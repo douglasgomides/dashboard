@@ -18,9 +18,26 @@ function NotFoundComponent() {
   );
 }
 
+function ErrorComponent({ error }: { error: Error }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <div className="max-w-md text-center">
+        <h1 className="text-lg font-semibold">Essa página não carregou</h1>
+        <p className="mt-2 text-sm" style={{ color: "var(--text-dim)" }}>
+          {error.message || "Erro inesperado."}
+        </p>
+        <Link to="/" className="mt-6 inline-block text-sm" style={{ color: "var(--accent)" }}>
+          Voltar pro início
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
+  errorComponent: ErrorComponent,
 });
 
 function RootComponent() {
