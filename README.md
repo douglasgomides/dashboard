@@ -6,7 +6,7 @@ conversão real (consulta ou venda de infoproduto) e, na Fase 3, um motor de
 regras de automação sobre a metodologia DC (funil de consciência C0–C3 +
 Diferencial → Narrativa → Percepção → Confiança → Venda → Multiplicação).
 
-Stack: TanStack Start (React) + Supabase (Postgres/RLS) + Cloudflare Workers.
+Stack: Vite + TanStack Router (SPA, React) + Supabase (Postgres/RLS). Deploy: Vercel.
 
 ## Estado atual: Fase 1
 
