@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "deploy": "wrangler deploy",
+    "deploy": "vite build && wrangler deploy -c dist/server/wrangler.json",
     "sync:instagram": "tsx scripts/sync-instagram.ts"
   },
   "dependencies": {

@@ -57,6 +57,30 @@ Variáveis de ambiente (`.env.local`):
 `src/routeTree.gen.ts` é gerado automaticamente no primeiro `npm run dev` ou
 `npm run build` — não commitado, não editar à mão.
 
+## Deploy (Cloudflare Workers)
+
+Via integração Git do Cloudflare (deploy automático a cada push, sem precisar
+de token nenhum):
+
+1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages** →
+   **Create** → **Connect to Git**.
+2. Selecione o repositório `douglasgomides/dashboard`, branch
+   `claude/doctor-creator-hub-nixvw6` (ou `main`, depois do merge).
+3. Build command: `npm run build`. Build output/deploy config: o projeto usa
+   `@cloudflare/vite-plugin`, que gera `dist/server/wrangler.json` sozinho —
+   o Cloudflare detecta e usa esse arquivo automaticamente, não precisa
+   apontar diretório de output manualmente.
+4. Em **Settings → Variables and Secrets**, adicione como *secret*:
+   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`,
+   `VITE_SUPABASE_PUBLISHABLE_KEY`. (`WINDSOR_API_KEY` só é usado pelo
+   `npm run sync:instagram` local/cron — não precisa estar no Worker a menos
+   que o sync vire uma rota server-side.)
+5. Deploy. Todo push nessa branch reconstrói e publica de novo.
+
+Alternativa manual (com um Cloudflare API Token — Workers Scripts:Edit):
+`npm run deploy` (roda `vite build` e depois `wrangler deploy` apontando pro
+config gerado).
+
 ## Próximos passos (fora do escopo desta entrega)
 
 - **Fase 2**: conectores read-only Feegow/Ninsaúde (consulta) e UTM
