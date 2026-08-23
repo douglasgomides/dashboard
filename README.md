@@ -57,29 +57,30 @@ Variáveis de ambiente (`.env.local`):
 `src/routeTree.gen.ts` é gerado automaticamente no primeiro `npm run dev` ou
 `npm run build` — não commitado, não editar à mão.
 
-## Deploy (Cloudflare Workers)
+## Deploy (Vercel)
 
-Via integração Git do Cloudflare (deploy automático a cada push, sem precisar
-de token nenhum):
+App SPA puro (Vite + `vercel.json` com rewrite de fallback) — zero-config no
+Vercel. Via dashboard (deploy automático a cada push):
 
-1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages** →
-   **Create** → **Connect to Git**.
-2. Selecione o repositório `douglasgomides/dashboard`, branch
-   `claude/doctor-creator-hub-nixvw6` (ou `main`, depois do merge).
-3. Build command: `npm run build`. Build output/deploy config: o projeto usa
-   `@cloudflare/vite-plugin`, que gera `dist/server/wrangler.json` sozinho —
-   o Cloudflare detecta e usa esse arquivo automaticamente, não precisa
-   apontar diretório de output manualmente.
-4. Em **Settings → Variables and Secrets**, adicione como *secret*:
-   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`,
-   `VITE_SUPABASE_PUBLISHABLE_KEY`. (`WINDSOR_API_KEY` só é usado pelo
-   `npm run sync:instagram` local/cron — não precisa estar no Worker a menos
-   que o sync vire uma rota server-side.)
-5. Deploy. Todo push nessa branch reconstrói e publica de novo.
+1. [vercel.com/new](https://vercel.com/new) → importe o repositório
+   `douglasgomides/dashboard`, branch `claude/doctor-creator-hub-nixvw6` (ou
+   `main`, depois do merge).
+2. Framework preset: **Vite** (auto-detectado). Build command `npm run
+   build`, output directory `dist` — ambos já são o default do preset, não
+   precisa mexer.
+3. Em **Settings → Environment Variables**, adicione `VITE_SUPABASE_URL` e
+   `VITE_SUPABASE_PUBLISHABLE_KEY` (únicas que o app usa em runtime — é um
+   SPA client-only, não tem rota server-side). `SUPABASE_URL`,
+   `SUPABASE_SERVICE_ROLE_KEY` e `WINDSOR_API_KEY` só são usadas pelo
+   `npm run sync:instagram` local/cron, não pelo deploy do site.
+4. Deploy. Todo push nessa branch gera um preview; promova pra produção
+   quando o backend (Supabase) estiver de pé.
 
-Alternativa manual (com um Cloudflare API Token — Workers Scripts:Edit):
-`npm run deploy` (roda `vite build` e depois `wrangler deploy` apontando pro
-config gerado).
+> Nota: uma tentativa de deploy direto via API (sem passar pelo dashboard)
+> esbarrou num 403 de permissão do lado do Vercel num projeto
+> `doctor-creator-intelligence-hub` que ficou órfão fora do escopo do time
+> "Douglas' projects" — se aparecer um projeto com esse nome que você não
+> reconhece ao importar, é esse; pode apagar.
 
 ## Próximos passos (fora do escopo desta entrega)
 
