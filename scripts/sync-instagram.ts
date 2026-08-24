@@ -49,11 +49,13 @@ async function windsorGet(fields: string[], extra: Record<string, string> = {}) 
 }
 
 // REEL/STORY/CAROUSEL_ALBUM map directly; plain FEED image or video is "estatico".
+// A Windsor não é consistente entre contas: em algumas media_type vem "REEL",
+// em outras "REELS" (plural) — por isso o includes() em vez de igualdade exata.
 function normalizeFormat(mediaType: unknown, productType: unknown): string | null {
   const type = String(mediaType ?? "").toUpperCase();
   const product = String(productType ?? "").toUpperCase();
   if (product === "STORY") return "stories";
-  if (product === "REEL" || type === "REEL") return "reels";
+  if (product.includes("REEL") || type.includes("REEL")) return "reels";
   if (type === "CAROUSEL_ALBUM") return "carrossel";
   if (type === "IMAGE" || type === "VIDEO") return "estatico";
   return null;
