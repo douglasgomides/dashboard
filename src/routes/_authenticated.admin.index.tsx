@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createClient, listAllClients } from "@/lib/admin-data";
+import { createAdminUser, createClient, listAllClients } from "@/lib/admin-data";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminClientsPage,
@@ -86,6 +86,84 @@ function NewClientForm() {
   );
 }
 
+function NewAdminForm() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [result, setResult] = useState<{ email: string; temporary_password: string | null } | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: () => createAdminUser({ email, password: password || undefined }),
+    onSuccess: (data) => {
+      setResult({ email, temporary_password: data.temporary_password });
+      setEmail("");
+      setPassword("");
+    },
+  });
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setResult(null);
+    mutation.mutate();
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border p-4"
+      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+    >
+      <div>
+        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+          E-mail do novo admin
+        </label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          className="mt-1 rounded-md border px-2 py-1.5 text-sm"
+          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+          Senha (opcional — em branco gera uma)
+        </label>
+        <input
+          type="text"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          minLength={8}
+          className="mt-1 rounded-md border px-2 py-1.5 text-sm"
+          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={mutation.isPending}
+        className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        style={{ background: "var(--accent)" }}
+      >
+        {mutation.isPending ? "Criando…" : "Novo admin"}
+      </button>
+      {mutation.isError && (
+        <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
+          {(mutation.error as Error).message}
+        </p>
+      )}
+      {result && (
+        <p className="w-full text-sm" style={{ color: "var(--good)" }}>
+          Admin {result.email} criado.
+          {result.temporary_password
+            ? ` Senha temporária (anote agora, não vai aparecer de novo): ${result.temporary_password}`
+            : " Ele(a) já pode entrar com a senha que você definiu."}
+        </p>
+      )}
+    </form>
+  );
+}
+
 function AdminClientsPage() {
   const { data: clients, isLoading } = useQuery({
     queryKey: ["admin-clients"],
@@ -94,6 +172,7 @@ function AdminClientsPage() {
 
   return (
     <div>
+      <NewAdminForm />
       <NewClientForm />
       {isLoading ? (
         <p style={{ color: "var(--text-dim)" }}>Carregando…</p>

@@ -82,3 +82,26 @@ export async function createClientUser(input: CreateClientUserInput) {
   }
   return body as { user_id: string; temporary_password: string };
 }
+
+export interface CreateAdminInput {
+  email: string;
+  password?: string;
+}
+
+export async function createAdminUser(input: CreateAdminInput) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error("Sessão expirada — faça login de novo.");
+
+  const res = await fetch("/api/admin/create-admin", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(input),
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error ?? `Falha ao criar admin (HTTP ${res.status})`);
+  }
+  return body as { user_id: string; temporary_password: string | null };
+}
