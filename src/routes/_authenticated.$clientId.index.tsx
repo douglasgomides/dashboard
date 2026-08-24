@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -102,32 +102,78 @@ function SinaisDeInteresse({ reach, contactTaps, newFollowers }: { reach: number
   );
 }
 
+// Lista compacta de posts, reutilizada no drill-down de dia e na
+// justificativa de "melhor horário" — sempre com link pro post real, nunca
+// só um número solto.
+function PostList({ posts }: { posts: any[] }) {
+  return (
+    <ul className="space-y-2">
+      {posts.map((p) => (
+        <li
+          key={p.id}
+          className="rounded-lg border p-3 text-sm"
+          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+        >
+          <a href={p.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+            {(p.caption ?? p.windsor_media_id).split("\n")[0].slice(0, 90)}
+          </a>
+          <div className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
+            {p.posted_at && new Date(p.posted_at).toLocaleDateString("pt-BR")} · Alcance{" "}
+            {(p.reach ?? 0).toLocaleString("pt-BR")} · Engajamento {(p.engagement ?? 0).toLocaleString("pt-BR")} ·
+            Salvos {(p.saved ?? 0).toLocaleString("pt-BR")}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function MelhoresHorarios({ posts }: { posts: any[] }) {
-  const ranked = useMemo(() => {
-    const buckets = new Map<string, { weekday: string; period: string; total: number; count: number }>();
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const { ranked, overallAvg } = useMemo(() => {
+    const buckets = new Map<
+      string,
+      { weekday: string; period: string; total: number; count: number; posts: any[] }
+    >();
+    let totalEng = 0;
+    let totalCount = 0;
     for (const p of posts) {
       if (!p.posted_at || p.engagement == null) continue;
+      totalEng += p.engagement;
+      totalCount += 1;
       const d = new Date(p.posted_at);
       const weekday = WEEKDAYS[d.getUTCDay()];
       const period = PERIODS.find((per) => per.test(d.getUTCHours()))?.label ?? "—";
       const key = `${weekday}__${period}`;
-      const entry = buckets.get(key) ?? { weekday, period, total: 0, count: 0 };
+      const entry = buckets.get(key) ?? { weekday, period, total: 0, count: 0, posts: [] };
       entry.total += p.engagement ?? 0;
       entry.count += 1;
+      entry.posts.push(p);
       buckets.set(key, entry);
     }
-    return Array.from(buckets.values())
-      .filter((b) => b.count >= 2)
-      .map((b) => ({ ...b, avg: b.total / b.count }))
+    const overallAvg = totalCount > 0 ? totalEng / totalCount : 0;
+    const ranked = Array.from(buckets.entries())
+      .filter(([, b]) => b.count >= 2)
+      .map(([key, b]) => ({
+        key,
+        weekday: b.weekday,
+        period: b.period,
+        count: b.count,
+        avg: b.total / b.count,
+        posts: [...b.posts].sort((a, c) => (c.engagement ?? 0) - (a.engagement ?? 0)),
+      }))
       .sort((a, b) => b.avg - a.avg)
       .slice(0, 5);
+    return { ranked, overallAvg };
   }, [posts]);
 
   return (
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <h2 className="mb-1 text-sm font-semibold">Melhores horários pra postar</h2>
       <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-        Últimos {TREND_DAYS} dias, por engajamento médio (horário em UTC).
+        Últimos {TREND_DAYS} dias, por engajamento médio (horário em UTC). Clique numa linha pra ver os posts que
+        sustentam o número.
       </p>
       {ranked.length === 0 ? (
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
@@ -141,17 +187,53 @@ function MelhoresHorarios({ posts }: { posts: any[] }) {
               <th className="pb-2">Período</th>
               <th className="pb-2 text-right">Posts</th>
               <th className="pb-2 text-right">Engajamento médio</th>
+              <th className="pb-2 text-right">vs. média da conta</th>
             </tr>
           </thead>
           <tbody>
-            {ranked.map((r) => (
-              <tr key={`${r.weekday}-${r.period}`} className="border-t" style={{ borderColor: "var(--border)" }}>
-                <td className="py-1.5">{r.weekday}</td>
-                <td className="py-1.5">{r.period}</td>
-                <td className="py-1.5 text-right">{r.count}</td>
-                <td className="py-1.5 text-right font-medium">{r.avg.toFixed(0)}</td>
-              </tr>
-            ))}
+            {ranked.map((r) => {
+              const vsAvg = overallAvg > 0 ? ((r.avg - overallAvg) / overallAvg) * 100 : 0;
+              const isOpen = expanded === r.key;
+              return (
+                <Fragment key={r.key}>
+                  <tr
+                    className="cursor-pointer border-t"
+                    style={{ borderColor: "var(--border)" }}
+                    onClick={() => setExpanded(isOpen ? null : r.key)}
+                  >
+                    <td className="py-1.5">{r.weekday}</td>
+                    <td className="py-1.5">{r.period}</td>
+                    <td className="py-1.5 text-right">{r.count}</td>
+                    <td className="py-1.5 text-right font-medium">{r.avg.toFixed(0)}</td>
+                    <td
+                      className="py-1.5 text-right font-medium"
+                      style={{ color: vsAvg >= 0 ? "var(--good)" : "var(--text-dim)" }}
+                    >
+                      {vsAvg >= 0 ? "+" : ""}
+                      {vsAvg.toFixed(0)}%
+                    </td>
+                  </tr>
+                  {isOpen && (
+                    <tr key={`${r.key}-expanded`}>
+                      <td colSpan={5} className="pb-3">
+                        <div
+                          className="rounded-lg border p-3"
+                          style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
+                        >
+                          <p className="mb-2 text-xs" style={{ color: "var(--text-faint)" }}>
+                            {r.count} post{r.count > 1 ? "s" : ""} publicado{r.count > 1 ? "s" : ""} em{" "}
+                            {r.weekday.toLowerCase()} à(o) {r.period.toLowerCase()} nos últimos {TREND_DAYS} dias —
+                            engajamento médio {vsAvg >= 0 ? vsAvg.toFixed(0) + "% acima" : Math.abs(vsAvg).toFixed(0) + "% abaixo"}{" "}
+                            da média geral da conta ({overallAvg.toFixed(0)}).
+                          </p>
+                          <PostList posts={r.posts} />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -219,23 +301,7 @@ function DrillDownDoDia({ date, posts }: { date: string | null; posts: any[] }) 
           Nenhum post publicado nesse dia — o alcance/interações vieram de posts anteriores continuando a circular.
         </p>
       ) : (
-        <ul className="space-y-2">
-          {dayPosts.map((p) => (
-            <li
-              key={p.id}
-              className="rounded-lg border p-3 text-sm"
-              style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-            >
-              <a href={p.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
-                {(p.caption ?? p.windsor_media_id).split("\n")[0].slice(0, 90)}
-              </a>
-              <div className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
-                Alcance {(p.reach ?? 0).toLocaleString("pt-BR")} · Engajamento {(p.engagement ?? 0).toLocaleString("pt-BR")} ·
-                Salvos {(p.saved ?? 0).toLocaleString("pt-BR")}
-              </div>
-            </li>
-          ))}
-        </ul>
+        <PostList posts={dayPosts} />
       )}
     </div>
   );
