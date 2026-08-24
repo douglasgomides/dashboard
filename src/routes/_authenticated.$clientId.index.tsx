@@ -14,7 +14,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { getMonthlyMetrics, getMetricsTrend, getPostsForAnalytics } from "@/lib/client-data";
+import { getClient, getMonthlyMetrics, getMetricsTrend, getPostsForAnalytics } from "@/lib/client-data";
 import { formatLabel } from "@/lib/methodology";
 import type { ContentFormat } from "@/integrations/supabase/types";
 
@@ -372,6 +372,12 @@ function MonthlyOverview() {
   const since = daysAgo(TREND_DAYS);
   const [selectedDateMonthly, setSelectedDateMonthly] = useState<string | null>(null);
   const [selectedDateTrend, setSelectedDateTrend] = useState<string | null>(null);
+  const [generatingReport, setGeneratingReport] = useState(false);
+
+  const { data: client } = useQuery({
+    queryKey: ["client", clientId],
+    queryFn: () => getClient(clientId),
+  });
 
   const { data: rows, isLoading } = useQuery({
     queryKey: ["monthly-metrics", clientId, start, end],
@@ -431,6 +437,32 @@ function MonthlyOverview() {
     "Seguidores ganhos": d.new_followers ?? 0,
   }));
 
+  const postsDoMes = (postsForAnalytics ?? []).filter(
+    (p) => p.posted_at && p.posted_at.slice(0, 10) >= start && p.posted_at.slice(0, 10) <= end,
+  );
+
+  async function handleDownloadReport() {
+    setGeneratingReport(true);
+    try {
+      const { downloadClientReport } = await import("@/lib/pdf-report");
+      await downloadClientReport({
+        clientName: client?.name ?? "Cliente",
+        igHandle: client?.instagram_handle,
+        periodLabel: new Date(start + "T12:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
+        kpis: [
+          { label: "Novos seguidores", value: newFollowers.toLocaleString("pt-BR") },
+          { label: "Alcance", value: reach.toLocaleString("pt-BR") },
+          { label: "Taxa de engajamento", value: engagementRate, hint: "interações ÷ alcance" },
+          { label: "Salvamentos", value: saves.toLocaleString("pt-BR") },
+        ],
+        postsForAnalytics: postsForAnalytics ?? [],
+        postsDoMes,
+      });
+    } finally {
+      setGeneratingReport(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -439,6 +471,16 @@ function MonthlyOverview() {
         <KpiCard label="Taxa de engajamento" value={engagementRate} hint="interações ÷ alcance" />
         <KpiCard label="Salvamentos" value={saves.toLocaleString("pt-BR")} />
       </div>
+
+      <button
+        type="button"
+        onClick={handleDownloadReport}
+        disabled={generatingReport}
+        className="rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-60"
+        style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+      >
+        {generatingReport ? "Gerando PDF…" : "Baixar relatório PDF"}
+      </button>
 
       <SinaisDeInteresse reach={reach} contactTaps={contactTaps} newFollowers={newFollowers} />
 
