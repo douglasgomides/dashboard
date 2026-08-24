@@ -50,7 +50,7 @@ function ConnectInstagramForm({ clientId }: { clientId: string }) {
     <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
       <div>
         <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          Windsor account ID
+          ID da conta Instagram
         </label>
         <input
           value={windsorAccountId}
@@ -408,7 +408,7 @@ function AdminClientDetailPage() {
       </div>
 
       <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h3 className="mb-3 text-sm font-semibold">Conta Instagram (Windsor.ai)</h3>
+        <h3 className="mb-3 text-sm font-semibold">Conta Instagram</h3>
         <ConnectInstagramForm clientId={clientId} />
         <InstagramAccountsList clientId={clientId} />
       </section>

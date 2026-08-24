@@ -310,15 +310,15 @@ function ClientReportDocument({
         <Text style={styles.sectionTitle}>Como este relatório foi feito</Text>
         <Text style={styles.methodTitle}>Fonte dos dados</Text>
         <Text style={styles.methodP}>
-          Métricas por post e diárias de conta extraídas da API da Windsor.ai (conectada ao Instagram profissional
-          do cliente). Este relatório usa os últimos {trendDays} dias para os cálculos de formato e horário, e o mês
-          corrente ({periodLabel}) para o ranking de top posts.
+          Métricas por post e diárias de conta extraídas diretamente do Instagram profissional do cliente. Este
+          relatório usa os últimos {trendDays} dias para os cálculos de formato e horário, e o mês corrente (
+          {periodLabel}) para o ranking de top posts.
         </Text>
         <Text style={styles.methodTitle}>O que este relatório NÃO inclui</Text>
         <Text style={styles.methodP}>
           Não há atribuição de conversão em paciente real ou venda — isso depende de conexão de CRM, ainda não
-          disponível para todos os clientes. "Seguidores gerados por post individual" também não está aqui: a
-          Windsor só disponibiliza seguidor ganho por dia da conta inteira, não por post — o mesmo vale para taxa de
+          disponível para todos os clientes. "Seguidores gerados por post individual" também não está aqui: a fonte
+          de dados só disponibiliza seguidor ganho por dia da conta inteira, não por post — o mesmo vale para taxa de
           seguidor real por Reels, que exigiria cruzar com export manual do Instagram Insights.
         </Text>
         <Text style={styles.methodTitle}>Limitações</Text>
