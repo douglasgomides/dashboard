@@ -2,6 +2,7 @@ import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getClient } from "@/lib/client-data";
 import { useAuth } from "@/hooks/use-auth";
+import { LogoutButton } from "@/components/logout-button";
 
 export const Route = createFileRoute("/_authenticated/$clientId")({
   component: ClientLayout,
@@ -54,6 +55,7 @@ function ClientLayout() {
             {client?.instagram_handle ? ` · @${client.instagram_handle}` : ""}
           </p>
         </div>
+        <LogoutButton />
       </header>
 
       <nav className="mb-8 flex flex-wrap gap-1 border-b" style={{ borderColor: "var(--border)" }}>
