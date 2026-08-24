@@ -276,6 +276,7 @@ function NextAngles({ clientId }: { clientId: string }) {
 function PostsRankingPage() {
   const { clientId } = Route.useParams();
   const { start, end } = monthBounds();
+  const [formatFilter, setFormatFilter] = useState<ContentFormat | "">("");
 
   const { data: posts, isLoading } = useQuery({
     queryKey: ["ranked-posts", clientId, start, end],
@@ -285,16 +286,41 @@ function PostsRankingPage() {
   if (isLoading) return <p style={{ color: "var(--text-dim)" }}>Carregando posts…</p>;
 
   const rows = posts ?? [];
+  const filteredRows = formatFilter ? rows.filter((p) => p.format === formatFilter) : rows;
 
   return (
     <div className="space-y-6">
       <TopDoMes posts={rows} />
 
       <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h2 className="mb-3 text-sm font-semibold">Ranking de posts do mês (por salvamentos)</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Ranking de posts do mês (por salvamentos)</h2>
+          <div className="flex items-center gap-2">
+            <span className="text-xs" style={{ color: "var(--text-faint)" }}>
+              Formato:
+            </span>
+            <select
+              value={formatFilter}
+              onChange={(e) => setFormatFilter(e.target.value as ContentFormat | "")}
+              className="rounded-md border px-2 py-1 text-xs"
+              style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+            >
+              <option value="">Todos</option>
+              {CONTENT_FORMATS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
         {rows.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--text-dim)" }}>
             Sem posts sincronizados pra este mês. Rode <code>npm run sync:instagram</code>.
+          </p>
+        ) : filteredRows.length === 0 ? (
+          <p className="text-sm" style={{ color: "var(--text-dim)" }}>
+            Nenhum post nesse formato este mês.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -312,7 +338,7 @@ function PostsRankingPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((post) => (
+                {filteredRows.map((post) => (
                   <PostRow key={post.id} post={post} clientId={clientId} />
                 ))}
               </tbody>
