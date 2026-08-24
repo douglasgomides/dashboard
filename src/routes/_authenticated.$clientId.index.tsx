@@ -198,28 +198,22 @@ function EngajamentoPorFormato({ posts }: { posts: any[] }) {
 }
 
 // Painel de "por que esse alcance": lista os posts publicados no dia
-// clicado num dos gráficos de linha/área, ordenados por alcance.
+// clicado no gráfico logo acima — fica colado nele, sem precisar rolar.
 function DrillDownDoDia({ date, posts }: { date: string | null; posts: any[] }) {
-  if (!date) {
-    return (
-      <div
-        className="rounded-xl border border-dashed p-4 text-center text-xs"
-        style={{ borderColor: "var(--border)", color: "var(--text-faint)" }}
-      >
-        Clique em um ponto dos gráficos acima pra ver o que foi publicado naquele dia.
-      </div>
-    );
-  }
+  if (!date) return null;
 
   const dayPosts = posts
     .filter((p) => p.posted_at && p.posted_at.slice(0, 10) === date)
     .sort((a, b) => (b.reach ?? 0) - (a.reach ?? 0));
 
   return (
-    <div className="rounded-xl border p-4" style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}>
-      <h2 className="mb-3 text-sm font-semibold">
+    <div
+      className="mt-3 rounded-lg border p-3"
+      style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
+    >
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
         O que aconteceu em {new Date(date + "T12:00:00").toLocaleDateString("pt-BR")}
-      </h2>
+      </h3>
       {dayPosts.length === 0 ? (
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
           Nenhum post publicado nesse dia — o alcance/interações vieram de posts anteriores continuando a circular.
@@ -251,7 +245,8 @@ function MonthlyOverview() {
   const { clientId } = Route.useParams();
   const { start, end } = monthBounds();
   const since = daysAgo(TREND_DAYS);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDateMonthly, setSelectedDateMonthly] = useState<string | null>(null);
+  const [selectedDateTrend, setSelectedDateTrend] = useState<string | null>(null);
 
   const { data: rows, isLoading } = useQuery({
     queryKey: ["monthly-metrics", clientId, start, end],
@@ -268,8 +263,11 @@ function MonthlyOverview() {
     queryFn: () => getPostsForAnalytics(clientId, since),
   });
 
-  function handleChartClick(e: any) {
-    if (e?.activeLabel) setSelectedDate(e.activeLabel);
+  function handleMonthlyClick(e: any) {
+    if (e?.activeLabel) setSelectedDateMonthly(e.activeLabel);
+  }
+  function handleTrendClick(e: any) {
+    if (e?.activeLabel) setSelectedDateTrend(e.activeLabel);
   }
 
   if (isLoading) {
@@ -325,7 +323,7 @@ function MonthlyOverview() {
           Clique em um ponto pra ver o que foi publicado naquele dia.
         </p>
         <ResponsiveContainer width="100%" height={240}>
-          <AreaChart data={chartData} onClick={handleChartClick} style={{ cursor: "pointer" }}>
+          <AreaChart data={chartData} onClick={handleMonthlyClick} style={{ cursor: "pointer" }}>
             <defs>
               <linearGradient id="reachFill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.35} />
@@ -339,6 +337,7 @@ function MonthlyOverview() {
             <Area type="monotone" dataKey="Interações" stroke="var(--good)" fillOpacity={0} />
           </AreaChart>
         </ResponsiveContainer>
+        <DrillDownDoDia date={selectedDateMonthly} posts={postsForAnalytics ?? []} />
       </div>
 
       <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
@@ -353,7 +352,7 @@ function MonthlyOverview() {
           </p>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={trendData} onClick={handleChartClick} style={{ cursor: "pointer" }}>
+            <LineChart data={trendData} onClick={handleTrendClick} style={{ cursor: "pointer" }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="date" tickFormatter={tickDate} tick={{ fontSize: 10 }} stroke="var(--text-faint)" interval="preserveStartEnd" />
               <YAxis yAxisId="left" tick={{ fontSize: 11 }} stroke="var(--text-faint)" />
@@ -364,9 +363,8 @@ function MonthlyOverview() {
             </LineChart>
           </ResponsiveContainer>
         )}
+        <DrillDownDoDia date={selectedDateTrend} posts={postsForAnalytics ?? []} />
       </div>
-
-      <DrillDownDoDia date={selectedDate} posts={postsForAnalytics ?? []} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <EngajamentoPorFormato posts={postsForAnalytics ?? []} />
