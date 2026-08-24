@@ -9,6 +9,7 @@ import {
   computeTopPosts,
   fmtFormatKey,
 } from "@/lib/report-metrics";
+import { fmtNum } from "@/lib/format";
 
 const styles = StyleSheet.create({
   page: { padding: 32, paddingBottom: 46, fontSize: 10, fontFamily: "Helvetica", color: "#1a1a1a" },
@@ -153,7 +154,7 @@ function ClientReportDocument({
           <View style={[styles.highlightBox, styles.highlightGood]}>
             <Text>
               <Text style={{ fontWeight: 700 }}>{fmtFormatKey(insight.best.format)}</Text> é o formato mais forte —
-              engajamento médio de {insight.best.avg.toFixed(0)} ({insight.best.count} posts),{" "}
+              engajamento médio de {fmtNum(Math.round(insight.best.avg))} ({insight.best.count} posts),{" "}
               {insight.bestPct >= 0 ? "+" : ""}
               {insight.bestPct.toFixed(0)}% acima da média geral.
               {insight.worst.format !== insight.best.format &&
@@ -169,7 +170,7 @@ function ClientReportDocument({
               <Text style={{ fontWeight: 700 }}>
                 {horarios[0].weekday} à(o) {horarios[0].period.toLowerCase()}
               </Text>{" "}
-              — engajamento médio de {horarios[0].avg.toFixed(0)} em {horarios[0].count} posts,{" "}
+              — engajamento médio de {fmtNum(Math.round(horarios[0].avg))} em {horarios[0].count} posts,{" "}
               {horaAvg > 0 ? (((horarios[0].avg - horaAvg) / horaAvg) * 100).toFixed(0) : "0"}% acima da média da
               conta.
             </Text>
@@ -253,7 +254,7 @@ function ClientReportDocument({
                   <Text style={[styles.td, styles.colWide]}>{r.weekday}</Text>
                   <Text style={[styles.td, styles.colWide]}>{r.period}</Text>
                   <Text style={[styles.td, styles.col]}>{r.count}</Text>
-                  <Text style={[styles.td, styles.col]}>{r.avg.toFixed(0)}</Text>
+                  <Text style={[styles.td, styles.col]}>{fmtNum(Math.round(r.avg))}</Text>
                 </View>
               ))}
             </View>
@@ -273,7 +274,7 @@ function ClientReportDocument({
                 <View key={f.formato} style={styles.tableRow}>
                   <Text style={[styles.td, styles.colWide]}>{f.formato}</Text>
                   <Text style={[styles.td, styles.col]}>{f.count}</Text>
-                  <Text style={[styles.td, styles.col]}>{f.avgEngagement}</Text>
+                  <Text style={[styles.td, styles.col]}>{fmtNum(f.avgEngagement)}</Text>
                 </View>
               ))}
             </View>
@@ -298,9 +299,9 @@ function ClientReportDocument({
               {topPosts.map((p) => (
                 <View key={p.id} style={styles.tableRow}>
                   <Text style={[styles.td, { flex: 5 }]}>{caseCaption(p).slice(0, 70)}</Text>
-                  <Text style={[styles.td, styles.col]}>{p.reach ?? 0}</Text>
-                  <Text style={[styles.td, styles.col]}>{p.engagement ?? 0}</Text>
-                  <Text style={[styles.td, styles.col]}>{p.saved ?? 0}</Text>
+                  <Text style={[styles.td, styles.col]}>{fmtNum(p.reach)}</Text>
+                  <Text style={[styles.td, styles.col]}>{fmtNum(p.engagement)}</Text>
+                  <Text style={[styles.td, styles.col]}>{fmtNum(p.saved)}</Text>
                 </View>
               ))}
             </View>

@@ -11,6 +11,7 @@ import {
   methodologyLabel,
 } from "@/lib/methodology";
 import type { ContentFormat, FunnelStage, MethodologyStage } from "@/integrations/supabase/types";
+import { fmtNum } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/$clientId/posts")({
   component: PostsRankingPage,
@@ -71,9 +72,9 @@ function PostRow({ post, clientId }: { post: Post; clientId: string }) {
           {post.posted_at ? new Date(post.posted_at).toLocaleDateString("pt-BR") : "—"}
         </div>
       </td>
-      <td className="py-2 pr-3 text-right text-sm">{post.saved ?? 0}</td>
-      <td className="py-2 pr-3 text-right text-sm">{post.engagement ?? 0}</td>
-      <td className="py-2 pr-3 text-right text-sm">{post.reach ?? 0}</td>
+      <td className="py-2 pr-3 text-right text-sm">{fmtNum(post.saved)}</td>
+      <td className="py-2 pr-3 text-right text-sm">{fmtNum(post.engagement)}</td>
+      <td className="py-2 pr-3 text-right text-sm">{fmtNum(post.reach)}</td>
       <td className="py-2 pr-3">
         <input
           defaultValue={post.tema ?? ""}
@@ -150,7 +151,9 @@ function ConversionByTag({ posts }: { posts: Post[] }) {
               <td className="py-1.5">{g.tema}</td>
               <td className="py-1.5">{g.format}</td>
               <td className="py-1.5 text-right">{g.count}</td>
-              <td className="py-1.5 text-right font-medium">{g.avgSaved.toFixed(1)}</td>
+              <td className="py-1.5 text-right font-medium">
+                {g.avgSaved.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -197,7 +200,7 @@ function MelhoresGanchos({ posts }: { posts: Post[] }) {
                   {gancho}
                 </a>
               </td>
-              <td className="py-1.5 text-right font-medium">{post.engagement ?? 0}</td>
+              <td className="py-1.5 text-right font-medium">{fmtNum(post.engagement)}</td>
             </tr>
           ))}
         </tbody>
@@ -231,7 +234,7 @@ function TopDoMes({ posts }: { posts: Post[] }) {
               #{i + 1}
             </div>
             <div className="mt-1 line-clamp-3">{firstLine(post.caption) ?? post.windsor_media_id}</div>
-            <div className="mt-1 font-medium">{post.saved ?? 0} salvos</div>
+            <div className="mt-1 font-medium">{fmtNum(post.saved)} salvos</div>
           </a>
         ))}
       </div>
@@ -378,7 +381,7 @@ function FormatoPorTema({ posts }: { posts: Post[] }) {
               <td className="py-1.5">{r.tema}</td>
               <td className="py-1.5">{formatLabel(r.formato)}</td>
               <td className="py-1.5 text-right">{r.count}</td>
-              <td className="py-1.5 text-right">{r.avgReach.toFixed(0)}</td>
+              <td className="py-1.5 text-right">{fmtNum(Math.round(r.avgReach))}</td>
               <td className="py-1.5 text-right font-medium">{r.engRate.toFixed(1)}%</td>
             </tr>
           ))}

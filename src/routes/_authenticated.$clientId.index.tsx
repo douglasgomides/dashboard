@@ -18,6 +18,7 @@ import { getClient, getMonthlyMetrics, getMetricsTrend, getPostsForAnalytics } f
 import { formatLabel } from "@/lib/methodology";
 import type { ContentFormat } from "@/integrations/supabase/types";
 import { computeFormatInsight, fmtFormatKey } from "@/lib/report-metrics";
+import { fmtNum } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/$clientId/")({
   component: MonthlyOverview,
@@ -205,7 +206,7 @@ function MelhoresHorarios({ posts }: { posts: any[] }) {
                     <td className="py-1.5">{r.weekday}</td>
                     <td className="py-1.5">{r.period}</td>
                     <td className="py-1.5 text-right">{r.count}</td>
-                    <td className="py-1.5 text-right font-medium">{r.avg.toFixed(0)}</td>
+                    <td className="py-1.5 text-right font-medium">{fmtNum(Math.round(r.avg))}</td>
                     <td
                       className="py-1.5 text-right font-medium"
                       style={{ color: vsAvg >= 0 ? "var(--good)" : "var(--text-dim)" }}
@@ -225,7 +226,7 @@ function MelhoresHorarios({ posts }: { posts: any[] }) {
                             {r.count} post{r.count > 1 ? "s" : ""} publicado{r.count > 1 ? "s" : ""} em{" "}
                             {r.weekday.toLowerCase()} à(o) {r.period.toLowerCase()} nos últimos {TREND_DAYS} dias —
                             engajamento médio {vsAvg >= 0 ? vsAvg.toFixed(0) + "% acima" : Math.abs(vsAvg).toFixed(0) + "% abaixo"}{" "}
-                            da média geral da conta ({overallAvg.toFixed(0)}).
+                            da média geral da conta ({fmtNum(Math.round(overallAvg))}).
                           </p>
                           <PostList posts={r.posts} />
                         </div>
@@ -270,8 +271,8 @@ function EngajamentoPorFormato({ posts }: { posts: any[] }) {
           <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis dataKey="formato" tick={{ fontSize: 11 }} stroke="var(--text-faint)" />
-            <YAxis tick={{ fontSize: 11 }} stroke="var(--text-faint)" />
-            <Tooltip />
+            <YAxis tick={{ fontSize: 11 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
+            <Tooltip formatter={(value: number) => fmtNum(value)} />
             <Bar dataKey="Engajamento médio" fill="var(--accent)" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
@@ -326,7 +327,7 @@ function InsightDeFormato({ posts }: { posts: any[] }) {
       style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
     >
       Nos últimos {TREND_DAYS} dias, <strong>{fmtFormatLabel(best.format)}</strong> foi o formato mais forte —
-      engajamento médio de {best.avg.toFixed(0)} ({best.count} posts), {bestPct >= 0 ? "+" : ""}
+      engajamento médio de {fmtNum(Math.round(best.avg))} ({best.count} posts), {bestPct >= 0 ? "+" : ""}
       {bestPct.toFixed(0)}% acima da média geral da conta.
       {worst.format !== best.format && (
         <>
@@ -481,12 +482,12 @@ function MonthlyOverview() {
           <KpiCard
             label="Melhor formato"
             value={fmtFormatKey(formatInsight.best.format)}
-            hint={`${formatInsight.best.avg.toFixed(0)} engaj. médio · ${formatInsight.best.count} posts`}
+            hint={`${fmtNum(Math.round(formatInsight.best.avg))} engaj. médio · ${formatInsight.best.count} posts`}
           />
           <KpiCard
             label="Formato mais fraco"
             value={fmtFormatKey(formatInsight.worst.format)}
-            hint={`${formatInsight.worst.avg.toFixed(0)} engaj. médio · ${formatInsight.worst.count} posts`}
+            hint={`${fmtNum(Math.round(formatInsight.worst.avg))} engaj. médio · ${formatInsight.worst.count} posts`}
           />
         </div>
       )}
@@ -517,8 +518,8 @@ function MonthlyOverview() {
               </linearGradient>
             </defs>
             <XAxis dataKey="date" tickFormatter={tickDate} tick={{ fontSize: 11 }} stroke="var(--text-faint)" />
-            <YAxis tick={{ fontSize: 11 }} stroke="var(--text-faint)" />
-            <Tooltip labelFormatter={tickDate} />
+            <YAxis tick={{ fontSize: 11 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
+            <Tooltip labelFormatter={tickDate} formatter={(value: number) => fmtNum(value)} />
             <Area type="monotone" dataKey="Alcance" stroke="var(--accent)" fill="url(#reachFill)" />
             <Area type="monotone" dataKey="Interações" stroke="var(--good)" fillOpacity={0} />
           </AreaChart>
@@ -541,9 +542,9 @@ function MonthlyOverview() {
             <LineChart data={trendData} onClick={handleTrendClick} style={{ cursor: "pointer" }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="date" tickFormatter={tickDate} tick={{ fontSize: 10 }} stroke="var(--text-faint)" interval="preserveStartEnd" />
-              <YAxis yAxisId="left" tick={{ fontSize: 11 }} stroke="var(--text-faint)" />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} stroke="var(--text-faint)" />
-              <Tooltip labelFormatter={tickDate} />
+              <YAxis yAxisId="left" tick={{ fontSize: 11 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
+              <Tooltip labelFormatter={tickDate} formatter={(value: number) => fmtNum(value)} />
               <Line yAxisId="left" type="monotone" dataKey="Alcance" stroke="var(--accent)" dot={false} />
               <Line yAxisId="right" type="monotone" dataKey="Seguidores ganhos" stroke="var(--good)" dot={false} />
             </LineChart>
