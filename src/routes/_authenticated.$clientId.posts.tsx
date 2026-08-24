@@ -239,6 +239,97 @@ function TopDoMes({ posts }: { posts: Post[] }) {
   );
 }
 
+// Divide os temas classificados em "repetir" (taxa de engajamento acima da
+// média entre os temas com volume) e "revisar" (abaixo) — não é opinião,
+// é o cálculo dos últimos posts do mês. Precisa de tema classificado na
+// tabela abaixo pra ter dado.
+function RepetirOuRevisar({ posts }: { posts: Post[] }) {
+  const MIN_POSTS = 3;
+
+  const { repetir, revisar, hasEnough } = useMemo(() => {
+    const groups = new Map<string, { tema: string; count: number; totalEng: number; totalReach: number }>();
+    for (const p of posts) {
+      if (!p.tema || p.engagement == null || p.reach == null) continue;
+      const entry = groups.get(p.tema) ?? { tema: p.tema, count: 0, totalEng: 0, totalReach: 0 };
+      entry.count += 1;
+      entry.totalEng += p.engagement;
+      entry.totalReach += p.reach;
+      groups.set(p.tema, entry);
+    }
+    const qualifying = Array.from(groups.values())
+      .filter((g) => g.count >= MIN_POSTS && g.totalReach > 0)
+      .map((g) => ({ ...g, rate: g.totalEng / g.totalReach }));
+    if (qualifying.length === 0) return { repetir: [], revisar: [], hasEnough: false };
+    const baseline = qualifying.reduce((s, g) => s + g.rate, 0) / qualifying.length;
+    return {
+      repetir: qualifying.filter((g) => g.rate >= baseline).sort((a, b) => b.rate - a.rate),
+      revisar: qualifying.filter((g) => g.rate < baseline).sort((a, b) => a.rate - b.rate),
+      hasEnough: true,
+    };
+  }, [posts]);
+
+  return (
+    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+      <h2 className="mb-1 text-sm font-semibold">O que repetir vs. o que revisar</h2>
+      <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
+        Calculado pela taxa de engajamento (engajamento ÷ alcance) dos temas com pelo menos {MIN_POSTS} posts
+        classificados neste mês.
+      </p>
+      {!hasEnough ? (
+        <p className="text-sm" style={{ color: "var(--text-dim)" }}>
+          Classifique o <strong>tema</strong> de pelo menos {MIN_POSTS} posts do mesmo assunto na tabela abaixo pra
+          habilitar esse veredito.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--good)" }}>
+              ↑ Repetir
+            </h3>
+            {repetir.length === 0 ? (
+              <p className="text-sm" style={{ color: "var(--text-dim)" }}>
+                Nenhum tema acima da média ainda.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {repetir.map((g) => (
+                  <li key={g.tema} className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+                    <div className="font-medium">{g.tema}</div>
+                    <div className="text-xs" style={{ color: "var(--text-dim)" }}>
+                      {(g.rate * 100).toFixed(1)}% engajamento · {g.count} posts
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--danger)" }}>
+              ↓ Revisar ou descontinuar
+            </h3>
+            {revisar.length === 0 ? (
+              <p className="text-sm" style={{ color: "var(--text-dim)" }}>
+                Nenhum tema abaixo da média ainda.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {revisar.map((g) => (
+                  <li key={g.tema} className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+                    <div className="font-medium">{g.tema}</div>
+                    <div className="text-xs" style={{ color: "var(--text-dim)" }}>
+                      {(g.rate * 100).toFixed(1)}% engajamento · {g.count} posts
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NextAngles({ clientId }: { clientId: string }) {
   const { data: angles, isLoading } = useQuery({
     queryKey: ["next-angles", clientId],
@@ -347,6 +438,7 @@ function PostsRankingPage() {
         )}
       </div>
 
+      <RepetirOuRevisar posts={rows} />
       <ConversionByTag posts={rows} />
       <MelhoresGanchos posts={rows} />
       <NextAngles clientId={clientId} />

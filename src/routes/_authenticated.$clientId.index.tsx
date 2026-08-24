@@ -252,7 +252,7 @@ function EngajamentoPorFormato({ posts }: { posts: any[] }) {
       groups.set(key, entry);
     }
     return Array.from(groups.entries()).map(([key, v]) => ({
-      formato: key === "não classificado" ? key : formatLabel(key as ContentFormat),
+      formato: fmtFormatLabel(key),
       "Engajamento médio": v.count > 0 ? Math.round(v.total / v.count) : 0,
     }));
   }, [posts]);
@@ -274,6 +274,65 @@ function EngajamentoPorFormato({ posts }: { posts: any[] }) {
             <Bar dataKey="Engajamento médio" fill="var(--accent)" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+      )}
+    </div>
+  );
+}
+
+function fmtFormatLabel(key: string) {
+  return key === "não classificado" ? key : formatLabel(key as ContentFormat);
+}
+
+// Resumo em texto corrido do que os números dizem — em vez de só mostrar a
+// tabela/gráfico crus, nomeia o melhor e o pior formato com os números que
+// sustentam a afirmação. Não sugere o que postar, só descreve o que já
+// aconteceu.
+function InsightDeFormato({ posts }: { posts: any[] }) {
+  const insight = useMemo(() => {
+    const groups = new Map<string, { total: number; count: number }>();
+    let totalEng = 0;
+    let totalCount = 0;
+    for (const p of posts) {
+      if (p.engagement == null) continue;
+      const key = p.format ?? "não classificado";
+      const entry = groups.get(key) ?? { total: 0, count: 0 };
+      entry.total += p.engagement;
+      entry.count += 1;
+      groups.set(key, entry);
+      totalEng += p.engagement;
+      totalCount += 1;
+    }
+    if (totalCount === 0) return null;
+    const overallAvg = totalEng / totalCount;
+    const ranked = Array.from(groups.entries())
+      .filter(([, v]) => v.count >= 3)
+      .map(([format, v]) => ({ format, avg: v.total / v.count, count: v.count }))
+      .sort((a, b) => b.avg - a.avg);
+    if (ranked.length < 2) return null;
+    const best = ranked[0];
+    const worst = ranked[ranked.length - 1];
+    const bestPct = overallAvg > 0 ? ((best.avg - overallAvg) / overallAvg) * 100 : 0;
+    const worstPct = overallAvg > 0 ? ((worst.avg - overallAvg) / overallAvg) * 100 : 0;
+    return { best, worst, bestPct, worstPct };
+  }, [posts]);
+
+  if (!insight) return null;
+  const { best, worst, bestPct, worstPct } = insight;
+
+  return (
+    <div
+      className="rounded-xl border p-4 text-sm leading-relaxed"
+      style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
+    >
+      Nos últimos {TREND_DAYS} dias, <strong>{fmtFormatLabel(best.format)}</strong> foi o formato mais forte —
+      engajamento médio de {best.avg.toFixed(0)} ({best.count} posts), {bestPct >= 0 ? "+" : ""}
+      {bestPct.toFixed(0)}% acima da média geral da conta.
+      {worst.format !== best.format && (
+        <>
+          {" "}
+          <strong>{fmtFormatLabel(worst.format)}</strong> ficou {Math.abs(worstPct).toFixed(0)}% abaixo ({worst.count}{" "}
+          posts) — vale revisar frequência ou abordagem nesse formato.
+        </>
       )}
     </div>
   );
@@ -431,6 +490,8 @@ function MonthlyOverview() {
         )}
         <DrillDownDoDia date={selectedDateTrend} posts={postsForAnalytics ?? []} />
       </div>
+
+      <InsightDeFormato posts={postsForAnalytics ?? []} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <EngajamentoPorFormato posts={postsForAnalytics ?? []} />
