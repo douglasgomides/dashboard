@@ -17,6 +17,7 @@ import {
 import { getClient, getMonthlyMetrics, getMetricsTrend, getPostsForAnalytics } from "@/lib/client-data";
 import { formatLabel } from "@/lib/methodology";
 import type { ContentFormat } from "@/integrations/supabase/types";
+import { computeFormatInsight, fmtFormatKey } from "@/lib/report-metrics";
 
 export const Route = createFileRoute("/_authenticated/$clientId/")({
   component: MonthlyOverview,
@@ -437,6 +438,8 @@ function MonthlyOverview() {
     "Seguidores ganhos": d.new_followers ?? 0,
   }));
 
+  const formatInsight = computeFormatInsight(postsForAnalytics ?? []);
+
   const postsDoMes = (postsForAnalytics ?? []).filter(
     (p) => p.posted_at && p.posted_at.slice(0, 10) >= start && p.posted_at.slice(0, 10) <= end,
   );
@@ -471,6 +474,21 @@ function MonthlyOverview() {
         <KpiCard label="Taxa de engajamento" value={engagementRate} hint="interações ÷ alcance" />
         <KpiCard label="Salvamentos" value={saves.toLocaleString("pt-BR")} />
       </div>
+
+      {formatInsight && (
+        <div className="grid grid-cols-2 gap-3">
+          <KpiCard
+            label="Melhor formato"
+            value={fmtFormatKey(formatInsight.best.format)}
+            hint={`${formatInsight.best.avg.toFixed(0)} engaj. médio · ${formatInsight.best.count} posts`}
+          />
+          <KpiCard
+            label="Formato mais fraco"
+            value={fmtFormatKey(formatInsight.worst.format)}
+            hint={`${formatInsight.worst.avg.toFixed(0)} engaj. médio · ${formatInsight.worst.count} posts`}
+          />
+        </div>
+      )}
 
       <button
         type="button"

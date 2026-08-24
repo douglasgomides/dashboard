@@ -330,6 +330,205 @@ function RepetirOuRevisar({ posts }: { posts: Post[] }) {
   );
 }
 
+// Mesmo tema pode performar diferente dependendo do formato — cruza os dois
+// pra mostrar onde a combinação funciona e onde não funciona. Só aparece
+// nas combinações com tema classificado.
+function FormatoPorTema({ posts }: { posts: Post[] }) {
+  const rows = useMemo(() => {
+    const groups = new Map<string, { tema: string; formato: ContentFormat; count: number; totalReach: number; totalEng: number }>();
+    for (const p of posts) {
+      if (!p.tema || !p.format) continue;
+      const key = `${p.tema}__${p.format}`;
+      const entry = groups.get(key) ?? { tema: p.tema, formato: p.format, count: 0, totalReach: 0, totalEng: 0 };
+      entry.count += 1;
+      entry.totalReach += p.reach ?? 0;
+      entry.totalEng += p.engagement ?? 0;
+      groups.set(key, entry);
+    }
+    return Array.from(groups.values())
+      .map((g) => ({
+        ...g,
+        avgReach: g.totalReach / g.count,
+        engRate: g.totalReach > 0 ? (g.totalEng / g.totalReach) * 100 : 0,
+      }))
+      .sort((a, b) => b.avgReach - a.avgReach);
+  }, [posts]);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+      <h2 className="mb-1 text-sm font-semibold">Tema dentro de cada formato</h2>
+      <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
+        O mesmo tema pode performar muito diferente dependendo do formato.
+      </p>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
+            <th className="pb-2">Tema</th>
+            <th className="pb-2">Formato</th>
+            <th className="pb-2 text-right">Posts</th>
+            <th className="pb-2 text-right">Alcance médio</th>
+            <th className="pb-2 text-right">Tx. engaj.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={`${r.tema}-${r.formato}`} className="border-t" style={{ borderColor: "var(--border)" }}>
+              <td className="py-1.5">{r.tema}</td>
+              <td className="py-1.5">{formatLabel(r.formato)}</td>
+              <td className="py-1.5 text-right">{r.count}</td>
+              <td className="py-1.5 text-right">{r.avgReach.toFixed(0)}</td>
+              <td className="py-1.5 text-right font-medium">{r.engRate.toFixed(1)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+type SortKey = "posted_at" | "reach" | "engagement" | "saved";
+
+// Base completa dos posts do mês — busca por legenda + filtro por tema e
+// formato + ordena por qualquer métrica. Não depende de classificação pra
+// funcionar (formato já vem pronto), fica mais rico conforme tema é preenchido.
+function ExploradorDePosts({ posts }: { posts: Post[] }) {
+  const [search, setSearch] = useState("");
+  const [temaFilter, setTemaFilter] = useState("");
+  const [formatFilter, setFormatFilter] = useState<ContentFormat | "">("");
+  const [sortKey, setSortKey] = useState<SortKey>("reach");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const temas = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of posts) if (p.tema) set.add(p.tema);
+    return Array.from(set).sort();
+  }, [posts]);
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return posts
+      .filter((p) => !term || (p.caption ?? "").toLowerCase().includes(term))
+      .filter((p) => !temaFilter || p.tema === temaFilter)
+      .filter((p) => !formatFilter || p.format === formatFilter)
+      .sort((a, b) => {
+        const av = sortKey === "posted_at" ? a.posted_at ?? "" : (a[sortKey] ?? 0);
+        const bv = sortKey === "posted_at" ? b.posted_at ?? "" : (b[sortKey] ?? 0);
+        const cmp = av > bv ? 1 : av < bv ? -1 : 0;
+        return sortDir === "asc" ? cmp : -cmp;
+      });
+  }, [posts, search, temaFilter, formatFilter, sortKey, sortDir]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  }
+
+  function sortIndicator(key: SortKey) {
+    if (sortKey !== key) return "";
+    return sortDir === "asc" ? " ↑" : " ↓";
+  }
+
+  return (
+    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+      <h2 className="mb-1 text-sm font-semibold">Explorador de posts</h2>
+      <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
+        Todos os posts do mês, filtráveis por tema e formato, ordenáveis por qualquer métrica.
+      </p>
+      <div className="mb-3 flex flex-wrap gap-2">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar na legenda..."
+          className="min-w-[200px] flex-1 rounded-md border px-2 py-1.5 text-sm"
+          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+        />
+        <select
+          value={temaFilter}
+          onChange={(e) => setTemaFilter(e.target.value)}
+          className="rounded-md border px-2 py-1.5 text-sm"
+          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+        >
+          <option value="">Todos os temas</option>
+          {temas.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+        <select
+          value={formatFilter}
+          onChange={(e) => setFormatFilter(e.target.value as ContentFormat | "")}
+          className="rounded-md border px-2 py-1.5 text-sm"
+          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+        >
+          <option value="">Todos os formatos</option>
+          {CONTENT_FORMATS.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {filtered.length === 0 ? (
+        <p className="text-sm" style={{ color: "var(--text-dim)" }}>
+          Nenhum post encontrado com esses filtros.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
+                <th className="cursor-pointer pb-2" onClick={() => toggleSort("posted_at")}>
+                  Data{sortIndicator("posted_at")}
+                </th>
+                <th className="pb-2">Formato</th>
+                <th className="pb-2">Tema</th>
+                <th className="pb-2">Legenda</th>
+                <th className="cursor-pointer pb-2 text-right" onClick={() => toggleSort("reach")}>
+                  Alcance{sortIndicator("reach")}
+                </th>
+                <th className="cursor-pointer pb-2 text-right" onClick={() => toggleSort("engagement")}>
+                  Engaj.{sortIndicator("engagement")}
+                </th>
+                <th className="cursor-pointer pb-2 text-right" onClick={() => toggleSort("saved")}>
+                  Salvos{sortIndicator("saved")}
+                </th>
+                <th className="pb-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((p) => (
+                <tr key={p.id} className="border-t" style={{ borderColor: "var(--border)" }}>
+                  <td className="py-1.5 whitespace-nowrap" style={{ color: "var(--text-dim)" }}>
+                    {p.posted_at ? new Date(p.posted_at).toLocaleDateString("pt-BR") : "—"}
+                  </td>
+                  <td className="py-1.5">{p.format ? formatLabel(p.format) : "—"}</td>
+                  <td className="py-1.5">{p.tema ?? "—"}</td>
+                  <td className="max-w-xs truncate py-1.5">{firstLine(p.caption) ?? p.windsor_media_id}</td>
+                  <td className="py-1.5 text-right">{(p.reach ?? 0).toLocaleString("pt-BR")}</td>
+                  <td className="py-1.5 text-right">{(p.engagement ?? 0).toLocaleString("pt-BR")}</td>
+                  <td className="py-1.5 text-right">{(p.saved ?? 0).toLocaleString("pt-BR")}</td>
+                  <td className="py-1.5 text-right">
+                    <a href={p.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+                      abrir ↗
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NextAngles({ clientId }: { clientId: string }) {
   const { data: angles, isLoading } = useQuery({
     queryKey: ["next-angles", clientId],
@@ -440,8 +639,10 @@ function PostsRankingPage() {
 
       <RepetirOuRevisar posts={rows} />
       <ConversionByTag posts={rows} />
+      <FormatoPorTema posts={rows} />
       <MelhoresGanchos posts={rows} />
       <NextAngles clientId={clientId} />
+      <ExploradorDePosts posts={rows} />
     </div>
   );
 }
