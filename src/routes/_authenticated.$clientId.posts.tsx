@@ -159,6 +159,86 @@ function ConversionByTag({ posts }: { posts: Post[] }) {
   );
 }
 
+function firstLine(caption: string | null): string | null {
+  if (!caption) return null;
+  const line = caption.split("\n").find((l) => l.trim().length > 0);
+  return line ? line.trim() : null;
+}
+
+function MelhoresGanchos({ posts }: { posts: Post[] }) {
+  const top = useMemo(() => {
+    return posts
+      .map((p) => ({ post: p, gancho: firstLine(p.caption) }))
+      .filter((x): x is { post: Post; gancho: string } => !!x.gancho)
+      .sort((a, b) => (b.post.engagement ?? 0) - (a.post.engagement ?? 0))
+      .slice(0, 8);
+  }, [posts]);
+
+  if (top.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+      <h2 className="mb-1 text-sm font-semibold">Melhores ganchos</h2>
+      <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
+        Primeira linha da legenda dos posts com mais engajamento — o padrão de abertura que mais prendeu atenção.
+      </p>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
+            <th className="pb-2">Gancho</th>
+            <th className="pb-2 text-right">Engajamento</th>
+          </tr>
+        </thead>
+        <tbody>
+          {top.map(({ post, gancho }) => (
+            <tr key={post.id} className="border-t" style={{ borderColor: "var(--border)" }}>
+              <td className="py-1.5">
+                <a href={post.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--text)" }}>
+                  {gancho}
+                </a>
+              </td>
+              <td className="py-1.5 text-right font-medium">{post.engagement ?? 0}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TopDoMes({ posts }: { posts: Post[] }) {
+  const top5 = posts.slice(0, 5);
+  if (top5.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border p-4" style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}>
+      <h2 className="mb-1 text-sm font-semibold">🏆 Top 5 do mês — considere repetir</h2>
+      <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
+        Os posts que mais salvaram no mês. Classifique-os abaixo (tema/funil/estágio) pra virarem sugestão de
+        "próximos ângulos" automaticamente.
+      </p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+        {top5.map((post, i) => (
+          <a
+            key={post.id}
+            href={post.permalink ?? "#"}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg border p-2 text-xs"
+            style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text)" }}
+          >
+            <div className="font-mono" style={{ color: "var(--text-faint)" }}>
+              #{i + 1}
+            </div>
+            <div className="mt-1 line-clamp-3">{firstLine(post.caption) ?? post.windsor_media_id}</div>
+            <div className="mt-1 font-medium">{post.saved ?? 0} salvos</div>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function NextAngles({ clientId }: { clientId: string }) {
   const { data: angles, isLoading } = useQuery({
     queryKey: ["next-angles", clientId],
@@ -208,6 +288,8 @@ function PostsRankingPage() {
 
   return (
     <div className="space-y-6">
+      <TopDoMes posts={rows} />
+
       <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
         <h2 className="mb-3 text-sm font-semibold">Ranking de posts do mês (por salvamentos)</h2>
         {rows.length === 0 ? (
@@ -240,6 +322,7 @@ function PostsRankingPage() {
       </div>
 
       <ConversionByTag posts={rows} />
+      <MelhoresGanchos posts={rows} />
       <NextAngles clientId={clientId} />
     </div>
   );

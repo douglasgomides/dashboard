@@ -44,6 +44,32 @@ export async function getRankedPosts(clientId: string, monthStart: string, month
   return data;
 }
 
+// Janela mais ampla (default 90 dias) pra gráficos de tendência, horários e
+// formato — a Visão Geral do Mês usa getMonthlyMetrics/getRankedPosts (mês
+// corrente) pros KPIs; essas duas alimentam os gráficos analíticos que
+// precisam de mais histórico pra fazer sentido.
+export async function getMetricsTrend(clientId: string, sinceDate: string) {
+  const { data, error } = await supabase
+    .from("instagram_account_daily_metrics")
+    .select("*")
+    .eq("client_id", clientId)
+    .gte("date", sinceDate)
+    .order("date", { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function getPostsForAnalytics(clientId: string, sinceDate: string) {
+  const { data, error } = await supabase
+    .from("instagram_posts")
+    .select("*")
+    .eq("client_id", clientId)
+    .gte("posted_at", sinceDate)
+    .order("posted_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
 export async function getNextAngles(clientId: string, limit = 5) {
   const { data, error } = await supabase.rpc("suggest_next_angles", {
     p_client_id: clientId,
