@@ -460,6 +460,7 @@ function MonthlyOverview() {
         ],
         postsForAnalytics: postsForAnalytics ?? [],
         postsDoMes,
+        trendDays: TREND_DAYS,
       });
     } finally {
       setGeneratingReport(false);

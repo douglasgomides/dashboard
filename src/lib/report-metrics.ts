@@ -93,3 +93,62 @@ export function computeTopPosts(posts: any[], limit = 5) {
     .sort((a, b) => (b.saved ?? 0) - (a.saved ?? 0))
     .slice(0, limit);
 }
+
+// Mesma lógica do componente RepetirOuRevisar — por tema, taxa de
+// engajamento (engajamento ÷ alcance), mínimo de posts pra entrar na conta.
+export function computeRepetirOuRevisar(posts: any[], minPosts = 3) {
+  const groups = new Map<string, { tema: string; count: number; totalEng: number; totalReach: number }>();
+  for (const p of posts) {
+    if (!p.tema || p.engagement == null || p.reach == null) continue;
+    const entry = groups.get(p.tema) ?? { tema: p.tema, count: 0, totalEng: 0, totalReach: 0 };
+    entry.count += 1;
+    entry.totalEng += p.engagement;
+    entry.totalReach += p.reach;
+    groups.set(p.tema, entry);
+  }
+  const qualifying = Array.from(groups.values())
+    .filter((g) => g.count >= minPosts && g.totalReach > 0)
+    .map((g) => ({ ...g, rate: g.totalEng / g.totalReach }));
+  if (qualifying.length === 0) return { repetir: [], revisar: [], hasEnough: false };
+  const baseline = qualifying.reduce((s, g) => s + g.rate, 0) / qualifying.length;
+  return {
+    repetir: qualifying.filter((g) => g.rate >= baseline).sort((a, b) => b.rate - a.rate),
+    revisar: qualifying.filter((g) => g.rate < baseline).sort((a, b) => a.rate - b.rate),
+    hasEnough: true,
+  };
+}
+
+// O post de maior e o de menor alcance no período — pra virar caso
+// destacado no relatório, com link e legenda reais (nunca inventados).
+export function computeCasosDestacados(posts: any[]) {
+  const withReach = posts.filter((p) => p.reach != null && p.reach > 0);
+  if (withReach.length < 2) return null;
+  const sorted = [...withReach].sort((a, b) => (b.reach ?? 0) - (a.reach ?? 0));
+  return { melhor: sorted[0], pior: sorted[sorted.length - 1] };
+}
+
+// Sintetiza o achado mais forte do período (formato ou horário, o que tiver
+// maior desvio da média) numa única frase — a mesma lógica que o exemplo de
+// referência chamava de "a frase que resume a semana".
+export function computeHeadline(posts: any[]) {
+  const formatInsight = computeFormatInsight(posts);
+  const { ranked: horarios, overallAvg: horaAvg } = computeMelhoresHorarios(posts);
+  const top = horarios[0];
+  const horaPct = top && horaAvg > 0 ? ((top.avg - horaAvg) / horaAvg) * 100 : 0;
+
+  const candidates: { pct: number; text: string }[] = [];
+  if (formatInsight) {
+    candidates.push({
+      pct: Math.abs(formatInsight.bestPct),
+      text: `${fmtFormatKey(formatInsight.best.format)} é o formato que mais engaja nesta conta — ${formatInsight.bestPct.toFixed(0)}% acima da média, com ${formatInsight.best.count} posts no período.`,
+    });
+  }
+  if (top) {
+    candidates.push({
+      pct: Math.abs(horaPct),
+      text: `${top.weekday} à(o) ${top.period.toLowerCase()} é a janela de maior engajamento — ${horaPct >= 0 ? "+" : ""}${horaPct.toFixed(0)}% acima da média, em ${top.count} posts.`,
+    });
+  }
+  if (candidates.length === 0) return null;
+  return candidates.sort((a, b) => b.pct - a.pct)[0].text;
+}
