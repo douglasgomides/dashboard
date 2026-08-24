@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { sendPasswordReset } from "@/lib/admin-data";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -12,6 +13,17 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+
+  async function handleForgotPassword() {
+    if (!email.trim()) {
+      setError("Digite seu e-mail acima antes de pedir o link.");
+      return;
+    }
+    setError(null);
+    await sendPasswordReset(email).catch((err) => setError((err as Error).message));
+    setResetSent(true);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -75,6 +87,15 @@ function LoginPage() {
           style={{ background: "var(--accent)" }}
         >
           {loading ? "Entrando…" : "Entrar"}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleForgotPassword}
+          className="mt-3 w-full text-center text-xs"
+          style={{ color: "var(--text-dim)" }}
+        >
+          {resetSent ? "Link enviado — confira seu e-mail" : "Esqueci minha senha"}
         </button>
       </form>
     </div>

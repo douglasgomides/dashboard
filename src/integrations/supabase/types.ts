@@ -197,11 +197,24 @@ export interface Database {
           },
         ];
       };
+      app_admins: {
+        Row: {
+          user_id: string;
+          created_at: string;
+        };
+        Insert: { user_id: string; created_at?: string };
+        Update: Partial<{ user_id: string; created_at: string }>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
       is_client_member: {
         Args: { p_client_id: string };
+        Returns: boolean;
+      };
+      is_app_admin: {
+        Args: Record<string, never>;
         Returns: boolean;
       };
       suggest_next_angles: {

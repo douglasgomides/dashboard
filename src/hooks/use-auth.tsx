@@ -6,20 +6,31 @@ interface AuthState {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isAdmin: boolean;
 }
 
-const AuthContext = createContext<AuthState>({ user: null, session: null, loading: true });
+const AuthContext = createContext<AuthState>({ user: null, session: null, loading: true, isAdmin: false });
+
+async function fetchIsAdmin(): Promise<boolean> {
+  const { data, error } = await supabase.rpc("is_app_admin");
+  if (error) return false;
+  return data === true;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({ user: null, session: null, loading: true });
+  const [state, setState] = useState<AuthState>({ user: null, session: null, loading: true, isAdmin: false });
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setState({ user: data.session?.user ?? null, session: data.session, loading: false });
+    supabase.auth.getSession().then(async ({ data }) => {
+      const user = data.session?.user ?? null;
+      const isAdmin = user ? await fetchIsAdmin() : false;
+      setState({ user, session: data.session, loading: false, isAdmin });
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setState({ user: session?.user ?? null, session, loading: false });
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const user = session?.user ?? null;
+      const isAdmin = user ? await fetchIsAdmin() : false;
+      setState({ user, session, loading: false, isAdmin });
     });
 
     return () => sub.subscription.unsubscribe();

@@ -1,6 +1,7 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getClient } from "@/lib/client-data";
+import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/_authenticated/$clientId")({
   component: ClientLayout,
@@ -14,6 +15,7 @@ const CFM_DOT: Record<string, string> = {
 
 function ClientLayout() {
   const { clientId } = Route.useParams();
+  const { isAdmin } = useAuth();
   const { data: client } = useQuery({
     queryKey: ["client", clientId],
     queryFn: () => getClient(clientId),
@@ -29,6 +31,11 @@ function ClientLayout() {
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-8">
+      {isAdmin && (
+        <Link to="/admin/$clientId" params={{ clientId }} className="mb-3 inline-block text-sm" style={{ color: "var(--accent)" }}>
+          ← Painel admin
+        </Link>
+      )}
       <header className="mb-6 flex items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
