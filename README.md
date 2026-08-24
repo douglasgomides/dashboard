@@ -68,11 +68,13 @@ Vercel. Via dashboard (deploy automático a cada push):
 2. Framework preset: **Vite** (auto-detectado). Build command `npm run
    build`, output directory `dist` — ambos já são o default do preset, não
    precisa mexer.
-3. Em **Settings → Environment Variables**, adicione `VITE_SUPABASE_URL` e
-   `VITE_SUPABASE_PUBLISHABLE_KEY` (únicas que o app usa em runtime — é um
-   SPA client-only, não tem rota server-side). `SUPABASE_URL`,
-   `SUPABASE_SERVICE_ROLE_KEY` e `WINDSOR_API_KEY` só são usadas pelo
-   `npm run sync:instagram` local/cron, não pelo deploy do site.
+3. Em **Settings → Environment Variables**, adicione:
+   - `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` — client-side (SPA).
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — server-side, sem prefixo
+     `VITE_`, marcar como *Sensitive*. Usadas pela única rota server-side do
+     app, `api/admin/create-user.ts` (Admin API do Supabase pra criar login
+     de outro usuário — não dá pra fazer isso só com RLS no navegador).
+   `WINDSOR_API_KEY` só é usada pelo `npm run sync:instagram` local/cron.
 4. Deploy. Todo push nessa branch gera um preview; promova pra produção
    quando o backend (Supabase) estiver de pé.
 
