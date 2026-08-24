@@ -65,3 +65,14 @@ export async function classifyPost(
   const { error } = await supabase.from("instagram_posts").update(fields).eq("id", postId);
   if (error) throw error;
 }
+
+// Biblioteca de inspiração ("Swipe File Médico") — global, não filtrada por
+// cliente. Referência de estrutura/gancho pra adaptar, nunca conteúdo pronto.
+export async function listInspirationPosts() {
+  const { data, error } = await supabase
+    .from("inspiration_posts")
+    .select("*")
+    .order("multiplicador_mediana", { ascending: false, nullsFirst: false });
+  if (error) throw error;
+  return data;
+}

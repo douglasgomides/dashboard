@@ -206,6 +206,35 @@ export interface Database {
         Update: Partial<{ user_id: string; created_at: string }>;
         Relationships: [];
       };
+      inspiration_posts: {
+        Row: {
+          id: string;
+          grupo: string;
+          especialidade: string;
+          midia: "post" | "reel";
+          formato: string | null;
+          metrica_valor: number | null;
+          metrica_label: string | null;
+          multiplicador_mediana: number | null;
+          titulo: string | null;
+          fonte_url: string | null;
+          fonte_handle: string | null;
+          gancho: string | null;
+          estrutura: string | null;
+          por_que_funcionou: string | null;
+          como_adaptar: string | null;
+          replicabilidade: "alta" | "media" | "baixa" | null;
+          replicabilidade_texto: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["inspiration_posts"]["Row"]> & {
+          grupo: string;
+          especialidade: string;
+          midia: "post" | "reel";
+        };
+        Update: Partial<Database["public"]["Tables"]["inspiration_posts"]["Row"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
