@@ -14,6 +14,7 @@ export type ContentFormat = "reels" | "carrossel" | "estatico" | "stories";
 export type SuggestionStatus = "suggested" | "accepted" | "dismissed";
 export type CfmScoreStatus = "verde" | "amarelo" | "vermelho";
 export type ClientMemberRole = "owner" | "strategist" | "viewer";
+export type CrmProvider = "kommo" | "feegow" | "ninsaude";
 
 export interface Database {
   public: {
@@ -205,6 +206,31 @@ export interface Database {
         Insert: { user_id: string; created_at?: string };
         Update: Partial<{ user_id: string; created_at: string }>;
         Relationships: [];
+      };
+      crm_connections: {
+        Row: {
+          id: string;
+          client_id: string;
+          provider: CrmProvider;
+          subdomain: string | null;
+          access_token: string | null;
+          active: boolean;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["crm_connections"]["Row"]> & {
+          client_id: string;
+          provider: CrmProvider;
+        };
+        Update: Partial<Database["public"]["Tables"]["crm_connections"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "crm_connections_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       inspiration_posts: {
         Row: {

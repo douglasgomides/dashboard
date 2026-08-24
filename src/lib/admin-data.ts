@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { CrmProvider } from "@/integrations/supabase/types";
 
 export async function listAllClients() {
   const { data, error } = await supabase
@@ -32,6 +33,31 @@ export async function listInstagramAccounts(clientId: string) {
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data;
+}
+
+export async function listCrmConnections(clientId: string) {
+  const { data, error } = await supabase
+    .from("crm_connections")
+    .select("id, provider, subdomain, active, created_at")
+    .eq("client_id", clientId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function createCrmConnection(input: {
+  client_id: string;
+  provider: CrmProvider;
+  subdomain?: string;
+  access_token?: string;
+}) {
+  const { error } = await supabase.from("crm_connections").insert(input);
+  if (error) throw error;
+}
+
+export async function removeCrmConnection(connectionId: string) {
+  const { error } = await supabase.from("crm_connections").delete().eq("id", connectionId);
+  if (error) throw error;
 }
 
 export async function listClientMembers(clientId: string) {

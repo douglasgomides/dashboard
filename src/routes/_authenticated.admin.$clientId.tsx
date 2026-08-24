@@ -5,12 +5,22 @@ import { getClient } from "@/lib/client-data";
 import {
   connectInstagramAccount,
   createClientUser,
+  createCrmConnection,
   listClientMembers,
+  listCrmConnections,
   listInstagramAccounts,
   removeClientMember,
+  removeCrmConnection,
   sendPasswordReset,
   type CreateClientUserInput,
 } from "@/lib/admin-data";
+import type { CrmProvider } from "@/integrations/supabase/types";
+
+const CRM_PROVIDER_LABELS: Record<CrmProvider, string> = {
+  kommo: "Kommo",
+  feegow: "Feegow",
+  ninsaude: "Ninsaúde",
+};
 
 export const Route = createFileRoute("/_authenticated/admin/$clientId")({
   component: AdminClientDetailPage,
@@ -76,6 +86,128 @@ function ConnectInstagramForm({ clientId }: { clientId: string }) {
         </p>
       )}
     </form>
+  );
+}
+
+function ConnectCrmForm({ clientId }: { clientId: string }) {
+  const queryClient = useQueryClient();
+  const [provider, setProvider] = useState<CrmProvider>("kommo");
+  const [subdomain, setSubdomain] = useState("");
+  const [accessToken, setAccessToken] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      createCrmConnection({
+        client_id: clientId,
+        provider,
+        subdomain: subdomain || undefined,
+        access_token: accessToken || undefined,
+      }),
+    onSuccess: () => {
+      setSubdomain("");
+      setAccessToken("");
+      queryClient.invalidateQueries({ queryKey: ["admin-crm-connections", clientId] });
+    },
+  });
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    mutation.mutate();
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
+      <div>
+        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+          CRM
+        </label>
+        <select
+          value={provider}
+          onChange={(e) => setProvider(e.target.value as CrmProvider)}
+          className="mt-1 rounded-md border px-2 py-1.5 text-sm"
+          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+        >
+          {(Object.entries(CRM_PROVIDER_LABELS) as [CrmProvider, string][]).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+          Subdomínio
+        </label>
+        <input
+          value={subdomain}
+          onChange={(e) => setSubdomain(e.target.value)}
+          placeholder="dralanatorres"
+          className="mt-1 w-44 rounded-md border px-2 py-1.5 text-sm"
+          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+          Token de acesso
+        </label>
+        <input
+          type="password"
+          value={accessToken}
+          onChange={(e) => setAccessToken(e.target.value)}
+          className="mt-1 w-64 rounded-md border px-2 py-1.5 text-sm"
+          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={mutation.isPending}
+        className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        style={{ background: "var(--accent)" }}
+      >
+        {mutation.isPending ? "Conectando…" : "Conectar CRM"}
+      </button>
+      {mutation.isError && (
+        <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
+          {(mutation.error as Error).message}
+        </p>
+      )}
+    </form>
+  );
+}
+
+function CrmConnectionsList({ clientId }: { clientId: string }) {
+  const queryClient = useQueryClient();
+  const { data: connections } = useQuery({
+    queryKey: ["admin-crm-connections", clientId],
+    queryFn: () => listCrmConnections(clientId),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (id: string) => removeCrmConnection(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-crm-connections", clientId] }),
+  });
+
+  if (!connections?.length) return null;
+  return (
+    <ul className="mt-3 space-y-1 text-sm">
+      {connections.map((c) => (
+        <li key={c.id} className="flex items-center gap-2" style={{ color: "var(--text-dim)" }}>
+          <span className="font-medium" style={{ color: "var(--text)" }}>
+            {CRM_PROVIDER_LABELS[c.provider]}
+          </span>
+          {c.subdomain ? ` · ${c.subdomain}` : ""}
+          {!c.active && " · inativo"}
+          <button
+            type="button"
+            onClick={() => removeMutation.mutate(c.id)}
+            className="text-xs"
+            style={{ color: "var(--danger)" }}
+          >
+            Remover
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -279,6 +411,12 @@ function AdminClientDetailPage() {
         <h3 className="mb-3 text-sm font-semibold">Conta Instagram (Windsor.ai)</h3>
         <ConnectInstagramForm clientId={clientId} />
         <InstagramAccountsList clientId={clientId} />
+      </section>
+
+      <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+        <h3 className="mb-3 text-sm font-semibold">CRM</h3>
+        <ConnectCrmForm clientId={clientId} />
+        <CrmConnectionsList clientId={clientId} />
       </section>
 
       <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
