@@ -88,6 +88,9 @@ function SinaisDeInteresse({ reach, contactTaps, newFollowers }: { reach: number
             Novos seguidores
           </div>
           <div className="mt-1 text-xl font-semibold">{newFollowers.toLocaleString("pt-BR")}</div>
+          <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-faint)" }}>
+            só últimos 30 dias — limite do Instagram, não do período escolhido
+          </div>
         </div>
       </div>
     </div>
@@ -400,7 +403,11 @@ function MonthlyOverview() {
         igHandle: client?.instagram_handle,
         periodLabel,
         kpis: [
-          { label: "Novos seguidores", value: newFollowers.toLocaleString("pt-BR") },
+          {
+            label: "Novos seguidores",
+            value: newFollowers.toLocaleString("pt-BR"),
+            hint: "só últimos 30 dias (limite do Instagram)",
+          },
           { label: "Alcance", value: reach.toLocaleString("pt-BR") },
           { label: "Taxa de engajamento", value: engagementRate, hint: "interações ÷ alcance" },
           { label: "Salvamentos", value: saves.toLocaleString("pt-BR") },
@@ -417,7 +424,11 @@ function MonthlyOverview() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiCard label="Novos seguidores" value={newFollowers.toLocaleString("pt-BR")} />
+        <KpiCard
+          label="Novos seguidores"
+          value={newFollowers.toLocaleString("pt-BR")}
+          hint="só últimos 30 dias (limite do Instagram)"
+        />
         <KpiCard label="Alcance" value={reach.toLocaleString("pt-BR")} />
         <KpiCard label="Taxa de engajamento" value={engagementRate} hint="interações ÷ alcance" />
         <KpiCard label="Salvamentos" value={saves.toLocaleString("pt-BR")} />
