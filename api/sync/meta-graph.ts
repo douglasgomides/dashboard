@@ -31,6 +31,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const accountId = typeof req.query.account_id === "string" ? req.query.account_id : undefined;
+  const after = typeof req.query.after === "string" ? req.query.after : undefined;
+  const maxPagesParam = typeof req.query.max_pages === "string" ? Number(req.query.max_pages) : undefined;
+  const maxPages = maxPagesParam && Number.isFinite(maxPagesParam) ? maxPagesParam : undefined;
 
   try {
     const results = await runMetaGraphSync({
@@ -38,6 +41,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       supabaseUrl: SUPABASE_URL,
       supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
       onlyAccountId: accountId,
+      maxPages,
+      after,
     });
 
     const hasErrors = results.some((r) => r.errors.length > 0);

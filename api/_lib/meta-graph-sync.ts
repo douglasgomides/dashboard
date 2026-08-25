@@ -40,6 +40,11 @@ export interface MetaSyncEnv {
   // contas). Passando isso, processa só essa conta — quem chama itera uma
   // por vez.
   onlyAccountId?: string;
+  // Quantas páginas de /media (100 posts cada) processar nesta invocação —
+  // mesmo uma conta só pode ter posts demais pra caber em 300s. Retorna
+  // nextCursor/done pra quem chama continuar de onde parou.
+  maxPages?: number;
+  after?: string;
 }
 
 export interface MetaAccountSyncResult {
@@ -47,27 +52,44 @@ export interface MetaAccountSyncResult {
   igAccountId: string;
   posts: number;
   temasClassified: number;
+  nextCursor: string | null;
+  done: boolean;
   errors: string[];
 }
 
-// Pagina o histórico completo de mídia da conta — sem limite de data, a API
-// simplesmente devolve tudo que existe, mais recente primeiro.
-async function fetchAllMedia(igAccountId: string, accessToken: string): Promise<MetaMedia[]> {
+// Pagina a mídia da conta, mais recente primeiro. Limitado a maxPages por
+// chamada — processar o histórico inteiro (500+ posts) numa invocação só
+// estourava os 300s da função na Vercel (confirmado por teste direto). Quem
+// chama itera passando o cursor `next` de volta até `done: true`.
+async function fetchMediaPage(
+  igAccountId: string,
+  accessToken: string,
+  maxPages: number,
+  after?: string,
+): Promise<{ media: MetaMedia[]; nextCursor: string | null; done: boolean }> {
   const fields = "id,caption,timestamp,media_type,media_product_type,permalink,thumbnail_url";
   let url: string | null =
-    `${GRAPH_BASE}/${igAccountId}/media?fields=${fields}&limit=100&access_token=${accessToken}`;
+    `${GRAPH_BASE}/${igAccountId}/media?fields=${fields}&limit=100&access_token=${accessToken}` +
+    (after ? `&after=${after}` : "");
   const all: MetaMedia[] = [];
+  let nextCursor: string | null = null;
+  let pagesLeft = maxPages;
 
-  while (url) {
+  while (url && pagesLeft > 0) {
     const res = await fetch(url);
     if (!res.ok) {
       throw new Error(`Meta Graph media fetch failed (${res.status}): ${await res.text()}`);
     }
-    const body = (await res.json()) as { data?: MetaMedia[]; paging?: { next?: string } };
+    const body = (await res.json()) as {
+      data?: MetaMedia[];
+      paging?: { next?: string; cursors?: { after?: string } };
+    };
     all.push(...(body.data ?? []));
+    nextCursor = body.paging?.cursors?.after ?? null;
     url = body.paging?.next ?? null;
+    pagesLeft--;
   }
-  return all;
+  return { media: all, nextCursor: url ? nextCursor : null, done: !url };
 }
 
 // Busca insights de até 50 posts por chamada via API de lote da Meta, em vez
@@ -114,8 +136,10 @@ async function syncAccountPosts(
   accountId: string,
   igAccountId: string,
   clientId: string,
-): Promise<{ count: number; errors: string[] }> {
-  const media = await fetchAllMedia(igAccountId, accessToken);
+  maxPages: number,
+  after: string | undefined,
+): Promise<{ count: number; errors: string[]; nextCursor: string | null; done: boolean }> {
+  const { media, nextCursor, done } = await fetchMediaPage(igAccountId, accessToken, maxPages, after);
   const insightsById = await fetchInsightsBatch(
     media.map((m) => m.id),
     accessToken,
@@ -156,7 +180,7 @@ async function syncAccountPosts(
     if (error) errors.push(`posts batch (${batch.length}): ${error.message}`);
     else count += batch.length;
   }
-  return { count, errors };
+  return { count, errors, nextCursor, done };
 }
 
 async function classifyMissingTemas(
@@ -205,6 +229,7 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
   const { data: accounts, error } = await query;
   if (error) throw error;
 
+  const maxPages = env.maxPages ?? 3;
   const results: MetaAccountSyncResult[] = [];
   for (const account of accounts ?? []) {
     const errors: string[] = [];
@@ -214,9 +239,11 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
       account.id,
       account.windsor_account_id,
       account.client_id,
+      maxPages,
+      env.after,
     ).catch((err) => {
       errors.push(`posts: ${err instanceof Error ? err.message : String(err)}`);
-      return { count: 0, errors: [] };
+      return { count: 0, errors: [], nextCursor: null, done: true };
     });
     const temas = await classifyMissingTemas(supabase, account.id, account.windsor_account_id).catch((err) => {
       errors.push(`classify: ${err instanceof Error ? err.message : String(err)}`);
@@ -228,6 +255,8 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
       igAccountId: account.windsor_account_id,
       posts: posts.count,
       temasClassified: temas.count,
+      nextCursor: posts.nextCursor,
+      done: posts.done,
       errors: [...errors, ...posts.errors, ...temas.errors],
     });
   }
