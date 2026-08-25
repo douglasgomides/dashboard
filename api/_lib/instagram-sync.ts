@@ -223,7 +223,7 @@ export async function runInstagramSync(env: SyncEnv): Promise<AccountSyncResult[
   const supabase = createClient<Database>(env.supabaseUrl, env.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const syncDays = env.syncDays ?? 90;
+  const syncDays = env.syncDays ?? 365;
 
   const { data: accounts, error } = await supabase
     .from("instagram_accounts")

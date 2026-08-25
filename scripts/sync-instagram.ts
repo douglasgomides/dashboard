@@ -13,7 +13,10 @@ import { runInstagramSync } from "../api/_lib/instagram-sync.js";
 const WINDSOR_API_KEY = process.env.WINDSOR_API_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SYNC_DAYS = Number(process.env.SYNC_DAYS ?? 90);
+// 365 dias por padrão — todo cliente novo entra com o histórico completo de
+// 1 ano, não só os últimos meses. O sync diário do n8n continua passando
+// sync_days=3 explicitamente (não precisa reprocessar o ano inteiro todo dia).
+const SYNC_DAYS = Number(process.env.SYNC_DAYS ?? 365);
 
 if (!WINDSOR_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error("Missing WINDSOR_API_KEY, SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");

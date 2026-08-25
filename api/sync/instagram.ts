@@ -31,14 +31,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const syncDaysParam = req.query.sync_days;
-  const syncDays = syncDaysParam ? Number(Array.isArray(syncDaysParam) ? syncDaysParam[0] : syncDaysParam) : 90;
+  const syncDays = syncDaysParam ? Number(Array.isArray(syncDaysParam) ? syncDaysParam[0] : syncDaysParam) : 365;
 
   try {
     const results = await runInstagramSync({
       windsorApiKey: WINDSOR_API_KEY,
       supabaseUrl: SUPABASE_URL,
       supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
-      syncDays: Number.isFinite(syncDays) ? syncDays : 90,
+      syncDays: Number.isFinite(syncDays) ? syncDays : 365,
     });
 
     const hasErrors = results.some((r) => r.errors.length > 0);
