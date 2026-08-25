@@ -35,6 +35,11 @@ export interface MetaSyncEnv {
   accessToken: string;
   supabaseUrl: string;
   supabaseServiceRoleKey: string;
+  // Processar todas as contas numa invocação só estourava os 300s da
+  // função na Vercel (confirmado: FUNCTION_INVOCATION_TIMEOUT com só 2
+  // contas). Passando isso, processa só essa conta — quem chama itera uma
+  // por vez.
+  onlyAccountId?: string;
 }
 
 export interface MetaAccountSyncResult {
@@ -195,10 +200,9 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { data: accounts, error } = await supabase
-    .from("instagram_accounts")
-    .select("id, client_id, windsor_account_id")
-    .eq("active", true);
+  let query = supabase.from("instagram_accounts").select("id, client_id, windsor_account_id").eq("active", true);
+  if (env.onlyAccountId) query = query.eq("id", env.onlyAccountId);
+  const { data: accounts, error } = await query;
   if (error) throw error;
 
   const results: MetaAccountSyncResult[] = [];

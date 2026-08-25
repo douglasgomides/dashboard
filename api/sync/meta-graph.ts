@@ -30,11 +30,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  const accountId = typeof req.query.account_id === "string" ? req.query.account_id : undefined;
+
   try {
     const results = await runMetaGraphSync({
       accessToken: META_ACCESS_TOKEN,
       supabaseUrl: SUPABASE_URL,
       supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+      onlyAccountId: accountId,
     });
 
     const hasErrors = results.some((r) => r.errors.length > 0);
