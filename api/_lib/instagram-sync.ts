@@ -37,6 +37,13 @@ function numOrNull(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+const BATCH_SIZE = 500;
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 // REEL/STORY/CAROUSEL_ALBUM map diretamente; FEED de imagem ou vídeo é "estatico".
 // A Windsor não é consistente entre contas: em algumas media_type vem "REEL",
 // em outras "REELS" (plural) — por isso o includes() em vez de igualdade exata.
@@ -107,34 +114,40 @@ async function syncPosts(
     windsorAccountId,
   );
 
+  const now = new Date().toISOString();
+  const postRows = rows
+    .filter((r) => r.media_id)
+    .map((r) => ({
+      instagram_account_id: accountId,
+      client_id: clientId,
+      windsor_media_id: String(r.media_id),
+      media_type: (r.media_type as string) ?? null,
+      format: normalizeFormat(r.media_type, r.media_product_type) as any,
+      permalink: (r.media_permalink as string) ?? null,
+      thumbnail_url: (r.media_thumbnail_url as string) ?? null,
+      caption: (r.media_caption as string) ?? null,
+      posted_at: (r.timestamp as string) ?? null,
+      reach: numOrNull(r.media_reach),
+      saved: numOrNull(r.media_saved),
+      likes: numOrNull(r.media_like_count),
+      comments: numOrNull(r.media_comments_count),
+      shares: numOrNull(r.media_shares),
+      views: numOrNull(r.media_views),
+      engagement: numOrNull(r.media_engagement),
+      metrics_updated_at: now,
+    }));
+
+  // Upsert em lote em vez de linha a linha — pra 1 ano de histórico, uma
+  // chamada por post estourava o timeout do n8n (60s+ pra poucas centenas
+  // de posts). Em lotes de 500, um sync completo de 1 ano fica em segundos.
   const errors: string[] = [];
   let count = 0;
-  for (const r of rows) {
-    if (!r.media_id) continue;
-    const { error } = await supabase.from("instagram_posts").upsert(
-      {
-        instagram_account_id: accountId,
-        client_id: clientId,
-        windsor_media_id: String(r.media_id),
-        media_type: (r.media_type as string) ?? null,
-        format: normalizeFormat(r.media_type, r.media_product_type) as any,
-        permalink: (r.media_permalink as string) ?? null,
-        thumbnail_url: (r.media_thumbnail_url as string) ?? null,
-        caption: (r.media_caption as string) ?? null,
-        posted_at: (r.timestamp as string) ?? null,
-        reach: numOrNull(r.media_reach),
-        saved: numOrNull(r.media_saved),
-        likes: numOrNull(r.media_like_count),
-        comments: numOrNull(r.media_comments_count),
-        shares: numOrNull(r.media_shares),
-        views: numOrNull(r.media_views),
-        engagement: numOrNull(r.media_engagement),
-        metrics_updated_at: new Date().toISOString(),
-      },
-      { onConflict: "instagram_account_id,windsor_media_id" },
-    );
-    if (error) errors.push(`post ${r.media_id}: ${error.message}`);
-    else count++;
+  for (const batch of chunk(postRows, BATCH_SIZE)) {
+    const { error } = await supabase
+      .from("instagram_posts")
+      .upsert(batch, { onConflict: "instagram_account_id,windsor_media_id" });
+    if (error) errors.push(`posts batch (${batch.length}): ${error.message}`);
+    else count += batch.length;
   }
   return { count, errors };
 }
@@ -154,14 +167,27 @@ async function classifyMissingTemas(
     .is("tema", null);
   if (selectError) return { count: 0, errors: [`classify select: ${selectError.message}`] };
 
-  const errors: string[] = [];
-  let count = 0;
+  // Agrupa por tema calculado e faz um UPDATE por grupo (não por post) —
+  // mesma razão do batching em syncPosts, e aqui o número de grupos é
+  // pequeno (a quantidade de temas do cliente), então a economia é ainda
+  // maior num backfill grande.
+  const idsByTema = new Map<string, string[]>();
   for (const row of rows ?? []) {
     const tema = classifyTema(windsorAccountId, row.caption);
     if (!tema) continue;
-    const { error } = await supabase.from("instagram_posts").update({ tema }).eq("id", row.id);
-    if (error) errors.push(`classify ${row.id}: ${error.message}`);
-    else count++;
+    const ids = idsByTema.get(tema) ?? [];
+    ids.push(row.id);
+    idsByTema.set(tema, ids);
+  }
+
+  const errors: string[] = [];
+  let count = 0;
+  for (const [tema, ids] of idsByTema) {
+    for (const batch of chunk(ids, BATCH_SIZE)) {
+      const { error } = await supabase.from("instagram_posts").update({ tema }).in("id", batch);
+      if (error) errors.push(`classify "${tema}" (${batch.length}): ${error.message}`);
+      else count += batch.length;
+    }
   }
   return { count, errors };
 }
@@ -193,28 +219,31 @@ async function syncDailyMetrics(
     windsorAccountId,
   );
 
+  const dailyRows = rows
+    .filter((r) => r.date)
+    .map((r) => ({
+      instagram_account_id: accountId,
+      client_id: clientId,
+      date: r.date as string,
+      followers_count: numOrNull(r.followers_count),
+      new_followers: numOrNull(r.follower_count_1d),
+      reach: numOrNull(r.reach_1d),
+      likes: numOrNull(r.likes),
+      comments: numOrNull(r.comments),
+      saves: numOrNull(r.saves),
+      shares: numOrNull(r.shares),
+      total_interactions: numOrNull(r.total_interactions),
+      profile_links_taps: numOrNull(r.profile_links_taps),
+    }));
+
   const errors: string[] = [];
   let count = 0;
-  for (const r of rows.filter((row) => row.date)) {
-    const { error } = await supabase.from("instagram_account_daily_metrics").upsert(
-      {
-        instagram_account_id: accountId,
-        client_id: clientId,
-        date: r.date as string,
-        followers_count: numOrNull(r.followers_count),
-        new_followers: numOrNull(r.follower_count_1d),
-        reach: numOrNull(r.reach_1d),
-        likes: numOrNull(r.likes),
-        comments: numOrNull(r.comments),
-        saves: numOrNull(r.saves),
-        shares: numOrNull(r.shares),
-        total_interactions: numOrNull(r.total_interactions),
-        profile_links_taps: numOrNull(r.profile_links_taps),
-      },
-      { onConflict: "instagram_account_id,date" },
-    );
-    if (error) errors.push(`daily ${r.date}: ${error.message}`);
-    else count++;
+  for (const batch of chunk(dailyRows, BATCH_SIZE)) {
+    const { error } = await supabase
+      .from("instagram_account_daily_metrics")
+      .upsert(batch, { onConflict: "instagram_account_id,date" });
+    if (error) errors.push(`daily batch (${batch.length}): ${error.message}`);
+    else count += batch.length;
   }
   return { count, errors };
 }
