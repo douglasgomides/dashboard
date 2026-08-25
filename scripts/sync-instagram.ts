@@ -35,6 +35,7 @@ async function main() {
   for (const r of results) {
     console.log(`[posts] synced ${r.posts} posts for account ${r.windsorAccountId}`);
     console.log(`[daily] synced ${r.dailyMetrics} days for account ${r.windsorAccountId}`);
+    console.log(`[tema] classified ${r.temasClassified} posts for account ${r.windsorAccountId}`);
     for (const err of r.errors) console.error(`[${r.windsorAccountId}] ${err}`);
   }
 }

@@ -13,6 +13,26 @@ export function fmtFormatKey(key: string) {
   return key === "não classificado" ? key : formatLabel(key as ContentFormat);
 }
 
+const BRAZIL_TZ = "America/Sao_Paulo";
+const brazilTimeParts = new Intl.DateTimeFormat("en-US", {
+  timeZone: BRAZIL_TZ,
+  weekday: "short",
+  hour: "numeric",
+  hour12: false,
+});
+const WEEKDAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+// posted_at vem em UTC do banco — bucketar por getUTCDay()/getUTCHours() direto
+// dava horário errado pro público (Brasil é UTC-3), deslocando cada post em 3h
+// no gráfico de "melhores horários". Sempre converter pro fuso de Brasília antes
+// de extrair dia da semana/hora.
+export function brazilWeekdayAndHour(iso: string): { weekday: number; hour: number } {
+  const parts = brazilTimeParts.formatToParts(new Date(iso));
+  const weekdayShort = parts.find((p) => p.type === "weekday")!.value;
+  const hourRaw = Number(parts.find((p) => p.type === "hour")!.value);
+  return { weekday: WEEKDAY_INDEX[weekdayShort], hour: hourRaw === 24 ? 0 : hourRaw };
+}
+
 // Mediana em vez de média em todo este arquivo — testado com dado real
 // (reels da Lana Torres) e a média fica 6–10x distorcida por um punhado de
 // posts virais, dando a impressão errada de que o post "típico" daquele
@@ -59,9 +79,9 @@ export function computeMelhoresHorarios(posts: any[]) {
   for (const p of posts) {
     if (!p.posted_at || p.engagement == null) continue;
     allEng.push(p.engagement);
-    const d = new Date(p.posted_at);
-    const weekday = WEEKDAYS[d.getUTCDay()];
-    const period = PERIODS.find((per) => per.test(d.getUTCHours()))?.label ?? "—";
+    const { weekday: weekdayIdx, hour } = brazilWeekdayAndHour(p.posted_at);
+    const weekday = WEEKDAYS[weekdayIdx];
+    const period = PERIODS.find((per) => per.test(hour))?.label ?? "—";
     const key = `${weekday}__${period}`;
     const entry = buckets.get(key) ?? { weekday, period, values: [] };
     entry.values.push(p.engagement);

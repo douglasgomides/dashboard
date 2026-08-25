@@ -6,6 +6,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
+import { classifyTema } from "./tema-classifier.js";
 
 const WINDSOR_BASE = "https://connectors.windsor.ai/instagram";
 
@@ -21,6 +22,7 @@ export interface AccountSyncResult {
   windsorAccountId: string;
   posts: number;
   dailyMetrics: number;
+  temasClassified: number;
   errors: string[];
 }
 
@@ -137,6 +139,33 @@ async function syncPosts(
   return { count, errors };
 }
 
+// Só preenche tema quando está null — nunca sobrescreve uma classificação já
+// feita (automática ou corrigida manualmente na UI). Roda depois do
+// syncPosts pra também cobrir posts recém-inseridos nesta mesma sync.
+async function classifyMissingTemas(
+  supabase: SupabaseClient<Database>,
+  accountId: string,
+  windsorAccountId: string,
+): Promise<{ count: number; errors: string[] }> {
+  const { data: rows, error: selectError } = await supabase
+    .from("instagram_posts")
+    .select("id, caption")
+    .eq("instagram_account_id", accountId)
+    .is("tema", null);
+  if (selectError) return { count: 0, errors: [`classify select: ${selectError.message}`] };
+
+  const errors: string[] = [];
+  let count = 0;
+  for (const row of rows ?? []) {
+    const tema = classifyTema(windsorAccountId, row.caption);
+    if (!tema) continue;
+    const { error } = await supabase.from("instagram_posts").update({ tema }).eq("id", row.id);
+    if (error) errors.push(`classify ${row.id}: ${error.message}`);
+    else count++;
+  }
+  return { count, errors };
+}
+
 async function syncDailyMetrics(
   supabase: SupabaseClient<Database>,
   windsorApiKey: string,
@@ -227,13 +256,18 @@ export async function runInstagramSync(env: SyncEnv): Promise<AccountSyncResult[
       errors.push(`daily: ${err instanceof Error ? err.message : String(err)}`);
       return { count: 0, errors: [] };
     });
+    const temas = await classifyMissingTemas(supabase, account.id, account.windsor_account_id).catch((err) => {
+      errors.push(`classify: ${err instanceof Error ? err.message : String(err)}`);
+      return { count: 0, errors: [] };
+    });
 
     results.push({
       accountId: account.id,
       windsorAccountId: account.windsor_account_id,
       posts: posts.count,
       dailyMetrics: daily.count,
-      errors: [...errors, ...posts.errors, ...daily.errors],
+      temasClassified: temas.count,
+      errors: [...errors, ...posts.errors, ...daily.errors, ...temas.errors],
     });
   }
   return results;

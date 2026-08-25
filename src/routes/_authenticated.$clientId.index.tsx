@@ -17,7 +17,7 @@ import {
 import { getClient, getMonthlyMetrics, getMetricsTrend, getPostsForAnalytics } from "@/lib/client-data";
 import { formatLabel } from "@/lib/methodology";
 import type { ContentFormat } from "@/integrations/supabase/types";
-import { computeFormatBreakdown, computeFormatInsight, fmtFormatKey, median } from "@/lib/report-metrics";
+import { brazilWeekdayAndHour, computeFormatBreakdown, computeFormatInsight, fmtFormatKey, median } from "@/lib/report-metrics";
 import { fmtNum } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/$clientId/")({
@@ -142,9 +142,9 @@ function MelhoresHorarios({ posts }: { posts: any[] }) {
     for (const p of posts) {
       if (!p.posted_at || p.engagement == null) continue;
       allEng.push(p.engagement);
-      const d = new Date(p.posted_at);
-      const weekday = WEEKDAYS[d.getUTCDay()];
-      const period = PERIODS.find((per) => per.test(d.getUTCHours()))?.label ?? "—";
+      const { weekday: weekdayIdx, hour } = brazilWeekdayAndHour(p.posted_at);
+      const weekday = WEEKDAYS[weekdayIdx];
+      const period = PERIODS.find((per) => per.test(hour))?.label ?? "—";
       const key = `${weekday}__${period}`;
       const entry = buckets.get(key) ?? { weekday, period, values: [], posts: [] };
       entry.values.push(p.engagement);
