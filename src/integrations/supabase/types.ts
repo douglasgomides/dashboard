@@ -208,6 +208,7 @@ export interface Database {
           provider: CrmProvider;
           subdomain: string | null;
           access_token: string | null;
+          webhook_secret: string | null;
           active: boolean;
           created_at: string;
         };
@@ -219,6 +220,47 @@ export interface Database {
         Relationships: [
           {
             foreignKeyName: "crm_connections_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      crm_leads: {
+        Row: {
+          id: string;
+          crm_connection_id: string;
+          client_id: string;
+          provider: CrmProvider;
+          external_lead_id: string;
+          event_type: "add" | "status" | "delete";
+          status_id: string | null;
+          old_status_id: string | null;
+          pipeline_id: string | null;
+          price: number | null;
+          raw_payload: unknown;
+          received_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["crm_leads"]["Row"]> & {
+          crm_connection_id: string;
+          client_id: string;
+          provider: CrmProvider;
+          external_lead_id: string;
+          event_type: "add" | "status" | "delete";
+          raw_payload: unknown;
+        };
+        Update: Partial<Database["public"]["Tables"]["crm_leads"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "crm_leads_crm_connection_id_fkey";
+            columns: ["crm_connection_id"];
+            isOneToOne: false;
+            referencedRelation: "crm_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "crm_leads_client_id_fkey";
             columns: ["client_id"];
             isOneToOne: false;
             referencedRelation: "clients";

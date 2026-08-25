@@ -38,7 +38,7 @@ export async function listInstagramAccounts(clientId: string) {
 export async function listCrmConnections(clientId: string) {
   const { data, error } = await supabase
     .from("crm_connections")
-    .select("id, provider, subdomain, active, created_at")
+    .select("id, provider, subdomain, webhook_secret, active, created_at")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -53,6 +53,31 @@ export async function createCrmConnection(input: {
 }) {
   const { error } = await supabase.from("crm_connections").insert(input);
   if (error) throw error;
+}
+
+// Buffer não existe no browser — gera o secret em base64 URL-safe na mão.
+function randomWebhookSecret(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  const binary = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+// Kommo não usa OAuth aqui — webhook nativo (a Kommo empurra o evento pra
+// nossa URL). A URL única por conexão (connection_id + secret) é a única
+// proteção do endpoint, já que a Kommo não assina os webhooks.
+export async function createKommoWebhookConnection(clientId: string, subdomain?: string) {
+  const { data, error } = await supabase
+    .from("crm_connections")
+    .insert({ client_id: clientId, provider: "kommo", subdomain, webhook_secret: randomWebhookSecret() })
+    .select("id, webhook_secret")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export function kommoWebhookUrl(connectionId: string, webhookSecret: string): string {
+  return `${window.location.origin}/api/integrations/kommo/webhook?connection_id=${connectionId}&secret=${webhookSecret}`;
 }
 
 export async function removeCrmConnection(connectionId: string) {

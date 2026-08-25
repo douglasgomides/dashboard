@@ -6,6 +6,8 @@ import {
   connectInstagramAccount,
   createClientUser,
   createCrmConnection,
+  createKommoWebhookConnection,
+  kommoWebhookUrl,
   listClientMembers,
   listCrmConnections,
   listInstagramAccounts,
@@ -94,8 +96,9 @@ function ConnectCrmForm({ clientId }: { clientId: string }) {
   const [provider, setProvider] = useState<CrmProvider>("kommo");
   const [subdomain, setSubdomain] = useState("");
   const [accessToken, setAccessToken] = useState("");
+  const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
 
-  const mutation = useMutation({
+  const tokenMutation = useMutation({
     mutationFn: () =>
       createCrmConnection({
         client_id: clientId,
@@ -110,10 +113,26 @@ function ConnectCrmForm({ clientId }: { clientId: string }) {
     },
   });
 
+  // Kommo não usa token colado à mão — gera uma URL de webhook única
+  // (connection_id + secret) pro admin colar nas configurações de Webhooks
+  // da Kommo. Sem OAuth: a Kommo empurra o evento pra essa URL sozinha.
+  const kommoMutation = useMutation({
+    mutationFn: () => createKommoWebhookConnection(clientId, subdomain || undefined),
+    onSuccess: (connection) => {
+      setSubdomain("");
+      setGeneratedUrl(kommoWebhookUrl(connection.id, connection.webhook_secret!));
+      queryClient.invalidateQueries({ queryKey: ["admin-crm-connections", clientId] });
+    },
+  });
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    mutation.mutate();
+    setGeneratedUrl(null);
+    if (provider === "kommo") kommoMutation.mutate();
+    else tokenMutation.mutate();
   }
+
+  const mutation = provider === "kommo" ? kommoMutation : tokenMutation;
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
@@ -123,7 +142,10 @@ function ConnectCrmForm({ clientId }: { clientId: string }) {
         </label>
         <select
           value={provider}
-          onChange={(e) => setProvider(e.target.value as CrmProvider)}
+          onChange={(e) => {
+            setProvider(e.target.value as CrmProvider);
+            setGeneratedUrl(null);
+          }}
           className="mt-1 rounded-md border px-2 py-1.5 text-sm"
           style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
         >
@@ -136,7 +158,7 @@ function ConnectCrmForm({ clientId }: { clientId: string }) {
       </div>
       <div>
         <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          Subdomínio
+          Subdomínio {provider === "kommo" && "(opcional, só referência)"}
         </label>
         <input
           value={subdomain}
@@ -146,30 +168,46 @@ function ConnectCrmForm({ clientId }: { clientId: string }) {
           style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
         />
       </div>
-      <div>
-        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          Token de acesso
-        </label>
-        <input
-          type="password"
-          value={accessToken}
-          onChange={(e) => setAccessToken(e.target.value)}
-          className="mt-1 w-64 rounded-md border px-2 py-1.5 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-        />
-      </div>
+      {provider !== "kommo" && (
+        <div>
+          <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+            Token de acesso
+          </label>
+          <input
+            type="password"
+            value={accessToken}
+            onChange={(e) => setAccessToken(e.target.value)}
+            className="mt-1 w-64 rounded-md border px-2 py-1.5 text-sm"
+            style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+          />
+        </div>
+      )}
       <button
         type="submit"
         disabled={mutation.isPending}
         className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
         style={{ background: "var(--accent)" }}
       >
-        {mutation.isPending ? "Conectando…" : "Conectar CRM"}
+        {mutation.isPending ? "Conectando…" : provider === "kommo" ? "Gerar URL de webhook" : "Conectar CRM"}
       </button>
       {mutation.isError && (
         <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
           {(mutation.error as Error).message}
         </p>
+      )}
+      {generatedUrl && (
+        <div className="w-full">
+          <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+            Cole essa URL em Kommo → Configurações → Webhooks (evento "Lead adicionado" e "Estágio alterado")
+          </label>
+          <input
+            readOnly
+            value={generatedUrl}
+            onFocus={(e) => e.target.select()}
+            className="mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
+            style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+          />
+        </div>
       )}
     </form>
   );
@@ -189,22 +227,33 @@ function CrmConnectionsList({ clientId }: { clientId: string }) {
 
   if (!connections?.length) return null;
   return (
-    <ul className="mt-3 space-y-1 text-sm">
+    <ul className="mt-3 space-y-2 text-sm">
       {connections.map((c) => (
-        <li key={c.id} className="flex items-center gap-2" style={{ color: "var(--text-dim)" }}>
-          <span className="font-medium" style={{ color: "var(--text)" }}>
-            {CRM_PROVIDER_LABELS[c.provider]}
-          </span>
-          {c.subdomain ? ` · ${c.subdomain}` : ""}
-          {!c.active && " · inativo"}
-          <button
-            type="button"
-            onClick={() => removeMutation.mutate(c.id)}
-            className="text-xs"
-            style={{ color: "var(--danger)" }}
-          >
-            Remover
-          </button>
+        <li key={c.id} style={{ color: "var(--text-dim)" }}>
+          <div className="flex items-center gap-2">
+            <span className="font-medium" style={{ color: "var(--text)" }}>
+              {CRM_PROVIDER_LABELS[c.provider]}
+            </span>
+            {c.subdomain ? ` · ${c.subdomain}` : ""}
+            {!c.active && " · inativo"}
+            <button
+              type="button"
+              onClick={() => removeMutation.mutate(c.id)}
+              className="text-xs"
+              style={{ color: "var(--danger)" }}
+            >
+              Remover
+            </button>
+          </div>
+          {c.provider === "kommo" && c.webhook_secret && (
+            <input
+              readOnly
+              value={kommoWebhookUrl(c.id, c.webhook_secret)}
+              onFocus={(e) => e.target.select()}
+              className="mt-1 w-full rounded-md border px-2 py-1 text-xs"
+              style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+            />
+          )}
         </li>
       ))}
     </ul>
