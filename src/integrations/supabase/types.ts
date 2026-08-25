@@ -3,13 +3,7 @@
 //   supabase gen types typescript --project-id <ref> > src/integrations/supabase/types.ts
 
 export type FunnelStage = "C0" | "C1" | "C2" | "C3";
-export type MethodologyStage =
-  | "diferencial"
-  | "narrativa"
-  | "percepcao"
-  | "confianca"
-  | "venda"
-  | "multiplicacao";
+export type MethodologyStage = "percepcao" | "confianca" | "venda" | "multiplicacao";
 export type ContentFormat = "reels" | "carrossel" | "estatico" | "stories";
 export type SuggestionStatus = "suggested" | "accepted" | "dismissed";
 export type CfmScoreStatus = "verde" | "amarelo" | "vermelho";

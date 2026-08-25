@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   AreaChart,
@@ -14,17 +14,19 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { getClient, getMonthlyMetrics, getMetricsTrend, getPostsForAnalytics } from "@/lib/client-data";
+import { getClient, getMonthlyMetrics, getPostsForAnalytics } from "@/lib/client-data";
 import { formatLabel } from "@/lib/methodology";
 import type { ContentFormat } from "@/integrations/supabase/types";
 import { brazilWeekdayAndHour, computeFormatBreakdown, computeFormatInsight, fmtFormatKey, median } from "@/lib/report-metrics";
+import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/$clientId/")({
   component: MonthlyOverview,
 });
 
-const TREND_DAYS = 90;
+const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
+
 const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const PERIODS = [
   { label: "Madrugada (0h–5h)", test: (h: number) => h < 6 },
@@ -32,18 +34,6 @@ const PERIODS = [
   { label: "Tarde (12h–17h)", test: (h: number) => h >= 12 && h < 18 },
   { label: "Noite (18h–23h)", test: (h: number) => h >= 18 },
 ];
-
-function monthBounds(date = new Date()) {
-  const start = new Date(date.getFullYear(), date.getMonth(), 1);
-  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
-}
-
-function daysAgo(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
-}
 
 function sum(rows: { [k: string]: any }[], key: string) {
   return rows.reduce((acc, r) => acc + (r[key] ?? 0), 0);
@@ -72,7 +62,7 @@ function KpiCard({ label, value, hint }: { label: string; value: string | number
 function SinaisDeInteresse({ reach, contactTaps, newFollowers }: { reach: number; contactTaps: number; newFollowers: number }) {
   return (
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-      <h2 className="mb-1 text-sm font-semibold">Alcance e sinais de interesse do mês</h2>
+      <h2 className="mb-1 text-sm font-semibold">Alcance e sinais de interesse no período</h2>
       <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
         A Meta depreciou "visitas ao perfil" na API — não é mais possível montar um funil real com % de conversão
         entre essas etapas. São sinais paralelos, não um funil sequencial.
@@ -130,7 +120,7 @@ function PostList({ posts }: { posts: any[] }) {
   );
 }
 
-function MelhoresHorarios({ posts }: { posts: any[] }) {
+function MelhoresHorarios({ posts, periodLabel }: { posts: any[]; periodLabel: string }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const { ranked, overallMedian } = useMemo(() => {
@@ -171,7 +161,7 @@ function MelhoresHorarios({ posts }: { posts: any[] }) {
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <h2 className="mb-1 text-sm font-semibold">Melhores horários pra postar</h2>
       <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-        Últimos {TREND_DAYS} dias, por engajamento (mediana; horário em UTC). Clique numa linha pra ver os posts que
+        {periodLabel}, por engajamento (mediana; horário de Brasília). Clique numa linha pra ver os posts que
         sustentam o número.
       </p>
       {ranked.length === 0 ? (
@@ -221,7 +211,7 @@ function MelhoresHorarios({ posts }: { posts: any[] }) {
                         >
                           <p className="mb-2 text-xs" style={{ color: "var(--text-faint)" }}>
                             {r.count} post{r.count > 1 ? "s" : ""} publicado{r.count > 1 ? "s" : ""} em{" "}
-                            {r.weekday.toLowerCase()} à(o) {r.period.toLowerCase()} nos últimos {TREND_DAYS} dias —
+                            {r.weekday.toLowerCase()} à(o) {r.period.toLowerCase()} no período selecionado —
                             engajamento {vsMedian >= 0 ? vsMedian.toFixed(0) + "% acima" : Math.abs(vsMedian).toFixed(0) + "% abaixo"}{" "}
                             da mediana geral da conta ({fmtNum(Math.round(overallMedian))}).
                           </p>
@@ -278,7 +268,7 @@ function fmtFormatLabel(key: string) {
 // tabela/gráfico crus, nomeia o melhor e o pior formato com os números que
 // sustentam a afirmação. Não sugere o que postar, só descreve o que já
 // aconteceu.
-function InsightDeFormato({ posts }: { posts: any[] }) {
+function InsightDeFormato({ posts, periodLabel }: { posts: any[]; periodLabel: string }) {
   const insight = useMemo(() => computeFormatInsight(posts), [posts]);
 
   if (!insight) return null;
@@ -289,7 +279,7 @@ function InsightDeFormato({ posts }: { posts: any[] }) {
       className="rounded-xl border p-4 text-sm leading-relaxed"
       style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
     >
-      Nos últimos {TREND_DAYS} dias, <strong>{fmtFormatLabel(best.format)}</strong> foi o formato mais forte —
+      {periodLabel}, <strong>{fmtFormatLabel(best.format)}</strong> foi o formato mais forte —
       engajamento (mediana) de {fmtNum(Math.round(best.median))} ({best.count} posts), {bestPct >= 0 ? "+" : ""}
       {bestPct.toFixed(0)}% acima da mediana geral da conta.
       {worst.format !== best.format && (
@@ -333,8 +323,9 @@ function DrillDownDoDia({ date, posts }: { date: string | null; posts: any[] }) 
 
 function MonthlyOverview() {
   const { clientId } = Route.useParams();
-  const { start, end } = monthBounds();
-  const since = daysAgo(TREND_DAYS);
+  const dateRangeState = clientLayoutRoute.useSearch();
+  const { start, end } = resolveDateRange(dateRangeState);
+  const periodLabel = formatRangeLabel({ start, end });
   const [selectedDateMonthly, setSelectedDateMonthly] = useState<string | null>(null);
   const [selectedDateTrend, setSelectedDateTrend] = useState<string | null>(null);
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -349,14 +340,9 @@ function MonthlyOverview() {
     queryFn: () => getMonthlyMetrics(clientId, start, end),
   });
 
-  const { data: trend } = useQuery({
-    queryKey: ["metrics-trend", clientId, since],
-    queryFn: () => getMetricsTrend(clientId, since),
-  });
-
   const { data: postsForAnalytics } = useQuery({
-    queryKey: ["posts-analytics", clientId, since],
-    queryFn: () => getPostsForAnalytics(clientId, since),
+    queryKey: ["posts-analytics", clientId, start, end],
+    queryFn: () => getPostsForAnalytics(clientId, start, end),
   });
 
   function handleMonthlyClick(e: any) {
@@ -367,7 +353,7 @@ function MonthlyOverview() {
   }
 
   if (isLoading) {
-    return <p style={{ color: "var(--text-dim)" }}>Carregando métricas do mês…</p>;
+    return <p style={{ color: "var(--text-dim)" }}>Carregando métricas…</p>;
   }
 
   const data = rows ?? [];
@@ -377,8 +363,8 @@ function MonthlyOverview() {
         className="rounded-xl border p-6 text-sm"
         style={{ background: "var(--warn-bg)", borderColor: "var(--warn-border)", color: "var(--text)" }}
       >
-        Sem dados sincronizados pra este mês ainda. Rode <code>npm run sync:instagram</code> depois de
-        cadastrar a conta do cliente em <code>instagram_accounts</code>.
+        Sem dados sincronizados nesse período. Rode <code>npm run sync:instagram</code> depois de
+        cadastrar a conta do cliente em <code>instagram_accounts</code>, ou escolha outro intervalo de datas.
       </div>
     );
   }
@@ -396,17 +382,14 @@ function MonthlyOverview() {
     Interações: d.total_interactions ?? 0,
   }));
 
-  const trendData = (trend ?? []).map((d) => ({
+  const trendData = data.map((d) => ({
     date: d.date,
     Alcance: d.reach ?? 0,
     "Seguidores ganhos": d.new_followers ?? 0,
   }));
 
   const formatInsight = computeFormatInsight(postsForAnalytics ?? []);
-
-  const postsDoMes = (postsForAnalytics ?? []).filter(
-    (p) => p.posted_at && p.posted_at.slice(0, 10) >= start && p.posted_at.slice(0, 10) <= end,
-  );
+  const trendDays = Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000));
 
   async function handleDownloadReport() {
     setGeneratingReport(true);
@@ -415,7 +398,7 @@ function MonthlyOverview() {
       await downloadClientReport({
         clientName: client?.name ?? "Cliente",
         igHandle: client?.instagram_handle,
-        periodLabel: new Date(start + "T12:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" }),
+        periodLabel,
         kpis: [
           { label: "Novos seguidores", value: newFollowers.toLocaleString("pt-BR") },
           { label: "Alcance", value: reach.toLocaleString("pt-BR") },
@@ -423,8 +406,8 @@ function MonthlyOverview() {
           { label: "Salvamentos", value: saves.toLocaleString("pt-BR") },
         ],
         postsForAnalytics: postsForAnalytics ?? [],
-        postsDoMes,
-        trendDays: TREND_DAYS,
+        postsDoMes: postsForAnalytics ?? [],
+        trendDays,
       });
     } finally {
       setGeneratingReport(false);
@@ -468,7 +451,7 @@ function MonthlyOverview() {
       <SinaisDeInteresse reach={reach} contactTaps={contactTaps} newFollowers={newFollowers} />
 
       <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h2 className="mb-1 text-sm font-semibold">Alcance × interações no mês</h2>
+        <h2 className="mb-1 text-sm font-semibold">Alcance × interações no período</h2>
         <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
           Clique em um ponto pra ver o que foi publicado naquele dia.
         </p>
@@ -491,7 +474,7 @@ function MonthlyOverview() {
       </div>
 
       <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h2 className="mb-1 text-sm font-semibold">Tendência geral — últimos {TREND_DAYS} dias</h2>
+        <h2 className="mb-1 text-sm font-semibold">Tendência geral — {periodLabel}</h2>
         <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
           Alcance e seguidores ganhos lado a lado, pra ver o efeito de mudanças ao longo do tempo. Clique em um
           ponto pra ver o que foi publicado naquele dia.
@@ -516,11 +499,11 @@ function MonthlyOverview() {
         <DrillDownDoDia date={selectedDateTrend} posts={postsForAnalytics ?? []} />
       </div>
 
-      <InsightDeFormato posts={postsForAnalytics ?? []} />
+      <InsightDeFormato posts={postsForAnalytics ?? []} periodLabel={periodLabel} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <EngajamentoPorFormato posts={postsForAnalytics ?? []} />
-        <MelhoresHorarios posts={postsForAnalytics ?? []} />
+        <MelhoresHorarios posts={postsForAnalytics ?? []} periodLabel={periodLabel} />
       </div>
     </div>
   );

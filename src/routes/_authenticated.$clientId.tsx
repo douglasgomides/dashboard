@@ -1,11 +1,18 @@
-import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getClient } from "@/lib/client-data";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
+import { DateRangePicker } from "@/components/date-range-picker";
+import type { DateRangeState, RangePreset } from "@/lib/date-range";
 
 export const Route = createFileRoute("/_authenticated/$clientId")({
   component: ClientLayout,
+  validateSearch: (search: Record<string, unknown>): DateRangeState => ({
+    preset: (search.preset as RangePreset) ?? "90d",
+    from: typeof search.from === "string" ? search.from : undefined,
+    to: typeof search.to === "string" ? search.to : undefined,
+  }),
 });
 
 const CFM_DOT: Record<string, string> = {
@@ -16,6 +23,8 @@ const CFM_DOT: Record<string, string> = {
 
 function ClientLayout() {
   const { clientId } = Route.useParams();
+  const dateRange = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const { isAdmin } = useAuth();
   const { data: client } = useQuery({
     queryKey: ["client", clientId],
@@ -55,7 +64,10 @@ function ClientLayout() {
             {client?.instagram_handle ? ` · @${client.instagram_handle}` : ""}
           </p>
         </div>
-        <LogoutButton />
+        <div className="flex items-center gap-3">
+          <DateRangePicker value={dateRange} onChange={(next) => navigate({ search: next })} />
+          <LogoutButton />
+        </div>
       </header>
 
       <nav className="mb-8 flex flex-wrap gap-1 border-b" style={{ borderColor: "var(--border)" }}>

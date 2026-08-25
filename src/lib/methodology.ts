@@ -12,8 +12,6 @@ export const FUNNEL_STAGES: { value: FunnelStage; label: string; description: st
 ];
 
 export const METHODOLOGY_STAGES: { value: MethodologyStage; label: string }[] = [
-  { value: "diferencial", label: "Diferencial" },
-  { value: "narrativa", label: "Narrativa" },
   { value: "percepcao", label: "Percepção" },
   { value: "confianca", label: "Confiança" },
   { value: "venda", label: "Venda" },

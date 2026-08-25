@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { classifyPost, getNextAngles, getPostsForAnalytics, getRankedPosts } from "@/lib/client-data";
+import { classifyPost, getNextAngles, getRankedPosts } from "@/lib/client-data";
 import {
   CONTENT_FORMATS,
   FUNNEL_STAGES,
@@ -13,6 +13,7 @@ import {
 } from "@/lib/methodology";
 import type { ContentFormat, FunnelStage, MethodologyStage } from "@/integrations/supabase/types";
 import { fmtNum } from "@/lib/format";
+import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import {
   computeConversionByTag,
   computeFormatoPorTema,
@@ -27,22 +28,7 @@ export const Route = createFileRoute("/_authenticated/$clientId/posts")({
   component: PostsRankingPage,
 });
 
-function monthBounds(date = new Date()) {
-  const start = new Date(date.getFullYear(), date.getMonth(), 1);
-  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-  return { start: start.toISOString(), end: end.toISOString() };
-}
-
-// Seções estruturais (repetir/revisar, explorador, taxa, alcance por
-// tema/formato) precisam de uma janela maior que "o mês corrente" pra ter
-// volume suficiente de posts por tema — 180 dias, igual o exemplo de
-// referência que calcula sobre os últimos 6 meses.
-const WIDE_DAYS = 180;
-function daysAgo(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
-}
+const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 
 type Post = NonNullable<Awaited<ReturnType<typeof getRankedPosts>>>[number];
 
@@ -223,9 +209,9 @@ function TopDoMes({ posts }: { posts: Post[] }) {
 
   return (
     <div className="rounded-xl border p-4" style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}>
-      <h2 className="mb-1 text-sm font-semibold">🏆 Top 5 do mês — considere repetir</h2>
+      <h2 className="mb-1 text-sm font-semibold">🏆 Top 5 do período — considere repetir</h2>
       <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-        Os posts que mais salvaram no mês. Classifique-os abaixo (tema/funil/estágio) pra virarem sugestão de
+        Os posts que mais salvaram no período selecionado. Classifique-os abaixo (tema/funil/estágio) pra virarem sugestão de
         "próximos ângulos" automaticamente.
       </p>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
@@ -252,9 +238,9 @@ function TopDoMes({ posts }: { posts: Post[] }) {
 
 // Divide os temas classificados em "repetir" (taxa de engajamento acima da
 // mediana entre os temas com volume) e "revisar" (abaixo) — não é opinião,
-// é o cálculo dos últimos posts do mês. Precisa de tema classificado na
+// é o cálculo sobre os posts do período selecionado. Precisa de tema classificado na
 // tabela abaixo pra ter dado.
-function RepetirOuRevisar({ posts }: { posts: Post[] }) {
+function RepetirOuRevisar({ posts, periodLabel }: { posts: Post[]; periodLabel: string }) {
   const MIN_POSTS = 10;
 
   const { repetir, revisar, hasEnough } = useMemo(() => computeRepetirOuRevisar(posts, MIN_POSTS), [posts]);
@@ -263,13 +249,13 @@ function RepetirOuRevisar({ posts }: { posts: Post[] }) {
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <h2 className="mb-1 text-sm font-semibold">O que repetir vs. o que revisar</h2>
       <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-        Calculado a partir da mediana da taxa de engajamento dos temas com volume relevante ({MIN_POSTS}+ posts) nos
-        últimos {Math.round(WIDE_DAYS / 30)} meses — não é opinião, é o que os dados mostraram.
+        Calculado a partir da mediana da taxa de engajamento dos temas com volume relevante ({MIN_POSTS}+ posts) no
+        período selecionado ({periodLabel}) — não é opinião, é o que os dados mostraram.
       </p>
       {!hasEnough ? (
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          Classifique o <strong>tema</strong> de pelo menos {MIN_POSTS} posts do mesmo assunto (na tabela de posts do
-          mês, mais abaixo) pra habilitar esse veredito.
+          Classifique o <strong>tema</strong> de pelo menos {MIN_POSTS} posts do mesmo assunto (na tabela de posts,
+          mais abaixo) pra habilitar esse veredito.
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -473,10 +459,10 @@ function FormatoPorTema({ posts }: { posts: Post[] }) {
 
 type SortKey = "posted_at" | "reach" | "engagement" | "saved";
 
-// Base completa dos posts do mês — busca por legenda + filtro por tema e
+// Base completa dos posts do período — busca por legenda + filtro por tema e
 // formato + ordena por qualquer métrica. Não depende de classificação pra
 // funcionar (formato já vem pronto), fica mais rico conforme tema é preenchido.
-function ExploradorDePosts({ posts }: { posts: Post[] }) {
+function ExploradorDePosts({ posts, periodLabel }: { posts: Post[]; periodLabel: string }) {
   const [search, setSearch] = useState("");
   const [temaFilter, setTemaFilter] = useState("");
   const [formatFilter, setFormatFilter] = useState<ContentFormat | "">("");
@@ -521,7 +507,7 @@ function ExploradorDePosts({ posts }: { posts: Post[] }) {
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <h2 className="mb-1 text-sm font-semibold">Explorador de posts</h2>
       <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-        Todos os posts dos últimos {Math.round(WIDE_DAYS / 30)} meses, filtráveis por tema e formato, ordenáveis por
+        Todos os posts do período selecionado ({periodLabel}), filtráveis por tema e formato, ordenáveis por
         qualquer métrica.
       </p>
       <div className="mb-3 flex flex-wrap gap-2">
@@ -649,7 +635,9 @@ function NextAngles({ clientId }: { clientId: string }) {
 
 function PostsRankingPage() {
   const { clientId } = Route.useParams();
-  const { start, end } = monthBounds();
+  const dateRangeState = clientLayoutRoute.useSearch();
+  const { start, end } = resolveDateRange(dateRangeState);
+  const periodLabel = formatRangeLabel({ start, end });
   const [formatFilter, setFormatFilter] = useState<ContentFormat | "">("");
 
   const { data: posts, isLoading } = useQuery({
@@ -657,15 +645,9 @@ function PostsRankingPage() {
     queryFn: () => getRankedPosts(clientId, start, end),
   });
 
-  const { data: widePosts } = useQuery({
-    queryKey: ["posts-analytics-wide", clientId, WIDE_DAYS],
-    queryFn: () => getPostsForAnalytics(clientId, daysAgo(WIDE_DAYS)),
-  });
-
   if (isLoading) return <p style={{ color: "var(--text-dim)" }}>Carregando posts…</p>;
 
   const rows = posts ?? [];
-  const wideRows = widePosts ?? [];
   const filteredRows = formatFilter ? rows.filter((p) => p.format === formatFilter) : rows;
 
   return (
@@ -674,7 +656,7 @@ function PostsRankingPage() {
 
       <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">Ranking de posts do mês (por salvamentos)</h2>
+          <h2 className="text-sm font-semibold">Ranking de posts do período ({periodLabel}) — por salvamentos</h2>
           <div className="flex items-center gap-2">
             <span className="text-xs" style={{ color: "var(--text-faint)" }}>
               Formato:
@@ -696,11 +678,12 @@ function PostsRankingPage() {
         </div>
         {rows.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-            Sem posts sincronizados pra este mês. Rode <code>npm run sync:instagram</code>.
+            Sem posts sincronizados nesse período. Rode <code>npm run sync:instagram</code> ou escolha outro
+            intervalo de datas.
           </p>
         ) : filteredRows.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-            Nenhum post nesse formato este mês.
+            Nenhum post nesse formato no período selecionado.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -727,14 +710,14 @@ function PostsRankingPage() {
         )}
       </div>
 
-      <RepetirOuRevisar posts={wideRows} />
-      <TopPorTaxa posts={wideRows} />
-      <ConversionByTag posts={wideRows} />
-      <DesempenhoEstrutural posts={wideRows} />
-      <FormatoPorTema posts={wideRows} />
+      <RepetirOuRevisar posts={rows} periodLabel={periodLabel} />
+      <TopPorTaxa posts={rows} />
+      <ConversionByTag posts={rows} />
+      <DesempenhoEstrutural posts={rows} />
+      <FormatoPorTema posts={rows} />
       <MelhoresGanchos posts={rows} />
       <NextAngles clientId={clientId} />
-      <ExploradorDePosts posts={wideRows} />
+      <ExploradorDePosts posts={rows} periodLabel={periodLabel} />
     </div>
   );
 }
