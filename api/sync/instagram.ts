@@ -32,6 +32,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const syncDaysParam = req.query.sync_days;
   const syncDays = syncDaysParam ? Number(Array.isArray(syncDaysParam) ? syncDaysParam[0] : syncDaysParam) : 365;
+  const dateFrom = typeof req.query.date_from === "string" ? req.query.date_from : undefined;
+  const dateTo = typeof req.query.date_to === "string" ? req.query.date_to : undefined;
 
   try {
     const results = await runInstagramSync({
@@ -39,6 +41,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       supabaseUrl: SUPABASE_URL,
       supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
       syncDays: Number.isFinite(syncDays) ? syncDays : 365,
+      dateFrom,
+      dateTo,
     });
 
     const hasErrors = results.some((r) => r.errors.length > 0);

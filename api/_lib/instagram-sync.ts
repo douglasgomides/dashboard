@@ -15,6 +15,11 @@ export interface SyncEnv {
   supabaseUrl: string;
   supabaseServiceRoleKey: string;
   syncDays?: number;
+  // Sobrescreve syncDays com uma janela exata (YYYY-MM-DD) — usado pra rodar
+  // um backfill grande em pedaços (ex: por trimestre) via chamadas separadas,
+  // já que uma única invocação de função na Vercel tem limite de duração.
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface AccountSyncResult {
@@ -87,20 +92,27 @@ async function windsorGetRange(
 const WINDSOR_CHUNK_DAYS = 30;
 
 // A Windsor demora demais (ou trava) quando pedimos uma janela de datas
-// grande de uma vez (ex: 365 dias) — descoberto tentando um backfill de 1
-// ano, que nunca voltava. Pedir em pedaços de 30 dias, sequencialmente, é
-// mais lento por request mas muito mais confiável — cada pedaço volta rápido
-// em vez de arriscar travar a chamada inteira.
+// grande de uma vez — descoberto tentando um backfill de 1 ano, que nunca
+// voltava. Pedir em pedaços de 30 dias, sequencialmente, é mais lento no
+// total mas muito mais confiável. Ainda assim, um backfill de 1 ano inteiro
+// numa única invocação da função estoura o limite de duração da Vercel —
+// pra isso, quem chama o endpoint (ex: n8n) precisa fazer várias chamadas
+// menores usando range.from/range.to em vez de uma sync_days=365 só.
 async function windsorGet(
   windsorApiKey: string,
-  syncDays: number,
+  range: { from: string; to: string },
   fields: string[],
   windsorAccountId: string,
 ): Promise<Record<string, unknown>[]> {
   const chunks: { from: string; to: string }[] = [];
-  for (let daysAgoEnd = syncDays; daysAgoEnd > 0; daysAgoEnd -= WINDSOR_CHUNK_DAYS) {
-    const daysAgoStart = Math.max(0, daysAgoEnd - WINDSOR_CHUNK_DAYS);
-    chunks.push({ from: dateNDaysAgo(daysAgoEnd), to: dateNDaysAgo(daysAgoStart) });
+  let cursor = new Date(range.to + "T00:00:00Z");
+  const start = new Date(range.from + "T00:00:00Z");
+  while (cursor > start) {
+    const chunkStart = new Date(cursor);
+    chunkStart.setUTCDate(chunkStart.getUTCDate() - WINDSOR_CHUNK_DAYS);
+    const from = chunkStart < start ? range.from : chunkStart.toISOString().slice(0, 10);
+    chunks.push({ from, to: cursor.toISOString().slice(0, 10) });
+    cursor = chunkStart;
   }
 
   const all: Record<string, unknown>[] = [];
@@ -114,14 +126,14 @@ async function windsorGet(
 async function syncPosts(
   supabase: SupabaseClient<Database>,
   windsorApiKey: string,
-  syncDays: number,
+  range: { from: string; to: string },
   accountId: string,
   windsorAccountId: string,
   clientId: string,
 ): Promise<{ count: number; errors: string[] }> {
   const rows = await windsorGet(
     windsorApiKey,
-    syncDays,
+    range,
     [
       "account_id",
       "media_id",
@@ -223,14 +235,14 @@ async function classifyMissingTemas(
 async function syncDailyMetrics(
   supabase: SupabaseClient<Database>,
   windsorApiKey: string,
-  syncDays: number,
+  range: { from: string; to: string },
   accountId: string,
   windsorAccountId: string,
   clientId: string,
 ): Promise<{ count: number; errors: string[] }> {
   const rows = await windsorGet(
     windsorApiKey,
-    syncDays,
+    range,
     [
       "account_id",
       "date",
@@ -280,7 +292,10 @@ export async function runInstagramSync(env: SyncEnv): Promise<AccountSyncResult[
   const supabase = createClient<Database>(env.supabaseUrl, env.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const syncDays = env.syncDays ?? 365;
+  const range =
+    env.dateFrom && env.dateTo
+      ? { from: env.dateFrom, to: env.dateTo }
+      : { from: dateNDaysAgo(env.syncDays ?? 365), to: dateNDaysAgo(0) };
 
   const { data: accounts, error } = await supabase
     .from("instagram_accounts")
@@ -294,7 +309,7 @@ export async function runInstagramSync(env: SyncEnv): Promise<AccountSyncResult[
     const posts = await syncPosts(
       supabase,
       env.windsorApiKey,
-      syncDays,
+      range,
       account.id,
       account.windsor_account_id,
       account.client_id,
@@ -305,7 +320,7 @@ export async function runInstagramSync(env: SyncEnv): Promise<AccountSyncResult[
     const daily = await syncDailyMetrics(
       supabase,
       env.windsorApiKey,
-      syncDays,
+      range,
       account.id,
       account.windsor_account_id,
       account.client_id,
