@@ -1,6 +1,7 @@
 {
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "functions": {
-    "api/sync/instagram.ts": { "maxDuration": 300 }
+    "api/sync/instagram.ts": { "maxDuration": 300 },
+    "api/sync/meta-graph.ts": { "maxDuration": 300 }
   }
 }

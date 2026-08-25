@@ -41,14 +41,14 @@ function dateNDaysAgo(n: number): string {
 // Windsor (campo genuinamente sem dado naquele dia, ex: followers_count fora
 // do dia de hoje) virava um 0 falso no banco, fazendo parecer "zero
 // seguidores" em vez de "sem esse dado nesse dia".
-function numOrNull(v: unknown): number | null {
+export function numOrNull(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
-const BATCH_SIZE = 500;
-function chunk<T>(items: T[], size: number): T[][] {
+export const BATCH_SIZE = 500;
+export function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
@@ -57,7 +57,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 // REEL/STORY/CAROUSEL_ALBUM map diretamente; FEED de imagem ou vídeo é "estatico".
 // A Windsor não é consistente entre contas: em algumas media_type vem "REEL",
 // em outras "REELS" (plural) — por isso o includes() em vez de igualdade exata.
-function normalizeFormat(mediaType: unknown, productType: unknown): string | null {
+export function normalizeFormat(mediaType: unknown, productType: unknown): string | null {
   const type = String(mediaType ?? "").toUpperCase();
   const product = String(productType ?? "").toUpperCase();
   if (product === "STORY") return "stories";
