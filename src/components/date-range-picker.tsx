@@ -23,6 +23,9 @@ export function DateRangePicker({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-medium" style={{ color: "var(--text-faint)" }}>
+        Período:
+      </span>
       <select
         value={value.preset}
         onChange={(e) => handlePresetChange(e.target.value as DateRangeState["preset"])}
