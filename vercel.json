@@ -3,6 +3,7 @@
   "functions": {
     "api/sync/instagram.ts": { "maxDuration": 300 },
     "api/sync/meta-graph.ts": { "maxDuration": 300 },
-    "api/sync/meta-comments.ts": { "maxDuration": 300 }
+    "api/sync/meta-comments.ts": { "maxDuration": 300 },
+    "api/sync/backfill-thumbnails.ts": { "maxDuration": 300 }
   }
 }
