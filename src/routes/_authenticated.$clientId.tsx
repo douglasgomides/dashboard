@@ -47,7 +47,7 @@ function ClientLayout() {
           ← Painel admin
         </Link>
       )}
-      <header className="mb-6 flex items-center justify-between gap-4">
+      <header className="mb-4 flex items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold">{client?.name ?? "Carregando…"}</h1>
@@ -64,27 +64,34 @@ function ClientLayout() {
             {client?.instagram_handle ? ` · @${client.instagram_handle}` : ""}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <DateRangePicker value={dateRange} onChange={(next) => navigate({ search: next })} />
-          <LogoutButton />
-        </div>
+        <LogoutButton />
       </header>
 
-      <nav className="mb-8 flex flex-wrap gap-1 border-b" style={{ borderColor: "var(--border)" }}>
-        {tabs.map((tab) => (
-          <Link
-            key={tab.to}
-            to={tab.to}
-            params={{ clientId }}
-            activeOptions={{ exact: tab.exact }}
-            className="px-3 py-2 text-sm font-medium"
-            activeProps={{ style: { color: "var(--accent)", borderBottom: "2px solid var(--accent)" } }}
-            inactiveProps={{ style: { color: "var(--text-dim)" } }}
-          >
-            {tab.label}
-          </Link>
-        ))}
-      </nav>
+      {/* Fixo no topo ao rolar — sem isso o seletor de período só aparecia
+          lá em cima, e em tabelas longas (Ranking de posts, por exemplo)
+          ficava fora de vista, dando a impressão de que não dava pra trocar
+          o período a partir dali. */}
+      <div
+        className="sticky top-0 z-10 mb-8 flex flex-wrap items-center justify-between gap-3 border-b py-2"
+        style={{ borderColor: "var(--border)", background: "var(--bg)" }}
+      >
+        <nav className="flex flex-wrap gap-1">
+          {tabs.map((tab) => (
+            <Link
+              key={tab.to}
+              to={tab.to}
+              params={{ clientId }}
+              activeOptions={{ exact: tab.exact }}
+              className="px-3 py-2 text-sm font-medium"
+              activeProps={{ style: { color: "var(--accent)", borderBottom: "2px solid var(--accent)" } }}
+              inactiveProps={{ style: { color: "var(--text-dim)" } }}
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </nav>
+        <DateRangePicker value={dateRange} onChange={(next) => navigate({ search: next })} />
+      </div>
 
       <Outlet />
     </div>
