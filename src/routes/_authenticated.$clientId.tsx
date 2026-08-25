@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getClient } from "@/lib/client-data";
 import { useAuth } from "@/hooks/use-auth";
@@ -24,7 +24,13 @@ const CFM_DOT: Record<string, string> = {
 function ClientLayout() {
   const { clientId } = Route.useParams();
   const dateRange = Route.useSearch();
-  const navigate = useNavigate({ from: Route.fullPath });
+  const navigate = useNavigate();
+  // `useNavigate({ from: Route.fullPath })` resolvia sempre pra rota do
+  // layout (a aba "Visão geral"), não pra aba realmente ativa — trocar o
+  // período em qualquer outra aba (ex.: Ranking) jogava de volta pra Visão
+  // geral. Navegar explicitamente pro pathname atual resolve, seja qual for
+  // a aba aberta.
+  const currentPathname = useRouterState({ select: (s) => s.location.pathname });
   const { isAdmin } = useAuth();
   const { data: client } = useQuery({
     queryKey: ["client", clientId],
@@ -90,7 +96,10 @@ function ClientLayout() {
             </Link>
           ))}
         </nav>
-        <DateRangePicker value={dateRange} onChange={(next) => navigate({ search: next })} />
+        <DateRangePicker
+          value={dateRange}
+          onChange={(next) => navigate({ to: currentPathname, search: next, replace: true })}
+        />
       </div>
 
       <Outlet />
