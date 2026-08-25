@@ -488,6 +488,86 @@ export type Database = {
           },
         ]
       }
+      instagram_comments: {
+        Row: {
+          author_username: string | null
+          client_id: string
+          commented_at: string | null
+          created_at: string
+          external_comment_id: string
+          id: string
+          instagram_post_id: string
+          is_question: boolean
+          like_count: number | null
+          text: string
+        }
+        Insert: {
+          author_username?: string | null
+          client_id: string
+          commented_at?: string | null
+          created_at?: string
+          external_comment_id: string
+          id?: string
+          instagram_post_id: string
+          is_question?: boolean
+          like_count?: number | null
+          text: string
+        }
+        Update: {
+          author_username?: string | null
+          client_id?: string
+          commented_at?: string | null
+          created_at?: string
+          external_comment_id?: string
+          id?: string
+          instagram_post_id?: string
+          is_question?: boolean
+          like_count?: number | null
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_comments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instagram_comments_instagram_post_id_fkey"
+            columns: ["instagram_post_id"]
+            isOneToOne: false
+            referencedRelation: "instagram_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      instagram_comments_sync_state: {
+        Row: {
+          instagram_account_id: string
+          last_synced_post_posted_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          instagram_account_id: string
+          last_synced_post_posted_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          instagram_account_id?: string
+          last_synced_post_posted_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_comments_sync_state_instagram_account_id_fkey"
+            columns: ["instagram_account_id"]
+            isOneToOne: true
+            referencedRelation: "instagram_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       instagram_posts: {
         Row: {
           caption: string | null

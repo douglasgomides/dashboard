@@ -40,6 +40,7 @@ function ClientLayout() {
   const tabs: { to: string; label: string; exact: boolean }[] = [
     { to: "/$clientId", label: "Visão geral do mês", exact: true },
     { to: "/$clientId/posts", label: "Ranking & próximos ângulos", exact: false },
+    { to: "/$clientId/duvidas", label: "Dúvidas de pacientes", exact: false },
     { to: "/$clientId/inspiracao", label: "Inspiração", exact: false },
     { to: "/$clientId/consultas", label: "O que virou paciente", exact: false },
     { to: "/$clientId/vendas", label: "O que virou venda", exact: false },

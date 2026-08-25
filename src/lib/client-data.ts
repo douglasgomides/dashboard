@@ -78,6 +78,21 @@ export async function classifyPost(
   if (error) throw error;
 }
 
+// Dúvidas reais de pacientes nos comentários dos posts — matéria-prima pra
+// pauta, não conteúdo pronto. is_question é heurística (pontuação/palavra
+// interrogativa), sem IA — quem decide o que virar conteúdo é o time.
+export async function getPatientQuestions(clientId: string, limit = 200) {
+  const { data, error } = await supabase
+    .from("instagram_comments")
+    .select("*, instagram_posts(caption, permalink, thumbnail_url, posted_at, tema)")
+    .eq("client_id", clientId)
+    .eq("is_question", true)
+    .order("commented_at", { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (error) throw error;
+  return data;
+}
+
 // Biblioteca de inspiração ("Swipe File Médico") — global, não filtrada por
 // cliente. Referência de estrutura/gancho pra adaptar, nunca conteúdo pronto.
 export async function listInspirationPosts() {
