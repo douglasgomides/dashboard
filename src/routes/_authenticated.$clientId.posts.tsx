@@ -14,8 +14,11 @@ import {
 import type { ContentFormat, FunnelStage, MethodologyStage } from "@/integrations/supabase/types";
 import { fmtNum } from "@/lib/format";
 import {
+  computeConversionByTag,
+  computeFormatoPorTema,
   computeReachByFormat,
   computeReachByTema,
+  computeRepetirOuRevisar,
   computeTopPostsPorTaxaDeSalvamento,
   computeTopReelsPorTaxaDeCompartilhamento,
 } from "@/lib/report-metrics";
@@ -131,20 +134,7 @@ function PostRow({ post, clientId }: { post: Post; clientId: string }) {
 }
 
 function ConversionByTag({ posts }: { posts: Post[] }) {
-  const grouped = useMemo(() => {
-    const map = new Map<string, { tema: string; format: string; count: number; totalSaved: number }>();
-    for (const p of posts) {
-      if (!p.tema) continue;
-      const key = `${p.tema}__${p.format ?? "—"}`;
-      const entry = map.get(key) ?? { tema: p.tema, format: formatLabel(p.format), count: 0, totalSaved: 0 };
-      entry.count += 1;
-      entry.totalSaved += p.saved ?? 0;
-      map.set(key, entry);
-    }
-    return Array.from(map.values())
-      .map((e) => ({ ...e, avgSaved: e.totalSaved / e.count }))
-      .sort((a, b) => b.avgSaved - a.avgSaved);
-  }, [posts]);
+  const grouped = useMemo(() => computeConversionByTag(posts), [posts]);
 
   if (grouped.length === 0) return null;
 
@@ -160,7 +150,7 @@ function ConversionByTag({ posts }: { posts: Post[] }) {
             <th className="pb-2">Tema</th>
             <th className="pb-2">Formato</th>
             <th className="pb-2 text-right">Posts</th>
-            <th className="pb-2 text-right">Média de salvamentos</th>
+            <th className="pb-2 text-right">Salvamentos (mediana)</th>
           </tr>
         </thead>
         <tbody>
@@ -170,7 +160,7 @@ function ConversionByTag({ posts }: { posts: Post[] }) {
               <td className="py-1.5">{g.format}</td>
               <td className="py-1.5 text-right">{g.count}</td>
               <td className="py-1.5 text-right font-medium">
-                {g.avgSaved.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
+                {g.medianSaved.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
               </td>
             </tr>
           ))}
@@ -261,39 +251,19 @@ function TopDoMes({ posts }: { posts: Post[] }) {
 }
 
 // Divide os temas classificados em "repetir" (taxa de engajamento acima da
-// média entre os temas com volume) e "revisar" (abaixo) — não é opinião,
+// mediana entre os temas com volume) e "revisar" (abaixo) — não é opinião,
 // é o cálculo dos últimos posts do mês. Precisa de tema classificado na
 // tabela abaixo pra ter dado.
 function RepetirOuRevisar({ posts }: { posts: Post[] }) {
   const MIN_POSTS = 10;
 
-  const { repetir, revisar, hasEnough } = useMemo(() => {
-    const groups = new Map<string, { tema: string; count: number; totalEng: number; totalReach: number }>();
-    for (const p of posts) {
-      if (!p.tema || p.engagement == null || p.reach == null) continue;
-      const entry = groups.get(p.tema) ?? { tema: p.tema, count: 0, totalEng: 0, totalReach: 0 };
-      entry.count += 1;
-      entry.totalEng += p.engagement;
-      entry.totalReach += p.reach;
-      groups.set(p.tema, entry);
-    }
-    const qualifying = Array.from(groups.values())
-      .filter((g) => g.count >= MIN_POSTS && g.totalReach > 0)
-      .map((g) => ({ ...g, rate: g.totalEng / g.totalReach }));
-    if (qualifying.length === 0) return { repetir: [], revisar: [], hasEnough: false };
-    const baseline = qualifying.reduce((s, g) => s + g.rate, 0) / qualifying.length;
-    return {
-      repetir: qualifying.filter((g) => g.rate >= baseline).sort((a, b) => b.rate - a.rate),
-      revisar: qualifying.filter((g) => g.rate < baseline).sort((a, b) => a.rate - b.rate),
-      hasEnough: true,
-    };
-  }, [posts]);
+  const { repetir, revisar, hasEnough } = useMemo(() => computeRepetirOuRevisar(posts, MIN_POSTS), [posts]);
 
   return (
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <h2 className="mb-1 text-sm font-semibold">O que repetir vs. o que revisar</h2>
       <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-        Calculado a partir da taxa de engajamento média dos temas com volume relevante ({MIN_POSTS}+ posts) nos
+        Calculado a partir da mediana da taxa de engajamento dos temas com volume relevante ({MIN_POSTS}+ posts) nos
         últimos {Math.round(WIDE_DAYS / 30)} meses — não é opinião, é o que os dados mostraram.
       </p>
       {!hasEnough ? (
@@ -309,7 +279,7 @@ function RepetirOuRevisar({ posts }: { posts: Post[] }) {
             </h3>
             {repetir.length === 0 ? (
               <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-                Nenhum tema acima da média ainda.
+                Nenhum tema acima da mediana ainda.
               </p>
             ) : (
               <ul className="space-y-2">
@@ -330,7 +300,7 @@ function RepetirOuRevisar({ posts }: { posts: Post[] }) {
             </h3>
             {revisar.length === 0 ? (
               <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-                Nenhum tema abaixo da média ainda.
+                Nenhum tema abaixo da mediana ainda.
               </p>
             ) : (
               <ul className="space-y-2">
@@ -351,9 +321,6 @@ function RepetirOuRevisar({ posts }: { posts: Post[] }) {
   );
 }
 
-// Mesmo tema pode performar diferente dependendo do formato — cruza os dois
-// pra mostrar onde a combinação funciona e onde não funciona. Só aparece
-// nas combinações com tema classificado.
 // Top posts/reels por taxa (÷ alcance) em vez de número bruto — normaliza
 // por quem viu o post, então compara post pequeno com post viral em pé de
 // igualdade. "Taxa de compartilhamento" só existe pra reels porque é onde a
@@ -410,8 +377,9 @@ function TopPorTaxa({ posts }: { posts: Post[] }) {
   );
 }
 
-// Alcance médio por tema e por formato — a base de comparação pra decidir
-// se um tema/formato vale ser repetido, independente de picos isolados.
+// Alcance (mediana) por tema e por formato — a base de comparação pra
+// decidir se um tema/formato vale ser repetido, independente de picos
+// isolados.
 function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
   const porTema = useMemo(() => computeReachByTema(posts), [posts]);
   const porFormato = useMemo(() => computeReachByFormat(posts), [posts]);
@@ -422,14 +390,14 @@ function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <h2 className="mb-1 text-sm font-semibold">Desempenho estrutural</h2>
       <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-        Alcance médio é a base de comparação — é o que decide se um formato/tema vale ser repetido, independente de
-        picos isolados.
+        Alcance (mediana) é a base de comparação — é o que decide se um formato/tema vale ser repetido, independente
+        de picos isolados.
       </p>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {porTema.length > 0 && (
           <div>
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-              Alcance médio por tema
+              Alcance (mediana) por tema
             </h3>
             <ResponsiveContainer width="100%" height={Math.max(120, porTema.length * 32)}>
               <BarChart data={porTema} layout="vertical" margin={{ left: 8 }}>
@@ -437,7 +405,7 @@ function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
                 <XAxis type="number" tick={{ fontSize: 10 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
                 <YAxis type="category" dataKey="tema" tick={{ fontSize: 10 }} stroke="var(--text-faint)" width={110} />
                 <Tooltip formatter={(value: number) => fmtNum(value)} />
-                <Bar dataKey="avgReach" name="Alcance médio" fill="var(--accent)" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="medianReach" name="Alcance (mediana)" fill="var(--accent)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -445,7 +413,7 @@ function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
         {porFormato.length > 0 && (
           <div>
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-              Alcance médio por formato
+              Alcance (mediana) por formato
             </h3>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={porFormato}>
@@ -453,7 +421,7 @@ function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
                 <XAxis dataKey="formato" tick={{ fontSize: 11 }} stroke="var(--text-faint)" />
                 <YAxis tick={{ fontSize: 11 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
                 <Tooltip formatter={(value: number) => fmtNum(value)} />
-                <Bar dataKey="avgReach" name="Alcance médio" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="medianReach" name="Alcance (mediana)" fill="var(--accent)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -463,26 +431,11 @@ function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
   );
 }
 
+// Mesmo tema pode performar diferente dependendo do formato — cruza os dois
+// pra mostrar onde a combinação funciona e onde não funciona. Só aparece
+// nas combinações com tema classificado.
 function FormatoPorTema({ posts }: { posts: Post[] }) {
-  const rows = useMemo(() => {
-    const groups = new Map<string, { tema: string; formato: ContentFormat; count: number; totalReach: number; totalEng: number }>();
-    for (const p of posts) {
-      if (!p.tema || !p.format) continue;
-      const key = `${p.tema}__${p.format}`;
-      const entry = groups.get(key) ?? { tema: p.tema, formato: p.format, count: 0, totalReach: 0, totalEng: 0 };
-      entry.count += 1;
-      entry.totalReach += p.reach ?? 0;
-      entry.totalEng += p.engagement ?? 0;
-      groups.set(key, entry);
-    }
-    return Array.from(groups.values())
-      .map((g) => ({
-        ...g,
-        avgReach: g.totalReach / g.count,
-        engRate: g.totalReach > 0 ? (g.totalEng / g.totalReach) * 100 : 0,
-      }))
-      .sort((a, b) => b.avgReach - a.avgReach);
-  }, [posts]);
+  const rows = useMemo(() => computeFormatoPorTema(posts), [posts]);
 
   if (rows.length === 0) return null;
 
@@ -498,7 +451,7 @@ function FormatoPorTema({ posts }: { posts: Post[] }) {
             <th className="pb-2">Tema</th>
             <th className="pb-2">Formato</th>
             <th className="pb-2 text-right">Posts</th>
-            <th className="pb-2 text-right">Alcance médio</th>
+            <th className="pb-2 text-right">Alcance (mediana)</th>
             <th className="pb-2 text-right">Tx. engaj.</th>
           </tr>
         </thead>
@@ -508,8 +461,8 @@ function FormatoPorTema({ posts }: { posts: Post[] }) {
               <td className="py-1.5">{r.tema}</td>
               <td className="py-1.5">{formatLabel(r.formato)}</td>
               <td className="py-1.5 text-right">{r.count}</td>
-              <td className="py-1.5 text-right">{fmtNum(Math.round(r.avgReach))}</td>
-              <td className="py-1.5 text-right font-medium">{r.engRate.toFixed(1)}%</td>
+              <td className="py-1.5 text-right">{fmtNum(r.medianReach)}</td>
+              <td className="py-1.5 text-right font-medium">{r.medianEngRate.toFixed(1)}%</td>
             </tr>
           ))}
         </tbody>

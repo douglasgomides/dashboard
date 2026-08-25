@@ -150,8 +150,8 @@ function ClientReportDocument({
   trendDays,
 }: ReportData) {
   const insight = computeFormatInsight(postsForAnalytics);
-  const { ranked: horarios, overallAvg: horaAvg } = computeMelhoresHorarios(postsForAnalytics);
-  const formatos = computeFormatBreakdown(postsForAnalytics).sort((a, b) => b.avgEngagement - a.avgEngagement);
+  const { ranked: horarios, overallMedian: horaMedian } = computeMelhoresHorarios(postsForAnalytics);
+  const formatos = computeFormatBreakdown(postsForAnalytics).sort((a, b) => b.medianEngagement - a.medianEngagement);
   const topPosts = computeTopPosts(postsDoMes, 5);
   const headline = computeHeadline(postsForAnalytics);
   const { repetir, revisar, hasEnough } = computeRepetirOuRevisar(postsForAnalytics, 10);
@@ -159,8 +159,8 @@ function ClientReportDocument({
   const temaTags = new Set(postsForAnalytics.map((p) => p.tema).filter(Boolean)).size;
   const reachPorFormato = computeReachByFormat(postsForAnalytics);
   const reachPorTema = computeReachByTema(postsForAnalytics).slice(0, 8);
-  const maxReachFormato = Math.max(1, ...reachPorFormato.map((r) => r.avgReach));
-  const maxReachTema = Math.max(1, ...reachPorTema.map((r) => r.avgReach));
+  const maxReachFormato = Math.max(1, ...reachPorFormato.map((r) => r.medianReach));
+  const maxReachTema = Math.max(1, ...reachPorTema.map((r) => r.medianReach));
   const topSalvamento = computeTopPostsPorTaxaDeSalvamento(postsForAnalytics, 5);
   const topCompartilhamento = computeTopReelsPorTaxaDeCompartilhamento(postsForAnalytics, 5);
 
@@ -199,9 +199,9 @@ function ClientReportDocument({
           <View style={[styles.highlightBox, styles.highlightGood]}>
             <Text>
               <Text style={{ fontWeight: 700 }}>{fmtFormatKey(insight.best.format)}</Text> é o formato mais forte —
-              engajamento médio de {fmtNum(Math.round(insight.best.avg))} ({insight.best.count} posts),{" "}
+              engajamento (mediana) de {fmtNum(Math.round(insight.best.median))} ({insight.best.count} posts),{" "}
               {insight.bestPct >= 0 ? "+" : ""}
-              {insight.bestPct.toFixed(0)}% acima da média geral.
+              {insight.bestPct.toFixed(0)}% acima da mediana geral.
               {insight.worst.format !== insight.best.format &&
                 ` ${fmtFormatKey(insight.worst.format)} ficou ${Math.abs(insight.worstPct).toFixed(0)}% abaixo (${insight.worst.count} posts) — vale revisar frequência ou abordagem nesse formato.`}
             </Text>
@@ -215,9 +215,9 @@ function ClientReportDocument({
               <Text style={{ fontWeight: 700 }}>
                 {horarios[0].weekday} à(o) {horarios[0].period.toLowerCase()}
               </Text>{" "}
-              — engajamento médio de {fmtNum(Math.round(horarios[0].avg))} em {horarios[0].count} posts,{" "}
-              {horaAvg > 0 ? (((horarios[0].avg - horaAvg) / horaAvg) * 100).toFixed(0) : "0"}% acima da média da
-              conta.
+              — engajamento (mediana) de {fmtNum(Math.round(horarios[0].median))} em {horarios[0].count} posts,{" "}
+              {horaMedian > 0 ? (((horarios[0].median - horaMedian) / horaMedian) * 100).toFixed(0) : "0"}% acima da
+              mediana da conta.
             </Text>
           </View>
         )}
@@ -232,7 +232,7 @@ function ClientReportDocument({
           <View style={{ flexDirection: "row", gap: 12 }}>
             <View style={styles.verdictCol}>
               <Text style={[styles.verdictLabel, { color: "#3f8f5f" }]}>REPETIR</Text>
-              {repetir.length === 0 && <Text style={{ fontSize: 8, color: "#888" }}>Nenhum tema acima da média.</Text>}
+              {repetir.length === 0 && <Text style={{ fontSize: 8, color: "#888" }}>Nenhum tema acima da mediana.</Text>}
               {repetir.map((g) => (
                 <View key={g.tema} style={styles.verdictItem}>
                   <Text style={styles.verdictTema}>{g.tema}</Text>
@@ -244,7 +244,7 @@ function ClientReportDocument({
             </View>
             <View style={styles.verdictCol}>
               <Text style={[styles.verdictLabel, { color: "#b3543f" }]}>REVISAR OU DESCONTINUAR</Text>
-              {revisar.length === 0 && <Text style={{ fontSize: 8, color: "#888" }}>Nenhum tema abaixo da média.</Text>}
+              {revisar.length === 0 && <Text style={{ fontSize: 8, color: "#888" }}>Nenhum tema abaixo da mediana.</Text>}
               {revisar.map((g) => (
                 <View key={g.tema} style={styles.verdictItem}>
                   <Text style={styles.verdictTema}>{g.tema}</Text>
@@ -272,23 +272,23 @@ function ClientReportDocument({
       <Page size="A4" style={styles.page}>
         <Text style={styles.sectionTitle}>Desempenho estrutural</Text>
         <Text style={styles.sectionHint}>
-          Alcance médio é a base de comparação — decide se um formato/tema vale ser repetido, independente de picos
-          isolados.
+          Alcance (mediana) é a base de comparação — decide se um formato/tema vale ser repetido, independente de
+          picos isolados.
         </Text>
         {reachPorFormato.length > 0 && (
           <>
-            <Text style={{ fontSize: 8, fontWeight: 700, color: "#888", marginBottom: 4 }}>ALCANCE MÉDIO POR FORMATO</Text>
+            <Text style={{ fontSize: 8, fontWeight: 700, color: "#888", marginBottom: 4 }}>ALCANCE (MEDIANA) POR FORMATO</Text>
             <BarChartBlock
-              rows={reachPorFormato.map((r) => ({ label: r.formato, value: r.avgReach }))}
+              rows={reachPorFormato.map((r) => ({ label: r.formato, value: r.medianReach }))}
               maxValue={maxReachFormato}
             />
           </>
         )}
         {reachPorTema.length > 0 && (
           <>
-            <Text style={{ fontSize: 8, fontWeight: 700, color: "#888", marginBottom: 4 }}>ALCANCE MÉDIO POR TEMA</Text>
+            <Text style={{ fontSize: 8, fontWeight: 700, color: "#888", marginBottom: 4 }}>ALCANCE (MEDIANA) POR TEMA</Text>
             <BarChartBlock
-              rows={reachPorTema.map((r) => ({ label: r.tema, value: r.avgReach }))}
+              rows={reachPorTema.map((r) => ({ label: r.tema, value: r.medianReach }))}
               maxValue={maxReachTema}
             />
           </>
@@ -337,14 +337,14 @@ function ClientReportDocument({
                 <Text style={[styles.th, styles.colWide]}>Dia</Text>
                 <Text style={[styles.th, styles.colWide]}>Período</Text>
                 <Text style={[styles.th, styles.col]}>Posts</Text>
-                <Text style={[styles.th, styles.col]}>Engaj. médio</Text>
+                <Text style={[styles.th, styles.col]}>Engaj. (mediana)</Text>
               </View>
               {horarios.map((r) => (
                 <View key={`${r.weekday}-${r.period}`} style={styles.tableRow}>
                   <Text style={[styles.td, styles.colWide]}>{r.weekday}</Text>
                   <Text style={[styles.td, styles.colWide]}>{r.period}</Text>
                   <Text style={[styles.td, styles.col]}>{r.count}</Text>
-                  <Text style={[styles.td, styles.col]}>{fmtNum(Math.round(r.avg))}</Text>
+                  <Text style={[styles.td, styles.col]}>{fmtNum(Math.round(r.median))}</Text>
                 </View>
               ))}
             </View>
@@ -353,18 +353,18 @@ function ClientReportDocument({
 
         {formatos.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Engajamento médio por formato</Text>
+            <Text style={styles.sectionTitle}>Engajamento (mediana) por formato</Text>
             <View style={styles.table}>
               <View style={styles.tableRowHeader}>
                 <Text style={[styles.th, styles.colWide]}>Formato</Text>
                 <Text style={[styles.th, styles.col]}>Posts</Text>
-                <Text style={[styles.th, styles.col]}>Engaj. médio</Text>
+                <Text style={[styles.th, styles.col]}>Engaj. (mediana)</Text>
               </View>
               {formatos.map((f) => (
                 <View key={f.formato} style={styles.tableRow}>
                   <Text style={[styles.td, styles.colWide]}>{f.formato}</Text>
                   <Text style={[styles.td, styles.col]}>{f.count}</Text>
-                  <Text style={[styles.td, styles.col]}>{fmtNum(f.avgEngagement)}</Text>
+                  <Text style={[styles.td, styles.col]}>{fmtNum(f.medianEngagement)}</Text>
                 </View>
               ))}
             </View>
@@ -452,6 +452,12 @@ function ClientReportDocument({
           disponível para todos os clientes. "Seguidores gerados por post individual" também não está aqui: a fonte
           de dados só disponibiliza seguidor ganho por dia da conta inteira, não por post — o mesmo vale para taxa de
           seguidor real por Reels, que exigiria cruzar com export manual do Instagram Insights.
+        </Text>
+        <Text style={styles.methodTitle}>Por que mediana, não média</Text>
+        <Text style={styles.methodP}>
+          Todo "engajamento" e "alcance" neste relatório é mediana, não média. Um post viral isolado pode inflar a
+          média de um formato/tema inteiro em 6 a 10 vezes, dando a impressão de que o post "típico" performa perto
+          da média geral — quando na real a maioria fica bem abaixo. Mediana representa melhor o post típico.
         </Text>
         <Text style={styles.methodTitle}>Limitações</Text>
         <Text style={styles.methodP}>

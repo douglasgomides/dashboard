@@ -17,7 +17,7 @@ import {
 import { getClient, getMonthlyMetrics, getMetricsTrend, getPostsForAnalytics } from "@/lib/client-data";
 import { formatLabel } from "@/lib/methodology";
 import type { ContentFormat } from "@/integrations/supabase/types";
-import { computeFormatInsight, fmtFormatKey } from "@/lib/report-metrics";
+import { computeFormatBreakdown, computeFormatInsight, fmtFormatKey, median } from "@/lib/report-metrics";
 import { fmtNum } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/$clientId/")({
@@ -133,48 +133,45 @@ function PostList({ posts }: { posts: any[] }) {
 function MelhoresHorarios({ posts }: { posts: any[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const { ranked, overallAvg } = useMemo(() => {
+  const { ranked, overallMedian } = useMemo(() => {
     const buckets = new Map<
       string,
-      { weekday: string; period: string; total: number; count: number; posts: any[] }
+      { weekday: string; period: string; values: number[]; posts: any[] }
     >();
-    let totalEng = 0;
-    let totalCount = 0;
+    const allEng: number[] = [];
     for (const p of posts) {
       if (!p.posted_at || p.engagement == null) continue;
-      totalEng += p.engagement;
-      totalCount += 1;
+      allEng.push(p.engagement);
       const d = new Date(p.posted_at);
       const weekday = WEEKDAYS[d.getUTCDay()];
       const period = PERIODS.find((per) => per.test(d.getUTCHours()))?.label ?? "—";
       const key = `${weekday}__${period}`;
-      const entry = buckets.get(key) ?? { weekday, period, total: 0, count: 0, posts: [] };
-      entry.total += p.engagement ?? 0;
-      entry.count += 1;
+      const entry = buckets.get(key) ?? { weekday, period, values: [], posts: [] };
+      entry.values.push(p.engagement);
       entry.posts.push(p);
       buckets.set(key, entry);
     }
-    const overallAvg = totalCount > 0 ? totalEng / totalCount : 0;
+    const overallMedian = median(allEng);
     const ranked = Array.from(buckets.entries())
-      .filter(([, b]) => b.count >= 2)
+      .filter(([, b]) => b.values.length >= 2)
       .map(([key, b]) => ({
         key,
         weekday: b.weekday,
         period: b.period,
-        count: b.count,
-        avg: b.total / b.count,
+        count: b.values.length,
+        median: median(b.values),
         posts: [...b.posts].sort((a, c) => (c.engagement ?? 0) - (a.engagement ?? 0)),
       }))
-      .sort((a, b) => b.avg - a.avg)
+      .sort((a, b) => b.median - a.median)
       .slice(0, 5);
-    return { ranked, overallAvg };
+    return { ranked, overallMedian };
   }, [posts]);
 
   return (
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <h2 className="mb-1 text-sm font-semibold">Melhores horários pra postar</h2>
       <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-        Últimos {TREND_DAYS} dias, por engajamento médio (horário em UTC). Clique numa linha pra ver os posts que
+        Últimos {TREND_DAYS} dias, por engajamento (mediana; horário em UTC). Clique numa linha pra ver os posts que
         sustentam o número.
       </p>
       {ranked.length === 0 ? (
@@ -188,13 +185,13 @@ function MelhoresHorarios({ posts }: { posts: any[] }) {
               <th className="pb-2">Dia</th>
               <th className="pb-2">Período</th>
               <th className="pb-2 text-right">Posts</th>
-              <th className="pb-2 text-right">Engajamento médio</th>
-              <th className="pb-2 text-right">vs. média da conta</th>
+              <th className="pb-2 text-right">Engajamento (mediana)</th>
+              <th className="pb-2 text-right">vs. mediana da conta</th>
             </tr>
           </thead>
           <tbody>
             {ranked.map((r) => {
-              const vsAvg = overallAvg > 0 ? ((r.avg - overallAvg) / overallAvg) * 100 : 0;
+              const vsMedian = overallMedian > 0 ? ((r.median - overallMedian) / overallMedian) * 100 : 0;
               const isOpen = expanded === r.key;
               return (
                 <Fragment key={r.key}>
@@ -206,13 +203,13 @@ function MelhoresHorarios({ posts }: { posts: any[] }) {
                     <td className="py-1.5">{r.weekday}</td>
                     <td className="py-1.5">{r.period}</td>
                     <td className="py-1.5 text-right">{r.count}</td>
-                    <td className="py-1.5 text-right font-medium">{fmtNum(Math.round(r.avg))}</td>
+                    <td className="py-1.5 text-right font-medium">{fmtNum(Math.round(r.median))}</td>
                     <td
                       className="py-1.5 text-right font-medium"
-                      style={{ color: vsAvg >= 0 ? "var(--good)" : "var(--text-dim)" }}
+                      style={{ color: vsMedian >= 0 ? "var(--good)" : "var(--text-dim)" }}
                     >
-                      {vsAvg >= 0 ? "+" : ""}
-                      {vsAvg.toFixed(0)}%
+                      {vsMedian >= 0 ? "+" : ""}
+                      {vsMedian.toFixed(0)}%
                     </td>
                   </tr>
                   {isOpen && (
@@ -225,8 +222,8 @@ function MelhoresHorarios({ posts }: { posts: any[] }) {
                           <p className="mb-2 text-xs" style={{ color: "var(--text-faint)" }}>
                             {r.count} post{r.count > 1 ? "s" : ""} publicado{r.count > 1 ? "s" : ""} em{" "}
                             {r.weekday.toLowerCase()} à(o) {r.period.toLowerCase()} nos últimos {TREND_DAYS} dias —
-                            engajamento médio {vsAvg >= 0 ? vsAvg.toFixed(0) + "% acima" : Math.abs(vsAvg).toFixed(0) + "% abaixo"}{" "}
-                            da média geral da conta ({fmtNum(Math.round(overallAvg))}).
+                            engajamento {vsMedian >= 0 ? vsMedian.toFixed(0) + "% acima" : Math.abs(vsMedian).toFixed(0) + "% abaixo"}{" "}
+                            da mediana geral da conta ({fmtNum(Math.round(overallMedian))}).
                           </p>
                           <PostList posts={r.posts} />
                         </div>
@@ -245,23 +242,15 @@ function MelhoresHorarios({ posts }: { posts: any[] }) {
 
 function EngajamentoPorFormato({ posts }: { posts: any[] }) {
   const data = useMemo(() => {
-    const groups = new Map<string, { total: number; count: number }>();
-    for (const p of posts) {
-      const key: ContentFormat | "não classificado" = p.format ?? "não classificado";
-      const entry = groups.get(key) ?? { total: 0, count: 0 };
-      entry.total += p.engagement ?? 0;
-      entry.count += 1;
-      groups.set(key, entry);
-    }
-    return Array.from(groups.entries()).map(([key, v]) => ({
-      formato: fmtFormatLabel(key),
-      "Engajamento médio": v.count > 0 ? Math.round(v.total / v.count) : 0,
+    return computeFormatBreakdown(posts).map((f) => ({
+      formato: f.formato,
+      "Engajamento (mediana)": f.medianEngagement,
     }));
   }, [posts]);
 
   return (
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-      <h2 className="mb-3 text-sm font-semibold">Engajamento médio por formato</h2>
+      <h2 className="mb-3 text-sm font-semibold">Engajamento (mediana) por formato</h2>
       {data.length === 0 ? (
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
           Sem posts suficientes ainda.
@@ -273,7 +262,7 @@ function EngajamentoPorFormato({ posts }: { posts: any[] }) {
             <XAxis dataKey="formato" tick={{ fontSize: 11 }} stroke="var(--text-faint)" />
             <YAxis tick={{ fontSize: 11 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
             <Tooltip formatter={(value: number) => fmtNum(value)} />
-            <Bar dataKey="Engajamento médio" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Engajamento (mediana)" fill="var(--accent)" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       )}
@@ -290,33 +279,7 @@ function fmtFormatLabel(key: string) {
 // sustentam a afirmação. Não sugere o que postar, só descreve o que já
 // aconteceu.
 function InsightDeFormato({ posts }: { posts: any[] }) {
-  const insight = useMemo(() => {
-    const groups = new Map<string, { total: number; count: number }>();
-    let totalEng = 0;
-    let totalCount = 0;
-    for (const p of posts) {
-      if (p.engagement == null) continue;
-      const key = p.format ?? "não classificado";
-      const entry = groups.get(key) ?? { total: 0, count: 0 };
-      entry.total += p.engagement;
-      entry.count += 1;
-      groups.set(key, entry);
-      totalEng += p.engagement;
-      totalCount += 1;
-    }
-    if (totalCount === 0) return null;
-    const overallAvg = totalEng / totalCount;
-    const ranked = Array.from(groups.entries())
-      .filter(([, v]) => v.count >= 3)
-      .map(([format, v]) => ({ format, avg: v.total / v.count, count: v.count }))
-      .sort((a, b) => b.avg - a.avg);
-    if (ranked.length < 2) return null;
-    const best = ranked[0];
-    const worst = ranked[ranked.length - 1];
-    const bestPct = overallAvg > 0 ? ((best.avg - overallAvg) / overallAvg) * 100 : 0;
-    const worstPct = overallAvg > 0 ? ((worst.avg - overallAvg) / overallAvg) * 100 : 0;
-    return { best, worst, bestPct, worstPct };
-  }, [posts]);
+  const insight = useMemo(() => computeFormatInsight(posts), [posts]);
 
   if (!insight) return null;
   const { best, worst, bestPct, worstPct } = insight;
@@ -327,8 +290,8 @@ function InsightDeFormato({ posts }: { posts: any[] }) {
       style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
     >
       Nos últimos {TREND_DAYS} dias, <strong>{fmtFormatLabel(best.format)}</strong> foi o formato mais forte —
-      engajamento médio de {fmtNum(Math.round(best.avg))} ({best.count} posts), {bestPct >= 0 ? "+" : ""}
-      {bestPct.toFixed(0)}% acima da média geral da conta.
+      engajamento (mediana) de {fmtNum(Math.round(best.median))} ({best.count} posts), {bestPct >= 0 ? "+" : ""}
+      {bestPct.toFixed(0)}% acima da mediana geral da conta.
       {worst.format !== best.format && (
         <>
           {" "}
@@ -482,12 +445,12 @@ function MonthlyOverview() {
           <KpiCard
             label="Melhor formato"
             value={fmtFormatKey(formatInsight.best.format)}
-            hint={`${fmtNum(Math.round(formatInsight.best.avg))} engaj. médio · ${formatInsight.best.count} posts`}
+            hint={`${fmtNum(Math.round(formatInsight.best.median))} engaj. (mediana) · ${formatInsight.best.count} posts`}
           />
           <KpiCard
             label="Formato mais fraco"
             value={fmtFormatKey(formatInsight.worst.format)}
-            hint={`${fmtNum(Math.round(formatInsight.worst.avg))} engaj. médio · ${formatInsight.worst.count} posts`}
+            hint={`${fmtNum(Math.round(formatInsight.worst.median))} engaj. (mediana) · ${formatInsight.worst.count} posts`}
           />
         </div>
       )}
