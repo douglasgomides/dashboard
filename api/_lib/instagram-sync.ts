@@ -61,16 +61,17 @@ function normalizeFormat(mediaType: unknown, productType: unknown): string | nul
 // risco de corte silencioso (foi isso que sumiu com reels da Lana Torres
 // antes). Sempre scoped por conta via `filter`, nunca busca todas as contas
 // juntas pra filtrar depois no cliente.
-async function windsorGet(
+async function windsorGetRange(
   windsorApiKey: string,
-  syncDays: number,
+  dateFrom: string,
+  dateTo: string,
   fields: string[],
   windsorAccountId: string,
 ): Promise<Record<string, unknown>[]> {
   const params = new URLSearchParams({
     api_key: windsorApiKey,
-    date_from: dateNDaysAgo(syncDays),
-    date_to: dateNDaysAgo(0),
+    date_from: dateFrom,
+    date_to: dateTo,
     fields: fields.join(","),
     filter: JSON.stringify([["account_id", "eq", windsorAccountId]]),
     _max_rows: "100000",
@@ -81,6 +82,33 @@ async function windsorGet(
   }
   const body = (await res.json()) as { data?: Record<string, unknown>[] };
   return body.data ?? [];
+}
+
+const WINDSOR_CHUNK_DAYS = 30;
+
+// A Windsor demora demais (ou trava) quando pedimos uma janela de datas
+// grande de uma vez (ex: 365 dias) — descoberto tentando um backfill de 1
+// ano, que nunca voltava. Pedir em pedaços de 30 dias, sequencialmente, é
+// mais lento por request mas muito mais confiável — cada pedaço volta rápido
+// em vez de arriscar travar a chamada inteira.
+async function windsorGet(
+  windsorApiKey: string,
+  syncDays: number,
+  fields: string[],
+  windsorAccountId: string,
+): Promise<Record<string, unknown>[]> {
+  const chunks: { from: string; to: string }[] = [];
+  for (let daysAgoEnd = syncDays; daysAgoEnd > 0; daysAgoEnd -= WINDSOR_CHUNK_DAYS) {
+    const daysAgoStart = Math.max(0, daysAgoEnd - WINDSOR_CHUNK_DAYS);
+    chunks.push({ from: dateNDaysAgo(daysAgoEnd), to: dateNDaysAgo(daysAgoStart) });
+  }
+
+  const all: Record<string, unknown>[] = [];
+  for (const c of chunks) {
+    const rows = await windsorGetRange(windsorApiKey, c.from, c.to, fields, windsorAccountId);
+    all.push(...rows);
+  }
+  return all;
 }
 
 async function syncPosts(
