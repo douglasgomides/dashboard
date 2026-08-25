@@ -219,6 +219,16 @@ async function classifyMissingTemas(
 // windsor_account_id guarda o Instagram Business Account ID — o mesmo
 // identificador que a API direta da Meta usa, então não precisa de coluna
 // nova pra mapear conta.
+//
+// O cursor de paginação fica salvo em instagram_backfill_state, não só na
+// resposta HTTP — uma invocação na Vercel tem ~300s, então o backfill de
+// uma conta grande precisa de várias chamadas, e não dá pra confiar em
+// alguém capturar o `nextCursor` da resposta anterior pra passar na
+// próxima (o status de execução do n8n fica "running" por minutos mesmo
+// depois da chamada real já ter terminado). Com o estado no banco, basta
+// chamar o endpoint de novo com os mesmos parâmetros que ele retoma
+// sozinho. Uma vez concluído (backfill_done = true), a mesma chamada vira
+// o sync incremental do dia a dia — busca só os posts mais recentes.
 export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyncResult[]> {
   const supabase = createClient<Database>(env.supabaseUrl, env.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -233,6 +243,18 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
   const results: MetaAccountSyncResult[] = [];
   for (const account of accounts ?? []) {
     const errors: string[] = [];
+
+    const { data: state } = await supabase
+      .from("instagram_backfill_state")
+      .select("next_cursor, backfill_done")
+      .eq("instagram_account_id", account.id)
+      .maybeSingle();
+
+    // Backfill em andamento: retoma do cursor salvo. Backfill concluído (ou
+    // nunca iniciado sem `after` explícito): busca a partir do topo — é o
+    // comportamento certo tanto pra primeira leva quanto pro sync diário.
+    const after = env.after ?? (state && !state.backfill_done ? (state.next_cursor ?? undefined) : undefined);
+
     const posts = await syncAccountPosts(
       supabase,
       env.accessToken,
@@ -240,11 +262,25 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
       account.windsor_account_id,
       account.client_id,
       maxPages,
-      env.after,
+      after,
     ).catch((err) => {
       errors.push(`posts: ${err instanceof Error ? err.message : String(err)}`);
       return { count: 0, errors: [], nextCursor: null, done: true };
     });
+
+    if (errors.length === 0) {
+      const { error: stateError } = await supabase.from("instagram_backfill_state").upsert(
+        {
+          instagram_account_id: account.id,
+          next_cursor: posts.done ? null : posts.nextCursor,
+          backfill_done: posts.done,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "instagram_account_id" },
+      );
+      if (stateError) errors.push(`state upsert: ${stateError.message}`);
+    }
+
     const temas = await classifyMissingTemas(supabase, account.id, account.windsor_account_id).catch((err) => {
       errors.push(`classify: ${err instanceof Error ? err.message : String(err)}`);
       return { count: 0, errors: [] };
