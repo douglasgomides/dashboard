@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getPatientQuestions } from "@/lib/client-data";
+import { computeDuvidasFrequentes } from "@/lib/report-metrics";
 
 export const Route = createFileRoute("/_authenticated/$clientId/duvidas")({
   component: DuvidasPage,
@@ -46,6 +47,57 @@ function QuestionCard({ q }: { q: Question }) {
   );
 }
 
+// Agrupa perguntas parecidas (mesmo assunto, fraseado diferente) num
+// ranking de dúvidas mais repetidas — cada grupo abre pra mostrar os
+// comentários reais que o compõem. Isso é o achado (o que perguntam de
+// verdade, e quantas vezes); virar conteúdo continua sendo decisão do time.
+function DuvidasFrequentes({ questions }: { questions: Question[] }) {
+  const [openIdx, setOpenIdx] = useState<number | null>(null);
+  const clusters = useMemo(() => computeDuvidasFrequentes(questions, { threshold: 0.4, minSize: 2 }), [questions]);
+
+  if (clusters.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+      <h2 className="mb-1 text-sm font-semibold">Dúvidas mais repetidas</h2>
+      <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
+        Perguntas com o mesmo assunto agrupadas por palavras-chave em comum (sem IA) — quanto mais gente pergunta a
+        mesma coisa, maior a chance de virar um post que resolve de vez.
+      </p>
+      <div className="space-y-2">
+        {clusters.map((c, i) => (
+          <div key={i} className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+            <div className="flex items-start justify-between gap-3">
+              <p>{c.representative.text}</p>
+              <span
+                className="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
+                style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+              >
+                {c.count}×
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpenIdx((v) => (v === i ? null : i))}
+              className="mt-2 text-xs font-medium"
+              style={{ color: "var(--accent)" }}
+            >
+              {openIdx === i ? "Ocultar" : "Ver"} os {c.count} comentários
+            </button>
+            {openIdx === i && (
+              <div className="mt-2 space-y-2">
+                {c.items.map((item) => (
+                  <QuestionCard key={item.id} q={item} />
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DuvidasPage() {
   const { clientId } = Route.useParams();
   const { data: questions, isLoading } = useQuery({
@@ -81,6 +133,8 @@ function DuvidasPage() {
         detecção de "é pergunta?" é heurística (pontuação/palavra interrogativa); quem decide o que virar conteúdo
         continua sendo o time.
       </div>
+
+      {!isLoading && <DuvidasFrequentes questions={rows} />}
 
       <div className="flex flex-wrap items-center gap-2 rounded-xl border p-3" style={{ borderColor: "var(--border)" }}>
         <input

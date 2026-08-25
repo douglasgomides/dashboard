@@ -701,6 +701,8 @@ function PostsRankingPage() {
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
   const [formatFilter, setFormatFilter] = useState<ContentFormat | "">("");
+  const [showAllRanked, setShowAllRanked] = useState(false);
+  const RANKED_PAGE_SIZE = 20;
 
   const { data: posts, isLoading } = useQuery({
     queryKey: ["ranked-posts", clientId, start, end],
@@ -711,6 +713,7 @@ function PostsRankingPage() {
 
   const rows = posts ?? [];
   const filteredRows = formatFilter ? rows.filter((p) => p.format === formatFilter) : rows;
+  const visibleRows = showAllRanked ? filteredRows : filteredRows.slice(0, RANKED_PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -763,11 +766,23 @@ function PostsRankingPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.map((post) => (
+                {visibleRows.map((post) => (
                   <PostRow key={post.id} post={post} clientId={clientId} />
                 ))}
               </tbody>
             </table>
+            {filteredRows.length > RANKED_PAGE_SIZE && (
+              <button
+                type="button"
+                onClick={() => setShowAllRanked((v) => !v)}
+                className="mt-3 text-xs font-medium"
+                style={{ color: "var(--accent)" }}
+              >
+                {showAllRanked
+                  ? "↑ Mostrar menos"
+                  : `↓ Ver todos os ${filteredRows.length} posts`}
+              </button>
+            )}
           </div>
         )}
       </div>

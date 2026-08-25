@@ -255,6 +255,106 @@ export function computeConceitosVencedores(posts: any[], limit = 7) {
     .slice(0, limit);
 }
 
+// Agrupa comentários-pergunta parecidos (mesmo assunto, fraseado diferente)
+// por sobreposição de palavras-chave — sem IA, só interseção de conjuntos.
+// Transforma uma lista crua de comentários num ranking real de "dúvidas mais
+// repetidas", rastreável até os comentários originais que compõem cada grupo.
+const DUVIDAS_STOPWORDS = new Set([
+  "para",
+  "como",
+  "esse",
+  "essa",
+  "isso",
+  "aquele",
+  "aquela",
+  "muito",
+  "muita",
+  "sobre",
+  "onde",
+  "quando",
+  "quanto",
+  "quanta",
+  "quais",
+  "qual",
+  "quem",
+  "porque",
+  "tem",
+  "tenho",
+  "pode",
+  "posso",
+  "poderia",
+  "gostaria",
+  "queria",
+  "ainda",
+  "voce",
+  "vc",
+  "você",
+  "estou",
+  "estar",
+  "fazer",
+  "faz",
+  "vai",
+  "algum",
+  "alguma",
+  "outro",
+  "outra",
+]);
+
+function duvidaNormalize(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
+function significantWords(text: string): Set<string> {
+  const words = duvidaNormalize(text)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= 4 && !DUVIDAS_STOPWORDS.has(w));
+  return new Set(words);
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let intersection = 0;
+  for (const w of a) if (b.has(w)) intersection++;
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+export function computeDuvidasFrequentes<T extends { id: string; text: string; like_count: number | null }>(
+  questions: T[],
+  { threshold = 0.4, minSize = 2 } = {},
+) {
+  const clusters: { words: Set<string>; items: T[] }[] = [];
+  for (const q of questions) {
+    const words = significantWords(q.text);
+    if (words.size === 0) continue;
+    let best: { cluster: (typeof clusters)[number]; sim: number } | null = null;
+    for (const c of clusters) {
+      const sim = jaccard(words, c.words);
+      if (sim >= threshold && (!best || sim > best.sim)) best = { cluster: c, sim };
+    }
+    // Compara sempre contra as palavras do primeiro item do grupo (não cresce
+    // o conjunto a cada novo membro) — evita "arrastar" o grupo pra um
+    // assunto diferente conforme mais comentários entram.
+    if (best) {
+      best.cluster.items.push(q);
+    } else {
+      clusters.push({ words, items: [q] });
+    }
+  }
+  return clusters
+    .filter((c) => c.items.length >= minSize)
+    .map((c) => ({
+      count: c.items.length,
+      representative: [...c.items].sort((a, b) => (b.like_count ?? 0) - (a.like_count ?? 0))[0],
+      items: c.items,
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
 // O post de maior e o de menor alcance no período — pra virar caso
 // destacado no relatório, com link e legenda reais (nunca inventados).
 export function computeCasosDestacados(posts: any[]) {

@@ -29,6 +29,7 @@ interface MetaMedia {
   media_product_type?: string;
   permalink?: string;
   thumbnail_url?: string;
+  media_url?: string;
 }
 
 export interface MetaSyncEnv {
@@ -67,7 +68,10 @@ async function fetchMediaPage(
   maxPages: number,
   after?: string,
 ): Promise<{ media: MetaMedia[]; nextCursor: string | null; done: boolean }> {
-  const fields = "id,caption,timestamp,media_type,media_product_type,permalink,thumbnail_url";
+  // thumbnail_url só existe pra VIDEO (é o preview estático do vídeo) — post
+  // de imagem não tem esse campo, só media_url (o arquivo em si). Pedir os
+  // dois e escolher na hora de montar a linha é o que cobre os dois casos.
+  const fields = "id,caption,timestamp,media_type,media_product_type,permalink,thumbnail_url,media_url";
   let url: string | null =
     `${GRAPH_BASE}/${igAccountId}/media?fields=${fields}&limit=100&access_token=${accessToken}` +
     (after ? `&after=${after}` : "");
@@ -157,7 +161,7 @@ async function syncAccountPosts(
         media_type: m.media_type ?? null,
         format: normalizeFormat(m.media_type, m.media_product_type) as any,
         permalink: m.permalink ?? null,
-        thumbnail_url: m.thumbnail_url ?? null,
+        thumbnail_url: m.thumbnail_url ?? m.media_url ?? null,
         caption: m.caption ?? null,
         posted_at: m.timestamp ?? null,
         reach: numOrNull(ins.reach),
