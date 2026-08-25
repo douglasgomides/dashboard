@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { runInstagramSync } from "../_lib/instagram-sync";
+import { runInstagramSync } from "../_lib/instagram-sync.js";
 
 // Endpoint chamado pelo n8n todo dia (Schedule Trigger → HTTP Request) pra
 // atualizar o dashboard sem precisar rodar o script manualmente. Protegido

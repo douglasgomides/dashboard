@@ -8,7 +8,7 @@
  * ambiente. O endpoint e os nomes de campo seguem a API pública da Windsor.ai
  * (https://windsor.ai/api-fields/) — confira lá se algum campo mudar.
  */
-import { runInstagramSync } from "../api/_lib/instagram-sync";
+import { runInstagramSync } from "../api/_lib/instagram-sync.js";
 
 const WINDSOR_API_KEY = process.env.WINDSOR_API_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
