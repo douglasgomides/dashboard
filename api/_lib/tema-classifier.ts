@@ -29,7 +29,7 @@ const DOUGLAS_GOMIDES: TemaRule[] = [
   },
   {
     tema: "Vida pessoal e paternidade",
-    keywords: ["filho", "paternidade", "ser pai", "parto", "gravidez", "gestação", "contrações", "nascimento"],
+    keywords: ["filho", "paternidade", "ser pai", "parto", "gravidez", "gestação", "contrações", "nascimento", "leon"],
   },
   {
     tema: "Atendimento e vendas na clinica",
