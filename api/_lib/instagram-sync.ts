@@ -37,7 +37,12 @@ function dateNDaysAgo(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Number(null) é 0 em JS, não NaN — sem o check explícito, um null vindo da
+// Windsor (campo genuinamente sem dado naquele dia, ex: followers_count fora
+// do dia de hoje) virava um 0 falso no banco, fazendo parecer "zero
+// seguidores" em vez de "sem esse dado nesse dia".
 function numOrNull(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
