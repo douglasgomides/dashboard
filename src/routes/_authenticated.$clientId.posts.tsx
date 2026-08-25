@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { classifyPost, getNextAngles, getRankedPosts } from "@/lib/client-data";
 import {
   CONTENT_FORMATS,
@@ -12,6 +13,12 @@ import {
 } from "@/lib/methodology";
 import type { ContentFormat, FunnelStage, MethodologyStage } from "@/integrations/supabase/types";
 import { fmtNum } from "@/lib/format";
+import {
+  computeReachByFormat,
+  computeReachByTema,
+  computeTopPostsPorTaxaDeSalvamento,
+  computeTopReelsPorTaxaDeCompartilhamento,
+} from "@/lib/report-metrics";
 
 export const Route = createFileRoute("/_authenticated/$clientId/posts")({
   component: PostsRankingPage,
@@ -336,6 +343,115 @@ function RepetirOuRevisar({ posts }: { posts: Post[] }) {
 // Mesmo tema pode performar diferente dependendo do formato — cruza os dois
 // pra mostrar onde a combinação funciona e onde não funciona. Só aparece
 // nas combinações com tema classificado.
+// Top posts/reels por taxa (÷ alcance) em vez de número bruto — normaliza
+// por quem viu o post, então compara post pequeno com post viral em pé de
+// igualdade. "Taxa de compartilhamento" só existe pra reels porque é onde a
+// Meta consistentemente preenche esse campo.
+function TopPorTaxa({ posts }: { posts: Post[] }) {
+  const porSalvamento = useMemo(() => computeTopPostsPorTaxaDeSalvamento(posts, 5), [posts]);
+  const porCompartilhamento = useMemo(() => computeTopReelsPorTaxaDeCompartilhamento(posts, 5), [posts]);
+
+  if (porSalvamento.length === 0 && porCompartilhamento.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      {porSalvamento.length > 0 && (
+        <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+          <h2 className="mb-1 text-sm font-semibold">Top posts — maior taxa de salvamento</h2>
+          <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
+            Salvamentos ÷ alcance — normaliza por quem viu, não só quem tem mais alcance.
+          </p>
+          <ul className="space-y-2">
+            {porSalvamento.map(({ post, rate }) => (
+              <li key={post.id} className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+                <a href={post.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--text)" }}>
+                  {firstLine(post.caption) ?? post.windsor_media_id}
+                </a>
+                <div className="mt-1 text-xs font-medium" style={{ color: "var(--good)" }}>
+                  {(rate * 100).toFixed(1)}% de taxa de salvamento
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {porCompartilhamento.length > 0 && (
+        <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+          <h2 className="mb-1 text-sm font-semibold">Top reels — maior taxa de compartilhamento</h2>
+          <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
+            Compartilhamentos ÷ alcance — o sinal mais forte de que o conteúdo circulou sozinho.
+          </p>
+          <ul className="space-y-2">
+            {porCompartilhamento.map(({ post, rate }) => (
+              <li key={post.id} className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+                <a href={post.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--text)" }}>
+                  {firstLine(post.caption) ?? post.windsor_media_id}
+                </a>
+                <div className="mt-1 text-xs font-medium" style={{ color: "var(--good)" }}>
+                  {(rate * 100).toFixed(1)}% de taxa de compartilhamento
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Alcance médio por tema e por formato — a base de comparação pra decidir
+// se um tema/formato vale ser repetido, independente de picos isolados.
+function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
+  const porTema = useMemo(() => computeReachByTema(posts), [posts]);
+  const porFormato = useMemo(() => computeReachByFormat(posts), [posts]);
+
+  if (porTema.length === 0 && porFormato.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+      <h2 className="mb-1 text-sm font-semibold">Desempenho estrutural</h2>
+      <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
+        Alcance médio é a base de comparação — é o que decide se um formato/tema vale ser repetido, independente de
+        picos isolados.
+      </p>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {porTema.length > 0 && (
+          <div>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+              Alcance médio por tema
+            </h3>
+            <ResponsiveContainer width="100%" height={Math.max(120, porTema.length * 32)}>
+              <BarChart data={porTema} layout="vertical" margin={{ left: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis type="number" tick={{ fontSize: 10 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
+                <YAxis type="category" dataKey="tema" tick={{ fontSize: 10 }} stroke="var(--text-faint)" width={110} />
+                <Tooltip formatter={(value: number) => fmtNum(value)} />
+                <Bar dataKey="avgReach" name="Alcance médio" fill="var(--accent)" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        {porFormato.length > 0 && (
+          <div>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+              Alcance médio por formato
+            </h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={porFormato}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="formato" tick={{ fontSize: 11 }} stroke="var(--text-faint)" />
+                <YAxis tick={{ fontSize: 11 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
+                <Tooltip formatter={(value: number) => fmtNum(value)} />
+                <Bar dataKey="avgReach" name="Alcance médio" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function FormatoPorTema({ posts }: { posts: Post[] }) {
   const rows = useMemo(() => {
     const groups = new Map<string, { tema: string; formato: ContentFormat; count: number; totalReach: number; totalEng: number }>();
@@ -641,7 +757,9 @@ function PostsRankingPage() {
       </div>
 
       <RepetirOuRevisar posts={rows} />
+      <TopPorTaxa posts={rows} />
       <ConversionByTag posts={rows} />
+      <DesempenhoEstrutural posts={rows} />
       <FormatoPorTema posts={rows} />
       <MelhoresGanchos posts={rows} />
       <NextAngles clientId={clientId} />

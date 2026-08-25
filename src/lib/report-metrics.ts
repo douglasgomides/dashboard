@@ -94,6 +94,60 @@ export function computeTopPosts(posts: any[], limit = 5) {
     .slice(0, limit);
 }
 
+// Taxa (salvamentos ÷ alcance, ou compartilhamentos ÷ alcance) — normaliza
+// por quem viu o post, diferente do ranking por número bruto de salvamentos.
+function computeTopByRate(posts: any[], numeratorKey: "saved" | "shares", limit: number) {
+  return posts
+    .filter((p) => p[numeratorKey] != null && p.reach != null && p.reach > 0)
+    .map((p) => ({ post: p, rate: p[numeratorKey] / p.reach }))
+    .sort((a, b) => b.rate - a.rate)
+    .slice(0, limit);
+}
+
+export function computeTopPostsPorTaxaDeSalvamento(posts: any[], limit = 5) {
+  return computeTopByRate(posts, "saved", limit);
+}
+
+export function computeTopReelsPorTaxaDeCompartilhamento(posts: any[], limit = 5) {
+  return computeTopByRate(
+    posts.filter((p) => p.format === "reels"),
+    "shares",
+    limit,
+  );
+}
+
+// Alcance médio agrupado só por tema (ignora formato) — base de comparação
+// pra decidir se um tema vale ser repetido, independente de picos isolados.
+export function computeReachByTema(posts: any[]) {
+  const groups = new Map<string, { total: number; count: number }>();
+  for (const p of posts) {
+    if (!p.tema || p.reach == null) continue;
+    const entry = groups.get(p.tema) ?? { total: 0, count: 0 };
+    entry.total += p.reach;
+    entry.count += 1;
+    groups.set(p.tema, entry);
+  }
+  return Array.from(groups.entries())
+    .map(([tema, v]) => ({ tema, count: v.count, avgReach: Math.round(v.total / v.count) }))
+    .sort((a, b) => b.avgReach - a.avgReach);
+}
+
+// Alcance médio agrupado só por formato.
+export function computeReachByFormat(posts: any[]) {
+  const groups = new Map<string, { total: number; count: number }>();
+  for (const p of posts) {
+    const key: ContentFormat | "não classificado" = p.format ?? "não classificado";
+    if (p.reach == null) continue;
+    const entry = groups.get(key) ?? { total: 0, count: 0 };
+    entry.total += p.reach;
+    entry.count += 1;
+    groups.set(key, entry);
+  }
+  return Array.from(groups.entries())
+    .map(([key, v]) => ({ formato: fmtFormatKey(key), count: v.count, avgReach: Math.round(v.total / v.count) }))
+    .sort((a, b) => b.avgReach - a.avgReach);
+}
+
 // Mesma lógica do componente RepetirOuRevisar — por tema, taxa de
 // engajamento (engajamento ÷ alcance), mínimo de posts pra entrar na conta.
 export function computeRepetirOuRevisar(posts: any[], minPosts = 3) {
