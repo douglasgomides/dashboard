@@ -15,6 +15,7 @@ import type { ContentFormat, FunnelStage, MethodologyStage } from "@/integration
 import { fmtNum } from "@/lib/format";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import {
+  computeConceitosVencedores,
   computeConversionByTag,
   computeFormatoPorTema,
   computeReachByFormat,
@@ -182,6 +183,7 @@ function MelhoresGanchos({ posts }: { posts: Post[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
+            <th className="pb-2"></th>
             <th className="pb-2">Gancho</th>
             <th className="pb-2 text-right">Engajamento</th>
           </tr>
@@ -189,6 +191,11 @@ function MelhoresGanchos({ posts }: { posts: Post[] }) {
         <tbody>
           {top.map(({ post, gancho }) => (
             <tr key={post.id} className="border-t" style={{ borderColor: "var(--border)" }}>
+              <td className="py-1.5 pr-2">
+                {post.thumbnail_url && (
+                  <img src={post.thumbnail_url} alt="" className="h-10 w-10 rounded object-cover" loading="lazy" />
+                )}
+              </td>
               <td className="py-1.5">
                 <a href={post.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--text)" }}>
                   {gancho}
@@ -221,14 +228,19 @@ function TopDoMes({ posts }: { posts: Post[] }) {
             href={post.permalink ?? "#"}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg border p-2 text-xs"
+            className="overflow-hidden rounded-lg border text-xs"
             style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text)" }}
           >
-            <div className="font-mono" style={{ color: "var(--text-faint)" }}>
-              #{i + 1}
+            {post.thumbnail_url && (
+              <img src={post.thumbnail_url} alt="" className="aspect-square w-full object-cover" loading="lazy" />
+            )}
+            <div className="p-2">
+              <div className="font-mono" style={{ color: "var(--text-faint)" }}>
+                #{i + 1}
+              </div>
+              <div className="mt-1 line-clamp-3">{firstLine(post.caption) ?? post.windsor_media_id}</div>
+              <div className="mt-1 font-medium">{fmtNum(post.saved)} salvos</div>
             </div>
-            <div className="mt-1 line-clamp-3">{firstLine(post.caption) ?? post.windsor_media_id}</div>
-            <div className="mt-1 font-medium">{fmtNum(post.saved)} salvos</div>
           </a>
         ))}
       </div>
@@ -327,13 +339,16 @@ function TopPorTaxa({ posts }: { posts: Post[] }) {
           </p>
           <ul className="space-y-2">
             {porSalvamento.map(({ post, rate }) => (
-              <li key={post.id} className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+              <li key={post.id} className="flex gap-2 rounded-lg border p-2 text-sm" style={{ borderColor: "var(--border)" }}>
+                {post.thumbnail_url && (
+                  <img src={post.thumbnail_url} alt="" className="h-12 w-12 shrink-0 rounded object-cover" loading="lazy" />
+                )}
                 <a href={post.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--text)" }}>
-                  {firstLine(post.caption) ?? post.windsor_media_id}
+                  <div className="line-clamp-2">{firstLine(post.caption) ?? post.windsor_media_id}</div>
+                  <div className="mt-1 text-xs font-medium" style={{ color: "var(--good)" }}>
+                    {(rate * 100).toFixed(1)}% de taxa de salvamento
+                  </div>
                 </a>
-                <div className="mt-1 text-xs font-medium" style={{ color: "var(--good)" }}>
-                  {(rate * 100).toFixed(1)}% de taxa de salvamento
-                </div>
               </li>
             ))}
           </ul>
@@ -347,13 +362,16 @@ function TopPorTaxa({ posts }: { posts: Post[] }) {
           </p>
           <ul className="space-y-2">
             {porCompartilhamento.map(({ post, rate }) => (
-              <li key={post.id} className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+              <li key={post.id} className="flex gap-2 rounded-lg border p-2 text-sm" style={{ borderColor: "var(--border)" }}>
+                {post.thumbnail_url && (
+                  <img src={post.thumbnail_url} alt="" className="h-12 w-12 shrink-0 rounded object-cover" loading="lazy" />
+                )}
                 <a href={post.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--text)" }}>
-                  {firstLine(post.caption) ?? post.windsor_media_id}
+                  <div className="line-clamp-2">{firstLine(post.caption) ?? post.windsor_media_id}</div>
+                  <div className="mt-1 text-xs font-medium" style={{ color: "var(--good)" }}>
+                    {(rate * 100).toFixed(1)}% de taxa de compartilhamento
+                  </div>
                 </a>
-                <div className="mt-1 text-xs font-medium" style={{ color: "var(--good)" }}>
-                  {(rate * 100).toFixed(1)}% de taxa de compartilhamento
-                </div>
               </li>
             ))}
           </ul>
@@ -453,6 +471,50 @@ function FormatoPorTema({ posts }: { posts: Post[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// Um post por tema (o de maior taxa de salvamento) — os "conceitos" que já
+// provaram funcionar nos últimos meses. Só o dado real; as variações de
+// ângulo pra testar continuam sendo produzidas fora do dashboard.
+function ConceitosVencedores({ posts }: { posts: Post[] }) {
+  const conceitos = useMemo(() => computeConceitosVencedores(posts, 7), [posts]);
+
+  if (conceitos.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+      <h2 className="mb-1 text-sm font-semibold">Conceitos vencedores</h2>
+      <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
+        Um post por tema — o de maior taxa de salvamento dele. São os conceitos que já provaram funcionar; as
+        variações de ângulo pra testar são produzidas fora do dashboard, a partir daqui.
+      </p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {conceitos.map(({ tema, post, rate }) => (
+          <a
+            key={tema}
+            href={post.permalink ?? "#"}
+            target="_blank"
+            rel="noreferrer"
+            className="flex overflow-hidden rounded-lg border text-sm"
+            style={{ background: "var(--surface-2)", borderColor: "var(--border)", color: "var(--text)" }}
+          >
+            {post.thumbnail_url && (
+              <img src={post.thumbnail_url} alt="" className="h-auto w-24 shrink-0 object-cover" loading="lazy" />
+            )}
+            <div className="p-3">
+              <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+                {tema}
+              </div>
+              <div className="mt-1 line-clamp-3">{firstLine(post.caption) ?? post.windsor_media_id}</div>
+              <div className="mt-1 text-xs font-medium" style={{ color: "var(--good)" }}>
+                {(rate * 100).toFixed(1)}% de taxa de salvamento
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
@@ -711,6 +773,7 @@ function PostsRankingPage() {
       </div>
 
       <RepetirOuRevisar posts={rows} periodLabel={periodLabel} />
+      <ConceitosVencedores posts={rows} />
       <TopPorTaxa posts={rows} />
       <ConversionByTag posts={rows} />
       <DesempenhoEstrutural posts={rows} />

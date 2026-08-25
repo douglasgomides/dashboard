@@ -237,6 +237,24 @@ export function computeConversionByTag(posts: any[]) {
     .sort((a, b) => b.medianSaved - a.medianSaved);
 }
 
+// Um post representante por tema (o de maior taxa de salvamento daquele
+// tema), ranqueados — "conceitos que já provaram funcionar", cada um com o
+// post real que embasa. Não gera variação nenhuma: é o dado, ponto final;
+// a produção de variações de ângulo continua fora do dashboard.
+export function computeConceitosVencedores(posts: any[], limit = 7) {
+  const bestByTema = new Map<string, { post: any; rate: number }>();
+  for (const p of posts) {
+    if (!p.tema || p.saved == null || p.reach == null || p.reach <= 0) continue;
+    const rate = p.saved / p.reach;
+    const current = bestByTema.get(p.tema);
+    if (!current || rate > current.rate) bestByTema.set(p.tema, { post: p, rate });
+  }
+  return Array.from(bestByTema.entries())
+    .map(([tema, v]) => ({ tema, post: v.post, rate: v.rate }))
+    .sort((a, b) => b.rate - a.rate)
+    .slice(0, limit);
+}
+
 // O post de maior e o de menor alcance no período — pra virar caso
 // destacado no relatório, com link e legenda reais (nunca inventados).
 export function computeCasosDestacados(posts: any[]) {
