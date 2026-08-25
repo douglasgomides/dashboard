@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { classifyPost, getNextAngles, getRankedPosts } from "@/lib/client-data";
+import { classifyPost, getNextAngles, getPostsForAnalytics, getRankedPosts } from "@/lib/client-data";
 import {
   CONTENT_FORMATS,
   FUNNEL_STAGES,
@@ -28,6 +28,17 @@ function monthBounds(date = new Date()) {
   const start = new Date(date.getFullYear(), date.getMonth(), 1);
   const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
   return { start: start.toISOString(), end: end.toISOString() };
+}
+
+// Seções estruturais (repetir/revisar, explorador, taxa, alcance por
+// tema/formato) precisam de uma janela maior que "o mês corrente" pra ter
+// volume suficiente de posts por tema — 180 dias, igual o exemplo de
+// referência que calcula sobre os últimos 6 meses.
+const WIDE_DAYS = 180;
+function daysAgo(n: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
 }
 
 type Post = NonNullable<Awaited<ReturnType<typeof getRankedPosts>>>[number];
@@ -254,7 +265,7 @@ function TopDoMes({ posts }: { posts: Post[] }) {
 // é o cálculo dos últimos posts do mês. Precisa de tema classificado na
 // tabela abaixo pra ter dado.
 function RepetirOuRevisar({ posts }: { posts: Post[] }) {
-  const MIN_POSTS = 3;
+  const MIN_POSTS = 10;
 
   const { repetir, revisar, hasEnough } = useMemo(() => {
     const groups = new Map<string, { tema: string; count: number; totalEng: number; totalReach: number }>();
@@ -282,13 +293,13 @@ function RepetirOuRevisar({ posts }: { posts: Post[] }) {
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <h2 className="mb-1 text-sm font-semibold">O que repetir vs. o que revisar</h2>
       <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-        Calculado pela taxa de engajamento (engajamento ÷ alcance) dos temas com pelo menos {MIN_POSTS} posts
-        classificados neste mês.
+        Calculado a partir da taxa de engajamento média dos temas com volume relevante ({MIN_POSTS}+ posts) nos
+        últimos {Math.round(WIDE_DAYS / 30)} meses — não é opinião, é o que os dados mostraram.
       </p>
       {!hasEnough ? (
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          Classifique o <strong>tema</strong> de pelo menos {MIN_POSTS} posts do mesmo assunto na tabela abaixo pra
-          habilitar esse veredito.
+          Classifique o <strong>tema</strong> de pelo menos {MIN_POSTS} posts do mesmo assunto (na tabela de posts do
+          mês, mais abaixo) pra habilitar esse veredito.
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -557,7 +568,8 @@ function ExploradorDePosts({ posts }: { posts: Post[] }) {
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <h2 className="mb-1 text-sm font-semibold">Explorador de posts</h2>
       <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-        Todos os posts do mês, filtráveis por tema e formato, ordenáveis por qualquer métrica.
+        Todos os posts dos últimos {Math.round(WIDE_DAYS / 30)} meses, filtráveis por tema e formato, ordenáveis por
+        qualquer métrica.
       </p>
       <div className="mb-3 flex flex-wrap gap-2">
         <input
@@ -692,9 +704,15 @@ function PostsRankingPage() {
     queryFn: () => getRankedPosts(clientId, start, end),
   });
 
+  const { data: widePosts } = useQuery({
+    queryKey: ["posts-analytics-wide", clientId, WIDE_DAYS],
+    queryFn: () => getPostsForAnalytics(clientId, daysAgo(WIDE_DAYS)),
+  });
+
   if (isLoading) return <p style={{ color: "var(--text-dim)" }}>Carregando posts…</p>;
 
   const rows = posts ?? [];
+  const wideRows = widePosts ?? [];
   const filteredRows = formatFilter ? rows.filter((p) => p.format === formatFilter) : rows;
 
   return (
@@ -756,14 +774,14 @@ function PostsRankingPage() {
         )}
       </div>
 
-      <RepetirOuRevisar posts={rows} />
-      <TopPorTaxa posts={rows} />
-      <ConversionByTag posts={rows} />
-      <DesempenhoEstrutural posts={rows} />
-      <FormatoPorTema posts={rows} />
+      <RepetirOuRevisar posts={wideRows} />
+      <TopPorTaxa posts={wideRows} />
+      <ConversionByTag posts={wideRows} />
+      <DesempenhoEstrutural posts={wideRows} />
+      <FormatoPorTema posts={wideRows} />
       <MelhoresGanchos posts={rows} />
       <NextAngles clientId={clientId} />
-      <ExploradorDePosts posts={rows} />
+      <ExploradorDePosts posts={wideRows} />
     </div>
   );
 }

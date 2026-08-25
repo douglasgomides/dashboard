@@ -150,7 +150,7 @@ export function computeReachByFormat(posts: any[]) {
 
 // Mesma lógica do componente RepetirOuRevisar — por tema, taxa de
 // engajamento (engajamento ÷ alcance), mínimo de posts pra entrar na conta.
-export function computeRepetirOuRevisar(posts: any[], minPosts = 3) {
+export function computeRepetirOuRevisar(posts: any[], minPosts = 10) {
   const groups = new Map<string, { tema: string; count: number; totalEng: number; totalReach: number }>();
   for (const p of posts) {
     if (!p.tema || p.engagement == null || p.reach == null) continue;

@@ -115,9 +115,9 @@ function ClientReportDocument({
   const formatos = computeFormatBreakdown(postsForAnalytics).sort((a, b) => b.avgEngagement - a.avgEngagement);
   const topPosts = computeTopPosts(postsDoMes, 5);
   const headline = computeHeadline(postsForAnalytics);
-  const { repetir, revisar, hasEnough } = computeRepetirOuRevisar(postsDoMes);
+  const { repetir, revisar, hasEnough } = computeRepetirOuRevisar(postsForAnalytics, 10);
   const casos = computeCasosDestacados(postsForAnalytics);
-  const temaTags = new Set(postsDoMes.map((p) => p.tema).filter(Boolean)).size;
+  const temaTags = new Set(postsForAnalytics.map((p) => p.tema).filter(Boolean)).size;
 
   return (
     <Document>
@@ -180,7 +180,7 @@ function ClientReportDocument({
         {hasEnough ? (
           <View style={[styles.highlightBox, repetir.length > 0 ? styles.highlightGood : styles.highlightWarn]}>
             <Text>
-              Entre os temas classificados este mês, {repetir.length > 0 && repetir[0] ? <Text style={{ fontWeight: 700 }}>{repetir[0].tema}</Text> : "nenhum tema"}
+              Entre os temas com volume relevante nos últimos {trendDays} dias, {repetir.length > 0 && repetir[0] ? <Text style={{ fontWeight: 700 }}>{repetir[0].tema}</Text> : "nenhum tema"}
               {repetir.length > 0 ? ` performa acima da média (${(repetir[0].rate * 100).toFixed(1)}% de engajamento).` : "."}
               {revisar.length > 0 &&
                 ` ${revisar[0].tema} está abaixo (${(revisar[0].rate * 100).toFixed(1)}%) — candidato a revisão.`}
@@ -190,8 +190,8 @@ function ClientReportDocument({
           <View style={styles.highlightBox}>
             <Text>
               {temaTags === 0
-                ? "Nenhum post deste mês tem tema classificado ainda — classificando pelo menos 3 posts do mesmo assunto na tabela de ranking, o próximo relatório já traz o que repetir e o que revisar por tema."
-                : "Ainda não há temas com posts suficientes classificados este mês pra comparar com confiança."}
+                ? "Nenhum post recente tem tema classificado ainda — classificando pelo menos 10 posts do mesmo assunto na tabela de ranking, o próximo relatório já traz o que repetir e o que revisar por tema."
+                : `Ainda não há temas com volume suficiente (10+ posts) nos últimos ${trendDays} dias pra comparar com confiança.`}
             </Text>
           </View>
         )}
@@ -325,8 +325,9 @@ function ClientReportDocument({
         <Text style={styles.methodTitle}>Limitações</Text>
         <Text style={styles.methodP}>
           "Melhor formato" e "melhor horário" só entram no cálculo com volume mínimo de posts (3 e 2,
-          respectivamente) — evita tirar conclusão de um post isolado. O veredito por tema depende de classificação
-          manual feita na aba de Ranking; sem isso, essa seção fica vazia por design, não por erro.
+          respectivamente); o veredito por tema exige 10+ posts classificados no mesmo assunto — limiares maiores
+          evitam tirar conclusão de um post isolado. O veredito por tema também depende de classificação manual
+          feita na aba de Ranking; sem isso, essa seção fica vazia por design, não por erro.
         </Text>
         <Text style={styles.methodP}>
           Este relatório não gera conteúdo pronto para publicar — ele mede e aponta direção. A produção continua
