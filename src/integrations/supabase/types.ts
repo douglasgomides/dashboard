@@ -268,6 +268,39 @@ export interface Database {
           },
         ];
       };
+      crm_raw_events: {
+        Row: {
+          id: string;
+          crm_connection_id: string;
+          client_id: string;
+          event_key: string;
+          raw_payload: unknown;
+          received_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["crm_raw_events"]["Row"]> & {
+          crm_connection_id: string;
+          client_id: string;
+          event_key: string;
+          raw_payload: unknown;
+        };
+        Update: Partial<Database["public"]["Tables"]["crm_raw_events"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "crm_raw_events_crm_connection_id_fkey";
+            columns: ["crm_connection_id"];
+            isOneToOne: false;
+            referencedRelation: "crm_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "crm_raw_events_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       inspiration_posts: {
         Row: {
           id: string;

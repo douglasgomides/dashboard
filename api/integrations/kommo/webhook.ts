@@ -64,5 +64,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (error) console.error(`[kommo webhook] ${connection.client_id}/${event.externalLeadId}:`, error.message);
   }
 
-  res.status(200).json({ received: events.length });
+  // Qualquer chave de topo além de "leads" (ex: "chat" — mensagem recebida)
+  // ainda não tem parser dedicado — a documentação pública da Kommo não
+  // detalha essa estrutura. Guarda bruto por enquanto pra inspecionar dado
+  // real antes de escrever o parser definitivo.
+  const otherKeys = Object.keys(parsed).filter((k) => k !== "leads");
+  for (const key of otherKeys) {
+    const { error } = await supabase.from("crm_raw_events").insert({
+      crm_connection_id: connection.id,
+      client_id: connection.client_id,
+      event_key: key,
+      raw_payload: parsed[key] as any,
+    });
+    if (error) console.error(`[kommo webhook] raw ${connection.client_id}/${key}:`, error.message);
+  }
+
+  res.status(200).json({ received: events.length, rawEvents: otherKeys.length });
 }
