@@ -5,8 +5,12 @@ import {
   computeFormatInsight,
   computeHeadline,
   computeMelhoresHorarios,
+  computeReachByFormat,
+  computeReachByTema,
   computeRepetirOuRevisar,
   computeTopPosts,
+  computeTopPostsPorTaxaDeSalvamento,
+  computeTopReelsPorTaxaDeCompartilhamento,
   fmtFormatKey,
 } from "@/lib/report-metrics";
 import { fmtNum } from "@/lib/format";
@@ -54,7 +58,7 @@ const styles = StyleSheet.create({
   caseLabel: { fontSize: 8, fontWeight: 700, color: "#888", textTransform: "uppercase", marginBottom: 4 },
   caseCaption: { fontSize: 9, fontStyle: "italic", color: "#333", marginBottom: 6, lineHeight: 1.4 },
   caseStats: { fontSize: 8, color: "#666" },
-  table: { borderWidth: 1, borderColor: "#ddd", borderRadius: 4 },
+  table: { borderWidth: 1, borderColor: "#ddd", borderRadius: 4, marginBottom: 4 },
   tableRowHeader: { flexDirection: "row", backgroundColor: "#f4f4f4", borderBottomWidth: 1, borderBottomColor: "#ddd" },
   tableRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#eee" },
   th: { padding: 6, fontSize: 8, fontWeight: 700, color: "#555" },
@@ -73,6 +77,16 @@ const styles = StyleSheet.create({
   pageNum: { position: "absolute", bottom: 18, right: 32, fontSize: 7, color: "#aaa" },
   methodP: { fontSize: 9, lineHeight: 1.5, marginBottom: 8, color: "#333" },
   methodTitle: { fontSize: 9, fontWeight: 700, marginBottom: 2 },
+  barRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  barLabel: { width: 120, fontSize: 8, color: "#555" },
+  barTrack: { flex: 1, height: 10, backgroundColor: "#eee", borderRadius: 3, marginHorizontal: 6 },
+  barFill: { height: 10, backgroundColor: "#b8935a", borderRadius: 3 },
+  barValue: { width: 55, fontSize: 8, textAlign: "right" as const, fontWeight: 700 },
+  verdictCol: { flex: 1 },
+  verdictLabel: { fontSize: 9, fontWeight: 700, marginBottom: 6 },
+  verdictItem: { borderWidth: 1, borderColor: "#ddd", borderRadius: 4, padding: 6, marginBottom: 4 },
+  verdictTema: { fontSize: 9, fontWeight: 700 },
+  verdictRate: { fontSize: 8, color: "#666", marginTop: 1 },
 });
 
 function Footer({ page }: { page: number }) {
@@ -86,9 +100,34 @@ function Footer({ page }: { page: number }) {
   );
 }
 
+// A fonte padrão do PDF (Helvetica) não tem glifo pra emoji — em vez de
+// deixar renderizar como caractere quebrado, remove antes de exibir.
+const EMOJI_RE =
+  /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu;
+
+function stripEmoji(s: string) {
+  return s.replace(EMOJI_RE, "").replace(/\s+/g, " ").trim();
+}
+
 function caseCaption(p: any) {
   const c = (p.caption ?? "").split("\n").find((l: string) => l.trim().length > 0);
-  return c ? c.trim().slice(0, 220) : p.windsor_media_id;
+  return stripEmoji(c ? c.trim().slice(0, 220) : (p.windsor_media_id ?? ""));
+}
+
+function BarChartBlock({ rows, maxValue }: { rows: { label: string; value: number }[]; maxValue: number }) {
+  return (
+    <View style={{ marginBottom: 10 }}>
+      {rows.map((r) => (
+        <View key={r.label} style={styles.barRow}>
+          <Text style={styles.barLabel}>{r.label}</Text>
+          <View style={styles.barTrack}>
+            <View style={[styles.barFill, { width: `${maxValue > 0 ? Math.max(2, (r.value / maxValue) * 100) : 0}%` }]} />
+          </View>
+          <Text style={styles.barValue}>{fmtNum(r.value)}</Text>
+        </View>
+      ))}
+    </View>
+  );
 }
 
 interface ReportData {
@@ -118,6 +157,12 @@ function ClientReportDocument({
   const { repetir, revisar, hasEnough } = computeRepetirOuRevisar(postsForAnalytics, 10);
   const casos = computeCasosDestacados(postsForAnalytics);
   const temaTags = new Set(postsForAnalytics.map((p) => p.tema).filter(Boolean)).size;
+  const reachPorFormato = computeReachByFormat(postsForAnalytics);
+  const reachPorTema = computeReachByTema(postsForAnalytics).slice(0, 8);
+  const maxReachFormato = Math.max(1, ...reachPorFormato.map((r) => r.avgReach));
+  const maxReachTema = Math.max(1, ...reachPorTema.map((r) => r.avgReach));
+  const topSalvamento = computeTopPostsPorTaxaDeSalvamento(postsForAnalytics, 5);
+  const topCompartilhamento = computeTopReelsPorTaxaDeCompartilhamento(postsForAnalytics, 5);
 
   return (
     <Document>
@@ -177,14 +222,38 @@ function ClientReportDocument({
           </View>
         )}
 
+        <Text style={styles.sectionTitle}>O que repetir vs. o que revisar</Text>
+        <Text style={styles.sectionHint}>
+          Calculado pela taxa de engajamento dos temas com volume relevante (10+ posts) nos últimos {trendDays} dias
+          — não é opinião, é o que os dados mostraram.
+        </Text>
+
         {hasEnough ? (
-          <View style={[styles.highlightBox, repetir.length > 0 ? styles.highlightGood : styles.highlightWarn]}>
-            <Text>
-              Entre os temas com volume relevante nos últimos {trendDays} dias, {repetir.length > 0 && repetir[0] ? <Text style={{ fontWeight: 700 }}>{repetir[0].tema}</Text> : "nenhum tema"}
-              {repetir.length > 0 ? ` performa acima da média (${(repetir[0].rate * 100).toFixed(1)}% de engajamento).` : "."}
-              {revisar.length > 0 &&
-                ` ${revisar[0].tema} está abaixo (${(revisar[0].rate * 100).toFixed(1)}%) — candidato a revisão.`}
-            </Text>
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <View style={styles.verdictCol}>
+              <Text style={[styles.verdictLabel, { color: "#3f8f5f" }]}>REPETIR</Text>
+              {repetir.length === 0 && <Text style={{ fontSize: 8, color: "#888" }}>Nenhum tema acima da média.</Text>}
+              {repetir.map((g) => (
+                <View key={g.tema} style={styles.verdictItem}>
+                  <Text style={styles.verdictTema}>{g.tema}</Text>
+                  <Text style={styles.verdictRate}>
+                    {(g.rate * 100).toFixed(1)}% engajamento · {g.count} posts
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <View style={styles.verdictCol}>
+              <Text style={[styles.verdictLabel, { color: "#b3543f" }]}>REVISAR OU DESCONTINUAR</Text>
+              {revisar.length === 0 && <Text style={{ fontSize: 8, color: "#888" }}>Nenhum tema abaixo da média.</Text>}
+              {revisar.map((g) => (
+                <View key={g.tema} style={styles.verdictItem}>
+                  <Text style={styles.verdictTema}>{g.tema}</Text>
+                  <Text style={styles.verdictRate}>
+                    {(g.rate * 100).toFixed(1)}% engajamento · {g.count} posts
+                  </Text>
+                </View>
+              ))}
+            </View>
           </View>
         ) : (
           <View style={styles.highlightBox}>
@@ -199,19 +268,42 @@ function ClientReportDocument({
         <Footer page={1} />
       </Page>
 
-      {/* Página 2 — Casos destacados + detalhamento */}
+      {/* Página 2 — Desempenho estrutural + casos destacados */}
       <Page size="A4" style={styles.page}>
+        <Text style={styles.sectionTitle}>Desempenho estrutural</Text>
+        <Text style={styles.sectionHint}>
+          Alcance médio é a base de comparação — decide se um formato/tema vale ser repetido, independente de picos
+          isolados.
+        </Text>
+        {reachPorFormato.length > 0 && (
+          <>
+            <Text style={{ fontSize: 8, fontWeight: 700, color: "#888", marginBottom: 4 }}>ALCANCE MÉDIO POR FORMATO</Text>
+            <BarChartBlock
+              rows={reachPorFormato.map((r) => ({ label: r.formato, value: r.avgReach }))}
+              maxValue={maxReachFormato}
+            />
+          </>
+        )}
+        {reachPorTema.length > 0 && (
+          <>
+            <Text style={{ fontSize: 8, fontWeight: 700, color: "#888", marginBottom: 4 }}>ALCANCE MÉDIO POR TEMA</Text>
+            <BarChartBlock
+              rows={reachPorTema.map((r) => ({ label: r.tema, value: r.avgReach }))}
+              maxValue={maxReachTema}
+            />
+          </>
+        )}
+
         <Text style={styles.sectionTitle}>Casos destacados do período</Text>
         {casos ? (
-          <>
-            <View style={styles.caseBox}>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={[styles.caseBox, { flex: 1 }]}>
               <Text style={styles.caseLabel}>Maior alcance</Text>
               <Text style={styles.caseCaption}>"{caseCaption(casos.melhor)}"</Text>
               <Text style={styles.caseStats}>
                 {casos.melhor.posted_at && new Date(casos.melhor.posted_at).toLocaleDateString("pt-BR")} · Alcance{" "}
-                {(casos.melhor.reach ?? 0).toLocaleString("pt-BR")} · Engajamento{" "}
-                {(casos.melhor.engagement ?? 0).toLocaleString("pt-BR")} · Salvos{" "}
-                {(casos.melhor.saved ?? 0).toLocaleString("pt-BR")}
+                {fmtNum(casos.melhor.reach)} · Engaj. {fmtNum(casos.melhor.engagement)} · Salvos{" "}
+                {fmtNum(casos.melhor.saved)}
               </Text>
               {casos.melhor.permalink && (
                 <Link src={casos.melhor.permalink} style={{ fontSize: 8, color: "#b8935a", marginTop: 4 }}>
@@ -219,14 +311,12 @@ function ClientReportDocument({
                 </Link>
               )}
             </View>
-            <View style={styles.caseBox}>
+            <View style={[styles.caseBox, { flex: 1 }]}>
               <Text style={styles.caseLabel}>Menor alcance</Text>
               <Text style={styles.caseCaption}>"{caseCaption(casos.pior)}"</Text>
               <Text style={styles.caseStats}>
                 {casos.pior.posted_at && new Date(casos.pior.posted_at).toLocaleDateString("pt-BR")} · Alcance{" "}
-                {(casos.pior.reach ?? 0).toLocaleString("pt-BR")} · Engajamento{" "}
-                {(casos.pior.engagement ?? 0).toLocaleString("pt-BR")} · Salvos{" "}
-                {(casos.pior.saved ?? 0).toLocaleString("pt-BR")}
+                {fmtNum(casos.pior.reach)} · Engaj. {fmtNum(casos.pior.engagement)} · Salvos {fmtNum(casos.pior.saved)}
               </Text>
               {casos.pior.permalink && (
                 <Link src={casos.pior.permalink} style={{ fontSize: 8, color: "#b8935a", marginTop: 4 }}>
@@ -234,7 +324,7 @@ function ClientReportDocument({
                 </Link>
               )}
             </View>
-          </>
+          </View>
         ) : (
           <Text style={{ fontSize: 9, color: "#888" }}>Posts insuficientes no período pra destacar casos.</Text>
         )}
@@ -284,8 +374,44 @@ function ClientReportDocument({
         <Footer page={2} />
       </Page>
 
-      {/* Página 3 — Top posts + metodologia */}
+      {/* Página 3 — Rankings por taxa + top posts */}
       <Page size="A4" style={styles.page}>
+        <Text style={styles.sectionTitle}>Rankings por taxa</Text>
+        <Text style={styles.sectionHint}>
+          Normaliza por alcance — compara post pequeno com post viral em pé de igualdade, em vez de premiar só quem
+          teve mais alcance.
+        </Text>
+        {topSalvamento.length > 0 && (
+          <>
+            <Text style={{ fontSize: 8, fontWeight: 700, color: "#888", marginBottom: 4 }}>
+              TOP POSTS — MAIOR TAXA DE SALVAMENTO
+            </Text>
+            {topSalvamento.map(({ post, rate }) => (
+              <View key={post.id} style={[styles.caseBox, { padding: 6, marginBottom: 4 }]}>
+                <Text style={{ fontSize: 9 }}>{caseCaption(post).slice(0, 90)}</Text>
+                <Text style={{ fontSize: 8, color: "#3f8f5f", fontWeight: 700, marginTop: 2 }}>
+                  {(rate * 100).toFixed(1)}% de taxa de salvamento
+                </Text>
+              </View>
+            ))}
+          </>
+        )}
+        {topCompartilhamento.length > 0 && (
+          <>
+            <Text style={{ fontSize: 8, fontWeight: 700, color: "#888", marginTop: 8, marginBottom: 4 }}>
+              TOP REELS — MAIOR TAXA DE COMPARTILHAMENTO
+            </Text>
+            {topCompartilhamento.map(({ post, rate }) => (
+              <View key={post.id} style={[styles.caseBox, { padding: 6, marginBottom: 4 }]}>
+                <Text style={{ fontSize: 9 }}>{caseCaption(post).slice(0, 90)}</Text>
+                <Text style={{ fontSize: 8, color: "#3f8f5f", fontWeight: 700, marginTop: 2 }}>
+                  {(rate * 100).toFixed(1)}% de taxa de compartilhamento
+                </Text>
+              </View>
+            ))}
+          </>
+        )}
+
         {topPosts.length > 0 && (
           <>
             <Text style={styles.sectionTitle}>Top posts do mês (por salvamentos)</Text>
@@ -308,11 +434,16 @@ function ClientReportDocument({
           </>
         )}
 
+        <Footer page={3} />
+      </Page>
+
+      {/* Página 4 — Metodologia */}
+      <Page size="A4" style={styles.page}>
         <Text style={styles.sectionTitle}>Como este relatório foi feito</Text>
         <Text style={styles.methodTitle}>Fonte dos dados</Text>
         <Text style={styles.methodP}>
           Métricas por post e diárias de conta extraídas diretamente do Instagram profissional do cliente. Este
-          relatório usa os últimos {trendDays} dias para os cálculos de formato e horário, e o mês corrente (
+          relatório usa os últimos {trendDays} dias para os cálculos de formato, horário e tema, e o mês corrente (
           {periodLabel}) para o ranking de top posts.
         </Text>
         <Text style={styles.methodTitle}>O que este relatório NÃO inclui</Text>
@@ -334,7 +465,7 @@ function ClientReportDocument({
           integralmente com o médico ou quem ele contratar.
         </Text>
 
-        <Footer page={3} />
+        <Footer page={4} />
       </Page>
     </Document>
   );
