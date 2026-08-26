@@ -4,28 +4,41 @@
 const WON_STATUS_ID = "142";
 const LOST_STATUS_ID = "143";
 
-// custom_fields chega como objeto de chaves numéricas em string (não
-// array), tanto pra lista de campos quanto pra lista de valores dentro de
-// cada campo — formato bruto do webhook da Kommo.
-function getCustomFieldValue(customFields: unknown, fieldNameIncludes: string): string | null {
-  if (!customFields || typeof customFields !== "object") return null;
-  for (const field of Object.values(customFields as Record<string, any>)) {
-    if (typeof field?.name === "string" && field.name.includes(fieldNameIncludes)) {
-      const values = field.values;
-      if (!values || typeof values !== "object") return null;
-      const first = Object.values(values as Record<string, any>)[0];
-      return first?.value ?? null;
+// Dois formatos possíveis pro mesmo dado, dependendo de quem escreveu a
+// linha por último: webhook grava "custom_fields" (objeto de chaves
+// numéricas em string, campo "name"); sync pela API grava
+// "custom_fields_values" (array, campo "field_name"). Tenta os dois.
+function getCustomFieldValue(rawPayload: any, fieldNameIncludes: string): string | null {
+  const objForm = rawPayload?.custom_fields;
+  if (objForm && typeof objForm === "object") {
+    for (const field of Object.values(objForm as Record<string, any>)) {
+      if (typeof field?.name === "string" && field.name.includes(fieldNameIncludes)) {
+        const values = field.values;
+        if (values && typeof values === "object") {
+          const first = Object.values(values as Record<string, any>)[0];
+          if (first?.value != null) return first.value;
+        }
+      }
+    }
+  }
+  const arrForm = rawPayload?.custom_fields_values;
+  if (Array.isArray(arrForm)) {
+    for (const field of arrForm) {
+      if (typeof field?.field_name === "string" && field.field_name.includes(fieldNameIncludes)) {
+        const value = field.values?.[0]?.value;
+        if (value != null) return value;
+      }
     }
   }
   return null;
 }
 
 export function getFonteDoLead(lead: { raw_payload: any }): string {
-  return getCustomFieldValue(lead.raw_payload?.custom_fields, "Fonte do Lead") ?? "Não informado";
+  return getCustomFieldValue(lead.raw_payload, "Fonte do Lead") ?? "Não informado";
 }
 
 export function getTipoDeProcedimento(lead: { raw_payload: any }): string {
-  return getCustomFieldValue(lead.raw_payload?.custom_fields, "Tipo de Procedim") ?? "Não informado";
+  return getCustomFieldValue(lead.raw_payload, "Tipo de Procedim") ?? "Não informado";
 }
 
 export interface FunilRow {

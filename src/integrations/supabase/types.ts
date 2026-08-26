@@ -247,6 +247,35 @@ export type Database = {
           },
         ]
       }
+      crm_leads_sync_state: {
+        Row: {
+          backfill_done: boolean
+          crm_connection_id: string
+          next_page: number
+          updated_at: string
+        }
+        Insert: {
+          backfill_done?: boolean
+          crm_connection_id: string
+          next_page?: number
+          updated_at?: string
+        }
+        Update: {
+          backfill_done?: boolean
+          crm_connection_id?: string
+          next_page?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_leads_sync_state_crm_connection_id_fkey"
+            columns: ["crm_connection_id"]
+            isOneToOne: true
+            referencedRelation: "crm_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_pipeline_statuses: {
         Row: {
           crm_connection_id: string

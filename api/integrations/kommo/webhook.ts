@@ -48,19 +48,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const parsed = parseBracketFormBody(raw);
   const events = extractLeadEvents(parsed);
 
+  // Evento de "mudança de etapa" da Kommo manda um payload bem mais magro
+  // que o de "lead criado" — sem custom_fields. Sobrescrever direto perderia
+  // Fonte do Lead/Tipo de Procedimento que um evento anterior já tinha
+  // capturado. Busca o que já existe e preserva custom_fields quando o
+  // evento novo não trouxer nenhum.
   for (const event of events) {
-    const { error } = await supabase.from("crm_leads").insert({
-      crm_connection_id: connection.id,
-      client_id: connection.client_id,
-      provider: connection.provider,
-      external_lead_id: event.externalLeadId,
-      event_type: event.eventType,
-      status_id: event.statusId,
-      old_status_id: event.oldStatusId,
-      pipeline_id: event.pipelineId,
-      price: event.price,
-      raw_payload: event.raw as any,
-    });
+    const { data: existing } = await supabase
+      .from("crm_leads")
+      .select("raw_payload")
+      .eq("crm_connection_id", connection.id)
+      .eq("external_lead_id", event.externalLeadId)
+      .maybeSingle();
+
+    const existingRaw = (existing?.raw_payload as Record<string, unknown> | null) ?? {};
+    const eventRaw = event.raw as Record<string, unknown>;
+    // O sync pela API guarda em "custom_fields_values" (array); o webhook
+    // guarda em "custom_fields" (objeto). Preserva qualquer um dos dois que
+    // já existia, já que um evento de mudança de etapa nunca traz nenhum.
+    const mergedRaw = {
+      ...existingRaw,
+      ...eventRaw,
+      custom_fields: "custom_fields" in eventRaw ? eventRaw.custom_fields : (existingRaw.custom_fields ?? null),
+      custom_fields_values: existingRaw.custom_fields_values ?? null,
+    };
+
+    const { error } = await supabase.from("crm_leads").upsert(
+      {
+        crm_connection_id: connection.id,
+        client_id: connection.client_id,
+        provider: connection.provider,
+        external_lead_id: event.externalLeadId,
+        event_type: event.eventType,
+        status_id: event.statusId,
+        old_status_id: event.oldStatusId,
+        pipeline_id: event.pipelineId,
+        price: event.price,
+        raw_payload: mergedRaw as any,
+        received_at: new Date().toISOString(),
+      },
+      { onConflict: "crm_connection_id,external_lead_id" },
+    );
     if (error) console.error(`[kommo webhook] ${connection.client_id}/${event.externalLeadId}:`, error.message);
   }
 
