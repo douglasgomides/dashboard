@@ -730,6 +730,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      crm_funil_por_campo: {
+        Args: { p_client_id: string; p_field_name_pattern: string }
+        Returns: {
+          chave: string
+          ganhos: number
+          perdidos: number
+          total: number
+        }[]
+      }
+      crm_leads_por_etapa: {
+        Args: { p_client_id: string }
+        Returns: {
+          etapa: string
+          pipeline: string
+          total: number
+        }[]
+      }
       is_app_admin: { Args: never; Returns: boolean }
       is_client_member: { Args: { p_client_id: string }; Returns: boolean }
       suggest_next_angles: {

@@ -78,26 +78,23 @@ export async function classifyPost(
   if (error) throw error;
 }
 
-// Leads da Kommo pro cliente — status_id/pipeline_id numéricos, sem nome
-// (o webhook da Kommo não manda nome de etapa, só o número).
-export async function getCrmLeads(clientId: string) {
-  const { data, error } = await supabase
-    .from("crm_leads")
-    .select("id, external_lead_id, status_id, pipeline_id, price, raw_payload, received_at")
-    .eq("client_id", clientId)
-    .order("received_at", { ascending: false });
+// Funil de leads por campo customizado (Fonte do Lead, Tipo de
+// Procedimento) × resultado (ganho/perdido) — agregado no banco via RPC.
+// A base já passa de 17 mil leads, e trazer tudo cru pro navegador batia no
+// limite padrão de 1000 linhas do PostgREST, então o cálculo mora no banco.
+export async function getCrmFunilPorCampo(clientId: string, fieldNamePattern: string) {
+  const { data, error } = await supabase.rpc("crm_funil_por_campo", {
+    p_client_id: clientId,
+    p_field_name_pattern: fieldNamePattern,
+  });
   if (error) throw error;
   return data;
 }
 
-// Nome de cada etapa/pipeline da Kommo — buscado uma vez via API (token de
-// longa duração gerado manualmente no painel dela) e salvo aqui, porque o
-// webhook não manda nome, só status_id/pipeline_id numéricos.
-export async function getCrmPipelineStatuses(clientId: string) {
-  const { data, error } = await supabase
-    .from("crm_pipeline_statuses")
-    .select("pipeline_id, pipeline_name, status_id, status_name, crm_connections!inner(client_id)")
-    .eq("crm_connections.client_id", clientId);
+// Leads por etapa nomeada, em todos os pipelines do cliente — mesmo motivo
+// de agregar no banco.
+export async function getCrmLeadsPorEtapa(clientId: string) {
+  const { data, error } = await supabase.rpc("crm_leads_por_etapa", { p_client_id: clientId });
   if (error) throw error;
   return data;
 }
