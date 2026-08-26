@@ -747,6 +747,17 @@ export type Database = {
           total: number
         }[]
       }
+      crm_pipeline_kanban: {
+        Args: { p_client_id: string }
+        Returns: {
+          pipeline_id: string
+          pipeline_name: string
+          status_id: string
+          status_name: string
+          total: number
+          valor_total: number
+        }[]
+      }
       is_app_admin: { Args: never; Returns: boolean }
       is_client_member: { Args: { p_client_id: string }; Returns: boolean }
       suggest_next_angles: {

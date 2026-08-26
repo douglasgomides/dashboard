@@ -99,6 +99,15 @@ export async function getCrmLeadsPorEtapa(clientId: string) {
   return data;
 }
 
+// Toda etapa de todo pipeline, inclusive as que nunca tiveram lead — pro
+// kanban de estrutura do CRM. Diferente de getCrmLeadsPorEtapa (que omite
+// etapa vazia), aqui a etapa vazia é o próprio achado.
+export async function getCrmPipelineKanban(clientId: string) {
+  const { data, error } = await supabase.rpc("crm_pipeline_kanban", { p_client_id: clientId });
+  if (error) throw error;
+  return data;
+}
+
 // Dúvidas reais de pacientes nos comentários dos posts — matéria-prima pra
 // pauta, não conteúdo pronto. is_question é heurística (pontuação/palavra
 // interrogativa), sem IA — quem decide o que virar conteúdo é o time.
