@@ -93,7 +93,11 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
   while (hasMore && pagesLeft > 0) {
     let result;
     try {
-      result = await fetchLeadsPage(env.kommoDomain, env.accessToken, { ...baseParams, page: String(page) });
+      result = await fetchLeadsPage(env.kommoDomain, env.accessToken, {
+        ...baseParams,
+        page: String(page),
+        with: "custom_fields_values",
+      });
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
       break;
