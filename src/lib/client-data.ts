@@ -78,6 +78,30 @@ export async function classifyPost(
   if (error) throw error;
 }
 
+// Leads da Kommo pro cliente — status_id/pipeline_id numéricos, sem nome
+// (o webhook da Kommo não manda nome de etapa, só o número).
+export async function getCrmLeads(clientId: string) {
+  const { data, error } = await supabase
+    .from("crm_leads")
+    .select("id, external_lead_id, status_id, pipeline_id, price, raw_payload, received_at")
+    .eq("client_id", clientId)
+    .order("received_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+// Nome de cada etapa/pipeline da Kommo — buscado uma vez via API (token de
+// longa duração gerado manualmente no painel dela) e salvo aqui, porque o
+// webhook não manda nome, só status_id/pipeline_id numéricos.
+export async function getCrmPipelineStatuses(clientId: string) {
+  const { data, error } = await supabase
+    .from("crm_pipeline_statuses")
+    .select("pipeline_id, pipeline_name, status_id, status_name, crm_connections!inner(client_id)")
+    .eq("crm_connections.client_id", clientId);
+  if (error) throw error;
+  return data;
+}
+
 // Dúvidas reais de pacientes nos comentários dos posts — matéria-prima pra
 // pauta, não conteúdo pronto. is_question é heurística (pontuação/palavra
 // interrogativa), sem IA — quem decide o que virar conteúdo é o time.

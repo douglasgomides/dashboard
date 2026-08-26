@@ -247,6 +247,44 @@ export type Database = {
           },
         ]
       }
+      crm_pipeline_statuses: {
+        Row: {
+          crm_connection_id: string
+          fetched_at: string
+          id: string
+          pipeline_id: string
+          pipeline_name: string
+          status_id: string
+          status_name: string
+        }
+        Insert: {
+          crm_connection_id: string
+          fetched_at?: string
+          id?: string
+          pipeline_id: string
+          pipeline_name: string
+          status_id: string
+          status_name: string
+        }
+        Update: {
+          crm_connection_id?: string
+          fetched_at?: string
+          id?: string
+          pipeline_id?: string
+          pipeline_name?: string
+          status_id?: string
+          status_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_pipeline_statuses_crm_connection_id_fkey"
+            columns: ["crm_connection_id"]
+            isOneToOne: false
+            referencedRelation: "crm_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_raw_events: {
         Row: {
           client_id: string
