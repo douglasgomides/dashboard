@@ -108,6 +108,21 @@ export async function getCrmPipelineKanban(clientId: string) {
   return data;
 }
 
+// Métricas essenciais pro painel de visão geral do CRM — "o que tá
+// acontecendo hoje", um número por indicador.
+export async function getCrmMetricasEssenciais(clientId: string) {
+  const { data, error } = await supabase.rpc("crm_metricas_essenciais", { p_client_id: clientId });
+  if (error) throw error;
+  return data?.[0] ?? null;
+}
+
+// Novos leads por dia — pro gráfico de tendência com período trocável.
+export async function getCrmLeadsPorDia(clientId: string, days = 30) {
+  const { data, error } = await supabase.rpc("crm_leads_por_dia", { p_client_id: clientId, p_days: days });
+  if (error) throw error;
+  return data;
+}
+
 // Dúvidas reais de pacientes nos comentários dos posts — matéria-prima pra
 // pauta, não conteúdo pronto. is_question é heurística (pontuação/palavra
 // interrogativa), sem IA — quem decide o que virar conteúdo é o time.

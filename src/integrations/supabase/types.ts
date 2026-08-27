@@ -739,12 +739,32 @@ export type Database = {
           total: number
         }[]
       }
+      crm_leads_por_dia: {
+        Args: { p_client_id: string; p_days?: number }
+        Returns: {
+          dia: string
+          total: number
+        }[]
+      }
       crm_leads_por_etapa: {
         Args: { p_client_id: string }
         Returns: {
           etapa: string
           pipeline: string
           total: number
+        }[]
+      }
+      crm_metricas_essenciais: {
+        Args: { p_client_id: string }
+        Returns: {
+          consultas_agendadas: number
+          em_atendimento: number
+          em_atendimento_valor: number
+          fonte_preenchida_pct: number
+          ganhos: number
+          novos_7d: number
+          perdidos: number
+          total_leads: number
         }[]
       }
       crm_pipeline_kanban: {
