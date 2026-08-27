@@ -730,6 +730,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      crm_atividade_recente: {
+        Args: { p_client_id: string; p_limit?: number }
+        Returns: {
+          criado_em: string
+          etapa: string
+          external_lead_id: string
+          fonte: string
+          nome: string
+          pipeline: string
+        }[]
+      }
       crm_funil_por_campo: {
         Args: { p_client_id: string; p_field_name_pattern: string }
         Returns: {

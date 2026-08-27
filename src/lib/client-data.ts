@@ -123,6 +123,16 @@ export async function getCrmLeadsPorDia(clientId: string, days = 30) {
   return data;
 }
 
+// Últimos leads criados, pro feed de atividade recente do painel.
+export async function getCrmAtividadeRecente(clientId: string, limit = 10) {
+  const { data, error } = await supabase.rpc("crm_atividade_recente", {
+    p_client_id: clientId,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return data;
+}
+
 // Dúvidas reais de pacientes nos comentários dos posts — matéria-prima pra
 // pauta, não conteúdo pronto. is_question é heurística (pontuação/palavra
 // interrogativa), sem IA — quem decide o que virar conteúdo é o time.

@@ -2,7 +2,12 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { getCrmMetricasEssenciais, getCrmLeadsPorDia, getCrmFunilPorCampo } from "@/lib/client-data";
+import {
+  getCrmMetricasEssenciais,
+  getCrmLeadsPorDia,
+  getCrmFunilPorCampo,
+  getCrmAtividadeRecente,
+} from "@/lib/client-data";
 
 export const Route = createFileRoute("/_authenticated/$clientId/crm-painel")({
   component: CrmPainelPage,
@@ -106,38 +111,109 @@ function TendenciaDeLeads({ clientId }: { clientId: string }) {
   );
 }
 
-function PorFonte({ clientId }: { clientId: string }) {
+function PorCampo({
+  clientId,
+  title,
+  fieldPattern,
+  emptyLabel,
+  color,
+}: {
+  clientId: string;
+  title: string;
+  fieldPattern: string;
+  emptyLabel: string;
+  color: string;
+}) {
   const { data, isLoading } = useQuery({
-    queryKey: ["crm-funil-fonte-chart", clientId],
-    queryFn: () => getCrmFunilPorCampo(clientId, "%Fonte do Lead%"),
+    queryKey: ["crm-funil-campo-chart", clientId, fieldPattern],
+    queryFn: () => getCrmFunilPorCampo(clientId, fieldPattern),
   });
 
   const rows = (data ?? [])
     .filter((r) => r.chave !== "Não informado")
     .slice(0, 8)
-    .map((r) => ({ fonte: r.chave, total: r.total }));
+    .map((r) => ({ chave: r.chave, total: r.total }));
 
   return (
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-      <h2 className="mb-3 text-sm font-semibold">Leads por fonte</h2>
+      <h2 className="mb-3 text-sm font-semibold">{title}</h2>
       {isLoading ? (
         <p className="text-xs" style={{ color: "var(--text-dim)" }}>
           Carregando…
         </p>
       ) : rows.length === 0 ? (
         <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          Nenhum lead com fonte identificada ainda.
+          {emptyLabel}
         </p>
       ) : (
         <ResponsiveContainer width="100%" height={Math.max(160, rows.length * 34)}>
           <BarChart data={rows} layout="vertical" margin={{ left: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis type="number" tick={{ fontSize: 10 }} stroke="var(--text-faint)" allowDecimals={false} />
-            <YAxis type="category" dataKey="fonte" tick={{ fontSize: 11 }} stroke="var(--text-faint)" width={110} />
+            <YAxis type="category" dataKey="chave" tick={{ fontSize: 11 }} stroke="var(--text-faint)" width={110} />
             <Tooltip formatter={(value: number) => [fmtN(value), "leads"]} />
-            <Bar dataKey="total" fill="var(--accent)" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="total" fill={color} radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
+      )}
+    </div>
+  );
+}
+
+function timeAgo(iso: string) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h}h`;
+  const d = Math.floor(h / 24);
+  return `há ${d}d`;
+}
+
+function AtividadeRecente({ clientId }: { clientId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["crm-atividade-recente", clientId],
+    queryFn: () => getCrmAtividadeRecente(clientId, 12),
+  });
+
+  const rows = data ?? [];
+
+  return (
+    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+      <h2 className="mb-3 text-sm font-semibold">Atividade recente</h2>
+      {isLoading ? (
+        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
+          Carregando…
+        </p>
+      ) : rows.length === 0 ? (
+        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
+          Nenhum lead recente.
+        </p>
+      ) : (
+        <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
+          {rows.map((r) => (
+            <li key={r.external_lead_id} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <div className="min-w-0">
+                <div className="truncate font-medium">{r.nome}</div>
+                <div className="truncate text-xs" style={{ color: "var(--text-dim)" }}>
+                  {r.fonte} · {r.pipeline}
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <span
+                  className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+                  style={{ background: "var(--surface-2)", color: "var(--text-dim)" }}
+                >
+                  {r.etapa}
+                </span>
+                <div className="mt-0.5 text-xs" style={{ color: "var(--text-faint)" }}>
+                  {r.criado_em ? timeAgo(r.criado_em) : "—"}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
@@ -159,6 +235,9 @@ function CrmPainelPage() {
       </p>
     );
   }
+
+  const decididos = m.ganhos + m.perdidos;
+  const taxaConversao = decididos > 0 ? Math.round((m.ganhos / decididos) * 100) : null;
 
   return (
     <div className="space-y-4">
@@ -186,9 +265,40 @@ function CrmPainelPage() {
         />
       </div>
 
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard label="Ganhos" value={fmtN(m.ganhos)} accent="var(--good)" />
+        <StatCard label="Perdidos" value={fmtN(m.perdidos)} accent="var(--danger)" />
+        <StatCard
+          label="Taxa de conversão"
+          value={taxaConversao !== null ? `${taxaConversao}%` : "—"}
+          sub="ganhos ÷ (ganhos + perdidos)"
+          accent="var(--accent)"
+        />
+        <StatCard label="Ainda em disputa" value={fmtN(m.total_leads - decididos)} sub="não ganhos nem perdidos" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <TendenciaDeLeads clientId={clientId} />
+        </div>
+        <AtividadeRecente clientId={clientId} />
+      </div>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <TendenciaDeLeads clientId={clientId} />
-        <PorFonte clientId={clientId} />
+        <PorCampo
+          clientId={clientId}
+          title="Leads por fonte"
+          fieldPattern="%Fonte do Lead%"
+          emptyLabel="Nenhum lead com fonte identificada ainda."
+          color="var(--accent)"
+        />
+        <PorCampo
+          clientId={clientId}
+          title="Leads por tipo de procedimento"
+          fieldPattern="%Tipo de Procedim%"
+          emptyLabel="Nenhum lead com procedimento identificado ainda."
+          color="var(--good)"
+        />
       </div>
     </div>
   );
