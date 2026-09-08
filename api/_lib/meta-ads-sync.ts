@@ -34,6 +34,13 @@ const FIELDS = [
   "actions_landing_page_view",
   "actions_lead",
   "actions_onsite_conversion_messaging_conversation_started_7d",
+  // Criativo. A mídia do anúncio é uma cópia do post (media_product_type
+  // 'AD'), com id e permalink próprios — não bate com instagram_posts, testado
+  // por id e por permalink. Por isso guardamos o link aqui em vez de referenciar
+  // o post orgânico.
+  "effective_instagram_media_id",
+  "effective_instagram_media__permalink",
+  "effective_instagram_media__thumbnail_url",
 ];
 
 export interface AdsSyncEnv {
@@ -76,6 +83,12 @@ function num(v: unknown): number {
   if (v === null || v === undefined || v === "") return 0;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+function texto(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
 }
 
 // frequency é a exceção: null aqui significa "a Meta não reportou", e gravar
@@ -136,12 +149,18 @@ async function syncAccount(
     const date = r.date ? String(r.date) : null;
     if (!campaignId || !date) continue;
 
+    const anterior = campanhas.get(campaignId);
     campanhas.set(campaignId, {
       client_id: client.id,
       ad_account_id: client.meta_ad_account_id,
       campaign_id: campaignId,
       name: String(r.campaign ?? "(sem nome)").slice(0, 180),
       objective: r.objective ? String(r.objective) : null,
+      // A miniatura vem vazia em parte das linhas (6 de 20 na amostra), então
+      // uma linha sem ela não pode apagar a que já tínhamos.
+      instagram_media_id: texto(r.effective_instagram_media_id) ?? anterior?.instagram_media_id ?? null,
+      permalink: texto(r.effective_instagram_media__permalink) ?? anterior?.permalink ?? null,
+      thumbnail_url: texto(r.effective_instagram_media__thumbnail_url) ?? anterior?.thumbnail_url ?? null,
     });
 
     metricas.push({

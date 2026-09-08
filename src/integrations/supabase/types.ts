@@ -733,24 +733,33 @@ export type Database = {
           ad_account_id: string
           campaign_id: string
           client_id: string
+          instagram_media_id: string | null
           name: string
           objective: string | null
+          permalink: string | null
+          thumbnail_url: string | null
           updated_at: string
         }
         Insert: {
           ad_account_id: string
           campaign_id: string
           client_id: string
+          instagram_media_id?: string | null
           name: string
           objective?: string | null
+          permalink?: string | null
+          thumbnail_url?: string | null
           updated_at?: string
         }
         Update: {
           ad_account_id?: string
           campaign_id?: string
           client_id?: string
+          instagram_media_id?: string | null
           name?: string
           objective?: string | null
+          permalink?: string | null
+          thumbnail_url?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -852,20 +861,9 @@ export type Database = {
           impressoes: number
           motivo: string
           objetivo: string | null
+          permalink: string | null
+          thumbnail_url: string | null
           veredito: string
-        }[]
-      }
-      ads_por_campanha: {
-        Args: { p_client_id: string; p_end: string; p_start: string }
-        Returns: {
-          campanha: string
-          cliques_link: number
-          conversas: number
-          ctr: number | null
-          custo_por_conversa: number | null
-          gasto: number
-          impressoes: number
-          objetivo: string | null
         }[]
       }
       ads_por_dia: {
