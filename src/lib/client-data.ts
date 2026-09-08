@@ -205,3 +205,17 @@ export async function getAdsPorObjetivo(clientId: string, start: string, end: st
   if (error) throw error;
   return data;
 }
+
+// Veredito por campanha. A régua é a mediana da própria conta no período, não
+// benchmark de mercado — o que é caro para uma clínica não é o que é caro para
+// um e-commerce, e o histórico da conta é a única comparação honesta que
+// temos.
+export async function getAdsDiagnostico(clientId: string, start: string, end: string) {
+  const { data, error } = await supabase.rpc("ads_diagnostico", {
+    p_client_id: clientId,
+    p_start: start,
+    p_end: end,
+  });
+  if (error) throw error;
+  return data;
+}
