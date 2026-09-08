@@ -11,13 +11,8 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import {
-  getAdsResumo,
-  getAdsPorDia,
-  getAdsPorCampanha,
-  getAdsPorObjetivo,
-  getAdsDiagnostico,
-} from "@/lib/client-data";
+import { getAdsResumo, getAdsPorDia, getAdsPorObjetivo, getAdsDiagnostico } from "@/lib/client-data";
+import { SyncButton } from "@/components/sync-button";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum, fmtBRL } from "@/lib/format";
 
@@ -115,16 +110,12 @@ function AnunciosPage() {
     queryKey: ["ads-objetivo", clientId, start, end],
     queryFn: () => getAdsPorObjetivo(clientId, start, end),
   });
-  const { data: porCampanha, isLoading: loadingCampanha } = useQuery({
-    queryKey: ["ads-campanha", clientId, start, end],
-    queryFn: () => getAdsPorCampanha(clientId, start, end),
-  });
   const { data: diagnostico, isLoading: loadingDiagnostico } = useQuery({
     queryKey: ["ads-diagnostico", clientId, start, end],
     queryFn: () => getAdsDiagnostico(clientId, start, end),
   });
 
-  const isLoading = loadingResumo || loadingDia || loadingObjetivo || loadingCampanha || loadingDiagnostico;
+  const isLoading = loadingResumo || loadingDia || loadingObjetivo || loadingDiagnostico;
 
   const porVeredito = ORDEM_VEREDITO.map((nome) => {
     const linhas = (diagnostico ?? []).filter((r) => r.veredito === nome);
@@ -161,6 +152,9 @@ function AnunciosPage() {
   if (!resumo || gasto === 0) {
     return (
       <div className="space-y-4">
+        <div className="flex justify-end">
+          <SyncButton clientId={clientId} alvo="anuncios" />
+        </div>
         <div
           className="rounded-xl border p-4 text-sm"
           style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
@@ -177,6 +171,10 @@ function AnunciosPage() {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <SyncButton clientId={clientId} alvo="anuncios" />
+      </div>
+
       <div
         className="rounded-xl border p-4 text-sm"
         style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
@@ -253,9 +251,41 @@ function AnunciosPage() {
                 {(diagnostico ?? []).map((r) => (
                   <tr key={r.campaign_id} className="border-t align-top" style={{ borderColor: "var(--border)" }}>
                     <td className="py-2">
-                      <div title={r.campanha}>{shortCampanha(r.campanha)}</div>
-                      <div className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
-                        {r.motivo}
+                      <div className="flex items-start gap-2">
+                        {r.thumbnail_url && (
+                          <img
+                            src={r.thumbnail_url}
+                            alt=""
+                            loading="lazy"
+                            className="h-10 w-10 shrink-0 rounded object-cover"
+                            style={{ border: "1px solid var(--border)" }}
+                            /* A URL é CDN do Instagram e expira; o sync diário
+                               a renova. Se mesmo assim vier quebrada, some em
+                               vez de mostrar ícone de imagem partida. */
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        )}
+                        <div>
+                          {r.permalink ? (
+                            <a
+                              href={r.permalink}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={r.campanha}
+                              className="underline underline-offset-2"
+                              style={{ color: "var(--accent)" }}
+                            >
+                              {shortCampanha(r.campanha)}
+                            </a>
+                          ) : (
+                            <span title={r.campanha}>{shortCampanha(r.campanha)}</span>
+                          )}
+                          <div className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
+                            {r.motivo}
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td className="py-2">
@@ -348,47 +378,6 @@ function AnunciosPage() {
           </div>
         </div>
       )}
-
-      <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h2 className="mb-1 text-sm font-semibold">Campanhas</h2>
-        <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-          Ordenadas por quanto consumiram. A pergunta é para onde foi o dinheiro primeiro, e o que ele trouxe depois.
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
-                <th className="pb-2">Campanha</th>
-                <th className="pb-2">Objetivo</th>
-                <th className="pb-2 text-right">Investido</th>
-                <th className="pb-2 text-right">Cliques no link</th>
-                <th className="pb-2 text-right">Conversas</th>
-                <th className="pb-2 text-right">Custo por conversa</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(porCampanha ?? []).map((r, i) => (
-                <tr key={`${r.campanha}-${i}`} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="py-1.5" title={r.campanha}>
-                    {shortCampanha(r.campanha)}
-                  </td>
-                  <td className="py-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
-                    {r.objetivo ?? "—"}
-                  </td>
-                  <td className="py-1.5 text-right">{fmtBRL(n(r.gasto))}</td>
-                  <td className="py-1.5 text-right" style={{ color: "var(--text-dim)" }}>
-                    {fmtNum(n(r.cliques_link))}
-                  </td>
-                  <td className="py-1.5 text-right">{fmtNum(n(r.conversas))}</td>
-                  <td className="py-1.5 text-right font-medium">
-                    {r.custo_por_conversa == null ? "—" : fmtBRL(n(r.custo_por_conversa))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
 
       <p className="text-xs" style={{ color: "var(--text-faint)" }}>
         Alcance não aparece somado aqui de propósito: somar o alcance de cada dia conta a mesma pessoa várias vezes, e

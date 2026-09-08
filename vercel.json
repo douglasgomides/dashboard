@@ -23,6 +23,9 @@
     },
     "api/sync/meta-ads.ts": {
       "maxDuration": 300
+    },
+    "api/sync/manual.ts": {
+      "maxDuration": 300
     }
   }
 }

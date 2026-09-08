@@ -183,15 +183,6 @@ export async function getAdsPorDia(clientId: string, start: string, end: string)
   return data;
 }
 
-export async function getAdsPorCampanha(clientId: string, start: string, end: string) {
-  const { data, error } = await supabase.rpc("ads_por_campanha", {
-    p_client_id: clientId,
-    p_start: start,
-    p_end: end,
-  });
-  if (error) throw error;
-  return data;
-}
 
 // O objetivo escolhido na campanha é a variável que mais mexeu no custo por
 // conversa desta conta, por isso ganha um corte próprio em vez de virar só
