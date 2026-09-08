@@ -158,3 +158,50 @@ export async function listInspirationPosts() {
   if (error) throw error;
   return data;
 }
+
+// Anúncios do Meta. Agregado no banco pelo mesmo motivo das funções de CRM:
+// são ~1.800 linhas por cliente (um dia × uma campanha) e a tela mostra
+// meia dúzia de números. CTR/CPC/CPM saem do gasto na leitura, nunca
+// gravados, pra não divergirem quando a Meta revisa um dia já sincronizado.
+export async function getAdsResumo(clientId: string, start: string, end: string) {
+  const { data, error } = await supabase.rpc("ads_resumo", {
+    p_client_id: clientId,
+    p_start: start,
+    p_end: end,
+  });
+  if (error) throw error;
+  return data?.[0] ?? null;
+}
+
+export async function getAdsPorDia(clientId: string, start: string, end: string) {
+  const { data, error } = await supabase.rpc("ads_por_dia", {
+    p_client_id: clientId,
+    p_start: start,
+    p_end: end,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getAdsPorCampanha(clientId: string, start: string, end: string) {
+  const { data, error } = await supabase.rpc("ads_por_campanha", {
+    p_client_id: clientId,
+    p_start: start,
+    p_end: end,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// O objetivo escolhido na campanha é a variável que mais mexeu no custo por
+// conversa desta conta, por isso ganha um corte próprio em vez de virar só
+// mais uma coluna na tabela de campanhas.
+export async function getAdsPorObjetivo(clientId: string, start: string, end: string) {
+  const { data, error } = await supabase.rpc("ads_por_objetivo", {
+    p_client_id: clientId,
+    p_start: start,
+    p_end: end,
+  });
+  if (error) throw error;
+  return data;
+}
