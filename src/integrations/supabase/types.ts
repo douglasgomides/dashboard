@@ -836,6 +836,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ads_diagnostico: {
+        Args: { p_client_id: string; p_end: string; p_start: string }
+        Returns: {
+          campaign_id: string
+          campanha: string
+          cliques_link: number
+          conversas: number
+          ctr: number | null
+          ctr_antes: number | null
+          ctr_depois: number | null
+          custo_por_conversa: number | null
+          frequencia: number | null
+          gasto: number
+          impressoes: number
+          motivo: string
+          objetivo: string | null
+          veredito: string
+        }[]
+      }
       ads_por_campanha: {
         Args: { p_client_id: string; p_end: string; p_start: string }
         Returns: {

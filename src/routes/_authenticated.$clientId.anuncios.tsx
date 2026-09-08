@@ -11,7 +11,13 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import { getAdsResumo, getAdsPorDia, getAdsPorCampanha, getAdsPorObjetivo } from "@/lib/client-data";
+import {
+  getAdsResumo,
+  getAdsPorDia,
+  getAdsPorCampanha,
+  getAdsPorObjetivo,
+  getAdsDiagnostico,
+} from "@/lib/client-data";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum, fmtBRL } from "@/lib/format";
 
@@ -32,6 +38,37 @@ function nOrNull(v: unknown): number | null {
   if (v === null || v === undefined) return null;
   const x = Number(v);
   return Number.isFinite(x) ? x : null;
+}
+
+// A ordem importa: "Escalar" primeiro porque é a única linha que pede uma
+// ação de crescimento; "Cortar" logo depois porque é dinheiro saindo agora.
+const ORDEM_VEREDITO = [
+  "Escalar",
+  "Cortar",
+  "Atrai mas não converte",
+  "Sem tração",
+  "Manter",
+  "Volume insuficiente",
+] as const;
+
+const COR_VEREDITO: Record<string, string> = {
+  Escalar: "var(--good)",
+  Cortar: "var(--danger)",
+  "Atrai mas não converte": "var(--warn)",
+  "Sem tração": "var(--warn)",
+  Manter: "var(--text-dim)",
+  "Volume insuficiente": "var(--text-faint)",
+};
+
+function Veredito({ nome }: { nome: string }) {
+  return (
+    <span
+      className="whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium"
+      style={{ color: COR_VEREDITO[nome] ?? "var(--text-dim)", borderColor: "var(--border)" }}
+    >
+      {nome}
+    </span>
+  );
 }
 
 function KpiCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -82,8 +119,32 @@ function AnunciosPage() {
     queryKey: ["ads-campanha", clientId, start, end],
     queryFn: () => getAdsPorCampanha(clientId, start, end),
   });
+  const { data: diagnostico, isLoading: loadingDiagnostico } = useQuery({
+    queryKey: ["ads-diagnostico", clientId, start, end],
+    queryFn: () => getAdsDiagnostico(clientId, start, end),
+  });
 
-  const isLoading = loadingResumo || loadingDia || loadingObjetivo || loadingCampanha;
+  const isLoading = loadingResumo || loadingDia || loadingObjetivo || loadingCampanha || loadingDiagnostico;
+
+  const porVeredito = ORDEM_VEREDITO.map((nome) => {
+    const linhas = (diagnostico ?? []).filter((r) => r.veredito === nome);
+    return {
+      nome,
+      campanhas: linhas.length,
+      gasto: linhas.reduce((a, r) => a + n(r.gasto), 0),
+      conversas: linhas.reduce((a, r) => a + n(r.conversas), 0),
+    };
+  }).filter((v) => v.campanhas > 0);
+
+  const custos = (diagnostico ?? [])
+    .map((r) => (r.custo_por_conversa == null ? null : n(r.custo_por_conversa)))
+    .filter((x): x is number => x !== null)
+    .sort((a, b) => a - b);
+  const medianaCusto = custos.length ? custos[Math.floor(custos.length / 2)] : 0;
+
+  const desperdicio = (diagnostico ?? [])
+    .filter((r) => r.veredito === "Atrai mas não converte" || r.veredito === "Sem tração")
+    .reduce((a, r) => a + n(r.gasto), 0);
   const gasto = n(resumo?.gasto);
   const conversas = n(resumo?.conversas);
 
@@ -146,6 +207,75 @@ function AnunciosPage() {
         />
         <KpiCard label="CTR" value={`${(nOrNull(resumo.ctr) ?? 0).toFixed(2)}%`} hint="Cliques ÷ impressões" />
       </div>
+
+      {(diagnostico?.length ?? 0) > 0 && (
+        <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+          <h2 className="mb-1 text-sm font-semibold">Diagnóstico das campanhas</h2>
+          <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
+            A régua é a mediana desta conta no período — {fmtBRL(medianaCusto)} por conversa — e não benchmark de
+            mercado. "Escalar" é quem converte a menos de 60% dessa mediana; "Cortar", quem passa do dobro. Campanha
+            que rodou pouco fica como indeterminada, em vez de receber um veredito de mentira.
+          </p>
+
+          <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
+            {porVeredito.map((v) => (
+              <div key={v.nome} className="rounded-xl border p-3" style={{ borderColor: "var(--border)" }}>
+                <Veredito nome={v.nome} />
+                <div className="mt-2 text-lg font-semibold">{fmtBRL(v.gasto)}</div>
+                <div className="text-xs" style={{ color: "var(--text-dim)" }}>
+                  {v.campanhas} {v.campanhas === 1 ? "campanha" : "campanhas"} · {fmtNum(v.conversas)}{" "}
+                  {v.conversas === 1 ? "conversa" : "conversas"}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {desperdicio > 0 && (
+            <p className="mb-4 rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+              <strong>{fmtBRL(desperdicio)}</strong> ({((desperdicio / gasto) * 100).toFixed(0)}% da verba) foram para
+              campanhas que não geraram uma única conversa no período.
+            </p>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
+                  <th className="pb-2">Campanha</th>
+                  <th className="pb-2">Veredito</th>
+                  <th className="pb-2 text-right">Investido</th>
+                  <th className="pb-2 text-right">Conversas</th>
+                  <th className="pb-2 text-right">Custo</th>
+                  <th className="pb-2 text-right">CTR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(diagnostico ?? []).map((r) => (
+                  <tr key={r.campaign_id} className="border-t align-top" style={{ borderColor: "var(--border)" }}>
+                    <td className="py-2">
+                      <div title={r.campanha}>{shortCampanha(r.campanha)}</div>
+                      <div className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
+                        {r.motivo}
+                      </div>
+                    </td>
+                    <td className="py-2">
+                      <Veredito nome={r.veredito} />
+                    </td>
+                    <td className="py-2 text-right">{fmtBRL(n(r.gasto))}</td>
+                    <td className="py-2 text-right">{fmtNum(n(r.conversas))}</td>
+                    <td className="py-2 text-right font-medium">
+                      {r.custo_por_conversa == null ? "—" : fmtBRL(n(r.custo_por_conversa))}
+                    </td>
+                    <td className="py-2 text-right" style={{ color: "var(--text-dim)" }}>
+                      {r.ctr == null ? "—" : `${n(r.ctr).toFixed(2)}%`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
         <h2 className="mb-1 text-sm font-semibold">Investimento e conversas por dia</h2>
