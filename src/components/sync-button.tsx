@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-type Alvo = "posts" | "anuncios" | "atendimento";
+type Alvo = "posts" | "anuncios" | "atendimento" | "comentarios" | "tudo";
 
 // O sync roda dentro de uma função da Vercel e pode levar dezenas de segundos.
 // Nada de barra de progresso falsa: o botão diz o que está fazendo e espera.
@@ -13,12 +13,14 @@ export function SyncButton({ clientId, alvo }: { clientId: string; alvo: Alvo })
   const [recado, setRecado] = useState<string | null>(null);
   const [deuErro, setDeuErro] = useState(false);
 
-  const rotulo =
-    alvo === "posts"
-      ? "Sincronizar posts"
-      : alvo === "anuncios"
-        ? "Sincronizar anúncios"
-        : "Sincronizar atendimento";
+  const ROTULOS: Record<Alvo, string> = {
+    tudo: "Atualizar dados",
+    posts: "Sincronizar posts",
+    anuncios: "Sincronizar anúncios",
+    atendimento: "Sincronizar atendimento",
+    comentarios: "Sincronizar comentários",
+  };
+  const rotulo = ROTULOS[alvo];
 
   async function sincronizar() {
     setEstado("rodando");
@@ -46,6 +48,20 @@ export function SyncButton({ clientId, alvo }: { clientId: string; alvo: Alvo })
         setRecado(`${corpo.linhas ?? 0} linhas atualizadas.`);
       } else if (alvo === "atendimento") {
         setRecado(`${corpo.sessoes ?? 0} atendimentos atualizados.`);
+      } else if (alvo === "comentarios") {
+        setRecado(`${corpo.comentarios ?? 0} comentários atualizados.`);
+      } else if (alvo === "tudo") {
+        // Em "tudo" cada parte responde por si: uma sem conta configurada não
+        // deve parecer falha da atualização inteira.
+        const p = corpo.partes ?? {};
+        const pedacos: string[] = [];
+        if (p.posts?.posts) pedacos.push(`${p.posts.posts} posts`);
+        if (p.comentarios?.comentarios) pedacos.push(`${p.comentarios.comentarios} comentários`);
+        if (p.anuncios?.linhas) pedacos.push(`${p.anuncios.linhas} linhas de anúncio`);
+        if (p.atendimento?.sessoes) pedacos.push(`${p.atendimento.sessoes} atendimentos`);
+        setRecado(pedacos.length ? `Atualizado: ${pedacos.join(", ")}.` : "Nada novo para atualizar.");
+        const falhou = Object.values(p).some((r: any) => r?.erro);
+        if (falhou) setDeuErro(true);
       } else {
         setRecado(`${corpo.posts ?? 0} posts atualizados.`);
       }
