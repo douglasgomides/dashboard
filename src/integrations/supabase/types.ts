@@ -72,6 +72,7 @@ export type Database = {
       clients: {
         Row: {
           active: boolean
+          avatar_url: string | null
           cfm_score_status: CfmScoreStatus | null
           created_at: string
           id: string
@@ -83,6 +84,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          avatar_url?: string | null
           cfm_score_status?: CfmScoreStatus | null
           created_at?: string
           id?: string
@@ -94,6 +96,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          avatar_url?: string | null
           cfm_score_status?: CfmScoreStatus | null
           created_at?: string
           id?: string

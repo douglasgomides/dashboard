@@ -22,6 +22,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { DateRangePicker } from "@/components/date-range-picker";
 import { ThemeMenu } from "@/components/theme-menu";
+import { ClientAvatar } from "@/components/client-avatar";
 import type { DateRangeState, RangePreset } from "@/lib/date-range";
 
 export const Route = createFileRoute("/_authenticated/$clientId")({
@@ -150,9 +151,11 @@ function ClientLayout() {
   );
 
   const identidade = (
-    <div>
+    <div className="flex min-w-0 items-center gap-2.5">
+      <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={38} />
+      <div className="min-w-0">
       <div className="flex items-center gap-2">
-        <h1 className="text-base font-semibold leading-tight">{client?.name ?? "Carregando…"}</h1>
+        <h1 className="truncate text-base font-semibold leading-tight">{client?.name ?? "Carregando…"}</h1>
         {client?.cfm_score_status && (
           <span
             title={`Selo CFM: ${client.cfm_score_status}`}
@@ -167,6 +170,7 @@ function ClientLayout() {
           {client?.instagram_handle ? ` · @${client.instagram_handle}` : ""}
         </p>
       )}
+      </div>
     </div>
   );
 

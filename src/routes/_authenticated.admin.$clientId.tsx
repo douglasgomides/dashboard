@@ -2,6 +2,8 @@ import { useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getClient } from "@/lib/client-data";
+import { ClientProfileForm } from "@/components/client-profile-form";
+import { ClientAvatar } from "@/components/client-avatar";
 import {
   connectInstagramAccount,
   createClientUser,
@@ -451,11 +453,21 @@ function AdminClientDetailPage() {
         <Link to="/admin" className="text-sm" style={{ color: "var(--accent)" }}>
           ← Todos os clientes
         </Link>
-        <h2 className="mt-2 text-lg font-semibold">{client?.name ?? "Carregando…"}</h2>
+        <div className="mt-2 flex items-center gap-3">
+          <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={44} />
+          <h2 className="text-lg font-semibold">{client?.name ?? "Carregando…"}</h2>
+        </div>
         <Link to="/$clientId" params={{ clientId }} className="text-sm" style={{ color: "var(--accent)" }}>
           Ver o painel deste cliente →
         </Link>
       </div>
+
+      {client && (
+        <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+          <h3 className="mb-3 text-sm font-semibold">Perfil do cliente</h3>
+          <ClientProfileForm client={client} />
+        </section>
+      )}
 
       <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
         <h3 className="mb-3 text-sm font-semibold">Conta Instagram</h3>
