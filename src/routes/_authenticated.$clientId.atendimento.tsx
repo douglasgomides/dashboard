@@ -102,7 +102,6 @@ function AtendimentoPage() {
   const semRoteamento = n(resumo?.sem_roteamento);
   const fatiaSemRoteamento = atendimentos > 0 ? (semRoteamento / atendimentos) * 100 : 0;
   const coberturaEspera = n(resumo?.espera_cobertura);
-  const coberturaAtendimento = n(resumo?.atendimento_cobertura);
 
   const serie = (volumeDiario ?? []).map((r) => ({
     dia: String(r.dia).slice(5),
@@ -139,9 +138,9 @@ function AtendimentoPage() {
           hint={`mediana de ${fmtNum(coberturaEspera)} atendimentos com o dado`}
         />
         <KpiCard
-          label="Duração do atendimento"
+          label="Tempo até fechar"
           value={dur(nOrNull(resumo?.atendimento_mediano_seg))}
-          hint={`mediana de ${fmtNum(coberturaAtendimento)} atendimentos com o dado`}
+          hint="quando a conversa é encerrada — não é tempo de atendimento"
         />
         <KpiCard
           label="Em andamento agora"
@@ -164,6 +163,21 @@ function AtendimentoPage() {
           Conversa que não foi para nenhuma equipe. É o número que precisa cair — e enquanto ele for alto, nenhum
           recorte por médica ou por especialidade vai ser confiável.
         </p>
+      </div>
+
+      {/* O timeService da WTS é relógio de parede entre abrir e encerrar, e nesta
+          conta 33% dos encerramentos saem em lote (o maior: 216 conversas no mesmo
+          minuto). Chamar isso de "duração do atendimento" seria vender arrumação de
+          fila como qualidade de atendimento. */}
+      <div
+        className="rounded-xl border p-4 text-sm"
+        style={{ background: "var(--surface-2)", borderColor: "var(--border)", color: "var(--text-dim)" }}
+      >
+        <strong style={{ color: "var(--text)" }}>Sobre o “tempo até fechar”:</strong> ele mede o intervalo entre
+        abrir e encerrar a conversa, não o tempo de conversa. Um terço dos encerramentos desta conta acontece em
+        lote — o maior teve 216 conversas fechadas no mesmo minuto — então o número descreve o hábito de arrumar a
+        fila, não o atendimento. A métrica que vale olhar aqui é a{" "}
+        <strong style={{ color: "var(--text)" }}>espera até a 1ª resposta</strong>.
       </div>
 
       <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
@@ -201,7 +215,7 @@ function AtendimentoPage() {
                 <th className="py-2 text-right font-medium">Atendimentos</th>
                 <th className="py-2 text-right font-medium">Fatia</th>
                 <th className="py-2 text-right font-medium">Espera</th>
-                <th className="py-2 text-right font-medium">Duração</th>
+                <th className="py-2 text-right font-medium">Até fechar</th>
               </tr>
             </thead>
             <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -229,7 +243,7 @@ function AtendimentoPage() {
                 <th className="py-2 text-right font-medium">Atendimentos</th>
                 <th className="py-2 text-right font-medium">Concluídos</th>
                 <th className="py-2 text-right font-medium">Espera</th>
-                <th className="py-2 text-right font-medium">Duração</th>
+                <th className="py-2 text-right font-medium">Até fechar</th>
               </tr>
             </thead>
             <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
