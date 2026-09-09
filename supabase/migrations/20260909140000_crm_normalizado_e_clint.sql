@@ -82,3 +82,12 @@ alter table public.crm_connections
 
 comment on column public.crm_connections.config is
   'Configuração específica do provedor. Na Clint guarda {"origins": [...]}.';
+
+-- crm_leads tem o SEU PRÓPRIO check de provider, separado do de
+-- crm_connections. Esquecer este aqui fez o primeiro sync da Clint buscar os
+-- 2.681 negócios com sucesso e falhar em todas as gravações.
+alter table public.crm_leads drop constraint if exists crm_leads_provider_check;
+
+alter table public.crm_leads
+  add constraint crm_leads_provider_check
+  check (provider in ('kommo', 'feegow', 'ninsaude', 'clint'));
