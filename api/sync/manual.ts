@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";
 import { runMetaGraphSync } from "../_lib/meta-graph-sync.js";
+import { runInstagramSync } from "../_lib/instagram-sync.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
 //
@@ -101,14 +102,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    if (!META_ACCESS_TOKEN) {
-      res.status(500).json({ error: "Servidor sem META_ACCESS_TOKEN configurado" });
-      return;
-    }
-
     const { data: perfis, error: erroPerfis } = await admin
       .from("instagram_accounts")
-      .select("id")
+      .select("id, sync_source")
       .eq("client_id", client_id)
       .eq("active", true);
     if (erroPerfis) throw new Error(erroPerfis.message);
@@ -122,18 +118,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    // Uma chamada por perfil: runMetaGraphSync filtra por conta, não por
-    // cliente, e um cliente pode ter mais de um perfil.
+    // Cada perfil é atualizado pelo sync que o alimenta — ver
+    // instagram_accounts.sync_source. Mandar todo mundo pra Graph API deixa
+    // de fora Douglas e Doctor Creator (que vêm da Windsor e não estão na
+    // Business Manager), e mandar todo mundo pra Windsor sobrescreveria com
+    // dado furado quem vem da Graph API.
+    const perfisGraph = perfis.filter((p) => p.sync_source === "meta_graph");
+    const perfisWindsor = perfis.filter((p) => p.sync_source !== "meta_graph");
+
     const contas = [];
-    for (const perfil of perfis) {
-      const parcial = await runMetaGraphSync({
-        accessToken: META_ACCESS_TOKEN,
+
+    if (perfisWindsor.length > 0) {
+      if (!WINDSOR_API_KEY) {
+        throw new Error("Perfil servido pela Windsor, mas WINDSOR_API_KEY não está configurada no servidor");
+      }
+      const parcial = await runInstagramSync({
+        windsorApiKey: WINDSOR_API_KEY,
         supabaseUrl: SUPABASE_URL,
         supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
-        onlyAccountId: perfil.id,
-        maxPages: 2,
+        syncDays: 7,
+        onlyClientId: client_id,
       });
       contas.push(...parcial);
+    }
+
+    if (perfisGraph.length > 0) {
+      if (!META_ACCESS_TOKEN) {
+        throw new Error("Perfil servido pela Meta Graph API, mas META_ACCESS_TOKEN não está configurado no servidor");
+      }
+      // Uma chamada por perfil: runMetaGraphSync filtra por conta, não por
+      // cliente, e um cliente pode ter mais de um perfil.
+      for (const perfil of perfisGraph) {
+        const parcial = await runMetaGraphSync({
+          accessToken: META_ACCESS_TOKEN,
+          supabaseUrl: SUPABASE_URL,
+          supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+          onlyAccountId: perfil.id,
+          maxPages: 2,
+        });
+        contas.push(...parcial);
+      }
     }
 
     const posts = contas.reduce((a, c) => a + (c.posts ?? 0), 0);
