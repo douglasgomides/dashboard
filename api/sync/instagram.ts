@@ -34,6 +34,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const syncDays = syncDaysParam ? Number(Array.isArray(syncDaysParam) ? syncDaysParam[0] : syncDaysParam) : 365;
   const dateFrom = typeof req.query.date_from === "string" ? req.query.date_from : undefined;
   const dateTo = typeof req.query.date_to === "string" ? req.query.date_to : undefined;
+  // Limita a um cliente. Sem isso, um backfill em janelas arrasta todas as
+  // contas da Windsor em cada janela — o dobro do trabalho por rodada, e é o
+  // que fazia a função estourar o tempo em janelas de 90 dias.
+  const clientId = typeof req.query.client_id === "string" ? req.query.client_id : undefined;
 
   try {
     const results = await runInstagramSync({
@@ -43,6 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       syncDays: Number.isFinite(syncDays) ? syncDays : 365,
       dateFrom,
       dateTo,
+      onlyClientId: clientId,
     });
 
     const hasErrors = results.some((r) => r.errors.length > 0);
