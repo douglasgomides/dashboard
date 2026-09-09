@@ -73,6 +73,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       custom_fields_values: existingRaw.custom_fields_values ?? null,
     };
 
+    // Colunas normalizadas. Só entram no payload quando têm valor: coluna
+    // ausente no upsert preserva o que já estava na linha, enquanto mandar
+    // null apagaria o dado que o sync pela API já tinha gravado — e um evento
+    // de mudança de etapa chega magro, sem created_at nem custom_fields.
+    const normalizado: Record<string, unknown> = {};
+    if (event.statusId != null) {
+      // 142 é ganho e 143 é perdido no Kommo. Justamente o evento de mudança
+      // de etapa é o que transforma um lead em ganho, então recalcular aqui
+      // é o que mantém o desfecho vivo.
+      normalizado.outcome = event.statusId === "142" ? "won" : event.statusId === "143" ? "lost" : "open";
+    }
+    const criadoEm = (mergedRaw as Record<string, unknown>).created_at;
+    if (criadoEm != null && String(criadoEm) !== "") {
+      normalizado.occurred_at = new Date(Number(criadoEm) * 1000).toISOString();
+    }
+    const nome = (mergedRaw as Record<string, unknown>).name;
+    if (typeof nome === "string" && nome !== "") {
+      normalizado.contact_name = nome;
+    }
+
     const { error } = await supabase.from("crm_leads").upsert(
       {
         crm_connection_id: connection.id,
@@ -86,6 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         price: event.price,
         raw_payload: mergedRaw as any,
         received_at: new Date().toISOString(),
+        ...normalizado,
       },
       { onConflict: "crm_connection_id,external_lead_id" },
     );

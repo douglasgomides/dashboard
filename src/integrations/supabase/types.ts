@@ -12,7 +12,7 @@ export type ContentFormat = "reels" | "carrossel" | "estatico" | "stories";
 export type SuggestionStatus = "suggested" | "accepted" | "dismissed";
 export type CfmScoreStatus = "verde" | "amarelo" | "vermelho";
 export type ClientMemberRole = "owner" | "strategist" | "viewer";
-export type CrmProvider = "kommo" | "feegow" | "ninsaude";
+export type CrmProvider = "kommo" | "feegow" | "ninsaude" | "clint";
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
@@ -156,6 +156,7 @@ export type Database = {
           client_id: string
           created_at: string
           id: string
+          config: Json
           provider: CrmProvider
           subdomain: string | null
           webhook_secret: string | null
@@ -166,6 +167,7 @@ export type Database = {
           client_id: string
           created_at?: string
           id?: string
+          config?: Json
           provider: CrmProvider
           subdomain?: string | null
           webhook_secret?: string | null
@@ -176,6 +178,7 @@ export type Database = {
           client_id?: string
           created_at?: string
           id?: string
+          config?: Json
           provider?: CrmProvider
           subdomain?: string | null
           webhook_secret?: string | null
@@ -200,6 +203,12 @@ export type Database = {
           old_status_id: string | null
           pipeline_id: string | null
           price: number | null
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          occurred_at: string | null
+          outcome: string | null
+          source: string | null
           provider: CrmProvider
           raw_payload: Json
           received_at: string
@@ -214,6 +223,12 @@ export type Database = {
           old_status_id?: string | null
           pipeline_id?: string | null
           price?: number | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          occurred_at?: string | null
+          outcome?: string | null
+          source?: string | null
           provider: CrmProvider
           raw_payload: Json
           received_at?: string
@@ -228,6 +243,12 @@ export type Database = {
           old_status_id?: string | null
           pipeline_id?: string | null
           price?: number | null
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          occurred_at?: string | null
+          outcome?: string | null
+          source?: string | null
           provider?: CrmProvider
           raw_payload?: Json
           received_at?: string

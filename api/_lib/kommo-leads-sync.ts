@@ -22,7 +22,31 @@ interface KommoLead {
   status_id: number;
   pipeline_id: number;
   price: number | null;
+  created_at?: number | null;
+  name?: string | null;
+  custom_fields_values?: { field_name?: string; values?: { value?: unknown }[] }[] | null;
   [key: string]: unknown;
+}
+
+// O Kommo codifica ganho e perda em ids fixos de status: 142 é ganho, 143 é
+// perdido, qualquer outro é etapa comum. A Clint usa texto (WON/LOST/OPEN).
+// A coluna outcome guarda o significado, já traduzido, para as funções do
+// banco não precisarem saber de qual CRM veio a linha.
+function kommoOutcome(statusId: number): "open" | "won" | "lost" {
+  if (statusId === 142) return "won";
+  if (statusId === 143) return "lost";
+  return "open";
+}
+
+function kommoCampo(lead: KommoLead, padrao: RegExp): string | null {
+  const campos = Array.isArray(lead.custom_fields_values) ? lead.custom_fields_values : [];
+  for (const c of campos) {
+    if (c?.field_name && padrao.test(c.field_name)) {
+      const v = c.values?.[0]?.value;
+      if (v != null && String(v) !== "") return String(v);
+    }
+  }
+  return null;
 }
 
 export interface KommoLeadsSyncEnv {
@@ -115,6 +139,14 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
         old_status_id: null,
         pipeline_id: String(lead.pipeline_id),
         price: lead.price,
+        // Colunas normalizadas: o mesmo significado que as funções do banco
+        // antes extraíam do raw_payload a cada consulta. Gravar aqui é o que
+        // permite que Kommo e Clint sejam lidos pela mesma função — e sem
+        // isso, todo lead novo entraria sem data e sumiria dos "novos 7 dias".
+        occurred_at: lead.created_at ? new Date(lead.created_at * 1000).toISOString() : null,
+        outcome: kommoOutcome(lead.status_id),
+        source: kommoCampo(lead, /Fonte do Lead/i),
+        contact_name: lead.name ?? null,
         raw_payload: lead as any,
         received_at: new Date().toISOString(),
       }));
