@@ -354,10 +354,16 @@ export async function runInstagramSync(env: SyncEnv): Promise<AccountSyncResult[
       ? { from: env.dateFrom, to: env.dateTo }
       : { from: dateNDaysAgo(env.syncDays ?? 365), to: dateNDaysAgo(0) };
 
+  // NUNCA toca em conta servida pela Meta Graph API. O filtro mora aqui, na
+  // raiz, e não em cada chamador: qualquer endpoint ou cron que chame este
+  // sync herda a garantia. Sem isso, o sync agendado da Windsor passava por
+  // cima das contas da Graph API e zerava campos que só ela preenche (foi o
+  // que aconteceu com as thumbnails da Lana Torres em 08/09/2026).
   let accountQuery = supabase
     .from("instagram_accounts")
     .select("id, client_id, windsor_account_id")
-    .eq("active", true);
+    .eq("active", true)
+    .eq("sync_source", "windsor");
   if (env.onlyClientId) accountQuery = accountQuery.eq("client_id", env.onlyClientId);
   const { data: accounts, error } = await accountQuery;
   if (error) throw error;

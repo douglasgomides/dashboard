@@ -267,7 +267,14 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  let query = supabase.from("instagram_accounts").select("id, client_id, windsor_account_id").eq("active", true);
+  // Simétrico ao filtro em instagram-sync.ts: cada sync só enxerga as contas
+  // que ele alimenta. Conta da Windsor passada por engano aqui sairia com
+  // metade dos campos vazios, porque o token da Graph API não cobre ela.
+  let query = supabase
+    .from("instagram_accounts")
+    .select("id, client_id, windsor_account_id")
+    .eq("active", true)
+    .eq("sync_source", "meta_graph");
   if (env.onlyAccountId) query = query.eq("id", env.onlyAccountId);
   const { data: accounts, error } = await query;
   if (error) throw error;
