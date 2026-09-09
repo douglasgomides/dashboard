@@ -21,6 +21,7 @@ import {
   computeReachByFormat,
   computeReachByTema,
   computeRepetirOuRevisar,
+  computeRetencaoDeReels,
   computeTopPostsPorTaxaDeSalvamento,
   computeTopReelsPorTaxaDeCompartilhamento,
 } from "@/lib/report-metrics";
@@ -202,6 +203,95 @@ function MelhoresGanchos({ posts }: { posts: Post[] }) {
                 </a>
               </td>
               <td className="py-1.5 text-right font-medium">{fmtNum(post.engagement)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RetencaoDeReels({ posts }: { posts: Post[] }) {
+  const r = useMemo(() => computeRetencaoDeReels(posts, 8), [posts]);
+
+  // Nenhum reel no período: a seção não tem o que dizer, some.
+  if (r.totalReels === 0) return null;
+
+  // Tem reel, mas sem o dado de retenção. Isso acontece de verdade (conta
+  // sincronizada pela Graph API, que não expõe skip rate), e o silêncio aqui
+  // seria pior que a explicação — o time acharia que o número está zerado.
+  if (r.withData === 0) {
+    return (
+      <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+        <h2 className="mb-1 text-sm font-semibold">Retenção dos reels</h2>
+        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
+          Os {r.totalReels} reels do período não têm dado de retenção. O hook rate vem do "skip rate" da Meta, que
+          só chega pela Windsor.ai — contas sincronizadas direto pela Graph API não recebem esse campo.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+      <h2 className="mb-1 text-sm font-semibold">Retenção dos reels</h2>
+      <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
+        <strong>Hook rate</strong> é quanta gente <em>não</em> pulou nos 3 primeiros segundos — é o gancho fazendo
+        efeito. Body rate e hold rate exigiriam a duração do vídeo, que a Meta não entrega por API; por isso o tempo
+        assistido aparece em segundos, não como porcentagem.
+      </p>
+
+      <div className="mb-4 grid grid-cols-2 gap-2">
+        <div className="rounded-xl border p-3 text-center" style={{ borderColor: "var(--border)" }}>
+          <div className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+            Hook rate (mediana)
+          </div>
+          <div className="mt-1 text-xl font-semibold">
+            {r.medianHookRate != null ? `${r.medianHookRate.toFixed(1)}%` : "—"}
+          </div>
+        </div>
+        <div className="rounded-xl border p-3 text-center" style={{ borderColor: "var(--border)" }}>
+          <div className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+            Tempo médio assistido (mediana)
+          </div>
+          <div className="mt-1 text-xl font-semibold">
+            {r.medianWatchSeconds != null ? `${r.medianWatchSeconds.toFixed(1)}s` : "—"}
+          </div>
+        </div>
+      </div>
+
+      {r.withData < r.totalReels && (
+        <p className="mb-2 text-[11px]" style={{ color: "var(--text-faint)" }}>
+          Baseado em {r.withData} de {r.totalReels} reels do período — o resto ainda não tem o dado.
+        </p>
+      )}
+
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
+            <th className="pb-2"></th>
+            <th className="pb-2">Reel</th>
+            <th className="pb-2 text-right">Hook rate</th>
+            <th className="pb-2 text-right">Tempo médio</th>
+          </tr>
+        </thead>
+        <tbody>
+          {r.melhores.map(({ post, hookRate, avgWatchSeconds }) => (
+            <tr key={post.id} className="border-t" style={{ borderColor: "var(--border)" }}>
+              <td className="py-1.5 pr-2">
+                {post.thumbnail_url && (
+                  <img src={post.thumbnail_url} alt="" className="h-10 w-10 rounded object-cover" loading="lazy" />
+                )}
+              </td>
+              <td className="py-1.5">
+                <a href={post.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--text)" }}>
+                  {firstLine(post.caption) ?? post.windsor_media_id}
+                </a>
+              </td>
+              <td className="py-1.5 text-right font-medium">{hookRate.toFixed(1)}%</td>
+              <td className="py-1.5 text-right">
+                {avgWatchSeconds != null ? `${avgWatchSeconds.toFixed(1)}s` : "—"}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -794,6 +884,7 @@ function PostsRankingPage() {
       <DesempenhoEstrutural posts={rows} />
       <FormatoPorTema posts={rows} />
       <MelhoresGanchos posts={rows} />
+      <RetencaoDeReels posts={rows} />
       <NextAngles clientId={clientId} />
       <ExploradorDePosts posts={rows} periodLabel={periodLabel} />
     </div>

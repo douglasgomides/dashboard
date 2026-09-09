@@ -4,6 +4,7 @@ import { getClient } from "@/lib/client-data";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { DateRangePicker } from "@/components/date-range-picker";
+import { RefreshButton } from "@/components/refresh-button";
 import type { DateRangeState, RangePreset } from "@/lib/date-range";
 
 export const Route = createFileRoute("/_authenticated/$clientId")({
@@ -74,7 +75,10 @@ function ClientLayout() {
             {client?.instagram_handle ? ` · @${client.instagram_handle}` : ""}
           </p>
         </div>
-        <LogoutButton />
+        <div className="flex items-center gap-3">
+          <RefreshButton clientId={clientId} />
+          <LogoutButton />
+        </div>
       </header>
 
       {/* Fixo no topo ao rolar — sem isso o seletor de período só aparecia

@@ -389,3 +389,45 @@ export function computeHeadline(posts: any[]) {
   if (candidates.length === 0) return null;
   return candidates.sort((a, b) => b.pct - a.pct)[0].text;
 }
+
+// Retenção de reels.
+//
+// O time pediu "hook rate, body rate e hold rate". Das três, só o hook rate
+// é derivável de dado real hoje:
+//
+//   hook rate = (1 - skip rate) × 100, onde skip rate é a fração de views
+//   que abandonou o reel nos 3 primeiros segundos (métrica da Meta, via
+//   Windsor). Atenção: a Windsor devolve FRAÇÃO (0.515 = 51,5%), apesar de
+//   declarar o campo como PERCENT — conferido contra a conta do Douglas.
+//
+// Body rate e hold rate no sentido estrito (quanto do vídeo a pessoa
+// assistiu) exigem a DURAÇÃO do vídeo, e nem a Windsor nem a Graph API
+// entregam esse campo. O tempo médio assistido sozinho não vira taxa — um
+// reel de 15s e um de 90s com o mesmo tempo médio têm retenção
+// completamente diferente. Então o tempo médio é mostrado como segundos
+// absolutos, e não como percentual inventado.
+export function computeRetencaoDeReels(posts: any[], limit = 10) {
+  const reels = posts.filter((p) => p.format === "reels" && p.reel_skip_rate != null);
+
+  const ranked = reels
+    .map((p) => ({
+      post: p,
+      hookRate: (1 - Number(p.reel_skip_rate)) * 100,
+      avgWatchSeconds: p.reel_avg_watch_time_ms != null ? Number(p.reel_avg_watch_time_ms) / 1000 : null,
+    }))
+    .sort((a, b) => b.hookRate - a.hookRate);
+
+  const hookRates = ranked.map((r) => r.hookRate);
+  const watchSeconds = ranked.map((r) => r.avgWatchSeconds).filter((v): v is number => v != null);
+
+  return {
+    // Quantos reels do período têm o dado. Quando é 0, a tela diz por quê em
+    // vez de mostrar um gráfico vazio.
+    withData: reels.length,
+    totalReels: posts.filter((p) => p.format === "reels").length,
+    medianHookRate: hookRates.length > 0 ? median(hookRates) : null,
+    medianWatchSeconds: watchSeconds.length > 0 ? median(watchSeconds) : null,
+    melhores: ranked.slice(0, limit),
+    piores: ranked.slice(-limit).reverse(),
+  };
+}

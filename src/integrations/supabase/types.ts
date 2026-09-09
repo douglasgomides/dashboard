@@ -494,6 +494,7 @@ export type Database = {
           id: string
           ig_user_id: string | null
           ig_username: string | null
+          sync_source: string
           windsor_account_id: string
         }
         Insert: {
@@ -503,6 +504,7 @@ export type Database = {
           created_at?: string
           id?: string
           ig_user_id?: string | null
+          sync_source?: string
           ig_username?: string | null
           windsor_account_id: string
         }
@@ -513,6 +515,7 @@ export type Database = {
           created_at?: string
           id?: string
           ig_user_id?: string | null
+          sync_source?: string
           ig_username?: string | null
           windsor_account_id?: string
         }
@@ -652,6 +655,11 @@ export type Database = {
           metrics_updated_at: string | null
           permalink: string | null
           posted_at: string | null
+          media_follows: number | null
+          profile_visits: number | null
+          reel_avg_watch_time_ms: number | null
+          reel_skip_rate: number | null
+          reel_total_watch_time_ms: number | null
           reach: number | null
           saved: number | null
           shares: number | null
@@ -676,6 +684,11 @@ export type Database = {
           metrics_updated_at?: string | null
           permalink?: string | null
           posted_at?: string | null
+          media_follows?: number | null
+          profile_visits?: number | null
+          reel_avg_watch_time_ms?: number | null
+          reel_skip_rate?: number | null
+          reel_total_watch_time_ms?: number | null
           reach?: number | null
           saved?: number | null
           shares?: number | null
@@ -700,6 +713,11 @@ export type Database = {
           metrics_updated_at?: string | null
           permalink?: string | null
           posted_at?: string | null
+          media_follows?: number | null
+          profile_visits?: number | null
+          reel_avg_watch_time_ms?: number | null
+          reel_skip_rate?: number | null
+          reel_total_watch_time_ms?: number | null
           reach?: number | null
           saved?: number | null
           shares?: number | null

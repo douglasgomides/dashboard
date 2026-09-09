@@ -20,6 +20,10 @@ export interface SyncEnv {
   // já que uma única invocação de função na Vercel tem limite de duração.
   dateFrom?: string;
   dateTo?: string;
+  // Limita o sync a um cliente. Usado pelo botão "Atualizar dados" na tela:
+  // o usuário só pode atualizar o cliente que ele tem permissão de ver, e
+  // não faz sentido esperar o sync de todas as contas pra ver a própria.
+  onlyClientId?: string;
 }
 
 export interface AccountSyncResult {
@@ -155,6 +159,14 @@ async function syncPosts(
       "media_shares",
       "media_engagement",
       "media_views",
+      // Retenção de reel — matéria-prima do hook rate (= 100 - skip rate).
+      // Vem null em post que não é reel; isso é esperado.
+      "media_reel_skip_rate",
+      "media_reel_avg_watch_time",
+      "media_reel_total_watch_time",
+      // Sinais de perfil por post. A Meta não suporta os dois para reels.
+      "media_profile_visits",
+      "media_follows",
     ],
     windsorAccountId,
   );
@@ -179,6 +191,11 @@ async function syncPosts(
       shares: numOrNull(r.media_shares),
       views: numOrNull(r.media_views),
       engagement: numOrNull(r.media_engagement),
+      reel_skip_rate: numOrNull(r.media_reel_skip_rate),
+      reel_avg_watch_time_ms: numOrNull(r.media_reel_avg_watch_time),
+      reel_total_watch_time_ms: numOrNull(r.media_reel_total_watch_time),
+      profile_visits: numOrNull(r.media_profile_visits),
+      media_follows: numOrNull(r.media_follows),
       metrics_updated_at: now,
     }));
 
@@ -264,12 +281,27 @@ async function syncDailyMetrics(
     windsorAccountId,
   );
 
-  const dailyRows = rows
-    .filter((r) => r.date)
-    .map((r) => ({
-      instagram_account_id: accountId,
-      client_id: clientId,
-      date: r.date as string,
+  // Os campos acima moram em TRÊS tabelas diferentes da Windsor
+  // (user_insights_day, user_insights_day_total_value, user_info), e ela
+  // devolve uma linha por tabela — várias linhas para a mesma data, cada uma
+  // preenchendo só o seu pedaço e deixando o resto null.
+  //
+  // Jogar isso direto no upsert quebrava o sync inteiro com "ON CONFLICT DO
+  // UPDATE command cannot affect row a second time": o Postgres recusa tocar
+  // a mesma linha duas vezes no mesmo comando. O erro derrubava o lote todo,
+  // e por isso instagram_account_daily_metrics parou de receber dados em
+  // 25/08/2026 — os KPIs e o gráfico de tendência da Visão geral congelaram
+  // junto, mesmo com os posts sincronizando normalmente.
+  //
+  // Descartar a duplicata não serve: perderia os campos que só existem na
+  // outra linha. Então mesclamos por data, ficando com o primeiro valor não
+  // nulo de cada campo.
+  const porData = new Map<string, Record<string, number | null>>();
+  for (const r of rows) {
+    if (!r.date) continue;
+    const date = r.date as string;
+    const atual = porData.get(date) ?? {};
+    const vindo = {
       followers_count: numOrNull(r.followers_count),
       new_followers: numOrNull(r.follower_count_1d),
       reach: numOrNull(r.reach_1d),
@@ -279,7 +311,27 @@ async function syncDailyMetrics(
       shares: numOrNull(r.shares),
       total_interactions: numOrNull(r.total_interactions),
       profile_links_taps: numOrNull(r.profile_links_taps),
-    }));
+    };
+    for (const [campo, valor] of Object.entries(vindo)) {
+      if (atual[campo] == null && valor != null) atual[campo] = valor;
+    }
+    porData.set(date, atual);
+  }
+
+  const dailyRows = [...porData.entries()].map(([date, campos]) => ({
+    instagram_account_id: accountId,
+    client_id: clientId,
+    date,
+    followers_count: campos.followers_count ?? null,
+    new_followers: campos.new_followers ?? null,
+    reach: campos.reach ?? null,
+    likes: campos.likes ?? null,
+    comments: campos.comments ?? null,
+    saves: campos.saves ?? null,
+    shares: campos.shares ?? null,
+    total_interactions: campos.total_interactions ?? null,
+    profile_links_taps: campos.profile_links_taps ?? null,
+  }));
 
   const errors: string[] = [];
   let count = 0;
@@ -302,10 +354,12 @@ export async function runInstagramSync(env: SyncEnv): Promise<AccountSyncResult[
       ? { from: env.dateFrom, to: env.dateTo }
       : { from: dateNDaysAgo(env.syncDays ?? 365), to: dateNDaysAgo(0) };
 
-  const { data: accounts, error } = await supabase
+  let accountQuery = supabase
     .from("instagram_accounts")
     .select("id, client_id, windsor_account_id")
     .eq("active", true);
+  if (env.onlyClientId) accountQuery = accountQuery.eq("client_id", env.onlyClientId);
+  const { data: accounts, error } = await accountQuery;
   if (error) throw error;
 
   const results: AccountSyncResult[] = [];

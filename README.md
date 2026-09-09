@@ -57,6 +57,46 @@ Variáveis de ambiente (`.env.local`):
 `src/routeTree.gen.ts` é gerado automaticamente no primeiro `npm run dev` ou
 `npm run build` — não commitado, não editar à mão.
 
+## Dois caminhos de sync — e o botão "Atualizar dados"
+
+Cada conta de Instagram é alimentada por um de dois syncs, e a coluna
+`instagram_accounts.sync_source` diz qual:
+
+| `sync_source` | Fonte | Cobertura |
+|---|---|---|
+| `windsor` (padrão) | Windsor.ai | todas as contas conectadas |
+| `meta_graph` | Meta Graph API direta | só as contas dentro da Business Manager cobertas pelo `META_ACCESS_TOKEN` |
+
+Rodar o sync errado numa conta não é inofensivo: sobrescreve dado bom por dado
+com buraco (a Windsor já perdeu os reels da Lana Torres uma vez). Por isso
+`api/sync/refresh.ts` despacha por `sync_source` em vez de rodar os dois.
+
+O botão "Atualizar dados" fica no cabeçalho do cliente, ao lado do logout, e
+mostra de quando é o dado. Diferente de `api/sync/instagram.ts` e
+`api/sync/meta-graph.ts` (máquina-chamando-máquina, com `SYNC_SECRET`), ele
+autoriza pelo usuário logado: token de sessão do Supabase + checagem de que a
+pessoa é membro daquele cliente ou admin. Janela padrão de 7 dias — é pra
+destravar a tela, não pra refazer histórico.
+
+> O sync diário do n8n ("Sync diário — Instagram Intelligence Hub", 6h) hoje
+> só cobre as contas `meta_graph`. Conta `windsor` depende do botão ou de
+> `npm run sync:instagram` até alguém agendar o `api/sync/instagram`.
+
+## Retenção de reels (hook rate)
+
+`instagram_posts` guarda `reel_skip_rate`, `reel_avg_watch_time_ms`,
+`reel_total_watch_time_ms`, `profile_visits` e `media_follows`.
+
+- **Hook rate** = `(1 - reel_skip_rate) * 100`. A Windsor devolve o skip rate
+  como **fração** (0.515 = 51,5%) apesar de declarar o campo como PERCENT.
+- **Body rate / hold rate** não são calculáveis: exigem a duração do vídeo, e
+  nem a Windsor nem a Graph API expõem esse campo. O tempo médio assistido
+  aparece em segundos absolutos, nunca como percentual estimado.
+- `profile_visits` e `media_follows` a Meta **não suporta em reels** — null em
+  reel é esperado, não é falha de sync.
+- O caminho `meta_graph` não tem skip rate (a Graph API não expõe): nessas
+  contas a seção de retenção explica a ausência em vez de mostrar zero.
+
 ## Deploy (Vercel)
 
 App SPA puro (Vite + `vercel.json` com rewrite de fallback) — zero-config no

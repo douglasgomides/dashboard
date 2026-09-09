@@ -19,6 +19,15 @@ import { classifyTema } from "./tema-classifier.js";
 
 const GRAPH_BASE = "https://graph.facebook.com/v21.0";
 const INSIGHTS_METRICS = "reach,likes,comments,shares,saved,views,total_interactions";
+
+// Métricas extras pedidas numa SEGUNDA passada, separada da base — de
+// propósito. Elas não existem em todo tipo de mídia (retenção só em reel;
+// profile_visits e follows a Meta não suporta em reel), e a Graph API rejeita
+// a sub-chamada inteira se qualquer métrica pedida for inválida pra aquela
+// mídia. Se fossem junto com a base, um reel perderia reach/likes/saved
+// também. Numa passada separada, a rejeição custa só o extra.
+const REELS_EXTRA_METRICS = "ig_reels_avg_watch_time,ig_reels_video_view_total_time";
+const FEED_EXTRA_METRICS = "profile_visits,follows";
 const INSIGHTS_BATCH_SIZE = 50; // limite da API de lote da Meta
 
 interface MetaMedia {
@@ -102,13 +111,15 @@ async function fetchMediaPage(
 async function fetchInsightsBatch(
   mediaIds: string[],
   accessToken: string,
+  metrics: string = INSIGHTS_METRICS,
 ): Promise<Map<string, Record<string, number>>> {
   const result = new Map<string, Record<string, number>>();
+  if (mediaIds.length === 0) return result;
 
   for (const idsBatch of chunk(mediaIds, INSIGHTS_BATCH_SIZE)) {
     const batchPayload = idsBatch.map((id) => ({
       method: "GET",
-      relative_url: `${id}/insights?metric=${INSIGHTS_METRICS}`,
+      relative_url: `${id}/insights?metric=${metrics}`,
     }));
 
     const res = await fetch(`${GRAPH_BASE}/`, {
@@ -149,11 +160,22 @@ async function syncAccountPosts(
     accessToken,
   );
 
+  // Passadas extras, tolerantes a falha: se a Meta recusar (métrica indisponível
+  // pra conta, post antigo demais, permissão faltando), o sync segue com as
+  // métricas base em vez de derrubar tudo.
+  const reelIds = media.filter((m) => normalizeFormat(m.media_type, m.media_product_type) === "reels").map((m) => m.id);
+  const feedIds = media.filter((m) => normalizeFormat(m.media_type, m.media_product_type) !== "reels").map((m) => m.id);
+  const tolerate = () => new Map<string, Record<string, number>>();
+  const reelsExtraById = await fetchInsightsBatch(reelIds, accessToken, REELS_EXTRA_METRICS).catch(tolerate);
+  const feedExtraById = await fetchInsightsBatch(feedIds, accessToken, FEED_EXTRA_METRICS).catch(tolerate);
+
   const now = new Date().toISOString();
   const rows = media
     .filter((m) => m.id && m.timestamp)
     .map((m) => {
       const ins = insightsById.get(m.id) ?? {};
+      const reelExtra = reelsExtraById.get(m.id) ?? {};
+      const feedExtra = feedExtraById.get(m.id) ?? {};
       return {
         instagram_account_id: accountId,
         client_id: clientId,
@@ -171,6 +193,13 @@ async function syncAccountPosts(
         shares: numOrNull(ins.shares),
         views: numOrNull(ins.views),
         engagement: numOrNull(ins.total_interactions),
+        // A Graph API não expõe skip rate (só a Windsor expõe) — fica null
+        // neste caminho, e o hook rate simplesmente não aparece pra essas
+        // contas em vez de ser inventado.
+        reel_avg_watch_time_ms: numOrNull(reelExtra.ig_reels_avg_watch_time),
+        reel_total_watch_time_ms: numOrNull(reelExtra.ig_reels_video_view_total_time),
+        profile_visits: numOrNull(feedExtra.profile_visits),
+        media_follows: numOrNull(feedExtra.follows),
         metrics_updated_at: now,
       };
     });
