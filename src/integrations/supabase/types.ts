@@ -218,6 +218,7 @@ export type Database = {
           provider: CrmProvider
           raw_payload: Json
           received_at: string
+          removido_na_origem: string | null
           status_id: string | null
         }
         Insert: {
@@ -238,6 +239,7 @@ export type Database = {
           provider: CrmProvider
           raw_payload: Json
           received_at?: string
+          removido_na_origem?: string | null
           status_id?: string | null
         }
         Update: {
@@ -258,6 +260,7 @@ export type Database = {
           provider?: CrmProvider
           raw_payload?: Json
           received_at?: string
+          removido_na_origem?: string | null
           status_id?: string | null
         }
         Relationships: [
