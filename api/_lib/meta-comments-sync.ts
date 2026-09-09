@@ -79,16 +79,39 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  // O token vem por conta quando existir, e cai no do ambiente quando não.
+  // Existem duas Business Managers em jogo e nenhum token cobre as duas: um
+  // valor global obrigaria a escolher qual cliente funciona.
   let query = supabase.from("instagram_accounts").select("id, client_id").eq("active", true);
   if (env.onlyAccountId) query = query.eq("id", env.onlyAccountId);
   const { data: accounts, error } = await query;
   if (error) throw error;
+
+  // Token por conta, com o do ambiente como reserva. Nenhum token cobre as
+  // duas Business Managers em uso, então um valor global obrigaria a escolher
+  // qual cliente funciona. Consulta separada porque a tabela de segredos é
+  // legível só por admin (e pelo service role daqui).
+  const tokensPorConta = new Map<string, string>();
+  {
+    const { data: segredos } = await supabase
+      .from("instagram_account_secrets")
+      .select("instagram_account_id, meta_access_token");
+    for (const seg of segredos ?? []) {
+      if (seg.meta_access_token) tokensPorConta.set(seg.instagram_account_id, seg.meta_access_token);
+    }
+  }
 
   const maxPosts = env.maxPosts ?? 30;
   const results: CommentsAccountSyncResult[] = [];
 
   for (const account of accounts ?? []) {
     const errors: string[] = [];
+    const tokenDaConta = tokensPorConta.get(account.id) ?? env.accessToken;
+    if (!tokenDaConta) {
+      results.push({ accountId: account.id, postsChecked: 0, comments: 0, questions: 0, done: true,
+        errors: ["Sem token da Meta: nem na conta, nem no ambiente"] });
+      continue;
+    }
     try {
       const { data: state } = await supabase
         .from("instagram_comments_sync_state")
@@ -111,7 +134,7 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
 
       const done = (posts?.length ?? 0) < maxPosts;
 
-      const commentsByPost = await fetchCommentsBatch(posts ?? [], env.accessToken);
+      const commentsByPost = await fetchCommentsBatch(posts ?? [], tokenDaConta);
       const now = new Date().toISOString();
       const rows = [];
       for (const post of posts ?? []) {

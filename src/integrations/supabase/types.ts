@@ -509,6 +509,27 @@ export type Database = {
           },
         ]
       }
+      instagram_account_secrets: {
+        Row: {
+          instagram_account_id: string
+          meta_access_token: string | null
+          nota: string | null
+          updated_at: string
+        }
+        Insert: {
+          instagram_account_id: string
+          meta_access_token?: string | null
+          nota?: string | null
+          updated_at?: string
+        }
+        Update: {
+          instagram_account_id?: string
+          meta_access_token?: string | null
+          nota?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       instagram_accounts: {
         Row: {
           active: boolean

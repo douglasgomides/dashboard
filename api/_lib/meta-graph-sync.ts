@@ -295,9 +295,19 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
     // comportamento certo tanto pra primeira leva quanto pro sync diário.
     const after = env.after ?? (state && !state.backfill_done ? (state.next_cursor ?? undefined) : undefined);
 
+    // Token da conta quando existir; o do ambiente é a reserva. Nenhum token
+    // cobre as duas Business Managers em uso, então um valor global obrigaria
+    // a escolher qual cliente funciona.
+    const { data: segredo } = await supabase
+      .from("instagram_account_secrets")
+      .select("meta_access_token")
+      .eq("instagram_account_id", account.id)
+      .maybeSingle();
+    const tokenDaConta = segredo?.meta_access_token ?? env.accessToken;
+
     const posts = await syncAccountPosts(
       supabase,
-      env.accessToken,
+      tokenDaConta,
       account.id,
       account.windsor_account_id,
       account.client_id,
