@@ -150,6 +150,12 @@ async function syncPosts(
       "media_product_type",
       "media_permalink",
       "media_thumbnail_url",
+      // media_thumbnail_url só existe para vídeo — é o preview estático dele.
+      // Carrossel e imagem vêm com ele nulo e a arte em media_url. Sem pedir
+      // os dois, uma conta que posta majoritariamente carrossel fica sem
+      // nenhuma imagem na tela (a Doctor Creator tinha 355 de 398 assim).
+      // Mesma regra que o sync da Graph API já usava.
+      "media_url",
       "media_caption",
       "timestamp",
       "media_reach",
@@ -181,7 +187,7 @@ async function syncPosts(
       media_type: (r.media_type as string) ?? null,
       format: normalizeFormat(r.media_type, r.media_product_type) as any,
       permalink: (r.media_permalink as string) ?? null,
-      thumbnail_url: (r.media_thumbnail_url as string) ?? null,
+      thumbnail_url: ((r.media_thumbnail_url ?? r.media_url) as string) ?? null,
       caption: (r.media_caption as string) ?? null,
       posted_at: (r.timestamp as string) ?? null,
       reach: numOrNull(r.media_reach),

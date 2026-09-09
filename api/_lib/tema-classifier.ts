@@ -100,9 +100,54 @@ const LANA_TORRES: TemaRule[] = [
   },
 ];
 
+// Extraídas lendo as 398 legendas reais dela e medindo a cobertura de cada
+// regra antes de escrever qualquer coisa aqui. A ordem importa: a oferta
+// (arsenal/prompt/Claude) vem antes de CFM porque boa parte dos posts de
+// arsenal menciona "dentro das normas do CFM" de passagem — o assunto é a
+// oferta, não a norma.
+//
+// Cobertura medida: 66% dos posts. Dos que sobram, 51 têm legenda que é só
+// "Siga @doctorcreators" — o tema mora na arte, não no texto, e forçar uma
+// tag ali seria inventar. Ficam null de propósito.
+const DOCTOR_CREATOR: TemaRule[] = [
+  {
+    tema: "Prompts e IA para conteudo",
+    keywords: ["arsenal", "prompt", "claude", "30 dias de conteúdo"],
+  },
+  {
+    tema: "Comunidade DCI e Club",
+    keywords: ["comente dci", "comenta dci", "comente “dci”", "comente club", "comenta club",
+               "comente “club”", "comunidade com mais de", "doctor creator club"],
+  },
+  {
+    tema: "Regulacao CFM",
+    keywords: ["cfm", "fiscalização", "pode e não pode", "pode ou não fazer",
+               "permitem e proíbem", "permite e proíbe"],
+  },
+  {
+    tema: "IA na pratica medica",
+    keywords: ["inteligência artificial", "ia na saúde", "ia está entrando"],
+  },
+  {
+    tema: "Carreira e realidade da medicina",
+    keywords: ["vale a pena", "abandon", "nem tudo são flores", "plantão",
+               "carreira médica", "em voz baixa"],
+  },
+  {
+    tema: "Autoridade e marca medica",
+    keywords: ["ser creator", "marca médica", "constrói autoridade", "o que postar"],
+  },
+  {
+    tema: "Consultorio e relacao com paciente",
+    keywords: ["consultório", "medicina também é relacionamento", "novos pacientes",
+               "depoimento de paciente"],
+  },
+];
+
 const RULES_BY_WINDSOR_ACCOUNT: Record<string, TemaRule[]> = {
   "17841400869970479": DOUGLAS_GOMIDES, // douglasgomides
   "17841401061134951": LANA_TORRES, // dralanatorres
+  "17841458525811009": DOCTOR_CREATOR, // doctorcreators
 };
 
 export function classifyTema(windsorAccountId: string, caption: string | null | undefined): string | null {
