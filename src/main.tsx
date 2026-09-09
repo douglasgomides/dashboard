@@ -2,7 +2,12 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { getRouter } from "./router";
+import { aplicarTemaSalvo } from "./hooks/use-theme";
 import "./styles.css";
+
+// Antes de montar o React: se o médico escolheu claro e o sistema dele está
+// no escuro, sem isto a tela pisca escura por um frame a cada carregamento.
+aplicarTemaSalvo();
 
 const rootEl = document.getElementById("root")!;
 
