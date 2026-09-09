@@ -6,25 +6,34 @@
     }
   ],
   "functions": {
-    "api/sync/instagram.ts": {
-      "maxDuration": 300
-    },
-    "api/sync/meta-graph.ts": {
-      "maxDuration": 300
-    },
-    "api/sync/meta-comments.ts": {
-      "maxDuration": 300
-    },
     "api/sync/backfill-thumbnails.ts": {
+      "maxDuration": 300
+    },
+    "api/sync/clint.ts": {
+      "maxDuration": 300
+    },
+    "api/sync/instagram.ts": {
       "maxDuration": 300
     },
     "api/sync/kommo-leads.ts": {
       "maxDuration": 300
     },
-    "api/sync/meta-ads.ts": {
+    "api/sync/kommo-reconcile.ts": {
       "maxDuration": 300
     },
     "api/sync/manual.ts": {
+      "maxDuration": 300
+    },
+    "api/sync/meta-ads.ts": {
+      "maxDuration": 300
+    },
+    "api/sync/meta-comments.ts": {
+      "maxDuration": 300
+    },
+    "api/sync/meta-graph.ts": {
+      "maxDuration": 300
+    },
+    "api/sync/wts.ts": {
       "maxDuration": 300
     }
   }
