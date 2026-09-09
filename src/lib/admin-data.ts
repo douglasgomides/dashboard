@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { CrmProvider } from "@/integrations/supabase/types";
+import type { CfmScoreStatus, CrmProvider } from "@/integrations/supabase/types";
 
 export async function listAllClients() {
   const { data, error } = await supabase
@@ -155,4 +155,53 @@ export async function createAdminUser(input: CreateAdminInput) {
     throw new Error(body.error ?? `Falha ao criar admin (HTTP ${res.status})`);
   }
   return body as { user_id: string; temporary_password: string | null };
+}
+
+// ---- Perfil do cliente ----------------------------------------------------
+
+export type ClientProfileInput = {
+  name: string;
+  specialty: string | null;
+  instagram_handle: string | null;
+  avatar_url: string | null;
+  meta_ad_account_id: string | null;
+  wts_company_id: string | null;
+  cfm_score_status: CfmScoreStatus | null;
+  active: boolean;
+};
+
+export async function updateClientProfile(clientId: string, input: ClientProfileInput) {
+  const { error } = await supabase.from("clients").update(input).eq("id", clientId);
+  if (error) throw error;
+}
+
+/**
+ * Sobe a foto e devolve a URL pública.
+ *
+ * O nome do arquivo carrega um carimbo de tempo em vez de ser fixo por
+ * cliente: com nome fixo, o navegador e a CDN continuariam servindo a foto
+ * antiga depois da troca, e a impressão seria de que o upload não funcionou.
+ * O arquivo velho é apagado depois, para o bucket não virar depósito.
+ */
+export async function uploadClientAvatar(clientId: string, file: File, avatarAtual?: string | null) {
+  const extensao = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+  const caminho = `${clientId}/${Date.now()}.${extensao}`;
+
+  const { error: erroUpload } = await supabase.storage
+    .from("client-avatars")
+    .upload(caminho, file, { contentType: file.type, upsert: false });
+  if (erroUpload) throw erroUpload;
+
+  const { data } = supabase.storage.from("client-avatars").getPublicUrl(caminho);
+
+  // Best-effort: se a limpeza falhar, sobra um arquivo órfão — não é motivo
+  // para a troca de foto falhar na cara do admin.
+  if (avatarAtual) {
+    const anterior = avatarAtual.split("/client-avatars/")[1];
+    if (anterior && anterior !== caminho) {
+      await supabase.storage.from("client-avatars").remove([anterior]).catch(() => undefined);
+    }
+  }
+
+  return data.publicUrl;
 }
