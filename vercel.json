@@ -18,9 +18,6 @@
     "api/sync/kommo-leads.ts": {
       "maxDuration": 300
     },
-    "api/sync/kommo-reconcile.ts": {
-      "maxDuration": 300
-    },
     "api/sync/manual.ts": {
       "maxDuration": 300
     },
