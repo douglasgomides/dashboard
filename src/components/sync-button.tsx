@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-type Alvo = "posts" | "anuncios";
+type Alvo = "posts" | "anuncios" | "atendimento";
 
 // O sync roda dentro de uma função da Vercel e pode levar dezenas de segundos.
 // Nada de barra de progresso falsa: o botão diz o que está fazendo e espera.
@@ -13,7 +13,12 @@ export function SyncButton({ clientId, alvo }: { clientId: string; alvo: Alvo })
   const [recado, setRecado] = useState<string | null>(null);
   const [deuErro, setDeuErro] = useState(false);
 
-  const rotulo = alvo === "posts" ? "Sincronizar posts" : "Sincronizar anúncios";
+  const rotulo =
+    alvo === "posts"
+      ? "Sincronizar posts"
+      : alvo === "anuncios"
+        ? "Sincronizar anúncios"
+        : "Sincronizar atendimento";
 
   async function sincronizar() {
     setEstado("rodando");
@@ -39,6 +44,8 @@ export function SyncButton({ clientId, alvo }: { clientId: string; alvo: Alvo })
         setRecado(corpo.nada_a_fazer);
       } else if (alvo === "anuncios") {
         setRecado(`${corpo.linhas ?? 0} linhas atualizadas.`);
+      } else if (alvo === "atendimento") {
+        setRecado(`${corpo.sessoes ?? 0} atendimentos atualizados.`);
       } else {
         setRecado(`${corpo.posts ?? 0} posts atualizados.`);
       }

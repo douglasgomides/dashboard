@@ -210,3 +210,44 @@ export async function getAdsDiagnostico(clientId: string, start: string, end: st
   if (error) throw error;
   return data;
 }
+
+// Atendimento no WhatsApp (WTS Chat).
+export async function getWtsResumo(clientId: string, start: string, end: string) {
+  const { data, error } = await supabase.rpc("wts_resumo", {
+    p_client_id: clientId,
+    p_start: start,
+    p_end: end,
+  });
+  if (error) throw error;
+  return data?.[0] ?? null;
+}
+
+export async function getWtsPorDepartamento(clientId: string, start: string, end: string) {
+  const { data, error } = await supabase.rpc("wts_por_departamento", {
+    p_client_id: clientId,
+    p_start: start,
+    p_end: end,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getWtsPorAgente(clientId: string, start: string, end: string) {
+  const { data, error } = await supabase.rpc("wts_por_agente", {
+    p_client_id: clientId,
+    p_start: start,
+    p_end: end,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getWtsVolumeDiario(clientId: string, start: string, end: string) {
+  const { data, error } = await supabase.rpc("wts_volume_diario", {
+    p_client_id: clientId,
+    p_start: start,
+    p_end: end,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
