@@ -15,6 +15,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { getClient, getMonthlyMetrics, getPostsForAnalytics } from "@/lib/client-data";
+import { ResumoDoMes } from "@/components/resumo-do-mes";
 import { formatLabel } from "@/lib/methodology";
 import type { ContentFormat } from "@/integrations/supabase/types";
 import { brazilWeekdayAndHour, computeFormatBreakdown, computeFormatInsight, fmtFormatKey, median } from "@/lib/report-metrics";
@@ -423,6 +424,14 @@ function MonthlyOverview() {
 
   return (
     <div className="space-y-6">
+      <ResumoDoMes
+        clientId={clientId}
+        start={start}
+        end={end}
+        periodLabel={periodLabel}
+        posts={postsForAnalytics}
+      />
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <KpiCard
           label="Novos seguidores"
