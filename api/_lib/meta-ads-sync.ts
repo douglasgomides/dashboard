@@ -142,7 +142,15 @@ async function syncAccount(
   const raw = await windsorGet(windsorApiKey, range.from, range.to, client.meta_ad_account_id);
 
   const campanhas = new Map<string, Database["public"]["Tables"]["meta_ads_campaigns"]["Insert"]>();
-  const metricas: Database["public"]["Tables"]["meta_ads_daily"]["Insert"][] = [];
+  // Agregado por (data, campanha), não uma linha por linha da Windsor.
+  //
+  // A consulta pede campos de nível de ANÚNCIO (media id, permalink,
+  // thumbnail), então a Windsor devolve uma linha por anúncio. Uma campanha
+  // com 3 anúncios no mesmo dia vira 3 linhas com a mesma chave, e o
+  // Postgres recusa o comando inteiro com "ON CONFLICT DO UPDATE command
+  // cannot affect row a second time" — derrubando o lote. Foi assim que o
+  // Douglas ficou com 22 campanhas e zero métricas.
+  const metricasPorChave = new Map<string, Database["public"]["Tables"]["meta_ads_daily"]["Insert"]>();
 
   for (const r of raw) {
     const campaignId = r.campaign_id ? String(r.campaign_id) : null;
@@ -163,22 +171,40 @@ async function syncAccount(
       thumbnail_url: texto(r.effective_instagram_media__thumbnail_url) ?? anterior?.thumbnail_url ?? null,
     });
 
-    metricas.push({
-      client_id: client.id,
-      ad_account_id: client.meta_ad_account_id,
-      date,
-      campaign_id: campaignId,
-      spend: num(r.spend),
-      impressions: num(r.impressions),
-      reach: num(r.reach),
-      clicks: num(r.clicks),
-      unique_clicks: num(r.unique_clicks),
-      frequency: numOrNull(r.frequency),
-      link_clicks: num(r.actions_link_click),
-      landing_page_views: num(r.actions_landing_page_view),
-      leads: num(r.actions_lead),
-      conversations: num(r.actions_onsite_conversion_messaging_conversation_started_7d),
-    });
+    const chave = `${date}|${campaignId}`;
+    const acc = metricasPorChave.get(chave);
+    if (!acc) {
+      metricasPorChave.set(chave, {
+        client_id: client.id,
+        ad_account_id: client.meta_ad_account_id,
+        date,
+        campaign_id: campaignId,
+        spend: num(r.spend),
+        impressions: num(r.impressions),
+        reach: num(r.reach),
+        clicks: num(r.clicks),
+        unique_clicks: num(r.unique_clicks),
+        frequency: null, // recalculada depois de somar; ver abaixo
+        link_clicks: num(r.actions_link_click),
+        landing_page_views: num(r.actions_landing_page_view),
+        leads: num(r.actions_lead),
+        conversations: num(r.actions_onsite_conversion_messaging_conversation_started_7d),
+      });
+    } else {
+      acc.spend = (acc.spend ?? 0) + num(r.spend);
+      acc.impressions = (acc.impressions ?? 0) + num(r.impressions);
+      // Alcance somado entre anúncios superestima: a mesma pessoa pode ter
+      // visto dois anúncios da campanha. A Windsor não entrega alcance no
+      // nível da campanha, então esta é a melhor aproximação disponível —
+      // e é por isso que frequência é derivada, não somada.
+      acc.reach = (acc.reach ?? 0) + num(r.reach);
+      acc.clicks = (acc.clicks ?? 0) + num(r.clicks);
+      acc.unique_clicks = (acc.unique_clicks ?? 0) + num(r.unique_clicks);
+      acc.link_clicks = (acc.link_clicks ?? 0) + num(r.actions_link_click);
+      acc.landing_page_views = (acc.landing_page_views ?? 0) + num(r.actions_landing_page_view);
+      acc.leads = (acc.leads ?? 0) + num(r.actions_lead);
+      acc.conversations = (acc.conversations ?? 0) + num(r.actions_onsite_conversion_messaging_conversation_started_7d);
+    }
   }
 
   // Campanhas primeiro: a tela junta métrica com nome, e uma métrica sem
@@ -190,6 +216,13 @@ async function syncAccount(
     if (error) result.errors.push(`campanhas: ${error.message}`);
     else result.campaigns += batch.length;
   }
+
+  // Frequência é impressões por pessoa alcançada — precisa ser calculada
+  // depois da soma, nunca somada linha a linha.
+  const metricas = [...metricasPorChave.values()].map((m) => ({
+    ...m,
+    frequency: m.reach && m.reach > 0 ? Number(((m.impressions ?? 0) / m.reach).toFixed(4)) : null,
+  }));
 
   for (const batch of chunk(metricas, BATCH_SIZE)) {
     const { error } = await supabase
