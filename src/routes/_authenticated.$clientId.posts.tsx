@@ -14,6 +14,7 @@ import {
 import type { ContentFormat, FunnelStage, MethodologyStage } from "@/integrations/supabase/types";
 import { fmtNum } from "@/lib/format";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
+import { SyncButton } from "@/components/sync-button";
 import {
   computeConceitosVencedores,
   computeConversionByTag,
@@ -807,6 +808,10 @@ function PostsRankingPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <SyncButton clientId={clientId} alvo="posts" />
+      </div>
+
       <TopDoMes posts={rows} />
 
       <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>

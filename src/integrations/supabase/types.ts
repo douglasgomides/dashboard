@@ -76,6 +76,7 @@ export type Database = {
           created_at: string
           id: string
           instagram_handle: string | null
+          meta_ad_account_id: string | null
           name: string
           specialty: string | null
         }
@@ -85,6 +86,7 @@ export type Database = {
           created_at?: string
           id?: string
           instagram_handle?: string | null
+          meta_ad_account_id?: string | null
           name: string
           specialty?: string | null
         }
@@ -94,6 +96,7 @@ export type Database = {
           created_at?: string
           id?: string
           instagram_handle?: string | null
+          meta_ad_account_id?: string | null
           name?: string
           specialty?: string | null
         }
@@ -743,11 +746,182 @@ export type Database = {
           },
         ]
       }
+      meta_ads_campaigns: {
+        Row: {
+          ad_account_id: string
+          campaign_id: string
+          client_id: string
+          instagram_media_id: string | null
+          name: string
+          objective: string | null
+          permalink: string | null
+          thumbnail_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          ad_account_id: string
+          campaign_id: string
+          client_id: string
+          instagram_media_id?: string | null
+          name: string
+          objective?: string | null
+          permalink?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ad_account_id?: string
+          campaign_id?: string
+          client_id?: string
+          instagram_media_id?: string | null
+          name?: string
+          objective?: string | null
+          permalink?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_ads_campaigns_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_ads_daily: {
+        Row: {
+          ad_account_id: string
+          campaign_id: string
+          client_id: string
+          clicks: number
+          conversations: number
+          created_at: string
+          date: string
+          frequency: number | null
+          id: string
+          impressions: number
+          landing_page_views: number
+          leads: number
+          link_clicks: number
+          reach: number
+          spend: number
+          unique_clicks: number
+          updated_at: string
+        }
+        Insert: {
+          ad_account_id: string
+          campaign_id: string
+          client_id: string
+          clicks?: number
+          conversations?: number
+          created_at?: string
+          date: string
+          frequency?: number | null
+          id?: string
+          impressions?: number
+          landing_page_views?: number
+          leads?: number
+          link_clicks?: number
+          reach?: number
+          spend?: number
+          unique_clicks?: number
+          updated_at?: string
+        }
+        Update: {
+          ad_account_id?: string
+          campaign_id?: string
+          client_id?: string
+          clicks?: number
+          conversations?: number
+          created_at?: string
+          date?: string
+          frequency?: number | null
+          id?: string
+          impressions?: number
+          landing_page_views?: number
+          leads?: number
+          link_clicks?: number
+          reach?: number
+          spend?: number
+          unique_clicks?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_ads_daily_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      ads_diagnostico: {
+        Args: { p_client_id: string; p_end: string; p_start: string }
+        Returns: {
+          campaign_id: string
+          campanha: string
+          cliques_link: number
+          conversas: number
+          ctr: number | null
+          ctr_antes: number | null
+          ctr_depois: number | null
+          custo_por_conversa: number | null
+          frequencia: number | null
+          gasto: number
+          impressoes: number
+          motivo: string
+          objetivo: string | null
+          permalink: string | null
+          thumbnail_url: string | null
+          veredito: string
+        }[]
+      }
+      ads_por_dia: {
+        Args: { p_client_id: string; p_end: string; p_start: string }
+        Returns: {
+          cliques_link: number
+          conversas: number
+          dia: string
+          gasto: number
+          impressoes: number
+        }[]
+      }
+      ads_por_objetivo: {
+        Args: { p_client_id: string; p_end: string; p_start: string }
+        Returns: {
+          campanhas: number
+          conversas: number
+          ctr: number | null
+          custo_por_conversa: number | null
+          gasto: number
+          objetivo: string
+        }[]
+      }
+      ads_resumo: {
+        Args: { p_client_id: string; p_end: string; p_start: string }
+        Returns: {
+          alcance_somado: number
+          campanhas: number
+          cliques: number
+          cliques_link: number
+          conversas: number
+          cpc: number | null
+          cpm: number | null
+          ctr: number | null
+          custo_por_conversa: number | null
+          dias: number
+          gasto: number
+          impressoes: number
+        }[]
+      }
       crm_atividade_recente: {
         Args: { p_client_id: string; p_limit?: number }
         Returns: {
