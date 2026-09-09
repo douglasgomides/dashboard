@@ -42,6 +42,7 @@ function ClientLayout() {
     { to: "/$clientId/posts", label: "Ranking & próximos ângulos", exact: false },
     { to: "/$clientId/duvidas", label: "Dúvidas de pacientes", exact: false },
     { to: "/$clientId/anuncios", label: "Anúncios", exact: false },
+    { to: "/$clientId/atendimento", label: "Atendimento (WhatsApp)", exact: false },
     { to: "/$clientId/crm-painel", label: "Painel CRM (Kommo)", exact: false },
     { to: "/$clientId/vendas-kommo", label: "Vendas × origem (Kommo)", exact: false },
     { to: "/$clientId/crm-estrutura", label: "Estrutura do CRM", exact: false },

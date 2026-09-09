@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";
 import { runMetaGraphSync } from "../_lib/meta-graph-sync.js";
 import { runInstagramSync } from "../_lib/instagram-sync.js";
+import { runWtsSync } from "../_lib/wts-sync.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
 //
@@ -27,6 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const WINDSOR_API_KEY = process.env.WINDSOR_API_KEY;
   const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+  const WTS_API_TOKEN = process.env.WTS_API_TOKEN;
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     res.status(500).json({ error: "Servidor sem SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY configurados" });
@@ -51,8 +53,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  if (!client_id || (alvo !== "posts" && alvo !== "anuncios")) {
-    res.status(400).json({ error: "Informe client_id e alvo ('posts' ou 'anuncios')" });
+  const ALVOS = ["posts", "anuncios", "atendimento"];
+  if (!client_id || !alvo || !ALVOS.includes(alvo)) {
+    res.status(400).json({ error: "Informe client_id e alvo ('posts', 'anuncios' ou 'atendimento')" });
     return;
   }
 
@@ -99,6 +102,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const linhas = contas.reduce((a, c) => a + c.rows, 0);
       res.status(contas.some((c) => c.errors.length > 0) ? 207 : 200).json({ alvo, linhas, contas });
+      return;
+    }
+
+    if (alvo === "atendimento") {
+      if (!WTS_API_TOKEN) {
+        res.status(500).json({ error: "Servidor sem WTS_API_TOKEN configurado" });
+        return;
+      }
+      const contas = await runWtsSync({
+        wtsToken: WTS_API_TOKEN,
+        supabaseUrl: SUPABASE_URL,
+        supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+        syncDays: DIAS_DE_JANELA,
+        clientId: client_id,
+      });
+
+      if (contas.length === 0) {
+        res.status(200).json({
+          alvo,
+          nada_a_fazer: "Este cliente não tem conta da WTS ligada ao cadastro.",
+          contas,
+        });
+        return;
+      }
+      const sessoes = contas.reduce((a, c) => a + c.sessoes, 0);
+      res.status(contas.some((c) => c.errors.length > 0) ? 207 : 200).json({ alvo, sessoes, contas });
       return;
     }
 

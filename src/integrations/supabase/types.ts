@@ -79,6 +79,7 @@ export type Database = {
           meta_ad_account_id: string | null
           name: string
           specialty: string | null
+          wts_company_id: string | null
         }
         Insert: {
           active?: boolean
@@ -89,6 +90,7 @@ export type Database = {
           meta_ad_account_id?: string | null
           name: string
           specialty?: string | null
+          wts_company_id?: string | null
         }
         Update: {
           active?: boolean
@@ -99,6 +101,7 @@ export type Database = {
           meta_ad_account_id?: string | null
           name?: string
           specialty?: string | null
+          wts_company_id?: string | null
         }
         Relationships: []
       }
@@ -900,6 +903,123 @@ export type Database = {
           },
         ]
       }
+      wts_agents: {
+        Row: {
+          client_id: string
+          email: string | null
+          name: string
+          profile: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          email?: string | null
+          name: string
+          profile?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          email?: string | null
+          name?: string
+          profile?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      wts_departments: {
+        Row: {
+          client_id: string
+          department_id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          department_id: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          department_id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      wts_sessions: {
+        Row: {
+          channel_id: string | null
+          client_id: string
+          contact_id: string | null
+          created_at: string
+          department_id: string | null
+          ended_at: string | null
+          first_response_at: string | null
+          service_seconds: number | null
+          session_id: string
+          started_at: string
+          status: string | null
+          updated_at: string
+          user_id: string | null
+          wait_seconds: number | null
+        }
+        Insert: {
+          channel_id?: string | null
+          client_id: string
+          contact_id?: string | null
+          created_at?: string
+          department_id?: string | null
+          ended_at?: string | null
+          first_response_at?: string | null
+          service_seconds?: number | null
+          session_id: string
+          started_at: string
+          status?: string | null
+          updated_at?: string
+          user_id?: string | null
+          wait_seconds?: number | null
+        }
+        Update: {
+          channel_id?: string | null
+          client_id?: string
+          contact_id?: string | null
+          created_at?: string
+          department_id?: string | null
+          ended_at?: string | null
+          first_response_at?: string | null
+          service_seconds?: number | null
+          session_id?: string
+          started_at?: string
+          status?: string | null
+          updated_at?: string
+          user_id?: string | null
+          wait_seconds?: number | null
+        }
+        Relationships: []
+      }
+      wts_sync_state: {
+        Row: {
+          client_id: string
+          last_session_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          last_session_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          last_session_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -1035,6 +1155,48 @@ export type Database = {
           post_count: number
           rationale: string
           tema: string
+        }[]
+      }
+      wts_por_agente: {
+        Args: { p_client_id: string; p_end: string; p_start: string }
+        Returns: {
+          agente: string
+          atendimento_mediano_seg: number
+          atendimentos: number
+          concluidos: number
+          espera_mediana_seg: number
+        }[]
+      }
+      wts_por_departamento: {
+        Args: { p_client_id: string; p_end: string; p_start: string }
+        Returns: {
+          atendimento_mediano_seg: number
+          atendimentos: number
+          departamento: string
+          espera_mediana_seg: number
+          fatia: number
+        }[]
+      }
+      wts_resumo: {
+        Args: { p_client_id: string; p_end: string; p_start: string }
+        Returns: {
+          atendimento_cobertura: number
+          atendimento_mediano_seg: number
+          atendimentos: number
+          concluidos: number
+          contatos_distintos: number
+          em_andamento: number
+          espera_cobertura: number
+          espera_mediana_seg: number
+          sem_roteamento: number
+        }[]
+      }
+      wts_volume_diario: {
+        Args: { p_client_id: string; p_end: string; p_start: string }
+        Returns: {
+          atendimentos: number
+          dia: string
+          espera_mediana_seg: number
         }[]
       }
     }
