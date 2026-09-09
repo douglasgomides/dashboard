@@ -4,6 +4,7 @@ import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";
 import { runMetaGraphSync } from "../_lib/meta-graph-sync.js";
 import { runInstagramSync } from "../_lib/instagram-sync.js";
 import { runWtsSync } from "../_lib/wts-sync.js";
+import { runMetaCommentsSync } from "../_lib/meta-comments-sync.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
 //
@@ -17,6 +18,10 @@ import { runWtsSync } from "../_lib/wts-sync.js";
 // endpoints com secret, chamados pelo n8n.
 
 const DIAS_DE_JANELA = 7;
+
+function temErro(r: { contas?: { errors: string[] }[] } | undefined): boolean {
+  return (r?.contas ?? []).some((c) => c.errors.length > 0);
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -34,6 +39,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(500).json({ error: "Servidor sem SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY configurados" });
     return;
   }
+  // Fixados depois da checagem: dentro das funções abaixo o TypeScript perde o
+  // estreitamento de process.env e volta a tratá-los como possivelmente vazios.
+  const urlSupabase: string = SUPABASE_URL;
+  const chaveServico: string = SUPABASE_SERVICE_ROLE_KEY;
 
   const authHeader = req.headers.authorization ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
@@ -53,9 +62,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento"];
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "tudo"];
   if (!client_id || !alvo || !ALVOS.includes(alvo)) {
-    res.status(400).json({ error: "Informe client_id e alvo ('posts', 'anuncios' ou 'atendimento')" });
+    res.status(400).json({ error: "Informe client_id e alvo ('tudo', 'posts', 'anuncios', 'atendimento' ou 'comentarios')" });
     return;
   }
 
@@ -79,58 +88,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    if (alvo === "anuncios") {
-      if (!WINDSOR_API_KEY) {
-        res.status(500).json({ error: "Servidor sem WINDSOR_API_KEY configurada" });
-        return;
-      }
+    async function sincronizarAnuncios() {
+      if (!WINDSOR_API_KEY) throw new Error("Servidor sem WINDSOR_API_KEY configurada");
       const contas = await runMetaAdsSync({
         windsorApiKey: WINDSOR_API_KEY,
-        supabaseUrl: SUPABASE_URL,
-        supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+        supabaseUrl: urlSupabase,
+        supabaseServiceRoleKey: chaveServico,
         syncDays: DIAS_DE_JANELA,
         clientId: client_id,
       });
 
       if (contas.length === 0) {
-        res.status(200).json({
-          alvo,
-          nada_a_fazer: "Este cliente não tem conta de anúncio ligada ao cadastro.",
-          contas,
-        });
-        return;
+        return { nada_a_fazer: "Este cliente não tem conta de anúncio ligada ao cadastro.", contas };
       }
-      const linhas = contas.reduce((a, c) => a + c.rows, 0);
-      res.status(contas.some((c) => c.errors.length > 0) ? 207 : 200).json({ alvo, linhas, contas });
-      return;
+      return { linhas: contas.reduce((a, c) => a + c.rows, 0), contas };
     }
 
-    if (alvo === "atendimento") {
-      if (!WTS_API_TOKEN) {
-        res.status(500).json({ error: "Servidor sem WTS_API_TOKEN configurado" });
-        return;
-      }
+    async function sincronizarAtendimento() {
+      if (!WTS_API_TOKEN) throw new Error("Servidor sem WTS_API_TOKEN configurado");
       const contas = await runWtsSync({
         wtsToken: WTS_API_TOKEN,
-        supabaseUrl: SUPABASE_URL,
-        supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+        supabaseUrl: urlSupabase,
+        supabaseServiceRoleKey: chaveServico,
         syncDays: DIAS_DE_JANELA,
         clientId: client_id,
       });
 
       if (contas.length === 0) {
-        res.status(200).json({
-          alvo,
-          nada_a_fazer: "Este cliente não tem conta da WTS ligada ao cadastro.",
-          contas,
-        });
-        return;
+        return { nada_a_fazer: "Este cliente não tem conta da WTS ligada ao cadastro.", contas };
       }
-      const sessoes = contas.reduce((a, c) => a + c.sessoes, 0);
-      res.status(contas.some((c) => c.errors.length > 0) ? 207 : 200).json({ alvo, sessoes, contas });
-      return;
+      return { sessoes: contas.reduce((a, c) => a + c.sessoes, 0), contas };
     }
 
+    async function sincronizarPosts() {
     const { data: perfis, error: erroPerfis } = await admin
       .from("instagram_accounts")
       .select("id, sync_source")
@@ -139,12 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (erroPerfis) throw new Error(erroPerfis.message);
 
     if (!perfis || perfis.length === 0) {
-      res.status(200).json({
-        alvo,
-        nada_a_fazer: "Este cliente não tem perfil do Instagram conectado.",
-        contas: [],
-      });
-      return;
+      return { nada_a_fazer: "Este cliente não tem perfil do Instagram conectado.", contas: [] };
     }
 
     // Cada perfil é atualizado pelo sync que o alimenta — ver
@@ -163,8 +148,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const parcial = await runInstagramSync({
         windsorApiKey: WINDSOR_API_KEY,
-        supabaseUrl: SUPABASE_URL,
-        supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+        supabaseUrl: urlSupabase,
+        supabaseServiceRoleKey: chaveServico,
         syncDays: 7,
         onlyClientId: client_id,
       });
@@ -180,8 +165,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (const perfil of perfisGraph) {
         const parcial = await runMetaGraphSync({
           accessToken: META_ACCESS_TOKEN,
-          supabaseUrl: SUPABASE_URL,
-          supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+          supabaseUrl: urlSupabase,
+          supabaseServiceRoleKey: chaveServico,
           onlyAccountId: perfil.id,
           maxPages: 2,
         });
@@ -189,8 +174,78 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const posts = contas.reduce((a, c) => a + (c.posts ?? 0), 0);
-    res.status(contas.some((c) => c.errors.length > 0) ? 207 : 200).json({ alvo, posts, contas });
+    return { posts: contas.reduce((a, c) => a + (c.posts ?? 0), 0), contas };
+    }
+
+    // Comentários usam o token guardado por conta em instagram_account_secrets,
+    // com o do ambiente como reserva — por isso não exigem META_ACCESS_TOKEN
+    // aqui, ao contrário do sync de posts pela Graph API.
+    async function sincronizarComentarios() {
+      // runMetaCommentsSync filtra por conta, não por cliente — mesmo padrão
+      // do sync de posts pela Graph API.
+      const { data: perfisCom } = await admin
+        .from("instagram_accounts")
+        .select("id")
+        .eq("client_id", client_id)
+        .eq("active", true);
+
+      const contas = [];
+      for (const perfil of perfisCom ?? []) {
+        const parcial = await runMetaCommentsSync({
+          accessToken: META_ACCESS_TOKEN ?? "",
+          supabaseUrl: urlSupabase,
+          supabaseServiceRoleKey: chaveServico,
+          onlyAccountId: perfil.id,
+        });
+        contas.push(...parcial);
+      }
+      if (contas.length === 0) {
+        return { nada_a_fazer: "Este cliente não tem perfil do Instagram conectado.", contas };
+      }
+      return { comentarios: contas.reduce((a, c) => a + (c.comments ?? 0), 0), contas };
+    }
+
+    if (alvo === "anuncios") {
+      const r = await sincronizarAnuncios();
+      res.status(temErro(r) ? 207 : 200).json({ alvo, ...r });
+      return;
+    }
+    if (alvo === "atendimento") {
+      const r = await sincronizarAtendimento();
+      res.status(temErro(r) ? 207 : 200).json({ alvo, ...r });
+      return;
+    }
+    if (alvo === "comentarios") {
+      const r = await sincronizarComentarios();
+      res.status(temErro(r) ? 207 : 200).json({ alvo, ...r });
+      return;
+    }
+    if (alvo === "posts") {
+      const r = await sincronizarPosts();
+      res.status(temErro(r) ? 207 : 200).json({ alvo, ...r });
+      return;
+    }
+
+    // "tudo": cada parte falha por conta própria. Cliente sem conta de anúncio
+    // não pode impedir que os posts dele atualizem — por isso cada bloco é
+    // capturado em separado em vez de derrubar a requisição inteira.
+    const partes: Record<string, unknown> = {};
+    for (const [nome, fn] of [
+      ["posts", sincronizarPosts],
+      ["comentarios", sincronizarComentarios],
+      ["anuncios", sincronizarAnuncios],
+      ["atendimento", sincronizarAtendimento],
+    ] as const) {
+      try {
+        partes[nome] = await fn();
+      } catch (err) {
+        partes[nome] = { erro: err instanceof Error ? err.message : String(err) };
+      }
+    }
+    const algumErro = Object.values(partes).some(
+      (r) => (r as any)?.erro || temErro(r as any),
+    );
+    res.status(algumErro ? 207 : 200).json({ alvo, partes });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }

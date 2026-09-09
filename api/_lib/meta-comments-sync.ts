@@ -119,20 +119,55 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
         .eq("instagram_account_id", account.id)
         .maybeSingle();
 
-      let postsQuery = supabase
+      // Frescor primeiro, histórico com o que sobrar.
+      //
+      // Antes esta função só andava para trás: pegava os posts mais antigos
+      // que o cursor e, ao terminar, zerava o cursor e recomeçava do topo.
+      // Numa conta com 1.275 posts, a 30 por execução, uma volta completa leva
+      // uns 40 dias — e era esse o tempo que um comentário de hoje esperava
+      // para ser visto. A conta da Lana chegou a ficar com o cursor em
+      // agosto de 2025, com 477 posts recentes nunca verificados, enquanto a
+      // execução diária reportava "sucesso" todo dia.
+      //
+      // Agora toda execução relê os posts mais novos — que é onde comentário
+      // novo aparece — e gasta o resto da cota continuando o backfill.
+      const RECENTES = 12;
+      const cotaBackfill = Math.max(1, maxPosts - RECENTES);
+
+      const { data: recentes, error: erroRecentes } = await supabase
         .from("instagram_posts")
         .select("id, windsor_media_id, posted_at")
         .eq("instagram_account_id", account.id)
         .not("posted_at", "is", null)
         .order("posted_at", { ascending: false })
-        .limit(maxPosts);
+        .limit(RECENTES);
+      if (erroRecentes) throw erroRecentes;
+
+      let backfillQuery = supabase
+        .from("instagram_posts")
+        .select("id, windsor_media_id, posted_at")
+        .eq("instagram_account_id", account.id)
+        .not("posted_at", "is", null)
+        .order("posted_at", { ascending: false })
+        .limit(cotaBackfill);
       if (state?.last_synced_post_posted_at) {
-        postsQuery = postsQuery.lt("posted_at", state.last_synced_post_posted_at);
+        backfillQuery = backfillQuery.lt("posted_at", state.last_synced_post_posted_at);
       }
-      const { data: posts, error: postsError } = await postsQuery;
+      const { data: antigos, error: postsError } = await backfillQuery;
       if (postsError) throw postsError;
 
-      const done = (posts?.length ?? 0) < maxPosts;
+      // Numa conta nova os dois conjuntos se sobrepõem; sem isto o mesmo post
+      // entraria duas vezes na chamada em lote da Meta.
+      const vistos = new Set<string>();
+      const posts = [...(recentes ?? []), ...(antigos ?? [])].filter((p) => {
+        if (vistos.has(p.id)) return false;
+        vistos.add(p.id);
+        return true;
+      });
+
+      // "done" olha só o backfill: a janela de recentes é relida sempre e
+      // nunca "termina".
+      const done = (antigos?.length ?? 0) < cotaBackfill;
 
       const commentsByPost = await fetchCommentsBatch(posts ?? [], tokenDaConta);
       const now = new Date().toISOString();
@@ -166,7 +201,9 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
         }
       }
 
-      const oldestChecked = posts && posts.length > 0 ? posts[posts.length - 1].posted_at : null;
+      // Pelo backfill, não pela lista mesclada: a janela de recentes é sempre
+      // a mesma e travaria o cursor no topo para sempre.
+      const oldestChecked = antigos && antigos.length > 0 ? antigos[antigos.length - 1].posted_at : null;
       if (errors.length === 0) {
         const { error: stateError } = await supabase.from("instagram_comments_sync_state").upsert(
           {
