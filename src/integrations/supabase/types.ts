@@ -69,6 +69,30 @@ export type Database = {
           },
         ]
       }
+      client_ad_accounts: {
+        Row: {
+          active: boolean
+          ad_account_id: string
+          client_id: string
+          created_at: string
+          name: string | null
+        }
+        Insert: {
+          active?: boolean
+          ad_account_id: string
+          client_id: string
+          created_at?: string
+          name?: string | null
+        }
+        Update: {
+          active?: boolean
+          ad_account_id?: string
+          client_id?: string
+          created_at?: string
+          name?: string | null
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           active: boolean
@@ -81,6 +105,7 @@ export type Database = {
           name: string
           specialty: string | null
           wts_company_id: string | null
+          wts_department_ids: string[] | null
         }
         Insert: {
           active?: boolean
@@ -93,6 +118,7 @@ export type Database = {
           name: string
           specialty?: string | null
           wts_company_id?: string | null
+          wts_department_ids?: string[] | null
         }
         Update: {
           active?: boolean
@@ -105,6 +131,7 @@ export type Database = {
           name?: string
           specialty?: string | null
           wts_company_id?: string | null
+          wts_department_ids?: string[] | null
         }
         Relationships: []
       }
