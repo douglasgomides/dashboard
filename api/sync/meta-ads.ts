@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";
+import { runMetaAdsGraphSync } from "../_lib/meta-ads-graph-sync.js";
 
 // Gasto de mídia do Meta, por dia e por campanha, via Windsor.
 // Roda para todo cliente ativo com meta_ad_account_id preenchido.
@@ -9,6 +10,17 @@ import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";
 //   sync_days=7          janela móvel (padrão 7 — a Meta revisa dias recentes)
 //   from=&to=            janela exata, para backfill em pedaços
 //   client_id=           limita a um cliente
+//   fonte=graph          lê direto da Marketing API da Meta (oficial)
+//   fonte=windsor        caminho antigo, via Windsor (padrão por enquanto)
+//
+// O caminho "graph" existe porque dado oficial vem completo — mesmo motivo
+// que levou o Instagram a sair da Windsor. Ele lê as contas de
+// client_ad_accounts, que aceita mais de uma por cliente; a Windsor lia
+// clients.meta_ad_account_id, que é uma coluna só.
+//
+// O padrão continua windsor de propósito: trocar a fonte de todo mundo de uma
+// vez, sem comparar os números lado a lado antes, é o tipo de mudança que
+// altera relatório de cliente sem ninguém perceber.
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST" && req.method !== "GET") {
@@ -40,6 +52,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const dateFrom = typeof req.query.from === "string" ? req.query.from : undefined;
   const dateTo = typeof req.query.to === "string" ? req.query.to : undefined;
   const clientId = typeof req.query.client_id === "string" ? req.query.client_id : undefined;
+
+  const fonte = typeof req.query.fonte === "string" ? req.query.fonte : "windsor";
+
+  if (fonte === "graph") {
+    const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+    if (!META_ACCESS_TOKEN) {
+      res.status(500).json({ error: "Servidor sem META_ACCESS_TOKEN configurado" });
+      return;
+    }
+    try {
+      const contas = await runMetaAdsGraphSync({
+        accessToken: META_ACCESS_TOKEN,
+        supabaseUrl: SUPABASE_URL,
+        supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+        syncDays,
+        dateFrom,
+        dateTo,
+        clientId,
+      });
+      const temErro = contas.some((c) => c.errors.length > 0);
+      res.status(temErro ? 207 : 200).json({ fonte: "graph", synced_at: new Date().toISOString(), contas });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
 
   try {
     const results = await runMetaAdsSync({

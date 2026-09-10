@@ -91,7 +91,15 @@ export type Database = {
           created_at?: string
           name?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "client_ad_accounts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       clients: {
         Row: {
