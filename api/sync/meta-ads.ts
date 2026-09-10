@@ -56,14 +56,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const fonte = typeof req.query.fonte === "string" ? req.query.fonte : "windsor";
 
   if (fonte === "graph") {
-    const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
-    if (!META_ACCESS_TOKEN) {
-      res.status(500).json({ error: "Servidor sem META_ACCESS_TOKEN configurado" });
+    // Token separado do META_ACCESS_TOKEN de propósito.
+    //
+    // O token do Instagram NÃO tem ads_read — testado em 10/09/2026 e a Meta
+    // devolveu 403 "(#200) Ad account owner has NOT grant ads_management or
+    // ads_read permission" nas cinco contas, incluindo as três que já rodam há
+    // meses pela Windsor. Ou seja, a dependência da Windsor para mídia nunca
+    // foi decisão de arquitetura: era consequência do escopo do token.
+    //
+    // Manter separado evita que regenerar o token de mídia derrube a leitura
+    // de conteúdo, que é o que sustenta a maioria das telas. Cai no
+    // META_ACCESS_TOKEN só como reserva, para o dia em que um único token
+    // cobrir os dois escopos.
+    const TOKEN_ADS = process.env.META_ADS_TOKEN ?? process.env.META_ACCESS_TOKEN;
+    if (!TOKEN_ADS) {
+      res.status(500).json({ error: "Servidor sem META_ADS_TOKEN (nem META_ACCESS_TOKEN) configurado" });
       return;
     }
     try {
       const contas = await runMetaAdsGraphSync({
-        accessToken: META_ACCESS_TOKEN,
+        accessToken: TOKEN_ADS,
         supabaseUrl: SUPABASE_URL,
         supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
         syncDays,
