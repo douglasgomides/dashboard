@@ -138,6 +138,24 @@ async function sincronizarAgentes(
   return linhas.length;
 }
 
+function linhaDaSessao(clientId: string, s: WtsSession) {
+  return {
+    client_id: clientId,
+    session_id: s.id,
+    started_at: s.startAt ?? s.createdAt,
+    ended_at: s.endAt ?? null,
+    status: s.status ?? null,
+    department_id: s.departmentId ?? null,
+    user_id: s.userId ?? null,
+    channel_id: s.channelId ?? null,
+    contact_id: s.contactId ?? null,
+    wait_seconds: duracaoParaSegundos(s.timeWait),
+    service_seconds: duracaoParaSegundos(s.timeService),
+    first_response_at: s.firstResponseAt ?? null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
 export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
   const supabase = createClient<Database>(env.supabaseUrl, env.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -145,7 +163,7 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
 
   let consulta = supabase
     .from("clients")
-    .select("id, name, wts_company_id")
+    .select("id, name, wts_company_id, wts_department_ids")
     .eq("active", true)
     .not("wts_company_id", "is", null);
   if (env.clientId) consulta = consulta.eq("id", env.clientId);
@@ -157,25 +175,61 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
   const dias = env.syncDays ?? 7;
   const corte = env.full ? null : new Date(Date.now() - dias * 86400_000);
 
+  /*
+   * Uma conta da WTS pode servir mais de um cliente.
+   *
+   * Dra. Juliana Paola e Mariela Muniz atendem na mesma clínica, no mesmo
+   * WhatsApp. O que separa as duas é a EQUIPE que atendeu — nada mais separa:
+   * tag do contato, número e agente foram testados e não dividem.
+   *
+   * Por isso o laço é por CONTA, não por cliente. Puxar a conta uma vez por
+   * cliente traria as mesmas conversas três vezes e daria todas para os três.
+   * Cada conversa é entregue a quem reivindica a equipe dela; o cliente sem
+   * equipes declaradas (wts_department_ids nulo) recebe o resto — hoje isso é
+   * o balde "Geral", que sozinho é 60% do volume e não pertence a nenhuma
+   * das médicas.
+   */
+  const porConta = new Map<string, typeof clientes>();
+  for (const c of clientes) {
+    const conta = c.wts_company_id as string;
+    if (!porConta.has(conta)) porConta.set(conta, []);
+    (porConta.get(conta) as typeof clientes).push(c);
+  }
+
   const resultados: WtsSyncResult[] = [];
 
-  for (const cliente of clientes) {
-    const r: WtsSyncResult = {
-      client_id: cliente.id,
-      client_name: cliente.name,
-      company_id: cliente.wts_company_id as string,
-      paginas: 0,
-      sessoes: 0,
-      departamentos: 0,
-      agentes: 0,
-      errors: [],
-    };
+  for (const [conta, doncos] of porConta) {
+    const donos = doncos as typeof clientes;
+    const curinga = donos.find((c) => !c.wts_department_ids || c.wts_department_ids.length === 0);
+    const porEquipe = new Map<string, string>();
+    for (const c of donos) {
+      for (const dep of c.wts_department_ids ?? []) porEquipe.set(dep, c.id);
+    }
 
-    try {
-      r.departamentos = await sincronizarDepartamentos(supabase, env.wtsToken, cliente.id);
-      r.agentes = await sincronizarAgentes(supabase, env.wtsToken, cliente.id);
-    } catch (err) {
-      r.errors.push(err instanceof Error ? err.message : String(err));
+    const res = new Map<string, WtsSyncResult>();
+    for (const c of donos) {
+      res.set(c.id, {
+        client_id: c.id,
+        client_name: c.name,
+        company_id: conta,
+        paginas: 0,
+        sessoes: 0,
+        departamentos: 0,
+        agentes: 0,
+        errors: [],
+      });
+    }
+
+    // Equipes e agentes valem para a conta inteira: gravados para todos os
+    // clientes dela, senão o join da tela devolve "(agente desconhecido)".
+    for (const c of donos) {
+      const r = res.get(c.id) as WtsSyncResult;
+      try {
+        r.departamentos = await sincronizarDepartamentos(supabase, env.wtsToken, c.id);
+        r.agentes = await sincronizarAgentes(supabase, env.wtsToken, c.id);
+      } catch (err) {
+        r.errors.push(err instanceof Error ? err.message : String(err));
+      }
     }
 
     try {
@@ -188,13 +242,13 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
           `&OrderBy=createdat&OrderDirection=DESCENDING`;
         const resposta = await wtsGet<{ items: WtsSession[]; hasMorePages: boolean }>(env.wtsToken, url);
         const itens = resposta.items ?? [];
-        r.paginas = pagina;
+        for (const r of res.values()) r.paginas = pagina;
 
         if (itens.length === 0) break;
 
-        // Como a ordenação é decrescente, a primeira sessão anterior ao corte
-        // significa que daqui para trás é tudo antigo: grava o que ainda é
-        // recente e para. É este passo que substitui o filtro de data.
+        // Ordenação decrescente: a primeira sessão anterior ao corte significa
+        // que daqui para trás é tudo antigo. É este passo que substitui o
+        // filtro de data, que nesta API não funciona.
         let lote = itens;
         if (corte) {
           const idx = itens.findIndex((s) => new Date(s.createdAt) < corte);
@@ -204,28 +258,27 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
           }
         }
 
-        if (lote.length > 0) {
-          const linhas = lote.map((s) => ({
-            client_id: cliente.id,
-            session_id: s.id,
-            started_at: s.startAt ?? s.createdAt,
-            ended_at: s.endAt ?? null,
-            status: s.status ?? null,
-            department_id: s.departmentId ?? null,
-            user_id: s.userId ?? null,
-            channel_id: s.channelId ?? null,
-            contact_id: s.contactId ?? null,
-            wait_seconds: duracaoParaSegundos(s.timeWait),
-            service_seconds: duracaoParaSegundos(s.timeService),
-            first_response_at: s.firstResponseAt ?? null,
-            updated_at: new Date().toISOString(),
-          }));
+        // Agrupa por dono antes de gravar: um upsert por cliente, não por linha.
+        const porDono = new Map<string, ReturnType<typeof linhaDaSessao>[]>();
+        for (const s of lote) {
+          const donoId = (s.departmentId ? porEquipe.get(s.departmentId) : undefined) ?? curinga?.id;
+          // Sem equipe reivindicada e sem curinga, a conversa não tem dono.
+          // Descartar em silêncio esconderia volume, então ela simplesmente
+          // não é gravada e isso aparece na diferença entre total e somatório.
+          if (!donoId) continue;
+          if (!porDono.has(donoId)) porDono.set(donoId, []);
+          (porDono.get(donoId) as ReturnType<typeof linhaDaSessao>[]).push(linhaDaSessao(donoId, s));
+        }
 
+        for (const [donoId, linhas] of porDono) {
+          const r = res.get(donoId) as WtsSyncResult;
           const { error } = await supabase
             .from("wts_sessions")
             .upsert(linhas, { onConflict: "client_id,session_id" });
-          if (error) throw new Error(`sessões página ${pagina}: ${error.message}`);
-
+          if (error) {
+            r.errors.push(`sessões página ${pagina}: ${error.message}`);
+            continue;
+          }
           r.sessoes += linhas.length;
           const datas = linhas.map((l) => l.started_at).sort();
           r.mais_antiga = r.mais_antiga && r.mais_antiga < datas[0] ? r.mais_antiga : datas[0];
@@ -238,24 +291,21 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
       }
 
       if (pagina > MAX_PAGINAS) {
-        r.errors.push(
-          `parou no teto de ${MAX_PAGINAS} páginas — rode de novo para continuar o backfill`,
-        );
+        for (const r of res.values()) {
+          r.errors.push(`parou no teto de ${MAX_PAGINAS} páginas — rode de novo para continuar o backfill`);
+        }
       }
-
-      await supabase.from("wts_sync_state").upsert(
-        {
-          client_id: cliente.id,
-          last_session_at: r.mais_recente ?? null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "client_id" },
-      );
     } catch (err) {
-      r.errors.push(err instanceof Error ? err.message : String(err));
+      for (const r of res.values()) r.errors.push(err instanceof Error ? err.message : String(err));
     }
 
-    resultados.push(r);
+    for (const r of res.values()) {
+      await supabase.from("wts_sync_state").upsert(
+        { client_id: r.client_id, last_session_at: r.mais_recente ?? null, updated_at: new Date().toISOString() },
+        { onConflict: "client_id" },
+      );
+      resultados.push(r);
+    }
   }
 
   return resultados;
