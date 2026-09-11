@@ -37,6 +37,38 @@ export type Database = {
         }
         Relationships: []
       }
+      client_ad_accounts: {
+        Row: {
+          active: boolean
+          ad_account_id: string
+          client_id: string
+          created_at: string
+          name: string | null
+        }
+        Insert: {
+          active?: boolean
+          ad_account_id: string
+          client_id: string
+          created_at?: string
+          name?: string | null
+        }
+        Update: {
+          active?: boolean
+          ad_account_id?: string
+          client_id?: string
+          created_at?: string
+          name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_ad_accounts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_members: {
         Row: {
           client_id: string

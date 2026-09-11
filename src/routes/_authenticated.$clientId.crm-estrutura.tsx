@@ -140,7 +140,7 @@ function CrmEstruturaPage() {
         className="rounded-xl border p-4 text-sm"
         style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
       >
-        Raio-x de como o CRM (Kommo) está organizado agora — todos os pipelines e etapas reais, com a posição de
+        Raio-x de como o CRM está organizado agora — todos os pipelines e etapas reais, com a posição de
         cada lead sincronizado. Não é auditoria de atendimento (não medimos resposta nem conteúdo de conversa), é um
         retrato da estrutura. Atualiza sozinho com o sync diário.
       </div>
@@ -149,7 +149,7 @@ function CrmEstruturaPage() {
         <p style={{ color: "var(--text-dim)" }}>Carregando…</p>
       ) : totalLeads === 0 ? (
         <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
-          Ainda sem leads sincronizados do Kommo pra esse cliente.
+          Ainda sem leads sincronizados do CRM pra esse cliente.
         </p>
       ) : (
         <>

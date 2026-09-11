@@ -76,7 +76,7 @@ function VendasKommoPage() {
         className="rounded-xl border p-4 text-sm"
         style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
       >
-        Cruzamento real de origem × resultado, direto do CRM (Kommo) — "Fonte do Lead" e "Tipo de Procedimento" são
+        Cruzamento real de origem × resultado, direto do CRM — "Fonte do Lead" e "Tipo de Procedimento" são
         preenchidos pela própria equipe comercial, não inferidos. Status "Ganho"/"Perdido" é o mesmo em qualquer
         funil da conta. O sync roda automaticamente todo dia.
       </div>
@@ -85,7 +85,7 @@ function VendasKommoPage() {
         <p style={{ color: "var(--text-dim)" }}>Carregando…</p>
       ) : totalLeads === 0 ? (
         <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
-          Ainda sem leads sincronizados do Kommo pra esse cliente.
+          Ainda sem leads sincronizados do CRM pra esse cliente.
         </p>
       ) : (
         <>

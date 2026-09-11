@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import {
   getCrmMetricasEssenciais,
+  getCrmNome,
   getCrmLeadsPorDia,
   getCrmFunilPorCampo,
   getCrmAtividadeRecente,
@@ -225,13 +226,17 @@ function CrmPainelPage() {
     queryKey: ["crm-metricas-essenciais", clientId],
     queryFn: () => getCrmMetricasEssenciais(clientId),
   });
+  const { data: crmNome } = useQuery({
+    queryKey: ["crm-nome", clientId],
+    queryFn: () => getCrmNome(clientId),
+  });
 
   if (isLoading) return <p style={{ color: "var(--text-dim)" }}>Carregando…</p>;
 
   if (!m || m.total_leads === 0) {
     return (
       <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
-        Ainda sem leads sincronizados do Kommo pra esse cliente.
+        Ainda sem leads sincronizados do CRM pra esse cliente.
       </p>
     );
   }
@@ -245,7 +250,8 @@ function CrmPainelPage() {
         className="rounded-xl border p-4 text-sm"
         style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
       >
-        O que está acontecendo no CRM (Kommo) agora — direto do banco, atualiza sozinho todo dia.
+        O que está acontecendo no CRM{crmNome ? ` (${crmNome})` : ""} agora — direto do banco, atualiza sozinho
+        todo dia.
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">

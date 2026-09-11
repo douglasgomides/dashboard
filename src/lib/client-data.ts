@@ -210,3 +210,26 @@ export async function getAdsDiagnostico(clientId: string, start: string, end: st
   if (error) throw error;
   return data;
 }
+
+// Nome do CRM do cliente, para a tela não afirmar "Kommo" para quem usa outro.
+// Dr. Sergio Maia controla leads em planilha e via "CRM (Kommo)" escrito na
+// cara dele; Doctor Creator e Douglas usam Clint. Quando há mais de uma
+// conexão, junta os nomes — é raro, mas mentir um só seria pior.
+const NOME_DO_CRM: Record<string, string> = {
+  kommo: "Kommo",
+  feegow: "Feegow",
+  ninsaude: "Ninsaúde",
+  clint: "Clint",
+  planilha: "planilha",
+};
+
+export async function getCrmNome(clientId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("crm_connections")
+    .select("provider")
+    .eq("client_id", clientId)
+    .eq("active", true);
+  if (error) throw new Error(error.message);
+  const nomes = [...new Set((data ?? []).map((c) => NOME_DO_CRM[c.provider] ?? c.provider))];
+  return nomes.length > 0 ? nomes.join(" + ") : null;
+}

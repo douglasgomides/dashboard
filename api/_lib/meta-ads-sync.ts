@@ -245,33 +245,64 @@ export async function runMetaAdsSync(env: AdsSyncEnv): Promise<AdsAccountSyncRes
     to: env.dateTo ?? new Date().toISOString().slice(0, 10),
   };
 
-  let query = supabase
+  // As contas vêm de client_ad_accounts, não mais de clients.meta_ad_account_id.
+  //
+  // O campo no cadastro é singular e quem tem mais de uma conta ficava com ele
+  // nulo — Dr. Sergio Maia (duas) e Dra. Juliana Paola (duas) caíam fora do
+  // filtro `.not("meta_ad_account_id", "is", null)` e o botão de sincronizar
+  // respondia "Este cliente não tem conta de anúncio ligada ao cadastro",
+  // mesmo com as contas cadastradas e acessíveis. A tabela client_ad_accounts
+  // existe exatamente para o caso de várias contas por cliente.
+  //
+  // meta_ad_account_id continua sendo lido como reserva, para não quebrar
+  // cliente que só está no cadastro antigo enquanto a migração não termina.
+  let contasQuery = supabase
+    .from("client_ad_accounts")
+    .select("client_id, ad_account_id, clients!inner(id, name, active)")
+    .eq("active", true)
+    .eq("clients.active", true);
+  if (env.clientId) contasQuery = contasQuery.eq("client_id", env.clientId);
+
+  const { data: vinculos, error: erroVinculos } = await contasQuery;
+  if (erroVinculos) throw new Error(`Falha ao listar contas de anúncio: ${erroVinculos.message}`);
+
+  const alvos = new Map<string, { id: string; name: string; meta_ad_account_id: string }>();
+  for (const v of vinculos ?? []) {
+    const cliente = v.clients as unknown as { id: string; name: string };
+    alvos.set(`${v.client_id}:${v.ad_account_id}`, {
+      id: v.client_id,
+      name: cliente?.name ?? "",
+      meta_ad_account_id: v.ad_account_id,
+    });
+  }
+
+  let legadoQuery = supabase
     .from("clients")
     .select("id, name, meta_ad_account_id")
     .eq("active", true)
     .not("meta_ad_account_id", "is", null);
-  if (env.clientId) query = query.eq("id", env.clientId);
+  if (env.clientId) legadoQuery = legadoQuery.eq("id", env.clientId);
 
-  const { data: clients, error } = await query;
+  const { data: legado, error } = await legadoQuery;
   if (error) throw new Error(`Falha ao listar clientes: ${error.message}`);
+  for (const c of legado ?? []) {
+    if (!c.meta_ad_account_id) continue;
+    const chave = `${c.id}:${c.meta_ad_account_id}`;
+    if (!alvos.has(chave)) {
+      alvos.set(chave, { id: c.id, name: c.name, meta_ad_account_id: c.meta_ad_account_id });
+    }
+  }
 
   const results: AdsAccountSyncResult[] = [];
-  for (const c of clients ?? []) {
-    if (!c.meta_ad_account_id) continue;
+  for (const alvo of alvos.values()) {
     try {
-      results.push(
-        await syncAccount(supabase, env.windsorApiKey, range, {
-          id: c.id,
-          name: c.name,
-          meta_ad_account_id: c.meta_ad_account_id,
-        }),
-      );
+      results.push(await syncAccount(supabase, env.windsorApiKey, range, alvo));
     } catch (err) {
       // Uma conta que falha não pode derrubar o sync das outras.
       results.push({
-        clientId: c.id,
-        clientName: c.name,
-        adAccountId: c.meta_ad_account_id,
+        clientId: alvo.id,
+        clientName: alvo.name,
+        adAccountId: alvo.meta_ad_account_id,
         campaigns: 0,
         rows: 0,
         errors: [err instanceof Error ? err.message : String(err)],
