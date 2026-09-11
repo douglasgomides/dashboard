@@ -17,7 +17,7 @@ import {
   Menu,
   X,
 } from "lucide-react";
-import { getClient } from "@/lib/client-data";
+import { getClient, getClientFontes } from "@/lib/client-data";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { DateRangePicker } from "@/components/date-range-picker";
@@ -49,8 +49,21 @@ const CFM_DOT: Record<string, string> = {
  * por item. O título do grupo carrega o qualificador, então o item pode ser
  * curto: "Atendimento › WhatsApp" em vez de "Atendimento (WhatsApp)".
  */
+type Fonte = "instagram" | "anuncios" | "crm" | "atendimento" | null;
+
+/*
+ * Cada grupo declara a fonte que o sustenta. Grupo sem a fonte ligada não
+ * aparece no menu.
+ *
+ * Aba vazia é pior que aba inexistente: ela sugere que falta dado, quando na
+ * verdade falta fonte. Mariela Muniz e Dra. Juliana Paola viam "Painel CRM",
+ * "Vendas × origem" e "Estrutura do CRM" zeradas — as três leem crm_leads, que
+ * é tabela de Kommo e Clint, e o CRM delas é o Clinic Desk. E a Mariela via
+ * "Anúncios" sem ter conta de anúncio nenhuma.
+ */
 const GRUPOS: {
   titulo: string | null;
+  fonte?: Fonte;
   itens: { to: string; label: string; exact?: boolean; Icone: typeof LayoutDashboard }[];
 }[] = [
   {
@@ -59,30 +72,27 @@ const GRUPOS: {
   },
   {
     titulo: "Conteúdo",
+    fonte: "instagram",
     itens: [
       { to: "/$clientId/posts", label: "Ranking & próximos ângulos", Icone: TrendingUp },
       { to: "/$clientId/duvidas", label: "Dúvidas de pacientes", Icone: MessageCircleQuestion },
       { to: "/$clientId/inspiracao", label: "Inspiração", Icone: Lightbulb },
     ],
   },
-  { titulo: "Mídia paga", itens: [{ to: "/$clientId/anuncios", label: "Anúncios", Icone: Megaphone }] },
-  { titulo: "Atendimento", itens: [{ to: "/$clientId/atendimento", label: "WhatsApp", Icone: MessagesSquare }] },
+  { titulo: "Mídia paga", fonte: "anuncios", itens: [{ to: "/$clientId/anuncios", label: "Anúncios", Icone: Megaphone }] },
+  { titulo: "Atendimento", fonte: "atendimento", itens: [{ to: "/$clientId/atendimento", label: "WhatsApp", Icone: MessagesSquare }] },
   {
     titulo: "CRM",
+    fonte: "crm",
     itens: [
       { to: "/$clientId/crm-painel", label: "Painel", Icone: KanbanSquare },
       { to: "/$clientId/vendas-kommo", label: "Vendas × origem", Icone: GitBranch },
       { to: "/$clientId/crm-estrutura", label: "Estrutura", Icone: Settings2 },
     ],
   },
-  {
-    titulo: "Resultado",
-    itens: [
-      { to: "/$clientId/consultas", label: "O que virou paciente", Icone: UserCheck },
-      { to: "/$clientId/vendas", label: "O que virou venda", Icone: DollarSign },
-    ],
-  },
-  { titulo: "Sistema", itens: [{ to: "/$clientId/automacoes", label: "Automações", Icone: Workflow }] },
+  // "O que virou paciente", "O que virou venda" e "Automações" saíram do menu:
+  // são telas de placeholder, sem nenhuma fonte de dado, para todos os
+  // clientes. As rotas continuam existindo para quem tiver o link.
 ];
 
 function ClientLayout() {
@@ -99,6 +109,22 @@ function ClientLayout() {
   const { data: client } = useQuery({
     queryKey: ["client", clientId],
     queryFn: () => getClient(clientId),
+  });
+  const { data: fontes } = useQuery({
+    queryKey: ["client-fontes", clientId],
+    queryFn: () => getClientFontes(clientId),
+  });
+
+  // Enquanto as fontes não chegam, mostra só o que não depende de fonte —
+  // piscar o menu inteiro e depois encolher é pior que crescer.
+  const grupos = GRUPOS.filter((g) => {
+    if (!g.fonte) return true;
+    if (!fontes) return false;
+    if (g.fonte === "instagram") return fontes.tem_instagram;
+    if (g.fonte === "anuncios") return fontes.tem_anuncios;
+    if (g.fonte === "crm") return fontes.tem_crm;
+    if (g.fonte === "atendimento") return fontes.tem_atendimento;
+    return true;
   });
 
   const [gavetaAberta, setGavetaAberta] = useState(false);
@@ -120,7 +146,7 @@ function ClientLayout() {
 
   const menu = (
     <nav className="flex flex-col gap-5">
-      {GRUPOS.map((grupo, i) => (
+      {grupos.map((grupo, i) => (
         <div key={grupo.titulo ?? `grupo-${i}`} className="flex flex-col gap-0.5">
           {grupo.titulo && (
             <div
