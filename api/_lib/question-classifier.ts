@@ -19,9 +19,13 @@
  * forma interrogativa e sim o assunto. Agora exige as duas coisas ao mesmo
  * tempo: pontuação de pergunta E vocabulário de saúde/tratamento/consulta.
  *
- * Medido sobre a mesma base: 88 marcados em vez de 888. Testei também uma
- * variante que aceitava pergunta sem "?" quando a frase começava com palavra
- * interrogativa; recuperou 3 comentários, os 3 irrelevantes, e foi descartada.
+ * Medido sobre a mesma base: 107 marcados em vez de 888.
+ *
+ * Duas variantes foram testadas e descartadas por medição, não por opinião:
+ * aceitar pergunta sem "?" quando a frase abre com palavra interrogativa
+ * recuperou 3 comentários, os 3 irrelevantes; incluir alimento genérico
+ * (ovo, leite, carne, café, comer) trouxe 20 a mais, quase todos piada
+ * — "Cadê o bom ar pra deixar cheiro de atum com ovo no carro?".
  *
  * O corte é deliberadamente conservador. Esta lista alimenta a pauta do
  * médico: uma dúvida real que escapa custa pouco, uma tela cheia de elogio
@@ -32,16 +36,30 @@
 // Sem acento de propósito — o texto chega normalizado por normalize().
 const ASSUNTO_CLINICO = new RegExp(
   "\\b(" +
-    "exame|sangue|tireoide|hormon|colesterol|glicemia|diabete|pressao|remedio|medicament|" +
-    "dose|comprimido|injec|caneta|ozempic|mounjaro|tirzepatida|semaglutida|glp|" +
+    // exames e condições
+    "exame|sangue|tireoi|hormon|colesterol|glicemia|glicose|diabete|pressao|insulina|" +
+    "anemia|ferritina|b12|colica|enxaqueca|intestin|digest|refluxo|gastrite|imunidade|" +
+    // medicação
+    "remedi|medicac|medicament|medica[rd]|dose|comprimido|capsula|injec|caneta|vacina|" +
+    "ozempic|mounjaro|tirzepatida|semaglutida|glp|anabolizante|esteroide|" +
     "testosterona|estrogen|progesteron|reposicao|implante|chip|anticoncepcional|diu|" +
-    "emagrec|engord|peso|kg|gordura|massa|muscul|treino|dieta|jejum|alimenta|proteina|carboidrato|" +
-    "suplement|vitamina|creatina|whey|colageno|" +
-    "consulta|agendar|atende|convenio|plano de saude|valor|preco|quanto custa|" +
-    "sintoma|dor|dores|cansaco|fadiga|sono|insonia|ansiedade|depress|menopausa|tpm|" +
-    "tratamento|protocolo|resultado|efeito|colateral|contraindic|" +
+    "posologia|receita|prescri|" +
+    // corpo e rotina
+    "emagrec|engord|peso|kg|quilo|gordura|massa magra|muscul|treino|exercicio|academia|" +
+    "dieta|jejum|alimenta|refeicao|proteina|carboidrato|acucar|gluten|lactose|sodio|" +
+    "suplement|vitamina|creatina|whey|colageno|saudavel|" +
+    // atendimento — "atende convênio?", "onde fica a clínica?"
+    "consulta|agendar|atende|atendimento|convenio|plano de saude|valor|preco|quanto custa|" +
+    "clinica|endereco|telefone|whatsapp|online|presencial|" +
+    // sintomas
+    "sintoma|dor|dores|cansaco|fadiga|sono|insonia|ansiedade|depress|menopausa|tpm|menstrua|" +
+    "libido|humor|memoria|queda de cabelo|calvicie|" +
+    // tratamento
+    "tratamento|protocolo|resultado|efeito colateral|contraindic|" +
     "gravid|gestante|amament|" +
-    "cirurgia|procedimento|botox|preenchi|laser|pele|cabelo|queda" +
+    "cirurgia|bariatric|procedimento|botox|preenchi|laser|pele|cabelo|" +
+    // conteúdo e produto
+    "curso|aula|live|palestra|ebook|inscri" +
     ")",
 );
 
