@@ -79,6 +79,18 @@ const CTA_DO_CRIADOR = new RegExp(
     "\\be (voce|vc)\\?|marca (alguem|aqui)|salva esse|compartilha)",
 );
 
+// Abordagem comercial disfarçada de pergunta. Chega educada, termina com "?"
+// e às vezes cita o assunto do perfil, então passa por todos os filtros
+// acima. Não é paciente: é agência de modelo procurando rosto, vendedor de
+// seguidores e recrutador. Seis casos na base — cinco no Dr. Sergio (o mesmo
+// texto da Backstage Model Management repetido) e um na Lana.
+const ABORDAGEM_COMERCIAL = new RegExp(
+  "(caca[- ]talento|casting|model management|nossa agencia|nossa equipe comercial|" +
+    "ajudamos perfis|mais seguidores|engajamento e alcance|resultados reais|" +
+    "teria interesse em (par|trabalh|conhec)|proposta comercial|" +
+    "vaga (nessa|na sua|pra uma|para uma)|curriculo|te ajudar a (crescer|vender|faturar))",
+);
+
 // Abaixo disso é emoji, hashtag ou "kkkk" — nunca uma dúvida de verdade.
 const MINIMO_LETRAS = 10;
 
@@ -99,6 +111,7 @@ export function isQuestion(text: string): boolean {
   const normalizado = normalize(text);
   if (normalizado.replace(/[^a-z0-9]/g, "").length < MINIMO_LETRAS) return false;
   if (CTA_DO_CRIADOR.test(normalizado)) return false;
+  if (ABORDAGEM_COMERCIAL.test(normalizado)) return false;
 
   return ASSUNTO_CLINICO.test(normalizado);
 }
