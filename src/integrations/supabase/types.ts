@@ -1125,6 +1125,15 @@ export type Database = {
           impressoes: number
         }[]
       }
+      client_fontes: {
+        Args: { p_client_id: string }
+        Returns: {
+          tem_anuncios: boolean
+          tem_atendimento: boolean
+          tem_crm: boolean
+          tem_instagram: boolean
+        }[]
+      }
       crm_atividade_recente: {
         Args: { p_client_id: string; p_limit?: number }
         Returns: {

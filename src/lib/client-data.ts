@@ -251,3 +251,10 @@ export async function getWtsVolumeDiario(clientId: string, start: string, end: s
   if (error) throw error;
   return data ?? [];
 }
+
+// Quais fontes o cliente tem ligadas — usado para o menu não mostrar aba vazia.
+export async function getClientFontes(clientId: string) {
+  const { data, error } = await supabase.rpc("client_fontes", { p_client_id: clientId });
+  if (error) throw error;
+  return data?.[0] ?? null;
+}
