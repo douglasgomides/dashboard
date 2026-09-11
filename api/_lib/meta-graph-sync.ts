@@ -61,6 +61,7 @@ export interface MetaAccountSyncResult {
   accountId: string;
   igAccountId: string;
   posts: number;
+  dailyMetrics: number;
   temasClassified: number;
   nextCursor: string | null;
   done: boolean;
@@ -252,6 +253,100 @@ async function classifyMissingTemas(
 // windsor_account_id guarda o Instagram Business Account ID — o mesmo
 // identificador que a API direta da Meta usa, então não precisa de coluna
 // nova pra mapear conta.
+// Métricas diárias DA CONTA (não do post).
+//
+// Até 11/09/2026 só o sync da Windsor escrevia instagram_account_daily_metrics.
+// Toda conta migrada pra Graph API ficava com a tabela vazia e os gráficos de
+// crescimento em branco — sem erro em lugar nenhum, porque ninguém pedia o
+// dado. Valia pra Dr. Sergio Maia, Dra. Juliana Paola e Mariela Muniz.
+//
+// A API separa isso em dois grupos, e só o primeiro vem por dia:
+//   - reach e follower_count: série diária, um valor por dia;
+//   - likes, comments, saves, shares, profile_views: SÓ total do período,
+//     e exigem metric_type=total_value (sem ele a chamada inteira falha
+//     com "(#100) ... should be specified with parameter metric_type").
+// Como não há como ratear um total do período entre os dias sem inventar
+// número, esses campos ficam nulos. Melhor vazio do que estimado.
+//
+// followers_count é reconstruído de trás pra frente: a API dá o total de
+// hoje e o saldo líquido de cada dia, então subtrair o saldo dia a dia
+// devolve o valor exato de cada data.
+const ACCOUNT_DAILY_METRICS = "reach,follower_count";
+const JANELA_DIAS = 29; // a Meta recusa intervalos maiores que 30 dias
+
+async function syncAccountDailyMetrics(
+  supabase: SupabaseClient<Database>,
+  accessToken: string,
+  accountId: string,
+  igAccountId: string,
+  clientId: string,
+): Promise<{ dias: number; errors: string[] }> {
+  const errors: string[] = [];
+  const agora = Math.floor(Date.now() / 1000);
+  const desde = agora - JANELA_DIAS * 86400;
+
+  const url =
+    `${GRAPH_BASE}/${igAccountId}/insights?metric=${ACCOUNT_DAILY_METRICS}` +
+    `&period=day&since=${desde}&until=${agora}&access_token=${accessToken}`;
+  const res = await fetch(url);
+  const json = (await res.json()) as {
+    data?: { name: string; values: { end_time: string; value: number }[] }[];
+    error?: { message?: string };
+  };
+  if (json.error) {
+    errors.push(`insights da conta: ${json.error.message ?? "erro desconhecido"}`);
+    return { dias: 0, errors };
+  }
+
+  const porDia = new Map<string, { reach?: number; novos?: number }>();
+  for (const metrica of json.data ?? []) {
+    for (const v of metrica.values ?? []) {
+      const dia = v.end_time.slice(0, 10);
+      const atual = porDia.get(dia) ?? {};
+      if (metrica.name === "reach") atual.reach = v.value;
+      if (metrica.name === "follower_count") atual.novos = v.value;
+      porDia.set(dia, atual);
+    }
+  }
+  if (porDia.size === 0) return { dias: 0, errors };
+
+  // Total de seguidores de hoje, para reconstruir a série para trás.
+  let seguidores: number | null = null;
+  try {
+    const perfil = await fetch(
+      `${GRAPH_BASE}/${igAccountId}?fields=followers_count&access_token=${accessToken}`,
+    );
+    const p = (await perfil.json()) as { followers_count?: number };
+    seguidores = typeof p.followers_count === "number" ? p.followers_count : null;
+  } catch (err) {
+    errors.push(`followers_count: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  const dias = [...porDia.keys()].sort(); // crescente
+  const totalPorDia = new Map<string, number | null>();
+  let acumulado = seguidores;
+  for (const dia of [...dias].reverse()) {
+    totalPorDia.set(dia, acumulado);
+    if (acumulado !== null) acumulado -= porDia.get(dia)?.novos ?? 0;
+  }
+
+  const linhas = dias.map((dia) => ({
+    client_id: clientId,
+    instagram_account_id: accountId,
+    date: dia,
+    reach: porDia.get(dia)?.reach ?? null,
+    new_followers: porDia.get(dia)?.novos ?? null,
+    followers_count: totalPorDia.get(dia) ?? null,
+  }));
+
+  const { error } = await supabase
+    .from("instagram_account_daily_metrics")
+    .upsert(linhas, { onConflict: "instagram_account_id,date" });
+  if (error) errors.push(`upsert diário: ${error.message}`);
+
+  return { dias: error ? 0 : linhas.length, errors };
+}
+
 //
 // O cursor de paginação fica salvo em instagram_backfill_state, não só na
 // resposta HTTP — uma invocação na Vercel tem ~300s, então o backfill de
@@ -331,6 +426,19 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
       if (stateError) errors.push(`state upsert: ${stateError.message}`);
     }
 
+    // Independente do backfill de posts: são chamadas baratas (2 requests) e
+    // precisam rodar todo dia, inclusive enquanto o histórico ainda pagina.
+    const diarias = await syncAccountDailyMetrics(
+      supabase,
+      tokenDaConta,
+      account.id,
+      account.windsor_account_id,
+      account.client_id,
+    ).catch((err) => {
+      errors.push(`metricas diarias: ${err instanceof Error ? err.message : String(err)}`);
+      return { dias: 0, errors: [] };
+    });
+
     const temas = await classifyMissingTemas(supabase, account.id, account.windsor_account_id).catch((err) => {
       errors.push(`classify: ${err instanceof Error ? err.message : String(err)}`);
       return { count: 0, errors: [] };
@@ -340,10 +448,11 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
       accountId: account.id,
       igAccountId: account.windsor_account_id,
       posts: posts.count,
+      dailyMetrics: diarias.dias,
       temasClassified: temas.count,
       nextCursor: posts.nextCursor,
       done: posts.done,
-      errors: [...errors, ...posts.errors, ...temas.errors],
+      errors: [...errors, ...posts.errors, ...diarias.errors, ...temas.errors],
     });
   }
   return results;
