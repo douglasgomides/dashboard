@@ -144,10 +144,65 @@ const DOCTOR_CREATOR: TemaRule[] = [
   },
 ];
 
+// Extraídas lendo as legendas dela e medindo a cobertura de cada regra antes
+// de escrever, como as anteriores. O perfil é quase inteiro sobre menopausa,
+// então "menopausa" sozinha nao separa nada — as regras especificas vem
+// primeiro e a de sintomas fica por ultimo, como rede.
+//
+// Cobertura: 74% dos posts dos ultimos 90 dias. No acervo inteiro cai para
+// 49%, e isso e esperado: ela tem post desde 2011 e o conteudo antigo e de
+// ginecologia geral, de antes de se especializar em menopausa. Nao vale
+// escrever regra para conteudo que ninguem vai consultar.
+const JULIANA_PAOLA: TemaRule[] = [
+  {
+    // Serie numerada ("Edicao 12 para o homem que...") — e a linha editorial
+    // de maior alcance dela, com folga. Vem primeiro porque esses posts
+    // tambem falam de menopausa e cairiam na rede de sintomas.
+    tema: "Menopausa e o casal",
+    keywords: ["para o marido", "pro marido", "para o seu marido", "para o homem",
+               "seu marido", "do casal", "namoro na menopausa"],
+  },
+  {
+    // Paciente desacreditada no consultorio. Linha forte e facil de perder:
+    // a maioria desses posts nao diz "menopausa" em lugar nenhum.
+    tema: "Quando a paciente nao e ouvida",
+    keywords: ["ignorada no consultório", "não está ficando louca", "segunda opinião",
+               "sem ter sido ouvida", "mandada embora", "não está exagerando",
+               "consulta de 15 minutos", "sendo tratada como", "ninguém ter avaliado"],
+  },
+  {
+    tema: "Suplementos e nutrientes",
+    keywords: ["magnésio", "vitamina d", "vitamina b", "creatina", "ômega", "omega-3",
+               "coq10", "ubiquinol", "suplement", "colágeno", "zinco", "melatonina",
+               "berberina", "mitocôndria"],
+  },
+  {
+    tema: "Exames e investigacao hormonal",
+    keywords: ["exame", "hemograma", "dosagem", "tsh", "ferritina"],
+  },
+  {
+    tema: "Tratamento da menopausa",
+    keywords: ["fezolinetanto", "veoza", "reposição hormonal", "terapia hormonal",
+               "tratamento não hormonal", "estradiol", "progesterona"],
+  },
+  {
+    tema: "Metabolismo e composicao corporal",
+    keywords: ["insulina", "emagrec", "gordura abdominal", "metabolismo",
+               "massa muscular", "sarcopenia"],
+  },
+  {
+    // Rede final: pega o que fala de menopausa sem se encaixar nas anteriores.
+    tema: "Sintomas da menopausa",
+    keywords: ["fogacho", "perimenopausa", "transição menopausal", "climatério",
+               "insônia", "sono ruim", "libido", "ressecamento", "menopausa"],
+  },
+];
+
 const RULES_BY_WINDSOR_ACCOUNT: Record<string, TemaRule[]> = {
   "17841400869970479": DOUGLAS_GOMIDES, // douglasgomides
   "17841401061134951": LANA_TORRES, // dralanatorres
   "17841458525811009": DOCTOR_CREATOR, // doctorcreators
+  "17841400575430051": JULIANA_PAOLA, // drajulianapaola
 };
 
 export function classifyTema(windsorAccountId: string, caption: string | null | undefined): string | null {
