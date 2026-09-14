@@ -221,12 +221,30 @@ async function classifyMissingTemas(
   accountId: string,
   igAccountId: string,
 ): Promise<{ count: number; errors: string[] }> {
-  const { data: rows, error: selectError } = await supabase
-    .from("instagram_posts")
-    .select("id, caption")
-    .eq("instagram_account_id", accountId)
-    .is("tema", null);
-  if (selectError) return { count: 0, errors: [`classify select: ${selectError.message}`] };
+  // Pagina explicitamente: o PostgREST corta em 1.000 linhas por padrão e não
+  // avisa. Sem isso, conta com mais de mil posts sem tema ficava parcialmente
+  // classificada e o sync reportava sucesso — e, pior, como não havia ordem
+  // definida, cada nova rodada sorteava outras mil e os posts recentes (os
+  // únicos que alguém consulta) podiam nunca ser alcançados. Foi o que
+  // aconteceu com a Dra. Juliana Paola: 3.271 posts, e os 119 recentes sem
+  // tema continuavam intactos depois de duas rodadas.
+  const PAGINA = 1000;
+  const rows: { id: string; caption: string | null }[] = [];
+  for (let inicio = 0; ; inicio += PAGINA) {
+    const { data, error: selectError } = await supabase
+      .from("instagram_posts")
+      .select("id, caption")
+      .eq("instagram_account_id", accountId)
+      .is("tema", null)
+      // Ordem estável é o que garante paginação correta; posted_at desc ainda
+      // coloca o conteúdo recente na frente, que é o que a tela mostra.
+      .order("posted_at", { ascending: false, nullsFirst: false })
+      .range(inicio, inicio + PAGINA - 1);
+    if (selectError) return { count: 0, errors: [`classify select: ${selectError.message}`] };
+    if (!data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < PAGINA) break;
+  }
 
   const idsByTema = new Map<string, string[]>();
   for (const row of rows ?? []) {

@@ -228,12 +228,25 @@ async function classifyMissingTemas(
   accountId: string,
   windsorAccountId: string,
 ): Promise<{ count: number; errors: string[] }> {
-  const { data: rows, error: selectError } = await supabase
-    .from("instagram_posts")
-    .select("id, caption")
-    .eq("instagram_account_id", accountId)
-    .is("tema", null);
-  if (selectError) return { count: 0, errors: [`classify select: ${selectError.message}`] };
+  // Pagina explicitamente: o PostgREST corta em 1.000 linhas por padrão e não
+  // avisa. Sem ordem definida, cada rodada ainda sorteava outras mil, então os
+  // posts recentes — os únicos que a tela mostra — podiam nunca ser
+  // alcançados. Mesmo defeito e mesma correção do meta-graph-sync.
+  const PAGINA = 1000;
+  const rows: { id: string; caption: string | null }[] = [];
+  for (let inicio = 0; ; inicio += PAGINA) {
+    const { data, error: selectError } = await supabase
+      .from("instagram_posts")
+      .select("id, caption")
+      .eq("instagram_account_id", accountId)
+      .is("tema", null)
+      .order("posted_at", { ascending: false, nullsFirst: false })
+      .range(inicio, inicio + PAGINA - 1);
+    if (selectError) return { count: 0, errors: [`classify select: ${selectError.message}`] };
+    if (!data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < PAGINA) break;
+  }
 
   // Agrupa por tema calculado e faz um UPDATE por grupo (não por post) —
   // mesma razão do batching em syncPosts, e aqui o número de grupos é
