@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";
+import { runMetaAdsGraphSync } from "../_lib/meta-ads-graph-sync.js";
 import { runMetaGraphSync } from "../_lib/meta-graph-sync.js";
 import { runInstagramSync } from "../_lib/instagram-sync.js";
 import { runWtsSync } from "../_lib/wts-sync.js";
@@ -89,19 +90,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     async function sincronizarAnuncios() {
-      if (!WINDSOR_API_KEY) throw new Error("Servidor sem WINDSOR_API_KEY configurada");
-      const contas = await runMetaAdsSync({
-        windsorApiKey: WINDSOR_API_KEY,
-        supabaseUrl: urlSupabase,
-        supabaseServiceRoleKey: chaveServico,
-        syncDays: DIAS_DE_JANELA,
-        clientId: client_id,
-      });
+      // Anúncios vêm de DUAS fontes: a Graph API (token próprio, contas em
+      // client_ad_accounts — ex.: Dr. Sergio) e a Windsor. Cada conta é
+      // preenchida pela sua fonte; o erro da outra fonte sobre a mesma conta é
+      // esperado. Rodamos as duas e olhamos só o que entrou — igual ao endpoint
+      // automático (api/sync/meta-ads.ts). Antes só o Windsor rodava aqui, e
+      // clientes da Graph apareciam como "sem conta de anúncio ligada".
+      const TOKEN_ADS = process.env.META_ADS_TOKEN ?? META_ACCESS_TOKEN;
+      let linhas = 0;
+      let temConta = false;
 
-      if (contas.length === 0) {
-        return { nada_a_fazer: "Este cliente não tem conta de anúncio ligada ao cadastro.", contas };
+      if (TOKEN_ADS) {
+        const g = await runMetaAdsGraphSync({
+          accessToken: TOKEN_ADS,
+          supabaseUrl: urlSupabase,
+          supabaseServiceRoleKey: chaveServico,
+          syncDays: DIAS_DE_JANELA,
+          clientId: client_id,
+        });
+        if (g.length > 0) temConta = true;
+        linhas += g.reduce((a, c) => a + c.rows, 0);
       }
-      return { linhas: contas.reduce((a, c) => a + c.rows, 0), contas };
+
+      if (WINDSOR_API_KEY) {
+        const w = await runMetaAdsSync({
+          windsorApiKey: WINDSOR_API_KEY,
+          supabaseUrl: urlSupabase,
+          supabaseServiceRoleKey: chaveServico,
+          syncDays: DIAS_DE_JANELA,
+          clientId: client_id,
+        });
+        if (w.length > 0) temConta = true;
+        linhas += w.reduce((a, c) => a + c.rows, 0);
+      }
+
+      if (!temConta) {
+        return { nada_a_fazer: "Este cliente não tem conta de anúncio ligada ao cadastro." };
+      }
+      return { linhas };
     }
 
     async function sincronizarAtendimento() {
