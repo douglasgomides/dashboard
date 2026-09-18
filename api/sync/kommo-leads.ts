@@ -58,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let query = supabase
     .from("crm_connections")
-    .select("id, client_id, subdomain")
+    .select("id, client_id, subdomain, access_token")
     .eq("provider", "kommo")
     .eq("active", true);
   if (connectionId) query = query.eq("id", connectionId);
@@ -77,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           continue;
         }
         const r = await runKommoReconcile({
-          accessToken: KOMMO_API_TOKEN,
+          accessToken: conn.access_token || KOMMO_API_TOKEN,
           kommoDomain: conn.subdomain.includes(".") ? conn.subdomain : `${conn.subdomain}.kommo.com`,
           supabaseUrl: SUPABASE_URL,
           supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
@@ -106,7 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         continue;
       }
       const result = await runKommoLeadsSync({
-        accessToken: KOMMO_API_TOKEN,
+        accessToken: conn.access_token || KOMMO_API_TOKEN,
         kommoDomain: `${conn.subdomain}.kommo.com`,
         supabaseUrl: SUPABASE_URL,
         supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
