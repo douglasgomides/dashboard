@@ -19,7 +19,9 @@ import type { Database } from "../../src/integrations/supabase/types.js";
 const API = "https://graph.facebook.com/v21.0";
 
 export type MetaAdsGraphEnv = {
-  accessToken: string;
+  // Reserva global (META_ADS_TOKEN). Opcional: cada conta pode ter o seu token
+  // próprio em client_ad_accounts.access_token, e é o que vale quando existe.
+  accessToken?: string;
   supabaseUrl: string;
   supabaseServiceRoleKey: string;
   syncDays?: number;
@@ -149,7 +151,7 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
 
   let consulta = supabase
     .from("client_ad_accounts")
-    .select("client_id, ad_account_id, clients(name, active)")
+    .select("client_id, ad_account_id, access_token, clients(name, active)")
     .eq("active", true);
   if (env.clientId) consulta = consulta.eq("client_id", env.clientId);
 
@@ -180,8 +182,21 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
       errors: [],
     };
 
+    // Token POR CONTA. Cada médico vive numa Business Manager diferente, então
+    // um token global não alcança todas as contas de anúncio — como já era no
+    // Instagram (instagram_account_secrets), o token do dono da conta fica em
+    // client_ad_accounts.access_token. env.accessToken (META_ADS_TOKEN) é só a
+    // reserva para contas sem token próprio.
+    const tokenConta =
+      (conta as { access_token?: string | null }).access_token || env.accessToken;
+    if (!tokenConta) {
+      r.errors.push("sem token: nem access_token na conta nem META_ADS_TOKEN no ambiente");
+      resultados.push(r);
+      continue;
+    }
+
     try {
-      const linhas = await buscarInsights(conta.ad_account_id, env.accessToken, since, until);
+      const linhas = await buscarInsights(conta.ad_account_id, tokenConta, since, until);
 
       // A Meta devolve uma linha por campanha por dia. Campanha repete em
       // todos os dias, então o cadastro dela é deduplicado antes de gravar.

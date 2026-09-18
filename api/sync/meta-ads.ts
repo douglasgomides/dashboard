@@ -65,14 +65,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // foi decisão de arquitetura: era consequência do escopo do token.
     //
     // Manter separado evita que regenerar o token de mídia derrube a leitura
-    // de conteúdo, que é o que sustenta a maioria das telas. Cai no
-    // META_ACCESS_TOKEN só como reserva, para o dia em que um único token
-    // cobrir os dois escopos.
-    const TOKEN_ADS = process.env.META_ADS_TOKEN ?? process.env.META_ACCESS_TOKEN;
-    if (!TOKEN_ADS) {
-      res.status(500).json({ error: "Servidor sem META_ADS_TOKEN (nem META_ACCESS_TOKEN) configurado" });
-      return;
-    }
+    // de conteúdo. NÃO cai mais no META_ACCESS_TOKEN: o token do Instagram não
+    // tem ads_read e só gerava 403. Agora o token vem POR CONTA
+    // (client_ad_accounts.access_token) — cada médico numa BM diferente — e o
+    // META_ADS_TOKEN global é só reserva para contas sem token próprio, então
+    // pode nem existir.
+    const TOKEN_ADS = process.env.META_ADS_TOKEN;
     try {
       const contas = await runMetaAdsGraphSync({
         accessToken: TOKEN_ADS,
