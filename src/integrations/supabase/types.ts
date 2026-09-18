@@ -71,25 +71,31 @@ export type Database = {
       }
       client_ad_accounts: {
         Row: {
+          access_token: string | null
           active: boolean
           ad_account_id: string
           client_id: string
           created_at: string
           name: string | null
+          provisional: boolean
         }
         Insert: {
+          access_token?: string | null
           active?: boolean
           ad_account_id: string
           client_id: string
           created_at?: string
           name?: string | null
+          provisional?: boolean
         }
         Update: {
+          access_token?: string | null
           active?: boolean
           ad_account_id?: string
           client_id?: string
           created_at?: string
           name?: string | null
+          provisional?: boolean
         }
         Relationships: [
           {

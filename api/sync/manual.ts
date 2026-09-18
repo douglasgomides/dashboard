@@ -96,11 +96,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // esperado. Rodamos as duas e olhamos só o que entrou — igual ao endpoint
       // automático (api/sync/meta-ads.ts). Antes só o Windsor rodava aqui, e
       // clientes da Graph apareciam como "sem conta de anúncio ligada".
-      const TOKEN_ADS = process.env.META_ADS_TOKEN ?? META_ACCESS_TOKEN;
+      // Graph roda SEMPRE: cada conta tem o seu token em
+      // client_ad_accounts.access_token (médicos em BMs diferentes). O
+      // META_ADS_TOKEN global virou só reserva e pode nem existir — não usamos
+      // mais o META_ACCESS_TOKEN do Instagram aqui (não tem ads_read).
+      const TOKEN_ADS = process.env.META_ADS_TOKEN;
       let linhas = 0;
       let temConta = false;
 
-      if (TOKEN_ADS) {
+      {
         const g = await runMetaAdsGraphSync({
           accessToken: TOKEN_ADS,
           supabaseUrl: urlSupabase,
