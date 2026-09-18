@@ -373,16 +373,17 @@ export async function runInstagramSync(env: SyncEnv): Promise<AccountSyncResult[
       ? { from: env.dateFrom, to: env.dateTo }
       : { from: dateNDaysAgo(env.syncDays ?? 365), to: dateNDaysAgo(0) };
 
-  // NUNCA toca em conta servida pela Meta Graph API. O filtro mora aqui, na
-  // raiz, e não em cada chamador: qualquer endpoint ou cron que chame este
-  // sync herda a garantia. Sem isso, o sync agendado da Windsor passava por
-  // cima das contas da Graph API e zerava campos que só ela preenche (foi o
-  // que aconteceu com as thumbnails da Lana Torres em 08/09/2026).
+  // POSTS só para contas 'windsor' (a Graph API é a dona dos posts das contas
+  // meta_graph; deixar o Windsor gravar por cima zerava campos que só a Graph
+  // preenche — thumbnails da Lana em 08/09/2026). JÁ as MÉTRICAS DE CONTA
+  // (reach, novos seguidores, salvamentos, engajamento) só a Windsor preenche e
+  // a Graph nem toca nessa tabela — então rodamos elas para TODAS as contas
+  // ativas; o filtro por fonte é aplicado só nos posts, dentro do loop. Sem
+  // isso, os KPIs das contas meta_graph ficavam congelados.
   let accountQuery = supabase
     .from("instagram_accounts")
-    .select("id, client_id, windsor_account_id")
-    .eq("active", true)
-    .eq("sync_source", "windsor");
+    .select("id, client_id, windsor_account_id, sync_source")
+    .eq("active", true);
   if (env.onlyClientId) accountQuery = accountQuery.eq("client_id", env.onlyClientId);
   const { data: accounts, error } = await accountQuery;
   if (error) throw error;
@@ -390,17 +391,21 @@ export async function runInstagramSync(env: SyncEnv): Promise<AccountSyncResult[
   const results: AccountSyncResult[] = [];
   for (const account of accounts ?? []) {
     const errors: string[] = [];
-    const posts = await syncPosts(
-      supabase,
-      env.windsorApiKey,
-      range,
-      account.id,
-      account.windsor_account_id,
-      account.client_id,
-    ).catch((err) => {
-      errors.push(`posts: ${err instanceof Error ? err.message : String(err)}`);
-      return { count: 0, errors: [] };
-    });
+    // Posts só para contas Windsor — a Graph API é a dona dos posts das meta_graph.
+    const posts =
+      account.sync_source === "windsor"
+        ? await syncPosts(
+            supabase,
+            env.windsorApiKey,
+            range,
+            account.id,
+            account.windsor_account_id,
+            account.client_id,
+          ).catch((err) => {
+            errors.push(`posts: ${err instanceof Error ? err.message : String(err)}`);
+            return { count: 0, errors: [] as string[] };
+          })
+        : { count: 0, errors: [] as string[] };
     const daily = await syncDailyMetrics(
       supabase,
       env.windsorApiKey,
