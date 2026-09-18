@@ -16,6 +16,7 @@ import {
   Workflow,
   Menu,
   X,
+  Lock,
 } from "lucide-react";
 import { getClient, getClientFontes } from "@/lib/client-data";
 import { useAuth } from "@/hooks/use-auth";
@@ -23,6 +24,7 @@ import { LogoutButton } from "@/components/logout-button";
 import { DateRangePicker } from "@/components/date-range-picker";
 import { ThemeMenu } from "@/components/theme-menu";
 import { ClientAvatar } from "@/components/client-avatar";
+import { PhasePlaceholder } from "@/components/PhasePlaceholder";
 import type { DateRangeState, RangePreset } from "@/lib/date-range";
 
 export const Route = createFileRoute("/_authenticated/$clientId")({
@@ -95,6 +97,33 @@ const GRUPOS: {
   // clientes. As rotas continuam existindo para quem tiver o link.
 ];
 
+const EM_CONSTRUCAO: Record<Exclude<Fonte, null>, { title: string; description: string }> = {
+  instagram: {
+    title: "Configuracao da BM em andamento",
+    description: "Estamos conectando a Business Manager da Meta para trazer os dados de Instagram deste perfil. Assim que a configuracao terminar, aparecem aqui.",
+  },
+  anuncios: {
+    title: "Configuracao da BM em andamento",
+    description: "Estamos configurando a conta de anuncios na Business Manager da Meta. Os dados de midia paga aparecem aqui quando ligar.",
+  },
+  crm: {
+    title: "Aguardando dados do CRM",
+    description: "Ainda nao recebemos dados do CRM deste cliente. Assim que a integracao comecar a enviar, o painel aparece aqui.",
+  },
+  atendimento: {
+    title: "Integracao de atendimento em configuracao",
+    description: "Estamos ligando o atendimento por WhatsApp. Os dados aparecem aqui quando a integracao estiver pronta.",
+  },
+};
+
+function fonteDaRota(pathname: string): Fonte {
+  if (/\/(posts|duvidas|inspiracao)$/.test(pathname)) return "instagram";
+  if (/\/anuncios$/.test(pathname)) return "anuncios";
+  if (/\/atendimento$/.test(pathname)) return "atendimento";
+  if (/\/(crm-painel|vendas-kommo|crm-estrutura)$/.test(pathname)) return "crm";
+  return null;
+}
+
 function ClientLayout() {
   const { clientId } = Route.useParams();
   const dateRange = Route.useSearch();
@@ -115,17 +144,21 @@ function ClientLayout() {
     queryFn: () => getClientFontes(clientId),
   });
 
-  // Enquanto as fontes não chegam, mostra só o que não depende de fonte —
-  // piscar o menu inteiro e depois encolher é pior que crescer.
-  const grupos = GRUPOS.filter((g) => {
-    if (!g.fonte) return true;
-    if (!fontes) return false;
-    if (g.fonte === "instagram") return fontes.tem_instagram;
-    if (g.fonte === "anuncios") return fontes.tem_anuncios;
-    if (g.fonte === "crm") return fontes.tem_crm;
-    if (g.fonte === "atendimento") return fontes.tem_atendimento;
+  // Fonte "pronta" = conectada de verdade. Enquanto as fontes nao chegam,
+  // tratamos como prontas para nao piscar cadeado a toa.
+  const fontePronta = (fonte: Fonte): boolean => {
+    if (!fonte) return true;
+    if (!fontes) return true;
+    if (fonte === "instagram") return fontes.tem_instagram;
+    if (fonte === "anuncios") return fontes.tem_anuncios;
+    if (fonte === "crm") return fontes.tem_crm;
+    if (fonte === "atendimento") return fontes.tem_atendimento;
     return true;
-  });
+  };
+  // Mostra TODOS os grupos; os sem fonte real aparecem como "em construcao".
+  const grupos = GRUPOS;
+  const fonteAtual = fonteDaRota(currentPathname);
+  const conteudoBloqueado = fonteAtual ? !fontePronta(fonteAtual) : false;
 
   const [gavetaAberta, setGavetaAberta] = useState(false);
 
@@ -146,14 +179,17 @@ function ClientLayout() {
 
   const menu = (
     <nav className="flex flex-col gap-5">
-      {grupos.map((grupo, i) => (
+      {grupos.map((grupo, i) => {
+        const bloqueado = !fontePronta(grupo.fonte ?? null);
+        return (
         <div key={grupo.titulo ?? `grupo-${i}`} className="flex flex-col gap-0.5">
           {grupo.titulo && (
             <div
-              className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide"
+              className="flex items-center gap-1.5 px-3 pb-1 text-xs font-semibold uppercase tracking-wide"
               style={{ color: "var(--text-faint)" }}
             >
               {grupo.titulo}
+              {bloqueado && <Lock size={11} className="shrink-0" />}
             </div>
           )}
           {grupo.itens.map((item) => (
@@ -165,14 +201,20 @@ function ClientLayout() {
               activeOptions={{ exact: item.exact ?? false }}
               className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium"
               activeProps={{ style: { color: "var(--accent)", background: "var(--accent-soft)" } }}
-              inactiveProps={{ style: { color: "var(--text-dim)" } }}
+              inactiveProps={{ style: { color: bloqueado ? "var(--text-faint)" : "var(--text-dim)" } }}
             >
               <item.Icone size={16} className="shrink-0" />
               <span>{item.label}</span>
+              {bloqueado && (
+                <span className="ml-auto text-[10px] font-normal" style={{ color: "var(--text-faint)" }}>
+                  em construcao
+                </span>
+              )}
             </Link>
           ))}
         </div>
-      ))}
+        );
+      })}
     </nav>
   );
 
@@ -284,7 +326,15 @@ function ClientLayout() {
         </div>
 
         <main className="mx-auto max-w-6xl px-5 py-7">
-          <Outlet />
+          {conteudoBloqueado && fonteAtual ? (
+            <PhasePlaceholder
+              phase="Em construcao"
+              title={EM_CONSTRUCAO[fonteAtual].title}
+              description={EM_CONSTRUCAO[fonteAtual].description}
+            />
+          ) : (
+            <Outlet />
+          )}
         </main>
       </div>
     </div>
