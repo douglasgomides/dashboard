@@ -144,6 +144,7 @@ function ClientLayout() {
     queryFn: () => getClientFontes(clientId),
   });
 
+  const emObras = Boolean((client as unknown as { em_onboarding?: boolean } | null | undefined)?.em_onboarding);
   // Fonte "pronta" = conectada de verdade. Enquanto as fontes nao chegam,
   // tratamos como prontas para nao piscar cadeado a toa.
   const fontePronta = (fonte: Fonte): boolean => {
@@ -155,10 +156,10 @@ function ClientLayout() {
     if (fonte === "atendimento") return fontes.tem_atendimento;
     return true;
   };
-  // Mostra TODOS os grupos; os sem fonte real aparecem como "em construcao".
-  const grupos = GRUPOS;
+  // Em onboarding: mostra tudo (faltando vira "em construcao"). Senao: esconde o que nao se aplica.
+  const grupos = GRUPOS.filter((g) => fontePronta(g.fonte ?? null) || emObras);
   const fonteAtual = fonteDaRota(currentPathname);
-  const conteudoBloqueado = fonteAtual ? !fontePronta(fonteAtual) : false;
+  const conteudoBloqueado = emObras && fonteAtual ? !fontePronta(fonteAtual) : false;
 
   const [gavetaAberta, setGavetaAberta] = useState(false);
 
