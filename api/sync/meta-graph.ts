@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { runMetaGraphSync } from "../_lib/meta-graph-sync.js";
+import { runMetaGraphSync, listMetaGraphAccountIds } from "../_lib/meta-graph-sync.js";
 
 // Sync direto com a API do Instagram (Meta Graph API) — substitui a Windsor
 // pra puxar posts, porque ela trava em consultas de período histórico.
@@ -27,6 +27,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
   if (!token || token !== SYNC_SECRET) {
     res.status(401).json({ error: "Token inválido" });
+    return;
+  }
+
+  // Modo "listar": devolve as contas que este sync alimenta, pra quem chama
+  // iterar uma por uma (cada conta numa requisição separada, senão a função
+  // estoura o limite de tempo da Vercel processando todas de uma vez).
+  if (req.query.list !== undefined) {
+    try {
+      const accounts = await listMetaGraphAccountIds({
+        supabaseUrl: SUPABASE_URL,
+        supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+      });
+      res.status(200).json({ accounts });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
     return;
   }
 

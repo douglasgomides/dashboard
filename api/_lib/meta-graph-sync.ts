@@ -267,6 +267,27 @@ async function classifyMissingTemas(
   return { count, errors };
 }
 
+// Lista os IDs das contas que este sync alimenta (ativas, sync_source
+// meta_graph). Existe pra que quem chama (o n8n) itere UMA conta por
+// requisição — processar todas numa invocação só estoura o limite de tempo
+// da função na Vercel. Reaproveita o mesmo SYNC_SECRET do endpoint, então
+// o chamador não precisa de credencial do Supabase.
+export async function listMetaGraphAccountIds(env: {
+  supabaseUrl: string;
+  supabaseServiceRoleKey: string;
+}): Promise<{ id: string; client_id: string }[]> {
+  const supabase = createClient<Database>(env.supabaseUrl, env.supabaseServiceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data, error } = await supabase
+    .from("instagram_accounts")
+    .select("id, client_id")
+    .eq("active", true)
+    .eq("sync_source", "meta_graph");
+  if (error) throw error;
+  return data ?? [];
+}
+
 // windsor_account_id guarda o Instagram Business Account ID — o mesmo
 // identificador que a API direta da Meta usa, então não precisa de coluna
 // nova pra mapear conta.
