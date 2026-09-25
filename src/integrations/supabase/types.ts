@@ -120,6 +120,7 @@ export type Database = {
           specialty: string | null
           wts_company_id: string | null
           wts_department_ids: string[] | null
+          wts_api_token: string | null
         }
         Insert: {
           active?: boolean
@@ -133,6 +134,7 @@ export type Database = {
           specialty?: string | null
           wts_company_id?: string | null
           wts_department_ids?: string[] | null
+          wts_api_token?: string | null
         }
         Update: {
           active?: boolean
@@ -146,6 +148,7 @@ export type Database = {
           specialty?: string | null
           wts_company_id?: string | null
           wts_department_ids?: string[] | null
+          wts_api_token?: string | null
         }
         Relationships: []
       }
