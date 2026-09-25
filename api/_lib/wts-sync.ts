@@ -163,7 +163,7 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
 
   let consulta = supabase
     .from("clients")
-    .select("id, name, wts_company_id, wts_department_ids")
+    .select("id, name, wts_company_id, wts_department_ids, wts_api_token")
     .eq("active", true)
     .not("wts_company_id", "is", null);
   if (env.clientId) consulta = consulta.eq("id", env.clientId);
@@ -200,6 +200,11 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
 
   for (const [conta, doncos] of porConta) {
     const donos = doncos as typeof clientes;
+    // Cada conta WTS pode ter token proprio (cliente com conta separada, como o
+    // Dr. Sergio Maia). Usa o token de qualquer dono da conta; se nenhum tiver,
+    // cai no token global (env.wtsToken).
+    const contaToken =
+      (donos.find((c) => c.wts_api_token)?.wts_api_token as string | undefined) ?? env.wtsToken;
     const curinga = donos.find((c) => !c.wts_department_ids || c.wts_department_ids.length === 0);
     const porEquipe = new Map<string, string>();
     for (const c of donos) {
@@ -225,8 +230,8 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
     for (const c of donos) {
       const r = res.get(c.id) as WtsSyncResult;
       try {
-        r.departamentos = await sincronizarDepartamentos(supabase, env.wtsToken, c.id);
-        r.agentes = await sincronizarAgentes(supabase, env.wtsToken, c.id);
+        r.departamentos = await sincronizarDepartamentos(supabase, contaToken, c.id);
+        r.agentes = await sincronizarAgentes(supabase, contaToken, c.id);
       } catch (err) {
         r.errors.push(err instanceof Error ? err.message : String(err));
       }
@@ -240,7 +245,7 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
         const url =
           `/chat/v1/session?PageSize=${PAGE_SIZE}&PageNumber=${pagina}` +
           `&OrderBy=createdat&OrderDirection=DESCENDING`;
-        const resposta = await wtsGet<{ items: WtsSession[]; hasMorePages: boolean }>(env.wtsToken, url);
+        const resposta = await wtsGet<{ items: WtsSession[]; hasMorePages: boolean }>(contaToken, url);
         const itens = resposta.items ?? [];
         for (const r of res.values()) r.paginas = pagina;
 
