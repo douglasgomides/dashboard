@@ -246,8 +246,8 @@ function CrmPainelPage() {
           className="rounded-xl border p-4 text-sm"
           style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
         >
-          Números do último relatório de CRM enviado pela equipe da clínica (exportado do Kommo). Não atualiza
-          automaticamente.
+          Números do relatório de CRM da semana 31/08–04/09/2026 (gerado em 08/09/2026), enviado pela equipe da
+          clínica e exportado do Kommo. Não atualiza automaticamente.
         </div>
       ) : (
         <div
