@@ -82,6 +82,16 @@ export function SyncButton({ clientId, alvo }: { clientId: string; alvo: Alvo })
     }
   }
 
+  // Conta conectada manualmente (ainda fora do pipeline automático de sync):
+  // clicar sincronizar só traria erro. Mostra uma nota em vez do botão.
+  if (clientId === "8d4b3b3f-74a7-419a-a113-35ebc02cb37f") {
+    return (
+      <span className="text-xs" style={{ color: "var(--text-dim)" }}>
+        Dados atualizados manualmente — sincronização automática ainda não ativada para esta conta.
+      </span>
+    );
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <button
