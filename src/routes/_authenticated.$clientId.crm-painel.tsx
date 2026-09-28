@@ -246,13 +246,23 @@ function CrmPainelPage() {
 
   return (
     <div className="space-y-4">
-      <div
-        className="rounded-xl border p-4 text-sm"
-        style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
-      >
-        O que está acontecendo no CRM{crmNome ? ` (${crmNome})` : ""} agora — direto do banco, atualiza sozinho
-        todo dia.
-      </div>
+      {clientId === "8d4b3b3f-74a7-419a-a113-35ebc02cb37f" ? (
+        <div
+          className="rounded-xl border p-4 text-sm"
+          style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
+        >
+          Números do último relatório de CRM enviado pela equipe da clínica (exportado do Kommo). Não atualiza
+          automaticamente.
+        </div>
+      ) : (
+        <div
+          className="rounded-xl border p-4 text-sm"
+          style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
+        >
+          O que está acontecendo no CRM{crmNome ? ` (${crmNome})` : ""} agora — direto do banco, atualiza sozinho
+          todo dia.
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatCard label="Leads na base" value={fmtN(m.total_leads)} />
