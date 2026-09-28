@@ -7,7 +7,16 @@ import {
   getCrmLeadsPorDia,
   getCrmFunilPorCampo,
   getCrmAtividadeRecente,
+  getCrmProvider,
 } from "@/lib/client-data";
+
+// Nome de exibição do CRM — evita chamar tudo de "Kommo" quando o cliente é Clint.
+function nomeCrm(provider: string | null | undefined): string {
+  if (provider === "clint") return "Clint";
+  if (provider === "kommo") return "Kommo";
+  if (provider === "planilha") return "planilha";
+  return "CRM";
+}
 
 export const Route = createFileRoute("/_authenticated/$clientId/crm-painel")({
   component: CrmPainelPage,
@@ -225,13 +234,18 @@ function CrmPainelPage() {
     queryKey: ["crm-metricas-essenciais", clientId],
     queryFn: () => getCrmMetricasEssenciais(clientId),
   });
+  const { data: crmProvider } = useQuery({
+    queryKey: ["crm-provider", clientId],
+    queryFn: () => getCrmProvider(clientId),
+  });
+  const crmNome = nomeCrm(crmProvider);
 
   if (isLoading) return <p style={{ color: "var(--text-dim)" }}>Carregando…</p>;
 
   if (!m || m.total_leads === 0) {
     return (
       <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
-        Ainda sem leads sincronizados do Kommo pra esse cliente.
+        Ainda sem leads sincronizados do {crmNome} pra esse cliente.
       </p>
     );
   }
@@ -254,12 +268,14 @@ function CrmPainelPage() {
           className="rounded-xl border p-4 text-sm"
           style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
         >
-          O que está acontecendo no CRM (Kommo) agora — direto do banco, atualiza sozinho todo dia.
-          <div className="mt-1.5 text-xs" style={{ opacity: 0.72 }}>
-            Os números aqui são de <strong>leads</strong> (os negócios/cards do funil), não de conversas de chat.
-            Por isso ficam menores que as “Conversas em andamento” que o Kommo mostra — um mesmo lead pode ter
-            várias conversas, e muita conversa nunca vira lead.
-          </div>
+          O que está acontecendo no CRM ({crmNome}) agora — direto do banco, atualiza sozinho todo dia.
+          {crmProvider === "kommo" && (
+            <div className="mt-1.5 text-xs" style={{ opacity: 0.72 }}>
+              Os números aqui são de <strong>leads</strong> (os negócios/cards do funil), não de conversas de chat.
+              Por isso ficam menores que as “Conversas em andamento” que o Kommo mostra — um mesmo lead pode ter
+              várias conversas, e muita conversa nunca vira lead.
+            </div>
+          )}
         </div>
       )}
 
