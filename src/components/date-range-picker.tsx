@@ -22,6 +22,7 @@ export function DateRangePicker({
   }
 
   return (
+    <div className="flex flex-col gap-1">
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-xs font-medium" style={{ color: "var(--text-faint)" }}>
         Período:
@@ -61,6 +62,11 @@ export function DateRangePicker({
           />
         </>
       )}
+    </div>
+      <span className="text-[11px] leading-snug" style={{ color: "var(--text-faint)" }}>
+        Se um período não filtrar ou vier vazio, a conta do Meta pode ter sido conectada ao dashboard há pouco — ainda
+        não há histórico completo desse intervalo.
+      </span>
     </div>
   );
 }
