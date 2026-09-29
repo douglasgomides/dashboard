@@ -114,6 +114,26 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
   let leadsUpserted = 0;
   let hasMore = true;
 
+  // Persiste o cursor a cada página processada. Antes, o estado só era salvo
+  // no fim da execução E somente se `errors.length === 0`. Numa conta grande
+  // (ex.: HOMS, ~30 páginas) a função estoura o tempo da Vercel no meio ou uma
+  // página falha — e aí TODO o avanço era descartado: a próxima execução
+  // recomeçava da mesma página e nunca passava dali (ficava congelada). Salvar
+  // por página garante que o backfill avance a cada execução, retomando de onde
+  // parou, mesmo com timeout ou erro pontual.
+  async function persistState(nextPage: number, done: boolean) {
+    const { error: stateError } = await supabase.from("crm_leads_sync_state").upsert(
+      {
+        crm_connection_id: env.crmConnectionId,
+        next_page: done ? 1 : nextPage,
+        backfill_done: done,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "crm_connection_id" },
+    );
+    if (stateError) errors.push(`state upsert: ${stateError.message}`);
+  }
+
   while (hasMore && pagesLeft > 0) {
     let result;
     try {
@@ -160,21 +180,12 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
     hasMore = mode === "backfill" ? result.leads.length === PAGE_SIZE : result.hasMore;
     page++;
     pagesLeft--;
+
+    // Grava o avanço imediatamente, página a página, para não perder o
+    // progresso se a próxima página estourar o tempo da função.
+    await persistState(page, mode === "incremental" || !hasMore);
   }
 
   const backfillDone = mode === "incremental" || !hasMore;
-  if (errors.length === 0) {
-    const { error: stateError } = await supabase.from("crm_leads_sync_state").upsert(
-      {
-        crm_connection_id: env.crmConnectionId,
-        next_page: backfillDone ? 1 : page,
-        backfill_done: backfillDone,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "crm_connection_id" },
-    );
-    if (stateError) errors.push(`state upsert: ${stateError.message}`);
-  }
-
   return { leadsFetched, leadsUpserted, done: backfillDone, mode, errors };
 }
