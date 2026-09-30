@@ -54,9 +54,9 @@
 /* -----------------------------------------------------------------------------
    RESET / TIPOGRAFIA BASE (system-ui — resolve o bug da Manrope não carregada)
    -------------------------------------------------------------------------- */
-*{box-sizing:border-box;margin:0}
+*{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;background:var(--page)}
-body{margin:0;background:var(--page);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--page);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 input,select,textarea{font:inherit;color:var(--ink)}
 a{color:inherit}
@@ -67,7 +67,7 @@ a{color:inherit}
    SHELL / LAYOUT (app grid + sidebar + main)
    -------------------------------------------------------------------------- */
 .app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
-.app>aside{background:var(--side);border-right:1px solid var(--border);padding:18px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:18px;overflow-y:auto}
+.app>aside{background:var(--side);border-right:1px solid var(--border);padding:18px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:18px;overflow-y:auto;font-size:14px}
 .brand{display:flex;align-items:center;gap:10px;font-weight:650;letter-spacing:-.01em;padding:0 6px}
 .logo{width:28px;height:28px;border-radius:8px;background:conic-gradient(from 210deg,var(--accent),var(--ai),var(--accent));display:grid;place-items:center}
 .logo i{width:10px;height:10px;border-radius:50%;background:var(--side)}
@@ -99,9 +99,9 @@ nav.side svg,.tabbar svg{width:18px;height:18px;flex:none;stroke:currentColor;fi
 .avatar.sm{width:30px;height:30px;font-size:12px}
 .who h1{font-size:19px;letter-spacing:-.01em;line-height:1.2;text-align:left}
 .who p{color:var(--muted);font-size:12.5px;text-align:left}
-.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:2px 9px;border-radius:99px;border:1px solid var(--border);color:var(--ink-2);background:var(--surface);white-space:nowrap}
-.chip svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-.chip.good svg{color:var(--good)}
+.hchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:2px 9px;border-radius:99px;border:1px solid var(--border);color:var(--ink-2);background:var(--surface);white-space:nowrap}
+.hchip svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.hchip.good svg{color:var(--good)}
 .spacer{flex:1}
 .seg{display:inline-flex;border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:2px}
 .seg button{padding:5px 12px;border-radius:8px;font-size:13px;color:var(--ink-2)}
@@ -116,7 +116,7 @@ nav.side svg,.tabbar svg{width:18px;height:18px;flex:none;stroke:currentColor;fi
 .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px;min-width:0}
 .card h2{font-size:14px;font-weight:650;letter-spacing:-.005em}
 .card .sub{font-size:12.5px;color:var(--muted);margin-top:2px}
-.grid{display:grid;gap:16px;margin-bottom:16px}
+.hgrid{display:grid;gap:16px;margin-bottom:16px}
 .h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:24px 0 10px;font-weight:650}
 
 /* INSIGHT */
@@ -237,14 +237,14 @@ table.t td:not(.l){white-space:nowrap}
 .alert{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2);font-size:13px;color:var(--ink-2);margin-bottom:12px}
 .alert b{color:var(--ink)}
 .alert .stat{margin-top:1px}
-.empty{padding:34px 18px;text-align:center;color:var(--ink-2);border:1px dashed var(--axis);border-radius:16px;background:var(--surface)}
-.empty h2{font-size:16px;color:var(--ink);margin-bottom:6px}
-.empty p{max-width:52ch;margin:0 auto}
+.hempty{padding:34px 18px;text-align:center;color:var(--ink-2);border:1px dashed var(--axis);border-radius:16px;background:var(--surface)}
+.hempty h2{font-size:16px;color:var(--ink);margin-bottom:6px}
+.hempty p{max-width:52ch;margin:0 auto}
 
 /* PAGE HEAD / LEAD / TAGs / SORTBAR / dúvidas / brief / semana */
-.pagehead{margin:8px 0 14px}
-.pagehead h2{font-size:22px;letter-spacing:-.02em;font-weight:650}
-.pagehead p{color:var(--ink-2);max-width:74ch;margin-top:4px}
+.hpagehead{margin:8px 0 14px}
+.hpagehead h2{font-size:22px;letter-spacing:-.02em;font-weight:650}
+.hpagehead p{color:var(--ink-2);max-width:74ch;margin-top:4px}
 .lead{font-size:15.5px;line-height:1.55;color:var(--ink);max-width:76ch}
 .lead b{font-weight:650}
 .tag2{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:99px;border:1px solid var(--border);background:var(--surface);color:var(--ink-2)}

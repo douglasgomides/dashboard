@@ -7,11 +7,11 @@ export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
 function ConteudoPage() {
   return (
     <div>
-      <div className="pagehead">
+      <div className="hpagehead">
         <h2>Conteúdo</h2>
         <p>Projeção de seguidores e evolução do conteúdo do período.</p>
       </div>
-      <div className="empty">
+      <div className="hempty">
         <h2>Em construção</h2>
         <p>
           A projeção de 30 dias de seguidores (estimativa linear) aparece aqui assim que a coleta diária de
