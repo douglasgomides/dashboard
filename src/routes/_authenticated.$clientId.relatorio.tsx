@@ -7,11 +7,11 @@ export const Route = createFileRoute("/_authenticated/$clientId/relatorio")({
 function RelatorioPage() {
   return (
     <div>
-      <div className="pagehead">
+      <div className="hpagehead">
         <h2>Relatório</h2>
         <p>Texto pronto para enviar ao cliente, editável, com copiar e exportar PDF.</p>
       </div>
-      <div className="empty">
+      <div className="hempty">
         <h2>Em construção</h2>
         <p>
           O relatório reúne alcance, seguidores, destaque, anúncios, atendimento e as ações do insight do período,

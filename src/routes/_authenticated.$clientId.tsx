@@ -242,7 +242,7 @@ function ClientLayout() {
             </div>
           </div>
           {client?.cfm_score_status === "verde" && (
-            <span className="chip good">
+            <span className="hchip good">
               <ShieldCheck /> CFM em conformidade
             </span>
           )}

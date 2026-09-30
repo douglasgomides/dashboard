@@ -7,11 +7,11 @@ export const Route = createFileRoute("/_authenticated/$clientId/ideias")({
 function IdeiasPage() {
   return (
     <div>
-      <div className="pagehead">
+      <div className="hpagehead">
         <h2>Ideias</h2>
         <p>Ângulos de conteúdo gerados por regra a partir do que já funcionou.</p>
       </div>
-      <div className="empty">
+      <div className="hempty">
         <h2>Em construção</h2>
         <p>
           A fila de ideias combina três regras: pergunta repetida vira carrossel de conexão; tema com 2+ posts e
