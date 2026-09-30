@@ -1,30 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
-  TrendingUp,
-  MessageCircleQuestion,
-  Lightbulb,
+  Activity,
+  AlignLeft,
+  LayoutGrid,
   Megaphone,
-  MessagesSquare,
-  KanbanSquare,
-  GitBranch,
-  Settings2,
-  UserCheck,
-  DollarSign,
-  Workflow,
+  Briefcase,
+  MessageCircle,
+  HelpCircle,
+  Lightbulb,
+  FileText,
+  Star,
+  Settings,
+  Search,
   Menu,
   X,
-  Lock,
+  ShieldCheck,
 } from "lucide-react";
 import { getClient, getClientFontes } from "@/lib/client-data";
+import { listAllClients } from "@/lib/admin-data";
 import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/hooks/use-theme";
 import { LogoutButton } from "@/components/logout-button";
 import { DateRangePicker } from "@/components/date-range-picker";
-import { ThemeMenu } from "@/components/theme-menu";
 import { ClientAvatar } from "@/components/client-avatar";
-import { PhasePlaceholder } from "@/components/PhasePlaceholder";
 import type { DateRangeState, RangePreset } from "@/lib/date-range";
 
 export const Route = createFileRoute("/_authenticated/$clientId")({
@@ -36,307 +37,276 @@ export const Route = createFileRoute("/_authenticated/$clientId")({
   }),
 });
 
-const CFM_DOT: Record<string, string> = {
-  verde: "var(--good)",
-  amarelo: "var(--warn)",
-  vermelho: "var(--danger)",
-};
+type NavItem = { to: string; label: string; Icone: typeof LayoutGrid; exact?: boolean; admin?: boolean };
+type NavGroup = { titulo: string; itens: NavItem[] };
 
-/*
- * Antes eram 12 abas numa fila só. No desktop já era muito para varrer com o
- * olho; no celular quebrava em três linhas e virava um paredão — e é o celular
- * que o médico usa.
- *
- * Agrupadas, a pergunta "onde vejo X?" passa a ter resposta antes de ler item
- * por item. O título do grupo carrega o qualificador, então o item pode ser
- * curto: "Atendimento › WhatsApp" em vez de "Atendimento (WhatsApp)".
- */
-type Fonte = "instagram" | "anuncios" | "crm" | "atendimento" | null;
-
-/*
- * Cada grupo declara a fonte que o sustenta. Grupo sem a fonte ligada não
- * aparece no menu.
- *
- * Aba vazia é pior que aba inexistente: ela sugere que falta dado, quando na
- * verdade falta fonte. Mariela Muniz e Dra. Juliana Paola viam "Painel CRM",
- * "Vendas × origem" e "Estrutura do CRM" zeradas — as três leem crm_leads, que
- * é tabela de Kommo e Clint, e o CRM delas é o Clinic Desk. E a Mariela via
- * "Anúncios" sem ter conta de anúncio nenhuma.
- */
-const GRUPOS: {
-  titulo: string | null;
-  fonte?: Fonte;
-  itens: { to: string; label: string; exact?: boolean; Icone: typeof LayoutDashboard }[];
-}[] = [
-  {
-    titulo: null,
-    itens: [{ to: "/$clientId", label: "Visão geral do mês", exact: true, Icone: LayoutDashboard }],
-  },
-  {
-    titulo: "Conteúdo",
-    fonte: "instagram",
-    itens: [
-      { to: "/$clientId/posts", label: "Ranking & próximos ângulos", Icone: TrendingUp },
-      { to: "/$clientId/duvidas", label: "Dúvidas de pacientes", Icone: MessageCircleQuestion },
-      { to: "/$clientId/inspiracao", label: "Inspiração", Icone: Lightbulb },
-    ],
-  },
-  { titulo: "Mídia paga", fonte: "anuncios", itens: [{ to: "/$clientId/anuncios", label: "Anúncios", Icone: Megaphone }] },
-  { titulo: "Atendimento", fonte: "atendimento", itens: [{ to: "/$clientId/atendimento", label: "WhatsApp", Icone: MessagesSquare }] },
-  {
-    titulo: "CRM",
-    fonte: "crm",
-    itens: [
-      { to: "/$clientId/crm-painel", label: "Painel", Icone: KanbanSquare },
-      { to: "/$clientId/vendas-kommo", label: "Vendas × origem", Icone: GitBranch },
-      { to: "/$clientId/crm-estrutura", label: "Estrutura", Icone: Settings2 },
-    ],
-  },
-  // "O que virou paciente", "O que virou venda" e "Automações" saíram do menu:
-  // são telas de placeholder, sem nenhuma fonte de dado, para todos os
-  // clientes. As rotas continuam existindo para quem tiver o link.
-];
-
-const EM_CONSTRUCAO: Record<Exclude<Fonte, null>, { title: string; description: string }> = {
-  instagram: {
-    title: "Configuracao da BM em andamento",
-    description: "Estamos conectando a Business Manager da Meta para trazer os dados de Instagram deste perfil. Assim que a configuracao terminar, aparecem aqui.",
-  },
-  anuncios: {
-    title: "Configuracao da BM em andamento",
-    description: "Estamos configurando a conta de anuncios na Business Manager da Meta. Os dados de midia paga aparecem aqui quando ligar.",
-  },
-  crm: {
-    title: "Aguardando dados do CRM",
-    description: "Ainda nao recebemos dados do CRM deste cliente. Assim que a integracao comecar a enviar, o painel aparece aqui.",
-  },
-  atendimento: {
-    title: "Integracao de atendimento em configuracao",
-    description: "Estamos ligando o atendimento por WhatsApp. Os dados aparecem aqui quando a integracao estiver pronta.",
-  },
-};
-
-function fonteDaRota(pathname: string): Fonte {
-  if (/\/(posts|duvidas|inspiracao)$/.test(pathname)) return "instagram";
-  if (/\/anuncios$/.test(pathname)) return "anuncios";
-  if (/\/atendimento$/.test(pathname)) return "atendimento";
-  if (/\/(crm-painel|vendas-kommo|crm-estrutura)$/.test(pathname)) return "crm";
-  return null;
+// Navegação unificada (protótipo v3). Grupos: Portfólio · Cliente · Biblioteca ·
+// Sistema. Itens de cliente aparecem sempre: quando falta fonte/dado, é a
+// própria página que explica o que falta (princípio do adendo), em vez de
+// esconder a aba.
+function buildGroups(clientName: string): NavGroup[] {
+  return [
+    { titulo: "Portfólio", itens: [{ to: "/admin", label: "Visão geral", Icone: LayoutDashboard, admin: true }] },
+    {
+      titulo: `Cliente · ${clientName}`,
+      itens: [
+        { to: "/$clientId", label: "Resultado", Icone: Activity, exact: true },
+        { to: "/$clientId/conteudo", label: "Conteúdo", Icone: AlignLeft },
+        { to: "/$clientId/posts", label: "Posts", Icone: LayoutGrid },
+        { to: "/$clientId/anuncios", label: "Anúncios", Icone: Megaphone },
+        { to: "/$clientId/crm-painel", label: "Comercial", Icone: Briefcase },
+        { to: "/$clientId/atendimento", label: "WhatsApp", Icone: MessageCircle },
+        { to: "/$clientId/duvidas", label: "Dúvidas", Icone: HelpCircle },
+        { to: "/$clientId/ideias", label: "Ideias", Icone: Lightbulb },
+        { to: "/$clientId/relatorio", label: "Relatório", Icone: FileText },
+      ],
+    },
+    { titulo: "Biblioteca", itens: [{ to: "/$clientId/inspiracao", label: "Inspiração", Icone: Star }] },
+    { titulo: "Sistema", itens: [{ to: "/admin", label: "Admin", Icone: Settings, admin: true }] },
+  ];
 }
 
 function ClientLayout() {
   const { clientId } = Route.useParams();
   const dateRange = Route.useSearch();
   const navigate = useNavigate();
-  // `useNavigate({ from: Route.fullPath })` resolvia sempre pra rota do
-  // layout (a aba "Visão geral"), não pra aba realmente ativa — trocar o
-  // período em qualquer outra aba (ex.: Ranking) jogava de volta pra Visão
-  // geral. Navegar explicitamente pro pathname atual resolve, seja qual for
-  // a aba aberta.
   const currentPathname = useRouterState({ select: (s) => s.location.pathname });
   const { isAdmin } = useAuth();
-  const { data: client } = useQuery({
-    queryKey: ["client", clientId],
-    queryFn: () => getClient(clientId),
-  });
-  const { data: fontes } = useQuery({
-    queryKey: ["client-fontes", clientId],
-    queryFn: () => getClientFontes(clientId),
-  });
+  const { tema, setTema } = useTheme();
 
-  const emObras = Boolean((client as unknown as { em_onboarding?: boolean } | null | undefined)?.em_onboarding);
-  // Fonte "pronta" = conectada de verdade. Enquanto as fontes nao chegam,
-  // tratamos como prontas para nao piscar cadeado a toa.
-  const fontePronta = (fonte: Fonte): boolean => {
-    if (!fonte) return true;
-    if (!fontes) return true;
-    if (fonte === "instagram") return fontes.tem_instagram;
-    if (fonte === "anuncios") return fontes.tem_anuncios;
-    if (fonte === "crm") return fontes.tem_crm;
-    if (fonte === "atendimento") return fontes.tem_atendimento;
-    return true;
-  };
-  // Em onboarding: mostra tudo (faltando vira "em construcao"). Senao: esconde o que nao se aplica.
-  const grupos = GRUPOS.filter((g) => fontePronta(g.fonte ?? null) || emObras);
-  const fonteAtual = fonteDaRota(currentPathname);
-  const conteudoBloqueado = emObras && fonteAtual ? !fontePronta(fonteAtual) : false;
+  const { data: client } = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId) });
+  // Mantido para futuras faixas de "coleta parada" por fonte (adendo §5).
+  useQuery({ queryKey: ["client-fontes", clientId], queryFn: () => getClientFontes(clientId) });
 
-  const [gavetaAberta, setGavetaAberta] = useState(false);
+  const [drawer, setDrawer] = useState(false);
+  const [pal, setPal] = useState(false);
 
-  // Navegou, fecha a gaveta. Sem isso o menu fica por cima do conteúdo que a
-  // pessoa acabou de pedir.
+  useEffect(() => setDrawer(false), [currentPathname]);
+
+  // Ctrl/Cmd+K abre a busca de cliente (admin). Esc fecha drawer/paleta.
   useEffect(() => {
-    setGavetaAberta(false);
-  }, [currentPathname]);
-
-  useEffect(() => {
-    if (!gavetaAberta) return;
-    function noEsc(e: KeyboardEvent) {
-      if (e.key === "Escape") setGavetaAberta(false);
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k" && isAdmin) {
+        e.preventDefault();
+        setPal((v) => !v);
+      }
+      if (e.key === "Escape") {
+        setPal(false);
+        setDrawer(false);
+      }
     }
-    document.addEventListener("keydown", noEsc);
-    return () => document.removeEventListener("keydown", noEsc);
-  }, [gavetaAberta]);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isAdmin]);
 
-  const menu = (
-    <nav className="flex flex-col gap-5">
-      {grupos.map((grupo, i) => {
-        const bloqueado = !fontePronta(grupo.fonte ?? null);
+  const groups = buildGroups(client?.name ?? "…");
+
+  const nav = (
+    <nav className="side">
+      {groups.map((g) => {
+        const itens = g.itens.filter((it) => !it.admin || isAdmin);
+        if (itens.length === 0) return null;
         return (
-        <div key={grupo.titulo ?? `grupo-${i}`} className="flex flex-col gap-0.5">
-          {grupo.titulo && (
-            <div
-              className="flex items-center gap-1.5 px-3 pb-1 text-xs font-semibold uppercase tracking-wide"
-              style={{ color: "var(--text-faint)" }}
-            >
-              {grupo.titulo}
-              {bloqueado && <Lock size={11} className="shrink-0" />}
-            </div>
-          )}
-          {grupo.itens.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              params={{ clientId }}
-              search={dateRange}
-              activeOptions={{ exact: item.exact ?? false }}
-              className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium"
-              activeProps={{ style: { color: "var(--accent)", background: "var(--accent-soft)" } }}
-              inactiveProps={{ style: { color: bloqueado ? "var(--text-faint)" : "var(--text-dim)" } }}
-            >
-              <item.Icone size={16} className="shrink-0" />
-              <span>{item.label}</span>
-              {bloqueado && (
-                <span className="ml-auto text-[10px] font-normal" style={{ color: "var(--text-faint)" }}>
-                  em construcao
-                </span>
-              )}
-            </Link>
-          ))}
-        </div>
+          <div key={g.titulo}>
+            <div className="lbl">{g.titulo}</div>
+            {itens.map((it) =>
+              it.to.startsWith("/$clientId") ? (
+                <Link
+                  key={it.to}
+                  to={it.to}
+                  params={{ clientId }}
+                  search={dateRange}
+                  activeOptions={{ exact: it.exact ?? false }}
+                  activeProps={{ "aria-current": "page" }}
+                >
+                  <it.Icone />
+                  <span>{it.label}</span>
+                </Link>
+              ) : (
+                <Link key={it.to + it.label} to={it.to} activeProps={{ "aria-current": "page" }}>
+                  <it.Icone />
+                  <span>{it.label}</span>
+                </Link>
+              )
+            )}
+          </div>
         );
       })}
     </nav>
   );
 
-  const identidade = (
-    <div className="flex min-w-0 items-center gap-2.5">
-      <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={38} />
-      <div className="min-w-0">
-      <div className="flex items-center gap-2">
-        <h1 className="truncate text-base font-semibold leading-tight">{client?.name ?? "Carregando…"}</h1>
-        {client?.cfm_score_status && (
-          <span
-            title={`Selo CFM: ${client.cfm_score_status}`}
-            className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-            style={{ background: CFM_DOT[client.cfm_score_status] }}
-          />
-        )}
+  const sidebarInner = (
+    <>
+      <div className="brand">
+        <span className="logo">
+          <i />
+        </span>
+        <span>Intelligence Hub</span>
       </div>
-      {(client?.specialty || client?.instagram_handle) && (
-        <p className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
-          {client?.specialty}
-          {client?.instagram_handle ? ` · @${client.instagram_handle}` : ""}
-        </p>
+      {isAdmin && (
+        <button type="button" className="kbar" onClick={() => setPal(true)}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <Search size={15} /> Buscar cliente…
+          </span>
+          <kbd>Ctrl K</kbd>
+        </button>
       )}
+      {nav}
+      <div className="side-foot">
+        <div className="themes">
+          <button type="button" aria-pressed={tema === "light"} onClick={() => setTema("light")}>
+            Claro
+          </button>
+          <button type="button" aria-pressed={tema === "dark"} onClick={() => setTema("dark")}>
+            Escuro
+          </button>
+        </div>
+        <LogoutButton />
+        <span>Intelligence Hub · Doctor Creator</span>
       </div>
-    </div>
+    </>
   );
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
-      {/* Coluna fixa no desktop */}
-      <aside
-        className="hidden border-r lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:gap-6 lg:p-4"
-        style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-      >
-        {identidade}
-        <div className="flex-1 overflow-y-auto">{menu}</div>
-        <div className="flex flex-col gap-2 border-t pt-3" style={{ borderColor: "var(--border)" }}>
-          {isAdmin && (
-            <Link to="/admin/$clientId" params={{ clientId }} className="px-3 text-sm" style={{ color: "var(--accent)" }}>
-              ← Painel admin
-            </Link>
-          )}
-          <LogoutButton />
-        </div>
-      </aside>
+    <div className="app">
+      <aside>{sidebarInner}</aside>
 
-      {/* Gaveta no celular */}
-      {gavetaAberta && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div
-            className="absolute inset-0"
-            style={{ background: "rgba(0,0,0,.5)" }}
-            onClick={() => setGavetaAberta(false)}
-          />
-          <div
-            className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col gap-6 overflow-y-auto border-r p-4"
-            style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+      {/* Drawer no mobile */}
+      {drawer && (
+        <div className="fixed inset-0 z-40" style={{ display: "block" }}>
+          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,.5)" }} onClick={() => setDrawer(false)} />
+          <aside
+            className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col gap-4 overflow-y-auto p-4"
+            style={{ background: "var(--side)", borderRight: "1px solid var(--border)" }}
           >
-            <div className="flex items-start justify-between gap-2">
-              {identidade}
-              <button
-                type="button"
-                onClick={() => setGavetaAberta(false)}
-                aria-label="Fechar menu"
-                style={{ color: "var(--text-dim)" }}
-              >
+            <div className="flex items-center justify-between">
+              <div className="brand">
+                <span className="logo">
+                  <i />
+                </span>
+                <span>Intelligence Hub</span>
+              </div>
+              <button type="button" onClick={() => setDrawer(false)} aria-label="Fechar menu" style={{ color: "var(--muted)" }}>
                 <X size={18} />
               </button>
             </div>
-            {menu}
-            <div className="mt-auto flex flex-col gap-2 border-t pt-3" style={{ borderColor: "var(--border)" }}>
-              {isAdmin && (
-                <Link to="/admin/$clientId" params={{ clientId }} className="px-3 text-sm" style={{ color: "var(--accent)" }}>
-                  ← Painel admin
-                </Link>
-              )}
+            {nav}
+            <div className="side-foot">
+              <div className="themes">
+                <button type="button" aria-pressed={tema === "light"} onClick={() => setTema("light")}>
+                  Claro
+                </button>
+                <button type="button" aria-pressed={tema === "dark"} onClick={() => setTema("dark")}>
+                  Escuro
+                </button>
+              </div>
               <LogoutButton />
             </div>
-          </div>
+          </aside>
         </div>
       )}
 
-      <div className="min-w-0">
-        {/* Barra fixa: o seletor de período precisa continuar alcançável no meio
-            de uma tabela longa. */}
-        <div
-          className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b px-5 py-2.5"
-          style={{ borderColor: "var(--border)", background: "var(--bg)" }}
-        >
-          <div className="flex min-w-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setGavetaAberta(true)}
-              aria-label="Abrir menu"
-              className="rounded-md border p-1.5 lg:hidden"
-              style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}
-            >
-              <Menu size={17} />
-            </button>
-            <span className="truncate text-sm font-medium lg:hidden">{client?.name ?? "Carregando…"}</span>
+      <div className="mainwrap">
+        <div className="top">
+          <button
+            type="button"
+            onClick={() => setDrawer(true)}
+            aria-label="Abrir menu"
+            className="hidden max-[820px]:inline-flex"
+            style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 6, color: "var(--ink-2)" }}
+          >
+            <Menu size={17} />
+          </button>
+          <div className="who">
+            <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={46} />
+            <div style={{ minWidth: 0 }}>
+              <h1>{client?.name ?? "Carregando…"}</h1>
+              {(client?.specialty || client?.instagram_handle) && (
+                <p>
+                  {client?.specialty}
+                  {client?.instagram_handle ? ` · @${client.instagram_handle}` : ""}
+                </p>
+              )}
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <DateRangePicker
-              value={dateRange}
-              onChange={(next) => navigate({ to: currentPathname, search: next, replace: true })}
-            />
-            <ThemeMenu />
-          </div>
+          {client?.cfm_score_status === "verde" && (
+            <span className="chip good">
+              <ShieldCheck /> CFM em conformidade
+            </span>
+          )}
+          <span className="spacer" />
+          <DateRangePicker
+            value={dateRange}
+            onChange={(next) => navigate({ to: currentPathname, search: next, replace: true })}
+          />
         </div>
 
-        <main className="mx-auto max-w-6xl px-5 py-7">
-          {conteudoBloqueado && fonteAtual ? (
-            <PhasePlaceholder
-              phase="Em construcao"
-              title={EM_CONSTRUCAO[fonteAtual].title}
-              description={EM_CONSTRUCAO[fonteAtual].description}
-            />
-          ) : (
-            <Outlet />
+        <Outlet />
+      </div>
+
+      {isAdmin && pal && <ClientPalette clientId={clientId} onClose={() => setPal(false)} />}
+    </div>
+  );
+}
+
+function ClientPalette({ clientId, onClose }: { clientId: string; onClose: () => void }) {
+  const navigate = useNavigate();
+  const [q, setQ] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { data: clients } = useQuery({ queryKey: ["admin-clients"], queryFn: listAllClients });
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    const list = clients ?? [];
+    if (!term) return list.slice(0, 40);
+    return list
+      .filter(
+        (c) =>
+          c.name.toLowerCase().includes(term) ||
+          (c.specialty ?? "").toLowerCase().includes(term) ||
+          (c.instagram_handle ?? "").toLowerCase().includes(term)
+      )
+      .slice(0, 40);
+  }, [q, clients]);
+
+  function go(id: string) {
+    onClose();
+    navigate({ to: "/$clientId", params: { clientId: id }, search: { preset: "90d" } });
+  }
+
+  return (
+    <div className="pal on" onClick={onClose}>
+      <div className="box" onClick={(e) => e.stopPropagation()}>
+        <input
+          ref={inputRef}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar cliente por nome, especialidade ou @…"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && filtered[0]) go(filtered[0].id);
+          }}
+        />
+        <ul>
+          {filtered.map((c) => (
+            <li key={c.id}>
+              <button type="button" className={c.id === clientId ? "sel" : ""} onClick={() => go(c.id)}>
+                <span>{c.name}</span>
+                <small>{c.specialty ?? c.instagram_handle ?? ""}</small>
+              </button>
+            </li>
+          ))}
+          {filtered.length === 0 && (
+            <li>
+              <button type="button" disabled>
+                <span style={{ color: "var(--muted)" }}>Nenhum cliente encontrado.</span>
+              </button>
+            </li>
           )}
-        </main>
+        </ul>
       </div>
     </div>
   );
