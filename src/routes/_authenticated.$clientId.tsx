@@ -37,13 +37,15 @@ export const Route = createFileRoute("/_authenticated/$clientId")({
   }),
 });
 
-type NavItem = { to: string; label: string; Icone: typeof LayoutGrid; exact?: boolean; admin?: boolean };
+type Fonte = "instagram" | "anuncios" | "crm" | "atendimento";
+type NavItem = { to: string; label: string; Icone: typeof LayoutGrid; exact?: boolean; admin?: boolean; fonte?: Fonte };
 type NavGroup = { titulo: string; itens: NavItem[] };
 
 // Navegação unificada (protótipo v3). Grupos: Portfólio · Cliente · Biblioteca ·
-// Sistema. Itens de cliente aparecem sempre: quando falta fonte/dado, é a
-// própria página que explica o que falta (princípio do adendo), em vez de
-// esconder a aba.
+// Sistema. Abas que dependem de uma fonte (Posts/Dúvidas=instagram, Anúncios,
+// Comercial=crm, WhatsApp=atendimento) só aparecem com a fonte conectada — pra
+// ninguém cair em aba vazia. O "mostrar e explicar a falta" do adendo entra no
+// M3, quando as páginas ganharem o estado de dado ausente.
 function buildGroups(clientName: string): NavGroup[] {
   return [
     { titulo: "Portfólio", itens: [{ to: "/admin", label: "Visão geral", Icone: LayoutDashboard, admin: true }] },
@@ -52,11 +54,11 @@ function buildGroups(clientName: string): NavGroup[] {
       itens: [
         { to: "/$clientId", label: "Resultado", Icone: Activity, exact: true },
         { to: "/$clientId/conteudo", label: "Conteúdo", Icone: AlignLeft },
-        { to: "/$clientId/posts", label: "Posts", Icone: LayoutGrid },
-        { to: "/$clientId/anuncios", label: "Anúncios", Icone: Megaphone },
-        { to: "/$clientId/crm-painel", label: "Comercial", Icone: Briefcase },
-        { to: "/$clientId/atendimento", label: "WhatsApp", Icone: MessageCircle },
-        { to: "/$clientId/duvidas", label: "Dúvidas", Icone: HelpCircle },
+        { to: "/$clientId/posts", label: "Posts", Icone: LayoutGrid, fonte: "instagram" },
+        { to: "/$clientId/anuncios", label: "Anúncios", Icone: Megaphone, fonte: "anuncios" },
+        { to: "/$clientId/crm-painel", label: "Comercial", Icone: Briefcase, fonte: "crm" },
+        { to: "/$clientId/atendimento", label: "WhatsApp", Icone: MessageCircle, fonte: "atendimento" },
+        { to: "/$clientId/duvidas", label: "Dúvidas", Icone: HelpCircle, fonte: "instagram" },
         { to: "/$clientId/ideias", label: "Ideias", Icone: Lightbulb },
         { to: "/$clientId/relatorio", label: "Relatório", Icone: FileText },
       ],
@@ -75,8 +77,18 @@ function ClientLayout() {
   const { tema, setTema } = useTheme();
 
   const { data: client } = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId) });
-  // Mantido para futuras faixas de "coleta parada" por fonte (adendo §5).
-  useQuery({ queryKey: ["client-fontes", clientId], queryFn: () => getClientFontes(clientId) });
+  const { data: fontes } = useQuery({ queryKey: ["client-fontes", clientId], queryFn: () => getClientFontes(clientId) });
+
+  // Aba com fonte só aparece se a fonte estiver conectada. Enquanto fontes não
+  // carregam, mostra tudo (não pisca cadeado à toa).
+  const fonteOk = (fonte?: Fonte): boolean => {
+    if (!fonte || !fontes) return true;
+    if (fonte === "instagram") return fontes.tem_instagram;
+    if (fonte === "anuncios") return fontes.tem_anuncios;
+    if (fonte === "crm") return fontes.tem_crm;
+    if (fonte === "atendimento") return fontes.tem_atendimento;
+    return true;
+  };
 
   const [drawer, setDrawer] = useState(false);
   const [pal, setPal] = useState(false);
@@ -104,7 +116,7 @@ function ClientLayout() {
   const nav = (
     <nav className="side">
       {groups.map((g) => {
-        const itens = g.itens.filter((it) => !it.admin || isAdmin);
+        const itens = g.itens.filter((it) => (!it.admin || isAdmin) && fonteOk(it.fonte));
         if (itens.length === 0) return null;
         return (
           <div key={g.titulo}>
