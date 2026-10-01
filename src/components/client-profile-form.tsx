@@ -49,7 +49,8 @@ const estiloInput: React.CSSProperties = {
   color: "var(--text)",
 };
 
-export function ClientProfileForm({ client }: { client: Tables<"clients"> }) {
+// O token do WTS não chega ao navegador (getClient usa colunas explícitas), por isso fica fora do tipo.
+export function ClientProfileForm({ client }: { client: Omit<Tables<"clients">, "wts_api_token"> }) {
   const queryClient = useQueryClient();
   const arquivoRef = useRef<HTMLInputElement>(null);
 
