@@ -23,6 +23,11 @@ import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_li
 // endpoints com secret, chamados pelo n8n.
 
 const DIAS_DE_JANELA = 7;
+// Anúncios reconferem 90 dias a cada clique (upsert, então não duplica). É o que
+// fecha buracos sozinho: conta recém-ligada, dia que a Meta revisou depois, sync
+// que falhou. Posts e comentários seguem na janela curta, porque a Meta Graph
+// cobra uma chamada por página.
+const DIAS_DE_ANUNCIOS = 90;
 
 // O alvo do botão (posts) e a fonte do registro (instagram) têm nomes diferentes.
 const FONTE_DO_ALVO: Record<string, FonteSync> = {
@@ -124,7 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           accessToken: TOKEN_ADS,
           supabaseUrl: urlSupabase,
           supabaseServiceRoleKey: chaveServico,
-          syncDays: DIAS_DE_JANELA,
+          syncDays: DIAS_DE_ANUNCIOS,
           clientId: client_id,
         });
         if (g.length > 0) temConta = true;
@@ -139,7 +144,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           windsorApiKey: WINDSOR_API_KEY,
           supabaseUrl: urlSupabase,
           supabaseServiceRoleKey: chaveServico,
-          syncDays: DIAS_DE_JANELA,
+          syncDays: DIAS_DE_ANUNCIOS,
           clientId: client_id,
         });
         if (w.length > 0) temConta = true;
