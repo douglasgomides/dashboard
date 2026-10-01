@@ -255,23 +255,51 @@ export async function runMetaAdsSync(env: AdsSyncEnv): Promise<AdsAccountSyncRes
   const { data: clients, error } = await query;
   if (error) throw new Error(`Falha ao listar clientes: ${error.message}`);
 
+  // Alvos = conta principal do cliente (clients.meta_ad_account_id) MAIS as contas
+  // de client_ad_accounts que não têm token próprio. Antes só a principal entrava:
+  // uma segunda conta sem token (ex.: Dra. Juliana Paola) nunca era lida por
+  // ninguém e o dashboard congelava o gasto dela. Contas COM token seguem pela Graph.
+  const alvos: { id: string; name: string; account: string }[] = [];
+  const vistos = new Set<string>();
+  const adicionar = (id: string, name: string, account: string | null) => {
+    if (!account) return;
+    const chave = `${id}:${account}`;
+    if (vistos.has(chave)) return;
+    vistos.add(chave);
+    alvos.push({ id, name, account });
+  };
+  for (const c of clients ?? []) adicionar(c.id, c.name, c.meta_ad_account_id);
+
+  let consultaExtra = supabase
+    .from("client_ad_accounts")
+    .select("client_id, ad_account_id, clients(name, active)")
+    .eq("active", true)
+    .is("access_token", null);
+  if (env.clientId) consultaExtra = consultaExtra.eq("client_id", env.clientId);
+  const { data: extras, error: erroExtras } = await consultaExtra;
+  if (erroExtras) throw new Error(`Falha ao listar contas sem token: ${erroExtras.message}`);
+  for (const e of extras ?? []) {
+    const cliente = e.clients as unknown as { name: string; active: boolean } | null;
+    if (!cliente?.active) continue;
+    adicionar(e.client_id, cliente.name, e.ad_account_id);
+  }
+
   const results: AdsAccountSyncResult[] = [];
-  for (const c of clients ?? []) {
-    if (!c.meta_ad_account_id) continue;
+  for (const alvo of alvos) {
     try {
       results.push(
         await syncAccount(supabase, env.windsorApiKey, range, {
-          id: c.id,
-          name: c.name,
-          meta_ad_account_id: c.meta_ad_account_id,
+          id: alvo.id,
+          name: alvo.name,
+          meta_ad_account_id: alvo.account,
         }),
       );
     } catch (err) {
       // Uma conta que falha não pode derrubar o sync das outras.
       results.push({
-        clientId: c.id,
-        clientName: c.name,
-        adAccountId: c.meta_ad_account_id,
+        clientId: alvo.id,
+        clientName: alvo.name,
+        adAccountId: alvo.account,
         campaigns: 0,
         rows: 0,
         errors: [err instanceof Error ? err.message : String(err)],
