@@ -245,15 +245,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq("client_id", client_id)
         .eq("active", true);
 
+      // O botão lê o perfil INTEIRO: repete rodadas de 150 posts até o backfill
+      // terminar (done) ou o tempo acabar. Antes era uma rodada de 30 por clique, e
+      // uma conta com 355 posts (Dra. Betina) levava ~12 cliques para ter as Dúvidas.
+      const prazo = Date.now() + 40_000;
       const contas = [];
       for (const perfil of perfisCom ?? []) {
-        const parcial = await runMetaCommentsSync({
-          accessToken: META_ACCESS_TOKEN ?? "",
-          supabaseUrl: urlSupabase,
-          supabaseServiceRoleKey: chaveServico,
-          onlyAccountId: perfil.id,
-        });
-        contas.push(...parcial);
+        for (let rodada = 0; rodada < 20; rodada++) {
+          const parcial = await runMetaCommentsSync({
+            accessToken: META_ACCESS_TOKEN ?? "",
+            supabaseUrl: urlSupabase,
+            supabaseServiceRoleKey: chaveServico,
+            onlyAccountId: perfil.id,
+            maxPosts: 150,
+          });
+          contas.push(...parcial);
+          const ultima = parcial[parcial.length - 1];
+          if (!ultima || ultima.done || ultima.errors.length > 0 || Date.now() > prazo) break;
+        }
       }
       if (contas.length === 0) {
         return { nada_a_fazer: "Este cliente não tem perfil do Instagram conectado.", contas };

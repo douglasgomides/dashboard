@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getPatientQuestions } from "@/lib/client-data";
 import { computeDuvidasFrequentes } from "@/lib/report-metrics";
+import { SyncButton } from "@/components/sync-button";
 
 export const Route = createFileRoute("/_authenticated/$clientId/duvidas")({
   component: DuvidasPage,
@@ -125,6 +126,9 @@ function DuvidasPage() {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <SyncButton clientId={clientId} alvo="comentarios" />
+      </div>
       <div
         className="rounded-xl border p-4 text-sm"
         style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
