@@ -24,6 +24,25 @@ interface MetaComment {
   username?: string;
   like_count?: number;
   timestamp?: string;
+  replies?: { data?: MetaComment[]; paging?: { next?: string } };
+}
+
+// Respostas entram como comentários: uma dúvida de paciente muitas vezes vem na
+// resposta a outro comentário, e antes elas nem eram buscadas.
+const CAMPOS_COMENTARIO = "id,text,username,like_count,timestamp,replies.limit(50){id,text,username,like_count,timestamp}";
+
+// Teto de páginas extras por chamada (cada uma é um request). Post com 219
+// comentários precisa de 5 páginas de 50. Sem teto, um post viral gasta o tempo
+// da função e o resto do perfil fica sem ler.
+const PAGINAS_EXTRAS_POR_CHAMADA = 120;
+
+function achatar(lista: MetaComment[] | undefined): MetaComment[] {
+  const out: MetaComment[] = [];
+  for (const c of lista ?? []) {
+    out.push(c);
+    for (const r of c.replies?.data ?? []) out.push(r);
+  }
+  return out;
 }
 
 export interface CommentsSyncEnv {
@@ -49,11 +68,13 @@ async function fetchCommentsBatch(
   accessToken: string,
 ): Promise<Map<string, MetaComment[]>> {
   const result = new Map<string, MetaComment[]>();
+  const proximas: { postId: string; url: string }[] = [];
+
   for (let i = 0; i < postsWithMediaId.length; i += COMMENTS_BATCH_SIZE) {
     const batch = postsWithMediaId.slice(i, i + COMMENTS_BATCH_SIZE);
     const batchPayload = batch.map((p) => ({
       method: "GET",
-      relative_url: `${p.windsor_media_id}/comments?fields=text,username,like_count,timestamp&limit=50`,
+      relative_url: `${p.windsor_media_id}/comments?fields=${CAMPOS_COMENTARIO}&limit=50`,
     }));
     const res = await fetch(`${GRAPH_BASE}/`, {
       method: "POST",
@@ -68,8 +89,28 @@ async function fetchCommentsBatch(
       const post = batch[j];
       const sub = responses[j];
       if (!sub || sub.code !== 200) continue; // comentários desativados nesse post não derrubam o sync
-      const parsed = JSON.parse(sub.body) as { data?: MetaComment[] };
-      result.set(post.id, parsed.data ?? []);
+      const parsed = JSON.parse(sub.body) as { data?: MetaComment[]; paging?: { next?: string } };
+      result.set(post.id, achatar(parsed.data));
+      if (parsed.paging?.next) proximas.push({ postId: post.id, url: parsed.paging.next });
+    }
+  }
+
+  // O lote só devolve a 1ª página de 50 de cada post. Segue o cursor dos que têm
+  // mais, com teto de requests por chamada (o resto fica para a próxima rodada).
+  let gastas = 0;
+  while (proximas.length > 0 && gastas < PAGINAS_EXTRAS_POR_CHAMADA) {
+    const item = proximas.shift()!;
+    gastas++;
+    try {
+      const res = await fetch(item.url);
+      if (!res.ok) continue;
+      const parsed = (await res.json()) as { data?: MetaComment[]; paging?: { next?: string } };
+      const atual = result.get(item.postId) ?? [];
+      atual.push(...achatar(parsed.data));
+      result.set(item.postId, atual);
+      if (parsed.paging?.next) proximas.push({ postId: item.postId, url: parsed.paging.next });
+    } catch {
+      // uma página que falha não derruba o resto do perfil
     }
   }
   return result;
