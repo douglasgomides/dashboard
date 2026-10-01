@@ -1134,6 +1134,36 @@ export type Database = {
           impressoes: number
         }[]
       }
+      portfolio_overview: {
+        Args: { p_start: string; p_end: string }
+        Returns: {
+          client_id: string
+          name: string
+          specialty: string | null
+          instagram_handle: string | null
+          em_onboarding: boolean
+          tem_instagram: boolean
+          tem_anuncios: boolean
+          tem_crm: boolean
+          tem_atendimento: boolean
+          reach: number
+          reach_prev: number
+          dias_com_dado: number
+          dias_com_dado_prev: number
+          dias_periodo: number
+          new_followers: number
+          followers_atual: number | null
+          serie_alcance: number[] | null
+          ad_spend: number
+          ad_conversas: number
+          ad_leads: number
+          crm_leads: number
+          ult_instagram: string | null
+          ult_anuncios: string | null
+          ult_crm: string | null
+          ult_atendimento: string | null
+        }[]
+      }
       client_fontes: {
         Args: { p_client_id: string }
         Returns: {
