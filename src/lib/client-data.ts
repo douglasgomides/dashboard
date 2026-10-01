@@ -6,7 +6,13 @@ import type {
 } from "@/integrations/supabase/types";
 
 export async function getClient(clientId: string) {
-  const { data, error } = await supabase.from("clients").select("*").eq("id", clientId).single();
+  const { data, error } = await supabase.from("clients")
+    // Colunas explícitas: `select *` entregaria wts_api_token ao navegador de qualquer membro.
+    .select(
+      "id, name, specialty, instagram_handle, cfm_score_status, active, created_at, meta_ad_account_id, wts_company_id, avatar_url, wts_department_ids, em_onboarding",
+    )
+    .eq("id", clientId)
+    .single();
   if (error) throw error;
   return data;
 }
