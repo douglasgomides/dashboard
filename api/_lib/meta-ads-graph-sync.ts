@@ -193,9 +193,8 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
       // Conta sem token própria que a Windsor já cobre (clients.meta_ad_account_id):
       // não é falha, só não é desta via. Registrar "sem token" aqui mostrava erro
       // falso no botão e no selo de clientes como Keylon, Doctor Creator e Lana.
-      if (cliente.meta_ad_account_id === conta.ad_account_id) continue;
-      r.errors.push("sem token: nem access_token na conta nem META_ADS_TOKEN no ambiente");
-      resultados.push(r);
+      // Agora TODA conta sem token é lida pela Windsor (meta-ads-sync.ts); se a Windsor
+      // não enxergar a conta, é ela quem reporta o erro, e ele aparece no botão.
       continue;
     }
 
