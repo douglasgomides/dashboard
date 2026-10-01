@@ -24,6 +24,12 @@ export interface ClintSyncEnv {
   supabaseUrl: string;
   supabaseServiceRoleKey: string;
   onlyClientId?: string;
+  /**
+   * Prazo (Date.now() em ms) para parar de paginar. A Clint não filtra por
+   * data, então cada rodada puxa a origem inteira; o botão manual roda numa
+   * função de ~60s e precisa devolver parcial + aviso em vez de estourar.
+   */
+  deadlineMs?: number;
 }
 
 export interface ClintSyncResult {
@@ -91,19 +97,28 @@ async function fetchOrigins(token: string): Promise<Map<string, string>> {
 // Puxa todos os negócios de uma origem, página a página. A Clint devolve
 // hasNext; confiamos nele em vez de calcular por totalCount, que muda entre
 // páginas se alguém criar um negócio no meio da paginação.
-async function fetchDealsByOrigin(token: string, originId: string): Promise<ClintDeal[]> {
+async function fetchDealsByOrigin(
+  token: string,
+  originId: string,
+  deadlineMs?: number,
+): Promise<{ deals: ClintDeal[]; truncated: boolean }> {
   const all: ClintDeal[] = [];
   let page = 1;
+  let truncated = false;
   // Trava de segurança: 200 páginas × 200 = 40 mil negócios por origem. Se
   // bater nisso, é bug de paginação, não volume real.
   while (page <= 200) {
+    if (deadlineMs && Date.now() > deadlineMs) {
+      truncated = true;
+      break;
+    }
     const body = await clintGet(token, `/deals?origin_id=${originId}&limit=${PAGE_SIZE}&page=${page}`);
     const rows: ClintDeal[] = body?.data ?? [];
     all.push(...rows);
     if (!body?.hasNext || rows.length === 0) break;
     page++;
   }
-  return all;
+  return { deals: all, truncated };
 }
 
 export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]> {
@@ -145,10 +160,11 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
     const stageRows = new Map<string, Record<string, unknown>>();
 
     for (const originId of origins) {
-      const deals = await fetchDealsByOrigin(token, originId).catch((err) => {
+      const { deals, truncated } = await fetchDealsByOrigin(token, originId, env.deadlineMs).catch((err) => {
         errors.push(`origem ${originId}: ${err instanceof Error ? err.message : String(err)}`);
-        return [] as ClintDeal[];
+        return { deals: [] as ClintDeal[], truncated: false };
       });
+      if (truncated) errors.push(`origem ${originId}: tempo esgotado, dados parciais — rode de novo`);
 
       const originName = originNames.get(originId) ?? originId;
 

@@ -1,4 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { createClient } from "@supabase/supabase-js";
+import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runMetaCommentsSync } from "../_lib/meta-comments-sync.js";
 
 // Sync de comentários dos posts (Meta Graph API) — matéria-prima pra pauta
@@ -41,6 +43,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       onlyAccountId: accountId,
       maxPosts,
     });
+    await recordSyncStatusPorCliente(
+      createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
+      "comentarios",
+      results.map((r) => ({ clientId: r.clientId, rows: r.comments, errors: r.errors })),
+    );
     const hasErrors = results.some((r) => r.errors.length > 0);
     res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), accounts: results });
   } catch (err) {

@@ -36,6 +36,7 @@ export interface CommentsSyncEnv {
 
 export interface CommentsAccountSyncResult {
   accountId: string;
+  clientId: string;
   postsChecked: number;
   comments: number;
   questions: number;
@@ -108,7 +109,7 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
     const errors: string[] = [];
     const tokenDaConta = tokensPorConta.get(account.id) ?? env.accessToken;
     if (!tokenDaConta) {
-      results.push({ accountId: account.id, postsChecked: 0, comments: 0, questions: 0, done: true,
+      results.push({ accountId: account.id, clientId: account.client_id, postsChecked: 0, comments: 0, questions: 0, done: true,
         errors: ["Sem token da Meta: nem na conta, nem no ambiente"] });
       continue;
     }
@@ -218,6 +219,7 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
 
       results.push({
         accountId: account.id,
+        clientId: account.client_id,
         postsChecked: posts?.length ?? 0,
         comments: commentsCount,
         questions: questionsCount,
@@ -227,6 +229,7 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
     } catch (err) {
       results.push({
         accountId: account.id,
+        clientId: account.client_id,
         postsChecked: 0,
         comments: 0,
         questions: 0,

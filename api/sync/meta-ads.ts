@@ -1,4 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { createClient } from "@supabase/supabase-js";
+import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";
 import { runMetaAdsGraphSync } from "../_lib/meta-ads-graph-sync.js";
 
@@ -81,6 +83,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         dateTo,
         clientId,
       });
+      await recordSyncStatusPorCliente(
+        createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
+        "anuncios",
+        contas.map((c) => ({ clientId: c.client_id, rows: c.rows, errors: c.errors })),
+        { okSeHouveLinhas: true },
+      );
       const temErro = contas.some((c) => c.errors.length > 0);
       res.status(temErro ? 207 : 200).json({ fonte: "graph", synced_at: new Date().toISOString(), contas });
     } catch (err) {
@@ -100,6 +108,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       clientId,
     });
 
+    await recordSyncStatusPorCliente(
+      createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
+      "anuncios",
+      // Só o que a Windsor efetivamente entregou: o erro dela sobre contas que
+      // a Graph alimenta é esperado e apagaria o sucesso registrado pela Graph.
+      results.filter((r) => r.rows > 0).map((r) => ({ clientId: r.clientId, rows: r.rows, errors: [] })),
+    );
     const hasErrors = results.some((r) => r.errors.length > 0);
     res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), accounts: results });
   } catch (err) {
