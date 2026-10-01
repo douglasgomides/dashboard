@@ -33,7 +33,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const syncDaysParam = req.query.sync_days;
-  const syncDays = syncDaysParam ? Number(Array.isArray(syncDaysParam) ? syncDaysParam[0] : syncDaysParam) : 365;
+  // Piso de 28 dias (o Instagram só guarda ~30 de seguidores por dia): o n8n chama com 7
+  // e uma falha de mais de uma semana, ou um cliente recém-ligado, deixava buraco nas
+  // métricas diárias para sempre. Valor explícito maior (backfill) continua valendo.
+  const PISO_DIAS_INSTAGRAM = 28;
+  const syncDaysBruto = syncDaysParam ? Number(Array.isArray(syncDaysParam) ? syncDaysParam[0] : syncDaysParam) : 365;
+  const syncDays = Number.isFinite(syncDaysBruto) ? Math.max(syncDaysBruto, PISO_DIAS_INSTAGRAM) : 365;
   const dateFrom = typeof req.query.date_from === "string" ? req.query.date_from : undefined;
   const dateTo = typeof req.query.date_to === "string" ? req.query.date_to : undefined;
   // Limita a um cliente. Sem isso, um backfill em janelas arrasta todas as
