@@ -25,6 +25,7 @@ const CRM_PROVIDER_LABELS: Record<CrmProvider, string> = {
   feegow: "Feegow",
   ninsaude: "Ninsaúde",
   clint: "Clint",
+  rdstation: "RD Station CRM",
 };
 
 export const Route = createFileRoute("/_authenticated/admin/$clientId")({

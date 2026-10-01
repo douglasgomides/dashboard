@@ -8,6 +8,7 @@ import { runWtsSync } from "../_lib/wts-sync.js";
 import { runMetaCommentsSync } from "../_lib/meta-comments-sync.js";
 import { runKommoLeadsSync } from "../_lib/kommo-leads-sync.js";
 import { runClintSync } from "../_lib/clint-sync.js";
+import { runRdStationSync } from "../_lib/rdstation-sync.js";
 import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_lib/sync-status.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
@@ -268,9 +269,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const kommo = (conexoes ?? []).filter((c) => c.provider === "kommo");
       const clint = (conexoes ?? []).filter((c) => c.provider === "clint");
+      const rdstation = (conexoes ?? []).filter((c) => c.provider === "rdstation");
       const planilha = (conexoes ?? []).filter((c) => c.provider === "planilha");
 
-      if (kommo.length === 0 && clint.length === 0) {
+      if (kommo.length === 0 && clint.length === 0 && rdstation.length === 0) {
         return planilha.length > 0
           ? { nada_a_fazer: "CRM por planilha, não sincroniza.", linhas: 0, erros: [] as string[] }
           : { nada_a_fazer: "Este cliente não tem CRM ligado ao cadastro.", linhas: 0, erros: [] as string[] };
@@ -319,6 +321,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           erros.push(...r.flatMap((c) => c.errors.map((e) => `Clint: ${e}`)));
         } catch (err) {
           erros.push(`Clint: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
+      if (rdstation.length > 0) {
+        try {
+          const r = await runRdStationSync({
+            supabaseUrl: urlSupabase,
+            supabaseServiceRoleKey: chaveServico,
+            onlyClientId: client_id,
+            deadlineMs: Date.now() + 50_000,
+          });
+          linhas += r.reduce((a, c) => a + c.negocios, 0);
+          erros.push(...r.flatMap((c) => c.errors.map((e) => `RD Station: ${e}`)));
+        } catch (err) {
+          erros.push(`RD Station: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 

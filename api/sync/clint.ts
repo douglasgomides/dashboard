@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runClintSync } from "../_lib/clint-sync.js";
+import { runRdStationSync } from "../_lib/rdstation-sync.js";
 
 // Sync dos negócios da Clint, chamado pelo n8n. Máquina chamando máquina,
 // então autoriza por SYNC_SECRET — o mesmo padrão de api/sync/kommo-leads.
@@ -44,8 +45,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       "crm",
       results.map((r) => ({ clientId: r.clientId, rows: r.negocios, errors: r.errors })),
     );
-    const hasErrors = results.some((r) => r.errors.length > 0);
-    res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), connections: results });
+    // RD Station CRM entra pelo mesmo endpoint e horário: a Vercel Hobby aceita
+    // no máximo 12 funções, então não existe arquivo próprio para ele.
+    let rdstation: Awaited<ReturnType<typeof runRdStationSync>> = [];
+    let rdErro: string | undefined;
+    try {
+      rdstation = await runRdStationSync({
+        supabaseUrl: SUPABASE_URL,
+        supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+        onlyClientId: clientId,
+      });
+    } catch (err) {
+      rdErro = err instanceof Error ? err.message : String(err);
+    }
+    const hasErrors = results.some((r) => r.errors.length > 0) || rdstation.some((r) => r.errors.length > 0) || !!rdErro;
+    res.status(hasErrors ? 207 : 200).json({
+      synced_at: new Date().toISOString(),
+      connections: results,
+      rdstation,
+      ...(rdErro ? { rdstation_erro: rdErro } : {}),
+    });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
