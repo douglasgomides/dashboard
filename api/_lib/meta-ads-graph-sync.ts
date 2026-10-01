@@ -151,7 +151,7 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
 
   let consulta = supabase
     .from("client_ad_accounts")
-    .select("client_id, ad_account_id, access_token, clients(name, active)")
+    .select("client_id, ad_account_id, access_token, clients(name, active, meta_ad_account_id)")
     .eq("active", true);
   if (env.clientId) consulta = consulta.eq("client_id", env.clientId);
 
@@ -168,7 +168,7 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
   const resultados: MetaAdsGraphResult[] = [];
 
   for (const conta of contas) {
-    const cliente = conta.clients as unknown as { name: string; active: boolean } | null;
+    const cliente = conta.clients as unknown as { name: string; active: boolean; meta_ad_account_id: string | null } | null;
     if (!cliente?.active) continue;
 
     const r: MetaAdsGraphResult = {
@@ -190,6 +190,10 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
     const tokenConta =
       (conta as { access_token?: string | null }).access_token || env.accessToken;
     if (!tokenConta) {
+      // Conta sem token própria que a Windsor já cobre (clients.meta_ad_account_id):
+      // não é falha, só não é desta via. Registrar "sem token" aqui mostrava erro
+      // falso no botão e no selo de clientes como Keylon, Doctor Creator e Lana.
+      if (cliente.meta_ad_account_id === conta.ad_account_id) continue;
       r.errors.push("sem token: nem access_token na conta nem META_ADS_TOKEN no ambiente");
       resultados.push(r);
       continue;
