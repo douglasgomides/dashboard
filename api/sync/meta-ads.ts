@@ -50,7 +50,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const syncDaysParam = typeof req.query.sync_days === "string" ? Number(req.query.sync_days) : undefined;
-  const syncDays = syncDaysParam && Number.isFinite(syncDaysParam) ? syncDaysParam : undefined;
+  // Piso de 30 dias: a rotina diária chamava com 7, e qualquer falha de mais de uma
+// semana (ou conta recém-ligada) deixava buraco no histórico para sempre.
+const PISO_DIAS_ANUNCIOS = 30;
+  const syncDays = Math.max(syncDaysParam && Number.isFinite(syncDaysParam) ? syncDaysParam : 0, PISO_DIAS_ANUNCIOS);
   const dateFrom = typeof req.query.from === "string" ? req.query.from : undefined;
   const dateTo = typeof req.query.to === "string" ? req.query.to : undefined;
   const clientId = typeof req.query.client_id === "string" ? req.query.client_id : undefined;
