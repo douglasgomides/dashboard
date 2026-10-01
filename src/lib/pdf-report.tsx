@@ -489,3 +489,37 @@ export async function downloadClientReport(data: ReportData) {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+// PDF simples a partir de um texto livre (relatório editável da aba Relatório).
+// Reaproveita estilos e rodapé do relatório completo.
+function TextReportDocument({ clientName, periodLabel, text }: { clientName: string; periodLabel: string; text: string }) {
+  const paragraphs = text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        <Text style={styles.eyebrow}>Relatório do período</Text>
+        <Text style={styles.title}>{clientName}</Text>
+        <Text style={styles.subtitle}>{periodLabel}</Text>
+        {paragraphs.map((p, i) => (
+          <Text key={i} style={styles.methodP}>
+            {p}
+          </Text>
+        ))}
+        <Footer page={1} />
+      </Page>
+    </Document>
+  );
+}
+
+export async function downloadTextReport(data: { clientName: string; periodLabel: string; text: string }) {
+  const blob = await pdf(<TextReportDocument {...data} />).toBlob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const safeName = data.clientName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  a.href = url;
+  a.download = `relatorio-${safeName}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

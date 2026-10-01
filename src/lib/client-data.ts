@@ -272,3 +272,19 @@ export async function getCrmProvider(clientId: string): Promise<string | null> {
   if (error) throw error;
   return data ?? null;
 }
+
+// Perguntas de paciente nos comentários dentro do período (para a fila de
+// Ideias e para o Relatório). Mesma heurística is_question de getPatientQuestions.
+export async function getPatientQuestionsPeriodo(clientId: string, start: string, end: string, limit = 1000) {
+  const { data, error } = await supabase
+    .from("instagram_comments")
+    .select("id, text, like_count, instagram_post_id, commented_at")
+    .eq("client_id", clientId)
+    .eq("is_question", true)
+    .gte("commented_at", start)
+    .lte("commented_at", end + "T23:59:59")
+    .order("commented_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
+}
