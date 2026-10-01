@@ -113,6 +113,7 @@ export type Database = {
           avatar_url: string | null
           cfm_score_status: CfmScoreStatus | null
           created_at: string
+          em_onboarding: boolean
           id: string
           instagram_handle: string | null
           meta_ad_account_id: string | null
@@ -127,6 +128,7 @@ export type Database = {
           avatar_url?: string | null
           cfm_score_status?: CfmScoreStatus | null
           created_at?: string
+          em_onboarding?: boolean
           id?: string
           instagram_handle?: string | null
           meta_ad_account_id?: string | null
@@ -141,6 +143,7 @@ export type Database = {
           avatar_url?: string | null
           cfm_score_status?: CfmScoreStatus | null
           created_at?: string
+          em_onboarding?: boolean
           id?: string
           instagram_handle?: string | null
           meta_ad_account_id?: string | null

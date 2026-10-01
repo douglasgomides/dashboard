@@ -38,6 +38,12 @@ export const Route = createFileRoute("/_authenticated/$clientId")({
   }),
 });
 
+// Clientes que só têm CRM ligado e não têm Business Manager: mostram só a aba
+// Comercial. As demais abas ficam escondidas e quem abrir o endereço delas é
+// levado ao Comercial. Dra. Fernanda Nunes (RD Station CRM).
+const CLIENTES_SO_CRM = new Set(["8770500e-ab5d-4ae8-9489-c49c9991303c"]);
+const ROTAS_DO_CRM = ["/crm-painel", "/crm-estrutura", "/vendas-kommo"];
+
 type Fonte = "instagram" | "anuncios" | "crm" | "atendimento";
 type NavItem = { to: string; label: string; Icone: typeof LayoutGrid; exact?: boolean; admin?: boolean; fonte?: Fonte };
 type NavGroup = { titulo: string; itens: NavItem[] };
@@ -91,6 +97,15 @@ function ClientLayout() {
     return true;
   };
 
+  const soCrm = CLIENTES_SO_CRM.has(clientId);
+  useEffect(() => {
+    if (!soCrm) return;
+    const dentroDoCrm = ROTAS_DO_CRM.some((r) => currentPathname.endsWith(r));
+    if (!dentroDoCrm) {
+      navigate({ to: "/$clientId/crm-painel", params: { clientId }, search: dateRange, replace: true });
+    }
+  }, [soCrm, currentPathname, clientId, navigate, dateRange]);
+
   const [drawer, setDrawer] = useState(false);
   const [pal, setPal] = useState(false);
 
@@ -117,7 +132,12 @@ function ClientLayout() {
   const nav = (
     <nav className="side">
       {groups.map((g) => {
-        const itens = g.itens.filter((it) => (!it.admin || isAdmin) && fonteOk(it.fonte));
+        const itens = g.itens.filter(
+          (it) =>
+            (!it.admin || isAdmin) &&
+            fonteOk(it.fonte) &&
+            (!soCrm || it.admin || it.fonte === "crm"),
+        );
         if (itens.length === 0) return null;
         return (
           <div key={g.titulo}>
