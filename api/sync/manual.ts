@@ -6,6 +6,9 @@ import { runMetaGraphSync } from "../_lib/meta-graph-sync.js";
 import { runInstagramSync } from "../_lib/instagram-sync.js";
 import { runWtsSync } from "../_lib/wts-sync.js";
 import { runMetaCommentsSync } from "../_lib/meta-comments-sync.js";
+import { runKommoLeadsSync } from "../_lib/kommo-leads-sync.js";
+import { runClintSync } from "../_lib/clint-sync.js";
+import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_lib/sync-status.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
 //
@@ -20,8 +23,17 @@ import { runMetaCommentsSync } from "../_lib/meta-comments-sync.js";
 
 const DIAS_DE_JANELA = 7;
 
-function temErro(r: { contas?: { errors: string[] }[] } | undefined): boolean {
-  return (r?.contas ?? []).some((c) => c.errors.length > 0);
+// O alvo do botão (posts) e a fonte do registro (instagram) têm nomes diferentes.
+const FONTE_DO_ALVO: Record<string, FonteSync> = {
+  posts: "instagram",
+  comentarios: "comentarios",
+  anuncios: "anuncios",
+  atendimento: "atendimento",
+  crm: "crm",
+};
+
+function temErro(r: { ok?: boolean; contas?: { errors: string[] }[] } | undefined): boolean {
+  return r?.ok === false || (r?.contas ?? []).some((c) => c.errors.length > 0);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -63,9 +75,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "tudo"];
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "tudo"];
   if (!client_id || !alvo || !ALVOS.includes(alvo)) {
-    res.status(400).json({ error: "Informe client_id e alvo ('tudo', 'posts', 'anuncios', 'atendimento' ou 'comentarios')" });
+    res.status(400).json({ error: "Informe client_id e alvo ('tudo', 'posts', 'anuncios', 'atendimento', 'comentarios' ou 'crm')" });
     return;
   }
 
@@ -103,6 +115,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const TOKEN_ADS = process.env.META_ADS_TOKEN;
       let linhas = 0;
       let temConta = false;
+      let graphTemConta = false;
+      const erros: string[] = [];
 
       {
         const g = await runMetaAdsGraphSync({
@@ -114,6 +128,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
         if (g.length > 0) temConta = true;
         linhas += g.reduce((a, c) => a + c.rows, 0);
+        // Erro da Graph é sempre real: a conta está cadastrada para ela.
+        erros.push(...g.flatMap((c) => c.errors));
+        graphTemConta = g.length > 0;
       }
 
       if (WINDSOR_API_KEY) {
@@ -126,12 +143,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
         if (w.length > 0) temConta = true;
         linhas += w.reduce((a, c) => a + c.rows, 0);
+        // Erro da Windsor só vale quando a Graph não serve este cliente; do
+        // contrário é o ruído esperado de conta que a Windsor não enxerga.
+        if (!graphTemConta) erros.push(...w.flatMap((c) => c.errors));
       }
 
       if (!temConta) {
         return { nada_a_fazer: "Este cliente não tem conta de anúncio ligada ao cadastro." };
       }
-      return { linhas };
+      return { linhas, erros };
     }
 
     async function sincronizarAtendimento() {
@@ -235,23 +255,131 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return { comentarios: contas.reduce((a, c) => a + (c.comments ?? 0), 0), contas };
     }
 
+    // CRM: Kommo e Clint do cliente, janela curta. Planilha é dado estático
+    // (importado à mão) — não há o que sincronizar, e dizer isso é melhor que
+    // fingir que atualizou.
+    async function sincronizarCrm() {
+      const { data: conexoes, error: erroCon } = await admin
+        .from("crm_connections")
+        .select("id, provider, subdomain, access_token")
+        .eq("client_id", client_id)
+        .eq("active", true);
+      if (erroCon) throw new Error(erroCon.message);
+
+      const kommo = (conexoes ?? []).filter((c) => c.provider === "kommo");
+      const clint = (conexoes ?? []).filter((c) => c.provider === "clint");
+      const planilha = (conexoes ?? []).filter((c) => c.provider === "planilha");
+
+      if (kommo.length === 0 && clint.length === 0) {
+        return planilha.length > 0
+          ? { nada_a_fazer: "CRM por planilha, não sincroniza.", linhas: 0, erros: [] as string[] }
+          : { nada_a_fazer: "Este cliente não tem CRM ligado ao cadastro.", linhas: 0, erros: [] as string[] };
+      }
+
+      let linhas = 0;
+      const erros: string[] = [];
+
+      for (const conn of kommo) {
+        const tokenKommo = conn.access_token || process.env.KOMMO_API_TOKEN;
+        if (!conn.subdomain) {
+          erros.push("Kommo: conexão sem subdomínio configurado");
+          continue;
+        }
+        if (!tokenKommo) {
+          erros.push("Kommo: conexão sem token e servidor sem KOMMO_API_TOKEN");
+          continue;
+        }
+        try {
+          const r = await runKommoLeadsSync({
+            accessToken: tokenKommo,
+            kommoDomain: conn.subdomain.includes(".") ? conn.subdomain : `${conn.subdomain}.kommo.com`,
+            supabaseUrl: urlSupabase,
+            supabaseServiceRoleKey: chaveServico,
+            crmConnectionId: conn.id,
+            clientId: client_id as string,
+            maxPages: 3,
+          });
+          linhas += r.leadsUpserted;
+          erros.push(...r.errors.map((e) => `Kommo: ${e}`));
+        } catch (err) {
+          erros.push(`Kommo: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
+      if (clint.length > 0) {
+        try {
+          // 50s: a função tem ~60s de teto e a Clint não filtra por data.
+          const r = await runClintSync({
+            supabaseUrl: urlSupabase,
+            supabaseServiceRoleKey: chaveServico,
+            onlyClientId: client_id,
+            deadlineMs: Date.now() + 50_000,
+          });
+          linhas += r.reduce((a, c) => a + c.negocios, 0);
+          erros.push(...r.flatMap((c) => c.errors.map((e) => `Clint: ${e}`)));
+        } catch (err) {
+          erros.push(`Clint: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
+      return { linhas, erros };
+    }
+
+    // Cada parte devolve o formato antigo MAIS o resumo honesto: ok, linhas,
+    // erro e dados_ate (frescura lida do DADO depois do sync, não da tentativa).
+    // Também deixa o resultado registrado em sync_status.
+    async function executar(nome: string, fn: () => Promise<any>) {
+      const fonte = FONTE_DO_ALVO[nome];
+      let r: any;
+      try {
+        r = await fn();
+      } catch (err) {
+        const msg = erroCurto(err instanceof Error ? err.message : String(err)) ?? "erro desconhecido";
+        await recordSyncStatus(admin, client_id as string, fonte, { ok: false, error: msg });
+        throw Object.assign(new Error(msg), { registrado: true });
+      }
+      const errosLista: string[] = [
+        ...(r?.erros ?? []),
+        ...(r?.contas ?? []).flatMap((c: { errors?: string[] }) => c.errors ?? []),
+      ];
+      const erro = erroCurto(errosLista[0]);
+      const linhas: number = r?.linhas ?? r?.posts ?? r?.comentarios ?? r?.sessoes ?? 0;
+      if (r?.nada_a_fazer) {
+        return { ...r, ok: true, linhas: 0, erro: null, dados_ate: await lerDadosAte(admin, client_id as string, fonte) };
+      }
+      const ok = errosLista.length === 0;
+      const dadosAte = await lerDadosAte(admin, client_id as string, fonte);
+      await recordSyncStatus(admin, client_id as string, fonte, {
+        ok,
+        rows: linhas,
+        error: erro,
+        dataAte: dadosAte,
+      });
+      return { ...r, ok, linhas, erro, dados_ate: dadosAte };
+    }
+
     if (alvo === "anuncios") {
-      const r = await sincronizarAnuncios();
+      const r = await executar("anuncios", sincronizarAnuncios);
       res.status(temErro(r) ? 207 : 200).json({ alvo, ...r });
       return;
     }
     if (alvo === "atendimento") {
-      const r = await sincronizarAtendimento();
+      const r = await executar("atendimento", sincronizarAtendimento);
       res.status(temErro(r) ? 207 : 200).json({ alvo, ...r });
       return;
     }
     if (alvo === "comentarios") {
-      const r = await sincronizarComentarios();
+      const r = await executar("comentarios", sincronizarComentarios);
       res.status(temErro(r) ? 207 : 200).json({ alvo, ...r });
       return;
     }
     if (alvo === "posts") {
-      const r = await sincronizarPosts();
+      const r = await executar("posts", sincronizarPosts);
+      res.status(temErro(r) ? 207 : 200).json({ alvo, ...r });
+      return;
+    }
+    if (alvo === "crm") {
+      const r = await executar("crm", sincronizarCrm);
       res.status(temErro(r) ? 207 : 200).json({ alvo, ...r });
       return;
     }
@@ -259,21 +387,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // "tudo": cada parte falha por conta própria. Cliente sem conta de anúncio
     // não pode impedir que os posts dele atualizem — por isso cada bloco é
     // capturado em separado em vez de derrubar a requisição inteira.
+    //
+    // Em paralelo: a função tem ~60s de teto e cinco partes em fila (posts da
+    // Graph, comentários, anúncios, WTS e agora CRM) somavam mais que isso.
+    // Partes tocam serviços diferentes e não dependem umas das outras.
     const partes: Record<string, unknown> = {};
-    for (const [nome, fn] of [
-      ["posts", sincronizarPosts],
-      ["comentarios", sincronizarComentarios],
-      ["anuncios", sincronizarAnuncios],
-      ["atendimento", sincronizarAtendimento],
-    ] as const) {
-      try {
-        partes[nome] = await fn();
-      } catch (err) {
-        partes[nome] = { erro: err instanceof Error ? err.message : String(err) };
-      }
-    }
+    await Promise.all(
+      (
+        [
+          ["posts", sincronizarPosts],
+          ["comentarios", sincronizarComentarios],
+          ["anuncios", sincronizarAnuncios],
+          ["atendimento", sincronizarAtendimento],
+          ["crm", sincronizarCrm],
+        ] as const
+      ).map(async ([nome, fn]) => {
+        try {
+          partes[nome] = await executar(nome, fn);
+        } catch (err) {
+          partes[nome] = {
+            ok: false,
+            linhas: 0,
+            erro: err instanceof Error ? err.message : String(err),
+            dados_ate: null,
+          };
+        }
+      }),
+    );
     const algumErro = Object.values(partes).some(
-      (r) => (r as any)?.erro || temErro(r as any),
+      (r) => (r as any)?.ok === false || (r as any)?.erro || temErro(r as any),
     );
     res.status(algumErro ? 207 : 200).json({ alvo, partes });
   } catch (err) {

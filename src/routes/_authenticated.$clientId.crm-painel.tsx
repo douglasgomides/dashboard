@@ -9,6 +9,7 @@ import {
   getCrmAtividadeRecente,
   getCrmProvider,
 } from "@/lib/client-data";
+import { SyncButton } from "@/components/sync-button";
 
 // Nome de exibição do CRM — evita chamar tudo de "Kommo" quando o cliente é Clint.
 function nomeCrm(provider: string | null | undefined): string {
@@ -255,6 +256,11 @@ function CrmPainelPage() {
 
   return (
     <div className="space-y-4">
+      {(crmProvider === "kommo" || crmProvider === "clint") && clientId !== "8d4b3b3f-74a7-419a-a113-35ebc02cb37f" && (
+        <div className="flex justify-end">
+          <SyncButton clientId={clientId} alvo="crm" />
+        </div>
+      )}
       {clientId === "8d4b3b3f-74a7-419a-a113-35ebc02cb37f" ? (
         <div
           className="rounded-xl border p-4 text-sm"

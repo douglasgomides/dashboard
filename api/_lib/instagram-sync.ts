@@ -28,6 +28,7 @@ export interface SyncEnv {
 
 export interface AccountSyncResult {
   accountId: string;
+  clientId: string;
   windsorAccountId: string;
   posts: number;
   dailyMetrics: number;
@@ -424,6 +425,7 @@ export async function runInstagramSync(env: SyncEnv): Promise<AccountSyncResult[
 
     results.push({
       accountId: account.id,
+      clientId: account.client_id,
       windsorAccountId: account.windsor_account_id,
       posts: posts.count,
       dailyMetrics: daily.count,

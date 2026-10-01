@@ -1,4 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { createClient } from "@supabase/supabase-js";
+import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";
 import { runMetaAdsGraphSync } from "../_lib/meta-ads-graph-sync.js";
 
@@ -53,7 +55,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const dateTo = typeof req.query.to === "string" ? req.query.to : undefined;
   const clientId = typeof req.query.client_id === "string" ? req.query.client_id : undefined;
 
-  const fonte = typeof req.query.fonte === "string" ? req.query.fonte : "windsor";
+  const fonte = typeof req.query.fonte === "string" ? req.query.fonte : "ambas";
+
+  // Sem `fonte`, o endpoint roda as DUAS vias: Windsor (uma conta por cliente,
+  // clients.meta_ad_account_id) e Graph (contas em client_ad_accounts, token por
+  // conta). Antes o padrão era só Windsor, e as contas lidas direto da Meta
+  // (HOMS, Sergio, Antônio, Ana Claudia) só atualizavam no clique do botão.
+  const urlSb: string = SUPABASE_URL;
+  const chaveSb: string = SUPABASE_SERVICE_ROLE_KEY;
+  async function rodarGraph() {
+    const contas = await runMetaAdsGraphSync({
+      accessToken: process.env.META_ADS_TOKEN,
+      supabaseUrl: urlSb,
+      supabaseServiceRoleKey: chaveSb,
+      syncDays,
+      dateFrom,
+      dateTo,
+      clientId,
+    });
+    await recordSyncStatusPorCliente(
+      createClient(urlSb, chaveSb, { auth: { persistSession: false, autoRefreshToken: false } }),
+      "anuncios",
+      contas.map((c) => ({ clientId: c.client_id, rows: c.rows, errors: c.errors })),
+      { okSeHouveLinhas: true },
+    );
+    return contas;
+  }
 
   if (fonte === "graph") {
     // Token separado do META_ACCESS_TOKEN de propósito.
@@ -81,6 +108,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         dateTo,
         clientId,
       });
+      await recordSyncStatusPorCliente(
+        createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
+        "anuncios",
+        contas.map((c) => ({ clientId: c.client_id, rows: c.rows, errors: c.errors })),
+        { okSeHouveLinhas: true },
+      );
       const temErro = contas.some((c) => c.errors.length > 0);
       res.status(temErro ? 207 : 200).json({ fonte: "graph", synced_at: new Date().toISOString(), contas });
     } catch (err) {
@@ -100,8 +133,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       clientId,
     });
 
-    const hasErrors = results.some((r) => r.errors.length > 0);
-    res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), accounts: results });
+    await recordSyncStatusPorCliente(
+      createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
+      "anuncios",
+      // Só o que a Windsor efetivamente entregou: o erro dela sobre contas que
+      // a Graph alimenta é esperado e apagaria o sucesso registrado pela Graph.
+      results.filter((r) => r.rows > 0).map((r) => ({ clientId: r.clientId, rows: r.rows, errors: [] })),
+    );
+    let graph: unknown = undefined;
+    let graphComErro = false;
+    if (fonte === "ambas") {
+      try {
+        const contasGraph = await rodarGraph();
+        graph = contasGraph;
+        graphComErro = contasGraph.some((c) => c.errors.length > 0);
+      } catch (err) {
+        graph = { erro: err instanceof Error ? err.message : String(err) };
+        graphComErro = true;
+      }
+    }
+    const hasErrors = results.some((r) => r.errors.length > 0) || graphComErro;
+    res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), accounts: results, ...(graph !== undefined ? { graph } : {}) });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }

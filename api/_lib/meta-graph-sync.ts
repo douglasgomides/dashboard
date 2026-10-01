@@ -59,6 +59,7 @@ export interface MetaSyncEnv {
 
 export interface MetaAccountSyncResult {
   accountId: string;
+  clientId: string;
   igAccountId: string;
   posts: number;
   temasClassified: number;
@@ -344,18 +345,51 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
       .maybeSingle();
     const tokenDaConta = segredo?.meta_access_token ?? env.accessToken;
 
-    const posts = await syncAccountPosts(
-      supabase,
-      tokenDaConta,
-      account.id,
-      account.windsor_account_id,
-      account.client_id,
-      maxPages,
-      after,
-    ).catch((err) => {
+    const vazio = { count: 0, errors: [] as string[], nextCursor: null as string | null, done: true };
+    const buscar = (cursor: string | undefined, paginas: number) =>
+      syncAccountPosts(
+        supabase,
+        tokenDaConta,
+        account.id,
+        account.windsor_account_id,
+        account.client_id,
+        paginas,
+        cursor,
+      );
+
+    // Backfill em andamento (retomando de um cursor salvo): antes, a execução
+    // só andava para TRÁS a partir do cursor e nunca relia o topo. Resultado:
+    // conta com backfill inacabado deixava de ver post novo (e de atualizar
+    // as métricas dos recentes) até o backfill terminar — e se o cursor
+    // ficasse inválido, a conta congelava sem ninguém notar (caso da Dra.
+    // Marcelly Achkar, parada em 18/09). Agora toda execução relê a primeira
+    // página do topo antes de continuar o backfill.
+    let postsTopo = 0;
+    const retomando = !env.after && after !== undefined;
+    if (retomando) {
+      const topo = await buscar(undefined, 1).catch((err) => {
+        errors.push(`posts (topo): ${err instanceof Error ? err.message : String(err)}`);
+        return vazio;
+      });
+      postsTopo = topo.count;
+      errors.push(...topo.errors);
+    }
+
+    let posts = await buscar(after, maxPages).catch((err) => {
+      // Cursor salvo que a Meta não aceita mais (expirou/invalidou): em vez de
+      // repetir o mesmo erro para sempre, descarta o cursor e recomeça o
+      // backfill do topo. O upsert é idempotente, então não duplica nada.
+      if (retomando) return null;
       errors.push(`posts: ${err instanceof Error ? err.message : String(err)}`);
-      return { count: 0, errors: [], nextCursor: null, done: true };
+      return vazio;
     });
+    if (posts === null) {
+      posts = await buscar(undefined, maxPages).catch((err) => {
+        errors.push(`posts: ${err instanceof Error ? err.message : String(err)}`);
+        return vazio;
+      });
+    }
+    posts = { ...posts, count: posts.count + postsTopo };
 
     if (errors.length === 0) {
       const { error: stateError } = await supabase.from("instagram_backfill_state").upsert(
@@ -377,6 +411,7 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
 
     results.push({
       accountId: account.id,
+      clientId: account.client_id,
       igAccountId: account.windsor_account_id,
       posts: posts.count,
       temasClassified: temas.count,

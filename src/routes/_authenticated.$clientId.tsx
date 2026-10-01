@@ -26,6 +26,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { LogoutButton } from "@/components/logout-button";
 import { DateRangePicker } from "@/components/date-range-picker";
 import { ClientAvatar } from "@/components/client-avatar";
+import { SyncFreshnessBadge } from "@/components/sync-freshness-badge";
 import type { DateRangeState, RangePreset } from "@/lib/date-range";
 
 export const Route = createFileRoute("/_authenticated/$clientId")({
@@ -246,6 +247,7 @@ function ClientLayout() {
               <ShieldCheck /> CFM em conformidade
             </span>
           )}
+          <SyncFreshnessBadge clientId={clientId} />
           <span className="spacer" />
           <DateRangePicker
             value={dateRange}

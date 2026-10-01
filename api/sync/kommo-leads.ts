@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
+import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runKommoLeadsSync } from "../_lib/kommo-leads-sync.js";
 import { runKommoReconcile } from "../_lib/kommo-reconcile.js";
 
@@ -100,6 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const results = [];
+    const clientePorConexao = new Map((connections ?? []).map((c) => [c.id, c.client_id]));
     for (const conn of connections ?? []) {
       if (!conn.subdomain) {
         results.push({ connectionId: conn.id, errors: ["sem subdomínio configurado, não dá pra montar a URL da API"] });
@@ -116,6 +118,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       results.push({ connectionId: conn.id, ...result });
     }
+    await recordSyncStatusPorCliente(
+      supabase,
+      "crm",
+      results.map((r) => ({
+        clientId: clientePorConexao.get((r as { connectionId: string }).connectionId) as string,
+        rows: "leadsUpserted" in r ? r.leadsUpserted : 0,
+        errors: "errors" in r && r.errors ? r.errors : [],
+      })),
+    );
     const hasErrors = results.some((r) => "errors" in r && r.errors && r.errors.length > 0);
     res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), connections: results });
   } catch (err) {

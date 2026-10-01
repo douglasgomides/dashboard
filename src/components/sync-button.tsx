@@ -3,15 +3,53 @@ import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-type Alvo = "posts" | "anuncios" | "atendimento" | "comentarios" | "tudo";
+type Alvo = "posts" | "anuncios" | "atendimento" | "comentarios" | "crm" | "tudo";
+
+const NOMES: Record<string, string> = {
+  posts: "Instagram",
+  comentarios: "Comentários",
+  anuncios: "Anúncios",
+  atendimento: "Atendimento",
+  crm: "CRM",
+};
+
+type Parte = {
+  ok?: boolean;
+  linhas?: number;
+  erro?: string | null;
+  dados_ate?: string | null;
+  nada_a_fazer?: string;
+};
+type Mensagem = { texto: string; erro: boolean };
+
+// "2026-09-18" -> "18/09". Sem new Date(): evitaria o deslocamento de fuso.
+function ddmm(iso: string | null | undefined): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+  return m ? `${m[3]}/${m[2]}` : null;
+}
+
+// Mensagem honesta de uma parte: diz até que data o DADO vai (lida do banco
+// depois do sync), distingue "nada novo" de "atualizado" e nunca transforma
+// erro em sucesso. Nunca "0 linhas atualizadas" como se fosse vitória.
+function mensagemDaParte(nome: string, p: Parte, sozinha: boolean): Mensagem | null {
+  const rotulo = NOMES[nome] ?? nome;
+  if (p.nada_a_fazer) return sozinha ? { texto: p.nada_a_fazer, erro: false } : null;
+  if (p.ok === false || p.erro) {
+    return { texto: `${rotulo}: erro — ${p.erro ?? "falha na sincronização"}`, erro: true };
+  }
+  const ate = ddmm(p.dados_ate);
+  if ((p.linhas ?? 0) > 0) {
+    return { texto: ate ? `${rotulo} atualizado até ${ate}.` : `${rotulo} atualizado.`, erro: false };
+  }
+  return { texto: ate ? `${rotulo}: nada novo desde ${ate}.` : `${rotulo}: nada novo.`, erro: false };
+}
 
 // O sync roda dentro de uma função da Vercel e pode levar dezenas de segundos.
 // Nada de barra de progresso falsa: o botão diz o que está fazendo e espera.
 export function SyncButton({ clientId, alvo }: { clientId: string; alvo: Alvo }) {
   const queryClient = useQueryClient();
   const [estado, setEstado] = useState<"parado" | "rodando">("parado");
-  const [recado, setRecado] = useState<string | null>(null);
-  const [deuErro, setDeuErro] = useState(false);
+  const [mensagens, setMensagens] = useState<Mensagem[]>([]);
 
   const ROTULOS: Record<Alvo, string> = {
     tudo: "Atualizar dados",
@@ -19,13 +57,13 @@ export function SyncButton({ clientId, alvo }: { clientId: string; alvo: Alvo })
     anuncios: "Sincronizar anúncios",
     atendimento: "Sincronizar atendimento",
     comentarios: "Sincronizar comentários",
+    crm: "Sincronizar CRM",
   };
   const rotulo = ROTULOS[alvo];
 
   async function sincronizar() {
     setEstado("rodando");
-    setRecado(null);
-    setDeuErro(false);
+    setMensagens([]);
     try {
       const { data: sessao } = await supabase.auth.getSession();
       const token = sessao.session?.access_token;
@@ -42,41 +80,29 @@ export function SyncButton({ clientId, alvo }: { clientId: string; alvo: Alvo })
         throw new Error(corpo?.error ?? `Falhou (${resposta.status})`);
       }
 
-      if (corpo?.nada_a_fazer) {
-        setRecado(corpo.nada_a_fazer);
-      } else if (alvo === "anuncios") {
-        setRecado(`${corpo.linhas ?? 0} linhas atualizadas.`);
-      } else if (alvo === "atendimento") {
-        setRecado(`${corpo.sessoes ?? 0} atendimentos atualizados.`);
-      } else if (alvo === "comentarios") {
-        setRecado(`${corpo.comentarios ?? 0} comentários atualizados.`);
-      } else if (alvo === "tudo") {
+      const msgs: Mensagem[] = [];
+      if (alvo === "tudo") {
         // Em "tudo" cada parte responde por si: uma sem conta configurada não
-        // deve parecer falha da atualização inteira.
-        const p = corpo.partes ?? {};
-        const pedacos: string[] = [];
-        if (p.posts?.posts) pedacos.push(`${p.posts.posts} posts`);
-        if (p.comentarios?.comentarios) pedacos.push(`${p.comentarios.comentarios} comentários`);
-        if (p.anuncios?.linhas) pedacos.push(`${p.anuncios.linhas} linhas de anúncio`);
-        if (p.atendimento?.sessoes) pedacos.push(`${p.atendimento.sessoes} atendimentos`);
-        setRecado(pedacos.length ? `Atualizado: ${pedacos.join(", ")}.` : "Nada novo para atualizar.");
-        const falhou = Object.values(p).some((r: any) => r?.erro);
-        if (falhou) setDeuErro(true);
+        // deve parecer falha da atualização inteira (some da lista).
+        for (const [nome, p] of Object.entries<Parte>(corpo.partes ?? {})) {
+          const m = mensagemDaParte(nome, p, false);
+          if (m) msgs.push(m);
+        }
+        if (msgs.length === 0) msgs.push({ texto: "Nada para atualizar neste cliente.", erro: false });
       } else {
-        setRecado(`${corpo.posts ?? 0} posts atualizados.`);
+        const m = mensagemDaParte(alvo, corpo as Parte, true);
+        if (m) msgs.push(m);
       }
 
-      // 207 = uma conta falhou e as outras não. Vale avisar sem tratar como
-      // erro total, porque parte do dado entrou.
-      if (resposta.status === 207) {
-        setDeuErro(true);
-        setRecado((r) => `${r ?? ""} Algumas contas falharam.`.trim());
+      // 207 sem texto de erro nas partes: ainda assim avisa.
+      if (resposta.status === 207 && !msgs.some((m) => m.erro)) {
+        msgs.push({ texto: "Algumas contas falharam.", erro: true });
       }
+      setMensagens(msgs);
 
       await queryClient.invalidateQueries();
     } catch (err) {
-      setDeuErro(true);
-      setRecado(err instanceof Error ? err.message : String(err));
+      setMensagens([{ texto: err instanceof Error ? err.message : String(err), erro: true }]);
     } finally {
       setEstado("parado");
     }
@@ -104,10 +130,14 @@ export function SyncButton({ clientId, alvo }: { clientId: string; alvo: Alvo })
         <RefreshCw size={14} className={estado === "rodando" ? "animate-spin" : undefined} />
         {estado === "rodando" ? "Sincronizando…" : rotulo}
       </button>
-      {recado && (
-        <span className="text-xs" style={{ color: deuErro ? "var(--danger)" : "var(--text-dim)" }}>
-          {recado}
-        </span>
+      {mensagens.length > 0 && (
+        <div className="flex flex-col text-xs">
+          {mensagens.map((m, i) => (
+            <span key={i} style={{ color: m.erro ? "var(--danger)" : "var(--text-dim)" }}>
+              {m.texto}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );

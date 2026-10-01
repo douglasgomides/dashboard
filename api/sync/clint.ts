@@ -1,4 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { createClient } from "@supabase/supabase-js";
+import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runClintSync } from "../_lib/clint-sync.js";
 
 // Sync dos negócios da Clint, chamado pelo n8n. Máquina chamando máquina,
@@ -37,6 +39,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
       onlyClientId: clientId,
     });
+    await recordSyncStatusPorCliente(
+      createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
+      "crm",
+      results.map((r) => ({ clientId: r.clientId, rows: r.negocios, errors: r.errors })),
+    );
     const hasErrors = results.some((r) => r.errors.length > 0);
     res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), connections: results });
   } catch (err) {
