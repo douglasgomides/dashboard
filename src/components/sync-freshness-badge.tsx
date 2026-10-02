@@ -51,11 +51,11 @@ export function SyncFreshnessBadge({ clientId }: { clientId: string }) {
     queryKey: ["client-sync-status", clientId],
     queryFn: async () => {
       // RPC fora do types.ts gerado (criada junto com este componente).
-      const rpc = supabase.rpc as unknown as (
-        fn: string,
-        args: Record<string, unknown>,
-      ) => Promise<{ data: Linha[] | null; error: unknown }>;
-      const { data, error } = await rpc("client_sync_status", { p_client_id: clientId });
+      // Chamar pelo client: soltar supabase.rpc perde o `this` e falha em silêncio.
+      const cliente = supabase as unknown as {
+        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: Linha[] | null; error: unknown }>;
+      };
+      const { data, error } = await cliente.rpc("client_sync_status", { p_client_id: clientId });
       if (error) throw error;
       return data ?? [];
     },
