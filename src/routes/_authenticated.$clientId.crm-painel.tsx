@@ -212,10 +212,11 @@ function AtividadeRecente({ clientId }: { clientId: string }) {
                   {r.fonte} · {r.pipeline}
                 </div>
               </div>
-              <div className="shrink-0 text-right">
+              <div className="min-w-0 max-w-[45%] shrink-0 text-right">
                 <span
-                  className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+                  className="inline-block max-w-full truncate rounded-full px-2 py-0.5 align-top text-xs font-medium"
                   style={{ background: "var(--surface-2)", color: "var(--text-dim)" }}
+                  title={r.etapa}
                 >
                   {r.etapa}
                 </span>
