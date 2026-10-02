@@ -1,0 +1,10 @@
+import { createClient } from "@supabase/supabase-js";
+import { runMetaGraphSync } from "./api/_lib/meta-graph-sync.ts";
+const url = process.env.SUPABASE_URL!, key = process.env.SK!;
+const sb = createClient(url, key, { auth: { persistSession: false } });
+const { data: c } = await sb.from("clients").select("id").eq("name", "Doctor Creator").single();
+const { data: a } = await sb.from("instagram_accounts").select("id,sync_source").eq("client_id", c!.id).eq("active", true).single();
+console.log("conta", a!.id.slice(0,8), a!.sync_source);
+const t = Date.now();
+const r = await runMetaGraphSync({ accessToken: "", supabaseUrl: url, supabaseServiceRoleKey: key, onlyAccountId: a!.id, maxPages: 1 });
+console.log("1 página em", Math.round((Date.now() - t) / 1000), "s:", JSON.stringify(r.map((x: any) => ({ posts: x.posts, done: x.done, next: x.nextCursor ? "sim" : "não", erros: (x.errors ?? []).map((e: string) => e.slice(0, 160)) }))));

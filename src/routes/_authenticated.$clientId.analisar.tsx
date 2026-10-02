@@ -1,6 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { definirEtapaResultado, listEtapasParaAnalise, type EtapaParaAnalise } from "@/lib/client-data";
+import {
+  definirEtapaKpi,
+  definirEtapaResultado,
+  listEtapasKpi,
+  listEtapasParaAnalise,
+  type EtapaKpi,
+  type EtapaParaAnalise,
+} from "@/lib/client-data";
 import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/_authenticated/$clientId/analisar")({
@@ -31,6 +38,20 @@ function AnalisarPage() {
     queryKey: ["crm-etapas-analise", clientId],
     queryFn: () => listEtapasParaAnalise(clientId),
     enabled: isAdmin,
+  });
+
+  const etapasKpi = useQuery({
+    queryKey: ["crm-etapas-kpi", clientId],
+    queryFn: () => listEtapasKpi(clientId),
+    enabled: isAdmin,
+  });
+
+  const salvarKpi = useMutation({
+    mutationFn: definirEtapaKpi,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm-etapas-kpi", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["crm-metricas-essenciais", clientId] });
+    },
   });
 
   const salvar = useMutation({
@@ -78,14 +99,14 @@ function AnalisarPage() {
   }
 
   const linhas = etapas.data ?? [];
-  if (linhas.length === 0) {
+  const kpis = etapasKpi.data ?? [];
+  if (linhas.length === 0 && kpis.length === 0) {
     return (
       <div>
         {head}
         <div className="card">
           <p className="note">
-            Nada a analisar neste cliente. A aba lista as etapas dos CRMs do tipo WTS Chat (Clinic Desk, Support CRM,
-            Synkronos). Kommo, Clint e RD Station já trazem ganho e perdido do próprio CRM.
+            Nada a analisar neste cliente: ele não tem etapas de CRM sincronizadas.
           </p>
         </div>
       </div>
@@ -215,6 +236,86 @@ function AnalisarPage() {
           </div>
         );
       })}
+
+      {kpis.length > 0 && <SecaoKpi etapas={kpis} salvar={salvarKpi} />}
+    </div>
+  );
+}
+
+function SecaoKpi({
+  etapas,
+  salvar,
+}: {
+  etapas: EtapaKpi[];
+  salvar: { mutate: (a: Parameters<typeof definirEtapaKpi>[0]) => void; isPending: boolean; isError: boolean; error: unknown };
+}) {
+  const porConexao = new Map<string, EtapaKpi[]>();
+  for (const e of etapas) porConexao.set(e.connection_id, [...(porConexao.get(e.connection_id) ?? []), e]);
+  const nenhumaMarcada = etapas.every((e) => !e.consulta_agendada);
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <h2>Cards do Comercial</h2>
+      <p className="sub">
+        Marque quais etapas contam como <b>consulta agendada</b> e como <b>em atendimento</b>. O nome da etapa sozinho engana
+        (por exemplo, "Redequação da agenda" ainda não é agendada), então a decisão é da equipe. A marcação aparece nos cards na
+        hora.
+      </p>
+      {nenhumaMarcada && (
+        <p className="note">Hoje nenhuma etapa deste cliente conta como consulta agendada, e o card mostra 0.</p>
+      )}
+      {[...porConexao.entries()].map(([conexao, grupo]) => (
+        <div key={conexao} style={{ overflowX: "auto", marginTop: 10 }}>
+          <table className="t">
+            <thead>
+              <tr>
+                <th className="l">Funil · etapa</th>
+                <th>Cards</th>
+                <th>Consulta agendada</th>
+                <th>Em atendimento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {grupo.map((e) => (
+                <tr key={`${e.pipeline_id}|${e.status_id}`} style={{ opacity: e.total === 0 ? 0.55 : 1 }}>
+                  <td className="l">
+                    {e.status_name}
+                    <span className="sub2">{e.pipeline_name}</span>
+                  </td>
+                  <td>{fmtN(e.total)}</td>
+                  {(["consulta_agendada", "em_atendimento"] as const).map((kpi) => {
+                    const marcada = kpi === "consulta_agendada" ? e.consulta_agendada : e.em_atendimento;
+                    const padrao = kpi === "consulta_agendada" ? e.padrao_consulta : e.padrao_atendimento;
+                    const origem = kpi === "consulta_agendada" ? e.origem_consulta : e.origem_atendimento;
+                    return (
+                      <td key={kpi}>
+                        <input
+                          type="checkbox"
+                          checked={marcada}
+                          disabled={padrao || salvar.isPending}
+                          aria-label={`${kpi === "consulta_agendada" ? "Consulta agendada" : "Em atendimento"}: ${e.status_name}`}
+                          onChange={(ev) =>
+                            salvar.mutate({
+                              connectionId: e.connection_id,
+                              pipelineId: e.pipeline_id,
+                              statusId: e.status_id,
+                              kpi,
+                              ativo: ev.target.checked,
+                            })
+                          }
+                        />
+                        <span className="sub2">{padrao ? "pelo nome" : origem === "sugestao" ? "sugerido" : marcada ? "equipe" : ""}</span>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+      {salvar.isError && (
+        <p className="note">Não consegui salvar: {salvar.error instanceof Error ? salvar.error.message : "erro desconhecido"}.</p>
+      )}
     </div>
   );
 }

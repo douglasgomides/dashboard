@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import {
   getCrmMetricasEssenciais,
   getCrmLeadsPorDia,
-  getCrmFunilPorCampo,
+  getCrmFunilPorCampoAlt,
   getCrmAtividadeRecente,
   getCrmProvider,
 } from "@/lib/client-data";
@@ -126,19 +126,19 @@ function TendenciaDeLeads({ clientId }: { clientId: string }) {
 function PorCampo({
   clientId,
   title,
-  fieldPattern,
+  fieldPatterns,
   emptyLabel,
   color,
 }: {
   clientId: string;
   title: string;
-  fieldPattern: string;
+  fieldPatterns: string[];
   emptyLabel: string;
   color: string;
 }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["crm-funil-campo-chart", clientId, fieldPattern],
-    queryFn: () => getCrmFunilPorCampo(clientId, fieldPattern),
+    queryKey: ["crm-funil-campo-chart", clientId, fieldPatterns],
+    queryFn: () => getCrmFunilPorCampoAlt(clientId, fieldPatterns),
   });
 
   const rows = (data ?? [])
@@ -328,14 +328,14 @@ function CrmPainelPage() {
         <PorCampo
           clientId={clientId}
           title="Leads por fonte"
-          fieldPattern="%Fonte do Lead%"
+          fieldPatterns={["%Fonte do Lead%", "%Origem do Lead%"]}
           emptyLabel="Nenhum lead com fonte identificada ainda."
           color="var(--accent)"
         />
         <PorCampo
           clientId={clientId}
           title="Leads por tipo de procedimento"
-          fieldPattern="%Tipo de Procedim%"
+          fieldPatterns={["%Tipo de Procedim%"]}
           emptyLabel="Nenhum lead com procedimento identificado ainda."
           color="var(--good)"
         />

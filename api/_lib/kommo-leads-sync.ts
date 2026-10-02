@@ -165,7 +165,8 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
         // isso, todo lead novo entraria sem data e sumiria dos "novos 7 dias".
         occurred_at: lead.created_at ? new Date(lead.created_at * 1000).toISOString() : null,
         outcome: kommoOutcome(lead.status_id),
-        source: kommoCampo(lead, /Fonte do Lead/i),
+        // "Fonte do Lead" (Lana) ou "Origem do Lead" (HOMS): o mesmo dado, nomes diferentes por conta.
+        source: kommoCampo(lead, /(Fonte|Origem) do Lead/i),
         contact_name: lead.name ?? null,
         raw_payload: lead as any,
         received_at: new Date().toISOString(),

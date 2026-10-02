@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { getCrmFunilPorCampo, getCrmLeadsPorEtapa } from "@/lib/client-data";
+import { getCrmFunilPorCampoAlt, getCrmLeadsPorEtapa } from "@/lib/client-data";
 
 export const Route = createFileRoute("/_authenticated/$clientId/vendas-kommo")({
   component: VendasKommoPage,
@@ -56,11 +56,11 @@ function VendasKommoPage() {
 
   const { data: porFonte, isLoading: loadingFonte } = useQuery({
     queryKey: ["crm-funil-fonte", clientId],
-    queryFn: () => getCrmFunilPorCampo(clientId, "%Fonte do Lead%"),
+    queryFn: () => getCrmFunilPorCampoAlt(clientId, ["%Fonte do Lead%", "%Origem do Lead%"]),
   });
   const { data: porProcedimento, isLoading: loadingProcedimento } = useQuery({
     queryKey: ["crm-funil-procedimento", clientId],
-    queryFn: () => getCrmFunilPorCampo(clientId, "%Tipo de Procedim%"),
+    queryFn: () => getCrmFunilPorCampoAlt(clientId, ["%Tipo de Procedim%"]),
   });
   const { data: porEtapa, isLoading: loadingEtapa } = useQuery({
     queryKey: ["crm-leads-etapa", clientId],
