@@ -15,7 +15,7 @@ import { SyncButton } from "@/components/sync-button";
 function nomeCrm(provider: string | null | undefined): string {
   if (provider === "clint") return "Clint";
   if (provider === "rdstation") return "RD Station";
-  if (provider === "flwchat") return "FlwChat";
+  if (provider === "flwchat") return "WTS Chat";
   if (provider === "kommo") return "Kommo";
   if (provider === "planilha") return "planilha";
   return "CRM";
