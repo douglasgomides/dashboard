@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAdminUser, createClient, listAllClients } from "@/lib/admin-data";
+import { ClientAvatar } from "@/components/client-avatar";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminClientsPage,
@@ -190,7 +191,12 @@ function AdminClientsPage() {
             <tbody>
               {(clients ?? []).map((c) => (
                 <tr key={c.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="px-4 py-2 font-medium">{c.name}</td>
+                  <td className="px-4 py-2 font-medium">
+                    <div className="flex items-center gap-3">
+                      <ClientAvatar nome={c.name} url={c.avatar_url} tamanho={36} />
+                      <span>{c.name}</span>
+                    </div>
+                  </td>
                   <td className="px-4 py-2" style={{ color: "var(--text-dim)" }}>
                     {c.specialty ?? "—"}
                   </td>
