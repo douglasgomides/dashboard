@@ -97,6 +97,16 @@ async function fetchCards(token: string, panelId: string, deadlineMs?: number): 
   return { cards: all, parcial: true };
 }
 
+// O painel de orçamentos descreve cada card como "NOME DO PROCEDIMENTO - 1 Sessão(ões) 1 Vez(es) a cada 7 dias".
+// O nome do procedimento é o que vem antes do " - N Sessão". Entra no payload no formato dos campos
+// customizados do Kommo, que é o que crm_funil_por_campo lê para o gráfico "por tipo de procedimento".
+function procedimentoDaDescricao(descricao: unknown): string | null {
+  if (typeof descricao !== "string") return null;
+  const m = descricao.replace(/\s+/g, " ").trim().match(/^(.+?)\s+-\s+\d+\s+Sess/i);
+  const nome = m?.[1]?.trim();
+  return nome ? nome : null;
+}
+
 export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncResult[]> {
   const supabase: SupabaseClient = createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -187,6 +197,7 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
           if (/^teste/i.test(titulo)) continue;
           if (desde && c.createdAt && c.createdAt.slice(0, 10) < desde) continue;
           const origem = c.customFields?.["origem-do-lead"];
+          const procedimento = procedimentoDaDescricao((c as { description?: unknown }).description);
           leadRows.push({
             crm_connection_id: conn.id,
             client_id: conn.client_id,
@@ -200,7 +211,9 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
             outcome: confirmadas.get(`${panelId}|${c.stepId ?? ""}`) ?? resultadoDaEtapa(stepNames.get(c.stepId ?? "") ?? ""),
             source: typeof origem === "string" && origem.trim() ? origem.trim() : null,
             contact_name: titulo || null,
-            raw_payload: c as unknown as Record<string, unknown>,
+            raw_payload: (procedimento
+              ? { ...c, custom_fields_values: [{ field_name: "Tipo de Procedimento", values: [{ value: procedimento }] }] }
+              : c) as unknown as Record<string, unknown>,
             received_at: c.updatedAt ?? c.createdAt ?? new Date().toISOString(),
           });
         }
