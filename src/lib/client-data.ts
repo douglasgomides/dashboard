@@ -97,6 +97,17 @@ export async function getCrmFunilPorCampo(clientId: string, fieldNamePattern: st
   return data;
 }
 
+// Algumas contas chamam o campo de "Fonte do Lead" e outras de "Origem do Lead".
+// Tenta os nomes em ordem e devolve o primeiro que tem pelo menos um valor informado.
+export async function getCrmFunilPorCampoAlt(clientId: string, padroes: string[]) {
+  let ultimo: Awaited<ReturnType<typeof getCrmFunilPorCampo>> = [];
+  for (const padrao of padroes) {
+    ultimo = await getCrmFunilPorCampo(clientId, padrao);
+    if (ultimo.some((r) => r.chave !== "Não informado")) return ultimo;
+  }
+  return ultimo;
+}
+
 // Leads por etapa nomeada, em todos os pipelines do cliente — mesmo motivo
 // de agregar no banco.
 export async function getCrmLeadsPorEtapa(clientId: string) {
@@ -346,4 +357,43 @@ export async function definirEtapaResultado(args: {
   });
   if (error) throw new Error(error.message ?? "falha ao salvar");
   return Number(data ?? 0);
+}
+
+export type EtapaKpi = {
+  connection_id: string;
+  provider: string;
+  pipeline_id: string;
+  pipeline_name: string;
+  status_id: string;
+  status_name: string;
+  total: number;
+  consulta_agendada: boolean;
+  em_atendimento: boolean;
+  padrao_consulta: boolean;
+  padrao_atendimento: boolean;
+  origem_consulta: "equipe" | "sugestao" | null;
+  origem_atendimento: "equipe" | "sugestao" | null;
+};
+
+export async function listEtapasKpi(clientId: string): Promise<EtapaKpi[]> {
+  const { data, error } = await (supabase as unknown as RpcClient).rpc("crm_etapas_kpi_para_analise", { p_client_id: clientId });
+  if (error) throw new Error(error.message ?? "falha ao ler as etapas");
+  return ((data as EtapaKpi[] | null) ?? []).map((r) => ({ ...r, total: Number(r.total) }));
+}
+
+export async function definirEtapaKpi(args: {
+  connectionId: string;
+  pipelineId: string;
+  statusId: string;
+  kpi: "consulta_agendada" | "em_atendimento";
+  ativo: boolean;
+}): Promise<void> {
+  const { error } = await (supabase as unknown as RpcClient).rpc("crm_definir_etapa_kpi", {
+    p_connection: args.connectionId,
+    p_pipeline: args.pipelineId,
+    p_status: args.statusId,
+    p_kpi: args.kpi,
+    p_ativo: args.ativo,
+  });
+  if (error) throw new Error(error.message ?? "falha ao salvar");
 }

@@ -11,7 +11,7 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import { getAdsResumo, getAdsPorDia, getAdsPorObjetivo, getAdsDiagnostico } from "@/lib/client-data";
+import { getAdsResumo, getAdsPorDia, getAdsPorObjetivo, getAdsDiagnostico, getClientFontes } from "@/lib/client-data";
 import { SyncButton } from "@/components/sync-button";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum, fmtBRL } from "@/lib/format";
@@ -145,11 +145,35 @@ function AnunciosPage() {
     conversas: n(r.conversas),
   }));
 
+  // Sem gasto no período: descobrir se a conta está pausada (já teve gasto antes),
+  // se está ligada mas nunca gastou, ou se nem está ligada. O texto muda para cada caso.
+  const vazio = !isLoading && (!resumo || gasto === 0);
+  const { data: fontes } = useQuery({
+    queryKey: ["fontes", clientId],
+    queryFn: () => getClientFontes(clientId),
+    enabled: vazio,
+  });
+  const { data: ultimoGasto } = useQuery({
+    queryKey: ["ads-ultimo-gasto", clientId],
+    queryFn: async () => {
+      const dias = await getAdsPorDia(clientId, "2024-01-01", end);
+      const comGasto = (dias ?? []).filter((r) => n(r.gasto) > 0);
+      return comGasto.length ? comGasto[comGasto.length - 1].dia : null;
+    },
+    enabled: vazio,
+  });
+
   if (isLoading) {
     return <p style={{ color: "var(--text-dim)" }}>Carregando…</p>;
   }
 
   if (!resumo || gasto === 0) {
+    const dataBR = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+    const mensagemVazia = ultimoGasto
+      ? `Anúncios pausados: o último investimento registrado foi em ${dataBR(ultimoGasto)}. Não houve gasto em ${periodLabel}.`
+      : fontes?.tem_anuncios
+        ? `A conta de anúncios está ligada, mas ainda não tem nenhum gasto registrado.`
+        : `Sem investimento registrado em ${periodLabel}. Se a clínica anuncia, falta ligar a conta de anúncio a este cliente no cadastro.`;
     return (
       <div className="space-y-4">
         <div className="flex justify-end">
@@ -162,8 +186,7 @@ function AnunciosPage() {
           Investimento em anúncios do Meta (Facebook e Instagram), por dia e por campanha.
         </div>
         <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
-          Sem investimento registrado em {periodLabel}. Se a clínica anuncia, falta ligar a conta de anúncio a este
-          cliente no cadastro.
+          {mensagemVazia}
         </p>
       </div>
     );
