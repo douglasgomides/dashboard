@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runClintSync } from "../_lib/clint-sync.js";
 import { runRdStationSync } from "../_lib/rdstation-sync.js";
+import { runFlwChatSync } from "../_lib/flwchat-sync.js";
 
 // Sync dos negócios da Clint, chamado pelo n8n. Máquina chamando máquina,
 // então autoriza por SYNC_SECRET — o mesmo padrão de api/sync/kommo-leads.
@@ -58,12 +59,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err) {
       rdErro = err instanceof Error ? err.message : String(err);
     }
-    const hasErrors = results.some((r) => r.errors.length > 0) || rdstation.some((r) => r.errors.length > 0) || !!rdErro;
+    // FlwChat/Synkronos (Marcella Brasil) também entra aqui, pelo mesmo motivo.
+    let flwchat: Awaited<ReturnType<typeof runFlwChatSync>> = [];
+    let flwErro: string | undefined;
+    try {
+      flwchat = await runFlwChatSync({
+        supabaseUrl: SUPABASE_URL,
+        supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+        onlyClientId: clientId,
+      });
+    } catch (err) {
+      flwErro = err instanceof Error ? err.message : String(err);
+    }
+    const hasErrors =
+      results.some((r) => r.errors.length > 0) ||
+      rdstation.some((r) => r.errors.length > 0) ||
+      flwchat.some((r) => r.errors.length > 0) ||
+      !!rdErro ||
+      !!flwErro;
     res.status(hasErrors ? 207 : 200).json({
       synced_at: new Date().toISOString(),
       connections: results,
       rdstation,
+      flwchat,
       ...(rdErro ? { rdstation_erro: rdErro } : {}),
+      ...(flwErro ? { flwchat_erro: flwErro } : {}),
     });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
