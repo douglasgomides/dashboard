@@ -381,6 +381,21 @@ function MonthlyOverview() {
   const contactTaps = sum(data, "profile_links_taps");
   const engagementRate = reach > 0 ? ((interactions / reach) * 100).toFixed(1) + "%" : "—";
 
+  // Os números de cima somam só os dias que têm dado. O Instagram entrega cerca de
+  // 30 dias de histórico diário, então em 90 dias (ou mais) o total costuma ser o
+  // mesmo de 30: não há dia mais antigo para somar. Sem este aviso parece que o
+  // cartão travou enquanto o gráfico muda.
+  const datasDados = data.map((d) => d.date).sort();
+  const primeiroDado = datasDados[0];
+  const ultimoDado = datasDados[datasDados.length - 1];
+  const diasDoPeriodo = Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1);
+  const diasSemDado = Math.max(0, diasDoPeriodo - data.length);
+  const dd = (iso: string) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
+  const avisoCobertura =
+    diasSemDado >= 3
+      ? `Os números acima somam os ${data.length} dias que têm dado (${dd(primeiroDado)} a ${dd(ultimoDado)}), e não os ${diasDoPeriodo} dias do período escolhido. Não há dado diário mais antigo que ${dd(primeiroDado)} para somar, por isso o total não muda quando o período é maior que isso.`
+      : null;
+
   const chartData = data.map((d) => ({
     date: d.date,
     Alcance: d.reach ?? 0,
@@ -431,6 +446,11 @@ function MonthlyOverview() {
         <KpiCard label="Taxa de engajamento" value={engagementRate} hint="interações ÷ alcance" />
         <KpiCard label="Salvamentos" value={saves.toLocaleString("pt-BR")} />
       </div>
+      {avisoCobertura && (
+        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
+          {avisoCobertura}
+        </p>
+      )}
 
       {formatInsight && (
         <div className="grid grid-cols-2 gap-3">
