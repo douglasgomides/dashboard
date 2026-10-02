@@ -12,7 +12,7 @@ export type ContentFormat = "reels" | "carrossel" | "estatico" | "stories";
 export type SuggestionStatus = "suggested" | "accepted" | "dismissed";
 export type CfmScoreStatus = "verde" | "amarelo" | "vermelho";
 export type ClientMemberRole = "owner" | "strategist" | "viewer";
-export type CrmProvider = "kommo" | "feegow" | "ninsaude" | "clint" | "rdstation";
+export type CrmProvider = "kommo" | "feegow" | "ninsaude" | "clint" | "rdstation" | "flwchat";
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
