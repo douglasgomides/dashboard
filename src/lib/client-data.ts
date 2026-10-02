@@ -268,13 +268,14 @@ export async function getClientFontes(clientId: string) {
 // Qual CRM alimenta esse cliente ('kommo' | 'clint' | 'planilha' | ...).
 // Usado só pra nomear o CRM certo na nota do painel — nada de hardcode "Kommo".
 export async function getCrmProvider(clientId: string): Promise<string | null> {
-  // rpc() tipado por cast: crm_provider foi criada agora e ainda não está no
-  // types.ts gerado. Retorna o provider ('kommo' | 'clint' | 'planilha' | ...).
-  const rpc = supabase.rpc as unknown as (
-    fn: string,
-    args: Record<string, unknown>,
-  ) => Promise<{ data: string | null; error: unknown }>;
-  const { data, error } = await rpc("crm_provider", { p_client_id: clientId });
+  // rpc() tipado por cast: crm_provider não está no types.ts gerado. Retorna o
+  // provider ('kommo' | 'clint' | 'planilha' | ...). Chamar pelo próprio client:
+  // soltar o método (`const rpc = supabase.rpc`) perde o `this` e a chamada falha
+  // em silêncio, o que escondia o botão de sincronizar CRM em todos os clientes.
+  const cliente = supabase as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: string | null; error: unknown }>;
+  };
+  const { data, error } = await cliente.rpc("crm_provider", { p_client_id: clientId });
   if (error) throw error;
   return data ?? null;
 }
