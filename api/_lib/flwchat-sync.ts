@@ -20,6 +20,8 @@
  * sem diferenciar maiúscula) definem outcome won/lost; o resto fica "open". Painéis
  * que mantêm os fechados numa etapa final (ex.: "Agendado") devolvem esses cards
  * normalmente, então o ganho/perdido aparece de verdade.
+ * A equipe pode confirmar o significado de cada etapa na aba "A analisar": isso grava em
+ * crm_etapa_resultado e passa na frente de config.etapas_*.
  * config.painel_desde = { "<panelId>": "AAAA-MM-DD" } descarta cards criados antes
  * da data, para não repetir o histórico que já veio de outra fonte (planilha).
  */
@@ -120,6 +122,15 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
       etapas_ganho?: string[];
       etapas_perdido?: string[];
     };
+    // Mapeamento confirmado pela equipe (aba "A analisar"). Tabela ausente = sem mapeamento.
+    const confirmadas = new Map<string, "won" | "lost" | "open">();
+    {
+      const { data: maps } = await supabase
+        .from("crm_etapa_resultado")
+        .select("pipeline_id, status_id, outcome")
+        .eq("crm_connection_id", conn.id);
+      for (const m of maps ?? []) confirmadas.set(`${m.pipeline_id}|${m.status_id}`, m.outcome as "won" | "lost" | "open");
+    }
     const resultadoDaEtapa = (nome: string): "won" | "lost" | "open" => {
       const n = nome.toLowerCase();
       if ((config.etapas_perdido ?? []).some((t) => n.includes(t.toLowerCase()))) return "lost";
@@ -186,7 +197,7 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
             pipeline_id: panelId,
             price: typeof c.monetaryAmount === "number" && c.monetaryAmount > 0 ? c.monetaryAmount : null,
             occurred_at: c.createdAt ?? null,
-            outcome: resultadoDaEtapa(stepNames.get(c.stepId ?? "") ?? ""),
+            outcome: confirmadas.get(`${panelId}|${c.stepId ?? ""}`) ?? resultadoDaEtapa(stepNames.get(c.stepId ?? "") ?? ""),
             source: typeof origem === "string" && origem.trim() ? origem.trim() : null,
             contact_name: titulo || null,
             raw_payload: c as unknown as Record<string, unknown>,

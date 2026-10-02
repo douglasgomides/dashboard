@@ -295,3 +295,55 @@ export async function getPatientQuestionsPeriodo(clientId: string, start: string
   if (error) throw error;
   return data ?? [];
 }
+
+// ---- Aba "A analisar": significado das etapas do CRM -------------------------
+
+export type EtapaParaAnalise = {
+  connection_id: string;
+  provider: string;
+  pipeline_id: string;
+  pipeline_name: string;
+  status_id: string;
+  status_name: string;
+  total: number;
+  valor: number;
+  ganhos: number;
+  perdidos: number;
+  abertos: number;
+  confirmado: boolean;
+  resultado_confirmado: "open" | "won" | "lost" | null;
+};
+
+// rpc fora do types.ts gerado. Chamar pelo client: soltar supabase.rpc perde o `this`.
+type RpcClient = {
+  rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message?: string } | null }>;
+};
+
+export async function listEtapasParaAnalise(clientId: string): Promise<EtapaParaAnalise[]> {
+  const { data, error } = await (supabase as unknown as RpcClient).rpc("crm_etapas_para_analise", { p_client_id: clientId });
+  if (error) throw new Error(error.message ?? "falha ao ler as etapas");
+  return ((data as EtapaParaAnalise[] | null) ?? []).map((r) => ({
+    ...r,
+    total: Number(r.total),
+    valor: Number(r.valor),
+    ganhos: Number(r.ganhos),
+    perdidos: Number(r.perdidos),
+    abertos: Number(r.abertos),
+  }));
+}
+
+export async function definirEtapaResultado(args: {
+  connectionId: string;
+  pipelineId: string;
+  statusId: string;
+  outcome: "open" | "won" | "lost";
+}): Promise<number> {
+  const { data, error } = await (supabase as unknown as RpcClient).rpc("crm_definir_etapa_resultado", {
+    p_connection: args.connectionId,
+    p_pipeline: args.pipelineId,
+    p_status: args.statusId,
+    p_outcome: args.outcome,
+  });
+  if (error) throw new Error(error.message ?? "falha ao salvar");
+  return Number(data ?? 0);
+}

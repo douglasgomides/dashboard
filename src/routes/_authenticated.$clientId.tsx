@@ -18,6 +18,7 @@ import {
   Menu,
   X,
   ShieldCheck,
+  ListChecks,
 } from "lucide-react";
 import { getClient, getClientFontes } from "@/lib/client-data";
 import { listAllClients } from "@/lib/admin-data";
@@ -68,6 +69,7 @@ function buildGroups(clientName: string): NavGroup[] {
         { to: "/$clientId/duvidas", label: "Dúvidas", Icone: HelpCircle, fonte: "instagram" },
         { to: "/$clientId/ideias", label: "Ideias", Icone: Lightbulb },
         { to: "/$clientId/relatorio", label: "Relatório", Icone: FileText },
+        { to: "/$clientId/analisar", label: "A analisar", Icone: ListChecks, admin: true, fonte: "crm" },
       ],
     },
     { titulo: "Biblioteca", itens: [{ to: "/$clientId/inspiracao", label: "Inspiração", Icone: Star }] },
