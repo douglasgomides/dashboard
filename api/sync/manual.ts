@@ -282,13 +282,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq("active", true);
       if (erroCon) throw new Error(erroCon.message);
 
-      const kommo = (conexoes ?? []).filter((c) => c.provider === "kommo");
+      // Kommo sem endereço = CRM lançado à mão (ex.: relatório em PDF). Não tem de onde puxar.
+      const kommo = (conexoes ?? []).filter((c) => c.provider === "kommo" && c.subdomain);
+      const kommoManual = (conexoes ?? []).filter((c) => c.provider === "kommo" && !c.subdomain);
       const clint = (conexoes ?? []).filter((c) => c.provider === "clint");
       const rdstation = (conexoes ?? []).filter((c) => c.provider === "rdstation");
       const flwchat = (conexoes ?? []).filter((c) => c.provider === "flwchat");
       const planilha = (conexoes ?? []).filter((c) => c.provider === "planilha");
 
       if (kommo.length === 0 && clint.length === 0 && rdstation.length === 0 && flwchat.length === 0) {
+        if (kommoManual.length > 0) {
+          return {
+            nada_a_fazer: "CRM lançado à mão (relatório da clínica), sem ligação com o Kommo para sincronizar.",
+            linhas: 0,
+            erros: [] as string[],
+          };
+        }
         return planilha.length > 0
           ? { nada_a_fazer: "CRM por planilha, não sincroniza.", linhas: 0, erros: [] as string[] }
           : { nada_a_fazer: "Este cliente não tem CRM ligado ao cadastro.", linhas: 0, erros: [] as string[] };
