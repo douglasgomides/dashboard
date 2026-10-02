@@ -1,4 +1,4 @@
-export type RangePreset = "mes_atual" | "30d" | "90d" | "180d" | "365d" | "personalizado";
+export type RangePreset = "mes_atual" | "7d" | "30d" | "90d" | "180d" | "365d" | "personalizado";
 
 export interface DateRangeState {
   preset: RangePreset;
@@ -8,6 +8,7 @@ export interface DateRangeState {
 
 export const RANGE_PRESETS: { value: RangePreset; label: string }[] = [
   { value: "mes_atual", label: "Este mês" },
+  { value: "7d", label: "Últimos 7 dias" },
   { value: "30d", label: "Últimos 30 dias" },
   { value: "90d", label: "Últimos 90 dias" },
   { value: "180d", label: "Últimos 6 meses" },
@@ -32,7 +33,7 @@ export function resolveDateRange(state: DateRangeState): { start: string; end: s
     const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     return { start: toISODate(start), end: toISODate(end) };
   }
-  const days = state.preset === "30d" ? 30 : state.preset === "180d" ? 180 : state.preset === "365d" ? 365 : 90;
+  const days = state.preset === "7d" ? 7 : state.preset === "30d" ? 30 : state.preset === "180d" ? 180 : state.preset === "365d" ? 365 : 90;
   const start = new Date(today);
   start.setDate(start.getDate() - days);
   return { start: toISODate(start), end: toISODate(today) };
