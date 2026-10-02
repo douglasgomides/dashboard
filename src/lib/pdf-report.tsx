@@ -15,7 +15,7 @@ import {
 } from "@/lib/report-metrics";
 import { fmtNum } from "@/lib/format";
 
-const styles = StyleSheet.create({
+export const styles = StyleSheet.create({
   page: { padding: 32, paddingBottom: 46, fontSize: 10, fontFamily: "Helvetica", color: "#1a1a1a" },
   eyebrow: { fontSize: 8, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 },
   title: { fontSize: 18, fontWeight: 700, marginBottom: 2 },
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   verdictRate: { fontSize: 8, color: "#666", marginTop: 1 },
 });
 
-function Footer({ page }: { page: number }) {
+export function Footer({ page }: { page: number }) {
   return (
     <>
       <Text style={styles.footer} fixed>
@@ -105,16 +105,16 @@ function Footer({ page }: { page: number }) {
 const EMOJI_RE =
   /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu;
 
-function stripEmoji(s: string) {
+export function stripEmoji(s: string) {
   return s.replace(EMOJI_RE, "").replace(/\s+/g, " ").trim();
 }
 
-function caseCaption(p: any) {
+export function caseCaption(p: any) {
   const c = (p.caption ?? "").split("\n").find((l: string) => l.trim().length > 0);
   return stripEmoji(c ? c.trim().slice(0, 220) : (p.windsor_media_id ?? ""));
 }
 
-function BarChartBlock({ rows, maxValue }: { rows: { label: string; value: number }[]; maxValue: number }) {
+export function BarChartBlock({ rows, maxValue }: { rows: { label: string; value: number }[]; maxValue: number }) {
   return (
     <View style={{ marginBottom: 10 }}>
       {rows.map((r) => (

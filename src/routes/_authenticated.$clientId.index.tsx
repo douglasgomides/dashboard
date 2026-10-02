@@ -399,25 +399,9 @@ function MonthlyOverview() {
   async function handleDownloadReport() {
     setGeneratingReport(true);
     try {
-      const { downloadClientReport } = await import("@/lib/pdf-report");
-      await downloadClientReport({
-        clientName: client?.name ?? "Cliente",
-        igHandle: client?.instagram_handle,
-        periodLabel,
-        kpis: [
-          {
-            label: "Novos seguidores",
-            value: newFollowers.toLocaleString("pt-BR"),
-            hint: "só últimos 30 dias (limite do Instagram)",
-          },
-          { label: "Alcance", value: reach.toLocaleString("pt-BR") },
-          { label: "Taxa de engajamento", value: engagementRate, hint: "interações ÷ alcance" },
-          { label: "Salvamentos", value: saves.toLocaleString("pt-BR") },
-        ],
-        postsForAnalytics: postsForAnalytics ?? [],
-        postsDoMes: postsForAnalytics ?? [],
-        trendDays,
-      });
+      // Relatório completo: todas as fontes do cliente, com o mesmo período da tela.
+      const { gerarEBaixarRelatorioCompleto } = await import("@/lib/relatorio-completo");
+      await gerarEBaixarRelatorioCompleto({ clientId, start, end, periodLabel });
     } finally {
       setGeneratingReport(false);
     }

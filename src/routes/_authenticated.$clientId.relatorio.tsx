@@ -121,8 +121,8 @@ function RelatorioPage() {
   async function exportarPdf() {
     setGerandoPdf(true);
     try {
-      const { downloadTextReport } = await import("@/lib/pdf-report");
-      await downloadTextReport({ clientName: client.data!.name, periodLabel, text: texto });
+      const { gerarEBaixarRelatorioCompleto } = await import("@/lib/relatorio-completo");
+      await gerarEBaixarRelatorioCompleto({ clientId, start, end, periodLabel, textoCliente: texto });
     } finally {
       setGerandoPdf(false);
     }
@@ -169,7 +169,7 @@ function RelatorioPage() {
               {copiado ? "Copiado" : "Copiar"}
             </button>
             <button type="button" className="btn" onClick={exportarPdf} disabled={gerandoPdf || !texto.trim()}>
-              {gerandoPdf ? "Gerando PDF…" : "Exportar PDF"}
+              {gerandoPdf ? "Gerando PDF completo…" : "Exportar PDF completo"}
             </button>
             <button type="button" className="btn ghost" onClick={() => setTexto(gerado.texto)}>
               Refazer texto
