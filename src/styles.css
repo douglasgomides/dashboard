@@ -352,3 +352,12 @@ textarea.reltxt{width:100%;background:var(--surface);border:1px solid var(--bord
  .printhead{display:block!important}
  .bm .trk i{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+
+/* Barra de progresso da sincronização: listras que andam enquanto roda. */
+@keyframes sync-bar-listras { from { background-position: 0 0; } to { background-position: 28px 0; } }
+.sync-bar-fill-rodando {
+  background-image: linear-gradient(45deg, rgba(255,255,255,.28) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.28) 50%, rgba(255,255,255,.28) 75%, transparent 75%, transparent);
+  background-size: 28px 28px;
+  animation: sync-bar-listras .9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) { .sync-bar-fill-rodando { animation: none; } }
