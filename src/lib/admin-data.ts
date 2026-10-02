@@ -4,7 +4,7 @@ import type { CfmScoreStatus, CrmProvider } from "@/integrations/supabase/types"
 export async function listAllClients() {
   const { data, error } = await supabase
     .from("clients")
-    .select("id, name, specialty, instagram_handle, active, created_at")
+    .select("id, name, specialty, instagram_handle, avatar_url, active, created_at")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data;
