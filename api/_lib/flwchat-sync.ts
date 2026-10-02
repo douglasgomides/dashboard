@@ -10,12 +10,16 @@
  *    ID, então os IDs ficam em crm_connections.config.panel_ids.
  *  - As etapas só vêm com `?includeDetails=Steps`; sem isso o card traz stepTitle nulo.
  *  - A listagem devolve só os cards ABERTOS: ganho/perdido fechado não aparece.
- *    Por isso todo card gravado aqui entra como outcome "open".
+ *    Painéis sem etapa final (Marcella) só mostram o que está aberto.
  *
  * Modelagem, igual ao que Kommo, Clint e RD Station já gravam:
  *  - o painel vira "pipeline" e a etapa vira "status" (crm_pipeline_statuses);
  *  - o valor do card (monetaryAmount) vira price;
  *  - cards de teste (título começando com "teste") são ignorados.
+ * config.etapas_ganho / config.etapas_perdido (listas de trechos do nome da etapa,
+ * sem diferenciar maiúscula) definem outcome won/lost; o resto fica "open". Painéis
+ * que mantêm os fechados numa etapa final (ex.: "Agendado") devolvem esses cards
+ * normalmente, então o ganho/perdido aparece de verdade.
  * config.painel_desde = { "<panelId>": "AAAA-MM-DD" } descarta cards criados antes
  * da data, para não repetir o histórico que já veio de outra fonte (planilha).
  */
@@ -110,7 +114,18 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
   for (const conn of connections ?? []) {
     const errors: string[] = [];
     const token = conn.access_token as string | null;
-    const config = (conn.config ?? {}) as { panel_ids?: string[]; painel_desde?: Record<string, string> };
+    const config = (conn.config ?? {}) as {
+      panel_ids?: string[];
+      painel_desde?: Record<string, string>;
+      etapas_ganho?: string[];
+      etapas_perdido?: string[];
+    };
+    const resultadoDaEtapa = (nome: string): "won" | "lost" | "open" => {
+      const n = nome.toLowerCase();
+      if ((config.etapas_perdido ?? []).some((t) => n.includes(t.toLowerCase()))) return "lost";
+      if ((config.etapas_ganho ?? []).some((t) => n.includes(t.toLowerCase()))) return "won";
+      return "open";
+    };
     const panelIds = (config.panel_ids ?? []).filter((p) => typeof p === "string" && p.length > 0);
 
     if (!token) {
@@ -171,7 +186,7 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
             pipeline_id: panelId,
             price: typeof c.monetaryAmount === "number" && c.monetaryAmount > 0 ? c.monetaryAmount : null,
             occurred_at: c.createdAt ?? null,
-            outcome: "open",
+            outcome: resultadoDaEtapa(stepNames.get(c.stepId ?? "") ?? ""),
             source: typeof origem === "string" && origem.trim() ? origem.trim() : null,
             contact_name: titulo || null,
             raw_payload: c as unknown as Record<string, unknown>,

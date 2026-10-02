@@ -164,7 +164,7 @@ const NOME_CRM: Record<string, string> = {
   kommo: "Kommo",
   clint: "Clint",
   rdstation: "RD Station",
-  flwchat: "FlwChat",
+  flwchat: "WTS Chat",
   planilha: "planilha",
   feegow: "Feegow",
   ninsaude: "Ninsaúde",
