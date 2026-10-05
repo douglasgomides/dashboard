@@ -368,8 +368,13 @@ function MonthlyOverview() {
         className="rounded-xl border p-6 text-sm"
         style={{ background: "var(--warn-bg)", borderColor: "var(--warn-border)", color: "var(--text)" }}
       >
-        Sem dados sincronizados nesse período. Rode <code>npm run sync:instagram</code> depois de
-        cadastrar a conta do cliente em <code>instagram_accounts</code>, ou escolha outro intervalo de datas.
+        <p>
+          Sem dados sincronizados nesse período. Clique em sincronizar para buscar os números do Instagram, ou escolha
+          outro intervalo de datas.
+        </p>
+        <div className="flex justify-end" style={{ marginTop: 12 }}>
+          <SyncButton clientId={clientId} alvo="tudo" />
+        </div>
       </div>
     );
   }
