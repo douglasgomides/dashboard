@@ -16,8 +16,12 @@ export const RANGE_PRESETS: { value: RangePreset; label: string }[] = [
   { value: "personalizado", label: "Personalizado" },
 ];
 
+// Data local (não UTC): toISOString() virava o "hoje" para amanhã a partir das 21h no
+// Brasil, deslocando o período inteiro um dia à noite.
 function toISODate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${dia}`;
 }
 
 // Sempre resolve pra um intervalo concreto {start, end} — "personalizado" sem
@@ -34,8 +38,9 @@ export function resolveDateRange(state: DateRangeState): { start: string; end: s
     return { start: toISODate(start), end: toISODate(end) };
   }
   const days = state.preset === "7d" ? 7 : state.preset === "30d" ? 30 : state.preset === "180d" ? 180 : state.preset === "365d" ? 365 : 90;
+  // "Últimos N dias" são N dias contando hoje (antes eram N+1: "7 dias" somava 8).
   const start = new Date(today);
-  start.setDate(start.getDate() - days);
+  start.setDate(start.getDate() - (days - 1));
   return { start: toISODate(start), end: toISODate(today) };
 }
 

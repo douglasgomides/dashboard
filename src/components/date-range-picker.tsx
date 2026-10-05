@@ -9,6 +9,19 @@ export function DateRangePicker({
 }) {
   const resolved = resolveDateRange(value);
 
+  // O <input type="date"> dispara onChange a cada trecho digitado (ex.: ano 0002 enquanto
+  // se escreve 2026), o que mandava uma consulta de dois mil anos e parecia que o filtro
+  // não pegava. Só aceita data completa, de 2000 em diante, e mantém from <= to.
+  function dataValida(iso: string): boolean {
+    return /^\d{4}-\d{2}-\d{2}$/.test(iso) && Number(iso.slice(0, 4)) >= 2000;
+  }
+  function mudarDatas(parcial: { from?: string; to?: string }) {
+    const from = parcial.from ?? value.from ?? resolved.start;
+    const to = parcial.to ?? value.to ?? resolved.end;
+    if (!dataValida(from) || !dataValida(to)) return;
+    onChange(from <= to ? { ...value, from, to } : { ...value, from: to, to: from });
+  }
+
   function handlePresetChange(preset: DateRangeState["preset"]) {
     if (preset === "personalizado") {
       // Preenche from/to com o intervalo atual na hora — sem isso os campos
@@ -45,7 +58,7 @@ export function DateRangePicker({
             type="date"
             value={value.from ?? resolved.start}
             max={value.to ?? resolved.end}
-            onChange={(e) => onChange({ ...value, from: e.target.value })}
+            onChange={(e) => mudarDatas({ from: e.target.value })}
             className="rounded-md border px-2 py-1.5 text-sm"
             style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
           />
@@ -56,7 +69,7 @@ export function DateRangePicker({
             type="date"
             value={value.to ?? resolved.end}
             min={value.from ?? resolved.start}
-            onChange={(e) => onChange({ ...value, to: e.target.value })}
+            onChange={(e) => mudarDatas({ to: e.target.value })}
             className="rounded-md border px-2 py-1.5 text-sm"
             style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
           />

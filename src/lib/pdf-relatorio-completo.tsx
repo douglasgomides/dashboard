@@ -180,7 +180,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
 
   const posts = d.posts;
   const temIg = d.fontes.tem_instagram;
-  const dias = Math.max(1, Math.round((new Date(d.end).getTime() - new Date(d.start).getTime()) / 86400000));
+  const dias = Math.max(1, Math.round((new Date(d.end).getTime() - new Date(d.start).getTime()) / 86400000) + 1);
 
   const headline = temIg ? computeHeadline(posts) : null;
   const insight = temIg ? computeFormatInsight(posts) : null;
