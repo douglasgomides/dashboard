@@ -199,7 +199,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const contas = [];
 
-    if (perfisWindsor.length > 0) {
+    // runInstagramSync grava as métricas DIÁRIAS (alcance, seguidores) de todas as contas
+    // ativas do cliente e os posts só das que vêm da Windsor. A Graph API não grava
+    // essa tabela, então sem esta chamada o botão deixava a Visão geral e o Conteúdo
+    // sem dado para quem lê os posts pela Graph.
+    if (perfisWindsor.length > 0 || (perfisGraph.length > 0 && WINDSOR_API_KEY)) {
       if (!WINDSOR_API_KEY) {
         throw new Error("Perfil servido pela Windsor, mas WINDSOR_API_KEY não está configurada no servidor");
       }

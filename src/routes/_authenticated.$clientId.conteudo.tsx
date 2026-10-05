@@ -6,6 +6,7 @@ import { getClientFontes, getMonthlyMetrics, getPostsForAnalytics } from "@/lib/
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { analyzeFollowers, analyzeFormatsAndTemas, fmtDiaBR, type GroupStat } from "@/lib/hub-conteudo";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
+import { SyncButton } from "@/components/sync-button";
 
 export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
   component: ConteudoPage,
@@ -91,6 +92,11 @@ function ConteudoPage() {
     <div className="hpagehead">
       <h2>Conteúdo</h2>
       <p>Seguidores, projeção de 30 dias e o que o conteúdo do período entregou. Período: {periodLabel}.</p>
+      {temIg && (
+        <div className="flex justify-end" style={{ marginTop: 8 }}>
+          <SyncButton clientId={clientId} alvo="posts" />
+        </div>
+      )}
     </div>
   );
 
