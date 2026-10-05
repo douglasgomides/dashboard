@@ -3,10 +3,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, RefreshCw, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-type Alvo = "posts" | "anuncios" | "atendimento" | "comentarios" | "crm" | "tudo";
+type Alvo = "posts" | "anuncios" | "atendimento" | "comentarios" | "crm" | "historico" | "tudo";
 
 const NOMES: Record<string, string> = {
   posts: "Instagram",
+  historico: "Histórico do Instagram",
   comentarios: "Comentários",
   anuncios: "Anúncios",
   atendimento: "Atendimento",
@@ -20,6 +21,7 @@ const PARTES_TUDO = ["posts", "comentarios", "anuncios", "atendimento", "crm"] a
 
 const FRASES: Record<string, string> = {
   posts: "Buscando os posts e métricas do Instagram…",
+  historico: "Buscando até 1 ano de histórico diário. Pode levar alguns minutos, não feche a página…",
   comentarios: "Lendo comentários e dúvidas dos pacientes…",
   anuncios: "Reconferindo 90 dias de anúncios…",
   atendimento: "Sincronizando o atendimento do WhatsApp…",
@@ -92,6 +94,7 @@ export function SyncButton({ clientId, alvo }: { clientId: string; alvo: Alvo })
   const ROTULOS: Record<Alvo, string> = {
     tudo: "Atualizar dados",
     posts: "Sincronizar posts",
+    historico: "Completar histórico (1 ano)",
     anuncios: "Sincronizar anúncios",
     atendimento: "Sincronizar atendimento",
     comentarios: "Sincronizar comentários",

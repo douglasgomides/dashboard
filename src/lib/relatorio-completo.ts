@@ -89,7 +89,7 @@ export async function coletarRelatorioCompleto(args: {
   const falhas: string[] = [];
   const omitidos: string[] = [];
 
-  const dias = Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000));
+  const dias = Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1);
 
   const [metrics, posts, perguntas] = fontes.tem_instagram
     ? await Promise.all([

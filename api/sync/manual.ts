@@ -33,6 +33,7 @@ const DIAS_DE_ANUNCIOS = 90;
 // O alvo do botão (posts) e a fonte do registro (instagram) têm nomes diferentes.
 const FONTE_DO_ALVO: Record<string, FonteSync> = {
   posts: "instagram",
+  historico: "instagram",
   comentarios: "comentarios",
   anuncios: "anuncios",
   atendimento: "atendimento",
@@ -82,7 +83,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "tudo"];
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo"];
   if (!client_id || !alvo || !ALVOS.includes(alvo)) {
     res.status(400).json({ error: "Informe client_id e alvo ('tudo', 'posts', 'anuncios', 'atendimento', 'comentarios' ou 'crm')" });
     return;
@@ -431,6 +432,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (alvo === "comentarios") {
       const r = await executar("comentarios", sincronizarComentarios);
+      res.status(temErro(r) ? 207 : 200).json({ alvo, ...r });
+      return;
+    }
+    if (alvo === "historico") {
+      // Completa o histórico diário (alcance, seguidores novos, interações) do Instagram.
+      // O sync normal só traz os últimos dias; sem isso, "Últimos 90 dias", "6 meses" e
+      // "Último ano" mostram o mesmo total, porque não há dia mais antigo gravado. Só
+      // admin: puxa um ano inteiro da Windsor e leva alguns minutos.
+      if (!ehAdmin) {
+        res.status(403).json({ error: "Só a equipe Doctor Creator pode completar o histórico." });
+        return;
+      }
+      if (!WINDSOR_API_KEY) {
+        res.status(500).json({ error: "WINDSOR_API_KEY não está configurada no servidor" });
+        return;
+      }
+      const r = await executar("posts", async () => {
+        const contas = await runInstagramSync({
+          windsorApiKey: WINDSOR_API_KEY,
+          supabaseUrl: urlSupabase,
+          supabaseServiceRoleKey: chaveServico,
+          syncDays: 365,
+          onlyClientId: client_id,
+        });
+        if (contas.length === 0) {
+          return { nada_a_fazer: "Este cliente não tem perfil do Instagram conectado.", contas: [] };
+        }
+        return {
+          posts: contas.reduce((a, c) => a + (c.dailyMetrics ?? 0), 0),
+          contas,
+        };
+      });
       res.status(temErro(r) ? 207 : 200).json({ alvo, ...r });
       return;
     }

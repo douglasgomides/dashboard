@@ -17,6 +17,7 @@ import {
 import { getClient, getMonthlyMetrics, getPostsForAnalytics } from "@/lib/client-data";
 import { ResumoDoMes } from "@/components/resumo-do-mes";
 import { SyncButton } from "@/components/sync-button";
+import { useAuth } from "@/hooks/use-auth";
 import { formatLabel } from "@/lib/methodology";
 import type { ContentFormat } from "@/integrations/supabase/types";
 import { brazilWeekdayAndHour, computeFormatBreakdown, computeFormatInsight, fmtFormatKey, median } from "@/lib/report-metrics";
@@ -328,6 +329,7 @@ function DrillDownDoDia({ date, posts }: { date: string | null; posts: any[] }) 
 
 function MonthlyOverview() {
   const { clientId } = Route.useParams();
+  const { isAdmin } = useAuth();
   const dateRangeState = clientLayoutRoute.useSearch();
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
@@ -414,7 +416,7 @@ function MonthlyOverview() {
   }));
 
   const formatInsight = computeFormatInsight(postsForAnalytics ?? []);
-  const trendDays = Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000));
+  const trendDays = Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1);
 
   async function handleDownloadReport() {
     setGeneratingReport(true);
@@ -452,9 +454,12 @@ function MonthlyOverview() {
         <KpiCard label="Salvamentos" value={saves.toLocaleString("pt-BR")} />
       </div>
       {avisoCobertura && (
-        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          {avisoCobertura}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs" style={{ color: "var(--text-dim)", flex: "1 1 320px" }}>
+            {avisoCobertura}
+          </p>
+          {isAdmin && <SyncButton clientId={clientId} alvo="historico" />}
+        </div>
       )}
 
       {formatInsight && (
