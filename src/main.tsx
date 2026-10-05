@@ -9,6 +9,23 @@ import "./styles.css";
 // no escuro, sem isto a tela pisca escura por um frame a cada carregamento.
 aplicarTemaSalvo();
 
+// Depois de um deploy, uma aba que ficou aberta ainda aponta para arquivos antigos que
+// deixaram de existir. Antes o servidor devolvia a página inicial no lugar do arquivo e o
+// navegador mostrava "'text/html' is not a valid JavaScript MIME type" (tela em branco).
+// O Vite avisa por vite:preloadError: recarregamos UMA vez para pegar a versão nova. A
+// marca em sessionStorage evita laço de recarga se o problema for outro.
+window.addEventListener("vite:preloadError", (evento) => {
+  evento.preventDefault();
+  try {
+    const ultima = Number(sessionStorage.getItem("recarga-por-deploy") ?? 0);
+    if (Date.now() - ultima < 60_000) return;
+    sessionStorage.setItem("recarga-por-deploy", String(Date.now()));
+  } catch {
+    // sessionStorage bloqueado: recarrega mesmo assim, uma vez por evento
+  }
+  window.location.reload();
+});
+
 const rootEl = document.getElementById("root")!;
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;

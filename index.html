@@ -5,6 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
     <title>Doctor Creator Intelligence Hub</title>
+    <script>
+      // Se o arquivo principal sumiu depois de um deploy (aba antiga), recarrega uma vez.
+      window.addEventListener(
+        "error",
+        function (e) {
+          var t = e.target;
+          if (t && t.tagName === "SCRIPT" && /\/assets\//.test(t.src || "")) {
+            try {
+              var k = "recarga-por-deploy";
+              if (Date.now() - (+sessionStorage.getItem(k) || 0) < 60000) return;
+              sessionStorage.setItem(k, String(Date.now()));
+            } catch (x) {}
+            location.reload();
+          }
+        },
+        true
+      );
+    </script>
   </head>
   <body>
     <div id="root"></div>
