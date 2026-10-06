@@ -108,6 +108,47 @@ export async function getCrmFunilPorCampoAlt(clientId: string, padroes: string[]
   return ultimo;
 }
 
+// Versoes por periodo (seletor do cabecalho). Datas AAAA-MM-DD, intervalo fechado.
+export async function getCrmFunilPorCampoPeriodoAlt(clientId: string, padroes: string[], from: string, to: string) {
+  const cliente = supabase as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: { chave: string; total: number }[] | null; error: unknown }>;
+  };
+  let ultimo: { chave: string; total: number }[] = [];
+  for (const padrao of padroes) {
+    const { data, error } = await cliente.rpc("crm_funil_por_campo_periodo", {
+      p_client_id: clientId,
+      p_field_name_pattern: padrao,
+      p_from: from,
+      p_to: to,
+    });
+    if (error) throw error;
+    ultimo = data ?? [];
+    if (ultimo.some((r) => r.chave !== "Não informado")) return ultimo;
+  }
+  return ultimo;
+}
+
+export async function getCrmLeadsPorDiaPeriodo(clientId: string, from: string, to: string) {
+  const cliente = supabase as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: { dia: string; total: number }[] | null; error: unknown }>;
+  };
+  const { data, error } = await cliente.rpc("crm_leads_por_dia_periodo", { p_client_id: clientId, p_from: from, p_to: to });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getCrmResumoPeriodo(clientId: string, from: string, to: string) {
+  const cliente = supabase as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{
+      data: { novos: number; ganhos: number; perdidos: number; valor: number }[] | null;
+      error: unknown;
+    }>;
+  };
+  const { data, error } = await cliente.rpc("crm_leads_resumo_periodo", { p_client_id: clientId, p_from: from, p_to: to });
+  if (error) throw error;
+  return data?.[0] ?? { novos: 0, ganhos: 0, perdidos: 0, valor: 0 };
+}
+
 // Leads por etapa nomeada, em todos os pipelines do cliente — mesmo motivo
 // de agregar no banco.
 export async function getCrmLeadsPorEtapa(clientId: string) {

@@ -1,14 +1,16 @@
-import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import {
   getCrmMetricasEssenciais,
   getCrmLeadsPorDia,
-  getCrmFunilPorCampoAlt,
   getCrmAtividadeRecente,
   getCrmProvider,
+  getCrmFunilPorCampoPeriodoAlt,
+  getCrmLeadsPorDiaPeriodo,
+  getCrmResumoPeriodo,
 } from "@/lib/client-data";
+import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { SyncButton } from "@/components/sync-button";
 
 // Nome de exibição do CRM — evita chamar tudo de "Kommo" quando o cliente é Clint.
@@ -20,6 +22,8 @@ function nomeCrm(provider: string | null | undefined): string {
   if (provider === "planilha") return "planilha";
   return "CRM";
 }
+
+const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 
 export const Route = createFileRoute("/_authenticated/$clientId/crm-painel")({
   component: CrmPainelPage,
@@ -60,17 +64,10 @@ function StatCard({
   );
 }
 
-const PERIODS = [
-  { label: "7 dias", days: 7 },
-  { label: "30 dias", days: 30 },
-  { label: "90 dias", days: 90 },
-];
-
-function TendenciaDeLeads({ clientId }: { clientId: string }) {
-  const [days, setDays] = useState(30);
+function TendenciaDeLeads({ clientId, start, end }: { clientId: string; start: string; end: string }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["crm-leads-dia", clientId, days],
-    queryFn: () => getCrmLeadsPorDia(clientId, days),
+    queryKey: ["crm-leads-dia-periodo", clientId, start, end],
+    queryFn: () => getCrmLeadsPorDiaPeriodo(clientId, start, end),
   });
 
   const rows = (data ?? []).map((r) => ({
@@ -82,23 +79,9 @@ function TendenciaDeLeads({ clientId }: { clientId: string }) {
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Novos leads por dia</h2>
-        <div className="flex gap-1">
-          {PERIODS.map((p) => (
-            <button
-              key={p.days}
-              type="button"
-              onClick={() => setDays(p.days)}
-              className="rounded-md px-2.5 py-1 text-xs font-medium"
-              style={
-                days === p.days
-                  ? { background: "var(--accent)", color: "white" }
-                  : { background: "var(--surface-2)", color: "var(--text-dim)" }
-              }
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <span className="text-xs" style={{ color: "var(--text-faint)" }}>
+          {formatRangeLabel({ start, end })}
+        </span>
       </div>
       {isLoading ? (
         <p className="text-xs" style={{ color: "var(--text-dim)" }}>
@@ -129,16 +112,20 @@ function PorCampo({
   fieldPatterns,
   emptyLabel,
   color,
+  start,
+  end,
 }: {
   clientId: string;
+  start: string;
+  end: string;
   title: string;
   fieldPatterns: string[];
   emptyLabel: string;
   color: string;
 }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["crm-funil-campo-chart", clientId, fieldPatterns],
-    queryFn: () => getCrmFunilPorCampoAlt(clientId, fieldPatterns),
+    queryKey: ["crm-funil-campo-chart-periodo", clientId, fieldPatterns, start, end],
+    queryFn: () => getCrmFunilPorCampoPeriodoAlt(clientId, fieldPatterns, start, end),
   });
 
   const rows = (data ?? [])
@@ -243,6 +230,12 @@ function CrmPainelPage() {
     queryFn: () => getCrmProvider(clientId),
   });
   const crmNome = nomeCrm(crmProvider);
+  // Periodo do seletor do cabecalho (inclui "Ultimos 7 dias").
+  const { start, end } = resolveDateRange(clientLayoutRoute.useSearch());
+  const { data: periodo } = useQuery({
+    queryKey: ["crm-resumo-periodo", clientId, start, end],
+    queryFn: () => getCrmResumoPeriodo(clientId, start, end),
+  });
 
   if (isLoading) return <p style={{ color: "var(--text-dim)" }}>Carregando…</p>;
 
@@ -317,9 +310,21 @@ function CrmPainelPage() {
         <StatCard label="Ainda em disputa" value={fmtN(m.total_leads - decididos)} sub="não ganhos nem perdidos" />
       </div>
 
+      <div>
+        <div className="mb-2 text-xs font-medium" style={{ color: "var(--text-faint)" }}>
+          No período selecionado ({formatRangeLabel({ start, end })}) — leads criados nesse intervalo
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard label="Leads novos" value={fmtN(periodo?.novos ?? 0)} accent="var(--accent)" />
+          <StatCard label="Ganhos" value={fmtN(periodo?.ganhos ?? 0)} accent="var(--good)" />
+          <StatCard label="Perdidos" value={fmtN(periodo?.perdidos ?? 0)} accent="var(--danger)" />
+          <StatCard label="Valor dos cards" value={fmtBRL(periodo?.valor ?? 0)} />
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <TendenciaDeLeads clientId={clientId} />
+          <TendenciaDeLeads clientId={clientId} start={start} end={end} />
         </div>
         <AtividadeRecente clientId={clientId} />
       </div>
@@ -327,6 +332,8 @@ function CrmPainelPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <PorCampo
           clientId={clientId}
+          start={start}
+          end={end}
           title="Leads por fonte"
           fieldPatterns={["%Fonte do Lead%", "%Origem do Lead%"]}
           emptyLabel="Nenhum lead com fonte identificada ainda."
@@ -334,6 +341,8 @@ function CrmPainelPage() {
         />
         <PorCampo
           clientId={clientId}
+          start={start}
+          end={end}
           title="Leads por tipo de procedimento"
           fieldPatterns={["%Tipo de Procedim%"]}
           emptyLabel="Nenhum lead com procedimento identificado ainda."
