@@ -43,6 +43,8 @@ function limparTema(t: unknown): string | null {
   if (typeof t !== "string") return null;
   const s = t.replace(/[\p{Extended_Pictographic}]/gu, "").replace(/\s+/g, " ").trim();
   if (s.length < 3 || s.length > 60) return null;
+  // O modelo às vezes escreve a palavra "null" em vez de deixar vazio.
+  if (/^(null|none|nan|n\/a|nenhum|nenhuma|sem tema|indefinido|desconhecido|-+)$/i.test(s)) return null;
   return s;
 }
 
@@ -99,7 +101,7 @@ export async function classificarConteudoComIA(
   const chaveOpenAI = process.env.OPENAI_API_KEY;
   const chaveClaude = process.env.ANTHROPIC_API_KEY;
   if (!chaveOpenAI && !chaveClaude) return { count: 0, errors: [], pulado: "OPENAI_API_KEY (ou ANTHROPIC_API_KEY) não configurada: classificação por IA desligada" };
-  const maxPosts = opts.maxPosts ?? 100;
+  const maxPosts = opts.maxPosts ?? 160;
   const limite = Date.now() + (opts.orcamentoMs ?? 40_000);
 
   const { data: pendentes, error } = await supabase
@@ -122,37 +124,49 @@ export async function classificarConteudoComIA(
 
   const errors: string[] = [];
   let count = 0;
-  for (let i = 0; i < linhas.length; i += LOTE) {
+  // Até 3 lotes ao mesmo tempo: o tempo da função é curto e cada resposta leva alguns segundos.
+  const CONCORRENCIA = 3;
+  const lotes: Linha[][] = [];
+  for (let i = 0; i < linhas.length; i += LOTE) lotes.push(linhas.slice(i, i + LOTE));
+  for (let g = 0; g < lotes.length; g += CONCORRENCIA) {
     const restante = limite - Date.now();
     if (restante < 8000) break;
-    const lote = linhas.slice(i, i + LOTE);
-    const usuario =
-      `TEMAS EXISTENTES: ${vocabulario.size ? Array.from(vocabulario).join("; ") : "(nenhum ainda)"}\n\nPOSTS:\n` +
-      lote.map((p) => JSON.stringify({ id: p.id, legenda: (p.caption ?? "").replace(/\s+/g, " ").slice(0, 600) })).join("\n");
-    let saida: Saida[];
-    try {
-      saida = chaveOpenAI ? await chamarOpenAI(chaveOpenAI, usuario, Math.min(restante - 1000, 30_000)) : await chamarClaude(chaveClaude as string, usuario, Math.min(restante - 1000, 30_000));
-    } catch (e) {
-      errors.push(`conteudo-ia: ${e instanceof Error ? e.message : String(e)}`);
-      break;
-    }
-    const porId = new Map(lote.map((p) => [p.id, p]));
-    for (const s of saida) {
-      const p = porId.get(s.id);
-      if (!p) continue;
-      const patch: Partial<Database["public"]["Tables"]["instagram_posts"]["Update"]> = {};
-      const tema = limparTema(s.tema);
-      if (!p.tema && tema) {
-        patch.tema = tema;
-        vocabulario.add(tema);
+    const grupo = lotes.slice(g, g + CONCORRENCIA);
+    const respostas = await Promise.all(
+      grupo.map(async (lote) => {
+        const usuario =
+          `TEMAS EXISTENTES: ${vocabulario.size ? Array.from(vocabulario).join("; ") : "(nenhum ainda)"}\n\nPOSTS:\n` +
+          lote.map((p) => JSON.stringify({ id: p.id, legenda: (p.caption ?? "").replace(/\s+/g, " ").slice(0, 600) })).join("\n");
+        try {
+          const ms = Math.min(restante - 1000, 30_000);
+          const saida = chaveOpenAI ? await chamarOpenAI(chaveOpenAI, usuario, ms) : await chamarClaude(chaveClaude as string, usuario, ms);
+          return { lote, saida };
+        } catch (e) {
+          errors.push(`conteudo-ia: ${e instanceof Error ? e.message : String(e)}`);
+          return { lote, saida: [] as Saida[] };
+        }
+      }),
+    );
+    for (const { lote, saida } of respostas) {
+      const porId = new Map(lote.map((p) => [p.id, p]));
+      for (const s of saida) {
+        const p = porId.get(s.id);
+        if (!p) continue;
+        const patch: Partial<Database["public"]["Tables"]["instagram_posts"]["Update"]> = {};
+        const tema = limparTema(s.tema);
+        if (!p.tema && tema) {
+          patch.tema = tema;
+          vocabulario.add(tema);
+        }
+        if (!p.funnel_stage && s.funil && FUNIS.has(s.funil)) patch.funnel_stage = s.funil as never;
+        if (!p.methodology_stage && s.estagio && ESTAGIOS.has(s.estagio)) patch.methodology_stage = s.estagio as never;
+        if (Object.keys(patch).length === 0) continue;
+        const { error: upErr } = await supabase.from("instagram_posts").update(patch).eq("id", p.id);
+        if (upErr) errors.push(`conteudo-ia update: ${upErr.message}`);
+        else count++;
       }
-      if (!p.funnel_stage && s.funil && FUNIS.has(s.funil)) patch.funnel_stage = s.funil as never;
-      if (!p.methodology_stage && s.estagio && ESTAGIOS.has(s.estagio)) patch.methodology_stage = s.estagio as never;
-      if (Object.keys(patch).length === 0) continue;
-      const { error: upErr } = await supabase.from("instagram_posts").update(patch).eq("id", p.id);
-      if (upErr) errors.push(`conteudo-ia update: ${upErr.message}`);
-      else count++;
     }
+    if (errors.length > 0) break;
   }
   return { count, errors };
 }
