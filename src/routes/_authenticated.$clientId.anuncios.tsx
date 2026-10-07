@@ -15,6 +15,26 @@ import { getAdsResumo, getAdsPorDia, getAdsPorObjetivo, getAdsDiagnostico, getCl
 import { SyncButton } from "@/components/sync-button";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum, fmtBRL } from "@/lib/format";
+import {
+  Wallet,
+  MessageCircle,
+  Coins,
+  Eye,
+  MousePointerClick,
+  Percent, Stethoscope,
+    Rocket,
+  Scissors,
+  TrendingDown,
+  PauseCircle,
+  CheckCircle2,
+  HelpCircle,
+  AlertTriangle,
+  Info,
+  CalendarDays,
+  Layers,
+  type LucideIcon,
+} from "lucide-react";
+import { Painel, Kpi, Selo, Miniatura, BarraFina, Ajuda } from "@/components/visual";
 
 export const Route = createFileRoute("/_authenticated/$clientId/anuncios")({
   component: AnunciosPage,
@@ -55,29 +75,51 @@ const COR_VEREDITO: Record<string, string> = {
   "Volume insuficiente": "var(--text-faint)",
 };
 
+const ICONE_VEREDITO: Record<string, LucideIcon> = {
+  Escalar: Rocket,
+  Cortar: Scissors,
+  "Atrai mas não converte": TrendingDown,
+  "Sem tração": PauseCircle,
+  Manter: CheckCircle2,
+  "Volume insuficiente": HelpCircle,
+};
+
 function Veredito({ nome }: { nome: string }) {
+  const Icon = ICONE_VEREDITO[nome] ?? HelpCircle;
+  const cor = COR_VEREDITO[nome] ?? "var(--text-dim)";
   return (
-    <span
-      className="whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium"
-      style={{ color: COR_VEREDITO[nome] ?? "var(--text-dim)", borderColor: "var(--border)" }}
-    >
+    <Selo cor={cor === "var(--text-faint)" ? "var(--muted)" : cor}>
+      <Icon size={12} aria-hidden />
       {nome}
-    </span>
+    </Selo>
   );
 }
 
-function KpiCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+// Faixa curta com ícone; o texto longo fica no "i".
+function Faixa({
+  icone: Icon,
+  cor = "var(--accent)",
+  alerta = false,
+  ajuda,
+  children,
+}: {
+  icone: LucideIcon;
+  cor?: string;
+  alerta?: boolean;
+  ajuda?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-      <div className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-        {label}
-      </div>
-      <div className="mt-1 text-2xl font-semibold">{value}</div>
-      {hint && (
-        <div className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
-          {hint}
-        </div>
-      )}
+    <div
+      className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm"
+      style={{
+        background: alerta ? `color-mix(in srgb, ${cor} 12%, transparent)` : "var(--accent-soft)",
+        borderColor: "var(--border)",
+      }}
+    >
+      <Icon size={16} aria-hidden className="shrink-0" style={{ color: cor }} />
+      <div className="min-w-0 flex-1">{children}</div>
+      {ajuda && <Ajuda>{ajuda}</Ajuda>}
     </div>
   );
 }
@@ -179,15 +221,10 @@ function AnunciosPage() {
         <div className="flex justify-end">
           <SyncButton clientId={clientId} alvo="anuncios" />
         </div>
-        <div
-          className="rounded-xl border p-4 text-sm"
-          style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
-        >
-          Investimento em anúncios do Meta (Facebook e Instagram), por dia e por campanha.
-        </div>
-        <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
+        <Faixa icone={Info}>Investimento em anúncios do Meta (Facebook e Instagram), por dia e por campanha.</Faixa>
+        <Faixa icone={ultimoGasto || fontes?.tem_anuncios ? PauseCircle : AlertTriangle} cor="var(--warn)" alerta>
           {mensagemVazia}
-        </p>
+        </Faixa>
       </div>
     );
   }
@@ -198,52 +235,64 @@ function AnunciosPage() {
         <SyncButton clientId={clientId} alvo="anuncios" />
       </div>
 
-      <div
-        className="rounded-xl border p-4 text-sm"
-        style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
+      <Faixa
+        icone={CalendarDays}
+        ajuda={
+          <>
+            Investimento em anúncios do Meta em {periodLabel}, direto da conta de anúncio — não é estimativa.{" "}
+            <strong>Conversa iniciada</strong> (Direct ou WhatsApp) é o resultado que dá para medir aqui: esta conta não
+            tem pixel nem formulário instalado, então "leads" e "visitas à página" chegam zerados e ficam de fora. O
+            sync roda automaticamente todo dia.
+          </>
+        }
       >
-        Investimento em anúncios do Meta em {periodLabel}, direto da conta de anúncio — não é estimativa.{" "}
-        <strong>Conversa iniciada</strong> (Direct ou WhatsApp) é o resultado que dá para medir aqui: esta conta não
-        tem pixel nem formulário instalado, então "leads" e "visitas à página" chegam zerados e ficam de fora. O sync
-        roda automaticamente todo dia.
-      </div>
+        Meta Ads · {periodLabel} · dados reais da conta
+      </Faixa>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <KpiCard label="Investido" value={fmtBRL(gasto)} hint={`${fmtNum(n(resumo.campanhas))} campanhas`} />
-        <KpiCard
-          label="Conversas iniciadas"
-          value={fmtNum(conversas)}
-          hint="Direct e WhatsApp"
+        <Kpi icone={Wallet} rotulo="Investido" valor={fmtBRL(gasto)} dica={`${fmtNum(n(resumo.campanhas))} campanhas`} cor="var(--s1)" />
+        <Kpi icone={MessageCircle} rotulo="Conversas iniciadas" valor={fmtNum(conversas)} dica="Direct e WhatsApp" cor="var(--good)" />
+        <Kpi
+          icone={Coins}
+          rotulo="Custo por conversa"
+          valor={conversas > 0 ? fmtBRL(nOrNull(resumo.custo_por_conversa) ?? gasto / conversas) : "—"}
+          dica={conversas > 0 ? "Investido ÷ conversas" : "Nenhuma conversa no período"}
+          cor="var(--accent)"
         />
-        <KpiCard
-          label="Custo por conversa"
-          value={conversas > 0 ? fmtBRL(nOrNull(resumo.custo_por_conversa) ?? gasto / conversas) : "—"}
-          hint={conversas > 0 ? "Investido ÷ conversas" : "Nenhuma conversa no período"}
+        <Kpi icone={Eye} rotulo="Impressões" valor={fmtNum(n(resumo.impressoes))} dica={`CPM ${fmtBRL(nOrNull(resumo.cpm))}`} cor="var(--s2)" />
+        <Kpi
+          icone={MousePointerClick}
+          rotulo="Cliques no link"
+          valor={fmtNum(n(resumo.cliques_link))}
+          dica={`CPC ${fmtBRL(nOrNull(resumo.cpc))}`}
+          cor="var(--s3)"
         />
-        <KpiCard label="Impressões" value={fmtNum(n(resumo.impressoes))} hint={`CPM ${fmtBRL(nOrNull(resumo.cpm))}`} />
-        <KpiCard
-          label="Cliques no link"
-          value={fmtNum(n(resumo.cliques_link))}
-          hint={`CPC ${fmtBRL(nOrNull(resumo.cpc))}`}
-        />
-        <KpiCard label="CTR" value={`${(nOrNull(resumo.ctr) ?? 0).toFixed(2)}%`} hint="Cliques ÷ impressões" />
+        <Kpi icone={Percent} rotulo="CTR" valor={`${(nOrNull(resumo.ctr) ?? 0).toFixed(2)}%`} dica="Cliques ÷ impressões" cor="var(--s7)" />
       </div>
 
       {(diagnostico?.length ?? 0) > 0 && (
-        <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-          <h2 className="mb-1 text-sm font-semibold">Diagnóstico das campanhas</h2>
-          <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-            A régua é a mediana desta conta no período — {fmtBRL(medianaCusto)} por conversa — e não benchmark de
-            mercado. "Escalar" é quem converte a menos de 60% dessa mediana; "Cortar", quem passa do dobro. Campanha
-            que rodou pouco fica como indeterminada, em vez de receber um veredito de mentira.
-          </p>
-
+        <Painel
+          icone={Stethoscope}
+          titulo="Diagnóstico das campanhas"
+          resumo={`Régua: mediana da conta, ${fmtBRL(medianaCusto)} por conversa`}
+          cor="var(--ai)"
+          ajuda={
+            <>
+              A régua é a mediana desta conta no período — {fmtBRL(medianaCusto)} por conversa — e não benchmark de
+              mercado. "Escalar" é quem converte a menos de 60% dessa mediana; "Cortar", quem passa do dobro. Campanha
+              que rodou pouco fica como indeterminada, em vez de receber um veredito de mentira.
+            </>
+          }
+        >
           <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
             {porVeredito.map((v) => (
               <div key={v.nome} className="rounded-xl border p-3" style={{ borderColor: "var(--border)" }}>
                 <Veredito nome={v.nome} />
-                <div className="mt-2 text-lg font-semibold">{fmtBRL(v.gasto)}</div>
-                <div className="text-xs" style={{ color: "var(--text-dim)" }}>
+                <div className="mt-2 text-lg font-semibold tabular-nums">{fmtBRL(v.gasto)}</div>
+                <div className="mt-1.5">
+                  <BarraFina valor={v.gasto} max={gasto} cor={COR_VEREDITO[v.nome] ?? "var(--muted)"} />
+                </div>
+                <div className="mt-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
                   {v.campanhas} {v.campanhas === 1 ? "campanha" : "campanhas"} · {fmtNum(v.conversas)}{" "}
                   {v.conversas === 1 ? "conversa" : "conversas"}
                 </div>
@@ -252,97 +301,120 @@ function AnunciosPage() {
           </div>
 
           {desperdicio > 0 && (
-            <p className="mb-4 rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
-              <strong>{fmtBRL(desperdicio)}</strong> ({((desperdicio / gasto) * 100).toFixed(0)}% da verba) foram para
-              campanhas que não geraram uma única conversa no período.
-            </p>
+            <div className="mb-4">
+              <Faixa icone={AlertTriangle} cor="var(--crit)" alerta>
+                <strong>{fmtBRL(desperdicio)}</strong> ({((desperdicio / gasto) * 100).toFixed(0)}% da verba) foram para
+                campanhas que não geraram uma única conversa no período.
+              </Faixa>
+            </div>
           )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
-                  <th className="pb-2">Campanha</th>
-                  <th className="pb-2">Veredito</th>
-                  <th className="pb-2 text-right">Investido</th>
-                  <th className="pb-2 text-right">Conversas</th>
-                  <th className="pb-2 text-right">Custo</th>
-                  <th className="pb-2 text-right">CTR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(diagnostico ?? []).map((r) => (
-                  <tr key={r.campaign_id} className="border-t align-top" style={{ borderColor: "var(--border)" }}>
-                    <td className="py-2">
-                      <div className="flex items-start gap-2">
-                        {r.thumbnail_url && (
-                          <img
-                            src={r.thumbnail_url}
-                            alt=""
-                            loading="lazy"
-                            className="h-10 w-10 shrink-0 rounded object-cover"
-                            style={{ border: "1px solid var(--border)" }}
-                            /* A URL é CDN do Instagram e expira; o sync diário
-                               a renova. Se mesmo assim vier quebrada, some em
-                               vez de mostrar ícone de imagem partida. */
-                            onError={(e) => {
-                              e.currentTarget.style.display = "none";
-                            }}
-                          />
+          <ul className="space-y-3">
+            {(diagnostico ?? []).map((r) => {
+              const custo = r.custo_por_conversa == null ? null : n(r.custo_por_conversa);
+              const corCusto =
+                custo === null || medianaCusto <= 0
+                  ? "var(--muted)"
+                  : custo <= medianaCusto * 0.6
+                    ? "var(--good)"
+                    : custo >= medianaCusto * 2
+                      ? "var(--crit)"
+                      : "var(--accent)";
+              const maxCusto = Math.max(medianaCusto * 2, custo ?? 0);
+              return (
+                <li key={r.campaign_id} className="rounded-xl border p-3" style={{ borderColor: "var(--border)" }}>
+                  <div className="flex items-start gap-3">
+                    {r.thumbnail_url && <Miniatura url={r.thumbnail_url} className="h-12 w-12" />}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <Veredito nome={r.veredito} />
+                        {r.ctr != null && (
+                          <span className="text-[11px]" style={{ color: "var(--text-dim)" }}>
+                            CTR {n(r.ctr).toFixed(2)}%
+                          </span>
                         )}
-                        <div>
-                          {r.permalink ? (
-                            <a
-                              href={r.permalink}
-                              target="_blank"
-                              rel="noreferrer"
-                              title={r.campanha}
-                              className="underline underline-offset-2"
-                              style={{ color: "var(--accent)" }}
-                            >
-                              {shortCampanha(r.campanha)}
-                            </a>
-                          ) : (
-                            <span title={r.campanha}>{shortCampanha(r.campanha)}</span>
-                          )}
-                          <div className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
-                            {r.motivo}
-                          </div>
-                        </div>
                       </div>
-                    </td>
-                    <td className="py-2">
-                      <Veredito nome={r.veredito} />
-                    </td>
-                    <td className="py-2 text-right">{fmtBRL(n(r.gasto))}</td>
-                    <td className="py-2 text-right">{fmtNum(n(r.conversas))}</td>
-                    <td className="py-2 text-right font-medium">
-                      {r.custo_por_conversa == null ? "—" : fmtBRL(n(r.custo_por_conversa))}
-                    </td>
-                    <td className="py-2 text-right" style={{ color: "var(--text-dim)" }}>
-                      {r.ctr == null ? "—" : `${n(r.ctr).toFixed(2)}%`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      <div className="mt-1 break-words text-sm font-medium">
+                        {r.permalink ? (
+                          <a
+                            href={r.permalink}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={r.campanha}
+                            className="underline underline-offset-2"
+                            style={{ color: "var(--accent)" }}
+                          >
+                            {shortCampanha(r.campanha)}
+                          </a>
+                        ) : (
+                          <span title={r.campanha}>{shortCampanha(r.campanha)}</span>
+                        )}
+                      </div>
+                      {r.motivo && (
+                        <div className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
+                          {r.motivo}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
+                    <div>
+                      <div className="flex items-center gap-1" style={{ color: "var(--text-dim)" }}>
+                        <Wallet size={12} aria-hidden /> Investido
+                      </div>
+                      <div className="mt-0.5 text-sm font-semibold tabular-nums">{fmtBRL(n(r.gasto))}</div>
+                      <div className="mt-1">
+                        <BarraFina valor={n(r.gasto)} max={gasto} cor="var(--s1)" />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1" style={{ color: "var(--text-dim)" }}>
+                        <MessageCircle size={12} aria-hidden /> Conversas
+                      </div>
+                      <div className="mt-0.5 text-sm font-semibold tabular-nums">{fmtNum(n(r.conversas))}</div>
+                      <div className="mt-1">
+                        <BarraFina valor={n(r.conversas)} max={conversas} cor="var(--good)" />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1" style={{ color: "var(--text-dim)" }}>
+                        <Coins size={12} aria-hidden /> Custo
+                      </div>
+                      <div className="mt-0.5 text-sm font-semibold tabular-nums">{custo === null ? "—" : fmtBRL(custo)}</div>
+                      <div className="mt-1">
+                        {custo === null ? <BarraFina valor={0} max={1} /> : <BarraFina valor={custo} max={maxCusto} cor={corCusto} />}
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-3 text-[11px]" style={{ color: "var(--muted)" }}>
+            Barras de investido e conversas: fatia do total da conta. Barra de custo: comparada à mediana ({fmtBRL(medianaCusto)}); verde = bem abaixo, vermelho = o dobro ou mais.
+          </p>
+        </Painel>
       )}
 
-      <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h2 className="mb-1 text-sm font-semibold">Investimento e conversas por dia</h2>
-        <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-          As barras são o gasto do dia; a linha, as conversas iniciadas. Dias em que a linha não acompanha a barra são
-          os que merecem olhada.
-        </p>
+      <Painel
+        icone={CalendarDays}
+        titulo="Investimento e conversas por dia"
+        resumo="Barra = gasto do dia · linha = conversas"
+        cor="var(--s2)"
+        ajuda={
+          <>
+            As barras são o gasto do dia; a linha, as conversas iniciadas. Dias em que a linha não acompanha a barra são
+            os que merecem olhada.
+          </>
+        }
+      >
         <div style={{ height: 260 }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={serie}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="dia" tickFormatter={tickDate} tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="esq" tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="dir" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} />
+              <YAxis yAxisId="esq" tick={{ fontSize: 11 }} width={36} />
+              <YAxis yAxisId="dir" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} width={28} />
               <Tooltip
                 formatter={(value: number | string, name: string) =>
                   name === "Gasto" ? fmtBRL(n(value)) : fmtNum(n(value))
@@ -355,57 +427,70 @@ function AnunciosPage() {
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-      </div>
+      </Painel>
 
       {(porObjetivo?.length ?? 0) > 1 && (
-        <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-          <h2 className="mb-1 text-sm font-semibold">Por objetivo da campanha</h2>
-          <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-            O objetivo escolhido ao subir a campanha muda o custo por conversa mais do que qualquer outro ajuste. Vale
-            comparar quanto foi investido em cada um.
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
-                  <th className="pb-2">Objetivo</th>
-                  <th className="pb-2 text-right">Campanhas</th>
-                  <th className="pb-2 text-right">Investido</th>
-                  <th className="pb-2 text-right">% da verba</th>
-                  <th className="pb-2 text-right">Conversas</th>
-                  <th className="pb-2 text-right">Custo por conversa</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(porObjetivo ?? []).map((r) => {
-                  const fatia = gasto > 0 ? (n(r.gasto) / gasto) * 100 : 0;
-                  return (
-                    <tr key={r.objetivo} className="border-t" style={{ borderColor: "var(--border)" }}>
-                      <td className="py-1.5">{r.objetivo}</td>
-                      <td className="py-1.5 text-right" style={{ color: "var(--text-dim)" }}>
-                        {fmtNum(n(r.campanhas))}
-                      </td>
-                      <td className="py-1.5 text-right">{fmtBRL(n(r.gasto))}</td>
-                      <td className="py-1.5 text-right" style={{ color: "var(--text-dim)" }}>
-                        {fatia.toFixed(0)}%
-                      </td>
-                      <td className="py-1.5 text-right">{fmtNum(n(r.conversas))}</td>
-                      <td className="py-1.5 text-right font-medium">
-                        {r.custo_por_conversa == null ? "—" : fmtBRL(n(r.custo_por_conversa))}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <Painel
+          icone={Layers}
+          titulo="Por objetivo da campanha"
+          resumo="Quanto da verba foi para cada objetivo"
+          cor="var(--s7)"
+          ajuda={
+            <>
+              O objetivo escolhido ao subir a campanha muda o custo por conversa mais do que qualquer outro ajuste. Vale
+              comparar quanto foi investido em cada um.
+            </>
+          }
+        >
+          <ul className="space-y-3">
+            {(porObjetivo ?? []).map((r) => {
+              const fatia = gasto > 0 ? (n(r.gasto) / gasto) * 100 : 0;
+              return (
+                <li key={r.objetivo}>
+                  <div className="flex items-baseline justify-between gap-2 text-sm">
+                    <span className="min-w-0 truncate font-medium" title={r.objetivo}>
+                      {r.objetivo}
+                    </span>
+                    <span className="shrink-0 tabular-nums">
+                      <b className="font-semibold">{fmtBRL(n(r.gasto))}</b>
+                      <span className="ml-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
+                        {fatia.toFixed(0)}% da verba
+                      </span>
+                    </span>
+                  </div>
+                  <div className="mt-1">
+                    <BarraFina valor={n(r.gasto)} max={gasto} cor="var(--s7)" />
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
+                    <span>
+                      {fmtNum(n(r.campanhas))} {n(r.campanhas) === 1 ? "campanha" : "campanhas"}
+                    </span>
+                    <span>{fmtNum(n(r.conversas))} conversas</span>
+                    <span>
+                      custo por conversa{" "}
+                      <b style={{ color: "var(--text)" }}>{r.custo_por_conversa == null ? "—" : fmtBRL(n(r.custo_por_conversa))}</b>
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Painel>
       )}
 
-      <p className="text-xs" style={{ color: "var(--text-faint)" }}>
-        Alcance não aparece somado aqui de propósito: somar o alcance de cada dia conta a mesma pessoa várias vezes, e
-        o número viraria uma versão inflada das impressões.
-      </p>
+      <Faixa
+        icone={Info}
+        ajuda={
+          <>
+            Alcance não aparece somado aqui de propósito: somar o alcance de cada dia conta a mesma pessoa várias vezes,
+            e o número viraria uma versão inflada das impressões.
+          </>
+        }
+      >
+        <span className="text-xs" style={{ color: "var(--text-dim)" }}>
+          Alcance não é somado de propósito (contaria a mesma pessoa várias vezes).
+        </span>
+      </Faixa>
     </div>
   );
 }

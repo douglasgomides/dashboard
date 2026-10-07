@@ -23,6 +23,8 @@ import {
 import { horasDosPosts, diasDosPosts, recomendacaoDeHorario } from "@/lib/horarios";
 import { Barras, BarraDividida, BarrasPareadas } from "@/components/barras";
 import { MapaDeCalor } from "@/components/mapa-de-calor";
+import { Painel, Kpi, Selo, Ajuda } from "@/components/visual";
+import { Users, Target, Heart, Clock, Lightbulb, MapPin, Globe, UserPlus, UserMinus, Scale, Eye, Radio, Layers, CalendarClock, Trophy, FileText, BarChart3, TrendingUp, VenetianMask, Cake, Sparkles } from "lucide-react";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 
 export const Route = createFileRoute("/_authenticated/$clientId/audiencia")({
@@ -32,11 +34,11 @@ export const Route = createFileRoute("/_authenticated/$clientId/audiencia")({
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 
 type Aba = "demografia" | "alcance" | "interacoes" | "horarios";
-const ABAS: { id: Aba; rotulo: string }[] = [
-  { id: "demografia", rotulo: "Demografia" },
-  { id: "alcance", rotulo: "Alcance e origem" },
-  { id: "interacoes", rotulo: "Interações" },
-  { id: "horarios", rotulo: "Melhores horários" },
+const ABAS: { id: Aba; rotulo: string; icone: typeof Users }[] = [
+  { id: "demografia", rotulo: "Demografia", icone: Users },
+  { id: "alcance", rotulo: "Alcance e origem", icone: Target },
+  { id: "interacoes", rotulo: "Interações", icone: Heart },
+  { id: "horarios", rotulo: "Melhores horários", icone: CalendarClock },
 ];
 
 // Quando a Meta recusa um bloco, diz o motivo em vez de mostrar zero.
@@ -51,13 +53,17 @@ function Falha({ b }: { b: Extract<Bloco<unknown>, { ok: false }> }) {
 function Leitura({ itens }: { itens: string[] }) {
   if (itens.length === 0) return null;
   return (
-    <div className="card" style={{ marginBottom: 16, background: "var(--accent-soft)" }}>
-      <h2>O que isso quer dizer</h2>
-      <ul style={{ margin: "8px 0 0", paddingLeft: 18, display: "grid", gap: 6, fontSize: 13.5 }}>
-        {itens.map((t) => (
-          <li key={t}>{t}</li>
-        ))}
-      </ul>
+    <div style={{ marginBottom: 16 }}>
+      <Painel icone={Lightbulb} titulo="Em resumo" cor="var(--warn)" destaque>
+        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 8, fontSize: 13.5 }}>
+          {itens.map((t) => (
+            <li key={t} className="flex items-start gap-2">
+              <Sparkles size={14} aria-hidden className="mt-0.5 shrink-0" style={{ color: "var(--warn)" }} />
+              <span>{t}</span>
+            </li>
+          ))}
+        </ul>
+      </Painel>
     </div>
   );
 }
@@ -72,9 +78,7 @@ function Demografia({ a }: { a: Audiencia }) {
     <div>
       <Leitura itens={leituraDemografia(a)} />
       <div className="hgrid two">
-        <div className="card">
-          <h2>Faixa etária dos seguidores</h2>
-          <p className="sub">Quem segue a conta hoje. A Meta só informa para contas com 100 seguidores ou mais.</p>
+        <Painel icone={Cake} titulo="Idade dos seguidores" resumo="Quem segue hoje" ajuda={<>Quem segue a conta hoje. A Meta só informa para contas com 100 seguidores ou mais.</>}>
           <div style={{ marginTop: 12 }}>
             {a.seguidores.ok ? (
               <Barras itens={a.seguidores.dados.faixa_etaria.map((p) => ({ rotulo: `${p.chave} anos`, valor: p.valor }))} />
@@ -82,10 +86,8 @@ function Demografia({ a }: { a: Audiencia }) {
               <Falha b={a.seguidores} />
             )}
           </div>
-        </div>
-        <div className="card">
-          <h2>Gênero dos seguidores</h2>
-          <p className="sub">Informado pelo Instagram. "Não informado" é quem não declarou.</p>
+        </Painel>
+        <Painel icone={VenetianMask} titulo="Gênero dos seguidores" resumo="Quem não declarou aparece como não informado" ajuda={<>Informado pelo Instagram. "Não informado" é quem não declarou.</>}>
           <div style={{ marginTop: 12 }}>
             {a.seguidores.ok ? (
               <BarraDividida
@@ -95,15 +97,11 @@ function Demografia({ a }: { a: Audiencia }) {
               <Falha b={a.seguidores} />
             )}
           </div>
-        </div>
+        </Painel>
       </div>
 
       <div className="hgrid two">
-        <div className="card">
-          <h2>Seguidores x quem o conteúdo alcançou</h2>
-          <p className="sub">
-            % por faixa etária. Alcance: {a.alcancados_no_mes.ok ? a.alcancados_no_mes.dados.mes : "mês"}. Se o alcance pesa mais que a base numa faixa, o conteúdo está chegando a gente nova ali.
-          </p>
+        <Painel icone={Target} titulo="Seguidores x alcançados" cor="var(--ai)" resumo="% por faixa etária" ajuda={<>% por faixa etária. Alcance: {a.alcancados_no_mes.ok ? a.alcancados_no_mes.dados.mes : "mês"}. Se o alcance pesa mais que a base numa faixa, o conteúdo está chegando a gente nova ali.</>}>
           <div style={{ marginTop: 12 }}>
             {a.seguidores.ok && a.alcancados_no_mes.ok && tb > 0 && ta > 0 ? (
               <BarrasPareadas
@@ -117,10 +115,8 @@ function Demografia({ a }: { a: Audiencia }) {
               <p className="note">Sem dado suficiente para comparar neste mês.</p>
             )}
           </div>
-        </div>
-        <div className="card">
-          <h2>Quem engaja</h2>
-          <p className="sub">Pessoas que curtiram, comentaram, salvaram ou compartilharam ({a.engajados_no_mes.ok ? a.engajados_no_mes.dados.mes : "mês"}).</p>
+        </Painel>
+        <Painel icone={Heart} titulo="Quem engaja" cor="var(--ai)" resumo="Por idade" ajuda={<>Pessoas que curtiram, comentaram, salvaram ou compartilharam ({a.engajados_no_mes.ok ? a.engajados_no_mes.dados.mes : "mês"}).</>}>
           <div style={{ marginTop: 12 }}>
             {a.engajados_no_mes.ok ? (
               soma(a.engajados_no_mes.dados.faixa_etaria) >= 50 ? (
@@ -132,13 +128,11 @@ function Demografia({ a }: { a: Audiencia }) {
               <Falha b={a.engajados_no_mes} />
             )}
           </div>
-        </div>
+        </Painel>
       </div>
 
       <div className="hgrid two">
-        <div className="card">
-          <h2>Cidades dos seguidores</h2>
-          <p className="sub">As 10 principais.</p>
+        <Painel icone={MapPin} titulo="Cidades" resumo="As 10 principais" ajuda={<>As 10 principais.</>}>
           <div style={{ marginTop: 12 }}>
             {a.seguidores.ok ? (
               <Barras
@@ -149,9 +143,8 @@ function Demografia({ a }: { a: Audiencia }) {
               <Falha b={a.seguidores} />
             )}
           </div>
-        </div>
-        <div className="card">
-          <h2>Países dos seguidores</h2>
+        </Painel>
+        <Painel icone={Globe} titulo="Países" resumo="Top 6">
           <div style={{ marginTop: 12 }}>
             {a.seguidores.ok ? (
               <Barras itens={a.seguidores.dados.paises.slice(0, 6).map((p) => ({ rotulo: p.chave, valor: p.valor }))} />
@@ -159,7 +152,7 @@ function Demografia({ a }: { a: Audiencia }) {
               <Falha b={a.seguidores} />
             )}
           </div>
-        </div>
+        </Painel>
       </div>
     </div>
   );
@@ -170,9 +163,7 @@ function Alcance({ a }: { a: Audiencia }) {
     <div>
       <Leitura itens={leituraOrigem(a)} />
       <div className="hgrid two">
-        <div className="card">
-          <h2>Alcance: seguidores x não seguidores</h2>
-          <p className="sub">Contas únicas alcançadas nos últimos {a.periodo.dias} dias ({a.periodo.de} a {a.periodo.ate}).</p>
+        <Painel icone={Users} titulo="Alcance" resumo="Seguidores x não seguidores" ajuda={<>Contas únicas alcançadas nos últimos {a.periodo.dias} dias ({a.periodo.de} a {a.periodo.ate}).</>}>
           <div style={{ marginTop: 12 }}>
             {a.alcance_por_tipo_de_seguidor.ok ? (
               <BarraDividida
@@ -185,10 +176,8 @@ function Alcance({ a }: { a: Audiencia }) {
               <Falha b={a.alcance_por_tipo_de_seguidor} />
             )}
           </div>
-        </div>
-        <div className="card">
-          <h2>Visualizações: seguidores x não seguidores</h2>
-          <p className="sub">Quantas vezes o conteúdo foi visto, no mesmo período.</p>
+        </Painel>
+        <Painel icone={Eye} titulo="Visualizações" cor="var(--ai)" resumo="Seguidores x não seguidores" ajuda={<>Quantas vezes o conteúdo foi visto, no mesmo período.</>}>
           <div style={{ marginTop: 12 }}>
             {a.visualizacoes_por_tipo_de_seguidor.ok ? (
               <BarraDividida
@@ -201,12 +190,11 @@ function Alcance({ a }: { a: Audiencia }) {
               <Falha b={a.visualizacoes_por_tipo_de_seguidor} />
             )}
           </div>
-        </div>
+        </Painel>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h2>Origem das visualizações, por tipo de conteúdo</h2>
-        <p className="sub">Reels, carrossel, post, stories e anúncios. Alcance e interações vêm da Meta no mesmo período.</p>
+      <div style={{ marginBottom: 16 }}>
+      <Painel icone={Layers} titulo="Origem das visualizações" resumo="Por tipo de conteúdo" ajuda={<>Reels, carrossel, post, stories e anúncios. Alcance e interações vêm da Meta no mesmo período.</>}>
         <div style={{ marginTop: 12 }}>
           {a.origem.ok ? (
             <>
@@ -214,52 +202,51 @@ function Alcance({ a }: { a: Audiencia }) {
                 itens={a.origem.dados.map((i) => ({ rotulo: i.conteudo, valor: i.visualizacoes }))}
                 formato={(v) => `${fmtN(v)} views`}
               />
-              <div style={{ overflowX: "auto", marginTop: 14 }}>
-                <table className="t">
-                  <thead>
-                    <tr>
-                      <th className="l">Conteúdo</th>
-                      <th>Visualizações</th>
-                      <th>Alcance</th>
-                      <th>Interações</th>
-                      <th>Interações por alcance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {a.origem.dados.map((i) => (
-                      <tr key={i.conteudo}>
-                        <td className="l">{i.conteudo}</td>
-                        <td>{fmtN(i.visualizacoes)}</td>
-                        <td>{fmtN(i.alcance)}</td>
-                        <td>{i.interacoes > 0 ? fmtN(i.interacoes) : "—"}</td>
-                        <td>{i.interacoes > 0 && i.alcance > 0 ? fmtPct(pctDe(i.interacoes, i.alcance), 1) : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="mt-3 grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
+                {a.origem.dados.map((i) => (
+                  <div key={i.conteudo} className="rounded-lg border p-3" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <b className="text-sm">{i.conteudo}</b>
+                      {i.interacoes > 0 && i.alcance > 0 ? (
+                        <Selo cor="var(--good-text)" titulo="Interações por alcance">{fmtPct(pctDe(i.interacoes, i.alcance), 1)}</Selo>
+                      ) : (
+                        <Selo titulo="Interações por alcance">—</Selo>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div><Eye size={13} aria-hidden className="mx-auto" style={{ color: "var(--accent)" }} /><div className="text-sm font-semibold tabular-nums">{fmtN(i.visualizacoes)}</div><div className="text-[11px]" style={{ color: "var(--muted)" }}>Views</div></div>
+                      <div><Target size={13} aria-hidden className="mx-auto" style={{ color: "var(--ai)" }} /><div className="text-sm font-semibold tabular-nums">{fmtN(i.alcance)}</div><div className="text-[11px]" style={{ color: "var(--muted)" }}>Alcance</div></div>
+                      <div><Heart size={13} aria-hidden className="mx-auto" style={{ color: "var(--crit)" }} /><div className="text-sm font-semibold tabular-nums">{i.interacoes > 0 ? fmtN(i.interacoes) : "—"}</div><div className="text-[11px]" style={{ color: "var(--muted)" }}>Interações</div></div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </>
           ) : (
             <Falha b={a.origem} />
           )}
         </div>
+      </Painel>
       </div>
 
-      <div className="card">
-        <h2>Quem seguiu e quem deixou de seguir</h2>
-        <p className="sub">Saldo dos últimos {a.periodo.dias} dias, direto da Meta.</p>
+      <Painel icone={UserPlus} titulo="Seguiu x deixou de seguir" resumo="Saldo no período" ajuda={<>Saldo dos últimos {a.periodo.dias} dias, direto da Meta.</>}>
         <div style={{ marginTop: 12 }}>
           {a.seguiram_e_deixaram.ok ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 28 }}>
-              <div><div className="sub">Seguiram</div><b style={{ fontSize: 24 }}>{fmtN(a.seguiram_e_deixaram.dados.seguiram)}</b></div>
-              <div><div className="sub">Deixaram de seguir</div><b style={{ fontSize: 24 }}>{fmtN(a.seguiram_e_deixaram.dados.deixaram_de_seguir)}</b></div>
-              <div><div className="sub">Saldo</div><b style={{ fontSize: 24, color: a.seguiram_e_deixaram.dados.saldo >= 0 ? "var(--good)" : "var(--crit)" }}>{a.seguiram_e_deixaram.dados.saldo >= 0 ? "+" : ""}{fmtN(a.seguiram_e_deixaram.dados.saldo)}</b></div>
+            <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))" }}>
+              <Kpi icone={UserPlus} rotulo="Seguiram" valor={fmtN(a.seguiram_e_deixaram.dados.seguiram)} cor="var(--good-text)" />
+              <Kpi icone={UserMinus} rotulo="Deixaram de seguir" valor={fmtN(a.seguiram_e_deixaram.dados.deixaram_de_seguir)} cor="var(--crit)" />
+              <Kpi
+                icone={Scale}
+                rotulo="Saldo"
+                valor={`${a.seguiram_e_deixaram.dados.saldo >= 0 ? "+" : ""}${fmtN(a.seguiram_e_deixaram.dados.saldo)}`}
+                cor={a.seguiram_e_deixaram.dados.saldo >= 0 ? "var(--good-text)" : "var(--crit)"}
+              />
             </div>
           ) : (
             <Falha b={a.seguiram_e_deixaram} />
           )}
         </div>
-      </div>
+      </Painel>
     </div>
   );
 }
@@ -285,9 +272,8 @@ function Interacoes({ a, clientId, start, end }: { a: Audiencia; clientId: strin
   return (
     <div>
       <Leitura itens={leitura} />
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h2>Interações no período</h2>
-        <p className="sub">Últimos {a.periodo.dias} dias ({a.periodo.de} a {a.periodo.ate}).</p>
+      <div style={{ marginBottom: 16 }}>
+      <Painel icone={Heart} titulo="Interações" resumo="Curtidas, comentários, salvos e compartilhados" ajuda={<>Últimos {a.periodo.dias} dias ({a.periodo.de} a {a.periodo.ate}).</>}>
         <div style={{ marginTop: 12 }}>
           {tot ? (
             <Barras
@@ -303,10 +289,9 @@ function Interacoes({ a, clientId, start, end }: { a: Audiencia; clientId: strin
             a.interacoes.ok === false && <Falha b={a.interacoes} />
           )}
         </div>
+      </Painel>
       </div>
-      <div className="card">
-        <h2>Interações por dia</h2>
-        <p className="sub">Do histórico diário gravado, no período escolhido no topo da página.</p>
+      <Painel icone={BarChart3} titulo="Interações por dia" resumo="Histórico diário gravado" ajuda={<>Do histórico diário gravado, no período escolhido no topo da página.</>}>
         {dias.length === 0 ? (
           <p className="note" style={{ marginTop: 10 }}>Nenhum dia do período tem interações gravadas.</p>
         ) : (
@@ -328,7 +313,7 @@ function Interacoes({ a, clientId, start, end }: { a: Audiencia; clientId: strin
             </div>
           </div>
         )}
-      </div>
+      </Painel>
     </div>
   );
 }
@@ -344,34 +329,22 @@ function Horarios({ a, clientId, start, end }: { a: Audiencia; clientId: string;
   return (
     <div>
       <Leitura itens={leitura} />
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h2>Quando os seguidores estão online</h2>
-        <p className="sub">
-          Média de seguidores online por dia da semana e hora, em horário de Brasília{a.horarios.ok ? `, nos últimos ${a.horarios.dados.dias} dias` : ""}. Cor mais forte, mais gente online.
-        </p>
+      <div style={{ marginBottom: 16 }}>
+      <Painel icone={Clock} titulo="Seguidores online" resumo="Dia da semana x hora (Brasília)" ajuda={<>Média de seguidores online por dia da semana e hora, em horário de Brasília{a.horarios.ok ? `, nos últimos ${a.horarios.dados.dias} dias` : ""}. Cor mais forte, mais gente online.</>}>
         <div style={{ marginTop: 12 }}>{mapa ? <MapaDeCalor mapa={mapa} /> : a.horarios.ok === false && <Falha b={a.horarios} />}</div>
+      </Painel>
       </div>
       {mapa && (
         <div className="hgrid two">
-          <div className="card">
-            <h2>Cinco melhores janelas</h2>
-            <table className="t" style={{ marginTop: 8 }}>
-              <thead>
-                <tr><th className="l">Dia e hora</th><th>Seguidores online (média)</th></tr>
-              </thead>
-              <tbody>
-                {janelas.map((j) => (
-                  <tr key={`${j.dia}-${j.hora}`}>
-                    <td className="l">{DIAS_SEMANA[j.dia]}, {j.hora}h</td>
-                    <td>{fmtN(j.online)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="card">
-            <h2>Por hora do dia</h2>
-            <p className="sub">Média dos sete dias da semana.</p>
+          <Painel icone={Trophy} titulo="5 melhores janelas" resumo="Dia e hora com mais gente online" ajuda={<>Seguidores online (média) em cada janela.</>}>
+            <Barras
+              total={0}
+              itens={janelas.map((j) => ({ rotulo: `${DIAS_SEMANA[j.dia]}, ${j.hora}h`, valor: j.online }))}
+              formato={(v) => fmtN(v)}
+              cor="var(--good)"
+            />
+          </Painel>
+          <Painel icone={Clock} titulo="Por hora do dia" resumo="Média dos 7 dias" ajuda={<>Média dos sete dias da semana.</>}>
             <div style={{ marginTop: 8 }}>
               <Barras
                 total={0}
@@ -379,12 +352,11 @@ function Horarios({ a, clientId, start, end }: { a: Audiencia; clientId: string;
                 formato={(v) => fmtN(v)}
               />
             </div>
-          </div>
+          </Painel>
         </div>
       )}
-      <div className="card" style={{ marginTop: 16 }}>
-        <h2>E os seus posts?</h2>
-        <p className="sub">Engajamento mediano por hora de publicação, só horas com {3}+ posts no período ({/* período vem do topo da página */}escolhido no topo).</p>
+      <div style={{ marginTop: 16 }}>
+      <Painel icone={FileText} titulo="E os seus posts?" resumo="Engajamento mediano por hora" ajuda={<>Engajamento mediano por hora de publicação, só horas com {3}+ posts no período ({/* período vem do topo da página */}escolhido no topo).</>}>
         {posts.isLoading ? (
           <Carregando />
         ) : horasPosts.length === 0 ? (
@@ -394,6 +366,7 @@ function Horarios({ a, clientId, start, end }: { a: Audiencia; clientId: string;
             <Barras total={0} itens={horasPosts.slice(0, 8).map((h) => ({ rotulo: `${h.hora}h (${h.posts} posts)`, valor: Math.round(h.mediana) }))} formato={(v) => fmtN(v)} cor="var(--ai, #8b7cf6)" />
           </div>
         )}
+      </Painel>
       </div>
     </div>
   );
@@ -419,10 +392,14 @@ function AudienciaPage() {
   const head = (
     <div className="hpagehead">
       <h2>Audiência</h2>
-      <p>
-        Quem segue, quem o conteúdo alcança, de onde vêm as visualizações e quando os seguidores estão online. Lido ao vivo da Meta; as abas
-        Interações e Horários dos posts usam também o período do topo ({periodLabel}).
-      </p>
+      <div className="flex items-center gap-2">
+        <Radio size={14} aria-hidden style={{ color: "var(--accent)" }} />
+        <span>Quem segue, alcance, origem e horários</span>
+        <Ajuda>
+          Quem segue, quem o conteúdo alcança, de onde vêm as visualizações e quando os seguidores estão online. Lido ao vivo da Meta; as abas
+          Interações e Horários dos posts usam também o período do topo ({periodLabel}).
+        </Ajuda>
+      </div>
       {temIg && (
         <div className="flex justify-end" style={{ marginTop: 8 }}>
           <button type="button" className="btn" onClick={() => aud.refetch()} disabled={aud.isFetching}>
@@ -448,6 +425,7 @@ function AudienciaPage() {
       <div className="seg" role="tablist" style={{ marginBottom: 16, flexWrap: "wrap" }}>
         {ABAS.map((x) => (
           <button key={x.id} type="button" role="tab" aria-selected={aba === x.id} aria-pressed={aba === x.id} onClick={() => setAba(x.id)}>
+            <x.icone size={14} aria-hidden className="mr-1 inline-block align-[-2px]" />
             {x.rotulo}
           </button>
         ))}

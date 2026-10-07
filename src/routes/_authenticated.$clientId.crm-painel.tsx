@@ -3,6 +3,26 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import {
+  Users,
+  CalendarCheck,
+  Headset,
+  Sparkles,
+  Target,
+  Trophy,
+  XCircle,
+  Hourglass,
+  Percent,
+  Filter,
+  TrendingUp,
+  Megaphone,
+  Stethoscope,
+  Activity,
+  Info,
+  AlertTriangle,
+  type LucideIcon,
+} from "lucide-react";
+import { Painel, Kpi, Selo, BarraFina, Ajuda } from "@/components/visual";
+import {
   getCrmMetricasEssenciais,
   getCrmLeadsPorDia,
   getCrmFunilPorCampoAlt,
@@ -32,31 +52,83 @@ function fmtN(n: number) {
   return n.toLocaleString("pt-BR");
 }
 
-function StatCard({
-  label,
-  value,
-  sub,
-  accent,
+// Faixa curta com ícone: aviso/contexto em uma linha; o texto longo vai no "i".
+function Faixa({
+  icone: Icon,
+  cor = "var(--accent)",
+  children,
+  ajuda,
+  alerta = false,
 }: {
-  label: string;
-  value: string;
-  sub?: string;
-  accent?: string;
+  icone: LucideIcon;
+  cor?: string;
+  children: React.ReactNode;
+  ajuda?: React.ReactNode;
+  alerta?: boolean;
 }) {
   return (
-    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-      <div className="text-xs" style={{ color: "var(--text-faint)" }}>
-        {label}
-      </div>
-      <div className="mt-1 font-mono text-2xl font-semibold" style={{ color: accent ?? "var(--text)" }}>
-        {value}
-      </div>
-      {sub && (
-        <div className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
-          {sub}
-        </div>
-      )}
+    <div
+      className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm"
+      style={{
+        background: alerta ? `color-mix(in srgb, ${cor} 12%, transparent)` : "var(--accent-soft)",
+        borderColor: "var(--border)",
+      }}
+    >
+      <Icon size={16} aria-hidden style={{ color: cor }} className="shrink-0" />
+      <div className="min-w-0 flex-1">{children}</div>
+      {ajuda && <Ajuda>{ajuda}</Ajuda>}
     </div>
+  );
+}
+
+// Uma etapa do funil: ícone, nome, número, barra proporcional à base e % da base.
+function EtapaFunil({
+  icone: Icon,
+  rotulo,
+  valor,
+  base,
+  cor,
+  extra,
+}: {
+  icone: LucideIcon;
+  rotulo: string;
+  valor: number | null;
+  base: number;
+  cor: string;
+  extra?: string;
+}) {
+  const pct = valor !== null && base > 0 ? Math.round((valor / base) * 100) : null;
+  return (
+    <li className="flex items-center gap-3">
+      <span
+        aria-hidden
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+        style={{ background: `color-mix(in srgb, ${cor} 16%, transparent)`, color: cor }}
+      >
+        <Icon size={16} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2 text-sm">
+          <span className="truncate font-medium">{rotulo}</span>
+          <span className="shrink-0 tabular-nums">
+            <b className="font-semibold">{valor === null ? "—" : fmtN(valor)}</b>
+            {pct !== null && (
+              <span className="ml-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
+                {pct}%
+              </span>
+            )}
+          </span>
+        </div>
+        <div className="mt-1">
+          <BarraFina valor={valor ?? 0} max={base} cor={cor} />
+        </div>
+        {extra && (
+          <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-dim)" }}>
+            {extra}
+          </div>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -79,26 +151,23 @@ function TendenciaDeLeads({ clientId }: { clientId: string }) {
   }));
 
   return (
-    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">Novos leads por dia</h2>
-        <div className="flex gap-1">
-          {PERIODS.map((p) => (
-            <button
-              key={p.days}
-              type="button"
-              onClick={() => setDays(p.days)}
-              className="rounded-md px-2.5 py-1 text-xs font-medium"
-              style={
-                days === p.days
-                  ? { background: "var(--accent)", color: "white" }
-                  : { background: "var(--surface-2)", color: "var(--text-dim)" }
-              }
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+    <Painel icone={TrendingUp} titulo="Novos leads por dia" resumo="Quantos leads entraram em cada dia" cor="var(--s1)">
+      <div className="mb-3 flex gap-1">
+        {PERIODS.map((p) => (
+          <button
+            key={p.days}
+            type="button"
+            onClick={() => setDays(p.days)}
+            className="rounded-md px-2.5 py-1 text-xs font-medium"
+            style={
+              days === p.days
+                ? { background: "var(--accent)", color: "white" }
+                : { background: "var(--surface-2)", color: "var(--text-dim)" }
+            }
+          >
+            {p.label}
+          </button>
+        ))}
       </div>
       {isLoading ? (
         <p className="text-xs" style={{ color: "var(--text-dim)" }}>
@@ -113,13 +182,13 @@ function TendenciaDeLeads({ clientId }: { clientId: string }) {
           <BarChart data={rows}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis dataKey="dia" tick={{ fontSize: 10 }} stroke="var(--text-faint)" interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 10 }} stroke="var(--text-faint)" allowDecimals={false} />
+            <YAxis tick={{ fontSize: 10 }} stroke="var(--text-faint)" allowDecimals={false} width={32} />
             <Tooltip formatter={(value: number) => [fmtN(value), "leads"]} labelFormatter={(l) => `Dia ${l}`} />
             <Bar dataKey="total" fill="var(--accent)" radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       )}
-    </div>
+    </Painel>
   );
 }
 
@@ -129,7 +198,9 @@ function PorCampo({
   fieldPatterns,
   emptyLabel,
   color,
+  icone,
 }: {
+  icone: LucideIcon;
   clientId: string;
   title: string;
   fieldPatterns: string[];
@@ -146,9 +217,11 @@ function PorCampo({
     .slice(0, 8)
     .map((r) => ({ chave: r.chave, total: r.total }));
 
+  const max = rows.reduce((m, r) => Math.max(m, r.total), 0);
+  const soma = rows.reduce((t, r) => t + r.total, 0);
+
   return (
-    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-      <h2 className="mb-3 text-sm font-semibold">{title}</h2>
+    <Painel icone={icone} titulo={title} resumo={`Top ${rows.length || 8} — ${soma ? fmtN(soma) + " leads" : "sem dados"}`} cor={color}>
       {isLoading ? (
         <p className="text-xs" style={{ color: "var(--text-dim)" }}>
           Carregando…
@@ -158,17 +231,28 @@ function PorCampo({
           {emptyLabel}
         </p>
       ) : (
-        <ResponsiveContainer width="100%" height={Math.max(160, rows.length * 34)}>
-          <BarChart data={rows} layout="vertical" margin={{ left: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis type="number" tick={{ fontSize: 10 }} stroke="var(--text-faint)" allowDecimals={false} />
-            <YAxis type="category" dataKey="chave" tick={{ fontSize: 11 }} stroke="var(--text-faint)" width={110} />
-            <Tooltip formatter={(value: number) => [fmtN(value), "leads"]} />
-            <Bar dataKey="total" fill={color} radius={[0, 4, 4, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <ul className="space-y-2.5">
+          {rows.map((r) => (
+            <li key={r.chave}>
+              <div className="flex items-baseline justify-between gap-2 text-sm">
+                <span className="min-w-0 truncate" title={r.chave}>
+                  {r.chave}
+                </span>
+                <span className="shrink-0 tabular-nums">
+                  <b className="font-semibold">{fmtN(r.total)}</b>
+                  <span className="ml-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
+                    {soma > 0 ? Math.round((r.total / soma) * 100) : 0}%
+                  </span>
+                </span>
+              </div>
+              <div className="mt-1">
+                <BarraFina valor={r.total} max={max} cor={color} />
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
-    </div>
+    </Painel>
   );
 }
 
@@ -192,8 +276,7 @@ function AtividadeRecente({ clientId }: { clientId: string }) {
   const rows = data ?? [];
 
   return (
-    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-      <h2 className="mb-3 text-sm font-semibold">Atividade recente</h2>
+    <Painel icone={Activity} titulo="Atividade recente" resumo="Últimos leads que entraram" cor="var(--s7)">
       {isLoading ? (
         <p className="text-xs" style={{ color: "var(--text-dim)" }}>
           Carregando…
@@ -228,7 +311,7 @@ function AtividadeRecente({ clientId }: { clientId: string }) {
           ))}
         </ul>
       )}
-    </div>
+    </Painel>
   );
 }
 
@@ -262,80 +345,150 @@ function CrmPainelPage() {
   const etapasPorConfirmar = emDisputa > 0 && m.consultas_agendadas === 0 && m.em_atendimento === 0;
   const baseCurta = decididos > 0 && decididos < m.total_leads * 0.3;
 
+  const base = m.total_leads;
+  const fontePct = m.fonte_preenchida_pct ?? 0;
+  const ehRelatorio = clientId === "8d4b3b3f-74a7-419a-a113-35ebc02cb37f";
+
   return (
     <div className="space-y-4">
-      {(crmProvider === "kommo" || crmProvider === "clint" || crmProvider === "rdstation" || crmProvider === "flwchat") && clientId !== "8d4b3b3f-74a7-419a-a113-35ebc02cb37f" && (
+      {(crmProvider === "kommo" || crmProvider === "clint" || crmProvider === "rdstation" || crmProvider === "flwchat") && !ehRelatorio && (
         <div className="flex justify-end">
           <SyncButton clientId={clientId} alvo="crm" />
         </div>
       )}
-      {clientId === "8d4b3b3f-74a7-419a-a113-35ebc02cb37f" ? (
-        <div
-          className="rounded-xl border p-4 text-sm"
-          style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
+      {ehRelatorio ? (
+        <Faixa
+          icone={Info}
+          ajuda={
+            <>
+              Números do relatório de CRM da semana 31/08–04/09/2026 (gerado em 08/09/2026), enviado pela equipe da
+              clínica e exportado do Kommo. Não atualiza automaticamente.
+            </>
+          }
         >
-          Números do relatório de CRM da semana 31/08–04/09/2026 (gerado em 08/09/2026), enviado pela equipe da
-          clínica e exportado do Kommo. Não atualiza automaticamente.
-        </div>
+          Relatório semanal 31/08–04/09/2026 · <b>não atualiza sozinho</b>
+        </Faixa>
       ) : (
-        <div
-          className="rounded-xl border p-4 text-sm"
-          style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
+        <Faixa
+          icone={Info}
+          ajuda={
+            <>
+              O que está acontecendo no CRM ({crmNome}) agora — direto do banco, atualiza sozinho todo dia.
+              {crmProvider === "kommo" && (
+                <div className="mt-2">
+                  Os números aqui são de <strong>leads</strong> (os negócios/cards do funil), não de conversas de chat.
+                  Por isso ficam menores que as “Conversas em andamento” que o Kommo mostra — um mesmo lead pode ter
+                  várias conversas, e muita conversa nunca vira lead.
+                </div>
+              )}
+            </>
+          }
         >
-          O que está acontecendo no CRM ({crmNome}) agora — direto do banco, atualiza sozinho todo dia.
+          CRM {crmNome} · ao vivo, atualiza todo dia
           {crmProvider === "kommo" && (
-            <div className="mt-1.5 text-xs" style={{ opacity: 0.72 }}>
-              Os números aqui são de <strong>leads</strong> (os negócios/cards do funil), não de conversas de chat.
-              Por isso ficam menores que as “Conversas em andamento” que o Kommo mostra — um mesmo lead pode ter
-              várias conversas, e muita conversa nunca vira lead.
-            </div>
+            <span className="ml-1 text-xs" style={{ color: "var(--text-dim)" }}>
+              · leads, não conversas
+            </span>
           )}
-        </div>
+        </Faixa>
+      )}
+
+      {etapasPorConfirmar && (
+        <Faixa icone={AlertTriangle} cor="var(--warn)" alerta>
+          <b>A configurar:</b> as etapas de consulta agendada e em atendimento ainda não foram marcadas.
+        </Faixa>
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard label="Leads na base" value={fmtN(m.total_leads)} />
-        <StatCard
-          label="Consultas agendadas"
-          value={etapasPorConfirmar ? "—" : fmtN(m.consultas_agendadas)}
-          sub={etapasPorConfirmar ? "a configurar: as etapas ainda não foram marcadas" : undefined}
-          accent="var(--accent)"
+        <Kpi icone={Users} rotulo="Leads na base" valor={fmtN(m.total_leads)} cor="var(--s1)" />
+        <Kpi
+          icone={CalendarCheck}
+          rotulo="Consultas agendadas"
+          valor={etapasPorConfirmar ? "—" : fmtN(m.consultas_agendadas)}
+          dica={etapasPorConfirmar ? "a configurar: as etapas ainda não foram marcadas" : undefined}
+          cor="var(--accent)"
         />
-        <StatCard
-          label="Em atendimento"
-          value={etapasPorConfirmar ? "—" : fmtN(m.em_atendimento)}
-          sub={
+        <Kpi
+          icone={Headset}
+          rotulo="Em atendimento"
+          valor={etapasPorConfirmar ? "—" : fmtN(m.em_atendimento)}
+          dica={
             etapasPorConfirmar
               ? "a configurar: as etapas ainda não foram marcadas"
               : m.em_atendimento_valor > 0
                 ? fmtBRL(m.em_atendimento_valor)
                 : undefined
           }
-          accent="var(--good)"
+          cor="var(--good)"
         />
-        <StatCard label="Novos (7 dias)" value={fmtN(m.novos_7d)} />
-        <StatCard
-          label="Fonte identificada"
-          value={`${m.fonte_preenchida_pct ?? 0}%`}
-          sub={(m.fonte_preenchida_pct ?? 0) === 0 ? "nenhum lead com origem preenchida" : "dos leads têm origem preenchida"}
+        <Kpi icone={Sparkles} rotulo="Novos (7 dias)" valor={fmtN(m.novos_7d)} cor="var(--s3)" />
+        <Kpi
+          icone={Target}
+          rotulo="Fonte identificada"
+          valor={`${fontePct}%`}
+          dica={fontePct === 0 ? "nenhum lead com origem preenchida" : "dos leads têm origem preenchida"}
+          cor={fontePct === 0 ? "var(--warn)" : "var(--s2)"}
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Ganhos" value={fmtN(m.ganhos)} accent="var(--good)" />
-        <StatCard label="Perdidos" value={fmtN(m.perdidos)} accent="var(--danger)" />
-        <StatCard
-          label="Taxa de conversão"
-          value={taxaConversao !== null ? `${taxaConversao}%` : "—"}
-          sub={
-            baseCurta
-              ? `só ${fmtN(decididos)} de ${fmtN(m.total_leads)} leads têm resultado definido`
-              : "ganhos ÷ (ganhos + perdidos)"
-          }
-          accent="var(--accent)"
-        />
-        <StatCard label="Ainda em disputa" value={fmtN(emDisputa)} sub="não ganhos nem perdidos" />
-      </div>
+      <Painel
+        icone={Filter}
+        titulo="Funil: do lead ao resultado"
+        resumo={`${fmtN(base)} leads na base — cada barra é a fatia da base`}
+        ajuda={
+          <>
+            Cada barra mostra quantos leads estão naquela situação e o percentual sobre os {fmtN(base)} leads da base.
+            Taxa de conversão = ganhos ÷ (ganhos + perdidos). “Ainda em disputa” são os leads que não foram nem ganhos
+            nem perdidos.
+          </>
+        }
+      >
+        <div className="grid gap-5 lg:grid-cols-5">
+          <ul className="space-y-3.5 lg:col-span-3">
+            <EtapaFunil icone={Users} rotulo="Leads na base" valor={m.total_leads} base={base} cor="var(--s1)" />
+            <EtapaFunil icone={Hourglass} rotulo="Ainda em disputa" valor={emDisputa} base={base} cor="var(--s3)" extra="não ganhos nem perdidos" />
+            <EtapaFunil
+              icone={Headset}
+              rotulo="Em atendimento"
+              valor={etapasPorConfirmar ? null : m.em_atendimento}
+              base={base}
+              cor="var(--good)"
+              extra={etapasPorConfirmar ? "a configurar" : m.em_atendimento_valor > 0 ? fmtBRL(m.em_atendimento_valor) : undefined}
+            />
+            <EtapaFunil
+              icone={CalendarCheck}
+              rotulo="Consultas agendadas"
+              valor={etapasPorConfirmar ? null : m.consultas_agendadas}
+              base={base}
+              cor="var(--accent)"
+              extra={etapasPorConfirmar ? "a configurar" : undefined}
+            />
+            <EtapaFunil icone={Trophy} rotulo="Ganhos" valor={m.ganhos} base={base} cor="var(--good)" />
+            <EtapaFunil icone={XCircle} rotulo="Perdidos" valor={m.perdidos} base={base} cor="var(--crit)" />
+          </ul>
+          <div
+            className="flex flex-col items-center justify-center rounded-xl p-4 text-center lg:col-span-2"
+            style={{ background: "var(--surface-2)" }}
+          >
+            <Percent size={20} aria-hidden style={{ color: "var(--accent)" }} />
+            <div className="mt-1 text-4xl font-semibold tabular-nums">{taxaConversao !== null ? `${taxaConversao}%` : "—"}</div>
+            <div className="text-xs font-medium" style={{ color: "var(--text-dim)" }}>
+              taxa de conversão
+            </div>
+            <div className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>
+              ganhos ÷ (ganhos + perdidos)
+            </div>
+            {baseCurta && (
+              <div className="mt-2">
+                <Selo cor="var(--warn)">
+                  <AlertTriangle size={12} aria-hidden />
+                  só {fmtN(decididos)} de {fmtN(m.total_leads)} com resultado
+                </Selo>
+              </div>
+            )}
+          </div>
+        </div>
+      </Painel>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -351,6 +504,7 @@ function CrmPainelPage() {
           fieldPatterns={["%Fonte do Lead%", "%Origem do Lead%"]}
           emptyLabel="Nenhum lead com fonte identificada ainda."
           color="var(--accent)"
+          icone={Megaphone}
         />
         <PorCampo
           clientId={clientId}
@@ -358,6 +512,7 @@ function CrmPainelPage() {
           fieldPatterns={["%Tipo de Procedim%"]}
           emptyLabel="Nenhum lead com procedimento identificado ainda."
           color="var(--good)"
+          icone={Stethoscope}
         />
       </div>
     </div>

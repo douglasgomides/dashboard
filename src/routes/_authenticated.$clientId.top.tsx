@@ -7,6 +7,8 @@ import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { getAudiencia, fmtN, fmtPct } from "@/lib/audiencia";
 import { METRICAS, topN, padroesDoTop, ehReel, ehPostDeFeed, valorDaMetrica, type MetricaTop } from "@/lib/top-conteudo";
 import { brazilWeekdayAndHour } from "@/lib/report-metrics";
+import { Painel, Selo, Miniatura, Numero, IconeFormato, Ajuda } from "@/components/visual";
+import { Trophy, Sparkles, Eye, Target, Bookmark, Share2, Heart, MessageCircle, FastForward, Timer, Clock, UserPlus, Reply, Users, Radio, Film, Image as ImageIcon, CircleDot, Lightbulb, ArrowUpDown } from "lucide-react";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 
 export const Route = createFileRoute("/_authenticated/$clientId/top")({
@@ -26,27 +28,44 @@ function quando(iso: string | null) {
 }
 const gancho = (c: string | null | undefined) => (c ?? "").split("\n")[0].trim();
 
-function Miniatura({ url }: { url: string | null }) {
-  const [erro, setErro] = useState(false);
-  if (!url || erro) return <div style={{ width: 64, height: 64, borderRadius: 8, background: "var(--surface-2)", flex: "none" }} />;
-  return <img src={url} alt="" loading="lazy" onError={() => setErro(true)} style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", flex: "none" }} />;
-}
-
 function Padroes({ frases, vazio }: { frases: string[]; vazio: string | null }) {
   return (
-    <div className="card" style={{ marginBottom: 16, background: "var(--accent-soft)" }}>
-      <h2>O que os melhores têm em comum</h2>
-      {frases.length > 0 ? (
-        <ul style={{ margin: "8px 0 0", paddingLeft: 18, display: "grid", gap: 6, fontSize: 13.5 }}>
-          {frases.map((f) => (
-            <li key={f}>{f}</li>
-          ))}
-        </ul>
-      ) : (
-        <p className="note" style={{ marginTop: 6 }}>{vazio}</p>
-      )}
-      <p className="note" style={{ marginTop: 8 }}>Só entra o que difere 15 pontos percentuais ou mais do conjunto de todos os posts do período. É um padrão para testar, não uma regra.</p>
+    <div style={{ marginBottom: 16 }}>
+      <Painel
+        icone={Lightbulb}
+        titulo="O que os melhores têm em comum"
+        cor="var(--warn)"
+        destaque
+        ajuda={<>Só entra o que difere 15 pontos percentuais ou mais do conjunto de todos os posts do período. É um padrão para testar, não uma regra.</>}
+      >
+        {frases.length > 0 ? (
+          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 8, fontSize: 13.5 }}>
+            {frases.map((f) => (
+              <li key={f} className="flex items-start gap-2">
+                <Sparkles size={14} aria-hidden className="mt-0.5 shrink-0" style={{ color: "var(--warn)" }} />
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="note" style={{ margin: 0 }}>{vazio}</p>
+        )}
+      </Painel>
     </div>
+  );
+}
+
+function Posicao({ i }: { i: number }) {
+  const cor = i === 0 ? "var(--warn)" : i === 1 ? "var(--muted)" : i === 2 ? "var(--s3)" : "var(--text-dim)";
+  return (
+    <span
+      className="flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full px-1 text-xs font-bold tabular-nums"
+      style={{ background: `color-mix(in srgb, ${cor} 18%, transparent)`, color: cor }}
+      title={`${i + 1}º lugar`}
+    >
+      {i < 3 ? <Trophy size={13} aria-hidden /> : null}
+      {i < 3 ? <span className="ml-0.5">{i + 1}</span> : i + 1}
+    </span>
   );
 }
 
@@ -54,34 +73,40 @@ function ListaDePosts({ itens, metrica, reels }: { itens: { p: any; v: number }[
   const rotulo = METRICAS.find((m) => m.id === metrica)?.rotulo ?? "";
   const fmtV = (v: number) => (metrica === "taxa_salvamento" ? fmtPct(v, 2) : fmtN(v));
   return (
-    <div style={{ display: "grid", gap: 8 }}>
+    <div style={{ display: "grid", gap: 8, gridTemplateColumns: "minmax(0,1fr)" }}>
       {itens.map(({ p, v }, i) => (
-        <div key={p.id} className="card" style={{ display: "flex", gap: 12, alignItems: "center", padding: 12 }}>
-          <span style={{ fontFamily: "var(--mono, monospace)", color: "var(--muted)", width: 26, textAlign: "right", flex: "none" }}>#{i + 1}</span>
-          <Miniatura url={p.thumbnail_url} />
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <a href={p.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--ink)", fontWeight: 600, fontSize: 13.5, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {gancho(p.caption) || "(sem legenda)"}
-            </a>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
-              {quando(p.posted_at)}
-              {p.format && !reels ? ` · ${p.format === "carrossel" ? "Carrossel" : p.format === "estatico" ? "Imagem" : p.format}` : ""}
-              {p.tema ? ` · ${p.tema}` : ""}
+        <div key={p.id} className="rounded-xl border p-3" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+          <div className="flex items-center gap-3">
+            <Posicao i={i} />
+            <Miniatura url={p.thumbnail_url} formato={p.format} className="h-16 w-16" />
+            <div className="min-w-0 flex-1">
+              <a href={p.permalink ?? "#"} target="_blank" rel="noreferrer" className="block truncate text-[13.5px] font-semibold" style={{ color: "var(--text)" }}>
+                {gancho(p.caption) || "(sem legenda)"}
+              </a>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                {p.format && <IconeFormato formato={p.format} />}
+                {p.format && !reels && <Selo>{p.format === "carrossel" ? "Carrossel" : p.format === "estatico" ? "Imagem" : p.format}</Selo>}
+                {p.tema && <Selo cor="var(--ai)">{p.tema}</Selo>}
+                <span className="inline-flex items-center gap-1 text-[11px]" style={{ color: "var(--muted)" }}>
+                  <Clock size={11} aria-hidden />
+                  {quando(p.posted_at)}
+                </span>
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 3, display: "flex", flexWrap: "wrap", gap: "2px 12px" }}>
-              {p.reach != null && <span>alcance {fmtN(p.reach)}</span>}
-              {p.saved != null && <span>salvos {fmtN(p.saved)}</span>}
-              {p.shares != null && <span>compart. {fmtN(p.shares)}</span>}
-              {p.likes != null && <span>curtidas {fmtN(p.likes)}</span>}
-              {p.comments != null && <span>coment. {fmtN(p.comments)}</span>}
-              {reels && p.views != null && <span>views {fmtN(p.views)}</span>}
-              {reels && p.reel_skip_rate != null && <span>pulam {fmtPct(Number(p.reel_skip_rate) * (Number(p.reel_skip_rate) <= 1 ? 100 : 1))}</span>}
-              {reels && p.reel_avg_watch_time_ms != null && <span>tempo médio {(Number(p.reel_avg_watch_time_ms) / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}s</span>}
+            <div className="shrink-0 text-right">
+              <div className="text-xl font-semibold tabular-nums leading-none">{fmtV(v)}</div>
+              <div className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>{rotulo.toLowerCase()}</div>
             </div>
           </div>
-          <div style={{ textAlign: "right", flex: "none" }}>
-            <div style={{ fontSize: 20, fontWeight: 650, fontVariantNumeric: "tabular-nums" }}>{fmtV(v)}</div>
-            <div style={{ fontSize: 11, color: "var(--muted)" }}>{rotulo.toLowerCase()}</div>
+          <div className="mt-2.5 flex flex-wrap gap-x-3.5 gap-y-1 border-t pt-2" style={{ borderColor: "var(--border)" }}>
+            {p.reach != null && <Numero icone={Target} valor={fmtN(p.reach)} rotulo="Alcance" />}
+            {p.saved != null && <Numero icone={Bookmark} valor={fmtN(p.saved)} rotulo="Salvos" />}
+            {p.shares != null && <Numero icone={Share2} valor={fmtN(p.shares)} rotulo="Compartilhamentos" />}
+            {p.likes != null && <Numero icone={Heart} valor={fmtN(p.likes)} rotulo="Curtidas" />}
+            {p.comments != null && <Numero icone={MessageCircle} valor={fmtN(p.comments)} rotulo="Comentários" />}
+            {reels && p.views != null && <Numero icone={Eye} valor={fmtN(p.views)} rotulo="Visualizações" />}
+            {reels && p.reel_skip_rate != null && <Numero icone={FastForward} valor={fmtPct(Number(p.reel_skip_rate) * (Number(p.reel_skip_rate) <= 1 ? 100 : 1))} rotulo="Pulam" cor="var(--crit)" />}
+            {reels && p.reel_avg_watch_time_ms != null && <Numero icone={Timer} valor={`${(Number(p.reel_avg_watch_time_ms) / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}s`} rotulo="Tempo médio" />}
           </div>
         </div>
       ))}
@@ -134,12 +159,19 @@ function Stories({ clientId, start, end }: { clientId: string; start: string; en
   return (
     <div>
       {guardados.data?.indisponivel && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h2>Ranking de stories ainda não disponível</h2>
-          <p className="note txt" style={{ marginTop: 6 }}>
-            Stories saem do ar em 24 horas e a Meta não guarda o histórico. O Hub passa a guardar cada story todo dia, mas a tabela <code>instagram_stories</code>{" "}
-            ainda não existe neste banco: falta aplicar a migração <code>20261007120000_instagram_stories.sql</code>. Depois disso o ranking se forma a partir do primeiro dia.
-          </p>
+        <div style={{ marginBottom: 16 }}>
+          <Painel
+            icone={CircleDot}
+            titulo="Ranking de stories em breve"
+            resumo="Falta criar a tabela de stories no banco"
+            cor="var(--warn)"
+            ajuda={<>
+              Stories saem do ar em 24 horas e a Meta não guarda o histórico. O Hub passa a guardar cada story todo dia, mas a tabela <code>instagram_stories</code>{" "}
+              ainda não existe neste banco: falta aplicar a migração <code>20261007120000_instagram_stories.sql</code>. Depois disso o ranking se forma a partir do primeiro dia.
+            </>}
+          >
+            <Selo cor="var(--warn)">Migração pendente</Selo>
+          </Painel>
         </div>
       )}
       {guardados.data && !guardados.data.indisponivel && (
@@ -156,25 +188,27 @@ function Stories({ clientId, start, end }: { clientId: string; start: string; en
           {top.length === 0 ? (
             <p className="note">Nenhum story guardado neste período ainda. O Hub guarda os que estão no ar a cada atualização do Instagram.</p>
           ) : (
-            <div style={{ display: "grid", gap: 8 }}>
+            <div style={{ display: "grid", gap: 8, gridTemplateColumns: "minmax(0,1fr)" }}>
               {top.map((s, i) => (
-                <div key={s.id} className="card" style={{ display: "flex", gap: 12, alignItems: "center", padding: 12 }}>
-                  <span style={{ fontFamily: "var(--mono, monospace)", color: "var(--muted)", width: 26, textAlign: "right", flex: "none" }}>#{i + 1}</span>
-                  <Miniatura url={s.thumbnail_url} />
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <a href={s.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--ink)", fontWeight: 600, fontSize: 13.5 }}>Story de {quando(s.posted_at)}</a>
-                    <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 3, display: "flex", flexWrap: "wrap", gap: "2px 12px" }}>
-                      {s.reach != null && <span>alcance {fmtN(s.reach)}</span>}
-                      {s.views != null && <span>views {fmtN(s.views)}</span>}
-                      {s.replies != null && <span>respostas {fmtN(s.replies)}</span>}
-                      {s.shares != null && <span>compart. {fmtN(s.shares)}</span>}
-                      {s.profile_visits != null && <span>visitas ao perfil {fmtN(s.profile_visits)}</span>}
-                      {s.follows != null && <span>novos seguidores {fmtN(s.follows)}</span>}
+                <div key={s.id} className="rounded-xl border p-3" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+                  <div className="flex items-center gap-3">
+                    <Posicao i={i} />
+                    <Miniatura url={s.thumbnail_url} formato="stories" className="h-16 w-16" />
+                    <div className="min-w-0 flex-1">
+                      <a href={s.permalink ?? "#"} target="_blank" rel="noreferrer" className="block truncate text-[13.5px] font-semibold" style={{ color: "var(--text)" }}>Story de {quando(s.posted_at)}</a>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="text-xl font-semibold tabular-nums leading-none">{fmtN(Number(s[metrica]))}</div>
+                      <div className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>{METRICAS_STORY.find((m) => m.id === metrica)?.rotulo.toLowerCase()}</div>
                     </div>
                   </div>
-                  <div style={{ textAlign: "right", flex: "none" }}>
-                    <div style={{ fontSize: 20, fontWeight: 650 }}>{fmtN(Number(s[metrica]))}</div>
-                    <div style={{ fontSize: 11, color: "var(--muted)" }}>{METRICAS_STORY.find((m) => m.id === metrica)?.rotulo.toLowerCase()}</div>
+                  <div className="mt-2.5 flex flex-wrap gap-x-3.5 gap-y-1 border-t pt-2" style={{ borderColor: "var(--border)" }}>
+                    {s.reach != null && <Numero icone={Target} valor={fmtN(s.reach)} rotulo="Alcance" />}
+                    {s.views != null && <Numero icone={Eye} valor={fmtN(s.views)} rotulo="Visualizações" />}
+                    {s.replies != null && <Numero icone={Reply} valor={fmtN(s.replies)} rotulo="Respostas" />}
+                    {s.shares != null && <Numero icone={Share2} valor={fmtN(s.shares)} rotulo="Compartilhamentos" />}
+                    {s.profile_visits != null && <Numero icone={Users} valor={fmtN(s.profile_visits)} rotulo="Visitas ao perfil" />}
+                    {s.follows != null && <Numero icone={UserPlus} valor={fmtN(s.follows)} rotulo="Novos seguidores" cor="var(--good-text)" />}
                   </div>
                 </div>
               ))}
@@ -184,32 +218,35 @@ function Stories({ clientId, start, end }: { clientId: string; start: string; en
         </>
       )}
 
-      <div className="card" style={{ marginTop: 16 }}>
-        <h2>Stories no ar agora</h2>
-        <p className="sub">Lidos ao vivo da Meta, com os números de agora.</p>
-        {aoVivo.isLoading ? (
-          <Carregando texto="Lendo da Meta…" />
-        ) : !vivos ? (
-          <p className="note" style={{ marginTop: 8 }}>{aoVivo.data?.nada_a_fazer ?? aoVivo.data?.erro ?? "Não foi possível ler os stories agora."}</p>
-        ) : !vivos.ok ? (
-          <p className="note" style={{ marginTop: 8 }}>A Meta não devolveu os stories: {vivos.erro}</p>
-        ) : vivos.dados.length === 0 ? (
-          <p className="note" style={{ marginTop: 8 }}>Nenhum story no ar neste momento.</p>
-        ) : (
-          <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-            {vivos.dados.map((s) => (
-              <div key={s.id} style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                <Miniatura url={s.thumbnail_url} />
-                <div style={{ fontSize: 13 }}>
-                  <a href={s.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--ink)", fontWeight: 600 }}>Story de {quando(s.postado_em)}</a>
-                  <div style={{ color: "var(--ink-2)", fontSize: 12 }}>
-                    alcance {fmtN(s.alcance ?? 0)} · views {fmtN(s.views ?? 0)} · respostas {fmtN(s.respostas ?? 0)} · compart. {fmtN(s.compartilhamentos ?? 0)}
+      <div style={{ marginTop: 16 }}>
+        <Painel icone={Radio} titulo="Stories no ar agora" resumo="Ao vivo da Meta" cor="var(--crit)" ajuda={<>Lidos ao vivo da Meta, com os números de agora.</>}>
+          {aoVivo.isLoading ? (
+            <Carregando texto="Lendo da Meta…" />
+          ) : !vivos ? (
+            <p className="note" style={{ margin: 0 }}>{aoVivo.data?.nada_a_fazer ?? aoVivo.data?.erro ?? "Não foi possível ler os stories agora."}</p>
+          ) : !vivos.ok ? (
+            <p className="note" style={{ margin: 0 }}>A Meta não devolveu os stories: {vivos.erro}</p>
+          ) : vivos.dados.length === 0 ? (
+            <p className="note" style={{ margin: 0 }}>Nenhum story no ar neste momento.</p>
+          ) : (
+            <div style={{ display: "grid", gap: 10 }}>
+              {vivos.dados.map((s) => (
+                <div key={s.id} className="flex items-center gap-3">
+                  <Miniatura url={s.thumbnail_url} formato="stories" className="h-14 w-14" />
+                  <div className="min-w-0">
+                    <a href={s.permalink ?? "#"} target="_blank" rel="noreferrer" className="text-[13px] font-semibold" style={{ color: "var(--text)" }}>Story de {quando(s.postado_em)}</a>
+                    <div className="mt-1 flex flex-wrap gap-x-3.5 gap-y-1">
+                      <Numero icone={Target} valor={fmtN(s.alcance ?? 0)} rotulo="Alcance" />
+                      <Numero icone={Eye} valor={fmtN(s.views ?? 0)} rotulo="Visualizações" />
+                      <Numero icone={Reply} valor={fmtN(s.respostas ?? 0)} rotulo="Respostas" />
+                      <Numero icone={Share2} valor={fmtN(s.compartilhamentos ?? 0)} rotulo="Compartilhamentos" />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </Painel>
       </div>
     </div>
   );
@@ -238,7 +275,11 @@ function TopPage() {
   const head = (
     <div className="hpagehead">
       <h2>Top conteúdos</h2>
-      <p>Os 20 melhores posts, Reels e stories do período ({periodLabel}), na métrica que você escolher, e o que eles têm em comum.</p>
+      <div className="flex items-center gap-2">
+        <Trophy size={14} aria-hidden style={{ color: "var(--warn)" }} />
+        <span>Os 20 melhores do período</span>
+        <Ajuda>Os 20 melhores posts, Reels e stories do período ({periodLabel}), na métrica que você escolher, e o que eles têm em comum.</Ajuda>
+      </div>
     </div>
   );
   if (fontes.isLoading) return <div>{head}<Carregando /></div>;
@@ -251,6 +292,7 @@ function TopPage() {
       <div className="seg" role="tablist" style={{ marginBottom: 14 }}>
         {(["posts", "reels", "stories"] as Aba[]).map((x) => (
           <button key={x} type="button" role="tab" aria-selected={aba === x} aria-pressed={aba === x} onClick={() => setAba(x)}>
+            {x === "posts" ? <ImageIcon size={14} aria-hidden className="mr-1 inline-block align-[-2px]" /> : x === "reels" ? <Film size={14} aria-hidden className="mr-1 inline-block align-[-2px]" /> : <CircleDot size={14} aria-hidden className="mr-1 inline-block align-[-2px]" />}
             {x === "posts" ? "Top 20 posts" : x === "reels" ? "Top 20 Reels" : "Top 20 stories"}
           </button>
         ))}

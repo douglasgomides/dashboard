@@ -5,6 +5,8 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { getClientFontes, getMonthlyMetrics, getPostsForAnalytics } from "@/lib/client-data";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { analyzeFollowers, analyzeFormatsAndTemas, fmtDiaBR, type GroupStat } from "@/lib/hub-conteudo";
+import { Painel, Kpi, Selo, BarraFina, Ajuda, IconeFormato, COR_FORMATO } from "@/components/visual";
+import { Users, TrendingUp, Target, CalendarCheck, LineChart as LineIcon, Trophy, Layers, Tag, Bookmark, FileText, AlertTriangle, Info } from "lucide-react";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 import { SyncButton } from "@/components/sync-button";
 
@@ -15,54 +17,39 @@ export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 const fmtN = (n: number) => Math.round(n).toLocaleString("pt-BR");
 
-function TabelaGrupo({ titulo, sub, rows, col }: { titulo: string; sub: string; rows: GroupStat[]; col: string }) {
+function TabelaGrupo({ titulo, sub, rows, col, icone }: { titulo: string; sub: string; rows: GroupStat[]; col: string; icone: typeof Layers }) {
   const max = Math.max(1, ...rows.map((r) => r.reachMedian));
+  const melhor = rows.length > 0 ? rows[0].key : null;
   return (
-    <div className="card">
-      <h2>{titulo}</h2>
-      <p className="sub">{sub}</p>
+    <Painel icone={icone} titulo={titulo} resumo={sub}>
       {rows.length === 0 ? (
-        <p className="note">Nenhum post do período tem {col.toLowerCase()} informado. A equipe pode classificar na aba Posts; quando a classificação por IA estiver ligada no servidor, ela preenche isso nas próximas atualizações.</p>
+        <div className="flex items-start gap-2 text-xs" style={{ color: "var(--text-dim)" }}>
+          <span>Sem {col.toLowerCase()} informado neste período.</span>
+          <Ajuda>Nenhum post do período tem {col.toLowerCase()} informado. A equipe pode classificar na aba Posts; quando a classificação por IA estiver ligada no servidor, ela preenche isso nas próximas atualizações.</Ajuda>
+        </div>
       ) : (
-        <div style={{ overflowX: "auto", marginTop: 10 }}>
-          <table className="t">
-            <thead>
-              <tr>
-                <th>{col}</th>
-                <th>Posts</th>
-                <th>Alcance mediano</th>
-                <th>Alcance médio</th>
-                <th>Salvos médios</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 12).map((r) => (
-                <tr key={r.key}>
-                  <td className="l">
-                    {r.label}
-                    <span
-                      aria-hidden
-                      style={{
-                        display: "block",
-                        height: 4,
-                        marginTop: 4,
-                        borderRadius: 2,
-                        width: `${Math.max(3, (r.reachMedian / max) * 100)}%`,
-                        background: "var(--accent)",
-                      }}
-                    />
-                  </td>
-                  <td>{r.count}</td>
-                  <td>{fmtN(r.reachMedian)}</td>
-                  <td>{fmtN(r.reachMean)}</td>
-                  <td>{r.savedMean.toLocaleString("pt-BR")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid gap-3">
+          {rows.slice(0, 12).map((r) => (
+            <div key={r.key}>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
+                  {titulo.includes("formato") && <IconeFormato formato={r.key} />}
+                  <span className="truncate">{r.label}</span>
+                  {r.key === melhor && <Selo cor="var(--good-text)" titulo="Maior alcance mediano"><Trophy size={11} aria-hidden /> 1º</Selo>}
+                </span>
+                <span className="shrink-0 text-sm font-semibold tabular-nums" title="Alcance mediano">{fmtN(r.reachMedian)}</span>
+              </div>
+              <BarraFina valor={r.reachMedian} max={max} cor={titulo.includes("formato") ? COR_FORMATO[r.key] ?? "var(--accent)" : "var(--accent)"} />
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <Selo titulo="Posts no período"><FileText size={11} aria-hidden /> {r.count} posts</Selo>
+                <Selo titulo="Alcance médio"><Target size={11} aria-hidden /> média {fmtN(r.reachMean)}</Selo>
+                <Selo titulo="Salvos médios por post" cor="var(--s7)"><Bookmark size={11} aria-hidden /> {r.savedMean.toLocaleString("pt-BR")} salvos</Selo>
+              </div>
+            </div>
+          ))}
         </div>
       )}
-    </div>
+    </Painel>
   );
 }
 
@@ -91,7 +78,11 @@ function ConteudoPage() {
   const head = (
     <div className="hpagehead">
       <h2>Conteúdo</h2>
-      <p>Seguidores, projeção de 30 dias e o que o conteúdo do período entregou. Período: {periodLabel}.</p>
+      <div className="flex items-center gap-2">
+        <Users size={14} aria-hidden style={{ color: "var(--accent)" }} />
+        <span>{periodLabel}</span>
+        <Ajuda>Seguidores, projeção de 30 dias e o que o conteúdo do período entregou. Período: {periodLabel}.</Ajuda>
+      </div>
       {temIg && (
         <div className="flex justify-end" style={{ marginTop: 8 }}>
           <SyncButton clientId={clientId} alvo="posts" />
@@ -127,37 +118,41 @@ function ConteudoPage() {
       {head}
 
       <div className="hgrid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-        <div className="card kpi">
-          <span className="l">Seguidores hoje</span>
-          <span className="v">{seg && seg.points.length ? fmtN(seg.points[seg.points.length - 1].followers) : "sem dado"}</span>
-          <small>{seg?.lastDate ? `última coleta em ${fmtDiaBR(seg.lastDate)}` : "nenhuma coleta no período"}</small>
-        </div>
-        <div className="card kpi">
-          <span className="l">Variação no período</span>
-          <span className="v">
-            {seg?.delta == null ? "sem dado" : `${seg.delta >= 0 ? "+" : "-"}${fmtN(Math.abs(seg.delta))}`}
-          </span>
-          <small>{seg?.delta == null ? "precisa de 2 dias com contagem" : `entre ${fmtDiaBR(seg.firstDate!)} e ${fmtDiaBR(seg.lastDate!)}`}</small>
-        </div>
-        <div className="card kpi">
-          <span className="l">Projeção em 30 dias</span>
-          <span className="v">{seg?.projection.ok ? fmtN(seg.projection.projected) : "não projetada"}</span>
-          <small>
-            {seg?.projection.ok
+        <Kpi
+          icone={Users}
+          rotulo="Seguidores hoje"
+          valor={seg && seg.points.length ? fmtN(seg.points[seg.points.length - 1].followers) : "sem dado"}
+          dica={seg?.lastDate ? `última coleta em ${fmtDiaBR(seg.lastDate)}` : "nenhuma coleta no período"}
+        />
+        <Kpi
+          icone={TrendingUp}
+          rotulo="Variação no período"
+          cor={seg?.delta != null && seg.delta < 0 ? "var(--crit)" : "var(--good-text)"}
+          valor={seg?.delta == null ? "sem dado" : `${seg.delta >= 0 ? "+" : "-"}${fmtN(Math.abs(seg.delta))}`}
+          dica={seg?.delta == null ? "precisa de 2 dias com contagem" : `entre ${fmtDiaBR(seg.firstDate!)} e ${fmtDiaBR(seg.lastDate!)}`}
+        />
+        <Kpi
+          icone={Target}
+          rotulo="Projeção em 30 dias"
+          cor="var(--ai)"
+          valor={seg?.projection.ok ? fmtN(seg.projection.projected) : "não projetada"}
+          dica={
+            seg?.projection.ok
               ? `${seg.projection.slopePerDay >= 0 ? "+" : ""}${seg.projection.slopePerDay.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} por dia, até ${fmtDiaBR(seg.projection.target)}`
-              : "veja o motivo abaixo"}
-          </small>
-        </div>
-        <div className="card kpi">
-          <span className="l">Dias com contagem</span>
-          <span className="v">{seg ? `${seg.daysWithData} de ${seg.expectedDays}` : "-"}</span>
-          <small>{seg ? `${Math.round(seg.coverage * 100)}% do período (mínimo 60%)` : ""}</small>
-        </div>
+              : "veja o motivo abaixo"
+          }
+        />
+        <Kpi
+          icone={CalendarCheck}
+          rotulo="Dias com contagem"
+          cor="var(--s2)"
+          valor={seg ? `${seg.daysWithData} de ${seg.expectedDays}` : "-"}
+          dica={seg ? `${Math.round(seg.coverage * 100)}% do período (mínimo 60%)` : undefined}
+        />
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h2>Evolução de seguidores</h2>
-        <p className="sub">Linha contínua é o medido; tracejada é uma estimativa linear, não uma promessa.</p>
+      <div style={{ marginBottom: 16 }}>
+      <Painel icone={LineIcon} titulo="Evolução de seguidores" resumo="Linha cheia: medido. Tracejada: estimativa" ajuda={<>Linha contínua é o medido; tracejada é uma estimativa linear, não uma promessa.</>}>
         {seg && seg.points.length >= 2 ? (
           <div style={{ width: "100%", height: 260, marginTop: 10 }}>
             <ResponsiveContainer>
@@ -176,19 +171,21 @@ function ConteudoPage() {
             </ResponsiveContainer>
           </div>
         ) : (
-          <p className="note" style={{ marginTop: 10 }}>
+          <p className="note" style={{ margin: 0 }}>
             Sem gráfico: {seg?.points.length ? "só 1 dia tem contagem de seguidores no período." : "nenhum dia do período tem contagem de seguidores."}
           </p>
         )}
         {seg && !seg.projection.ok && (
-          <div className="note">
-            <i />
-            <span>{seg.projection.reason} O total de seguidores é gravado todo dia. Os últimos 28 dias foram reconstruídos com o que a Meta informa de quem seguiu e deixou de seguir; o que for mais antigo que {seg.firstDate ? `${seg.firstDate.slice(8, 10)}/${seg.firstDate.slice(5, 7)}` : "a primeira coleta"} não existe, porque a Meta não guarda o total dos dias passados.</span>
+          <div className="mt-2 flex items-start gap-2 text-xs" style={{ color: "var(--text-dim)" }}>
+            <AlertTriangle size={14} aria-hidden className="mt-0.5 shrink-0" style={{ color: "var(--warn)" }} />
+            <span className="flex-1">{seg.projection.reason}</span>
+            <Ajuda>{seg.projection.reason} O total de seguidores é gravado todo dia. Os últimos 28 dias foram reconstruídos com o que a Meta informa de quem seguiu e deixou de seguir; o que for mais antigo que {seg.firstDate ? `${seg.firstDate.slice(8, 10)}/${seg.firstDate.slice(5, 7)}` : "a primeira coleta"} não existe, porque a Meta não guarda o total dos dias passados.</Ajuda>
           </div>
         )}
         {seg && seg.projection.ok && seg.gaps.length > 0 && (
-          <p className="note">Atenção: há dias sem coleta no período, a estimativa usa só os dias com dado.</p>
+          <div className="mt-2"><Selo cor="var(--warn)" titulo="A estimativa usa só os dias com dado"><AlertTriangle size={11} aria-hidden /> Há dias sem coleta no período</Selo></div>
         )}
+      </Painel>
       </div>
 
       {fm && fm.total === 0 ? (
@@ -200,25 +197,28 @@ function ConteudoPage() {
       ) : (
         fm && (
           <>
-            <div className="insight">
-              <span className="tag">
-                <b /> Melhor formato por alcance
-              </span>
+            <div style={{ marginBottom: 16 }}>
               {fm.melhorFormato ? (
-                <>
-                  <h2>
-                    {fm.melhorFormato.label} alcança mais por post: mediana de {fmtN(fm.melhorFormato.reachMedian)} contas
-                  </h2>
-                  <p className="why">
-                    Base: {fm.melhorFormato.count} posts de {fm.melhorFormato.label} no período, com média de{" "}
-                    {fm.melhorFormato.savedMean.toLocaleString("pt-BR")} salvamentos por post. Usamos a mediana para um post viral não puxar o número.
-                  </p>
-                </>
+                <Painel
+                  icone={Trophy}
+                  cor="var(--good-text)"
+                  destaque
+                  titulo={`${fm.melhorFormato.label} alcança mais por post`}
+                  resumo="Melhor formato por alcance"
+                  ajuda={<>Base: {fm.melhorFormato.count} posts de {fm.melhorFormato.label} no período, com média de {fm.melhorFormato.savedMean.toLocaleString("pt-BR")} salvamentos por post. Usamos a mediana para um post viral não puxar o número.</>}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <IconeFormato formato={fm.melhorFormato.key} size={20} />
+                    <span className="text-2xl font-semibold tabular-nums">{fmtN(fm.melhorFormato.reachMedian)}</span>
+                    <span className="text-xs" style={{ color: "var(--text-dim)" }}>contas, mediana por post</span>
+                    <Selo titulo="Posts na base"><FileText size={11} aria-hidden /> {fm.melhorFormato.count} posts</Selo>
+                    <Selo cor="var(--s7)" titulo="Salvamentos médios por post"><Bookmark size={11} aria-hidden /> {fm.melhorFormato.savedMean.toLocaleString("pt-BR")} salvos</Selo>
+                  </div>
+                </Painel>
               ) : (
-                <>
-                  <h2>Ainda não dá para apontar o melhor formato</h2>
-                  <p className="why">{fm.melhorFormatoMotivo}</p>
-                </>
+                <Painel icone={Info} cor="var(--muted)" titulo="Melhor formato: ainda sem resposta" resumo="Melhor formato por alcance" ajuda={<>{fm.melhorFormatoMotivo}</>}>
+                  <p className="note" style={{ margin: 0 }}>{fm.melhorFormatoMotivo}</p>
+                </Painel>
               )}
             </div>
             <div className="hgrid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))" }}>
@@ -227,12 +227,14 @@ function ConteudoPage() {
                 sub={`${fm.total} posts no período`}
                 rows={fm.porFormato}
                 col="Formato"
+                icone={Layers}
               />
               <TabelaGrupo
                 titulo="Posts por pilar / tema"
                 sub={`${fm.comTema} de ${fm.total} posts têm tema classificado${fm.comTema < fm.total ? " (classifique os demais na aba Posts)" : ""}`}
                 rows={fm.porTema}
                 col="Tema"
+                icone={Tag}
               />
             </div>
           </>

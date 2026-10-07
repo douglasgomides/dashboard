@@ -38,12 +38,12 @@ export function Ajuda({ children }: { children: ReactNode }) {
       >
         <Info size={14} />
       </summary>
-      <div
-        className="absolute right-0 z-20 mt-2 w-72 max-w-[80vw] rounded-lg border p-3 text-xs leading-relaxed"
+      <span
+        className="absolute right-0 z-20 mt-2 block w-72 max-w-[80vw] rounded-lg border p-3 text-xs leading-relaxed"
         style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-dim)", boxShadow: "var(--shadow)" }}
       >
         {children}
-      </div>
+      </span>
     </details>
   );
 }
