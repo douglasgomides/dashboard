@@ -50,7 +50,21 @@ function mensagemDaParte(nome: string, p: Parte, sozinha: boolean): Mensagem | n
   const rotulo = NOMES[nome] ?? nome;
   if (p.nada_a_fazer) return sozinha ? { texto: p.nada_a_fazer, erro: false } : null;
   if (p.ok === false || p.erro) {
-    return { texto: `${rotulo}: erro — ${p.erro ?? "falha na sincronização"}`, erro: true };
+    const bruto = p.erro ?? "falha na sincronização";
+    // Erros conhecidos da Meta, em português e com o que fazer.
+    if (/API access blocked/i.test(bruto)) {
+      return {
+        texto: `${rotulo}: a Meta bloqueou o acesso do token deste cliente. É preciso gerar um token novo na empresa (BM) dele e aprovar o pedido com outro administrador.`,
+        erro: true,
+      };
+    }
+    if (/Service temporarily unavailable|is_transient|unexpected error/i.test(bruto)) {
+      return { texto: `${rotulo}: a Meta está instável agora. Tente de novo em alguns minutos.`, erro: true };
+    }
+    if (/Error validating access token|session has expired|code":\s*190/i.test(bruto)) {
+      return { texto: `${rotulo}: o token da Meta deste cliente venceu. Gere um novo e grave no cadastro.`, erro: true };
+    }
+    return { texto: `${rotulo}: erro — ${bruto}`, erro: true };
   }
   const ate = ddmm(p.dados_ate);
   if ((p.linhas ?? 0) > 0) {

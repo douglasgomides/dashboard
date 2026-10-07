@@ -306,7 +306,7 @@ const MODELO_POR_TIPO: Record<TipoDuvida, { formato: string; acao: string }> = {
   },
   geral: {
     formato: "Carrossel",
-    acao: "Carrossel que responde a dúvida com clareza e termina convidando para conversar.",
+    acao: "Conteúdo que responde a dúvida com clareza e termina convidando para conversar.",
   },
 };
 
@@ -454,4 +454,24 @@ export function ideiaParaTexto(i: Ideia): string {
     `O que fazer: ${i.acao}`,
     `Por quê: ${i.porque}`,
   ].join("\n");
+}
+
+// ---------- plano de 7 dias a partir das ideias ----------
+const DIAS_SEMANA = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
+
+// Distribui as ideias da lista em dias de publicação (segunda, terça, quarta, quinta e sexta), com os
+// outros dias para responder comentários e mensagens. Só usa o que a lista já traz: sem ideia nova,
+// sem número inventado. Ideias vindas de dúvidas de pacientes vêm primeiro.
+export function montarPlano7Dias(ideias: Ideia[]): string {
+  if (ideias.length === 0) return "";
+  const ordem = [...ideias].sort((a, b) => Number(b.regra === "pergunta") - Number(a.regra === "pergunta"));
+  const dias = [0, 1, 2, 3, 4];
+  const linhas = DIAS_SEMANA.map((dia, i) => {
+    const k = dias.indexOf(i);
+    if (k < 0) return `${dia}: sem publicação nova. Responder comentários e mensagens que chegaram na semana.`;
+    const ideia = ordem[k];
+    if (!ideia) return `${dia}: espaço livre. Reaproveitar o post de melhor resultado do período em outro formato.`;
+    return `${dia}: ${ideia.formato}. ${ideia.acao}`;
+  });
+  return ["Plano de conteúdo da semana", ...linhas].join("\n");
 }

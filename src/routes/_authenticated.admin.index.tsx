@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAdminUser, createClient, listAllClients } from "@/lib/admin-data";
 import { ClientAvatar } from "@/components/client-avatar";
 import { supabase } from "@/integrations/supabase/client";
@@ -193,14 +193,24 @@ function Chip({ ligado, linha, erro }: { ligado: boolean; linha?: LinhaFonte; er
   );
 }
 
+async function lerSaude(clientId: string) {
+  const [fontes, linhas] = await Promise.all([getClientFontes(clientId).catch(() => null), statusDoCliente(clientId)]);
+  return { fontes, linhas };
+}
+
+const ROTULO_FONTE: Record<string, string> = { instagram: "Instagram", anuncios: "Anúncios", crm: "CRM", atendimento: "WhatsApp" };
+const FLAG_FONTE: Record<string, "tem_instagram" | "tem_anuncios" | "tem_crm" | "tem_atendimento"> = {
+  instagram: "tem_instagram",
+  anuncios: "tem_anuncios",
+  crm: "tem_crm",
+  atendimento: "tem_atendimento",
+};
+
 // Uma linha da Visão geral: as quatro fontes do cliente e até que dia cada uma tem dado.
 function LinhaSaude({ clientId }: { clientId: string }) {
   const { data } = useQuery({
     queryKey: ["saude-cliente", clientId],
-    queryFn: async () => {
-      const [fontes, linhas] = await Promise.all([getClientFontes(clientId).catch(() => null), statusDoCliente(clientId)]);
-      return { fontes, linhas };
-    },
+    queryFn: () => lerSaude(clientId),
     staleTime: 60_000,
     retry: false,
   });
@@ -237,8 +247,53 @@ function AdminClientsPage() {
     },
   });
 
+  // Alerta na própria tela: fontes ligadas e paradas há mais de 3 dias (ou com erro), de todos os clientes.
+  const saudes = useQueries({
+    queries: (clients ?? []).map((c) => ({
+      queryKey: ["saude-cliente", c.id],
+      queryFn: () => lerSaude(c.id),
+      staleTime: 60_000,
+      retry: false,
+    })),
+  });
+  const paradas: string[] = [];
+  (clients ?? []).forEach((c, i) => {
+    const s = saudes[i]?.data;
+    if (!s) return;
+    for (const l of s.linhas) {
+      const flag = FLAG_FONTE[l.fonte];
+      if (!flag || !s.fontes?.[flag]) continue;
+      if (tomDaFonte(l) === "ruim") paradas.push(`${c.name}: ${ROTULO_FONTE[l.fonte]} ${l.data_ate ? `até ${ddmm(l.data_ate)}` : "com erro"}`);
+    }
+  });
+  const carregandoSaude = saudes.some((q) => q.isLoading);
+
   return (
     <div>
+      {!carregandoSaude && (
+        <div
+          className="mb-3 rounded-xl border p-3 text-sm"
+          style={{ borderColor: paradas.length ? "var(--danger)" : "var(--border)", background: "var(--surface)" }}
+        >
+          {paradas.length === 0 ? (
+            <span style={{ color: "var(--good)", fontWeight: 600 }}>Todas as fontes ligadas estão com dado de até 3 dias atrás.</span>
+          ) : (
+            <>
+              <strong style={{ color: "var(--danger)" }}>
+                {paradas.length} fonte{paradas.length === 1 ? "" : "s"} parada{paradas.length === 1 ? "" : "s"} há mais de 3 dias
+              </strong>
+              <ul className="mt-1 list-disc pl-5" style={{ color: "var(--text-dim)" }}>
+                {paradas.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+              <p className="mt-1 text-xs" style={{ color: "var(--text-faint)" }}>
+                Anúncio parado muitas vezes é campanha pausada ou pagamento pendente, e não falha de sincronização.
+              </p>
+            </>
+          )}
+        </div>
+      )}
       <p className="mb-3 text-sm" style={{ color: "var(--text-dim)" }}>
         Visão geral: até que dia cada fonte de cada cliente tem dado. Verde: em dia. Amarelo: 2 a 3 dias parado.
         Vermelho: mais de 3 dias parado ou com erro. "Não ligado" quer dizer que o cliente não tem aquela fonte.

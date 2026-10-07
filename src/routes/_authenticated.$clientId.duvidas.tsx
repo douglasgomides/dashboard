@@ -134,8 +134,8 @@ function DuvidasPage() {
         style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
       >
         Dúvidas reais que pacientes deixaram nos comentários — matéria-prima pra pauta, não conteúdo pronto. A
-        detecção de "é pergunta?" é heurística (pontuação/palavra interrogativa); quem decide o que virar conteúdo
-        continua sendo o time.
+        detecção de "é pergunta?" é heurística (pontuação/palavra interrogativa); sorteios, convites para seguir e respostas
+        do próprio perfil são tirados da lista. Quem decide o que virar conteúdo continua sendo o time.
       </div>
 
       {!isLoading && <DuvidasFrequentes questions={rows} />}
