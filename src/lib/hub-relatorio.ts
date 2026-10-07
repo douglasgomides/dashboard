@@ -60,7 +60,7 @@ export function buildRelatorio(inp: RelatorioInput): RelatorioResult {
     omitidos.push("alcance (nenhum dia com alcance coletado no período)");
   } else {
     const total = comAlcance.reduce((a, m) => a + num(m.reach), 0);
-    blocos.push(`Alcance: seu conteúdo chegou a ${fmtN(total)} contas no período (soma dos alcances diários, em ${comAlcance.length} dias com coleta).`);
+    blocos.push(`Alcance: somando o alcance de cada dia, seu conteúdo teve ${fmtN(total)} de alcance em ${comAlcance.length} dias com coleta (a mesma pessoa pode ter sido contada em mais de um dia).`);
   }
 
   // Seguidores
@@ -132,7 +132,7 @@ export function buildRelatorio(inp: RelatorioInput): RelatorioResult {
     omitidos.push("ações recomendadas (dependem do Instagram)");
   }
   if (acoes.length > 0) {
-    blocos.push("Próximas ações recomendadas:\n" + acoes.map((a, i) => `${i + 1}. ${a.acao} ${a.porque}`).join("\n"));
+    blocos.push("Próximas ações recomendadas:\n" + acoes.map((a, i) => `${i + 1}. ${a.acao} Por quê: ${a.porque}`).join("\n"));
   }
 
   let texto: string;

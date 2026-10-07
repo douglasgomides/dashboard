@@ -1,20 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { statusDoCliente, tomDaFonte, ddmm, type LinhaFonte } from "@/lib/saude-fontes";
 
 // Selo de frescura: "Dados: Instagram até 30/09 · Anúncios até 30/09 · CRM até
-// 01/10". A data vem do DADO (RPC client_sync_status calcula max(date) etc.),
-// não da última tentativa — tentativa não prova dado novo.
-// Cor por fonte: verde <= 1 dia de atraso, amarelo 2-3, vermelho > 3 ou com
-// erro na última tentativa.
-
-type Linha = {
-  fonte: string;
-  last_attempt_at: string | null;
-  last_success_at: string | null;
-  last_error: string | null;
-  last_rows: number | null;
-  data_ate: string | null;
-};
+// 01/10". A data vem do DADO (RPC client_sync_status, ou a leitura direta das tabelas
+// quando a migração ainda não existe), não da última tentativa: tentativa não prova dado novo.
+// Cor por fonte: verde <= 1 dia de atraso, amarelo 2-3, vermelho > 3 ou com erro na última tentativa.
 
 const ROTULOS: Record<string, string> = {
   instagram: "Instagram",
@@ -25,47 +15,23 @@ const ROTULOS: Record<string, string> = {
 // Comentários não têm data de dado; só entram se a última tentativa deu erro.
 const ORDEM = ["instagram", "anuncios", "crm", "atendimento", "comentarios"];
 
-function diasDeAtraso(dataAte: string): number {
-  const [a, m, d] = dataAte.slice(0, 10).split("-").map(Number);
-  const hoje = new Date();
-  const base = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-  return Math.round((base - Date.UTC(a, m - 1, d)) / 86400000);
-}
-
-function cor(l: Linha): string {
-  if (l.last_error) return "var(--danger)";
-  if (!l.data_ate) return "var(--text-dim)";
-  const atraso = diasDeAtraso(l.data_ate);
-  if (atraso <= 1) return "var(--good)";
-  if (atraso <= 3) return "var(--warn, #b7791f)";
-  return "var(--danger)";
-}
-
-function ddmm(iso: string): string {
-  const [, m, d] = iso.slice(0, 10).split("-");
-  return `${d}/${m}`;
-}
+const COR: Record<string, string> = {
+  bom: "var(--good)",
+  atencao: "var(--warn, #b7791f)",
+  ruim: "var(--danger)",
+  neutro: "var(--text-dim)",
+};
 
 export function SyncFreshnessBadge({ clientId }: { clientId: string }) {
   const { data } = useQuery({
     queryKey: ["client-sync-status", clientId],
-    queryFn: async () => {
-      // RPC fora do types.ts gerado (criada junto com este componente).
-      // Chamar pelo client: soltar supabase.rpc perde o `this` e falha em silêncio.
-      const cliente = supabase as unknown as {
-        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: Linha[] | null; error: unknown }>;
-      };
-      const { data, error } = await cliente.rpc("client_sync_status", { p_client_id: clientId });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => statusDoCliente(clientId),
     staleTime: 60_000,
     retry: false,
   });
 
-  // Sem RPC (migration ainda não aplicada) ou sem nenhuma fonte: não mostra nada.
   const linhas = ORDEM.map((f) => (data ?? []).find((l) => l.fonte === f)).filter(
-    (l): l is Linha => !!l && (!!l.data_ate || (l.fonte === "comentarios" && !!l.last_error)),
+    (l): l is LinhaFonte => !!l && (!!l.data_ate || (l.fonte === "comentarios" && !!l.last_error)),
   );
   if (linhas.length === 0) return null;
 
@@ -77,7 +43,7 @@ export function SyncFreshnessBadge({ clientId }: { clientId: string }) {
     >
       <span>Dados:</span>
       {linhas.map((l, i) => (
-        <span key={l.fonte} style={{ color: cor(l), fontWeight: 600 }} title={l.last_error ?? undefined}>
+        <span key={l.fonte} style={{ color: COR[tomDaFonte(l)], fontWeight: 600 }} title={l.last_error ?? undefined}>
           {i > 0 && <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>· </span>}
           {ROTULOS[l.fonte] ?? "Comentários"}
           {l.data_ate ? ` até ${ddmm(l.data_ate)}` : ""}

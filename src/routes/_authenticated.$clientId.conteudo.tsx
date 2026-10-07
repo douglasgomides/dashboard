@@ -183,7 +183,7 @@ function ConteudoPage() {
         {seg && !seg.projection.ok && (
           <div className="note">
             <i />
-            <span>{seg.projection.reason} A coleta diária de seguidores é responsabilidade do time Doctor Creator (sincronização do Instagram).</span>
+            <span>{seg.projection.reason} O total de seguidores é gravado todo dia e o histórico vai se formando {seg.firstDate ? `desde ${seg.firstDate.slice(8, 10)}/${seg.firstDate.slice(5, 7)}` : "a partir da próxima atualização"}; a Meta só informa o total de hoje, por isso não dá para reconstruir os dias que passaram.</span>
           </div>
         )}
         {seg && seg.projection.ok && seg.gaps.length > 0 && (

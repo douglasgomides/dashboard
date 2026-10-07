@@ -312,14 +312,14 @@ function TopDoMes({ posts }: { posts: Post[] }) {
         Os posts que mais salvaram no período selecionado. Classifique-os abaixo (tema/funil/estágio) pra virarem sugestão de
         "próximos ângulos" automaticamente.
       </p>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+      <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-5 sm:overflow-visible sm:px-0">
         {top5.map((post, i) => (
           <a
             key={post.id}
             href={post.permalink ?? "#"}
             target="_blank"
             rel="noreferrer"
-            className="overflow-hidden rounded-lg border text-xs"
+            className="min-w-[46%] shrink-0 snap-start overflow-hidden rounded-lg border text-xs sm:min-w-0"
             style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text)" }}
           >
             {post.thumbnail_url && (

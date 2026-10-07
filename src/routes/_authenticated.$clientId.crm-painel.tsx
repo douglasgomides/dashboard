@@ -256,6 +256,11 @@ function CrmPainelPage() {
 
   const decididos = m.ganhos + m.perdidos;
   const taxaConversao = decididos > 0 ? Math.round((m.ganhos / decididos) * 100) : null;
+  const emDisputa = m.total_leads - decididos;
+  // Zero que não é fato: há leads em aberto, mas nenhuma etapa foi marcada como "consulta agendada"
+  // nem "em atendimento". O número real só aparece depois que a equipe marca as etapas em "A analisar".
+  const etapasPorConfirmar = emDisputa > 0 && m.consultas_agendadas === 0 && m.em_atendimento === 0;
+  const baseCurta = decididos > 0 && decididos < m.total_leads * 0.3;
 
   return (
     <div className="space-y-4">
@@ -290,18 +295,29 @@ function CrmPainelPage() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatCard label="Leads na base" value={fmtN(m.total_leads)} />
-        <StatCard label="Consultas agendadas" value={fmtN(m.consultas_agendadas)} accent="var(--accent)" />
+        <StatCard
+          label="Consultas agendadas"
+          value={etapasPorConfirmar ? "—" : fmtN(m.consultas_agendadas)}
+          sub={etapasPorConfirmar ? "a configurar: as etapas ainda não foram marcadas" : undefined}
+          accent="var(--accent)"
+        />
         <StatCard
           label="Em atendimento"
-          value={fmtN(m.em_atendimento)}
-          sub={m.em_atendimento_valor > 0 ? fmtBRL(m.em_atendimento_valor) : undefined}
+          value={etapasPorConfirmar ? "—" : fmtN(m.em_atendimento)}
+          sub={
+            etapasPorConfirmar
+              ? "a configurar: as etapas ainda não foram marcadas"
+              : m.em_atendimento_valor > 0
+                ? fmtBRL(m.em_atendimento_valor)
+                : undefined
+          }
           accent="var(--good)"
         />
         <StatCard label="Novos (7 dias)" value={fmtN(m.novos_7d)} />
         <StatCard
           label="Fonte identificada"
           value={`${m.fonte_preenchida_pct ?? 0}%`}
-          sub="dos leads têm origem preenchida"
+          sub={(m.fonte_preenchida_pct ?? 0) === 0 ? "nenhum lead com origem preenchida" : "dos leads têm origem preenchida"}
         />
       </div>
 
@@ -311,10 +327,14 @@ function CrmPainelPage() {
         <StatCard
           label="Taxa de conversão"
           value={taxaConversao !== null ? `${taxaConversao}%` : "—"}
-          sub="ganhos ÷ (ganhos + perdidos)"
+          sub={
+            baseCurta
+              ? `só ${fmtN(decididos)} de ${fmtN(m.total_leads)} leads têm resultado definido`
+              : "ganhos ÷ (ganhos + perdidos)"
+          }
           accent="var(--accent)"
         />
-        <StatCard label="Ainda em disputa" value={fmtN(m.total_leads - decididos)} sub="não ganhos nem perdidos" />
+        <StatCard label="Ainda em disputa" value={fmtN(emDisputa)} sub="não ganhos nem perdidos" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

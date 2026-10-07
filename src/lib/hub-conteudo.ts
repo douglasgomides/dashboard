@@ -265,6 +265,76 @@ function moda(values: (string | null | undefined)[]): string | null {
 const fmtN = (n: number) => Math.round(n).toLocaleString("pt-BR");
 const fmtD1 = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
+
+// ---------- ideias a partir de dúvidas: tipo da pergunta, gancho e post parecido ----------
+const DIACRITICOS_RE = new RegExp("[̀-ͯ]", "g");
+const semAcento = (s: string) => s.toLowerCase().normalize("NFD").replace(DIACRITICOS_RE, "");
+
+type TipoDuvida = "preco" | "como_agendar" | "uso" | "sintoma" | "resultado" | "geral";
+
+function tipoDaDuvida(texto: string): TipoDuvida {
+  const t = semAcento(texto);
+  if (/\b(quanto (custa|e|fica|sai)|valor|preco|parcel|pagamento|custa)\b/.test(t)) return "preco";
+  if (/\b(onde|como (faco|fazer|compro|comprar|agendo|agendar|marco|marcar)|agendar|marcar|comprar|link)\b/.test(t)) return "como_agendar";
+  if (/\b(posso|pode|tomar|dose|quantas?|de quanto em quanto|junto com|misturar|usar)\b/.test(t)) return "uso";
+  if (/\b(dor|sangr|menstru|calor|sintoma|queda|inchac|ansied|sono|libido|cansaco)\b/.test(t)) return "sintoma";
+  if (/\b(resultado|funciona|demora|quanto tempo|em quanto tempo|ja faz)\b/.test(t)) return "resultado";
+  return "geral";
+}
+
+// Cada tipo de dúvida pede um conteúdo diferente (antes todas viravam o mesmo carrossel).
+const MODELO_POR_TIPO: Record<TipoDuvida, { formato: string; acao: string }> = {
+  preco: {
+    formato: "Reels",
+    acao: "Reels curto explicando o que está incluído na avaliação e como funciona o atendimento, sem preço promocional e sem urgência.",
+  },
+  como_agendar: {
+    formato: "Reels",
+    acao: "Reels ou story com o passo a passo, em 3 passos, de como agendar a avaliação.",
+  },
+  uso: {
+    formato: "Carrossel",
+    acao: "Carrossel de perguntas e respostas sobre o uso, com aviso claro de que cada caso depende de avaliação médica.",
+  },
+  sintoma: {
+    formato: "Reels",
+    acao: "Reels sobre os sinais que merecem atenção e quando procurar avaliação, sem prometer resultado.",
+  },
+  resultado: {
+    formato: "Carrossel",
+    acao: "Carrossel sobre o que esperar e em quanto tempo costuma haver mudança, sem garantia e sem antes e depois.",
+  },
+  geral: {
+    formato: "Carrossel",
+    acao: "Carrossel que responde a dúvida com clareza e termina convidando para conversar.",
+  },
+};
+
+function tokens(s: string): Set<string> {
+  return new Set(
+    semAcento(s)
+      .replace(/[^a-z0-9 ]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 3),
+  );
+}
+
+// Post da própria conta que mais se parece com a pergunta (palavras em comum), para a ideia trazer evidência.
+function postParecido(texto: string, posts: any[]): { legenda: string; salvos: number } | null {
+  const alvo = tokens(texto);
+  let melhor: { legenda: string; salvos: number; pontos: number } | null = null;
+  for (const p of posts) {
+    if (p.saved == null || !p.caption) continue;
+    const cap = tokens(String(p.caption));
+    let pontos = 0;
+    for (const w of alvo) if (cap.has(w)) pontos++;
+    if (pontos >= 2 && (!melhor || pontos > melhor.pontos || (pontos === melhor.pontos && Number(p.saved) > melhor.salvos))) {
+      melhor = { legenda: String(p.caption).split("\n")[0].trim(), salvos: Number(p.saved), pontos };
+    }
+  }
+  return melhor ? { legenda: melhor.legenda, salvos: melhor.salvos } : null;
+}
+
 export function buildIdeias(
   posts: any[],
   perguntas: { id: string; text: string; like_count: number | null; instagram_post_id?: string }[],
@@ -284,17 +354,27 @@ export function buildIdeias(
         `Regra "pergunta repetida": há ${perguntas.length} perguntas, mas nenhuma se repete (nenhuma dúvida apareceu 2 vezes ou mais).`,
       );
     }
+    const fmtsConta = groupStats(posts, (p) => p.format ?? null, (k) => fmtFormatKey(k)).filter((f) => f.count >= MIN_POSTS_FORMATO);
+    const melhorDaConta = fmtsConta[0] ?? null;
     for (const [i, c] of clusters.slice(0, 5).entries()) {
       const texto = c.representative.text.replace(/\s+/g, " ").trim();
+      const curto = texto.length > 90 ? texto.slice(0, 87) + "..." : texto;
+      const tipo = tipoDaDuvida(texto);
+      const modelo = MODELO_POR_TIPO[tipo];
+      const parecido = postParecido(texto, posts);
+      const formato = tipo === "geral" && melhorDaConta ? melhorDaConta.label : modelo.formato;
+      const evidencia = parecido
+        ? ` Um post parecido, "${parecido.legenda.length > 60 ? parecido.legenda.slice(0, 57) + "..." : parecido.legenda}", teve ${fmtN(parecido.salvos)} salvamentos.`
+        : "";
       ideias.push({
         id: `pergunta-${i}`,
         regra: "pergunta",
         tema: texto.length > 120 ? texto.slice(0, 117) + "..." : texto,
         funil: FUNIL_ROTULO.C1,
         estagio: ESTAGIO_ROTULO.confianca,
-        formato: "Carrossel",
-        acao: "Carrossel de conexão que responde a dúvida com clareza e termina convidando para conversar.",
-        porque: `${c.count} pessoas perguntaram algo parecido nos comentários do período (ex.: "${texto.length > 90 ? texto.slice(0, 87) + "..." : texto}").`,
+        formato,
+        acao: `${modelo.acao} Gancho possível: "${curto}"`,
+        porque: `${c.count} pessoas perguntaram algo parecido nos comentários do período (ex.: "${curto}").${evidencia}`,
       });
     }
   }

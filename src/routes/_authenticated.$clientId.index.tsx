@@ -347,6 +347,16 @@ function MonthlyOverview() {
     queryFn: () => getMonthlyMetrics(clientId, start, end),
   });
 
+  // Período anterior, do mesmo tamanho, só para mostrar a variação quando houver dado nos dois lados.
+  const diasPeriodo = Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1);
+  const isoMenosDias = (iso: string, n: number) => new Date(new Date(iso + "T12:00:00Z").getTime() - n * 86400000).toISOString().slice(0, 10);
+  const prevEnd = isoMenosDias(start, 1);
+  const prevStart = isoMenosDias(start, diasPeriodo);
+  const { data: rowsAnterior } = useQuery({
+    queryKey: ["monthly-metrics-anterior", clientId, prevStart, prevEnd],
+    queryFn: () => getMonthlyMetrics(clientId, prevStart, prevEnd),
+  });
+
   const { data: postsForAnalytics } = useQuery({
     queryKey: ["posts-analytics", clientId, start, end],
     queryFn: () => getPostsForAnalytics(clientId, start, end),
@@ -387,6 +397,19 @@ function MonthlyOverview() {
   const interactions = sum(data, "total_interactions");
   const contactTaps = sum(data, "profile_links_taps");
   const engagementRate = reach > 0 ? ((interactions / reach) * 100).toFixed(1) + "%" : "—";
+
+  // Variação contra o período anterior: só aparece quando o anterior tem dado em pelo menos 80% dos dias
+  // do atual. Como o Instagram guarda ~30 dias de histórico diário, na maioria dos casos ela ainda não existe.
+  const ant = rowsAnterior ?? [];
+  const temAnterior = ant.length >= Math.ceil(data.length * 0.8) && data.length >= 7;
+  const variacao = (atual: number, antes: number): string | undefined => {
+    if (!temAnterior || antes <= 0) return undefined;
+    const p = ((atual - antes) / antes) * 100;
+    return `${p >= 0 ? "▲" : "▼"} ${Math.abs(p).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% contra o período anterior`;
+  };
+  const vsNovos = variacao(newFollowers, sum(ant, "new_followers"));
+  const vsAlcance = variacao(reach, sum(ant, "reach"));
+  const vsSalvos = variacao(saves, sum(ant, "saves"));
 
   // Os números de cima somam só os dias que têm dado. O Instagram entrega cerca de
   // 30 dias de histórico diário, então em 90 dias (ou mais) o total costuma ser o
@@ -447,11 +470,11 @@ function MonthlyOverview() {
         <KpiCard
           label="Novos seguidores"
           value={newFollowers.toLocaleString("pt-BR")}
-          hint="só últimos 30 dias (limite do Instagram)"
+          hint={vsNovos ?? "só últimos 30 dias (limite do Instagram)"}
         />
-        <KpiCard label="Alcance" value={reach.toLocaleString("pt-BR")} />
+        <KpiCard label="Alcance (soma dos dias)" value={reach.toLocaleString("pt-BR")} hint={vsAlcance ?? "alcance de cada dia somado; a mesma pessoa pode contar mais de uma vez"} />
         <KpiCard label="Taxa de engajamento" value={engagementRate} hint="interações ÷ alcance" />
-        <KpiCard label="Salvamentos" value={saves.toLocaleString("pt-BR")} />
+        <KpiCard label="Salvamentos" value={saves.toLocaleString("pt-BR")} hint={vsSalvos} />
       </div>
       {avisoCobertura && (
         <div className="flex flex-wrap items-center justify-between gap-3">
