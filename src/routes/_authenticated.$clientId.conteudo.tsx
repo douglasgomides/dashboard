@@ -183,7 +183,7 @@ function ConteudoPage() {
         {seg && !seg.projection.ok && (
           <div className="note">
             <i />
-            <span>{seg.projection.reason} O total de seguidores é gravado todo dia e o histórico vai se formando {seg.firstDate ? `desde ${seg.firstDate.slice(8, 10)}/${seg.firstDate.slice(5, 7)}` : "a partir da próxima atualização"}; a Meta só informa o total de hoje, por isso não dá para reconstruir os dias que passaram.</span>
+            <span>{seg.projection.reason} O total de seguidores é gravado todo dia. Os últimos 28 dias foram reconstruídos com o que a Meta informa de quem seguiu e deixou de seguir; o que for mais antigo que {seg.firstDate ? `${seg.firstDate.slice(8, 10)}/${seg.firstDate.slice(5, 7)}` : "a primeira coleta"} não existe, porque a Meta não guarda o total dos dias passados.</span>
           </div>
         )}
         {seg && seg.projection.ok && seg.gaps.length > 0 && (
