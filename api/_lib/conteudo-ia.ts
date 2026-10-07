@@ -6,7 +6,8 @@
  * caía em "Tema livre". Funil e estágio nunca foram preenchidos automaticamente.
  *
  * Regras:
- * - Só roda quando ANTHROPIC_API_KEY existe no servidor; sem a chave, não faz nada e diz isso.
+ * - Só roda quando há chave no servidor: OPENAI_API_KEY (GPT, modelo padrão gpt-4o-mini) ou, se não houver,
+ *   ANTHROPIC_API_KEY (Claude Haiku). Sem nenhuma das duas, não faz nada e diz isso.
  * - Nunca sobrescreve o que a equipe já classificou: só preenche campo vazio.
  * - Posts mais recentes primeiro, com teto por rodada (custo e tempo da função).
  * - Reaproveita os temas que a conta já tem, para o vocabulário não se espalhar em sinônimos.
@@ -14,7 +15,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
 
-const MODELO = process.env.CLASSIFICADOR_MODELO || "claude-haiku-4-5-20251001";
+// CLASSIFICADOR_MODELO troca o modelo sem mexer no código.
+const MODELO_OPENAI = process.env.CLASSIFICADOR_MODELO || "gpt-4o-mini";
+const MODELO_CLAUDE = process.env.CLASSIFICADOR_MODELO || "claude-haiku-4-5-20251001";
 const FUNIS = new Set(["C0", "C1", "C2", "C3"]);
 const ESTAGIOS = new Set(["percepcao", "confianca", "venda", "multiplicacao"]);
 const LOTE = 20;
@@ -25,7 +28,7 @@ Para cada post devolva:
 - funil: C0 (a pessoa não sabe que tem o problema), C1 (reconhece o problema), C2 (compara soluções e tratamentos), C3 (pronta para decidir ou agendar).
 - estagio: percepcao (atrair atenção e educar), confianca (autoridade, bastidores, caso, prova), venda (chamada direta para agendar ou comprar), multiplicacao (pede compartilhar, indicar ou marcar alguém).
 Se a legenda estiver vazia ou não der para classificar com segurança, use null no campo.
-Responda SOMENTE um JSON, uma lista: [{"id":"...","tema":"...","funil":"C1","estagio":"percepcao"}].`;
+Responda SOMENTE um JSON no formato {"posts":[{"id":"...","tema":"...","funil":"C1","estagio":"percepcao"}]}, com um item por post recebido.`;
 
 type Linha = { id: string; caption: string | null; tema: string | null; funnel_stage: string | null; methodology_stage: string | null };
 type Saida = { id: string; tema?: string | null; funil?: string | null; estagio?: string | null };
@@ -43,20 +46,49 @@ function limparTema(t: unknown): string | null {
   return s;
 }
 
-async function chamar(chave: string, usuario: string, ms: number): Promise<Saida[]> {
+// A resposta pode vir como {"posts":[...]} (modo JSON da OpenAI) ou como lista solta; aceita os dois.
+function lerLista(texto: string): Saida[] {
+  const iObj = texto.indexOf("{");
+  const iArr = texto.indexOf("[");
+  const inicio = iObj >= 0 && (iArr < 0 || iObj < iArr) ? iObj : iArr;
+  if (inicio < 0) throw new Error("resposta sem JSON");
+  const fim = Math.max(texto.lastIndexOf("}"), texto.lastIndexOf("]"));
+  const bruto = JSON.parse(texto.slice(inicio, fim + 1));
+  const lista = Array.isArray(bruto) ? bruto : (bruto?.posts ?? Object.values(bruto ?? {}).find((v) => Array.isArray(v)));
+  if (!Array.isArray(lista)) throw new Error("resposta sem lista de posts");
+  return lista as Saida[];
+}
+
+async function chamarOpenAI(chave: string, usuario: string, ms: number): Promise<Saida[]> {
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${chave}` },
+    signal: AbortSignal.timeout(ms),
+    body: JSON.stringify({
+      model: MODELO_OPENAI,
+      response_format: { type: "json_object" },
+      max_completion_tokens: 2500,
+      messages: [
+        { role: "system", content: SISTEMA },
+        { role: "user", content: usuario },
+      ],
+    }),
+  });
+  if (!r.ok) throw new Error(`OpenAI respondeu ${r.status}: ${(await r.text()).slice(0, 160)}`);
+  const j = (await r.json()) as { choices?: { message?: { content?: string } }[] };
+  return lerLista(j.choices?.[0]?.message?.content ?? "");
+}
+
+async function chamarClaude(chave: string, usuario: string, ms: number): Promise<Saida[]> {
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": chave, "anthropic-version": "2023-06-01" },
     signal: AbortSignal.timeout(ms),
-    body: JSON.stringify({ model: MODELO, max_tokens: 2500, system: SISTEMA, messages: [{ role: "user", content: usuario }] }),
+    body: JSON.stringify({ model: MODELO_CLAUDE, max_tokens: 2500, system: SISTEMA, messages: [{ role: "user", content: usuario }] }),
   });
   if (!r.ok) throw new Error(`Anthropic respondeu ${r.status}: ${(await r.text()).slice(0, 160)}`);
   const j = (await r.json()) as { content?: { text?: string }[] };
-  const texto = (j.content ?? []).map((b) => b.text ?? "").join("");
-  const ini = texto.indexOf("[");
-  const fim = texto.lastIndexOf("]");
-  if (ini < 0 || fim < ini) throw new Error("resposta sem lista JSON");
-  return JSON.parse(texto.slice(ini, fim + 1)) as Saida[];
+  return lerLista((j.content ?? []).map((b) => b.text ?? "").join(""));
 }
 
 export async function classificarConteudoComIA(
@@ -64,8 +96,9 @@ export async function classificarConteudoComIA(
   accountId: string,
   opts: { maxPosts?: number; orcamentoMs?: number } = {},
 ): Promise<ResultadoIA> {
-  const chave = process.env.ANTHROPIC_API_KEY;
-  if (!chave) return { count: 0, errors: [], pulado: "ANTHROPIC_API_KEY não configurada: classificação por IA desligada" };
+  const chaveOpenAI = process.env.OPENAI_API_KEY;
+  const chaveClaude = process.env.ANTHROPIC_API_KEY;
+  if (!chaveOpenAI && !chaveClaude) return { count: 0, errors: [], pulado: "OPENAI_API_KEY (ou ANTHROPIC_API_KEY) não configurada: classificação por IA desligada" };
   const maxPosts = opts.maxPosts ?? 100;
   const limite = Date.now() + (opts.orcamentoMs ?? 40_000);
 
@@ -98,7 +131,7 @@ export async function classificarConteudoComIA(
       lote.map((p) => JSON.stringify({ id: p.id, legenda: (p.caption ?? "").replace(/\s+/g, " ").slice(0, 600) })).join("\n");
     let saida: Saida[];
     try {
-      saida = await chamar(chave, usuario, Math.min(restante - 1000, 30_000));
+      saida = chaveOpenAI ? await chamarOpenAI(chaveOpenAI, usuario, Math.min(restante - 1000, 30_000)) : await chamarClaude(chaveClaude as string, usuario, Math.min(restante - 1000, 30_000));
     } catch (e) {
       errors.push(`conteudo-ia: ${e instanceof Error ? e.message : String(e)}`);
       break;
