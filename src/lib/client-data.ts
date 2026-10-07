@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { filtrarPerguntas } from "@/lib/comentarios";
 import type {
   ContentFormat,
   FunnelStage,
@@ -153,6 +154,13 @@ export async function getCrmAtividadeRecente(clientId: string, limit = 10) {
 // Dúvidas reais de pacientes nos comentários dos posts — matéria-prima pra
 // pauta, não conteúdo pronto. is_question é heurística (pontuação/palavra
 // interrogativa), sem IA — quem decide o que virar conteúdo é o time.
+
+// @ das contas do próprio cliente: resposta do perfil nos comentários não é paciente perguntando.
+async function donosDoPerfil(clientId: string): Promise<string[]> {
+  const { data } = await supabase.from("instagram_accounts").select("ig_username").eq("client_id", clientId);
+  return (data ?? []).map((r) => r.ig_username).filter((x): x is string => !!x);
+}
+
 export async function getPatientQuestions(clientId: string, limit = 200) {
   const { data, error } = await supabase
     .from("instagram_comments")
@@ -162,7 +170,8 @@ export async function getPatientQuestions(clientId: string, limit = 200) {
     .order("commented_at", { ascending: false, nullsFirst: false })
     .limit(limit);
   if (error) throw error;
-  return data;
+  // Sorteio, convite para seguir e resposta do próprio perfil saem da lista (lib/comentarios.ts).
+  return filtrarPerguntas(data ?? [], await donosDoPerfil(clientId));
 }
 
 // Biblioteca de inspiração ("Swipe File Médico") — global, não filtrada por
@@ -296,7 +305,7 @@ export async function getCrmProvider(clientId: string): Promise<string | null> {
 export async function getPatientQuestionsPeriodo(clientId: string, start: string, end: string, limit = 1000) {
   const { data, error } = await supabase
     .from("instagram_comments")
-    .select("id, text, like_count, instagram_post_id, commented_at")
+    .select("id, text, like_count, instagram_post_id, commented_at, author_username")
     .eq("client_id", clientId)
     .eq("is_question", true)
     .gte("commented_at", start)
@@ -304,7 +313,7 @@ export async function getPatientQuestionsPeriodo(clientId: string, start: string
     .order("commented_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return data ?? [];
+  return filtrarPerguntas(data ?? [], await donosDoPerfil(clientId));
 }
 
 // ---- Aba "A analisar": significado das etapas do CRM -------------------------

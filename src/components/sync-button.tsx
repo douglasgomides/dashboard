@@ -93,12 +93,12 @@ export function SyncButton({ clientId, alvo }: { clientId: string; alvo: Alvo })
 
   const ROTULOS: Record<Alvo, string> = {
     tudo: "Atualizar dados",
-    posts: "Sincronizar posts",
+    posts: "Atualizar posts",
     historico: "Completar histórico (1 ano)",
-    anuncios: "Sincronizar anúncios",
-    atendimento: "Sincronizar atendimento",
-    comentarios: "Sincronizar comentários",
-    crm: "Sincronizar CRM",
+    anuncios: "Atualizar anúncios",
+    atendimento: "Atualizar atendimento",
+    comentarios: "Atualizar comentários",
+    crm: "Atualizar CRM",
   };
   const rotulo = ROTULOS[alvo];
   const rodando = estado === "rodando";

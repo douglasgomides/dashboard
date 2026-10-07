@@ -22,7 +22,7 @@ function AdminLayout() {
             Painel admin
           </span>
           <h1 className="text-xl font-semibold">
-            <Link to="/admin">Clientes</Link>
+            <Link to="/admin">Visão geral dos clientes</Link>
           </h1>
         </div>
         <LogoutButton />

@@ -76,10 +76,11 @@ export function DateRangePicker({
         </>
       )}
     </div>
-      <span className="text-[11px] leading-snug" style={{ color: "var(--text-faint)" }}>
+      <details className="text-[11px] leading-snug" style={{ color: "var(--text-faint)" }}>
+        <summary className="cursor-pointer select-none py-1">Sobre o período</summary>
         Se um período não filtrar ou vier vazio, a conta do Meta pode ter sido conectada ao dashboard há pouco — ainda
         não há histórico completo desse intervalo.
-      </span>
+      </details>
     </div>
   );
 }

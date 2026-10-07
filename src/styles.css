@@ -361,3 +361,12 @@ textarea.reltxt{width:100%;background:var(--surface);border:1px solid var(--bord
   animation: sync-bar-listras .9s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) { .sync-bar-fill-rodando { animation: none; } }
+
+/* Tabelas escritas com utilitários (table.w-full) não tinham espaço entre as colunas:
+   "InvestidoConversas", "AlcanceTema" e "4R$ 172,48" saíam colados. Célula que já traz px-* fica como está. */
+table.w-full th:not([class*="px-"]),
+table.w-full td:not([class*="px-"]) { padding-left: 0.5rem; padding-right: 0.5rem; }
+table.w-full th:not([class*="px-"]):first-child,
+table.w-full td:not([class*="px-"]):first-child { padding-left: 0; }
+table.w-full th:not([class*="px-"]):last-child,
+table.w-full td:not([class*="px-"]):last-child { padding-right: 0; }

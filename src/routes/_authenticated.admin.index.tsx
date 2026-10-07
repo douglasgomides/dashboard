@@ -3,6 +3,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAdminUser, createClient, listAllClients } from "@/lib/admin-data";
 import { ClientAvatar } from "@/components/client-avatar";
+import { supabase } from "@/integrations/supabase/client";
+import { getClientFontes } from "@/lib/client-data";
+import { statusDoCliente, tomDaFonte, ddmm, type LinhaFonte } from "@/lib/saude-fontes";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminClientsPage,
@@ -165,54 +168,124 @@ function NewAdminForm() {
   );
 }
 
+const COR_TOM: Record<string, string> = {
+  bom: "var(--good)",
+  atencao: "var(--warn, #b7791f)",
+  ruim: "var(--danger)",
+  neutro: "var(--text-faint)",
+};
+
+function Chip({ ligado, linha, erro }: { ligado: boolean; linha?: LinhaFonte; erro?: boolean }) {
+  if (!ligado) {
+    return (
+      <span title="Fonte não ligada a este cliente" style={{ color: "var(--text-faint)" }}>
+        não ligado
+      </span>
+    );
+  }
+  const tom = tomDaFonte(linha);
+  const texto = linha?.data_ate ? `até ${ddmm(linha.data_ate)}` : "sem dado";
+  return (
+    <span style={{ color: COR_TOM[tom], fontWeight: 600 }} title={erro ? "Erro na última tentativa" : undefined}>
+      {tom === "ruim" ? "● " : tom === "atencao" ? "◐ " : tom === "bom" ? "✓ " : ""}
+      {texto}
+    </span>
+  );
+}
+
+// Uma linha da Visão geral: as quatro fontes do cliente e até que dia cada uma tem dado.
+function LinhaSaude({ clientId }: { clientId: string }) {
+  const { data } = useQuery({
+    queryKey: ["saude-cliente", clientId],
+    queryFn: async () => {
+      const [fontes, linhas] = await Promise.all([getClientFontes(clientId).catch(() => null), statusDoCliente(clientId)]);
+      return { fontes, linhas };
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+  const f = data?.fontes;
+  const por = (nome: string) => data?.linhas.find((l) => l.fonte === nome);
+  if (!data) {
+    return (
+      <td colSpan={4} className="px-4 py-2 text-xs" style={{ color: "var(--text-faint)" }}>
+        Lendo as fontes…
+      </td>
+    );
+  }
+  return (
+    <>
+      <td className="px-4 py-2 text-xs"><Chip ligado={!!f?.tem_instagram} linha={por("instagram")} /></td>
+      <td className="px-4 py-2 text-xs"><Chip ligado={!!f?.tem_anuncios} linha={por("anuncios")} /></td>
+      <td className="px-4 py-2 text-xs"><Chip ligado={!!f?.tem_crm} linha={por("crm")} /></td>
+      <td className="px-4 py-2 text-xs"><Chip ligado={!!f?.tem_atendimento} linha={por("atendimento")} /></td>
+    </>
+  );
+}
+
 function AdminClientsPage() {
   const { data: clients, isLoading } = useQuery({
     queryKey: ["admin-clients"],
     queryFn: listAllClients,
   });
+  // @ do Instagram da conta ligada, para quando o cadastro do cliente não traz.
+  const { data: contasIg } = useQuery({
+    queryKey: ["admin-ig-handles"],
+    queryFn: async () => {
+      const { data } = await supabase.from("instagram_accounts").select("client_id, ig_username").eq("active", true);
+      return new Map((data ?? []).map((r) => [r.client_id, r.ig_username as string | null]));
+    },
+  });
 
   return (
     <div>
-      <NewAdminForm />
-      <NewClientForm />
+      <p className="mb-3 text-sm" style={{ color: "var(--text-dim)" }}>
+        Visão geral: até que dia cada fonte de cada cliente tem dado. Verde: em dia. Amarelo: 2 a 3 dias parado.
+        Vermelho: mais de 3 dias parado ou com erro. "Não ligado" quer dizer que o cliente não tem aquela fonte.
+      </p>
       {isLoading ? (
         <p style={{ color: "var(--text-dim)" }}>Carregando…</p>
       ) : (
-        <div className="overflow-hidden rounded-xl border" style={{ borderColor: "var(--border)" }}>
+        <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "var(--border)" }}>
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs" style={{ color: "var(--text-faint)", background: "var(--surface-2)" }}>
                 <th className="px-4 py-2">Nome</th>
-                <th className="px-4 py-2">Especialidade</th>
                 <th className="px-4 py-2">Instagram</th>
+                <th className="px-4 py-2">Anúncios</th>
+                <th className="px-4 py-2">CRM</th>
+                <th className="px-4 py-2">WhatsApp</th>
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody>
-              {(clients ?? []).map((c) => (
-                <tr key={c.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="px-4 py-2 font-medium">
-                    <div className="flex items-center gap-3">
-                      <ClientAvatar nome={c.name} url={c.avatar_url} tamanho={36} />
-                      <span>{c.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-2" style={{ color: "var(--text-dim)" }}>
-                    {c.specialty ?? "—"}
-                  </td>
-                  <td className="px-4 py-2" style={{ color: "var(--text-dim)" }}>
-                    {c.instagram_handle ? `@${c.instagram_handle}` : "—"}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <Link to="/admin/$clientId" params={{ clientId: c.id }} style={{ color: "var(--accent)" }}>
-                      Gerenciar →
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {(clients ?? []).map((c) => {
+                const handle = c.instagram_handle || contasIg?.get(c.id) || null;
+                return (
+                  <tr key={c.id} className="border-t" style={{ borderColor: "var(--border)" }}>
+                    <td className="px-4 py-2 font-medium">
+                      <div className="flex items-center gap-3">
+                        <ClientAvatar nome={c.name} url={c.avatar_url} tamanho={36} />
+                        <div>
+                          <div>{c.name}</div>
+                          <div className="text-xs font-normal" style={{ color: "var(--text-dim)" }}>
+                            {[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <LinhaSaude clientId={c.id} />
+                    <td className="px-4 py-2 text-right">
+                      <Link to="/admin/$clientId" params={{ clientId: c.id }} style={{ color: "var(--accent)" }}>
+                        Gerenciar →
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
               {(clients ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center" style={{ color: "var(--text-dim)" }}>
+                  <td colSpan={6} className="px-4 py-6 text-center" style={{ color: "var(--text-dim)" }}>
                     Nenhum cliente cadastrado ainda.
                   </td>
                 </tr>
@@ -221,6 +294,13 @@ function AdminClientsPage() {
           </table>
         </div>
       )}
+      <details className="mt-6">
+        <summary className="cursor-pointer select-none py-1 text-sm font-medium">Cadastrar admin ou cliente</summary>
+        <div className="mt-3">
+          <NewAdminForm />
+          <NewClientForm />
+        </div>
+      </details>
     </div>
   );
 }

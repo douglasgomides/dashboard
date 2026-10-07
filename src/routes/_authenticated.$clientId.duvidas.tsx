@@ -37,7 +37,7 @@ function QuestionCard({ q }: { q: Question }) {
           {post?.permalink && (
             <>
               <span>·</span>
-              <a href={post.permalink} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+              <a href={post.permalink} target="_blank" rel="noreferrer" className="inline-block py-1.5" style={{ color: "var(--accent)" }}>
                 ver post ↗
               </a>
             </>
@@ -80,7 +80,7 @@ function DuvidasFrequentes({ questions }: { questions: Question[] }) {
             <button
               type="button"
               onClick={() => setOpenIdx((v) => (v === i ? null : i))}
-              className="mt-2 text-xs font-medium"
+              className="mt-1 py-1.5 text-xs font-medium"
               style={{ color: "var(--accent)" }}
             >
               {openIdx === i ? "Ocultar" : "Ver"} os {c.count} comentários
