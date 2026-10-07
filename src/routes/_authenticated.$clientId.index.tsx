@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -23,6 +23,8 @@ import type { ContentFormat } from "@/integrations/supabase/types";
 import { brazilWeekdayAndHour, computeFormatBreakdown, computeFormatInsight, fmtFormatKey, median } from "@/lib/report-metrics";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum } from "@/lib/format";
+import { UserPlus, Eye, Activity, Bookmark, Trophy, TrendingDown, MousePointerClick, LineChart as LineIcon, Clock, Gauge, BarChart3, Download, Loader2, Lightbulb } from "lucide-react";
+import { Painel, Kpi, BarraFina, Miniatura } from "@/components/visual";
 
 export const Route = createFileRoute("/_authenticated/$clientId/")({
   component: MonthlyOverview,
@@ -46,57 +48,21 @@ function tickDate(d: string) {
   return d.slice(5);
 }
 
-function KpiCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
-  return (
-    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-      <div className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-        {label}
-      </div>
-      <div className="mt-1 text-2xl font-semibold">{value}</div>
-      {hint && (
-        <div className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
-          {hint}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function SinaisDeInteresse({ reach, contactTaps, newFollowers }: { reach: number; contactTaps: number; newFollowers: number }) {
   return (
-    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-      <h2 className="mb-1 text-sm font-semibold">Alcance e sinais de interesse no período</h2>
-      <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-        A Meta depreciou "visitas ao perfil" na API — não é mais possível montar um funil real com % de conversão
-        entre essas etapas. São sinais paralelos, não um funil sequencial.
-      </p>
-      <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-xl border p-4 text-center" style={{ borderColor: "var(--border)" }}>
-          <div className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-            Alcance
-          </div>
-          <div className="mt-1 text-xl font-semibold">{reach.toLocaleString("pt-BR")}</div>
-        </div>
-        <div className="rounded-xl border p-4 text-center" style={{ borderColor: "var(--border)" }}>
-          <div className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-            Toques em botões de contato
-          </div>
-          <div className="mt-1 text-xl font-semibold">{contactTaps.toLocaleString("pt-BR")}</div>
-          <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-faint)" }}>
-            endereço, ligar, e-mail, mensagem
-          </div>
-        </div>
-        <div className="rounded-xl border p-4 text-center" style={{ borderColor: "var(--border)" }}>
-          <div className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-            Novos seguidores
-          </div>
-          <div className="mt-1 text-xl font-semibold">{newFollowers.toLocaleString("pt-BR")}</div>
-          <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-faint)" }}>
-            só últimos 30 dias — limite do Instagram, não do período escolhido
-          </div>
-        </div>
+    <Painel
+      icone={MousePointerClick}
+      cor="var(--s1)"
+      titulo="Alcance e sinais de interesse"
+      resumo="Três sinais paralelos, não um funil"
+      ajuda="A Meta depreciou “visitas ao perfil” na API, então não dá mais para montar um funil real com % de conversão entre essas etapas. São sinais paralelos, não um funil sequencial."
+    >
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance" valor={reach.toLocaleString("pt-BR")} />
+        <Kpi icone={MousePointerClick} cor="var(--s2)" rotulo="Toques em contato" valor={contactTaps.toLocaleString("pt-BR")} dica="endereço, ligar, e-mail, mensagem" />
+        <Kpi icone={UserPlus} cor="var(--s3)" rotulo="Novos seguidores" valor={newFollowers.toLocaleString("pt-BR")} dica="só últimos 30 dias (limite do Instagram, não do período escolhido)" />
       </div>
-    </div>
+    </Painel>
   );
 }
 
@@ -107,19 +73,25 @@ function PostList({ posts }: { posts: any[] }) {
   return (
     <ul className="space-y-2">
       {posts.map((p) => (
-        <li
-          key={p.id}
-          className="rounded-lg border p-3 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-        >
-          <a href={p.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
-            {(p.caption ?? p.windsor_media_id).split("\n")[0].slice(0, 90)}
+        <li key={p.id}>
+          <a
+            href={p.permalink ?? "#"}
+            target="_blank"
+            rel="noreferrer"
+            className="flex gap-3 rounded-lg border p-2.5 text-sm"
+            style={{ borderColor: "var(--border)", background: "var(--surface)", color: "var(--text)" }}
+          >
+            <Miniatura url={p.thumbnail_url} formato={p.format} className="h-12 w-12" />
+            <span className="min-w-0 flex-1">
+              <span className="line-clamp-1 block font-medium">{(p.caption ?? p.windsor_media_id).split("\n")[0].slice(0, 90)}</span>
+              <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums" style={{ color: "var(--text-dim)" }}>
+                <span>{p.posted_at && new Date(p.posted_at).toLocaleDateString("pt-BR")}</span>
+                <span className="inline-flex items-center gap-1"><Eye size={12} /> {(p.reach ?? 0).toLocaleString("pt-BR")}</span>
+                <span className="inline-flex items-center gap-1"><Activity size={12} /> {(p.engagement ?? 0).toLocaleString("pt-BR")}</span>
+                <span className="inline-flex items-center gap-1"><Bookmark size={12} /> {(p.saved ?? 0).toLocaleString("pt-BR")}</span>
+              </span>
+            </span>
           </a>
-          <div className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
-            {p.posted_at && new Date(p.posted_at).toLocaleDateString("pt-BR")} · Alcance{" "}
-            {(p.reach ?? 0).toLocaleString("pt-BR")} · Engajamento {(p.engagement ?? 0).toLocaleString("pt-BR")} ·
-            Salvos {(p.saved ?? 0).toLocaleString("pt-BR")}
-          </div>
         </li>
       ))}
     </ul>
@@ -163,76 +135,68 @@ function MelhoresHorarios({ posts, periodLabel }: { posts: any[]; periodLabel: s
     return { ranked, overallMedian };
   }, [posts]);
 
+  const maxMediana = Math.max(1, ...ranked.map((r) => r.median));
   return (
-    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-      <h2 className="mb-1 text-sm font-semibold">Melhores horários pra postar</h2>
-      <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-        {periodLabel}, por engajamento (mediana; horário de Brasília). Clique numa linha pra ver os posts que
-        sustentam o número.
-      </p>
+    <Painel
+      icone={Clock}
+      cor="var(--s7)"
+      titulo="Melhores horários para postar"
+      resumo="Toque numa linha para ver os posts"
+      ajuda={`${periodLabel}, por engajamento (mediana; horário de Brasília). Clique numa linha para ver os posts que sustentam o número.`}
+    >
       {ranked.length === 0 ? (
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          Poucos posts pra ranquear com confiança ainda.
+          Poucos posts para ranquear com confiança ainda.
         </p>
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
-              <th className="pb-2">Dia</th>
-              <th className="pb-2">Período</th>
-              <th className="pb-2 text-right">Posts</th>
-              <th className="pb-2 text-right">Engajamento (mediana)</th>
-              <th className="pb-2 text-right">vs. mediana da conta</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ranked.map((r) => {
-              const vsMedian = overallMedian > 0 ? ((r.median - overallMedian) / overallMedian) * 100 : 0;
-              const isOpen = expanded === r.key;
-              return (
-                <Fragment key={r.key}>
-                  <tr
-                    className="cursor-pointer border-t"
-                    style={{ borderColor: "var(--border)" }}
-                    onClick={() => setExpanded(isOpen ? null : r.key)}
-                  >
-                    <td className="py-1.5">{r.weekday}</td>
-                    <td className="py-1.5">{r.period}</td>
-                    <td className="py-1.5 text-right">{r.count}</td>
-                    <td className="py-1.5 text-right font-medium">{fmtNum(Math.round(r.median))}</td>
-                    <td
-                      className="py-1.5 text-right font-medium"
-                      style={{ color: vsMedian >= 0 ? "var(--good)" : "var(--text-dim)" }}
-                    >
-                      {vsMedian >= 0 ? "+" : ""}
+        <ul className="space-y-2">
+          {ranked.map((r, idx) => {
+            const vsMedian = overallMedian > 0 ? ((r.median - overallMedian) / overallMedian) * 100 : 0;
+            const isOpen = expanded === r.key;
+            return (
+              <li key={r.key}>
+                <button
+                  type="button"
+                  onClick={() => setExpanded(isOpen ? null : r.key)}
+                  className="block w-full rounded-lg border p-2.5 text-left"
+                  style={{ borderColor: isOpen ? "var(--accent)" : "var(--border)", background: "var(--surface)" }}
+                  aria-expanded={isOpen}
+                >
+                  <span className="flex items-center justify-between gap-2 text-sm">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold" style={{ background: idx === 0 ? "var(--warn)" : "var(--surface-2)", color: idx === 0 ? "#1a1a19" : "var(--text-dim)" }}>
+                        {idx + 1}
+                      </span>
+                      <b className="truncate">{r.weekday}</b>
+                      <span className="truncate text-xs" style={{ color: "var(--text-dim)" }}>{r.period}</span>
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold tabular-nums" style={{ color: vsMedian >= 0 ? "var(--good-text)" : "var(--text-dim)" }}>
+                      {vsMedian >= 0 ? "▲ +" : "▼ "}
                       {vsMedian.toFixed(0)}%
-                    </td>
-                  </tr>
-                  {isOpen && (
-                    <tr key={`${r.key}-expanded`}>
-                      <td colSpan={5} className="pb-3">
-                        <div
-                          className="rounded-lg border p-3"
-                          style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
-                        >
-                          <p className="mb-2 text-xs" style={{ color: "var(--text-faint)" }}>
-                            {r.count} post{r.count > 1 ? "s" : ""} publicado{r.count > 1 ? "s" : ""} em{" "}
-                            {r.weekday.toLowerCase()} à(o) {r.period.toLowerCase()} no período selecionado —
-                            engajamento {vsMedian >= 0 ? vsMedian.toFixed(0) + "% acima" : Math.abs(vsMedian).toFixed(0) + "% abaixo"}{" "}
-                            da mediana geral da conta ({fmtNum(Math.round(overallMedian))}).
-                          </p>
-                          <PostList posts={r.posts} />
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+                    </span>
+                  </span>
+                  <span className="mt-2 flex items-center gap-2">
+                    <span className="min-w-0 flex-1"><BarraFina valor={r.median} max={maxMediana} cor="var(--s7)" /></span>
+                    <span className="shrink-0 text-xs tabular-nums" style={{ color: "var(--text-dim)" }}>
+                      <b style={{ color: "var(--text)" }}>{fmtNum(Math.round(r.median))}</b> · {r.count} posts
+                    </span>
+                  </span>
+                </button>
+                {isOpen && (
+                  <div className="mt-2 rounded-lg border p-3" style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}>
+                    <p className="mb-2 text-xs" style={{ color: "var(--text-faint)" }}>
+                      {r.count} post{r.count > 1 ? "s" : ""} em {r.weekday.toLowerCase()}, {r.period.toLowerCase()}: engajamento{" "}
+                      {vsMedian >= 0 ? vsMedian.toFixed(0) + "% acima" : Math.abs(vsMedian).toFixed(0) + "% abaixo"} da mediana da conta ({fmtNum(Math.round(overallMedian))}).
+                    </p>
+                    <PostList posts={r.posts} />
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       )}
-    </div>
+    </Painel>
   );
 }
 
@@ -245,8 +209,7 @@ function EngajamentoPorFormato({ posts }: { posts: any[] }) {
   }, [posts]);
 
   return (
-    <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-      <h2 className="mb-3 text-sm font-semibold">Engajamento (mediana) por formato</h2>
+    <Painel icone={BarChart3} cor="var(--s3)" titulo="Engajamento por formato" resumo="Mediana de cada formato">
       {data.length === 0 ? (
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
           Sem posts suficientes ainda.
@@ -258,11 +221,11 @@ function EngajamentoPorFormato({ posts }: { posts: any[] }) {
             <XAxis dataKey="formato" tick={{ fontSize: 11 }} stroke="var(--text-faint)" />
             <YAxis tick={{ fontSize: 11 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
             <Tooltip formatter={(value: number) => fmtNum(value)} />
-            <Bar dataKey="Engajamento (mediana)" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Engajamento (mediana)" fill="var(--s3)" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       )}
-    </div>
+    </Painel>
   );
 }
 
@@ -282,9 +245,11 @@ function InsightDeFormato({ posts, periodLabel }: { posts: any[]; periodLabel: s
 
   return (
     <div
-      className="rounded-xl border p-4 text-sm leading-relaxed"
+      className="flex gap-3 rounded-xl border p-4 text-sm leading-relaxed"
       style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
     >
+      <Lightbulb size={18} aria-hidden className="mt-0.5 shrink-0" style={{ color: "var(--warn)" }} />
+      <span>
       {periodLabel}, <strong>{fmtFormatLabel(best.format)}</strong> foi o formato mais forte —
       engajamento (mediana) de {fmtNum(Math.round(best.median))} ({best.count} posts), {bestPct >= 0 ? "+" : ""}
       {bestPct.toFixed(0)}% acima da mediana geral da conta.
@@ -295,6 +260,7 @@ function InsightDeFormato({ posts, periodLabel }: { posts: any[]; periodLabel: s
           posts) — vale revisar frequência ou abordagem nesse formato.
         </>
       )}
+      </span>
     </div>
   );
 }
@@ -402,10 +368,10 @@ function MonthlyOverview() {
   // do atual. Como o Instagram guarda ~30 dias de histórico diário, na maioria dos casos ela ainda não existe.
   const ant = rowsAnterior ?? [];
   const temAnterior = ant.length >= Math.ceil(data.length * 0.8) && data.length >= 7;
-  const variacao = (atual: number, antes: number): string | undefined => {
-    if (!temAnterior || antes <= 0) return undefined;
+  const variacao = (atual: number, antes: number): { sobe: boolean; texto: string } | null => {
+    if (!temAnterior || antes <= 0) return null;
     const p = ((atual - antes) / antes) * 100;
-    return `${p >= 0 ? "▲" : "▼"} ${Math.abs(p).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% contra o período anterior`;
+    return { sobe: p >= 0, texto: `${Math.abs(p).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% vs. período anterior` };
   };
   const vsNovos = variacao(newFollowers, sum(ant, "new_followers"));
   const vsAlcance = variacao(reach, sum(ant, "reach"));
@@ -467,14 +433,10 @@ function MonthlyOverview() {
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiCard
-          label="Novos seguidores"
-          value={newFollowers.toLocaleString("pt-BR")}
-          hint={vsNovos ?? "só últimos 30 dias (limite do Instagram)"}
-        />
-        <KpiCard label="Alcance (soma dos dias)" value={reach.toLocaleString("pt-BR")} hint={vsAlcance ?? "alcance de cada dia somado; a mesma pessoa pode contar mais de uma vez"} />
-        <KpiCard label="Taxa de engajamento" value={engagementRate} hint="interações ÷ alcance" />
-        <KpiCard label="Salvamentos" value={saves.toLocaleString("pt-BR")} hint={vsSalvos} />
+        <Kpi icone={UserPlus} cor="var(--s3)" rotulo="Novos seguidores" valor={newFollowers.toLocaleString("pt-BR")} tendencia={vsNovos} dica="só últimos 30 dias (limite do Instagram)" />
+        <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance (soma dos dias)" valor={reach.toLocaleString("pt-BR")} tendencia={vsAlcance} dica="a mesma pessoa pode contar mais de um dia" />
+        <Kpi icone={Activity} cor="var(--s2)" rotulo="Taxa de engajamento" valor={engagementRate} dica="interações ÷ alcance" />
+        <Kpi icone={Bookmark} cor="var(--s7)" rotulo="Salvamentos" valor={saves.toLocaleString("pt-BR")} tendencia={vsSalvos} />
       </div>
       {avisoCobertura && (
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -487,15 +449,19 @@ function MonthlyOverview() {
 
       {formatInsight && (
         <div className="grid grid-cols-2 gap-3">
-          <KpiCard
-            label="Melhor formato"
-            value={fmtFormatKey(formatInsight.best.format)}
-            hint={`${fmtNum(Math.round(formatInsight.best.median))} engaj. (mediana) · ${formatInsight.best.count} posts`}
+          <Kpi
+            icone={Trophy}
+            cor="var(--good-text)"
+            rotulo="Melhor formato"
+            valor={fmtFormatKey(formatInsight.best.format)}
+            dica={`${fmtNum(Math.round(formatInsight.best.median))} engaj. (mediana) · ${formatInsight.best.count} posts`}
           />
-          <KpiCard
-            label="Formato mais fraco"
-            value={fmtFormatKey(formatInsight.worst.format)}
-            hint={`${fmtNum(Math.round(formatInsight.worst.median))} engaj. (mediana) · ${formatInsight.worst.count} posts`}
+          <Kpi
+            icone={TrendingDown}
+            cor="var(--crit)"
+            rotulo="Formato mais fraco"
+            valor={fmtFormatKey(formatInsight.worst.format)}
+            dica={`${fmtNum(Math.round(formatInsight.worst.median))} engaj. (mediana) · ${formatInsight.worst.count} posts`}
           />
         </div>
       )}
@@ -504,19 +470,16 @@ function MonthlyOverview() {
         type="button"
         onClick={handleDownloadReport}
         disabled={generatingReport}
-        className="rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-60"
+        className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-60"
         style={{ borderColor: "var(--border)", background: "var(--surface)" }}
       >
+        {generatingReport ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
         {generatingReport ? "Gerando PDF…" : "Baixar relatório PDF"}
       </button>
 
       <SinaisDeInteresse reach={reach} contactTaps={contactTaps} newFollowers={newFollowers} />
 
-      <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h2 className="mb-1 text-sm font-semibold">Alcance × interações no período</h2>
-        <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-          Clique em um ponto pra ver o que foi publicado naquele dia.
-        </p>
+      <Painel icone={Gauge} cor="var(--s1)" titulo="Alcance e interações" resumo="Toque num ponto para ver o que foi publicado no dia">
         <ResponsiveContainer width="100%" height={240}>
           <AreaChart data={chartData} onClick={handleMonthlyClick} style={{ cursor: "pointer" }}>
             <defs>
@@ -533,14 +496,15 @@ function MonthlyOverview() {
           </AreaChart>
         </ResponsiveContainer>
         <DrillDownDoDia date={selectedDateMonthly} posts={postsForAnalytics ?? []} />
-      </div>
+      </Painel>
 
-      <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h2 className="mb-1 text-sm font-semibold">Tendência geral — {periodLabel}</h2>
-        <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-          Alcance e seguidores ganhos lado a lado, pra ver o efeito de mudanças ao longo do tempo. Clique em um
-          ponto pra ver o que foi publicado naquele dia.
-        </p>
+      <Painel
+        icone={LineIcon}
+        cor="var(--s3)"
+        titulo="Tendência geral"
+        resumo="Alcance e seguidores ganhos lado a lado"
+        ajuda={`${periodLabel}. Alcance e seguidores ganhos lado a lado, para ver o efeito de mudanças ao longo do tempo. Clique em um ponto para ver o que foi publicado naquele dia.`}
+      >
         {trendData.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--text-dim)" }}>
             Sem histórico suficiente ainda.
@@ -553,13 +517,13 @@ function MonthlyOverview() {
               <YAxis yAxisId="left" tick={{ fontSize: 11 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
               <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
               <Tooltip labelFormatter={tickDate} formatter={(value: number) => fmtNum(value)} />
-              <Line yAxisId="left" type="monotone" dataKey="Alcance" stroke="var(--accent)" dot={false} />
-              <Line yAxisId="right" type="monotone" dataKey="Seguidores ganhos" stroke="var(--good)" dot={false} />
+              <Line yAxisId="left" type="monotone" dataKey="Alcance" stroke="var(--s1)" strokeWidth={2} dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="Seguidores ganhos" stroke="var(--s3)" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         )}
         <DrillDownDoDia date={selectedDateTrend} posts={postsForAnalytics ?? []} />
-      </div>
+      </Painel>
 
       <InsightDeFormato posts={postsForAnalytics ?? []} periodLabel={periodLabel} />
 

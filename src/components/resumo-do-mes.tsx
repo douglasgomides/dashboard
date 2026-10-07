@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { getAdsResumo, getAdsDiagnostico, getWtsResumo } from "@/lib/client-data";
 import { fmtNum, fmtBRL } from "@/lib/format";
+import { Camera, Megaphone, TrendingUp, MessageCircle, AlertTriangle, Sparkles, type LucideIcon } from "lucide-react";
 
 /**
  * O que aconteceu no período, em frases, juntando as quatro fontes.
@@ -34,19 +35,26 @@ function dur(seg: number): string {
 
 function Linha({
   children,
+  icone: Icon,
   atencao = false,
 }: {
   children: React.ReactNode;
+  icone: LucideIcon;
   atencao?: boolean;
 }) {
+  const cor = atencao ? "var(--warn)" : "var(--accent)";
   return (
-    <li className="flex gap-2.5 text-sm leading-relaxed">
+    <li className="flex items-start gap-3 rounded-lg border p-3 text-sm leading-relaxed" style={{ borderColor: "var(--border)", background: atencao ? "var(--warn-bg)" : "var(--surface)" }}>
       <span
         aria-hidden
-        className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full"
-        style={{ background: atencao ? "var(--warn)" : "var(--accent)" }}
-      />
-      <span style={{ color: "var(--text-dim)" }}>{children}</span>
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+        style={{ background: `color-mix(in srgb, ${cor} 18%, transparent)`, color: atencao ? "var(--text)" : cor }}
+      >
+        <Icon size={16} />
+      </span>
+      <span className="min-w-0" style={{ color: "var(--text-dim)" }}>
+        {children}
+      </span>
     </li>
   );
 }
@@ -81,7 +89,7 @@ export function ResumoDoMes({
     queryFn: () => getWtsResumo(clientId, start, end),
   });
 
-  const linhas: React.ReactNode[] = [];
+  const linhas: { icone: LucideIcon; node: React.ReactNode }[] = [];
   const atencoes: React.ReactNode[] = [];
 
   // ---- Conteúdo -----------------------------------------------------------
@@ -89,7 +97,7 @@ export function ResumoDoMes({
   if (publicados > 0) {
     const melhor = [...(posts ?? [])].sort((a, b) => n(b?.saved) - n(a?.saved))[0];
     const salvos = n(melhor?.saved);
-    linhas.push(
+    linhas.push({ icone: Camera, node: (
       <>
         <Forte>{fmtNum(publicados)} publicações</Forte> no período.
         {salvos > 0 && melhor?.caption && (
@@ -106,15 +114,15 @@ export function ResumoDoMes({
             , com <Forte>{fmtNum(salvos)} salvamentos</Forte>.
           </>
         )}
-      </>,
-    );
+      </>
+    ) });
   }
 
   // ---- Anúncios -----------------------------------------------------------
   const gasto = n(ads?.gasto);
   if (gasto > 0) {
     const conversas = n(ads?.conversas);
-    linhas.push(
+    linhas.push({ icone: Megaphone, node: (
       <>
         <Forte>{fmtBRL(gasto)}</Forte> investidos em anúncio
         {conversas > 0 ? (
@@ -125,8 +133,8 @@ export function ResumoDoMes({
         ) : (
           <> — e nenhuma conversa iniciada no período.</>
         )}
-      </>,
-    );
+      </>
+    ) });
 
     const cortar = (diagnostico ?? []).filter((c) => c.veredito === "Cortar");
     const escalar = (diagnostico ?? []).filter((c) => c.veredito === "Escalar");
@@ -137,14 +145,14 @@ export function ResumoDoMes({
     if (escalar.length > 0) {
       const g = escalar.reduce((a, c) => a + n(c.gasto), 0);
       const cv = escalar.reduce((a, c) => a + n(c.conversas), 0);
-      linhas.push(
+      linhas.push({ icone: TrendingUp, node: (
         <>
           <Forte>
             {escalar.length} {escalar.length === 1 ? "campanha converte" : "campanhas convertem"}
           </Forte>{" "}
           bem abaixo da mediana da conta: {fmtBRL(g)} trouxeram {fmtNum(cv)} conversas. É onde cabe mais verba.
-        </>,
-      );
+        </>
+      ) });
     }
 
     const desperdicio =
@@ -166,7 +174,7 @@ export function ResumoDoMes({
   const atendimentos = n(wts?.atendimentos);
   if (atendimentos > 0) {
     const espera = n(wts?.espera_mediana_seg);
-    linhas.push(
+    linhas.push({ icone: MessageCircle, node: (
       <>
         <Forte>{fmtNum(atendimentos)} atendimentos</Forte> no WhatsApp, de{" "}
         {fmtNum(n(wts?.contatos_distintos))} pessoas diferentes
@@ -176,8 +184,8 @@ export function ResumoDoMes({
           </>
         )}
         .
-      </>,
-    );
+      </>
+    ) });
 
     const semRota = n(wts?.sem_roteamento);
     const fatia = atendimentos > 0 ? (semRota / atendimentos) * 100 : 0;
@@ -200,30 +208,37 @@ export function ResumoDoMes({
       className="rounded-xl border p-4"
       style={{ background: "var(--surface)", borderColor: "var(--border)" }}
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold">O que aconteceu</h2>
-        <span className="text-xs" style={{ color: "var(--text-faint)" }}>
-          {periodLabel}
+      <div className="flex items-center gap-3">
+        <span aria-hidden className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: "color-mix(in srgb, var(--accent) 16%, transparent)", color: "var(--accent)" }}>
+          <Sparkles size={18} />
         </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold leading-tight">O que aconteceu</h2>
+          <span className="text-xs" style={{ color: "var(--text-faint)" }}>
+            {periodLabel}
+          </span>
+        </div>
       </div>
 
-      <ul className="mt-3 flex flex-col gap-2">
+      <ul className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
         {linhas.map((l, i) => (
-          <Linha key={`l${i}`}>{l}</Linha>
+          <Linha key={`l${i}`} icone={l.icone}>
+            {l.node}
+          </Linha>
         ))}
       </ul>
 
       {atencoes.length > 0 && (
         <>
           <div
-            className="mt-3 border-t pt-3 text-xs font-semibold uppercase tracking-wide"
-            style={{ borderColor: "var(--border)", color: "var(--text-faint)" }}
+            className="mt-4 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide"
+            style={{ color: "var(--text-faint)" }}
           >
-            Merece atenção
+            <AlertTriangle size={13} /> Merece atenção
           </div>
-          <ul className="mt-2 flex flex-col gap-2">
+          <ul className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
             {atencoes.map((a, i) => (
-              <Linha key={`a${i}`} atencao>
+              <Linha key={`a${i}`} icone={AlertTriangle} atencao>
                 {a}
               </Linha>
             ))}

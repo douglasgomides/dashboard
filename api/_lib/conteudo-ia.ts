@@ -124,6 +124,8 @@ export async function classificarConteudoComIA(
 
   const errors: string[] = [];
   let count = 0;
+  // Resposta lenta da IA não é falha da sincronização: o que ficou sem classificar entra na próxima rodada.
+  let atrasou = false;
   // Até 3 lotes ao mesmo tempo: o tempo da função é curto e cada resposta leva alguns segundos.
   const CONCORRENCIA = 3;
   const lotes: Linha[][] = [];
@@ -142,6 +144,10 @@ export async function classificarConteudoComIA(
           const saida = chaveOpenAI ? await chamarOpenAI(chaveOpenAI, usuario, ms) : await chamarClaude(chaveClaude as string, usuario, ms);
           return { lote, saida };
         } catch (e) {
+          if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
+            atrasou = true;
+            return { lote, saida: [] as Saida[] };
+          }
           errors.push(`conteudo-ia: ${e instanceof Error ? e.message : String(e)}`);
           return { lote, saida: [] as Saida[] };
         }
@@ -166,7 +172,7 @@ export async function classificarConteudoComIA(
         else count++;
       }
     }
-    if (errors.length > 0) break;
+    if (errors.length > 0 || atrasou) break;
   }
-  return { count, errors };
+  return { count, errors, pulado: atrasou ? "a IA demorou para responder; o que faltou classificar entra na próxima atualização" : undefined };
 }
