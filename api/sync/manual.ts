@@ -10,6 +10,7 @@ import { runKommoLeadsSync } from "../_lib/kommo-leads-sync.js";
 import { runClintSync } from "../_lib/clint-sync.js";
 import { runRdStationSync } from "../_lib/rdstation-sync.js";
 import { runFlwChatSync } from "../_lib/flwchat-sync.js";
+import { lerAudiencia } from "../_lib/meta-audiencia.js";
 import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_lib/sync-status.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
@@ -83,7 +84,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo"];
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia"];
   if (!client_id || !alvo || !ALVOS.includes(alvo)) {
     res.status(400).json({ error: "Informe client_id e alvo ('tudo', 'posts', 'anuncios', 'atendimento', 'comentarios' ou 'crm')" });
     return;
@@ -418,6 +419,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         dataAte: dadosAte,
       });
       return { ...r, ok, linhas, erro, dados_ate: dadosAte };
+    }
+
+    // Audiência (demografia, origem, horários, stories no ar): leitura ao vivo da Meta, nada é gravado.
+    // Guarda 20 minutos na memória da função para não repetir ~15 chamadas à Meta a cada abertura da tela.
+    if (alvo === "audiencia") {
+      const memoria: Map<string, { t: number; d: unknown }> = ((globalThis as any).__audienciaCache ??= new Map());
+      const guardado = memoria.get(client_id);
+      if (guardado && Date.now() - guardado.t < 20 * 60_000) {
+        res.status(200).json({ alvo, ok: true, dados: guardado.d, do_cache: true });
+        return;
+      }
+      const { data: contasIg, error: erroIg } = await admin
+        .from("instagram_accounts")
+        .select("id, windsor_account_id, sync_source")
+        .eq("client_id", client_id)
+        .eq("active", true);
+      if (erroIg) throw new Error(erroIg.message);
+      const conta = (contasIg ?? []).find((c) => c.sync_source === "meta_graph" && c.windsor_account_id);
+      if (!conta) {
+        res.status(200).json({ alvo, ok: true, nada_a_fazer: "Este cliente não tem Instagram ligado pela Meta com token próprio, então a audiência detalhada não está disponível." });
+        return;
+      }
+      const { data: segredo } = await admin.from("instagram_account_secrets").select("meta_access_token").eq("instagram_account_id", conta.id).maybeSingle();
+      const tokenIg = segredo?.meta_access_token ?? META_ACCESS_TOKEN;
+      if (!tokenIg) {
+        res.status(200).json({ alvo, ok: false, erro: "Instagram sem token da Meta configurado." });
+        return;
+      }
+      const dados = await lerAudiencia({ igId: conta.windsor_account_id as string, token: tokenIg });
+      memoria.set(client_id, { t: Date.now(), d: dados });
+      res.status(200).json({ alvo, ok: true, dados });
+      return;
     }
 
     if (alvo === "anuncios") {

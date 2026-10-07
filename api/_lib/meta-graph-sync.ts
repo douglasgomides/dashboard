@@ -17,6 +17,7 @@ import type { Database } from "../../src/integrations/supabase/types.js";
 import { numOrNull, chunk, BATCH_SIZE, normalizeFormat } from "./instagram-sync.js";
 import { classifyTema } from "./tema-classifier.js";
 import { classificarConteudoComIA } from "./conteudo-ia.js";
+import { storiesAoVivo, g as graphGet } from "./meta-audiencia.js";
 
 const GRAPH_BASE = "https://graph.facebook.com/v21.0";
 const INSIGHTS_METRICS = "reach,likes,comments,shares,saved,views,total_interactions";
@@ -245,6 +246,108 @@ async function gravarSeguidoresDeHoje(
   }
 }
 
+
+// Stories duram 24 horas e a Meta não devolve os que já saíram do ar. Por isso o que está no ar na hora do sync
+// é gravado em instagram_stories (uma linha por story). Sem a tabela (migração ainda não aplicada), não faz nada.
+export async function guardarStories(supabase: SupabaseClient<Database>, igAccountId: string, accountId: string, clientId: string, token: string): Promise<string[]> {
+  try {
+    const stories = await storiesAoVivo(token, igAccountId);
+    if (stories.length === 0) return [];
+    const linhas = stories.map((s) => ({
+      client_id: clientId,
+      instagram_account_id: accountId,
+      ig_media_id: s.id,
+      posted_at: s.postado_em,
+      media_type: s.media_type,
+      permalink: s.permalink,
+      thumbnail_url: s.thumbnail_url,
+      reach: s.alcance,
+      views: s.views,
+      replies: s.respostas,
+      shares: s.compartilhamentos,
+      total_interactions: s.interacoes,
+      profile_visits: s.visitas_ao_perfil,
+      follows: s.novos_seguidores,
+      metrics_updated_at: new Date().toISOString(),
+    }));
+    const { error } = await (supabase as any).from("instagram_stories").upsert(linhas, { onConflict: "instagram_account_id,ig_media_id" });
+    if (error) {
+      // 42P01 = tabela inexistente: migração ainda não aplicada, não é falha do sync.
+      if (error.code === "42P01" || /instagram_stories/.test(error.message ?? "")) return [];
+      return [`stories: ${error.message}`];
+    }
+    return [];
+  } catch (e) {
+    return [`stories: ${e instanceof Error ? e.message : String(e)}`];
+  }
+}
+
+// Reconstrói os últimos 28 dias de seguidores com os números REAIS da Meta: seguiram e deixaram de seguir por dia
+// (follows_and_unfollows). Parte do total de hoje e volta dia a dia: total do dia anterior = total do dia menos o saldo.
+// Só preenche dia sem total gravado, nunca sobrescreve o que foi medido. A Meta conta o dia no fuso da Califórnia.
+export async function reconstruirSeguidores(supabase: SupabaseClient<Database>, igAccountId: string, accountId: string, clientId: string, token: string): Promise<string[]> {
+  try {
+    const hojeBr = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    const desdeBr = new Date(Date.now() - 31 * 86400 * 1000).toISOString().slice(0, 10);
+    const { data: lidos } = await supabase
+      .from("instagram_account_daily_metrics")
+      .select("date, followers_count")
+      .eq("instagram_account_id", accountId)
+      .gte("date", desdeBr);
+    const conhecidos = new Map((lidos ?? []).filter((r) => r.followers_count != null).map((r) => [r.date as string, Number(r.followers_count)]));
+    const totalHoje = conhecidos.get(hojeBr);
+    if (totalHoje == null) return [];
+    const faltando = Array.from({ length: 28 }, (_, i) => new Date(Date.now() - (i + 1) * 86400 * 1000 - 3 * 3600 * 1000).toISOString().slice(0, 10)).filter((d) => !conhecidos.has(d));
+    if (faltando.length < 5) return [];
+
+    // Início do dia atual na Califórnia, em segundos UTC.
+    const agora = Date.now();
+    const la = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(agora));
+    const [ya, ma, da] = la.split("-").map(Number);
+    const offs = (instante: number) => {
+      const t = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", timeZoneName: "shortOffset" }).formatToParts(new Date(instante)).find((p) => p.type === "timeZoneName")?.value ?? "GMT-8";
+      return -Number(/GMT([+-]\d+)/.exec(t)?.[1] ?? -8);
+    };
+    const meiaNoite = (ano: number, mes: number, dia: number) => Date.UTC(ano, mes - 1, dia) + offs(Date.UTC(ano, mes - 1, dia, 12)) * 3600_000;
+    const fimDoDia0 = meiaNoite(ya, ma, da) / 1000; // início de hoje (LA) = fim do dia de ontem
+
+    const saldo = async (de: number, ate: number): Promise<number> => {
+      const c = await graphGet(token, `${igAccountId}/insights`, { metric: "follows_and_unfollows", period: "day", metric_type: "total_value", breakdown: "follow_type", since: de, until: ate });
+      const r = c?.data?.[0]?.total_value?.breakdowns?.[0]?.results ?? [];
+      const seg = Number(r.find((x: any) => x.dimension_values?.[0] === "FOLLOWER")?.value ?? 0);
+      const per = Number(r.find((x: any) => x.dimension_values?.[0] === "NON_FOLLOWER")?.value ?? 0);
+      return seg - per;
+    };
+
+    const parcial = await saldo(fimDoDia0, Math.floor(agora / 1000));
+    const saldos: number[] = new Array(28).fill(0);
+    for (let k = 0; k < 28; k += 7) {
+      await Promise.all(
+        Array.from({ length: Math.min(7, 28 - k) }, (_, j) => k + j).map(async (i) => {
+          const ate = fimDoDia0 - i * 86400;
+          // Janela de UM dia exato: do início do dia até 1 segundo antes do fim. Com 24 h cheias a Meta devolve dois dias.
+          saldos[i] = await saldo(ate - 86400, ate - 1).catch(() => 0);
+        }),
+      );
+    }
+    // total ao fim do dia i = total ao fim do dia i-1 (mais recente) menos o saldo do dia i-1 ... partindo de hoje menos o saldo parcial.
+    let total = totalHoje - parcial;
+    const linhas: { instagram_account_id: string; client_id: string; date: string; followers_count: number }[] = [];
+    for (let i = 0; i < 28; i++) {
+      const diaLA = new Date(meiaNoite(ya, ma, da) - (i + 1) * 86400_000 + 12 * 3600_000);
+      const data = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(diaLA);
+      if (!conhecidos.has(data) && data < hojeBr) linhas.push({ instagram_account_id: accountId, client_id: clientId, date: data, followers_count: Math.round(total) });
+      total -= saldos[i];
+    }
+    if (linhas.length === 0) return [];
+    // Linhas só com a coluna do total: o upsert não toca nas outras métricas do dia.
+    const { error } = await supabase.from("instagram_account_daily_metrics").upsert(linhas as never, { onConflict: "instagram_account_id,date" });
+    return error ? [`seguidores (histórico): ${error.message}`] : [];
+  } catch (e) {
+    return [`seguidores (histórico): ${e instanceof Error ? e.message : String(e)}`];
+  }
+}
+
 async function classifyMissingTemas(
   supabase: SupabaseClient<Database>,
   accountId: string,
@@ -438,6 +541,8 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
     });
 
     const errosSeguidores = await gravarSeguidoresDeHoje(supabase, account.windsor_account_id, account.id, account.client_id, tokenDaConta);
+    errosSeguidores.push(...(await reconstruirSeguidores(supabase, account.windsor_account_id, account.id, account.client_id, tokenDaConta)));
+    errosSeguidores.push(...(await guardarStories(supabase, account.windsor_account_id, account.id, account.client_id, tokenDaConta)));
 
     // Tema, funil e estágio por IA para o que as regras não cobrem (só roda com ANTHROPIC_API_KEY).
     const ia = await classificarConteudoComIA(supabase, account.id).catch((err) => ({

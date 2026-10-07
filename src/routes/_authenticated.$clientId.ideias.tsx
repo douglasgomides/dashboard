@@ -5,6 +5,8 @@ import { getClientFontes, getPatientQuestionsPeriodo, getPostsForAnalytics } fro
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { buildIdeias, ideiaParaTexto, montarPlano7Dias, type Ideia } from "@/lib/hub-conteudo";
 import { limparTexto } from "@/lib/hub-relatorio";
+import { padroesDoTop, topN } from "@/lib/top-conteudo";
+import { horasDosPosts } from "@/lib/horarios";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 
 export const Route = createFileRoute("/_authenticated/$clientId/ideias")({
@@ -54,8 +56,8 @@ function IdeiaCard({ i }: { i: Ideia }) {
 
 
 // Plano da semana montado só com as ideias da lista, para copiar e colar na agenda da equipe.
-function PlanoDaSemana({ ideias }: { ideias: Ideia[] }) {
-  const texto = useMemo(() => limparTexto(montarPlano7Dias(ideias)), [ideias]);
+function PlanoDaSemana({ ideias, hora }: { ideias: Ideia[]; hora: number | null }) {
+  const texto = useMemo(() => limparTexto(montarPlano7Dias(ideias, hora)), [ideias, hora]);
   const [ok, setOk] = useState(false);
   if (!texto) return null;
   async function copiar() {
@@ -105,6 +107,14 @@ function IdeiasPage() {
     [posts.data, perguntas.data],
   );
 
+  // O que o melhor conteúdo do período tem em comum, e a hora em que os posts renderam mais (para o plano da semana).
+  const melhores = useMemo(() => {
+    const todos = posts.data ?? [];
+    const top = topN(todos, "post", "saved", 20).concat(topN(todos, "reel", "saved", 20)).sort((x, y) => y.v - x.v).slice(0, 20);
+    return padroesDoTop(top.map((x) => x.p), todos);
+  }, [posts.data]);
+  const horaSugerida = useMemo(() => horasDosPosts(posts.data ?? [])[0]?.hora ?? null, [posts.data]);
+
   const head = (
     <div className="hpagehead">
       <h2>Ideias{res && res.ideias.length > 0 ? ` (${res.ideias.length})` : ""}</h2>
@@ -123,6 +133,17 @@ function IdeiasPage() {
   return (
     <div>
       {head}
+      {melhores.frases.length > 0 && (
+        <div className="card" style={{ marginBottom: 16, background: "var(--accent-soft)" }}>
+          <h2>O que o seu melhor conteúdo tem em comum</h2>
+          <p className="sub">Os 20 posts e Reels que mais salvaram no período, comparados com todos os outros. Padrão para testar, não regra.</p>
+          <ul style={{ margin: "8px 0 0", paddingLeft: 18, display: "grid", gap: 6, fontSize: 13.5 }}>
+            {melhores.frases.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <p className="sub-top">
         <span>{res.totalPosts} posts no período</span>
         <span>{res.totalPerguntas} perguntas de pacientes nos comentários</span>
@@ -145,7 +166,7 @@ function IdeiasPage() {
               <IdeiaCard key={i.id} i={i} />
             ))}
           </div>
-          <PlanoDaSemana ideias={res.ideias} />
+          <PlanoDaSemana ideias={res.ideias} hora={horaSugerida} />
           {res.faltas.length > 0 && (
             <div className="card" style={{ marginTop: 16 }}>
               <h2>Regras sem ideia neste período</h2>

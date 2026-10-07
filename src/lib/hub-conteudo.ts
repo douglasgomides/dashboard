@@ -462,7 +462,7 @@ const DIAS_SEMANA = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"
 // Distribui as ideias da lista em dias de publicação (segunda, terça, quarta, quinta e sexta), com os
 // outros dias para responder comentários e mensagens. Só usa o que a lista já traz: sem ideia nova,
 // sem número inventado. Ideias vindas de dúvidas de pacientes vêm primeiro.
-export function montarPlano7Dias(ideias: Ideia[]): string {
+export function montarPlano7Dias(ideias: Ideia[], horaSugerida?: number | null): string {
   if (ideias.length === 0) return "";
   const ordem = [...ideias].sort((a, b) => Number(b.regra === "pergunta") - Number(a.regra === "pergunta"));
   const dias = [0, 1, 2, 3, 4];
@@ -471,7 +471,7 @@ export function montarPlano7Dias(ideias: Ideia[]): string {
     if (k < 0) return `${dia}: sem publicação nova. Responder comentários e mensagens que chegaram na semana.`;
     const ideia = ordem[k];
     if (!ideia) return `${dia}: espaço livre. Reaproveitar o post de melhor resultado do período em outro formato.`;
-    return `${dia}: ${ideia.formato}. ${ideia.acao}`;
+    return `${dia}${horaSugerida != null ? `, por volta das ${horaSugerida}h` : ""}: ${ideia.formato}. ${ideia.acao}`;
   });
   return ["Plano de conteúdo da semana", ...linhas].join("\n");
 }

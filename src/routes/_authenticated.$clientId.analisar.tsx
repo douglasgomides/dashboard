@@ -300,7 +300,7 @@ function AnalisarPage() {
       {etapasKpi.error ? (
         <div className="card" style={{ marginBottom: 16 }}>
           <h2>Cards do Comercial</h2>
-          <p className="note">
+          <p className="note txt">
             A marcação de quais etapas contam como consulta agendada e em atendimento ainda não está disponível neste banco:
             falta aplicar a migração <code>20261002150000_crm_etapa_kpi.sql</code>. Até lá, esses dois números aparecem como
             "a configurar" no Comercial.
