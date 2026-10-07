@@ -16,6 +16,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
 import { numOrNull, chunk, BATCH_SIZE, normalizeFormat } from "./instagram-sync.js";
 import { classifyTema } from "./tema-classifier.js";
+import { classificarConteudoComIA } from "./conteudo-ia.js";
 
 const GRAPH_BASE = "https://graph.facebook.com/v21.0";
 const INSIGHTS_METRICS = "reach,likes,comments,shares,saved,views,total_interactions";
@@ -217,6 +218,33 @@ async function syncAccountPosts(
   return { count, errors, nextCursor, done };
 }
 
+
+// Total de seguidores de hoje, direto da Graph, gravado na linha do dia (só essa coluna, o resto da linha fica).
+// A Graph só informa o valor atual, então o histórico nasce a partir daqui, um ponto por dia.
+async function gravarSeguidoresDeHoje(
+  supabase: SupabaseClient<Database>,
+  igAccountId: string,
+  accountId: string,
+  clientId: string,
+  token: string,
+): Promise<string[]> {
+  try {
+    const r = await fetch(`${GRAPH_BASE}/${igAccountId}?fields=followers_count&access_token=${token}`, { signal: AbortSignal.timeout(15000) });
+    if (!r.ok) return [`seguidores: Graph respondeu ${r.status}`];
+    const j = (await r.json()) as { followers_count?: number };
+    if (typeof j.followers_count !== "number") return [];
+    const hoje = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); // dia em Brasília
+    const { error } = await supabase
+      .from("instagram_account_daily_metrics")
+      .upsert({ instagram_account_id: accountId, client_id: clientId, date: hoje, followers_count: j.followers_count } as never, {
+        onConflict: "instagram_account_id,date",
+      });
+    return error ? [`seguidores: ${error.message}`] : [];
+  } catch (e) {
+    return [`seguidores: ${e instanceof Error ? e.message : String(e)}`];
+  }
+}
+
 async function classifyMissingTemas(
   supabase: SupabaseClient<Database>,
   accountId: string,
@@ -409,15 +437,24 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
       return { count: 0, errors: [] };
     });
 
+    const errosSeguidores = await gravarSeguidoresDeHoje(supabase, account.windsor_account_id, account.id, account.client_id, tokenDaConta);
+
+    // Tema, funil e estágio por IA para o que as regras não cobrem (só roda com ANTHROPIC_API_KEY).
+    const ia = await classificarConteudoComIA(supabase, account.id).catch((err) => ({
+      count: 0,
+      errors: [`conteudo-ia: ${err instanceof Error ? err.message : String(err)}`],
+      pulado: undefined as string | undefined,
+    }));
+
     results.push({
       accountId: account.id,
       clientId: account.client_id,
       igAccountId: account.windsor_account_id,
       posts: posts.count,
-      temasClassified: temas.count,
+      temasClassified: temas.count + ia.count,
       nextCursor: posts.nextCursor,
       done: posts.done,
-      errors: [...errors, ...posts.errors, ...temas.errors],
+      errors: [...errors, ...posts.errors, ...temas.errors, ...ia.errors, ...errosSeguidores],
     });
   }
   return results;

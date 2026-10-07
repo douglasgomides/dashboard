@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -27,6 +28,54 @@ function resultadoAtual(e: EtapaParaAnalise): Resultado {
   if (e.ganhos >= e.perdidos && e.ganhos >= e.abertos && e.ganhos > 0) return "won";
   if (e.perdidos > e.abertos && e.perdidos > 0) return "lost";
   return "open";
+}
+
+
+// Confirma de uma vez todas as etapas com cards que ainda estão "a confirmar", do jeito que o dashboard
+// já mostra (o que a equipe confirmou, senão o palpite pelo nome). Dois cliques: o primeiro só avisa.
+function ConfirmarEmLote({
+  pendentes,
+  confirmar,
+}: {
+  pendentes: EtapaParaAnalise[];
+  confirmar: (e: EtapaParaAnalise) => Promise<unknown>;
+}) {
+  const [passo, setPasso] = useState<"parado" | "pedindo" | "gravando" | "feito">("parado");
+  const [falha, setFalha] = useState<string | null>(null);
+  if (pendentes.length === 0) return null;
+  async function rodar() {
+    setPasso("gravando");
+    setFalha(null);
+    try {
+      for (const e of pendentes) await confirmar(e);
+      setPasso("feito");
+    } catch (err) {
+      setFalha(err instanceof Error ? err.message : "erro desconhecido");
+      setPasso("parado");
+    }
+  }
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, margin: "10px 0 0" }}>
+      {passo === "pedindo" ? (
+        <>
+          <span style={{ fontSize: 12.5 }}>
+            Confirmar {pendentes.length} etapa{pendentes.length === 1 ? "" : "s"} como estão na coluna "Significa"?
+          </span>
+          <button type="button" className="btn" onClick={rodar}>
+            Sim, confirmar
+          </button>
+          <button type="button" className="btn" onClick={() => setPasso("parado")}>
+            Cancelar
+          </button>
+        </>
+      ) : (
+        <button type="button" className="btn" disabled={passo === "gravando"} onClick={() => setPasso("pedindo")}>
+          {passo === "gravando" ? "Confirmando…" : `Confirmar as ${pendentes.length} etapas pendentes como estão`}
+        </button>
+      )}
+      {falha && <span style={{ fontSize: 12.5, color: "var(--danger)" }}>Não consegui confirmar: {falha}</span>}
+    </div>
+  );
 }
 
 function AnalisarPage() {
@@ -158,6 +207,17 @@ function AnalisarPage() {
             <p className="sub">
               Para cada etapa, diga o que significa. Ao mudar, os cards da etapa são atualizados na hora.
             </p>
+            <ConfirmarEmLote
+              pendentes={grupo.filter((g) => g.total > 0 && !g.confirmado)}
+              confirmar={(e) =>
+                salvar.mutateAsync({
+                  connectionId: e.connection_id,
+                  pipelineId: e.pipeline_id,
+                  statusId: e.status_id,
+                  outcome: resultadoAtual(e),
+                })
+              }
+            />
             <div style={{ overflowX: "auto", marginTop: 10 }}>
               <table className="t">
                 <thead>
@@ -237,7 +297,18 @@ function AnalisarPage() {
         );
       })}
 
-      {kpis.length > 0 && <SecaoKpi etapas={kpis} salvar={salvarKpi} />}
+      {etapasKpi.error ? (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h2>Cards do Comercial</h2>
+          <p className="note">
+            A marcação de quais etapas contam como consulta agendada e em atendimento ainda não está disponível neste banco:
+            falta aplicar a migração <code>20261002150000_crm_etapa_kpi.sql</code>. Até lá, esses dois números aparecem como
+            "a configurar" no Comercial.
+          </p>
+        </div>
+      ) : (
+        kpis.length > 0 && <SecaoKpi etapas={kpis} salvar={salvarKpi} />
+      )}
     </div>
   );
 }

@@ -61,6 +61,7 @@ function RelatorioPage() {
   const loading = queries.some((q) => q.isLoading);
   const erro = queries.some((q) => q.error);
 
+  const [excluidos, setExcluidos] = useState<string[]>([]);
   const gerado = useMemo(() => {
     if (loading || erro || !client.data || !f) return null;
     return buildRelatorio({
@@ -74,8 +75,9 @@ function RelatorioPage() {
       perguntas: perguntas.data ?? [],
       ads: ads.data ?? null,
       wts: wts.data ?? null,
+      excluir: excluidos,
     });
-  }, [loading, erro, client.data, f, periodLabel, start, end, metrics.data, posts.data, perguntas.data, ads.data, wts.data]);
+  }, [loading, erro, client.data, f, periodLabel, start, end, metrics.data, posts.data, perguntas.data, ads.data, wts.data, excluidos]);
 
   // Texto editável: regenera quando muda o período/dados (a edição manual vale
   // até a próxima troca de período ou clique em "Refazer texto").
@@ -135,6 +137,24 @@ function RelatorioPage() {
         <div className="card" style={{ marginBottom: 16, borderColor: "var(--warn)" }}>
           <h2>Não incluído por falta de dado</h2>
           <p className="sub">{gerado.omitidos.join("; ")}.</p>
+        </div>
+      )}
+      {gerado.blocos.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h2>O que entra no texto</h2>
+          <p className="sub">Desmarque o que não faz sentido enviar a este cliente. Trocar a seleção refaz o texto (a edição manual é perdida).</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginTop: 8 }}>
+            {gerado.blocos.map((b) => (
+              <label key={b.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, minHeight: 28 }}>
+                <input
+                  type="checkbox"
+                  checked={!excluidos.includes(b.id)}
+                  onChange={(ev) => setExcluidos((cur) => (ev.target.checked ? cur.filter((x) => x !== b.id) : [...cur, b.id]))}
+                />
+                {b.rotulo}
+              </label>
+            ))}
+          </div>
         </div>
       )}
       {!gerado.texto ? (

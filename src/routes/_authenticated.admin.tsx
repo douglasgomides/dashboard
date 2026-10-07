@@ -24,6 +24,14 @@ function AdminLayout() {
           <h1 className="text-xl font-semibold">
             <Link to="/admin">Visão geral dos clientes</Link>
           </h1>
+          <nav className="mt-1 flex gap-4 text-sm" style={{ color: "var(--text-dim)" }}>
+            <Link to="/admin" activeOptions={{ exact: true }} activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
+              Saúde das fontes
+            </Link>
+            <Link to="/admin/referencia" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
+              Referência entre clientes
+            </Link>
+          </nav>
         </div>
         <LogoutButton />
       </header>

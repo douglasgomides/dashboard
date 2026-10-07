@@ -14,11 +14,15 @@ export interface RelatorioInput {
   perguntas: any[];
   ads: any | null;
   wts: any | null;
+  // Blocos que a pessoa desmarcou (ids de RelatorioResult.blocos): ficam fora do texto.
+  excluir?: string[];
 }
 
 export interface RelatorioResult {
   texto: string;
   omitidos: string[];
+  // Blocos que têm dado neste período, para a pessoa escolher quais entram no texto.
+  blocos: { id: string; rotulo: string }[];
 }
 
 const num = (v: unknown) => {
@@ -49,7 +53,8 @@ function primeiroNome(nome: string) {
 
 export function buildRelatorio(inp: RelatorioInput): RelatorioResult {
   const omitidos: string[] = [];
-  const blocos: string[] = [];
+  const blocos: { id: string; rotulo: string; texto: string }[] = [];
+  const bloco = (id: string, rotulo: string, texto: string) => blocos.push({ id, rotulo, texto });
   const temIg = inp.fontes?.tem_instagram ?? true;
 
   // Alcance
@@ -60,7 +65,7 @@ export function buildRelatorio(inp: RelatorioInput): RelatorioResult {
     omitidos.push("alcance (nenhum dia com alcance coletado no período)");
   } else {
     const total = comAlcance.reduce((a, m) => a + num(m.reach), 0);
-    blocos.push(`Alcance: somando o alcance de cada dia, seu conteúdo teve ${fmtN(total)} de alcance em ${comAlcance.length} dias com coleta (a mesma pessoa pode ter sido contada em mais de um dia).`);
+    bloco("alcance", "Alcance", `Alcance: somando o alcance de cada dia, seu conteúdo teve ${fmtN(total)} de alcance em ${comAlcance.length} dias com coleta (a mesma pessoa pode ter sido contada em mais de um dia).`);
   }
 
   // Seguidores
@@ -72,7 +77,9 @@ export function buildRelatorio(inp: RelatorioInput): RelatorioResult {
       const ate = f.points[f.points.length - 1];
       const de = f.points[0];
       const sinal = f.delta >= 0 ? `ganhou ${fmtN(f.delta)}` : `perdeu ${fmtN(Math.abs(f.delta))}`;
-      blocos.push(
+      bloco(
+        "seguidores",
+        "Seguidores",
         `Seguidores: o perfil ${sinal} seguidores entre ${de.date.split("-").reverse().slice(0, 2).join("/")} e ${ate.date.split("-").reverse().slice(0, 2).join("/")} e está com ${fmtN(ate.followers)}.`,
       );
     }
@@ -87,7 +94,9 @@ export function buildRelatorio(inp: RelatorioInput): RelatorioResult {
       const legenda = String(cand.caption ?? "").split("\n")[0].trim();
       const trecho = legenda ? ` "${legenda.length > 80 ? legenda.slice(0, 77) + "..." : legenda}"` : "";
       const salvos = cand.saved != null ? `, com ${fmtN(num(cand.saved))} salvamentos` : "";
-      blocos.push(
+      bloco(
+        "post",
+        "Post destaque",
         `Post destaque:${trecho} (${cand.format ? fmtFormatKey(cand.format) : "post"}) alcançou ${fmtN(num(cand.reach))} contas${salvos}.${cand.permalink ? ` ${cand.permalink}` : ""}`,
       );
     }
@@ -106,7 +115,7 @@ export function buildRelatorio(inp: RelatorioInput): RelatorioResult {
     } else {
       t += ", sem conversas registradas nos anúncios";
     }
-    blocos.push(t + ".");
+    bloco("anuncios", "Anúncios", t + ".");
   }
 
   // Atendimento
@@ -119,7 +128,7 @@ export function buildRelatorio(inp: RelatorioInput): RelatorioResult {
     if (inp.wts.espera_mediana_seg != null && num(inp.wts.espera_cobertura) > 0) {
       t += `. A mediana do tempo até a primeira resposta foi de ${duracao(num(inp.wts.espera_mediana_seg))}`;
     }
-    blocos.push(t + ".");
+    bloco("atendimento", "Atendimento", t + ".");
   }
 
   // Ações recomendadas (regras de ideias)
@@ -132,14 +141,15 @@ export function buildRelatorio(inp: RelatorioInput): RelatorioResult {
     omitidos.push("ações recomendadas (dependem do Instagram)");
   }
   if (acoes.length > 0) {
-    blocos.push("Próximas ações recomendadas:\n" + acoes.map((a, i) => `${i + 1}. ${a.acao} Por quê: ${a.porque}`).join("\n"));
+    bloco("acoes", "Próximas ações recomendadas", "Próximas ações recomendadas:\n" + acoes.map((a, i) => `${i + 1}. ${a.acao} Por quê: ${a.porque}`).join("\n"));
   }
 
+  const usados = blocos.filter((b) => !(inp.excluir ?? []).includes(b.id));
   let texto: string;
-  if (blocos.length === 0) {
+  if (usados.length === 0) {
     texto = "";
   } else {
-    texto = `Olá, ${primeiroNome(inp.clientName)}! Segue o resumo do período de ${inp.periodLabel}.\n\n${blocos.join("\n\n")}\n\nQualquer dúvida, estamos à disposição.`;
+    texto = `Olá, ${primeiroNome(inp.clientName)}! Segue o resumo do período de ${inp.periodLabel}.\n\n${usados.map((b) => b.texto).join("\n\n")}\n\nQualquer dúvida, estamos à disposição.`;
   }
-  return { texto: limparTexto(texto), omitidos };
+  return { texto: limparTexto(texto), omitidos, blocos: blocos.map(({ id, rotulo }) => ({ id, rotulo })) };
 }

@@ -22,7 +22,7 @@ function TabelaGrupo({ titulo, sub, rows, col }: { titulo: string; sub: string; 
       <h2>{titulo}</h2>
       <p className="sub">{sub}</p>
       {rows.length === 0 ? (
-        <p className="note">Nenhum post do período tem {col.toLowerCase()} informado.</p>
+        <p className="note">Nenhum post do período tem {col.toLowerCase()} informado. A equipe pode classificar na aba Posts; quando a classificação por IA estiver ligada no servidor, ela preenche isso nas próximas atualizações.</p>
       ) : (
         <div style={{ overflowX: "auto", marginTop: 10 }}>
           <table className="t">

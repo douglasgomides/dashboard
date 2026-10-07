@@ -3,7 +3,8 @@ import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getClientFontes, getPatientQuestionsPeriodo, getPostsForAnalytics } from "@/lib/client-data";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
-import { buildIdeias, ideiaParaTexto, type Ideia } from "@/lib/hub-conteudo";
+import { buildIdeias, ideiaParaTexto, montarPlano7Dias, type Ideia } from "@/lib/hub-conteudo";
+import { limparTexto } from "@/lib/hub-relatorio";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 
 export const Route = createFileRoute("/_authenticated/$clientId/ideias")({
@@ -47,6 +48,35 @@ function IdeiaCard({ i }: { i: Ideia }) {
       <p className="note" style={{ marginTop: 0 }}>
         <b>Por quê:</b>&nbsp;{i.porque}
       </p>
+    </div>
+  );
+}
+
+
+// Plano da semana montado só com as ideias da lista, para copiar e colar na agenda da equipe.
+function PlanoDaSemana({ ideias }: { ideias: Ideia[] }) {
+  const texto = useMemo(() => limparTexto(montarPlano7Dias(ideias)), [ideias]);
+  const [ok, setOk] = useState(false);
+  if (!texto) return null;
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setOk(true);
+      setTimeout(() => setOk(false), 2000);
+    } catch {
+      window.prompt("Copie o plano:", texto);
+    }
+  }
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+        <h2>Plano de 7 dias</h2>
+        <button type="button" className="btn" onClick={copiar}>
+          {ok ? "Copiado" : "Copiar plano"}
+        </button>
+      </div>
+      <p className="sub">Monta a semana com as ideias acima. Dúvidas de pacientes entram primeiro.</p>
+      <pre style={{ whiteSpace: "pre-wrap", font: "inherit", lineHeight: 1.55, marginTop: 8, fontSize: 13 }}>{texto}</pre>
     </div>
   );
 }
@@ -115,6 +145,7 @@ function IdeiasPage() {
               <IdeiaCard key={i.id} i={i} />
             ))}
           </div>
+          <PlanoDaSemana ideias={res.ideias} />
           {res.faltas.length > 0 && (
             <div className="card" style={{ marginTop: 16 }}>
               <h2>Regras sem ideia neste período</h2>

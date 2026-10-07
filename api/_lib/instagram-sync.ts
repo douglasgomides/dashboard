@@ -353,14 +353,25 @@ async function syncDailyMetrics(
     profile_links_taps: campos.profile_links_taps ?? null,
   }));
 
+  // A Windsor só informa o total de seguidores do dia ATUAL; nos dias anteriores a linha chega sem ele.
+  // Gravar followers_count: null por cima apagava, a cada rodada, o total que o dia anterior tinha gravado,
+  // e a série de seguidores nunca passava de 1 dia ("1 de 90 dias com contagem"). Por isso as linhas sem o
+  // total vão sem a coluna: o upsert não a atualiza e o valor já gravado fica.
+  const comSeguidores = dailyRows.filter((r) => r.followers_count != null);
+  const semSeguidores = dailyRows
+    .filter((r) => r.followers_count == null)
+    .map(({ followers_count: _descartado, ...resto }) => resto);
+
   const errors: string[] = [];
   let count = 0;
-  for (const batch of chunk(dailyRows, BATCH_SIZE)) {
-    const { error } = await supabase
-      .from("instagram_account_daily_metrics")
-      .upsert(batch, { onConflict: "instagram_account_id,date" });
-    if (error) errors.push(`daily batch (${batch.length}): ${error.message}`);
-    else count += batch.length;
+  for (const grupo of [comSeguidores, semSeguidores] as Record<string, unknown>[][]) {
+    for (const batch of chunk(grupo, BATCH_SIZE)) {
+      const { error } = await supabase
+        .from("instagram_account_daily_metrics")
+        .upsert(batch as never, { onConflict: "instagram_account_id,date" });
+      if (error) errors.push(`daily batch (${batch.length}): ${error.message}`);
+      else count += batch.length;
+    }
   }
   return { count, errors };
 }
