@@ -42,7 +42,9 @@ const ERRO_TRANSITORIO_DA_META = /temporarily unavailable|"code":\s*(1|2)\b|resp
 export async function diagnosticarContaAnuncios(contaId: string, token: string, erroInsights?: string): Promise<MotivoAnuncios | null> {
   const conta = contaId.startsWith("act_") ? contaId : `act_${contaId}`;
 
-  const c = await g<{ account_status?: number; disable_reason?: number }>(conta, token, { fields: "account_status,disable_reason" });
+  const c = await g<{ account_status?: number; disable_reason?: number; funding_source?: string; funding_source_details?: { display_string?: string } }>(conta, token, {
+    fields: "account_status,disable_reason,funding_source,funding_source_details{display_string}",
+  });
   if (!c.ok) {
     // 190/200/10 e família: token vencido, revogado ou sem permissão — é acesso, não instabilidade.
     if (c.codigo === 190 || c.codigo === 200 || c.codigo === 10 || c.status === 401 || c.status === 403) {
@@ -87,6 +89,21 @@ export async function diagnosticarContaAnuncios(contaId: string, token: string, 
   }
   const ativas = st.filter((s) => s === "ACTIVE").length;
   if (ativas > 0) {
+    // Sem nenhuma forma de pagamento ligada à conta, nada é entregue.
+    if (c.corpo.funding_source === undefined && c.corpo.funding_source_details === undefined) {
+      /* campo não veio (permissão): não conclui nada */
+    } else if (!c.corpo.funding_source && !c.corpo.funding_source_details?.display_string) {
+      return { texto: `A conta de anúncios está sem forma de pagamento cadastrada. ${ACAO_PAGAMENTO}`, dono: "cliente" };
+    }
+    // Problemas apontados pela Meta em campanhas e anúncios (além dos conjuntos): o erro de pagamento costuma aparecer aí.
+    const [campIss, adIss] = await Promise.all([
+      g<{ data?: { issues_info?: { error_summary?: string; error_message?: string }[] }[] }>(`${conta}/campaigns`, token, { fields: "issues_info", effective_status: JSON.stringify(["ACTIVE", "WITH_ISSUES"]), limit: "100" }),
+      g<{ data?: { issues_info?: { error_summary?: string; error_message?: string }[] }[] }>(`${conta}/ads`, token, { fields: "issues_info", effective_status: JSON.stringify(["ACTIVE", "WITH_ISSUES"]), limit: "100" }),
+    ]);
+    const textos = [campIss, adIss].flatMap((x) => (x.ok ? (x.corpo.data ?? []) : [])).flatMap((a) => (a.issues_info ?? []).map((i) => (i.error_summary || i.error_message || "").trim())).filter(Boolean);
+    if (textos.some((t) => PARECE_PAGAMENTO.test(t))) {
+      return { texto: `${ativas} campanha${ativas === 1 ? "" : "s"} ligada${ativas === 1 ? "" : "s"}, mas a Meta parou a entrega por erro de pagamento. ${ACAO_PAGAMENTO}`, dono: "cliente" };
+    }
     // Campanha ligada e sem entrega: a própria Meta diz o problema nos conjuntos de anúncios (issues_info).
     const conj = await g<{ data?: { issues_info?: { error_summary?: string; error_message?: string }[] }[] }>(`${conta}/adsets`, token, {
       fields: "effective_status,issues_info",
@@ -98,8 +115,8 @@ export async function diagnosticarContaAnuncios(contaId: string, token: string, 
       if (resumos.some((t) => PARECE_PAGAMENTO.test(t))) {
         return { texto: `${ativas} campanha${ativas === 1 ? "" : "s"} ligada${ativas === 1 ? "" : "s"}, mas a Meta parou a entrega por erro de pagamento. ${ACAO_PAGAMENTO}`, dono: "cliente" };
       }
-      if (resumos.length > 0) {
-        const unico = [...new Set(resumos)].slice(0, 2).join("; ").slice(0, 160);
+      if (resumos.length > 0 || textos.length > 0) {
+        const unico = [...new Set([...resumos, ...textos])].slice(0, 2).join("; ").slice(0, 160);
         return { texto: `${ativas} campanha${ativas === 1 ? "" : "s"} ligada${ativas === 1 ? "" : "s"}, mas sem entrega. A Meta informa: ${unico}.`, dono: "cliente" };
       }
     }
