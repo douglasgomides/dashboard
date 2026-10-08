@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Route as RouteIcon, Search } from "lucide-react";
@@ -31,7 +31,7 @@ function Etapa({ n, rotulo, base }: { n: number; rotulo: string; base: number })
   );
 }
 
-function Tabela({ cab, linhas }: { cab: string[]; linhas: (string | number | JSX.Element)[][] }) {
+function Tabela({ cab, linhas }: { cab: string[]; linhas: (string | number | ReactNode)[][] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
