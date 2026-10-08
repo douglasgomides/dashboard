@@ -5,7 +5,7 @@ import { createAdminUser, createClient, listAllClients } from "@/lib/admin-data"
 import { ClientAvatar } from "@/components/client-avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { getClientFontes } from "@/lib/client-data";
-import { statusDoCliente, tomDaFonte, ddmm, type LinhaFonte } from "@/lib/saude-fontes";
+import { statusDoCliente, tomDaFonte, ddmm, diasDeAtraso, type LinhaFonte } from "@/lib/saude-fontes";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminClientsPage,
@@ -257,13 +257,22 @@ function AdminClientsPage() {
     })),
   });
   const paradas: string[] = [];
+  // Dado em dia, mas a última tentativa de atualizar deu erro: não é "parada", é um erro a olhar.
+  const comErro: string[] = [];
   (clients ?? []).forEach((c, i) => {
     const s = saudes[i]?.data;
     if (!s) return;
     for (const l of s.linhas) {
       const flag = FLAG_FONTE[l.fonte];
       if (!flag || !s.fontes?.[flag]) continue;
-      if (tomDaFonte(l) === "ruim") paradas.push(`${c.name}: ${ROTULO_FONTE[l.fonte]} ${l.data_ate ? `até ${ddmm(l.data_ate)}` : "com erro"}`);
+      if (tomDaFonte(l) !== "ruim") continue;
+      const velho = l.data_ate ? diasDeAtraso(l.data_ate) > 3 : false;
+      if (velho || (!l.data_ate && !l.last_error)) {
+        paradas.push(`${c.name}: ${ROTULO_FONTE[l.fonte]} ${l.data_ate ? `até ${ddmm(l.data_ate)}` : "sem dado"}`);
+      } else {
+        const erro = (l.last_error ?? "").replace(/\s+/g, " ").slice(0, 90);
+        comErro.push(`${c.name}: ${ROTULO_FONTE[l.fonte]}${l.data_ate ? ` (dado até ${ddmm(l.data_ate)})` : ""}, erro na última atualização: ${erro}`);
+      }
     }
   });
   const carregandoSaude = saudes.some((q) => q.isLoading);
@@ -273,23 +282,39 @@ function AdminClientsPage() {
       {!carregandoSaude && (
         <div
           className="mb-3 rounded-xl border p-3 text-sm"
-          style={{ borderColor: paradas.length ? "var(--danger)" : "var(--border)", background: "var(--surface)" }}
+          style={{ borderColor: paradas.length || comErro.length ? "var(--danger)" : "var(--border)", background: "var(--surface)" }}
         >
-          {paradas.length === 0 ? (
+          {paradas.length === 0 && comErro.length === 0 ? (
             <span style={{ color: "var(--good)", fontWeight: 600 }}>Todas as fontes ligadas estão com dado de até 3 dias atrás.</span>
           ) : (
             <>
-              <strong style={{ color: "var(--danger)" }}>
-                {paradas.length} fonte{paradas.length === 1 ? "" : "s"} parada{paradas.length === 1 ? "" : "s"} há mais de 3 dias
-              </strong>
-              <ul className="mt-1 list-disc pl-5" style={{ color: "var(--text-dim)" }}>
-                {paradas.map((p) => (
-                  <li key={p}>{p}</li>
-                ))}
-              </ul>
-              <p className="mt-1 text-xs" style={{ color: "var(--text-faint)" }}>
-                Anúncio parado muitas vezes é campanha pausada ou pagamento pendente, e não falha de sincronização.
-              </p>
+              {paradas.length > 0 && (
+                <>
+                  <strong style={{ color: "var(--danger)" }}>
+                    {paradas.length} fonte{paradas.length === 1 ? "" : "s"} sem dado novo há mais de 3 dias
+                  </strong>
+                  <ul className="mt-1 list-disc pl-5" style={{ color: "var(--text-dim)" }}>
+                    {paradas.map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-1 text-xs" style={{ color: "var(--text-faint)" }}>
+                    Anúncio parado muitas vezes é campanha pausada ou pagamento pendente, e não falha de sincronização.
+                  </p>
+                </>
+              )}
+              {comErro.length > 0 && (
+                <div className={paradas.length > 0 ? "mt-3" : ""}>
+                  <strong style={{ color: "var(--warn-text, var(--text))" }}>
+                    {comErro.length} fonte{comErro.length === 1 ? "" : "s"} com dado em dia, mas com erro na última atualização
+                  </strong>
+                  <ul className="mt-1 list-disc pl-5" style={{ color: "var(--text-dim)" }}>
+                    {comErro.map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </>
           )}
         </div>
