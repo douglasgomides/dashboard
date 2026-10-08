@@ -45,6 +45,37 @@ export async function recordSyncStatus(
   } catch {
     /* registrar não pode quebrar o sync */
   }
+  await registrarMotivoInstagram(supabase, clientId, fonte, r);
+}
+
+// Instagram bloqueado pela Meta (token vencido, revogado ou ativo da BM perdido): o que está pendente não é
+// código nosso, é a equipe da cliente aprovar o novo token na Business Manager dela. Diz isso no painel.
+// Sucesso limpa o aviso. Outros erros não mexem aqui (o painel traduz o erro bruto).
+const BLOQUEIO_INSTAGRAM = /API access blocked|"code":\s*(190|200)\b|access token|session has expired|invalid oauth|error validating/i;
+async function registrarMotivoInstagram(
+  supabase: SupabaseClient<any, any, any>,
+  clientId: string,
+  fonte: FonteSync,
+  r: { ok: boolean; error?: string | null },
+): Promise<void> {
+  if (fonte !== "instagram") return;
+  try {
+    const bloqueado = !r.ok && !!r.error && BLOQUEIO_INSTAGRAM.test(r.error);
+    await supabase.from("sync_status").upsert(
+      {
+        client_id: clientId,
+        fonte,
+        motivo: bloqueado
+          ? "Aguardando a equipe da cliente aprovar, na Business Manager dela, a geração do novo token de acesso ao Instagram. Até lá os posts não atualizam (as métricas diárias da conta seguem normais). Não é falha de sincronização."
+          : null,
+        motivo_dono: bloqueado ? "cliente" : null,
+        motivo_em: new Date().toISOString(),
+      },
+      { onConflict: "client_id,fonte" },
+    );
+  } catch {
+    /* o aviso é um extra; a coluna pode não existir */
+  }
 }
 
 // Agrupa resultados por cliente e grava um registro por cliente x fonte:
