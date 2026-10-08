@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runWtsSync } from "../_lib/wts-sync.js";
+import { ingerirConversasWts } from "../_lib/conversas-wts.js";
 
 // Atendimento no WhatsApp via WTS Chat.
 // Roda para todo cliente ativo com wts_company_id preenchido.
@@ -61,8 +62,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       "atendimento",
       results.map((r) => ({ clientId: r.client_id, rows: r.sessoes, errors: r.errors })),
     );
+    // Conversas: depois do sync das sessões, traz as mensagens das novas (até ~100s). Nunca derruba o sync.
+    const conversas: Record<string, unknown> = {};
+    try {
+      const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+      const clientes = [...new Set(results.map((r) => r.client_id))];
+      for (const id of clientes) {
+        const c = await ingerirConversasWts(admin, WTS_API_TOKEN, id, { limite: 80, orcamentoMs: Math.floor(100_000 / Math.max(1, clientes.length)), dias: 7 });
+        conversas[id] = { sessoes: c.sessoes, mensagens: c.mensagens, erros: c.erros.slice(0, 3) };
+      }
+    } catch (e) {
+      conversas.erro = e instanceof Error ? e.message : String(e);
+    }
     const hasErrors = results.some((r) => r.errors.length > 0);
-    res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), contas: results });
+    res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), contas: results, conversas });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }

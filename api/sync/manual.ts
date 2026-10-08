@@ -12,6 +12,7 @@ import { runRdStationSync } from "../_lib/rdstation-sync.js";
 import { runFlwChatSync } from "../_lib/flwchat-sync.js";
 import { lerAudiencia } from "../_lib/meta-audiencia.js";
 import { classificarConteudoComIA } from "../_lib/conteudo-ia.js";
+import { ingerirConversasWts } from "../_lib/conversas-wts.js";
 import { criarLinkShort, cliquesDoLink, destinoWhatsApp, novoCodigoRef } from "../_lib/shortio.js";
 import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_lib/sync-status.js";
 
@@ -86,7 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas"];
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas"];
   if (!client_id || !alvo || !ALVOS.includes(alvo)) {
     res.status(400).json({ error: "Informe client_id e alvo ('tudo', 'posts', 'anuncios', 'atendimento', 'comentarios' ou 'crm')" });
     return;
@@ -471,6 +472,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const dados = await lerAudiencia({ igId: conta.windsor_account_id as string, token: tokenIg });
       memoria.set(client_id, { t: Date.now(), d: dados });
       res.status(200).json({ alvo, ok: true, dados });
+      return;
+    }
+
+    // ---- Conversas do WhatsApp (WTS): grava mensagens, pessoa e toque. Só admin: é dado de paciente. ----
+    if (alvo === "conversas") {
+      if (!ehAdmin) {
+        res.status(403).json({ error: "Só admin ingere conversas" });
+        return;
+      }
+      if (!WTS_API_TOKEN) {
+        res.status(200).json({ alvo, ok: false, erro: "Servidor sem WTS_API_TOKEN configurado" });
+        return;
+      }
+      const b = (req.body ?? {}) as { limite?: number; dias?: number };
+      const r = await ingerirConversasWts(admin, WTS_API_TOKEN, client_id as string, { limite: Math.min(Number(b.limite) || 120, 300), dias: b.dias, orcamentoMs: 200_000 });
+      res.status(r.erros.length ? 207 : 200).json({ alvo, ok: r.erros.length === 0, ...r, erros: r.erros.slice(0, 8) });
       return;
     }
 
