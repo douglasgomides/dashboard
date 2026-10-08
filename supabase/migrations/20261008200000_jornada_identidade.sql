@@ -166,7 +166,7 @@ returns table (
   ultima_msg_texto text, total_msgs bigint, lead_id uuid, codigo_ref text
 )
 language plpgsql
-stable
+volatile
 security definer
 set search_path = public
 as $$
@@ -196,7 +196,7 @@ $$;
 create or replace function public.ler_mensagens(p_conversa uuid)
 returns table (id uuid, direcao text, autor text, texto text, tipo text, enviada_em timestamptz)
 language plpgsql
-stable
+volatile
 security definer
 set search_path = public
 as $$
