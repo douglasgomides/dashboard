@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { MessageSquare, ShieldCheck } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Download, MessageSquare, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Painel, Selo } from "@/components/visual";
 
@@ -71,6 +71,39 @@ function ConversasPage() {
     },
   });
 
+  const qc = useQueryClient();
+  const [puxando, setPuxando] = useState<null | "mais" | "todas">(null);
+  const [status, setStatus] = useState<string>("");
+
+  // Cada chamada traz até 150 conversas novas; "todas" repete até não sobrar nenhuma.
+  async function puxar(modo: "mais" | "todas") {
+    setPuxando(modo);
+    setStatus("Buscando…");
+    let total = 0;
+    try {
+      const { data: sessao } = await supabase.auth.getSession();
+      const token = sessao.session?.access_token;
+      for (let rodada = 1; rodada <= 60; rodada++) {
+        const resp = await fetch("/api/sync/manual", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ client_id: clientId, alvo: "conversas", limite: 150 }),
+        });
+        const j = await resp.json().catch(() => null);
+        if (!resp.ok || !j) throw new Error(j?.error ?? `Falha (${resp.status})`);
+        total += j.sessoes ?? 0;
+        await qc.invalidateQueries({ queryKey: ["conversas", clientId] });
+        const falta = j.restantes ?? 0;
+        setStatus(falta > 0 ? `${total} conversas trazidas… faltam ${falta}` : `${total} conversas trazidas. Nada mais a buscar.`);
+        if (modo === "mais" || falta === 0 || (j.sessoes ?? 0) === 0) break;
+      }
+    } catch (e) {
+      setStatus(`Parou: ${(e as Error).message}. ${total} trazidas até aqui.`);
+    } finally {
+      setPuxando(null);
+    }
+  }
+
   const atual = lista.data?.find((c) => c.id === aberta);
 
   return (
@@ -82,7 +115,26 @@ function ConversasPage() {
         ajuda="Telefone aparece só com os 4 últimos dígitos. Cada abertura de conversa fica registrada (quem, quando)."
       >
         <div className="mb-3 flex items-center gap-2 text-xs" style={{ color: "var(--text-dim)" }}>
-          <ShieldCheck size={14} /> Acesso restrito e registrado.
+          <ShieldCheck size={14} /> Acesso restrito e registrado. Atualiza sozinho todo dia.
+        </div>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <button
+            disabled={!!puxando}
+            onClick={() => puxar("mais")}
+            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
+            style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+          >
+            <Download size={14} /> Puxar mais conversas
+          </button>
+          <button
+            disabled={!!puxando}
+            onClick={() => puxar("todas")}
+            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
+            style={{ borderColor: "var(--accent)", background: "var(--surface)" }}
+          >
+            <Download size={14} /> Puxar todas
+          </button>
+          {status && <span className="text-xs" style={{ color: "var(--text-dim)" }}>{status}</span>}
         </div>
         {lista.isLoading && <p className="text-sm">Carregando…</p>}
         {lista.error && <p className="text-sm" style={{ color: "var(--danger, #c0392b)" }}>{(lista.error as Error).message}</p>}
@@ -93,7 +145,7 @@ function ConversasPage() {
         )}
         <div className="grid gap-4 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
           <ul className="max-h-[70vh] min-w-0 space-y-1 overflow-y-auto pr-1">
-            {lista.data?.map((c) => (
+            {lista.data?.filter((c) => c.total_msgs > 0).map((c) => (
               <li key={c.id}>
                 <button
                   onClick={() => setAberta(c.id)}

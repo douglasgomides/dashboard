@@ -28,9 +28,9 @@ async function wtsGet(token: string, caminho: string): Promise<any> {
 
 export function direcaoDaMensagem(d: unknown): "entrada" | "saida" | "sistema" {
   const x = String(d ?? "").toLowerCase();
-  // WTS: TO_HUB = o paciente escreveu para a clínica; FROM_HUB = a clínica respondeu.
-  if (/to_hub|tohub/.test(x)) return "entrada";
-  if (/from_hub|fromhub/.test(x)) return "saida";
+  // WTS (conferido numa conversa real): FROM_HUB = veio do paciente; TO_HUB = a clínica/bot enviou ao paciente.
+  if (/from_hub|fromhub/.test(x)) return "entrada";
+  if (/to_hub|tohub/.test(x)) return "saida";
   if (/(out|send|sent|tocontact|to_contact|agent|user)/.test(x)) return "saida";
   if (/(^in|input|inbound|receiv|fromcontact|from_contact|contact)/.test(x)) return "entrada";
   return "sistema";
@@ -43,6 +43,7 @@ export type ResultadoConversas = {
   mensagens: number;
   pessoas: number;
   comCodigo: number;
+  restantes: number;
   erros: string[];
   valoresVistos: Record<string, Record<string, number>>;
 };
@@ -59,24 +60,31 @@ export async function ingerirConversasWts(
   let tokenAtivo = tokenPrincipal;
   const limite = opts.limite ?? 120;
   const fim = Date.now() + (opts.orcamentoMs ?? 150_000);
-  const r: ResultadoConversas = { sessoes: 0, mensagens: 0, pessoas: 0, comCodigo: 0, erros: [], valoresVistos: { direcao: {}, tipo: {}, origem: {} } };
+  const r: ResultadoConversas = { sessoes: 0, mensagens: 0, pessoas: 0, comCodigo: 0, restantes: 0, erros: [], valoresVistos: { direcao: {}, tipo: {}, origem: {} } };
 
   // Sessões candidatas: as mais novas primeiro.
-  let q = supabase.from("wts_sessions").select("session_id, contact_id, started_at, updated_at").eq("client_id", clientId).not("contact_id", "is", null).order("started_at", { ascending: false }).limit(2000);
-  if (opts.dias) q = q.gte("started_at", new Date(Date.now() - opts.dias * 86_400_000).toISOString());
-  const { data: sessoes, error } = await q;
-  if (error) {
-    r.erros.push(`wts_sessions: ${error.message}`);
-    return r;
+  // O PostgREST devolve no máximo 1000 linhas por chamada: pagina até acabar.
+  const sessoes: any[] = [];
+  const desde = opts.dias ? new Date(Date.now() - opts.dias * 86_400_000).toISOString() : null;
+  for (let de = 0; de < 20_000; de += 1000) {
+    let q = supabase.from("wts_sessions").select("session_id, contact_id, started_at, updated_at").eq("client_id", clientId).not("contact_id", "is", null).order("started_at", { ascending: false }).range(de, de + 999);
+    if (desde) q = q.gte("started_at", desde);
+    const { data: pag, error } = await q;
+    if (error) {
+      r.erros.push(`wts_sessions: ${error.message}`);
+      return r;
+    }
+    sessoes.push(...(pag ?? []));
+    if ((pag ?? []).length < 1000) break;
   }
-  const ids = (sessoes ?? []).map((s: any) => String(s.session_id));
+  const ids = sessoes.map((s: any) => String(s.session_id));
   const existentes = new Map<string, string>();
   for (let i = 0; i < ids.length; i += 300) {
     const { data: ex } = await supabase.from("conversas").select("externo_id, ultima_msg_em").eq("client_id", clientId).eq("provider", "wts").in("externo_id", ids.slice(i, i + 300));
     for (const e of ex ?? []) existentes.set(e.externo_id, e.ultima_msg_em ?? "");
   }
   // Novas sempre; as já gravadas só se a sessão mudou depois da última mensagem conhecida.
-  const pendentes = (sessoes ?? []).filter((s: any) => {
+  const pendentes = sessoes.filter((s: any) => {
     const ult = existentes.get(String(s.session_id));
     if (opts.refazer) return true;
     return ult === undefined || (s.updated_at && ult && new Date(s.updated_at).getTime() > new Date(ult).getTime() + 60_000);
@@ -146,7 +154,14 @@ export async function ingerirConversasWts(
         break;
       }
     }
-    if (msgs.length === 0) return;
+    if (msgs.length === 0) {
+      // Sessão sem mensagem (ou que a conta não enxerga): marca para não ser buscada de novo a cada rodada.
+      await supabase.from("conversas").upsert(
+        { client_id: clientId, provider: "wts", canal: "whatsapp", externo_id: sid, iniciada_em: s.started_at, ultima_msg_em: s.updated_at ?? s.started_at },
+        { onConflict: "client_id,provider,externo_id" },
+      );
+      return;
+    }
     msgs.sort((a, b) => String(a.timestamp ?? a.createdAt).localeCompare(String(b.timestamp ?? b.createdAt)));
 
     const c = await contato(String(s.contact_id));
@@ -235,5 +250,6 @@ export async function ingerirConversasWts(
     }
   }
   await Promise.all([trabalhador(), trabalhador(), trabalhador(), trabalhador(), trabalhador()]);
+  r.restantes = Math.max(0, pendentes.length - Math.min(cursor, fila.length));
   return r;
 }

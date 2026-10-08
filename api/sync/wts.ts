@@ -68,7 +68,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
       const clientes = [...new Set(results.map((r) => r.client_id))];
       for (const id of clientes) {
-        const c = await ingerirConversasWts(admin, WTS_API_TOKEN, id, { limite: 80, orcamentoMs: Math.floor(100_000 / Math.max(1, clientes.length)), dias: 7 });
+        const { data: lig } = await admin.from("crm_connections").select("access_token").eq("client_id", id).eq("provider", "flwchat").eq("active", true);
+        const extras = (lig ?? []).map((l) => l.access_token as string).filter(Boolean);
+        const c = await ingerirConversasWts(admin, WTS_API_TOKEN, id, { tokensExtras: extras, limite: 80, orcamentoMs: Math.floor(100_000 / Math.max(1, clientes.length)), dias: 7 });
         conversas[id] = { sessoes: c.sessoes, mensagens: c.mensagens, erros: c.erros.slice(0, 3) };
       }
     } catch (e) {
