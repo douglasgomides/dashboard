@@ -28,6 +28,9 @@ async function wtsGet(token: string, caminho: string): Promise<any> {
 
 export function direcaoDaMensagem(d: unknown): "entrada" | "saida" | "sistema" {
   const x = String(d ?? "").toLowerCase();
+  // WTS: TO_HUB = o paciente escreveu para a clínica; FROM_HUB = a clínica respondeu.
+  if (/to_hub|tohub/.test(x)) return "entrada";
+  if (/from_hub|fromhub/.test(x)) return "saida";
   if (/(out|send|sent|tocontact|to_contact|agent|user)/.test(x)) return "saida";
   if (/(^in|input|inbound|receiv|fromcontact|from_contact|contact)/.test(x)) return "entrada";
   return "sistema";
@@ -46,10 +49,14 @@ export type ResultadoConversas = {
 
 export async function ingerirConversasWts(
   supabase: SupabaseClient<any, any, any>,
-  token: string,
+  tokenPrincipal: string,
   clientId: string,
-  opts: { limite?: number; orcamentoMs?: number; dias?: number } = {},
+  opts: { limite?: number; orcamentoMs?: number; dias?: number; refazer?: boolean; tokensExtras?: string[] } = {},
 ): Promise<ResultadoConversas> {
+  // Alguns clientes (ex.: Sergio) têm as sessões listadas pelo token do servidor, mas as mensagens só aparecem com o
+  // token da própria conta. Testa na ordem e guarda o que funcionou.
+  const tokens = [tokenPrincipal, ...(opts.tokensExtras ?? [])];
+  let tokenAtivo = tokenPrincipal;
   const limite = opts.limite ?? 120;
   const fim = Date.now() + (opts.orcamentoMs ?? 150_000);
   const r: ResultadoConversas = { sessoes: 0, mensagens: 0, pessoas: 0, comCodigo: 0, erros: [], valoresVistos: { direcao: {}, tipo: {}, origem: {} } };
@@ -71,6 +78,7 @@ export async function ingerirConversasWts(
   // Novas sempre; as já gravadas só se a sessão mudou depois da última mensagem conhecida.
   const pendentes = (sessoes ?? []).filter((s: any) => {
     const ult = existentes.get(String(s.session_id));
+    if (opts.refazer) return true;
     return ult === undefined || (s.updated_at && ult && new Date(s.updated_at).getTime() > new Date(ult).getTime() + 60_000);
   });
 
@@ -82,7 +90,7 @@ export async function ingerirConversasWts(
   async function contato(id: string): Promise<Contato | null> {
     if (contatos.has(id)) return contatos.get(id) ?? null;
     try {
-      const c = await wtsGet(token, `/core/v1/contact/${id}`);
+      const c = await wtsGet(tokenAtivo, `/core/v1/contact/${id}`);
       const v: Contato = { phone: c.phoneNumber ?? null, nome: c.name ?? c.nameWhatsapp ?? null, email: c.email ?? null, instagram: typeof c.instagram === "string" ? c.instagram : null };
       contatos.set(id, v);
       return v;
@@ -120,11 +128,23 @@ export async function ingerirConversasWts(
 
   async function processar(s: any) {
     const sid = String(s.session_id);
-    const msgs: any[] = [];
-    for (let pagina = 1; pagina <= 8; pagina++) {
-      const j = await wtsGet(token, `/chat/v1/session/${sid}/message?PageSize=100&PageNumber=${pagina}`);
-      msgs.push(...(j.items ?? []));
-      if (!j.hasMorePages) break;
+    let msgs: any[] = [];
+    const ordem = [tokenAtivo, ...tokens.filter((t) => t !== tokenAtivo)];
+    for (const tk of ordem) {
+      msgs = [];
+      try {
+        for (let pagina = 1; pagina <= 8; pagina++) {
+          const j = await wtsGet(tk, `/chat/v1/session/${sid}/message?PageSize=100&PageNumber=${pagina}`);
+          msgs.push(...(j.items ?? []));
+          if (!j.hasMorePages) break;
+        }
+      } catch {
+        msgs = [];
+      }
+      if (msgs.length > 0) {
+        tokenAtivo = tk;
+        break;
+      }
     }
     if (msgs.length === 0) return;
     msgs.sort((a, b) => String(a.timestamp ?? a.createdAt).localeCompare(String(b.timestamp ?? b.createdAt)));

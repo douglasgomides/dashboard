@@ -485,8 +485,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(200).json({ alvo, ok: false, erro: "Servidor sem WTS_API_TOKEN configurado" });
         return;
       }
-      const b = (req.body ?? {}) as { limite?: number; dias?: number };
-      const r = await ingerirConversasWts(admin, WTS_API_TOKEN, client_id as string, { limite: Math.min(Number(b.limite) || 120, 300), dias: b.dias, orcamentoMs: 200_000 });
+      const b = (req.body ?? {}) as { limite?: number; dias?: number; refazer?: boolean };
+      const { data: ligacoes } = await admin.from("crm_connections").select("access_token").eq("client_id", client_id).eq("provider", "flwchat").eq("active", true);
+      const extras = (ligacoes ?? []).map((l) => l.access_token as string).filter(Boolean);
+      const r = await ingerirConversasWts(admin, WTS_API_TOKEN, client_id as string, { limite: Math.min(Number(b.limite) || 120, 300), dias: b.dias, refazer: !!b.refazer, tokensExtras: extras, orcamentoMs: 200_000 });
       res.status(r.erros.length ? 207 : 200).json({ alvo, ok: r.erros.length === 0, ...r, erros: r.erros.slice(0, 8) });
       return;
     }
