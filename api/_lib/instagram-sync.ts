@@ -4,6 +4,7 @@
  * o n8n chama todo dia. Um único lugar pra essa lógica evita os dois
  * caminhos divergirem.
  */
+import { classificarConteudoComIA } from "./conteudo-ia.js";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
 import { classifyTema } from "./tema-classifier.js";
@@ -434,14 +435,24 @@ export async function runInstagramSync(env: SyncEnv): Promise<AccountSyncResult[
       return { count: 0, errors: [] };
     });
 
+    // Tema, funil (C0 a C3) e estágio por IA. As contas meta_graph já passam por aqui no sync delas
+    // (meta-graph-sync.ts); as Windsor (ex.: Douglas, Doctor Creator) ficavam de fora.
+    const ia =
+      account.sync_source === "windsor"
+        ? await classificarConteudoComIA(supabase, account.id).catch((err) => ({
+            count: 0,
+            errors: [`conteudo-ia: ${err instanceof Error ? err.message : String(err)}`],
+          }))
+        : { count: 0, errors: [] as string[] };
+
     results.push({
       accountId: account.id,
       clientId: account.client_id,
       windsorAccountId: account.windsor_account_id,
       posts: posts.count,
       dailyMetrics: daily.count,
-      temasClassified: temas.count,
-      errors: [...errors, ...posts.errors, ...daily.errors, ...temas.errors],
+      temasClassified: temas.count + ia.count,
+      errors: [...errors, ...posts.errors, ...daily.errors, ...temas.errors, ...ia.errors],
     });
   }
   return results;

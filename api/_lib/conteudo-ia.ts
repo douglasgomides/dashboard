@@ -22,21 +22,31 @@ const FUNIS = new Set(["C0", "C1", "C2", "C3"]);
 const ESTAGIOS = new Set(["percepcao", "confianca", "venda", "multiplicacao"]);
 const LOTE = 20;
 
-const SISTEMA = `Você classifica legendas de posts de Instagram de um médico, em português do Brasil.
+const SISTEMA = `Você classifica legendas de posts de Instagram de um médico, em português do Brasil, pela metodologia de funil de CONTEÚDO da Doctor Creator.
+O funil C0 a C3 descreve o OBJETIVO do post e o tipo de público para o qual ele seria impulsionado. NÃO descreve o quanto o paciente já sabe do problema.
+
 Para cada post devolva:
 - tema: 2 a 4 palavras, substantivo, sem emoji (ex.: "Sintomas da menopausa", "Queda de cabelo"). Reuse um dos TEMAS EXISTENTES quando servir; só crie tema novo se nenhum servir.
-- funil: C0 (a pessoa não sabe que tem o problema), C1 (reconhece o problema), C2 (compara soluções e tratamentos), C3 (pronta para decidir ou agendar).
+- funil:
+  C0 = ALCANCE e visualização. Conteúdo feito para ser visto por muita gente: gancho forte, tendência, curiosidade, humor, opinião, assunto amplo, sem ensinar passo a passo nem pedir ação. Meta: visualizações.
+  C1 = ATRAIR SEGUIDORES com conteúdo útil e educativo: explica, ensina, desmistifica, lista dicas, passo a passo. Meta: seguidores, salvamentos e compartilhamentos. Seria patrocinado para interesses amplos.
+  C2 = SOLUÇÃO aplicada ao problema da pessoa e CAPTAÇÃO DE LEADS: bate na dor de quem já tem o problema e apresenta o tratamento, a consulta ou o procedimento como saída, com chamada para agendar, chamar no WhatsApp, link na bio ou lista de espera. Seria patrocinado para interesses específicos e geolocalizado.
+  C3 = PROVA: depoimentos, cases e resultados de pacientes, bastidores que provam competência. Meta: converter quem já conhece (remarketing).
+  Na dúvida, escolha o objetivo PRINCIPAL do post. Um post educativo que termina com uma chamada leve para agendar continua C1; só é C2 quando a solução e a chamada para ação são o centro do post.
 - estagio: percepcao (atrair atenção e educar), confianca (autoridade, bastidores, caso, prova), venda (chamada direta para agendar ou comprar), multiplicacao (pede compartilhar, indicar ou marcar alguém).
 Se a legenda estiver vazia ou não der para classificar com segurança, use null no campo.
 Responda SOMENTE um JSON no formato {"posts":[{"id":"...","tema":"...","funil":"C1","estagio":"percepcao"}]}, com um item por post recebido.`;
 
-type Linha = { id: string; caption: string | null; tema: string | null; funnel_stage: string | null; methodology_stage: string | null };
+type Linha = { id: string; caption: string | null; tema: string | null; funnel_stage: string | null; methodology_stage: string | null; format?: string | null; posted_at?: string | null };
 type Saida = { id: string; tema?: string | null; funil?: string | null; estagio?: string | null };
 
 export interface ResultadoIA {
   count: number;
   errors: string[];
   pulado?: string;
+  // Só no modo "refazerFunil": data do post mais antigo já tratado. Quem chama repete com antesDe = proximo
+  // até vir null (acabou).
+  proximo?: string | null;
 }
 
 function limparTema(t: unknown): string | null {
@@ -96,20 +106,28 @@ async function chamarClaude(chave: string, usuario: string, ms: number): Promise
 export async function classificarConteudoComIA(
   supabase: SupabaseClient<Database>,
   accountId: string,
-  opts: { maxPosts?: number; orcamentoMs?: number } = {},
+  opts: { maxPosts?: number; orcamentoMs?: number; refazerFunil?: boolean; antesDe?: string | null } = {},
 ): Promise<ResultadoIA> {
   const chaveOpenAI = process.env.OPENAI_API_KEY;
   const chaveClaude = process.env.ANTHROPIC_API_KEY;
   if (!chaveOpenAI && !chaveClaude) return { count: 0, errors: [], pulado: "OPENAI_API_KEY (ou ANTHROPIC_API_KEY) não configurada: classificação por IA desligada" };
-  const maxPosts = opts.maxPosts ?? 160;
-  const limite = Date.now() + (opts.orcamentoMs ?? 40_000);
+  const maxPosts = opts.maxPosts ?? 400;
+  const limite = Date.now() + (opts.orcamentoMs ?? 60_000);
 
-  const { data: pendentes, error } = await supabase
+  // refazerFunil: reclassifica o funil de TODOS os posts com legenda, do mais novo para o mais antigo, em
+  // blocos (antesDe é o cursor). Usado quando a definição de C0 a C3 muda. Fora disso, só preenche vazio.
+  let consulta = supabase
     .from("instagram_posts")
-    .select("id, caption, tema, funnel_stage, methodology_stage")
+    .select("id, caption, tema, funnel_stage, methodology_stage, format, posted_at")
     .eq("instagram_account_id", accountId)
-    .or("tema.is.null,funnel_stage.is.null,methodology_stage.is.null")
     .not("caption", "is", null)
+    .not("posted_at", "is", null);
+  if (opts.refazerFunil) {
+    if (opts.antesDe) consulta = consulta.lt("posted_at", opts.antesDe);
+  } else {
+    consulta = consulta.or("tema.is.null,funnel_stage.is.null,methodology_stage.is.null");
+  }
+  const { data: pendentes, error } = await consulta
     .order("posted_at", { ascending: false, nullsFirst: false })
     .limit(maxPosts);
   if (error) return { count: 0, errors: [`conteudo-ia select: ${error.message}`] };
@@ -126,8 +144,11 @@ export async function classificarConteudoComIA(
   let count = 0;
   // Resposta lenta da IA não é falha da sincronização: o que ficou sem classificar entra na próxima rodada.
   let atrasou = false;
+  // Cursor do modo refazerFunil: post mais antigo já tratado, sem pular nenhum lote que falhou no meio.
+  let ultimoTratado: string | null = null;
+  let falhouLote = false;
   // Até 3 lotes ao mesmo tempo: o tempo da função é curto e cada resposta leva alguns segundos.
-  const CONCORRENCIA = 3;
+  const CONCORRENCIA = 5;
   const lotes: Linha[][] = [];
   for (let i = 0; i < linhas.length; i += LOTE) lotes.push(linhas.slice(i, i + LOTE));
   for (let g = 0; g < lotes.length; g += CONCORRENCIA) {
@@ -138,7 +159,7 @@ export async function classificarConteudoComIA(
       grupo.map(async (lote) => {
         const usuario =
           `TEMAS EXISTENTES: ${vocabulario.size ? Array.from(vocabulario).join("; ") : "(nenhum ainda)"}\n\nPOSTS:\n` +
-          lote.map((p) => JSON.stringify({ id: p.id, legenda: (p.caption ?? "").replace(/\s+/g, " ").slice(0, 600) })).join("\n");
+          lote.map((p) => JSON.stringify({ id: p.id, formato: p.format ?? null, legenda: (p.caption ?? "").replace(/\s+/g, " ").slice(0, 600) })).join("\n");
         try {
           const ms = Math.min(restante - 1000, 30_000);
           const saida = chaveOpenAI ? await chamarOpenAI(chaveOpenAI, usuario, ms) : await chamarClaude(chaveClaude as string, usuario, ms);
@@ -154,6 +175,11 @@ export async function classificarConteudoComIA(
       }),
     );
     for (const { lote, saida } of respostas) {
+      if (saida.length === 0) falhouLote = true;
+      else if (!falhouLote) {
+        const mais = lote.map((p) => p.posted_at ?? "").filter(Boolean).sort()[0];
+        if (mais) ultimoTratado = mais;
+      }
       const porId = new Map(lote.map((p) => [p.id, p]));
       for (const s of saida) {
         const p = porId.get(s.id);
@@ -164,7 +190,7 @@ export async function classificarConteudoComIA(
           patch.tema = tema;
           vocabulario.add(tema);
         }
-        if (!p.funnel_stage && s.funil && FUNIS.has(s.funil)) patch.funnel_stage = s.funil as never;
+        if ((opts.refazerFunil || !p.funnel_stage) && s.funil && FUNIS.has(s.funil) && s.funil !== p.funnel_stage) patch.funnel_stage = s.funil as never;
         if (!p.methodology_stage && s.estagio && ESTAGIOS.has(s.estagio)) patch.methodology_stage = s.estagio as never;
         if (Object.keys(patch).length === 0) continue;
         const { error: upErr } = await supabase.from("instagram_posts").update(patch).eq("id", p.id);
@@ -174,5 +200,11 @@ export async function classificarConteudoComIA(
     }
     if (errors.length > 0 || atrasou) break;
   }
-  return { count, errors, pulado: atrasou ? "a IA demorou para responder; o que faltou classificar entra na próxima atualização" : undefined };
+  const terminouTudo = !falhouLote && !atrasou && errors.length === 0 && linhas.length < maxPosts;
+  return {
+    count,
+    errors,
+    pulado: atrasou ? "a IA demorou para responder; o que faltou classificar entra na próxima atualização" : undefined,
+    proximo: opts.refazerFunil ? (terminouTudo ? null : ultimoTratado ?? opts.antesDe ?? null) : undefined,
+  };
 }

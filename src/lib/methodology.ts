@@ -4,11 +4,13 @@
 // sinônimo genérico.
 import type { ContentFormat, FunnelStage, MethodologyStage } from "@/integrations/supabase/types";
 
+// C0 a C3 = OBJETIVO do conteúdo e tipo de público do impulsionamento (metodologia Doctor Creator).
+// NÃO é o estágio de consciência do paciente.
 export const FUNNEL_STAGES: { value: FunnelStage; label: string; description: string }[] = [
-  { value: "C0", label: "C0 — Não sabe que precisa", description: "Paciente ainda não reconhece o problema." },
-  { value: "C1", label: "C1 — Reconhece o problema", description: "Sabe que tem a dor, ainda não busca solução." },
-  { value: "C2", label: "C2 — Avalia soluções", description: "Compara alternativas e profissionais." },
-  { value: "C3", label: "C3 — Decisão de compra", description: "Pronto para agendar/comprar." },
+  { value: "C0", label: "C0 — Alcance", description: "Alcance e visualização: conteúdo feito para ser visto por muita gente." },
+  { value: "C1", label: "C1 — Educar e atrair seguidores", description: "Seguidores, salvamentos e posts úteis e educativos. Patrocina para interesses amplos." },
+  { value: "C2", label: "C2 — Solução e captação", description: "Solução aplicada ao problema da pessoa, bate na dor, captação de leads. Patrocina para interesses específicos, geolocalizado." },
+  { value: "C3", label: "C3 — Prova e remarketing", description: "Depoimentos e cases. Remarketing." },
 ];
 
 export const METHODOLOGY_STAGES: { value: MethodologyStage; label: string }[] = [

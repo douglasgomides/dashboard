@@ -241,10 +241,10 @@ export interface IdeiasResult {
 }
 
 const FUNIL_ROTULO: Record<string, string> = {
-  C0: "C0, não sabe que precisa",
-  C1: "C1, reconhece o problema",
-  C2: "C2, avalia soluções",
-  C3: "C3, decisão",
+  C0: "C0, alcance",
+  C1: "C1, educar e atrair seguidores",
+  C2: "C2, solução e captação",
+  C3: "C3, prova e remarketing",
 };
 const ESTAGIO_ROTULO: Record<string, string> = {
   percepcao: "Percepção",
