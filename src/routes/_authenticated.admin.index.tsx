@@ -6,6 +6,39 @@ import { ClientAvatar } from "@/components/client-avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { getClientFontes } from "@/lib/client-data";
 import { statusDoCliente, tomDaFonte, ddmm, diasDeAtraso, type LinhaFonte } from "@/lib/saude-fontes";
+import { motivoDaLinha, ROTULO_DONO, type Dono } from "@/lib/motivos";
+import { SeloDono } from "@/components/selo-dono";
+
+
+function LinhaMotivo({ texto, motivo }: { texto: string; motivo: ReturnType<typeof motivoDaLinha> }) {
+  return (
+    <li>
+      <div className="flex flex-wrap items-center gap-2">
+        <span style={{ color: "var(--text)" }}>{texto}</span>
+        {motivo && <SeloDono dono={motivo.dono} />}
+      </div>
+      {motivo && (
+        <div className="text-xs" style={{ color: "var(--text-dim)" }}>
+          {motivo.texto}
+        </div>
+      )}
+    </li>
+  );
+}
+
+// "Quantas são realmente nossas?": é a resposta à pergunta "o sync está quebrado?".
+function ResumoDonos({ itens }: { itens: { motivo: ReturnType<typeof motivoDaLinha> }[] }) {
+  const cont: Record<Dono, number> = { cliente: 0, meta: 0, origem: 0, nos: 0 };
+  let semMotivo = 0;
+  for (const i of itens) i.motivo ? cont[i.motivo.dono]++ : semMotivo++;
+  const partes = (Object.keys(cont) as Dono[]).filter((d) => cont[d] > 0).map((d) => `${cont[d]} ${ROTULO_DONO[d].toLowerCase()}`);
+  if (semMotivo > 0) partes.push(`${semMotivo} sem motivo identificado`);
+  return (
+    <p className="mt-2 text-xs" style={{ color: "var(--text-faint)" }}>
+      Resumo: {partes.join(" · ")}.
+    </p>
+  );
+}
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminClientsPage,
@@ -256,9 +289,9 @@ function AdminClientsPage() {
       retry: false,
     })),
   });
-  const paradas: string[] = [];
+  const paradas: { texto: string; motivo: ReturnType<typeof motivoDaLinha> }[] = [];
   // Dado em dia, mas a última tentativa de atualizar deu erro: não é "parada", é um erro a olhar.
-  const comErro: string[] = [];
+  const comErro: { texto: string; motivo: ReturnType<typeof motivoDaLinha> }[] = [];
   (clients ?? []).forEach((c, i) => {
     const s = saudes[i]?.data;
     if (!s) return;
@@ -268,10 +301,10 @@ function AdminClientsPage() {
       if (tomDaFonte(l) !== "ruim") continue;
       const velho = l.data_ate ? diasDeAtraso(l.data_ate) > 3 : false;
       if (velho || (!l.data_ate && !l.last_error)) {
-        paradas.push(`${c.name}: ${ROTULO_FONTE[l.fonte]} ${l.data_ate ? `até ${ddmm(l.data_ate)}` : "sem dado"}`);
+        paradas.push({ texto: `${c.name}: ${ROTULO_FONTE[l.fonte]} ${l.data_ate ? `até ${ddmm(l.data_ate)}` : "sem dado"}`, motivo: motivoDaLinha(l) });
       } else {
         const erro = (l.last_error ?? "").replace(/\s+/g, " ").slice(0, 90);
-        comErro.push(`${c.name}: ${ROTULO_FONTE[l.fonte]}${l.data_ate ? ` (dado até ${ddmm(l.data_ate)})` : ""}, erro na última atualização: ${erro}`);
+        comErro.push({ texto: `${c.name}: ${ROTULO_FONTE[l.fonte]}${l.data_ate ? ` (dado até ${ddmm(l.data_ate)})` : ""}`, motivo: motivoDaLinha(l) ?? { texto: erro, dono: "nos" } });
       }
     }
   });
@@ -293,14 +326,12 @@ function AdminClientsPage() {
                   <strong style={{ color: "var(--danger)" }}>
                     {paradas.length} fonte{paradas.length === 1 ? "" : "s"} sem dado novo há mais de 3 dias
                   </strong>
-                  <ul className="mt-1 list-disc pl-5" style={{ color: "var(--text-dim)" }}>
+                  <ul className="mt-1 space-y-1.5 pl-0" style={{ color: "var(--text-dim)", listStyle: "none" }}>
                     {paradas.map((p) => (
-                      <li key={p}>{p}</li>
+                      <LinhaMotivo key={p.texto} {...p} />
                     ))}
                   </ul>
-                  <p className="mt-1 text-xs" style={{ color: "var(--text-faint)" }}>
-                    Anúncio parado muitas vezes é campanha pausada ou pagamento pendente, e não falha de sincronização.
-                  </p>
+                  <ResumoDonos itens={[...paradas, ...comErro]} />
                 </>
               )}
               {comErro.length > 0 && (
@@ -308,9 +339,9 @@ function AdminClientsPage() {
                   <strong style={{ color: "var(--warn-text, var(--text))" }}>
                     {comErro.length} fonte{comErro.length === 1 ? "" : "s"} com dado em dia, mas com erro na última atualização
                   </strong>
-                  <ul className="mt-1 list-disc pl-5" style={{ color: "var(--text-dim)" }}>
+                  <ul className="mt-1 space-y-1.5 pl-0" style={{ color: "var(--text-dim)", listStyle: "none" }}>
                     {comErro.map((p) => (
-                      <li key={p}>{p}</li>
+                      <LinhaMotivo key={p.texto} {...p} />
                     ))}
                   </ul>
                 </div>

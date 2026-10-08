@@ -10,6 +10,9 @@ export type LinhaFonte = {
   last_error: string | null;
   last_rows: number | null;
   data_ate: string | null;
+  // Por que está parada, descoberto pelo sync na origem (ex.: erro de pagamento na Meta) e de quem é a ação.
+  motivo?: string | null;
+  motivo_dono?: string | null;
 };
 
 export type Fontes = { tem_instagram: boolean; tem_anuncios: boolean; tem_crm: boolean; tem_atendimento: boolean } | null;

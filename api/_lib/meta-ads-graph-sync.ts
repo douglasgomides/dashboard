@@ -15,6 +15,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
+import { diagnosticarContaAnuncios } from "./diagnostico-anuncios.js";
 
 const API = "https://graph.facebook.com/v21.0";
 
@@ -265,6 +266,30 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
       }
     } catch (err) {
       r.errors.push(err instanceof Error ? err.message : String(err));
+    }
+
+    // Motivo: só quando a conta está sem dado novo há mais de 2 dias (ou deu erro). Conta em dia limpa o motivo.
+    // Gravar o motivo nunca pode derrubar o sync (a coluna pode ainda não existir).
+    try {
+      const { data: ult } = await supabase
+        .from("meta_ads_daily")
+        .select("date")
+        .eq("client_id", conta.client_id)
+        .eq("ad_account_id", conta.ad_account_id)
+        .order("date", { ascending: false })
+        .limit(1);
+      const ultimo = ult?.[0]?.date ?? null;
+      const limite = new Date(hoje.getTime() - 2 * 86400_000).toISOString().slice(0, 10);
+      const parada = !ultimo || ultimo < limite;
+      const motivo = parada ? await diagnosticarContaAnuncios(conta.ad_account_id, tokenConta) : null;
+      await (supabase as any)
+        .from("sync_status")
+        .upsert(
+          { client_id: conta.client_id, fonte: "anuncios", motivo: motivo?.texto ?? null, motivo_dono: motivo?.dono ?? null, motivo_em: new Date().toISOString() },
+          { onConflict: "client_id,fonte" },
+        );
+    } catch {
+      /* diagnóstico é um extra */
     }
 
     resultados.push(r);

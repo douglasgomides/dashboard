@@ -1,5 +1,8 @@
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { statusDoCliente, diasDeAtraso, ddmm } from "@/lib/saude-fontes";
+import { motivoDaLinha, COR_DONO } from "@/lib/motivos";
+import { SeloDono } from "@/components/selo-dono";
 import {
   ComposedChart,
   Bar,
@@ -124,6 +127,31 @@ function Faixa({
   );
 }
 
+// Quando a fonte está parada, diz POR QUÊ e de quem é a ação (pagamento, campanhas desligadas, acesso vencido...).
+function MotivoParada({ clientId }: { clientId: string }) {
+  const { data } = useQuery({
+    queryKey: ["client-sync-status", clientId],
+    queryFn: () => statusDoCliente(clientId),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const l = data?.find((x) => x.fonte === "anuncios");
+  const parada = l?.data_ate ? diasDeAtraso(l.data_ate) > 3 : false;
+  const m = parada || l?.motivo ? motivoDaLinha(l) : null;
+  if (!l || !m) return null;
+  return (
+    <Faixa icone={AlertTriangle} cor={COR_DONO[m.dono]} alerta>
+      <div className="flex flex-wrap items-center gap-2">
+        <b>{l.data_ate ? `Sem dado novo desde ${ddmm(l.data_ate)}` : "Sem dado de anúncios"}</b>
+        <SeloDono dono={m.dono} />
+      </div>
+      <div className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
+        {m.texto}
+      </div>
+    </Faixa>
+  );
+}
+
 function tickDate(d: string) {
   return d.slice(5);
 }
@@ -221,6 +249,7 @@ function AnunciosPage() {
         <div className="flex justify-end">
           <SyncButton clientId={clientId} alvo="anuncios" />
         </div>
+        <MotivoParada clientId={clientId} />
         <Faixa icone={Info}>Investimento em anúncios do Meta (Facebook e Instagram), por dia e por campanha.</Faixa>
         <Faixa icone={ultimoGasto || fontes?.tem_anuncios ? PauseCircle : AlertTriangle} cor="var(--warn)" alerta>
           {mensagemVazia}
@@ -235,6 +264,7 @@ function AnunciosPage() {
         <SyncButton clientId={clientId} alvo="anuncios" />
       </div>
 
+      <MotivoParada clientId={clientId} />
       <Faixa
         icone={CalendarDays}
         ajuda={
