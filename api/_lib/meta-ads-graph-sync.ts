@@ -281,7 +281,7 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
       const ultimo = ult?.[0]?.date ?? null;
       const limite = new Date(hoje.getTime() - 2 * 86400_000).toISOString().slice(0, 10);
       const parada = !ultimo || ultimo < limite;
-      const motivo = parada ? await diagnosticarContaAnuncios(conta.ad_account_id, tokenConta) : null;
+      const motivo = parada ? await diagnosticarContaAnuncios(conta.ad_account_id, tokenConta, r.errors.find((e) => e.startsWith("Meta insights"))) : null;
       await (supabase as any)
         .from("sync_status")
         .upsert(
