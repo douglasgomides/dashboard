@@ -250,6 +250,11 @@ export async function ingerirConversasWts(
     }
   }
   await Promise.all([trabalhador(), trabalhador(), trabalhador(), trabalhador(), trabalhador()]);
+  try {
+    await supabase.rpc("vincular_flwchat", { p_client: clientId });
+  } catch {
+    /* o vínculo roda de novo na próxima rodada */
+  }
   r.restantes = Math.max(0, pendentes.length - Math.min(cursor, fila.length));
   return r;
 }
