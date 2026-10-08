@@ -481,7 +481,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return;
       }
       const forma = (v: any, d = 0): any =>
-        v == null ? null : Array.isArray(v) ? [forma(v[0], d + 1)] : typeof v === "object" ? (d > 2 ? "{…}" : Object.fromEntries(Object.keys(v).slice(0, 40).map((k) => [k, forma(v[k], d + 1)]))) : typeof v;
+        v == null ? null : Array.isArray(v) ? [forma(v[0], d + 1)] : typeof v === "object" ? (d > 4 ? "{…}" : Object.fromEntries(Object.keys(v).slice(0, 60).map((k) => [k, forma(v[k], d + 1)]))) : typeof v;
       const tentar = async (base: string, caminho: string, cab: Record<string, string>) => {
         try {
           const r = await fetch(`${base}${caminho}`, { headers: { Accept: "application/json", ...cab }, signal: AbortSignal.timeout(15_000) });
@@ -496,19 +496,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const saida: Record<string, unknown> = {};
 
       // WTS Chat (token do servidor) e FlwChat (token da conexão): mesma API, api.wts.chat
-      const { data: sess } = await admin.from("wts_sessions").select("session_id, contact_id").eq("client_id", client_id).not("contact_id", "is", null).order("started_at", { ascending: false }).limit(1);
-      const s0 = sess?.[0];
-      if (s0 && WTS_API_TOKEN) {
+      const { data: sess } = await admin.from("wts_sessions").select("session_id, contact_id").eq("client_id", client_id).not("contact_id", "is", null).order("started_at", { ascending: false }).limit(25);
+      if ((sess ?? []).length > 0 && WTS_API_TOKEN) {
         const cab = { Authorization: `Bearer ${WTS_API_TOKEN}` };
         const base = "https://api.wts.chat";
-        for (const c of [
-          `/chat/v1/session/${s0.session_id}`,
-          `/chat/v1/session/${s0.session_id}/message`,
-          `/chat/v1/session/${s0.session_id}/messages`,
-          `/chat/v1/message?SessionId=${s0.session_id}&PageSize=3`,
-          `/core/v1/contact/${s0.contact_id}`,
-          `/chat/v1/contact/${s0.contact_id}`,
-        ]) saida[`wts ${c.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, "{id}")}`] = await tentar(base, c, cab);
+        // Procura uma sessão que tenha mensagens e mostra a forma da sessão, da mensagem e do contato.
+        let achou = false;
+        for (const s0 of sess ?? []) {
+          const m = await tentar(base, `/chat/v1/session/${s0.session_id}/message?PageSize=3`, cab);
+          const itens = (m.forma as any)?.items;
+          if (m.status === 200 && Array.isArray(itens) && itens[0]) {
+            saida["wts mensagem (forma)"] = m;
+            saida["wts sessão (forma)"] = await tentar(base, `/chat/v1/session/${s0.session_id}`, cab);
+            saida["wts contato /core/v1/contact/{id}"] = await tentar(base, `/core/v1/contact/${s0.contact_id}`, cab);
+            achou = true;
+            break;
+          }
+        }
+        saida["wts achou sessão com mensagens"] = achou;
       }
 
       // Kommo: notas, eventos e contatos (telefone) de um lead de exemplo
@@ -519,15 +524,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const cab = { Authorization: `Bearer ${k.access_token}` };
         const base = `https://${dom}`;
         const lead = await tentar(base, "/api/v4/leads?limit=1&with=contacts", cab);
-        saida["kommo /api/v4/leads?with=contacts"] = lead;
+        saida["kommo lead?with=contacts (forma)"] = lead;
         const { data: l1 } = await admin.from("crm_leads").select("external_lead_id").eq("client_id", client_id).eq("provider", "kommo").order("received_at", { ascending: false }).limit(1);
         const lid = l1?.[0]?.external_lead_id;
         if (lid) {
-          saida["kommo /api/v4/leads/{id}/notes"] = await tentar(base, `/api/v4/leads/${lid}/notes?limit=5`, cab);
-          saida["kommo /api/v4/events (chat)"] = await tentar(base, `/api/v4/events?limit=5&filter[entity][]=lead&filter[entity_id][]=${lid}`, cab);
-          saida["kommo /api/v4/talks"] = await tentar(base, `/api/v4/talks?limit=1`, cab);
+          const tipos = async (caminho: string, chave: string) => {
+            try {
+              const r = await fetch(`${base}${caminho}`, { headers: { Accept: "application/json", ...cab }, signal: AbortSignal.timeout(15_000) });
+              const j: any = await r.json().catch(() => ({}));
+              const itens: any[] = j?._embedded?.[chave] ?? [];
+              const cont: Record<string, number> = {};
+              for (const i of itens) cont[String(i.note_type ?? i.type ?? "?")] = (cont[String(i.note_type ?? i.type ?? "?")] ?? 0) + 1;
+              return { status: r.status, tipos: cont, exemplo: forma(itens[0]) };
+            } catch (e) { return { status: 0, erro: e instanceof Error ? e.message.slice(0, 60) : "erro" }; }
+          };
+          saida["kommo notas (tipos + forma)"] = await tipos(`/api/v4/leads/${lid}/notes?limit=50`, "notes");
+          saida["kommo eventos do lead (tipos + forma)"] = await tipos(`/api/v4/events?limit=50&filter[entity][]=lead&filter[entity_id][]=${lid}`, "events");
+          saida["kommo /api/v4/talks (forma)"] = await tentar(base, `/api/v4/talks?limit=2`, cab);
         }
-        saida["kommo /api/v4/contacts"] = await tentar(base, "/api/v4/contacts?limit=1", cab);
+        saida["kommo contato (forma)"] = await tentar(base, "/api/v4/contacts?limit=1", cab);
       }
 
       // FlwChat: token por conexão
