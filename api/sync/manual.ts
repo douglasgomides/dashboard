@@ -12,6 +12,7 @@ import { runRdStationSync } from "../_lib/rdstation-sync.js";
 import { runFlwChatSync } from "../_lib/flwchat-sync.js";
 import { lerAudiencia } from "../_lib/meta-audiencia.js";
 import { classificarConteudoComIA } from "../_lib/conteudo-ia.js";
+import { criarLinkShort, cliquesDoLink, destinoWhatsApp, novoCodigoRef } from "../_lib/shortio.js";
 import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_lib/sync-status.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
@@ -85,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar"];
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas"];
   if (!client_id || !alvo || !ALVOS.includes(alvo)) {
     res.status(400).json({ error: "Informe client_id e alvo ('tudo', 'posts', 'anuncios', 'atendimento', 'comentarios' ou 'crm')" });
     return;
@@ -470,6 +471,145 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const dados = await lerAudiencia({ igId: conta.windsor_account_id as string, token: tokenIg });
       memoria.set(client_id, { t: Date.now(), d: dados });
       res.status(200).json({ alvo, ok: true, dados });
+      return;
+    }
+
+    // ---- Sonda de conversas (só admin): testa endpoints de cada CRM e devolve apenas a ESTRUTURA, nunca dados ----
+    if (alvo === "sonda_conversas") {
+      if (!ehAdmin) {
+        res.status(403).json({ error: "Só admin" });
+        return;
+      }
+      const forma = (v: any, d = 0): any =>
+        v == null ? null : Array.isArray(v) ? [forma(v[0], d + 1)] : typeof v === "object" ? (d > 2 ? "{…}" : Object.fromEntries(Object.keys(v).slice(0, 40).map((k) => [k, forma(v[k], d + 1)]))) : typeof v;
+      const tentar = async (base: string, caminho: string, cab: Record<string, string>) => {
+        try {
+          const r = await fetch(`${base}${caminho}`, { headers: { Accept: "application/json", ...cab }, signal: AbortSignal.timeout(15_000) });
+          const t = await r.text();
+          let j: any = null;
+          try { j = JSON.parse(t); } catch { /* não é JSON */ }
+          return { status: r.status, forma: j ? forma(j) : t.slice(0, 80) };
+        } catch (e) {
+          return { status: 0, forma: e instanceof Error ? e.message.slice(0, 80) : "erro" };
+        }
+      };
+      const saida: Record<string, unknown> = {};
+
+      // WTS Chat (token do servidor) e FlwChat (token da conexão): mesma API, api.wts.chat
+      const { data: sess } = await admin.from("wts_sessions").select("session_id, contact_id").eq("client_id", client_id).not("contact_id", "is", null).order("started_at", { ascending: false }).limit(1);
+      const s0 = sess?.[0];
+      if (s0 && WTS_API_TOKEN) {
+        const cab = { Authorization: `Bearer ${WTS_API_TOKEN}` };
+        const base = "https://api.wts.chat";
+        for (const c of [
+          `/chat/v1/session/${s0.session_id}`,
+          `/chat/v1/session/${s0.session_id}/message`,
+          `/chat/v1/session/${s0.session_id}/messages`,
+          `/chat/v1/message?SessionId=${s0.session_id}&PageSize=3`,
+          `/core/v1/contact/${s0.contact_id}`,
+          `/chat/v1/contact/${s0.contact_id}`,
+        ]) saida[`wts ${c.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, "{id}")}`] = await tentar(base, c, cab);
+      }
+
+      // Kommo: notas, eventos e contatos (telefone) de um lead de exemplo
+      const { data: conn } = await admin.from("crm_connections").select("provider, subdomain, access_token").eq("client_id", client_id).eq("active", true);
+      const k = (conn ?? []).find((c) => c.provider === "kommo" && c.subdomain && c.access_token);
+      if (k) {
+        const dom = (k.subdomain as string).includes(".") ? (k.subdomain as string) : `${k.subdomain}.kommo.com`;
+        const cab = { Authorization: `Bearer ${k.access_token}` };
+        const base = `https://${dom}`;
+        const lead = await tentar(base, "/api/v4/leads?limit=1&with=contacts", cab);
+        saida["kommo /api/v4/leads?with=contacts"] = lead;
+        const { data: l1 } = await admin.from("crm_leads").select("external_lead_id").eq("client_id", client_id).eq("provider", "kommo").order("received_at", { ascending: false }).limit(1);
+        const lid = l1?.[0]?.external_lead_id;
+        if (lid) {
+          saida["kommo /api/v4/leads/{id}/notes"] = await tentar(base, `/api/v4/leads/${lid}/notes?limit=5`, cab);
+          saida["kommo /api/v4/events (chat)"] = await tentar(base, `/api/v4/events?limit=5&filter[entity][]=lead&filter[entity_id][]=${lid}`, cab);
+          saida["kommo /api/v4/talks"] = await tentar(base, `/api/v4/talks?limit=1`, cab);
+        }
+        saida["kommo /api/v4/contacts"] = await tentar(base, "/api/v4/contacts?limit=1", cab);
+      }
+
+      // FlwChat: token por conexão
+      const f = (conn ?? []).find((c) => c.provider === "flwchat" && c.access_token);
+      if (f) {
+        const cab = { Authorization: `Bearer ${f.access_token}` };
+        saida["flwchat /core/v1/contact?PageSize=1"] = await tentar("https://api.wts.chat", "/core/v1/contact?PageSize=1", cab);
+        saida["flwchat /chat/v1/session?PageSize=1"] = await tentar("https://api.wts.chat", "/chat/v1/session?PageSize=1", cab);
+      }
+      res.status(200).json({ alvo, ok: true, conexoes: (conn ?? []).map((c) => c.provider), sonda: saida });
+      return;
+    }
+
+    // ---- Jornada: links rastreados (short.gy), cliques e vínculo pessoa <-> lead ----
+    if (alvo === "jornada") {
+      const { data: ligados, error: erroRpc } = await admin.rpc("vincular_pessoas", { p_client: client_id });
+      if (erroRpc) {
+        res.status(200).json({ alvo, ok: false, erro: `vincular_pessoas: ${erroRpc.message}` });
+        return;
+      }
+      res.status(200).json({ alvo, ok: true, leads_ligados: ligados ?? 0 });
+      return;
+    }
+
+    if (alvo === "link_rastreado" || alvo === "links_stats") {
+      if (!ehAdmin) {
+        res.status(403).json({ error: "Só admin cria e atualiza links rastreados" });
+        return;
+      }
+      const chaveShort = process.env.SHORTIO_API_KEY;
+      const dominioShort = process.env.SHORTIO_DOMAIN;
+      if (!chaveShort || !dominioShort) {
+        res.status(200).json({ alvo, ok: false, erro: "Servidor sem SHORTIO_API_KEY e SHORTIO_DOMAIN configurados na Vercel." });
+        return;
+      }
+
+      if (alvo === "links_stats") {
+        const { data: links } = await admin.from("links_rastreados").select("id, shortio_id").eq("client_id", client_id).not("shortio_id", "is", null);
+        let atualizados = 0;
+        for (const l of links ?? []) {
+          const n = await cliquesDoLink(chaveShort, l.shortio_id as string);
+          if (n == null) continue;
+          await admin.from("links_rastreados").update({ cliques_total: n, cliques_atualizado_em: new Date().toISOString() }).eq("id", l.id);
+          atualizados++;
+        }
+        res.status(200).json({ alvo, ok: true, atualizados, total: (links ?? []).length });
+        return;
+      }
+
+      const b = (req.body ?? {}) as {
+        tipo?: string; titulo?: string; numero_whatsapp?: string; mensagem?: string; instagram_post_id?: string | null; ad_campaign_id?: string | null;
+      };
+      const tipos = ["bio", "post", "story", "anuncio", "email", "outro"];
+      if (!b.tipo || !tipos.includes(b.tipo) || !b.numero_whatsapp || !b.mensagem) {
+        res.status(400).json({ error: "Informe tipo (bio, post, story, anuncio, email ou outro), numero_whatsapp e mensagem" });
+        return;
+      }
+      const codigo = novoCodigoRef();
+      const destino = destinoWhatsApp(b.numero_whatsapp, b.mensagem, codigo);
+      const curto = await criarLinkShort({ chave: chaveShort, dominio: dominioShort, destino, titulo: b.titulo, tags: [b.tipo, codigo] });
+      const { data: criado, error: erroIns } = await admin
+        .from("links_rastreados")
+        .insert({
+          client_id,
+          codigo_ref: codigo,
+          tipo: b.tipo,
+          instagram_post_id: b.instagram_post_id ?? null,
+          ad_campaign_id: b.ad_campaign_id ?? null,
+          titulo: b.titulo ?? null,
+          destino_url: destino,
+          mensagem_modelo: b.mensagem,
+          shortio_id: curto.id,
+          short_url: curto.shortUrl,
+          criado_por: quem.user.id,
+        } as never)
+        .select("id")
+        .single();
+      if (erroIns) {
+        res.status(200).json({ alvo, ok: false, erro: `Link criado no short.gy (${curto.shortUrl}) mas não gravado: ${erroIns.message}` });
+        return;
+      }
+      res.status(200).json({ alvo, ok: true, id: criado?.id, codigo_ref: codigo, short_url: curto.shortUrl });
       return;
     }
 

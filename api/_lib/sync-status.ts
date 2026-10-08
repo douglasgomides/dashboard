@@ -46,6 +46,14 @@ export async function recordSyncStatus(
     /* registrar não pode quebrar o sync */
   }
   await registrarMotivoInstagram(supabase, clientId, fonte, r);
+  // CRM sincronizado: liga os leads às pessoas (telefone) e alimenta a linha do tempo. Nunca derruba o sync.
+  if (fonte === "crm" && r.ok) {
+    try {
+      await supabase.rpc("vincular_pessoas", { p_client: clientId });
+    } catch {
+      /* a função pode ainda não existir */
+    }
+  }
 }
 
 // Instagram bloqueado pela Meta (token vencido, revogado ou ativo da BM perdido): o que está pendente não é
