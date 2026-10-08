@@ -24,6 +24,9 @@ import { horasDosPosts, diasDosPosts, recomendacaoDeHorario } from "@/lib/horari
 import { Barras, BarraDividida, BarrasPareadas } from "@/components/barras";
 import { MapaDeCalor } from "@/components/mapa-de-calor";
 import { Painel, Kpi, Selo, Ajuda } from "@/components/visual";
+import { MapaBrasil, MapaMundo, nomeDoPais } from "@/components/mapa-coropletico";
+import { ufDaCidade } from "@/lib/geo-br";
+import { ESTADOS_BR } from "@/lib/mapas";
 import { Users, Target, Heart, Clock, Lightbulb, MapPin, Globe, UserPlus, UserMinus, Scale, Eye, Radio, Layers, CalendarClock, Trophy, FileText, BarChart3, TrendingUp, VenetianMask, Cake, Sparkles } from "lucide-react";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 
@@ -131,29 +134,7 @@ function Demografia({ a }: { a: Audiencia }) {
         </Painel>
       </div>
 
-      <div className="hgrid two">
-        <Painel icone={MapPin} titulo="Cidades" resumo="As 10 principais" ajuda={<>As 10 principais.</>}>
-          <div style={{ marginTop: 12 }}>
-            {a.seguidores.ok ? (
-              <Barras
-                total={soma(a.seguidores.dados.cidades)}
-                itens={a.seguidores.dados.cidades.slice(0, 10).map((p) => ({ rotulo: nomeDaCidade(p.chave), valor: p.valor }))}
-              />
-            ) : (
-              <Falha b={a.seguidores} />
-            )}
-          </div>
-        </Painel>
-        <Painel icone={Globe} titulo="Países" resumo="Top 6">
-          <div style={{ marginTop: 12 }}>
-            {a.seguidores.ok ? (
-              <Barras itens={a.seguidores.dados.paises.slice(0, 6).map((p) => ({ rotulo: p.chave, valor: p.valor }))} />
-            ) : (
-              <Falha b={a.seguidores} />
-            )}
-          </div>
-        </Painel>
-      </div>
+      <Geografia seguidores={a.seguidores} />
     </div>
   );
 }
@@ -438,6 +419,67 @@ function AudienciaPage() {
         Dados da Meta lidos em {new Date(a.gerado_em).toLocaleString("pt-BR")}. Alcance, visualizações e interações cobrem os últimos {a.periodo.dias} dias; a
         Meta não permite períodos maiores que 30 dias nestas métricas.
       </p>
+    </div>
+  );
+}
+
+// Onde os seguidores estão: Brasil por estado (somando as cidades que a Meta informa) e mundo por país.
+function Geografia({ seguidores }: { seguidores: Bloco<{ faixa_etaria: { chave: string; valor: number }[]; genero: { chave: string; valor: number }[]; cidades: { chave: string; valor: number }[]; paises: { chave: string; valor: number }[] }> }) {
+  const g = useMemo(() => {
+    if (!seguidores.ok) return null;
+    const { cidades, paises } = seguidores.dados;
+    const porUf: Record<string, number> = {};
+    let semEstado = 0;
+    for (const c of cidades) {
+      const uf = ufDaCidade(c.chave);
+      if (uf) porUf[uf] = (porUf[uf] ?? 0) + c.valor;
+      else semEstado += c.valor;
+    }
+    const porPais: Record<string, number> = {};
+    for (const p of paises) porPais[p.chave] = p.valor;
+    const estados = Object.entries(porUf).sort((x, y) => y[1] - x[1]);
+    return { cidades, paises, porUf, porPais, estados, semEstado, totalCidades: soma(cidades) };
+  }, [seguidores]);
+
+  if (!seguidores.ok) return <Painel icone={MapPin} titulo="Onde estão" resumo="Brasil e mundo"><Falha b={seguidores} /></Painel>;
+  if (!g) return null;
+  const nomeUf = (uf: string) => ESTADOS_BR.find((e) => e.uf === uf)?.nome ?? uf;
+  const totalUf = g.estados.reduce((acc, [, v]) => acc + v, 0);
+
+  return (
+    <div style={{ display: "grid", gap: 16 }}>
+      <Painel
+        icone={MapPin}
+        titulo="Onde estão no Brasil"
+        resumo="Estados mais escuros têm mais seguidores"
+        ajuda={<>Cada estado soma as cidades que a Meta informa ({g.cidades.length} cidades, {fmtN(g.totalCidades)} seguidores com cidade conhecida). A Meta entrega só as cidades principais, então estados com muita gente espalhada em cidades pequenas aparecem com menos do que têm de verdade.{g.semEstado > 0 ? <> {fmtN(g.semEstado)} seguidores estão em cidades sem estado identificado e não entram no mapa.</> : null}</>}
+      >
+        <div className="hgrid two" style={{ alignItems: "start", marginTop: 4 }}>
+          <MapaBrasil porUf={g.porUf} />
+          <div style={{ display: "grid", gap: 18 }}>
+            <div>
+              <h3 style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8 }}>Estados</h3>
+              <Barras total={totalUf} itens={g.estados.slice(0, 6).map(([uf, v]) => ({ rotulo: nomeUf(uf), valor: v }))} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8 }}>Cidades principais</h3>
+              <Barras total={g.totalCidades} itens={g.cidades.slice(0, 10).map((p) => ({ rotulo: nomeDaCidade(p.chave), valor: p.valor }))} />
+            </div>
+          </div>
+        </div>
+      </Painel>
+
+      <Painel
+        icone={Globe}
+        titulo="Países"
+        resumo="Países mais escuros têm mais seguidores"
+        ajuda={<>Seguidores por país, como a Meta informa. A escala de cor usa a raiz do valor para os países pequenos não sumirem ao lado do Brasil. Países muito pequenos podem não aparecer no mapa, mas estão na lista.</>}
+      >
+        <div className="hgrid two" style={{ alignItems: "center", marginTop: 4 }}>
+          <MapaMundo porPais={g.porPais} />
+          <Barras total={soma(g.paises)} itens={g.paises.slice(0, 6).map((p) => ({ rotulo: nomeDoPais(p.chave), valor: p.valor }))} />
+        </div>
+      </Painel>
     </div>
   );
 }
