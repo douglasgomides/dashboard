@@ -101,11 +101,12 @@ function linkClicks(acoes: AcaoMeta[] | undefined): number {
   return somaAcao(acoes, (t) => t === "link_click");
 }
 
-async function buscarInsights(
+async function buscarInsightsUmaJanela(
   contaId: string,
   token: string,
   since: string,
   until: string,
+  limite = 500,
 ): Promise<LinhaInsight[]> {
   const campos = [
     "date_start",
@@ -127,7 +128,7 @@ async function buscarInsights(
   let url =
     `${API}/${conta}/insights?level=campaign&time_increment=1` +
     `&time_range=${encodeURIComponent(JSON.stringify({ since, until }))}` +
-    `&fields=${campos}&limit=500&access_token=${encodeURIComponent(token)}`;
+    `&fields=${campos}&limit=${limite}&access_token=${encodeURIComponent(token)}`;
 
   const linhas: LinhaInsight[] = [];
   // Teto de páginas: uma conta com muitas campanhas em janela longa pagina
@@ -143,6 +144,46 @@ async function buscarInsights(
     url = corpo.paging?.next ?? "";
   }
   return linhas;
+}
+
+const ERRO_DE_CARGA = /"code":\s*(1|2)\b|temporarily unavailable|respondeu 5\d\d|unknown error|reduce the amount of data/i;
+const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const somaDias = (iso: string, n: number) => new Date(new Date(iso + "T12:00:00Z").getTime() + n * 86400_000).toISOString().slice(0, 10);
+
+// Conta com muitas campanhas (a do Douglas tem 127) faz a Meta responder "unknown error" a consultas grandes.
+// Primeiro tenta a janela inteira; se a Meta reclamar de carga, refaz em janelas curtas com páginas pequenas,
+// guardando o que conseguir. Janelas que falharem ficam em "avisos" (dado parcial é dito, nunca escondido).
+async function buscarInsights(contaId: string, token: string, since: string, until: string, avisos: string[]): Promise<LinhaInsight[]> {
+  try {
+    return await buscarInsightsUmaJanela(contaId, token, since, until);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!ERRO_DE_CARGA.test(msg)) throw e;
+    const linhas: LinhaInsight[] = [];
+    let ultimoErro = msg;
+    let falhas = 0;
+    let ok = 0;
+    for (let ini = since; ini <= until; ini = somaDias(ini, 2)) {
+      const fim = somaDias(ini, 1) > until ? until : somaDias(ini, 1);
+      let feito = false;
+      for (const [limite, espera] of [[50, 0], [25, 1500]] as const) {
+        if (espera) await dormir(espera);
+        try {
+          linhas.push(...(await buscarInsightsUmaJanela(contaId, token, ini, fim, limite)));
+          feito = true;
+          break;
+        } catch (e2) {
+          ultimoErro = e2 instanceof Error ? e2.message : String(e2);
+          if (!ERRO_DE_CARGA.test(ultimoErro)) throw e2;
+        }
+      }
+      if (feito) ok++;
+      else falhas++;
+    }
+    if (ok === 0) throw new Error(ultimoErro);
+    if (falhas > 0) avisos.push(`Meta devolveu dado só de parte do período (${falhas} janela${falhas === 1 ? "" : "s"} falharam): ${ultimoErro.slice(0, 120)}`);
+    return linhas;
+  }
 }
 
 export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAdsGraphResult[]> {
@@ -200,7 +241,9 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
     }
 
     try {
-      const linhas = await buscarInsights(conta.ad_account_id, tokenConta, since, until);
+      const avisos: string[] = [];
+      const linhas = await buscarInsights(conta.ad_account_id, tokenConta, since, until, avisos);
+      for (const a of avisos) r.errors.push(a);
 
       // A Meta devolve uma linha por campanha por dia. Campanha repete em
       // todos os dias, então o cadastro dela é deduplicado antes de gravar.
