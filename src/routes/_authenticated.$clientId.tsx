@@ -70,6 +70,7 @@ function buildGroups(clientName: string): NavGroup[] {
         { to: "/$clientId/anuncios", label: "Anúncios", Icone: Megaphone, fonte: "anuncios" },
         { to: "/$clientId/crm-painel", label: "Comercial", Icone: Briefcase, fonte: "crm" },
         { to: "/$clientId/atendimento", label: "WhatsApp", Icone: MessageCircle, fonte: "atendimento" },
+        { to: "/$clientId/conversas", label: "Conversas", Icone: MessageCircle, admin: true, fonte: "atendimento" },
         { to: "/$clientId/duvidas", label: "Dúvidas", Icone: HelpCircle, fonte: "instagram" },
         { to: "/$clientId/ideias", label: "Ideias", Icone: Lightbulb },
         { to: "/$clientId/relatorio", label: "Relatório", Icone: FileText },
