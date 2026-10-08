@@ -298,9 +298,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const planilha = (conexoes ?? []).filter((c) => c.provider === "planilha");
 
       if (kommo.length === 0 && clint.length === 0 && rdstation.length === 0 && flwchat.length === 0) {
+        // CRM que a equipe da cliente não liberou: o dado chega por planilha/relatório exportado e é lançado
+        // à mão. Grava o motivo para o painel dizer isso, em vez de parecer falha de sincronização.
+        if (kommoManual.length > 0 || planilha.length > 0) {
+          try {
+            await admin.from("sync_status").upsert(
+              {
+                client_id: client_id as string,
+                fonte: "crm",
+                motivo:
+                  "A equipe da cliente não liberou acesso ao CRM e envia só uma planilha exportada dele, que é lançada à mão aqui. O dado só avança quando chega uma planilha nova. Não é falha de sincronização.",
+                motivo_dono: "cliente",
+                motivo_em: new Date().toISOString(),
+              } as never,
+              { onConflict: "client_id,fonte" },
+            );
+          } catch {
+            /* a coluna pode ainda não existir; o aviso é um extra */
+          }
+        }
         if (kommoManual.length > 0) {
           return {
-            nada_a_fazer: "CRM lançado à mão (relatório da clínica), sem ligação com o Kommo para sincronizar.",
+            nada_a_fazer: "CRM lançado à mão (planilha exportada pela equipe da cliente), sem acesso ao CRM para sincronizar.",
             linhas: 0,
             erros: [] as string[],
           };
