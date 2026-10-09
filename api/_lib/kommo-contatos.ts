@@ -104,7 +104,7 @@ export async function enriquecerContatosKommo(
       await dormir(180);
     }
 
-    const linhas: Record<string, unknown>[] = [];
+    const linhas: { id: string; phone: string | null; email: string | null; nome: string | null }[] = [];
     for (const l of leads) {
       const cid = contatoDoLead.get(l.id);
       if (!cid) continue;
@@ -114,22 +114,13 @@ export async function enriquecerContatosKommo(
       if (d.phone) r.comTelefone++;
       if (d.email) r.comEmail++;
       if (!d.phone && !d.email && !d.nome) continue;
-      const linha: Record<string, unknown> = {
-        crm_connection_id: conn.id,
-        client_id: conn.client_id,
-        provider: "kommo",
-        external_lead_id: String(l.id),
-        event_type: "sync",
-      };
-      if (d.phone) linha.contact_phone = d.phone;
-      if (d.email) linha.contact_email = d.email;
-      if (d.nome) linha.contact_name = d.nome;
-      linhas.push(linha);
+      linhas.push({ id: String(l.id), phone: d.phone, email: d.email, nome: d.nome });
     }
-    for (let i = 0; i < linhas.length; i += 200) {
-      const { error } = await supabase.from("crm_leads").upsert(linhas.slice(i, i + 200), { onConflict: "crm_connection_id,external_lead_id" });
+    // Função do banco que só atualiza as colunas de contato (um upsert exigiria raw_payload e o sobrescreveria).
+    for (let i = 0; i < linhas.length; i += 250) {
+      const { data, error } = await supabase.rpc("aplicar_contatos_kommo", { p_conn: conn.id, p_linhas: linhas.slice(i, i + 250) });
       if (error) r.erros.push(`gravar página ${pagina}: ${error.message}`);
-      else r.gravados += Math.min(200, linhas.length - i);
+      else r.gravados += Number(data) || 0;
     }
 
     r.paginasLidas++;
