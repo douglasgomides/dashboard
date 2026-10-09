@@ -84,11 +84,18 @@ export async function ingerirConversasWts(
     for (const e of ex ?? []) existentes.set(e.externo_id, e.ultima_msg_em ?? "");
   }
   // Novas sempre; as já gravadas só se a sessão mudou depois da última mensagem conhecida.
-  const pendentes = sessoes.filter((s: any) => {
+  // Sem conversa gravada primeiro (senão as sessões recentes que só mudaram de estado ocupam todo o lote e as antigas
+  // nunca chegam). Depois, as já gravadas que mudaram depois da última mensagem, só se mudaram nos últimos 3 dias.
+  const limiteMudanca = Date.now() - 3 * 86_400_000;
+  const novas = sessoes.filter((s: any) => existentes.get(String(s.session_id)) === undefined);
+  const mudaram = sessoes.filter((s: any) => {
     const ult = existentes.get(String(s.session_id));
+    if (ult === undefined) return false;
     if (opts.refazer) return true;
-    return ult === undefined || (s.updated_at && ult && new Date(s.updated_at).getTime() > new Date(ult).getTime() + 60_000);
+    const up = s.updated_at ? new Date(s.updated_at).getTime() : 0;
+    return !!ult && up > new Date(ult).getTime() + 60_000 && up >= limiteMudanca;
   });
+  const pendentes = [...novas, ...mudaram];
 
   // Códigos dos links rastreados deste cliente (casam com a primeira mensagem do paciente).
   const { data: links } = await supabase.from("links_rastreados").select("id, codigo_ref, tipo, instagram_post_id, ad_campaign_id").eq("client_id", clientId);

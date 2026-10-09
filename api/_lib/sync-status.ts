@@ -137,7 +137,8 @@ export async function lerDadosAte(
       return soData((data as Record<string, string> | null)?.[coluna]);
     };
     if (fonte === "anuncios") return await topo("meta_ads_daily", "date");
-    if (fonte === "crm") return await topo("crm_leads", "received_at");
+    // Data do lead (occurred_at), não a da sincronização: o Kommo grava received_at = agora a cada rodada.
+    if (fonte === "crm") return (await topo("crm_leads", "occurred_at")) ?? (await topo("crm_leads", "received_at"));
     if (fonte === "atendimento") return await topo("wts_sessions", "started_at");
     if (fonte === "instagram") {
       const [a, b] = await Promise.all([

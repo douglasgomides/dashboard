@@ -34,7 +34,8 @@ export async function dadosAte(clientId: string): Promise<LinhaFonte[]> {
     ultima("instagram_account_daily_metrics", "date", clientId),
     ultima("instagram_posts", "metrics_updated_at", clientId),
     ultima("meta_ads_daily", "date", clientId),
-    ultima("crm_leads", "received_at", clientId),
+    // Data do lead, não a da sincronização (o Kommo grava received_at = agora a cada rodada).
+    ultima("crm_leads", "occurred_at", clientId).then(async (d) => d ?? (await ultima("crm_leads", "received_at", clientId))),
     ultima("wts_sessions", "started_at", clientId),
   ]);
   // Instagram vale o dado MAIS ANTIGO entre a conta e os posts (caso da Marcelly: posts parados, conta em dia).
