@@ -13,6 +13,7 @@ import { runFlwChatSync } from "../_lib/flwchat-sync.js";
 import { lerAudiencia } from "../_lib/meta-audiencia.js";
 import { classificarConteudoComIA } from "../_lib/conteudo-ia.js";
 import { ingerirConversasWts } from "../_lib/conversas-wts.js";
+import { enriquecerContatosKommo } from "../_lib/kommo-contatos.js";
 import { criarLinkShort, cliquesDoLink, destinoWhatsApp, novoCodigoRef } from "../_lib/shortio.js";
 import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_lib/sync-status.js";
 
@@ -87,7 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas"];
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos"];
   if (!client_id || !alvo || !ALVOS.includes(alvo)) {
     res.status(400).json({ error: "Informe client_id e alvo ('tudo', 'posts', 'anuncios', 'atendimento', 'comentarios' ou 'crm')" });
     return;
@@ -490,6 +491,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const extras = (ligacoes ?? []).map((l) => l.access_token as string).filter(Boolean);
       const r = await ingerirConversasWts(admin, WTS_API_TOKEN, client_id as string, { limite: Math.min(Number(b.limite) || 120, 300), dias: b.dias, refazer: !!b.refazer, tokensExtras: extras, orcamentoMs: 200_000 });
       res.status(r.erros.length ? 207 : 200).json({ alvo, ok: r.erros.length === 0, ...r, erros: r.erros.slice(0, 8) });
+      return;
+    }
+
+    // ---- Telefone, e-mail e nome dos leads do Kommo (contatos). Só admin; o token fica no servidor. ----
+    if (alvo === "kommo_contatos") {
+      if (!ehAdmin) {
+        res.status(403).json({ error: "Só admin" });
+        return;
+      }
+      const b = (req.body ?? {}) as { pagina?: number; paginas?: number };
+      const { data: conns } = await admin.from("crm_connections").select("id, client_id, subdomain, access_token, provider").eq("client_id", client_id).eq("provider", "kommo").eq("active", true);
+      const conn = (conns ?? []).find((c) => c.subdomain && c.access_token);
+      if (!conn) {
+        res.status(200).json({ alvo, ok: false, erro: "Cliente sem conexão Kommo com subdomínio e token" });
+        return;
+      }
+      const r = await enriquecerContatosKommo(admin, { id: conn.id, client_id: conn.client_id, subdomain: conn.subdomain as string, access_token: conn.access_token as string }, { pagina: Number(b.pagina) || 1, paginas: Math.min(Number(b.paginas) || 20, 60), orcamentoMs: 240_000 });
+      if (r.proximaPagina === null) {
+        try {
+          await admin.rpc("vincular_pessoas", { p_client: client_id });
+        } catch {
+          /* o vínculo roda de novo no próximo sync de CRM */
+        }
+      }
+      res.status(r.erros.length ? 207 : 200).json({ alvo, ok: r.erros.length === 0, ...r, erros: r.erros.slice(0, 6) });
       return;
     }
 
