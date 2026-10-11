@@ -4,6 +4,11 @@ import { createHash } from "node:crypto";
 
 // Entrada do Tracker do Sistema de Aquisição de Pacientes (SAP).
 //
+// Fica em _lib e não em api/sap/ de propósito: o plano da Vercel deste projeto
+// já está no limite de 12 funções. Hoje quem grava no Tracker são os workflows
+// "SAP |" do n8n, direto no Supabase. Para expor como endpoint, junte as
+// funções de sync num roteador único e importe este handler de lá.
+//
 // Máquina chamando máquina (n8n, formulário, CRM), então autoriza pelo
 // SYNC_SECRET no header Authorization: Bearer, igual aos endpoints de sync.
 //
