@@ -135,3 +135,21 @@ Vercel. Via dashboard (deploy automático a cada push):
   agendamento por cima.
 - Onboarding self-service (OAuth) só depois que os 2 clientes piloto
   validarem a Fase 1.
+
+## Sistema de Aquisição de Pacientes · Tracker (`/$clientId/aquisicao`)
+
+Funil do SAP por clínica: leads → qualificados (A+B) → agendamentos → consultas
+→ fechamentos → receita, com investimento (Meta pelo `meta_ads_daily`, outras
+fontes por `sap_metricas_diarias`), semáforo semanal, meta x realizado pró-rata,
+motivos de não fechamento, toque do follow-up em que fechou e tabela de leads.
+Sem clínica ligada, a tela oferece um exemplo em memória (nada é gravado).
+
+- Banco: `supabase/migrations/20261011120000_sap_tracker.sql` (só tabelas
+  `sap_*`, view `sap_funil_semanal` e policies de leitura; nada existente muda).
+  A clínica aparece no Hub quando `sap_clinicas.client_id` aponta para o cliente.
+- Entrada: `POST /api/sap/lead` (cria, gera `L-AAAAMMDD-NNN`, deduplica por
+  `meta_lead_id` ou telefone em 30 dias) e `PATCH /api/sap/lead?id=...`
+  (status). Autoriza por `Authorization: Bearer $SYNC_SECRET`. Telefone e e-mail
+  chegam crus e são gravados só como SHA-256.
+- Workflows do n8n que escrevem aqui: `SAP | Lead → Tracker`,
+  `SAP | Status → Tracker + Conversões offline`, `SAP | Alerta semanal`.

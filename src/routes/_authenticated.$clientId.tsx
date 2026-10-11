@@ -21,6 +21,7 @@ import {
   ListChecks,
   Users,
   Trophy,
+  Target,
 } from "lucide-react";
 import { getClient, getClientFontes } from "@/lib/client-data";
 import { listAllClients } from "@/lib/admin-data";
@@ -68,6 +69,7 @@ function buildGroups(clientName: string): NavGroup[] {
         { to: "/$clientId/top", label: "Top conteúdos", Icone: Trophy, fonte: "instagram" },
         { to: "/$clientId/audiencia", label: "Audiência", Icone: Users, fonte: "instagram" },
         { to: "/$clientId/anuncios", label: "Anúncios", Icone: Megaphone, fonte: "anuncios" },
+        { to: "/$clientId/aquisicao", label: "Aquisição", Icone: Target },
         { to: "/$clientId/crm-painel", label: "Comercial", Icone: Briefcase, fonte: "crm" },
         { to: "/$clientId/atendimento", label: "WhatsApp", Icone: MessageCircle, fonte: "atendimento" },
         { to: "/$clientId/jornada", label: "Jornada", Icone: Activity, admin: true },
