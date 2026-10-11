@@ -31,6 +31,9 @@ function AdminLayout() {
             <Link to="/admin/referencia" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
               Referência entre clientes
             </Link>
+            <Link to="/admin/aquisicao" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
+              Sistema de Aquisição
+            </Link>
           </nav>
         </div>
         <LogoutButton />

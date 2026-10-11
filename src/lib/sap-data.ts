@@ -332,8 +332,8 @@ function rng(seed: number) {
   };
 }
 
-export function dadosDeExemplo(start: string, end: string): SapDados {
-  const r = rng(42);
+export function dadosDeExemplo(start: string, end: string, seed = 42): SapDados {
+  const r = rng(seed);
   const pick = <T,>(arr: readonly T[]) => arr[Math.floor(r() * arr.length)];
   const servicos = ["Harmonização facial", "Bioestimulador", "Protocolo de flacidez"] as const;
   const canais = ["Meta Ads", "Meta Ads", "Meta Ads", "Google Ads", "Indicação", "Orgânico"] as const;
@@ -391,4 +391,142 @@ export function dadosDeExemplo(start: string, end: string): SapDados {
     investimento,
     metas,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Portfólio: todas as clínicas do SAP numa tela (admin).
+
+export const MARCOS: { dia: number; nome: string }[] = [
+  { dia: 3, nome: "Kickoff" },
+  { dia: 7, nome: "Acessos críticos e baseline" },
+  { dia: 10, nome: "Sessão 1 · Diagnóstico" },
+  { dia: 14, nome: "Sessão 2 · Metas assinadas" },
+  { dia: 17, nome: "Sessão 3 · Atração" },
+  { dia: 21, nome: "Sessão 4 · Conversa" },
+  { dia: 29, nome: "Anúncios no ar" },
+  { dia: 35, nome: "Sessão 5 · Venda" },
+  { dia: 48, nome: "Sessão 6 · Fidelização" },
+  { dia: 60, nome: "Checkpoint D60" },
+  { dia: 90, nome: "Encerramento D90" },
+];
+
+export function faseDoDia(dia: number | null): string {
+  if (dia === null) return "sem D0";
+  if (dia < 0) return "antes do D0";
+  if (dia <= 7) return "Onboarding";
+  if (dia <= 14) return "Diagnóstico e metas";
+  if (dia <= 28) return "Montagem";
+  if (dia <= 30) return "Lançamento";
+  if (dia < 60) return "Venda e fidelização";
+  if (dia <= 90) return "Otimização";
+  return "Pós-contrato";
+}
+
+export function diaAtual(d0: string | null): number | null {
+  if (!d0) return null;
+  return Math.floor((Date.now() - Date.parse(`${d0}T12:00:00-03:00`)) / 86400000);
+}
+
+export function proximoMarco(dia: number | null): { dia: number; nome: string; faltam: number } | null {
+  if (dia === null) return null;
+  const m = MARCOS.find((x) => x.dia >= dia);
+  return m ? { ...m, faltam: m.dia - dia } : null;
+}
+
+export type SapLinhaPortfolio = {
+  clinica: SapClinica;
+  dia: number | null;
+  semana: SapResumo;
+  semanaAnterior: SapResumo;
+};
+
+function isoDia(offset: number): string {
+  const d = new Date(Date.now() + offset * 86400000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Fortaleza" }).format(d);
+}
+
+// Semana = últimos 7 dias fechados; anterior = os 7 antes dela.
+export function janelasDaSemana() {
+  return { ini: isoDia(-7), fim: isoDia(-1), iniAnt: isoDia(-14), fimAnt: isoDia(-8) };
+}
+
+function recorte(d: SapDados, ini: string, fim: string): SapDados {
+  const a = `${ini}T00:00:00-03:00`;
+  const b = `${fim}T23:59:59.999-03:00`;
+  return {
+    ...d,
+    leads: d.leads.filter((l) => Date.parse(l.data_entrada) >= Date.parse(a) && Date.parse(l.data_entrada) <= Date.parse(b)),
+    investimento: d.investimento.filter((r) => r.data >= ini && r.data <= fim),
+  };
+}
+
+export function montarLinha(d: SapDados): SapLinhaPortfolio {
+  const j = janelasDaSemana();
+  return {
+    clinica: d.clinica,
+    dia: diaAtual(d.clinica.d0),
+    semana: calcularResumo(recorte(d, j.ini, j.fim), j.ini, j.fim),
+    semanaAnterior: calcularResumo(recorte(d, j.iniAnt, j.fimAnt), j.iniAnt, j.fimAnt),
+  };
+}
+
+// null quando as tabelas sap_* ainda não existem.
+export async function getSapPortfolio(): Promise<SapLinhaPortfolio[] | null> {
+  const { data: clinicas, error } = await db
+    .from("sap_clinicas")
+    .select("id, client_id, nome, cidade, especialidade, d0, status")
+    .order("d0", { ascending: true });
+  if (error) {
+    if (error.code === "42P01" || /does not exist|schema cache/i.test(error.message)) return null;
+    throw error;
+  }
+  const lista = (clinicas ?? []) as SapClinica[];
+  if (!lista.length) return [];
+  const j = janelasDaSemana();
+  const ids = lista.map((c) => c.id);
+  const clientIds = lista.map((c) => c.client_id).filter((x): x is string => !!x);
+  const [leadsR, metaR, outrosR, metasR] = await Promise.all([
+    db.from("sap_leads").select(`clinica_id, ${CAMPOS_LEAD}`).in("clinica_id", ids).gte("data_entrada", `${j.iniAnt}T00:00:00-03:00`).limit(20000),
+    clientIds.length
+      ? db.from("meta_ads_daily").select("client_id, date, spend").in("client_id", clientIds).gte("date", j.iniAnt).limit(50000)
+      : Promise.resolve({ data: [], error: null }),
+    db.from("sap_metricas_diarias").select("clinica_id, data, canal, investimento").in("clinica_id", ids).gte("data", j.iniAnt),
+    db.from("sap_metas").select("clinica_id, mes, etapa, meta").in("clinica_id", ids).gte("mes", `${j.iniAnt.slice(0, 7)}-01`),
+  ]);
+  for (const r of [leadsR, metaR, outrosR, metasR]) if (r.error) throw r.error;
+  type L = SapLead & { clinica_id: string };
+  const leads = (leadsR.data ?? []) as L[];
+  const meta = (metaR.data ?? []) as { client_id: string; date: string; spend: number }[];
+  const outros = (outrosR.data ?? []) as (SapInvestimento & { clinica_id: string })[];
+  const metas = (metasR.data ?? []) as (SapMeta & { clinica_id: string })[];
+  return lista.map((c) =>
+    montarLinha({
+      clinica: c,
+      leads: leads.filter((l) => l.clinica_id === c.id),
+      investimento: [
+        ...meta.filter((m) => m.client_id === c.client_id).map((m) => ({ data: m.date, canal: "Meta Ads", investimento: Number(m.spend) || 0 })),
+        ...outros.filter((o) => o.clinica_id === c.id && o.canal !== "Meta Ads").map((o) => ({ data: o.data, canal: o.canal, investimento: Number(o.investimento) || 0 })),
+      ],
+      metas: metas.filter((m) => m.clinica_id === c.id).map((m) => ({ mes: m.mes, etapa: m.etapa, meta: Number(m.meta) || 0 })),
+    }),
+  );
+}
+
+export function portfolioDeExemplo(): SapLinhaPortfolio[] {
+  const base = [
+    { nome: "Clínica Aurora Dermatologia", cidade: "Campinas/SP", especialidade: "Dermatologia estética", diasAtras: 41 },
+    { nome: "Instituto Vértice Cirurgia Plástica", cidade: "Belo Horizonte/MG", especialidade: "Cirurgia plástica", diasAtras: 12 },
+    { nome: "Clínica Sorriso Pleno", cidade: "Recife/PE", especialidade: "Odontologia", diasAtras: 67 },
+  ];
+  return base.map((b, i) => {
+    const d0 = isoDia(-b.diasAtras);
+    const d = dadosDeExemplo(isoDia(-21), isoDia(-1), 42 + i * 101);
+    const fator = [1, 0.35, 0.8][i];
+    const leads = d.leads.filter((_, k) => (k * 7919) % 100 < fator * 100);
+    return montarLinha({
+      ...d,
+      leads,
+      clinica: { id: `exemplo-${i}`, client_id: null, nome: b.nome, cidade: b.cidade, especialidade: b.especialidade, d0, status: b.diasAtras < 29 ? "onboarding" : "rodando" },
+    });
+  });
 }
