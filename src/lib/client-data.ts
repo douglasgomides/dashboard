@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { diagnosticarAds, type LinhaAds, type CampanhaCadastro } from "@/lib/anuncios-objetivo";
+import { lerDiagnosticoRpc, montarDadosReduzidos, type DadosComerciais, type MetricasEssenciais, type WtsResumoMin } from "@/lib/comercial";
 import { filtrarPerguntas } from "@/lib/comentarios";
 import type {
   ContentFormat,
@@ -519,11 +520,11 @@ export async function getComentariosVozDoPaciente(clientId: string, start: strin
   if (error) throw error;
   const comentarios = data ?? [];
   return { comentarios, donos, noLimite: comentarios.length >= limit };
+}
 
 // ---- Comercial: "onde o funil quebra" + checklist de dados -------------------
 // Tenta a RPC crm_diagnostico_comercial (migração 20261013150000). Se ela ainda não
 // existe no banco, monta uma leitura reduzida com as funções que já existem.
-import { lerDiagnosticoRpc, montarDadosReduzidos, type DadosComerciais, type MetricasEssenciais, type WtsResumoMin } from "@/lib/comercial";
 
 export async function getDiagnosticoComercial(clientId: string, start: string, end: string): Promise<DadosComerciais> {
   const cli = supabase as unknown as RpcClient;
