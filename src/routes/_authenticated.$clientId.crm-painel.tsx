@@ -18,6 +18,8 @@ import {
   Activity,
   Info,
   AlertTriangle,
+  ChevronDown,
+  ScanSearch,
   type LucideIcon,
 } from "lucide-react";
 import { Painel, Kpi, Selo, BarraFina, Ajuda } from "@/components/visual";
@@ -32,6 +34,8 @@ import {
 } from "@/lib/client-data";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { SyncButton } from "@/components/sync-button";
+import { ListaLimitacoes } from "@/components/insight-card";
+import { ChecklistDados, FunilOndeQuebra, ProblemasPorTipo, useDiagnosticoComercial } from "@/components/comercial-diagnostico";
 
 // Nome de exibição do CRM — evita chamar tudo de "Kommo" quando o cliente é Clint.
 function nomeCrm(provider: string | null | undefined): string {
@@ -316,6 +320,8 @@ function CrmPainelPage() {
     queryKey: ["crm-resumo-periodo", clientId, start, end],
     queryFn: () => getCrmResumoPeriodo(clientId, start, end),
   });
+  // Camada 1: "onde o funil quebra", problemas por tipo e checklist (src/lib/comercial.ts).
+  const diag = useDiagnosticoComercial(clientId, start, end);
 
   if (isLoading) return <p style={{ color: "var(--text-dim)" }}>Carregando…</p>;
 
@@ -351,8 +357,8 @@ function CrmPainelPage() {
           icone={Info}
           ajuda={
             <>
-              Números do relatório de CRM da semana 31/08–04/09/2026 (gerado em 08/09/2026), enviado pela equipe da
-              clínica e exportado do Kommo. Não atualiza automaticamente.
+              Números do relatório de CRM da semana 31/08–04/09/2026 (gerado em 08/09/2026), enviado pela equipe da clínica e exportado do
+              Kommo. Não atualiza automaticamente.
             </>
           }
         >
@@ -366,9 +372,9 @@ function CrmPainelPage() {
               O que está acontecendo no CRM ({crmNome}) agora — direto do banco, atualiza sozinho todo dia.
               {crmProvider === "kommo" && (
                 <div className="mt-2">
-                  Os números aqui são de <strong>leads</strong> (os negócios/cards do funil), não de conversas de chat.
-                  Por isso ficam menores que as “Conversas em andamento” que o Kommo mostra — um mesmo lead pode ter
-                  várias conversas, e muita conversa nunca vira lead.
+                  Os números aqui são de <strong>leads</strong> (os negócios/cards do funil), não de conversas de chat. Por isso ficam
+                  menores que as “Conversas em andamento” que o Kommo mostra — um mesmo lead pode ter várias conversas, e muita conversa
+                  nunca vira lead.
                 </div>
               )}
             </>
@@ -382,6 +388,65 @@ function CrmPainelPage() {
           )}
         </Faixa>
       )}
+
+      {/* Camada 1: onde o funil quebra, o que está travando e o que falta medir. */}
+      {diag.data?.dados.crmCompartilhado && (
+        <Faixa icone={AlertTriangle} cor="var(--crit)" alerta>
+          <b>Mesmos dados de outro cliente:</b> esta conta de CRM também está ligada a {diag.data.dados.crmCompartilhado.clientes} outro(s)
+          cliente(s)
+          {diag.data.dados.crmCompartilhado.nomes.length ? ` (${diag.data.dados.crmCompartilhado.nomes.join(", ")})` : ""}. Os números
+          abaixo não são só deste médico.
+        </Faixa>
+      )}
+
+      <Painel
+        icone={Filter}
+        titulo="Onde o funil quebra"
+        resumo={`Entrou → foi atendido → agendou → comprou · ${formatRangeLabel({ start, end })}`}
+        ajuda={
+          <>
+            Quatro passos, cada um com quantos chegaram e o percentual sobre o passo anterior (base diferente da “taxa de conversão” mais
+            abaixo, que continua sendo ganhos ÷ (ganhos + perdidos) da base inteira). A caixa no topo mostra onde mais gente fica pelo
+            caminho.
+          </>
+        }
+      >
+        {diag.isLoading && (
+          <p className="text-sm" style={{ color: "var(--text-dim)" }}>
+            Calculando o funil…
+          </p>
+        )}
+        {diag.error && (
+          <p className="text-sm" style={{ color: "var(--crit)" }}>
+            Não deu para montar o funil: {(diag.error as Error).message}
+          </p>
+        )}
+        {diag.data && <FunilOndeQuebra funil={diag.data.funil} />}
+      </Painel>
+
+      {diag.data && (
+        <Painel icone={Target} titulo="O que está travando" resumo="Cada problema com o tipo, quem resolve e o que fazer">
+          <ProblemasPorTipo porTipo={diag.data.porTipo} clientId={clientId} />
+        </Painel>
+      )}
+
+      {diag.data && (
+        <Painel
+          icone={ScanSearch}
+          titulo="Checklist de dados"
+          resumo="O que precisa estar no CRM para o painel conseguir responder"
+          cor="var(--s7)"
+        >
+          <ChecklistDados itens={diag.data.checklist} clientId={clientId} />
+        </Painel>
+      )}
+
+      {diag.data && <ListaLimitacoes itens={diag.data.limitacoes} />}
+
+      {/* Camada 2: a leitura de sempre do CRM — mesmos números, fórmulas e janelas de antes. */}
+      <h2 className="pt-2 text-sm font-semibold" style={{ color: "var(--text-dim)" }}>
+        Números do CRM
+      </h2>
 
       {etapasPorConfirmar && (
         <Faixa icone={AlertTriangle} cor="var(--warn)" alerta>
@@ -427,16 +492,22 @@ function CrmPainelPage() {
         resumo={`${fmtN(base)} leads na base — cada barra é a fatia da base`}
         ajuda={
           <>
-            Cada barra mostra quantos leads estão naquela situação e o percentual sobre os {fmtN(base)} leads da base.
-            Taxa de conversão = ganhos ÷ (ganhos + perdidos). “Ainda em disputa” são os leads que não foram nem ganhos
-            nem perdidos.
+            Cada barra mostra quantos leads estão naquela situação e o percentual sobre os {fmtN(base)} leads da base. Taxa de conversão =
+            ganhos ÷ (ganhos + perdidos). “Ainda em disputa” são os leads que não foram nem ganhos nem perdidos.
           </>
         }
       >
         <div className="grid gap-5 lg:grid-cols-5">
           <ul className="space-y-3.5 lg:col-span-3">
             <EtapaFunil icone={Users} rotulo="Leads na base" valor={m.total_leads} base={base} cor="var(--s1)" />
-            <EtapaFunil icone={Hourglass} rotulo="Ainda em disputa" valor={emDisputa} base={base} cor="var(--s3)" extra="não ganhos nem perdidos" />
+            <EtapaFunil
+              icone={Hourglass}
+              rotulo="Ainda em disputa"
+              valor={emDisputa}
+              base={base}
+              cor="var(--s3)"
+              extra="não ganhos nem perdidos"
+            />
             <EtapaFunil
               icone={Headset}
               rotulo="Em atendimento"
@@ -480,7 +551,12 @@ function CrmPainelPage() {
         </div>
       </Painel>
 
-      <Painel icone={Sparkles} titulo="No período selecionado" resumo={`Leads criados entre ${formatRangeLabel({ start, end })}`} cor="var(--s3)">
+      <Painel
+        icone={Sparkles}
+        titulo="No período selecionado"
+        resumo={`Leads criados entre ${formatRangeLabel({ start, end })}`}
+        cor="var(--s3)"
+      >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Kpi icone={Users} rotulo="Leads novos" valor={fmtN(periodo?.novos ?? 0)} cor="var(--accent)" />
           <Kpi icone={Trophy} rotulo="Ganhos" valor={fmtN(periodo?.ganhos ?? 0)} cor="var(--good)" />
@@ -489,35 +565,44 @@ function CrmPainelPage() {
         </div>
       </Painel>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <TendenciaDeLeads clientId={clientId} start={start} end={end} />
-        </div>
-        <AtividadeRecente clientId={clientId} />
-      </div>
+      {/* Camada 3: dados completos, abertos sob demanda. */}
+      <details className="group rounded-xl border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+        <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-2 px-4 text-sm font-semibold">
+          Ver dados completos (leads por dia, atividade, fonte e procedimento)
+          <ChevronDown size={16} aria-hidden className="transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="space-y-4 p-3 pt-0 sm:p-4 sm:pt-0">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <TendenciaDeLeads clientId={clientId} start={start} end={end} />
+            </div>
+            <AtividadeRecente clientId={clientId} />
+          </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <PorCampo
-          clientId={clientId}
-          start={start}
-          end={end}
-          title="Leads por fonte"
-          fieldPatterns={["%Fonte do Lead%", "%Origem do Lead%"]}
-          emptyLabel="Nenhum lead com fonte identificada ainda."
-          color="var(--accent)"
-          icone={Megaphone}
-        />
-        <PorCampo
-          clientId={clientId}
-          start={start}
-          end={end}
-          title="Leads por tipo de procedimento"
-          fieldPatterns={["%Tipo de Procedim%"]}
-          emptyLabel="Nenhum lead com procedimento identificado ainda."
-          color="var(--good)"
-          icone={Stethoscope}
-        />
-      </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <PorCampo
+              clientId={clientId}
+              start={start}
+              end={end}
+              title="Leads por fonte"
+              fieldPatterns={["%Fonte do Lead%", "%Origem do Lead%"]}
+              emptyLabel="Nenhum lead com fonte identificada ainda."
+              color="var(--accent)"
+              icone={Megaphone}
+            />
+            <PorCampo
+              clientId={clientId}
+              start={start}
+              end={end}
+              title="Leads por tipo de procedimento"
+              fieldPatterns={["%Tipo de Procedim%"]}
+              emptyLabel="Nenhum lead com procedimento identificado ainda."
+              color="var(--good)"
+              icone={Stethoscope}
+            />
+          </div>
+        </div>
+      </details>
     </div>
   );
 }
