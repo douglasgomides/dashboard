@@ -11,7 +11,6 @@
 // registra em `semLeitura` o que faltou.
 import { fmtFormatKey, median } from "@/lib/report-metrics";
 import { conversaMaisBarata, GRUPOS, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
-import { BENCHMARKS, avaliar } from "@/lib/benchmarks";
 
 export type Tom = "bom" | "ruim" | "atencao";
 export type RotaAcao = "posts" | "anuncios" | "atendimento" | "ideias" | "conteudo";
@@ -89,7 +88,7 @@ function regraRitmo(e: EntradaLeitura, out: Achado[], falta: string[]) {
     base = `alcance diário mediano ${int(depois)} contra ${int(antes)} no período anterior (${dias.length} e ${ant.length} dias)`;
   } else {
     if (dias.length < MIN_DIAS_TENDENCIA) {
-      falta.push(`Ritmo do alcance: precisa de ${MIN_DIAS_TENDENCIA}+ dias com dado (tem ${dias.length}).`);
+      falta.push(`Se o alcance está subindo ou caindo: precisa de pelo menos ${MIN_DIAS_TENDENCIA} dias com dado do Instagram (este período tem ${dias.length}).`);
       return;
     }
     const meio = Math.floor(dias.length / 2);
@@ -100,13 +99,27 @@ function regraRitmo(e: EntradaLeitura, out: Achado[], falta: string[]) {
   }
   if (antes <= 0) return;
   const v = (depois - antes) / antes;
+  if (Math.abs(v) < 0.1) {
+    out.push({
+      id: "ritmo",
+      tom: "atencao",
+      peso: 1,
+      titulo: `O alcance ficou estável ${rotulo}.`,
+      porque: "Nem cresceu nem caiu: o que está sendo feito mantém o patamar. Para subir de nível, algo precisa mudar (formato, tema ou frequência).",
+      base,
+    });
+    return;
+  }
   if (Math.abs(v) < VARIACAO_RELEVANTE) {
     out.push({
       id: "ritmo",
       tom: "atencao",
       peso: 1,
-      titulo: `O alcance ficou estável ${rotulo} (${v >= 0 ? "+" : ""}${pct(v)}).`,
-      porque: "Nem cresceu nem caiu de forma relevante: o que está sendo feito mantém o patamar. Para subir de nível, algo precisa mudar (formato, tema ou frequência).",
+      titulo: v > 0 ? `O alcance subiu um pouco ${rotulo} (+${pct(v)}).` : `O alcance caiu um pouco ${rotulo} (-${pct(Math.abs(v))}).`,
+      porque: v > 0
+        ? "Ainda não é uma mudança forte o bastante para dizer que algo novo está funcionando. Vale acompanhar mais uma semana."
+        : "Ainda não é uma queda forte, mas vale olhar se a frequência de posts ou o tipo de conteúdo mudou nesse trecho.",
+      acao: v < 0 ? { texto: "Comparar os posts da primeira e da segunda metade do período e ver o que mudou.", rota: "posts" } : undefined,
       base,
     });
     return;
@@ -133,7 +146,7 @@ function regraRitmo(e: EntradaLeitura, out: Achado[], falta: string[]) {
 function regraConcentracao(posts: any[], out: Achado[], falta: string[]) {
   const comAlcance = posts.filter((p) => n(p.reach) > 0);
   if (comAlcance.length < MIN_POSTS_LEITURA) {
-    falta.push(`Dependência de viral: precisa de ${MIN_POSTS_LEITURA}+ posts com alcance (tem ${comAlcance.length}).`);
+    falta.push(`Se o resultado depende de um único post: precisa de pelo menos ${MIN_POSTS_LEITURA} posts com alcance medido (este período tem ${comAlcance.length}).`);
     return;
   }
   const total = comAlcance.reduce((a, p) => a + n(p.reach), 0);
@@ -166,7 +179,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
     .filter(([, e]) => e.reach.length >= MIN_POSTS_GRUPO)
     .map(([f, e]) => ({ f, nome: fmtFormatKey(f), count: e.reach.length, alcance: median(e.reach), salvo: median(e.taxaSalvo) }));
   if (grupos.length < 2) {
-    falta.push(`Comparação de formatos: precisa de 2+ formatos classificados com ${MIN_POSTS_GRUPO}+ posts cada.`);
+    falta.push(`Qual formato funciona melhor (Reels, carrossel, foto): precisa de pelo menos ${MIN_POSTS_GRUPO} posts de 2 formatos diferentes no período.`);
     return;
   }
   const porAlcance = [...grupos].sort((a, b) => b.alcance - a.alcance);
@@ -224,7 +237,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
 function regraSeguir(posts: any[], out: Achado[], falta: string[]) {
   const com = posts.filter((p) => p.media_follows != null && n(p.reach) >= 200);
   if (com.length < MIN_POSTS_LEITURA) {
-    falta.push(`O que faz seguir: precisa de ${MIN_POSTS_LEITURA}+ posts com “seguiram pelo post” medido (tem ${com.length}).`);
+    falta.push(`Qual post faz a pessoa seguir o perfil: o Instagram só informa isso para fotos e carrosséis, e o período tem ${com.length} (precisa de ${MIN_POSTS_LEITURA}).`);
     return;
   }
   const taxa = (p: any) => n(p.media_follows) / n(p.reach);
