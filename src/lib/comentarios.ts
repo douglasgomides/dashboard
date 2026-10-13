@@ -1,38 +1,35 @@
-// Triagem de comentários antes de virarem dúvida ou ideia. "É pergunta?" (isQuestion) pega pontuação e
-// palavra interrogativa, e deixava passar sorteio, convite para seguir e resposta do próprio perfil
-// ("Já me segue no QUERIDA DIVA? Ainda não te vi por lá"). Aqui sai o que claramente não é paciente perguntando.
-// Regras simples e explicáveis, sem IA: ficam de fora só os casos óbvios; na dúvida, o comentário fica.
+// Triagem de comentários antes de virarem dúvida ou ideia. "É pergunta?" (is_question) pega pontuação e
+// palavra interrogativa, e deixava passar sorteio, convite para seguir, piada, desabafo, conversa entre
+// seguidores e resposta do próprio perfil. A regra completa (com o motivo de cada exclusão) mora em
+// lib/voz-do-paciente.ts; aqui ficam os atalhos usados pelas consultas de dados e pelo relatório.
 
-const DIACRITICOS = new RegExp("[̀-ͯ]", "g");
-const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(DIACRITICOS, "");
+import { analisarVozDoPaciente, triarComentario, type MotivoExclusao } from "@/lib/voz-do-paciente";
 
 export type CategoriaComentario = "pergunta" | "sorteio_ou_convite" | "do_proprio_perfil" | "sem_conteudo";
 
-const SORTEIO_OU_CONVITE: RegExp[] = [
-  /\bsorteio\b/,
-  /\bconcorr(e|endo|er)\b/,
-  /\bparticip(ar|ando|e)\b.*\b(sorteio|promo)/,
-  /\bja (me )?segue\b/,
-  /\bme segue\b/,
-  /\bme segu(e|a) la\b/,
-  /\bnao te vi por la\b/,
-  /\bsegue (a|o) (pagina|perfil|conta)\b/,
-  /\bmarque? (um|uma|\d+|tres|dois|duas) (amig|pessoa)/,
-  /\blink (na|da) bio\b/,
-  /\bcupom\b/,
-  /\bchama no (direct|dm|whats)/,
-  /\bmanda (um )?(direct|dm)\b/,
-];
+const CATEGORIA: Record<MotivoExclusao, CategoriaComentario> = {
+  vazio_ou_curto: "sem_conteudo",
+  so_emoji: "sem_conteudo",
+  so_mencao: "sem_conteudo",
+  spam_ou_promocao: "sorteio_ou_convite",
+  do_proprio_perfil: "do_proprio_perfil",
+  profissional_de_saude: "sem_conteudo",
+  conversa_entre_seguidores: "sem_conteudo",
+  pergunta_para_seguidores: "sem_conteudo",
+  piada_ou_ironia: "sem_conteudo",
+  sem_pergunta: "sem_conteudo",
+  repetido: "sem_conteudo",
+};
 
 export function categoriaDoComentario(texto: string, autor?: string | null, donos: string[] = []): CategoriaComentario {
-  const t = norm(texto).replace(/\s+/g, " ").trim();
-  const semEmoji = t.replace(/[^a-z0-9?]/g, "");
-  if (semEmoji.length < 6) return "sem_conteudo";
-  if (autor && donos.some((d) => d && norm(d) === norm(autor))) return "do_proprio_perfil";
-  if (SORTEIO_OU_CONVITE.some((r) => r.test(t))) return "sorteio_ou_convite";
-  return "pergunta";
+  const r = triarComentario(texto, autor, { donos });
+  return r.ok ? "pergunta" : CATEGORIA[r.motivo];
 }
 
-export function filtrarPerguntas<T extends { text: string; author_username?: string | null }>(rows: T[], donos: string[] = []): T[] {
-  return rows.filter((q) => categoriaDoComentario(q.text, q.author_username, donos) === "pergunta");
+/** Só as perguntas reais de pacientes (sem ruído e sem a mesma pessoa repetindo). */
+export function filtrarPerguntas<T extends { id: string; text: string; author_username?: string | null; like_count?: number | null; instagram_post_id?: string | null }>(
+  rows: T[],
+  donos: string[] = [],
+): T[] {
+  return analisarVozDoPaciente(rows, { donos }).mantidos.map((m) => m.comentario);
 }

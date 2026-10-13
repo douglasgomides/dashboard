@@ -494,3 +494,29 @@ export async function definirEtapaKpi(args: {
   });
   if (error) throw new Error(error.message ?? "falha ao salvar");
 }
+
+// ---- Central de voz do paciente (Dúvidas e Ideias) ---------------------------
+// Comentários CRUS do período, antes da triagem: os marcados como pergunta e os que
+// falam de preço ou agendamento mesmo sem "?". A triagem (lib/voz-do-paciente.ts) roda
+// na tela, para mostrar também o que ficou de fora e por quê.
+const TERMOS_COMERCIAIS = ["valor", "preço", "preco", "quanto custa", "agendar", "consulta", "atende", "convênio", "convenio"];
+
+export async function getComentariosVozDoPaciente(clientId: string, start: string, end: string, limit = 1500) {
+  const { desde, antesDe } = limitesBR(start, end);
+  const filtro = ["is_question.eq.true", ...TERMOS_COMERCIAIS.map((t) => `text.ilike.*${t}*`)].join(",");
+  const [{ data, error }, donos] = await Promise.all([
+    supabase
+      .from("instagram_comments")
+      .select("id, text, like_count, instagram_post_id, commented_at, author_username, is_question, instagram_posts(caption, permalink, thumbnail_url, posted_at, tema)")
+      .eq("client_id", clientId)
+      .or(filtro)
+      .gte("commented_at", desde)
+      .lt("commented_at", antesDe)
+      .order("commented_at", { ascending: false })
+      .limit(limit),
+    donosDoPerfil(clientId),
+  ]);
+  if (error) throw error;
+  const comentarios = data ?? [];
+  return { comentarios, donos, noLimite: comentarios.length >= limit };
+}
