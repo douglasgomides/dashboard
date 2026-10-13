@@ -101,7 +101,7 @@ export function medirCobertura(e: EntradaResultado): Cobertura {
     else if (faltam >= 3)
       alertas.push({
         tom: faltam / diasPeriodo > 0.4 ? "ruim" : "atencao",
-        texto: `Período incompleto: ${comDado.length} de ${diasPeriodo} dias têm dado do Instagram (${dm(comDado[0])} a ${dm(comDado[comDado.length - 1])}). Totais e comparações valem só para esses dias.${diasPeriodo > 30 ? " O Instagram só entrega cerca de 30 dias de histórico diário." : ""}`,
+        texto: `Período incompleto: ${comDado.length} de ${diasPeriodo} dias têm dado do Instagram (${dm(comDado[0])} a ${dm(comDado[comDado.length - 1])}). Totais e comparações valem só para esses dias.${comDado[0] > e.start ? ` O histórico diário guardado deste perfil começa em ${dm(comDado[0])}.` : ""}`,
       });
   }
   if (diasAbertos > 0 && fim >= ultimoFechado)

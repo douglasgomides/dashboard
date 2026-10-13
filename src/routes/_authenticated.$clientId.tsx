@@ -8,7 +8,8 @@ import { AppShell } from "@/components/app-shell";
 import { SyncFreshnessBadge, DisponibilidadeFontes } from "@/components/sync-freshness-badge";
 import { useClientRole } from "@/hooks/use-client-role";
 import { CLIENTES_SO_CRM, ROTAS_DO_CRM } from "@/lib/nav";
-import type { DateRangeState, RangePreset } from "@/lib/date-range";
+import { resolveDateRange, type DateRangeState, type RangePreset } from "@/lib/date-range";
+import { CoberturaPeriodo } from "@/components/cobertura-periodo";
 
 export const Route = createFileRoute("/_authenticated/$clientId")({
   component: ClientLayout,
@@ -71,6 +72,11 @@ function ClientLayout() {
         fontesLinha={<DisponibilidadeFontes clientId={clientId} fontes={fontes} />}
         onBuscarCliente={isAdmin ? () => setPal(true) : undefined}
       >
+        <CoberturaPeriodo
+          clientId={clientId}
+          {...resolveDateRange(dateRange)}
+          onUsarPeriodo={(from, to) => navigate({ to: currentPathname, search: { preset: "personalizado", from, to }, replace: true })}
+        />
         <Outlet />
       </AppShell>
       {isAdmin && pal && <ClientPalette clientId={clientId} onClose={() => setPal(false)} />}
