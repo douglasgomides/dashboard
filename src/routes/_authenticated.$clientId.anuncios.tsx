@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { statusDoCliente, diasDeAtraso, ddmm } from "@/lib/saude-fontes";
@@ -9,41 +9,13 @@ import { getAdsPorDia, getAdsDiagnosticoPorObjetivo, getClientFontes } from "@/l
 import { SyncButton } from "@/components/sync-button";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtBRL } from "@/lib/format";
-import {
-  GRUPOS,
-  EXPLICA_CATEGORIA,
-  ORDEM_CATEGORIAS,
-  conversaMaisBarata,
-  planoDeAcao,
-  limitacoesDeAnuncios,
-  unidade,
-  type CampanhaDiag,
-  type Categoria,
-  type DiagnosticoAds,
-} from "@/lib/anuncios-objetivo";
-import { BENCHMARKS, avaliar, ROTULO_FAIXA, COR_FAIXA } from "@/lib/benchmarks";
-import { ROTULO_CONFIANCA } from "@/lib/insight";
-import { InsightCard, ListaLimitacoes, SeloStatus, OQueE } from "@/components/insight-card";
-import {
-  Wallet,
-  MessageCircle,
-  Coins,
-  Eye,
-  MousePointerClick,
-  Percent,
-  PauseCircle,
-  AlertTriangle,
-  Info,
-  CalendarDays,
-  Layers,
-  ListChecks,
-  Zap,
-  Gauge,
-  ShieldAlert,
-  Megaphone,
-  type LucideIcon,
-} from "lucide-react";
-import { Painel, Kpi, Selo, Miniatura, BarraFina, Ajuda } from "@/components/visual";
+import { GRUPOS, conversaMaisBarata, planoDeAcao, limitacoesDeAnuncios, unidade, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
+import { BENCHMARKS } from "@/lib/benchmarks";
+import { InsightCard, ListaLimitacoes, OQueE } from "@/components/insight-card";
+import { MetodologiaAnuncios } from "@/components/anuncios/metodologia";
+import { DiagnosticoCampanhas, Faixa } from "@/components/anuncios/diagnostico-campanhas";
+import { Wallet, MessageCircle, Coins, Eye, MousePointerClick, Percent, PauseCircle, AlertTriangle, Info, CalendarDays, Layers, Zap, Megaphone } from "lucide-react";
+import { Painel, Kpi, BarraFina } from "@/components/visual";
 
 export const Route = createFileRoute("/_authenticated/$clientId/anuncios")({
   component: AnunciosPage,
@@ -58,34 +30,6 @@ function n(v: unknown): number {
 const int = (v: number) => Math.round(v).toLocaleString("pt-BR");
 const porCem = (v: number | null) => (v == null ? "—" : (v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 }));
 
-// Faixa curta com ícone; o texto longo fica no "i".
-function Faixa({
-  icone: Icon,
-  cor = "var(--accent)",
-  alerta = false,
-  ajuda,
-  children,
-}: {
-  icone: LucideIcon;
-  cor?: string;
-  alerta?: boolean;
-  ajuda?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm"
-      style={{
-        background: alerta ? `color-mix(in srgb, ${cor} 12%, transparent)` : "var(--accent-soft)",
-        borderColor: "var(--border)",
-      }}
-    >
-      <Icon size={16} aria-hidden className="shrink-0" style={{ color: cor }} />
-      <div className="min-w-0 flex-1">{children}</div>
-      {ajuda && <Ajuda>{ajuda}</Ajuda>}
-    </div>
-  );
-}
 
 // Quando a fonte está parada, diz POR QUÊ e de quem é a ação (pagamento, campanhas desligadas, acesso vencido...).
 function MotivoParada({ clientId }: { clientId: string }) {
@@ -112,31 +56,6 @@ function MotivoParada({ clientId }: { clientId: string }) {
   );
 }
 
-// ---------- categoria ----------
-const TOM_CATEGORIA: Record<Categoria, "bom" | "atencao" | "ruim" | null> = {
-  "Escalar agora": "bom",
-  Manter: null,
-  "Revisar criativo": "atencao",
-  "Revisar público": "atencao",
-  Cortar: "ruim",
-  "Sem dados suficientes": null,
-};
-const COR_CATEGORIA: Record<Categoria, string> = {
-  "Escalar agora": "var(--good)",
-  Manter: "var(--text-dim)",
-  "Revisar criativo": "var(--warn)",
-  "Revisar público": "var(--warn)",
-  Cortar: "var(--crit)",
-  "Sem dados suficientes": "var(--muted)",
-};
-function SeloCategoria({ c }: { c: Categoria }) {
-  const tom = TOM_CATEGORIA[c];
-  return tom ? <SeloStatus tom={tom} texto={c} /> : <Selo cor={COR_CATEGORIA[c]}>{c}</Selo>;
-}
-
-function shortCampanha(nome: string) {
-  return nome.length > 64 ? nome.slice(0, 63) + "…" : nome;
-}
 
 // ---------- bloco: Se eu tivesse que agir hoje ----------
 function AgirHoje({ d, clientId }: { d: DiagnosticoAds; clientId: string }) {
@@ -147,13 +66,13 @@ function AgirHoje({ d, clientId }: { d: DiagnosticoAds; clientId: string }) {
         <Zap size={18} aria-hidden style={{ color: "var(--accent)" }} /> Se eu tivesse que agir hoje, faria isso:
       </h2>
       <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
-        Cada campanha é comparada só com as do mesmo objetivo. Mudanças de verba sempre em passos de 20%: mais que isso faz a Meta
-        reiniciar o aprendizado e o custo sobe por alguns dias.
+        Usa os vereditos de cada campanha (Escalar, Cortar, Sem tração…), dados comparando só com as do mesmo objetivo. Mudanças de verba
+        sempre em passos de 20%: mais que isso faz a Meta reiniciar o aprendizado e o custo sobe por alguns dias.
       </p>
       {plano.length === 0 ? (
         <p className="mt-3 rounded-lg p-3 text-sm" style={{ background: "var(--surface-2)" }}>
-          Nenhuma mudança de verba urgente neste período: nenhuma campanha custa o dobro das outras do mesmo objetivo e nenhuma se
-          destaca o bastante para receber mais.
+          Nenhuma mudança de verba urgente neste período: nenhuma campanha com verba relevante está marcada "Cortar" ou "Sem tração" e
+          nenhuma marcada "Escalar" está pronta para receber mais.
         </p>
       ) : (
         <ol className="mt-3 space-y-3">
@@ -211,7 +130,12 @@ function PorObjetivo({ d }: { d: DiagnosticoAds }) {
           return (
             <li key={g.grupo}>
               <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
-                <span className="font-medium">{G.nome}</span>
+                <span className="min-w-0">
+                  <span className="font-medium">{G.nome}</span>
+                  <span className="ml-1.5 font-mono text-[10px]" style={{ color: "var(--text-faint)" }} title="Objetivo como vem da Meta">
+                    {g.objetivosBrutos.join(" · ")}
+                  </span>
+                </span>
                 <span className="tabular-nums">
                   <b className="font-semibold">{fmtBRL(g.gasto)}</b>
                   <span className="ml-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
@@ -247,175 +171,16 @@ function PorObjetivo({ d }: { d: DiagnosticoAds }) {
                   </span>
                 )}
               </div>
+              <p className="mt-0.5 text-[11px]" style={{ color: "var(--text-faint)" }}>
+                {g.medianaCusto != null
+                  ? `Régua do veredito: campanha típica de ${G.curto}, ${unidade(g.grupo, g.medianaCusto)} (${g.campanhasComVolume} campanhas com volume).`
+                  : g.grupo === "outro"
+                    ? "Sem régua própria: campanhas comparadas com a conta toda, pela conversa."
+                    : `Menos de 3 campanhas com volume: comparadas com a conta toda, pela conversa${d.reguaConta.custoPorConversa != null ? ` (típica: ${fmtBRL(d.reguaConta.custoPorConversa)} por conversa)` : ""}.`}
+              </p>
             </li>
           );
         })}
-      </ul>
-    </Painel>
-  );
-}
-
-// ---------- card de campanha ----------
-function Numero({ icone: Icon, rotulo, valor, sub }: { icone: LucideIcon; rotulo: string; valor: string; sub?: string }) {
-  return (
-    <div className="min-w-0">
-      <div className="flex items-center gap-1 text-[11px]" style={{ color: "var(--text-dim)" }}>
-        <Icon size={12} aria-hidden /> {rotulo}
-      </div>
-      <div className="mt-0.5 text-sm font-semibold tabular-nums">{valor}</div>
-      {sub && (
-        <div className="text-[11px]" style={{ color: "var(--text-faint)" }}>
-          {sub}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CampanhaCard({ c, gastoTotal }: { c: CampanhaDiag; gastoTotal: number }) {
-  const G = GRUPOS[c.grupo];
-  const faixaCtr = c.grupo === "trafego" ? avaliar(BENCHMARKS.ctrTrafego, c.ctrLink) : null;
-  const corRisco = c.risco.nivel === "alto" ? "var(--crit)" : c.risco.nivel === "medio" ? "var(--warn)" : "var(--text-dim)";
-  return (
-    <li className="rounded-xl border p-3" style={{ borderColor: "var(--border)", borderLeft: `4px solid ${COR_CATEGORIA[c.categoria]}` }}>
-      <div className="flex items-start gap-3">
-        {c.thumbnail_url && <Miniatura url={c.thumbnail_url} className="h-12 w-12 shrink-0" />}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <SeloCategoria c={c.categoria} />
-            <Selo cor="var(--s7)">{G.curto}</Selo>
-          </div>
-          <div className="mt-1 break-words text-sm font-medium">
-            {c.permalink ? (
-              <a href={c.permalink} target="_blank" rel="noreferrer" title={c.campanha} className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
-                {shortCampanha(c.campanha)}
-              </a>
-            ) : (
-              <span title={c.campanha}>{shortCampanha(c.campanha)}</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Numero icone={Wallet} rotulo="Investido" valor={fmtBRL(c.gasto)} sub={`${Math.round((c.gasto / Math.max(gastoTotal, 1)) * 100)}% da verba`} />
-        <Numero
-          icone={G.porMil ? Eye : MousePointerClick}
-          rotulo={`Resultado (${G.porMil ? "aparições" : G.resultadoPlural})`}
-          valor={G.porMil ? int(c.impressoes) : int(c.resultados)}
-          sub={`${int(c.conversas)} ${Math.round(c.conversas) === 1 ? "conversa" : "conversas"}`}
-        />
-        <Numero
-          icone={Coins}
-          rotulo={G.porMil ? "Custo a cada mil aparições" : `Custo por ${G.resultado}`}
-          valor={c.custoPorResultado != null && c.grupo !== "outro" ? fmtBRL(c.custoPorResultado) : "—"}
-        />
-        <Numero icone={MessageCircle} rotulo="Custo por conversa" valor={c.custoPorConversa != null ? fmtBRL(c.custoPorConversa) : "—"} sub={c.grupo !== "mensagem" && c.conversas > 0 ? "não é o objetivo dela" : undefined} />
-      </div>
-
-      <p className="mt-3 text-xs leading-relaxed" style={{ color: "var(--text)" }}>
-        {c.comparacao}
-      </p>
-      <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-dim)" }}>
-        <b style={{ color: "var(--text)" }}>Por quê: </b>
-        {c.motivo}
-      </p>
-      {c.ctrLink != null && c.impressoes >= 1000 && (
-        <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
-          De cada 100 vezes que o anúncio apareceu, {porCem(c.ctrLink)} viraram clique no link
-          {faixaCtr ? (
-            <>
-              {" "}
-              · <span style={{ color: COR_FAIXA[faixaCtr], fontWeight: 600 }}>{ROTULO_FAIXA[faixaCtr]}</span> (médicos: 0,83 de cada 100)
-            </>
-          ) : null}
-          .
-        </p>
-      )}
-
-      <div className="mt-3 rounded-lg p-3 text-sm" style={{ background: "var(--accent-soft)" }}>
-        <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          Ação sugerida
-        </div>
-        <p className="mt-0.5 font-medium leading-snug">{c.acao}</p>
-      </div>
-
-      <div className="mt-2 flex flex-col gap-1 text-xs" style={{ color: "var(--text-dim)" }}>
-        <span className="inline-flex items-start gap-1" title={c.motivoConfianca}>
-          <Gauge size={13} className="mt-0.5 shrink-0" aria-hidden />
-          <span>
-            <b style={{ color: "var(--text)" }}>{ROTULO_CONFIANCA[c.confianca]}</b> · {c.motivoConfianca}
-          </span>
-        </span>
-        <span className="inline-flex items-start gap-1">
-          <ShieldAlert size={13} className="mt-0.5 shrink-0" aria-hidden style={{ color: corRisco }} />
-          <span>
-            <b style={{ color: "var(--text)" }}>Risco de mexer: </b>
-            {c.risco.texto}
-          </span>
-        </span>
-      </div>
-    </li>
-  );
-}
-
-function Campanhas({ d }: { d: DiagnosticoAds }) {
-  const [filtro, setFiltro] = useState<Categoria | "todas">("todas");
-  const porCat = ORDEM_CATEGORIAS.map((cat) => {
-    const cs = d.campanhas.filter((c) => c.categoria === cat);
-    return { cat, n: cs.length, gasto: cs.reduce((s, c) => s + c.gasto, 0) };
-  }).filter((x) => x.n > 0);
-  const ordem = (c: CampanhaDiag) => ORDEM_CATEGORIAS.indexOf(c.categoria);
-  const lista = d.campanhas.filter((c) => filtro === "todas" || c.categoria === filtro).sort((a, b) => ordem(a) - ordem(b) || b.gasto - a.gasto);
-  return (
-    <Painel
-      icone={ListChecks}
-      titulo="Campanhas: o que fazer com cada uma"
-      resumo="Comparada só com as do mesmo objetivo"
-      cor="var(--ai)"
-      ajuda={
-        <>
-          {ORDEM_CATEGORIAS.map((c) => (
-            <span key={c} className="mb-1 block">
-              <b>{c}:</b> {EXPLICA_CATEGORIA[c]}
-            </span>
-          ))}
-        </>
-      }
-    >
-      <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Filtrar campanhas">
-        {[{ cat: "todas" as const, n: d.campanhas.length, gasto: d.gasto }, ...porCat].map((x) => {
-          const ativo = filtro === x.cat;
-          return (
-            <button
-              key={x.cat}
-              type="button"
-              onClick={() => setFiltro(x.cat)}
-              aria-pressed={ativo}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 text-xs font-medium"
-              style={{
-                background: ativo ? "var(--accent-soft)" : "var(--surface)",
-                borderColor: ativo ? "var(--accent)" : "var(--border)",
-                color: "var(--text)",
-              }}
-            >
-              {x.cat === "todas" ? "Todas" : x.cat}
-              <span className="tabular-nums" style={{ color: "var(--text-dim)" }}>
-                {x.n} · {fmtBRL(x.gasto)}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      {filtro !== "todas" && (
-        <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-          {EXPLICA_CATEGORIA[filtro]}
-        </p>
-      )}
-      <ul className="space-y-3">
-        {lista.map((c) => (
-          <CampanhaCard key={c.campaign_id} c={c} gastoTotal={d.gasto} />
-        ))}
       </ul>
     </Painel>
   );
@@ -487,6 +252,8 @@ function AnunciosPage() {
   const msg = diag.grupos.find((g) => g.grupo === "mensagem");
   const ctrConta = diag.impressoes > 0 ? diag.cliquesLink / diag.impressoes : null;
   const custoMil = diag.impressoes > 0 ? (diag.gasto / diag.impressoes) * 1000 : null;
+  // Conta sem pixel nem formulário: leads e visitas à página chegam zerados e só a conversa é medida.
+  const soConversa = diag.leads === 0 && diag.visitasPagina === 0;
 
   return (
     <div className="space-y-4">
@@ -500,13 +267,30 @@ function AnunciosPage() {
         ajuda={
           <>
             Investimento em anúncios do Meta em {periodLabel}, direto da conta de anúncio — não é estimativa. Cada campanha é julgada pelo
-            resultado do objetivo dela (conversa, cadastro, clique ou aparições) e comparada só com campanhas do mesmo objetivo. O sync roda
-            automaticamente todo dia.
+            resultado do objetivo dela (conversa, cadastro, clique ou aparições) e comparada só com campanhas do mesmo objetivo; com poucas
+            campanhas no objetivo, com a conta toda, pela conversa.{" "}
+            {soConversa && (
+              <>
+                <strong>Conversa iniciada</strong> (Direct ou WhatsApp) é o resultado que dá para medir aqui: esta conta não tem pixel nem
+                formulário instalado, então "leads" e "visitas à página" chegam zerados e ficam de fora.{" "}
+              </>
+            )}
+            O sync roda automaticamente todo dia.
           </>
         }
       >
-        Meta Ads · {periodLabel} · {diag.campanhas.length} campanhas
+        Meta Ads · {periodLabel} · {diag.campanhas.length} campanhas · dados reais da conta
       </Faixa>
+
+      {soConversa && (
+        <Faixa icone={Info} cor="var(--warn)" alerta>
+          <span className="text-xs">
+            <b>Só conversas são medidas nesta conta:</b> "leads" e "visitas à página" chegaram zerados em {periodLabel} (sem pixel nem formulário
+            instalado). Conversa iniciada (Direct ou WhatsApp) é o resultado que dá para medir aqui; campanhas de cadastro ou vendas ficam sem o
+            resultado próprio.
+          </span>
+        </Faixa>
+      )}
 
       <AgirHoje d={diag} clientId={clientId} />
 
@@ -534,9 +318,9 @@ function AnunciosPage() {
         </OQueE>
       </div>
 
-      <PorObjetivo d={diag} />
+      <DiagnosticoCampanhas d={diag} />
 
-      <Campanhas d={diag} />
+      <PorObjetivo d={diag} />
 
       <Painel
         icone={CalendarDays}
@@ -565,6 +349,8 @@ function AnunciosPage() {
       </Painel>
 
       <ListaLimitacoes itens={limitacoes} />
+
+      <MetodologiaAnuncios d={diag} />
 
       <p className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--muted)" }}>
         <Megaphone size={12} aria-hidden /> Referências de mercado só pintam de cor quando a fonte tem metodologia publicada.
