@@ -21,7 +21,7 @@
 // vai em `omitidos` (card "Não incluído por falta de dado").
 //
 // Lógica pura e determinística (sem IA, sem banco): testável com `npx tsx`.
-import { conversaMaisBarata, GRUPOS, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
+import { conversaMaisBarata, GRUPOS, MIN_IMPRESSOES, MIN_GASTO, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { analyzeFollowers, daysBetween, fmtDiaBR } from "@/lib/hub-conteudo";
 import { confiancaPorAmostra, type Area, type Impacto, type Insight, type Limitacao, type Responsavel, type Tom } from "@/lib/insight";
 import { checarLinguagemCFM, tornarSeguro } from "@/lib/linguagem-cfm";
@@ -573,7 +573,7 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
           responsavel: "gestor_trafego",
           titulo: `${ruins.length} ${plural(ruins.length, "campanha consome", "campanhas consomem")} verba sem retorno`,
           diagnostico: "Cada campanha foi comparada só com as do mesmo objetivo; estas ficaram sem resultado ou com custo 2 vezes ou mais acima das parecidas.",
-          evidencia: `${fmtBRL(diag.desperdicio)} em ${ruins.length} campanhas, todas com pelo menos mil impressões e R$ 50 de gasto.`,
+          evidencia: `${fmtBRL(diag.desperdicio)} em ${ruins.length} campanhas, todas com pelo menos ${MIN_IMPRESSOES} impressões e R$ ${MIN_GASTO} de gasto.`,
           amostra: ruins.length,
           minimo: 1,
           unidadeAmostra: "campanhas com volume",
