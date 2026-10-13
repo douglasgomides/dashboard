@@ -96,6 +96,7 @@ export const AREAS: NavArea[] = [
       { path: "/crm-painel", label: "Comercial", Icone: Briefcase, fonte: "crm" },
       { path: "/crm-guia", label: "Organizar o CRM", Icone: ClipboardList, fonte: "crm" },
       { path: "/atendimento", label: "WhatsApp", Icone: MessageCircle, fonte: "atendimento" },
+      { path: "/conversas", label: "Conversas e auditoria", Icone: MessagesSquare, admin: true, fonte: "atendimento" },
       { path: "/jornada", label: "Jornada", Icone: Route, admin: true },
     ],
   },
@@ -120,7 +121,6 @@ export const AREAS: NavArea[] = [
 /** "Operação": telas de uso da equipe Doctor Creator. */
 export const AVANCADO: NavTab[] = [
   { path: "/analisar", label: "A analisar", Icone: ListChecks, admin: true, fonte: "crm" },
-  { path: "/conversas", label: "Conversas", Icone: MessagesSquare, admin: true, fonte: "atendimento" },
   { path: "/crm-estrutura", label: "Estrutura do CRM", Icone: Network, admin: true, fonte: "crm" },
   { path: "/vendas-kommo", label: "Vendas (Kommo)", Icone: ShoppingBag, admin: true, fonte: "crm" },
   { path: "/vendas", label: "Vendas", Icone: ShoppingBag, admin: true },

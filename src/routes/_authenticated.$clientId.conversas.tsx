@@ -7,6 +7,7 @@ import {
   type LeituraConversaBanco, type Situacao, type ResumoIA,
 } from "@/lib/conversa-leitura";
 import { useLeituraConversas } from "@/components/atendimento-resumo";
+import { AuditoriaComercial } from "@/components/auditoria-comercial";
 import { supabase } from "@/integrations/supabase/client";
 import { Painel, Selo } from "@/components/visual";
 
@@ -253,6 +254,7 @@ function ConversasPage() {
         <div className="mb-3 flex items-center gap-2 text-xs" style={{ color: "var(--text-dim)" }}>
           <ShieldCheck size={14} /> Acesso restrito e registrado. Atualiza sozinho todo dia.
         </div>
+        <AuditoriaComercial clientId={clientId} onAbrir={(id) => setAberta(id)} />
         {geral && geral.comPaciente > 0 && (
           <section className="mb-4 space-y-3" aria-label="Como está o atendimento">
             <h2 className="text-[15px] font-semibold">Como está o atendimento (últimas {geral.conversas} conversas)</h2>
