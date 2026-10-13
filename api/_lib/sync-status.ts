@@ -27,7 +27,7 @@ export async function recordSyncStatus(
   supabase: SupabaseClient<any, any, any>,
   clientId: string,
   fonte: FonteSync,
-  r: { ok: boolean; rows?: number | null; error?: string | null; dataAte?: string | null },
+  r: { ok: boolean; rows?: number | null; error?: string | null; dataAte?: string | null; preservaBloqueio?: boolean },
 ): Promise<void> {
   try {
     const agora = new Date().toISOString();
@@ -68,9 +68,13 @@ async function registrarMotivoInstagram(
   supabase: SupabaseClient<any, any, any>,
   clientId: string,
   fonte: FonteSync,
-  r: { ok: boolean; error?: string | null },
+  r: { ok: boolean; error?: string | null; preservaBloqueio?: boolean },
 ): Promise<void> {
   if (fonte !== "instagram") return;
+  // O sync da Windsor (06h30) só traz as métricas diárias da conta; os posts vêm da Graph (06h). Sucesso da
+  // Windsor apagava o aviso de bloqueio gravado pela Graph meia hora antes, e a conta parecia "sem erro"
+  // com os posts parados (Dra. Marcelly Achkar, "API access blocked" desde 18/09). Ela não limpa mais.
+  if (r.ok && r.preservaBloqueio) return;
   try {
     const bloqueado = !r.ok && !!r.error && BLOQUEIO_INSTAGRAM.test(r.error);
     await supabase.from("sync_status").upsert(
@@ -97,7 +101,7 @@ export async function recordSyncStatusPorCliente(
   supabase: SupabaseClient<any, any, any>,
   fonte: FonteSync,
   itens: { clientId: string; rows: number; errors: string[] }[],
-  opts: { okSeHouveLinhas?: boolean } = {},
+  opts: { okSeHouveLinhas?: boolean; preservaBloqueio?: boolean } = {},
 ): Promise<void> {
   const porCliente = new Map<string, { rows: number; errors: string[] }>();
   for (const i of itens) {
@@ -113,6 +117,7 @@ export async function recordSyncStatusPorCliente(
       ok: a.errors.length === 0 || (!!opts.okSeHouveLinhas && a.rows > 0),
       rows: a.rows,
       error: a.errors[0],
+      preservaBloqueio: opts.preservaBloqueio,
     });
   }
 }

@@ -174,6 +174,40 @@ function CampanhaCard({ c, d, naConversa }: { c: CampanhaDiag; d: DiagnosticoAds
         />
       </div>
 
+      {/* Indicadores do criativo: só leitura, não mudam o veredito acima. */}
+      <div className="mt-3 rounded-lg p-2.5" style={{ background: "var(--surface-2, var(--surface))" }}>
+        <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-dim)" }}>
+          Indicadores do criativo
+        </div>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">
+          <Celula icone={Eye} rotulo="Aparições (impressões)" valor={int(c.impressoes)} sub={c.alcanceDiarioSomado > 0 ? `alcance somado dos dias: ${int(c.alcanceDiarioSomado)}` : undefined} />
+          <Celula icone={MousePointerClick} rotulo="CTR no link" valor={c.ctrLink != null ? `${(c.ctrLink * 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%` : "—"} sub={c.ctrTodos != null ? `todos os cliques: ${(c.ctrTodos * 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%` : undefined} />
+          <Celula icone={Coins} rotulo="CPC (clique no link)" valor={c.cpcLink != null ? fmtBRL(c.cpcLink) : "—"} sub={`${int(c.cliquesLink)} cliques no link`} />
+          <Celula icone={Coins} rotulo="CPM (mil aparições)" valor={c.cpm != null ? fmtBRL(c.cpm) : "—"} />
+          <Celula
+            icone={Eye}
+            rotulo="Frequência por dia"
+            valor={c.frequenciaDia != null ? c.frequenciaDia.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "—"}
+            sub={
+              c.frequencia7d != null
+                ? `últimos 7 dias: ${c.frequencia7d.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}${c.frequencia7d >= 2 ? " · alta: a mesma pessoa vê demais" : ""}`
+                : undefined
+            }
+          />
+          <Celula
+            icone={MessageCircle}
+            rotulo="Clique que vira conversa"
+            valor={c.conversaPorClique != null ? `${Math.round(c.conversaPorClique * 100)} de 100` : "—"}
+            sub={c.conversaPorClique == null ? "menos de 20 cliques" : undefined}
+          />
+          <Celula icone={Coins} rotulo="Custo por visita à página" valor={c.custoPorVisita != null ? fmtBRL(c.custoPorVisita) : "—"} sub={c.visitasPagina ? `${int(c.visitasPagina)} visitas` : undefined} />
+          <Celula icone={Wallet} rotulo="Gasto por dia ativo" valor={c.gastoDiario != null ? fmtBRL(c.gastoDiario) : "—"} sub={`${c.diasAtivos} dias com gasto`} />
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed" style={{ color: "var(--text-dim)" }}>
+          Como ler: CTR baixo = a arte não chama atenção; CTR bom e pouca conversa por clique = o problema é a oferta ou o público, não a arte; frequência por dia acima de 2 = a mesma pessoa está vendo demais (tende a cansar). Frequência aqui é por dia (a Meta não libera pessoas únicas somadas entre dias nesta base).
+        </p>
+      </div>
+
       <p className="mt-3 text-xs leading-relaxed" style={{ color: "var(--text)" }}>
         {c.comparacao}
       </p>

@@ -157,6 +157,8 @@ export interface LinhaAds {
   conversations: number | null;
   leads: number | null;
   landing_page_views: number | null;
+  reach?: number | null; // alcance do DIA (a Meta não soma pessoas únicas entre dias)
+  clicks?: number | null; // todos os cliques (perfil, curtida, link…)
 }
 export interface CampanhaCadastro {
   campaign_id: string;
@@ -189,6 +191,15 @@ export interface CampanhaDiag {
   ctrLink: number | null; // fração: cliques no link ÷ impressões
   ctrLink1: number | null; // 1ª metade do período
   ctrLink2: number | null; // 2ª metade
+  // Indicadores do criativo (só leitura, não mudam o veredito):
+  cpm: number | null; // custo por mil aparições
+  cpcLink: number | null; // custo por clique no link
+  ctrTodos: number | null; // todos os cliques ÷ aparições
+  frequenciaDia: number | null; // aparições ÷ alcance diário somado = vezes que a mesma pessoa viu, em média, por dia
+  frequencia7d: number | null; // mesma conta nos últimos 7 dias do período (fadiga recente)
+  alcanceDiarioSomado: number; // soma do alcance de cada dia (repete pessoas entre dias)
+  conversaPorClique: number | null; // conversas ÷ cliques no link (o clique vira conversa?)
+  custoPorVisita: number | null; // gasto ÷ visitas à página
   cansando: boolean; // cliques por impressão caíram 20%+ da 1ª para a 2ª metade
   atencaoCaindo: boolean; // caíram 10%+
   /** Veredito oficial (os seis do diagnóstico original). É o que a tela mostra. */
@@ -313,11 +324,18 @@ function vereditoPelaConta(c: { impressoes: number; gasto: number; conversas: nu
 export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[], start: string, end: string): DiagnosticoAds {
   const meio = new Date((new Date(start + "T12:00:00Z").getTime() + new Date(end + "T12:00:00Z").getTime()) / 2).toISOString().slice(0, 10);
   const cad = new Map(cadastro.map((c) => [c.campaign_id, c]));
-  type Acc = { g: number; i: number; lc: number; cv: number; ld: number; lpv: number; i1: number; c1: number; i2: number; c2: number; dias: Set<string> };
+  type Acc = { g: number; i: number; lc: number; cv: number; ld: number; lpv: number; i1: number; c1: number; i2: number; c2: number; dias: Set<string>; r: number; ck: number; i7: number; r7: number };
+  const seteDias = new Date(new Date(end + "T12:00:00Z").getTime() - 6 * 86400000).toISOString().slice(0, 10);
   const acc = new Map<string, Acc>();
   for (const l of linhas) {
     if (l.date < start || l.date > end) continue;
-    const a = acc.get(l.campaign_id) ?? { g: 0, i: 0, lc: 0, cv: 0, ld: 0, lpv: 0, i1: 0, c1: 0, i2: 0, c2: 0, dias: new Set<string>() };
+    const a = acc.get(l.campaign_id) ?? { g: 0, i: 0, lc: 0, cv: 0, ld: 0, lpv: 0, i1: 0, c1: 0, i2: 0, c2: 0, dias: new Set<string>(), r: 0, ck: 0, i7: 0, r7: 0 };
+    a.r += n(l.reach);
+    a.ck += n(l.clicks);
+    if (l.date >= seteDias && n(l.reach) > 0) {
+      a.i7 += n(l.impressions);
+      a.r7 += n(l.reach);
+    }
     a.g += n(l.spend);
     a.i += n(l.impressions);
     a.lc += n(l.link_clicks);
@@ -339,7 +357,7 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
     CampanhaDiag,
     | "campaign_id" | "campanha" | "objetivo" | "grupo" | "permalink" | "thumbnail_url" | "gasto" | "impressoes" | "cliquesLink" | "conversas" | "leads"
     | "visitasPagina" | "diasAtivos" | "gastoDiario" | "resultados" | "custoPorResultado" | "custoPorConversa" | "ctrLink" | "ctrLink1" | "ctrLink2"
-    | "cansando" | "atencaoCaindo"
+    | "cansando" | "atencaoCaindo" | "cpm" | "cpcLink" | "ctrTodos" | "frequenciaDia" | "frequencia7d" | "alcanceDiarioSomado" | "conversaPorClique" | "custoPorVisita"
   > & { naoMedido: boolean };
   const base: Base[] = [];
   for (const [id, a] of acc) {
@@ -383,6 +401,14 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
       ctrLink2: ctr2,
       cansando: ctr1 != null && ctr2 != null && ctr1 > 0 && ctr2 <= ctr1 * QUEDA_CTR,
       atencaoCaindo: ctr1 != null && ctr2 != null && ctr1 > 0 && ctr2 <= ctr1 * QUEDA_ATENCAO,
+      cpm: a.i > 0 ? (a.g / a.i) * 1000 : null,
+      cpcLink: a.lc > 0 ? a.g / a.lc : null,
+      ctrTodos: a.i > 0 && a.ck > 0 ? a.ck / a.i : null,
+      frequenciaDia: a.r > 0 ? a.i / a.r : null,
+      frequencia7d: a.r7 > 0 ? a.i7 / a.r7 : null,
+      alcanceDiarioSomado: a.r,
+      conversaPorClique: a.lc >= 20 ? a.cv / a.lc : null,
+      custoPorVisita: a.lpv > 0 ? a.g / a.lpv : null,
       naoMedido,
     });
   }

@@ -303,7 +303,7 @@ export async function getAdsCampanhasPeriodo(clientId: string, start: string, en
   for (let de = 0; ; de += PAGINA) {
     const { data, error } = await (supabase as any)
       .from("meta_ads_daily")
-      .select("date, campaign_id, spend, impressions, link_clicks, conversations, leads, landing_page_views")
+      .select("date, campaign_id, spend, impressions, link_clicks, conversations, leads, landing_page_views, reach, clicks")
       .eq("client_id", clientId)
       .gte("date", start)
       .lte("date", end.slice(0, 10))
