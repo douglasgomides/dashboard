@@ -207,14 +207,18 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
         ? "Quantas pessoas diferentes viram pelo menos um post ou story. É o mesmo número de “contas alcançadas” do Instagram."
         : "Soma de quantas pessoas viram o perfil em cada dia. A mesma pessoa conta de novo se voltou em outro dia, por isso é maior que o número do Instagram.",
       status: null,
-      comparacao: comparavel ? variacaoTexto(reachSoma, soma(antReach, "reach")) : undefined,
-      rota: "/$clientId/conteudo",
-      botao: "Ver alcance dia a dia",
+      // Variação só sobre a soma dos dias (como na tela original); com alcance único não há comparação equivalente.
+      comparacao: comparavel && unico == null ? variacaoTexto(reachSoma, soma(antReach, "reach")) : undefined,
+      rota: "/$clientId/posts",
+      botao: "Ver posts do período",
     });
 
     // Interação: interações ÷ alcance (fórmula do benchmark mLabs/Socialinsider).
-    const inter = e.periodoIg?.interacoes ?? soma(comReach, "total_interactions");
-    const base = e.periodoIg?.alcance_unico ?? reachSoma;
+    // Mesma regra da taxa de engajamento original: alcance único só quando as
+    // interações também vêm da Meta para o período; senão, soma ÷ soma.
+    const usaUnico = e.periodoIg?.alcance_unico != null && e.periodoIg?.interacoes != null;
+    const inter = usaUnico ? e.periodoIg!.interacoes! : soma(comReach, "total_interactions");
+    const base = usaUnico ? e.periodoIg!.alcance_unico! : reachSoma;
     if (base > 0 && inter > 0) {
       const taxa = inter / base;
       const f = avaliar(BENCHMARKS.engajamentoPorAlcance, taxa);
