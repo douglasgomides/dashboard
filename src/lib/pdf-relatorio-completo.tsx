@@ -396,10 +396,10 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
           {d.periodLabel}
         </Text>
 
-        {d.avisosDados.length > 0 ? (
+        {(d.avisosDados ?? []).length > 0 ? (
           <View style={{ borderWidth: 1, borderColor: "#E3B341", backgroundColor: "#FFF8E6", borderRadius: 4, padding: 8, marginBottom: 10 }} wrap={false}>
             <Text style={{ fontSize: 10, fontWeight: 700, marginBottom: 3 }}>Antes de ler: o que pode estar errado nos dados deste período</Text>
-            {d.avisosDados.map((a, i) => (
+            {(d.avisosDados ?? []).map((a, i) => (
               <Text key={i} style={{ fontSize: 8.5, lineHeight: 1.4, marginBottom: 2 }}>
                 <Text style={{ fontWeight: 700 }}>· {stripEmoji(a.titulo)}.</Text> {stripEmoji(a.texto)} <Text style={{ color: "#7A5B14" }}>Como corrigir: {stripEmoji(a.correcao)}</Text>
               </Text>
