@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { diagnosticarAds, type LinhaAds, type CampanhaCadastro } from "@/lib/anuncios-objetivo";
 import type { Acompanhamento } from "@/lib/oportunidades";
 import { lerDiagnosticoRpc, montarDadosReduzidos, type DadosComerciais, type MetricasEssenciais, type WtsResumoMin } from "@/lib/comercial";
-import { filtrarPerguntas } from "@/lib/comentarios";
+import { filtrarPerguntas, perguntasDaDeteccaoOriginal } from "@/lib/comentarios";
 import type {
   ContentFormat,
   FunnelStage,
@@ -624,4 +624,31 @@ export async function salvarAcompanhamento(a: Acompanhamento): Promise<{ local: 
     return { local: true };
   }
   return { local: false };
+}
+
+// ---- Dúvidas: detecção original (477eb43) ------------------------------------------------------
+// A leitura que a tela Dúvidas fazia no baseline: só comentários com is_question = true, com o post
+// (miniatura, link, tema), filtrados pela regra original (lib/comentarios.ts `filtrarPerguntasOriginal`:
+// sai só texto curto, resposta do próprio perfil e sorteio/convite). Sem período = as últimas 200, de
+// qualquer data, exatamente como antes. Com período, usa os limites do fuso de Brasília (limitesBR).
+// (Import aqui embaixo para este trecho ficar só acrescentado ao arquivo; imports são içados.)
+
+export async function getPerguntasDeteccaoOriginal(clientId: string, periodo?: { start: string; end: string } | null, limit?: number) {
+  const max = limit ?? (periodo ? 1000 : 200);
+  let consulta = supabase
+    .from("instagram_comments")
+    .select("id, text, like_count, instagram_post_id, commented_at, author_username, is_question, instagram_posts(caption, permalink, thumbnail_url, posted_at, tema)")
+    .eq("client_id", clientId)
+    .eq("is_question", true);
+  if (periodo) {
+    const { desde, antesDe } = limitesBR(periodo.start, periodo.end);
+    consulta = consulta.gte("commented_at", desde).lt("commented_at", antesDe);
+  }
+  const [{ data, error }, donos] = await Promise.all([
+    consulta.order("commented_at", { ascending: false, nullsFirst: false }).limit(max),
+    donosDoPerfil(clientId),
+  ]);
+  if (error) throw error;
+  const lidos = data ?? [];
+  return { perguntas: perguntasDaDeteccaoOriginal(lidos, donos), lidos: lidos.length, donos, noLimite: lidos.length >= max, limite: max };
 }

@@ -3,7 +3,10 @@
 // aleatória dos últimos 45 a 120 dias, texto cortado em ~180 caracteres).
 // Rodar: npx tsx scripts/test-voz-do-paciente.ts
 import { analisarVozDoPaciente, triarComentario, classificarIntencao, normalizar, ROTULO_MOTIVO, type ComentarioBruto } from "../src/lib/voz-do-paciente";
-import { buildIdeias, ideiaParaInsight } from "../src/lib/hub-conteudo";
+import { buildIdeias, buildIdeiasRegraOriginal, ideiaParaInsight, ideiaParaTexto, ideiasOriginaisSemRepetir } from "../src/lib/hub-conteudo";
+import { categoriaDoComentario, filtrarPerguntas, filtrarPerguntasOriginal, filtrarPerguntasTriagem, perguntasDaDeteccaoOriginal } from "../src/lib/comentarios";
+import { computeDuvidasFrequentes } from "../src/lib/report-metrics";
+import { carregarBaseline, BASELINE } from "./baseline-477eb43";
 
 type Linha = [autor: string, curtidas: number, texto: string, post?: string];
 const C = (prefixo: string, a: Linha[]): ComentarioBruto[] =>
@@ -421,6 +424,74 @@ espera("roteiro com 3 a 5 passos", ideias.ideias.every((i) => i.roteiro.length >
 espera("nenhuma ideia de pedido de dose", ideias.ideias.every((i) => !/dose|dosagem/i.test(i.titulo)));
 const so1 = buildIdeias([], C("x", [["ana", 0, "Como abaixar o cortisol??"], ["ana", 0, "Como abaixar o cortisol alto??"], ["", 0, "@fulana olha isso"], ["", 0, "kkkkk qual é?"]]) as any);
 espera("comentário único/ruído não vira ideia", so1.ideias.length === 0, String(so1.ideias.length));
+
+// ---------- detecção original (477eb43): a camada "Todas as perguntas detectadas" ----------
+// Compara a função restaurada com o código do commit 477eb43 lido do repositório (não com uma cópia).
+console.log(`\n=== Detecção original x código do ${BASELINE} ===`);
+const base = await carregarBaseline();
+const donosJ = ["drajulianapaola"];
+// Fixture: os comentários reais acima + casos que a regra original trata (sorteio, convite, resposta do
+// perfil, texto curto) + linhas sem is_question (a consulta original só lia is_question = true).
+const extrasFixture = C("bx", [
+  ["drajulianapaola", 0, "Obrigada pela pergunta! Vou responder no stories?"],
+  ["", 0, "Já me segue no QUERIDA DIVA? Ainda não te vi por lá"],
+  ["", 0, "Participe do sorteio e marque 3 amigas?"],
+  ["", 0, "Oi?"],
+  ["", 0, "kkkkk qual é?"],
+  ["", 0, "Dra, qual exame pedir para ver o cortisol?"],
+]);
+type ComFlag = ComentarioBruto & { is_question?: boolean; like_count: number | null };
+const fixtureOriginal: ComFlag[] = [
+  ...[...juliana, ...lana, ...sergio, ...mariela, ...extrasFixture].map((c) => ({ ...c, like_count: c.like_count ?? null, is_question: true })),
+  { id: "nq1", text: "Adorei o vídeo, muito bom mesmo", like_count: 0, author_username: "fulana", instagram_post_id: "p1", is_question: false },
+  { id: "nq2", text: "Qual o valor da consulta", like_count: 0, author_username: "ciclana", instagram_post_id: "p1", is_question: false },
+];
+const esperadoBase = base.comentarios.filtrarPerguntas(fixtureOriginal.filter((c) => c.is_question === true), donosJ);
+const obtido = perguntasDaDeteccaoOriginal(fixtureOriginal, donosJ);
+const ids = (xs: { id: string }[]) => xs.map((x) => x.id).join(",");
+espera(`detecção original devolve as mesmas perguntas que o ${BASELINE} (${esperadoBase.length} de ${fixtureOriginal.length})`, ids(obtido) === ids(esperadoBase), `${obtido.length} x ${esperadoBase.length}`);
+espera("filtrarPerguntasOriginal = filtrarPerguntas do baseline", ids(filtrarPerguntasOriginal(fixtureOriginal, donosJ)) === ids(base.comentarios.filtrarPerguntas(fixtureOriginal, donosJ)));
+espera(
+  "categoriaDoComentario igual ao baseline em todos os comentários",
+  fixtureOriginal.every((c) => categoriaDoComentario(c.text, c.author_username, donosJ) === base.comentarios.categoriaDoComentario(c.text, c.author_username, donosJ)),
+);
+espera("linhas sem is_question ficam fora (como na consulta original)", !obtido.some((c) => c.id === "nq1" || c.id === "nq2"));
+espera("detecção original tira resposta do perfil, sorteio/convite e texto curto", !obtido.some((c) => ["bx0", "bx1", "bx2", "bx3"].includes(c.id)));
+espera("detecção original mantém o que a triagem nova tira (ex.: piada)", obtido.some((c) => c.id === "bx4"));
+const cOrig = computeDuvidasFrequentes(obtido, { threshold: 0.4, minSize: 2 });
+const cBase = base.metrics.computeDuvidasFrequentes(esperadoBase, { threshold: 0.4, minSize: 2 });
+const assinatura = (cs: { count: number; representative: { id: string }; items: { id: string }[] }[]) => cs.map((c) => `${c.count}|${c.representative.id}|${ids(c.items)}`).join(";");
+espera(`computeDuvidasFrequentes (dúvidas mais repetidas) igual ao ${BASELINE}: ${cOrig.length} grupos`, assinatura(cOrig) === assinatura(cBase), `${cOrig.length} x ${cBase.length}`);
+const comFlag = fixtureOriginal.filter((c) => c.is_question);
+const triagem = filtrarPerguntasTriagem(comFlag, donosJ);
+espera("filtrarPerguntas (Relatório/PDF) segue com a triagem nova", ids(filtrarPerguntas(comFlag, donosJ)) === ids(triagem));
+espera("triagem nova é mais estrita que a detecção original", triagem.length < obtido.length, `${triagem.length} < ${obtido.length}`);
+console.log(`  detecção original: ${obtido.length} perguntas; triagem nova: ${triagem.length}; grupos originais: ${cOrig.length}`);
+
+// ---------- ideias: regra original de volta, sem repetir a nova ----------
+console.log(`\n=== Ideias pela regra original x ${BASELINE} ===`);
+const ideiasBase = base.conteudo.buildIdeias([], esperadoBase);
+const ideiasOrig = buildIdeiasRegraOriginal([], obtido);
+const chave = (i: any) => [i.regra, i.tema, i.formato, i.funil, i.estagio, i.acao, i.porque].join(" | ");
+espera(
+  `ideias "pergunta repetida" iguais às do ${BASELINE} (${ideiasBase.ideias.length})`,
+  ideiasOrig.ideias.map(chave).join("\n") === ideiasBase.ideias.map(chave).join("\n"),
+);
+espera("faltas da regra original iguais ao baseline", ideiasOrig.faltas.join("\n") === ideiasBase.faltas.join("\n"));
+espera("ideias da regra original marcadas como regra original", ideiasOrig.ideias.every((i) => i.regraOriginal === true));
+const novasJ = buildIdeias([], juliana as any, { donos: donosJ });
+const origJ = buildIdeiasRegraOriginal([], perguntasDaDeteccaoOriginal(juliana as any[], donosJ));
+const cruz = ideiasOriginaisSemRepetir(novasJ.ideias, origJ.ideias, analisarVozDoPaciente(juliana, { donos: donosJ }));
+espera("deduplicação não perde nada (extras + repetidas = originais)", cruz.extras.length + cruz.repetidas.length === origJ.ideias.length, `${cruz.extras.length} + ${cruz.repetidas.length} = ${origJ.ideias.length}`);
+const sobrepoe = (a: string[] = [], b: string[] = []) => a.length > 0 && b.length > 0 && a.filter((x) => b.includes(x)).length / Math.min(a.length, b.length) >= 0.5;
+espera("nenhuma ideia extra repete os comentários de uma ideia nova", cruz.extras.every((o) => novasJ.ideias.every((n) => !sobrepoe(o.comentarioIds, n.comentarioIds))));
+espera("toda repetida tem uma ideia nova com os mesmos comentários", cruz.repetidas.every((r) => sobrepoe(r.original.comentarioIds, r.nova.comentarioIds)));
+for (const o of cruz.extras) console.log(`  + [regra original] ${o.titulo.slice(0, 70)} | ${o.formato} | ${o.funil} | ${o.estagio}`);
+for (const r of cruz.repetidas) console.log(`  = [já na lista nova] ${r.original.titulo.slice(0, 60)} -> ${r.nova.titulo}`);
+const txt = ideiaParaTexto(novasJ.ideias[0]);
+espera("texto copiado traz Funil e Estágio", /\nFunil: /.test(txt) && /\nEstágio: /.test(txt), txt.split("\n").slice(0, 5).join(" / "));
+espera("texto copiado mantém gancho, roteiro e CTA", /\nGancho: /.test(txt) && /\nRoteiro:/.test(txt) && /\nCTA: /.test(txt));
+espera("todas as ideias novas têm funil e estágio", novasJ.ideias.every((i) => !!i.funil && !!i.estagio));
 
 console.log(`\n${falhas === 0 ? "Tudo certo." : `${falhas} falha(s).`}`);
 if (falhas) process.exitCode = 1;
