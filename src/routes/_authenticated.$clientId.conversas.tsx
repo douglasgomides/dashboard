@@ -30,7 +30,7 @@ function Numero({ rotulo, valor, detalhe, cor }: { rotulo: string; valor: string
 }
 
 /** Leitura da conversa aberta: fatos (regras fixas) + resumo por IA sob demanda. */
-function LeituraDaConversa({ l, conversaId }: { l: LeituraConversaBanco | undefined; conversaId: string }) {
+function LeituraDaConversa({ l, conversaId, clientId }: { l: LeituraConversaBanco | undefined; conversaId: string; clientId: string }) {
   const qc = useQueryClient();
   const resumo = useQuery({
     queryKey: ["conversa-resumo", conversaId],
@@ -48,10 +48,10 @@ function LeituraDaConversa({ l, conversaId }: { l: LeituraConversaBanco | undefi
     setErro("");
     try {
       const { data: sessao } = await supabase.auth.getSession();
-      const resp = await fetch("/api/conversas/resumo", {
+      const resp = await fetch("/api/sync/manual", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessao.session?.access_token ?? ""}` },
-        body: JSON.stringify({ conversa_id: conversaId }),
+        body: JSON.stringify({ client_id: clientId, alvo: "resumo_conversa", conversa_id: conversaId }),
       });
       const j = await resp.json().catch(() => null);
       if (!resp.ok) throw new Error(j?.error ?? `Falha (${resp.status})`);
@@ -377,7 +377,7 @@ function ConversasPage() {
             {aberta && (
               <>
                 <div className="mb-2 text-sm font-semibold">{atual?.pessoa_nome ?? "Conversa"}</div>
-                <LeituraDaConversa l={porId.get(aberta)} conversaId={aberta} />
+                <LeituraDaConversa l={porId.get(aberta)} conversaId={aberta} clientId={clientId} />
                 {msgs.isLoading && <p className="text-sm">Abrindo…</p>}
                 {msgs.error && <p className="text-sm">{(msgs.error as Error).message}</p>}
                 <div className="flex max-h-[62vh] flex-col gap-1.5 overflow-y-auto">

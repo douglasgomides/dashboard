@@ -123,7 +123,7 @@ export function resumirAtendimento(ls: LeituraConversaBanco[]): ResumoAtendiment
   };
 }
 
-// Resumo por IA (api/conversas/resumo.ts). Campos opcionais: a IA pode omitir.
+// Resumo por IA (api/_lib/resumo-conversa.ts, via /api/sync/manual alvo "resumo_conversa"). Campos opcionais: a IA pode omitir.
 export interface ResumoIA {
   motivo?: string | null;
   resumo?: string | null;

@@ -1,5 +1,7 @@
 /**
  * Resumo de UMA conversa do WhatsApp por IA, sob demanda (botão "Resumir com IA" em Conversas).
+ * Chamado por api/sync/manual.ts (alvo "resumo_conversa"), que já checa admin/membro: o plano da
+ * Vercel aceita no máximo 12 funções, então isto não ganhou um endpoint próprio.
  *
  * - Quem pode: admin ou membro do cliente (mesma regra de ler_mensagens).
  * - O que vai para a IA: só o texto da conversa, com telefone, e-mail e CPF mascarados; o nome do
@@ -9,8 +11,7 @@
  *   disso marca o resumo como desatualizado na tela.
  * - A IA não diagnostica nem inventa: o prompt manda dizer "não dá para saber" quando faltar dado.
  */
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const MODELO_OPENAI = process.env.RESUMO_MODELO || process.env.CLASSIFICADOR_MODELO || "gpt-4o-mini";
 const MODELO_CLAUDE = process.env.RESUMO_MODELO || "claude-haiku-4-5-20251001";
@@ -78,82 +79,36 @@ async function chamarIA(transcricao: string): Promise<{ json: unknown; modelo: s
   throw new Error("Servidor sem OPENAI_API_KEY nem ANTHROPIC_API_KEY: resumo por IA desligado.");
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
-    res.status(405).json({ error: "Use POST" });
-    return;
-  }
-  const URL = process.env.SUPABASE_URL;
-  const CHAVE = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!URL || !CHAVE) {
-    res.status(500).json({ error: "Servidor sem SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY configurados" });
-    return;
-  }
-  const auth = req.headers.authorization ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
-  if (!token) {
-    res.status(401).json({ error: "Sem token de autenticação" });
-    return;
-  }
-  const admin = createClient(URL, CHAVE, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: quem, error: erroQuem } = await admin.auth.getUser(token);
-  if (erroQuem || !quem.user) {
-    res.status(401).json({ error: "Token inválido" });
-    return;
-  }
-
-  const { conversa_id } = (req.body ?? {}) as { conversa_id?: string };
-  if (!conversa_id) {
-    res.status(400).json({ error: "Informe conversa_id" });
-    return;
-  }
-  const { data: conv } = await admin.from("conversas" as never).select("id, client_id").eq("id", conversa_id).maybeSingle();
+export async function resumirConversa(
+  admin: SupabaseClient<any, any, any>,
+  clientId: string,
+  conversaId: string,
+  userId: string,
+): Promise<{ resumo: unknown; modelo: string; ate_msg_em: string }> {
+  const { data: conv } = await admin.from("conversas").select("id, client_id").eq("id", conversaId).maybeSingle();
   const c = conv as { id: string; client_id: string } | null;
-  if (!c) {
-    res.status(404).json({ error: "Conversa não encontrada" });
-    return;
-  }
-  const { data: ehAdmin } = await admin.from("app_admins").select("user_id").eq("user_id", quem.user.id).maybeSingle();
-  if (!ehAdmin) {
-    const { data: ehMembro } = await admin.from("client_members").select("user_id").eq("user_id", quem.user.id).eq("client_id", c.client_id).maybeSingle();
-    if (!ehMembro) {
-      res.status(403).json({ error: "Sem acesso a este cliente" });
-      return;
-    }
-  }
-
-  try {
-    const { data: msgs, error } = await admin
-      .from("mensagens" as never)
-      .select("direcao, autor, texto, tipo, enviada_em")
-      .eq("conversa_id", conversa_id)
-      .order("enviada_em", { ascending: false })
-      .limit(MAX_MSGS);
-    if (error) throw new Error(error.message);
-    const lista = ((msgs ?? []) as { direcao: string; autor: string | null; texto: string | null; tipo: string | null; enviada_em: string }[]).reverse();
-    if (lista.length === 0) {
-      res.status(422).json({ error: "Conversa sem mensagens guardadas" });
-      return;
-    }
-    // Automática = sem assinatura "*Nome:*" e repetida em várias conversas; aqui basta marcar as sem
-    // assinatura que a IA deve tratar com cuidado (a regra exata fica em leitura_conversas).
-    const linhas = lista.map((m) => {
-      const quemFala = m.direcao === "entrada" ? "Paciente" : m.direcao === "saida" ? "Clínica" : "Sistema";
-      const corpo = m.texto ? mascarar(m.texto) : `(${(m.tipo ?? "mídia").toLowerCase()})`;
-      return `[${hora(m.enviada_em)}] ${quemFala}: ${corpo}`;
-    });
-    const transcricao = `Conversa (${lista.length} mensagens, da mais antiga para a mais recente${lista.length === MAX_MSGS ? `; só as ${MAX_MSGS} últimas` : ""}):\n${linhas.join("\n")}`.slice(0, 60_000);
-
-    const { json, modelo } = await chamarIA(transcricao);
-    const ate = lista[lista.length - 1].enviada_em;
-    const { error: erroGrava } = await admin.from("conversas_resumos" as never).upsert(
-      { conversa_id, client_id: c.client_id, resumo: json, modelo, ate_msg_em: ate, gerado_em: new Date().toISOString(), gerado_por: quem.user.id } as never,
-      { onConflict: "conversa_id" },
-    );
-    if (erroGrava) throw new Error(erroGrava.message);
-    await admin.from("acessos_conversas" as never).insert({ user_id: quem.user.id, client_id: c.client_id, conversa_id, acao: "resumo_ia" } as never);
-    res.status(200).json({ ok: true, resumo: json, modelo, ate_msg_em: ate });
-  } catch (e) {
-    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
-  }
+  if (!c || c.client_id !== clientId) throw new Error("Conversa não encontrada para este cliente");
+  const { data: msgs, error } = await admin
+    .from("mensagens")
+    .select("direcao, autor, texto, tipo, enviada_em")
+    .eq("conversa_id", conversaId)
+    .order("enviada_em", { ascending: false })
+    .limit(MAX_MSGS);
+  if (error) throw new Error(error.message);
+  const lista = ((msgs ?? []) as { direcao: string; autor: string | null; texto: string | null; tipo: string | null; enviada_em: string }[]).reverse();
+  if (lista.length === 0) throw new Error("Conversa sem mensagens guardadas");
+  const linhas = lista.map((m) => {
+    const quemFala = m.direcao === "entrada" ? "Paciente" : m.direcao === "saida" ? "Clínica" : "Sistema";
+    const corpo = m.texto ? mascarar(m.texto) : `(${(m.tipo ?? "mídia").toLowerCase()})`;
+    return `[${hora(m.enviada_em)}] ${quemFala}: ${corpo}`;
+  });
+  const transcricao = `Conversa (${lista.length} mensagens, da mais antiga para a mais recente${lista.length === MAX_MSGS ? `; só as ${MAX_MSGS} últimas` : ""}):\n${linhas.join("\n")}`.slice(0, 60_000);
+  const { json, modelo } = await chamarIA(transcricao);
+  const ate = lista[lista.length - 1].enviada_em;
+  const { error: erroGrava } = await admin
+    .from("conversas_resumos")
+    .upsert({ conversa_id: conversaId, client_id: clientId, resumo: json, modelo, ate_msg_em: ate, gerado_em: new Date().toISOString(), gerado_por: userId }, { onConflict: "conversa_id" });
+  if (erroGrava) throw new Error(erroGrava.message);
+  await admin.from("acessos_conversas").insert({ user_id: userId, client_id: clientId, conversa_id: conversaId, acao: "resumo_ia" });
+  return { resumo: json, modelo, ate_msg_em: ate };
 }

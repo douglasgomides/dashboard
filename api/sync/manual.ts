@@ -17,6 +17,7 @@ import { enriquecerContatosKommo } from "../_lib/kommo-contatos.js";
 import { criarLinkShort, cliquesDoLink, destinoWhatsApp, novoCodigoRef } from "../_lib/shortio.js";
 import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_lib/sync-status.js";
 import { rodarConferencia } from "../_lib/conferencia.js";
+import { resumirConversa } from "../_lib/resumo-conversa.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
 //
@@ -89,7 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram"];
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa"];
   // "conferencia" olha todos os clientes de uma vez (só admin), por isso não exige client_id.
   const alvoGlobal = alvo === "conferencia";
   if ((!client_id && !alvoGlobal) || !alvo || !ALVOS.includes(alvo)) {
@@ -532,6 +533,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ---- Conversas do WhatsApp (WTS): grava mensagens, pessoa e toque. Só admin: é dado de paciente. ----
+    if (alvo === "resumo_conversa") {
+      const conversaId = (req.body ?? {}).conversa_id as string | undefined;
+      if (!conversaId) {
+        res.status(400).json({ error: "Informe conversa_id" });
+        return;
+      }
+      const r = await resumirConversa(admin, client_id, conversaId, quem.user.id);
+      res.status(200).json({ alvo, ok: true, ...r });
+      return;
+    }
     if (alvo === "conversas") {
       if (!ehAdmin) {
         res.status(403).json({ error: "Só admin ingere conversas" });

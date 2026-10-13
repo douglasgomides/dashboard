@@ -32,9 +32,6 @@
     },
     "api/sync/wts.ts": {
       "maxDuration": 300
-    },
-    "api/conversas/resumo.ts": {
-      "maxDuration": 60
     }
   }
 }
