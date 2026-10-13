@@ -72,8 +72,45 @@ const ROTULO_FAL: Record<string, string> = {
   nome_errado: "Errou o nome do paciente", informacao_inconsistente: "Informação inconsistente", pressao: "Pressionou o paciente",
   so_emoji: "Respondeu só com emoji", desconto_reativo: "Desconto antes de construir valor", excesso_audio: "Excesso de áudio",
 };
-const lista = (o: Record<string, number> | null | undefined, r: Record<string, string>) =>
-  Object.entries(o ?? {}).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${r[k] ?? k}: ${n}`);
+// Dica prática para cada erro do atendimento (vai no relatório para a equipe da clínica).
+const DICA_FALHA: Record<string, string> = {
+  sem_resposta: "Nenhuma conversa termina com mensagem do paciente: revisar a caixa 2x por dia e responder tudo.",
+  demora: "Responder em até 15 minutos no horário comercial; fora dele, mensagem automática com o horário de retorno.",
+  desvio_preco: "Quando perguntarem o valor, responder o valor na hora, junto com o que está incluso e duas opções de horário.",
+  preco_sem_ancoragem: "Antes do número, dizer o que a pessoa ganha (avaliação completa, tecnologia, resultado esperado).",
+  sem_cta: "Terminar toda resposta com uma pergunta de agenda: “tenho quinta às 10h ou sexta às 15h, qual prefere?”.",
+  sem_follow_up: "Se o paciente sumir, voltar em 1, 3 e 7 dias com uma mensagem curta e um horário concreto.",
+  nome_errado: "Conferir o nome do paciente antes de colar mensagem pronta.",
+  informacao_inconsistente: "Usar uma tabela única de valores e datas, igual para todas as atendentes.",
+  pressao: "Trocar “o que te impede?” por uma pergunta sobre a dúvida que ficou.",
+  so_emoji: "Quando o paciente demonstra interesse, responder com o próximo passo, não só com emoji.",
+  desconto_reativo: "Construir valor antes de qualquer desconto; desconto só com prazo e condição.",
+  excesso_audio: "Preço e horário sempre por escrito; áudio só para explicar.",
+};
+
+function BarrasPdf({ itens, cor }: { itens: [string, number][]; cor: string }) {
+  const max = Math.max(1, ...itens.map(([, n]) => n));
+  return (
+    <View style={{ marginBottom: 6 }}>
+      {itens.map(([rot, n], i) => (
+        <View key={i} style={{ flexDirection: "row", alignItems: "center", marginBottom: 3 }} wrap={false}>
+          <Text style={{ width: 170, fontSize: 8.5 }}>{rot}</Text>
+          <View style={{ flexGrow: 1, height: 8, backgroundColor: "#F1EEE8", borderRadius: 2 }}>
+            <View style={{ width: `${Math.max(3, (n / max) * 100)}%`, height: 8, backgroundColor: cor, borderRadius: 2 }} />
+          </View>
+          <Text style={{ width: 28, fontSize: 8.5, textAlign: "right", fontWeight: 700 }}>{n}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function ComoLer({ children }: { children: string }) {
+  return <Text style={{ fontSize: 8, color: GRAY, marginBottom: 6, lineHeight: 1.35 }}>Como ler: {children}</Text>;
+}
+
+const lista = (o: Record<string, number> | null | undefined, r: Record<string, string>): [string, number][] =>
+  Object.entries(o ?? {}).sort((a, b) => b[1] - a[1]).map(([k, n]) => [r[k] ?? k, n]);
 
 function Titulo({ children, dica }: { children: string; dica?: string }) {
   return (
@@ -358,6 +395,18 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
           {d.igHandle ? `@${d.igHandle} · ` : ""}
           {d.periodLabel}
         </Text>
+
+        {d.avisosDados.length > 0 ? (
+          <View style={{ borderWidth: 1, borderColor: "#E3B341", backgroundColor: "#FFF8E6", borderRadius: 4, padding: 8, marginBottom: 10 }} wrap={false}>
+            <Text style={{ fontSize: 10, fontWeight: 700, marginBottom: 3 }}>Antes de ler: o que pode estar errado nos dados deste período</Text>
+            {d.avisosDados.map((a, i) => (
+              <Text key={i} style={{ fontSize: 8.5, lineHeight: 1.4, marginBottom: 2 }}>
+                <Text style={{ fontWeight: 700 }}>· {stripEmoji(a.titulo)}.</Text> {stripEmoji(a.texto)} <Text style={{ color: "#7A5B14" }}>Como corrigir: {stripEmoji(a.correcao)}</Text>
+              </Text>
+            ))}
+            <Text style={{ fontSize: 8, color: GRAY, marginTop: 2 }}>Enquanto isso não for corrigido, os números ligados a esses pontos podem estar abaixo do real.</Text>
+          </View>
+        ) : null}
 
         <Kpis items={kpis} />
 
@@ -954,23 +1003,55 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
             </Text>
           ) : null}
           <Text style={styles.methodTitle}>Funil da conversa</Text>
-          <Text style={styles.methodP}>
-            Engajaram {d.auditoria.funil?.engajou ?? 0} · pediram preço {d.auditoria.funil?.preco_pedido ?? 0} · receberam preço {d.auditoria.funil?.preco_apresentado ?? 0} · agendamento em curso {d.auditoria.funil?.agendamento_em_curso ?? 0} · agendaram {d.auditoria.funil?.agendou ?? 0}.
-          </Text>
-          <Text style={styles.methodTitle}>O que o paciente disse (objeções declaradas)</Text>
-          {lista(d.auditoria.objecoes, ROTULO_OBJ).map((t, i) => <Text key={`o${i}`} style={styles.methodP}>· {t}</Text>)}
+          <ComoLer>cada barra é quantas conversas chegaram até aquele ponto. A maior queda entre duas barras é onde a clínica mais perde paciente.</ComoLer>
+          <BarrasPdf
+            cor={GOLD}
+            itens={[
+              ["Engajaram (paciente respondeu)", d.auditoria.funil?.engajou ?? 0],
+              ["Pediram preço", d.auditoria.funil?.preco_pedido ?? 0],
+              ["Receberam o preço", d.auditoria.funil?.preco_apresentado ?? 0],
+              ["Agendamento em curso", d.auditoria.funil?.agendamento_em_curso ?? 0],
+              ["Agendaram", d.auditoria.funil?.agendou ?? 0],
+            ]}
+          />
+          <Text style={styles.methodTitle}>O que o paciente disse (objeções)</Text>
+          <ComoLer>o motivo que o paciente falou. Quase nunca é o motivo real da perda: veja o bloco seguinte.</ComoLer>
+          <BarrasPdf cor="#E3B341" itens={lista(d.auditoria.objecoes, ROTULO_OBJ)} />
           <Text style={styles.methodTitle}>O que a clínica errou (a causa real da perda)</Text>
-          {lista(d.auditoria.falhas, ROTULO_FAL).map((t, i) => <Text key={`f${i}`} style={styles.methodP}>· {t}</Text>)}
-          {(d.auditoria.por_atendente ?? []).length > 0 ? <Text style={styles.methodTitle}>Por atendente</Text> : null}
-          {(d.auditoria.por_atendente ?? []).map((p: any, i: number) => (
-            <View key={`a${i}`} wrap={false} style={{ marginBottom: 4 }}>
-              <Text style={styles.methodP}>
-                <Text style={{ fontWeight: 700 }}>{stripEmoji(p.nome)}</Text>: nota {p.nota != null ? String(p.nota).replace(".", ",") : "—"} · {p.conversas} conversas · {p.agendou} agendaram · deu preço em {p.preco_apresentado}
-                {p.falha_mais_comum ? ` · erro mais comum: ${ROTULO_FAL[p.falha_mais_comum] ?? p.falha_mais_comum}` : ""}
-              </Text>
-              {p.a_melhorar ? <Text style={{ fontSize: 8, color: GRAY, marginLeft: 8 }}>A melhorar: {stripEmoji(p.a_melhorar)}</Text> : null}
-            </View>
-          ))}
+          <ComoLer>o que a leitura das conversas mostrou do lado da clínica. É aqui que dá para ganhar paciente sem gastar mais em anúncio.</ComoLer>
+          <BarrasPdf cor={RED} itens={lista(d.auditoria.falhas, ROTULO_FAL)} />
+          {(() => {
+            const at = ((d.auditoria.por_atendente ?? []) as any[]).filter((p) => p.conversas >= 3 && !/Sem atendente/.test(p.nome));
+            const bem = at.filter((p) => p.nota != null && p.nota >= 7);
+            const ajuda = at.filter((p) => p.nota != null && p.nota < 7);
+            const semDono = ((d.auditoria.por_atendente ?? []) as any[]).find((p) => /Sem atendente/.test(p.nome));
+            return (
+              <>
+                {at.length > 0 ? <Text style={styles.methodTitle}>Quem está atendendo bem e quem precisa de ajuda</Text> : null}
+                {at.length > 0 ? <ComoLer>nota de 0 a 10 dada pela leitura das conversas de cada atendente (mínimo de 3 conversas). A dica é o ajuste que mais muda o resultado dela.</ComoLer> : null}
+                {bem.map((p, i) => (
+                  <View key={`b${i}`} wrap={false} style={{ borderLeftWidth: 3, borderLeftColor: "#2E7D4F", paddingLeft: 6, marginBottom: 5 }}>
+                    <Text style={{ fontSize: 9.5, fontWeight: 700 }}>{stripEmoji(p.nome)} · {String(p.nota).replace(".", ",")}/10 · atendendo bem</Text>
+                    <Text style={{ fontSize: 8.5, color: "#444" }}>{p.conversas} conversas, {p.agendou} agendaram, deu preço em {p.preco_apresentado}.{p.a_melhorar ? ` Para ficar ainda melhor: ${stripEmoji(p.a_melhorar)}.` : ""}</Text>
+                  </View>
+                ))}
+                {ajuda.map((p, i) => (
+                  <View key={`a${i}`} wrap={false} style={{ borderLeftWidth: 3, borderLeftColor: RED, paddingLeft: 6, marginBottom: 5 }}>
+                    <Text style={{ fontSize: 9.5, fontWeight: 700 }}>{stripEmoji(p.nome)} · {String(p.nota).replace(".", ",")}/10 · precisa de ajuda</Text>
+                    <Text style={{ fontSize: 8.5, color: "#444" }}>
+                      {p.conversas} conversas, {p.agendou} agendaram, deu preço em {p.preco_apresentado}.{p.falha_mais_comum ? ` Erro mais comum: ${ROTULO_FAL[p.falha_mais_comum] ?? p.falha_mais_comum}.` : ""}
+                    </Text>
+                    {p.falha_mais_comum && DICA_FALHA[p.falha_mais_comum] ? <Text style={{ fontSize: 8.5, color: "#7A5B14" }}>Dica: {DICA_FALHA[p.falha_mais_comum]}</Text> : null}
+                  </View>
+                ))}
+                {semDono && semDono.conversas > 0 ? (
+                  <Text style={[styles.methodP, { fontSize: 8.5 }]}>
+                    {semDono.conversas} conversas não têm atendente identificada (robô ou sem assinatura){semDono.agendou ? `, com ${semDono.agendou} agendamentos` : ", sem agendamento"}. Dica: toda conversa precisa de dono; peça para as atendentes assinarem as mensagens.
+                  </Text>
+                ) : null}
+              </>
+            );
+          })()}
           {(d.auditoria.exemplos ?? []).length > 0 ? <Text style={styles.methodTitle}>Exemplos reais com correção</Text> : null}
           {(d.auditoria.exemplos ?? []).slice(0, 5).map((e: any, i: number) => (
             <View key={`e${i}`} wrap={false} style={{ marginBottom: 5 }}>

@@ -30,6 +30,7 @@ import { getResumoPeriodo } from "@/lib/audiencia";
 import { diagnosticarAds, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { buildRelatorioEnvio, type RelatorioEnvio } from "@/lib/relatorio-envio";
 import { resumirAtendimento, type ResumoAtendimento } from "@/lib/conversa-leitura";
+import { avisosDeCobertura, type CoberturaFonte } from "@/lib/cobertura";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface FontesCliente {
@@ -80,6 +81,8 @@ export interface RelatorioCompletoData {
   // Auditoria comercial: leitura por IA de cada conversa (auditoria_comercial) + tempos por regra fixa.
   auditoria: any | null;
   atendimento: ResumoAtendimento | null;
+  // "Antes de ler": problemas no dado de entrada (qualidade_dados) e cobertura do período.
+  avisosDados: { titulo: string; texto: string; correcao: string }[];
   omitidos: string[];
   falhas: string[];
   // Conteúdo validado (resumo, vitórias, atenção, ações, testes, limitações) da página 1.
@@ -227,7 +230,41 @@ export async function coletarRelatorioCompleto(args: {
       )
     : null;
 
+  const avisosDados: { titulo: string; texto: string; correcao: string }[] = [];
+  const problemas = await tentar(
+    "Qualidade dos dados",
+    falhas,
+    async () => {
+      const { data, error } = await (supabase as any).rpc("qualidade_dados", { p_client_id: clientId });
+      if (error) throw error;
+      return (Array.isArray(data) ? data : []) as { titulo: string; evidencia: string; correcao: string; severidade: string }[];
+    },
+    [],
+  );
+  for (const p of problemas.sort((a, b) => (a.severidade === "alta" ? -1 : 1) - (b.severidade === "alta" ? -1 : 1)).slice(0, 6))
+    avisosDados.push({ titulo: p.titulo, texto: p.evidencia, correcao: p.correcao });
+  const cobertura = await tentar(
+    "Cobertura do período",
+    falhas,
+    async () => {
+      const { data, error } = await (supabase as any).rpc("cobertura_periodo", { p_client: clientId, p_de: start, p_ate: end.slice(0, 10) });
+      if (error) throw error;
+      return (data ?? []) as CoberturaFonte[];
+    },
+    [] as CoberturaFonte[],
+  );
+  const hojeBr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  for (const a of avisosDeCobertura(cobertura, start, end.slice(0, 10), hojeBr))
+    avisosDados.push({ titulo: `${a.rotulo}: período incompleto`, texto: a.texto, correcao: "Os totais desta parte valem só para os dias com dado." });
+  if (auditoria && Number(auditoria.lidas) < Number(auditoria.conversas_periodo))
+    avisosDados.push({
+      titulo: "Nem toda conversa foi lida",
+      texto: `A IA leu ${auditoria.lidas} de ${auditoria.conversas_periodo} conversas do período.`,
+      correcao: "A leitura roda todo dia; as que faltam entram no próximo relatório.",
+    });
+
   return {
+    avisosDados,
     auditoria,
     atendimento,
     envio,
