@@ -786,8 +786,8 @@ function RetencaoDeReels({ posts }: { posts: Post[] }) {
       ajuda="Hook rate é quanta gente não pulou nos 3 primeiros segundos: é o gancho fazendo efeito. Body rate e hold rate exigiriam a duração do vídeo, que a Meta não entrega por API. Por isso o tempo assistido aparece em segundos, não em porcentagem."
     >
       <div className="mb-4 grid grid-cols-2 gap-3">
-        <Kpi icone={PlayCircle} cor="var(--s2)" rotulo="Hook rate (mediana)" valor={r.medianHookRate != null ? `${r.medianHookRate.toFixed(1)}%` : "—"} />
-        <Kpi icone={Timer} cor="var(--s1)" rotulo="Tempo assistido (mediana)" valor={r.medianWatchSeconds != null ? `${r.medianWatchSeconds.toFixed(1)}s` : "—"} />
+        <Kpi icone={PlayCircle} cor="var(--s2)" rotulo="Hook rate (mediana)" valor={r.medianHookRate != null ? `${r.medianHookRate.toFixed(1)}%` : "—"} dica={r.weightedHookRate != null ? `ponderado por views: ${r.weightedHookRate.toFixed(1)}%` : undefined} />
+        <Kpi icone={Timer} cor="var(--s1)" rotulo="Tempo assistido (mediana)" valor={r.medianWatchSeconds != null ? `${r.medianWatchSeconds.toFixed(1)}s` : "—"} dica={r.weightedWatchSeconds != null ? `ponderado por views: ${r.weightedWatchSeconds.toFixed(1)}s` : undefined} />
       </div>
 
       {r.withData < r.totalReels && (

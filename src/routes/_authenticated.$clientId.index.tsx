@@ -24,6 +24,7 @@ import { brazilWeekdayAndHour, computeFormatBreakdown, computeFormatInsight, fmt
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum } from "@/lib/format";
 import { analyzeGrowth } from "@/lib/hub-conteudo";
+import { getResumoPeriodo } from "@/lib/audiencia";
 import { UserPlus, Eye, Activity, Bookmark, Trophy, TrendingDown, MousePointerClick, LineChart as LineIcon, Clock, Gauge, BarChart3, Download, Loader2, Lightbulb } from "lucide-react";
 import { Painel, Kpi, BarraFina, Miniatura } from "@/components/visual";
 
@@ -329,6 +330,14 @@ function MonthlyOverview() {
     queryFn: () => getPostsForAnalytics(clientId, start, end),
   });
 
+  // Alcance único e interações do período, direto da Meta: o Instagram conta contas ÚNICAS, o banco só tem o alcance dia a dia.
+  const { data: periodoIg } = useQuery({
+    queryKey: ["periodo-ig", clientId, start, end],
+    queryFn: () => getResumoPeriodo(clientId, start, end),
+    staleTime: 20 * 60_000,
+    retry: false,
+  });
+
   function handleMonthlyClick(e: any) {
     if (e?.activeLabel) setSelectedDateMonthly(e.activeLabel);
   }
@@ -361,6 +370,8 @@ function MonthlyOverview() {
   const newFollowers = sum(data, "new_followers");
   // Bruto x líquido: o bruto é o "Seguidores" do Instagram; o líquido desconta quem saiu (ver tela Conteúdo).
   const cresc = analyzeGrowth(data as { date: string; new_followers?: number | null; unfollowers?: number | null }[], start, end);
+  const meta = periodoIg?.dados;
+  const taxaUnica = meta?.alcance_unico && meta.interacoes != null ? ((meta.interacoes / meta.alcance_unico) * 100).toFixed(1) + "%" : null;
   const sinal = (n: number) => `${n >= 0 ? "+" : "-"}${Math.abs(n).toLocaleString("pt-BR")}`;
   const dicaSeguidores = cresc.diasMedidos
     ? `bruto, igual ao Instagram · saíram ${cresc.saidas.toLocaleString("pt-BR")} · líquido ${sinal(cresc.liquido)} (${cresc.diasMedidos} dias medidos)`
@@ -441,9 +452,32 @@ function MonthlyOverview() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi icone={UserPlus} cor="var(--s3)" rotulo="Novos seguidores (bruto)" valor={newFollowers.toLocaleString("pt-BR")} tendencia={vsNovos} dica={dicaSeguidores} />
-        <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance (soma dos dias)" valor={reach.toLocaleString("pt-BR")} tendencia={vsAlcance} dica="a mesma pessoa pode contar mais de um dia" />
-        <Kpi icone={Activity} cor="var(--s2)" rotulo="Taxa de engajamento" valor={engagementRate} dica="interações ÷ alcance" />
-        <Kpi icone={Bookmark} cor="var(--s7)" rotulo="Salvamentos" valor={saves.toLocaleString("pt-BR")} tendencia={vsSalvos} />
+        {meta?.alcance_unico != null ? (
+          <Kpi
+            icone={Eye}
+            cor="var(--s1)"
+            rotulo="Alcance (contas únicas)"
+            valor={meta.alcance_unico.toLocaleString("pt-BR")}
+            dica={`igual ao “Contas alcançadas” do Instagram, ${dd(meta.de)} a ${dd(meta.ate)}${meta.recortado ? " (últimos 30 dias do período)" : ""}. Soma dos dias: ${reach.toLocaleString("pt-BR")}`}
+          />
+        ) : (
+          <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance (soma dos dias)" valor={reach.toLocaleString("pt-BR")} tendencia={vsAlcance} dica="soma do alcance de cada dia: a mesma pessoa conta em mais de um dia, então passa do “Contas alcançadas” do Instagram" />
+        )}
+        <Kpi
+          icone={Activity}
+          cor="var(--s2)"
+          rotulo="Taxa de engajamento"
+          valor={taxaUnica ?? engagementRate}
+          dica={taxaUnica ? "interações ÷ alcance único do período (fórmula da casa; a Meta não publica taxa)" : "interações ÷ soma dos alcances diários (fórmula da casa; a Meta não publica taxa)"}
+        />
+        <Kpi
+          icone={Bookmark}
+          cor="var(--s7)"
+          rotulo="Salvamentos"
+          valor={(meta?.salvamentos ?? saves).toLocaleString("pt-BR")}
+          tendencia={meta?.salvamentos != null ? undefined : vsSalvos}
+          dica={meta?.salvamentos != null ? `por data da ação, igual ao Instagram (${dd(meta.de)} a ${dd(meta.ate)})` : "soma dos salvamentos de cada dia"}
+        />
       </div>
       {avisoCobertura && (
         <div className="flex flex-wrap items-center justify-between gap-3">

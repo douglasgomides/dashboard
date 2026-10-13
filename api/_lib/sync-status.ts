@@ -31,6 +31,10 @@ export async function recordSyncStatus(
 ): Promise<void> {
   try {
     const agora = new Date().toISOString();
+    // O sync automático (cron/n8n) não informa até que data o dado vai; só o botão manual informava. Resultado: o
+    // carimbo "Dados até" ficava preso na data do último clique manual, semanas atrás, mesmo com o sync rodando todo
+    // dia. Sucesso sem data informada lê a data real do banco (mesma regra do botão e da RPC client_sync_status).
+    if (r.ok && !r.dataAte) r = { ...r, dataAte: await lerDadosAte(supabase, clientId, fonte) };
     const linha: Record<string, unknown> = {
       client_id: clientId,
       fonte,

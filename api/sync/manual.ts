@@ -10,12 +10,13 @@ import { runKommoLeadsSync } from "../_lib/kommo-leads-sync.js";
 import { runClintSync } from "../_lib/clint-sync.js";
 import { runRdStationSync } from "../_lib/rdstation-sync.js";
 import { runFlwChatSync } from "../_lib/flwchat-sync.js";
-import { lerAudiencia } from "../_lib/meta-audiencia.js";
+import { lerAudiencia, lerResumoPeriodo } from "../_lib/meta-audiencia.js";
 import { classificarConteudoComIA } from "../_lib/conteudo-ia.js";
 import { ingerirConversasWts } from "../_lib/conversas-wts.js";
 import { enriquecerContatosKommo } from "../_lib/kommo-contatos.js";
 import { criarLinkShort, cliquesDoLink, destinoWhatsApp, novoCodigoRef } from "../_lib/shortio.js";
 import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_lib/sync-status.js";
+import { rodarConferencia } from "../_lib/conferencia.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
 //
@@ -88,8 +89,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos"];
-  if (!client_id || !alvo || !ALVOS.includes(alvo)) {
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram"];
+  // "conferencia" olha todos os clientes de uma vez (só admin), por isso não exige client_id.
+  const alvoGlobal = alvo === "conferencia";
+  if ((!client_id && !alvoGlobal) || !alvo || !ALVOS.includes(alvo)) {
     res.status(400).json({ error: "Informe client_id e alvo ('tudo', 'posts', 'anuncios', 'atendimento', 'comentarios' ou 'crm')" });
     return;
   }
@@ -101,6 +104,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .maybeSingle();
 
   if (!ehAdmin) {
+    if (alvoGlobal) {
+      res.status(403).json({ error: "Só admin" });
+      return;
+    }
     const { data: ehMembro } = await admin
       .from("client_members")
       .select("user_id")
@@ -114,6 +121,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    if (alvoGlobal) {
+      const resultado = await rodarConferencia(admin, { tokenGlobalAnuncios: process.env.META_ADS_TOKEN });
+      res.status(200).json({ alvo, ok: true, ...resultado });
+      return;
+    }
+    if (!client_id) {
+      res.status(400).json({ error: "Informe client_id" });
+      return;
+    }
     async function sincronizarAnuncios() {
       // Anúncios vêm de DUAS fontes: a Graph API (token próprio, contas em
       // client_ad_accounts — ex.: Dr. Sergio) e a Windsor. Cada conta é
@@ -472,6 +488,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const dados = await lerAudiencia({ igId: conta.windsor_account_id as string, token: tokenIg });
       memoria.set(client_id, { t: Date.now(), d: dados });
+      res.status(200).json({ alvo, ok: true, dados });
+      return;
+    }
+
+    // Números do período escolhido, do jeito do painel do Instagram (alcance ÚNICO, não a soma dos dias). Leitura ao vivo,
+    // nada é gravado; guarda 20 minutos na memória da função, por cliente e período.
+    if (alvo === "periodo_instagram") {
+      const b = (req.body ?? {}) as { de?: string; ate?: string };
+      const iso = /^\d{4}-\d{2}-\d{2}$/;
+      if (!b.de || !b.ate || !iso.test(b.de) || !iso.test(b.ate)) {
+        res.status(400).json({ error: "Informe de e ate (YYYY-MM-DD)" });
+        return;
+      }
+      const chave = `${client_id}:${b.de}:${b.ate}`;
+      const memoria: Map<string, { t: number; d: unknown }> = ((globalThis as any).__periodoIgCache ??= new Map());
+      const guardado = memoria.get(chave);
+      if (guardado && Date.now() - guardado.t < 20 * 60_000) {
+        res.status(200).json({ alvo, ok: true, dados: guardado.d, do_cache: true });
+        return;
+      }
+      const { data: contasIg, error: erroIg } = await admin
+        .from("instagram_accounts")
+        .select("id, windsor_account_id, sync_source")
+        .eq("client_id", client_id)
+        .eq("active", true);
+      if (erroIg) throw new Error(erroIg.message);
+      const conta = (contasIg ?? []).find((c) => c.sync_source === "meta_graph" && c.windsor_account_id);
+      if (!conta) {
+        res.status(200).json({ alvo, ok: true, nada_a_fazer: "Instagram sem token próprio da Meta: o alcance único do período não está disponível." });
+        return;
+      }
+      const { data: segredo } = await admin.from("instagram_account_secrets").select("meta_access_token").eq("instagram_account_id", conta.id).maybeSingle();
+      const tokenIg = segredo?.meta_access_token ?? META_ACCESS_TOKEN;
+      if (!tokenIg) {
+        res.status(200).json({ alvo, ok: false, erro: "Instagram sem token da Meta configurado." });
+        return;
+      }
+      const dados = await lerResumoPeriodo({ igId: conta.windsor_account_id as string, token: tokenIg, de: b.de, ate: b.ate });
+      memoria.set(chave, { t: Date.now(), d: dados });
       res.status(200).json({ alvo, ok: true, dados });
       return;
     }

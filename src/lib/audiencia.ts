@@ -53,6 +53,38 @@ export async function getAudiencia(clientId: string): Promise<RespostaAudiencia>
   return { dados: corpo.dados as Audiencia };
 }
 
+export interface ResumoPeriodo {
+  de: string;
+  ate: string;
+  dias: number;
+  recortado: boolean;
+  alcance_unico: number | null;
+  contas_engajadas: number | null;
+  interacoes: number | null;
+  salvamentos: number | null;
+  curtidas: number | null;
+  comentarios: number | null;
+  compartilhamentos: number | null;
+  erros: string[];
+}
+
+// Alcance único e interações do período, direto da Meta (o dashboard soma o alcance dia a dia, o Instagram conta contas únicas).
+export async function getResumoPeriodo(clientId: string, de: string, ate: string): Promise<{ dados?: ResumoPeriodo; nada_a_fazer?: string; erro?: string }> {
+  const { data: sessao } = await supabase.auth.getSession();
+  const token = sessao.session?.access_token;
+  if (!token) return { erro: "Sessão expirada." };
+  const r = await fetch("/api/sync/manual", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ client_id: clientId, alvo: "periodo_instagram", de, ate }),
+  });
+  const corpo = await r.json().catch(() => null);
+  if (!r.ok) return { erro: corpo?.error ?? `A leitura da Meta falhou (${r.status}).` };
+  if (corpo?.nada_a_fazer) return { nada_a_fazer: corpo.nada_a_fazer };
+  if (corpo?.ok === false) return { erro: corpo.erro ?? "A leitura da Meta falhou." };
+  return { dados: corpo.dados as ResumoPeriodo };
+}
+
 // ---------- formatação ----------
 export const fmtN = (n: number) => Math.round(n).toLocaleString("pt-BR");
 export const fmtPct = (n: number, casas = 0) => `${n.toLocaleString("pt-BR", { maximumFractionDigits: casas })}%`;

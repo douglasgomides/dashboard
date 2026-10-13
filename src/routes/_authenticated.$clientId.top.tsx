@@ -278,7 +278,7 @@ function TopPage() {
       <div className="flex items-center gap-2">
         <Trophy size={14} aria-hidden style={{ color: "var(--warn)" }} />
         <span>Os 20 melhores do período</span>
-        <Ajuda>Os 20 melhores posts, Reels e stories do período ({periodLabel}), na métrica que você escolher, e o que eles têm em comum.</Ajuda>
+        <Ajuda>Os 20 melhores posts, Reels e stories do período ({periodLabel}), na métrica que você escolher, e o que eles têm em comum. Curtidas, comentários, visualizações e alcance de cada post são só do alcance orgânico: o Instagram mostra no post o total com impulsionamento, então um post turbinado aparece com número maior lá do que aqui.</Ajuda>
       </div>
     </div>
   );

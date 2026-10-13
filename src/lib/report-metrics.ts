@@ -417,6 +417,20 @@ export function computeRetencaoDeReels(posts: any[], limit = 10) {
     }))
     .sort((a, b) => b.hookRate - a.hookRate);
 
+  // Média PONDERADA por views: é a que se compara com o número agregado do Instagram. A mediana (por reel) fica ao lado
+  // porque um reel viral não deve decidir sozinho; as duas diferem quando os reels têm views muito desiguais.
+  const ponderada = (valor: (r: (typeof ranked)[number]) => number | null) => {
+    let soma = 0;
+    let pesos = 0;
+    for (const r of ranked) {
+      const v = valor(r);
+      const w = Number(r.post.views ?? 0);
+      if (v == null || !(w > 0)) continue;
+      soma += v * w;
+      pesos += w;
+    }
+    return pesos > 0 ? soma / pesos : null;
+  };
   const hookRates = ranked.map((r) => r.hookRate);
   const watchSeconds = ranked.map((r) => r.avgWatchSeconds).filter((v): v is number => v != null);
 
@@ -427,6 +441,8 @@ export function computeRetencaoDeReels(posts: any[], limit = 10) {
     totalReels: posts.filter((p) => p.format === "reels").length,
     medianHookRate: hookRates.length > 0 ? median(hookRates) : null,
     medianWatchSeconds: watchSeconds.length > 0 ? median(watchSeconds) : null,
+    weightedHookRate: ponderada((r) => r.hookRate),
+    weightedWatchSeconds: ponderada((r) => r.avgWatchSeconds),
     melhores: ranked.slice(0, limit),
     piores: ranked.slice(-limit).reverse(),
   };
