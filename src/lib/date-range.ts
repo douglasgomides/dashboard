@@ -33,9 +33,11 @@ export function resolveDateRange(state: DateRangeState): { start: string; end: s
     return { start: state.from, end: state.to };
   }
   if (state.preset === "mes_atual") {
+    // Termina hoje, não no último dia do mês: com o fim no futuro, o "período
+    // anterior do mesmo tamanho" virava o mês passado INTEIRO contra um mês pela
+    // metade, e todo card mostrava queda que não existiu.
     const start = new Date(today.getFullYear(), today.getMonth(), 1);
-    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    return { start: toISODate(start), end: toISODate(end) };
+    return { start: toISODate(start), end: toISODate(today) };
   }
   const days = state.preset === "7d" ? 7 : state.preset === "30d" ? 30 : state.preset === "180d" ? 180 : state.preset === "365d" ? 365 : 90;
   // "Últimos N dias" são N dias contando hoje (antes eram N+1: "7 dias" somava 8).

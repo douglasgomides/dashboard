@@ -10,6 +10,8 @@
 // Toda regra tem amostra mínima: quando não dá para afirmar, ela não inventa,
 // registra em `semLeitura` o que faltou.
 import { fmtFormatKey, median } from "@/lib/report-metrics";
+import { conversaMaisBarata, GRUPOS, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
+import { BENCHMARKS, avaliar } from "@/lib/benchmarks";
 
 export type Tom = "bom" | "ruim" | "atencao";
 export type RotaAcao = "posts" | "anuncios" | "atendimento" | "ideias" | "conteudo";
@@ -35,8 +37,7 @@ export interface EntradaLeitura {
   diario: { date: string; reach?: number | null; new_followers?: number | null }[];
   diarioAnterior?: { date: string; reach?: number | null; new_followers?: number | null }[];
   posts: any[];
-  ads?: { gasto?: number | null; conversas?: number | null } | null;
-  adsDiagnostico?: { veredito: string; gasto: number | null; conversas: number | null }[] | null;
+  adsDiag?: DiagnosticoAds | null;
   wts?: { atendimentos?: number | null; espera_mediana_seg?: number | null; sem_roteamento?: number | null } | null;
 }
 
@@ -289,55 +290,61 @@ function regraConstancia(posts: any[], out: Achado[]) {
 
 // 6. Anúncios: quanto da verba trabalhou.
 function regraAnuncios(e: EntradaLeitura, out: Achado[]) {
-  const gasto = n(e.ads?.gasto);
-  if (gasto <= 0) return;
-  const conversas = n(e.ads?.conversas);
-  const diag = e.adsDiagnostico ?? [];
-  const desperdicio = diag
-    .filter((c) => c.veredito === "Cortar" || c.veredito === "Sem tração" || c.veredito === "Atrai mas não converte")
-    .reduce((a, c) => a + n(c.gasto), 0);
-  const escalar = diag.filter((c) => c.veredito === "Escalar");
-  const fatia = desperdicio / gasto;
-  const base = `${brl(gasto)} investidos, ${int(conversas)} conversas${conversas > 0 ? ` (${brl(gasto / conversas)} cada)` : ""}; ${brl(desperdicio)} em campanhas caras ou sem conversa`;
+  const d = e.adsDiag;
+  if (!d || d.gasto <= 0) return;
+  const gasto = d.gasto;
+  const fatia = d.desperdicio / gasto;
+  const escalar = d.campanhas.filter((c) => c.veredito === "Escalar");
+  const msg = d.grupos.find((g) => g.grupo === "mensagem");
+  const base = `${brl(gasto)} investidos em ${d.campanhas.length} campanhas; cada campanha comparada só com as do mesmo objetivo; ${brl(d.desperdicio)} em campanhas que custam 2x o normal do objetivo ou não entregaram o que prometem`;
 
-  if (conversas === 0) {
-    out.push({
-      id: "anuncios",
-      tom: "ruim",
-      peso: 3,
-      titulo: `${brl(gasto)} em anúncio e nenhuma conversa iniciada.`,
-      porque: "A verba comprou visualização, mas ninguém chamou. Ou o objetivo da campanha não é mensagem, ou o anúncio atrai curioso e não paciente.",
-      acao: { texto: "Revise o objetivo das campanhas e pause as que só trazem clique.", rota: "anuncios" },
-      base,
-    });
-    return;
-  }
+  // 1. Desperdício dentro do próprio objetivo.
   if (fatia >= DESPERDICIO_RELEVANTE) {
     out.push({
       id: "anuncios",
       tom: "ruim",
       peso: 3,
-      titulo: `${pct(fatia)} da verba de anúncio foi para campanhas que não se pagam.`,
-      porque: `${brl(desperdicio)} foram para campanhas que custam caro demais por conversa ou não trouxeram nenhuma. Esse dinheiro, nas campanhas que funcionam, traria mais pacientes pelo mesmo valor.`,
+      titulo: `${pct(fatia)} da verba de anúncio foi para campanhas que não entregam.`,
+      porque: `${brl(d.desperdicio)} foram para campanhas que custam o dobro ou mais do que as outras com o mesmo objetivo, ou que não entregaram nenhum resultado. O mesmo dinheiro nas campanhas que funcionam traria mais resultado.`,
       acao: {
         texto: escalar.length
-          ? `Tire a verba dessas e passe para ${escalar.length === 1 ? "a campanha que converte" : `as ${escalar.length} campanhas que convertem`} barato.`
-          : "Pause essas campanhas e teste um criativo novo com objetivo de mensagem.",
+          ? `Pausar as campanhas marcadas "Cortar" e passar a verba para ${escalar.length === 1 ? "a campanha marcada" : `as ${escalar.length} campanhas marcadas`} "Escalar".`
+          : 'Pausar as campanhas marcadas "Cortar" e testar um anúncio novo.',
         rota: "anuncios",
       },
       base,
     });
-    return;
+  } else {
+    out.push({
+      id: "anuncios",
+      tom: "bom",
+      peso: 2,
+      titulo: msg && msg.custoPorConversa != null
+        ? `Os anúncios estão rendendo: cada conversa no WhatsApp custou ${brl(msg.custoPorConversa)}.`
+        : "Os anúncios estão rendendo dentro do esperado para cada objetivo.",
+      porque: `Menos de ${pct(DESPERDICIO_RELEVANTE)} da verba foi para campanhas ruins. ${escalar.length ? `${escalar.length === 1 ? "Uma campanha entrega" : `${escalar.length} campanhas entregam`} bem mais barato que as outras do mesmo tipo: é onde cabe mais dinheiro.` : "O próximo passo é saber quantas dessas conversas viraram consulta."}`,
+      acao: escalar.length ? { texto: `Aumentar a verba das ${escalar.length} campanhas marcadas "Escalar".`, rota: "anuncios" } : undefined,
+      base,
+    });
   }
-  out.push({
-    id: "anuncios",
-    tom: "bom",
-    peso: 2,
-    titulo: `A verba de anúncio está trabalhando: ${brl(gasto / conversas)} por conversa.`,
-    porque: `Menos de ${pct(DESPERDICIO_RELEVANTE)} do investimento foi para campanhas ruins. ${escalar.length ? `${escalar.length === 1 ? "Uma campanha converte" : `${escalar.length} campanhas convertem`} bem abaixo da mediana: é onde cabe mais dinheiro.` : "O próximo passo é saber quantas dessas conversas viraram consulta."}`,
-    acao: escalar.length ? { texto: "Aumente a verba das campanhas marcadas para escalar.", rota: "anuncios" } : undefined,
-    base,
-  });
+
+  // 2. Entre objetivos: de onde a conversa sai mais barata.
+  const cmp = conversaMaisBarata(d);
+  if (cmp) {
+    const B = GRUPOS[cmp.barato.grupo];
+    const C = GRUPOS[cmp.caro.grupo];
+    out.push({
+      id: "anuncios-objetivo",
+      tom: "atencao",
+      peso: 3,
+      titulo: cmp.vezes
+        ? `Conversa vinda de campanha de ${C.curto} custa ${cmp.vezes.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}x mais que de campanha de ${B.curto}.`
+        : `${brl(cmp.caro.gasto)} em campanhas de ${C.curto} não trouxeram nenhuma conversa.`,
+      porque: `Campanhas de ${B.curto} trouxeram ${int(cmp.barato.conversas)} conversas a ${brl(cmp.barato.custoPorConversa!)} cada. As de ${C.curto} receberam ${brl(cmp.caro.gasto)} e trouxeram ${int(cmp.caro.conversas)}${cmp.caro.custoPorConversa ? ` (${brl(cmp.caro.custoPorConversa)} cada)` : ""}. Campanha de ${C.curto} pode ter outro papel (fazer o perfil ser conhecido), mas se a meta é paciente chamando, o dinheiro rende mais em ${B.curto}.`,
+      acao: { texto: `Testar mover parte da verba de ${C.curto} para campanhas de ${B.curto} por 2 semanas e comparar.`, rota: "anuncios" },
+      base: `${B.nome}: ${brl(cmp.barato.gasto)} → ${int(cmp.barato.conversas)} conversas · ${C.nome}: ${brl(cmp.caro.gasto)} → ${int(cmp.caro.conversas)} conversas`,
+    });
+  }
 }
 
 // 7. WhatsApp: o paciente que chamou foi atendido a tempo?

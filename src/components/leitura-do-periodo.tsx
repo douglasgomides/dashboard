@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { getAdsResumo, getAdsDiagnostico, getWtsResumo } from "@/lib/client-data";
+import { getAdsDiagnosticoPorObjetivo, getWtsResumo } from "@/lib/client-data";
 import { lerPeriodo, type Achado, type RotaAcao, type Tom } from "@/lib/leitura-periodo";
 import { ArrowRight, CheckCircle2, AlertTriangle, XCircle, Compass, ChevronDown } from "lucide-react";
 
@@ -85,14 +85,13 @@ export function LeituraDoPeriodo({
   diarioAnterior?: { date: string; reach?: number | null; new_followers?: number | null }[];
   posts: any[] | undefined;
 }) {
-  const { data: ads } = useQuery({ queryKey: ["ads-resumo", clientId, start, end], queryFn: () => getAdsResumo(clientId, start, end) });
-  const { data: adsDiagnostico } = useQuery({ queryKey: ["ads-diagnostico", clientId, start, end], queryFn: () => getAdsDiagnostico(clientId, start, end) });
+  const { data: adsDiag } = useQuery({ queryKey: ["ads-diag-objetivo", clientId, start, end], queryFn: () => getAdsDiagnosticoPorObjetivo(clientId, start, end) });
   const { data: wts } = useQuery({ queryKey: ["wts-resumo", clientId, start, end], queryFn: () => getWtsResumo(clientId, start, end) });
   const [verFaltas, setVerFaltas] = useState(false);
 
   const leitura = useMemo(
-    () => lerPeriodo({ diario, diarioAnterior, posts: posts ?? [], ads, adsDiagnostico, wts }),
-    [diario, diarioAnterior, posts, ads, adsDiagnostico, wts],
+    () => lerPeriodo({ diario, diarioAnterior, posts: posts ?? [], adsDiag, wts }),
+    [diario, diarioAnterior, posts, adsDiag, wts],
   );
 
   const cv = COR[leitura.veredito.tom];

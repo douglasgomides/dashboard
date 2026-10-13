@@ -231,7 +231,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
     kpis.push({ label: "Investido em anúncios", value: fmtBRL(num(adsRes.gasto)), hint: `${adsRes.campanhas} campanhas` });
     kpis.push({ label: "Conversas iniciadas", value: fmtNum(num(adsRes.conversas)), hint: "Direct e WhatsApp" });
     kpis.push({ label: "Custo por conversa", value: adsRes.custo_por_conversa != null ? fmtBRL(num(adsRes.custo_por_conversa)) : "sem dado" });
-    kpis.push({ label: "Impressões", value: fmtNum(num(adsRes.impressoes)), hint: adsRes.ctr != null ? `CTR ${pct(num(adsRes.ctr) * (num(adsRes.ctr) <= 1 ? 100 : 1), 2)}` : undefined });
+    kpis.push({ label: "Impressões", value: fmtNum(num(adsRes.impressoes)), hint: adsRes.ctr != null ? `CTR ${pct(num(adsRes.ctr), 2)}` : undefined });
   }
   if (wRes) {
     kpis.push({ label: "Atendimentos no WhatsApp", value: fmtNum(num(wRes.atendimentos)), hint: `${fmtNum(num(wRes.contatos_distintos))} contatos diferentes` });
@@ -601,7 +601,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
               { label: "Custo por conversa", value: adsRes.custo_por_conversa != null ? fmtBRL(num(adsRes.custo_por_conversa)) : "sem dado" },
               { label: "Impressões", value: fmtNum(num(adsRes.impressoes)), hint: adsRes.cpm != null ? `CPM ${fmtBRL(num(adsRes.cpm))}` : undefined },
               { label: "Cliques no link", value: fmtNum(num(adsRes.cliques_link)), hint: adsRes.cpc != null ? `CPC ${fmtBRL(num(adsRes.cpc))}` : undefined },
-              { label: "CTR", value: adsRes.ctr != null ? pct(num(adsRes.ctr) * (num(adsRes.ctr) <= 1 ? 100 : 1), 2) : "sem dado" },
+              { label: "CTR", value: adsRes.ctr != null ? pct(num(adsRes.ctr), 2) : "sem dado" },
               { label: "Alcance somado", value: fmtNum(num(adsRes.alcance_somado)), hint: "soma entre campanhas" },
               { label: "Dias com gasto", value: fmtNum(num(adsRes.dias)) },
             ]}
@@ -717,7 +717,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
                     linhas={wts.porDepartamento.map((x: any) => [
                       String(x.departamento ?? "n/d"),
                       fmtNum(num(x.atendimentos)),
-                      pct(num(x.fatia) * (num(x.fatia) <= 1 ? 100 : 1), 0),
+                      pct(num(x.fatia), 0),
                       fmtSeg(x.espera_mediana_seg),
                       fmtSeg(x.atendimento_mediano_seg),
                     ])}
