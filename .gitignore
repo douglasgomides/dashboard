@@ -20,3 +20,4 @@ src/routeTree.gen.ts
 .DS_Store
 .vercel
 .env*
+.claude/worktrees/

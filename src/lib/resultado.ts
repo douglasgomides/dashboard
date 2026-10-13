@@ -9,7 +9,7 @@
 // o cruzamento leads x engajamento (cruzamento.ts) e os benchmarks.
 import { lerPeriodo, type Achado } from "@/lib/leitura-periodo";
 import { cruzar, type EntradaCruzamento } from "@/lib/cruzamento";
-import type { DiagnosticoAds } from "@/lib/anuncios-objetivo";
+import { insightsDeAnuncios, limitacoesDeAnuncios, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { BENCHMARKS, avaliar, type Faixa } from "@/lib/benchmarks";
 import { confiancaPorAmostra, ordenarPorPrioridade, type Insight, type Limitacao, type Responsavel, type Area, type Tom } from "@/lib/insight";
 
@@ -313,8 +313,15 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
 export function montarResultado(e: EntradaResultado): Resultado {
   const cobertura = medirCobertura(e);
   const leitura = lerPeriodo({ diario: e.diario, diarioAnterior: e.diarioAnterior, posts: e.posts ?? [], adsDiag: e.adsDiag, wts: e.wts });
-  const insights: Insight[] = leitura.achados.map((a) => paraInsight(a, e, cobertura));
+  // Anúncios: o plano de verba da tela Anúncios (ações com valores) substitui a
+  // leitura genérica de anúncio, para as duas telas dizerem a mesma coisa.
+  const adsInsights = insightsDeAnuncios(e.adsDiag);
+  const insights: Insight[] = leitura.achados
+    .filter((a) => !(adsInsights.length && a.id.startsWith("anuncios")))
+    .map((a) => paraInsight(a, e, cobertura));
+  insights.push(...adsInsights);
   const limitacoes: Limitacao[] = leitura.semLeitura.map((t, i) => ({ id: `leitura-${i}`, area: "conteudo", texto: t, resolve: "equipe_hub" }));
+  limitacoes.push(...limitacoesDeAnuncios(e.adsDiag));
 
   if (e.leadsPorDia) {
     const c = cruzar({ start: e.start, end: e.end > e.hoje ? e.hoje : e.end, leadsPorDia: e.leadsPorDia, diario: e.diario, adsPorDia: e.adsPorDia, posts: e.posts ?? [] } as EntradaCruzamento);
