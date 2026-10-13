@@ -1,7 +1,7 @@
 // Lógica pura das páginas Conteúdo, Ideias e Relatório do Hub.
 // Sem React e sem acesso ao banco: recebe linhas já lidas e devolve resultado
 // determinístico (sem IA). Isso permite testar com dado real via `npx tsx`.
-import { fmtFormatKey, median } from "@/lib/report-metrics";
+import { computeDuvidasFrequentes, fmtFormatKey, median } from "@/lib/report-metrics";
 import { confiancaPorAmostra, type Confianca, type Insight, type Limitacao } from "@/lib/insight";
 import { analisarVozDoPaciente, assuntoDoTexto, confiancaDoGrupo, type GrupoDuvida, type ResultadoVoz } from "@/lib/voz-do-paciente";
 
@@ -315,6 +315,8 @@ export interface Ideia {
   avisoSeguranca?: string; // CFM / segurança médica
   grupoId?: string; // grupo de dúvida de origem
   pessoas?: number;
+  comentarioIds?: string[]; // comentários que sustentam a ideia (para cruzar a regra nova com a original)
+  regraOriginal?: boolean; // ideia gerada pela regra original (477eb43), mostrada junto das novas
   // campos usados pelo relatório e pelo PDF
   funil: string;
   estagio: string;
@@ -484,6 +486,7 @@ function ideiaDeGrupo(g: GrupoDuvida, i: number, posts: any[]): Ideia {
     avisoSeguranca: g.avisoCfm ?? AVISO_GERAL,
     grupoId: g.id,
     pessoas: g.pessoas,
+    comentarioIds: g.itens.map((x) => x.comentario.id),
     funil: comercial ? FUNIL_ROTULO.C2 : FUNIL_ROTULO.C1,
     estagio: comercial ? ESTAGIO_ROTULO.venda : ESTAGIO_ROTULO.confianca,
     acao: `${post.formato}: ${titulo}.`,
@@ -653,19 +656,315 @@ export function faltasParaLimitacoes(faltas: string[]): Limitacao[] {
 export function ideiaParaTexto(i: Ideia): string {
   return [
     `Ideia: ${i.titulo}`,
+    i.regraOriginal ? `Origem: regra original (${REGRA_ORIGINAL_ROTULO[i.regra]})` : "",
+    i.tema && i.tema !== i.titulo ? `Tema: ${i.tema}` : "",
     `Formato: ${i.formato}`,
+    `Funil: ${i.funil}`,
+    `Estágio: ${i.estagio}`,
     `Objetivo: ${ROTULO_OBJETIVO[i.objetivo]}`,
     `Confiança: ${i.confianca}`,
     `Por que vale testar: ${i.porQueTestar}`,
     `Evidência: ${i.evidencia}`,
+    `O que fazer: ${i.acao}`,
+    i.porque && i.porque !== i.evidencia ? `Por quê: ${i.porque}` : "",
     `Gancho: ${i.gancho}`,
-    `Roteiro:`,
+    i.roteiro.length ? `Roteiro:` : "",
     ...i.roteiro.map((r, k) => `${k + 1}. ${r}`),
-    `CTA: ${i.cta}`,
+    i.cta ? `CTA: ${i.cta}` : "",
     i.avisoSeguranca ? `Atenção: ${i.avisoSeguranca}` : "",
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+// ---------- ideias pela REGRA ORIGINAL (477eb43) ----------
+// As regras de geração do baseline continuam disponíveis e são mostradas na tela Ideias como
+// "regra original", sem repetir o que a regra nova já trouxe. Diferenças principais (veja a matriz
+// docs/auditoria, R4): a pergunta repetida usa a detecção original (is_question, sem triagem nova) e o
+// agrupamento original (Jaccard ≥ 0,4, conta comentários, não pessoas); o título é o texto do
+// comentário; formato e ação vêm do tipo da dúvida; funil C1 e estágio Confiança. Tema e formato têm os
+// mesmos limites da regra nova (só o formato padrão do tema era "A definir").
+export const REGRA_ORIGINAL_ROTULO: Record<Ideia["regra"], string> = {
+  pergunta: "Pergunta repetida",
+  tema: "Tema que salva mais",
+  formato: "Formato de maior alcance",
+};
+
+type TipoDuvida = "preco" | "como_agendar" | "uso" | "sintoma" | "resultado" | "geral";
+
+function tipoDaDuvida(texto: string): TipoDuvida {
+  const t = semAcento(texto);
+  if (/\b(quanto (custa|e|fica|sai)|valor|preco|parcel|pagamento|custa)\b/.test(t)) return "preco";
+  if (/\b(onde|como (faco|fazer|compro|comprar|agendo|agendar|marco|marcar)|agendar|marcar|comprar|link)\b/.test(t)) return "como_agendar";
+  if (/\b(posso|pode|tomar|dose|quantas?|de quanto em quanto|junto com|misturar|usar)\b/.test(t)) return "uso";
+  if (/\b(dor|sangr|menstru|calor|sintoma|queda|inchac|ansied|sono|libido|cansaco)\b/.test(t)) return "sintoma";
+  if (/\b(resultado|funciona|demora|quanto tempo|em quanto tempo|ja faz)\b/.test(t)) return "resultado";
+  return "geral";
+}
+
+// Cada tipo de dúvida pede um conteúdo diferente (antes todas viravam o mesmo carrossel).
+const MODELO_POR_TIPO: Record<TipoDuvida, { formato: string; acao: string }> = {
+  preco: {
+    formato: "Reels",
+    acao: "Reels curto explicando o que está incluído na avaliação e como funciona o atendimento, sem preço promocional e sem urgência.",
+  },
+  como_agendar: {
+    formato: "Reels",
+    acao: "Reels ou story com o passo a passo, em 3 passos, de como agendar a avaliação.",
+  },
+  uso: {
+    formato: "Carrossel",
+    acao: "Carrossel de perguntas e respostas sobre o uso, com aviso claro de que cada caso depende de avaliação médica.",
+  },
+  sintoma: {
+    formato: "Reels",
+    acao: "Reels sobre os sinais que merecem atenção e quando procurar avaliação, sem prometer resultado.",
+  },
+  resultado: {
+    formato: "Carrossel",
+    acao: "Carrossel sobre o que esperar e em quanto tempo costuma haver mudança, sem garantia e sem antes e depois.",
+  },
+  geral: {
+    formato: "Carrossel",
+    acao: "Conteúdo que responde a dúvida com clareza e termina convidando para conversar.",
+  },
+};
+
+// Versão original do "post parecido": compara só com a legenda (a nova compara legenda + tema).
+function postParecidoOriginal(texto: string, posts: any[]): { legenda: string; salvos: number } | null {
+  const alvo = tokens(texto);
+  let melhor: { legenda: string; salvos: number; pontos: number } | null = null;
+  for (const p of posts) {
+    if (p.saved == null || !p.caption) continue;
+    const cap = tokens(String(p.caption));
+    let pontos = 0;
+    for (const w of alvo) if (cap.has(w)) pontos++;
+    if (pontos >= 2 && (!melhor || pontos > melhor.pontos || (pontos === melhor.pontos && Number(p.saved) > melhor.salvos))) {
+      melhor = { legenda: String(p.caption).split("\n")[0].trim(), salvos: Number(p.saved), pontos };
+    }
+  }
+  return melhor ? { legenda: melhor.legenda, salvos: melhor.salvos } : null;
+}
+
+const POR_QUE_ORIGINAL: Record<Ideia["regra"], string> = {
+  pergunta: "Regra original: a mesma dúvida apareceu 2 vezes ou mais nos comentários marcados como pergunta (agrupamento por palavras em comum, contando comentários).",
+  tema: "Regra original: tema com 2+ posts em que a mediana de salvos ficou 25% ou mais acima da mediana da conta.",
+  formato: "Regra original: formato com 3+ posts e a maior mediana de alcance da conta.",
+};
+
+export interface IdeiasOriginaisResult {
+  ideias: Ideia[];
+  faltas: string[];
+  totalPosts: number;
+  totalPerguntas: number;
+}
+
+/**
+ * Regras de geração de ideias do baseline (477eb43), com o mesmo cálculo. `perguntas` deve vir da
+ * detecção original (is_question + `filtrarPerguntasOriginal`). Os campos novos do cartão (gancho,
+ * roteiro, CTA, confiança) são preenchidos só com o que a regra original já tinha.
+ */
+export function buildIdeiasRegraOriginal(
+  posts: any[],
+  perguntas: { id: string; text: string; like_count: number | null; instagram_post_id?: string | null }[],
+): IdeiasOriginaisResult {
+  const ideias: Ideia[] = [];
+  const faltas: string[] = [];
+
+  // (a) pergunta repetida
+  if (perguntas.length < MIN_PERGUNTAS) {
+    faltas.push(
+      `Regra "pergunta repetida": há ${perguntas.length} pergunta(s) de paciente nos comentários do período; precisa de ${MIN_PERGUNTAS} ou mais.`,
+    );
+  } else {
+    const clusters = computeDuvidasFrequentes(perguntas, { threshold: 0.4, minSize: 2 });
+    if (clusters.length === 0) {
+      faltas.push(
+        `Regra "pergunta repetida": há ${perguntas.length} perguntas, mas nenhuma se repete (nenhuma dúvida apareceu 2 vezes ou mais).`,
+      );
+    }
+    const fmtsConta = groupStats(posts, (p) => p.format ?? null, (k) => fmtFormatKey(k)).filter((f) => f.count >= MIN_POSTS_FORMATO);
+    const melhorDaConta = fmtsConta[0] ?? null;
+    for (const [i, c] of clusters.slice(0, 5).entries()) {
+      const texto = c.representative.text.replace(/\s+/g, " ").trim();
+      const curto = texto.length > 90 ? texto.slice(0, 87) + "..." : texto;
+      const tipo = tipoDaDuvida(texto);
+      const modelo = MODELO_POR_TIPO[tipo];
+      const parecido = postParecidoOriginal(texto, posts);
+      const formato = tipo === "geral" && melhorDaConta ? melhorDaConta.label : modelo.formato;
+      const evidencia = parecido
+        ? ` Um post parecido, "${parecido.legenda.length > 60 ? parecido.legenda.slice(0, 57) + "..." : parecido.legenda}", teve ${fmtN(parecido.salvos)} salvamentos.`
+        : "";
+      const tema = texto.length > 120 ? texto.slice(0, 117) + "..." : texto;
+      const porque = `${c.count} pessoas perguntaram algo parecido nos comentários do período (ex.: "${curto}").${evidencia}`;
+      ideias.push({
+        id: `original-pergunta-${i}`,
+        regra: "pergunta",
+        regraOriginal: true,
+        titulo: tema,
+        tema,
+        funil: FUNIL_ROTULO.C1,
+        estagio: ESTAGIO_ROTULO.confianca,
+        formato,
+        acao: `${modelo.acao} Gancho possível: "${curto}"`,
+        porque,
+        objetivo: tipo === "preco" || tipo === "como_agendar" ? "venda" : "salvamento",
+        confianca: confiancaDoGrupo(c.count),
+        motivoConfianca: `${c.count} comentário(s) parecidos; a regra original conta comentários, não pessoas (a mesma pessoa pode contar 2 vezes)`,
+        evidencia: porque,
+        porQueTestar: POR_QUE_ORIGINAL.pergunta,
+        gancho: curto,
+        roteiro: [],
+        cta: "",
+        avisoSeguranca: AVISO_GERAL,
+        comentarioIds: c.items.map((x) => x.id),
+        pessoas: c.count,
+      });
+    }
+  }
+
+  // (b) e (c) exigem amostra mínima
+  if (posts.length < MIN_POSTS_REGRAS) {
+    const f = `há ${posts.length} post(s) no período; precisa de ${MIN_POSTS_REGRAS} ou mais`;
+    faltas.push(`Regra "tema com salvos acima da média": ${f}.`);
+    faltas.push(`Regra "formato de maior alcance": ${f}.`);
+  } else {
+    const savedValid = posts.filter((p) => p.saved != null).map((p) => Number(p.saved));
+    const baseSaved = median(savedValid);
+    const temas = new Map<string, any[]>();
+    for (const p of posts) if (p.tema) (temas.get(p.tema) ?? temas.set(p.tema, []).get(p.tema)!).push(p);
+    if (temas.size === 0) {
+      faltas.push('Regra "tema com salvos acima da média": nenhum post do período está classificado por tema (classificar na aba Posts).');
+    } else {
+      const achados = Array.from(temas.entries())
+        .filter(([, ps]) => ps.length >= 2)
+        .map(([tema, ps]) => ({ tema, ps, med: median(ps.filter((p) => p.saved != null).map((p) => Number(p.saved))) }))
+        .filter((t) => t.med > 0 && t.med >= baseSaved * MARGEM_TEMA)
+        .sort((a, b) => b.med - a.med)
+        .slice(0, 4);
+      if (achados.length === 0) {
+        faltas.push('Regra "tema com salvos acima da média": nenhum tema com 2+ posts tem mediana de salvos 25% acima da mediana da conta no período.');
+      }
+      for (const [i, t] of achados.entries()) {
+        const fm = moda(t.ps.map((p) => p.format));
+        const porque = `${t.ps.length} posts sobre "${t.tema}" tiveram mediana de ${fmtD1(t.med)} salvos, contra ${fmtD1(baseSaved)} da conta no período.`;
+        ideias.push({
+          id: `original-tema-${i}`,
+          regra: "tema",
+          regraOriginal: true,
+          titulo: t.tema,
+          tema: t.tema,
+          funil: FUNIL_ROTULO[moda(t.ps.map((p) => p.funnel_stage)) ?? ""] ?? "Não classificado",
+          estagio: ESTAGIO_ROTULO[moda(t.ps.map((p) => p.methodology_stage)) ?? ""] ?? "Não classificado",
+          formato: fm ? fmtFormatKey(fm) : "A definir",
+          acao: `Variação do tema "${t.tema}" com outro ângulo, caso ou pergunta.`,
+          porque,
+          objetivo: "salvamento",
+          confianca: confiancaPorAmostra(t.ps.length, 3),
+          motivoConfianca: `${t.ps.length} posts sobre o tema`,
+          evidencia: porque,
+          porQueTestar: POR_QUE_ORIGINAL.tema,
+          gancho: "",
+          roteiro: [],
+          cta: "",
+          avisoSeguranca: assuntoDoTexto(t.tema)?.sensivel ?? AVISO_GERAL,
+        });
+      }
+    }
+
+    const fmts = groupStats(
+      posts,
+      (p) => p.format ?? null,
+      (k) => fmtFormatKey(k),
+    ).filter((f) => f.count >= MIN_POSTS_FORMATO);
+    if (fmts.length === 0) {
+      faltas.push(`Regra "formato de maior alcance": nenhum formato classificado tem ${MIN_POSTS_FORMATO}+ posts no período.`);
+    } else {
+      const best = fmts[0];
+      const overall = median(posts.filter((p) => p.reach != null).map((p) => Number(p.reach)));
+      const doFormato = posts.filter((p) => p.format === best.key && p.tema);
+      const melhorTema = moda(
+        [...doFormato].sort((a, b) => (b.reach ?? 0) - (a.reach ?? 0)).slice(0, 3).map((p) => p.tema),
+      );
+      const porque = `${best.label} tem o maior alcance por post: mediana de ${fmtN(best.reachMedian)} em ${best.count} posts, contra ${fmtN(overall)} da conta toda.`;
+      ideias.push({
+        id: "original-formato-0",
+        regra: "formato",
+        regraOriginal: true,
+        titulo: melhorTema ?? "Tema livre",
+        tema: melhorTema ?? "Tema livre",
+        funil: FUNIL_ROTULO[moda(posts.filter((p) => p.format === best.key).map((p) => p.funnel_stage)) ?? ""] ?? "Não classificado",
+        estagio: ESTAGIO_ROTULO[moda(posts.filter((p) => p.format === best.key).map((p) => p.methodology_stage)) ?? ""] ?? "Não classificado",
+        formato: best.label,
+        acao: `Novo conteúdo em ${best.label}${melhorTema ? ` sobre "${melhorTema}"` : ""}.`,
+        porque,
+        objetivo: "alcance",
+        confianca: confiancaPorAmostra(best.count, MIN_POSTS_FORMATO),
+        motivoConfianca: `${best.count} posts nesse formato no período`,
+        evidencia: porque,
+        porQueTestar: POR_QUE_ORIGINAL.formato,
+        gancho: "",
+        roteiro: [],
+        cta: "",
+        avisoSeguranca: (melhorTema ? assuntoDoTexto(melhorTema)?.sensivel : null) ?? AVISO_GERAL,
+      });
+    }
+  }
+  return { ideias, faltas, totalPosts: posts.length, totalPerguntas: perguntas.length };
+}
+
+export interface CruzamentoRegraOriginal {
+  extras: Ideia[]; // ideias da regra original que a regra nova não trouxe
+  repetidas: { original: Ideia; nova: Ideia }[]; // já aparecem na lista nova
+  diferencas: string[]; // onde as duas regras chegaram à mesma ideia com algum detalhe diferente
+}
+
+const sobreposicao = (a: string[] = [], b: string[] = []) => {
+  if (a.length === 0 || b.length === 0) return 0;
+  const sb = new Set(b);
+  const comuns = a.filter((x) => sb.has(x)).length;
+  return comuns / Math.min(a.length, b.length);
+};
+
+/**
+ * Tira da regra original o que a regra nova já trouxe: pergunta com metade ou mais dos mesmos
+ * comentários, mesmo tema, mesmo formato. Nada some em silêncio: as repetidas e as diferenças de
+ * detalhe voltam listadas. Se a voz (triagem nova) for passada, a ideia original montada sobre
+ * comentários que a triagem nova marcou como pedido de dose ou remédio ganha o aviso de cuidado.
+ */
+export function ideiasOriginaisSemRepetir(novas: Ideia[], originais: Ideia[], voz?: ResultadoVoz | null): CruzamentoRegraOriginal {
+  const extras: Ideia[] = [];
+  const repetidas: { original: Ideia; nova: Ideia }[] = [];
+  const diferencas: string[] = [];
+  const idsCuidado = new Set((voz?.gruposCuidado ?? []).flatMap((g) => g.itens.map((x) => x.comentario.id)));
+  const igual = (a: string, b: string) => semAcento(a).trim() === semAcento(b).trim();
+
+  for (const o of originais) {
+    let nova: Ideia | undefined;
+    if (o.regra === "pergunta") {
+      nova = novas.find((n) => n.regra === "pergunta" && sobreposicao(o.comentarioIds, n.comentarioIds) >= 0.5);
+    } else if (o.regra === "tema") {
+      nova = novas.find((n) => n.regra === "tema" && igual(n.tema, o.tema));
+      if (nova && !igual(nova.formato, o.formato))
+        diferencas.push(`Tema "${o.tema}": a regra original indicava o formato "${o.formato}"; a nova indica "${nova.formato}".`);
+    } else {
+      nova = novas.find((n) => n.regra === "formato" && igual(n.formato, o.formato));
+      if (nova && !igual(nova.tema, o.tema)) diferencas.push(`Formato ${o.formato}: a regra original sugeria o tema "${o.tema}"; a nova sugere "${nova.tema}".`);
+    }
+    if (nova) {
+      repetidas.push({ original: o, nova });
+      continue;
+    }
+    if (o.regra === "pergunta" && (o.comentarioIds ?? []).some((id) => idsCuidado.has(id))) {
+      extras.push({
+        ...o,
+        avisoSeguranca:
+          "Parte destes comentários pede dose ou nome de remédio (a triagem nova não transforma isso em post). Responder sem dose e sem nome de remédio; o post, se feito, é educativo e geral. " +
+          AVISO_GERAL,
+      });
+    } else extras.push(o);
+  }
+  return { extras, repetidas, diferencas };
 }
 
 // ---------- plano de 7 dias a partir das ideias ----------
@@ -674,16 +973,20 @@ const DIAS_SEMANA = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"
 // Distribui as ideias da lista em dias de publicação (segunda, terça, quarta, quinta e sexta), com os
 // outros dias para responder comentários e mensagens. Só usa o que a lista já traz: sem ideia nova,
 // sem número inventado. Ideias vindas de dúvidas de pacientes vêm primeiro.
-export function montarPlano7Dias(ideias: Ideia[], horaSugerida?: number | null): string {
+// Com `manterOrdem`, usa a ordem recebida (a tela Ideias põe as da regra original depois das novas).
+// Ideia da regra original sai na linha do jeito original: "Formato. O que fazer".
+export function montarPlano7Dias(ideias: Ideia[], horaSugerida?: number | null, opcoes: { manterOrdem?: boolean } = {}): string {
   if (ideias.length === 0) return "";
-  const ordem = [...ideias].sort((a, b) => Number(b.regra === "pergunta") - Number(a.regra === "pergunta"));
+  const ordem = opcoes.manterOrdem ? [...ideias] : [...ideias].sort((a, b) => Number(b.regra === "pergunta") - Number(a.regra === "pergunta"));
   const dias = [0, 1, 2, 3, 4];
   const linhas = DIAS_SEMANA.map((dia, i) => {
     const k = dias.indexOf(i);
     if (k < 0) return `${dia}: sem publicação nova. Responder comentários e mensagens que chegaram na semana.`;
     const ideia = ordem[k];
     if (!ideia) return `${dia}: espaço livre. Reaproveitar o post de melhor resultado do período em outro formato.`;
-    return `${dia}${horaSugerida != null ? `, por volta das ${horaSugerida}h` : ""}: ${ideia.formato}. ${ideia.titulo}. Gancho: ${ideia.gancho}`;
+    const hora = horaSugerida != null ? `, por volta das ${horaSugerida}h` : "";
+    if (ideia.regraOriginal) return `${dia}${hora}: ${ideia.formato}. ${ideia.acao} (regra original)`;
+    return `${dia}${hora}: ${ideia.formato}. ${ideia.titulo}. Gancho: ${ideia.gancho}`;
   });
   return ["Plano de conteúdo da semana", ...linhas].join("\n");
 }
