@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { getClient, getMonthlyMetrics, getPostsForAnalytics } from "@/lib/client-data";
 import { ResumoDoMes } from "@/components/resumo-do-mes";
+import { LeituraDoPeriodo } from "@/components/leitura-do-periodo";
 import { SyncButton } from "@/components/sync-button";
 import { useAuth } from "@/hooks/use-auth";
 import { formatLabel } from "@/lib/methodology";
@@ -441,6 +442,16 @@ function MonthlyOverview() {
       <div className="flex justify-end">
         <SyncButton clientId={clientId} alvo="tudo" />
       </div>
+
+      <LeituraDoPeriodo
+        clientId={clientId}
+        start={start}
+        end={end}
+        periodLabel={periodLabel}
+        diario={data}
+        diarioAnterior={rowsAnterior ?? undefined}
+        posts={postsForAnalytics}
+      />
 
       <ResumoDoMes
         clientId={clientId}
