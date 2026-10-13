@@ -91,7 +91,9 @@ function JornadaPage() {
         p_client: clientId,
       });
       if (error) throw new Error(error.message);
-      return data as any;
+      // A função devolve um objeto; se vier lista (ou nada), trata como "sem resumo" em vez de quebrar a tela.
+      const obj = Array.isArray(data) ? data[0] : data;
+      return obj && typeof obj === "object" && "leads_total" in obj ? (obj as any) : null;
     },
   });
   const busca = useQuery({
@@ -118,7 +120,7 @@ function JornadaPage() {
 
   const r = resumo.data;
   const d = diag.data;
-  const tabelas = r && (r.por_origem.length > 0 || r.posts.length > 0 || r.links.length > 0);
+  const tabelas = r && ((r.por_origem?.length ?? 0) > 0 || (r.posts?.length ?? 0) > 0 || (r.links?.length ?? 0) > 0);
   return (
     <div className="space-y-4">
       <Painel icone={Filter} titulo="Onde a jornada quebra" resumo={`Do lead à venda · ${formatRangeLabel({ start, end })}`}>
@@ -199,7 +201,7 @@ function JornadaPage() {
             <ChevronDown size={16} aria-hidden className="transition-transform group-open:rotate-180" />
           </summary>
           <div className="space-y-4 p-3 pt-0 sm:p-4 sm:pt-0">
-            {r && r.por_origem.length > 0 && (
+            {r && (r.por_origem?.length ?? 0) > 0 && (
               <Painel icone={RouteIcon} titulo="Resultado por origem do lead" resumo="Origem que o CRM registrou: leads, vendas e receita.">
                 <Tabela
                   cab={["Origem", "Leads", "Vendas", "Conversão", "Receita"]}
@@ -214,7 +216,7 @@ function JornadaPage() {
               </Painel>
             )}
 
-            {r && r.posts.length > 0 && (
+            {r && (r.posts?.length ?? 0) > 0 && (
               <Painel
                 icone={RouteIcon}
                 titulo="Posts que geraram gente de verdade"
@@ -235,7 +237,7 @@ function JornadaPage() {
               </Painel>
             )}
 
-            {r && r.links.length > 0 && (
+            {r && (r.links?.length ?? 0) > 0 && (
               <Painel
                 icone={RouteIcon}
                 titulo="Links rastreados"
@@ -312,7 +314,7 @@ function JornadaPage() {
                   {l.origem ? ` · ${l.origem}` : ""}
                 </Selo>
               ))}
-              {detalhe.data.conversas.length > 0 && <Selo>{detalhe.data.conversas.length} conversa(s) no WhatsApp</Selo>}
+              {(detalhe.data.conversas?.length ?? 0) > 0 && <Selo>{detalhe.data.conversas.length} conversa(s) no WhatsApp</Selo>}
             </div>
           </div>
         )}
