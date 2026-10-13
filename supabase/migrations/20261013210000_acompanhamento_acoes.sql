@@ -36,6 +36,9 @@ returns boolean language sql stable security definer set search_path to 'public'
     where m.client_id = p_client_id and m.user_id = auth.uid() and m.role in ('owner', 'strategist')
   );
 $$;
+revoke execute on function public.pode_editar_acoes(uuid) from public, anon;
+grant execute on function public.pode_editar_acoes(uuid) to authenticated;
+revoke all on public.acoes_acompanhamento from anon;
 create policy "editor grava acoes" on public.acoes_acompanhamento
   for insert with check (public.pode_editar_acoes(client_id));
 create policy "editor atualiza acoes" on public.acoes_acompanhamento
