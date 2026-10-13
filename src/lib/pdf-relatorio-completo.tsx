@@ -26,6 +26,7 @@ import {
 import { analyzeFollowers, buildIdeias, fmtDiaBR } from "@/lib/hub-conteudo";
 import { fmtBRL, fmtNum } from "@/lib/format";
 import { BarChartBlock, Footer, caseCaption, stripEmoji, styles } from "@/lib/pdf-report";
+import { duracao } from "@/lib/conversa-leitura";
 import type { RelatorioCompletoData } from "@/lib/relatorio-completo";
 import { GRUPOS } from "@/lib/anuncios-objetivo";
 import { NOTA_ALGORITMO_DUVIDAS, SECOES, duvidasRepetidas, type SecaoId } from "@/lib/relatorio-envio";
@@ -52,6 +53,27 @@ function fmtSeg(sec: number | null | undefined): string {
 }
 
 const pct = (n: number, casas = 1) => `${n.toFixed(casas).replace(".", ",")}%`;
+
+// Marca Doctor Creator: "Doctor" na cor do texto e "Creator" em dourado, serifada (como o logo).
+function Logo() {
+  return (
+    <Text style={{ fontFamily: "Times-Roman", fontSize: 18, color: "#111111", marginBottom: 6 }}>
+      Doctor<Text style={{ fontFamily: "Times-Bold", color: "#C49A5C" }}>Creator</Text>
+    </Text>
+  );
+}
+
+const ROTULO_OBJ: Record<string, string> = {
+  preco: "Preço", convenio: "Convênio/plano", distancia: "Distância", adiamento: "Adiamento (vou pensar)", agenda: "Agenda/horário", medo: "Medo", desconfianca: "Desconfiança", outro: "Outro",
+};
+const ROTULO_FAL: Record<string, string> = {
+  sem_resposta: "Deixou o paciente sem resposta", demora: "Demorou para responder", desvio_preco: "Desviou da pergunta de preço",
+  preco_sem_ancoragem: "Preço sem ancorar valor", sem_cta: "Não conduziu para data/hora", sem_follow_up: "Sem follow-up",
+  nome_errado: "Errou o nome do paciente", informacao_inconsistente: "Informação inconsistente", pressao: "Pressionou o paciente",
+  so_emoji: "Respondeu só com emoji", desconto_reativo: "Desconto antes de construir valor", excesso_audio: "Excesso de áudio",
+};
+const lista = (o: Record<string, number> | null | undefined, r: Record<string, string>) =>
+  Object.entries(o ?? {}).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${r[k] ?? k}: ${n}`);
 
 function Titulo({ children, dica }: { children: string; dica?: string }) {
   return (
@@ -328,7 +350,8 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
     <Document>
       {/* 1. Sumário executivo */}
       <Page size="A4" style={styles.page} wrap>
-        <Text style={styles.eyebrow}>Doctor Creator Intelligence Hub · relatório completo</Text>
+        <Logo />
+        <Text style={styles.eyebrow}>Intelligence Hub · relatório completo</Text>
         <Text style={styles.title}>{d.clientName}</Text>
         <Text style={styles.subtitle}>
           {d.specialty ? `${d.specialty} · ` : ""}
@@ -911,7 +934,61 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
         <Footer page={8} />
       </Page>
 
-      {/* 9. Metodologia e o que não entrou */}
+      {/* 9. Auditoria comercial (conversas lidas por IA + tempos por regra fixa) */}
+      {d.auditoria ? (
+        <Page size="A4" style={styles.page} wrap>
+          <Logo />
+          <Titulo dica="Cada conversa do WhatsApp do período foi lida por IA: etapa, objeção do paciente, falhas da clínica e nota do atendimento. Tempos de resposta por regra fixa (robô e menu não contam).">Auditoria comercial</Titulo>
+          <Kpis
+            items={[
+              { label: "Conversas no período", value: String(d.auditoria.conversas_periodo), hint: `${d.auditoria.lidas} lidas pela IA` },
+              { label: "Pediram preço", value: String(d.auditoria.funil?.preco_pedido ?? 0), hint: `${d.auditoria.funil?.preco_apresentado ?? 0} receberam` },
+              { label: "Agendaram", value: String(d.auditoria.funil?.agendou ?? 0) },
+              { label: "Nota do atendimento", value: d.auditoria.nota_media != null ? `${String(d.auditoria.nota_media).replace(".", ",")}/10` : "—" },
+            ]}
+          />
+          {d.atendimento ? (
+            <Text style={styles.methodP}>
+              Tempo até a 1ª resposta de uma pessoa (mediana): {duracao(d.atendimento.medianaPrimeiraResposta)}; em horário comercial: {duracao(d.atendimento.medianaComercial)}. Pacientes que ficaram sem resposta: {d.atendimento.semResposta} de {d.atendimento.comPaciente}
+              {d.atendimento.soRobo ? ` (${d.atendimento.soRobo} só receberam mensagem automática)` : ""}. Referência: responder na 1ª hora dá cerca de 7x mais chance de qualificar o lead (Harvard Business Review, 2011).
+            </Text>
+          ) : null}
+          <Text style={styles.methodTitle}>Funil da conversa</Text>
+          <Text style={styles.methodP}>
+            Engajaram {d.auditoria.funil?.engajou ?? 0} · pediram preço {d.auditoria.funil?.preco_pedido ?? 0} · receberam preço {d.auditoria.funil?.preco_apresentado ?? 0} · agendamento em curso {d.auditoria.funil?.agendamento_em_curso ?? 0} · agendaram {d.auditoria.funil?.agendou ?? 0}.
+          </Text>
+          <Text style={styles.methodTitle}>O que o paciente disse (objeções declaradas)</Text>
+          {lista(d.auditoria.objecoes, ROTULO_OBJ).map((t, i) => <Text key={`o${i}`} style={styles.methodP}>· {t}</Text>)}
+          <Text style={styles.methodTitle}>O que a clínica errou (a causa real da perda)</Text>
+          {lista(d.auditoria.falhas, ROTULO_FAL).map((t, i) => <Text key={`f${i}`} style={styles.methodP}>· {t}</Text>)}
+          {(d.auditoria.por_atendente ?? []).length > 0 ? <Text style={styles.methodTitle}>Por atendente</Text> : null}
+          {(d.auditoria.por_atendente ?? []).map((p: any, i: number) => (
+            <View key={`a${i}`} wrap={false} style={{ marginBottom: 4 }}>
+              <Text style={styles.methodP}>
+                <Text style={{ fontWeight: 700 }}>{stripEmoji(p.nome)}</Text>: nota {p.nota != null ? String(p.nota).replace(".", ",") : "—"} · {p.conversas} conversas · {p.agendou} agendaram · deu preço em {p.preco_apresentado}
+                {p.falha_mais_comum ? ` · erro mais comum: ${ROTULO_FAL[p.falha_mais_comum] ?? p.falha_mais_comum}` : ""}
+              </Text>
+              {p.a_melhorar ? <Text style={{ fontSize: 8, color: GRAY, marginLeft: 8 }}>A melhorar: {stripEmoji(p.a_melhorar)}</Text> : null}
+            </View>
+          ))}
+          {(d.auditoria.exemplos ?? []).length > 0 ? <Text style={styles.methodTitle}>Exemplos reais com correção</Text> : null}
+          {(d.auditoria.exemplos ?? []).slice(0, 5).map((e: any, i: number) => (
+            <View key={`e${i}`} wrap={false} style={{ marginBottom: 5 }}>
+              <Text style={[styles.methodP, { fontStyle: "italic" }]}>“{stripEmoji(e.evidencia)}”</Text>
+              <Text style={{ fontSize: 8.5, color: GOLD, marginLeft: 8 }}>Melhor: {stripEmoji(e.como_deveria)}</Text>
+            </View>
+          ))}
+          {(d.auditoria.resgate ?? []).length > 0 ? <Text style={styles.methodTitle}>Resgatar esta semana ({d.auditoria.resgate.length})</Text> : null}
+          {(d.auditoria.resgate ?? []).slice(0, 15).map((r: any, i: number) => (
+            <Text key={`r${i}`} style={styles.methodP}>
+              · {stripEmoji(r.nome)}{r.interesse ? ` (${stripEmoji(r.interesse)})` : ""}{r.proximo_passo ? `: ${stripEmoji(r.proximo_passo)}` : ""}
+            </Text>
+          ))}
+          <Footer page={9} ia />
+        </Page>
+      ) : null}
+
+      {/* 10. Metodologia e o que não entrou */}
       <Page size="A4" style={styles.page} wrap>
         <Titulo>Como este relatório foi feito</Titulo>
         <Text style={styles.methodTitle}>Fontes</Text>
@@ -980,9 +1057,9 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
           </>
         ) : null}
         <Text style={styles.methodP}>
-          Este relatório mede e aponta direção. As ações sugeridas saem de regras sobre os números, não de IA, e a produção de conteúdo continua com o médico ou a equipe que ele contratar.
+          Este relatório mede e aponta direção. As ações sugeridas saem de regras sobre os números, não de IA, e a produção de conteúdo continua com o médico ou a equipe que ele contratar. Exceção: a auditoria comercial lê cada conversa com IA (telefone, e-mail e CPF mascarados) para classificar etapa, objeção e falhas; os tempos de resposta e as contagens continuam por regra fixa.
         </Text>
-        <Footer page={9} />
+        <Footer page={10} />
       </Page>
     </Document>
   );

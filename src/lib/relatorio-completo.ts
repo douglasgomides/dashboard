@@ -29,6 +29,8 @@ import {
 import { getResumoPeriodo } from "@/lib/audiencia";
 import { diagnosticarAds, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { buildRelatorioEnvio, type RelatorioEnvio } from "@/lib/relatorio-envio";
+import { resumirAtendimento, type ResumoAtendimento } from "@/lib/conversa-leitura";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface FontesCliente {
   tem_instagram: boolean;
@@ -75,6 +77,9 @@ export interface RelatorioCompletoData {
     porOrigem: any[];
     porDia: any[];
   } | null;
+  // Auditoria comercial: leitura por IA de cada conversa (auditoria_comercial) + tempos por regra fixa.
+  auditoria: any | null;
+  atendimento: ResumoAtendimento | null;
   omitidos: string[];
   falhas: string[];
   // Conteúdo validado (resumo, vitórias, atenção, ações, testes, limitações) da página 1.
@@ -194,7 +199,37 @@ export async function coletarRelatorioCompleto(args: {
     });
   }
 
+  // Auditoria comercial (só onde há conversa guardada; sem conversa, a seção sai do PDF).
+  const auditoria = await tentar(
+    "Auditoria comercial",
+    falhas,
+    async () => {
+      const { data, error } = await (supabase as any).rpc("auditoria_comercial", { p_client: clientId, p_de: start, p_ate: end.slice(0, 10) });
+      if (error) throw error;
+      const j = Array.isArray(data) ? data[0] : data;
+      return j && Number(j.conversas_periodo) > 0 ? j : null;
+    },
+    null,
+  );
+  const atendimento = auditoria
+    ? await tentar(
+        "Tempo de resposta",
+        falhas,
+        async () => {
+          const { data, error } = await (supabase as any).rpc("leitura_conversas", { p_client: clientId, p_limite: 500 });
+          if (error) throw error;
+          const ls = ((data ?? []) as any[])
+            .filter((l) => l.ultima_msg_em && String(l.ultima_msg_em).slice(0, 10) >= start && String(l.ultima_msg_em).slice(0, 10) <= end.slice(0, 10))
+            .map((l) => ({ ...l, msgs_paciente: Number(l.msgs_paciente), msgs_clinica: Number(l.msgs_clinica), msgs_automaticas: Number(l.msgs_automaticas) }));
+          return ls.length ? resumirAtendimento(ls) : null;
+        },
+        null,
+      )
+    : null;
+
   return {
+    auditoria,
+    atendimento,
     envio,
     clientName: client.name,
     igHandle: client.instagram_handle,

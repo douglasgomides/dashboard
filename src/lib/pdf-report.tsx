@@ -89,11 +89,13 @@ export const styles = StyleSheet.create({
   verdictRate: { fontSize: 8, color: "#666", marginTop: 1 },
 });
 
-export function Footer({ page }: { page: number }) {
+export function Footer({ page, ia = false }: { page: number; ia?: boolean }) {
   return (
     <>
       <Text style={styles.footer} fixed>
-        Doctor Creator Intelligence Hub — relatório gerado a partir de dados medidos, sem conteúdo gerado por IA.
+        {ia
+          ? "Doctor Creator Intelligence Hub — classificação das conversas feita por IA; tempos e contagens medidos por regra fixa."
+          : "Doctor Creator Intelligence Hub — relatório gerado a partir de dados medidos, sem conteúdo gerado por IA."}
       </Text>
       <Text style={styles.pageNum} render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`} fixed />
     </>

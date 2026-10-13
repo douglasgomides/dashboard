@@ -129,6 +129,7 @@ export const AVANCADO: NavTab[] = [
   { path: "/admin", label: "Portfólio e saúde das fontes", Icone: LayoutDashboard, admin: true, absoluto: true },
   { path: "/admin/referencia", label: "Referência entre clientes", Icone: Scale, admin: true, absoluto: true },
   { path: "/admin/conferencia", label: "Conferência de dados", Icone: ClipboardCheck, admin: true, absoluto: true },
+  { path: "/admin/relatorios", label: "Relatórios da semana", Icone: FileText, admin: true, absoluto: true },
 ];
 
 // Clientes que só têm CRM ligado e não têm Business Manager: veem só o
