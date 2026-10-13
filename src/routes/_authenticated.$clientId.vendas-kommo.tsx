@@ -13,7 +13,7 @@ function FunilTable({ title, rows, colLabel }: { title: string; rows: FunilRow[]
   return (
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <h2 className="mb-3 text-sm font-semibold">{title}</h2>
-      <table className="w-full text-sm">
+      <table className="w-full text-sm empilha">
         <thead>
           <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
             <th className="pb-2">{colLabel}</th>
@@ -31,17 +31,17 @@ function FunilTable({ title, rows, colLabel }: { title: string; rows: FunilRow[]
             return (
               <tr key={r.chave} className="border-t" style={{ borderColor: "var(--border)" }}>
                 <td className="py-1.5">{r.chave}</td>
-                <td className="py-1.5 text-right">{r.total}</td>
-                <td className="py-1.5 text-right" style={{ color: "var(--good)" }}>
+                <td data-label="Total" className="py-1.5 text-right">{r.total}</td>
+                <td data-label="Ganhos" className="py-1.5 text-right" style={{ color: "var(--good)" }}>
                   {r.ganhos}
                 </td>
-                <td className="py-1.5 text-right" style={{ color: "var(--danger)" }}>
+                <td data-label="Perdidos" className="py-1.5 text-right" style={{ color: "var(--danger)" }}>
                   {r.perdidos}
                 </td>
-                <td className="py-1.5 text-right" style={{ color: "var(--text-dim)" }}>
+                <td data-label="Em andamento" className="py-1.5 text-right" style={{ color: "var(--text-dim)" }}>
                   {emAndamento}
                 </td>
-                <td className="py-1.5 text-right font-medium">{taxaGanho.toFixed(1)}%</td>
+                <td data-label="Taxa de ganho" className="py-1.5 text-right font-medium">{taxaGanho.toFixed(1)}%</td>
               </tr>
             );
           })}
@@ -98,7 +98,7 @@ function VendasKommoPage() {
               <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
                 Onde os leads sincronizados estão parados agora, em qualquer pipeline da conta.
               </p>
-              <table className="w-full text-sm">
+              <table className="w-full text-sm empilha">
                 <thead>
                   <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
                     <th className="pb-2">Pipeline</th>
@@ -109,11 +109,11 @@ function VendasKommoPage() {
                 <tbody>
                   {(porEtapa ?? []).map((r) => (
                     <tr key={`${r.pipeline}-${r.etapa}`} className="border-t" style={{ borderColor: "var(--border)" }}>
-                      <td className="py-1.5" style={{ color: "var(--text-dim)" }}>
+                      <td data-label="Pipeline" className="py-1.5" style={{ color: "var(--text-dim)" }}>
                         {r.pipeline}
                       </td>
-                      <td className="py-1.5">{r.etapa}</td>
-                      <td className="py-1.5 text-right">{r.total}</td>
+                      <td data-label="Etapa" className="py-1.5">{r.etapa}</td>
+                      <td data-label="Leads" className="py-1.5 text-right">{r.total}</td>
                     </tr>
                   ))}
                 </tbody>

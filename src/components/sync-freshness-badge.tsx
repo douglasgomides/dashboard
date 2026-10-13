@@ -29,7 +29,12 @@ function tituloDaFonte(l: LinhaFonte): string | undefined {
   return `${ROTULO_DONO[m.dono]}: ${m.texto}`;
 }
 
-export function SyncFreshnessBadge({ clientId }: { clientId: string }) {
+const PESO: Record<string, number> = { ruim: 3, atencao: 2, neutro: 1, bom: 0 };
+const FRASE_TOM: Record<string, string> = { bom: "Dados em dia", atencao: "Dados com atraso", ruim: "Dados parados", neutro: "Dados" };
+
+// compacto: para o cabeçalho do celular. Um ponto com a cor da PIOR fonte e uma
+// frase curta; o detalhe por fonte aparece na folha do período.
+export function SyncFreshnessBadge({ clientId, compacto = false }: { clientId: string; compacto?: boolean }) {
   const { data } = useQuery({
     queryKey: ["client-sync-status", clientId],
     queryFn: () => statusDoCliente(clientId),
@@ -41,6 +46,18 @@ export function SyncFreshnessBadge({ clientId }: { clientId: string }) {
     (l): l is LinhaFonte => !!l && (!!l.data_ate || (l.fonte === "comentarios" && !!l.last_error)),
   );
   if (linhas.length === 0) return null;
+
+  if (compacto) {
+    const pior = linhas.reduce((a, l) => (PESO[tomDaFonte(l)] > PESO[a] ? tomDaFonte(l) : a), "bom" as string);
+    const resumo = linhas.map((l) => `${ROTULOS[l.fonte] ?? "Comentários"}${l.data_ate ? ` até ${ddmm(l.data_ate)}` : " (erro)"}`).join(" · ");
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap" style={{ color: "var(--text-dim)" }} title={resumo}>
+        <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: COR[pior] }} />
+        {FRASE_TOM[pior]}
+        <span className="sr-only">: {resumo}</span>
+      </span>
+    );
+  }
 
   return (
     <span

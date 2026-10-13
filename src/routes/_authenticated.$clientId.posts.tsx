@@ -655,7 +655,8 @@ function FormatoPorTema({ posts }: { posts: Post[] }) {
       resumo="Taxa de engajamento: quanto mais escuro, melhor"
       ajuda="O mesmo tema pode performar muito diferente dependendo do formato. Cada célula mostra a taxa de engajamento (mediana), a quantidade de posts e o alcance (mediana). Só aparecem combinações com tema classificado."
     >
-      <div className="overflow-x-auto">
+      <p className="rola-aviso">Arraste para o lado para ver todos os formatos →</p>
+      <div className="rola-x">
         <div className="grid min-w-[420px] gap-1.5" style={{ gridTemplateColumns: `minmax(110px,1.2fr) repeat(${formatos.length}, minmax(86px,1fr))` }}>
           <span />
           {formatos.map((f) => (
@@ -913,7 +914,7 @@ function ExploradorDePosts({ posts, periodLabel }: { posts: Post[]; periodLabel:
   }
   const seta = (key: SortKey) => (sortKey !== key ? "" : sortDir === "asc" ? " ↑" : " ↓");
 
-  const campo = "rounded-md border px-2 py-1.5 text-sm";
+  const campo = "min-h-[44px] rounded-md border px-2 py-1.5 text-base min-[821px]:min-h-0 min-[821px]:text-sm";
   const estiloCampo = { borderColor: "var(--border)", background: "var(--surface-2)" } as const;
 
   return (
@@ -1007,7 +1008,7 @@ function ExploradorDePosts({ posts, periodLabel }: { posts: Post[]; periodLabel:
         </>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm empilha">
             <thead>
               <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
                 <th className="cursor-pointer pb-2" onClick={() => toggleSort("posted_at")}>Data{seta("posted_at")}</th>
@@ -1023,14 +1024,14 @@ function ExploradorDePosts({ posts, periodLabel }: { posts: Post[]; periodLabel:
             <tbody>
               {filtered.map((p) => (
                 <tr key={p.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="whitespace-nowrap py-1.5" style={{ color: "var(--text-dim)" }}>{p.posted_at ? new Date(p.posted_at).toLocaleDateString("pt-BR") : "—"}</td>
-                  <td className="py-1.5"><span className="inline-flex items-center gap-1.5"><IconeFormato formato={p.format} />{p.format ? formatLabel(p.format) : "—"}</span></td>
-                  <td className="py-1.5">{p.tema ?? "—"}</td>
-                  <td className="max-w-xs truncate py-1.5">{firstLine(p.caption) ?? p.windsor_media_id}</td>
-                  <td className="py-1.5 text-right">{(p.reach ?? 0).toLocaleString("pt-BR")}</td>
-                  <td className="py-1.5 text-right">{(p.engagement ?? 0).toLocaleString("pt-BR")}</td>
-                  <td className="py-1.5 text-right">{(p.saved ?? 0).toLocaleString("pt-BR")}</td>
-                  <td className="py-1.5 text-right"><a href={p.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>abrir ↗</a></td>
+                  <td data-label="Data" className="whitespace-nowrap py-1.5" style={{ color: "var(--text-dim)" }}>{p.posted_at ? new Date(p.posted_at).toLocaleDateString("pt-BR") : "—"}</td>
+                  <td data-label="Formato" className="py-1.5"><span className="inline-flex items-center gap-1.5"><IconeFormato formato={p.format} />{p.format ? formatLabel(p.format) : "—"}</span></td>
+                  <td data-label="Tema" className="py-1.5">{p.tema ?? "—"}</td>
+                  <td data-label="Legenda" className="max-w-xs truncate py-1.5">{firstLine(p.caption) ?? p.windsor_media_id}</td>
+                  <td data-label="Alcance" className="py-1.5 text-right">{(p.reach ?? 0).toLocaleString("pt-BR")}</td>
+                  <td data-label="Engajamento" className="py-1.5 text-right">{(p.engagement ?? 0).toLocaleString("pt-BR")}</td>
+                  <td data-label="Salvos" className="py-1.5 text-right">{(p.saved ?? 0).toLocaleString("pt-BR")}</td>
+                  <td data-label="Post" className="py-1.5 text-right"><a href={p.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>abrir ↗</a></td>
                 </tr>
               ))}
             </tbody>
