@@ -1,17 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { CheckCircle2, AlertTriangle, ChevronDown, Copy, FileDown, RotateCcw, ShieldCheck } from "lucide-react";
 import {
-  getAdsResumo,
+  getAdsCampanhasPeriodo,
   getClient,
   getClientFontes,
+  getCrmLeadsPorDiaPeriodo,
+  getCrmResumoPeriodo,
   getMonthlyMetrics,
   getPatientQuestionsPeriodo,
   getPostsForAnalytics,
   getWtsResumo,
+  getWtsVolumeDiario,
 } from "@/lib/client-data";
+import { getResumoPeriodo } from "@/lib/audiencia";
+import { diagnosticarAds } from "@/lib/anuncios-objetivo";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
-import { buildRelatorio } from "@/lib/hub-relatorio";
+import { buildRelatorioEnvio, LIMITE_WHATSAPP, SECOES, type ChecagemItem, type RelatorioEnvio } from "@/lib/relatorio-envio";
+import { checarLinguagemCFM, ROTULO_REGRA_CFM } from "@/lib/linguagem-cfm";
+import { InsightCard } from "@/components/insight-card";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 
 export const Route = createFileRoute("/_authenticated/$clientId/relatorio")({
@@ -19,6 +27,13 @@ export const Route = createFileRoute("/_authenticated/$clientId/relatorio")({
 });
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
+
+// A leitura do alcance único vai à Meta ao vivo; não deixa o relatório esperando para sempre.
+function comPrazo<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([p, new Promise<T>((res) => setTimeout(() => res(fallback), ms))]);
+}
+
+type Versao = "whatsapp" | "executiva" | "pdf";
 
 function RelatorioPage() {
   const { clientId } = Route.useParams();
@@ -30,174 +45,335 @@ function RelatorioPage() {
   const fontes = useQuery({ queryKey: ["fontes", clientId], queryFn: () => getClientFontes(clientId) });
   const f = fontes.data;
   const temIg = f?.tem_instagram === true;
+  const temAds = f?.tem_anuncios === true;
+  const temWts = f?.tem_atendimento === true;
+  const temCrm = f?.tem_crm === true;
 
-  const metrics = useQuery({
-    queryKey: ["rel-metrics", clientId, start, end],
-    queryFn: () => getMonthlyMetrics(clientId, start, end),
+  const metrics = useQuery({ queryKey: ["rel-metrics", clientId, start, end], queryFn: () => getMonthlyMetrics(clientId, start, end), enabled: temIg });
+  const posts = useQuery({ queryKey: ["rel-posts", clientId, start, end], queryFn: () => getPostsForAnalytics(clientId, start, end), enabled: temIg });
+  const perguntas = useQuery({ queryKey: ["rel-perguntas", clientId, start, end], queryFn: () => getPatientQuestionsPeriodo(clientId, start, end), enabled: temIg });
+  const periodoIg = useQuery({
+    queryKey: ["periodo-ig", clientId, start, end],
+    queryFn: () => comPrazo(getResumoPeriodo(clientId, start, end), 12_000, { erro: "A Meta demorou a responder." }),
     enabled: temIg,
-  });
-  const posts = useQuery({
-    queryKey: ["rel-posts", clientId, start, end],
-    queryFn: () => getPostsForAnalytics(clientId, start, end + "T23:59:59"),
-    enabled: temIg,
-  });
-  const perguntas = useQuery({
-    queryKey: ["rel-perguntas", clientId, start, end],
-    queryFn: () => getPatientQuestionsPeriodo(clientId, start, end),
-    enabled: temIg,
+    staleTime: 20 * 60_000,
+    retry: false,
   });
   const ads = useQuery({
-    queryKey: ["rel-ads", clientId, start, end],
-    queryFn: () => getAdsResumo(clientId, start, end),
-    enabled: f?.tem_anuncios === true,
+    queryKey: ["rel-ads-objetivo", clientId, start, end],
+    queryFn: async () => {
+      const { linhas, cadastro } = await getAdsCampanhasPeriodo(clientId, start, end);
+      return { diag: diagnosticarAds(linhas, cadastro, start, end), diasComDado: Array.from(new Set(linhas.filter((l) => Number(l.spend) > 0 || Number(l.impressions) > 0).map((l) => String(l.date).slice(0, 10)))) };
+    },
+    enabled: temAds,
   });
   const wts = useQuery({
     queryKey: ["rel-wts", clientId, start, end],
-    queryFn: () => getWtsResumo(clientId, start, end),
-    enabled: f?.tem_atendimento === true,
+    queryFn: async () => {
+      const [resumo, dias] = await Promise.all([getWtsResumo(clientId, start, end), getWtsVolumeDiario(clientId, start, end)]);
+      return { resumo, diasComDado: (dias ?? []).filter((d: any) => Number(d.atendimentos) > 0).map((d: any) => String(d.dia).slice(0, 10)) };
+    },
+    enabled: temWts,
+  });
+  const crm = useQuery({
+    queryKey: ["rel-crm", clientId, start, end],
+    queryFn: async () => {
+      const [resumo, dias] = await Promise.all([getCrmResumoPeriodo(clientId, start, end), getCrmLeadsPorDiaPeriodo(clientId, start, end)]);
+      return { resumo, diasComDado: dias.filter((d) => Number(d.total) > 0).map((d) => String(d.dia).slice(0, 10)) };
+    },
+    enabled: temCrm,
   });
 
-  const queries = [client, fontes, ...(temIg ? [metrics, posts, perguntas] : []), ...(f?.tem_anuncios ? [ads] : []), ...(f?.tem_atendimento ? [wts] : [])];
+  const queries = [client, fontes, ...(temIg ? [metrics, posts, perguntas, periodoIg] : []), ...(temAds ? [ads] : []), ...(temWts ? [wts] : []), ...(temCrm ? [crm] : [])];
   const loading = queries.some((q) => q.isLoading);
-  const erro = queries.some((q) => q.error);
+  const erro = [client, fontes, metrics, posts, perguntas, ads, wts, crm].some((q) => q.error);
 
-  const [excluidos, setExcluidos] = useState<string[]>([]);
-  const gerado = useMemo(() => {
+  const envio: RelatorioEnvio | null = useMemo(() => {
     if (loading || erro || !client.data || !f) return null;
-    return buildRelatorio({
+    return buildRelatorioEnvio({
       clientName: client.data.name,
       periodLabel,
       start,
       end,
-      fontes: f,
+      fontes: { tem_instagram: temIg, tem_anuncios: temAds, tem_crm: temCrm, tem_atendimento: temWts },
       metrics: metrics.data ?? [],
       posts: posts.data ?? [],
       perguntas: perguntas.data ?? [],
+      alcanceUnico: periodoIg.data?.dados?.alcance_unico ?? null,
       ads: ads.data ?? null,
       wts: wts.data ?? null,
-      excluir: excluidos,
+      crm: crm.data ?? null,
     });
-  }, [loading, erro, client.data, f, periodLabel, start, end, metrics.data, posts.data, perguntas.data, ads.data, wts.data, excluidos]);
+  }, [loading, erro, client.data, f, periodLabel, start, end, temIg, temAds, temCrm, temWts, metrics.data, posts.data, perguntas.data, periodoIg.data, ads.data, wts.data, crm.data]);
 
-  // Texto editável: regenera quando muda o período/dados (a edição manual vale
-  // até a próxima troca de período ou clique em "Refazer texto").
-  const [texto, setTexto] = useState("");
-  const [copiado, setCopiado] = useState(false);
+  // Texto editável: volta ao gerado quando muda o período/dados ou em "Voltar ao texto gerado".
+  const [versao, setVersao] = useState<Versao>("whatsapp");
+  const [textoWhats, setTextoWhats] = useState("");
+  const [textoExec, setTextoExec] = useState("");
+  const [copiado, setCopiado] = useState<Versao | null>(null);
   const [gerandoPdf, setGerandoPdf] = useState(false);
+  const [erroPdf, setErroPdf] = useState<string | null>(null);
   useEffect(() => {
-    if (gerado) setTexto(gerado.texto);
-  }, [gerado]);
+    if (envio) {
+      setTextoWhats(envio.whatsapp);
+      setTextoExec(envio.executiva);
+    }
+  }, [envio]);
 
   const head = (
     <div className="hpagehead">
       <h2>Relatório</h2>
-      <p>Texto pronto para enviar ao cliente pelo WhatsApp, editável. Período: {periodLabel}.</p>
+      <p>Texto pronto para enviar ao cliente, em 3 versões do mesmo conteúdo conferido. Período: {periodLabel}.</p>
     </div>
   );
 
-  if (loading) return <div>{head}<Carregando texto="Montando o relatório…" /></div>;
-  if (erro || !gerado) return <div>{head}<ErroCarga texto="Falha ao ler os dados do período. Tente novamente em instantes." /></div>;
-
-  if (!f?.tem_instagram && !f?.tem_anuncios && !f?.tem_atendimento) {
+  if (loading) return <div>{head}<Carregando texto="Conferindo os dados e montando o relatório…" /></div>;
+  if (erro || !envio) return <div>{head}<ErroCarga texto="Falha ao ler os dados do período. Tente novamente em instantes." /></div>;
+  if (!temIg && !temAds && !temWts && !temCrm) {
     return (
       <div>
         {head}
-        <SemFonte
-          {...SEM_INSTAGRAM}
-          texto="Este cliente não tem nenhuma fonte ligada (Instagram, anúncios ou WhatsApp), então não há o que relatar. O relatório não é gerado vazio."
-        />
+        <SemFonte {...SEM_INSTAGRAM} texto="Este cliente não tem nenhuma fonte ligada (Instagram, anúncios, WhatsApp ou CRM), então não há o que relatar. O relatório não é gerado vazio." />
       </div>
     );
   }
 
-  async function copiar() {
+  async function copiar(texto: string, qual: Versao) {
     try {
       await navigator.clipboard.writeText(texto);
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 2000);
+      setCopiado(qual);
+      setTimeout(() => setCopiado(null), 2000);
     } catch {
       window.prompt("Copie o texto:", texto);
     }
   }
 
-  async function exportarPdf() {
+  async function baixarPdf() {
     setGerandoPdf(true);
+    setErroPdf(null);
     try {
       const { gerarEBaixarRelatorioCompleto } = await import("@/lib/relatorio-completo");
-      await gerarEBaixarRelatorioCompleto({ clientId, start, end, periodLabel, textoCliente: texto });
+      await gerarEBaixarRelatorioCompleto({ clientId, start, end, periodLabel, textoCliente: textoWhats, envio: envio! });
+    } catch (e) {
+      setErroPdf(e instanceof Error ? e.message : "Falha ao gerar o PDF.");
     } finally {
       setGerandoPdf(false);
     }
   }
 
+  const vazio = SECOES.every((s) => envio.conteudo[s.id].length === 0 || s.id === "limitacoes");
+  const btn = "btn inline-flex min-h-[44px] items-center justify-center gap-1.5 px-4 text-sm";
+
   return (
-    <div>
+    <div className="space-y-4">
       {head}
-      {gerado.omitidos.length > 0 && (
-        <div className="card" style={{ marginBottom: 16, borderColor: "var(--warn)" }}>
-          <h2>Não incluído por falta de dado</h2>
-          <p className="sub">{gerado.omitidos.join("; ")}.</p>
-        </div>
-      )}
-      {gerado.blocos.length > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h2>O que entra no texto</h2>
-          <p className="sub">Desmarque o que não faz sentido enviar a este cliente. Trocar a seleção refaz o texto (a edição manual é perdida).</p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginTop: 8 }}>
-            {gerado.blocos.map((b) => (
-              <label key={b.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, minHeight: 28 }}>
-                <input
-                  type="checkbox"
-                  checked={!excluidos.includes(b.id)}
-                  onChange={(ev) => setExcluidos((cur) => (ev.target.checked ? cur.filter((x) => x !== b.id) : [...cur, b.id]))}
-                />
-                {b.rotulo}
-              </label>
+
+      <Checagem envio={envio} />
+
+      {vazio ? (
+        <SemFonte titulo="Sem dado para montar o texto" texto="Nenhuma seção tem dado neste período, então o relatório ficaria vazio. Troque o período no cabeçalho." />
+      ) : (
+        <section className="card" aria-labelledby="rel-versoes">
+          <h2 id="rel-versoes">Versões para enviar</h2>
+          <p className="sub">Mesmo conteúdo nas três: resumo, vitórias, pontos de atenção, ações, próximos testes e dados incompletos.</p>
+          <div role="tablist" aria-label="Versão do relatório" className="mt-3 grid grid-cols-3 gap-1 rounded-lg p-1" style={{ background: "var(--surface-2)" }}>
+            {(
+              [
+                ["whatsapp", "WhatsApp"],
+                ["executiva", "Reunião"],
+                ["pdf", "PDF"],
+              ] as [Versao, string][]
+            ).map(([id, rot]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={versao === id}
+                onClick={() => setVersao(id)}
+                className="min-h-[44px] rounded-md text-sm font-semibold"
+                style={versao === id ? { background: "var(--surface)", color: "var(--ink)", boxShadow: "0 1px 2px rgba(0,0,0,.08)" } : { color: "var(--text-dim)" }}
+              >
+                {rot}
+              </button>
             ))}
           </div>
-        </div>
-      )}
-      {!gerado.texto ? (
-        <SemFonte
-          titulo="Sem dado para montar o texto"
-          texto="Nenhuma seção tem dado neste período, então o relatório ficaria vazio. Troque o período no cabeçalho."
-        />
-      ) : (
-        <div className="card">
-          <label htmlFor="rel-texto" className="sub" style={{ display: "block", marginBottom: 6 }}>
-            Texto do relatório (edite à vontade antes de copiar)
-          </label>
-          <textarea
-            id="rel-texto"
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            rows={18}
-            style={{
-              width: "100%",
-              border: "1px solid var(--border)",
-              borderRadius: 10,
-              padding: 12,
-              background: "var(--surface-2)",
-              color: "var(--ink)",
-              font: "inherit",
-              lineHeight: 1.5,
-              resize: "vertical",
-            }}
-          />
-          <div className="chips" style={{ marginTop: 12, marginBottom: 0 }}>
-            <button type="button" className="btn pri" onClick={copiar}>
-              {copiado ? "Copiado" : "Copiar"}
-            </button>
-            <button type="button" className="btn" onClick={exportarPdf} disabled={gerandoPdf || !texto.trim()}>
-              {gerandoPdf ? "Gerando PDF completo…" : "Exportar PDF completo"}
-            </button>
-            <button type="button" className="btn ghost" onClick={() => setTexto(gerado.texto)}>
-              Refazer texto
-            </button>
-          </div>
+
+          {versao === "whatsapp" && (
+            <EditorVersao
+              id="rel-whats"
+              rotulo="Versão curta para WhatsApp (edite à vontade antes de copiar)"
+              texto={textoWhats}
+              setTexto={setTextoWhats}
+              gerado={envio.whatsapp}
+              limite={LIMITE_WHATSAPP}
+              linhas={16}
+            >
+              <button type="button" className={`${btn} pri`} onClick={() => copiar(textoWhats, "whatsapp")} disabled={!textoWhats.trim()}>
+                <Copy size={15} aria-hidden /> {copiado === "whatsapp" ? "Copiado" : "Copiar para WhatsApp"}
+              </button>
+            </EditorVersao>
+          )}
+
+          {versao === "executiva" && (
+            <EditorVersao id="rel-exec" rotulo="Versão executiva para reunião: pontos principais e 3 decisões" texto={textoExec} setTexto={setTextoExec} gerado={envio.executiva} linhas={18}>
+              <button type="button" className={`${btn} pri`} onClick={() => copiar(textoExec, "executiva")} disabled={!textoExec.trim()}>
+                <Copy size={15} aria-hidden /> {copiado === "executiva" ? "Copiado" : "Copiar versão executiva"}
+              </button>
+            </EditorVersao>
+          )}
+
+          {versao === "pdf" && (
+            <div className="mt-3">
+              <p className="sub">
+                A primeira página traz as 6 seções com a evidência de cada ponto; depois vem o detalhamento de Instagram, anúncios, WhatsApp e CRM. A mensagem de WhatsApp, como estiver editada, vai no fim.
+              </p>
+              <ol className="mt-2 space-y-1 text-sm" style={{ color: "var(--text)" }}>
+                {SECOES.map((s) => (
+                  <li key={s.id}>
+                    <b>{s.titulo}</b>{" "}
+                    <span style={{ color: "var(--text-dim)" }}>({envio.conteudo[s.id].length} {envio.conteudo[s.id].length === 1 ? "item" : "itens"})</span>
+                  </li>
+                ))}
+              </ol>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className={`${btn} pri`} onClick={baixarPdf} disabled={gerandoPdf}>
+                  <FileDown size={15} aria-hidden /> {gerandoPdf ? "Gerando o PDF…" : "Baixar PDF detalhado"}
+                </button>
+              </div>
+              {erroPdf && (
+                <p className="mt-2 text-sm" style={{ color: "var(--crit)" }}>
+                  {erroPdf}
+                </p>
+              )}
+            </div>
+          )}
           <p className="note">O envio direto pelo WhatsApp é fase 2. Hoje: copie e cole na conversa do cliente.</p>
-        </div>
+        </section>
+      )}
+
+      {envio.insights.length > 0 && (
+        <section aria-labelledby="rel-recs">
+          <h2 id="rel-recs" className="mb-2 text-sm font-semibold">
+            Recomendações que passaram na checagem
+          </h2>
+          <div className="grid gap-3 md:grid-cols-2">
+            {envio.insights.map((i) => (
+              <InsightCard key={i.id} insight={i} clientId={clientId} compacto />
+            ))}
+          </div>
+        </section>
       )}
     </div>
+  );
+}
+
+function EditorVersao({
+  id,
+  rotulo,
+  texto,
+  setTexto,
+  gerado,
+  limite,
+  linhas,
+  children,
+}: {
+  id: string;
+  rotulo: string;
+  texto: string;
+  setTexto: (s: string) => void;
+  gerado: string;
+  limite?: number;
+  linhas: number;
+  children: React.ReactNode;
+}) {
+  // A checagem de linguagem roda também no texto editado à mão.
+  const cfm = useMemo(() => checarLinguagemCFM(texto), [texto]);
+  const passou = limite != null && texto.length > limite;
+  return (
+    <div className="mt-3">
+      <label htmlFor={id} className="sub" style={{ display: "block", marginBottom: 6 }}>
+        {rotulo}
+      </label>
+      <textarea
+        id={id}
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        rows={linhas}
+        className="block w-full"
+        style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12, background: "var(--surface-2)", color: "var(--ink)", font: "inherit", fontSize: 14, lineHeight: 1.5, resize: "vertical" }}
+      />
+      <div className="mt-1 flex flex-wrap justify-between gap-2 text-xs" style={{ color: passou ? "var(--crit)" : "var(--text-faint)" }}>
+        <span>
+          {texto.length} caracteres{limite != null ? ` de até ${limite} recomendados` : ""}
+          {passou ? ": longo para WhatsApp, encurte" : ""}
+        </span>
+        {texto !== gerado && <span style={{ color: "var(--text-faint)" }}>Editado à mão</span>}
+      </div>
+      {!cfm.ok && (
+        <div className="mt-2 rounded-lg border p-3 text-sm" style={{ background: "var(--warn-bg)", borderColor: "var(--warn-border)" }} role="alert">
+          <p className="font-semibold">A edição tem trecho que fere a regra do CFM. Ajuste antes de enviar:</p>
+          <ul className="mt-1 list-disc space-y-1 pl-5">
+            {cfm.achados.slice(0, 6).map((a, i) => (
+              <li key={i}>
+                "{a.trecho}": {ROTULO_REGRA_CFM[a.regra]}, {a.motivo}.
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {children}
+        <button type="button" className="btn ghost inline-flex min-h-[44px] items-center gap-1.5 px-4 text-sm" onClick={() => setTexto(gerado)} disabled={texto === gerado}>
+          <RotateCcw size={15} aria-hidden /> Voltar ao texto gerado
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Checagem({ envio }: { envio: RelatorioEnvio }) {
+  const ok = envio.checagem.filter((c) => c.status === "ok").length;
+  return (
+    <section className="card" aria-labelledby="rel-checagem">
+      <h2 id="rel-checagem" className="flex items-center gap-2">
+        <ShieldCheck size={18} aria-hidden /> Checagem antes de enviar
+      </h2>
+      <p className="sub">
+        {ok} de {envio.checagem.length} itens sem ressalva. O que está em atenção já foi tratado no texto (removido, reescrito ou escrito como limitação); confira antes de mandar.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {envio.checagem.map((c) => (
+          <ItemChecagem key={c.id} c={c} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ItemChecagem({ c }: { c: ChecagemItem }) {
+  const [aberto, setAberto] = useState(c.id === "linguagem" && c.status === "atencao");
+  const Icone = c.status === "ok" ? CheckCircle2 : AlertTriangle;
+  return (
+    <li className="rounded-lg border" style={{ borderColor: c.status === "ok" ? "var(--good-border)" : "var(--warn-border)", background: c.status === "ok" ? "var(--good-bg)" : "var(--warn-bg)" }}>
+      <button type="button" onClick={() => setAberto(!aberto)} aria-expanded={aberto} className="flex min-h-[44px] w-full items-start gap-2 p-3 text-left">
+        <Icone size={18} aria-hidden className="mt-0.5 shrink-0" style={{ color: c.status === "ok" ? "var(--good-text)" : "var(--warn)" }} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold" style={{ color: "var(--text)" }}>
+            {c.titulo}: {c.status === "ok" ? "passou" : "atenção"}
+          </span>
+          <span className="block text-sm" style={{ color: "var(--text-dim)" }}>
+            {c.resumo}
+          </span>
+        </span>
+        <ChevronDown size={16} aria-hidden className="mt-1 shrink-0" style={{ transform: aberto ? "rotate(180deg)" : undefined }} />
+      </button>
+      {aberto && c.detalhes.length > 0 && (
+        <ul className="space-y-1 px-3 pb-3 pl-9 text-xs leading-relaxed" style={{ color: "var(--text-dim)", overflowWrap: "anywhere" }}>
+          {c.detalhes.map((d, i) => (
+            <li key={i}>{d}</li>
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }

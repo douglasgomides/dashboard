@@ -1,3 +1,5 @@
+// OBSOLETO para a tela Relatório: ela usa src/lib/relatorio-envio.ts (3 versões validadas, custo por
+// conversa só de campanhas de mensagem, checagem CFM). Mantido só porque scripts/test-hub-conteudo.ts o usa.
 // Monta o texto do relatório para WhatsApp. Determinístico, sem IA.
 // Seção sem fonte é omitida do texto e listada em `omitidos`.
 import { analyzeFollowers, buildIdeias, type Ideia } from "@/lib/hub-conteudo";

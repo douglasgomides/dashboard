@@ -7,7 +7,7 @@ import {
   getClient,
   getClientFontes,
   getCrmProvider,
-  getAdsDiagnostico,
+  getAdsCampanhasPeriodo,
   getAdsPorDia,
   getAdsPorObjetivo,
   getAdsResumo,
@@ -15,6 +15,8 @@ import {
   getCrmLeadsPorDia,
   getCrmLeadsPorEtapa,
   getCrmMetricasEssenciais,
+  getCrmLeadsPorDiaPeriodo,
+  getCrmResumoPeriodo,
   getMonthlyMetrics,
   getPatientQuestionsPeriodo,
   getPostsForAnalytics,
@@ -23,6 +25,9 @@ import {
   getWtsResumo,
   getWtsVolumeDiario,
 } from "@/lib/client-data";
+import { getResumoPeriodo } from "@/lib/audiencia";
+import { diagnosticarAds, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
+import { buildRelatorioEnvio, type RelatorioEnvio } from "@/lib/relatorio-envio";
 
 export interface FontesCliente {
   tem_instagram: boolean;
@@ -48,7 +53,10 @@ export interface RelatorioCompletoData {
     resumo: any | null;
     porDia: any[];
     porObjetivo: any[];
-    diagnostico: any[];
+    // Diagnóstico que respeita o objetivo de cada campanha (anuncios-objetivo.ts).
+    // O custo por conversa do relatório sai SÓ daqui (campanhas de mensagem).
+    objetivo: DiagnosticoAds | null;
+    diasComDado: string[];
   } | null;
   wts: {
     resumo: any | null;
@@ -64,6 +72,8 @@ export interface RelatorioCompletoData {
   } | null;
   omitidos: string[];
   falhas: string[];
+  // Conteúdo validado (resumo, vitórias, atenção, ações, testes, limitações) da página 1.
+  envio: RelatorioEnvio;
 }
 
 async function tentar<T>(rotulo: string, falhas: string[], fn: () => Promise<T>, vazio: T): Promise<T> {
@@ -84,6 +94,7 @@ export async function coletarRelatorioCompleto(args: {
   periodLabel: string;
   textoCliente: string;
   crmNome: string | null;
+  envio?: RelatorioEnvio;
 }): Promise<RelatorioCompletoData> {
   const { clientId, client, fontes, start, end } = args;
   const falhas: string[] = [];
@@ -102,13 +113,19 @@ export async function coletarRelatorioCompleto(args: {
 
   let ads: RelatorioCompletoData["ads"] = null;
   if (fontes.tem_anuncios) {
-    const [resumo, porDia, porObjetivo, diagnostico] = await Promise.all([
+    const [resumo, porDia, porObjetivo, campanhas] = await Promise.all([
       tentar("anúncios, resumo", falhas, () => getAdsResumo(clientId, start, end), null as any),
       tentar("anúncios, por dia", falhas, () => getAdsPorDia(clientId, start, end), [] as any[]),
       tentar("anúncios, por objetivo", falhas, () => getAdsPorObjetivo(clientId, start, end), [] as any[]),
-      tentar("anúncios, diagnóstico", falhas, () => getAdsDiagnostico(clientId, start, end), [] as any[]),
+      tentar("anúncios, campanhas", falhas, () => getAdsCampanhasPeriodo(clientId, start, end), null),
     ]);
-    ads = { resumo, porDia: porDia ?? [], porObjetivo: porObjetivo ?? [], diagnostico: diagnostico ?? [] };
+    ads = {
+      resumo,
+      porDia: porDia ?? [],
+      porObjetivo: porObjetivo ?? [],
+      objetivo: campanhas ? diagnosticarAds(campanhas.linhas, campanhas.cadastro, start, end) : null,
+      diasComDado: campanhas ? Array.from(new Set(campanhas.linhas.filter((l) => Number(l.spend) > 0 || Number(l.impressions) > 0).map((l) => String(l.date).slice(0, 10)))) : [],
+    };
   } else {
     omitidos.push("Anúncios (nenhuma conta de anúncio ligada)");
   }
@@ -127,7 +144,13 @@ export async function coletarRelatorioCompleto(args: {
   }
 
   let crm: RelatorioCompletoData["crm"] = null;
+  let crmPeriodo: { resumo: { novos: number; ganhos: number; perdidos: number } | null; diasComDado: string[] } | null = null;
   if (fontes.tem_crm) {
+    const [resumoP, diasP] = await Promise.all([
+      tentar("CRM, resumo do período", falhas, () => getCrmResumoPeriodo(clientId, start, end), null),
+      tentar("CRM, contatos por dia", falhas, () => getCrmLeadsPorDiaPeriodo(clientId, start, end), [] as { dia: string; total: number }[]),
+    ]);
+    crmPeriodo = { resumo: resumoP, diasComDado: (diasP ?? []).filter((d) => Number(d.total) > 0).map((d) => String(d.dia).slice(0, 10)) };
     const [metricas, porEtapa, porOrigem, porDia] = await Promise.all([
       tentar("CRM, métricas", falhas, () => getCrmMetricasEssenciais(clientId), null as any),
       tentar("CRM, etapas", falhas, () => getCrmLeadsPorEtapa(clientId), [] as any[]),
@@ -139,7 +162,28 @@ export async function coletarRelatorioCompleto(args: {
     omitidos.push("CRM (não conectado)");
   }
 
+  // Conteúdo validado: o da tela (quando veio do Relatório) ou montado aqui com os mesmos dados.
+  let envio = args.envio;
+  if (!envio) {
+    const periodoIg = fontes.tem_instagram ? await getResumoPeriodo(clientId, start, end).catch(() => null) : null;
+    envio = buildRelatorioEnvio({
+      clientName: client.name,
+      periodLabel: args.periodLabel,
+      start,
+      end,
+      fontes,
+      metrics: metrics ?? [],
+      posts: posts ?? [],
+      perguntas: perguntas ?? [],
+      alcanceUnico: periodoIg?.dados?.alcance_unico ?? null,
+      ads: ads?.objetivo ? { diag: ads.objetivo, diasComDado: ads.diasComDado } : null,
+      wts: wts ? { resumo: wts.resumo, diasComDado: (wts.volumeDiario ?? []).filter((d: any) => Number(d.atendimentos) > 0).map((d: any) => String(d.dia).slice(0, 10)) } : null,
+      crm: crmPeriodo,
+    });
+  }
+
   return {
+    envio,
     clientName: client.name,
     igHandle: client.instagram_handle,
     specialty: client.specialty,
@@ -178,6 +222,7 @@ export async function gerarEBaixarRelatorioCompleto(args: {
   end: string;
   periodLabel: string;
   textoCliente?: string;
+  envio?: RelatorioEnvio;
 }) {
   const [client, fontes, provider] = await Promise.all([
     getClient(args.clientId),
@@ -199,6 +244,7 @@ export async function gerarEBaixarRelatorioCompleto(args: {
     periodLabel: args.periodLabel,
     textoCliente: args.textoCliente ?? "",
     crmNome: provider ? (NOME_CRM[provider] ?? provider) : null,
+    envio: args.envio,
   });
   const { downloadRelatorioCompleto } = await import("@/lib/pdf-relatorio-completo");
   await downloadRelatorioCompleto(dados);

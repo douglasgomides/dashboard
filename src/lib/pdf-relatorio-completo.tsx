@@ -1,4 +1,7 @@
-// Relatório COMPLETO em PDF: tudo que o dashboard calcula para o cliente, em um
+// Relatório COMPLETO em PDF (versão "detalhada" do Relatório). A página 1 segue a mesma
+// estrutura validada do WhatsApp e da versão executiva (relatorio-envio.ts): resumo,
+// vitórias, atenção, ações, testes e limitações, com a evidência de cada ponto e a
+// checagem antes de enviar. Depois vem o detalhamento: tudo que o dashboard calcula, em um
 // documento só. Instagram (evolução, formatos, temas, horários, rankings, reels),
 // anúncios (diagnóstico por campanha), WhatsApp, CRM, dúvidas, ideias, ações e a
 // mensagem pronta para o cliente. Seções sem fonte saem do PDF e viram aviso.
@@ -7,10 +10,7 @@ import { Document, Link, Page, Path, pdf, Svg, Text, View, Line } from "@react-p
 import {
   computeCasosDestacados,
   computeConceitosVencedores,
-  computeDuvidasFrequentes,
   computeFormatBreakdown,
-  computeFormatInsight,
-  computeHeadline,
   computeMelhoresHorarios,
   computeReachByFormat,
   computeReachByTema,
@@ -25,6 +25,9 @@ import { analyzeFollowers, buildIdeias, fmtDiaBR } from "@/lib/hub-conteudo";
 import { fmtBRL, fmtNum } from "@/lib/format";
 import { BarChartBlock, Footer, caseCaption, stripEmoji, styles } from "@/lib/pdf-report";
 import type { RelatorioCompletoData } from "@/lib/relatorio-completo";
+import { GRUPOS } from "@/lib/anuncios-objetivo";
+import { SECOES, duvidasRepetidas } from "@/lib/relatorio-envio";
+import { tornarSeguro } from "@/lib/linguagem-cfm";
 
 const GOLD = "#b8935a";
 const GREEN = "#3f8f5f";
@@ -162,8 +165,8 @@ function Caixa({ children, tom }: { children: any; tom?: "bom" | "atencao" }) {
 function corVeredito(v: string): string {
   const s = (v ?? "").toLowerCase();
   if (s.includes("escalar")) return GREEN;
-  if (s.includes("cortar")) return RED;
-  if (s.includes("atrai") || s.includes("sem tra")) return AMBER;
+  if (s.includes("cortar") || s.includes("sem resultado")) return RED;
+  if (s.includes("não medido") || s.includes("volume")) return AMBER;
   return GRAY;
 }
 
@@ -182,8 +185,6 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   const temIg = d.fontes.tem_instagram;
   const dias = Math.max(1, Math.round((new Date(d.end).getTime() - new Date(d.start).getTime()) / 86400000) + 1);
 
-  const headline = temIg ? computeHeadline(posts) : null;
-  const insight = temIg ? computeFormatInsight(posts) : null;
   const { ranked: horarios, overallMedian: horaMediana } = temIg ? computeMelhoresHorarios(posts) : { ranked: [] as any[], overallMedian: 0 };
   const formatos = temIg ? computeFormatBreakdown(posts).sort((a, b) => b.medianEngagement - a.medianEngagement) : [];
   const reachFormato = temIg ? computeReachByFormat(posts) : [];
@@ -195,24 +196,37 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   const topCompart = temIg ? computeTopReelsPorTaxaDeCompartilhamento(posts, 5) : [];
   const retencao = temIg ? computeRetencaoDeReels(posts, 5) : null;
   const conceitos = temIg ? computeConceitosVencedores(posts, 6) : [];
-  const duvidas = computeDuvidasFrequentes(d.perguntas as any[], { threshold: 0.4, minSize: 2 }).slice(0, 8);
+  // Comentário de paciente nunca é citado: só o assunto e quantas pessoas diferentes perguntaram.
+  const temasPerfil = posts.map((p: any) => String(p.tema ?? "")).filter(Boolean);
+  const duvidas = temIg ? duvidasRepetidas(d.perguntas as any[], 2, temasPerfil).duvidas : [];
   const seg = temIg ? analyzeFollowers(metrics, d.start, d.end) : null;
-  const ideias = temIg ? buildIdeias(posts, d.perguntas as any[]) : null;
+  // Ideias da regra "pergunta repetida" citam o comentário; ficam fora (a dúvida já aparece acima, sem citação).
+  const ideiasBrutas = temIg ? buildIdeias(posts, d.perguntas as any[]) : null;
+  const ideias = ideiasBrutas
+    ? {
+        ...ideiasBrutas,
+        ideias: ideiasBrutas.ideias
+          .filter((i) => i.regra !== "pergunta")
+          .map((i) => ({ ...i, acao: tornarSeguro(i.acao).texto, porque: tornarSeguro(i.porque).texto }))
+          .filter((i) => i.acao && i.porque),
+      }
+    : null;
 
   const ads = d.ads;
   const adsRes = ads?.resumo ?? null;
-  const diag = [...(ads?.diagnostico ?? [])].sort((a, b) => num(b.gasto) - num(a.gasto));
+  // Diagnóstico por objetivo: cada campanha comparada só com as do mesmo objetivo.
+  const obj = ads?.objetivo ?? null;
+  const diag = [...(obj?.campanhas ?? [])].sort((a, b) => b.gasto - a.gasto);
   const diagGrupos = new Map<string, { n: number; gasto: number; conv: number }>();
   for (const r of diag) {
     const g = diagGrupos.get(r.veredito) ?? { n: 0, gasto: 0, conv: 0 };
     g.n += 1;
-    g.gasto += num(r.gasto);
-    g.conv += num(r.conversas);
+    g.gasto += r.gasto;
+    g.conv += r.conversas;
     diagGrupos.set(r.veredito, g);
   }
-  const gastoRuim = [...diagGrupos.entries()]
-    .filter(([v]) => /cortar|atrai|sem tra/i.test(v))
-    .reduce((a, [, g]) => a + g.gasto, 0);
+  const unidade = (c: (typeof diag)[number]) =>
+    c.custoPorResultado == null ? "sem resultado" : GRUPOS[c.grupo].porMil ? `${fmtBRL(c.custoPorResultado)} / mil vezes` : `${fmtBRL(c.custoPorResultado)} / ${GRUPOS[c.grupo].resultado}`;
 
   const wts = d.wts;
   const wRes = wts?.resumo ?? null;
@@ -223,43 +237,22 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   const kpis: { label: string; value: string; hint?: string }[] = [];
   if (temIg) {
     kpis.push({ label: "Novos seguidores", value: fmtNum(novos), hint: "só últimos 30 dias (limite do Instagram)" });
-    kpis.push({ label: "Alcance", value: fmtNum(reach), hint: `${metrics.length} dias com coleta` });
-    kpis.push({ label: "Taxa de engajamento", value: pct(taxaEng), hint: "interações ÷ alcance" });
+    kpis.push({ label: "Soma dos alcances diários", value: fmtNum(reach), hint: `${metrics.length} dias; a mesma pessoa conta em mais de um dia` });
+    kpis.push({ label: "Interações a cada 100 de alcance", value: taxaEng.toFixed(1).replace(".", ","), hint: "curtidas, comentários, salvos e compartilhamentos" });
     kpis.push({ label: "Salvamentos", value: fmtNum(saves) });
   }
-  if (adsRes) {
-    kpis.push({ label: "Investido em anúncios", value: fmtBRL(num(adsRes.gasto)), hint: `${adsRes.campanhas} campanhas` });
-    kpis.push({ label: "Conversas iniciadas", value: fmtNum(num(adsRes.conversas)), hint: "Direct e WhatsApp" });
-    kpis.push({ label: "Custo por conversa", value: adsRes.custo_por_conversa != null ? fmtBRL(num(adsRes.custo_por_conversa)) : "sem dado" });
-    kpis.push({ label: "Impressões", value: fmtNum(num(adsRes.impressoes)), hint: adsRes.ctr != null ? `CTR ${pct(num(adsRes.ctr), 2)}` : undefined });
+  if (obj && obj.gasto > 0) {
+    kpis.push({ label: "Investido em anúncios", value: fmtBRL(obj.gasto), hint: `${obj.campanhas.length} campanhas` });
+    kpis.push({ label: "Conversas (campanhas de mensagem)", value: fmtNum(obj.conversasMensagem), hint: "Direct e WhatsApp" });
+    kpis.push({ label: "Custo por conversa", value: obj.custoPorConversaMensagem != null ? fmtBRL(obj.custoPorConversaMensagem) : "sem campanha de mensagem", hint: "só campanhas de mensagem" });
   }
   if (wRes) {
     kpis.push({ label: "Atendimentos no WhatsApp", value: fmtNum(num(wRes.atendimentos)), hint: `${fmtNum(num(wRes.contatos_distintos))} contatos diferentes` });
-    kpis.push({ label: "Espera até a 1ª resposta", value: fmtSeg(wRes.espera_mediana_seg), hint: "mediana" });
+    kpis.push({ label: "Espera até a 1ª resposta", value: fmtSeg(wRes.espera_mediana_seg), hint: "metade esperou até isso" });
   }
   if (cm) {
     kpis.push({ label: "Leads no CRM", value: fmtNum(num(cm.total_leads)), hint: d.crmNome ? `CRM ${d.crmNome}` : undefined });
     kpis.push({ label: "Ganhos", value: fmtNum(num(cm.ganhos)), hint: `${fmtNum(num(cm.perdidos))} perdidos` });
-  }
-
-  const acoes: string[] = [];
-  if (ideias?.ideias.length) {
-    for (const i of ideias.ideias.slice(0, 4)) acoes.push(`${i.acao} ${i.porque}`);
-  }
-  if (gastoRuim > 0 && adsRes && num(adsRes.gasto) > 0) {
-    acoes.push(
-      `Rever as campanhas marcadas como "Cortar" e "Atrai mas não converte": juntas consumiram ${fmtBRL(gastoRuim)} (${pct((gastoRuim / num(adsRes.gasto)) * 100, 0)} do investimento do período).`,
-    );
-  }
-  const escalar = diagGrupos.get("Escalar");
-  if (escalar && escalar.n > 0) {
-    acoes.push(`Escalar verba nas ${escalar.n} campanha(s) que convertem abaixo da mediana da conta (${fmtBRL(escalar.gasto)} gastos, ${fmtNum(escalar.conv)} conversas).`);
-  }
-  if (wRes && num(wRes.espera_mediana_seg) > 600) {
-    acoes.push(`Reduzir o tempo até a primeira resposta no WhatsApp: a mediana está em ${fmtSeg(wRes.espera_mediana_seg)}.`);
-  }
-  if (duvidas.length > 0) {
-    acoes.push(`Responder em conteúdo a dúvida que mais se repete nos comentários: "${stripEmoji(duvidas[0].representative.text).slice(0, 110)}" (${duvidas[0].count} pessoas).`);
   }
 
   return (
@@ -276,72 +269,34 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
 
         <Kpis items={kpis} />
 
-        {headline ? (
-          <View style={styles.headline} wrap={false}>
-            <Text style={{ fontWeight: 700, marginBottom: 2 }}>O achado do período</Text>
-            <Text>{headline}</Text>
-          </View>
-        ) : null}
+        {SECOES.map((sec) =>
+          d.envio.conteudo[sec.id].length > 0 ? (
+            <View key={sec.id}>
+              <Titulo dica={sec.id === "acoes" ? "Só entra recomendação com evidência e amostra mínima; as demais foram descartadas na checagem." : undefined}>{sec.titulo}</Titulo>
+              {d.envio.conteudo[sec.id].map((it, i) => (
+                <View key={it.id} style={{ marginBottom: 5 }} wrap={false}>
+                  <Text style={styles.methodP}>
+                    {sec.id === "acoes" ? `${i + 1}. ` : "· "}
+                    {stripEmoji(it.texto)}
+                  </Text>
+                  {it.evidencia && !/^https?:/.test(it.evidencia) ? <Text style={{ fontSize: 8, color: GRAY, marginLeft: 8, lineHeight: 1.35 }}>Evidência: {stripEmoji(it.evidencia)}</Text> : null}
+                  {it.evidencia && /^https?:/.test(it.evidencia) ? (
+                    <Link src={it.evidencia} style={{ fontSize: 8, color: GOLD, marginLeft: 8 }}>
+                      Abrir no Instagram
+                    </Link>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          ) : null,
+        )}
 
-        <Titulo dica={`Período de ${dias} dias. Cada ponto vem de dado medido na fonte.`}>O que aconteceu</Titulo>
-        {temIg && topSalvos[0] ? (
-          <Caixa tom="bom">
-            <Text>
-              <Text style={{ fontWeight: 700 }}>{posts.length} publicações</Text> no período. A mais salva foi "{caseCaption(topSalvos[0]).slice(0, 110)}", com{" "}
-              <Text style={{ fontWeight: 700 }}>{fmtNum(topSalvos[0].saved)} salvamentos</Text> e alcance de {fmtNum(topSalvos[0].reach)}.
-            </Text>
-          </Caixa>
-        ) : null}
-        {insight ? (
-          <Caixa>
-            <Text>
-              <Text style={{ fontWeight: 700 }}>{fmtFormatKey(insight.best.format)}</Text> é o formato mais forte: engajamento (mediana) de {fmtNum(Math.round(insight.best.median))} em {insight.best.count} posts,{" "}
-              {insight.bestPct >= 0 ? "+" : ""}
-              {insight.bestPct.toFixed(0)}% sobre a mediana geral.
-              {insight.worst.format !== insight.best.format ? ` ${fmtFormatKey(insight.worst.format)} ficou ${Math.abs(insight.worstPct).toFixed(0)}% abaixo (${insight.worst.count} posts).` : ""}
-            </Text>
-          </Caixa>
-        ) : null}
-        {adsRes && num(adsRes.gasto) > 0 ? (
-          <Caixa>
-            <Text>
-              <Text style={{ fontWeight: 700 }}>{fmtBRL(num(adsRes.gasto))}</Text> investidos em anúncio, que trouxeram <Text style={{ fontWeight: 700 }}>{fmtNum(num(adsRes.conversas))} conversas</Text>
-              {adsRes.custo_por_conversa != null ? ` a ${fmtBRL(num(adsRes.custo_por_conversa))} cada` : ""}.
-            </Text>
-          </Caixa>
-        ) : null}
-        {gastoRuim > 0 ? (
-          <Caixa tom="atencao">
-            <Text>
-              <Text style={{ fontWeight: 700 }}>Merece atenção:</Text> {fmtBRL(gastoRuim)} foram para campanhas que custam caro demais por conversa ou não converteram nenhuma.
-            </Text>
-          </Caixa>
-        ) : null}
-        {wRes ? (
-          <Caixa>
-            <Text>
-              <Text style={{ fontWeight: 700 }}>{fmtNum(num(wRes.atendimentos))} atendimentos</Text> no WhatsApp, de {fmtNum(num(wRes.contatos_distintos))} pessoas diferentes, com {fmtSeg(wRes.espera_mediana_seg)} de espera até a primeira resposta (mediana).
-            </Text>
-          </Caixa>
-        ) : null}
-        {cm ? (
-          <Caixa>
-            <Text>
-              <Text style={{ fontWeight: 700 }}>{fmtNum(num(cm.total_leads))} leads</Text> no CRM{d.crmNome ? ` ${d.crmNome}` : ""}: {fmtNum(num(cm.ganhos))} ganhos, {fmtNum(num(cm.perdidos))} perdidos e {fmtNum(num(cm.em_atendimento))} em atendimento.
-            </Text>
-          </Caixa>
-        ) : null}
-
-        {acoes.length > 0 ? (
-          <>
-            <Titulo dica="Calculadas por regra a partir dos números acima, não geradas por IA.">Próximas ações recomendadas</Titulo>
-            {acoes.map((a, i) => (
-              <Text key={i} style={[styles.methodP, { marginBottom: 5 }]}>
-                {i + 1}. {stripEmoji(a)}
-              </Text>
-            ))}
-          </>
-        ) : null}
+        <Titulo dica="Feita antes de montar o texto. Comentário de paciente nunca é citado.">Checagem antes de enviar</Titulo>
+        {d.envio.checagem.map((c) => (
+          <Text key={c.id} style={[styles.methodP, { marginBottom: 3 }]}>
+            <Text style={{ fontWeight: 700, color: c.status === "ok" ? GREEN : AMBER }}>{c.status === "ok" ? "Passou" : "Atenção"}</Text> · {c.titulo}: {stripEmoji(c.resumo)}
+          </Text>
+        ))}
         <Footer page={1} />
       </Page>
 
@@ -596,13 +551,13 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
           <Titulo dica="Dado direto da conta de anúncio. Conversa iniciada (Direct ou WhatsApp) é o resultado que dá para medir nessas contas.">Anúncios</Titulo>
           <Kpis
             items={[
-              { label: "Investido", value: fmtBRL(num(adsRes.gasto)), hint: `${adsRes.campanhas} campanhas` },
-              { label: "Conversas iniciadas", value: fmtNum(num(adsRes.conversas)) },
-              { label: "Custo por conversa", value: adsRes.custo_por_conversa != null ? fmtBRL(num(adsRes.custo_por_conversa)) : "sem dado" },
-              { label: "Impressões", value: fmtNum(num(adsRes.impressoes)), hint: adsRes.cpm != null ? `CPM ${fmtBRL(num(adsRes.cpm))}` : undefined },
-              { label: "Cliques no link", value: fmtNum(num(adsRes.cliques_link)), hint: adsRes.cpc != null ? `CPC ${fmtBRL(num(adsRes.cpc))}` : undefined },
-              { label: "CTR", value: adsRes.ctr != null ? pct(num(adsRes.ctr), 2) : "sem dado" },
-              { label: "Alcance somado", value: fmtNum(num(adsRes.alcance_somado)), hint: "soma entre campanhas" },
+              { label: "Investido", value: fmtBRL(obj?.gasto ?? num(adsRes.gasto)), hint: `${obj?.campanhas.length ?? adsRes.campanhas} campanhas` },
+              { label: "Conversas (campanhas de mensagem)", value: fmtNum(obj?.conversasMensagem ?? 0) },
+              { label: "Custo por conversa", value: obj?.custoPorConversaMensagem != null ? fmtBRL(obj.custoPorConversaMensagem) : "sem campanha de mensagem", hint: "só campanhas de mensagem" },
+              { label: "Impressões", value: fmtNum(num(adsRes.impressoes)), hint: adsRes.cpm != null ? `${fmtBRL(num(adsRes.cpm))} para aparecer mil vezes` : undefined },
+              { label: "Cliques no link", value: fmtNum(num(adsRes.cliques_link)), hint: adsRes.cpc != null ? `${fmtBRL(num(adsRes.cpc))} por clique` : undefined },
+              { label: "Cliques a cada 100 impressões", value: adsRes.ctr != null ? num(adsRes.ctr).toFixed(2).replace(".", ",") : "sem dado" },
+              { label: "Soma do alcance das campanhas", value: fmtNum(num(adsRes.alcance_somado)), hint: "a mesma pessoa pode contar em mais de uma" },
               { label: "Dias com gasto", value: fmtNum(num(adsRes.dias)) },
             ]}
           />
@@ -612,26 +567,26 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
           <Subtitulo>Conversas por dia</Subtitulo>
           <Linha valores={(ads.porDia ?? []).map((x: any) => num(x.conversas))} cor={GREEN} />
 
-          {ads.porObjetivo.length > 0 ? (
+          {obj && obj.grupos.length > 0 ? (
             <>
-              <Titulo dica="O objetivo escolhido na campanha é o que mais mexe no custo por conversa.">Resultado por objetivo</Titulo>
+              <Titulo dica="Cada objetivo tem o seu resultado. A última coluna responde só uma pergunta: quanto custou cada conversa vinda daquele objetivo.">Resultado por objetivo</Titulo>
               <Tabela
                 colunas={[
                   { h: "Objetivo", flex: 3 },
-                  { h: "Campanhas", flex: 1.4, alinhar: "right" },
-                  { h: "Investido", flex: 1.8, alinhar: "right" },
-                  { h: "Conversas", flex: 1.4, alinhar: "right" },
-                  { h: "Custo/conversa", flex: 1.8, alinhar: "right" },
+                  { h: "Campanhas", flex: 1.3, alinhar: "right" },
+                  { h: "Investido", flex: 1.7, alinhar: "right" },
+                  { h: "Custo por resultado", flex: 2.4, alinhar: "right" },
+                  { h: "Conversas", flex: 1.3, alinhar: "right" },
+                  { h: "Custo/conversa", flex: 1.7, alinhar: "right" },
                 ]}
-                linhas={[...ads.porObjetivo]
-                  .sort((a: any, b: any) => num(b.gasto) - num(a.gasto))
-                  .map((o: any) => [
-                    String(o.objetivo ?? "n/d").replace(/^OUTCOME_/, "").replace(/_/g, " ").toLowerCase(),
-                    String(o.campanhas),
-                    fmtBRL(num(o.gasto)),
-                    fmtNum(num(o.conversas)),
-                    o.custo_por_conversa != null ? fmtBRL(num(o.custo_por_conversa)) : "sem conversa",
-                  ])}
+                linhas={obj.grupos.map((g) => [
+                  GRUPOS[g.grupo].nome,
+                  String(g.campanhas),
+                  fmtBRL(g.gasto),
+                  g.custoPorResultado == null ? "sem resultado" : GRUPOS[g.grupo].porMil ? `${fmtBRL(g.custoPorResultado)} / mil vezes` : `${fmtBRL(g.custoPorResultado)} / ${GRUPOS[g.grupo].resultado}`,
+                  fmtNum(g.conversas),
+                  g.custoPorConversa != null ? fmtBRL(g.custoPorConversa) : "sem conversa",
+                ])}
               />
             </>
           ) : null}
@@ -642,7 +597,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
       {/* 6. Anúncios: diagnóstico por campanha */}
       {ads && diag.length > 0 ? (
         <Page size="A4" style={styles.page} wrap>
-          <Titulo dica="A régua é a mediana da própria conta no período, não benchmark de mercado. Campanha que rodou pouco fica como indeterminada.">Anúncios: diagnóstico por campanha</Titulo>
+          <Titulo dica="Cada campanha é comparada só com as campanhas do mesmo objetivo na própria conta (a campanha típica), não com benchmark de mercado. Campanha que rodou pouco fica como volume insuficiente.">Anúncios: diagnóstico por campanha</Titulo>
           <Tabela
             colunas={[
               { h: "Veredito", flex: 3 },
@@ -658,26 +613,24 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
                 String(g.n),
                 fmtBRL(g.gasto),
                 fmtNum(g.conv),
-                num(adsRes?.gasto) > 0 ? pct((g.gasto / num(adsRes.gasto)) * 100, 0) : "n/d",
+                obj && obj.gasto > 0 ? pct((g.gasto / obj.gasto) * 100, 0) : "n/d",
               ])}
           />
           <Subtitulo>Campanhas com maior investimento</Subtitulo>
           <Tabela
             colunas={[
               { h: "Campanha", flex: 4 },
-              { h: "Veredito", flex: 2.4 },
+              { h: "Objetivo", flex: 1.6 },
+              { h: "Veredito", flex: 2 },
               { h: "Investido", flex: 1.6, alinhar: "right" },
-              { h: "Conv.", flex: 1, alinhar: "right" },
-              { h: "Custo/conv.", flex: 1.6, alinhar: "right" },
-              { h: "Freq.", flex: 1, alinhar: "right" },
+              { h: "Custo por resultado", flex: 2.2, alinhar: "right" },
             ]}
-            linhas={diag.slice(0, 18).map((r: any) => [
+            linhas={diag.slice(0, 18).map((r) => [
               stripEmoji(String(r.campanha ?? "")).slice(0, 48),
+              GRUPOS[r.grupo].curto,
               { t: r.veredito, cor: corVeredito(r.veredito), negrito: true },
-              fmtBRL(num(r.gasto)),
-              fmtNum(num(r.conversas)),
-              r.custo_por_conversa != null ? fmtBRL(num(r.custo_por_conversa)) : "sem conv.",
-              r.frequencia != null ? num(r.frequencia).toFixed(1).replace(".", ",") : "n/d",
+              fmtBRL(r.gasto),
+              unidade(r),
             ])}
           />
           {diag.length > 18 ? <Text style={{ fontSize: 8, color: GRAY }}>Mostrando as 18 campanhas de maior investimento, de {diag.length} no período.</Text> : null}
@@ -804,18 +757,18 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
       <Page size="A4" style={styles.page} wrap>
         {temIg ? (
           <>
-            <Titulo dica={`${d.perguntas.length} pergunta(s) de pacientes nos comentários do período. A detecção de pergunta é uma regra simples de pontuação e palavra interrogativa.`}>Dúvidas dos pacientes</Titulo>
+            <Titulo dica={`${d.perguntas.length} pergunta(s) nos comentários do período. Só entra o assunto perguntado por 2 ou mais pessoas diferentes; emoji, @, link e divulgação são ignorados e nenhum comentário é citado.`}>Dúvidas dos pacientes</Titulo>
             {duvidas.length > 0 ? (
               <Tabela
                 colunas={[
-                  { h: "Dúvida mais representativa", flex: 6 },
-                  { h: "Pessoas", flex: 1.2, alinhar: "right" },
+                  { h: "Assunto da dúvida", flex: 6 },
+                  { h: "Pessoas diferentes", flex: 1.8, alinhar: "right" },
                 ]}
-                linhas={duvidas.map((c) => [stripEmoji(c.representative.text).slice(0, 130), String(c.count)])}
+                linhas={duvidas.map((c) => [tornarSeguro(c.tema).texto || "assunto omitido (nome de medicamento)", String(c.pessoas)])}
               />
             ) : (
               <Caixa>
-                <Text>Nenhuma pergunta se repetiu 2 ou mais vezes no período, então não há um tema único de dúvida para transformar em conteúdo.</Text>
+                <Text>Nenhum assunto foi perguntado por 2 ou mais pessoas diferentes no período, então não há uma dúvida comum para transformar em conteúdo.</Text>
               </Caixa>
             )}
           </>
