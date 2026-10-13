@@ -8,6 +8,7 @@ import { getClientFontes } from "@/lib/client-data";
 import { statusDoCliente, tomDaFonte, ddmm, diasDeAtraso, type LinhaFonte } from "@/lib/saude-fontes";
 import { motivoDaLinha, ROTULO_DONO, type Dono } from "@/lib/motivos";
 import { saudeDaFonte, CelulaSaude } from "@/components/source-health";
+import { useQualidadeDados } from "@/components/qualidade-dados";
 import { SeloDono } from "@/components/selo-dono";
 
 
@@ -243,6 +244,18 @@ function LinhaSaude({ clientId }: { clientId: string }) {
   );
 }
 
+// Contagem de "dado com erro" (qualidade_dados) do cliente, com os títulos no title.
+function ChipQualidade({ clientId }: { clientId: string }) {
+  const { data } = useQualidadeDados(clientId);
+  if (!data?.length) return null;
+  const altas = data.filter((p) => p.severidade === "alta").length;
+  return (
+    <div className="mt-1 text-xs font-semibold" style={{ color: altas ? "var(--crit)" : "var(--warn)" }} title={data.map((p) => p.titulo).join("\n")}>
+      {data.length} {data.length === 1 ? "dado com erro" : "dados com erro"}{altas ? ` · ${altas} afeta${altas === 1 ? "" : "m"} a leitura` : ""}
+    </div>
+  );
+}
+
 function AdminClientsPage() {
   const { data: clients, isLoading } = useQuery({
     queryKey: ["admin-clients"],
@@ -369,6 +382,7 @@ function AdminClientsPage() {
                           <div className="text-xs font-normal" style={{ color: "var(--text-dim)" }}>
                             {[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}
                           </div>
+                          <ChipQualidade clientId={c.id} />
                         </div>
                       </div>
                     </td>

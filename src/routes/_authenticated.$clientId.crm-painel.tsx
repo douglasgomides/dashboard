@@ -35,6 +35,7 @@ import {
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { SyncButton } from "@/components/sync-button";
 import { ListaLimitacoes } from "@/components/insight-card";
+import { QualidadeDados, BaseVivaCrm } from "@/components/qualidade-dados";
 import { ChecklistDados, FunilOndeQuebra, ProblemasPorTipo, useDiagnosticoComercial } from "@/components/comercial-diagnostico";
 
 // Nome de exibição do CRM — evita chamar tudo de "Kommo" quando o cliente é Clint.
@@ -327,9 +328,12 @@ function CrmPainelPage() {
 
   if (!m || m.total_leads === 0) {
     return (
+      <div className="space-y-4">
+      <QualidadeDados clientId={clientId} fonte="crm" titulo="Dados do CRM com erro" />
       <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
         Ainda sem leads sincronizados do {crmNome} pra esse cliente.
       </p>
+      </div>
     );
   }
 
@@ -347,6 +351,8 @@ function CrmPainelPage() {
 
   return (
     <div className="space-y-4">
+      {!ehRelatorio && <QualidadeDados clientId={clientId} fonte="crm" titulo="Dados do CRM com erro" />}
+      {!ehRelatorio && <BaseVivaCrm clientId={clientId} />}
       {(crmProvider === "kommo" || crmProvider === "clint" || crmProvider === "rdstation" || crmProvider === "flwchat") && !ehRelatorio && (
         <div className="flex justify-end">
           <SyncButton clientId={clientId} alvo="crm" />

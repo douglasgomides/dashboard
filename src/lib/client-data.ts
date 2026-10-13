@@ -652,3 +652,36 @@ export async function getPerguntasDeteccaoOriginal(clientId: string, periodo?: {
   const lidos = data ?? [];
   return { perguntas: perguntasDaDeteccaoOriginal(lidos, donos), lidos: lidos.length, donos, noLimite: lidos.length >= max, limite: max };
 }
+
+// ---- Qualidade dos dados (RPC qualidade_dados, migração 20261013230000) --------
+// O que está entrando errado, causa provável, como corrigir e quem corrige.
+export interface ProblemaDado {
+  id: string;
+  fonte: "crm" | "instagram" | "anuncios" | "atendimento" | "comentarios" | string;
+  severidade: "alta" | "media";
+  titulo: string;
+  evidencia: string;
+  causa: string;
+  correcao: string;
+  responsavel: string;
+  afeta: string;
+}
+
+export async function getQualidadeDados(clientId: string): Promise<ProblemaDado[]> {
+  const { data, error } = await (supabase as any).rpc("qualidade_dados", { p_client_id: clientId });
+  if (error) {
+    // Migração ainda não aplicada neste banco: sem lista, sem quebrar a tela.
+    if (error.code === "PGRST202" || /qualidade_dados/.test(error.message ?? "")) return [];
+    throw error;
+  }
+  return Array.isArray(data) ? (data as ProblemaDado[]) : [];
+}
+
+// Base viva x parada do CRM (crm_base_viva): só leads em aberto. Sem a função, devolve null.
+export interface BaseViva { abertos: number; vivos_30d: number; parados_90d: number; criados_30d: number }
+export async function getCrmBaseViva(clientId: string): Promise<BaseViva | null> {
+  const { data, error } = await (supabase as any).rpc("crm_base_viva", { p_client_id: clientId });
+  if (error) { if (error.code === "PGRST202" || /crm_base_viva/.test(error.message ?? "")) return null; throw error; }
+  const j = Array.isArray(data) ? data[0] : data;
+  return j && Number(j.abertos) > 0 ? { abertos: Number(j.abertos), vivos_30d: Number(j.vivos_30d), parados_90d: Number(j.parados_90d), criados_30d: Number(j.criados_30d) } : null;
+}

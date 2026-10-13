@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getMonthlyMetrics, getPostsForAnalytics, getAdsDiagnosticoPorObjetivo, getAdsPorDia, getWtsResumo, getCrmResumoPeriodo, getCrmLeadsPorDiaPeriodo, getClientFontes } from "@/lib/client-data";
 import { getResumoPeriodo } from "@/lib/audiencia";
 import { montarResultado } from "@/lib/resultado";
+import { useQualidadeDados, problemasParaInsights } from "@/components/qualidade-dados";
 
 // Leitura do período usada pela Home e por Oportunidades: as duas telas mostram
 // exatamente as mesmas recomendações, calculadas uma vez (React Query reaproveita).
@@ -26,6 +27,8 @@ export function useResultado(clientId: string, start: string, end: string) {
   const crm = useQuery({ queryKey: ["crm-resumo", clientId, start, fim], queryFn: () => getCrmResumoPeriodo(clientId, start, fim), ...opts });
   const leadsDia = useQuery({ queryKey: ["crm-leads-dia", clientId, start, fim], queryFn: () => getCrmLeadsPorDiaPeriodo(clientId, start, fim), ...opts });
 
+  const qualidade = useQualidadeDados(clientId);
+
   const r = useMemo(() => {
     if (!metricas.data) return null;
     return montarResultado({
@@ -42,8 +45,9 @@ export function useResultado(clientId: string, start: string, end: string) {
       crm: crm.data ? { novos: Number(crm.data.novos), ganhos: Number(crm.data.ganhos) } : null,
       leadsPorDia: leadsDia.data?.length ? leadsDia.data.map((l) => ({ dia: l.dia, total: Number(l.total) })) : fontes.data?.tem_crm ? [] : undefined,
       fontes: fontes.data ?? null,
+      problemasDados: problemasParaInsights(qualidade.data ?? []),
     });
-  }, [metricas.data, anterior.data, posts.data, periodoIg.data, adsDiag.data, adsDia.data, wts.data, crm.data, leadsDia.data, fontes.data, start, fim, hoje]);
+  }, [qualidade.data, metricas.data, anterior.data, posts.data, periodoIg.data, adsDiag.data, adsDia.data, wts.data, crm.data, leadsDia.data, fontes.data, start, fim, hoje]);
 
-  return { r, hoje, fim, diasPeriodo, carregando: metricas.isLoading, metricas, anterior, posts, periodoIg, fontes };
+  return { r, hoje, fim, diasPeriodo, carregando: metricas.isLoading, metricas, anterior, posts, periodoIg, fontes, qualidade };
 }

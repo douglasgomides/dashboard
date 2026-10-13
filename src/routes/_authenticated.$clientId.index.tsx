@@ -19,6 +19,7 @@ import { useResultado } from "@/hooks/use-resultado";
 import { InsightCard, ListaLimitacoes, SeloStatus, BotaoAcao, OQueE, COR_TOM } from "@/components/insight-card";
 import { NextBestActionCard, NextBestActionPanel, usePainelNBA } from "@/components/next-best-action";
 import { ResumoDoMes } from "@/components/resumo-do-mes";
+import { QualidadeDados } from "@/components/qualidade-dados";
 import { fmtFormatKey } from "@/lib/report-metrics";
 import { analyzeGrowth } from "@/lib/hub-conteudo";
 import { Link } from "@tanstack/react-router";
@@ -461,6 +462,9 @@ function MonthlyOverview() {
           ))}
         </div>
       )}
+
+      {/* Dado com erro na origem: muda a leitura de tudo abaixo, por isso vem antes. */}
+      <QualidadeDados clientId={clientId} compacto />
 
       {/* ===== CAMADA 1: primeira dobra ===== */}
       <section className="space-y-4" aria-label="Visão executiva">

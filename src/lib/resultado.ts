@@ -28,6 +28,7 @@ export interface EntradaResultado {
   crm?: { novos: number; ganhos: number } | null;
   leadsPorDia?: { dia: string; total: number }[];
   fontes?: { tem_instagram?: boolean; tem_anuncios?: boolean; tem_crm?: boolean; tem_atendimento?: boolean } | null;
+  problemasDados?: Insight[]; // dado com erro (qualidade_dados); ids começam com "dado-"
 }
 
 export interface Metrica {
@@ -369,6 +370,10 @@ export function montarResultado(e: EntradaResultado): Resultado {
       responsavel: "equipe_hub",
     });
 
+  // Dado com erro na origem (CRM parado, sem origem, fonte sem atualizar...): entra
+  // como ação operacional, mas não pesa no veredito do período (não é resultado).
+  insights.push(...(e.problemasDados ?? []));
+
   // Regra e fonte para os insights que vêm de outros módulos (anúncios, cruzamento).
   for (const i of insights) {
     i.fonte ??= FONTE_AREA[i.area];
@@ -391,7 +396,7 @@ export function montarResultado(e: EntradaResultado): Resultado {
 
   // Veredito: pelo saldo dos insights com confiança não baixa.
   const pesos = { alto: 3, medio: 2, baixo: 1 } as const;
-  const confiaveis = ordenados.filter((i) => i.confianca !== "baixa");
+  const confiaveis = ordenados.filter((i) => i.confianca !== "baixa" && !i.id.startsWith("dado-"));
   // As métricas com referência de mercado também contam (1 ponto cada), para o
   // veredito bater com as cores que a pessoa vê nos cards.
   const bom = confiaveis.filter((i) => i.tom === "bom").reduce((s, i) => s + pesos[i.impacto], 0) + metricas.filter((m) => m.status === "bom").length;
@@ -417,8 +422,8 @@ export function montarResultado(e: EntradaResultado): Resultado {
     resumo.push(`${brl(e.adsDiag.gasto)} investidos em anúncio${e.adsDiag.conversasMensagem ? `; os anúncios de mensagem trouxeram ${int(e.adsDiag.conversasMensagem)} conversas` : ""}.`);
   if (e.crm && e.crm.novos > 0) resumo.push(`${int(e.crm.novos)} novos contatos entraram no CRM${e.crm.ganhos ? ` e ${int(e.crm.ganhos)} viraram paciente/venda` : ""}.`);
   if (n(e.wts?.atendimentos) > 0) resumo.push(`${int(n(e.wts?.atendimentos))} atendimentos no WhatsApp${n(e.wts?.espera_mediana_seg) > 0 ? `, com ${dur(n(e.wts?.espera_mediana_seg))} de espera típica pela primeira resposta` : ""}.`);
-  const melhor = ordenados.find((i) => i.tom === "bom" && i.confianca !== "baixa");
-  const pior = ordenados.find((i) => i.tom !== "bom" && i.confianca !== "baixa");
+  const melhor = confiaveis.find((i) => i.tom === "bom");
+  const pior = confiaveis.find((i) => i.tom !== "bom");
   if (melhor) resumo.push(`Destaque: ${melhor.titulo}`);
   if (pior) resumo.push(`Ponto de atenção: ${pior.titulo}`);
 
