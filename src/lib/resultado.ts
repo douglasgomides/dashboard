@@ -115,6 +115,23 @@ export function medirCobertura(e: EntradaResultado): Cobertura {
 }
 
 // ---------- adaptação dos achados antigos para o contrato de Insight ----------
+const REGRA_ACHADO: Record<string, string> = {
+  ritmo: "Compara o alcance diário típico (mediana) do período com o período anterior do mesmo tamanho, quando ele tem dado em 80% ou mais dos dias; sem isso, compara a 1ª com a 2ª metade do período. Precisa de 10 dias com dado. Menos de 10% de diferença = estável; 10% a 25% = leve; 25% ou mais = relevante.",
+  concentracao: "Um único post responde por 40% ou mais do alcance somado dos posts do período (mínimo de 5 posts com alcance).",
+  formato: "Só formatos com 3 ou mais posts. Compara o alcance típico (mediana) e a parte de quem viu que salvou. Diferença de salvamento só é afirmada com folga de 30%.",
+  seguir: "Seguidores ganhos pelo post ÷ pessoas alcançadas pelo post, em posts com 200+ de alcance (mínimo de 5). O Instagram não informa esse dado para Reels.",
+  constancia: "Maior intervalo entre dois posts seguidos do período igual ou maior que 7 dias.",
+  atendimento: "Espera típica (mediana) até a 1ª resposta no WhatsApp: até 5 min = bom; 30 min ou mais = ruim (HBR 2011; Opinion Box/Mobile Time).",
+  roteamento: "30% ou mais das conversas do período sem departamento/equipe.",
+};
+const FONTE_AREA: Record<string, string> = {
+  conteudo: "Instagram (Meta Graph API / Windsor): métricas diárias da conta e por post",
+  anuncios: "Meta Ads: gasto, impressões, cliques no link, conversas e leads por campanha e dia",
+  comercial: "WhatsApp (WTS Chat) e CRM da clínica",
+  resumo: "Instagram, Meta Ads, CRM e WhatsApp",
+  ideias: "Comentários do Instagram",
+};
+
 const META_ACHADO: Record<string, { area: Area; responsavel: Responsavel; rota?: string; botao?: string }> = {
   ritmo: { area: "conteudo", responsavel: "social_media", rota: "/$clientId/posts", botao: "Ver posts do período" },
   concentracao: { area: "conteudo", responsavel: "social_media", rota: "/$clientId/ideias", botao: "Ver ideias de série" },
@@ -157,6 +174,8 @@ function paraInsight(a: Achado, e: EntradaResultado, cob: Cobertura): Insight {
     acao: a.acao ? { texto: a.acao.texto, rota: m.rota, botao: m.botao } : undefined,
     responsavel: m.responsavel,
     risco: riscos.join(" ") || undefined,
+    regra: REGRA_ACHADO[a.id],
+    fonte: FONTE_AREA[m.area],
   };
 }
 
@@ -344,6 +363,16 @@ export function montarResultado(e: EntradaResultado): Resultado {
       acao: { texto: `Conectar o ${faltaFonte.join(" e o ")} da clínica ao painel.`, rota: "/$clientId/crm-painel", botao: `Ver como conectar o ${faltaFonte[0]}` },
       responsavel: "equipe_hub",
     });
+
+  // Regra e fonte para os insights que vêm de outros módulos (anúncios, cruzamento).
+  for (const i of insights) {
+    i.fonte ??= FONTE_AREA[i.area];
+    if (!i.regra && i.area === "anuncios")
+      i.regra = "Cada campanha é medida pelo resultado do próprio objetivo e comparada com a campanha típica (mediana) do mesmo objetivo: até 0,6x o custo típico = Escalar; 2x ou mais = Cortar (mesma régua de fadiga da Meta). Mínimo de 3 campanhas com volume no objetivo.";
+    if (!i.regra && i.id.startsWith("cruz-"))
+      i.regra = "Leads do CRM por dia comparados com o engajamento e o gasto em anúncio dos 3 dias anteriores, sem o efeito do dia da semana (correlação de Spearman; 0,3 ou mais = relação real). Mínimo de 21 dias com dado e 20 leads. Mostra que as séries andam juntas, não que uma causa a outra.";
+    if (i.id.startsWith("cruz-")) i.fonte = "CRM da clínica + Instagram + Meta Ads";
+  }
 
   const ordenados = ordenarPorPrioridade(insights);
   const comAcao = ordenados.filter((i) => i.acao);

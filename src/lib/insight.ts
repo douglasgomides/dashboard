@@ -14,6 +14,11 @@
 // - sem dado suficiente, não vira insight: vira Limitacao.
 
 export type Area = "resumo" | "conteudo" | "anuncios" | "comercial" | "ideias";
+
+/** Categoria mostrada no card de Próxima Melhor Ação. */
+export function categoriaDaArea(a: Area): "Social" | "Comercial" | "Operacional" {
+  return a === "conteudo" || a === "ideias" ? "Social" : a === "anuncios" || a === "comercial" ? "Comercial" : "Operacional";
+}
 export type Tom = "bom" | "atencao" | "ruim";
 export type Confianca = "alta" | "media" | "baixa";
 export type Impacto = "alto" | "medio" | "baixo";
@@ -33,6 +38,9 @@ export interface Insight {
   acao?: { texto: string; rota?: string; botao?: string }; // botao: rótulo específico ("Ver as 3 campanhas para cortar")
   responsavel: Responsavel;
   risco?: string; // limitação do dado que pode mudar a conclusão
+  regra?: string; // a regra determinística que gerou o insight (limites e amostra mínima)
+  fonte?: string; // de onde vêm os dados (ex.: "Instagram (Meta Graph API) + CRM Kommo")
+  etapas?: string[]; // passos de execução sugeridos
 }
 
 export interface Limitacao {
