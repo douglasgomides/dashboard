@@ -63,7 +63,7 @@ export function InsightCard({ insight: i, clientId, aberto: abertoInicial = fals
   const [aberto, setAberto] = useState(abertoInicial);
   const c = COR_TOM[i.tom];
   return (
-    <article className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)", borderLeft: `4px solid ${c.borda}` }}>
+    <article className="min-w-0 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)", borderLeft: `4px solid ${c.borda}` }}>
       <div className="flex flex-wrap items-center gap-1.5">
         <SeloStatus tom={i.tom} />
         <Chip icone={Gauge}>{ROTULO_CONFIANCA[i.confianca]}</Chip>
@@ -102,13 +102,13 @@ export function InsightCard({ insight: i, clientId, aberto: abertoInicial = fals
         type="button"
         onClick={() => setAberto(!aberto)}
         aria-expanded={aberto}
-        className="mt-2 inline-flex min-h-[36px] items-center gap-1 text-xs font-medium"
+        className="mt-2 inline-flex min-h-[44px] items-center gap-1 text-[13px] font-medium min-[821px]:min-h-[36px] min-[821px]:text-xs"
         style={{ color: "var(--text-faint)" }}
       >
         <ChevronDown size={14} style={{ transform: aberto ? "rotate(180deg)" : undefined }} /> {aberto ? "Esconder" : "Ver"} evidência e limitações
       </button>
       {aberto && (
-        <dl className="mt-1 space-y-2 text-xs leading-relaxed" style={{ color: "var(--text-dim)" }}>
+        <dl className="mt-1 space-y-2 text-[13px] leading-relaxed sm:text-xs" style={{ color: "var(--text-dim)" }}>
           {compacto && (
             <div>
               <dt className="font-semibold" style={{ color: "var(--text)" }}>Por que aconteceu</dt>
@@ -167,7 +167,7 @@ export function ListaLimitacoes({ itens, titulo = "O que o painel ainda não con
 export function OQueE({ children }: { children: React.ReactNode }) {
   return (
     <details className="text-xs" style={{ color: "var(--text-dim)" }}>
-      <summary className="inline-flex min-h-[32px] cursor-pointer list-none items-center gap-1" style={{ color: "var(--text-faint)" }}>
+      <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center gap-1 min-[821px]:min-h-[32px]" style={{ color: "var(--text-faint)" }}>
         <Info size={12} aria-hidden /> O que é isso?
       </summary>
       <p className="mt-1 leading-relaxed">{children}</p>

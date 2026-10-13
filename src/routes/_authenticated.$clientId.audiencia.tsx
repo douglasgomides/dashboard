@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { LEGENDA } from "@/components/grafico";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { getClientFontes, getMonthlyMetrics, getPostsForAnalytics } from "@/lib/client-data";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
@@ -276,15 +277,15 @@ function Interacoes({ a, clientId, start, end }: { a: Audiencia; clientId: strin
         {dias.length === 0 ? (
           <p className="note" style={{ marginTop: 10 }}>Nenhum dia do período tem interações gravadas.</p>
         ) : (
-          <div style={{ marginTop: 10, overflowX: "auto" }}>
-            <div style={{ minWidth: Math.max(320, dias.length * 22) }}>
-              <ResponsiveContainer width="100%" height={260}>
+          <div style={{ marginTop: 10 }}>
+            <div className="grafico-caixa" style={{ height: 260 }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dias}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="dia" tick={{ fontSize: 10 }} stroke="var(--text-faint)" interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 10 }} stroke="var(--text-faint)" />
+                  <XAxis dataKey="dia" tick={{ fontSize: 11 }} stroke="var(--text-faint)" interval="preserveStartEnd" minTickGap={20} />
+                  <YAxis tick={{ fontSize: 11 }} stroke="var(--text-faint)" width={40} />
                   <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Legend {...LEGENDA} />
                   <Bar dataKey="Curtidas" stackId="i" fill="var(--accent)" />
                   <Bar dataKey="Comentários" stackId="i" fill="var(--ai, #8b7cf6)" />
                   <Bar dataKey="Salvamentos" stackId="i" fill="var(--good)" />

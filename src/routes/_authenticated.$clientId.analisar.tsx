@@ -219,7 +219,7 @@ function AnalisarPage() {
               }
             />
             <div style={{ overflowX: "auto", marginTop: 10 }}>
-              <table className="t">
+              <table className="t empilha">
                 <thead>
                   <tr>
                     <th className="l">Etapa</th>
@@ -243,14 +243,14 @@ function AnalisarPage() {
                           {e.status_name}
                           {paineis.length > 1 && <span className="sub2">{e.pipeline_name}</span>}
                         </td>
-                        <td>{fmtN(e.total)}</td>
-                        <td>{e.valor > 0 ? fmtBRL(e.valor) : "—"}</td>
-                        <td>
+                        <td data-label="Cards">{fmtN(e.total)}</td>
+                        <td data-label="Valor">{e.valor > 0 ? fmtBRL(e.valor) : "—"}</td>
+                        <td data-label="Hoje conta como">
                           {e.total === 0
                             ? "—"
                             : `${fmtN(e.ganhos)} ganho · ${fmtN(e.perdidos)} perdido · ${fmtN(e.abertos)} aberto`}
                         </td>
-                        <td className="l">
+                        <td data-label="Significa" className="l">
                           <select
                             value={atual}
                             disabled={gravando}
@@ -336,7 +336,7 @@ function SecaoKpi({
       )}
       {[...porConexao.entries()].map(([conexao, grupo]) => (
         <div key={conexao} style={{ overflowX: "auto", marginTop: 10 }}>
-          <table className="t">
+          <table className="t empilha">
             <thead>
               <tr>
                 <th className="l">Funil · etapa</th>
@@ -352,13 +352,13 @@ function SecaoKpi({
                     {e.status_name}
                     <span className="sub2">{e.pipeline_name}</span>
                   </td>
-                  <td>{fmtN(e.total)}</td>
+                  <td data-label="Cards">{fmtN(e.total)}</td>
                   {(["consulta_agendada", "em_atendimento"] as const).map((kpi) => {
                     const marcada = kpi === "consulta_agendada" ? e.consulta_agendada : e.em_atendimento;
                     const padrao = kpi === "consulta_agendada" ? e.padrao_consulta : e.padrao_atendimento;
                     const origem = kpi === "consulta_agendada" ? e.origem_consulta : e.origem_atendimento;
                     return (
-                      <td key={kpi}>
+                      <td data-label={kpi === "consulta_agendada" ? "Consulta agendada" : "Em atendimento"} key={kpi}>
                         <input
                           type="checkbox"
                           checked={marcada}

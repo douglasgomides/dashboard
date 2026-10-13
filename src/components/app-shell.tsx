@@ -1,0 +1,316 @@
+import { useEffect, useState, type ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
+import { CalendarDays, ChevronDown, Menu, Search, ShieldCheck, X, MoreHorizontal } from "lucide-react";
+import { useTheme } from "@/hooks/use-theme";
+import { LogoutButton } from "@/components/logout-button";
+import { ClientAvatar } from "@/components/client-avatar";
+import { DateRangePicker, rotuloPeriodo } from "@/components/date-range-picker";
+import type { DateRangeState } from "@/lib/date-range";
+import {
+  areaDoCaminho,
+  areasVisiveis,
+  avancadoVisivel,
+  subcaminho,
+  type AreaVisivel,
+  type NavTab,
+  type Visibilidade,
+} from "@/lib/nav";
+
+// Casca do Hub: barra lateral (computador) ou cabeçalho compacto + barra
+// inferior (celular), abas da área e o conteúdo. Não busca dado nenhum: quem
+// usa passa cliente, visibilidade e período. Assim a mesma casca serve à rota
+// real e à página de QA (src/routes/qa.layout.tsx, só em desenvolvimento).
+
+export interface ShellClient {
+  name: string;
+  specialty?: string | null;
+  instagram_handle?: string | null;
+  avatar_url?: string | null;
+  cfm_score_status?: string | null;
+}
+
+export interface AppShellProps {
+  clientId: string;
+  client: ShellClient | undefined;
+  pathname: string;
+  dateRange: DateRangeState;
+  onDateRange: (next: DateRangeState) => void;
+  vis: Visibilidade;
+  /** Selo de frescura completo (computador e folha do período). */
+  frescor?: ReactNode;
+  /** Selo de frescura curto (cabeçalho do celular). */
+  frescorCompacto?: ReactNode;
+  onBuscarCliente?: () => void;
+  children: ReactNode;
+}
+
+function TabLink({ tab, clientId, dateRange, className, children, ativo }: { tab: NavTab; clientId: string; dateRange: DateRangeState; className?: string; children: ReactNode; ativo: boolean }) {
+  // Estilo do item ativo vem de data-on (a área fica acesa em qualquer aba dela).
+  // O aria-current fica com o Link, só na tela exata.
+  const comum = { className, "data-on": ativo ? "" : undefined, activeOptions: { exact: true, includeSearch: false } };
+  if (tab.absoluto) {
+    return (
+      <Link to={tab.path as never} {...comum}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <Link to={`/$clientId${tab.path}` as never} params={{ clientId } as never} search={dateRange as never} {...comum}>
+      {children}
+    </Link>
+  );
+}
+
+/** Primeira aba visível da área: é para onde o item da área leva. */
+function primeira(a: AreaVisivel): NavTab {
+  return a.visiveis[0];
+}
+
+export function BottomSheet({ aberto, onFechar, titulo, children }: { aberto: boolean; onFechar: () => void; titulo: string; children: ReactNode }) {
+  useEffect(() => {
+    if (!aberto) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onFechar();
+    document.addEventListener("keydown", onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [aberto, onFechar]);
+  if (!aberto) return null;
+  return (
+    <div className="sheet" role="dialog" aria-modal="true" aria-label={titulo}>
+      <div className="sheet-fundo" onClick={onFechar} />
+      <div className="sheet-caixa">
+        <div className="sheet-alca" aria-hidden />
+        <div className="sheet-topo">
+          <h2>{titulo}</h2>
+          <button type="button" className="icobtn" onClick={onFechar} aria-label="Fechar">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="sheet-corpo">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function TemaBotoes() {
+  const { tema, setTema } = useTheme();
+  return (
+    <div className="themes" role="group" aria-label="Aparência">
+      <button type="button" aria-pressed={tema === "light"} onClick={() => setTema("light")}>
+        Claro
+      </button>
+      <button type="button" aria-pressed={tema === "dark"} onClick={() => setTema("dark")}>
+        Escuro
+      </button>
+    </div>
+  );
+}
+
+/** Abas da área atual. No celular viram um controle segmentado que rola de lado. */
+export function AreaTabs({ area, sub, clientId, dateRange }: { area: AreaVisivel | undefined; sub: string; clientId: string; dateRange: DateRangeState }) {
+  if (!area || area.visiveis.length < 2) return null;
+  return (
+    <nav className="areatabs" aria-label={`Telas de ${area.label}`}>
+      <div className="areatabs-trilho">
+        {area.visiveis.map((t) => (
+          <TabLink key={t.path} tab={t} clientId={clientId} dateRange={dateRange} ativo={t.path === sub}>
+            {t.label}
+          </TabLink>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+export function AppShell({ clientId, client, pathname, dateRange, onDateRange, vis, frescor, frescorCompacto, onBuscarCliente, children }: AppShellProps) {
+  const sub = subcaminho(pathname, clientId);
+  const ativa = areaDoCaminho(sub);
+  const areas = areasVisiveis(vis);
+  const avancado = avancadoVisivel(vis);
+  const area = areas.find((a) => a.id === ativa);
+  const naAvancado = ativa === "mais";
+
+  const [avancadoAberto, setAvancadoAberto] = useState(naAvancado);
+  const [mais, setMais] = useState(false);
+  const [periodo, setPeriodo] = useState(false);
+
+  // Trocar de tela fecha as folhas do celular.
+  useEffect(() => {
+    setMais(false);
+  }, [pathname]);
+  useEffect(() => {
+    if (naAvancado) setAvancadoAberto(true);
+  }, [naAvancado]);
+
+  const nome = client?.name ?? "Carregando…";
+  const linhaInfo = [client?.specialty, client?.instagram_handle ? `@${client.instagram_handle}` : null].filter(Boolean).join(" · ");
+  const cfm = client?.cfm_score_status === "verde" && (
+    <span className="hchip good" title="Status definido pela equipe no cadastro do cliente (campo cfm_score_status). Não é uma verificação automática das publicações.">
+      <ShieldCheck /> CFM em conformidade
+    </span>
+  );
+
+  const listaAvancado = avancado.map((t) => (
+    <TabLink key={t.path} tab={t} clientId={clientId} dateRange={dateRange} ativo={!t.absoluto && t.path === sub}>
+      <t.Icone aria-hidden />
+      <span>{t.label}</span>
+    </TabLink>
+  ));
+
+  return (
+    <div className="app">
+      {/* ===== Computador: barra lateral ===== */}
+      <aside aria-label="Menu principal">
+        <div className="brand">
+          <span className="logo">
+            <i />
+          </span>
+          <span>Intelligence Hub</span>
+        </div>
+        {onBuscarCliente && (
+          <button type="button" className="kbar" onClick={onBuscarCliente}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <Search size={15} /> Buscar cliente…
+            </span>
+            <kbd>Ctrl K</kbd>
+          </button>
+        )}
+        <nav className="side areas">
+          {areas.map((a) => (
+            <TabLink key={a.id} tab={primeira(a)} clientId={clientId} dateRange={dateRange} ativo={a.id === ativa}>
+              <a.Icone aria-hidden />
+              <span className="area-txt">
+                <span>{a.label}</span>
+                <small>{a.descricao}</small>
+              </span>
+            </TabLink>
+          ))}
+          {avancado.length > 0 && (
+            <div className="avancado">
+              <button type="button" aria-expanded={avancadoAberto} onClick={() => setAvancadoAberto((v) => !v)} className="avancado-btn">
+                <span>Avançado</span>
+                <ChevronDown size={16} aria-hidden style={{ transform: avancadoAberto ? "rotate(180deg)" : undefined, marginLeft: "auto" }} />
+              </button>
+              {avancadoAberto && <div className="avancado-lista">{listaAvancado}</div>}
+            </div>
+          )}
+        </nav>
+        <div className="side-foot">
+          <TemaBotoes />
+          <LogoutButton className="text-sm text-left min-h-[36px]" />
+          <span>Intelligence Hub · Doctor Creator</span>
+        </div>
+      </aside>
+
+      <div className="mainwrap">
+        {/* ===== Celular: cabeçalho compacto e fixo ===== */}
+        <header className="mhead">
+          <div className="mhead-linha">
+            <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={32} />
+            <div className="mhead-nome">
+              <b>{nome}</b>
+              {frescorCompacto}
+            </div>
+            <button type="button" className="periodo-chip" onClick={() => setPeriodo(true)} aria-label={`Período: ${rotuloPeriodo(dateRange)}. Trocar período`}>
+              <CalendarDays size={16} aria-hidden />
+              <span>{rotuloPeriodo(dateRange)}</span>
+            </button>
+          </div>
+          <AreaTabs area={area} sub={sub} clientId={clientId} dateRange={dateRange} />
+        </header>
+
+        {/* ===== Computador: cabeçalho ===== */}
+        <div className="top">
+          <div className="who">
+            <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={46} />
+            <div style={{ minWidth: 0 }}>
+              <h1>{nome}</h1>
+              {linhaInfo && <p>{linhaInfo}</p>}
+            </div>
+          </div>
+          {cfm}
+          {frescor}
+          <span className="spacer" />
+          <DateRangePicker value={dateRange} onChange={onDateRange} />
+        </div>
+        <div className="dtabs">
+          <AreaTabs area={area} sub={sub} clientId={clientId} dateRange={dateRange} />
+        </div>
+
+        {(area || naAvancado) && (
+          <p className="areadesc">
+            <b>{naAvancado ? "Avançado" : area!.label}</b>
+            <span>{naAvancado ? "Telas de uso da equipe" : area!.descricao}</span>
+          </p>
+        )}
+
+        {children}
+      </div>
+
+      {/* ===== Celular: barra inferior com as 5 áreas + Mais ===== */}
+      <nav className="bottomnav" aria-label="Áreas">
+        {areas.map((a) => (
+          <TabLink key={a.id} tab={primeira(a)} clientId={clientId} dateRange={dateRange} ativo={a.id === ativa}>
+            <a.Icone aria-hidden />
+            <span>{a.label}</span>
+          </TabLink>
+        ))}
+        <button type="button" onClick={() => setMais(true)} data-on={naAvancado ? "" : undefined} aria-haspopup="dialog">
+          {naAvancado ? <MoreHorizontal aria-hidden /> : <Menu aria-hidden />}
+          <span>Mais</span>
+        </button>
+      </nav>
+
+      <BottomSheet aberto={periodo} onFechar={() => setPeriodo(false)} titulo="Período">
+        <DateRangePicker
+          variante="lista"
+          value={dateRange}
+          onChange={(next) => {
+            onDateRange(next);
+            if (next.preset !== "personalizado") setPeriodo(false);
+          }}
+        />
+        {frescor && <div className="sheet-frescor">{frescor}</div>}
+      </BottomSheet>
+
+      <BottomSheet aberto={mais} onFechar={() => setMais(false)} titulo="Mais">
+        <div className="mais-cliente">
+          <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={40} />
+          <div style={{ minWidth: 0 }}>
+            <b>{nome}</b>
+            {linhaInfo && <p>{linhaInfo}</p>}
+          </div>
+        </div>
+        {cfm && <div style={{ marginBottom: 12 }}>{cfm}</div>}
+        {onBuscarCliente && (
+          <button
+            type="button"
+            className="mais-item"
+            onClick={() => {
+              setMais(false);
+              onBuscarCliente();
+            }}
+          >
+            <Search aria-hidden /> <span>Trocar de cliente</span>
+          </button>
+        )}
+        {avancado.length > 0 && (
+          <>
+            <div className="mais-lbl">Avançado</div>
+            <nav className="mais-lista" aria-label="Avançado">
+              {listaAvancado}
+            </nav>
+          </>
+        )}
+        <div className="mais-lbl">Aparência</div>
+        <TemaBotoes />
+        <LogoutButton className="mais-item mais-sair" />
+      </BottomSheet>
+    </div>
+  );
+}

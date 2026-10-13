@@ -1,11 +1,26 @@
 import { RANGE_PRESETS, resolveDateRange, type DateRangeState } from "@/lib/date-range";
 
+export function rotuloPeriodo(value: DateRangeState): string {
+  if (value.preset === "personalizado") {
+    const r = resolveDateRange(value);
+    const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+    return `${dm(r.start)} a ${dm(r.end)}`;
+  }
+  return RANGE_PRESETS.find((p) => p.value === value.preset)?.label ?? "Período";
+}
+
+const CAMPO = "min-h-[44px] rounded-lg border px-3 text-base min-[821px]:min-h-[36px] min-[821px]:rounded-md min-[821px]:px-2 min-[821px]:text-sm";
+
+// variante "lista": usada na folha de baixo do celular — cada período é um botão
+// grande (alvo de toque de 44px) em vez de um <select> pequeno.
 export function DateRangePicker({
   value,
   onChange,
+  variante = "inline",
 }: {
   value: DateRangeState;
   onChange: (next: DateRangeState) => void;
+  variante?: "inline" | "lista";
 }) {
   const resolved = resolveDateRange(value);
 
@@ -34,6 +49,70 @@ export function DateRangePicker({
     }
   }
 
+  const sobre = (
+    <details className="text-[11px] leading-snug" style={{ color: "var(--text-faint)" }}>
+      <summary className="flex min-h-[44px] cursor-pointer select-none items-center py-1 min-[821px]:block min-[821px]:min-h-0">Sobre o período</summary>
+      Se um período não filtrar ou vier vazio, a conta do Meta pode ter sido conectada ao dashboard há pouco — ainda
+      não há histórico completo desse intervalo.
+    </details>
+  );
+
+  if (variante === "lista") {
+    return (
+      <div className="flex flex-col gap-2">
+        <div role="radiogroup" aria-label="Período" className="grid grid-cols-2 gap-2">
+          {RANGE_PRESETS.map((p) => {
+            const sel = value.preset === p.value;
+            return (
+              <button
+                key={p.value}
+                type="button"
+                role="radio"
+                aria-checked={sel}
+                onClick={() => handlePresetChange(p.value)}
+                className="min-h-[48px] rounded-xl border px-3 text-left text-[15px]"
+                style={{
+                  borderColor: sel ? "var(--accent)" : "var(--border)",
+                  background: sel ? "color-mix(in srgb, var(--accent) 12%, var(--surface))" : "var(--surface)",
+                  fontWeight: sel ? 650 : 400,
+                }}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+        {value.preset === "personalizado" && (
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex flex-col gap-1 text-xs" style={{ color: "var(--text-faint)" }}>
+              De
+              <input
+                type="date"
+                value={value.from ?? resolved.start}
+                max={value.to ?? resolved.end}
+                onChange={(e) => mudarDatas({ from: e.target.value })}
+                className={CAMPO}
+                style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs" style={{ color: "var(--text-faint)" }}>
+              Até
+              <input
+                type="date"
+                value={value.to ?? resolved.end}
+                min={value.from ?? resolved.start}
+                onChange={(e) => mudarDatas({ to: e.target.value })}
+                className={CAMPO}
+                style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+              />
+            </label>
+          </div>
+        )}
+        {sobre}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-1">
     <div className="flex flex-wrap items-center gap-2">
@@ -43,7 +122,8 @@ export function DateRangePicker({
       <select
         value={value.preset}
         onChange={(e) => handlePresetChange(e.target.value as DateRangeState["preset"])}
-        className="rounded-md border px-2 py-1.5 text-sm"
+        className={CAMPO}
+        aria-label="Período"
         style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
       >
         {RANGE_PRESETS.map((p) => (
@@ -59,7 +139,7 @@ export function DateRangePicker({
             value={value.from ?? resolved.start}
             max={value.to ?? resolved.end}
             onChange={(e) => mudarDatas({ from: e.target.value })}
-            className="rounded-md border px-2 py-1.5 text-sm"
+            className={CAMPO}
             style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
           />
           <span className="text-xs" style={{ color: "var(--text-faint)" }}>
@@ -70,17 +150,13 @@ export function DateRangePicker({
             value={value.to ?? resolved.end}
             min={value.from ?? resolved.start}
             onChange={(e) => mudarDatas({ to: e.target.value })}
-            className="rounded-md border px-2 py-1.5 text-sm"
+            className={CAMPO}
             style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
           />
         </>
       )}
     </div>
-      <details className="text-[11px] leading-snug" style={{ color: "var(--text-faint)" }}>
-        <summary className="cursor-pointer select-none py-1">Sobre o período</summary>
-        Se um período não filtrar ou vier vazio, a conta do Meta pode ter sido conectada ao dashboard há pouco — ainda
-        não há histórico completo desse intervalo.
-      </details>
+      {sobre}
     </div>
   );
 }

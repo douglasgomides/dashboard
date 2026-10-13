@@ -61,6 +61,7 @@ function KanbanBoard({ pipelineId, pipelineName, rows }: { pipelineId: string; p
           </span>
         </div>
       </div>
+      <p className="rola-aviso px-4 pt-3" style={{ marginBottom: 0 }}>Arraste para o lado para ver todas as etapas →</p>
       <div className="flex gap-3 overflow-x-auto p-4">
         {rows.map((r) => {
           const state = classify(r, maxTotal);

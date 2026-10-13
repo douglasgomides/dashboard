@@ -6,7 +6,9 @@ export function MapaDeCalor({ mapa }: { mapa: number[][] }) {
   const max = Math.max(1, ...valores);
   const min = Math.min(...valores);
   return (
-    <div style={{ overflowX: "auto" }}>
+    <>
+    <p className="rola-aviso">Arraste para o lado para ver as 24 horas →</p>
+    <div className="rola-x">
       <div style={{ minWidth: 560, display: "grid", gridTemplateColumns: "40px repeat(24, 1fr)", gap: 2, fontSize: 10.5, color: "var(--muted)" }}>
         <span />
         {Array.from({ length: 24 }, (_, h) => (
@@ -19,6 +21,7 @@ export function MapaDeCalor({ mapa }: { mapa: number[][] }) {
         ))}
       </div>
     </div>
+    </>
   );
 }
 
