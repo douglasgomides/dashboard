@@ -1,19 +1,30 @@
 // Diagnóstico de anúncios que respeita o objetivo da campanha.
 //
-// O diagnóstico antigo (RPC ads_diagnostico) julgava TODA campanha pelo custo
-// por conversa de WhatsApp. Campanha de tráfego, alcance ou post impulsionado
-// saía "Sem tração" por definição e entrava no "desperdício" — e era a maior
-// parte da verba (LINK_CLICKS concentra o gasto de quase todos os clientes).
+// O diagnóstico antigo (RPC ads_diagnostico, migração 20260908223000) julgava
+// TODA campanha pelo custo por conversa de WhatsApp, contra a mediana da conta
+// inteira. Campanha de tráfego, alcance ou post impulsionado saía "Sem tração"
+// por definição e entrava no "desperdício" — e era a maior parte da verba
+// (LINK_CLICKS concentra o gasto de quase todos os clientes).
 //
-// Aqui cada campanha é medida pelo resultado do objetivo dela e comparada só com
-// campanhas do MESMO objetivo. Comparar objetivos diferentes só é feito numa
-// leitura à parte e explícita: "quanto custa uma conversa vinda de cada
-// objetivo", porque no fim a clínica quer conversa/lead.
+// Aqui o veredito oficial continua sendo um dos SEIS do diagnóstico original
+// (Escalar, Cortar, Atrai mas não converte, Sem tração, Manter, Volume
+// insuficiente), com os mesmos limites (0,6x e 2x da campanha típica; volume
+// mínimo de 500 aparições e R$ 30). O que mudou: cada campanha é medida pelo
+// resultado do objetivo dela e comparada só com campanhas do MESMO objetivo.
+// Quando o objetivo tem menos de 3 campanhas com volume (ou o resultado dele
+// não chega aqui), a campanha volta para a régua original: conversa, comparada
+// com a conta toda — e isso fica escrito na tela ("Comparada com a conta").
+//
+// Sinais extras viram SELOS ao lado do veredito, não vereditos: "Criativo
+// cansando", "Atenção caindo", "Revisar público", "Resultado não medido",
+// "Comparada com a conta".
+//
+// Comparar objetivos diferentes só é feito numa leitura à parte e explícita:
+// "quanto custa uma conversa vinda de cada objetivo".
 //
 // Em cima do diagnóstico, este arquivo monta a "central de decisão de verba":
-// categoria por campanha (Escalar agora, Manter, Revisar criativo, Revisar
-// público, Cortar, Sem dados suficientes), confiança, risco de mexer, ação
-// sugerida, e até 3 ações de verba com valores ("Se eu tivesse que agir hoje").
+// confiança, risco de mexer, ação sugerida, e até 3 ações de verba com valores
+// ("Se eu tivesse que agir hoje").
 //
 // Lógica pura: recebe as linhas diárias de meta_ads_daily + o cadastro das
 // campanhas e devolve o diagnóstico. Testável com `npx tsx`.
@@ -100,19 +111,41 @@ export function grupoDoObjetivo(objetivo: string | null | undefined, conversas: 
   return "outro";
 }
 
-// Veredito "técnico" (usado também pela Leitura do período). A categoria de
-// decisão, mais fina, fica em `categoria`.
-export type Veredito = "Escalar" | "Manter" | "Cortar" | "Sem resultado" | "Não medido" | "Sem comparação" | "Volume insuficiente";
+// ---------------------------------------------------------------- vereditos
 
-export type Categoria = "Escalar agora" | "Manter" | "Revisar criativo" | "Revisar público" | "Cortar" | "Sem dados suficientes";
-export const ORDEM_CATEGORIAS: Categoria[] = ["Escalar agora", "Cortar", "Revisar público", "Revisar criativo", "Manter", "Sem dados suficientes"];
-export const EXPLICA_CATEGORIA: Record<Categoria, string> = {
-  "Escalar agora": "Entrega o resultado do objetivo por 60% ou menos do custo da campanha típica do mesmo objetivo, e o anúncio não está perdendo atenção.",
-  Manter: "Custo dentro da faixa normal do objetivo. Deixar rodar.",
-  "Revisar criativo": "O anúncio está cansando: de cada 100 pessoas que viam, menos clicam agora do que no começo do período (queda de 20% ou mais), ou o custo já passou do típico e a atenção começou a cair.",
-  "Revisar público": "As pessoas clicam (tanto ou mais que o normal), mas o clique não vira resultado: custa 2x ou mais o típico, ou não trouxe nenhum.",
-  Cortar: "Custa 2x ou mais a campanha típica do mesmo objetivo (ou não trouxe resultado) e nem chama atenção: o anúncio não funciona com esse público.",
-  "Sem dados suficientes": "Rodou pouco, o resultado acontece fora daqui (site) ou não há outras campanhas do mesmo objetivo para comparar.",
+/** Veredito oficial: os seis rótulos do diagnóstico original. */
+export type Veredito = "Escalar" | "Cortar" | "Atrai mas não converte" | "Sem tração" | "Manter" | "Volume insuficiente";
+// A ordem importa: "Escalar" primeiro porque é a única linha que pede uma ação
+// de crescimento; "Cortar" logo depois porque é dinheiro saindo agora.
+export const ORDEM_VEREDITO: Veredito[] = ["Escalar", "Cortar", "Atrai mas não converte", "Sem tração", "Manter", "Volume insuficiente"];
+export const EXPLICA_VEREDITO: Record<Veredito, string> = {
+  Escalar: "Entrega o resultado por 60% ou menos do custo da campanha típica (do mesmo objetivo; ou da conta, quando há poucas campanhas do objetivo). É onde cabe mais verba.",
+  Cortar: "Custa 2x ou mais a campanha típica (do mesmo objetivo; ou da conta). A Meta considera 2x o sinal de anúncio esgotado.",
+  "Atrai mas não converte": "Não trouxe nenhum resultado do objetivo, mas as pessoas clicam tanto ou mais que o típico: o anúncio prende, o problema está na oferta, no público ou no destino do clique.",
+  "Sem tração": "Não trouxe nenhum resultado do objetivo e pouca gente clica: nem atrai nem converte.",
+  Manter: "Custo dentro da faixa normal (entre 0,6x e 2x a campanha típica). Deixar rodar.",
+  "Volume insuficiente": "Rodou pouco para julgar (menos de 500 aparições ou menos de R$ 30 no período).",
+};
+
+/**
+ * Veredito "técnico" usado fora da tela de Anúncios (Resumo, Leitura do
+ * período, relatório). É derivado do oficial: "Escalar", "Cortar", "Manter" e
+ * "Volume insuficiente" são os mesmos; "Atrai mas não converte" e "Sem tração"
+ * viram "Sem resultado", salvo quando o resultado do objetivo não é medido
+ * aqui ("Não medido") ou quando a campanha foi julgada pela conversa da conta
+ * mas entregou o resultado do próprio objetivo ("Sem comparação").
+ */
+export type VereditoTecnico = "Escalar" | "Manter" | "Cortar" | "Sem resultado" | "Não medido" | "Sem comparação" | "Volume insuficiente";
+
+/** Selos ao lado do veredito: sinais extras, que não mudam o veredito. */
+export type SeloCampanha = "Criativo cansando" | "Atenção caindo" | "Revisar público" | "Resultado não medido" | "Comparada com a conta";
+export const ORDEM_SELOS: SeloCampanha[] = ["Criativo cansando", "Atenção caindo", "Revisar público", "Resultado não medido", "Comparada com a conta"];
+export const EXPLICA_SELO: Record<SeloCampanha, string> = {
+  "Criativo cansando": "De cada 100 vezes que o anúncio aparecia, menos gente clica no link na 2ª metade do período do que na 1ª: queda de 20% ou mais. Hora de trocar a arte.",
+  "Atenção caindo": "Já custa entre 1x e 2x a campanha típica e os cliques por aparição caíram 10% ou mais da 1ª para a 2ª metade do período.",
+  "Revisar público": "As pessoas clicam tanto ou mais que o típico, mas o clique não vira resultado (ou custa 2x ou mais): revisar público e para onde o clique leva.",
+  "Resultado não medido": "Campanha de cadastro ou venda com visitas à página (ou cliques), mas sem o resultado registrado aqui: falta o pixel/evento no site.",
+  "Comparada com a conta": "Comparada com a conta toda: poucas campanhas deste objetivo (menos de 3 com volume) ou resultado não medido. Vale a régua original: custo por conversa contra a campanha típica da conta.",
 };
 
 export interface LinhaAds {
@@ -138,7 +171,7 @@ export type NivelRisco = "baixo" | "medio" | "alto";
 export interface CampanhaDiag {
   campaign_id: string;
   campanha: string;
-  objetivo: string | null;
+  objetivo: string | null; // objetivo bruto da Meta (LINK_CLICKS, OUTCOME_ENGAGEMENT…)
   grupo: Grupo;
   permalink: string | null;
   thumbnail_url: string | null;
@@ -158,13 +191,24 @@ export interface CampanhaDiag {
   ctrLink2: number | null; // 2ª metade
   cansando: boolean; // cliques por impressão caíram 20%+ da 1ª para a 2ª metade
   atencaoCaindo: boolean; // caíram 10%+
-  veredito: Veredito;
-  // Decisão
-  categoria: Categoria;
-  regua: number | null; // custo da campanha típica do mesmo objetivo
-  vezesRegua: number | null; // custoPorResultado ÷ regua
+  /** Veredito oficial (os seis do diagnóstico original). É o que a tela mostra. */
+  vereditoOficial: Veredito;
+  /** Derivado do oficial, para Resumo/Leitura/relatório. Ver `VereditoTecnico`. */
+  veredito: VereditoTecnico;
+  selos: SeloCampanha[];
+  /** "objetivo": comparada com as do mesmo objetivo; "conta": régua original (conversa, conta toda); null: não julgada (volume). */
+  julgadaPor: "objetivo" | "conta" | null;
+  resultadoNaRegua: number; // resultados (objetivo) ou conversas (conta)
+  custoNaRegua: number | null; // custo por resultado (objetivo) ou por conversa (conta)
+  regua: number | null; // custo da campanha típica usada (objetivo ou conta)
+  vezesRegua: number | null; // custoNaRegua ÷ regua
+  ctrReferencia: number | null; // atenção típica usada para "Atrai mas não converte"
+  atencaoBoa: boolean;
+  /** Veredito pela regra original (conversa, conta toda), para comparar na metodologia. */
+  vereditoContaToda: Veredito;
   comparacao: string; // "a campanha típica de mensagem custa R$ X por conversa; esta custa 1,8x isso"
   motivo: string;
+  notas: string[]; // explicação de cada selo, com os números
   acao: string;
   confianca: Confianca;
   motivoConfianca: string;
@@ -174,13 +218,22 @@ export interface CampanhaDiag {
 export interface GrupoResumo {
   grupo: Grupo;
   campanhas: number;
+  campanhasComVolume: number; // as que entram na régua do objetivo
+  objetivosBrutos: string[]; // nomes da Meta que caíram neste grupo
   gasto: number;
   resultados: number;
   custoPorResultado: number | null;
-  medianaCusto: number | null; // régua usada no veredito (campanha típica)
+  medianaCusto: number | null; // régua usada no veredito (campanha típica); null = objetivo julgado pela conta
   conversas: number;
   custoPorConversa: number | null; // visão de negócio, comparável entre objetivos
   ctrReferencia: number | null; // cliques por impressão da campanha típica do grupo
+}
+
+export interface ReguaConta {
+  custoPorConversa: number | null; // mediana do custo por conversa (campanhas com 500+ aparições), como o SQL original
+  ctrLink: number | null; // mediana dos cliques no link por aparição (500+ aparições)
+  campanhas: number; // quantas campanhas entraram no custo por conversa
+  custoPorConversaTelaAntiga: number | null; // o número que a tela antiga exibia: mediana "de cima" de todas as campanhas com conversa
 }
 
 export interface DiagnosticoAds {
@@ -190,21 +243,34 @@ export interface DiagnosticoAds {
   impressoes: number;
   cliquesLink: number;
   conversas: number; // de todas as campanhas
-  desperdicio: number; // Cortar + Sem resultado (veredito)
+  leads: number;
+  visitasPagina: number;
+  /** Cortar + Sem resultado (veredito técnico): "Verba que não entregou" do Resumo. */
+  desperdicio: number;
+  /** Atrai mas não converte + Sem tração (veredito oficial): o alerta original da tela Anúncios. */
+  desperdicioSemResultado: number;
   conversasMensagem: number;
   custoPorConversaMensagem: number | null; // só campanhas de mensagem
+  reguaConta: ReguaConta;
 }
 
-export const MIN_IMPRESSOES = 1000;
-export const MIN_GASTO = 50;
+// Limites do diagnóstico original (ads_diagnostico).
+export const MIN_IMPRESSOES = 500;
+export const MIN_GASTO = 30;
 export const MIN_CAMPANHAS_REGUA = 3;
-export const ESCALAR = 0.6; // custo ≤ 60% da campanha típica do objetivo
+export const ESCALAR = 0.6; // custo ≤ 60% da campanha típica
 export const CORTAR = 2; // custo ≥ 2x a típica: a mesma régua de fadiga da Meta
+// Fadiga: cada metade do período precisa de 1000+ aparições para comparar.
+export const MIN_IMPRESSOES_METADE = 1000;
+// Abaixo disso a taxa de cliques da campanha é mostrada, mas com aviso de amostra pequena.
+export const MIN_IMPRESSOES_TAXA = 1000;
 export const QUEDA_CTR = 0.8; // fadiga: cliques por impressão caem 20%+
 export const QUEDA_ATENCAO = 0.9; // atenção caindo: 10%+ (usado com custo 1–2x)
 export const PASSO_ORCAMENTO = 0.2; // a Meta reinicia o aprendizado com mudança > 20%
 // Volume mínimo de resultados para confiança média (alta = 3x isso).
 export const MIN_RESULTADOS: Record<Grupo, number> = { mensagem: 10, lead: 10, trafego: 100, engajamento: 10, alcance: 10, venda: 30, outro: 10 };
+// Referência de mercado de atenção em tráfego, quando não há 3 campanhas para comparar.
+export const CTR_TRAFEGO_MERCADO = 0.008;
 
 const n = (v: unknown) => {
   const x = Number(v);
@@ -227,6 +293,21 @@ export function porCem(ctr: number | null): string {
 export function unidade(g: Grupo, v: number): string {
   const G = GRUPOS[g];
   return G.porMil ? `${brl(v)} a cada mil vezes que aparece` : `${brl(v)} por ${G.resultado}`;
+}
+/** Unidade da régua com que a campanha foi julgada (objetivo ou conversa da conta). */
+export function unidadeNaRegua(c: Pick<CampanhaDiag, "grupo" | "julgadaPor">, v: number): string {
+  return c.julgadaPor === "conta" ? `${brl(v)} por conversa` : unidade(c.grupo, v);
+}
+
+/** Regra original (ads_diagnostico), aplicada à conta toda e pela conversa. */
+function vereditoPelaConta(c: { impressoes: number; gasto: number; conversas: number; custoPorConversa: number | null; ctrLink: number | null }, r: ReguaConta): Veredito {
+  if (c.impressoes < MIN_IMPRESSOES || c.gasto < MIN_GASTO) return "Volume insuficiente";
+  if (c.conversas === 0) return r.ctrLink != null && c.ctrLink != null && c.ctrLink >= r.ctrLink ? "Atrai mas não converte" : "Sem tração";
+  const med = r.custoPorConversa;
+  if (med == null || c.custoPorConversa == null) return "Manter";
+  if (c.custoPorConversa <= med * ESCALAR) return "Escalar";
+  if (c.custoPorConversa >= med * CORTAR) return "Cortar";
+  return "Manter";
 }
 
 export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[], start: string, end: string): DiagnosticoAds {
@@ -254,7 +335,12 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
     acc.set(l.campaign_id, a);
   }
 
-  type Base = Omit<CampanhaDiag, "veredito" | "categoria" | "regua" | "vezesRegua" | "comparacao" | "motivo" | "acao" | "confianca" | "motivoConfianca" | "risco">;
+  type Base = Pick<
+    CampanhaDiag,
+    | "campaign_id" | "campanha" | "objetivo" | "grupo" | "permalink" | "thumbnail_url" | "gasto" | "impressoes" | "cliquesLink" | "conversas" | "leads"
+    | "visitasPagina" | "diasAtivos" | "gastoDiario" | "resultados" | "custoPorResultado" | "custoPorConversa" | "ctrLink" | "ctrLink1" | "ctrLink2"
+    | "cansando" | "atencaoCaindo"
+  > & { naoMedido: boolean };
   const base: Base[] = [];
   for (const [id, a] of acc) {
     if (a.g <= 0 && a.i <= 0) continue;
@@ -266,8 +352,14 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
     else if (grupo === "trafego") resultados = a.lc;
     else if (grupo === "engajamento" || grupo === "alcance") resultados = a.i / 1000;
     else if (grupo === "venda") resultados = a.lpv;
-    const ctr1 = a.i1 >= MIN_IMPRESSOES ? a.c1 / a.i1 : null;
-    const ctr2 = a.i2 >= MIN_IMPRESSOES ? a.c2 / a.i2 : null;
+    const ctr1 = a.i1 >= MIN_IMPRESSOES_METADE ? a.c1 / a.i1 : null;
+    const ctr2 = a.i2 >= MIN_IMPRESSOES_METADE ? a.c2 / a.i2 : null;
+    // Resultado não medido: cadastro/venda sem o resultado registrado aqui, mas
+    // com sinal de que a pessoa chegou ao site. Cadastro com nenhum lead e muitas
+    // visitas também: as poucas conversas não são o resultado dessa campanha.
+    const naoMedido =
+      (grupo === "lead" || grupo === "venda") &&
+      ((resultados === 0 && (a.lpv > 0 || a.lc > 0)) || (grupo === "lead" && a.ld === 0 && a.lpv >= 10 && a.lpv > a.cv));
     base.push({
       campaign_id: id,
       campanha: c?.name ?? "(campanha removida)",
@@ -291,124 +383,179 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
       ctrLink2: ctr2,
       cansando: ctr1 != null && ctr2 != null && ctr1 > 0 && ctr2 <= ctr1 * QUEDA_CTR,
       atencaoCaindo: ctr1 != null && ctr2 != null && ctr1 > 0 && ctr2 <= ctr1 * QUEDA_ATENCAO,
+      naoMedido,
     });
   }
 
-  // Régua por grupo: custo da campanha típica (mediana) entre as que têm volume.
-  // Também a "atenção típica" do grupo (cliques no link por impressão).
+  // Régua por objetivo: custo da campanha típica (mediana) entre as que têm
+  // volume e resultado medido. Também a "atenção típica" do objetivo.
   const comVolume = (c: Base) => c.impressoes >= MIN_IMPRESSOES && c.gasto >= MIN_GASTO;
   const reguas = new Map<Grupo, number | null>();
   const ctrRef = new Map<Grupo, number | null>();
+  const volumeCampanhasGrupo = new Map<Grupo, number>();
   for (const g of Object.keys(GRUPOS) as Grupo[]) {
-    const doGrupo = base.filter((c) => c.grupo === g && comVolume(c));
+    const doGrupo = base.filter((c) => c.grupo === g && comVolume(c) && !c.naoMedido);
     const custos = doGrupo.filter((c) => c.custoPorResultado != null).map((c) => c.custoPorResultado!);
-    reguas.set(g, custos.length >= MIN_CAMPANHAS_REGUA ? median(custos) : null);
+    volumeCampanhasGrupo.set(g, custos.length);
+    reguas.set(g, g !== "outro" && custos.length >= MIN_CAMPANHAS_REGUA ? median(custos) : null);
     const ctrs = doGrupo.filter((c) => c.ctrLink != null).map((c) => c.ctrLink!);
     // Sem 3 campanhas para comparar, tráfego usa a referência de mercado de
     // confiabilidade média (WordStream 2025, médicos ~0,8%). Os outros grupos
     // ficam sem referência de atenção.
-    const refMercado = g === "trafego" && (BENCHMARKS.ctrTrafego.confiabilidade as string) !== "baixa" ? 0.008 : null;
+    const refMercado = g === "trafego" && (BENCHMARKS.ctrTrafego.confiabilidade as string) !== "baixa" ? CTR_TRAFEGO_MERCADO : null;
     ctrRef.set(g, ctrs.length >= MIN_CAMPANHAS_REGUA ? median(ctrs) : refMercado);
   }
-  const volumeCampanhasGrupo = new Map<Grupo, number>();
-  for (const c of base) if (comVolume(c)) volumeCampanhasGrupo.set(c.grupo, (volumeCampanhasGrupo.get(c.grupo) ?? 0) + 1);
+
+  // Régua da conta toda (a do SQL original): campanhas com 500+ aparições.
+  const conta500 = base.filter((c) => c.impressoes >= MIN_IMPRESSOES);
+  const cpcConta = conta500.filter((c) => c.custoPorConversa != null).map((c) => c.custoPorConversa!);
+  const ctrConta = conta500.filter((c) => c.ctrLink != null).map((c) => c.ctrLink!);
+  const todosCustos = base.filter((c) => c.custoPorConversa != null).map((c) => c.custoPorConversa!).sort((a, b) => a - b);
+  const reguaConta: ReguaConta = {
+    custoPorConversa: cpcConta.length ? median(cpcConta) : null,
+    ctrLink: ctrConta.length ? median(ctrConta) : null,
+    campanhas: cpcConta.length,
+    custoPorConversaTelaAntiga: todosCustos.length ? todosCustos[Math.floor(todosCustos.length / 2)] : null,
+  };
 
   const gastoTotal = base.reduce((s, c) => s + c.gasto, 0);
   const conversasTotal = base.reduce((s, c) => s + c.conversas, 0);
   const topConversa = [...base].sort((a, b) => b.conversas - a.conversas)[0];
 
-  const campanhas: CampanhaDiag[] = base.map((c) => {
+  const campanhas: CampanhaDiag[] = base.map(({ naoMedido, ...c }) => {
     const G = GRUPOS[c.grupo];
-    const med = reguas.get(c.grupo) ?? null;
-    const ref = ctrRef.get(c.grupo) ?? null;
-    const cpr = c.custoPorResultado;
-    const vezes = cpr != null && med != null && med > 0 ? cpr / med : null;
+    const volumeOk = comVolume({ ...c, naoMedido });
+    const medObjetivo = reguas.get(c.grupo) ?? null;
+    const porObjetivo = c.grupo !== "outro" && !naoMedido && medObjetivo != null;
+    const julgadaPor: CampanhaDiag["julgadaPor"] = !volumeOk ? null : porObjetivo ? "objetivo" : "conta";
+    // Régua mostrada (também para a campanha com pouco volume): a do objetivo quando existe, senão a da conta.
+    const usaObjetivo = julgadaPor === "objetivo" || (julgadaPor == null && porObjetivo);
+    const regua = usaObjetivo ? medObjetivo : reguaConta.custoPorConversa;
+    const ref = usaObjetivo ? (ctrRef.get(c.grupo) ?? null) : reguaConta.ctrLink;
+    const resultadoNaRegua = usaObjetivo ? c.resultados : c.conversas;
+    const custoNaRegua = usaObjetivo ? c.custoPorResultado : c.custoPorConversa;
+    const vezes = custoNaRegua != null && regua != null && regua > 0 ? custoNaRegua / regua : null;
     const atencaoBoa = ref != null && c.ctrLink != null && c.ctrLink >= ref;
-    const un = (v: number) => unidade(c.grupo, v);
+    const un = (v: number) => (usaObjetivo ? unidade(c.grupo, v) : `${brl(v)} por conversa`);
+    const resultadoTxt = usaObjetivo ? G.resultado : "conversa";
+    const tipicaTxt = usaObjetivo ? `a campanha típica de ${G.curto}` : "a campanha típica da conta";
     const nome = aspas(c.campanha);
     const quedaTxt =
       c.ctrLink1 != null && c.ctrLink2 != null
         ? `no começo do período ${porCem(c.ctrLink1)} vezes que o anúncio apareceu viravam clique; no fim, ${porCem(c.ctrLink2)}`
         : "";
 
-    // ---------- veredito técnico (mantido para a Leitura do período) ----------
-    let veredito: Veredito;
-    if (c.impressoes < MIN_IMPRESSOES || c.gasto < MIN_GASTO) veredito = "Volume insuficiente";
-    else if (c.grupo === "outro") veredito = "Sem comparação";
-    else if (c.resultados === 0 && (c.grupo === "lead" || c.grupo === "venda") && (c.visitasPagina > 0 || c.cliquesLink > 0)) veredito = "Não medido";
-    // Cadastro no site: nenhum lead registrado, mas muitas visitas à página. As
-    // poucas conversas não são o resultado dessa campanha — o cadastro não chega aqui.
-    else if (c.grupo === "lead" && c.leads === 0 && c.visitasPagina >= 10 && c.visitasPagina > c.conversas) veredito = "Não medido";
-    else if (c.resultados === 0) veredito = "Sem resultado";
-    else if (med == null) veredito = "Sem comparação";
-    else if (cpr! <= med * ESCALAR) veredito = "Escalar";
-    else if (cpr! >= med * CORTAR) veredito = "Cortar";
-    else veredito = "Manter";
+    // ---------- veredito oficial (os seis do diagnóstico original) ----------
+    // 1. Volume insuficiente: menos de 500 aparições ou menos de R$ 30.
+    // 2. Nenhum resultado (do objetivo; ou nenhuma conversa, se julgada pela conta):
+    //      cliques por aparição ≥ o típico → Atrai mas não converte; senão → Sem tração.
+    // 3. Custo ≤ 0,6x a típica → Escalar; ≥ 2x → Cortar; resto → Manter.
+    let vereditoOficial: Veredito;
+    if (!volumeOk) vereditoOficial = "Volume insuficiente";
+    else if (resultadoNaRegua === 0) vereditoOficial = atencaoBoa ? "Atrai mas não converte" : "Sem tração";
+    else if (vezes == null) vereditoOficial = "Manter";
+    else if (vezes <= ESCALAR) vereditoOficial = "Escalar";
+    else if (vezes >= CORTAR) vereditoOficial = "Cortar";
+    else vereditoOficial = "Manter";
+    const vereditoContaToda = vereditoPelaConta(c, reguaConta);
 
-    // ---------- comparação com a campanha típica do mesmo objetivo ----------
-    const comparacao =
-      med != null
-        ? `A campanha típica de ${G.curto} custa ${un(med)}${vezes != null ? (vezes >= 1.05 ? `; esta custa ${x1(vezes)}x isso` : vezes <= 0.95 ? `; esta custa ${pct(1 - vezes)} menos` : "; esta está no mesmo nível") : ""}.`
-        : `Menos de ${MIN_CAMPANHAS_REGUA} campanhas de ${G.curto} com volume no período: não há campanha típica para comparar.`;
+    // ---------- selos ----------
+    const selos: SeloCampanha[] = [];
+    const notas: string[] = [];
+    if (c.cansando) {
+      selos.push("Criativo cansando");
+      notas.push(`Criativo cansando: ${quedaTxt} (queda de ${pct(1 - c.ctrLink2! / c.ctrLink1!)}).`);
+    } else if (c.atencaoCaindo && vezes != null && vezes >= 1 && vezes < CORTAR && volumeOk) {
+      selos.push("Atenção caindo");
+      notas.push(`Atenção caindo: já custa ${x1(vezes)}x ${tipicaTxt} e ${quedaTxt}.`);
+    }
+    if (vereditoOficial === "Atrai mas não converte" || (vereditoOficial === "Cortar" && atencaoBoa)) {
+      selos.push("Revisar público");
+      notas.push(
+        `Revisar público: as pessoas clicam (${porCem(c.ctrLink)} aparições viram clique, no nível ou acima do típico${ref != null ? ` de ${porCem(ref)}` : ""}), mas o clique não vira ${resultadoTxt}${vereditoOficial === "Cortar" ? " a um custo normal" : ""}.`,
+      );
+    }
+    if (naoMedido) {
+      selos.push("Resultado não medido");
+      notas.push(
+        `Resultado não medido: o resultado dessa campanha (${G.resultado}) acontece no site e não chega aqui: ${c.visitasPagina > 0 ? `${int(c.visitasPagina)} visitas à página` : `${int(c.cliquesLink)} cliques no link`} por ${brl(c.gasto)}${c.conversas > 0 ? ` (e ${int(c.conversas)} ${c.conversas === 1 ? "conversa" : "conversas"})` : ""}.`,
+      );
+    }
+    if (julgadaPor === "conta") {
+      selos.push("Comparada com a conta");
+      notas.push(
+        naoMedido
+          ? "Comparada com a conta toda: como o resultado do objetivo não chega aqui, vale a régua original, pela conversa."
+          : c.grupo === "outro"
+            ? `Comparada com a conta toda: o objetivo ${c.objetivo ?? "(sem objetivo)"} não tem régua própria; vale a régua original, pela conversa.`
+            : `Comparada com a conta toda: poucas campanhas deste objetivo (${volumeCampanhasGrupo.get(c.grupo) ?? 0} de ${G.curto} com volume; o mínimo é ${MIN_CAMPANHAS_REGUA}). Vale a régua original, pela conversa.`,
+      );
+    }
 
-    // ---------- categoria (regras explícitas, nesta ordem) ----------
-    // 1. Sem dados suficientes: pouco volume, objetivo sem régua, resultado fora
-    //    daqui (Não medido) ou sem campanhas do mesmo objetivo para comparar.
-    // 2. Sem nenhum resultado, ou custo ≥ 2x a típica:
-    //      atenção boa (cliques por impressão ≥ a típica do objetivo) → Revisar público
-    //      senão → Cortar
-    // 3. Fadiga: cliques por impressão caíram 20%+ da 1ª para a 2ª metade → Revisar criativo
-    //    (vale também para campanha barata: trocar o criativo antes de pôr mais verba)
-    // 4. Custo entre 1x e 2x a típica e atenção caindo 10%+ → Revisar criativo
-    // 5. Custo ≤ 60% da típica → Escalar agora
-    // 6. Resto → Manter
-    let categoria: Categoria;
+    // ---------- veredito técnico (Resumo, Leitura do período, relatório) ----------
+    let veredito: VereditoTecnico;
+    if (vereditoOficial === "Atrai mas não converte" || vereditoOficial === "Sem tração") {
+      veredito = naoMedido
+        ? "Não medido"
+        : julgadaPor === "conta" && c.grupo !== "mensagem" && (c.resultados > 0 || c.grupo === "outro")
+          ? "Sem comparação"
+          : "Sem resultado";
+    } else veredito = vereditoOficial;
+
+    // ---------- comparação com a campanha típica ----------
+    const vsTxt = vezes != null ? (vezes >= 1.05 ? `; esta custa ${x1(vezes)}x isso` : vezes <= 0.95 ? `; esta custa ${pct(1 - vezes)} menos` : "; esta está no mesmo nível") : "";
+    let comparacao: string;
+    if (usaObjetivo) comparacao = `A campanha típica de ${G.curto} custa ${un(medObjetivo!)}${vsTxt}.`;
+    else {
+      const prefixo = naoMedido
+        ? "Comparada com a conta toda: o resultado deste objetivo não chega aqui."
+        : c.grupo === "outro"
+          ? "Comparada com a conta toda: objetivo sem régua própria."
+          : `Comparada com a conta toda: poucas campanhas deste objetivo (menos de ${MIN_CAMPANHAS_REGUA} de ${G.curto} com volume).`;
+      comparacao =
+        reguaConta.custoPorConversa != null
+          ? `${prefixo} A conversa da campanha típica da conta custa ${brl(reguaConta.custoPorConversa)}${vsTxt}.`
+          : `${prefixo} Nenhuma campanha da conta trouxe conversa para comparar.`;
+    }
+
+    // ---------- motivo ----------
     let motivo: string;
-    if (veredito === "Volume insuficiente") {
-      categoria = "Sem dados suficientes";
-      motivo = `Rodou pouco para julgar (${brl(c.gasto)} e ${int(c.impressoes)} aparições; o mínimo é ${brl(MIN_GASTO)} e ${int(MIN_IMPRESSOES)}).`;
-    } else if (veredito === "Não medido") {
-      categoria = "Sem dados suficientes";
-      motivo = `O resultado dessa campanha (${G.resultado}) acontece no site e não chega aqui: ${c.visitasPagina > 0 ? `${int(c.visitasPagina)} visitas à página` : `${int(c.cliquesLink)} cliques no link`} por ${brl(c.gasto)}${c.conversas > 0 ? ` (e ${int(c.conversas)} ${c.conversas === 1 ? "conversa" : "conversas"})` : ""}.`;
-    } else if (c.grupo === "outro") {
-      categoria = "Sem dados suficientes";
-      motivo = `Objetivo ${c.objetivo ?? "não informado"} sem régua definida neste painel.`;
-    } else if (c.resultados === 0) {
-      categoria = atencaoBoa ? "Revisar público" : "Cortar";
-      motivo = atencaoBoa
-        ? `Investiu ${brl(c.gasto)}: as pessoas clicam (${porCem(c.ctrLink)} aparições viram clique, acima do típico), mas nenhum clique virou ${G.resultado}.`
-        : `Investiu ${brl(c.gasto)} e não gerou nenhum(a) ${G.resultado}, que é o que esse objetivo promete. E pouca gente clica (${porCem(c.ctrLink)} aparições).`;
-    } else if (med == null) {
-      categoria = "Sem dados suficientes";
-      motivo = `${un(cpr!)}. ${comparacao}`;
-    } else if (vezes! >= CORTAR) {
-      categoria = atencaoBoa ? "Revisar público" : "Cortar";
-      motivo = atencaoBoa
-        ? c.grupo === "trafego"
-          ? `O anúncio chama atenção (${porCem(c.ctrLink)} aparições viram clique, acima do típico), mas aparecer para esse público está caro: ${un(cpr!)}, ${x1(vezes!)}x o típico.`
-          : `As pessoas clicam (${porCem(c.ctrLink)} aparições viram clique, acima do típico), mas o clique não vira ${G.resultado}: ${un(cpr!)}, ${x1(vezes!)}x o típico.`
-        : `${un(cpr!)}, ${x1(vezes!)}x a campanha típica de ${G.curto} (${un(med)}). A Meta considera 2x o sinal de anúncio esgotado, e aqui nem a atenção ajuda (${porCem(c.ctrLink)} aparições viram clique).`;
-    } else if (c.cansando) {
-      categoria = "Revisar criativo";
-      motivo = `O anúncio está cansando: ${quedaTxt} (queda de ${pct(1 - c.ctrLink2! / c.ctrLink1!)}). Custo hoje: ${un(cpr!)}${vezes! <= ESCALAR ? ", ainda barato — troque o criativo antes de pôr mais verba" : ""}.`;
-    } else if (vezes! >= 1 && c.atencaoCaindo) {
-      categoria = "Revisar criativo";
-      motivo = `Já custa ${x1(vezes!)}x a campanha típica de ${G.curto} e a atenção começou a cair: ${quedaTxt}.`;
-    } else if (vezes! <= ESCALAR) {
-      categoria = "Escalar agora";
-      motivo = `${un(cpr!)}, ${pct(1 - vezes!)} mais barato que a campanha típica de ${G.curto} (${un(med)}). É onde cabe mais verba.`;
-    } else {
-      categoria = "Manter";
-      motivo = `${un(cpr!)}, dentro da faixa normal das campanhas de ${G.curto} (típica: ${un(med)}).`;
+    switch (vereditoOficial) {
+      case "Volume insuficiente":
+        motivo = `Rodou pouco para julgar (${brl(c.gasto)} e ${int(c.impressoes)} aparições; o mínimo é ${brl(MIN_GASTO)} e ${int(MIN_IMPRESSOES)}).`;
+        break;
+      case "Atrai mas não converte":
+        motivo = `Investiu ${brl(c.gasto)}: o anúncio prende (${porCem(c.ctrLink)} aparições viram clique, no nível ou acima do típico${ref != null ? ` de ${porCem(ref)}` : ""}), mas nenhum clique virou ${resultadoTxt}. O problema está na oferta, no público ou no destino, não na arte.`;
+        break;
+      case "Sem tração":
+        motivo = `Investiu ${brl(c.gasto)} e não gerou nenhum(a) ${resultadoTxt}${usaObjetivo ? ", que é o que esse objetivo promete" : ""}. E pouca gente clica (${porCem(c.ctrLink)} aparições${ref != null ? `, contra ${porCem(ref)} do típico` : ""}): nem atrai nem converte.`;
+        if (!usaObjetivo && c.grupo !== "mensagem" && c.resultados > 0 && c.grupo !== "outro")
+          motivo += ` Pelo objetivo dela, trouxe ${G.porMil ? `${int(c.impressoes)} aparições` : `${int(c.resultados)} ${c.resultados === 1 ? G.resultado : G.resultadoPlural}`}.`;
+        break;
+      case "Escalar":
+        motivo = `${un(custoNaRegua!)}, ${pct(1 - vezes!)} mais barato que ${tipicaTxt} (${un(regua!)}). É onde cabe mais verba.`;
+        break;
+      case "Cortar":
+        motivo = atencaoBoa
+          ? c.grupo === "trafego" && usaObjetivo
+            ? `O anúncio chama atenção (${porCem(c.ctrLink)} aparições viram clique, acima do típico), mas aparecer para esse público está caro: ${un(custoNaRegua!)}, ${x1(vezes!)}x o típico.`
+            : `As pessoas clicam (${porCem(c.ctrLink)} aparições viram clique, acima do típico), mas o clique não vira ${resultadoTxt} a um custo normal: ${un(custoNaRegua!)}, ${x1(vezes!)}x o típico.`
+          : `${un(custoNaRegua!)}, ${x1(vezes!)}x ${tipicaTxt} (${un(regua!)}). A Meta considera 2x o sinal de anúncio esgotado, e aqui nem a atenção ajuda (${porCem(c.ctrLink)} aparições viram clique).`;
+        break;
+      default:
+        motivo = vezes != null ? `${un(custoNaRegua!)}, dentro da faixa normal (típica: ${un(regua!)}).` : `${custoNaRegua != null ? un(custoNaRegua) : "Sem custo para comparar"}.`;
     }
 
     // ---------- confiança (volume de resultados e de aparições) ----------
-    const minimo = MIN_RESULTADOS[c.grupo];
-    let confianca: Confianca = c.impressoes < MIN_IMPRESSOES ? "baixa" : confiancaPorAmostra(c.resultados, minimo);
-    if (categoria === "Sem dados suficientes") confianca = "baixa";
-    // Régua feita com poucas campanhas (3–4) segura a confiança em média.
-    if (confianca === "alta" && (volumeCampanhasGrupo.get(c.grupo) ?? 0) < 5) confianca = "media";
-    const motivoConfianca = `${G.porMil ? `${int(c.impressoes)} aparições` : `${int(c.resultados)} ${c.resultados === 1 ? G.resultado : G.resultadoPlural} e ${int(c.impressoes)} aparições`} em ${c.diasAtivos} ${c.diasAtivos === 1 ? "dia" : "dias"} com gasto; régua de ${G.curto} feita com ${volumeCampanhasGrupo.get(c.grupo) ?? 0} campanhas. Confiança alta pede ${minimo * 3}+ ${G.porMil ? "mil aparições" : G.resultadoPlural}.`;
+    const minimo = usaObjetivo ? MIN_RESULTADOS[c.grupo] : MIN_RESULTADOS.mensagem;
+    let confianca: Confianca = c.impressoes < MIN_IMPRESSOES_TAXA ? "baixa" : confiancaPorAmostra(resultadoNaRegua, minimo);
+    if (vereditoOficial === "Volume insuficiente" || naoMedido) confianca = "baixa";
+    const campanhasNaRegua = usaObjetivo ? (volumeCampanhasGrupo.get(c.grupo) ?? 0) : reguaConta.campanhas;
+    // Régua feita com poucas campanhas (3–4) ou régua da conta seguram a confiança em média.
+    if (confianca === "alta" && (campanhasNaRegua < 5 || julgadaPor === "conta")) confianca = "media";
+    const porMilRegua = usaObjetivo && G.porMil;
+    const unidadeRes = usaObjetivo ? G : GRUPOS.mensagem;
+    const motivoConfianca = `${porMilRegua ? `${int(c.impressoes)} aparições` : `${int(resultadoNaRegua)} ${resultadoNaRegua === 1 ? unidadeRes.resultado : unidadeRes.resultadoPlural} e ${int(c.impressoes)} aparições`} em ${c.diasAtivos} ${c.diasAtivos === 1 ? "dia" : "dias"} com gasto; régua ${usaObjetivo ? `de ${G.curto}` : "da conta"} feita com ${campanhasNaRegua} campanhas. Confiança alta pede ${minimo * 3}+ ${porMilRegua ? "mil aparições" : unidadeRes.resultadoPlural}.`;
 
     // ---------- risco de mexer ----------
     const fatiaGasto = gastoTotal > 0 ? c.gasto / gastoTotal : 0;
@@ -426,41 +573,72 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
 
     // ---------- ação sugerida ----------
     const dia = c.gastoDiario;
+    const criativoNovo = `Subir 2 ou 3 criativos novos em ${nome} sem mexer na verba; quando os novos tiverem 3–4 dias rodando, pausar o antigo.`;
+    const revisarPublico =
+      c.grupo === "mensagem"
+        ? `Revisar o público de ${nome} (idade, região, interesses) e conferir se a mensagem automática do WhatsApp responde na hora. Se o custo não cair em 7 dias, pausar.`
+        : `Revisar o público de ${nome} (idade, região, interesses) e para onde o clique leva. Se o custo não cair em 7 dias, pausar.`;
+    const outroPapel = julgadaPor === "conta" && c.grupo !== "mensagem" && c.grupo !== "outro" && c.resultados > 0;
     let acao: string;
-    switch (categoria) {
-      case "Escalar agora":
-        acao = dia
-          ? `Aumentar o orçamento de ${nome} em 20% (de ~${brl0(dia)}/dia para ~${brl0(dia * 1.2)}/dia) e repetir em 3–4 dias se o custo se mantiver.`
-          : `Aumentar o orçamento de ${nome} em 20%.`;
-        break;
-      case "Manter":
-        acao = `Manter ${nome} como está e reavaliar no próximo período.`;
-        break;
-      case "Revisar criativo":
-        acao = `Subir 2 ou 3 criativos novos em ${nome} sem mexer na verba; quando os novos tiverem 3–4 dias rodando, pausar o antigo.`;
-        break;
-      case "Revisar público":
-        acao =
-          c.grupo === "mensagem"
-            ? `Revisar o público de ${nome} (idade, região, interesses) e conferir se a mensagem automática do WhatsApp responde na hora. Se o custo não cair em 7 dias, pausar.`
-            : `Revisar o público de ${nome} (idade, região, interesses) e para onde o clique leva. Se o custo não cair em 7 dias, pausar.`;
-        break;
-      case "Cortar":
-        acao =
-          risco.nivel === "alto"
-            ? `Reduzir ${nome} em 20% agora (~${brl0(c.gasto * PASSO_ORCAMENTO)} no período) e mais 20% a cada 3–4 dias se o custo não melhorar.`
-            : `Pausar ${nome} (${brl0(c.gasto)} no período).`;
-        break;
-      default:
-        acao =
-          veredito === "Não medido"
-            ? `Instalar o evento de ${G.resultado} no site (pixel da Meta) para medir ${nome}; até lá, conferir os resultados no Gerenciador de Anúncios.`
-            : veredito === "Volume insuficiente"
-              ? `Deixar ${nome} rodar até ${brl(MIN_GASTO)} e ${int(MIN_IMPRESSOES)} aparições antes de decidir.`
-              : `Acompanhar o custo de ${nome} (${cpr != null ? un(cpr) : "sem resultado ainda"}) no próximo período; com 3+ campanhas de ${G.curto} dá para comparar.`;
+    if (naoMedido) {
+      acao = `Instalar o evento de ${G.resultado} no site (pixel da Meta) para medir ${nome}; até lá, conferir os resultados no Gerenciador de Anúncios.`;
+    } else {
+      switch (vereditoOficial) {
+        case "Escalar":
+          acao = c.cansando
+            ? `${criativoNovo} Ainda é barata: com o criativo novo rodando, aumentar o orçamento em 20%.`
+            : dia
+              ? `Aumentar o orçamento de ${nome} em 20% (de ~${brl0(dia)}/dia para ~${brl0(dia * 1.2)}/dia) e repetir em 3–4 dias se o custo se mantiver.`
+              : `Aumentar o orçamento de ${nome} em 20%.`;
+          break;
+        case "Manter":
+          acao = c.cansando || selos.includes("Atenção caindo") ? criativoNovo : `Manter ${nome} como está e reavaliar no próximo período.`;
+          break;
+        case "Atrai mas não converte":
+          acao = outroPapel
+            ? `Decidir se ${nome} tem outro papel (fazer o médico ser conhecido): trouxe ${G.porMil ? `${int(c.impressoes)} aparições` : `${int(c.resultados)} ${G.resultadoPlural}`}, mas nenhuma conversa. Se a meta é conversa, ${revisarPublico.charAt(0).toLowerCase() + revisarPublico.slice(1)}`
+            : revisarPublico;
+          break;
+        case "Sem tração":
+          acao = outroPapel
+            ? `Decidir se ${nome} tem outro papel (fazer o médico ser conhecido): trouxe ${G.porMil ? `${int(c.impressoes)} aparições` : `${int(c.resultados)} ${G.resultadoPlural}`}, mas nenhuma conversa. Se a meta é conversa, pausar (${brl0(c.gasto)} no período).`
+            : risco.nivel === "alto"
+              ? `Reduzir ${nome} em 20% agora (~${brl0(c.gasto * PASSO_ORCAMENTO)} no período) e mais 20% a cada 3–4 dias se continuar sem resultado.`
+              : `Pausar ${nome} (${brl0(c.gasto)} no período).`;
+          break;
+        case "Cortar":
+          acao = atencaoBoa
+            ? revisarPublico
+            : risco.nivel === "alto"
+              ? `Reduzir ${nome} em 20% agora (~${brl0(c.gasto * PASSO_ORCAMENTO)} no período) e mais 20% a cada 3–4 dias se o custo não melhorar.`
+              : `Pausar ${nome} (${brl0(c.gasto)} no período).`;
+          break;
+        default:
+          acao = `Deixar ${nome} rodar até ${brl(MIN_GASTO)} e ${int(MIN_IMPRESSOES)} aparições antes de decidir.`;
+      }
     }
 
-    return { ...c, veredito, categoria, regua: med, vezesRegua: vezes, comparacao, motivo, acao, confianca, motivoConfianca, risco };
+    return {
+      ...c,
+      vereditoOficial,
+      veredito,
+      selos,
+      julgadaPor,
+      resultadoNaRegua,
+      custoNaRegua,
+      regua,
+      vezesRegua: vezes,
+      ctrReferencia: ref,
+      atencaoBoa,
+      vereditoContaToda,
+      comparacao,
+      motivo,
+      notas,
+      acao,
+      confianca,
+      motivoConfianca,
+      risco,
+    };
   });
   campanhas.sort((a, b) => b.gasto - a.gasto);
 
@@ -473,6 +651,8 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
       return {
         grupo: g,
         campanhas: cs.length,
+        campanhasComVolume: volumeCampanhasGrupo.get(g) ?? 0,
+        objetivosBrutos: [...new Set(cs.map((c) => c.objetivo ?? "(sem objetivo)"))].sort(),
         gasto,
         resultados,
         custoPorResultado: resultados > 0 ? gasto / resultados : null,
@@ -486,6 +666,7 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
     .sort((a, b) => b.gasto - a.gasto);
 
   const msg = grupos.find((g) => g.grupo === "mensagem");
+  const soma = (f: (c: CampanhaDiag) => boolean) => campanhas.filter(f).reduce((s, c) => s + c.gasto, 0);
   return {
     campanhas,
     grupos,
@@ -493,9 +674,13 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
     impressoes: campanhas.reduce((s, c) => s + c.impressoes, 0),
     cliquesLink: campanhas.reduce((s, c) => s + c.cliquesLink, 0),
     conversas: conversasTotal,
-    desperdicio: campanhas.filter((c) => c.veredito === "Cortar" || c.veredito === "Sem resultado").reduce((s, c) => s + c.gasto, 0),
+    leads: campanhas.reduce((s, c) => s + c.leads, 0),
+    visitasPagina: campanhas.reduce((s, c) => s + c.visitasPagina, 0),
+    desperdicio: soma((c) => c.veredito === "Cortar" || c.veredito === "Sem resultado"),
+    desperdicioSemResultado: soma((c) => c.vereditoOficial === "Atrai mas não converte" || c.vereditoOficial === "Sem tração"),
     conversasMensagem: msg?.conversas ?? 0,
     custoPorConversaMensagem: msg?.custoPorConversa ?? null,
+    reguaConta,
   };
 }
 
@@ -525,10 +710,16 @@ export function conversaMaisBarata(d: DiagnosticoAds): { barato: GrupoResumo; ca
 //  A. Entre objetivos (conversaMaisBarata): tirar verba das campanhas do
 //     objetivo caro que mais gastaram sem trazer conversa e passar para a
 //     melhor campanha do objetivo barato. Entra sempre que existir.
-//  B. Cortar: pausar (ou reduzir 20%, se o risco de mexer é alto) e passar a
-//     verba para a melhor campanha do MESMO objetivo (Escalar agora > Manter).
-//  C. Escalar agora que não recebeu verba em A/B: +20% no orçamento.
-//  D. Revisar público/criativo com verba relevante (≥ 8% do total): não move
+//  B. Marcadas "Cortar" (sem o selo "Revisar público") e "Sem tração": pausar
+//     (ou reduzir 20%, se o risco de mexer é alto) e passar a verba para a
+//     melhor campanha do MESMO objetivo marcada "Escalar" (senão "Manter"). Se
+//     a campanha foi comparada com a conta, a receptora é a melhor da conta
+//     pela conversa. Fica de fora quem tem "Resultado não medido" e quem foi
+//     julgada pela conversa mas entregou o resultado do próprio objetivo.
+//  C. Marcadas "Escalar" (sem "Criativo cansando") que não receberam verba em
+//     A/B: +20% no orçamento.
+//  D. "Atrai mas não converte" e selos "Revisar público", "Criativo cansando"
+//     ou "Atenção caindo" com verba relevante (≥ 8% do total): não move
 //     dinheiro, mas diz quanto está em jogo.
 // Ordem: A primeiro; depois por dinheiro em jogo. Uma campanha não aparece
 // como origem duas vezes. Quem recebe verba sobe no máximo o próprio gasto do
@@ -540,20 +731,28 @@ function impactoPorFatia(f: number): Impacto {
   return f >= 0.2 ? "alto" : f >= 0.08 ? "medio" : "baixo";
 }
 
+const temSelo = (c: CampanhaDiag, s: SeloCampanha) => c.selos.includes(s);
+/** Julgada pela conversa da conta, mas entregou o resultado do próprio objetivo: não é dinheiro perdido. */
+const outroPapel = (c: CampanhaDiag) => c.julgadaPor === "conta" && c.grupo !== "mensagem" && c.grupo !== "outro" && c.resultados > 0 && c.conversas === 0;
+
 // Quem recebe verba sobe no máximo o próprio gasto do período, somando todas
 // as ações (capacidade). Sem capacidade (< R$ 30), passa para a próxima.
 const MIN_CAPACIDADE = 30;
-function melhorReceptora(cs: CampanhaDiag[], grupo: Grupo, excluir: Set<string>, capacidade: Map<string, number>, porConversa = false): CampanhaDiag | null {
+function melhorReceptora(cs: CampanhaDiag[], grupo: Grupo | null, excluir: Set<string>, capacidade: Map<string, number>, porConversa = false): CampanhaDiag | null {
   const custo = (c: CampanhaDiag) => (porConversa ? c.custoPorConversa : c.custoPorResultado) ?? Infinity;
   const ok = cs.filter(
     (c) =>
-      c.grupo === grupo &&
+      (grupo == null || c.grupo === grupo) &&
       !excluir.has(c.campaign_id) &&
       (capacidade.get(c.campaign_id) ?? c.gasto) >= MIN_CAPACIDADE &&
-      (c.categoria === "Escalar agora" || c.categoria === "Manter" || (porConversa && c.categoria === "Sem dados suficientes" && c.conversas >= 10)) &&
+      !temSelo(c, "Criativo cansando") &&
+      !temSelo(c, "Resultado não medido") &&
+      (c.vereditoOficial === "Escalar" || c.vereditoOficial === "Manter") &&
+      // Mesmo objetivo: a receptora precisa ter sido julgada pela mesma régua.
+      (porConversa || grupo == null || c.julgadaPor === "objetivo") &&
       Number.isFinite(custo(c)),
   );
-  ok.sort((a, b) => (a.categoria === "Escalar agora" ? 0 : 1) - (b.categoria === "Escalar agora" ? 0 : 1) || custo(a) - custo(b));
+  ok.sort((a, b) => (a.vereditoOficial === "Escalar" ? 0 : 1) - (b.vereditoOficial === "Escalar" ? 0 : 1) || custo(a) - custo(b));
   return ok[0] ?? null;
 }
 
@@ -581,7 +780,7 @@ export function planoDeAcao(d: DiagnosticoAds): Insight[] {
     const cpcBarato = cmp.barato.custoPorConversa!;
     // Excesso = o que a campanha gastou além do que as conversas dela custariam no objetivo barato.
     const origens = cs
-      .filter((c) => c.grupo === cmp.caro.grupo && c.categoria !== "Escalar agora" && c.gasto >= MIN_GASTO && c.risco.nivel !== "alto" && c.campaign_id !== destino?.campaign_id)
+      .filter((c) => c.grupo === cmp.caro.grupo && c.vereditoOficial !== "Escalar" && c.gasto >= MIN_GASTO && c.risco.nivel !== "alto" && c.campaign_id !== destino?.campaign_id)
       .map((c) => ({ c, excesso: c.gasto - c.conversas * cpcBarato }))
       .filter((o) => o.excesso > 0)
       .sort((a, b) => b.excesso - a.excesso)
@@ -618,7 +817,7 @@ export function planoDeAcao(d: DiagnosticoAds): Insight[] {
           motivoConfianca: `${int(cmp.barato.conversas)} conversas no objetivo de ${B.curto}; ${int(cmp.caro.conversas)} no de ${C.curto}.`,
           impacto: impactoPorFatia(movido / d.gasto) === "baixo" && ganho >= 10 ? "medio" : impactoPorFatia(Math.max(movido / d.gasto, cmp.caro.gasto / d.gasto / 2)),
           impactoTexto: ganho >= 1 ? `≈ ${int(ganho)} conversas a mais no mesmo período, com a mesma verba (supondo que a verba extra renda como a média das campanhas de ${B.curto}, ${brl(Math.max(cpcBarato, destino.custoPorConversa!))} por conversa).` : undefined,
-          acao: { texto: `${txtOrigens[0].toUpperCase() + txtOrigens.slice(1)}, e passar ~${brl0(movido)} para ${aspas(destino.campanha)} (${B.curto}, ${brl(destino.custoPorConversa!)} por conversa), subindo 20% a cada 3–4 dias.${restoTxt(liberado, movido)}` },
+          acao: { texto: `${txtOrigens[0].toUpperCase() + txtOrigens.slice(1)}, e passar ~${brl0(movido)} para ${aspas(destino.campanha)} (${B.curto}, ${brl(destino.custoPorConversa!)} por conversa, marcada "${destino.vereditoOficial}"), subindo 20% a cada 3–4 dias.${restoTxt(liberado, movido)}` },
           responsavel: "gestor_trafego",
           risco: `${destino.risco.nivel === "alto" ? "A campanha que recebe é a principal fonte de conversas: suba 20% por vez. " : ""}Campanha de ${C.curto} pode trazer paciente que chama depois, sem ser contado como conversa do anúncio.`,
         },
@@ -626,25 +825,42 @@ export function planoDeAcao(d: DiagnosticoAds): Insight[] {
     }
   }
 
-  // ---------- B. cortar dentro do mesmo objetivo ----------
+  // ---------- B. "Cortar" e "Sem tração" ----------
   const usadosOrigem = new Set(cands.flatMap((c) => c.origens));
-  const cortar = cs.filter((c) => c.categoria === "Cortar" && c.gasto >= MIN_GASTO && !usadosOrigem.has(c.campaign_id)).sort((a, b) => b.gasto - a.gasto);
+  const cortar = cs
+    .filter(
+      (c) =>
+        ((c.vereditoOficial === "Cortar" && !temSelo(c, "Revisar público")) || c.vereditoOficial === "Sem tração") &&
+        !temSelo(c, "Resultado não medido") &&
+        !outroPapel(c) &&
+        c.gasto >= MIN_GASTO &&
+        !usadosOrigem.has(c.campaign_id),
+    )
+    .sort((a, b) => b.gasto - a.gasto);
   for (const c of cortar) {
     const G = GRUPOS[c.grupo];
-    const destino = melhorReceptora(cs, c.grupo, new Set([c.campaign_id]), capacidade);
+    const pelaConta = c.julgadaPor === "conta";
+    // Pela conta, a régua é a conversa: a receptora é a melhor da conta pela conversa.
+    const destino = pelaConta ? melhorReceptora(cs, null, new Set([c.campaign_id]), capacidade, true) : melhorReceptora(cs, c.grupo, new Set([c.campaign_id]), capacidade);
+    const custoDest = (x: CampanhaDiag) => (pelaConta ? x.custoPorConversa : x.custoPorResultado);
+    const unD = (v: number) => (pelaConta ? `${brl(v)} por conversa` : unidade(c.grupo, v));
+    const resPlural = pelaConta ? "conversas" : G.resultadoPlural;
+    const resSing = pelaConta ? "conversa" : G.resultado;
+    const tipica = pelaConta ? "a campanha típica da conta" : `a campanha típica de ${G.curto}`;
     const pausar = c.risco.nivel !== "alto";
     const liberado = pausar ? c.gasto : c.gasto * PASSO_ORCAMENTO;
     const movido = redondo(destino ? Math.min(liberado, cap(destino)) : liberado);
     if (destino) reservar(destino, movido);
-    const vezes = c.vezesRegua != null ? `${x1(c.vezesRegua)}x o custo das outras de ${G.curto}` : `nenhum(a) ${G.resultado}`;
+    const vezes = c.vezesRegua != null && c.vereditoOficial === "Cortar" ? `${x1(c.vezesRegua)}x o custo ${pelaConta ? "da campanha típica da conta" : `das outras de ${G.curto}`}` : `nenhum(a) ${resSing}`;
     const verbo = pausar ? `Pausar ${aspas(c.campanha)} (${brl0(c.gasto)} no período, ${vezes})` : `Reduzir ${aspas(c.campanha)} em 20% (~${brl0(liberado)}; ${vezes})`;
     let ganhoTxt: string | undefined;
-    if (destino && !G.porMil && destino.custoPorResultado) {
-      // Conservador: a verba extra rende como a campanha típica do objetivo.
-      const custoExtra = Math.max(destino.custoPorResultado, c.regua ?? destino.custoPorResultado);
-      const perdidos = c.resultados * (movido / c.gasto);
+    const cd = destino ? custoDest(destino) : null;
+    if (destino && cd && (pelaConta || !G.porMil)) {
+      // Conservador: a verba extra rende como a campanha típica.
+      const custoExtra = Math.max(cd, c.regua ?? cd);
+      const perdidos = c.resultadoNaRegua * (movido / c.gasto);
       const ganho = movido / custoExtra - perdidos;
-      if (ganho >= 1) ganhoTxt = `≈ ${int(ganho)} ${ganho >= 2 ? G.resultadoPlural : G.resultado} a mais com a mesma verba (supondo que a verba extra renda como a campanha típica de ${G.curto}, ${unidade(c.grupo, custoExtra)}).`;
+      if (ganho >= 1) ganhoTxt = `≈ ${int(ganho)} ${ganho >= 2 ? resPlural : resSing} a mais com a mesma verba (supondo que a verba extra renda como ${tipica}, ${unD(custoExtra)}).`;
     }
     cands.push({
       prioridade: 1,
@@ -655,17 +871,20 @@ export function planoDeAcao(d: DiagnosticoAds): Insight[] {
         id: `anuncios-cortar-${c.campaign_id}`,
         area: "anuncios",
         tom: "ruim",
-        titulo: `${aspas(c.campanha)} custa ${c.vezesRegua != null ? `${x1(c.vezesRegua)}x` : "muito mais que"} a campanha típica de ${G.curto}.`,
+        titulo:
+          c.vereditoOficial === "Sem tração"
+            ? `${aspas(c.campanha)} (marcada "Sem tração") não trouxe nenhum(a) ${resSing} com ${brl0(c.gasto)}.`
+            : `${aspas(c.campanha)} (marcada "Cortar") custa ${c.vezesRegua != null ? `${x1(c.vezesRegua)}x` : "muito mais que"} ${tipica}.`,
         diagnostico: c.motivo,
-        evidencia: `${brl(c.gasto)} investidos, ${int(c.resultados)} ${G.resultadoPlural}${c.custoPorResultado ? ` (${unidade(c.grupo, c.custoPorResultado)})` : ""}. ${c.comparacao}`,
+        evidencia: `${brl(c.gasto)} investidos, ${int(c.resultadoNaRegua)} ${resPlural}${c.custoNaRegua ? ` (${unD(c.custoNaRegua)})` : ""}. ${c.comparacao}`,
         confianca: c.confianca,
         motivoConfianca: c.motivoConfianca,
         impacto: impactoPorFatia(c.gasto / d.gasto),
         impactoTexto: ganhoTxt,
         acao: {
           texto: destino
-            ? `${verbo} e passar ~${brl0(movido)} para ${aspas(destino.campanha)} (${unidade(c.grupo, destino.custoPorResultado!)}), subindo 20% a cada 3–4 dias.${restoTxt(liberado, movido)}`
-            : `${verbo}. Guardar a verba até ter uma campanha de ${G.curto} que funcione.`,
+            ? `${verbo} e passar ~${brl0(movido)} para ${aspas(destino.campanha)} (${unD(cd!)}, marcada "${destino.vereditoOficial}"), subindo 20% a cada 3–4 dias.${restoTxt(liberado, movido)}`
+            : `${verbo}. Guardar a verba até ter uma campanha ${pelaConta ? "" : `de ${G.curto} `}que funcione.`,
         },
         responsavel: "gestor_trafego",
         risco: c.risco.texto,
@@ -673,11 +892,14 @@ export function planoDeAcao(d: DiagnosticoAds): Insight[] {
     });
   }
 
-  // ---------- C. escalar quem não recebeu verba ----------
+  // ---------- C. "Escalar" que não recebeu verba ----------
   const destinos = new Set(cands.map((c) => c.destino).filter(Boolean) as string[]);
-  for (const c of cs.filter((c) => c.categoria === "Escalar agora" && !destinos.has(c.campaign_id))) {
+  for (const c of cs.filter((c) => c.vereditoOficial === "Escalar" && !temSelo(c, "Criativo cansando") && !temSelo(c, "Resultado não medido") && !destinos.has(c.campaign_id))) {
     const G = GRUPOS[c.grupo];
+    const pelaConta = c.julgadaPor === "conta";
+    const resPlural = pelaConta ? "conversas" : G.resultadoPlural;
     const extra = c.gasto * PASSO_ORCAMENTO;
+    const custo = c.custoNaRegua;
     cands.push({
       prioridade: 0,
       valor: extra,
@@ -687,14 +909,13 @@ export function planoDeAcao(d: DiagnosticoAds): Insight[] {
         id: `anuncios-escalar-${c.campaign_id}`,
         area: "anuncios",
         tom: "bom",
-        titulo: `${aspas(c.campanha)} entrega ${G.resultadoPlural} ${c.vezesRegua != null ? `${pct(1 - c.vezesRegua)} mais barato` : "mais barato"} que a campanha típica de ${G.curto}.`,
+        titulo: `${aspas(c.campanha)} (marcada "Escalar") entrega ${resPlural} ${c.vezesRegua != null ? `${pct(1 - c.vezesRegua)} mais barato` : "mais barato"} que ${pelaConta ? "a campanha típica da conta" : `a campanha típica de ${G.curto}`}.`,
         diagnostico: c.motivo,
-        evidencia: `${brl(c.gasto)} investidos, ${int(c.resultados)} ${G.resultadoPlural}. ${c.comparacao}`,
+        evidencia: `${brl(c.gasto)} investidos, ${int(c.resultadoNaRegua)} ${resPlural}. ${c.comparacao}`,
         confianca: c.confianca,
         motivoConfianca: c.motivoConfianca,
         impacto: impactoPorFatia(c.gasto / d.gasto),
-        impactoTexto:
-          !G.porMil && c.custoPorResultado ? `≈ ${int(extra / c.custoPorResultado)} ${G.resultadoPlural} a mais por período com +~${brl0(extra)} (se o custo se mantiver).` : undefined,
+        impactoTexto: (pelaConta || !G.porMil) && custo ? `≈ ${int(extra / custo)} ${resPlural} a mais por período com +~${brl0(extra)} (se o custo se mantiver).` : undefined,
         acao: { texto: c.acao },
         responsavel: "gestor_trafego",
         risco: "Ao subir a verba o custo costuma piorar um pouco; por isso 20% por vez, conferindo o custo antes do próximo aumento.",
@@ -703,8 +924,11 @@ export function planoDeAcao(d: DiagnosticoAds): Insight[] {
   }
 
   // ---------- D. revisar público/criativo com verba relevante ----------
-  for (const c of cs.filter((c) => (c.categoria === "Revisar público" || c.categoria === "Revisar criativo") && c.gasto / d.gasto >= 0.08)) {
+  const revisar = (c: CampanhaDiag) =>
+    c.vereditoOficial === "Atrai mas não converte" || temSelo(c, "Revisar público") || temSelo(c, "Criativo cansando") || temSelo(c, "Atenção caindo");
+  for (const c of cs.filter((c) => revisar(c) && !temSelo(c, "Resultado não medido") && c.gasto / d.gasto >= 0.08)) {
     const G = GRUPOS[c.grupo];
+    const publico = c.vereditoOficial === "Atrai mas não converte" || temSelo(c, "Revisar público");
     cands.push({
       prioridade: 0,
       valor: c.gasto * 0.5, // não move verba: pesa metade na ordenação
@@ -713,13 +937,13 @@ export function planoDeAcao(d: DiagnosticoAds): Insight[] {
         id: `anuncios-revisar-${c.campaign_id}`,
         area: "anuncios",
         tom: "atencao",
-        titulo: `${aspas(c.campanha)} (${brl0(c.gasto)} no período) pede ${c.categoria === "Revisar público" ? "ajuste de público" : "criativo novo"}.`,
-        diagnostico: c.motivo,
+        titulo: `${aspas(c.campanha)} (marcada "${c.vereditoOficial}", ${brl0(c.gasto)} no período) pede ${publico ? "ajuste de público" : "criativo novo"}.`,
+        diagnostico: [c.motivo, ...c.notas.filter((t) => !t.startsWith("Comparada"))].join(" "),
         evidencia: `${brl(c.gasto)} investidos, ${int(c.resultados)} ${G.resultadoPlural}; de cada 100 aparições, ${c.ctrLink != null ? (c.ctrLink * 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "—"} viraram clique no link. ${c.comparacao}`,
         confianca: c.confianca,
         motivoConfianca: c.motivoConfianca,
         impacto: impactoPorFatia(c.gasto / d.gasto),
-        acao: { texto: c.acao },
+        acao: { texto: publico ? c.acao : c.acao.includes("criativos novos") ? c.acao : `Subir 2 ou 3 criativos novos em ${aspas(c.campanha)} sem mexer na verba; quando os novos tiverem 3–4 dias rodando, pausar o antigo.` },
         responsavel: "gestor_trafego",
         risco: c.risco.texto,
       },
@@ -773,23 +997,23 @@ export function insightsDeAnuncios(d: DiagnosticoAds | null | undefined): Insigh
 export function limitacoesDeAnuncios(d: DiagnosticoAds | null | undefined): Limitacao[] {
   if (!d || d.gasto <= 0) return [];
   const out: Limitacao[] = [];
-  const naoMedido = d.campanhas.filter((c) => c.veredito === "Não medido");
+  const naoMedido = d.campanhas.filter((c) => c.selos.includes("Resultado não medido"));
   if (naoMedido.length) {
     const g = naoMedido.reduce((s, c) => s + c.gasto, 0);
     out.push({
       id: "anuncios-nao-medido",
       area: "anuncios",
-      texto: `${naoMedido.length} ${naoMedido.length === 1 ? "campanha" : "campanhas"} de cadastro/venda no site (${brl0(g)}) não ${naoMedido.length === 1 ? "tem" : "têm"} o resultado registrado aqui: dá para ver a visita à página, mas não o cadastro ou a compra.`,
+      texto: `${naoMedido.length} ${naoMedido.length === 1 ? "campanha" : "campanhas"} de cadastro/venda no site (${brl0(g)}) não ${naoMedido.length === 1 ? "tem" : "têm"} o resultado registrado aqui: dá para ver a visita à página, mas não o cadastro ou a compra. ${naoMedido.length === 1 ? "Ela foi comparada" : "Elas foram comparadas"} com a conta toda, pela conversa.`,
       resolve: "gestor_trafego",
       comoResolver: "Instalar o pixel da Meta com o evento de lead/compra no site.",
     });
   }
-  const pouco = d.campanhas.filter((c) => c.veredito === "Volume insuficiente");
+  const pouco = d.campanhas.filter((c) => c.vereditoOficial === "Volume insuficiente");
   if (pouco.length) {
     out.push({
       id: "anuncios-pouco-volume",
       area: "anuncios",
-      texto: `${pouco.length} ${pouco.length === 1 ? "campanha rodou" : "campanhas rodaram"} pouco (${brl0(pouco.reduce((s, c) => s + c.gasto, 0))} no total) e não ${pouco.length === 1 ? "foi julgada" : "foram julgadas"}.`,
+      texto: `${pouco.length} ${pouco.length === 1 ? "campanha rodou" : "campanhas rodaram"} pouco (${brl0(pouco.reduce((s, c) => s + c.gasto, 0))} no total; menos de ${int(MIN_IMPRESSOES)} aparições ou ${brl0(MIN_GASTO)}) e ${pouco.length === 1 ? "ficou" : "ficaram"} como "Volume insuficiente".`,
       resolve: "gestor_trafego",
     });
   }
@@ -798,7 +1022,7 @@ export function limitacoesDeAnuncios(d: DiagnosticoAds | null | undefined): Limi
     out.push({
       id: "anuncios-sem-regua",
       area: "anuncios",
-      texto: `${semRegua.map((g) => GRUPOS[g.grupo].nome).join(", ")}: menos de ${MIN_CAMPANHAS_REGUA} campanhas com volume no período, então não dá para dizer se o custo está bom ou ruim comparando com as outras.`,
+      texto: `${semRegua.map((g) => GRUPOS[g.grupo].nome).join(", ")}: menos de ${MIN_CAMPANHAS_REGUA} campanhas com volume no período, então essas campanhas foram comparadas com a conta toda, pela conversa (a régua original), e não com as do mesmo objetivo.`,
       resolve: "gestor_trafego",
       comoResolver: "Escolher um período maior ou rodar mais de uma campanha com o mesmo objetivo.",
     });
