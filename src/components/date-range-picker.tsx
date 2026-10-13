@@ -17,12 +17,22 @@ export function DateRangePicker({
   value,
   onChange,
   variante = "inline",
+  inicioDados,
 }: {
   value: DateRangeState;
   onChange: (next: DateRangeState) => void;
   variante?: "inline" | "lista";
+  /** Primeiro dia com dado da fonte desta tela: períodos que começam bem antes disso não são oferecidos. */
+  inicioDados?: string | null;
 }) {
   const resolved = resolveDateRange(value);
+  // Só oferece período que tem dado (folga de 7 dias); o período atual sempre aparece.
+  const presets = RANGE_PRESETS.filter((p) => {
+    if (!inicioDados || p.value === value.preset || p.value === "personalizado" || p.value === "mes_atual") return true;
+    const ini = resolveDateRange({ preset: p.value }).start;
+    const limite = new Date(new Date(inicioDados + "T12:00:00").getTime() - 7 * 86400000).toISOString().slice(0, 10);
+    return ini >= limite;
+  });
 
   // O <input type="date"> dispara onChange a cada trecho digitado (ex.: ano 0002 enquanto
   // se escreve 2026), o que mandava uma consulta de dois mil anos e parecia que o filtro
@@ -61,7 +71,7 @@ export function DateRangePicker({
     return (
       <div className="flex flex-col gap-2">
         <div role="radiogroup" aria-label="Período" className="grid grid-cols-2 gap-2">
-          {RANGE_PRESETS.map((p) => {
+          {presets.map((p) => {
             const sel = value.preset === p.value;
             return (
               <button
@@ -126,7 +136,7 @@ export function DateRangePicker({
         aria-label="Período"
         style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
       >
-        {RANGE_PRESETS.map((p) => (
+        {presets.map((p) => (
           <option key={p.value} value={p.value}>
             {p.label}
           </option>

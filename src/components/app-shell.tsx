@@ -43,6 +43,8 @@ export interface AppShellProps {
   /** Linha 2 do cabeçalho: disponibilidade de cada fonte. */
   fontesLinha?: ReactNode;
   onBuscarCliente?: () => void;
+  /** Primeiro dia com dado da fonte da tela atual (limita os períodos oferecidos). */
+  inicioDados?: string | null;
   children: ReactNode;
 }
 
@@ -129,7 +131,7 @@ export function AreaTabs({ area, sub, clientId, dateRange }: { area: AreaVisivel
   );
 }
 
-export function AppShell({ clientId, client, pathname, dateRange, onDateRange, vis, frescor, frescorCompacto, fontesLinha, onBuscarCliente, children }: AppShellProps) {
+export function AppShell({ clientId, client, pathname, dateRange, onDateRange, vis, frescor, frescorCompacto, fontesLinha, onBuscarCliente, inicioDados, children }: AppShellProps) {
   const sub = subcaminho(pathname, clientId);
   const ativa = areaDoCaminho(sub);
   const areas = areasVisiveis(vis);
@@ -272,7 +274,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
           </div>
           {cfm}
           <span className="spacer" />
-          <DateRangePicker value={dateRange} onChange={onDateRange} />
+          <DateRangePicker value={dateRange} onChange={onDateRange} inicioDados={inicioDados} />
         </div>
         <div className="top-linha2">{fontesLinha ?? frescor}</div>
         <div className="dtabs">
@@ -307,6 +309,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
       <BottomSheet aberto={periodo} onFechar={() => setPeriodo(false)} titulo="Período">
         <DateRangePicker
           variante="lista"
+          inicioDados={inicioDados}
           value={dateRange}
           onChange={(next) => {
             onDateRange(next);

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate, useRouterState, Outlet } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getClient, getClientFontes } from "@/lib/client-data";
+import { supabase } from "@/integrations/supabase/client";
 import { listAllClients } from "@/lib/admin-data";
 import { useAuth } from "@/hooks/use-auth";
 import { AppShell } from "@/components/app-shell";
@@ -14,7 +15,7 @@ import { CoberturaPeriodo } from "@/components/cobertura-periodo";
 export const Route = createFileRoute("/_authenticated/$clientId")({
   component: ClientLayout,
   validateSearch: (search: Record<string, unknown>): DateRangeState => ({
-    preset: (search.preset as RangePreset) ?? "90d",
+    preset: (search.preset as RangePreset) ?? "30d",
     from: typeof search.from === "string" ? search.from : undefined,
     to: typeof search.to === "string" ? search.to : undefined,
   }),
@@ -42,6 +43,29 @@ function ClientLayout() {
       navigate({ to: "/$clientId/crm-painel", params: { clientId }, search: dateRange, replace: true });
     }
   }, [soCrm, currentPathname, clientId, navigate, dateRange]);
+
+  // Primeiro dia com dado de cada fonte: a tela só oferece período que tem dado.
+  const { data: cobertura } = useQuery({
+    queryKey: ["cobertura-geral", clientId],
+    queryFn: async () => {
+      const hoje = new Date().toISOString().slice(0, 10);
+      const { data } = await (supabase as any).rpc("cobertura_periodo", { p_client: clientId, p_de: hoje, p_ate: hoje });
+      return ((data ?? []) as { fonte: string; primeiro_geral: string | null }[]) ?? [];
+    },
+    staleTime: 30 * 60_000,
+    retry: false,
+  });
+  const primeiro = (f: string) => cobertura?.find((c) => c.fonte === f)?.primeiro_geral ?? null;
+  const fonteDaTela = /\/anuncios/.test(currentPathname)
+    ? ["anuncios"]
+    : /\/(crm|vendas|consultas|jornada|analisar)/.test(currentPathname)
+      ? ["crm"]
+      : /\/(atendimento|conversas)/.test(currentPathname)
+        ? ["whatsapp"]
+        : /\/(relatorio|oportunidades)/.test(currentPathname)
+          ? []
+          : ["instagram"];
+  const inicioDados = fonteDaTela.map(primeiro).filter(Boolean).sort()[0] ?? null;
 
   const [pal, setPal] = useState(false);
 
@@ -71,6 +95,7 @@ function ClientLayout() {
         frescorCompacto={<SyncFreshnessBadge clientId={clientId} compacto />}
         fontesLinha={<DisponibilidadeFontes clientId={clientId} fontes={fontes} />}
         onBuscarCliente={isAdmin ? () => setPal(true) : undefined}
+        inicioDados={inicioDados}
       >
         <CoberturaPeriodo
           clientId={clientId}
@@ -110,7 +135,7 @@ function ClientPalette({ clientId, onClose }: { clientId: string; onClose: () =>
 
   function go(id: string) {
     onClose();
-    navigate({ to: "/$clientId", params: { clientId: id }, search: { preset: "90d" } });
+    navigate({ to: "/$clientId", params: { clientId: id }, search: { preset: "30d" } });
   }
 
   return (

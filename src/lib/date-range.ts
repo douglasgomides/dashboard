@@ -25,7 +25,7 @@ function toISODate(d: Date): string {
 }
 
 // Sempre resolve pra um intervalo concreto {start, end} — "personalizado" sem
-// from/to ainda preenchidos cai de volta em 90 dias, pra nunca disparar uma
+// from/to ainda preenchidos cai de volta em 30 dias, pra nunca disparar uma
 // query com bound indefinido.
 export function resolveDateRange(state: DateRangeState): { start: string; end: string } {
   const today = new Date();
@@ -39,7 +39,7 @@ export function resolveDateRange(state: DateRangeState): { start: string; end: s
     const start = new Date(today.getFullYear(), today.getMonth(), 1);
     return { start: toISODate(start), end: toISODate(today) };
   }
-  const days = state.preset === "7d" ? 7 : state.preset === "30d" ? 30 : state.preset === "180d" ? 180 : state.preset === "365d" ? 365 : 90;
+  const days = state.preset === "7d" ? 7 : state.preset === "30d" ? 30 : state.preset === "180d" ? 180 : state.preset === "365d" ? 365 : state.preset === "90d" ? 90 : 30;
   // "Últimos N dias" são N dias contando hoje (antes eram N+1: "7 dias" somava 8).
   const start = new Date(today);
   start.setDate(start.getDate() - (days - 1));
