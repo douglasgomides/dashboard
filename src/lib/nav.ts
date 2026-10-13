@@ -24,6 +24,7 @@ import {
   Users,
   Workflow,
   type LucideIcon,
+  ClipboardList,
 } from "lucide-react";
 
 // Navegação do Hub: 5 categorias (Início, Social, Comercial, Oportunidades,
@@ -93,6 +94,7 @@ export const AREAS: NavArea[] = [
     tabs: [
       { path: "/anuncios", label: "Anúncios", Icone: Megaphone, fonte: "anuncios" },
       { path: "/crm-painel", label: "Comercial", Icone: Briefcase, fonte: "crm" },
+      { path: "/crm-guia", label: "Organizar o CRM", Icone: ClipboardList, fonte: "crm" },
       { path: "/atendimento", label: "WhatsApp", Icone: MessageCircle, fonte: "atendimento" },
       { path: "/jornada", label: "Jornada", Icone: Route, admin: true },
     ],
@@ -132,7 +134,7 @@ export const AVANCADO: NavTab[] = [
 // Clientes que só têm CRM ligado e não têm Business Manager: veem só o
 // Comercial. Quem abrir outro endereço é levado ao Funil. Dra. Fernanda Nunes (RD Station CRM).
 export const CLIENTES_SO_CRM = new Set(["8770500e-ab5d-4ae8-9489-c49c9991303c"]);
-export const ROTAS_DO_CRM = ["/crm-painel", "/crm-estrutura", "/vendas-kommo"];
+export const ROTAS_DO_CRM = ["/crm-painel", "/crm-guia", "/crm-estrutura", "/vendas-kommo"];
 
 export function fonteOk(fonte: Fonte | undefined, fontes: Fontes): boolean {
   if (!fonte || !fontes) return true;

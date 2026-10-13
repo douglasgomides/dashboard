@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { AlertOctagon, AlertTriangle, ChevronDown, Wrench } from "lucide-react";
 import { getQualidadeDados, getCrmBaseViva, type ProblemaDado } from "@/lib/client-data";
 import { ROTULO_RESPONSAVEL, type Responsavel } from "@/lib/insight";
@@ -75,6 +76,11 @@ export function QualidadeDados({ clientId, fonte, titulo = "Dados com erro na or
         <button type="button" onClick={() => setTodos(!todos)} className="mb-2 min-h-[44px] text-sm font-semibold" style={{ color: "var(--accent)" }}>
           {todos ? "Mostrar menos" : `Ver os ${itens.length} problemas`}
         </button>
+      )}
+      {itens.some((p) => p.fonte === "crm") && (
+        <Link to="/$clientId/crm-guia" params={{ clientId }} className="mb-2 inline-flex min-h-[40px] items-center text-sm font-semibold" style={{ color: "var(--accent)" }}>
+          Abrir o guia passo a passo para organizar o CRM →
+        </Link>
       )}
       {!compacto && <div className="h-2" />}
     </section>

@@ -5,7 +5,7 @@
 import { chromium } from "playwright-core";
 const BASE = "http://localhost:5198";
 const CID = "11111111-1111-1111-1111-111111111111";
-const rotas = ["", "/conteudo", "/posts", "/top", "/audiencia", "/duvidas", "/ideias", "/inspiracao", "/anuncios", "/crm-painel", "/atendimento", "/jornada", "/oportunidades", "/relatorio", "/analisar", "/conversas", "/crm-estrutura", "/vendas-kommo", "/vendas", "/consultas", "/automacoes"].map((r) => `/${CID}${r}`)
+const rotas = ["", "/conteudo", "/posts", "/top", "/audiencia", "/duvidas", "/ideias", "/inspiracao", "/anuncios", "/crm-painel", "/crm-guia", "/atendimento", "/jornada", "/oportunidades", "/relatorio", "/analisar", "/conversas", "/crm-estrutura", "/vendas-kommo", "/vendas", "/consultas", "/automacoes"].map((r) => `/${CID}${r}`)
   .concat(["/admin", `/admin/${CID}`, "/admin/conferencia", "/admin/referencia"]);
 const width = +(process.argv[2] ?? 1280);
 const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
