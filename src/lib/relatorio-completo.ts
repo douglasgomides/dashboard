@@ -8,6 +8,7 @@ import {
   getClientFontes,
   getCrmProvider,
   getAdsCampanhasPeriodo,
+  getAdsDiagnostico,
   getAdsPorDia,
   getAdsPorObjetivo,
   getAdsResumo,
@@ -57,6 +58,10 @@ export interface RelatorioCompletoData {
     // O custo por conversa do relatório sai SÓ daqui (campanhas de mensagem).
     objetivo: DiagnosticoAds | null;
     diasComDado: string[];
+    // Frequência por campanha (campaign_id → vezes que a mesma pessoa viu), com a definição do
+    // relatório antigo: RPC ads_diagnostico, `avg(frequency)` = MÉDIA DAS FREQUÊNCIAS DIÁRIAS,
+    // não a frequência do período (a Meta não soma frequência entre dias). O PDF diz isso em nota.
+    frequencia: Record<string, number | null>;
   } | null;
   wts: {
     resumo: any | null;
@@ -113,13 +118,20 @@ export async function coletarRelatorioCompleto(args: {
 
   let ads: RelatorioCompletoData["ads"] = null;
   if (fontes.tem_anuncios) {
-    const [resumo, porDia, porObjetivo, campanhas] = await Promise.all([
+    const [resumo, porDia, porObjetivo, campanhas, diagConta] = await Promise.all([
       tentar("anúncios, resumo", falhas, () => getAdsResumo(clientId, start, end), null as any),
       tentar("anúncios, por dia", falhas, () => getAdsPorDia(clientId, start, end), [] as any[]),
       tentar("anúncios, por objetivo", falhas, () => getAdsPorObjetivo(clientId, start, end), [] as any[]),
       tentar("anúncios, campanhas", falhas, () => getAdsCampanhasPeriodo(clientId, start, end), null),
+      tentar("anúncios, frequência por campanha", falhas, () => getAdsDiagnostico(clientId, start, end), [] as any[]),
     ]);
+    const frequencia: Record<string, number | null> = {};
+    for (const r of (diagConta ?? []) as any[]) {
+      const v = r?.frequencia == null ? null : Number(r.frequencia);
+      frequencia[String(r.campaign_id)] = v != null && Number.isFinite(v) ? v : null;
+    }
     ads = {
+      frequencia,
       resumo,
       porDia: porDia ?? [],
       porObjetivo: porObjetivo ?? [],

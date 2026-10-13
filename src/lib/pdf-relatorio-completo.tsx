@@ -11,6 +11,8 @@ import {
   computeCasosDestacados,
   computeConceitosVencedores,
   computeFormatBreakdown,
+  computeFormatInsight,
+  computeHeadline,
   computeMelhoresHorarios,
   computeReachByFormat,
   computeReachByTema,
@@ -26,7 +28,7 @@ import { fmtBRL, fmtNum } from "@/lib/format";
 import { BarChartBlock, Footer, caseCaption, stripEmoji, styles } from "@/lib/pdf-report";
 import type { RelatorioCompletoData } from "@/lib/relatorio-completo";
 import { GRUPOS } from "@/lib/anuncios-objetivo";
-import { SECOES, duvidasRepetidas } from "@/lib/relatorio-envio";
+import { NOTA_ALGORITMO_DUVIDAS, SECOES, duvidasRepetidas, type SecaoId } from "@/lib/relatorio-envio";
 import { tornarSeguro } from "@/lib/linguagem-cfm";
 
 const GOLD = "#b8935a";
@@ -185,6 +187,13 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   const temIg = d.fontes.tem_instagram;
   const dias = Math.max(1, Math.round((new Date(d.end).getTime() - new Date(d.start).getTime()) / 86400000) + 1);
 
+  // Restaurados do relatório antigo: "O achado do período" e o insight de formato por engajamento.
+  const headline = temIg ? computeHeadline(posts) : null;
+  const insight = temIg ? computeFormatInsight(posts) : null;
+  // Checagem CFM no PDF: mesma regra do texto (reescrita segura por padrão, nada apagado) e as
+  // mesmas escolhas de "manter original" feitas na tela.
+  const manter = d.envio.manterOriginal ?? [];
+  const seguro = (t: string) => tornarSeguro(t, { manter }).texto || t;
   const { ranked: horarios, overallMedian: horaMediana } = temIg ? computeMelhoresHorarios(posts) : { ranked: [] as any[], overallMedian: 0 };
   const formatos = temIg ? computeFormatBreakdown(posts).sort((a, b) => b.medianEngagement - a.medianEngagement) : [];
   const reachFormato = temIg ? computeReachByFormat(posts) : [];
@@ -200,15 +209,21 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   const temasPerfil = posts.map((p: any) => String(p.tema ?? "")).filter(Boolean);
   const duvidas = temIg ? duvidasRepetidas(d.perguntas as any[], 2, temasPerfil).duvidas : [];
   const seg = temIg ? analyzeFollowers(metrics, d.start, d.end) : null;
-  // Ideias da regra "pergunta repetida" citam o comentário; ficam fora (a dúvida já aparece acima, sem citação).
+  // Ideias de conteúdo, inclusive as que saem das dúvidas (restauradas). A regra "pergunta" usa o
+  // agrupamento da tela Dúvidas (voz-do-paciente): só assunto perguntado por 2+ pessoas diferentes.
+  // O comentário NUNCA é citado no PDF: o "porquê" dessas ideias diz só quantas pessoas e o assunto
+  // (a evidência original traz um exemplo do comentário, que fica na tela Dúvidas).
   const ideiasBrutas = temIg ? buildIdeias(posts, d.perguntas as any[]) : null;
   const ideias = ideiasBrutas
     ? {
         ...ideiasBrutas,
         ideias: ideiasBrutas.ideias
-          .filter((i) => i.regra !== "pergunta")
-          .map((i) => ({ ...i, acao: tornarSeguro(i.acao).texto, porque: tornarSeguro(i.porque).texto }))
-          .filter((i) => i.acao && i.porque),
+          .filter((i) => i.regra !== "pergunta" || (i.pessoas ?? 0) >= 2)
+          .map((i) => {
+            const porque =
+              i.regra === "pergunta" ? `${i.pessoas} pessoas diferentes perguntaram sobre "${i.tema}" nos comentários do período (comentário não citado).` : i.porque;
+            return { ...i, acao: seguro(i.acao), porque: seguro(porque) };
+          }),
       }
     : null;
 
@@ -243,8 +258,16 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   }
   if (obj && obj.gasto > 0) {
     kpis.push({ label: "Investido em anúncios", value: fmtBRL(obj.gasto), hint: `${obj.campanhas.length} campanhas` });
-    kpis.push({ label: "Conversas (campanhas de mensagem)", value: fmtNum(obj.conversasMensagem), hint: "Direct e WhatsApp" });
+    kpis.push({ label: "Conversas (campanhas de mensagem)", value: fmtNum(obj.conversasMensagem), hint: `Direct e WhatsApp; ${fmtNum(obj.conversas)} somando todas as campanhas` });
     kpis.push({ label: "Custo por conversa", value: obj.custoPorConversaMensagem != null ? fmtBRL(obj.custoPorConversaMensagem) : "sem campanha de mensagem", hint: "só campanhas de mensagem" });
+  }
+  // Restaurado na página 1: Impressões com o CTR (já em %, como o SQL devolve; ver página de Anúncios).
+  if (adsRes && num(adsRes.gasto) > 0) {
+    kpis.push({
+      label: "Impressões",
+      value: fmtNum(num(adsRes.impressoes)),
+      hint: adsRes.ctr != null ? `CTR ${num(adsRes.ctr).toFixed(2).replace(".", ",")}% (cliques a cada 100 impressões)` : undefined,
+    });
   }
   if (wRes) {
     kpis.push({ label: "Atendimentos no WhatsApp", value: fmtNum(num(wRes.atendimentos)), hint: `${fmtNum(num(wRes.contatos_distintos))} contatos diferentes` });
@@ -253,6 +276,52 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   if (cm) {
     kpis.push({ label: "Leads no CRM", value: fmtNum(num(cm.total_leads)), hint: d.crmNome ? `CRM ${d.crmNome}` : undefined });
     kpis.push({ label: "Ganhos", value: fmtNum(num(cm.ganhos)), hint: `${fmtNum(num(cm.perdidos))} perdidos` });
+  }
+
+  // Blocos do "O que aconteceu" do relatório antigo, restaurados dentro da seção certa da página 1.
+  // Seção que a equipe desmarcou inteira na tela não ganha os blocos extras também.
+  const secaoTirada = (s: SecaoId) => d.envio.conteudoCompleto[s].length > 0 && d.envio.conteudo[s].length === 0;
+  const extras: Partial<Record<SecaoId, any[]>> = { resumo: [], vitorias: [] };
+  if (!secaoTirada("resumo")) {
+    if (headline) {
+      extras.resumo!.push(
+        <View key="achado" style={styles.headline} wrap={false}>
+          <Text style={{ fontWeight: 700, marginBottom: 2 }}>O achado do período</Text>
+          <Text>{stripEmoji(seguro(headline)).replace(/\s*[—–]\s*/g, ": ")}</Text>
+        </View>,
+      );
+    }
+    if (temIg && topSalvos[0]) {
+      extras.resumo!.push(
+        <Caixa key="mais-salva" tom="bom">
+          <Text>
+            <Text style={{ fontWeight: 700 }}>{posts.length} publicações</Text> no período. A mais salva foi "{stripEmoji(seguro(caseCaption(topSalvos[0]).slice(0, 110)))}", com{" "}
+            <Text style={{ fontWeight: 700 }}>{fmtNum(topSalvos[0].saved)} salvamentos</Text> e alcance de {fmtNum(topSalvos[0].reach)}.
+          </Text>
+        </Caixa>,
+      );
+    }
+    if (cm) {
+      extras.resumo!.push(
+        <Caixa key="crm">
+          <Text>
+            <Text style={{ fontWeight: 700 }}>{fmtNum(num(cm.total_leads))} leads</Text> no CRM{d.crmNome ? ` ${d.crmNome}` : ""} (histórico da conta): {fmtNum(num(cm.ganhos))} ganhos, {fmtNum(num(cm.perdidos))} perdidos e {fmtNum(num(cm.em_atendimento))} em atendimento.
+          </Text>
+        </Caixa>,
+      );
+    }
+  }
+  if (!secaoTirada("vitorias") && insight) {
+    extras.vitorias!.push(
+      <Caixa key="formato-engaj">
+        <Text>
+          <Text style={{ fontWeight: 700 }}>{fmtFormatKey(insight.best.format)}</Text> é o formato mais forte em engajamento: engajamento (mediana) de {fmtNum(Math.round(insight.best.median))} em {insight.best.count} posts,{" "}
+          {insight.bestPct >= 0 ? "+" : ""}
+          {insight.bestPct.toFixed(0)}% sobre a mediana geral.
+          {insight.worst.format !== insight.best.format ? ` ${fmtFormatKey(insight.worst.format)} ficou ${Math.abs(insight.worstPct).toFixed(0)}% abaixo (${insight.worst.count} posts).` : ""}
+        </Text>
+      </Caixa>,
+    );
   }
 
   return (
@@ -270,9 +339,10 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
         <Kpis items={kpis} />
 
         {SECOES.map((sec) =>
-          d.envio.conteudo[sec.id].length > 0 ? (
+          d.envio.conteudo[sec.id].length > 0 || (extras[sec.id]?.length ?? 0) > 0 ? (
             <View key={sec.id}>
-              <Titulo dica={sec.id === "acoes" ? "Só entra recomendação com evidência e amostra mínima; as demais foram descartadas na checagem." : undefined}>{sec.titulo}</Titulo>
+              <Titulo dica={sec.id === "acoes" ? "Só entra recomendação com evidência e amostra mínima; as demais foram descartadas na checagem." : sec.id === "resumo" ? `Período de ${dias} dias. Cada ponto vem de dado medido na fonte.` : undefined}>{sec.titulo}</Titulo>
+              {extras[sec.id] ?? null}
               {d.envio.conteudo[sec.id].map((it, i) => (
                 <View key={it.id} style={{ marginBottom: 5 }} wrap={false}>
                   <Text style={styles.methodP}>
@@ -619,21 +689,35 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
           <Subtitulo>Campanhas com maior investimento</Subtitulo>
           <Tabela
             colunas={[
-              { h: "Campanha", flex: 4 },
-              { h: "Objetivo", flex: 1.6 },
-              { h: "Veredito", flex: 2 },
-              { h: "Investido", flex: 1.6, alinhar: "right" },
-              { h: "Custo por resultado", flex: 2.2, alinhar: "right" },
+              { h: "Campanha", flex: 3.2 },
+              { h: "Objetivo", flex: 1.4 },
+              { h: "Veredito", flex: 1.8 },
+              { h: "Investido", flex: 1.5, alinhar: "right" },
+              { h: "Custo por resultado", flex: 1.9, alinhar: "right" },
+              { h: "Conv.", flex: 0.9, alinhar: "right" },
+              { h: "Custo/conv.", flex: 1.4, alinhar: "right" },
+              { h: "Freq.*", flex: 0.9, alinhar: "right" },
             ]}
-            linhas={diag.slice(0, 18).map((r) => [
-              stripEmoji(String(r.campanha ?? "")).slice(0, 48),
-              GRUPOS[r.grupo].curto,
-              { t: r.veredito, cor: corVeredito(r.veredito), negrito: true },
-              fmtBRL(r.gasto),
-              unidade(r),
-            ])}
+            linhas={diag.slice(0, 18).map((r) => {
+              const fq = ads?.frequencia?.[r.campaign_id];
+              return [
+                // Nome de campanha pode ter termo de risco ("promoção"): marcado, nunca apagado.
+                stripEmoji(seguro(String(r.campanha ?? ""))).slice(0, 40),
+                GRUPOS[r.grupo].curto,
+                { t: r.veredito, cor: corVeredito(r.veredito), negrito: true },
+                fmtBRL(r.gasto),
+                unidade(r),
+                fmtNum(r.conversas),
+                r.custoPorConversa != null ? fmtBRL(r.custoPorConversa) : "sem conv.",
+                fq != null ? fq.toFixed(1).replace(".", ",") : "n/d",
+              ];
+            })}
           />
           {diag.length > 18 ? <Text style={{ fontSize: 8, color: GRAY }}>Mostrando as 18 campanhas de maior investimento, de {diag.length} no período.</Text> : null}
+          <Text style={{ fontSize: 7.5, color: GRAY, marginTop: 4, lineHeight: 1.4 }}>
+            Conv.: conversas iniciadas (Direct ou WhatsApp) da campanha. Custo/conv.: investido ÷ conversas da própria campanha, qualquer que seja o objetivo. *Freq.: quantas vezes, em média, a mesma pessoa viu o anúncio,
+            calculada como a média das frequências diárias da campanha no período, não a frequência do período inteiro (que costuma ser maior, porque a mesma pessoa aparece em vários dias).
+          </Text>
           <Footer page={6} />
         </Page>
       ) : null}
@@ -764,7 +848,10 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
                   { h: "Assunto da dúvida", flex: 6 },
                   { h: "Pessoas diferentes", flex: 1.8, alinhar: "right" },
                 ]}
-                linhas={duvidas.map((c) => [tornarSeguro(c.tema).texto || "assunto omitido (nome de medicamento)", String(c.pessoas)])}
+                linhas={duvidas.map((c) => {
+                  const t = seguro(c.tema);
+                  return [t === c.tema ? t : `${t} (termo trocado pela checagem CFM)`, String(c.pessoas)];
+                })}
               />
             ) : (
               <Caixa>
@@ -839,6 +926,19 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
         <Text style={styles.methodP}>
           O Instagram só informa o ganho diário de seguidores dos últimos 30 dias. Melhor formato exige 3 posts ou mais, e a leitura por tema exige 10 posts classificados no mesmo assunto. O CRM mostra o histórico inteiro da conta, não só o período. A detecção de dúvida nos comentários é uma regra de pontuação e palavra interrogativa, então pode incluir elogios com interrogação.
         </Text>
+        <Text style={styles.methodTitle}>Como as dúvidas foram contadas</Text>
+        <Text style={styles.methodP}>
+          {NOTA_ALGORITMO_DUVIDAS} Neste PDF, a tabela "Dúvidas dos pacientes" usa o agrupamento por palavra-chave do relatório, e as "Ideias de conteúdo" que vêm de dúvidas usam o agrupamento por assunto da tela Dúvidas (só assunto perguntado por 2 ou mais pessoas diferentes).
+        </Text>
+        <Text style={styles.methodTitle}>Linguagem segura (CFM 2.336/2023)</Text>
+        <Text style={styles.methodP}>
+          Nenhum ponto é apagado pela checagem. Frase com promessa de resultado, preço, nome de remédio, superlativo, sensacionalismo ou @ de pessoa recebe uma reescrita segura{d.envio.alteracoes.length > 0 ? ` (${d.envio.alteracoes.length} neste relatório${d.envio.alteracoes.some((a) => a.mantido) ? `, ${d.envio.alteracoes.filter((a) => a.mantido).length} mantida(s) como no original por escolha da equipe` : ""})` : " (nenhuma foi necessária neste relatório)"}.
+        </Text>
+        {d.envio.alteracoes.map((a, i) => (
+          <Text key={`cfm${i}`} style={[styles.methodP, { fontSize: 8, color: "#555" }]}>
+            · {a.secao}: "{stripEmoji(a.original)}" {a.mantido ? "(mantido como no original)" : `→ "${stripEmoji(a.corrigido)}"`}. Motivo: {a.motivos.join("; ")}.
+          </Text>
+        ))}
         <Text style={styles.methodTitle}>O que não está neste relatório</Text>
         {d.omitidos.length > 0 ? (
           d.omitidos.map((o, i) => (
@@ -849,6 +949,26 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
         ) : (
           <Text style={styles.methodP}>Todas as fontes do cliente entraram.</Text>
         )}
+        {d.envio.omitidos.length > 0 ? (
+          <>
+            <Text style={[styles.methodP, { fontWeight: 700 }]}>Não incluído por falta de dado:</Text>
+            {d.envio.omitidos.map((o, i) => (
+              <Text key={`om${i}`} style={styles.methodP}>
+                · {stripEmoji(o)}.
+              </Text>
+            ))}
+          </>
+        ) : null}
+        {d.envio.excluidos.length > 0 ? (
+          <>
+            <Text style={[styles.methodP, { fontWeight: 700 }]}>Retirado do envio por escolha da equipe:</Text>
+            {d.envio.excluidos.map((o, i) => (
+              <Text key={`ex${i}`} style={styles.methodP}>
+                · {stripEmoji(o)}.
+              </Text>
+            ))}
+          </>
+        ) : null}
         {d.falhas.length > 0 ? (
           <>
             <Text style={styles.methodTitle}>Leituras que falharam na geração</Text>
