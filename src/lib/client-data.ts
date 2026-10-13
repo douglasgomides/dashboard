@@ -519,4 +519,38 @@ export async function getComentariosVozDoPaciente(clientId: string, start: strin
   if (error) throw error;
   const comentarios = data ?? [];
   return { comentarios, donos, noLimite: comentarios.length >= limit };
+
+// ---- Comercial: "onde o funil quebra" + checklist de dados -------------------
+// Tenta a RPC crm_diagnostico_comercial (migração 20261013150000). Se ela ainda não
+// existe no banco, monta uma leitura reduzida com as funções que já existem.
+import { lerDiagnosticoRpc, montarDadosReduzidos, type DadosComerciais, type MetricasEssenciais, type WtsResumoMin } from "@/lib/comercial";
+
+export async function getDiagnosticoComercial(clientId: string, start: string, end: string): Promise<DadosComerciais> {
+  const cli = supabase as unknown as RpcClient;
+  const fontes = await getClientFontes(clientId).catch(() => null);
+  const whatsappConectado = !!fontes?.tem_atendimento;
+  const wts: WtsResumoMin | null = whatsappConectado ? await getWtsResumo(clientId, start, end).catch(() => null) : null;
+
+  const { data, error } = await cli.rpc("crm_diagnostico_comercial", { p_client_id: clientId, p_from: start, p_to: end });
+  if (!error && data && typeof data === "object") {
+    return lerDiagnosticoRpc(data as Record<string, any>, { whatsappConectado, wts });
+  }
+
+  const [provider, metricas, etapas, jornada] = await Promise.all([
+    getCrmProvider(clientId).catch(() => null),
+    getCrmMetricasEssenciais(clientId).catch(() => null),
+    getCrmLeadsPorEtapa(clientId).catch(() => []),
+    cli
+      .rpc("jornada_resumo", { p_client: clientId })
+      .then((r) => (r.error ? null : (r.data as { leads_total: number; leads_sem_pessoa: number } | null)))
+      .catch(() => null),
+  ]);
+  return montarDadosReduzidos({
+    provider,
+    metricas: metricas as MetricasEssenciais | null,
+    etapas: (etapas as { pipeline: string; etapa: string; total: number }[]).map((e) => ({ ...e, total: Number(e.total) })),
+    jornada,
+    whatsappConectado,
+    wts,
+  });
 }
