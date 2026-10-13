@@ -432,12 +432,12 @@ textarea.reltxt{width:100%;background:var(--surface);border:1px solid var(--bord
   .mhead .areatabs a{min-height:44px;padding:0 14px;border-radius:9px;font-size:14px}
   .mhead .areatabs a[data-on]{background:var(--surface);box-shadow:0 0 0 1px var(--border),0 1px 2px rgba(0,0,0,.06);color:var(--ink)}
   .areadesc{margin:12px 0 10px;font-size:13.5px}
-  .bottomnav{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);position:fixed;bottom:0;left:0;right:0;z-index:40;background:var(--side);border-top:1px solid var(--border);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
-  .bottomnav a,.bottomnav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:52px;padding:4px 2px;font-size:11.5px;color:var(--muted);text-decoration:none;border-radius:10px;min-width:0}
+  .bottomnav{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);position:fixed;bottom:0;left:0;right:0;z-index:40;background:var(--side);border-top:1px solid var(--side-border);padding:4px 2px calc(4px + env(safe-area-inset-bottom))}
+  .bottomnav a,.bottomnav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:52px;padding:4px 0;font-size:12px;letter-spacing:-.01em;color:var(--side-muted);text-decoration:none;border-radius:10px;min-width:0}
   .bottomnav span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .bottomnav svg{width:22px;height:22px;flex:none;stroke-width:1.8}
-  .bottomnav [data-on]{color:var(--ink);font-weight:650}
-  .bottomnav [data-on] svg{color:var(--accent)}
+  .bottomnav [data-on]{color:var(--side-ink);font-weight:650;background:var(--side-active)}
+  .bottomnav [data-on] svg{color:var(--accent-hover)}
   .health{grid-template-columns:1fr}.week{grid-template-columns:repeat(2,1fr)}
   .q{grid-template-columns:1fr}.form{grid-template-columns:1fr}.cards{grid-template-columns:1fr}
   .tbl-sticky th:first-child,.tbl-sticky td:first-child{position:static}
@@ -496,3 +496,28 @@ table.w-full th:not([class*="px-"]):first-child,
 table.w-full td:not([class*="px-"]):first-child { padding-left: 0; }
 table.w-full th:not([class*="px-"]):last-child,
 table.w-full td:not([class*="px-"]):last-child { padding-right: 0; }
+
+/* ===== Refinamento 2.0: barra lateral em grupos, recolhível; cabeçalho em 2 linhas ===== */
+.brand{position:relative}
+.recolher{margin-left:auto;display:inline-grid;place-items:center;width:32px;height:32px;border-radius:8px;color:var(--side-muted)}
+.recolher:hover{background:var(--side-hover);color:var(--side-ink)}
+nav.side .grupo{display:flex;flex-direction:column}
+nav.side .sub-itens{display:flex;flex-direction:column;gap:1px;margin:2px 0 6px 28px;border-left:1px solid var(--side-border);padding-left:8px}
+nav.side .sub-itens a{min-height:36px;padding:6px 10px;font-size:14px;color:var(--side-ink-2);text-decoration:none}
+nav.side .sub-itens a[aria-current=page]{background:var(--side-active);color:var(--side-ink);font-weight:600;box-shadow:inset 2px 0 0 var(--accent)}
+nav.side .sub-itens a[data-on]:not([aria-current=page]){background:none;box-shadow:none;font-weight:400}
+.avancado-btn{display:flex!important;align-items:center;gap:10px}
+.app.recolhida{grid-template-columns:72px minmax(0,1fr)}
+.app.recolhida>aside{padding:18px 10px}
+.app.recolhida .so-aberta,.app.recolhida .kbar,.app.recolhida .avancado-lista{display:none}
+.app.recolhida .brand{flex-direction:column;gap:12px;padding:0}
+.app.recolhida .recolher{margin-left:0}
+.app.recolhida nav.side a,.app.recolhida nav.side button{justify-content:center;padding:10px}
+.top-linha2{margin:-2px 0 14px}
+.fontes-linha{display:flex;flex-wrap:wrap;gap:6px 16px;list-style:none;margin:0;padding:0;font-size:13px;color:var(--ink-2)}
+.fontes-linha li{display:inline-flex;align-items:center;gap:6px;cursor:help}
+.fontes-linha b{font-weight:600;color:var(--ink)}
+.fontes-linha li[data-tom=neutro] span:not(.fontes-ponto){color:var(--muted)}
+.fontes-ponto{width:8px;height:8px;border-radius:50%;flex:none}
+.sheet-frescor .fontes-linha{flex-direction:column;gap:10px;font-size:14px}
+@media (max-width:820px){.top-linha2{display:none}}

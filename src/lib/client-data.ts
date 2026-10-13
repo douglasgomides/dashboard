@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { diagnosticarAds, type LinhaAds, type CampanhaCadastro } from "@/lib/anuncios-objetivo";
+import type { Acompanhamento } from "@/lib/oportunidades";
 import { lerDiagnosticoRpc, montarDadosReduzidos, type DadosComerciais, type MetricasEssenciais, type WtsResumoMin } from "@/lib/comercial";
 import { filtrarPerguntas } from "@/lib/comentarios";
 import type {
@@ -554,4 +555,73 @@ export async function getDiagnosticoComercial(clientId: string, start: string, e
     whatsappConectado,
     wts,
   });
+}
+
+// ---- Oportunidades: acompanhamento das ações (migração 20261013210000) -------
+// Enquanto a tabela não existe no banco, guarda no navegador e avisa a tela
+// (`local: true`), para ninguém achar que o histórico está salvo para a equipe.
+
+const chaveLocal = (clientId: string) => `hub-acoes-${clientId}`;
+function lerLocal(clientId: string): Acompanhamento[] {
+  try {
+    return JSON.parse(localStorage.getItem(chaveLocal(clientId)) ?? "[]") as Acompanhamento[];
+  } catch {
+    return [];
+  }
+}
+function gravarLocal(clientId: string, xs: Acompanhamento[]) {
+  try {
+    localStorage.setItem(chaveLocal(clientId), JSON.stringify(xs));
+  } catch {
+    /* navegador sem armazenamento: segue sem persistir */
+  }
+}
+const semTabela = (e: any) => e?.code === "42P01" || e?.code === "PGRST205" || /acoes_acompanhamento/.test(e?.message ?? "");
+
+export async function getAcompanhamentos(clientId: string): Promise<{ itens: Acompanhamento[]; local: boolean }> {
+  const { data, error } = await (supabase as any).from("acoes_acompanhamento").select("*").eq("client_id", clientId);
+  if (error) {
+    if (semTabela(error)) return { itens: lerLocal(clientId), local: true };
+    throw error;
+  }
+  return {
+    local: false,
+    itens: (data ?? []).map((r: any) => ({
+      clientId: r.client_id,
+      insightId: r.insight_id,
+      titulo: r.titulo,
+      status: r.status,
+      responsavel: r.responsavel,
+      prazo: r.prazo,
+      checklist: r.checklist ?? [],
+      historico: r.historico ?? [],
+      feedback: r.feedback,
+      resultado: r.resultado,
+      criadoEm: r.criado_em,
+      atualizadoEm: r.atualizado_em,
+    })),
+  };
+}
+
+export async function salvarAcompanhamento(a: Acompanhamento): Promise<{ local: boolean }> {
+  const { error } = await (supabase as any).from("acoes_acompanhamento").upsert({
+    client_id: a.clientId,
+    insight_id: a.insightId,
+    titulo: a.titulo,
+    status: a.status,
+    responsavel: a.responsavel,
+    prazo: a.prazo,
+    checklist: a.checklist,
+    historico: a.historico,
+    feedback: a.feedback,
+    resultado: a.resultado,
+    atualizado_em: a.atualizadoEm,
+  });
+  if (error) {
+    if (!semTabela(error)) throw error;
+    const xs = lerLocal(a.clientId).filter((x) => x.insightId !== a.insightId);
+    gravarLocal(a.clientId, [...xs, a]);
+    return { local: true };
+  }
+  return { local: false };
 }

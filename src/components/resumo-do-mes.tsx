@@ -1,0 +1,252 @@
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { getAdsResumo, getAdsDiagnosticoPorObjetivo, getWtsResumo } from "@/lib/client-data";
+import { fmtNum, fmtBRL } from "@/lib/format";
+import { Camera, Megaphone, TrendingUp, MessageCircle, AlertTriangle, Sparkles, type LucideIcon } from "lucide-react";
+
+/**
+ * O que aconteceu no período, em frases, juntando as quatro fontes.
+ *
+ * Existe porque a Visão geral só falava de Instagram: o dinheiro de anúncio e
+ * o atendimento no WhatsApp moravam em abas que a médica podia nunca abrir.
+ * Quem entra no dashboard uma vez por mês precisa da conclusão na primeira
+ * tela, não de doze abas de número.
+ *
+ * Toda frase aqui é CALCULADA a partir do mesmo dado das outras abas — nada é
+ * escrito por IA e nada é estimado. Cada afirmação carrega o número que a
+ * sustenta, para dar para conferir na aba correspondente. Bloco sem dado
+ * simplesmente não aparece, em vez de mostrar zero: cliente sem anúncio não
+ * tem "R$ 0,00 investido", tem ausência de anúncio.
+ */
+
+function n(v: unknown): number {
+  const x = Number(v);
+  return Number.isFinite(x) ? x : 0;
+}
+
+function dur(seg: number): string {
+  const s = Math.max(0, Math.trunc(seg));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}min`;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return m ? `${h}h${String(m).padStart(2, "0")}` : `${h}h`;
+}
+
+function Linha({
+  children,
+  icone: Icon,
+  atencao = false,
+}: {
+  children: React.ReactNode;
+  icone: LucideIcon;
+  atencao?: boolean;
+}) {
+  const cor = atencao ? "var(--warn)" : "var(--accent)";
+  return (
+    <li className="flex items-start gap-3 rounded-lg border p-3 text-sm leading-relaxed" style={{ borderColor: "var(--border)", background: atencao ? "var(--warn-bg)" : "var(--surface)" }}>
+      <span
+        aria-hidden
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+        style={{ background: `color-mix(in srgb, ${cor} 18%, transparent)`, color: atencao ? "var(--text)" : cor }}
+      >
+        <Icon size={16} />
+      </span>
+      <span className="min-w-0" style={{ color: "var(--text-dim)" }}>
+        {children}
+      </span>
+    </li>
+  );
+}
+
+function Forte({ children }: { children: React.ReactNode }) {
+  return <strong style={{ color: "var(--text)" }}>{children}</strong>;
+}
+
+export function ResumoDoMes({
+  clientId,
+  start,
+  end,
+  periodLabel,
+  posts,
+}: {
+  clientId: string;
+  start: string;
+  end: string;
+  periodLabel: string;
+  posts: any[] | undefined;
+}) {
+  const { data: ads } = useQuery({
+    queryKey: ["ads-resumo", clientId, start, end],
+    queryFn: () => getAdsResumo(clientId, start, end),
+  });
+  // Diagnóstico por objetivo (o antigo julgava tráfego e alcance por conversa).
+  const { data: diag } = useQuery({
+    queryKey: ["ads-diag-objetivo", clientId, start, end],
+    queryFn: () => getAdsDiagnosticoPorObjetivo(clientId, start, end),
+  });
+  const { data: wts } = useQuery({
+    queryKey: ["wts-resumo", clientId, start, end],
+    queryFn: () => getWtsResumo(clientId, start, end),
+  });
+
+  const linhas: { icone: LucideIcon; node: React.ReactNode }[] = [];
+  const atencoes: React.ReactNode[] = [];
+
+  // ---- Conteúdo -----------------------------------------------------------
+  const publicados = (posts ?? []).length;
+  if (publicados > 0) {
+    const melhor = [...(posts ?? [])].sort((a, b) => n(b?.saved) - n(a?.saved))[0];
+    const salvos = n(melhor?.saved);
+    linhas.push({ icone: Camera, node: (
+      <>
+        <Forte>{fmtNum(publicados)} publicações</Forte> no período.
+        {salvos > 0 && melhor?.caption && (
+          <>
+            {" "}
+            A mais salva foi{" "}
+            {melhor.permalink ? (
+              <a href={melhor.permalink} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+                “{String(melhor.caption).slice(0, 60).trim()}…”
+              </a>
+            ) : (
+              <>“{String(melhor.caption).slice(0, 60).trim()}…”</>
+            )}
+            , com <Forte>{fmtNum(salvos)} salvamentos</Forte>.
+          </>
+        )}
+      </>
+    ) });
+  }
+
+  // ---- Anúncios -----------------------------------------------------------
+  const gasto = n(ads?.gasto);
+  if (gasto > 0) {
+    const conversas = n(ads?.conversas);
+    linhas.push({ icone: Megaphone, node: (
+      <>
+        <Forte>{fmtBRL(gasto)}</Forte> investidos em anúncio
+        {conversas > 0 ? (
+          <>
+            , que trouxeram <Forte>{fmtNum(conversas)} conversas</Forte>
+            {diag?.custoPorConversaMensagem != null ? (
+              <>
+                {" "}
+                (nas campanhas de mensagem, <Forte>{fmtBRL(diag.custoPorConversaMensagem)}</Forte> cada)
+              </>
+            ) : null}
+            .
+          </>
+        ) : (
+          <> — e nenhuma conversa iniciada no período.</>
+        )}
+      </>
+    ) });
+
+    const escalar = (diag?.campanhas ?? []).filter((c) => c.veredito === "Escalar");
+
+    if (escalar.length > 0) {
+      const g = escalar.reduce((a, c) => a + n(c.gasto), 0);
+      const cv = escalar.reduce((a, c) => a + n(c.conversas), 0);
+      linhas.push({ icone: TrendingUp, node: (
+        <>
+          <Forte>
+            {escalar.length} {escalar.length === 1 ? "campanha entrega" : "campanhas entregam"}
+          </Forte>{" "}
+          bem mais barato que as outras do mesmo objetivo: {fmtBRL(g)} investidos{cv > 0 ? `, ${fmtNum(cv)} conversas` : ""}. É onde cabe mais verba.
+        </>
+      ) });
+    }
+
+    const desperdicio = n(diag?.desperdicio);
+    if (desperdicio > 0) {
+      atencoes.push(
+        <>
+          <Forte>{fmtBRL(desperdicio)}</Forte> ({gasto > 0 ? Math.round((desperdicio / gasto) * 100) : 0}% da verba) foram para campanhas que
+          custam o dobro das outras do mesmo objetivo ou não entregaram o que o objetivo promete.{" "}
+          <Link to="/$clientId/anuncios" params={{ clientId }} style={{ color: "var(--accent)" }}>
+            Ver quais →
+          </Link>
+        </>,
+      );
+    }
+  }
+
+  // ---- Atendimento --------------------------------------------------------
+  const atendimentos = n(wts?.atendimentos);
+  if (atendimentos > 0) {
+    const espera = n(wts?.espera_mediana_seg);
+    linhas.push({ icone: MessageCircle, node: (
+      <>
+        <Forte>{fmtNum(atendimentos)} atendimentos</Forte> no WhatsApp, de{" "}
+        {fmtNum(n(wts?.contatos_distintos))} pessoas diferentes
+        {espera > 0 && (
+          <>
+            , com <Forte>{dur(espera)}</Forte> de espera até a primeira resposta
+          </>
+        )}
+        .
+      </>
+    ) });
+
+    const semRota = n(wts?.sem_roteamento);
+    const fatia = atendimentos > 0 ? (semRota / atendimentos) * 100 : 0;
+    if (fatia >= 30) {
+      atencoes.push(
+        <>
+          <Forte>{fatia.toFixed(0)}% das conversas</Forte> não foram encaminhadas para nenhuma equipe.{" "}
+          <Link to="/$clientId/atendimento" params={{ clientId }} style={{ color: "var(--accent)" }}>
+            Ver atendimento →
+          </Link>
+        </>,
+      );
+    }
+  }
+
+  if (linhas.length === 0 && atencoes.length === 0) return null;
+
+  return (
+    <section
+      className="rounded-xl border p-4"
+      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+    >
+      <div className="flex items-center gap-3">
+        <span aria-hidden className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: "color-mix(in srgb, var(--accent) 16%, transparent)", color: "var(--accent)" }}>
+          <Sparkles size={18} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold leading-tight">O que aconteceu</h2>
+          <span className="text-xs" style={{ color: "var(--text-faint)" }}>
+            {periodLabel}
+          </span>
+        </div>
+      </div>
+
+      <ul className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
+        {linhas.map((l, i) => (
+          <Linha key={`l${i}`} icone={l.icone}>
+            {l.node}
+          </Linha>
+        ))}
+      </ul>
+
+      {atencoes.length > 0 && (
+        <>
+          <div
+            className="mt-4 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide"
+            style={{ color: "var(--text-faint)" }}
+          >
+            <AlertTriangle size={13} /> Merece atenção
+          </div>
+          <ul className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
+            {atencoes.map((a, i) => (
+              <Linha key={`a${i}`} icone={AlertTriangle} atencao>
+                {a}
+              </Linha>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}

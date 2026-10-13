@@ -6,6 +6,11 @@ import {
   FileText,
   HelpCircle,
   LayoutDashboard,
+  Home,
+  Target,
+  Scale,
+  ClipboardCheck,
+  Route,
   LayoutGrid,
   Lightbulb,
   ListChecks,
@@ -21,8 +26,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-// Navegação do Hub: no máximo 5 áreas com nome simples e uma frase que diz para
-// que serve cada uma. Dentro de cada área, abas (as telas que já existiam, com
+// Navegação do Hub: 5 categorias (Início, Social, Comercial, Oportunidades,
+// Relatórios) com uma frase que diz para que serve cada uma. Dentro de cada área, abas (as telas que já existiam, com
 // os mesmos endereços). O que é de uso da equipe fica em "Avançado".
 //
 // Regras de visibilidade (iguais às de antes):
@@ -45,77 +50,83 @@ export interface NavTab {
 }
 
 export interface NavArea {
-  id: "resumo" | "conteudo" | "anuncios" | "comercial" | "ideias";
+  id: "inicio" | "social" | "comercial" | "oportunidades" | "relatorios";
   label: string;
+  /** Rótulo da barra inferior do celular (cabe em 1/6 da tela). */
+  curto?: string;
   descricao: string;
   Icone: LucideIcon;
   tabs: NavTab[];
 }
 
+// Cinco categorias. Nenhuma tela saiu: cada rota antiga é uma aba de uma delas
+// (mesmos endereços, favoritos continuam valendo). Inspiração (Biblioteca) fica
+// dentro de Social; o que é da equipe fica em "Operação".
 export const AREAS: NavArea[] = [
   {
-    id: "resumo",
-    label: "Resumo",
-    descricao: "O que aconteceu e o que fazer esta semana",
-    Icone: Activity,
-    tabs: [
-      { path: "", label: "Resumo", Icone: Activity },
-      { path: "/relatorio", label: "Relatório", Icone: FileText },
-    ],
+    id: "inicio",
+    label: "Início",
+    descricao: "O que está acontecendo e o que fazer",
+    Icone: Home,
+    tabs: [{ path: "", label: "Resultado", Icone: Activity }],
   },
   {
-    id: "conteudo",
-    label: "Conteúdo",
-    descricao: "Como o Instagram está indo",
+    id: "social",
+    label: "Social",
+    descricao: "Instagram: conteúdo, público e dúvidas",
     Icone: AlignLeft,
     tabs: [
-      { path: "/conteudo", label: "Visão", Icone: AlignLeft },
+      { path: "/conteudo", label: "Conteúdo", Icone: AlignLeft },
       { path: "/posts", label: "Posts", Icone: LayoutGrid, fonte: "instagram" },
-      { path: "/top", label: "Melhores", Icone: Trophy, fonte: "instagram" },
-      { path: "/audiencia", label: "Público", Icone: Users, fonte: "instagram" },
+      { path: "/top", label: "Top conteúdos", Icone: Trophy, fonte: "instagram" },
+      { path: "/audiencia", label: "Audiência", Icone: Users, fonte: "instagram" },
+      { path: "/duvidas", label: "Dúvidas", Icone: HelpCircle, fonte: "instagram" },
+      { path: "/ideias", label: "Ideias", Icone: Lightbulb },
+      { path: "/inspiracao", label: "Inspiração", Icone: Star },
     ],
-  },
-  {
-    id: "anuncios",
-    label: "Anúncios",
-    descricao: "Onde a verba rende e onde vaza",
-    Icone: Megaphone,
-    tabs: [{ path: "/anuncios", label: "Anúncios", Icone: Megaphone, fonte: "anuncios" }],
   },
   {
     id: "comercial",
     label: "Comercial",
-    descricao: "Do contato ao paciente",
+    descricao: "Anúncios, CRM, WhatsApp e jornada",
     Icone: Briefcase,
     tabs: [
-      { path: "/crm-painel", label: "Funil", Icone: Briefcase, fonte: "crm" },
+      { path: "/anuncios", label: "Anúncios", Icone: Megaphone, fonte: "anuncios" },
+      { path: "/crm-painel", label: "Comercial", Icone: Briefcase, fonte: "crm" },
       { path: "/atendimento", label: "WhatsApp", Icone: MessageCircle, fonte: "atendimento" },
-      { path: "/jornada", label: "Jornada", Icone: Activity, admin: true },
+      { path: "/jornada", label: "Jornada", Icone: Route, admin: true },
     ],
   },
   {
-    id: "ideias",
-    label: "Ideias",
-    descricao: "O que postar a seguir",
-    Icone: Lightbulb,
-    tabs: [
-      { path: "/ideias", label: "Ideias", Icone: Lightbulb },
-      { path: "/duvidas", label: "Dúvidas dos pacientes", Icone: HelpCircle, fonte: "instagram" },
-      { path: "/inspiracao", label: "Inspiração", Icone: Star },
-    ],
+    id: "oportunidades",
+    label: "Oportunidades",
+    curto: "Ações",
+    descricao: "Ações recomendadas e acompanhamento",
+    Icone: Target,
+    tabs: [{ path: "/oportunidades", label: "Oportunidades", Icone: Target }],
+  },
+  {
+    id: "relatorios",
+    label: "Relatórios",
+    curto: "Relatório",
+    descricao: "Texto e PDF para enviar ao cliente",
+    Icone: FileText,
+    tabs: [{ path: "/relatorio", label: "Relatório", Icone: FileText }],
   },
 ];
 
-/** "Avançado": telas de uso da equipe. Fica recolhido. */
+/** "Operação": telas de uso da equipe Doctor Creator. */
 export const AVANCADO: NavTab[] = [
-  { path: "/conversas", label: "Conversas", Icone: MessagesSquare, admin: true, fonte: "atendimento" },
   { path: "/analisar", label: "A analisar", Icone: ListChecks, admin: true, fonte: "crm" },
+  { path: "/conversas", label: "Conversas", Icone: MessagesSquare, admin: true, fonte: "atendimento" },
   { path: "/crm-estrutura", label: "Estrutura do CRM", Icone: Network, admin: true, fonte: "crm" },
   { path: "/vendas-kommo", label: "Vendas (Kommo)", Icone: ShoppingBag, admin: true, fonte: "crm" },
   { path: "/vendas", label: "Vendas", Icone: ShoppingBag, admin: true },
   { path: "/consultas", label: "Consultas", Icone: CalendarCheck, admin: true },
   { path: "/automacoes", label: "Automações", Icone: Workflow, admin: true },
-  { path: "/admin", label: "Admin · Portfólio", Icone: LayoutDashboard, admin: true, absoluto: true },
+  { path: "/admin", label: "Portfólio e saúde das fontes", Icone: LayoutDashboard, admin: true, absoluto: true },
+  { path: "/admin/referencia", label: "Referência entre clientes", Icone: Scale, admin: true, absoluto: true },
+  { path: "/admin/conferencia", label: "Conferência de dados", Icone: ClipboardCheck, admin: true, absoluto: true },
 ];
 
 // Clientes que só têm CRM ligado e não têm Business Manager: veem só o
@@ -136,7 +147,18 @@ export interface Visibilidade {
   isAdmin: boolean;
   fontes: Fontes;
   soCrm: boolean;
+  /** Papel no cliente. Muda só a ORDEM de apresentação, nunca o acesso. */
+  papel?: "admin" | "owner" | "strategist" | "viewer" | null;
 }
+
+// Médico (owner) e viewer: resultado, oportunidades e relatório primeiro.
+// Estrategista e equipe: análise primeiro. Todas as áreas continuam disponíveis.
+const ORDEM_POR_PAPEL: Record<string, NavArea["id"][]> = {
+  owner: ["inicio", "oportunidades", "relatorios", "social", "comercial"],
+  viewer: ["inicio", "oportunidades", "relatorios", "social", "comercial"],
+  strategist: ["inicio", "social", "comercial", "oportunidades", "relatorios"],
+  admin: ["inicio", "social", "comercial", "oportunidades", "relatorios"],
+};
 
 export function tabVisivel(t: NavTab, v: Visibilidade): boolean {
   return (!t.admin || v.isAdmin) && fonteOk(t.fonte, v.fontes) && (!v.soCrm || !!t.admin || t.fonte === "crm");
@@ -145,7 +167,10 @@ export function tabVisivel(t: NavTab, v: Visibilidade): boolean {
 export type AreaVisivel = NavArea & { visiveis: NavTab[] };
 
 export function areasVisiveis(v: Visibilidade): AreaVisivel[] {
-  return AREAS.map((a) => ({ ...a, visiveis: a.tabs.filter((t) => tabVisivel(t, v)) })).filter((a) => a.visiveis.length > 0);
+  const ordem = ORDEM_POR_PAPEL[v.papel ?? (v.isAdmin ? "admin" : "strategist")] ?? ORDEM_POR_PAPEL.strategist;
+  return AREAS.map((a) => ({ ...a, visiveis: a.tabs.filter((t) => tabVisivel(t, v)) }))
+    .filter((a) => a.visiveis.length > 0)
+    .sort((x, y) => ordem.indexOf(x.id) - ordem.indexOf(y.id));
 }
 
 export function avancadoVisivel(v: Visibilidade): NavTab[] {
@@ -163,6 +188,6 @@ export function subcaminho(pathname: string, clientId: string): string {
 /** Área ativa para o endereço atual. "mais" quando a tela está no Avançado. */
 export function areaDoCaminho(sub: string): NavArea["id"] | "mais" | null {
   for (const a of AREAS) if (a.tabs.some((t) => t.path === sub)) return a.id;
-  if (AVANCADO.some((t) => t.path === sub)) return "mais";
+  if (AVANCADO.some((t) => !t.absoluto && t.path === sub)) return "mais";
   return null;
 }

@@ -11,7 +11,8 @@ import { lerPeriodo, type Achado } from "@/lib/leitura-periodo";
 import { cruzar, type EntradaCruzamento } from "@/lib/cruzamento";
 import { insightsDeAnuncios, limitacoesDeAnuncios, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { BENCHMARKS, avaliar, type Faixa } from "@/lib/benchmarks";
-import { confiancaPorAmostra, ordenarPorPrioridade, type Insight, type Limitacao, type Responsavel, type Area, type Tom } from "@/lib/insight";
+import { ordenarPorScore } from "@/lib/oportunidades";
+import { confiancaPorAmostra, type Insight, type Limitacao, type Responsavel, type Area, type Tom } from "@/lib/insight";
 
 export interface EntradaResultado {
   start: string;
@@ -374,7 +375,8 @@ export function montarResultado(e: EntradaResultado): Resultado {
     if (i.id.startsWith("cruz-")) i.fonte = "CRM da clínica + Instagram + Meta Ads";
   }
 
-  const ordenados = ordenarPorPrioridade(insights);
+  // Prioridade: score 0–100 (impacto 30%, urgência 25%, confiança 20%, facilidade 15%, alinhamento 10%).
+  const ordenados = ordenarPorScore(insights);
   const comAcao = ordenados.filter((i) => i.acao);
   // A próxima ação é a mais prioritária que corrige algo; se tudo vai bem, a que repete o que funciona.
   const proximaAcao = comAcao.find((i) => i.tom !== "bom") ?? comAcao[0] ?? null;

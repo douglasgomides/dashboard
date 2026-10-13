@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, ChevronDown, Menu, Search, ShieldCheck, X, MoreHorizontal } from "lucide-react";
+import { CalendarDays, ChevronDown, Menu, Search, ShieldCheck, X, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
 import { LogoutButton } from "@/components/logout-button";
 import { ClientAvatar } from "@/components/client-avatar";
@@ -40,6 +40,8 @@ export interface AppShellProps {
   frescor?: ReactNode;
   /** Selo de frescura curto (cabeçalho do celular). */
   frescorCompacto?: ReactNode;
+  /** Linha 2 do cabeçalho: disponibilidade de cada fonte. */
+  fontesLinha?: ReactNode;
   onBuscarCliente?: () => void;
   children: ReactNode;
 }
@@ -127,7 +129,7 @@ export function AreaTabs({ area, sub, clientId, dateRange }: { area: AreaVisivel
   );
 }
 
-export function AppShell({ clientId, client, pathname, dateRange, onDateRange, vis, frescor, frescorCompacto, onBuscarCliente, children }: AppShellProps) {
+export function AppShell({ clientId, client, pathname, dateRange, onDateRange, vis, frescor, frescorCompacto, fontesLinha, onBuscarCliente, children }: AppShellProps) {
   const sub = subcaminho(pathname, clientId);
   const ativa = areaDoCaminho(sub);
   const areas = areasVisiveis(vis);
@@ -135,7 +137,24 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
   const area = areas.find((a) => a.id === ativa);
   const naAvancado = ativa === "mais";
 
-  const [avancadoAberto, setAvancadoAberto] = useState(naAvancado);
+  const [avancadoAberto, setAvancadoAberto] = useState(naAvancado || vis.papel === "admin");
+  // Barra lateral recolhível (lembrada neste navegador).
+  const [recolhida, setRecolhida] = useState(() => {
+    try {
+      return localStorage.getItem("hub-sidebar-recolhida") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const alternarRecolhida = () =>
+    setRecolhida((v) => {
+      try {
+        localStorage.setItem("hub-sidebar-recolhida", v ? "0" : "1");
+      } catch {
+        /* sem storage */
+      }
+      return !v;
+    });
   const [mais, setMais] = useState(false);
   const [periodo, setPeriodo] = useState(false);
 
@@ -163,14 +182,17 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
   ));
 
   return (
-    <div className="app">
+    <div className={`app${recolhida ? " recolhida" : ""}`}>
       {/* ===== Computador: barra lateral ===== */}
       <aside aria-label="Menu principal">
         <div className="brand">
           <span className="logo">
             <i />
           </span>
-          <span>Intelligence Hub</span>
+          <span className="so-aberta">Intelligence Hub</span>
+          <button type="button" className="recolher" onClick={alternarRecolhida} aria-label={recolhida ? "Abrir menu lateral" : "Recolher menu lateral"} title={recolhida ? "Abrir menu" : "Recolher menu"}>
+            {recolhida ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
         </div>
         {onBuscarCliente && (
           <button type="button" className="kbar" onClick={onBuscarCliente}>
@@ -182,25 +204,39 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
         )}
         <nav className="side areas">
           {areas.map((a) => (
-            <TabLink key={a.id} tab={primeira(a)} clientId={clientId} dateRange={dateRange} ativo={a.id === ativa}>
-              <a.Icone aria-hidden />
-              <span className="area-txt">
-                <span>{a.label}</span>
-                <small>{a.descricao}</small>
-              </span>
-            </TabLink>
+            <div key={a.id} className="grupo">
+              <TabLink tab={primeira(a)} clientId={clientId} dateRange={dateRange} ativo={a.id === ativa}>
+                <a.Icone aria-hidden />
+                <span className="area-txt so-aberta">
+                  <span>{a.label}</span>
+                  {a.id !== ativa && <small>{a.descricao}</small>}
+                </span>
+                <span className="sr-only">{a.label}</span>
+              </TabLink>
+              {/* Grupo expandido: as telas da área ativa aparecem logo abaixo. */}
+              {a.id === ativa && a.visiveis.length > 1 && !recolhida && (
+                <div className="sub-itens">
+                  {a.visiveis.map((t) => (
+                    <TabLink key={t.path} tab={t} clientId={clientId} dateRange={dateRange} ativo={t.path === sub}>
+                      <span>{t.label}</span>
+                    </TabLink>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
           {avancado.length > 0 && (
             <div className="avancado">
               <button type="button" aria-expanded={avancadoAberto} onClick={() => setAvancadoAberto((v) => !v)} className="avancado-btn">
-                <span>Avançado</span>
+                <Settings size={16} aria-hidden />
+                <span className="so-aberta">Operação</span>
                 <ChevronDown size={16} aria-hidden style={{ transform: avancadoAberto ? "rotate(180deg)" : undefined, marginLeft: "auto" }} />
               </button>
               {avancadoAberto && <div className="avancado-lista">{listaAvancado}</div>}
             </div>
           )}
         </nav>
-        <div className="side-foot">
+        <div className="side-foot so-aberta">
           <TemaBotoes />
           <LogoutButton className="text-sm text-left min-h-[36px]" />
           <span>Intelligence Hub · Doctor Creator</span>
@@ -224,7 +260,8 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
           <AreaTabs area={area} sub={sub} clientId={clientId} dateRange={dateRange} />
         </header>
 
-        {/* ===== Computador: cabeçalho ===== */}
+        {/* ===== Computador: cabeçalho em duas linhas ===== */}
+        {/* Linha 1: quem é o cliente e o período. Linha 2: disponibilidade de cada fonte. */}
         <div className="top">
           <div className="who">
             <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={46} />
@@ -234,18 +271,18 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
             </div>
           </div>
           {cfm}
-          {frescor}
           <span className="spacer" />
           <DateRangePicker value={dateRange} onChange={onDateRange} />
         </div>
+        <div className="top-linha2">{fontesLinha ?? frescor}</div>
         <div className="dtabs">
           <AreaTabs area={area} sub={sub} clientId={clientId} dateRange={dateRange} />
         </div>
 
         {(area || naAvancado) && (
           <p className="areadesc">
-            <b>{naAvancado ? "Avançado" : area!.label}</b>
-            <span>{naAvancado ? "Telas de uso da equipe" : area!.descricao}</span>
+            <b>{naAvancado ? "Operação" : area!.label}</b>
+            <span>{naAvancado ? "Telas de uso da equipe Doctor Creator" : area!.descricao}</span>
           </p>
         )}
 
@@ -257,7 +294,8 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
         {areas.map((a) => (
           <TabLink key={a.id} tab={primeira(a)} clientId={clientId} dateRange={dateRange} ativo={a.id === ativa}>
             <a.Icone aria-hidden />
-            <span>{a.label}</span>
+            <span aria-hidden={!!a.curto}>{a.curto ?? a.label}</span>
+            {a.curto && <span className="sr-only">{a.label}</span>}
           </TabLink>
         ))}
         <button type="button" onClick={() => setMais(true)} data-on={naAvancado ? "" : undefined} aria-haspopup="dialog">
@@ -275,7 +313,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
             if (next.preset !== "personalizado") setPeriodo(false);
           }}
         />
-        {frescor && <div className="sheet-frescor">{frescor}</div>}
+        {(fontesLinha ?? frescor) && <div className="sheet-frescor">{fontesLinha ?? frescor}</div>}
       </BottomSheet>
 
       <BottomSheet aberto={mais} onFechar={() => setMais(false)} titulo="Mais">
@@ -301,8 +339,8 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
         )}
         {avancado.length > 0 && (
           <>
-            <div className="mais-lbl">Avançado</div>
-            <nav className="mais-lista" aria-label="Avançado">
+            <div className="mais-lbl">Operação</div>
+            <nav className="mais-lista" aria-label="Operação">
               {listaAvancado}
             </nav>
           </>

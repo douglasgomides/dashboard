@@ -5,7 +5,8 @@ import { getClient, getClientFontes } from "@/lib/client-data";
 import { listAllClients } from "@/lib/admin-data";
 import { useAuth } from "@/hooks/use-auth";
 import { AppShell } from "@/components/app-shell";
-import { SyncFreshnessBadge } from "@/components/sync-freshness-badge";
+import { SyncFreshnessBadge, DisponibilidadeFontes } from "@/components/sync-freshness-badge";
+import { useClientRole } from "@/hooks/use-client-role";
 import { CLIENTES_SO_CRM, ROTAS_DO_CRM } from "@/lib/nav";
 import type { DateRangeState, RangePreset } from "@/lib/date-range";
 
@@ -18,8 +19,8 @@ export const Route = createFileRoute("/_authenticated/$clientId")({
   }),
 });
 
-// Navegação: 5 áreas (Resumo, Conteúdo, Anúncios, Comercial, Ideias) com abas
-// dentro, mais "Avançado" para a equipe. A configuração (rótulos, abas, quem vê
+// Navegação: 5 categorias (Início, Social, Comercial, Oportunidades, Relatórios)
+// com abas dentro, mais "Operação" para a equipe. A configuração (rótulos, abas, quem vê
 // o quê) fica em src/lib/nav.ts; a casca visual em src/components/app-shell.tsx.
 function ClientLayout() {
   const { clientId } = Route.useParams();
@@ -27,6 +28,7 @@ function ClientLayout() {
   const navigate = useNavigate();
   const currentPathname = useRouterState({ select: (s) => s.location.pathname });
   const { isAdmin } = useAuth();
+  const { papel } = useClientRole(clientId);
 
   const { data: client } = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId) });
   const { data: fontes } = useQuery({ queryKey: ["client-fontes", clientId], queryFn: () => getClientFontes(clientId) });
@@ -63,9 +65,10 @@ function ClientLayout() {
         pathname={currentPathname}
         dateRange={dateRange}
         onDateRange={(next) => navigate({ to: currentPathname, search: next, replace: true })}
-        vis={{ isAdmin, fontes, soCrm }}
+        vis={{ isAdmin, fontes, soCrm, papel }}
         frescor={<SyncFreshnessBadge clientId={clientId} />}
         frescorCompacto={<SyncFreshnessBadge clientId={clientId} compacto />}
+        fontesLinha={<DisponibilidadeFontes clientId={clientId} fontes={fontes} />}
         onBuscarCliente={isAdmin ? () => setPal(true) : undefined}
       >
         <Outlet />
