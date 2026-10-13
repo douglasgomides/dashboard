@@ -17,7 +17,7 @@ import {
 import { getResumoPeriodo } from "@/lib/audiencia";
 import { diagnosticarAds } from "@/lib/anuncios-objetivo";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
-import { buildRelatorioEnvio, LIMITE_WHATSAPP, SECOES, type ChecagemItem, type RelatorioEnvio } from "@/lib/relatorio-envio";
+import { buildRelatorioEnvio, LIMITE_WHATSAPP, SECOES, type AlteracaoLinguagem, type ChecagemItem, type RelatorioEnvio } from "@/lib/relatorio-envio";
 import { checarLinguagemCFM, ROTULO_REGRA_CFM } from "@/lib/linguagem-cfm";
 import { InsightCard } from "@/components/insight-card";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
@@ -88,6 +88,11 @@ function RelatorioPage() {
   const loading = queries.some((q) => q.isLoading);
   const erro = [client, fontes, metrics, posts, perguntas, ads, wts, crm].some((q) => q.error);
 
+  // O que a equipe tirou do envio (seção inteira ou bloco) e as frases sinalizadas pelo CFM que ela
+  // decidiu manter como foram geradas. As duas escolhas refazem as 3 versões (WhatsApp, executiva, PDF).
+  const [excluidos, setExcluidos] = useState<string[]>([]);
+  const [manterCfm, setManterCfm] = useState<string[]>([]);
+
   const envio: RelatorioEnvio | null = useMemo(() => {
     if (loading || erro || !client.data || !f) return null;
     return buildRelatorioEnvio({
@@ -103,8 +108,10 @@ function RelatorioPage() {
       ads: ads.data ?? null,
       wts: wts.data ?? null,
       crm: crm.data ?? null,
+      excluir: excluidos,
+      manterOriginal: manterCfm,
     });
-  }, [loading, erro, client.data, f, periodLabel, start, end, temIg, temAds, temCrm, temWts, metrics.data, posts.data, perguntas.data, periodoIg.data, ads.data, wts.data, crm.data]);
+  }, [loading, erro, client.data, f, periodLabel, start, end, temIg, temAds, temCrm, temWts, metrics.data, posts.data, perguntas.data, periodoIg.data, ads.data, wts.data, crm.data, excluidos, manterCfm]);
 
   // Texto editável: volta ao gerado quando muda o período/dados ou em "Voltar ao texto gerado".
   const [versao, setVersao] = useState<Versao>("whatsapp");
@@ -161,17 +168,25 @@ function RelatorioPage() {
     }
   }
 
-  const vazio = SECOES.every((s) => envio.conteudo[s.id].length === 0 || s.id === "limitacoes");
+  const semDado = SECOES.every((s) => envio.conteudoCompleto[s.id].length === 0 || s.id === "limitacoes");
+  const tudoDesmarcado = !semDado && SECOES.every((s) => envio.conteudo[s.id].length === 0);
   const btn = "btn inline-flex min-h-[44px] items-center justify-center gap-1.5 px-4 text-sm";
+  const alternarManter = (original: string) => setManterCfm((cur) => (cur.includes(original) ? cur.filter((x) => x !== original) : [...cur, original]));
 
   return (
     <div className="space-y-4">
       {head}
 
-      <Checagem envio={envio} />
+      {envio.omitidos.length > 0 && <NaoIncluido omitidos={envio.omitidos} />}
 
-      {vazio ? (
+      {envio.blocos.length > 0 && <OQueEntra envio={envio} excluidos={excluidos} setExcluidos={setExcluidos} />}
+
+      <Checagem envio={envio} alternarManter={alternarManter} />
+
+      {semDado ? (
         <SemFonte titulo="Sem dado para montar o texto" texto="Nenhuma seção tem dado neste período, então o relatório ficaria vazio. Troque o período no cabeçalho." />
+      ) : tudoDesmarcado ? (
+        <SemFonte titulo="Nada marcado para enviar" texto="Todas as seções foram desmarcadas em “O que entra no texto”. Marque ao menos uma para montar as versões." />
       ) : (
         <section className="card" aria-labelledby="rel-versoes">
           <h2 id="rel-versoes">Versões para enviar</h2>
@@ -225,15 +240,22 @@ function RelatorioPage() {
           {versao === "pdf" && (
             <div className="mt-3">
               <p className="sub">
-                A primeira página traz as 6 seções com a evidência de cada ponto; depois vem o detalhamento de Instagram, anúncios, WhatsApp e CRM. A mensagem de WhatsApp, como estiver editada, vai no fim.
+                A primeira página traz o achado do período, os números principais e as 6 seções com a evidência de cada ponto; depois vem o detalhamento de Instagram, anúncios, WhatsApp e CRM. A mensagem de WhatsApp, como estiver editada, vai no fim. O que foi desmarcado em “O que entra no texto” fica fora do PDF e é registrado na página de metodologia.
               </p>
               <ol className="mt-2 space-y-1 text-sm" style={{ color: "var(--text)" }}>
-                {SECOES.map((s) => (
-                  <li key={s.id}>
-                    <b>{s.titulo}</b>{" "}
-                    <span style={{ color: "var(--text-dim)" }}>({envio.conteudo[s.id].length} {envio.conteudo[s.id].length === 1 ? "item" : "itens"})</span>
-                  </li>
-                ))}
+                {SECOES.map((s) => {
+                  const n = envio.conteudo[s.id].length;
+                  const fora = envio.conteudoCompleto[s.id].length - n;
+                  return (
+                    <li key={s.id}>
+                      <b>{s.titulo}</b>{" "}
+                      <span style={{ color: "var(--text-dim)" }}>
+                        ({n} {n === 1 ? "item" : "itens"}
+                        {fora > 0 ? `; ${fora} desmarcado${fora === 1 ? "" : "s"}` : ""})
+                      </span>
+                    </li>
+                  );
+                })}
               </ol>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" className={`${btn} pri`} onClick={baixarPdf} disabled={gerandoPdf}>
@@ -311,14 +333,25 @@ function EditorVersao({
       </div>
       {!cfm.ok && (
         <div className="mt-2 rounded-lg border p-3 text-sm" style={{ background: "var(--warn-bg)", borderColor: "var(--warn-border)" }} role="alert">
-          <p className="font-semibold">A edição tem trecho que fere a regra do CFM. Ajuste antes de enviar:</p>
-          <ul className="mt-1 list-disc space-y-1 pl-5">
+          <p className="font-semibold">A edição tem trecho que fere a regra do CFM. Nada foi mudado no seu texto: use a sugestão ou mantenha como está.</p>
+          <ul className="mt-2 space-y-2">
             {cfm.achados.slice(0, 6).map((a, i) => (
-              <li key={i}>
-                "{a.trecho}": {ROTULO_REGRA_CFM[a.regra]}, {a.motivo}.
+              <li key={i} className="rounded-md p-2" style={{ background: "var(--surface)" }}>
+                <span className="block">
+                  <Marcado frase={a.frase} trechos={[a.trecho]} />
+                </span>
+                <span className="mt-1 block text-xs" style={{ color: "var(--text-dim)" }}>
+                  {ROTULO_REGRA_CFM[a.regra]}: {a.motivo}. Sugestão segura: “{a.sugestao}”
+                </span>
+                {a.sugestao && a.sugestao !== a.frase && texto.includes(a.frase) && (
+                  <button type="button" className="btn ghost mt-1 inline-flex min-h-[36px] items-center px-3 text-xs" onClick={() => setTexto(texto.replace(a.frase, a.sugestao))}>
+                    Aplicar sugestão
+                  </button>
+                )}
               </li>
             ))}
           </ul>
+          {cfm.achados.length > 6 && <p className="mt-1 text-xs">e mais {cfm.achados.length - 6} trecho(s).</p>}
         </div>
       )}
       <div className="mt-3 flex flex-wrap gap-2">
@@ -331,7 +364,108 @@ function EditorVersao({
   );
 }
 
-function Checagem({ envio }: { envio: RelatorioEnvio }) {
+// Frase com as palavras sinalizadas pelo CFM marcadas.
+function Marcado({ frase, trechos }: { frase: string; trechos: string[] }) {
+  const alvo = trechos.filter(Boolean);
+  if (alvo.length === 0) return <>{frase}</>;
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`(${alvo.map(esc).join("|")})`, "g");
+  return (
+    <>
+      {frase.split(re).map((p, i) =>
+        alvo.includes(p) ? (
+          <mark key={i} style={{ background: "var(--warn-bg)", color: "var(--ink)", outline: "1px solid var(--warn)", borderRadius: 3, padding: "0 2px" }}>
+            {p}
+          </mark>
+        ) : (
+          <span key={i}>{p}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+// Baseline (hub-relatorio.ts `omitidos`): o que ficou fora por falta de dado, agora com os casos novos.
+function NaoIncluido({ omitidos }: { omitidos: string[] }) {
+  const [todos, setTodos] = useState(false);
+  const LIMITE = 6;
+  const lista = todos ? omitidos : omitidos.slice(0, LIMITE);
+  return (
+    <section className="card" aria-labelledby="rel-omitidos" style={{ borderColor: "var(--warn)" }}>
+      <h2 id="rel-omitidos">Não incluído por falta de dado</h2>
+      <p className="sub">Estes pontos ficaram fora das 3 versões porque não há dado suficiente no período. Não é erro do texto.</p>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm" style={{ color: "var(--text)" }}>
+        {lista.map((o, i) => (
+          <li key={i}>{o}</li>
+        ))}
+      </ul>
+      {omitidos.length > LIMITE && (
+        <button type="button" className="btn ghost mt-2 inline-flex min-h-[40px] items-center gap-1 px-3 text-sm" onClick={() => setTodos(!todos)} aria-expanded={todos}>
+          <ChevronDown size={14} aria-hidden style={{ transform: todos ? "rotate(180deg)" : undefined }} />
+          {todos ? "Mostrar menos" : `Ver todos (${omitidos.length})`}
+        </button>
+      )}
+    </section>
+  );
+}
+
+// Baseline: caixas "O que entra no texto" (relatorio.tsx L142–159). Agora por seção e, ao abrir,
+// bloco a bloco. Vale para WhatsApp, executiva e PDF.
+function OQueEntra({ envio, excluidos, setExcluidos }: { envio: RelatorioEnvio; excluidos: string[]; setExcluidos: (f: (cur: string[]) => string[]) => void }) {
+  const [detalhe, setDetalhe] = useState(false);
+  const alternar = (chave: string, incluir: boolean) => setExcluidos((cur) => (incluir ? cur.filter((x) => x !== chave) : cur.includes(chave) ? cur : [...cur, chave]));
+  const secoes = SECOES.filter((s) => envio.conteudoCompleto[s.id].length > 0);
+  return (
+    <section className="card" aria-labelledby="rel-entra">
+      <h2 id="rel-entra">O que entra no texto</h2>
+      <p className="sub">Desmarque o que não faz sentido enviar a este cliente. Vale para as 3 versões (WhatsApp, reunião e PDF). Trocar a seleção refaz o texto (a edição manual é perdida).</p>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+        {secoes.map((s) => (
+          <label key={s.id} className="inline-flex min-h-[36px] items-center gap-2 text-sm">
+            <input type="checkbox" checked={!excluidos.includes(`secao:${s.id}`)} onChange={(ev) => alternar(`secao:${s.id}`, ev.target.checked)} />
+            {s.titulo} <span style={{ color: "var(--text-faint)" }}>({envio.conteudoCompleto[s.id].length})</span>
+          </label>
+        ))}
+      </div>
+      <button type="button" className="btn ghost mt-2 inline-flex min-h-[40px] items-center gap-1 px-3 text-sm" onClick={() => setDetalhe(!detalhe)} aria-expanded={detalhe}>
+        <ChevronDown size={14} aria-hidden style={{ transform: detalhe ? "rotate(180deg)" : undefined }} />
+        {detalhe ? "Esconder os blocos" : "Escolher bloco a bloco"}
+      </button>
+      {detalhe && (
+        <div className="mt-2 space-y-3">
+          {secoes.map((s) => {
+            const secaoFora = excluidos.includes(`secao:${s.id}`);
+            return (
+              <fieldset key={s.id} disabled={secaoFora} style={{ opacity: secaoFora ? 0.55 : 1 }}>
+                <legend className="text-xs font-semibold" style={{ color: "var(--text-dim)" }}>
+                  {s.titulo}
+                  {secaoFora ? " (seção desmarcada)" : ""}
+                </legend>
+                <div className="mt-1 flex flex-col gap-1">
+                  {envio.blocos
+                    .filter((b) => b.secao === s.id)
+                    .map((b) => (
+                      <label key={b.chave} className="inline-flex min-h-[32px] items-center gap-2 text-sm">
+                        <input type="checkbox" checked={!excluidos.includes(b.chave)} onChange={(ev) => alternar(b.chave, ev.target.checked)} />
+                        {b.rotulo}
+                      </label>
+                    ))}
+                </div>
+              </fieldset>
+            );
+          })}
+          {excluidos.length > 0 && (
+            <button type="button" className="btn ghost inline-flex min-h-[40px] items-center gap-1.5 px-3 text-sm" onClick={() => setExcluidos(() => [])}>
+              <RotateCcw size={14} aria-hidden /> Incluir tudo de novo
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Checagem({ envio, alternarManter }: { envio: RelatorioEnvio; alternarManter: (original: string) => void }) {
   const ok = envio.checagem.filter((c) => c.status === "ok").length;
   return (
     <section className="card" aria-labelledby="rel-checagem">
@@ -339,18 +473,44 @@ function Checagem({ envio }: { envio: RelatorioEnvio }) {
         <ShieldCheck size={18} aria-hidden /> Checagem antes de enviar
       </h2>
       <p className="sub">
-        {ok} de {envio.checagem.length} itens sem ressalva. O que está em atenção já foi tratado no texto (removido, reescrito ou escrito como limitação); confira antes de mandar.
+        {ok} de {envio.checagem.length} itens sem ressalva. O que está em atenção já foi tratado no texto (reescrito com sugestão segura ou escrito como limitação; nada é apagado); confira antes de mandar.
       </p>
       <ul className="mt-3 space-y-2">
         {envio.checagem.map((c) => (
-          <ItemChecagem key={c.id} c={c} />
+          <ItemChecagem key={c.id} c={c}>
+            {c.id === "linguagem" && envio.alteracoes.length > 0 ? <AlteracoesCFM alteracoes={envio.alteracoes} alternarManter={alternarManter} /> : null}
+          </ItemChecagem>
         ))}
       </ul>
     </section>
   );
 }
 
-function ItemChecagem({ c }: { c: ChecagemItem }) {
+// Cada frase sinalizada: original com as palavras marcadas, a reescrita segura e um clique para
+// manter o original (ou voltar à sugestão). A escolha refaz as 3 versões.
+function AlteracoesCFM({ alteracoes, alternarManter }: { alteracoes: AlteracaoLinguagem[]; alternarManter: (original: string) => void }) {
+  return (
+    <ul className="space-y-2 px-3 pb-3 pl-9 text-xs leading-relaxed" style={{ color: "var(--text-dim)", overflowWrap: "anywhere" }}>
+      {alteracoes.map((a) => (
+        <li key={a.original} className="rounded-md p-2" style={{ background: "var(--surface)" }}>
+          <span className="block font-semibold" style={{ color: "var(--text)" }}>
+            {a.secao}: {a.mantido ? "mantido como no original" : "reescrita segura aplicada"}
+          </span>
+          <span className="block">
+            Original: “<Marcado frase={a.original} trechos={a.trechos} />”
+          </span>
+          <span className="block">Sugestão: “{a.corrigido}”</span>
+          <span className="block">Motivo: {a.motivos.join("; ")}.</span>
+          <button type="button" className="btn ghost mt-1 inline-flex min-h-[36px] items-center px-3 text-xs" onClick={() => alternarManter(a.original)}>
+            {a.mantido ? "Usar a sugestão segura" : "Manter original"}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ItemChecagem({ c, children }: { c: ChecagemItem; children?: React.ReactNode }) {
   const [aberto, setAberto] = useState(c.id === "linguagem" && c.status === "atencao");
   const Icone = c.status === "ok" ? CheckCircle2 : AlertTriangle;
   return (
@@ -367,7 +527,8 @@ function ItemChecagem({ c }: { c: ChecagemItem }) {
         </span>
         <ChevronDown size={16} aria-hidden className="mt-1 shrink-0" style={{ transform: aberto ? "rotate(180deg)" : undefined }} />
       </button>
-      {aberto && c.detalhes.length > 0 && (
+      {aberto && children}
+      {aberto && !children && c.detalhes.length > 0 && (
         <ul className="space-y-1 px-3 pb-3 pl-9 text-xs leading-relaxed" style={{ color: "var(--text-dim)", overflowWrap: "anywhere" }}>
           {c.detalhes.map((d, i) => (
             <li key={i}>{d}</li>

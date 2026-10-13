@@ -13,7 +13,12 @@
 //   - ruído dos comentários: comentário nunca é citado; só vira pauta a dúvida
 //     feita por 2+ pessoas diferentes; emoji, @, link e spam são ignorados;
 //   - linguagem segura (CFM 2.336/2023): frase com promessa, preço, remédio,
-//     superlativo ou sensacionalismo é reescrita ou removida.
+//     superlativo ou sensacionalismo recebe uma reescrita segura (aplicada por padrão)
+//     e fica listada com o original; a equipe pode manter o original. Nada é apagado.
+//
+// A equipe escolhe o que entra (`excluir`, por seção ou por bloco), como no relatório
+// antigo; a escolha vale para as 3 versões. O que ficou de fora por falta de dado
+// vai em `omitidos` (card "Não incluído por falta de dado").
 //
 // Lógica pura e determinística (sem IA, sem banco): testável com `npx tsx`.
 import { conversaMaisBarata, GRUPOS, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
@@ -45,6 +50,18 @@ export interface EnvioInput {
   ads: { diag: DiagnosticoAds; diasComDado: string[] } | null;
   wts: { resumo: any | null; diasComDado: string[] } | null;
   crm: { resumo: { novos: number; ganhos: number; perdidos: number } | null; diasComDado: string[] } | null;
+  // O que a equipe tirou do envio (vale para WhatsApp, executiva e PDF). Cada entrada é
+  // "secao:<SecaoId>" (a seção inteira) ou "<SecaoId>:<id do item>" (um bloco). Ver `blocos`.
+  excluir?: string[];
+  // Frases sinalizadas pela checagem CFM que a equipe decidiu manter como foram geradas
+  // (chave = `AlteracaoLinguagem.original`). As demais recebem a reescrita segura.
+  manterOriginal?: string[];
+}
+
+export interface BlocoEnvio {
+  chave: string; // "<SecaoId>:<id do item>"
+  secao: SecaoId;
+  rotulo: string;
 }
 
 export type SecaoId = "resumo" | "vitorias" | "atencao" | "acoes" | "testes" | "limitacoes";
@@ -76,13 +93,20 @@ export interface ChecagemItem {
 
 export interface AlteracaoLinguagem {
   secao: string;
-  original: string;
-  corrigido: string | null; // null = removido
+  original: string; // frase como foi gerada (chave para "manter original")
+  corrigido: string; // reescrita segura sugerida; nada é apagado
   motivos: string[];
+  trechos: string[]; // palavras marcadas na frase original
+  mantido: boolean; // a equipe escolheu manter o original
 }
 
 export interface RelatorioEnvio {
-  conteudo: ConteudoEnvio;
+  conteudo: ConteudoEnvio; // o que vai nas 3 versões (já sem o que a equipe desmarcou)
+  conteudoCompleto: ConteudoEnvio; // tudo que tem dado, antes das escolhas de "O que entra"
+  blocos: BlocoEnvio[]; // itens que podem ser incluídos/excluídos
+  excluidos: string[]; // rótulos do que a equipe tirou (para o PDF registrar)
+  omitidos: string[]; // "Não incluído por falta de dado"
+  manterOriginal: string[];
   checagem: ChecagemItem[];
   insights: Insight[]; // recomendações aprovadas, no contrato do Hub
   limitacoes: Limitacao[];
@@ -320,6 +344,9 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
   const limitacoes: Limitacao[] = [];
   const candidatas: Candidata[] = [];
   const detalhesDado: string[] = [];
+  // "Não incluído por falta de dado": os mesmos avisos do relatório antigo (hub-relatorio.ts)
+  // e os novos (CRM, espera não medida, recomendações descartadas).
+  const omitidos: string[] = [];
   let dadoOk = true;
 
   const limitar = (l: Limitacao, curto: string) => {
@@ -360,6 +387,8 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
         { id: "alcance-unico", area: "conteudo", texto: "O número de pessoas diferentes alcançadas no período não veio da Meta; o relatório usa a soma dos alcances diários, que conta a mesma pessoa mais de uma vez.", resolve: "equipe_hub", comoResolver: "Abrir a Visão geral para ler o alcance do período direto da Meta." },
         "alcance é a soma dos dias, não pessoas únicas",
       );
+    } else {
+      omitidos.push("alcance (nenhum dia com alcance coletado no período)");
     }
     if (posts.length > 0) resumo.push({ id: "posts", curto: `${posts.length} ${plural(posts.length, "publicação", "publicações")}`, texto: `${posts.length} ${plural(posts.length, "publicação", "publicações")} no período.` });
 
@@ -372,7 +401,17 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
         vitorias.push({ id: "seguidores", curto: `+${fmtN(seg.delta)} seguidores (agora ${fmtCompacto(ate.followers)})`, texto, evidencia: `Contagem de seguidores em ${seg.daysWithData} dias.` });
       } else if (seg.delta < 0) {
         atencao.push({ id: "seguidores", curto: `${fmtN(seg.delta)} seguidores no período`, texto, evidencia: `Contagem de seguidores em ${seg.daysWithData} dias.` });
+      } else {
+        // Sem ganho nem perda: o relatório antigo mostrava mesmo assim ("ganhou 0"); continua no resumo.
+        resumo.push({
+          id: "seguidores",
+          curto: `seguidores estáveis (${fmtCompacto(ate.followers)})`,
+          texto: `O perfil não ganhou nem perdeu seguidores entre ${fmtDiaBR(de.date)} e ${fmtDiaBR(ate.date)} e está com ${fmtN(ate.followers)}.`,
+          evidencia: `Contagem de seguidores em ${seg.daysWithData} dias.`,
+        });
       }
+    } else {
+      omitidos.push("seguidores (menos de 2 dias com contagem gravada no período)");
     }
 
     // Post de maior alcance
@@ -386,6 +425,8 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
         texto: `A publicação de maior alcance foi ${trecho ? trecho + " " : ""}(${top.format ? fmtFormatKey(top.format) : "post"}), com ${fmtN(num(top.reach))} contas alcançadas${top.saved != null ? ` e ${fmtN(num(top.saved))} salvamentos` : ""}.`,
         evidencia: top.permalink ?? undefined,
       });
+    } else {
+      omitidos.push("post destaque (nenhum post com alcance no período)");
     }
 
     // Formato que mais alcança
@@ -487,6 +528,7 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
     }
   } else {
     dadoOk = false;
+    omitidos.push("alcance, seguidores e post destaque (Instagram não conectado)");
     detalhesDado.push("Instagram: não conectado.");
     limitar({ id: "sem-ig", area: "conteudo", texto: "O Instagram não está conectado: alcance, seguidores e conteúdo ficam fora do relatório.", resolve: "equipe_hub", comoResolver: "Conectar o perfil profissional em Fontes." }, "Instagram não conectado");
   }
@@ -497,6 +539,7 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
     const cov = cobertura(inp.ads.diasComDado, start, end);
     detalhesDado.push(`Anúncios: ${cov.com} de ${cov.total} dias com dado${cov.faltando.length ? ` (sem linha: ${trechos(cov.faltando)}; pode ser dia sem campanha ativa)` : ""}.`);
     if (diag.gasto <= 0) {
+      omitidos.push("anúncios (conta conectada, mas sem investimento no período)");
       limitar({ id: "ads-sem-gasto", area: "anuncios", texto: "A conta de anúncios está conectada, mas não houve investimento no período.", resolve: "gestor_trafego" }, "sem investimento em anúncios");
     } else {
       const msg = diag.custoPorConversaMensagem;
@@ -504,7 +547,8 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
         id: "ads",
         curto: `${fmtBRL(diag.gasto)} em anúncios${msg != null ? `; ${fmtN(diag.conversasMensagem)} conversas (${fmtBRL(msg)} cada)` : ""}`,
         texto: `${fmtBRL(diag.gasto)} investidos em anúncios.${msg != null ? ` As campanhas de mensagem abriram ${fmtN(diag.conversasMensagem)} conversas, a ${fmtBRL(msg)} cada.` : ""}`,
-        evidencia: `${diag.campanhas.length} campanhas; custo por conversa calculado só com campanhas de mensagem.`,
+        // O total de conversas de TODAS as campanhas (o número do relatório antigo) continua na evidência.
+        evidencia: `${diag.campanhas.length} campanhas; custo por conversa calculado só com campanhas de mensagem; somando todas as campanhas, ${fmtN(diag.conversas)} conversas iniciadas.`,
       });
       if (msg == null) {
         limitar(
@@ -595,8 +639,11 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
     }
   } else if (!f.tem_anuncios) {
     dadoOk = false;
+    omitidos.push("anúncios (conta de anúncios não conectada)");
     detalhesDado.push("Anúncios: conta não conectada.");
     limitar({ id: "sem-ads", area: "anuncios", texto: "A conta de anúncios não está conectada: investimento e custo por conversa ficam fora.", resolve: "equipe_hub", comoResolver: "Ligar a conta de anúncios do cliente." }, "anúncios não conectados");
+  } else {
+    omitidos.push("anúncios (conta conectada, mas os dados do período não foram lidos)");
   }
 
   // ---------- WhatsApp de atendimento
@@ -607,15 +654,25 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
     const at = num(r?.atendimentos);
     if (at <= 0) {
       dadoOk = false;
+      omitidos.push("atendimento (conectado, mas sem atendimentos no período)");
       limitar({ id: "wts-vazio", area: "comercial", texto: "O WhatsApp de atendimento está conectado, mas não registrou atendimentos no período. Pode ser falha na sincronização.", resolve: "equipe_hub", comoResolver: "Conferir a sincronização do WhatsApp de atendimento." }, "WhatsApp sem atendimentos registrados");
     } else {
-      resumo.push({ id: "wts", curto: `${fmtN(at)} atendimentos no WhatsApp`, texto: `${fmtN(at)} atendimentos no WhatsApp, de ${fmtN(num(r.contatos_distintos))} pessoas diferentes.` });
+      const medidos = num(r.espera_cobertura); // wts_resumo: quantos atendimentos têm espera medida
+      const esp = r.espera_mediana_seg != null ? num(r.espera_mediana_seg) : null;
+      // Espera dentro do aceitável: o relatório antigo mostrava sempre que medida; continua no resumo.
+      // Acima de 15 min ela vira ponto de atenção (abaixo), como já era.
+      const esperaBoa = esp != null && medidos > 0 && esp <= ESPERA_ALTA_SEG;
+      resumo.push({
+        id: "wts",
+        curto: `${fmtN(at)} atendimentos no WhatsApp${esperaBoa ? `; metade respondida em até ${fmtDuracao(esp!)}` : ""}`,
+        texto: `${fmtN(at)} atendimentos no WhatsApp, de ${fmtN(num(r.contatos_distintos))} pessoas diferentes.${esperaBoa ? ` Metade dos pacientes recebeu a primeira resposta em até ${fmtDuracao(esp!)}.` : ""}`,
+        evidencia: esperaBoa ? `${medidos} atendimentos com tempo de espera medido, de ${fmtN(at)}.` : undefined,
+      });
+      if (esp == null || medidos <= 0) omitidos.push("tempo até a primeira resposta no WhatsApp (nenhum atendimento com espera medida)");
       if (cov.fracao < 0.5) {
         dadoOk = false;
         limitar({ id: "wts-dias", area: "comercial", texto: `Houve atendimento registrado em só ${cov.com} de ${cov.total} dias. Se a clínica atende todo dia útil, parte das conversas pode não estar chegando ao painel.`, resolve: "equipe_hub", comoResolver: "Conferir se todos os números e departamentos estão ligados." }, `WhatsApp com registro em ${cov.com} de ${cov.total} dias`);
       }
-      const medidos = num(r.espera_cobertura); // wts_resumo: quantos atendimentos têm espera medida
-      const esp = r.espera_mediana_seg != null ? num(r.espera_mediana_seg) : null;
       if (esp != null && esp > ESPERA_ALTA_SEG) {
         atencao.push({ id: "wts-espera", curto: `metade dos pacientes esperou mais de ${fmtDuracao(esp)} pela 1ª resposta`, texto: `Metade dos pacientes esperou mais de ${fmtDuracao(esp)} pela primeira resposta no WhatsApp.`, evidencia: `${medidos} atendimentos com tempo de espera medido, de ${fmtN(at)}.` });
         candidatas.push({
@@ -640,8 +697,11 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
     }
   } else if (!f.tem_atendimento) {
     dadoOk = false;
+    omitidos.push("atendimento (WhatsApp de atendimento não conectado)");
     detalhesDado.push("WhatsApp de atendimento: não conectado.");
     limitar({ id: "sem-wts", area: "comercial", texto: "O WhatsApp de atendimento não está conectado: não dá para saber quantas conversas viraram atendimento nem o tempo de resposta.", resolve: "equipe_hub", comoResolver: "Conectar a plataforma de atendimento." }, "WhatsApp de atendimento não conectado");
+  } else {
+    omitidos.push("atendimento (conectado, mas os dados do período não foram lidos)");
   }
 
   // ---------- CRM
@@ -674,12 +734,16 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
       }
     } else {
       dadoOk = false;
+      omitidos.push("CRM (conectado, mas sem contatos novos no período)");
       limitar({ id: "crm-vazio", area: "comercial", texto: "O CRM está conectado, mas não registrou contatos novos no período.", resolve: "comercial", comoResolver: "Conferir se os contatos estão sendo lançados no CRM." }, "CRM sem contatos novos");
     }
   } else if (!f.tem_crm) {
     dadoOk = false;
+    omitidos.push("CRM (não conectado)");
     detalhesDado.push("CRM: não conectado.");
     limitar({ id: "sem-crm", area: "comercial", texto: "O CRM não está conectado: não dá para ligar o marketing a consultas fechadas.", resolve: "equipe_hub", comoResolver: "Conectar o CRM da clínica." }, "CRM não conectado");
+  } else {
+    omitidos.push("CRM (conectado, mas os dados do período não foram lidos)");
   }
 
   // ---------- validação das recomendações
@@ -722,25 +786,52 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
     return ({ alto: 3, medio: 2, baixo: 1 })[i.impacto] * ({ ruim: 3, atencao: 2, bom: 1 })[i.tom];
   };
   acoes.sort((a, b) => peso(b.id) - peso(a.id));
+  if (acoes.length === 0) {
+    omitidos.push(
+      f.tem_instagram
+        ? "ações recomendadas (sem dado suficiente: nenhuma recomendação teve evidência e amostra mínima)"
+        : "ações recomendadas de conteúdo (dependem do Instagram)",
+    );
+  }
+  for (const d of descartadas) omitidos.push(`recomendação "${d.titulo}" (${d.motivo})`);
 
   // ---------- linguagem segura (em cada item, antes de montar as versões)
+  // Nada é apagado: a frase de risco recebe a reescrita segura (padrão) ou fica como foi gerada,
+  // se a equipe clicou em "Manter original". Toda frase sinalizada fica listada na checagem.
+  const manter = inp.manterOriginal ?? [];
   const alteracoes: AlteracaoLinguagem[] = [];
+  const registrar = (secao: string, lista: ReturnType<typeof tornarSeguro>["alteracoes"]) => {
+    for (const a of lista) if (!alteracoes.some((x) => x.original === a.original)) alteracoes.push({ secao, ...a });
+  };
   const bruto: ConteudoEnvio = { resumo, vitorias, atencao, acoes, testes: testes.slice(0, 3), limitacoes: limitacoesItens };
-  const conteudo = {} as ConteudoEnvio;
+  const conteudoCompleto = {} as ConteudoEnvio;
   for (const s of SECOES) {
-    conteudo[s.id] = [];
+    conteudoCompleto[s.id] = [];
     for (const it of bruto[s.id]) {
-      const c = tornarSeguro(it.curto);
-      const t = tornarSeguro(it.texto);
-      for (const a of [...c.alteracoes, ...t.alteracoes]) {
-        if (!alteracoes.some((x) => x.original === a.original)) alteracoes.push({ secao: s.titulo, ...a });
-      }
-      if (!c.texto.trim() || !t.texto.trim()) continue; // item inteiro removido
+      const c = tornarSeguro(it.curto, { manter });
+      const t = tornarSeguro(it.texto, { manter });
+      registrar(s.titulo, [...c.alteracoes, ...t.alteracoes]);
       // Evidência também passa pela checagem (pode trazer nome de campanha/legenda).
-      const e = it.evidencia ? tornarSeguro(it.evidencia) : null;
-      for (const a of e?.alteracoes ?? []) if (!alteracoes.some((x) => x.original === a.original)) alteracoes.push({ secao: `${s.titulo} (evidência)`, ...a });
-      conteudo[s.id].push({ ...it, curto: c.texto.replace(/[.]$/, ""), texto: t.texto, evidencia: e?.texto || undefined });
+      const e = it.evidencia ? tornarSeguro(it.evidencia, { manter }) : null;
+      registrar(`${s.titulo} (evidência)`, e?.alteracoes ?? []);
+      // Nunca some um item: se a reescrita esvaziar o texto, fica o original.
+      conteudoCompleto[s.id].push({ ...it, curto: (c.texto || it.curto).replace(/[.]$/, ""), texto: t.texto || it.texto, evidencia: e ? e.texto || it.evidencia : undefined });
     }
+  }
+
+  // ---------- o que entra (escolha da equipe; vale para WhatsApp, executiva e PDF)
+  const blocos: BlocoEnvio[] = SECOES.flatMap((s) => conteudoCompleto[s.id].map((it) => ({ chave: `${s.id}:${it.id}`, secao: s.id, rotulo: rotuloBloco(s.id, it) })));
+  const excluir = new Set(inp.excluir ?? []);
+  const conteudo = {} as ConteudoEnvio;
+  const excluidos: string[] = [];
+  for (const s of SECOES) {
+    const secaoFora = excluir.has(`secao:${s.id}`);
+    if (secaoFora && conteudoCompleto[s.id].length > 0) excluidos.push(`${s.titulo} (seção inteira)`);
+    conteudo[s.id] = conteudoCompleto[s.id].filter((it) => {
+      const fora = secaoFora || excluir.has(`${s.id}:${it.id}`);
+      if (fora && !secaoFora) excluidos.push(`${s.titulo}: ${rotuloBloco(s.id, it)}`);
+      return !fora;
+    });
   }
 
   // ---------- checagem
@@ -778,20 +869,60 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
         `Pergunta feita por uma pessoa só não vira pauta (${com.semRepeticao}).`,
         ...com.duvidas.map((d) => `Dúvida repetida: ${d.tema}, ${d.pessoas} pessoas diferentes.`),
         ...(com.autoresDesconhecidos > 0 ? [`${com.autoresDesconhecidos} comentários vieram sem o nome do autor: textos diferentes contaram como pessoas diferentes e textos iguais, como uma só.`] : []),
+        NOTA_ALGORITMO_DUVIDAS,
       ],
     },
     {
       id: "linguagem",
       titulo: "Linguagem segura (CFM)",
       status: alteracoes.length === 0 ? "ok" : "atencao",
-      resumo: alteracoes.length === 0 ? "Nenhuma promessa de resultado, preço, nome de remédio ou superlativo." : `${alteracoes.length} ${plural(alteracoes.length, "trecho foi corrigido", "trechos foram corrigidos")} antes de montar o texto.`,
-      detalhes: alteracoes.map((a) => (a.corrigido ? `Reescrito (${a.motivos.join("; ")}): "${a.original}" → "${a.corrigido}"` : `Removido (${a.motivos.join("; ")}): "${a.original}"`)),
+      resumo:
+        alteracoes.length === 0
+          ? "Nenhuma promessa de resultado, preço, nome de remédio ou superlativo."
+          : `${alteracoes.length} ${plural(alteracoes.length, "trecho sinalizado", "trechos sinalizados")}: ${alteracoes.filter((a) => !a.mantido).length} com a reescrita segura aplicada${alteracoes.some((a) => a.mantido) ? `, ${alteracoes.filter((a) => a.mantido).length} mantido(s) como no original por escolha da equipe` : ""}. Nada foi apagado.`,
+      detalhes: alteracoes.map((a) =>
+        a.mantido
+          ? `Mantido como no original (${a.motivos.join("; ")}): "${a.original}". Sugestão não usada: "${a.corrigido}"`
+          : `Reescrito (${a.motivos.join("; ")}): "${a.original}" → "${a.corrigido}"`,
+      ),
     },
   ];
 
   const whatsapp = montarWhatsapp(inp, conteudo);
   const executiva = montarExecutiva(inp, conteudo);
-  return { conteudo, checagem, insights, limitacoes, descartadas, alteracoes, whatsapp, executiva };
+  return { conteudo, conteudoCompleto, blocos, excluidos, omitidos, manterOriginal: [...manter], checagem, insights, limitacoes, descartadas, alteracoes, whatsapp, executiva };
+}
+
+/**
+ * Três algoritmos contam dúvidas no Hub; o relatório não muda o seu (regra: não mexer em cálculo),
+ * mas diz a diferença. A troca pelo da tela Dúvidas não foi feita porque ele descarta mais
+ * (profissionais de saúde, conversa entre seguidores, pergunta sem "?") e agrupa por assunto,
+ * o que tiraria dúvidas que hoje aparecem aqui.
+ */
+export const NOTA_ALGORITMO_DUVIDAS =
+  "Como as dúvidas são contadas aqui: o relatório agrupa as perguntas do período por palavra-chave (a palavra dita pelo maior número de pessoas diferentes vira uma dúvida, até 5). A tela Dúvidas dos pacientes (e as ideias de conteúdo que saem das dúvidas) agrupa por assunto e intenção e lê também comentários comerciais sem \"?\". Por isso a mesma dúvida pode aparecer com números diferentes nas duas telas; nenhum dos dois cita o comentário.";
+
+const ROTULO_BLOCO: Record<string, string> = {
+  alcance: "Alcance",
+  posts: "Publicações",
+  seguidores: "Seguidores",
+  "post-top": "Post destaque",
+  formato: "Formato que mais alcança",
+  ads: "Anúncios",
+  "ads-desperdicio": "Anúncios: verba sem retorno",
+  "ads-escalar": "Anúncios: campanhas mais baratas",
+  wts: "Atendimento",
+  "wts-espera": "Atendimento: espera",
+  crm: "CRM",
+  "crm-ganhos": "CRM: contatos fechados",
+  duvida: "Dúvida repetida",
+};
+
+function rotuloBloco(secao: SecaoId, it: ItemEnvio): string {
+  const base = secao === "testes" || secao === "acoes" || secao === "limitacoes" ? null : ROTULO_BLOCO[it.id];
+  if (base) return base;
+  const t = it.curto.charAt(0).toUpperCase() + it.curto.slice(1);
+  return t.length > 70 ? t.slice(0, 67).trimEnd() + "..." : t;
 }
 
 // ---------------------------------------------------------------- versões
