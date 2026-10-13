@@ -1,34 +1,102 @@
-// Teste do diagnóstico por objetivo com dado real (meta_ads_daily, 13/09 a 12/10/2026,
-// somado por campanha em duas metades). Rodar: npx tsx scripts/test-anuncios-objetivo.ts
-import { diagnosticarAds, conversaMaisBarata, GRUPOS, type LinhaAds, type CampanhaCadastro } from "../src/lib/anuncios-objetivo";
+// Teste do diagnóstico por objetivo e da central de decisão de verba com dado
+// real (meta_ads_daily, 13/09 a 12/10/2026, somado por campanha em duas metades,
+// ver scripts/fixtures/anuncios-3-clientes.json).
+// Rodar: npx tsx scripts/test-anuncios-objetivo.ts
+import { readFileSync } from "node:fs";
+import {
+  diagnosticarAds,
+  conversaMaisBarata,
+  planoDeAcao,
+  insightsDeAnuncios,
+  limitacoesDeAnuncios,
+  grupoDoObjetivo,
+  GRUPOS,
+  ORDEM_CATEGORIAS,
+  type LinhaAds,
+  type CampanhaCadastro,
+} from "../src/lib/anuncios-objetivo";
 
-type Bruto = [number, string, string, number, number, number, number, number, number];
+// [metade, campaign_id, objective, gasto, impressoes, cliques_link, conversas, leads, visitas_pagina, dias_com_gasto, nome]
+type Bruto = [number, string, string, number, number, number, number, number, number, number, string];
 const START = "2026-09-13", END = "2026-10-12";
+const fixture = JSON.parse(readFileSync(new URL("./fixtures/anuncios-3-clientes.json", import.meta.url), "utf8")) as Record<string, Bruto[] | string>;
+
+// Cada metade vira `dias` linhas diárias iguais (a 1ª metade começa em 13/09, a 2ª em 27/09).
 function montar(rows: Bruto[]) {
-  const linhas: LinhaAds[] = rows.map(([h, id, , g, i, lc, cv, ld, lpv]) => ({
-    date: h === 1 ? START : END, campaign_id: id, spend: g, impressions: i, link_clicks: lc, conversations: cv, leads: ld, landing_page_views: lpv,
-  }));
+  const linhas: LinhaAds[] = [];
   const cad = new Map<string, CampanhaCadastro>();
-  for (const [, id, obj] of rows) cad.set(id, { campaign_id: id, name: `${obj} …${id.slice(-4)}`, objective: obj });
+  for (const [h, id, obj, g, i, lc, cv, ld, lpv, dias, nome] of rows) {
+    const k = Math.max(1, dias);
+    const inicio = new Date((h === 1 ? START : "2026-09-27") + "T12:00:00Z");
+    for (let j = 0; j < k; j++) {
+      const date = new Date(inicio.getTime() + j * 86400000).toISOString().slice(0, 10);
+      linhas.push({ date, campaign_id: id, spend: g / k, impressions: i / k, link_clicks: lc / k, conversations: cv / k, leads: ld / k, landing_page_views: lpv / k });
+    }
+    cad.set(id, { campaign_id: id, name: nome || `${obj} …${id.slice(-4)}`, objective: obj });
+  }
   return diagnosticarAds(linhas, [...cad.values()], START, END);
 }
 
-const keylon: Bruto[] = [[2,"120229734711190324","MESSAGES",162,7014,85,25,0,0],[1,"120232228483600324","LINK_CLICKS",168,6937,366,0,0,0],[2,"120252411789750324","OUTCOME_ENGAGEMENT",9,156,2,0,0,0],[2,"120236943428960324","LINK_CLICKS",225,23509,2039,3,0,0],[1,"120214454564270324","MESSAGES",165,2945,44,19,0,0],[1,"120251976117660324","OUTCOME_ENGAGEMENT",64,765,14,4,0,0],[2,"120251969823110324","LINK_CLICKS",151,25258,2131,0,0,0],[2,"120214454564270324","MESSAGES",177,3941,55,13,0,0],[1,"120214454692150324","MESSAGES",162,6310,155,47,0,0],[2,"120214454692150324","MESSAGES",49,1768,45,18,0,0],[2,"120215383789310324","MESSAGES",62,918,11,0,0,0],[1,"120215383789310324","MESSAGES",172,2228,45,8,0,0],[2,"120228334155010324","MESSAGES",172,8814,172,25,0,0],[2,"120239959602790324","LINK_CLICKS",102,2412,111,0,0,0],[1,"120228334155010324","MESSAGES",166,5567,118,25,0,0],[2,"120232228483600324","LINK_CLICKS",180,7658,330,0,0,0],[2,"120214454705360324","MESSAGES",172,6296,144,55,0,0],[1,"120229734711190324","MESSAGES",167,6149,78,26,0,0],[1,"120236943428960324","LINK_CLICKS",203,19251,1968,2,0,0],[1,"120229143487850324","LINK_CLICKS",170,5031,218,0,0,0],[1,"120214384735010324","MESSAGES",150,6977,144,63,0,0],[1,"120252181338340324","OUTCOME_ENGAGEMENT",13,203,2,2,0,0],[1,"120251969823110324","LINK_CLICKS",134,14582,1308,0,0,0],[2,"120214384735010324","MESSAGES",158,8241,195,83,0,0],[2,"120229143487850324","LINK_CLICKS",180,6558,197,0,0,0],[2,"120251814680490324","OUTCOME_ENGAGEMENT",212,3726,29,12,0,0],[2,"120252181338340324","OUTCOME_ENGAGEMENT",145,1640,17,9,0,0],[1,"120214454705360324","MESSAGES",165,4828,89,28,0,0],[1,"120251814680490324","OUTCOME_ENGAGEMENT",195,3750,14,10,0,0],[1,"120239959602790324","LINK_CLICKS",361,12278,663,0,0,0]];
-const lana: Bruto[] = [[2,"120241686985970169","LINK_CLICKS",165,11062,285,0,0,0],[1,"120252896367260169","LINK_CLICKS",80,4307,350,5,0,1],[1,"120253061335310169","OUTCOME_ENGAGEMENT",154,2140,40,12,0,0],[1,"120253117295340169","OUTCOME_ENGAGEMENT",51,749,7,2,0,0],[2,"120253199625830169","LINK_CLICKS",160,13249,394,2,0,0],[1,"120243113265320169","LINK_CLICKS",153,21397,2008,2,0,0],[1,"120248779391210514","OUTCOME_ENGAGEMENT",735,16607,139,49,0,0],[1,"120253184568510514","OUTCOME_LEADS",64,539,12,0,0,1],[1,"120241686985970169","LINK_CLICKS",168,12726,203,0,0,0],[1,"120253029635290169","LINK_CLICKS",110,6060,172,0,0,2],[2,"120248779391210514","OUTCOME_ENGAGEMENT",827,21969,218,45,0,8],[2,"120253443797430169","LINK_CLICKS",26,2183,60,0,0,0],[2,"120253415689370169","OUTCOME_ENGAGEMENT",31,835,6,2,0,0],[2,"120251998897010169","OUTCOME_ENGAGEMENT",151,4189,33,22,0,0],[1,"120253011568500169","LINK_CLICKS",128,11864,558,0,0,0],[1,"120252994287060169","LINK_CLICKS",160,9189,228,3,0,2],[2,"120239661280860169","LINK_CLICKS",182,9752,331,0,0,0],[2,"120253443791510169","LINK_CLICKS",24,1866,45,1,0,0],[2,"120253420627490514","OUTCOME_LEADS",84,1633,33,1,0,24],[1,"120253117214520169","LINK_CLICKS",58,5771,271,0,0,2],[2,"120253117250580169","OUTCOME_ENGAGEMENT",60,1106,7,2,0,0],[2,"120252789861330169","LINK_CLICKS",166,20402,805,1,0,0],[1,"120252942898240169","LINK_CLICKS",121,10628,167,1,0,0],[2,"120253117214520169","LINK_CLICKS",152,15084,786,0,0,3],[2,"120253296059150169","OUTCOME_ENGAGEMENT",81,2412,12,3,0,0],[1,"120252433177970514","OUTCOME_LEADS",114,2750,20,1,4,1],[1,"120242967225200169","LINK_CLICKS",166,8138,327,5,0,0],[1,"120239661280860169","LINK_CLICKS",183,10903,232,2,0,0],[1,"120252852044380169","LINK_CLICKS",135,4699,137,0,0,0],[2,"120242967225200169","LINK_CLICKS",167,9271,325,1,0,0],[2,"120253231211640514","OUTCOME_LEADS",14,126,2,0,1,1],[1,"120237611606750169","MESSAGES",205,4717,34,11,0,0],[1,"120251998897010169","OUTCOME_ENGAGEMENT",147,4062,20,12,0,0],[1,"120252789861330169","LINK_CLICKS",167,16773,854,1,0,1],[2,"120243113265320169","LINK_CLICKS",152,26926,2082,0,0,0],[2,"120253236102080169","LINK_CLICKS",160,8957,439,3,0,0],[2,"120253199629180169","LINK_CLICKS",156,11790,307,1,0,0],[1,"120244978092800169","LINK_CLICKS",168,8865,163,0,0,0],[1,"120252852051210169","LINK_CLICKS",59,2880,75,0,0,0],[1,"120252852064570169","LINK_CLICKS",59,1767,66,0,0,0],[2,"120253353861070514","OUTCOME_LEADS",72,764,9,0,1,1],[1,"120253011320060169","LINK_CLICKS",108,11706,460,0,0,0],[2,"120244978092800169","LINK_CLICKS",165,9716,204,2,0,0],[2,"120252820821790514","OUTCOME_ENGAGEMENT",1391,30236,282,115,0,9],[2,"120252789844290169","LINK_CLICKS",167,26281,1349,1,0,2],[1,"120252789818970169","LINK_CLICKS",167,18244,728,3,0,2],[2,"120243074379840169","LINK_CLICKS",166,8572,344,2,0,0],[2,"120253354276400514","OUTCOME_LEADS",58,1346,18,1,0,11],[1,"120252992344380514","OUTCOME_LEADS",559,5703,102,8,14,1],[2,"120237611606750169","MESSAGES",209,5804,45,11,0,0],[1,"120252789844290169","LINK_CLICKS",167,23082,1429,2,0,4],[2,"120253355295160514","OUTCOME_LEADS",41,1132,20,0,0,18],[2,"120252789818970169","LINK_CLICKS",125,14776,498,0,0,2],[1,"120253117250580169","OUTCOME_ENGAGEMENT",50,971,5,0,0,0],[1,"120252820821790514","OUTCOME_ENGAGEMENT",835,13902,134,57,0,0],[2,"120252852035990169","LINK_CLICKS",111,8115,246,0,0,0],[1,"120253231211640514","OUTCOME_LEADS",210,2208,44,1,4,3],[1,"120253029624620169","LINK_CLICKS",159,7884,979,3,0,0],[2,"120253420683020514","OUTCOME_LEADS",3,107,6,0,0,2],[2,"120253061335310169","OUTCOME_ENGAGEMENT",5,232,1,0,0,0],[1,"120243074379840169","LINK_CLICKS",166,8084,295,1,0,0],[1,"120252789877250169","LINK_CLICKS",146,11196,422,1,0,5],[2,"120253011568500169","LINK_CLICKS",152,18853,702,2,0,1],[1,"120252852035990169","LINK_CLICKS",153,8288,299,0,0,0],[2,"120253117295340169","OUTCOME_ENGAGEMENT",125,1980,15,5,0,0],[1,"120253199629180169","LINK_CLICKS",4,152,3,0,0,0],[2,"120253433502980514","OUTCOME_LEADS",218,8558,111,2,0,83]];
+let falhas = 0;
+function check(cond: boolean, msg: string) {
+  if (!cond) {
+    falhas++;
+    console.log(`  ✗ FALHOU: ${msg}`);
+  } else console.log(`  ✓ ${msg}`);
+}
 
 const brl = (v: number | null) => (v == null ? "—" : v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
-for (const [nome, rows] of [["Dr. Keylon", keylon], ["Lana Torres", lana]] as const) {
-  const d = montar(rows as Bruto[]);
-  console.log(`\n=== ${nome}: ${brl(d.gasto)} investidos, desperdício ${brl(d.desperdicio)} (${((d.desperdicio / d.gasto) * 100).toFixed(0)}%)`);
-  console.log(`custo por conversa (só campanhas de mensagem): ${brl(d.custoPorConversaMensagem)} em ${d.conversasMensagem} conversas`);
-  for (const g of d.grupos) console.log(`  ${GRUPOS[g.grupo].nome.padEnd(28)} ${String(g.campanhas).padStart(2)} camp · ${brl(g.gasto).padStart(12)} · custo/${GRUPOS[g.grupo].resultado} ${brl(g.custoPorResultado)} · régua ${brl(g.medianaCusto)} · conversas ${g.conversas} (${brl(g.custoPorConversa)})`);
+const resultados: Record<string, ReturnType<typeof montar>> = {};
+for (const nome of Object.keys(fixture).filter((k) => !k.startsWith("_"))) {
+  const d = montar(fixture[nome] as Bruto[]);
+  resultados[nome] = d;
+  console.log(`\n=== ${nome}: ${brl(d.gasto)} investidos em ${d.campanhas.length} campanhas`);
+  console.log(`custo por conversa (só campanhas de mensagem): ${brl(d.custoPorConversaMensagem)} em ${d.conversasMensagem} conversas; conversas de todas: ${d.conversas}`);
+  for (const g of d.grupos)
+    console.log(
+      `  ${GRUPOS[g.grupo].nome.padEnd(28)} ${String(g.campanhas).padStart(2)} camp · ${brl(g.gasto).padStart(12)} (${((g.gasto / d.gasto) * 100).toFixed(0)}%) · custo/${GRUPOS[g.grupo].resultado} ${brl(g.custoPorResultado)} · típica ${brl(g.medianaCusto)} · conversas ${g.conversas} (${brl(g.custoPorConversa)})`,
+    );
   const cont: Record<string, number> = {};
-  for (const c of d.campanhas) cont[c.veredito] = (cont[c.veredito] ?? 0) + 1;
-  console.log("  vereditos:", JSON.stringify(cont));
-  for (const c of d.campanhas.filter((c) => c.veredito !== "Manter").slice(0, 6)) console.log(`   [${c.veredito}] ${c.campanha}: ${c.motivo}`);
+  for (const c of d.campanhas) cont[c.categoria] = (cont[c.categoria] ?? 0) + 1;
+  console.log("  categorias:", ORDEM_CATEGORIAS.filter((k) => cont[k]).map((k) => `${k}: ${cont[k]}`).join(" · "));
+  for (const c of d.campanhas.filter((c) => c.categoria !== "Manter" && c.categoria !== "Sem dados suficientes").slice(0, 6))
+    console.log(`   [${c.categoria} | conf. ${c.confianca} | risco ${c.risco.nivel}] ${c.campanha}: ${c.motivo}`);
   const cmp = conversaMaisBarata(d);
   if (cmp) console.log(`  conversa mais barata: ${GRUPOS[cmp.barato.grupo].nome} ${brl(cmp.barato.custoPorConversa)} vs ${GRUPOS[cmp.caro.grupo].nome} ${brl(cmp.caro.custoPorConversa)} (${cmp.vezes?.toFixed(1) ?? "∞"}x)`);
-  // Como o diagnóstico antigo via a mesma conta: tudo sem conversa = desperdício.
-  const antigo = d.campanhas.filter((c) => c.conversas === 0 && c.impressoes >= 500 && c.gasto >= 30).reduce((s, c) => s + c.gasto, 0);
-  console.log(`  diagnóstico antigo chamaria de "sem conversa" (desperdício): ${brl(antigo)} (${((antigo / d.gasto) * 100).toFixed(0)}%)`);
+  console.log("  >> Se eu tivesse que agir hoje:");
+  planoDeAcao(d).forEach((i, k) => console.log(`   ${k + 1}. ${i.acao?.texto}\n      (${i.titulo} | ${i.confianca} | ${i.impactoTexto ?? "sem estimativa"})`));
+  console.log(`  limitações: ${limitacoesDeAnuncios(d).map((l) => l.id).join(", ")}`);
 }
+
+console.log("\n=== Verificações");
+// Regras do grupo
+check(grupoDoObjetivo("LINK_CLICKS", 268, 963) === "mensagem", "tráfego com 268 conversas em 963 cliques é tráfego para o WhatsApp (régua: conversa)");
+check(grupoDoObjetivo("LINK_CLICKS", 9, 7996) === "trafego", "tráfego com 9 conversas em 8 mil cliques segue como tráfego");
+
+for (const [nome, d] of Object.entries(resultados)) {
+  const plano = planoDeAcao(d);
+  check(plano.length >= 1 && plano.length <= 3, `${nome}: plano tem de 1 a 3 ações (${plano.length})`);
+  check(plano.every((i) => /R\$/.test(i.acao?.texto ?? "")), `${nome}: toda ação do plano traz valor em R$`);
+  const ins = insightsDeAnuncios(d);
+  check(ins.every((i) => i.area === "anuncios" && i.responsavel === "gestor_trafego"), `${nome}: insights com área "anuncios" e responsável gestor de tráfego`);
+  const proibido = /mediana|\bCTR\b|\bCPM\b|\bCPC\b/;
+  const textos = [...ins.flatMap((i) => [i.titulo, i.diagnostico, i.acao?.texto ?? ""]), ...d.campanhas.flatMap((c) => [c.motivo, c.acao, c.comparacao])];
+  check(!textos.some((t) => proibido.test(t)), `${nome}: textos sem jargão (mediana, CTR, CPM, CPC)`);
+  // Categorias coerentes com as regras
+  for (const c of d.campanhas) {
+    if (c.categoria === "Escalar agora" && !(c.vezesRegua != null && c.vezesRegua <= 0.6 && !c.cansando)) check(false, `${nome}: Escalar agora fora da regra (${c.campanha})`);
+    if (c.categoria === "Cortar" && !(c.resultados === 0 || (c.vezesRegua ?? 0) >= 2)) check(false, `${nome}: Cortar fora da regra (${c.campanha})`);
+  }
+}
+const lana = resultados["Lana Torres"];
+check(conversaMaisBarata(lana) != null, "Lana: conversa de tráfego bem mais cara que de mensagem");
+check(planoDeAcao(lana)[0]?.id === "anuncios-entre-objetivos", "Lana: a 1ª ação é a troca entre objetivos");
+const ju = resultados["Dra. Juliana Paola"];
+const blef = ju.campanhas.find((c) => c.campaign_id === "120251102433920047")!;
+check(blef.grupo === "mensagem" && blef.risco.nivel === "alto", "Juliana: tráfego para WhatsApp (blefaroplastia) é julgado por conversa e tem risco alto (principal fonte de conversas)");
+check(!planoDeAcao(ju).some((i) => /^(Pausar|Reduzir)[^,]*BLEFAROPLASTIA/i.test(i.acao?.texto ?? "")), "Juliana: o plano não corta a campanha que traz as conversas");
+const keylon = resultados["Dr. Keylon Lucarelli"];
+check(keylon.campanhas.some((c) => c.categoria === "Revisar criativo" || c.categoria === "Cortar"), "Keylon: há ao menos uma campanha para revisar ou cortar");
+
+console.log(falhas ? `\n${falhas} verificação(ões) falharam` : "\nTodas as verificações passaram");
+if (falhas) process.exit(1);
