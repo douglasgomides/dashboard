@@ -82,6 +82,68 @@ function coverageOf(points: FollowerPoint[], start: string, end: string) {
   return { expected, coverage: points.filter((p) => p.date >= start && p.date <= end).length / expected };
 }
 
+// ---------- seguidor bruto x líquido ----------
+// Bruto = novos seguidores do dia (é o número do "Seguidores" no Insights da Meta e do app do Instagram).
+// Saíram = deixaram de seguir ou saíram do Instagram. Líquido = bruto - saíram (o que de fato mudou no total).
+// A Meta leva ~2 dias para fechar um dia: dia aberto aparece à parte e não entra nas somas.
+export const DIAS_PARA_FECHAR = 2;
+
+export interface GrowthDay {
+  date: string;
+  novos: number; // bruto
+  saidas: number | null; // null = não medido
+  liquido: number | null;
+  aberto: boolean; // a Meta ainda não fechou o dia
+}
+
+export interface GrowthAnalysis {
+  days: GrowthDay[];
+  novos: number; // bruto, só dias fechados com saída medida
+  saidas: number;
+  liquido: number;
+  diasMedidos: number;
+  diasFechados: number; // dias fechados do período que têm algum dado
+  diasSemSaida: number; // fechados, sem saída gravada (histórico anterior à coleta)
+  diasAbertos: number;
+  novosTodosFechados: number; // bruto de todos os dias fechados, medidos ou não (compara com o Instagram)
+  taxaSaida: number | null; // saíram / bruto, 0..1
+}
+
+export function analyzeGrowth(
+  metrics: { date: string; new_followers?: number | null; unfollowers?: number | null }[],
+  start: string,
+  end: string,
+  today: string = msToIso(Date.now()),
+): GrowthAnalysis {
+  const ultimoFechado = msToIso(isoToMs(today) - DIAS_PARA_FECHAR * DAY_MS);
+  const days: GrowthDay[] = [];
+  for (const m of metrics) {
+    if (m.date < start || m.date > end || m.date > today) continue;
+    const aberto = m.date > ultimoFechado;
+    const saidas = m.unfollowers == null ? null : Number(m.unfollowers);
+    if (m.new_followers == null && saidas == null) continue;
+    const novos = Number(m.new_followers ?? 0);
+    days.push({ date: m.date, novos, saidas, liquido: saidas == null ? null : novos - saidas, aberto });
+  }
+  days.sort((a, b) => a.date.localeCompare(b.date));
+  const fechados = days.filter((d) => !d.aberto);
+  const medidos = fechados.filter((d) => d.saidas != null);
+  const novos = medidos.reduce((a, d) => a + d.novos, 0);
+  const saidas = medidos.reduce((a, d) => a + (d.saidas ?? 0), 0);
+  return {
+    days,
+    novos,
+    saidas,
+    liquido: novos - saidas,
+    diasMedidos: medidos.length,
+    diasFechados: fechados.length,
+    diasSemSaida: fechados.length - medidos.length,
+    diasAbertos: days.length - fechados.length,
+    novosTodosFechados: fechados.reduce((a, d) => a + d.novos, 0),
+    taxaSaida: novos > 0 ? saidas / novos : null,
+  };
+}
+
 export function analyzeFollowers(
   metrics: { date: string; followers_count: number | null }[],
   start: string,

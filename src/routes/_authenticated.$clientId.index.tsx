@@ -23,6 +23,7 @@ import type { ContentFormat } from "@/integrations/supabase/types";
 import { brazilWeekdayAndHour, computeFormatBreakdown, computeFormatInsight, fmtFormatKey, median } from "@/lib/report-metrics";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum } from "@/lib/format";
+import { analyzeGrowth } from "@/lib/hub-conteudo";
 import { UserPlus, Eye, Activity, Bookmark, Trophy, TrendingDown, MousePointerClick, LineChart as LineIcon, Clock, Gauge, BarChart3, Download, Loader2, Lightbulb } from "lucide-react";
 import { Painel, Kpi, BarraFina, Miniatura } from "@/components/visual";
 
@@ -358,6 +359,12 @@ function MonthlyOverview() {
   }
 
   const newFollowers = sum(data, "new_followers");
+  // Bruto x líquido: o bruto é o "Seguidores" do Instagram; o líquido desconta quem saiu (ver tela Conteúdo).
+  const cresc = analyzeGrowth(data as { date: string; new_followers?: number | null; unfollowers?: number | null }[], start, end);
+  const sinal = (n: number) => `${n >= 0 ? "+" : "-"}${Math.abs(n).toLocaleString("pt-BR")}`;
+  const dicaSeguidores = cresc.diasMedidos
+    ? `bruto, igual ao Instagram · saíram ${cresc.saidas.toLocaleString("pt-BR")} · líquido ${sinal(cresc.liquido)} (${cresc.diasMedidos} dias medidos)`
+    : "bruto, igual ao Instagram · saídas ainda não medidas neste período";
   const reach = sum(data, "reach");
   const saves = sum(data, "saves");
   const interactions = sum(data, "total_interactions");
@@ -433,7 +440,7 @@ function MonthlyOverview() {
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Kpi icone={UserPlus} cor="var(--s3)" rotulo="Novos seguidores" valor={newFollowers.toLocaleString("pt-BR")} tendencia={vsNovos} dica="só últimos 30 dias (limite do Instagram)" />
+        <Kpi icone={UserPlus} cor="var(--s3)" rotulo="Novos seguidores (bruto)" valor={newFollowers.toLocaleString("pt-BR")} tendencia={vsNovos} dica={dicaSeguidores} />
         <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance (soma dos dias)" valor={reach.toLocaleString("pt-BR")} tendencia={vsAlcance} dica="a mesma pessoa pode contar mais de um dia" />
         <Kpi icone={Activity} cor="var(--s2)" rotulo="Taxa de engajamento" valor={engagementRate} dica="interações ÷ alcance" />
         <Kpi icone={Bookmark} cor="var(--s7)" rotulo="Salvamentos" valor={saves.toLocaleString("pt-BR")} tendencia={vsSalvos} />
