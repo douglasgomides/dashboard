@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getClientFontes } from "@/lib/client-data";
 import { statusDoCliente, tomDaFonte, ddmm, diasDeAtraso, type LinhaFonte } from "@/lib/saude-fontes";
 import { motivoDaLinha, ROTULO_DONO, type Dono } from "@/lib/motivos";
+import { saudeDaFonte, CelulaSaude } from "@/components/source-health";
 import { SeloDono } from "@/components/selo-dono";
 
 
@@ -201,31 +202,6 @@ function NewAdminForm() {
   );
 }
 
-const COR_TOM: Record<string, string> = {
-  bom: "var(--good)",
-  atencao: "var(--warn, #b7791f)",
-  ruim: "var(--danger)",
-  neutro: "var(--text-faint)",
-};
-
-function Chip({ ligado, linha, erro }: { ligado: boolean; linha?: LinhaFonte; erro?: boolean }) {
-  if (!ligado) {
-    return (
-      <span title="Fonte não ligada a este cliente" style={{ color: "var(--text-faint)" }}>
-        não ligado
-      </span>
-    );
-  }
-  const tom = tomDaFonte(linha);
-  const texto = linha?.data_ate ? `até ${ddmm(linha.data_ate)}` : "sem dado";
-  return (
-    <span style={{ color: COR_TOM[tom], fontWeight: 600 }} title={erro ? "Erro na última tentativa" : undefined}>
-      {tom === "ruim" ? "● " : tom === "atencao" ? "◐ " : tom === "bom" ? "✓ " : ""}
-      {texto}
-    </span>
-  );
-}
-
 async function lerSaude(clientId: string) {
   const [fontes, linhas] = await Promise.all([getClientFontes(clientId).catch(() => null), statusDoCliente(clientId)]);
   return { fontes, linhas };
@@ -256,12 +232,13 @@ function LinhaSaude({ clientId }: { clientId: string }) {
       </td>
     );
   }
+  // Estado, data do último dado, causa e próxima ação (mesmas regras de antes: tomDaFonte + motivoDaLinha).
   return (
     <>
-      <td className="px-4 py-2 text-xs"><Chip ligado={!!f?.tem_instagram} linha={por("instagram")} /></td>
-      <td className="px-4 py-2 text-xs"><Chip ligado={!!f?.tem_anuncios} linha={por("anuncios")} /></td>
-      <td className="px-4 py-2 text-xs"><Chip ligado={!!f?.tem_crm} linha={por("crm")} /></td>
-      <td className="px-4 py-2 text-xs"><Chip ligado={!!f?.tem_atendimento} linha={por("atendimento")} /></td>
+      <td className="px-4 py-3 align-top" data-label="Instagram"><CelulaSaude s={saudeDaFonte(!!f?.tem_instagram, por("instagram"))} /></td>
+      <td className="px-4 py-3 align-top" data-label="Anúncios"><CelulaSaude s={saudeDaFonte(!!f?.tem_anuncios, por("anuncios"))} /></td>
+      <td className="px-4 py-3 align-top" data-label="CRM"><CelulaSaude s={saudeDaFonte(!!f?.tem_crm, por("crm"))} /></td>
+      <td className="px-4 py-3 align-top" data-label="WhatsApp"><CelulaSaude s={saudeDaFonte(!!f?.tem_atendimento, por("atendimento"))} /></td>
     </>
   );
 }
@@ -351,16 +328,17 @@ function AdminClientsPage() {
         </div>
       )}
       <p className="mb-3 text-sm" style={{ color: "var(--text-dim)" }}>
-        Visão geral: até que dia cada fonte de cada cliente tem dado. Verde: em dia. Amarelo: 2 a 3 dias parado.
-        Vermelho: mais de 3 dias parado ou com erro. "Não ligado" quer dizer que o cliente não tem aquela fonte.
+        Saúde das fontes: para cada fonte, o estado, a data do último dado (do próprio dado, não da última sincronização),
+        a causa identificada e a próxima ação possível. Estados: Fonte atualizada · Do lado do cliente · Sem dado novo na
+        origem · Instabilidade da Meta · Erro · Fonte não conectada. Clientes com problema aparecem primeiro.
       </p>
       {isLoading ? (
         <p style={{ color: "var(--text-dim)" }}>Carregando…</p>
       ) : (
         <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "var(--border)" }}>
-          <table className="w-full text-sm">
+          <table className="w-full text-sm empilha">
             <thead>
-              <tr className="text-left text-xs" style={{ color: "var(--text-faint)", background: "var(--surface-2)" }}>
+              <tr className="text-left text-xs" style={{ color: "var(--ink-2)", background: "var(--surface-2)" }}>
                 <th className="px-4 py-2">Nome</th>
                 <th className="px-4 py-2">Instagram</th>
                 <th className="px-4 py-2">Anúncios</th>
@@ -370,11 +348,20 @@ function AdminClientsPage() {
               </tr>
             </thead>
             <tbody>
-              {(clients ?? []).map((c) => {
+              {[...(clients ?? [])]
+                .map((c, i) => {
+                  const sd = saudes[i]?.data;
+                  const peso = sd
+                    ? Math.max(0, ...(["instagram", "anuncios", "crm", "atendimento"] as const).map((fo) => saudeDaFonte(!!sd.fontes?.[FLAG_FONTE[fo]], sd.linhas.find((l) => l.fonte === fo)).peso))
+                    : 0;
+                  return { c, peso };
+                })
+                .sort((x, y) => y.peso - x.peso)
+                .map(({ c }) => {
                 const handle = c.instagram_handle || contasIg?.get(c.id) || null;
                 return (
                   <tr key={c.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                    <td className="px-4 py-2 font-medium">
+                    <td className="px-4 py-3 align-top font-medium" data-label="Cliente">
                       <div className="flex items-center gap-3">
                         <ClientAvatar nome={c.name} url={c.avatar_url} tamanho={36} />
                         <div>
@@ -386,7 +373,7 @@ function AdminClientsPage() {
                       </div>
                     </td>
                     <LinhaSaude clientId={c.id} />
-                    <td className="px-4 py-2 text-right">
+                    <td className="px-4 py-3 text-right align-top" data-label="">
                       <Link to="/admin/$clientId" params={{ clientId: c.id }} style={{ color: "var(--accent)" }}>
                         Gerenciar →
                       </Link>
