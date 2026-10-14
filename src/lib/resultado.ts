@@ -15,6 +15,8 @@ import { ordenarPorScore } from "@/lib/oportunidades";
 import { confiancaPorAmostra, type Insight, type Limitacao, type Responsavel, type Area, type Tom } from "@/lib/insight";
 
 export interface EntradaResultado {
+  /** A tela já mostra a faixa de cobertura no topo: não repetir "Período incompleto" nos alertas. */
+  coberturaNoTopo?: boolean;
   start: string;
   end: string;
   hoje: string;
@@ -98,7 +100,8 @@ export function medirCobertura(e: EntradaResultado): Cobertura {
   const faltam = diasPeriodo - comDado.length;
   if (e.fontes?.tem_instagram !== false) {
     if (comDado.length === 0) alertas.push({ tom: "ruim", texto: "Nenhum dia com dado do Instagram neste período. Os números de conteúdo abaixo ficam vazios." });
-    else if (faltam >= 3)
+    // "Período incompleto" fica uma vez só, na faixa de cobertura do topo de toda tela (CoberturaPeriodo).
+    else if (faltam >= 3 && !e.coberturaNoTopo)
       alertas.push({
         tom: faltam / diasPeriodo > 0.4 ? "ruim" : "atencao",
         texto: `Período incompleto: ${comDado.length} de ${diasPeriodo} dias têm dado do Instagram (${dm(comDado[0])} a ${dm(comDado[comDado.length - 1])}). Totais e comparações valem só para esses dias.${comDado[0] > e.start ? ` O histórico diário guardado deste perfil começa em ${dm(comDado[0])}.` : ""}`,
@@ -205,7 +208,7 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
       rotulo: unico != null ? `Alcance (contas únicas)${e.periodoIg?.recortado ? ", últimos 30 dias" : ""}` : "Alcance (soma dos dias)",
       valor: int(unico ?? reachSoma),
       explicacao: unico != null
-        ? `Quantas pessoas diferentes viram pelo menos um post ou story${e.periodoIg?.recortado ? " nos últimos 30 dias do período (a Meta não calcula contas únicas para mais de 30 dias)" : ""}. É o mesmo número de “contas alcançadas” do Instagram. A soma do alcance de cada dia foi ${int(reachSoma)}.`
+        ? `Quantas pessoas diferentes viram pelo menos um post ou story${e.periodoIg?.recortado ? " nos últimos 30 dias do período (a Meta não calcula contas únicas para mais de 30 dias)" : ""}. É o mesmo número de “contas alcançadas” do Instagram.`
         : "Soma de quantas pessoas viram o perfil em cada dia. A mesma pessoa conta de novo se voltou em outro dia, por isso é maior que o número do Instagram.",
       status: null,
       // Variação só sobre a soma dos dias (como na tela original); com alcance único não há comparação equivalente.

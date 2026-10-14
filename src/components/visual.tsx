@@ -170,6 +170,38 @@ export function Numero({
 }
 
 // Cartão de número grande com ícone — substitui as caixas "RÓTULO EM CAIXA ALTA + valor + frase".
+/** Ícone "i" com a explicação técnica: passa o mouse (title) ou toca para abrir. */
+export function InfoDica({ texto, rotulo = "Mais informações" }: { texto: string; rotulo?: string }) {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <span className="relative ml-auto inline-flex">
+      <button
+        type="button"
+        aria-label={rotulo}
+        aria-expanded={aberto}
+        title={texto}
+        onClick={(e) => {
+          e.stopPropagation();
+          setAberto(!aberto);
+        }}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full"
+        style={{ color: "var(--text-faint)" }}
+      >
+        <Info size={14} aria-hidden />
+      </button>
+      {aberto && (
+        <span
+          role="tooltip"
+          className="absolute right-0 top-7 z-20 w-64 rounded-lg border p-2.5 text-xs leading-relaxed shadow-lg"
+          style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--ink-2)" }}
+        >
+          {texto}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function Kpi({
   icone: Icon,
   rotulo,
@@ -177,6 +209,7 @@ export function Kpi({
   dica,
   cor = "var(--accent)",
   tendencia,
+  info,
 }: {
   icone: LucideIcon;
   rotulo: string;
@@ -184,6 +217,8 @@ export function Kpi({
   dica?: string;
   cor?: string;
   tendencia?: { sobe: boolean; texto: string } | null;
+  /** Explicação técnica (fonte, fórmula, limitação): fica num ícone "i", fora do corpo do cartão. */
+  info?: string;
 }) {
   return (
     <div className="rounded-xl border p-3.5" style={{ background: "var(--surface)", borderColor: "var(--border)" }} title={dica}>
@@ -198,6 +233,7 @@ export function Kpi({
         <span className="text-xs font-medium" style={{ color: "var(--text-dim)" }}>
           {rotulo}
         </span>
+        {info && <InfoDica texto={info} rotulo={`Sobre ${rotulo}`} />}
       </div>
       <div className="mt-2 text-2xl font-semibold tabular-nums leading-none">{valor}</div>
       {tendencia && (

@@ -36,7 +36,12 @@ export function CoberturaPeriodo({ clientId, start, end, onUsarPeriodo }: { clie
         <CalendarClock size={18} aria-hidden className="mt-0.5 shrink-0" style={{ color: grave ? "var(--warn)" : "var(--muted)" }} />
         <div className="min-w-0 flex-1">
           <p>
-            <b>Você escolheu {dm(start)} a {dm(fim)}, mas nem todo dado cobre esse período.</b> {principal.rotulo}: {principal.texto}
+            {novoInicio ? (
+              <b>Há dado só desde {dm(novoInicio)}. Você escolheu {dm(start)} a {dm(fim)}: os números abaixo cobrem só os dias com dado.</b>
+            ) : (
+              <b>Você escolheu {dm(start)} a {dm(fim)}, mas nem todo dado cobre esse período.</b>
+            )}{" "}
+            {principal.rotulo}: {principal.texto}
             {avisos.length > 1 && (
               <button type="button" onClick={() => setAberto(!aberto)} aria-expanded={aberto} className="ml-1 inline-flex items-center gap-0.5 font-semibold" style={{ color: "var(--accent)" }}>
                 {aberto ? "Ocultar" : `Ver as ${avisos.length} fontes`} <ChevronDown size={14} aria-hidden style={{ transform: aberto ? "rotate(180deg)" : undefined }} />
