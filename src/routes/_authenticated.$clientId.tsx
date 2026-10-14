@@ -47,6 +47,11 @@ export const Route = createFileRoute("/_authenticated/$clientId")({
 const CLIENTES_SO_CRM = new Set(["8770500e-ab5d-4ae8-9489-c49c9991303c"]);
 const ROTAS_DO_CRM = ["/crm-painel", "/crm-estrutura", "/vendas-kommo"];
 
+// Clientes sem Business Manager próprio: a Meta não libera a Audiência ao vivo
+// (cidades, idade, gênero), então a aba fica escondida e o endereço direto volta
+// para o Resultado. Dra. Marcelly Achkar. Para voltar, tire o id daqui.
+const CLIENTES_SEM_AUDIENCIA = new Set(["633e6ee6-cb55-4796-8ffe-ce9c6e34cc12"]);
+
 type Fonte = "instagram" | "anuncios" | "crm" | "atendimento";
 type NavItem = { to: string; label: string; Icone: typeof LayoutGrid; exact?: boolean; admin?: boolean; fonte?: Fonte };
 type NavGroup = { titulo: string; itens: NavItem[] };
@@ -106,6 +111,12 @@ function ClientLayout() {
   };
 
   const soCrm = CLIENTES_SO_CRM.has(clientId);
+  const semAudiencia = CLIENTES_SEM_AUDIENCIA.has(clientId);
+  useEffect(() => {
+    if (semAudiencia && currentPathname.endsWith("/audiencia")) {
+      navigate({ to: "/$clientId", params: { clientId }, search: dateRange, replace: true });
+    }
+  }, [semAudiencia, currentPathname, clientId, navigate, dateRange]);
   useEffect(() => {
     if (!soCrm) return;
     const dentroDoCrm = ROTAS_DO_CRM.some((r) => currentPathname.endsWith(r));
@@ -144,7 +155,8 @@ function ClientLayout() {
           (it) =>
             (!it.admin || isAdmin) &&
             fonteOk(it.fonte) &&
-            (!soCrm || it.admin || it.fonte === "crm"),
+            (!soCrm || it.admin || it.fonte === "crm") &&
+            !(semAudiencia && it.to === "/$clientId/audiencia"),
         );
         if (itens.length === 0) return null;
         return (
