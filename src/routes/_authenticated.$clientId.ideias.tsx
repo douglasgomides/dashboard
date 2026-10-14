@@ -23,6 +23,8 @@ import { horasDosPosts } from "@/lib/horarios";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 import { BotaoAcao, ListaLimitacoes, OQueE, SeloStatus } from "@/components/insight-card";
 import { BotaoCopiar } from "@/components/botao-copiar";
+import { AcoesDaIdeia, PlanejadorSemana, usePautas } from "@/components/planejador-conteudo";
+import { useClientRole } from "@/hooks/use-client-role";
 
 export const Route = createFileRoute("/_authenticated/$clientId/ideias")({
   component: IdeiasPage,
@@ -52,7 +54,7 @@ function Rotulo({ children }: { children: React.ReactNode }) {
   );
 }
 
-function IdeiaCard({ i, clientId }: { i: Ideia; clientId: string }) {
+function IdeiaCard({ i, clientId, planner }: { i: Ideia; clientId: string; planner?: { api: ReturnType<typeof usePautas>; podeEditar: boolean } }) {
   return (
     <article className="flex min-w-0 flex-col gap-3 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -136,6 +138,8 @@ function IdeiaCard({ i, clientId }: { i: Ideia; clientId: string }) {
         </div>
       )}
 
+      {planner && <AcoesDaIdeia ideia={i} clientId={clientId} api={planner.api} podeEditar={planner.podeEditar} />}
+
       <div className="mt-auto flex flex-wrap gap-2">
         <BotaoCopiar texto={ideiaParaTexto(i)} rotulo="Copiar ideia completa" variante="primario" />
         {i.regra === "pergunta" && i.pessoas ? (
@@ -188,7 +192,7 @@ function PlanoDaSemana({ ideias, originais, hora }: { ideias: Ideia[]; originais
 type Cruzamento = ReturnType<typeof buildIdeiasRegraOriginal> & ReturnType<typeof ideiasOriginaisSemRepetir>;
 
 // Ideias geradas pelas regras originais (477eb43), sem repetir as da regra nova.
-function IdeiasRegraOriginal({ orig, carregando, erro, clientId }: { orig: Cruzamento | null; carregando: boolean; erro: boolean; clientId: string }) {
+function IdeiasRegraOriginal({ orig, carregando, erro, clientId, planner }: { orig: Cruzamento | null; carregando: boolean; erro: boolean; clientId: string; planner?: { api: ReturnType<typeof usePautas>; podeEditar: boolean } }) {
   if (carregando) return <Carregando texto="Calculando as ideias da regra original…" />;
   if (erro) return <ErroCarga texto="Não consegui ler as perguntas para a regra original. Atualize a página." />;
   if (!orig) return null;
@@ -204,7 +208,7 @@ function IdeiasRegraOriginal({ orig, carregando, erro, clientId }: { orig: Cruza
       {orig.extras.length > 0 ? (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {orig.extras.map((i) => (
-            <IdeiaCard key={i.id} i={i} clientId={clientId} />
+            <IdeiaCard key={i.id} i={i} clientId={clientId} planner={planner} />
           ))}
         </div>
       ) : (
@@ -268,6 +272,9 @@ function IdeiasPage() {
   const periodLabel = formatRangeLabel({ start, end });
 
   const fontes = useQuery({ queryKey: ["fontes", clientId], queryFn: () => getClientFontes(clientId) });
+  const pautasApi = usePautas(clientId);
+  const { podeEditar } = useClientRole(clientId);
+  const planner = { api: pautasApi, podeEditar };
   const temIg = fontes.data?.tem_instagram === true;
   const posts = useQuery({
     queryKey: ["ideias-posts", clientId, start, end],
@@ -314,7 +321,7 @@ function IdeiasPage() {
         Ideias{res && res.ideias.length > 0 ? ` (${res.ideias.length})` : ""}
         {orig && orig.extras.length > 0 ? ` + ${orig.extras.length} da regra original` : ""}
       </h2>
-      <p>Ideias de post com gancho e roteiro prontos, tiradas só de dúvidas reais repetidas e do que já funcionou no perfil. Período: {periodLabel}.</p>
+      <p>Ideias de post com gancho e roteiro prontos, tiradas só de dúvidas reais repetidas e do que já funcionou no perfil. Transforme em pauta, gere o roteiro e monte a semana no planejador abaixo. Período: {periodLabel}.</p>
     </div>
   );
 
@@ -361,13 +368,15 @@ function IdeiasPage() {
         <>
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {res.ideias.map((i) => (
-              <IdeiaCard key={i.id} i={i} clientId={clientId} />
+              <IdeiaCard key={i.id} i={i} clientId={clientId} planner={planner} />
             ))}
           </div>
         </>
       )}
 
-      <IdeiasRegraOriginal orig={orig} carregando={perguntasOriginais.isLoading} erro={!!perguntasOriginais.error} clientId={clientId} />
+      <IdeiasRegraOriginal orig={orig} carregando={perguntasOriginais.isLoading} erro={!!perguntasOriginais.error} clientId={clientId} planner={planner} />
+
+      <PlanejadorSemana clientId={clientId} api={pautasApi} podeEditar={podeEditar} />
 
       {(res.ideias.length > 0 || (orig?.extras.length ?? 0) > 0) && <PlanoDaSemana ideias={res.ideias} originais={orig?.extras ?? []} hora={horaSugerida} />}
 
