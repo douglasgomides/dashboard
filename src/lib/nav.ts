@@ -94,7 +94,8 @@ export const AREAS: NavArea[] = [
     Icone: Briefcase,
     tabs: [
       { path: "/anuncios", label: "Anúncios", Icone: Megaphone, fonte: "anuncios" },
-      { path: "/aquisicao", label: "Aquisição", Icone: Target },
+      // Só a equipe vê por enquanto: o cliente sem clínica do SAP ligada cairia numa tela quase vazia. Para abrir ao cliente, tire o admin.
+      { path: "/aquisicao", label: "Aquisição", Icone: Target, admin: true },
       { path: "/crm-painel", label: "Comercial", Icone: Briefcase, fonte: "crm" },
       { path: "/crm-guia", label: "Organizar o CRM", Icone: ClipboardList, fonte: "crm" },
       { path: "/atendimento", label: "WhatsApp", Icone: MessageCircle, fonte: "atendimento" },
