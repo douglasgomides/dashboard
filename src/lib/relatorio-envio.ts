@@ -114,6 +114,7 @@ export interface RelatorioEnvio {
   alteracoes: AlteracaoLinguagem[];
   whatsapp: string;
   executiva: string;
+  alcanceUnico?: number | null; // contas únicas do período (Meta), para o PDF usar o mesmo número da tela
 }
 
 // ---------------------------------------------------------------- formatação
@@ -890,7 +891,7 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
 
   const whatsapp = montarWhatsapp(inp, conteudo);
   const executiva = montarExecutiva(inp, conteudo);
-  return { conteudo, conteudoCompleto, blocos, excluidos, omitidos, manterOriginal: [...manter], checagem, insights, limitacoes, descartadas, alteracoes, whatsapp, executiva };
+  return { conteudo, conteudoCompleto, blocos, excluidos, omitidos, manterOriginal: [...manter], checagem, insights, limitacoes, descartadas, alteracoes, whatsapp, executiva, alcanceUnico: inp.alcanceUnico ?? null };
 }
 
 /**

@@ -31,6 +31,7 @@
 import { median } from "@/lib/report-metrics";
 import { BENCHMARKS } from "@/lib/benchmarks";
 import { confiancaPorAmostra, type Confianca, type Impacto, type Insight, type Limitacao, type Tom } from "@/lib/insight";
+import { fmtFracao } from "@/lib/metricas";
 
 export type Grupo = "mensagem" | "lead" | "trafego" | "engajamento" | "alcance" | "venda" | "outro";
 
@@ -293,7 +294,7 @@ const brl0 = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curre
 const redondo = (v: number) => (v >= 100 ? Math.round(v / 10) * 10 : Math.round(v));
 const x1 = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 const int = (v: number) => Math.round(v).toLocaleString("pt-BR");
-const pct = (v: number) => `${Math.round(v * 100)}%`;
+const pct = (v: number) => fmtFracao(v);
 const curtoNome = (s: string) => (s.length > 48 ? s.slice(0, 47) + "…" : s);
 export const aspas = (s: string) => `“${curtoNome(s)}”`;
 

@@ -20,6 +20,7 @@ import { MetodologiaAnuncios } from "@/components/anuncios/metodologia";
 import { DiagnosticoCampanhas, Faixa } from "@/components/anuncios/diagnostico-campanhas";
 import { Wallet, MessageCircle, Coins, Eye, MousePointerClick, Percent, PauseCircle, AlertTriangle, Info, CalendarDays, Layers, Zap, Megaphone } from "lucide-react";
 import { Painel, Kpi, BarraFina } from "@/components/visual";
+import { fmtFracao } from "@/lib/metricas";
 
 export const Route = createFileRoute("/_authenticated/$clientId/anuncios")({
   component: AnunciosPage,
@@ -143,7 +144,7 @@ function PorObjetivo({ d }: { d: DiagnosticoAds }) {
                 <span className="tabular-nums">
                   <b className="font-semibold">{fmtBRL(g.gasto)}</b>
                   <span className="ml-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
-                    {Math.round(fatia * 100)}% da verba
+                    {fmtFracao(fatia)} da verba
                   </span>
                 </span>
               </div>

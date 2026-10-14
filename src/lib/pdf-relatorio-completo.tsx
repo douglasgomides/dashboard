@@ -313,6 +313,8 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   const kpis: { label: string; value: string; hint?: string }[] = [];
   if (temIg) {
     kpis.push({ label: "Novos seguidores", value: diasNovos ? fmtNum(novos) : "sem dado", hint: `${diasNovos} de ${metrics.length} dias com o dado (o Instagram só informa os últimos 30)` });
+    if (d.envio.alcanceUnico != null && d.envio.alcanceUnico > 0)
+      kpis.push({ label: "Alcance (contas únicas)", value: fmtNum(d.envio.alcanceUnico), hint: "pessoas diferentes no período, segundo a Meta" });
     kpis.push({ label: "Soma dos alcances diários", value: fmtNum(reach), hint: `${metrics.length} dias; a mesma pessoa conta em mais de um dia` });
     kpis.push({ label: "Interações a cada 100 de alcance", value: taxaEng.toFixed(1).replace(".", ","), hint: "curtidas, comentários, salvos e compartilhamentos" });
     kpis.push({ label: "Salvamentos", value: fmtNum(saves) });
@@ -592,13 +594,13 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
       {/* 4. Instagram: rankings e casos */}
       {temIg ? (
         <Page size="A4" style={styles.page} wrap>
-          <Titulo dica="Ranking por salvamentos, que é a ação que mais pesa para o alcance.">Instagram: posts e reels em destaque</Titulo>
+          <Titulo dica="Ranking por salvamentos, que é a ação que mais pesa para o alcance. Alcance, salvos e engajamento dos posts são acumulados desde a publicação, não só do período.">Instagram: posts e reels em destaque</Titulo>
           {topSalvos.length > 0 ? (
             <Tabela
               colunas={[
                 { h: "Post", flex: 6 },
                 { h: "Formato", flex: 1.6 },
-                { h: "Alcance", flex: 1.4, alinhar: "right" },
+                { h: "Alcance acum.", flex: 1.4, alinhar: "right" },
                 { h: "Salvos", flex: 1.2, alinhar: "right" },
                 { h: "Engaj.", flex: 1.2, alinhar: "right" },
               ]}
@@ -672,7 +674,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
                   <Text style={styles.caseLabel}>{rot}</Text>
                   <Text style={styles.caseCaption}>"{caseCaption(p)}"</Text>
                   <Text style={styles.caseStats}>
-                    {p.posted_at ? new Date(p.posted_at).toLocaleDateString("pt-BR") : ""} · Alcance {fmtNum(p.reach)} · Engaj. {fmtNum(p.engagement)} · Salvos {fmtNum(p.saved)}
+                    {p.posted_at ? new Date(p.posted_at).toLocaleDateString("pt-BR") : ""} · Alcance acumulado {fmtNum(p.reach)} · Engaj. {fmtNum(p.engagement)} · Salvos {fmtNum(p.saved)}
                   </Text>
                   {p.permalink ? (
                     <Link src={p.permalink} style={{ fontSize: 8, color: GOLD, marginTop: 4 }}>

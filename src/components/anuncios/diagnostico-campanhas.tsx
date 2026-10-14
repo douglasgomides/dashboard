@@ -3,7 +3,7 @@
 // selo, alerta de verba sem resultado e a lista de campanhas com as barras de
 // fatia do investimento, fatia das conversas e custo contra a régua.
 import { useState } from "react";
-import { fmtTaxa } from "@/lib/metricas";
+import { fmtTaxa, fmtFracao } from "@/lib/metricas";
 import { Wallet, MessageCircle, Coins, Eye, MousePointerClick, AlertTriangle, Gauge, ShieldAlert, Stethoscope, type LucideIcon } from "lucide-react";
 import { fmtBRL } from "@/lib/format";
 import {
@@ -136,7 +136,7 @@ function CampanhaCard({ c, d, naConversa }: { c: CampanhaDiag; d: DiagnosticoAds
           icone={Wallet}
           rotulo="Investido"
           valor={fmtBRL(c.gasto)}
-          sub={`${Math.round((c.gasto / Math.max(d.gasto, 1)) * 100)}% da verba`}
+          sub={`${fmtTaxa(c.gasto, d.gasto)} da verba`}
           barra={{ valor: c.gasto, max: d.gasto, cor: "var(--s1)" }}
         />
         <Celula
@@ -148,7 +148,7 @@ function CampanhaCard({ c, d, naConversa }: { c: CampanhaDiag; d: DiagnosticoAds
           icone={MessageCircle}
           rotulo="Conversas"
           valor={int(c.conversas)}
-          sub={d.conversas > 0 ? `${Math.round((c.conversas / d.conversas) * 100)}% das conversas` : undefined}
+          sub={d.conversas > 0 ? `${fmtTaxa(c.conversas, d.conversas)} das conversas` : undefined}
           barra={{ valor: c.conversas, max: d.conversas, cor: "var(--good)" }}
         />
         <Celula
@@ -198,7 +198,7 @@ function CampanhaCard({ c, d, naConversa }: { c: CampanhaDiag; d: DiagnosticoAds
           <Celula
             icone={MessageCircle}
             rotulo="Clique que vira conversa"
-            valor={c.conversaPorClique != null ? `${Math.round(c.conversaPorClique * 100)} de 100` : "—"}
+            valor={c.conversaPorClique != null ? fmtFracao(c.conversaPorClique) : "—"}
             sub={c.conversaPorClique == null ? "menos de 20 cliques" : undefined}
           />
           <Celula icone={Coins} rotulo="Custo por visita à página" valor={c.custoPorVisita != null ? fmtBRL(c.custoPorVisita) : "—"} sub={c.visitasPagina ? `${int(c.visitasPagina)} visitas` : undefined} />

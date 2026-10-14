@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { getAdsResumo, getAdsDiagnosticoPorObjetivo, getWtsResumo } from "@/lib/client-data";
 import { fmtNum, fmtBRL } from "@/lib/format";
 import { Camera, Megaphone, TrendingUp, MessageCircle, AlertTriangle, Sparkles, type LucideIcon } from "lucide-react";
+import { fmtTaxa } from "@/lib/metricas";
 
 /**
  * O que aconteceu no período, em frases, juntando as quatro fontes.
@@ -164,7 +165,7 @@ export function ResumoDoMes({
     if (desperdicio > 0) {
       atencoes.push(
         <>
-          <Forte>{fmtBRL(desperdicio)}</Forte> ({gasto > 0 ? Math.round((desperdicio / gasto) * 100) : 0}% da verba) foram para campanhas que
+          <Forte>{fmtBRL(desperdicio)}</Forte> ({fmtTaxa(desperdicio, gasto)} da verba) foram para campanhas que
           custam o dobro das outras do mesmo objetivo ou não entregaram o que o objetivo promete.{" "}
           <Link to="/$clientId/anuncios" params={{ clientId }} style={{ color: "var(--accent)" }}>
             Ver quais →

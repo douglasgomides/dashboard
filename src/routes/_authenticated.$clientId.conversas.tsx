@@ -12,6 +12,7 @@ import { AuditoriaComercial } from "@/components/auditoria-comercial";
 import { CustoWhatsapp } from "@/components/custo-whatsapp";
 import { supabase } from "@/integrations/supabase/client";
 import { Painel, Selo } from "@/components/visual";
+import { fmtTaxa } from "@/lib/metricas";
 
 export const Route = createFileRoute("/_authenticated/$clientId/conversas")({
   // ?conversa=<id> abre a conversa direto (link vindo do lead / do CRM).
@@ -262,7 +263,7 @@ function ConversasPage() {
           <section className="mb-4 space-y-3" aria-label="Como está o atendimento">
             <h2 className="text-[15px] font-semibold">Como está o atendimento (últimas {geral.conversas} conversas)</h2>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              <Numero rotulo="Paciente sem resposta" valor={`${geral.semResposta}`} detalhe={`${Math.round((geral.semResposta / geral.comPaciente) * 100)}% das conversas${geral.soRobo ? ` · ${geral.soRobo} só com robô` : ""}`} cor={geral.semResposta ? "var(--crit)" : undefined} />
+              <Numero rotulo="Paciente sem resposta" valor={`${geral.semResposta}`} detalhe={`${fmtTaxa(geral.semResposta, geral.comPaciente)} das conversas${geral.soRobo ? ` · ${geral.soRobo} só com robô` : ""}`} cor={geral.semResposta ? "var(--crit)" : undefined} />
               <Numero rotulo="1ª resposta humana (mediana)" valor={duracao(geral.medianaPrimeiraResposta)} detalhe="sem contar robô/menu" cor={(geral.medianaPrimeiraResposta ?? 0) > 3600 ? "var(--crit)" : undefined} />
               <Numero rotulo="Resposta em horário comercial" valor={duracao(geral.medianaComercial)} detalhe="seg–sex 8h–18h, sáb 8h–12h" />
               <Numero rotulo="Conversas sem lead no CRM" valor={`${geral.semLead}`} detalhe="telefone não bate com nenhum lead" cor={geral.semLead ? "var(--warn)" : undefined} />

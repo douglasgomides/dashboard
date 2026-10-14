@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { AlertOctagon, AlertTriangle, ChevronDown, Wrench } from "lucide-react";
 import { getQualidadeDados, getCrmBaseViva, type ProblemaDado } from "@/lib/client-data";
 import { ROTULO_RESPONSAVEL, type Responsavel } from "@/lib/insight";
+import { fmtTaxa } from "@/lib/metricas";
 
 // "Dado com erro": o que está entrando errado na origem (CRM, Instagram, anúncios),
 // a causa provável e o que fazer para corrigir. Regras fixas no banco (qualidade_dados).
@@ -111,7 +112,7 @@ export function problemasParaInsights(ps: ProblemaDado[]) {
 export function BaseVivaCrm({ clientId }: { clientId: string }) {
   const { data: b } = useQuery({ queryKey: ["crm-base-viva", clientId], queryFn: () => getCrmBaseViva(clientId), staleTime: 10 * 60_000, retry: false });
   if (!b) return null;
-  const pct = (x: number) => `${Math.round((x / b.abertos) * 100)}%`;
+  const pct = (x: number) => fmtTaxa(x, b.abertos);
   const fmt = (x: number) => x.toLocaleString("pt-BR");
   const meio = Math.max(0, b.abertos - b.vivos_30d - b.parados_90d);
   const partes = [

@@ -10,6 +10,7 @@ import { Painel, Kpi, Selo, BarraFina, Ajuda, IconeFormato, COR_FORMATO } from "
 import { Users, UserPlus, UserMinus, Scale, TrendingUp, Target, CalendarCheck, LineChart as LineIcon, Trophy, Layers, Tag, Bookmark, FileText, AlertTriangle, Info } from "lucide-react";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 import { SyncButton } from "@/components/sync-button";
+import { fmtFracao } from "@/lib/metricas";
 
 export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
   component: ConteudoPage,
@@ -174,7 +175,7 @@ function ConteudoPage() {
                 cor="var(--crit)"
                 rotulo="Deixaram de seguir"
                 valor={cresc.diasMedidos ? `-${fmtN(cresc.saidas)}` : "sem dado"}
-                dica={cresc.taxaSaida != null ? `${Math.round(cresc.taxaSaida * 100)}% de quem entrou` : "sem saídas medidas no período"}
+                dica={cresc.taxaSaida != null ? `${fmtFracao(cresc.taxaSaida)} de quem entrou` : "sem saídas medidas no período"}
               />
               <Kpi
                 icone={Scale}
