@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Carregando } from "@/components/sem-fonte";
+import { Carregando, ResumoExecutivo } from "@/components/sem-fonte";
 import { useQuery } from "@tanstack/react-query";
 import { getCrmFunilPorCampoAlt, getCrmLeadsPorEtapa } from "@/lib/client-data";
 
@@ -8,6 +8,21 @@ export const Route = createFileRoute("/_authenticated/$clientId/vendas-kommo")({
 });
 
 type FunilRow = { chave: string; total: number; ganhos: number; perdidos: number };
+
+// Resumo em frases: volume, quanto já fechou e qual fonte converte mais (com 10+ leads, para não exagerar fonte pequena).
+function resumoVendas(rows: FunilRow[], total: number): string[] {
+  const ganhos = rows.reduce((s, r) => s + r.ganhos, 0);
+  const perdidos = rows.reduce((s, r) => s + r.perdidos, 0);
+  const comVolume = rows.filter((r) => r.total >= 10);
+  const melhor = [...comVolume].sort((a, b) => b.ganhos / b.total - a.ganhos / a.total)[0];
+  const maior = [...rows].sort((a, b) => b.total - a.total)[0];
+  const pct = (a: number, b: number) => `${b > 0 ? Math.round((a / b) * 100) : 0}%`;
+  return [
+    `${total.toLocaleString("pt-BR")} leads no CRM: ${ganhos.toLocaleString("pt-BR")} ganhos (${pct(ganhos, total)}), ${perdidos.toLocaleString("pt-BR")} perdidos e ${(total - ganhos - perdidos).toLocaleString("pt-BR")} ainda em aberto.`,
+    maior ? `A fonte que mais traz leads é “${maior.chave}” (${pct(maior.total, total)} do total).` : "",
+    melhor && melhor.ganhos > 0 ? `A que mais vira venda é “${melhor.chave}”: ${pct(melhor.ganhos, melhor.total)} dos leads fecharam.` : "Nenhuma fonte com 10+ leads tem venda marcada ainda: confira se o ganho está sendo registrado no CRM.",
+  ];
+}
 
 function FunilTable({ title, rows, colLabel }: { title: string; rows: FunilRow[]; colLabel: string }) {
   if (rows.length === 0) return null;
@@ -90,6 +105,7 @@ function VendasKommoPage() {
         </p>
       ) : (
         <>
+          <ResumoExecutivo frases={resumoVendas(porFonte ?? [], totalLeads)} />
           <FunilTable title="Por fonte do lead" rows={porFonte ?? []} colLabel="Fonte" />
           <FunilTable title="Por tipo de procedimento" rows={porProcedimento ?? []} colLabel="Procedimento" />
 

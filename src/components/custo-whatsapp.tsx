@@ -75,14 +75,14 @@ export function CustoWhatsapp({ clientId }: { clientId: string }) {
               {[["marketing_usd", "Marketing (US$)"], ["utilidade_usd", "Utilidade (US$)"], ["cambio_brl", "Câmbio (R$)"], ["taxa_provedor_pct", "Taxa do provedor (%)"]].map(([k, r]) => (
                 <label key={k} className="flex flex-col">
                   {r}
-                  <input defaultValue={String(p[k])} onChange={(e) => setForm({ ...form, [k]: e.target.value })} className="w-28 rounded border px-2 py-1" style={{ borderColor: "var(--border)", background: "var(--surface)" }} />
+                  <input autoComplete="off" inputMode="decimal" defaultValue={String(p[k])} onChange={(e) => setForm({ ...form, [k]: e.target.value })} className="w-28 rounded border px-2 py-1" style={{ borderColor: "var(--border)", background: "var(--surface)" }} />
                 </label>
               ))}
               <label className="flex min-w-[200px] flex-1 flex-col">
                 Fonte
-                <input defaultValue={p.fonte} onChange={(e) => setForm({ ...form, fonte: e.target.value })} className="rounded border px-2 py-1" style={{ borderColor: "var(--border)", background: "var(--surface)" }} />
+                <input autoComplete="off" defaultValue={p.fonte} onChange={(e) => setForm({ ...form, fonte: e.target.value })} className="rounded border px-2 py-1" style={{ borderColor: "var(--border)", background: "var(--surface)" }} />
               </label>
-              <button type="button" onClick={salvar} className="rounded px-3 py-1.5 font-semibold" style={{ background: "var(--accent)", color: "var(--accent-fg, #fff)" }}>Salvar</button>
+              <button type="button" onClick={salvar} className="rounded px-3 py-1.5 font-semibold" style={{ background: "var(--accent)", color: "var(--accent-fg, #fff)" }}>Salvar preços</button>
             </div>
           )}
         </div>

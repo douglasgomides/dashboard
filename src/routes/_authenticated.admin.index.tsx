@@ -441,7 +441,7 @@ function AdminClientsPage() {
                     <LinhaSaude clientId={c.id} />
                     <td className="px-4 py-3 text-right align-top" data-label="">
                       <Link to="/admin/$clientId" params={{ clientId: c.id }} style={{ color: "var(--accent)" }}>
-                        Gerenciar →
+                        Gerenciar fontes e acesso →
                       </Link>
                     </td>
                   </tr>
