@@ -238,12 +238,17 @@ function LinhaSaude({ clientId }: { clientId: string }) {
     );
   }
   // Estado, data do último dado, causa e próxima ação (mesmas regras de antes: tomDaFonte + motivoDaLinha).
+  const conectar = (
+    <Link to="/admin/$clientId" params={{ clientId }} className="inline-flex min-h-[32px] items-center rounded-lg px-3 text-xs font-bold text-white" style={{ background: "var(--crit)" }}>
+      Conectar agora →
+    </Link>
+  );
   return (
     <>
-      <td className="px-4 py-3 align-top" data-label="Instagram"><CelulaSaude s={saudeDaFonte(!!f?.tem_instagram, por("instagram"))} /></td>
-      <td className="px-4 py-3 align-top" data-label="Anúncios"><CelulaSaude s={saudeDaFonte(!!f?.tem_anuncios, por("anuncios"))} /></td>
-      <td className="px-4 py-3 align-top" data-label="CRM"><CelulaSaude s={saudeDaFonte(!!f?.tem_crm, por("crm"))} /></td>
-      <td className="px-4 py-3 align-top" data-label="WhatsApp"><CelulaSaude s={saudeDaFonte(!!f?.tem_atendimento, por("atendimento"))} /></td>
+      <td className="px-4 py-3 align-top" data-label="Instagram"><CelulaSaude s={saudeDaFonte(!!f?.tem_instagram, por("instagram"))} conectar={conectar} /></td>
+      <td className="px-4 py-3 align-top" data-label="Anúncios"><CelulaSaude s={saudeDaFonte(!!f?.tem_anuncios, por("anuncios"))} conectar={conectar} /></td>
+      <td className="px-4 py-3 align-top" data-label="CRM"><CelulaSaude s={saudeDaFonte(!!f?.tem_crm, por("crm"))} conectar={conectar} /></td>
+      <td className="px-4 py-3 align-top" data-label="WhatsApp"><CelulaSaude s={saudeDaFonte(!!f?.tem_atendimento, por("atendimento"))} opcional="Só liga se a clínica usa WhatsApp com API (WTS)." /></td>
     </>
   );
 }

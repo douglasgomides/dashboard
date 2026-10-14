@@ -59,8 +59,27 @@ export function saudeDaFonte(ligado: boolean, l: LinhaFonte | undefined): SaudeF
   return { estado: "origem", rotulo: tom === "atencao" ? "Atrasada (2 a 3 dias)" : ROTULO_ESTADO.origem, cor: tom === "atencao" ? "var(--warn)" : COR.origem, data, causa: "Sem causa identificada ainda.", proxima: "Aguardar a próxima atualização; se passar de 3 dias, a causa aparece aqui.", peso: 2 };
 }
 
-/** Célula de uma fonte: estado em cima, data, causa e próxima ação em texto curto. */
-export function CelulaSaude({ s }: { s: SaudeFonte }) {
+/** Célula de uma fonte: estado em cima, data, causa e próxima ação em texto curto.
+ *  Fonte não conectada aparece em vermelho com "Conectar agora" (quando há link para o cadastro). */
+export function CelulaSaude({ s, conectar, opcional }: { s: SaudeFonte; conectar?: React.ReactNode; opcional?: string }) {
+  if (s.estado === "nao_conectada" && opcional) {
+    return (
+      <div className="min-w-[150px] text-[13px] leading-snug" style={{ color: "var(--muted)" }}>
+        <div className="font-semibold">Não usa (opcional)</div>
+        <div className="text-xs">{opcional}</div>
+      </div>
+    );
+  }
+  if (s.estado === "nao_conectada") {
+    return (
+      <div className="min-w-[150px] space-y-1.5 text-[13px] leading-snug">
+        <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-bold uppercase tracking-wide" style={{ background: "color-mix(in srgb, var(--crit) 16%, transparent)", color: "var(--crit)" }}>
+          <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: "var(--crit)" }} /> Não conectado
+        </span>
+        {conectar}
+      </div>
+    );
+  }
   return (
     <div className="min-w-[150px] space-y-0.5 text-[13px] leading-snug">
       <div className="flex items-center gap-1.5 font-semibold" style={{ color: "var(--ink)" }}>
