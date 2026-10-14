@@ -146,6 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let linhas = 0;
       let temConta = false;
       let graphTemConta = false;
+      let windsorTemConta = false;
       const erros: string[] = [];
 
       {
@@ -172,6 +173,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           clientId: client_id,
         });
         if (w.length > 0) temConta = true;
+        if (w.length > 0) windsorTemConta = true;
         linhas += w.reduce((a, c) => a + c.rows, 0);
         // Erro da Windsor só vale quando a Graph não serve este cliente; do
         // contrário é o ruído esperado de conta que a Windsor não enxerga.
@@ -189,7 +191,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!temConta) {
         return { nada_a_fazer: "Este cliente não tem conta de anúncio ligada ao cadastro." };
       }
-      return { linhas, erros };
+      // Só a planilha alimentou (nem Graph nem Windsor leem conta deste cliente): "dados até" não se aplica.
+      return { linhas, erros, so_planilha: !graphTemConta && !windsorTemConta };
     }
 
     async function sincronizarAtendimento() {
@@ -460,13 +463,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const ok = errosLista.length === 0;
       const dadosAte = await lerDadosAte(admin, client_id as string, fonte);
+      // O registro guarda a data; a resposta ao botão não a mostra quando só a planilha alimentou (não é "atualizado até").
       await recordSyncStatus(admin, client_id as string, fonte, {
         ok,
         rows: linhas,
         error: erro,
         dataAte: dadosAte,
       });
-      return { ...r, ok, linhas, erro, dados_ate: dadosAte };
+      return { ...r, ok, linhas, erro, dados_ate: r?.so_planilha ? null : dadosAte };
     }
 
     // Audiência (demografia, origem, horários, stories no ar): leitura ao vivo da Meta, nada é gravado.

@@ -118,7 +118,6 @@ export function AdsPlanilhaPainel({ linhas: todas, start, end }: { linhas: AdsPl
           <b>Fonte: planilha de distribuição de conteúdo da equipe Doctor Creator, atualizada a cada análise semanal.</b>{" "}
           <span style={{ color: "var(--text-dim)" }}>
             Não é a conta de anúncios da Meta. O valor é por semana de análise, não por dia.
-            {ultima ? ` Última análise com valores: ${ddmmaaaa(ultima.dia)}.` : ""}
           </span>
         </div>
         <Ajuda>
