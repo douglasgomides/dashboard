@@ -63,7 +63,7 @@ function ConnectInstagramForm({ clientId }: { clientId: string }) {
           value={windsorAccountId}
           onChange={(e) => setWindsorAccountId(e.target.value)}
           required
-          placeholder="17841400869970479"
+          placeholder="Ex.: 1234567890"
           className="mt-1 w-56 rounded-md border px-2 py-1.5 text-sm"
           style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
         />
@@ -168,7 +168,7 @@ function ConnectCrmForm({ clientId }: { clientId: string }) {
         <input autoComplete="off"
           value={subdomain}
           onChange={(e) => setSubdomain(e.target.value)}
-          placeholder="dralanatorres"
+          placeholder="Ex.: suaclinica"
           className="mt-1 w-44 rounded-md border px-2 py-1.5 text-sm"
           style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
         />
