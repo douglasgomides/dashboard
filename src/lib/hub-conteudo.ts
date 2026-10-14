@@ -5,6 +5,7 @@ import { computeDuvidasFrequentes, fmtFormatKey, median } from "@/lib/report-met
 import { confiancaPorAmostra, type Confianca, type Insight, type Limitacao } from "@/lib/insight";
 import { analisarVozDoPaciente, assuntoDoTexto, confiancaDoGrupo, type GrupoDuvida, type ResultadoVoz } from "@/lib/voz-do-paciente";
 import { MIN_POSTS_CONCLUSAO, confiancaPorPosts } from "@/lib/metricas";
+import { soPerguntas, classificarComentario } from "@/lib/classificar-comentario";
 
 // ---------- datas ----------
 const DAY_MS = 86400000;
@@ -302,7 +303,7 @@ export const ROTULO_OBJETIVO: Record<ObjetivoIdeia, string> = {
 
 export interface Ideia {
   id: string;
-  regra: "pergunta" | "tema" | "formato";
+  regra: "pergunta" | "tema" | "formato" | "identificacao";
   titulo: string; // título claro do post
   tema: string;
   formato: string; // formato recomendado
@@ -318,6 +319,7 @@ export interface Ideia {
   grupoId?: string; // grupo de dúvida de origem
   pessoas?: number;
   comentarioIds?: string[]; // comentários que sustentam a ideia (para cruzar a regra nova com a original)
+  exemplos?: string[]; // 2 a 3 comentários reais, para a equipe validar se a leitura faz sentido
   regraOriginal?: boolean; // ideia gerada pela regra original (477eb43), mostrada junto das novas
   // campos usados pelo relatório e pelo PDF
   funil: string;
@@ -399,7 +401,7 @@ function roteiroDaDuvida(g: GrupoDuvida): { objetivo: ObjetivoIdeia; roteiro: st
       return {
         objetivo: "venda",
         roteiro: [
-          "Abrir com a pergunta real que chegou nos comentários (sem mostrar quem perguntou).",
+          "Abrir com a situação de quem quer marcar e não sabe como funciona (sem ler comentário).",
           "Contar o que acontece na primeira consulta: conversa, exame físico, o que o médico olha.",
           "Dizer quanto tempo costuma durar e o que é bom levar (exames antigos, lista de remédios em uso).",
           "Mostrar as formas de atendimento que existem de verdade (presencial, online) e como agendar.",
@@ -444,7 +446,7 @@ function roteiroDaDuvida(g: GrupoDuvida): { objetivo: ObjetivoIdeia; roteiro: st
       return {
         objetivo: "salvamento",
         roteiro: [
-          "Abrir lendo a pergunta real que mais apareceu (sem mostrar quem perguntou).",
+          "Abrir com a situação do dia a dia que gera essa dúvida (sem ler o comentário de ninguém).",
           `Explicar em palavras simples o básico sobre ${t.replace(/^(o|a|os|as) /, "")} e por que a dúvida é tão comum.`,
           "Mostrar o que o médico costuma avaliar antes de indicar qualquer caminho (histórico, sintomas, exames).",
           "Dizer quais sinais pedem avaliação logo.",
@@ -489,6 +491,7 @@ function ideiaDeGrupo(g: GrupoDuvida, i: number, posts: any[]): Ideia {
     grupoId: g.id,
     pessoas: g.pessoas,
     comentarioIds: g.itens.map((x) => x.comentario.id),
+    exemplos: g.exemplos.slice(0, 3).map((e) => cortar(e.texto, 160)),
     funil: comercial ? FUNIL_ROTULO.C2 : FUNIL_ROTULO.C1,
     estagio: comercial ? ESTAGIO_ROTULO.venda : ESTAGIO_ROTULO.confianca,
     acao: `${post.formato}: ${titulo}.`,
@@ -690,6 +693,7 @@ export function ideiaParaTexto(i: Ideia): string {
 // comentário; formato e ação vêm do tipo da dúvida; funil C1 e estágio Confiança. Tema e formato têm os
 // mesmos limites da regra nova (só o formato padrão do tema era "A definir").
 export const REGRA_ORIGINAL_ROTULO: Record<Ideia["regra"], string> = {
+  identificacao: "Tema que gera identificação",
   pergunta: "Pergunta repetida",
   tema: "Tema que salva mais",
   formato: "Formato de maior alcance",
@@ -705,6 +709,31 @@ function tipoDaDuvida(texto: string): TipoDuvida {
   if (/\b(dor|sangr|menstru|calor|sintoma|queda|inchac|ansied|sono|libido|cansaco)\b/.test(t)) return "sintoma";
   if (/\b(resultado|funciona|demora|quanto tempo|em quanto tempo|ja faz)\b/.test(t)) return "resultado";
   return "geral";
+}
+
+const cortarOriginal = (t: string) => {
+  const x = t.replace(/\s+/g, " ").trim();
+  return x.length > 160 ? x.slice(0, 157) + "..." : x;
+};
+
+/** Abertura do vídeo pelo tipo de dúvida, sem copiar o comentário. */
+function ganchoDaDuvida(tipo: TipoDuvida, texto: string): string {
+  const assunto = assuntoDoTexto(texto)?.rotulo?.toLowerCase() ?? null;
+  const sobre = assunto ? ` sobre ${assunto}` : "";
+  switch (tipo) {
+    case "preco":
+      return "O que está incluído numa avaliação, e por que ela é diferente de uma consulta rápida.";
+    case "como_agendar":
+      return "Agendar a sua avaliação é mais simples do que parece: são 3 passos.";
+    case "uso":
+      return `Antes de usar qualquer coisa${sobre}, entenda isto.`;
+    case "sintoma":
+      return `Esse sinal${sobre} merece atenção. Te explico quando procurar avaliação.`;
+    case "resultado":
+      return `Quanto tempo leva para ver diferença${sobre}? A resposta honesta.`;
+    default:
+      return assunto ? `${assunto.charAt(0).toUpperCase() + assunto.slice(1)}: o que quase ninguém te explica direito.` : "A dúvida que mais chega aqui, respondida sem enrolação.";
+  }
 }
 
 // Cada tipo de dúvida pede um conteúdo diferente (antes todas viravam o mesmo carrossel).
@@ -752,6 +781,7 @@ function postParecidoOriginal(texto: string, posts: any[]): { legenda: string; s
 }
 
 const POR_QUE_ORIGINAL: Record<Ideia["regra"], string> = {
+  identificacao: "Elogios e relatos pessoais de pessoas diferentes nos posts do mesmo tema.",
   pergunta: "Regra original: a mesma dúvida apareceu 2 vezes ou mais nos comentários marcados como pergunta (agrupamento por palavras em comum, contando comentários).",
   tema: "Regra original: tema com 8+ posts (amostra mínima desde out/2026) em que a mediana de salvos ficou 25% ou mais acima da mediana da conta.",
   formato: "Regra original: formato com 8+ posts (amostra mínima desde out/2026), a maior mediana de alcance e acima do post típico da conta.",
@@ -771,10 +801,12 @@ export interface IdeiasOriginaisResult {
  */
 export function buildIdeiasRegraOriginal(
   posts: any[],
-  perguntas: { id: string; text: string; like_count: number | null; instagram_post_id?: string | null }[],
+  comentariosDetectados: { id: string; text: string; like_count: number | null; instagram_post_id?: string | null }[],
 ): IdeiasOriginaisResult {
   const ideias: Ideia[] = [];
   const faltas: string[] = [];
+  // Só "pergunta" entra (classificar-comentario.ts): elogio, relato e marcação de amigo não são dúvida.
+  const perguntas = soPerguntas(comentariosDetectados);
 
   // (a) pergunta repetida
   if (perguntas.length < MIN_PERGUNTAS) {
@@ -811,18 +843,20 @@ export function buildIdeiasRegraOriginal(
         funil: FUNIL_ROTULO.C1,
         estagio: ESTAGIO_ROTULO.confianca,
         formato,
-        acao: `${modelo.acao} Gancho possível: "${curto}"`,
+        acao: modelo.acao,
         porque,
         objetivo: tipo === "preco" || tipo === "como_agendar" ? "venda" : "salvamento",
         confianca: confiancaDoGrupo(c.count),
         motivoConfianca: `${c.count} comentário(s) parecidos; a regra original conta comentários, não pessoas (a mesma pessoa pode contar 2 vezes)`,
         evidencia: porque,
         porQueTestar: POR_QUE_ORIGINAL.pergunta,
-        gancho: curto,
+        // Gancho é a abertura do vídeo para o paciente: nunca o comentário copiado nem "apareceu N vezes".
+        gancho: ganchoDaDuvida(tipo, texto),
         roteiro: [],
         cta: "",
         avisoSeguranca: AVISO_GERAL,
         comentarioIds: c.items.map((x) => x.id),
+        exemplos: c.items.slice(0, 3).map((x) => cortarOriginal(x.text)),
         pessoas: c.count,
       });
     }
@@ -997,4 +1031,69 @@ export function montarPlano7Dias(ideias: Ideia[], horaSugerida?: number | null, 
     return `${dia}${hora}: ${ideia.formato}. ${ideia.titulo}. Gancho: ${ideia.gancho}`;
   });
   return ["Plano de conteúdo da semana", ...linhas].join("\n");
+}
+
+
+// ---------------------------------------------------------------- tema que gera identificação
+
+export const MIN_PESSOAS_IDENTIFICACAO = 3;
+
+/**
+ * Elogios e relatos pessoais (classificar-comentario.ts) nos posts do mesmo tema viram a ideia
+ * "Tema que gera identificação": o público se reconhece nesse assunto. Não usa perguntas (essas vão para
+ * "Pergunta repetida"). Mínimo de 3 pessoas diferentes por tema. Mostra 2 a 3 comentários reais.
+ */
+export function ideiasDeIdentificacao(
+  comentarios: { id: string; text: string; author_username?: string | null; instagram_posts?: { tema?: string | null } | null }[],
+): { ideias: Ideia[]; faltas: string[] } {
+  const porTema = new Map<string, { autores: Set<string>; itens: { id: string; text: string; tipo: string }[] }>();
+  for (const c of comentarios) {
+    const tema = c.instagram_posts?.tema?.trim();
+    if (!tema) continue;
+    const tipo = classificarComentario(c.text);
+    if (tipo !== "elogio" && tipo !== "relato") continue;
+    const g = porTema.get(tema) ?? { autores: new Set<string>(), itens: [] };
+    g.autores.add((c.author_username ?? c.id).toLowerCase());
+    g.itens.push({ id: c.id, text: c.text, tipo });
+    porTema.set(tema, g);
+  }
+  const grupos = [...porTema.entries()].filter(([, g]) => g.autores.size >= MIN_PESSOAS_IDENTIFICACAO).sort((a, b) => b[1].autores.size - a[1].autores.size).slice(0, 3);
+  const faltas: string[] = grupos.length
+    ? []
+    : [`Regra "tema que gera identificação": nenhum tema teve elogio ou relato pessoal de ${MIN_PESSOAS_IDENTIFICACAO} pessoas diferentes (posts sem tema não entram).`];
+  const ideias = grupos.map(([tema, g], i): Ideia => {
+    const relatos = g.itens.filter((x) => x.tipo === "relato").length;
+    // Relato primeiro nos exemplos: mostra melhor por que o tema toca as pessoas.
+    const exemplos = [...g.itens].sort((a, b) => (a.tipo === b.tipo ? b.text.length - a.text.length : a.tipo === "relato" ? -1 : 1)).slice(0, 3).map((x) => cortarOriginal(x.text));
+    const porque = `${g.autores.size} pessoas diferentes se identificaram nos posts sobre "${tema}" (${relatos} relato(s) pessoal(is) e ${g.itens.length - relatos} elogio(s)).`;
+    return {
+      id: `identificacao-${i}`,
+      regra: "identificacao",
+      titulo: `${tema}: a história de quem passa por isso`,
+      tema,
+      formato: "Reels",
+      objetivo: "alcance",
+      confianca: g.autores.size >= 10 ? "alta" : g.autores.size >= 5 ? "media" : "baixa",
+      motivoConfianca: `${g.autores.size} pessoas diferentes (5+ = média, 10+ = alta)`,
+      evidencia: porque,
+      porQueTestar: "Quando o público se reconhece num assunto, o conteúdo é compartilhado e traz gente nova parecida com quem já segue. É conteúdo de topo de funil (C1).",
+      gancho: `Se você já passou por isso com ${tema.toLowerCase()}, saiba que não é só com você.`,
+      roteiro: [
+        "Abrir com uma cena comum a quem vive esse problema (sem expor ninguém).",
+        "Mostrar que é frequente e por que acontece, em palavras simples.",
+        "Dizer o que costuma ajudar e quando vale procurar avaliação, sem prometer resultado.",
+        "Fechar convidando a mandar para alguém que vai se identificar.",
+      ],
+      cta: "Mande para alguém que vai se identificar.",
+      avisoSeguranca: AVISO_GERAL,
+      comentarioIds: g.itens.map((x) => x.id),
+      exemplos,
+      pessoas: g.autores.size,
+      funil: FUNIL_ROTULO.C1,
+      estagio: ESTAGIO_ROTULO.percepcao,
+      acao: `Reels: ${tema}, a história de quem passa por isso.`,
+      porque,
+    };
+  });
+  return { ideias, faltas };
 }

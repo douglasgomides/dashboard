@@ -1,13 +1,15 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Filter, Gauge, Layers, ShieldAlert, Target, Users } from "lucide-react";
-import { getClientFontes, getComentariosVozDoPaciente, getPerguntasDeteccaoOriginal, getPostsForAnalytics } from "@/lib/client-data";
+import { Clapperboard, Filter, Gauge, Layers, MessageSquareQuote, Newspaper, ShieldAlert, Target, Users } from "lucide-react";
+import { getClientFontes, getComentariosPeriodo, getComentariosVozDoPaciente, getObjecoesWhatsapp, getPerguntasDeteccaoOriginal, getPostsForAnalytics } from "@/lib/client-data";
+import { ETAPAS, montarRoteiros, type Etapa, type RoteiroAnuncio } from "@/lib/roteiros-anuncio";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import {
   buildIdeias,
   buildIdeiasRegraOriginal,
   faltasParaLimitacoes,
+  ideiasDeIdentificacao,
   ideiaParaTexto,
   ideiasOriginaisSemRepetir,
   montarPlano7Dias,
@@ -33,6 +35,7 @@ export const Route = createFileRoute("/_authenticated/$clientId/ideias")({
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 
 const ORIGEM: Record<Ideia["regra"], string> = {
+  identificacao: "Tema que gera identificação",
   pergunta: "Dúvida de pacientes",
   tema: "Tema que o público mais salva",
   formato: "Formato que mais alcança",
@@ -40,7 +43,7 @@ const ORIGEM: Record<Ideia["regra"], string> = {
 
 function Chip({ icone: Icon, children }: { icone: typeof Users; children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px]" style={{ background: "var(--surface-2)", color: "var(--text-dim)" }}>
+    <span className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium" style={{ background: "var(--surface-2)", borderColor: "var(--border)", color: "var(--ink-2)" }}>
       <Icon size={11} aria-hidden /> {children}
     </span>
   );
@@ -48,15 +51,91 @@ function Chip({ icone: Icon, children }: { icone: typeof Users; children: React.
 
 function Rotulo({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+    <div className="text-[11px] font-bold uppercase tracking-wide" style={{ color: "var(--ink-2)" }}>
       {children}
     </div>
   );
 }
 
+/** Etapa do funil de uma ideia de post: pelo campo funil (C1/C2/C3); sem etapa definida, topo (C1). */
+function etapaDaIdeia(i: Ideia): Etapa {
+  if (i.funil.startsWith("C3")) return "C3";
+  if (i.funil.startsWith("C2")) return "C2";
+  return "C1";
+}
+
+function Exemplos({ itens }: { itens?: string[] }) {
+  if (!itens?.length) return null;
+  return (
+    <div className="text-sm">
+      <Rotulo>Comentários reais (confira se a leitura faz sentido)</Rotulo>
+      <ul className="mt-1 space-y-1">
+        {itens.slice(0, 3).map((t, k) => (
+          <li key={k} className="flex gap-1.5 rounded-md px-2 py-1.5 text-[13px] leading-snug" style={{ background: "var(--surface-2)", color: "var(--ink)" }}>
+            <MessageSquareQuote size={14} aria-hidden className="mt-0.5 shrink-0" style={{ color: "var(--muted)" }} />
+            <span>“{t}”</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Roteiro de anúncio para gravar (C1/C2/C3), a partir de dores e objeções reais.
+function RoteiroCard({ r }: { r: RoteiroAnuncio }) {
+  const texto = [
+    `${r.etapa} · ${r.titulo}`,
+    `Objetivo da campanha: ${r.objetivoCampanha}`,
+    `Gancho: ${r.gancho}`,
+    `Roteiro:\n${r.roteiro.map((x, k) => `${k + 1}. ${x}`).join("\n")}`,
+    `Texto do anúncio: ${r.copy}`,
+    `CTA: ${r.cta}`,
+    `Base: ${r.baseTexto} (${r.origem})`,
+  ].join("\n");
+  return (
+    <article className="flex min-w-0 flex-col gap-3 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)", borderTop: `3px solid ${ETAPAS[r.etapa].cor}` }}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold" style={{ background: `color-mix(in srgb, ${ETAPAS[r.etapa].cor} 16%, transparent)`, color: "var(--ink)" }}>
+          <Clapperboard size={11} aria-hidden /> Anúncio {r.etapa}
+        </span>
+        <Chip icone={Target}>Campanha: {r.objetivoCampanha}</Chip>
+        <Chip icone={Users}>{r.baseTexto}</Chip>
+      </div>
+      <div>
+        <h3 className="text-base font-semibold leading-snug" style={{ color: "var(--ink)" }}>{r.titulo}</h3>
+        <p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>Vem de: {r.origem}</p>
+      </div>
+      <div className="rounded-lg border p-3 text-sm" style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}>
+        <Rotulo>Gancho (primeiros 3 segundos)</Rotulo>
+        <p className="mt-0.5 font-semibold leading-snug" style={{ color: "var(--ink)" }}>{r.gancho}</p>
+      </div>
+      <div className="text-sm">
+        <Rotulo>O que gravar</Rotulo>
+        <ol className="mt-1 list-decimal space-y-1 pl-5 leading-relaxed" style={{ color: "var(--ink)" }}>
+          {r.roteiro.map((x, k) => (
+            <li key={k}>{x}</li>
+          ))}
+        </ol>
+      </div>
+      <div className="text-sm">
+        <Rotulo>Texto do anúncio</Rotulo>
+        <p className="mt-0.5" style={{ color: "var(--ink)" }}>{r.copy}</p>
+        <p className="mt-1 text-xs font-semibold" style={{ color: "var(--ink-2)" }}>Botão: {r.cta}</p>
+      </div>
+      <Exemplos itens={r.exemplos} />
+      <p className="flex gap-1.5 text-xs" style={{ color: "var(--ink-2)" }}>
+        <ShieldAlert size={14} aria-hidden className="shrink-0" style={{ color: "var(--warn)" }} /> {r.aviso}
+      </p>
+      <div className="mt-auto">
+        <BotaoCopiar texto={texto} rotulo="Copiar roteiro do anúncio" variante="primario" />
+      </div>
+    </article>
+  );
+}
+
 function IdeiaCard({ i, clientId, planner }: { i: Ideia; clientId: string; planner?: { api: ReturnType<typeof usePautas>; podeEditar: boolean } }) {
   return (
-    <article className="flex min-w-0 flex-col gap-3 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+    <article className="flex min-w-0 flex-col gap-3 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)", borderTop: `3px solid ${ETAPAS[etapaDaIdeia(i)].cor}` }}>
       <div className="flex flex-wrap items-center gap-1.5">
         <SeloStatus tom={i.regra === "pergunta" ? "atencao" : "bom"} texto={i.regraOriginal ? `Regra original · ${REGRA_ORIGINAL_ROTULO[i.regra]}` : ORIGEM[i.regra]} />
         <Chip icone={Target}>{ROTULO_OBJETIVO[i.objetivo]}</Chip>
@@ -65,7 +144,7 @@ function IdeiaCard({ i, clientId, planner }: { i: Ideia; clientId: string; plann
         <Chip icone={Layers}>Estágio: {i.estagio}</Chip>
       </div>
       <div>
-        <h3 className="text-[15px] font-semibold leading-snug" style={{ color: "var(--text)" }}>
+        <h3 className="text-base font-semibold leading-snug" style={{ color: "var(--ink)" }}>
           {i.titulo}
         </h3>
         <p className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
@@ -82,13 +161,15 @@ function IdeiaCard({ i, clientId, planner }: { i: Ideia; clientId: string; plann
 
       {i.gancho && (
         <div className="rounded-lg p-3 text-sm" style={{ background: "var(--accent-soft)" }}>
-          <Rotulo>{i.regraOriginal ? "Gancho possível" : "Gancho pronto"}</Rotulo>
+          <Rotulo>Gancho pronto</Rotulo>
           <p className="mt-0.5 font-medium italic leading-snug">{i.gancho}</p>
           <div className="mt-2">
             <BotaoCopiar texto={i.gancho} rotulo="Copiar gancho" />
           </div>
         </div>
       )}
+
+      <Exemplos itens={i.exemplos} />
 
       {i.roteiro.length > 0 && (
         <div className="text-sm">
@@ -287,6 +368,22 @@ function IdeiasPage() {
     enabled: temIg,
   });
 
+  // Todos os comentários do período (com o tema do post): elogios e relatos viram "Tema que gera identificação".
+  const todosComentarios = useQuery({
+    queryKey: ["comentarios-periodo", clientId, start, end],
+    queryFn: () => getComentariosPeriodo(clientId, start, end),
+    enabled: temIg,
+    staleTime: 5 * 60_000,
+  });
+  // Objeções das conversas de WhatsApp (auditoria por IA), para os anúncios C3.
+  const objecoes = useQuery({
+    queryKey: ["objecoes-whatsapp", clientId, start, end],
+    queryFn: () => getObjecoesWhatsapp(clientId, start, end),
+    enabled: fontes.data?.tem_atendimento === true,
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+
   // Regra original (477eb43): perguntas pela detecção original (is_question + filtro original).
   const perguntasOriginais = useQuery({
     queryKey: ["perguntas-deteccao-original", clientId, start, end],
@@ -297,8 +394,20 @@ function IdeiasPage() {
   const res = useMemo(() => {
     if (!posts.data || !comentarios.data) return null;
     const voz = analisarVozDoPaciente(comentarios.data.comentarios, { donos: comentarios.data.donos });
-    return { ...buildIdeias(posts.data, comentarios.data.comentarios, { voz }), limitacoesVoz: voz.limitacoes, voz };
-  }, [posts.data, comentarios.data]);
+    const base = buildIdeias(posts.data, comentarios.data.comentarios, { voz });
+    const ident = ideiasDeIdentificacao(todosComentarios.data ?? []);
+    return { ...base, ideias: [...base.ideias, ...ident.ideias], faltas: [...base.faltas, ...(todosComentarios.data ? ident.faltas : [])], limitacoesVoz: voz.limitacoes, voz };
+  }, [posts.data, comentarios.data, todosComentarios.data]);
+
+  // Anúncios para gravar, por etapa (C1/C2/C3), das dores e objeções reais.
+  const roteiros = useMemo(() => {
+    if (!res) return [];
+    return montarRoteiros({
+      grupos: res.voz.grupos.map((g) => ({ id: g.id, rotulo: g.rotulo, termo: g.termo, intencao: g.intencao, pessoas: g.pessoas, exemplos: g.exemplos, cuidadoMedico: g.cuidadoMedico })),
+      identificacao: res.ideias.filter((i) => i.regra === "identificacao").map((i) => ({ tema: i.tema, pessoas: i.pessoas ?? 0, exemplos: i.exemplos ?? [] })),
+      objecoesWhatsapp: objecoes.data ?? null,
+    });
+  }, [res, objecoes.data]);
 
   // Ideias da regra original que a regra nova não trouxe (sem repetir; repetidas e diferenças ficam listadas).
   const orig = useMemo(() => {
@@ -359,19 +468,68 @@ function IdeiasPage() {
         {perguntasOriginais.data && <span>{perguntasOriginais.data.perguntas.length} perguntas de pacientes pela detecção original</span>}
       </p>
 
-      {res.ideias.length === 0 ? (
+      {/* Atalhos por etapa do funil, com quantas ideias e anúncios há em cada uma. */}
+      <nav className="flex flex-wrap gap-2" aria-label="Etapas do funil">
+        {(["C1", "C2", "C3"] as Etapa[]).map((e) => {
+          const nPosts = res.ideias.filter((i) => etapaDaIdeia(i) === e).length;
+          const nAds = roteiros.filter((r) => r.etapa === e).length;
+          return (
+            <a key={e} href={`#etapa-${e}`} className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: ETAPAS[e].cor, color: "var(--ink)", background: `color-mix(in srgb, ${ETAPAS[e].cor} 10%, var(--surface))` }}>
+              {ETAPAS[e].nome}
+              <span className="text-xs font-normal" style={{ color: "var(--ink-2)" }}>{nPosts} post{nPosts === 1 ? "" : "s"} · {nAds} anúncio{nAds === 1 ? "" : "s"}</span>
+            </a>
+          );
+        })}
+      </nav>
+
+      {res.ideias.length === 0 && roteiros.length === 0 ? (
         <div className="hempty">
           <h2>Nenhuma ideia com base suficiente neste período</h2>
           <p>O Hub não inventa ideia sem dado. Veja abaixo o que falta.</p>
         </div>
       ) : (
-        <>
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {res.ideias.map((i) => (
-              <IdeiaCard key={i.id} i={i} clientId={clientId} planner={planner} />
-            ))}
-          </div>
-        </>
+        (["C1", "C2", "C3"] as Etapa[]).map((e) => {
+          const ideiasEtapa = res.ideias.filter((i) => etapaDaIdeia(i) === e);
+          const adsEtapa = roteiros.filter((r) => r.etapa === e);
+          return (
+            <section key={e} id={`etapa-${e}`} className="scroll-mt-4 rounded-2xl border p-4 sm:p-5" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
+              <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-l-4 pl-3" style={{ borderColor: ETAPAS[e].cor }}>
+                <h2 className="text-lg font-bold" style={{ color: "var(--ink)" }}>{ETAPAS[e].nome}</h2>
+                <span className="text-sm" style={{ color: "var(--ink-2)" }}>{ETAPAS[e].papel} · anúncio com objetivo de {ETAPAS[e].objetivoCampanha.toLowerCase()}</span>
+              </div>
+              <h3 className="mb-2 flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide" style={{ color: "var(--ink-2)" }}>
+                <Newspaper size={15} aria-hidden /> Posts para publicar
+              </h3>
+              {ideiasEtapa.length ? (
+                <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  {ideiasEtapa.map((i) => (
+                    <IdeiaCard key={i.id} i={i} clientId={clientId} planner={planner} />
+                  ))}
+                </div>
+              ) : (
+                <p className="mb-5 text-sm" style={{ color: "var(--ink-2)" }}>Nenhuma ideia de post com base suficiente nesta etapa no período.</p>
+              )}
+              <h3 className="mb-2 flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide" style={{ color: "var(--ink-2)" }}>
+                <Clapperboard size={15} aria-hidden /> Anúncios para gravar
+              </h3>
+              {adsEtapa.length ? (
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  {adsEtapa.map((r) => (
+                    <RoteiroCard key={r.id} r={r} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm" style={{ color: "var(--ink-2)" }}>
+                  {e === "C1"
+                    ? "Sem tema com relatos ou elogios de 3 pessoas diferentes ainda (precisa de posts com tema classificado)."
+                    : e === "C2"
+                      ? "Sem dúvida de saúde repetida por 2 pessoas ou mais no período."
+                      : "Sem objeção repetida nos comentários nem nas conversas de WhatsApp lidas no período."}
+                </p>
+              )}
+            </section>
+          );
+        })
       )}
 
       <IdeiasRegraOriginal orig={orig} carregando={perguntasOriginais.isLoading} erro={!!perguntasOriginais.error} clientId={clientId} planner={planner} />
@@ -387,7 +545,9 @@ function IdeiasPage() {
           De onde vêm as ideias
         </h2>
         <ul className="mt-1 list-disc space-y-1 pl-5">
-          <li>Dúvida de pacientes: só quando 2 ou mais pessoas diferentes perguntaram sobre o mesmo assunto, depois de tirar spam, piada, desabafo e respostas de profissionais.</li>
+          <li>Dúvida de pacientes: só comentários classificados como pergunta (elogio, relato pessoal e marcação de amigo não entram), quando 2 ou mais pessoas diferentes perguntaram sobre o mesmo assunto. O gancho nunca copia o comentário.</li>
+          <li>Tema que gera identificação: elogios e relatos pessoais de 3 ou mais pessoas diferentes nos posts do mesmo tema.</li>
+          <li>Anúncios para gravar: C1 dos temas que geram identificação; C2 das dúvidas de saúde e comparações; C3 das objeções (preço, convênio, medo, "não é para mim", adiar, agenda) nos comentários e nas conversas de WhatsApp lidas pela IA. C3 é para campanha de mensagens.</li>
           <li>Tema que o público mais salva: tema com 8+ posts em que o post típico foi salvo pelo menos 25% mais que o post típico da conta.</li>
           <li>Formato que mais alcança: formato com 8+ posts em que o post típico chegou a mais pessoas que o post típico da conta. Com menos de 8 posts, o dado não vira conclusão.</li>
           <li>
