@@ -7,7 +7,9 @@
  * ads_planilha_semanal e NUNCA é espalhado em dias nem gravado em meta_ads_daily: seria dado inventado.
  *
  * Regras de limpeza (a planilha tem sujeira real, conferida em 14/10/2026):
- *  - dia de análise no futuro é descartado (o bloco "30/12/2026" são acumulados do ano, não uma semana);
+ *  - dia de análise no futuro (o bloco "30/12/2026") NÃO é descartado: são 8 posts, 3 deles só existem ali, com o
+ *    investimento acumulado. A linha é guardada com a data como está na planilha e o "valor no período" fica nulo
+ *    (ali ele repete o acumulado, não é uma semana). A tela separa essas linhas das semanas de análise;
  *  - valor negativo vira nulo (o bloco de 10/07 subtrai acumulados e dá -R$ 12 mil no período);
  *  - linha sem data ou sem link do post é ignorada;
  *  - o mesmo post duas vezes no mesmo dia de análise: vale a primeira linha;
@@ -166,10 +168,8 @@ export function interpretarPlanilha(csv: string, hojeIso: string): AdsPlanilhaLe
   for (const r of tabela.slice(1)) {
     const dia = lerData(r[idx.dia]);
     if (!dia) continue; // linha separadora ou data ilegível
-    if (dia > hojeIso) {
-      descartadas.futuro++;
-      continue;
-    }
+    const dataNoFuturo = dia > hojeIso;
+    if (dataNoFuturo) descartadas.futuro++; // só contagem: a linha é mantida
     const link = normalizarLink(r[idx.link]);
     if (!link) {
       descartadas.semLink++;
@@ -199,7 +199,7 @@ export function interpretarPlanilha(csv: string, hojeIso: string): AdsPlanilhaLe
       acao: texto(r[idx.acao]),
       orcamento_dia: lerInteiro(r[idx.orc]),
       valor_total: anulaNegativo(lerReais(r[idx.total])),
-      valor_periodo: anulaNegativo(lerReais(r[idx.periodo])),
+      valor_periodo: dataNoFuturo ? null : anulaNegativo(lerReais(r[idx.periodo])),
       seguidores_antes: antes,
       seguidores_apos: apos,
       seguidores_periodo: segPer,
@@ -257,7 +257,7 @@ export async function runAdsPlanilhaSync(env: AdsPlanilhaSyncEnv): Promise<AdsPl
         if (eUp) throw new Error(eUp.message);
         res.rows += lote.length;
       }
-      res.ate = linhas.reduce((m, l) => (l.analise_em > m ? l.analise_em : m), "");
+      res.ate = linhas.filter((l) => l.analise_em <= hoje).reduce((m, l) => (l.analise_em > m ? l.analise_em : m), "");
       // Fonte manual: sem isto o painel lê "sem dado novo na origem" quando a última análise passa de 3 dias.
       await sb.from("sync_status").upsert(
         {

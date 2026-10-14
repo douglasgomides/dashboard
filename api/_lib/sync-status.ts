@@ -141,7 +141,21 @@ export async function lerDadosAte(
       return soData((data as Record<string, string> | null)?.[coluna]);
     };
     // Cliente lido só pela planilha do gestor (sem conta de anúncios nossa) tem o dado em ads_planilha_semanal.
-    if (fonte === "anuncios") return (await topo("meta_ads_daily", "date")) ?? (await topo("ads_planilha_semanal", "analise_em"));
+    if (fonte === "anuncios") {
+      const diario = await topo("meta_ads_daily", "date");
+      if (diario) return diario;
+      // Planilha: ignora a linha com data no futuro (o bloco "30/12/2026"), que não é uma análise de verdade.
+      const hoje = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+      const { data } = await supabase
+        .from("ads_planilha_semanal")
+        .select("analise_em")
+        .eq("client_id", clientId)
+        .lte("analise_em", hoje)
+        .order("analise_em", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return soData((data as { analise_em?: string } | null)?.analise_em);
+    }
     // Data do lead (occurred_at), não a da sincronização: o Kommo grava received_at = agora a cada rodada.
     if (fonte === "crm") return (await topo("crm_leads", "occurred_at")) ?? (await topo("crm_leads", "received_at"));
     if (fonte === "atendimento") return await topo("wts_sessions", "started_at");

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ExternalLink, FileSpreadsheet, Info, MessageCircle, UserPlus, Wallet } from "lucide-react";
+import { ExternalLink, FileSpreadsheet, Info, Layers, MessageCircle, UserPlus, Wallet } from "lucide-react";
 import { Ajuda, Kpi, Painel, Selo } from "@/components/visual";
 import { fmtBRL, fmtNum } from "@/lib/format";
 import type { AdsPlanilhaLinha } from "@/lib/client-data";
@@ -39,7 +39,46 @@ function razao(gasto: number, resultado: number): string {
   return resultado > 0 ? fmtBRL(gasto / resultado) : "—";
 }
 
-export function AdsPlanilhaPainel({ linhas, start, end }: { linhas: AdsPlanilhaLinha[]; start: string; end: string }) {
+interface PostAcumulado {
+  post_url: string;
+  nome: string | null;
+  tipo: string | null;
+  desativado: boolean;
+  total: number | null;
+  de: string;
+  dataNoFuturo: boolean;
+}
+
+// Uma linha por post com o último "Valor Investido Total" conhecido. Entram TODOS os posts da planilha, inclusive os
+// que só aparecem no bloco de data inválida ("30/12/2026"): para esses vale o valor dali, marcado como data inválida.
+function acumuladoPorPost(linhas: AdsPlanilhaLinha[], hoje: string): PostAcumulado[] {
+  const porPost = new Map<string, AdsPlanilhaLinha[]>();
+  for (const l of linhas) porPost.set(l.post_url, [...(porPost.get(l.post_url) ?? []), l]);
+  const out: PostAcumulado[] = [];
+  for (const [url, ls] of porPost) {
+    const validas = ls.filter((l) => l.analise_em <= hoje).sort((a, b) => (a.analise_em < b.analise_em ? 1 : -1));
+    const futuras = ls.filter((l) => l.analise_em > hoje);
+    const comTotal = validas.find((l) => l.valor_total != null);
+    const base = comTotal ?? futuras.find((l) => l.valor_total != null) ?? validas[0] ?? futuras[0];
+    const recente = validas[0] ?? futuras[0];
+    out.push({
+      post_url: url,
+      nome: base.nome ?? recente.nome,
+      tipo: recente.tipo,
+      desativado: /desativ/i.test(recente.status ?? ""),
+      total: base.valor_total,
+      de: base.analise_em,
+      dataNoFuturo: base.analise_em > hoje,
+    });
+  }
+  return out.sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
+}
+
+export function AdsPlanilhaPainel({ linhas: todas, start, end }: { linhas: AdsPlanilhaLinha[]; start: string; end: string }) {
+  const hoje = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+  // A planilha tem um bloco com data no futuro (30/12/2026, acumulados): fica fora das semanas de análise.
+  const linhas = useMemo(() => todas.filter((l) => l.analise_em <= hoje), [todas, hoje]);
+  const acumulado = useMemo(() => acumuladoPorPost(todas, hoje), [todas, hoje]);
   const semanas = useMemo(() => agruparSemanas(linhas), [linhas]);
   const validas = semanas.filter((s) => s.gasto != null);
   const noPeriodo = validas.filter((s) => s.dia >= start && s.dia <= end);
@@ -76,7 +115,7 @@ export function AdsPlanilhaPainel({ linhas, start, end }: { linhas: AdsPlanilhaL
           Os impulsionamentos desta cliente correm numa conta de anúncios que ainda não está ligada ao dashboard. Enquanto isso, os números vêm da
           planilha do gestor: gasto de cada post no período entre duas análises, seguidores e mensagens que ele anotou. A planilha não traz
           impressões, cliques nem CTR. Valores negativos, datas no futuro e ganhos de seguidores que não fecham com "antes" e "depois" são
-          descartados, em vez de aparecerem na tela.
+          descartados, em vez de aparecerem na tela. Todos os posts da planilha aparecem no quadro de acumulado, ao fim da página.
         </Ajuda>
       </div>
 
@@ -205,6 +244,57 @@ export function AdsPlanilhaPainel({ linhas, start, end }: { linhas: AdsPlanilhaL
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        </Painel>
+      )}
+      {acumulado.length > 0 && (
+        <Painel
+          icone={Layers}
+          titulo="Investimento acumulado por post"
+          resumo={`${acumulado.length} posts na planilha · ${fmtBRL(acumulado.reduce((a, p) => a + (p.total ?? 0), 0))} somados`}
+          cor="var(--s2)"
+          ajuda={
+            <>
+              Último "Valor Investido Total" que a planilha registra de cada post, de todas as análises. Posts marcados com data inválida só
+              aparecem no bloco da planilha datado de 30/12/2026, que está no futuro: o valor está lá, mas não dá para dizer até quando vale.
+              Posts sem valor ficam com "—" em vez de R$ 0.
+            </>
+          }
+        >
+          <div className="max-h-[420px] overflow-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}>
+                  <th className="py-1.5 pr-3 font-medium">Post</th>
+                  <th className="py-1.5 pr-3 font-medium">Tipo</th>
+                  <th className="py-1.5 pr-3 font-medium">Situação</th>
+                  <th className="py-1.5 pr-3 text-right font-medium">Investido acumulado</th>
+                  <th className="py-1.5 text-right font-medium">Valor de</th>
+                </tr>
+              </thead>
+              <tbody>
+                {acumulado.map((p) => (
+                  <tr key={p.post_url} className="border-t" style={{ borderColor: "var(--border)" }}>
+                    <td className="max-w-[320px] py-2 pr-3">
+                      <a href={p.post_url} target="_blank" rel="noreferrer" className="inline-flex items-start gap-1 hover:underline">
+                        <span className="line-clamp-2">{p.nome ?? p.post_url}</span>
+                        <ExternalLink size={12} className="mt-1 shrink-0" aria-hidden />
+                      </a>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <Selo>{p.tipo ?? "—"}</Selo>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <Selo cor={p.desativado ? "var(--muted)" : "var(--good)"}>{p.desativado ? "Desativado" : "Ativo"}</Selo>
+                    </td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{p.total == null ? "—" : fmtBRL(p.total)}</td>
+                    <td className="py-2 text-right text-xs tabular-nums" style={{ color: "var(--text-dim)" }}>
+                      {p.dataNoFuturo ? `${ddmmaaaa(p.de)} (data inválida na planilha)` : ddmmaaaa(p.de)}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
