@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { lerTrackerAuto, montarKpisSap, type TrackerAutoBruto } from "@/lib/sap-auto";
 import type { LinhaPlano } from "@/lib/sap-metas";
+import { ITENS_EXECUCAO, resumoSaude, type ItemRegistro, type ResumoSaude, type SemanaSaude } from "@/lib/sap-scores";
 
 // Tracker do Sistema de Aquisição de Pacientes (SAP).
 //
@@ -441,6 +442,8 @@ export type SapLinhaPortfolio = {
   semana: SapResumo;
   semanaAnterior: SapResumo;
   automatico?: boolean; // números do tracker automático (CRM + WhatsApp), não de sap_leads
+  execucao?: number | null; // Score de Execução (% do D90), de sap_clinicas.score_execucao
+  saude?: ResumoSaude | null; // Score de Saúde semanal (11.04)
 };
 
 function isoDia(offset: number): string {
@@ -477,7 +480,7 @@ export function montarLinha(d: SapDados): SapLinhaPortfolio {
 export async function getSapPortfolio(): Promise<SapLinhaPortfolio[] | null> {
   const { data: clinicas, error } = await db
     .from("sap_clinicas")
-    .select("id, client_id, nome, cidade, especialidade, d0, status, piloto")
+    .select("id, client_id, nome, cidade, especialidade, d0, status, piloto, score_execucao")
     .order("d0", { ascending: true });
   if (error) {
     if (error.code === "42P01" || /does not exist|schema cache/i.test(error.message)) return null;
@@ -513,9 +516,17 @@ export async function getSapPortfolio(): Promise<SapLinhaPortfolio[] | null> {
       metas: metas.filter((m) => m.clinica_id === c.id).map((m) => ({ mes: m.mes, etapa: m.etapa, meta: Number(m.meta) || 0 })),
     }),
   );
+  const saudeR = await db.from("sap_saude_semana").select("clinica_id, semana, tarefas_no_prazo, sessoes_marcadas, sessoes_com_decisor, call_grupo, decisor_respondeu, tempo_resposta_h, kpis_verde, kpis_vermelho, sentimento, o_que_aconteceu").in("clinica_id", ids);
+  const saudeRows = (saudeR.error ? [] : (saudeR.data ?? [])) as (SemanaSaude & { clinica_id: string })[];
+  const nnum = (v: unknown) => (v === null || v === undefined ? null : Number(v));
   // Sem leads registrados um a um: os números vêm do tracker automático (CRM + WhatsApp + Meta).
   return Promise.all(
-    linhas.map(async (l) => {
+    linhas.map(async (l0) => {
+      const c0 = l0.clinica as SapClinica & { score_execucao?: number | null };
+      const semanasSaude = saudeRows
+        .filter((r) => r.clinica_id === c0.id)
+        .map((r) => ({ ...r, tarefas_no_prazo: nnum(r.tarefas_no_prazo), sessoes_marcadas: nnum(r.sessoes_marcadas), sessoes_com_decisor: nnum(r.sessoes_com_decisor), tempo_resposta_h: nnum(r.tempo_resposta_h), kpis_verde: nnum(r.kpis_verde), kpis_vermelho: nnum(r.kpis_vermelho) }));
+      const l: SapLinhaPortfolio = { ...l0, execucao: c0.score_execucao === null || c0.score_execucao === undefined ? null : Number(c0.score_execucao) / 100, saude: semanasSaude.length ? resumoSaude(semanasSaude) : null };
       if (!l.clinica.client_id || l.semana.leads + l.semanaAnterior.leads > 0) return l;
       const [a, b] = await Promise.all([getTrackerAuto(l.clinica.client_id, j.ini, j.fim), getTrackerAuto(l.clinica.client_id, j.iniAnt, j.fimAnt)]);
       const ra = lerTrackerAuto(a);
@@ -677,5 +688,52 @@ export async function salvarPlanoSap(
     p_baseline_de: c.baselineDe,
     p_baseline_ate: c.baselineAte,
   });
+  if (error) throw error;
+}
+
+// Score de Execução e Score de Saúde (11.04). Regras em src/lib/sap-scores.ts.
+export async function getExecucaoSap(clinicaId: string): Promise<ItemRegistro[]> {
+  const { data, error } = await db.from("sap_execucao_item").select("item, status, data_cumpriu, evidencia, observacao").eq("clinica_id", clinicaId);
+  if (error) {
+    if (error.code === "42P01" || /does not exist|schema cache/i.test(error.message)) return [];
+    throw error;
+  }
+  return (data ?? []) as ItemRegistro[];
+}
+
+export async function salvarExecucaoSap(clientId: string, registros: ItemRegistro[]): Promise<number | null> {
+  const pesos = new Map(ITENS_EXECUCAO.map((i) => [i.n, i.peso]));
+  const { data, error } = await db.rpc("sap_salvar_execucao", {
+    p_client_id: clientId,
+    p_itens: registros.map((r) => ({ ...r, peso: pesos.get(r.item) ?? 1 })),
+  });
+  if (error) throw error;
+  return data === null ? null : Number(data);
+}
+
+export async function getSaudeSap(clinicaId: string): Promise<SemanaSaude[]> {
+  const { data, error } = await db
+    .from("sap_saude_semana")
+    .select("semana, tarefas_no_prazo, sessoes_marcadas, sessoes_com_decisor, call_grupo, decisor_respondeu, tempo_resposta_h, kpis_verde, kpis_vermelho, sentimento, o_que_aconteceu")
+    .eq("clinica_id", clinicaId)
+    .order("semana");
+  if (error) {
+    if (error.code === "42P01" || /does not exist|schema cache/i.test(error.message)) return [];
+    throw error;
+  }
+  const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+  return ((data ?? []) as SemanaSaude[]).map((s) => ({
+    ...s,
+    tarefas_no_prazo: n(s.tarefas_no_prazo),
+    sessoes_marcadas: n(s.sessoes_marcadas),
+    sessoes_com_decisor: n(s.sessoes_com_decisor),
+    tempo_resposta_h: n(s.tempo_resposta_h),
+    kpis_verde: n(s.kpis_verde),
+    kpis_vermelho: n(s.kpis_vermelho),
+  }));
+}
+
+export async function salvarSaudeSap(clientId: string, semana: SemanaSaude) {
+  const { error } = await db.rpc("sap_salvar_saude", { p_client_id: clientId, p_semana: semana });
   if (error) throw error;
 }

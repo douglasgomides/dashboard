@@ -5,6 +5,7 @@ import { Target } from "lucide-react";
 import { getSapPortfolio, portfolioDeExemplo, faseDoDia, proximoMarco, type Farol, type SapLinhaPortfolio } from "@/lib/sap-data";
 import { fmtBRL, fmtNum } from "@/lib/format";
 import { Painel, Selo, Ajuda } from "@/components/visual";
+import { corDaSaude } from "@/components/sap-scores";
 
 // Portfólio do Sistema de Aquisição de Pacientes: todas as clínicas numa tela,
 // no lugar do 11.05 (painel) e da parte de números do 11.04 (score de saúde).
@@ -30,7 +31,9 @@ function PortfolioSap() {
   const { data, isLoading, error } = useQuery({ queryKey: ["sap-portfolio"], queryFn: getSapPortfolio });
 
   const linhas = exemplo ? portfolioDeExemplo() : (data ?? []);
-  const ordenadas = [...linhas].sort((a, b) => PESO[piorFarol(b)] - PESO[piorFarol(a)] || (a.dia ?? 0) - (b.dia ?? 0));
+  // Risco: primeiro a cor do Score de Saúde (11.04), depois o semáforo dos números, depois o começo do programa.
+  const riscoSaude = (l: SapLinhaPortfolio) => { const c = l.saude?.ultima?.cor ?? ""; return c.startsWith("Vermelho") ? 3 : c.startsWith("Amarelo") ? 2 : c === "Verde" ? 0 : 1; };
+  const ordenadas = [...linhas].sort((a, b) => riscoSaude(b) - riscoSaude(a) || PESO[piorFarol(b)] - PESO[piorFarol(a)] || (a.dia ?? 0) - (b.dia ?? 0));
 
   if (isLoading && !exemplo) return <p style={{ color: "var(--text-dim)" }}>Carregando…</p>;
   if (error && !exemplo) return <p style={{ color: "var(--crit)" }}>Não consegui ler o portfólio: {(error as Error).message}</p>;
@@ -63,6 +66,10 @@ function PortfolioSap() {
     { leads: 0, consultas: 0, fechamentos: 0, receita: 0, vermelhas: 0 },
   );
 
+  // 11.04: média da carteira abaixo de 7 por 2 semanas é gatilho de contratação (11.01).
+  const notas = ordenadas.map((l) => l.saude?.ultima?.nota).filter((n): n is number => typeof n === "number");
+  const mediaSaude = notas.length ? notas.reduce((a, b) => a + b, 0) / notas.length : null;
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -83,8 +90,9 @@ function PortfolioSap() {
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         {[
+          ["Saúde média da carteira", mediaSaude === null ? "sem registro" : `${mediaSaude.toFixed(1).replace(".", ",")}${mediaSaude < 7 ? " · abaixo de 7" : ""}`],
           ["Clínicas com vermelho", fmtNum(tot.vermelhas)],
           ["Leads", fmtNum(tot.leads)],
           ["Consultas", fmtNum(tot.consultas)],
@@ -99,7 +107,7 @@ function PortfolioSap() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-        <table className="w-full min-w-[980px] text-sm">
+        <table className="w-full min-w-[1180px] text-sm">
           <thead>
             <tr className="text-left text-xs" style={{ color: "var(--muted)" }}>
               <th className="px-3 py-2.5 font-medium">Clínica</th>
@@ -111,6 +119,8 @@ function PortfolioSap() {
               <th className="px-3 py-2.5 text-right font-medium">Fechou</th>
               <th className="px-3 py-2.5 text-right font-medium">Receita</th>
               <th className="px-3 py-2.5 text-right font-medium">1ª resposta</th>
+              <th className="px-3 py-2.5 text-right font-medium">Saúde</th>
+              <th className="px-3 py-2.5 text-right font-medium">Execução</th>
             </tr>
           </thead>
           <tbody>
@@ -168,6 +178,26 @@ function PortfolioSap() {
                     <div className="text-xs" style={{ color: "var(--muted)" }}>{variacao(s.receita, a.receita)}</div>
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{s.medianaResposta === null ? "sem dado" : `${Math.round(s.medianaResposta)} min`}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    {l.saude?.ultima ? (
+                      <>
+                        <span className="font-semibold" style={{ color: corDaSaude(l.saude.ultima.cor) }}>{l.saude.ultima.nota?.toFixed(1).replace(".", ",")}</span>
+                        <div className="text-xs" style={{ color: corDaSaude(l.saude.ultima.cor) }}>
+                          S{l.saude.ultima.semana} · {l.saude.ultima.cor}
+                          {l.saude.vermelhasSeguidas >= 2 ? " · 2 semanas" : ""}
+                        </div>
+                      </>
+                    ) : (
+                      <span style={{ color: "var(--muted)" }}>sem registro</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    {l.execucao === null || l.execucao === undefined ? (
+                      <span style={{ color: "var(--muted)" }}>sem itens</span>
+                    ) : (
+                      <span className="font-semibold" style={{ color: l.execucao >= 0.8 ? "var(--good)" : "var(--crit)" }}>{Math.round(l.execucao * 100)}%</span>
+                    )}
+                  </td>
                 </tr>
               );
             })}
