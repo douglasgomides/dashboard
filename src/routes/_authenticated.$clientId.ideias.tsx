@@ -388,8 +388,8 @@ function IdeiasPage() {
         </h2>
         <ul className="mt-1 list-disc space-y-1 pl-5">
           <li>Dúvida de pacientes: só quando 2 ou mais pessoas diferentes perguntaram sobre o mesmo assunto, depois de tirar spam, piada, desabafo e respostas de profissionais.</li>
-          <li>Tema que o público mais salva: tema com 2+ posts em que o post típico foi salvo pelo menos 25% mais que o post típico da conta.</li>
-          <li>Formato que mais alcança: formato com 3+ posts em que o post típico chegou a mais pessoas.</li>
+          <li>Tema que o público mais salva: tema com 8+ posts em que o post típico foi salvo pelo menos 25% mais que o post típico da conta.</li>
+          <li>Formato que mais alcança: formato com 8+ posts em que o post típico chegou a mais pessoas que o post típico da conta. Com menos de 8 posts, o dado não vira conclusão.</li>
           <li>
             Regra original: as mesmas três regras como eram antes. A pergunta repetida usa todos os comentários marcados como pergunta (sem a triagem nova), agrupa por
             palavras em comum e conta comentários; o título é o próprio comentário e o formato vem do tipo da dúvida (preço, agendar, uso, sintoma, resultado, geral).

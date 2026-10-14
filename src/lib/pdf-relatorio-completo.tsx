@@ -1092,7 +1092,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
         </Text>
         <Text style={styles.methodTitle}>Limites que valem a pena conhecer</Text>
         <Text style={styles.methodP}>
-          O Instagram só informa o ganho diário de seguidores dos últimos 30 dias. Melhor formato exige 3 posts ou mais, e a leitura por tema exige 10 posts classificados no mesmo assunto. O CRM mostra o histórico inteiro da conta, não só o período. A detecção de dúvida nos comentários é uma regra de pontuação e palavra interrogativa, então pode incluir elogios com interrogação.
+          O Instagram só informa o ganho diário de seguidores dos últimos 30 dias. Melhor formato, horário ou tema exige 8 posts ou mais no grupo, e a leitura por tema exige 10 posts classificados no mesmo assunto. O CRM mostra o histórico inteiro da conta, não só o período. A detecção de dúvida nos comentários é uma regra de pontuação e palavra interrogativa, então pode incluir elogios com interrogação.
         </Text>
         <Text style={styles.methodTitle}>Como as dúvidas foram contadas</Text>
         <Text style={styles.methodP}>

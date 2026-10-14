@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { type Metrica } from "@/lib/resultado";
 import { useResultado } from "@/hooks/use-resultado";
+import { ROTULO_CONFIANCA } from "@/lib/insight";
 import { DiagnosticoEstrategico } from "@/components/diagnostico-estrategico";
 import { InsightCard, ListaLimitacoes, SeloStatus, BotaoAcao, OQueE, COR_TOM } from "@/components/insight-card";
 import { NextBestActionCard, NextBestActionPanel, usePainelNBA } from "@/components/next-best-action";
@@ -32,7 +33,7 @@ import type { ContentFormat } from "@/integrations/supabase/types";
 import { brazilWeekdayAndHour, computeFormatBreakdown, computeFormatInsight, median } from "@/lib/report-metrics";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum } from "@/lib/format";
-import { seguidoresNoPeriodo, type DiaSeguidores } from "@/lib/metricas";
+import { seguidoresNoPeriodo, confiancaPorPosts, MIN_POSTS_CONCLUSAO, ROTULO_AMOSTRA_PEQUENA, type DiaSeguidores } from "@/lib/metricas";
 import { Eye, Activity, Bookmark, Clock, Gauge, BarChart3, Download, Loader2, Lightbulb, UserPlus, MousePointerClick, Trophy, TrendingDown, LineChart as LineIcon, ChevronRight } from "lucide-react";
 import { Painel, BarraFina, Miniatura, Kpi } from "@/components/visual";
 
@@ -111,7 +112,7 @@ function PostList({ posts }: { posts: any[] }) {
 function MelhoresHorarios({ posts, periodLabel }: { posts: any[]; periodLabel: string }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const { ranked, overallMedian } = useMemo(() => {
+  const { ranked, overallMedian, poucosDados } = useMemo(() => {
     const buckets = new Map<
       string,
       { weekday: string; period: string; values: number[]; posts: any[] }
@@ -130,8 +131,13 @@ function MelhoresHorarios({ posts, periodLabel }: { posts: any[]; periodLabel: s
       buckets.set(key, entry);
     }
     const overallMedian = median(allEng);
+    // Ranking só entre horários com amostra mínima (MIN_POSTS_CONCLUSAO); os outros vão para "poucos dados".
+    const poucosDados = Array.from(buckets.values())
+      .filter((b) => b.values.length < MIN_POSTS_CONCLUSAO)
+      .map((b) => ({ weekday: b.weekday, period: b.period, count: b.values.length, median: median(b.values) }))
+      .sort((a, b) => b.count - a.count);
     const ranked = Array.from(buckets.entries())
-      .filter(([, b]) => b.values.length >= 2)
+      .filter(([, b]) => b.values.length >= MIN_POSTS_CONCLUSAO)
       .map(([key, b]) => ({
         key,
         weekday: b.weekday,
@@ -142,7 +148,7 @@ function MelhoresHorarios({ posts, periodLabel }: { posts: any[]; periodLabel: s
       }))
       .sort((a, b) => b.median - a.median)
       .slice(0, 5);
-    return { ranked, overallMedian };
+    return { ranked, overallMedian, poucosDados };
   }, [posts]);
 
   const maxMediana = Math.max(1, ...ranked.map((r) => r.median));
@@ -156,7 +162,7 @@ function MelhoresHorarios({ posts, periodLabel }: { posts: any[]; periodLabel: s
     >
       {ranked.length === 0 ? (
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          Poucos posts para ranquear com confiança ainda.
+          Nenhum horário tem {MIN_POSTS_CONCLUSAO} posts ou mais no período, por isso nenhum é chamado de melhor. Os horários com menos posts estão abaixo.
         </p>
       ) : (
         <ul className="space-y-2">
@@ -205,6 +211,20 @@ function MelhoresHorarios({ posts, periodLabel }: { posts: any[]; periodLabel: s
             );
           })}
         </ul>
+      )}
+      {poucosDados.length > 0 && (
+        <div className="mt-4">
+          <p className="mb-1.5 text-xs font-semibold" style={{ color: "var(--ink-2)" }}>
+            Poucos dados ({ROTULO_AMOSTRA_PEQUENA}: menos de {MIN_POSTS_CONCLUSAO} posts, sem ranking)
+          </p>
+          <ul className="flex flex-wrap gap-1.5">
+            {poucosDados.map((b) => (
+              <li key={`${b.weekday}-${b.period}`} className="rounded-full border px-2.5 py-0.5 text-xs" style={{ borderColor: "var(--border)", color: "var(--ink-2)" }}>
+                {b.weekday} · {b.period.toLowerCase()} · {b.count} {b.count === 1 ? "post" : "posts"} · {fmtNum(Math.round(b.median))} engaj.
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </Painel>
   );
@@ -635,8 +655,8 @@ function MonthlyOverview() {
 
                 {formatInsight && (
                   <div className="grid grid-cols-2 gap-3">
-                    <Kpi icone={Trophy} cor="var(--good-text)" rotulo="Melhor formato" valor={fmtFormatKey(formatInsight.best.format)} dica={`${fmtNum(Math.round(formatInsight.best.median))} engaj. (mediana) · ${formatInsight.best.count} posts`} />
-                    <Kpi icone={TrendingDown} cor="var(--crit)" rotulo="Formato mais fraco" valor={fmtFormatKey(formatInsight.worst.format)} dica={`${fmtNum(Math.round(formatInsight.worst.median))} engaj. (mediana) · ${formatInsight.worst.count} posts`} />
+                    <Kpi icone={Trophy} cor="var(--good-text)" rotulo="Melhor formato" valor={fmtFormatKey(formatInsight.best.format)} dica={`${fmtNum(Math.round(formatInsight.best.median))} engaj. (mediana) · ${formatInsight.best.count} posts · ${ROTULO_CONFIANCA[confiancaPorPosts(formatInsight.best.count)].toLowerCase()}`} />
+                    <Kpi icone={TrendingDown} cor="var(--crit)" rotulo="Formato mais fraco" valor={fmtFormatKey(formatInsight.worst.format)} dica={`${fmtNum(Math.round(formatInsight.worst.median))} engaj. (mediana) · ${formatInsight.worst.count} posts · ${ROTULO_CONFIANCA[confiancaPorPosts(formatInsight.worst.count)].toLowerCase()}`} />
                   </div>
                 )}
 

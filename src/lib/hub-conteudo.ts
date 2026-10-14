@@ -4,6 +4,7 @@
 import { computeDuvidasFrequentes, fmtFormatKey, median } from "@/lib/report-metrics";
 import { confiancaPorAmostra, type Confianca, type Insight, type Limitacao } from "@/lib/insight";
 import { analisarVozDoPaciente, assuntoDoTexto, confiancaDoGrupo, type GrupoDuvida, type ResultadoVoz } from "@/lib/voz-do-paciente";
+import { MIN_POSTS_CONCLUSAO, confiancaPorPosts } from "@/lib/metricas";
 
 // ---------- datas ----------
 const DAY_MS = 86400000;
@@ -252,7 +253,8 @@ function groupStats(posts: any[], keyOf: (p: any) => string | null, labelOf: (k:
     .sort((a, b) => b.reachMedian - a.reachMedian);
 }
 
-export const MIN_POSTS_FORMATO = 3;
+// Mínimo para chamar um formato de melhor/pior: regra única de src/lib/metricas.ts (8 posts).
+export const MIN_POSTS_FORMATO = MIN_POSTS_CONCLUSAO;
 export const MIN_POSTS_REGRAS = 8;
 export const MIN_PERGUNTAS = 3;
 // Tema só entra se a mediana de salvos for pelo menos 25% acima da da conta (evita ruído de 1 ou 2 salvos).
@@ -537,13 +539,13 @@ export function buildIdeias(
       faltas.push('Regra "tema que mais salva": nenhum post do período está classificado por tema (classificar na aba Posts).');
     } else {
       const achados = Array.from(temas.entries())
-        .filter(([, ps]) => ps.length >= 2)
+        .filter(([, ps]) => ps.length >= MIN_POSTS_CONCLUSAO)
         .map(([tema, ps]) => ({ tema, ps, med: median(ps.filter((p) => p.saved != null).map((p) => Number(p.saved))) }))
         .filter((t) => t.med > 0 && t.med >= baseSaved * MARGEM_TEMA)
         .sort((a, b) => b.med - a.med)
         .slice(0, 4);
       if (achados.length === 0) {
-        faltas.push('Regra "tema que mais salva": nenhum tema com 2+ posts teve o post típico 25% acima do post típico da conta em salvamentos.');
+        faltas.push(`Regra "tema que mais salva": nenhum tema com ${MIN_POSTS_CONCLUSAO}+ posts teve o post típico 25% acima do post típico da conta em salvamentos.`);
       }
       for (const [i, t] of achados.entries()) {
         const fm = moda(t.ps.map((p) => p.format));
@@ -557,8 +559,8 @@ export function buildIdeias(
           tema: t.tema,
           formato,
           objetivo: "salvamento",
-          confianca: confiancaPorAmostra(t.ps.length, 3),
-          motivoConfianca: `${t.ps.length} posts sobre o tema (3+ dá confiança média, 9+ alta)`,
+          confianca: confiancaPorPosts(t.ps.length),
+          motivoConfianca: `${t.ps.length} posts sobre o tema (8 a 19 = confiança média, 20+ alta)`,
           evidencia,
           porQueTestar: "Esse tema já é guardado pelo seu público para consultar depois. Uma variação com ângulo novo aproveita um interesse comprovado.",
           gancho: `${t.tema}: 3 coisas que eu ainda não te contei por aqui.`,
@@ -586,6 +588,9 @@ export function buildIdeias(
     ).filter((f) => f.count >= MIN_POSTS_FORMATO);
     if (fmts.length === 0) {
       faltas.push(`Regra "formato que mais alcança": nenhum formato classificado tem ${MIN_POSTS_FORMATO}+ posts no período.`);
+    } else if (fmts[0].reachMedian <= median(posts.filter((p) => p.reach != null).map((p) => Number(p.reach)))) {
+      // O formato com mais alcance entre os que têm amostra mínima ficou abaixo do post típico da conta: não é "o que mais alcança".
+      faltas.push(`Regra "formato que mais alcança": entre os formatos com ${MIN_POSTS_FORMATO}+ posts, nenhum alcança mais que o post típico da conta.`);
     } else {
       const best = fmts[0];
       const overall = median(posts.filter((p) => p.reach != null).map((p) => Number(p.reach)));
@@ -603,7 +608,7 @@ export function buildIdeias(
         tema: melhorTema ?? "Tema livre",
         formato: best.label,
         objetivo: "alcance",
-        confianca: confiancaPorAmostra(best.count, MIN_POSTS_FORMATO),
+        confianca: confiancaPorPosts(best.count),
         motivoConfianca: `${best.count} posts nesse formato no período`,
         evidencia,
         porQueTestar: "É o formato que mais leva os seus posts para pessoas que ainda não te seguem. Repetir o formato com um tema forte é o teste mais barato de alcance.",
@@ -748,8 +753,8 @@ function postParecidoOriginal(texto: string, posts: any[]): { legenda: string; s
 
 const POR_QUE_ORIGINAL: Record<Ideia["regra"], string> = {
   pergunta: "Regra original: a mesma dúvida apareceu 2 vezes ou mais nos comentários marcados como pergunta (agrupamento por palavras em comum, contando comentários).",
-  tema: "Regra original: tema com 2+ posts em que a mediana de salvos ficou 25% ou mais acima da mediana da conta.",
-  formato: "Regra original: formato com 3+ posts e a maior mediana de alcance da conta.",
+  tema: "Regra original: tema com 8+ posts (amostra mínima desde out/2026) em que a mediana de salvos ficou 25% ou mais acima da mediana da conta.",
+  formato: "Regra original: formato com 8+ posts (amostra mínima desde out/2026), a maior mediana de alcance e acima do post típico da conta.",
 };
 
 export interface IdeiasOriginaisResult {
@@ -837,13 +842,13 @@ export function buildIdeiasRegraOriginal(
       faltas.push('Regra "tema com salvos acima da média": nenhum post do período está classificado por tema (classificar na aba Posts).');
     } else {
       const achados = Array.from(temas.entries())
-        .filter(([, ps]) => ps.length >= 2)
+        .filter(([, ps]) => ps.length >= MIN_POSTS_CONCLUSAO)
         .map(([tema, ps]) => ({ tema, ps, med: median(ps.filter((p) => p.saved != null).map((p) => Number(p.saved))) }))
         .filter((t) => t.med > 0 && t.med >= baseSaved * MARGEM_TEMA)
         .sort((a, b) => b.med - a.med)
         .slice(0, 4);
       if (achados.length === 0) {
-        faltas.push('Regra "tema com salvos acima da média": nenhum tema com 2+ posts tem mediana de salvos 25% acima da mediana da conta no período.');
+        faltas.push(`Regra "tema com salvos acima da média": nenhum tema com ${MIN_POSTS_CONCLUSAO}+ posts tem mediana de salvos 25% acima da mediana da conta no período.`);
       }
       for (const [i, t] of achados.entries()) {
         const fm = moda(t.ps.map((p) => p.format));
@@ -860,7 +865,7 @@ export function buildIdeiasRegraOriginal(
           acao: `Variação do tema "${t.tema}" com outro ângulo, caso ou pergunta.`,
           porque,
           objetivo: "salvamento",
-          confianca: confiancaPorAmostra(t.ps.length, 3),
+          confianca: confiancaPorPosts(t.ps.length),
           motivoConfianca: `${t.ps.length} posts sobre o tema`,
           evidencia: porque,
           porQueTestar: POR_QUE_ORIGINAL.tema,
@@ -879,6 +884,9 @@ export function buildIdeiasRegraOriginal(
     ).filter((f) => f.count >= MIN_POSTS_FORMATO);
     if (fmts.length === 0) {
       faltas.push(`Regra "formato de maior alcance": nenhum formato classificado tem ${MIN_POSTS_FORMATO}+ posts no período.`);
+    } else if (fmts[0].reachMedian <= median(posts.filter((p) => p.reach != null).map((p) => Number(p.reach)))) {
+      // O formato com mais alcance entre os que têm amostra mínima ficou abaixo do post típico da conta: não é "o que mais alcança".
+      faltas.push(`Regra "formato de maior alcance": entre os formatos com ${MIN_POSTS_FORMATO}+ posts, nenhum alcança mais que o post típico da conta.`);
     } else {
       const best = fmts[0];
       const overall = median(posts.filter((p) => p.reach != null).map((p) => Number(p.reach)));
@@ -899,7 +907,7 @@ export function buildIdeiasRegraOriginal(
         acao: `Novo conteúdo em ${best.label}${melhorTema ? ` sobre "${melhorTema}"` : ""}.`,
         porque,
         objetivo: "alcance",
-        confianca: confiancaPorAmostra(best.count, MIN_POSTS_FORMATO),
+        confianca: confiancaPorPosts(best.count),
         motivoConfianca: `${best.count} posts nesse formato no período`,
         evidencia: porque,
         porQueTestar: POR_QUE_ORIGINAL.formato,

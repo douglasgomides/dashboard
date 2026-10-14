@@ -11,6 +11,7 @@
 // registra em `semLeitura` o que faltou.
 import { fmtFormatKey, median } from "@/lib/report-metrics";
 import { conversaMaisBarata, GRUPOS, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
+import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 
 export type Tom = "bom" | "ruim" | "atencao";
 export type RotaAcao = "posts" | "anuncios" | "atendimento" | "ideias" | "conteudo";
@@ -44,7 +45,8 @@ export interface EntradaLeitura {
 export const MIN_DIAS_TENDENCIA = 10;
 export const VARIACAO_RELEVANTE = 0.25; // ±25%
 export const MIN_POSTS_LEITURA = 5;
-export const MIN_POSTS_GRUPO = 3;
+// Grupo (formato, tema, horário) só vira "melhor"/"pior" com a amostra mínima única (src/lib/metricas.ts).
+export const MIN_POSTS_GRUPO = MIN_POSTS_CONCLUSAO;
 export const CONCENTRACAO_VIRAL = 0.4; // 1 post com 40%+ do alcance dos posts
 export const LACUNA_DIAS = 7;
 export const DIFERENCA_SALVO = 1.3; // taxa de salvamento 30% maior para afirmar diferença

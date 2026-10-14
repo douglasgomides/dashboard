@@ -1,6 +1,7 @@
 import type { ContentFormat } from "@/integrations/supabase/types";
 import { formatLabel } from "@/lib/methodology";
 import { analisarVozDoPaciente } from "@/lib/voz-do-paciente";
+import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 
 const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const PERIODS = [
@@ -61,8 +62,9 @@ export function computeFormatInsight(posts: any[]) {
   }
   if (allEng.length === 0) return null;
   const overallMedian = median(allEng);
+  // "Melhor" e "pior" só entre formatos com amostra mínima (MIN_POSTS_CONCLUSAO posts).
   const ranked = Array.from(groups.entries())
-    .filter(([, v]) => v.length >= 3)
+    .filter(([, v]) => v.length >= MIN_POSTS_CONCLUSAO)
     .map(([format, v]) => ({ format, median: median(v), count: v.length }))
     .sort((a, b) => b.median - a.median);
   if (ranked.length < 2) return null;
@@ -89,12 +91,11 @@ export function computeMelhoresHorarios(posts: any[]) {
     buckets.set(key, entry);
   }
   const overallMedian = median(allEng);
-  const ranked = Array.from(buckets.values())
-    .filter((b) => b.values.length >= 2)
-    .map((b) => ({ weekday: b.weekday, period: b.period, count: b.values.length, median: median(b.values) }))
-    .sort((a, b) => b.median - a.median)
-    .slice(0, 5);
-  return { ranked, overallMedian };
+  const todos = Array.from(buckets.values()).map((b) => ({ weekday: b.weekday, period: b.period, count: b.values.length, median: median(b.values) }));
+  // Ranking só entre horários com amostra mínima; os demais vão para "poucos dados", sem ordem de melhor.
+  const ranked = todos.filter((b) => b.count >= MIN_POSTS_CONCLUSAO).sort((a, b) => b.median - a.median).slice(0, 5);
+  const poucosDados = todos.filter((b) => b.count < MIN_POSTS_CONCLUSAO).sort((a, b) => b.count - a.count);
+  return { ranked, overallMedian, poucosDados };
 }
 
 // Mesma lógica do componente EngajamentoPorFormato.
