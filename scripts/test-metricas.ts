@@ -1,6 +1,8 @@
 // npx tsx scripts/test-metricas.ts — regressão das definições centrais (src/lib/metricas.ts)
 import assert from "node:assert/strict";
 import { custoPorConversaConta, custoPorConversaMensagem, fmtFracao, fmtTaxa, razao, seguidoresNoPeriodo } from "../src/lib/metricas";
+import { confiancaPorPosts, podeConcluir } from "../src/lib/metricas";
+import { computeMelhoresHorarios, computeFormatInsight } from "../src/lib/report-metrics";
 
 // Caso real (Lana Torres, 90 dias): R$ 33.012,20 ÷ 977 = R$ 33,79 na conta toda.
 const conta = custoPorConversaConta(33012.2, 977);
@@ -53,5 +55,23 @@ console.log("test-metricas: ok");
 import("../src/lib/comercial").then(({ fmtPct }) => {
   assert.equal(fmtPct(2 / 1365), "0,15%");
   assert.equal(fmtPct(0), "0%");
-  console.log("test-metricas (comercial): ok");
+  // Amostra mínima de posts: "melhor"/"pior" só com 8+; selo baixa (até 7), média (8–19), alta (20+).
+{
+  assert.equal(confiancaPorPosts(7), "baixa");
+  assert.equal(confiancaPorPosts(8), "media");
+  assert.equal(confiancaPorPosts(19), "media");
+  assert.equal(confiancaPorPosts(20), "alta");
+  assert.equal(podeConcluir(7), false);
+  // "Quarta de manhã +834%" com 3 posts: vai para poucos dados, sem ranking.
+  const post = (dia: string, hora: string, eng: number, format = "reels") => ({ posted_at: `${dia}T${hora}:00-03:00`, engagement: eng, format });
+  const qua = ["2026-09-02", "2026-09-09", "2026-09-16"].map((d) => post(d, "09", 900));
+  const outros = Array.from({ length: 8 }, (_, i) => post(`2026-09-0${(i % 3) + 4}`, "19", 100));
+  const h = computeMelhoresHorarios([...qua, ...outros]);
+  assert.ok(h.ranked.every((r) => r.count >= 8));
+  assert.ok(h.poucosDados.some((r) => r.count === 3 && r.median === 900));
+  // Formato com 3 posts não vira "melhor".
+  assert.equal(computeFormatInsight([...qua.map((p) => ({ ...p, format: "image" })), ...outros]), null);
+}
+
+console.log("test-metricas (comercial): ok");
 });

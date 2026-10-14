@@ -104,3 +104,21 @@ export function seguidoresNoPeriodo(dias: DiaSeguidores[], de: string, ate: stri
     mesmaCobertura: ambos.length > 0 && ambos.length === comTotal.length && ambos[0]?.date === comTotal[0]?.date,
   };
 }
+
+// ---------------------------------------------------------------- amostra mínima de posts
+
+/**
+ * Um formato, horário ou tema só pode ser chamado de "melhor" ou "pior" com pelo menos 8 posts no grupo.
+ * Abaixo disso o dado aparece com o rótulo "amostra pequena" e sem conclusão em texto.
+ */
+export const MIN_POSTS_CONCLUSAO = 8;
+export const ROTULO_AMOSTRA_PEQUENA = "amostra pequena";
+
+/** Selo de confiança por número de posts: baixa (até 7), média (8 a 19), alta (20 ou mais). */
+export function confiancaPorPosts(n: number): "baixa" | "media" | "alta" {
+  if (n >= 20) return "alta";
+  if (n >= MIN_POSTS_CONCLUSAO) return "media";
+  return "baixa";
+}
+
+export const podeConcluir = (n: number) => n >= MIN_POSTS_CONCLUSAO;
