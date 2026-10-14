@@ -1,5 +1,6 @@
 import type { ContentFormat } from "@/integrations/supabase/types";
 import { formatLabel } from "@/lib/methodology";
+import { analisarVozDoPaciente } from "@/lib/voz-do-paciente";
 
 const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const PERIODS = [
@@ -255,6 +256,10 @@ export function computeConceitosVencedores(posts: any[], limit = 7) {
     .slice(0, limit);
 }
 
+// DETECÇÃO ORIGINAL (477eb43), restaurada sem mudança: é o agrupamento que a tela Dúvidas e a regra
+// "pergunta repetida" das Ideias usavam. "count" = comentários (a mesma pessoa pode contar 2 vezes).
+// A versão com a triagem nova (conta pessoas) está logo abaixo, em computeDuvidasFrequentesTriagem.
+//
 // Agrupa comentários-pergunta parecidos (mesmo assunto, fraseado diferente)
 // por sobreposição de palavras-chave — sem IA, só interseção de conjuntos.
 // Transforma uma lista crua de comentários num ranking real de "dúvidas mais
@@ -355,6 +360,24 @@ export function computeDuvidasFrequentes<T extends { id: string; text: string; l
     .sort((a, b) => b.count - a.count);
 }
 
+// TRIAGEM NOVA: ranking das "dúvidas mais repetidas" contando pessoas (antes era computeDuvidasFrequentes).
+// Antes de agrupar, passa pela triagem da voz do paciente (lib/voz-do-paciente.ts): sai spam, piada,
+// desabafo, conversa entre seguidores, só @, resposta do perfil e de outros profissionais, e a mesma
+// pessoa repetindo. "count" é o número de pessoas diferentes; pedidos de dose/remédio ficam de fora
+// (não são dúvida para virar conteúdo). Rastreável até os comentários originais de cada grupo.
+export function computeDuvidasFrequentesTriagem<T extends { id: string; text: string; like_count: number | null; author_username?: string | null; instagram_post_id?: string | null }>(
+  questions: T[],
+  { threshold = 0.34, minSize = 2, donos = [] as string[] } = {},
+) {
+  const r = analisarVozDoPaciente(questions, { donos, minPessoas: minSize, limiarSimilaridade: threshold });
+  return r.grupos.map((g) => ({
+    count: g.pessoas,
+    rotulo: g.rotulo,
+    representative: [...g.itens].sort((a, b) => (b.comentario.like_count ?? 0) - (a.comentario.like_count ?? 0))[0].comentario,
+    items: g.itens.map((i) => i.comentario),
+  }));
+}
+
 // O post de maior e o de menor alcance no período — pra virar caso
 // destacado no relatório, com link e legenda reais (nunca inventados).
 export function computeCasosDestacados(posts: any[]) {
@@ -417,6 +440,20 @@ export function computeRetencaoDeReels(posts: any[], limit = 10) {
     }))
     .sort((a, b) => b.hookRate - a.hookRate);
 
+  // Média PONDERADA por views: é a que se compara com o número agregado do Instagram. A mediana (por reel) fica ao lado
+  // porque um reel viral não deve decidir sozinho; as duas diferem quando os reels têm views muito desiguais.
+  const ponderada = (valor: (r: (typeof ranked)[number]) => number | null) => {
+    let soma = 0;
+    let pesos = 0;
+    for (const r of ranked) {
+      const v = valor(r);
+      const w = Number(r.post.views ?? 0);
+      if (v == null || !(w > 0)) continue;
+      soma += v * w;
+      pesos += w;
+    }
+    return pesos > 0 ? soma / pesos : null;
+  };
   const hookRates = ranked.map((r) => r.hookRate);
   const watchSeconds = ranked.map((r) => r.avgWatchSeconds).filter((v): v is number => v != null);
 
@@ -427,6 +464,8 @@ export function computeRetencaoDeReels(posts: any[], limit = 10) {
     totalReels: posts.filter((p) => p.format === "reels").length,
     medianHookRate: hookRates.length > 0 ? median(hookRates) : null,
     medianWatchSeconds: watchSeconds.length > 0 ? median(watchSeconds) : null,
+    weightedHookRate: ponderada((r) => r.hookRate),
+    weightedWatchSeconds: ponderada((r) => r.avgWatchSeconds),
     melhores: ranked.slice(0, limit),
     piores: ranked.slice(-limit).reverse(),
   };

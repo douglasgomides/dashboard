@@ -1,17 +1,34 @@
 import { useState, type ReactNode } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { Carregando } from "@/components/sem-fonte";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Route as RouteIcon, Search } from "lucide-react";
+import { ChevronDown, Filter, Route as RouteIcon, ScanSearch, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Painel, Selo } from "@/components/visual";
+import { OQueE } from "@/components/insight-card";
+import { ChecklistDados, FunilOndeQuebra, useDiagnosticoComercial } from "@/components/comercial-diagnostico";
+import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
+import { JornadaFunil } from "@/components/jornada-funil";
+import { fmtTaxa } from "@/lib/metricas";
+import { ListaLimitacoes } from "@/components/insight-card";
+
+const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 
 export const Route = createFileRoute("/_authenticated/$clientId/jornada")({
   component: JornadaPage,
 });
 
-const rpc = supabase.rpc.bind(supabase) as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: any; error: { message: string } | null }>;
-const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "—");
+const rpc = supabase.rpc.bind(supabase) as unknown as (
+  fn: string,
+  args: Record<string, unknown>,
+) => Promise<{ data: any; error: { message: string } | null }>;
+const brl = (v: number) =>
+  v.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: 0,
+  });
+const pct = (a: number, b: number) => fmtTaxa(a, b);
 const quando = (iso?: string) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : "");
 
 const ROTULO: Record<string, string> = {
@@ -25,8 +42,12 @@ function Etapa({ n, rotulo, base }: { n: number; rotulo: string; base: number })
   return (
     <div className="rounded-lg border p-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
       <div className="text-2xl font-semibold tabular-nums">{n.toLocaleString("pt-BR")}</div>
-      <div className="text-xs" style={{ color: "var(--text-dim)" }}>{rotulo}</div>
-      <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-faint)" }}>{pct(n, base)} das pessoas</div>
+      <div className="text-xs" style={{ color: "var(--text-dim)" }}>
+        {rotulo}
+      </div>
+      <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-faint)" }}>
+        {pct(n, base)} das pessoas
+      </div>
     </div>
   );
 }
@@ -37,13 +58,21 @@ function Tabela({ cab, linhas }: { cab: string[]; linhas: (string | number | Rea
       <table className="w-full text-sm">
         <thead>
           <tr style={{ color: "var(--text-faint)" }} className="text-left text-xs uppercase">
-            {cab.map((c) => <th key={c} className="py-1 pr-3 font-medium">{c}</th>)}
+            {cab.map((c) => (
+              <th key={c} className="py-1 pr-3 font-medium">
+                {c}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
           {linhas.map((l, i) => (
             <tr key={i} className="border-t" style={{ borderColor: "var(--border)" }}>
-              {l.map((c, j) => <td key={j} className="py-1.5 pr-3 align-top tabular-nums">{c}</td>)}
+              {l.map((c, j) => (
+                <td key={j} className="py-1.5 pr-3 align-top tabular-nums">
+                  {c}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
@@ -56,20 +85,32 @@ function JornadaPage() {
   const { clientId } = Route.useParams();
   const [q, setQ] = useState("");
   const [pessoa, setPessoa] = useState<string | null>(null);
+  const { start, end } = resolveDateRange(clientLayoutRoute.useSearch());
+  const diag = useDiagnosticoComercial(clientId, start, end);
 
   const resumo = useQuery({
-    queryKey: ["jornada", clientId],
+    queryKey: ["jornada", clientId, start, end],
     queryFn: async () => {
-      const { data, error } = await rpc("jornada_resumo", { p_client: clientId });
+      // Versão com período (só leads criados no período e sem os removidos no CRM de origem).
+      const { data, error } = await rpc("jornada_resumo", {
+        p_client: clientId,
+        p_de: start,
+        p_ate: end,
+      });
       if (error) throw new Error(error.message);
-      return data as any;
+      // A função devolve um objeto; se vier lista (ou nada), trata como "sem resumo" em vez de quebrar a tela.
+      const obj = Array.isArray(data) ? data[0] : data;
+      return obj && typeof obj === "object" && "leads_total" in obj ? (obj as any) : null;
     },
   });
   const busca = useQuery({
     queryKey: ["jornada-busca", clientId, q],
     enabled: q.trim().length >= 2,
     queryFn: async () => {
-      const { data, error } = await rpc("buscar_pessoas", { p_client: clientId, p_q: q.trim() });
+      const { data, error } = await rpc("buscar_pessoas", {
+        p_client: clientId,
+        p_q: q.trim(),
+      });
       if (error) throw new Error(error.message);
       return (data ?? []) as any[];
     },
@@ -85,11 +126,69 @@ function JornadaPage() {
   });
 
   const r = resumo.data;
+  const d = diag.data;
+  const tabelas = r && ((r.por_origem?.length ?? 0) > 0 || (r.posts?.length ?? 0) > 0 || (r.links?.length ?? 0) > 0);
   return (
     <div className="space-y-4">
-      <Painel icone={RouteIcon} titulo="Jornada: do post à venda" resumo="Cada pessoa ligada por telefone, @ do Instagram ou identificador do atendimento. O que cruzou e o que ainda está solto.">
-        {resumo.isLoading && <p className="text-sm">Calculando…</p>}
+      <JornadaFunil clientId={clientId} start={start} end={end} />
+
+      <Painel icone={Filter} titulo="Onde a jornada quebra" resumo={`Do lead à venda · ${formatRangeLabel({ start, end })}`}>
+        {diag.isLoading && <Carregando texto="Calculando onde a jornada quebra…" linhas={2} />}
+        {diag.error && <p className="text-sm">{(diag.error as Error).message}</p>}
+        {d && <FunilOndeQuebra funil={d.funil} />}
+        {d && (d.limitacoes?.length ?? 0) > 0 && <ListaLimitacoes itens={d.limitacoes} titulo="O que limita esta leitura" />}
+      </Painel>
+
+      {d && (
+        <Painel
+          icone={ScanSearch}
+          titulo="O que falta para ligar post, conversa e venda"
+          resumo="Checklist de rastreamento: cada item que falta deixa um pedaço da jornada no escuro"
+          cor="var(--s7)"
+        >
+          <ChecklistDados itens={d.checklist} clientId={clientId} compacto />
+        </Painel>
+      )}
+
+      <Painel
+        icone={RouteIcon}
+        titulo="Jornada: do post à venda"
+        resumo="Cada pessoa ligada por telefone, @ do Instagram ou identificador do atendimento. O que cruzou e o que ainda está solto."
+      >
+        <OQueE>
+          Uma “pessoa” é alguém que o painel reconheceu em mais de um lugar pelo mesmo telefone ou @. Comentou num post, chamou no WhatsApp
+          e virou lead no CRM: aparece uma vez só. Os números são do período escolhido: leads criados no período (sem os removidos no CRM),
+          comentários e conversas que aconteceram nele.
+        </OQueE>
+        {resumo.isLoading && <Carregando texto="Ligando post, conversa e venda…" linhas={2} />}
         {resumo.error && <p className="text-sm">{(resumo.error as Error).message}</p>}
+        {r && r.leads_total > 0 && (
+          <div
+            className="mb-3 rounded-xl border p-3"
+            style={{
+              borderColor: r.leads_sem_pessoa / r.leads_total >= 0.5 ? "var(--danger-border)" : "var(--warn-border)",
+              background: r.leads_sem_pessoa / r.leads_total >= 0.5 ? "var(--danger-bg)" : "var(--warn-bg)",
+            }}
+          >
+            <div className="text-3xl font-semibold tabular-nums">{pct(r.leads_sem_pessoa, r.leads_total)}</div>
+            <p className="text-sm" style={{ color: "var(--text)" }}>
+              dos leads criados no período <b>não estão ligados</b> a nenhuma pessoa ({r.leads_sem_pessoa.toLocaleString("pt-BR")} de{" "}
+              {r.leads_total.toLocaleString("pt-BR")}).
+            </p>
+            {r.escopo && (
+              <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
+                Escopo: {r.leads_total.toLocaleString("pt-BR")} leads criados de {formatRangeLabel({ start, end })}. A base inteira tem{" "}
+                {Number(r.escopo.leads_base_toda).toLocaleString("pt-BR")} leads ativos
+                {Number(r.escopo.leads_removidos_na_origem) > 0 ? ` e ${Number(r.escopo.leads_removidos_na_origem).toLocaleString("pt-BR")} removidos no CRM (não entram)` : ""}. O Comercial mostra a base
+                inteira e só os leads com etapa conhecida, por isso o número lá é diferente.
+              </p>
+            )}
+            <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
+              Sem telefone, @ ou conversa guardada não dá para ligar. O painel só liga quando o telefone, o @ ou o identificador da conversa
+              (sessionId do WTS) batem exatamente — nunca por nome parecido. Quanto mais conversas puxadas, mais ligam.
+            </p>
+          </div>
+        )}
         {r && (
           <>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
@@ -100,62 +199,111 @@ function JornadaPage() {
               <Etapa n={r.ganhos} rotulo={`compraram${r.receita > 0 ? ` · ${brl(r.receita)}` : ""}`} base={r.pessoas} />
             </div>
             <div className="mt-3 grid gap-2 text-sm md:grid-cols-3">
-              <div>Comentaram <b>e</b> viraram lead: <b>{r.comentaram_e_lead}</b></div>
-              <div>Conversaram <b>e</b> viraram lead: <b>{r.conversaram_e_lead}</b></div>
-              <div>Comentaram <b>e</b> conversaram: <b>{r.comentaram_e_conversaram}</b></div>
+              <div>
+                Comentaram <b>e</b> viraram lead: <b>{r.comentaram_e_lead}</b>
+              </div>
+              <div>
+                Conversaram <b>e</b> viraram lead: <b>{r.conversaram_e_lead}</b>
+              </div>
+              <div>
+                Comentaram <b>e</b> conversaram: <b>{r.comentaram_e_conversaram}</b>
+              </div>
             </div>
-            {r.leads_sem_pessoa > 0 && (
-              <p className="mt-3 rounded-lg border p-2 text-xs" style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}>
-                {r.leads_sem_pessoa.toLocaleString("pt-BR")} de {r.leads_total.toLocaleString("pt-BR")} leads do CRM ainda não foram ligados a uma pessoa
-                (sem telefone, @ ou conversa guardada). Quanto mais conversas puxadas, mais ligam.
-              </p>
-            )}
           </>
         )}
       </Painel>
 
-      {r && r.por_origem.length > 0 && (
-        <Painel icone={RouteIcon} titulo="Resultado por origem do lead" resumo="Origem que o CRM registrou: leads, vendas e receita.">
-          <Tabela
-            cab={["Origem", "Leads", "Vendas", "Conversão", "Receita"]}
-            linhas={r.por_origem.map((o: any) => [o.o, o.leads, o.ganhos, pct(o.ganhos, o.leads), o.receita > 0 ? brl(o.receita) : "—"])}
-          />
-        </Painel>
+      {tabelas && (
+        <details className="group rounded-xl border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+          <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-2 px-4 text-sm font-semibold">
+            Ver dados detalhados (origem, posts e links)
+            <ChevronDown size={16} aria-hidden className="transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="space-y-4 p-3 pt-0 sm:p-4 sm:pt-0">
+            {r && (r.por_origem?.length ?? 0) > 0 && (
+              <Painel icone={RouteIcon} titulo="Resultado por origem do lead" resumo="Origem que o CRM registrou: leads, vendas e receita.">
+                <Tabela
+                  cab={["Origem", "Leads", "Vendas", "Conversão", "Receita"]}
+                  linhas={r.por_origem.map((o: any) => [
+                    o.o,
+                    o.leads,
+                    o.ganhos,
+                    pct(o.ganhos, o.leads),
+                    o.receita > 0 ? brl(o.receita) : "—",
+                  ])}
+                />
+              </Painel>
+            )}
+
+            {r && (r.posts?.length ?? 0) > 0 && (
+              <Painel
+                icone={RouteIcon}
+                titulo="Posts que geraram gente de verdade"
+                resumo="Quem comentou no post e depois virou lead ou comprou."
+              >
+                <Tabela
+                  cab={["Post", "Comentaristas", "Viraram lead", "Compraram", "Receita"]}
+                  linhas={r.posts.map((p: any) => [
+                    <a key={p.id} href={p.permalink ?? "#"} target="_blank" rel="noreferrer" className="underline">
+                      {(p.legenda || "(sem legenda)").slice(0, 70)}
+                    </a>,
+                    p.comentaristas,
+                    p.viraram_lead,
+                    p.ganhos,
+                    p.receita > 0 ? brl(p.receita) : "—",
+                  ])}
+                />
+              </Painel>
+            )}
+
+            {r && (r.links?.length ?? 0) > 0 && (
+              <Painel
+                icone={RouteIcon}
+                titulo="Links rastreados"
+                resumo="Clique → conversa → lead → venda, pelo código que vai na mensagem."
+              >
+                <Tabela
+                  cab={["Link", "Tipo", "Cliques", "Conversas", "Leads", "Vendas"]}
+                  linhas={r.links.map((l: any) => [
+                    l.titulo ?? l.short_url,
+                    l.tipo,
+                    l.cliques_total ?? 0,
+                    l.conversas,
+                    l.viraram_lead,
+                    l.ganhos,
+                  ])}
+                />
+              </Painel>
+            )}
+          </div>
+        </details>
       )}
 
-      {r && r.posts.length > 0 && (
-        <Painel icone={RouteIcon} titulo="Posts que geraram gente de verdade" resumo="Quem comentou no post e depois virou lead ou comprou.">
-          <Tabela
-            cab={["Post", "Comentaristas", "Viraram lead", "Compraram", "Receita"]}
-            linhas={r.posts.map((p: any) => [
-              <a key={p.id} href={p.permalink ?? "#"} target="_blank" rel="noreferrer" className="underline">{(p.legenda || "(sem legenda)").slice(0, 70)}</a>,
-              p.comentaristas, p.viraram_lead, p.ganhos, p.receita > 0 ? brl(p.receita) : "—",
-            ])}
-          />
-        </Painel>
-      )}
-
-      {r && r.links.length > 0 && (
-        <Painel icone={RouteIcon} titulo="Links rastreados" resumo="Clique → conversa → lead → venda, pelo código que vai na mensagem.">
-          <Tabela
-            cab={["Link", "Tipo", "Cliques", "Conversas", "Leads", "Vendas"]}
-            linhas={r.links.map((l: any) => [l.titulo ?? l.short_url, l.tipo, l.cliques_total ?? 0, l.conversas, l.viraram_lead, l.ganhos])}
-          />
-        </Painel>
-      )}
-
-      <Painel icone={Search} titulo="Linha do tempo de uma pessoa" resumo="Busque por nome, @ do Instagram ou os 4+ últimos dígitos do telefone.">
+      <Painel
+        icone={Search}
+        titulo="Linha do tempo de uma pessoa"
+        resumo="Busque por nome, @ do Instagram ou os 4+ últimos dígitos do telefone."
+      >
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Nome, @ ou telefone"
-          className="mb-2 w-full rounded-lg border px-3 py-2 text-sm"
+          className="mb-2 min-h-[44px] w-full rounded-lg border px-3 py-2 text-base sm:text-sm"
           style={{ borderColor: "var(--border)", background: "var(--surface)" }}
         />
         <div className="flex flex-wrap gap-1.5">
           {busca.data?.map((p) => (
-            <button key={p.id} onClick={() => setPessoa(p.id)} className="rounded-lg border px-2 py-1 text-xs" style={{ borderColor: p.id === pessoa ? "var(--accent)" : "var(--border)" }}>
-              {p.nome ?? p.ig_username ?? "Sem nome"} {p.telefone_final ? `· ${p.telefone_final}` : ""} {p.ig_username ? `· @${p.ig_username}` : ""}
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setPessoa(p.id)}
+              className="min-h-[44px] max-w-full truncate rounded-lg border px-3 py-1 text-left text-xs"
+              style={{
+                borderColor: p.id === pessoa ? "var(--accent)" : "var(--border)",
+              }}
+            >
+              {p.nome ?? p.ig_username ?? "Sem nome"} {p.telefone_final ? `· ${p.telefone_final}` : ""}{" "}
+              {p.ig_username ? `· @${p.ig_username}` : ""}
             </button>
           ))}
         </div>
@@ -165,19 +313,27 @@ function JornadaPage() {
             <ol className="space-y-1.5 border-l pl-3" style={{ borderColor: "var(--border)" }}>
               {detalhe.data.linha.map((e: any, i: number) => (
                 <li key={i} className="text-sm">
-                  <span className="text-xs" style={{ color: "var(--text-faint)" }}>{quando(e.quando)} </span>
+                  <span className="text-xs" style={{ color: "var(--text-faint)" }}>
+                    {quando(e.quando)}{" "}
+                  </span>
                   {ROTULO[e.tipo] ?? e.tipo}
-                  {e.legenda ? <span style={{ color: "var(--text-dim)" }}> — “{e.legenda}”</span> : e.detalhe ? <span style={{ color: "var(--text-dim)" }}> — {e.detalhe}</span> : null}
+                  {e.legenda ? (
+                    <span style={{ color: "var(--text-dim)" }}> — “{e.legenda}”</span>
+                  ) : e.detalhe ? (
+                    <span style={{ color: "var(--text-dim)" }}> — {e.detalhe}</span>
+                  ) : null}
                 </li>
               ))}
             </ol>
             <div className="flex flex-wrap gap-1.5">
               {detalhe.data.leads.map((l: any, i: number) => (
                 <Selo key={i} cor={l.resultado === "won" ? "var(--accent)" : "var(--muted)"}>
-                  {l.resultado === "won" ? "Comprou" : l.resultado === "lost" ? "Perdido" : "Em aberto"}{l.valor > 0 ? ` · ${brl(Number(l.valor))}` : ""}{l.origem ? ` · ${l.origem}` : ""}
+                  {l.resultado === "won" ? "Comprou" : l.resultado === "lost" ? "Perdido" : "Em aberto"}
+                  {l.valor > 0 ? ` · ${brl(Number(l.valor))}` : ""}
+                  {l.origem ? ` · ${l.origem}` : ""}
                 </Selo>
               ))}
-              {detalhe.data.conversas.length > 0 && <Selo>{detalhe.data.conversas.length} conversa(s) no WhatsApp</Selo>}
+              {(detalhe.data.conversas?.length ?? 0) > 0 && <Selo>{detalhe.data.conversas.length} conversa(s) no WhatsApp</Selo>}
             </div>
           </div>
         )}

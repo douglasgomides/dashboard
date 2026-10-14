@@ -27,10 +27,14 @@ export async function recordSyncStatus(
   supabase: SupabaseClient<any, any, any>,
   clientId: string,
   fonte: FonteSync,
-  r: { ok: boolean; rows?: number | null; error?: string | null; dataAte?: string | null },
+  r: { ok: boolean; rows?: number | null; error?: string | null; dataAte?: string | null; preservaBloqueio?: boolean },
 ): Promise<void> {
   try {
     const agora = new Date().toISOString();
+    // O sync automático (cron/n8n) não informa até que data o dado vai; só o botão manual informava. Resultado: o
+    // carimbo "Dados até" ficava preso na data do último clique manual, semanas atrás, mesmo com o sync rodando todo
+    // dia. Sucesso sem data informada lê a data real do banco (mesma regra do botão e da RPC client_sync_status).
+    if (r.ok && !r.dataAte) r = { ...r, dataAte: await lerDadosAte(supabase, clientId, fonte) };
     const linha: Record<string, unknown> = {
       client_id: clientId,
       fonte,
@@ -64,9 +68,13 @@ async function registrarMotivoInstagram(
   supabase: SupabaseClient<any, any, any>,
   clientId: string,
   fonte: FonteSync,
-  r: { ok: boolean; error?: string | null },
+  r: { ok: boolean; error?: string | null; preservaBloqueio?: boolean },
 ): Promise<void> {
   if (fonte !== "instagram") return;
+  // O sync da Windsor (06h30) só traz as métricas diárias da conta; os posts vêm da Graph (06h). Sucesso da
+  // Windsor apagava o aviso de bloqueio gravado pela Graph meia hora antes, e a conta parecia "sem erro"
+  // com os posts parados (Dra. Marcelly Achkar, "API access blocked" desde 18/09). Ela não limpa mais.
+  if (r.ok && r.preservaBloqueio) return;
   try {
     const bloqueado = !r.ok && !!r.error && BLOQUEIO_INSTAGRAM.test(r.error);
     await supabase.from("sync_status").upsert(
@@ -93,7 +101,7 @@ export async function recordSyncStatusPorCliente(
   supabase: SupabaseClient<any, any, any>,
   fonte: FonteSync,
   itens: { clientId: string; rows: number; errors: string[] }[],
-  opts: { okSeHouveLinhas?: boolean } = {},
+  opts: { okSeHouveLinhas?: boolean; preservaBloqueio?: boolean } = {},
 ): Promise<void> {
   const porCliente = new Map<string, { rows: number; errors: string[] }>();
   for (const i of itens) {
@@ -109,6 +117,7 @@ export async function recordSyncStatusPorCliente(
       ok: a.errors.length === 0 || (!!opts.okSeHouveLinhas && a.rows > 0),
       rows: a.rows,
       error: a.errors[0],
+      preservaBloqueio: opts.preservaBloqueio,
     });
   }
 }
@@ -136,7 +145,22 @@ export async function lerDadosAte(
         .maybeSingle();
       return soData((data as Record<string, string> | null)?.[coluna]);
     };
-    if (fonte === "anuncios") return await topo("meta_ads_daily", "date");
+    // Cliente lido só pela planilha de distribuição de conteúdo (sem conta de anúncios nossa) tem o dado em ads_planilha_semanal.
+    if (fonte === "anuncios") {
+      const diario = await topo("meta_ads_daily", "date");
+      if (diario) return diario;
+      // Planilha: ignora a linha com data no futuro (o bloco "30/12/2026"), que não é uma análise de verdade.
+      const hoje = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+      const { data } = await supabase
+        .from("ads_planilha_semanal")
+        .select("analise_em")
+        .eq("client_id", clientId)
+        .lte("analise_em", hoje)
+        .order("analise_em", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return soData((data as { analise_em?: string } | null)?.analise_em);
+    }
     // Data do lead (occurred_at), não a da sincronização: o Kommo grava received_at = agora a cada rodada.
     if (fonte === "crm") return (await topo("crm_leads", "occurred_at")) ?? (await topo("crm_leads", "received_at"));
     if (fonte === "atendimento") return await topo("wts_sessions", "started_at");

@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";
 import { runMetaAdsGraphSync } from "../_lib/meta-ads-graph-sync.js";
+import { runAdsPlanilhaSync } from "../_lib/ads-planilha-sync.js";
 import { runMetaGraphSync } from "../_lib/meta-graph-sync.js";
 import { runInstagramSync } from "../_lib/instagram-sync.js";
 import { runWtsSync } from "../_lib/wts-sync.js";
@@ -10,12 +11,14 @@ import { runKommoLeadsSync } from "../_lib/kommo-leads-sync.js";
 import { runClintSync } from "../_lib/clint-sync.js";
 import { runRdStationSync } from "../_lib/rdstation-sync.js";
 import { runFlwChatSync } from "../_lib/flwchat-sync.js";
-import { lerAudiencia } from "../_lib/meta-audiencia.js";
+import { lerAudiencia, lerResumoPeriodo } from "../_lib/meta-audiencia.js";
 import { classificarConteudoComIA } from "../_lib/conteudo-ia.js";
 import { ingerirConversasWts } from "../_lib/conversas-wts.js";
 import { enriquecerContatosKommo } from "../_lib/kommo-contatos.js";
 import { criarLinkShort, cliquesDoLink, destinoWhatsApp, novoCodigoRef } from "../_lib/shortio.js";
 import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_lib/sync-status.js";
+import { rodarConferencia, rodarEtapa, ETAPAS, type EtapaId, type Achado, type Verificado } from "../_lib/conferencia.js";
+import { resumirConversa } from "../_lib/resumo-conversa.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
 //
@@ -88,8 +91,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos"];
-  if (!client_id || !alvo || !ALVOS.includes(alvo)) {
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa"];
+  // "conferencia" olha todos os clientes de uma vez (só admin), por isso não exige client_id.
+  const alvoGlobal = alvo === "conferencia";
+  if ((!client_id && !alvoGlobal) || !alvo || !ALVOS.includes(alvo)) {
     res.status(400).json({ error: "Informe client_id e alvo ('tudo', 'posts', 'anuncios', 'atendimento', 'comentarios' ou 'crm')" });
     return;
   }
@@ -101,6 +106,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .maybeSingle();
 
   if (!ehAdmin) {
+    if (alvoGlobal) {
+      res.status(403).json({ error: "Só admin" });
+      return;
+    }
     const { data: ehMembro } = await admin
       .from("client_members")
       .select("user_id")
@@ -114,6 +123,66 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    if (alvoGlobal) {
+      const { etapa, conferencia_id } = (req.body ?? {}) as { etapa?: string; conferencia_id?: string };
+      // Sem etapa: conferência inteira numa chamada (modo antigo).
+      if (!etapa) {
+        const resultado = await rodarConferencia(admin, { tokenGlobalAnuncios: process.env.META_ADS_TOKEN });
+        res.status(200).json({ alvo, ok: true, ...resultado });
+        return;
+      }
+      // Por etapas: a tela chama "inicio", depois cada etapa, depois "fim". Cada etapa grava seu
+      // resultado na rodada (conferencias_dados), então a última conferência fica salva com data e hora.
+      if (etapa === "inicio") {
+        const { data: nova, error } = await admin.from("conferencias_dados").insert({ iniciada_por: quem.user.id }).select("id, iniciada_em").single();
+        if (error) throw new Error(error.message);
+        res.status(200).json({ alvo, ok: true, conferencia_id: nova.id, iniciada_em: nova.iniciada_em, etapas: ETAPAS });
+        return;
+      }
+      if (!conferencia_id) {
+        res.status(400).json({ error: "Informe conferencia_id" });
+        return;
+      }
+      const { data: atual, error: erroLer } = await admin.from("conferencias_dados").select("*").eq("id", conferencia_id).maybeSingle();
+      if (erroLer || !atual) {
+        res.status(404).json({ error: "Conferência não encontrada" });
+        return;
+      }
+      if (etapa === "fim") {
+        const { error } = await admin.from("conferencias_dados").update({ concluida_em: new Date().toISOString() }).eq("id", conferencia_id);
+        if (error) throw new Error(error.message);
+        res.status(200).json({ alvo, ok: true });
+        return;
+      }
+      if (!(ETAPAS as readonly string[]).includes(etapa)) {
+        res.status(400).json({ error: "Etapa desconhecida" });
+        return;
+      }
+      const t0 = Date.now();
+      let registro: Record<string, unknown>;
+      let r: Awaited<ReturnType<typeof rodarEtapa>> | null = null;
+      try {
+        r = await rodarEtapa(admin, etapa as EtapaId, { tokenGlobalAnuncios: process.env.META_ADS_TOKEN });
+        registro = { etapa, status: "ok", achados: r.achados.length, verificados: r.verificados.length, ms: Date.now() - t0 };
+      } catch (e) {
+        registro = { etapa, status: "erro", erro: erroCurto(e instanceof Error ? e.message : String(e), 200), ms: Date.now() - t0 };
+      }
+      // Rodar a mesma etapa de novo substitui o resultado anterior dela (não duplica).
+      const etapas = [...((atual.etapas as any[]) ?? []).filter((x) => x.etapa !== etapa), registro];
+      const achados = [...((atual.achados as Achado[]) ?? []).filter((a) => a.etapa !== etapa), ...(r?.achados ?? [])];
+      const verificados = [...((atual.verificados as Verificado[]) ?? []).filter((v) => v.etapa !== etapa), ...(r?.verificados ?? [])];
+      const extra: Record<string, unknown> = {};
+      if (r?.contas_vistas_na_meta != null) extra.contas_vistas_na_meta = r.contas_vistas_na_meta;
+      if (r?.tokens_testados != null) extra.tokens_testados = r.tokens_testados;
+      const { error: erroGravar } = await admin.from("conferencias_dados").update({ etapas, achados, verificados, ...extra }).eq("id", conferencia_id);
+      if (erroGravar) throw new Error(erroGravar.message);
+      res.status(200).json({ alvo, ok: true, ...registro, novos: r?.achados ?? [], novos_verificados: r?.verificados ?? [] });
+      return;
+    }
+    if (!client_id) {
+      res.status(400).json({ error: "Informe client_id" });
+      return;
+    }
     async function sincronizarAnuncios() {
       // Anúncios vêm de DUAS fontes: a Graph API (token próprio, contas em
       // client_ad_accounts — ex.: Dr. Sergio) e a Windsor. Cada conta é
@@ -129,6 +198,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let linhas = 0;
       let temConta = false;
       let graphTemConta = false;
+      let windsorTemConta = false;
       const erros: string[] = [];
 
       {
@@ -155,16 +225,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           clientId: client_id,
         });
         if (w.length > 0) temConta = true;
+        if (w.length > 0) windsorTemConta = true;
         linhas += w.reduce((a, c) => a + c.rows, 0);
         // Erro da Windsor só vale quando a Graph não serve este cliente; do
         // contrário é o ruído esperado de conta que a Windsor não enxerga.
         if (!graphTemConta) erros.push(...w.flatMap((c) => c.errors));
       }
 
+      // Planilha de distribuição de conteúdo (clients.ads_planilha_url): para quem a Meta e a Windsor não enxergam a conta.
+      {
+        const pl = await runAdsPlanilhaSync({ supabaseUrl: urlSupabase, supabaseServiceRoleKey: chaveServico, onlyClientId: client_id });
+        if (pl.length > 0) temConta = true;
+        linhas += pl.reduce((a, c) => a + c.rows, 0);
+        erros.push(...pl.flatMap((c) => c.errors));
+      }
+
       if (!temConta) {
         return { nada_a_fazer: "Este cliente não tem conta de anúncio ligada ao cadastro." };
       }
-      return { linhas, erros };
+      // Só a planilha alimentou (nem Graph nem Windsor leem conta deste cliente): "dados até" não se aplica.
+      return { linhas, erros, so_planilha: !graphTemConta && !windsorTemConta };
     }
 
     async function sincronizarAtendimento() {
@@ -435,13 +515,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const ok = errosLista.length === 0;
       const dadosAte = await lerDadosAte(admin, client_id as string, fonte);
+      // O registro guarda a data; a resposta ao botão não a mostra quando só a planilha alimentou (não é "atualizado até").
       await recordSyncStatus(admin, client_id as string, fonte, {
         ok,
         rows: linhas,
         error: erro,
         dataAte: dadosAte,
       });
-      return { ...r, ok, linhas, erro, dados_ate: dadosAte };
+      return { ...r, ok, linhas, erro, dados_ate: r?.so_planilha ? null : dadosAte };
     }
 
     // Audiência (demografia, origem, horários, stories no ar): leitura ao vivo da Meta, nada é gravado.
@@ -476,7 +557,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
+    // Números do período escolhido, do jeito do painel do Instagram (alcance ÚNICO, não a soma dos dias). Leitura ao vivo,
+    // nada é gravado; guarda 20 minutos na memória da função, por cliente e período.
+    if (alvo === "periodo_instagram") {
+      const b = (req.body ?? {}) as { de?: string; ate?: string };
+      const iso = /^\d{4}-\d{2}-\d{2}$/;
+      if (!b.de || !b.ate || !iso.test(b.de) || !iso.test(b.ate)) {
+        res.status(400).json({ error: "Informe de e ate (YYYY-MM-DD)" });
+        return;
+      }
+      const chave = `${client_id}:${b.de}:${b.ate}`;
+      const memoria: Map<string, { t: number; d: unknown }> = ((globalThis as any).__periodoIgCache ??= new Map());
+      const guardado = memoria.get(chave);
+      if (guardado && Date.now() - guardado.t < 20 * 60_000) {
+        res.status(200).json({ alvo, ok: true, dados: guardado.d, do_cache: true });
+        return;
+      }
+      const { data: contasIg, error: erroIg } = await admin
+        .from("instagram_accounts")
+        .select("id, windsor_account_id, sync_source")
+        .eq("client_id", client_id)
+        .eq("active", true);
+      if (erroIg) throw new Error(erroIg.message);
+      const conta = (contasIg ?? []).find((c) => c.sync_source === "meta_graph" && c.windsor_account_id);
+      if (!conta) {
+        res.status(200).json({ alvo, ok: true, nada_a_fazer: "Instagram sem token próprio da Meta: o alcance único do período não está disponível." });
+        return;
+      }
+      const { data: segredo } = await admin.from("instagram_account_secrets").select("meta_access_token").eq("instagram_account_id", conta.id).maybeSingle();
+      const tokenIg = segredo?.meta_access_token ?? META_ACCESS_TOKEN;
+      if (!tokenIg) {
+        res.status(200).json({ alvo, ok: false, erro: "Instagram sem token da Meta configurado." });
+        return;
+      }
+      const dados = await lerResumoPeriodo({ igId: conta.windsor_account_id as string, token: tokenIg, de: b.de, ate: b.ate });
+      memoria.set(chave, { t: Date.now(), d: dados });
+      res.status(200).json({ alvo, ok: true, dados });
+      return;
+    }
+
     // ---- Conversas do WhatsApp (WTS): grava mensagens, pessoa e toque. Só admin: é dado de paciente. ----
+    if (alvo === "resumo_conversa") {
+      const conversaId = (req.body ?? {}).conversa_id as string | undefined;
+      if (!conversaId) {
+        res.status(400).json({ error: "Informe conversa_id" });
+        return;
+      }
+      const r = await resumirConversa(admin, client_id, conversaId, quem.user.id);
+      res.status(200).json({ alvo, ok: true, ...r });
+      return;
+    }
     if (alvo === "conversas") {
       if (!ehAdmin) {
         res.status(403).json({ error: "Só admin ingere conversas" });

@@ -14,17 +14,25 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { getClient, getMonthlyMetrics, getPostsForAnalytics } from "@/lib/client-data";
+import { type Metrica } from "@/lib/resultado";
+import { useResultado } from "@/hooks/use-resultado";
+import { DiagnosticoEstrategico } from "@/components/diagnostico-estrategico";
+import { InsightCard, ListaLimitacoes, SeloStatus, BotaoAcao, OQueE, COR_TOM } from "@/components/insight-card";
+import { NextBestActionCard, NextBestActionPanel, usePainelNBA } from "@/components/next-best-action";
 import { ResumoDoMes } from "@/components/resumo-do-mes";
+import { QualidadeDados } from "@/components/qualidade-dados";
+import { fmtFormatKey } from "@/lib/report-metrics";
+import { analyzeGrowth } from "@/lib/hub-conteudo";
+import { Link } from "@tanstack/react-router";
 import { SyncButton } from "@/components/sync-button";
 import { useAuth } from "@/hooks/use-auth";
 import { formatLabel } from "@/lib/methodology";
 import type { ContentFormat } from "@/integrations/supabase/types";
-import { brazilWeekdayAndHour, computeFormatBreakdown, computeFormatInsight, fmtFormatKey, median } from "@/lib/report-metrics";
+import { brazilWeekdayAndHour, computeFormatBreakdown, computeFormatInsight, median } from "@/lib/report-metrics";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum } from "@/lib/format";
-import { UserPlus, Eye, Activity, Bookmark, Trophy, TrendingDown, MousePointerClick, LineChart as LineIcon, Clock, Gauge, BarChart3, Download, Loader2, Lightbulb } from "lucide-react";
-import { Painel, Kpi, BarraFina, Miniatura } from "@/components/visual";
+import { Eye, Activity, Bookmark, Clock, Gauge, BarChart3, Download, Loader2, Lightbulb, UserPlus, MousePointerClick, Trophy, TrendingDown, LineChart as LineIcon, ChevronRight } from "lucide-react";
+import { Painel, BarraFina, Miniatura, Kpi } from "@/components/visual";
 
 export const Route = createFileRoute("/_authenticated/$clientId/")({
   component: MonthlyOverview,
@@ -39,6 +47,7 @@ const PERIODS = [
   { label: "Tarde (12h–17h)", test: (h: number) => h >= 12 && h < 18 },
   { label: "Noite (18h–23h)", test: (h: number) => h >= 18 },
 ];
+
 
 function sum(rows: { [k: string]: any }[], key: string) {
   return rows.reduce((acc, r) => acc + (r[key] ?? 0), 0);
@@ -58,7 +67,7 @@ function SinaisDeInteresse({ reach, contactTaps, newFollowers }: { reach: number
       ajuda="A Meta depreciou “visitas ao perfil” na API, então não dá mais para montar um funil real com % de conversão entre essas etapas. São sinais paralelos, não um funil sequencial."
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance" valor={reach.toLocaleString("pt-BR")} />
+        <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance (soma dos dias)" valor={reach.toLocaleString("pt-BR")} dica="soma do alcance de cada dia; a mesma pessoa conta em mais de um dia" />
         <Kpi icone={MousePointerClick} cor="var(--s2)" rotulo="Toques em contato" valor={contactTaps.toLocaleString("pt-BR")} dica="endereço, ligar, e-mail, mensagem" />
         <Kpi icone={UserPlus} cor="var(--s3)" rotulo="Novos seguidores" valor={newFollowers.toLocaleString("pt-BR")} dica="só últimos 30 dias (limite do Instagram, não do período escolhido)" />
       </div>
@@ -83,7 +92,7 @@ function PostList({ posts }: { posts: any[] }) {
           >
             <Miniatura url={p.thumbnail_url} formato={p.format} className="h-12 w-12" />
             <span className="min-w-0 flex-1">
-              <span className="line-clamp-1 block font-medium">{(p.caption ?? p.windsor_media_id).split("\n")[0].slice(0, 90)}</span>
+              <span className="line-clamp-1 block font-medium" title={String((p.caption ?? p.windsor_media_id).split("\n")[0].slice(0, 90) ?? "")}>{(p.caption ?? p.windsor_media_id).split("\n")[0].slice(0, 90)}</span>
               <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums" style={{ color: "var(--text-dim)" }}>
                 <span>{p.posted_at && new Date(p.posted_at).toLocaleDateString("pt-BR")}</span>
                 <span className="inline-flex items-center gap-1"><Eye size={12} /> {(p.reach ?? 0).toLocaleString("pt-BR")}</span>
@@ -167,8 +176,8 @@ function MelhoresHorarios({ posts, periodLabel }: { posts: any[]; periodLabel: s
                       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold" style={{ background: idx === 0 ? "var(--warn)" : "var(--surface-2)", color: idx === 0 ? "#1a1a19" : "var(--text-dim)" }}>
                         {idx + 1}
                       </span>
-                      <b className="truncate">{r.weekday}</b>
-                      <span className="truncate text-xs" style={{ color: "var(--text-dim)" }}>{r.period}</span>
+                      <b className="truncate" title={String(r.weekday ?? "")}>{r.weekday}</b>
+                      <span className="truncate text-xs" style={{ color: "var(--text-dim)" }} title={String(r.period ?? "")}>{r.period}</span>
                     </span>
                     <span className="shrink-0 text-xs font-semibold tabular-nums" style={{ color: vsMedian >= 0 ? "var(--good-text)" : "var(--text-dim)" }}>
                       {vsMedian >= 0 ? "▲ +" : "▼ "}
@@ -293,6 +302,56 @@ function DrillDownDoDia({ date, posts }: { date: string | null; posts: any[] }) 
   );
 }
 
+function MetricaCard({ m, clientId }: { m: Metrica; clientId: string }) {
+  const c = m.status ? COR_TOM[m.status] : null;
+  return (
+    <article className="flex flex-col rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)", borderTop: c ? `3px solid ${c.borda}` : undefined }}>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-sm font-medium" style={{ color: "var(--text-dim)" }}>
+          {m.rotulo}
+        </h3>
+        {m.status ? <SeloStatus tom={m.status} texto={m.selo} /> : <span className="text-[11px]" style={{ color: "var(--text-faint)" }}>sem referência</span>}
+      </div>
+      <div className="mt-1.5 text-2xl font-semibold tabular-nums leading-tight">{m.valor}</div>
+      {m.statusTexto && (
+        <div className="mt-1 text-xs font-medium" style={{ color: c?.cor ?? "var(--text-dim)" }}>
+          {m.statusTexto}
+        </div>
+      )}
+      {m.comparacao && (
+        <div className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
+          {m.comparacao}
+        </div>
+      )}
+      <div className="mt-2">
+        <OQueE>
+          {m.explicacao}
+          {m.fonte ? <span className="mt-1 block" style={{ color: "var(--text-faint)" }}>Fonte da referência: {m.fonte}</span> : null}
+        </OQueE>
+      </div>
+      {m.rota && m.botao && (
+        <div className="mt-auto pt-3">
+          <BotaoAcao texto={m.botao} rota={m.rota} clientId={clientId} variante="secundario" />
+        </div>
+      )}
+    </article>
+  );
+}
+
+function Secao({ numero, titulo, children }: { numero: number; titulo: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="flex items-center gap-2 text-base font-semibold">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ background: "var(--surface-2)", color: "var(--text-dim)" }}>
+          {numero}
+        </span>
+        {titulo}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
 function MonthlyOverview() {
   const { clientId } = Route.useParams();
   const { isAdmin } = useAuth();
@@ -302,72 +361,45 @@ function MonthlyOverview() {
   const [selectedDateMonthly, setSelectedDateMonthly] = useState<string | null>(null);
   const [selectedDateTrend, setSelectedDateTrend] = useState<string | null>(null);
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [analisesAbertas, setAnalisesAbertas] = useState(false);
+  const painel = usePainelNBA();
 
-  const { data: client } = useQuery({
-    queryKey: ["client", clientId],
-    queryFn: () => getClient(clientId),
-  });
+  const { r, hoje, fim, diasPeriodo, metricas, anterior, posts, periodoIg, fontes } = useResultado(clientId, start, end);
+  void hoje;
 
-  const { data: rows, isLoading } = useQuery({
-    queryKey: ["monthly-metrics", clientId, start, end],
-    queryFn: () => getMonthlyMetrics(clientId, start, end),
-  });
-
-  // Período anterior, do mesmo tamanho, só para mostrar a variação quando houver dado nos dois lados.
-  const diasPeriodo = Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1);
-  const isoMenosDias = (iso: string, n: number) => new Date(new Date(iso + "T12:00:00Z").getTime() - n * 86400000).toISOString().slice(0, 10);
-  const prevEnd = isoMenosDias(start, 1);
-  const prevStart = isoMenosDias(start, diasPeriodo);
-  const { data: rowsAnterior } = useQuery({
-    queryKey: ["monthly-metrics-anterior", clientId, prevStart, prevEnd],
-    queryFn: () => getMonthlyMetrics(clientId, prevStart, prevEnd),
-  });
-
-  const { data: postsForAnalytics } = useQuery({
-    queryKey: ["posts-analytics", clientId, start, end],
-    queryFn: () => getPostsForAnalytics(clientId, start, end),
-  });
-
-  function handleMonthlyClick(e: any) {
-    if (e?.activeLabel) setSelectedDateMonthly(e.activeLabel);
-  }
-  function handleTrendClick(e: any) {
-    if (e?.activeLabel) setSelectedDateTrend(e.activeLabel);
-  }
-
-  if (isLoading) {
-    return <p style={{ color: "var(--text-dim)" }}>Carregando métricas…</p>;
-  }
-
-  const data = rows ?? [];
-  if (data.length === 0) {
+  if (metricas.isLoading || !r) {
     return (
-      <div
-        className="rounded-xl border p-6 text-sm"
-        style={{ background: "var(--warn-bg)", borderColor: "var(--warn-border)", color: "var(--text)" }}
-      >
-        <p>
-          Sem dados sincronizados nesse período. Clique em sincronizar para buscar os números do Instagram, ou escolha
-          outro intervalo de datas.
-        </p>
-        <div className="flex justify-end" style={{ marginTop: 12 }}>
-          <SyncButton clientId={clientId} alvo="tudo" />
-        </div>
+      <div className="mx-auto w-full max-w-5xl space-y-4" aria-busy="true" aria-label="Carregando">
+        {[120, 96, 220].map((h, i) => (
+          <div key={i} className="animate-pulse rounded-xl" style={{ height: h, background: "var(--surface-2)" }} />
+        ))}
       </div>
     );
   }
 
+  // ---------- KPIs executivos: definições ORIGINAIS da tela (inalteradas) ----------
+  const data = metricas.data ?? [];
+  const ant = anterior.data ?? [];
+  const semInstagram = data.length === 0;
   const newFollowers = sum(data, "new_followers");
+  const cresc = analyzeGrowth(data as { date: string; new_followers?: number | null; unfollowers?: number | null }[], start, fim);
+  const meta = periodoIg.data?.dados;
+  const taxaUnica = meta?.alcance_unico && meta.interacoes != null ? ((meta.interacoes / meta.alcance_unico) * 100).toFixed(1) + "%" : null;
+  const sinal = (n: number) => `${n >= 0 ? "+" : "-"}${Math.abs(n).toLocaleString("pt-BR")}`;
+  // Bruto, saídas e líquido com a MESMA cobertura (dias fechados que têm os dois números). O bruto de
+  // todos os dias continua informado, com a sua própria cobertura, para não sumir com dado.
+  const novosKpi = cresc.diasMedidos ? cresc.novos : newFollowers;
+  const dicaSeguidores = cresc.diasMedidos
+    ? `bruto em ${cresc.diasMedidos} dias com ganhos e saídas medidos · saíram ${cresc.saidas.toLocaleString("pt-BR")} · líquido ${sinal(cresc.liquido)}${newFollowers !== cresc.novos ? ` · somando também dias sem saída medida: ${newFollowers.toLocaleString("pt-BR")}` : ""}`
+    : "bruto de todos os dias com dado · saídas ainda não medidas neste período (o Instagram só informa ganhos e saídas dos últimos 30 dias)";
   const reach = sum(data, "reach");
   const saves = sum(data, "saves");
   const interactions = sum(data, "total_interactions");
   const contactTaps = sum(data, "profile_links_taps");
   const engagementRate = reach > 0 ? ((interactions / reach) * 100).toFixed(1) + "%" : "—";
-
-  // Variação contra o período anterior: só aparece quando o anterior tem dado em pelo menos 80% dos dias
-  // do atual. Como o Instagram guarda ~30 dias de histórico diário, na maioria dos casos ela ainda não existe.
-  const ant = rowsAnterior ?? [];
-  const temAnterior = ant.length >= Math.ceil(data.length * 0.8) && data.length >= 7;
+  // Comparação com o período anterior: só com 80%+ dos dias com alcance dos dois lados e 7+ dias.
+  const diasReach = data.filter((d) => d.reach != null).length;
+  const temAnterior = ant.filter((d) => d.reach != null).length >= Math.ceil(diasReach * 0.8) && diasReach >= 7;
   const variacao = (atual: number, antes: number): { sobe: boolean; texto: string } | null => {
     if (!temAnterior || antes <= 0) return null;
     const p = ((atual - antes) / antes) * 100;
@@ -376,161 +408,306 @@ function MonthlyOverview() {
   const vsNovos = variacao(newFollowers, sum(ant, "new_followers"));
   const vsAlcance = variacao(reach, sum(ant, "reach"));
   const vsSalvos = variacao(saves, sum(ant, "saves"));
-
-  // Os números de cima somam só os dias que têm dado. O Instagram entrega cerca de
-  // 30 dias de histórico diário, então em 90 dias (ou mais) o total costuma ser o
-  // mesmo de 30: não há dia mais antigo para somar. Sem este aviso parece que o
-  // cartão travou enquanto o gráfico muda.
-  const datasDados = data.map((d) => d.date).sort();
-  const primeiroDado = datasDados[0];
-  const ultimoDado = datasDados[datasDados.length - 1];
-  const diasDoPeriodo = Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1);
-  const diasSemDado = Math.max(0, diasDoPeriodo - data.length);
   const dd = (iso: string) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
+  const datasDados = data.filter((d) => d.reach != null).map((d) => d.date).sort();
+  const diasSemDado = Math.max(0, diasPeriodo - datasDados.length);
   const avisoCobertura =
-    diasSemDado >= 3
-      ? `Os números acima somam os ${data.length} dias que têm dado (${dd(primeiroDado)} a ${dd(ultimoDado)}), e não os ${diasDoPeriodo} dias do período escolhido. Não há dado diário mais antigo que ${dd(primeiroDado)} para somar, por isso o total não muda quando o período é maior que isso.`
+    diasSemDado >= 3 && datasDados.length
+      ? `Os números somam os ${datasDados.length} dias que têm dado (${dd(datasDados[0])} a ${dd(datasDados[datasDados.length - 1])}), e não os ${diasPeriodo} dias do período escolhido. Não há dado diário mais antigo que ${dd(datasDados[0])} para somar, por isso o total não muda quando o período é maior que isso.`
       : null;
 
-  const chartData = data.map((d) => ({
-    date: d.date,
-    Alcance: d.reach ?? 0,
-    Interações: d.total_interactions ?? 0,
-  }));
+  const chartData = data.filter((d) => d.reach != null).map((d) => ({ date: d.date, Alcance: d.reach ?? 0, Interações: d.total_interactions ?? 0 }));
+  const trendData = data.filter((d) => d.reach != null).map((d) => ({ date: d.date, Alcance: d.reach ?? 0, "Seguidores ganhos": d.new_followers ?? 0 }));
+  const formatInsight = computeFormatInsight(posts.data ?? []);
 
-  const trendData = data.map((d) => ({
-    date: d.date,
-    Alcance: d.reach ?? 0,
-    "Seguidores ganhos": d.new_followers ?? 0,
-  }));
-
-  const formatInsight = computeFormatInsight(postsForAnalytics ?? []);
-  const trendDays = Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1);
+  const oportunidades = r.semana.length ? r.semana : r.insights.filter((i) => i.acao).slice(0, 3);
+  const principal = r.proximaAcao ?? oportunidades[0] ?? null;
+  const outras = oportunidades.filter((i) => i !== principal).slice(0, 2);
+  const cv = r.veredito.tom === "neutro" ? null : COR_TOM[r.veredito.tom];
+  const alertasCriticos = r.cobertura.alertas;
 
   async function handleDownloadReport() {
     setGeneratingReport(true);
     try {
-      // Relatório completo: todas as fontes do cliente, com o mesmo período da tela.
       const { gerarEBaixarRelatorioCompleto } = await import("@/lib/relatorio-completo");
-      await gerarEBaixarRelatorioCompleto({ clientId, start, end, periodLabel });
+      await gerarEBaixarRelatorioCompleto({ clientId, start, end: fim, periodLabel });
     } finally {
       setGeneratingReport(false);
     }
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-end">
-        <SyncButton clientId={clientId} alvo="tudo" />
-      </div>
+  function abrirAnalises() {
+    setAnalisesAbertas(true);
+    requestAnimationFrame(() => document.getElementById("todas-analises")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
 
-      <ResumoDoMes
+  const explicacao = {
+    seguidores: "Fonte: Instagram (métrica diária “seguidores ganhos”). Fórmula: soma dos novos seguidores de cada dia do período, sem descontar quem saiu (igual ao número do Instagram). Limitação: o Instagram só entrega cerca de 30 dias de histórico diário; quem saiu só é medido nos dias já fechados.",
+    alcance: meta?.alcance_unico != null
+      ? `Fonte: Instagram, “Contas alcançadas” do período (${dd(meta.de)} a ${dd(meta.ate)}${meta.recortado ? ", últimos 30 dias do período" : ""}). Conta pessoas únicas. Limitação: a Meta só calcula para até 30 dias; a soma dos alcances diários (${reach.toLocaleString("pt-BR")}) é maior porque repete pessoas.`
+      : "Fonte: Instagram, alcance de cada dia. Fórmula: soma dos alcances diários. Limitação: a mesma pessoa conta de novo em cada dia em que viu o perfil, por isso passa do “Contas alcançadas” do Instagram.",
+    engajamento: taxaUnica
+      ? "Fórmula da casa (a Meta não publica taxa): interações ÷ alcance único do período × 100. Interações = curtidas, comentários, salvamentos e compartilhamentos. Referência de mercado: mLabs Brasil ~4,5% (2025)."
+      : "Fórmula da casa (a Meta não publica taxa): interações ÷ soma dos alcances diários × 100. Fica menor que a taxa sobre o alcance único. Referência de mercado: mLabs Brasil ~4,5% (2025), calculada sobre alcance único.",
+    salvamentos: meta?.salvamentos != null
+      ? `Fonte: Instagram, salvamentos por data da ação (${dd(meta.de)} a ${dd(meta.ate)}), igual ao Instagram. Salvar indica que o conteúdo foi útil a ponto de querer rever.`
+      : "Fonte: Instagram, soma dos salvamentos de cada dia. Salvar indica que o conteúdo foi útil a ponto de querer rever.",
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-5xl space-y-8">
+      {/* Avisos que mudam a leitura dos números ficam sempre visíveis. */}
+      {alertasCriticos.length > 0 && (
+        <div className="space-y-2" role="status">
+          {alertasCriticos.map((a, i) => (
+            <p key={i} className="rounded-lg border px-3 py-2 text-sm" style={{ background: COR_TOM[a.tom].fundo, borderColor: COR_TOM[a.tom].borda, color: "var(--ink)" }}>
+              {a.texto}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {/* Dado com erro na origem: muda a leitura de tudo abaixo, por isso vem antes. */}
+      <QualidadeDados clientId={clientId} compacto />
+
+      {/* ===== CAMADA 1: primeira dobra ===== */}
+      <section className="space-y-4" aria-label="Visão executiva">
+        {principal ? (
+          <NextBestActionCard insight={principal} destaque onAbrir={() => painel.abrir(principal)} />
+        ) : (
+          <div className="rounded-xl border p-5 text-sm" style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--ink-2)" }}>
+            Nenhuma oportunidade com evidência suficiente neste período. Os números abaixo continuam valendo; com mais dias de dado, o painel volta a recomendar.
+          </div>
+        )}
+
+        {semInstagram ? (
+          <div className="rounded-xl border p-5 text-sm" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+            <p style={{ color: "var(--ink)" }}>Sem dado do Instagram neste período, por isso os indicadores de alcance, seguidores, engajamento e salvamentos não aparecem.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <SyncButton clientId={clientId} alvo="tudo" />
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div>
+              <Kpi icone={UserPlus} cor="var(--s3)" rotulo="Novos seguidores (bruto)" valor={novosKpi.toLocaleString("pt-BR")} tendencia={cresc.diasMedidos ? undefined : vsNovos} dica={dicaSeguidores} />
+              <OQueE>{dicaSeguidores}. {explicacao.seguidores}</OQueE>
+            </div>
+            <div>
+              {meta?.alcance_unico != null ? (
+                <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance (contas únicas)" valor={meta.alcance_unico.toLocaleString("pt-BR")} dica={`igual ao “Contas alcançadas” do Instagram, ${dd(meta.de)} a ${dd(meta.ate)}${meta.recortado ? " (últimos 30 dias do período)" : ""}. Soma dos dias: ${reach.toLocaleString("pt-BR")}`} />
+              ) : (
+                <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance (soma dos dias)" valor={reach.toLocaleString("pt-BR")} tendencia={vsAlcance} dica="soma do alcance de cada dia: a mesma pessoa conta em mais de um dia, então passa do “Contas alcançadas” do Instagram" />
+              )}
+              <OQueE>{explicacao.alcance}</OQueE>
+            </div>
+            <div>
+              <Kpi icone={Activity} cor="var(--s2)" rotulo="Taxa de engajamento" valor={taxaUnica ?? engagementRate} dica={taxaUnica ? "interações ÷ alcance único do período (fórmula da casa; a Meta não publica taxa)" : "interações ÷ soma dos alcances diários (fórmula da casa; a Meta não publica taxa)"} />
+              <OQueE>{explicacao.engajamento}</OQueE>
+            </div>
+            <div>
+              <Kpi
+                icone={Bookmark}
+                cor="var(--s7)"
+                rotulo="Salvamentos"
+                valor={(meta?.salvamentos ?? saves).toLocaleString("pt-BR")}
+                tendencia={meta?.salvamentos != null ? undefined : vsSalvos}
+                dica={meta?.salvamentos != null ? `por data da ação, igual ao Instagram (${dd(meta.de)} a ${dd(meta.ate)})` : "soma dos salvamentos de cada dia"}
+              />
+              <OQueE>{explicacao.salvamentos}</OQueE>
+            </div>
+          </div>
+        )}
+
+        <button type="button" onClick={abrirAnalises} className="inline-flex min-h-[44px] items-center gap-1 text-sm font-semibold" style={{ color: "var(--accent)" }}>
+          Ver todas as análises do período <ChevronRight size={16} aria-hidden />
+        </button>
+      </section>
+
+      <DiagnosticoEstrategico
         clientId={clientId}
         start={start}
-        end={end}
-        periodLabel={periodLabel}
-        posts={postsForAnalytics}
+        fim={fim}
+        resultado={r}
+        diario={(metricas.data as any[]) ?? []}
+        diarioAnterior={(anterior.data as any[]) ?? undefined}
+        posts={(posts.data as any[]) ?? []}
       />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Kpi icone={UserPlus} cor="var(--s3)" rotulo="Novos seguidores" valor={newFollowers.toLocaleString("pt-BR")} tendencia={vsNovos} dica="só últimos 30 dias (limite do Instagram)" />
-        <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance (soma dos dias)" valor={reach.toLocaleString("pt-BR")} tendencia={vsAlcance} dica="a mesma pessoa pode contar mais de um dia" />
-        <Kpi icone={Activity} cor="var(--s2)" rotulo="Taxa de engajamento" valor={engagementRate} dica="interações ÷ alcance" />
-        <Kpi icone={Bookmark} cor="var(--s7)" rotulo="Salvamentos" valor={saves.toLocaleString("pt-BR")} tendencia={vsSalvos} />
-      </div>
-      {avisoCobertura && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs" style={{ color: "var(--text-dim)", flex: "1 1 320px" }}>
-            {avisoCobertura}
-          </p>
-          {isAdmin && <SyncButton clientId={clientId} alvo="historico" />}
-        </div>
+      {/* ===== Segunda dobra ===== */}
+      {outras.length > 0 && (
+        <section className="space-y-3" aria-labelledby="outras-op">
+          <h2 id="outras-op" className="text-[18px] font-semibold">Outras oportunidades</h2>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {outras.map((i) => (
+              <NextBestActionCard key={i.id} insight={i} onAbrir={() => painel.abrir(i)} />
+            ))}
+          </div>
+          <Link to="/$clientId/oportunidades" params={{ clientId }} className="inline-flex min-h-[44px] items-center gap-1 text-sm font-semibold" style={{ color: "var(--accent)" }}>
+            Ver todas as oportunidades ({r.insights.filter((i) => i.acao).length}) <ChevronRight size={16} aria-hidden />
+          </Link>
+        </section>
       )}
 
-      {formatInsight && (
-        <div className="grid grid-cols-2 gap-3">
-          <Kpi
-            icone={Trophy}
-            cor="var(--good-text)"
-            rotulo="Melhor formato"
-            valor={fmtFormatKey(formatInsight.best.format)}
-            dica={`${fmtNum(Math.round(formatInsight.best.median))} engaj. (mediana) · ${formatInsight.best.count} posts`}
-          />
-          <Kpi
-            icone={TrendingDown}
-            cor="var(--crit)"
-            rotulo="Formato mais fraco"
-            valor={fmtFormatKey(formatInsight.worst.format)}
-            dica={`${fmtNum(Math.round(formatInsight.worst.median))} engaj. (mediana) · ${formatInsight.worst.count} posts`}
-          />
+      <section className="space-y-3" aria-labelledby="resumo-exec">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="resumo-exec" className="text-[18px] font-semibold">Resumo do período</h2>
+          {r.veredito.tom !== "neutro" && <SeloStatus tom={r.veredito.tom} texto={r.veredito.titulo.split(":")[0].replace(/\.$/, "")} />}
         </div>
-      )}
+        <div className="rounded-xl border p-4 sm:p-5" style={{ background: "var(--surface)", borderColor: "var(--border)", borderLeft: cv ? `4px solid ${cv.borda}` : undefined }}>
+          <p className="text-[15px] font-semibold" style={{ color: "var(--ink)" }}>{r.veredito.titulo}</p>
+          {r.resumo.length > 0 && (
+            <ul className="mt-2 space-y-1 text-[15px] leading-relaxed" style={{ color: "var(--ink-2)" }}>
+              {r.resumo.map((t, i) => (
+                <li key={i}>{t}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <BotaoAcao texto="Aprofundar em Social" rota="/$clientId/conteudo" clientId={clientId} variante="secundario" />
+          <BotaoAcao texto={fontes.data?.tem_crm ? "Aprofundar em Comercial" : "Ver anúncios"} rota={fontes.data?.tem_crm ? "/$clientId/crm-painel" : "/$clientId/anuncios"} clientId={clientId} variante="secundario" />
+          <BotaoAcao texto="Montar relatório para o cliente" rota="/$clientId/relatorio" clientId={clientId} variante="secundario" />
+        </div>
+      </section>
 
-      <button
-        type="button"
-        onClick={handleDownloadReport}
-        disabled={generatingReport}
-        className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-60"
-        style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-      >
-        {generatingReport ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-        {generatingReport ? "Gerando PDF…" : "Baixar relatório PDF"}
-      </button>
+      {/* ===== CAMADAS 2 e 3: todas as análises (nada removido; só recolhido) ===== */}
+      <section id="todas-analises" className="rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+        <button
+          type="button"
+          onClick={() => setAnalisesAbertas(!analisesAbertas)}
+          aria-expanded={analisesAbertas}
+          className="flex min-h-[56px] w-full items-center justify-between gap-2 px-4 text-left sm:px-5"
+        >
+          <span>
+            <span className="block text-[18px] font-semibold">Todas as análises do período</span>
+            <span className="block text-sm" style={{ color: "var(--muted)" }}>O que aconteceu, por que, sinais de interesse, gráficos, formatos, horários e limitações</span>
+          </span>
+          <ChevronRight size={20} aria-hidden style={{ transform: analisesAbertas ? "rotate(90deg)" : undefined }} />
+        </button>
+        {analisesAbertas && (
+          <div className="space-y-6 border-t px-4 pb-5 pt-5 sm:px-5" style={{ borderColor: "var(--border)" }}>
+            <ResumoDoMes clientId={clientId} start={start} end={fim} periodLabel={periodLabel} posts={posts.data} />
 
-      <SinaisDeInteresse reach={reach} contactTaps={contactTaps} newFollowers={newFollowers} />
+            {r.insights.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-[18px] font-semibold">Por que aconteceu</h3>
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  {r.insights.map((i) => (
+                    <InsightCard key={i.id} insight={i} clientId={clientId} />
+                  ))}
+                </div>
+              </div>
+            )}
 
-      <Painel icone={Gauge} cor="var(--s1)" titulo="Alcance e interações" resumo="Toque num ponto para ver o que foi publicado no dia">
-        <ResponsiveContainer width="100%" height={240}>
-          <AreaChart data={chartData} onClick={handleMonthlyClick} style={{ cursor: "pointer" }}>
-            <defs>
-              <linearGradient id="reachFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="date" tickFormatter={tickDate} tick={{ fontSize: 11 }} stroke="var(--text-faint)" />
-            <YAxis tick={{ fontSize: 11 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
-            <Tooltip labelFormatter={tickDate} formatter={(value: number) => fmtNum(value)} />
-            <Area type="monotone" dataKey="Alcance" stroke="var(--accent)" fill="url(#reachFill)" />
-            <Area type="monotone" dataKey="Interações" stroke="var(--good)" fillOpacity={0} />
-          </AreaChart>
-        </ResponsiveContainer>
-        <DrillDownDoDia date={selectedDateMonthly} posts={postsForAnalytics ?? []} />
-      </Painel>
+            {r.metricas.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-[18px] font-semibold">Indicadores com referência de mercado</h3>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {r.metricas.map((m) => (
+                    <MetricaCard key={m.id} m={m} clientId={clientId} />
+                  ))}
+                </div>
+                <p className="text-[13px]" style={{ color: "var(--muted)" }}>
+                  Bom, na média ou abaixo só aparecem quando existe referência de mercado com metodologia publicada. Sem referência, compare com o período anterior.
+                </p>
+              </div>
+            )}
 
-      <Painel
-        icone={LineIcon}
-        cor="var(--s3)"
-        titulo="Tendência geral"
-        resumo="Alcance e seguidores ganhos lado a lado"
-        ajuda={`${periodLabel}. Alcance e seguidores ganhos lado a lado, para ver o efeito de mudanças ao longo do tempo. Clique em um ponto para ver o que foi publicado naquele dia.`}
-      >
-        {trendData.length === 0 ? (
-          <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-            Sem histórico suficiente ainda.
-          </p>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={trendData} onClick={handleTrendClick} style={{ cursor: "pointer" }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="date" tickFormatter={tickDate} tick={{ fontSize: 10 }} stroke="var(--text-faint)" interval="preserveStartEnd" />
-              <YAxis yAxisId="left" tick={{ fontSize: 11 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} stroke="var(--text-faint)" tickFormatter={fmtNum} />
-              <Tooltip labelFormatter={tickDate} formatter={(value: number) => fmtNum(value)} />
-              <Line yAxisId="left" type="monotone" dataKey="Alcance" stroke="var(--s1)" strokeWidth={2} dot={false} />
-              <Line yAxisId="right" type="monotone" dataKey="Seguidores ganhos" stroke="var(--s3)" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+            {!semInstagram && (
+              <>
+                <SinaisDeInteresse reach={reach} contactTaps={contactTaps} newFollowers={newFollowers} />
+
+                {avisoCobertura && (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-[13px]" style={{ color: "var(--ink-2)", flex: "1 1 320px" }}>{avisoCobertura}</p>
+                    {isAdmin && <SyncButton clientId={clientId} alvo="historico" />}
+                  </div>
+                )}
+
+                {formatInsight && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Kpi icone={Trophy} cor="var(--good-text)" rotulo="Melhor formato" valor={fmtFormatKey(formatInsight.best.format)} dica={`${fmtNum(Math.round(formatInsight.best.median))} engaj. (mediana) · ${formatInsight.best.count} posts`} />
+                    <Kpi icone={TrendingDown} cor="var(--crit)" rotulo="Formato mais fraco" valor={fmtFormatKey(formatInsight.worst.format)} dica={`${fmtNum(Math.round(formatInsight.worst.median))} engaj. (mediana) · ${formatInsight.worst.count} posts`} />
+                  </div>
+                )}
+
+                <Painel icone={Gauge} cor="var(--s1)" titulo="Alcance e interações" resumo="Toque num ponto para ver o que foi publicado no dia">
+                  <div className="min-w-0">
+                    <ResponsiveContainer width="100%" height={240}>
+                      <AreaChart data={chartData} onClick={(e: any) => e?.activeLabel && setSelectedDateMonthly(e.activeLabel)} style={{ cursor: "pointer" }}>
+                        <defs>
+                          <linearGradient id="reachFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.3} />
+                            <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="date" tickFormatter={tickDate} tick={{ fontSize: 12 }} stroke="var(--muted)" interval="preserveStartEnd" minTickGap={24} />
+                        <YAxis tick={{ fontSize: 12 }} stroke="var(--muted)" tickFormatter={fmtNum} width={48} />
+                        <Tooltip labelFormatter={tickDate} formatter={(value: number) => fmtNum(value)} />
+                        <Area type="monotone" dataKey="Alcance" stroke="var(--accent)" fill="url(#reachFill)" />
+                        <Area type="monotone" dataKey="Interações" stroke="var(--good)" fillOpacity={0} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <DrillDownDoDia date={selectedDateMonthly} posts={posts.data ?? []} />
+                </Painel>
+
+                <Painel
+                  icone={LineIcon}
+                  cor="var(--s3)"
+                  titulo="Tendência geral"
+                  resumo="Alcance e seguidores ganhos lado a lado"
+                  ajuda={`${periodLabel}. Alcance e seguidores ganhos lado a lado, para ver o efeito de mudanças ao longo do tempo. Clique em um ponto para ver o que foi publicado naquele dia.`}
+                >
+                  {trendData.length === 0 ? (
+                    <p className="text-sm" style={{ color: "var(--ink-2)" }}>Sem histórico suficiente ainda.</p>
+                  ) : (
+                    <div className="min-w-0">
+                      <ResponsiveContainer width="100%" height={220}>
+                        <LineChart data={trendData} onClick={(e: any) => e?.activeLabel && setSelectedDateTrend(e.activeLabel)} style={{ cursor: "pointer" }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--grid)" />
+                          <XAxis dataKey="date" tickFormatter={tickDate} tick={{ fontSize: 12 }} stroke="var(--muted)" interval="preserveStartEnd" minTickGap={24} />
+                          <YAxis yAxisId="left" tick={{ fontSize: 12 }} stroke="var(--muted)" tickFormatter={fmtNum} width={48} />
+                          <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} stroke="var(--muted)" tickFormatter={fmtNum} width={40} />
+                          <Tooltip labelFormatter={tickDate} formatter={(value: number) => fmtNum(value)} />
+                          <Line yAxisId="left" type="monotone" dataKey="Alcance" stroke="var(--s1)" strokeWidth={2} dot={false} />
+                          <Line yAxisId="right" type="monotone" dataKey="Seguidores ganhos" stroke="var(--s3)" strokeWidth={2} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                  <DrillDownDoDia date={selectedDateTrend} posts={posts.data ?? []} />
+                </Painel>
+
+                <InsightDeFormato posts={posts.data ?? []} periodLabel={periodLabel} />
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <EngajamentoPorFormato posts={posts.data ?? []} />
+                  <MelhoresHorarios posts={posts.data ?? []} periodLabel={periodLabel} />
+                </div>
+              </>
+            )}
+
+            <ListaLimitacoes itens={r.limitacoes} />
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <button
+                type="button"
+                onClick={handleDownloadReport}
+                disabled={generatingReport}
+                className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold disabled:opacity-60"
+                style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+              >
+                {generatingReport ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                {generatingReport ? "Gerando PDF…" : "Baixar relatório PDF"}
+              </button>
+              <SyncButton clientId={clientId} alvo="tudo" />
+            </div>
+          </div>
         )}
-        <DrillDownDoDia date={selectedDateTrend} posts={postsForAnalytics ?? []} />
-      </Painel>
+      </section>
 
-      <InsightDeFormato posts={postsForAnalytics ?? []} periodLabel={periodLabel} />
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <EngajamentoPorFormato posts={postsForAnalytics ?? []} />
-        <MelhoresHorarios posts={postsForAnalytics ?? []} periodLabel={periodLabel} />
-      </div>
+      <NextBestActionPanel insight={painel.aberto} clientId={clientId} onFechar={painel.fechar} />
     </div>
   );
 }

@@ -31,6 +31,12 @@ function AdminLayout() {
             <Link to="/admin/referencia" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
               Referência entre clientes
             </Link>
+            <Link to="/admin/conferencia" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
+              Conferência de dados
+            </Link>
+            <Link to="/admin/relatorios" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
+              Relatórios da semana
+            </Link>
             <Link to="/admin/aquisicao" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
               Sistema de Aquisição
             </Link>

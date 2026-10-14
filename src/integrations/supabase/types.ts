@@ -515,6 +515,7 @@ export type Database = {
           saves: number | null
           shares: number | null
           total_interactions: number | null
+          unfollowers: number | null
         }
         Insert: {
           client_id: string
@@ -531,6 +532,7 @@ export type Database = {
           saves?: number | null
           shares?: number | null
           total_interactions?: number | null
+          unfollowers?: number | null
         }
         Update: {
           client_id?: string
@@ -547,6 +549,7 @@ export type Database = {
           saves?: number | null
           shares?: number | null
           total_interactions?: number | null
+          unfollowers?: number | null
         }
         Relationships: [
           {

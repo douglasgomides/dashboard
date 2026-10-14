@@ -43,10 +43,42 @@ export type ResultadoConversas = {
   mensagens: number;
   pessoas: number;
   comCodigo: number;
+  comAnuncio?: number;
   restantes: number;
   erros: string[];
   valoresVistos: Record<string, Record<string, number>>;
 };
+
+// Origem de anúncio (clique para WhatsApp): a Meta manda junto da 1ª mensagem um "referral" com o id do anúncio
+// (source_id), ctwa_clid, título e link. Não sabemos em que campo o WTS repassa isso, então procura em qualquer
+// lugar do JSON das 3 primeiras mensagens do paciente, por nome de chave.
+const CHAVE_ANUNCIO = /^(referral|ctwa_?clid|source_?id|sourceid|ad_?id|adid|headline|source_?url|sourceurl|source_?type|campaign_?id)$/i;
+export function acharOrigemAnuncio(msgs: any[]): { ad_id: string | null; campaign_id: string | null; ctwa_clid: string | null; headline: string | null; source_url: string | null; bruto: Record<string, unknown> } | null {
+  const achado: Record<string, unknown> = {};
+  const visitar = (v: any, d: number) => {
+    if (!v || typeof v !== "object" || d > 6) return;
+    for (const [k, x] of Object.entries(v)) {
+      if (CHAVE_ANUNCIO.test(k) && x != null && x !== "") achado[k] = typeof x === "object" ? x : String(x);
+      if (typeof x === "object") visitar(x, d + 1);
+    }
+  };
+  for (const m of msgs.slice(0, 3)) visitar(m, 0);
+  if (!Object.keys(achado).length) return null;
+  const pega = (re: RegExp) => {
+    for (const [k, v] of Object.entries(achado)) if (re.test(k) && typeof v === "string") return v;
+    const ref = achado.referral as Record<string, unknown> | undefined;
+    if (ref && typeof ref === "object") for (const [k, v] of Object.entries(ref)) if (re.test(k) && v != null) return String(v);
+    return null;
+  };
+  return {
+    ad_id: pega(/^(source_?id|sourceid|ad_?id|adid)$/i),
+    campaign_id: pega(/^campaign_?id$/i),
+    ctwa_clid: pega(/^ctwa_?clid$/i),
+    headline: pega(/^headline$/i),
+    source_url: pega(/^source_?url|sourceurl$/i),
+    bruto: achado,
+  };
+}
 
 export async function ingerirConversasWts(
   supabase: SupabaseClient<any, any, any>,
@@ -60,7 +92,7 @@ export async function ingerirConversasWts(
   let tokenAtivo = tokenPrincipal;
   const limite = opts.limite ?? 120;
   const fim = Date.now() + (opts.orcamentoMs ?? 150_000);
-  const r: ResultadoConversas = { sessoes: 0, mensagens: 0, pessoas: 0, comCodigo: 0, restantes: 0, erros: [], valoresVistos: { direcao: {}, tipo: {}, origem: {} } };
+  const r: ResultadoConversas = { sessoes: 0, mensagens: 0, pessoas: 0, comCodigo: 0, restantes: 0, erros: [], valoresVistos: { direcao: {}, tipo: {}, origem: {}, chaves: {} } };
 
   // Sessões candidatas: as mais novas primeiro.
   // O PostgREST devolve no máximo 1000 linhas por chamada: pagina até acabar.
@@ -204,6 +236,21 @@ export async function ingerirConversasWts(
     if (eConv || !conv) {
       r.erros.push(`conversa ${sid.slice(0, 8)}: ${eConv?.message ?? "sem id"}`);
       return;
+    }
+
+    // Veio de anúncio? Guarda o que a Meta mandou (id do anúncio etc.) para cruzar anúncio → conversa → lead.
+    const entradas = msgs.filter((x) => direcaoDaMensagem(x.direction) === "entrada");
+    const origem = acharOrigemAnuncio(entradas);
+    if (origem) {
+      const { error: eO } = await supabase.from("conversas_origem_anuncio").upsert({ conversa_id: conv.id, client_id: clientId, ...origem }, { onConflict: "conversa_id" });
+      if (eO) r.erros.push(`origem anúncio ${sid.slice(0, 8)}: ${eO.message}`);
+      else r.comAnuncio = (r.comAnuncio ?? 0) + 1;
+    }
+    // Nomes dos campos que o WTS devolve na 1ª mensagem do paciente (para saber onde mora a origem do anúncio).
+    if (entradas[0] && typeof entradas[0] === "object") {
+      for (const k of Object.keys(entradas[0])) r.valoresVistos.chaves[k] = (r.valoresVistos.chaves[k] ?? 0) + 1;
+      if (entradas[0].details && typeof entradas[0].details === "object")
+        for (const k of Object.keys(entradas[0].details)) r.valoresVistos.chaves[`details.${k}`] = (r.valoresVistos.chaves[`details.${k}`] ?? 0) + 1;
     }
 
     const linhas = msgs.map((m) => {

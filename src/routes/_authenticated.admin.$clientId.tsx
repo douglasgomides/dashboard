@@ -59,7 +59,7 @@ function ConnectInstagramForm({ clientId }: { clientId: string }) {
         <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
           ID da conta Instagram
         </label>
-        <input
+        <input autoComplete="off"
           value={windsorAccountId}
           onChange={(e) => setWindsorAccountId(e.target.value)}
           required
@@ -72,7 +72,7 @@ function ConnectInstagramForm({ clientId }: { clientId: string }) {
         <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
           @Instagram (opcional)
         </label>
-        <input
+        <input autoComplete="off"
           value={igUsername}
           onChange={(e) => setIgUsername(e.target.value)}
           className="mt-1 rounded-md border px-2 py-1.5 text-sm"
@@ -165,7 +165,7 @@ function ConnectCrmForm({ clientId }: { clientId: string }) {
         <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
           Subdomínio {provider === "kommo" && "(opcional, só referência)"}
         </label>
-        <input
+        <input autoComplete="off"
           value={subdomain}
           onChange={(e) => setSubdomain(e.target.value)}
           placeholder="dralanatorres"
@@ -178,7 +178,7 @@ function ConnectCrmForm({ clientId }: { clientId: string }) {
           <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
             Token de acesso
           </label>
-          <input
+          <input autoComplete="new-password"
             type="password"
             value={accessToken}
             onChange={(e) => setAccessToken(e.target.value)}
@@ -205,7 +205,7 @@ function ConnectCrmForm({ clientId }: { clientId: string }) {
           <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
             Cole essa URL em Kommo → Configurações → Webhooks (evento "Lead adicionado" e "Estágio alterado")
           </label>
-          <input
+          <input autoComplete="off"
             readOnly
             value={generatedUrl}
             onFocus={(e) => e.target.select()}
@@ -251,7 +251,7 @@ function CrmConnectionsList({ clientId }: { clientId: string }) {
             </button>
           </div>
           {c.provider === "kommo" && c.webhook_secret && (
-            <input
+            <input autoComplete="off"
               readOnly
               value={kommoWebhookUrl(c.id, c.webhook_secret)}
               onFocus={(e) => e.target.select()}
@@ -293,7 +293,7 @@ function NewUserForm({ clientId }: { clientId: string }) {
         <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
           E-mail
         </label>
-        <input
+        <input autoComplete="off"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -367,7 +367,7 @@ function MembersList({ clientId }: { clientId: string }) {
           <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
             Enviar redefinição de senha (e-mail do usuário)
           </label>
-          <input
+          <input autoComplete="off"
             type="email"
             value={resetEmail}
             onChange={(e) => setResetEmail(e.target.value)}

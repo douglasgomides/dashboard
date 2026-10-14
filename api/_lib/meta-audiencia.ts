@@ -257,3 +257,69 @@ export async function lerAudiencia(opts: { igId: string; token: string; dias?: n
     stories_ao_vivo: stories,
   };
 }
+
+// Números do PERÍODO escolhido, direto da Meta, do jeito que o painel do Instagram conta.
+// O dashboard soma o alcance dia a dia, mas alcance é contagem de contas ÚNICAS: quem foi alcançado em 5 dias entra 5 vezes
+// na soma, e o total passa do "Contas alcançadas" do Instagram. Aqui o alcance vem como total_value do período inteiro.
+// A janela vai até 30 dias (limite seguro da Meta para estas métricas); período maior usa os últimos 30 dias dele.
+export interface ResumoPeriodo {
+  de: string;
+  ate: string;
+  dias: number;
+  recortado: boolean; // o período pedido era maior que 30 dias
+  alcance_unico: number | null;
+  contas_engajadas: number | null;
+  interacoes: number | null;
+  salvamentos: number | null;
+  curtidas: number | null;
+  comentarios: number | null;
+  compartilhamentos: number | null;
+  erros: string[];
+}
+
+export async function lerResumoPeriodo(opts: { igId: string; token: string; de: string; ate: string }): Promise<ResumoPeriodo> {
+  const { igId, token } = opts;
+  const DIA_S = 86400;
+  // Meia-noite de Brasília = 03:00 UTC.
+  const inicioDoDia = (iso: string) => Math.floor(Date.parse(`${iso}T03:00:00Z`) / 1000);
+  const hojeIso = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+  const ate = opts.ate > hojeIso ? hojeIso : opts.ate;
+  const diasPedidos = Math.max(1, Math.round((inicioDoDia(ate) - inicioDoDia(opts.de)) / DIA_S) + 1);
+  const dias = Math.min(30, diasPedidos);
+  const de = new Date((inicioDoDia(ate) - (dias - 1) * DIA_S) * 1000 + 3 * 3600_000).toISOString().slice(0, 10);
+  const since = inicioDoDia(de);
+  const until = Math.min(inicioDoDia(ate) + DIA_S - 1, Math.floor(Date.now() / 1000));
+  const erros: string[] = [];
+
+  const valor = async (metricas: string): Promise<Record<string, number | null>> => {
+    try {
+      const c = await g(token, `${igId}/insights`, { metric: metricas, period: "day", metric_type: "total_value", since, until });
+      const out: Record<string, number | null> = {};
+      for (const m of metricas.split(",")) {
+        const d = (c?.data ?? []).find((x: any) => x.name === m);
+        out[m] = d?.total_value?.value == null ? null : Number(d.total_value.value);
+      }
+      return out;
+    } catch (e) {
+      erros.push(`${metricas}: ${e instanceof Error ? e.message : String(e)}`);
+      return Object.fromEntries(metricas.split(",").map((m) => [m, null]));
+    }
+  };
+
+  // Uma chamada por grupo: se uma métrica falhar na Meta, não derruba as outras.
+  const [a, b, c] = await Promise.all([valor("reach"), valor("accounts_engaged,total_interactions"), valor("saves,likes,comments,shares")]);
+  return {
+    de,
+    ate,
+    dias,
+    recortado: diasPedidos > 30,
+    alcance_unico: a.reach,
+    contas_engajadas: b.accounts_engaged,
+    interacoes: b.total_interactions,
+    salvamentos: c.saves,
+    curtidas: c.likes,
+    comentarios: c.comments,
+    compartilhamentos: c.shares,
+    erros,
+  };
+}

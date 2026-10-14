@@ -283,24 +283,38 @@ async function syncDailyMetrics(
   windsorAccountId: string,
   clientId: string,
 ): Promise<{ count: number; errors: string[] }> {
-  const rows = await windsorGet(
-    windsorApiKey,
-    range,
-    [
-      "account_id",
-      "date",
-      "followers_count",
-      "follower_count_1d",
-      "reach_1d",
-      "likes",
-      "comments",
-      "saves",
-      "shares",
-      "total_interactions",
-      "profile_links_taps",
-    ],
-    windsorAccountId,
-  );
+  const CAMPOS = [
+    "account_id",
+    "date",
+    "followers_count",
+    "follower_count_1d",
+    "follows_and_unfollows",
+    "reach_1d",
+    "likes",
+    "comments",
+    "saves",
+    "shares",
+    "total_interactions",
+    "profile_links_taps",
+  ];
+  // A Windsor recusa o pedido INTEIRO (400 "follower_count supports the last 30 days only") quando
+  // follower_count_1d vem junto com um date_from de mais de 30 dias. Isso derrubava também alcance e
+  // interações, que ela tem para trás. Por isso o trecho antigo é pedido sem esse campo, e o recente
+  // (últimos 29 dias) com todos. O sync diário (janela curta) continua igual.
+  const limite30 = dateNDaysAgo(29);
+  const diaAntes = (d: string) => {
+    const t = new Date(d + "T00:00:00Z");
+    t.setUTCDate(t.getUTCDate() - 1);
+    return t.toISOString().slice(0, 10);
+  };
+  const rows: Record<string, unknown>[] = [];
+  if (range.from < limite30) {
+    const ateAntigo = range.to < limite30 ? range.to : diaAntes(limite30);
+    rows.push(...(await windsorGet(windsorApiKey, { from: range.from, to: ateAntigo }, CAMPOS.filter((c) => c !== "follower_count_1d"), windsorAccountId)));
+  }
+  if (range.to >= limite30) {
+    rows.push(...(await windsorGet(windsorApiKey, { from: range.from < limite30 ? limite30 : range.from, to: range.to }, CAMPOS, windsorAccountId)));
+  }
 
   // Os campos acima moram em TRÊS tabelas diferentes da Windsor
   // (user_insights_day, user_insights_day_total_value, user_info), e ela
@@ -325,6 +339,7 @@ async function syncDailyMetrics(
     const vindo = {
       followers_count: numOrNull(r.followers_count),
       new_followers: numOrNull(r.follower_count_1d),
+      follows_and_unfollows: numOrNull(r.follows_and_unfollows),
       reach: numOrNull(r.reach_1d),
       likes: numOrNull(r.likes),
       comments: numOrNull(r.comments),
@@ -339,33 +354,55 @@ async function syncDailyMetrics(
     porData.set(date, atual);
   }
 
-  const dailyRows = [...porData.entries()].map(([date, campos]) => ({
-    instagram_account_id: accountId,
-    client_id: clientId,
-    date,
-    followers_count: campos.followers_count ?? null,
-    new_followers: campos.new_followers ?? null,
-    reach: campos.reach ?? null,
-    likes: campos.likes ?? null,
-    comments: campos.comments ?? null,
-    saves: campos.saves ?? null,
-    shares: campos.shares ?? null,
-    total_interactions: campos.total_interactions ?? null,
-    profile_links_taps: campos.profile_links_taps ?? null,
-  }));
+  // Seguidor bruto x líquido. A Windsor entrega "follows_and_unfollows" = quem seguiu + quem deixou de seguir
+  // no dia (validado contra o Insights da Meta: 06 a 11/10 da Lana somam 748 = 522 novos + 226 saídas).
+  // Saídas = esse total menos os novos. A Meta leva ~2 dias para fechar um dia e, enquanto não fecha, devolve 0:
+  // dia aberto com 0 vira null (desconhecido), não "0 saíram".
+  const ultimoDiaFechado = dateNDaysAgo(2);
+  const dailyRows = [...porData.entries()].map(([date, campos]) => {
+    const aberto = date > ultimoDiaFechado;
+    const novos = campos.new_followers ?? null;
+    const total = campos.follows_and_unfollows ?? null;
+    // 0 novos e 0 no total = a Meta não mediu (dia aberto ou fora da janela de 30 dias), não "ninguém saiu".
+    const semMedida = (novos ?? 0) === 0 && (total ?? 0) === 0;
+    const saidas = !semMedida && novos != null && total != null && total >= novos ? total - novos : null;
+    const linha: Record<string, unknown> = {
+      instagram_account_id: accountId,
+      client_id: clientId,
+      date,
+      followers_count: campos.followers_count ?? null,
+      new_followers: aberto && semMedida ? null : novos,
+      reach: campos.reach ?? null,
+      likes: campos.likes ?? null,
+      comments: campos.comments ?? null,
+      saves: campos.saves ?? null,
+      shares: campos.shares ?? null,
+      total_interactions: campos.total_interactions ?? null,
+      profile_links_taps: campos.profile_links_taps ?? null,
+    };
+    if (saidas != null) linha.unfollowers = saidas;
+    // Dia antigo (pedido sem follower_count_1d): sem a coluna, para não apagar o que já foi medido.
+    if (date < limite30 && novos == null) delete linha.new_followers;
+    return linha;
+  });
 
   // A Windsor só informa o total de seguidores do dia ATUAL; nos dias anteriores a linha chega sem ele.
   // Gravar followers_count: null por cima apagava, a cada rodada, o total que o dia anterior tinha gravado,
   // e a série de seguidores nunca passava de 1 dia ("1 de 90 dias com contagem"). Por isso as linhas sem o
-  // total vão sem a coluna: o upsert não a atualiza e o valor já gravado fica.
-  const comSeguidores = dailyRows.filter((r) => r.followers_count != null);
-  const semSeguidores = dailyRows
-    .filter((r) => r.followers_count == null)
-    .map(({ followers_count: _descartado, ...resto }) => resto);
+  // total vão sem a coluna: o upsert não a atualiza e o valor já gravado fica. O mesmo vale para as saídas:
+  // dia sem medida não grava a coluna, para não apagar o que um dia já foi medido.
+  // Cada grupo tem o mesmo conjunto de colunas (o upsert em lote preenche com null a coluna que falta).
+  const grupos = new Map<string, Record<string, unknown>[]>();
+  for (const r of dailyRows) {
+    const { followers_count, ...resto } = r;
+    const linha = followers_count == null ? resto : r;
+    const chave = Object.keys(linha).sort().join(",");
+    grupos.set(chave, [...(grupos.get(chave) ?? []), linha]);
+  }
 
   const errors: string[] = [];
   let count = 0;
-  for (const grupo of [comSeguidores, semSeguidores] as Record<string, unknown>[][]) {
+  for (const grupo of grupos.values()) {
     for (const batch of chunk(grupo, BATCH_SIZE)) {
       const { error } = await supabase
         .from("instagram_account_daily_metrics")

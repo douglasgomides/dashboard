@@ -1,14 +1,16 @@
 import { useMemo } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { LEGENDA } from "@/components/grafico";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Bar, ReferenceLine, Legend } from "recharts";
 import { getClientFontes, getMonthlyMetrics, getPostsForAnalytics } from "@/lib/client-data";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
-import { analyzeFollowers, analyzeFormatsAndTemas, fmtDiaBR, type GroupStat } from "@/lib/hub-conteudo";
+import { analyzeFollowers, analyzeGrowth, analyzeFormatsAndTemas, fmtDiaBR, type GroupStat } from "@/lib/hub-conteudo";
 import { Painel, Kpi, Selo, BarraFina, Ajuda, IconeFormato, COR_FORMATO } from "@/components/visual";
-import { Users, TrendingUp, Target, CalendarCheck, LineChart as LineIcon, Trophy, Layers, Tag, Bookmark, FileText, AlertTriangle, Info } from "lucide-react";
+import { Users, UserPlus, UserMinus, Scale, TrendingUp, Target, CalendarCheck, LineChart as LineIcon, Trophy, Layers, Tag, Bookmark, FileText, AlertTriangle, Info } from "lucide-react";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 import { SyncButton } from "@/components/sync-button";
+import { fmtFracao } from "@/lib/metricas";
 
 export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
   component: ConteudoPage,
@@ -34,7 +36,7 @@ function TabelaGrupo({ titulo, sub, rows, col, icone }: { titulo: string; sub: s
               <div className="mb-1 flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
                   {titulo.includes("formato") && <IconeFormato formato={r.key} />}
-                  <span className="truncate">{r.label}</span>
+                  <span className="truncate" title={String(r.label ?? "")}>{r.label}</span>
                   {r.key === melhor && <Selo cor="var(--good-text)" titulo="Maior alcance mediano"><Trophy size={11} aria-hidden /> 1º</Selo>}
                 </span>
                 <span className="shrink-0 text-sm font-semibold tabular-nums" title="Alcance mediano">{fmtN(r.reachMedian)}</span>
@@ -73,6 +75,7 @@ function ConteudoPage() {
   });
 
   const seg = useMemo(() => (metrics.data ? analyzeFollowers(metrics.data, start, end) : null), [metrics.data, start, end]);
+  const cresc = useMemo(() => (metrics.data ? analyzeGrowth(metrics.data, start, end) : null), [metrics.data, start, end]);
   const fm = useMemo(() => (posts.data ? analyzeFormatsAndTemas(posts.data) : null), [posts.data]);
 
   const head = (
@@ -151,15 +154,77 @@ function ConteudoPage() {
         />
       </div>
 
+      {cresc && cresc.days.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <Painel
+            icone={Scale}
+            titulo="Crescimento: bruto x líquido"
+            resumo="Novos − saíram = o que mudou no total"
+            ajuda={<>Bruto é o número que o Instagram mostra em "Seguidores" (novos no período). Líquido desconta quem deixou de seguir ou saiu do Instagram, e é o que de fato mudou no total. A Meta leva cerca de 2 dias para fechar um dia, então os 2 últimos dias ficam de fora das somas e aparecem no gráfico como "em fechamento".</>}
+          >
+            <div className="hgrid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", marginTop: 4 }}>
+              <Kpi
+                icone={UserPlus}
+                cor="var(--s3)"
+                rotulo="Novos seguidores (bruto)"
+                valor={cresc.diasMedidos ? `+${fmtN(cresc.novos)}` : "sem dado"}
+                dica="igual ao “Seguidores” do Instagram"
+              />
+              <Kpi
+                icone={UserMinus}
+                cor="var(--crit)"
+                rotulo="Deixaram de seguir"
+                valor={cresc.diasMedidos ? `-${fmtN(cresc.saidas)}` : "sem dado"}
+                dica={cresc.taxaSaida != null ? `${fmtFracao(cresc.taxaSaida)} de quem entrou` : "sem saídas medidas no período"}
+              />
+              <Kpi
+                icone={Scale}
+                cor={cresc.liquido < 0 ? "var(--crit)" : "var(--good-text)"}
+                rotulo="Líquido"
+                valor={cresc.diasMedidos ? `${cresc.liquido >= 0 ? "+" : "-"}${fmtN(Math.abs(cresc.liquido))}` : "sem dado"}
+                dica={cresc.diasMedidos ? `${cresc.diasMedidos} dia${cresc.diasMedidos === 1 ? "" : "s"} medido${cresc.diasMedidos === 1 ? "" : "s"}` : undefined}
+              />
+            </div>
+            <div className="grafico-caixa" style={{ height: 240, marginTop: 12 }}>
+              <ResponsiveContainer>
+                <ComposedChart data={cresc.days.map((d) => ({ date: d.date, Novos: d.novos, Saíram: d.saidas == null ? undefined : -d.saidas, Líquido: d.liquido ?? undefined, aberto: d.aberto }))} margin={{ top: 8, right: 12, bottom: 0, left: 0 }} stackOffset="sign">
+                  <CartesianGrid stroke="var(--grid)" vertical={false} />
+                  <XAxis dataKey="date" tickFormatter={fmtDiaBR} tick={{ fontSize: 11, fill: "var(--muted)" }} minTickGap={24} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} width={44} tickFormatter={(v) => fmtN(v)} />
+                  <ReferenceLine y={0} stroke="var(--border)" />
+                  <Tooltip
+                    labelFormatter={(l, itens) => `${fmtDiaBR(String(l))}${itens?.[0]?.payload?.aberto ? " (em fechamento)" : ""}`}
+                    formatter={(v, nome) => [fmtN(Math.abs(Number(v))), nome]}
+                    contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                  />
+                  <Legend {...LEGENDA} />
+                  <Bar dataKey="Novos" stackId="a" fill="var(--s3)" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="Saíram" stackId="a" fill="var(--crit)" radius={[0, 0, 3, 3]} />
+                  <Line type="monotone" dataKey="Líquido" stroke="var(--accent)" strokeWidth={2} dot={cresc.days.length < 20} connectNulls />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {cresc.diasAbertos > 0 && (
+                <Selo cor="var(--warn)" titulo="A Meta ainda não fechou estes dias"><AlertTriangle size={11} aria-hidden /> {cresc.diasAbertos} dia{cresc.diasAbertos === 1 ? "" : "s"} em fechamento, fora das somas</Selo>
+              )}
+              {cresc.diasSemSaida > 0 && (
+                <Selo titulo="Dias com novos seguidores, mas sem a saída gravada"><Info size={11} aria-hidden /> {cresc.diasSemSaida} dia{cresc.diasSemSaida === 1 ? "" : "s"} sem saída medida, fora das somas</Selo>
+              )}
+            </div>
+          </Painel>
+        </div>
+      )}
+
       <div style={{ marginBottom: 16 }}>
       <Painel icone={LineIcon} titulo="Evolução de seguidores" resumo="Linha cheia: medido. Tracejada: estimativa" ajuda={<>Linha contínua é o medido; tracejada é uma estimativa linear, não uma promessa.</>}>
         {seg && seg.points.length >= 2 ? (
-          <div style={{ width: "100%", height: 260, marginTop: 10 }}>
+          <div className="grafico-caixa" style={{ height: 260, marginTop: 10 }}>
             <ResponsiveContainer>
               <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
                 <CartesianGrid stroke="var(--grid)" vertical={false} />
-                <XAxis dataKey="date" tickFormatter={fmtDiaBR} tick={{ fontSize: 11, fill: "var(--muted)" }} minTickGap={24} />
-                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 11, fill: "var(--muted)" }} width={56} tickFormatter={(v) => fmtN(v)} />
+                <XAxis dataKey="date" tickFormatter={fmtDiaBR} tick={{ fontSize: 11, fill: "var(--muted)" }} minTickGap={24} interval="preserveStartEnd" />
+                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 11, fill: "var(--muted)" }} width={48} tickFormatter={(v) => fmtN(v)} />
                 <Tooltip
                   labelFormatter={(l) => fmtDiaBR(String(l))}
                   formatter={(v) => fmtN(Number(v))}
@@ -221,7 +286,7 @@ function ConteudoPage() {
                 </Painel>
               )}
             </div>
-            <div className="hgrid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))" }}>
+            <div className="hgrid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(min(340px,100%),1fr))" }}>
               <TabelaGrupo
                 titulo="Posts por formato"
                 sub={`${fm.total} posts no período`}

@@ -1,8 +1,10 @@
+import { sincronizarShortio } from "../_lib/shortio-sync.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";
 import { runMetaAdsGraphSync } from "../_lib/meta-ads-graph-sync.js";
+import { runAdsPlanilhaSync } from "../_lib/ads-planilha-sync.js";
 
 // Gasto de mídia do Meta, por dia e por campanha, via Windsor.
 // Roda para todo cliente ativo com meta_ad_account_id preenchido.
@@ -155,8 +157,46 @@ const PISO_DIAS_ANUNCIOS = 30;
         graphComErro = true;
       }
     }
-    const hasErrors = results.some((r) => r.errors.length > 0) || graphComErro;
-    res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), accounts: results, ...(graph !== undefined ? { graph } : {}) });
+    // Links do short.gy (todos os da conta, atribuídos ao cliente pela bio, @ ou nome). Nunca derruba o sync.
+    let shortio: unknown = undefined;
+    if (process.env.SHORTIO_API_KEY) {
+      try {
+        shortio = await sincronizarShortio(
+          createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
+          process.env.SHORTIO_API_KEY,
+          { orcamentoMs: 70_000 },
+        );
+      } catch (err) {
+        shortio = { erro: err instanceof Error ? err.message : String(err) };
+      }
+    }
+    // Planilha de distribuição de conteúdo da equipe Doctor Creator, para clientes cuja conta de anúncios não conseguimos ler (clients.ads_planilha_url).
+    let planilha: unknown = undefined;
+    let planilhaComErro = false;
+    if (fonte === "ambas") {
+      try {
+        const contasPlanilha = await runAdsPlanilhaSync({ supabaseUrl: urlSb, supabaseServiceRoleKey: chaveSb, onlyClientId: clientId });
+        await recordSyncStatusPorCliente(
+          createClient(urlSb, chaveSb, { auth: { persistSession: false, autoRefreshToken: false } }),
+          "anuncios",
+          contasPlanilha.map((c) => ({ clientId: c.client_id, rows: c.rows, errors: c.errors })),
+          { okSeHouveLinhas: true },
+        );
+        planilha = contasPlanilha;
+        planilhaComErro = contasPlanilha.some((c) => c.errors.length > 0);
+      } catch (err) {
+        planilha = { erro: err instanceof Error ? err.message : String(err) };
+        planilhaComErro = true;
+      }
+    }
+    const hasErrors = results.some((r) => r.errors.length > 0) || graphComErro || planilhaComErro;
+    res.status(hasErrors ? 207 : 200).json({
+      synced_at: new Date().toISOString(),
+      accounts: results,
+      ...(graph !== undefined ? { graph } : {}),
+      ...(planilha !== undefined ? { planilha } : {}),
+      ...(shortio !== undefined ? { shortio } : {}),
+    });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }

@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 
-export function LogoutButton() {
+export function LogoutButton({ className = "text-sm" }: { className?: string }) {
   const navigate = useNavigate();
 
   async function handleLogout() {
@@ -13,7 +13,7 @@ export function LogoutButton() {
     <button
       type="button"
       onClick={handleLogout}
-      className="text-sm"
+      className={className}
       style={{ color: "var(--text-dim)" }}
     >
       Sair

@@ -1,7 +1,9 @@
 import { useMemo } from "react";
+import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getCrmPipelineKanban } from "@/lib/client-data";
+import { fmtTaxa } from "@/lib/metricas";
 
 export const Route = createFileRoute("/_authenticated/$clientId/crm-estrutura")({
   component: CrmEstruturaPage,
@@ -61,6 +63,7 @@ function KanbanBoard({ pipelineId, pipelineName, rows }: { pipelineId: string; p
           </span>
         </div>
       </div>
+      <p className="rola-aviso px-4 pt-3" style={{ marginBottom: 0 }}>Arraste para o lado para ver todas as etapas →</p>
       <div className="flex gap-3 overflow-x-auto p-4">
         {rows.map((r) => {
           const state = classify(r, maxTotal);
@@ -146,7 +149,7 @@ function CrmEstruturaPage() {
       </div>
 
       {isLoading ? (
-        <p style={{ color: "var(--text-dim)" }}>Carregando…</p>
+        <Carregando texto="Lendo a estrutura do CRM…" />
       ) : totalLeads === 0 ? (
         <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
           Ainda sem leads sincronizados do Kommo pra esse cliente.
@@ -181,7 +184,7 @@ function CrmEstruturaPage() {
             <ul className="space-y-3 text-sm">
               {biggest && biggest.total > 0 && (
                 <li className="rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>
-                  <b>{Math.round((biggest.total / totalLeads) * 100)}% da base</b> ({fmtN(biggest.total)} leads) está
+                  <b>{fmtTaxa(biggest.total, totalLeads)} da base</b> ({fmtN(biggest.total)} leads) está
                   parada em <b>"{biggest.status_name}"</b> ({biggest.pipeline_name}) — é o maior bolsão isolado de
                   toda a conta.
                 </li>
