@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { AppShell } from "@/components/app-shell";
 import { SyncFreshnessBadge, DisponibilidadeFontes } from "@/components/sync-freshness-badge";
 import { useClientRole } from "@/hooks/use-client-role";
-import { CLIENTES_SO_CRM, ROTAS_DO_CRM } from "@/lib/nav";
+import { CLIENTES_SO_CRM, CLIENTES_SEM_AUDIENCIA, ROTAS_DO_CRM } from "@/lib/nav";
 import { resolveDateRange, type DateRangeState, type RangePreset } from "@/lib/date-range";
 import { CoberturaPeriodo } from "@/components/cobertura-periodo";
 
@@ -36,6 +36,12 @@ function ClientLayout() {
   const { data: fontes } = useQuery({ queryKey: ["client-fontes", clientId], queryFn: () => getClientFontes(clientId) });
 
   const soCrm = CLIENTES_SO_CRM.has(clientId);
+  const semAudiencia = CLIENTES_SEM_AUDIENCIA.has(clientId);
+  useEffect(() => {
+    if (semAudiencia && currentPathname.endsWith("/audiencia")) {
+      navigate({ to: "/$clientId", params: { clientId }, search: dateRange, replace: true });
+    }
+  }, [semAudiencia, currentPathname, clientId, navigate, dateRange]);
   useEffect(() => {
     if (!soCrm) return;
     const dentroDoCrm = ROTAS_DO_CRM.some((r) => currentPathname.endsWith(r));
@@ -90,7 +96,7 @@ function ClientLayout() {
         pathname={currentPathname}
         dateRange={dateRange}
         onDateRange={(next) => navigate({ to: currentPathname, search: next, replace: true })}
-        vis={{ isAdmin, fontes, soCrm, papel }}
+        vis={{ isAdmin, fontes, soCrm, semAudiencia, papel }}
         frescor={<SyncFreshnessBadge clientId={clientId} />}
         frescorCompacto={<SyncFreshnessBadge clientId={clientId} compacto />}
         fontesLinha={<DisponibilidadeFontes clientId={clientId} fontes={fontes} />}

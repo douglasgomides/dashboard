@@ -71,7 +71,8 @@ export function SyncFreshnessBadge({ clientId, compacto = false }: { clientId: s
         <span key={l.fonte} style={{ color: COR[tomDaFonte(l)], fontWeight: 600 }} title={tituloDaFonte(l)}>
           {i > 0 && <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>· </span>}
           {ROTULOS[l.fonte] ?? "Comentários"}
-          {l.data_ate ? ` até ${ddmm(l.data_ate)}` : ""}
+          {/* Fonte alimentada à mão (planilha): a data de análise não é "atualizado até", então não aparece. */}
+          {l.motivo_dono === "manual" ? " (planilha)" : l.data_ate ? ` até ${ddmm(l.data_ate)}` : ""}
           {tomDaFonte(l) === "ruim" ? (motivoDaLinha(l)?.dono === "nos" || !motivoDaLinha(l) ? " (erro)" : " (ver motivo)") : ""}
         </span>
       ))}

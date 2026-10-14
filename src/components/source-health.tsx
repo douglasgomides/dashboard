@@ -32,6 +32,7 @@ const PROXIMA: Record<Exclude<Dono, never>, string> = {
   origem: "Confirmar com o cliente se pausou a campanha ou se o CRM é lançado à mão. Sem ação técnica.",
   meta: "Aguardar a próxima atualização automática. Se passar de 2 dias, abrir chamado na Meta.",
   nos: "Equipe Doctor Creator: rodar a sincronização desta fonte e olhar o erro.",
+  manual: "Fonte lançada à mão (planilha): atualizar a planilha ou liberar o acesso à origem.",
 };
 
 export interface SaudeFonte {
@@ -52,7 +53,7 @@ export function saudeDaFonte(ligado: boolean, l: LinhaFonte | undefined): SaudeF
   if (!l || (!l.data_ate && !l.last_error)) return { estado: "sem_dado", rotulo: ROTULO_ESTADO.sem_dado, cor: COR.sem_dado, data: null, causa: "A fonte está ligada, mas nenhum dado chegou ainda.", proxima: PROXIMA.nos, peso: 3 };
   if (tom === "bom" && !l.last_error) return { estado: "atualizada", rotulo: ROTULO_ESTADO.atualizada, cor: COR.atualizada, data, causa: null, proxima: null, peso: 1 };
   if (m) {
-    const estado: Estado = m.dono === "nos" ? "erro" : m.dono;
+    const estado: Estado = m.dono === "nos" ? "erro" : m.dono === "manual" ? "origem" : m.dono;
     return { estado, rotulo: ROTULO_ESTADO[estado], cor: COR[estado], data, causa: m.texto, proxima: PROXIMA[m.dono], peso: estado === "erro" ? 5 : estado === "cliente" ? 4 : 2 };
   }
   // Atrasada (2 a 3 dias) sem causa identificada ainda.

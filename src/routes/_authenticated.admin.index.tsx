@@ -34,7 +34,7 @@ function LinhaMotivo({ texto, motivo }: { texto: string; motivo: ReturnType<type
 
 // "Quantas são realmente nossas?": é a resposta à pergunta "o sync está quebrado?".
 function ResumoDonos({ itens }: { itens: { motivo: ReturnType<typeof motivoDaLinha> }[] }) {
-  const cont: Record<Dono, number> = { cliente: 0, meta: 0, origem: 0, nos: 0 };
+  const cont: Record<Dono, number> = { cliente: 0, meta: 0, origem: 0, nos: 0, manual: 0 };
   let semMotivo = 0;
   for (const i of itens) i.motivo ? cont[i.motivo.dono]++ : semMotivo++;
   const partes = (Object.keys(cont) as Dono[]).filter((d) => cont[d] > 0).map((d) => `${cont[d]} ${ROTULO_DONO[d].toLowerCase()}`);

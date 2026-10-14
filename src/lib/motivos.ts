@@ -1,9 +1,9 @@
 // Por que uma fonte está parada, em linguagem de gente, e DE QUEM é a ação.
 // Hoje "Anúncios até 04/09" parece falha de sincronização; muitas vezes é pagamento, campanha desligada
 // ou acesso revogado do lado do cliente. Este arquivo transforma o que sabemos em uma frase honesta.
-import { diasDeAtraso, type LinhaFonte } from "@/lib/saude-fontes";
+import { atrasoDaFonte, diasDeAtraso, type LinhaFonte } from "@/lib/saude-fontes";
 
-export type Dono = "cliente" | "meta" | "origem" | "nos";
+export type Dono = "cliente" | "meta" | "origem" | "nos" | "manual";
 export type Motivo = { texto: string; dono: Dono };
 
 export const ROTULO_DONO: Record<Dono, string> = {
@@ -11,6 +11,7 @@ export const ROTULO_DONO: Record<Dono, string> = {
   meta: "Instabilidade da Meta",
   origem: "Sem dado novo na origem",
   nos: "Falha nossa",
+  manual: "Planilha manual",
 };
 
 // Cores por dono: só "Falha nossa" é vermelho de verdade; o resto não é culpa do sync.
@@ -19,6 +20,7 @@ export const COR_DONO: Record<Dono, string> = {
   meta: "var(--s1)",
   origem: "var(--muted)",
   nos: "var(--crit)",
+  manual: "var(--muted)",
 };
 
 const NOME_FONTE: Record<string, string> = { instagram: "Instagram", anuncios: "anúncios", crm: "CRM", atendimento: "WhatsApp", comentarios: "comentários" };
@@ -49,7 +51,7 @@ export function motivoDaLinha(l: LinhaFonte | undefined): Motivo | null {
     if (m) return m;
     return { texto: `Erro técnico na última atualização: ${l.last_error.replace(/\s+/g, " ").slice(0, 140)}`, dono: "nos" };
   }
-  if (l.data_ate && diasDeAtraso(l.data_ate) > 3) {
+  if (l.data_ate && atrasoDaFonte(l) > 3) {
     const rodouOk = !!l.last_success_at && diasDeAtraso(l.last_success_at.slice(0, 10)) <= 1;
     if (rodouOk || !l.last_attempt_at) {
       const por =

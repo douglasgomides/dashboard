@@ -142,6 +142,11 @@ export const AVANCADO: NavTab[] = [
 export const CLIENTES_SO_CRM = new Set(["8770500e-ab5d-4ae8-9489-c49c9991303c"]);
 export const ROTAS_DO_CRM = ["/crm-painel", "/crm-guia", "/crm-estrutura", "/vendas-kommo"];
 
+// Clientes sem Business Manager próprio: a Meta não libera a Audiência ao vivo
+// (cidades, idade, gênero), então a aba fica escondida e o endereço direto volta
+// para o Resultado. Dra. Marcelly Achkar. Para voltar, tire o id daqui.
+export const CLIENTES_SEM_AUDIENCIA = new Set(["633e6ee6-cb55-4796-8ffe-ce9c6e34cc12"]);
+
 export function fonteOk(fonte: Fonte | undefined, fontes: Fontes): boolean {
   if (!fonte || !fontes) return true;
   if (fonte === "instagram") return fontes.tem_instagram;
@@ -155,6 +160,7 @@ export interface Visibilidade {
   isAdmin: boolean;
   fontes: Fontes;
   soCrm: boolean;
+  semAudiencia?: boolean;
   /** Papel no cliente. Muda só a ORDEM de apresentação, nunca o acesso. */
   papel?: "admin" | "owner" | "strategist" | "viewer" | null;
 }
@@ -169,7 +175,7 @@ const ORDEM_POR_PAPEL: Record<string, NavArea["id"][]> = {
 };
 
 export function tabVisivel(t: NavTab, v: Visibilidade): boolean {
-  return (!t.admin || v.isAdmin) && fonteOk(t.fonte, v.fontes) && (!v.soCrm || !!t.admin || t.fonte === "crm");
+  return (!t.admin || v.isAdmin) && fonteOk(t.fonte, v.fontes) && (!v.soCrm || !!t.admin || t.fonte === "crm") && !(v.semAudiencia && t.path.endsWith("audiencia"));
 }
 
 export type AreaVisivel = NavArea & { visiveis: NavTab[] };

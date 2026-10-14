@@ -34,6 +34,7 @@ type Parte = {
   erro?: string | null;
   dados_ate?: string | null;
   nada_a_fazer?: string;
+  so_planilha?: boolean;
 };
 type Mensagem = { texto: string; erro: boolean };
 
@@ -65,6 +66,10 @@ function mensagemDaParte(nome: string, p: Parte, sozinha: boolean): Mensagem | n
       return { texto: `${rotulo}: o token da Meta deste cliente venceu. Gere um novo e grave no cadastro.`, erro: true };
     }
     return { texto: `${rotulo}: erro — ${bruto}`, erro: true };
+  }
+  if (p.so_planilha) {
+    // Fonte alimentada à mão (planilha da equipe): atualizar lê a planilha de novo; não existe "até que data".
+    return { texto: `${rotulo} atualizados a partir da planilha.`, erro: false };
   }
   const ate = ddmm(p.dados_ate);
   if ((p.linhas ?? 0) > 0) {

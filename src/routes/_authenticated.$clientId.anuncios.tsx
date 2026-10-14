@@ -7,7 +7,8 @@ import { statusDoCliente, diasDeAtraso, ddmm } from "@/lib/saude-fontes";
 import { motivoDaLinha, COR_DONO } from "@/lib/motivos";
 import { SeloDono } from "@/components/selo-dono";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
-import { getAdsPorDia, getAdsDiagnosticoPorObjetivo, getClientFontes } from "@/lib/client-data";
+import { getAdsPorDia, getAdsDiagnosticoPorObjetivo, getClientFontes, getAdsPlanilha } from "@/lib/client-data";
+import { AdsPlanilhaPainel } from "@/components/ads-planilha";
 import { SyncButton } from "@/components/sync-button";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { ComparativoConta } from "@/components/anuncios/comparativo-conta";
@@ -48,6 +49,8 @@ function MotivoParada({ clientId }: { clientId: string }) {
   const parada = l?.data_ate ? diasDeAtraso(l.data_ate) > 3 : false;
   const m = parada || l?.motivo ? motivoDaLinha(l) : null;
   if (!l || !m) return null;
+  // Fonte alimentada à mão (planilha de distribuição de conteúdo): não é parada nem erro, e o painel da planilha já explica a origem.
+  if (m.dono === "manual") return null;
   return (
     <Faixa icone={AlertTriangle} cor={COR_DONO[m.dono]} alerta>
       <div className="flex flex-wrap items-center gap-2">
@@ -256,6 +259,14 @@ function AnunciosPage() {
     enabled: vazio,
   });
 
+  // Cliente cuja conta de anúncios não é lida pela Meta/Windsor: impulsionamentos vêm da planilha de distribuição de conteúdo (semanal).
+  const { data: planilha } = useQuery({
+    queryKey: ["ads-planilha", clientId],
+    queryFn: () => getAdsPlanilha(clientId),
+    staleTime: 60_000,
+  });
+  const temPlanilha = (planilha?.length ?? 0) > 0;
+
   if (isLoading) {
     return <Carregando texto="Lendo os anúncios…" />;
   }
@@ -273,10 +284,16 @@ function AnunciosPage() {
           <SyncButton clientId={clientId} alvo="anuncios" />
         </div>
         <MotivoParada clientId={clientId} />
-        <Faixa icone={Info}>Investimento em anúncios do Meta (Facebook e Instagram), por dia e por campanha.</Faixa>
-        <Faixa icone={ultimoGasto || fontes?.tem_anuncios ? PauseCircle : AlertTriangle} cor="var(--warn)" alerta>
-          {mensagemVazia}
-        </Faixa>
+        {temPlanilha ? (
+          <AdsPlanilhaPainel linhas={planilha ?? []} start={start} end={end} />
+        ) : (
+          <>
+            <Faixa icone={Info}>Investimento em anúncios do Meta (Facebook e Instagram), por dia e por campanha.</Faixa>
+            <Faixa icone={ultimoGasto || fontes?.tem_anuncios ? PauseCircle : AlertTriangle} cor="var(--warn)" alerta>
+              {mensagemVazia}
+            </Faixa>
+          </>
+        )}
       </div>
     );
   }
