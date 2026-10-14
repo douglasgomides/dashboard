@@ -265,18 +265,38 @@ function CrmConnectionsList({ clientId }: { clientId: string }) {
   );
 }
 
-function NewUserForm({ clientId }: { clientId: string }) {
+const LINK_PAINEL = "https://dash.doctorcreator.com.br";
+
+/** Mensagem pronta para mandar ao médico (WhatsApp ou e-mail) com o acesso. */
+function mensagemDeAcesso(o: { nomeCliente: string; email: string; senha: string | null }): string {
+  return [
+    `Olá! Seu acesso ao painel da Doctor Creator está pronto.`,
+    ``,
+    `Link: ${LINK_PAINEL}`,
+    `E-mail: ${o.email}`,
+    o.senha ? `Senha temporária: ${o.senha}` : `Senha: a mesma que você já usa no painel.`,
+    ``,
+    o.senha
+      ? `No primeiro acesso você cria a sua senha e vê um tour de 2 minutos: onde ver o retorno do investimento, o conteúdo, os anúncios e o atendimento.`
+      : `${o.nomeCliente} já aparece para você ao entrar.`,
+    `Qualquer dúvida, é só responder esta mensagem.`,
+  ].join("\n");
+}
+
+function NewUserForm({ clientId, nomeCliente }: { clientId: string; nomeCliente: string }) {
   const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<CreateClientUserInput["role"]>("owner");
-  const [result, setResult] = useState<{ user_id: string; temporary_password: string } | null>(null);
+  const [result, setResult] = useState<{ user_id: string; temporary_password: string | null; ja_existia?: boolean; email: string } | null>(null);
+  const [copiado, setCopiado] = useState(false);
 
   const mutation = useMutation({
-    mutationFn: () => createClientUser({ email, client_id: clientId, role }),
+    mutationFn: () => createClientUser({ email: email.trim(), client_id: clientId, role }),
     onSuccess: (data) => {
-      setResult(data);
+      setResult({ ...data, email: email.trim() });
       setEmail("");
       queryClient.invalidateQueries({ queryKey: ["admin-members", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["admin-logins-por-cliente"] });
     },
   });
 
@@ -284,62 +304,97 @@ function NewUserForm({ clientId }: { clientId: string }) {
     e.preventDefault();
     if (!email.trim()) return;
     setResult(null);
+    setCopiado(false);
     mutation.mutate();
   }
 
+  const msg = result ? mensagemDeAcesso({ nomeCliente, email: result.email, senha: result.temporary_password }) : "";
+
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-      <div>
-        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          E-mail
-        </label>
-        <input autoComplete="off"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className="mt-1 w-64 rounded-md border px-2 py-1.5 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          Papel
-        </label>
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value as CreateClientUserInput["role"])}
-          className="mt-1 rounded-md border px-2 py-1.5 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+    <div className="space-y-3">
+      <ol className="list-decimal space-y-0.5 pl-5 text-sm" style={{ color: "var(--ink-2)" }}>
+        <li>Digite o e-mail do médico (ou de quem vai acompanhar) e escolha o papel.</li>
+        <li>Clique em <b>Criar acesso</b>: o Hub gera uma senha temporária.</li>
+        <li>Envie a mensagem pronta por WhatsApp ou e-mail. No primeiro acesso, a pessoa cria a própria senha e vê um tour.</li>
+      </ol>
+      <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+            E-mail
+          </label>
+          <input autoComplete="off"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="Ex.: medico@clinica.com.br"
+            className="mt-1 w-64 rounded-md border px-2 py-1.5 text-sm"
+            style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+            Papel
+          </label>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as CreateClientUserInput["role"])}
+            className="mt-1 rounded-md border px-2 py-1.5 text-sm"
+            style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+          >
+            <option value="owner">Owner (o médico)</option>
+            <option value="strategist">Strategist</option>
+            <option value="viewer">Viewer</option>
+          </select>
+        </div>
+        <button
+          type="submit"
+          disabled={mutation.isPending}
+          className="min-h-[40px] rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          style={{ background: "var(--accent)" }}
         >
-          <option value="owner">Owner (o médico)</option>
-          <option value="strategist">Strategist</option>
-          <option value="viewer">Viewer</option>
-        </select>
-      </div>
-      <button
-        type="submit"
-        disabled={mutation.isPending}
-        className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-        style={{ background: "var(--accent)" }}
-      >
-        {mutation.isPending ? "Criando…" : "Criar usuário"}
-      </button>
-      {mutation.isError && (
-        <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
-          {(mutation.error as Error).message}
-        </p>
-      )}
+          {mutation.isPending ? "Criando…" : "Criar acesso"}
+        </button>
+        {mutation.isError && (
+          <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
+            {(mutation.error as Error).message}
+          </p>
+        )}
+      </form>
       {result && (
-        <div
-          className="w-full rounded-lg border p-3 text-sm"
-          style={{ background: "var(--good-bg)", borderColor: "var(--good-border)" }}
-        >
-          Usuário criado. Senha temporária (copie e envie por um canal seguro — não é mostrada de novo):{" "}
-          <code className="font-mono font-semibold">{result.temporary_password}</code>
+        <div className="space-y-2 rounded-lg border p-3 text-sm" style={{ background: "var(--good-bg)", borderColor: "var(--good-border)" }}>
+          <p className="font-semibold">
+            {result.ja_existia
+              ? "Esse e-mail já tinha conta no painel: ele foi vinculado a este cliente, com a senha que já usa."
+              : "Acesso criado. A senha temporária aparece só aqui e na mensagem abaixo."}
+          </p>
+          <textarea readOnly value={msg} rows={9} className="w-full rounded-md border p-2 font-mono text-xs" style={{ borderColor: "var(--border)", background: "var(--surface)" }} aria-label="Mensagem para enviar" />
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="min-h-[40px] rounded-lg px-3 text-sm font-semibold text-white"
+              style={{ background: "var(--accent)" }}
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(msg);
+                  setCopiado(true);
+                } catch {
+                  /* sem permissão: a pessoa copia do campo */
+                }
+              }}
+            >
+              {copiado ? "Copiado!" : "Copiar mensagem"}
+            </button>
+            <a className="inline-flex min-h-[40px] items-center rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: "var(--border)", background: "var(--surface)" }} href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer">
+              Enviar pelo WhatsApp
+            </a>
+            <a className="inline-flex min-h-[40px] items-center rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: "var(--border)", background: "var(--surface)" }} href={`mailto:${result.email}?subject=${encodeURIComponent("Seu acesso ao painel Doctor Creator")}&body=${encodeURIComponent(msg)}`}>
+              Enviar por e-mail
+            </a>
+          </div>
         </div>
       )}
-    </form>
+    </div>
   );
 }
 
@@ -497,8 +552,8 @@ function AdminClientDetailPage() {
       </section>
 
       <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h3 className="mb-3 text-sm font-semibold">Novo usuário para este cliente</h3>
-        <NewUserForm clientId={clientId} />
+        <h3 id="acesso" className="mb-3 scroll-mt-4 text-sm font-semibold">Dar acesso ao médico</h3>
+        <NewUserForm clientId={clientId} nomeCliente={client?.name ?? "O cliente"} />
       </section>
 
       <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
