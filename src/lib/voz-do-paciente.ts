@@ -418,9 +418,11 @@ function formatoParaIntencao(intencao: Intencao): string {
 function sugestaoPost(intencao: Intencao, a: { rotulo: string; termo: string }, exemplo: string, n: number, sensivel: boolean) {
   const ex = cortar(exemplo, 90);
   switch (intencao) {
+    // Gancho = primeira frase do vídeo, falada para o paciente. Nunca copia o comentário nem diz quantas vezes
+    // a dúvida apareceu (isso é evidência para a equipe, não abertura de conteúdo).
     case "preco":
     case "agendamento":
-      return { formato: "Reels ou Stories", titulo: "Como funciona a consulta, do agendamento ao retorno", gancho: "Muita gente pergunta como funciona a consulta. Te mostro o passo a passo." };
+      return { formato: "Reels ou Stories", titulo: "Como funciona a consulta, do agendamento ao retorno", gancho: "Do primeiro contato ao retorno: é assim que funciona uma consulta aqui." };
     case "medo":
       return { formato: "Reels", titulo: `${a.rotulo}: é seguro? O que é mito e o que merece atenção`, gancho: `Tem medo quando o assunto é ${a.termo}? Vamos separar o que é mito do que precisa de atenção.` };
     case "objecao":
@@ -431,12 +433,9 @@ function sugestaoPost(intencao: Intencao, a: { rotulo: string; termo: string }, 
       return {
         formato: "Carrossel",
         titulo: `${a.rotulo}: respondendo a dúvida que mais aparece`,
-        // Assunto sensível (hormônio, peso, suplemento, procedimento): não cita a pergunta, que pode trazer nome de produto.
         gancho: sensivel
-          ? `${n >= 3 ? `Perguntas sobre ${a.termo} apareceram ${n} vezes nos comentários.` : `Recebi perguntas sobre ${a.termo} nos comentários.`} Antes de qualquer decisão, entenda isto.`
-          : n >= 3
-            ? `"${ex}" Perguntas assim apareceram ${n} vezes nos comentários. Vamos falar sobre ${a.termo}.`
-            : `"${ex}" Vamos falar sobre ${a.termo}.`,
+          ? `Antes de decidir qualquer coisa sobre ${a.termo}, entenda isto.`
+          : `${a.rotulo}: o que quase ninguém te explica direito.`,
       };
   }
 }

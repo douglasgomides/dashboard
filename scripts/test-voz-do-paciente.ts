@@ -472,11 +472,18 @@ console.log(`  detecção original: ${obtido.length} perguntas; triagem nova: ${
 console.log(`\n=== Ideias pela regra original x ${BASELINE} ===`);
 const ideiasBase = base.conteudo.buildIdeias([], esperadoBase);
 const ideiasOrig = buildIdeiasRegraOriginal([], obtido);
-const chave = (i: any) => [i.regra, i.tema, i.formato, i.funil, i.estagio, i.acao, i.porque].join(" | ");
-espera(
-  `ideias "pergunta repetida" iguais às do ${BASELINE} (${ideiasBase.ideias.length})`,
-  ideiasOrig.ideias.map(chave).join("\n") === ideiasBase.ideias.map(chave).join("\n"),
-);
+// Sem "acao": desde out/2026 a ação não traz mais "Gancho possível: <comentário copiado>" (pedido do usuário).
+const chave = (i: any) => [i.regra, i.tema, i.formato, i.funil, i.estagio, i.porque].join(" | ");
+// Desde out/2026 só comentário classificado como pergunta entra (classificar-comentario.ts): a regra original
+// pode dar MENOS ideias que o baseline, nunca outras.
+{
+  const base = new Set(ideiasBase.ideias.map(chave));
+  for (const i of ideiasOrig.ideias) if (!base.has(chave(i))) console.log("   nova:", chave(i));
+  espera(
+    `ideias "pergunta repetida": todas presentes no ${BASELINE} (${ideiasOrig.ideias.length} de ${ideiasBase.ideias.length})`,
+    ideiasOrig.ideias.every((i) => base.has(chave(i))),
+  );
+}
 espera("faltas da regra original iguais ao baseline", ideiasOrig.faltas.join("\n") === ideiasBase.faltas.join("\n"));
 espera("ideias da regra original marcadas como regra original", ideiasOrig.ideias.every((i) => i.regraOriginal === true));
 const novasJ = buildIdeias([], juliana as any, { donos: donosJ });

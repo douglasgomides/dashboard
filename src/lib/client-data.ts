@@ -760,3 +760,25 @@ export async function getRoiPeriodo(clientId: string, de: string, ate: string): 
     crm_compartilhado: !!data.crm_compartilhado,
   };
 }
+
+// Comentários do período (todos, não só perguntas), com o tema do post: base de "Tema que gera identificação".
+export async function getComentariosPeriodo(clientId: string, start: string, end: string, limit = 2000) {
+  const { desde, antesDe } = limitesBR(start, end);
+  const { data, error } = await supabase
+    .from("instagram_comments")
+    .select("id, text, author_username, instagram_post_id, instagram_posts(tema)")
+    .eq("client_id", clientId)
+    .gte("commented_at", desde)
+    .lt("commented_at", antesDe)
+    .order("commented_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as { id: string; text: string; author_username: string | null; instagram_post_id: string | null; instagram_posts: { tema: string | null } | null }[];
+}
+
+// Objeções das conversas de WhatsApp lidas pela IA (auditoria comercial), por tipo. null quando não há.
+export async function getObjecoesWhatsapp(clientId: string, start: string, end: string): Promise<Record<string, number> | null> {
+  const { data, error } = await (supabase as any).rpc("auditoria_comercial", { p_client: clientId, p_de: start, p_ate: end.slice(0, 10) });
+  if (error || !data?.objecoes) return null;
+  return data.objecoes as Record<string, number>;
+}

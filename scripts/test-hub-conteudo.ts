@@ -81,7 +81,8 @@ console.log("\nTravessao/emoji no texto gerado:", bad ? "SIM (falha)" : "nenhum"
     if (!ok) falhasOrig++;
     console.log(`${ok ? "ok  " : "FALHA"} ${nome}${det ? ` -> ${det}` : ""}`);
   };
-  const chave = (i: any) => [i.regra, i.tema, i.formato, i.funil, i.estagio, i.acao, i.porque].join(" | ");
+  // Sem "acao": desde out/2026 a ação não traz mais "Gancho possível: <comentário copiado>" (pedido do usuário).
+  const chave = (i: any) => [i.regra, i.tema, i.formato, i.funil, i.estagio, i.porque].join(" | ");
   console.log(`\n=== Ideias: regra original x ${BASELINE} ===`);
   for (const [nome, posts, qs] of [["Juliana Paola", julPosts, julQ], ["Lana Torres", lanaPosts, lanaQ], ["Dr. Sergio Maia", sergioPosts, sergioQ], ["Doctor Creator", dcPosts, []], ["Dra. Samira (vazio)", [], []]] as [string, any[], any[]][]) {
     const b = base.conteudo.buildIdeias(posts, qs);
