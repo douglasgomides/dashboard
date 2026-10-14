@@ -67,20 +67,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const temporaryPassword = randomPassword();
+  const emailNorm = email.trim().toLowerCase();
 
+  // primeiro_acesso: no primeiro login a pessoa cria a própria senha e vê o tour (rota /bem-vindo).
   const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email,
+    email: emailNorm,
     password: temporaryPassword,
     email_confirm: true,
+    user_metadata: { primeiro_acesso: true },
   });
-  if (createError || !created.user) {
-    res.status(400).json({ error: createError?.message ?? "Falha ao criar usuário" });
-    return;
+
+  let userId = created?.user?.id ?? null;
+  let jaExistia = false;
+  if (createError || !userId) {
+    // E-mail que já tem conta (ex.: médico em dois clientes): só vincula ao cliente, sem trocar a senha dele.
+    if (createError && /already|registered|exists/i.test(createError.message)) {
+      for (let page = 1; page <= 10 && !userId; page++) {
+        const { data: lista } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+        const achado = lista?.users.find((u) => (u.email ?? "").toLowerCase() === emailNorm);
+        if (achado) userId = achado.id;
+        if (!lista || lista.users.length < 1000) break;
+      }
+      jaExistia = !!userId;
+    }
+    if (!userId) {
+      res.status(400).json({ error: createError?.message ?? "Falha ao criar usuário" });
+      return;
+    }
   }
 
   const { error: memberError } = await admin
     .from("client_members")
-    .insert({ client_id, user_id: created.user.id, role });
+    .upsert({ client_id, user_id: userId, role }, { onConflict: "client_id,user_id" });
   if (memberError) {
     // Usuário já foi criado — não desfazemos automaticamente; reporta o erro
     // pro admin decidir (ex.: vincular manualmente depois).
@@ -88,5 +106,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  res.status(200).json({ user_id: created.user.id, temporary_password: temporaryPassword });
+  res.status(200).json({ user_id: userId, temporary_password: jaExistia ? null : temporaryPassword, ja_existia: jaExistia });
 }

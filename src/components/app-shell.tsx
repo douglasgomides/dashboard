@@ -264,6 +264,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
           )}
         </nav>
         <div className="side-foot so-aberta">
+          <Link to="/bem-vindo" className="text-sm">Tour do painel</Link>
           <TemaBotoes />
           <LogoutButton className="text-sm text-left min-h-[36px]" />
           <span>Intelligence Hub · Doctor Creator</span>

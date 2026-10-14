@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Carregando } from "@/components/sem-fonte";
+import { MANUAL_CRM } from "@/lib/manual-crm";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Circle, Copy, Printer, ClipboardList } from "lucide-react";
@@ -84,6 +85,14 @@ function GuiaCrmPage() {
           <button type="button" onClick={() => window.print()} className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border px-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
             <Printer size={14} aria-hidden /> Imprimir / salvar PDF
           </button>
+          <button
+            type="button"
+            onClick={async () => (await import("@/lib/pdf-manual-crm")).baixarManualCrm(client?.name)}
+            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold"
+            style={{ borderColor: "var(--accent)", color: "var(--accent)", background: "var(--surface)" }}
+          >
+            <Printer size={14} aria-hidden /> Baixar o manual do CRM (PDF)
+          </button>
         </div>
       </header>
 
@@ -154,6 +163,27 @@ function GuiaCrmPage() {
           </div>
         ))}
       </section>
+      <ManualCrm />
     </div>
+  );
+}
+
+// Manual completo (mesmo texto do PDF e do onboarding): o padrão que o painel precisa ler.
+function ManualCrm() {
+  return (
+    <section className="space-y-3 rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }} aria-label="Manual de organização do CRM">
+      <h2 className="text-[15px] font-semibold">Manual de organização do CRM</h2>
+      {MANUAL_CRM.map((s) => (
+        <div key={s.titulo}>
+          <h3 className="text-sm font-semibold" style={{ color: "var(--ink)" }}>{s.titulo}</h3>
+          {s.intro && <p className="text-sm" style={{ color: "var(--ink-2)" }}>{s.intro}</p>}
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
+            {s.itens.map((i) => (
+              <li key={i.titulo}><b>{i.titulo}:</b> {i.texto}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
   );
 }

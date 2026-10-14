@@ -453,9 +453,9 @@ function AdminClientsPage() {
                             {[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}
                           </div>
                           {semLogin(c.id) && (
-                            <div className="mt-1 inline-flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--warn)" }} title="Nenhum usuário do cliente tem acesso ao painel (só a equipe).">
-                              <UserX size={13} aria-hidden /> Médico sem login
-                            </div>
+                            <Link to="/admin/$clientId" params={{ clientId: c.id }} hash="acesso" className="mt-1 inline-flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--warn)" }} title="Nenhum usuário do cliente tem acesso ao painel (só a equipe). Clique para dar acesso.">
+                              <UserX size={13} aria-hidden /> Médico sem login · dar acesso
+                            </Link>
                           )}
                           <ChipQualidade clientId={c.id} />
                         </div>

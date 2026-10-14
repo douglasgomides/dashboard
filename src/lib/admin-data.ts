@@ -131,7 +131,7 @@ export async function createClientUser(input: CreateClientUserInput) {
   if (!res.ok) {
     throw new Error(body.error ?? `Falha ao criar usuário (HTTP ${res.status})`);
   }
-  return body as { user_id: string; temporary_password: string };
+  return body as { user_id: string; temporary_password: string | null; ja_existia?: boolean };
 }
 
 export interface CreateAdminInput {
