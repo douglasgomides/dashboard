@@ -20,6 +20,12 @@ import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { buildRelatorioEnvio, LIMITE_WHATSAPP, SECOES, type AlteracaoLinguagem, type ChecagemItem, type RelatorioEnvio } from "@/lib/relatorio-envio";
 import { checarLinguagemCFM, ROTULO_REGRA_CFM } from "@/lib/linguagem-cfm";
 import { InsightCard } from "@/components/insight-card";
+import { useQualidadeDados } from "@/components/qualidade-dados";
+import { usePautas } from "@/components/planejador-conteudo";
+import { statusDoCliente } from "@/lib/saude-fontes";
+import { motivoDaLinha } from "@/lib/motivos";
+import { pendenciasDoCliente, textosComTom, ROTULO_TOM, type Tom } from "@/lib/relatorio-tom";
+import { ROTULO_FORMATO, seteDias } from "@/lib/pauta";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 
 export const Route = createFileRoute("/_authenticated/$clientId/relatorio")({
@@ -113,6 +119,33 @@ function RelatorioPage() {
     });
   }, [loading, erro, client.data, f, periodLabel, start, end, temIg, temAds, temCrm, temWts, metrics.data, posts.data, perguntas.data, periodoIg.data, ads.data, wts.data, crm.data, excluidos, manterCfm]);
 
+  // Tom e blocos extras (pendências do cliente, próxima semana). "padrao" mantém o texto de sempre.
+  const [tom, setTom] = useState<Tom | "padrao">("padrao");
+  const [explicar, setExplicar] = useState(false);
+  const [comPendencias, setComPendencias] = useState(true);
+  const [comSemana, setComSemana] = useState(true);
+  const qualidade = useQualidadeDados(clientId);
+  const saude = useQuery({ queryKey: ["saude-cliente-motivos", clientId], queryFn: () => statusDoCliente(clientId), staleTime: 5 * 60_000, retry: false });
+  const pautasApi = usePautas(clientId);
+  const pendencias = useMemo(
+    () => pendenciasDoCliente(qualidade.data ?? [], (saude.data ?? []).map((l) => motivoDaLinha(l)).filter((m): m is NonNullable<typeof m> => !!m)),
+    [qualidade.data, saude.data],
+  );
+  const proximaSemana = useMemo(() => {
+    const dias = seteDias(new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10));
+    const rot = new Map(dias.map((d) => [d.data, d.rotulo]));
+    return (pautasApi.q.data?.pautas ?? [])
+      .filter((p) => p.dia && rot.has(p.dia) && p.status !== "medida")
+      .sort((a, b) => (a.dia! < b.dia! ? -1 : 1))
+      .map((p) => `${rot.get(p.dia!)}: ${ROTULO_FORMATO[p.formato]} sobre ${p.titulo}`);
+  }, [pautasApi.q.data]);
+  const gerados = useMemo(() => {
+    if (!envio) return null;
+    const extras = { pendencias: comPendencias ? pendencias : [], proximaSemana: comSemana ? proximaSemana : [] };
+    if (tom === "padrao" && !explicar && extras.pendencias.length === 0 && extras.proximaSemana.length === 0) return { whatsapp: envio.whatsapp, executiva: envio.executiva };
+    return textosComTom({ clientName: client.data?.name ?? "", periodLabel }, envio.conteudo, tom === "padrao" ? "consultivo" : tom, extras, { explicarTermos: explicar });
+  }, [envio, tom, explicar, comPendencias, comSemana, pendencias, proximaSemana, client.data, periodLabel]);
+
   // Texto editável: volta ao gerado quando muda o período/dados ou em "Voltar ao texto gerado".
   const [versao, setVersao] = useState<Versao>("whatsapp");
   const [textoWhats, setTextoWhats] = useState("");
@@ -121,11 +154,11 @@ function RelatorioPage() {
   const [gerandoPdf, setGerandoPdf] = useState(false);
   const [erroPdf, setErroPdf] = useState<string | null>(null);
   useEffect(() => {
-    if (envio) {
-      setTextoWhats(envio.whatsapp);
-      setTextoExec(envio.executiva);
+    if (gerados) {
+      setTextoWhats(gerados.whatsapp);
+      setTextoExec(gerados.executiva);
     }
-  }, [envio]);
+  }, [gerados]);
 
   const head = (
     <div className="hpagehead">
@@ -183,6 +216,39 @@ function RelatorioPage() {
 
       <Checagem envio={envio} alternarManter={alternarManter} />
 
+      <section className="card" aria-labelledby="rel-tom">
+        <h2 id="rel-tom">Tom e blocos do texto</h2>
+        <p className="sub">Mesmo conteúdo conferido, dito de outro jeito. Trocar refaz o texto (a edição manual é perdida).</p>
+        <div role="radiogroup" aria-label="Tom do texto" className="mt-2 grid gap-2 sm:grid-cols-4">
+          {([["padrao", { nome: "Padrão", descricao: "O texto de sempre, sem ajuste de tom." }], ...(Object.entries(ROTULO_TOM) as [Tom, { nome: string; descricao: string }][])] as [Tom | "padrao", { nome: string; descricao: string }][]).map(([id, r]) => (
+            <button key={id} type="button" role="radio" aria-checked={tom === id} onClick={() => setTom(id)} className="rounded-lg border p-2.5 text-left" style={{ borderColor: tom === id ? "var(--accent)" : "var(--border)", background: tom === id ? "color-mix(in srgb, var(--accent) 8%, var(--surface))" : "var(--surface)" }}>
+              <span className="block text-sm font-semibold" style={{ color: "var(--ink)" }}>{r.nome}</span>
+              <span className="block text-xs" style={{ color: "var(--text-dim)" }}>{r.descricao}</span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-col gap-1.5 text-sm">
+          <label className="inline-flex min-h-[32px] items-center gap-2">
+            <input type="checkbox" checked={explicar} onChange={(e) => setExplicar(e.target.checked)} />
+            Explicar termos técnicos (CTR, CPM, lead…) na primeira vez que aparecem
+          </label>
+          <label className="inline-flex min-h-[32px] items-center gap-2">
+            <input type="checkbox" checked={comPendencias} onChange={(e) => setComPendencias(e.target.checked)} disabled={pendencias.length === 0} />
+            Pendências do cliente {pendencias.length ? `(${pendencias.length})` : "(nenhuma encontrada)"}
+          </label>
+          <label className="inline-flex min-h-[32px] items-center gap-2">
+            <input type="checkbox" checked={comSemana} onChange={(e) => setComSemana(e.target.checked)} disabled={proximaSemana.length === 0} />
+            Plano da próxima semana {proximaSemana.length ? `(${proximaSemana.length} pauta${proximaSemana.length === 1 ? "" : "s"} do planejador)` : "(nenhuma pauta com dia no planejador de Ideias)"}
+          </label>
+        </div>
+        {comPendencias && pendencias.length > 0 && (
+          <details className="mt-2 text-xs" style={{ color: "var(--text-dim)" }}>
+            <summary className="cursor-pointer font-medium">Ver as pendências que entram</summary>
+            <ul className="mt-1 list-disc space-y-1 pl-5">{pendencias.map((p) => <li key={p}>{p}</li>)}</ul>
+          </details>
+        )}
+      </section>
+
       {semDado ? (
         <SemFonte titulo="Sem dado para montar o texto" texto="Nenhuma seção tem dado neste período, então o relatório ficaria vazio. Troque o período no cabeçalho." />
       ) : tudoDesmarcado ? (
@@ -219,9 +285,10 @@ function RelatorioPage() {
               rotulo="Versão curta para WhatsApp (edite à vontade antes de copiar)"
               texto={textoWhats}
               setTexto={setTextoWhats}
-              gerado={envio.whatsapp}
+              gerado={gerados?.whatsapp ?? envio.whatsapp}
               limite={LIMITE_WHATSAPP}
               linhas={16}
+              previa="whatsapp"
             >
               <button type="button" className={`${btn} pri`} onClick={() => copiar(textoWhats, "whatsapp")} disabled={!textoWhats.trim()}>
                 <Copy size={15} aria-hidden /> {copiado === "whatsapp" ? "Copiado" : "Copiar para WhatsApp"}
@@ -230,7 +297,7 @@ function RelatorioPage() {
           )}
 
           {versao === "executiva" && (
-            <EditorVersao id="rel-exec" rotulo="Versão executiva para reunião: pontos principais e 3 decisões" texto={textoExec} setTexto={setTextoExec} gerado={envio.executiva} linhas={18}>
+            <EditorVersao id="rel-exec" rotulo="Versão executiva para reunião: pontos principais e 3 decisões" texto={textoExec} setTexto={setTextoExec} gerado={gerados?.executiva ?? envio.executiva} linhas={18} previa="doc">
               <button type="button" className={`${btn} pri`} onClick={() => copiar(textoExec, "executiva")} disabled={!textoExec.trim()}>
                 <Copy size={15} aria-hidden /> {copiado === "executiva" ? "Copiado" : "Copiar versão executiva"}
               </button>
@@ -297,8 +364,10 @@ function EditorVersao({
   gerado,
   limite,
   linhas,
+  previa,
   children,
 }: {
+  previa?: "whatsapp" | "doc";
   id: string;
   rotulo: string;
   texto: string;
@@ -316,14 +385,17 @@ function EditorVersao({
       <label htmlFor={id} className="sub" style={{ display: "block", marginBottom: 6 }}>
         {rotulo}
       </label>
-      <textarea
-        id={id}
-        value={texto}
-        onChange={(e) => setTexto(e.target.value)}
-        rows={linhas}
-        className="block w-full"
-        style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12, background: "var(--surface-2)", color: "var(--ink)", font: "inherit", fontSize: 14, lineHeight: 1.5, resize: "vertical" }}
-      />
+      <div className={previa ? "grid gap-3 lg:grid-cols-2" : ""}>
+        <textarea
+          id={id}
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          rows={linhas}
+          className="block w-full"
+          style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12, background: "var(--surface-2)", color: "var(--ink)", font: "inherit", fontSize: 14, lineHeight: 1.5, resize: "vertical" }}
+        />
+        {previa && <Previa texto={texto} tipo={previa} />}
+      </div>
       <div className="mt-1 flex flex-wrap justify-between gap-2 text-xs" style={{ color: passou ? "var(--crit)" : "var(--text-faint)" }}>
         <span>
           {texto.length} caracteres{limite != null ? ` de até ${limite} recomendados` : ""}
@@ -360,6 +432,41 @@ function EditorVersao({
           <RotateCcw size={15} aria-hidden /> Voltar ao texto gerado
         </button>
       </div>
+    </div>
+  );
+}
+
+// Prévia de como o texto chega: balão de WhatsApp (com *negrito*) ou folha de documento.
+function Negrito({ linha }: { linha: string }) {
+  return (
+    <>
+      {linha.split(/(\*[^*\n]+\*)/g).map((p, i) => (/^\*[^*]+\*$/.test(p) ? <b key={i}>{p.slice(1, -1)}</b> : <span key={i}>{p}</span>))}
+    </>
+  );
+}
+function Previa({ texto, tipo }: { texto: string; tipo: "whatsapp" | "doc" }) {
+  const linhas = texto.split("\n");
+  if (tipo === "whatsapp") {
+    return (
+      <div aria-label="Prévia no WhatsApp" className="rounded-xl p-3" style={{ background: "color-mix(in srgb, #25d366 10%, var(--surface-2))" }}>
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>Prévia no WhatsApp</div>
+        <div className="ml-auto max-w-[92%] whitespace-pre-wrap break-words rounded-lg rounded-tr-sm p-3 text-[13.5px] leading-relaxed shadow-sm" style={{ background: "color-mix(in srgb, #25d366 22%, var(--surface))", color: "var(--ink)" }}>
+          {linhas.map((l, i) => (
+            <div key={i} style={{ minHeight: l ? undefined : "0.75em" }}><Negrito linha={l} /></div>
+          ))}
+          <div className="mt-1 text-right text-[10px]" style={{ color: "var(--muted)" }}>agora ✓✓</div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div aria-label="Prévia do documento" className="rounded-xl border p-5 text-[13.5px] leading-relaxed shadow-sm" style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--ink)" }}>
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>Prévia para a reunião</div>
+      {linhas.map((l, i) =>
+        i === 0 ? <h3 key={i} className="text-base font-semibold">{l}</h3>
+        : /^[A-ZÁÉÍÓÚÂÊÔÃÕÇ][^•:]*$/.test(l) && l.length < 60 && !/^Período/.test(l) ? <h4 key={i} className="mt-3 text-sm font-semibold" style={{ color: "var(--accent)" }}>{l}</h4>
+        : <p key={i} style={{ minHeight: l ? undefined : "0.5em", color: /^Período/.test(l) ? "var(--muted)" : undefined }}>{l}</p>,
+      )}
     </div>
   );
 }
