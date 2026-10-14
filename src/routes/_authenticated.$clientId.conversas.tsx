@@ -8,6 +8,7 @@ import {
 } from "@/lib/conversa-leitura";
 import { useLeituraConversas } from "@/components/atendimento-resumo";
 import { AuditoriaComercial } from "@/components/auditoria-comercial";
+import { CustoWhatsapp } from "@/components/custo-whatsapp";
 import { supabase } from "@/integrations/supabase/client";
 import { Painel, Selo } from "@/components/visual";
 
@@ -255,6 +256,7 @@ function ConversasPage() {
           <ShieldCheck size={14} /> Acesso restrito e registrado. Atualiza sozinho todo dia.
         </div>
         <AuditoriaComercial clientId={clientId} onAbrir={(id) => setAberta(id)} />
+        <div className="mb-4"><CustoWhatsapp clientId={clientId} /></div>
         {geral && geral.comPaciente > 0 && (
           <section className="mb-4 space-y-3" aria-label="Como está o atendimento">
             <h2 className="text-[15px] font-semibold">Como está o atendimento (últimas {geral.conversas} conversas)</h2>

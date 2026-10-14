@@ -11,6 +11,7 @@ import {
 import { SyncButton } from "@/components/sync-button";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum } from "@/lib/format";
+import { CustoWhatsapp } from "@/components/custo-whatsapp";
 
 export const Route = createFileRoute("/_authenticated/$clientId/atendimento")({
   component: AtendimentoPage,
@@ -118,6 +119,8 @@ function AtendimentoPage() {
         </p>
         <SyncButton clientId={clientId} alvo="atendimento" />
       </div>
+
+      <CustoWhatsapp clientId={clientId} />
 
       {/* O dado da WTS é de uma clínica só, com as duas médicas dentro. Dizer
           isso na tela evita que alguém leia estes números como sendo de uma. */}
