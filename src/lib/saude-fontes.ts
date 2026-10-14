@@ -2,6 +2,7 @@
 // Usa a RPC client_sync_status quando ela existe; se a migração ainda não foi aplicada, lê as
 // tabelas com as mesmas regras (RLS vale igual), para o selo e a Visão geral não sumirem.
 import { supabase } from "@/integrations/supabase/client";
+import { statusDaFonte, diasEntre, hojeBrasilia, FONTES, type FonteId, type CorStatus } from "@/lib/status-fonte";
 
 export type LinhaFonte = {
   fonte: string;
@@ -85,11 +86,9 @@ export async function statusDoCliente(clientId: string): Promise<LinhaFonte[]> {
   return dadosAte(clientId);
 }
 
+/** Dias sem dado novo, contados no fuso de Brasília (mesma conta de status-fonte.ts). */
 export function diasDeAtraso(dataAte: string): number {
-  const [a, m, d] = dataAte.slice(0, 10).split("-").map(Number);
-  const hoje = new Date();
-  const base = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-  return Math.round((base - Date.UTC(a, m - 1, d)) / 86400000);
+  return diasEntre(hojeBrasilia(), dataAte);
 }
 
 // Feriados nacionais (e pontos facultativos que a clínica costuma folgar) para contar dias úteis. Atualizar todo ano.
@@ -120,14 +119,55 @@ export function atrasoDaFonte(l: { fonte?: string; data_ate: string | null }): n
 }
 
 export type Tom = "bom" | "atencao" | "ruim" | "neutro";
-export function tomDaFonte(l: (Pick<LinhaFonte, "data_ate" | "last_error"> & { fonte?: string; motivo_dono?: string | null }) | undefined): Tom {
-  if (!l) return "neutro";
-  // Fonte sem acesso, alimentada à mão (planilha): não é alarme, é uma situação combinada. Fica em cinza.
-  if (l.motivo_dono === "manual") return "neutro";
-  if (l.last_error) return "ruim";
-  if (!l.data_ate) return "neutro";
-  const atraso = atrasoDaFonte(l);
-  return atraso <= 1 ? "bom" : atraso <= 3 ? "atencao" : "ruim";
+const TOM_DA_COR: Record<CorStatus, Tom> = { verde: "bom", amarelo: "atencao", vermelho: "ruim", cinza: "neutro" };
+/** Tom da fonte pela regra única (src/lib/status-fonte.ts). Linha sem data nem erro = sem dado para mostrar. */
+export function tomDaFonte(l: Pick<LinhaFonte, "data_ate" | "last_error"> | undefined): Tom {
+  if (!l || (!l.data_ate && !l.last_error)) return "neutro";
+  return TOM_DA_COR[statusDaFonte({ cadastro: true, data_ate: l.data_ate, last_error: l.last_error }).cor];
+}
+
+// ---------------------------------------------------------------- todos os clientes (admin)
+
+export interface FontesDoCliente {
+  fontes: NonNullable<Fontes>; // "ligado" pela regra única (cadastro OU dado OU planilha manual)
+  cadastro: NonNullable<Fontes>; // só o cadastro (client_fontes)
+  linhas: LinhaFonte[];
+  naoUsa: FonteId[];
+}
+
+const FLAG: Record<FonteId, keyof NonNullable<Fontes>> = { instagram: "tem_instagram", anuncios: "tem_anuncios", crm: "tem_crm", atendimento: "tem_atendimento" };
+
+/** Uma leitura para todos os clientes (RPC status_das_fontes, só admin). */
+export async function lerStatusDasFontes(): Promise<Map<string, FontesDoCliente>> {
+  const { data, error } = await (supabase as any).rpc("status_das_fontes");
+  if (error) throw error;
+  const out = new Map<string, FontesDoCliente>();
+  for (const r of (data ?? []) as any[]) {
+    const fonte = r.fonte as FonteId;
+    if (!FONTES.includes(fonte)) continue;
+    const c = out.get(r.client_id) ?? {
+      fontes: { tem_instagram: false, tem_anuncios: false, tem_crm: false, tem_atendimento: false },
+      cadastro: { tem_instagram: false, tem_anuncios: false, tem_crm: false, tem_atendimento: false },
+      linhas: [],
+      naoUsa: [],
+    };
+    const data_ate = r.data_ate ? String(r.data_ate).slice(0, 10) : null;
+    c.cadastro[FLAG[fonte]] = !!r.cadastro;
+    c.fontes[FLAG[fonte]] = !!r.cadastro || !!data_ate || r.motivo_dono === "manual";
+    c.linhas.push({ fonte, last_attempt_at: r.last_attempt_at, last_success_at: r.last_success_at, last_error: r.last_error, last_rows: null, data_ate, motivo: r.motivo, motivo_dono: r.motivo_dono });
+    if (r.nao_usa) c.naoUsa.push(fonte);
+    out.set(r.client_id, c);
+  }
+  return out;
+}
+
+/** "É intencional, não mostrar mais": a fonte passa a aparecer como "Não usa". */
+export async function marcarNaoUsa(clientId: string, fonte: FonteId, naoUsa: boolean): Promise<void> {
+  const t = (supabase as any).from("fontes_nao_usadas");
+  const { error } = naoUsa
+    ? await t.upsert({ client_id: clientId, fonte, marcado_por: (await supabase.auth.getUser()).data.user?.id ?? null }, { onConflict: "client_id,fonte" })
+    : await t.delete().eq("client_id", clientId).eq("fonte", fonte);
+  if (error) throw error;
 }
 
 export function ddmm(iso: string): string {

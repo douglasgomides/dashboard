@@ -14,6 +14,8 @@ export interface Achado {
   acao: string;
   risco?: string;
   etapa?: EtapaId;
+  clientId?: string; // para ações por cliente (ex.: "É intencional")
+  fontesFaltando?: ("instagram" | "anuncios" | "crm")[]; // só em "sem_fonte"
 }
 
 export interface Verificado {
@@ -87,4 +89,48 @@ export function estadoDaEtapa(id: EtapaId, registros: RegistroEtapa[], rodando: 
   if (rodando === id) return "rodando";
   const r = registros.find((x) => x.etapa === id);
   return r ? r.status : "pendente";
+}
+
+// ---------------------------------------------------------------- fonte não ligada (agrupada)
+
+export type FonteObrigatoria = "instagram" | "anuncios" | "crm";
+export const NOME_FONTE_OBRIG: Record<FonteObrigatoria, string> = { instagram: "Instagram", anuncios: "Anúncios", crm: "CRM" };
+
+/** Fontes que faltam num ponto "sem_fonte". Conferências antigas não guardavam a lista: lê do título ("Sem anúncios, CRM ligado"). */
+export function fontesFaltando(a: Achado): FonteObrigatoria[] {
+  if (a.tipo !== "sem_fonte") return [];
+  if (a.fontesFaltando?.length) return a.fontesFaltando;
+  const t = a.titulo.toLowerCase();
+  return (["instagram", "anuncios", "crm"] as FonteObrigatoria[]).filter((f) => t.includes(f === "anuncios" ? "anúncios" : f));
+}
+
+export interface LinhaSemFonte {
+  achado: Achado;
+  clientId: string | null;
+  cliente: string;
+  faltando: FonteObrigatoria[]; // já sem as marcadas como "não usa"
+}
+
+/**
+ * Separa a lista: pontos de prioridade alta e média primeiro (destaque), depois a tabela única de
+ * "fonte não ligada" (sem o que foi marcado como intencional) e, por fim, os demais pontos de prioridade baixa.
+ */
+export function separarAchados(
+  as: Achado[],
+  naoUsa: Set<string>, // "clientId:fonte"
+  idPorNome: Map<string, string> = new Map(),
+): { destaque: Achado[]; semFonte: LinhaSemFonte[]; demais: Achado[] } {
+  const ord = ordenarAchados(as);
+  const semFonte: LinhaSemFonte[] = [];
+  for (const a of ord) {
+    if (a.tipo !== "sem_fonte") continue;
+    const clientId = a.clientId ?? (a.cliente ? idPorNome.get(a.cliente) ?? null : null);
+    const faltando = fontesFaltando(a).filter((f) => !(clientId && naoUsa.has(`${clientId}:${f}`)));
+    if (faltando.length) semFonte.push({ achado: a, clientId, cliente: a.cliente ?? "—", faltando });
+  }
+  return {
+    destaque: ord.filter((a) => a.tipo !== "sem_fonte" && a.gravidade !== "baixa"),
+    semFonte,
+    demais: ord.filter((a) => a.tipo !== "sem_fonte" && a.gravidade === "baixa"),
+  };
 }

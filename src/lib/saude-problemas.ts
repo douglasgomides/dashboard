@@ -4,8 +4,9 @@
 //
 // Não cria regra nova de saúde: o estado vem de saudeDaFonte (tomDaFonte + motivoDaLinha) e os
 // problemas de dado vêm de qualidade_dados (banco). Aqui só se classifica e se ordena.
-import { diasDeAtraso, type Fontes, type LinhaFonte } from "@/lib/saude-fontes";
+import { type Fontes, type LinhaFonte } from "@/lib/saude-fontes";
 import { motivoDaLinha } from "@/lib/motivos";
+import { statusDaFonte } from "@/lib/status-fonte";
 import type { ProblemaDado } from "@/lib/client-data";
 
 export type TipoProblema = "falha_tecnica" | "cliente" | "sem_dado_origem" | "config_incompleta";
@@ -68,6 +69,7 @@ export interface EntradaCliente {
   fontes: Fontes;
   linhas: LinhaFonte[];
   qualidade?: ProblemaDado[];
+  naoUsa?: string[]; // fontes marcadas como "não usa" (intencional)
 }
 
 const FLAG: Record<string, keyof NonNullable<Fontes>> = {
@@ -91,12 +93,21 @@ const ACAO = {
 const ORDEM_GRAVIDADE: Record<Gravidade, number> = { alta: 0, media: 1, baixa: 2 };
 const ORDEM_TIPO: Record<TipoProblema, number> = { falha_tecnica: 0, config_incompleta: 1, cliente: 2, sem_dado_origem: 3 };
 
+// Mesma regra de cor do admin (status-fonte.ts): parado = vermelho por tempo (mais de 3 dias ou sem dado).
 function velho(l: LinhaFonte): boolean {
-  return !l.data_ate || diasDeAtraso(l.data_ate) > 3;
+  return !l.data_ate || statusDaFonte({ cadastro: true, data_ate: l.data_ate }).cor === "vermelho";
 }
 
 /** Problema de uma fonte ligada (sync_status), ou null se está em dia. Mesmas regras de saudeDaFonte. */
 export function problemaDaLinha(c: Pick<EntradaCliente, "id" | "nome">, l: LinhaFonte): ProblemaFonte | null {
+  const p = problemaBruto(c, l);
+  // Mesma régua de cor do admin: fonte em VERMELHO (mais de 3 dias ou erro) nunca é "baixa / só acompanhar".
+  // Sem erro nosso, a ação é confirmar com o cliente (campanha pausada, CRM lançado à mão, planilha).
+  if (p && velho(l) && p.gravidade === "baixa") return { ...p, gravidade: "media", quem: p.quem === "ninguem" ? "cliente" : p.quem };
+  return p;
+}
+
+function problemaBruto(c: Pick<EntradaCliente, "id" | "nome">, l: LinhaFonte): ProblemaFonte | null {
   const base = {
     clientId: c.id,
     cliente: c.nome,
@@ -111,8 +122,7 @@ export function problemaDaLinha(c: Pick<EntradaCliente, "id" | "nome">, l: Linha
   if (!l.data_ate && !l.last_error) {
     return { ...base, id: `${c.id}:${l.fonte}:sem-dado`, tipo: "config_incompleta", gravidade: "alta", quem: "equipe", titulo: `${nome} ligado, mas nenhum dado chegou ainda`, detalhe: "A fonte está marcada como ligada no cadastro, mas a sincronização nunca gravou dado.", acao: ACAO.semDado };
   }
-  const atraso = l.data_ate ? diasDeAtraso(l.data_ate) : null;
-  if (!l.last_error && atraso != null && atraso <= 1) return null;
+  if (!l.last_error && l.data_ate && statusDaFonte({ cadastro: true, data_ate: l.data_ate }).cor === "verde") return null;
   const m = motivoDaLinha(l);
   const parado = velho(l);
   const quando = l.data_ate ? `Último dado: ${l.data_ate.slice(8, 10)}/${l.data_ate.slice(5, 7)}` : "Sem dado";
@@ -177,7 +187,7 @@ export function montarProblemasFontes(clientes: EntradaCliente[]): ProblemaFonte
   for (const c of clientes) {
     const f = c.fontes;
     // Instagram é a fonte base do painel: cliente sem Instagram ligado é configuração incompleta.
-    if (f && !f.tem_instagram) {
+    if (f && !f.tem_instagram && !c.naoUsa?.includes("instagram")) {
       out.push({ id: `${c.id}:instagram:nao-ligado`, clientId: c.id, cliente: c.nome, fonte: "instagram", tipo: "config_incompleta", gravidade: "media", quem: "equipe", titulo: "Instagram não está ligado", detalhe: "O cadastro do cliente não tem conta do Instagram ativa.", acao: ACAO.semInstagram, afeta: "Visão geral, conteúdo, ideias e relatório.", ultimaTentativa: null, ultimoSucesso: null, ultimoErro: null, dadoAte: null });
     }
     for (const l of c.linhas) {

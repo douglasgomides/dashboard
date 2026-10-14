@@ -34,10 +34,12 @@ const meta = problemaDaLinha(c, linha("anuncios", { data_ate: dia(0), last_error
 assert.equal(meta.quem, "meta");
 assert.equal(meta.gravidade, "baixa");
 
-// Sync roda sem erro, origem sem dado novo: sem dado na origem, baixa, só acompanhar.
+// Sync roda sem erro, origem sem dado novo há 12 dias: sem dado na origem, mas vermelho (regra única),
+// então não é "baixa / só acompanhar": média, e quem confirma é o cliente.
 const orig = problemaDaLinha(c, linha("anuncios", { data_ate: dia(12), last_success_at: new Date().toISOString(), last_attempt_at: new Date().toISOString() }))!;
 assert.equal(orig.tipo, "sem_dado_origem");
-assert.equal(orig.quem, "ninguem");
+assert.equal(orig.gravidade, "media");
+assert.equal(orig.quem, "cliente");
 assert.match(orig.acao, /pausou/);
 
 // Motivo gravado pelo sync tem prioridade (dono vindo do banco).

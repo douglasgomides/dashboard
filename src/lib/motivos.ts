@@ -2,6 +2,7 @@
 // Hoje "Anúncios até 04/09" parece falha de sincronização; muitas vezes é pagamento, campanha desligada
 // ou acesso revogado do lado do cliente. Este arquivo transforma o que sabemos em uma frase honesta.
 import { atrasoDaFonte, diasDeAtraso, type LinhaFonte } from "@/lib/saude-fontes";
+import { statusDaFonte, type StatusFonte } from "@/lib/status-fonte";
 
 export type Dono = "cliente" | "meta" | "origem" | "nos" | "manual";
 export type Motivo = { texto: string; dono: Dono };
@@ -64,4 +65,10 @@ export function motivoDaLinha(l: LinhaFonte | undefined): Motivo | null {
     }
   }
   return null;
+}
+
+/** Status da fonte (regra única de status-fonte.ts) com o motivo em linguagem de gente. */
+export function statusDaLinha(l: LinhaFonte | undefined, cadastro: boolean, naoUsa = false): StatusFonte {
+  const m = motivoDaLinha(l);
+  return statusDaFonte({ cadastro, data_ate: l?.data_ate ?? null, last_error: l?.last_error ?? null, motivo: m?.texto ?? null, motivo_dono: l?.motivo_dono ?? null, naoUsa });
 }

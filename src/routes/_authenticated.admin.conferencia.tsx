@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Circle, ClipboardCheck, ListChecks, Loader2, RefreshCw, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { marcarNaoUsa } from "@/lib/saude-fontes";
 import { Painel, Selo } from "@/components/visual";
 import {
   ETAPAS,
@@ -12,6 +13,10 @@ import {
   filtrarAchados,
   ordenarAchados,
   resumirConferencia,
+  separarAchados,
+  NOME_FONTE_OBRIG,
+  type FonteObrigatoria,
+  type LinhaSemFonte,
   type Achado,
   type Conferencia,
   type EtapaId,
@@ -93,6 +98,71 @@ function CartaoAchado({ a }: { a: Achado }) {
         {a.risco && <div><dt className="inline font-semibold" style={{ color: "var(--ink)" }}>Risco: </dt><dd className="inline">{a.risco}</dd></div>}
         <div><dt className="inline font-semibold" style={{ color: "var(--ink)" }}>O que fazer: </dt><dd className="inline">{a.acao}</dd></div>
       </dl>
+    </div>
+  );
+}
+
+// "Fonte não ligada": todos os clientes numa tabela só (cliente × fontes faltando), com "É intencional" por fonte.
+function TabelaSemFonte({ linhas, onMarcar, marcando }: { linhas: LinhaSemFonte[]; onMarcar: (clientId: string, f: FonteObrigatoria) => void; marcando: string | null }) {
+  const fontes: FonteObrigatoria[] = ["instagram", "anuncios", "crm"];
+  return (
+    <div className="rounded-lg border" style={{ borderColor: "var(--border)" }}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 px-3 py-2" style={{ background: "var(--surface-2)" }}>
+        <strong className="text-sm" style={{ color: "var(--ink)" }}>
+          Fonte não ligada · {linhas.length} cliente{linhas.length === 1 ? "" : "s"}
+        </strong>
+        <span className="text-xs" style={{ color: "var(--ink-2)" }}>
+          Pode ser intencional (cliente que não anuncia, CRM que não temos acesso). Marque e o ponto some daqui; no admin a fonte vira “não usa”.
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs" style={{ color: "var(--ink-2)" }}>
+              <th className="px-3 py-2">Cliente</th>
+              {fontes.map((f) => (
+                <th key={f} className="px-3 py-2">{NOME_FONTE_OBRIG[f]}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {linhas.map((l) => (
+              <tr key={l.achado.id} className="border-t" style={{ borderColor: "var(--border)" }}>
+                <td className="px-3 py-2 align-top font-medium" style={{ color: "var(--ink)" }}>
+                  {l.cliente}
+                  {l.achado.gravidade !== "baixa" && (
+                    <div className="text-xs font-semibold" style={{ color: COR[l.achado.gravidade] }}>
+                      Prioridade {ROTULO_GRAVIDADE[l.achado.gravidade].toLowerCase()}
+                    </div>
+                  )}
+                </td>
+                {fontes.map((f) => (
+                  <td key={f} className="px-3 py-2 align-top">
+                    {l.faltando.includes(f) ? (
+                      <div className="space-y-1">
+                        <span className="text-xs font-semibold" style={{ color: f === "instagram" ? "var(--crit)" : "var(--warn)" }}>Falta</span>
+                        {l.clientId && (
+                          <button
+                            type="button"
+                            className="block whitespace-nowrap text-xs font-semibold underline-offset-2 hover:underline disabled:opacity-50"
+                            style={{ color: "var(--accent)" }}
+                            disabled={marcando === `${l.clientId}:${f}`}
+                            onClick={() => onMarcar(l.clientId!, f)}
+                          >
+                            É intencional, não mostrar mais
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs" style={{ color: "var(--muted)" }}>ok</span>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -185,8 +255,38 @@ function ConferenciaPage() {
     }
   }
 
+  // Fontes marcadas como "não usa" e ids dos clientes (conferências antigas só guardavam o nome).
+  const naoUsaQ = useQuery({
+    queryKey: ["fontes-nao-usadas"],
+    queryFn: async () => {
+      const [{ data: nu }, { data: cs }] = await Promise.all([
+        (supabase as any).from("fontes_nao_usadas").select("client_id, fonte"),
+        supabase.from("clients").select("id, name"),
+      ]);
+      return {
+        naoUsa: new Set<string>(((nu ?? []) as { client_id: string; fonte: string }[]).map((r) => `${r.client_id}:${r.fonte}`)),
+        idPorNome: new Map<string, string>((cs ?? []).map((x) => [x.name, x.id])),
+      };
+    },
+    staleTime: 60_000,
+  });
+  const [marcando, setMarcando] = useState<string | null>(null);
+  async function marcar(clientId: string, f: FonteObrigatoria) {
+    setMarcando(`${clientId}:${f}`);
+    try {
+      await marcarNaoUsa(clientId, f, true);
+      await qc.invalidateQueries({ queryKey: ["fontes-nao-usadas"] });
+      qc.invalidateQueries({ queryKey: ["status-das-fontes"] });
+    } catch (x) {
+      setErro(x instanceof Error ? x.message : "Não consegui salvar.");
+    } finally {
+      setMarcando(null);
+    }
+  }
+
   const achados = useMemo(() => ordenarAchados(c?.achados ?? []), [c]);
   const visiveis = filtrarAchados(achados, { gravidade: fGrav === "todas" ? undefined : fGrav, etapa: fEtapa || undefined, cliente: fCliente || undefined });
+  const grupos = separarAchados(visiveis, naoUsaQ.data?.naoUsa ?? new Set(), naoUsaQ.data?.idPorNome);
   const r = c ? resumirConferencia(c) : null;
   const clientes = [...new Set(achados.map((a) => a.cliente).filter(Boolean) as string[])].sort();
   const incompleta = c && !c.concluida_em && !ocupado;
@@ -289,10 +389,26 @@ function ConferenciaPage() {
             {visiveis.length === 0 ? (
               <p className="note" style={{ margin: 0 }}>{achados.length ? "Nenhum ponto nesse filtro." : ocupado ? "Nada encontrado até agora." : "Nada encontrado: tudo o que foi conferido bate."}</p>
             ) : (
-              <div className="grid gap-3">
-                {visiveis.map((a) => (
-                  <CartaoAchado key={a.id} a={a} />
-                ))}
+              <div className="grid gap-4">
+                {grupos.destaque.length > 0 && (
+                  <div className="grid gap-3 rounded-xl border p-3" style={{ borderColor: "var(--crit)", background: "color-mix(in srgb, var(--crit) 5%, var(--surface))" }}>
+                    <strong className="text-sm" style={{ color: "var(--crit)" }}>
+                      Prioridade alta e média · {grupos.destaque.length}
+                    </strong>
+                    {grupos.destaque.map((a) => (
+                      <CartaoAchado key={a.id} a={a} />
+                    ))}
+                  </div>
+                )}
+                {grupos.semFonte.length > 0 && <TabelaSemFonte linhas={grupos.semFonte} onMarcar={marcar} marcando={marcando} />}
+                {grupos.demais.length > 0 && (
+                  <div className="grid gap-3">
+                    <strong className="text-sm" style={{ color: "var(--ink-2)" }}>Prioridade baixa · {grupos.demais.length}</strong>
+                    {grupos.demais.map((a) => (
+                      <CartaoAchado key={a.id} a={a} />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             {(c.verificados ?? []).length > 0 && <ListaVerificados itens={c.verificados} />}
