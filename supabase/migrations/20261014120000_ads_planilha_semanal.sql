@@ -1,4 +1,4 @@
--- Anúncios lidos de uma planilha do gestor de tráfego, para clientes cuja conta de anúncios
+-- Anúncios lidos de uma planilha de distribuição de conteúdo da equipe Doctor Creator, para clientes cuja conta de anúncios
 -- a Meta/Windsor não entrega (hoje: Dra. Marcelly Achkar, impulsionamentos feitos pelo Instagram
 -- numa conta que ninguém do time enxerga). A planilha é SEMANAL: uma linha por post turbinado em
 -- cada dia de análise. Não tem dado diário, então não entra em meta_ads_daily nem é espalhada em dias.

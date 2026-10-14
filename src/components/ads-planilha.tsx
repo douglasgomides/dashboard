@@ -5,10 +5,11 @@ import { Ajuda, Kpi, Painel, Selo } from "@/components/visual";
 import { fmtBRL, fmtNum } from "@/lib/format";
 import type { AdsPlanilhaLinha } from "@/lib/client-data";
 
-// Impulsionamentos lidos da planilha do gestor de tráfego. Existe enquanto a conta de anúncios do cliente não é lida
+// Impulsionamentos lidos da planilha de distribuição de conteúdo da equipe Doctor Creator. Existe enquanto a conta de anúncios do cliente não é lida
 // pela Meta nem pela Windsor. A planilha é SEMANAL e tem uma linha por post em cada análise: por isso o painel mostra
 // gasto por semana de análise, nunca por dia, e não tem impressões, cliques nem CTR (a planilha não traz).
 
+const SEM_DATA = "2099-12-31"; // mesma sentinela de api/_lib/ads-planilha-sync.ts: linhas sem "Dia da Análise" na planilha
 const dd = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const ddmmaaaa = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
@@ -47,6 +48,7 @@ interface PostAcumulado {
   total: number | null;
   de: string;
   dataNoFuturo: boolean;
+  semData: boolean;
 }
 
 // Uma linha por post com o último "Valor Investido Total" conhecido. Entram TODOS os posts da planilha, inclusive os
@@ -60,7 +62,8 @@ function acumuladoPorPost(linhas: AdsPlanilhaLinha[], hoje: string): PostAcumula
     const futuras = ls.filter((l) => l.analise_em > hoje);
     const comTotal = validas.find((l) => l.valor_total != null);
     const base = comTotal ?? futuras.find((l) => l.valor_total != null) ?? validas[0] ?? futuras[0];
-    const recente = validas[0] ?? futuras[0];
+    // O estado mais recente de um post é o do bloco sem data no fim da planilha (ativo agora / desativado desde a última análise).
+    const recente = futuras.find((l) => l.analise_em === SEM_DATA) ?? validas[0] ?? futuras[0];
     out.push({
       post_url: url,
       nome: base.nome ?? recente.nome,
@@ -68,7 +71,8 @@ function acumuladoPorPost(linhas: AdsPlanilhaLinha[], hoje: string): PostAcumula
       desativado: /desativ/i.test(recente.status ?? ""),
       total: base.valor_total,
       de: base.analise_em,
-      dataNoFuturo: base.analise_em > hoje,
+      dataNoFuturo: base.analise_em > hoje && base.analise_em !== SEM_DATA,
+      semData: base.analise_em === SEM_DATA,
     });
   }
   return out.sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
@@ -79,6 +83,12 @@ export function AdsPlanilhaPainel({ linhas: todas, start, end }: { linhas: AdsPl
   // A planilha tem um bloco com data no futuro (30/12/2026, acumulados): fica fora das semanas de análise.
   const linhas = useMemo(() => todas.filter((l) => l.analise_em <= hoje), [todas, hoje]);
   const acumulado = useMemo(() => acumuladoPorPost(todas, hoje), [todas, hoje]);
+  // Bloco sem data no fim da planilha: o que está ligado AGORA, com o orçamento diário atual.
+  const ativosAgora = useMemo(
+    () => todas.filter((l) => l.analise_em === SEM_DATA && /^ativ/i.test((l.status ?? "").trim())),
+    [todas],
+  );
+  const verbaDiaria = ativosAgora.reduce((a, l) => a + (l.orcamento_dia ?? 0), 0);
   const semanas = useMemo(() => agruparSemanas(linhas), [linhas]);
   const validas = semanas.filter((s) => s.gasto != null);
   const noPeriodo = validas.filter((s) => s.dia >= start && s.dia <= end);
@@ -105,7 +115,7 @@ export function AdsPlanilhaPainel({ linhas: todas, start, end }: { linhas: AdsPl
       >
         <FileSpreadsheet size={16} aria-hidden className="shrink-0" style={{ color: "var(--warn)" }} />
         <div className="min-w-0 flex-1">
-          <b>Fonte: planilha do gestor de tráfego, atualizada a cada análise semanal.</b>{" "}
+          <b>Fonte: planilha de distribuição de conteúdo da equipe Doctor Creator, atualizada a cada análise semanal.</b>{" "}
           <span style={{ color: "var(--text-dim)" }}>
             Não é a conta de anúncios da Meta. O valor é por semana de análise, não por dia.
             {ultima ? ` Última análise com valores: ${ddmmaaaa(ultima.dia)}.` : ""}
@@ -113,11 +123,54 @@ export function AdsPlanilhaPainel({ linhas: todas, start, end }: { linhas: AdsPl
         </div>
         <Ajuda>
           Os impulsionamentos desta cliente correm numa conta de anúncios que ainda não está ligada ao dashboard. Enquanto isso, os números vêm da
-          planilha do gestor: gasto de cada post no período entre duas análises, seguidores e mensagens que ele anotou. A planilha não traz
+          planilha de distribuição de conteúdo que a equipe Doctor Creator preenche: gasto de cada post no período entre duas análises, seguidores e mensagens que a equipe anotou. A planilha não traz
           impressões, cliques nem CTR. Valores negativos, datas no futuro e ganhos de seguidores que não fecham com "antes" e "depois" são
           descartados, em vez de aparecerem na tela. Todos os posts da planilha aparecem no quadro de acumulado, ao fim da página.
         </Ajuda>
       </div>
+
+      {ativosAgora.length > 0 && (
+        <Painel
+          icone={Wallet}
+          titulo="Impulsionamentos ativos agora"
+          resumo={`${ativosAgora.length} posts · ${fmtBRL(verbaDiaria)} por dia de orçamento`}
+          cor="var(--good)"
+          ajuda={
+            <>
+              São os posts marcados como "Ativado" no bloco do fim da planilha, que não tem data de análise. O orçamento é o diário que a equipe
+              anotou. Não é gasto realizado: o gasto de cada semana está no quadro de investimento por semana.
+            </>
+          }
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}>
+                  <th className="py-1.5 pr-3 font-medium">Post</th>
+                  <th className="py-1.5 pr-3 font-medium">Tipo</th>
+                  <th className="py-1.5 text-right font-medium">Orçamento por dia</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ativosAgora.map((l) => (
+                  <tr key={l.post_url} className="border-t" style={{ borderColor: "var(--border)" }}>
+                    <td className="max-w-[360px] py-2 pr-3">
+                      <a href={l.post_url} target="_blank" rel="noreferrer" className="inline-flex items-start gap-1 hover:underline">
+                        <span className="line-clamp-2">{l.nome ?? l.post_url}</span>
+                        <ExternalLink size={12} className="mt-1 shrink-0" aria-hidden />
+                      </a>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <Selo titulo={l.tipo === "C2" ? "Gerar mensagens" : l.tipo === "C0" ? "Alcance" : "Ganhar seguidores"}>{l.tipo ?? "—"}</Selo>
+                    </td>
+                    <td className="py-2 text-right tabular-nums">{l.orcamento_dia == null ? "—" : fmtBRL(l.orcamento_dia)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Painel>
+      )}
 
       {noPeriodo.length === 0 ? (
         <div className="rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}>
@@ -199,7 +252,7 @@ export function AdsPlanilhaPainel({ linhas: todas, start, end }: { linhas: AdsPl
           cor="var(--accent)"
           ajuda={
             <>
-              C1 é post para ganhar seguidores; C2 é post para gerar mensagem. "Manter" e "Parar" são a decisão que o gestor registrou na
+              C1 é post para ganhar seguidores; C2 é post para gerar mensagem. "Manter" e "Parar" são a decisão que a equipe registrou na
               planilha, não uma classificação do dashboard.
             </>
           }
@@ -291,7 +344,7 @@ export function AdsPlanilhaPainel({ linhas: todas, start, end }: { linhas: AdsPl
                     </td>
                     <td className="py-2 pr-3 text-right tabular-nums">{p.total == null ? "—" : fmtBRL(p.total)}</td>
                     <td className="py-2 text-right text-xs tabular-nums" style={{ color: "var(--text-dim)" }}>
-                      {p.dataNoFuturo ? `${ddmmaaaa(p.de)} (data inválida na planilha)` : ddmmaaaa(p.de)}
+                      {p.semData ? "sem data na planilha" : p.dataNoFuturo ? `${ddmmaaaa(p.de)} (data inválida na planilha)` : ddmmaaaa(p.de)}
                     </td>
                   </tr>
                 ))}

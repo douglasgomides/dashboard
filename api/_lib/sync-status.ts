@@ -140,7 +140,7 @@ export async function lerDadosAte(
         .maybeSingle();
       return soData((data as Record<string, string> | null)?.[coluna]);
     };
-    // Cliente lido só pela planilha do gestor (sem conta de anúncios nossa) tem o dado em ads_planilha_semanal.
+    // Cliente lido só pela planilha de distribuição de conteúdo (sem conta de anúncios nossa) tem o dado em ads_planilha_semanal.
     if (fonte === "anuncios") {
       const diario = await topo("meta_ads_daily", "date");
       if (diario) return diario;

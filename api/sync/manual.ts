@@ -178,7 +178,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!graphTemConta) erros.push(...w.flatMap((c) => c.errors));
       }
 
-      // Planilha do gestor (clients.ads_planilha_url): para quem a Meta e a Windsor não enxergam a conta.
+      // Planilha de distribuição de conteúdo (clients.ads_planilha_url): para quem a Meta e a Windsor não enxergam a conta.
       {
         const pl = await runAdsPlanilhaSync({ supabaseUrl: urlSupabase, supabaseServiceRoleKey: chaveServico, onlyClientId: client_id });
         if (pl.length > 0) temConta = true;

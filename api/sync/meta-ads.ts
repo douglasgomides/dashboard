@@ -156,7 +156,7 @@ const PISO_DIAS_ANUNCIOS = 30;
         graphComErro = true;
       }
     }
-    // Planilha do gestor de tráfego, para clientes cuja conta de anúncios não conseguimos ler (clients.ads_planilha_url).
+    // Planilha de distribuição de conteúdo da equipe Doctor Creator, para clientes cuja conta de anúncios não conseguimos ler (clients.ads_planilha_url).
     let planilha: unknown = undefined;
     let planilhaComErro = false;
     if (fonte === "ambas") {

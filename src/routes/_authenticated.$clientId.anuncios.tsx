@@ -140,7 +140,7 @@ function MotivoParada({ clientId }: { clientId: string }) {
   const parada = l?.data_ate ? diasDeAtraso(l.data_ate) > 3 : false;
   const m = parada || l?.motivo ? motivoDaLinha(l) : null;
   if (!l || !m) return null;
-  // Fonte alimentada à mão (planilha do gestor): não é parada nem erro, e o painel da planilha já explica a origem.
+  // Fonte alimentada à mão (planilha de distribuição de conteúdo): não é parada nem erro, e o painel da planilha já explica a origem.
   if (m.dono === "manual") return null;
   return (
     <Faixa icone={AlertTriangle} cor={COR_DONO[m.dono]} alerta>
@@ -236,7 +236,7 @@ function AnunciosPage() {
     enabled: vazio,
   });
 
-  // Cliente cuja conta de anúncios não é lida pela Meta/Windsor: impulsionamentos vêm da planilha do gestor (semanal).
+  // Cliente cuja conta de anúncios não é lida pela Meta/Windsor: impulsionamentos vêm da planilha de distribuição de conteúdo (semanal).
   const { data: planilha } = useQuery({
     queryKey: ["ads-planilha", clientId],
     queryFn: () => getAdsPlanilha(clientId),

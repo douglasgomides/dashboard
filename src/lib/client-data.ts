@@ -319,7 +319,7 @@ export async function getWtsVolumeDiario(clientId: string, start: string, end: s
   return data ?? [];
 }
 
-// Impulsionamentos lidos da planilha do gestor de tráfego (clients.ads_planilha_url), para cliente cuja conta de
+// Impulsionamentos lidos da planilha de distribuição de conteúdo da equipe Doctor Creator (clients.ads_planilha_url), para cliente cuja conta de
 // anúncios não é lida pela Meta nem pela Windsor. Uma linha por post em cada análise SEMANAL: não é dado diário.
 export interface AdsPlanilhaLinha {
   analise_em: string;

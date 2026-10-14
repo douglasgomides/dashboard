@@ -1,9 +1,9 @@
 /**
- * Anúncios lidos de uma planilha do gestor de tráfego (clients.ads_planilha_url).
+ * Anúncios lidos de uma planilha de distribuição de conteúdo da equipe Doctor Creator (clients.ads_planilha_url).
  *
  * Existe para cliente cuja conta de anúncios nem a Meta nem a Windsor entregam (Dra. Marcelly Achkar:
  * impulsionamentos feitos pelo Instagram numa conta fora de qualquer BM nossa). A planilha é SEMANAL, uma
- * linha por post turbinado em cada dia de análise. Não existe dado diário nela, então o resultado vai para
+ * linha por post turbinado em cada dia de análise (a equipe a preenche toda semana). Não existe dado diário nela, então o resultado vai para
  * ads_planilha_semanal e NUNCA é espalhado em dias nem gravado em meta_ads_daily: seria dado inventado.
  *
  * Regras de limpeza (a planilha tem sujeira real, conferida em 14/10/2026):
@@ -11,13 +11,20 @@
  *    investimento acumulado. A linha é guardada com a data como está na planilha e o "valor no período" fica nulo
  *    (ali ele repete o acumulado, não é uma semana). A tela separa essas linhas das semanas de análise;
  *  - valor negativo vira nulo (o bloco de 10/07 subtrai acumulados e dá -R$ 12 mil no período);
- *  - linha sem data ou sem link do post é ignorada;
+ *  - linha SEM data de análise mas com link do post é guardada com a data sentinela SEM_DATA (2099-12-31). São os
+ *    blocos do fim da planilha: os posts ATIVOS agora (status "Ativado", com o orçamento diário atual) e os desativados
+ *    desde a última análise. Não são uma semana de análise: a tela os mostra à parte, como "sem data na planilha".
+ *    Linha sem data e sem link é separador e é ignorada;
  *  - o mesmo post duas vezes no mesmo dia de análise: vale a primeira linha;
  *  - "seguidores no período" só vale quando Após - Antes bate com ele. Na análise de 10/07 cinco linhas
  *    trazem o TOTAL de seguidores no lugar do ganho (ex.: antes 8.991, após 15.103, "período" 8.991);
  *    nelas o ganho e o custo por seguidor viram nulos, em vez de mostrar um custo de R$ 0,01.
  */
 import { createClient } from "@supabase/supabase-js";
+
+// Data sentinela das linhas sem "Dia da Análise" (bloco do fim da planilha). Sempre no futuro, então fica fora de
+// "dados até" e das semanas de análise; a tela a reconhece e escreve "sem data na planilha".
+export const SEM_DATA = "2099-12-31";
 
 export interface AdsPlanilhaLinha {
   analise_em: string;
@@ -166,10 +173,14 @@ export function interpretarPlanilha(csv: string, hojeIso: string): AdsPlanilhaLe
   };
 
   for (const r of tabela.slice(1)) {
-    const dia = lerData(r[idx.dia]);
-    if (!dia) continue; // linha separadora ou data ilegível
+    const diaLido = lerData(r[idx.dia]);
+    const temDiaEscrito = (r[idx.dia] ?? "").trim() !== "";
+    if (!diaLido && temDiaEscrito) continue; // data escrita mas ilegível: não adivinho
+    // Sem data e com link: bloco do fim da planilha (posts ativos agora e desativados desde a última análise).
+    if (!diaLido && !normalizarLink(r[idx.link])) continue; // separador
+    const dia = diaLido ?? SEM_DATA;
     const dataNoFuturo = dia > hojeIso;
-    if (dataNoFuturo) descartadas.futuro++; // só contagem: a linha é mantida
+    if (dataNoFuturo && dia !== SEM_DATA) descartadas.futuro++; // só contagem: a linha é mantida
     const link = normalizarLink(r[idx.link]);
     if (!link) {
       descartadas.semLink++;
@@ -214,7 +225,7 @@ export function interpretarPlanilha(csv: string, hojeIso: string): AdsPlanilhaLe
 }
 
 const MOTIVO_PLANILHA =
-  "Anúncios lidos da planilha de distribuição do gestor de tráfego, porque a conta de anúncios ainda não está liberada para o dashboard na Meta. Os valores são semanais, anotados a cada análise.";
+  "Anúncios lidos da planilha de distribuição de conteúdo da equipe Doctor Creator, porque a conta de anúncios ainda não está liberada para o dashboard na Meta (a equipe da cliente não liberou o token). Os valores são semanais, anotados a cada análise.";
 
 export interface AdsPlanilhaSyncEnv {
   supabaseUrl: string;
