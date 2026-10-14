@@ -32,6 +32,7 @@ import type { ContentFormat } from "@/integrations/supabase/types";
 import { brazilWeekdayAndHour, computeFormatBreakdown, computeFormatInsight, median } from "@/lib/report-metrics";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum } from "@/lib/format";
+import { seguidoresNoPeriodo, type DiaSeguidores } from "@/lib/metricas";
 import { Eye, Activity, Bookmark, Clock, Gauge, BarChart3, Download, Loader2, Lightbulb, UserPlus, MousePointerClick, Trophy, TrendingDown, LineChart as LineIcon, ChevronRight } from "lucide-react";
 import { Painel, BarraFina, Miniatura, Kpi } from "@/components/visual";
 
@@ -58,19 +59,18 @@ function tickDate(d: string) {
   return d.slice(5);
 }
 
-function SinaisDeInteresse({ reach, contactTaps, newFollowers }: { reach: number; contactTaps: number; newFollowers: number }) {
+// Alcance e seguidores ficam só no cartão principal (um número de alcance por tela); aqui, o sinal de interesse.
+function SinaisDeInteresse({ contactTaps }: { contactTaps: number }) {
   return (
     <Painel
       icone={MousePointerClick}
       cor="var(--s1)"
-      titulo="Alcance e sinais de interesse"
-      resumo="Três sinais paralelos, não um funil"
-      ajuda="A Meta depreciou “visitas ao perfil” na API, então não dá mais para montar um funil real com % de conversão entre essas etapas. São sinais paralelos, não um funil sequencial."
+      titulo="Sinais de interesse"
+      resumo="Toques nos botões de contato do perfil"
+      ajuda="A Meta depreciou “visitas ao perfil” na API, então não dá mais para montar um funil real com % de conversão entre alcance, visita e contato. O alcance e os seguidores estão no cartão do topo."
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance (soma dos dias)" valor={reach.toLocaleString("pt-BR")} dica="soma do alcance de cada dia; a mesma pessoa conta em mais de um dia" />
-        <Kpi icone={MousePointerClick} cor="var(--s2)" rotulo="Toques em contato" valor={contactTaps.toLocaleString("pt-BR")} dica="endereço, ligar, e-mail, mensagem" />
-        <Kpi icone={UserPlus} cor="var(--s3)" rotulo="Novos seguidores" valor={newFollowers.toLocaleString("pt-BR")} dica="só últimos 30 dias (limite do Instagram, não do período escolhido)" />
+        <Kpi icone={MousePointerClick} cor="var(--s2)" rotulo="Toques em contato" valor={contactTaps.toLocaleString("pt-BR")} info="Endereço, ligar, e-mail e mensagem, somados de cada dia do período." />
       </div>
     </Painel>
   );
@@ -384,7 +384,11 @@ function MonthlyOverview() {
   const semInstagram = data.length === 0;
   const newFollowers = sum(data, "new_followers");
   const cresc = analyzeGrowth(data as { date: string; new_followers?: number | null; unfollowers?: number | null }[], start, fim);
-  const meta = periodoIg.data?.dados;
+  // Métricas que a Meta só entrega para até 30 dias (alcance único, salvamentos por data da ação, novos seguidores)
+  // só aparecem quando o período é de até 30 dias. Em períodos maiores, a versão "soma dos dias", com rótulo.
+  const periodo30 = diasPeriodo <= 30;
+  const meta = periodo30 ? periodoIg.data?.dados : undefined;
+  const saldoTotal = seguidoresNoPeriodo(data as DiaSeguidores[], start, fim);
   const taxaUnica = meta?.alcance_unico && meta.interacoes != null ? ((meta.interacoes / meta.alcance_unico) * 100).toFixed(1) + "%" : null;
   const sinal = (n: number) => `${n >= 0 ? "+" : "-"}${Math.abs(n).toLocaleString("pt-BR")}`;
   // Bruto, saídas e líquido com a MESMA cobertura (dias fechados que têm os dois números). O bruto de
@@ -493,33 +497,33 @@ function MonthlyOverview() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <div>
-              <Kpi icone={UserPlus} cor="var(--s3)" rotulo="Novos seguidores (bruto)" valor={novosKpi.toLocaleString("pt-BR")} tendencia={cresc.diasMedidos ? undefined : vsNovos} dica={dicaSeguidores} />
-              <OQueE>{dicaSeguidores}. {explicacao.seguidores}</OQueE>
-            </div>
-            <div>
-              {meta?.alcance_unico != null ? (
-                <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance (contas únicas)" valor={meta.alcance_unico.toLocaleString("pt-BR")} dica={`igual ao “Contas alcançadas” do Instagram, ${dd(meta.de)} a ${dd(meta.ate)}${meta.recortado ? " (últimos 30 dias do período)" : ""}. Soma dos dias: ${reach.toLocaleString("pt-BR")}`} />
-              ) : (
-                <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance (soma dos dias)" valor={reach.toLocaleString("pt-BR")} tendencia={vsAlcance} dica="soma do alcance de cada dia: a mesma pessoa conta em mais de um dia, então passa do “Contas alcançadas” do Instagram" />
-              )}
-              <OQueE>{explicacao.alcance}</OQueE>
-            </div>
-            <div>
-              <Kpi icone={Activity} cor="var(--s2)" rotulo="Taxa de engajamento" valor={taxaUnica ?? engagementRate} dica={taxaUnica ? "interações ÷ alcance único do período (fórmula da casa; a Meta não publica taxa)" : "interações ÷ soma dos alcances diários (fórmula da casa; a Meta não publica taxa)"} />
-              <OQueE>{explicacao.engajamento}</OQueE>
-            </div>
-            <div>
+            {periodo30 ? (
+              <Kpi icone={UserPlus} cor="var(--s3)" rotulo="Novos seguidores (bruto)" valor={novosKpi.toLocaleString("pt-BR")} tendencia={cresc.diasMedidos ? undefined : vsNovos} dica={dicaSeguidores} info={`${dicaSeguidores}. ${explicacao.seguidores}`} />
+            ) : (
               <Kpi
-                icone={Bookmark}
-                cor="var(--s7)"
-                rotulo="Salvamentos"
-                valor={(meta?.salvamentos ?? saves).toLocaleString("pt-BR")}
-                tendencia={meta?.salvamentos != null ? undefined : vsSalvos}
-                dica={meta?.salvamentos != null ? `por data da ação, igual ao Instagram (${dd(meta.de)} a ${dd(meta.ate)})` : "soma dos salvamentos de cada dia"}
+                icone={UserPlus}
+                cor="var(--s3)"
+                rotulo="Seguidores: saldo no período"
+                valor={saldoTotal.saldoTotal != null ? sinal(saldoTotal.saldoTotal) : "—"}
+                dica={saldoTotal.saldoTotal != null ? "variação do total de seguidores do primeiro ao último dia com dado" : "sem o total de seguidores no começo e no fim do período"}
+                info="Total de seguidores no último dia com dado menos o total no primeiro. Novos seguidores e saídas só aparecem em períodos de até 30 dias: o Instagram não entrega esses números para trás."
               />
-              <OQueE>{explicacao.salvamentos}</OQueE>
-            </div>
+            )}
+            {meta?.alcance_unico != null ? (
+              <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance (contas únicas)" valor={meta.alcance_unico.toLocaleString("pt-BR")} dica={`igual ao “Contas alcançadas” do Instagram, ${dd(meta.de)} a ${dd(meta.ate)}`} info={explicacao.alcance} />
+            ) : (
+              <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance (soma dos dias)" valor={reach.toLocaleString("pt-BR")} tendencia={vsAlcance} dica="a mesma pessoa conta em cada dia em que viu o perfil" info={explicacao.alcance} />
+            )}
+            <Kpi icone={Activity} cor="var(--s2)" rotulo="Taxa de engajamento" valor={taxaUnica ?? engagementRate} dica={taxaUnica ? "interações ÷ alcance único" : "interações ÷ soma dos alcances diários"} info={explicacao.engajamento} />
+            <Kpi
+              icone={Bookmark}
+              cor="var(--s7)"
+              rotulo="Salvamentos"
+              valor={(meta?.salvamentos ?? saves).toLocaleString("pt-BR")}
+              tendencia={meta?.salvamentos != null ? undefined : vsSalvos}
+              dica={meta?.salvamentos != null ? `por data da ação, igual ao Instagram (${dd(meta.de)} a ${dd(meta.ate)})` : "soma dos salvamentos de cada dia"}
+              info={explicacao.salvamentos}
+            />
           </div>
         )}
 
@@ -620,12 +624,12 @@ function MonthlyOverview() {
 
             {!semInstagram && (
               <>
-                <SinaisDeInteresse reach={reach} contactTaps={contactTaps} newFollowers={newFollowers} />
+                <SinaisDeInteresse contactTaps={contactTaps} />
 
-                {avisoCobertura && (
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-[13px]" style={{ color: "var(--ink-2)", flex: "1 1 320px" }}>{avisoCobertura}</p>
-                    {isAdmin && <SyncButton clientId={clientId} alvo="historico" />}
+                {/* O aviso de histórico curto fica uma vez só, na faixa do topo; aqui só o botão de buscar histórico. */}
+                {avisoCobertura && isAdmin && (
+                  <div className="flex justify-end">
+                    <SyncButton clientId={clientId} alvo="historico" />
                   </div>
                 )}
 

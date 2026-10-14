@@ -38,7 +38,9 @@ export function useResultado(clientId: string, start: string, end: string) {
       diario: metricas.data as any[],
       diarioAnterior: (anterior.data as any[]) ?? undefined,
       posts: (posts.data as any[]) ?? [],
-      periodoIg: periodoIg.data?.dados ?? null,
+      // Métricas de 30 dias da Meta (alcance único etc.) só valem para período de até 30 dias.
+      coberturaNoTopo: true,
+      periodoIg: diasPeriodo <= 30 ? periodoIg.data?.dados ?? null : null,
       adsDiag: adsDiag.data ?? null,
       adsPorDia: (adsDia.data ?? []).map((a: any) => ({ dia: a.dia, gasto: Number(a.gasto), conversas: Number(a.conversas) })),
       wts: wts.data ?? null,
