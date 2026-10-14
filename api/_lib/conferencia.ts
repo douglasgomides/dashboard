@@ -99,12 +99,16 @@ async function gastoDosUltimos30(id: string, token: string): Promise<number> {
 type Sb = SupabaseClient<any, any, any>;
 
 async function base(supabase: Sb) {
-  const { data: clientes } = await supabase.from("clients").select("id, name").eq("active", true);
+  const { data: clientes } = await supabase.from("clients").select("id, name, meta_ad_account_id").eq("active", true);
   const nome = new Map<string, string>((clientes ?? []).map((c: any) => [c.id, c.name]));
   const ativos = new Set(nome.keys());
   const { data: contasAds } = await supabase.from("client_ad_accounts").select("client_id, ad_account_id, name, active, access_token");
   const ads = (contasAds ?? []).filter((c: any) => ativos.has(c.client_id));
-  return { nome, ativos, contasAds: contasAds ?? [], ads };
+  // Conta gravada direto no cadastro do cliente (campo antigo) também conta como ligação.
+  const contaCadastro = (clientes ?? [])
+    .filter((c: any) => c.meta_ad_account_id)
+    .map((c: any) => ({ client_id: c.id as string, ad_account_id: String(c.meta_ad_account_id) }));
+  return { nome, ativos, contasAds: contasAds ?? [], ads, contaCadastro };
 }
 
 /** Roda uma etapa da conferência. Só leitura na origem; quem grava o resultado é o chamador. */
@@ -141,14 +145,19 @@ export async function rodarConferencia(supabase: Sb, opts: { tokenGlobalAnuncios
 type Base = Awaited<ReturnType<typeof base>>;
 type Parcial = Omit<ResultadoEtapa, "etapa">;
 
-async function etapaDuplicidades(supabase: Sb, { nome, ativos, ads }: Base): Promise<Parcial> {
+async function etapaDuplicidades(supabase: Sb, { nome, ativos, ads, contaCadastro }: Base): Promise<Parcial> {
   const achados: Achado[] = [];
   const verificados: Verificado[] = [];
   // 1. Mesma conta de anúncios ligada a mais de um cliente: toda soma entre clientes conta o gasto duas vezes.
   const porConta = new Map<string, Set<string>>();
   for (const c of ads) {
     if (!c.active) continue;
-    porConta.set(c.ad_account_id, (porConta.get(c.ad_account_id) ?? new Set()).add(c.client_id));
+    const id = String(c.ad_account_id).replace(/^act_/, "");
+    porConta.set(id, (porConta.get(id) ?? new Set()).add(c.client_id));
+  }
+  for (const c of contaCadastro) {
+    const id = c.ad_account_id.replace(/^act_/, "");
+    porConta.set(id, (porConta.get(id) ?? new Set()).add(c.client_id));
   }
   for (const [conta, cs] of porConta) {
     if (cs.size < 2) continue;

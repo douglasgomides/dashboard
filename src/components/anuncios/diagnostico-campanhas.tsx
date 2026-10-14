@@ -3,6 +3,7 @@
 // selo, alerta de verba sem resultado e a lista de campanhas com as barras de
 // fatia do investimento, fatia das conversas e custo contra a régua.
 import { useState } from "react";
+import { fmtTaxa } from "@/lib/metricas";
 import { Wallet, MessageCircle, Coins, Eye, MousePointerClick, AlertTriangle, Gauge, ShieldAlert, Stethoscope, type LucideIcon } from "lucide-react";
 import { fmtBRL } from "@/lib/format";
 import {
@@ -291,11 +292,11 @@ export function DiagnosticoCampanhas({ d }: { d: DiagnosticoAds }) {
   const sem = d.campanhas.filter((c) => c.vereditoOficial === "Atrai mas não converte" || c.vereditoOficial === "Sem tração");
   const semConta = sem.filter((c) => c.julgadaPor === "conta" && !c.selos.includes("Resultado não medido")).reduce((s, c) => s + c.gasto, 0);
   const semNaoMedido = sem.filter((c) => c.selos.includes("Resultado não medido")).reduce((s, c) => s + c.gasto, 0);
-  const pct = (v: number) => `${Math.round((v / Math.max(d.gasto, 1)) * 100)}%`;
+  const pct = (v: number) => fmtTaxa(v, d.gasto);
   const reguasTxt =
     [
       ...d.grupos.filter((g) => g.medianaCusto != null).map((g) => `típica de ${GRUPOS[g.grupo].curto}: ${unidade(g.grupo, g.medianaCusto!)}`),
-      ...(d.reguaConta.custoPorConversa != null ? [`conta toda: ${fmtBRL(d.reguaConta.custoPorConversa)} por conversa`] : []),
+      ...(d.reguaConta.custoPorConversa != null ? [`conta toda (só para objetivos sem régua própria): ${fmtBRL(d.reguaConta.custoPorConversa)} por conversa`] : []),
     ].join("; ") || "sem régua no período";
 
   const botao = (ativo: boolean) => ({
@@ -308,11 +309,13 @@ export function DiagnosticoCampanhas({ d }: { d: DiagnosticoAds }) {
     <Painel
       icone={Stethoscope}
       titulo="Diagnóstico das campanhas"
-      resumo={`Régua: campanha típica do mesmo objetivo${d.reguaConta.custoPorConversa != null ? `; com poucas campanhas no objetivo, a da conta (${fmtBRL(d.reguaConta.custoPorConversa)} por conversa)` : ""}`}
+      resumo={`Régua por objetivo: ${reguasTxt}`}
       cor="var(--ai)"
       ajuda={
         <>
-          A régua é a campanha típica (mediana) desta conta no período, e não referência de mercado. Cada campanha é comparada com as do mesmo
+          A régua é a campanha típica (mediana) desta conta no período, e não referência de mercado. São duas medianas diferentes, com bases
+          diferentes: a típica de cada objetivo usa só campanhas desse objetivo com 500+ aparições e R$ 30+ de gasto; a da conta toda usa
+          todas as campanhas com conversa e 500+ aparições, de qualquer objetivo, e só vale para objetivos sem régua própria. Cada campanha é comparada com as do mesmo
           objetivo, no resultado desse objetivo; se o objetivo tem menos de 3 campanhas com volume, com a conta toda, pela conversa (a régua
           original). "Escalar" é quem entrega a 60% ou menos da típica; "Cortar", quem passa do dobro. Campanha que rodou pouco fica como "Volume
           insuficiente", em vez de receber um veredito de mentira.

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { statusDoCliente, diasDeAtraso, ddmm } from "@/lib/saude-fontes";
 import { motivoDaLinha, COR_DONO } from "@/lib/motivos";
 import { SeloDono } from "@/components/selo-dono";
@@ -189,6 +190,33 @@ function PorObjetivo({ d }: { d: DiagnosticoAds }) {
   );
 }
 
+// A mesma conta de anúncios ligada a mais de um cliente: cada cliente mostra o gasto inteiro da conta.
+function ContaCompartilhada({ clientId }: { clientId: string }) {
+  const { data } = useQuery({
+    queryKey: ["contas-anuncio-compartilhadas", clientId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("contas_anuncio_compartilhadas", { p_client_id: clientId });
+      if (error) return [];
+      return (data ?? []) as { ad_account_id: string; outros_clientes: number; nomes: string[] | null }[];
+    },
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+  if (!data?.length) return null;
+  return (
+    <>
+      {data.map((c) => (
+        <Faixa key={c.ad_account_id} icone={AlertTriangle} cor="var(--warn)" alerta>
+          A conta de anúncios {c.ad_account_id} também está ligada a {c.outros_clientes} outro{c.outros_clientes > 1 ? "s" : ""} cliente
+          {c.outros_clientes > 1 ? "s" : ""}
+          {c.nomes?.length ? ` (${c.nomes.join(", ")})` : ""}: o gasto e os resultados aparecem inteiros em cada um. Não some os clientes. Para
+          separar, cada cliente precisa da própria conta ou de um filtro por campanha no cadastro.
+        </Faixa>
+      ))}
+    </>
+  );
+}
+
 function AnunciosPage() {
   const { clientId } = Route.useParams();
   const dateRangeState = clientLayoutRoute.useSearch();
@@ -265,6 +293,7 @@ function AnunciosPage() {
       </div>
 
       <MotivoParada clientId={clientId} />
+      <ContaCompartilhada clientId={clientId} />
       <Faixa
         icone={CalendarDays}
         ajuda={
