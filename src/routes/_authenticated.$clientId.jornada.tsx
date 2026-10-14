@@ -7,6 +7,7 @@ import { Painel, Selo } from "@/components/visual";
 import { OQueE } from "@/components/insight-card";
 import { ChecklistDados, FunilOndeQuebra, useDiagnosticoComercial } from "@/components/comercial-diagnostico";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
+import { JornadaFunil } from "@/components/jornada-funil";
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 
@@ -123,6 +124,8 @@ function JornadaPage() {
   const tabelas = r && ((r.por_origem?.length ?? 0) > 0 || (r.posts?.length ?? 0) > 0 || (r.links?.length ?? 0) > 0);
   return (
     <div className="space-y-4">
+      <JornadaFunil clientId={clientId} start={start} end={end} />
+
       <Painel icone={Filter} titulo="Onde a jornada quebra" resumo={`Do lead à venda · ${formatRangeLabel({ start, end })}`}>
         {diag.isLoading && <p className="text-sm">Calculando…</p>}
         {diag.error && <p className="text-sm">{(diag.error as Error).message}</p>}
