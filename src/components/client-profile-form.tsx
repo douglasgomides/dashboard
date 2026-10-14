@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Upload, Trash2 } from "lucide-react";
 import { updateClientProfile, uploadClientAvatar, type ClientProfileInput } from "@/lib/admin-data";
 import { ClientAvatar } from "@/components/client-avatar";
@@ -59,6 +60,15 @@ export function ClientProfileForm({ client }: { client: Omit<Tables<"clients">, 
   const [instagram, setInstagram] = useState(client.instagram_handle ?? "");
   const [avatar, setAvatar] = useState(client.avatar_url ?? "");
   const [contaAds, setContaAds] = useState(client.meta_ad_account_id ?? "");
+  // Contas de anúncio realmente ligadas (client_ad_accounts): é por elas que o sync lê os anúncios.
+  const { data: contasLigadas } = useQuery({
+    queryKey: ["contas-anuncio-ligadas", client.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("client_ad_accounts").select("ad_account_id, name, active").eq("client_id", client.id).order("active", { ascending: false });
+      return (data ?? []) as { ad_account_id: string; name: string | null; active: boolean }[];
+    },
+    staleTime: 60_000,
+  });
   const [contaWts, setContaWts] = useState(client.wts_company_id ?? "");
   const [cfm, setCfm] = useState<CfmScoreStatus | "">(client.cfm_score_status ?? "");
   const [ativo, setAtivo] = useState(client.active);
@@ -197,7 +207,7 @@ export function ClientProfileForm({ client }: { client: Omit<Tables<"clients">, 
           <input
             value={especialidade}
             onChange={(e) => setEspecialidade(e.target.value)}
-            placeholder="Ginecologia e saúde da mulher"
+            placeholder="Ex.: dermatologia"
             className="mt-1 w-full rounded-md border px-2.5 py-1.5 text-sm"
             style={estiloInput}
           />
@@ -209,7 +219,7 @@ export function ClientProfileForm({ client }: { client: Omit<Tables<"clients">, 
           <input
             value={instagram}
             onChange={(e) => setInstagram(e.target.value)}
-            placeholder="dralanatorres"
+            placeholder="Ex.: drnome"
             className="mt-1 w-full rounded-md border px-2.5 py-1.5 text-sm"
             style={estiloInput}
           />
@@ -231,20 +241,37 @@ export function ClientProfileForm({ client }: { client: Omit<Tables<"clients">, 
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Campo label="Conta de anúncio (Meta)" hint="Só o número. Vazio = aba de anúncios fica sem dado.">
+        <Campo
+          label="Conta de anúncio (Meta)"
+          hint={
+            (contasLigadas ?? []).some((c) => c.active)
+              ? "Conta principal (opcional): os anúncios já são lidos pelas contas ligadas abaixo."
+              : "Só o número. Sem conta aqui nem ligada abaixo, a aba de anúncios fica sem dado."
+          }
+        >
           <input
             value={contaAds}
             onChange={(e) => setContaAds(e.target.value)}
-            placeholder="373686576757847"
+            placeholder="Ex.: 1234567890"
             className="mt-1 w-full rounded-md border px-2.5 py-1.5 text-sm"
             style={estiloInput}
           />
+          {(contasLigadas ?? []).length > 0 && (
+            <ul className="mt-1.5 space-y-0.5 text-xs" aria-label="Contas de anúncio ligadas">
+              {contasLigadas!.map((c) => (
+                <li key={c.ad_account_id} style={{ color: c.active ? "var(--ink-2)" : "var(--muted)" }}>
+                  {c.active ? "Ligada" : "Desligada"}: {c.ad_account_id}
+                  {c.name ? ` · ${c.name}` : ""}
+                </li>
+              ))}
+            </ul>
+          )}
         </Campo>
         <Campo label="Conta da WTS" hint="companyId. Vazio = aba de atendimento fica sem dado.">
           <input
             value={contaWts}
             onChange={(e) => setContaWts(e.target.value)}
-            placeholder="36900f78-a0db-4732-83b2-0a09ee8267b2"
+            placeholder="Ex.: 00000000-0000-0000-0000-000000000000"
             className="mt-1 w-full rounded-md border px-2.5 py-1.5 text-sm"
             style={estiloInput}
           />
