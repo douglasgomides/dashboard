@@ -303,6 +303,14 @@ function AdminClientsPage() {
     }
   });
   const carregandoSaude = saudes.some((q) => q.isLoading);
+  // Filtro da tabela de clientes: busca por nome, especialidade ou @, e "só com problema".
+  const [busca, setBusca] = useState("");
+  const [soProblema, setSoProblema] = useState(false);
+  const casaFiltro = (c: { id: string; name: string; specialty?: string | null; instagram_handle?: string | null }) => {
+    const t = busca.trim().toLowerCase();
+    const texto = !t || [c.name, c.specialty, c.instagram_handle, contasIg?.get(c.id)].some((x) => (x ?? "").toLowerCase().includes(t));
+    return texto && (!soProblema || problemas.some((p) => p.clientId === c.id));
+  };
   // Problemas de dado (qualidade_dados) por cliente: mesma chave do ChipQualidade, então a leitura é compartilhada.
   const qualidades = useQueries({
     queries: (clients ?? []).map((c) => ({
@@ -372,6 +380,21 @@ function AdminClientsPage() {
         a causa identificada e a próxima ação possível. Estados: Fonte atualizada · Do lado do cliente · Sem dado novo na
         origem · Instabilidade da Meta · Erro · Fonte não conectada. Clientes com problema aparecem primeiro.
       </p>
+      <div className="mb-2 flex flex-wrap items-center gap-3">
+        <input
+          autoComplete="off"
+          type="search"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar cliente por nome, especialidade ou @"
+          aria-label="Buscar cliente"
+          className="min-h-[40px] w-full max-w-sm rounded-lg border px-3 text-sm"
+          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+        />
+        <label className="inline-flex min-h-[40px] items-center gap-2 text-sm">
+          <input type="checkbox" checked={soProblema} onChange={(e) => setSoProblema(e.target.checked)} /> Só clientes com problema
+        </label>
+      </div>
       {isLoading ? (
         <Carregando texto="Lendo os clientes…" />
       ) : (
@@ -389,7 +412,9 @@ function AdminClientsPage() {
             </thead>
             <tbody>
               {[...(clients ?? [])]
-                .map((c, i) => {
+                .filter(casaFiltro)
+                .map((c) => ({ c, i: (clients ?? []).indexOf(c) }))
+                .map(({ c, i }) => {
                   const sd = saudes[i]?.data;
                   const peso = sd
                     ? Math.max(0, ...(["instagram", "anuncios", "crm", "atendimento"] as const).map((fo) => saudeDaFonte(!!sd.fontes?.[FLAG_FONTE[fo]], sd.linhas.find((l) => l.fonte === fo)).peso))
@@ -422,6 +447,14 @@ function AdminClientsPage() {
                   </tr>
                 );
               })}
+              {(clients ?? []).length > 0 && !(clients ?? []).some(casaFiltro) && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center" style={{ color: "var(--text-dim)" }}>
+                    Nenhum cliente com esse filtro.{" "}
+                    <button type="button" className="font-semibold" style={{ color: "var(--accent)" }} onClick={() => { setBusca(""); setSoProblema(false); }}>Limpar</button>
+                  </td>
+                </tr>
+              )}
               {(clients ?? []).length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center" style={{ color: "var(--text-dim)" }}>
