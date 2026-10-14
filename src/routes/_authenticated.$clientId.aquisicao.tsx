@@ -22,6 +22,7 @@ import { getSapDados, calcularResumo, dadosDeExemplo, REFERENCIA, type Farol, ty
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtBRL, fmtNum } from "@/lib/format";
 import { Kpi, Painel, Selo, BarraFina, Ajuda } from "@/components/visual";
+import { CadastroSap, TrackerAutomatico, MarcosDoCrm } from "@/components/sap-tracker";
 
 export const Route = createFileRoute("/_authenticated/$clientId/aquisicao")({
   component: AquisicaoPage,
@@ -54,6 +55,19 @@ function AquisicaoPage() {
   const dateRangeState = clientLayoutRoute.useSearch();
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
+  return (
+    <div className="space-y-6">
+      <CadastroSap clientId={clientId} />
+      <TrackerAutomatico clientId={clientId} start={start} end={end} periodLabel={periodLabel} />
+      <MarcosDoCrm clientId={clientId} />
+      <TrackerManual clientId={clientId} start={start} end={end} periodLabel={periodLabel} />
+    </div>
+  );
+}
+
+// Leads registrados lead a lead em sap_leads (n8n "SAP | Lead → Tracker" ou /api/sap/lead), com
+// pontuação A/B/C, toque de fechamento e motivo. Continua valendo para quem preencher por lá.
+function TrackerManual({ clientId, start, end, periodLabel }: { clientId: string; start: string; end: string; periodLabel: string }) {
   const [exemplo, setExemplo] = useState(false);
 
   const { data, isLoading, error } = useQuery({
@@ -74,27 +88,24 @@ function AquisicaoPage() {
     );
   }
 
-  if (!dados || !resumo) {
+  if (!dados || !resumo || (!exemplo && dados.leads.length === 0)) {
     return (
-      <div className="space-y-4">
-        <Painel icone={Target} titulo="Sistema de Aquisição de Pacientes" resumo="Este cliente ainda não tem uma clínica do sistema ligada.">
-          <div className="space-y-3 text-sm" style={{ color: "var(--text-dim)" }}>
-            <p>
-              O Tracker passa a mostrar dados assim que existir uma linha em <code>sap_clinicas</code> com o{" "}
-              <code>client_id</code> deste cliente. O workflow do n8n <strong>SAP | D0 Onboarding</strong> cria essa linha no
-              fechamento, e os leads chegam por <strong>SAP | Lead → Tracker</strong> ou pelo endpoint <code>/api/sap/lead</code>.
-            </p>
-            <button
-              type="button"
-              onClick={() => setExemplo(true)}
-              className="rounded-lg px-3 py-2 text-sm font-medium"
-              style={{ background: "var(--accent)", color: "var(--on-accent, #fff)" }}
-            >
-              Ver a tela com dados de exemplo
-            </button>
-          </div>
-        </Painel>
-      </div>
+      <Painel icone={ListChecks} titulo="Leads registrados um a um (opcional)" resumo="Pontuação A/B/C, toque de fechamento e motivo, quando a clínica registra lead a lead.">
+        <div className="space-y-3 text-sm" style={{ color: "var(--text-dim)" }}>
+          <p>
+            Os números acima já saem do CRM e do WhatsApp. Esta parte só aparece quando os leads também chegam um a um pelo endpoint{" "}
+            <code>/api/sap/lead</code> (ou pelo workflow <strong>SAP | Lead → Tracker</strong>), com a pontuação e o toque de fechamento.
+          </p>
+          <button
+            type="button"
+            onClick={() => setExemplo(true)}
+            className="rounded-lg border px-3 py-2 text-sm font-medium"
+            style={{ borderColor: "var(--border)", color: "var(--text)" }}
+          >
+            Ver como fica, com dados de exemplo
+          </button>
+        </div>
+      </Painel>
     );
   }
 
