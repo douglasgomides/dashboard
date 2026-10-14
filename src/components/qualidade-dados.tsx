@@ -103,7 +103,7 @@ export function problemasParaInsights(ps: ProblemaDado[]) {
     acao: { texto: p.correcao, rota: p.fonte === "crm" ? "/$clientId/crm-painel" : p.fonte === "anuncios" ? "/$clientId/anuncios" : undefined, botao: p.fonte === "crm" ? "Ver o funil do CRM" : p.fonte === "anuncios" ? "Ver anúncios" : undefined },
     responsavel: (p.responsavel as any) ?? "equipe_hub",
     regra: "Verificação fixa de qualidade dos dados (função qualidade_dados no banco): leads abertos parados há 90+ dias, CRM sem lead novo enquanto chegam conversas, origem vazia, ganho não registrado, CRM compartilhado, erro de sincronização, Instagram ou anúncio parado.",
-    fonte: "Banco do Intelligence Hub (CRM, Instagram, Meta Ads, WhatsApp)",
+    fonte: "Banco do Doctor Creator Hub (CRM, Instagram, Meta Ads, WhatsApp)",
     risco: "Recomendação sobre o dado de entrada: não diz se o resultado foi bom ou ruim, diz que a leitura está comprometida.",
   }));
 }
