@@ -1,7 +1,7 @@
 // Por que uma fonte está parada, em linguagem de gente, e DE QUEM é a ação.
 // Hoje "Anúncios até 04/09" parece falha de sincronização; muitas vezes é pagamento, campanha desligada
 // ou acesso revogado do lado do cliente. Este arquivo transforma o que sabemos em uma frase honesta.
-import { diasDeAtraso, type LinhaFonte } from "@/lib/saude-fontes";
+import { atrasoDaFonte, diasDeAtraso, type LinhaFonte } from "@/lib/saude-fontes";
 
 export type Dono = "cliente" | "meta" | "origem" | "nos";
 export type Motivo = { texto: string; dono: Dono };
@@ -49,7 +49,7 @@ export function motivoDaLinha(l: LinhaFonte | undefined): Motivo | null {
     if (m) return m;
     return { texto: `Erro técnico na última atualização: ${l.last_error.replace(/\s+/g, " ").slice(0, 140)}`, dono: "nos" };
   }
-  if (l.data_ate && diasDeAtraso(l.data_ate) > 3) {
+  if (l.data_ate && atrasoDaFonte(l) > 3) {
     const rodouOk = !!l.last_success_at && diasDeAtraso(l.last_success_at.slice(0, 10)) <= 1;
     if (rodouOk || !l.last_attempt_at) {
       const por =

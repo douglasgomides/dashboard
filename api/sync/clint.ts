@@ -71,6 +71,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err) {
       flwErro = err instanceof Error ? err.message : String(err);
     }
+    // O status de CRM também precisa existir para quem sincroniza por aqui (FlwChat e RD Station). Sem isso o painel
+    // mostrava "nenhuma tentativa" para Mariela, Sergio e Juliana Paola, mesmo com o sync rodando todo dia.
+    const supabaseStatus = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+    await recordSyncStatusPorCliente(supabaseStatus, "crm", flwchat.map((r) => ({ clientId: r.clientId, rows: r.cards, errors: r.errors })));
+    await recordSyncStatusPorCliente(supabaseStatus, "crm", rdstation.map((r) => ({ clientId: r.clientId, rows: r.negocios, errors: r.errors })));
     const hasErrors =
       results.some((r) => r.errors.length > 0) ||
       rdstation.some((r) => r.errors.length > 0) ||

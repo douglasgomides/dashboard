@@ -5,7 +5,7 @@ import { createAdminUser, createClient, listAllClients } from "@/lib/admin-data"
 import { ClientAvatar } from "@/components/client-avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { getClientFontes } from "@/lib/client-data";
-import { statusDoCliente, tomDaFonte, ddmm, diasDeAtraso, type LinhaFonte } from "@/lib/saude-fontes";
+import { statusDoCliente, tomDaFonte, ddmm, atrasoDaFonte, type LinhaFonte } from "@/lib/saude-fontes";
 import { motivoDaLinha, ROTULO_DONO, type Dono } from "@/lib/motivos";
 import { SeloDono } from "@/components/selo-dono";
 
@@ -299,7 +299,7 @@ function AdminClientsPage() {
       const flag = FLAG_FONTE[l.fonte];
       if (!flag || !s.fontes?.[flag]) continue;
       if (tomDaFonte(l) !== "ruim") continue;
-      const velho = l.data_ate ? diasDeAtraso(l.data_ate) > 3 : false;
+      const velho = l.data_ate ? atrasoDaFonte(l) > 3 : false;
       if (velho || (!l.data_ate && !l.last_error)) {
         paradas.push({ texto: `${c.name}: ${ROTULO_FONTE[l.fonte]} ${l.data_ate ? `até ${ddmm(l.data_ate)}` : "sem dado"}`, motivo: motivoDaLinha(l) });
       } else {
@@ -309,13 +309,16 @@ function AdminClientsPage() {
     }
   });
   const carregandoSaude = saudes.some((q) => q.isLoading);
+  // Vermelho só para falha nossa. Pagamento, campanha, token do cliente e fonte sem movimento são aviso, não alarme.
+  const algumaFalhaNossa = [...paradas, ...comErro].some((p) => p.motivo?.dono === "nos");
+  const corAlerta = algumaFalhaNossa ? "var(--danger)" : paradas.length || comErro.length ? "var(--warn)" : "var(--border)";
 
   return (
     <div>
       {!carregandoSaude && (
         <div
           className="mb-3 rounded-xl border p-3 text-sm"
-          style={{ borderColor: paradas.length || comErro.length ? "var(--danger)" : "var(--border)", background: "var(--surface)" }}
+          style={{ borderColor: corAlerta, background: "var(--surface)" }}
         >
           {paradas.length === 0 && comErro.length === 0 ? (
             <span style={{ color: "var(--good)", fontWeight: 600 }}>Todas as fontes ligadas estão com dado de até 3 dias atrás.</span>
@@ -323,7 +326,7 @@ function AdminClientsPage() {
             <>
               {paradas.length > 0 && (
                 <>
-                  <strong style={{ color: "var(--danger)" }}>
+                  <strong style={{ color: algumaFalhaNossa ? "var(--danger)" : "var(--warn-text, var(--text))" }}>
                     {paradas.length} fonte{paradas.length === 1 ? "" : "s"} sem dado novo há mais de 3 dias
                   </strong>
                   <ul className="mt-1 space-y-1.5 pl-0" style={{ color: "var(--text-dim)", listStyle: "none" }}>
