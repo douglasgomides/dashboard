@@ -348,6 +348,103 @@ export async function reconstruirSeguidores(supabase: SupabaseClient<Database>, 
   }
 }
 
+// ---- Métricas diárias da conta direto da Graph (para contas que a Windsor não cobre) ----
+// Alcance, interações, salvos, compartilhamentos, toques no perfil, novos seguidores e saídas por dia vêm da Windsor para quase
+// todas as contas. Quem não está no conector Instagram da Windsor (Doctor Creator, Juliana Carrion) ficava com esses números
+// parados enquanto o "sync com sucesso" seguia verde. Aqui a Graph preenche, com o token da própria conta, só os dias que
+// a Windsor não trouxe: se o último dia com alcance for recente, não faz nada (a Windsor está cobrindo).
+// A Meta conta o dia no fuso da Califórnia e leva ~2 dias para fechar; o dia gravado é o da Califórnia (igual a reconstruirSeguidores).
+const LA = "America/Los_Angeles";
+const laData = (ms: number) => new Intl.DateTimeFormat("en-CA", { timeZone: LA, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
+const laOffsetHoras = (ms: number) => {
+  const t = new Intl.DateTimeFormat("en-US", { timeZone: LA, timeZoneName: "shortOffset" }).formatToParts(new Date(ms)).find((p) => p.type === "timeZoneName")?.value ?? "GMT-8";
+  return -Number(/GMT([+-]\d+)/.exec(t)?.[1] ?? -8);
+};
+const laMeiaNoiteMs = (ano: number, mes: number, dia: number) => Date.UTC(ano, mes - 1, dia) + laOffsetHoras(Date.UTC(ano, mes - 1, dia, 12)) * 3600_000;
+const METRICAS_DIA = ["reach", "total_interactions", "likes", "comments", "saves", "shares", "profile_links_taps"] as const;
+
+async function metricasDoDia(token: string, igId: string, since: number, until: number): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  const ler = async (lista: string[]) => {
+    const c = await graphGet(token, `${igId}/insights`, { metric: lista.join(","), period: "day", metric_type: "total_value", since, until });
+    for (const d of c?.data ?? []) { const v = d?.total_value?.value; if (typeof v === "number" && Number.isFinite(v)) { out[d.name] = v; } }
+  };
+  try { await ler([...METRICAS_DIA]); }
+  catch { for (const m of METRICAS_DIA) { try { await ler([m]); } catch { /* métrica que esta conta não expõe */ } } }
+  return out;
+}
+
+async function seguiramEDeixaram(token: string, igId: string, since: number, until: number): Promise<{ novos: number; saidas: number } | null> {
+  try {
+    const c = await graphGet(token, `${igId}/insights`, { metric: "follows_and_unfollows", period: "day", metric_type: "total_value", breakdown: "follow_type", since, until });
+    const r = c?.data?.[0]?.total_value?.breakdowns?.[0]?.results ?? [];
+    const v = (k: string) => Number(r.find((x: any) => x.dimension_values?.[0] === k)?.value ?? 0);
+    return { novos: v("FOLLOWER"), saidas: v("NON_FOLLOWER") };
+  } catch { return null; }
+}
+
+export async function gravarMetricasDiariasPelaGraph(
+  supabase: SupabaseClient<Database>,
+  igAccountId: string,
+  accountId: string,
+  clientId: string,
+  token: string,
+): Promise<string[]> {
+  try {
+    const hojeBr = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+    const { data: ult } = await supabase
+      .from("instagram_account_daily_metrics")
+      .select("date")
+      .eq("instagram_account_id", accountId)
+      .not("reach", "is", null)
+      .order("date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const ultimo: string | null = (ult as { date?: string } | null)?.date ?? null;
+    const dias = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / 86_400_000);
+    if (ultimo && dias(hojeBr, ultimo) <= 3) { return []; } // a Windsor está cobrindo esta conta
+
+    // Dias da Califórnia fechados (de 2 dias atrás para trás), do dia seguinte ao último com alcance, no máximo 28.
+    const hojeLa = laData(Date.now()).split("-").map(Number);
+    const alvo: { data: string; since: number; until: number }[] = [];
+    for (let k = 2; k < 2 + 28; k++) {
+      const meia = laMeiaNoiteMs(hojeLa[0], hojeLa[1], hojeLa[2]) - k * 86_400_000;
+      const data = laData(meia + 12 * 3600_000);
+      if (ultimo && data <= ultimo) { break; }
+      alvo.push({ data, since: Math.floor(meia / 1000), until: Math.floor(meia / 1000) + 86_399 });
+    }
+    if (alvo.length === 0) { return []; }
+
+    const linhas: Record<string, unknown>[] = [];
+    for (let i = 0; i < alvo.length; i += 7) {
+      await Promise.all(alvo.slice(i, i + 7).map(async (d) => {
+        const [m, f] = await Promise.all([metricasDoDia(token, igAccountId, d.since, d.until), seguiramEDeixaram(token, igAccountId, d.since, d.until)]);
+        const linha: Record<string, unknown> = { instagram_account_id: accountId, client_id: clientId, date: d.data };
+        if ("reach" in m) linha.reach = m.reach;
+        if ("total_interactions" in m) linha.total_interactions = m.total_interactions;
+        if ("likes" in m) linha.likes = m.likes;
+        if ("comments" in m) linha.comments = m.comments;
+        if ("saves" in m) linha.saves = m.saves;
+        if ("shares" in m) linha.shares = m.shares;
+        if ("profile_links_taps" in m) linha.profile_links_taps = m.profile_links_taps;
+        if (f) { linha.new_followers = f.novos; linha.unfollowers = f.saidas; }
+        if (Object.keys(linha).length > 3) { linhas.push(linha); } // só grava o dia se a Meta devolveu alguma métrica
+      }));
+    }
+    if (linhas.length === 0) { return ["métricas diárias pela Graph: a Meta não devolveu nenhuma métrica"]; }
+    // Cada grupo tem o mesmo conjunto de colunas (o upsert em lote preenche com null a coluna que falta).
+    const grupos = new Map<string, Record<string, unknown>[]>();
+    for (const l of linhas) { const k = Object.keys(l).sort().join(","); grupos.set(k, [...(grupos.get(k) ?? []), l]); }
+    for (const g of grupos.values()) {
+      const { error } = await supabase.from("instagram_account_daily_metrics").upsert(g as never, { onConflict: "instagram_account_id,date" });
+      if (error) { return [`métricas diárias pela Graph: ${error.message}`]; }
+    }
+    return [];
+  } catch (e) {
+    return [`métricas diárias pela Graph: ${e instanceof Error ? e.message : String(e)}`];
+  }
+}
+
 async function classifyMissingTemas(
   supabase: SupabaseClient<Database>,
   accountId: string,
@@ -543,6 +640,7 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
     const errosSeguidores = await gravarSeguidoresDeHoje(supabase, account.windsor_account_id, account.id, account.client_id, tokenDaConta);
     errosSeguidores.push(...(await reconstruirSeguidores(supabase, account.windsor_account_id, account.id, account.client_id, tokenDaConta)));
     errosSeguidores.push(...(await guardarStories(supabase, account.windsor_account_id, account.id, account.client_id, tokenDaConta)));
+    errosSeguidores.push(...(await gravarMetricasDiariasPelaGraph(supabase, account.windsor_account_id, account.id, account.client_id, tokenDaConta)));
 
     // Tema, funil e estágio por IA para o que as regras não cobrem (só roda com ANTHROPIC_API_KEY).
     const ia = await classificarConteudoComIA(supabase, account.id).catch((err) => ({

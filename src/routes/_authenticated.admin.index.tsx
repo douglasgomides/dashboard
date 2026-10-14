@@ -28,7 +28,7 @@ function LinhaMotivo({ texto, motivo }: { texto: string; motivo: ReturnType<type
 
 // "Quantas são realmente nossas?": é a resposta à pergunta "o sync está quebrado?".
 function ResumoDonos({ itens }: { itens: { motivo: ReturnType<typeof motivoDaLinha> }[] }) {
-  const cont: Record<Dono, number> = { cliente: 0, meta: 0, origem: 0, nos: 0 };
+  const cont: Record<Dono, number> = { cliente: 0, meta: 0, origem: 0, nos: 0, manual: 0 };
   let semMotivo = 0;
   for (const i of itens) i.motivo ? cont[i.motivo.dono]++ : semMotivo++;
   const partes = (Object.keys(cont) as Dono[]).filter((d) => cont[d] > 0).map((d) => `${cont[d]} ${ROTULO_DONO[d].toLowerCase()}`);
@@ -298,7 +298,7 @@ function AdminClientsPage() {
     for (const l of s.linhas) {
       const flag = FLAG_FONTE[l.fonte];
       if (!flag || !s.fontes?.[flag]) continue;
-      if (tomDaFonte(l) !== "ruim") continue;
+      if (tomDaFonte(l) !== "ruim") continue;   // inclui as fontes manuais, que ficam em cinza e fora do alerta
       const velho = l.data_ate ? atrasoDaFonte(l) > 3 : false;
       if (velho || (!l.data_ate && !l.last_error)) {
         paradas.push({ texto: `${c.name}: ${ROTULO_FONTE[l.fonte]} ${l.data_ate ? `até ${ddmm(l.data_ate)}` : "sem dado"}`, motivo: motivoDaLinha(l) });

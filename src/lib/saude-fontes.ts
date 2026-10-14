@@ -120,8 +120,10 @@ export function atrasoDaFonte(l: { fonte?: string; data_ate: string | null }): n
 }
 
 export type Tom = "bom" | "atencao" | "ruim" | "neutro";
-export function tomDaFonte(l: (Pick<LinhaFonte, "data_ate" | "last_error"> & { fonte?: string }) | undefined): Tom {
+export function tomDaFonte(l: (Pick<LinhaFonte, "data_ate" | "last_error"> & { fonte?: string; motivo_dono?: string | null }) | undefined): Tom {
   if (!l) return "neutro";
+  // Fonte sem acesso, alimentada à mão (planilha): não é alarme, é uma situação combinada. Fica em cinza.
+  if (l.motivo_dono === "manual") return "neutro";
   if (l.last_error) return "ruim";
   if (!l.data_ate) return "neutro";
   const atraso = atrasoDaFonte(l);
