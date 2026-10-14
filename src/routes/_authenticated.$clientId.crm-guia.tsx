@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Circle, Copy, Printer, ClipboardList } from "lucide-react";
@@ -34,7 +35,7 @@ function GuiaCrmPage() {
   });
   const [copiado, setCopiado] = useState(false);
 
-  if (isLoading) return <p style={{ color: "var(--text-dim)" }}>Lendo o CRM…</p>;
+  if (isLoading) return <Carregando texto="Lendo o CRM…" />;
   if (!data || !data.provider) return <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>Este cliente não tem CRM conectado.</p>;
 
   const num = (v: unknown) => (v == null ? null : Number(v));

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAdminUser, createClient, listAllClients } from "@/lib/admin-data";
@@ -81,7 +82,7 @@ function NewClientForm() {
         <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
           Nome do médico(a)
         </label>
-        <input
+        <input autoComplete="off"
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
@@ -93,7 +94,7 @@ function NewClientForm() {
         <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
           Especialidade
         </label>
-        <input
+        <input autoComplete="off"
           value={specialty}
           onChange={(e) => setSpecialty(e.target.value)}
           className="mt-1 rounded-md border px-2 py-1.5 text-sm"
@@ -104,7 +105,7 @@ function NewClientForm() {
         <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
           @Instagram
         </label>
-        <input
+        <input autoComplete="off"
           value={handle}
           onChange={(e) => setHandle(e.target.value)}
           className="mt-1 rounded-md border px-2 py-1.5 text-sm"
@@ -159,7 +160,7 @@ function NewAdminForm() {
         <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
           E-mail do novo admin
         </label>
-        <input
+        <input autoComplete="off"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -172,7 +173,7 @@ function NewAdminForm() {
         <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
           Senha (opcional — em branco gera uma)
         </label>
-        <input
+        <input autoComplete="off"
           type="text"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -372,7 +373,7 @@ function AdminClientsPage() {
         origem · Instabilidade da Meta · Erro · Fonte não conectada. Clientes com problema aparecem primeiro.
       </p>
       {isLoading ? (
-        <p style={{ color: "var(--text-dim)" }}>Carregando…</p>
+        <Carregando texto="Lendo os clientes…" />
       ) : (
         <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "var(--border)" }}>
           <table className="w-full text-sm empilha">

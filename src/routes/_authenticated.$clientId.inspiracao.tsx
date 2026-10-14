@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { listInspirationPosts } from "@/lib/client-data";
@@ -224,7 +225,7 @@ function InspiracaoPage() {
       </div>
 
       {isLoading ? (
-        <p style={{ color: "var(--text-dim)" }}>Carregando…</p>
+        <Carregando />
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {filtered.map((post) => (

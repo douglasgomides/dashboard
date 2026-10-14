@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Filter, Route as RouteIcon, ScanSearch, Search } from "lucide-react";
@@ -127,7 +128,7 @@ function JornadaPage() {
       <JornadaFunil clientId={clientId} start={start} end={end} />
 
       <Painel icone={Filter} titulo="Onde a jornada quebra" resumo={`Do lead à venda · ${formatRangeLabel({ start, end })}`}>
-        {diag.isLoading && <p className="text-sm">Calculando…</p>}
+        {diag.isLoading && <Carregando texto="Calculando onde a jornada quebra…" linhas={2} />}
         {diag.error && <p className="text-sm">{(diag.error as Error).message}</p>}
         {d && <FunilOndeQuebra funil={d.funil} />}
       </Painel>
@@ -152,7 +153,7 @@ function JornadaPage() {
           Uma “pessoa” é alguém que o painel reconheceu em mais de um lugar pelo mesmo telefone ou @. Comentou num post, chamou no WhatsApp
           e virou lead no CRM: aparece uma vez só. Os números são de toda a base, não só do período.
         </OQueE>
-        {resumo.isLoading && <p className="text-sm">Calculando…</p>}
+        {resumo.isLoading && <Carregando texto="Ligando post, conversa e venda…" linhas={2} />}
         {resumo.error && <p className="text-sm">{(resumo.error as Error).message}</p>}
         {r && r.leads_total > 0 && (
           <div

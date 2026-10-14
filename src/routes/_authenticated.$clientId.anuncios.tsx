@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { statusDoCliente, diasDeAtraso, ddmm } from "@/lib/saude-fontes";
@@ -227,7 +228,7 @@ function AnunciosPage() {
   });
 
   if (isLoading) {
-    return <p style={{ color: "var(--text-dim)" }}>Carregando…</p>;
+    return <Carregando texto="Lendo os anúncios…" />;
   }
 
   if (!diag || gasto === 0) {

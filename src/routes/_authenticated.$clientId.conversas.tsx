@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, MessageSquare, ShieldCheck, Sparkles, Loader2, AlertTriangle } from "lucide-react";
@@ -314,7 +315,7 @@ function ConversasPage() {
           </button>
           {status && <span className="text-xs" style={{ color: "var(--text-dim)" }}>{status}</span>}
         </div>
-        {lista.isLoading && <p className="text-sm">Carregando…</p>}
+        {lista.isLoading && <Carregando texto="Lendo as conversas…" />}
         {lista.error && <p className="text-sm" style={{ color: "var(--danger, #c0392b)" }}>{(lista.error as Error).message}</p>}
         {lista.data && lista.data.length === 0 && (
           <p className="text-sm" style={{ color: "var(--text-dim)" }}>

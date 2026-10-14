@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getCrmPipelineKanban } from "@/lib/client-data";
@@ -147,7 +148,7 @@ function CrmEstruturaPage() {
       </div>
 
       {isLoading ? (
-        <p style={{ color: "var(--text-dim)" }}>Carregando…</p>
+        <Carregando texto="Lendo a estrutura do CRM…" />
       ) : totalLeads === 0 ? (
         <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
           Ainda sem leads sincronizados do Kommo pra esse cliente.

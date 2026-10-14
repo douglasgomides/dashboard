@@ -1,4 +1,5 @@
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { Carregando } from "@/components/sem-fonte";
 import { useQuery } from "@tanstack/react-query";
 import { LEGENDA } from "@/components/grafico";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
@@ -85,7 +86,7 @@ function AtendimentoPage() {
   const atendimentos = n(resumo?.atendimentos);
 
   if (isLoading) {
-    return <p style={{ color: "var(--text-dim)" }}>Carregando…</p>;
+    return <Carregando texto="Lendo o atendimento…" />;
   }
 
   if (!resumo || atendimentos === 0) {

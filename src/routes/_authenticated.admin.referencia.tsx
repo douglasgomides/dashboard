@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Carregando } from "@/components/sem-fonte";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -97,7 +98,7 @@ function ReferenciaPage() {
         É um termômetro, não uma meta: especialidade, tamanho de conta e anúncio mudam muito o alcance.
       </p>
       {isLoading ? (
-        <p style={{ color: "var(--text-dim)" }}>Calculando…</p>
+        <Carregando texto="Calculando a referência…" linhas={2} />
       ) : error || !quadro ? (
         <p style={{ color: "var(--danger)" }}>Não consegui ler os posts agora.</p>
       ) : quadro.length === 0 ? (

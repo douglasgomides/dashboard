@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Carregando } from "@/components/sem-fonte";
 import { useQuery } from "@tanstack/react-query";
 import { getCrmFunilPorCampoAlt, getCrmLeadsPorEtapa } from "@/lib/client-data";
 
@@ -82,7 +83,7 @@ function VendasKommoPage() {
       </div>
 
       {isLoading ? (
-        <p style={{ color: "var(--text-dim)" }}>Carregando…</p>
+        <Carregando texto="Lendo as vendas…" />
       ) : totalLeads === 0 ? (
         <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
           Ainda sem leads sincronizados do Kommo pra esse cliente.

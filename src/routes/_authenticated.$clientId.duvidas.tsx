@@ -419,7 +419,7 @@ function TodasAsPerguntas({
         </div>
 
         {dados.isLoading ? (
-          <p style={{ color: "var(--text-dim)" }}>Carregando…</p>
+          <Carregando />
         ) : dados.error || !dados.data ? (
           <ErroCarga texto="Não consegui ler as perguntas pela detecção original. Atualize a página." />
         ) : (

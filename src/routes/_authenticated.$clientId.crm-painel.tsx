@@ -1,4 +1,5 @@
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { Carregando } from "@/components/sem-fonte";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import {
@@ -326,7 +327,7 @@ function CrmPainelPage() {
   // Camada 1: "onde o funil quebra", problemas por tipo e checklist (src/lib/comercial.ts).
   const diag = useDiagnosticoComercial(clientId, start, end);
 
-  if (isLoading) return <p style={{ color: "var(--text-dim)" }}>Carregando…</p>;
+  if (isLoading) return <Carregando texto="Lendo o CRM…" />;
 
   if (!m || m.total_leads === 0) {
     return (
