@@ -32,6 +32,7 @@ import { median } from "@/lib/report-metrics";
 import { BENCHMARKS } from "@/lib/benchmarks";
 import { confiancaPorAmostra, type Confianca, type Impacto, type Insight, type Limitacao, type Tom } from "@/lib/insight";
 import { fmtFracao } from "@/lib/metricas";
+import { avaliarRastreio, type Rastreio } from "@/lib/rastreio-anuncios";
 
 export type Grupo = "mensagem" | "lead" | "trafego" | "engajamento" | "alcance" | "venda" | "outro";
 
@@ -265,6 +266,45 @@ export interface DiagnosticoAds {
   custoPorConversaMensagem: number | null; // só campanhas de mensagem
   gastoMensagem: number; // gasto das campanhas de mensagem (numerador do custo acima)
   reguaConta: ReguaConta;
+  /** Confiabilidade do rastreio de conversas (aplicarRastreio). Suspeito = nada de custo por conversa nem "não converte". */
+  rastreio?: Rastreio;
+}
+
+/**
+ * Checagem de confiabilidade ANTES de qualquer conclusão sobre conversas. Com rastreio suspeito, devolve uma
+ * cópia sem custo por conversa, sem "verba que não entregou" e sem comparação de conversa entre objetivos: assim
+ * nenhuma tela, relatório ou PDF tira conclusão de conversão mal rastreada. Os números brutos (gasto, cliques,
+ * conversas atribuídas) continuam, para o alerta citar.
+ */
+export function aplicarRastreio(d: DiagnosticoAds, atendimentosWhatsapp: number | null | undefined): DiagnosticoAds {
+  const rastreio = avaliarRastreio({ cliquesLink: d.cliquesLink, conversas: d.conversas, atendimentosWhatsapp });
+  if (!rastreio.suspeito) return { ...d, rastreio };
+  return {
+    ...d,
+    rastreio,
+    desperdicio: 0,
+    desperdicioSemResultado: 0,
+    custoPorConversaMensagem: null,
+    grupos: d.grupos.map((g) => ({ ...g, custoPorConversa: null })),
+    reguaConta: { ...d.reguaConta, custoPorConversa: null, custoPorConversaTelaAntiga: null },
+  };
+}
+
+function insightRastreio(d: DiagnosticoAds): Insight {
+  return {
+    id: "anuncios-rastreio-suspeito",
+    area: "anuncios",
+    tom: "atencao",
+    titulo: "Provável problema de rastreio das conversas dos anúncios",
+    diagnostico: d.rastreio?.mensagem ?? "",
+    evidencia: `${int(d.cliquesLink)} cliques no link, ${int(d.conversas)} conversas atribuídas pela Meta no período.`,
+    confianca: "media",
+    motivoConfianca: "Conta de cliques e conversas no período; o WhatsApp entra quando está ligado.",
+    impacto: "alto",
+    acao: { texto: "Conferir o objetivo de cada campanha (tráfego não conta conversa) e colocar código de rastreio no link do WhatsApp. Não pausar campanha por custo por conversa até isso estar resolvido." },
+    responsavel: "gestor_trafego",
+    risco: "Pausar campanha boa porque a conversa dela não está sendo contada.",
+  };
 }
 
 // Limites do diagnóstico original (ads_diagnostico).
@@ -793,6 +833,7 @@ function restoTxt(liberado: number, movido: number): string {
 
 export function planoDeAcao(d: DiagnosticoAds): Insight[] {
   if (d.gasto <= 0) return [];
+  if (d.rastreio?.suspeito) return [insightRastreio(d)]; // nenhuma ação de verba com conversão mal rastreada
   type Cand = { valor: number; insight: Insight; origens: string[]; destino?: string; prioridade: number };
   const cands: Cand[] = [];
   const cs = d.campanhas;

@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { diagnosticarAds, type LinhaAds, type CampanhaCadastro } from "@/lib/anuncios-objetivo";
+import { aplicarRastreio, diagnosticarAds, type LinhaAds, type CampanhaCadastro } from "@/lib/anuncios-objetivo";
 import type { Acompanhamento } from "@/lib/oportunidades";
 import { lerDiagnosticoRpc, montarDadosReduzidos, type DadosComerciais, type MetricasEssenciais, type WtsResumoMin } from "@/lib/comercial";
 import { filtrarPerguntas, perguntasDaDeteccaoOriginal } from "@/lib/comentarios";
@@ -323,8 +323,21 @@ export async function getAdsCampanhasPeriodo(clientId: string, start: string, en
 }
 
 export async function getAdsDiagnosticoPorObjetivo(clientId: string, start: string, end: string) {
-  const { linhas, cadastro } = await getAdsCampanhasPeriodo(clientId, start, end);
-  return diagnosticarAds(linhas, cadastro, start, end.slice(0, 10));
+  const [{ linhas, cadastro }, whatsapp] = await Promise.all([getAdsCampanhasPeriodo(clientId, start, end), getAtendimentosWhatsapp(clientId, start, end)]);
+  // Confiabilidade do rastreio antes de qualquer diagnóstico (src/lib/rastreio-anuncios.ts).
+  return aplicarRastreio(diagnosticarAds(linhas, cadastro, start, end.slice(0, 10)), whatsapp);
+}
+
+/** Atendimentos no WhatsApp do cliente no período; null quando não há WhatsApp ligado ou a leitura falha. */
+export async function getAtendimentosWhatsapp(clientId: string, start: string, end: string): Promise<number | null> {
+  try {
+    const fontes = await getClientFontes(clientId);
+    if (!fontes?.tem_atendimento) return null;
+    const r: any = await getWtsResumo(clientId, start, end);
+    return r?.atendimentos != null ? Number(r.atendimentos) : null;
+  } catch {
+    return null;
+  }
 }
 
 // Atendimento no WhatsApp (WTS Chat).

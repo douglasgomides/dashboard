@@ -292,6 +292,8 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   const adsRes = ads?.resumo ?? null;
   // Diagnóstico por objetivo: cada campanha comparada só com as do mesmo objetivo.
   const obj = ads?.objetivo ?? null;
+  // Rastreio de conversas suspeito: nenhum veredito nem custo por conversa no PDF (rastreio-anuncios.ts).
+  const rastreioSuspeito = !!obj?.rastreio?.suspeito;
   const diag = [...(obj?.campanhas ?? [])].sort((a, b) => b.gasto - a.gasto);
   const diagGrupos = new Map<string, { n: number; gasto: number; conv: number }>();
   for (const r of diag) {
@@ -322,7 +324,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   if (obj && obj.gasto > 0) {
     kpis.push({ label: "Investido em anúncios", value: fmtBRL(obj.gasto), hint: `${obj.campanhas.length} campanhas` });
     kpis.push({ label: "Conversas (campanhas de mensagem)", value: fmtNum(obj.conversasMensagem), hint: `Direct e WhatsApp; ${fmtNum(obj.conversas)} somando todas as campanhas` });
-    kpis.push({ label: "Custo por conversa (mensagem)", value: obj.custoPorConversaMensagem != null ? fmtBRL(obj.custoPorConversaMensagem) : "sem campanha de mensagem", hint: obj.conversas > 0 ? `só campanhas de mensagem; conta toda: ${fmtBRL(obj.gasto / obj.conversas)}` : "só campanhas de mensagem" });
+    kpis.push(rastreioSuspeito ? { label: "Custo por conversa", value: "não confiável", hint: "rastreio de conversas suspeito" } : { label: "Custo por conversa (mensagem)", value: obj.custoPorConversaMensagem != null ? fmtBRL(obj.custoPorConversaMensagem) : "sem campanha de mensagem", hint: obj.conversas > 0 ? `só campanhas de mensagem; conta toda: ${fmtBRL(obj.gasto / obj.conversas)}` : "só campanhas de mensagem" });
   }
   // Restaurado na página 1: Impressões com o CTR (já em %, como o SQL devolve; ver página de Anúncios).
   if (adsRes && num(adsRes.gasto) > 0) {
@@ -699,7 +701,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
             items={[
               { label: "Investido", value: fmtBRL(obj?.gasto ?? num(adsRes.gasto)), hint: `${obj?.campanhas.length ?? adsRes.campanhas} campanhas` },
               { label: "Conversas (campanhas de mensagem)", value: fmtNum(obj?.conversasMensagem ?? 0) },
-              { label: "Custo por conversa (mensagem)", value: obj?.custoPorConversaMensagem != null ? fmtBRL(obj.custoPorConversaMensagem) : "sem campanha de mensagem", hint: obj && obj.conversas > 0 ? `só campanhas de mensagem; conta toda: ${fmtBRL(obj.gasto / obj.conversas)}` : "só campanhas de mensagem" },
+              rastreioSuspeito ? { label: "Custo por conversa", value: "não confiável", hint: "rastreio de conversas suspeito" } : { label: "Custo por conversa (mensagem)", value: obj?.custoPorConversaMensagem != null ? fmtBRL(obj.custoPorConversaMensagem) : "sem campanha de mensagem", hint: obj && obj.conversas > 0 ? `só campanhas de mensagem; conta toda: ${fmtBRL(obj.gasto / obj.conversas)}` : "só campanhas de mensagem" },
               { label: "Impressões", value: fmtNum(num(adsRes.impressoes)), hint: adsRes.cpm != null ? `${fmtBRL(num(adsRes.cpm))} para aparecer mil vezes` : undefined },
               { label: "Cliques no link", value: fmtNum(num(adsRes.cliques_link)), hint: adsRes.cpc != null ? `${fmtBRL(num(adsRes.cpc))} por clique` : undefined },
               { label: "Cliques a cada 100 impressões", value: adsRes.ctr != null ? num(adsRes.ctr).toFixed(2).replace(".", ",") : "sem dado" },
@@ -744,6 +746,9 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
       {ads && diag.length > 0 ? (
         <Page size="A4" style={styles.page} wrap>
           <Titulo dica="Cada campanha é comparada só com as campanhas do mesmo objetivo na própria conta (a campanha típica), não com benchmark de mercado. Campanha que rodou pouco fica como volume insuficiente.">Anúncios: diagnóstico por campanha</Titulo>
+          {rastreioSuspeito ? (
+            <Text style={{ fontSize: 9, color: "#B91C1C", marginBottom: 8, lineHeight: 1.4 }}>{obj?.rastreio?.mensagem} Enquanto isso, nenhuma campanha é classificada pelo custo por conversa.</Text>
+          ) : (
           <Tabela
             colunas={[
               { h: "Veredito", flex: 3 },
@@ -762,6 +767,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
                 obj && obj.gasto > 0 ? pct((g.gasto / obj.gasto) * 100, 0) : "n/d",
               ])}
           />
+          )}
           <Subtitulo>Campanhas com maior investimento</Subtitulo>
           <Tabela
             colunas={[
@@ -780,11 +786,11 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
                 // Nome de campanha pode ter termo de risco ("promoção"): marcado, nunca apagado.
                 stripEmoji(seguro(String(r.campanha ?? ""))).slice(0, 40),
                 GRUPOS[r.grupo].curto,
-                { t: r.veredito, cor: corVeredito(r.veredito), negrito: true },
+                rastreioSuspeito ? { t: "rastreio suspeito", cor: GRAY, negrito: false } : { t: r.veredito, cor: corVeredito(r.veredito), negrito: true },
                 fmtBRL(r.gasto),
                 unidade(r),
                 fmtNum(r.conversas),
-                r.custoPorConversa != null ? fmtBRL(r.custoPorConversa) : "sem conv.",
+                rastreioSuspeito ? "não confiável" : r.custoPorConversa != null ? fmtBRL(r.custoPorConversa) : "sem conv.",
                 fq != null ? fq.toFixed(1).replace(".", ",") : "n/d",
               ];
             })}
