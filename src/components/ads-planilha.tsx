@@ -270,7 +270,9 @@ export function AdsPlanilhaPainel({ linhas: todas, start, end }: { linhas: AdsPl
               </thead>
               <tbody>
                 {postsUltima.map((l) => {
-                  const ehMsg = l.tipo === "C2";
+                  // O resultado é o que a equipe anotou: mensagens quando existem, senão seguidores (a planilha traz seguidores
+                  // também para alguns posts C2).
+                  const ehMsg = l.mensagens_periodo != null;
                   const res = ehMsg ? l.mensagens_periodo : l.seguidores_periodo;
                   const custo = ehMsg ? l.custo_mensagem : l.custo_seguidor;
                   const parar = (l.acao ?? "").toUpperCase().includes("PARAR");
@@ -283,7 +285,7 @@ export function AdsPlanilhaPainel({ linhas: todas, start, end }: { linhas: AdsPl
                         </a>
                       </td>
                       <td className="py-2 pr-3">
-                        <Selo titulo={ehMsg ? "Gerar mensagens" : "Ganhar seguidores"}>{l.tipo ?? "—"}</Selo>
+                        <Selo titulo={l.tipo === "C2" ? "Gerar mensagens" : l.tipo === "C0" ? "Alcance" : "Ganhar seguidores"}>{l.tipo ?? "—"}</Selo>
                       </td>
                       <td className="py-2 pr-3">
                         <Selo cor={parar ? "var(--danger)" : "var(--good)"}>{l.acao ?? "—"}</Selo>
