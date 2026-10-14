@@ -25,6 +25,7 @@ import {
   Workflow,
   type LucideIcon,
   ClipboardList,
+  ListTodo,
 } from "lucide-react";
 
 // Navegação do Hub: 5 categorias (Início, Social, Comercial, Oportunidades,
@@ -102,11 +103,14 @@ export const AREAS: NavArea[] = [
   },
   {
     id: "oportunidades",
-    label: "Oportunidades",
+    label: "Próximas ações",
     curto: "Ações",
-    descricao: "Ações recomendadas e acompanhamento",
+    descricao: "O que fazer agora, por prioridade, e o acompanhamento",
     Icone: Target,
-    tabs: [{ path: "/oportunidades", label: "Oportunidades", Icone: Target }],
+    tabs: [
+      { path: "/proximas-acoes", label: "Próximas ações", Icone: ListTodo },
+      { path: "/oportunidades", label: "Oportunidades (score)", Icone: Target },
+    ],
   },
   {
     id: "relatorios",
