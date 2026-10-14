@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { lerTrackerAuto, montarKpisSap, type TrackerAutoBruto } from "@/lib/sap-auto";
 
 // Tracker do Sistema de Aquisição de Pacientes (SAP).
 //
@@ -438,6 +439,7 @@ export type SapLinhaPortfolio = {
   dia: number | null;
   semana: SapResumo;
   semanaAnterior: SapResumo;
+  automatico?: boolean; // números do tracker automático (CRM + WhatsApp), não de sap_leads
 };
 
 function isoDia(offset: number): string {
@@ -474,7 +476,7 @@ export function montarLinha(d: SapDados): SapLinhaPortfolio {
 export async function getSapPortfolio(): Promise<SapLinhaPortfolio[] | null> {
   const { data: clinicas, error } = await db
     .from("sap_clinicas")
-    .select("id, client_id, nome, cidade, especialidade, d0, status")
+    .select("id, client_id, nome, cidade, especialidade, d0, status, piloto")
     .order("d0", { ascending: true });
   if (error) {
     if (error.code === "42P01" || /does not exist|schema cache/i.test(error.message)) return null;
@@ -499,7 +501,7 @@ export async function getSapPortfolio(): Promise<SapLinhaPortfolio[] | null> {
   const meta = (metaR.data ?? []) as { client_id: string; date: string; spend: number }[];
   const outros = (outrosR.data ?? []) as (SapInvestimento & { clinica_id: string })[];
   const metas = (metasR.data ?? []) as (SapMeta & { clinica_id: string })[];
-  return lista.map((c) =>
+  const linhas = lista.map((c) =>
     montarLinha({
       clinica: c,
       leads: leads.filter((l) => l.clinica_id === c.id),
@@ -510,6 +512,47 @@ export async function getSapPortfolio(): Promise<SapLinhaPortfolio[] | null> {
       metas: metas.filter((m) => m.clinica_id === c.id).map((m) => ({ mes: m.mes, etapa: m.etapa, meta: Number(m.meta) || 0 })),
     }),
   );
+  // Sem leads registrados um a um: os números vêm do tracker automático (CRM + WhatsApp + Meta).
+  return Promise.all(
+    linhas.map(async (l) => {
+      if (!l.clinica.client_id || l.semana.leads + l.semanaAnterior.leads > 0) return l;
+      const [a, b] = await Promise.all([getTrackerAuto(l.clinica.client_id, j.ini, j.fim), getTrackerAuto(l.clinica.client_id, j.iniAnt, j.fimAnt)]);
+      const ra = lerTrackerAuto(a);
+      const rb = lerTrackerAuto(b);
+      return { ...l, semana: ra ? resumoDoAuto(ra) : l.semana, semanaAnterior: rb ? resumoDoAuto(rb) : l.semanaAnterior, automatico: true };
+    }),
+  );
+}
+
+// Converte o tracker automático no formato do resumo (portfólio e leitura semanal).
+export function resumoDoAuto(t: TrackerAutoBruto): SapResumo {
+  const leitura = montarKpisSap(t);
+  const k = (id: string) => leitura.kpis.find((x) => x.id === id)!;
+  return {
+    leads: t.leads,
+    qualificados: t.qualificados,
+    agendamentos: t.agendados,
+    consultas: t.compareceram,
+    fechamentos: t.fechados,
+    receita: t.receita,
+    investimento: t.investido,
+    cpl: div(t.investido, t.leads),
+    custoConsulta: k("custo_consulta").valor,
+    roas: t.investido > 0 ? t.receita / t.investido : null,
+    ticketMedio: div(t.receita, t.fechados_com_valor),
+    medianaResposta: t.resposta_mediana_min,
+    taxaAgendamento: k("agendamento").valor,
+    taxaComparecimento: k("comparecimento").valor,
+    taxaConversao: k("conversao").valor,
+    semanas: t.semanas.map((s) => ({ semana: s.semana, leads: s.leads, consultas: s.compareceram, fechamentos: s.fechados, receita: s.receita })),
+    motivos: [],
+    toques: [],
+    canais: t.canais.map((c) => ({ canal: c.canal, leads: c.leads, consultas: c.compareceram, fechamentos: c.fechados, receita: c.receita, investimento: c.canal === "Meta Ads" ? t.investido : 0 })),
+    metas: [],
+    alertas: leitura.kpis
+      .filter((x) => x.ehMeta && x.id !== "custo_consulta")
+      .map((x) => ({ chave: x.id, titulo: x.titulo, valor: x.texto, regra: x.regra, farol: x.farol })),
+  };
 }
 
 export function portfolioDeExemplo(): SapLinhaPortfolio[] {
@@ -529,4 +572,68 @@ export function portfolioDeExemplo(): SapLinhaPortfolio[] {
       clinica: { id: `exemplo-${i}`, client_id: null, nome: b.nome, cidade: b.cidade, especialidade: b.especialidade, d0, status: b.diasAtras < 29 ? "onboarding" : "rodando" },
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// Tracker automático (CRM + WhatsApp + Meta), cadastro da clínica e marcos das etapas.
+// Regras dos KPIs em src/lib/sap-auto.ts; a conta no banco em sap_tracker_auto.
+
+export type SapCadastro = SapClinica & { servicos: string[] | null; ticket_medio: number | null; piloto: boolean | null };
+
+export async function getClinicaSap(clientId: string): Promise<SapCadastro | null> {
+  const { data, error } = await db
+    .from("sap_clinicas")
+    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto")
+    .eq("client_id", clientId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    if (error.code === "42P01" || /does not exist|schema cache/i.test(error.message)) return null;
+    throw error;
+  }
+  return (data as SapCadastro | null) ?? null;
+}
+
+export async function salvarClinicaSap(clientId: string, v: { d0: string | null; status: string; servicos: string[]; ticket: number | null; piloto: boolean }) {
+  const { error } = await db.rpc("sap_salvar_clinica", {
+    p_client_id: clientId,
+    p_d0: v.d0,
+    p_status: v.status,
+    p_servicos: v.servicos,
+    p_ticket: v.ticket,
+    p_piloto: v.piloto,
+  });
+  if (error) throw error;
+}
+
+export async function getTrackerAuto(clientId: string, start: string, end: string): Promise<unknown> {
+  const { data, error } = await db.rpc("sap_tracker_auto", { p_client_id: clientId, p_from: start, p_to: end });
+  if (error) throw error;
+  return data;
+}
+
+export type EtapaSap = {
+  connection_id: string;
+  provider: string;
+  pipeline_id: string;
+  pipeline_name: string;
+  status_id: string;
+  status_name: string;
+  total: number;
+  ganhos: number;
+  perdidos: number;
+  marco: string | null;
+  sugestao: string | null;
+};
+
+export async function getEtapasSap(clientId: string): Promise<EtapaSap[]> {
+  const { data, error } = await db.rpc("sap_etapas_para_marcar", { p_client_id: clientId });
+  if (error) throw error;
+  return ((data ?? []) as EtapaSap[]).map((e) => ({ ...e, total: Number(e.total) || 0, ganhos: Number(e.ganhos) || 0, perdidos: Number(e.perdidos) || 0 }));
+}
+
+export async function definirMarcoSap(e: Pick<EtapaSap, "connection_id" | "pipeline_id" | "status_id">, marco: string | null) {
+  const { error } = await db.rpc("sap_definir_marco", { p_connection: e.connection_id, p_pipeline: e.pipeline_id, p_status: e.status_id, p_marco: marco });
+  if (error) throw error;
 }

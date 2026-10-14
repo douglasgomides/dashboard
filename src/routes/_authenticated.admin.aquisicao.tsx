@@ -41,7 +41,8 @@ function PortfolioSap() {
         <div className="space-y-3 text-sm" style={{ color: "var(--text-dim)" }}>
           <p>
             Aqui aparece cada clínica do sistema com o dia em que está, a fase, o próximo marco, o semáforo e os números da última
-            semana. A clínica entra quando o workflow <strong>SAP | D0 Onboarding</strong> cria a linha em <code>sap_clinicas</code>.
+            semana. Para incluir uma clínica, abra o cliente, vá em <strong>Aquisição</strong> e clique em <strong>Ativar o SAP</strong> (marque
+            "piloto" para um cliente de outro produto). Os números saem sozinhos do CRM e do WhatsApp.
           </p>
           <button type="button" onClick={() => setExemplo(true)} className="rounded-lg px-3 py-2 text-sm font-medium" style={{ background: "var(--accent)", color: "#fff" }}>
             Ver com clínicas de exemplo
@@ -68,6 +69,7 @@ function PortfolioSap() {
         <div className="flex flex-wrap items-center gap-2 text-sm" style={{ color: "var(--text-dim)" }}>
           <strong style={{ color: "var(--text)" }}>Sistema de Aquisição · {ordenadas.length} clínica(s)</strong>
           <span>· últimos 7 dias fechados</span>
+          {ordenadas.some((l) => l.automatico) && <span>· números do CRM e do WhatsApp</span>}
           {exemplo && <Selo cor="var(--warn)">clínicas de exemplo, nada disso está no banco</Selo>}
           <Ajuda>
             Ordem: primeiro quem tem luz vermelha, depois quem está mais no começo do programa. Semáforo com as regras do 08.05; as
@@ -129,6 +131,7 @@ function PortfolioSap() {
                     <div className="text-xs" style={{ color: "var(--muted)" }}>
                       {[l.clinica.especialidade, l.clinica.cidade].filter(Boolean).join(" · ") || "sem dados de cadastro"}
                       {!l.clinica.client_id && " · sem cliente no Hub"}
+                      {(l.clinica as { piloto?: boolean }).piloto && " · piloto"}
                     </div>
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
