@@ -14,7 +14,8 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import { getAdsResumo, getAdsPorDia, getAdsPorObjetivo, getAdsDiagnostico, getClientFontes } from "@/lib/client-data";
+import { getAdsResumo, getAdsPorDia, getAdsPorObjetivo, getAdsDiagnostico, getClientFontes, getAdsPlanilha } from "@/lib/client-data";
+import { AdsPlanilhaPainel } from "@/components/ads-planilha";
 import { SyncButton } from "@/components/sync-button";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum, fmtBRL } from "@/lib/format";
@@ -233,6 +234,14 @@ function AnunciosPage() {
     enabled: vazio,
   });
 
+  // Cliente cuja conta de anúncios não é lida pela Meta/Windsor: impulsionamentos vêm da planilha do gestor (semanal).
+  const { data: planilha } = useQuery({
+    queryKey: ["ads-planilha", clientId],
+    queryFn: () => getAdsPlanilha(clientId),
+    staleTime: 60_000,
+  });
+  const temPlanilha = (planilha?.length ?? 0) > 0;
+
   if (isLoading) {
     return <p style={{ color: "var(--text-dim)" }}>Carregando…</p>;
   }
@@ -250,10 +259,16 @@ function AnunciosPage() {
           <SyncButton clientId={clientId} alvo="anuncios" />
         </div>
         <MotivoParada clientId={clientId} />
-        <Faixa icone={Info}>Investimento em anúncios do Meta (Facebook e Instagram), por dia e por campanha.</Faixa>
-        <Faixa icone={ultimoGasto || fontes?.tem_anuncios ? PauseCircle : AlertTriangle} cor="var(--warn)" alerta>
-          {mensagemVazia}
-        </Faixa>
+        {temPlanilha ? (
+          <AdsPlanilhaPainel linhas={planilha ?? []} start={start} end={end} />
+        ) : (
+          <>
+            <Faixa icone={Info}>Investimento em anúncios do Meta (Facebook e Instagram), por dia e por campanha.</Faixa>
+            <Faixa icone={ultimoGasto || fontes?.tem_anuncios ? PauseCircle : AlertTriangle} cor="var(--warn)" alerta>
+              {mensagemVazia}
+            </Faixa>
+          </>
+        )}
       </div>
     );
   }

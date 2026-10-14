@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";
 import { runMetaAdsGraphSync } from "../_lib/meta-ads-graph-sync.js";
+import { runAdsPlanilhaSync } from "../_lib/ads-planilha-sync.js";
 import { runMetaGraphSync } from "../_lib/meta-graph-sync.js";
 import { runInstagramSync } from "../_lib/instagram-sync.js";
 import { runWtsSync } from "../_lib/wts-sync.js";
@@ -175,6 +176,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Erro da Windsor só vale quando a Graph não serve este cliente; do
         // contrário é o ruído esperado de conta que a Windsor não enxerga.
         if (!graphTemConta) erros.push(...w.flatMap((c) => c.errors));
+      }
+
+      // Planilha do gestor (clients.ads_planilha_url): para quem a Meta e a Windsor não enxergam a conta.
+      {
+        const pl = await runAdsPlanilhaSync({ supabaseUrl: urlSupabase, supabaseServiceRoleKey: chaveServico, onlyClientId: client_id });
+        if (pl.length > 0) temConta = true;
+        linhas += pl.reduce((a, c) => a + c.rows, 0);
+        erros.push(...pl.flatMap((c) => c.errors));
       }
 
       if (!temConta) {

@@ -140,7 +140,8 @@ export async function lerDadosAte(
         .maybeSingle();
       return soData((data as Record<string, string> | null)?.[coluna]);
     };
-    if (fonte === "anuncios") return await topo("meta_ads_daily", "date");
+    // Cliente lido só pela planilha do gestor (sem conta de anúncios nossa) tem o dado em ads_planilha_semanal.
+    if (fonte === "anuncios") return (await topo("meta_ads_daily", "date")) ?? (await topo("ads_planilha_semanal", "analise_em"));
     // Data do lead (occurred_at), não a da sincronização: o Kommo grava received_at = agora a cada rodada.
     if (fonte === "crm") return (await topo("crm_leads", "occurred_at")) ?? (await topo("crm_leads", "received_at"));
     if (fonte === "atendimento") return await topo("wts_sessions", "started_at");

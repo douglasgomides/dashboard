@@ -319,6 +319,48 @@ export async function getWtsVolumeDiario(clientId: string, start: string, end: s
   return data ?? [];
 }
 
+// Impulsionamentos lidos da planilha do gestor de tráfego (clients.ads_planilha_url), para cliente cuja conta de
+// anúncios não é lida pela Meta nem pela Windsor. Uma linha por post em cada análise SEMANAL: não é dado diário.
+export interface AdsPlanilhaLinha {
+  analise_em: string;
+  post_url: string;
+  nome: string | null;
+  tipo: string | null;
+  status: string | null;
+  acao: string | null;
+  orcamento_dia: number | null;
+  valor_total: number | null;
+  valor_periodo: number | null;
+  seguidores_antes: number | null;
+  seguidores_apos: number | null;
+  seguidores_periodo: number | null;
+  mensagens_antes: number | null;
+  mensagens_depois: number | null;
+  mensagens_periodo: number | null;
+  custo_seguidor: number | null;
+  custo_mensagem: number | null;
+}
+
+export async function getAdsPlanilha(clientId: string): Promise<AdsPlanilhaLinha[]> {
+  // tabela fora do types.ts gerado: leitura tipada por cast (mesmo padrão de crm_provider)
+  const cliente = supabase as unknown as {
+    from: (t: string) => {
+      select: (c: string) => {
+        eq: (k: string, v: string) => {
+          order: (c: string, o: { ascending: boolean }) => Promise<{ data: AdsPlanilhaLinha[] | null; error: unknown }>;
+        };
+      };
+    };
+  };
+  const { data, error } = await cliente
+    .from("ads_planilha_semanal")
+    .select("analise_em, post_url, nome, tipo, status, acao, orcamento_dia, valor_total, valor_periodo, seguidores_antes, seguidores_apos, seguidores_periodo, mensagens_antes, mensagens_depois, mensagens_periodo, custo_seguidor, custo_mensagem")
+    .eq("client_id", clientId)
+    .order("analise_em", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
 // Quais fontes o cliente tem ligadas — usado para o menu não mostrar aba vazia.
 export async function getClientFontes(clientId: string) {
   const { data, error } = await supabase.rpc("client_fontes", { p_client_id: clientId });
