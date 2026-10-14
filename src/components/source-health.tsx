@@ -1,5 +1,7 @@
-import { tomDaFonte, ddmm, type LinhaFonte } from "@/lib/saude-fontes";
-import { motivoDaLinha, ROTULO_DONO, type Dono } from "@/lib/motivos";
+import { type LinhaFonte } from "@/lib/saude-fontes";
+import { motivoDaLinha, statusDaLinha, ROTULO_DONO, type Dono } from "@/lib/motivos";
+import { VAR_COR, type CorStatus, type StatusFonte } from "@/lib/status-fonte";
+import { AlertOctagon, CheckCircle2, Clock, MinusCircle } from "lucide-react";
 
 // Saúde de uma fonte em quatro respostas: estado, data do último dado,
 // causa identificada e próxima ação possível. As regras de estado e de causa
@@ -38,31 +40,60 @@ const PROXIMA: Record<Exclude<Dono, never>, string> = {
 export interface SaudeFonte {
   estado: Estado;
   rotulo: string;
-  cor: string;
+  cor: string; // variável CSS da cor do status (regra única de status-fonte.ts)
+  status: StatusFonte;
   data: string | null; // dd/mm do último dado
   causa: string | null;
   proxima: string | null;
   peso: number; // para ordenar: problema primeiro
 }
 
-export function saudeDaFonte(ligado: boolean, l: LinhaFonte | undefined): SaudeFonte {
-  if (!ligado) return { estado: "nao_conectada", rotulo: ROTULO_ESTADO.nao_conectada, cor: COR.nao_conectada, data: null, causa: null, proxima: "Conectar em Gerenciar, se o cliente usar esta fonte.", peso: 0 };
-  const tom = tomDaFonte(l);
+/** Saúde de uma fonte. A COR vem só de statusDaLinha (dias sem dado / erro); o motivo e o dono viram texto. */
+export function saudeDaFonte(cadastro: boolean, l: LinhaFonte | undefined, naoUsa = false): SaudeFonte {
+  const st = statusDaLinha(l, cadastro, naoUsa);
+  const cor = VAR_COR[st.cor];
+  if (!st.ligado) return { estado: "nao_conectada", rotulo: st.rotulo, cor, status: st, data: null, causa: null, proxima: st.naoUsa ? null : "Conectar em Gerenciar, se o cliente usar esta fonte.", peso: 0 };
   const m = motivoDaLinha(l);
-  const data = l?.data_ate ? ddmm(l.data_ate) : null;
-  if (!l || (!l.data_ate && !l.last_error)) return { estado: "sem_dado", rotulo: ROTULO_ESTADO.sem_dado, cor: COR.sem_dado, data: null, causa: "A fonte está ligada, mas nenhum dado chegou ainda.", proxima: PROXIMA.nos, peso: 3 };
-  if (tom === "bom" && !l.last_error) return { estado: "atualizada", rotulo: ROTULO_ESTADO.atualizada, cor: COR.atualizada, data, causa: null, proxima: null, peso: 1 };
-  if (m) {
-    const estado: Estado = m.dono === "nos" ? "erro" : m.dono === "manual" ? "origem" : m.dono;
-    return { estado, rotulo: ROTULO_ESTADO[estado], cor: COR[estado], data, causa: m.texto, proxima: PROXIMA[m.dono], peso: estado === "erro" ? 5 : estado === "cliente" ? 4 : 2 };
-  }
-  // Atrasada (2 a 3 dias) sem causa identificada ainda.
-  return { estado: "origem", rotulo: tom === "atencao" ? "Atrasada (2 a 3 dias)" : ROTULO_ESTADO.origem, cor: tom === "atencao" ? "var(--warn)" : COR.origem, data, causa: "Sem causa identificada ainda.", proxima: "Aguardar a próxima atualização; se passar de 3 dias, a causa aparece aqui.", peso: 2 };
+  const peso = st.peso * 2 + (m?.dono === "nos" ? 1 : 0);
+  if (st.dias == null) return { estado: l?.last_error ? "erro" : "sem_dado", rotulo: st.rotulo, cor, status: st, data: null, causa: m?.texto ?? "A fonte está ligada, mas nenhum dado chegou ainda.", proxima: PROXIMA[m?.dono ?? "nos"], peso };
+  if (st.cor === "verde") return { estado: "atualizada", rotulo: st.rotulo, cor, status: st, data: st.data, causa: null, proxima: null, peso };
+  const estado: Estado = st.rotulo === "Erro" ? "erro" : m ? (m.dono === "nos" ? "erro" : m.dono === "manual" ? "origem" : (m.dono as Estado)) : "origem";
+  return {
+    estado,
+    rotulo: st.rotulo,
+    cor,
+    status: st,
+    data: st.data,
+    causa: m?.texto ?? (st.cor === "amarelo" ? "Sem causa identificada ainda." : "Sem dado novo e sem causa registrada."),
+    proxima: m ? PROXIMA[m.dono] ?? PROXIMA.origem : st.cor === "amarelo" ? "Aguardar a próxima atualização; se passar de 3 dias, vira vermelho." : PROXIMA.nos,
+    peso,
+  };
+}
+
+const ICONE: Record<CorStatus, typeof CheckCircle2> = { verde: CheckCircle2, amarelo: Clock, vermelho: AlertOctagon, cinza: MinusCircle };
+
+/** Ícone + cor do status: toda data aparece com um dos dois juntos. */
+export function SeloStatus({ st, texto }: { st: StatusFonte; texto?: string }) {
+  const I = ICONE[st.cor];
+  return (
+    <span className="inline-flex items-center gap-1.5 font-semibold" style={{ color: VAR_COR[st.cor] }}>
+      <I size={14} aria-hidden className="shrink-0" />
+      {texto ?? st.rotulo}
+    </span>
+  );
 }
 
 /** Célula de uma fonte: estado em cima, data, causa e próxima ação em texto curto.
  *  Fonte não conectada aparece em vermelho com "Conectar agora" (quando há link para o cadastro). */
 export function CelulaSaude({ s, conectar, opcional }: { s: SaudeFonte; conectar?: React.ReactNode; opcional?: string }) {
+  if (s.estado === "nao_conectada" && s.status.naoUsa) {
+    return (
+      <div className="min-w-[150px] text-[13px] leading-snug" style={{ color: "var(--muted)" }}>
+        <SeloStatus st={s.status} />
+        <div className="text-xs">Marcado como intencional</div>
+      </div>
+    );
+  }
   if (s.estado === "nao_conectada" && opcional) {
     return (
       <div className="min-w-[150px] text-[13px] leading-snug" style={{ color: "var(--muted)" }}>
@@ -83,11 +114,12 @@ export function CelulaSaude({ s, conectar, opcional }: { s: SaudeFonte; conectar
   }
   return (
     <div className="min-w-[150px] space-y-0.5 text-[13px] leading-snug">
-      <div className="flex items-center gap-1.5 font-semibold" style={{ color: "var(--ink)" }}>
-        <span aria-hidden className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: s.cor }} />
-        {s.rotulo}
-      </div>
-      {s.data && <div style={{ color: "var(--ink-2)" }}>Último dado: {s.data}</div>}
+      <SeloStatus st={s.status} />
+      {s.data && (
+        <div className="font-medium" style={{ color: s.cor }}>
+          {s.status.detalhe}
+        </div>
+      )}
       {s.causa && (
         <div className="line-clamp-2" style={{ color: "var(--ink-2)" }} title={s.causa}>
           {s.causa}

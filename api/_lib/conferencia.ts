@@ -7,6 +7,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { erroCurto, lerDadosAte } from "./sync-status.js";
+import { statusDaFonte, fonteLigada, NOME_FONTE, type FonteId } from "../../src/lib/status-fonte.js";
 
 const GRAPH = "https://graph.facebook.com/v23.0";
 
@@ -22,6 +23,8 @@ export interface Achado {
   acao: string; // o que fazer
   risco?: string; // o que dá errado se ninguém agir
   etapa?: EtapaId;
+  clientId?: string; // para ações por cliente (ex.: "É intencional")
+  fontesFaltando?: ("instagram" | "anuncios" | "crm")[]; // só em "sem_fonte"
 }
 
 // O que foi conferido e passou (ou não): a prova de que a conferência olhou, não só o que deu errado.
@@ -108,7 +111,10 @@ async function base(supabase: Sb) {
   const contaCadastro = (clientes ?? [])
     .filter((c: any) => c.meta_ad_account_id)
     .map((c: any) => ({ client_id: c.id as string, ad_account_id: String(c.meta_ad_account_id) }));
-  return { nome, ativos, contasAds: contasAds ?? [], ads, contaCadastro };
+  // Status de cada fonte pela mesma leitura do /admin (RPC status_das_fontes) e a mesma regra (status-fonte.ts).
+  const { data: statusRows } = await (supabase as any).rpc("status_das_fontes");
+  const statusFontes = ((statusRows ?? []) as any[]).filter((r) => ativos.has(r.client_id));
+  return { nome, ativos, contasAds: contasAds ?? [], ads, contaCadastro, statusFontes };
 }
 
 /** Roda uma etapa da conferência. Só leitura na origem; quem grava o resultado é o chamador. */
@@ -171,6 +177,24 @@ async function etapaDuplicidades(supabase: Sb, { nome, ativos, ads, contaCadastr
       detalhe: `${nomes.join(" e ")}. O gasto aparece inteiro em cada um, então qualquer soma entre clientes conta em dobro.`,
       acao: "Se a conta é de um só cliente, tire do outro. Se é compartilhada de verdade, deixe e evite somar os dois no mesmo total.",
       risco: "Relatório entre clientes e benchmark com gasto em dobro; um cliente pode ver anúncio que não é dele.",
+    });
+  }
+  // 1a. Conta desligada (ou de outro cliente) com dado ainda gravado no cliente: o gasto antigo continua
+  // entrando nas somas dele. Caso Dra. Juliana Paola × conta "Dr. Juliana" (blefaroplastia), out/2026.
+  for (const c of ads) {
+    if (c.active) continue;
+    const { count } = await supabase.from("meta_ads_daily").select("id", { count: "exact", head: true }).eq("client_id", c.client_id).eq("ad_account_id", c.ad_account_id);
+    if (!count) continue;
+    achados.push({
+      id: `conta-inativa-com-dado:${c.client_id}:${c.ad_account_id}`,
+      gravidade: "alta",
+      tipo: "inconsistencia",
+      cliente: nome.get(c.client_id) ?? null,
+      clientId: c.client_id,
+      titulo: `Conta de anúncios ${c.ad_account_id} está desligada, mas ${count} dias de dado dela continuam neste cliente`,
+      detalhe: `${c.name ?? "Conta sem nome"}. O sync parou, mas o histórico gravado continua somando no gasto, nas campanhas e no relatório deste cliente.`,
+      acao: "Se a conta é de outro cliente, mover o histórico para ele. Se não é de nenhum cliente, apagar o histórico dela deste cliente.",
+      risco: "Anúncio de outro médico aparece no painel e no relatório deste cliente.",
     });
   }
   for (const [conta, cs] of porConta) {
@@ -341,127 +365,82 @@ async function etapaInconsistencias(supabase: Sb, { nome, ads }: Base, opts: { t
   return { achados, verificados };
 }
 
-async function etapaParados(supabase: Sb, { nome, ativos, ads }: Base): Promise<Parcial> {
+// Texto de cada fonte parada (o que provavelmente aconteceu e o que fazer). A DECISÃO de "parada" é só statusDaFonte.
+const PARADA: Record<FonteId, { detalhe: string; acao: string; risco: string; gravidade: Gravidade }> = {
+  instagram: {
+    detalhe: "O sync registra sucesso, mas as métricas diárias (Windsor ou Graph) não trazem dia novo desta conta: alcance, novos seguidores e saídas ficam parados.",
+    acao: "Conferir a conta no conector Instagram da Windsor (ou a leitura direta pela Graph) e rodar a sincronização.",
+    risco: "Alcance, engajamento, crescimento e relatório do cliente param no tempo sem aviso.",
+    gravidade: "alta",
+  },
+  anuncios: {
+    detalhe: "Nenhum dia novo de anúncios e nenhum motivo registrado no painel.",
+    acao: "Conferir no Gerenciador de Anúncios se há campanha rodando. Se não houver, registrar o motivo. Se houver, o token ou a conta estão errados.",
+    risco: "Se há campanha rodando, o painel mostra zero gasto e zero lead enquanto o cliente paga.",
+    gravidade: "media",
+  },
+  crm: {
+    detalhe: "Nenhum lead novo gravado. Pode ser real (cliente sem lead) ou o CRM lançado à mão / funil errado na conexão.",
+    acao: "Perguntar ao cliente se entraram leads. Se entraram, conferir funil e token da conexão do CRM.",
+    risco: "Funil e atendimento aparecem vazios; a leitura de conversão do período fica sem base.",
+    gravidade: "baixa",
+  },
+  atendimento: {
+    detalhe: "Nenhuma conversa nova gravada. Pode ser real ou o número do WhatsApp mudou.",
+    acao: "Perguntar ao cliente se recebeu mensagens. Se recebeu, conferir o canal na WTS.",
+    risco: "Atendimento e tempo de resposta aparecem vazios no período.",
+    gravidade: "baixa",
+  },
+};
+
+async function etapaParados(_supabase: Sb, { nome, statusFontes }: Base): Promise<Parcial> {
   const achados: Achado[] = [];
   const verificados: Verificado[] = [];
   const hoje = hojeBr();
-  // 3. Instagram: sync dá sucesso, mas o alcance parou. Foi o caso do Doctor Creator (parado desde 30/09).
-  const { data: igs } = await supabase.from("instagram_accounts").select("client_id, ig_username").eq("active", true);
-  const { data: statusRows } = await supabase.from("sync_status").select("client_id, fonte, motivo, last_success_at");
-  const status = new Map<string, any>((statusRows ?? []).map((s: any) => [`${s.client_id}:${s.fonte}`, s]));
-  for (const ig of igs ?? []) {
-    if (!ativos.has(ig.client_id)) continue;
-    const { data: ult } = await supabase
-      .from("instagram_account_daily_metrics")
-      .select("date")
-      .eq("client_id", ig.client_id)
-      .not("reach", "is", null)
-      .order("date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const ultimo: string | null = ult?.date ?? null;
-    const s = status.get(`${ig.client_id}:instagram`);
-    if (s?.motivo) continue; // já explicado no painel (ex.: token da cliente bloqueado)
-    const atraso = ultimo ? diff(hoje, ultimo) : null;
-    if (atraso == null || atraso > 3) {
-      achados.push({
-        id: `ig-parado:${ig.client_id}`,
-        gravidade: "alta",
-        tipo: "dado_parado",
-        cliente: nome.get(ig.client_id) ?? null,
-        titulo: ultimo ? `Alcance do Instagram parado desde ${ultimo.slice(8, 10)}/${ultimo.slice(5, 7)} (${atraso} dias)` : "Instagram sem nenhum dia de alcance gravado",
-        detalhe: `@${ig.ig_username}. O sync registra sucesso, mas a fonte das métricas diárias (Windsor) não devolve esta conta, então alcance, novos seguidores e saídas ficam parados.`,
-        acao: "Conectar esta conta no conector Instagram da Windsor, ou passar a ler as métricas diárias direto da Graph.",
-        risco: "Alcance, engajamento, crescimento e relatório do cliente param no tempo sem aviso.",
-      });
-    }
-    verificados.push({ etapa: "parados", tipo: "instagram", nome: `@${ig.ig_username}`, cliente: nome.get(ig.client_id) ?? null, ok: !(atraso == null || atraso > 3) || !!s?.motivo, nota: ultimo ? `Alcance até ${ultimo.slice(8, 10)}/${ultimo.slice(5, 7)}` : "Sem alcance gravado" });
-  }
-
-  // 4. Anúncios: conta ativa sem dado novo e sem motivo registrado.
-  const ultimoPorConta = new Map<string, string>();
-  for (const c of ads) {
-    if (!c.active) continue;
-    const { data: u } = await supabase
-      .from("meta_ads_daily")
-      .select("date")
-      .eq("client_id", c.client_id)
-      .eq("ad_account_id", c.ad_account_id)
-      .order("date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (u?.date) ultimoPorConta.set(`${c.client_id}:${c.ad_account_id}`, u.date);
-  }
-  const clientesComAdsRecentes = new Set<string>();
-  for (const c of ads) {
-    const u = ultimoPorConta.get(`${c.client_id}:${c.ad_account_id}`);
-    if (u && diff(hoje, u) <= 5) clientesComAdsRecentes.add(c.client_id);
-  }
-  for (const c of ads) {
-    if (!c.active || clientesComAdsRecentes.has(c.client_id)) continue; // outra conta do cliente está em dia
-    const s = status.get(`${c.client_id}:anuncios`);
-    if (s?.motivo) continue;
-    const u = ultimoPorConta.get(`${c.client_id}:${c.ad_account_id}`);
+  for (const r of statusFontes) {
+    const fonte = r.fonte as FonteId;
+    if (!PARADA[fonte]) continue;
+    const e = { cadastro: !!r.cadastro, data_ate: r.data_ate ? String(r.data_ate).slice(0, 10) : null, last_error: r.last_error, motivo: r.motivo, motivo_dono: r.motivo_dono, naoUsa: !!r.nao_usa };
+    if (!fonteLigada(e)) continue; // não ligada: aparece em "fontes obrigatórias"
+    const st = statusDaFonte(e, hoje);
+    const cli = nome.get(r.client_id) ?? null;
+    verificados.push({ etapa: "parados", tipo: fonte === "anuncios" ? "conta_anuncios" : fonte === "crm" ? "crm" : fonte === "instagram" ? "instagram" : "cliente", nome: NOME_FONTE[fonte], cliente: cli, ok: st.cor !== "vermelho" || !!r.motivo, nota: `${st.rotulo}: ${st.detalhe}` });
+    if (st.cor !== "vermelho" || r.motivo) continue; // com motivo registrado, o painel já explica
+    const t = PARADA[fonte];
     achados.push({
-      id: `ads-parado:${c.client_id}:${c.ad_account_id}`,
-      gravidade: "media",
+      id: `${fonte}-parado:${r.client_id}`,
+      gravidade: t.gravidade,
       tipo: "dado_parado",
-      cliente: nome.get(c.client_id) ?? null,
-      titulo: u ? `Anúncios sem dado novo desde ${u.slice(8, 10)}/${u.slice(5, 7)}` : "Conta de anúncios cadastrada sem nenhum dado",
-      detalhe: `Conta ${c.ad_account_id}. Sem motivo registrado no painel.`,
-      acao: "Conferir no Gerenciador de Anúncios se há campanha rodando. Se não houver, registrar o motivo. Se houver, o token ou a conta estão errados.",
-      risco: "Se há campanha rodando, o painel mostra zero gasto e zero lead enquanto o cliente paga.",
+      cliente: cli,
+      titulo: st.data ? `${NOME_FONTE[fonte]} ${st.rotulo.toLowerCase()}: ${st.detalhe}` : `${NOME_FONTE[fonte]} ligado sem nenhum dado gravado`,
+      detalhe: r.last_error ? `${t.detalhe} Erro na última atualização: ${erroCurto(String(r.last_error))}` : t.detalhe,
+      acao: t.acao,
+      risco: t.risco,
     });
-  }
-  for (const c of ads) {
-    if (!c.active) continue;
-    const u = ultimoPorConta.get(`${c.client_id}:${c.ad_account_id}`);
-    verificados.push({ etapa: "parados", tipo: "conta_anuncios", nome: `${c.name ?? "Conta"} (${c.ad_account_id})`, cliente: nome.get(c.client_id) ?? null, ok: !!u && diff(hoje, u) <= 5, nota: u ? `Dado até ${u.slice(8, 10)}/${u.slice(5, 7)}` : "Sem dado" });
-  }
-
-  // 4b. CRM e WhatsApp: a sincronização diz "sucesso" (sem erro, rodou há pouco), mas o dado mais novo é velho.
-  // Pode ser ausência real (nenhum lead novo), por isso é aviso: a conferência só aponta para alguém olhar.
-  for (const fonte of ["crm", "atendimento"] as const) {
-    const limite = fonte === "crm" ? 7 : 3;
-    for (const s of statusRows ?? []) {
-      if (s.fonte !== fonte || !ativos.has(s.client_id) || s.motivo || !s.last_success_at) continue;
-      if (diff(hoje, String(s.last_success_at).slice(0, 10)) > 2) continue; // não rodou há pouco: aparece na Saúde das fontes
-      const ultimo = await lerDadosAte(supabase, s.client_id, fonte);
-      const atraso = ultimo ? diff(hoje, ultimo) : null;
-      const parado = atraso == null || atraso > limite;
-      const rot = fonte === "crm" ? "CRM" : "WhatsApp";
-      verificados.push({ etapa: "parados", tipo: fonte === "crm" ? "crm" : "cliente", nome: rot, cliente: nome.get(s.client_id) ?? null, ok: !parado, nota: ultimo ? `Sync ok; dado até ${ultimo.slice(8, 10)}/${ultimo.slice(5, 7)}` : "Sync ok; nenhum dado" });
-      if (!parado) continue;
-      achados.push({
-        id: `${fonte}-parado:${s.client_id}`,
-        gravidade: "baixa",
-        tipo: "dado_parado",
-        cliente: nome.get(s.client_id) ?? null,
-        titulo: ultimo ? `${rot}: sincronização com sucesso, mas nada novo desde ${ultimo.slice(8, 10)}/${ultimo.slice(5, 7)} (${atraso} dias)` : `${rot}: sincronização com sucesso, mas nenhum dado gravado`,
-        detalhe: fonte === "crm" ? "Nenhum lead novo no período. Pode ser real (cliente sem lead) ou o CRM lançado à mão / funil errado na conexão." : "Nenhuma conversa nova no período. Pode ser real ou o número do WhatsApp mudou.",
-        acao: fonte === "crm" ? "Perguntar ao cliente se entraram leads. Se entraram, conferir funil e token da conexão do CRM." : "Perguntar ao cliente se recebeu mensagens. Se recebeu, conferir o canal na WTS.",
-        risco: "Funil e atendimento aparecem vazios; a leitura de conversão do período fica sem base.",
-      });
-    }
   }
   return { achados, verificados };
 }
 
-async function etapaFontesObrigatorias(supabase: Sb, { nome, ativos, ads }: Base): Promise<Parcial> {
+async function etapaFontesObrigatorias(_supabase: Sb, { nome, ativos, statusFontes }: Base): Promise<Parcial> {
   const achados: Achado[] = [];
   const verificados: Verificado[] = [];
-  const { data: igs } = await supabase.from("instagram_accounts").select("client_id").eq("active", true);
-  // 5. Cliente ativo sem alguma fonte ligada (Instagram, anúncios ou CRM).
-  const { data: crms } = await supabase.from("crm_connections").select("client_id");
-  const temIg = new Set<string>((igs ?? []).map((i: any) => i.client_id));
-  const temAds = new Set<string>(ads.filter((a: any) => a.active).map((a: any) => a.client_id));
-  const temCrm = new Set<string>((crms ?? []).map((c: any) => c.client_id));
+  // 5. Cliente ativo sem alguma fonte ligada. "Ligado" é a mesma regra do /admin (fonteLigada): se a tabela
+  // mostra dado, aqui também está ligado. Fonte marcada como "não usa" (intencional) não aparece.
+  const ligada = (id: string, fonte: FonteId) => {
+    const r = statusFontes.find((x: any) => x.client_id === id && x.fonte === fonte);
+    return r ? fonteLigada({ cadastro: !!r.cadastro, data_ate: r.data_ate, motivo_dono: r.motivo_dono }) || !!r.nao_usa : false;
+  };
+  const temIg = new Set<string>([...ativos].filter((id) => ligada(id, "instagram")));
+  const temAds = new Set<string>([...ativos].filter((id) => ligada(id, "anuncios")));
+  const temCrm = new Set<string>([...ativos].filter((id) => ligada(id, "crm")));
   for (const id of ativos) {
     const falta = [!temIg.has(id) && "Instagram", !temAds.has(id) && "anúncios", !temCrm.has(id) && "CRM"].filter(Boolean) as string[];
     verificados.push({ etapa: "fontes_obrigatorias", tipo: "cliente", nome: nome.get(id) ?? id, cliente: nome.get(id) ?? null, ok: falta.length === 0, nota: falta.length ? `Falta ${falta.join(", ")}` : "Instagram, anúncios e CRM ligados" });
     if (falta.length === 0) continue;
     achados.push({
       id: `sem-fonte:${id}`,
+      clientId: id,
+      fontesFaltando: [!temIg.has(id) && "instagram", !temAds.has(id) && "anuncios", !temCrm.has(id) && "crm"].filter(Boolean) as ("instagram" | "anuncios" | "crm")[],
       // Instagram é obrigatório (é a base do painel); anúncios e CRM podem não existir de verdade.
       gravidade: !temIg.has(id) ? "alta" : falta.length === 3 ? "media" : "baixa",
       tipo: "sem_fonte",

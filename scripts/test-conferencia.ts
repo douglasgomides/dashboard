@@ -1,7 +1,7 @@
 // npx tsx scripts/test-conferencia.ts
 import assert from "node:assert/strict";
 import { compararGasto } from "../api/_lib/conferencia";
-import { estadoDaEtapa, filtrarAchados, ordenarAchados, resumirConferencia, type Achado } from "../src/lib/conferencia";
+import { estadoDaEtapa, filtrarAchados, fontesFaltando, ordenarAchados, resumirConferencia, separarAchados, type Achado } from "../src/lib/conferencia";
 
 // Gasto: diferenças pequenas (arredondamento, dia fechando) não viram alerta.
 assert.equal(compararGasto(0, 0), null);
@@ -37,5 +37,23 @@ assert.deepEqual(r.etapasComErro, ["contas_meta"]);
 assert.equal(estadoDaEtapa("parados", [], "parados"), "rodando");
 assert.equal(estadoDaEtapa("parados", [{ etapa: "parados", status: "ok" }], null), "ok");
 assert.equal(estadoDaEtapa("duplicidades", [], null), "pendente");
+
+
+// Fonte não ligada: agrupada numa tabela, sem o que foi marcado como intencional; alta/média em destaque.
+{
+  const sf = (id: string, cliente: string, titulo: string, g: Achado["gravidade"] = "baixa"): Achado => ({ id, gravidade: g, cliente, tipo: "sem_fonte", titulo, detalhe: "", acao: "" });
+  const lista: Achado[] = [
+    sf("s1", "Dra. A", "Sem anúncios, CRM ligado"),
+    { ...sf("s2", "Dr. B", "Sem CRM ligado"), clientId: "b", fontesFaltando: ["crm"] },
+    sf("s3", "Dra. C", "Sem Instagram, anúncios, CRM ligado", "alta"),
+    { id: "p1", gravidade: "media", cliente: "Dra. A", tipo: "dado_parado", titulo: "parado", detalhe: "", acao: "" },
+    { id: "p2", gravidade: "baixa", cliente: "Dra. A", tipo: "dado_parado", titulo: "crm parado", detalhe: "", acao: "" },
+  ];
+  const r = separarAchados(lista, new Set(["b:crm", "a:anuncios"]), new Map([["Dra. A", "a"]]));
+  assert.deepEqual(r.destaque.map((x) => x.id), ["p1"]);
+  assert.deepEqual(r.demais.map((x) => x.id), ["p2"]);
+  assert.deepEqual(r.semFonte.map((x) => [x.cliente, x.faltando.join(",")]), [["Dra. C", "instagram,anuncios,crm"], ["Dra. A", "crm"]]);
+  assert.deepEqual(fontesFaltando(sf("x", "X", "Sem Instagram ligado")), ["instagram"]);
+}
 
 console.log("test-conferencia: ok");
