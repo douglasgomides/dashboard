@@ -73,7 +73,7 @@ function BemVindo() {
     <div className="min-h-screen px-4 py-8" style={{ background: "var(--bg)" }}>
       <div className="mx-auto w-full max-w-2xl space-y-5">
         <header>
-          <div className="text-sm font-semibold" style={{ color: "var(--accent)" }}>Intelligence Hub · Doctor Creator</div>
+          <div className="text-sm font-semibold" style={{ color: "var(--accent)" }}>Doctor Creator Hub</div>
           <h1 className="mt-1 text-2xl font-semibold" style={{ color: "var(--ink)" }}>
             {primeiroAcesso ? "Bem-vindo(a) ao seu painel" : "Tour do painel"}
             {cliente?.nome ? `, ${cliente.nome}` : ""}

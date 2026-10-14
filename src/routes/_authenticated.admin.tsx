@@ -51,7 +51,7 @@ function AdminLayout() {
           <span className="logo">
             <i />
           </span>
-          <span className="so-aberta">Intelligence Hub</span>
+          <span className="so-aberta">Doctor Creator Hub</span>
         </div>
         <nav className="side">
           <div className="lbl">Portfólio</div>
@@ -59,7 +59,7 @@ function AdminLayout() {
         </nav>
         <div className="side-foot so-aberta">
           <LogoutButton className="text-sm text-left min-h-[36px]" />
-          <span>Intelligence Hub · Doctor Creator</span>
+          <span>Doctor Creator Hub</span>
         </div>
       </aside>
       <div className="mainwrap">

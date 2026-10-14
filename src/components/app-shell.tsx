@@ -203,7 +203,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
           <span className="logo">
             <i />
           </span>
-          <span className="so-aberta">Intelligence Hub</span>
+          <span className="so-aberta">Doctor Creator Hub</span>
           <button type="button" className="recolher" onClick={alternarRecolhida} aria-label={recolhida ? "Abrir menu lateral" : "Recolher menu lateral"} title={recolhida ? "Abrir menu" : "Recolher menu"}>
             {recolhida ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
           </button>
@@ -267,7 +267,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
           <Link to="/bem-vindo" className="text-sm">Tour do painel</Link>
           <TemaBotoes />
           <LogoutButton className="text-sm text-left min-h-[36px]" />
-          <span>Intelligence Hub · Doctor Creator</span>
+          <span>Doctor Creator Hub</span>
         </div>
       </aside>
 
