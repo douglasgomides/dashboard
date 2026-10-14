@@ -333,7 +333,7 @@ function regraAnuncios(e: EntradaLeitura, out: Achado[]) {
       tom: "bom",
       peso: 2,
       titulo: msg && msg.custoPorConversa != null
-        ? `Os anúncios estão rendendo: cada conversa no WhatsApp custou ${brl(msg.custoPorConversa)}.`
+        ? `Os anúncios estão rendendo: nas campanhas de mensagem, cada conversa custou ${brl(msg.custoPorConversa)}.`
         : "Os anúncios estão rendendo dentro do esperado para cada objetivo.",
       porque: `Menos de ${pct(DESPERDICIO_RELEVANTE)} da verba foi para campanhas ruins. ${escalar.length ? `${escalar.length === 1 ? "Uma campanha entrega" : `${escalar.length} campanhas entregam`} bem mais barato que as outras do mesmo tipo: é onde cabe mais dinheiro.` : "O próximo passo é saber quantas dessas conversas viraram consulta."}`,
       acao: escalar.length ? { texto: `Aumentar a verba das ${escalar.length} campanhas marcadas "Escalar".`, rota: "anuncios" } : undefined,

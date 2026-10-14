@@ -545,10 +545,10 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
       const msg = diag.custoPorConversaMensagem;
       resumo.push({
         id: "ads",
-        curto: `${fmtBRL(diag.gasto)} em anúncios${msg != null ? `; ${fmtN(diag.conversasMensagem)} conversas (${fmtBRL(msg)} cada)` : ""}`,
-        texto: `${fmtBRL(diag.gasto)} investidos em anúncios.${msg != null ? ` As campanhas de mensagem abriram ${fmtN(diag.conversasMensagem)} conversas, a ${fmtBRL(msg)} cada.` : ""}`,
+        curto: `${fmtBRL(diag.gasto)} em anúncios${diag.conversas > 0 ? `; ${fmtN(diag.conversas)} conversas no total (${fmtBRL(diag.gasto / diag.conversas)} cada)` : ""}${msg != null ? `; nas campanhas de mensagem, ${fmtBRL(msg)} cada` : ""}`,
+        texto: `${fmtBRL(diag.gasto)} investidos em anúncios${diag.conversas > 0 ? `, com ${fmtN(diag.conversas)} conversas somando todas as campanhas (${fmtBRL(diag.gasto / diag.conversas)} por conversa na conta toda)` : ""}.${msg != null ? ` Só as campanhas de mensagem abriram ${fmtN(diag.conversasMensagem)} conversas, a ${fmtBRL(msg)} cada (${fmtBRL(diag.gastoMensagem)} ÷ ${fmtN(diag.conversasMensagem)}).` : ""}`,
         // O total de conversas de TODAS as campanhas (o número do relatório antigo) continua na evidência.
-        evidencia: `${diag.campanhas.length} campanhas; custo por conversa calculado só com campanhas de mensagem; somando todas as campanhas, ${fmtN(diag.conversas)} conversas iniciadas.`,
+        evidencia: `${diag.campanhas.length} campanhas. Conta toda: ${fmtBRL(diag.gasto)} ÷ ${fmtN(diag.conversas)} conversas. Campanhas de mensagem: ${fmtBRL(diag.gastoMensagem)} ÷ ${fmtN(diag.conversasMensagem)} conversas.`,
       });
       if (msg == null) {
         limitar(

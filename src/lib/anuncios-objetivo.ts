@@ -262,6 +262,7 @@ export interface DiagnosticoAds {
   desperdicioSemResultado: number;
   conversasMensagem: number;
   custoPorConversaMensagem: number | null; // só campanhas de mensagem
+  gastoMensagem: number; // gasto das campanhas de mensagem (numerador do custo acima)
   reguaConta: ReguaConta;
 }
 
@@ -706,6 +707,7 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
     desperdicioSemResultado: soma((c) => c.vereditoOficial === "Atrai mas não converte" || c.vereditoOficial === "Sem tração"),
     conversasMensagem: msg?.conversas ?? 0,
     custoPorConversaMensagem: msg?.custoPorConversa ?? null,
+    gastoMensagem: msg?.gasto ?? 0,
     reguaConta,
   };
 }

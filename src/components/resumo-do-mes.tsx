@@ -129,12 +129,14 @@ export function ResumoDoMes({
         {conversas > 0 ? (
           <>
             , que trouxeram <Forte>{fmtNum(conversas)} conversas</Forte>
-            {diag?.custoPorConversaMensagem != null ? (
+            {" "}
+            (<Forte>{fmtBRL(gasto / conversas)}</Forte> por conversa na conta toda
+            {diag?.custoPorConversaMensagem != null && diag.conversasMensagem > 0 ? (
               <>
-                {" "}
-                (nas campanhas de mensagem, <Forte>{fmtBRL(diag.custoPorConversaMensagem)}</Forte> cada)
+                ; só nas campanhas de mensagem, <Forte>{fmtBRL(diag.custoPorConversaMensagem)}</Forte> ({fmtNum(diag.conversasMensagem)} conversas)
               </>
             ) : null}
+            )
             .
           </>
         ) : (

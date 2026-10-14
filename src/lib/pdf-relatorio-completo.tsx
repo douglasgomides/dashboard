@@ -318,7 +318,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   if (obj && obj.gasto > 0) {
     kpis.push({ label: "Investido em anúncios", value: fmtBRL(obj.gasto), hint: `${obj.campanhas.length} campanhas` });
     kpis.push({ label: "Conversas (campanhas de mensagem)", value: fmtNum(obj.conversasMensagem), hint: `Direct e WhatsApp; ${fmtNum(obj.conversas)} somando todas as campanhas` });
-    kpis.push({ label: "Custo por conversa", value: obj.custoPorConversaMensagem != null ? fmtBRL(obj.custoPorConversaMensagem) : "sem campanha de mensagem", hint: "só campanhas de mensagem" });
+    kpis.push({ label: "Custo por conversa (mensagem)", value: obj.custoPorConversaMensagem != null ? fmtBRL(obj.custoPorConversaMensagem) : "sem campanha de mensagem", hint: obj.conversas > 0 ? `só campanhas de mensagem; conta toda: ${fmtBRL(obj.gasto / obj.conversas)}` : "só campanhas de mensagem" });
   }
   // Restaurado na página 1: Impressões com o CTR (já em %, como o SQL devolve; ver página de Anúncios).
   if (adsRes && num(adsRes.gasto) > 0) {
@@ -695,7 +695,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
             items={[
               { label: "Investido", value: fmtBRL(obj?.gasto ?? num(adsRes.gasto)), hint: `${obj?.campanhas.length ?? adsRes.campanhas} campanhas` },
               { label: "Conversas (campanhas de mensagem)", value: fmtNum(obj?.conversasMensagem ?? 0) },
-              { label: "Custo por conversa", value: obj?.custoPorConversaMensagem != null ? fmtBRL(obj.custoPorConversaMensagem) : "sem campanha de mensagem", hint: "só campanhas de mensagem" },
+              { label: "Custo por conversa (mensagem)", value: obj?.custoPorConversaMensagem != null ? fmtBRL(obj.custoPorConversaMensagem) : "sem campanha de mensagem", hint: obj && obj.conversas > 0 ? `só campanhas de mensagem; conta toda: ${fmtBRL(obj.gasto / obj.conversas)}` : "só campanhas de mensagem" },
               { label: "Impressões", value: fmtNum(num(adsRes.impressoes)), hint: adsRes.cpm != null ? `${fmtBRL(num(adsRes.cpm))} para aparecer mil vezes` : undefined },
               { label: "Cliques no link", value: fmtNum(num(adsRes.cliques_link)), hint: adsRes.cpc != null ? `${fmtBRL(num(adsRes.cpc))} por clique` : undefined },
               { label: "Cliques a cada 100 impressões", value: adsRes.ctr != null ? num(adsRes.ctr).toFixed(2).replace(".", ",") : "sem dado" },

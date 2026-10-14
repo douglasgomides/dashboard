@@ -293,9 +293,10 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
     if (d.conversasMensagem > 0 && d.custoPorConversaMensagem != null)
       out.push({
         id: "custo-conversa",
-        rotulo: "Custo de cada conversa",
+        rotulo: "Custo por conversa (campanhas de mensagem)",
         valor: brl(d.custoPorConversaMensagem),
-        explicacao: `Quanto custou, em média, cada pessoa que chamou no WhatsApp/Direct pelos anúncios de mensagem (${int(d.conversasMensagem)} conversas). Não há referência de mercado confiável: compare com o mês anterior. ${BENCHMARKS.custoPorConversa.referencia}.`,
+        comparacao: d.conversas > 0 ? `Conta toda: ${brl(d.gasto / d.conversas)} (${brl(d.gasto)} ÷ ${int(d.conversas)} conversas de todas as campanhas)` : undefined,
+        explicacao: `Gasto das campanhas de mensagem (${brl(d.gastoMensagem)}) ÷ conversas que elas iniciaram (${int(d.conversasMensagem)}). Não é o custo da conta toda: campanhas de outros objetivos gastam sem gerar conversa. Não há referência de mercado confiável: compare com o mês anterior. ${BENCHMARKS.custoPorConversa.referencia}.`,
         status: null,
         rota: "/$clientId/anuncios",
         botao: "Ver custo por campanha",
