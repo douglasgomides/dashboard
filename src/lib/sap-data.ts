@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { lerTrackerAuto, montarKpisSap, type TrackerAutoBruto } from "@/lib/sap-auto";
+import type { LinhaPlano } from "@/lib/sap-metas";
 
 // Tracker do Sistema de Aquisição de Pacientes (SAP).
 //
@@ -578,12 +579,21 @@ export function portfolioDeExemplo(): SapLinhaPortfolio[] {
 // Tracker automático (CRM + WhatsApp + Meta), cadastro da clínica e marcos das etapas.
 // Regras dos KPIs em src/lib/sap-auto.ts; a conta no banco em sap_tracker_auto.
 
-export type SapCadastro = SapClinica & { servicos: string[] | null; ticket_medio: number | null; piloto: boolean | null };
+export type SapCadastro = SapClinica & {
+  servicos: string[] | null;
+  ticket_medio: number | null;
+  piloto: boolean | null;
+  consulta_paga: boolean | null;
+  verba_em_dia: boolean | null;
+  score_execucao: number | null;
+  baseline_de: string | null;
+  baseline_ate: string | null;
+};
 
 export async function getClinicaSap(clientId: string): Promise<SapCadastro | null> {
   const { data, error } = await db
     .from("sap_clinicas")
-    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto")
+    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto, consulta_paga, verba_em_dia, score_execucao, baseline_de, baseline_ate")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -635,5 +645,37 @@ export async function getEtapasSap(clientId: string): Promise<EtapaSap[]> {
 
 export async function definirMarcoSap(e: Pick<EtapaSap, "connection_id" | "pipeline_id" | "status_id">, marco: string | null) {
   const { error } = await db.rpc("sap_definir_marco", { p_connection: e.connection_id, p_pipeline: e.pipeline_id, p_status: e.status_id, p_marco: marco });
+  if (error) throw error;
+}
+
+// Baseline D0, metas D90 e condições da garantia (03.07 / 01.02). Regras em src/lib/sap-metas.ts.
+export async function getPlanoSap(clinicaId: string): Promise<LinhaPlano[]> {
+  const { data, error } = await db.from("sap_kpi_plano").select("kpi, baseline, origem, amostra, meta, conta_garantia").eq("clinica_id", clinicaId);
+  if (error) {
+    if (error.code === "42P01" || /does not exist|schema cache/i.test(error.message)) return [];
+    throw error;
+  }
+  return ((data ?? []) as LinhaPlano[]).map((l) => ({
+    ...l,
+    baseline: l.baseline === null ? null : Number(l.baseline),
+    meta: l.meta === null ? null : Number(l.meta),
+    amostra: l.amostra === null ? null : Number(l.amostra),
+  }));
+}
+
+export async function salvarPlanoSap(
+  clientId: string,
+  linhas: LinhaPlano[],
+  c: { consultaPaga: boolean; verbaEmDia: boolean; score: number | null; baselineDe: string | null; baselineAte: string | null },
+) {
+  const { error } = await db.rpc("sap_salvar_plano", {
+    p_client_id: clientId,
+    p_kpis: linhas,
+    p_consulta_paga: c.consultaPaga,
+    p_verba_em_dia: c.verbaEmDia,
+    p_score_execucao: c.score,
+    p_baseline_de: c.baselineDe,
+    p_baseline_ate: c.baselineAte,
+  });
   if (error) throw error;
 }

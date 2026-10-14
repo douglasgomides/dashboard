@@ -2,14 +2,11 @@ import {
   Activity,
   AlignLeft,
   Briefcase,
-  CalendarCheck,
   FileText,
   HelpCircle,
   LayoutDashboard,
   Home,
   Target,
-  Scale,
-  ClipboardCheck,
   Route,
   LayoutGrid,
   Lightbulb,
@@ -18,11 +15,11 @@ import {
   MessageCircle,
   MessagesSquare,
   Network,
+  Settings,
   ShoppingBag,
   Star,
   Trophy,
   Users,
-  Workflow,
   type LucideIcon,
   ClipboardList,
   ListTodo,
@@ -98,8 +95,6 @@ export const AREAS: NavArea[] = [
     Icone: Megaphone,
     tabs: [
       { path: "/anuncios", label: "Anúncios", Icone: Megaphone, fonte: "anuncios" },
-      // Só a equipe vê por enquanto: o cliente sem clínica do SAP ligada cairia numa tela quase vazia. Para abrir ao cliente, tire o admin.
-      { path: "/aquisicao", label: "Aquisição", Icone: Target, admin: true },
     ],
   },
   {
@@ -126,18 +121,19 @@ export const AREAS: NavArea[] = [
   },
 ];
 
-/** "Sistema": telas de uso da equipe Doctor Creator (só admin). "A analisar" saiu daqui: fica no cadastro do cliente no admin. */
+/**
+ * "Equipe": ferramentas da equipe Doctor Creator PARA ESTE CLIENTE (só admin). Médico e viewer nunca veem.
+ * As páginas de portfólio (todos os clientes: saúde das fontes, referência, conferência, relatórios da
+ * semana, SAP de todas as clínicas) ficam no menu do /admin; daqui sai um link só, "Todos os clientes".
+ * Vendas, Consultas e Automações são telas ainda não construídas ("Fase 2/3"): saíram do menu, os
+ * endereços continuam funcionando.
+ */
 export const AVANCADO: NavTab[] = [
-  { path: "/crm-estrutura", label: "Estrutura do CRM", Icone: Network, admin: true, fonte: "crm" },
-  { path: "/vendas-kommo", label: "Vendas (Kommo)", Icone: ShoppingBag, admin: true, fonte: "crm" },
-  { path: "/vendas", label: "Vendas", Icone: ShoppingBag, admin: true },
-  { path: "/consultas", label: "Consultas", Icone: CalendarCheck, admin: true },
-  { path: "/automacoes", label: "Automações", Icone: Workflow, admin: true },
-  { path: "/admin", label: "Portfólio e saúde das fontes", Icone: LayoutDashboard, admin: true, absoluto: true },
-  { path: "/admin/referencia", label: "Referência entre clientes", Icone: Scale, admin: true, absoluto: true },
-  { path: "/admin/conferencia", label: "Conferência de dados", Icone: ClipboardCheck, admin: true, absoluto: true },
-  { path: "/admin/relatorios", label: "Relatórios da semana", Icone: FileText, admin: true, absoluto: true },
-  { path: "/admin/aquisicao", label: "Sistema de Aquisição", Icone: Target, admin: true, absoluto: true },
+  { path: "/aquisicao", label: "Sistema de Aquisição (SAP)", Icone: Target, admin: true },
+  { path: "/admin/$clientId", label: "Configurar este cliente", Icone: Settings, admin: true, absoluto: true },
+  { path: "/crm-estrutura", label: "Etapas do CRM", Icone: Network, admin: true, fonte: "crm" },
+  { path: "/vendas-kommo", label: "Vendas por origem (Kommo)", Icone: ShoppingBag, admin: true, fonte: "crm" },
+  { path: "/admin", label: "Todos os clientes", Icone: LayoutDashboard, admin: true, absoluto: true },
 ];
 
 // Clientes que só têm CRM ligado e não têm Business Manager: veem só o
