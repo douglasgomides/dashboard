@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Painel } from "@/components/visual";
 import { montarFunil, type EtapaFunil, type FunilBanco } from "@/lib/jornada-funil";
 import { formatRangeLabel } from "@/lib/date-range";
+import { fmtFracao } from "@/lib/metricas";
 
 // Funil de 7 etapas do período. Etapa sem dado mostra o que falta (integração, dado e onde resolver),
 // nunca um zero que parece resultado.
@@ -19,7 +20,7 @@ async function lerFunil(clientId: string, de: string, ate: string): Promise<Funi
 
 const COR: Record<EtapaFunil["estado"], string> = { medido: "var(--accent)", zero: "var(--warn)", parcial: "var(--warn)", sem_integracao: "var(--muted)" };
 const fmt = (n: number) => n.toLocaleString("pt-BR");
-const pct = (t: number) => `${(t * 100).toLocaleString("pt-BR", { maximumFractionDigits: t < 0.1 ? 1 : 0 })}%`;
+const pct = (t: number) => fmtFracao(t);
 const NOME: Record<string, string> = { alcance: "alcance", engajamento: "engajamento", comentario: "comentário", conversa: "conversa", lead: "lead", agendamento: "agendamento", venda: "venda" };
 
 function LinhaEtapa({ e, largura }: { e: EtapaFunil; largura: number }) {

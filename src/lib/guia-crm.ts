@@ -1,3 +1,4 @@
+import { fmtFracao } from "@/lib/metricas";
 // Guia de organização do CRM, por cliente: lê as etapas reais do CRM dele, diz o que cada uma
 // vira no padrão Doctor Creator, aponta as que a gente não sabe o que querem dizer e monta o
 // passo a passo para a equipe da clínica ajustar. Regras fixas e verificáveis (nome da etapa).
@@ -141,7 +142,7 @@ export function montarGuiaCrm(etapasBrutas: EtapaCrm[], c: CamposCrm): GuiaCrm {
   passos.push({
     id: "origem",
     titulo: "Registrar de onde veio cada lead",
-    porque: pOrigem == null ? "Não conseguimos ler a origem dos leads deste CRM." : `Só ${Math.round(pOrigem * 100)}% dos leads dos últimos 90 dias têm a origem preenchida. Sem isso não dá para saber se o Instagram ou o anúncio traz paciente.`,
+    porque: pOrigem == null ? "Não conseguimos ler a origem dos leads deste CRM." : `Só ${fmtFracao(pOrigem)} dos leads dos últimos 90 dias têm a origem preenchida. Sem isso não dá para saber se o Instagram ou o anúncio traz paciente.`,
     como: [
       `${onde.campo} Nome: “Origem do lead”. Opções: Instagram (orgânico), Anúncio Meta, Google, Indicação, Site, Paciente antigo, Outro.`,
       "Tornar o campo obrigatório para sair da etapa “Novo lead”.",
@@ -159,7 +160,7 @@ export function montarGuiaCrm(etapasBrutas: EtapaCrm[], c: CamposCrm): GuiaCrm {
         ? "Nenhum lead foi marcado como perdido nos últimos 90 dias: os que desistiram ficam “abertos” para sempre e distorcem todas as taxas."
         : pMotivo == null
           ? `${c.perdidos} perdidos nos últimos 90 dias; não conseguimos ler o motivo deles.`
-          : `Só ${Math.round(pMotivo * 100)}% dos ${c.perdidos} perdidos têm motivo. Sem motivo, não dá para saber se perde por preço, demora ou convênio.`,
+          : `Só ${fmtFracao(pMotivo)} dos ${c.perdidos} perdidos têm motivo. Sem motivo, não dá para saber se perde por preço, demora ou convênio.`,
     como: [onde.motivo, "Lista de motivos: Preço, Não respondeu, Convênio/particular, Distância, Horário, Já fez em outro lugar, Só queria informação, Outro."],
     feito: c.perdidos > 0 && pMotivo != null && pMotivo >= 0.8,
   });
@@ -173,7 +174,7 @@ export function montarGuiaCrm(etapasBrutas: EtapaCrm[], c: CamposCrm): GuiaCrm {
         ? "Nenhum lead foi marcado como ganho nos últimos 90 dias. O painel não consegue mostrar quanto o marketing trouxe de faturamento."
         : pValor == null || pValor >= 0.8
           ? "Ganhos estão sendo registrados."
-          : `Só ${Math.round(pValor * 100)}% dos ganhos têm valor preenchido.`,
+          : `Só ${fmtFracao(pValor)} dos ganhos têm valor preenchido.`,
     como: [onde.valor, "Mover para ganho no dia em que o paciente fechar (consulta paga ou procedimento contratado)."],
     feito: c.ganhos > 0 && (pValor == null || pValor >= 0.8),
   });
@@ -185,7 +186,7 @@ export function montarGuiaCrm(etapasBrutas: EtapaCrm[], c: CamposCrm): GuiaCrm {
     porque:
       pParados == null
         ? "Sem dado de movimentação dos leads."
-        : `${Math.round(pParados * 100)}% dos leads em aberto estão parados há mais de 90 dias. Eles inflam a base e escondem a fila real.`,
+        : `${fmtFracao(pParados)} dos leads em aberto estão parados há mais de 90 dias. Eles inflam a base e escondem a fila real.`,
     como: [
       "Filtrar os leads em aberto sem movimentação há 90+ dias.",
       "Mover para “Perdido” com o motivo “Não respondeu” ou para um funil “Reativação”, fora do funil principal.",
@@ -199,7 +200,7 @@ export function montarGuiaCrm(etapasBrutas: EtapaCrm[], c: CamposCrm): GuiaCrm {
     passos.push({
       id: "dono",
       titulo: "Todo lead com um responsável",
-      porque: pDono == null ? "" : `${Math.round(pDono * 100)}% dos leads em aberto estão sem responsável.`,
+      porque: pDono == null ? "" : `${fmtFracao(pDono)} dos leads em aberto estão sem responsável.`,
       como: ["Distribuir os leads sem responsável e ativar a distribuição automática para novos leads, se o CRM tiver."],
       feito: pDono != null && pDono < 0.1,
     });

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { fmtTaxa } from "@/lib/metricas";
 import { supabase } from "@/integrations/supabase/client";
 
 // Qualidade do lead por campanha: o anúncio trouxe gente que avança no funil ou só volume?
@@ -40,7 +41,7 @@ function Tabela({ linhas, base, rotuloBase }: { linhas: Linha[]; base: (l: Linha
                 <td className="py-1.5 pr-3" title={l.campanha}>{curto(l.campanha)}</td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">{brl(l.gasto)}</td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">{num(b)}</td>
-                <td className="py-1.5 pr-3 text-right tabular-nums">{num(l.avancaram)} <span className="text-xs" style={{ color: "var(--text-dim)" }}>({Math.round((l.avancaram / b) * 100)}%)</span></td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">{num(l.avancaram)} <span className="text-xs" style={{ color: "var(--text-dim)" }}>({fmtTaxa(l.avancaram, b)})</span></td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">{num(l.agendaram)}</td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">{num(l.ganhos)}</td>
                 <td className="py-1.5 text-right tabular-nums font-semibold" style={{ color: zero ? "var(--crit)" : custoAv != null && melhor != null && custoAv === melhor ? "var(--good)" : undefined }}>

@@ -48,3 +48,10 @@ const vazio = seguidoresNoPeriodo([], "2026-10-01", "2026-10-07");
 assert.equal(vazio.ganhos, null); // indisponível, não 0
 assert.equal(vazio.saldoTotal, null);
 console.log("test-metricas: ok");
+
+// Regressão: os helpers das telas usam a mesma regra (antes "0%" ou "menos de 1%").
+import("../src/lib/comercial").then(({ fmtPct }) => {
+  assert.equal(fmtPct(2 / 1365), "0,15%");
+  assert.equal(fmtPct(0), "0%");
+  console.log("test-metricas (comercial): ok");
+});

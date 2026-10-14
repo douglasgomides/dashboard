@@ -9,6 +9,8 @@ import { OQueE } from "@/components/insight-card";
 import { ChecklistDados, FunilOndeQuebra, useDiagnosticoComercial } from "@/components/comercial-diagnostico";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { JornadaFunil } from "@/components/jornada-funil";
+import { fmtTaxa } from "@/lib/metricas";
+import { ListaLimitacoes } from "@/components/insight-card";
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 
@@ -26,7 +28,7 @@ const brl = (v: number) =>
     currency: "BRL",
     maximumFractionDigits: 0,
   });
-const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "—");
+const pct = (a: number, b: number) => fmtTaxa(a, b);
 const quando = (iso?: string) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : "");
 
 const ROTULO: Record<string, string> = {
@@ -87,10 +89,13 @@ function JornadaPage() {
   const diag = useDiagnosticoComercial(clientId, start, end);
 
   const resumo = useQuery({
-    queryKey: ["jornada", clientId],
+    queryKey: ["jornada", clientId, start, end],
     queryFn: async () => {
+      // Versão com período (só leads criados no período e sem os removidos no CRM de origem).
       const { data, error } = await rpc("jornada_resumo", {
         p_client: clientId,
+        p_de: start,
+        p_ate: end,
       });
       if (error) throw new Error(error.message);
       // A função devolve um objeto; se vier lista (ou nada), trata como "sem resumo" em vez de quebrar a tela.
@@ -131,6 +136,7 @@ function JornadaPage() {
         {diag.isLoading && <Carregando texto="Calculando onde a jornada quebra…" linhas={2} />}
         {diag.error && <p className="text-sm">{(diag.error as Error).message}</p>}
         {d && <FunilOndeQuebra funil={d.funil} />}
+        {d && (d.limitacoes?.length ?? 0) > 0 && <ListaLimitacoes itens={d.limitacoes} titulo="O que limita esta leitura" />}
       </Painel>
 
       {d && (
@@ -151,7 +157,8 @@ function JornadaPage() {
       >
         <OQueE>
           Uma “pessoa” é alguém que o painel reconheceu em mais de um lugar pelo mesmo telefone ou @. Comentou num post, chamou no WhatsApp
-          e virou lead no CRM: aparece uma vez só. Os números são de toda a base, não só do período.
+          e virou lead no CRM: aparece uma vez só. Os números são do período escolhido: leads criados no período (sem os removidos no CRM),
+          comentários e conversas que aconteceram nele.
         </OQueE>
         {resumo.isLoading && <Carregando texto="Ligando post, conversa e venda…" linhas={2} />}
         {resumo.error && <p className="text-sm">{(resumo.error as Error).message}</p>}
@@ -165,9 +172,17 @@ function JornadaPage() {
           >
             <div className="text-3xl font-semibold tabular-nums">{pct(r.leads_sem_pessoa, r.leads_total)}</div>
             <p className="text-sm" style={{ color: "var(--text)" }}>
-              dos leads do CRM <b>não estão ligados</b> a nenhuma pessoa ({r.leads_sem_pessoa.toLocaleString("pt-BR")} de{" "}
+              dos leads criados no período <b>não estão ligados</b> a nenhuma pessoa ({r.leads_sem_pessoa.toLocaleString("pt-BR")} de{" "}
               {r.leads_total.toLocaleString("pt-BR")}).
             </p>
+            {r.escopo && (
+              <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
+                Escopo: {r.leads_total.toLocaleString("pt-BR")} leads criados de {formatRangeLabel({ start, end })}. A base inteira tem{" "}
+                {Number(r.escopo.leads_base_toda).toLocaleString("pt-BR")} leads ativos
+                {Number(r.escopo.leads_removidos_na_origem) > 0 ? ` e ${Number(r.escopo.leads_removidos_na_origem).toLocaleString("pt-BR")} removidos no CRM (não entram)` : ""}. O Comercial mostra a base
+                inteira e só os leads com etapa conhecida, por isso o número lá é diferente.
+              </p>
+            )}
             <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
               Sem telefone, @ ou conversa guardada não dá para ligar. O painel só liga quando o telefone, o @ ou o identificador da conversa
               (sessionId do WTS) batem exatamente — nunca por nome parecido. Quanto mais conversas puxadas, mais ligam.

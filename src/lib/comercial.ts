@@ -24,6 +24,7 @@
 //   significado, ganho/perda não marcados, sem telefone/@ para cruzar).
 
 import { BENCHMARKS, avaliar, type Faixa } from "./benchmarks";
+import { fmtFracao } from "@/lib/metricas";
 import { confiancaPorAmostra, type Impacto, type Insight, type Limitacao, type Responsavel, type Tom } from "./insight";
 
 // ---------------------------------------------------------------- regras de etapa
@@ -302,7 +303,7 @@ export interface Funil {
 
 const pct = (a: number, b: number) => (b > 0 ? a / b : 0);
 export const fmtN = (n: number) => Math.round(n).toLocaleString("pt-BR");
-export const fmtPct = (r: number) => (r > 0 && r < 0.005 ? "menos de 1%" : `${Math.round(r * 100)}%`);
+export const fmtPct = (r: number) => fmtFracao(r);
 
 /** "de cada 10 que entraram, 4 agendaram" — usa 100 quando dá menos de 1 em 10. */
 export function deCadaFrase(valor: number, base: number, verboBase: string, verbo: [string, string]): string | null {

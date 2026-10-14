@@ -3,6 +3,7 @@
 // O painel NÃO dispara mensagem nem cria anúncio: sugere, monta o texto e acompanha o status.
 // Regras CFM: nada de preço, desconto, promoção ou garantia de resultado nas mensagens e pautas.
 import { grupoEspecialidade } from "@/lib/benchmark-estrategico";
+import { fmtFracao } from "@/lib/metricas";
 
 export type Area = "Ginecologia" | "Dermatologia" | "Oftalmologia" | "Nutrologia/Endocrinologia" | "Cardiologia" | "Ortopedia" | "Pediatria" | "Psiquiatria" | "Cirurgia plástica" | "Outras";
 
@@ -130,10 +131,10 @@ export function sugerirCampanhas(e: EntradaCampanhas): Campanha[] {
   const b = e.base;
   const doc = primeiroNome(e.nomeMedico);
   const agenda = taxaAgenda(b);
-  const reguaAgenda = agenda.propria ? `agendamento de ${Math.round(agenda.taxa * 100)}% (dos leads deste cliente nos últimos 90 dias)` : `agendamento de ${Math.round(agenda.taxa * 100)}% (referência; o CRM não tem histórico suficiente)`;
+  const reguaAgenda = agenda.propria ? `agendamento de ${fmtFracao(agenda.taxa)} (dos leads deste cliente nos últimos 90 dias)` : `agendamento de ${fmtFracao(agenda.taxa)} (referência; o CRM não tem histórico suficiente)`;
   const proj = (publico: number, resp: number, reguaResp: string): Projecao => {
     const r = Math.round(publico * resp);
-    return { publico, resposta: { pct: resp, n: r }, consultas: Math.round(r * agenda.taxa), custo: null, regua: `Resposta de ${Math.round(resp * 100)}% (${reguaResp}) e ${reguaAgenda}.`, estimativa: true };
+    return { publico, resposta: { pct: resp, n: r }, consultas: Math.round(r * agenda.taxa), custo: null, regua: `Resposta de ${fmtFracao(resp)} (${reguaResp}) e ${reguaAgenda}.`, estimativa: true };
   };
 
   // 1. Reativação: leads em aberto parados há 90+ dias.

@@ -1,4 +1,5 @@
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { fmtTaxa } from "@/lib/metricas";
 import { Carregando } from "@/components/sem-fonte";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
@@ -109,7 +110,7 @@ function EtapaFunil({
   cor: string;
   extra?: string;
 }) {
-  const pct = valor !== null && base > 0 ? Math.round((valor / base) * 100) : null;
+  const pct = valor !== null && base > 0 ? fmtTaxa(valor, base) : null;
   return (
     <li className="flex items-center gap-3">
       <span
@@ -126,7 +127,7 @@ function EtapaFunil({
             <b className="font-semibold">{valor === null ? "—" : fmtN(valor)}</b>
             {pct !== null && (
               <span className="ml-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
-                {pct}%
+                {pct}
               </span>
             )}
           </span>
@@ -233,7 +234,7 @@ function PorCampo({
                 <span className="shrink-0 tabular-nums">
                   <b className="font-semibold">{fmtN(r.total)}</b>
                   <span className="ml-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
-                    {soma > 0 ? Math.round((r.total / soma) * 100) : 0}%
+                    {fmtTaxa(r.total, soma)}
                   </span>
                 </span>
               </div>
@@ -341,7 +342,7 @@ function CrmPainelPage() {
   }
 
   const decididos = m.ganhos + m.perdidos;
-  const taxaConversao = decididos > 0 ? Math.round((m.ganhos / decididos) * 100) : null;
+  const taxaConversao = decididos > 0 ? fmtTaxa(m.ganhos, decididos) : null;
   const emDisputa = m.total_leads - decididos;
   // Zero que não é fato: há leads em aberto, mas nenhuma etapa foi marcada como "consulta agendada"
   // nem "em atendimento". O número real só aparece depois que a equipe marca as etapas em "A analisar".
@@ -466,7 +467,7 @@ function CrmPainelPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Kpi icone={Users} rotulo="Leads na base" valor={fmtN(m.total_leads)} cor="var(--s1)" />
+        <Kpi icone={Users} rotulo="Leads na base" valor={fmtN(m.total_leads)} cor="var(--s1)" dica="todo o histórico, sem os removidos no CRM e só leads com etapa conhecida (não segue o período)" />
         <Kpi
           icone={CalendarCheck}
           rotulo="Consultas agendadas"
@@ -543,7 +544,7 @@ function CrmPainelPage() {
             style={{ background: "var(--surface-2)" }}
           >
             <Percent size={20} aria-hidden style={{ color: "var(--accent)" }} />
-            <div className="mt-1 text-4xl font-semibold tabular-nums">{taxaConversao !== null ? `${taxaConversao}%` : "—"}</div>
+            <div className="mt-1 text-4xl font-semibold tabular-nums">{taxaConversao ?? "—"}</div>
             <div className="text-xs font-medium" style={{ color: "var(--text-dim)" }}>
               taxa de conversão
             </div>

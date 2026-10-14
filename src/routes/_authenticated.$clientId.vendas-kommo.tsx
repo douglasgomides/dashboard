@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { fmtTaxa } from "@/lib/metricas";
 import { Carregando, ResumoExecutivo } from "@/components/sem-fonte";
 import { useQuery } from "@tanstack/react-query";
 import { getCrmFunilPorCampoAlt, getCrmLeadsPorEtapa } from "@/lib/client-data";
@@ -16,7 +17,7 @@ function resumoVendas(rows: FunilRow[], total: number): string[] {
   const comVolume = rows.filter((r) => r.total >= 10);
   const melhor = [...comVolume].sort((a, b) => b.ganhos / b.total - a.ganhos / a.total)[0];
   const maior = [...rows].sort((a, b) => b.total - a.total)[0];
-  const pct = (a: number, b: number) => `${b > 0 ? Math.round((a / b) * 100) : 0}%`;
+  const pct = (a: number, b: number) => fmtTaxa(a, b);
   return [
     `${total.toLocaleString("pt-BR")} leads no CRM: ${ganhos.toLocaleString("pt-BR")} ganhos (${pct(ganhos, total)}), ${perdidos.toLocaleString("pt-BR")} perdidos e ${(total - ganhos - perdidos).toLocaleString("pt-BR")} ainda em aberto.`,
     maior ? `A fonte que mais traz leads é “${maior.chave}” (${pct(maior.total, total)} do total).` : "",
@@ -57,7 +58,7 @@ function FunilTable({ title, rows, colLabel }: { title: string; rows: FunilRow[]
                 <td data-label="Em andamento" className="py-1.5 text-right" style={{ color: "var(--text-dim)" }}>
                   {emAndamento}
                 </td>
-                <td data-label="Taxa de ganho" className="py-1.5 text-right font-medium">{taxaGanho.toFixed(1)}%</td>
+                <td data-label="Taxa de ganho" className="py-1.5 text-right font-medium">{fmtTaxa(r.ganhos, r.total)}</td>
               </tr>
             );
           })}
