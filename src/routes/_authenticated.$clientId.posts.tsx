@@ -234,8 +234,8 @@ function ResumoPosts({ posts }: { posts: Post[] }) {
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       <Kpi icone={Layers} rotulo="Posts no período" valor={fmtNum(total)} />
-      <Kpi icone={Bookmark} rotulo="Salvamentos" valor={fmtNum(salvos)} cor="var(--s1)" />
-      <Kpi icone={Heart} rotulo="Engajamento" valor={fmtNum(engaj)} cor="var(--s2)" />
+      <Kpi icone={Bookmark} rotulo="Salvamentos acumulados dos posts" valor={fmtNum(salvos)} cor="var(--s1)" dica="soma dos posts publicados no período, desde a publicação até hoje (não é o mesmo que os salvamentos do período na Visão geral)" />
+      <Kpi icone={Heart} rotulo="Engajamento acumulado dos posts" valor={fmtNum(engaj)} cor="var(--s2)" dica="desde a publicação até hoje" />
       <div className="rounded-xl border p-3.5" style={{ background: "var(--surface)", borderColor: "var(--border)" }} title="Posts com tema preenchido. Sem tema, os painéis por assunto ficam vazios.">
         <div className="flex items-center gap-2">
           <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-md" style={{ background: "color-mix(in srgb, var(--ai) 16%, transparent)", color: "var(--ai)" }}>

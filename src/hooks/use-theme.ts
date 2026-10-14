@@ -8,8 +8,9 @@ import { useCallback, useEffect, useState } from "react";
  * claro na apresentação, e a mesma conta pode ser aberta por ela, pela
  * secretária e pela gente.
  *
- * "sistema" é o padrão e não escreve atributo nenhum — quem decide é o
- * prefers-color-scheme, no CSS. Só a escolha explícita estampa data-theme.
+ * Padrão: claro (pedido da equipe: o painel abre claro mesmo com o sistema em
+ * modo escuro). "sistema" continua disponível como escolha explícita e, aí,
+ * quem decide é o prefers-color-scheme, no CSS.
  */
 
 export type ThemeChoice = "light" | "dark" | "system";
@@ -46,7 +47,7 @@ function gravar(chave: string, valor: string) {
 }
 
 function temaValido(v: string | null): ThemeChoice {
-  return v === "light" || v === "dark" ? v : "system";
+  return v === "dark" || v === "system" ? v : "light";
 }
 
 function accentValido(v: string | null): AccentChoice {

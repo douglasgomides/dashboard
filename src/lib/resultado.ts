@@ -202,10 +202,10 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
     const reachSoma = soma(comReach, "reach");
     out.push({
       id: "alcance",
-      rotulo: "Pessoas alcançadas",
+      rotulo: unico != null ? `Alcance (contas únicas)${e.periodoIg?.recortado ? ", últimos 30 dias" : ""}` : "Alcance (soma dos dias)",
       valor: int(unico ?? reachSoma),
       explicacao: unico != null
-        ? "Quantas pessoas diferentes viram pelo menos um post ou story. É o mesmo número de “contas alcançadas” do Instagram."
+        ? `Quantas pessoas diferentes viram pelo menos um post ou story${e.periodoIg?.recortado ? " nos últimos 30 dias do período (a Meta não calcula contas únicas para mais de 30 dias)" : ""}. É o mesmo número de “contas alcançadas” do Instagram. A soma do alcance de cada dia foi ${int(reachSoma)}.`
         : "Soma de quantas pessoas viram o perfil em cada dia. A mesma pessoa conta de novo se voltou em outro dia, por isso é maior que o número do Instagram.",
       status: null,
       // Variação só sobre a soma dos dias (como na tela original); com alcance único não há comparação equivalente.
@@ -236,21 +236,25 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
     }
 
     // Seguidores: líquido no período, normalizado para 30 dias contra a base.
-    const novos = soma(comReach, "new_followers");
+    // Cobertura própria: só dias em que o Instagram trouxe novos seguidores (ele só fornece os últimos
+    // 30 dias). Antes dividia pelos dias com alcance, o que subestimava o ritmo mensal.
+    const comNovos = dias.filter((d) => d.new_followers != null);
+    const antNovos = ant.filter((d) => d.new_followers != null);
+    const novos = soma(comNovos, "new_followers");
     const seguidores = [...dias].reverse().find((d) => d.followers_count != null)?.followers_count ?? null;
-    if (novos > 0 || seguidores) {
-      const diasMedidos = Math.max(1, comReach.length);
+    if (comNovos.length > 0 && (novos > 0 || seguidores)) {
+      const diasMedidos = comNovos.length;
       const mensal = seguidores ? (novos / seguidores) * (30 / diasMedidos) : null;
       const f = mensal != null ? avaliar(BENCHMARKS.crescimentoMensal, mensal, { seguidores: seguidores ?? 0 }) : null;
       out.push({
         id: "seguidores",
         rotulo: "Novos seguidores",
         valor: `+${int(novos)}`,
-        explicacao: `Quantas pessoas começaram a seguir no período (sem descontar quem saiu). ${mensal != null ? `Equivale a ${pct(mensal, 1)} do perfil por mês.` : ""} Referência: ${BENCHMARKS.crescimentoMensal.referencia}.`,
+        explicacao: `Quantas pessoas começaram a seguir em ${diasMedidos} dias com esse dado (sem descontar quem saiu; o Instagram só informa os últimos 30 dias). ${mensal != null ? `Equivale a ${pct(mensal, 1)} do perfil por mês.` : ""} Referência: ${BENCHMARKS.crescimentoMensal.referencia}.`,
         status: faixaParaTom(f),
         selo: f ? SELO_FAIXA[f] : undefined,
         statusTexto: f ? TEXTO_FAIXA[f] : undefined,
-        comparacao: comparavel ? variacaoTexto(novos, soma(antReach, "new_followers")) : undefined,
+        comparacao: comNovos.length >= 7 && antNovos.length >= comNovos.length * 0.8 ? variacaoTexto(novos, soma(antNovos, "new_followers")) : undefined,
         fonte: BENCHMARKS.crescimentoMensal.fonte,
       });
     }
@@ -418,7 +422,7 @@ export function montarResultado(e: EntradaResultado): Resultado {
   const alc = mt("alcance");
   const seg = mt("seguidores");
   const posts = (e.posts ?? []).length;
-  if (alc) resumo.push(`${alc.valor} pessoas viram o perfil${seg ? ` e ${seg.valor.replace("+", "")} começaram a seguir` : ""}${posts ? `, com ${int(posts)} publicações` : ""}.`);
+  if (alc) resumo.push(`${alc.rotulo}: ${alc.valor}${seg ? `; ${seg.valor.replace("+", "")} começaram a seguir` : ""}${posts ? `; ${int(posts)} publicações` : ""}.`);
   if (e.adsDiag && e.adsDiag.gasto > 0)
     resumo.push(`${brl(e.adsDiag.gasto)} investidos em anúncio${e.adsDiag.conversasMensagem ? `; os anúncios de mensagem trouxeram ${int(e.adsDiag.conversasMensagem)} conversas` : ""}.`);
   if (e.crm && e.crm.novos > 0) resumo.push(`${int(e.crm.novos)} novos contatos entraram no CRM${e.crm.ganhos ? ` e ${int(e.crm.ganhos)} viraram paciente/venda` : ""}.`);

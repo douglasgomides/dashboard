@@ -236,6 +236,8 @@ const rotuloFunil = (f: string | null | undefined) => (f ? f : "Não classificad
 export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   const metrics = [...d.metrics].sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const reach = metrics.reduce((a, m) => a + num(m.reach), 0);
+  // Mesma regra da tela: só dias em que o Instagram trouxe o dado (null não vira 0 na cobertura).
+  const diasNovos = metrics.filter((m) => m.new_followers != null).length;
   const novos = metrics.reduce((a, m) => a + num(m.new_followers), 0);
   const saves = metrics.reduce((a, m) => a + num(m.saves), 0);
   const interacoes = metrics.reduce((a, m) => a + num(m.total_interactions), 0);
@@ -310,7 +312,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   // KPIs do sumário: Instagram primeiro, depois o que existir de anúncio/WhatsApp/CRM.
   const kpis: { label: string; value: string; hint?: string }[] = [];
   if (temIg) {
-    kpis.push({ label: "Novos seguidores", value: fmtNum(novos), hint: "só últimos 30 dias (limite do Instagram)" });
+    kpis.push({ label: "Novos seguidores", value: diasNovos ? fmtNum(novos) : "sem dado", hint: `${diasNovos} de ${metrics.length} dias com o dado (o Instagram só informa os últimos 30)` });
     kpis.push({ label: "Soma dos alcances diários", value: fmtNum(reach), hint: `${metrics.length} dias; a mesma pessoa conta em mais de um dia` });
     kpis.push({ label: "Interações a cada 100 de alcance", value: taxaEng.toFixed(1).replace(".", ","), hint: "curtidas, comentários, salvos e compartilhamentos" });
     kpis.push({ label: "Salvamentos", value: fmtNum(saves) });

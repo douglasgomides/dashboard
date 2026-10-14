@@ -145,7 +145,7 @@ function Alcance({ a }: { a: Audiencia }) {
     <div>
       <Leitura itens={leituraOrigem(a)} />
       <div className="hgrid two">
-        <Painel icone={Users} titulo="Alcance" resumo="Seguidores x não seguidores" ajuda={<>Contas únicas alcançadas nos últimos {a.periodo.dias} dias ({a.periodo.de} a {a.periodo.ate}).</>}>
+        <Painel icone={Users} titulo="Alcance" resumo={`Seguidores x não seguidores · últimos ${a.periodo.dias} dias (janela fixa)`} ajuda={<>Contas únicas alcançadas nos últimos {a.periodo.dias} dias ({a.periodo.de} a {a.periodo.ate}).</>}>
           <div style={{ marginTop: 12 }}>
             {a.alcance_por_tipo_de_seguidor.ok ? (
               <BarraDividida
@@ -211,7 +211,7 @@ function Alcance({ a }: { a: Audiencia }) {
       </Painel>
       </div>
 
-      <Painel icone={UserPlus} titulo="Seguiu x deixou de seguir" resumo="Saldo no período" ajuda={<>Saldo dos últimos {a.periodo.dias} dias, direto da Meta.</>}>
+      <Painel icone={UserPlus} titulo="Seguiu x deixou de seguir" resumo={`Saldo dos últimos ${a.periodo.dias} dias (janela fixa da Meta, não segue o período escolhido)`} ajuda={<>Saldo dos últimos {a.periodo.dias} dias, direto da Meta.</>}>
         <div style={{ marginTop: 12 }}>
           {a.seguiram_e_deixaram.ok ? (
             <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))" }}>

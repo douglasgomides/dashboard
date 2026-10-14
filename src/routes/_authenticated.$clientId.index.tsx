@@ -67,7 +67,7 @@ function SinaisDeInteresse({ reach, contactTaps, newFollowers }: { reach: number
       ajuda="A Meta depreciou “visitas ao perfil” na API, então não dá mais para montar um funil real com % de conversão entre essas etapas. São sinais paralelos, não um funil sequencial."
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance" valor={reach.toLocaleString("pt-BR")} />
+        <Kpi icone={Eye} cor="var(--s1)" rotulo="Alcance (soma dos dias)" valor={reach.toLocaleString("pt-BR")} dica="soma do alcance de cada dia; a mesma pessoa conta em mais de um dia" />
         <Kpi icone={MousePointerClick} cor="var(--s2)" rotulo="Toques em contato" valor={contactTaps.toLocaleString("pt-BR")} dica="endereço, ligar, e-mail, mensagem" />
         <Kpi icone={UserPlus} cor="var(--s3)" rotulo="Novos seguidores" valor={newFollowers.toLocaleString("pt-BR")} dica="só últimos 30 dias (limite do Instagram, não do período escolhido)" />
       </div>
@@ -386,9 +386,12 @@ function MonthlyOverview() {
   const meta = periodoIg.data?.dados;
   const taxaUnica = meta?.alcance_unico && meta.interacoes != null ? ((meta.interacoes / meta.alcance_unico) * 100).toFixed(1) + "%" : null;
   const sinal = (n: number) => `${n >= 0 ? "+" : "-"}${Math.abs(n).toLocaleString("pt-BR")}`;
+  // Bruto, saídas e líquido com a MESMA cobertura (dias fechados que têm os dois números). O bruto de
+  // todos os dias continua informado, com a sua própria cobertura, para não sumir com dado.
+  const novosKpi = cresc.diasMedidos ? cresc.novos : newFollowers;
   const dicaSeguidores = cresc.diasMedidos
-    ? `bruto, igual ao Instagram · saíram ${cresc.saidas.toLocaleString("pt-BR")} · líquido ${sinal(cresc.liquido)} (${cresc.diasMedidos} dias medidos)`
-    : "bruto, igual ao Instagram · saídas ainda não medidas neste período";
+    ? `bruto em ${cresc.diasMedidos} dias com ganhos e saídas medidos · saíram ${cresc.saidas.toLocaleString("pt-BR")} · líquido ${sinal(cresc.liquido)}${newFollowers !== cresc.novos ? ` · somando também dias sem saída medida: ${newFollowers.toLocaleString("pt-BR")}` : ""}`
+    : "bruto de todos os dias com dado · saídas ainda não medidas neste período (o Instagram só informa ganhos e saídas dos últimos 30 dias)";
   const reach = sum(data, "reach");
   const saves = sum(data, "saves");
   const interactions = sum(data, "total_interactions");
@@ -487,7 +490,7 @@ function MonthlyOverview() {
         ) : (
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <div>
-              <Kpi icone={UserPlus} cor="var(--s3)" rotulo="Novos seguidores (bruto)" valor={newFollowers.toLocaleString("pt-BR")} tendencia={vsNovos} dica={dicaSeguidores} />
+              <Kpi icone={UserPlus} cor="var(--s3)" rotulo="Novos seguidores (bruto)" valor={novosKpi.toLocaleString("pt-BR")} tendencia={cresc.diasMedidos ? undefined : vsNovos} dica={dicaSeguidores} />
               <OQueE>{dicaSeguidores}. {explicacao.seguidores}</OQueE>
             </div>
             <div>
