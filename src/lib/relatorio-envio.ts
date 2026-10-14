@@ -930,7 +930,15 @@ function rotuloBloco(secao: SecaoId, it: ItemEnvio): string {
 export const LIMITE_WHATSAPP = 900;
 const semTravessao = (s: string) => s.replace(/\s*[—–]\s*/g, ", ");
 
-export function montarWhatsapp(inp: Pick<EnvioInput, "clientName" | "periodLabel">, c: ConteudoEnvio, limite = LIMITE_WHATSAPP): string {
+// Estilo opcional (tom do texto e blocos extras, como pendências do cliente). Sem estilo, o texto é o de sempre.
+export interface EstiloTexto {
+  abertura?: string;
+  cab?: Partial<Record<SecaoId, string>>;
+  fechamento?: string;
+  extras?: { titulo: string; itens: string[] }[];
+}
+
+export function montarWhatsapp(inp: Pick<EnvioInput, "clientName" | "periodLabel">, c: ConteudoEnvio, limite = LIMITE_WHATSAPP, estilo: EstiloTexto = {}): string {
   // Emoji com parcimônia: só em dois títulos.
   const cab: Record<SecaoId, string> = {
     resumo: "*Resumo do período*",
@@ -942,16 +950,17 @@ export function montarWhatsapp(inp: Pick<EnvioInput, "clientName" | "periodLabel
   };
   const max: Record<SecaoId, number> = { resumo: 3, vitorias: 2, atencao: 2, acoes: 3, testes: 1, limitacoes: 2 };
   const montar = () => {
-    const blocos: string[] = [`Olá, ${saudacao(inp.clientName)}! Segue o resumo de ${inp.periodLabel}.`];
+    const blocos: string[] = [estilo.abertura ?? `Olá, ${saudacao(inp.clientName)}! Segue o resumo de ${inp.periodLabel}.`];
     for (const s of SECOES) {
       const itens = c[s.id].slice(0, max[s.id]);
       if (itens.length === 0) continue;
       const resto = c[s.id].length - itens.length;
       const linhas = itens.map((i) => `• ${i.curto.charAt(0).toUpperCase()}${i.curto.slice(1)}`);
       if (s.id === "limitacoes" && resto > 0) linhas.push(`• e mais ${resto} no PDF`);
-      blocos.push(`${cab[s.id]}\n${linhas.join("\n")}`);
+      blocos.push(`${estilo.cab?.[s.id] ?? cab[s.id]}\n${linhas.join("\n")}`);
     }
-    blocos.push("O relatório completo vai em PDF. Qualquer dúvida, estou à disposição.");
+    for (const x of estilo.extras ?? []) if (x.itens.length) blocos.push(`*${x.titulo}*\n${x.itens.slice(0, 3).map((i) => `• ${i}`).join("\n")}`);
+    blocos.push(estilo.fechamento ?? "O relatório completo vai em PDF. Qualquer dúvida, estou à disposição.");
     return semTravessao(blocos.join("\n\n"));
   };
   // Corta do menos importante até caber.
@@ -965,7 +974,7 @@ export function montarWhatsapp(inp: Pick<EnvioInput, "clientName" | "periodLabel
   return texto;
 }
 
-export function montarExecutiva(inp: Pick<EnvioInput, "clientName" | "periodLabel">, c: ConteudoEnvio): string {
+export function montarExecutiva(inp: Pick<EnvioInput, "clientName" | "periodLabel">, c: ConteudoEnvio, estilo: EstiloTexto = {}): string {
   const rot = (s: SecaoId) => SECOES.find((x) => x.id === s)!.curto;
   const pega: [SecaoId, number][] = [["resumo", 3], ["vitorias", 2], ["atencao", 2], ["limitacoes", 1]];
   const pontos: string[] = [];
@@ -993,6 +1002,8 @@ export function montarExecutiva(inp: Pick<EnvioInput, "clientName" | "periodLabe
     ...(decisoes.length ? decisoes.map((d, i) => `${i + 1}. ${d}`) : ["Nenhuma decisão pendente: não houve recomendação com evidência suficiente."]),
   ];
   if (c.testes.length > 0) linhas.push("", "Próximos testes", ...c.testes.slice(0, 2).map((t) => `• ${t.curto}`));
+  for (const x of estilo.extras ?? []) if (x.itens.length) linhas.push("", x.titulo, ...x.itens.slice(0, 5).map((i) => `• ${i}`));
+  if (estilo.fechamento) linhas.push("", estilo.fechamento);
   return semTravessao(linhas.join("\n"));
 }
 
