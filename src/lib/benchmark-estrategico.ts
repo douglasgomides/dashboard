@@ -121,7 +121,7 @@ function noRecorte(p: PostBench, r: Recorte): boolean {
   return (!r.formato || p.formato === r.formato) && (!r.objetivo || p.objetivo === r.objetivo);
 }
 
-export type Posicao = "top" | "acima" | "abaixo" | "sem_dado";
+export type Posicao = "top" | "acima" | "media" | "abaixo" | "sem_dado";
 
 export interface LinhaComparacao {
   metrica: Metrica;
@@ -143,8 +143,10 @@ export interface Comparacao {
 
 function posicao(v: number | null, med: number | null, p75: number | null): Posicao {
   if (v == null || med == null) return "sem_dado";
-  if (p75 != null && v >= p75 && v > med) return "top";
-  return v >= med ? "acima" : "abaixo";
+  if (p75 != null && v >= p75 && v > med * 1.05) return "top";
+  // Diferença de até 5% da mediana é empate: não conta como acima nem abaixo.
+  if (Math.abs(v - med) <= Math.abs(med) * 0.05) return "media";
+  return v > med ? "acima" : "abaixo";
 }
 
 /** Compara um cliente com o grupo (os outros clientes) num recorte. Null se o cliente não tem posts suficientes. */

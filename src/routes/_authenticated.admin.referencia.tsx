@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtFormatKey, median } from "@/lib/report-metrics";
+import { BenchmarkEstrategico } from "@/components/benchmark-estrategico";
+import type { ClienteBench, PostBench } from "@/lib/benchmark-estrategico";
 
 export const Route = createFileRoute("/_authenticated/admin/referencia")({
   component: ReferenciaPage,
@@ -22,11 +24,11 @@ function ReferenciaPage() {
     queryFn: async () => {
       const desde = new Date(Date.now() - DIAS * 86400000).toISOString().slice(0, 10);
       const pagina = 1000;
-      const posts: { client_id: string; format: string | null; reach: number | null; saved: number | null }[] = [];
+      const posts: { client_id: string; format: string | null; reach: number | null; saved: number | null; methodology_stage: string | null; tema: string | null; shares: number | null; comments: number | null; likes: number | null }[] = [];
       for (let i = 0; ; i += pagina) {
         const { data, error } = await supabase
           .from("instagram_posts")
-          .select("client_id, format, reach, saved")
+          .select("client_id, format, reach, saved, methodology_stage, tema, shares, comments, likes")
           .gte("posted_at", desde)
           .order("posted_at", { ascending: false })
           .range(i, i + pagina - 1);
@@ -34,8 +36,25 @@ function ReferenciaPage() {
         posts.push(...(data ?? []));
         if (!data || data.length < pagina) break;
       }
-      const { data: clientes } = await supabase.from("clients").select("id, name");
-      return { posts, nomes: new Map((clientes ?? []).map((c) => [c.id, c.name])) };
+      const { data: clientes } = await supabase.from("clients").select("id, name, specialty, active");
+      // Stories (sem salvamento na API) e seguidores mais recentes de cada conta, para o benchmark estratégico.
+      const { data: stories } = await (supabase as any).from("instagram_stories").select("client_id, reach, shares, replies, total_interactions").gte("posted_at", desde).limit(5000);
+      const semana = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
+      const { data: seg } = await supabase.from("instagram_account_daily_metrics").select("client_id, date, followers_count").gte("date", semana).not("followers_count", "is", null).order("date", { ascending: false }).limit(2000);
+      const seguidores = new Map<string, number>();
+      for (const r of seg ?? []) if (!seguidores.has(r.client_id)) seguidores.set(r.client_id, Number(r.followers_count));
+      const bench: { clientes: ClienteBench[]; posts: PostBench[] } = {
+        clientes: (clientes ?? []).filter((c: any) => c.active !== false).map((c: any) => ({ id: c.id, nome: c.name, especialidade: c.specialty ?? null, seguidores: seguidores.get(c.id) ?? null })),
+        posts: [
+          ...posts.map((p) => ({ client_id: p.client_id, formato: p.format, objetivo: p.methodology_stage, tema: p.tema, reach: p.reach, saved: p.saved, shares: p.shares, comments: p.comments, likes: p.likes })),
+          // Stories: respostas contam como comentário; o resto das interações entra em "likes" para a taxa de engajamento.
+          ...((stories ?? []) as any[]).map((st) => ({
+            client_id: st.client_id, formato: "stories", objetivo: null, tema: null, reach: st.reach, saved: null, shares: st.shares, comments: st.replies,
+            likes: Math.max(0, Number(st.total_interactions ?? 0) - Number(st.shares ?? 0) - Number(st.replies ?? 0)),
+          })),
+        ],
+      };
+      return { posts, nomes: new Map((clientes ?? []).map((c) => [c.id, c.name])), bench };
     },
   });
 
@@ -66,6 +85,12 @@ function ReferenciaPage() {
 
   return (
     <div>
+      {isLoading ? (
+        <div className="mb-6 h-40 animate-pulse rounded-xl" style={{ background: "var(--surface-2)" }} aria-busy="true" />
+      ) : data ? (
+        <BenchmarkEstrategico clientes={data.bench.clientes} posts={data.bench.posts} dias={DIAS} />
+      ) : null}
+      <h3 className="mb-1 mt-2 text-[15px] font-semibold">Termômetro por formato (todas as contas)</h3>
       <p className="mb-3 text-sm" style={{ color: "var(--text-dim)" }}>
         Referência entre clientes, só para a equipe. Últimos {DIAS} dias, mediana por formato. Cada cliente entra com a
         própria mediana (mínimo de {MIN_POSTS_CLIENTE} posts no formato) e só aparecem formatos com 2 clientes ou mais.
