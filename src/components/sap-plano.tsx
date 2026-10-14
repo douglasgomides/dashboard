@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Painel, Selo } from "@/components/visual";
 import { fmtBRL } from "@/lib/format";
 import { hojeBrasilia } from "@/lib/status-fonte";
-import { getClinicaSap, getPlanoSap, getTrackerAuto, MARCOS, salvarPlanoSap } from "@/lib/sap-data";
+import { getClinicaSap, getExecucaoSap, getPlanoSap, getTrackerAuto, MARCOS, salvarPlanoSap } from "@/lib/sap-data";
 import { lerTrackerAuto, montarKpisSap } from "@/lib/sap-auto";
 import {
   avaliarGarantia,
@@ -168,6 +168,8 @@ function TabelaPlano({ clientId, clinica, plano, atual, carregando, hoje }: { cl
   const [editando, setEditando] = useState(false);
   const [rascunho, setRascunho] = useState<Record<KpiPlano, { baseline: string; meta: string; garantia: boolean; origem: LinhaPlano["origem"]; amostra: number | null }> | null>(null);
   const [cond, setCond] = useState({ consultaPaga: true, verbaEmDia: true, score: "" });
+  const execQ = useQuery({ queryKey: ["sap-execucao", clinica.id], queryFn: () => getExecucaoSap(clinica.id) });
+  const temItensExecucao = (execQ.data ?? []).length > 0;
   const [janelaMedida, setJanelaMedida] = useState<{ de: string; ate: string } | null>(null);
   const [medindo, setMedindo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -364,8 +366,8 @@ function TabelaPlano({ clientId, clinica, plano, atual, carregando, hoje }: { cl
               </label>
               <label className="text-sm">
                 Score de Execução (%)
-                <input inputMode="decimal" value={cond.score} onChange={(e) => setCond({ ...cond, score: e.target.value })} placeholder="Ex.: 85" className="mt-1 min-h-[34px] w-full rounded-md border px-2 text-sm" style={campoSty} />
-                <span className="text-xs" style={{ color: "var(--muted)" }}>Calculado no 11.04 a cada quinzena.</span>
+                <input inputMode="decimal" value={cond.score} disabled={temItensExecucao} onChange={(e) => setCond({ ...cond, score: e.target.value })} placeholder="Ex.: 85" className="mt-1 min-h-[34px] w-full rounded-md border px-2 text-sm disabled:opacity-70" style={campoSty} />
+                <span className="text-xs" style={{ color: "var(--muted)" }}>{temItensExecucao ? "Calculado pelos 20 itens em Execução e saúde." : "Preencha os itens em Execução e saúde para calcular sozinho."}</span>
               </label>
             </div>
           )}

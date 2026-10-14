@@ -89,6 +89,7 @@ export const AREAS: NavArea[] = [
       { path: "/sap", label: "Programa", Icone: Flag, sap: true },
       { path: "/sap/metas", label: "Metas e garantia", Icone: Target, sap: true },
       { path: "/sap/leitura", label: "Leitura da semana", Icone: ClipboardCheck, sap: true },
+      { path: "/sap/execucao", label: "Execução e saúde", Icone: ListChecks, sap: true },
       { path: "/sap/etapas", label: "Etapas no funil do SAP", Icone: Network, sap: true, admin: true, fonte: "crm" },
     ],
   },
