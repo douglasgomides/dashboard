@@ -94,6 +94,8 @@ export const AREAS: NavArea[] = [
     Icone: Briefcase,
     tabs: [
       { path: "/anuncios", label: "Anúncios", Icone: Megaphone, fonte: "anuncios" },
+      // Só a equipe vê por enquanto: o cliente sem clínica do SAP ligada cairia numa tela quase vazia. Para abrir ao cliente, tire o admin.
+      { path: "/aquisicao", label: "Aquisição", Icone: Target, admin: true },
       { path: "/crm-painel", label: "Comercial", Icone: Briefcase, fonte: "crm" },
       { path: "/crm-guia", label: "Organizar o CRM", Icone: ClipboardList, fonte: "crm" },
       { path: "/atendimento", label: "WhatsApp", Icone: MessageCircle, fonte: "atendimento" },
@@ -135,6 +137,7 @@ export const AVANCADO: NavTab[] = [
   { path: "/admin/referencia", label: "Referência entre clientes", Icone: Scale, admin: true, absoluto: true },
   { path: "/admin/conferencia", label: "Conferência de dados", Icone: ClipboardCheck, admin: true, absoluto: true },
   { path: "/admin/relatorios", label: "Relatórios da semana", Icone: FileText, admin: true, absoluto: true },
+  { path: "/admin/aquisicao", label: "Sistema de Aquisição", Icone: Target, admin: true, absoluto: true },
 ];
 
 // Clientes que só têm CRM ligado e não têm Business Manager: veem só o

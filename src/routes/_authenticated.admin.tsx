@@ -37,6 +37,9 @@ function AdminLayout() {
             <Link to="/admin/relatorios" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
               Relatórios da semana
             </Link>
+            <Link to="/admin/aquisicao" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
+              Sistema de Aquisição
+            </Link>
           </nav>
         </div>
         <LogoutButton />
