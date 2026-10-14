@@ -1,19 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { CadastroSap } from "@/components/sap-tracker";
-import { ScoreExecucao, ScoreSaude } from "@/components/sap-scores";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-// Sistema de Aquisição · Execução e saúde (11.04): o que a clínica cumpriu (a clínica vê) e a saúde da conta (só a equipe).
+// O Sistema de Aquisição saiu do menu do Hub e virou uma área própria (/sap). Endereço antigo redireciona.
 export const Route = createFileRoute("/_authenticated/$clientId/sap/execucao")({
-  component: ExecucaoSap,
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/sap/$clientId/execucao" as never, params: { clientId: params.clientId } as never });
+  },
 });
-
-function ExecucaoSap() {
-  const { clientId } = Route.useParams();
-  return (
-    <div className="space-y-6">
-      <CadastroSap clientId={clientId} />
-      <ScoreExecucao clientId={clientId} />
-      <ScoreSaude clientId={clientId} />
-    </div>
-  );
-}

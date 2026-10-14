@@ -265,6 +265,10 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
         </nav>
         <div className="side-foot so-aberta">
           <Link to="/bem-vindo" className="text-sm">Tour do painel</Link>
+          {/* Troca de produto (não é item de menu): só para a equipe e para clínica com o Sistema de Aquisição ativo. */}
+          {(vis.isAdmin || vis.sap) && (
+            <Link to="/sap/$clientId" params={{ clientId }} className="text-sm">Sistema de Aquisição →</Link>
+          )}
           <TemaBotoes />
           <LogoutButton className="text-sm text-left min-h-[36px]" />
           <span>Doctor Creator Hub</span>

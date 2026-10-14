@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, redirect, Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardCheck, FileText, LayoutDashboard, Scale, Target } from "lucide-react";
+import { ClipboardCheck, FileText, LayoutDashboard, Scale } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LogoutButton } from "@/components/logout-button";
 import { getClient } from "@/lib/client-data";
@@ -19,7 +19,6 @@ const ITENS = [
   { to: "/admin/referencia", label: "Referência entre clientes", Icone: Scale },
   { to: "/admin/conferencia", label: "Conferência de dados", Icone: ClipboardCheck },
   { to: "/admin/relatorios", label: "Relatórios da semana", Icone: FileText },
-  { to: "/admin/aquisicao", label: "Sistema de Aquisição", Icone: Target },
 ] as const;
 
 const TITULO: Record<string, string> = {
@@ -27,7 +26,6 @@ const TITULO: Record<string, string> = {
   "/admin/referencia": "Referência entre clientes",
   "/admin/conferencia": "Conferência de dados",
   "/admin/relatorios": "Relatórios da semana",
-  "/admin/aquisicao": "Sistema de Aquisição",
 };
 
 function AdminLayout() {
@@ -58,6 +56,8 @@ function AdminLayout() {
           {itens}
         </nav>
         <div className="side-foot so-aberta">
+          {/* Troca de produto: o Sistema de Aquisição é separado do Hub. */}
+          <Link to="/sap" className="text-sm">Sistema de Aquisição →</Link>
           <LogoutButton className="text-sm text-left min-h-[36px]" />
           <span>Doctor Creator Hub</span>
         </div>
