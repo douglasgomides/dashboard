@@ -740,3 +740,23 @@ export async function getCrmBaseViva(clientId: string): Promise<BaseViva | null>
   const j = Array.isArray(data) ? data[0] : data;
   return j && Number(j.abertos) > 0 ? { abertos: Number(j.abertos), vivos_30d: Number(j.vivos_30d), parados_90d: Number(j.parados_90d), criados_30d: Number(j.criados_30d) } : null;
 }
+
+// Retorno do investimento do período (RPC roi_periodo). null = sem acesso ou RPC ausente.
+export async function getRoiPeriodo(clientId: string, de: string, ate: string): Promise<import("@/lib/roi").DadosRoi | null> {
+  const { data, error } = await (supabase as any).rpc("roi_periodo", { p_client_id: clientId, p_de: de, p_ate: ate });
+  if (error) throw error;
+  if (!data) return null;
+  const n = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  return {
+    tem_anuncios: !!data.tem_anuncios,
+    tem_crm: !!data.tem_crm,
+    investido: n(data.investido),
+    leads: n(data.leads),
+    leads_com_origem: n(data.leads_com_origem),
+    ganhos: n(data.ganhos),
+    ganhos_com_valor: n(data.ganhos_com_valor),
+    receita: n(data.receita),
+    ganho_identificavel: !!data.ganho_identificavel,
+    crm_compartilhado: !!data.crm_compartilhado,
+  };
+}

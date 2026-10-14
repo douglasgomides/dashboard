@@ -5,7 +5,9 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { createAdminUser, createClient, listAllClients } from "@/lib/admin-data";
 import { ClientAvatar } from "@/components/client-avatar";
 import { supabase } from "@/integrations/supabase/client";
-import { getQualidadeDados } from "@/lib/client-data";
+import { getQualidadeDados, getRoiPeriodo } from "@/lib/client-data";
+import { montarRoi, resumoRoi, type Roi } from "@/lib/roi";
+import { resolveDateRange } from "@/lib/date-range";
 import { lerStatusDasFontes, type FontesDoCliente } from "@/lib/saude-fontes";
 import { FONTES, NOME_FONTE, LEGENDA_STATUS, VAR_COR, type FonteId } from "@/lib/status-fonte";
 import { ArrowRight, UserX } from "lucide-react";
@@ -276,9 +278,29 @@ function AdminClientsPage() {
   });
   const semLogin = (id: string) => !!logins && !logins.get(id);
 
+  // ROI dos últimos 30 dias por cliente (mesma regra do bloco "Retorno do investimento" do Resultado).
+  const ult30 = resolveDateRange({ preset: "30d" });
+  const rois = useQueries({
+    queries: (clients ?? []).map((c) => ({
+      queryKey: ["roi-periodo", c.id, ult30.start, ult30.end],
+      queryFn: () => getRoiPeriodo(c.id, ult30.start, ult30.end),
+      staleTime: 10 * 60_000,
+      retry: false,
+    })),
+  });
+  const roiDe = (id: string): Roi | null => {
+    const i = (clients ?? []).findIndex((c) => c.id === id);
+    const d = i >= 0 ? rois[i]?.data : null;
+    return d ? montarRoi(d) : null;
+  };
+  const semRoi = (id: string) => {
+    const r = roiDe(id);
+    return !!r && !r.calculavel;
+  };
+
   // Filtros e ordenação da tabela.
   const [busca, setBusca] = useState("");
-  const [filtro, setFiltro] = useState<"todos" | "problema" | "sem_login">("todos");
+  const [filtro, setFiltro] = useState<"todos" | "problema" | "sem_roi" | "sem_login">("todos");
   const [ordem, setOrdem] = useState<"pior" | "nome">("pior");
   const piorPeso = (id: string) => {
     const sd = saudePorCliente.get(id);
@@ -290,6 +312,7 @@ function AdminClientsPage() {
     if (!texto) return false;
     if (filtro === "problema") return piorPeso(c.id) >= 2; // amarelo ou vermelho
     if (filtro === "sem_login") return semLogin(c.id);
+    if (filtro === "sem_roi") return semRoi(c.id);
     return true;
   };
   // Problemas de dado (qualidade_dados) por cliente: mesma chave do ChipQualidade, então a leitura é compartilhada.
@@ -390,6 +413,7 @@ function AdminClientsPage() {
         />
         {chipFiltro("todos", "Todos", (clients ?? []).length)}
         {chipFiltro("problema", "Com problema", (clients ?? []).filter((c) => piorPeso(c.id) >= 2).length)}
+        {chipFiltro("sem_roi", "Sem ROI", rois.every((q) => !q.isLoading) ? (clients ?? []).filter((c) => semRoi(c.id)).length : undefined)}
         {chipFiltro("sem_login", "Sem login", logins ? (clients ?? []).filter((c) => semLogin(c.id)).length : undefined)}
         <label className="ml-auto inline-flex min-h-[40px] items-center gap-2 text-sm" style={{ color: "var(--ink-2)" }}>
           Ordenar por
@@ -411,6 +435,7 @@ function AdminClientsPage() {
                 <th className="px-4 py-2">Anúncios</th>
                 <th className="px-4 py-2">CRM</th>
                 <th className="px-4 py-2">WhatsApp</th>
+                <th className="px-4 py-2" title="Retorno do investimento dos últimos 30 dias">ROI (30 dias)</th>
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>
@@ -437,6 +462,18 @@ function AdminClientsPage() {
                       </div>
                     </td>
                     <LinhaSaude clientId={c.id} saude={saudePorCliente.get(c.id) ?? null} />
+                    <td className="px-4 py-3 align-top" data-label="ROI (30 dias)">
+                      {(() => {
+                        const r = roiDe(c.id);
+                        if (!r) return <span className="text-xs" style={{ color: "var(--muted)" }}>…</span>;
+                        const cor = r.calculavel ? (r.roi! >= 0 ? "var(--good)" : "var(--crit)") : "var(--warn)";
+                        return (
+                          <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} className="whitespace-nowrap text-sm font-semibold" style={{ color: cor }} title={r.itens.filter((i) => !i.feito).map((i) => `Falta: ${i.preciso}`).join("\n") || "Ver o retorno no Resultado"}>
+                            {resumoRoi(r)}
+                          </Link>
+                        );
+                      })()}
+                    </td>
                     <td className="px-4 py-3 text-right align-top" data-label="">
                       <Link
                         to="/admin/$clientId"
@@ -453,7 +490,7 @@ function AdminClientsPage() {
               })}
               {(clients ?? []).length > 0 && linhasTabela.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center" style={{ color: "var(--text-dim)" }}>
+                  <td colSpan={7} className="px-4 py-6 text-center" style={{ color: "var(--text-dim)" }}>
                     Nenhum cliente com esse filtro.{" "}
                     <button type="button" className="font-semibold" style={{ color: "var(--accent)" }} onClick={() => { setBusca(""); setFiltro("todos"); }}>Limpar</button>
                   </td>
@@ -461,7 +498,7 @@ function AdminClientsPage() {
               )}
               {(clients ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center" style={{ color: "var(--text-dim)" }}>
+                  <td colSpan={7} className="px-4 py-6 text-center" style={{ color: "var(--text-dim)" }}>
                     Nenhum cliente cadastrado ainda.
                   </td>
                 </tr>

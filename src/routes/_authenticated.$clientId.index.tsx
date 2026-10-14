@@ -20,6 +20,7 @@ import { DiagnosticoEstrategico } from "@/components/diagnostico-estrategico";
 import { InsightCard, ListaLimitacoes, SeloStatus, BotaoAcao, OQueE, COR_TOM } from "@/components/insight-card";
 import { NextBestActionCard, NextBestActionPanel, usePainelNBA } from "@/components/next-best-action";
 import { ResumoDoMes } from "@/components/resumo-do-mes";
+import { RetornoInvestimento } from "@/components/retorno-investimento";
 import { QualidadeDados } from "@/components/qualidade-dados";
 import { fmtFormatKey } from "@/lib/report-metrics";
 import { analyzeGrowth } from "@/lib/hub-conteudo";
@@ -456,6 +457,9 @@ function MonthlyOverview() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-8">
+      {/* O que o médico quer saber primeiro: quanto investiu e quanto voltou. */}
+      <RetornoInvestimento clientId={clientId} start={start} end={fim} />
+
       {/* Avisos que mudam a leitura dos números ficam sempre visíveis. */}
       {alertasCriticos.length > 0 && (
         <div className="space-y-2" role="status">
