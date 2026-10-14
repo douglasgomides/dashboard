@@ -8,6 +8,7 @@ import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, C
 import { getAdsPorDia, getAdsDiagnosticoPorObjetivo, getClientFontes } from "@/lib/client-data";
 import { SyncButton } from "@/components/sync-button";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
+import { ComparativoConta } from "@/components/anuncios/comparativo-conta";
 import { fmtBRL } from "@/lib/format";
 import { GRUPOS, conversaMaisBarata, planoDeAcao, limitacoesDeAnuncios, unidade, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { BENCHMARKS } from "@/lib/benchmarks";
@@ -293,6 +294,8 @@ function AnunciosPage() {
       )}
 
       <AgirHoje d={diag} clientId={clientId} />
+
+      <ComparativoConta clientId={clientId} start={start} end={end} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <Kpi icone={Wallet} rotulo="Investido" valor={fmtBRL(gasto)} dica={`${diag.campanhas.length} campanhas`} cor="var(--s1)" />
