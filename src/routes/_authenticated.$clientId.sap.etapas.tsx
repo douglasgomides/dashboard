@@ -1,12 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { MarcosDoCrm } from "@/components/sap-tracker";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-// Sistema de Aquisição · Etapas do CRM (equipe): o que cada etapa significa no funil do SAP.
+// O Sistema de Aquisição saiu do menu do Hub e virou uma área própria (/sap). Endereço antigo redireciona.
 export const Route = createFileRoute("/_authenticated/$clientId/sap/etapas")({
-  component: EtapasSap,
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/sap/$clientId/etapas" as never, params: { clientId: params.clientId } as never });
+  },
 });
-
-function EtapasSap() {
-  const { clientId } = Route.useParams();
-  return <MarcosDoCrm clientId={clientId} abertoInicial />;
-}

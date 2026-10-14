@@ -1,18 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { CadastroSap } from "@/components/sap-tracker";
-import { PlanoSap } from "@/components/sap-plano";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-// Sistema de Aquisição · Metas e garantia: baseline D0, metas D90 (03.07) e garantia condicionada (01.02).
+// O Sistema de Aquisição saiu do menu do Hub e virou uma área própria (/sap). Endereço antigo redireciona.
 export const Route = createFileRoute("/_authenticated/$clientId/sap/metas")({
-  component: MetasSap,
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/sap/$clientId/metas" as never, params: { clientId: params.clientId } as never });
+  },
 });
-
-function MetasSap() {
-  const { clientId } = Route.useParams();
-  return (
-    <div className="space-y-6">
-      <CadastroSap clientId={clientId} />
-      <PlanoSap clientId={clientId} />
-    </div>
-  );
-}

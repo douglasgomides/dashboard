@@ -53,7 +53,7 @@ export interface NavTab {
 }
 
 export interface NavArea {
-  id: "resumo" | "sap" | "conteudo" | "anuncios" | "vendas" | "relatorio";
+  id: "resumo" | "conteudo" | "anuncios" | "vendas" | "relatorio";
   label: string;
   /** Rótulo da barra inferior do celular (cabe em 1/6 da tela). */
   curto?: string;
@@ -76,21 +76,6 @@ export const AREAS: NavArea[] = [
       { path: "/proximas-acoes", label: "Próximas ações", Icone: ListTodo },
       { path: "/campanhas", label: "Campanhas do mês", Icone: Megaphone },
       { path: "/oportunidades", label: "Oportunidades (score)", Icone: Target },
-    ],
-  },
-  {
-    // Programa de 90 dias. Produto à parte na venda, módulo dentro do Hub: depois do D90 vira acompanhamento.
-    id: "sap",
-    label: "Sistema de Aquisição",
-    curto: "SAP",
-    descricao: "Programa de 90 dias: metas, garantia e leitura da semana",
-    Icone: Target,
-    tabs: [
-      { path: "/sap", label: "Programa", Icone: Flag, sap: true },
-      { path: "/sap/metas", label: "Metas e garantia", Icone: Target, sap: true },
-      { path: "/sap/leitura", label: "Leitura da semana", Icone: ClipboardCheck, sap: true },
-      { path: "/sap/execucao", label: "Execução e saúde", Icone: ListChecks, sap: true },
-      { path: "/sap/etapas", label: "Etapas no funil do SAP", Icone: Network, sap: true, admin: true, fonte: "crm" },
     ],
   },
   {
@@ -187,10 +172,10 @@ export interface Visibilidade {
 // Médico (owner) e viewer: resultado, oportunidades e relatório primeiro.
 // Estrategista e equipe: análise primeiro. Todas as áreas continuam disponíveis.
 const ORDEM_POR_PAPEL: Record<string, NavArea["id"][]> = {
-  owner: ["resumo", "sap", "relatorio", "conteudo", "anuncios", "vendas"],
-  viewer: ["resumo", "sap", "relatorio", "conteudo", "anuncios", "vendas"],
-  strategist: ["resumo", "sap", "conteudo", "anuncios", "vendas", "relatorio"],
-  admin: ["resumo", "sap", "conteudo", "anuncios", "vendas", "relatorio"],
+  owner: ["resumo", "relatorio", "conteudo", "anuncios", "vendas"],
+  viewer: ["resumo", "relatorio", "conteudo", "anuncios", "vendas"],
+  strategist: ["resumo", "conteudo", "anuncios", "vendas", "relatorio"],
+  admin: ["resumo", "conteudo", "anuncios", "vendas", "relatorio"],
 };
 
 export function tabVisivel(t: NavTab, v: Visibilidade): boolean {

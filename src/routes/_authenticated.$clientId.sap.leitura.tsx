@@ -1,12 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { LeituraDaSemana } from "@/components/sap-leitura";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-// Sistema de Aquisição · Leitura da semana (08.05): vazamento principal, ação de cada lado e mensagem pronta.
+// O Sistema de Aquisição saiu do menu do Hub e virou uma área própria (/sap). Endereço antigo redireciona.
 export const Route = createFileRoute("/_authenticated/$clientId/sap/leitura")({
-  component: LeituraSap,
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/sap/$clientId/leitura" as never, params: { clientId: params.clientId } as never });
+  },
 });
-
-function LeituraSap() {
-  const { clientId } = Route.useParams();
-  return <LeituraDaSemana clientId={clientId} />;
-}

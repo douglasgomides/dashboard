@@ -8,7 +8,6 @@ import { motivoDaLinha, COR_DONO } from "@/lib/motivos";
 import { SeloDono } from "@/components/selo-dono";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { getAdsPorDia, getAdsDiagnosticoPorObjetivo, getClientFontes, getAdsPlanilha } from "@/lib/client-data";
-import { RegrasMidiaSap } from "@/components/sap-midia";
 import { AdsPlanilhaPainel } from "@/components/ads-planilha";
 import { SyncButton } from "@/components/sync-button";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
@@ -356,7 +355,6 @@ function AnunciosPage() {
 
       <MotivoParada clientId={clientId} />
       <ContaCompartilhada clientId={clientId} />
-      <RegrasMidiaSap clientId={clientId} />
       {suspeito && (
         <Faixa icone={AlertTriangle} cor="var(--crit)" alerta>
           {diag.rastreio?.mensagem}

@@ -204,7 +204,7 @@ export function TrackerAutomatico({ clientId, start, end, periodLabel }: { clien
             ))}
           </ol>
           {isAdmin && leitura.pendencias.some((p) => /^Marcar/.test(p)) && (
-            <Link to="/$clientId/sap/etapas" params={{ clientId }} className="mt-2 inline-block text-sm font-semibold underline" style={{ color: "var(--accent)" }}>
+            <Link to="/sap/$clientId/etapas" params={{ clientId }} className="mt-2 inline-block text-sm font-semibold underline" style={{ color: "var(--accent)" }}>
               Marcar as etapas do CRM agora
             </Link>
           )}

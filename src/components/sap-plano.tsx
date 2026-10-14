@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { CheckCircle2, CircleDashed, Flag, ShieldQuestion, Target, XCircle } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Painel, Selo } from "@/components/visual";
@@ -467,50 +466,4 @@ function Evolucao({ k, base, agora }: { k: KpiPlano; base: number | null; agora:
   const igual = Math.abs(agora - base) < (u === "pct" ? 0.005 : 0.5);
   const txt = u === "pct" ? `${agora - base >= 0 ? "+" : ""}${Math.round((agora - base) * 100)} p.p.` : base > 0 ? `${agora - base >= 0 ? "+" : ""}${Math.round(((agora - base) / base) * 100)}%` : "·";
   return <span style={{ color: igual ? "var(--muted)" : melhor ? "var(--good)" : "var(--crit)" }}>{txt}</span>;
-}
-
-/** Faixa no topo do Resumo para clínica com SAP: dia do programa, próximo marco e os KPIs da garantia desde o D0. */
-export function FaixaSap({ clientId }: { clientId: string }) {
-  const hoje = hojeBrasilia();
-  const j = { de: somarDias(hoje, -28), ate: somarDias(hoje, -1) };
-  const cadQ = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId) });
-  const clinica = cadQ.data ?? null;
-  const planoQ = useQuery({ queryKey: ["sap-plano", clinica?.id], queryFn: () => getPlanoSap(clinica!.id), enabled: !!clinica });
-  const atualQ = useQuery({ queryKey: ["sap-auto", clientId, j.de, j.ate], queryFn: () => getTrackerAuto(clientId, j.de, j.ate), enabled: !!clinica });
-  const g = useMemo(() => {
-    const atual = lerTrackerAuto(atualQ.data);
-    const plano = planoQ.data ?? [];
-    if (!clinica || !atual || !plano.length) return null;
-    return avaliarGarantia({ plano, atual, consultaPaga: clinica.consulta_paga !== false, verbaEmDia: clinica.verba_em_dia !== false, score: null });
-  }, [atualQ.data, planoQ.data, clinica]);
-  if (!clinica) return null;
-  const dia = clinica.d0 ? diasEntre(clinica.d0, hoje) : null;
-  const marco = dia === null ? null : MARCOS.find((m) => m.dia >= dia) ?? null;
-  const melhoraram = g ? g.kpis.filter((k) => k.resultado === "melhorou").length : null;
-  return (
-    <Link
-      to="/$clientId/sap"
-      params={{ clientId }}
-      className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border px-4 py-3 text-sm no-underline"
-      style={{ borderColor: "color-mix(in srgb, var(--accent) 35%, var(--border))", background: "var(--accent-soft)", color: "var(--text)" }}
-    >
-      <span className="flex items-center gap-2 font-semibold">
-        <Target size={16} aria-hidden style={{ color: "var(--accent)" }} /> Sistema de Aquisição
-      </span>
-      <span>
-        {dia === null ? "sem D0" : dia > 90 ? "programa concluído · acompanhamento" : dia < 0 ? `começa em ${-dia} dia(s)` : <><strong className="tabular-nums">D{dia}</strong> de 90</>}
-      </span>
-      {marco && dia !== null && dia <= 90 && (
-        <span style={{ color: "var(--text-dim)" }}>
-          próximo: {marco.nome} ({marco.dia - dia === 0 ? "hoje" : `em ${marco.dia - dia} dia(s)`})
-        </span>
-      )}
-      {g && melhoraram !== null && (
-        <span style={{ color: melhoraram >= Math.max(1, g.kpis.length - 1) ? "var(--good)" : "var(--warn)" }}>
-          {melhoraram} de {g.kpis.length} KPIs da garantia melhorando desde o D0
-        </span>
-      )}
-      <span className="ml-auto text-xs font-semibold" style={{ color: "var(--accent)" }}>Abrir →</span>
-    </Link>
-  );
 }
