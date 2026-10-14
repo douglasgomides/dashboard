@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { getAdsResumo, getAdsDiagnostico, getWtsResumo } from "@/lib/client-data";
+import { getAdsResumo, getAdsDiagnosticoPorObjetivo, getWtsResumo } from "@/lib/client-data";
 import { fmtNum, fmtBRL } from "@/lib/format";
 import { Camera, Megaphone, TrendingUp, MessageCircle, AlertTriangle, Sparkles, type LucideIcon } from "lucide-react";
+import { fmtTaxa } from "@/lib/metricas";
 
 /**
  * O que aconteceu no período, em frases, juntando as quatro fontes.
@@ -80,9 +81,10 @@ export function ResumoDoMes({
     queryKey: ["ads-resumo", clientId, start, end],
     queryFn: () => getAdsResumo(clientId, start, end),
   });
-  const { data: diagnostico } = useQuery({
-    queryKey: ["ads-diagnostico", clientId, start, end],
-    queryFn: () => getAdsDiagnostico(clientId, start, end),
+  // Diagnóstico por objetivo (o antigo julgava tráfego e alcance por conversa).
+  const { data: diag } = useQuery({
+    queryKey: ["ads-diag-objetivo", clientId, start, end],
+    queryFn: () => getAdsDiagnosticoPorObjetivo(clientId, start, end),
   });
   const { data: wts } = useQuery({
     queryKey: ["wts-resumo", clientId, start, end],
@@ -127,8 +129,16 @@ export function ResumoDoMes({
         <Forte>{fmtBRL(gasto)}</Forte> investidos em anúncio
         {conversas > 0 ? (
           <>
-            , que trouxeram <Forte>{fmtNum(conversas)} conversas</Forte> a{" "}
-            <Forte>{fmtBRL(gasto / conversas)}</Forte> cada.
+            , que trouxeram <Forte>{fmtNum(conversas)} conversas</Forte>
+            {" "}
+            (<Forte>{fmtBRL(gasto / conversas)}</Forte> por conversa na conta toda
+            {diag?.custoPorConversaMensagem != null && diag.conversasMensagem > 0 ? (
+              <>
+                ; só nas campanhas de mensagem, <Forte>{fmtBRL(diag.custoPorConversaMensagem)}</Forte> ({fmtNum(diag.conversasMensagem)} conversas)
+              </>
+            ) : null}
+            )
+            .
           </>
         ) : (
           <> — e nenhuma conversa iniciada no período.</>
@@ -136,11 +146,7 @@ export function ResumoDoMes({
       </>
     ) });
 
-    const cortar = (diagnostico ?? []).filter((c) => c.veredito === "Cortar");
-    const escalar = (diagnostico ?? []).filter((c) => c.veredito === "Escalar");
-    const semTracao = (diagnostico ?? []).filter(
-      (c) => c.veredito === "Sem tração" || c.veredito === "Atrai mas não converte",
-    );
+    const escalar = (diag?.campanhas ?? []).filter((c) => c.veredito === "Escalar");
 
     if (escalar.length > 0) {
       const g = escalar.reduce((a, c) => a + n(c.gasto), 0);
@@ -148,20 +154,19 @@ export function ResumoDoMes({
       linhas.push({ icone: TrendingUp, node: (
         <>
           <Forte>
-            {escalar.length} {escalar.length === 1 ? "campanha converte" : "campanhas convertem"}
+            {escalar.length} {escalar.length === 1 ? "campanha entrega" : "campanhas entregam"}
           </Forte>{" "}
-          bem abaixo da mediana da conta: {fmtBRL(g)} trouxeram {fmtNum(cv)} conversas. É onde cabe mais verba.
+          bem mais barato que as outras do mesmo objetivo: {fmtBRL(g)} investidos{cv > 0 ? `, ${fmtNum(cv)} conversas` : ""}. É onde cabe mais verba.
         </>
       ) });
     }
 
-    const desperdicio =
-      cortar.reduce((a, c) => a + n(c.gasto), 0) + semTracao.reduce((a, c) => a + n(c.gasto), 0);
+    const desperdicio = n(diag?.desperdicio);
     if (desperdicio > 0) {
       atencoes.push(
         <>
-          <Forte>{fmtBRL(desperdicio)}</Forte> foram para campanhas que custam caro demais por conversa ou não
-          converteram nenhuma.{" "}
+          <Forte>{fmtBRL(desperdicio)}</Forte> ({fmtTaxa(desperdicio, gasto)} da verba) foram para campanhas que
+          custam o dobro das outras do mesmo objetivo ou não entregaram o que o objetivo promete.{" "}
           <Link to="/$clientId/anuncios" params={{ clientId }} style={{ color: "var(--accent)" }}>
             Ver quais →
           </Link>

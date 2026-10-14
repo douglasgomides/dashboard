@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runWtsSync } from "../_lib/wts-sync.js";
 import { ingerirConversasWts } from "../_lib/conversas-wts.js";
+import { analisarConversasPendentes } from "../_lib/resumo-conversa.js";
 
 // Atendimento no WhatsApp via WTS Chat.
 // Roda para todo cliente ativo com wts_company_id preenchido.
@@ -46,6 +47,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const syncDays = syncDaysParam && Number.isFinite(syncDaysParam) ? syncDaysParam : undefined;
   const full = req.query.full === "1" || req.query.full === "true";
   const clientId = typeof req.query.client_id === "string" ? req.query.client_id : undefined;
+  const inicio = Date.now();
+
+  // ?so_analisar=1: só a leitura por IA das conversas pendentes (sem sync), para uma 2ª chamada do n8n.
+  if (req.query.so_analisar === "1") {
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+    let q = admin.from("conversas").select("client_id").gte("ultima_msg_em", new Date(Date.now() - 30 * 86400000).toISOString());
+    if (clientId) q = q.eq("client_id", clientId);
+    const { data } = await q.limit(5000);
+    const clientes = [...new Set((data ?? []).map((r: { client_id: string }) => r.client_id))];
+    const analise: Record<string, unknown> = {};
+    for (const id of clientes) {
+      const resta = 250_000 - (Date.now() - inicio);
+      if (resta < 15_000) break;
+      analise[id] = await analisarConversasPendentes(admin, id, { limite: 200, orcamentoMs: Math.floor(resta / Math.max(1, clientes.length - Object.keys(analise).length)) });
+    }
+    res.status(200).json({ ok: true, analise });
+    return;
+  }
 
   try {
     const results = await runWtsSync({
@@ -71,13 +90,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const { data: lig } = await admin.from("crm_connections").select("access_token").eq("client_id", id).eq("provider", "flwchat").eq("active", true);
         const extras = (lig ?? []).map((l) => l.access_token as string).filter(Boolean);
         const c = await ingerirConversasWts(admin, WTS_API_TOKEN, id, { tokensExtras: extras, limite: 80, orcamentoMs: Math.floor(100_000 / Math.max(1, clientes.length)), dias: 7 });
-        conversas[id] = { sessoes: c.sessoes, mensagens: c.mensagens, erros: c.erros.slice(0, 3) };
+        conversas[id] = { sessoes: c.sessoes, mensagens: c.mensagens, com_anuncio: c.comAnuncio ?? 0, campos_primeira_msg: c.valoresVistos.chaves, erros: c.erros.slice(0, 3) };
       }
     } catch (e) {
       conversas.erro = e instanceof Error ? e.message : String(e);
     }
+    // Leitura por IA das conversas novas, com o tempo que sobrar da função (até ~270s no total).
+    const analise: Record<string, unknown> = {};
+    try {
+      const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+      const clientes = [...new Set(results.map((r) => r.client_id))];
+      for (const id of clientes) {
+        const resta = 260_000 - (Date.now() - inicio);
+        if (resta < 15_000) break;
+        analise[id] = await analisarConversasPendentes(admin, id, { limite: 60, orcamentoMs: Math.floor(resta / Math.max(1, clientes.length - Object.keys(analise).length)) });
+      }
+    } catch (e) {
+      analise.erro = e instanceof Error ? e.message : String(e);
+    }
     const hasErrors = results.some((r) => r.errors.length > 0);
-    res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), contas: results, conversas });
+    res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), contas: results, conversas, analise });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }

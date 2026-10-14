@@ -146,7 +146,7 @@ function PostCard({ post, posicao, maxSalvos, clientId }: { post: Post; posicao:
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <a href={post.permalink ?? "#"} target="_blank" rel="noreferrer" className="line-clamp-2 text-sm font-medium" style={{ color: "var(--text)" }}>
+            <a href={post.permalink ?? "#"} target="_blank" rel="noreferrer" className="line-clamp-2 text-sm font-medium" style={{ color: "var(--text)" }} title={post.caption ?? undefined}>
               {titulo}
             </a>
             <button
@@ -234,8 +234,8 @@ function ResumoPosts({ posts }: { posts: Post[] }) {
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       <Kpi icone={Layers} rotulo="Posts no período" valor={fmtNum(total)} />
-      <Kpi icone={Bookmark} rotulo="Salvamentos" valor={fmtNum(salvos)} cor="var(--s1)" />
-      <Kpi icone={Heart} rotulo="Engajamento" valor={fmtNum(engaj)} cor="var(--s2)" />
+      <Kpi icone={Bookmark} rotulo="Salvamentos acumulados dos posts" valor={fmtNum(salvos)} cor="var(--s1)" dica="soma dos posts publicados no período, desde a publicação até hoje (não é o mesmo que os salvamentos do período na Visão geral)" />
+      <Kpi icone={Heart} rotulo="Engajamento acumulado dos posts" valor={fmtNum(engaj)} cor="var(--s2)" dica="desde a publicação até hoje" />
       <div className="rounded-xl border p-3.5" style={{ background: "var(--surface)", borderColor: "var(--border)" }} title="Posts com tema preenchido. Sem tema, os painéis por assunto ficam vazios.">
         <div className="flex items-center gap-2">
           <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-md" style={{ background: "color-mix(in srgb, var(--ai) 16%, transparent)", color: "var(--ai)" }}>
@@ -290,7 +290,7 @@ function TopDoMes({ posts }: { posts: Post[] }) {
                 <Bookmark size={11} /> {fmtNum(post.saved)}
               </span>
             </div>
-            <div className="p-2"><div className="line-clamp-2 leading-snug">{firstLine(post.caption) ?? post.windsor_media_id}</div></div>
+            <div className="p-2"><div className="line-clamp-2 leading-snug" title={String(firstLine(post.caption) ?? post.windsor_media_id ?? "")}>{firstLine(post.caption) ?? post.windsor_media_id}</div></div>
           </a>
         ))}
       </div>
@@ -398,7 +398,7 @@ function ListaRepetir({ itens, cor, vazio }: { itens: { tema: string; rate: numb
       {itens.map((g) => (
         <li key={g.tema} className="text-sm">
           <div className="mb-1 flex items-baseline justify-between gap-2">
-            <span className="min-w-0 truncate font-medium">{g.tema}</span>
+            <span className="min-w-0 truncate font-medium" title={String(g.tema ?? "")}>{g.tema}</span>
             <span className="shrink-0 text-xs tabular-nums" style={{ color: "var(--text-dim)" }}>
               <b style={{ color: "var(--text)" }}>{(g.rate * 100).toFixed(1)}%</b> · {nPosts(g.count)}
             </span>
@@ -470,7 +470,7 @@ function ConceitosVencedores({ posts }: { posts: Post[] }) {
             <Miniatura url={post.thumbnail_url} formato={post.format} className="h-auto min-h-24 w-24 rounded-none" />
             <div className="min-w-0 p-3">
               <Selo cor="var(--ai)">{tema}</Selo>
-              <div className="mt-1.5 line-clamp-2 leading-snug">{firstLine(post.caption) ?? post.windsor_media_id}</div>
+              <div className="mt-1.5 line-clamp-2 leading-snug" title={String(firstLine(post.caption) ?? post.windsor_media_id ?? "")}>{firstLine(post.caption) ?? post.windsor_media_id}</div>
               <div className="mt-1.5 flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--good-text)" }}>
                 <Bookmark size={12} /> {(rate * 100).toFixed(1)}% salvam
               </div>
@@ -488,7 +488,7 @@ function LinhaTaxa({ post, rate, max, cor }: { post: Post; rate: number; max: nu
       <a href={post.permalink ?? "#"} target="_blank" rel="noreferrer" className="flex gap-2.5 rounded-lg border p-2" style={{ borderColor: "var(--border)", color: "var(--text)" }}>
         <Miniatura url={post.thumbnail_url} formato={post.format} className="h-12 w-12" />
         <span className="min-w-0 flex-1">
-          <span className="line-clamp-1 block text-sm">{firstLine(post.caption) ?? post.windsor_media_id}</span>
+          <span className="line-clamp-1 block text-sm" title={String(firstLine(post.caption) ?? post.windsor_media_id ?? "")}>{firstLine(post.caption) ?? post.windsor_media_id}</span>
           <span className="mt-1 flex items-center gap-2">
             <span className="min-w-0 flex-1">
               <BarraFina valor={rate} max={max} cor={cor} />
@@ -562,7 +562,7 @@ function ConversionByTag({ posts }: { posts: Post[] }) {
           <li key={`${g.tema}-${g.format}`} className="text-sm">
             <div className="mb-1 flex items-center justify-between gap-2">
               <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate font-medium">{g.tema}</span>
+                <span className="truncate font-medium" title={String(g.tema ?? "")}>{g.tema}</span>
                 <Selo>{g.format}</Selo>
               </span>
               <span className="shrink-0 text-xs tabular-nums" style={{ color: "var(--text-dim)" }}>
@@ -601,7 +601,7 @@ function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
               {porTema.map((t) => (
                 <li key={t.tema} className="text-sm">
                   <div className="mb-1 flex items-baseline justify-between gap-2">
-                    <span className="min-w-0 truncate">{t.tema}</span>
+                    <span className="min-w-0 truncate" title={String(t.tema ?? "")}>{t.tema}</span>
                     <b className="shrink-0 text-xs tabular-nums">{fmtNum(t.medianReach)}</b>
                   </div>
                   <BarraFina valor={t.medianReach} max={Math.max(...porTema.map((x) => x.medianReach))} cor="var(--s1)" />
@@ -655,7 +655,8 @@ function FormatoPorTema({ posts }: { posts: Post[] }) {
       resumo="Taxa de engajamento: quanto mais escuro, melhor"
       ajuda="O mesmo tema pode performar muito diferente dependendo do formato. Cada célula mostra a taxa de engajamento (mediana), a quantidade de posts e o alcance (mediana). Só aparecem combinações com tema classificado."
     >
-      <div className="overflow-x-auto">
+      <p className="rola-aviso">Arraste para o lado para ver todos os formatos →</p>
+      <div className="rola-x">
         <div className="grid min-w-[420px] gap-1.5" style={{ gridTemplateColumns: `minmax(110px,1.2fr) repeat(${formatos.length}, minmax(86px,1fr))` }}>
           <span />
           {formatos.map((f) => (
@@ -686,7 +687,7 @@ function FragmentoLinha({
   return (
     <>
       <span className="flex items-center truncate pr-1 text-sm font-medium" title={tema}>
-        <span className="truncate">{tema}</span>
+        <span className="truncate" title={String(tema ?? "")}>{tema}</span>
       </span>
       {formatos.map((f) => {
         const c = celula(tema, f);
@@ -741,7 +742,7 @@ function MelhoresGanchos({ posts }: { posts: Post[] }) {
             <a href={post.permalink ?? "#"} target="_blank" rel="noreferrer" className="flex gap-3 rounded-xl border p-2.5" style={{ borderColor: "var(--border)", color: "var(--text)" }}>
               <Miniatura url={post.thumbnail_url} formato={post.format} className="h-14 w-14" />
               <span className="min-w-0 flex-1">
-                <span className="line-clamp-2 block text-sm italic leading-snug">“{gancho}”</span>
+                <span className="line-clamp-2 block text-sm italic leading-snug" title={gancho}>“{gancho}”</span>
                 <span className="mt-1.5 flex items-center gap-2">
                   <span className="min-w-0 flex-1">
                     <BarraFina valor={post.engagement ?? 0} max={max} cor="var(--s2)" />
@@ -802,7 +803,7 @@ function RetencaoDeReels({ posts }: { posts: Post[] }) {
             <a href={post.permalink ?? "#"} target="_blank" rel="noreferrer" className="flex gap-3 rounded-xl border p-2.5" style={{ borderColor: "var(--border)", color: "var(--text)" }}>
               <Miniatura url={post.thumbnail_url} formato="reels" className="h-12 w-12" />
               <span className="min-w-0 flex-1">
-                <span className="line-clamp-1 block text-sm">{firstLine(post.caption) ?? post.windsor_media_id}</span>
+                <span className="line-clamp-1 block text-sm" title={String(firstLine(post.caption) ?? post.windsor_media_id ?? "")}>{firstLine(post.caption) ?? post.windsor_media_id}</span>
                 <span className="mt-1.5 flex items-center gap-2">
                   <span className="min-w-0 flex-1">
                     <BarraFina valor={hookRate} max={maxHook} cor="var(--s2)" />
@@ -913,7 +914,7 @@ function ExploradorDePosts({ posts, periodLabel }: { posts: Post[]; periodLabel:
   }
   const seta = (key: SortKey) => (sortKey !== key ? "" : sortDir === "asc" ? " ↑" : " ↓");
 
-  const campo = "rounded-md border px-2 py-1.5 text-sm";
+  const campo = "min-h-[44px] rounded-md border px-2 py-1.5 text-base min-[821px]:min-h-0 min-[821px]:text-sm";
   const estiloCampo = { borderColor: "var(--border)", background: "var(--surface-2)" } as const;
 
   return (
@@ -989,10 +990,10 @@ function ExploradorDePosts({ posts, periodLabel }: { posts: Post[]; periodLabel:
                     </span>
                   </div>
                   <div className="p-2">
-                    <div className="line-clamp-2 text-xs leading-snug">{firstLine(p.caption) ?? p.windsor_media_id}</div>
+                    <div className="line-clamp-2 text-xs leading-snug" title={String(firstLine(p.caption) ?? p.windsor_media_id ?? "")}>{firstLine(p.caption) ?? p.windsor_media_id}</div>
                     <div className="mt-1 flex items-center justify-between gap-1 text-[11px]" style={{ color: "var(--muted)" }}>
                       <span>{dataCurta(p.posted_at)}</span>
-                      {p.tema && <span className="truncate" style={{ color: "var(--ai)" }}>{p.tema}</span>}
+                      {p.tema && <span className="truncate" style={{ color: "var(--ai)" }} title={String(p.tema ?? "")}>{p.tema}</span>}
                     </div>
                   </div>
                 </a>
@@ -1007,7 +1008,7 @@ function ExploradorDePosts({ posts, periodLabel }: { posts: Post[]; periodLabel:
         </>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm empilha">
             <thead>
               <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
                 <th className="cursor-pointer pb-2" onClick={() => toggleSort("posted_at")}>Data{seta("posted_at")}</th>
@@ -1023,14 +1024,14 @@ function ExploradorDePosts({ posts, periodLabel }: { posts: Post[]; periodLabel:
             <tbody>
               {filtered.map((p) => (
                 <tr key={p.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="whitespace-nowrap py-1.5" style={{ color: "var(--text-dim)" }}>{p.posted_at ? new Date(p.posted_at).toLocaleDateString("pt-BR") : "—"}</td>
-                  <td className="py-1.5"><span className="inline-flex items-center gap-1.5"><IconeFormato formato={p.format} />{p.format ? formatLabel(p.format) : "—"}</span></td>
-                  <td className="py-1.5">{p.tema ?? "—"}</td>
-                  <td className="max-w-xs truncate py-1.5">{firstLine(p.caption) ?? p.windsor_media_id}</td>
-                  <td className="py-1.5 text-right">{(p.reach ?? 0).toLocaleString("pt-BR")}</td>
-                  <td className="py-1.5 text-right">{(p.engagement ?? 0).toLocaleString("pt-BR")}</td>
-                  <td className="py-1.5 text-right">{(p.saved ?? 0).toLocaleString("pt-BR")}</td>
-                  <td className="py-1.5 text-right"><a href={p.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>abrir ↗</a></td>
+                  <td data-label="Data" className="whitespace-nowrap py-1.5" style={{ color: "var(--text-dim)" }}>{p.posted_at ? new Date(p.posted_at).toLocaleDateString("pt-BR") : "—"}</td>
+                  <td data-label="Formato" className="py-1.5"><span className="inline-flex items-center gap-1.5"><IconeFormato formato={p.format} />{p.format ? formatLabel(p.format) : "—"}</span></td>
+                  <td data-label="Tema" className="py-1.5">{p.tema ?? "—"}</td>
+                  <td data-label="Legenda" className="max-w-xs truncate py-1.5" title={String(firstLine(p.caption) ?? p.windsor_media_id ?? "")}>{firstLine(p.caption) ?? p.windsor_media_id}</td>
+                  <td data-label="Alcance" className="py-1.5 text-right">{(p.reach ?? 0).toLocaleString("pt-BR")}</td>
+                  <td data-label="Engajamento" className="py-1.5 text-right">{(p.engagement ?? 0).toLocaleString("pt-BR")}</td>
+                  <td data-label="Salvos" className="py-1.5 text-right">{(p.saved ?? 0).toLocaleString("pt-BR")}</td>
+                  <td data-label="Post" className="py-1.5 text-right"><a href={p.permalink ?? "#"} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>abrir ↗</a></td>
                 </tr>
               ))}
             </tbody>

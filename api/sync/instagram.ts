@@ -61,6 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
       "instagram",
       results.map((r) => ({ clientId: r.clientId, rows: r.posts + r.dailyMetrics, errors: r.errors })),
+      { preservaBloqueio: true },
     );
     const hasErrors = results.some((r) => r.errors.length > 0);
     res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), accounts: results });

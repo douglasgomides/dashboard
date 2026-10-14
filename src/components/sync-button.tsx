@@ -217,14 +217,14 @@ export function SyncButton({ clientId, alvo }: { clientId: string; alvo: Alvo })
       : FRASES[alvo] ?? "Sincronizando…";
 
   return (
-    <div className="flex flex-col items-end gap-1.5" style={{ minWidth: mostrarBarra ? 260 : undefined }}>
+    <div className="flex flex-col items-end gap-1.5" style={{ minWidth: mostrarBarra ? "min(260px, 100%)" : undefined }}>
       <div className="flex flex-wrap items-center justify-end gap-2">
         <button
           type="button"
           onClick={sincronizar}
           disabled={estado !== "parado"}
           aria-busy={rodando}
-          className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium disabled:opacity-70"
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-70 min-[821px]:min-h-0 min-[821px]:px-2.5"
           style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
         >
           {estado === "concluindo" ? (

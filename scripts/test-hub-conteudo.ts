@@ -67,3 +67,48 @@ const rel2 = buildRelatorio({
 show("RELATORIO Samira (sem IG, com ads+wts)", rel2.texto + "\n--- omitidos: " + rel2.omitidos.join("; "));
 const bad = /[—–]|\p{Extended_Pictographic}/u.test(rel.texto + rel2.texto);
 console.log("\nTravessao/emoji no texto gerado:", bad ? "SIM (falha)" : "nenhum");
+
+// ---------- regra original das ideias (477eb43) x código do baseline ----------
+// buildIdeiasRegraOriginal precisa dar exatamente as ideias que o buildIdeias do baseline dava (mesmo tema,
+// formato, funil, estágio, ação e porquê), para as 3 regras. E a deduplicação contra a regra nova não pode
+// perder nenhuma (extras + repetidas = todas).
+{
+  const { buildIdeiasRegraOriginal, ideiasOriginaisSemRepetir, ideiaParaTexto, montarPlano7Dias } = await import("../src/lib/hub-conteudo");
+  const { carregarBaseline, BASELINE } = await import("./baseline-477eb43");
+  const base = await carregarBaseline();
+  let falhasOrig = 0;
+  const check = (ok: boolean, nome: string, det = "") => {
+    if (!ok) falhasOrig++;
+    console.log(`${ok ? "ok  " : "FALHA"} ${nome}${det ? ` -> ${det}` : ""}`);
+  };
+  const chave = (i: any) => [i.regra, i.tema, i.formato, i.funil, i.estagio, i.acao, i.porque].join(" | ");
+  console.log(`\n=== Ideias: regra original x ${BASELINE} ===`);
+  for (const [nome, posts, qs] of [["Juliana Paola", julPosts, julQ], ["Lana Torres", lanaPosts, lanaQ], ["Dr. Sergio Maia", sergioPosts, sergioQ], ["Doctor Creator", dcPosts, []], ["Dra. Samira (vazio)", [], []]] as [string, any[], any[]][]) {
+    const b = base.conteudo.buildIdeias(posts, qs);
+    const o = buildIdeiasRegraOriginal(posts, qs);
+    check(o.ideias.map(chave).join("\n") === b.ideias.map(chave).join("\n"), `${nome}: ${o.ideias.length} ideias iguais às do baseline (${b.ideias.length})`);
+    check(o.faltas.join("\n") === b.faltas.join("\n"), `${nome}: faltas iguais ao baseline`);
+    // Texto copiado do baseline (Funil, Estágio, O que fazer, Por quê) continua dentro do texto novo.
+    check(
+      o.ideias.every((i) => {
+        const t = ideiaParaTexto(i);
+        return t.includes(`Funil: ${i.funil}`) && t.includes(`Estágio: ${i.estagio}`) && t.includes(`O que fazer: ${i.acao}`) && t.includes(i.porque);
+      }),
+      `${nome}: texto copiado traz Funil, Estágio, O que fazer e Por quê`,
+    );
+    const novas = buildIdeias(posts, qs);
+    const cruz = ideiasOriginaisSemRepetir(novas.ideias, o.ideias);
+    check(cruz.extras.length + cruz.repetidas.length === o.ideias.length, `${nome}: deduplicação sem perda (${cruz.extras.length} extra(s) + ${cruz.repetidas.length} já na lista nova)`);
+    for (const d of cruz.diferencas) console.log(`     diferença: ${d}`);
+    for (const e of cruz.extras) console.log(`     + [regra original] ${e.regra}: ${e.titulo.slice(0, 70)} | ${e.formato} | ${e.funil} | ${e.estagio}`);
+    if (novas.ideias.length > 0 && cruz.extras.length > 0) {
+      const plano = montarPlano7Dias([...novas.ideias, ...cruz.extras], 19, { manterOrdem: true });
+      check(plano.split("\n").length === 8, `${nome}: plano com as ideias da regra original tem 7 dias`);
+    }
+  }
+  // Plano sem opção: igual ao de antes desta mudança (ordem pergunta primeiro).
+  const nv = buildIdeias(julPosts, julQ).ideias;
+  check(montarPlano7Dias(nv, 19) === montarPlano7Dias(nv, 19, {}), "plano padrão inalterado");
+  console.log(falhasOrig === 0 ? "Regra original: tudo certo." : `Regra original: ${falhasOrig} falha(s).`);
+  if (falhasOrig) process.exitCode = 1;
+}

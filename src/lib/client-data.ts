@@ -1,5 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
-import { filtrarPerguntas } from "@/lib/comentarios";
+import { diagnosticarAds, type LinhaAds, type CampanhaCadastro } from "@/lib/anuncios-objetivo";
+import type { Acompanhamento } from "@/lib/oportunidades";
+import { lerDiagnosticoRpc, montarDadosReduzidos, type DadosComerciais, type MetricasEssenciais, type WtsResumoMin } from "@/lib/comercial";
+import { filtrarPerguntas, perguntasDaDeteccaoOriginal } from "@/lib/comentarios";
 import type {
   ContentFormat,
   FunnelStage,
@@ -39,25 +42,38 @@ export async function getMonthlyMetrics(clientId: string, monthStart: string, mo
   return data;
 }
 
+// Limites de um período em datas (YYYY-MM-DD) no fuso de Brasília. Comparar
+// posted_at (timestamptz) com "2026-09-30" virava 30/09 00:00 UTC — 29/09 às 21h
+// em Brasília — e sumiam os posts do último dia. Aceita também "…T23:59:59",
+// que algumas telas ainda mandam: só a data importa.
+export function limitesBR(de: string, ate: string): { desde: string; antesDe: string } {
+  const dia = ate.slice(0, 10);
+  const seguinte = new Date(dia + "T12:00:00Z");
+  seguinte.setUTCDate(seguinte.getUTCDate() + 1);
+  return { desde: de.slice(0, 10) + "T00:00:00-03:00", antesDe: seguinte.toISOString().slice(0, 10) + "T00:00:00-03:00" };
+}
+
 export async function getRankedPosts(clientId: string, monthStart: string, monthEnd: string) {
+  const { desde, antesDe } = limitesBR(monthStart, monthEnd);
   const { data, error } = await supabase
     .from("instagram_posts")
     .select("*")
     .eq("client_id", clientId)
-    .gte("posted_at", monthStart)
-    .lte("posted_at", monthEnd)
+    .gte("posted_at", desde)
+    .lt("posted_at", antesDe)
     .order("saved", { ascending: false, nullsFirst: false });
   if (error) throw error;
   return data;
 }
 
 export async function getPostsForAnalytics(clientId: string, sinceDate: string, untilDate?: string) {
+  const { desde, antesDe } = limitesBR(sinceDate, untilDate ?? sinceDate);
   let query = supabase
     .from("instagram_posts")
     .select("*")
     .eq("client_id", clientId)
-    .gte("posted_at", sinceDate);
-  if (untilDate) query = query.lte("posted_at", untilDate);
+    .gte("posted_at", desde);
+  if (untilDate) query = query.lt("posted_at", antesDe);
   const { data, error } = await query.order("posted_at", { ascending: false });
   if (error) throw error;
   return data;
@@ -278,6 +294,39 @@ export async function getAdsDiagnostico(clientId: string, start: string, end: st
   return data;
 }
 
+// Linhas diárias por campanha + cadastro das campanhas, para o diagnóstico que
+// respeita o objetivo (src/lib/anuncios-objetivo.ts). Lido direto das tabelas
+// (RLS: membro do cliente ou admin), paginado porque passa de 1.000 linhas.
+export async function getAdsCampanhasPeriodo(clientId: string, start: string, end: string) {
+  const linhas: LinhaAds[] = [];
+  const PAGINA = 1000;
+  for (let de = 0; ; de += PAGINA) {
+    const { data, error } = await (supabase as any)
+      .from("meta_ads_daily")
+      .select("date, campaign_id, spend, impressions, link_clicks, conversations, leads, landing_page_views, reach, clicks")
+      .eq("client_id", clientId)
+      .gte("date", start)
+      .lte("date", end.slice(0, 10))
+      .order("date", { ascending: true })
+      .order("campaign_id", { ascending: true })
+      .range(de, de + PAGINA - 1);
+    if (error) throw error;
+    linhas.push(...((data ?? []) as LinhaAds[]));
+    if (!data || data.length < PAGINA) break;
+  }
+  const { data: cad, error: e2 } = await (supabase as any)
+    .from("meta_ads_campaigns")
+    .select("campaign_id, name, objective, permalink, thumbnail_url")
+    .eq("client_id", clientId);
+  if (e2) throw e2;
+  return { linhas, cadastro: (cad ?? []) as CampanhaCadastro[] };
+}
+
+export async function getAdsDiagnosticoPorObjetivo(clientId: string, start: string, end: string) {
+  const { linhas, cadastro } = await getAdsCampanhasPeriodo(clientId, start, end);
+  return diagnosticarAds(linhas, cadastro, start, end.slice(0, 10));
+}
+
 // Atendimento no WhatsApp (WTS Chat).
 export async function getWtsResumo(clientId: string, start: string, end: string) {
   const { data, error } = await supabase.rpc("wts_resumo", {
@@ -391,8 +440,8 @@ export async function getPatientQuestionsPeriodo(clientId: string, start: string
     .select("id, text, like_count, instagram_post_id, commented_at, author_username")
     .eq("client_id", clientId)
     .eq("is_question", true)
-    .gte("commented_at", start)
-    .lte("commented_at", end + "T23:59:59")
+    .gte("commented_at", limitesBR(start, end).desde)
+    .lt("commented_at", limitesBR(start, end).antesDe)
     .order("commented_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -488,4 +537,193 @@ export async function definirEtapaKpi(args: {
     p_ativo: args.ativo,
   });
   if (error) throw new Error(error.message ?? "falha ao salvar");
+}
+
+// ---- Central de voz do paciente (Dúvidas e Ideias) ---------------------------
+// Comentários CRUS do período, antes da triagem: os marcados como pergunta e os que
+// falam de preço ou agendamento mesmo sem "?". A triagem (lib/voz-do-paciente.ts) roda
+// na tela, para mostrar também o que ficou de fora e por quê.
+const TERMOS_COMERCIAIS = ["valor", "preço", "preco", "quanto custa", "agendar", "consulta", "atende", "convênio", "convenio"];
+
+export async function getComentariosVozDoPaciente(clientId: string, start: string, end: string, limit = 1500) {
+  const { desde, antesDe } = limitesBR(start, end);
+  const filtro = ["is_question.eq.true", ...TERMOS_COMERCIAIS.map((t) => `text.ilike.*${t}*`)].join(",");
+  const [{ data, error }, donos] = await Promise.all([
+    supabase
+      .from("instagram_comments")
+      .select("id, text, like_count, instagram_post_id, commented_at, author_username, is_question, instagram_posts(caption, permalink, thumbnail_url, posted_at, tema)")
+      .eq("client_id", clientId)
+      .or(filtro)
+      .gte("commented_at", desde)
+      .lt("commented_at", antesDe)
+      .order("commented_at", { ascending: false })
+      .limit(limit),
+    donosDoPerfil(clientId),
+  ]);
+  if (error) throw error;
+  const comentarios = data ?? [];
+  return { comentarios, donos, noLimite: comentarios.length >= limit };
+}
+
+// ---- Comercial: "onde o funil quebra" + checklist de dados -------------------
+// Tenta a RPC crm_diagnostico_comercial (migração 20261013150000). Se ela ainda não
+// existe no banco, monta uma leitura reduzida com as funções que já existem.
+
+export async function getDiagnosticoComercial(clientId: string, start: string, end: string): Promise<DadosComerciais> {
+  const cli = supabase as unknown as RpcClient;
+  const fontes = await getClientFontes(clientId).catch(() => null);
+  const whatsappConectado = !!fontes?.tem_atendimento;
+  const wts: WtsResumoMin | null = whatsappConectado ? await getWtsResumo(clientId, start, end).catch(() => null) : null;
+
+  const { data, error } = await cli.rpc("crm_diagnostico_comercial", { p_client_id: clientId, p_from: start, p_to: end });
+  if (!error && data && typeof data === "object") {
+    return lerDiagnosticoRpc(data as Record<string, any>, { whatsappConectado, wts });
+  }
+
+  const [provider, metricas, etapas, jornada] = await Promise.all([
+    getCrmProvider(clientId).catch(() => null),
+    getCrmMetricasEssenciais(clientId).catch(() => null),
+    getCrmLeadsPorEtapa(clientId).catch(() => []),
+    cli
+      .rpc("jornada_resumo", { p_client: clientId })
+      .then((r) => (r.error ? null : (r.data as { leads_total: number; leads_sem_pessoa: number } | null)))
+      .catch(() => null),
+  ]);
+  return montarDadosReduzidos({
+    provider,
+    metricas: metricas as MetricasEssenciais | null,
+    etapas: (etapas as { pipeline: string; etapa: string; total: number }[]).map((e) => ({ ...e, total: Number(e.total) })),
+    jornada,
+    whatsappConectado,
+    wts,
+  });
+}
+
+// ---- Oportunidades: acompanhamento das ações (migração 20261013210000) -------
+// Enquanto a tabela não existe no banco, guarda no navegador e avisa a tela
+// (`local: true`), para ninguém achar que o histórico está salvo para a equipe.
+
+const chaveLocal = (clientId: string) => `hub-acoes-${clientId}`;
+function lerLocal(clientId: string): Acompanhamento[] {
+  try {
+    return JSON.parse(localStorage.getItem(chaveLocal(clientId)) ?? "[]") as Acompanhamento[];
+  } catch {
+    return [];
+  }
+}
+function gravarLocal(clientId: string, xs: Acompanhamento[]) {
+  try {
+    localStorage.setItem(chaveLocal(clientId), JSON.stringify(xs));
+  } catch {
+    /* navegador sem armazenamento: segue sem persistir */
+  }
+}
+const semTabela = (e: any) => e?.code === "42P01" || e?.code === "PGRST205" || /acoes_acompanhamento/.test(e?.message ?? "");
+
+export async function getAcompanhamentos(clientId: string): Promise<{ itens: Acompanhamento[]; local: boolean }> {
+  const { data, error } = await (supabase as any).from("acoes_acompanhamento").select("*").eq("client_id", clientId);
+  if (error) {
+    if (semTabela(error)) return { itens: lerLocal(clientId), local: true };
+    throw error;
+  }
+  return {
+    local: false,
+    itens: (data ?? []).map((r: any) => ({
+      clientId: r.client_id,
+      insightId: r.insight_id,
+      titulo: r.titulo,
+      status: r.status,
+      responsavel: r.responsavel,
+      prazo: r.prazo,
+      checklist: r.checklist ?? [],
+      historico: r.historico ?? [],
+      feedback: r.feedback,
+      resultado: r.resultado,
+      criadoEm: r.criado_em,
+      atualizadoEm: r.atualizado_em,
+    })),
+  };
+}
+
+export async function salvarAcompanhamento(a: Acompanhamento): Promise<{ local: boolean }> {
+  const { error } = await (supabase as any).from("acoes_acompanhamento").upsert({
+    client_id: a.clientId,
+    insight_id: a.insightId,
+    titulo: a.titulo,
+    status: a.status,
+    responsavel: a.responsavel,
+    prazo: a.prazo,
+    checklist: a.checklist,
+    historico: a.historico,
+    feedback: a.feedback,
+    resultado: a.resultado,
+    atualizado_em: a.atualizadoEm,
+  });
+  if (error) {
+    if (!semTabela(error)) throw error;
+    const xs = lerLocal(a.clientId).filter((x) => x.insightId !== a.insightId);
+    gravarLocal(a.clientId, [...xs, a]);
+    return { local: true };
+  }
+  return { local: false };
+}
+
+// ---- Dúvidas: detecção original (477eb43) ------------------------------------------------------
+// A leitura que a tela Dúvidas fazia no baseline: só comentários com is_question = true, com o post
+// (miniatura, link, tema), filtrados pela regra original (lib/comentarios.ts `filtrarPerguntasOriginal`:
+// sai só texto curto, resposta do próprio perfil e sorteio/convite). Sem período = as últimas 200, de
+// qualquer data, exatamente como antes. Com período, usa os limites do fuso de Brasília (limitesBR).
+// (Import aqui embaixo para este trecho ficar só acrescentado ao arquivo; imports são içados.)
+
+export async function getPerguntasDeteccaoOriginal(clientId: string, periodo?: { start: string; end: string } | null, limit?: number) {
+  const max = limit ?? (periodo ? 1000 : 200);
+  let consulta = supabase
+    .from("instagram_comments")
+    .select("id, text, like_count, instagram_post_id, commented_at, author_username, is_question, instagram_posts(caption, permalink, thumbnail_url, posted_at, tema)")
+    .eq("client_id", clientId)
+    .eq("is_question", true);
+  if (periodo) {
+    const { desde, antesDe } = limitesBR(periodo.start, periodo.end);
+    consulta = consulta.gte("commented_at", desde).lt("commented_at", antesDe);
+  }
+  const [{ data, error }, donos] = await Promise.all([
+    consulta.order("commented_at", { ascending: false, nullsFirst: false }).limit(max),
+    donosDoPerfil(clientId),
+  ]);
+  if (error) throw error;
+  const lidos = data ?? [];
+  return { perguntas: perguntasDaDeteccaoOriginal(lidos, donos), lidos: lidos.length, donos, noLimite: lidos.length >= max, limite: max };
+}
+
+// ---- Qualidade dos dados (RPC qualidade_dados, migração 20261013230000) --------
+// O que está entrando errado, causa provável, como corrigir e quem corrige.
+export interface ProblemaDado {
+  id: string;
+  fonte: "crm" | "instagram" | "anuncios" | "atendimento" | "comentarios" | string;
+  severidade: "alta" | "media";
+  titulo: string;
+  evidencia: string;
+  causa: string;
+  correcao: string;
+  responsavel: string;
+  afeta: string;
+}
+
+export async function getQualidadeDados(clientId: string): Promise<ProblemaDado[]> {
+  const { data, error } = await (supabase as any).rpc("qualidade_dados", { p_client_id: clientId });
+  if (error) {
+    // Migração ainda não aplicada neste banco: sem lista, sem quebrar a tela.
+    if (error.code === "PGRST202" || /qualidade_dados/.test(error.message ?? "")) return [];
+    throw error;
+  }
+  return Array.isArray(data) ? (data as ProblemaDado[]) : [];
+}
+
+// Base viva x parada do CRM (crm_base_viva): só leads em aberto. Sem a função, devolve null.
+export interface BaseViva { abertos: number; vivos_30d: number; parados_90d: number; criados_30d: number }
+export async function getCrmBaseViva(clientId: string): Promise<BaseViva | null> {
+  const { data, error } = await (supabase as any).rpc("crm_base_viva", { p_client_id: clientId });
+  if (error) { if (error.code === "PGRST202" || /crm_base_viva/.test(error.message ?? "")) return null; throw error; }
+  const j = Array.isArray(data) ? data[0] : data;
+  return j && Number(j.abertos) > 0 ? { abertos: Number(j.abertos), vivos_30d: Number(j.vivos_30d), parados_90d: Number(j.parados_90d), criados_30d: Number(j.criados_30d) } : null;
 }

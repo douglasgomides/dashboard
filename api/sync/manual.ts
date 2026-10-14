@@ -17,7 +17,8 @@ import { ingerirConversasWts } from "../_lib/conversas-wts.js";
 import { enriquecerContatosKommo } from "../_lib/kommo-contatos.js";
 import { criarLinkShort, cliquesDoLink, destinoWhatsApp, novoCodigoRef } from "../_lib/shortio.js";
 import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_lib/sync-status.js";
-import { rodarConferencia } from "../_lib/conferencia.js";
+import { rodarConferencia, rodarEtapa, ETAPAS, type EtapaId, type Achado, type Verificado } from "../_lib/conferencia.js";
+import { resumirConversa } from "../_lib/resumo-conversa.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
 //
@@ -90,7 +91,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram"];
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa"];
   // "conferencia" olha todos os clientes de uma vez (só admin), por isso não exige client_id.
   const alvoGlobal = alvo === "conferencia";
   if ((!client_id && !alvoGlobal) || !alvo || !ALVOS.includes(alvo)) {
@@ -123,8 +124,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     if (alvoGlobal) {
-      const resultado = await rodarConferencia(admin, { tokenGlobalAnuncios: process.env.META_ADS_TOKEN });
-      res.status(200).json({ alvo, ok: true, ...resultado });
+      const { etapa, conferencia_id } = (req.body ?? {}) as { etapa?: string; conferencia_id?: string };
+      // Sem etapa: conferência inteira numa chamada (modo antigo).
+      if (!etapa) {
+        const resultado = await rodarConferencia(admin, { tokenGlobalAnuncios: process.env.META_ADS_TOKEN });
+        res.status(200).json({ alvo, ok: true, ...resultado });
+        return;
+      }
+      // Por etapas: a tela chama "inicio", depois cada etapa, depois "fim". Cada etapa grava seu
+      // resultado na rodada (conferencias_dados), então a última conferência fica salva com data e hora.
+      if (etapa === "inicio") {
+        const { data: nova, error } = await admin.from("conferencias_dados").insert({ iniciada_por: quem.user.id }).select("id, iniciada_em").single();
+        if (error) throw new Error(error.message);
+        res.status(200).json({ alvo, ok: true, conferencia_id: nova.id, iniciada_em: nova.iniciada_em, etapas: ETAPAS });
+        return;
+      }
+      if (!conferencia_id) {
+        res.status(400).json({ error: "Informe conferencia_id" });
+        return;
+      }
+      const { data: atual, error: erroLer } = await admin.from("conferencias_dados").select("*").eq("id", conferencia_id).maybeSingle();
+      if (erroLer || !atual) {
+        res.status(404).json({ error: "Conferência não encontrada" });
+        return;
+      }
+      if (etapa === "fim") {
+        const { error } = await admin.from("conferencias_dados").update({ concluida_em: new Date().toISOString() }).eq("id", conferencia_id);
+        if (error) throw new Error(error.message);
+        res.status(200).json({ alvo, ok: true });
+        return;
+      }
+      if (!(ETAPAS as readonly string[]).includes(etapa)) {
+        res.status(400).json({ error: "Etapa desconhecida" });
+        return;
+      }
+      const t0 = Date.now();
+      let registro: Record<string, unknown>;
+      let r: Awaited<ReturnType<typeof rodarEtapa>> | null = null;
+      try {
+        r = await rodarEtapa(admin, etapa as EtapaId, { tokenGlobalAnuncios: process.env.META_ADS_TOKEN });
+        registro = { etapa, status: "ok", achados: r.achados.length, verificados: r.verificados.length, ms: Date.now() - t0 };
+      } catch (e) {
+        registro = { etapa, status: "erro", erro: erroCurto(e instanceof Error ? e.message : String(e), 200), ms: Date.now() - t0 };
+      }
+      // Rodar a mesma etapa de novo substitui o resultado anterior dela (não duplica).
+      const etapas = [...((atual.etapas as any[]) ?? []).filter((x) => x.etapa !== etapa), registro];
+      const achados = [...((atual.achados as Achado[]) ?? []).filter((a) => a.etapa !== etapa), ...(r?.achados ?? [])];
+      const verificados = [...((atual.verificados as Verificado[]) ?? []).filter((v) => v.etapa !== etapa), ...(r?.verificados ?? [])];
+      const extra: Record<string, unknown> = {};
+      if (r?.contas_vistas_na_meta != null) extra.contas_vistas_na_meta = r.contas_vistas_na_meta;
+      if (r?.tokens_testados != null) extra.tokens_testados = r.tokens_testados;
+      const { error: erroGravar } = await admin.from("conferencias_dados").update({ etapas, achados, verificados, ...extra }).eq("id", conferencia_id);
+      if (erroGravar) throw new Error(erroGravar.message);
+      res.status(200).json({ alvo, ok: true, ...registro, novos: r?.achados ?? [], novos_verificados: r?.verificados ?? [] });
       return;
     }
     if (!client_id) {
@@ -545,6 +597,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ---- Conversas do WhatsApp (WTS): grava mensagens, pessoa e toque. Só admin: é dado de paciente. ----
+    if (alvo === "resumo_conversa") {
+      const conversaId = (req.body ?? {}).conversa_id as string | undefined;
+      if (!conversaId) {
+        res.status(400).json({ error: "Informe conversa_id" });
+        return;
+      }
+      const r = await resumirConversa(admin, client_id, conversaId, quem.user.id);
+      res.status(200).json({ alvo, ok: true, ...r });
+      return;
+    }
     if (alvo === "conversas") {
       if (!ehAdmin) {
         res.status(403).json({ error: "Só admin ingere conversas" });

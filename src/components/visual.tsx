@@ -30,13 +30,15 @@ export function IconeFormato({ formato, size = 14 }: { formato: ContentFormat | 
 export function Ajuda({ children }: { children: ReactNode }) {
   return (
     <details className="relative inline-block align-middle">
+      {/* Alvo de toque de 44px no celular; o círculo visível continua pequeno. */}
       <summary
-        className="flex h-6 w-6 cursor-pointer list-none items-center justify-center rounded-full"
-        style={{ color: "var(--muted)", background: "var(--surface-2)" }}
+        className="-m-2.5 flex h-11 w-11 cursor-pointer list-none items-center justify-center min-[821px]:m-0 min-[821px]:h-6 min-[821px]:w-6"
         aria-label="Como ler este painel"
         title="Como ler"
       >
-        <Info size={14} />
+        <span className="flex h-6 w-6 items-center justify-center rounded-full" style={{ color: "var(--muted)", background: "var(--surface-2)" }}>
+          <Info size={14} />
+        </span>
       </summary>
       <span
         className="absolute right-0 z-20 mt-2 block w-72 max-w-[80vw] rounded-lg border p-3 text-xs leading-relaxed"
@@ -204,7 +206,7 @@ export function Kpi({
         </div>
       )}
       {dica && !tendencia && (
-        <div className="mt-1.5 line-clamp-2 text-[11px] leading-snug" style={{ color: "var(--muted)" }}>
+        <div className="mt-1.5 line-clamp-2 text-[11px] leading-snug" style={{ color: "var(--muted)" }} title={typeof dica === "string" ? dica : undefined}>
           {dica}
         </div>
       )}

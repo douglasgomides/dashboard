@@ -34,6 +34,9 @@ function AdminLayout() {
             <Link to="/admin/conferencia" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
               Conferência de dados
             </Link>
+            <Link to="/admin/relatorios" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
+              Relatórios da semana
+            </Link>
           </nav>
         </div>
         <LogoutButton />

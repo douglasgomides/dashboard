@@ -283,25 +283,38 @@ async function syncDailyMetrics(
   windsorAccountId: string,
   clientId: string,
 ): Promise<{ count: number; errors: string[] }> {
-  const rows = await windsorGet(
-    windsorApiKey,
-    range,
-    [
-      "account_id",
-      "date",
-      "followers_count",
-      "follower_count_1d",
-      "follows_and_unfollows",
-      "reach_1d",
-      "likes",
-      "comments",
-      "saves",
-      "shares",
-      "total_interactions",
-      "profile_links_taps",
-    ],
-    windsorAccountId,
-  );
+  const CAMPOS = [
+    "account_id",
+    "date",
+    "followers_count",
+    "follower_count_1d",
+    "follows_and_unfollows",
+    "reach_1d",
+    "likes",
+    "comments",
+    "saves",
+    "shares",
+    "total_interactions",
+    "profile_links_taps",
+  ];
+  // A Windsor recusa o pedido INTEIRO (400 "follower_count supports the last 30 days only") quando
+  // follower_count_1d vem junto com um date_from de mais de 30 dias. Isso derrubava também alcance e
+  // interações, que ela tem para trás. Por isso o trecho antigo é pedido sem esse campo, e o recente
+  // (últimos 29 dias) com todos. O sync diário (janela curta) continua igual.
+  const limite30 = dateNDaysAgo(29);
+  const diaAntes = (d: string) => {
+    const t = new Date(d + "T00:00:00Z");
+    t.setUTCDate(t.getUTCDate() - 1);
+    return t.toISOString().slice(0, 10);
+  };
+  const rows: Record<string, unknown>[] = [];
+  if (range.from < limite30) {
+    const ateAntigo = range.to < limite30 ? range.to : diaAntes(limite30);
+    rows.push(...(await windsorGet(windsorApiKey, { from: range.from, to: ateAntigo }, CAMPOS.filter((c) => c !== "follower_count_1d"), windsorAccountId)));
+  }
+  if (range.to >= limite30) {
+    rows.push(...(await windsorGet(windsorApiKey, { from: range.from < limite30 ? limite30 : range.from, to: range.to }, CAMPOS, windsorAccountId)));
+  }
 
   // Os campos acima moram em TRÊS tabelas diferentes da Windsor
   // (user_insights_day, user_insights_day_total_value, user_info), e ela
@@ -368,6 +381,8 @@ async function syncDailyMetrics(
       profile_links_taps: campos.profile_links_taps ?? null,
     };
     if (saidas != null) linha.unfollowers = saidas;
+    // Dia antigo (pedido sem follower_count_1d): sem a coluna, para não apagar o que já foi medido.
+    if (date < limite30 && novos == null) delete linha.new_followers;
     return linha;
   });
 

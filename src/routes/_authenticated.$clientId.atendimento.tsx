@@ -1,5 +1,7 @@
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { Carregando, ResumoExecutivo } from "@/components/sem-fonte";
 import { useQuery } from "@tanstack/react-query";
+import { LEGENDA } from "@/components/grafico";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import {
   getWtsResumo,
@@ -10,6 +12,7 @@ import {
 import { SyncButton } from "@/components/sync-button";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum } from "@/lib/format";
+import { CustoWhatsapp } from "@/components/custo-whatsapp";
 
 export const Route = createFileRoute("/_authenticated/$clientId/atendimento")({
   component: AtendimentoPage,
@@ -83,7 +86,7 @@ function AtendimentoPage() {
   const atendimentos = n(resumo?.atendimentos);
 
   if (isLoading) {
-    return <p style={{ color: "var(--text-dim)" }}>Carregando…</p>;
+    return <Carregando texto="Lendo o atendimento…" />;
   }
 
   if (!resumo || atendimentos === 0) {
@@ -117,6 +120,19 @@ function AtendimentoPage() {
         </p>
         <SyncButton clientId={clientId} alvo="atendimento" />
       </div>
+
+      <ResumoExecutivo
+        tom={(nOrNull(resumo?.espera_mediana_seg) ?? 0) > 3600 || fatiaSemRoteamento > 40 ? "atencao" : "bom"}
+        frases={[
+          `${fmtNum(atendimentos)} atendimentos de ${fmtNum(n(resumo?.contatos_distintos))} pessoas no período.`,
+          nOrNull(resumo?.espera_mediana_seg) == null
+            ? "Sem dado de espera até a 1ª resposta neste período."
+            : `Na metade dos atendimentos, a 1ª resposta veio em até ${dur(nOrNull(resumo?.espera_mediana_seg))}${(nOrNull(resumo?.espera_mediana_seg) ?? 0) > 3600 ? ": acima de 1 hora, quando a chance de agendar cai bastante." : "."}`,
+          fatiaSemRoteamento > 40 ? `${fatiaSemRoteamento.toFixed(0)}% das conversas não foram para nenhuma equipe: organizar o roteamento é o primeiro ajuste.` : "",
+        ]}
+      />
+
+      <CustoWhatsapp clientId={clientId} />
 
       {/* O dado da WTS é de uma clínica só, com as duas médicas dentro. Dizer
           isso na tela evita que alguém leia estes números como sendo de uma. */}
@@ -182,13 +198,13 @@ function AtendimentoPage() {
 
       <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
         <div className="mb-3 text-sm font-semibold">Volume por dia e espera até a 1ª resposta</div>
-        <div style={{ width: "100%", height: 280 }}>
+        <div className="grafico-caixa" style={{ height: 280 }}>
           <ResponsiveContainer>
             <ComposedChart data={serie}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="dia" tick={{ fontSize: 11, fill: "var(--text-dim)" }} />
-              <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "var(--text-dim)" }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "var(--text-dim)" }} unit="min" />
+              <XAxis dataKey="dia" tick={{ fontSize: 11, fill: "var(--text-dim)" }} interval="preserveStartEnd" minTickGap={24} />
+              <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "var(--text-dim)" }} width={40} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "var(--text-dim)" }} unit="min" width={52} />
               <Tooltip
                 contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8 }}
                 formatter={(v, name) =>
@@ -197,7 +213,7 @@ function AtendimentoPage() {
                     : [fmtNum(Number(v)), "Atendimentos"]
                 }
               />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Legend {...LEGENDA} />
               <Bar yAxisId="left" dataKey="atendimentos" name="Atendimentos" fill="var(--accent)" radius={[3, 3, 0, 0]} />
               <Line yAxisId="right" type="monotone" dataKey="espera" name="espera" stroke="var(--warn)" dot={false} connectNulls />
             </ComposedChart>
@@ -208,7 +224,7 @@ function AtendimentoPage() {
       <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
         <div className="mb-3 text-sm font-semibold">Por equipe</div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm empilha">
             <thead>
               <tr style={{ color: "var(--text-faint)" }}>
                 <th className="py-2 text-left font-medium">Equipe</th>
@@ -221,11 +237,11 @@ function AtendimentoPage() {
             <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
               {(porDepartamento ?? []).map((r) => (
                 <tr key={r.departamento} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="py-2">{r.departamento}</td>
-                  <td className="py-2 text-right">{fmtNum(n(r.atendimentos))}</td>
-                  <td className="py-2 text-right">{nOrNull(r.fatia) === null ? "—" : `${n(r.fatia).toFixed(1)}%`}</td>
-                  <td className="py-2 text-right">{dur(nOrNull(r.espera_mediana_seg))}</td>
-                  <td className="py-2 text-right">{dur(nOrNull(r.atendimento_mediano_seg))}</td>
+                  <td data-label="Equipe" className="py-2">{r.departamento}</td>
+                  <td data-label="Atendimentos" className="py-2 text-right">{fmtNum(n(r.atendimentos))}</td>
+                  <td data-label="Fatia" className="py-2 text-right">{nOrNull(r.fatia) === null ? "—" : `${n(r.fatia).toFixed(1)}%`}</td>
+                  <td data-label="Espera" className="py-2 text-right">{dur(nOrNull(r.espera_mediana_seg))}</td>
+                  <td data-label="Até fechar" className="py-2 text-right">{dur(nOrNull(r.atendimento_mediano_seg))}</td>
                 </tr>
               ))}
             </tbody>
@@ -236,7 +252,7 @@ function AtendimentoPage() {
       <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
         <div className="mb-3 text-sm font-semibold">Por atendente</div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm empilha">
             <thead>
               <tr style={{ color: "var(--text-faint)" }}>
                 <th className="py-2 text-left font-medium">Atendente</th>
@@ -249,11 +265,11 @@ function AtendimentoPage() {
             <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
               {(porAgente ?? []).map((r) => (
                 <tr key={r.agente} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="py-2">{r.agente}</td>
-                  <td className="py-2 text-right">{fmtNum(n(r.atendimentos))}</td>
-                  <td className="py-2 text-right">{fmtNum(n(r.concluidos))}</td>
-                  <td className="py-2 text-right">{dur(nOrNull(r.espera_mediana_seg))}</td>
-                  <td className="py-2 text-right">{dur(nOrNull(r.atendimento_mediano_seg))}</td>
+                  <td data-label="Atendente" className="py-2">{r.agente}</td>
+                  <td data-label="Atendimentos" className="py-2 text-right">{fmtNum(n(r.atendimentos))}</td>
+                  <td data-label="Concluídos" className="py-2 text-right">{fmtNum(n(r.concluidos))}</td>
+                  <td data-label="Espera" className="py-2 text-right">{dur(nOrNull(r.espera_mediana_seg))}</td>
+                  <td data-label="Até fechar" className="py-2 text-right">{dur(nOrNull(r.atendimento_mediano_seg))}</td>
                 </tr>
               ))}
             </tbody>

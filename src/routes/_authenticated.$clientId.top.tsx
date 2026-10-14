@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { getClientFontes, getPostsForAnalytics } from "@/lib/client-data";
+import { getClientFontes, getPostsForAnalytics, limitesBR } from "@/lib/client-data";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { getAudiencia, fmtN, fmtPct } from "@/lib/audiencia";
 import { METRICAS, topN, padroesDoTop, ehReel, ehPostDeFeed, valorDaMetrica, type MetricaTop } from "@/lib/top-conteudo";
@@ -80,7 +80,7 @@ function ListaDePosts({ itens, metrica, reels }: { itens: { p: any; v: number }[
             <Posicao i={i} />
             <Miniatura url={p.thumbnail_url} formato={p.format} className="h-16 w-16" />
             <div className="min-w-0 flex-1">
-              <a href={p.permalink ?? "#"} target="_blank" rel="noreferrer" className="block truncate text-[13.5px] font-semibold" style={{ color: "var(--text)" }}>
+              <a href={p.permalink ?? "#"} target="_blank" rel="noreferrer" className="block truncate text-[13.5px] font-semibold" style={{ color: "var(--text)" }} title={p.caption ?? undefined}>
                 {gancho(p.caption) || "(sem legenda)"}
               </a>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -133,8 +133,8 @@ function Stories({ clientId, start, end }: { clientId: string; start: string; en
         .from("instagram_stories")
         .select("*")
         .eq("client_id", clientId)
-        .gte("posted_at", start)
-        .lte("posted_at", end + "T23:59:59")
+        .gte("posted_at", limitesBR(start, end).desde)
+        .lt("posted_at", limitesBR(start, end).antesDe)
         .limit(2000);
       if (error) {
         if (error.code === "42P01" || error.code === "PGRST205" || /instagram_stories/.test(error.message ?? "")) return { indisponivel: true as const, linhas: [] as any[] };

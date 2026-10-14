@@ -1,5 +1,6 @@
 import type { ContentFormat } from "@/integrations/supabase/types";
 import { formatLabel } from "@/lib/methodology";
+import { analisarVozDoPaciente } from "@/lib/voz-do-paciente";
 
 const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const PERIODS = [
@@ -255,6 +256,10 @@ export function computeConceitosVencedores(posts: any[], limit = 7) {
     .slice(0, limit);
 }
 
+// DETECÇÃO ORIGINAL (477eb43), restaurada sem mudança: é o agrupamento que a tela Dúvidas e a regra
+// "pergunta repetida" das Ideias usavam. "count" = comentários (a mesma pessoa pode contar 2 vezes).
+// A versão com a triagem nova (conta pessoas) está logo abaixo, em computeDuvidasFrequentesTriagem.
+//
 // Agrupa comentários-pergunta parecidos (mesmo assunto, fraseado diferente)
 // por sobreposição de palavras-chave — sem IA, só interseção de conjuntos.
 // Transforma uma lista crua de comentários num ranking real de "dúvidas mais
@@ -353,6 +358,24 @@ export function computeDuvidasFrequentes<T extends { id: string; text: string; l
       items: c.items,
     }))
     .sort((a, b) => b.count - a.count);
+}
+
+// TRIAGEM NOVA: ranking das "dúvidas mais repetidas" contando pessoas (antes era computeDuvidasFrequentes).
+// Antes de agrupar, passa pela triagem da voz do paciente (lib/voz-do-paciente.ts): sai spam, piada,
+// desabafo, conversa entre seguidores, só @, resposta do perfil e de outros profissionais, e a mesma
+// pessoa repetindo. "count" é o número de pessoas diferentes; pedidos de dose/remédio ficam de fora
+// (não são dúvida para virar conteúdo). Rastreável até os comentários originais de cada grupo.
+export function computeDuvidasFrequentesTriagem<T extends { id: string; text: string; like_count: number | null; author_username?: string | null; instagram_post_id?: string | null }>(
+  questions: T[],
+  { threshold = 0.34, minSize = 2, donos = [] as string[] } = {},
+) {
+  const r = analisarVozDoPaciente(questions, { donos, minPessoas: minSize, limiarSimilaridade: threshold });
+  return r.grupos.map((g) => ({
+    count: g.pessoas,
+    rotulo: g.rotulo,
+    representative: [...g.itens].sort((a, b) => (b.comentario.like_count ?? 0) - (a.comentario.like_count ?? 0))[0].comentario,
+    items: g.itens.map((i) => i.comentario),
+  }));
 }
 
 // O post de maior e o de menor alcance no período — pra virar caso
