@@ -502,6 +502,10 @@ table.w-full td:not([class*="px-"]):last-child { padding-right: 0; }
 .recolher{margin-left:auto;display:inline-grid;place-items:center;width:32px;height:32px;border-radius:8px;color:var(--side-muted)}
 .recolher:hover{background:var(--side-hover);color:var(--side-ink)}
 nav.side .grupo{display:flex;flex-direction:column}
+nav.side .grupo-cab{display:flex;align-items:center;gap:2px}
+nav.side .grupo-cab>a{flex:1;min-width:0}
+nav.side .grupo-toggle{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex:none;border-radius:8px;color:var(--side-ink-2);background:none;border:0;cursor:pointer}
+nav.side .grupo-toggle:hover{background:var(--side-active);color:var(--side-ink)}
 nav.side .sub-itens{display:flex;flex-direction:column;gap:1px;margin:2px 0 6px 28px;border-left:1px solid var(--side-border);padding-left:8px}
 nav.side .sub-itens a{min-height:36px;padding:6px 10px;font-size:14px;color:var(--side-ink-2);text-decoration:none}
 nav.side .sub-itens a[aria-current=page]{background:var(--side-active);color:var(--side-ink);font-weight:600;box-shadow:inset 2px 0 0 var(--accent)}
@@ -529,4 +533,13 @@ textarea::placeholder {
   color: var(--text-faint, #94a3b8);
   font-style: italic;
   opacity: 1;
+}
+
+/* Admin: atalhos do menu no celular (a barra lateral some abaixo de 820px). */
+.admin-mnav{display:none}
+@media (max-width: 820px){
+  .top.admin-top{display:flex;padding-top:16px}
+  .admin-mnav{display:flex;gap:6px;overflow-x:auto;padding:4px 0 8px;margin-bottom:4px}
+  .admin-mnav a,.admin-mnav button{flex:none;white-space:nowrap;padding:6px 12px;border:1px solid var(--border);border-radius:999px;font-size:13px;color:var(--ink-2);background:var(--surface)}
+  .admin-mnav a[aria-current=page]{border-color:var(--accent);color:var(--accent);font-weight:600}
 }

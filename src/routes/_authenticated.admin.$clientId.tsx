@@ -455,14 +455,27 @@ function AdminClientDetailPage() {
         <Link to="/admin" className="text-sm" style={{ color: "var(--accent)" }}>
           ← Todos os clientes
         </Link>
-        <div className="mt-2 flex items-center gap-3">
+        <div className="mt-2 flex flex-wrap items-center gap-3">
           <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={44} />
-          <h2 className="text-lg font-semibold">{client?.name ?? "Carregando…"}</h2>
+          <Link to="/$clientId" params={{ clientId }} className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
+            Ver o painel deste cliente →
+          </Link>
         </div>
-        <Link to="/$clientId" params={{ clientId }} className="text-sm" style={{ color: "var(--accent)" }}>
-          Ver o painel deste cliente →
-        </Link>
       </div>
+
+      {/* Tarefas da equipe que saíram do menu do cliente. */}
+      <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+        <h3 className="mb-1 text-sm font-semibold">Tarefas da equipe neste cliente</h3>
+        <p className="mb-3 text-sm" style={{ color: "var(--ink-2)" }}>Classificar o CRM é trabalho da equipe, por isso fica aqui e não no menu do cliente.</p>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/$clientId/analisar" params={{ clientId }} className="inline-flex min-h-[40px] items-center rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--accent)" }}>
+            A analisar: etapas, ganho e perda do CRM →
+          </Link>
+          <Link to="/$clientId/crm-estrutura" params={{ clientId }} className="inline-flex min-h-[40px] items-center rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--accent)" }}>
+            Estrutura do CRM →
+          </Link>
+        </div>
+      </section>
 
       {client && (
         <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>

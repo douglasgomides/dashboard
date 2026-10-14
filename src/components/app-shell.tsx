@@ -159,6 +159,18 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
     });
   const [mais, setMais] = useState(false);
   const [periodo, setPeriodo] = useState(false);
+  // Grupos do menu recolhíveis; o grupo da página atual abre sozinho.
+  const [abertos, setAbertos] = useState<Set<string>>(() => new Set(ativa && ativa !== "mais" ? [ativa] : []));
+  useEffect(() => {
+    if (ativa && ativa !== "mais") setAbertos((s) => (s.has(ativa) ? s : new Set(s).add(ativa)));
+  }, [ativa]);
+  const alternarGrupo = (id: string) =>
+    setAbertos((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
 
   // Trocar de tela fecha as folhas do celular.
   useEffect(() => {
@@ -207,16 +219,29 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
         <nav className="side areas">
           {areas.map((a) => (
             <div key={a.id} className="grupo">
-              <TabLink tab={primeira(a)} clientId={clientId} dateRange={dateRange} ativo={a.id === ativa}>
-                <a.Icone aria-hidden />
-                <span className="area-txt so-aberta">
-                  <span>{a.label}</span>
-                  {a.id !== ativa && <small>{a.descricao}</small>}
-                </span>
-                <span className="sr-only">{a.label}</span>
-              </TabLink>
-              {/* Grupo expandido: as telas da área ativa aparecem logo abaixo. */}
-              {a.id === ativa && a.visiveis.length > 1 && !recolhida && (
+              <div className="grupo-cab">
+                <TabLink tab={primeira(a)} clientId={clientId} dateRange={dateRange} ativo={a.id === ativa}>
+                  <a.Icone aria-hidden />
+                  <span className="area-txt so-aberta">
+                    <span>{a.label}</span>
+                    {a.id !== ativa && <small>{a.descricao}</small>}
+                  </span>
+                  <span className="sr-only">{a.label}</span>
+                </TabLink>
+                {a.visiveis.length > 1 && !recolhida && (
+                  <button
+                    type="button"
+                    className="grupo-toggle"
+                    aria-expanded={abertos.has(a.id)}
+                    aria-label={`${abertos.has(a.id) ? "Recolher" : "Abrir"} ${a.label}`}
+                    onClick={() => alternarGrupo(a.id)}
+                  >
+                    <ChevronDown size={16} aria-hidden style={{ transform: abertos.has(a.id) ? "rotate(180deg)" : undefined }} />
+                  </button>
+                )}
+              </div>
+              {/* Grupo aberto: as telas do grupo aparecem logo abaixo. */}
+              {abertos.has(a.id) && a.visiveis.length > 1 && !recolhida && (
                 <div className="sub-itens">
                   {a.visiveis.map((t) => (
                     <TabLink key={t.path} tab={t} clientId={clientId} dateRange={dateRange} ativo={t.path === sub}>
@@ -231,7 +256,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
             <div className="avancado">
               <button type="button" aria-expanded={avancadoAberto} onClick={() => setAvancadoAberto((v) => !v)} className="avancado-btn">
                 <Settings size={16} aria-hidden />
-                <span className="so-aberta">Operação</span>
+                <span className="so-aberta">Sistema</span>
                 <ChevronDown size={16} aria-hidden style={{ transform: avancadoAberto ? "rotate(180deg)" : undefined, marginLeft: "auto" }} />
               </button>
               {avancadoAberto && <div className="avancado-lista">{listaAvancado}</div>}
@@ -283,7 +308,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
 
         {(area || naAvancado) && (
           <p className="areadesc">
-            <b>{naAvancado ? "Operação" : area!.label}</b>
+            <b>{naAvancado ? "Sistema" : area!.label}</b>
             <span>{naAvancado ? "Telas de uso da equipe Doctor Creator" : area!.descricao}</span>
           </p>
         )}
@@ -342,8 +367,8 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
         )}
         {avancado.length > 0 && (
           <>
-            <div className="mais-lbl">Operação</div>
-            <nav className="mais-lista" aria-label="Operação">
+            <div className="mais-lbl">Sistema</div>
+            <nav className="mais-lista" aria-label="Sistema">
               {listaAvancado}
             </nav>
           </>

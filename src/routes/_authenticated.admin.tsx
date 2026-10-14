@@ -1,6 +1,9 @@
-import { createFileRoute, Outlet, redirect, Link } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, Link, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { ClipboardCheck, FileText, LayoutDashboard, Scale, Target } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LogoutButton } from "@/components/logout-button";
+import { getClient } from "@/lib/client-data";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   beforeLoad: async () => {
@@ -10,41 +13,79 @@ export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
 });
 
+// Admin no MESMO layout do painel do cliente (barra lateral, tipografia, cartões): parece parte do mesmo produto.
+const ITENS = [
+  { to: "/admin", label: "Visão geral do portfólio", Icone: LayoutDashboard, exato: true },
+  { to: "/admin/referencia", label: "Referência entre clientes", Icone: Scale },
+  { to: "/admin/conferencia", label: "Conferência de dados", Icone: ClipboardCheck },
+  { to: "/admin/relatorios", label: "Relatórios da semana", Icone: FileText },
+  { to: "/admin/aquisicao", label: "Sistema de Aquisição", Icone: Target },
+] as const;
+
+const TITULO: Record<string, string> = {
+  "/admin": "Visão geral do portfólio",
+  "/admin/referencia": "Referência entre clientes",
+  "/admin/conferencia": "Conferência de dados",
+  "/admin/relatorios": "Relatórios da semana",
+  "/admin/aquisicao": "Sistema de Aquisição",
+};
+
 function AdminLayout() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname }).replace(/\/+$/, "") || "/admin";
+  // Dentro de um cliente (/admin/<id>): o título é o nome do cliente.
+  const idCliente = /^\/admin\/([0-9a-f-]{36})$/.exec(pathname)?.[1] ?? null;
+  const { data: cliente } = useQuery({ queryKey: ["client", idCliente], queryFn: () => getClient(idCliente!), enabled: !!idCliente });
+  const titulo = idCliente ? (cliente?.name ?? "Carregando…") : (TITULO[pathname] ?? "Painel admin");
+
+  const itens = ITENS.map((it) => (
+    <Link key={it.to} to={it.to} activeOptions={{ exact: "exato" in it ? true : false }} activeProps={{ "aria-current": "page" }}>
+      <it.Icone aria-hidden size={18} />
+      <span>{it.label}</span>
+    </Link>
+  ));
+
   return (
-    <div className="mx-auto max-w-6xl px-5 py-8">
-      <header className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <span
-            className="text-xs font-mono uppercase tracking-wide"
-            style={{ color: "var(--text-faint)" }}
-          >
-            Painel admin
+    <div className="app">
+      <aside aria-label="Menu do admin">
+        <div className="brand">
+          <span className="logo">
+            <i />
           </span>
-          <h1 className="text-xl font-semibold">
-            <Link to="/admin">Visão geral dos clientes</Link>
-          </h1>
-          <nav className="mt-1 flex gap-4 text-sm" style={{ color: "var(--text-dim)" }}>
-            <Link to="/admin" activeOptions={{ exact: true }} activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
-              Saúde das fontes
-            </Link>
-            <Link to="/admin/referencia" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
-              Referência entre clientes
-            </Link>
-            <Link to="/admin/conferencia" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
-              Conferência de dados
-            </Link>
-            <Link to="/admin/relatorios" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
-              Relatórios da semana
-            </Link>
-            <Link to="/admin/aquisicao" activeProps={{ style: { color: "var(--accent)", fontWeight: 600 } }}>
-              Sistema de Aquisição
-            </Link>
-          </nav>
+          <span className="so-aberta">Intelligence Hub</span>
         </div>
-        <LogoutButton />
-      </header>
-      <Outlet />
+        <nav className="side">
+          <div className="lbl">Portfólio</div>
+          {itens}
+        </nav>
+        <div className="side-foot so-aberta">
+          <LogoutButton className="text-sm text-left min-h-[36px]" />
+          <span>Intelligence Hub · Doctor Creator</span>
+        </div>
+      </aside>
+      <div className="mainwrap">
+        <div className="top admin-top">
+          <div className="who">
+            <div style={{ minWidth: 0 }}>
+              <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+                {idCliente ? "Cliente · configuração" : "Painel admin"}
+              </span>
+              <h1>{titulo}</h1>
+            </div>
+          </div>
+        </div>
+        {/* Celular: a barra lateral some; os mesmos atalhos numa linha que rola de lado. */}
+        <nav className="admin-mnav" aria-label="Menu do admin">
+          {ITENS.map((it) => (
+            <Link key={it.to} to={it.to} activeOptions={{ exact: "exato" in it ? true : false }} activeProps={{ "aria-current": "page" }}>
+              {it.label}
+            </Link>
+          ))}
+          <LogoutButton className="text-sm" />
+        </nav>
+        <div className="mt-4">
+          <Outlet />
+        </div>
+      </div>
     </div>
   );
 }

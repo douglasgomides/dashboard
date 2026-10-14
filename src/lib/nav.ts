@@ -52,7 +52,7 @@ export interface NavTab {
 }
 
 export interface NavArea {
-  id: "inicio" | "social" | "comercial" | "oportunidades" | "relatorios";
+  id: "resumo" | "conteudo" | "anuncios" | "vendas" | "relatorio";
   label: string;
   /** Rótulo da barra inferior do celular (cabe em 1/6 da tela). */
   curto?: string;
@@ -61,73 +61,73 @@ export interface NavArea {
   tabs: NavTab[];
 }
 
-// Cinco categorias. Nenhuma tela saiu: cada rota antiga é uma aba de uma delas
-// (mesmos endereços, favoritos continuam valendo). Inspiração (Biblioteca) fica
-// dentro de Social; o que é da equipe fica em "Operação".
+// Cinco grupos (pedido de out/2026): Resumo, Conteúdo, Anúncios, Atendimento e vendas, Relatório.
+// Nenhuma tela saiu e nenhum endereço mudou: cada rota antiga é um item de um grupo. A primeira aba é a
+// página inicial do grupo (em Conteúdo, a aba "Conteúdo"). O que é da equipe fica em "Sistema".
 export const AREAS: NavArea[] = [
   {
-    id: "inicio",
-    label: "Início",
+    id: "resumo",
+    label: "Resumo",
     descricao: "O que está acontecendo e o que fazer",
     Icone: Home,
-    tabs: [{ path: "", label: "Resultado", Icone: Activity }],
-  },
-  {
-    id: "social",
-    label: "Social",
-    descricao: "Instagram: conteúdo, público e dúvidas",
-    Icone: AlignLeft,
     tabs: [
-      { path: "/conteudo", label: "Conteúdo", Icone: AlignLeft },
-      { path: "/posts", label: "Posts", Icone: LayoutGrid, fonte: "instagram" },
-      { path: "/top", label: "Top conteúdos", Icone: Trophy, fonte: "instagram" },
-      { path: "/audiencia", label: "Audiência", Icone: Users, fonte: "instagram" },
-      { path: "/duvidas", label: "Dúvidas", Icone: HelpCircle, fonte: "instagram" },
-      { path: "/ideias", label: "Ideias", Icone: Lightbulb },
-      { path: "/inspiracao", label: "Inspiração", Icone: Star },
-    ],
-  },
-  {
-    id: "comercial",
-    label: "Comercial",
-    descricao: "Anúncios, CRM, WhatsApp e jornada",
-    Icone: Briefcase,
-    tabs: [
-      { path: "/anuncios", label: "Anúncios", Icone: Megaphone, fonte: "anuncios" },
-      // Só a equipe vê por enquanto: o cliente sem clínica do SAP ligada cairia numa tela quase vazia. Para abrir ao cliente, tire o admin.
-      { path: "/aquisicao", label: "Aquisição", Icone: Target, admin: true },
-      { path: "/crm-painel", label: "Comercial", Icone: Briefcase, fonte: "crm" },
-      { path: "/crm-guia", label: "Organizar o CRM", Icone: ClipboardList, fonte: "crm" },
-      { path: "/atendimento", label: "WhatsApp", Icone: MessageCircle, fonte: "atendimento" },
-      { path: "/conversas", label: "Conversas e auditoria", Icone: MessagesSquare, admin: true, fonte: "atendimento" },
-      { path: "/jornada", label: "Jornada", Icone: Route, admin: true },
-    ],
-  },
-  {
-    id: "oportunidades",
-    label: "Próximas ações",
-    curto: "Ações",
-    descricao: "O que fazer agora, por prioridade, e o acompanhamento",
-    Icone: Target,
-    tabs: [
+      { path: "", label: "Resumo", Icone: Activity },
       { path: "/proximas-acoes", label: "Próximas ações", Icone: ListTodo },
       { path: "/campanhas", label: "Campanhas do mês", Icone: Megaphone },
       { path: "/oportunidades", label: "Oportunidades (score)", Icone: Target },
     ],
   },
   {
-    id: "relatorios",
-    label: "Relatórios",
-    curto: "Relatório",
+    id: "conteudo",
+    label: "Conteúdo",
+    descricao: "Instagram: posts, público e ideias",
+    Icone: AlignLeft,
+    tabs: [
+      { path: "/conteudo", label: "Conteúdo", Icone: AlignLeft },
+      { path: "/posts", label: "Posts", Icone: LayoutGrid, fonte: "instagram" },
+      { path: "/top", label: "Top conteúdos", Icone: Trophy, fonte: "instagram" },
+      { path: "/audiencia", label: "Audiência", Icone: Users, fonte: "instagram" },
+      { path: "/ideias", label: "Ideias", Icone: Lightbulb },
+      { path: "/inspiracao", label: "Inspiração", Icone: Star },
+    ],
+  },
+  {
+    id: "anuncios",
+    label: "Anúncios",
+    descricao: "Investimento e resultado por objetivo",
+    Icone: Megaphone,
+    tabs: [
+      { path: "/anuncios", label: "Anúncios", Icone: Megaphone, fonte: "anuncios" },
+      // Só a equipe vê por enquanto: o cliente sem clínica do SAP ligada cairia numa tela quase vazia. Para abrir ao cliente, tire o admin.
+      { path: "/aquisicao", label: "Aquisição", Icone: Target, admin: true },
+    ],
+  },
+  {
+    id: "vendas",
+    label: "Atendimento e vendas",
+    curto: "Vendas",
+    descricao: "CRM, WhatsApp, dúvidas e jornada",
+    Icone: Briefcase,
+    tabs: [
+      { path: "/crm-painel", label: "Comercial", Icone: Briefcase, fonte: "crm" },
+      { path: "/crm-guia", label: "Organizar o CRM", Icone: ClipboardList, fonte: "crm" },
+      { path: "/atendimento", label: "WhatsApp", Icone: MessageCircle, fonte: "atendimento" },
+      { path: "/conversas", label: "Conversas e auditoria", Icone: MessagesSquare, admin: true, fonte: "atendimento" },
+      { path: "/duvidas", label: "Dúvidas", Icone: HelpCircle, fonte: "instagram" },
+      { path: "/jornada", label: "Jornada", Icone: Route, admin: true },
+    ],
+  },
+  {
+    id: "relatorio",
+    label: "Relatório",
     descricao: "Texto e PDF para enviar ao cliente",
     Icone: FileText,
     tabs: [{ path: "/relatorio", label: "Relatório", Icone: FileText }],
   },
 ];
 
-/** "Operação": telas de uso da equipe Doctor Creator. */
+/** "Sistema": telas de uso da equipe Doctor Creator (só admin). "A analisar" saiu daqui: fica no cadastro do cliente no admin. */
 export const AVANCADO: NavTab[] = [
-  { path: "/analisar", label: "A analisar", Icone: ListChecks, admin: true, fonte: "crm" },
   { path: "/crm-estrutura", label: "Estrutura do CRM", Icone: Network, admin: true, fonte: "crm" },
   { path: "/vendas-kommo", label: "Vendas (Kommo)", Icone: ShoppingBag, admin: true, fonte: "crm" },
   { path: "/vendas", label: "Vendas", Icone: ShoppingBag, admin: true },
@@ -171,10 +171,10 @@ export interface Visibilidade {
 // Médico (owner) e viewer: resultado, oportunidades e relatório primeiro.
 // Estrategista e equipe: análise primeiro. Todas as áreas continuam disponíveis.
 const ORDEM_POR_PAPEL: Record<string, NavArea["id"][]> = {
-  owner: ["inicio", "oportunidades", "relatorios", "social", "comercial"],
-  viewer: ["inicio", "oportunidades", "relatorios", "social", "comercial"],
-  strategist: ["inicio", "social", "comercial", "oportunidades", "relatorios"],
-  admin: ["inicio", "social", "comercial", "oportunidades", "relatorios"],
+  owner: ["resumo", "relatorio", "conteudo", "anuncios", "vendas"],
+  viewer: ["resumo", "relatorio", "conteudo", "anuncios", "vendas"],
+  strategist: ["resumo", "conteudo", "anuncios", "vendas", "relatorio"],
+  admin: ["resumo", "conteudo", "anuncios", "vendas", "relatorio"],
 };
 
 export function tabVisivel(t: NavTab, v: Visibilidade): boolean {
@@ -190,7 +190,9 @@ export function areasVisiveis(v: Visibilidade): AreaVisivel[] {
     .sort((x, y) => ordem.indexOf(x.id) - ordem.indexOf(y.id));
 }
 
+/** Itens de Sistema/Admin: só a equipe (app admin). Médico (owner) e viewer nunca veem. */
 export function avancadoVisivel(v: Visibilidade): NavTab[] {
+  if (!v.isAdmin || v.papel === "owner" || v.papel === "viewer") return [];
   return AVANCADO.filter((t) => tabVisivel(t, v));
 }
 
