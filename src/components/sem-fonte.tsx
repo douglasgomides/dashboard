@@ -52,3 +52,20 @@ export const SEM_INSTAGRAM = {
     "Este cliente ainda não tem uma conta de Instagram ligada ao Hub, então não há seguidores, posts nem comentários para analisar. Nenhum número é exibido para não passar a impressão de zero.",
   quem: "time Doctor Creator, ligando a conta de Instagram do médico à Business Manager do cliente.",
 };
+
+// Resumo executivo no topo de uma tela: 2 a 4 frases em linguagem de gente, antes dos detalhes.
+export function ResumoExecutivo({ frases, tom = "neutro" }: { frases: string[]; tom?: "bom" | "atencao" | "neutro" }) {
+  const lista = frases.filter(Boolean);
+  if (!lista.length) return null;
+  const cor = tom === "bom" ? "var(--good)" : tom === "atencao" ? "var(--warn)" : "var(--accent)";
+  return (
+    <section aria-label="Resumo" className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)", borderLeft: `3px solid ${cor}` }}>
+      <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>Em resumo</h2>
+      <ul className="mt-1.5 space-y-1 text-sm leading-relaxed" style={{ color: "var(--ink)" }}>
+        {lista.map((f) => (
+          <li key={f}>{f}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}

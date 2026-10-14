@@ -1,5 +1,5 @@
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
-import { Carregando } from "@/components/sem-fonte";
+import { Carregando, ResumoExecutivo } from "@/components/sem-fonte";
 import { useQuery } from "@tanstack/react-query";
 import { LEGENDA } from "@/components/grafico";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
@@ -120,6 +120,17 @@ function AtendimentoPage() {
         </p>
         <SyncButton clientId={clientId} alvo="atendimento" />
       </div>
+
+      <ResumoExecutivo
+        tom={(nOrNull(resumo?.espera_mediana_seg) ?? 0) > 3600 || fatiaSemRoteamento > 40 ? "atencao" : "bom"}
+        frases={[
+          `${fmtNum(atendimentos)} atendimentos de ${fmtNum(n(resumo?.contatos_distintos))} pessoas no período.`,
+          nOrNull(resumo?.espera_mediana_seg) == null
+            ? "Sem dado de espera até a 1ª resposta neste período."
+            : `Na metade dos atendimentos, a 1ª resposta veio em até ${dur(nOrNull(resumo?.espera_mediana_seg))}${(nOrNull(resumo?.espera_mediana_seg) ?? 0) > 3600 ? ": acima de 1 hora, quando a chance de agendar cai bastante." : "."}`,
+          fatiaSemRoteamento > 40 ? `${fatiaSemRoteamento.toFixed(0)}% das conversas não foram para nenhuma equipe: organizar o roteamento é o primeiro ajuste.` : "",
+        ]}
+      />
 
       <CustoWhatsapp clientId={clientId} />
 
