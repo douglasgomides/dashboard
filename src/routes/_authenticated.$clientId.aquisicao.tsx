@@ -23,6 +23,7 @@ import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtBRL, fmtNum } from "@/lib/format";
 import { Kpi, Painel, Selo, BarraFina, Ajuda } from "@/components/visual";
 import { CadastroSap, TrackerAutomatico, MarcosDoCrm } from "@/components/sap-tracker";
+import { PlanoSap } from "@/components/sap-plano";
 
 export const Route = createFileRoute("/_authenticated/$clientId/aquisicao")({
   component: AquisicaoPage,
@@ -58,6 +59,7 @@ function AquisicaoPage() {
   return (
     <div className="space-y-6">
       <CadastroSap clientId={clientId} />
+      <PlanoSap clientId={clientId} />
       <TrackerAutomatico clientId={clientId} start={start} end={end} periodLabel={periodLabel} />
       <MarcosDoCrm clientId={clientId} />
       <TrackerManual clientId={clientId} start={start} end={end} periodLabel={periodLabel} />
