@@ -544,6 +544,11 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
       limitar({ id: "ads-sem-gasto", area: "anuncios", texto: "A conta de anúncios está conectada, mas não houve investimento no período.", resolve: "gestor_trafego" }, "sem investimento em anúncios");
     } else {
       const msg = diag.custoPorConversaMensagem;
+      if (diag.rastreio?.suspeito) {
+        // Conversão mal rastreada: o relatório não afirma custo por conversa nem verba desperdiçada.
+        resumo.push({ id: "ads", curto: `${fmtBRL(diag.gasto)} em anúncios; rastreio de conversas suspeito`, texto: `${fmtBRL(diag.gasto)} investidos em anúncios. ${diag.rastreio.mensagem}`, evidencia: `${fmtN(diag.cliquesLink)} cliques no link; ${fmtN(diag.conversas)} conversas atribuídas pela Meta.` });
+        limitar({ id: "ads-rastreio", area: "anuncios", texto: diag.rastreio.mensagem ?? "Rastreio de conversas suspeito.", resolve: "gestor_trafego", comoResolver: "Usar objetivo de mensagens nas campanhas que levam ao WhatsApp e colocar código de rastreio no link." }, "rastreio de conversas suspeito: custo por conversa omitido");
+      } else
       resumo.push({
         id: "ads",
         curto: `${fmtBRL(diag.gasto)} em anúncios${diag.conversas > 0 ? `; ${fmtN(diag.conversas)} conversas no total (${fmtBRL(diag.gasto / diag.conversas)} cada)` : ""}${msg != null ? `; nas campanhas de mensagem, ${fmtBRL(msg)} cada` : ""}`,
@@ -551,13 +556,14 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
         // O total de conversas de TODAS as campanhas (o número do relatório antigo) continua na evidência.
         evidencia: `${diag.campanhas.length} campanhas. Conta toda: ${fmtBRL(diag.gasto)} ÷ ${fmtN(diag.conversas)} conversas. Campanhas de mensagem: ${fmtBRL(diag.gastoMensagem)} ÷ ${fmtN(diag.conversasMensagem)} conversas.`,
       });
-      if (msg == null) {
+      if (msg == null && !diag.rastreio?.suspeito) {
         limitar(
           { id: "ads-sem-mensagem", area: "anuncios", texto: "Nenhuma campanha de mensagem (WhatsApp/Direct) no período: o custo por conversa não se aplica. As campanhas foram medidas pelo resultado do objetivo de cada uma.", resolve: "gestor_trafego" },
           "sem campanha de mensagem: custo por conversa não se aplica",
         );
       }
-      const ruins = diag.campanhas.filter((c) => c.veredito === "Cortar" || c.veredito === "Sem resultado");
+      // Com rastreio suspeito, nenhuma campanha é apontada como "sem resultado" ou "cara".
+      const ruins = diag.rastreio?.suspeito ? [] : diag.campanhas.filter((c) => c.veredito === "Cortar" || c.veredito === "Sem resultado");
       if (ruins.length > 0) {
         const pct = Math.round((diag.desperdicio / diag.gasto) * 100);
         atencao.push({

@@ -122,7 +122,22 @@ export function ResumoDoMes({
 
   // ---- Anúncios -----------------------------------------------------------
   const gasto = n(ads?.gasto);
-  if (gasto > 0) {
+  if (gasto > 0 && diag?.rastreio?.suspeito) {
+    // Rastreio de conversas suspeito: só o investimento e o alerta; nenhum custo por conversa nem campanha "cara".
+    linhas.push({ icone: Megaphone, node: (
+      <>
+        <Forte>{fmtBRL(gasto)}</Forte> investidos em anúncio.
+      </>
+    ) });
+    atencoes.push(
+      <>
+        {diag.rastreio.mensagem}{" "}
+        <Link to="/$clientId/anuncios" params={{ clientId }} style={{ color: "var(--accent)" }}>
+          Ver objetivo de cada campanha →
+        </Link>
+      </>,
+    );
+  } else if (gasto > 0) {
     const conversas = n(ads?.conversas);
     linhas.push({ icone: Megaphone, node: (
       <>

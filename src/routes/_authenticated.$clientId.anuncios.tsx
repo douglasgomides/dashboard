@@ -22,6 +22,7 @@ import { DiagnosticoCampanhas, Faixa } from "@/components/anuncios/diagnostico-c
 import { Wallet, MessageCircle, Coins, Eye, MousePointerClick, Percent, PauseCircle, AlertTriangle, Info, CalendarDays, Layers, Zap, Megaphone } from "lucide-react";
 import { Painel, Kpi, BarraFina } from "@/components/visual";
 import { fmtFracao } from "@/lib/metricas";
+import { nomeObjetivo, objetivoNaoContaConversa } from "@/lib/rastreio-anuncios";
 
 export const Route = createFileRoute("/_authenticated/$clientId/anuncios")({
   component: AnunciosPage,
@@ -221,6 +222,46 @@ function ContaCompartilhada({ clientId }: { clientId: string }) {
   );
 }
 
+// Rastreio suspeito: no lugar do diagnóstico, o objetivo de cada campanha (tráfego com link de WhatsApp não conta conversa).
+function ObjetivosDasCampanhas({ d }: { d: DiagnosticoAds }) {
+  const cs = [...d.campanhas].sort((a, b) => b.gasto - a.gasto);
+  return (
+    <Painel icone={Layers} titulo="Objetivo de cada campanha" resumo={`${cs.length} campanhas · o diagnóstico volta quando o rastreio estiver confiável`}>
+      <p className="mb-3 text-sm" style={{ color: "var(--ink-2)" }}>
+        Campanha de <b>tráfego</b> (ou de conversão no site) com link de WhatsApp não registra “conversa iniciada”: a conversa acontece, mas a Meta
+        não conta. Por isso nenhuma campanha é classificada como “não converte” enquanto o rastreio estiver suspeito.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm empilha">
+          <thead>
+            <tr className="text-left text-xs" style={{ color: "var(--ink-2)" }}>
+              <th className="px-2 py-2">Campanha</th>
+              <th className="px-2 py-2">Objetivo</th>
+              <th className="px-2 py-2 text-right">Investido</th>
+              <th className="px-2 py-2 text-right">Cliques no link</th>
+              <th className="px-2 py-2 text-right">Conversas atribuídas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cs.map((c) => (
+              <tr key={c.campaign_id} className="border-t" style={{ borderColor: "var(--border)" }}>
+                <td className="px-2 py-2" data-label="Campanha" title={c.campanha}>{c.campanha}</td>
+                <td className="px-2 py-2" data-label="Objetivo">
+                  <span className="font-semibold" style={{ color: "var(--ink)" }}>{nomeObjetivo(c.objetivo)}</span>
+                  {objetivoNaoContaConversa(c.objetivo) && <div className="text-xs" style={{ color: "var(--warn)" }}>não conta conversa do WhatsApp</div>}
+                </td>
+                <td className="px-2 py-2 text-right tabular-nums" data-label="Investido">{fmtBRL(c.gasto)}</td>
+                <td className="px-2 py-2 text-right tabular-nums" data-label="Cliques no link">{int(c.cliquesLink)}</td>
+                <td className="px-2 py-2 text-right tabular-nums" data-label="Conversas atribuídas">{int(c.conversas)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Painel>
+  );
+}
+
 function AnunciosPage() {
   const { clientId } = Route.useParams();
   const dateRangeState = clientLayoutRoute.useSearch();
@@ -303,6 +344,8 @@ function AnunciosPage() {
   const custoMil = diag.impressoes > 0 ? (diag.gasto / diag.impressoes) * 1000 : null;
   // Conta sem pixel nem formulário: leads e visitas à página chegam zerados e só a conversa é medida.
   const soConversa = diag.leads === 0 && diag.visitasPagina === 0;
+  // Rastreio de conversas suspeito (rastreio-anuncios.ts): sem custo por conversa e sem diagnóstico de campanha.
+  const suspeito = !!diag.rastreio?.suspeito;
 
   return (
     <div className="space-y-4">
@@ -312,6 +355,11 @@ function AnunciosPage() {
 
       <MotivoParada clientId={clientId} />
       <ContaCompartilhada clientId={clientId} />
+      {suspeito && (
+        <Faixa icone={AlertTriangle} cor="var(--crit)" alerta>
+          {diag.rastreio?.mensagem}
+        </Faixa>
+      )}
       <Faixa
         icone={CalendarDays}
         ajuda={
@@ -354,8 +402,8 @@ function AnunciosPage() {
         <Kpi
           icone={Coins}
           rotulo="Custo por conversa"
-          valor={msg?.custoPorConversa != null ? fmtBRL(msg.custoPorConversa) : "—"}
-          dica={msg ? `Só campanhas de mensagem: ${fmtBRL(msg.gasto)} ÷ ${int(msg.conversas)} conversas` : "Sem campanha de mensagem no período"}
+          valor={suspeito ? "Não confiável" : msg?.custoPorConversa != null ? fmtBRL(msg.custoPorConversa) : "—"}
+          dica={suspeito ? "Rastreio de conversas suspeito: veja o aviso acima" : msg ? `Só campanhas de mensagem: ${fmtBRL(msg.gasto)} ÷ ${int(msg.conversas)} conversas` : "Sem campanha de mensagem no período"}
           cor="var(--accent)"
         />
         <Kpi icone={Eye} rotulo="Aparições do anúncio" valor={int(diag.impressoes)} dica={custoMil != null ? `${fmtBRL(custoMil)} a cada mil aparições` : undefined} cor="var(--s2)" />
@@ -372,7 +420,7 @@ function AnunciosPage() {
         </OQueE>
       </div>
 
-      <DiagnosticoCampanhas d={diag} />
+      {suspeito ? <ObjetivosDasCampanhas d={diag} /> : <DiagnosticoCampanhas d={diag} />}
 
       <PorObjetivo d={diag} />
 

@@ -282,7 +282,18 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
 
   // Anúncios: só conversa de campanha de mensagem; status pela fatia de verba que não entrega.
   const d = e.adsDiag;
-  if (d && d.gasto > 0) {
+  if (d && d.gasto > 0 && d.rastreio?.suspeito) {
+    out.push({
+      id: "verba",
+      rotulo: "Rastreio das conversas",
+      valor: "Suspeito",
+      explicacao: d.rastreio.mensagem ?? "",
+      status: "atencao",
+      statusTexto: "Sem custo por conversa até corrigir",
+      rota: "/$clientId/anuncios",
+      botao: "Ver campanhas e objetivos",
+    });
+  } else if (d && d.gasto > 0) {
     const fatia = d.desperdicio / d.gasto;
     out.push({
       id: "verba",

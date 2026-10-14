@@ -305,6 +305,19 @@ function regraConstancia(posts: any[], out: Achado[]) {
 function regraAnuncios(e: EntradaLeitura, out: Achado[]) {
   const d = e.adsDiag;
   if (!d || d.gasto <= 0) return;
+  // Rastreio de conversas suspeito: nenhuma conclusão de custo ou de "verba que vaza" (rastreio-anuncios.ts).
+  if (d.rastreio?.suspeito) {
+    out.push({
+      id: "anuncios",
+      tom: "atencao",
+      peso: 3,
+      titulo: "As conversas dos anúncios não estão sendo contadas direito.",
+      porque: d.rastreio.mensagem ?? "",
+      acao: { texto: "Conferir o objetivo das campanhas e o código de rastreio do link do WhatsApp antes de mexer na verba.", rota: "anuncios" },
+      base: `${brl(d.gasto)} investidos; ${int(d.cliquesLink)} cliques no link; ${int(d.conversas)} conversas atribuídas`,
+    });
+    return;
+  }
   const gasto = d.gasto;
   const fatia = d.desperdicio / gasto;
   const escalar = d.campanhas.filter((c) => c.veredito === "Escalar");

@@ -25,9 +25,10 @@ import {
   getWtsPorDepartamento,
   getWtsResumo,
   getWtsVolumeDiario,
+  getAtendimentosWhatsapp,
 } from "@/lib/client-data";
 import { getResumoPeriodo } from "@/lib/audiencia";
-import { diagnosticarAds, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
+import { aplicarRastreio, diagnosticarAds, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { buildRelatorioEnvio, type RelatorioEnvio } from "@/lib/relatorio-envio";
 import { resumirAtendimento, type ResumoAtendimento } from "@/lib/conversa-leitura";
 import { avisosDeCobertura, type CoberturaFonte } from "@/lib/cobertura";
@@ -143,7 +144,7 @@ export async function coletarRelatorioCompleto(args: {
       resumo,
       porDia: porDia ?? [],
       porObjetivo: porObjetivo ?? [],
-      objetivo: campanhas ? diagnosticarAds(campanhas.linhas, campanhas.cadastro, start, end) : null,
+      objetivo: campanhas ? aplicarRastreio(diagnosticarAds(campanhas.linhas, campanhas.cadastro, start, end), await getAtendimentosWhatsapp(clientId, start, end)) : null,
       diasComDado: campanhas ? Array.from(new Set(campanhas.linhas.filter((l) => Number(l.spend) > 0 || Number(l.impressions) > 0).map((l) => String(l.date).slice(0, 10)))) : [],
     };
   } else {

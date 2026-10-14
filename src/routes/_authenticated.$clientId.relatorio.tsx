@@ -3,7 +3,7 @@ import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, AlertTriangle, ChevronDown, Copy, FileDown, RotateCcw, ShieldCheck } from "lucide-react";
 import {
-  getAdsCampanhasPeriodo,
+  getAdsCampanhasPeriodo, getAtendimentosWhatsapp,
   getClient,
   getClientFontes,
   getCrmLeadsPorDiaPeriodo,
@@ -15,7 +15,7 @@ import {
   getWtsVolumeDiario,
 } from "@/lib/client-data";
 import { getResumoPeriodo } from "@/lib/audiencia";
-import { diagnosticarAds } from "@/lib/anuncios-objetivo";
+import { aplicarRastreio, diagnosticarAds } from "@/lib/anuncios-objetivo";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { buildRelatorioEnvio, LIMITE_WHATSAPP, SECOES, type AlteracaoLinguagem, type ChecagemItem, type RelatorioEnvio } from "@/lib/relatorio-envio";
 import { checarLinguagemCFM, ROTULO_REGRA_CFM } from "@/lib/linguagem-cfm";
@@ -68,8 +68,8 @@ function RelatorioPage() {
   const ads = useQuery({
     queryKey: ["rel-ads-objetivo", clientId, start, end],
     queryFn: async () => {
-      const { linhas, cadastro } = await getAdsCampanhasPeriodo(clientId, start, end);
-      return { diag: diagnosticarAds(linhas, cadastro, start, end), diasComDado: Array.from(new Set(linhas.filter((l) => Number(l.spend) > 0 || Number(l.impressions) > 0).map((l) => String(l.date).slice(0, 10)))) };
+      const [{ linhas, cadastro }, whatsapp] = await Promise.all([getAdsCampanhasPeriodo(clientId, start, end), getAtendimentosWhatsapp(clientId, start, end)]);
+      return { diag: aplicarRastreio(diagnosticarAds(linhas, cadastro, start, end), whatsapp), diasComDado: Array.from(new Set(linhas.filter((l) => Number(l.spend) > 0 || Number(l.impressions) > 0).map((l) => String(l.date).slice(0, 10)))) };
     },
     enabled: temAds,
   });
