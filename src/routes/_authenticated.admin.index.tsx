@@ -9,6 +9,7 @@ import { statusDoCliente, tomDaFonte, ddmm, diasDeAtraso, type LinhaFonte } from
 import { motivoDaLinha, ROTULO_DONO, type Dono } from "@/lib/motivos";
 import { saudeDaFonte, CelulaSaude } from "@/components/source-health";
 import { useQualidadeDados } from "@/components/qualidade-dados";
+import { LinksSemCliente } from "@/components/links-shortio";
 import { SeloDono } from "@/components/selo-dono";
 
 
@@ -406,6 +407,9 @@ function AdminClientsPage() {
           </table>
         </div>
       )}
+      <div className="mt-6">
+        <LinksSemCliente clientes={[...(clients ?? [])].filter((c: any) => c.active !== false).sort((x: any, y: any) => x.name.localeCompare(y.name))} />
+      </div>
       <details className="mt-6">
         <summary className="cursor-pointer select-none py-1 text-sm font-medium">Cadastrar admin ou cliente</summary>
         <div className="mt-3">

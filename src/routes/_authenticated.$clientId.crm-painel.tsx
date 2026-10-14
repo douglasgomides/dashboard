@@ -37,6 +37,7 @@ import { SyncButton } from "@/components/sync-button";
 import { ListaLimitacoes } from "@/components/insight-card";
 import { QualidadeDados, BaseVivaCrm } from "@/components/qualidade-dados";
 import { AtendimentoResumo } from "@/components/atendimento-resumo";
+import { LinksShortio } from "@/components/links-shortio";
 import { ChecklistDados, FunilOndeQuebra, ProblemasPorTipo, useDiagnosticoComercial } from "@/components/comercial-diagnostico";
 
 // Nome de exibição do CRM — evita chamar tudo de "Kommo" quando o cliente é Clint.
@@ -355,6 +356,7 @@ function CrmPainelPage() {
       {!ehRelatorio && <QualidadeDados clientId={clientId} fonte="crm" titulo="Dados do CRM com erro" />}
       {!ehRelatorio && <BaseVivaCrm clientId={clientId} />}
       {!ehRelatorio && <AtendimentoResumo clientId={clientId} />}
+      {!ehRelatorio && <LinksShortio clientId={clientId} />}
       {(crmProvider === "kommo" || crmProvider === "clint" || crmProvider === "rdstation" || crmProvider === "flwchat") && !ehRelatorio && (
         <div className="flex justify-end">
           <SyncButton clientId={clientId} alvo="crm" />

@@ -1,3 +1,4 @@
+import { sincronizarShortio } from "../_lib/shortio-sync.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
@@ -155,8 +156,21 @@ const PISO_DIAS_ANUNCIOS = 30;
         graphComErro = true;
       }
     }
+    // Links do short.gy (todos os da conta, atribuídos ao cliente pela bio, @ ou nome). Nunca derruba o sync.
+    let shortio: unknown = undefined;
+    if (process.env.SHORTIO_API_KEY) {
+      try {
+        shortio = await sincronizarShortio(
+          createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
+          process.env.SHORTIO_API_KEY,
+          { orcamentoMs: 70_000 },
+        );
+      } catch (err) {
+        shortio = { erro: err instanceof Error ? err.message : String(err) };
+      }
+    }
     const hasErrors = results.some((r) => r.errors.length > 0) || graphComErro;
-    res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), accounts: results, ...(graph !== undefined ? { graph } : {}) });
+    res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), accounts: results, ...(graph !== undefined ? { graph } : {}), ...(shortio !== undefined ? { shortio } : {}) });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
