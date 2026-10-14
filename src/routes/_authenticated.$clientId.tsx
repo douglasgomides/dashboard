@@ -1,3 +1,4 @@
+import { getClinicaSap } from "@/lib/sap-data";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate, useRouterState, Outlet } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -34,6 +35,8 @@ function ClientLayout() {
 
   const { data: client } = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId) });
   const { data: fontes } = useQuery({ queryKey: ["client-fontes", clientId], queryFn: () => getClientFontes(clientId) });
+  // Sistema de Aquisição ativo (linha em sap_clinicas): acende a área do SAP para o cliente.
+  const { data: clinicaSap } = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId) });
 
   const soCrm = CLIENTES_SO_CRM.has(clientId);
   const semAudiencia = CLIENTES_SEM_AUDIENCIA.has(clientId);
@@ -96,7 +99,7 @@ function ClientLayout() {
         pathname={currentPathname}
         dateRange={dateRange}
         onDateRange={(next) => navigate({ to: currentPathname, search: next, replace: true })}
-        vis={{ isAdmin, fontes, soCrm, semAudiencia, papel }}
+        vis={{ isAdmin, fontes, soCrm, semAudiencia, papel, sap: !!clinicaSap }}
         frescor={<SyncFreshnessBadge clientId={clientId} />}
         frescorCompacto={<SyncFreshnessBadge clientId={clientId} compacto />}
         fontesLinha={<DisponibilidadeFontes clientId={clientId} fontes={fontes} />}
