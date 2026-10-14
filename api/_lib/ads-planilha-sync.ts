@@ -213,6 +213,9 @@ export function interpretarPlanilha(csv: string, hojeIso: string): AdsPlanilhaLe
   return { linhas: out, descartadas, negativosAnulados, inconsistentesAnulados };
 }
 
+const MOTIVO_PLANILHA =
+  "Anúncios lidos da planilha de distribuição do gestor de tráfego, porque a conta de anúncios ainda não está liberada para o dashboard na Meta. Os valores são semanais, anotados a cada análise.";
+
 export interface AdsPlanilhaSyncEnv {
   supabaseUrl: string;
   supabaseServiceRoleKey: string;
@@ -255,6 +258,17 @@ export async function runAdsPlanilhaSync(env: AdsPlanilhaSyncEnv): Promise<AdsPl
         res.rows += lote.length;
       }
       res.ate = linhas.reduce((m, l) => (l.analise_em > m ? l.analise_em : m), "");
+      // Fonte manual: sem isto o painel lê "sem dado novo na origem" quando a última análise passa de 3 dias.
+      await sb.from("sync_status").upsert(
+        {
+          client_id: c.id,
+          fonte: "anuncios",
+          motivo: MOTIVO_PLANILHA,
+          motivo_dono: "manual",
+          motivo_em: new Date().toISOString(),
+        },
+        { onConflict: "client_id,fonte" },
+      );
     } catch (e) {
       res.errors.push(e instanceof Error ? e.message : String(e));
     }

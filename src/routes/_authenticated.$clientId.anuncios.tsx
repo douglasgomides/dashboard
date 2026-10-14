@@ -140,6 +140,8 @@ function MotivoParada({ clientId }: { clientId: string }) {
   const parada = l?.data_ate ? diasDeAtraso(l.data_ate) > 3 : false;
   const m = parada || l?.motivo ? motivoDaLinha(l) : null;
   if (!l || !m) return null;
+  // Fonte alimentada à mão (planilha do gestor): não é parada nem erro, e o painel da planilha já explica a origem.
+  if (m.dono === "manual") return null;
   return (
     <Faixa icone={AlertTriangle} cor={COR_DONO[m.dono]} alerta>
       <div className="flex flex-wrap items-center gap-2">
