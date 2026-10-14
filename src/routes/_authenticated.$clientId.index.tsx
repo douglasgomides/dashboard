@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { type Metrica } from "@/lib/resultado";
 import { useResultado } from "@/hooks/use-resultado";
+import { DiagnosticoEstrategico } from "@/components/diagnostico-estrategico";
 import { InsightCard, ListaLimitacoes, SeloStatus, BotaoAcao, OQueE, COR_TOM } from "@/components/insight-card";
 import { NextBestActionCard, NextBestActionPanel, usePainelNBA } from "@/components/next-best-action";
 import { ResumoDoMes } from "@/components/resumo-do-mes";
@@ -519,6 +520,16 @@ function MonthlyOverview() {
           Ver todas as análises do período <ChevronRight size={16} aria-hidden />
         </button>
       </section>
+
+      <DiagnosticoEstrategico
+        clientId={clientId}
+        start={start}
+        fim={fim}
+        resultado={r}
+        diario={(metricas.data as any[]) ?? []}
+        diarioAnterior={(anterior.data as any[]) ?? undefined}
+        posts={(posts.data as any[]) ?? []}
+      />
 
       {/* ===== Segunda dobra ===== */}
       {outras.length > 0 && (
