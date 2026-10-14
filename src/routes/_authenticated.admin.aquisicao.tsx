@@ -41,7 +41,7 @@ function PortfolioSap() {
         <div className="space-y-3 text-sm" style={{ color: "var(--text-dim)" }}>
           <p>
             Aqui aparece cada clínica do sistema com o dia em que está, a fase, o próximo marco, o semáforo e os números da última
-            semana. Para incluir uma clínica, abra o cliente, vá em <strong>Aquisição</strong> e clique em <strong>Ativar o SAP</strong> (marque
+            semana. Para incluir uma clínica, abra o cliente, vá em <strong>Sistema de Aquisição → Programa</strong> e clique em <strong>Ativar o SAP</strong> (marque
             "piloto" para um cliente de outro produto). Os números saem sozinhos do CRM e do WhatsApp.
           </p>
           <button type="button" onClick={() => setExemplo(true)} className="rounded-lg px-3 py-2 text-sm font-medium" style={{ background: "var(--accent)", color: "#fff" }}>
@@ -122,7 +122,7 @@ function PortfolioSap() {
                 <tr key={l.clinica.id} className="border-t align-top" style={{ borderColor: "var(--border)" }}>
                   <td className="px-3 py-2.5">
                     {l.clinica.client_id ? (
-                      <Link to="/$clientId/aquisicao" params={{ clientId: l.clinica.client_id }} className="font-medium underline-offset-2 hover:underline">
+                      <Link to="/$clientId/sap" params={{ clientId: l.clinica.client_id }} className="font-medium underline-offset-2 hover:underline">
                         {l.clinica.nome}
                       </Link>
                     ) : (

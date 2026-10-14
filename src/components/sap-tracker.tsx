@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardList, Gauge, ListTree, Radio, ShieldCheck, Target, TrendingDown } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -203,9 +204,9 @@ export function TrackerAutomatico({ clientId, start, end, periodLabel }: { clien
             ))}
           </ol>
           {isAdmin && leitura.pendencias.some((p) => /^Marcar/.test(p)) && (
-            <a href="#marcos" className="mt-2 inline-block text-sm font-semibold underline" style={{ color: "var(--accent)" }}>
+            <Link to="/$clientId/sap/etapas" params={{ clientId }} className="mt-2 inline-block text-sm font-semibold underline" style={{ color: "var(--accent)" }}>
               Marcar as etapas do CRM agora
-            </a>
+            </Link>
           )}
         </section>
       )}
@@ -350,11 +351,11 @@ function CardKpi({ k }: { k: KpiSap }) {
 // ---------------------------------------------------------------------------
 // Marcos do CRM: o que cada etapa significa no funil do SAP. Só admin.
 
-export function MarcosDoCrm({ clientId }: { clientId: string }) {
+export function MarcosDoCrm({ clientId, abertoInicial = false }: { clientId: string; abertoInicial?: boolean }) {
   const { isAdmin } = useAuth();
   const qc = useQueryClient();
   const { data, isLoading, error } = useQuery({ queryKey: ["sap-etapas", clientId], queryFn: () => getEtapasSap(clientId), enabled: isAdmin });
-  const [aberto, setAberto] = useState(false);
+  const [aberto, setAberto] = useState(abertoInicial);
   const [erro, setErro] = useState<string | null>(null);
   const marcar = useMutation({
     mutationFn: async (lista: { e: EtapaSap; marco: string | null }[]) => {

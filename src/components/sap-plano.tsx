@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { CheckCircle2, CircleDashed, Flag, ShieldQuestion, Target, XCircle } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Painel, Selo } from "@/components/visual";
@@ -48,7 +49,14 @@ const RES: Record<ResultadoKpi, { rotulo: string; cor: string; Icone: typeof Che
   sem_baseline: { rotulo: "Sem baseline", cor: "var(--warn)", Icone: ShieldQuestion },
 };
 
-/** Linha do tempo D0–D90, baseline/metas e garantia da clínica do SAP. */
+/** Linha do tempo D0–D90 (tela Programa). */
+export function LinhaDoTempoSap({ clientId }: { clientId: string }) {
+  const cadQ = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId) });
+  if (!cadQ.data) return null;
+  return <LinhaDoTempo d0={cadQ.data.d0} hoje={hojeBrasilia()} />;
+}
+
+/** Baseline/metas e garantia da clínica do SAP (tela Metas e garantia). */
 export function PlanoSap({ clientId }: { clientId: string }) {
   const hoje = hojeBrasilia();
   const cadQ = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId) });
@@ -66,7 +74,6 @@ export function PlanoSap({ clientId }: { clientId: string }) {
 
   return (
     <div className="space-y-4">
-      <LinhaDoTempo d0={clinica.d0} hoje={hoje} />
       <TabelaPlano clientId={clientId} clinica={clinica} plano={plano} atual={atual} carregando={planoQ.isLoading} hoje={hoje} />
       {clinica.d0 && jg && (
         <CardGarantia
@@ -94,8 +101,14 @@ function LinhaDoTempo({ d0, hoje }: { d0: string | null; hoje: string }) {
   const dia = diasEntre(d0, hoje);
   const pos = (d: number) => `${Math.min(100, Math.max(0, (d / 90) * 100))}%`;
   const qs = quinzenas(d0);
+  const concluido = dia > 90;
   return (
-    <Painel icone={Flag} titulo="Linha do tempo D0 a D90" resumo={`D0 ${dm(d0)} · D60 ${dm(somarDias(d0, 60))} · D90 ${dm(somarDias(d0, 90))}`}>
+    <Painel icone={Flag} titulo={concluido ? "Programa concluído · acompanhamento" : "Linha do tempo D0 a D90"} resumo={`D0 ${dm(d0)} · D60 ${dm(somarDias(d0, 60))} · D90 ${dm(somarDias(d0, 90))}`}>
+      {concluido && (
+        <p className="mb-2 rounded-lg p-3 text-sm" style={{ background: "var(--accent-soft)" }}>
+          Os 90 dias terminaram em {dm(somarDias(d0, 90))}. Agora é acompanhamento: as metas e a leitura da semana continuam, sempre comparando com o D0.
+        </p>
+      )}
       <div className="relative mx-2 mb-10 mt-8 h-2 rounded-full" style={{ background: "var(--surface-2, var(--border))" }}>
         {/* janela da garantia */}
         <div className="absolute top-0 h-2 rounded-full" style={{ left: pos(62), width: `${(27 / 90) * 100}%`, background: "color-mix(in srgb, var(--warn) 45%, transparent)" }} title="Janela da garantia (D62 a D89)" />
@@ -274,6 +287,7 @@ function TabelaPlano({ clientId, clinica, plano, atual, carregando, hoje }: { cl
                   <th className="py-2 pr-3 text-right font-medium">Baseline D0</th>
                   <th className="py-2 pr-3 text-right font-medium">Meta D90</th>
                   <th className="py-2 pr-3 text-right font-medium">Agora</th>
+                  <th className="py-2 pr-3 text-right font-medium">Desde o D0</th>
                   <th className="py-2 font-medium">Garantia</th>
                 </tr>
               </thead>
@@ -318,6 +332,9 @@ function TabelaPlano({ clientId, clinica, plano, atual, carregando, hoje }: { cl
                         ) : (
                           <span style={{ color: naMeta === null ? "var(--text)" : naMeta ? "var(--good)" : "var(--crit)" }}>{fmtValor(k.id, agora)}</span>
                         )}
+                      </td>
+                      <td className="py-2 pr-3 text-right text-xs tabular-nums">
+                        <Evolucao k={k.id} base={l?.baseline ?? null} agora={k.id === "pensando_cadencia" ? null : agora} />
                       </td>
                       <td className="py-2">
                         {editando && r ? (
@@ -400,7 +417,7 @@ function CardGarantia({
   return (
     <Painel
       icone={ShieldQuestion}
-      titulo={janela.previa ? "Garantia · prévia" : "Garantia · resultado"}
+      titulo={janela.previa ? "Garantia · prévia" : "Garantia · resultado final (D62 a D89)"}
       resumo={`${janela.previa ? "Prévia com as últimas 4 semanas" : "Janela oficial D62 a D89"} (${dm(janela.de)} a ${dm(janela.ate)}). Regra do 01.02: Score de Execução ≥ 80% e 2 dos 3 KPIs principais sem melhora → +30 dias sem custo.`}
     >
       {carregando || !g ? (
@@ -436,5 +453,62 @@ function CardGarantia({
         </>
       )}
     </Painel>
+  );
+}
+
+// Variação contra a baseline D0, na direção certa de cada KPI (tempo e custo: menor é melhor).
+function Evolucao({ k, base, agora }: { k: KpiPlano; base: number | null; agora: number | null }) {
+  if (base === null || agora === null) return <span style={{ color: "var(--muted)" }}>·</span>;
+  const u = unidade(k);
+  const menorMelhor = u === "min" || k === "custo_consulta";
+  const melhor = menorMelhor ? agora < base : agora > base;
+  const igual = Math.abs(agora - base) < (u === "pct" ? 0.005 : 0.5);
+  const txt = u === "pct" ? `${agora - base >= 0 ? "+" : ""}${Math.round((agora - base) * 100)} p.p.` : base > 0 ? `${agora - base >= 0 ? "+" : ""}${Math.round(((agora - base) / base) * 100)}%` : "·";
+  return <span style={{ color: igual ? "var(--muted)" : melhor ? "var(--good)" : "var(--crit)" }}>{txt}</span>;
+}
+
+/** Faixa no topo do Resumo para clínica com SAP: dia do programa, próximo marco e os KPIs da garantia desde o D0. */
+export function FaixaSap({ clientId }: { clientId: string }) {
+  const hoje = hojeBrasilia();
+  const j = { de: somarDias(hoje, -28), ate: somarDias(hoje, -1) };
+  const cadQ = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId) });
+  const clinica = cadQ.data ?? null;
+  const planoQ = useQuery({ queryKey: ["sap-plano", clinica?.id], queryFn: () => getPlanoSap(clinica!.id), enabled: !!clinica });
+  const atualQ = useQuery({ queryKey: ["sap-auto", clientId, j.de, j.ate], queryFn: () => getTrackerAuto(clientId, j.de, j.ate), enabled: !!clinica });
+  const g = useMemo(() => {
+    const atual = lerTrackerAuto(atualQ.data);
+    const plano = planoQ.data ?? [];
+    if (!clinica || !atual || !plano.length) return null;
+    return avaliarGarantia({ plano, atual, consultaPaga: clinica.consulta_paga !== false, verbaEmDia: clinica.verba_em_dia !== false, score: null });
+  }, [atualQ.data, planoQ.data, clinica]);
+  if (!clinica) return null;
+  const dia = clinica.d0 ? diasEntre(clinica.d0, hoje) : null;
+  const marco = dia === null ? null : MARCOS.find((m) => m.dia >= dia) ?? null;
+  const melhoraram = g ? g.kpis.filter((k) => k.resultado === "melhorou").length : null;
+  return (
+    <Link
+      to="/$clientId/sap"
+      params={{ clientId }}
+      className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border px-4 py-3 text-sm no-underline"
+      style={{ borderColor: "color-mix(in srgb, var(--accent) 35%, var(--border))", background: "var(--accent-soft)", color: "var(--text)" }}
+    >
+      <span className="flex items-center gap-2 font-semibold">
+        <Target size={16} aria-hidden style={{ color: "var(--accent)" }} /> Sistema de Aquisição
+      </span>
+      <span>
+        {dia === null ? "sem D0" : dia > 90 ? "programa concluído · acompanhamento" : dia < 0 ? `começa em ${-dia} dia(s)` : <><strong className="tabular-nums">D{dia}</strong> de 90</>}
+      </span>
+      {marco && dia !== null && dia <= 90 && (
+        <span style={{ color: "var(--text-dim)" }}>
+          próximo: {marco.nome} ({marco.dia - dia === 0 ? "hoje" : `em ${marco.dia - dia} dia(s)`})
+        </span>
+      )}
+      {g && melhoraram !== null && (
+        <span style={{ color: melhoraram >= Math.max(1, g.kpis.length - 1) ? "var(--good)" : "var(--warn)" }}>
+          {melhoraram} de {g.kpis.length} KPIs da garantia melhorando desde o D0
+        </span>
+      )}
+      <span className="ml-auto text-xs font-semibold" style={{ color: "var(--accent)" }}>Abrir →</span>
+    </Link>
   );
 }
