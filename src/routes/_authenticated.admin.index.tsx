@@ -4,13 +4,15 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { createAdminUser, createClient, listAllClients } from "@/lib/admin-data";
 import { ClientAvatar } from "@/components/client-avatar";
 import { supabase } from "@/integrations/supabase/client";
-import { getClientFontes } from "@/lib/client-data";
+import { getClientFontes, getQualidadeDados } from "@/lib/client-data";
 import { statusDoCliente, tomDaFonte, ddmm, diasDeAtraso, type LinhaFonte } from "@/lib/saude-fontes";
 import { motivoDaLinha, ROTULO_DONO, type Dono } from "@/lib/motivos";
 import { saudeDaFonte, CelulaSaude } from "@/components/source-health";
 import { useQualidadeDados } from "@/components/qualidade-dados";
 import { LinksSemCliente } from "@/components/links-shortio";
 import { SeloDono } from "@/components/selo-dono";
+import { PainelSaudeFontes } from "@/components/painel-saude-fontes";
+import { montarProblemasFontes } from "@/lib/saude-problemas";
 
 
 function LinhaMotivo({ texto, motivo }: { texto: string; motivo: ReturnType<typeof motivoDaLinha> }) {
@@ -300,9 +302,32 @@ function AdminClientsPage() {
     }
   });
   const carregandoSaude = saudes.some((q) => q.isLoading);
+  // Problemas de dado (qualidade_dados) por cliente: mesma chave do ChipQualidade, então a leitura é compartilhada.
+  const qualidades = useQueries({
+    queries: (clients ?? []).map((c) => ({
+      queryKey: ["qualidade-dados", c.id],
+      queryFn: () => getQualidadeDados(c.id),
+      staleTime: 10 * 60_000,
+      retry: false,
+    })),
+  });
+  const problemas = montarProblemasFontes(
+    (clients ?? []).flatMap((c, i) => {
+      const s = saudes[i]?.data;
+      return s ? [{ id: c.id, nome: c.name, fontes: s.fontes, linhas: s.linhas, qualidade: qualidades[i]?.data ?? [] }] : [];
+    }),
+  );
 
   return (
     <div>
+      <PainelSaudeFontes
+        problemas={problemas}
+        clientes={clients ?? []}
+        carregando={isLoading || carregandoSaude || qualidades.some((q) => q.isLoading)}
+        lidos={saudes.filter((q) => !q.isLoading).length}
+        total={(clients ?? []).length}
+        falhas={saudes.filter((q) => q.isError).length}
+      />
       {!carregandoSaude && (
         <div
           className="mb-3 rounded-xl border p-3 text-sm"
