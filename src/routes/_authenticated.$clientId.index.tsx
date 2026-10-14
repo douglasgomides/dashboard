@@ -92,7 +92,7 @@ function PostList({ posts }: { posts: any[] }) {
           >
             <Miniatura url={p.thumbnail_url} formato={p.format} className="h-12 w-12" />
             <span className="min-w-0 flex-1">
-              <span className="line-clamp-1 block font-medium">{(p.caption ?? p.windsor_media_id).split("\n")[0].slice(0, 90)}</span>
+              <span className="line-clamp-1 block font-medium" title={String((p.caption ?? p.windsor_media_id).split("\n")[0].slice(0, 90) ?? "")}>{(p.caption ?? p.windsor_media_id).split("\n")[0].slice(0, 90)}</span>
               <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums" style={{ color: "var(--text-dim)" }}>
                 <span>{p.posted_at && new Date(p.posted_at).toLocaleDateString("pt-BR")}</span>
                 <span className="inline-flex items-center gap-1"><Eye size={12} /> {(p.reach ?? 0).toLocaleString("pt-BR")}</span>
@@ -176,8 +176,8 @@ function MelhoresHorarios({ posts, periodLabel }: { posts: any[]; periodLabel: s
                       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold" style={{ background: idx === 0 ? "var(--warn)" : "var(--surface-2)", color: idx === 0 ? "#1a1a19" : "var(--text-dim)" }}>
                         {idx + 1}
                       </span>
-                      <b className="truncate">{r.weekday}</b>
-                      <span className="truncate text-xs" style={{ color: "var(--text-dim)" }}>{r.period}</span>
+                      <b className="truncate" title={String(r.weekday ?? "")}>{r.weekday}</b>
+                      <span className="truncate text-xs" style={{ color: "var(--text-dim)" }} title={String(r.period ?? "")}>{r.period}</span>
                     </span>
                     <span className="shrink-0 text-xs font-semibold tabular-nums" style={{ color: vsMedian >= 0 ? "var(--good-text)" : "var(--text-dim)" }}>
                       {vsMedian >= 0 ? "▲ +" : "▼ "}

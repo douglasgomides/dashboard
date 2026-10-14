@@ -35,7 +35,7 @@ function TabelaGrupo({ titulo, sub, rows, col, icone }: { titulo: string; sub: s
               <div className="mb-1 flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
                   {titulo.includes("formato") && <IconeFormato formato={r.key} />}
-                  <span className="truncate">{r.label}</span>
+                  <span className="truncate" title={String(r.label ?? "")}>{r.label}</span>
                   {r.key === melhor && <Selo cor="var(--good-text)" titulo="Maior alcance mediano"><Trophy size={11} aria-hidden /> 1º</Selo>}
                 </span>
                 <span className="shrink-0 text-sm font-semibold tabular-nums" title="Alcance mediano">{fmtN(r.reachMedian)}</span>

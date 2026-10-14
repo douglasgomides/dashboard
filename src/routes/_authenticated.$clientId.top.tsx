@@ -80,7 +80,7 @@ function ListaDePosts({ itens, metrica, reels }: { itens: { p: any; v: number }[
             <Posicao i={i} />
             <Miniatura url={p.thumbnail_url} formato={p.format} className="h-16 w-16" />
             <div className="min-w-0 flex-1">
-              <a href={p.permalink ?? "#"} target="_blank" rel="noreferrer" className="block truncate text-[13.5px] font-semibold" style={{ color: "var(--text)" }}>
+              <a href={p.permalink ?? "#"} target="_blank" rel="noreferrer" className="block truncate text-[13.5px] font-semibold" style={{ color: "var(--text)" }} title={p.caption ?? undefined}>
                 {gancho(p.caption) || "(sem legenda)"}
               </a>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">

@@ -121,7 +121,7 @@ function EtapaFunil({
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2 text-sm">
-          <span className="truncate font-medium">{rotulo}</span>
+          <span className="truncate font-medium" title={String(rotulo ?? "")}>{rotulo}</span>
           <span className="shrink-0 tabular-nums">
             <b className="font-semibold">{valor === null ? "—" : fmtN(valor)}</b>
             {pct !== null && (
@@ -282,7 +282,7 @@ function AtividadeRecente({ clientId }: { clientId: string }) {
           {rows.map((r) => (
             <li key={r.external_lead_id} className="flex items-center justify-between gap-3 py-2 text-sm">
               <div className="min-w-0">
-                <div className="truncate font-medium">{r.nome}</div>
+                <div className="truncate font-medium" title={String(r.nome ?? "")}>{r.nome}</div>
                 <div className="truncate text-xs" style={{ color: "var(--text-dim)" }}>
                   {r.fonte} · {r.pipeline}
                 </div>

@@ -57,7 +57,7 @@ export function NextBestActionCard({ insight: i, onAbrir, destaque = false }: { 
       <h2 className={`mt-2 font-semibold leading-snug ${destaque ? "text-lg sm:text-xl" : "text-base"}`} style={{ color: "var(--ink)" }}>
         {i.titulo}
       </h2>
-      <p className="mt-1 line-clamp-2 text-sm" style={{ color: "var(--ink-2)" }}>
+      <p className="mt-1 line-clamp-2 text-sm" style={{ color: "var(--ink-2)" }} title={i.diagnostico}>
         {i.diagnostico}
       </p>
       {i.acao && (

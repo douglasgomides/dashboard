@@ -354,10 +354,10 @@ function ConversasPage() {
                   }}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm font-medium">{c.pessoa_nome}</span>
+                    <span className="truncate text-sm font-medium" title={String(c.pessoa_nome ?? "")}>{c.pessoa_nome}</span>
                     <span className="shrink-0 text-xs" style={{ color: "var(--text-faint)" }}>{quando(c.ultima_msg_em)}</span>
                   </div>
-                  <div className="mt-0.5 truncate text-xs" style={{ color: "var(--text-dim)" }}>
+                  <div className="mt-0.5 truncate text-xs" style={{ color: "var(--text-dim)" }} title={c.ultima_msg_texto ?? undefined}>
                     {c.ultima_msg_texto || "(mídia)"}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1">

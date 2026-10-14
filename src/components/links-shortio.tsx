@@ -104,7 +104,7 @@ export function LinksSemCliente({ clientes }: { clientes: { id: string; name: st
           <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
             <div className="min-w-0">
               <div className="font-medium">{(l.short_url ?? "").replace(/^https?:\/\//, "")}{l.titulo ? ` · ${l.titulo}` : ""}</div>
-              <div className="truncate text-xs" style={{ color: "var(--text-dim)" }}>{l.original_url}</div>
+              <div className="truncate text-xs" style={{ color: "var(--text-dim)" }} title={String(l.original_url ?? "")}>{l.original_url}</div>
             </div>
             <select defaultValue="" onChange={(e) => atribuir(l.id, e.target.value)} className="rounded border px-2 py-1 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
               <option value="">Escolher cliente…</option>

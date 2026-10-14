@@ -206,7 +206,7 @@ export function Kpi({
         </div>
       )}
       {dica && !tendencia && (
-        <div className="mt-1.5 line-clamp-2 text-[11px] leading-snug" style={{ color: "var(--muted)" }}>
+        <div className="mt-1.5 line-clamp-2 text-[11px] leading-snug" style={{ color: "var(--muted)" }} title={typeof dica === "string" ? dica : undefined}>
           {dica}
         </div>
       )}
