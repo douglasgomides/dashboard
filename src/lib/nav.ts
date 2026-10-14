@@ -109,6 +109,7 @@ export const AREAS: NavArea[] = [
     Icone: Target,
     tabs: [
       { path: "/proximas-acoes", label: "Próximas ações", Icone: ListTodo },
+      { path: "/campanhas", label: "Campanhas do mês", Icone: Megaphone },
       { path: "/oportunidades", label: "Oportunidades (score)", Icone: Target },
     ],
   },

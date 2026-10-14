@@ -150,6 +150,8 @@ export function combinar(
     porId.delete(i.id);
   }
   for (const s of porId.values()) {
+    // Itens de outras telas (Próximas ações "pa:", Campanhas "camp:") usam a mesma tabela; não são insights daqui.
+    if (s.insightId.startsWith("pa:") || s.insightId.startsWith("camp:")) continue;
     const acomp = ABERTOS.includes(s.status) ? { ...s, status: "expirada" as Status } : s;
     out.push({ insight: null, acomp, score: null });
   }
