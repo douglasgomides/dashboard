@@ -54,7 +54,7 @@ function TabLink({ tab, clientId, dateRange, className, children, ativo }: { tab
   const comum = { className, "data-on": ativo ? "" : undefined, activeOptions: { exact: true, includeSearch: false } };
   if (tab.absoluto) {
     return (
-      <Link to={tab.path as never} {...comum}>
+      <Link to={tab.path as never} params={(tab.path.includes("$clientId") ? { clientId } : undefined) as never} {...comum}>
         {children}
       </Link>
     );
@@ -256,7 +256,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
             <div className="avancado">
               <button type="button" aria-expanded={avancadoAberto} onClick={() => setAvancadoAberto((v) => !v)} className="avancado-btn">
                 <Settings size={16} aria-hidden />
-                <span className="so-aberta">Sistema</span>
+                <span className="so-aberta">Equipe</span>
                 <ChevronDown size={16} aria-hidden style={{ transform: avancadoAberto ? "rotate(180deg)" : undefined, marginLeft: "auto" }} />
               </button>
               {avancadoAberto && <div className="avancado-lista">{listaAvancado}</div>}
@@ -309,7 +309,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
 
         {(area || naAvancado) && (
           <p className="areadesc">
-            <b>{naAvancado ? "Sistema" : area!.label}</b>
+            <b>{naAvancado ? "Equipe" : area!.label}</b>
             <span>{naAvancado ? "Telas de uso da equipe Doctor Creator" : area!.descricao}</span>
           </p>
         )}
@@ -368,8 +368,8 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
         )}
         {avancado.length > 0 && (
           <>
-            <div className="mais-lbl">Sistema</div>
-            <nav className="mais-lista" aria-label="Sistema">
+            <div className="mais-lbl">Equipe (só Doctor Creator)</div>
+            <nav className="mais-lista" aria-label="Equipe">
               {listaAvancado}
             </nav>
           </>
