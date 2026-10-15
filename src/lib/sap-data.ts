@@ -5,6 +5,7 @@ import type { LinhaPlano } from "@/lib/sap-metas";
 import { ITENS_EXECUCAO, resumoSaude, type ItemRegistro, type ResumoSaude, type SemanaSaude } from "@/lib/sap-scores";
 import { diaDoPrograma, MARCOS_PRINCIPAIS, type Pausa } from "@/lib/sap-cronograma";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import type { RegistroAcesso } from "@/lib/sap-acessos";
 
 // Tracker do Sistema de Aquisição de Pacientes (SAP).
 //
@@ -603,12 +604,18 @@ export type SapCadastro = SapClinica & {
   garantia_status: "nao_avaliada" | "aplicada" | "nao_se_aplica" | null;
   garantia_inicio: string | null;
   pos_contrato: "manutencao" | "encerrado" | "cancelado" | null;
+  decisor_nome: string | null;
+  decisor_contato: string | null;
+  ambicao_d90: string | null;
+  coordenador: string | null;
+  caminho_tecnologia: "A" | "B" | null;
+  categoria_fonte_meta: string | null;
 };
 
 export async function getClinicaSap(clientId: string): Promise<SapCadastro | null> {
   const { data, error } = await db
     .from("sap_clinicas")
-    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto, consulta_paga, verba_em_dia, score_execucao, baseline_de, baseline_ate, aceite_metas_em, aceite_metas_por, ajustes_acordados, garantia_status, garantia_inicio, pos_contrato, sap_pausas(id, tipo, inicio, fim, motivo, removido_em)")
+    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto, consulta_paga, verba_em_dia, score_execucao, baseline_de, baseline_ate, aceite_metas_em, aceite_metas_por, ajustes_acordados, garantia_status, garantia_inicio, pos_contrato, decisor_nome, decisor_contato, ambicao_d90, coordenador, caminho_tecnologia, categoria_fonte_meta, sap_pausas(id, tipo, inicio, fim, motivo, removido_em)")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -783,5 +790,49 @@ export async function getSaudeSap(clinicaId: string): Promise<SemanaSaude[]> {
 
 export async function salvarSaudeSap(clientId: string, semana: SemanaSaude) {
   const { error } = await db.rpc("sap_salvar_saude", { p_client_id: clientId, p_semana: semana });
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------- ficha, acessos e ações (Lote B)
+
+export async function salvarFichaSap(clinicaId: string, f: { decisorNome: string; decisorContato: string; ambicao: string; coordenador: string; caminho: string; categoriaFonte: string }) {
+  const { error } = await db.rpc("sap_salvar_ficha", {
+    p_clinica_id: clinicaId, p_decisor_nome: f.decisorNome, p_decisor_contato: f.decisorContato, p_ambicao: f.ambicao,
+    p_coordenador: f.coordenador, p_caminho: f.caminho, p_categoria_fonte: f.categoriaFonte,
+  });
+  if (error) throw error;
+}
+
+export async function getAcessosSap(clinicaId: string): Promise<RegistroAcesso[]> {
+  const { data, error } = await db.from("sap_acessos").select("item, status, confirmado_em, confirmado_por, observacao, revogado_em").eq("clinica_id", clinicaId);
+  if (error) throw error;
+  return (data ?? []) as RegistroAcesso[];
+}
+
+export async function salvarAcessoSap(clinicaId: string, r: RegistroAcesso) {
+  const { error } = await db.rpc("sap_salvar_acesso", {
+    p_clinica_id: clinicaId, p_item: r.item, p_status: r.status, p_confirmado_em: r.confirmado_em, p_confirmado_por: r.confirmado_por ?? "",
+    p_observacao: r.observacao ?? "", p_revogado_em: r.revogado_em,
+  });
+  if (error) throw error;
+}
+
+export type AcaoSap = {
+  id: string; semana: string; origem: "leitura" | "call" | "saude" | "outro"; codigo: string | null; texto: string;
+  lado: "clinica" | "dc"; responsavel: string | null; prazo: string | null; status: "aberta" | "feita" | "nao_feita"; resultado: string | null;
+};
+
+export async function getAcoesSap(clinicaId: string): Promise<AcaoSap[]> {
+  const { data, error } = await db.from("sap_acoes").select("id, semana, origem, codigo, texto, lado, responsavel, prazo, status, resultado")
+    .eq("clinica_id", clinicaId).is("removido_em", null).order("semana", { ascending: false }).order("criado_em", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as AcaoSap[];
+}
+
+export async function salvarAcaoSap(clinicaId: string, a: Omit<AcaoSap, "id"> & { id?: string | null }, remover = false) {
+  const { error } = await db.rpc("sap_salvar_acao", {
+    p_clinica_id: clinicaId, p_id: a.id ?? null, p_semana: a.semana, p_origem: a.origem, p_codigo: a.codigo ?? "", p_texto: a.texto,
+    p_lado: a.lado, p_responsavel: a.responsavel ?? "", p_prazo: a.prazo, p_status: a.status, p_resultado: a.resultado ?? "", p_remover: remover,
+  });
   if (error) throw error;
 }

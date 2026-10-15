@@ -26,4 +26,10 @@ assert.equal(r.atrasados, 0);
 assert.equal(ok.find((x) => x.id === "leitura")!.status, "rotina");
 // Sem meta de custo depois do D45: atrasado.
 assert.equal(passosDaImplantacao({ ...zero, ativo: true, d0: "2026-08-01", dia: 47 }).find((x) => x.id === "custo")!.status, "atrasado");
+// Acessos críticos (02.05): aparece só quando o checklist foi lido; atrasado depois do D7.
+assert.equal(passosDaImplantacao({ ...zero, ativo: true, d0: "2026-08-01", dia: 3 }).some((x) => x.id === "acessos"), false);
+assert.equal(passosDaImplantacao({ ...zero, ativo: true, d0: "2026-08-01", dia: 9, acessosCriticos: { feitos: 4, total: 9 } }).find((x) => x.id === "acessos")!.status, "atrasado");
+assert.equal(passosDaImplantacao({ ...zero, ativo: true, d0: "2026-08-01", dia: 9, acessosCriticos: { feitos: 9, total: 9 } }).find((x) => x.id === "acessos")!.status, "feito");
+// Metas sem aceite registrado não contam como feitas.
+assert.equal(passosDaImplantacao({ ...zero, ativo: true, d0: "2026-08-01", dia: 13, metasPrincipais: 3, aceiteMetas: false }).find((x) => x.id === "metas")!.status, "fazer");
 console.log("test-sap-implantacao: ok");

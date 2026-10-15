@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertOctagon, CheckCircle2, CircleDashed, ClipboardCheck, Copy, MessageCircle, TriangleAlert } from "lucide-react";
+import { AcoesSap } from "@/components/sap-acoes";
 import { useAuth } from "@/hooks/use-auth";
 import { Painel, Selo } from "@/components/visual";
 import { hojeBrasilia } from "@/lib/status-fonte";
@@ -110,6 +111,18 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
           <span />
         </Painel>
       )}
+
+      <AcoesSap
+        clientId={clientId}
+        sugestoes={
+          p
+            ? [
+                ...(p.v.acaoClinica ? [{ codigo: p.v.codigo, texto: p.v.acaoClinica, lado: "clinica" as const }] : []),
+                ...(p.v.acaoDc ? [{ codigo: p.v.codigo, texto: p.v.acaoDc, lado: "dc" as const, responsavel: p.v.dono }] : []),
+              ]
+            : []
+        }
+      />
 
       {isAdmin && leitura.mensagem && (
         <Painel icone={MessageCircle} titulo="Mensagem para a clínica" resumo="Modelo do 08.05, para mandar até 12h de segunda.">
