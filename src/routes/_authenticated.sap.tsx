@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, ListOrdered, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight, Radar } from "lucide-react";
+import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, ListOrdered, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight, Radar, CalendarCheck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { TrocaProduto } from "@/components/troca-produto";
@@ -16,6 +16,7 @@ export const Route = createFileRoute("/_authenticated/sap")({
 
 // Menu da clínica agrupado pelas etapas do programa: visão geral, implantação (D0 a D30), rotina semanal e resultado.
 const ITENS = [
+  { grupo: "Visão geral", sub: "/semana", label: "Esta semana", Icone: CalendarCheck },
   { grupo: "Visão geral", sub: "", label: "Programa", Icone: Flag },
   { grupo: "Visão geral", sub: "/passo-a-passo", label: "Passo a passo", Icone: ListOrdered },
   { grupo: "Implantação", sub: "/onboarding", label: "Ficha e acessos", Icone: KeyRound },
