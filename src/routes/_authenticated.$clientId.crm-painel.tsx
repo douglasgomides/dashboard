@@ -25,6 +25,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Painel, Kpi, Selo, BarraFina, Ajuda } from "@/components/visual";
+import { VisoesComerciais } from "@/components/crm-visoes";
 import {
   getCrmMetricasEssenciais,
   getCrmLeadsPorDia,
@@ -576,6 +577,9 @@ function CrmPainelPage() {
           <Kpi icone={Target} rotulo="Valor dos cards" valor={fmtBRL(periodo?.valor ?? 0)} cor="var(--s1)" />
         </div>
       </Painel>
+
+      {/* Coorte, estoque e movimentos (src/lib/crm-visoes.ts). */}
+      <VisoesComerciais clientId={clientId} start={start} end={end} />
 
       {/* Camada 3: dados completos, abertos sob demanda. */}
       <details className="group rounded-xl border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
