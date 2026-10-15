@@ -476,6 +476,7 @@ textarea.reltxt{width:100%;background:var(--surface);border:1px solid var(--bord
  :root,:root[data-theme=dark]{color-scheme:light;--page:#fff;--surface:#fff;--surface-2:#f1f1ed;--ink:#0b0b0b;--ink-2:#333;--muted:#666;--grid:#ddd;--axis:#bbb;--border:rgba(0,0,0,.18);--shadow:none;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s7:#4a3aa7;--good-text:#006300}
  .app{display:block}.mainwrap{padding:0;max-width:none}.card{break-inside:avoid;box-shadow:none}
  .printhead{display:block!important}
+ .no-print,.admin-mnav,.top.admin-top{display:none!important}
  .bm .trk i{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 

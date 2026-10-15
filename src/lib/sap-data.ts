@@ -881,3 +881,30 @@ export async function salvarAuditoriaSap(clinicaId: string, a: AuditoriaSemana) 
   });
   if (error) throw error;
 }
+
+// ---------------------------------------------------------------- documentos 03.07 e 08.07 (Lote D)
+
+export async function getDocumentoTextoSap(clinicaId: string, documento: "plano" | "d90"): Promise<Record<string, string>> {
+  const { data, error } = await db.from("sap_documento_texto").select("secao, texto").eq("clinica_id", clinicaId).eq("documento", documento);
+  if (error) throw error;
+  return Object.fromEntries(((data ?? []) as { secao: string; texto: string | null }[]).map((r) => [r.secao, r.texto ?? ""]));
+}
+
+export async function salvarDocumentoTextoSap(clinicaId: string, documento: "plano" | "d90", secao: string, texto: string) {
+  const { error } = await db.rpc("sap_salvar_documento_texto", { p_clinica_id: clinicaId, p_documento: documento, p_secao: secao, p_texto: texto });
+  if (error) throw error;
+}
+
+/** Gasto em anúncio por semana (segunda-feira), para o G3 do relatório D90. */
+export async function getGastoSemanalSap(clientId: string, de: string, ate: string): Promise<Map<string, number>> {
+  const { data, error } = await db.from("meta_ads_daily").select("date, spend").eq("client_id", clientId).gte("date", de).lte("date", ate).limit(50000);
+  if (error) throw error;
+  const m = new Map<string, number>();
+  for (const r of (data ?? []) as { date: string; spend: number | null }[]) {
+    const d = new Date(`${r.date}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+    const k = d.toISOString().slice(0, 10);
+    m.set(k, (m.get(k) ?? 0) + (Number(r.spend) || 0));
+  }
+  return m;
+}
