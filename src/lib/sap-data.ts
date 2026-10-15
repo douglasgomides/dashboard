@@ -624,12 +624,13 @@ export type SapCadastro = SapClinica & {
   conversoes_google: boolean | null;
   rastreamento_conferido_por: string | null;
   rastreamento_conferido_em: string | null;
+  drive_pasta_url: string | null;
 };
 
 export async function getClinicaSap(clientId: string): Promise<SapCadastro | null> {
   const { data, error } = await db
     .from("sap_clinicas")
-    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto, consulta_paga, verba_em_dia, score_execucao, baseline_de, baseline_ate, aceite_metas_em, aceite_metas_por, ajustes_acordados, garantia_status, garantia_inicio, pos_contrato, decisor_nome, decisor_contato, ambicao_d90, coordenador, caminho_tecnologia, categoria_fonte_meta, verba_mensal, meta_pixel_id, meta_ad_account_id, google_ads_customer_id, google_acoes_conversao, status_categoria_meta, categoria_verificada_em, conversoes_meta, conversoes_google, rastreamento_conferido_por, rastreamento_conferido_em, sap_pausas(id, tipo, inicio, fim, motivo, removido_em)")
+    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto, consulta_paga, verba_em_dia, score_execucao, baseline_de, baseline_ate, aceite_metas_em, aceite_metas_por, ajustes_acordados, garantia_status, garantia_inicio, pos_contrato, decisor_nome, decisor_contato, ambicao_d90, coordenador, caminho_tecnologia, categoria_fonte_meta, verba_mensal, meta_pixel_id, meta_ad_account_id, google_ads_customer_id, google_acoes_conversao, status_categoria_meta, categoria_verificada_em, conversoes_meta, conversoes_google, rastreamento_conferido_por, rastreamento_conferido_em, drive_pasta_url, sap_pausas(id, tipo, inicio, fim, motivo, removido_em)")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -1016,4 +1017,28 @@ export async function getConversoesSap(clinicaId: string): Promise<LinhaConversa
     throw error;
   }
   return (data ?? []) as LinhaConversao[];
+}
+
+// ---------------------------------------------------------------- modo sessão
+
+export type RegistroSessao = { chave: string; texto: string | null; feito_em: string | null };
+
+export async function getSessaoSap(clinicaId: string, sessao: string): Promise<RegistroSessao[]> {
+  const { data, error } = await db.from("sap_sessao_registro").select("chave, texto, feito_em").eq("clinica_id", clinicaId).eq("sessao", sessao);
+  if (error) {
+    if (error.code === "42P01" || /does not exist|schema cache/i.test(error.message)) return [];
+    throw error;
+  }
+  return (data ?? []) as RegistroSessao[];
+}
+
+/** feito: true marca, false desmarca, null mantém (só salva o texto). */
+export async function salvarSessaoSap(clinicaId: string, sessao: string, chave: string, texto: string | null, feito: boolean | null) {
+  const { error } = await db.rpc("sap_salvar_sessao", { p_clinica_id: clinicaId, p_sessao: sessao, p_chave: chave, p_texto: texto, p_feito: feito });
+  if (error) throw error;
+}
+
+export async function salvarPastaDriveSap(clinicaId: string, url: string) {
+  const { error } = await db.rpc("sap_salvar_pasta_drive", { p_clinica_id: clinicaId, p_url: url });
+  if (error) throw error;
 }
