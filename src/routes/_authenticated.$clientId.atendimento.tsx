@@ -13,8 +13,16 @@ import { SyncButton } from "@/components/sync-button";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum } from "@/lib/format";
 import { CustoWhatsapp } from "@/components/custo-whatsapp";
+import { ConversasWhatsapp } from "@/components/conversas-whatsapp";
+import { useAuth } from "@/hooks/use-auth";
 
+// Atendimento no WhatsApp: uma tela só com duas abas. "Números" (volume, espera, equipe) e, para a equipe,
+// "Conversas e auditoria" (cada conversa com a leitura e a auditoria comercial), que antes era /conversas.
 export const Route = createFileRoute("/_authenticated/$clientId/atendimento")({
+  validateSearch: (s: Record<string, unknown>): { aba?: "numeros" | "conversas"; conversa?: string } => ({
+    aba: s.aba === "conversas" ? "conversas" : undefined,
+    conversa: typeof s.conversa === "string" ? s.conversa : undefined,
+  }),
   component: AtendimentoPage,
 });
 
@@ -61,6 +69,36 @@ function KpiCard({ label, value, hint }: { label: string; value: string; hint?: 
 
 function AtendimentoPage() {
   const { clientId } = Route.useParams();
+  const { aba, conversa } = Route.useSearch();
+  const { isAdmin } = useAuth();
+  const navigate = Route.useNavigate();
+  const atual = aba === "conversas" && isAdmin ? "conversas" : "numeros";
+  const ir = (a: "numeros" | "conversas") => navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, aba: a === "conversas" ? "conversas" : undefined, conversa: undefined }) as never });
+  return (
+    <div className="space-y-4">
+      {isAdmin && (
+        <div className="flex gap-1 rounded-lg border p-1 text-sm" role="tablist" aria-label="Atendimento no WhatsApp" style={{ borderColor: "var(--border)", width: "fit-content", background: "var(--surface)" }}>
+          {([["numeros", "Números do atendimento"], ["conversas", "Conversas e auditoria"]] as const).map(([id, rot]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={atual === id}
+              onClick={() => ir(id)}
+              className="min-h-[36px] rounded-md px-3 font-medium"
+              style={{ background: atual === id ? "var(--accent-soft)" : "transparent", color: atual === id ? "var(--text)" : "var(--text-dim)" }}
+            >
+              {rot}
+            </button>
+          ))}
+        </div>
+      )}
+      {atual === "conversas" ? <ConversasWhatsapp clientId={clientId} conversaInicial={conversa} /> : <NumerosWhatsapp clientId={clientId} />}
+    </div>
+  );
+}
+
+function NumerosWhatsapp({ clientId }: { clientId: string }) {
   const dateRangeState = clientLayoutRoute.useSearch();
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
