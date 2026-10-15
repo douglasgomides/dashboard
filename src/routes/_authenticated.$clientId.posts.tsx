@@ -41,6 +41,7 @@ import type { ContentFormat, FunnelStage, MethodologyStage } from "@/integration
 import { fmtNum } from "@/lib/format";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { SyncButton } from "@/components/sync-button";
+import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { Painel, Selo, Miniatura, BarraFina, Numero, Kpi, IconeFormato, COR_FORMATO } from "@/components/visual";
 import {
   computeConceitosVencedores,
@@ -48,6 +49,7 @@ import {
   computeFormatoPorTema,
   computeReachByFormat,
   computeReachByTema,
+  separarAmostra,
   computeRepetirOuRevisar,
   computeRetencaoDeReels,
   computeTopPostsPorTaxaDeSalvamento,
@@ -546,7 +548,8 @@ function TopPorTaxa({ posts }: { posts: Post[] }) {
 function ConversionByTag({ posts }: { posts: Post[] }) {
   const grouped = useMemo(() => computeConversionByTag(posts), [posts]);
   if (grouped.length === 0) return null;
-  const top = grouped.slice(0, 10);
+  const { conclusivos, poucos } = separarAmostra(grouped);
+  const top = conclusivos.slice(0, 10);
   const max = Math.max(1, ...top.map((g) => g.medianSaved));
 
   return (
@@ -555,8 +558,9 @@ function ConversionByTag({ posts }: { posts: Post[] }) {
       cor="var(--s3)"
       titulo="Conversão real por tema e formato"
       resumo="Salvamentos (mediana) de cada combinação"
-      ajuda="Proxy de conversão real: usa salvamentos, não curtidas. Só aparece depois que os posts são classificados no ranking acima."
+      ajuda={`Proxy de conversão real: usa salvamentos, não curtidas. Só entra no ranking a combinação com ${MIN_POSTS_CONCLUSAO} posts ou mais; as outras aparecem à parte, sem conclusão.`}
     >
+      {top.length === 0 && <SemAmostra />}
       <ul className="space-y-2.5">
         {top.map((g) => (
           <li key={`${g.tema}-${g.format}`} className="text-sm">
@@ -573,15 +577,18 @@ function ConversionByTag({ posts }: { posts: Post[] }) {
           </li>
         ))}
       </ul>
+      <PoucosDados itens={poucos.map((g) => ({ rotulo: `${g.tema} · ${g.format}`, count: g.count }))} />
     </Painel>
   );
 }
 
 function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
-  const porTema = useMemo(() => computeReachByTema(posts), [posts]);
-  const porFormato = useMemo(() => computeReachByFormat(posts), [posts]);
+  const temaTodos = useMemo(() => computeReachByTema(posts), [posts]);
+  const formatoTodos = useMemo(() => computeReachByFormat(posts), [posts]);
+  const { conclusivos: porTema, poucos: temaPoucos } = separarAmostra(temaTodos);
+  const { conclusivos: porFormato, poucos: formatoPoucos } = separarAmostra(formatoTodos);
 
-  if (porTema.length === 0 && porFormato.length === 0) return null;
+  if (temaTodos.length === 0 && formatoTodos.length === 0) return null;
 
   return (
     <Painel
@@ -589,8 +596,9 @@ function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
       cor="var(--s1)"
       titulo="Alcance por tema e por formato"
       resumo="Mediana, para não se enganar com um post viral"
-      ajuda="Alcance (mediana) é a base de comparação. Decide se um formato ou tema vale ser repetido, independente de picos isolados."
+      ajuda={`Alcance (mediana) é a base de comparação. Decide se um formato ou tema vale ser repetido, independente de picos isolados. Só entra na comparação o grupo com ${MIN_POSTS_CONCLUSAO} posts ou mais.`}
     >
+      {porTema.length === 0 && porFormato.length === 0 && <SemAmostra />}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {porTema.length > 0 && (
           <div>
@@ -602,7 +610,7 @@ function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
                 <li key={t.tema} className="text-sm">
                   <div className="mb-1 flex items-baseline justify-between gap-2">
                     <span className="min-w-0 truncate" title={String(t.tema ?? "")}>{t.tema}</span>
-                    <b className="shrink-0 text-xs tabular-nums">{fmtNum(t.medianReach)}</b>
+                    <b className="shrink-0 text-xs tabular-nums">{fmtNum(t.medianReach)} <span className="font-normal" style={{ color: "var(--muted)" }}>· {nPosts(t.count)}</span></b>
                   </div>
                   <BarraFina valor={t.medianReach} max={Math.max(...porTema.map((x) => x.medianReach))} cor="var(--s1)" />
                 </li>
@@ -623,7 +631,7 @@ function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
                       <IconeFormato formato={CONTENT_FORMATS.find((c) => c.label === f.formato)?.value} size={13} />
                       {f.formato}
                     </span>
-                    <b className="shrink-0 text-xs tabular-nums">{fmtNum(f.medianReach)}</b>
+                    <b className="shrink-0 text-xs tabular-nums">{fmtNum(f.medianReach)} <span className="font-normal" style={{ color: "var(--muted)" }}>· {nPosts(f.count)}</span></b>
                   </div>
                   <BarraFina valor={f.medianReach} max={Math.max(...porFormato.map((x) => x.medianReach))} cor="var(--s1)" />
                 </li>
@@ -632,7 +640,26 @@ function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
           </div>
         )}
       </div>
+      <PoucosDados itens={[...temaPoucos.map((t) => ({ rotulo: t.tema, count: t.count })), ...formatoPoucos.map((f) => ({ rotulo: f.formato, count: f.count }))]} />
     </Painel>
+  );
+}
+
+/** Grupos abaixo da amostra mínima: aparecem, mas sem ranking nem barra. */
+function PoucosDados({ itens }: { itens: { rotulo: string; count: number }[] }) {
+  if (!itens.length) return null;
+  return (
+    <p className="mt-3 text-xs" style={{ color: "var(--muted)" }}>
+      <strong>Poucos dados para comparar</strong> (menos de {MIN_POSTS_CONCLUSAO} posts): {itens.map((i) => `${i.rotulo} (${i.count})`).join(", ")}.
+    </p>
+  );
+}
+
+function SemAmostra() {
+  return (
+    <p className="text-sm" style={{ color: "var(--text-dim)" }}>
+      Nenhum grupo tem {MIN_POSTS_CONCLUSAO} posts ou mais no período. Aumente o período ou classifique mais posts para comparar com segurança.
+    </p>
   );
 }
 
@@ -653,7 +680,7 @@ function FormatoPorTema({ posts }: { posts: Post[] }) {
       cor="var(--ai)"
       titulo="Tema dentro de cada formato"
       resumo="Taxa de engajamento: quanto mais escuro, melhor"
-      ajuda="O mesmo tema pode performar muito diferente dependendo do formato. Cada célula mostra a taxa de engajamento (mediana), a quantidade de posts e o alcance (mediana). Só aparecem combinações com tema classificado."
+      ajuda={`O mesmo tema pode performar muito diferente dependendo do formato. Cada célula mostra a taxa de engajamento (mediana), a quantidade de posts e o alcance (mediana). Célula cinza: menos de ${MIN_POSTS_CONCLUSAO} posts, sem conclusão. Só aparecem combinações com tema classificado.`}
     >
       <p className="rola-aviso">Arraste para o lado para ver todos os formatos →</p>
       <div className="rola-x">
@@ -697,13 +724,15 @@ function FragmentoLinha({
               —
             </span>
           );
+        // Com poucos posts a célula não ganha cor: não dá para dizer que a combinação funciona.
+        const pouco = c.count < MIN_POSTS_CONCLUSAO;
         const forca = Math.round(15 + (c.medianEngRate / max) * 70);
         return (
           <span
             key={f}
             className="rounded-md px-1 py-1.5 text-center"
-            style={{ background: `color-mix(in srgb, var(--ai) ${forca}%, var(--surface))` }}
-            title={`${nPosts(c.count)} · alcance mediano ${fmtNum(c.medianReach)}`}
+            style={{ background: pouco ? "var(--surface-2)" : `color-mix(in srgb, var(--ai) ${forca}%, var(--surface))`, color: pouco ? "var(--muted)" : undefined }}
+            title={`${nPosts(c.count)} · alcance mediano ${fmtNum(c.medianReach)}${pouco ? ` · poucos dados (menos de ${MIN_POSTS_CONCLUSAO} posts)` : ""}`}
           >
             <b className="block text-sm tabular-nums">{c.medianEngRate.toFixed(1)}%</b>
             <span className="block text-[10px] tabular-nums" style={{ color: "var(--text-dim)" }}>

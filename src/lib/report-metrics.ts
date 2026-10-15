@@ -143,6 +143,15 @@ export function computeTopReelsPorTaxaDeCompartilhamento(posts: any[], limit = 5
   );
 }
 
+// Amostra mínima para comparar grupos (tema, formato, tema × formato): com menos de MIN_POSTS_CONCLUSAO
+// posts o grupo não entra no ranking; aparece à parte como "poucos dados", sem conclusão.
+export function separarAmostra<T extends { count: number }>(grupos: T[]): { conclusivos: T[]; poucos: T[] } {
+  return {
+    conclusivos: grupos.filter((g) => g.count >= MIN_POSTS_CONCLUSAO),
+    poucos: grupos.filter((g) => g.count < MIN_POSTS_CONCLUSAO).sort((a, b) => b.count - a.count),
+  };
+}
+
 // Alcance (mediana) agrupado só por tema (ignora formato) — base de
 // comparação pra decidir se um tema vale ser repetido, independente de
 // picos isolados.
