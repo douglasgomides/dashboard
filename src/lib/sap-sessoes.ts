@@ -38,10 +38,15 @@ export interface DefSessao {
   acoesDe?: { chave: string; lado: "clinica" | "dc" };
 }
 
+import { SESSAO_B, SESSAO_K } from "@/lib/sessoes/kickoff-baseline";
+import { SESSAO_S2, SESSAO_S3 } from "@/lib/sessoes/s2-s3";
+import { SESSAO_S4, SESSAO_S5 } from "@/lib/sessoes/s4-s5";
+import { SESSAO_D60, SESSAO_D90, SESSAO_S6 } from "@/lib/sessoes/s6-d60-d90";
+
 const doc = (id: string) => `https://docs.google.com/document/d/${id}/edit`;
 const planilha = (id: string) => `https://docs.google.com/spreadsheets/d/${id}/edit`;
 
-export const SESSOES: DefSessao[] = [
+const SESSAO_S1: DefSessao =
   {
     id: "S1",
     cronoN: 9,
@@ -178,8 +183,10 @@ export const SESSOES: DefSessao[] = [
       { chave: "pos-enviar", quando: "Até 48 h", oque: "Enviar 03.06 e 03.07 (KPIs com metas propostas) ao decisor no grupo, com a mensagem do 02.02", quem: "Coordenador / CS e Relacionamento", horas: 48, doc: "03.06" },
     ],
     acoesDe: { chave: "acoes_clinica", lado: "clinica" },
-  },
-];
+  };
+
+/** Todas as reuniões do programa, na ordem do Cronograma Mestre (00.02). Roteiros extraídos do Drive (a fonte). */
+export const SESSOES: DefSessao[] = [SESSAO_K, SESSAO_B, SESSAO_S1, SESSAO_S2, SESSAO_S3, SESSAO_S4, SESSAO_S5, SESSAO_S6, SESSAO_D60, SESSAO_D90];
 
 export const sessaoPorId = (id: string | undefined) => SESSOES.find((s) => s.id === id) ?? null;
 export const sessaoDoItem = (cronoN: number) => SESSOES.find((s) => s.cronoN === cronoN) ?? null;
