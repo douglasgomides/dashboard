@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ClipboardCheck, FileText, LayoutDashboard, Scale } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LogoutButton } from "@/components/logout-button";
+import { TrocaProduto } from "@/components/troca-produto";
 import { getClient } from "@/lib/client-data";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -15,14 +16,14 @@ export const Route = createFileRoute("/_authenticated/admin")({
 
 // Admin no MESMO layout do painel do cliente (barra lateral, tipografia, cartões): parece parte do mesmo produto.
 const ITENS = [
-  { to: "/admin", label: "Visão geral do portfólio", Icone: LayoutDashboard, exato: true },
+  { to: "/admin", label: "Clientes do Hub", Icone: LayoutDashboard, exato: true },
   { to: "/admin/referencia", label: "Referência entre clientes", Icone: Scale },
   { to: "/admin/conferencia", label: "Conferência de dados", Icone: ClipboardCheck },
   { to: "/admin/relatorios", label: "Relatórios da semana", Icone: FileText },
 ] as const;
 
 const TITULO: Record<string, string> = {
-  "/admin": "Visão geral do portfólio",
+  "/admin": "Clientes do Hub",
   "/admin/referencia": "Referência entre clientes",
   "/admin/conferencia": "Conferência de dados",
   "/admin/relatorios": "Relatórios da semana",
@@ -51,13 +52,12 @@ function AdminLayout() {
           </span>
           <span className="so-aberta">Doctor Creator Hub</span>
         </div>
+        <TrocaProduto atual="hub" clientId={null} />
         <nav className="side">
           <div className="lbl">Portfólio</div>
           {itens}
         </nav>
         <div className="side-foot so-aberta">
-          {/* Troca de produto: o Sistema de Aquisição é separado do Hub. */}
-          <Link to="/sap" className="text-sm">Sistema de Aquisição →</Link>
           <LogoutButton className="text-sm text-left min-h-[36px]" />
           <span>Doctor Creator Hub</span>
         </div>

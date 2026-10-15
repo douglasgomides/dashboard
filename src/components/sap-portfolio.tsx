@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { listAllClients } from "@/lib/admin-data";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Target } from "lucide-react";
-import { getSapPortfolio, portfolioDeExemplo, faseDoDia, proximoMarco, type Farol, type SapLinhaPortfolio } from "@/lib/sap-data";
+import { getSapPorCliente, getSapPortfolio, novaClinicaSap, portfolioDeExemplo, faseDoDia, proximoMarco, type Farol, type SapLinhaPortfolio } from "@/lib/sap-data";
 import { fmtBRL, fmtNum } from "@/lib/format";
 import { Painel, Selo, Ajuda } from "@/components/visual";
 import { corDaSaude } from "@/components/sap-scores";
@@ -42,8 +42,8 @@ export function PortfolioSap() {
         <div className="space-y-3 text-sm" style={{ color: "var(--text-dim)" }}>
           <p>
             Aqui aparece cada clínica do sistema com o dia em que está, a fase, o próximo marco, o semáforo e os números da última
-            semana. Para incluir uma clínica, escolha o cliente abaixo e clique em <strong>Ativar o SAP</strong> (marque "piloto" para um
-            cliente de outro produto). Os números saem sozinhos do CRM e do WhatsApp.
+            semana. Toda clínica nova entra aqui: clique em <strong>Cadastrar nova clínica</strong>. Depois do D90 ela segue
+            no Doctor Creator Hub como acompanhamento. Os números saem sozinhos do CRM e do WhatsApp.
           </p>
           <AbrirClinica />
           <button type="button" onClick={() => setExemplo(true)} className="rounded-lg px-3 py-2 text-sm font-medium" style={{ background: "var(--accent)", color: "#fff" }}>
@@ -218,24 +218,82 @@ function Num({ v, ant }: { v: number; ant: number }) {
 }
 
 /** Abre (ou ativa) o Sistema de Aquisição de qualquer cliente do Hub. */
+// Entrada do SAP: clínica NOVA é cadastrada aqui (nasce no programa e, depois do D90, segue no Hub com os mesmos dados).
+// Cliente que já está no Hub só entra no SAP como exceção (piloto), pela opção "Trazer um cliente do Hub".
 function AbrirClinica() {
   const navigate = useNavigate();
-  const { data } = useQuery({ queryKey: ["admin-clients"], queryFn: listAllClients });
-  const clientes = ((data ?? []) as { id: string; name: string }[]).slice().sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const qc = useQueryClient();
+  const [aberto, setAberto] = useState(false);
+  const [f, setF] = useState({ nome: "", especialidade: "", cidade: "", instagram: "", d0: "", servico: "", ticket: "", piloto: false });
+  const clientesQ = useQuery({ queryKey: ["admin-clients"], queryFn: listAllClients });
+  const sapQ = useQuery({ queryKey: ["sap-por-cliente"], queryFn: getSapPorCliente });
+  const todos = ((clientesQ.data ?? []) as { id: string; name: string }[]).slice().sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const noSap = todos.filter((c) => sapQ.data?.has(c.id));
+  const soHub = todos.filter((c) => !sapQ.data?.has(c.id));
+  const criar = useMutation({
+    mutationFn: () => novaClinicaSap({ nome: f.nome, especialidade: f.especialidade, cidade: f.cidade, instagram: f.instagram, d0: f.d0 || null, piloto: f.piloto, servico: f.servico, ticket: f.ticket ? Number(f.ticket.replace(/\./g, "").replace(",", ".")) : null }),
+    onSuccess: (id) => {
+      qc.invalidateQueries({ queryKey: ["admin-clients"] });
+      qc.invalidateQueries({ queryKey: ["sap-portfolio"] });
+      qc.invalidateQueries({ queryKey: ["sap-por-cliente"] });
+      navigate({ to: "/sap/$clientId/passo-a-passo" as never, params: { clientId: id } as never });
+    },
+  });
+  const campo = { borderColor: "var(--border)", background: "var(--surface)" } as const;
+  const input = (k: keyof typeof f, rot: string, extra: Record<string, unknown> = {}) => (
+    <label className="text-xs">{rot}<input value={String(f[k])} onChange={(e) => setF({ ...f, [k]: e.target.value })} className="mt-0.5 block min-h-[36px] w-full rounded-md border px-2 text-sm" style={campo} {...extra} /></label>
+  );
   return (
-    <label className="flex flex-wrap items-center gap-2 text-sm">
-      <span style={{ color: "var(--text-dim)" }}>Abrir ou ativar uma clínica:</span>
-      <select
-        defaultValue=""
-        onChange={(e) => e.target.value && navigate({ to: "/sap/$clientId", params: { clientId: e.target.value } })}
-        className="min-h-[38px] rounded-lg border px-2 text-sm"
-        style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-      >
-        <option value="">Escolha o cliente…</option>
-        {clientes.map((c) => (
-          <option key={c.id} value={c.id}>{c.name}</option>
-        ))}
-      </select>
-    </label>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" onClick={() => setAberto((x) => !x)} className="min-h-[40px] rounded-lg px-4 text-sm font-semibold text-white" style={{ background: "#C49A5C" }} aria-expanded={aberto}>
+          + Cadastrar nova clínica
+        </button>
+        {noSap.length > 0 && (
+          <label className="flex flex-wrap items-center gap-2 text-sm">
+            <span style={{ color: "var(--text-dim)" }}>Abrir clínica do programa:</span>
+            <select defaultValue="" onChange={(e) => e.target.value && navigate({ to: "/sap/$clientId", params: { clientId: e.target.value } })} className="min-h-[38px] rounded-lg border px-2 text-sm" style={campo}>
+              <option value="">Escolha…</option>
+              {noSap.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
+      {aberto && (
+        <form onSubmit={(e) => { e.preventDefault(); if (f.nome.trim()) criar.mutate(); }} className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+          <p className="mb-3 text-sm" style={{ color: "var(--text-dim)" }}>
+            Toda clínica nova entra por aqui. Ela nasce no Sistema de Aquisição e, depois do D90, segue no Doctor Creator Hub como acompanhamento, com os mesmos dados.
+            O D0 é o dia da assinatura e do pagamento; se ainda não fechou, deixe em branco.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {input("nome", "Nome da clínica ou do médico *", { required: true, autoComplete: "off" })}
+            {input("especialidade", "Especialidade")}
+            {input("cidade", "Cidade")}
+            {input("instagram", "@ do Instagram")}
+            {input("d0", "D0 (assinatura)", { type: "date" })}
+            {input("servico", "Serviço prioritário")}
+            {input("ticket", "Ticket médio (R$)", { inputMode: "decimal" })}
+            <label className="flex items-end gap-2 pb-2 text-sm"><input type="checkbox" checked={f.piloto} onChange={(e) => setF({ ...f, piloto: e.target.checked })} /> Piloto</label>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button type="submit" disabled={criar.isPending || !f.nome.trim()} className="min-h-[40px] rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
+              {criar.isPending ? "Cadastrando…" : "Cadastrar e abrir o passo a passo"}
+            </button>
+            <button type="button" onClick={() => setAberto(false)} className="text-sm" style={{ color: "var(--text-dim)" }}>Cancelar</button>
+            {criar.isError && <span className="text-sm" style={{ color: "var(--crit)" }}>{(criar.error as Error).message}</span>}
+          </div>
+        </form>
+      )}
+      {soHub.length > 0 && (
+        <details className="text-sm">
+          <summary className="cursor-pointer" style={{ color: "var(--text-dim)" }}>Exceção: trazer para o SAP um cliente que já está no Hub</summary>
+          <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>Clientes que já estavam com a Doctor Creator continuam no Hub. Use só para um piloto combinado.</p>
+          <select defaultValue="" onChange={(e) => e.target.value && navigate({ to: "/sap/$clientId", params: { clientId: e.target.value } })} className="mt-1 min-h-[38px] rounded-lg border px-2 text-sm" style={campo}>
+            <option value="">Escolha o cliente do Hub…</option>
+            {soHub.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </details>
+      )}
+    </div>
   );
 }

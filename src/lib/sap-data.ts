@@ -908,3 +908,28 @@ export async function getGastoSemanalSap(clientId: string, de: string, ate: stri
   }
   return m;
 }
+
+// ---------------------------------------------------------------- entrada pelo SAP (clínica nova) e selo no Hub
+
+/** Cadastra uma clínica nova direto no Sistema de Aquisição: cria o cliente (que segue no Hub depois do D90) e a clínica. */
+export async function novaClinicaSap(v: { nome: string; especialidade: string; cidade: string; instagram: string; d0: string | null; piloto: boolean; servico: string; ticket: number | null }): Promise<string> {
+  const { data, error } = await db.rpc("sap_nova_clinica", {
+    p_nome: v.nome, p_especialidade: v.especialidade, p_cidade: v.cidade, p_instagram: v.instagram, p_d0: v.d0, p_piloto: v.piloto, p_servico: v.servico, p_ticket: v.ticket,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+/** Clientes do Hub que estão no SAP, com o dia do programa (para o selo "SAP · D23" no Hub). */
+export async function getSapPorCliente(): Promise<Map<string, { dia: number | null; status: string | null }>> {
+  const { data, error } = await db.from("sap_clinicas").select("client_id, d0, status, sap_pausas(id, tipo, inicio, fim, removido_em)");
+  if (error) {
+    if (/does not exist|schema cache/i.test(error.message)) return new Map();
+    throw error;
+  }
+  const m = new Map<string, { dia: number | null; status: string | null }>();
+  for (const r of (data ?? []) as { client_id: string | null; d0: string | null; status: string | null; sap_pausas?: PausaBruta[] }[]) {
+    if (r.client_id) m.set(r.client_id, { dia: diaAtual(r.d0, pausasValidas(r.sap_pausas)), status: r.status });
+  }
+  return m;
+}

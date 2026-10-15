@@ -1,11 +1,12 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { ehEnderecoSap } from "@/lib/marca";
+import { diaAtual, pausasValidas } from "@/lib/sap-data";
 
 // Página inicial de quem está logado: decide para onde ir (as regras de acesso continuam as mesmas).
 // - Endereço sap.*: o Sistema de Aquisição (/sap), produto separado do Hub.
 // - Admin: painel de administração do Hub.
-// - Cliente: o primeiro cliente a que tem acesso.
+// - Cliente: o primeiro cliente a que tem acesso (no SAP enquanto está no programa; no Hub depois do D90).
 export const Route = createFileRoute("/_authenticated/")({
   beforeLoad: async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -26,6 +27,18 @@ export const Route = createFileRoute("/_authenticated/")({
 
     if (!membership) {
       throw redirect({ to: "/sem-acesso" });
+    }
+    // Clínica dentro do programa (D0 a D90): abre no Sistema de Aquisição. Depois do D90, o Hub é o acompanhamento.
+    const { data: sap } = await (supabase as any)
+      .from("sap_clinicas")
+      .select("d0, status, sap_pausas(id, tipo, inicio, fim, removido_em)")
+      .eq("client_id", membership.client_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (sap && sap.status !== "encerrada") {
+      const dia = diaAtual(sap.d0, pausasValidas(sap.sap_pausas));
+      if (dia === null || dia <= 90) throw redirect({ to: "/sap/$clientId", params: { clientId: membership.client_id } });
     }
     throw redirect({ to: "/$clientId", params: { clientId: membership.client_id } });
   },

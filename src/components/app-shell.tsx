@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { TrocaProduto } from "@/components/troca-produto";
 import { Link } from "@tanstack/react-router";
 import { CalendarDays, ChevronDown, Menu, Search, ShieldCheck, X, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
@@ -208,6 +209,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
             {recolhida ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
           </button>
         </div>
+        {vis.isAdmin && <TrocaProduto atual="hub" clientId={vis.sap ? clientId : null} />}
         {onBuscarCliente && (
           <button type="button" className="kbar" onClick={onBuscarCliente}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
@@ -266,7 +268,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
         <div className="side-foot so-aberta">
           <Link to="/bem-vindo" className="text-sm">Tour do painel</Link>
           {/* Troca de produto (não é item de menu): só para a equipe e para clínica com o Sistema de Aquisição ativo. */}
-          {(vis.isAdmin || vis.sap) && (
+          {!vis.isAdmin && vis.sap && (
             <Link to="/sap/$clientId" params={{ clientId }} className="text-sm">Sistema de Aquisição →</Link>
           )}
           <TemaBotoes />
