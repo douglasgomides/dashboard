@@ -9,6 +9,7 @@ import { getQualidadeDados, getRoiPeriodo } from "@/lib/client-data";
 import { montarRoi, resumoRoi, type Roi } from "@/lib/roi";
 import { resolveDateRange } from "@/lib/date-range";
 import { lerStatusDasFontes, type FontesDoCliente } from "@/lib/saude-fontes";
+import { notaDasFontes, ROTULO_FAIXA, type NotaFontes } from "@/lib/nota-fontes";
 import { FONTES, NOME_FONTE, LEGENDA_STATUS, VAR_COR, type FonteId } from "@/lib/status-fonte";
 import { ArrowRight, UserX } from "lucide-react";
 import { saudeDaFonte, CelulaSaude, SeloStatus, type SaudeFonte } from "@/components/source-health";
@@ -219,6 +220,22 @@ function LinhaSaude({ clientId, saude }: { clientId: string; saude: Record<Fonte
   );
 }
 
+// Nota de saúde das fontes, com o porquê no title e em texto curto.
+function CelulaNota({ n }: { n: NotaFontes | null }) {
+  if (!n) return <span className="text-xs" style={{ color: "var(--muted)" }}>…</span>;
+  if (n.nota === null) return <span className="text-xs" style={{ color: "var(--muted)" }}>sem fonte ligada</span>;
+  const cor = VAR_COR[n.cor];
+  return (
+    <div title={n.motivos.length ? `Por que não é 100:\n${n.motivos.join("\n")}` : "Todas as fontes em dia, sem problema de dado"}>
+      <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+        <span className="text-lg font-bold tabular-nums" style={{ color: cor }}>{n.nota}</span>
+        <span className="text-xs font-semibold" style={{ color: cor }}>{ROTULO_FAIXA[n.faixa!]}</span>
+      </div>
+      {n.motivos[0] && <div className="mt-0.5 max-w-[180px] text-xs" style={{ color: "var(--text-dim)" }}>{n.motivos[0]}{n.motivos.length > 1 ? ` +${n.motivos.length - 1}` : ""}</div>}
+    </div>
+  );
+}
+
 // Contagem de "dado com erro" (qualidade_dados) do cliente, com os títulos no title.
 function ChipQualidade({ clientId }: { clientId: string }) {
   const { data } = useQualidadeDados(clientId);
@@ -301,7 +318,7 @@ function AdminClientsPage() {
   // Filtros e ordenação da tabela.
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<"todos" | "problema" | "sem_roi" | "sem_login">("todos");
-  const [ordem, setOrdem] = useState<"pior" | "nome">("pior");
+  const [ordem, setOrdem] = useState<"pior" | "nota" | "nome">("pior");
   const piorPeso = (id: string) => {
     const sd = saudePorCliente.get(id);
     return sd ? Math.max(...FONTES.map((f) => sd[f].status.peso)) : 0;
@@ -330,9 +347,25 @@ function AdminClientsPage() {
       return s ? [{ id: c.id, nome: c.name, fontes: s.fontes, linhas: s.linhas, naoUsa: s.naoUsa, qualidade: qualidades[i]?.data ?? [] }] : [];
     }),
   );
+  // Nota de saúde das fontes (0 a 100): status de cada fonte + problemas de dado (src/lib/nota-fontes.ts).
+  const notaPorCliente = new Map<string, NotaFontes | null>(
+    (clients ?? []).map((c, i) => {
+      const sd = saudePorCliente.get(c.id);
+      if (!sd) return [c.id, null];
+      const st = Object.fromEntries(FONTES.map((f) => [f, sd[f].status]));
+      return [c.id, notaDasFontes(st, qualidades[i]?.data ?? [])];
+    }),
+  );
+  const valorNota = (id: string) => notaPorCliente.get(id)?.nota ?? 101;
   const linhasTabela = (clients ?? [])
     .filter(casaFiltro)
-    .sort((x, y) => (ordem === "nome" ? x.name.localeCompare(y.name, "pt-BR") : piorPeso(y.id) - piorPeso(x.id) || x.name.localeCompare(y.name, "pt-BR")));
+    .sort((x, y) =>
+      ordem === "nome"
+        ? x.name.localeCompare(y.name, "pt-BR")
+        : ordem === "nota"
+          ? valorNota(x.id) - valorNota(y.id) || x.name.localeCompare(y.name, "pt-BR")
+          : piorPeso(y.id) - piorPeso(x.id) || x.name.localeCompare(y.name, "pt-BR"),
+    );
   const chipFiltro = (id: typeof filtro, rot: string, n?: number) => (
     <button
       type="button"
@@ -419,6 +452,7 @@ function AdminClientsPage() {
           Ordenar por
           <select value={ordem} onChange={(e) => setOrdem(e.target.value as typeof ordem)} className="min-h-[36px] rounded-lg border px-2 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
             <option value="pior">Pior status</option>
+            <option value="nota">Nota das fontes (menor primeiro)</option>
             <option value="nome">Nome</option>
           </select>
         </label>
@@ -431,6 +465,7 @@ function AdminClientsPage() {
             <thead>
               <tr className="text-left text-xs" style={{ color: "var(--ink-2)", background: "var(--surface-2)" }}>
                 <th className="px-4 py-2">Nome</th>
+                <th className="px-4 py-2" title="0 a 100: fontes em dia, fontes por ligar e problemas de dado">Nota</th>
                 <th className="px-4 py-2">Instagram</th>
                 <th className="px-4 py-2">Anúncios</th>
                 <th className="px-4 py-2">CRM</th>
@@ -461,6 +496,7 @@ function AdminClientsPage() {
                         </div>
                       </div>
                     </td>
+                    <td className="px-4 py-3 align-top" data-label="Nota das fontes"><CelulaNota n={notaPorCliente.get(c.id) ?? null} /></td>
                     <LinhaSaude clientId={c.id} saude={saudePorCliente.get(c.id) ?? null} />
                     <td className="px-4 py-3 align-top" data-label="ROI (30 dias)">
                       {(() => {
@@ -490,7 +526,7 @@ function AdminClientsPage() {
               })}
               {(clients ?? []).length > 0 && linhasTabela.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center" style={{ color: "var(--text-dim)" }}>
+                  <td colSpan={8} className="px-4 py-6 text-center" style={{ color: "var(--text-dim)" }}>
                     Nenhum cliente com esse filtro.{" "}
                     <button type="button" className="font-semibold" style={{ color: "var(--accent)" }} onClick={() => { setBusca(""); setFiltro("todos"); }}>Limpar</button>
                   </td>
@@ -498,7 +534,7 @@ function AdminClientsPage() {
               )}
               {(clients ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center" style={{ color: "var(--text-dim)" }}>
+                  <td colSpan={8} className="px-4 py-6 text-center" style={{ color: "var(--text-dim)" }}>
                     Nenhum cliente cadastrado ainda.
                   </td>
                 </tr>
