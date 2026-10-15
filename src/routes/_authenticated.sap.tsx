@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, KeyRound, ClipboardCheck, Flag, ListOrdered, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight } from "lucide-react";
+import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, ListOrdered, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { getClient } from "@/lib/client-data";
@@ -21,6 +21,7 @@ const ITENS = [
   { sub: "/metas", label: "Metas e garantia", Icone: Target },
   { sub: "/leitura", label: "Leitura da semana", Icone: ClipboardCheck },
   { sub: "/execucao", label: "Execução e saúde", Icone: ListChecks },
+  { sub: "/documentos", label: "Plano e relatório D90", Icone: FileText },
   { sub: "/midia", label: "Mídia", Icone: Gauge },
   { sub: "/etapas", label: "Etapas no funil (equipe)", Icone: Network, admin: true },
 ] as const;
