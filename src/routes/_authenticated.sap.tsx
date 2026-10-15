@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, ListOrdered, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
+import { TrocaProduto } from "@/components/troca-produto";
 import { getClient } from "@/lib/client-data";
 import { diaAtual, faseDoDia, getClinicaSap } from "@/lib/sap-data";
 
@@ -13,17 +14,18 @@ export const Route = createFileRoute("/_authenticated/sap")({
   component: SapLayout,
 });
 
+// Menu da clínica agrupado pelas etapas do programa: visão geral, implantação (D0 a D30), rotina semanal e resultado.
 const ITENS = [
-  { sub: "/passo-a-passo", label: "Passo a passo", Icone: ListOrdered },
-  { sub: "", label: "Programa", Icone: Flag },
-  { sub: "/cronograma", label: "Cronograma e prazos", Icone: CalendarClock },
-  { sub: "/onboarding", label: "Ficha e acessos", Icone: KeyRound },
-  { sub: "/metas", label: "Metas e garantia", Icone: Target },
-  { sub: "/leitura", label: "Leitura da semana", Icone: ClipboardCheck },
-  { sub: "/execucao", label: "Execução e saúde", Icone: ListChecks },
-  { sub: "/documentos", label: "Plano e relatório D90", Icone: FileText },
-  { sub: "/midia", label: "Mídia", Icone: Gauge },
-  { sub: "/etapas", label: "Etapas no funil (equipe)", Icone: Network, admin: true },
+  { grupo: "Visão geral", sub: "", label: "Programa", Icone: Flag },
+  { grupo: "Visão geral", sub: "/passo-a-passo", label: "Passo a passo", Icone: ListOrdered },
+  { grupo: "Implantação", sub: "/onboarding", label: "Ficha e acessos", Icone: KeyRound },
+  { grupo: "Implantação", sub: "/cronograma", label: "Cronograma e prazos", Icone: CalendarClock },
+  { grupo: "Implantação", sub: "/etapas", label: "Etapas no funil (equipe)", Icone: Network, admin: true },
+  { grupo: "Rotina semanal", sub: "/leitura", label: "Leitura da semana", Icone: ClipboardCheck },
+  { grupo: "Rotina semanal", sub: "/execucao", label: "Execução e saúde", Icone: ListChecks },
+  { grupo: "Rotina semanal", sub: "/midia", label: "Mídia", Icone: Gauge },
+  { grupo: "Resultado", sub: "/metas", label: "Metas e garantia", Icone: Target },
+  { grupo: "Resultado", sub: "/documentos", label: "Plano e relatório D90", Icone: FileText },
 ] as const;
 
 function SapLayout() {
@@ -47,7 +49,8 @@ function SapLayout() {
       )}
       {parte === "clinica" &&
         clientId &&
-        itens.map((it) => (
+        itens.map((it, i) => [
+          i === 0 || itens[i - 1].grupo !== it.grupo ? <div key={`g-${it.grupo}`} className="lbl" style={{ fontSize: 10, opacity: 0.8 }}>{it.grupo}</div> : null,
           <Link
             key={it.sub}
             to={`/sap/$clientId${it.sub}` as never}
@@ -58,8 +61,8 @@ function SapLayout() {
           >
             <it.Icone aria-hidden size={18} />
             <span>{it.label}</span>
-          </Link>
-        ))}
+          </Link>,
+        ])}
     </>
   );
 
@@ -72,16 +75,19 @@ function SapLayout() {
           </span>
           <span className="so-aberta">Sistema de Aquisição</span>
         </div>
+        {isAdmin && <TrocaProduto atual="sap" clientId={clientId} />}
         <nav className="side">
           {links("todas")}
           {clientId && <div className="lbl">{cliente?.name ?? "Clínica"}</div>}
           {links("clinica")}
         </nav>
         <div className="side-foot so-aberta">
-          {/* Troca de produto (não é item de menu): leva ao painel do Hub. */}
-          <Link to={clientId ? "/$clientId" : isAdmin ? "/admin" : "/"} params={(clientId ? { clientId } : undefined) as never} className="inline-flex items-center gap-1.5 text-sm">
-            <ArrowLeftRight size={14} aria-hidden /> Ir para o Doctor Creator Hub
-          </Link>
+          {/* A clínica vê o Hub como a continuação do programa (acompanhamento). A equipe troca de produto no topo. */}
+          {!isAdmin && (
+            <Link to={clientId ? "/$clientId" : "/"} params={(clientId ? { clientId } : undefined) as never} className="inline-flex items-center gap-1.5 text-sm">
+              <ArrowLeftRight size={14} aria-hidden /> Acompanhamento no Doctor Creator Hub
+            </Link>
+          )}
           <LogoutButton className="text-sm text-left min-h-[36px]" />
           <span>Sistema de Aquisição de Pacientes · Doctor Creator</span>
         </div>

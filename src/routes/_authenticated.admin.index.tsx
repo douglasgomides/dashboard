@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getQualidadeDados, getRoiPeriodo } from "@/lib/client-data";
 import { montarRoi, resumoRoi, type Roi } from "@/lib/roi";
 import { resolveDateRange } from "@/lib/date-range";
+import { getSapPorCliente } from "@/lib/sap-data";
 import { lerStatusDasFontes, type FontesDoCliente } from "@/lib/saude-fontes";
 import { notaDasFontes, ROTULO_FAIXA, type NotaFontes } from "@/lib/nota-fontes";
 import { FONTES, NOME_FONTE, LEGENDA_STATUS, VAR_COR, type FonteId } from "@/lib/status-fonte";
@@ -263,6 +264,7 @@ function AdminClientsPage() {
   });
 
   // Status de todas as fontes de todos os clientes numa leitura só, pela regra única (src/lib/status-fonte.ts).
+  const { data: sapPorCliente } = useQuery({ queryKey: ["sap-por-cliente"], queryFn: getSapPorCliente, staleTime: 5 * 60_000, retry: false });
   const statusQ = useQuery({ queryKey: ["status-das-fontes"], queryFn: lerStatusDasFontes, staleTime: 60_000, retry: false });
   const saudePorCliente = new Map<string, Record<FonteId, SaudeFonte> | null>((clients ?? []).map((c) => [c.id, saudesDoCliente(statusQ.data?.get(c.id))]));
   const carregandoSaude = statusQ.isLoading;
@@ -381,6 +383,14 @@ function AdminClientsPage() {
 
   return (
     <div>
+      {/* Dois produtos: clínica nova entra pelo Sistema de Aquisição; o Hub é o acompanhamento contínuo. */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 text-sm" style={{ borderColor: "color-mix(in srgb, #C49A5C 45%, var(--border))", background: "color-mix(in srgb, #C49A5C 6%, var(--surface))" }}>
+        <span>
+          <strong>Clínica nova entra pelo Sistema de Aquisição.</strong>{" "}
+          <span style={{ color: "var(--text-dim)" }}>Aqui ficam os clientes em acompanhamento: quem já estava com a Doctor Creator e quem terminou os 90 dias.{sapPorCliente?.size ? ` ${sapPorCliente.size} cliente(s) também no SAP, com o selo dourado.` : ""}</span>
+        </span>
+        <Link to="/sap" className="inline-flex min-h-[38px] items-center rounded-lg px-3 font-semibold text-white" style={{ background: "#C49A5C" }}>Cadastrar clínica nova no SAP →</Link>
+      </div>
       {statusQ.isError && (
         <p className="mb-3 text-sm" style={{ color: "var(--crit)" }}>
           Não consegui ler o status das fontes agora. Tente de novo em instantes.
@@ -487,6 +497,15 @@ function AdminClientsPage() {
                           <div className="text-xs font-normal" style={{ color: "var(--text-dim)" }}>
                             {[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}
                           </div>
+                          {sapPorCliente?.get(c.id) && (() => {
+                            const sp = sapPorCliente.get(c.id)!;
+                            const txt = sp.dia === null ? "SAP · sem D0" : sp.dia > 90 ? "Terminou o SAP · acompanhamento" : sp.dia < 0 ? `SAP · começa em ${-sp.dia} dia(s)` : `SAP · D${sp.dia} de 90`;
+                            return (
+                              <Link to="/sap/$clientId" params={{ clientId: c.id }} className="mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: "color-mix(in srgb, #C49A5C 18%, transparent)", color: "#8a6a35" }} title="Abrir no Sistema de Aquisição">
+                                {txt}
+                              </Link>
+                            );
+                          })()}
                           {semLogin(c.id) && (
                             <Link to="/admin/$clientId" params={{ clientId: c.id }} hash="acesso" className="mt-1 inline-flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--warn)" }} title="Nenhum usuário do cliente tem acesso ao painel (só a equipe). Clique para dar acesso.">
                               <UserX size={13} aria-hidden /> Médico sem login · dar acesso
@@ -547,7 +566,8 @@ function AdminClientsPage() {
         <LinksSemCliente clientes={[...(clients ?? [])].filter((c: any) => c.active !== false).sort((x: any, y: any) => x.name.localeCompare(y.name))} />
       </div>
       <details className="mt-6">
-        <summary className="cursor-pointer select-none py-1 text-sm font-medium">Cadastrar admin ou cliente</summary>
+        <summary className="cursor-pointer select-none py-1 text-sm font-medium">Cadastrar admin ou cliente só do Hub (exceção)</summary>
+        <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>Clínica nova entra pelo Sistema de Aquisição. Use o cadastro abaixo só para cliente que não vai passar pelo programa.</p>
         <div className="mt-3">
           <NewAdminForm />
           <NewClientForm />
