@@ -10,7 +10,7 @@ export interface PassoImplantacao {
   titulo: string;
   porque: string; // em linguagem simples
   como: string; // o que clicar
-  tela: "" | "/metas" | "/leitura" | "/execucao" | "/midia" | "/etapas" | "/cronograma" | "/onboarding";
+  tela: "" | "/metas" | "/leitura" | "/execucao" | "/midia" | "/etapas" | "/cronograma" | "/onboarding" | "/rastreamento";
   quando: string;
   status: StatusPasso;
   detalhe?: string;
@@ -30,6 +30,7 @@ export interface EstadoImplantacao {
   metaCustoConsulta: boolean;
   aceiteMetas?: boolean; // data e assinante do aceite registrados (03.07)
   acessosCriticos?: { feitos: number; total: number }; // checklist 02.05
+  rastreamento?: { liberado: boolean; faltam: number[]; aguardandoConferencia: boolean }; // checklist 05.03 §9
   linhasCompletas: number | null; // 0 a 1
   divergencia: number | null; // 0 a 1 (null = sem leads de anúncio)
   saudeSemanaAtual: boolean;
@@ -77,6 +78,25 @@ export function passosDaImplantacao(e: EstadoImplantacao): PassoImplantacao[] {
             quando: "Críticos até o D7; complementares até o D14",
             status: ate(7, e.acessosCriticos.feitos >= e.acessosCriticos.total),
             detalhe: e.acessosCriticos.feitos < e.acessosCriticos.total ? `${e.acessosCriticos.feitos} de ${e.acessosCriticos.total} críticos confirmados.` : undefined,
+          },
+        ]
+      : []),
+    ...(e.rastreamento
+      ? [
+          {
+            id: "rastreamento",
+            grupo: "Começo (D0 a D14)" as const,
+            titulo: "Aprovar o checklist de rastreamento antes de subir anúncio (05.03)",
+            porque: "Anúncio sem medição queima a verba e não prova nada no D90. Nenhum anúncio sobe sem os testes obrigatórios aprovados com evidência e conferidos pelo Coordenador.",
+            como: "Em Rastreamento, registre a categoria da fonte na Meta e marque cada teste com a evidência (print ou link).",
+            tela: "/rastreamento" as const,
+            quando: "Setup do D18 ao D26; teste final até o D27",
+            status: ate(27, e.rastreamento.liberado),
+            detalhe: e.rastreamento.liberado
+              ? undefined
+              : e.rastreamento.aguardandoConferencia
+                ? "Testes aprovados; falta a conferência do Coordenador."
+                : `Faltam os testes ${e.rastreamento.faltam.join(", ")}.`,
           },
         ]
       : []),
