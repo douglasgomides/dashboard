@@ -6,7 +6,7 @@ import { chromium } from "playwright-core";
 const BASE = "http://localhost:5198";
 const CID = "11111111-1111-1111-1111-111111111111";
 const rotas = ["", "/conteudo", "/posts", "/top", "/audiencia", "/duvidas", "/ideias", "/inspiracao", "/anuncios", "/crm-painel", "/crm-guia", "/proximas-acoes", "/campanhas", "/atendimento", "/jornada", "/oportunidades", "/relatorio", "/analisar", "/conversas", "/crm-estrutura", "/vendas-kommo", "/vendas", "/consultas", "/automacoes", "/aquisicao"].map((r) => `/${CID}${r}`)
-  .concat(["/admin", `/admin/${CID}`, "/admin/conferencia", "/admin/referencia", "/admin/relatorios", "/sap", `/sap/${CID}`, `/sap/${CID}/metas`, `/sap/${CID}/leitura`, `/sap/${CID}/execucao`, `/sap/${CID}/midia`, `/sap/${CID}/etapas`, `/sap/${CID}/passo-a-passo`, `/sap/${CID}/cronograma`, `/sap/${CID}/onboarding`, `/sap/${CID}/documentos`, `/sap/${CID}/documentos?doc=d90`]);
+  .concat(["/admin", `/admin/${CID}`, "/admin/conferencia", "/admin/referencia", "/admin/relatorios", "/sap", `/sap/${CID}`, `/sap/${CID}/metas`, `/sap/${CID}/leitura`, `/sap/${CID}/execucao`, `/sap/${CID}/midia`, `/sap/${CID}/etapas`, `/sap/${CID}/passo-a-passo`, `/sap/${CID}/cronograma`, `/sap/${CID}/onboarding`, `/sap/${CID}/rastreamento`, `/sap/${CID}/documentos`, `/sap/${CID}/documentos?doc=d90`]);
 const width = +(process.argv[2] ?? 1280);
 const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const ctx = await b.newContext({ viewport: { width, height: 900 } });

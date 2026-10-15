@@ -8,6 +8,7 @@ import { hojeBrasilia } from "@/lib/status-fonte";
 import type { RegistroAcesso } from "@/lib/sap-acessos";
 import { lerSinais, type AuditoriaSemana, type SinaisBrutos } from "@/lib/sap-sinais";
 import type { SemanaFidelizacao } from "@/lib/sap-fidelizacao";
+import type { CategoriaMeta, LinhaConversao, RegistroTeste, StatusTeste } from "@/lib/sap-rastreamento";
 
 // Tracker do Sistema de Aquisição de Pacientes (SAP).
 //
@@ -613,12 +614,22 @@ export type SapCadastro = SapClinica & {
   caminho_tecnologia: "A" | "B" | null;
   categoria_fonte_meta: string | null;
   verba_mensal: number | null;
+  meta_pixel_id: string | null;
+  meta_ad_account_id: string | null;
+  google_ads_customer_id: string | null;
+  google_acoes_conversao: Record<string, string> | null;
+  status_categoria_meta: CategoriaMeta | null;
+  categoria_verificada_em: string | null;
+  conversoes_meta: boolean | null;
+  conversoes_google: boolean | null;
+  rastreamento_conferido_por: string | null;
+  rastreamento_conferido_em: string | null;
 };
 
 export async function getClinicaSap(clientId: string): Promise<SapCadastro | null> {
   const { data, error } = await db
     .from("sap_clinicas")
-    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto, consulta_paga, verba_em_dia, score_execucao, baseline_de, baseline_ate, aceite_metas_em, aceite_metas_por, ajustes_acordados, garantia_status, garantia_inicio, pos_contrato, decisor_nome, decisor_contato, ambicao_d90, coordenador, caminho_tecnologia, categoria_fonte_meta, verba_mensal, sap_pausas(id, tipo, inicio, fim, motivo, removido_em)")
+    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto, consulta_paga, verba_em_dia, score_execucao, baseline_de, baseline_ate, aceite_metas_em, aceite_metas_por, ajustes_acordados, garantia_status, garantia_inicio, pos_contrato, decisor_nome, decisor_contato, ambicao_d90, coordenador, caminho_tecnologia, categoria_fonte_meta, verba_mensal, meta_pixel_id, meta_ad_account_id, google_ads_customer_id, google_acoes_conversao, status_categoria_meta, categoria_verificada_em, conversoes_meta, conversoes_google, rastreamento_conferido_por, rastreamento_conferido_em, sap_pausas(id, tipo, inicio, fim, motivo, removido_em)")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -964,4 +975,45 @@ export async function salvarFidelizacaoSap(clinicaId: string, s: SemanaFidelizac
   const { semana, ...dados } = s;
   const { error } = await db.rpc("sap_salvar_fidelizacao", { p_clinica_id: clinicaId, p_semana: semana, p_dados: dados });
   if (error) throw error;
+}
+
+// ---------------------------------------------------------------- rastreamento e conversões offline (Lote F, 05.03)
+
+export async function getTestesRastreioSap(clinicaId: string): Promise<RegistroTeste[]> {
+  const { data, error } = await db.from("sap_rastreamento_teste").select("item, status, evidencia, feito_em").eq("clinica_id", clinicaId);
+  if (error) throw error;
+  return (data ?? []) as RegistroTeste[];
+}
+
+export async function salvarTesteRastreioSap(clinicaId: string, item: number, status: StatusTeste, evidencia: string) {
+  const { error } = await db.rpc("sap_salvar_teste_rastreamento", { p_clinica_id: clinicaId, p_item: item, p_status: status, p_evidencia: evidencia });
+  if (error) throw error;
+}
+
+export async function conferirRastreioSap(clinicaId: string, por: string) {
+  const { error } = await db.rpc("sap_conferir_rastreamento", { p_clinica_id: clinicaId, p_por: por });
+  if (error) throw error;
+}
+
+export type ConfigRastreio = {
+  meta_pixel_id: string; meta_ad_account_id: string; google_ads_customer_id: string;
+  google_acoes_conversao: Record<string, string>; status_categoria_meta: CategoriaMeta | "";
+  categoria_verificada_em: string; conversoes_meta: boolean; conversoes_google: boolean;
+};
+
+export async function salvarConfigRastreioSap(clinicaId: string, c: ConfigRastreio) {
+  const { error } = await db.rpc("sap_salvar_rastreamento", { p_clinica_id: clinicaId, p_dados: c });
+  if (error) throw error;
+}
+
+/** Fila de conversões offline (só admin lê). Últimos 90 dias. */
+export async function getConversoesSap(clinicaId: string): Promise<LinhaConversao[]> {
+  const desde = new Date(Date.now() - 90 * 86_400_000).toISOString();
+  const { data, error } = await db.from("sap_conversoes").select("etapa, plataforma, status, motivo, ocorreu_em, enviado_em")
+    .eq("clinica_id", clinicaId).gte("ocorreu_em", desde).order("ocorreu_em", { ascending: false }).limit(2000);
+  if (error) {
+    if (error.code === "42P01" || /does not exist|schema cache/i.test(error.message)) return [];
+    throw error;
+  }
+  return (data ?? []) as LinhaConversao[];
 }
