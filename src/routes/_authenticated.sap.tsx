@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardCheck, Flag, ListOrdered, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight } from "lucide-react";
+import { CalendarClock, ClipboardCheck, Flag, ListOrdered, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { getClient } from "@/lib/client-data";
@@ -16,6 +16,7 @@ export const Route = createFileRoute("/_authenticated/sap")({
 const ITENS = [
   { sub: "/passo-a-passo", label: "Passo a passo", Icone: ListOrdered },
   { sub: "", label: "Programa", Icone: Flag },
+  { sub: "/cronograma", label: "Cronograma e prazos", Icone: CalendarClock },
   { sub: "/metas", label: "Metas e garantia", Icone: Target },
   { sub: "/leitura", label: "Leitura da semana", Icone: ClipboardCheck },
   { sub: "/execucao", label: "Execução e saúde", Icone: ListChecks },
@@ -30,7 +31,7 @@ function SapLayout() {
   const sub = clientId ? pathname.slice(`/sap/${clientId}`.length) : null;
   const { data: cliente } = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId!), enabled: !!clientId });
   const { data: clinica } = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId!), enabled: !!clientId });
-  const dia = diaAtual(clinica?.d0 ?? null);
+  const dia = diaAtual(clinica?.d0 ?? null, clinica?.pausas);
   const itens = ITENS.filter((i) => !("admin" in i) || isAdmin);
   const titulo = clientId ? (cliente?.name ?? "Carregando…") : isAdmin ? "Todas as clínicas" : "Sistema de Aquisição";
 

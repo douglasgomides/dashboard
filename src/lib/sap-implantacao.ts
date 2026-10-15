@@ -10,7 +10,7 @@ export interface PassoImplantacao {
   titulo: string;
   porque: string; // em linguagem simples
   como: string; // o que clicar
-  tela: "" | "/metas" | "/leitura" | "/execucao" | "/midia" | "/etapas";
+  tela: "" | "/metas" | "/leitura" | "/execucao" | "/midia" | "/etapas" | "/cronograma";
   quando: string;
   status: StatusPasso;
   detalhe?: string;
@@ -28,6 +28,7 @@ export interface EstadoImplantacao {
   baselineMedida: boolean;
   metasPrincipais: number; // quantos dos KPIs da garantia têm meta
   metaCustoConsulta: boolean;
+  aceiteMetas?: boolean; // data e assinante do aceite registrados (03.07)
   linhasCompletas: number | null; // 0 a 1
   divergencia: number | null; // 0 a 1 (null = sem leads de anúncio)
   saudeSemanaAtual: boolean;
@@ -93,11 +94,16 @@ export function passosDaImplantacao(e: EstadoImplantacao): PassoImplantacao[] {
       grupo: "Começo (D0 a D14)",
       titulo: "Propor e assinar as metas D90",
       porque: "As metas são de processo (resposta, comparecimento, conversão), nunca de faturamento. São assinadas pelo decisor na Sessão 2.",
-      como: "Em Metas e garantia, clique em \"Propor metas (regra do 03.07)\", ajuste com o Fundador e salve.",
+      como: "Em Metas e garantia, clique em \"Propor metas (regra do 03.07)\", ajuste com o Fundador e salve. Depois, em Cronograma e prazos, registre a data do aceite e quem assinou.",
       tela: "/metas",
       quando: "Sessão 2 (D12 a D14)",
-      status: ate(14, e.metasPrincipais >= 2),
-      detalhe: e.metasPrincipais && e.metasPrincipais < 2 ? `${e.metasPrincipais} dos KPIs da garantia com meta.` : undefined,
+      status: ate(14, e.metasPrincipais >= 2 && e.aceiteMetas !== false),
+      detalhe:
+        e.metasPrincipais && e.metasPrincipais < 2
+          ? `${e.metasPrincipais} dos KPIs da garantia com meta.`
+          : e.metasPrincipais >= 2 && e.aceiteMetas === false
+            ? "Metas definidas, mas o aceite (data e assinante) não foi registrado."
+            : undefined,
     },
     {
       id: "ticket",

@@ -59,7 +59,7 @@ export function ScoreExecucao({ clientId }: { clientId: string }) {
   const registros = itensQ.data ?? [];
   const atualMap = useMemo(() => new Map(registros.map((r) => [r.item, r])), [registros]);
   const dados = rascunho ?? atualMap;
-  const dia = diaAtual(clinica?.d0 ?? null);
+  const dia = diaAtual(clinica?.d0 ?? null, clinica?.pausas);
   const res = useMemo(() => calcularExecucao([...dados.values()], dia), [dados, dia]);
 
   const salvar = useMutation({
@@ -231,7 +231,7 @@ export function ScoreSaude({ clientId }: { clientId: string }) {
   const planoQ = useQuery({ queryKey: ["sap-plano", clinica?.id], queryFn: () => getPlanoSap(clinica!.id), enabled: !!clinica && isAdmin });
   const j = { de: somarDias(hoje, -28), ate: somarDias(hoje, -1) };
   const atualQ = useQuery({ queryKey: ["sap-auto", clientId, j.de, j.ate], queryFn: () => getTrackerAuto(clientId, j.de, j.ate), enabled: !!clinica && isAdmin });
-  const dia = diaAtual(clinica?.d0 ?? null);
+  const dia = diaAtual(clinica?.d0 ?? null, clinica?.pausas);
   const semanaAtual = dia === null ? 1 : Math.max(1, Math.floor(dia / 7) + 1);
   const [sel, setSel] = useState<number>(semanaAtual);
   const [f, setF] = useState<SemanaSaude>(vazia(semanaAtual));

@@ -37,7 +37,7 @@ export function PassoAPassoSap({ clientId }: { clientId: string }) {
     const t = lerTrackerAuto(autoQ.data);
     const l = t ? montarKpisSap(t) : null;
     const plano = planoQ.data ?? [];
-    const dia = diaAtual(clinica?.d0 ?? null);
+    const dia = diaAtual(clinica?.d0 ?? null, clinica?.pausas);
     const principais = kpisDaGarantia(clinica?.consulta_paga !== false);
     const exec = calcularExecucao(execQ.data ?? [], dia);
     const semana = dia === null ? null : Math.floor(Math.max(0, dia) / 7) + 1;
@@ -55,6 +55,7 @@ export function PassoAPassoSap({ clientId }: { clientId: string }) {
       baselineMedida: !!clinica?.baseline_de || plano.some((p) => p.baseline !== null && p.origem === "medido"),
       metasPrincipais: plano.filter((p) => principais.includes(p.kpi) && p.meta !== null).length,
       metaCustoConsulta: plano.some((p) => p.kpi === "custo_consulta" && p.meta !== null),
+      aceiteMetas: !!clinica?.aceite_metas_em,
       linhasCompletas: l?.checagens.find((c) => c.id === "linhas")?.valor ?? null,
       divergencia: l?.checagens.find((c) => c.id === "divergencia")?.valor ?? null,
       saudeSemanaAtual: semana !== null && (saudeQ.data ?? []).some((s) => s.semana === semana),

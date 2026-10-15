@@ -57,7 +57,7 @@ export function CadastroSap({ clientId }: { clientId: string }) {
     );
   }
 
-  const dia = diaAtual(clinica.d0);
+  const dia = diaAtual(clinica.d0, clinica.pausas);
   const marco = proximoMarco(dia);
   return (
     <section className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
