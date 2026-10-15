@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessagesSquare, PhoneCall, Tags } from "lucide-react";
+import { MessagesSquare, PhoneCall, Sparkles, Tags } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Painel, Selo } from "@/components/visual";
 import {
   definirCategoriaMotivoSap, definirSinalSap, getAuditoriasSap, getClinicaSap, getEtapasSap, getSinaisEtapasSap, getSinaisSap, getTrackerAuto,
-  salvarAuditoriaSap,
+  getAuditoriaIASap, salvarAuditoriaSap,
 } from "@/lib/sap-data";
 import { lerTrackerAuto } from "@/lib/sap-auto";
-import { CATEGORIAS_MOTIVO, indicadoresAtendimento, METAS_ATENDIMENTO, type AuditoriaSemana } from "@/lib/sap-sinais";
+import { CATEGORIAS_MOTIVO, indicadoresAtendimento, METAS_ATENDIMENTO, ROTULO_FALHA, preencherComIA, type AuditoriaSemana } from "@/lib/sap-sinais";
 import { somar } from "@/lib/sap-cronograma";
 import { hojeBrasilia } from "@/lib/status-fonte";
 
@@ -72,13 +72,13 @@ export function AtendimentoSap({ clientId }: { clientId: string }) {
           <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>Parte dos motivos está em categoria sugerida pelo nome. Confirme em Etapas no funil.</p>
         )}
       </Painel>
-      {isAdmin && <AuditoriaForm clinicaId={clinica.id} auds={auds} hoje={hoje} />}
+      {isAdmin && <AuditoriaForm clientId={clientId} clinicaId={clinica.id} auds={auds} hoje={hoje} />}
       {!isAdmin && auds.length > 0 && <p className="text-xs" style={{ color: "var(--muted)" }}>Última auditoria de conversas: semana de {dm(auds[0].semana)}.</p>}
     </div>
   );
 }
 
-function AuditoriaForm({ clinicaId, auds, hoje }: { clinicaId: string; auds: AuditoriaSemana[]; hoje: string }) {
+function AuditoriaForm({ clientId, clinicaId, auds, hoje }: { clientId: string; clinicaId: string; auds: AuditoriaSemana[]; hoje: string }) {
   const qc = useQueryClient();
   const semana = segunda(hoje);
   const atual = auds.find((a) => a.semana === semana);
@@ -90,6 +90,13 @@ function AuditoriaForm({ clinicaId, auds, hoje }: { clinicaId: string; auds: Aud
     mutationFn: () => salvarAuditoriaSap(clinicaId, { semana, conversas: num(f.conversas), nota_media: num(f.nota), confirmacao_vespera: fr(f.conf), f1_24h: fr(f.f1), pensando_cadencia: fr(f.pens), observacao: f.obs }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sap-auditoria", clinicaId] }),
   });
+  const iaQ = useQuery({ queryKey: ["sap-auditoria-ia", clientId, semana], queryFn: () => getAuditoriaIASap(clientId, semana) });
+  const ia = iaQ.data;
+  const usarIA = () => {
+    if (!ia) return;
+    const p = preencherComIA(ia);
+    setF({ ...f, conversas: p.conversas, nota: p.nota === null ? f.nota : String(p.nota), f1: p.f1 === null ? f.f1 : String(p.f1), obs: [f.obs, p.obs].filter(Boolean).join(" · ") });
+  };
   const input = (k: keyof typeof f, rot: string, sufixo = "") => (
     <label className="text-xs">{rot}
       <span className="mt-0.5 flex items-center gap-1"><input inputMode="decimal" value={String(f[k])} onChange={(x) => setF({ ...f, [k]: x.target.value })} className="block min-h-[34px] w-20 rounded-md border px-2 text-sm" style={campo} />{sufixo}</span>
@@ -98,6 +105,22 @@ function AuditoriaForm({ clinicaId, auds, hoje }: { clinicaId: string; auds: Aud
   return (
     <Painel icone={MessagesSquare} titulo="Auditoria semanal de conversas (06.09)" resumo={`Semana de ${dm(semana)}${atual ? " · lançada" : " · ainda não lançada"}`}
       ajuda={<>Amostra de 10 conversas da semana pela rubrica de 12 pontos. Anote também, pelas conversas e pela agenda, a confirmação até a véspera, o F1 em até 24 h das consultas sem fechamento e quantos "pensando" estão com cadência ativa.</>}>
+      {ia && ia.conversas_semana > 0 && (
+        <div className="mt-2 rounded-lg border p-3 text-sm" style={{ borderColor: "var(--accent)", background: "color-mix(in srgb, var(--accent) 6%, transparent)" }}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <strong className="inline-flex items-center gap-1.5"><Sparkles size={15} aria-hidden /> Sugestão da IA para esta semana</strong>
+            {ia.amostra > 0 && <button type="button" onClick={usarIA} className="min-h-[32px] rounded-lg px-3 text-xs font-semibold text-white" style={{ background: "var(--accent)" }}>Usar sugestão no formulário</button>}
+          </div>
+          <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
+            {ia.conversas_semana} conversa(s) na semana · {ia.analisadas} analisada(s) pela IA{ia.sem_analise ? ` · ${ia.sem_analise} sem análise atualizada` : ""}.
+            {ia.amostra > 0 && <> Amostra das {ia.amostra} mais recentes: nota média {ia.nota_media_0a10 ?? "—"} de 10 (≈ {ia.nota_media_0a10 === null ? "—" : Math.round(ia.nota_media_0a10 * 12) / 10} de 12, estimativa).</>}
+          </p>
+          {ia.falhas.length > 0 && <p className="mt-1 text-xs">Falhas mais comuns: {ia.falhas.map((x) => `${ROTULO_FALHA[x.falha] ?? x.falha} (${x.n})`).join(", ")}.</p>}
+          {ia.abertas > 0 && <p className="mt-1 text-xs">Conversas em aberto: {ia.abertas}, {ia.abertas_sem_follow_up} sem follow-up · {ia.recuperaveis} recuperável(is) sem agendamento.</p>}
+          {ia.pontos_a_melhorar.length > 0 && <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>A melhorar: {ia.pontos_a_melhorar.slice(0, 4).join(" · ")}</p>}
+          <p className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>A IA lê cada conversa do WhatsApp (sem dados do paciente). Confirmação até a véspera vem da agenda e continua manual. Revise antes de salvar.</p>
+        </div>
+      )}
       <div className="mt-2 flex flex-wrap items-end gap-3">
         {input("conversas", "Conversas auditadas")}
         {input("nota", "Nota média (0 a 12)")}

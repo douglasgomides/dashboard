@@ -24,3 +24,12 @@ assert.ok(i.gatilhos.some((g) => g.codigo === "V13" && /cadência/.test(g.motivo
 i = indicadoresAtendimento({ ...s, remarcados: 3, motivos: [{ categoria: "Preço", total: 5, sugeridos: 0 }] }, 8, null);
 assert.ok(!i.gatilhos.some((g) => g.codigo === "V12" || g.codigo === "V9"));
 console.log("ok sap-sinais");
+{
+  const { preencherComIA } = await import("../src/lib/sap-sinais");
+  const p = preencherComIA({ amostra: 10, nota_media_0a10: 7.5, falhas: [{ falha: "demora", n: 4 }, { falha: "sem_follow_up", n: 3 }], abertas: 4, abertas_sem_follow_up: 1 });
+  assert.equal(p.nota, 9);
+  assert.equal(p.f1, 75);
+  assert.ok(p.obs.startsWith("IA: demora para responder (4)"));
+  assert.equal(preencherComIA({ amostra: 0, nota_media_0a10: null, falhas: [], abertas: 0, abertas_sem_follow_up: 0 }).f1, null);
+  console.log("ok sap-sinais ia");
+}
