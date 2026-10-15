@@ -41,7 +41,8 @@ export interface DefSessao {
 import { SESSAO_B, SESSAO_K } from "@/lib/sessoes/kickoff-baseline";
 import { SESSAO_S2, SESSAO_S3 } from "@/lib/sessoes/s2-s3";
 import { SESSAO_S4, SESSAO_S5 } from "@/lib/sessoes/s4-s5";
-import { SESSAO_D60, SESSAO_D90, SESSAO_S6 } from "@/lib/sessoes/s6-d60-d90";
+import { SESSAO_D90, SESSAO_S6 } from "@/lib/sessoes/s6-d60-d90";
+import { SESSAO_D60 } from "@/lib/sessoes/d60";
 
 const doc = (id: string) => `https://docs.google.com/document/d/${id}/edit`;
 const planilha = (id: string) => `https://docs.google.com/spreadsheets/d/${id}/edit`;
