@@ -3,11 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertOctagon, CheckCircle2, CircleDashed, ClipboardCheck, Copy, MessageCircle, TriangleAlert } from "lucide-react";
 import { AcoesSap } from "@/components/sap-acoes";
 import { AtendimentoSap } from "@/components/sap-atendimento";
+import { FidelizacaoSap } from "@/components/sap-verba-fidelizacao";
+import { resumoFidelizacao } from "@/lib/sap-fidelizacao";
 import { indicadoresAtendimento } from "@/lib/sap-sinais";
 import { useAuth } from "@/hooks/use-auth";
 import { Painel, Selo } from "@/components/visual";
 import { hojeBrasilia } from "@/lib/status-fonte";
-import { diaAtual, getAuditoriasSap, getClinicaSap, getPlanoSap, getSinaisSap, getTrackerAuto } from "@/lib/sap-data";
+import { diaAtual, getAuditoriasSap, getClinicaSap, getFidelizacaoSap, getPlanoSap, getSinaisSap, getTrackerAuto } from "@/lib/sap-data";
 import { lerTrackerAuto } from "@/lib/sap-auto";
 import { avaliarGarantia, somarDias } from "@/lib/sap-metas";
 import { MAPA_VAZAMENTOS, montarLeitura, type StatusPasso } from "@/lib/sap-leitura";
@@ -34,6 +36,7 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
   const antQ = useQuery({ queryKey: ["sap-auto", clientId, antJ.de, antJ.ate], queryFn: () => getTrackerAuto(clientId, antJ.de, antJ.ate) });
   const sinQ = useQuery({ queryKey: ["sap-sinais", clientId, atualJ.de, atualJ.ate], queryFn: () => getSinaisSap(clientId, atualJ.de, atualJ.ate) });
   const audQ = useQuery({ queryKey: ["sap-auditoria", clinica?.id], queryFn: () => getAuditoriasSap(clinica!.id), enabled: !!clinica });
+  const fidQ = useQuery({ queryKey: ["sap-fidelizacao", clinica?.id], queryFn: () => getFidelizacaoSap(clinica!.id), enabled: !!clinica });
   const [copiado, setCopiado] = useState(false);
 
   const leitura = useMemo(() => {
@@ -52,9 +55,12 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
       consultaPaga,
       score,
       garantiaAplicaNaPrevia: garantia?.aplica ?? null,
-      extras: indicadoresAtendimento(sinQ.data ?? null, atual.agendados, audQ.data?.[0] ?? null).gatilhos,
+      extras: [
+        ...indicadoresAtendimento(sinQ.data ?? null, atual.agendados, audQ.data?.[0] ?? null).gatilhos,
+        ...resumoFidelizacao(fidQ.data ?? [], diaAtual(clinica?.d0 ?? null, clinica?.pausas)).gatilhos,
+      ],
     });
-  }, [atualQ.data, antQ.data, planoQ.data, clinica, sinQ.data, audQ.data]);
+  }, [atualQ.data, antQ.data, planoQ.data, clinica, sinQ.data, audQ.data, fidQ.data]);
 
   if (atualQ.isLoading || cadQ.isLoading) return <p className="text-sm" style={{ color: "var(--text-dim)" }}>Montando a leitura da semana…</p>;
   if (atualQ.error) return <p className="text-sm" style={{ color: "var(--crit)" }}>Não consegui montar a leitura: {(atualQ.error as Error).message}</p>;
@@ -129,6 +135,7 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
         }
       />
       <AtendimentoSap clientId={clientId} />
+      <FidelizacaoSap clientId={clientId} />
 
       {isAdmin && leitura.mensagem && (
         <Painel icone={MessageCircle} titulo="Mensagem para a clínica" resumo="Modelo do 08.05, para mandar até 12h de segunda.">
