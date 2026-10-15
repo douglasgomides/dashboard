@@ -7,6 +7,7 @@ import {
   computeMelhoresHorarios,
   computeReachByFormat,
   computeReachByTema,
+  separarAmostra,
   computeRepetirOuRevisar,
   computeTopPosts,
   computeTopPostsPorTaxaDeSalvamento,
@@ -159,8 +160,8 @@ function ClientReportDocument({
   const { repetir, revisar, hasEnough } = computeRepetirOuRevisar(postsForAnalytics, 10);
   const casos = computeCasosDestacados(postsForAnalytics);
   const temaTags = new Set(postsForAnalytics.map((p) => p.tema).filter(Boolean)).size;
-  const reachPorFormato = computeReachByFormat(postsForAnalytics);
-  const reachPorTema = computeReachByTema(postsForAnalytics).slice(0, 8);
+  const reachPorFormato = separarAmostra(computeReachByFormat(postsForAnalytics)).conclusivos;
+  const reachPorTema = separarAmostra(computeReachByTema(postsForAnalytics)).conclusivos.slice(0, 8);
   const maxReachFormato = Math.max(1, ...reachPorFormato.map((r) => r.medianReach));
   const maxReachTema = Math.max(1, ...reachPorTema.map((r) => r.medianReach));
   const topSalvamento = computeTopPostsPorTaxaDeSalvamento(postsForAnalytics, 5);

@@ -6,6 +6,7 @@
 // anúncios (diagnóstico por campanha), WhatsApp, CRM, dúvidas, ideias, ações e a
 // mensagem pronta para o cliente. Seções sem fonte saem do PDF e viram aviso.
 // Tudo é medido ou calculado por regra, nada é gerado por IA.
+import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { Document, Link, Page, Path, pdf, Svg, Text, View, Line } from "@react-pdf/renderer";
 import {
   computeCasosDestacados,
@@ -16,6 +17,7 @@ import {
   computeMelhoresHorarios,
   computeReachByFormat,
   computeReachByTema,
+  separarAmostra,
   computeRepetirOuRevisar,
   computeRetencaoDeReels,
   computeTopPosts,
@@ -257,8 +259,9 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   const seguro = (t: string) => tornarSeguro(t, { manter }).texto || t;
   const { ranked: horarios, overallMedian: horaMediana } = temIg ? computeMelhoresHorarios(posts) : { ranked: [] as any[], overallMedian: 0 };
   const formatos = temIg ? computeFormatBreakdown(posts).sort((a, b) => b.medianEngagement - a.medianEngagement) : [];
-  const reachFormato = temIg ? computeReachByFormat(posts) : [];
-  const reachTema = temIg ? computeReachByTema(posts).slice(0, 8) : [];
+  const reachFormato = temIg ? separarAmostra(computeReachByFormat(posts)).conclusivos : [];
+  const temasClassificados = temIg ? computeReachByTema(posts).length : 0;
+  const reachTema = temIg ? separarAmostra(computeReachByTema(posts)).conclusivos.slice(0, 8) : [];
   const { repetir, revisar, hasEnough } = temIg ? computeRepetirOuRevisar(posts, 10) : { repetir: [], revisar: [], hasEnough: false };
   const casos = temIg ? computeCasosDestacados(posts) : null;
   const topSalvos = temIg ? computeTopPosts(posts, 8) : [];
@@ -538,7 +541,11 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
             </>
           ) : (
             <Caixa>
-              <Text>Nenhum post do período tem tema classificado, então a leitura por tema não aparece. Classificar os posts na aba Posts libera este bloco.</Text>
+              <Text>
+                {temasClassificados > 0
+                  ? `Nenhum tema tem ${MIN_POSTS_CONCLUSAO} posts ou mais no período, então a comparação por tema não aparece (com menos posts, um post fora da curva decide sozinho).`
+                  : "Nenhum post do período tem tema classificado, então a leitura por tema não aparece. Classificar os posts na aba Posts libera este bloco."}
+              </Text>
             </Caixa>
           )}
 
