@@ -9,6 +9,7 @@
 //   conversão quando a clínica não tem consulta paga). Amostra mínima: 30 qualificados (agendamento),
 //   20 agendamentos (comparecimento), 15 consultas (conversão). Amostra não atingida com a verba
 //   reduzida/pausada = "não avaliável"; com a verba em dia = "não melhorou".
+import { dataDoDia, type Pausa } from "./sap-cronograma";
 import type { TrackerAutoBruto } from "@/lib/sap-auto";
 import { montarKpisSap } from "@/lib/sap-auto";
 
@@ -53,9 +54,10 @@ export function janelaBaseline(d0: string | null, hoje: string): { de: string; a
 }
 
 /** Janela da garantia (D62 a D89). Antes do D62, mostra a prévia com as últimas 4 semanas fechadas. */
-export function janelaGarantia(d0: string, hoje: string): { de: string; ate: string; previa: boolean } {
-  const de = somarDias(d0, JANELA_GARANTIA.de);
-  const ate = somarDias(d0, JANELA_GARANTIA.ate);
+/** Janela da garantia (D62 a D89). Com pausa de prazo, os dias são empurrados (01.02 §5). */
+export function janelaGarantia(d0: string, hoje: string, pausas: Pausa[] = []): { de: string; ate: string; previa: boolean } {
+  const de = pausas.length ? dataDoDia(d0, pausas, JANELA_GARANTIA.de, hoje) : somarDias(d0, JANELA_GARANTIA.de);
+  const ate = pausas.length ? dataDoDia(d0, pausas, JANELA_GARANTIA.ate, hoje) : somarDias(d0, JANELA_GARANTIA.ate);
   if (hoje > ate) return { de, ate, previa: false };
   const ontem = somarDias(hoje, -1);
   if (hoje <= de) return { de: somarDias(ontem, -27), ate: ontem, previa: true };

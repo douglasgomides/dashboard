@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Painel, Selo } from "@/components/visual";
 import { fmtBRL } from "@/lib/format";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import { dataDoDia, diaDoPrograma, type Pausa } from "@/lib/sap-cronograma";
 import { getClinicaSap, getExecucaoSap, getPlanoSap, getTrackerAuto, MARCOS, salvarPlanoSap } from "@/lib/sap-data";
 import { lerTrackerAuto, montarKpisSap } from "@/lib/sap-auto";
 import {
@@ -52,7 +53,7 @@ const RES: Record<ResultadoKpi, { rotulo: string; cor: string; Icone: typeof Che
 export function LinhaDoTempoSap({ clientId }: { clientId: string }) {
   const cadQ = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId) });
   if (!cadQ.data) return null;
-  return <LinhaDoTempo d0={cadQ.data.d0} hoje={hojeBrasilia()} />;
+  return <LinhaDoTempo d0={cadQ.data.d0} hoje={hojeBrasilia()} pausas={cadQ.data.pausas ?? []} />;
 }
 
 /** Baseline/metas e garantia da clínica do SAP (tela Metas e garantia). */
@@ -63,7 +64,7 @@ export function PlanoSap({ clientId }: { clientId: string }) {
   const planoQ = useQuery({ queryKey: ["sap-plano", clinica?.id], queryFn: () => getPlanoSap(clinica!.id), enabled: !!clinica });
   const ultimas4 = { de: somarDias(hoje, -28), ate: somarDias(hoje, -1) };
   const atualQ = useQuery({ queryKey: ["sap-auto", clientId, ultimas4.de, ultimas4.ate], queryFn: () => getTrackerAuto(clientId, ultimas4.de, ultimas4.ate), enabled: !!clinica });
-  const jg = clinica?.d0 ? janelaGarantia(clinica.d0, hoje) : null;
+  const jg = clinica?.d0 ? janelaGarantia(clinica.d0, hoje, clinica.pausas ?? []) : null;
   const garQ = useQuery({ queryKey: ["sap-auto", clientId, jg?.de, jg?.ate], queryFn: () => getTrackerAuto(clientId, jg!.de, jg!.ate), enabled: !!jg });
 
   if (!clinica) return null;
@@ -89,7 +90,7 @@ export function PlanoSap({ clientId }: { clientId: string }) {
   );
 }
 
-function LinhaDoTempo({ d0, hoje }: { d0: string | null; hoje: string }) {
+function LinhaDoTempo({ d0, hoje, pausas }: { d0: string | null; hoje: string; pausas: Pausa[] }) {
   if (!d0) {
     return (
       <Painel icone={Flag} titulo="Linha do tempo D0 a D90" resumo="Defina o D0 no cadastro para ver os marcos, as quinzenas e a janela da garantia.">
@@ -97,15 +98,16 @@ function LinhaDoTempo({ d0, hoje }: { d0: string | null; hoje: string }) {
       </Painel>
     );
   }
-  const dia = diasEntre(d0, hoje);
+  const dia = diaDoPrograma(d0, pausas, hoje);
+  const dataDe = (n: number) => dataDoDia(d0, pausas, n, hoje);
   const pos = (d: number) => `${Math.min(100, Math.max(0, (d / 90) * 100))}%`;
   const qs = quinzenas(d0);
   const concluido = dia > 90;
   return (
-    <Painel icone={Flag} titulo={concluido ? "Programa concluído · acompanhamento" : "Linha do tempo D0 a D90"} resumo={`D0 ${dm(d0)} · D60 ${dm(somarDias(d0, 60))} · D90 ${dm(somarDias(d0, 90))}`}>
+    <Painel icone={Flag} titulo={concluido ? "Programa concluído · acompanhamento" : "Linha do tempo D0 a D90"} resumo={`D0 ${dm(d0)} · D60 ${dm(dataDe(60))} · D90 ${dm(dataDe(90))}${pausas.length ? " (com pausa de prazo)" : ""}`}>
       {concluido && (
         <p className="mb-2 rounded-lg p-3 text-sm" style={{ background: "var(--accent-soft)" }}>
-          Os 90 dias terminaram em {dm(somarDias(d0, 90))}. Agora é acompanhamento: as metas e a leitura da semana continuam, sempre comparando com o D0.
+          Os 90 dias terminaram em {dm(dataDe(90))}. Agora é acompanhamento: as metas e a leitura da semana continuam, sempre comparando com o D0.
         </p>
       )}
       <div className="relative mx-2 mb-10 mt-8 h-2 rounded-full" style={{ background: "var(--surface-2, var(--border))" }}>
@@ -114,7 +116,7 @@ function LinhaDoTempo({ d0, hoje }: { d0: string | null; hoje: string }) {
         {/* progresso */}
         <div className="absolute top-0 h-2 rounded-full" style={{ left: 0, width: pos(dia), background: "var(--accent)" }} />
         {MARCOS.map((m) => (
-          <div key={m.dia} className="absolute -top-1" style={{ left: pos(m.dia) }}>
+          <div key={m.n} className="absolute -top-1" style={{ left: pos(m.dia) }}>
             <div className="h-4 w-0.5 -translate-x-1/2" style={{ background: m.dia <= dia ? "var(--accent)" : "var(--muted)" }} title={`D${m.dia} · ${m.nome}`} />
           </div>
         ))}
@@ -149,8 +151,8 @@ function LinhaDoTempo({ d0, hoje }: { d0: string | null; hoje: string }) {
         <summary className="cursor-pointer text-xs" style={{ color: "var(--text-dim)" }}>Todos os marcos</summary>
         <ul className="mt-2 grid gap-1 sm:grid-cols-2">
           {MARCOS.map((m) => (
-            <li key={m.dia} style={{ color: m.dia < dia ? "var(--muted)" : "var(--text)" }}>
-              <span className="tabular-nums">D{m.dia}</span> · {dm(somarDias(d0, m.dia))} · {m.nome}
+            <li key={m.n} style={{ color: m.dia < dia ? "var(--muted)" : "var(--text)" }}>
+              <span className="tabular-nums">D{m.dia}</span> · {dm(dataDe(m.dia))} · {m.nome}
             </li>
           ))}
         </ul>

@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { lerTrackerAuto, montarKpisSap, type TrackerAutoBruto } from "@/lib/sap-auto";
 import type { LinhaPlano } from "@/lib/sap-metas";
 import { ITENS_EXECUCAO, resumoSaude, type ItemRegistro, type ResumoSaude, type SemanaSaude } from "@/lib/sap-scores";
+import { diaDoPrograma, MARCOS_PRINCIPAIS, type Pausa } from "@/lib/sap-cronograma";
+import { hojeBrasilia } from "@/lib/status-fonte";
 
 // Tracker do Sistema de Aquisição de Pacientes (SAP).
 //
@@ -19,6 +21,8 @@ export type SapClinica = {
   especialidade: string | null;
   d0: string | null;
   status: "onboarding" | "rodando" | "pausada" | "encerrada" | null;
+  /** Pausas de prazo (01.02 §5), já sem as removidas. */
+  pausas?: Pausa[];
 };
 
 export type SapLead = {
@@ -399,19 +403,8 @@ export function dadosDeExemplo(start: string, end: string, seed = 42): SapDados 
 // ---------------------------------------------------------------------------
 // Portfólio: todas as clínicas do SAP numa tela (admin).
 
-export const MARCOS: { dia: number; nome: string }[] = [
-  { dia: 3, nome: "Kickoff" },
-  { dia: 7, nome: "Acessos críticos e baseline" },
-  { dia: 10, nome: "Sessão 1 · Diagnóstico" },
-  { dia: 14, nome: "Sessão 2 · Metas assinadas" },
-  { dia: 17, nome: "Sessão 3 · Atração" },
-  { dia: 21, nome: "Sessão 4 · Conversa" },
-  { dia: 29, nome: "Anúncios no ar" },
-  { dia: 35, nome: "Sessão 5 · Venda" },
-  { dia: 48, nome: "Sessão 6 · Fidelização" },
-  { dia: 60, nome: "Checkpoint D60" },
-  { dia: 90, nome: "Encerramento D90" },
-];
+// Sessões e marcos do Cronograma Mestre 00.02 (lista completa em src/lib/sap-cronograma.ts), pelo dia-alvo.
+export const MARCOS: { dia: number; nome: string; n: number }[] = MARCOS_PRINCIPAIS;
 
 export function faseDoDia(dia: number | null): string {
   if (dia === null) return "sem D0";
@@ -425,10 +418,15 @@ export function faseDoDia(dia: number | null): string {
   return "Pós-contrato";
 }
 
-export function diaAtual(d0: string | null): number | null {
+/** Dia do programa hoje: dias corridos desde o D0 menos os dias de pausa formal já passados (01.02 §5). */
+export function diaAtual(d0: string | null, pausas: Pausa[] = []): number | null {
   if (!d0) return null;
-  return Math.floor((Date.now() - Date.parse(`${d0}T12:00:00-03:00`)) / 86400000);
+  return diaDoPrograma(d0, pausas, hojeBrasilia());
 }
+
+type PausaBruta = { tipo: Pausa["tipo"]; inicio: string; fim: string | null; removido_em: string | null; id?: string; motivo?: string | null };
+export const pausasValidas = (xs: PausaBruta[] | null | undefined): Pausa[] =>
+  (xs ?? []).filter((p) => !p.removido_em).map((p) => ({ id: p.id, tipo: p.tipo, inicio: p.inicio, fim: p.fim, motivo: p.motivo ?? null }));
 
 export function proximoMarco(dia: number | null): { dia: number; nome: string; faltam: number } | null {
   if (dia === null) return null;
@@ -470,7 +468,7 @@ export function montarLinha(d: SapDados): SapLinhaPortfolio {
   const j = janelasDaSemana();
   return {
     clinica: d.clinica,
-    dia: diaAtual(d.clinica.d0),
+    dia: diaAtual(d.clinica.d0, d.clinica.pausas),
     semana: calcularResumo(recorte(d, j.ini, j.fim), j.ini, j.fim),
     semanaAnterior: calcularResumo(recorte(d, j.iniAnt, j.fimAnt), j.iniAnt, j.fimAnt),
   };
@@ -480,13 +478,13 @@ export function montarLinha(d: SapDados): SapLinhaPortfolio {
 export async function getSapPortfolio(): Promise<SapLinhaPortfolio[] | null> {
   const { data: clinicas, error } = await db
     .from("sap_clinicas")
-    .select("id, client_id, nome, cidade, especialidade, d0, status, piloto, score_execucao")
+    .select("id, client_id, nome, cidade, especialidade, d0, status, piloto, score_execucao, sap_pausas(id, tipo, inicio, fim, removido_em)")
     .order("d0", { ascending: true });
   if (error) {
     if (error.code === "42P01" || /does not exist|schema cache/i.test(error.message)) return null;
     throw error;
   }
-  const lista = (clinicas ?? []) as SapClinica[];
+  const lista = ((clinicas ?? []) as (SapClinica & { sap_pausas?: PausaBruta[] })[]).map(({ sap_pausas, ...c }) => ({ ...c, pausas: pausasValidas(sap_pausas) })) as SapClinica[];
   if (!lista.length) return [];
   const j = janelasDaSemana();
   const ids = lista.map((c) => c.id);
@@ -599,12 +597,18 @@ export type SapCadastro = SapClinica & {
   score_execucao: number | null;
   baseline_de: string | null;
   baseline_ate: string | null;
+  aceite_metas_em: string | null;
+  aceite_metas_por: string | null;
+  ajustes_acordados: string | null;
+  garantia_status: "nao_avaliada" | "aplicada" | "nao_se_aplica" | null;
+  garantia_inicio: string | null;
+  pos_contrato: "manutencao" | "encerrado" | "cancelado" | null;
 };
 
 export async function getClinicaSap(clientId: string): Promise<SapCadastro | null> {
   const { data, error } = await db
     .from("sap_clinicas")
-    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto, consulta_paga, verba_em_dia, score_execucao, baseline_de, baseline_ate")
+    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto, consulta_paga, verba_em_dia, score_execucao, baseline_de, baseline_ate, aceite_metas_em, aceite_metas_por, ajustes_acordados, garantia_status, garantia_inicio, pos_contrato, sap_pausas(id, tipo, inicio, fim, motivo, removido_em)")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -613,7 +617,51 @@ export async function getClinicaSap(clientId: string): Promise<SapCadastro | nul
     if (error.code === "42P01" || /does not exist|schema cache/i.test(error.message)) return null;
     throw error;
   }
-  return (data as SapCadastro | null) ?? null;
+  if (!data) return null;
+  const { sap_pausas, ...resto } = data as SapCadastro & { sap_pausas?: PausaBruta[] };
+  return { ...resto, pausas: pausasValidas(sap_pausas) } as SapCadastro;
+}
+
+// ---------------------------------------------------------------- cronograma, pausas, atrasos e contrato (Lote A)
+
+export async function getMarcosSap(clinicaId: string) {
+  const { data, error } = await db.from("sap_marco_status").select("marco, concluido_em, evidencia, observacao").eq("clinica_id", clinicaId);
+  if (error) throw error;
+  return (data ?? []) as { marco: number; concluido_em: string | null; evidencia: string | null; observacao: string | null }[];
+}
+
+export async function marcarMarcoSap(clinicaId: string, marco: number, concluidoEm: string | null, evidencia: string, observacao = "") {
+  const { error } = await db.rpc("sap_marcar_marco", { p_clinica_id: clinicaId, p_marco: marco, p_concluido_em: concluidoEm, p_evidencia: evidencia, p_observacao: observacao });
+  if (error) throw error;
+}
+
+export type AtrasoSap = { id: string; data: string; dias_uteis: number; categoria: string; descricao: string | null };
+
+export async function getAtrasosSap(clinicaId: string): Promise<AtrasoSap[]> {
+  const { data, error } = await db.from("sap_atrasos").select("id, data, dias_uteis, categoria, descricao").eq("clinica_id", clinicaId).is("removido_em", null).order("data");
+  if (error) throw error;
+  return (data ?? []) as AtrasoSap[];
+}
+
+export async function salvarAtrasoSap(clinicaId: string, a: { id?: string | null; data: string; dias: number; categoria: string; descricao: string }, remover = false) {
+  const { error } = await db.rpc("sap_salvar_atraso", { p_clinica_id: clinicaId, p_id: a.id ?? null, p_data: a.data, p_dias: a.dias, p_categoria: a.categoria, p_descricao: a.descricao || null, p_remover: remover });
+  if (error) throw error;
+}
+
+export async function salvarPausaSap(clinicaId: string, p: { id?: string | null; tipo: Pausa["tipo"]; inicio: string; fim: string | null; motivo: string }, remover = false) {
+  const { error } = await db.rpc("sap_salvar_pausa", { p_clinica_id: clinicaId, p_id: p.id ?? null, p_tipo: p.tipo, p_inicio: p.inicio, p_fim: p.fim, p_motivo: p.motivo || null, p_remover: remover });
+  if (error) throw error;
+}
+
+export async function salvarContratoSap(
+  clinicaId: string,
+  v: { aceiteEm: string | null; aceitePor: string; ajustes: string; garantiaStatus: SapCadastro["garantia_status"]; garantiaInicio: string | null; posContrato: SapCadastro["pos_contrato"] },
+) {
+  const { error } = await db.rpc("sap_salvar_contrato", {
+    p_clinica_id: clinicaId, p_aceite_em: v.aceiteEm, p_aceite_por: v.aceitePor, p_ajustes: v.ajustes,
+    p_garantia_status: v.garantiaStatus, p_garantia_inicio: v.garantiaInicio, p_pos_contrato: v.posContrato,
+  });
+  if (error) throw error;
 }
 
 export async function salvarClinicaSap(clientId: string, v: { d0: string | null; status: string; servicos: string[]; ticket: number | null; piloto: boolean }) {

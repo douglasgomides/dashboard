@@ -42,7 +42,7 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
       atual,
       anterior: lerTrackerAuto(antQ.data),
       plano,
-      dia: diaAtual(clinica?.d0 ?? null),
+      dia: diaAtual(clinica?.d0 ?? null, clinica?.pausas),
       ticket: clinica?.ticket_medio ? Number(clinica.ticket_medio) : null,
       consultaPaga,
       score,
