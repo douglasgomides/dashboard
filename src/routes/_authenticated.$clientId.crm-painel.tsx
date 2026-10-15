@@ -48,6 +48,7 @@ function nomeCrm(provider: string | null | undefined): string {
   if (provider === "clint") return "Clint";
   if (provider === "rdstation") return "RD Station";
   if (provider === "flwchat") return "WTS Chat";
+  if (provider === "digisac") return "Digisac";
   if (provider === "kommo") return "Kommo";
   if (provider === "planilha") return "planilha";
   return "CRM";
@@ -360,7 +361,7 @@ function CrmPainelPage() {
       {!ehRelatorio && <BaseVivaCrm clientId={clientId} />}
       {!ehRelatorio && <AtendimentoResumo clientId={clientId} />}
       {!ehRelatorio && <LinksShortio clientId={clientId} />}
-      {(crmProvider === "kommo" || crmProvider === "clint" || crmProvider === "rdstation" || crmProvider === "flwchat") && !ehRelatorio && (
+      {(crmProvider === "kommo" || crmProvider === "clint" || crmProvider === "rdstation" || crmProvider === "flwchat" || crmProvider === "digisac") && !ehRelatorio && (
         <div className="flex justify-end">
           <SyncButton clientId={clientId} alvo="crm" />
         </div>

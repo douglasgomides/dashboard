@@ -4,6 +4,7 @@ import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runClintSync } from "../_lib/clint-sync.js";
 import { runRdStationSync } from "../_lib/rdstation-sync.js";
 import { runFlwChatSync } from "../_lib/flwchat-sync.js";
+import { runDigisacSync } from "../_lib/digisac-sync.js";
 
 // Sync dos negócios da Clint, chamado pelo n8n. Máquina chamando máquina,
 // então autoriza por SYNC_SECRET — o mesmo padrão de api/sync/kommo-leads.
@@ -71,22 +72,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (err) {
       flwErro = err instanceof Error ? err.message : String(err);
     }
+    // Digisac (IGM Palmas) entra aqui também, pelo mesmo motivo do limite de 12 funções.
+    let digisac: Awaited<ReturnType<typeof runDigisacSync>> = [];
+    let digErro: string | undefined;
+    try {
+      digisac = await runDigisacSync({
+        supabaseUrl: SUPABASE_URL,
+        supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+        onlyClientId: clientId,
+        deadlineMs: Date.now() + 45_000,
+      });
+    } catch (err) {
+      digErro = err instanceof Error ? err.message : String(err);
+    }
     // O status de CRM também precisa existir para quem sincroniza por aqui (FlwChat e RD Station). Sem isso o painel
     // mostrava "nenhuma tentativa" para Mariela, Sergio e Juliana Paola, mesmo com o sync rodando todo dia.
     const supabaseStatus = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
     await recordSyncStatusPorCliente(supabaseStatus, "crm", flwchat.map((r) => ({ clientId: r.clientId, rows: r.cards, errors: r.errors })));
+    await recordSyncStatusPorCliente(supabaseStatus, "crm", digisac.map((r) => ({ clientId: r.clientId, rows: r.contatos, errors: r.errors })));
+    await recordSyncStatusPorCliente(supabaseStatus, "atendimento", digisac.map((r) => ({ clientId: r.clientId, rows: r.atendimentos, errors: r.errors })));
     await recordSyncStatusPorCliente(supabaseStatus, "crm", rdstation.map((r) => ({ clientId: r.clientId, rows: r.negocios, errors: r.errors })));
     const hasErrors =
       results.some((r) => r.errors.length > 0) ||
       rdstation.some((r) => r.errors.length > 0) ||
       flwchat.some((r) => r.errors.length > 0) ||
+      digisac.some((r) => r.errors.length > 0) ||
       !!rdErro ||
-      !!flwErro;
+      !!flwErro ||
+      !!digErro;
     res.status(hasErrors ? 207 : 200).json({
       synced_at: new Date().toISOString(),
       connections: results,
       rdstation,
       flwchat,
+      digisac,
+      ...(digErro ? { digisac_erro: digErro } : {}),
       ...(rdErro ? { rdstation_erro: rdErro } : {}),
       ...(flwErro ? { flwchat_erro: flwErro } : {}),
     });

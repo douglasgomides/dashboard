@@ -51,7 +51,7 @@ export interface Funil {
   receita: number;
 }
 
-const NOME_CRM: Record<string, string> = { kommo: "Kommo", clint: "Clint", rdstation: "RD Station", flwchat: "flwChat", feegow: "Feegow", ninsaude: "Ninsaúde", planilha: "planilha" };
+const NOME_CRM: Record<string, string> = { kommo: "Kommo", clint: "Clint", rdstation: "RD Station", flwchat: "flwChat", digisac: "Digisac", feegow: "Feegow", ninsaude: "Ninsaúde", planilha: "planilha" };
 
 export function montarFunil(d: FunilBanco | null | undefined): Funil {
   const f = d?.fontes;

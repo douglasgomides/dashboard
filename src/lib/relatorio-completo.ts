@@ -294,6 +294,7 @@ const NOME_CRM: Record<string, string> = {
   clint: "Clint",
   rdstation: "RD Station",
   flwchat: "WTS Chat",
+  digisac: "Digisac",
   planilha: "planilha",
   feegow: "Feegow",
   ninsaude: "Ninsaúde",
