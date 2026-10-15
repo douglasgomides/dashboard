@@ -782,3 +782,23 @@ export async function getObjecoesWhatsapp(clientId: string, start: string, end: 
   if (error || !data?.objecoes) return null;
   return data.objecoes as Record<string, number>;
 }
+
+// Posts para casar com campanhas de impulsionamento: o post costuma ser publicado antes do período do
+// anúncio, então busca desde alguns meses antes. Só as colunas usadas, paginado.
+export async function getPostsParaImpulsionados(clientId: string, desde: string) {
+  const out: { id: string; caption: string | null; posted_at: string; permalink: string | null; thumbnail_url: string | null; reach: number | null }[] = [];
+  const PAGINA = 1000;
+  for (let de = 0; ; de += PAGINA) {
+    const { data, error } = await (supabase as any)
+      .from("instagram_posts")
+      .select("id, caption, posted_at, permalink, thumbnail_url, reach")
+      .eq("client_id", clientId)
+      .gte("posted_at", desde)
+      .order("posted_at", { ascending: false })
+      .range(de, de + PAGINA - 1);
+    if (error) throw error;
+    out.push(...(data ?? []));
+    if (!data || data.length < PAGINA) break;
+  }
+  return out;
+}
