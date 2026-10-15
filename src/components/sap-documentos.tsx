@@ -4,7 +4,7 @@ import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, LineChart, R
 import { Printer } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import {
-  getAcoesSap, getClinicaSap, getDocumentoTextoSap, getExecucaoSap, getGastoSemanalSap, getMarcosSap, getPlanoSap, getSinaisSap, getTrackerAuto,
+  getAcoesSap, getClinicaSap, getFidelizacaoSap, getDocumentoTextoSap, getExecucaoSap, getGastoSemanalSap, getMarcosSap, getPlanoSap, getSinaisSap, getTrackerAuto,
   salvarDocumentoTextoSap, type SapCadastro,
 } from "@/lib/sap-data";
 import { lerTrackerAuto, montarKpisSap, type TrackerAutoBruto } from "@/lib/sap-auto";
@@ -13,6 +13,7 @@ import { calcularExecucao } from "@/lib/sap-scores";
 import { CRONOGRAMA, dataDoDia, somar } from "@/lib/sap-cronograma";
 import { fmtKpi, linhasKpis, planoPorQuinzena, RISCOS_PADRAO, ROTULO_STATUS_D90, SECOES_TEXTO, type StatusKpiD90 } from "@/lib/sap-documentos";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import { resumoFidelizacao } from "@/lib/sap-fidelizacao";
 import { LEGENDA } from "@/components/grafico";
 
 const dmy = (iso: string | null | undefined) => (iso ? iso.split("-").reverse().join("/") : "—");
@@ -203,6 +204,7 @@ export function RelatorioD90Sap({ clientId }: { clientId: string }) {
   const acoesQ = useQuery({ queryKey: ["sap-acoes", c?.id], queryFn: () => getAcoesSap(c!.id), enabled: !!c });
   const sinQ = useQuery({ queryKey: ["sap-sinais", clientId, jan?.anuncio.de, jan?.anuncio.ate], queryFn: () => getSinaisSap(clientId, jan!.anuncio.de, jan!.anuncio.ate), enabled: !!jan && jan.anuncio.de <= jan.anuncio.ate });
   const gastoQ = useQuery({ queryKey: ["sap-gasto-sem", clientId, jan?.anuncio.de, jan?.anuncio.ate], queryFn: () => getGastoSemanalSap(clientId, jan!.anuncio.de, jan!.anuncio.ate), enabled: !!jan && jan.anuncio.de <= jan.anuncio.ate });
+  const fidQ = useQuery({ queryKey: ["sap-fidelizacao", c?.id], queryFn: () => getFidelizacaoSap(c!.id), enabled: !!c });
   const txtQ = useQuery({ queryKey: ["sap-doc", c?.id, "d90"], queryFn: () => getDocumentoTextoSap(c!.id, "d90"), enabled: !!c });
 
   if (cadQ.isLoading) return <p className="note">Carregando…</p>;
@@ -223,6 +225,7 @@ export function RelatorioD90Sap({ clientId }: { clientId: string }) {
   const textos = txtQ.data ?? {};
   const S = SECOES_TEXTO.d90;
   const acoes = acoesQ.data ?? [];
+  const fid = resumoFidelizacao((fidQ.data ?? []).filter((x) => x.semana >= jan.anuncio.de), null, 99);
 
   return (
     <div className="space-y-1">
@@ -254,7 +257,16 @@ export function RelatorioD90Sap({ clientId }: { clientId: string }) {
           <li>Receita atribuída: <strong>{anu ? `${brl(anu.receita)} (${anu.fechados} tratamento${anu.fechados === 1 ? "" : "s"})` : "—"}</strong></li>
           <li>Verba de mídia investida (paga pela clínica): <strong>{anu ? brl(anu.investido) : "—"}</strong></li>
           <li>Indicações (canal Indicação no CRM): <strong>{anu?.canais.find((x) => x.canal === "Indicação")?.leads ?? 0}</strong></li>
-          <li style={{ color: "var(--muted)" }}>Retornos, recompras, reativação e avaliações no Google: ainda não medidos pelo painel.</li>
+          {fid.semanas > 0 ? (
+            <>
+              <li>Retornos e recompras: <strong>{fid.retornos + fid.recompras}</strong></li>
+              <li>Pacientes reativados (agendaram): <strong>{fid.reativacao.agendaram} de {fid.reativacao.contatados} contatados</strong></li>
+              <li>Indicações registradas: <strong>{fid.indicacoes}</strong>{fid.semCodigo !== null ? ` (${Math.round(fid.semCodigo * 100)}% sem código)` : ""}</li>
+              <li>Avaliações novas no Google: <strong>{fid.avaliacoes}</strong></li>
+            </>
+          ) : (
+            <li style={{ color: "var(--muted)" }}>Retornos, recompras, reativação e avaliações: nenhuma semana lançada em Leitura da semana.</li>
+          )}
         </ul>
       </Secao>
 

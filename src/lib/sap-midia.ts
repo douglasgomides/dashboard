@@ -4,6 +4,8 @@
 // 1. Verba: decide pelo custo por consulta realizada da conta (últimas 4 semanas) contra a meta do D45.
 // 2. Fadiga (V3): CTR caiu e o custo por resultado subiu 30% ou mais da semana anterior para esta,
 //    com verba parecida (±30%). Ação: 2 a 3 criativos novos; verba sobe só 20% a 30% a cada 3–4 dias.
+//    Também (05.11): frequência acima de 3 na semana com CTR caindo. A frequência usa o alcance diário somado,
+//    que conta a mesma pessoa mais de uma vez: o número sai menor que o real, então a regra só dispara com folga.
 // 3. Pausa: campanha de conversa com custo por conversa acima de 2× o custo-meta por conversa nos
 //    últimos 7 dias. Custo-meta por conversa = meta de custo por consulta × (consultas ÷ conversas)
 //    da conta: quanto uma conversa pode custar para a consulta sair no custo combinado.
@@ -28,9 +30,10 @@ interface Janela {
   impressoes: number;
   cliques: number;
   conversas: number;
+  alcance: number;
 }
 
-const vazia = (): Janela => ({ gasto: 0, impressoes: 0, cliques: 0, conversas: 0 });
+const vazia = (): Janela => ({ gasto: 0, impressoes: 0, cliques: 0, conversas: 0, alcance: 0 });
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 function somarDias(iso: string, d: number) {
@@ -68,6 +71,7 @@ export function regrasDeMidia(e: EntradaMidia): LeituraMidia {
     j.impressoes += Number(l.impressions) || 0;
     j.cliques += Number(l.link_clicks) || 0;
     j.conversas += Number(l.conversations) || 0;
+    j.alcance += Number(l.reach) || 0;
     alvo.set(l.campaign_id, j);
   }
 
@@ -122,6 +126,16 @@ export function regrasDeMidia(e: EntradaMidia): LeituraMidia {
           titulo: "Criativo cansando",
           detalhe: `CTR de ${(ctrB * 100).toFixed(2).replace(".", ",")}% para ${(ctrA * 100).toFixed(2).replace(".", ",")}% e custo por ${a.conversas > 0 ? "conversa" : "clique"} de ${brl(custoB)} para ${brl(custoA)}, com a mesma verba.`,
           acao: "Subir 2 a 3 criativos novos (banco sem rosto ou gravação) ou impulsionar o post orgânico que performou. Não aumentar verba agora.",
+        });
+      } else if (ctrB > 0 && ctrA < ctrB && a.alcance > 0 && a.impressoes / a.alcance > 3) {
+        alertas.push({
+          tipo: "fadiga",
+          campaign_id: id,
+          campanha,
+          codigo: "V3",
+          titulo: "Público vendo o mesmo anúncio demais",
+          detalhe: `Frequência acima de ${(a.impressoes / a.alcance).toFixed(1).replace(".", ",")} na semana, com CTR caindo de ${(ctrB * 100).toFixed(2).replace(".", ",")}% para ${(ctrA * 100).toFixed(2).replace(".", ",")}%.`,
+          acao: "Trocar ou somar criativos (3 ou mais por conjunto) e ampliar o público. Não aumentar verba agora.",
         });
       }
     }

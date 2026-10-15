@@ -7,6 +7,7 @@ import { diaDoPrograma, MARCOS_PRINCIPAIS, type Pausa } from "@/lib/sap-cronogra
 import { hojeBrasilia } from "@/lib/status-fonte";
 import type { RegistroAcesso } from "@/lib/sap-acessos";
 import { lerSinais, type AuditoriaSemana, type SinaisBrutos } from "@/lib/sap-sinais";
+import type { SemanaFidelizacao } from "@/lib/sap-fidelizacao";
 
 // Tracker do Sistema de Aquisição de Pacientes (SAP).
 //
@@ -611,12 +612,13 @@ export type SapCadastro = SapClinica & {
   coordenador: string | null;
   caminho_tecnologia: "A" | "B" | null;
   categoria_fonte_meta: string | null;
+  verba_mensal: number | null;
 };
 
 export async function getClinicaSap(clientId: string): Promise<SapCadastro | null> {
   const { data, error } = await db
     .from("sap_clinicas")
-    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto, consulta_paga, verba_em_dia, score_execucao, baseline_de, baseline_ate, aceite_metas_em, aceite_metas_por, ajustes_acordados, garantia_status, garantia_inicio, pos_contrato, decisor_nome, decisor_contato, ambicao_d90, coordenador, caminho_tecnologia, categoria_fonte_meta, sap_pausas(id, tipo, inicio, fim, motivo, removido_em)")
+    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto, consulta_paga, verba_em_dia, score_execucao, baseline_de, baseline_ate, aceite_metas_em, aceite_metas_por, ajustes_acordados, garantia_status, garantia_inicio, pos_contrato, decisor_nome, decisor_contato, ambicao_d90, coordenador, caminho_tecnologia, categoria_fonte_meta, verba_mensal, sap_pausas(id, tipo, inicio, fim, motivo, removido_em)")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -932,4 +934,34 @@ export async function getSapPorCliente(): Promise<Map<string, { dia: number | nu
     if (r.client_id) m.set(r.client_id, { dia: diaAtual(r.d0, pausasValidas(r.sap_pausas)), status: r.status });
   }
   return m;
+}
+
+// ---------------------------------------------------------------- verba e fidelização (Lote E)
+
+export async function salvarVerbaSap(clinicaId: string, verbaMensal: number | null, verbaEmDia: boolean | null) {
+  const { error } = await db.rpc("sap_salvar_verba", { p_clinica_id: clinicaId, p_verba_mensal: verbaMensal, p_verba_em_dia: verbaEmDia });
+  if (error) throw error;
+}
+
+/** Gasto em anúncio por dia (Meta), para a verba combinada. */
+export async function getGastoDiarioSap(clientId: string, de: string, ate: string): Promise<Map<string, number>> {
+  const { data, error } = await db.from("meta_ads_daily").select("date, spend").eq("client_id", clientId).gte("date", de).lte("date", ate).limit(50000);
+  if (error) throw error;
+  const m = new Map<string, number>();
+  for (const r of (data ?? []) as { date: string; spend: number | null }[]) m.set(r.date, (m.get(r.date) ?? 0) + (Number(r.spend) || 0));
+  return m;
+}
+
+export async function getFidelizacaoSap(clinicaId: string): Promise<SemanaFidelizacao[]> {
+  const { data, error } = await db.from("sap_fidelizacao_semana")
+    .select("semana, retornos, recompras, contatados_reativacao, reativados_agendaram, indicacoes, indicacoes_com_codigo, avaliacoes_google, sair, contatados_regua")
+    .eq("clinica_id", clinicaId).order("semana", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as SemanaFidelizacao[];
+}
+
+export async function salvarFidelizacaoSap(clinicaId: string, s: SemanaFidelizacao) {
+  const { semana, ...dados } = s;
+  const { error } = await db.rpc("sap_salvar_fidelizacao", { p_clinica_id: clinicaId, p_semana: semana, p_dados: dados });
+  if (error) throw error;
 }

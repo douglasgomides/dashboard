@@ -33,4 +33,9 @@ assert.ok(s.alertas.every((a) => a.tipo === "fadiga"));
 const sm = regrasDeMidia({ linhas, cadastro: cad, ate: dia(0), conta4s: { investido: 6000, compareceram: 20, conversasPlataforma: 400 }, metaCustoConsulta: null, rastreioSuspeito: false });
 assert.ok(sm.alertas.some((a) => a.tipo === "verba" && /D45/.test(a.acao)));
 assert.ok(!sm.alertas.some((a) => a.tipo === "pausa" || a.tipo === "escala"));
+// Frequência (05.11): D com CTR caindo pouco (sem o salto de custo) mas frequência acima de 3.
+const lf: LinhaAds[] = [];
+for (let i = 0; i < 14; i++) lf.push({ date: dia(i), campaign_id: "D", spend: 80, impressions: 9000, link_clicks: i < 7 ? 85 : 90, conversations: 6, leads: 0, landing_page_views: 0, reach: i < 7 ? 2500 : 4000 });
+const f = regrasDeMidia({ linhas: lf, cadastro: [{ campaign_id: "D", name: "Retargeting", objective: "OUTCOME_ENGAGEMENT" }], ate: dia(0), conta4s: null, metaCustoConsulta: null, rastreioSuspeito: false });
+assert.ok(f.alertas.some((a) => a.campaign_id === "D" && a.tipo === "fadiga" && /Frequência/.test(a.detalhe)));
 console.log("test-sap-midia: ok");
