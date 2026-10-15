@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, ClipboardCheck, Flag, ListOrdered, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight } from "lucide-react";
+import { CalendarClock, KeyRound, ClipboardCheck, Flag, ListOrdered, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { getClient } from "@/lib/client-data";
@@ -17,6 +17,7 @@ const ITENS = [
   { sub: "/passo-a-passo", label: "Passo a passo", Icone: ListOrdered },
   { sub: "", label: "Programa", Icone: Flag },
   { sub: "/cronograma", label: "Cronograma e prazos", Icone: CalendarClock },
+  { sub: "/onboarding", label: "Ficha e acessos", Icone: KeyRound },
   { sub: "/metas", label: "Metas e garantia", Icone: Target },
   { sub: "/leitura", label: "Leitura da semana", Icone: ClipboardCheck },
   { sub: "/execucao", label: "Execução e saúde", Icone: ListChecks },

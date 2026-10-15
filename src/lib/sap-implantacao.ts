@@ -10,7 +10,7 @@ export interface PassoImplantacao {
   titulo: string;
   porque: string; // em linguagem simples
   como: string; // o que clicar
-  tela: "" | "/metas" | "/leitura" | "/execucao" | "/midia" | "/etapas" | "/cronograma";
+  tela: "" | "/metas" | "/leitura" | "/execucao" | "/midia" | "/etapas" | "/cronograma" | "/onboarding";
   quando: string;
   status: StatusPasso;
   detalhe?: string;
@@ -29,6 +29,7 @@ export interface EstadoImplantacao {
   metasPrincipais: number; // quantos dos KPIs da garantia têm meta
   metaCustoConsulta: boolean;
   aceiteMetas?: boolean; // data e assinante do aceite registrados (03.07)
+  acessosCriticos?: { feitos: number; total: number }; // checklist 02.05
   linhasCompletas: number | null; // 0 a 1
   divergencia: number | null; // 0 a 1 (null = sem leads de anúncio)
   saudeSemanaAtual: boolean;
@@ -64,6 +65,21 @@ export function passosDaImplantacao(e: EstadoImplantacao): PassoImplantacao[] {
       status: ate(5, e.temCrm && e.temWhatsapp && e.temAnuncios),
       detalhe: [!e.temCrm && "falta o CRM", !e.temWhatsapp && "falta o WhatsApp", !e.temAnuncios && "falta a conta de anúncios"].filter(Boolean).join(", ") || undefined,
     },
+    ...(e.acessosCriticos
+      ? [
+          {
+            id: "acessos",
+            grupo: "Começo (D0 a D14)" as const,
+            titulo: "Confirmar os acessos críticos (02.05)",
+            porque: "Sem Business Manager, conta de anúncios, pixel, histórico da agenda e números dos últimos 3 meses, não há Sessão 1 nem baseline confiável.",
+            como: "Em Ficha e acessos, marque cada item como confirmado (ou \"não se aplica\") depois de testar o acesso de verdade.",
+            tela: "/onboarding" as const,
+            quando: "Críticos até o D7; complementares até o D14",
+            status: ate(7, e.acessosCriticos.feitos >= e.acessosCriticos.total),
+            detalhe: e.acessosCriticos.feitos < e.acessosCriticos.total ? `${e.acessosCriticos.feitos} de ${e.acessosCriticos.total} críticos confirmados.` : undefined,
+          },
+        ]
+      : []),
     {
       id: "etapas",
       grupo: "Começo (D0 a D14)",

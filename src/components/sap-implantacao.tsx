@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Circle, Clock, Repeat } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getClientFontes } from "@/lib/client-data";
-import { diaAtual, getClinicaSap, getEtapasSap, getExecucaoSap, getPlanoSap, getSaudeSap, getTrackerAuto } from "@/lib/sap-data";
+import { resumoAcessos } from "@/lib/sap-acessos";
+import { diaAtual, getAcessosSap, getClinicaSap, getEtapasSap, getExecucaoSap, getPlanoSap, getSaudeSap, getTrackerAuto } from "@/lib/sap-data";
 import { lerTrackerAuto, montarKpisSap } from "@/lib/sap-auto";
 import { kpisDaGarantia, somarDias } from "@/lib/sap-metas";
 import { calcularExecucao } from "@/lib/sap-scores";
@@ -31,6 +32,7 @@ export function PassoAPassoSap({ clientId }: { clientId: string }) {
   const planoQ = useQuery({ queryKey: ["sap-plano", clinica?.id], queryFn: () => getPlanoSap(clinica!.id), enabled: !!clinica });
   const execQ = useQuery({ queryKey: ["sap-execucao", clinica?.id], queryFn: () => getExecucaoSap(clinica!.id), enabled: !!clinica });
   const saudeQ = useQuery({ queryKey: ["sap-saude", clinica?.id], queryFn: () => getSaudeSap(clinica!.id), enabled: !!clinica && isAdmin });
+  const acessosQ = useQuery({ queryKey: ["sap-acessos", clinica?.id], queryFn: () => getAcessosSap(clinica!.id), enabled: !!clinica });
   const etapasQ = useQuery({ queryKey: ["sap-etapas", clientId], queryFn: () => getEtapasSap(clientId), enabled: isAdmin });
 
   const passos = useMemo(() => {
@@ -56,13 +58,14 @@ export function PassoAPassoSap({ clientId }: { clientId: string }) {
       metasPrincipais: plano.filter((p) => principais.includes(p.kpi) && p.meta !== null).length,
       metaCustoConsulta: plano.some((p) => p.kpi === "custo_consulta" && p.meta !== null),
       aceiteMetas: !!clinica?.aceite_metas_em,
+      acessosCriticos: acessosQ.data ? resumoAcessos(acessosQ.data, null).criticos : undefined,
       linhasCompletas: l?.checagens.find((c) => c.id === "linhas")?.valor ?? null,
       divergencia: l?.checagens.find((c) => c.id === "divergencia")?.valor ?? null,
       saudeSemanaAtual: semana !== null && (saudeQ.data ?? []).some((s) => s.semana === semana),
       execucaoItens: (execQ.data ?? []).filter((r) => r.status !== "Pendente").length,
       execucaoVencidosSemStatus: exec.vencidosSemStatus,
     }).filter((p) => isAdmin || !["etapas", "saude", "midia", "fontes"].includes(p.id));
-  }, [clinica, fontesQ.data, autoQ.data, planoQ.data, execQ.data, saudeQ.data, etapasQ.data, isAdmin]);
+  }, [acessosQ.data, clinica, fontesQ.data, autoQ.data, planoQ.data, execQ.data, saudeQ.data, etapasQ.data, isAdmin]);
 
   if (cadQ.isLoading) return <p className="text-sm" style={{ color: "var(--text-dim)" }}>Carregando…</p>;
   const r = resumoImplantacao(passos);
