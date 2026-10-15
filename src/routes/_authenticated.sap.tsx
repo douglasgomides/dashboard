@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, ListOrdered, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight, Radar, CalendarCheck } from "lucide-react";
+import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, ListOrdered, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight, Radar, CalendarCheck, Presentation } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { TrocaProduto } from "@/components/troca-produto";
@@ -20,6 +20,7 @@ const ITENS = [
   { grupo: "Visão geral", sub: "", label: "Programa", Icone: Flag },
   { grupo: "Visão geral", sub: "/passo-a-passo", label: "Passo a passo", Icone: ListOrdered },
   { grupo: "Implantação", sub: "/onboarding", label: "Ficha e acessos", Icone: KeyRound },
+  { grupo: "Implantação", sub: "/sessao", label: "Reuniões (modo sessão)", Icone: Presentation, admin: true },
   { grupo: "Implantação", sub: "/cronograma", label: "Cronograma e prazos", Icone: CalendarClock },
   { grupo: "Implantação", sub: "/rastreamento", label: "Rastreamento", Icone: Radar },
   { grupo: "Implantação", sub: "/etapas", label: "Etapas no funil (equipe)", Icone: Network, admin: true },

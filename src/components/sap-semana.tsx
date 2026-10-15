@@ -101,7 +101,7 @@ export function EstaSemanaSap({ clientId }: { clientId: string }) {
                 {t.detalhe && <div className="mt-0.5 text-xs" style={{ color: "var(--muted)" }}>{t.detalhe}</div>}
               </div>
               {(isAdmin || t.tela === "/cronograma" || t.tela === "/leitura" || t.tela === "/onboarding" || t.tela === "/rastreamento") && (
-                <Link to={`/sap/$clientId${t.tela}` as never} params={{ clientId } as never}
+                <Link to={(t.tela === "/sessao" && !isAdmin ? "/sap/$clientId/cronograma" : `/sap/$clientId${t.tela}`) as never} params={{ clientId } as never} search={(t.busca && isAdmin ? t.busca : undefined) as never}
                   className="inline-flex min-h-[32px] items-center rounded-lg border px-3 text-xs font-semibold" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>
                   Abrir →
                 </Link>

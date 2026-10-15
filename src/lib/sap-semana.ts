@@ -6,6 +6,7 @@
 import { dataDoDia, entre, somar, type ItemComData, type Pausa } from "@/lib/sap-cronograma";
 import { ITENS_ACESSO, type RegistroAcesso } from "@/lib/sap-acessos";
 import type { ResumoTestes } from "@/lib/sap-rastreamento";
+import { sessaoDoItem } from "@/lib/sap-sessoes";
 
 export type Papel = "trafego" | "cs" | "coordenacao" | "clinica";
 export const ROTULO_PAPEL: Record<Papel, string> = {
@@ -16,7 +17,7 @@ export const ROTULO_PAPEL: Record<Papel, string> = {
 };
 
 export type Situacao = "atrasado" | "hoje" | "semana";
-export type Tela = "" | "/cronograma" | "/onboarding" | "/rastreamento" | "/leitura" | "/execucao" | "/midia" | "/metas";
+export type Tela = "" | "/sessao" | "/cronograma" | "/onboarding" | "/rastreamento" | "/leitura" | "/execucao" | "/midia" | "/metas";
 
 export interface TarefaSemana {
   id: string;
@@ -26,6 +27,8 @@ export interface TarefaSemana {
   prazo: string;
   situacao: Situacao;
   tela: Tela;
+  /** Parâmetro da tela (ex.: qual sessão abrir no modo sessão). */
+  busca?: { s: string };
   origem: "Cronograma" | "Acessos" | "Rastreamento" | "Ação combinada" | "Rotina semanal";
 }
 
@@ -74,13 +77,15 @@ export function tarefasDaSemana(e: EntradaSemana): TarefaSemana[] {
     if (it.tipo === "Recorrente" || it.status === "feito" || it.status === "futuro") continue;
     const papeis: Papel[] = [papelDoDono(it.dono)];
     if (it.clinica && !papeis.includes("clinica")) papeis.push("clinica");
+    const sessao = sessaoDoItem(it.n);
     add({
       id: `crono-${it.n}`,
       titulo: it.nome,
       detalhe: `${it.dono} · pronto quando: ${it.pronto}`,
       papeis,
       prazo: it.status === "atrasado" ? it.dataFim : it.dataAlvo < hoje ? it.dataFim : it.dataAlvo,
-      tela: "/cronograma",
+      tela: sessao ? "/sessao" : "/cronograma",
+      ...(sessao ? { busca: { s: sessao.id } } : {}),
       origem: "Cronograma",
     });
   }

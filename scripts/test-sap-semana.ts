@@ -60,3 +60,9 @@ assert.equal(rotuloPrazo("2026-11-01", "2026-11-03"), "atrasado há 2 dias");
 assert.equal(rotuloPrazo("2026-11-03", "2026-11-03"), "vence hoje");
 assert.equal(rotuloPrazo("2026-11-04", "2026-11-03"), "vence em 1 dia");
 console.log("ok sap-semana");
+// Sessão com modo sessão aponta para a tela da sessão.
+{
+  const t2 = tarefasDaSemana(base("2026-10-09", "2026-10-01"));
+  const s1 = t2.find((x) => x.id === "crono-9");
+  assert.ok(s1 && s1.tela === "/sessao" && s1.busca?.s === "S1");
+}
