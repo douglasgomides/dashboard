@@ -213,3 +213,61 @@ export function linhasParaAcoes(texto: string | null | undefined): string[] {
     .map((l) => l.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, "").trim())
     .filter((l) => l.length > 2);
 }
+
+// ---------------------------------------------------------------- trilha do programa e rascunho por IA
+
+export type EstadoTrilha = "feita" | "atrasada" | "agora" | "proxima" | "futura";
+export interface PassoTrilha { s: DefSessao; data: string | null; estado: EstadoTrilha; diasAte: number | null }
+
+/** Cada reunião na ordem do programa, com a data-alvo do cronograma e o estado. "proxima" = a primeira ainda aberta. */
+export function trilha(
+  sessoes: DefSessao[],
+  crono: { n: number; dataAlvo: string; dataIni: string; dataFim: string; status: string }[],
+  hoje: string,
+): { passos: PassoTrilha[]; proxima: PassoTrilha | null } {
+  const porN = new Map(crono.map((c) => [c.n, c]));
+  const passos: PassoTrilha[] = [...sessoes]
+    .sort((a, b) => (porN.get(a.cronoN)?.dataAlvo ?? "9").localeCompare(porN.get(b.cronoN)?.dataAlvo ?? "9") || a.cronoN - b.cronoN)
+    .map((s) => {
+      const c = porN.get(s.cronoN);
+      if (!c) return { s, data: null, estado: "futura" as EstadoTrilha, diasAte: null };
+      const estado: EstadoTrilha = c.status === "feito" ? "feita" : c.status === "atrasado" ? "atrasada" : c.status === "agora" ? "agora" : "futura";
+      const diasAte = Math.round((Date.parse(`${c.dataAlvo}T12:00:00Z`) - Date.parse(`${hoje}T12:00:00Z`)) / 86_400_000);
+      return { s, data: c.dataAlvo, estado, diasAte };
+    });
+  const i = passos.findIndex((p) => p.estado !== "feita");
+  if (i >= 0 && passos[i].estado === "futura") passos[i] = { ...passos[i], estado: "proxima" };
+  return { passos, proxima: i >= 0 ? passos[i] : null };
+}
+
+export interface RascunhoIA {
+  resumo?: string; decisoes?: string[]; kpis?: string[]; acoes_clinica?: string[]; acoes_dc?: string[];
+  citacoes?: string[]; conferir?: string[]; riscos?: string[]; mensagem?: string; modelo?: string; gerado_em?: string;
+}
+
+export function lerRascunho(texto: string | null | undefined): RascunhoIA | null {
+  if (!texto) return null;
+  try {
+    const j = JSON.parse(texto) as RascunhoIA;
+    const lista = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0) : []);
+    return {
+      resumo: typeof j.resumo === "string" ? j.resumo : undefined,
+      decisoes: lista(j.decisoes), kpis: lista(j.kpis), acoes_clinica: lista(j.acoes_clinica), acoes_dc: lista(j.acoes_dc),
+      citacoes: lista(j.citacoes), conferir: lista(j.conferir), riscos: lista(j.riscos),
+      mensagem: typeof j.mensagem === "string" ? j.mensagem : undefined,
+      modelo: typeof j.modelo === "string" ? j.modelo : undefined, gerado_em: typeof j.gerado_em === "string" ? j.gerado_em : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Rascunho em texto corrido (para copiar no relatório ou no grupo). */
+export function rascunhoEmTexto(r: RascunhoIA, titulo: string): string {
+  const sec = (t: string, l?: string[]) => (l && l.length ? `\n${t}\n${l.map((x) => `- ${x}`).join("\n")}\n` : "");
+  return [
+    `${titulo}\n`,
+    r.resumo ? `${r.resumo}\n` : "",
+    sec("Decisões", r.decisoes), sec("KPIs", r.kpis), sec("Ações da clínica", r.acoes_clinica), sec("Entregas da Doctor Creator", r.acoes_dc),
+  ].join("").trim();
+}

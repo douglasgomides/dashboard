@@ -1042,3 +1042,16 @@ export async function salvarPastaDriveSap(clinicaId: string, url: string) {
   const { error } = await db.rpc("sap_salvar_pasta_drive", { p_clinica_id: clinicaId, p_url: url });
   if (error) throw error;
 }
+
+/** Rascunho do pós-sessão por IA (api/_lib/sessao-ia.ts via /api/sync/manual, alvo "sessao_ia"). Só admin. */
+export async function gerarRascunhoSessao(clientId: string, args: { sessao: string; titulo: string; entregas: string[]; rotulos: Record<string, string>; transcricao: string }) {
+  const { data: sessao } = await supabase.auth.getSession();
+  const resp = await fetch("/api/sync/manual", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessao.session?.access_token ?? ""}` },
+    body: JSON.stringify({ client_id: clientId, alvo: "sessao_ia", ...args }),
+  });
+  const j = (await resp.json().catch(() => null)) as { error?: string } | null;
+  if (!resp.ok) throw new Error(j?.error ?? `Falha (${resp.status})`);
+  return j;
+}

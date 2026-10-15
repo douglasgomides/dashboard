@@ -30,3 +30,13 @@ assert.equal(pz.find((p) => p.chave === "pos-enviar")?.atrasado, false); // 48 h
 
 assert.deepEqual(linhasParaAcoes("- Responder em 5 min\n\n2. Confirmar na véspera\n• ok\n  Lista de espera  "), ["Responder em 5 min", "Confirmar na véspera", "Lista de espera"]);
 console.log("ok sap-sessoes");
+{
+  const { trilha, lerRascunho, rascunhoEmTexto } = await import("../src/lib/sap-sessoes");
+  const t = trilha(SESSOES, [{ n: 9, dataAlvo: "2026-10-10", dataIni: "2026-10-09", dataFim: "2026-10-11", status: "feito" }], "2026-10-12");
+  assert.equal(t.passos.find((p) => p.s.id === "S1")?.estado, "feita");
+  const r = lerRascunho(JSON.stringify({ resumo: "ok", decisoes: ["a", 3, ""], acoes_clinica: ["x"] }));
+  assert.deepEqual(r?.decisoes, ["a"]);
+  assert.ok(rascunhoEmTexto(r!, "S1").includes("- x"));
+  assert.equal(lerRascunho("{quebrado"), null);
+  console.log("ok sap-sessoes trilha/ia");
+}

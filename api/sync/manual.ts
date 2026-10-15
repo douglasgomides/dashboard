@@ -20,6 +20,7 @@ import { criarLinkShort, cliquesDoLink, destinoWhatsApp, novoCodigoRef } from ".
 import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_lib/sync-status.js";
 import { rodarConferencia, rodarEtapa, ETAPAS, type EtapaId, type Achado, type Verificado } from "../_lib/conferencia.js";
 import { resumirConversa } from "../_lib/resumo-conversa.js";
+import { rascunharSessao } from "../_lib/sessao-ia.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
 //
@@ -92,7 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa"];
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia"];
   // "conferencia" olha todos os clientes de uma vez (só admin), por isso não exige client_id.
   const alvoGlobal = alvo === "conferencia";
   if ((!client_id && !alvoGlobal) || !alvo || !ALVOS.includes(alvo)) {
@@ -627,6 +628,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ---- Conversas do WhatsApp (WTS): grava mensagens, pessoa e toque. Só admin: é dado de paciente. ----
+    // ---- Modo sessão do SAP: rascunho do pós-sessão por IA. Só admin: são notas internas da equipe. ----
+    if (alvo === "sessao_ia") {
+      if (!ehAdmin) {
+        res.status(403).json({ error: "Só admin" });
+        return;
+      }
+      const b = (req.body ?? {}) as { sessao?: string; titulo?: string; entregas?: string[]; rotulos?: Record<string, string>; transcricao?: string };
+      if (!b.sessao || !b.titulo) {
+        res.status(400).json({ error: "Informe sessao e titulo" });
+        return;
+      }
+      const r = await rascunharSessao(admin, client_id!, {
+        sessao: b.sessao, titulo: String(b.titulo).slice(0, 200),
+        entregas: Array.isArray(b.entregas) ? b.entregas.map(String).slice(0, 20) : [],
+        rotulos: b.rotulos && typeof b.rotulos === "object" ? b.rotulos : {},
+        transcricao: typeof b.transcricao === "string" ? b.transcricao : null,
+      }, quem.user.id);
+      res.status(200).json({ alvo, ok: true, ...r });
+      return;
+    }
     if (alvo === "resumo_conversa") {
       const conversaId = (req.body ?? {}).conversa_id as string | undefined;
       if (!conversaId) {

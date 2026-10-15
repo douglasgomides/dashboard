@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, ClipboardList, FolderOpen, Mic, Timer } from "lucide-react";
+import { BookOpen, ClipboardList, FolderOpen, Mic, Sparkles, Timer } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Painel, Selo } from "@/components/visual";
 import {
-  diaAtual, getClinicaSap, getMarcosSap, getPlanoSap, getSessaoSap, getTrackerAuto, marcarMarcoSap, salvarAcaoSap, salvarPastaDriveSap, salvarSessaoSap,
+  diaAtual, gerarRascunhoSessao, getClinicaSap, getMarcosSap, getPlanoSap, getSessaoSap, getTrackerAuto, marcarMarcoSap, salvarAcaoSap, salvarPastaDriveSap, salvarSessaoSap,
   type RegistroSessao, type SapCadastro,
 } from "@/lib/sap-data";
 import { cronogramaComDatas } from "@/lib/sap-cronograma";
 import { lerTrackerAuto } from "@/lib/sap-auto";
 import { KPIS_PLANO, baselineDoTracker, janelaBaseline, kpisDaGarantia, type LinhaPlano } from "@/lib/sap-metas";
 import { fmtKpi } from "@/lib/sap-documentos";
-import { SESSOES, blocoNoTempo, duracaoPlanejada, linhasParaAcoes, prazosPos, sessaoPorId, type BlocoSessao, type DefSessao } from "@/lib/sap-sessoes";
+import { SESSOES, lerRascunho, rascunhoEmTexto, trilha, type EstadoTrilha, blocoNoTempo, duracaoPlanejada, linhasParaAcoes, prazosPos, sessaoPorId, type BlocoSessao, type DefSessao } from "@/lib/sap-sessoes";
 import { segundaDe } from "@/lib/sap-semana";
 import { hojeBrasilia } from "@/lib/status-fonte";
 
@@ -23,45 +23,67 @@ const dm = (iso: string) => iso.slice(0, 10).split("-").reverse().slice(0, 2).jo
 /** Modo sessão: cada reunião numa tela só, com o roteiro do Drive, os números da clínica e o registro ao vivo. Só a equipe. */
 export function ModoSessaoSap({ clientId, sessaoId }: { clientId: string; sessaoId?: string }) {
   const { isAdmin } = useAuth();
+  const hoje = hojeBrasilia();
   const cadQ = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId) });
   const c = cadQ.data ?? null;
+  const marcosQ = useQuery({ queryKey: ["sap-marcos", c?.id], queryFn: () => getMarcosSap(c!.id), enabled: !!c });
+  const t = useMemo(() => {
+    if (!c?.d0) return null;
+    const feitos = new Map((marcosQ.data ?? []).map((m) => [m.marco, { concluidoEm: m.concluido_em, evidencia: m.evidencia }]));
+    return trilha(SESSOES, cronogramaComDatas(c.d0, c.pausas ?? [], hoje, feitos), hoje);
+  }, [c, marcosQ.data, hoje]);
   if (!isAdmin) return <p className="note">O modo sessão é da equipe Doctor Creator.</p>;
   if (cadQ.isLoading) return <p className="note">Carregando…</p>;
   if (!c) return <p className="note">Esta clínica ainda não está no Sistema de Aquisição.</p>;
-  const s = sessaoPorId(sessaoId) ?? SESSOES[0];
+  // Sem sessão escolhida, abre a próxima da trilha (a primeira ainda não feita).
+  const s = sessaoPorId(sessaoId) ?? t?.proxima?.s ?? SESSOES[0];
   return (
     <div className="space-y-4">
-      <EscolhaSessao clinica={c} atual={s.id} clientId={clientId} />
+      <EscolhaSessao t={t} atual={s.id} clientId={clientId} />
       <Sessao key={s.id} clinica={c} s={s} clientId={clientId} />
     </div>
   );
 }
 
-function EscolhaSessao({ clinica, atual, clientId }: { clinica: SapCadastro; atual: string; clientId: string }) {
-  const hoje = hojeBrasilia();
-  const marcosQ = useQuery({ queryKey: ["sap-marcos", clinica.id], queryFn: () => getMarcosSap(clinica.id) });
-  const crono = useMemo(() => {
-    if (!clinica.d0) return [];
-    const feitos = new Map((marcosQ.data ?? []).map((m) => [m.marco, { concluidoEm: m.concluido_em, evidencia: m.evidencia }]));
-    return cronogramaComDatas(clinica.d0, clinica.pausas ?? [], hoje, feitos).filter((i) => i.tipo === "Sessão");
-  }, [clinica, marcosQ.data, hoje]);
+function EscolhaSessao({ t, atual, clientId }: { t: ReturnType<typeof trilha> | null; atual: string; clientId: string }) {
+  if (!t) return <p className="note">Defina o D0 em Programa → Editar cadastro para ver a trilha das reuniões com datas.</p>;
+  const cor: Record<EstadoTrilha, string> = { feita: "var(--good)", atrasada: "var(--crit)", agora: "var(--accent)", proxima: "var(--accent)", futura: "var(--border)" };
+  const rotulo: Record<EstadoTrilha, string> = { feita: "feita", atrasada: "atrasada", agora: "na janela", proxima: "próxima", futura: "" };
+  const feitas = t.passos.filter((p) => p.estado === "feita").length;
   return (
-    <div className="flex flex-wrap gap-1.5" aria-label="Reuniões do programa">
-      {crono.map((i) => {
-        const def = SESSOES.find((x) => x.cronoN === i.n);
-        const rot = i.nome.split(" (")[0].split(" · ").slice(0, 2).join(" · ");
-        const base = "inline-flex min-h-[32px] items-center gap-1 rounded-full border px-3 text-xs";
-        if (!def) return <span key={i.n} className={base} style={{ borderColor: "var(--border)", color: "var(--muted)" }} title="Modo sessão em breve; use o roteiro do Drive">{rot} · {dm(i.dataAlvo)}</span>;
-        const ativo = def.id === atual;
-        return (
-          <Link key={i.n} to={"/sap/$clientId/sessao" as never} params={{ clientId } as never} search={{ s: def.id } as never} className={`${base} font-semibold`}
-            style={ativo ? { background: "var(--accent)", color: "white", borderColor: "var(--accent)" } : { borderColor: "var(--accent)", color: "var(--accent)" }}>
-            {rot} · {dm(i.dataAlvo)}{i.status === "feito" ? " ✓" : ""}
-          </Link>
-        );
-      })}
-      {!clinica.d0 && <span className="note">Defina o D0 para ver as datas das reuniões.</span>}
-    </div>
+    <section className="rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }} aria-label="Trilha das reuniões do programa">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold">Trilha do programa · {feitas} de {t.passos.length} reuniões feitas</h2>
+        {t.proxima && (
+          <span className="text-xs" style={{ color: "var(--text-dim)" }}>
+            Próxima: <strong>{t.proxima.s.titulo}</strong>
+            {t.proxima.diasAte !== null && (t.proxima.diasAte < 0 ? ` · atrasada ${-t.proxima.diasAte} dia(s)` : t.proxima.diasAte === 0 ? " · hoje" : ` · em ${t.proxima.diasAte} dia(s)`)}
+          </span>
+        )}
+      </div>
+      <ol className="mt-3 flex gap-0 overflow-x-auto pb-1">
+        {t.passos.map((p, i) => {
+          const ativo = p.s.id === atual;
+          return (
+            <li key={p.s.id} className="relative flex min-w-[112px] flex-1 flex-col items-center text-center">
+              {i > 0 && <span aria-hidden className="absolute left-0 right-1/2 top-[13px] h-0.5" style={{ background: t.passos[i - 1].estado === "feita" ? "var(--good)" : "var(--border)" }} />}
+              {i < t.passos.length - 1 && <span aria-hidden className="absolute left-1/2 right-0 top-[13px] h-0.5" style={{ background: p.estado === "feita" ? "var(--good)" : "var(--border)" }} />}
+              <Link to={"/sap/$clientId/sessao" as never} params={{ clientId } as never} search={{ s: p.s.id } as never} aria-current={ativo ? "step" : undefined}
+                className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full border-2 text-[11px] font-bold"
+                style={{ borderColor: cor[p.estado], background: p.estado === "feita" ? "var(--good)" : ativo ? "var(--accent)" : "var(--surface)", color: p.estado === "feita" || ativo ? "white" : "var(--text)", boxShadow: ativo ? "0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent)" : undefined }}>
+                {p.estado === "feita" ? "✓" : i + 1}
+              </Link>
+              <Link to={"/sap/$clientId/sessao" as never} params={{ clientId } as never} search={{ s: p.s.id } as never} className="mt-1 px-1 text-[11px] font-medium leading-tight hover:underline" style={{ color: ativo ? "var(--accent)" : "var(--text)" }}>
+                {p.s.titulo.replace(/^Sessão (\d) · /, "S$1 · ")}
+              </Link>
+              <span className="text-[10px]" style={{ color: p.estado === "atrasada" ? "var(--crit)" : "var(--muted)" }}>
+                {p.data ? dm(p.data) : "—"}{rotulo[p.estado] ? ` · ${rotulo[p.estado]}` : ""}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 
@@ -84,7 +106,7 @@ function Sessao({ clinica, s, clientId }: { clinica: SapCadastro; s: DefSessao; 
       <Durante clinica={clinica} s={s} reg={reg} inicio={inicio} fim={fim} clientId={clientId}
         salvarTexto={(chave, texto) => salvar.mutateAsync({ chave, texto, feito: null })}
         marcar={(chave, feito) => salvar.mutateAsync({ chave, texto: reg.get(chave)?.texto ?? null, feito })} />
-      {fim && <Depois clinica={clinica} s={s} reg={reg} fim={fim} salvar={(chave, feito) => salvar.mutate({ chave, texto: reg.get(chave)?.texto ?? null, feito })} />}
+      {fim && <Depois clinica={clinica} s={s} reg={reg} fim={fim} clientId={clientId} salvar={(chave, feito) => salvar.mutate({ chave, texto: reg.get(chave)?.texto ?? null, feito })} />}
       {salvar.isError && <p className="text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</p>}
     </>
   );
@@ -321,15 +343,89 @@ function CampoNota({ rotulo, dica, linhas, valor, salvar }: { rotulo: string; di
   );
 }
 
-function Depois({ s, reg, fim, salvar }: { clinica: SapCadastro; s: DefSessao; reg: Reg; fim: string; salvar: (chave: string, feito: boolean) => void }) {
+function Depois({ clinica, s, reg, fim, salvar, clientId }: { clinica: SapCadastro; s: DefSessao; reg: Reg; fim: string; salvar: (chave: string, feito: boolean) => void; clientId: string }) {
   const feitos = new Set([...reg.values()].filter((r) => r.feito_em).map((r) => r.chave));
   const itens = prazosPos(s, fim, new Date().toISOString(), feitos);
   const nFeitos = itens.filter((i) => i.feito).length;
   const atrasados = itens.filter((i) => i.atrasado).length;
   return (
-    <Painel icone={ClipboardList} titulo="Depois da sessão" resumo={`${nFeitos} de ${itens.length} feitos${atrasados ? ` · ${atrasados} atrasado(s)` : ""}`} destaque
-      ajuda={<>Os prazos contam do fim da sessão. O relatório sai do prompt do Drive com a transcrição; as notas registradas acima entram junto como apoio.</>}>
-      <Checklist itens={itens} reg={reg} salvar={salvar} />
+    <>
+      <RascunhoIASessao clinica={clinica} s={s} reg={reg} clientId={clientId} />
+      <Painel icone={ClipboardList} titulo="Depois da sessão" resumo={`${nFeitos} de ${itens.length} feitos${atrasados ? ` · ${atrasados} atrasado(s)` : ""}`} destaque
+        ajuda={<>Os prazos contam do fim da sessão. O relatório oficial sai do modelo do Drive; o rascunho da IA acima ajuda a escrever mais rápido.</>}>
+        <Checklist itens={itens} reg={reg} salvar={salvar} />
+      </Painel>
+    </>
+  );
+}
+
+function RascunhoIASessao({ clinica, s, reg, clientId }: { clinica: SapCadastro; s: DefSessao; reg: Reg; clientId: string }) {
+  const qc = useQueryClient();
+  const [transcricao, setTranscricao] = useState("");
+  const [copiado, setCopiado] = useState("");
+  const r = lerRascunho(reg.get("ia_rascunho")?.texto);
+  const rotulos = Object.fromEntries(s.blocos.flatMap((b) => (b.registrar ?? []).map((x) => [x.chave, x.rotulo])));
+  const gerar = useMutation({
+    mutationFn: () => gerarRascunhoSessao(clientId, { sessao: s.id, titulo: s.titulo, entregas: s.sai, rotulos, transcricao }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sap-sessao", clinica.id, s.id] }),
+  });
+  const criarAcoes = useMutation({
+    mutationFn: async (textos: string[]) => {
+      const hoje = hojeBrasilia();
+      const prazo = new Date(Date.parse(`${hoje}T12:00:00Z`) + 14 * 86_400_000).toISOString().slice(0, 10);
+      for (const texto of textos) await salvarAcaoSap(clinica.id, { semana: segundaDe(hoje), origem: "call", codigo: s.id, texto, lado: "dc", responsavel: null, prazo, status: "aberta", resultado: null });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sap-acoes"] }),
+  });
+  const copiar = async (txt: string, qual: string) => { try { await navigator.clipboard.writeText(txt); setCopiado(qual); setTimeout(() => setCopiado(""), 2000); } catch { setCopiado("erro"); } };
+  const lista = (t: string, l?: string[], cor?: string) => (l && l.length ? (
+    <div><div className="text-xs font-semibold" style={{ color: cor ?? "var(--text-dim)" }}>{t}</div><ul className="list-disc pl-5 text-sm">{l.map((x) => <li key={x}>{x}</li>)}</ul></div>
+  ) : null);
+  return (
+    <Painel icone={Sparkles} titulo="Rascunho com IA" resumo={r ? `Gerado ${r.gerado_em ? dmh(r.gerado_em) : ""} · revisar antes de enviar` : "Notas + transcrição viram rascunho do relatório"}
+      ajuda={<>A IA lê as notas registradas nesta sessão e, se você colar, a transcrição (telefone, e-mail e CPF são mascarados). Ela não inventa número nem promete resultado: o que faltar vai para "Conferir antes de enviar". Nada é enviado à clínica: você revisa, copia e envia.</>}>
+      <label className="mt-2 block text-xs">
+        <span className="font-semibold">Transcrição da reunião (opcional)</span>
+        <textarea rows={3} value={transcricao} onChange={(x) => setTranscricao(x.target.value)} placeholder="Cole aqui a transcrição do Meet/Zoom para um rascunho mais completo." className="mt-0.5 block w-full rounded-md border px-2 py-1 text-sm" style={campo} />
+      </label>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button type="button" disabled={gerar.isPending} onClick={() => gerar.mutate()} className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
+          <Sparkles size={15} aria-hidden /> {gerar.isPending ? "Gerando…" : r ? "Gerar de novo" : "Gerar rascunho com IA"}
+        </button>
+        {gerar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{(gerar.error as Error).message}</span>}
+      </div>
+      {r && (
+        <div className="mt-3 space-y-3 rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>
+          {r.resumo && <p className="text-sm">{r.resumo}</p>}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {lista("Decisões", r.decisoes)}
+            {lista("KPIs", r.kpis)}
+            {lista("Ações da clínica", r.acoes_clinica)}
+            {lista("Entregas da Doctor Creator", r.acoes_dc)}
+            {lista("Citações do decisor", r.citacoes)}
+            {lista("Riscos percebidos", r.riscos, "var(--warn)")}
+          </div>
+          {lista("Conferir antes de enviar", r.conferir, "var(--crit)")}
+          {r.mensagem && (
+            <div>
+              <div className="text-xs font-semibold" style={{ color: "var(--text-dim)" }}>Mensagem para o grupo da clínica (revisar)</div>
+              <p className="whitespace-pre-wrap rounded-md p-2 text-sm" style={{ background: "var(--surface-2, var(--surface))" }}>{r.mensagem}</p>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2 text-xs">
+            <button type="button" className="rounded-lg border px-3 py-1.5 font-semibold" style={{ borderColor: "var(--border)" }} onClick={() => copiar(rascunhoEmTexto(r, `${s.titulo} · ${clinica.nome ?? ""}`), "resumo")}>{copiado === "resumo" ? "Copiado ✓" : "Copiar resumo"}</button>
+            {r.mensagem && <button type="button" className="rounded-lg border px-3 py-1.5 font-semibold" style={{ borderColor: "var(--border)" }} onClick={() => copiar(r.mensagem!, "msg")}>{copiado === "msg" ? "Copiado ✓" : "Copiar mensagem"}</button>}
+            {!!r.acoes_dc?.length && (
+              <button type="button" disabled={criarAcoes.isPending || criarAcoes.isSuccess} className="rounded-lg border px-3 py-1.5 font-semibold" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
+                onClick={() => criarAcoes.mutate(r.acoes_dc!)}>
+                {criarAcoes.isSuccess ? "Entregas da DC criadas ✓" : `Criar ${r.acoes_dc.length} entrega(s) da DC em Ações combinadas`}
+              </button>
+            )}
+            {copiado === "erro" && <span style={{ color: "var(--crit)" }}>Não foi possível copiar.</span>}
+          </div>
+          {r.modelo && <p className="text-[11px]" style={{ color: "var(--muted)" }}>Rascunho por IA ({r.modelo}). Revisão humana obrigatória antes de enviar.</p>}
+        </div>
+      )}
     </Painel>
   );
 }
