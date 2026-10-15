@@ -90,6 +90,27 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const errors: string[] = [];
+
+  // Nomes dos motivos de perda: o lead só traz loss_reason_id. Sem o nome, ninguém sabe o que o número
+  // significa e o SAP não consegue separar preço, medo, cônjuge... (07.07). Falha aqui não para o sync.
+  try {
+    const res = await fetch(`https://${env.kommoDomain}/api/v4/leads/loss_reasons?limit=250`, {
+      headers: { Authorization: `Bearer ${env.accessToken}` },
+    });
+    if (res.ok && res.status !== 204) {
+      const body = (await res.json()) as { _embedded?: { loss_reasons?: { id: number; name: string }[] } };
+      const motivos = body._embedded?.loss_reasons ?? [];
+      if (motivos.length) {
+        const { error } = await (supabase as any).from("crm_motivos_perda").upsert(
+          motivos.map((m) => ({ crm_connection_id: env.crmConnectionId, motivo_id: String(m.id), nome: m.name, atualizado_em: new Date().toISOString() })),
+          { onConflict: "crm_connection_id,motivo_id" },
+        );
+        if (error) errors.push(`motivos de perda: ${error.message}`);
+      }
+    }
+  } catch (err) {
+    errors.push(`motivos de perda: ${err instanceof Error ? err.message : String(err)}`);
+  }
   const maxPages = env.maxPages ?? 5;
 
   const { data: state } = await supabase

@@ -6,6 +6,7 @@ import { ITENS_EXECUCAO, resumoSaude, type ItemRegistro, type ResumoSaude, type 
 import { diaDoPrograma, MARCOS_PRINCIPAIS, type Pausa } from "@/lib/sap-cronograma";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import type { RegistroAcesso } from "@/lib/sap-acessos";
+import { lerSinais, type AuditoriaSemana, type SinaisBrutos } from "@/lib/sap-sinais";
 
 // Tracker do Sistema de Aquisição de Pacientes (SAP).
 //
@@ -833,6 +834,50 @@ export async function salvarAcaoSap(clinicaId: string, a: Omit<AcaoSap, "id"> & 
   const { error } = await db.rpc("sap_salvar_acao", {
     p_clinica_id: clinicaId, p_id: a.id ?? null, p_semana: a.semana, p_origem: a.origem, p_codigo: a.codigo ?? "", p_texto: a.texto,
     p_lado: a.lado, p_responsavel: a.responsavel ?? "", p_prazo: a.prazo, p_status: a.status, p_resultado: a.resultado ?? "", p_remover: remover,
+  });
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------- confirmação, remarcação, motivos e auditoria (Lote C)
+
+export async function getSinaisSap(clientId: string, de: string, ate: string): Promise<SinaisBrutos | null> {
+  const { data, error } = await db.rpc("sap_sinais_auto", { p_client_id: clientId, p_from: de, p_to: ate });
+  if (error) {
+    if (/does not exist|schema cache/i.test(error.message)) return null;
+    throw error;
+  }
+  return lerSinais(data);
+}
+
+export type SinalEtapa = { crm_connection_id: string; pipeline_id: string; status_id: string; sinal: "confirmado" | "remarcou"; ativo: boolean };
+
+export async function getSinaisEtapasSap(): Promise<SinalEtapa[]> {
+  const { data, error } = await db.from("sap_etapa_sinal").select("crm_connection_id, pipeline_id, status_id, sinal, ativo");
+  if (error) throw error;
+  return (data ?? []) as SinalEtapa[];
+}
+
+export async function definirSinalSap(e: { connection_id: string; pipeline_id: string; status_id: string }, sinal: SinalEtapa["sinal"], ligado: boolean) {
+  const { error } = await db.rpc("sap_definir_sinal", { p_connection_id: e.connection_id, p_pipeline_id: e.pipeline_id, p_status_id: e.status_id, p_sinal: sinal, p_ligado: ligado });
+  if (error) throw error;
+}
+
+export async function definirCategoriaMotivoSap(connectionId: string, motivoId: string, categoria: string) {
+  const { error } = await db.rpc("sap_definir_categoria_motivo", { p_connection_id: connectionId, p_motivo_id: motivoId, p_categoria: categoria });
+  if (error) throw error;
+}
+
+export async function getAuditoriasSap(clinicaId: string): Promise<AuditoriaSemana[]> {
+  const { data, error } = await db.from("sap_auditoria_semana").select("semana, conversas, nota_media, confirmacao_vespera, f1_24h, pensando_cadencia, observacao")
+    .eq("clinica_id", clinicaId).order("semana", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as AuditoriaSemana[];
+}
+
+export async function salvarAuditoriaSap(clinicaId: string, a: AuditoriaSemana) {
+  const { error } = await db.rpc("sap_salvar_auditoria", {
+    p_clinica_id: clinicaId, p_semana: a.semana, p_conversas: a.conversas, p_nota: a.nota_media, p_confirmacao: a.confirmacao_vespera,
+    p_f1: a.f1_24h, p_pensando: a.pensando_cadencia, p_observacao: a.observacao ?? "",
   });
   if (error) throw error;
 }
