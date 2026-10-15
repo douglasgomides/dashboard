@@ -9,6 +9,7 @@ import { SeloDono } from "@/components/selo-dono";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { getAdsPorDia, getAdsDiagnosticoPorObjetivo, getClientFontes, getAdsPlanilha } from "@/lib/client-data";
 import { AdsPlanilhaPainel } from "@/components/ads-planilha";
+import { PostsImpulsionados } from "@/components/seguidores-impulsionados";
 import { SyncButton } from "@/components/sync-button";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { ComparativoConta } from "@/components/anuncios/comparativo-conta";
@@ -395,6 +396,7 @@ function AnunciosPage() {
       <ComparativoConta clientId={clientId} start={start} end={end} />
 
       <QualidadeLeadsCampanha clientId={clientId} start={start} end={end} />
+      <PostsImpulsionados clientId={clientId} start={start} end={end} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <Kpi icone={Wallet} rotulo="Investido" valor={fmtBRL(gasto)} dica={`${diag.campanhas.length} campanhas`} cor="var(--s1)" />

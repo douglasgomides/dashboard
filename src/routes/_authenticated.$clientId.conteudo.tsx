@@ -11,6 +11,7 @@ import { Users, UserPlus, UserMinus, Scale, TrendingUp, Target, CalendarCheck, L
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 import { SyncButton } from "@/components/sync-button";
 import { fmtFracao } from "@/lib/metricas";
+import { SeguidoresSemana } from "@/components/seguidores-impulsionados";
 
 export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
   component: ConteudoPage,
@@ -251,6 +252,10 @@ function ConteudoPage() {
           <div className="mt-2"><Selo cor="var(--warn)" titulo="A estimativa usa só os dias com dado"><AlertTriangle size={11} aria-hidden /> Há dias sem coleta no período</Selo></div>
         )}
       </Painel>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <SeguidoresSemana clientId={clientId} start={start} end={end} />
       </div>
 
       {fm && fm.total === 0 ? (
