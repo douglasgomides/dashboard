@@ -106,6 +106,12 @@ const ONDE: Record<string, { etapas: string; campo: string; motivo: string; valo
     motivo: "Use uma etapa “Perdido” e um campo de lista “Motivo da perda”, preenchido sempre que mover para lá.",
     valor: "Preencha o valor (monetário) do card ao fechar.",
   },
+  digisac: {
+    etapas: "No Digisac, use os quadros Kanban, um para cada médico, com as mesmas etapas nos dois.",
+    campo: "Use as etiquetas de médico, de origem (com [Origem] no nome) e de status, em todo contato novo.",
+    motivo: "Peça ao suporte do Digisac para cadastrar os assuntos de fechamento e escolha um ao encerrar o atendimento.",
+    valor: "O Digisac não guarda valor por contato. O valor entra pelo registro da consulta.",
+  },
 };
 const ONDE_PADRAO = {
   etapas: "Nas configurações do funil do seu CRM, renomeie/crie as etapas.",

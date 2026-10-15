@@ -27,6 +27,7 @@ const CRM_PROVIDER_LABELS: Record<CrmProvider, string> = {
   clint: "Clint",
   rdstation: "RD Station CRM",
   flwchat: "WTS Chat (Synkronos, Clinic Desk, Support CRM)",
+  digisac: "Digisac (IGM Palmas)",
 };
 
 export const Route = createFileRoute("/_authenticated/admin/$clientId")({

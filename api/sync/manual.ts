@@ -11,6 +11,7 @@ import { runKommoLeadsSync } from "../_lib/kommo-leads-sync.js";
 import { runClintSync } from "../_lib/clint-sync.js";
 import { runRdStationSync } from "../_lib/rdstation-sync.js";
 import { runFlwChatSync } from "../_lib/flwchat-sync.js";
+import { runDigisacSync } from "../_lib/digisac-sync.js";
 import { lerAudiencia, lerResumoPeriodo } from "../_lib/meta-audiencia.js";
 import { classificarConteudoComIA } from "../_lib/conteudo-ia.js";
 import { ingerirConversasWts } from "../_lib/conversas-wts.js";
@@ -248,6 +249,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     async function sincronizarAtendimento() {
+      // Digisac (IGM Palmas): o atendimento sai da mesma conexão do CRM, então a rodada é uma só.
+      const { data: ligDigisac } = await admin.from("crm_connections").select("id").eq("client_id", client_id).eq("provider", "digisac").eq("active", true);
+      if ((ligDigisac ?? []).length > 0) {
+        const r = await runDigisacSync({
+          supabaseUrl: urlSupabase,
+          supabaseServiceRoleKey: chaveServico,
+          onlyClientId: client_id,
+          deadlineMs: Date.now() + 50_000,
+        });
+        const erros = r.flatMap((c) => c.errors);
+        if (erros.length > 0 && r.every((c) => c.atendimentos === 0)) throw new Error(`Digisac: ${erros[0]}`);
+        return { sessoes: r.reduce((a, c) => a + c.atendimentos, 0), contas: r };
+      }
       if (!WTS_API_TOKEN) throw new Error("Servidor sem WTS_API_TOKEN configurado");
       const contas = await runWtsSync({
         wtsToken: WTS_API_TOKEN,
@@ -378,9 +392,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const clint = (conexoes ?? []).filter((c) => c.provider === "clint");
       const rdstation = (conexoes ?? []).filter((c) => c.provider === "rdstation");
       const flwchat = (conexoes ?? []).filter((c) => c.provider === "flwchat");
+      const digisac = (conexoes ?? []).filter((c) => c.provider === "digisac");
       const planilha = (conexoes ?? []).filter((c) => c.provider === "planilha");
 
-      if (kommo.length === 0 && clint.length === 0 && rdstation.length === 0 && flwchat.length === 0) {
+      if (kommo.length === 0 && clint.length === 0 && rdstation.length === 0 && flwchat.length === 0 && digisac.length === 0) {
         // CRM que a equipe da cliente não liberou: o dado chega por planilha/relatório exportado e é lançado
         // à mão. Grava o motivo para o painel dizer isso, em vez de parecer falha de sincronização.
         if (kommoManual.length > 0 || planilha.length > 0) {
@@ -485,6 +500,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           erros.push(...r.flatMap((c) => c.errors.map((e) => `FlwChat: ${e}`)));
         } catch (err) {
           erros.push(`FlwChat: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
+      if (digisac.length > 0) {
+        try {
+          const r = await runDigisacSync({
+            supabaseUrl: urlSupabase,
+            supabaseServiceRoleKey: chaveServico,
+            onlyClientId: client_id,
+            deadlineMs: Date.now() + 50_000,
+          });
+          linhas += r.reduce((a, c) => a + c.contatos, 0);
+          erros.push(...r.flatMap((c) => c.errors.map((e) => `Digisac: ${e}`)));
+        } catch (err) {
+          erros.push(`Digisac: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 
