@@ -6,7 +6,7 @@ import { Painel, Selo } from "@/components/visual";
 import { fmtBRL } from "@/lib/format";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { dataDoDia, diaDoPrograma, type Pausa } from "@/lib/sap-cronograma";
-import { getClinicaSap, getExecucaoSap, getPlanoSap, getTrackerAuto, MARCOS, salvarPlanoSap } from "@/lib/sap-data";
+import { getAuditoriasSap, getClinicaSap, getExecucaoSap, getPlanoSap, getTrackerAuto, MARCOS, salvarPlanoSap } from "@/lib/sap-data";
 import { lerTrackerAuto, montarKpisSap } from "@/lib/sap-auto";
 import {
   avaliarGarantia,
@@ -171,6 +171,9 @@ function TabelaPlano({ clientId, clinica, plano, atual, carregando, hoje }: { cl
   const [cond, setCond] = useState({ consultaPaga: true, verbaEmDia: true, score: "" });
   const execQ = useQuery({ queryKey: ["sap-execucao", clinica.id], queryFn: () => getExecucaoSap(clinica.id) });
   const temItensExecucao = (execQ.data ?? []).length > 0;
+  // "Pensando" em cadência não está no CRM: vem da auditoria semanal de conversas (06.09).
+  const audQ = useQuery({ queryKey: ["sap-auditoria", clinica.id], queryFn: () => getAuditoriasSap(clinica.id) });
+  const pensandoAud = audQ.data?.find((a) => a.pensando_cadencia !== null)?.pensando_cadencia ?? null;
   const [janelaMedida, setJanelaMedida] = useState<{ de: string; ate: string } | null>(null);
   const [medindo, setMedindo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -179,7 +182,7 @@ function TabelaPlano({ clientId, clinica, plano, atual, carregando, hoje }: { cl
   const valorAtual = (k: KpiPlano): number | null => {
     if (!leituraAtual || !atual) return null;
     if (k === "receita_mensal") return (atual.receita * 30) / 28;
-    if (k === "pensando_cadencia") return null;
+    if (k === "pensando_cadencia") return pensandoAud === null ? null : Number(pensandoAud);
     return leituraAtual.kpis.find((x) => x.id === k)?.valor ?? null;
   };
   const linha = (k: KpiPlano) => plano.find((p) => p.kpi === k);
@@ -330,14 +333,14 @@ function TabelaPlano({ clientId, clinica, plano, atual, carregando, hoje }: { cl
                         )}
                       </td>
                       <td className="py-2 pr-3 text-right tabular-nums">
-                        {k.id === "pensando_cadencia" ? (
-                          <span className="text-xs" style={{ color: "var(--muted)" }}>medido na auditoria</span>
+                        {k.id === "pensando_cadencia" && agora === null ? (
+                          <span className="text-xs" style={{ color: "var(--muted)" }}>lance a auditoria da semana</span>
                         ) : (
                           <span style={{ color: naMeta === null ? "var(--text)" : naMeta ? "var(--good)" : "var(--crit)" }}>{fmtValor(k.id, agora)}</span>
                         )}
                       </td>
                       <td className="py-2 pr-3 text-right text-xs tabular-nums">
-                        <Evolucao k={k.id} base={l?.baseline ?? null} agora={k.id === "pensando_cadencia" ? null : agora} />
+                        <Evolucao k={k.id} base={l?.baseline ?? null} agora={agora} />
                       </td>
                       <td className="py-2">
                         {editando && r ? (

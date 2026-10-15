@@ -94,6 +94,8 @@ export function montarLeitura(args: {
   score: number | null;
   garantiaAplicaNaPrevia?: boolean | null;
   nomeContato?: string;
+  /** Gatilhos de confirmação, remarcação, motivos e auditoria (src/lib/sap-sinais.ts): V8, V9, V12, V13, V14. */
+  extras?: { codigo: CodigoV; motivo: string }[];
 }): LeituraSemanal {
   const { atual, plano } = args;
   const l = montarKpisSap(atual);
@@ -163,6 +165,9 @@ export function montarLeitura(args: {
   });
   // V6 só vale com tempo de resposta bom: com resposta vermelha, V4 já cobre.
   for (const c of ordemPerdas) if (!(c.v.codigo === "V6" && respVermelha)) candidatos.push(c);
+  // Confirmação, remarcação, objeções e follow-up: na ordem do mapa, sem repetir o que a perda já apontou.
+  for (const e of [...(args.extras ?? [])].sort((a, b) => Number(a.codigo.slice(1)) - Number(b.codigo.slice(1))))
+    if (!candidatos.some((c) => c.v.codigo === e.codigo)) candidatos.push({ v: vazamento(e.codigo), motivo: e.motivo });
   if (atual.investido > 0 && atual.leads_plataforma === 0 && atual.leads_crm_meta === 0)
     candidatos.push({ v: vazamento("V18"), motivo: "Há investimento no período, mas nenhum lead de anúncio na plataforma nem no CRM." });
 
