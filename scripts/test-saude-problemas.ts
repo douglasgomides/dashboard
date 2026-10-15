@@ -1,8 +1,14 @@
 // npx tsx scripts/test-saude-problemas.ts
 import assert from "node:assert/strict";
 import { montarProblemasFontes, resumirProblemas, filtrarProblemas, problemaDaLinha } from "../src/lib/saude-problemas";
+import { hojeBrasilia } from "../src/lib/status-fonte";
 
-const dia = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+// Dias contados a partir de hoje em Brasília, como a regra (em UTC o teste falhava de madrugada).
+const dia = (n: number) => {
+  const d = new Date(`${hojeBrasilia()}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+};
 const linha = (fonte: string, o: Record<string, unknown>) => ({ fonte, last_attempt_at: null, last_success_at: null, last_error: null, last_rows: null, data_ate: null, ...o }) as any;
 const todas = { tem_instagram: true, tem_anuncios: true, tem_crm: true, tem_atendimento: true };
 const c = { id: "c1", nome: "Dra. A" };

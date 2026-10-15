@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CadastroSap, TrackerAutomatico } from "@/components/sap-tracker";
 import { LinhaDoTempoSap } from "@/components/sap-plano";
@@ -27,6 +27,9 @@ function ProgramaSap() {
   const periodLabel = `${dm(start)} a ${dm(ontem)}`;
   return (
     <div className="space-y-6">
+      <Link to="/sap/$clientId/passo-a-passo" params={{ clientId }} className="block rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "color-mix(in srgb, var(--accent) 35%, var(--border))", background: "var(--accent-soft)" }}>
+        <strong>Implantando esta clínica?</strong> Siga o <span className="font-semibold underline">Passo a passo</span>: o que fazer, em que ordem e por quê.
+      </Link>
       <CadastroSap clientId={clientId} />
       <LinhaDoTempoSap clientId={clientId} />
       <div className="flex flex-wrap items-center gap-2 text-sm" role="group" aria-label="Período dos números">

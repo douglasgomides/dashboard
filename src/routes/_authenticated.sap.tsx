@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardCheck, Flag, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight } from "lucide-react";
+import { ClipboardCheck, Flag, ListOrdered, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { getClient } from "@/lib/client-data";
@@ -14,6 +14,7 @@ export const Route = createFileRoute("/_authenticated/sap")({
 });
 
 const ITENS = [
+  { sub: "/passo-a-passo", label: "Passo a passo", Icone: ListOrdered },
   { sub: "", label: "Programa", Icone: Flag },
   { sub: "/metas", label: "Metas e garantia", Icone: Target },
   { sub: "/leitura", label: "Leitura da semana", Icone: ClipboardCheck },
