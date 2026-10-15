@@ -1055,3 +1055,20 @@ export async function gerarRascunhoSessao(clientId: string, args: { sessao: stri
   if (!resp.ok) throw new Error(j?.error ?? `Falha (${resp.status})`);
   return j;
 }
+
+// ---------------------------------------------------------------- IA na auditoria semanal (06.09)
+
+export type SugestaoAuditoria = {
+  conversas_semana: number; analisadas: number; sem_analise: number; amostra: number; nota_media_0a10: number | null;
+  falhas: { falha: string; n: number }[]; abertas: number; abertas_sem_follow_up: number; recuperaveis: number; pontos_a_melhorar: string[];
+};
+
+/** Junta as análises de IA das conversas da semana (conversas_resumos) numa sugestão para a auditoria. Só admin. */
+export async function getAuditoriaIASap(clientId: string, semana: string): Promise<SugestaoAuditoria | null> {
+  const { data, error } = await db.rpc("sap_auditoria_ia", { p_client_id: clientId, p_semana: semana });
+  if (error) {
+    if (/does not exist|schema cache/i.test(error.message)) return null;
+    throw error;
+  }
+  return (data ?? null) as SugestaoAuditoria | null;
+}

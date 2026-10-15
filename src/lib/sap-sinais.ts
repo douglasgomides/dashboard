@@ -88,3 +88,20 @@ export function indicadoresAtendimento(s: SinaisBrutos | null, agendados: number
 
   return { confirmacao, remarcacao, f1, pensando, nota: auditoria?.nota_media != null ? Number(auditoria.nota_media) : null, motivos, totalMotivos, gatilhos };
 }
+
+// ---------------------------------------------------------------- sugestão da IA para a auditoria (06.09)
+
+export const ROTULO_FALHA: Record<string, string> = {
+  sem_resposta: "sem resposta", demora: "demora para responder", desvio_preco: "desviou do preço", preco_sem_ancoragem: "preço sem explicar o valor",
+  sem_cta: "sem chamar para agendar", sem_follow_up: "sem follow-up", nome_errado: "nome errado", informacao_inconsistente: "informação inconsistente",
+  pressao: "pressão", so_emoji: "só emoji", desconto_reativo: "desconto reativo", excesso_audio: "excesso de áudio",
+};
+
+/** Converte a sugestão em valores do formulário: nota 0–10 da IA vira escala 0–12 da rubrica (estimativa) e as falhas
+ *  mais frequentes viram o "o que corrigir no retreino". Confirmação até a véspera não sai da conversa: fica em branco. */
+export function preencherComIA(s: { amostra: number; nota_media_0a10: number | null; falhas: { falha: string; n: number }[]; abertas: number; abertas_sem_follow_up: number }) {
+  const nota = s.nota_media_0a10 === null ? null : Math.round(s.nota_media_0a10 * 1.2 * 10) / 10;
+  const f1 = s.abertas > 0 ? Math.round(((s.abertas - s.abertas_sem_follow_up) / s.abertas) * 100) : null;
+  const obs = s.falhas.slice(0, 3).map((f) => `${ROTULO_FALHA[f.falha] ?? f.falha} (${f.n})`).join("; ");
+  return { conversas: s.amostra, nota, f1, obs: obs ? `IA: ${obs}` : "" };
+}
