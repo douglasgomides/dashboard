@@ -17,7 +17,7 @@ import type { Database } from "../../src/integrations/supabase/types.js";
 const PAGE_SIZE = 250; // limite máximo da API da Kommo
 const INCREMENTAL_LOOKBACK_DAYS = 3; // margem de segurança sobre o intervalo do job diário
 
-interface KommoLead {
+export interface KommoLead {
   id: number;
   status_id: number;
   pipeline_id: number;
@@ -47,6 +47,35 @@ function kommoCampo(lead: KommoLead, padrao: RegExp): string | null {
     }
   }
   return null;
+}
+
+/**
+ * A linha de crm_leads que o Kommo vira. Exportada para o sync, a reconciliação
+ * e os scripts usarem exatamente a mesma tradução.
+ */
+export function linhaDoLead(lead: KommoLead, crmConnectionId: string, clientId: string) {
+  return {
+    crm_connection_id: crmConnectionId,
+    client_id: clientId,
+    provider: "kommo" as const,
+    external_lead_id: String(lead.id),
+    event_type: "sync",
+    status_id: String(lead.status_id),
+    old_status_id: null,
+    pipeline_id: String(lead.pipeline_id),
+    price: lead.price,
+    // Colunas normalizadas: o mesmo significado que as funções do banco
+    // antes extraíam do raw_payload a cada consulta. Gravar aqui é o que
+    // permite que Kommo e Clint sejam lidos pela mesma função — e sem
+    // isso, todo lead novo entraria sem data e sumiria dos "novos 7 dias".
+    occurred_at: lead.created_at ? new Date(lead.created_at * 1000).toISOString() : null,
+    outcome: kommoOutcome(lead.status_id),
+    // "Fonte do Lead" (Lana) ou "Origem do Lead" (HOMS): o mesmo dado, nomes diferentes por conta.
+    source: kommoCampo(lead, /(Fonte|Origem) do Lead/i),
+    contact_name: lead.name ?? null,
+    raw_payload: lead as any,
+    received_at: new Date().toISOString(),
+  };
 }
 
 export interface KommoLeadsSyncEnv {
@@ -170,28 +199,7 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
     leadsFetched += result.leads.length;
 
     if (result.leads.length > 0) {
-      const rows = result.leads.map((lead) => ({
-        crm_connection_id: env.crmConnectionId,
-        client_id: env.clientId,
-        provider: "kommo" as const,
-        external_lead_id: String(lead.id),
-        event_type: "sync",
-        status_id: String(lead.status_id),
-        old_status_id: null,
-        pipeline_id: String(lead.pipeline_id),
-        price: lead.price,
-        // Colunas normalizadas: o mesmo significado que as funções do banco
-        // antes extraíam do raw_payload a cada consulta. Gravar aqui é o que
-        // permite que Kommo e Clint sejam lidos pela mesma função — e sem
-        // isso, todo lead novo entraria sem data e sumiria dos "novos 7 dias".
-        occurred_at: lead.created_at ? new Date(lead.created_at * 1000).toISOString() : null,
-        outcome: kommoOutcome(lead.status_id),
-        // "Fonte do Lead" (Lana) ou "Origem do Lead" (HOMS): o mesmo dado, nomes diferentes por conta.
-        source: kommoCampo(lead, /(Fonte|Origem) do Lead/i),
-        contact_name: lead.name ?? null,
-        raw_payload: lead as any,
-        received_at: new Date().toISOString(),
-      }));
+      const rows = result.leads.map((lead) => linhaDoLead(lead, env.crmConnectionId, env.clientId));
       const { error } = await supabase
         .from("crm_leads")
         .upsert(rows, { onConflict: "crm_connection_id,external_lead_id" });

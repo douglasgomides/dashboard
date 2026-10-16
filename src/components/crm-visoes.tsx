@@ -32,7 +32,7 @@ export function VisoesComerciais({ clientId, start, end }: { clientId: string; s
         icone={Users}
         titulo="Coorte: os leads de cada semana, hoje"
         resumo="Quem entrou em cada semana e até onde chegou"
-        ajuda={<>Cada linha são os leads que entraram naquela semana e a etapa em que estão hoje. Semanas recentes ainda não tiveram tempo de andar. A taxa só aparece com {AMOSTRA_MIN_COORTE} leads ou mais na semana. Listas antigas importadas ficam de fora.</>}
+        ajuda={<>Cada linha são os leads que entraram naquela semana e a etapa em que estão hoje. Semanas recentes ainda não tiveram tempo de andar. A coluna “Hoje em consulta agendada” conta quantos desses leads estão agora numa etapa de consulta agendada: não é o total de agendamentos da semana (para isso, veja “Movimentos no CRM”). A taxa só aparece com {AMOSTRA_MIN_COORTE} leads ou mais na semana. Listas antigas importadas ficam de fora.</>}
       >
         {!v.coortes.length ? (
           <p className="note" style={{ margin: 0 }}>Nenhum lead entrou no período.</p>
@@ -44,7 +44,7 @@ export function VisoesComerciais({ clientId, start, end }: { clientId: string; s
                   <th className={th}>Semana de entrada</th>
                   <th className={`${th} text-right`}>Leads</th>
                   <th className={`${th} text-right`}>Atendidos</th>
-                  <th className={`${th} text-right`}>Agendaram</th>
+                  <th className={`${th} text-right`}>Hoje em consulta agendada</th>
                   <th className={`${th} text-right`}>Compraram</th>
                   <th className={`${th} text-right`}>Perdidos</th>
                   <th className={`${th} text-right`}>Ainda abertos</th>
@@ -117,7 +117,7 @@ export function VisoesComerciais({ clientId, start, end }: { clientId: string; s
         icone={History}
         titulo="Movimentos no CRM"
         resumo="Mudanças de etapa, agendamentos, vendas e perdas por semana"
-        ajuda={<>Gravado a cada mudança que chega do CRM. Não existe histórico de antes do início da gravação; a hora é a da sincronização (no Kommo, na hora).</>}
+        ajuda={<>“Foram para consulta agendada” conta os leads, de qualquer idade, que passaram para uma etapa de consulta agendada naquela semana. Gravado a cada mudança que chega do CRM; antes do início da gravação só existe histórico onde ele foi completado a partir do próprio CRM. A hora é a da sincronização (no Kommo, na hora).</>}
       >
         {!v.eventosDesde ? (
           <p className="note" style={{ margin: 0 }}>O histórico de movimentos começa a ser gravado agora. As primeiras semanas aparecem aqui conforme a equipe mexe nos leads.</p>
@@ -131,7 +131,7 @@ export function VisoesComerciais({ clientId, start, end }: { clientId: string; s
                   <th className={th}>Semana</th>
                   <th className={`${th} text-right`}>Leads mexidos</th>
                   <th className={`${th} text-right`}>Mudanças de etapa</th>
-                  <th className={`${th} text-right`}>Agendaram</th>
+                  <th className={`${th} text-right`}>Foram para consulta agendada</th>
                   <th className={`${th} text-right`}>Vendas</th>
                   <th className={`${th} text-right`}>Perdas</th>
                 </tr>

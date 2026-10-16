@@ -11,12 +11,21 @@
  * simplesmente deixa de existir. A única forma de saber é varrer TODOS os ids
  * vivos e comparar com o que temos.
  *
+ * A mesma varredura serve para o caminho inverso: lead que existe no Kommo e
+ * não existe aqui. O backfill pagina uma lista que muda enquanto é lida (lead
+ * que muda de etapa pula de página) e o incremental só olha o que foi atualizado
+ * nos últimos dias, então um lead antigo que escapou do backfill nunca mais
+ * entra. Foi o caso de 658 leads da Lana na etapa "Consulta Agendada" do funil
+ * Instagram [Elité Clinic] (15/10/2026): o painel mostrava 89 onde o Kommo tem
+ * 747. A varredura importa o que falta.
+ *
  * Marca em vez de apagar. Se a varredura vier incompleta, um DELETE seria
  * irreversível; uma marca se desfaz. Um lead que reaparecer é desmarcado
  * sozinho na varredura seguinte.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
+import { linhaDoLead, type KommoLead } from "./kommo-leads-sync.js";
 
 const PAGE_SIZE = 250; // limite da API da Kommo
 const MAX_PAGINAS = 200; // 50 mil leads; acima disso é outra conversa
@@ -44,6 +53,8 @@ export interface KommoReconcileResult {
   sumiram: number;
   reapareceram: number;
   marcados: number;
+  /** Leads que existem no Kommo e não existiam aqui, importados agora. */
+  importados: number;
   precisaConfirmar: boolean;
   errors: string[];
 }
@@ -51,27 +62,31 @@ export interface KommoReconcileResult {
 async function idsVivos(
   domain: string,
   accessToken: string,
-): Promise<{ ids: Set<string>; completo: boolean; erro?: string }> {
+): Promise<{ ids: Set<string>; leads: Map<string, KommoLead>; completo: boolean; erro?: string }> {
   const ids = new Set<string>();
+  const leads = new Map<string, KommoLead>();
   let page = 1;
   while (page <= MAX_PAGINAS) {
     const qs = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(page) });
     const res = await fetch(`https://${domain}/api/v4/leads?${qs.toString()}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (res.status === 204) return { ids, completo: true }; // fim normal da paginação
+    if (res.status === 204) return { ids, leads, completo: true }; // fim normal da paginação
     if (!res.ok) {
-      return { ids, completo: false, erro: `Kommo respondeu ${res.status}: ${(await res.text()).slice(0, 200)}` };
+      return { ids, leads, completo: false, erro: `Kommo respondeu ${res.status}: ${(await res.text()).slice(0, 200)}` };
     }
     const body = (await res.json()) as {
-      _embedded?: { leads?: { id: number }[] };
+      _embedded?: { leads?: KommoLead[] };
       _links?: { next?: unknown };
     };
-    for (const l of body._embedded?.leads ?? []) ids.add(String(l.id));
-    if (!body._links?.next) return { ids, completo: true };
+    for (const l of body._embedded?.leads ?? []) {
+      ids.add(String(l.id));
+      leads.set(String(l.id), l);
+    }
+    if (!body._links?.next) return { ids, leads, completo: true };
     page += 1;
   }
-  return { ids, completo: false, erro: `parou no teto de ${MAX_PAGINAS} páginas` };
+  return { ids, leads, completo: false, erro: `parou no teto de ${MAX_PAGINAS} páginas` };
 }
 
 export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoReconcileResult> {
@@ -80,7 +95,7 @@ export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoRe
   });
   const errors: string[] = [];
 
-  const { ids, completo, erro } = await idsVivos(env.kommoDomain, env.accessToken);
+  const { ids, leads, completo, erro } = await idsVivos(env.kommoDomain, env.accessToken);
   if (erro) errors.push(erro);
 
   // Varredura incompleta não serve para concluir ausência: o que faltou ler
@@ -92,6 +107,7 @@ export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoRe
       sumiram: 0,
       reapareceram: 0,
       marcados: 0,
+      importados: 0,
       precisaConfirmar: false,
       errors: [...errors, "varredura incompleta — nada foi marcado"],
     };
@@ -103,6 +119,7 @@ export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoRe
       sumiram: 0,
       reapareceram: 0,
       marcados: 0,
+      importados: 0,
       precisaConfirmar: false,
       errors: [...errors, "a origem devolveu zero leads — recusando marcar a base inteira"],
     };
@@ -170,12 +187,32 @@ export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoRe
     }
   }
 
+  // O caminho inverso: existe no Kommo e não existe aqui. Só importa quando a leitura local foi completa
+  // (uma leitura local truncada faria parecer que tudo falta).
+  let importados = 0;
+  if (!errors.some((e) => e.startsWith("leitura local"))) {
+    const locaisSet = new Set(locais.map((l) => l.external_lead_id));
+    const faltantes = [...ids].filter((id) => !locaisSet.has(id));
+    for (let i = 0; i < faltantes.length; i += 500) {
+      const linhas = faltantes
+        .slice(i, i + 500)
+        .map((id) => leads.get(id))
+        .filter((l): l is KommoLead => !!l)
+        .map((l) => linhaDoLead(l, env.crmConnectionId, env.clientId));
+      if (linhas.length === 0) continue;
+      const { error } = await supabase.from("crm_leads").upsert(linhas as any, { onConflict: "crm_connection_id,external_lead_id" });
+      if (error) errors.push(`importação de faltantes: ${error.message}`);
+      else importados += linhas.length;
+    }
+  }
+
   return {
     idsNaOrigem: ids.size,
     leadsLocais: distintosLocais,
     sumiram: sumiram.length,
     reapareceram: reapareceram.length,
     marcados,
+    importados,
     precisaConfirmar,
     errors,
   };
