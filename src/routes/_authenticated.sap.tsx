@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, ListOrdered, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight, Radar, CalendarCheck, Presentation } from "lucide-react";
+import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, ListOrdered, Gauge, LayoutDashboard, ListChecks, Network, Target, ArrowLeftRight, Radar, CalendarCheck, Presentation, UsersRound } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { TrocaProduto } from "@/components/troca-produto";
@@ -45,7 +45,7 @@ function SapLayout() {
   const dia = diaAtual(clinica?.d0 ?? null, clinica?.pausas);
   const itens = (isAdmin ? ITENS.filter(() => true) : ITENS.filter((i) => "clinica" in i))
     .map((i) => ({ ...i, grupo: isAdmin ? i.grupo : "Seu programa", label: isAdmin ? i.label : (ROTULO_CLINICA[i.sub] ?? i.label) }));
-  const titulo = clientId ? (cliente?.name ?? "Carregando…") : isAdmin ? "Todas as clínicas" : "Sistema de Aquisição";
+  const titulo = pathname === "/sap/guia" ? "Como operamos" : clientId ? (cliente?.name ?? "Carregando…") : isAdmin ? "Todas as clínicas" : "Sistema de Aquisição";
 
   const links = (parte: "todas" | "clinica") => (
     <>
@@ -53,6 +53,12 @@ function SapLayout() {
         <Link to="/sap" activeOptions={{ exact: true }} activeProps={{ "aria-current": "page" }} >
           <LayoutDashboard aria-hidden size={18} />
           <span>Todas as clínicas</span>
+        </Link>
+      )}
+      {parte === "todas" && (
+        <Link to="/sap/guia" activeOptions={{ exact: true }} activeProps={{ "aria-current": "page" }}>
+          <UsersRound aria-hidden size={18} />
+          <span>Como operamos</span>
         </Link>
       )}
       {parte === "clinica" &&
@@ -125,6 +131,7 @@ function SapLayout() {
               Todas as clínicas
             </Link>
           )}
+          <Link to="/sap/guia" activeOptions={{ exact: true }} activeProps={{ "aria-current": "page" }}>Como operamos</Link>
           {clientId &&
             itens.map((it) => (
               <Link key={it.sub} to={`/sap/$clientId${it.sub}` as never} params={{ clientId } as never} activeOptions={{ exact: true }} aria-current={sub === it.sub ? "page" : undefined}>
