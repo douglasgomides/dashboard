@@ -10,9 +10,9 @@ export const SESSAO_S2: DefSessao = {
   quando: "D12 a D14",
   duracao: "90 min, videochamada gravada; aprovação do cliente em D+2",
   quem: [
-    { papel: "Fundador", faz: "Conduz, pergunta, propõe o serviço e a frase final. Não digita." },
+    { papel: "Condutor", faz: "Conduz, pergunta, propõe o serviço e a frase final. Não digita." },
     { papel: "Coordenador de Implementação", faz: "Projeta a 04.02 e o 04.03, explica números, fecha decisões e próximos passos. Dono do D+1, do D+2 e de toda mensagem enviada à clínica." },
-    { papel: "Analista de Onboarding", faz: "Registra ao vivo na 04.02, no 04.03 e no perfil. Fala só quando o Fundador pede para conferir um número ou ler uma frase do garimpo. Não envia mensagem à clínica." },
+    { papel: "Analista de Onboarding", faz: "Registra ao vivo na 04.02, no 04.03 e no perfil. Fala só quando o Condutor pede para conferir um número ou ler uma frase do garimpo. Não envia mensagem à clínica." },
     { papel: "Decisor da clínica", faz: "Obrigatório. Em geral o médico que executa o serviço candidato. Sem ele, a sessão é remarcada." },
     { papel: "Quem apresenta o investimento (consultora, gerente ou o médico)", faz: "Obrigatório. É quem mais conhece as objeções reais." },
     { papel: "Recepção", faz: "Recomendada só no Bloco 4 (minuto 40 ao 55). Lê a primeira mensagem do paciente e sabe as palavras dele." },
@@ -46,22 +46,22 @@ export const SESSAO_S2: DefSessao = {
   preparo: [
     { chave: "prep-pedido-s1", quando: "Fim da Sessão 1 (D8 a D10)", oque: "Sessão 2 marcada para D12 a D14. Pedido à clínica: 2 Fichas de Caso, inventário de provas e prints de 20 conversas reais de WhatsApp sem nome nem telefone", quem: "Coordenador de Implementação", horas: -96, doc: "04.04" },
     { chave: "prep-lembrete-fichas", quando: "D-5", oque: "Lembrete das Fichas de Caso e dos prints, com prazo D-2", quem: "Coordenador de Implementação", horas: -120, doc: "04.04" },
-    { chave: "prep-garimpo", quando: "D-4 a D-2", oque: "Garimpo de voz do paciente (60 a 90 min): avaliações Google da clínica e de 3 concorrentes, comentários e Direct, 20 conversas de WhatsApp, Fichas de Caso. Entrega de meia página ao Fundador", quem: "Analista de Onboarding", horas: -96 },
+    { chave: "prep-garimpo", quando: "D-4 a D-2", oque: "Garimpo de voz do paciente (60 a 90 min): avaliações Google da clínica e de 3 concorrentes, comentários e Direct, 20 conversas de WhatsApp, Fichas de Caso. Entrega de meia página ao Condutor", quem: "Analista de Onboarding", horas: -96 },
     { chave: "prep-ticket-margem", quando: "D-3", oque: "Ticket médio fechado e margem por serviço coletados em privado com o decisor (mensagem ou ligação de 10 min)", quem: "Coordenador de Implementação", horas: -72, doc: "04.02" },
     { chave: "prep-matriz", quando: "D-2", oque: "04.02 pré-preenchida: serviços, dados brutos, notas automáticas. Notas da conversa em branco", quem: "Analista de Onboarding", horas: -48, doc: "04.02" },
-    { chave: "prep-leitura-fundador", quando: "D-1", oque: "Fundador lê o 03.06, a 04.02, a Folha de Garimpo e as Fichas de Caso. Escolhe 2 exemplos da especialidade no banco do 04.03. Anota a hipótese de serviço, de paciente e de diferencial", quem: "Fundador", horas: -24, doc: "04.03" },
+    { chave: "prep-leitura-fundador", quando: "D-1", oque: "Condutor lê o 03.06, a 04.02, a Folha de Garimpo e as Fichas de Caso. Escolhe 2 exemplos da especialidade no banco do 04.03. Anota a hipótese de serviço, de paciente e de diferencial", quem: "Condutor", horas: -24, doc: "04.03" },
     { chave: "prep-0307-final", quando: "D-1", oque: "03.07 em versão final, pronto para envio no ZapSign ao fim da sessão", quem: "Coordenador de Implementação", horas: -24, doc: "03.07" },
     { chave: "prep-lembrete-clinica", quando: "D-1", oque: "Lembrete à clínica: quem precisa estar, link, e \"deixe à mão fotos, vídeos e números do serviço que vocês mais querem crescer\"", quem: "Coordenador de Implementação", horas: -24 },
-    { chave: "prep-tela", quando: "10 min antes", oque: "Gravação pronta; 04.02 e 04.03 abertos na tela do Coordenador; Folha de Garimpo aberta para o Fundador", quem: "Coordenador e Analista", horas: -0.17 },
+    { chave: "prep-tela", quando: "10 min antes", oque: "Gravação pronta; 04.02 e 04.03 abertos na tela do Coordenador; Folha de Garimpo aberta para o Condutor", quem: "Coordenador e Analista", horas: -0.17 },
   ],
   regraPreparo: "Sem Fichas de Caso nem prints até D-2, a sessão acontece mesmo assim: o garimpo público dá a base, o Bloco 4 usa as perguntas de resgate e a falta vira tarefa da clínica com prazo D+2. Margem e ticket são coletados em privado; se o decisor não quiser expor, o Coordenador oculta as colunas B, C e F da 04.02 antes de projetar.",
   blocos: [
     {
       n: 1, titulo: "Retomada", min: 10, publico: "Decisor e quem apresenta o investimento",
       passos: [
-        "Fundador: \"Hoje a gente decide para quem o sistema vai ser montado e o que a gente vai dizer para essa pessoa. Saímos com o serviço dos 90 dias, o retrato do paciente e a frase que vai estar no anúncio, no WhatsApp e na consulta. No final, a gente assina as metas.\"",
+        "Condutor: \"Hoje a gente decide para quem o sistema vai ser montado e o que a gente vai dizer para essa pessoa. Saímos com o serviço dos 90 dias, o retrato do paciente e a frase que vai estar no anúncio, no WhatsApp e na consulta. No final, a gente assina as metas.\"",
         "Coordenador lê em 1 min as ações do 03.07 para este intervalo: feito, não feito, nova data. Também o que a Doctor Creator entregou (Tracker com baseline, ajustes de mensagem, matriz pré-preenchida).",
-        "Fundador: \"Saímos com [serviço candidato] e com [paciente desejado]. Hoje a matriz confirma ou muda isso.\"",
+        "Condutor: \"Saímos com [serviço candidato] e com [paciente desejado]. Hoje a matriz confirma ou muda isso.\"",
         "Combinado do dia: \"Se aparecer um segundo serviço importante, ele vai para a lista do que entra depois. Foco é o que faz o sistema funcionar.\"",
       ],
       registrar: [{ chave: "revisao_acoes_s1", rotulo: "Ações da Sessão 1: feito, não feito, nova data", linhas: 3 }],
@@ -86,10 +86,10 @@ export const SESSAO_S2: DefSessao = {
       n: 3, titulo: "Escolha do serviço prioritário", min: 10, publico: "Decisor e quem apresenta o investimento",
       passos: [
         "Coordenador mostra o ranking, o \"% do máximo\" e a linha \"A escolha depende dos pesos?\" do quadro Decisão.",
-        "Fundador: \"Pela matriz, o serviço que mais paga o esforço dos 90 dias é [1º do ranking], porque ganha em [2 ou 3 critérios]. Faz sentido para vocês?\"",
+        "Condutor: \"Pela matriz, o serviço que mais paga o esforço dos 90 dias é [1º do ranking], porque ganha em [2 ou 3 critérios]. Faz sentido para vocês?\"",
         "Concorda: Analista marca \"Sim\" em Escolhido. Quer outro: \"Pode escolher, desde que o motivo seja verificável. Qual é?\" Valem: agenda do 1º lotada, equipamento parado, sazonalidade real, sócio de licença. Não valem: \"gosto mais\", \"é o que mais faço\", \"meu concorrente faz\".",
         "Se a checagem disser \"Sim: discuta os pesos\": \"Para vocês, neste momento, pesa mais o valor por paciente ou a agenda que está vazia?\" Ajuste de peso só com motivo escrito.",
-        "Fundador lê o que fica fora: \"Nos 90 dias a gente NÃO anuncia [serviços]. Eles continuam no orgânico e na indicação. O [2º do ranking] pode entrar entre o dia 61 e o dia 90 se o principal estiver dentro da meta.\"",
+        "Condutor lê o que fica fora: \"Nos 90 dias a gente NÃO anuncia [serviços]. Eles continuam no orgânico e na indicação. O [2º do ranking] pode entrar entre o dia 61 e o dia 90 se o principal estiver dentro da meta.\"",
       ],
       alerta: "Um serviço. Se pedirem dois: \"O segundo entra depois que o primeiro estiver rodando com número. Dois ao mesmo tempo dividem verba, gravação e treino, e nenhum aprende.\"",
       registrar: [
@@ -101,9 +101,9 @@ export const SESSAO_S2: DefSessao = {
     {
       n: 4, titulo: "Perfil do paciente ideal", min: 15, publico: "Decisor, quem apresenta o investimento e recepção",
       passos: [
-        "Fundador conduz como entrevista, com a Folha de Garimpo aberta. Primeiro lê 3 frases literais do garimpo (\"Olha como os seus pacientes escrevem...\") e só depois pergunta. O Analista preenche os 8 campos.",
+        "Condutor conduz como entrevista, com a Folha de Garimpo aberta. Primeiro lê 3 frases literais do garimpo (\"Olha como os seus pacientes escrevem...\") e só depois pergunta. O Analista preenche os 8 campos.",
         "Para a recepção: \"Você é quem mais conversa com esse paciente. Hoje eu preciso do seu ouvido, não de uma avaliação do seu trabalho.\"",
-        "Ao fim, o Fundador lê o retrato em 4 frases: \"O nosso paciente é [quem é], que [gatilho] e diz '[dor]'. Ele quer [desejo]. Antes de decidir, tem medo de [objeção] e conversa com [quem decide junto]. A gente não quer [quem não é].\"",
+        "Ao fim, o Condutor lê o retrato em 4 frases: \"O nosso paciente é [quem é], que [gatilho] e diz '[dor]'. Ele quer [desejo]. Antes de decidir, tem medo de [objeção] e conversa com [quem decide junto]. A gente não quer [quem não é].\"",
       ],
       alerta: "O perfil vira gancho, não rótulo. No anúncio, a versão que aprova com mais facilidade é a do momento (\"A foto do celular mostrou o que o espelho não mostrava\"). A versão direta é amarelo: sobe como teste com plano B e o resultado vai para o 05.16.",
       registrar: [
@@ -120,10 +120,10 @@ export const SESSAO_S2: DefSessao = {
     {
       n: 5, titulo: "Proposta de valor", min: 25, publico: "Decisor e quem apresenta o investimento",
       passos: [
-        "Coordenador projeta o 04.03 e o Analista digita. Os 2 exemplos do banco escolhidos pelo Fundador ficam ao lado, só como calibragem.",
+        "Coordenador projeta o 04.03 e o Analista digita. Os 2 exemplos do banco escolhidos pelo Condutor ficam ao lado, só como calibragem.",
         "Campos em ordem (15 min): para quem, qual problema, contra o quê, qual diferencial, qual prova, oferta de entrada, frase final.",
         "Contra o quê: \"Se vocês não existissem, o que ele faria?\" O diferencial é medido contra essa alternativa, não contra \"o mercado\". Prova: \"Se um paciente desconfiado pedisse para ver, o que vocês mostram?\"",
-        "Teste (5 min): Fundador lê a frase em voz alta e faz as 5 perguntas do 04.03: o paciente se reconhece? o diferencial tem prova? a alternativa poderia dizer o mesmo? está em linguagem de paciente? qual a cor no semáforo do 00.04?",
+        "Teste (5 min): Condutor lê a frase em voz alta e faz as 5 perguntas do 04.03: o paciente se reconhece? o diferencial tem prova? a alternativa poderia dizer o mesmo? está em linguagem de paciente? qual a cor no semáforo do 00.04?",
         "Ajuste ao vivo (5 min): ler de novo; se soar como site de clínica, reescrever. Antes e depois: sim, como jornada em vídeo com autorização, em teste amarelo.",
         "Status dito em voz alta. Validada: 4 primeiras respostas \"sim\" e cor verde ou amarela. Rascunho: falta prova; orgânico e WhatsApp usam, anúncio pago espera a prova (D+2, no máximo D+5) ou usa prova de processo.",
       ],
@@ -147,7 +147,7 @@ export const SESSAO_S2: DefSessao = {
       n: 6, titulo: "Metas D90 e assinatura do 03.07", min: 10, publico: "Decisor",
       passos: [
         "Coordenador projeta a tabela de KPIs do 03.07.",
-        "Fundador confirma cada KPI: \"Baseline [valor], medido em [fonte]. Meta no dia 90: [valor]. Continua de pé com o serviço de hoje?\" Se o serviço mudou desde a Sessão 1, ajustar a meta de custo por consulta realizada e de conversão da consulta ao ticket do novo serviço.",
+        "Condutor confirma cada KPI: \"Baseline [valor], medido em [fonte]. Meta no dia 90: [valor]. Continua de pé com o serviço de hoje?\" Se o serviço mudou desde a Sessão 1, ajustar a meta de custo por consulta realizada e de conversão da consulta ao ticket do novo serviço.",
         "Garantia em uma frase: \"Se vocês cumprirem a execução, Score de Execução de 80% ou mais, e pelo menos 2 dos 3 indicadores principais não melhorarem em relação ao dia 0, a gente acompanha mais 30 dias sem custo.\" Receita é acompanhada no Tracker e não é meta contratual.",
         "Coordenador envia o 03.07 pelo ZapSign ainda na call. Ideal: assinado antes de desligar. Limite: 24 horas.",
         "Próximos passos: D+1 o 04.05 no grupo; até D+2 a clínica aprova e responde \"ciente\" nas amarelas; tarefas da clínica até a Sessão 3; Sessão 3 marcada agora, entre D16 e D18.",
@@ -165,17 +165,17 @@ export const SESSAO_S2: DefSessao = {
   situacoes: [
     { titulo: "A clínica não trouxe Fichas de Caso nem prints", como: ["Usar o garimpo público.", "Perguntas de resgate: \"Me conta a primeira mensagem do último paciente que fechou esse serviço. E a do último que sumiu.\"", "Pedir à recepção para ler 3 conversas em voz alta, sem nome. Fichas viram tarefa D+2."] },
     { titulo: "O médico quer dois serviços", como: ["Regra do Bloco 3. O segundo vai para \"o que fica fora\" com a data em que pode entrar."] },
-    { titulo: "O médico discorda da matriz sem motivo verificável", como: ["\"A matriz não é minha opinião, é a sua clínica em números. Se você me der um motivo que eu consiga mostrar para a sua equipe, a gente muda.\"", "Se insistir, o Fundador decide se aceita, registra o risco e avisa que a meta do 03.07 pode precisar de ajuste."] },
+    { titulo: "O médico discorda da matriz sem motivo verificável", como: ["\"A matriz não é minha opinião, é a sua clínica em números. Se você me der um motivo que eu consiga mostrar para a sua equipe, a gente muda.\"", "Se insistir, o Condutor decide se aceita, registra o risco e avisa que a meta do 03.07 pode precisar de ajuste."] },
     { titulo: "Não existe prova de diferencial", como: ["Proposta em rascunho com prova de processo.", "Tarefas: puxar volume do sistema, pedir avaliação no Google a todos os pacientes atendidos no mês (sem filtro e sem brinde, ver 04.04), escrever o protocolo por etapas."] },
     { titulo: "O médico quer antes e depois, preço ou gancho mais agressivo", como: ["É amarelo: explicar o risco em uma frase.", "Propor o formato que costuma aprovar (jornada em vídeo, consulta com condição, dor como cena com versão direta em teste), pedir o ciente e abrir o teste no 05.16."] },
     { titulo: "O médico quer garantia escrita, promessa de cura ou nome de medicamento controlado", como: ["É vermelho: explicar em uma frase e oferecer a versão forte que passa.", "Registrar no 04.05. Vermelho a Doctor Creator não sobe, nem com \"ciente\"."] },
     { titulo: "O perfil descrito é \"todo mundo\"", como: ["\"Se fosse só uma pessoa para você atender na semana que vem, quem seria?\" Começar dela e generalizar depois."] },
     { titulo: "A recepção corrige o médico sobre o que o paciente fala", como: ["Ótimo sinal. Registrar as duas versões; vale a da recepção para o campo 7."] },
     { titulo: "O garimpo contradiz o médico", como: ["Mostrar as frases: \"Os seus pacientes estão dizendo que o que eles lembram é isto.\"", "O diferencial é o que o paciente percebe e consegue repetir."] },
-    { titulo: "A sessão acaba sem a frase final", como: ["Fundador fecha a frase no D+1 com o Editor e Copy e manda junto com o 04.05. Nunca remarcar só por isso."] },
+    { titulo: "A sessão acaba sem a frase final", como: ["Condutor fecha a frase no D+1 com o Editor e Copy e manda junto com o 04.05. Nunca remarcar só por isso."] },
   ],
   regras: [
-    "O Fundador não digita. O Analista registra. O Coordenador fecha combinados e fala com a clínica depois.",
+    "O Condutor não digita. O Analista registra. O Coordenador fecha combinados e fala com a clínica depois.",
     "Toda frase com jargão médico é reescrita na hora com o termo do paciente.",
     "A escolha do serviço é da clínica com base na matriz. A construção da proposta é conduzida pela Doctor Creator: o médico escreve como médico, o paciente lê como paciente.",
     "Não prometer resultado financeiro. As metas são os KPIs operacionais do 03.07.",
@@ -188,7 +188,7 @@ export const SESSAO_S2: DefSessao = {
     { chave: "pos-gravacao", quando: "D (até 2 h depois)", oque: "Gravação e transcrição na pasta da clínica; 04.02 e 04.03 salvos; Folha de Garimpo atualizada com o que a recepção e o médico falaram", quem: "Analista de Onboarding", horas: 2, doc: "04.02" },
     { chave: "pos-clickup", quando: "D", oque: "Tarefas da clínica no ClickUp com prazo; Sessão 3 confirmada", quem: "Coordenador de Implementação", horas: 4 },
     { chave: "pos-banco-mensagens", quando: "D+1", oque: "Banco de mensagens (3 ganchos de anúncio, abertura de WhatsApp, fala de consulta), cada uma com cor do semáforo", quem: "Editor e Copy", horas: 24 },
-    { chave: "pos-envio-0405", quando: "D+1", oque: "04.05 montado; Fundador revisa; enviado no grupo em 3 mensagens (link, pedido de APROVADO até D+2, pedido de CIENTE nas amarelas)", quem: "Coordenador de Implementação", horas: 24, doc: "04.05" },
+    { chave: "pos-envio-0405", quando: "D+1", oque: "04.05 montado; Condutor revisa; enviado no grupo em 3 mensagens (link, pedido de APROVADO até D+2, pedido de CIENTE nas amarelas)", quem: "Coordenador de Implementação", horas: 24, doc: "04.05" },
     { chave: "pos-aprovacao", quando: "D+2", oque: "Aprovação e \"ciente\" nas peças amarelas registrados no 04.05 e no 05.10 · Plano de Campanha", quem: "Coordenador de Implementação", horas: 48, doc: "05.10" },
     { chave: "pos-sem-resposta", quando: "D+3 sem resposta", oque: "Ligação ao decisor. Sem aceite até D+4, a Sessão 3 acontece com o documento \"aprovação pendente\" e nenhum anúncio sobe até o aceite", quem: "Coordenador de Implementação", horas: 72, doc: "04.05" },
   ],

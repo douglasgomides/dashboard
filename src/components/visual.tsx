@@ -1,3 +1,4 @@
+import { TextoComCodigos } from "@/components/sap-docs";
 import { useState, type ReactNode } from "react";
 import { Film, GalleryHorizontalEnd, Image as ImageIcon, CircleDot, Info, type LucideIcon } from "lucide-react";
 import type { ContentFormat } from "@/integrations/supabase/types";
@@ -60,6 +61,7 @@ export function Painel({
   children,
 }: {
   icone: LucideIcon;
+  /** Códigos de documento no título (ex.: "(02.06)") viram link para o documento. */
   titulo: string;
   resumo?: string;
   ajuda?: ReactNode;
@@ -81,7 +83,7 @@ export function Painel({
           <Icon size={18} />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold leading-tight">{titulo}</h2>
+          <h2 className="text-sm font-semibold leading-tight"><TextoComCodigos texto={titulo} /></h2>
           {resumo && (
             <p className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
               {resumo}

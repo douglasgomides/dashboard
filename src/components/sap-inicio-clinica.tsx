@@ -5,7 +5,8 @@ import { ArrowDownRight, ArrowUpRight, CalendarDays, Minus } from "lucide-react"
 import { Termo } from "@/components/sap-ajuda";
 import { diaAtual, faseDoDia, getClinicaSap, getMarcosSap, getPlanoSap, getTrackerAuto } from "@/lib/sap-data";
 import { cronogramaComDatas, somar } from "@/lib/sap-cronograma";
-import { lerTrackerAuto } from "@/lib/sap-auto";
+import { lerTrackerAuto, montarKpisSap } from "@/lib/sap-auto";
+import { DadoIncompleto } from "@/components/sap-kpi";
 import { KPIS_PLANO, baselineDoTracker, kpisDaGarantia, type KpiPlano } from "@/lib/sap-metas";
 import { fmtKpi } from "@/lib/sap-documentos";
 import { SESSOES, trilha } from "@/lib/sap-sessoes";
@@ -26,9 +27,9 @@ export function VisaoClinica({ clientId }: { clientId: string }) {
   const ate = somar(hoje, -1);
   const autoQ = useQuery({ queryKey: ["sap-auto", clientId, de, ate], queryFn: () => getTrackerAuto(clientId, de, ate), enabled: !!c });
 
-  const atual = useMemo(() => {
+  const { atual, leitura } = useMemo(() => {
     const t = lerTrackerAuto(autoQ.data);
-    return t ? baselineDoTracker(t, 28) : [];
+    return { atual: t ? baselineDoTracker(t, 28) : [], leitura: t ? montarKpisSap(t) : null };
   }, [autoQ.data]);
   const proxima = useMemo(() => {
     if (!c?.d0) return null;
@@ -73,15 +74,19 @@ export function VisaoClinica({ clientId }: { clientId: string }) {
           const igual = b !== null && agora !== null && Math.abs(agora - b) < 1e-9;
           const Icone = igual ? Minus : melhorou ? (MENOR_MELHOR.has(k) ? ArrowDownRight : ArrowUpRight) : MENOR_MELHOR.has(k) ? ArrowUpRight : ArrowDownRight;
           const cor = igual || melhorou === null ? "var(--text-dim)" : melhorou ? "var(--good)" : "var(--crit)";
+          const inc = leitura?.kpis.find((x) => x.id === k)?.incompleto;
+          const partida = b !== null ? fmtKpi(k, b) : inc ? "não medido (dado incompleto)" : "ainda não medido";
           return (
             <div key={k} className="rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
               <div className="text-xs font-medium" style={{ color: "var(--text-dim)" }}>{TERMO[k] ? <Termo t={TERMO[k]!}>{rot}</Termo> : rot}</div>
-              <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-2xl font-semibold tabular-nums">{fmtKpi(k, agora)}</span>
-                {melhorou !== null && <Icone size={18} aria-label={igual ? "igual" : melhorou ? "melhorou" : "piorou"} style={{ color: cor }} />}
-              </div>
+              {inc ? <DadoIncompleto inc={inc} clientId={clientId} compacto /> : (
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="text-2xl font-semibold tabular-nums">{agora === null ? <span className="text-base font-normal" style={{ color: "var(--muted)" }}>sem dado no período</span> : fmtKpi(k, agora)}</span>
+                  {melhorou !== null && <Icone size={18} aria-label={igual ? "igual" : melhorou ? "melhorou" : "piorou"} style={{ color: cor }} />}
+                </div>
+              )}
               <div className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
-                Últimas 4 semanas · <Termo t="Baseline">ponto de partida</Termo>: {fmtKpi(k, b)}{base?.meta != null ? <> · <Termo t="Meta">meta</Termo>: {fmtKpi(k, base.meta)}</> : null}
+                Últimas 4 semanas · <Termo t="Baseline">ponto de partida</Termo>: {partida}{base?.meta != null ? <> · <Termo t="Meta">meta</Termo>: {fmtKpi(k, base.meta)}</> : null}
               </div>
             </div>
           );

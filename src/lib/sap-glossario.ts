@@ -37,15 +37,15 @@ export interface PassoTour { titulo: string; texto: string; sub: string }
 export function passosDoTour(isAdmin: boolean): PassoTour[] {
   return isAdmin
     ? [
-        { titulo: "Comece pelo \"Esta semana\"", texto: "Tudo o que vence nos próximos 7 dias, por papel. Cada item tem um botão que leva direto para resolver.", sub: "/semana" },
-        { titulo: "Reuniões em uma tela", texto: "A trilha mostra as 10 reuniões do programa. Abra a próxima: preparo, roteiro com relógio, notas ao vivo e rascunho por IA no final.", sub: "/sessao" },
-        { titulo: "Toda semana: a leitura", texto: "Números da semana, vazamento principal, auditoria de conversas com sugestão da IA e uma ação para cada lado.", sub: "/leitura" },
-        { titulo: "Dúvida em algum termo?", texto: "O botão \"O que significa?\" no topo explica D0, baseline, KPI e os outros termos em uma frase.", sub: "" },
+        { titulo: "Novo por aqui? Leia o Comece aqui", texto: "Em 2 minutos: o que é o programa, a linha do tempo D0 a D90, o que cada papel faz e como fechar uma tarefa.", sub: "/comece" },
+        { titulo: "Sua tela é Minhas tarefas", texto: "Só o que é do seu papel nesta clínica, em Atrasadas, Hoje, Esta semana e Depois. Clique numa tarefa: ela mostra por que existe, como fazer, onde fazer e o que conta como pronto.", sub: "" },
+        { titulo: "Prove que fez", texto: "Cole o link ou envie o print da evidência e clique em \"Marcar como feito\". O que o sistema detecta sozinho já aparece como \"feito automaticamente\".", sub: "" },
+        { titulo: "Dúvida? Use o ?", texto: "O botão ? no topo reabre este tour, o Comece aqui, o glossário e a lista de documentos.", sub: "" },
       ]
     : [
-        { titulo: "Bem-vindo ao seu programa", texto: "Aqui você acompanha os 90 dias: em que dia estamos, os 3 números que importam e a próxima reunião.", sub: "" },
-        { titulo: "O que fazer esta semana", texto: "A lista mostra só o que é da clínica, com prazo. Quando a equipe marcar como feito, some da lista.", sub: "/semana" },
-        { titulo: "Metas e resultado", texto: "As metas que combinamos e como cada número está em relação ao ponto de partida.", sub: "/metas" },
-        { titulo: "Dúvida em algum termo?", texto: "Toque em \"O que significa?\" no topo ou em qualquer palavra sublinhada para ver a explicação.", sub: "" },
+        { titulo: "Bem-vindo ao seu programa", texto: "Aqui você acompanha os 90 dias: o que é da clínica fazer, em que dia estamos e a próxima reunião.", sub: "" },
+        { titulo: "O que fazer agora", texto: "Minhas tarefas mostra só o que é da clínica, com prazo. Quando a equipe marcar como feito, sai da lista.", sub: "" },
+        { titulo: "Números e metas", texto: "O Painel da clínica mostra os números; Metas e garantia mostra cada número contra o ponto de partida.", sub: "/painel" },
+        { titulo: "Dúvida? Use o ?", texto: "O botão ? no topo reabre este tour e explica cada termo.", sub: "" },
       ];
 }

@@ -30,7 +30,7 @@ export const SESSAO_D60: DefSessao = {
   sai: [
     "Lista de componentes com status e evidência de uso de cada um (11.02, seção 5)",
     "Leitura dos KPIs do período contra a baseline D0 e a meta D90, combinada com a clínica",
-    "Score de Execução do D60 registrado e, se abaixo de 80%, escalado ao Fundador (08.05, seção 4)",
+    "Score de Execução do D60 registrado e, se abaixo de 80%, escalado ao Condutor (08.05, seção 4)",
     "Ajustes do D61 ao D90: no máximo 3, com lado, dono (função) e prazo em data",
     "08.06 Playbook de Continuidade entregue (ou com data até o check-in seguinte)",
     "Check-ins D66, D76 e D86 e encerramento D90 na agenda; ata na pasta (critério de pronto do 00.02)",
@@ -56,7 +56,7 @@ export const SESSAO_D60: DefSessao = {
     { chave: "prep-leitura", quando: "D-2", oque: "Leitura da DC na ordem da 08.05, seção 2.2, e vazamento principal das últimas 4 semanas com a ação padrão do mapa (V1 a V20)", quem: "Coordenador + Gestor de Tráfego", horas: -48, doc: "08.05" },
     { chave: "prep-playbook", quando: "D-2", oque: "Rodar o 08.08 no momento D60 (Bloco 4: Playbook; Bloco 3 atualizado se o Tracker for posterior à Sessão 6). \"Em uso\" só com item Cumprido e evidência no 11.04; nos demais, \"[Coordenador confirma no checkpoint D60]\"", quem: "Coordenador de Implementação", horas: -48, doc: "08.08" },
     { chave: "prep-score", quando: "D-2", oque: "Conferir o Score de Execução no 11.04. Abaixo de 80%: escalar ao Fundador no mesmo dia (3 linhas: o que aconteceu, por que, o que propõe). O Fundador decide como apresentar à clínica e se entra na reunião (08.05, seção 4)", quem: "Coordenador → Fundador", horas: -48, doc: "11.04" },
-    { chave: "prep-resumo", quando: "D-1", oque: "Resumo de 1 página para o Fundador: KPIs baseline x atual x meta, vazamento principal, Score de Execução, componentes sem evidência, pontos sensíveis (proposta, validar)", quem: "Coordenador de Implementação", horas: -24 },
+    { chave: "prep-resumo", quando: "D-1", oque: "Resumo de 1 página para o Condutor: KPIs baseline x atual x meta, vazamento principal, Score de Execução, componentes sem evidência, pontos sensíveis (proposta, validar)", quem: "Coordenador de Implementação", horas: -24 },
     { chave: "prep-vespera", quando: "D-1", oque: "Mensagem de véspera à clínica e combinado de sala sobre valores em R$ (protocolo do 08.01)", quem: "CS e Relacionamento", horas: -24, doc: "08.01" },
     { chave: "prep-tela", quando: "15 min antes", oque: "Abrir checklist de evidência, aba Painel do 08.04 (visão \"Operação\" se combinado) e rascunho do 08.06. Não abrir a aba Garantia na tela compartilhada. Gravação ligada", quem: "Coordenador de Implementação", horas: -0.25 },
   ],
@@ -121,15 +121,15 @@ export const SESSAO_D60: DefSessao = {
       ],
     },
     {
-      n: 4, titulo: "Score de Execução", min: 5, publico: "Decisor (Fundador se escalado)",
+      n: 4, titulo: "Score de Execução", min: 5, publico: "Decisor (Condutor se escalado)",
       passos: [
         "Mostrar o Score de Execução do D60 (11.04) e o resumo por item: Presença, Prazos, Treino, Gravação, Registro, Uso, Verba, com a evidência de cada um.",
         "Para cada item Parcial ou Não cumprido: o que falta, quem faz, até quando. Vira ajuste do bloco 5 ou pendência do Playbook.",
-        "Abaixo de 80%: a escalada ao Fundador já foi feita na preparação; seguir a forma de apresentar que ele decidiu. Lembrar só a regra assinada: a garantia pede Score de 80% ou mais no D90 (01.02, seção 1.1).",
+        "Abaixo de 80%: a escalada ao Condutor já foi feita na preparação; seguir a forma de apresentar que ele decidiu. Lembrar só a regra assinada: a garantia pede Score de 80% ou mais no D90 (01.02, seção 1.1).",
       ],
       registrar: [
         { chave: "score_execucao", rotulo: "Score de Execução no D60 (11.04) e itens Parcial ou Não cumprido" },
-        { chave: "escala_fundador", rotulo: "Escalado ao Fundador? (Sim/Não, data e decisão)" },
+        { chave: "escala_fundador", rotulo: "Escalado ao Condutor? (Sim/Não, data e decisão)" },
       ],
     },
     {

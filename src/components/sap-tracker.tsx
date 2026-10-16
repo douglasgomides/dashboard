@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AlertTriangle, CalendarDays, CheckCircle2, ClipboardList, Gauge, ListTree, Radio, ShieldCheck, Target, TrendingDown } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { DadoIncompleto } from "@/components/sap-kpi";
 import { Painel, Selo, BarraFina } from "@/components/visual";
 import { fmtBRL, fmtNum } from "@/lib/format";
 import { definirMarcoSap, diaAtual, faseDoDia, getClinicaSap, getEtapasSap, getTrackerAuto, proximoMarco, salvarClinicaSap, type EtapaSap } from "@/lib/sap-data";
@@ -213,7 +214,7 @@ export function TrackerAutomatico({ clientId, start, end, periodLabel }: { clien
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {leitura.kpis.map((k) => (
-          <CardKpi key={k.id} k={k} />
+          <CardKpi key={k.id} k={k} clientId={clientId} />
         ))}
       </div>
 
@@ -317,7 +318,7 @@ export function TrackerAutomatico({ clientId, start, end, periodLabel }: { clien
   );
 }
 
-function CardKpi({ k }: { k: KpiSap }) {
+function CardKpi({ k, clientId }: { k: KpiSap; clientId: string }) {
   const cor = COR[k.farol];
   return (
     <div
@@ -332,9 +333,11 @@ function CardKpi({ k }: { k: KpiSap }) {
           </span>
         )}
       </div>
-      <div className="mt-1.5 text-2xl font-semibold tabular-nums" style={{ color: k.valor === null ? "var(--muted)" : "var(--text)", fontSize: k.valor === null ? "1rem" : undefined }}>
-        {k.texto}
-      </div>
+      {k.incompleto ? <DadoIncompleto inc={k.incompleto} clientId={clientId} /> : (
+        <div className="mt-1.5 text-2xl font-semibold tabular-nums" style={{ color: k.valor === null ? "var(--muted)" : "var(--text)", fontSize: k.valor === null ? "1rem" : undefined }}>
+          {k.texto}
+        </div>
+      )}
       <div className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>{k.base}</div>
       <div className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>{k.regra}</div>
       {k.amostraPequena && k.valor !== null && (
@@ -343,7 +346,7 @@ function CardKpi({ k }: { k: KpiSap }) {
         </div>
       )}
       {k.estimativa && <p className="mt-1.5 text-[11px]" style={{ color: "var(--warn)" }}>Estimativa: {k.estimativa}</p>}
-      {k.falta && <p className="mt-1.5 text-[11px]" style={{ color: "var(--crit)" }}>{k.falta}</p>}
+      {k.falta && !k.incompleto && <p className="mt-1.5 text-[11px]" style={{ color: "var(--crit)" }}>{k.falta}</p>}
     </div>
   );
 }

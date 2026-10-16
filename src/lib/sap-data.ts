@@ -9,6 +9,7 @@ import type { RegistroAcesso } from "@/lib/sap-acessos";
 import { lerSinais, type AuditoriaSemana, type SinaisBrutos } from "@/lib/sap-sinais";
 import type { SemanaFidelizacao } from "@/lib/sap-fidelizacao";
 import type { CategoriaMeta, LinhaConversao, RegistroTeste, StatusTeste } from "@/lib/sap-rastreamento";
+import type { AcaoBruta, EntradaTarefas, PapelId, RotinaRegistro, StatusRegistro } from "@/lib/sap-tarefas";
 
 // Tracker do Sistema de Aquisição de Pacientes (SAP).
 //
@@ -1094,4 +1095,126 @@ export async function getAtendentesSap(clientId: string, de: string, ate: string
     throw error;
   }
   return (data ?? []) as AtendenteResumo[];
+}
+
+// ---------------------------------------------------------------- tarefas: cronograma como fonte única
+
+export interface PessoaHub { user_id: string; nome: string; email: string; equipe: boolean; client_ids: string[] }
+
+/** Pessoas do Hub para "Quem é quem" (só a equipe vê). */
+export async function getPessoasHub(): Promise<PessoaHub[]> {
+  const { data, error } = await db.rpc("sap_pessoas_hub");
+  if (error) throw error;
+  return (data ?? []) as PessoaHub[];
+}
+
+export async function salvarPapelSap(clinicaId: string, papel: PapelId, userId: string | null) {
+  const { error } = await db.rpc("sap_salvar_papel", { p_clinica_id: clinicaId, p_papel: papel, p_user_id: userId });
+  if (error) throw error;
+}
+
+export async function marcarTarefaSap(clinicaId: string, marco: number, acao: "feito" | "nao_se_aplica" | "desfazer", v: { data?: string | null; evidencia?: string; motivo?: string; semana?: string | null }) {
+  const { error } = await db.rpc("sap_marcar_tarefa", {
+    p_clinica_id: clinicaId, p_marco: marco, p_acao: acao, p_data: v.data ?? null, p_evidencia: v.evidencia ?? "", p_motivo: v.motivo ?? "", p_semana: v.semana ?? null,
+  });
+  if (error) throw new Error(/evidencia obrigatoria/.test(error.message) ? "Cole o link ou o print da evidência." : /motivo obrigatorio/.test(error.message) ? "Escreva o motivo." : error.message);
+}
+
+export async function registrarDeteccaoSap(clinicaId: string, detectados: number[], avaliados: number[]) {
+  const { error } = await db.rpc("sap_registrar_deteccao", { p_clinica_id: clinicaId, p_detectados: detectados, p_avaliados: avaliados });
+  if (error) throw error;
+}
+
+const CAMPOS_CLINICA_TAREFAS = "id, client_id, nome, d0, ticket_medio, drive_pasta_url, decisor_nome, coordenador, aceite_metas_em, aceite_metas_por, consulta_paga, status_categoria_meta, categoria_verificada_em, rastreamento_conferido_por, rastreamento_conferido_em, garantia_status, sap_pausas(id, tipo, inicio, fim, motivo, removido_em)";
+
+/** Dados de todas as clínicas que o usuário vê (ou de uma só), no formato da lib de tarefas. A mesma função alimenta
+ *  Minhas tarefas, Esta semana, Cronograma, Painel e Todas as clínicas, para os números baterem. */
+export async function getEntradasTarefas(clientId?: string, isAdmin = false): Promise<Omit<EntradaTarefas, "hoje">[]> {
+  let q = db.from("sap_clinicas").select(CAMPOS_CLINICA_TAREFAS).order("created_at", { ascending: false });
+  if (clientId) q = q.eq("client_id", clientId).limit(1);
+  const { data: clinicas, error } = await q;
+  if (error) throw error;
+  const lista = (clinicas ?? []) as (Record<string, unknown> & { id: string; client_id: string; sap_pausas?: PausaBruta[] })[];
+  if (!lista.length) return [];
+  const ids = lista.map((c) => c.id);
+  const clientIds = lista.map((c) => c.client_id);
+  const em = <T,>(r: { data: T[] | null; error: unknown }) => { if (r.error) throw r.error; return r.data ?? []; };
+  const [nomesCli, status, rotinas, acessos, testes, plano, acoes, auditorias, fidelizacao, execucao, fontes, papeis, saude, pessoas] = await Promise.all([
+    db.from("clients").select("id, name").in("id", clientIds),
+    db.from("sap_marco_status").select("clinica_id, marco, concluido_em, evidencia, observacao, estado, atualizado_por, atualizado_em, detectado_em, desfeito_em, desfeito_motivo").in("clinica_id", ids),
+    db.from("sap_rotina_semana").select("clinica_id, marco, semana, feito_em, evidencia, feito_por").in("clinica_id", ids),
+    db.from("sap_acessos").select("clinica_id, item, status, confirmado_em, confirmado_por, observacao, revogado_em").in("clinica_id", ids),
+    db.from("sap_rastreamento_teste").select("clinica_id, item, status, evidencia, feito_em").in("clinica_id", ids),
+    db.from("sap_kpi_plano").select("clinica_id, kpi, baseline, origem, meta").in("clinica_id", ids),
+    db.from("sap_acoes").select("clinica_id, id, semana, origem, texto, lado, responsavel, prazo, status").in("clinica_id", ids).is("removido_em", null),
+    db.from("sap_auditoria_semana").select("clinica_id, semana").in("clinica_id", ids),
+    db.from("sap_fidelizacao_semana").select("clinica_id, semana").in("clinica_id", ids),
+    db.from("sap_execucao_item").select("clinica_id, item, status, data_cumpriu, evidencia, observacao").in("clinica_id", ids),
+    db.rpc("sap_fontes_etapas", { p_client_ids: clientIds }),
+    db.rpc("sap_papeis_nomes", { p_clinica_ids: ids }),
+    isAdmin ? db.from("sap_saude_semana").select("clinica_id, semana, tarefas_no_prazo, sessoes_marcadas, sessoes_com_decisor, call_grupo, decisor_respondeu, tempo_resposta_h, kpis_verde, kpis_vermelho, sentimento, o_que_aconteceu").in("clinica_id", ids) : Promise.resolve({ data: null, error: null }),
+    isAdmin ? db.rpc("sap_pessoas_hub") : Promise.resolve({ data: [], error: null }),
+  ]);
+  const por = <T extends { clinica_id: string }>(rows: T[], id: string) => rows.filter((r) => r.clinica_id === id);
+  const nomeCli = new Map((em(nomesCli) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
+  const fontesPor = new Map((em(fontes) as { client_id: string; tem_crm: boolean; tem_atendimento: boolean; tem_anuncios: boolean; marcos: string[] }[]).map((f) => [f.client_id, f]));
+  const papeisRows = em(papeis) as { clinica_id: string; papel: PapelId; user_id: string; nome: string }[];
+  const nomes = new Map((em(pessoas) as PessoaHub[]).map((p) => [p.user_id, p.nome]));
+  for (const p of papeisRows) nomes.set(p.user_id, p.nome);
+  const saudeRows = saude.data === null ? null : (em(saude) as (SemanaSaude & { clinica_id: string })[]);
+  return lista.map((c) => {
+    const f = fontesPor.get(c.client_id);
+    return {
+      clinica: {
+        id: c.id, clientId: c.client_id, nome: nomeCli.get(c.client_id) ?? String(c.nome ?? "Clínica"),
+        d0: (c.d0 as string | null) ?? null, pausas: pausasValidas(c.sap_pausas), ticket: c.ticket_medio ? Number(c.ticket_medio) : null,
+        drivePasta: (c.drive_pasta_url as string | null) ?? null, decisor: (c.decisor_nome as string | null) ?? null, coordenador: (c.coordenador as string | null) ?? null,
+        aceiteMetasEm: (c.aceite_metas_em as string | null) ?? null, aceiteMetasPor: (c.aceite_metas_por as string | null) ?? null, consultaPaga: c.consulta_paga !== false,
+        categoriaMeta: (c.status_categoria_meta as CategoriaMeta | null) ?? null, categoriaVerificadaEm: (c.categoria_verificada_em as string | null) ?? null,
+        conferidoPor: (c.rastreamento_conferido_por as string | null) ?? null, conferidoEm: (c.rastreamento_conferido_em as string | null) ?? null,
+        garantiaStatus: (c.garantia_status as string | null) ?? null,
+      },
+      fontes: f ? { crm: f.tem_crm, whatsapp: f.tem_atendimento, anuncios: f.tem_anuncios, marcos: f.marcos ?? [] } : null,
+      plano: por(em(plano) as (NonNullable<EntradaTarefas["plano"]>[number] & { clinica_id: string })[], c.id),
+      status: por(em(status) as (StatusRegistro & { clinica_id: string })[], c.id),
+      rotinas: por(em(rotinas) as (RotinaRegistro & { clinica_id: string })[], c.id),
+      acessos: por(em(acessos) as (RegistroAcesso & { clinica_id: string })[], c.id),
+      testes: por(em(testes) as (RegistroTeste & { clinica_id: string })[], c.id),
+      acoes: por(em(acoes) as (AcaoBruta & { clinica_id: string })[], c.id),
+      saude: saudeRows ? por(saudeRows, c.id) : null,
+      auditorias: por(em(auditorias) as { clinica_id: string; semana: string }[], c.id).map((a) => a.semana),
+      fidelizacao: por(em(fidelizacao) as { clinica_id: string; semana: string }[], c.id).map((a) => a.semana),
+      execucao: por(em(execucao) as (ItemRegistro & { clinica_id: string })[], c.id),
+      papeis: Object.fromEntries(papeisRows.filter((p) => p.clinica_id === c.id).map((p) => [p.papel, { userId: p.user_id, nome: p.nome }])),
+      nomes,
+    };
+  });
+}
+
+/** Sobe um print de evidência (privado) e devolve o valor a guardar no item ("arquivo:<caminho>"). */
+export async function enviarEvidenciaSap(clinicaId: string, marco: number, arquivo: File): Promise<string> {
+  const ext = (arquivo.name.split(".").pop() ?? "png").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+  const caminho = `${clinicaId}/${marco}/${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from("sap-evidencias").upload(caminho, arquivo, { upsert: false, contentType: arquivo.type || undefined });
+  if (error) throw error;
+  return `arquivo:${caminho}`;
+}
+
+/** Link temporário (10 min) para abrir um print guardado. */
+export async function linkEvidenciaSap(valor: string): Promise<string | null> {
+  if (!valor.startsWith("arquivo:")) return valor;
+  const { data, error } = await supabase.storage.from("sap-evidencias").createSignedUrl(valor.slice(8), 600);
+  if (error) return null;
+  return data.signedUrl;
+}
+
+export async function getPrefUsuarioSap(): Promise<{ tour_visto_em: string | null; comece_visto_em: string | null } | null> {
+  const { data, error } = await db.from("sap_usuario_pref").select("tour_visto_em, comece_visto_em").maybeSingle();
+  if (error) return null;
+  return (data as { tour_visto_em: string | null; comece_visto_em: string | null } | null) ?? { tour_visto_em: null, comece_visto_em: null };
+}
+
+export async function marcarVistoSap(chave: "tour" | "comece" | "tour_reset") {
+  const { error } = await db.rpc("sap_marcar_visto", { p_chave: chave });
+  if (error) throw error;
 }

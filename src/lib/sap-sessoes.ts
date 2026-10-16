@@ -55,9 +55,9 @@ const SESSAO_S1: DefSessao =
     quando: "D8 a D10",
     duracao: "Agendar 120 min; o roteiro cabe em 90 a 115 min",
     quem: [
-      { papel: "Fundador", faz: "Conduz e faz as perguntas de fundo. Não anota." },
+      { papel: "Condutor", faz: "Conduz e faz as perguntas de fundo. Não anota." },
       { papel: "Coordenador de Implementação", faz: "Co-conduz, controla o tempo, puxa o próximo bloco e responde dúvida de processo." },
-      { papel: "Analista de Onboarding", faz: "Registra e corrige a planilha ao vivo. Só fala quando o Fundador pede." },
+      { papel: "Analista de Onboarding", faz: "Registra e corrige a planilha ao vivo. Só fala quando o Condutor pede." },
     ],
     principio: "O diagnóstico já foi feito com dados. A sessão serve para a clínica confirmar ou corrigir os números, contar o que os números não mostram e decidir junto. Quem conduz não inventa diagnóstico na hora e não discute número: registra os dois e segue.",
     entra: ["03.03 Raio-X e Baseline D0 preenchido e conferido", "03.01 Análise pré-reunião e lead oculto com síntese", "02.04 Formulário pré-diagnóstico e 02.06 Ficha do Cliente"],
@@ -72,20 +72,20 @@ const SESSAO_S1: DefSessao =
     ],
     preparo: [
       { chave: "prep-pacote", quando: "2 dias antes", oque: "Enviar o pacote de preparação: aba Raio-X do 03.03 (top 3 e gráfico), síntese de 5 linhas do 03.01, frustração, tentativas e meta declarada do 02.04", quem: "Coordenador de Implementação", horas: -48, doc: "03.03" },
-      { chave: "prep-leitura", quando: "Véspera", oque: "Fundador lê o pacote e anota: hipótese de prioridade, 3 perguntas que os números não respondem, serviço candidato", quem: "Fundador", horas: -24 },
+      { chave: "prep-leitura", quando: "Véspera", oque: "Condutor lê o pacote e anota: hipótese de prioridade, 3 perguntas que os números não respondem, serviço candidato", quem: "Condutor", horas: -24 },
       { chave: "prep-lembrete", quando: "Véspera", oque: "Lembrete à clínica (02.02): quem precisa estar e por quanto tempo; o trecho financeiro é só com o decisor", quem: "CS e Relacionamento", horas: -24 },
       { chave: "prep-alinhar", quando: "15 min antes", oque: "Alinhar em 5 min (hipótese, ordem dos vazamentos, quem fala de quê). Abrir o 03.03 (aba Raio-X) e o 03.07 em branco. Gravação e transcrição ligadas", quem: "Os três", horas: -0.25 },
     ],
-    regraPreparo: "Se o Fundador não leu o pacote até a véspera, o Coordenador remarca com até 24 h de antecedência. A remarcação não move o D0 nem o D90.",
+    regraPreparo: "Se o Condutor não leu o pacote até a véspera, o Coordenador remarca com até 24 h de antecedência. A remarcação não move o D0 nem o D90.",
     blocos: [
       {
         n: 1, titulo: "Abertura e expectativa", min: 10, publico: "Decisor, recepção líder, quem apresenta valor, quem cuida de redes",
         passos: [
           "Cada pessoa da clínica diz o nome, a função e onde toca o paciente.",
-          "Fundador: \"Hoje eu trago o que os números de vocês mostram. Vocês corrigem o que estiver errado e contam o que o número não conta. No fim a gente decide por onde começa e como vai medir.\"",
-          "Fundador: \"Não é aula, não é venda e ninguém está sendo avaliado. Quando um número for ruim, o problema é de processo, não de pessoa.\"",
-          "Fundador: \"O contrato tem 90 dias. O sistema fica completo até o dia 60, e de 61 a 90 a gente otimiza com dado real. Hoje é o dia D__.\"",
-          "Fundador: \"A sessão é gravada. Em até 48 horas vocês recebem o relatório por escrito.\"",
+          "Condutor: \"Hoje eu trago o que os números de vocês mostram. Vocês corrigem o que estiver errado e contam o que o número não conta. No fim a gente decide por onde começa e como vai medir.\"",
+          "Condutor: \"Não é aula, não é venda e ninguém está sendo avaliado. Quando um número for ruim, o problema é de processo, não de pessoa.\"",
+          "Condutor: \"O contrato tem 90 dias. O sistema fica completo até o dia 60, e de 61 a 90 a gente otimiza com dado real. Hoje é o dia D__.\"",
+          "Condutor: \"A sessão é gravada. Em até 48 horas vocês recebem o relatório por escrito.\"",
           "Coordenador mostra o funil completo em 30 segundos: atração, filtro, conversa, agendamento, comparecimento, consulta, follow-up, retorno e indicação.",
         ],
         mostrar: "funil",
@@ -94,7 +94,7 @@ const SESSAO_S1: DefSessao =
         n: 2, titulo: "Investigação etapa por etapa", min: 70, publico: "Mesmo grupo",
         passos: [
           "Para cada etapa, sempre nesta ordem: quantos entram? quantos passam? quem cuida? o que acontece com quem não passa?",
-          "Quando a clínica corrige um número, o Analista lança no 03.03 na hora, com a fonte. O Fundador só comenta se a correção mudar o top 3.",
+          "Quando a clínica corrige um número, o Analista lança no 03.03 na hora, com a fonte. O Condutor só comenta se a correção mudar o top 3.",
         ],
         mostrar: "kpis",
         perguntas: [
@@ -141,7 +141,7 @@ const SESSAO_S1: DefSessao =
         n: 5, titulo: "Prioridade de ataque e KPIs", min: 10, publico: "Só decisor e sócios",
         passos: [
           "Protocolo de sala: \"Agora vamos falar de metas e faturamento. Combinamos que essa parte é só com a Dra. Obrigado, equipe.\"",
-          "Prioridade: o Fundador propõe por onde começar com o critério dito em voz alta (custo do vazamento x facilidade de corrigir x quanto depende da clínica). A clínica confirma ou traz outro motivo.",
+          "Prioridade: o Condutor propõe por onde começar com o critério dito em voz alta (custo do vazamento x facilidade de corrigir x quanto depende da clínica). A clínica confirma ou traz outro motivo.",
           "KPIs: sempre os 3 da garantia (tempo de 1ª resposta, comparecimento e conversão da consulta, ou agendamento se a consulta não é paga) mais 1 ou 2 ligados ao maior vazamento. Receita atribuída é só acompanhada, nunca meta.",
           "\"Hoje a gente define quais KPIs e de onde eles partem. A meta de cada um vocês assinam na Sessão 2.\"",
           "Garantia em uma frase: \"Se vocês executarem o combinado, com Score de Execução de 80% ou mais no D90, e pelo menos 2 dos 3 KPIs principais não melhorarem, a gente acompanha mais 30 dias sem custo.\"",
@@ -152,7 +152,7 @@ const SESSAO_S1: DefSessao =
       {
         n: 6, titulo: "Próximos passos", min: 5, publico: "Decisor e sócios",
         passos: [
-          "Fundador lê em voz alta: prioridade e por quê; KPIs com a baseline; o que a clínica faz nos próximos 14 dias; o que a DC entrega até a Sessão 2.",
+          "Condutor lê em voz alta: prioridade e por quê; KPIs com a baseline; o que a clínica faz nos próximos 14 dias; o que a DC entrega até a Sessão 2.",
           "Coordenador marca a Sessão 2 (D12 a D14) na hora.",
           "\"O relatório chega em até 48 horas no grupo da clínica.\"",
         ],
@@ -180,7 +180,7 @@ const SESSAO_S1: DefSessao =
       { chave: "pos-congelar", quando: "Logo após", oque: "Congelar a aba Baseline D0 do 03.03 (colar como valores, data no cabeçalho); salvar gravação e transcrição na pasta do cliente", quem: "Analista de Onboarding", horas: 1, doc: "03.03" },
       { chave: "pos-prompt", quando: "Até 4 h", oque: "Rodar o prompt 03.05 com a transcrição, 03.03, 03.01, 02.04 e 02.06", quem: "Coordenador de Implementação", horas: 4, doc: "03.05" },
       { chave: "pos-revisar", quando: "Até 24 h", oque: "Revisar o rascunho, tratar a lista \"Para conferência do Coordenador\" e preencher o 03.07 com as propostas", quem: "Coordenador de Implementação", horas: 24, doc: "03.07" },
-      { chave: "pos-fundador", quando: "Até 36 h", oque: "Revisão final do relatório 03.06", quem: "Fundador", horas: 36, doc: "03.06" },
+      { chave: "pos-fundador", quando: "Até 36 h", oque: "Revisão final do relatório 03.06", quem: "Condutor", horas: 36, doc: "03.06" },
       { chave: "pos-enviar", quando: "Até 48 h", oque: "Enviar 03.06 e 03.07 (KPIs com metas propostas) ao decisor no grupo, com a mensagem do 02.02", quem: "Coordenador / CS e Relacionamento", horas: 48, doc: "03.06" },
     ],
     acoesDe: { chave: "acoes_clinica", lado: "clinica" },

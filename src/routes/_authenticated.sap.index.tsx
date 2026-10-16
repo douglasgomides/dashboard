@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PortfolioSap } from "@/components/sap-portfolio";
+import { MinhasTarefasTodas } from "@/components/sap-tarefas";
 import { getClinicaSap } from "@/lib/sap-data";
 
 // Início do Sistema de Aquisição. Equipe: todas as clínicas. Clínica: o próprio programa.
@@ -22,7 +23,14 @@ function InicioSap() {
       return comSap.filter((c): c is { id: string; nome: string } => !!c);
     },
   });
-  if (isAdmin) return <PortfolioSap />;
+  if (isAdmin) {
+    return (
+      <div className="space-y-6">
+        <MinhasTarefasTodas />
+        <PortfolioSap />
+      </div>
+    );
+  }
   if (isLoading) return <p className="text-sm" style={{ color: "var(--text-dim)" }}>Carregando…</p>;
   const clinicas = data ?? [];
   if (!clinicas.length) {

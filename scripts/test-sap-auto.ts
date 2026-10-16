@@ -45,4 +45,20 @@ assert.equal(o.pendencias.length, 0);
 assert.equal(lerTrackerAuto(null), null);
 assert.ok(!j.funil.some((f) => f.id === "compareceram"), "sem etapa de consulta realizada, o funil não mostra consultas");
 assert.ok(o.funil.some((f) => f.id === "compareceram"));
+// Dado incompleto: compareceu marcado sem "faltou" não mostra 100% nem selo verde; receita sem valor e custo sem
+// origem Meta também viram "Dado incompleto" com o que falta e onde resolver.
+const parcial = montarKpisSap(lerTrackerAuto({
+  tem_crm: true, tem_whatsapp: true, marcos_marcados: 2, marcos: ["agendado", "compareceu", "fechou"], leads: 50, qualificados: 40, agendados: 12,
+  compareceram: 10, faltaram: 0, fechados: 4, fechados_com_valor: 1, receita: 3000, investido: 2000, leads_crm_meta: 0, leads_plataforma: 30,
+})!);
+const kp = (id: string) => parcial.kpis.find((x) => x.id === id)!;
+assert.equal(kp("comparecimento").valor, null);
+assert.equal(kp("comparecimento").texto, "Dado incompleto");
+assert.equal(kp("comparecimento").farol, "cinza");
+assert.equal(kp("comparecimento").incompleto?.resolver, "etapas");
+assert.equal(kp("comparecimento").incompleto?.parcial, "100%");
+assert.equal(kp("receita").valor, null);
+assert.equal(kp("receita").incompleto?.resolver, "crm");
+assert.equal(kp("custo_consulta").incompleto?.resolver, "rastreamento");
+assert.equal(kp("conversao").incompleto, undefined);
 console.log("test-sap-auto: ok");
