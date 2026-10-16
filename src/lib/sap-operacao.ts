@@ -90,3 +90,31 @@ export const FERRAMENTAS: Ferramenta[] = [
 export function funcao(id: IdFuncao): Funcao {
   return FUNCOES.find((f) => f.id === id)!;
 }
+
+// ---------------------------------------------------------------- quem vê o quê (acesso)
+
+export type Nivel = "admin" | "equipe" | "clinica";
+export interface LinhaAcesso { oque: string; admin: string; equipe: string; clinica: string }
+
+/** Níveis de acesso do Hub e do SAP. Hoje existem 2 no banco: admin (toda a equipe Doctor Creator) e clínica
+ *  (usuário ligado ao cliente). "Equipe" sem poderes de admin é proposta, ainda não ativa. */
+export const NIVEIS: { id: Nivel; nome: string; quem: string; ativo: boolean }[] = [
+  { id: "admin", nome: "Admin", quem: "Fundador e Coordenador: configuram clientes, criam acessos e atribuem papéis", ativo: true },
+  { id: "equipe", nome: "Equipe", quem: "Tráfego, CS, Editor, Analista: executam as tarefas das clínicas onde têm papel", ativo: false },
+  { id: "clinica", nome: "Clínica", quem: "Médico e recepção: só a própria clínica, em visão simplificada", ativo: true },
+];
+
+export const ACESSOS: LinhaAcesso[] = [
+  { oque: "Ver todas as clínicas e o portfólio", admin: "Sim", equipe: "Só as clínicas onde tem papel", clinica: "Não" },
+  { oque: "Minhas tarefas", admin: "Sim, com filtro por papel", equipe: "Sim, as do seu papel", clinica: "Só as tarefas da clínica" },
+  { oque: "Marcar tarefa como feita e anexar evidência", admin: "Sim", equipe: "Sim, nas suas tarefas", clinica: "Não (a equipe marca)" },
+  { oque: "Painel da clínica (números)", admin: "Completo, com qualidade do dado", equipe: "Completo", clinica: "3 números da garantia e linha do tempo" },
+  { oque: "Cronograma", admin: "Completo, com pausas e contrato", equipe: "Completo, sem editar pausas e contrato", clinica: "Agenda do programa (leitura)" },
+  { oque: "Reuniões (modo sessão), Ficha e acessos, Rastreamento, Etapas do funil, Banco de anúncios", admin: "Sim", equipe: "Sim", clinica: "Não" },
+  { oque: "Quem é quem", admin: "Ver e atribuir", equipe: "Ver", clinica: "Não" },
+  { oque: "Leitura da semana", admin: "Completa, com auditoria e atendentes", equipe: "Completa", clinica: "Números da semana e ações combinadas" },
+  { oque: "Score de Saúde", admin: "Sim", equipe: "Sim", clinica: "Não (só a equipe vê)" },
+  { oque: "Metas e garantia, Plano e relatório D90", admin: "Editar", equipe: "Ver", clinica: "Ver" },
+  { oque: "Conversas dos pacientes e leads em atenção", admin: "Sim", equipe: "Sim", clinica: "No Hub da própria clínica" },
+  { oque: "Configurar integrações (CRM, WhatsApp, Meta) e criar acessos", admin: "Sim", equipe: "Não", clinica: "Não" },
+];
