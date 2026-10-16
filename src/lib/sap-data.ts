@@ -1072,3 +1072,26 @@ export async function getAuditoriaIASap(clientId: string, semana: string): Promi
   }
   return (data ?? null) as SugestaoAuditoria | null;
 }
+
+// ---------------------------------------------------------------- leads em atenção e atendimento por atendente (IA das conversas)
+
+export type LeadAtencao = { conversa_id: string; motivo: "sem_resposta" | "sem_follow_up" | "recuperavel"; horas_parado: number; interesse: string | null; proximo_passo: string | null; atendente: string | null };
+export type AtendenteResumo = { atendente: string; conversas: number; nota_media: number | null; agendou: number; recuperaveis: number; falhas: { falha: string; n: number }[] };
+
+export async function getLeadsAtencaoSap(clientId: string): Promise<LeadAtencao[]> {
+  const { data, error } = await db.rpc("sap_leads_atencao", { p_client_id: clientId, p_limite: 30 });
+  if (error) {
+    if (/does not exist|schema cache/i.test(error.message)) return [];
+    throw error;
+  }
+  return (data ?? []) as LeadAtencao[];
+}
+
+export async function getAtendentesSap(clientId: string, de: string, ate: string): Promise<AtendenteResumo[]> {
+  const { data, error } = await db.rpc("sap_atendimento_por_atendente", { p_client_id: clientId, p_de: de, p_ate: ate });
+  if (error) {
+    if (/does not exist|schema cache/i.test(error.message)) return [];
+    throw error;
+  }
+  return (data ?? []) as AtendenteResumo[];
+}
