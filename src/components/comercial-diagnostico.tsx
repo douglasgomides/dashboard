@@ -133,7 +133,7 @@ export function FunilOndeQuebra({ funil }: { funil: Funil }) {
         ))}
       </ol>
       <p className="text-xs" style={{ color: "var(--text-faint)" }}>
-        Contando {funil.escopoTexto}, pela situação de hoje no CRM. Só pintamos de verde/vermelho o que tem referência de mercado confiável
+        Contando {funil.escopoTexto}, pela situação de hoje no CRM; em "agendaram" entram também os que já passaram por uma etapa de consulta e depois andaram. Só pintamos de verde/vermelho o que tem referência de mercado confiável
         (agendamento: clínicas agendam perto de 4 em cada 10 leads).
       </p>
     </div>
