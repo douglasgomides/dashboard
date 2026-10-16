@@ -5,6 +5,9 @@ import { CadastroSap, TrackerAutomatico } from "@/components/sap-tracker";
 import { LinhaDoTempoSap } from "@/components/sap-plano";
 import { TrackerManual } from "@/components/sap-manual";
 import { getClinicaSap } from "@/lib/sap-data";
+import { useAuth } from "@/hooks/use-auth";
+import { VisaoClinica } from "@/components/sap-inicio-clinica";
+import { EstaSemanaSap } from "@/components/sap-semana";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { somarDias } from "@/lib/sap-metas";
 
@@ -17,6 +20,8 @@ const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(
 
 function ProgramaSap() {
   const { clientId } = Route.useParams();
+  const { isAdmin } = useAuth();
+  const [completo, setCompleto] = useState(false);
   const { data: clinica } = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId) });
   const hoje = hojeBrasilia();
   const ontem = somarDias(hoje, -1);
@@ -25,8 +30,22 @@ function ProgramaSap() {
   const efetiva = janela === "d0" && !temD0 ? "4s" : janela;
   const start = efetiva === "d0" ? clinica!.d0! : efetiva === "4s" ? somarDias(hoje, -28) : somarDias(hoje, -30);
   const periodLabel = `${dm(start)} a ${dm(ontem)}`;
+  // Clínica: uma tela só (onde estamos, 3 números, próxima reunião, o que fazer). Os números completos ficam a um clique.
+  if (!isAdmin) {
+    return (
+      <div className="space-y-6">
+        <VisaoClinica clientId={clientId} />
+        <EstaSemanaSap clientId={clientId} />
+        <button type="button" onClick={() => setCompleto(!completo)} aria-expanded={completo} className="text-sm font-semibold underline" style={{ color: "var(--accent)" }}>
+          {completo ? "Esconder os números completos" : "Ver todos os números do funil"}
+        </button>
+        {completo && <TrackerAutomatico clientId={clientId} start={start} end={ontem} periodLabel={periodLabel} />}
+      </div>
+    );
+  }
   return (
     <div className="space-y-6">
+      <VisaoClinica clientId={clientId} />
       <Link to="/sap/$clientId/passo-a-passo" params={{ clientId }} className="block rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "color-mix(in srgb, var(--accent) 35%, var(--border))", background: "var(--accent-soft)" }}>
         <strong>Implantando esta clínica?</strong> Siga o <span className="font-semibold underline">Passo a passo</span>: o que fazer, em que ordem e por quê.
       </Link>

@@ -4,6 +4,7 @@ import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, ListOrdered, G
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { TrocaProduto } from "@/components/troca-produto";
+import { BotaoGlossario, PrimeiroAcesso } from "@/components/sap-ajuda";
 import { getClient } from "@/lib/client-data";
 import { diaAtual, faseDoDia, getClinicaSap } from "@/lib/sap-data";
 
@@ -15,21 +16,24 @@ export const Route = createFileRoute("/_authenticated/sap")({
 });
 
 // Menu da clínica agrupado pelas etapas do programa: visão geral, implantação (D0 a D30), rotina semanal e resultado.
+// clinica: o que a clínica vê (menu enxuto). O resto é ferramenta da equipe.
 const ITENS = [
-  { grupo: "Visão geral", sub: "/semana", label: "Esta semana", Icone: CalendarCheck },
-  { grupo: "Visão geral", sub: "", label: "Programa", Icone: Flag },
+  { grupo: "Visão geral", sub: "", label: "Início", Icone: Flag, clinica: true },
+  { grupo: "Visão geral", sub: "/semana", label: "Esta semana", Icone: CalendarCheck, clinica: true },
   { grupo: "Visão geral", sub: "/passo-a-passo", label: "Passo a passo", Icone: ListOrdered },
-  { grupo: "Implantação", sub: "/onboarding", label: "Ficha e acessos", Icone: KeyRound },
   { grupo: "Implantação", sub: "/sessao", label: "Reuniões (modo sessão)", Icone: Presentation, admin: true },
-  { grupo: "Implantação", sub: "/cronograma", label: "Cronograma e prazos", Icone: CalendarClock },
+  { grupo: "Implantação", sub: "/onboarding", label: "Ficha e acessos", Icone: KeyRound },
+  { grupo: "Implantação", sub: "/cronograma", label: "Cronograma e prazos", Icone: CalendarClock, clinica: true },
   { grupo: "Implantação", sub: "/rastreamento", label: "Rastreamento", Icone: Radar },
   { grupo: "Implantação", sub: "/etapas", label: "Etapas no funil (equipe)", Icone: Network, admin: true },
-  { grupo: "Rotina semanal", sub: "/leitura", label: "Leitura da semana", Icone: ClipboardCheck },
+  { grupo: "Rotina semanal", sub: "/leitura", label: "Leitura da semana", Icone: ClipboardCheck, clinica: true },
   { grupo: "Rotina semanal", sub: "/execucao", label: "Execução e saúde", Icone: ListChecks },
   { grupo: "Rotina semanal", sub: "/midia", label: "Mídia", Icone: Gauge },
-  { grupo: "Resultado", sub: "/metas", label: "Metas e garantia", Icone: Target },
-  { grupo: "Resultado", sub: "/documentos", label: "Plano e relatório D90", Icone: FileText },
+  { grupo: "Resultado", sub: "/metas", label: "Metas e garantia", Icone: Target, clinica: true },
+  { grupo: "Resultado", sub: "/documentos", label: "Plano e relatório D90", Icone: FileText, clinica: true },
 ] as const;
+// Na visão da clínica, os grupos viram um só e alguns nomes ficam mais diretos.
+const ROTULO_CLINICA: Record<string, string> = { "/cronograma": "Agenda do programa", "/leitura": "Números da semana", "/documentos": "Plano e relatório" };
 
 function SapLayout() {
   const { isAdmin } = useAuth();
@@ -39,7 +43,8 @@ function SapLayout() {
   const { data: cliente } = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId!), enabled: !!clientId });
   const { data: clinica } = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId!), enabled: !!clientId });
   const dia = diaAtual(clinica?.d0 ?? null, clinica?.pausas);
-  const itens = ITENS.filter((i) => !("admin" in i) || isAdmin);
+  const itens = (isAdmin ? ITENS.filter(() => true) : ITENS.filter((i) => "clinica" in i))
+    .map((i) => ({ ...i, grupo: isAdmin ? i.grupo : "Seu programa", label: isAdmin ? i.label : (ROTULO_CLINICA[i.sub] ?? i.label) }));
   const titulo = clientId ? (cliente?.name ?? "Carregando…") : isAdmin ? "Todas as clínicas" : "Sistema de Aquisição";
 
   const links = (parte: "todas" | "clinica") => (
@@ -106,7 +111,13 @@ function SapLayout() {
               <h1>{titulo}</h1>
             </div>
           </div>
+          {clientId && (
+            <div className="flex flex-wrap items-center gap-2">
+              <BotaoGlossario />
+            </div>
+          )}
         </div>
+        <PrimeiroAcesso isAdmin={isAdmin} clientId={clientId} />
         {/* Celular: os mesmos atalhos numa linha que rola de lado. */}
         <nav className="admin-mnav" aria-label="Menu do Sistema de Aquisição">
           {isAdmin && (
