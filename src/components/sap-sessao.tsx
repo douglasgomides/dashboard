@@ -13,7 +13,7 @@ import { lerTrackerAuto } from "@/lib/sap-auto";
 import { KPIS_PLANO, baselineDoTracker, janelaBaseline, kpisDaGarantia, type LinhaPlano } from "@/lib/sap-metas";
 import { fmtKpi } from "@/lib/sap-documentos";
 import { SESSOES, lerRascunho, rascunhoEmTexto, trilha, type EstadoTrilha, blocoNoTempo, duracaoPlanejada, linhasParaAcoes, prazosPos, sessaoPorId, type BlocoSessao, type DefSessao } from "@/lib/sap-sessoes";
-import { segundaDe } from "@/lib/sap-semana";
+import { segundaDe } from "@/lib/sap-tarefas";
 import { hojeBrasilia } from "@/lib/status-fonte";
 
 const campo = { borderColor: "var(--border)", background: "var(--surface)" } as const;

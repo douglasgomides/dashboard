@@ -103,7 +103,7 @@ export const SECOES_TEXTO = {
     { id: "resumo", titulo: "1. Resumo executivo", dica: "Escreva por último: de onde a clínica saiu, onde chegou, o maior aprendizado e a recomendação. Número ruim com o mesmo destaque do bom." },
     { id: "funcionou", titulo: "5. O que funcionou", dica: "O quê, por quê e a evidência." },
     { id: "nao_funcionou", titulo: "5. O que não funcionou", dica: "Causa provável, o que foi feito e o dono daqui para frente. Sem culpar a clínica nem a DC." },
-    { id: "aprendizados", titulo: "8. Aprendizados", dica: "3 a 4 frases do Fundador." },
+    { id: "aprendizados", titulo: "8. Aprendizados", dica: "3 a 4 frases do Condutor." },
     { id: "recomendacao", titulo: "9. Recomendação para os próximos 90 dias", dica: "Prioridade, ação, KPI-alvo, meta sugerida para o D180 e dono." },
     { id: "manutencao", titulo: "10. Proposta de manutenção e decisão", dica: "Valor, o que inclui e o que não inclui (08.06). Decisão da clínica: manutenção ou seguir com o playbook, e a data." },
     { id: "depoimento", titulo: "11. Depoimento e case", dica: "O que a clínica autorizou por escrito e por quanto tempo. Nunca dado de paciente, resultado de tratamento ou antes e depois." },

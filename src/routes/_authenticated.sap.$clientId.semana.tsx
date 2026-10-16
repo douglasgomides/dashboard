@@ -1,20 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { EstaSemanaSap } from "@/components/sap-semana";
-import { LeadsAtencao } from "@/components/sap-ia-atendimento";
-import { useAuth } from "@/hooks/use-auth";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-// Sistema de Aquisição · Esta semana: o que vence nos próximos 7 dias, por papel.
+// Rota antiga: "Esta semana" virou um filtro de Minhas tarefas (atrasadas, hoje e próximos 7 dias).
 export const Route = createFileRoute("/_authenticated/sap/$clientId/semana")({
-  component: SemanaPage,
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/sap/$clientId", params: { clientId: params.clientId } });
+  },
 });
-
-function SemanaPage() {
-  const { clientId } = Route.useParams();
-  const { isAdmin } = useAuth();
-  return (
-    <div className="space-y-4">
-      <EstaSemanaSap clientId={clientId} />
-      {isAdmin && <LeadsAtencao clientId={clientId} />}
-    </div>
-  );
-}

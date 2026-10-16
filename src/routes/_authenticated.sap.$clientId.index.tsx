@@ -1,73 +1,21 @@
-import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { CadastroSap, TrackerAutomatico } from "@/components/sap-tracker";
-import { LinhaDoTempoSap } from "@/components/sap-plano";
-import { TrackerManual } from "@/components/sap-manual";
-import { getClinicaSap } from "@/lib/sap-data";
+import { createFileRoute } from "@tanstack/react-router";
+import { MinhasTarefasClinica } from "@/components/sap-tarefas";
+import { LeadsAtencao } from "@/components/sap-ia-atendimento";
 import { useAuth } from "@/hooks/use-auth";
-import { VisaoClinica } from "@/components/sap-inicio-clinica";
-import { EstaSemanaSap } from "@/components/sap-semana";
-import { hojeBrasilia } from "@/lib/status-fonte";
-import { somarDias } from "@/lib/sap-metas";
 
-// Sistema de Aquisição · Programa: cadastro (D0), linha do tempo D0–D90 e os 6 números do SAP.
+// Sistema de Aquisição · Minhas tarefas: primeira tela da clínica. Só itens do cronograma (fonte única), do papel de
+// quem está logado, agrupados por urgência. A equipe também vê os leads que precisam de atenção.
 export const Route = createFileRoute("/_authenticated/sap/$clientId/")({
-  component: ProgramaSap,
+  component: MinhasTarefas,
 });
 
-const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
-
-function ProgramaSap() {
+function MinhasTarefas() {
   const { clientId } = Route.useParams();
   const { isAdmin } = useAuth();
-  const [completo, setCompleto] = useState(false);
-  const { data: clinica } = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId) });
-  const hoje = hojeBrasilia();
-  const ontem = somarDias(hoje, -1);
-  const temD0 = !!clinica?.d0 && clinica.d0 < hoje;
-  const [janela, setJanela] = useState<"d0" | "4s" | "30d">("4s");
-  const efetiva = janela === "d0" && !temD0 ? "4s" : janela;
-  const start = efetiva === "d0" ? clinica!.d0! : efetiva === "4s" ? somarDias(hoje, -28) : somarDias(hoje, -30);
-  const periodLabel = `${dm(start)} a ${dm(ontem)}`;
-  // Clínica: uma tela só (onde estamos, 3 números, próxima reunião, o que fazer). Os números completos ficam a um clique.
-  if (!isAdmin) {
-    return (
-      <div className="space-y-6">
-        <VisaoClinica clientId={clientId} />
-        <EstaSemanaSap clientId={clientId} />
-        <button type="button" onClick={() => setCompleto(!completo)} aria-expanded={completo} className="text-sm font-semibold underline" style={{ color: "var(--accent)" }}>
-          {completo ? "Esconder os números completos" : "Ver todos os números do funil"}
-        </button>
-        {completo && <TrackerAutomatico clientId={clientId} start={start} end={ontem} periodLabel={periodLabel} />}
-      </div>
-    );
-  }
   return (
     <div className="space-y-6">
-      <VisaoClinica clientId={clientId} />
-      <Link to="/sap/$clientId/passo-a-passo" params={{ clientId }} className="block rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "color-mix(in srgb, var(--accent) 35%, var(--border))", background: "var(--accent-soft)" }}>
-        <strong>Implantando esta clínica?</strong> Siga o <span className="font-semibold underline">Passo a passo</span>: o que fazer, em que ordem e por quê.
-      </Link>
-      <CadastroSap clientId={clientId} />
-      <LinhaDoTempoSap clientId={clientId} />
-      <div className="flex flex-wrap items-center gap-2 text-sm" role="group" aria-label="Período dos números">
-        <span style={{ color: "var(--text-dim)" }}>Período:</span>
-        {([["4s", "Últimas 4 semanas"], ["30d", "Últimos 30 dias"], ...(temD0 ? [["d0", "Desde o D0"]] : [])] as [typeof janela, string][]).map(([id, rot]) => (
-          <button
-            key={id}
-            type="button"
-            aria-pressed={efetiva === id}
-            onClick={() => setJanela(id)}
-            className="min-h-[34px] rounded-full border px-3"
-            style={{ borderColor: "var(--border)", background: efetiva === id ? "var(--accent-soft)" : "transparent" }}
-          >
-            {rot}
-          </button>
-        ))}
-      </div>
-      <TrackerAutomatico clientId={clientId} start={start} end={ontem} periodLabel={periodLabel} />
-      <TrackerManual clientId={clientId} start={start} end={ontem} periodLabel={periodLabel} />
+      <MinhasTarefasClinica clientId={clientId} />
+      {isAdmin && <LeadsAtencao clientId={clientId} />}
     </div>
   );
 }

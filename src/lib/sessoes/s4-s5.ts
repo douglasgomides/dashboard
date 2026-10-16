@@ -187,7 +187,7 @@ export const SESSAO_S5: DefSessao = {
   duracao: "90 a 120 min",
   quem: [
     { papel: "CS e Relacionamento", faz: "Conduz a sessão e a simulação." },
-    { papel: "Fundador", faz: "Abre e fecha (blocos 1, 3 e fechamento) e corrige o médico na simulação. Não anota." },
+    { papel: "Condutor", faz: "Abre e fecha (blocos 1, 3 e fechamento) e corrige o médico na simulação. Não anota." },
     { papel: "Analista de Onboarding", faz: "Registra ao vivo no 07.02 a 07.06 e no 07.07. Não fala com o cliente." },
     { papel: "Médico do serviço prioritário", faz: "Obrigatório. Ajusta o roteiro na voz dele, grava o toque de follow-up e faz a simulação." },
     { papel: "Consultora ou quem apresenta o investimento", faz: "Obrigatória. Ensaia a transição e é avaliada junto na simulação." },
@@ -232,11 +232,11 @@ export const SESSAO_S5: DefSessao = {
   regraPreparo: "Sem simulação aprovada do médico, a parte de venda não conta como implementada no 11.04 (Score de Saúde e de Execução). A sessão pode ser remarcada uma vez; a simulação não pode ser pulada.",
   blocos: [
     {
-      n: 1, titulo: "Retomada e os números", min: 10, publico: "Médico, consultora, follow-up e decisor · Fundador conduz",
+      n: 1, titulo: "Retomada e os números", min: 10, publico: "Médico, consultora, follow-up e decisor · Condutor conduz",
       passos: [
         "Mostrar no Tracker (08.04) o funil desde o D28: leads, agendamentos, consultas realizadas, fechados. Se o 08.04 não está consolidado, usar o 07.07.",
         "Comparar a conversão da consulta atual com a baseline D0 (03.03) e com a meta do 03.07.",
-        "Fundador: \"Até aqui a gente trabalhou para o paciente certo chegar na sua cadeira. Hoje é sobre o que acontece quando ele senta. Não é sobre vender. É sobre ele entender o suficiente para decidir, sim ou não.\"",
+        "Condutor: \"Até aqui a gente trabalhou para o paciente certo chegar na sua cadeira. Hoje é sobre o que acontece quando ele senta. Não é sobre vender. É sobre ele entender o suficiente para decidir, sim ou não.\"",
         "Pergunta ao médico: \"Das últimas consultas, quantas você sentiu que o paciente saiu querendo e não marcou?\"",
       ],
       mostrar: "funil",
@@ -264,11 +264,11 @@ export const SESSAO_S5: DefSessao = {
       ],
     },
     {
-      n: 3, titulo: "Roteiro de Consulta Consultiva e passagem para a consultora", min: 25, publico: "Médico e consultora · Fundador + CS",
+      n: 3, titulo: "Roteiro de Consulta Consultiva e passagem para a consultora", min: 25, publico: "Médico e consultora · Condutor + CS",
       passos: [
         "As 8 etapas do 07.02 na tela, já personalizadas. O médico lê em voz alta a etapa 3 (tradução do problema) e a etapa 5 (recomendação com plano). Ajusta até soar como ele; o Analista edita ao vivo.",
         "Definir com o médico os contras ditos antes do preço (tempo, desconforto, recuperação, manutenção, o que depende do paciente). Mínimo de 2.",
-        "Risco de esperar: Fundador pergunta \"Se o paciente esperar seis meses, o que muda de fato no quadro dele?\" Se \"nada de relevante\", a frase sai e não se fala em risco.",
+        "Risco de esperar: Condutor pergunta \"Se o paciente esperar seis meses, o que muda de fato no quadro dele?\" Se \"nada de relevante\", a frase sai e não se fala em risco.",
         "Variação por tipo de serviço (07.02 seção 4): ambulatorial pode iniciar no dia se o paciente quiser; cirurgia nunca no mesmo dia, sinal reserva a data.",
         "Se houver consultora: ensaiar a frase de transição do 07.03 e combinar a ficha de passagem.",
       ],
@@ -308,7 +308,7 @@ export const SESSAO_S5: DefSessao = {
       ],
     },
     {
-      n: 6, titulo: "Simulação com o médico", min: 25, publico: "Médico e consultora · CS conduz, Fundador corrige",
+      n: 6, titulo: "Simulação com o médico", min: 25, publico: "Médico e consultora · CS conduz, Condutor corrige",
       passos: [
         "06.08 no modo consulta: CS compartilha a tela, o simulador faz o paciente, o Analista digita a fala do médico literalmente, o CS lê a resposta do paciente.",
         "Cenário 1 (C1): paciente ideal que traz a objeção mais frequente da clínica. Mostrar contras antes do preço, teach-back, validar → contextualizar → reconduzir, próximo passo com duas opções.",
@@ -320,11 +320,11 @@ export const SESSAO_S5: DefSessao = {
       registrar: [
         { chave: "resultado_c1", rotulo: "Cenário 1: nota (x de 7), eliminatório? aprovado?" },
         { chave: "resultado_c2", rotulo: "Cenário 2: nota (x de 7), eliminatório? aprovado?" },
-        { chave: "correcoes_fundador", rotulo: "Correções do Fundador", linhas: 3 },
+        { chave: "correcoes_fundador", rotulo: "Correções do Condutor", linhas: 3 },
       ],
     },
     {
-      n: 7, titulo: "Fechamento · Metas assinadas", min: 5, publico: "Decisor · Fundador conduz",
+      n: 7, titulo: "Fechamento · Metas assinadas", min: 5, publico: "Decisor · Condutor conduz",
       passos: [
         "O decisor assina (ZapSign ou aceite por escrito no WhatsApp, registrado pelo CS) duas metas.",
         "Conversão da consulta (fechados ÷ consultas realizadas): baseline D0 do 03.03 → meta do 03.07, confirmada ou ajustada hoje. Mede no 07.07 e 08.04.",
@@ -356,7 +356,7 @@ export const SESSAO_S5: DefSessao = {
     "\"Não pressionar\" não é \"não perguntar\": toda consulta termina com uma pergunta de decisão.",
     "O \"não\" explícito encerra a cadência. Registrar o motivo e respeitar.",
     "Cirurgia nunca no mesmo dia. Urgência só quando é verdadeira (clínica ou de agenda).",
-    "O Fundador não anota. O Analista de Onboarding registra ao vivo.",
+    "O Condutor não anota. O Analista de Onboarding registra ao vivo.",
   ],
   pos: [
     { chave: "pos-versoes-finais", quando: "Mesmo dia", oque: "Versões finais do 07.02 a 07.06 salvas na pasta da clínica; resultado da simulação e metas assinadas registrados no 11.04 e no 08.04", quem: "Analista de Onboarding", horas: 4, doc: "07.02" },

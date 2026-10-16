@@ -544,3 +544,13 @@ textarea::placeholder {
   .admin-mnav a,.admin-mnav button{flex:none;white-space:nowrap;padding:6px 12px;border:1px solid var(--border);border-radius:999px;font-size:13px;color:var(--ink-2);background:var(--surface)}
   .admin-mnav a[aria-current=page]{border-color:var(--accent);color:var(--accent);font-weight:600}
 }
+
+/* SAP: menu lateral vira gaveta no celular */
+.sap-menu-btn{display:none}
+@media (max-width:820px){
+  .sap-menu-btn{display:inline-flex}
+  .app>aside.gaveta{display:flex;position:fixed;top:0;left:0;bottom:0;width:min(300px,86vw);z-index:70;height:100dvh;box-shadow:0 0 24px rgba(0,0,0,.25)}
+  .sap-fundo-gaveta{position:fixed;inset:0;z-index:65;background:rgba(0,0,0,.45)}
+}
+.sap-fechar-gaveta{display:none}
+@media (max-width:820px){.app>aside.gaveta .sap-fechar-gaveta{display:inline-flex}}

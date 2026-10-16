@@ -6,11 +6,11 @@ const planilha = (id: string) => `https://docs.google.com/spreadsheets/d/${id}/e
 export const SESSAO_K: DefSessao = {
   id: "K",
   cronoN: 3,
-  titulo: "Kickoff com o fundador",
+  titulo: "Kickoff",
   quando: "D1 a D3",
   duracao: "20 a 30 min por videochamada; o roteiro usa 25 min e deixa 5 de folga",
   quem: [
-    { papel: "Fundador", faz: "Conduz a conversa inteira." },
+    { papel: "Condutor", faz: "Conduz a conversa inteira." },
     { papel: "Coordenador de Implementação", faz: "É apresentado como dono da conta (\"Eu sou o seu ponto de decisão aqui dentro. Se algo travar, é comigo.\") e registra na 02.06." },
     { papel: "Decisor da clínica", faz: "Precisa estar. Sem decisor, remarcar dentro do D3." },
   ],
@@ -40,7 +40,7 @@ export const SESSAO_K: DefSessao = {
     { codigo: "02.05", nome: "Checklist de Dados e Acessos", url: doc("1EJTA-mpZzwSmrRBChnDu0W6JfgvPRYebbrBF9TlC8rM") },
   ],
   preparo: [
-    { chave: "prep-resumo-venda", quando: "Até 1 h antes", oque: "Ler o resumo da venda na 02.06 e escrever 3 linhas para o Fundador: dor principal, serviço de interesse, maior receio dito na venda", quem: "Coordenador de Implementação", horas: -1, doc: "02.06" },
+    { chave: "prep-resumo-venda", quando: "Até 1 h antes", oque: "Ler o resumo da venda na 02.06 e escrever 3 linhas para o Condutor: dor principal, serviço de interesse, maior receio dito na venda", quem: "Coordenador de Implementação", horas: -1, doc: "02.06" },
     { chave: "prep-conteudo-instagram", quando: "Até 1 h antes", oque: "Abrir o Instagram do médico e anotar 1 conteúdo que performou bem (citado no bloco 3)", quem: "Coordenador de Implementação", horas: -1 },
     { chave: "prep-linha-do-tempo", quando: "Até 1 h antes", oque: "Aba 1 da tela: linha do tempo dos 90 dias com as datas reais da clínica (00.02, com D0, D60 e D90 preenchidos)", quem: "Coordenador de Implementação", horas: -1, doc: "00.02" },
     { chave: "prep-tracker-exemplo", quando: "Até 1 h antes", oque: "Aba 2 da tela: Tracker de exemplo com dados fictícios (08.04, aba Painel), funil da impressão até a indicação", quem: "Coordenador de Implementação", horas: -1, doc: "08.04" },
@@ -52,16 +52,16 @@ export const SESSAO_K: DefSessao = {
     {
       n: 1, titulo: "Abertura", min: 2, publico: "Decisor (e quem a clínica trouxer)",
       passos: [
-        "Fundador: \"[Nome], bom te ver. Antes de tudo: obrigado pela confiança. Hoje é uma conversa curta, de uns 25 minutos.\"",
-        "Fundador: \"Quero te mostrar o que vai acontecer na clínica nos próximos 90 dias, como a gente vai medir, e o que eu preciso de vocês.\"",
-        "Fundador apresenta o Coordenador como quem cuida da conta do começo ao fim.",
+        "Condutor: \"[Nome], bom te ver. Antes de tudo: obrigado pela confiança. Hoje é uma conversa curta, de uns 25 minutos.\"",
+        "Condutor: \"Quero te mostrar o que vai acontecer na clínica nos próximos 90 dias, como a gente vai medir, e o que eu preciso de vocês.\"",
+        "Condutor apresenta o Coordenador como quem cuida da conta do começo ao fim.",
         "Coordenador, em uma frase: \"Eu sou o seu ponto de decisão aqui dentro. Se algo travar, é comigo.\"",
       ],
     },
     {
       n: 2, titulo: "A visão", min: 4, publico: "Decisor",
       passos: [
-        "Fundador, sem tela.",
+        "Condutor, sem tela.",
         "\"Depois de 18 anos olhando clínica por dentro, o problema quase nunca é falta de paciente interessado. É o caminho que esse paciente percorre.\"",
         "\"O anúncio atrai a pessoa errada, a mensagem demora, a consulta é marcada pra daqui a duas semanas, o paciente falta, e quem não fechou nunca mais recebe mensagem. Cada etapa vaza um pouco. Somado, é muito.\"",
         "\"A gente vai construir esse caminho inteiro com vocês, da atração até a indicação, e medir cada etapa, pra ninguém precisar adivinhar onde está o problema.\"",
@@ -71,7 +71,7 @@ export const SESSAO_K: DefSessao = {
     {
       n: 3, titulo: "O que a clínica vai viver nos 90 dias", min: 5, publico: "Decisor",
       passos: [
-        "Mostrar a aba 1: linha do tempo com as datas reais. O Fundador aponta cada data.",
+        "Mostrar a aba 1: linha do tempo com as datas reais. O Condutor aponta cada data.",
         "\"Até o dia 10 a gente faz o diagnóstico. Vocês vão ver o funil da clínica em números, talvez pela primeira vez.\"",
         "\"Até o dia 14 a gente escolhe o serviço e o paciente que mais valem a pena e fecha as metas dos 90 dias, assinadas por você.\"",
         "\"Por volta do dia 20 tem a sessão de gravação. Vocês só gravam no celular, com a gente dirigindo ao vivo. Roteiro, edição e publicação são nossos.\" Citar criativos sem rosto e impulsionamento do conteúdo anotado pelo Coordenador.",
@@ -123,7 +123,7 @@ export const SESSAO_K: DefSessao = {
     {
       n: 7, titulo: "A pergunta que puxa a ambição", min: 3, publico: "Decisor",
       passos: [
-        "Fundador, devagar, sem tela.",
+        "Condutor, devagar, sem tela.",
         "\"Imagina que é o dia 90 e você está me contando que valeu muito a pena. O que mudou na clínica pra você me dizer isso?\"",
         "Deixar falar. Depois: \"E daqui a um ano, se isso continuar funcionando, onde você quer que a clínica esteja?\"",
         "Se responder com número de faturamento: \"Ótimo, vamos acompanhar isso. E o que precisa acontecer na agenda e no atendimento pra esse número aparecer?\" (traz para KPI operacional).",
@@ -320,7 +320,7 @@ export const SESSAO_B: DefSessao = {
       n: 8, titulo: "Fechamento", min: 2, publico: "Decisor e quem estiver na sala",
       passos: [
         "Ler em voz alta: números que ficaram com (E), o que passa a ser medido a partir de hoje e por quem, e as pendências com data.",
-        "\"Com isso, o(a) [Fundador] e o(a) Coordenador(a) chegam na Sessão 1 já sabendo onde a clínica perde paciente. Lá a gente confirma com vocês e decide por onde começar. Ela é em [data], com [quem precisa estar].\"",
+        "\"Com isso, o(a) [Condutor] e o(a) Coordenador(a) chegam na Sessão 1 já sabendo onde a clínica perde paciente. Lá a gente confirma com vocês e decide por onde começar. Ela é em [data], com [quem precisa estar].\"",
       ],
       alerta: "Todo número que entrou como declarado ou (E) precisa de uma linha em \"Plano para medir a partir do D0\" com responsável. Sem isso, a meta do D90 não tem com o que ser comparada.",
       registrar: [
@@ -352,7 +352,7 @@ export const SESSAO_B: DefSessao = {
     { chave: "pos-gravacao", quando: "Mesmo dia", oque: "Salvar gravação e transcrição em 03 Diagnóstico/Gravações/", quem: "Analista de Onboarding", horas: 6 },
     { chave: "pos-pendencias-clickup", quando: "Mesmo dia", oque: "Lançar pendências de acesso no ClickUp com dependência do cliente (02.08)", quem: "Analista de Onboarding", horas: 6, doc: "02.08" },
     { chave: "pos-conferencia-0303", quando: "Até 24 h", oque: "Conferir o 03.03: somas da agenda, ticket x fechamentos = receita, nenhuma taxa acima de 100%", quem: "Coordenador de Implementação", horas: 24, doc: "03.03" },
-    { chave: "pos-pacote-fundador", quando: "Até 2 dias antes da Sessão 1", oque: "Enviar ao Fundador o pacote: aba Raio-X do 03.03 (top 3 e gráfico), síntese do 03.01 e respostas-chave do 02.04 (frustração, o que já tentou, meta declarada)", quem: "Coordenador de Implementação", horas: 72, doc: "03.03" },
+    { chave: "pos-pacote-fundador", quando: "Até 2 dias antes da Sessão 1", oque: "Enviar ao Condutor o pacote: aba Raio-X do 03.03 (top 3 e gráfico), síntese do 03.01 e respostas-chave do 02.04 (frustração, o que já tentou, meta declarada)", quem: "Coordenador de Implementação", horas: 72, doc: "03.03" },
   ],
   acoesDe: { chave: "acoes_clinica", lado: "clinica" },
 };

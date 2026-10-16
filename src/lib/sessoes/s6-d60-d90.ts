@@ -14,7 +14,7 @@ export const SESSAO_S6: DefSessao = {
   quando: "D45 a D50",
   duracao: "90 min, por videochamada gravada",
   quem: [
-    { papel: "Fundador", faz: "Conduz a sessão e interpreta os números em voz alta." },
+    { papel: "Condutor", faz: "Conduz a sessão e interpreta os números em voz alta." },
     { papel: "Coordenador de Implementação", faz: "Coconduz, mostra o Tracker na tela e anota os compromissos." },
     { papel: "Analista de Onboarding", faz: "Registra ao vivo. Não conduz a conversa." },
     { papel: "Decisor da clínica (médico ou sócio)", faz: "Obrigatório. Aprova régua, indicação e plano de otimização." },
@@ -53,7 +53,7 @@ export const SESSAO_S6: DefSessao = {
     { chave: "prep-tracker", quando: "D-3", oque: "Atualizar o Tracker com a semana fechada; conferir se Agendou, Compareceu e Decisão estão preenchidos em pelo menos 90% das linhas", quem: "Coordenador de Implementação", horas: -72, doc: "08.04" },
     { chave: "prep-leitura", quando: "D-2", oque: "Rodar a leitura da 08.05: identificar o maior vazamento e trazer 3 hipóteses de ação", quem: "Coordenador + Gestor de Tráfego", horas: -48, doc: "08.05" },
     { chave: "prep-preencher", quando: "D-2", oque: "Pré-preencher o 08.02 com os serviços e prazos de recall sugeridos; pré-preencher o 08.03 com o momento de pico de satisfação provável do serviço prioritário", quem: "Coordenador de Implementação", horas: -48, doc: "08.02" },
-    { chave: "prep-resumo", quando: "D-1", oque: "Resumo de 1 página para o Fundador: KPIs baseline x atual x meta, maior vazamento, Score de Execução, pontos sensíveis da conta (atrasos, insatisfação, equipe resistente)", quem: "Coordenador de Implementação", horas: -24, doc: "11.04" },
+    { chave: "prep-resumo", quando: "D-1", oque: "Resumo de 1 página para o Condutor: KPIs baseline x atual x meta, maior vazamento, Score de Execução, pontos sensíveis da conta (atrasos, insatisfação, equipe resistente)", quem: "Coordenador de Implementação", horas: -24, doc: "11.04" },
     { chave: "prep-vespera", quando: "D-1", oque: "Mensagem de véspera (WhatsApp): última sessão individual; recepção na primeira meia hora; quem lê os números até o fim. Combinar o protocolo de sala se o decisor não quiser a equipe vendo receita", quem: "CS e Relacionamento", horas: -24 },
   ],
   regraPreparo: "Protocolo de sala: se o decisor não quiser a equipe vendo receita, o Tracker aparece na visão \"Operação\" (volumes e taxas, sem R$) nos blocos com equipe, e a visão completa só com o decisor nos últimos 5 minutos do bloco 4. Combinar por mensagem na véspera.",
@@ -61,7 +61,7 @@ export const SESSAO_S6: DefSessao = {
     {
       n: 1, titulo: "Retomada do funil", min: 10, publico: "Decisor, recepção e quem lê o Tracker",
       passos: [
-        "Fundador: \"Hoje é a última sessão individual e ela tem dois objetivos. O primeiro é fazer quem já é paciente voltar e trazer outros. O segundo é deixar vocês lendo os próprios números, porque a partir do dia 60 quem toca a rotina é a clínica, com a gente do lado até o dia 90.\"",
+        "Condutor: \"Hoje é a última sessão individual e ela tem dois objetivos. O primeiro é fazer quem já é paciente voltar e trazer outros. O segundo é deixar vocês lendo os próprios números, porque a partir do dia 60 quem toca a rotina é a clínica, com a gente do lado até o dia 90.\"",
         "Mostrar na tela o funil com cada etapa e o material que está rodando: Atração (05.10), Filtro (05.08), Conversa (06.02 e 06.03), Comparecimento (06.06), Consulta (07.02 e 07.07), Follow-up (07.06), Fidelização e indicação (hoje: 08.02 e 08.03), Controle (08.04 e 08.05).",
         "Pergunta de checagem (anotar literal): \"Das etapas que estão rodando, qual vocês sentem que ainda depende de alguém lembrar de fazer?\"",
         "Se a resposta for operacional, vira o primeiro item do plano de otimização.",
@@ -70,9 +70,9 @@ export const SESSAO_S6: DefSessao = {
       registrar: [{ chave: "depende_memoria", rotulo: "Etapa que ainda depende de alguém lembrar (resposta literal)", linhas: 2 }],
     },
     {
-      n: 2, titulo: "Régua de relacionamento", min: 20, publico: "Fundador + recepção, com o decisor",
+      n: 2, titulo: "Régua de relacionamento", min: 20, publico: "Condutor + recepção, com o decisor",
       passos: [
-        "Fundador: \"Paciente que já confiou na clínica custa muito menos para voltar do que um paciente novo vindo de anúncio. Hoje esse retorno depende da memória da recepção. A régua tira isso da memória.\"",
+        "Condutor: \"Paciente que já confiou na clínica custa muito menos para voltar do que um paciente novo vindo de anúncio. Hoje esse retorno depende da memória da recepção. A régua tira isso da memória.\"",
         "Pós-atendimento (5 min): mostrar D+1 e D+7. \"Hoje alguém manda mensagem no dia seguinte? Quem?\" Definir responsável e se vai manual ou automatizado (Quaddro ou caminho B, 11.03).",
         "Cuidado pós-procedimento (3 min): confirmar com o médico que as mensagens são orientação geral já entregue por escrito. Nenhuma orientação clínica individual por mensagem automática. Médico aprova o texto ali ou em até 48 h.",
         "Lembrete de retorno e recall (5 min): preencher na tela o prazo por serviço. O médico define o prazo, não a DC.",
@@ -93,9 +93,9 @@ export const SESSAO_S6: DefSessao = {
       ],
     },
     {
-      n: 3, titulo: "Processo de indicação", min: 15, publico: "Fundador com o médico, recepção e consultora",
+      n: 3, titulo: "Processo de indicação", min: 15, publico: "Condutor com o médico, recepção e consultora",
       passos: [
-        "Fundador: \"Indicação não é favor que se pede, é consequência de uma experiência boa. O que muda agora é que a gente escolhe o momento em que o paciente está mais satisfeito e deixa fácil para ele indicar. E a gente mede.\"",
+        "Condutor: \"Indicação não é favor que se pede, é consequência de uma experiência boa. O que muda agora é que a gente escolhe o momento em que o paciente está mais satisfeito e deixa fácil para ele indicar. E a gente mede.\"",
         "Momento de pico (4 min): \"Em que momento do tratamento o paciente costuma te agradecer ou elogiar?\" Esse é o momento de pedir.",
         "Quem pede e como (4 min): mostrar as falas do 08.03. O médico só planta a semente com uma frase; o convite com link vem da recepção ou da consultora. Ensaiar uma vez a fala do médico.",
         "Ética (3 min): ler em voz alta a regra de não oferecer vantagem a quem indica ou é indicado. Registrar o ciente do médico.",
@@ -154,7 +154,7 @@ export const SESSAO_S6: DefSessao = {
     {
       n: 6, titulo: "Do D50 ao D90 e rotina semanal que a clínica assume", min: 10, publico: "Decisor, recepção e quem lê o Tracker",
       passos: [
-        "Fundador: \"Até o dia 60 a gente termina de ajustar tudo e faz um checkpoint formal: sistema completo rodando. Do dia 61 ao 90 é otimização com dado real. No dia 90 a gente senta, compara com a meta que vocês assinaram e decide junto o próximo passo.\"",
+        "Condutor: \"Até o dia 60 a gente termina de ajustar tudo e faz um checkpoint formal: sistema completo rodando. Do dia 61 ao 90 é otimização com dado real. No dia 90 a gente senta, compara com a meta que vocês assinaram e decide junto o próximo passo.\"",
         "Mostrar a linha do tempo: D50 a D60 régua e indicação ativadas, plano em execução; D60 checkpoint formal; D61 a D89 check-in quinzenal (30 min), anúncios ajustados toda semana, auditoria de conversas, call em grupo; D60 a D90 entrega do 08.06; D90 encerramento com o 08.07.",
         "Combinar a rotina com função e horário: diário (preencher Agendou, Compareceu e Decisão, 10 min); sexta (conferir semana completa, 15 min); segunda (ler o Tracker na sequência da 08.05 e escolher 1 ajuste, 20 min); mensal (reativação, indicações, avaliações, 45 min).",
         "Pergunta de compromisso final (anotar literal): \"Quem, com nome de função, vai abrir o Tracker na segunda-feira às [hora]?\"",
@@ -172,7 +172,7 @@ export const SESSAO_S6: DefSessao = {
     },
   ],
   situacoes: [
-    { titulo: "Números muito abaixo da baseline", como: ["Não defender a DC. Mostrar o dado e separar o que é anúncio (DC) do que é conversa e consulta (clínica).", "Montar o plano de otimização em cima do maior vazamento.", "Coordenador registra o risco no 11.04; o Fundador decide se antecipa um check-in."] },
+    { titulo: "Números muito abaixo da baseline", como: ["Não defender a DC. Mostrar o dado e separar o que é anúncio (DC) do que é conversa e consulta (clínica).", "Montar o plano de otimização em cima do maior vazamento.", "Coordenador registra o risco no 11.04; o Condutor decide se antecipa um check-in."] },
     { titulo: "Tracker com dado incompleto", como: ["Inverter a ordem: bloco 4 vira 15 min de leitura do que existe e 10 min para combinar a rotina de preenchimento.", "Registrar no Score de Execução."] },
     { titulo: "Médico quer oferecer desconto por indicação", como: ["Explicar o art. 59 do Código de Ética Médica e o risco de denúncia por concorrência.", "Oferecer o agradecimento pessoal do 08.03.", "Se insistir, registrar a orientação dada na ata e não configurar o mecanismo."] },
     { titulo: "Clínica sem base exportável", como: ["Reativação começa pela agenda dos últimos 12 meses, exportada manualmente em blocos de 50 pacientes.", "O resto da régua roda normalmente."] },
@@ -212,14 +212,14 @@ export const SESSAO_D90: DefSessao = {
   quando: "D90",
   duracao: "60 min",
   quem: [
-    { papel: "Fundador", faz: "Conduz: abertura, KPIs e funil, status da garantia, recomendação e proposta de manutenção." },
+    { papel: "Condutor", faz: "Conduz: abertura, KPIs e funil, status da garantia, recomendação e proposta de manutenção." },
     { papel: "Coordenador de Implementação", faz: "Apresenta o que funcionou e o que não funcionou e o Score de Execução. Redigiu o relatório." },
     { papel: "CS e Relacionamento", faz: "Apoia na proposta de manutenção e faz o pedido de depoimento e case no fim." },
     { papel: "Decisor da clínica", faz: "Recebe e assina o relatório; decide entre manutenção e seguir com o playbook." },
   ],
   principio: "Número ruim aparece com o mesmo destaque do número bom. Receita atribuída é indicador acompanhado, nunca resultado prometido. O que não funcionou tem causa e dono, sem culpar a clínica nem a DC.",
   entra: [
-    "08.07 Relatório de Encerramento D90 pronto e revisado pelo Fundador, enviado 24 h antes",
+    "08.07 Relatório de Encerramento D90 pronto e revisado pelo Condutor, enviado 24 h antes",
     "08.04 Tracker fechado até D88, com mais de 90% das linhas completas",
     "03.07 Plano de Ação e Metas (KPIs, baseline D0 e meta D90 assinados)",
     "11.04 Score de Execução atualizado",
@@ -247,14 +247,14 @@ export const SESSAO_D90: DefSessao = {
     { chave: "prep-previa", quando: "D85", oque: "Prévia: calcular Score de Execução e KPIs para o encerramento", quem: "Coordenador de Implementação", horas: -120, doc: "11.04" },
     { chave: "prep-prompt", quando: "D85 a D88", oque: "Rodar o 08.08 no momento D90 (Bloco 5 e Bloco 4 revisado). Números só do 08.04 e do 11.04, com origem; garantia copiada da aba Garantia, nunca recalculada", quem: "Coordenador de Implementação", horas: -96, doc: "08.08" },
     { chave: "prep-redigir", quando: "D85 a D88", oque: "Redigir o 08.07 seção por seção (KPIs, funil, gráficos G1 a G5, o que funcionou e não funcionou, Score, garantia, aprendizados, recomendação, manutenção, depoimento); resumo executivo por último", quem: "Coordenador de Implementação", horas: -72, doc: "08.07" },
-    { chave: "prep-revisao", quando: "Até D89", oque: "Revisar o relatório: resumo executivo, aprendizados, status da garantia e recomendação (Bloco 5 do 08.08). Score de Execução, Relatório D90 e Playbook prontos", quem: "Fundador", horas: -36, doc: "08.07" },
+    { chave: "prep-revisao", quando: "Até D89", oque: "Revisar o relatório: resumo executivo, aprendizados, status da garantia e recomendação (Bloco 5 do 08.08). Score de Execução, Relatório D90 e Playbook prontos", quem: "Condutor", horas: -36, doc: "08.07" },
     { chave: "prep-envio", quando: "24 h antes", oque: "Enviar o relatório ao decisor 24 h antes da reunião de encerramento", quem: "Coordenador / CS e Relacionamento", horas: -24, doc: "08.07" },
   ],
-  regraPreparo: "Relatório só vai para a clínica depois da conferência do Coordenador (lista do 08.08) e da revisão do Fundador. Status de cada KPI pela mesma regra em todo relatório: meta atingida; melhorou, abaixo da meta; não melhorou.",
+  regraPreparo: "Relatório só vai para a clínica depois da conferência do Coordenador (lista do 08.08) e da revisão do Condutor. Status de cada KPI pela mesma regra em todo relatório: meta atingida; melhorou, abaixo da meta; não melhorou.",
   blocos: [
     {
       n: 1, titulo: "Abertura: o que a clínica tinha no D0 e o que tem hoje", min: 5, publico: "Decisor",
-      passos: ["Fundador abre comparando o ponto de partida (D0) com o sistema que roda hoje."],
+      passos: ["Condutor abre comparando o ponto de partida (D0) com o sistema que roda hoje."],
       mostrar: "funil",
     },
     {
@@ -298,7 +298,7 @@ export const SESSAO_D90: DefSessao = {
       ],
       registrar: [
         { chave: "acoes_clinica", rotulo: "Ações da clínica para os próximos 90 dias (uma por linha: ação, KPI-alvo, dono)", linhas: 5 },
-        { chave: "aprendizados", rotulo: "Aprendizados destacados pelo Fundador", linhas: 3 },
+        { chave: "aprendizados", rotulo: "Aprendizados destacados pelo Condutor", linhas: 3 },
       ],
     },
     {

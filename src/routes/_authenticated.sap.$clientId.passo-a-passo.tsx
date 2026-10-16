@@ -1,12 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { PassoAPassoSap } from "@/components/sap-implantacao";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-// Sistema de Aquisição · Passo a passo da implantação: o roteiro para qualquer pessoa da equipe implantar.
+// Rota antiga: o Passo a passo virou o manual dentro de cada tarefa. Redireciona para Minhas tarefas.
 export const Route = createFileRoute("/_authenticated/sap/$clientId/passo-a-passo")({
-  component: PassoAPasso,
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/sap/$clientId", params: { clientId: params.clientId } });
+  },
 });
-
-function PassoAPasso() {
-  const { clientId } = Route.useParams();
-  return <PassoAPassoSap clientId={clientId} />;
-}
