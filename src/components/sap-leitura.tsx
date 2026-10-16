@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertOctagon, CheckCircle2, CircleDashed, ClipboardCheck, Copy, MessageCircle, TriangleAlert } from "lucide-react";
 import { AcoesSap } from "@/components/sap-acoes";
 import { AtendimentoSap } from "@/components/sap-atendimento";
+import { AtendimentoPorAtendente, ResumoParaMedico } from "@/components/sap-ia-atendimento";
 import { FidelizacaoSap } from "@/components/sap-verba-fidelizacao";
 import { resumoFidelizacao } from "@/lib/sap-fidelizacao";
 import { indicadoresAtendimento } from "@/lib/sap-sinais";
@@ -135,8 +136,13 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
         }
       />
       <AtendimentoSap clientId={clientId} />
+      {isAdmin && <AtendimentoPorAtendente clientId={clientId} />}
       <FidelizacaoSap clientId={clientId} />
 
+      {isAdmin && clinica && (
+        <ResumoParaMedico clientId={clientId} clinica={clinica} dia={diaAtual(clinica.d0, clinica.pausas)}
+          principal={p ? { titulo: p.v.titulo, acaoClinica: p.v.acaoClinica, acaoDc: p.v.acaoDc, prazo: p.v.prazo } : null} />
+      )}
       {isAdmin && leitura.mensagem && (
         <Painel icone={MessageCircle} titulo="Mensagem para a clínica" resumo="Modelo do 08.05, para mandar até 12h de segunda.">
           <p className="whitespace-pre-wrap rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface-2, var(--surface))" }}>

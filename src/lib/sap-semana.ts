@@ -147,7 +147,8 @@ export function tarefasDaSemana(e: EntradaSemana): TarefaSemana[] {
       add({ id: "rotina-fidelizacao", titulo: "Registrar retornos, reativação e indicações da semana", papeis: ["cs"], prazo: sexta, tela: "/leitura", origem: "Rotina semanal" });
     }
     if (dia >= 29) {
-      add({ id: "rotina-leitura", titulo: "Fazer a leitura da semana e combinar uma ação de cada lado", papeis: ["coordenacao", "clinica"], prazo: sexta, tela: "/leitura", origem: "Rotina semanal" });
+      add({ id: "rotina-leitura", titulo: "Fazer a leitura da semana, combinar uma ação de cada lado e enviar o resumo ao médico", detalhe: "O resumo com os 3 números fica pronto na Leitura da semana: revisar e enviar até 12h de segunda.", papeis: ["coordenacao"], prazo: sexta, tela: "/leitura", origem: "Rotina semanal" });
+      add({ id: "rotina-leitura-clinica", titulo: "Ler os números da semana e combinar a ação da clínica com a equipe", papeis: ["clinica"], prazo: sexta, tela: "/leitura", origem: "Rotina semanal" });
     }
   }
   if (e.execucaoVencidosSemStatus) {
