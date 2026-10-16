@@ -22,6 +22,7 @@ Regras: português do Brasil, frases curtas, sem jargão. Não invente: se algo 
 Responda SOMENTE um JSON:
 {"motivo": "por que a pessoa entrou em contato, em até 12 palavras",
  "resumo": "o que aconteceu na conversa, 2 a 4 frases",
+ "comercial": true | false,
  "interesse": "procedimento, consulta ou assunto de interesse, ou null",
  "origem": "anuncio" | "instagram" | "indicacao" | "paciente_antigo" | "desconhecida",
  "etapa": "so_robo" | "sem_resposta_paciente" | "engajou" | "qualificacao" | "preco_apresentado" | "agendamento_em_curso" | "agendou" | "nao_e_paciente",
@@ -35,9 +36,9 @@ Responda SOMENTE um JSON:
  "atendimento": {"nota": "bom" | "regular" | "ruim", "nota_0a10": 0-10, "pontos_fortes": ["..."], "pontos_a_melhorar": ["..."]},
  "evidencia": "um trecho curto e literal da conversa que sustenta a principal falha ou acerto (sem telefone/nome do paciente)",
  "como_deveria": "o que a atendente deveria ter respondido nesse ponto, em 1 a 2 frases prontas para usar",
- "proximo_passo": "a ação concreta que a clínica deveria fazer agora com este lead, em 1 frase",
+ "proximo_passo": "UMA ação comercial em 1 frase, só de um destes tipos: responder o paciente, fazer follow-up, oferecer horário e agendar, ou confirmar a consulta. Se comercial=false, null",
  "alerta": "se o paciente relatou algo urgente ou grave de saúde, descreva em 1 frase; senão null"}
-Critérios: respondeu o que foi perguntado? deu preço quando pedido, com ancoragem de valor (resultado, diferencial) e chamada para agendar? conduziu para data e hora concretas? voltou a falar quando o paciente sumiu (follow-up)? demorou mais de 1 hora em horário comercial? "recuperavel" = demonstrou interesse real (perguntou preço, procedimento ou disse que quer) e não agendou.`;
+Critérios: respondeu o que foi perguntado? deu preço quando pedido, com ancoragem de valor (resultado, diferencial) e chamada para agendar? conduziu para data e hora concretas? voltou a falar quando o paciente sumiu (follow-up)? demorou mais de 1 hora em horário comercial? "recuperavel" = demonstrou interesse real (perguntou preço, procedimento ou disse que quer) e não agendou. "comercial" = false quando a conversa é administrativa e não é venda de consulta ou procedimento (nota fiscal, boleto, recibo, reembolso, documentos, resultado de exame já feito, fornecedor, assunto interno); nesse caso "recuperavel" = false e "proximo_passo" = null.`;
 
 function mascarar(t: string): string {
   return t

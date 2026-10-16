@@ -73,6 +73,13 @@ export interface KpiSap {
   falta?: string; // o que fazer para o número existir / ficar confiável
   amostraPequena?: boolean;
   ehMeta: boolean; // receita nunca é meta
+  /** Número existe no CRM mas está errado por falta de configuração: a tela mostra "Dado incompleto", nunca o número. */
+  incompleto?: { falta: string; resolver: "etapas" | "rastreamento" | "crm"; parcial: string };
+}
+
+/** Regra única de dado incompleto: zera o valor (nada de número grande nem selo verde) e guarda o que falta. */
+function semDadoConfiavel(k: KpiSap, falta: string, resolver: NonNullable<KpiSap["incompleto"]>["resolver"]): KpiSap {
+  return { ...k, valor: null, farol: "cinza", texto: "Dado incompleto", falta, incompleto: { falta, resolver, parcial: k.texto } };
 }
 
 export interface ChecagemSap {
@@ -207,6 +214,9 @@ export function montarKpisSap(t: TrackerAutoBruto): LeituraTracker {
   };
   if (!temComparecimento) pendencias.push("Marcar no CRM a etapa de consulta realizada e a de falta.");
   else if (!tem("faltou")) pendencias.push("Marcar no CRM a etapa de falta (no-show).");
+  const comparecimentoFinal = !temComparecimento
+    ? semDadoConfiavel(comparecimento, "Falta marcar no CRM a etapa de consulta realizada e a de falta.", "etapas")
+    : !tem("faltou") ? semDadoConfiavel(comparecimento, "Falta marcar no CRM a etapa de falta: sem ela, quem faltou não aparece e o comparecimento fica perto de 100%.", "etapas") : comparecimento;
 
   // 4. Conversão da consulta
   const conv = temComparecimento ? div(t.fechados, t.compareceram) : null;
@@ -223,6 +233,8 @@ export function montarKpisSap(t: TrackerAutoBruto): LeituraTracker {
     ehMeta: true,
   };
 
+  const conversaoFinal = !temComparecimento ? semDadoConfiavel(conversao, "Falta marcar no CRM a etapa de consulta realizada: sem ela, não dá para separar quem consultou e não fechou.", "etapas") : conversao;
+
   // 5. Custo por consulta realizada
   const cc = temComparecimento && t.investido > 0 ? div(t.investido, t.compareceram) : null;
   const custo: KpiSap = {
@@ -238,6 +250,12 @@ export function montarKpisSap(t: TrackerAutoBruto): LeituraTracker {
     ehMeta: true,
   };
 
+  const custoFinal = t.investido > 0 && !temComparecimento
+    ? semDadoConfiavel(custo, "Falta marcar no CRM a etapa de consulta realizada.", "etapas")
+    : t.investido > 0 && t.leads_crm_meta === 0
+      ? semDadoConfiavel(custo, "Nenhum lead do CRM tem origem Meta: não dá para saber quais consultas vieram do anúncio. Registre a origem (UTM) dos leads.", "rastreamento")
+      : custo;
+
   // 6. Receita atribuída (acompanha, nunca é meta)
   const receita: KpiSap = {
     id: "receita",
@@ -251,6 +269,9 @@ export function montarKpisSap(t: TrackerAutoBruto): LeituraTracker {
     ehMeta: false,
   };
   if (t.fechados > 0 && t.fechados_com_valor / t.fechados < 0.8) pendencias.push("Preencher o valor fechado nos cards ganhos do CRM.");
+  const receitaFinal = t.fechados > 0 && t.fechados_com_valor < t.fechados
+    ? semDadoConfiavel(receita, `${n(t.fechados - t.fechados_com_valor)} de ${n(t.fechados)} cards ganhos estão sem valor no CRM. Preencha o valor fechado em cada um.`, "crm")
+    : receita;
 
   // Checagens de qualidade do dado (03.07): divergência ≤ 20% e linhas completas ≥ 90%.
   const divergencia: ChecagemSap = (() => {
@@ -281,7 +302,7 @@ export function montarKpisSap(t: TrackerAutoBruto): LeituraTracker {
   if (lin !== null && t.com_origem / Math.max(1, t.leads) < REF_SAP.linhasMin) pendencias.push("Preencher a origem do lead em todo card novo.");
 
   return {
-    kpis: [resp, agendamento, comparecimento, conversao, custo, receita],
+    kpis: [resp, agendamento, comparecimentoFinal, conversaoFinal, custoFinal, receitaFinal],
     checagens: [divergencia, linhas],
     funil: [
       { id: "leads", rotulo: "Leads", valor: t.leads },

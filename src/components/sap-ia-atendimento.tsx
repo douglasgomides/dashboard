@@ -17,6 +17,8 @@ const MOTIVO: Record<LeadAtencao["motivo"], { rotulo: string; cor: string; dica:
   sem_follow_up: { rotulo: "Sem follow-up", cor: "var(--warn)", dica: "Conversa em aberto, parada há 2 dias ou mais, sem novo contato." },
   recuperavel: { rotulo: "Dá para recuperar", cor: "var(--accent)", dica: "Mostrou interesse real e não agendou." },
 };
+/** Nunca mostrar "null", "undefined" ou vazio: devolve null para esconder o campo. */
+const txt = (v: string | null | undefined) => (v && !/^(null|undefined|none|n\/a|-)$/i.test(v.trim()) ? v.trim() : null);
 const tempo = (h: number) => (h < 24 ? `${h} h` : `${Math.round(h / 24)} dia(s)`);
 
 /** Leads que precisam de atenção agora, pela leitura de IA de cada conversa. Só a equipe; não envia nada. */
@@ -35,9 +37,9 @@ export function LeadsAtencao({ clientId }: { clientId: string }) {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Selo cor={MOTIVO[l.motivo].cor} titulo={MOTIVO[l.motivo].dica}>{MOTIVO[l.motivo].rotulo}</Selo>
-                  <span className="text-xs" style={{ color: "var(--text-dim)" }}>parado há {tempo(l.horas_parado)}{l.interesse ? ` · ${l.interesse}` : ""}{l.atendente ? ` · ${l.atendente}` : ""}</span>
+                  <span className="text-xs" style={{ color: "var(--text-dim)" }}>parado há {tempo(l.horas_parado)}{txt(l.interesse) ? ` · ${txt(l.interesse)}` : ""}{txt(l.atendente) ? ` · atendente: ${txt(l.atendente)}` : ""}</span>
                 </div>
-                {l.proximo_passo && <div className="mt-0.5 text-sm">{l.proximo_passo}</div>}
+                {txt(l.proximo_passo) && <div className="mt-0.5 text-sm">{txt(l.proximo_passo)}</div>}
               </div>
               <Link to="/$clientId/atendimento" params={{ clientId }} search={{ aba: "conversas", conversa: l.conversa_id } as never}
                 className="inline-flex min-h-[32px] items-center rounded-lg border px-3 text-xs font-semibold" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>
