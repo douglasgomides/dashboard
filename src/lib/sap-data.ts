@@ -10,6 +10,7 @@ import { lerSinais, type AuditoriaSemana, type SinaisBrutos } from "@/lib/sap-si
 import type { SemanaFidelizacao } from "@/lib/sap-fidelizacao";
 import type { CategoriaMeta, LinhaConversao, RegistroTeste, StatusTeste } from "@/lib/sap-rastreamento";
 import type { AcaoBruta, EntradaTarefas, PapelId, RotinaRegistro, StatusRegistro } from "@/lib/sap-tarefas";
+import type { Peca } from "@/lib/sap-anuncios";
 
 // Tracker do Sistema de Aquisição de Pacientes (SAP).
 //
@@ -1139,7 +1140,7 @@ export async function getEntradasTarefas(clientId?: string, isAdmin = false): Pr
   const ids = lista.map((c) => c.id);
   const clientIds = lista.map((c) => c.client_id);
   const em = <T,>(r: { data: T[] | null; error: unknown }) => { if (r.error) throw r.error; return r.data ?? []; };
-  const [nomesCli, status, rotinas, acessos, testes, plano, acoes, auditorias, fidelizacao, execucao, fontes, papeis, saude, pessoas] = await Promise.all([
+  const [nomesCli, status, rotinas, acessos, testes, plano, acoes, auditorias, fidelizacao, execucao, fontes, papeis, saude, pessoas, pecas] = await Promise.all([
     db.from("clients").select("id, name").in("id", clientIds),
     db.from("sap_marco_status").select("clinica_id, marco, concluido_em, evidencia, observacao, estado, atualizado_por, atualizado_em, detectado_em, desfeito_em, desfeito_motivo").in("clinica_id", ids),
     db.from("sap_rotina_semana").select("clinica_id, marco, semana, feito_em, evidencia, feito_por").in("clinica_id", ids),
@@ -1154,6 +1155,7 @@ export async function getEntradasTarefas(clientId?: string, isAdmin = false): Pr
     db.rpc("sap_papeis_nomes", { p_clinica_ids: ids }),
     isAdmin ? db.from("sap_saude_semana").select("clinica_id, semana, tarefas_no_prazo, sessoes_marcadas, sessoes_com_decisor, call_grupo, decisor_respondeu, tempo_resposta_h, kpis_verde, kpis_vermelho, sentimento, o_que_aconteceu").in("clinica_id", ids) : Promise.resolve({ data: null, error: null }),
     isAdmin ? db.rpc("sap_pessoas_hub") : Promise.resolve({ data: [], error: null }),
+    db.from("sap_pecas").select("clinica_id, id, modelo, titulo, etapa, formato, rosto, ganchos, semaforo, ciente_em, status, arquivo_url, campaign_id, reprovacao_meta").in("clinica_id", ids),
   ]);
   const por = <T extends { clinica_id: string }>(rows: T[], id: string) => rows.filter((r) => r.clinica_id === id);
   const nomeCli = new Map((em(nomesCli) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
@@ -1185,6 +1187,7 @@ export async function getEntradasTarefas(clientId?: string, isAdmin = false): Pr
       auditorias: por(em(auditorias) as { clinica_id: string; semana: string }[], c.id).map((a) => a.semana),
       fidelizacao: por(em(fidelizacao) as { clinica_id: string; semana: string }[], c.id).map((a) => a.semana),
       execucao: por(em(execucao) as (ItemRegistro & { clinica_id: string })[], c.id),
+      pecas: pecas.error ? null : por((pecas.data ?? []) as (Peca & { clinica_id: string })[], c.id),
       papeis: Object.fromEntries(papeisRows.filter((p) => p.clinica_id === c.id).map((p) => [p.papel, { userId: p.user_id, nome: p.nome }])),
       nomes,
     };
@@ -1217,4 +1220,31 @@ export async function getPrefUsuarioSap(): Promise<{ tour_visto_em: string | nul
 export async function marcarVistoSap(chave: "tour" | "comece" | "tour_reset") {
   const { error } = await db.rpc("sap_marcar_visto", { p_chave: chave });
   if (error) throw error;
+}
+
+// ---------------------------------------------------------------- banco de anúncios
+
+export async function getPecasSap(clinicaId?: string): Promise<(Peca & { clinica_id: string })[]> {
+  let q = db.from("sap_pecas").select("id, clinica_id, modelo, titulo, etapa, formato, rosto, ganchos, semaforo, ciente_em, status, arquivo_url, campaign_id, reprovacao_meta, atualizado_em").order("atualizado_em", { ascending: false });
+  if (clinicaId) q = q.eq("clinica_id", clinicaId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as (Peca & { clinica_id: string })[];
+}
+
+export async function salvarPecaSap(clinicaId: string, p: Omit<Peca, "id"> & { id?: string | null }) {
+  const { error } = await db.rpc("sap_salvar_peca", { p_clinica_id: clinicaId, p_id: p.id ?? null, p_dados: p });
+  if (error) throw new Error(/semaforo bloqueia/.test(error.message) ? "Semáforo vermelho não aprova; amarelo precisa da data do ciente do médico." : error.message);
+}
+
+export interface CampanhaNumeros { campaign_id: string; nome: string | null; objetivo: string | null; gasto: number; conversas: number; cliques: number; impressoes: number; dias: number; ultimos7_gasto: number; ultimos7_conversas: number; anteriores7_gasto: number; anteriores7_conversas: number; ultimo_dia: string | null }
+
+export async function getCampanhasNumerosSap(clientId: string): Promise<CampanhaNumeros[]> {
+  const { data, error } = await db.rpc("sap_campanhas_numeros", { p_client_id: clientId });
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    ...(r as unknown as CampanhaNumeros),
+    gasto: Number(r.gasto) || 0, conversas: Number(r.conversas) || 0, cliques: Number(r.cliques) || 0, impressoes: Number(r.impressoes) || 0, dias: Number(r.dias) || 0,
+    ultimos7_gasto: Number(r.ultimos7_gasto) || 0, ultimos7_conversas: Number(r.ultimos7_conversas) || 0, anteriores7_gasto: Number(r.anteriores7_gasto) || 0, anteriores7_conversas: Number(r.anteriores7_conversas) || 0,
+  }));
 }

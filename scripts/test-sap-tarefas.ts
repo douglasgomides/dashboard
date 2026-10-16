@@ -122,4 +122,13 @@ const d1 = montarTarefas(entrada({ saude: [], acoes: [] }));
 assert.equal(d1.find((x) => x.n === 31)!.situacao, "depois");
 assert.equal(d1.find((x) => x.n === 29)!.situacao, "depois");
 
+// Banco de anúncios fecha os itens 16 (6 sem rosto + vídeos) e 21 (aprovação do médico).
+const peca = (x: object) => ({ id: Math.random().toString(), modelo: "BA-03", titulo: "t", etapa: "C1", formato: "imagem", rosto: false, ganchos: [], semaforo: "verde", ciente_em: null, status: "aprovado", arquivo_url: null, campaign_id: null, reprovacao_meta: null, ...x }) as never;
+const comPecas = montarTarefas(entrada({ pecas: [...Array.from({ length: 6 }, () => peca({})), peca({ rosto: true, formato: "reels" })] }));
+assert.equal(comPecas.find((x) => x.n === 16)!.status, "auto");
+assert.equal(comPecas.find((x) => x.n === 21)!.status, "auto");
+const semCiente = montarTarefas(entrada({ pecas: [peca({ semaforo: "amarelo", status: "producao" })] }));
+assert.equal(semCiente.find((x) => x.n === 21)!.status, "a_fazer");
+assert.equal(montarTarefas(entrada()).find((x) => x.n === 16)!.status, "a_fazer"); // sem dado de peças: não detecta
+
 console.log("ok sap-tarefas");

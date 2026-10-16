@@ -6,7 +6,7 @@ import { SESSOES } from "@/lib/sap-sessoes";
 import { MAPA_VAZAMENTOS } from "@/lib/sap-leitura";
 import { ITENS_ACESSO } from "@/lib/sap-acessos";
 
-export type TelaDoc = "/cronograma" | "/onboarding" | "/rastreamento" | "/metas" | "/leitura" | "/execucao" | "/midia" | "/documentos" | "/sessao" | "/painel";
+export type TelaDoc = "/anuncios" | "/cronograma" | "/onboarding" | "/rastreamento" | "/metas" | "/leitura" | "/execucao" | "/midia" | "/documentos" | "/sessao" | "/painel";
 export interface DocSap {
   codigo: string;
   nome: string;
@@ -69,11 +69,13 @@ const BASE: DocSap[] = [
 ];
 
 const TELA_SESSAO = new Set(["04.01", "05.01", "06.01", "07.01"]);
+/** Documentos que têm uma tela do Hub fazendo o papel deles. */
+const TELA_DOC: Record<string, TelaDoc> = { "05.04": "/anuncios", "05.05": "/anuncios", "05.03": "/rastreamento" };
 
 export const DOCS: DocSap[] = (() => {
   const m = new Map(BASE.map((d) => [d.codigo, d]));
   for (const s of SESSOES) for (const d of s.docs) {
-    if (!m.has(d.codigo)) m.set(d.codigo, D(d.codigo, d.nome, `Usado em: ${s.titulo}.`, d.url, TELA_SESSAO.has(d.codigo) ? "/sessao" : undefined));
+    if (!m.has(d.codigo)) m.set(d.codigo, D(d.codigo, d.nome, `Usado em: ${s.titulo}.${TELA_DOC[d.codigo] === "/anuncios" ? " No Hub, é o Banco de anúncios." : ""}`, d.url, TELA_DOC[d.codigo] ?? (TELA_SESSAO.has(d.codigo) ? "/sessao" : undefined)));
   }
   for (const v of MAPA_VAZAMENTOS) m.set(v.codigo, { codigo: v.codigo, nome: v.titulo, serve: `Vazamento da Leitura da semana: ${v.sintoma}.`, tela: "/leitura", tipo: "vazamento" });
   for (const a of ITENS_ACESSO) m.set(a.id, { codigo: a.id, nome: a.nome, serve: `Item do Checklist de Dados e Acessos (${a.bloco}). ${a.dica}`.trim(), tela: "/onboarding", tipo: "acesso" });

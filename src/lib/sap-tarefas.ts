@@ -10,6 +10,7 @@ import { TESTES_RASTREIO, dispensavel, recheckCategoria, resumoTestes, type Cate
 import { calcularExecucao, resumoSaude, type ItemRegistro, type SemanaSaude } from "@/lib/sap-scores";
 import { kpisDaGarantia, type KpiPlano } from "@/lib/sap-metas";
 import { SESSOES, sessaoDoItem } from "@/lib/sap-sessoes";
+import { contagemCriativos, pecasAprovadas, type Peca } from "@/lib/sap-anuncios";
 
 // ---------------------------------------------------------------- papéis
 
@@ -46,7 +47,7 @@ export function papelDoDono(dono: string | null | undefined): PapelId {
 
 // ---------------------------------------------------------------- manual de cada item
 
-export type Tela = "" | "/tarefas" | "/painel" | "/cronograma" | "/sessao" | "/onboarding" | "/rastreamento" | "/etapas" | "/papeis" | "/leitura" | "/execucao" | "/midia" | "/metas" | "/documentos";
+export type Tela = "" | "/tarefas" | "/painel" | "/cronograma" | "/sessao" | "/onboarding" | "/rastreamento" | "/etapas" | "/papeis" | "/leitura" | "/execucao" | "/midia" | "/metas" | "/documentos" | "/anuncios";
 export interface Onde { rotulo: string; tela?: Tela; busca?: { s: string }; hub?: "config"; doc?: string }
 export interface Manual {
   porque: string;
@@ -82,12 +83,12 @@ export const MANUAL: Record<number, Manual> = {
   13: { origem: "novo", porque: "Decide canal, verba e custo-meta antes de subir qualquer anúncio.", como: ["Conduza a Sessão 3 no modo sessão.", "Registre canal, verba e custo-meta.", "Encerre a sessão no painel."], onde: sessao(13) },
   14: { origem: "passo", porque: "Anúncio sem medição queima a verba e não prova nada no D90. Nenhum anúncio sobe sem os testes obrigatórios aprovados com evidência e conferidos pelo Coordenador.", como: ["Configure pixel, CAPI, tag do Google e UTMs.", "Em Rastreamento, registre a categoria da fonte na Meta.", "Marque cada teste com a evidência (print ou link).", "Peça a conferência do Coordenador."], onde: { rotulo: "Abrir Rastreamento", tela: "/rastreamento" } },
   15: { origem: "novo", porque: "Os vídeos com o médico são a matéria-prima dos anúncios.", como: ["Marque a videochamada de 60 a 90 min.", "Dirija a gravação com 3 ganchos por vídeo.", "Confirme que os arquivos brutos chegaram e cole o link da pasta."], onde: { rotulo: "Abrir o cronograma", tela: "/cronograma" } },
-  16: { origem: "novo", porque: "Peças sem rosto permitem subir anúncio mesmo sem gravação nova.", como: ["Produza pelo menos 6 peças sem rosto até o D24.", "Edite os vídeos até o D26.", "Coloque tudo na pasta de aprovados e cole o link."], onde: { rotulo: "Abrir o cronograma", tela: "/cronograma" } },
+  16: { origem: "novo", porque: "Peças sem rosto permitem subir anúncio mesmo sem gravação nova. Partir de modelos que já funcionam encurta a criação.", como: ["No Banco de anúncios, escolha 2 ou 3 modelos por etapa (C1, C2, C3) para o serviço prioritário.", "Produza pelo menos 6 peças sem rosto até o D24 e os vídeos editados até o D26.", "Marque cada peça como aprovada no banco, com o link do arquivo."], onde: { rotulo: "Abrir o Banco de anúncios", tela: "/anuncios" } },
   17: { origem: "novo", porque: "Define as metas de atendimento e a confirmação de consulta com a recepção.", como: ["Conduza a Sessão 4 no modo sessão.", "Defina as metas de atendimento.", "Encerre a sessão no painel."], onde: sessao(17) },
   18: { origem: "novo", porque: "A recepção é quem transforma lead em consulta; cada atendente precisa passar no critério de treino.", como: ["Treine cada atendente com o roteiro.", "Avalie pelo critério do treino da recepção.", "Registre a aprovação de cada um e cole o link."], onde: { rotulo: "Abrir a Leitura da semana", tela: "/leitura" } },
   19: { origem: "novo", porque: "A IA de atendimento e a régua de confirmação precisam estar testadas antes dos anúncios.", como: ["Configure a Quaddro (ou o caminho B).", "Rode os cenários 5 vezes; os eliminatórios precisam de 100%.", "Ative a régua de confirmação e cole o link do teste."], onde: { rotulo: "Abrir o cronograma", tela: "/cronograma" } },
   20: { origem: "novo", porque: "Sem a volta das etapas do CRM para as plataformas, a otimização não aprende quem vira consulta.", como: ["Crie um lead fictício e avance as etapas no CRM.", "Confira se ele aparece na Meta e no Google.", "Compartilhe o Tracker com a clínica e cole o print."], onde: { rotulo: "Abrir Rastreamento", tela: "/rastreamento" } },
-  21: { origem: "novo", porque: "Nenhuma peça vai ao ar sem a aprovação do médico; os amarelos precisam do ciente dele.", como: ["Envie as peças com o semáforo.", "Registre a aprovação e o ciente nos amarelos.", "Cole o link da aprovação."], onde: { rotulo: "Abrir o cronograma", tela: "/cronograma" } },
+  21: { origem: "novo", porque: "Nenhuma peça vai ao ar sem a aprovação do médico; os amarelos precisam do ciente dele.", como: ["Envie as peças ao médico com o semáforo de cada uma.", "No Banco de anúncios, registre a data do ciente nas amarelas.", "Marque as peças como aprovadas (vermelho nunca aprova)."], onde: { rotulo: "Abrir o Banco de anúncios", tela: "/anuncios" } },
   22: { origem: "novo", porque: "É o marco de lançamento: a partir daqui começam a leitura semanal e as regras de mídia.", como: ["Confirme que o rastreamento foi liberado.", "Suba as campanhas e veja se estão entregando.", "Cole o print do Gerenciador de Anúncios."], onde: { rotulo: "Abrir Mídia", tela: "/midia" } },
   23: { origem: "novo", porque: "O médico pratica a conversa de venda sem pressão antes de os leads chegarem em volume.", como: ["Conduza a Sessão 5 no modo sessão.", "Faça a simulação com o médico.", "Avalie pela rubrica e encerre a sessão."], onde: sessao(23) },
   24: { origem: "novo", porque: "Quem diz \"vou pensar\" só volta com cadência de follow-up registrada.", como: ["Ative a cadência de follow-up no CRM.", "Confira as primeiras decisões registradas.", "Cole o link ou print."], onde: { rotulo: "Abrir a Leitura da semana", tela: "/leitura" } },
@@ -159,6 +160,8 @@ export interface EntradaTarefas {
   auditorias: string[] | null; // segundas com auditoria registrada
   fidelizacao: string[] | null; // segundas com fidelização registrada
   execucao: ItemRegistro[] | null;
+  /** Peças do Banco de anúncios (null = sem dado; itens 16 e 21 não detectam). */
+  pecas?: Peca[] | null;
   papeis: Partial<Record<PapelId, { userId: string; nome: string }>>;
   nomes: Map<string, string>; // user_id → nome (para "feito por")
 }
@@ -213,7 +216,7 @@ const BRL_DIA = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay();
 export const segundaDe = (iso: string) => somar(iso, -((BRL_DIA(iso) + 6) % 7));
 
 /** Itens que o painel sabe detectar sozinho. */
-export const DETECTAVEIS = new Set([1, 2, 5, 8, 11, 14, 29, 31]);
+export const DETECTAVEIS = new Set([1, 2, 5, 8, 11, 14, 16, 21, 29, 31]);
 
 /** Dia útil anterior, sem sair da semana (segunda feriado: o prazo fica na própria segunda, não na sexta anterior). */
 function naSemana(dia: string, segunda: string): string {
@@ -316,6 +319,19 @@ function subtarefasDe(n: number, e: EntradaTarefas, dataDia: (d: number) => stri
         out.push(sub("execucao", "Itens vencidos do Score de Execução com status", "coordenador", v === 0, { prazo: naSemana(somar(semana, 4), semana), tela: "/execucao", detalhe: v ? `${v} item(ns) sem status` : undefined }));
       }
       return out;
+    }
+    case 16: {
+      if (!e.pecas) return null;
+      const k = contagemCriativos(e.pecas);
+      return [
+        sub("sem-rosto", `Peças sem rosto aprovadas (${k.semRosto} de ${k.metaSemRosto})`, "editor", k.semRosto >= k.metaSemRosto, { prazo: c.d0 ? dataDia(24) : null, tela: "/anuncios" }),
+        sub("videos", k.videosPlanejados ? `Vídeos editados aprovados (${k.videos} de ${k.videosPlanejados})` : "Vídeos editados aprovados (nenhum vídeo planejado no banco)", "editor", k.videosPlanejados > 0 && k.videos >= k.videosPlanejados, { prazo: c.d0 ? dataDia(26) : null, tela: "/anuncios" }),
+      ];
+    }
+    case 21: {
+      if (!e.pecas) return null;
+      const a = pecasAprovadas(e.pecas);
+      return [sub("aprovadas", a.total ? `Peças com aprovação do médico (${a.total - a.pendentes} de ${a.total})` : "Nenhuma peça no Banco de anúncios ainda", "coordenador", a.ok, { tela: "/anuncios", detalhe: a.pendentes ? `${a.pendentes} pendente(s): semáforo, ciente ou aprovação` : undefined })];
     }
     default:
       return [];
@@ -434,6 +450,7 @@ function detectadoAvaliavel(n: number, e: EntradaTarefas): boolean {
   if (n === 5) return !!e.acessos;
   if (n === 8 || n === 11) return !!e.plano;
   if (n === 14) return !!e.testes;
+  if (n === 16 || n === 21) return !!e.pecas;
   return true;
 }
 
