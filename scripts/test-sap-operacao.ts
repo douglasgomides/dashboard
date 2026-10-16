@@ -11,4 +11,10 @@ assert.ok(RITOS[0].quando.startsWith("Segunda") && RITOS[RITOS.length - 1].quand
 // Cada ferramenta diz para que usar, para que não usar e quem.
 assert.ok(FERRAMENTAS.every((f) => f.usarPara && f.naoUsarPara && f.quem));
 assert.ok(FERRAMENTAS.some((f) => f.nome.startsWith("App")));
-console.log("ok sap-operacao");
+// Acessos: 3 níveis (equipe ainda é proposta) e toda linha diz o que cada nível pode.
+import("../src/lib/sap-operacao").then(({ ACESSOS, NIVEIS }) => {
+  assert.deepEqual(NIVEIS.map((n) => n.id), ["admin", "equipe", "clinica"]);
+  assert.equal(NIVEIS.find((n) => n.id === "equipe")!.ativo, false);
+  assert.ok(ACESSOS.every((a) => a.admin && a.equipe && a.clinica));
+  console.log("ok sap-operacao");
+});

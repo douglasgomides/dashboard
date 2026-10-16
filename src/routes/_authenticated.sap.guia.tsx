@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarRange, UsersRound, Wrench } from "lucide-react";
+import { CalendarRange, KeyRound, UsersRound, Wrench } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Painel, Selo } from "@/components/visual";
-import { FERRAMENTAS, FUNCOES, RITOS, type IdFuncao } from "@/lib/sap-operacao";
+import { ACESSOS, FERRAMENTAS, FUNCOES, NIVEIS, RITOS, type IdFuncao } from "@/lib/sap-operacao";
 
 // Sistema de Aquisição · Como operamos: quem faz o quê, a rotina da semana e quando usar cada ferramenta (11.02).
 export const Route = createFileRoute("/_authenticated/sap/guia")({
@@ -67,6 +67,30 @@ function GuiaOperacao() {
           </div>
         </Painel>
       )}
+
+      <Painel icone={KeyRound} titulo="Quem vê o quê" resumo="Níveis de acesso no Hub e no Sistema de Aquisição"
+        ajuda={<>A clínica nunca vê o que é interno da equipe (Score de Saúde, auditoria por atendente, configuração). O nível Equipe, sem poderes de admin, é uma proposta: hoje toda a equipe entra como admin.</>}>
+        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+          {NIVEIS.map((n) => (
+            <div key={n.id} className="rounded-lg border p-2 text-sm" style={{ borderColor: "var(--border)", opacity: n.ativo ? 1 : 0.8 }}>
+              <strong>{n.nome}</strong>{!n.ativo && <span className="ml-1 text-xs" style={{ color: "var(--warn)" }}>(proposta, ainda não ativo)</span>}
+              <div className="text-xs" style={{ color: "var(--text-dim)" }}>{n.quem}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead><tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}><th className="py-1 pr-3 font-medium">O quê</th><th className="py-1 pr-3 font-medium">Admin</th><th className="py-1 pr-3 font-medium">Equipe (proposta)</th><th className="py-1 font-medium">Clínica</th></tr></thead>
+            <tbody>
+              {ACESSOS.map((a) => (
+                <tr key={a.oque} className="border-t align-top" style={{ borderColor: "var(--border)" }}>
+                  <td className="py-1.5 pr-3 font-medium">{a.oque}</td><td className="py-1.5 pr-3 text-xs">{a.admin}</td><td className="py-1.5 pr-3 text-xs" style={{ color: "var(--text-dim)" }}>{a.equipe}</td><td className="py-1.5 text-xs">{a.clinica}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Painel>
 
       <Painel icone={Wrench} titulo="Quando usar cada ferramenta" resumo="Para que serve, para que não serve e quem usa">
         <div className="mt-2 grid gap-3 md:grid-cols-2">
