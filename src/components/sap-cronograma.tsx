@@ -135,7 +135,7 @@ function BarraFases({ d0, pausas, hoje, dia, tarefas }: { d0: string; pausas: Pa
             const passada = f.ate <= dia;
             return (
               <div key={f.nome} className="absolute inset-y-0 flex items-center justify-center overflow-hidden border-r px-0.5 text-[10px] font-medium leading-tight"
-                title={`${f.nome} · D${f.de}–D${f.ate - 1} · ${k.feitas} de ${k.total} feitas`}
+                title={`${f.nome} · D${f.de}–D${f.ate - 1} · ${k.total ? `${k.feitas} de ${k.total} feitas` : "só rotinas semanais"}`}
                 style={{ left: pct(f.de), width: `calc(${pct(f.ate)} - ${pct(f.de)})`, borderColor: "var(--border)",
                   background: f.nome === atual ? "color-mix(in srgb, var(--accent) 22%, var(--surface))" : feita ? "color-mix(in srgb, var(--good) 16%, var(--surface))" : passada ? "color-mix(in srgb, var(--crit) 10%, var(--surface))" : i % 2 ? "var(--surface)" : "color-mix(in srgb, var(--muted) 6%, var(--surface))" }}>
                 <span className="truncate">{f.nome}</span>
@@ -160,7 +160,7 @@ function BarraFases({ d0, pausas, hoje, dia, tarefas }: { d0: string; pausas: Pa
             <li key={f.nome} className="flex items-baseline justify-between gap-2 rounded-md px-2 py-1"
               style={{ background: f.nome === atual ? "color-mix(in srgb, var(--accent) 15%, var(--surface))" : undefined }}>
               <span>{feita ? "✓ " : ""}<strong>{f.nome}</strong>{f.nome === atual ? " · hoje" : ""}</span>
-              <span className="text-xs tabular-nums" style={{ color: "var(--text-dim)" }}>D{f.de} · {data(f.de)} · {k.feitas}/{k.total}</span>
+              <span className="text-xs tabular-nums" style={{ color: "var(--text-dim)" }}>D{f.de} · {data(f.de)} · {k.total ? `${k.feitas}/${k.total}` : "rotinas"}</span>
             </li>
           );
         })}
@@ -194,7 +194,7 @@ function ContratoSap({ clinica, podeEditar, d90 }: { clinica: SapCadastro; podeE
           <div>Garantia: <strong>{GARANTIA[clinica.garantia_status ?? "nao_avaliada"]}</strong>{clinica.garantia_status === "aplicada" && clinica.garantia_inicio ? ` · ${dm(clinica.garantia_inicio)} a ${dm(fimGarantia)}` : ""}</div>
           <div>Depois do D90 ({dmy(d90)}): <strong>{clinica.pos_contrato ? POS[clinica.pos_contrato] : "—"}</strong></div>
           {clinica.ajustes_acordados && <div className="sm:col-span-2">Ajustes acordados: {clinica.ajustes_acordados}</div>}
-          {!clinica.aceite_metas_em && <div className="sm:col-span-2"><Selo cor="var(--warn)">Sem aceite registrado, a garantia não tem prova do que foi combinado</Selo></div>}
+          {!clinica.aceite_metas_em && <div className="text-xs font-semibold sm:col-span-2" style={{ color: "var(--warn)" }}>Sem aceite registrado, a garantia não tem prova do que foi combinado.</div>}
           {podeEditar && (
             <button type="button" className="mt-1 justify-self-start text-sm font-semibold underline" style={{ color: "var(--accent)" }}
               onClick={() => setEd({ aceiteEm: clinica.aceite_metas_em ?? "", aceitePor: clinica.aceite_metas_por ?? "", ajustes: clinica.ajustes_acordados ?? "", garantiaStatus: clinica.garantia_status ?? "", garantiaInicio: clinica.garantia_inicio ?? "", posContrato: clinica.pos_contrato ?? "" })}>
@@ -254,8 +254,8 @@ function PausasEAtrasos({ clinica, pausas, atrasos, hoje }: { clinica: SapCadast
       <div className="mt-2 flex flex-wrap items-end gap-2">
         <label className="text-xs">Data<input type="date" value={na.data} onChange={(x) => setNa({ ...na, data: x.target.value })} className="mt-0.5 block min-h-[34px] rounded-md border px-2 text-sm" style={campo} /></label>
         <label className="text-xs">Dias úteis<input inputMode="numeric" value={na.dias} onChange={(x) => setNa({ ...na, dias: x.target.value.replace(/\D/g, "") })} className="mt-0.5 block min-h-[34px] w-16 rounded-md border px-2 text-sm" style={campo} /></label>
-        <label className="text-xs">O que atrasou
-          <select value={na.categoria} onChange={(x) => setNa({ ...na, categoria: x.target.value })} className="mt-0.5 block min-h-[34px] rounded-md border px-2 text-sm" style={campo}>
+        <label className="min-w-0 max-w-full text-xs">O que atrasou
+          <select value={na.categoria} onChange={(x) => setNa({ ...na, categoria: x.target.value })} className="mt-0.5 block min-h-[34px] w-full max-w-full rounded-md border px-2 text-sm" style={campo}>
             {Object.entries(CATEGORIAS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </label>

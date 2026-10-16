@@ -213,13 +213,13 @@ function FilaConversoes({ clinica }: { clinica: SapCadastro }) {
           {plats.map((p) => {
             const f = resumoFila(linhas, p.id, agora);
             return (
-              <div key={p.id} className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+              <div key={p.id} className="min-w-0 rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
                 <div className="flex flex-wrap items-center gap-2">
                   <strong>{p.nome}</strong>
                   <Selo cor={p.ligado ? "var(--good)" : "var(--muted)"}>{p.ligado ? "envio ligado" : "envio desligado"}</Selo>
                 </div>
                 {p.falta && <div className="mt-1 text-xs" style={{ color: "var(--warn)" }}>Falta {p.falta} para enviar.</div>}
-                <table className="mt-2 w-full text-xs">
+                <div className="mt-2 overflow-x-auto"><table className="w-full min-w-[420px] text-xs">
                   <thead><tr style={{ color: "var(--text-dim)" }}><th className="text-left font-normal">Etapa</th>{(["pendente", "enviado", "falhou", "expirado", "sem_dados"] as StatusConversao[]).map((s) => <th key={s} className="text-right font-normal">{ROTULO_STATUS[s]}</th>)}</tr></thead>
                   <tbody>
                     {ETAPAS_NEUTRAS.map((e) => {
@@ -232,7 +232,7 @@ function FilaConversoes({ clinica }: { clinica: SapCadastro }) {
                       );
                     })}
                   </tbody>
-                </table>
+                </table></div>
                 <div className="mt-2 space-y-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
                   <div>Último envio: {f.ultimoEnvio ? dm(f.ultimoEnvio) : "nenhum ainda"}</div>
                   {f.porStatus.bloqueado > 0 && <div>{f.porStatus.bloqueado} bloqueada(s) pela restrição total da categoria: ficam só no Tracker.</div>}

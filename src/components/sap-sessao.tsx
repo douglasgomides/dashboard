@@ -1,3 +1,4 @@
+import { TextoComCodigos } from "@/components/sap-docs";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -124,8 +125,8 @@ function Cabecalho({ clinica, s, fase }: { clinica: SapCadastro; s: DefSessao; f
         {s.quem.map((q) => <div key={q.papel}><strong>{q.papel}</strong><div className="text-xs" style={{ color: "var(--text-dim)" }}>{q.faz}</div></div>)}
       </div>
       <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-        <div><div className="text-xs font-semibold" style={{ color: "var(--text-dim)" }}>ENTRA</div><ul className="list-disc pl-5">{s.entra.map((x) => <li key={x}>{x}</li>)}</ul></div>
-        <div><div className="text-xs font-semibold" style={{ color: "var(--text-dim)" }}>SAI</div><ul className="list-disc pl-5">{s.sai.map((x) => <li key={x}>{x}</li>)}</ul></div>
+        <div><div className="text-xs font-semibold" style={{ color: "var(--text-dim)" }}>ENTRA</div><ul className="list-disc pl-5">{s.entra.map((x) => <li key={x}><TextoComCodigos texto={x} /></li>)}</ul></div>
+        <div><div className="text-xs font-semibold" style={{ color: "var(--text-dim)" }}>SAI</div><ul className="list-disc pl-5">{s.sai.map((x) => <li key={x}><TextoComCodigos texto={x} /></li>)}</ul></div>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
         {s.docs.map((d) => <a key={d.codigo} href={d.url} target="_blank" rel="noreferrer" className="rounded-full border px-2.5 py-1 underline-offset-2 hover:underline" style={{ borderColor: "var(--border)" }}>{d.codigo} · {d.nome} (modelo)</a>)}
@@ -163,9 +164,9 @@ function Checklist({ itens, reg, salvar }: { itens: { chave: string; quando: str
           <li key={p.chave} className="flex items-start gap-2 text-sm">
             <input type="checkbox" className="mt-1" checked={feito} onChange={(x) => salvar(p.chave, x.target.checked)} aria-label={p.oque} />
             <div>
-              <div style={feito ? { textDecoration: "line-through", color: "var(--text-dim)" } : undefined}>{p.oque}</div>
+              <div style={feito ? { textDecoration: "line-through", color: "var(--text-dim)" } : undefined}><TextoComCodigos texto={p.oque} /></div>
               <div className="text-xs" style={{ color: "var(--muted)" }}>
-                {p.quando}{p.prazo ? ` (${dmh(p.prazo)})` : ""} · {p.quem}{p.doc ? ` · ${p.doc}` : ""}
+                {p.quando}{p.prazo ? ` (${dmh(p.prazo)})` : ""} · {p.quem}{p.doc ? <> · <TextoComCodigos texto={p.doc} /></> : ""}
                 {feito && reg.get(p.chave)?.feito_em ? ` · feito ${dmh(reg.get(p.chave)!.feito_em!)}` : ""}
                 {p.atrasado && <> · <Selo cor="var(--crit)">atrasado</Selo></>}
               </div>
@@ -291,7 +292,7 @@ function Durante({ clinica, s, reg, inicio, fim, clientId, salvarTexto, marcar }
         <summary className="cursor-pointer font-semibold">Situações difíceis e regras de condução</summary>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           {s.situacoes.map((x) => <div key={x.titulo}><strong>{x.titulo}</strong><ul className="list-disc pl-5 text-xs">{x.como.map((c) => <li key={c}>{c}</li>)}</ul></div>)}
-          <div><strong>Regras</strong><ul className="list-disc pl-5 text-xs">{s.regras.map((r) => <li key={r}>{r}</li>)}</ul></div>
+          <div><strong>Regras</strong><ul className="list-disc pl-5 text-xs">{s.regras.map((r) => <li key={r}><TextoComCodigos texto={r} /></li>)}</ul></div>
         </div>
       </details>
       <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>Depois de encerrar, a lista do pós-sessão aparece abaixo e os prazos também entram em <Link to={"/sap/$clientId/semana" as never} params={{ clientId } as never} className="underline">Esta semana</Link> pelo Cronograma.</p>
@@ -379,7 +380,7 @@ function RascunhoIASessao({ clinica, s, reg, clientId }: { clinica: SapCadastro;
   });
   const copiar = async (txt: string, qual: string) => { try { await navigator.clipboard.writeText(txt); setCopiado(qual); setTimeout(() => setCopiado(""), 2000); } catch { setCopiado("erro"); } };
   const lista = (t: string, l?: string[], cor?: string) => (l && l.length ? (
-    <div><div className="text-xs font-semibold" style={{ color: cor ?? "var(--text-dim)" }}>{t}</div><ul className="list-disc pl-5 text-sm">{l.map((x) => <li key={x}>{x}</li>)}</ul></div>
+    <div><div className="text-xs font-semibold" style={{ color: cor ?? "var(--text-dim)" }}>{t}</div><ul className="list-disc pl-5 text-sm">{l.map((x) => <li key={x}><TextoComCodigos texto={x} /></li>)}</ul></div>
   ) : null);
   return (
     <Painel icone={Sparkles} titulo="Rascunho com IA" resumo={r ? `Gerado ${r.gerado_em ? dmh(r.gerado_em) : ""} · revisar antes de enviar` : "Notas + transcrição viram rascunho do relatório"}

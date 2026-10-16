@@ -215,6 +215,12 @@ export const segundaDe = (iso: string) => somar(iso, -((BRL_DIA(iso) + 6) % 7));
 /** Itens que o painel sabe detectar sozinho. */
 export const DETECTAVEIS = new Set([1, 2, 5, 8, 11, 14, 29, 31]);
 
+/** Dia útil anterior, sem sair da semana (segunda feriado: o prazo fica na própria segunda, não na sexta anterior). */
+function naSemana(dia: string, segunda: string): string {
+  const d = diaUtilAnterior(dia);
+  return d < segunda ? dia : d;
+}
+
 function sub(id: string, nome: string, papel: PapelId, feito: boolean, extra: Partial<Subtarefa> = {}): Subtarefa {
   return { id, nome, papel, feito, auto: true, prazo: null, ...extra };
 }
@@ -287,9 +293,9 @@ function subtarefasDe(n: number, e: EntradaTarefas, dataDia: (d: number) => stri
       const ini = somar(semana, 0);
       const dia = c.d0 ? diaDoPrograma(c.d0, c.pausas, e.hoje) : null;
       const out: Subtarefa[] = [];
-      if (e.acoes) out.push(sub("leitura", "Leitura da semana com uma ação de cada lado e resumo ao médico", "trafego", e.acoes.some((a) => a.semana === ini && a.origem === "leitura"), { prazo: diaUtilAnterior(ini), tela: "/leitura" }));
-      if (e.auditorias) out.push(sub("auditoria", "Auditoria de 10 conversas", "cs", e.auditorias.includes(ini), { prazo: diaUtilAnterior(somar(ini, 3)), tela: "/leitura" }));
-      if (e.fidelizacao && dia !== null && dia >= 52) out.push(sub("fidelizacao", "Retornos, reativação e indicações da semana", "cs", e.fidelizacao.includes(ini), { prazo: diaUtilAnterior(somar(ini, 4)), tela: "/leitura" }));
+      if (e.acoes) out.push(sub("leitura", "Leitura da semana com uma ação de cada lado e resumo ao médico", "trafego", e.acoes.some((a) => a.semana === ini && a.origem === "leitura"), { prazo: naSemana(ini, ini), tela: "/leitura" }));
+      if (e.auditorias) out.push(sub("auditoria", "Auditoria de 10 conversas", "cs", e.auditorias.includes(ini), { prazo: naSemana(somar(ini, 3), ini), tela: "/leitura" }));
+      if (e.fidelizacao && dia !== null && dia >= 52) out.push(sub("fidelizacao", "Retornos, reativação e indicações da semana", "cs", e.fidelizacao.includes(ini), { prazo: naSemana(somar(ini, 4), ini), tela: "/leitura" }));
       const rc = recheckCategoria(c.categoriaVerificadaEm, e.hoje);
       if (dia !== null && dia >= 18 && dia <= 90) out.push(sub("categoria", "Rever a categoria saúde e bem-estar na Meta (a cada 15 dias)", "trafego", !rc.vencido, { prazo: e.hoje, tela: "/rastreamento" }));
       return out;
@@ -304,10 +310,10 @@ function subtarefasDe(n: number, e: EntradaTarefas, dataDia: (d: number) => stri
       const out: Subtarefa[] = [];
       const dia = c.d0 ? diaDoPrograma(c.d0, c.pausas, e.hoje) : null;
       const nSemana = dia === null ? null : Math.floor(Math.max(0, dia) / 7) + 1;
-      if (e.saude) out.push(sub("saude", "Score de Saúde da semana lançado", "coordenador", nSemana !== null && e.saude.some((s) => s.semana === nSemana), { prazo: diaUtilAnterior(somar(semana, 4)), tela: "/execucao" }));
+      if (e.saude) out.push(sub("saude", "Score de Saúde da semana lançado", "coordenador", nSemana !== null && e.saude.some((s) => s.semana === nSemana), { prazo: naSemana(somar(semana, 4), semana), tela: "/execucao" }));
       if (e.execucao) {
         const v = calcularExecucao(e.execucao, dia).vencidosSemStatus;
-        out.push(sub("execucao", "Itens vencidos do Score de Execução com status", "coordenador", v === 0, { prazo: diaUtilAnterior(somar(semana, 4)), tela: "/execucao", detalhe: v ? `${v} item(ns) sem status` : undefined }));
+        out.push(sub("execucao", "Itens vencidos do Score de Execução com status", "coordenador", v === 0, { prazo: naSemana(somar(semana, 4), semana), tela: "/execucao", detalhe: v ? `${v} item(ns) sem status` : undefined }));
       }
       return out;
     }
@@ -388,7 +394,8 @@ export function montarTarefas(e: EntradaTarefas): Tarefa[] {
         prazoCal = checkins[0] ?? prazoCal;
       }
       const rot = e.rotinas.find((r) => r.marco === it.n && r.semana === seg);
-      const pendSubs = (subs ?? []).filter((s) => !s.feito && s.prazo && s.prazo <= limite);
+      // Subtarefas da rotina só contam com a janela aberta; a call (30) carrega as ações combinadas, que valem desde o kickoff.
+      const pendSubs = ativaSemana || it.n === 30 ? (subs ?? []).filter((s) => !s.feito && s.prazo && s.prazo <= limite) : [];
       const feitoAuto = det === true;
       const status: StatusTarefa = rot ? "manual" : feitoAuto && ativaSemana ? "auto" : "a_fazer";
       const prazo = diaUtilAnterior(prazoCal);

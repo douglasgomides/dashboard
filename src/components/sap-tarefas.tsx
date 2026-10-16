@@ -374,7 +374,9 @@ export function MinhasTarefasClinica({ clientId, filtroInicial = "minhas", grupo
       <AlertaPapeis entrada={c.entrada} clientId={clientId} />
       {isAdmin && (ehFundador || filtro === "todas") && <AlertasFundador alertas={c.alertas} />}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <LinhaContadores tarefas={visiveis} prefixo={filtro === "minhas" ? (isAdmin ? (meus.length ? `Seus papéis: ${meus.map((p) => NOME_PAPEL[p]).join(", ")}.` : "Você ainda não tem papel nesta clínica.") : undefined) : undefined} />
+        {isAdmin && filtro === "minhas" && !meus.length
+          ? <span className="text-sm" style={{ color: "var(--text-dim)" }}>Você ainda não tem papel nesta clínica.</span>
+          : <LinhaContadores tarefas={visiveis} prefixo={filtro === "minhas" && isAdmin ? `Seus papéis: ${meus.map((p) => NOME_PAPEL[p]).join(", ")}.` : undefined} />}
         {isAdmin && <SeletorFiltro valor={filtro} onChange={setFiltro} contagem={(f) => filtrar(c, f, user?.id, isAdmin).filter((t) => t.situacao !== "feita" && t.situacao !== "depois").length} />}
       </div>
       {isAdmin && filtro === "minhas" && !meus.length ? (

@@ -1,3 +1,4 @@
+import { TextoComCodigos } from "@/components/sap-docs";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { IdCard, KeyRound } from "lucide-react";
@@ -45,7 +46,7 @@ function FichaSap({ clinica }: { clinica: SapCadastro }) {
       {!ed ? (
         <div className="mt-2 grid gap-1 text-sm sm:grid-cols-2">
           {linhas.map(([k, v]) => (
-            <div key={k}><span style={{ color: "var(--text-dim)" }}>{k}: </span>{v ? <strong>{v}</strong> : <span style={{ color: "var(--muted)" }}>não preenchido</span>}</div>
+            <div key={k}><span style={{ color: "var(--text-dim)" }}><TextoComCodigos texto={k} />: </span>{v ? <strong>{v}</strong> : <span style={{ color: "var(--muted)" }}>não preenchido</span>}</div>
           ))}
           {isAdmin && (
             <button type="button" className="mt-1 justify-self-start text-sm font-semibold underline" style={{ color: "var(--accent)" }}
@@ -111,7 +112,7 @@ function ChecklistAcessos({ clinica }: { clinica: SapCadastro }) {
         ) : (
           <>Ainda não está pronto para a Sessão 1. Falta: <strong>{portao.falta.join(", ")}</strong>. (Kickoff, formulário e baseline são marcados em Cronograma e prazos.)</>
         )}
-        {r.atrasados.length > 0 && <div className="mt-1" style={{ color: "var(--crit)" }}>Vencidos: {r.atrasados.map((i) => i.id).join(", ")}</div>}
+        {r.atrasados.length > 0 && <div className="mt-1" style={{ color: "var(--crit)" }}>Vencidos: {r.atrasados.map((i) => i.nome).join(", ")}</div>}
         {r.aRevogar > 0 && dia !== null && dia >= 90 && <div className="mt-1" style={{ color: "var(--warn)" }}>{r.aRevogar} acesso(s) da DC ainda não revogado(s).</div>}
       </div>
       {blocos.map((b) => (

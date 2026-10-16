@@ -6,7 +6,7 @@ import { chromium } from "playwright-core";
 const BASE = "http://localhost:5198";
 const CID = "11111111-1111-1111-1111-111111111111";
 const rotas = ["", "/conteudo", "/posts", "/top", "/audiencia", "/duvidas", "/ideias", "/inspiracao", "/anuncios", "/crm-painel", "/crm-guia", "/proximas-acoes", "/campanhas", "/atendimento", "/jornada", "/oportunidades", "/relatorio", "/analisar", "/conversas", "/crm-estrutura", "/vendas-kommo", "/vendas", "/consultas", "/automacoes", "/aquisicao"].map((r) => `/${CID}${r}`)
-  .concat(["/admin", `/admin/${CID}`, "/admin/conferencia", "/admin/referencia", "/admin/relatorios", "/sap", "/sap/guia", `/sap/${CID}`, `/sap/${CID}/metas`, `/sap/${CID}/leitura`, `/sap/${CID}/execucao`, `/sap/${CID}/midia`, `/sap/${CID}/etapas`, `/sap/${CID}/passo-a-passo`, `/sap/${CID}/cronograma`, `/sap/${CID}/onboarding`, `/sap/${CID}/semana`, `/sap/${CID}/sessao`, `/sap/${CID}/sessao?s=S1`, `/sap/${CID}/sessao?s=S5`, `/sap/${CID}/sessao?s=D90`, `/sap/${CID}/rastreamento`, `/sap/${CID}/documentos`, `/sap/${CID}/documentos?doc=d90`]);
+  .concat(["/admin", `/admin/${CID}`, "/admin/conferencia", "/admin/referencia", "/admin/relatorios", "/sap", "/sap/guia", `/sap/${CID}`, `/sap/${CID}/metas`, `/sap/${CID}/leitura`, `/sap/${CID}/execucao`, `/sap/${CID}/midia`, `/sap/${CID}/etapas`, `/sap/${CID}/passo-a-passo`, `/sap/${CID}/cronograma`, `/sap/${CID}/onboarding`, `/sap/${CID}/semana`, `/sap/${CID}/sessao`, `/sap/${CID}/sessao?s=S1`, `/sap/${CID}/sessao?s=S5`, `/sap/${CID}/sessao?s=D90`, `/sap/${CID}/rastreamento`, `/sap/${CID}/documentos`, `/sap/${CID}/documentos?doc=d90`, `/sap/${CID}/painel`, `/sap/${CID}/papeis`, "/sap/docs", "/sap/comece"]);
 const width = +(process.argv[2] ?? 1280);
 const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const ctx = await b.newContext({ viewport: { width, height: 900 } });
@@ -19,6 +19,14 @@ await ctx.route("http://localhost:9/**", async (route) => {
   if (u.includes("/auth/v1/")) return route.fulfill({ json: sessao });
   if (u.includes("/rpc/is_app_admin")) return route.fulfill({ json: true });
   if (u.includes("/rest/v1/clients")) return route.fulfill({ json: u.includes("id=eq") ? { id: CID, name: "Cliente Teste", specialty: "Dermatologia", instagram_handle: "teste" } : [{ id: CID, name: "Cliente Teste" }], headers: { "content-range": "0-0/1" } });
+  // Clínica SAP com D0 de ontem, para as telas de tarefas renderizarem o cronograma.
+  if (u.includes("/rest/v1/sap_clinicas")) {
+    const d0 = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const c = { id: "22222222-2222-2222-2222-222222222222", client_id: CID, nome: "Clínica Teste", d0, status: "onboarding", ticket_medio: 4500, consulta_paga: true, servicos: [], sap_pausas: [] };
+    const accept = route.request().headers()["accept"] ?? "";
+    return route.fulfill({ json: accept.includes("vnd.pgrst.object") ? c : [c] });
+  }
+  if (u.includes("/rpc/sap_fontes_etapas")) return route.fulfill({ json: [{ client_id: CID, tem_crm: true, tem_atendimento: true, tem_anuncios: true, marcos: ["agendado"] }] });
   if (u.includes("/rpc/client_fontes")) return route.fulfill({ json: [{ tem_instagram: true, tem_anuncios: true, tem_crm: true, tem_atendimento: true }] });
   if (u.includes("/rpc/")) return route.fulfill({ json: [] });
   const accept = route.request().headers()["accept"] ?? "";

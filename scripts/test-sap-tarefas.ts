@@ -117,4 +117,9 @@ const vermelha = { tarefas_no_prazo: 0, sessoes_marcadas: 0, sessoes_com_decisor
 assert.equal(alertasFundador(entrada({ saude: [{ semana: 1, ...vermelha }, { semana: 2, ...vermelha }] })).length, 1);
 assert.ok(!t.some((x) => x.papel === "fundador"));
 
+// Rotinas fora da janela (D1: Score de Saúde começa no D7, rotina de tráfego no D29) não aparecem como hoje/atrasadas.
+const d1 = montarTarefas(entrada({ saude: [], acoes: [] }));
+assert.equal(d1.find((x) => x.n === 31)!.situacao, "depois");
+assert.equal(d1.find((x) => x.n === 29)!.situacao, "depois");
+
 console.log("ok sap-tarefas");
