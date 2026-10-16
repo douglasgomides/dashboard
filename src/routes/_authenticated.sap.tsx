@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, Gauge, LayoutDashboard, ListChecks, ListTodo, Menu, Network, Target, ArrowLeftRight, Radar, Presentation, UsersRound, UserRoundCheck, BookOpen, X } from "lucide-react";
+import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, Gauge, LayoutDashboard, ListChecks, ListTodo, Megaphone, Menu, Network, Target, ArrowLeftRight, Radar, Presentation, UsersRound, UserRoundCheck, BookOpen, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { TrocaProduto } from "@/components/troca-produto";
@@ -26,6 +26,7 @@ const ITENS = [
   { grupo: "Implantação", sub: "/sessao", label: "Reuniões", Icone: Presentation, admin: true },
   { grupo: "Implantação", sub: "/onboarding", label: "Ficha e acessos", Icone: KeyRound },
   { grupo: "Implantação", sub: "/rastreamento", label: "Rastreamento", Icone: Radar },
+  { grupo: "Implantação", sub: "/anuncios", label: "Banco de anúncios", Icone: Megaphone, admin: true },
   { grupo: "Implantação", sub: "/etapas", label: "Etapas do funil", Icone: Network, admin: true },
   { grupo: "Implantação", sub: "/papeis", label: "Quem é quem", Icone: UserRoundCheck },
   { grupo: "Rotina semanal", sub: "/leitura", label: "Leitura da semana", Icone: ClipboardCheck, clinica: true },
