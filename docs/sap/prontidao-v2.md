@@ -96,7 +96,22 @@ O teste no banco rodou dentro de uma transação que é sempre desfeita no fim. 
 | G | Um caminho só de envio à Meta + workflow de erro que avisa a equipe | n8n | Desligar o workflow de erro; versão anterior |
 | H | Ligar a proteção contra senha vazada | Supabase Auth | Desligar no painel |
 
-A, B, C e H são pequenos e reversíveis. Posso aplicar com o seu "ok". D a G mexem em workflows desligados, então não têm efeito em cliente até a ativação.
+A, B, C e H são pequenos e reversíveis. D a G mexem em workflows desligados, então não têm efeito em cliente até a ativação.
+
+### Aplicado em 16/10/2026 (aprovado pelo Fundador) e retestado
+
+| # | O que mudou | Reteste | Reversão |
+|---|---|---|---|
+| A | `roi_periodo` sem EXECUTE para anônimo (segue para logado); `search_path` fixo nas 3 funções | anon = false, authenticated = true | Comentário em `supabase/migrations/20261019120000_sap_prontidao_integridade.sql` |
+| B | Índice único (clinica_id, meta_lead_id); `clinica_id` obrigatório. **Telefone repetido continua permitido** (o n8n deduplica em 30 dias e o paciente pode voltar depois), então o índice de telefone proposto antes foi descartado | Meta repetido bloqueado; lead sem clínica bloqueado; telefone repetido aceito | Idem |
+| C | Decisão só para quem não faltou | "Fechou" + faltou bloqueado; "Fechou" + compareceu aceito | Idem |
+| D | n8n "SAP \| Lead → Tracker": webhook exige o header do "SAP Webhook Token"; a clínica vem só da Config (UUID validado) | Leitura do workflow; não executado | Restaurar versão `88b86ce7` |
+| E | n8n "SAP \| Proposta aceita → Contrato → D0": o segredo foi apagado dos 3 Config; a assinatura é conferida em `GET /docs/{token}/` do ZapSign com a credencial "ZapSign API token" (o corpo do webhook não é mais confiável). Com isso, a URL cadastrada no ZapSign não precisa mais de `?segredo=` | Leitura do workflow; não executado | Restaurar versão `15748cdb` |
+| F | n8n "SAP \| Status": "não fechou" e "pensando" ficam com cadência **Ativa**; "Encerrada" só quando vier explícito. "Fechou", "não fechou" e "pensando" gravam compareceu = Sim | Leitura do workflow; não executado | Restaurar versão `4a851aff` |
+| G | Um caminho só para a Meta: clínica com a fila do CRM ligada (`conversoes_meta`) envia só pelo workflow diário. Workflow de erro "SAP \| Avisar falhas" criado (avisa o grupo da equipe no WhatsApp) | Criado; **falta publicar** | Arquivar o workflow |
+| H | Proteção contra senha vazada | **Pendente: ligar no painel do Supabase (Auth → Settings)** | Desligar no painel |
+
+**Pendente com você:** publicar o "SAP | Avisar falhas" (n8n bloqueia apontar o workflow de erro para um workflow não publicado; ele só roda quando outro falha e não dispara nada sozinho). Depois disso eu ligo o aviso de erro nos 10 workflows SAP. Também falta ligar o item H no painel.
 
 ## 6. Dependências de fornecedor (sem confirmação técnica)
 - Quaddro: API, janela de envio, passagem para humano, webhooks. Tudo "[a confirmar]".
@@ -131,8 +146,9 @@ A, B, C e H são pequenos e reversíveis. Posso aplicar com o seu "ok". D a G me
 | Drive (pasta automática) | Bloqueado | Não | — | Depende do D0 | — |
 
 ## 8. Go / no-go
-- [ ] P0 1 e 2 corrigidos e retestados
-- [ ] Correções B e C no banco (duplicados e status)
+- [ ] P0 1 e 2 corrigidos (feito em 16/10) e retestados numa execução de teste (falta)
+- [x] Correções B e C no banco (duplicados e status), retestadas
+- [ ] Workflow de erro publicado e ligado nos 10 workflows
 - [ ] Token Meta por pixel ou de sistema, testado com test_event_code
 - [ ] D0 sem placeholders, testado com um e-mail interno
 - [ ] Template do ClickUp salvo e ID preenchido
@@ -144,7 +160,7 @@ A, B, C e H são pequenos e reversíveis. Posso aplicar com o seu "ok". D a G me
 
 **Decisão hoje: NO-GO para ativar automações.** O Hub e o banco podem continuar em uso manual, como já está.
 
-## 9. Nota de prontidão: 4/10
+## 9. Nota de prontidão: 5/10 (era 4 antes das correções A–G)
 - Hub e banco: firmes (isolamento comprovado; indicadores batem).
 - Automações: nenhuma foi executada, 2 falhas críticas e 7 altas, sem tratamento de erro.
 - Fornecedores: nenhum confirmado tecnicamente.
