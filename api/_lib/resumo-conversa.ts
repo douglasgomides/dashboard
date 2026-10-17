@@ -95,9 +95,11 @@ export async function resumirConversa(
   conversaId: string,
   userId: string | null,
 ): Promise<{ resumo: unknown; modelo: string; ate_msg_em: string }> {
-  const { data: conv } = await admin.from("conversas").select("id, client_id").eq("id", conversaId).maybeSingle();
-  const c = conv as { id: string; client_id: string } | null;
+  const { data: conv } = await admin.from("conversas").select("id, client_id, provider").eq("id", conversaId).maybeSingle();
+  const c = conv as { id: string; client_id: string; provider: string | null } | null;
   if (!c || c.client_id !== clientId) throw new Error("Conversa não encontrada para este cliente");
+  // Kommo: só o lado do paciente tem texto (a API não entrega o da clínica). A IA julgaria o atendimento sem vê-lo.
+  if (c.provider === "kommo") throw new Error("Conversa do Kommo: o Kommo não entrega o texto da clínica, então a leitura por IA não se aplica");
   const { data: msgs, error } = await admin
     .from("mensagens")
     .select("direcao, autor, texto, tipo, enviada_em")
@@ -141,6 +143,7 @@ export async function analisarConversasPendentes(
     .from("conversas")
     .select("id, ultima_msg_em")
     .eq("client_id", clientId)
+    .neq("provider", "kommo") // só o lado do paciente tem texto: ver resumirConversa
     .gte("ultima_msg_em", desde)
     .order("ultima_msg_em", { ascending: false })
     .limit(400);
