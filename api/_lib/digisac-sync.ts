@@ -132,12 +132,12 @@ export function statusDoAtendimento(t: Pick<DigisacTicket, "isOpen" | "userId">)
 
 // ---------- HTTP ----------
 
-function baseUrl(subdomain: string): string {
+export function baseUrl(subdomain: string): string {
   const host = subdomain.includes(".") ? subdomain : `${subdomain}.digisac.io`;
   return `https://${host}/api/v1`;
 }
 
-async function digGet(base: string, token: string, path: string, query: Record<string, string | number> = {}, tentativa = 0): Promise<any> {
+export async function digGet(base: string, token: string, path: string, query: Record<string, string | number> = {}, tentativa = 0): Promise<any> {
   const qs = new URLSearchParams(Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)])));
   const url = `${base}${path}${qs.toString() ? `?${qs.toString()}` : ""}`;
   const res = await fetch(url, {
