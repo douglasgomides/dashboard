@@ -22,6 +22,7 @@
  * atendimentos, crm_connections.config.contatos_ate para contatos).
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { integrationHost, integrationRequest } from "./integration-http.js";
 
 const PAGE_SIZE = 200;
 const BATCH_SIZE = 500;
@@ -133,23 +134,27 @@ export function statusDoAtendimento(t: Pick<DigisacTicket, "isOpen" | "userId">)
 // ---------- HTTP ----------
 
 export function baseUrl(subdomain: string): string {
-  const host = subdomain.includes(".") ? subdomain : `${subdomain}.digisac.io`;
+  const host = integrationHost(subdomain, "digisac");
   return `https://${host}/api/v1`;
 }
 
 export async function digGet(base: string, token: string, path: string, query: Record<string, string | number> = {}, tentativa = 0): Promise<any> {
+  const target = new URL(base);
+  if (target.protocol !== "https:" || target.username || target.password || target.port || target.pathname !== "/api/v1" || target.search || target.hash || integrationHost(target.hostname, "digisac") !== target.hostname || !/^\/[a-z][a-z0-9/_-]*$/i.test(path)) {
+    throw new Error("URL da integração Digisac inválida");
+  }
   const qs = new URLSearchParams(Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)])));
   const url = `${base}${path}${qs.toString() ? `?${qs.toString()}` : ""}`;
-  const res = await fetch(url, {
+  const res = await fetch(url, integrationRequest({
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "User-Agent": "Mozilla/5.0 (DoctorCreatorDashboard)" },
-  });
+  }));
   if (!res.ok) {
     if ((res.status === 429 || res.status >= 500) && tentativa < 2) {
       await new Promise((r) => setTimeout(r, 800 * (tentativa + 1)));
       return digGet(base, token, path, query, tentativa + 1);
     }
     // Nunca repetir o cabeçalho no erro: ele carrega o token.
-    throw new Error(`Digisac ${path} falhou (${res.status}): ${(await res.text()).slice(0, 160)}`);
+    throw new Error(`Digisac ${path} falhou (${res.status})`);
   }
   return res.json();
 }
@@ -173,9 +178,11 @@ async function paginar<T>(
       ...extra,
       ...(Object.keys(query).length ? { query: JSON.stringify(query) } : {}),
     });
-    const rows: T[] = body?.data ?? [];
+    if (!Array.isArray(body?.data)) throw new Error(`Digisac ${path}: página inválida`);
+    const rows: T[] = body.data;
     itens.push(...rows);
-    const ultima = Number(body?.lastPage ?? page);
+    const ultima = Number(body?.lastPage);
+    if (!Number.isSafeInteger(ultima) || ultima < 0) throw new Error(`Digisac ${path}: paginação inválida`);
     if (rows.length === 0 || page >= ultima) return { itens, parcial: false };
     if (deadlineMs && Date.now() > deadlineMs) return { itens, parcial: true };
   }
@@ -235,7 +242,9 @@ export async function runDigisacSync(env: DigisacSyncEnv): Promise<DigisacSyncRe
       results.push({ ...vazio, errors: ["Conexão do Digisac sem subdomínio ou sem token"] });
       continue;
     }
-    const base = baseUrl(subdomain);
+    let base: string;
+    try { base = baseUrl(subdomain); }
+    catch (err) { results.push({ ...vazio, errors: [err instanceof Error ? err.message : String(err)] }); continue; }
     const agora = new Date().toISOString();
     const config = (conn.config && typeof conn.config === "object" ? conn.config : {}) as Record<string, unknown>;
 
@@ -267,7 +276,8 @@ export async function runDigisacSync(env: DigisacSyncEnv): Promise<DigisacSyncRe
     // 2) Atendimentos (tickets) -> wts_sessions
     let atendimentos = 0;
     try {
-      const { data: estado } = await supabase.from("wts_sync_state").select("last_session_at").eq("client_id", conn.client_id).maybeSingle();
+      const { data: estado, error: erroEstado } = await supabase.from("wts_sync_state").select("last_session_at").eq("client_id", conn.client_id).maybeSingle();
+      if (erroEstado) throw new Error(`estado dos atendimentos: ${erroEstado.message}`);
       const desde = menosSobreposicao((estado?.last_session_at as string | null) ?? null);
       const r = await paginar<DigisacTicket>(base, token, "/tickets", {}, { desde, ordem: true }, env.deadlineMs);
       if (r.parcial) errors.push("Digisac: atendimentos interrompidos por tempo, o resto entra na próxima rodada");
@@ -306,7 +316,8 @@ export async function runDigisacSync(env: DigisacSyncEnv): Promise<DigisacSyncRe
       }
       // Só avança a marca d'água se tudo gravou: lote perdido precisa ser relido na próxima rodada.
       if (marca && !falhouAtend) {
-        await supabase.from("wts_sync_state").upsert({ client_id: conn.client_id, last_session_at: marca, updated_at: agora }, { onConflict: "client_id" });
+        const { error } = await supabase.from("wts_sync_state").upsert({ client_id: conn.client_id, last_session_at: marca, updated_at: agora }, { onConflict: "client_id" });
+        if (error) errors.push(`estado dos atendimentos: ${error.message}`);
       }
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
@@ -373,7 +384,8 @@ export async function runDigisacSync(env: DigisacSyncEnv): Promise<DigisacSyncRe
       if (eEtapas) errors.push(`etapas: ${eEtapas.message}`);
 
       if (marca && !falhouContatos) {
-        await supabase.from("crm_connections").update({ config: { ...config, contatos_ate: marca } }).eq("id", conn.id);
+        const { error } = await supabase.from("crm_connections").update({ config: { ...config, contatos_ate: marca } }).eq("id", conn.id);
+        if (error) errors.push(`estado dos contatos: ${error.message}`);
       }
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));

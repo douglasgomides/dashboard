@@ -5,6 +5,7 @@ import { getRouteApi } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveDateRange } from "@/lib/date-range";
 import { BarraFina } from "@/components/visual";
+import { parseTicket, ticketForInput } from "@/lib/ticket";
 
 // Auditoria comercial do período: o que a IA leu em cada conversa (conversas_resumos), somado.
 // Mesma estrutura das auditorias manuais: funil, objeções x falhas, por atendente, resgate, exemplos.
@@ -55,16 +56,23 @@ function Barras({ itens, rotulos, cor }: { itens: Record<string, number>; rotulo
 export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; onAbrir?: (conversaId: string) => void }) {
   const busca = layout.useSearch();
   const { start, end } = resolveDateRange(busca);
-  const { data: a } = useQuery({
+  const auditoria = useQuery({
     queryKey: ["auditoria-comercial", clientId, start, end],
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("auditoria_comercial", { p_client: clientId, p_de: start, p_ate: end.slice(0, 10) });
-      if (error) return null;
+      if (error) throw error;
       return ((Array.isArray(data) ? data[0] : data) ?? null) as Auditoria | null;
     },
     staleTime: 5 * 60_000,
     retry: false,
   });
+  if (auditoria.isLoading) return <p role="status" className="mb-4 text-sm" style={{ color: "var(--text-dim)" }}>Carregando auditoria comercial…</p>;
+  if (auditoria.isError) return (
+    <div role="alert" className="mb-4 text-sm" style={{ color: "var(--crit)" }}>
+      Não foi possível carregar a auditoria comercial. <button type="button" className="underline" onClick={() => void auditoria.refetch()}>Tentar novamente</button>
+    </div>
+  );
+  const a = auditoria.data;
   if (!a) return null;
   if (!a.lidas)
     return (
@@ -90,7 +98,7 @@ export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; on
           IA leu {a.lidas} de {a.conversas_periodo} conversas{a.nota_media != null ? ` · nota média do atendimento ${String(a.nota_media).replace(".", ",")}/10` : ""}
         </span>
       </div>
-      <EmJogo clientId={clientId} de={start} ate={end.slice(0, 10)} />
+      <EmJogo key={clientId} clientId={clientId} de={start} ate={end.slice(0, 10)} />
       {precoNaoDado > 0 && (
         <p className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--warn-border, var(--warn))", background: "var(--warn-bg, var(--surface))" }}>
           <b>{precoNaoDado}</b> pacientes pediram preço e não receberam. É o ponto do funil que mais costuma derrubar a conversão.
@@ -197,23 +205,31 @@ function EmJogo({ clientId, de, ate }: { clientId: string; de: string; ate: stri
     queryKey: ["receita-em-jogo", clientId, de, ate],
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("receita_em_jogo", { p_client: clientId, p_de: de, p_ate: ate });
-      if (error) return null;
-      return (data ?? null) as EmJogoDados | null;
+      if (error) throw error;
+      return ((Array.isArray(data) ? data[0] : data) ?? null) as EmJogoDados | null;
     },
     staleTime: 5 * 60_000,
     retry: false,
   });
   const salvar = useMutation({
     mutationFn: async (v: number | null) => {
+      if (!isAdmin) throw new Error("Seu acesso permite apenas leitura.");
+      if (v !== null && (!Number.isFinite(v) || v <= 0)) throw new Error("Informe um valor positivo em reais.");
       const { error } = await (supabase as any).rpc("definir_ticket_cliente", { p_client: clientId, p_valor: v });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => { setEditando(false); qc.invalidateQueries({ queryKey: ["receita-em-jogo", clientId] }); },
   });
+  if (q.isLoading) return <p role="status" className="text-sm" style={{ color: "var(--text-dim)" }}>Calculando o potencial do período…</p>;
+  if (q.isError) return (
+    <div role="alert" className="text-sm" style={{ color: "var(--crit)" }}>
+      Não foi possível calcular o potencial do período. <button type="button" className="underline" onClick={() => void q.refetch()}>Tentar novamente</button>
+    </div>
+  );
   const d = q.data;
   if (!d || d.recuperaveis === 0) return null;
   const caixa = { borderColor: "var(--border)", background: "var(--surface)" };
-  const numero = Number(valor.replace(/\./g, "").replace(",", "."));
+  const numero = parseTicket(valor);
   return (
     <div className="rounded-xl border p-3" style={caixa}>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -230,17 +246,17 @@ function EmJogo({ clientId, de, ate }: { clientId: string; de: string; ate: stri
         {" "}É o potencial se todos agendarem, não uma previsão. A lista está em "Resgatar hoje".
       </p>
       {isAdmin && (editando ? (
-        <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (numero > 0) salvar.mutate(numero); }}>
+        <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (numero !== null && !salvar.isPending) salvar.mutate(numero); }}>
           <label className="text-sm">Ticket médio (R$){" "}
-            <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} className="ml-1 min-h-[34px] w-32 rounded-lg border px-2 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg)" }} />
+            <input inputMode="decimal" placeholder="Ex.: 1.234,56" disabled={salvar.isPending} value={valor} onChange={(e) => setValor(e.target.value)} className="ml-1 min-h-[34px] w-32 rounded-lg border px-2 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg)" }} />
           </label>
-          <button type="submit" disabled={!(numero > 0) || salvar.isPending} className="min-h-[34px] rounded-lg px-3 text-sm font-medium disabled:opacity-50" style={{ background: "var(--accent)", color: "var(--accent-ink)" }}>Salvar</button>
-          {d.fonte_ticket === "equipe" && <button type="button" className="text-xs underline" onClick={() => salvar.mutate(null)}>Voltar ao automático</button>}
-          <button type="button" className="text-xs underline" onClick={() => setEditando(false)}>Cancelar</button>
-          {salvar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</span>}
+          <button type="submit" disabled={numero === null || salvar.isPending} className="min-h-[34px] rounded-lg px-3 text-sm font-medium disabled:opacity-50" style={{ background: "var(--accent)", color: "var(--accent-ink)" }}>{salvar.isPending ? "Salvando…" : "Salvar"}</button>
+          {d.fonte_ticket === "equipe" && <button type="button" disabled={salvar.isPending} className="text-xs underline disabled:opacity-50" onClick={() => salvar.mutate(null)}>Voltar ao automático</button>}
+          <button type="button" disabled={salvar.isPending} className="text-xs underline disabled:opacity-50" onClick={() => setEditando(false)}>Cancelar</button>
+          {salvar.isError && <span role="alert" className="text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</span>}
         </form>
       ) : (
-        <button type="button" className="mt-1 text-xs underline" style={{ color: "var(--text-dim)" }} onClick={() => { setValor(d.ticket ? String(d.ticket) : ""); setEditando(true); }}>
+        <button type="button" className="mt-1 text-xs underline" style={{ color: "var(--text-dim)" }} onClick={() => { salvar.reset(); setValor(ticketForInput(d.ticket)); setEditando(true); }}>
           {d.ticket == null ? "Definir ticket médio" : "Ajustar ticket"}
         </button>
       ))}

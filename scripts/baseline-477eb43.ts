@@ -1,9 +1,8 @@
-// Carrega o código ORIGINAL do commit 477eb43 (antes da triagem nova) direto do git, para os testes
+// Carrega o código ORIGINAL do commit 477eb43 (antes da triagem nova) de uma fixture versionada, para os testes
 // compararem a "detecção original" restaurada com a lógica de antes, linha por linha.
 // Uso: const b = await carregarBaseline(); b.comentarios.filtrarPerguntas(...), b.metrics.computeDuvidasFrequentes(...),
 // b.conteudo.buildIdeias(...).
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -13,8 +12,9 @@ export const BASELINE = "477eb43";
 const RAIZ = fileURLToPath(new URL("..", import.meta.url));
 const BASE_LIB = ["comentarios", "report-metrics", "hub-conteudo"];
 
-function doGit(caminho: string): string {
-  return execFileSync("git", ["show", `${BASELINE}:${caminho}`], { cwd: RAIZ, encoding: "utf8" });
+function lerFixture(caminho: string): string {
+  const nome = caminho.split("/").at(-1)!;
+  return readFileSync(join(RAIZ, "scripts", "fixtures", `baseline-${BASELINE}`, `${nome}.txt`), "utf8");
 }
 
 export async function carregarBaseline() {
@@ -22,7 +22,7 @@ export async function carregarBaseline() {
   for (const nome of BASE_LIB) {
     // Imports "@/lib/x": os 3 arquivos acima vêm do baseline; o resto (methodology, tipos) do código atual,
     // que não mudou no que esses arquivos usam (fmtFormatKey, median, formatLabel).
-    const src = doGit(`src/lib/${nome}.ts`).replace(/from "@\/([^"]+)"/g, (_m, p: string) => {
+    const src = lerFixture(`src/lib/${nome}.ts`).replace(/from "@\/([^"]+)"/g, (_m, p: string) => {
       const base = p.replace(/^lib\//, "");
       if (p.startsWith("lib/") && BASE_LIB.includes(base)) return `from "./${base}"`;
       return `from "${pathToFileURL(join(RAIZ, "src", p)).href}"`;

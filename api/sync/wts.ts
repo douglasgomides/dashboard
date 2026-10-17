@@ -1,5 +1,7 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { z } from "zod";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runWtsSync } from "../_lib/wts-sync.js";
 import { ingerirConversasWts } from "../_lib/conversas-wts.js";
@@ -20,77 +22,84 @@ import { sondarConversasCrm } from "../_lib/sonda-conversas-crm.js";
 // Se a conta for maior que isso, chame de novo: o upsert é idempotente e a
 // segunda passada só regrava o que já existe até alcançar o resto.
 
+const querySchema = z.object({
+  client_id: z.string().uuid().optional(), sync_days: z.coerce.number().int().min(1).max(365).optional(),
+  dias: z.coerce.number().int().min(1).max(90).optional(), full: z.enum(["0", "1", "true", "false"]).optional(),
+  sonda_crm: z.literal("1").optional(), digisac_conversas: z.literal("1").optional(), so_analisar: z.literal("1").optional(),
+}).refine((q) => [q.sonda_crm, q.digisac_conversas, q.so_analisar].filter(Boolean).length <= 1, "Escolha apenas um modo");
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST" && req.method !== "GET") {
-    res.status(405).json({ error: "Method not allowed" });
-    return;
-  }
-
-  const SYNC_SECRET = process.env.SYNC_SECRET;
-  const WTS_API_TOKEN = process.env.WTS_API_TOKEN;
-  const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!SYNC_SECRET || !WTS_API_TOKEN || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    res.status(500).json({
-      error: "Servidor sem SYNC_SECRET/WTS_API_TOKEN/SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY configurados",
-    });
-    return;
-  }
-
+  res.setHeader("Cache-Control", "no-store");
+  if (req.method !== "POST" && req.method !== "GET") { res.status(405).json({ error: "Method not allowed" }); return; }
+  const entrada = querySchema.safeParse(req.query);
+  if (!entrada.success) { res.status(400).json({ error: "Parâmetros de sincronização inválidos" }); return; }
+  const query = entrada.data;
+  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SYNC_SECRET, WTS_API_TOKEN } = process.env;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { res.status(500).json({ error: "Servidor sem Supabase configurado" }); return; }
   const authHeader = req.headers.authorization ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  if (!token || token !== SYNC_SECRET) {
-    res.status(401).json({ error: "Token inválido" });
-    return;
-  }
-
-  const syncDaysParam = typeof req.query.sync_days === "string" ? Number(req.query.sync_days) : undefined;
-  const syncDays = syncDaysParam && Number.isFinite(syncDaysParam) ? syncDaysParam : undefined;
-  const full = req.query.full === "1" || req.query.full === "true";
-  const clientId = typeof req.query.client_id === "string" ? req.query.client_id : undefined;
+  if (!token) { res.status(401).json({ error: "Token inválido" }); return; }
+  const maquina = !!SYNC_SECRET && timingSafeEqual(createHash("sha256").update(token).digest(), createHash("sha256").update(SYNC_SECRET).digest());
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  const clientId = query.client_id;
+  const syncDays = query.sync_days;
+  const full = query.full === "1" || query.full === "true";
   const inicio = Date.now();
 
-  // ?sonda_crm=1: testa os endpoints de conversa de Clint e Kommo com a chave real de cada conexão e devolve só a
-  // ESTRUTURA (status, nomes de campos e tipos), nunca o conteúdo. Serve para escrever a importação sem supor formato.
-  if (req.query.sonda_crm === "1") {
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-    res.status(200).json({ ok: true, sonda: await sondarConversasCrm(admin) });
+  // Sonda lê integrações e estruturas de conversas de várias clínicas. Requer
+  // sessão de app_admin; o segredo do cron não concede acesso ao diagnóstico.
+  if (query.sonda_crm) {
+    if (maquina) { res.status(403).json({ error: "A sonda exige sessão de administrador" }); return; }
+    const { data: quem, error } = await admin.auth.getUser(token);
+    if (error || !quem.user) { res.status(401).json({ error: "Token inválido" }); return; }
+    const { data: ehAdmin, error: erroAdmin } = await admin.from("app_admins").select("user_id").eq("user_id", quem.user.id).maybeSingle();
+    if (erroAdmin) { res.status(503).json({ error: "Não foi possível verificar o acesso" }); return; }
+    if (!ehAdmin) { res.status(403).json({ error: "Só administrador pode executar a sonda" }); return; }
+    try { res.status(200).json({ ok: true, sonda: await sondarConversasCrm(admin, { onlyClientId: clientId }) }); }
+    catch { res.status(500).json({ error: "Não foi possível executar a sonda" }); }
     return;
   }
-
-  // ?digisac_conversas=1: mensagens dos atendimentos do Digisac (IGM Palmas) viram conversas, como as da WTS.
-  if (req.query.digisac_conversas === "1") {
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-    const dias = Number(req.query.dias) > 0 ? Math.min(90, Number(req.query.dias)) : 30;
-    const r = await ingerirConversasDigisac(admin, { limite: 250, orcamentoMs: 240_000, dias });
-    res.status(200).json({ ok: true, digisac: r });
-    return;
-  }
-
-  // ?so_analisar=1: só a leitura por IA das conversas pendentes (sem sync), para uma 2ª chamada do n8n.
-  if (req.query.so_analisar === "1") {
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-    // O banco devolve no máximo 1.000 linhas por consulta: pagina, senão os últimos clientes (ex.: IGM) ficam de fora.
-    const corte30 = new Date(Date.now() - 30 * 86400000).toISOString();
-    const vistos = new Set<string>();
-    for (let de = 0; de < 50_000; de += 1000) {
-      let q = admin.from("conversas").select("client_id").gte("ultima_msg_em", corte30).order("id").range(de, de + 999);
-      if (clientId) q = q.eq("client_id", clientId);
-      const { data } = await q;
-      for (const r of (data ?? []) as { client_id: string }[]) vistos.add(r.client_id);
-      if ((data ?? []).length < 1000) break;
-    }
-    const clientes = [...vistos];
-    // Clientes em paralelo (cada um com o tempo todo): antes, um de cada vez dividia os 4 minutos e o atraso não baixava.
-    const orcamentoMs = Math.max(15_000, 240_000 - (Date.now() - inicio));
-    const resultados = await Promise.all(clientes.map((id) => analisarConversasPendentes(admin, id, { limite: 200, orcamentoMs }).then((r) => [id, r] as const)));
-    const analise: Record<string, unknown> = Object.fromEntries(resultados);
-    res.status(200).json({ ok: true, analise });
-    return;
-  }
+  if (!SYNC_SECRET) { res.status(500).json({ error: "Servidor sem SYNC_SECRET configurado" }); return; }
+  if (!maquina) { res.status(401).json({ error: "Token inválido" }); return; }
 
   try {
+    // Digisac é independente da credencial WTS e respeita o cliente solicitado.
+    if (query.digisac_conversas) {
+      const digisac = await ingerirConversasDigisac(admin, { limite: 250, orcamentoMs: 240_000, dias: query.dias ?? 30, onlyClientId: clientId });
+      const ok = Object.values(digisac).every((r) => r.erros.length === 0);
+      res.status(ok ? 200 : 207).json({ ok, digisac });
+      return;
+    }
+    if (query.so_analisar) {
+      const corte30 = new Date(Date.now() - 30 * 86400000).toISOString();
+      const vistos = new Set<string>();
+      let completa = false;
+      for (let de = 0; de < 50_000; de += 1000) {
+        let q = admin.from("conversas").select("client_id").gte("ultima_msg_em", corte30).order("id").range(de, de + 999);
+        if (clientId) q = q.eq("client_id", clientId);
+        const { data, error } = await q;
+        if (error) throw new Error("Não foi possível listar os clientes com conversas pendentes");
+        for (const r of (data ?? []) as { client_id: string }[]) vistos.add(r.client_id);
+        if ((data?.length ?? 0) < 1000) { completa = true; break; }
+      }
+      if (!completa) throw new Error("Lista de conversas incompleta: limite de paginação atingido");
+      const clientes = [...vistos];
+      const analise: Record<string, Awaited<ReturnType<typeof analisarConversasPendentes>>> = {};
+      const fim = inicio + 225_000;
+      let cursor = 0;
+      async function trabalhador() {
+        while (cursor < clientes.length && fim - Date.now() >= 15_000) {
+          const id = clientes[cursor++];
+          analise[id] = await analisarConversasPendentes(admin, id, { limite: 200, orcamentoMs: Math.min(60_000, fim - Date.now()) });
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(3, clientes.length) }, () => trabalhador()));
+      const pendentes = clientes.length - Object.keys(analise).length;
+      const ok = pendentes === 0 && Object.values(analise).every((r) => r.erros.length === 0);
+      res.status(ok ? 200 : 207).json({ ok, analise, clientes_pendentes: pendentes });
+      return;
+    }
+    if (!WTS_API_TOKEN) { res.status(500).json({ error: "Servidor sem WTS_API_TOKEN configurado" }); return; }
     const results = await runWtsSync({
       wtsToken: WTS_API_TOKEN,
       supabaseUrl: SUPABASE_URL,
@@ -111,7 +120,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
       const clientes = [...new Set(results.map((r) => r.client_id))];
       for (const id of clientes) {
-        const { data: lig } = await admin.from("crm_connections").select("access_token").eq("client_id", id).eq("provider", "flwchat").eq("active", true);
+        const { data: lig, error: erroLigacoes } = await admin.from("crm_connections").select("access_token").eq("client_id", id).eq("provider", "flwchat").eq("active", true);
+        if (erroLigacoes) throw new Error("Não foi possível ler as credenciais adicionais de conversas");
         const extras = (lig ?? []).map((l) => l.access_token as string).filter(Boolean);
         const c = await ingerirConversasWts(admin, WTS_API_TOKEN, id, { tokensExtras: extras, limite: 80, orcamentoMs: Math.floor(100_000 / Math.max(1, clientes.length)), dias: 7 });
         conversas[id] = { sessoes: c.sessoes, mensagens: c.mensagens, com_anuncio: c.comAnuncio ?? 0, campos_primeira_msg: c.valoresVistos.chaves, erros: c.erros.slice(0, 3) };
@@ -132,7 +142,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (e) {
       analise.erro = e instanceof Error ? e.message : String(e);
     }
-    const hasErrors = results.some((r) => r.errors.length > 0);
+    const erroAuxiliar = (r: unknown) => !!r && typeof r === "object" && ("erro" in r || ("erros" in r && Array.isArray(r.erros) && r.erros.length > 0));
+    const hasErrors = results.some((r) => r.errors.length > 0) || typeof conversas.erro === "string" || typeof analise.erro === "string" || Object.values(conversas).some(erroAuxiliar) || Object.values(analise).some(erroAuxiliar);
     res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), contas: results, conversas, analise });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });

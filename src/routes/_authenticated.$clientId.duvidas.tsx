@@ -342,7 +342,7 @@ function TodasAsPerguntas({
 }) {
   const [busca, setBusca] = useState("");
   const [temaFilter, setTemaFilter] = useState("");
-  const rows = dados.data?.perguntas ?? [];
+  const rows = useMemo(() => dados.data?.perguntas ?? [], [dados.data?.perguntas]);
   const status = useMemo(() => statusNaTriagemNova(voz), [voz]);
 
   const temas = useMemo(() => {

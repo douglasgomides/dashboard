@@ -12,6 +12,7 @@
  * - Usa a mesma chave do servidor das outras IAs: OPENAI_API_KEY ou ANTHROPIC_API_KEY.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { sessionDraftSchema } from "./ai-output.js";
 
 const MODELO_OPENAI = process.env.SESSAO_MODELO || process.env.RESUMO_MODELO || "gpt-4o-mini";
 const MODELO_CLAUDE = process.env.SESSAO_MODELO || "claude-haiku-4-5-20251001";
@@ -102,7 +103,11 @@ export async function rascunharSessao(
     notas.join("\n\n") || "(sem notas)",
     transcricao ? `\n# Transcrição (pode estar incompleta)\n${transcricao}` : "",
   ].join("\n");
-  const { json, modelo } = await chamarIA(entrada);
+  const resposta = await chamarIA(entrada);
+  const validado = sessionDraftSchema.safeParse(resposta.json);
+  if (!validado.success) throw new Error("IA devolveu rascunho em formato inválido");
+  const { modelo } = resposta;
+  const json = validado.data;
   const { error: e2 } = await admin.from("sap_sessao_registro").upsert({
     clinica_id: clinica.id, sessao: args.sessao, chave: "ia_rascunho", texto: JSON.stringify({ ...(json as object), modelo, gerado_em: new Date().toISOString() }),
     atualizado_por: userId, atualizado_em: new Date().toISOString(),

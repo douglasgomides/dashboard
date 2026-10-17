@@ -46,7 +46,7 @@ function ChecklistRastreio({ clinica }: { clinica: SapCadastro }) {
   const inval = () => { qc.invalidateQueries({ queryKey: ["sap-rastreio-testes", clinica.id] }); qc.invalidateQueries({ queryKey: ["sap-cadastro"] }); };
   const salvar = useMutation({ mutationFn: (v: { item: number; status: StatusTeste; evidencia: string }) => salvarTesteRastreioSap(clinica.id, v.item, v.status, v.evidencia), onSuccess: inval });
   const conferir = useMutation({ mutationFn: (por: string) => conferirRastreioSap(clinica.id, por), onSuccess: inval });
-  const regs = q.data ?? [];
+  const regs = useMemo(() => q.data ?? [], [q.data]);
   const mapa = useMemo(() => new Map(regs.map((r) => [r.item, r])), [regs]);
   const cat = clinica.status_categoria_meta;
   const r = resumoTestes(regs, cat, clinica.rastreamento_conferido_por);

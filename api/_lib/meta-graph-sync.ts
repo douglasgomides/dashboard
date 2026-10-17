@@ -18,6 +18,7 @@ import { numOrNull, chunk, BATCH_SIZE, normalizeFormat } from "./instagram-sync.
 import { classifyTema } from "./tema-classifier.js";
 import { classificarConteudoComIA } from "./conteudo-ia.js";
 import { storiesAoVivo, g as graphGet } from "./meta-audiencia.js";
+import { graphPageUrl, integrationRequest } from "./integration-http.js";
 
 const GRAPH_BASE = "https://graph.facebook.com/v21.0";
 const INSIGHTS_METRICS = "reach,likes,comments,shares,saved,views,total_interactions";
@@ -86,13 +87,13 @@ async function fetchMediaPage(
   const fields = "id,caption,timestamp,media_type,media_product_type,permalink,thumbnail_url,media_url";
   let url: string | null =
     `${GRAPH_BASE}/${igAccountId}/media?fields=${fields}&limit=100&access_token=${accessToken}` +
-    (after ? `&after=${after}` : "");
+    (after ? `&after=${encodeURIComponent(after)}` : "");
   const all: MetaMedia[] = [];
   let nextCursor: string | null = null;
   let pagesLeft = maxPages;
 
   while (url && pagesLeft > 0) {
-    const res = await fetch(url);
+    const res = await fetch(graphPageUrl(url), integrationRequest());
     if (!res.ok) {
       throw new Error(`Meta Graph media fetch failed (${res.status}): ${await res.text()}`);
     }
@@ -100,7 +101,8 @@ async function fetchMediaPage(
       data?: MetaMedia[];
       paging?: { next?: string; cursors?: { after?: string } };
     };
-    all.push(...(body.data ?? []));
+    if (!Array.isArray(body?.data)) throw new Error("Meta Graph media: resposta inválida, cursor preservado");
+    all.push(...body.data);
     nextCursor = body.paging?.cursors?.after ?? null;
     url = body.paging?.next ?? null;
     pagesLeft--;
@@ -115,6 +117,7 @@ async function fetchInsightsBatch(
   mediaIds: string[],
   accessToken: string,
   metrics: string = INSIGHTS_METRICS,
+  errors: string[] = [],
 ): Promise<Map<string, Record<string, number>>> {
   const result = new Map<string, Record<string, number>>();
   if (mediaIds.length === 0) return result;
@@ -125,11 +128,11 @@ async function fetchInsightsBatch(
       relative_url: `${id}/insights?metric=${metrics}`,
     }));
 
-    const res = await fetch(`${GRAPH_BASE}/`, {
+    const res = await fetch(`${GRAPH_BASE}/`, integrationRequest({
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ access_token: accessToken, batch: JSON.stringify(batchPayload) }),
-    });
+    }));
     if (!res.ok) {
       throw new Error(`Meta Graph batch insights failed (${res.status}): ${await res.text()}`);
     }
@@ -138,11 +141,21 @@ async function fetchInsightsBatch(
     for (let i = 0; i < idsBatch.length; i++) {
       const id = idsBatch[i];
       const sub = responses[i];
-      if (!sub || sub.code !== 200) continue; // posts antigos podem não ter insights disponíveis — não derruba o sync
-      const parsed = JSON.parse(sub.body) as { data?: { name: string; values?: { value: number }[] }[] };
-      const metrics: Record<string, number> = {};
-      for (const m of parsed.data ?? []) metrics[m.name] = m.values?.[0]?.value ?? 0;
-      result.set(id, metrics);
+      if (!sub || sub.code !== 200) {
+        errors.push(`insights ${id}: Graph respondeu ${sub?.code ?? "sem resposta"}`);
+        continue;
+      }
+      try {
+        const parsed = JSON.parse(sub.body) as { data?: { name: string; values?: { value: number }[] }[] };
+        const metrics: Record<string, number> = {};
+        for (const m of parsed.data ?? []) {
+          const value = numOrNull(m.values?.[0]?.value);
+          if (value !== null) metrics[m.name] = value;
+        }
+        result.set(id, metrics);
+      } catch {
+        errors.push(`insights ${id}: resposta inválida da Graph`);
+      }
     }
   }
   return result;
@@ -156,11 +169,14 @@ async function syncAccountPosts(
   clientId: string,
   maxPages: number,
   after: string | undefined,
-): Promise<{ count: number; errors: string[]; nextCursor: string | null; done: boolean }> {
+): Promise<{ count: number; errors: string[]; nextCursor: string | null; done: boolean; persisted: boolean }> {
   const { media, nextCursor, done } = await fetchMediaPage(igAccountId, accessToken, maxPages, after);
+  const errors: string[] = [];
   const insightsById = await fetchInsightsBatch(
     media.map((m) => m.id),
     accessToken,
+    INSIGHTS_METRICS,
+    errors,
   );
 
   // Passadas extras, tolerantes a falha: se a Meta recusar (métrica indisponível
@@ -179,6 +195,23 @@ async function syncAccountPosts(
       const ins = insightsById.get(m.id) ?? {};
       const reelExtra = reelsExtraById.get(m.id) ?? {};
       const feedExtra = feedExtraById.get(m.id) ?? {};
+      // Ausência de métrica não é um valor novo: omitir preserva o snapshot anterior.
+      const metricFields: Record<string, number> = {};
+      for (const [column, value] of Object.entries({
+        reach: ins.reach,
+        saved: ins.saved,
+        likes: ins.likes,
+        comments: ins.comments,
+        shares: ins.shares,
+        views: ins.views,
+        engagement: ins.total_interactions,
+        reel_avg_watch_time_ms: reelExtra.ig_reels_avg_watch_time,
+        reel_total_watch_time_ms: reelExtra.ig_reels_video_view_total_time,
+        profile_visits: feedExtra.profile_visits,
+        media_follows: feedExtra.follows,
+      })) {
+        if (value !== undefined) metricFields[column] = value;
+      }
       return {
         instagram_account_id: accountId,
         client_id: clientId,
@@ -189,34 +222,33 @@ async function syncAccountPosts(
         thumbnail_url: m.thumbnail_url ?? m.media_url ?? null,
         caption: m.caption ?? null,
         posted_at: m.timestamp ?? null,
-        reach: numOrNull(ins.reach),
-        saved: numOrNull(ins.saved),
-        likes: numOrNull(ins.likes),
-        comments: numOrNull(ins.comments),
-        shares: numOrNull(ins.shares),
-        views: numOrNull(ins.views),
-        engagement: numOrNull(ins.total_interactions),
-        // A Graph API não expõe skip rate (só a Windsor expõe) — fica null
-        // neste caminho, e o hook rate simplesmente não aparece pra essas
-        // contas em vez de ser inventado.
-        reel_avg_watch_time_ms: numOrNull(reelExtra.ig_reels_avg_watch_time),
-        reel_total_watch_time_ms: numOrNull(reelExtra.ig_reels_video_view_total_time),
-        profile_visits: numOrNull(feedExtra.profile_visits),
-        media_follows: numOrNull(feedExtra.follows),
-        metrics_updated_at: now,
+        ...metricFields,
+        ...(Object.keys(ins).length > 0 ? { metrics_updated_at: now } : {}),
       };
     });
 
-  const errors: string[] = [];
+  // PostgREST usa a união das colunas do lote. Misturar patches diferentes
+  // preencheria com null as métricas omitidas nas demais linhas.
+  const groups = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key = Object.keys(row).sort().join(",");
+    const group = groups.get(key) ?? [];
+    group.push(row);
+    groups.set(key, group);
+  }
   let count = 0;
-  for (const batch of chunk(rows, BATCH_SIZE)) {
+  let persisted = true;
+  for (const batch of [...groups.values()].flatMap((group) => chunk(group, BATCH_SIZE))) {
     const { error } = await supabase
       .from("instagram_posts")
       .upsert(batch, { onConflict: "instagram_account_id,windsor_media_id" });
-    if (error) errors.push(`posts batch (${batch.length}): ${error.message}`);
+    if (error) {
+      errors.push(`posts batch (${batch.length}): ${error.message}`);
+      persisted = false;
+    }
     else count += batch.length;
   }
-  return { count, errors, nextCursor, done };
+  return { count, errors, nextCursor, done, persisted };
 }
 
 
@@ -573,7 +605,7 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
       .maybeSingle();
     const tokenDaConta = segredo?.meta_access_token ?? env.accessToken;
 
-    const vazio = { count: 0, errors: [] as string[], nextCursor: null as string | null, done: true };
+    const vazio = { count: 0, errors: [] as string[], nextCursor: null as string | null, done: true, persisted: false };
     const buscar = (cursor: string | undefined, paginas: number) =>
       syncAccountPosts(
         supabase,
@@ -593,6 +625,7 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
     // Marcelly Achkar, parada em 18/09). Agora toda execução relê a primeira
     // página do topo antes de continuar o backfill.
     let postsTopo = 0;
+    let topoPersistido = true;
     const retomando = !env.after && after !== undefined;
     if (retomando) {
       const topo = await buscar(undefined, 1).catch((err) => {
@@ -600,6 +633,7 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
         return vazio;
       });
       postsTopo = topo.count;
+      topoPersistido = topo.persisted;
       errors.push(...topo.errors);
     }
 
@@ -618,8 +652,12 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
       });
     }
     posts = { ...posts, count: posts.count + postsTopo };
+    errors.push(...posts.errors);
 
-    if (errors.length === 0) {
+    let progressoGravado = false;
+    // Insights indisponíveis preservam as métricas e ficam no diagnóstico;
+    // não prendem o histórico em posts antigos que a Meta não mede mais.
+    if (posts.persisted && topoPersistido) {
       const { error: stateError } = await supabase.from("instagram_backfill_state").upsert(
         {
           instagram_account_id: account.id,
@@ -630,6 +668,7 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
         { onConflict: "instagram_account_id" },
       );
       if (stateError) errors.push(`state upsert: ${stateError.message}`);
+      else progressoGravado = true;
     }
 
     const temas = await classifyMissingTemas(supabase, account.id, account.windsor_account_id).catch((err) => {
@@ -655,9 +694,9 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
       igAccountId: account.windsor_account_id,
       posts: posts.count,
       temasClassified: temas.count + ia.count,
-      nextCursor: posts.nextCursor,
-      done: posts.done,
-      errors: [...errors, ...posts.errors, ...temas.errors, ...ia.errors, ...errosSeguidores],
+      nextCursor: progressoGravado ? posts.nextCursor : (after ?? null),
+      done: progressoGravado && posts.done,
+      errors: [...errors, ...temas.errors, ...ia.errors, ...errosSeguidores],
     });
   }
   return results;

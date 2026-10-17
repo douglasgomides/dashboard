@@ -20,4 +20,10 @@ src/routeTree.gen.ts
 .DS_Store
 .vercel
 .env*
+!.env.example
 .claude/worktrees/
+supabase/.temp/
+
+# Local browser verification
+playwright-report/
+test-results/

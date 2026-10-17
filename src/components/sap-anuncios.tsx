@@ -25,7 +25,7 @@ export function BancoAnuncios({ clientId }: { clientId: string }) {
   const pecasQ = useQuery({ queryKey: ["sap-pecas", "todas"], queryFn: () => getPecasSap(), enabled: isAdmin });
   const campQ = useQuery({ queryKey: ["sap-campanhas", clientId], queryFn: () => getCampanhasNumerosSap(clientId), enabled: isAdmin });
   const [aba, setAba] = useState<"pecas" | "modelos">("pecas");
-  const todas = pecasQ.data ?? [];
+  const todas = useMemo(() => pecasQ.data ?? [], [pecasQ.data]);
   const pecas = clinica ? todas.filter((p) => p.clinica_id === clinica.id) : [];
   const placar = useMemo(() => placarModelos(todas), [todas]);
 

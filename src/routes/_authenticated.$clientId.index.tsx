@@ -25,6 +25,7 @@ import { RetornoInvestimento } from "@/components/retorno-investimento";
 import { QualidadeDados } from "@/components/qualidade-dados";
 import { fmtFormatKey } from "@/lib/report-metrics";
 import { analyzeGrowth } from "@/lib/hub-conteudo";
+import { completeInstagramPeriod } from "@/lib/report-period";
 import { Link } from "@tanstack/react-router";
 import { SyncButton } from "@/components/sync-button";
 import { useAuth } from "@/hooks/use-auth";
@@ -407,7 +408,7 @@ function MonthlyOverview() {
   // Métricas que a Meta só entrega para até 30 dias (alcance único, salvamentos por data da ação, novos seguidores)
   // só aparecem quando o período é de até 30 dias. Em períodos maiores, a versão "soma dos dias", com rótulo.
   const periodo30 = diasPeriodo <= 30;
-  const meta = periodo30 ? periodoIg.data?.dados : undefined;
+  const meta = periodo30 ? completeInstagramPeriod(periodoIg.data?.dados, start, fim) : null;
   const saldoTotal = seguidoresNoPeriodo(data as DiaSeguidores[], start, fim);
   const taxaUnica = meta?.alcance_unico && meta.interacoes != null ? ((meta.interacoes / meta.alcance_unico) * 100).toFixed(1) + "%" : null;
   const sinal = (n: number) => `${n >= 0 ? "+" : "-"}${Math.abs(n).toLocaleString("pt-BR")}`;

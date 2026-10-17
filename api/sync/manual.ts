@@ -1,5 +1,7 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { z } from "zod";
 import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";
 import { runMetaAdsGraphSync } from "../_lib/meta-ads-graph-sync.js";
 import { runAdsPlanilhaSync } from "../_lib/ads-planilha-sync.js";
@@ -22,19 +24,21 @@ import { rodarConferencia, rodarEtapa, ETAPAS, type EtapaId, type Achado, type V
 import { resumirConversa } from "../_lib/resumo-conversa.js";
 import { rascunharSessao } from "../_lib/sessao-ia.js";
 import { rodarAgentes, catalogoFluxos, enfileirarBrain } from "../_lib/agentes.js";
+import { integrationHost, integrationRequest } from "../_lib/integration-http.js";
+import { manualRequestSchema } from "../_lib/request-validation.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
 //
-// Diferente dos outros endpoints de sync, este NÃO usa o SYNC_SECRET: o
-// segredo do n8n não pode viver no navegador. A autorização aqui é a sessão do
-// próprio usuário — admin, ou membro do cliente que ele está olhando. É o mesmo
-// padrão de api/admin/create-user.ts.
+// No navegador, usa a sessão do usuário (admin ou membro autorizado do cliente).
+// SYNC_SECRET fica reservado ao agendamento de agentes no servidor e só permite
+// enfileirar o Brand Brain ou processar a fila; nunca vai para o navegador.
 //
 // Janela curta de propósito: o botão existe para "atualiza agora que eu
 // publiquei", não para refazer histórico. Backfill continua sendo trabalho dos
 // endpoints com secret, chamados pelo n8n.
 
 const DIAS_DE_JANELA = 7;
+const agendamentoSchema = z.object({ alvo: z.literal("agentes"), acao: z.enum(["rodar", "brain_enfileirar"]) }).strict();
 // Anúncios reconferem 90 dias a cada clique (upsert, então não duplica). É o que
 // fecha buracos sozinho: conta recém-ligada, dia que a Meta revisou depois, sync
 // que falhou. Posts e comentários seguem na janela curta, porque a Meta Graph
@@ -56,10 +60,18 @@ function temErro(r: { ok?: boolean; contas?: { errors: string[] }[] } | undefine
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
   }
+  const corpoOriginal: unknown = req.body;
+  const parsedBody = manualRequestSchema.safeParse(corpoOriginal);
+  if (!parsedBody.success) {
+    res.status(400).json({ error: "Parâmetros inválidos", campos: [...new Set(parsedBody.error.issues.map((issue) => issue.path[0]).filter(Boolean))] });
+    return;
+  }
+  req.body = parsedBody.data;
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -87,15 +99,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // Agendamento do n8n (SYNC_SECRET), restrito a duas ações que só GERAM SUGESTÕES para revisão humana:
+  // Agendamento do n8n (SYNC_SECRET), restrito a duas ações; aprovações humanas continuam obrigatórias:
   // - "brain_enfileirar": coloca na fila a leitura do Brand Brain das clínicas com o módulo cuja última leitura tem mais de 11 h;
   // - "rodar": roda a fila de agentes (aprovações continuam esperando uma pessoa; nada é enviado a clínica ou paciente).
   const SYNC_SECRET = process.env.SYNC_SECRET;
-  if (SYNC_SECRET && token === SYNC_SECRET) {
-    const corpo = (req.body ?? {}) as { alvo?: string; acao?: string };
-    if (corpo.alvo !== "agentes" || !["rodar", "brain_enfileirar"].includes(corpo.acao ?? "")) { res.status(403).json({ error: "O segredo do agendamento só roda a fila de agentes" }); return; }
+  const agendado = SYNC_SECRET && timingSafeEqual(createHash("sha256").update(token).digest(), createHash("sha256").update(SYNC_SECRET).digest());
+  if (agendado) {
+    // Usa o corpo original: o schema geral remove campos desconhecidos. Aqui
+    // qualquer parâmetro extra deve ser recusado, inclusive execucao_id.
+    const corpo = agendamentoSchema.safeParse(corpoOriginal);
+    if (!corpo.success) { res.status(403).json({ error: "O segredo do agendamento só permite rodar a fila ou enfileirar o Brand Brain" }); return; }
     try {
-      if (corpo.acao === "brain_enfileirar") {
+      if (corpo.data.acao === "brain_enfileirar") {
         const r = await enfileirarBrain(admin);
         res.status(200).json({ alvo: "agentes", ok: true, agendado: true, ...r });
         return;
@@ -123,25 +138,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const { data: ehAdmin } = await admin
+  const { data: ehAdmin, error: erroAdmin } = await admin
     .from("app_admins")
     .select("user_id")
     .eq("user_id", quem.user.id)
     .maybeSingle();
+  if (erroAdmin) { res.status(503).json({ error: "Não foi possível verificar o acesso" }); return; }
 
   if (!ehAdmin) {
     if (alvoGlobal) {
       res.status(403).json({ error: "Só admin" });
       return;
     }
-    const { data: ehMembro } = await admin
+    const { data: ehMembro, error: erroMembro } = await admin
       .from("client_members")
-      .select("user_id")
+      .select("user_id, role")
       .eq("user_id", quem.user.id)
       .eq("client_id", client_id)
       .maybeSingle();
+    if (erroMembro) { res.status(503).json({ error: "Não foi possível verificar o acesso" }); return; }
     if (!ehMembro) {
       res.status(403).json({ error: "Sem acesso a este cliente" });
+      return;
+    }
+    if (!["owner", "strategist"].includes(ehMembro.role) && !["audiencia", "periodo_instagram"].includes(alvo)) {
+      res.status(403).json({ error: "Seu acesso é somente leitura" });
       return;
     }
   }
@@ -150,6 +171,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Agentic Core: a Central de Agentes pede para rodar a fila (ou uma execução) e o catálogo de fluxos.
     if (alvo === "agentes") {
       const { acao, execucao_id } = (req.body ?? {}) as { acao?: string; execucao_id?: string };
+      if (acao && !["catalogo", "rodar"].includes(acao)) { res.status(400).json({ error: "Ação de agentes inválida" }); return; }
       if (acao === "catalogo") { res.status(200).json({ alvo, ok: true, fluxos: catalogoFluxos() }); return; }
       if (execucao_id && !/^[0-9a-f-]{36}$/.test(execucao_id)) { res.status(400).json({ error: "execucao_id inválido" }); return; }
       const r = await rodarAgentes(admin, { execucaoId: execucao_id ?? null, maxPassos: 8, prazoMs: 45_000 });
@@ -741,7 +763,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         v == null ? null : Array.isArray(v) ? [forma(v[0], d + 1)] : typeof v === "object" ? (d > 4 ? "{…}" : Object.fromEntries(Object.keys(v).slice(0, 60).map((k) => [k, forma(v[k], d + 1)]))) : typeof v;
       const tentar = async (base: string, caminho: string, cab: Record<string, string>) => {
         try {
-          const r = await fetch(`${base}${caminho}`, { headers: { Accept: "application/json", ...cab }, signal: AbortSignal.timeout(15_000) });
+          const r = await fetch(`${base}${caminho}`, integrationRequest({ headers: { Accept: "application/json", ...cab }, signal: AbortSignal.timeout(15_000) }));
           const t = await r.text();
           let j: any = null;
           try { j = JSON.parse(t); } catch { /* não é JSON */ }
@@ -777,7 +799,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { data: conn } = await admin.from("crm_connections").select("provider, subdomain, access_token").eq("client_id", client_id).eq("active", true);
       const k = (conn ?? []).find((c) => c.provider === "kommo" && c.subdomain && c.access_token);
       if (k) {
-        const dom = (k.subdomain as string).includes(".") ? (k.subdomain as string) : `${k.subdomain}.kommo.com`;
+        const dom = integrationHost(k.subdomain as string, "kommo");
         const cab = { Authorization: `Bearer ${k.access_token}` };
         const base = `https://${dom}`;
         const lead = await tentar(base, "/api/v4/leads?limit=1&with=contacts", cab);
@@ -787,7 +809,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (lid) {
           const tipos = async (caminho: string, chave: string) => {
             try {
-              const r = await fetch(`${base}${caminho}`, { headers: { Accept: "application/json", ...cab }, signal: AbortSignal.timeout(15_000) });
+              const r = await fetch(`${base}${caminho}`, integrationRequest({ headers: { Accept: "application/json", ...cab }, signal: AbortSignal.timeout(15_000) }));
               const j: any = await r.json().catch(() => ({}));
               const itens: any[] = j?._embedded?.[chave] ?? [];
               const cont: Record<string, number> = {};
@@ -837,12 +859,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       if (alvo === "links_stats") {
-        const { data: links } = await admin.from("links_rastreados").select("id, shortio_id").eq("client_id", client_id).not("shortio_id", "is", null);
+        const { data: links, error: erroLinks } = await admin.from("links_rastreados").select("id, shortio_id").eq("client_id", client_id).not("shortio_id", "is", null);
+        if (erroLinks) throw new Error(erroLinks.message);
         let atualizados = 0;
         for (const l of links ?? []) {
           const n = await cliquesDoLink(chaveShort, l.shortio_id as string);
           if (n == null) continue;
-          await admin.from("links_rastreados").update({ cliques_total: n, cliques_atualizado_em: new Date().toISOString() }).eq("id", l.id);
+          const { error } = await admin.from("links_rastreados").update({ cliques_total: n, cliques_atualizado_em: new Date().toISOString() }).eq("id", l.id).eq("client_id", client_id);
+          if (error) throw new Error(error.message);
           atualizados++;
         }
         res.status(200).json({ alvo, ok: true, atualizados, total: (links ?? []).length });

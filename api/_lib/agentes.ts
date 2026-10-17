@@ -32,12 +32,51 @@ export interface Execucao {
 // a entrada antes de chamar; erro de validação é falha do passo (registrada), nunca chamada com dado ruim.
 interface Ferramenta<E extends z.ZodTypeAny> {
   nome: string; descricao: string; risco: Risco; externa: boolean; timeoutMs: number;
+  escritaExterna?: boolean;
   entrada: E;
   executar: (admin: Admin, exec: Execucao, e: z.infer<E>) => Promise<any>;
 }
 function ferramenta<E extends z.ZodTypeAny>(f: Ferramenta<E>) { return f; }
 
 const clickupToken = () => process.env.CLICKUP_API_TOKEN || "";
+
+class EfeitoExternoIncerto extends Error {}
+
+/**
+ * Uma intenção sem confirmação pode significar que o provedor aceitou a ação
+ * antes da conexão cair. Ela nunca é reenviada automaticamente. A chave única
+ * também impede duas reservas concorrentes de enviar o mesmo comentário.
+ */
+async function escritaExterna(
+  admin: Admin, exec: Execucao, nome: string, entrada: unknown, risco: Risco,
+  executar: () => Promise<unknown>,
+): Promise<unknown> {
+  const chave = `${exec.id}:externo:${exec.passo_atual}:${nome}:${exec.contexto.rodada ?? 0}:${exec.contexto.rodada_marco ?? 0}`;
+  const conferir = () => new EfeitoExternoIncerto(`${nome}: envio sem confirmação durável. Confira a tarefa no provedor e o registro ${chave} antes de retomar; reenvio automático bloqueado.`);
+  const { data: anterior, error: erroLeitura } = await admin.from("agente_passos").select("ok, saida")
+    .eq("chave_idempotencia", chave).maybeSingle();
+  if (erroLeitura) throw conferir();
+  if (anterior) {
+    if (anterior.ok === true) return anterior.saida;
+    throw conferir();
+  }
+  const { error: erroIntencao } = await admin.from("agente_passos").insert({
+    execucao_id: exec.id, ordem: exec.passo_atual, nome: `intencao:${nome}`, ferramenta: nome, risco,
+    entrada, ok: null, chave_idempotencia: chave, erro: "Intenção registrada; confirmação externa pendente",
+  });
+  // Até um erro de transporte no INSERT pode ter deixado uma intenção salva.
+  // Em qualquer caso o HTTP ainda não foi enviado por esta chamada.
+  if (erroIntencao) throw conferir();
+  const t0 = Date.now();
+  try {
+    const saida = await executar();
+    const { data: confirmacao, error } = await admin.from("agente_passos")
+      .update({ ok: true, saida, erro: null, ms: Date.now() - t0 })
+      .eq("chave_idempotencia", chave).select("id").single();
+    if (error || !confirmacao) throw conferir();
+    return saida;
+  } catch { throw conferir(); }
+}
 
 export const FERRAMENTAS = {
   "sap.ler_clinica": ferramenta({
@@ -120,17 +159,19 @@ export const FERRAMENTAS = {
     },
   }),
   "clickup.comentar": ferramenta({
-    nome: "clickup.comentar", descricao: "Comenta numa tarefa do ClickUp ligada ao item do SAP.", risco: "baixo", externa: true, timeoutMs: 15_000,
+    nome: "clickup.comentar", descricao: "Comenta numa tarefa do ClickUp ligada ao item do SAP.", risco: "baixo", externa: true, escritaExterna: true, timeoutMs: 15_000,
     entrada: z.object({ task_id: z.string().min(3).nullable(), texto: z.string().min(5).max(2000) }),
-    executar: async (_a, _x, e) => {
+    executar: async (admin, exec, e) => {
       if (!clickupToken()) return { configurada: false, motivo: "CLICKUP_API_TOKEN não configurado no servidor" };
       if (!e.task_id) return { configurada: false, motivo: "nenhuma tarefa do ClickUp ligada a este item" };
-      const r = await fetch(`https://api.clickup.com/api/v2/task/${e.task_id}/comment`, {
-        method: "POST", headers: { authorization: clickupToken(), "content-type": "application/json" },
-        body: JSON.stringify({ comment_text: e.texto, notify_all: false }), signal: AbortSignal.timeout(15_000),
+      return escritaExterna(admin, exec, "clickup.comentar", e, "baixo", async () => {
+        const r = await fetch(`https://api.clickup.com/api/v2/task/${encodeURIComponent(e.task_id!)}/comment`, {
+          method: "POST", headers: { authorization: clickupToken(), "content-type": "application/json" },
+          body: JSON.stringify({ comment_text: e.texto, notify_all: false }), signal: AbortSignal.timeout(15_000), redirect: "error",
+        });
+        if (!r.ok) throw new Error(`ClickUp respondeu ${r.status} ao comentar`);
+        return { configurada: true, ok: true };
       });
-      if (!r.ok) throw new Error(`ClickUp respondeu ${r.status} ao comentar`);
-      return { configurada: true, ok: true };
     },
   }),
 } as const;
@@ -139,10 +180,17 @@ type NomeFerramenta = keyof typeof FERRAMENTAS;
 async function usar<N extends NomeFerramenta>(admin: Admin, exec: Execucao, nome: N, entrada: z.infer<(typeof FERRAMENTAS)[N]["entrada"]>): Promise<any> {
   const f = FERRAMENTAS[nome] as Ferramenta<any>;
   const e = f.entrada.parse(entrada);
-  return await Promise.race([
-    f.executar(admin, exec, e),
-    new Promise((_, rej) => setTimeout(() => rej(new Error(`${nome}: passou de ${f.timeoutMs / 1000}s`)), f.timeoutMs)),
-  ]);
+  // Escritas usam o timeout nativo do HTTP e seu registro durável. Um
+  // Promise.race externo poderia vencer durante o INSERT da intenção e
+  // deixar a escrita começar em segundo plano depois de anunciar a falha.
+  if (f.escritaExterna) return f.executar(admin, exec, e);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      f.executar(admin, exec, e),
+      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`${nome}: passou de ${f.timeoutMs / 1000}s`)), f.timeoutMs); }),
+    ]);
+  } finally { if (timer) clearTimeout(timer); }
 }
 
 // ---------------------------------------------------------------- contrato dos passos
@@ -276,12 +324,28 @@ const FLUXO_ACESSOS: Fluxo = {
 // ---------------------------------------------------------------- fluxo 2: Brand · carga do Brand Brain
 const corta = (t: unknown, n: number) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, n);
 
+/** Remove identificadores reconhecíveis ANTES de persistir o contexto ou enviar à IA. */
+function mensagemKommoSemIdentificadores(mensagem: Record<string, any>): string {
+  let texto = typeof mensagem.text === "string" ? mensagem.text.slice(0, 10_000) : "";
+  // Nomes fornecidos em metadados não precisam aparecer no texto agregado.
+  for (const nome of [mensagem.author?.name, mensagem.contact?.name, mensagem.sender?.name]) {
+    if (typeof nome !== "string" || nome.trim().length < 3 || nome.length > 200) continue;
+    texto = texto.replace(new RegExp(nome.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu"), "[pessoa]");
+  }
+  return texto.replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, "[e-mail]")
+    .replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, "[cpf]")
+    .replace(/(\+?55\s?)?\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}/g, "[telefone]")
+    .replace(/@[a-z0-9_.]+/gi, "[perfil]");
+}
+
 /** Junta o que a clínica já tem no Hub, em texto curto por fonte. Só entra fonte com dado. */
 async function lerFontesBrain(admin: Admin, clientId: string) {
-  const { data: modulo } = await admin.rpc("tem_modulo", { p_client_id: clientId, p_modulo: "brand_brain" });
+  const { data: modulo, error: erroModulo } = await admin.rpc("tem_modulo", { p_client_id: clientId, p_modulo: "brand_brain" });
+  if (erroModulo) throw new Error(`Não foi possível verificar o módulo Brand Brain: ${erroModulo.message}`);
   if (!modulo) return { ativo: false, fontes: {} as Partial<Record<Fonte, string>>, aprovados: [] as string[] };
-  const { data: cli } = await admin.from("sap_clinicas").select("id, nome, especialidade, cidade, servicos, ticket_medio, consulta_paga, ambicao_d90, ajustes_acordados")
+  const { data: cli, error: erroClinica } = await admin.from("sap_clinicas").select("id, nome, especialidade, cidade, servicos, ticket_medio, consulta_paga, ambicao_d90, ajustes_acordados")
     .eq("client_id", clientId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (erroClinica) throw new Error(`Não foi possível ler a ficha da clínica: ${erroClinica.message}`);
   const desde = new Date(Date.now() - 120 * 86_400_000).toISOString();
   const [sessoes, resumos, posts, duvidas, pecas, aprovados, kommo] = await Promise.all([
     cli ? admin.from("sap_sessao_registro").select("sessao, chave, texto").eq("clinica_id", cli.id).not("texto", "is", null).limit(60) : Promise.resolve({ data: [] }),
@@ -293,6 +357,9 @@ async function lerFontesBrain(admin: Admin, clientId: string) {
     // Kommo manda pelo webhook as mensagens que o paciente envia (WhatsApp oficial e Direct). Só o lado do paciente.
     admin.from("crm_raw_events").select("raw_payload").eq("client_id", clientId).eq("event_key", "message").gte("received_at", desde).order("received_at", { ascending: false }).limit(200),
   ]);
+  for (const result of [sessoes, resumos, posts, duvidas, pecas, aprovados, kommo]) {
+    if ("error" in result && result.error) throw new Error(`Não foi possível ler uma fonte do Brand Brain: ${result.error.message}`);
+  }
   const fontes: Partial<Record<Fonte, string>> = {};
   if (cli) {
     const ficha = [cli.especialidade && `Especialidade: ${cli.especialidade}`, cli.cidade && `Cidade: ${cli.cidade}`,
@@ -312,10 +379,12 @@ async function lerFontesBrain(admin: Admin, clientId: string) {
   const pc = (pecas.data ?? []) as { titulo: string; etapa: string; formato: string; ganchos: unknown; semaforo: string; status: string }[];
   if (pc.length) fontes.banco_anuncios = pc.map((p) => `- ${p.etapa} · ${p.formato} · ${p.status} · ${p.semaforo ?? ""} · "${corta(p.titulo, 100)}" ganchos: ${corta(JSON.stringify(p.ganchos ?? []), 200)}`).join("\n");
   const msgs = ((kommo.data ?? []) as { raw_payload: any }[])
-    .map((r) => { const a = r.raw_payload?.add; const m = Array.isArray(a) ? a[0] : (a?.["0"] ?? a); return typeof m?.text === "string" ? m.text : ""; })
+    .flatMap((r) => { const a = r.raw_payload?.add; return Array.isArray(a) ? a : a && typeof a === "object" ? (typeof a.text === "string" ? [a] : Object.values(a)) : []; })
+    .filter((m): m is Record<string, any> => !!m && typeof m === "object" && !Array.isArray(m))
+    .map(mensagemKommoSemIdentificadores)
     .map((t) => corta(t, 200)).filter((t) => t.length >= 12);
   const unicas = [...new Set(msgs)].slice(0, 120);
-  if (unicas.length) fontes.mensagens_kommo = `${unicas.length} mensagens recebidas de pacientes (120 dias, as mais recentes; repetidas removidas):\n` + unicas.map((t) => `- ${t}`).join("\n");
+  if (unicas.length) fontes.mensagens_kommo = `${unicas.length} mensagens do webhook Kommo (120 dias, as mais recentes; direção não inferida; repetidas removidas):\n` + unicas.map((t) => `- ${t}`).join("\n");
   const apr = ((aprovados.data ?? []) as { memoria: string; chave: string; valor: string }[]).map((a) => `${a.memoria}.${a.chave}: ${a.valor}`);
   return { ativo: true, fontes, aprovados: apr };
 }
@@ -387,12 +456,15 @@ export async function enfileirarBrain(admin: Admin): Promise<{ enfileiradas: num
   const limite = Date.now() - 11 * 3_600_000;
   let enfileiradas = 0, puladas = 0;
   for (const { client_id } of (mods ?? []) as { client_id: string }[]) {
-    const { data: ult } = await admin.from("agente_execucoes").select("estado, criado_em").eq("client_id", client_id).eq("fluxo", FLUXO_BRAIN.id)
+    const { data: ult, error: erroAnterior } = await admin.from("agente_execucoes").select("estado, criado_em").eq("client_id", client_id).eq("fluxo", FLUXO_BRAIN.id)
       .order("criado_em", { ascending: false }).limit(1).maybeSingle();
+    if (erroAnterior) throw new Error(`Não foi possível verificar a última leitura do Brand Brain: ${erroAnterior.message}`);
     const ativa = ult && !["concluida", "falhou", "cancelada"].includes(ult.estado as string);
-    if (ativa || (ult && new Date(ult.criado_em as string).getTime() > limite)) { puladas++; continue; }
+    const criadaEm = ult && typeof ult.criado_em === "string" ? new Date(ult.criado_em).getTime() : null;
+    if (ult && (criadaEm == null || !Number.isFinite(criadaEm))) throw new Error("Última leitura do Brand Brain com data inválida; agendamento interrompido");
+    if (ativa || (criadaEm != null && criadaEm > limite)) { puladas++; continue; }
     const { error: e } = await admin.from("agente_execucoes").insert({ client_id, agente: FLUXO_BRAIN.agente, fluxo: FLUXO_BRAIN.id, objetivo: `${FLUXO_BRAIN.objetivo} (agendado)`, criado_por: null });
-    if (e) { if (/duplicate/i.test(e.message)) { puladas++; continue; } throw new Error(e.message); }
+    if (e) { if (e.code === "23505") { puladas++; continue; } throw new Error(e.message); }
     enfileiradas++;
   }
   return { enfileiradas, puladas };
@@ -423,7 +495,10 @@ export async function rodarAgentes(admin: Admin, opcoes: { execucaoId?: string |
 
 async function rodarUma(admin: Admin, exec: Execucao, maxPassos: number, fim: number) {
   const fluxo = FLUXOS[exec.fluxo];
-  const atualizar = (campos: Record<string, unknown>) => admin.from("agente_execucoes").update({ ...campos, atualizado_em: new Date().toISOString() }).eq("id", exec.id);
+  const atualizar = async (campos: Record<string, unknown>) => {
+    const { error } = await admin.from("agente_execucoes").update({ ...campos, atualizado_em: new Date().toISOString() }).eq("id", exec.id);
+    if (error) throw new Error(`Não foi possível persistir o estado do agente: ${error.message}`);
+  };
   if (!fluxo) {
     await atualizar({ estado: "falhou", erro: `fluxo desconhecido: ${exec.fluxo}`, lease_ate: null, encerrado_em: new Date().toISOString() });
     return { id: exec.id, estado: "falhou", passos: 0, erro: "fluxo desconhecido" };
@@ -433,7 +508,8 @@ async function rodarUma(admin: Admin, exec: Execucao, maxPassos: number, fim: nu
     admin, exec,
     usar: (n, e) => usar(admin, exec, n, e),
     aprovacao: async (passo) => {
-      const { data } = await admin.from("aprovacoes").select("id, estado, comentario, proposta").eq("execucao_id", exec.id).eq("passo", passo).order("criado_em", { ascending: false }).limit(1).maybeSingle();
+      const { data, error } = await admin.from("aprovacoes").select("id, estado, comentario, proposta").eq("execucao_id", exec.id).eq("passo", passo).order("criado_em", { ascending: false }).limit(1).maybeSingle();
+      if (error) throw new Error(`Não foi possível verificar a aprovação: ${error.message}`);
       return (data as any) ?? null;
     },
   };
@@ -454,13 +530,18 @@ async function rodarUma(admin: Admin, exec: Execucao, maxPassos: number, fim: nu
     let jaFeito = false;
     try {
       if (chave) {
-        const { data: feito } = await admin.from("agente_passos").select("saida").eq("chave_idempotencia", chave).eq("ok", true).maybeSingle();
-        if (feito) { jaFeito = true; r = { tipo: "seguir", saida: { ...(feito.saida as object), repetido: "já tinha rodado; não repetiu a ação" } }; }
+        const { data: feito, error } = await admin.from("agente_passos").select("saida").eq("chave_idempotencia", chave).eq("ok", true).maybeSingle();
+        if (error) throw new Error(`Não foi possível conferir a idempotência: ${error.message}`);
+        if (feito) { jaFeito = true; r = { tipo: "seguir", saida: { ...(feito.saida as object), repetido: "já tinha rodado; não repetiu a ação" }, contexto: (feito.saida as any)?.__contexto, irPara: (feito.saida as any)?.__irPara }; }
         else r = await passo.executar(ctx);
       } else r = await passo.executar(ctx);
     } catch (e) {
       const erro = (e instanceof Error ? e.message : String(e)).slice(0, 400);
       await admin.from("agente_passos").insert({ execucao_id: exec.id, ordem: exec.passo_atual, nome: passo.nome, ferramenta: passo.ferramenta ?? null, risco: passo.risco, ok: false, erro, ms: Date.now() - t0 });
+      if (e instanceof EfeitoExternoIncerto) {
+        await atualizar({ estado: "pausada", estado_antes_pausa: "pendente", erro: `${passo.nome}: ${erro}`, proximo_em: null, lease_ate: null });
+        return { id: exec.id, estado: "pausada", passos, erro };
+      }
       const tentativas = exec.tentativas;
       if (tentativas >= MAX_TENTATIVAS) {
         await atualizar({ estado: "falhou", erro: `${passo.nome}: ${erro}`, lease_ate: null, encerrado_em: new Date().toISOString() });
@@ -474,7 +555,11 @@ async function rodarUma(admin: Admin, exec: Execucao, maxPassos: number, fim: nu
     const custoPasso = Math.max(0, (await custoDaExecucao(admin, exec.id)) - custoAntes);
     exec.custo_usd = Number(exec.custo_usd) + custoPasso;
     const linha = { execucao_id: exec.id, ordem: exec.passo_atual, nome: passo.nome, ferramenta: passo.ferramenta ?? null, risco: passo.risco, custo_usd: custoPasso, ms: Date.now() - t0 };
-    if (!jaFeito) await admin.from("agente_passos").insert({ ...linha, ok: r.tipo !== "falhar", saida: resumoSaida(r), erro: r.tipo === "falhar" ? r.erro : null, chave_idempotencia: chave });
+    if (!jaFeito) {
+      const saida = r.tipo === "seguir" && chave ? { ...(r.saida as object), ...(r.contexto ? { __contexto: r.contexto } : {}), ...(r.irPara ? { __irPara: r.irPara } : {}) } : resumoSaida(r);
+      const { error } = await admin.from("agente_passos").insert({ ...linha, ok: r.tipo !== "falhar", saida, erro: r.tipo === "falhar" ? r.erro : null, chave_idempotencia: chave });
+      if (error) throw new Error(`Não foi possível persistir o passo do agente: ${error.message}`);
+    }
 
     if (r.tipo === "seguir") {
       const contexto = { ...exec.contexto, ...(r.contexto ?? {}) };
@@ -509,7 +594,8 @@ async function rodarUma(admin: Admin, exec: Execucao, maxPassos: number, fim: nu
 }
 
 async function custoDaExecucao(admin: Admin, id: string): Promise<number> {
-  const { data } = await admin.from("ia_execucoes").select("custo_usd").eq("execucao_id", id);
+  const { data, error } = await admin.from("ia_execucoes").select("custo_usd").eq("execucao_id", id);
+  if (error) throw new Error(`Não foi possível verificar o custo do agente: ${error.message}`);
   return ((data ?? []) as { custo_usd: number | null }[]).reduce((s, r) => s + Number(r.custo_usd ?? 0), 0);
 }
 

@@ -212,6 +212,9 @@ function ConteudoPage() {
               {cresc.diasSemSaida > 0 && (
                 <Selo titulo="Dias com novos seguidores, mas sem a saída gravada"><Info size={11} aria-hidden /> {cresc.diasSemSaida} dia{cresc.diasSemSaida === 1 ? "" : "s"} sem saída medida, fora das somas</Selo>
               )}
+              {cresc.diasSemGanhos > 0 && (
+                <Selo titulo="Dias sem o número de novos seguidores gravado"><Info size={11} aria-hidden /> {cresc.diasSemGanhos} dia{cresc.diasSemGanhos === 1 ? "" : "s"} sem ganhos medidos, fora das somas</Selo>
+              )}
             </div>
           </Painel>
         </div>

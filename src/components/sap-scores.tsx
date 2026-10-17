@@ -56,7 +56,7 @@ export function ScoreExecucao({ clientId }: { clientId: string }) {
   const [rascunho, setRascunho] = useState<Map<number, ItemRegistro> | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  const registros = itensQ.data ?? [];
+  const registros = useMemo(() => itensQ.data ?? [], [itensQ.data]);
   const atualMap = useMemo(() => new Map(registros.map((r) => [r.item, r])), [registros]);
   const dados = rascunho ?? atualMap;
   const dia = diaAtual(clinica?.d0 ?? null, clinica?.pausas);
@@ -237,7 +237,7 @@ export function ScoreSaude({ clientId }: { clientId: string }) {
   const [f, setF] = useState<SemanaSaude>(vazia(semanaAtual));
   const [erro, setErro] = useState<string | null>(null);
 
-  const semanas = semQ.data ?? [];
+  const semanas = useMemo(() => semQ.data ?? [], [semQ.data]);
   // Abre na semana atual do programa assim que o D0 chega (o cadastro carrega depois do primeiro render).
   const [escolheu, setEscolheu] = useState(false);
   useEffect(() => {
@@ -245,7 +245,7 @@ export function ScoreSaude({ clientId }: { clientId: string }) {
   }, [semanaAtual, escolheu]);
   useEffect(() => {
     setF(semanas.find((s) => s.semana === sel) ?? vazia(sel));
-  }, [sel, semQ.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sel, semanas]);
 
   const resumo = useMemo(() => resumoSaude(semanas), [semanas]);
   const previa = notaDaSemana(f);

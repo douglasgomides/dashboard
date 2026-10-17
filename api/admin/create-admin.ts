@@ -1,5 +1,6 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
+import { createAdminSchema } from "../_lib/request-validation.js";
 
 // Cria um admin master (acesso total, sem vínculo com um client_members
 // específico). Espelha api/admin/create-user.ts mas insere em app_admins
@@ -13,6 +14,7 @@ function randomPassword(): string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
@@ -52,15 +54,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const { email, password } = (req.body ?? {}) as { email?: string; password?: string };
-  if (!email) {
-    res.status(400).json({ error: "Falta email" });
+  const parsedBody = createAdminSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    res.status(400).json({ error: "Informe email válido e senha com pelo menos 8 caracteres" });
     return;
   }
-  if (password && password.length < 8) {
-    res.status(400).json({ error: "Senha precisa ter pelo menos 8 caracteres" });
-    return;
-  }
+  const { email, password } = parsedBody.data;
 
   const finalPassword = password || randomPassword();
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -14,10 +14,10 @@ export const Route = createFileRoute("/_authenticated/admin/integracoes")({
 const caixa = { borderColor: "var(--border)", background: "var(--surface)" } as const;
 const dim = { color: "var(--text-dim)" } as const;
 const COR: Record<EstadoCliente, string> = { conectado: "var(--good)", atrasado: "var(--warn)", erro: "var(--crit)", sem_registro: "var(--muted)", nao_conectado: "var(--muted)" };
-const data = (iso: string | null) => (iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
+const data = (iso: string | null) => (iso && Number.isFinite(Date.parse(iso)) ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }) : "—");
 
 function Integracoes() {
-  const mapa = useQuery({ queryKey: ["mapa-conexoes"], queryFn: getMapaConexoes, staleTime: 60_000 });
+  const mapa = useQuery({ queryKey: ["mapa-conexoes"], queryFn: getMapaConexoes, staleTime: 60_000, retry: false });
   const categorias = Object.keys(CATEGORIAS) as Categoria[];
   return (
     <div className="space-y-6">
@@ -25,8 +25,8 @@ function Integracoes() {
         Todas as conexões do Hub num lugar só, com o estado real de cada cliente (lido das contas ligadas e da última
         sincronização). "Planejado" é conector que ainda não existe: está aqui para orientar, não para ligar.
       </p>
-      {mapa.isLoading ? <p className="note">Carregando…</p> : mapa.isError ? (
-        <p className="note" style={{ color: "var(--crit)" }}>Não foi possível carregar: {(mapa.error as Error).message}</p>
+      {mapa.isLoading ? <p role="status" className="note">Carregando integrações…</p> : mapa.isError ? (
+        <p role="alert" className="note" style={{ color: "var(--crit)" }}>Não foi possível carregar as integrações. <button type="button" className="underline" onClick={() => void mapa.refetch()}>Tentar novamente</button></p>
       ) : categorias.map((cat) => {
         const lista = CONECTORES.filter((c) => c.categoria === cat);
         if (!lista.length) return null;
@@ -45,6 +45,7 @@ function Integracoes() {
 
 function CardConector({ c, linhas }: { c: Conector; linhas: LinhaConexao[] }) {
   const [aberto, setAberto] = useState(false);
+  const listaId = useId();
   const ligados = linhas.filter((l) => l.estado !== "nao_conectado");
   const conta = (e: EstadoCliente) => ligados.filter((l) => l.estado === e).length;
   const problemas = conta("erro") + conta("atrasado");
@@ -67,11 +68,11 @@ function CardConector({ c, linhas }: { c: Conector; linhas: LinhaConexao[] }) {
       </div>
       {c.estado === "disponivel" && ligados.length > 0 && (
         <>
-          <button type="button" className="mt-2 inline-flex items-center gap-1 text-xs underline" style={dim} aria-expanded={aberto} onClick={() => setAberto(!aberto)}>
-            {aberto ? <ChevronDown size={12} /> : <ChevronRight size={12} />} Ver clientes
+          <button type="button" className="mt-2 inline-flex min-h-[44px] items-center gap-1 text-xs underline" style={dim} aria-label={`Ver clientes de ${c.nome}`} aria-controls={aberto ? listaId : undefined} aria-expanded={aberto} onClick={() => setAberto(!aberto)}>
+            {aberto ? <ChevronDown size={12} aria-hidden /> : <ChevronRight size={12} aria-hidden />} Ver clientes
           </button>
           {aberto && (
-            <ul className="mt-2 divide-y text-sm" style={{ borderColor: "var(--border)" }}>
+            <ul id={listaId} className="mt-2 divide-y text-sm" style={{ borderColor: "var(--border)" }}>
               {ligados.sort((a, b) => ordem(a.estado) - ordem(b.estado)).map((l) => (
                 <li key={l.clientId} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-1.5">
                   <span className="min-w-[180px] flex-1">{l.cliente}{l.detalhe ? <span style={dim}> · {l.detalhe}</span> : null}</span>

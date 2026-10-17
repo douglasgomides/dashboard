@@ -10,16 +10,12 @@ import { AppShell } from "@/components/app-shell";
 import { SyncFreshnessBadge, DisponibilidadeFontes } from "@/components/sync-freshness-badge";
 import { useClientRole } from "@/hooks/use-client-role";
 import { CLIENTES_SO_CRM, CLIENTES_SEM_AUDIENCIA, ROTAS_DO_CRM } from "@/lib/nav";
-import { resolveDateRange, type DateRangeState, type RangePreset } from "@/lib/date-range";
+import { parseDateRangeSearch, resolveDateRange } from "@/lib/date-range";
 import { CoberturaPeriodo } from "@/components/cobertura-periodo";
 
 export const Route = createFileRoute("/_authenticated/$clientId")({
   component: ClientLayout,
-  validateSearch: (search: Record<string, unknown>): DateRangeState => ({
-    preset: (search.preset as RangePreset) ?? "30d",
-    from: typeof search.from === "string" ? search.from : undefined,
-    to: typeof search.to === "string" ? search.to : undefined,
-  }),
+  validateSearch: parseDateRangeSearch,
 });
 
 // Navegação: 5 categorias (Início, Social, Comercial, Oportunidades, Relatórios)
