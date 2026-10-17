@@ -42,8 +42,21 @@ function BrandBrain() {
       else setAviso({ tipo: "ok", texto: "A leitura ainda está rodando. Atualize a tela em instantes." });
       recarregar();
     },
-    onError: (e: Error) => setAviso({ tipo: "erro", texto: /ja existe|duplicate/.test(e.message) ? "Já existe uma leitura em andamento para esta clínica. Veja na Central de Agentes." : e.message }),
+    onError: (e: Error) => setAviso({ tipo: "erro", texto: /ja existe|duplicate/.test(e.message) ? "Já existe uma leitura em andamento para esta clínica. Atualize a tela em instantes." : e.message }),
   });
+
+  // Atualiza sozinho ao abrir a clínica quando a última leitura tem mais de 12 h (ou nunca houve). Uma tentativa por
+  // clínica a cada abertura da tela; se a última falhou há menos de 12 h, espera o botão para não repetir o erro.
+  const [tentou, setTentou] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!clientId || leitura.isLoading || leitura.isError || pedir.isPending || tentou.has(clientId)) return;
+    const l = leitura.data;
+    const velha = !l || Date.now() - new Date(l.quando).getTime() > 12 * 3_600_000;
+    if (!velha || (l && !["concluida", "falhou", "cancelada"].includes(l.estado))) return;
+    setTentou((s) => new Set(s).add(clientId));
+    setAviso({ tipo: "ok", texto: l ? "A última leitura tem mais de 12 horas: atualizando agora." : "Primeira leitura desta clínica: lendo as fontes agora." });
+    pedir.mutate();
+  }, [clientId, leitura.isLoading, leitura.isError, leitura.data, pedir, tentou]);
 
   const grupos = useMemo(() => organizar(itens.data ?? []), [itens.data]);
   const propostas = grupos.flatMap((g) => g.propostas.map((p) => ({ p, atual: g.aprovado })));
