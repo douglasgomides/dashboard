@@ -90,6 +90,21 @@ export async function sondarConversasCrm(admin: SupabaseClient<any, any, any>): 
         const e0 = primeiraLista(ev.json)[0];
         r[`GET /api/v4/events (${tipo})`] = { status: ev.status, value_after: e0 ? forma(e0.value_after, 0, 8) : null, total_na_pagina: primeiraLista(ev.json).length };
       }
+      // Notas de chat (sugestão do fundador): note_type incoming/outgoing_chat_message, texto em params.
+      const filtro = "filter[note_type][0]=incoming_chat_message&filter[note_type][1]=outgoing_chat_message&limit=50";
+      for (const ent of ["leads", "contacts"]) {
+        const n = await tentar(`${base}/api/v4/${ent}/notes?${filtro}`, cab);
+        const notas = primeiraLista(n.json) as any[];
+        const porTipo: Record<string, { total: number; com_texto: number; campos_params: string[] }> = {};
+        for (const x of notas) {
+          const t = String(x?.note_type ?? "?");
+          const g = porTipo[t] ?? (porTipo[t] = { total: 0, com_texto: 0, campos_params: [] });
+          g.total++;
+          if (typeof x?.params?.text === "string" && x.params.text.trim()) g.com_texto++;
+          for (const k of Object.keys(x?.params ?? {})) if (!g.campos_params.includes(k)) g.campos_params.push(k);
+        }
+        r[`GET /api/v4/${ent}/notes (chat)`] = { status: n.status, notas: notas.length, por_tipo: porTipo, forma_nota: notas[0] ? forma(notas[0], 0, 3) : null, proxima_pagina: !!n.json?._links?.next };
+      }
       const talk0 = primeiraLista(talks.json)[0];
       if (talk0?.talk_id) {
         const det = await tentar(`${base}/api/v4/talks/${talk0.talk_id}`, cab);
