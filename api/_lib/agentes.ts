@@ -371,6 +371,25 @@ const FLUXO_BRAIN: Fluxo = {
 };
 
 export const FLUXOS: Record<string, Fluxo> = { [FLUXO_ACESSOS.id]: FLUXO_ACESSOS, [FLUXO_BRAIN.id]: FLUXO_BRAIN };
+
+/** Agendamento (duas vezes por dia): põe na fila a leitura do Brand Brain de cada clínica com o módulo, se a última
+ *  leitura tem mais de 11 h e não há uma em andamento. A leitura só gera sugestões; quem aprova é uma pessoa. */
+export async function enfileirarBrain(admin: Admin): Promise<{ enfileiradas: number; puladas: number }> {
+  const { data: mods, error } = await admin.from("cliente_modulos").select("client_id").eq("modulo", "brand_brain").in("status", ["ativo", "beta"]);
+  if (error) throw new Error(error.message);
+  const limite = Date.now() - 11 * 3_600_000;
+  let enfileiradas = 0, puladas = 0;
+  for (const { client_id } of (mods ?? []) as { client_id: string }[]) {
+    const { data: ult } = await admin.from("agente_execucoes").select("estado, criado_em").eq("client_id", client_id).eq("fluxo", FLUXO_BRAIN.id)
+      .order("criado_em", { ascending: false }).limit(1).maybeSingle();
+    const ativa = ult && !["concluida", "falhou", "cancelada"].includes(ult.estado as string);
+    if (ativa || (ult && new Date(ult.criado_em as string).getTime() > limite)) { puladas++; continue; }
+    const { error: e } = await admin.from("agente_execucoes").insert({ client_id, agente: FLUXO_BRAIN.agente, fluxo: FLUXO_BRAIN.id, objetivo: `${FLUXO_BRAIN.objetivo} (agendado)`, criado_por: null });
+    if (e) { if (/duplicate/i.test(e.message)) { puladas++; continue; } throw new Error(e.message); }
+    enfileiradas++;
+  }
+  return { enfileiradas, puladas };
+}
 /** Catálogo para a Central (sem funções). */
 export function catalogoFluxos() {
   return Object.values(FLUXOS).map((f) => ({ id: f.id, agente: f.agente, nome: f.nome, objetivo: f.objetivo, passos: f.passos.map((p) => ({ nome: p.nome, descricao: p.descricao, risco: p.risco, ferramenta: p.ferramenta ?? null })) }));
