@@ -22,7 +22,7 @@ function Integracoes() {
   return (
     <div className="space-y-6">
       <p className="max-w-3xl text-sm" style={dim}>
-        Todas as conexões do Hub num lugar só, com o estado real de cada cliente (lido das contas ligadas e da última
+        Todas as conexões do Nexo num lugar só, com o estado real de cada cliente (lido das contas ligadas e da última
         sincronização). "Planejado" é conector que ainda não existe: está aqui para orientar, não para ligar.
       </p>
       {mapa.isLoading ? <p className="note">Carregando…</p> : mapa.isError ? (

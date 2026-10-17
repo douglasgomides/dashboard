@@ -566,7 +566,7 @@ function AdminClientsPage() {
         <LinksSemCliente clientes={[...(clients ?? [])].filter((c: any) => c.active !== false).sort((x: any, y: any) => x.name.localeCompare(y.name))} />
       </div>
       <details className="mt-6">
-        <summary className="cursor-pointer select-none py-1 text-sm font-medium">Cadastrar admin ou cliente só do Hub (exceção)</summary>
+        <summary className="cursor-pointer select-none py-1 text-sm font-medium">Cadastrar admin ou cliente só do Nexo (exceção)</summary>
         <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>Clínica nova entra pelo Sistema de Aquisição. Use o cadastro abaixo só para cliente que não vai passar pelo programa.</p>
         <div className="mt-3">
           <NewAdminForm />

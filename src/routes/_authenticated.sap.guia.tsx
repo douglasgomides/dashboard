@@ -68,7 +68,7 @@ function GuiaOperacao() {
         </Painel>
       )}
 
-      <Painel icone={KeyRound} titulo="Quem vê o quê" resumo="Níveis de acesso no Hub e no Sistema de Aquisição"
+      <Painel icone={KeyRound} titulo="Quem vê o quê" resumo="Níveis de acesso no Nexo e no Sistema de Aquisição"
         ajuda={<>A clínica nunca vê o que é interno da equipe (Score de Saúde, auditoria por atendente, configuração). O nível Equipe, sem poderes de admin, é uma proposta: hoje toda a equipe entra como admin.</>}>
         <div className="mt-2 grid gap-2 sm:grid-cols-3">
           {NIVEIS.map((n) => (

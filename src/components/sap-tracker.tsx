@@ -176,7 +176,7 @@ export function TrackerAutomatico({ clientId, start, end, periodLabel }: { clien
 
   if (!bruto.tem_crm) {
     return (
-      <Painel icone={Gauge} titulo="Tracker do SAP" resumo="Sem CRM ligado ao Hub.">
+      <Painel icone={Gauge} titulo="Tracker do SAP" resumo="Sem CRM ligado ao Nexo.">
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
           O tracker lê os leads do CRM e as conversas do WhatsApp. Ligue o CRM da clínica em Configurações do cliente para os números aparecerem.
         </p>

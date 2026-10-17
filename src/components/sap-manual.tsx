@@ -153,7 +153,7 @@ export function TrackerManual({ clientId, start, end, periodLabel }: { clientId:
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <Kpi icone={Coins} rotulo="Investimento em mídia" valor={fmtBRL(r.investimento)} dica="Meta pelo sync do Hub; outras fontes pelo n8n" cor="var(--s2)" />
+        <Kpi icone={Coins} rotulo="Investimento em mídia" valor={fmtBRL(r.investimento)} dica="Meta pelo sync do Nexo; outras fontes pelo n8n" cor="var(--s2)" />
         <Kpi icone={Coins} rotulo="Custo por lead" valor={brlOuTraco(r.cpl)} cor="var(--s2)" />
         <Kpi icone={Coins} rotulo="Custo por consulta" valor={brlOuTraco(r.custoConsulta)} cor="var(--s2)" />
         <Kpi icone={TrendingUp} rotulo="Retorno sobre mídia" valor={r.roas === null ? "sem dado" : `${r.roas.toFixed(1).replace(".", ",")}x`} dica="receita atribuída ÷ investimento" cor="var(--s3)" />

@@ -140,7 +140,7 @@ export function PortfolioSap() {
                     )}
                     <div className="text-xs" style={{ color: "var(--muted)" }}>
                       {[l.clinica.especialidade, l.clinica.cidade].filter(Boolean).join(" · ") || "sem dados de cadastro"}
-                      {!l.clinica.client_id && " · sem cliente no Hub"}
+                      {!l.clinica.client_id && " · sem cliente no Nexo"}
                       {(l.clinica as { piloto?: boolean }).piloto && " · piloto"}
                     </div>
                   </td>
@@ -286,10 +286,10 @@ function AbrirClinica() {
       )}
       {soHub.length > 0 && (
         <details className="text-sm">
-          <summary className="cursor-pointer" style={{ color: "var(--text-dim)" }}>Exceção: trazer para o SAP um cliente que já está no Hub</summary>
-          <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>Clientes que já estavam com a Doctor Creator continuam no Hub. Use só para um piloto combinado.</p>
+          <summary className="cursor-pointer" style={{ color: "var(--text-dim)" }}>Exceção: trazer para o SAP um cliente que já está no Nexo</summary>
+          <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>Clientes que já estavam com a Doctor Creator continuam no Nexo. Use só para um piloto combinado.</p>
           <select defaultValue="" onChange={(e) => e.target.value && navigate({ to: "/sap/$clientId", params: { clientId: e.target.value } })} className="mt-1 min-h-[38px] rounded-lg border px-2 text-sm" style={campo}>
-            <option value="">Escolha o cliente do Hub…</option>
+            <option value="">Escolha o cliente do Nexo…</option>
             {soHub.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </details>

@@ -23,7 +23,7 @@ const D = (codigo: string, nome: string, serve: string, url?: string, tela?: Tel
 /** Documentos do programa (pasta "Sistema de Aquisição v2" no Drive). Os modelos; a cópia de cada clínica fica na pasta dela. */
 const BASE: DocSap[] = [
   D("00.01", "Leia-me e Índice Geral", "Mapa de todos os documentos do programa.", doc("1tkyWZEV1yevR1LYGmltl0-LCMJD3TtRVw61cryNEUyQ")),
-  D("00.02", "Cronograma Mestre D0 a D90", "Os 35 itens do programa, com janela, dono e critério de pronto. No Hub, é a tela Cronograma.", pl("1eEsjnsQNo8OyqtNMZN3-5c-eANxFnNc5EfwqUAyEijc"), "/cronograma"),
+  D("00.02", "Cronograma Mestre D0 a D90", "Os 35 itens do programa, com janela, dono e critério de pronto. No SAP, é a tela Cronograma.", pl("1eEsjnsQNo8OyqtNMZN3-5c-eANxFnNc5EfwqUAyEijc"), "/cronograma"),
   D("00.03", "Decisões do Produto e Regras do Jogo", "Regras fixas do programa e por que foram decididas assim.", doc("1RZjozuEMwBqcA7bdnkbdZE7CDTIdoJ2h5PfnomBcfB8")),
   D("00.05", "Mudanças da v1 para a v2", "O que mudou na versão atual do programa.", doc("1o92GXlOXJPSHM1vpGq0cv5jtM6bhuQgR7tvOWiR5-zA")),
   D("00.06", "Biblioteca de Referências e Fontes", "Fontes usadas no método.", doc("138-gLUhkcEkUyWBHQYi0YVAfxWNfpDqHQQHm_5vVplM")),
@@ -37,21 +37,21 @@ const BASE: DocSap[] = [
   D("02.02", "Mensagens do Onboarding", "Mensagens prontas de boas-vindas e cobrança.", doc("1QT1T7M9gIIkf2iTmBCb5lefLLFkqlMK5Tm7eUyEqiYE")),
   D("02.03", "Roteiro do Kickoff", "Roteiro da conversa de kickoff com o decisor.", doc("11WESFmtdtkBO3XtilUEJYUa4OWrzygFIjHpM_HOGA0A"), "/sessao"),
   D("02.04", "Formulário Pré-Diagnóstico", "Perguntas que a clínica responde antes do diagnóstico.", doc("1tajqnBPk5pxMSzc-ACAJwCKIbZPcsYhb0QbFiFXDXKc")),
-  D("02.05", "Checklist de Dados e Acessos", "Os acessos que a clínica libera (Meta, Google, site, agenda). No Hub, é a tela Ficha e acessos.", doc("1EJTA-mpZzwSmrRBChnDu0W6JfgvPRYebbrBF9TlC8rM"), "/onboarding"),
-  D("02.06", "Ficha do Cliente", "Quem decide, ambição D90, coordenador, caminho de tecnologia. No Hub, é a tela Ficha e acessos.", pl("1CaDGL4v7xxoJc20B7yRBB7ysjYjwgcHoS_2gTFyTlAE"), "/onboarding"),
+  D("02.05", "Checklist de Dados e Acessos", "Os acessos que a clínica libera (Meta, Google, site, agenda). No SAP, é a tela Ficha e acessos.", doc("1EJTA-mpZzwSmrRBChnDu0W6JfgvPRYebbrBF9TlC8rM"), "/onboarding"),
+  D("02.06", "Ficha do Cliente", "Quem decide, ambição D90, coordenador, caminho de tecnologia. No SAP, é a tela Ficha e acessos.", pl("1CaDGL4v7xxoJc20B7yRBB7ysjYjwgcHoS_2gTFyTlAE"), "/onboarding"),
   D("02.07", "Estrutura Interna Drive e ClickUp", "Como criar a pasta e a lista da clínica.", doc("14W9UPXK_3nlV3i3Q5yxlLAGmIlmzpqakB6IijHu292A")),
   D("02.08", "Template de Tarefas ClickUp", "Tarefas-modelo para o ClickUp.", pl("1uzhatKLGcJ6BBFV4OqXTazbNvtjD7-qfFMYyiqP76Nw")),
   D("03.01", "Análise Pré-Reunião e Lead Oculto", "Análise com prints e tempos medidos antes da Sessão 1.", doc("1tWFezd0EwB1Jy2v9MUTPP1dkwXgQfegIYOYdQzp9PuA")),
   D("03.02", "Roteiro da Reunião de Coleta da Baseline", "Roteiro da reunião que coleta os números do D0.", doc("1LFJykF2uJJ9QY43NozzYqH9qkPUXGxsOnNzkdlFEHv4"), "/sessao"),
-  D("03.03", "Raio-X da Aquisição e Baseline D0", "Os números de partida, cada um medido ou estimado. No Hub, é Metas e garantia.", pl("1iJ5Lv4FMNvXxV1g_TJLrFYZy-shGGKRKywVsnOXj5ys"), "/metas"),
+  D("03.03", "Raio-X da Aquisição e Baseline D0", "Os números de partida, cada um medido ou estimado. No SAP, é Metas e garantia.", pl("1iJ5Lv4FMNvXxV1g_TJLrFYZy-shGGKRKywVsnOXj5ys"), "/metas"),
   D("03.04", "Script da Sessão de Diagnóstico", "Roteiro da Sessão 1.", doc("1Zl7Xg2fvpaooYOtMQQgqst1xHJ8an69pvblVz8SoEho"), "/sessao"),
   D("03.05", "Prompt do Relatório de Diagnóstico", "Prompt de IA para montar o relatório.", doc("1-Lf3ycYzscpQ_h70ZcwSOVuVR7ijd7QKeR1_wFBnmI4")),
   D("03.08", "Transcrição Simulada para Teste", "Transcrição para treinar o modo sessão.", doc("12QOIDBYwrgV8a7F9EuVpFjFCv5nm_8gIu7KGDaro1Ww")),
   D("08.01", "Script da Sessão de Fidelização e Controle", "Roteiro da Sessão 6.", doc("1dSH-N4cfey7N9fwZ50T-FxFlRbwJAowDBjMUX-ag9t0"), "/sessao"),
   D("08.02", "Régua de Relacionamento e Reativação", "Mensagens de retorno e reativação de pacientes.", doc("1Xkun2hKUpsubZJLrviWm5RgNtqj76InBHQU3kByUqys")),
   D("08.03", "Processo de Indicação", "Como pedir e registrar indicações.", doc("1rw_C_6YvtT9spkq66n57i-zwSSh6ORWBPDHwWTInSEE")),
-  D("08.04", "Tracker de Controle", "Planilha de números da clínica (Plano B quando o CRM falha). No Hub, os números vêm do CRM.", pl("1A9uc20D3nW2nL8O_79kOjUfQg57pOOYlsP7vvoCMrTI"), "/painel"),
-  D("08.05", "Rotina de Leitura Semanal e Plano por Vazamento", "Como ler a semana e escolher a ação (V1 a V20). No Hub, é a Leitura da semana.", doc("1CHJdAxfj9Zg5IBpLX95HpqIuQfRhT3BBDY3s4c5ZjEw"), "/leitura"),
+  D("08.04", "Tracker de Controle", "Planilha de números da clínica (Plano B quando o CRM falha). No SAP, os números vêm do CRM.", pl("1A9uc20D3nW2nL8O_79kOjUfQg57pOOYlsP7vvoCMrTI"), "/painel"),
+  D("08.05", "Rotina de Leitura Semanal e Plano por Vazamento", "Como ler a semana e escolher a ação (V1 a V20). No SAP, é a Leitura da semana.", doc("1CHJdAxfj9Zg5IBpLX95HpqIuQfRhT3BBDY3s4c5ZjEw"), "/leitura"),
   D("08.06", "Playbook de Continuidade", "Entregável final: como a clínica continua sozinha.", doc("1dZ2MyzCPtetyovGtLB6Xt1QS77rsge3C7zO0DTamzfU"), "/documentos"),
   D("08.07", "Relatório de Encerramento D90", "Resultado contra a meta e avaliação da garantia.", doc("1wxxiZv2Ptf0xIeMNJNjUQbFREjtjFgyQuuUKRVQxL6A"), "/documentos"),
   D("08.08", "Prompt de Personalização da Fidelização e do Encerramento", "Prompt de IA para Sessão 6 e D90.", doc("19cZO5wn7GRiV9j2tEx8Lib1QDeqBubGJSNnZtjGT2To")),
@@ -63,9 +63,9 @@ const BASE: DocSap[] = [
   D("09.04", "Prompt do Registro e Resumo da Call", "Prompt de IA para o resumo da call.", doc("1hZmiwv6z6kZiHXzkwTwHdKryt2iJ5V-Kp5sFryoLvXo")),
   D("10.01", "Regras da Comunidade e do Suporte", "Regras do grupo e do suporte.", doc("1123BeAM4HvRS-X4HUSGkggg1xhUsOCbdq8PUWzYw7IY")),
   D("11.01", "Capacidade, Equipe e Horas por Cliente", "Quantas clínicas cada pessoa atende.", doc("1YXsh7NiPdsopdS7a_m_Exv2IJtx_8kOkBjvyAB9E1k8")),
-  D("11.02", "Operação Enxuta v2", "Papéis, rotina semanal e ferramentas da equipe. No Hub, é Como operamos.", doc("1FK-TymBxlVKJ4b77W95jTnnyB0076yYUaIKGbF2bINo")),
+  D("11.02", "Operação Enxuta v2", "Papéis, rotina semanal e ferramentas da equipe. No SAP, é Como operamos.", doc("1FK-TymBxlVKJ4b77W95jTnnyB0076yYUaIKGbF2bINo")),
   D("11.03", "Integração Quaddro e Caminho B", "Como ligar a IA de atendimento (ou seguir sem ela).", doc("150AfCpj9HXWc1BYl5kl2ethGok3G-lyUWKb9l-xMvhc")),
-  D("11.04", "Score de Saúde e Score de Execução", "Como pontuar a semana e os 20 compromissos. No Hub, é Execução e saúde.", pl("1bZq_wUSWKFmawLQtBQv7h9xpaB5uh9L-lLGFfmTYliQ"), "/execucao"),
+  D("11.04", "Score de Saúde e Score de Execução", "Como pontuar a semana e os 20 compromissos. No SAP, é Execução e saúde.", pl("1bZq_wUSWKFmawLQtBQv7h9xpaB5uh9L-lLGFfmTYliQ"), "/execucao"),
 ];
 
 const TELA_SESSAO = new Set(["04.01", "05.01", "06.01", "07.01"]);
@@ -75,7 +75,7 @@ const TELA_DOC: Record<string, TelaDoc> = { "05.04": "/anuncios", "05.05": "/anu
 export const DOCS: DocSap[] = (() => {
   const m = new Map(BASE.map((d) => [d.codigo, d]));
   for (const s of SESSOES) for (const d of s.docs) {
-    if (!m.has(d.codigo)) m.set(d.codigo, D(d.codigo, d.nome, `Usado em: ${s.titulo}.${TELA_DOC[d.codigo] === "/anuncios" ? " No Hub, é o Banco de anúncios." : ""}`, d.url, TELA_DOC[d.codigo] ?? (TELA_SESSAO.has(d.codigo) ? "/sessao" : undefined)));
+    if (!m.has(d.codigo)) m.set(d.codigo, D(d.codigo, d.nome, `Usado em: ${s.titulo}.${TELA_DOC[d.codigo] === "/anuncios" ? " No SAP, é o Banco de anúncios." : ""}`, d.url, TELA_DOC[d.codigo] ?? (TELA_SESSAO.has(d.codigo) ? "/sessao" : undefined)));
   }
   for (const v of MAPA_VAZAMENTOS) m.set(v.codigo, { codigo: v.codigo, nome: v.titulo, serve: `Vazamento da Leitura da semana: ${v.sintoma}.`, tela: "/leitura", tipo: "vazamento" });
   for (const a of ITENS_ACESSO) m.set(a.id, { codigo: a.id, nome: a.nome, serve: `Item do Checklist de Dados e Acessos (${a.bloco}). ${a.dica}`.trim(), tela: "/onboarding", tipo: "acesso" });

@@ -95,8 +95,8 @@ export function Footer({ page, ia = false }: { page: number; ia?: boolean }) {
     <>
       <Text style={styles.footer} fixed>
         {ia
-          ? "Doctor Creator Intelligence Hub — classificação das conversas feita por IA; tempos e contagens medidos por regra fixa."
-          : "Doctor Creator Intelligence Hub — relatório gerado a partir de dados medidos, sem conteúdo gerado por IA."}
+          ? "Nexo · Doctor Creator — classificação das conversas feita por IA; tempos e contagens medidos por regra fixa."
+          : "Nexo · Doctor Creator — relatório gerado a partir de dados medidos, sem conteúdo gerado por IA."}
       </Text>
       <Text style={styles.pageNum} render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`} fixed />
     </>
@@ -171,7 +171,7 @@ function ClientReportDocument({
     <Document>
       {/* Página 1 — Sumário executivo */}
       <Page size="A4" style={styles.page}>
-        <Text style={styles.eyebrow}>Doctor Creator Intelligence Hub</Text>
+        <Text style={styles.eyebrow}>Nexo · Doctor Creator</Text>
         <Text style={styles.title}>{clientName}</Text>
         <Text style={styles.subtitle}>
           {igHandle ? `@${igHandle} · ` : ""}

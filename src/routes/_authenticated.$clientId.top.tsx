@@ -166,7 +166,7 @@ function Stories({ clientId, start, end }: { clientId: string; start: string; en
             resumo="Falta criar a tabela de stories no banco"
             cor="var(--warn)"
             ajuda={<>
-              Stories saem do ar em 24 horas e a Meta não guarda o histórico. O Hub passa a guardar cada story todo dia, mas a tabela <code>instagram_stories</code>{" "}
+              Stories saem do ar em 24 horas e a Meta não guarda o histórico. O Nexo passa a guardar cada story todo dia, mas a tabela <code>instagram_stories</code>{" "}
               ainda não existe neste banco: falta aplicar a migração <code>20261007120000_instagram_stories.sql</code>. Depois disso o ranking se forma a partir do primeiro dia.
             </>}
           >
@@ -186,7 +186,7 @@ function Stories({ clientId, start, end }: { clientId: string; start: string; en
             <span className="sub">{guardados.data.linhas.length} stories guardados no período</span>
           </div>
           {top.length === 0 ? (
-            <p className="note">Nenhum story guardado neste período ainda. O Hub guarda os que estão no ar a cada atualização do Instagram.</p>
+            <p className="note">Nenhum story guardado neste período ainda. O Nexo guarda os que estão no ar a cada atualização do Instagram.</p>
           ) : (
             <div style={{ display: "grid", gap: 8, gridTemplateColumns: "minmax(0,1fr)" }}>
               {top.map((s, i) => (
