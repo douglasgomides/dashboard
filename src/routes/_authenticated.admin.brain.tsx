@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, History, Loader2, Pencil, Plus, Sparkles, X } from "lucide-react";
 import { FONTES, MEMORIAS, NOME_MEMORIA, paraChave, textoSemDadoPessoal, type Memoria } from "@/lib/brand-brain";
-import { decidirItem, escreverItem, getClinicasBrain, getItensBrain, organizar, pedirPropostas, restaurarItem, type ItemBrain } from "@/lib/brain-data";
+import { decidirItem, escreverItem, getClinicasBrain, getItensBrain, getUltimaLeitura, organizar, pedirPropostas, restaurarItem, type ItemBrain } from "@/lib/brain-data";
 
 // Brand Brain: a memória de marca de cada clínica. O agente lê o que já existe no Hub e PROPÕE; nada vale até alguém
 // aprovar aqui. Cada mudança guarda a versão anterior, que pode ser restaurada. Só aparece clínica com o módulo ativo.
@@ -28,17 +28,18 @@ function BrandBrain() {
   const clinicas = useQuery({ queryKey: ["brain-clinicas"], queryFn: getClinicasBrain });
   const clientId = c ?? clinicas.data?.[0]?.client_id;
   const itens = useQuery({ queryKey: ["brain-itens", clientId], queryFn: () => getItensBrain(clientId!), enabled: !!clientId });
+  const leitura = useQuery({ queryKey: ["brain-leitura", clientId], queryFn: () => getUltimaLeitura(clientId!), enabled: !!clientId });
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
   useEffect(() => setAviso(null), [clientId]);
-  const recarregar = () => qc.invalidateQueries({ queryKey: ["brain-itens", clientId] });
+  const recarregar = () => { qc.invalidateQueries({ queryKey: ["brain-itens", clientId] }); qc.invalidateQueries({ queryKey: ["brain-leitura", clientId] }); };
 
   const pedir = useMutation({
     mutationFn: () => pedirPropostas(clientId!),
     onSuccess: (r) => {
       const e = r.execucoes?.[0];
-      if (e?.estado === "falhou") setAviso({ tipo: "erro", texto: `O agente não conseguiu: ${e.erro ?? "erro"}. Veja o log na Central de Agentes.` });
-      else if (e?.estado === "concluida") setAviso({ tipo: "ok", texto: "Pronto. As propostas novas estão em \"Para revisar\" (se a fonte trouxe algo novo)." });
-      else setAviso({ tipo: "ok", texto: `O agente está em "${e?.estado ?? "fila"}". Acompanhe na Central de Agentes.` });
+      if (e?.estado === "falhou") setAviso({ tipo: "erro", texto: `Não deu certo: ${e.erro ?? "erro"}` });
+      else if (e?.estado === "concluida") setAviso({ tipo: "ok", texto: "Pronto. O que for novo está em \"Para revisar\"." });
+      else setAviso({ tipo: "ok", texto: "A leitura ainda está rodando. Atualize a tela em instantes." });
       recarregar();
     },
     onError: (e: Error) => setAviso({ tipo: "erro", texto: /ja existe|duplicate/.test(e.message) ? "Já existe uma leitura em andamento para esta clínica. Veja na Central de Agentes." : e.message }),
@@ -70,9 +71,9 @@ function BrandBrain() {
     <div className="space-y-6">
       <header className="space-y-3">
         <p className="max-w-3xl text-sm" style={dim}>
-          A memória de marca da clínica, usada por quem cria conteúdo, anúncio e atendimento. O agente lê o que já existe no Hub
-          (ficha do SAP, sessões, conversas, Instagram, banco de anúncios) e propõe. Nada vale até alguém aprovar aqui.
-          Não entra nome, telefone nem caso de paciente: só padrões.
+          A memória de marca da clínica, usada por quem cria conteúdo, anúncio e atendimento. Em "Atualizar sugestões", a IA lê o que já
+          existe no Hub (Instagram, conversas, ficha e sessões do SAP, banco de anúncios) e sugere. Nada vale até alguém aprovar aqui.
+          Não entra nome, telefone nem caso de paciente: só padrões. Tudo se resolve nesta tela.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-sm">Clínica{" "}
@@ -82,8 +83,9 @@ function BrandBrain() {
             </select>
           </label>
           <button type="button" className={botao} style={principal} disabled={!clientId || pedir.isPending} onClick={() => { setAviso(null); pedir.mutate(); }}>
-            {pedir.isPending ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Ler fontes e propor
+            {pedir.isPending ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} {pedir.isPending ? "Lendo as fontes…" : "Atualizar sugestões"}
           </button>
+          <UltimaLeitura l={leitura.data ?? null} />
         </div>
         {aviso && <p role="status" className="text-sm" style={{ color: aviso.tipo === "erro" ? "var(--crit)" : "var(--good)" }}>{aviso.texto}</p>}
       </header>
@@ -128,6 +130,14 @@ function BrandBrain() {
       )}
     </div>
   );
+}
+
+function UltimaLeitura({ l }: { l: Awaited<ReturnType<typeof getUltimaLeitura>> }) {
+  if (!l) return <span className="text-xs" style={dim}>Ainda não houve leitura desta clínica.</span>;
+  const quando = new Date(l.quando).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const n = Number((l.resultado as { propostas?: number } | null)?.propostas ?? 0);
+  const texto = l.estado === "concluida" ? `${n} sugestão(ões) nova(s)` : l.estado === "falhou" ? `não deu certo: ${l.erro ?? "erro"}` : "em andamento";
+  return <span className="text-xs" style={{ color: l.estado === "falhou" ? "var(--crit)" : "var(--text-dim)" }}>Última leitura: {quando} · {texto}</span>;
 }
 
 function Selos({ item }: { item: ItemBrain }) {

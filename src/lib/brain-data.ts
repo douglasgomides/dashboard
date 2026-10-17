@@ -49,6 +49,14 @@ export async function escreverItem(clientId: string, memoria: Memoria, chave: st
   if (error) throw new Error(erroBrain(error.message));
 }
 
+/** Última leitura das fontes desta clínica (para mostrar na própria tela do Brand Brain). */
+export async function getUltimaLeitura(clientId: string): Promise<{ estado: string; erro: string | null; resultado: Record<string, unknown> | null; quando: string } | null> {
+  const { data, error } = await db.from("agente_execucoes").select("estado, erro, resultado, atualizado_em").eq("client_id", clientId).eq("fluxo", "brain_carga")
+    .order("criado_em", { ascending: false }).limit(1).maybeSingle();
+  if (error) throw error;
+  return data ? { estado: data.estado, erro: data.erro, resultado: data.resultado, quando: data.atualizado_em } : null;
+}
+
 /** Pede ao agente Brand que leia as fontes e proponha itens. Roda no servidor até o fim (é curto). */
 export async function pedirPropostas(clientId: string) {
   const id = await iniciarFluxo(clientId, { id: "brain_carga", agente: "brand", nome: "", objetivo: "Ler as fontes que a clínica já tem no Hub e propor itens para o Brand Brain.", passos: [] });
