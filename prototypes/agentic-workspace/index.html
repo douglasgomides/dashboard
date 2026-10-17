@@ -1,0 +1,1176 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="color-scheme" content="light dark">
+  <title>Doctor Creator · HUB</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { color-scheme:light; --page:#f8fafc; --surface:#fff; --surface-2:#f1f5f9; --ink:#0f172a; --secondary:#475569; --muted:#64748b; --border:#e2e8f0; --accent:#2563eb; --accent-hover:#1d4ed8; --accent-soft:#eff6ff; --side:#111827; --side-ink:#f1f5f9; --side-muted:#cbd5e1; --good:#047857; --good-soft:#ecfdf5; --warn:#92400e; --warn-soft:#fffbeb; --danger:#b91c1c; --ai:#6d28d9; --sap:#8a5c20; --shadow:0 8px 30px #0f172a0a; }
+    :root[data-theme="dark"] { color-scheme:dark; --page:#0b1220; --surface:#111a2b; --surface-2:#1a2436; --ink:#e2e8f0; --secondary:#cbd5e1; --muted:#a5b4c8; --border:#2c3b52; --accent:#2563eb; --accent-hover:#1d4ed8; --accent-soft:#142a4d; --side:#070c16; --good:#6ee7b7; --good-soft:#11372e; --warn:#fcd34d; --warn-soft:#362d17; --danger:#fca5a5; --ai:#c4b5fd; --sap:#edc589; --shadow:none; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--page); color:var(--ink); font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased; }
+    button,input,select,textarea { font:inherit; color:inherit; }
+    button { cursor:pointer; }
+    button:disabled { cursor:not-allowed; opacity:.55; }
+    button,select,textarea,input { -webkit-tap-highlight-color:transparent; }
+    button { min-height:44px; }
+    :focus-visible { outline:3px solid #60a5fa; outline-offset:3px; }
+    h1,h2,h3,p { margin:0; }
+    h1 { font-size:30px; line-height:1.2; letter-spacing:-1px; }
+    h2 { font-size:18px; letter-spacing:-.3px; }
+    h3 { font-size:16px; line-height:1.4; }
+    a { color:inherit; }
+    svg { width:19px; height:19px; flex:none; stroke:currentColor; stroke-width:1.7; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+    [hidden] { display:none!important; }
+    .skip { position:fixed; left:16px; top:-100px; padding:12px; z-index:100; background:var(--surface); }
+    .skip:focus { top:12px; }
+    .demo-bar { min-height:40px; padding:6px 24px; display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:5px 12px; color:var(--secondary); background:var(--surface-2); border-bottom:1px solid var(--border); font-size:12px; }
+    .demo-bar strong { font-weight:650; color:var(--ink); }
+    .demo-bar button { border:0; background:none; text-decoration:underline; min-height:28px; font-size:12px; }
+    .workspace { display:grid; grid-template-columns:224px minmax(0,1fr); min-height:calc(100vh - 40px); }
+    .sidebar { background:var(--side); color:var(--side-ink); padding:26px 16px 18px; display:flex; flex-direction:column; position:sticky; top:0; height:100vh; gap:32px; }
+    .brand { display:flex; align-items:center; gap:11px; padding:0 9px; }
+    .brand-mark { display:grid; place-items:center; width:34px; height:34px; border-radius:10px; background:#2563eb; }
+    .brand-mark::after { content:""; width:12px; height:12px; border:3px solid #fff; border-radius:50%; }
+    .brand strong { display:block; font-size:15px; font-weight:650; letter-spacing:-.3px; }
+    .brand small { color:var(--side-muted); font-size:12px; }
+    .nav-label { color:#a4b1c6; margin:0 12px 10px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+    .nav-list { display:flex; flex-direction:column; gap:5px; }
+    .nav-list button { border:0; background:none; display:flex; align-items:center; gap:12px; color:var(--side-muted); padding:11px 13px; text-align:left; border-radius:9px; font-size:14px; }
+    .nav-list button:hover { background:#1f2937; color:#fff; }
+    .nav-list button[aria-current="page"] { background:#263345; color:#fff; font-weight:600; box-shadow:inset 3px 0 0 #60a5fa; }
+    .nav-count { margin-left:auto; padding:0 6px; font-size:12px; background:#3b4658; border-radius:5px; }
+    .sidebar-footer { margin-top:auto; padding:16px 10px 0; border-top:1px solid #ffffff1f; }
+    .profile { display:flex; gap:10px; align-items:center; font-size:13px; }
+    .avatar { display:grid; place-items:center; width:32px; height:32px; flex:none; border-radius:50%; background:var(--surface-2); color:var(--secondary); font-size:12px; font-weight:650; }
+    .sidebar .avatar { background:#303c50; color:#fff; }
+    .profile small { display:block; color:var(--side-muted); font-size:11px; }
+    .sidebar-note { font-size:11px; color:#a4b1c6; margin-top:14px; }
+    .mainwrap { min-width:0; }
+    .toolbar { background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:14px; padding:18px 32px; }
+    .toolbar-start,.toolbar-end { display:flex; align-items:center; gap:18px; min-width:0; }
+    .product-switch { display:flex; padding:4px; gap:3px; background:var(--surface-2); border-radius:9px; }
+    .product-switch button { border:0; padding:5px 15px; background:none; font-size:13px; font-weight:600; min-height:34px; border-radius:6px; color:var(--secondary); }
+    .product-switch button[aria-pressed="true"] { background:var(--surface); color:var(--ink); box-shadow:0 1px 4px #00000012; }
+    .client-picker { display:flex; align-items:center; gap:9px; }
+    .client-picker svg { color:var(--muted); }
+    .client-picker label { display:block; font-size:11px; color:var(--muted); }
+    select { max-width:100%; border:1px solid var(--border); border-radius:7px; padding:6px 25px 6px 9px; background:var(--surface); min-height:36px; font-size:13px; }
+    .client-picker select { border:0; padding:0 22px 0 0; font-size:14px; font-weight:600; min-height:26px; }
+    .view-picker { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--secondary); }
+    .icon-button { display:inline-flex; align-items:center; justify-content:center; width:40px; min-height:40px; border:1px solid var(--border); background:var(--surface); border-radius:9px; }
+    main { max-width:1460px; margin:auto; padding:32px 38px 44px; min-width:0; }
+    .page-head { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:25px; }
+    .eyebrow { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--secondary); margin-bottom:8px; }
+    .sap-label { color:var(--sap); }
+    .sub { color:var(--secondary); font-size:14px; margin-top:8px; max-width:65ch; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:10px 15px; border:1px solid var(--border); border-radius:8px; background:var(--surface); font-size:13px; font-weight:600; text-decoration:none; }
+    .btn:hover { background:var(--surface-2); }
+    .btn.primary { color:#fff; background:var(--accent); border-color:var(--accent); }
+    .btn.primary:hover { background:var(--accent-hover); }
+    .btn.link { border:0; background:none; color:var(--secondary); padding:6px 0; min-height:36px; font-weight:500; }
+    .btn.link:hover { text-decoration:underline; }
+    .btn.danger { color:var(--danger); }
+    .summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); background:var(--surface); border:1px solid var(--border); border-radius:12px; margin-bottom:28px; }
+    .summary-cell { padding:17px 22px; display:flex; align-items:center; gap:13px; }
+    .summary-cell+.summary-cell { border-left:1px solid var(--border); }
+    .summary-icon { width:36px; height:36px; border-radius:10px; display:grid; place-items:center; background:var(--surface-2); color:var(--secondary); }
+    .summary-cell:first-child .summary-icon { color:var(--accent); background:var(--accent-soft); }
+    .summary-value { font-size:22px; line-height:1.1; font-weight:650; letter-spacing:-.5px; font-variant-numeric:tabular-nums; }
+    .summary-label { display:block; color:var(--secondary); font-size:12px; margin-top:3px; }
+    .columns { display:grid; grid-template-columns:minmax(0,1.85fr) minmax(270px,1fr); align-items:start; gap:24px; }
+    .stack { display:flex; flex-direction:column; gap:18px; min-width:0; }
+    .section-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:13px; }
+    .section-head small { color:var(--muted); font-size:12px; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:21px; box-shadow:var(--shadow); min-width:0; }
+    .decision { position:relative; }
+    .decision.priority { border-color:color-mix(in srgb,var(--accent) 32%,var(--border)); }
+    .decision+.decision { margin-top:12px; }
+    .card-top { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+    .tag { display:inline-flex; align-items:center; gap:5px; width:fit-content; font-size:11px; font-weight:600; padding:4px 8px; border-radius:5px; background:var(--surface-2); color:var(--secondary); line-height:1.4; }
+    .tag svg { width:13px; height:13px; }
+    .tag.ai { color:var(--ai); }
+    .tag.warning { color:var(--warn); background:var(--warn-soft); }
+    .tag.success { color:var(--good); background:var(--good-soft); }
+    .tag.blue { color:var(--ink); background:var(--accent-soft); }
+    .micro { font-size:12px; color:var(--muted); }
+    .description { color:var(--secondary); font-size:14px; margin-top:8px; }
+    .metadata { display:flex; gap:6px 16px; flex-wrap:wrap; margin-top:14px; font-size:12px; color:var(--secondary); }
+    .metadata span { display:inline-flex; gap:5px; align-items:center; }
+    .metadata svg { width:14px; height:14px; }
+    .card-actions { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; border-top:1px solid var(--border); padding-top:16px; margin-top:17px; }
+    .card-actions .btn { max-width:100%; }
+    .callout { padding:14px 16px; border-radius:9px; background:var(--surface-2); font-size:13px; color:var(--secondary); }
+    .callout strong { color:var(--ink); }
+    .callout.alert { background:var(--warn-soft); color:var(--warn); }
+    .source-error { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:22px; border:1px solid var(--warn); border-radius:10px; padding:14px 18px; background:var(--warn-soft); color:var(--warn); font-size:13px; }
+    .source-error p { max-width:65ch; }
+    .run { border-top:1px solid var(--border); padding:17px 0; }
+    .run:first-of-type { border-top:0; padding-top:5px; }
+    .run-head { display:flex; gap:10px; align-items:start; }
+    .run-icon { padding:7px; border-radius:8px; background:var(--surface-2); color:var(--ai); display:grid; place-items:center; flex:none; }
+    .run h3 { font-size:14px; }
+    .run p { font-size:12px; color:var(--secondary); margin-top:5px; }
+    .run-state { margin-top:9px; display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+    .run .btn.link { font-size:12px; min-height:32px; }
+    .activity-foot { padding-top:13px; border-top:1px solid var(--border); }
+    .health { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .health .dot { width:7px; height:7px; background:var(--good); border-radius:50%; display:inline-block; margin-right:6px; }
+    .health h3 { font-size:13px; }
+    .health p { color:var(--muted); font-size:12px; margin-top:5px; }
+    .progress { height:6px; border-radius:10px; background:var(--surface-2); overflow:hidden; margin:15px 0 8px; }
+    .progress span { display:block; height:100%; background:var(--accent); border-radius:10px; }
+    .program { margin-bottom:25px; padding:17px 21px; display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:12px; }
+    .program .progress { margin-top:7px; }
+    .program strong { font-size:14px; }
+    .program p { font-size:12px; color:var(--secondary); margin-top:3px; }
+    .program .progress span { background:var(--sap); }
+    .done-list { display:flex; flex-direction:column; gap:15px; }
+    .done-item { display:flex; align-items:start; gap:9px; font-size:13px; }
+    .done-item>svg { color:var(--good); width:17px; height:17px; margin-top:2px; }
+    .done-item small { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
+    .quiet-heading { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:16px; }
+    .empty { padding:26px; border:1px dashed var(--border); border-radius:12px; text-align:center; background:var(--surface); }
+    .empty>svg { width:27px; height:27px; color:var(--good); margin:0 auto 9px; }
+    .empty p { font-size:13px; color:var(--secondary); margin-top:6px; }
+    .list-row { display:flex; gap:14px; padding:18px 0; border-top:1px solid var(--border); align-items:start; }
+    .list-row:first-of-type { border-top:0; }
+    .list-row .row-main { min-width:0; flex:1; }
+    .list-row h3 { font-size:15px; }
+    .list-row p { color:var(--secondary); font-size:13px; margin-top:5px; }
+    .numbered { width:28px; height:28px; display:grid; place-items:center; flex:none; border-radius:50%; background:var(--surface-2); font-size:12px; color:var(--secondary); }
+    .metrics-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-bottom:24px; }
+    .metric strong { display:block; font-size:28px; letter-spacing:-1px; margin:12px 0 5px; font-variant-numeric:tabular-nums; }
+    .metric p { font-size:13px; color:var(--secondary); }
+    .bar-chart { display:flex; flex-direction:column; gap:19px; }
+    .chart-row { display:grid; grid-template-columns:110px 1fr 50px; align-items:center; gap:13px; font-size:13px; }
+    .chart-row .progress { margin:0; height:9px; }
+    .chart-row strong { text-align:right; }
+    .footnote { margin-top:24px; display:flex; gap:15px; align-items:center; justify-content:space-between; flex-wrap:wrap; font-size:12px; color:var(--muted); }
+    .footnote label { display:flex; align-items:center; gap:7px; min-height:36px; }
+    input[type="checkbox"] { width:17px; height:17px; accent-color:var(--accent); flex:none; }
+    dialog { border:1px solid var(--border); border-radius:16px; padding:0; background:var(--surface); color:var(--ink); width:min(690px,calc(100vw - 28px)); max-height:calc(100dvh - 36px); box-shadow:0 25px 90px #0005; }
+    dialog::backdrop { background:#0f172a80; backdrop-filter:blur(3px); }
+    .dialog-head { display:flex; justify-content:space-between; align-items:start; gap:16px; padding:23px 26px; border-bottom:1px solid var(--border); }
+    .dialog-head h2 { margin-top:7px; font-size:21px; }
+    .dialog-body { padding:22px 26px; display:flex; flex-direction:column; gap:19px; }
+    .dialog-body .description { margin:0; }
+    .dialog-footer { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; padding:18px 26px; background:var(--surface-2); border-top:1px solid var(--border); }
+    .dialog-footer .actions { display:flex; flex-wrap:wrap; gap:9px; }
+    .review-grid { display:grid; grid-template-columns:1fr 1fr; gap:13px; }
+    .review-box { padding:14px; border:1px solid var(--border); border-radius:8px; font-size:13px; }
+    .review-box strong { display:block; margin-bottom:6px; font-size:12px; }
+    .review-box p { color:var(--secondary); }
+    .preview-content { border-left:3px solid var(--accent); padding:14px 17px; background:var(--surface-2); border-radius:0 8px 8px 0; font-size:14px; }
+    .evidence-list { padding:0; list-style:none; margin:0; display:flex; flex-direction:column; gap:10px; }
+    .evidence-list li { display:flex; align-items:start; gap:9px; font-size:13px; color:var(--secondary); }
+    .evidence-list svg { width:16px; height:16px; margin-top:2px; color:var(--muted); }
+    .field-label { display:block; font-size:13px; font-weight:600; }
+    textarea { width:100%; border:1px solid var(--border); background:var(--page); border-radius:8px; padding:12px; resize:vertical; margin-top:7px; font-size:14px; min-height:90px; }
+    .review-check { display:flex; align-items:start; gap:9px; font-size:13px; color:var(--secondary); }
+    .review-check input { margin-top:3px; }
+    .form-error { font-size:13px; color:var(--danger); margin-top:7px; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    #live { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); padding:12px 20px; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--ink); box-shadow:var(--shadow); z-index:90; max-width:calc(100vw - 32px); font-size:13px; }
+    #live:empty { display:none; }
+    @media(min-width:1500px) { main { padding:38px 48px 50px; } }
+    @media(max-width:1150px) { .workspace { grid-template-columns:195px minmax(0,1fr); } .toolbar { padding:16px 24px; } main { padding:28px 24px 36px; } .toolbar-start { gap:12px; } .view-picker>span { display:none; } .columns { grid-template-columns:minmax(0,1.65fr) minmax(250px,1fr); gap:18px; } .card { padding:18px; } }
+    @media(max-width:950px) { .columns { grid-template-columns:1fr; } .columns>.stack:last-child { display:grid; grid-template-columns:1fr 1fr; align-items:start; } .columns>.stack:last-child>.card:first-child { grid-column:1/-1; } .toolbar { flex-wrap:wrap; } .toolbar-start { flex:1; justify-content:space-between; } .toolbar-end { margin-left:auto; } .summary-cell { padding:16px; gap:10px; } }
+    @media(max-width:700px) { .demo-bar { padding:6px 12px; font-size:11px; } .demo-bar>span { display:none; } .workspace { display:block; } .sidebar { display:contents; } .sidebar>.brand,.sidebar .nav-label,.sidebar-footer { display:none; } .nav-list { position:fixed; bottom:0; left:0; right:0; z-index:40; background:var(--side); display:grid; grid-template-columns:repeat(4,1fr); gap:2px; padding:6px 6px calc(6px + env(safe-area-inset-bottom)); border-top:1px solid #ffffff26; } .nav-list button { flex-direction:column; gap:4px; padding:7px 3px; text-align:center; font-size:11px; justify-content:center; min-height:52px; } .nav-list button[aria-current="page"] { box-shadow:none; } .nav-count { display:none; } .toolbar { padding:12px 16px; gap:12px; } .toolbar-start { flex-basis:100%; gap:12px; } .toolbar-end { width:100%; justify-content:space-between; margin:0; } .client-picker svg { display:none; } .client-picker select { font-size:13px; width:150px; } .view-picker>span { display:block; font-size:12px; } .product-switch button { padding:5px 12px; } .icon-button { width:36px; min-height:36px; } main { padding:25px 16px 110px; } h1 { font-size:28px; } .page-head { align-items:start; margin-bottom:22px; } .page-head>.btn { width:42px; min-width:42px; padding:10px; } .page-head>.btn span { display:none; } .sub { font-size:13px; } .summary { margin-bottom:23px; } .summary-cell { padding:14px 10px; gap:7px; align-items:start; } .summary-icon { display:none; } .summary-value { font-size:22px; } .summary-label { font-size:11px; line-height:1.4; margin-top:5px; } .columns>.stack:last-child { display:flex; } .section-head small { font-size:11px; } .card { padding:18px; } .card-actions { align-items:stretch; } .card-actions>.btn.primary { flex:1; } .program { grid-template-columns:1fr; gap:9px; padding:16px; } .review-grid { grid-template-columns:1fr; } .dialog-head,.dialog-body { padding:19px; } .dialog-footer { padding:16px 19px; } .dialog-footer>.actions { width:100%; } .dialog-footer .actions>.primary { flex:1; } .metrics-grid { grid-template-columns:1fr; gap:10px; } .metric strong { margin:4px 0; } .chart-row { grid-template-columns:90px 1fr 40px; gap:9px; font-size:12px; } #live { bottom:90px; } }
+    /* The mobile entry prioritizes the first decision; D0–D90 remains in the header. */
+    @media(max-width:700px) { .program { display:none; } }
+    @media(prefers-reduced-motion:no-preference) { button { transition:box-shadow 120ms; } dialog[open] { animation:enter 150ms ease-out; } @keyframes enter { from { transform:translateY(8px); } to { transform:translateY(0); } } }
+
+    /* The public pages and workspace share the existing navy, blue and brass identity. */
+    :root { --page:#f6f7f8; --ink:#152033; --secondary:#4b596d; --muted:#627085; --border:#dfe4ea; --accent:#254d77; --accent-hover:#1d3b5b; --accent-soft:#edf2f7; --side:#111d2e; --ai:#52627b; --sap:#795a2c; --shadow:none; --brass:#b58f59; }
+    :root[data-theme="dark"] { --page:#0d1522; --surface:#142031; --surface-2:#1d2a3c; --ink:#e8edf4; --secondary:#c5cedb; --muted:#a1b0c3; --border:#304156; --accent:#365e89; --accent-hover:#426c99; --accent-soft:#22364c; --side:#0a111d; --ai:#b2c0d1; --brass:#c6a46f; }
+    body { font-feature-settings:"cv11","ss01"; }
+    button, .btn { letter-spacing:.005em; }
+    .btn, .icon-button, select, textarea { border-radius:5px; }
+    h1 { font-weight:540; letter-spacing:-1.15px; }
+    h2 { font-weight:590; }
+    .demo-bar { justify-content:space-between; padding:5px 28px; font-size:11px; min-height:36px; }
+    .demo-bar strong { font-weight:600; }
+    .demo-links { display:flex; align-items:center; gap:16px; }
+    .demo-bar button { text-decoration:none; padding:0; color:var(--secondary); }
+    .demo-bar button:hover { text-decoration:underline; }
+    .workspace { grid-template-columns:236px minmax(0,1fr); min-height:calc(100vh - 36px); }
+    .sidebar { padding:30px 18px 22px; gap:43px; }
+    .brand { display:block; padding:0 12px; }
+    .wordmark { font-family:Georgia,'Times New Roman',serif; font-size:24px; line-height:1.15; letter-spacing:-.9px; font-weight:400; white-space:nowrap; }
+    .wordmark span { color:var(--brass); font-weight:600; }
+    .brand small { display:block; margin-top:12px; font-size:10px; text-transform:uppercase; letter-spacing:.18em; }
+    .brand strong { font:inherit; letter-spacing:inherit; }
+    .nav-list { gap:4px; }
+    .nav-list button { border-radius:5px; padding:12px 13px; font-size:13px; }
+    .nav-list button[aria-current="page"] { background:#ffffff0c; box-shadow:inset 2px 0 0 var(--brass); }
+    .nav-list button svg { width:17px; height:17px; }
+    .nav-count { font-size:11px; background:#ffffff12; border-radius:3px; }
+    .nav-label { font-size:10px; letter-spacing:.13em; color:#aab8cc; }
+    .sidebar-note { line-height:1.7; }
+    .avatar { border-radius:6px; }
+    .toolbar { min-height:86px; padding:16px 40px; }
+    .product-switch { border:1px solid var(--border); border-radius:5px; background:transparent; padding:3px; }
+    .product-switch button { min-height:30px; border-radius:3px; font-size:11px; letter-spacing:.08em; }
+    .product-switch button[aria-pressed="true"] { background:var(--accent-soft); box-shadow:none; }
+    .product-label { font-size:11px; font-weight:650; letter-spacing:.14em; border-right:1px solid var(--border); padding-right:18px; }
+    .session-label { font-size:11px; color:var(--muted); display:flex; align-items:center; gap:9px; }
+    .session-label strong { color:var(--secondary); font-weight:550; }
+    .toolbar .logout { border:0; background:transparent; font-size:12px; color:var(--secondary); min-height:36px; padding:6px; }
+    main { padding:38px 40px 48px; max-width:1440px; }
+    .page-head { margin-bottom:31px; }
+    .page-head h1 { font-size:32px; }
+    .eyebrow { font-size:11px; letter-spacing:.025em; }
+    .eyebrow svg { display:none; }
+    .sub { max-width:66ch; font-size:13px; }
+    .summary { border-radius:6px; margin-bottom:30px; }
+    .summary-cell { padding:19px 23px; }
+    .summary-icon { display:none; }
+    .summary-value { font-size:27px; font-weight:500; }
+    .summary-label { font-size:11px; }
+    .columns { gap:24px; grid-template-columns:minmax(0,1.8fr) minmax(280px,1fr); }
+    .card { border-radius:6px; padding:24px; }
+    .decision.priority { border-color:var(--border); border-left:2px solid var(--accent); }
+    .card-actions { margin-top:21px; padding-top:17px; }
+    .tag { border-radius:3px; padding:3px 7px; font-size:10px; font-weight:550; letter-spacing:.01em; }
+    .tag.ai { background:transparent; padding-left:0; }
+    .tag.ai svg { width:13px; height:13px; }
+    .run-icon { background:transparent; border:1px solid var(--border); border-radius:5px; padding:7px; }
+    .run-icon svg { width:16px; height:16px; }
+    .callout { border-radius:4px; padding:15px 17px; line-height:1.7; }
+    .callout>svg { vertical-align:middle; width:15px; height:15px; margin-right:4px; }
+    .done-item>svg { width:15px; height:15px; }
+    .program { border-radius:6px; padding:19px 23px; }
+    .program strong { font-weight:550; }
+    .progress { height:3px; border-radius:0; }
+    .progress span { border-radius:0; }
+    .health p { line-height:1.7; }
+    .empty { border-style:solid; border-radius:6px; text-align:left; }
+    .empty>svg { margin:0 0 10px; }
+    dialog { border-radius:8px; }
+    .dialog-head { padding:25px 28px; }
+    .dialog-body { padding:25px 28px; }
+    .dialog-head h2 { font-size:23px; font-weight:500; }
+    .numbered { border-radius:4px; }
+    .reception-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:0; margin-bottom:28px; border:1px solid var(--border); background:var(--surface); border-radius:6px; }
+    .reception-summary>div { padding:20px; }
+    .reception-summary>div+div { border-left:1px solid var(--border); }
+    .reception-summary strong { display:block; font-size:25px; font-weight:500; }
+    .reception-summary span { color:var(--secondary); font-size:12px; }
+    .reception-list { padding:0; list-style:none; margin:0; }
+    .reception-list li { display:flex; justify-content:space-between; align-items:center; gap:18px; padding:18px 0; border-bottom:1px solid var(--border); }
+    .reception-list li:last-child { border:0; }
+    .reception-list strong { display:block; font-size:14px; font-weight:550; }
+    .reception-list p { color:var(--secondary); font-size:12px; margin-top:4px; }
+    /* Public presentation: editorial hierarchy, product-specific narrative, no invented social proof. */
+    .public { background:#fafaf8; color:#172337; min-height:calc(100vh - 36px); }
+    .public .btn.primary { background:#254d77; color:#fff; border-color:#254d77; }
+    .public .btn { border-color:#d8dfe5; border-radius:4px; min-height:46px; font-size:12px; padding:11px 19px; background:transparent; }
+    .public .btn:hover { background:#edf1f5; }
+    .public .btn.primary:hover { background:#1d3b5b; }
+    .public .wordmark { font-size:27px; }
+    .public .wordmark span { color:#916d38; }
+    .login-aside .wordmark span { color:#c8aa78; }
+    .public a { text-decoration:none; }
+    .public-nav { max-width:1320px; padding:27px 52px; margin:auto; display:flex; justify-content:space-between; gap:24px; align-items:center; }
+    .public-brand { display:flex; align-items:center; gap:20px; }
+    .product-caption { padding:4px 0 4px 20px; border-left:1px solid #d5dbe2; font-size:10px; font-weight:650; letter-spacing:.17em; }
+    .public-nav-links { display:flex; align-items:center; gap:29px; font-size:12px; }
+    .public-nav-links button { border:0; background:none; padding:0; font-size:12px; min-height:40px; color:#4b596d; }
+    .public-main { max-width:none; padding:0; }
+    .public-hero { max-width:1320px; padding:69px 52px 78px; margin:auto; display:grid; grid-template-columns:1.02fr 1fr; align-items:center; gap:64px; }
+    .public-kicker { display:flex; gap:11px; align-items:center; margin-bottom:26px; text-transform:uppercase; letter-spacing:.14em; font-size:10px; font-weight:600; color:#5d6776; }
+    .public-kicker::before { content:""; width:28px; height:1px; background:#a7834e; }
+    .public-hero h1 { font-size:clamp(38px,4.1vw,58px); line-height:1.09; font-weight:450; letter-spacing:-2.2px; max-width:550px; }
+    .public-hero h1 em { font-family:Georgia,'Times New Roman',serif; font-weight:400; color:#7c623c; letter-spacing:-1.8px; }
+    .public-hero .intro { margin-top:24px; font-size:15px; line-height:1.85; max-width:460px; color:#536073; }
+    .public-hero .hero-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:31px; }
+    .public-hero .hero-note { margin-top:17px; font-size:11px; color:#637084; }
+    .product-proof { background:#101e30; color:#e7edf6; padding:29px; border:1px solid #22354b; border-radius:6px; box-shadow:0 22px 50px -35px #0c192a80; position:relative; }
+    .proof-top { display:flex; justify-content:space-between; align-items:center; padding-bottom:23px; border-bottom:1px solid #ffffff20; font-size:10px; letter-spacing:.07em; color:#b3c1d3; }
+    .proof-brand { font-size:13px; letter-spacing:.12em; font-weight:550; color:#f6f8fb; }
+    .proof-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; margin:23px 0; }
+    .proof-heading h2 { font-size:22px; font-weight:450; letter-spacing:-.6px; color:#f4f7fb; }
+    .proof-heading span { font-size:10px; border:1px solid #ffffff24; padding:4px 7px; border-radius:3px; color:#c2cedd; }
+    .proof-metrics { display:grid; grid-template-columns:repeat(3,1fr); padding-bottom:24px; }
+    .proof-metrics>div+div { border-left:1px solid #ffffff20; padding-left:17px; }
+    .proof-metrics strong { display:block; font-size:27px; font-weight:450; letter-spacing:-.7px; font-variant-numeric:tabular-nums; }
+    .proof-metrics small { display:block; color:#aebed1; font-size:10px; margin-top:7px; }
+    .proof-chart { display:flex; align-items:end; justify-content:space-between; gap:7px; height:88px; padding:0 8px; border-bottom:1px solid #ffffff25; }
+    .proof-chart span { width:100%; background:#6587ae; opacity:.85; border-radius:1px 1px 0 0; }
+    .proof-chart span:nth-child(3n) { background:#bea16c; }
+    .proof-axis { display:flex; justify-content:space-between; color:#aebed1; margin-top:9px; font-size:9px; }
+    .proof-action { margin-top:24px; padding:16px; border:1px solid #ffffff22; border-radius:4px; display:flex; gap:12px; align-items:start; }
+    .proof-action>svg { width:16px; height:16px; color:#c5aa7b; margin-top:1px; }
+    .proof-action strong { display:block; font-weight:500; font-size:12px; color:#f4f7fb; }
+    .proof-action p { font-size:11px; color:#b9c8d9; line-height:1.8; margin-top:5px; }
+    .proof-footer { margin-top:21px; font-size:10px; color:#aabbd0; display:flex; justify-content:space-between; gap:12px; }
+    .proof-stages { display:flex; flex-direction:column; margin-top:5px; }
+    .proof-stage { display:flex; gap:14px; padding:17px 0; border-top:1px solid #ffffff20; align-items:start; }
+    .proof-stage>span { font-size:11px; color:#c5aa7b; font-variant-numeric:tabular-nums; }
+    .proof-stage strong { display:block; font-size:12px; font-weight:500; }
+    .proof-stage p { font-size:10px; margin-top:5px; color:#b9c8d9; line-height:1.7; }
+    .proof-stage .stage-state { margin-left:auto; padding-top:2px; font-size:9px; white-space:nowrap; color:#b9c8d9; }
+    .public-divider { border-top:1px solid #dce1e6; border-bottom:1px solid #dce1e6; }
+    .public-strip { max-width:1320px; margin:auto; padding:24px 52px; display:flex; justify-content:space-between; gap:22px; align-items:center; color:#4d5a6c; font-size:11px; }
+    .public-strip strong { color:#172337; font-weight:550; }
+    .public-section { max-width:1320px; padding:78px 52px; margin:auto; }
+    .section-intro { display:grid; grid-template-columns:.8fr 1.2fr; gap:70px; align-items:start; margin-bottom:40px; }
+    .section-intro h2 { font-size:33px; line-height:1.18; font-weight:450; letter-spacing:-1px; }
+    .section-intro p { color:#536073; font-size:14px; line-height:1.85; max-width:550px; }
+    .editorial-rows { display:grid; grid-template-columns:repeat(3,1fr); gap:35px; }
+    .editorial-row { border-top:1px solid #ccd4de; padding-top:22px; }
+    .editorial-row .serial { color:#7c623c; font-size:11px; font-variant-numeric:tabular-nums; display:block; margin-bottom:25px; }
+    .editorial-row h3 { font-size:17px; font-weight:550; letter-spacing:-.3px; }
+    .editorial-row p { margin-top:12px; color:#536073; font-size:13px; line-height:1.85; }
+    .public-final { background:#edf0f2; padding:48px 52px; border-top:1px solid #dce1e6; }
+    .public-final>div { max-width:1216px; margin:auto; display:flex; justify-content:space-between; align-items:center; gap:28px; }
+    .public-final h2 { font-size:27px; font-weight:450; letter-spacing:-.7px; }
+    .public-final p { color:#536073; font-size:13px; margin-top:9px; }
+    .public-footer { max-width:1320px; margin:auto; padding:29px 52px; display:flex; justify-content:space-between; gap:22px; align-items:center; font-size:10px; color:#59677a; }
+    .footer-links { display:flex; gap:22px; flex-wrap:wrap; }
+    .public-footer a { padding:8px 0; }
+    /* Dedicated login surfaces. Roles are fixtures in this prototype, never user-supplied authorization. */
+    .login-layout { display:grid; grid-template-columns:1fr 1fr; min-height:calc(100vh - 36px); }
+    .login-aside { background:#111e30; color:#fff; padding:43px 58px; display:flex; flex-direction:column; justify-content:space-between; gap:60px; }
+    .login-aside .product-caption { border-color:#ffffff30; color:#d0d9e6; }
+    .login-copy { max-width:470px; padding-bottom:25px; }
+    .login-copy .public-kicker { color:#b7c4d5; }
+    .login-copy h1 { font-size:clamp(34px,3.3vw,48px); line-height:1.16; font-weight:450; letter-spacing:-1.6px; }
+    .login-copy h1 em { font-family:Georgia,'Times New Roman',serif; font-weight:400; color:#c8aa78; }
+    .login-copy>p { font-size:14px; line-height:1.9; color:#bdcadb; margin-top:24px; max-width:390px; }
+    .login-context { border-top:1px solid #ffffff25; padding-top:22px; margin-top:33px; display:flex; gap:11px; align-items:start; }
+    .login-context svg { width:16px; height:16px; color:#c8aa78; margin-top:2px; }
+    .login-context p { color:#bdcadb; font-size:11px; line-height:1.8; }
+    .login-aside-footer { font-size:10px; color:#aebed1; }
+    .login-pane { display:flex; flex-direction:column; padding:32px 52px; }
+    .back-link { width:fit-content; color:#59677a; font-size:11px; padding:8px 0; }
+    .back-link::before { content:"←"; margin-right:8px; }
+    .login-form-wrap { width:100%; max-width:352px; margin:auto; padding:35px 0; }
+    .access-kicker { font-size:10px; letter-spacing:.13em; text-transform:uppercase; color:#7c623c; margin-bottom:15px; font-weight:600; }
+    .login-form-wrap h2 { font-size:29px; letter-spacing:-.8px; font-weight:500; }
+    .login-intro { color:#59677a; font-size:13px; line-height:1.8; margin-top:11px; margin-bottom:27px; }
+    .login-form label { display:block; font-size:12px; font-weight:550; margin-top:20px; margin-bottom:7px; }
+    .login-form input { width:100%; min-height:47px; background:#fff; border:1px solid #cdd5df; border-radius:4px; padding:10px 12px; font-size:13px; color:#263b51; }
+    .password-wrap { position:relative; }
+    .password-wrap input { padding-right:60px; }
+    .password-wrap button { position:absolute; right:8px; top:3px; min-height:40px; padding:0 4px; background:transparent; border:0; color:#59677a; font-size:10px; }
+    .login-form .btn.primary { width:100%; margin-top:25px; }
+    .forgot { display:block; margin:12px auto 0; min-height:38px; padding:0; border:0; background:transparent; color:#4b596d; font-size:11px; }
+    .demo-login-note { font-size:10px; line-height:1.8; padding:14px 0; color:#59677a; border-top:1px solid #dce1e6; margin-top:22px; }
+    .login-access-note { font-size:11px; line-height:1.85; color:#59677a; margin-top:16px; }
+    .login-pane-footer { font-size:10px; text-align:center; color:#59677a; padding-top:10px; }
+    .public .access-notice { padding:12px 14px; border-left:2px solid #8b6633; background:#f3eee5; font-size:12px; line-height:1.8; color:#674b26; margin-bottom:20px; }
+    .showcase-grid { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+    .showcase-grid h3 { font-size:14px; font-weight:600; margin-bottom:10px; }
+    .showcase-grid button { display:flex; align-items:center; justify-content:space-between; width:100%; padding:11px 12px; border:1px solid var(--border); background:var(--surface); font-size:12px; margin-top:7px; border-radius:4px; text-align:left; }
+    .showcase-grid button:hover { background:var(--surface-2); }
+    .showcase-grid button svg { width:14px; height:14px; color:var(--muted); }
+    .showcase-note { color:var(--secondary); font-size:12px; line-height:1.8; }
+    @media(min-width:1600px) { .public-hero { padding-top:95px; padding-bottom:100px; } }
+    @media(max-width:1150px) { .workspace { grid-template-columns:204px minmax(0,1fr); } .sidebar { padding-inline:12px; } .wordmark { font-size:23px; } .toolbar { padding:15px 26px; } main { padding:30px 26px 40px; } .columns { grid-template-columns:minmax(0,1.6fr) minmax(250px,1fr); gap:18px; } .card { padding:20px; } .public-hero { gap:35px; padding:55px 36px 65px; } .public-nav,.public-section,.public-strip,.public-footer { padding-left:36px; padding-right:36px; } .product-proof { padding:24px; } .login-aside { padding:40px 38px; } .login-pane { padding:30px 38px; } .section-intro { gap:40px; } .public-hero h1 { font-size:46px; } }
+    @media(max-width:950px) { .columns { grid-template-columns:1fr; } .toolbar-start { justify-content:flex-start; } .toolbar-end { margin-left:auto; } .session-label>strong { display:none; } .public-nav-links { gap:18px; } .public-nav-links button { display:none; } .public-hero h1 { font-size:40px; } .public-hero { gap:25px; } .proof-heading h2 { font-size:19px; } .proof-metrics strong { font-size:23px; } .proof-metrics>div+div { padding-left:10px; } .proof-top { letter-spacing:0; } .login-aside { padding:33px 28px; } .login-pane { padding:25px 28px; } .login-copy h1 { font-size:37px; } }
+    @media(max-width:700px) { .demo-bar { padding:5px 16px; align-items:center; flex-wrap:nowrap; gap:12px; } .demo-bar>div>span { display:none; } .demo-links { gap:13px; } .demo-bar button { font-size:10px; } .demo-bar strong { font-size:10px; } .workspace { display:block; } .sidebar { display:contents; } .nav-list { display:flex; flex-direction:row; } .nav-list button { flex:1; min-height:52px; font-size:10px; padding:8px 3px; } .nav-list button[aria-current="page"] { box-shadow:none; background:#ffffff0d; } .nav-list button svg { width:17px; height:17px; } .toolbar { min-height:auto; padding:12px 17px; gap:7px; } .toolbar-start { justify-content:space-between; gap:12px; flex-basis:auto; flex:1; } .toolbar-end { width:auto; gap:9px; } .client-picker label { font-size:9px; } .client-picker select { width:138px; font-size:12px; } .session-label { font-size:10px; } .session-label>strong { display:none; } .product-label { padding-right:12px; font-size:10px; } .toolbar .logout { font-size:11px; } .toolbar .icon-button { display:inline-flex; width:32px; min-height:34px; } main { padding:25px 17px 105px; } .page-head { margin-bottom:23px; gap:12px; } .page-head h1 { font-size:28px; } .page-head>.btn { width:auto; min-width:0; padding:9px 11px; font-size:11px; } .page-head>.btn svg { display:none; } .page-head>.btn span { display:inline; } .sub { font-size:12px; margin-top:7px; } .summary-cell { padding:15px 12px; } .summary-value { font-size:24px; } .summary-label { font-size:10px; } .card { padding:18px; } h2 { font-size:17px; } .columns>.stack:last-child { display:flex; } .program { display:none; } .session-label .avatar { display:none; } .public-nav { padding:23px 22px; gap:15px; } .public .wordmark { font-size:23px; } .public-brand { gap:12px; } .product-caption { padding-left:12px; font-size:9px; } .public-nav-links { gap:0; } .public-nav .btn { padding:8px 11px; font-size:11px; min-height:40px; } .public-hero { grid-template-columns:1fr; padding:38px 22px 47px; gap:40px; } .public-kicker { font-size:9px; letter-spacing:.10em; margin-bottom:23px; } .public-hero h1 { font-size:43px; max-width:500px; letter-spacing:-1.8px; } .public-hero .intro { font-size:14px; margin-top:23px; } .public-hero .hero-actions { margin-top:25px; gap:10px; } .public-hero .btn { padding:10px 13px; font-size:11px; } .product-proof { padding:23px; } .proof-metrics strong { font-size:26px; } .proof-heading h2 { font-size:21px; } .public-strip { padding:23px 22px; flex-wrap:wrap; gap:13px 22px; font-size:10px; } .public-strip>strong { flex-basis:100%; } .public-section { padding:46px 22px; } .section-intro { grid-template-columns:1fr; gap:18px; margin-bottom:31px; } .section-intro h2 { font-size:29px; } .section-intro p { font-size:13px; } .editorial-rows { grid-template-columns:1fr; gap:28px; } .editorial-row { padding-top:17px; } .editorial-row .serial { margin-bottom:14px; } .editorial-row p { margin-top:8px; } .public-final { padding:34px 22px; } .public-final>div { display:block; } .public-final h2 { font-size:25px; } .public-final .btn { margin-top:23px; } .public-footer { padding:25px 22px; display:block; } .footer-links { gap:20px; margin-top:15px; } .login-layout { grid-template-columns:1fr; } .login-aside { padding:26px 24px; gap:0; } .login-copy { padding:0; } .login-copy .public-kicker,.login-copy>p,.login-context,.login-aside-footer { display:none; } .login-copy h1 { margin-top:29px; font-size:31px; max-width:440px; letter-spacing:-1.1px; } .login-pane { padding:19px 24px 30px; } .login-form-wrap { padding:25px 0 20px; max-width:none; } .login-form-wrap h2 { font-size:26px; } .login-intro { margin-top:8px; margin-bottom:22px; font-size:12px; } .login-form label { margin-top:17px; } .login-form .btn.primary { margin-top:22px; } .login-pane-footer { font-size:9px; } .showcase-grid { gap:14px; } .showcase-grid button { font-size:11px; padding:10px; } .dialog-head,.dialog-body { padding:20px; } .reception-summary>div { padding:14px 10px; } .reception-summary span { font-size:10px; } }
+    @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
+
+
+    /* Work delivered, method coverage and preserved product areas. */
+    .editorial-rows { row-gap:40px; }
+    .service-section { border-top:1px solid #dce1e6; }
+    .delivery-steps { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:30px; padding:0; list-style:none; counter-reset:delivery; }
+    .delivery-steps li { border-top:1px solid #ccd4de; padding-top:19px; counter-increment:delivery; }
+    .delivery-steps li::before { content:"0" counter(delivery); display:block; color:#7c623c; font-size:11px; margin-bottom:18px; }
+    .delivery-steps strong { font-size:15px; font-weight:550; }
+    .delivery-steps p,.scope-note { color:#536073; font-size:12px; line-height:1.85; margin-top:12px; }
+    .scope-note { border-top:1px solid #dce1e6; padding-top:22px; margin-top:30px; max-width:900px; }
+    .faq-section { border-top:1px solid #dce1e6; }
+    .faq-list details { border-top:1px solid #ccd4de; padding:0; }
+    .faq-list details:last-child { border-bottom:1px solid #ccd4de; }
+    .faq-list summary { cursor:pointer; font-size:14px; font-weight:500; padding:21px 0; }
+    .faq-list details p { color:#536073; max-width:900px; font-size:13px; line-height:1.9; padding:0 0 23px; }
+    .coverage-intro { margin-bottom:22px; }
+    .module-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+    .module-card { display:flex; flex-direction:column; align-items:start; }
+    .module-card h2 { margin-top:13px; }
+    .module-card ul,.module-detail { padding-left:18px; margin:18px 0 22px; color:var(--secondary); font-size:13px; line-height:1.95; }
+    .module-card .btn { margin-top:auto; }
+    .future-section { margin-top:22px; }
+    .future-section h2 { margin-top:12px; }
+    .future-section>div { margin-top:24px; padding-top:19px; border-top:1px solid var(--border); }
+    .future-section h3 { font-size:14px; }
+    @media(max-width:800px) { .delivery-steps { grid-template-columns:repeat(2,minmax(0,1fr)); gap:25px; } }
+    @media(max-width:700px) { .module-grid { grid-template-columns:1fr; gap:15px; } .delivery-steps { gap:25px 20px; } .faq-list summary { font-size:13px; line-height:1.7; } .future-section h3 { line-height:1.6; } }
+  </style>
+</head>
+<body>
+  <a href="#main" class="skip">Ir para o conteúdo</a>
+  <div class="demo-bar"><div><strong>Estudo de interface</strong><span> · Dados fictícios. Acesso e ações demonstrativos.</span></div><div class="demo-links"><button type="button" data-action="showcase">Telas e perfis</button><button type="button" data-action="reset">Reiniciar demonstração</button></div></div>
+  <div id="app"></div>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+  <div id="live" role="status" aria-live="polite" aria-atomic="true"></div>
+  <script type="application/json" id="capability-map">{
+  "groups": [
+    {
+      "id": "hub-resumo",
+      "product": "hub",
+      "title": "Inteligência e prioridades",
+      "description": "Saiba onde olhar e qual decisão vem primeiro.",
+      "detail": "Resumo, oportunidades e campanhas preservam o contexto da clínica. Os próximos passos precisam de evidência, responsável e prazo.",
+      "entries": [
+        {
+          "path": "",
+          "label": "Resumo",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/proximas-acoes",
+          "label": "Próximas ações",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/campanhas",
+          "label": "Campanhas do mês",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/oportunidades",
+          "label": "Oportunidades (score)",
+          "audience": "clinic",
+          "source": "hub-nav"
+        }
+      ]
+    },
+    {
+      "id": "hub-conteudo",
+      "product": "hub",
+      "title": "Conteúdo e audiência",
+      "description": "Estude o que atrai atenção e o que vale desenvolver.",
+      "detail": "Conteúdo, posts, audiência, ideias e referências continuam reunidos. A leitura depende das fontes conectadas; uma boa interação não comprova uma venda.",
+      "entries": [
+        {
+          "path": "/conteudo",
+          "label": "Conteúdo",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/posts",
+          "label": "Posts",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/top",
+          "label": "Top conteúdos",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/audiencia",
+          "label": "Audiência",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/ideias",
+          "label": "Ideias",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/inspiracao",
+          "label": "Inspiração",
+          "audience": "clinic",
+          "source": "hub-nav"
+        }
+      ]
+    },
+    {
+      "id": "hub-midia",
+      "product": "hub",
+      "title": "Anúncios",
+      "description": "Confira investimento e desempenho por objetivo.",
+      "detail": "Os anúncios continuam com seu contexto de campanha e fonte. Alterações de orçamento e publicação autônoma não são demonstradas nesta versão.",
+      "entries": [
+        {
+          "path": "/anuncios",
+          "label": "Anúncios",
+          "audience": "clinic",
+          "source": "hub-nav"
+        }
+      ]
+    },
+    {
+      "id": "hub-comercial",
+      "product": "hub",
+      "title": "Atendimento e vendas",
+      "description": "Acompanhe o caminho da conversa à decisão.",
+      "detail": "Comercial, organização do CRM, WhatsApp e dúvidas preservados. Relacionar uma venda à sua origem exige rastreamento e registros consistentes.",
+      "entries": [
+        {
+          "path": "/crm-painel",
+          "label": "Comercial",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/crm-guia",
+          "label": "Organizar o CRM",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/atendimento",
+          "label": "WhatsApp",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/duvidas",
+          "label": "Dúvidas",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/jornada",
+          "label": "Jornada",
+          "audience": "admin",
+          "source": "hub-nav"
+        }
+      ]
+    },
+    {
+      "id": "hub-relatorio",
+      "product": "hub",
+      "title": "Relatórios",
+      "description": "Tenha uma leitura do período pronta para revisar.",
+      "detail": "O relatório reúne resultados, limitações e prioridades. Preparar o texto e publicar no destino autorizado são etapas diferentes.",
+      "entries": [
+        {
+          "path": "/relatorio",
+          "label": "Relatório",
+          "audience": "clinic",
+          "source": "hub-nav"
+        }
+      ]
+    },
+    {
+      "id": "hub-sistema",
+      "product": "hub",
+      "title": "Configuração do cliente",
+      "description": "Organize as fontes e a estrutura comercial.",
+      "detail": "Área administrativa para configuração, etapas do CRM e leitura de vendas por origem. Acesso limitado ao escopo autorizado.",
+      "entries": [
+        {
+          "path": "/admin/$clientId",
+          "label": "Configurar este cliente",
+          "audience": "admin",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/crm-estrutura",
+          "label": "Etapas do CRM",
+          "audience": "admin",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/vendas-kommo",
+          "label": "Vendas por origem (Kommo)",
+          "audience": "admin",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/admin",
+          "label": "Todos os clientes",
+          "audience": "admin",
+          "source": "hub-nav"
+        }
+      ]
+    },
+    {
+      "id": "sap-inicio",
+      "product": "sap",
+      "title": "Minha implantação",
+      "description": "Responsabilidades e visão da clínica no programa.",
+      "detail": "As tarefas da clínica e o painel de acompanhamento continuam separados das ferramentas internas da equipe.",
+      "entries": [
+        {
+          "path": "/sap/$clientId",
+          "label": "Minhas tarefas",
+          "audience": "clinic",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/painel",
+          "label": "Painel da clínica",
+          "audience": "clinic",
+          "source": "sap-nav"
+        }
+      ]
+    },
+    {
+      "id": "sap-base",
+      "product": "sap",
+      "title": "Preparação e implantação",
+      "description": "Da ficha inicial ao rastreamento conferido.",
+      "detail": "Diagnóstico, acessos, cronograma e responsáveis preservados. Cada etapa avança com seu critério de entrega; tempo decorrido não significa trabalho concluído.",
+      "entries": [
+        {
+          "path": "/sap/$clientId/cronograma",
+          "label": "Cronograma",
+          "audience": "clinic",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/onboarding",
+          "label": "Ficha e acessos",
+          "audience": "team",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/rastreamento",
+          "label": "Rastreamento",
+          "audience": "team",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/papeis",
+          "label": "Quem é quem",
+          "audience": "team",
+          "source": "sap-nav"
+        }
+      ]
+    },
+    {
+      "id": "sap-metodo",
+      "product": "sap",
+      "title": "Sessões, anúncios e jornada",
+      "description": "Método completo, da atração ao relacionamento.",
+      "detail": "As seis sessões incluem paciente ideal, atração, conversa, confirmação, comunicação na consulta, follow-up e fidelização. Os roteiros e a gravação guiada de criativos pertencem ao método; não são gravação de consultas.",
+      "entries": [
+        {
+          "path": "/sap/$clientId/sessao",
+          "label": "Reuniões",
+          "audience": "admin",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/anuncios",
+          "label": "Banco de anúncios",
+          "audience": "admin",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/etapas",
+          "label": "Etapas do funil",
+          "audience": "admin",
+          "source": "sap-nav"
+        }
+      ]
+    },
+    {
+      "id": "sap-semana",
+      "product": "sap",
+      "title": "Leitura e execução semanal",
+      "description": "Encontre o gargalo e combine a próxima ação.",
+      "detail": "Conferir os registros vem antes de interpretar o funil. A rotina cruza leitura, execução e mídia para propor uma ação com responsável e prazo.",
+      "entries": [
+        {
+          "path": "/sap/$clientId/leitura",
+          "label": "Leitura da semana",
+          "audience": "clinic",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/execucao",
+          "label": "Execução e saúde",
+          "audience": "team",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/midia",
+          "label": "Mídia",
+          "audience": "team",
+          "source": "sap-nav"
+        }
+      ]
+    },
+    {
+      "id": "sap-resultado",
+      "product": "sap",
+      "title": "Metas e continuidade",
+      "description": "Compare a evolução e preserve o histórico.",
+      "detail": "Metas e condições continuam documentadas. Plano e relatório D90 apoiam a continuidade; o acesso ao HUB depende de contratação e liberação próprias.",
+      "entries": [
+        {
+          "path": "/sap/$clientId/metas",
+          "label": "Metas e garantia",
+          "audience": "clinic",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/documentos",
+          "label": "Plano e relatório D90",
+          "audience": "clinic",
+          "source": "sap-nav"
+        }
+      ]
+    },
+    {
+      "id": "sap-biblioteca",
+      "product": "sap",
+      "title": "Orientação e materiais",
+      "description": "Documentos e instruções que sustentam a implantação.",
+      "detail": "A biblioteca e o início guiado continuam disponíveis no SAP. Materiais operacionais respeitam o perfil da pessoa.",
+      "entries": [
+        {
+          "path": "/sap",
+          "label": "Todas as clínicas",
+          "audience": "admin",
+          "source": "sap-global"
+        },
+        {
+          "path": "/sap/guia",
+          "label": "Como operamos",
+          "audience": "admin",
+          "source": "sap-global"
+        },
+        {
+          "path": "/sap/docs",
+          "label": "Documentos do SAP",
+          "audience": "clinic",
+          "source": "sap-global"
+        },
+        {
+          "path": "/sap/comece",
+          "label": "Comece aqui",
+          "audience": "clinic",
+          "source": "sap-global"
+        }
+      ]
+    },
+    {
+      "id": "hub-administracao",
+      "product": "hub",
+      "title": "Administração e agentes",
+      "description": "Carteira, conhecimento, integrações e governança.",
+      "detail": "Brand Brain, Central de Agentes, conferência e relatórios da carteira continuam sob responsabilidade administrativa. A presença de uma área não significa que toda a sua operação seja autônoma.",
+      "entries": [
+        {
+          "path": "/admin",
+          "label": "Clientes do Hub",
+          "audience": "admin",
+          "source": "admin-nav"
+        },
+        {
+          "path": "/admin/referencia",
+          "label": "Referência entre clientes",
+          "audience": "admin",
+          "source": "admin-nav"
+        },
+        {
+          "path": "/admin/conferencia",
+          "label": "Conferência de dados",
+          "audience": "admin",
+          "source": "admin-nav"
+        },
+        {
+          "path": "/admin/relatorios",
+          "label": "Relatórios da semana",
+          "audience": "admin",
+          "source": "admin-nav"
+        },
+        {
+          "path": "/admin/agentes",
+          "label": "Central de Agentes",
+          "audience": "admin",
+          "source": "admin-nav"
+        },
+        {
+          "path": "/admin/brain",
+          "label": "Brand Brain",
+          "audience": "admin",
+          "source": "admin-nav"
+        },
+        {
+          "path": "/admin/integracoes",
+          "label": "Integrações",
+          "audience": "admin",
+          "source": "admin-nav"
+        },
+        {
+          "path": "/admin/equipe",
+          "label": "Equipe",
+          "audience": "admin",
+          "source": "admin-nav"
+        }
+      ]
+    }
+  ],
+  "future": [
+    {
+      "title": "Gravação e análise de consultas",
+      "detail": "Evolução futura. Sem gravador, envio de áudio ou análise de consultas nesta versão."
+    },
+    {
+      "title": "Operação autônoma de campanhas",
+      "detail": "Evolução futura. Mudanças de mídia continuam dependentes de escopo, evidências e autorização."
+    },
+    {
+      "title": "Novas fontes e agentes especializados",
+      "detail": "Evolução futura. Cada conexão e fluxo precisa ser implementado e validado; MCP, por si só, não garante integração nem qualidade dos dados."
+    }
+  ]
+}</script>
+<script type="module">
+    const icons = {
+      home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
+      plan:'<rect x="4" y="4" width="16" height="17" rx="2"/><path d="M9 3v3m6-3v3M8 11h8m-8 4h5"/>',
+      chart:'<path d="M4 4v16h17M8 15v-4m5 4V7m5 8v-6"/>',
+      activity:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+      chevron:'<path d="m9 5 7 7-7 7"/>', check:'<path d="m5 12 4 4L19 6"/>',
+      bot:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8m-8 4h8m-8 4h4"/>',
+      arrow:'<path d="M4 12h16m-6-6 6 6-6 6"/>',
+      clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+      shield:'<path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6z"/><path d="m8 12 3 3 5-6"/>',
+      source:'<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 4 16 4 16 0V5M4 12v6c0 4 16 4 16 0v-6"/>',
+      user:'<circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',
+      building:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h1m4 0h1m-6 4h1m4 0h1m-5 10v-5h4v5"/>',
+      close:'<path d="m6 6 12 12M6 18 18 6"/>',
+      document:'<path d="M14 2H5v20h14V7zM14 2v6h5M8 12h8m-8 4h8"/>',
+      warning:'<path d="m12 3 10 18H2zM12 9v4m0 4h.01"/>',
+      pause:'<path d="M8 5v14m8-14v14"/>', play:'<path d="m7 4 14 8-14 8z"/>',
+      spark:'<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/>',
+      moon:'<path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13z"/>',
+      refresh:'<path d="M20 7a8 8 0 1 0 1 8M20 3v5h-5"/>',
+    };
+    const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.document}</svg>`;
+    const esc = text => String(text).replace(/[&<>"']/g, value => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[value]));
+    const clients = { aurora:{name:'Clínica Aurora',initials:'CA',day:24}, horizonte:{name:'Clínica Horizonte',initials:'CH',day:46} };
+    const coverage = JSON.parse(document.getElementById('capability-map').textContent);
+    const products = { hub:{name:'HUB',description:'Inteligência de marketing e vendas',plan:'Plano de ação'}, sap:{name:'SAP',description:'Sistema de Aquisição de Pacientes',plan:'Plano de 90 dias'} };
+    const app = document.getElementById('app');
+    const dialog = document.getElementById('dialog');
+    const live = document.getElementById('live');
+    let state = { product:'hub',client:'aurora',role:'admin',page:'today',screen:'landing',sourceError:false,theme:'light' };
+    let session = null;
+    let accessNotice = '';
+    const isOperator = () => ['admin','team'].includes(state.role);
+    const isClinic = () => ['clinic','reception'].includes(state.role);
+    const roleName = () => ({admin:'Administrativo',team:'Equipe interna',clinic:'Gestão da clínica',reception:'Recepção'})[state.role];
+    let store = {};
+    let timers = new Set();
+    let announcementTimer;
+    let modalContext = null;
+    const key = () => `${state.client}:${state.product}`;
+    const data = () => store[key()] ??= {
+      approval:'pending',feedback:'',clinicTaskDone:false,
+      runs:[{id:'analysis',title:state.product==='hub'?'Análise do atendimento':'Preparação do próximo check-in',detail:'Organizando evidências para revisão. Nenhuma mensagem será enviada.',status:'running',source:'CRM e WhatsApp'}],
+      completed:[state.product==='hub'?'Conferência dos dados do período':'Conferência da ficha da clínica'],
+      events:[{text:'Dados do período conferidos',detail:'Agente de conferência · leitura automática',status:'Concluído'}],
+    };
+    const proposal = () => state.product==='hub' ? {
+      title:'Relatório semanal pronto para revisão',label:'Revisar relatório',due:'Antes de segunda-feira',
+      description:'Os resultados foram organizados. Revise o resumo antes de publicar na tarefa de acompanhamento.',
+      destination:`Tarefa “Acompanhamento semanal” · ${clients[state.client].name}`,
+      before:'Relatório disponível somente como rascunho.',after:'Resumo publicado como comentário no ClickUp da clínica.',
+      preview:'Nesta semana, a prioridade proposta é revisar o atendimento e acompanhar a evolução dos agendamentos. A síntese reúne os resultados e as limitações das fontes disponíveis.',
+      evidence:['CRM · 12 a 16 de outubro · dados demonstrativos','Instagram · 12 a 16 de outubro · dados demonstrativos','Conferência de cobertura realizada no cenário de teste'],
+      execute:'Aprovar e publicar',result:'Publicação do relatório simulada',
+    } : {
+      title:'Etapa de rastreamento pronta para conferir',label:'Revisar evidências',due:'Próximo marco do programa',
+      description:'O agente reuniu os testes de eventos. Confira as evidências antes de concluir a etapa no cronograma.',
+      destination:`Cronograma de implantação · ${clients[state.client].name}`,
+      before:'Rastreamento aguardando validação da equipe.',after:'Etapa marcada como concluída no cronograma.',
+      preview:'Proposta de conclusão: rastreamento configurado e evento de teste registrado. O responsável precisa confirmar se a evidência atende ao critério do programa.',
+      evidence:['Gerenciador de Eventos · evento de teste demonstrativo','UTMs · conferência de parâmetros no cenário de teste','Evidência de rastreamento · exemplo preparado para o protótipo'],
+      execute:'Aprovar e concluir etapa',result:'Conclusão da etapa simulada',
+    };
+    const statusLabel = status => ({running:'Em andamento',paused:'Pausado por você',completed:'Concluído',blocked:'Bloqueado'})[status] || status;
+    const badge = (text, tone='', name='') => `<span class="tag ${tone}">${name?icon(name):''}${esc(text)}</span>`;
+    function announce(message) {
+      clearTimeout(announcementTimer); live.textContent=message;
+      announcementTimer=setTimeout(()=>{live.textContent='';},6500);
+    }
+    function schedule(fn,ms) {
+      const timer=setTimeout(()=>{timers.delete(timer);fn();},ms); timers.add(timer);
+    }
+    function closeDialog() { if(dialog.open) dialog.close(); modalContext=null; }
+    function navigate(page) { if(state.screen!=='workspace'||(state.role==='reception'&&!['today','plan','activity'].includes(page)))return; closeDialog(); state.page=page; render(); document.getElementById('page-title').focus(); }
+    function render() {
+      if(state.screen==='landing') { renderLanding(); return; }
+      if(state.screen==='login') { renderLogin(); return; }
+      if(!session) { go('/'+state.product+'/entrar'); return; }
+      const d=data(), p=products[state.product], c=clients[state.client];
+      const needs=state.role==='reception'?Number(!d.receptionDone):isOperator() ? Number(d.approval==='pending')+Number(!d.clinicTaskDone) : Number(!d.clinicTaskDone);
+      document.title=`${p.name} · ${roleName()} · Doctor Creator`;
+      app.innerHTML=`<div class="workspace">
+        <aside class="sidebar" aria-label="Menu do workspace">
+          <div class="brand"><div class="wordmark">Doctor<span>Creator</span></div><small>${p.name} · ${state.role==='admin'?'Administração':state.role==='team'?'Operação':'Clínica'}</small></div>
+          <div><p class="nav-label">${state.product==='hub'?'Acompanhamento':'Programa de aquisição'}</p><nav class="nav-list" aria-label="Navegação principal">
+            ${[['today',state.role==='reception'?'Minha fila':'Hoje','home'],['plan',state.role==='reception'?'Minha rotina':p.plan,'plan'],...state.role==='reception'?[]:[['results','Resultados','chart'],['modules','Ferramentas','document']],['activity',state.role==='reception'?'Histórico':'Atividade','activity']].map(([id,label,image])=>`<button type="button" data-page="${id}" ${state.page===id?'aria-current="page"':''}>${icon(image)}<span>${label}</span>${id==='today'&&needs?`<span class="nav-count" aria-hidden="true">${needs}</span>`:''}</button>`).join('')}
+          </nav></div>
+          <div class="sidebar-footer"><div class="profile"><span class="avatar">${isOperator()?'DC':c.initials}</span><div>${roleName()}<small>${state.role==='admin'?'Carteira e governança':state.role==='team'?'Clínicas atribuídas':state.role==='reception'?'Fila de atendimento':'Resultados e decisões'}</small></div></div><p class="sidebar-note">Agentes identificados. Decisões sob seu controle.</p></div>
+        </aside>
+        <div class="mainwrap"><header class="toolbar">
+          <div class="toolbar-start">${state.role==='admin'?`<div class="product-switch" role="group" aria-label="Produto">${['hub','sap'].map(id=>`<button type="button" data-product="${id}" aria-pressed="${state.product===id}">${products[id].name}</button>`).join('')}</div>`:`<span class="product-label">${p.name}</span>`}
+            <div class="client-picker"><div><label for="client">Clínica selecionada</label><select id="client" ${state.role!=='admin'?'disabled':''}>${Object.entries(clients).filter(([id])=>state.role==='admin'||id===session.client).map(([id,v])=>`<option value="${id}" ${state.client===id?'selected':''}>${v.name}</option>`).join('')}</select></div></div>
+          </div><div class="toolbar-end"><div class="session-label"><span class="avatar">${state.role==='admin'?'DC':state.role==='team'?'OP':c.initials}</span><strong>${roleName()}</strong></div>
+            <button type="button" class="icon-button" data-action="theme" aria-label="${state.theme==='light'?'Ativar tema escuro':'Ativar tema claro'}">${icon('moon')}</button><button type="button" class="logout" data-action="logout">Sair</button>
+          </div>
+        </header>
+        <main id="main"><header class="page-head"><div><div class="eyebrow ${state.product==='sap'?'sap-label':''}">${icon(state.product==='hub'?'activity':'plan')} ${p.description}${state.product==='sap'?` · D${c.day} de 90`:''}</div><h1 id="page-title" tabindex="-1">${({today:state.role==='reception'?'Minha fila':'Visão do dia',plan:state.role==='reception'?'Minha rotina':p.plan,results:'Resultados',modules:'Todas as áreas',activity:state.role==='reception'?'Histórico do atendimento':'Atividade dos agentes'})[state.page]}</h1><p class="sub">${state.page==='today'?(isOperator()?'As decisões da sua equipe, com contexto para agir.':'O que precisa de você e como o trabalho está avançando.'):'Clínica selecionada: '+c.name+' · cenário demonstrativo'}</p></div>
+          ${isOperator()?`<button type="button" class="btn primary" data-action="ask" aria-label="Pedir análise">${icon('spark')}<span>Pedir análise</span></button>`:''}
+        </header>
+        ${state.sourceError?`<div class="source-error" role="alert"><div><strong>Os dados ainda não puderam ser conferidos.</strong><p>As recomendações estão suspensas. Resultados do período ficam indisponíveis até a nova leitura.</p></div><button class="btn" type="button" data-action="retry">${icon('refresh')} Tentar novamente</button></div>`:''}
+        ${state.role==='reception'?reception(d):state.page==='today'?today(d,needs):state.page==='plan'?plan(d):state.page==='results'?results():state.page==='modules'?modules():activity(d)}
+        <footer class="footnote"><span>Semana de 12 a 18 de outubro · dados demonstrativos</span><label><input id="source-error" type="checkbox" ${state.sourceError?'checked':''}> Simular falha da fonte</label></footer>
+        </main></div></div>`;
+      document.documentElement.dataset.theme=state.theme;
+    }
+    function today(d,needs) {
+      const active=d.runs.filter(r=>r.status==='running').length;
+      return `${state.product==='sap'?`<section class="program" aria-label="Andamento do programa"><div><strong>Implantação e aquisição</strong><p>D${clients[state.client].day} de 90 · próximo passo com responsável e evidência</p></div><div><div class="health"><span class="micro">Tempo decorrido do programa</span><span class="micro">D${clients[state.client].day}/90</span></div><div class="progress" role="progressbar" aria-label="Dias decorridos do programa" aria-valuenow="${clients[state.client].day}" aria-valuemin="0" aria-valuemax="90"><span style="width:${clients[state.client].day/90*100}%"></span></div><p>Dias decorridos não representam entregas concluídas.</p></div></section>`:''}
+      <section class="summary" aria-label="Resumo do dia">${[[needs,'Precisam de você','user'],[active,'Em andamento','bot'],[d.completed.length,'Concluído recentemente','check']].map(([value,label,image])=>`<div class="summary-cell"><div class="summary-icon">${icon(image)}</div><div><div class="summary-value">${value}</div><span class="summary-label">${label}</span></div></div>`).join('')}</section>
+      <div class="columns"><div class="stack"><section aria-labelledby="decisions-title"><div class="section-head"><h2 id="decisions-title">Precisa de você</h2><small>${needs?`${needs} ${needs===1?'pendência':'pendências'}`:'Sem pendências'}</small></div>
+      ${isOperator()&&d.approval==='pending'?decision():''}
+      ${!d.clinicTaskDone?clinicTask():''}
+      ${needs===0?`<div class="empty">${icon('check')}<h3>Nenhuma decisão pendente</h3><p>Você pode acompanhar o trabalho dos agentes ao lado.</p></div>`:''}
+      </section><section class="card"><div class="section-head"><h2>Concluído recentemente</h2>${badge('Registrado','success','check')}</div><div class="done-list">${d.completed.map(t=>`<div class="done-item">${icon('check')}<div>${esc(t)}<small>${clients[state.client].name} · nesta demonstração</small></div></div>`).join('')}</div></section>
+      </div><div class="stack"><section class="card"><div class="section-head"><h2>Operação dos agentes</h2>${badge('IA','ai','bot')}</div>${d.runs.map(runCard).join('')}<div class="activity-foot"><button type="button" class="btn link" data-page="activity">Ver todas as atividades ${icon('arrow')}</button></div></section>
+      <section class="card health"><div><h3>${state.sourceError?icon('warning')+' Leitura indisponível':'<span class="dot"></span> Fontes conferidas no cenário'}</h3><p>${state.sourceError?'Nenhum dado foi convertido em zero.':'CRM, Instagram e WhatsApp · demonstração'}</p></div>${icon('source')}</section>
+      <div class="callout">${icon('shield')} <strong>Supervisão da operação.</strong> ${isOperator()?'Publicações e conclusões de etapas exigem revisão.':'A equipe cuida da execução; suas tarefas aparecem aqui.'}</div>
+      </div></div>`;
+    }
+    function decision() {
+      const p=proposal();
+      return `<article class="card decision priority"><div class="card-top">${badge('Preparado por agente','ai','bot')}<span class="micro">${p.due}</span></div><h3>${p.title}</h3><p class="description">${p.description}</p><div class="metadata"><span>${icon('shield')} Aguardando sua aprovação</span><span>${icon('user')} Equipe responsável</span></div><div class="card-actions"><button type="button" class="btn primary" data-action="review" ${state.sourceError?'disabled':''}>${p.label} ${icon('arrow')}</button><button type="button" class="btn link" data-action="evidence">Ver evidências</button></div>${state.sourceError?'<p class="form-error">A aprovação fica indisponível até conferir a fonte.</p>':''}</article>`;
+    }
+    function clinicTask() {
+      return `<article class="card decision"><div class="card-top">${badge(isOperator()?'Acompanhar com a clínica':'Sua tarefa','','user')}<span class="micro">Esta semana</span></div><h3>${state.product==='hub'?'Conferir prioridades do próximo período':'Revisar as peças da campanha'}</h3><p class="description">${isOperator()?'A clínica precisa revisar o material. Você pode abrir o contexto e acompanhar o retorno.':'O material está organizado. Veja o que precisa ser conferido e registre sua revisão.'}</p><div class="metadata"><span>${icon('user')} Responsável da clínica</span><span>${icon('clock')} Prazo de revisão · sexta-feira</span></div><div class="card-actions"><button type="button" class="btn" data-action="task">${isOperator()?'Ver tarefa da clínica':'Abrir minha tarefa'} ${icon('chevron')}</button>${badge('Revisão humana')}</div></article>`;
+    }
+    function runCard(run) {
+      return `<article class="run" data-run-id="${run.id}"><div class="run-head"><span class="run-icon">${icon('bot')}</span><div><h3>${esc(run.title)}</h3><p>${esc(run.detail)}</p><div class="run-state">${badge(statusLabel(run.status),run.status==='completed'?'success':run.status==='paused'?'warning':'','')}<span class="micro">Agente · IA</span></div>${isOperator()&&run.status!=='completed'?`<button type="button" class="btn link" data-run="${run.id}" data-action="${run.status==='paused'?'resume':'pause'}">${icon(run.status==='paused'?'play':'pause')} ${run.status==='paused'?'Retomar':'Pausar'}</button>`:''}</div></div></article>`;
+    }
+    function plan(d) {
+      const items=state.product==='hub'?[
+        ['Leitura do período','Agente de análise','Em andamento'],['Revisão das prioridades','Responsável da clínica',d.clinicTaskDone?'Concluído':'Precisa de você'],['Relatório semanal','Equipe Doctor Creator',d.approval==='approved'?'Concluído':d.approval==='pending'?'Aguardando revisão':d.approval==='changes'?'Ajuste solicitado':'Em andamento']
+      ]:[['Rastreamento e evidências','Equipe de implementação',d.approval==='approved'?'Concluído':'Aguardando revisão'],['Peças da campanha','Responsável da clínica',d.clinicTaskDone?'Concluído':'Precisa de você'],['Treino do atendimento','Equipe de relacionamento','Próxima etapa'],['Anúncios no ar','Gestor de tráfego','Depende das etapas anteriores']];
+      return `<section class="card"><div class="section-head"><h2>${state.product==='hub'?'Prioridades do período':'Próximas entregas do programa'}</h2>${badge('Responsável + próximo passo')}</div>${items.map(([title,owner,status],i)=>`<div class="list-row"><span class="numbered">${i+1}</span><div class="row-main"><h3>${title}</h3><p>${owner}</p><div class="metadata">${badge(status,status==='Concluído'?'success':'')}</div></div>${i===1&&!d.clinicTaskDone?'<button type="button" class="btn" data-action="task">Abrir tarefa</button>':''}</div>`).join('')}<div class="callout">${state.product==='sap'?'O cronograma detalhado permanece como fonte das tarefas. Esta visão destaca o responsável e o que depende de cada entrega.':'O plano reúne ações e campanhas. Cada proposta mantém seu vínculo com as evidências e com a atividade do agente.'}</div></section>`;
+    }
+    function results() {
+      const unavailable=state.sourceError;
+      return `<div class="callout" style="margin-bottom:20px">${icon('source')} <strong>${unavailable?'Fonte indisponível: resultados suspensos.':'Cenário demonstrativo · semana de 12 a 16 de outubro'}</strong> ${unavailable?'Os valores ausentes não são tratados como zero.':'Valores fictícios para avaliar a organização da tela. Não representam resultado de uma clínica.'}</div><section class="metrics-grid" aria-label="Indicadores do cenário">${[['Conversas iniciadas','120','Origem: WhatsApp'],['Agendamentos','36','Origem: CRM'],['Consultas realizadas','24','Origem: CRM']].map(([label,value,source])=>`<article class="card metric"><h2>${label}</h2><strong>${unavailable?'—':value}</strong><p>${unavailable?'Indisponível até nova leitura':source}</p></article>`).join('')}</section><section class="card"><div class="section-head"><h2>Da conversa à consulta</h2>${badge(unavailable?'Leitura pendente':'Dados simulados')}</div>${unavailable?'<p class="description">Tente novamente na mensagem de erro acima para recuperar a visualização.</p>':`<div class="bar-chart">${[['Conversas',120,100],['Agendamentos',36,30],['Consultas',24,20]].map(([name,value,width])=>`<div class="chart-row"><span>${name}</span><div class="progress"><span style="width:${width}%"></span></div><strong>${value}</strong></div>`).join('')}</div>`}<p class="description" style="margin-top:22px">Uma entrega do agente e uma melhora no resultado são coisas distintas. Esta tela mostra indicadores; a aba Atividade registra o trabalho executado.</p></section>`;
+    }
+    function activity(d) {
+      return `<div class="columns"><section class="card"><div class="section-head"><h2>Trabalho em andamento</h2>${badge('Agentes de IA','ai','bot')}</div>${d.runs.map(runCard).join('')}${d.approval==='changes'?'<div class="callout alert"><strong>Ajuste solicitado</strong><p>O agente recebeu sua orientação. Uma nova proposta exigirá outra revisão.</p></div>':''}<div class="callout" style="margin-top:15px">Pausar interrompe os próximos passos. Uma ação já concluída não é desfeita automaticamente.</div></section><section class="card"><h2 style="margin-bottom:18px">Histórico desta clínica</h2><div class="done-list">${d.events.map(event=>`<div class="done-item">${icon(event.status==='Concluído'?'check':'clock')}<div><p>${esc(event.text)}</p><small>${esc(event.detail)}</small><div style="margin-top:6px">${badge(event.status,event.status==='Concluído'?'success':'')}</div></div></div>`).join('')}</div></section></div>`;
+    }
+    function showDialog(content,kind) {
+      modalContext={key:key(),role:state.role,kind}; dialog.innerHTML=content; dialog.showModal();
+    }
+    function dialogHeader(title,label='Revisão da proposta') {
+      return `<header class="dialog-head"><div><span class="micro">${label} · ${clients[state.client].name} · ${products[state.product].name}</span><h2 id="dialog-title">${title}</h2></div><button type="button" class="icon-button" data-action="close" aria-label="Fechar painel">${icon('close')}</button></header>`;
+    }
+    function review(evidenceOnly=false) {
+      if(!isOperator()||data().approval!=='pending') return;
+      const p=proposal();
+      showDialog(`${dialogHeader(evidenceOnly?'Evidências da proposta':p.title)}<div class="dialog-body">${badge('Preparado por agente de IA','ai','bot')}
+      <p class="description">${evidenceOnly?'Veja as fontes antes de decidir.':'Confira o conteúdo, o destino e o efeito desta aprovação.'}</p>
+      ${!evidenceOnly?`<div><h3 style="margin-bottom:9px">O que será aprovado</h3><div class="preview-content">${p.preview}</div></div><div class="review-grid"><div class="review-box"><strong>Antes</strong><p>${p.before}</p></div><div class="review-box"><strong>Depois da aprovação</strong><p>${p.after}</p></div></div><div class="review-box"><strong>Destino</strong><p>${p.destination}</p></div>`:''}
+      <div><h3 style="margin-bottom:10px">Base da proposta</h3><ul class="evidence-list">${p.evidence.map(e=>`<li>${icon('source')}<span>${e}</span></li>`).join('')}</ul></div>
+      <div class="callout alert">${icon('shield')} <strong>Limite de autonomia:</strong> o agente prepara a proposta. Uma pessoa da equipe precisa aprovar. ${state.product==='hub'?'Um comentário publicado não pode ser desfeito automaticamente.':'Concluir a etapa não comprova, por si só, melhora nos resultados.'}</div>
+      ${!evidenceOnly?`<label class="review-check"><input id="review-check" type="checkbox" ${state.sourceError?'disabled':''}><span>Conferi o conteúdo, a clínica e o efeito desta ação.</span></label><div id="change-form" hidden><label class="field-label" for="feedback">O que o agente precisa ajustar?</label><textarea id="feedback" placeholder="Descreva o ajuste necessário…" maxlength="1000"></textarea><p id="feedback-error" class="form-error" role="alert" hidden>Descreva o ajuste antes de enviar.</p></div>`:''}
+      <p class="micro">Simulação: nenhuma mensagem, alteração de cronograma ou chamada de IA será enviada.</p></div><footer class="dialog-footer"><button type="button" class="btn link" data-action="close">Voltar</button><div class="actions">${evidenceOnly?'<button type="button" class="btn primary" data-action="review-from-evidence">Revisar proposta</button>':`<button type="button" class="btn" id="request-change" data-action="request-change">Solicitar ajuste</button><button type="button" class="btn primary" id="approve" data-action="approve" disabled>${p.execute}</button>`}</div></footer>`,evidenceOnly?'evidence':'review');
+    }
+    function task() {
+      const team=isOperator();
+      showDialog(`${dialogHeader(state.product==='hub'?'Revisar prioridades do período':'Revisar peças da campanha','Tarefa da clínica')}<div class="dialog-body">${badge('Responsável da clínica','','user')}<p class="description">${team?'Esta tarefa depende do retorno da clínica. A equipe acompanha o andamento.':'Confira o material preparado e registre sua revisão. Se houver alguma dúvida, informe o que precisa ser alterado.'}</p><div class="preview-content">${state.product==='hub'?'Prioridades propostas: revisar o atendimento, acompanhar agendamentos e preparar a pauta de conteúdo do próximo período.':'Material demonstrativo: seis peças de campanha e dois roteiros de vídeo organizados para revisão.'}</div><div class="review-box"><strong>Pronto quando</strong><p>${state.product==='hub'?'A clínica revisou as prioridades e registrou as observações.':'A clínica conferiu as peças e registrou o retorno à equipe.'}</p></div>${team?'<div class="callout">A clínica pode registrar a revisão na visualização “Clínica”. A equipe não conclui a tarefa em nome dela neste protótipo.</div>':`<label class="field-label" for="task-note">Observações da revisão <span class="micro">(opcional)</span><textarea id="task-note" maxlength="1000" placeholder="O que a equipe precisa saber?"></textarea></label>`}<p class="micro">O registro acontece somente nesta demonstração.</p></div><footer class="dialog-footer"><button type="button" class="btn" data-action="close">Voltar</button>${!team?'<button type="button" class="btn primary" data-action="complete-task">Registrar minha revisão</button>':''}</footer>`,'task');
+    }
+    function ask() {
+      if(!isOperator()) return;
+      showDialog(`${dialogHeader('Que análise você precisa?','Orientar o agente')}<div class="dialog-body"><p class="description">O agente preparará uma análise para ${clients[state.client].name}. Publicar mensagens ou alterar etapas continuará exigindo aprovação.</p><label class="field-label" for="request">Objetivo da análise<textarea id="request" maxlength="1000" placeholder="Ex.: analisar os pontos de perda no atendimento desta semana"></textarea></label><p id="request-error" class="form-error" role="alert" hidden>Descreva o objetivo da análise.</p><div class="review-box"><strong>Escopo desta solicitação</strong><p>Somente a clínica selecionada · ${products[state.product].name} · leitura e preparação de proposta.</p></div><p class="micro">Simulação com dados demonstrativos. Nenhuma chamada de IA ou custo real.</p></div><footer class="dialog-footer"><button type="button" class="btn" data-action="close">Cancelar</button><button type="button" class="btn primary" data-action="start-analysis">Preparar análise ${icon('arrow')}</button></footer>`,'ask');
+    }
+    function validContext(kind,role='operator') {
+      return state.screen==='workspace' && modalContext?.key===key() && modalContext.role===state.role && (!role||(role==='operator'?isOperator():role==='clinic'?isClinic():state.role===role)) && modalContext.kind===kind;
+    }
+    function approve() {
+      if(!validContext('review')||state.sourceError||data().approval!=='pending'||!document.getElementById('review-check')?.checked) return;
+      const d=data(), context=key(), p=proposal();
+      d.approval='executing';
+      d.runs.push({id:'approval',title:p.result,detail:'Executando apenas o cenário demonstrativo aprovado.',status:'running',source:'Proposta revisada'});
+      d.events.unshift({text:'Proposta aprovada pela equipe',detail:'Conteúdo, destino e efeito revisados · simulação',status:'Em andamento'});
+      closeDialog(); render(); document.getElementById('page-title').focus(); announce('Aprovação registrada. A simulação está em andamento.');
+      schedule(()=>{
+        const run=d.runs.find(r=>r.id==='approval');
+        if(!run||run.status!=='running') return;
+        completeApproval(d,run,p.result,context);
+      },1300);
+    }
+    function completeApproval(d,run,title,context) {
+      run.status='completed'; run.detail='Simulação concluída. Nenhuma ação foi enviada à operação.'; d.approval='approved';
+      d.completed.unshift(title); d.events.unshift({text:title,detail:'Após aprovação humana · nenhuma escrita externa',status:'Concluído'});
+      if(key()===context) {render();announce('Simulação concluída. O registro está no histórico desta clínica.');}
+    }
+    function requestChange() {
+      if(!validContext('review')||data().approval!=='pending') return;
+      const form=document.getElementById('change-form');
+      if(form.hidden) {form.hidden=false;document.getElementById('request-change').textContent='Enviar solicitação';document.getElementById('approve').hidden=true;document.getElementById('feedback').focus();return;}
+      const feedback=document.getElementById('feedback').value.trim();
+      if(!feedback) {document.getElementById('feedback-error').hidden=false;document.getElementById('feedback').focus();return;}
+      const d=data();d.approval='changes';d.feedback=feedback;d.events.unshift({text:'Ajuste solicitado à proposta',detail:feedback,status:'Aguardando ajuste'});
+      closeDialog();render();document.getElementById('page-title').focus();announce('Ajuste solicitado. A proposta não foi aprovada nem executada.');
+    }
+    function controlRun(id,action) {
+      if(!isOperator()) return;
+      const d=data(),run=d.runs.find(r=>r.id===id);
+      if(!run||run.status==='completed') return;
+      run.status=action==='pause'?'paused':'running';
+      d.events.unshift({text:`${action==='pause'?'Pausa':'Retomada'}: ${run.title}`,detail:'Decisão da equipe · próximos passos controlados',status:action==='pause'?'Pausado':'Em andamento'});
+      if(action==='resume'&&id==='approval') {const context=key(),p=proposal();schedule(()=>{if(run.status==='running') completeApproval(d,run,p.result,context);},1300);}
+      render();document.querySelector(`[data-run="${id}"]`)?.focus();announce(action==='pause'?'Próximos passos pausados.':'Execução retomada no cenário demonstrativo.');
+    }
+    document.addEventListener('click',event=>{
+      const b=event.target.closest('button'); if(!b||b.disabled)return;
+      if(b.dataset.page) {navigate(b.dataset.page);return;}
+      if(b.dataset.product) {if(state.role!=='admin'||state.screen!=='workspace')return; go('/'+b.dataset.product+'/painel');return;}
+      const action=b.dataset.action;
+      if(action==='close')closeDialog();
+      if(action==='review')review();
+      if(action==='evidence')review(true);
+      if(action==='review-from-evidence'){closeDialog();review();}
+      if(action==='task')task();
+      if(action==='approve')approve();
+      if(action==='request-change')requestChange();
+      if(action==='ask')ask();
+      if(action==='theme'){state.theme=state.theme==='light'?'dark':'light';render();document.querySelector('[data-action="theme"]').focus();}
+      if(action==='retry'){state.sourceError=false;render();announce('Leitura recuperada no cenário demonstrativo.');}
+      if(action==='pause'||action==='resume')controlRun(b.dataset.run,action);
+      if(action==='complete-task'&&validContext('task','clinic')&&!data().clinicTaskDone){const d=data(),note=document.getElementById('task-note').value.trim();d.clinicTaskDone=true;d.completed.unshift('Revisão registrada pela clínica');d.events.unshift({text:'Revisão registrada pela clínica',detail:note||'Sem observações adicionais',status:'Concluído'});closeDialog();render();document.getElementById('page-title').focus();announce('Sua revisão foi registrada nesta demonstração.');}
+      if(action==='start-analysis'&&validContext('ask')){const request=document.getElementById('request').value.trim();if(!request){document.getElementById('request-error').hidden=false;document.getElementById('request').focus();return;}const d=data();d.runs.push({id:`request-${d.runs.length}`,title:'Análise solicitada por você',detail:request,status:'running',source:'Dados da clínica selecionada'});d.events.unshift({text:'Nova análise solicitada',detail:request,status:'Em andamento'});closeDialog();state.page='activity';render();document.getElementById('page-title').focus();announce('Análise adicionada à atividade desta clínica. Nenhuma IA real foi acionada.');}
+      if(action==='reset'){timers.forEach(clearTimeout);timers.clear();closeDialog();store={};state={...state,page:'today',sourceError:false};render();announce('Demonstração reiniciada. Todos os exemplos voltaram ao estado inicial.');}
+    });
+    document.addEventListener('change',event=>{
+      const target=event.target;
+      if(target.id==='client'&&state.role==='admin'&&clients[target.value]){closeDialog();state.client=target.value;state.page='today';render();document.getElementById('client').focus();}
+
+      if(target.id==='source-error'){state.sourceError=target.checked;render();document.getElementById('source-error').focus();}
+      if(target.id==='review-check'){document.getElementById('approve').disabled=!target.checked||state.sourceError;}
+    });
+
+    function brand(product) { return `<div class="public-brand"><div class="wordmark">Doctor<span>Creator</span></div><span class="product-caption">${product==='admin'?'ADMIN':products[product].name}</span></div>`; }
+    const publicCopy = {
+      hub:{kicker:'Agentes de IA para marketing e vendas',title:'Marketing e vendas.<br><em>Inteligência em ação.</em>',intro:'Transforme dados de conteúdo, anúncios e atendimento em análises e prioridades. Agentes de IA preparam o trabalho; sua equipe revisa e decide o próximo passo.',previewTitle:'Uma análise. Um próximo passo.',sectionTitle:'Da informação<br>à entrega.',sectionIntro:'O valor está no trabalho preparado para ser usado: conhecimento da clínica, evidências organizadas e uma proposta clara. O HUB conecta análise à rotina de marketing e vendas da clínica.',items:[['Estude o que atrai','Entenda conteúdo, audiência e anúncios conforme as fontes conectadas. Identifique o que merece investigação antes de aumentar o investimento.'],['Entenda o que converte','Leia o CRM e o atendimento com contexto. Compare conversa, agendamento e comparecimento; diferencie um gargalo comercial de uma falha de registro.'],['Receba trabalho preparado','Agentes organizam conhecimento da clínica em propostas para o Brand Brain. Sua equipe confere as fontes e aprova o que passa a orientar conteúdo e atendimento.']],final:'Mais clareza no marketing.<br>Mais direção nas vendas.',finalText:'Veja como análises e agentes podem apoiar o trabalho da sua clínica.'},
+      sap:{kicker:'Sistema de Aquisição de Pacientes',title:'Aquisição de pacientes.<br><em>Da atração à fidelização.</em>',intro:'Uma implantação assistida de 90 dias para conectar anúncios, atendimento, consulta e acompanhamento. Método e execução técnica organizam a jornada; software e agentes de IA apoiam entregas específicas, com revisão da equipe.',previewTitle:'Uma jornada inteira. Um plano.',sectionTitle:'O anúncio é<br>só o começo.',sectionIntro:'O paciente precisa chegar, ser bem atendido, comparecer e entender sua recomendação. O SAP organiza essa jornada com seis sessões individuais, tarefas, materiais e leitura semanal.',items:[['Diagnóstico e direção','Defina o serviço prioritário, o paciente ideal, a proposta de valor e as metas. A implantação começa entendendo a realidade da clínica.'],['Atração e rastreamento','Prepare campanhas, criativos e eventos de teste. A gravação guiada é de materiais para anúncios; a mídia começa depois da preparação do atendimento e da conferência do rastreamento.'],['Conversa e confirmação','Treine a recepção para conduzir a conversa, organizar o agendamento e confirmar a presença. Registre cada etapa no CRM ou na agenda adotada pela clínica.'],['Comunicação na consulta','Estruture a apresentação do plano, esclareça dúvidas e explique opções e limites. O médico mantém a decisão clínica; o paciente decide com compreensão e liberdade.'],['Follow-up e relacionamento','Organize retornos, próximos passos, fidelização e indicações com responsáveis e cadências. A jornada continua depois da primeira consulta.'],['Leitura e melhoria semanal','Confira os registros, identifique o principal vazamento do funil e combine a ação da semana. A clínica e a equipe acompanham o que ficou sob sua responsabilidade.']],final:'Uma jornada bem preparada.<br>Uma equipe com direção.',finalText:'Conheça o método e as responsabilidades da implantação antes de começar.'}
+    };
+    function landingExtras(p) {
+      const steps=p==='hub'?[['Contexto','Fontes disponíveis, período e conhecimento da clínica.'],['Análise','Dados conferidos, evidências e limites da leitura.'],['Entrega','Conhecimento da clínica organizado em propostas para revisão.'],['Acompanhamento','Decisão registrada e atividade identificada.']]:[['D0–D14','Onboarding, diagnóstico, paciente ideal e proposta de valor.'],['D16–D40','Atração, rastreamento, recepção, consulta e follow-up.'],['Até D60','Marco previsto para o método estar em operação, conforme as entregas.'],['D61–D90','Melhoria com dados reais, relatório final e plano de continuidade.']];
+      const faq=p==='hub'?[
+        ['O que os agentes fazem?','O agente de Brand Brain lê as fontes disponíveis e propõe memória de marca para revisão, nas clínicas com esse módulo ativo. As áreas de conteúdo, anúncios e atendimento dão contexto ao estudo. O relatório semanal do protótipo ilustra um fluxo proposto; não representa um fluxo já implementado no motor de agentes.'],
+        ['O HUB substitui meu CRM?','A proposta é aproveitar os sistemas que a clínica já utiliza, conforme as integrações disponíveis. O CRM registra a operação comercial; o HUB ajuda a estudá-la e orientar o trabalho de marketing e vendas.'],
+        ['Todo número tem atribuição de venda?','Não. Origem, período e cobertura precisam estar claros. Relacionar anúncios, conversas e vendas exige identificadores e registros consistentes. Dado indisponível deve aparecer como indisponível.'],
+        ['Já posso gravar consultas?','A gravação e a análise de consultas são uma evolução futura e não estão disponíveis nesta versão. Hoje, o método do SAP apoia a comunicação com roteiros, apresentação do plano, dúvidas e follow-up.'],
+        ['Quem pode acessar?','Cada pessoa tem sua função: administração, equipe interna, gestão da clínica ou recepção. Apenas a administração acompanha os dois produtos. A gestão da clínica e a recepção têm visões diferentes, conforme suas responsabilidades.']
+      ]:[
+        ['Como os agentes ajudam no SAP?','O fluxo atual confere acessos críticos, prepara cobranças para revisão e solicita aprovação para concluir o marco de acessos. O responsável decide antes de uma ação. O exemplo de rastreamento deste protótipo ilustra outro fluxo proposto; sua automação ainda precisa ser implementada.'],
+        ['O que faz parte da implantação?','Kickoff, seis sessões individuais, diagnóstico, plano de 90 dias, materiais e rotinas da jornada, execução técnica de mídia e rastreamento, leitura semanal e relatório D90. As entregas e condições são detalhadas na proposta.'],
+        ['O investimento em anúncios está incluído?','A gestão de tráfego faz parte do programa de 90 dias. A verba paga às plataformas é da clínica e é separada. Licenças e serviços adicionais seguem o escopo da proposta.'],
+        ['Quem conversa com os pacientes?','A equipe da clínica continua responsável pelo atendimento diário e pelos registros. A implantação prepara o processo e orienta a execução. Não é um serviço de atendimento diário aos pacientes.'],
+        ['Preciso trocar de CRM?','Um sistema que já funciona pode ser aproveitado. A prioridade é organizar etapas, registros e rastreamento antes de decidir sobre uma migração.'],
+        ['Existe promessa de faturamento?','Não há promessa de receita, lucro ou quantidade de tratamentos. As metas operacionais e eventuais condições de garantia são estabelecidas na proposta e no contrato, com linha de base e critérios de execução.'],
+        ['A consulta será gravada?','Não nesta versão. O método já inclui comunicação consultiva, apresentação do plano e follow-up. Gravar e analisar consultas é uma evolução futura. A gravação guiada de criativos para anúncios é outra entrega.'],
+        ['Como continuo no HUB?','O SAP prepara a base para a continuidade. O histórico da clínica deve ser preservado, mas o HUB possui contratação e liberação de acesso próprias. Concluir os 90 dias não concede acesso automaticamente.']
+      ];
+      return `<section class="public-section service-section" aria-labelledby="delivery-title"><div class="section-intro"><h2 id="delivery-title">${p==='hub'?'Agentes com contexto.<br>Equipe no comando.':'90 dias.<br>Responsabilidades claras.'}</h2><p>${p==='hub'?'Service as Software é a direção do produto: transformar conhecimento e dados em trabalho entregue. Começamos por fluxos definidos, com evidências, revisão e histórico. A autonomia cresce conforme a confiabilidade de cada fluxo.':'A equipe Doctor Creator conduz a implantação técnica; a clínica participa das sessões, valida materiais, atende e mantém os registros. A meta é colocar o método em operação até D60 e usar o período final para melhorar com dados reais.'}</p></div><ol class="delivery-steps">${steps.map(([t,d])=>`<li><strong>${t}</strong><p>${d}</p></li>`).join('')}</ol><p class="scope-note">${p==='hub'?'O protótipo usa dados fictícios. A análise real depende das fontes e dos fluxos disponíveis para cada clínica.':'Plano, diagnóstico, materiais, roteiro de continuidade e relatório D90 permanecem no escopo. Prazos dependem das entregas e das pausas registradas. Verba de mídia e atendimento diário aos pacientes têm responsabilidades próprias.'}</p></section><section class="public-section faq-section" aria-labelledby="faq-title"><div class="section-intro"><h2 id="faq-title">Antes de começar.</h2><p>O que faz parte da experiência e o que depende da sua equipe.</p></div><div class="faq-list">${faq.map(([q,a])=>`<details><summary>${q}</summary><p>${a}</p></details>`).join('')}</div></section>`;
+    }
+    function renderLanding() {
+      const p=state.product,c=publicCopy[p]; document.documentElement.dataset.theme='light';document.title=`${products[p].name} · Doctor Creator`;
+      app.innerHTML=`<div class="public"><header class="public-nav">${brand(p)}<nav class="public-nav-links" aria-label="Navegação pública"><button type="button" data-section="metodo">Como funciona</button><a class="btn" href="#/${p}/entrar">Acessar ${products[p].name} ${icon('arrow')}</a></nav></header>
+      <main id="main" class="public-main"><section class="public-hero" aria-labelledby="public-title"><div><p class="public-kicker">${c.kicker}</p><h1 id="public-title">${c.title}</h1><p class="intro">${c.intro}</p><div class="hero-actions"><button type="button" class="btn primary" data-action="explore">Explorar demonstração ${icon('arrow')}</button><button type="button" class="btn" data-section="metodo">Conhecer a experiência</button></div><p class="hero-note">${p==='hub'?'Análise de marketing e vendas. Trabalho preparado para agir.':'Implantação assistida · seis sessões individuais · acompanhamento semanal'}</p></div>
+      <div class="product-proof" aria-label="Prévia ilustrativa do ${products[p].name}"><div class="proof-top"><span class="proof-brand">${products[p].name} / CLÍNICA AURORA</span><span>PRÉVIA ILUSTRATIVA</span></div><div class="proof-heading"><h2>${c.previewTitle}</h2><span>${p==='hub'?'12 — 16 OUT':'D24 / D90'}</span></div>
+      ${p==='hub'?`<div class="proof-metrics"><div><strong>120</strong><small>Conversas</small></div><div><strong>36</strong><small>Agendamentos</small></div><div><strong>24</strong><small>Comparecimentos</small></div></div><div class="proof-chart" aria-hidden="true">${[30,45,38,54,42,66,51,73,65,84,71,92].map(h=>`<span style="height:${h}%"></span>`).join('')}</div><div class="proof-axis"><span>EVOLUÇÃO ILUSTRATIVA</span><span>OUTUBRO</span></div><div class="proof-action">${icon('document')}<div><strong>Agente · memória de marca proposta</strong><p>Conhecimento da clínica organizado a partir das fontes disponíveis, para revisão.</p></div></div>`:`<div class="proof-stages"><div class="proof-stage"><span>01</span><div><strong>Conhecer e atrair</strong><p>Diagnóstico, posicionamento e campanhas.</p></div><span class="stage-state">Base</span></div><div class="proof-stage"><span>02</span><div><strong>Conversar e comparecer</strong><p>Recepção, agenda e confirmação.</p></div><span class="stage-state">Jornada</span></div><div class="proof-stage"><span>03</span><div><strong>Decidir e continuar</strong><p>Consulta, follow-up e fidelização.</p></div><span class="stage-state">Relação</span></div></div><div class="proof-action">${icon('document')}<div><strong>Agente · evidências organizadas</strong><p>Uma etapa só avança depois da conferência do responsável.</p></div></div>`}<div class="proof-footer"><span>Dados fictícios · sem resultado prometido</span><span>Supervisão humana</span></div></div></section>
+      <div class="public-divider"><div class="public-strip"><strong>${p==='hub'?'Inteligência aplicada à clínica.':'A jornada completa do paciente.'}</strong><span>${p==='hub'?'Conteúdo e anúncios':'Atração e atendimento'}</span><span>${p==='hub'?'CRM e atendimento':'Consulta e follow-up'}</span><span>${p==='hub'?'Agentes e entregas':'Fidelização e indicações'}</span></div></div>
+      <section id="metodo" class="public-section" aria-labelledby="method-title"><div class="section-intro"><h2 id="method-title">${c.sectionTitle}</h2><p>${c.sectionIntro}</p></div><div class="editorial-rows">${c.items.map(([t,d],i)=>`<article class="editorial-row"><span class="serial">0${i+1}</span><h3>${t}</h3><p>${d}</p></article>`).join('')}</div></section>
+      ${landingExtras(p)}<section class="public-final"><div><div><h2>${c.final}</h2><p>${c.finalText}</p></div><a href="#/${p}/entrar" class="btn primary">Conhecer o ${products[p].name} ${icon('arrow')}</a></div></section></main>
+      <footer class="public-footer"><span>Doctor Creator · ${products[p].name} · Estudo de interface</span><div class="footer-links"><a href="#/${p}/equipe">Acesso da equipe interna</a><a href="#/admin/entrar">Administrativo</a><button type="button" class="btn link" data-action="scope">Sobre os acessos</button></div></footer></div>`;
+    }
+    function visibleGroups() {
+      return coverage.groups.filter(g=>g.product===state.product).map(g=>({...g,entries:g.entries.filter(e=>state.role==='admin'||e.audience==='clinic'||state.role==='team'&&e.audience==='team')})).filter(g=>g.entries.length);
+    }
+    function modules() {
+      return `<section class="card coverage-intro"><h2>O essencial à frente. O restante, acessível.</h2><p class="description">Este mapa preserva as áreas da aplicação atual. No protótipo, você pode entender cada área; as telas completas continuam na aplicação. A visibilidade acompanha o perfil deste exemplo.</p></section><div class="module-grid">${visibleGroups().map(g=>`<section class="card module-card"><p class="micro">${products[state.product].name} · área existente</p><h2>${esc(g.title)}</h2><p class="description">${esc(g.description)}</p><ul>${g.entries.map(e=>`<li>${esc(e.label)}</li>`).join('')}</ul><button type="button" class="btn" data-module="${g.id}">Entender esta área<span class="sr-only">: ${esc(g.title)}</span> ${icon('arrow')}</button></section>`).join('')}</div><section class="card future-section"><p class="micro">Roadmap · não disponível nesta versão</p><h2>Evoluções planejadas</h2>${coverage.future.map(f=>`<div><h3>${esc(f.title)}</h3><p class="description">${esc(f.detail)}</p></div>`).join('')}</section>`;
+    }
+    function openModule(id) {
+      const g=visibleGroups().find(g=>g.id===id);if(!g||state.screen!=='workspace'||state.role==='reception')return;
+      closeDialog();dialog.innerHTML=`${dialogHeader(g.title,'Área existente · visão de cobertura')}<div class="dialog-body"><p class="description">${esc(g.detail)}</p><ul class="module-detail">${g.entries.map(e=>`<li>${esc(e.label)}</li>`).join('')}</ul><p class="micro">Este estudo apresenta a organização da área. Não executa as funções da aplicação atual.</p></div><footer class="dialog-footer"><button type="button" class="btn primary" data-action="close">Voltar às áreas</button></footer>`;dialog.showModal();
+    }
+    function loginKind() { return state.loginRole || 'clinic'; }
+    function renderLogin() {
+      const p=state.product,role=loginKind(),admin=role==='admin',internal=role==='team';
+      const label=admin?'Administrativo':internal?'Equipe interna':'Clínica';
+      document.documentElement.dataset.theme='light'; document.title=`Entrar · ${admin?'Administrativo':products[p].name} · Doctor Creator`;
+      app.innerHTML=`<div class="public login-layout"><aside class="login-aside">${brand(admin?'admin':p)}<div class="login-copy"><p class="public-kicker">${admin?'Gestão da operação':internal?'Operação com responsabilidade':products[p].description}</p><h1>${admin?'Uma visão completa.<br><em>Acesso com responsabilidade.</em>':internal?'Contexto para agir.<br><em>Clareza para entregar.</em>':p==='hub'?'Marketing e vendas,<br><em>com direção.</em>':'Sua jornada de aquisição,<br><em>etapa por etapa.</em>'}</h1><p>${admin?'Acompanhe a carteira, as equipes e os dois produtos a partir de um acesso administrativo.':internal?'Acompanhe as clínicas atribuídas, os próximos passos e as aprovações da sua operação.':p==='hub'?'Acompanhe as análises de marketing e vendas, as entregas dos agentes e as prioridades da sua clínica.':'Da atração ao follow-up: acompanhe suas tarefas, as sessões e as entregas do programa de 90 dias.'}</p><div class="login-context">${icon('shield')}<p>${admin?'Acesso exclusivo à administração.':internal?'Permissões definidas por produto, função e carteira de clínicas.':`Seu acesso é individual e limitado à sua clínica no ${products[p].name}.`}</p></div></div><p class="login-aside-footer">Doctor Creator · ${admin?'Administração':products[p].name} · Acesso individual</p></aside>
+      <main id="main" class="login-pane"><a class="back-link" href="#/${p}">Voltar à apresentação</a><div class="login-form-wrap"><p class="access-kicker">${label}${admin?'':' / '+products[p].name}</p><h2>Bem-vindo de volta.</h2><p class="login-intro">${admin?'Entre no ambiente administrativo.':internal?'Acesse sua área de trabalho.':'Acesse o ambiente da sua clínica.'}</p>${accessNotice?`<p class="access-notice" role="alert">${esc(accessNotice)}</p>`:''}
+      <form class="login-form" id="demo-login" aria-label="Entrar no ${admin?'Administrativo':products[p].name}"><label for="login-email">E-mail</label><input id="login-email" type="email" autocomplete="off" value="${admin?'admin':internal?'operacao':'clinica'}@exemplo.com" readonly aria-describedby="demo-login-note"><label for="login-password">Senha</label><div class="password-wrap"><input id="login-password" type="password" autocomplete="off" value="demonstracao" readonly aria-describedby="demo-login-note"><button type="button" data-action="password" aria-label="Mostrar senha">Mostrar</button></div><button type="submit" class="btn primary">Entrar na demonstração ${icon('arrow')}</button><button type="button" class="forgot" data-action="forgot">Esqueci minha senha</button><p id="demo-login-note" class="demo-login-note">Acesso fictício para avaliar a interface. Os campos são de exemplo e não recebem credenciais reais.</p></form>
+      <p class="login-access-note">${admin?'A administração gerencia a carteira e os acessos.':internal?'Seu acesso é concedido pela administração da operação.':'Cada pessoa utiliza seu próprio acesso. O convite e a função são definidos pelo responsável.'}</p></div><p class="login-pane-footer">${admin?'Administrativo':products[p].name} · Ambiente de demonstração</p></main></div>`;
+    }
+    function go(path) { closeDialog(); if(location.hash==='#'+path) route(); else location.hash=path; }
+    function startDemo(product,role='clinic') {
+      if(!products[product]||!['admin','team','clinic','reception'].includes(role))return;
+      timers.forEach(clearTimeout); timers.clear();
+      session={role,product,client:'aurora'};state.role=role;state.client='aurora';state.page='today';state.sourceError=false;accessNotice='';go('/'+product+'/painel');
+    }
+    function route() {
+      closeDialog();const path=location.hash.slice(1).split('?')[0]||'/hub';
+      if(path==='/admin/entrar') {state.product='hub';state.loginRole='admin';state.screen='login';}
+      else {
+        const match=path.match(/^\/(hub|sap)(?:\/(entrar|equipe|painel))?$/);
+        if(!match){state.product='hub';state.screen='landing';}
+        else {
+          state.product=match[1];const mode=match[2];state.screen=mode==='painel'?'workspace':mode?'login':'landing';state.loginRole=mode==='equipe'?'team':'clinic';
+          if(mode==='painel') {
+            if(!session) {state.screen='login';accessNotice='Entre pelo acesso deste produto para continuar a demonstração.';}
+            else if(session.role!=='admin'&&session.product!==state.product) {state.screen='login';accessNotice='Este acesso pertence a outro produto. Use um convite autorizado para este ambiente.';}
+            else {state.role=session.role;state.client=state.role==='admin'?state.client:session.client;state.page='today';accessNotice='';}
+          } else accessNotice='';
+        }
+      }
+      render();window.scrollTo(0,0);
+    }
+    function showcase() {
+      closeDialog();dialog.innerHTML=`<header class="dialog-head"><div><span class="micro">Estudo de interface</span><h2 id="dialog-title">Telas e perfis</h2></div><button type="button" class="icon-button" data-action="close" aria-label="Fechar painel">${icon('close')}</button></header><div class="dialog-body"><p class="showcase-note">Este painel pertence à demonstração. Dentro dos produtos, a clínica e os funcionários não escolhem perfis nem trocam de produto.</p><div class="showcase-grid">${['hub','sap'].map(p=>`<section><h3>${products[p].name}</h3><button type="button" data-route="/${p}">Apresentação · ${products[p].name}${icon('arrow')}</button><button type="button" data-route="/${p}/entrar">Login · ${products[p].name}${icon('arrow')}</button>${[['admin','Administrativo'],['team','Equipe interna'],['clinic','Gestão da clínica'],['reception','Recepção']].map(([r,label])=>`<button type="button" data-scene="${p}:${r}">${label} · ${products[p].name}${icon('arrow')}</button>`).join('')}</section>`).join('')}</div><p class="showcase-note">Todas as clínicas, dados e acessos são fictícios. Este estudo não substitui autorização no servidor.</p></div>`;dialog.showModal();
+    }
+    function reception(d) {
+      if(state.page==='activity')return `<section class="card"><h2>Histórico da minha rotina</h2><div class="done-list" style="margin-top:22px">${d.events.filter(e=>/revisão|rotina/i.test(e.text)).map(e=>`<div class="done-item">${icon('check')}<div><p>${esc(e.text)}</p><small>${esc(e.detail)}</small></div></div>`).join('')||'<p class="description">Nenhuma atualização registrada nesta demonstração.</p>'}</div></section>`;
+      return `<section class="reception-summary" aria-label="Resumo da recepção"><div><strong>${d.receptionDone?'0':'3'}</strong><span>Próximas ações</span></div><div><strong>${d.receptionDone?'3':'0'}</strong><span>Conferidas hoje</span></div><div><strong>1</strong><span>Clínica atribuída</span></div></section><section class="card"><div class="section-head"><h2>${state.page==='plan'?'Minha rotina de atendimento':'Próximos passos do atendimento'}</h2>${badge('Recepção')}</div><p class="description">Clínica Aurora · acompanhe as ações da sua função. Os exemplos não contêm dados de pacientes.</p><ul class="reception-list">${[['Conferir os contatos recebidos','Confirmar responsável e próxima ação no CRM.'],['Revisar os agendamentos','Conferir o registro de confirmação na agenda.'],['Atualizar pendências do atendimento','Registrar o que depende do retorno da equipe.']].map(([t,d])=>`<li><div><strong>${t}</strong><p>${d}</p></div>${badge(data().receptionDone?'Conferido':'Hoje',data().receptionDone?'success':'')}</li>`).join('')}</ul><div class="card-actions"><span class="micro">Responsável: recepção da Clínica Aurora</span><button class="btn primary" type="button" data-action="reception-review" ${d.receptionDone?'disabled':''}>${d.receptionDone?'Rotina conferida':'Registrar conferência'} ${icon('arrow')}</button></div></section>`;
+    }
+    document.addEventListener('submit',event=>{
+      if(event.target.id!=='demo-login')return;event.preventDefault();startDemo(state.product,loginKind());
+    });
+    document.addEventListener('click',event=>{
+      const b=event.target.closest('button');if(!b||b.disabled)return;
+      if(b.dataset.module){openModule(b.dataset.module);return;}
+      if(b.dataset.route){go(b.dataset.route);return;}
+      if(b.dataset.scene){const[p,r]=b.dataset.scene.split(':');startDemo(p,r);return;}
+      if(b.dataset.section){document.getElementById(b.dataset.section)?.scrollIntoView({behavior:'instant',block:'start'});return;}
+      const action=b.dataset.action;
+      if(action==='showcase')showcase();
+      if(action==='explore')go('/'+state.product+'/entrar');
+      if(action==='logout'){const p=state.product;session=null;timers.forEach(clearTimeout);timers.clear();state.page='today';go('/'+p+'/entrar');}
+      if(action==='password'){const input=document.getElementById('login-password');input.type=input.type==='password'?'text':'password';b.textContent=input.type==='password'?'Mostrar':'Ocultar';b.setAttribute('aria-label',input.type==='password'?'Mostrar senha':'Ocultar senha');}
+      if(action==='forgot'){closeDialog();dialog.innerHTML=`${dialogHeader('Recuperar acesso','Acesso demonstrativo')}<div class="dialog-body"><p class="description">O link de recuperação é enviado ao e-mail cadastrado no produto.</p><div class="review-box"><strong>Solicitação simulada</strong><p>Nenhum e-mail foi enviado. Os acessos desta demonstração são fictícios.</p></div></div><footer class="dialog-footer"><button type="button" class="btn primary" data-action="close">Voltar ao login</button></footer>`;dialog.showModal();}
+      if(action==='scope'){closeDialog();dialog.innerHTML=`${dialogHeader('Acesso individual, por função','Organização dos acessos')}<div class="dialog-body"><p class="description">HUB e SAP têm entradas e ambientes próprios. Cada acesso de clínica ou funcionário fica limitado ao produto e à clínica autorizados. Somente o administrativo pode acompanhar os dois produtos.</p><p class="micro">Nesta demonstração, os perfis são exemplos. A implementação real exige validação no servidor.</p></div><footer class="dialog-footer"><button type="button" class="btn primary" data-action="close">Entendi</button></footer>`;dialog.showModal();}
+      if(action==='reception-review'&&state.role==='reception'&&state.screen==='workspace') {const d=data();d.receptionDone=true;d.events.unshift({text:'Conferência da rotina registrada',detail:'Recepção · somente nesta demonstração',status:'Concluído'});render();announce('Conferência registrada no exemplo. Nenhum contato ou agendamento real foi alterado.');}
+    });
+    window.addEventListener('hashchange',route);
+
+    dialog.addEventListener('close',()=>{if(!dialog.open) modalContext=null;});
+    route();
+  </script>
+</body>
+</html>
