@@ -2,8 +2,8 @@ export const PRODUCT_COPY = {
   nexo: {
     name: "Nexo",
     kicker: "Inteligência de dados para clínicas",
-    headline: "Transforme dados em",
-    emphasis: "decisões de marketing e vendas.",
+    headline: "Transforme dados",
+    emphasis: "em decisões de marketing e vendas.",
     intro: "Entenda o que atrai pacientes, enxergue oportunidades no atendimento e dê direção à equipe. O Nexo reúne os dados disponíveis da clínica e usa inteligência agêntica para preparar análises, organizar conhecimento e apoiar a próxima decisão.",
     note: "Dados com contexto. Inteligência aplicada. Decisões com fundamento.",
     previewTitle: "Dos dados ao próximo passo.",
