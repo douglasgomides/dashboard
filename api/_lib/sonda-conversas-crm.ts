@@ -72,6 +72,15 @@ export async function sondarConversasCrm(admin: SupabaseClient<any, any, any>): 
           r[`GET ${p.replace(contatoId, "{contactId}")}`] = { status: t.status, forma: t.status === 200 ? t.forma : undefined, mensagem: t.status !== 200 ? String(t.json?.message ?? "").slice(0, 160) : undefined };
         }
       }
+      // A seção Messages da documentação não lista conversas: o chatId tem que vir de outro recurso v2 (contato,
+      // negócio, chats) ou do webhook. Só leitura; devolve a estrutura e os campos com "chat" no nome.
+      const v2: string[] = ["/v2/chats?limit=1", "/v2/contacts?limit=1", "/v2/deals?limit=1", "/v2/webhooks"];
+      if (contatoId) v2.push(`/v2/contacts/${contatoId}`, `/v2/chats?contact_id=${contatoId}`, `/v2/contacts/${contatoId}/chat`);
+      for (const p of v2) {
+        const t = await tentar(`${base}${p}`, cab);
+        const item = primeiraLista(t.json)[0] ?? (t.json && typeof t.json === "object" && !Array.isArray(t.json) ? t.json : null);
+        r[`GET ${contatoId ? p.replace(contatoId, "{contactId}") : p}`] = { status: t.status, forma: t.status === 200 ? forma(t.json, 0, 3) : undefined, campos_de_conversa: t.status === 200 && item ? comChat(item) : undefined, mensagem: t.status !== 200 ? String(t.json?.message ?? "").slice(0, 160) : undefined };
+      }
       const semConta = await tentar(`${base}/v2/messages/chats?limit=2`, cab);
       r["GET /v2/messages/chats (sem parâmetro)"] = { status: semConta.status, mensagem: String(semConta.json?.message ?? "").slice(0, 200) };
       if (conta) {
