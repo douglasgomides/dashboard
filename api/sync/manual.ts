@@ -21,6 +21,7 @@ import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_li
 import { rodarConferencia, rodarEtapa, ETAPAS, type EtapaId, type Achado, type Verificado } from "../_lib/conferencia.js";
 import { resumirConversa } from "../_lib/resumo-conversa.js";
 import { rascunharSessao } from "../_lib/sessao-ia.js";
+import { rodarAgentes, catalogoFluxos } from "../_lib/agentes.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
 //
@@ -93,9 +94,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia"];
-  // "conferencia" olha todos os clientes de uma vez (só admin), por isso não exige client_id.
-  const alvoGlobal = alvo === "conferencia";
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes"];
+  // "conferencia" e "agentes" olham todos os clientes de uma vez (só admin), por isso não exigem client_id.
+  const alvoGlobal = alvo === "conferencia" || alvo === "agentes";
   if ((!client_id && !alvoGlobal) || !alvo || !ALVOS.includes(alvo)) {
     res.status(400).json({ error: "Informe client_id e alvo ('tudo', 'posts', 'anuncios', 'atendimento', 'comentarios' ou 'crm')" });
     return;
@@ -125,6 +126,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // Agentic Core: a Central de Agentes pede para rodar a fila (ou uma execução) e o catálogo de fluxos.
+    if (alvo === "agentes") {
+      const { acao, execucao_id } = (req.body ?? {}) as { acao?: string; execucao_id?: string };
+      if (acao === "catalogo") { res.status(200).json({ alvo, ok: true, fluxos: catalogoFluxos() }); return; }
+      if (execucao_id && !/^[0-9a-f-]{36}$/.test(execucao_id)) { res.status(400).json({ error: "execucao_id inválido" }); return; }
+      const r = await rodarAgentes(admin, { execucaoId: execucao_id ?? null, maxPassos: 8, prazoMs: 45_000 });
+      res.status(200).json({ alvo, ok: true, ...r });
+      return;
+    }
     if (alvoGlobal) {
       const { etapa, conferencia_id } = (req.body ?? {}) as { etapa?: string; conferencia_id?: string };
       // Sem etapa: conferência inteira numa chamada (modo antigo).
