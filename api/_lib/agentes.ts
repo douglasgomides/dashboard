@@ -16,7 +16,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { chamarIAJson, iaDisponivel } from "./ia.js";
-import { FONTES, validarPropostas, type Fonte, type PropostaBrain } from "../../src/lib/brand-brain.js";
+import { FONTES, padroesComerciais, validarPropostas, type Fonte, type PropostaBrain } from "../../src/lib/brand-brain.js";
 import { MARCO_ACESSOS, evidenciaCriticos, mensagemPadrao, mensagemValida, situacaoCriticos, type ItemConfirmado, type ItemPendente } from "../../src/lib/agente-acessos.js";
 
 type Admin = SupabaseClient<any, any, any>;
@@ -316,6 +316,16 @@ async function lerFontesBrain(admin: Admin, clientId: string) {
     .map((t) => corta(t, 200)).filter((t) => t.length >= 12);
   const unicas = [...new Set(msgs)].slice(0, 120);
   if (unicas.length) fontes.mensagens_kommo = `${unicas.length} mensagens recebidas de pacientes (120 dias, as mais recentes; repetidas removidas):\n` + unicas.map((t) => `- ${t}`).join("\n");
+  // Objeções e falhas em %: todas as conversas lidas pela auditoria nos últimos 30 dias (não só as 40 acima).
+  const corte30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const todos: unknown[] = [];
+  for (let de = 0; de < 5000; de += 1000) {
+    const { data } = await admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", corte30).order("gerado_em").range(de, de + 999);
+    todos.push(...((data ?? []) as { resumo: unknown }[]).map((r) => r.resumo));
+    if ((data ?? []).length < 1000) break;
+  }
+  const padroes = padroesComerciais(todos, 30);
+  if (padroes) fontes.auditoria_comercial = padroes;
   const apr = ((aprovados.data ?? []) as { memoria: string; chave: string; valor: string }[]).map((a) => `${a.memoria}.${a.chave}: ${a.valor}`);
   return { ativo: true, fontes, aprovados: apr };
 }
@@ -326,6 +336,7 @@ Memórias: identidade (quem é, diferencial, tom), audiencia (dores, desejos, d�
 Regras:
 - Cada item: uma frase objetiva em português do Brasil, sem travessão, até 300 caracteres.
 - Só afirme o que está nas fontes. Quando for padrão, diga o tamanho da amostra (ex.: "em 12 de 40 resumos").
+- Da fonte auditoria_comercial, use as porcentagens como vieram (não arredonde de novo nem invente outras): objeções viram itens de audiencia (ex.: objecao_preco), falhas viram itens de comercial (ex.: falha_sem_follow_up), sempre com a % e o total de conversas.
 - NUNCA inclua nome, telefone, e-mail, CPF, @ de perfil ou caso clínico de paciente. Só padrões agregados.
 - Nada de promessa de resultado, antes e depois ou linguagem proibida pelo CFM.
 - "fonte" é uma destas chaves: {FONTES}. Use a de onde o item saiu.
