@@ -8,7 +8,7 @@ export function TrocaProduto({ atual, clientId }: { atual: "hub" | "sap"; client
   const item = (p: "hub" | "sap", rot: string) => {
     const on = atual === p;
     const estilo = {
-      background: on ? (p === "sap" ? "#C49A5C" : "var(--accent)") : "transparent",
+      background: on ? "var(--side-active)" : "transparent",
       color: on ? "#fff" : "var(--side-ink-2, var(--text-dim))",
     };
     const cls = "flex-1 rounded-md px-2 py-1.5 text-center text-xs font-semibold leading-tight";
@@ -18,7 +18,7 @@ export function TrocaProduto({ atual, clientId }: { atual: "hub" | "sap"; client
   return (
     <div className="so-aberta mb-3 flex gap-1 rounded-lg border p-1" role="navigation" aria-label="Produto" style={{ borderColor: "var(--side-border, var(--border))" }}>
       {item("sap", "Sistema de Aquisição")}
-      {item("hub", "Hub · acompanhamento")}
+      {item("hub", "Nexo · inteligência")}
     </div>
   );
 }

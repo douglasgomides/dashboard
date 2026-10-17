@@ -1,3 +1,4 @@
+import { ProductBrand } from "@/components/product-brand";
 import { useEffect, useState, type ReactNode } from "react";
 import { TrocaProduto } from "@/components/troca-produto";
 import { Link } from "@tanstack/react-router";
@@ -201,10 +202,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
       {/* ===== Computador: barra lateral ===== */}
       <aside aria-label="Menu principal">
         <div className="brand">
-          <span className="logo">
-            <i />
-          </span>
-          <span className="so-aberta">Doctor Creator Hub</span>
+          <ProductBrand product="nexo" dark />
           <button type="button" className="recolher" onClick={alternarRecolhida} aria-label={recolhida ? "Abrir menu lateral" : "Recolher menu lateral"} title={recolhida ? "Abrir menu" : "Recolher menu"}>
             {recolhida ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
           </button>
@@ -267,13 +265,9 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
         </nav>
         <div className="side-foot so-aberta">
           <Link to="/bem-vindo" className="text-sm">Tour do painel</Link>
-          {/* Troca de produto (não é item de menu): só para a equipe e para clínica com o Sistema de Aquisição ativo. */}
-          {!vis.isAdmin && vis.sap && (
-            <Link to="/sap/$clientId" params={{ clientId }} className="text-sm">Sistema de Aquisição →</Link>
-          )}
           <TemaBotoes />
           <LogoutButton className="text-sm text-left min-h-[36px]" />
-          <span>Doctor Creator Hub</span>
+          <span>Nexo · Marketing e vendas</span>
         </div>
       </aside>
 
@@ -283,7 +277,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
           <div className="mhead-linha">
             <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={32} />
             <div className="mhead-nome">
-              <b>{nome}</b>
+              <b><span className="workspace-product-inline">Nexo · </span>{nome}</b>
               {frescorCompacto}
             </div>
             <button type="button" className="periodo-chip" onClick={() => setPeriodo(true)} aria-label={`Período: ${rotuloPeriodo(dateRange)}. Trocar período`}>
@@ -300,6 +294,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
           <div className="who">
             <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={46} />
             <div style={{ minWidth: 0 }}>
+              <p className="workspace-kicker">Nexo · Inteligência de marketing e vendas</p>
               <h1>{nome}</h1>
               {linhaInfo && <p>{linhaInfo}</p>}
             </div>
@@ -355,7 +350,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
         <div className="mais-cliente">
           <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={40} />
           <div style={{ minWidth: 0 }}>
-            <b>{nome}</b>
+            <b><span className="workspace-product-inline">Nexo · </span>{nome}</b>
             {linhaInfo && <p>{linhaInfo}</p>}
           </div>
         </div>

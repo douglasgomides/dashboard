@@ -43,7 +43,7 @@ export function PortfolioSap() {
           <p>
             Aqui aparece cada clínica do sistema com o dia em que está, a fase, o próximo marco, o semáforo e os números da última
             semana. Toda clínica nova entra aqui: clique em <strong>Cadastrar nova clínica</strong>. Depois do D90 ela segue
-            no Doctor Creator Hub como acompanhamento. Os números saem sozinhos do CRM e do WhatsApp.
+            no Nexo como acompanhamento. Os números saem sozinhos do CRM e do WhatsApp.
           </p>
           <AbrirClinica />
           <button type="button" onClick={() => setExemplo(true)} className="rounded-lg px-3 py-2 text-sm font-medium" style={{ background: "var(--accent)", color: "#fff" }}>
@@ -262,7 +262,7 @@ function AbrirClinica() {
       {aberto && (
         <form onSubmit={(e) => { e.preventDefault(); if (f.nome.trim()) criar.mutate(); }} className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
           <p className="mb-3 text-sm" style={{ color: "var(--text-dim)" }}>
-            Toda clínica nova entra por aqui. Ela nasce no Sistema de Aquisição e, depois do D90, segue no Doctor Creator Hub como acompanhamento, com os mesmos dados.
+            Toda clínica nova entra por aqui. Ela nasce no Sistema de Aquisição e, depois do D90, segue no Nexo como acompanhamento, com os mesmos dados.
             O D0 é o dia da assinatura e do pagamento; se ainda não fechou, deixe em branco.
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

@@ -29,9 +29,12 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.64.1",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@typescript-eslint/parser": "8.62.0",
     "@vercel/node": "^3.2.24",
     "@vitejs/plugin-react": "^5.0.4",
     "eslint": "^9.32.0",

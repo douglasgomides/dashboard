@@ -1,3 +1,4 @@
+import { ProductBrand } from "@/components/product-brand";
 import { createFileRoute, Outlet, redirect, Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Bot, Brain, ClipboardCheck, FileText, LayoutDashboard, Plug, Scale, Users } from "lucide-react";
@@ -16,7 +17,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
 
 // Admin no MESMO layout do painel do cliente (barra lateral, tipografia, cartões): parece parte do mesmo produto.
 const ITENS = [
-  { to: "/admin", label: "Clientes do Hub", Icone: LayoutDashboard, exato: true },
+  { to: "/admin", label: "Clientes do Nexo", Icone: LayoutDashboard, exato: true },
   { to: "/admin/referencia", label: "Referência entre clientes", Icone: Scale },
   { to: "/admin/conferencia", label: "Conferência de dados", Icone: ClipboardCheck },
   { to: "/admin/relatorios", label: "Relatórios da semana", Icone: FileText },
@@ -27,7 +28,7 @@ const ITENS = [
 ] as const;
 
 const TITULO: Record<string, string> = {
-  "/admin": "Clientes do Hub",
+  "/admin": "Clientes do Nexo",
   "/admin/referencia": "Referência entre clientes",
   "/admin/conferencia": "Conferência de dados",
   "/admin/relatorios": "Relatórios da semana",
@@ -42,7 +43,7 @@ function AdminLayout() {
   // Dentro de um cliente (/admin/<id>): o título é o nome do cliente.
   const idCliente = /^\/admin\/([0-9a-f-]{36})$/.exec(pathname)?.[1] ?? null;
   const { data: cliente } = useQuery({ queryKey: ["client", idCliente], queryFn: () => getClient(idCliente!), enabled: !!idCliente });
-  const titulo = idCliente ? (cliente?.name ?? "Carregando…") : (TITULO[pathname] ?? "Painel admin");
+  const titulo = idCliente ? (cliente?.name ?? "Carregando…") : (TITULO[pathname] ?? "Nexo · Administração");
 
   const itens = ITENS.map((it) => (
     <Link key={it.to} to={it.to} activeOptions={{ exact: "exato" in it ? true : false }} activeProps={{ "aria-current": "page" }}>
@@ -55,10 +56,7 @@ function AdminLayout() {
     <div className="app">
       <aside aria-label="Menu do admin">
         <div className="brand">
-          <span className="logo">
-            <i />
-          </span>
-          <span className="so-aberta">Doctor Creator Hub</span>
+          <ProductBrand product="nexo" dark />
         </div>
         <TrocaProduto atual="hub" clientId={null} />
         <nav className="side">
@@ -67,7 +65,7 @@ function AdminLayout() {
         </nav>
         <div className="side-foot so-aberta">
           <LogoutButton className="text-sm text-left min-h-[36px]" />
-          <span>Doctor Creator Hub</span>
+          <span>Nexo · Doctor Creator</span>
         </div>
       </aside>
       <div className="mainwrap">
@@ -75,7 +73,7 @@ function AdminLayout() {
           <div className="who">
             <div style={{ minWidth: 0 }}>
               <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--muted)" }}>
-                {idCliente ? "Cliente · configuração" : "Painel admin"}
+                {idCliente ? "Cliente · configuração" : "Nexo · Administração"}
               </span>
               <h1>{titulo}</h1>
             </div>

@@ -1,7 +1,8 @@
+import { ProductBrand } from "@/components/product-brand";
 import { createFileRoute, Link, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, Gauge, LayoutDashboard, ListChecks, ListTodo, Megaphone, Menu, Network, Target, ArrowLeftRight, Radar, Presentation, UsersRound, UserRoundCheck, BookOpen, X } from "lucide-react";
+import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, Gauge, LayoutDashboard, ListChecks, ListTodo, Megaphone, Menu, Network, Target, Radar, Presentation, UsersRound, UserRoundCheck, BookOpen, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { TrocaProduto } from "@/components/troca-produto";
@@ -122,10 +123,7 @@ function SapConteudo({ isAdmin }: { isAdmin: boolean }) {
           <button type="button" aria-label="Fechar o menu" onClick={() => setGaveta(false)} className="sap-fechar-gaveta self-end rounded-md p-1"><X size={20} /></button>
         )}
         <div className="brand">
-          <span className="logo" style={{ background: "#C49A5C" }}>
-            <i />
-          </span>
-          <span className="so-aberta">Sistema de Aquisição</span>
+          <ProductBrand product="sap" dark />
         </div>
         {isAdmin && <TrocaProduto atual="sap" clientId={clientId} />}
         <nav className="side">
@@ -134,12 +132,6 @@ function SapConteudo({ isAdmin }: { isAdmin: boolean }) {
           {links("clinica")}
         </nav>
         <div className="side-foot so-aberta">
-          {/* A clínica vê o Hub como a continuação do programa (acompanhamento). A equipe troca de produto no topo. */}
-          {!isAdmin && (
-            <Link to={clientId ? "/$clientId" : "/"} params={(clientId ? { clientId } : undefined) as never} className="inline-flex items-center gap-1.5 text-sm">
-              <ArrowLeftRight size={14} aria-hidden /> Acompanhamento no Doctor Creator Hub
-            </Link>
-          )}
           <LogoutButton className="text-sm text-left min-h-[36px]" />
           <span>Sistema de Aquisição de Pacientes · Doctor Creator</span>
         </div>
@@ -149,7 +141,7 @@ function SapConteudo({ isAdmin }: { isAdmin: boolean }) {
           <div className="who">
             <button type="button" aria-label="Abrir o menu" aria-expanded={gaveta} onClick={() => setGaveta(true)} className="sap-menu-btn mr-2 rounded-md border p-1.5" style={{ borderColor: "var(--border)" }}><Menu size={20} /></button>
             <div style={{ minWidth: 0 }}>
-              <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "#C49A5C" }}>
+              <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--brand-gold-ink)" }}>
                 Sistema de Aquisição de Pacientes
                 {clientId && clinica?.d0 && dia !== null ? ` · ${dia > 90 ? "acompanhamento" : dia < 0 ? `começa em ${-dia} dia(s)` : `D${dia} de 90 · ${faseDoDia(dia)}`}` : ""}
               </span>

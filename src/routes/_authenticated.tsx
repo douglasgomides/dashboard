@@ -6,6 +6,7 @@ export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async ({ location }) => {
     const { data } = await supabase.auth.getUser();
     if (!data.user) {
+      if (location.pathname === "/") throw redirect({ to: "/conhecer" });
       throw redirect({ to: "/login", search: { redirect: location.href } as any });
     }
     // Primeiro acesso de quem recebeu convite: criar a própria senha e ver o tour antes de entrar.
