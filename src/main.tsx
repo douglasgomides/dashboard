@@ -4,6 +4,10 @@ import { RouterProvider } from "@tanstack/react-router";
 import { getRouter } from "./router";
 import { aplicarTemaSalvo } from "./hooks/use-theme";
 import "./styles.css";
+import "./nexo.css";
+import { ehEnderecoSap } from "./lib/marca";
+
+document.title = ehEnderecoSap() ? "SAP · Doctor Creator" : "Nexo · Doctor Creator";
 
 // Antes de montar o React: se o médico escolheu claro e o sistema dele está
 // no escuro, sem isto a tela pisca escura por um frame a cada carregamento.

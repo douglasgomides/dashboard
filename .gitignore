@@ -21,3 +21,5 @@ src/routeTree.gen.ts
 .vercel
 .env*
 .claude/worktrees/
+test-results/
+playwright-report/

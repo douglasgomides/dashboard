@@ -1,0 +1,36 @@
+name: Nexo and SAP interface
+
+on:
+  pull_request:
+  push:
+    branches: [claude/doctor-creator-hub-nixvw6]
+
+permissions:
+  contents: read
+
+jobs:
+  interface:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VITE_SUPABASE_URL: http://localhost:9
+      VITE_SUPABASE_PUBLISHABLE_KEY: fake-public-test-key
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npx eslint src/components/product-brand.tsx src/routes/conhecer.tsx src/routes/login.tsx src/components/app-shell.tsx src/routes/_authenticated.admin.tsx src/routes/_authenticated.sap.tsx src/lib/product-copy.ts src/lib/login-destination.ts scripts/verify-nexo-interface.mjs
+      - run: npx tsx scripts/test-nexo-navigation.ts
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/verify-nexo-interface.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: interface-results
+          path: test-results/nexo-interface/
+          retention-days: 7
