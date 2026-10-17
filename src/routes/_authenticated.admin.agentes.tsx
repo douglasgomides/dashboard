@@ -166,6 +166,7 @@ function IniciarServico({ catalogo, clinicas, aoIniciar, onErro }: { catalogo: F
   return (
     <section aria-labelledby="t-iniciar" className="rounded-xl border p-4 text-sm" style={caixa}>
       <h2 id="t-iniciar" className="text-base font-semibold">Iniciar um serviço</h2>
+      <p className="mt-1 text-xs" style={dim}>O Brand Brain não começa aqui: atualize na própria tela Brand Brain. Esta Central só mostra o registro técnico de cada leitura.</p>
       <div className="mt-2 flex flex-wrap items-end gap-2">
         <label className="text-xs" style={dim}>Clínica (SAP)
           <select value={cliente} onChange={(e) => setCliente(e.target.value)} className="mt-1 block max-w-full rounded-lg border p-2 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
@@ -176,7 +177,7 @@ function IniciarServico({ catalogo, clinicas, aoIniciar, onErro }: { catalogo: F
         <label className="text-xs" style={dim}>Serviço
           <select value={fluxo} onChange={(e) => setFluxo(e.target.value)} className="mt-1 block max-w-full rounded-lg border p-2 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg)" }}>
             <option value="">Escolha</option>
-            {catalogo.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+            {catalogo.filter((x) => x.id !== "brain_carga").map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
           </select>
         </label>
         <button type="button" disabled={!cliente || !f || enviando} className="rounded-lg px-3 py-2 font-semibold text-white disabled:opacity-50" style={{ background: "var(--accent)" }}
