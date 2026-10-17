@@ -22,6 +22,7 @@ export const FONTES = {
   instagram_posts: "Posts do Instagram",
   instagram_duvidas: "Perguntas nos comentários",
   banco_anuncios: "Banco de anúncios",
+  auditoria_comercial: "Auditoria comercial das conversas (objeções e falhas em %)",
   equipe: "Escrito pela equipe",
 } as const;
 export type Fonte = keyof typeof FONTES;
@@ -68,4 +69,42 @@ export function validarPropostas(bruto: unknown, fontesLidas: Fonte[]): { ok: Pr
     ok.push({ memoria, chave, valor, fonte, fonte_detalhe: det && textoSemDadoPessoal(det) ? det : null, confianca });
   }
   return { ok, descartes };
+}
+
+const NOME_OBJECAO: Record<string, string> = { preco: "preço", convenio: "convênio", distancia: "distância", adiamento: "adiamento", agenda: "agenda", medo: "medo", desconfianca: "desconfiança", outro: "outra" };
+const NOME_FALHA: Record<string, string> = {
+  sem_resposta: "sem resposta", demora: "demora", desvio_preco: "desviou do preço", preco_sem_ancoragem: "preço sem ancoragem", sem_cta: "sem chamada para agendar",
+  sem_follow_up: "sem follow-up", nome_errado: "nome errado", informacao_inconsistente: "informação inconsistente", pressao: "pressão", so_emoji: "só emoji",
+  desconto_reativo: "desconto reativo", excesso_audio: "excesso de áudio",
+};
+
+/**
+ * Padrões da auditoria comercial (leitura por IA de cada conversa) em %, para o Brand Brain: objeções do paciente,
+ * falhas da clínica e quantos não agendaram. Só conversas comerciais. Abaixo de 10 conversas não sai nada
+ * (amostra pequena demais para virar memória). Texto agregado: nenhum dado de paciente.
+ */
+export function padroesComerciais(resumos: unknown[], dias: number): string | null {
+  const com = resumos.filter((r): r is Record<string, any> => !!r && typeof r === "object" && (r as any).comercial !== false);
+  const n = com.length;
+  if (n < 10) return null;
+  const pct = (x: number) => `${Math.round((100 * x) / n)}%`;
+  const contar = (campo: string, nomes: Record<string, string>) => {
+    const c = new Map<string, number>();
+    for (const r of com) for (const v of new Set(Array.isArray(r[campo]) ? (r[campo] as unknown[]).map(String) : [])) if (nomes[v]) c.set(v, (c.get(v) ?? 0) + 1);
+    return [...c.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, x]) => `${nomes[k]} ${pct(x)} (${x})`);
+  };
+  const agendou = com.filter((r) => r.etapa === "agendou" || r.situacao === "agendou").length;
+  const recup = com.filter((r) => r.recuperavel === true && r.etapa !== "agendou" && r.situacao !== "agendou").length;
+  const precoPedido = com.filter((r) => r.preco_pedido === true).length;
+  const precoDado = com.filter((r) => r.preco_pedido === true && r.preco_apresentado === true).length;
+  const linhas = [
+    `${n} conversas comerciais lidas nos últimos ${dias} dias.`,
+    `Agendaram: ${pct(agendou)} (${agendou}). Interesse real sem agendar (recuperáveis): ${pct(recup)} (${recup}).`,
+    precoPedido ? `Pediram preço: ${pct(precoPedido)} (${precoPedido}); a clínica apresentou o preço em ${Math.round((100 * precoDado) / precoPedido)}% desses.` : null,
+  ];
+  const ob = contar("objecoes", NOME_OBJECAO);
+  if (ob.length) linhas.push(`Objeções do paciente (% das conversas): ${ob.join("; ")}.`);
+  const fa = contar("falhas", NOME_FALHA);
+  if (fa.length) linhas.push(`Falhas da clínica (% das conversas): ${fa.join("; ")}.`);
+  return linhas.filter(Boolean).join("\n");
 }

@@ -31,3 +31,24 @@ assert.equal(validarPropostas({ foo: 1 }, ["conversas"]).ok.length, 0);
 assert.equal(validarPropostas(null, ["conversas"]).ok.length, 0);
 
 console.log("ok brand-brain");
+
+// Padrões da auditoria comercial em %
+import { padroesComerciais } from "../src/lib/brand-brain";
+{
+  const base = { comercial: true, objecoes: [] as string[], falhas: [] as string[] };
+  assert.equal(padroesComerciais(Array.from({ length: 9 }, () => base), 30), null);
+  const rs = [
+    ...Array.from({ length: 4 }, () => ({ ...base, objecoes: ["preco", "preco"], falhas: ["sem_follow_up"], preco_pedido: true, preco_apresentado: true, recuperavel: true })),
+    ...Array.from({ length: 2 }, () => ({ ...base, etapa: "agendou" })),
+    ...Array.from({ length: 4 }, () => ({ ...base, objecoes: ["medo"], preco_pedido: true, preco_apresentado: false })),
+    { comercial: false, objecoes: ["preco"] },
+  ];
+  const t = padroesComerciais(rs, 30)!;
+  assert.match(t, /^10 conversas comerciais/);
+  assert.match(t, /Agendaram: 20% \(2\)/);
+  assert.match(t, /recuperáveis\): 40% \(4\)/);
+  assert.match(t, /Pediram preço: 80% \(8\); a clínica apresentou o preço em 50%/);
+  assert.match(t, /preço 40% \(4\); medo 40% \(4\)/);
+  assert.match(t, /sem follow-up 40% \(4\)/);
+  console.log("ok padroes comerciais");
+}
