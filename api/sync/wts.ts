@@ -4,6 +4,7 @@ import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runWtsSync } from "../_lib/wts-sync.js";
 import { ingerirConversasWts } from "../_lib/conversas-wts.js";
 import { analisarConversasPendentes } from "../_lib/resumo-conversa.js";
+import { ingerirConversasDigisac } from "../_lib/conversas-digisac.js";
 
 // Atendimento no WhatsApp via WTS Chat.
 // Roda para todo cliente ativo com wts_company_id preenchido.
@@ -48,6 +49,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const full = req.query.full === "1" || req.query.full === "true";
   const clientId = typeof req.query.client_id === "string" ? req.query.client_id : undefined;
   const inicio = Date.now();
+
+  // ?digisac_conversas=1: mensagens dos atendimentos do Digisac (IGM Palmas) viram conversas, como as da WTS.
+  if (req.query.digisac_conversas === "1") {
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+    const dias = Number(req.query.dias) > 0 ? Math.min(90, Number(req.query.dias)) : 30;
+    const r = await ingerirConversasDigisac(admin, { limite: 250, orcamentoMs: 240_000, dias });
+    res.status(200).json({ ok: true, digisac: r });
+    return;
+  }
 
   // ?so_analisar=1: só a leitura por IA das conversas pendentes (sem sync), para uma 2ª chamada do n8n.
   if (req.query.so_analisar === "1") {
