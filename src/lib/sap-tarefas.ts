@@ -162,7 +162,7 @@ export interface EntradaTarefas {
   execucao: ItemRegistro[] | null;
   /** Peças do Banco de anúncios (null = sem dado; itens 16 e 21 não detectam). */
   pecas?: Peca[] | null;
-  papeis: Partial<Record<PapelId, { userId: string; nome: string }>>;
+  papeis: Partial<Record<PapelId, { userId: string | null; pessoaId?: string | null; nome: string }>>;
   nomes: Map<string, string>; // user_id → nome (para "feito por")
 }
 
