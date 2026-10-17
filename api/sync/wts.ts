@@ -56,12 +56,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (clientId) q = q.eq("client_id", clientId);
     const { data } = await q.limit(5000);
     const clientes = [...new Set((data ?? []).map((r: { client_id: string }) => r.client_id))];
-    const analise: Record<string, unknown> = {};
-    for (const id of clientes) {
-      const resta = 250_000 - (Date.now() - inicio);
-      if (resta < 15_000) break;
-      analise[id] = await analisarConversasPendentes(admin, id, { limite: 200, orcamentoMs: Math.floor(resta / Math.max(1, clientes.length - Object.keys(analise).length)) });
-    }
+    // Clientes em paralelo (cada um com o tempo todo): antes, um de cada vez dividia os 4 minutos e o atraso não baixava.
+    const orcamentoMs = Math.max(15_000, 240_000 - (Date.now() - inicio));
+    const resultados = await Promise.all(clientes.map((id) => analisarConversasPendentes(admin, id, { limite: 200, orcamentoMs }).then((r) => [id, r] as const)));
+    const analise: Record<string, unknown> = Object.fromEntries(resultados);
     res.status(200).json({ ok: true, analise });
     return;
   }
