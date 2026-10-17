@@ -166,7 +166,7 @@ export function montarKpisSap(t: TrackerAutoBruto): LeituraTracker {
   // 1. 1ª resposta
   const resp: KpiSap = (() => {
     const base = { id: "resposta" as const, titulo: "1ª resposta (mediana)", regra: `Até ${REF_SAP.respostaMin} min em horário comercial`, ehMeta: true };
-    if (!t.tem_whatsapp) return { ...base, valor: null, texto: "WhatsApp não ligado", farol: "cinza" as Farol, base: "sem conversas", falta: "Ligar o WhatsApp da clínica ao Hub (sem isso não há tempo de resposta)." };
+    if (!t.tem_whatsapp) return { ...base, valor: null, texto: "WhatsApp não ligado", farol: "cinza" as Farol, base: "sem conversas", falta: "Ligar o WhatsApp da clínica ao Nexo (sem isso não há tempo de resposta)." };
     if (t.resposta_mediana_min === null || t.resposta_conversas === 0)
       return { ...base, valor: null, texto: "sem conversas no período", farol: "cinza" as Farol, base: "0 conversas em horário comercial" };
     const v = t.resposta_mediana_min;
@@ -179,7 +179,7 @@ export function montarKpisSap(t: TrackerAutoBruto): LeituraTracker {
       amostraPequena: t.resposta_conversas < 20,
     };
   })();
-  if (!t.tem_whatsapp) pendencias.push("Ligar o WhatsApp da clínica ao Hub para medir a 1ª resposta.");
+  if (!t.tem_whatsapp) pendencias.push("Ligar o WhatsApp da clínica ao Nexo para medir a 1ª resposta.");
 
   // 2. Agendamento
   const ag = div(t.agendados, t.qualificados);

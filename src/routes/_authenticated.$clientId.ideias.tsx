@@ -485,7 +485,7 @@ function IdeiasPage() {
       {res.ideias.length === 0 && roteiros.length === 0 ? (
         <div className="hempty">
           <h2>Nenhuma ideia com base suficiente neste período</h2>
-          <p>O Hub não inventa ideia sem dado. Veja abaixo o que falta.</p>
+          <p>O Nexo não inventa ideia sem dado. Veja abaixo o que falta.</p>
         </div>
       ) : (
         (["C1", "C2", "C3"] as Etapa[]).map((e) => {

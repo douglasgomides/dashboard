@@ -397,7 +397,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
       {/* 1. Sumário executivo */}
       <Page size="A4" style={styles.page} wrap>
         <Logo />
-        <Text style={styles.eyebrow}>Intelligence Hub · relatório completo</Text>
+        <Text style={styles.eyebrow}>Nexo · relatório completo</Text>
         <Text style={styles.title}>{d.clientName}</Text>
         <Text style={styles.subtitle}>
           {d.specialty ? `${d.specialty} · ` : ""}

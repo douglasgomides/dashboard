@@ -115,6 +115,6 @@ export const ACESSOS: LinhaAcesso[] = [
   { oque: "Leitura da semana", admin: "Completa, com auditoria e atendentes", equipe: "Completa", clinica: "Números da semana e ações combinadas" },
   { oque: "Score de Saúde", admin: "Sim", equipe: "Sim", clinica: "Não (só a equipe vê)" },
   { oque: "Metas e garantia, Plano e relatório D90", admin: "Editar", equipe: "Ver", clinica: "Ver" },
-  { oque: "Conversas dos pacientes e leads em atenção", admin: "Sim", equipe: "Sim", clinica: "No Hub da própria clínica" },
+  { oque: "Conversas dos pacientes e leads em atenção", admin: "Sim", equipe: "Sim", clinica: "No Nexo da própria clínica" },
   { oque: "Configurar integrações (CRM, WhatsApp, Meta) e criar acessos", admin: "Sim", equipe: "Não", clinica: "Não" },
 ];

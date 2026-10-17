@@ -49,7 +49,7 @@ export function ErroCarga({ texto }: { texto: string }) {
 export const SEM_INSTAGRAM = {
   titulo: "Instagram não conectado",
   texto:
-    "Este cliente ainda não tem uma conta de Instagram ligada ao Hub, então não há seguidores, posts nem comentários para analisar. Nenhum número é exibido para não passar a impressão de zero.",
+    "Este cliente ainda não tem uma conta de Instagram ligada ao Nexo, então não há seguidores, posts nem comentários para analisar. Nenhum número é exibido para não passar a impressão de zero.",
   quem: "time Doctor Creator, ligando a conta de Instagram do médico à Business Manager do cliente.",
 };
 

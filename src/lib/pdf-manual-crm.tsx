@@ -36,7 +36,7 @@ function Manual({ cliente }: { cliente?: string | null }) {
           </View>
         ))}
         <Text style={{ marginTop: 10, color: INK2, fontSize: 8.5 }} fixed>
-          Doctor Creator · Intelligence Hub · Dúvidas sobre o CRM: fale com a equipe Doctor Creator.
+          Doctor Creator · Nexo · Dúvidas sobre o CRM: fale com a equipe Doctor Creator.
         </Text>
       </Page>
     </Document>

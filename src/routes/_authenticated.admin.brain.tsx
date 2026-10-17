@@ -75,7 +75,7 @@ function BrandBrain() {
     return (
       <div className="rounded-xl border p-4 text-sm" style={caixa}>
         Nenhuma clínica com o Brand Brain ativo. O módulo é ligado por clínica (cliente_modulos) e hoje está só na clínica de teste.
-        Clientes do Hub continuam iguais.
+        Clientes do Nexo continuam iguais.
       </div>
     );
   }
@@ -85,7 +85,7 @@ function BrandBrain() {
       <header className="space-y-3">
         <p className="max-w-3xl text-sm" style={dim}>
           A memória de marca da clínica, usada por quem cria conteúdo, anúncio e atendimento. Em "Atualizar sugestões", a IA lê o que já
-          existe no Hub (Instagram, conversas, ficha e sessões do SAP, banco de anúncios) e sugere. Nada vale até alguém aprovar aqui.
+          existe no Nexo (Instagram, conversas, ficha e sessões do SAP, banco de anúncios) e sugere. Nada vale até alguém aprovar aqui.
           Não entra nome, telefone nem caso de paciente: só padrões. Tudo se resolve nesta tela.
         </p>
         <div className="flex flex-wrap items-center gap-2">

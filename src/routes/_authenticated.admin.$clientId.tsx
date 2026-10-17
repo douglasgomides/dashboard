@@ -315,7 +315,7 @@ function NewUserForm({ clientId, nomeCliente }: { clientId: string; nomeCliente:
     <div className="space-y-3">
       <ol className="list-decimal space-y-0.5 pl-5 text-sm" style={{ color: "var(--ink-2)" }}>
         <li>Digite o e-mail do médico (ou de quem vai acompanhar) e escolha o papel.</li>
-        <li>Clique em <b>Criar acesso</b>: o Hub gera uma senha temporária.</li>
+        <li>Clique em <b>Criar acesso</b>: o Nexo gera uma senha temporária.</li>
         <li>Envie a mensagem pronta por WhatsApp ou e-mail. No primeiro acesso, a pessoa cria a própria senha e vê um tour.</li>
       </ol>
       <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">

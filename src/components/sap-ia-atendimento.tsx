@@ -29,7 +29,7 @@ export function LeadsAtencao({ clientId }: { clientId: string }) {
   return (
     <Painel icone={BellRing} titulo="Leads que precisam de atenção" destaque={n("sem_resposta") > 0}
       resumo={q.isLoading ? "Carregando…" : leads.length ? `${n("sem_resposta")} sem resposta · ${n("sem_follow_up")} sem follow-up · ${n("recuperavel")} recuperáveis` : "Nenhum lead parado nos últimos 30 dias"}
-      ajuda={<>A IA lê cada conversa do WhatsApp e marca quem está esperando a clínica, quem ficou sem follow-up e quem mostrou interesse e não agendou. Sem nome nem telefone aqui: abra a conversa no Hub para agir. Nenhuma mensagem é enviada automaticamente.</>}>
+      ajuda={<>A IA lê cada conversa do WhatsApp e marca quem está esperando a clínica, quem ficou sem follow-up e quem mostrou interesse e não agendou. Sem nome nem telefone aqui: abra a conversa no Nexo para agir. Nenhuma mensagem é enviada automaticamente.</>}>
       {leads.length > 0 && (
         <ul className="mt-2 divide-y" style={{ borderColor: "var(--border)" }}>
           {leads.slice(0, 15).map((l) => (
@@ -49,7 +49,7 @@ export function LeadsAtencao({ clientId }: { clientId: string }) {
           ))}
         </ul>
       )}
-      {leads.length > 15 && <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>E mais {leads.length - 15} na aba Conversas do Hub.</p>}
+      {leads.length > 15 && <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>E mais {leads.length - 15} na aba Conversas do Nexo.</p>}
     </Painel>
   );
 }

@@ -41,7 +41,7 @@ function InicioSap() {
           O Sistema de Aquisição de Pacientes é o programa de 90 dias da Doctor Creator. Para saber mais, fale com a equipe.
         </p>
         <Link to="/" className="mt-3 inline-block font-semibold underline" style={{ color: "var(--accent)" }}>
-          Voltar para o Doctor Creator Hub
+          Voltar para o Nexo · Doctor Creator
         </Link>
       </div>
     );
