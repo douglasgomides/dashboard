@@ -16,6 +16,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { chamarIAJson, iaDisponivel } from "./ia.js";
+import { FONTES, validarPropostas, type Fonte, type PropostaBrain } from "../../src/lib/brand-brain.js";
 import { MARCO_ACESSOS, evidenciaCriticos, mensagemPadrao, mensagemValida, situacaoCriticos, type ItemConfirmado, type ItemPendente } from "../../src/lib/agente-acessos.js";
 
 type Admin = SupabaseClient<any, any, any>;
@@ -78,8 +79,22 @@ export const FERRAMENTAS = {
   }),
   "ia.gerar_json": ferramenta({
     nome: "ia.gerar_json", descricao: "Texto ou classificação por IA, com custo registrado.", risco: "baixo", externa: true, timeoutMs: 50_000,
-    entrada: z.object({ sistema: z.string().min(20), entrada: z.string().min(1).max(20_000), finalidade: z.string() }),
-    executar: async (admin, exec, e) => chamarIAJson(admin, { sistema: e.sistema, entrada: e.entrada, finalidade: e.finalidade, clientId: exec.client_id, execucaoId: exec.id, maxTokens: 700 }),
+    entrada: z.object({ sistema: z.string().min(20), entrada: z.string().min(1).max(20_000), finalidade: z.string(), max_tokens: z.number().int().min(100).max(2500).optional() }),
+    executar: async (admin, exec, e) => chamarIAJson(admin, { sistema: e.sistema, entrada: e.entrada, finalidade: e.finalidade, clientId: exec.client_id, execucaoId: exec.id, maxTokens: e.max_tokens ?? 700 }),
+  }),
+  "brain.ler_fontes": ferramenta({
+    nome: "brain.ler_fontes", descricao: "Lê as fontes atuais da clínica para o Brand Brain (ficha, sessões, conversas, Instagram, banco de anúncios) e o que já está aprovado.", risco: "baixo", externa: false, timeoutMs: 20_000,
+    entrada: z.object({ client_id: z.string().uuid() }),
+    executar: async (admin, _x, e) => lerFontesBrain(admin, e.client_id),
+  }),
+  "brain.propor": ferramenta({
+    nome: "brain.propor", descricao: "Grava propostas no Brand Brain (estado proposto; nada vale até uma pessoa aprovar).", risco: "baixo", externa: false, timeoutMs: 10_000,
+    entrada: z.object({ client_id: z.string().uuid(), itens: z.array(z.object({ memoria: z.string(), chave: z.string(), valor: z.string(), fonte: z.string(), fonte_detalhe: z.string().nullable().optional(), confianca: z.string() })).max(40) }),
+    executar: async (admin, exec, e) => {
+      const { data, error } = await admin.rpc("brain_propor", { p_client_id: e.client_id, p_itens: e.itens, p_execucao: exec.id });
+      if (error) throw new Error(error.message);
+      return { gravadas: data as number };
+    },
   }),
   // ClickUp: API oficial v2 com token pessoal (CLICKUP_API_TOKEN no servidor). Sem token, a ferramenta responde
   // "não configurada" e o fluxo segue registrando isso; nunca finge que leu ou comentou.
@@ -258,7 +273,104 @@ const FLUXO_ACESSOS: Fluxo = {
   ],
 };
 
-export const FLUXOS: Record<string, Fluxo> = { [FLUXO_ACESSOS.id]: FLUXO_ACESSOS };
+// ---------------------------------------------------------------- fluxo 2: Brand · carga do Brand Brain
+const corta = (t: unknown, n: number) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+
+/** Junta o que a clínica já tem no Hub, em texto curto por fonte. Só entra fonte com dado. */
+async function lerFontesBrain(admin: Admin, clientId: string) {
+  const { data: modulo } = await admin.rpc("tem_modulo", { p_client_id: clientId, p_modulo: "brand_brain" });
+  if (!modulo) return { ativo: false, fontes: {} as Partial<Record<Fonte, string>>, aprovados: [] as string[] };
+  const { data: cli } = await admin.from("sap_clinicas").select("id, nome, especialidade, cidade, servicos, ticket_medio, consulta_paga, ambicao_d90, ajustes_acordados")
+    .eq("client_id", clientId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const desde = new Date(Date.now() - 120 * 86_400_000).toISOString();
+  const [sessoes, resumos, posts, duvidas, pecas, aprovados] = await Promise.all([
+    cli ? admin.from("sap_sessao_registro").select("sessao, chave, texto").eq("clinica_id", cli.id).not("texto", "is", null).limit(60) : Promise.resolve({ data: [] }),
+    admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", desde).order("gerado_em", { ascending: false }).limit(40),
+    admin.from("instagram_posts").select("tema, format, caption, reach, saved, engagement").eq("client_id", clientId).gte("posted_at", desde).order("engagement", { ascending: false, nullsFirst: false }).limit(15),
+    admin.from("instagram_comments").select("text").eq("client_id", clientId).eq("is_question", true).gte("commented_at", desde).order("commented_at", { ascending: false }).limit(50),
+    cli ? admin.from("sap_pecas").select("titulo, etapa, formato, ganchos, semaforo, status").eq("clinica_id", cli.id).limit(30) : Promise.resolve({ data: [] }),
+    admin.from("brain_itens").select("memoria, chave, valor").eq("client_id", clientId).eq("estado", "aprovado"),
+  ]);
+  const fontes: Partial<Record<Fonte, string>> = {};
+  if (cli) {
+    const ficha = [cli.especialidade && `Especialidade: ${cli.especialidade}`, cli.cidade && `Cidade: ${cli.cidade}`,
+      cli.servicos && `Serviços: ${corta(Array.isArray(cli.servicos) ? cli.servicos.join(", ") : JSON.stringify(cli.servicos), 400)}`,
+      cli.ticket_medio && `Ticket médio: R$ ${cli.ticket_medio}`, cli.consulta_paga === false ? "Consulta não é paga" : null,
+      cli.ambicao_d90 && `Ambição para o D90: ${corta(cli.ambicao_d90, 300)}`, cli.ajustes_acordados && `Ajustes acordados: ${corta(cli.ajustes_acordados, 300)}`].filter(Boolean);
+    if (ficha.length) fontes.ficha_sap = ficha.join("\n");
+  }
+  const ses = ((sessoes.data ?? []) as { sessao: string; chave: string; texto: string }[]).filter((r) => r.texto?.trim());
+  if (ses.length) fontes.sessoes = ses.map((r) => `[${r.sessao} · ${r.chave}] ${corta(r.texto, 300)}`).join("\n");
+  const res = (resumos.data ?? []) as { resumo: unknown }[];
+  if (res.length) fontes.conversas = `${res.length} resumos (últimos 120 dias):\n` + res.map((r) => `- ${corta(typeof r.resumo === "string" ? r.resumo : JSON.stringify(r.resumo), 350)}`).join("\n");
+  const ps = (posts.data ?? []) as { tema: string | null; format: string | null; caption: string | null; reach: number | null; saved: number | null; engagement: number | null }[];
+  if (ps.length) fontes.instagram_posts = `${ps.length} posts com mais engajamento (120 dias):\n` + ps.map((p) => `- ${p.format ?? "post"} · tema ${p.tema ?? "?"} · alcance ${p.reach ?? "?"} · salvos ${p.saved ?? "?"} · "${corta(p.caption, 120)}"`).join("\n");
+  const dv = (duvidas.data ?? []) as { text: string }[];
+  if (dv.length) fontes.instagram_duvidas = `${dv.length} perguntas nos comentários (120 dias):\n` + dv.map((d) => `- ${corta(d.text, 150)}`).join("\n");
+  const pc = (pecas.data ?? []) as { titulo: string; etapa: string; formato: string; ganchos: unknown; semaforo: string; status: string }[];
+  if (pc.length) fontes.banco_anuncios = pc.map((p) => `- ${p.etapa} · ${p.formato} · ${p.status} · ${p.semaforo ?? ""} · "${corta(p.titulo, 100)}" ganchos: ${corta(JSON.stringify(p.ganchos ?? []), 200)}`).join("\n");
+  const apr = ((aprovados.data ?? []) as { memoria: string; chave: string; valor: string }[]).map((a) => `${a.memoria}.${a.chave}: ${a.valor}`);
+  return { ativo: true, fontes, aprovados: apr };
+}
+
+const SISTEMA_BRAIN = `Você monta a memória de marca (Brand Brain) de uma clínica médica cliente da Doctor Creator, para a equipe revisar.
+Leia as fontes e proponha itens curtos e úteis para quem vai criar conteúdo, anúncios e atendimento.
+Memórias: identidade (quem é, diferencial, tom), audiencia (dores, desejos, dúvidas, objeções reais), comercial (serviços, ticket, motivos de perda, como agenda), criativa (temas, ganchos e formatos que funcionaram ou não), decisao (o que foi decidido nas sessões e ainda vale).
+Regras:
+- Cada item: uma frase objetiva em português do Brasil, sem travessão, até 300 caracteres.
+- Só afirme o que está nas fontes. Quando for padrão, diga o tamanho da amostra (ex.: "em 12 de 40 resumos").
+- NUNCA inclua nome, telefone, e-mail, CPF, @ de perfil ou caso clínico de paciente. Só padrões agregados.
+- Nada de promessa de resultado, antes e depois ou linguagem proibida pelo CFM.
+- "fonte" é uma destas chaves: {FONTES}. Use a de onde o item saiu.
+- "confianca": alta (várias evidências), media, baixa (uma evidência só).
+- Se um item já aprovado continua certo, não repita. Se as fontes mostram que mudou, proponha a mesma chave com o texto novo.
+- No máximo 20 itens. Chave em minúsculas com _ (ex.: objecao_preco).
+Responda SOMENTE JSON: {"itens":[{"memoria":"audiencia","chave":"objecao_preco","valor":"...","fonte":"conversas","fonte_detalhe":"12 de 40 resumos","confianca":"media"}]}`;
+
+const FLUXO_BRAIN: Fluxo = {
+  id: "brain_carga", agente: "brand", nome: "Brand Brain: propor memória da clínica",
+  objetivo: "Ler as fontes que a clínica já tem no Hub e propor itens para o Brand Brain. Nada vale até uma pessoa aprovar na tela Brand Brain.",
+  passos: [
+    {
+      nome: "ler_fontes", descricao: "Lê ficha, sessões, conversas, Instagram e banco de anúncios", ferramenta: "brain.ler_fontes", risco: "baixo",
+      executar: async (c) => {
+        const r = await c.usar("brain.ler_fontes", { client_id: c.exec.client_id });
+        if (!r.ativo) return { tipo: "falhar", erro: "Brand Brain não está ativo para esta clínica (módulo brand_brain)." };
+        const lidas = Object.keys(r.fontes) as Fonte[];
+        if (!lidas.length) return { tipo: "concluir", resultado: { propostas: 0, motivo: "Nenhuma fonte com dado ainda. Escreva itens à mão na tela Brand Brain." } };
+        return { tipo: "seguir", saida: { fontes: lidas, aprovados: r.aprovados.length }, contexto: { fontes: r.fontes, fontes_lidas: lidas, aprovados: r.aprovados } };
+      },
+    },
+    {
+      nome: "propor", descricao: "A IA propõe itens; o servidor descarta o que não tem fonte ou tem dado pessoal", ferramenta: "ia.gerar_json", risco: "baixo",
+      executar: async (c) => {
+        if (!iaDisponivel()) return { tipo: "falhar", erro: "IA não configurada no servidor (OPENAI_API_KEY ou ANTHROPIC_API_KEY)." };
+        const fontes = c.exec.contexto.fontes as Record<string, string>;
+        const lidas = c.exec.contexto.fontes_lidas as Fonte[];
+        const texto = lidas.map((f) => `### ${f} (${FONTES[f]})\n${fontes[f]}`).join("\n\n").slice(0, 16_000);
+        const aprovados = (c.exec.contexto.aprovados as string[]).join("\n") || "(nenhum)";
+        const r = await c.usar("ia.gerar_json", { sistema: SISTEMA_BRAIN.replace("{FONTES}", lidas.join(", ")), finalidade: "agente_brain_carga", max_tokens: 2000, entrada: `JÁ APROVADO:\n${aprovados}\n\nFONTES:\n${texto}` });
+        const { ok, descartes } = validarPropostas(r.json, lidas);
+        return { tipo: "seguir", saida: { propostas: ok.length, descartes, modelo: r.modelo }, contexto: { propostas: ok, fontes: null } };
+      },
+    },
+    {
+      nome: "gravar", descricao: "Grava as propostas para revisão (estado proposto)", ferramenta: "brain.propor", risco: "baixo", idempotente: true,
+      executar: async (c) => {
+        const itens = c.exec.contexto.propostas as PropostaBrain[];
+        if (!itens.length) return { tipo: "seguir", saida: { gravadas: 0 } };
+        const r = await c.usar("brain.propor", { client_id: c.exec.client_id, itens });
+        return { tipo: "seguir", saida: r, contexto: { gravadas: r.gravadas } };
+      },
+    },
+    {
+      nome: "concluir", descricao: "Encerra com o resumo", risco: "baixo",
+      executar: async (c) => ({ tipo: "concluir", resultado: { propostas: Number(c.exec.contexto.gravadas ?? 0), fontes: c.exec.contexto.fontes_lidas, revisar_em: "Admin → Brand Brain" } }),
+    },
+  ],
+};
+
+export const FLUXOS: Record<string, Fluxo> = { [FLUXO_ACESSOS.id]: FLUXO_ACESSOS, [FLUXO_BRAIN.id]: FLUXO_BRAIN };
 /** Catálogo para a Central (sem funções). */
 export function catalogoFluxos() {
   return Object.values(FLUXOS).map((f) => ({ id: f.id, agente: f.agente, nome: f.nome, objetivo: f.objetivo, passos: f.passos.map((p) => ({ nome: p.nome, descricao: p.descricao, risco: p.risco, ferramenta: p.ferramenta ?? null })) }));
