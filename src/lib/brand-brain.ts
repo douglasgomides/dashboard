@@ -18,6 +18,7 @@ export const FONTES = {
   ficha_sap: "Ficha da clínica no SAP",
   sessoes: "Registros das sessões",
   conversas: "Resumos de conversas do WhatsApp",
+  mensagens_kommo: "Mensagens recebidas no Kommo (WhatsApp e Direct, só o lado do paciente)",
   instagram_posts: "Posts do Instagram",
   instagram_duvidas: "Perguntas nos comentários",
   banco_anuncios: "Banco de anúncios",

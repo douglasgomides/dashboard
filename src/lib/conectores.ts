@@ -27,7 +27,7 @@ export const CONECTORES: Conector[] = [
   { id: "meta_graph", nome: "Instagram (Meta Graph)", categoria: "conteudo", estado: "disponivel", fonte: "instagram", alimenta: "Posts, métricas da conta, comentários e perguntas", autenticacao: "Token da Meta por conta (guardado no servidor)" },
   { id: "windsor", nome: "Instagram (Windsor)", categoria: "conteudo", estado: "disponivel", fonte: "instagram", alimenta: "Posts e métricas da conta", autenticacao: "Chave da Windsor no servidor" },
   { id: "meta_ads", nome: "Anúncios Meta", categoria: "anuncios", estado: "disponivel", fonte: "anuncios", alimenta: "Gasto, resultados e campanhas", autenticacao: "Conta de anúncio ligada ao cliente + token da Meta no servidor" },
-  { id: "kommo", nome: "Kommo", categoria: "crm", estado: "disponivel", fonte: "crm", alimenta: "Leads, etapas e motivos de perda", autenticacao: "Token OAuth do Kommo por cliente" },
+  { id: "kommo", nome: "Kommo", categoria: "crm", estado: "disponivel", fonte: "crm", alimenta: "Leads, etapas, motivos de perda e, quando o webhook de mensagens está ligado, as mensagens recebidas (fonte do Brand Brain)", autenticacao: "Token OAuth do Kommo por cliente" },
   { id: "clint", nome: "Clint", categoria: "crm", estado: "disponivel", fonte: "crm", alimenta: "Negócios e etapas", autenticacao: "Chave da API por cliente" },
   { id: "rdstation", nome: "RD Station CRM", categoria: "crm", estado: "disponivel", fonte: "crm", alimenta: "Negócios e funis", autenticacao: "Token por cliente" },
   { id: "flwchat", nome: "FlwChat", categoria: "crm", estado: "disponivel", fonte: "crm", alimenta: "Cards e painéis", autenticacao: "Token por cliente" },
