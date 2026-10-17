@@ -62,7 +62,7 @@ export function tipoKommo(t: string | null | undefined): string {
   return m[String(t ?? "")] ?? (t ? String(t) : "texto");
 }
 
-export type ResultadoKommo = { dias: number; eventos: number; conversas: number; mensagens: number; com_texto: number; ate: string | null; erros: string[]; valoresVistos: Record<string, Record<string, number>> };
+export type ResultadoKommo = { robo?: number; dias: number; eventos: number; conversas: number; mensagens: number; com_texto: number; ate: string | null; erros: string[]; valoresVistos: Record<string, Record<string, number>> };
 
 async function eventosDoDia(dom: string, token: string, tipo: string, de: number, ate: number): Promise<EventoKommo[]> {
   const todos: EventoKommo[] = [];
@@ -136,7 +136,14 @@ export async function ingerirConversasKommo(
         break; // não avança o cursor: a próxima execução tenta o mesmo dia
       }
       msgs = [...new Map(msgs.map((m) => [m.messageId, m])).values()];
-      for (const conn of membros) await gravarJanela(admin, conn, msgs, cursor, fimJanela, r);
+      for (const conn of membros) {
+        await gravarJanela(admin, conn, msgs, cursor, fimJanela, r);
+        // Resposta de robô (até 10 s depois do paciente, ou em sequência de robô): marcada para a tela avisar e o
+        // tempo de resposta não contar como gente. Regra em supabase/migrations/20261021190000_robo_nas_conversas.sql.
+        const { data: n, error: eR } = await admin.rpc("kommo_marcar_robo", { p_client: conn.client_id, p_de: new Date(cursor).toISOString(), p_ate: new Date(fimJanela).toISOString() });
+        if (eR) r.erros.push(`robô: ${eR.message}`);
+        else r.robo = (r.robo ?? 0) + Number(n ?? 0);
+      }
       if (r.erros.length) break;
 
       cursor = fimJanela;
