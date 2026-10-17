@@ -165,6 +165,7 @@ const ROTULO_TIPO: Record<string, string> = {
   VIDEO: "🎬 vídeo",
   DOCUMENT: "📎 documento",
   STICKER: "figurinha",
+  kommo_sem_texto: "(sem texto: o Kommo não entrega)",
 };
 
 /** Conversas do WhatsApp, uma a uma, com a leitura e a auditoria comercial (aba "Conversas e auditoria" do Atendimento). */

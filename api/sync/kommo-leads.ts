@@ -4,6 +4,7 @@ import type { Database } from "../../src/integrations/supabase/types.js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runKommoLeadsSync } from "../_lib/kommo-leads-sync.js";
 import { runKommoReconcile } from "../_lib/kommo-reconcile.js";
+import { ingerirConversasKommo } from "../_lib/conversas-kommo.js";
 
 // Sync ativo de leads da Kommo via API — complementa o webhook passivo
 // (api/integrations/kommo/webhook.ts), que só cobre o que teve evento
@@ -21,6 +22,8 @@ import { runKommoReconcile } from "../_lib/kommo-reconcile.js";
 //   max_pages=       páginas por execução do sync
 //   reconcile=1      roda a varredura de ausentes em vez do sync
 //   confirmar=1      na reconciliação, marca mesmo acima do limite de segurança
+//   conversas=1      importa as conversas (talks) pelos eventos de mensagem, em vez do sync de leads
+//   dias=            na 1ª importação de conversas, quantos dias para trás (padrão 30)
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST" && req.method !== "GET") {
@@ -66,6 +69,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { data: connections, error } = await query;
   if (error) {
     res.status(500).json({ error: error.message });
+    return;
+  }
+
+  if (req.query.conversas === "1") {
+    try {
+      const dias = Number(req.query.dias) > 0 ? Math.min(90, Number(req.query.dias)) : 30;
+      const r = await ingerirConversasKommo(supabase, { orcamentoMs: 240_000, diasIniciais: dias, connectionId });
+      const problema = Object.values(r).some((x) => x.erros.length > 0);
+      res.status(problema ? 207 : 200).json({ ok: !problema, conversas: r });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
     return;
   }
 
