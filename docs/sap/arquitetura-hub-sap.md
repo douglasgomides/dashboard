@@ -222,7 +222,10 @@ tarefas_clickup     (clickup_task_id, client_id, marco, status, responsavel, pra
 | Custo de IA, logs | ✅ | ❌ | ❌ | ❌ |
 | Mudar módulo do cliente | ✅ (com sua decisão comercial) | ❌ | ❌ | ❌ |
 
-## 5. Arquitetura do Brand Brain ⬜
+## 5. Arquitetura do Brand Brain 🟡
+
+> **Feito (MVP, 21/10):** tabela `brain_itens` (uma linha por versão), funções `brain_propor`, `brain_decidir`, `brain_restaurar`, `brain_manual`, conferência de dado pessoal no banco e no servidor, fluxo de agente `brain_carga` (lê ficha, sessões, resumos de conversa, posts, perguntas nos comentários e banco de anúncios; IA propõe; servidor descarta sem fonte ou com dado pessoal) e tela **Admin → Brand Brain**. Módulo ligado só na clínica de teste. **Falta:** motivos de perda do CRM e documentos do Drive como fonte; o SAP e os outros agentes ainda não leem o Brain.
+
 
 - **Um Brain por clínica, no Hub** (`brain_itens`), lido pelo SAP e pelos agentes. Disponível só para quem tiver o módulo `brand_brain`.
 - **Cinco memórias:** Identidade, Audiência, Comercial, Criativa e Decisão.
