@@ -25,6 +25,8 @@ let browser;
 const cases = [];
 const unexpectedRequests = [];
 const runtimeErrors = [];
+const coverage = JSON.parse(html.toString().match(/id="capability-map">([\s\S]+?)<\/script>/)[1]);
+const entries = coverage.groups.flatMap(group => group.entries);
 try {
   browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
@@ -246,7 +248,7 @@ try {
   await run('HUB and SAP presentations have dedicated content and entry points', async () => {
     for (const name of ['hub','sap']) {
       await page.goto(`${origin}/#/${name}`);
-      await expect(page.getByRole('heading', { level:1 })).toContainText(name==='hub'?'Clareza para decidir.':'Aquisição com método.');
+      await expect(page.getByRole('heading', { level:1 })).toContainText(name==='hub'?'Marketing e vendas.':'Aquisição de pacientes.');
       await expect(page.getByRole('link', { name:`Acessar ${name.toUpperCase()}`, exact:false })).toHaveAttribute('href',`#/${name}/entrar`);
       await page.getByRole('button', { name:'Conhecer a experiência', exact:true }).click();
       const position=await page.locator('#metodo').evaluate(el=>({top:el.getBoundingClientRect().top,bottom:el.getBoundingClientRect().bottom,viewport:innerHeight,scroll:scrollY}));
@@ -341,6 +343,94 @@ try {
     await expect(page.locator('.workspace')).toHaveCount(0);
   });
 
+  await run('coverage preserves every active HUB SAP and admin navigation entry', async () => {
+    const hub = await readFile(new URL('../../src/lib/nav.ts', import.meta.url),'utf8');
+    const sap = await readFile(new URL('../../src/routes/_authenticated.sap.tsx', import.meta.url),'utf8');
+    const admin = await readFile(new URL('../../src/routes/_authenticated.admin.tsx', import.meta.url),'utf8');
+    const expected = [
+      ...[...hub.split('export const AREAS:')[1].split('// Clientes que')[0].matchAll(/\{ path: "([^"]*)", label: "([^"]*)"/g)].map(([,path,label])=>({source:'hub-nav',path,label})),
+      ...[...sap.split('const ITENS = [')[1].split('] as const')[0].matchAll(/sub: "([^"]*)", label: "([^"]*)"/g)].map(([,path,label])=>({source:'sap-nav',path:'/sap/$clientId'+path,label})),
+      ...[...admin.matchAll(/\{ to: "([^"]*)", label: "([^"]*)"/g)].map(([,path,label])=>({source:'admin-nav',path,label})),
+      ...[['/sap','Todas as clínicas'],['/sap/guia','Como operamos'],['/sap/docs','Documentos do SAP'],['/sap/comece','Comece aqui']].map(([path,label])=>({source:'sap-global',path,label})),
+    ];
+    const normalized = rows=>rows.map(({source,path,label})=>JSON.stringify([source,path,label])).sort();
+    assert.deepEqual(normalized(entries),normalized(expected),'No active navigation entry may disappear or be invented');
+    assert.equal(new Set(coverage.groups.map(g=>g.id)).size,coverage.groups.length);
+    for(const name of ['hub','sap']) {
+      await scene(name,'admin');await nav('Ferramentas').click();
+      await expect(page.getByRole('heading',{name:'Todas as áreas',exact:true})).toBeVisible();
+      const groups=coverage.groups.filter(g=>g.product===name);
+      assert.equal(await page.locator('.module-card li').count(),groups.flatMap(g=>g.entries).length);
+      for(const group of groups) {
+        await page.locator(`[data-module="${group.id}"]`).click();
+        await expect(page.getByRole('dialog')).toContainText(group.title);
+        for(const entry of group.entries) await expect(page.getByRole('dialog').getByRole('listitem').filter({hasText:entry.label})).not.toHaveCount(0);
+        await page.keyboard.press('Escape');
+      }
+    }
+  });
+
+  await run('catalog respects roles and distinguishes existing areas from future recording', async () => {
+    for(const name of ['hub','sap']) {
+      for(const role of ['team','clinic']) {
+        await scene(name,role);await nav('Ferramentas').click();
+        const visible=coverage.groups.filter(g=>g.product===name).flatMap(g=>g.entries).filter(e=>e.audience==='clinic'||role==='team'&&e.audience==='team');
+        assert.equal(await page.locator('.module-card li').count(),visible.length);
+        await expect(page.locator('[data-module="hub-administracao"]')).toHaveCount(0);
+        await expect(page.locator('.future-section')).toContainText('não disponível nesta versão');
+        await expect(page.locator('.future-section')).toContainText('Gravação e análise de consultas');
+      }
+      await scene(name,'reception');await expect(nav('Ferramentas')).toHaveCount(0);
+    }
+  });
+
+  await run('copy preserves full SAP journey scope milestones and honest agent capabilities', async () => {
+    await page.goto(`${origin}/#/sap`);
+    for(const title of ['Diagnóstico e direção','Atração e rastreamento','Conversa e confirmação','Comunicação na consulta','Follow-up e relacionamento','Leitura e melhoria semanal']) {
+      await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
+    }
+    await expect(page.locator('.intro')).toContainText('90 dias');
+    await expect(page.locator('#metodo')).toContainText('seis sessões individuais');
+    await expect(page.locator('.delivery-steps')).toContainText('Até D60');
+    await expect(page.locator('.delivery-steps')).toContainText('D61–D90');
+    for(const question of ['O investimento em anúncios está incluído?','Existe promessa de faturamento?','A consulta será gravada?','Como continuo no HUB?']) {
+      await page.getByText(question,{exact:true}).click();
+    }
+    await expect(page.locator('.faq-list')).toContainText('separada');
+    await expect(page.locator('.faq-list')).toContainText('Não há promessa de receita');
+    await expect(page.locator('.faq-list')).toContainText('evolução futura');
+    await expect(page.locator('.faq-list')).toContainText('não concede acesso automaticamente');
+    assert.equal(await page.locator('input[type="file"],audio,[data-action="record"]').count(),0);
+    await page.goto(`${origin}/#/hub`);
+    await expect(page.locator('.public-kicker')).toContainText('Agentes de IA para marketing e vendas');
+    await expect(page.locator('.service-section')).toContainText('Service as Software');
+    await page.getByText('O que os agentes fazem?',{exact:true}).click();
+    await expect(page.locator('.faq-list')).toContainText('O agente de Brand Brain');
+    await expect(page.locator('.faq-list')).toContainText('não representa um fluxo já implementado');
+    await page.goto(`${origin}/#/sap`);
+    await page.getByText('Como os agentes ajudam no SAP?',{exact:true}).click();
+    await expect(page.locator('.faq-list')).toContainText('confere acessos críticos');
+    await expect(page.locator('.faq-list')).toContainText('sua automação ainda precisa ser implementada');
+  });
+
+  await run('catalog mobile and desktop keyboard and accessibility in both themes', async () => {
+    for(const width of [375,1440]) {
+      await page.setViewportSize({width,height:1000});
+      for(const name of ['hub','sap']) {
+        await scene(name,'admin');await nav('Ferramentas').click();
+        for(const theme of ['light','dark']) {
+          if(await page.locator('html').getAttribute('data-theme')!==theme) await page.getByRole('button',{name:`Ativar tema ${theme==='dark'?'escuro':'claro'}`,exact:true}).click();
+          assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
+          const result=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
+          assert.deepEqual(result.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);
+        }
+        const entry=page.locator('[data-module]').first();await entry.focus();await page.keyboard.press('Enter');
+        await expect(page.getByRole('dialog')).toBeVisible();await page.keyboard.press('Escape');await expect(entry).toBeFocused();
+        await page.screenshot({path:`${output}/${name}-areas-${width}.png`,fullPage:true});
+      }
+    }
+  });
+
   await run('public presentations and logins render without overflow or basic accessibility violations', async () => {
     for (const width of [375,768,1440]) {
       await page.setViewportSize({width,height:1000});
@@ -382,6 +472,7 @@ try {
     authorization:'UI scenarios only. Real server authorization is not implemented by this prototype.',
     externalRequests:unexpectedRequests,runtimeErrors,data:'fictional, in memory only',
     api:'not connected; no writes or AI/provider calls',
+    coverage:{groups:coverage.groups.length,entries:entries.length,source:'current application navigation',fullScreensImplemented:false},
   },null,2)+'\n');
   console.log(`${cases.length}/${cases.length} prototype checks passed`);
 } catch (error) {

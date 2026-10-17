@@ -376,6 +376,33 @@
     @media(max-width:700px) { .demo-bar { padding:5px 16px; align-items:center; flex-wrap:nowrap; gap:12px; } .demo-bar>div>span { display:none; } .demo-links { gap:13px; } .demo-bar button { font-size:10px; } .demo-bar strong { font-size:10px; } .workspace { display:block; } .sidebar { display:contents; } .nav-list { display:flex; flex-direction:row; } .nav-list button { flex:1; min-height:52px; font-size:10px; padding:8px 3px; } .nav-list button[aria-current="page"] { box-shadow:none; background:#ffffff0d; } .nav-list button svg { width:17px; height:17px; } .toolbar { min-height:auto; padding:12px 17px; gap:7px; } .toolbar-start { justify-content:space-between; gap:12px; flex-basis:auto; flex:1; } .toolbar-end { width:auto; gap:9px; } .client-picker label { font-size:9px; } .client-picker select { width:138px; font-size:12px; } .session-label { font-size:10px; } .session-label>strong { display:none; } .product-label { padding-right:12px; font-size:10px; } .toolbar .logout { font-size:11px; } .toolbar .icon-button { display:inline-flex; width:32px; min-height:34px; } main { padding:25px 17px 105px; } .page-head { margin-bottom:23px; gap:12px; } .page-head h1 { font-size:28px; } .page-head>.btn { width:auto; min-width:0; padding:9px 11px; font-size:11px; } .page-head>.btn svg { display:none; } .page-head>.btn span { display:inline; } .sub { font-size:12px; margin-top:7px; } .summary-cell { padding:15px 12px; } .summary-value { font-size:24px; } .summary-label { font-size:10px; } .card { padding:18px; } h2 { font-size:17px; } .columns>.stack:last-child { display:flex; } .program { display:none; } .session-label .avatar { display:none; } .public-nav { padding:23px 22px; gap:15px; } .public .wordmark { font-size:23px; } .public-brand { gap:12px; } .product-caption { padding-left:12px; font-size:9px; } .public-nav-links { gap:0; } .public-nav .btn { padding:8px 11px; font-size:11px; min-height:40px; } .public-hero { grid-template-columns:1fr; padding:38px 22px 47px; gap:40px; } .public-kicker { font-size:9px; letter-spacing:.10em; margin-bottom:23px; } .public-hero h1 { font-size:43px; max-width:500px; letter-spacing:-1.8px; } .public-hero .intro { font-size:14px; margin-top:23px; } .public-hero .hero-actions { margin-top:25px; gap:10px; } .public-hero .btn { padding:10px 13px; font-size:11px; } .product-proof { padding:23px; } .proof-metrics strong { font-size:26px; } .proof-heading h2 { font-size:21px; } .public-strip { padding:23px 22px; flex-wrap:wrap; gap:13px 22px; font-size:10px; } .public-strip>strong { flex-basis:100%; } .public-section { padding:46px 22px; } .section-intro { grid-template-columns:1fr; gap:18px; margin-bottom:31px; } .section-intro h2 { font-size:29px; } .section-intro p { font-size:13px; } .editorial-rows { grid-template-columns:1fr; gap:28px; } .editorial-row { padding-top:17px; } .editorial-row .serial { margin-bottom:14px; } .editorial-row p { margin-top:8px; } .public-final { padding:34px 22px; } .public-final>div { display:block; } .public-final h2 { font-size:25px; } .public-final .btn { margin-top:23px; } .public-footer { padding:25px 22px; display:block; } .footer-links { gap:20px; margin-top:15px; } .login-layout { grid-template-columns:1fr; } .login-aside { padding:26px 24px; gap:0; } .login-copy { padding:0; } .login-copy .public-kicker,.login-copy>p,.login-context,.login-aside-footer { display:none; } .login-copy h1 { margin-top:29px; font-size:31px; max-width:440px; letter-spacing:-1.1px; } .login-pane { padding:19px 24px 30px; } .login-form-wrap { padding:25px 0 20px; max-width:none; } .login-form-wrap h2 { font-size:26px; } .login-intro { margin-top:8px; margin-bottom:22px; font-size:12px; } .login-form label { margin-top:17px; } .login-form .btn.primary { margin-top:22px; } .login-pane-footer { font-size:9px; } .showcase-grid { gap:14px; } .showcase-grid button { font-size:11px; padding:10px; } .dialog-head,.dialog-body { padding:20px; } .reception-summary>div { padding:14px 10px; } .reception-summary span { font-size:10px; } }
     @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
 
+
+    /* Work delivered, method coverage and preserved product areas. */
+    .editorial-rows { row-gap:40px; }
+    .service-section { border-top:1px solid #dce1e6; }
+    .delivery-steps { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:30px; padding:0; list-style:none; counter-reset:delivery; }
+    .delivery-steps li { border-top:1px solid #ccd4de; padding-top:19px; counter-increment:delivery; }
+    .delivery-steps li::before { content:"0" counter(delivery); display:block; color:#7c623c; font-size:11px; margin-bottom:18px; }
+    .delivery-steps strong { font-size:15px; font-weight:550; }
+    .delivery-steps p,.scope-note { color:#536073; font-size:12px; line-height:1.85; margin-top:12px; }
+    .scope-note { border-top:1px solid #dce1e6; padding-top:22px; margin-top:30px; max-width:900px; }
+    .faq-section { border-top:1px solid #dce1e6; }
+    .faq-list details { border-top:1px solid #ccd4de; padding:0; }
+    .faq-list details:last-child { border-bottom:1px solid #ccd4de; }
+    .faq-list summary { cursor:pointer; font-size:14px; font-weight:500; padding:21px 0; }
+    .faq-list details p { color:#536073; max-width:900px; font-size:13px; line-height:1.9; padding:0 0 23px; }
+    .coverage-intro { margin-bottom:22px; }
+    .module-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+    .module-card { display:flex; flex-direction:column; align-items:start; }
+    .module-card h2 { margin-top:13px; }
+    .module-card ul,.module-detail { padding-left:18px; margin:18px 0 22px; color:var(--secondary); font-size:13px; line-height:1.95; }
+    .module-card .btn { margin-top:auto; }
+    .future-section { margin-top:22px; }
+    .future-section h2 { margin-top:12px; }
+    .future-section>div { margin-top:24px; padding-top:19px; border-top:1px solid var(--border); }
+    .future-section h3 { font-size:14px; }
+    @media(max-width:800px) { .delivery-steps { grid-template-columns:repeat(2,minmax(0,1fr)); gap:25px; } }
+    @media(max-width:700px) { .module-grid { grid-template-columns:1fr; gap:15px; } .delivery-steps { gap:25px 20px; } .faq-list summary { font-size:13px; line-height:1.7; } .future-section h3 { line-height:1.6; } }
   </style>
 </head>
 <body>
@@ -384,7 +411,424 @@
   <div id="app"></div>
   <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
   <div id="live" role="status" aria-live="polite" aria-atomic="true"></div>
-  <script type="module">
+  <script type="application/json" id="capability-map">{
+  "groups": [
+    {
+      "id": "hub-resumo",
+      "product": "hub",
+      "title": "Inteligência e prioridades",
+      "description": "Saiba onde olhar e qual decisão vem primeiro.",
+      "detail": "Resumo, oportunidades e campanhas preservam o contexto da clínica. Os próximos passos precisam de evidência, responsável e prazo.",
+      "entries": [
+        {
+          "path": "",
+          "label": "Resumo",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/proximas-acoes",
+          "label": "Próximas ações",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/campanhas",
+          "label": "Campanhas do mês",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/oportunidades",
+          "label": "Oportunidades (score)",
+          "audience": "clinic",
+          "source": "hub-nav"
+        }
+      ]
+    },
+    {
+      "id": "hub-conteudo",
+      "product": "hub",
+      "title": "Conteúdo e audiência",
+      "description": "Estude o que atrai atenção e o que vale desenvolver.",
+      "detail": "Conteúdo, posts, audiência, ideias e referências continuam reunidos. A leitura depende das fontes conectadas; uma boa interação não comprova uma venda.",
+      "entries": [
+        {
+          "path": "/conteudo",
+          "label": "Conteúdo",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/posts",
+          "label": "Posts",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/top",
+          "label": "Top conteúdos",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/audiencia",
+          "label": "Audiência",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/ideias",
+          "label": "Ideias",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/inspiracao",
+          "label": "Inspiração",
+          "audience": "clinic",
+          "source": "hub-nav"
+        }
+      ]
+    },
+    {
+      "id": "hub-midia",
+      "product": "hub",
+      "title": "Anúncios",
+      "description": "Confira investimento e desempenho por objetivo.",
+      "detail": "Os anúncios continuam com seu contexto de campanha e fonte. Alterações de orçamento e publicação autônoma não são demonstradas nesta versão.",
+      "entries": [
+        {
+          "path": "/anuncios",
+          "label": "Anúncios",
+          "audience": "clinic",
+          "source": "hub-nav"
+        }
+      ]
+    },
+    {
+      "id": "hub-comercial",
+      "product": "hub",
+      "title": "Atendimento e vendas",
+      "description": "Acompanhe o caminho da conversa à decisão.",
+      "detail": "Comercial, organização do CRM, WhatsApp e dúvidas preservados. Relacionar uma venda à sua origem exige rastreamento e registros consistentes.",
+      "entries": [
+        {
+          "path": "/crm-painel",
+          "label": "Comercial",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/crm-guia",
+          "label": "Organizar o CRM",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/atendimento",
+          "label": "WhatsApp",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/duvidas",
+          "label": "Dúvidas",
+          "audience": "clinic",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/jornada",
+          "label": "Jornada",
+          "audience": "admin",
+          "source": "hub-nav"
+        }
+      ]
+    },
+    {
+      "id": "hub-relatorio",
+      "product": "hub",
+      "title": "Relatórios",
+      "description": "Tenha uma leitura do período pronta para revisar.",
+      "detail": "O relatório reúne resultados, limitações e prioridades. Preparar o texto e publicar no destino autorizado são etapas diferentes.",
+      "entries": [
+        {
+          "path": "/relatorio",
+          "label": "Relatório",
+          "audience": "clinic",
+          "source": "hub-nav"
+        }
+      ]
+    },
+    {
+      "id": "hub-sistema",
+      "product": "hub",
+      "title": "Configuração do cliente",
+      "description": "Organize as fontes e a estrutura comercial.",
+      "detail": "Área administrativa para configuração, etapas do CRM e leitura de vendas por origem. Acesso limitado ao escopo autorizado.",
+      "entries": [
+        {
+          "path": "/admin/$clientId",
+          "label": "Configurar este cliente",
+          "audience": "admin",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/crm-estrutura",
+          "label": "Etapas do CRM",
+          "audience": "admin",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/vendas-kommo",
+          "label": "Vendas por origem (Kommo)",
+          "audience": "admin",
+          "source": "hub-nav"
+        },
+        {
+          "path": "/admin",
+          "label": "Todos os clientes",
+          "audience": "admin",
+          "source": "hub-nav"
+        }
+      ]
+    },
+    {
+      "id": "sap-inicio",
+      "product": "sap",
+      "title": "Minha implantação",
+      "description": "Responsabilidades e visão da clínica no programa.",
+      "detail": "As tarefas da clínica e o painel de acompanhamento continuam separados das ferramentas internas da equipe.",
+      "entries": [
+        {
+          "path": "/sap/$clientId",
+          "label": "Minhas tarefas",
+          "audience": "clinic",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/painel",
+          "label": "Painel da clínica",
+          "audience": "clinic",
+          "source": "sap-nav"
+        }
+      ]
+    },
+    {
+      "id": "sap-base",
+      "product": "sap",
+      "title": "Preparação e implantação",
+      "description": "Da ficha inicial ao rastreamento conferido.",
+      "detail": "Diagnóstico, acessos, cronograma e responsáveis preservados. Cada etapa avança com seu critério de entrega; tempo decorrido não significa trabalho concluído.",
+      "entries": [
+        {
+          "path": "/sap/$clientId/cronograma",
+          "label": "Cronograma",
+          "audience": "clinic",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/onboarding",
+          "label": "Ficha e acessos",
+          "audience": "team",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/rastreamento",
+          "label": "Rastreamento",
+          "audience": "team",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/papeis",
+          "label": "Quem é quem",
+          "audience": "team",
+          "source": "sap-nav"
+        }
+      ]
+    },
+    {
+      "id": "sap-metodo",
+      "product": "sap",
+      "title": "Sessões, anúncios e jornada",
+      "description": "Método completo, da atração ao relacionamento.",
+      "detail": "As seis sessões incluem paciente ideal, atração, conversa, confirmação, comunicação na consulta, follow-up e fidelização. Os roteiros e a gravação guiada de criativos pertencem ao método; não são gravação de consultas.",
+      "entries": [
+        {
+          "path": "/sap/$clientId/sessao",
+          "label": "Reuniões",
+          "audience": "admin",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/anuncios",
+          "label": "Banco de anúncios",
+          "audience": "admin",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/etapas",
+          "label": "Etapas do funil",
+          "audience": "admin",
+          "source": "sap-nav"
+        }
+      ]
+    },
+    {
+      "id": "sap-semana",
+      "product": "sap",
+      "title": "Leitura e execução semanal",
+      "description": "Encontre o gargalo e combine a próxima ação.",
+      "detail": "Conferir os registros vem antes de interpretar o funil. A rotina cruza leitura, execução e mídia para propor uma ação com responsável e prazo.",
+      "entries": [
+        {
+          "path": "/sap/$clientId/leitura",
+          "label": "Leitura da semana",
+          "audience": "clinic",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/execucao",
+          "label": "Execução e saúde",
+          "audience": "team",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/midia",
+          "label": "Mídia",
+          "audience": "team",
+          "source": "sap-nav"
+        }
+      ]
+    },
+    {
+      "id": "sap-resultado",
+      "product": "sap",
+      "title": "Metas e continuidade",
+      "description": "Compare a evolução e preserve o histórico.",
+      "detail": "Metas e condições continuam documentadas. Plano e relatório D90 apoiam a continuidade; o acesso ao HUB depende de contratação e liberação próprias.",
+      "entries": [
+        {
+          "path": "/sap/$clientId/metas",
+          "label": "Metas e garantia",
+          "audience": "clinic",
+          "source": "sap-nav"
+        },
+        {
+          "path": "/sap/$clientId/documentos",
+          "label": "Plano e relatório D90",
+          "audience": "clinic",
+          "source": "sap-nav"
+        }
+      ]
+    },
+    {
+      "id": "sap-biblioteca",
+      "product": "sap",
+      "title": "Orientação e materiais",
+      "description": "Documentos e instruções que sustentam a implantação.",
+      "detail": "A biblioteca e o início guiado continuam disponíveis no SAP. Materiais operacionais respeitam o perfil da pessoa.",
+      "entries": [
+        {
+          "path": "/sap",
+          "label": "Todas as clínicas",
+          "audience": "admin",
+          "source": "sap-global"
+        },
+        {
+          "path": "/sap/guia",
+          "label": "Como operamos",
+          "audience": "admin",
+          "source": "sap-global"
+        },
+        {
+          "path": "/sap/docs",
+          "label": "Documentos do SAP",
+          "audience": "clinic",
+          "source": "sap-global"
+        },
+        {
+          "path": "/sap/comece",
+          "label": "Comece aqui",
+          "audience": "clinic",
+          "source": "sap-global"
+        }
+      ]
+    },
+    {
+      "id": "hub-administracao",
+      "product": "hub",
+      "title": "Administração e agentes",
+      "description": "Carteira, conhecimento, integrações e governança.",
+      "detail": "Brand Brain, Central de Agentes, conferência e relatórios da carteira continuam sob responsabilidade administrativa. A presença de uma área não significa que toda a sua operação seja autônoma.",
+      "entries": [
+        {
+          "path": "/admin",
+          "label": "Clientes do Hub",
+          "audience": "admin",
+          "source": "admin-nav"
+        },
+        {
+          "path": "/admin/referencia",
+          "label": "Referência entre clientes",
+          "audience": "admin",
+          "source": "admin-nav"
+        },
+        {
+          "path": "/admin/conferencia",
+          "label": "Conferência de dados",
+          "audience": "admin",
+          "source": "admin-nav"
+        },
+        {
+          "path": "/admin/relatorios",
+          "label": "Relatórios da semana",
+          "audience": "admin",
+          "source": "admin-nav"
+        },
+        {
+          "path": "/admin/agentes",
+          "label": "Central de Agentes",
+          "audience": "admin",
+          "source": "admin-nav"
+        },
+        {
+          "path": "/admin/brain",
+          "label": "Brand Brain",
+          "audience": "admin",
+          "source": "admin-nav"
+        },
+        {
+          "path": "/admin/integracoes",
+          "label": "Integrações",
+          "audience": "admin",
+          "source": "admin-nav"
+        },
+        {
+          "path": "/admin/equipe",
+          "label": "Equipe",
+          "audience": "admin",
+          "source": "admin-nav"
+        }
+      ]
+    }
+  ],
+  "future": [
+    {
+      "title": "Gravação e análise de consultas",
+      "detail": "Evolução futura. Sem gravador, envio de áudio ou análise de consultas nesta versão."
+    },
+    {
+      "title": "Operação autônoma de campanhas",
+      "detail": "Evolução futura. Mudanças de mídia continuam dependentes de escopo, evidências e autorização."
+    },
+    {
+      "title": "Novas fontes e agentes especializados",
+      "detail": "Evolução futura. Cada conexão e fluxo precisa ser implementado e validado; MCP, por si só, não garante integração nem qualidade dos dados."
+    }
+  ]
+}</script>
+<script type="module">
     const icons = {
       home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
       plan:'<rect x="4" y="4" width="16" height="17" rx="2"/><path d="M9 3v3m6-3v3M8 11h8m-8 4h5"/>',
@@ -409,7 +853,8 @@
     const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.document}</svg>`;
     const esc = text => String(text).replace(/[&<>"']/g, value => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[value]));
     const clients = { aurora:{name:'Clínica Aurora',initials:'CA',day:24}, horizonte:{name:'Clínica Horizonte',initials:'CH',day:46} };
-    const products = { hub:{name:'HUB',description:'Acompanhamento contínuo',plan:'Plano de ação'}, sap:{name:'SAP',description:'Sistema de Aquisição de Pacientes',plan:'Plano de 90 dias'} };
+    const coverage = JSON.parse(document.getElementById('capability-map').textContent);
+    const products = { hub:{name:'HUB',description:'Inteligência de marketing e vendas',plan:'Plano de ação'}, sap:{name:'SAP',description:'Sistema de Aquisição de Pacientes',plan:'Plano de 90 dias'} };
     const app = document.getElementById('app');
     const dialog = document.getElementById('dialog');
     const live = document.getElementById('live');
@@ -457,7 +902,7 @@
       const timer=setTimeout(()=>{timers.delete(timer);fn();},ms); timers.add(timer);
     }
     function closeDialog() { if(dialog.open) dialog.close(); modalContext=null; }
-    function navigate(page) { if(state.screen!=='workspace'||(state.role==='reception'&&page==='results'))return; closeDialog(); state.page=page; render(); document.getElementById('page-title').focus(); }
+    function navigate(page) { if(state.screen!=='workspace'||(state.role==='reception'&&!['today','plan','activity'].includes(page)))return; closeDialog(); state.page=page; render(); document.getElementById('page-title').focus(); }
     function render() {
       if(state.screen==='landing') { renderLanding(); return; }
       if(state.screen==='login') { renderLogin(); return; }
@@ -469,7 +914,7 @@
         <aside class="sidebar" aria-label="Menu do workspace">
           <div class="brand"><div class="wordmark">Doctor<span>Creator</span></div><small>${p.name} · ${state.role==='admin'?'Administração':state.role==='team'?'Operação':'Clínica'}</small></div>
           <div><p class="nav-label">${state.product==='hub'?'Acompanhamento':'Programa de aquisição'}</p><nav class="nav-list" aria-label="Navegação principal">
-            ${[['today',state.role==='reception'?'Minha fila':'Hoje','home'],['plan',state.role==='reception'?'Minha rotina':p.plan,'plan'],...state.role==='reception'?[]:[['results','Resultados','chart']],['activity',state.role==='reception'?'Histórico':'Atividade','activity']].map(([id,label,image])=>`<button type="button" data-page="${id}" ${state.page===id?'aria-current="page"':''}>${icon(image)}<span>${label}</span>${id==='today'&&needs?`<span class="nav-count" aria-hidden="true">${needs}</span>`:''}</button>`).join('')}
+            ${[['today',state.role==='reception'?'Minha fila':'Hoje','home'],['plan',state.role==='reception'?'Minha rotina':p.plan,'plan'],...state.role==='reception'?[]:[['results','Resultados','chart'],['modules','Ferramentas','document']],['activity',state.role==='reception'?'Histórico':'Atividade','activity']].map(([id,label,image])=>`<button type="button" data-page="${id}" ${state.page===id?'aria-current="page"':''}>${icon(image)}<span>${label}</span>${id==='today'&&needs?`<span class="nav-count" aria-hidden="true">${needs}</span>`:''}</button>`).join('')}
           </nav></div>
           <div class="sidebar-footer"><div class="profile"><span class="avatar">${isOperator()?'DC':c.initials}</span><div>${roleName()}<small>${state.role==='admin'?'Carteira e governança':state.role==='team'?'Clínicas atribuídas':state.role==='reception'?'Fila de atendimento':'Resultados e decisões'}</small></div></div><p class="sidebar-note">Agentes identificados. Decisões sob seu controle.</p></div>
         </aside>
@@ -480,11 +925,11 @@
             <button type="button" class="icon-button" data-action="theme" aria-label="${state.theme==='light'?'Ativar tema escuro':'Ativar tema claro'}">${icon('moon')}</button><button type="button" class="logout" data-action="logout">Sair</button>
           </div>
         </header>
-        <main id="main"><header class="page-head"><div><div class="eyebrow ${state.product==='sap'?'sap-label':''}">${icon(state.product==='hub'?'activity':'plan')} ${p.description}${state.product==='sap'?` · D${c.day} de 90`:''}</div><h1 id="page-title" tabindex="-1">${({today:state.role==='reception'?'Minha fila':'Visão do dia',plan:state.role==='reception'?'Minha rotina':p.plan,results:'Resultados',activity:state.role==='reception'?'Histórico do atendimento':'Atividade dos agentes'})[state.page]}</h1><p class="sub">${state.page==='today'?(isOperator()?'As decisões da sua equipe, com contexto para agir.':'O que precisa de você e como o trabalho está avançando.'):'Clínica selecionada: '+c.name+' · cenário demonstrativo'}</p></div>
+        <main id="main"><header class="page-head"><div><div class="eyebrow ${state.product==='sap'?'sap-label':''}">${icon(state.product==='hub'?'activity':'plan')} ${p.description}${state.product==='sap'?` · D${c.day} de 90`:''}</div><h1 id="page-title" tabindex="-1">${({today:state.role==='reception'?'Minha fila':'Visão do dia',plan:state.role==='reception'?'Minha rotina':p.plan,results:'Resultados',modules:'Todas as áreas',activity:state.role==='reception'?'Histórico do atendimento':'Atividade dos agentes'})[state.page]}</h1><p class="sub">${state.page==='today'?(isOperator()?'As decisões da sua equipe, com contexto para agir.':'O que precisa de você e como o trabalho está avançando.'):'Clínica selecionada: '+c.name+' · cenário demonstrativo'}</p></div>
           ${isOperator()?`<button type="button" class="btn primary" data-action="ask" aria-label="Pedir análise">${icon('spark')}<span>Pedir análise</span></button>`:''}
         </header>
         ${state.sourceError?`<div class="source-error" role="alert"><div><strong>Os dados ainda não puderam ser conferidos.</strong><p>As recomendações estão suspensas. Resultados do período ficam indisponíveis até a nova leitura.</p></div><button class="btn" type="button" data-action="retry">${icon('refresh')} Tentar novamente</button></div>`:''}
-        ${state.role==='reception'?reception(d):state.page==='today'?today(d,needs):state.page==='plan'?plan(d):state.page==='results'?results():activity(d)}
+        ${state.role==='reception'?reception(d):state.page==='today'?today(d,needs):state.page==='plan'?plan(d):state.page==='results'?results():state.page==='modules'?modules():activity(d)}
         <footer class="footnote"><span>Semana de 12 a 18 de outubro · dados demonstrativos</span><label><input id="source-error" type="checkbox" ${state.sourceError?'checked':''}> Simular falha da fonte</label></footer>
         </main></div></div>`;
       document.documentElement.dataset.theme=state.theme;
@@ -620,26 +1065,56 @@
 
     function brand(product) { return `<div class="public-brand"><div class="wordmark">Doctor<span>Creator</span></div><span class="product-caption">${product==='admin'?'ADMIN':products[product].name}</span></div>`; }
     const publicCopy = {
-      hub:{kicker:'Inteligência para a gestão da clínica',title:'Clareza para decidir.<br><em>Controle para evoluir.</em>',intro:'Conteúdo, mídia e operação comercial em uma visão organizada. Entenda os números da sua clínica e acompanhe as decisões que movem o trabalho.',previewTitle:'A operação, em perspectiva.',sectionTitle:'Uma visão conectada.<br>Decisões com contexto.',sectionIntro:'Os indicadores só ajudam quando dizem de onde vêm e o que precisa acontecer depois. O HUB aproxima a análise do trabalho da sua equipe.',items:[['Enxergue o que importa','Conteúdo, anúncios e CRM reunidos conforme as fontes conectadas, com período e origem dos indicadores visíveis.'],['Decida com evidências','Prioridades acompanhadas do contexto, dos limites da leitura e do responsável pelo próximo passo.'],['Acompanhe a execução','Propostas preparadas por agentes, revisão humana e histórico para entender o que foi feito.']],final:'Sua gestão, com mais perspectiva.',finalText:'Conheça a organização do HUB em um ambiente demonstrativo.'},
-      sap:{kicker:'Sistema de Aquisição de Pacientes',title:'Aquisição com método.<br><em>Execução com direção.</em>',intro:'Um programa de implantação de 90 dias para organizar a aquisição da sua clínica. Metas, entregas, responsáveis e acompanhamento em um ambiente próprio.',previewTitle:'Da preparação à operação.',sectionTitle:'Um plano claro.<br>Uma operação organizada.',sectionIntro:'Cada fase tem um objetivo e uma entrega. A clínica acompanha suas responsabilidades; a equipe conduz a implantação com contexto e evidências.',items:[['Prepare a base','Organize os acessos, o diagnóstico e a definição das metas antes de avançar para a execução.'],['Conduza a implantação','Acompanhe o plano de 90 dias, as entregas da equipe e os materiais que precisam da revisão da clínica.'],['Confira a evolução','Leia os indicadores disponíveis, registre decisões e mantenha os próximos passos com responsável e prazo.']],final:'Uma entrada estruturada para crescer.',finalText:'Explore a jornada de implantação no ambiente demonstrativo do SAP.'}
+      hub:{kicker:'Agentes de IA para marketing e vendas',title:'Marketing e vendas.<br><em>Inteligência em ação.</em>',intro:'Transforme dados de conteúdo, anúncios e atendimento em análises e prioridades. Agentes de IA preparam o trabalho; sua equipe revisa e decide o próximo passo.',previewTitle:'Uma análise. Um próximo passo.',sectionTitle:'Da informação<br>à entrega.',sectionIntro:'O valor está no trabalho preparado para ser usado: conhecimento da clínica, evidências organizadas e uma proposta clara. O HUB conecta análise à rotina de marketing e vendas da clínica.',items:[['Estude o que atrai','Entenda conteúdo, audiência e anúncios conforme as fontes conectadas. Identifique o que merece investigação antes de aumentar o investimento.'],['Entenda o que converte','Leia o CRM e o atendimento com contexto. Compare conversa, agendamento e comparecimento; diferencie um gargalo comercial de uma falha de registro.'],['Receba trabalho preparado','Agentes organizam conhecimento da clínica em propostas para o Brand Brain. Sua equipe confere as fontes e aprova o que passa a orientar conteúdo e atendimento.']],final:'Mais clareza no marketing.<br>Mais direção nas vendas.',finalText:'Veja como análises e agentes podem apoiar o trabalho da sua clínica.'},
+      sap:{kicker:'Sistema de Aquisição de Pacientes',title:'Aquisição de pacientes.<br><em>Da atração à fidelização.</em>',intro:'Uma implantação assistida de 90 dias para conectar anúncios, atendimento, consulta e acompanhamento. Método e execução técnica organizam a jornada; software e agentes de IA apoiam entregas específicas, com revisão da equipe.',previewTitle:'Uma jornada inteira. Um plano.',sectionTitle:'O anúncio é<br>só o começo.',sectionIntro:'O paciente precisa chegar, ser bem atendido, comparecer e entender sua recomendação. O SAP organiza essa jornada com seis sessões individuais, tarefas, materiais e leitura semanal.',items:[['Diagnóstico e direção','Defina o serviço prioritário, o paciente ideal, a proposta de valor e as metas. A implantação começa entendendo a realidade da clínica.'],['Atração e rastreamento','Prepare campanhas, criativos e eventos de teste. A gravação guiada é de materiais para anúncios; a mídia começa depois da preparação do atendimento e da conferência do rastreamento.'],['Conversa e confirmação','Treine a recepção para conduzir a conversa, organizar o agendamento e confirmar a presença. Registre cada etapa no CRM ou na agenda adotada pela clínica.'],['Comunicação na consulta','Estruture a apresentação do plano, esclareça dúvidas e explique opções e limites. O médico mantém a decisão clínica; o paciente decide com compreensão e liberdade.'],['Follow-up e relacionamento','Organize retornos, próximos passos, fidelização e indicações com responsáveis e cadências. A jornada continua depois da primeira consulta.'],['Leitura e melhoria semanal','Confira os registros, identifique o principal vazamento do funil e combine a ação da semana. A clínica e a equipe acompanham o que ficou sob sua responsabilidade.']],final:'Uma jornada bem preparada.<br>Uma equipe com direção.',finalText:'Conheça o método e as responsabilidades da implantação antes de começar.'}
     };
+    function landingExtras(p) {
+      const steps=p==='hub'?[['Contexto','Fontes disponíveis, período e conhecimento da clínica.'],['Análise','Dados conferidos, evidências e limites da leitura.'],['Entrega','Conhecimento da clínica organizado em propostas para revisão.'],['Acompanhamento','Decisão registrada e atividade identificada.']]:[['D0–D14','Onboarding, diagnóstico, paciente ideal e proposta de valor.'],['D16–D40','Atração, rastreamento, recepção, consulta e follow-up.'],['Até D60','Marco previsto para o método estar em operação, conforme as entregas.'],['D61–D90','Melhoria com dados reais, relatório final e plano de continuidade.']];
+      const faq=p==='hub'?[
+        ['O que os agentes fazem?','O agente de Brand Brain lê as fontes disponíveis e propõe memória de marca para revisão, nas clínicas com esse módulo ativo. As áreas de conteúdo, anúncios e atendimento dão contexto ao estudo. O relatório semanal do protótipo ilustra um fluxo proposto; não representa um fluxo já implementado no motor de agentes.'],
+        ['O HUB substitui meu CRM?','A proposta é aproveitar os sistemas que a clínica já utiliza, conforme as integrações disponíveis. O CRM registra a operação comercial; o HUB ajuda a estudá-la e orientar o trabalho de marketing e vendas.'],
+        ['Todo número tem atribuição de venda?','Não. Origem, período e cobertura precisam estar claros. Relacionar anúncios, conversas e vendas exige identificadores e registros consistentes. Dado indisponível deve aparecer como indisponível.'],
+        ['Já posso gravar consultas?','A gravação e a análise de consultas são uma evolução futura e não estão disponíveis nesta versão. Hoje, o método do SAP apoia a comunicação com roteiros, apresentação do plano, dúvidas e follow-up.'],
+        ['Quem pode acessar?','Cada pessoa tem sua função: administração, equipe interna, gestão da clínica ou recepção. Apenas a administração acompanha os dois produtos. A gestão da clínica e a recepção têm visões diferentes, conforme suas responsabilidades.']
+      ]:[
+        ['Como os agentes ajudam no SAP?','O fluxo atual confere acessos críticos, prepara cobranças para revisão e solicita aprovação para concluir o marco de acessos. O responsável decide antes de uma ação. O exemplo de rastreamento deste protótipo ilustra outro fluxo proposto; sua automação ainda precisa ser implementada.'],
+        ['O que faz parte da implantação?','Kickoff, seis sessões individuais, diagnóstico, plano de 90 dias, materiais e rotinas da jornada, execução técnica de mídia e rastreamento, leitura semanal e relatório D90. As entregas e condições são detalhadas na proposta.'],
+        ['O investimento em anúncios está incluído?','A gestão de tráfego faz parte do programa de 90 dias. A verba paga às plataformas é da clínica e é separada. Licenças e serviços adicionais seguem o escopo da proposta.'],
+        ['Quem conversa com os pacientes?','A equipe da clínica continua responsável pelo atendimento diário e pelos registros. A implantação prepara o processo e orienta a execução. Não é um serviço de atendimento diário aos pacientes.'],
+        ['Preciso trocar de CRM?','Um sistema que já funciona pode ser aproveitado. A prioridade é organizar etapas, registros e rastreamento antes de decidir sobre uma migração.'],
+        ['Existe promessa de faturamento?','Não há promessa de receita, lucro ou quantidade de tratamentos. As metas operacionais e eventuais condições de garantia são estabelecidas na proposta e no contrato, com linha de base e critérios de execução.'],
+        ['A consulta será gravada?','Não nesta versão. O método já inclui comunicação consultiva, apresentação do plano e follow-up. Gravar e analisar consultas é uma evolução futura. A gravação guiada de criativos para anúncios é outra entrega.'],
+        ['Como continuo no HUB?','O SAP prepara a base para a continuidade. O histórico da clínica deve ser preservado, mas o HUB possui contratação e liberação de acesso próprias. Concluir os 90 dias não concede acesso automaticamente.']
+      ];
+      return `<section class="public-section service-section" aria-labelledby="delivery-title"><div class="section-intro"><h2 id="delivery-title">${p==='hub'?'Agentes com contexto.<br>Equipe no comando.':'90 dias.<br>Responsabilidades claras.'}</h2><p>${p==='hub'?'Service as Software é a direção do produto: transformar conhecimento e dados em trabalho entregue. Começamos por fluxos definidos, com evidências, revisão e histórico. A autonomia cresce conforme a confiabilidade de cada fluxo.':'A equipe Doctor Creator conduz a implantação técnica; a clínica participa das sessões, valida materiais, atende e mantém os registros. A meta é colocar o método em operação até D60 e usar o período final para melhorar com dados reais.'}</p></div><ol class="delivery-steps">${steps.map(([t,d])=>`<li><strong>${t}</strong><p>${d}</p></li>`).join('')}</ol><p class="scope-note">${p==='hub'?'O protótipo usa dados fictícios. A análise real depende das fontes e dos fluxos disponíveis para cada clínica.':'Plano, diagnóstico, materiais, roteiro de continuidade e relatório D90 permanecem no escopo. Prazos dependem das entregas e das pausas registradas. Verba de mídia e atendimento diário aos pacientes têm responsabilidades próprias.'}</p></section><section class="public-section faq-section" aria-labelledby="faq-title"><div class="section-intro"><h2 id="faq-title">Antes de começar.</h2><p>O que faz parte da experiência e o que depende da sua equipe.</p></div><div class="faq-list">${faq.map(([q,a])=>`<details><summary>${q}</summary><p>${a}</p></details>`).join('')}</div></section>`;
+    }
     function renderLanding() {
       const p=state.product,c=publicCopy[p]; document.documentElement.dataset.theme='light';document.title=`${products[p].name} · Doctor Creator`;
       app.innerHTML=`<div class="public"><header class="public-nav">${brand(p)}<nav class="public-nav-links" aria-label="Navegação pública"><button type="button" data-section="metodo">Como funciona</button><a class="btn" href="#/${p}/entrar">Acessar ${products[p].name} ${icon('arrow')}</a></nav></header>
-      <main id="main" class="public-main"><section class="public-hero" aria-labelledby="public-title"><div><p class="public-kicker">${c.kicker}</p><h1 id="public-title">${c.title}</h1><p class="intro">${c.intro}</p><div class="hero-actions"><button type="button" class="btn primary" data-action="explore">Explorar demonstração ${icon('arrow')}</button><button type="button" class="btn" data-section="metodo">Conhecer a experiência</button></div><p class="hero-note">Acesso individual para cada pessoa da clínica.</p></div>
+      <main id="main" class="public-main"><section class="public-hero" aria-labelledby="public-title"><div><p class="public-kicker">${c.kicker}</p><h1 id="public-title">${c.title}</h1><p class="intro">${c.intro}</p><div class="hero-actions"><button type="button" class="btn primary" data-action="explore">Explorar demonstração ${icon('arrow')}</button><button type="button" class="btn" data-section="metodo">Conhecer a experiência</button></div><p class="hero-note">${p==='hub'?'Análise de marketing e vendas. Trabalho preparado para agir.':'Implantação assistida · seis sessões individuais · acompanhamento semanal'}</p></div>
       <div class="product-proof" aria-label="Prévia ilustrativa do ${products[p].name}"><div class="proof-top"><span class="proof-brand">${products[p].name} / CLÍNICA AURORA</span><span>PRÉVIA ILUSTRATIVA</span></div><div class="proof-heading"><h2>${c.previewTitle}</h2><span>${p==='hub'?'12 — 16 OUT':'D24 / D90'}</span></div>
-      ${p==='hub'?`<div class="proof-metrics"><div><strong>120</strong><small>Conversas</small></div><div><strong>36</strong><small>Agendamentos</small></div><div><strong>24</strong><small>Comparecimentos</small></div></div><div class="proof-chart" aria-hidden="true">${[30,45,38,54,42,66,51,73,65,84,71,92].map(h=>`<span style="height:${h}%"></span>`).join('')}</div><div class="proof-axis"><span>EVOLUÇÃO ILUSTRATIVA</span><span>OUTUBRO</span></div><div class="proof-action">${icon('document')}<div><strong>Relatório do período preparado</strong><p>Fontes e prioridades organizadas para revisão da equipe.</p></div></div>`:`<div class="proof-stages"><div class="proof-stage"><span>01</span><div><strong>Diagnóstico e preparação</strong><p>Base, acessos e metas da clínica.</p></div><span class="stage-state">Conferido</span></div><div class="proof-stage"><span>02</span><div><strong>Estrutura e rastreamento</strong><p>Próxima entrega com evidência.</p></div><span class="stage-state">Em revisão</span></div><div class="proof-stage"><span>03</span><div><strong>Campanhas e atendimento</strong><p>Implantação acompanhada pela equipe.</p></div><span class="stage-state">Próxima fase</span></div></div><div class="proof-action">${icon('shield')}<div><strong>Aguardando uma decisão da clínica</strong><p>Material de campanha organizado para conferência.</p></div></div>`}<div class="proof-footer"><span>Dados fictícios · sem resultado prometido</span><span>Supervisão humana</span></div></div></section>
-      <div class="public-divider"><div class="public-strip"><strong>${p==='hub'?'Gestão contínua, com contexto.':'Implantação, com acompanhamento.'}</strong><span>${p==='hub'?'Conteúdo e mídia':'Diagnóstico e metas'}</span><span>${p==='hub'?'Atendimento e CRM':'Entregas e responsáveis'}</span><span>${p==='hub'?'Decisões e execução':'Rastreamento e revisão'}</span></div></div>
+      ${p==='hub'?`<div class="proof-metrics"><div><strong>120</strong><small>Conversas</small></div><div><strong>36</strong><small>Agendamentos</small></div><div><strong>24</strong><small>Comparecimentos</small></div></div><div class="proof-chart" aria-hidden="true">${[30,45,38,54,42,66,51,73,65,84,71,92].map(h=>`<span style="height:${h}%"></span>`).join('')}</div><div class="proof-axis"><span>EVOLUÇÃO ILUSTRATIVA</span><span>OUTUBRO</span></div><div class="proof-action">${icon('document')}<div><strong>Agente · memória de marca proposta</strong><p>Conhecimento da clínica organizado a partir das fontes disponíveis, para revisão.</p></div></div>`:`<div class="proof-stages"><div class="proof-stage"><span>01</span><div><strong>Conhecer e atrair</strong><p>Diagnóstico, posicionamento e campanhas.</p></div><span class="stage-state">Base</span></div><div class="proof-stage"><span>02</span><div><strong>Conversar e comparecer</strong><p>Recepção, agenda e confirmação.</p></div><span class="stage-state">Jornada</span></div><div class="proof-stage"><span>03</span><div><strong>Decidir e continuar</strong><p>Consulta, follow-up e fidelização.</p></div><span class="stage-state">Relação</span></div></div><div class="proof-action">${icon('document')}<div><strong>Agente · evidências organizadas</strong><p>Uma etapa só avança depois da conferência do responsável.</p></div></div>`}<div class="proof-footer"><span>Dados fictícios · sem resultado prometido</span><span>Supervisão humana</span></div></div></section>
+      <div class="public-divider"><div class="public-strip"><strong>${p==='hub'?'Inteligência aplicada à clínica.':'A jornada completa do paciente.'}</strong><span>${p==='hub'?'Conteúdo e anúncios':'Atração e atendimento'}</span><span>${p==='hub'?'CRM e atendimento':'Consulta e follow-up'}</span><span>${p==='hub'?'Agentes e entregas':'Fidelização e indicações'}</span></div></div>
       <section id="metodo" class="public-section" aria-labelledby="method-title"><div class="section-intro"><h2 id="method-title">${c.sectionTitle}</h2><p>${c.sectionIntro}</p></div><div class="editorial-rows">${c.items.map(([t,d],i)=>`<article class="editorial-row"><span class="serial">0${i+1}</span><h3>${t}</h3><p>${d}</p></article>`).join('')}</div></section>
-      <section class="public-final"><div><div><h2>${c.final}</h2><p>${c.finalText}</p></div><a href="#/${p}/entrar" class="btn primary">Conhecer o ${products[p].name} ${icon('arrow')}</a></div></section></main>
+      ${landingExtras(p)}<section class="public-final"><div><div><h2>${c.final}</h2><p>${c.finalText}</p></div><a href="#/${p}/entrar" class="btn primary">Conhecer o ${products[p].name} ${icon('arrow')}</a></div></section></main>
       <footer class="public-footer"><span>Doctor Creator · ${products[p].name} · Estudo de interface</span><div class="footer-links"><a href="#/${p}/equipe">Acesso da equipe interna</a><a href="#/admin/entrar">Administrativo</a><button type="button" class="btn link" data-action="scope">Sobre os acessos</button></div></footer></div>`;
+    }
+    function visibleGroups() {
+      return coverage.groups.filter(g=>g.product===state.product).map(g=>({...g,entries:g.entries.filter(e=>state.role==='admin'||e.audience==='clinic'||state.role==='team'&&e.audience==='team')})).filter(g=>g.entries.length);
+    }
+    function modules() {
+      return `<section class="card coverage-intro"><h2>O essencial à frente. O restante, acessível.</h2><p class="description">Este mapa preserva as áreas da aplicação atual. No protótipo, você pode entender cada área; as telas completas continuam na aplicação. A visibilidade acompanha o perfil deste exemplo.</p></section><div class="module-grid">${visibleGroups().map(g=>`<section class="card module-card"><p class="micro">${products[state.product].name} · área existente</p><h2>${esc(g.title)}</h2><p class="description">${esc(g.description)}</p><ul>${g.entries.map(e=>`<li>${esc(e.label)}</li>`).join('')}</ul><button type="button" class="btn" data-module="${g.id}">Entender esta área<span class="sr-only">: ${esc(g.title)}</span> ${icon('arrow')}</button></section>`).join('')}</div><section class="card future-section"><p class="micro">Roadmap · não disponível nesta versão</p><h2>Evoluções planejadas</h2>${coverage.future.map(f=>`<div><h3>${esc(f.title)}</h3><p class="description">${esc(f.detail)}</p></div>`).join('')}</section>`;
+    }
+    function openModule(id) {
+      const g=visibleGroups().find(g=>g.id===id);if(!g||state.screen!=='workspace'||state.role==='reception')return;
+      closeDialog();dialog.innerHTML=`${dialogHeader(g.title,'Área existente · visão de cobertura')}<div class="dialog-body"><p class="description">${esc(g.detail)}</p><ul class="module-detail">${g.entries.map(e=>`<li>${esc(e.label)}</li>`).join('')}</ul><p class="micro">Este estudo apresenta a organização da área. Não executa as funções da aplicação atual.</p></div><footer class="dialog-footer"><button type="button" class="btn primary" data-action="close">Voltar às áreas</button></footer>`;dialog.showModal();
     }
     function loginKind() { return state.loginRole || 'clinic'; }
     function renderLogin() {
       const p=state.product,role=loginKind(),admin=role==='admin',internal=role==='team';
       const label=admin?'Administrativo':internal?'Equipe interna':'Clínica';
       document.documentElement.dataset.theme='light'; document.title=`Entrar · ${admin?'Administrativo':products[p].name} · Doctor Creator`;
-      app.innerHTML=`<div class="public login-layout"><aside class="login-aside">${brand(admin?'admin':p)}<div class="login-copy"><p class="public-kicker">${admin?'Gestão da operação':internal?'Operação com responsabilidade':products[p].description}</p><h1>${admin?'Uma visão completa.<br><em>Acesso com responsabilidade.</em>':internal?'Contexto para agir.<br><em>Clareza para entregar.</em>':p==='hub'?'Sua clínica,<br><em>em perspectiva.</em>':'Seu plano,<br><em>em movimento.</em>'}</h1><p>${admin?'Acompanhe a carteira, as equipes e os dois produtos a partir de um acesso administrativo.':internal?'Acompanhe as clínicas atribuídas, os próximos passos e as aprovações da sua operação.':p==='hub'?'Acompanhe os números, as prioridades e as decisões do seu HUB.':'Acompanhe a implantação, as entregas e os próximos passos da sua clínica no SAP.'}</p><div class="login-context">${icon('shield')}<p>${admin?'Acesso exclusivo à administração.':internal?'Permissões definidas por produto, função e carteira de clínicas.':`Seu acesso é individual e limitado à sua clínica no ${products[p].name}.`}</p></div></div><p class="login-aside-footer">Doctor Creator · ${admin?'Administração':products[p].name} · Acesso individual</p></aside>
+      app.innerHTML=`<div class="public login-layout"><aside class="login-aside">${brand(admin?'admin':p)}<div class="login-copy"><p class="public-kicker">${admin?'Gestão da operação':internal?'Operação com responsabilidade':products[p].description}</p><h1>${admin?'Uma visão completa.<br><em>Acesso com responsabilidade.</em>':internal?'Contexto para agir.<br><em>Clareza para entregar.</em>':p==='hub'?'Marketing e vendas,<br><em>com direção.</em>':'Sua jornada de aquisição,<br><em>etapa por etapa.</em>'}</h1><p>${admin?'Acompanhe a carteira, as equipes e os dois produtos a partir de um acesso administrativo.':internal?'Acompanhe as clínicas atribuídas, os próximos passos e as aprovações da sua operação.':p==='hub'?'Acompanhe as análises de marketing e vendas, as entregas dos agentes e as prioridades da sua clínica.':'Da atração ao follow-up: acompanhe suas tarefas, as sessões e as entregas do programa de 90 dias.'}</p><div class="login-context">${icon('shield')}<p>${admin?'Acesso exclusivo à administração.':internal?'Permissões definidas por produto, função e carteira de clínicas.':`Seu acesso é individual e limitado à sua clínica no ${products[p].name}.`}</p></div></div><p class="login-aside-footer">Doctor Creator · ${admin?'Administração':products[p].name} · Acesso individual</p></aside>
       <main id="main" class="login-pane"><a class="back-link" href="#/${p}">Voltar à apresentação</a><div class="login-form-wrap"><p class="access-kicker">${label}${admin?'':' / '+products[p].name}</p><h2>Bem-vindo de volta.</h2><p class="login-intro">${admin?'Entre no ambiente administrativo.':internal?'Acesse sua área de trabalho.':'Acesse o ambiente da sua clínica.'}</p>${accessNotice?`<p class="access-notice" role="alert">${esc(accessNotice)}</p>`:''}
       <form class="login-form" id="demo-login" aria-label="Entrar no ${admin?'Administrativo':products[p].name}"><label for="login-email">E-mail</label><input id="login-email" type="email" autocomplete="off" value="${admin?'admin':internal?'operacao':'clinica'}@exemplo.com" readonly aria-describedby="demo-login-note"><label for="login-password">Senha</label><div class="password-wrap"><input id="login-password" type="password" autocomplete="off" value="demonstracao" readonly aria-describedby="demo-login-note"><button type="button" data-action="password" aria-label="Mostrar senha">Mostrar</button></div><button type="submit" class="btn primary">Entrar na demonstração ${icon('arrow')}</button><button type="button" class="forgot" data-action="forgot">Esqueci minha senha</button><p id="demo-login-note" class="demo-login-note">Acesso fictício para avaliar a interface. Os campos são de exemplo e não recebem credenciais reais.</p></form>
       <p class="login-access-note">${admin?'A administração gerencia a carteira e os acessos.':internal?'Seu acesso é concedido pela administração da operação.':'Cada pessoa utiliza seu próprio acesso. O convite e a função são definidos pelo responsável.'}</p></div><p class="login-pane-footer">${admin?'Administrativo':products[p].name} · Ambiente de demonstração</p></main></div>`;
@@ -679,6 +1154,7 @@
     });
     document.addEventListener('click',event=>{
       const b=event.target.closest('button');if(!b||b.disabled)return;
+      if(b.dataset.module){openModule(b.dataset.module);return;}
       if(b.dataset.route){go(b.dataset.route);return;}
       if(b.dataset.scene){const[p,r]=b.dataset.scene.split(':');startDemo(p,r);return;}
       if(b.dataset.section){document.getElementById(b.dataset.section)?.scrollIntoView({behavior:'instant',block:'start'});return;}

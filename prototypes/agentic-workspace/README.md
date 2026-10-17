@@ -1,6 +1,10 @@
-# HUB e SAP · apresentação, acessos e operação
+# HUB e SAP · agentes, marketing e vendas
 
 Protótipo independente da revisão visual. Mantém a marca Doctor Creator: azul-marinho, branco, azul contido e dourado discreto; tipografia editorial nas páginas públicas e hierarquia operacional no produto. Não usa mascotes, ilustrações de robôs ou promessas de resultados.
+
+O HUB se apresenta como inteligência de marketing e vendas com agentes que preparam trabalho para revisão. O SAP conserva a implantação assistida de 90 dias e a jornada da atração à fidelização. A direção de Service as Software aparece em entregas concretas e limites de autonomia, sem anunciar todos os módulos como agentes já implementados.
+
+A página **Ferramentas** torna visíveis as áreas da aplicação atual permitidas ao perfil. Seu catálogo é comparado automaticamente com 47 itens dos menus existentes. Os botões explicam a cobertura; não substituem nem executam as telas completas. Método, escopo, capacidades atuais e evoluções planejadas estão em [PRESERVATION.md](PRESERVATION.md).
 
 Abra `index.html` diretamente no navegador. Não requer instalação, variáveis de ambiente ou rede. Na barra superior, **Telas e perfis** é uma ferramenta exclusiva da demonstração: não faz parte da interface dos produtos.
 
@@ -67,7 +71,7 @@ Isso não equivale a homologar login real, RLS, autorização de APIs, leitores 
 5. Preservar marcos, pausas e pendências reais. A barra D0–D90 demonstra tempo decorrido, não percentual de entrega.
 6. Obter estado de execução do motor real. O temporizador demonstrativo não pode ser convertido em confirmação de publicação ou sucesso externo.
 7. Definir expiração, revogação e transição de acesso, auditoria e resposta a efeito externo incerto. Uma aprovação antiga não autoriza uma proposta modificada.
-8. Preservar as áreas existentes de Conteúdo, Anúncios, Comercial e Relatórios. A navegação do protótipo é um recorte de experiência, não remoção dessas capacidades.
+8. Preservar todas as áreas inventariadas, os materiais, sessões, regras e históricos. A página Ferramentas apresenta a organização proposta, não substitui as telas atuais. Não habilitar gravação de consultas ou operação autônoma de campanhas: são evoluções futuras.
 
 O contrato de acesso e seus casos de homologação estão em [ACCESS.md](ACCESS.md).
 
