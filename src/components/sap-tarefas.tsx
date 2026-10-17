@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Painel, Selo } from "@/components/visual";
 import { TextoComCodigos } from "@/components/sap-docs";
 import {
-  enviarEvidenciaSap, getEntradasTarefas, getPessoasHub, linkEvidenciaSap, marcarTarefaSap, registrarDeteccaoSap, salvarPapelSap,
+  enviarEvidenciaSap, getEntradasTarefas, getPessoasEquipe, linkEvidenciaSap, marcarTarefaSap, registrarDeteccaoSap, salvarPapelPessoa,
 } from "@/lib/sap-data";
 import {
   NOME_PAPEL, PAPEIS, SEM_EVIDENCIA, alertasFundador, contarTarefas, deteccoes, ehDoPapel, montarTarefas, papeisSemPessoa, porUrgencia, rotuloPrazo,
@@ -282,7 +282,7 @@ export type Filtro = "minhas" | "todas" | PapelId;
 /** Papéis do usuário logado nesta clínica (pela atribuição em Quem é quem). */
 export function papeisDoUsuario(entrada: EntradaTarefas, userId: string | undefined): PapelId[] {
   if (!userId) return [];
-  return (Object.entries(entrada.papeis) as [PapelId, { userId: string } | undefined][]).filter(([, p]) => p?.userId === userId).map(([k]) => k);
+  return (Object.entries(entrada.papeis) as [PapelId, { userId: string | null } | undefined][]).filter(([, p]) => !!userId && p?.userId === userId).map(([k]) => k);
 }
 
 export function filtrar(c: ClinicaTarefas, filtro: Filtro, userId: string | undefined, isAdmin: boolean): Tarefa[] {
@@ -423,11 +423,11 @@ export function QuemEQuem({ clientId }: { clientId: string }) {
   const { isAdmin } = useAuth();
   const qc = useQueryClient();
   const { lista, isLoading } = useTarefas(clientId);
-  const pessoasQ = useQuery({ queryKey: ["sap-pessoas-hub"], queryFn: getPessoasHub, enabled: isAdmin });
+  const pessoasQ = useQuery({ queryKey: ["pessoas-equipe"], queryFn: getPessoasEquipe, enabled: isAdmin });
   const c = lista[0];
   const salvar = useMutation({
-    mutationFn: (v: { papel: PapelId; userId: string | null }) => salvarPapelSap(c!.entrada.clinica.id, v.papel, v.userId),
-    onSuccess: () => invalidarTarefas(qc),
+    mutationFn: (v: { papel: PapelId; pessoaId: string | null }) => salvarPapelPessoa(c!.entrada.clinica.id, v.papel, v.pessoaId),
+    onSuccess: () => { invalidarTarefas(qc); qc.invalidateQueries({ queryKey: ["pessoas-equipe"] }); },
   });
   if (isLoading) return <p className="note">Carregando…</p>;
   if (!c) return <p className="note">Esta clínica ainda não está no Sistema de Aquisição.</p>;
@@ -436,12 +436,13 @@ export function QuemEQuem({ clientId }: { clientId: string }) {
   return (
     <div className="space-y-4">
       <AlertaPapeis entrada={c.entrada} clientId={clientId} />
-      <Painel icone={UserRoundCheck} titulo="Quem é quem" resumo="Uma pessoa do Hub por papel nesta clínica"
+      <Painel icone={UserRoundCheck} titulo="Quem é quem" resumo="Uma pessoa da Equipe por papel nesta clínica"
         ajuda={<>Cada tarefa do cronograma tem um papel. A pessoa atribuída aqui vê essas tarefas em Minhas tarefas, e o nome aparece no card. O Condutor pode ser o Fundador (no piloto) ou outra pessoa. O Fundador fica só para alertas de escalonamento.</>}>
         <ul className="mt-2 divide-y" style={{ borderColor: "var(--border)" }}>
           {PAPEIS.map((p) => {
             const atual = c.entrada.papeis[p.id];
-            const opcoes = pessoas.filter((x) => (p.id === "clinica" ? x.client_ids.includes(clientId) || x.equipe : x.equipe));
+            // Ativos da equipe; no papel "Clínica", também os contatos desta clínica. Quem já está no papel continua na lista.
+            const opcoes = pessoas.filter((x) => x.id === atual?.pessoaId || (x.ativa && (x.tipo === "equipe" || (p.id === "clinica" && x.client_id === clientId))));
             return (
               <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
                 <div className="min-w-[200px] flex-1">
@@ -449,11 +450,11 @@ export function QuemEQuem({ clientId }: { clientId: string }) {
                   <div className="text-xs" style={{ color: "var(--text-dim)" }}>{p.resumo}</div>
                 </div>
                 {isAdmin ? (
-                  <select aria-label={`Pessoa para ${p.nome}`} value={atual?.userId ?? ""} disabled={salvar.isPending}
-                    onChange={(x) => salvar.mutate({ papel: p.id, userId: x.target.value || null })}
+                  <select aria-label={`Pessoa para ${p.nome}`} value={atual?.pessoaId ?? ""} disabled={salvar.isPending}
+                    onChange={(x) => salvar.mutate({ papel: p.id, pessoaId: x.target.value || null })}
                     className="min-h-[38px] min-w-[200px] rounded-lg border px-2 text-sm" style={{ ...campo, borderColor: atual ? "var(--border)" : "var(--warn)" }}>
                     <option value="">Sem pessoa</option>
-                    {opcoes.map((x) => <option key={x.user_id} value={x.user_id}>{x.nome}{x.equipe ? "" : " (clínica)"}</option>)}
+                    {opcoes.map((x) => <option key={x.id} value={x.id}>{x.nome}{x.tipo === "clinica" ? " (clínica)" : ""}{x.tem_login ? "" : " · sem login"}</option>)}
                   </select>
                 ) : (
                   <span className="text-sm">{atual?.nome ?? <span style={{ color: "var(--muted)" }}>sem pessoa</span>}</span>
@@ -463,7 +464,7 @@ export function QuemEQuem({ clientId }: { clientId: string }) {
           })}
         </ul>
         {salvar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</p>}
-        {isAdmin && <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>Pessoa que não aparece na lista precisa de um login no Hub (Admin → criar acesso).</p>}
+        {isAdmin && <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>Pessoa que não aparece na lista: cadastre em <Link to="/admin/equipe" className="underline">Admin → Equipe</Link>. Não precisa de login; quem tem login com o mesmo e-mail vê as tarefas em Minhas tarefas.</p>}
       </Painel>
     </div>
   );

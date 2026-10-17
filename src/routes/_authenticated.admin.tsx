@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, redirect, Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, ClipboardCheck, FileText, LayoutDashboard, Scale } from "lucide-react";
+import { Bot, ClipboardCheck, FileText, LayoutDashboard, Scale, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LogoutButton } from "@/components/logout-button";
 import { TrocaProduto } from "@/components/troca-produto";
@@ -21,6 +21,7 @@ const ITENS = [
   { to: "/admin/conferencia", label: "Conferência de dados", Icone: ClipboardCheck },
   { to: "/admin/relatorios", label: "Relatórios da semana", Icone: FileText },
   { to: "/admin/agentes", label: "Central de Agentes", Icone: Bot },
+  { to: "/admin/equipe", label: "Equipe", Icone: Users },
 ] as const;
 
 const TITULO: Record<string, string> = {
@@ -29,6 +30,7 @@ const TITULO: Record<string, string> = {
   "/admin/conferencia": "Conferência de dados",
   "/admin/relatorios": "Relatórios da semana",
   "/admin/agentes": "Central de Agentes",
+  "/admin/equipe": "Equipe",
 };
 
 function AdminLayout() {

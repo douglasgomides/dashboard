@@ -4,7 +4,7 @@ import { chromium } from "playwright-core";
 const BASE = "http://localhost:5198";
 const CID = "11111111-1111-1111-1111-111111111111";
 const rotasCliente = ["", "/conteudo", "/posts", "/top", "/audiencia", "/duvidas", "/ideias", "/inspiracao", "/anuncios", "/crm-painel", "/crm-guia", "/proximas-acoes", "/campanhas", "/atendimento", "/oportunidades", "/relatorio"].map((r) => `/${CID}${r}`);
-const rotasProibidas = ["/sap", `/sap/${CID}`, `/sap/${CID}/cronograma`, "/admin", `/${CID}/aquisicao`];
+const rotasProibidas = ["/sap", `/sap/${CID}`, `/sap/${CID}/cronograma`, "/admin", "/admin/equipe", `/${CID}/aquisicao`];
 // /jornada some do menu do cliente, mas abre pelo endereço com os dados da própria clínica (o banco permite ao membro).
 // Não é vazamento entre clínicas; fica como aviso até a decisão de produto.
 const rotasAviso = [`/${CID}/jornada`];

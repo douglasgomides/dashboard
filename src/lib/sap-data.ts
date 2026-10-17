@@ -1114,6 +1114,32 @@ export async function salvarPapelSap(clinicaId: string, papel: PapelId, userId: 
   if (error) throw error;
 }
 
+// ---------------------------------------------------------------- Equipe (cadastro de pessoas, sem exigir login)
+
+export interface PessoaEquipe {
+  id: string; nome: string; tipo: "equipe" | "clinica"; client_id: string | null; funcoes: string[];
+  email: string | null; whatsapp: string | null; user_id: string | null; tem_login: boolean; ativa: boolean; observacao: string | null; papeis: number;
+}
+export type DadosPessoa = Pick<PessoaEquipe, "nome" | "tipo" | "client_id" | "funcoes" | "email" | "whatsapp" | "ativa" | "observacao">;
+
+export async function getPessoasEquipe(): Promise<PessoaEquipe[]> {
+  const { data, error } = await db.rpc("pessoas_listar");
+  if (error) throw error;
+  return (data ?? []) as PessoaEquipe[];
+}
+
+export async function salvarPessoaEquipe(id: string | null, dados: DadosPessoa): Promise<string> {
+  const { data, error } = await db.rpc("pessoas_salvar", { p_id: id, p_dados: dados });
+  if (error) throw new Error(/email invalido/.test(error.message) ? "E-mail inválido." : /pessoas_equipe_email|duplicate/.test(error.message) ? "Já existe uma pessoa com este e-mail." : /nome/.test(error.message) ? "Escreva o nome." : error.message);
+  return data as string;
+}
+
+/** Atribui uma pessoa do cadastro a um papel da clínica (null tira a pessoa). */
+export async function salvarPapelPessoa(clinicaId: string, papel: PapelId, pessoaId: string | null) {
+  const { error } = await db.rpc("sap_salvar_papel_pessoa", { p_clinica_id: clinicaId, p_papel: papel, p_pessoa: pessoaId });
+  if (error) throw new Error(/inativa|nao encontrada/.test(error.message) ? "Pessoa não encontrada ou inativa." : error.message);
+}
+
 export async function marcarTarefaSap(clinicaId: string, marco: number, acao: "feito" | "nao_se_aplica" | "desfazer", v: { data?: string | null; evidencia?: string; motivo?: string; semana?: string | null }) {
   const { error } = await db.rpc("sap_marcar_tarefa", {
     p_clinica_id: clinicaId, p_marco: marco, p_acao: acao, p_data: v.data ?? null, p_evidencia: v.evidencia ?? "", p_motivo: v.motivo ?? "", p_semana: v.semana ?? null,
@@ -1152,7 +1178,7 @@ export async function getEntradasTarefas(clientId?: string, isAdmin = false): Pr
     db.from("sap_fidelizacao_semana").select("clinica_id, semana").in("clinica_id", ids),
     db.from("sap_execucao_item").select("clinica_id, item, status, data_cumpriu, evidencia, observacao").in("clinica_id", ids),
     db.rpc("sap_fontes_etapas", { p_client_ids: clientIds }),
-    db.rpc("sap_papeis_nomes", { p_clinica_ids: ids }),
+    db.rpc("sap_papeis_pessoas", { p_clinica_ids: ids }),
     isAdmin ? db.from("sap_saude_semana").select("clinica_id, semana, tarefas_no_prazo, sessoes_marcadas, sessoes_com_decisor, call_grupo, decisor_respondeu, tempo_resposta_h, kpis_verde, kpis_vermelho, sentimento, o_que_aconteceu").in("clinica_id", ids) : Promise.resolve({ data: null, error: null }),
     isAdmin ? db.rpc("sap_pessoas_hub") : Promise.resolve({ data: [], error: null }),
     db.from("sap_pecas").select("clinica_id, id, modelo, titulo, etapa, formato, rosto, ganchos, semaforo, ciente_em, status, arquivo_url, campaign_id, reprovacao_meta").in("clinica_id", ids),
@@ -1160,9 +1186,9 @@ export async function getEntradasTarefas(clientId?: string, isAdmin = false): Pr
   const por = <T extends { clinica_id: string }>(rows: T[], id: string) => rows.filter((r) => r.clinica_id === id);
   const nomeCli = new Map((em(nomesCli) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
   const fontesPor = new Map((em(fontes) as { client_id: string; tem_crm: boolean; tem_atendimento: boolean; tem_anuncios: boolean; marcos: string[] }[]).map((f) => [f.client_id, f]));
-  const papeisRows = em(papeis) as { clinica_id: string; papel: PapelId; user_id: string; nome: string }[];
+  const papeisRows = em(papeis) as { clinica_id: string; papel: PapelId; user_id: string | null; nome: string | null; pessoa_id: string | null }[];
   const nomes = new Map((em(pessoas) as PessoaHub[]).map((p) => [p.user_id, p.nome]));
-  for (const p of papeisRows) nomes.set(p.user_id, p.nome);
+  for (const p of papeisRows) if (p.user_id && p.nome) nomes.set(p.user_id, p.nome);
   const saudeRows = saude.data === null ? null : (em(saude) as (SemanaSaude & { clinica_id: string })[]);
   return lista.map((c) => {
     const f = fontesPor.get(c.client_id);
@@ -1188,7 +1214,7 @@ export async function getEntradasTarefas(clientId?: string, isAdmin = false): Pr
       fidelizacao: por(em(fidelizacao) as { clinica_id: string; semana: string }[], c.id).map((a) => a.semana),
       execucao: por(em(execucao) as (ItemRegistro & { clinica_id: string })[], c.id),
       pecas: pecas.error ? null : por((pecas.data ?? []) as (Peca & { clinica_id: string })[], c.id),
-      papeis: Object.fromEntries(papeisRows.filter((p) => p.clinica_id === c.id).map((p) => [p.papel, { userId: p.user_id, nome: p.nome }])),
+      papeis: Object.fromEntries(papeisRows.filter((p) => p.clinica_id === c.id).map((p) => [p.papel, { userId: p.user_id, pessoaId: p.pessoa_id, nome: p.nome ?? "Sem nome" }])),
       nomes,
     };
   });
