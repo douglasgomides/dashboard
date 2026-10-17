@@ -21,7 +21,7 @@ import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_li
 import { rodarConferencia, rodarEtapa, ETAPAS, type EtapaId, type Achado, type Verificado } from "../_lib/conferencia.js";
 import { resumirConversa } from "../_lib/resumo-conversa.js";
 import { rascunharSessao } from "../_lib/sessao-ia.js";
-import { rodarAgentes, catalogoFluxos } from "../_lib/agentes.js";
+import { rodarAgentes, catalogoFluxos, enfileirarBrain } from "../_lib/agentes.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
 //
@@ -86,6 +86,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  // Agendamento do n8n (SYNC_SECRET), restrito a duas ações que só GERAM SUGESTÕES para revisão humana:
+  // - "brain_enfileirar": coloca na fila a leitura do Brand Brain das clínicas com o módulo cuja última leitura tem mais de 11 h;
+  // - "rodar": roda a fila de agentes (aprovações continuam esperando uma pessoa; nada é enviado a clínica ou paciente).
+  const SYNC_SECRET = process.env.SYNC_SECRET;
+  if (SYNC_SECRET && token === SYNC_SECRET) {
+    const corpo = (req.body ?? {}) as { alvo?: string; acao?: string };
+    if (corpo.alvo !== "agentes" || !["rodar", "brain_enfileirar"].includes(corpo.acao ?? "")) { res.status(403).json({ error: "O segredo do agendamento só roda a fila de agentes" }); return; }
+    try {
+      if (corpo.acao === "brain_enfileirar") {
+        const r = await enfileirarBrain(admin);
+        res.status(200).json({ alvo: "agentes", ok: true, agendado: true, ...r });
+        return;
+      }
+      const r = await rodarAgentes(admin, { execucaoId: null, maxPassos: 8, prazoMs: 45_000 });
+      res.status(200).json({ alvo: "agentes", ok: true, agendado: true, ...r });
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+    return;
+  }
 
   const { data: quem, error: erroQuem } = await admin.auth.getUser(token);
   if (erroQuem || !quem.user) {
