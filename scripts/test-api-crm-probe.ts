@@ -11,12 +11,14 @@ const CLIENT = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
 const USER = "33333333-3333-4333-8333-333333333333";
 const privateText = "Fictional patient Private Person phone 85999991234 token very-secret-token";
+const privateContactId = "contact/private?secret=very-secret-token";
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 const dbError = () => json({ message: "simulated database failure", code: "XX000" }, 400);
 let appAdmin = false;
 let providerCalls = 0;
+const providerUrls: URL[] = [];
 let authCalls = 0;
 let failConnections = false;
 let failConversationRead = false;
@@ -61,11 +63,13 @@ try {
       throw new Error(`Unexpected database call ${table}`);
     }
     providerCalls++;
+    providerUrls.push(url);
     assert.ok(["api.clint.digital", "clinic.kommo.com"].includes(url.hostname), "probe must not send a secret to a configured arbitrary host");
     assert.equal(init?.redirect, "error");
     assert.ok(init?.signal instanceof AbortSignal);
     if (url.hostname === "api.clint.digital") {
       if (url.pathname.endsWith("/channel-accounts")) return json({ data: [{ id: "channel", type: privateText, status: privateText }] });
+      if (url.pathname === "/v1/contacts") return json({ data: [{ id: privateContactId, name: "Private Person", chat_id: "private-chat-id" }] });
       if (url.pathname === "/v2/contacts") throw new Error(privateText);
       if (url.pathname.endsWith("/messages/chats")) return url.searchParams.has("channel_account_id") ? json({ data: [{ id: "chat" }] }) : json({ message: privateText, detail: privateText }, 400);
       if (url.pathname.includes("/messages/chat/")) return json({ data: [{ text: privateText, access_token: "very-secret-token", name: "Private Person", phone: "85999991234" }] });
@@ -73,7 +77,11 @@ try {
     }
     if (url.pathname.endsWith("/talks")) return json({ _embedded: { talks: [{ talk_id: "talk", contact_id: "contact", text: privateText }] } });
     if (url.pathname.endsWith("/events")) return json({ _embedded: { events: [{ value_after: { text: privateText } }] } });
-    if (url.pathname.endsWith("/notes")) return json({ _embedded: { notes: [{ note_type: privateText, params: { text: privateText, email: "private@example.test" } }] } });
+    if (url.pathname.endsWith("/notes")) {
+      if (url.searchParams.get("limit") === "250") return json({ _embedded: { notes: Array.from({ length: 250 }, (_, i) => ({ note_type: i === 0 ? privateText : "incoming_chat_message" })) } });
+      if (url.searchParams.get("limit") === "5") return json({ _embedded: { notes: [{ note_type: "service_message" }, { note_type: "extended_service_message" }, { note_type: privateText }] } });
+      return json({ _embedded: { notes: [{ note_type: privateText, params: { text: privateText, email: "private@example.test" } }] } });
+    }
     return json({ title: privateText, detail: privateText, text: privateText }, 400);
   };
   let nested: unknown = "private value";
@@ -81,9 +89,22 @@ try {
   assert.doesNotThrow(() => forma(nested), "array nesting must obey the same depth ceiling as objects");
   const result = await sondarConversasCrm(db());
   const serialized = JSON.stringify(result);
-  for (const value of [privateText, "Private Person", "very-secret-token", "85999991234", "private@example.test", "127.0.0.1"]) assert.equal(serialized.includes(value), false, "probe response must contain schema/aggregates only");
+  for (const value of [privateText, "Private Person", "very-secret-token", "85999991234", "private@example.test", "127.0.0.1", privateContactId, "private-chat-id", "clint-co", "kommo-co", "bad-conn"]) assert.equal(serialized.includes(value), false, "probe response must contain schema/aggregates only, without IDs or untrusted note types");
   assert.ok(serialized.includes("Domínio Kommo inválido"));
   assert.ok(providerCalls > 0);
+  const clint = result["clint (1)"] as Record<string, any>;
+  for (const path of ["/v2/messages/contact/{contactId}", "/v2/messages/chat/contact/{contactId}", "/v2/messages?contact_id={contactId}", "/v1/contacts/{contactId}/chats", "/v2/contacts/{contactId}/chats", "/v2/chats?limit=1", "/v2/contacts?limit=1", "/v2/deals?limit=1", "/v2/webhooks", "/v2/contacts/{contactId}", "/v2/chats?contact_id={contactId}", "/v2/contacts/{contactId}/chat"]) {
+    assert.ok(clint[`GET ${path}`], `new upstream probe must remain available: ${path}`);
+  }
+  assert.ok(providerUrls.some((url) => url.pathname === `/v2/messages/contact/${encodeURIComponent(privateContactId)}`));
+  assert.ok(providerUrls.some((url) => url.pathname === "/v2/messages" && url.searchParams.get("contact_id") === privateContactId));
+  assert.equal(providerUrls.some((url) => url.searchParams.has("secret")), false, "provider IDs must be encoded without injecting query parameters");
+  const kommo = result["kommo (2)"] as Record<string, any>;
+  assert.deepEqual(kommo["tipos de nota em até 1.000 notas de leads"], { outro: 4, incoming_chat_message: 996 });
+  assert.deepEqual(providerUrls.filter((url) => url.hostname === "clinic.kommo.com" && url.searchParams.get("limit") === "250").map((url) => url.searchParams.get("page")), ["1", "2", "3", "4"], "note census must stop after four pages");
+  for (const q of ["filter[note_type][]=incoming_chat_message", "filter[note_type]=incoming_chat_message", "filter[note_type][]=service_message&filter[note_type][]=extended_service_message"]) {
+    assert.deepEqual(kommo[`notes ?${q}`], { status: 200, tipos_vindos: ["service_message", "extended_service_message", "outro"] });
+  }
   failConnections = true;
   const before = providerCalls;
   await assert.rejects(() => sondarConversasCrm(db()), /carregar as conexões/);

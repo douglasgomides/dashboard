@@ -1,6 +1,6 @@
 # Revisão de engenharia do Dashboard
 
-Repositório: `douglasgomides/dashboard`. Revisão realizada em 17/10/2026. A entrega incorpora a atualização remota `e1919a3` (até o PR 131), além das correções locais anteriores de sincronização.
+Repositório: `douglasgomides/dashboard`. Revisão realizada em 17/10/2026. A entrega incorpora a atualização remota `dc72194` (até o PR 133), além das correções locais anteriores de sincronização.
 
 ## Resultado
 
@@ -90,6 +90,6 @@ O advisor da homologação mantém cinco tabelas com RLS sem policy, intencional
 
 ## Aplicação da entrega
 
-O ZIP contém o projeto completo sem dependências instaladas, credenciais ou metadados Git. O patch contém as mudanças cumulativas sobre `e1919a3`. Antes de aplicar em outra branch, use `git apply --check` e examine a diferença.
+O ZIP contém o projeto completo sem dependências instaladas, credenciais ou metadados Git. O patch contém as mudanças cumulativas sobre `dc72194`. Antes de aplicar em outra branch, use `git apply --check` e examine a diferença.
 
 Siga `docs/operations.md` para homologação. Publique código e migrações somente após os pontos de compatibilidade acima terem sido verificados no ambiente de destino. Os problemas marcados como corrigidos dependem da aplicação das respectivas mudanças de código e SQL; o sistema hospedado não muda ao receber estes arquivos.

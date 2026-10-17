@@ -12,6 +12,8 @@ import { createHash } from "node:crypto";
 import { integrationHost, integrationRequest } from "./integration-http.js";
 
 const campoSeguro = (key: string) => /^[a-z_][a-z0-9_]{0,63}$/i.test(key) && !["__proto__", "constructor", "prototype"].includes(key);
+const tipoNotaSeguro = (tipo: unknown): string => typeof tipo === "string" && ["incoming_chat_message", "outgoing_chat_message", "service_message", "extended_service_message"].includes(tipo) ? tipo : "outro";
+const identificador = (valor: unknown): string | null => (typeof valor === "string" || typeof valor === "number") && String(valor).length > 0 && String(valor).length <= 256 ? encodeURIComponent(String(valor)) : null;
 
 /** Forma de um JSON: tipos no lugar dos valores, até 4 níveis, 1º item de cada lista. */
 export function forma(v: unknown, d = 0, max = 4): unknown {
@@ -60,12 +62,14 @@ export async function sondarConversasCrm(admin: SupabaseClient<any, any, any>, o
     if (de === 9500) throw new Error("Lista de conexões da sonda incompleta");
   }
   const vistos = new Set<string>();
+  let indiceConexao = 0;
   for (const c of conns) {
     if (Date.now() >= fim) { saida.aviso = "Orçamento da sonda esgotado; resultado parcial"; break; }
     if (!c.access_token) continue;
     const chave = `${c.provider}:${c.subdomain ?? ""}:${createHash("sha256").update(c.access_token).digest("hex")}`;
     if (vistos.has(chave)) continue; // mesma conta servindo mais de um cliente: testa uma vez
     vistos.add(chave);
+    const rotulo = `${c.provider} (${++indiceConexao})`;
     const r: Record<string, unknown> = {};
     if (c.provider === "clint") {
       const cab = { "api-token": c.access_token };
@@ -74,25 +78,42 @@ export async function sondarConversasCrm(admin: SupabaseClient<any, any, any>, o
       const contas = await consultar(`${base}/v2/channel-accounts?limit=20`, cab);
       const lista = primeiraLista(contas.json) as { id?: string; type?: string; status?: string }[];
       r["GET /v2/channel-accounts"] = { status: contas.status, total: lista.length, forma: forma(lista[0]) };
-      const conta = lista[0]?.id;
+      const conta = identificador(lista[0]?.id);
       // Onde aparece o ID da conversa: campos com "chat" ou "conversation" no contato e no negócio.
       const comChat = (o: any, pref = ""): string[] => !o || typeof o !== "object" ? [] : Object.entries(o).flatMap(([k, v]) =>
         [...(campoSeguro(k) && /chat|conversation|talk/i.test(k) ? [`${pref}${k}`] : []), ...(campoSeguro(k) && v && typeof v === "object" && !Array.isArray(v) && pref.split(".").length < 3 ? comChat(v, `${pref}${k}.`) : [])]);
-      for (const p of ["/v2/contacts?limit=1", "/v1/contacts?limit=1", "/v1/deals?limit=1"]) {
+      let contatoId: string | null = null;
+      for (const p of ["/v1/contacts?limit=1", "/v1/deals?limit=1"]) {
         const t = await consultar(`${base}${p}`, cab);
         const item = primeiraLista(t.json)[0];
+        if (p.includes("contacts")) contatoId = identificador(item?.id);
         r[`GET ${p.split("?")[0]}`] = { status: t.status, campos_de_conversa: item ? comChat(item) : [], campos: item ? Object.keys(item).filter(campoSeguro).slice(0, 40) : [] };
+      }
+      if (contatoId) {
+        for (const modelo of ["/v2/messages/contact/{contactId}", "/v2/messages/chat/contact/{contactId}", "/v2/messages?contact_id={contactId}", "/v1/contacts/{contactId}/chats", "/v2/contacts/{contactId}/chats"]) {
+          const t = await consultar(`${base}${modelo.replace("{contactId}", contatoId)}`, cab);
+          r[`GET ${modelo}`] = { status: t.status, forma: t.forma };
+        }
+      }
+      // Recursos v2 que podem apontar para o chat. IDs servem só à consulta;
+      // os rótulos da resposta conservam o modelo e nunca os identificadores.
+      const modelosV2 = ["/v2/chats?limit=1", "/v2/contacts?limit=1", "/v2/deals?limit=1", "/v2/webhooks"];
+      if (contatoId) modelosV2.push("/v2/contacts/{contactId}", "/v2/chats?contact_id={contactId}", "/v2/contacts/{contactId}/chat");
+      for (const modelo of modelosV2) {
+        const t = await consultar(`${base}${modelo.replace("{contactId}", contatoId ?? "")}`, cab);
+        const item = primeiraLista(t.json)[0] ?? (t.json && typeof t.json === "object" && !Array.isArray(t.json) ? t.json : null);
+        r[`GET ${modelo}`] = { status: t.status, forma: t.status === 200 ? forma(t.json, 0, 3) : t.forma, campos_de_conversa: t.status === 200 && item ? comChat(item) : undefined };
       }
       const semConta = await consultar(`${base}/v2/messages/chats?limit=2`, cab);
       r["GET /v2/messages/chats (sem parâmetro)"] = { status: semConta.status, forma: semConta.forma };
       if (conta) {
-        for (const q of [`channel_account_id=${encodeURIComponent(conta)}`, `channelAccountId=${encodeURIComponent(conta)}`, `channel_account=${encodeURIComponent(conta)}`]) {
+        for (const q of [`channel_account_id=${conta}`, `channelAccountId=${conta}`, `channel_account=${conta}`]) {
           const t = await consultar(`${base}/v2/messages/chats?limit=2&${q}`, cab);
           r[`GET /v2/messages/chats?${q.split("=")[0]}=`] = { status: t.status, forma: t.forma };
           const chat = primeiraLista(t.json)[0];
-          const id = chat?.id ?? chat?.chat_id;
+          const id = identificador(chat?.id ?? chat?.chat_id);
           if (t.status === 200 && id) {
-            const m = await consultar(`${base}/v2/messages/chat/${encodeURIComponent(String(id))}?limit=3`, cab);
+            const m = await consultar(`${base}/v2/messages/chat/${id}?limit=3`, cab);
             r["GET /v2/messages/chat/{chatId}"] = { status: m.status, forma: m.forma };
             break;
           }
@@ -101,7 +122,7 @@ export async function sondarConversasCrm(admin: SupabaseClient<any, any, any>, o
     } else {
       let dom: string;
       try { dom = integrationHost(c.subdomain ?? "", "kommo"); }
-      catch { saida[`${c.provider} (${c.id.slice(0, 8)})`] = { erro: "Domínio Kommo inválido; nenhuma consulta enviada" }; continue; }
+      catch { saida[rotulo] = { erro: "Domínio Kommo inválido; nenhuma consulta enviada" }; continue; }
       const base = `https://${dom}`;
       const cab = { Authorization: `Bearer ${c.access_token}` };
       const talks = await consultar(`${base}/api/v4/talks?limit=2`, cab);
@@ -112,13 +133,25 @@ export async function sondarConversasCrm(admin: SupabaseClient<any, any, any>, o
         r[`GET /api/v4/events (${tipo})`] = { status: ev.status, value_after: e0 ? forma(e0.value_after, 0, 8) : null, total_na_pagina: primeiraLista(ev.json).length };
       }
       // Notas de chat (sugestão do fundador): note_type incoming/outgoing_chat_message, texto em params.
+      const tipos: Record<string, number> = {};
+      for (let pagina = 1; pagina <= 4; pagina++) {
+        const n = await consultar(`${base}/api/v4/leads/notes?limit=250&page=${pagina}`, cab);
+        const notas = primeiraLista(n.json);
+        for (const nota of notas) { const tipo = tipoNotaSeguro(nota?.note_type); tipos[tipo] = (tipos[tipo] ?? 0) + 1; }
+        if (notas.length < 250) break;
+      }
+      r["tipos de nota em até 1.000 notas de leads"] = tipos;
+      for (const q of ["filter[note_type][]=incoming_chat_message", "filter[note_type]=incoming_chat_message", "filter[note_type][]=service_message&filter[note_type][]=extended_service_message"]) {
+        const n = await consultar(`${base}/api/v4/leads/notes?limit=5&${q}`, cab);
+        r[`notes ?${q}`] = { status: n.status, tipos_vindos: [...new Set(primeiraLista(n.json).map((nota) => tipoNotaSeguro(nota?.note_type)))] };
+      }
       const filtro = "filter[note_type][0]=incoming_chat_message&filter[note_type][1]=outgoing_chat_message&limit=50";
       for (const ent of ["leads", "contacts"]) {
         const n = await consultar(`${base}/api/v4/${ent}/notes?${filtro}`, cab);
         const notas = primeiraLista(n.json) as any[];
         const porTipo: Record<string, { total: number; com_texto: number; campos_params: string[] }> = {};
         for (const x of notas) {
-          const t = ["incoming_chat_message", "outgoing_chat_message"].includes(x?.note_type) ? x.note_type : "outro";
+          const t = tipoNotaSeguro(x?.note_type);
           const g = porTipo[t] ?? (porTipo[t] = { total: 0, com_texto: 0, campos_params: [] });
           g.total++;
           if (typeof x?.params?.text === "string" && x.params.text.trim()) g.com_texto++;
@@ -137,7 +170,7 @@ export async function sondarConversasCrm(admin: SupabaseClient<any, any, any>, o
         r["GET /api/v4/contacts/chats"] = { status: ch.status, forma: ch.forma };
       }
     }
-    saida[`${c.provider} (${c.id.slice(0, 8)})`] = r;
+    saida[rotulo] = r;
   }
   return saida;
 }
