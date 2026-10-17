@@ -91,9 +91,9 @@ function LoginPage() {
       <aside className="nx-login-aside">
         <ProductBrand product={product} dark />
         <div className="nx-login-copy">
-          <p className="nx-kicker">{acesso === "admin" ? "Administração Doctor Creator" : internal ? "Equipe Doctor Creator" : sap ? "Sistema de Aquisição de Pacientes" : "Agentes de IA para marketing e vendas"}</p>
-          <h1>{acesso === "admin" ? <>Uma visão completa.<br /><em>Acesso com responsabilidade.</em></> : internal ? <>Contexto para analisar.<br /><em>Clareza para entregar.</em></> : sap ? <>Sua jornada de aquisição,<br /><em>etapa por etapa.</em></> : <>Marketing e vendas,<br /><em>com inteligência em ação.</em></>}</h1>
-          <p>{internal ? "Acesse seu ambiente de trabalho e acompanhe as análises, entregas e responsabilidades da sua operação." : sap ? "Da atração ao follow-up: acompanhe suas tarefas, as sessões e as entregas do programa de 90 dias." : "Acompanhe os dados da sua clínica, o conhecimento preparado pelos agentes e as prioridades de marketing e vendas."}</p>
+          <p className="nx-kicker">{acesso === "admin" ? "Administração Doctor Creator" : internal ? "Equipe Doctor Creator" : sap ? "Sistema de Aquisição de Pacientes" : "Inteligência de dados para marketing e vendas"}</p>
+          <h1>{acesso === "admin" ? <>Uma visão completa.<br /><em>Acesso com responsabilidade.</em></> : internal ? <>Contexto para analisar.<br /><em>Clareza para entregar.</em></> : sap ? <>Sua aquisição de pacientes,<br /><em>com método e direção.</em></> : <>Clareza para decidir.<br /><em>Direção para avançar.</em></>}</h1>
+          <p>{internal ? "Acesse seu ambiente de trabalho e acompanhe as análises, entregas e responsabilidades da sua operação." : sap ? "Acompanhe o plano de 90 dias, as tarefas e as entregas que organizam a jornada de aquisição da sua clínica." : "Acesse os dados, as análises e o conhecimento da sua clínica. Inteligência agêntica para dar contexto às decisões de marketing e vendas."}</p>
           <div className="nx-login-context"><ShieldCheck size={17} aria-hidden /><p>Seu acesso é individual. As áreas disponíveis seguem as permissões concedidas ao seu usuário.</p></div>
         </div>
         <p className="nx-login-aside-footer">{name} · Doctor Creator</p>
