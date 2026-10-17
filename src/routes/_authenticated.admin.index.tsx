@@ -19,6 +19,7 @@ import { LinksSemCliente } from "@/components/links-shortio";
 import { SeloDono } from "@/components/selo-dono";
 import { PainelSaudeFontes } from "@/components/painel-saude-fontes";
 import { montarProblemasFontes } from "@/lib/saude-problemas";
+import { SemRespostaAgora } from "@/components/sem-resposta-agora";
 
 
 export const Route = createFileRoute("/_authenticated/admin/")({
@@ -391,6 +392,7 @@ function AdminClientsPage() {
         </span>
         <Link to="/sap" className="inline-flex min-h-[38px] items-center rounded-lg px-3 font-semibold text-white" style={{ background: "#C49A5C" }}>Cadastrar clínica nova no SAP →</Link>
       </div>
+      <SemRespostaAgora />
       {statusQ.isError && (
         <p className="mb-3 text-sm" style={{ color: "var(--crit)" }}>
           Não consegui ler o status das fontes agora. Tente de novo em instantes.

@@ -7,6 +7,7 @@ import { resolveDateRange } from "@/lib/date-range";
 import { BarraFina } from "@/components/visual";
 import { ExperimentoSemana } from "@/components/experimento-semana";
 import { OrigemConversao } from "@/components/origem-conversao";
+import { ReceitaPorCanal } from "@/components/receita-por-canal";
 
 // Auditoria comercial do período: o que a IA leu em cada conversa (conversas_resumos), somado.
 // Mesma estrutura das auditorias manuais: funil, objeções x falhas, por atendente, resgate, exemplos.
@@ -76,6 +77,8 @@ export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; on
           {a.conversas_periodo} conversas no período, nenhuma lida pela IA ainda. A leitura roda sozinha todo dia, depois da sincronização do WhatsApp:
           cada conversa ganha etapa do funil, objeção, falhas do atendimento, nota da atendente e o que ela deveria ter respondido.
         </p>
+        {/* Receita por canal só depende do CRM: aparece mesmo sem leitura por IA (ex.: clínicas só com Kommo ou Clint). */}
+        <div className="mt-3"><ReceitaPorCanal clientId={clientId} de={start} ate={end.slice(0, 10)} /></div>
       </section>
     );
   const f = a.funil;
@@ -95,6 +98,7 @@ export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; on
       <EmJogo clientId={clientId} de={start} ate={end.slice(0, 10)} />
       <ExperimentoSemana clientId={clientId} />
       <OrigemConversao clientId={clientId} de={start} ate={end.slice(0, 10)} />
+      <ReceitaPorCanal clientId={clientId} de={start} ate={end.slice(0, 10)} />
       {precoNaoDado > 0 && (
         <p className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--warn-border, var(--warn))", background: "var(--warn-bg, var(--surface))" }}>
           <b>{precoNaoDado}</b> pacientes pediram preço e não receberam. É o ponto do funil que mais costuma derrubar a conversão.
