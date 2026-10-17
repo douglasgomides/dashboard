@@ -46,6 +46,14 @@ function BrandBrain() {
 
   const grupos = useMemo(() => organizar(itens.data ?? []), [itens.data]);
   const propostas = grupos.flatMap((g) => g.propostas.map((p) => ({ p, atual: g.aprovado })));
+  // "Aprovar os novos": uma pessoa revisa a lista e aprova de uma vez. Proposta que troca um texto já aprovado (ou que
+  // disputa a mesma chave com outra) fica de fora: essa continua item a item, para ninguém sobrescrever sem ver.
+  const novas = propostas.filter(({ p, atual }) => !atual && propostas.filter((x) => x.p.memoria === p.memoria && x.p.chave === p.chave).length === 1);
+  const aprovarNovas = useMutation({
+    mutationFn: async () => { for (const { p } of novas) await decidirItem(p.id, "aprovar"); return novas.length; },
+    onSuccess: (n) => { setAviso({ tipo: "ok", texto: `${n} item(ns) aprovado(s).` }); recarregar(); },
+    onError: (e: Error) => { setAviso({ tipo: "erro", texto: e.message }); recarregar(); },
+  });
 
   if (clinicas.isLoading) return <p className="note">Carregando…</p>;
   if (clinicas.isError) return <p className="note" style={{ color: "var(--crit)" }}>Não foi possível carregar: {(clinicas.error as Error).message}</p>;
@@ -85,7 +93,15 @@ function BrandBrain() {
       ) : (
         <>
           <section aria-labelledby="revisar" className="space-y-2">
-            <h2 id="revisar" className="font-medium">Para revisar {propostas.length ? `(${propostas.length})` : ""}</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 id="revisar" className="font-medium">Para revisar {propostas.length ? `(${propostas.length})` : ""}</h2>
+              {novas.length > 1 && (
+                <button type="button" className={botao} style={caixa} disabled={aprovarNovas.isPending}
+                  onClick={() => { if (window.confirm(`Aprovar ${novas.length} itens novos de uma vez? Os que trocam um texto já aprovado ficam para revisar um por um.`)) aprovarNovas.mutate(); }}>
+                  {aprovarNovas.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Aprovar os {novas.length} novos
+                </button>
+              )}
+            </div>
             {!propostas.length ? <p className="note">Nenhuma proposta pendente.</p> : (
               <ul className="space-y-2">
                 {propostas.map(({ p, atual }) => <CardProposta key={p.id} item={p} atual={atual} onFeito={recarregar} />)}
