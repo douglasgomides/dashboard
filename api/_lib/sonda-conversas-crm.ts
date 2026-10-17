@@ -59,10 +59,18 @@ export async function sondarConversasCrm(admin: SupabaseClient<any, any, any>): 
       // Onde aparece o ID da conversa: campos com "chat" ou "conversation" no contato e no negócio.
       const comChat = (o: any, pref = ""): string[] => !o || typeof o !== "object" ? [] : Object.entries(o).flatMap(([k, v]) =>
         [...(/chat|conversation|talk/i.test(k) ? [`${pref}${k}`] : []), ...(v && typeof v === "object" && !Array.isArray(v) && pref.split(".").length < 3 ? comChat(v, `${pref}${k}.`) : [])]);
-      for (const p of ["/v2/contacts?limit=1", "/v1/contacts?limit=1", "/v1/deals?limit=1"]) {
+      let contatoId: string | null = null;
+      for (const p of ["/v1/contacts?limit=1", "/v1/deals?limit=1"]) {
         const t = await tentar(`${base}${p}`, cab);
         const item = primeiraLista(t.json)[0];
-        r[`GET ${p.split("?")[0]}`] = { status: t.status, campos_de_conversa: item ? comChat(item) : [], campos: item ? Object.keys(item).slice(0, 40) : [] };
+        if (p.includes("contacts") && item?.id) contatoId = String(item.id);
+        r[`GET ${p.split("?")[0]}`] = { status: t.status, campos_de_conversa: item ? comChat(item) : [] };
+      }
+      if (contatoId) {
+        for (const p of [`/v2/messages/contact/${contatoId}`, `/v2/messages/chat/contact/${contatoId}`, `/v2/messages?contact_id=${contatoId}`, `/v1/contacts/${contatoId}/chats`, `/v2/contacts/${contatoId}/chats`]) {
+          const t = await tentar(`${base}${p}`, cab);
+          r[`GET ${p.replace(contatoId, "{contactId}")}`] = { status: t.status, forma: t.status === 200 ? t.forma : undefined, mensagem: t.status !== 200 ? String(t.json?.message ?? "").slice(0, 160) : undefined };
+        }
       }
       const semConta = await tentar(`${base}/v2/messages/chats?limit=2`, cab);
       r["GET /v2/messages/chats (sem parâmetro)"] = { status: semConta.status, mensagem: String(semConta.json?.message ?? "").slice(0, 200) };
@@ -91,6 +99,19 @@ export async function sondarConversasCrm(admin: SupabaseClient<any, any, any>): 
         r[`GET /api/v4/events (${tipo})`] = { status: ev.status, value_after: e0 ? forma(e0.value_after, 0, 8) : null, total_na_pagina: primeiraLista(ev.json).length };
       }
       // Notas de chat (sugestão do fundador): note_type incoming/outgoing_chat_message, texto em params.
+      const tipos: Record<string, number> = {};
+      for (let pg = 1; pg <= 4; pg++) {
+        const n = await tentar(`${base}/api/v4/leads/notes?limit=250&page=${pg}`, cab);
+        const notas = primeiraLista(n.json) as any[];
+        for (const x of notas) tipos[String(x?.note_type)] = (tipos[String(x?.note_type)] ?? 0) + 1;
+        if (notas.length < 250) break;
+      }
+      r["tipos de nota em até 1.000 notas de leads"] = tipos;
+      for (const q of ["filter[note_type][]=incoming_chat_message", "filter[note_type]=incoming_chat_message", "filter[note_type][]=service_message&filter[note_type][]=extended_service_message"]) {
+        const n = await tentar(`${base}/api/v4/leads/notes?limit=5&${q}`, cab);
+        const notas = primeiraLista(n.json) as any[];
+        r[`notes ?${q}`] = { status: n.status, tipos_vindos: [...new Set(notas.map((x) => String(x?.note_type)))] };
+      }
       const filtro = "filter[note_type][0]=incoming_chat_message&filter[note_type][1]=outgoing_chat_message&limit=50";
       for (const ent of ["leads", "contacts"]) {
         const n = await tentar(`${base}/api/v4/${ent}/notes?${filtro}`, cab);
