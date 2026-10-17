@@ -283,13 +283,15 @@ async function lerFontesBrain(admin: Admin, clientId: string) {
   const { data: cli } = await admin.from("sap_clinicas").select("id, nome, especialidade, cidade, servicos, ticket_medio, consulta_paga, ambicao_d90, ajustes_acordados")
     .eq("client_id", clientId).order("created_at", { ascending: false }).limit(1).maybeSingle();
   const desde = new Date(Date.now() - 120 * 86_400_000).toISOString();
-  const [sessoes, resumos, posts, duvidas, pecas, aprovados] = await Promise.all([
+  const [sessoes, resumos, posts, duvidas, pecas, aprovados, kommo] = await Promise.all([
     cli ? admin.from("sap_sessao_registro").select("sessao, chave, texto").eq("clinica_id", cli.id).not("texto", "is", null).limit(60) : Promise.resolve({ data: [] }),
     admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", desde).order("gerado_em", { ascending: false }).limit(40),
     admin.from("instagram_posts").select("tema, format, caption, reach, saved, engagement").eq("client_id", clientId).gte("posted_at", desde).order("engagement", { ascending: false, nullsFirst: false }).limit(15),
     admin.from("instagram_comments").select("text").eq("client_id", clientId).eq("is_question", true).gte("commented_at", desde).order("commented_at", { ascending: false }).limit(50),
     cli ? admin.from("sap_pecas").select("titulo, etapa, formato, ganchos, semaforo, status").eq("clinica_id", cli.id).limit(30) : Promise.resolve({ data: [] }),
     admin.from("brain_itens").select("memoria, chave, valor").eq("client_id", clientId).eq("estado", "aprovado"),
+    // Kommo manda pelo webhook as mensagens que o paciente envia (WhatsApp oficial e Direct). Só o lado do paciente.
+    admin.from("crm_raw_events").select("raw_payload").eq("client_id", clientId).eq("event_key", "message").gte("received_at", desde).order("received_at", { ascending: false }).limit(200),
   ]);
   const fontes: Partial<Record<Fonte, string>> = {};
   if (cli) {
@@ -309,6 +311,11 @@ async function lerFontesBrain(admin: Admin, clientId: string) {
   if (dv.length) fontes.instagram_duvidas = `${dv.length} perguntas nos comentários (120 dias):\n` + dv.map((d) => `- ${corta(d.text, 150)}`).join("\n");
   const pc = (pecas.data ?? []) as { titulo: string; etapa: string; formato: string; ganchos: unknown; semaforo: string; status: string }[];
   if (pc.length) fontes.banco_anuncios = pc.map((p) => `- ${p.etapa} · ${p.formato} · ${p.status} · ${p.semaforo ?? ""} · "${corta(p.titulo, 100)}" ganchos: ${corta(JSON.stringify(p.ganchos ?? []), 200)}`).join("\n");
+  const msgs = ((kommo.data ?? []) as { raw_payload: any }[])
+    .map((r) => { const a = r.raw_payload?.add; const m = Array.isArray(a) ? a[0] : (a?.["0"] ?? a); return typeof m?.text === "string" ? m.text : ""; })
+    .map((t) => corta(t, 200)).filter((t) => t.length >= 12);
+  const unicas = [...new Set(msgs)].slice(0, 120);
+  if (unicas.length) fontes.mensagens_kommo = `${unicas.length} mensagens recebidas de pacientes (120 dias, as mais recentes; repetidas removidas):\n` + unicas.map((t) => `- ${t}`).join("\n");
   const apr = ((aprovados.data ?? []) as { memoria: string; chave: string; valor: string }[]).map((a) => `${a.memoria}.${a.chave}: ${a.valor}`);
   return { ativo: true, fontes, aprovados: apr };
 }
