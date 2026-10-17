@@ -56,6 +56,14 @@ export async function sondarConversasCrm(admin: SupabaseClient<any, any, any>): 
       const lista = primeiraLista(contas.json) as { id?: string; type?: string; status?: string }[];
       r["GET /v2/channel-accounts"] = { status: contas.status, total: lista.length, tipos: lista.map((x) => `${x.type}/${x.status}`) };
       const conta = lista[0]?.id;
+      // Onde aparece o ID da conversa: campos com "chat" ou "conversation" no contato e no negócio.
+      const comChat = (o: any, pref = ""): string[] => !o || typeof o !== "object" ? [] : Object.entries(o).flatMap(([k, v]) =>
+        [...(/chat|conversation|talk/i.test(k) ? [`${pref}${k}`] : []), ...(v && typeof v === "object" && !Array.isArray(v) && pref.split(".").length < 3 ? comChat(v, `${pref}${k}.`) : [])]);
+      for (const p of ["/v2/contacts?limit=1", "/v1/contacts?limit=1", "/v1/deals?limit=1"]) {
+        const t = await tentar(`${base}${p}`, cab);
+        const item = primeiraLista(t.json)[0];
+        r[`GET ${p.split("?")[0]}`] = { status: t.status, campos_de_conversa: item ? comChat(item) : [], campos: item ? Object.keys(item).slice(0, 40) : [] };
+      }
       const semConta = await tentar(`${base}/v2/messages/chats?limit=2`, cab);
       r["GET /v2/messages/chats (sem parâmetro)"] = { status: semConta.status, mensagem: String(semConta.json?.message ?? "").slice(0, 200) };
       if (conta) {
@@ -82,7 +90,12 @@ export async function sondarConversasCrm(admin: SupabaseClient<any, any, any>): 
         const e0 = primeiraLista(ev.json)[0];
         r[`GET /api/v4/events (${tipo})`] = { status: ev.status, value_after: e0 ? forma(e0.value_after, 0, 8) : null, total_na_pagina: primeiraLista(ev.json).length };
       }
-      const contato = primeiraLista(talks.json)[0]?.contact_id;
+      const talk0 = primeiraLista(talks.json)[0];
+      if (talk0?.talk_id) {
+        const det = await tentar(`${base}/api/v4/talks/${talk0.talk_id}`, cab);
+        r["GET /api/v4/talks/{talk_id}"] = { status: det.status, forma: det.forma };
+      }
+      const contato = talk0?.contact_id;
       if (contato) {
         const ch = await tentar(`${base}/api/v4/contacts/chats?contact_id=${contato}`, cab);
         r["GET /api/v4/contacts/chats"] = { status: ch.status, forma: ch.forma, detalhe: ch.status >= 400 ? String(ch.json?.detail ?? ch.json?.title ?? "").slice(0, 120) : undefined };
