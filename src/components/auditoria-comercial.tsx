@@ -5,6 +5,7 @@ import { getRouteApi } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveDateRange } from "@/lib/date-range";
 import { BarraFina } from "@/components/visual";
+import { ExperimentoSemana } from "@/components/experimento-semana";
 
 // Auditoria comercial do período: o que a IA leu em cada conversa (conversas_resumos), somado.
 // Mesma estrutura das auditorias manuais: funil, objeções x falhas, por atendente, resgate, exemplos.
@@ -15,7 +16,7 @@ const ROTULO_OBJECAO: Record<string, string> = {
   preco: "Preço", convenio: "Convênio/plano", distancia: "Distância", adiamento: "Adiamento (“vou pensar”)", agenda: "Agenda/horário",
   medo: "Medo", desconfianca: "Desconfiança", outro: "Outro",
 };
-const ROTULO_FALHA: Record<string, string> = {
+export const ROTULO_FALHA: Record<string, string> = {
   sem_resposta: "Deixou o paciente sem resposta", demora: "Demorou para responder", desvio_preco: "Desviou da pergunta de preço",
   preco_sem_ancoragem: "Deu preço sem ancorar valor", sem_cta: "Não conduziu para data/hora", sem_follow_up: "Sem follow-up quando o paciente sumiu",
   nome_errado: "Errou o nome do paciente", informacao_inconsistente: "Informação inconsistente (valor, data)", pressao: "Pressionou o paciente",
@@ -91,6 +92,7 @@ export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; on
         </span>
       </div>
       <EmJogo clientId={clientId} de={start} ate={end.slice(0, 10)} />
+      <ExperimentoSemana clientId={clientId} />
       {precoNaoDado > 0 && (
         <p className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--warn-border, var(--warn))", background: "var(--warn-bg, var(--surface))" }}>
           <b>{precoNaoDado}</b> pacientes pediram preço e não receberam. É o ponto do funil que mais costuma derrubar a conversão.
