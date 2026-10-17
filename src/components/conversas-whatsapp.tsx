@@ -166,6 +166,7 @@ const ROTULO_TIPO: Record<string, string> = {
   DOCUMENT: "📎 documento",
   STICKER: "figurinha",
   kommo_sem_texto: "(sem texto: o Kommo não entrega)",
+  kommo_robo: "(resposta automática; o Kommo não entrega o texto)",
 };
 
 /** Conversas do WhatsApp, uma a uma, com a leitura e a auditoria comercial (aba "Conversas e auditoria" do Atendimento). */
@@ -202,6 +203,16 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
       const { data, error } = await rpc("ler_mensagens", { p_conversa: aberta });
       if (error) throw new Error(error.message);
       return (data ?? []) as Mensagem[];
+    },
+  });
+  // Mensagens de robô/menu da conversa aberta (mesma regra do tempo de resposta), para o balão avisar "Robô".
+  const robo = useQuery({
+    queryKey: ["mensagens-robo", aberta],
+    enabled: !!aberta,
+    queryFn: async () => {
+      const { data, error } = await rpc("mensagens_automaticas", { p_conversa: aberta });
+      if (error) return new Set<string>();
+      return new Set(((data ?? []) as (string | { mensagens_automaticas: string })[]).map((x) => (typeof x === "string" ? x : x.mensagens_automaticas)));
     },
   });
 
@@ -383,19 +394,21 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
                 <div className="flex max-h-[62vh] flex-col gap-1.5 overflow-y-auto">
                   {msgs.data?.map((m) => {
                     const paciente = m.direcao === "entrada";
+                    const ehRobo = !paciente && (m.tipo === "kommo_robo" || !!robo.data?.has(m.id));
                     const corpo = m.texto || ROTULO_TIPO[m.tipo ?? ""] || m.tipo || "";
                     return (
                       <div key={m.id} className={`flex ${paciente ? "justify-start" : "justify-end"}`}>
                         <div
                           className="max-w-[85%] whitespace-pre-wrap break-words rounded-xl px-3 py-1.5 text-sm"
                           style={{
-                            background: paciente ? "var(--muted, #eee)" : "var(--accent)",
-                            color: paciente ? "var(--text)" : "var(--accent-fg, #fff)",
+                            background: paciente ? "var(--muted, #eee)" : ehRobo ? "var(--surface)" : "var(--accent)",
+                            color: paciente || ehRobo ? "var(--text)" : "var(--accent-fg, #fff)",
+                            border: ehRobo ? "1px dashed var(--border)" : undefined,
                           }}
                         >
                           {corpo}
                           <div className="mt-0.5 text-[10px] opacity-70">
-                            {paciente ? "Paciente" : m.autor || "Clínica"} · {quando(m.enviada_em)}
+                            {paciente ? "Paciente" : ehRobo ? "🤖 Robô (resposta automática)" : m.autor || "Clínica"} · {quando(m.enviada_em)}
                           </div>
                         </div>
                       </div>
