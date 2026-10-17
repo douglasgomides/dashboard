@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="color-scheme" content="light dark">
+  <title>Hoje · Doctor Creator · Protótipo</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { color-scheme:light; --page:#f8fafc; --surface:#fff; --surface-2:#f1f5f9; --ink:#0f172a; --secondary:#475569; --muted:#64748b; --border:#e2e8f0; --accent:#2563eb; --accent-hover:#1d4ed8; --accent-soft:#eff6ff; --side:#111827; --side-ink:#f1f5f9; --side-muted:#cbd5e1; --good:#047857; --good-soft:#ecfdf5; --warn:#92400e; --warn-soft:#fffbeb; --danger:#b91c1c; --ai:#6d28d9; --sap:#8a5c20; --shadow:0 8px 30px #0f172a0a; }
+    :root[data-theme="dark"] { color-scheme:dark; --page:#0b1220; --surface:#111a2b; --surface-2:#1a2436; --ink:#e2e8f0; --secondary:#cbd5e1; --muted:#a5b4c8; --border:#2c3b52; --accent:#2563eb; --accent-hover:#1d4ed8; --accent-soft:#142a4d; --side:#070c16; --good:#6ee7b7; --good-soft:#11372e; --warn:#fcd34d; --warn-soft:#362d17; --danger:#fca5a5; --ai:#c4b5fd; --sap:#edc589; --shadow:none; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--page); color:var(--ink); font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased; }
+    button,input,select,textarea { font:inherit; color:inherit; }
+    button { cursor:pointer; }
+    button:disabled { cursor:not-allowed; opacity:.55; }
+    button,select,textarea,input { -webkit-tap-highlight-color:transparent; }
+    button { min-height:44px; }
+    :focus-visible { outline:3px solid #60a5fa; outline-offset:3px; }
+    h1,h2,h3,p { margin:0; }
+    h1 { font-size:30px; line-height:1.2; letter-spacing:-1px; }
+    h2 { font-size:18px; letter-spacing:-.3px; }
+    h3 { font-size:16px; line-height:1.4; }
+    a { color:inherit; }
+    svg { width:19px; height:19px; flex:none; stroke:currentColor; stroke-width:1.7; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+    [hidden] { display:none!important; }
+    .skip { position:fixed; left:16px; top:-100px; padding:12px; z-index:100; background:var(--surface); }
+    .skip:focus { top:12px; }
+    .demo-bar { min-height:40px; padding:6px 24px; display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:5px 12px; color:var(--secondary); background:var(--surface-2); border-bottom:1px solid var(--border); font-size:12px; }
+    .demo-bar strong { font-weight:650; color:var(--ink); }
+    .demo-bar button { border:0; background:none; text-decoration:underline; min-height:28px; font-size:12px; }
+    .workspace { display:grid; grid-template-columns:224px minmax(0,1fr); min-height:calc(100vh - 40px); }
+    .sidebar { background:var(--side); color:var(--side-ink); padding:26px 16px 18px; display:flex; flex-direction:column; position:sticky; top:0; height:100vh; gap:32px; }
+    .brand { display:flex; align-items:center; gap:11px; padding:0 9px; }
+    .brand-mark { display:grid; place-items:center; width:34px; height:34px; border-radius:10px; background:#2563eb; }
+    .brand-mark::after { content:""; width:12px; height:12px; border:3px solid #fff; border-radius:50%; }
+    .brand strong { display:block; font-size:15px; font-weight:650; letter-spacing:-.3px; }
+    .brand small { color:var(--side-muted); font-size:12px; }
+    .nav-label { color:#a4b1c6; margin:0 12px 10px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+    .nav-list { display:flex; flex-direction:column; gap:5px; }
+    .nav-list button { border:0; background:none; display:flex; align-items:center; gap:12px; color:var(--side-muted); padding:11px 13px; text-align:left; border-radius:9px; font-size:14px; }
+    .nav-list button:hover { background:#1f2937; color:#fff; }
+    .nav-list button[aria-current="page"] { background:#263345; color:#fff; font-weight:600; box-shadow:inset 3px 0 0 #60a5fa; }
+    .nav-count { margin-left:auto; padding:0 6px; font-size:12px; background:#3b4658; border-radius:5px; }
+    .sidebar-footer { margin-top:auto; padding:16px 10px 0; border-top:1px solid #ffffff1f; }
+    .profile { display:flex; gap:10px; align-items:center; font-size:13px; }
+    .avatar { display:grid; place-items:center; width:32px; height:32px; flex:none; border-radius:50%; background:var(--surface-2); color:var(--secondary); font-size:12px; font-weight:650; }
+    .sidebar .avatar { background:#303c50; color:#fff; }
+    .profile small { display:block; color:var(--side-muted); font-size:11px; }
+    .sidebar-note { font-size:11px; color:#a4b1c6; margin-top:14px; }
+    .mainwrap { min-width:0; }
+    .toolbar { background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:14px; padding:18px 32px; }
+    .toolbar-start,.toolbar-end { display:flex; align-items:center; gap:18px; min-width:0; }
+    .product-switch { display:flex; padding:4px; gap:3px; background:var(--surface-2); border-radius:9px; }
+    .product-switch button { border:0; padding:5px 15px; background:none; font-size:13px; font-weight:600; min-height:34px; border-radius:6px; color:var(--secondary); }
+    .product-switch button[aria-pressed="true"] { background:var(--surface); color:var(--ink); box-shadow:0 1px 4px #00000012; }
+    .client-picker { display:flex; align-items:center; gap:9px; }
+    .client-picker svg { color:var(--muted); }
+    .client-picker label { display:block; font-size:11px; color:var(--muted); }
+    select { max-width:100%; border:1px solid var(--border); border-radius:7px; padding:6px 25px 6px 9px; background:var(--surface); min-height:36px; font-size:13px; }
+    .client-picker select { border:0; padding:0 22px 0 0; font-size:14px; font-weight:600; min-height:26px; }
+    .view-picker { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--secondary); }
+    .icon-button { display:inline-flex; align-items:center; justify-content:center; width:40px; min-height:40px; border:1px solid var(--border); background:var(--surface); border-radius:9px; }
+    main { max-width:1460px; margin:auto; padding:32px 38px 44px; min-width:0; }
+    .page-head { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:25px; }
+    .eyebrow { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--secondary); margin-bottom:8px; }
+    .sap-label { color:var(--sap); }
+    .sub { color:var(--secondary); font-size:14px; margin-top:8px; max-width:65ch; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:10px 15px; border:1px solid var(--border); border-radius:8px; background:var(--surface); font-size:13px; font-weight:600; text-decoration:none; }
+    .btn:hover { background:var(--surface-2); }
+    .btn.primary { color:#fff; background:var(--accent); border-color:var(--accent); }
+    .btn.primary:hover { background:var(--accent-hover); }
+    .btn.link { border:0; background:none; color:var(--secondary); padding:6px 0; min-height:36px; font-weight:500; }
+    .btn.link:hover { text-decoration:underline; }
+    .btn.danger { color:var(--danger); }
+    .summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); background:var(--surface); border:1px solid var(--border); border-radius:12px; margin-bottom:28px; }
+    .summary-cell { padding:17px 22px; display:flex; align-items:center; gap:13px; }
+    .summary-cell+.summary-cell { border-left:1px solid var(--border); }
+    .summary-icon { width:36px; height:36px; border-radius:10px; display:grid; place-items:center; background:var(--surface-2); color:var(--secondary); }
+    .summary-cell:first-child .summary-icon { color:var(--accent); background:var(--accent-soft); }
+    .summary-value { font-size:22px; line-height:1.1; font-weight:650; letter-spacing:-.5px; font-variant-numeric:tabular-nums; }
+    .summary-label { display:block; color:var(--secondary); font-size:12px; margin-top:3px; }
+    .columns { display:grid; grid-template-columns:minmax(0,1.85fr) minmax(270px,1fr); align-items:start; gap:24px; }
+    .stack { display:flex; flex-direction:column; gap:18px; min-width:0; }
+    .section-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:13px; }
+    .section-head small { color:var(--muted); font-size:12px; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:21px; box-shadow:var(--shadow); min-width:0; }
+    .decision { position:relative; }
+    .decision.priority { border-color:color-mix(in srgb,var(--accent) 32%,var(--border)); }
+    .decision+.decision { margin-top:12px; }
+    .card-top { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+    .tag { display:inline-flex; align-items:center; gap:5px; width:fit-content; font-size:11px; font-weight:600; padding:4px 8px; border-radius:5px; background:var(--surface-2); color:var(--secondary); line-height:1.4; }
+    .tag svg { width:13px; height:13px; }
+    .tag.ai { color:var(--ai); }
+    .tag.warning { color:var(--warn); background:var(--warn-soft); }
+    .tag.success { color:var(--good); background:var(--good-soft); }
+    .tag.blue { color:var(--ink); background:var(--accent-soft); }
+    .micro { font-size:12px; color:var(--muted); }
+    .description { color:var(--secondary); font-size:14px; margin-top:8px; }
+    .metadata { display:flex; gap:6px 16px; flex-wrap:wrap; margin-top:14px; font-size:12px; color:var(--secondary); }
+    .metadata span { display:inline-flex; gap:5px; align-items:center; }
+    .metadata svg { width:14px; height:14px; }
+    .card-actions { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; border-top:1px solid var(--border); padding-top:16px; margin-top:17px; }
+    .card-actions .btn { max-width:100%; }
+    .callout { padding:14px 16px; border-radius:9px; background:var(--surface-2); font-size:13px; color:var(--secondary); }
+    .callout strong { color:var(--ink); }
+    .callout.alert { background:var(--warn-soft); color:var(--warn); }
+    .source-error { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:22px; border:1px solid var(--warn); border-radius:10px; padding:14px 18px; background:var(--warn-soft); color:var(--warn); font-size:13px; }
+    .source-error p { max-width:65ch; }
+    .run { border-top:1px solid var(--border); padding:17px 0; }
+    .run:first-of-type { border-top:0; padding-top:5px; }
+    .run-head { display:flex; gap:10px; align-items:start; }
+    .run-icon { padding:7px; border-radius:8px; background:var(--surface-2); color:var(--ai); display:grid; place-items:center; flex:none; }
+    .run h3 { font-size:14px; }
+    .run p { font-size:12px; color:var(--secondary); margin-top:5px; }
+    .run-state { margin-top:9px; display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+    .run .btn.link { font-size:12px; min-height:32px; }
+    .activity-foot { padding-top:13px; border-top:1px solid var(--border); }
+    .health { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .health .dot { width:7px; height:7px; background:var(--good); border-radius:50%; display:inline-block; margin-right:6px; }
+    .health h3 { font-size:13px; }
+    .health p { color:var(--muted); font-size:12px; margin-top:5px; }
+    .progress { height:6px; border-radius:10px; background:var(--surface-2); overflow:hidden; margin:15px 0 8px; }
+    .progress span { display:block; height:100%; background:var(--accent); border-radius:10px; }
+    .program { margin-bottom:25px; padding:17px 21px; display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:12px; }
+    .program .progress { margin-top:7px; }
+    .program strong { font-size:14px; }
+    .program p { font-size:12px; color:var(--secondary); margin-top:3px; }
+    .program .progress span { background:var(--sap); }
+    .done-list { display:flex; flex-direction:column; gap:15px; }
+    .done-item { display:flex; align-items:start; gap:9px; font-size:13px; }
+    .done-item>svg { color:var(--good); width:17px; height:17px; margin-top:2px; }
+    .done-item small { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
+    .quiet-heading { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:16px; }
+    .empty { padding:26px; border:1px dashed var(--border); border-radius:12px; text-align:center; background:var(--surface); }
+    .empty>svg { width:27px; height:27px; color:var(--good); margin:0 auto 9px; }
+    .empty p { font-size:13px; color:var(--secondary); margin-top:6px; }
+    .list-row { display:flex; gap:14px; padding:18px 0; border-top:1px solid var(--border); align-items:start; }
+    .list-row:first-of-type { border-top:0; }
+    .list-row .row-main { min-width:0; flex:1; }
+    .list-row h3 { font-size:15px; }
+    .list-row p { color:var(--secondary); font-size:13px; margin-top:5px; }
+    .numbered { width:28px; height:28px; display:grid; place-items:center; flex:none; border-radius:50%; background:var(--surface-2); font-size:12px; color:var(--secondary); }
+    .metrics-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-bottom:24px; }
+    .metric strong { display:block; font-size:28px; letter-spacing:-1px; margin:12px 0 5px; font-variant-numeric:tabular-nums; }
+    .metric p { font-size:13px; color:var(--secondary); }
+    .bar-chart { display:flex; flex-direction:column; gap:19px; }
+    .chart-row { display:grid; grid-template-columns:110px 1fr 50px; align-items:center; gap:13px; font-size:13px; }
+    .chart-row .progress { margin:0; height:9px; }
+    .chart-row strong { text-align:right; }
+    .footnote { margin-top:24px; display:flex; gap:15px; align-items:center; justify-content:space-between; flex-wrap:wrap; font-size:12px; color:var(--muted); }
+    .footnote label { display:flex; align-items:center; gap:7px; min-height:36px; }
+    input[type="checkbox"] { width:17px; height:17px; accent-color:var(--accent); flex:none; }
+    dialog { border:1px solid var(--border); border-radius:16px; padding:0; background:var(--surface); color:var(--ink); width:min(690px,calc(100vw - 28px)); max-height:calc(100dvh - 36px); box-shadow:0 25px 90px #0005; }
+    dialog::backdrop { background:#0f172a80; backdrop-filter:blur(3px); }
+    .dialog-head { display:flex; justify-content:space-between; align-items:start; gap:16px; padding:23px 26px; border-bottom:1px solid var(--border); }
+    .dialog-head h2 { margin-top:7px; font-size:21px; }
+    .dialog-body { padding:22px 26px; display:flex; flex-direction:column; gap:19px; }
+    .dialog-body .description { margin:0; }
+    .dialog-footer { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; padding:18px 26px; background:var(--surface-2); border-top:1px solid var(--border); }
+    .dialog-footer .actions { display:flex; flex-wrap:wrap; gap:9px; }
+    .review-grid { display:grid; grid-template-columns:1fr 1fr; gap:13px; }
+    .review-box { padding:14px; border:1px solid var(--border); border-radius:8px; font-size:13px; }
+    .review-box strong { display:block; margin-bottom:6px; font-size:12px; }
+    .review-box p { color:var(--secondary); }
+    .preview-content { border-left:3px solid var(--accent); padding:14px 17px; background:var(--surface-2); border-radius:0 8px 8px 0; font-size:14px; }
+    .evidence-list { padding:0; list-style:none; margin:0; display:flex; flex-direction:column; gap:10px; }
+    .evidence-list li { display:flex; align-items:start; gap:9px; font-size:13px; color:var(--secondary); }
+    .evidence-list svg { width:16px; height:16px; margin-top:2px; color:var(--muted); }
+    .field-label { display:block; font-size:13px; font-weight:600; }
+    textarea { width:100%; border:1px solid var(--border); background:var(--page); border-radius:8px; padding:12px; resize:vertical; margin-top:7px; font-size:14px; min-height:90px; }
+    .review-check { display:flex; align-items:start; gap:9px; font-size:13px; color:var(--secondary); }
+    .review-check input { margin-top:3px; }
+    .form-error { font-size:13px; color:var(--danger); margin-top:7px; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    #live { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); padding:12px 20px; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--ink); box-shadow:var(--shadow); z-index:90; max-width:calc(100vw - 32px); font-size:13px; }
+    #live:empty { display:none; }
+    @media(min-width:1500px) { main { padding:38px 48px 50px; } }
+    @media(max-width:1150px) { .workspace { grid-template-columns:195px minmax(0,1fr); } .toolbar { padding:16px 24px; } main { padding:28px 24px 36px; } .toolbar-start { gap:12px; } .view-picker>span { display:none; } .columns { grid-template-columns:minmax(0,1.65fr) minmax(250px,1fr); gap:18px; } .card { padding:18px; } }
+    @media(max-width:950px) { .columns { grid-template-columns:1fr; } .columns>.stack:last-child { display:grid; grid-template-columns:1fr 1fr; align-items:start; } .columns>.stack:last-child>.card:first-child { grid-column:1/-1; } .toolbar { flex-wrap:wrap; } .toolbar-start { flex:1; justify-content:space-between; } .toolbar-end { margin-left:auto; } .summary-cell { padding:16px; gap:10px; } }
+    @media(max-width:700px) { .demo-bar { padding:6px 12px; font-size:11px; } .demo-bar>span { display:none; } .workspace { display:block; } .sidebar { display:contents; } .sidebar>.brand,.sidebar .nav-label,.sidebar-footer { display:none; } .nav-list { position:fixed; bottom:0; left:0; right:0; z-index:40; background:var(--side); display:grid; grid-template-columns:repeat(4,1fr); gap:2px; padding:6px 6px calc(6px + env(safe-area-inset-bottom)); border-top:1px solid #ffffff26; } .nav-list button { flex-direction:column; gap:4px; padding:7px 3px; text-align:center; font-size:11px; justify-content:center; min-height:52px; } .nav-list button[aria-current="page"] { box-shadow:none; } .nav-count { display:none; } .toolbar { padding:12px 16px; gap:12px; } .toolbar-start { flex-basis:100%; gap:12px; } .toolbar-end { width:100%; justify-content:space-between; margin:0; } .client-picker svg { display:none; } .client-picker select { font-size:13px; width:150px; } .view-picker>span { display:block; font-size:12px; } .product-switch button { padding:5px 12px; } .icon-button { width:36px; min-height:36px; } main { padding:25px 16px 110px; } h1 { font-size:28px; } .page-head { align-items:start; margin-bottom:22px; } .page-head>.btn { width:42px; min-width:42px; padding:10px; } .page-head>.btn span { display:none; } .sub { font-size:13px; } .summary { margin-bottom:23px; } .summary-cell { padding:14px 10px; gap:7px; align-items:start; } .summary-icon { display:none; } .summary-value { font-size:22px; } .summary-label { font-size:11px; line-height:1.4; margin-top:5px; } .columns>.stack:last-child { display:flex; } .section-head small { font-size:11px; } .card { padding:18px; } .card-actions { align-items:stretch; } .card-actions>.btn.primary { flex:1; } .program { grid-template-columns:1fr; gap:9px; padding:16px; } .review-grid { grid-template-columns:1fr; } .dialog-head,.dialog-body { padding:19px; } .dialog-footer { padding:16px 19px; } .dialog-footer>.actions { width:100%; } .dialog-footer .actions>.primary { flex:1; } .metrics-grid { grid-template-columns:1fr; gap:10px; } .metric strong { margin:4px 0; } .chart-row { grid-template-columns:90px 1fr 40px; gap:9px; font-size:12px; } #live { bottom:90px; } }
+    /* The mobile entry prioritizes the first decision; D0–D90 remains in the header. */
+    @media(max-width:700px) { .program { display:none; } }
+    @media(prefers-reduced-motion:no-preference) { button { transition:box-shadow 120ms; } dialog[open] { animation:enter 150ms ease-out; } @keyframes enter { from { transform:translateY(8px); } to { transform:translateY(0); } } }
+  </style>
+</head>
+<body>
+  <a href="#main" class="skip">Ir para o conteúdo</a>
+  <div class="demo-bar"><strong>Protótipo navegável</strong><span>Dados demonstrativos. Nenhuma ação é enviada para a operação.</span><button type="button" data-action="reset">Reiniciar demonstração</button></div>
+  <div id="app"></div>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+  <div id="live" role="status" aria-live="polite" aria-atomic="true"></div>
+  <script type="module">
+    const icons = {
+      home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
+      plan:'<rect x="4" y="4" width="16" height="17" rx="2"/><path d="M9 3v3m6-3v3M8 11h8m-8 4h5"/>',
+      chart:'<path d="M4 4v16h17M8 15v-4m5 4V7m5 8v-6"/>',
+      activity:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+      chevron:'<path d="m9 5 7 7-7 7"/>', check:'<path d="m5 12 4 4L19 6"/>',
+      bot:'<rect x="4" y="7" width="16" height="13" rx="4"/><path d="M12 3v4m-5 6h.01M17 13h.01M9 17h6M1 11v5m22-5v5"/>',
+      arrow:'<path d="M4 12h16m-6-6 6 6-6 6"/>',
+      clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+      shield:'<path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6z"/><path d="m8 12 3 3 5-6"/>',
+      source:'<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 4 16 4 16 0V5M4 12v6c0 4 16 4 16 0v-6"/>',
+      user:'<circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',
+      building:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h1m4 0h1m-6 4h1m4 0h1m-5 10v-5h4v5"/>',
+      close:'<path d="m6 6 12 12M6 18 18 6"/>',
+      document:'<path d="M14 2H5v20h14V7zM14 2v6h5M8 12h8m-8 4h8"/>',
+      warning:'<path d="m12 3 10 18H2zM12 9v4m0 4h.01"/>',
+      pause:'<path d="M8 5v14m8-14v14"/>', play:'<path d="m7 4 14 8-14 8z"/>',
+      spark:'<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/>',
+      moon:'<path d="M20.8 13A9 9 0 0 1 11 3.2 9 9 0 1 0 20.8 13z"/>',
+      refresh:'<path d="M20 7a8 8 0 1 0 1 8M20 3v5h-5"/>',
+    };
+    const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.document}</svg>`;
+    const esc = text => String(text).replace(/[&<>"']/g, value => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[value]));
+    const clients = { aurora:{name:'Clínica Aurora',initials:'CA',day:24}, horizonte:{name:'Clínica Horizonte',initials:'CH',day:46} };
+    const products = { hub:{name:'HUB',description:'Acompanhamento contínuo',plan:'Plano de ação'}, sap:{name:'SAP',description:'Sistema de Aquisição de Pacientes',plan:'Plano de 90 dias'} };
+    const app = document.getElementById('app');
+    const dialog = document.getElementById('dialog');
+    const live = document.getElementById('live');
+    let state = { product:'hub',client:'aurora',role:'team',page:'today',sourceError:false, theme:'light' };
+    let store = {};
+    let timers = new Set();
+    let announcementTimer;
+    let modalContext = null;
+    const key = () => `${state.client}:${state.product}`;
+    const data = () => store[key()] ??= {
+      approval:'pending',feedback:'',clinicTaskDone:false,
+      runs:[{id:'analysis',title:state.product==='hub'?'Análise do atendimento':'Preparação do próximo check-in',detail:'Organizando evidências para revisão. Nenhuma mensagem será enviada.',status:'running',source:'CRM e WhatsApp'}],
+      completed:[state.product==='hub'?'Conferência dos dados do período':'Conferência da ficha da clínica'],
+      events:[{text:'Dados do período conferidos',detail:'Agente de conferência · leitura automática',status:'Concluído'}],
+    };
+    const proposal = () => state.product==='hub' ? {
+      title:'Relatório semanal pronto para revisão',label:'Revisar relatório',due:'Antes de segunda-feira',
+      description:'Os resultados foram organizados. Revise o resumo antes de publicar na tarefa de acompanhamento.',
+      destination:`Tarefa “Acompanhamento semanal” · ${clients[state.client].name}`,
+      before:'Relatório disponível somente como rascunho.',after:'Resumo publicado como comentário no ClickUp da clínica.',
+      preview:'Nesta semana, a prioridade proposta é revisar o atendimento e acompanhar a evolução dos agendamentos. A síntese reúne os resultados e as limitações das fontes disponíveis.',
+      evidence:['CRM · 12 a 16 de outubro · dados demonstrativos','Instagram · 12 a 16 de outubro · dados demonstrativos','Conferência de cobertura realizada no cenário de teste'],
+      execute:'Aprovar e publicar',result:'Publicação do relatório simulada',
+    } : {
+      title:'Etapa de rastreamento pronta para conferir',label:'Revisar evidências',due:'Próximo marco do programa',
+      description:'O agente reuniu os testes de eventos. Confira as evidências antes de concluir a etapa no cronograma.',
+      destination:`Cronograma de implantação · ${clients[state.client].name}`,
+      before:'Rastreamento aguardando validação da equipe.',after:'Etapa marcada como concluída no cronograma.',
+      preview:'Proposta de conclusão: rastreamento configurado e evento de teste registrado. O responsável precisa confirmar se a evidência atende ao critério do programa.',
+      evidence:['Gerenciador de Eventos · evento de teste demonstrativo','UTMs · conferência de parâmetros no cenário de teste','Evidência de rastreamento · exemplo preparado para o protótipo'],
+      execute:'Aprovar e concluir etapa',result:'Conclusão da etapa simulada',
+    };
+    const statusLabel = status => ({running:'Em andamento',paused:'Pausado por você',completed:'Concluído',blocked:'Bloqueado'})[status] || status;
+    const badge = (text, tone='', name='') => `<span class="tag ${tone}">${name?icon(name):''}${esc(text)}</span>`;
+    function announce(message) {
+      clearTimeout(announcementTimer); live.textContent=message;
+      announcementTimer=setTimeout(()=>{live.textContent='';},6500);
+    }
+    function schedule(fn,ms) {
+      const timer=setTimeout(()=>{timers.delete(timer);fn();},ms); timers.add(timer);
+    }
+    function closeDialog() { if(dialog.open) dialog.close(); modalContext=null; }
+    function navigate(page) { closeDialog(); state.page=page; render(); document.getElementById('page-title').focus(); }
+    function render() {
+      const d=data(), p=products[state.product], c=clients[state.client];
+      const needs=state.role==='team' ? Number(d.approval==='pending')+Number(!d.clinicTaskDone) : Number(!d.clinicTaskDone);
+      app.innerHTML=`<div class="workspace">
+        <aside class="sidebar" aria-label="Menu do workspace">
+          <div class="brand"><span class="brand-mark" aria-hidden="true"></span><div><strong>Doctor Creator</strong><small>Workspace</small></div></div>
+          <div><p class="nav-label">${state.product==='hub'?'Acompanhamento':'Programa de aquisição'}</p><nav class="nav-list" aria-label="Navegação principal">
+            ${[['today','Hoje','home'],['plan',p.plan,'plan'],['results','Resultados','chart'],['activity','Atividade','activity']].map(([id,label,image])=>`<button type="button" data-page="${id}" ${state.page===id?'aria-current="page"':''}>${icon(image)}<span>${label}</span>${id==='today'&&needs?`<span class="nav-count" aria-hidden="true">${needs}</span>`:''}</button>`).join('')}
+          </nav></div>
+          <div class="sidebar-footer"><div class="profile"><span class="avatar">${state.role==='team'?'DC':c.initials}</span><div>${state.role==='team'?'Equipe Doctor Creator':'Responsável da clínica'}<small>${state.role==='team'?'Operação e aprovações':'Resultados e suas tarefas'}</small></div></div><p class="sidebar-note">Agentes identificados. Decisões sob seu controle.</p></div>
+        </aside>
+        <div class="mainwrap"><header class="toolbar">
+          <div class="toolbar-start"><div class="product-switch" role="group" aria-label="Produto">${['hub','sap'].map(id=>`<button type="button" data-product="${id}" aria-pressed="${state.product===id}">${products[id].name}</button>`).join('')}</div>
+            <div class="client-picker">${icon('building')}<div><label for="client">Clínica selecionada</label><select id="client" ${state.role==='clinic'?'disabled':''}>${Object.entries(clients).map(([id,v])=>`<option value="${id}" ${state.client===id?'selected':''}>${v.name}</option>`).join('')}</select></div></div>
+          </div><div class="toolbar-end"><label class="view-picker"><span>Visualização</span><select id="role" aria-label="Visualização"><option value="team" ${state.role==='team'?'selected':''}>Equipe</option><option value="clinic" ${state.role==='clinic'?'selected':''}>Clínica</option></select></label>
+            <button type="button" class="icon-button" data-action="theme" aria-label="${state.theme==='light'?'Ativar tema escuro':'Ativar tema claro'}">${icon('moon')}</button>
+          </div>
+        </header>
+        <main id="main"><header class="page-head"><div><div class="eyebrow ${state.product==='sap'?'sap-label':''}">${icon(state.product==='hub'?'activity':'plan')} ${p.description}${state.product==='sap'?` · D${c.day} de 90`:''}</div><h1 id="page-title" tabindex="-1">${({today:'Hoje',plan:p.plan,results:'Resultados',activity:'Atividade dos agentes'})[state.page]}</h1><p class="sub">${state.page==='today'?(state.role==='team'?'As decisões da sua equipe, com contexto para agir.':'O que precisa de você e como o trabalho está avançando.'):'Clínica selecionada: '+c.name+' · cenário demonstrativo'}</p></div>
+          ${state.role==='team'?`<button type="button" class="btn primary" data-action="ask" aria-label="Pedir análise">${icon('spark')}<span>Pedir análise</span></button>`:''}
+        </header>
+        ${state.sourceError?`<div class="source-error" role="alert"><div><strong>Os dados ainda não puderam ser conferidos.</strong><p>As recomendações estão suspensas. Resultados do período ficam indisponíveis até a nova leitura.</p></div><button class="btn" type="button" data-action="retry">${icon('refresh')} Tentar novamente</button></div>`:''}
+        ${state.page==='today'?today(d,needs):state.page==='plan'?plan(d):state.page==='results'?results():activity(d)}
+        <footer class="footnote"><span>Semana de 12 a 18 de outubro · dados demonstrativos</span><label><input id="source-error" type="checkbox" ${state.sourceError?'checked':''}> Simular falha da fonte</label></footer>
+        </main></div></div>`;
+      document.documentElement.dataset.theme=state.theme;
+    }
+    function today(d,needs) {
+      const active=d.runs.filter(r=>r.status==='running').length;
+      return `${state.product==='sap'?`<section class="program" aria-label="Andamento do programa"><div><strong>Seu programa, um passo por vez</strong><p>D${clients[state.client].day} de 90 · próximo passo com responsável e evidência</p></div><div><div class="health"><span class="micro">Tempo decorrido do programa</span><span class="micro">D${clients[state.client].day}/90</span></div><div class="progress" role="progressbar" aria-label="Dias decorridos do programa" aria-valuenow="${clients[state.client].day}" aria-valuemin="0" aria-valuemax="90"><span style="width:${clients[state.client].day/90*100}%"></span></div><p>Dias decorridos não representam entregas concluídas.</p></div></section>`:''}
+      <section class="summary" aria-label="Resumo do dia">${[[needs,'Precisam de você','user'],[active,'Em andamento','bot'],[d.completed.length,'Concluído recentemente','check']].map(([value,label,image])=>`<div class="summary-cell"><div class="summary-icon">${icon(image)}</div><div><div class="summary-value">${value}</div><span class="summary-label">${label}</span></div></div>`).join('')}</section>
+      <div class="columns"><div class="stack"><section aria-labelledby="decisions-title"><div class="section-head"><h2 id="decisions-title">Precisa de você</h2><small>${needs?`${needs} ${needs===1?'item':'itens'}`:'Tudo em dia'}</small></div>
+      ${state.role==='team'&&d.approval==='pending'?decision():''}
+      ${!d.clinicTaskDone?clinicTask():''}
+      ${needs===0?`<div class="empty">${icon('check')}<h3>Nenhuma decisão pendente</h3><p>Você pode acompanhar o trabalho dos agentes ao lado.</p></div>`:''}
+      </section><section class="card"><div class="section-head"><h2>Concluído recentemente</h2>${badge('Registrado','success','check')}</div><div class="done-list">${d.completed.map(t=>`<div class="done-item">${icon('check')}<div>${esc(t)}<small>${clients[state.client].name} · nesta demonstração</small></div></div>`).join('')}</div></section>
+      </div><div class="stack"><section class="card"><div class="section-head"><h2>Agentes em atividade</h2>${badge('IA','ai','bot')}</div>${d.runs.map(runCard).join('')}<div class="activity-foot"><button type="button" class="btn link" data-page="activity">Ver todas as atividades ${icon('arrow')}</button></div></section>
+      <section class="card health"><div><h3>${state.sourceError?icon('warning')+' Leitura indisponível':'<span class="dot"></span> Fontes conferidas no cenário'}</h3><p>${state.sourceError?'Nenhum dado foi convertido em zero.':'CRM, Instagram e WhatsApp · demonstração'}</p></div>${icon('source')}</section>
+      <div class="callout">${icon('shield')} <strong>Você define o próximo passo.</strong> ${state.role==='team'?'Publicações e conclusões de etapas exigem revisão.':'A equipe cuida da execução; suas tarefas aparecem aqui.'}</div>
+      </div></div>`;
+    }
+    function decision() {
+      const p=proposal();
+      return `<article class="card decision priority"><div class="card-top">${badge('Preparado por agente','ai','bot')}<span class="micro">${p.due}</span></div><h3>${p.title}</h3><p class="description">${p.description}</p><div class="metadata"><span>${icon('shield')} Aguardando sua aprovação</span><span>${icon('user')} Equipe responsável</span></div><div class="card-actions"><button type="button" class="btn primary" data-action="review" ${state.sourceError?'disabled':''}>${p.label} ${icon('arrow')}</button><button type="button" class="btn link" data-action="evidence">Ver evidências</button></div>${state.sourceError?'<p class="form-error">A aprovação fica indisponível até conferir a fonte.</p>':''}</article>`;
+    }
+    function clinicTask() {
+      return `<article class="card decision"><div class="card-top">${badge(state.role==='team'?'Acompanhar com a clínica':'Sua tarefa','','user')}<span class="micro">Esta semana</span></div><h3>${state.product==='hub'?'Conferir prioridades do próximo período':'Revisar as peças da campanha'}</h3><p class="description">${state.role==='team'?'A clínica precisa revisar o material. Você pode abrir o contexto e acompanhar o retorno.':'O material está organizado. Veja o que precisa ser conferido e registre sua revisão.'}</p><div class="metadata"><span>${icon('user')} Responsável da clínica</span><span>${icon('clock')} Uma decisão por vez</span></div><div class="card-actions"><button type="button" class="btn" data-action="task">${state.role==='team'?'Ver tarefa da clínica':'Abrir minha tarefa'} ${icon('chevron')}</button>${badge('Revisão humana')}</div></article>`;
+    }
+    function runCard(run) {
+      return `<article class="run" data-run-id="${run.id}"><div class="run-head"><span class="run-icon">${icon('bot')}</span><div><h3>${esc(run.title)}</h3><p>${esc(run.detail)}</p><div class="run-state">${badge(statusLabel(run.status),run.status==='completed'?'success':run.status==='paused'?'warning':'','')}<span class="micro">Agente · IA</span></div>${state.role==='team'&&run.status!=='completed'?`<button type="button" class="btn link" data-run="${run.id}" data-action="${run.status==='paused'?'resume':'pause'}">${icon(run.status==='paused'?'play':'pause')} ${run.status==='paused'?'Retomar':'Pausar'}</button>`:''}</div></div></article>`;
+    }
+    function plan(d) {
+      const items=state.product==='hub'?[
+        ['Leitura do período','Agente de análise','Em andamento'],['Revisão das prioridades','Responsável da clínica',d.clinicTaskDone?'Concluído':'Precisa de você'],['Relatório semanal','Equipe Doctor Creator',d.approval==='approved'?'Concluído':d.approval==='pending'?'Aguardando revisão':d.approval==='changes'?'Ajuste solicitado':'Em andamento']
+      ]:[['Rastreamento e evidências','Equipe de implementação',d.approval==='approved'?'Concluído':'Aguardando revisão'],['Peças da campanha','Responsável da clínica',d.clinicTaskDone?'Concluído':'Precisa de você'],['Treino do atendimento','Equipe de relacionamento','Próxima etapa'],['Anúncios no ar','Gestor de tráfego','Depende das etapas anteriores']];
+      return `<section class="card"><div class="section-head"><h2>${state.product==='hub'?'Prioridades do período':'Próximas entregas do programa'}</h2>${badge('Responsável + próximo passo')}</div>${items.map(([title,owner,status],i)=>`<div class="list-row"><span class="numbered">${i+1}</span><div class="row-main"><h3>${title}</h3><p>${owner}</p><div class="metadata">${badge(status,status==='Concluído'?'success':'')}</div></div>${i===1&&!d.clinicTaskDone?'<button type="button" class="btn" data-action="task">Abrir tarefa</button>':''}</div>`).join('')}<div class="callout">${state.product==='sap'?'O cronograma detalhado permanece como fonte das tarefas. Esta visão destaca o responsável e o que depende de cada entrega.':'O plano reúne ações e campanhas. Cada proposta mantém seu vínculo com as evidências e com a atividade do agente.'}</div></section>`;
+    }
+    function results() {
+      const unavailable=state.sourceError;
+      return `<div class="callout" style="margin-bottom:20px">${icon('source')} <strong>${unavailable?'Fonte indisponível: resultados suspensos.':'Cenário demonstrativo · semana de 12 a 16 de outubro'}</strong> ${unavailable?'Os valores ausentes não são tratados como zero.':'Valores fictícios para avaliar a organização da tela. Não representam resultado de uma clínica.'}</div><section class="metrics-grid" aria-label="Indicadores do cenário">${[['Conversas iniciadas','120','Origem: WhatsApp'],['Agendamentos','36','Origem: CRM'],['Consultas realizadas','24','Origem: CRM']].map(([label,value,source])=>`<article class="card metric"><h2>${label}</h2><strong>${unavailable?'—':value}</strong><p>${unavailable?'Indisponível até nova leitura':source}</p></article>`).join('')}</section><section class="card"><div class="section-head"><h2>Da conversa à consulta</h2>${badge(unavailable?'Leitura pendente':'Dados simulados')}</div>${unavailable?'<p class="description">Tente novamente na mensagem de erro acima para recuperar a visualização.</p>':`<div class="bar-chart">${[['Conversas',120,100],['Agendamentos',36,30],['Consultas',24,20]].map(([name,value,width])=>`<div class="chart-row"><span>${name}</span><div class="progress"><span style="width:${width}%"></span></div><strong>${value}</strong></div>`).join('')}</div>`}<p class="description" style="margin-top:22px">Uma entrega do agente e uma melhora no resultado são coisas distintas. Esta tela mostra indicadores; a aba Atividade registra o trabalho executado.</p></section>`;
+    }
+    function activity(d) {
+      return `<div class="columns"><section class="card"><div class="section-head"><h2>Trabalho em andamento</h2>${badge('Agentes de IA','ai','bot')}</div>${d.runs.map(runCard).join('')}${d.approval==='changes'?'<div class="callout alert"><strong>Ajuste solicitado</strong><p>O agente recebeu sua orientação. Uma nova proposta exigirá outra revisão.</p></div>':''}<div class="callout" style="margin-top:15px">Pausar interrompe os próximos passos. Uma ação já concluída não é desfeita automaticamente.</div></section><section class="card"><h2 style="margin-bottom:18px">Histórico desta clínica</h2><div class="done-list">${d.events.map(event=>`<div class="done-item">${icon(event.status==='Concluído'?'check':'clock')}<div><p>${esc(event.text)}</p><small>${esc(event.detail)}</small><div style="margin-top:6px">${badge(event.status,event.status==='Concluído'?'success':'')}</div></div></div>`).join('')}</div></section></div>`;
+    }
+    function showDialog(content,kind) {
+      modalContext={key:key(),role:state.role,kind}; dialog.innerHTML=content; dialog.showModal();
+    }
+    function dialogHeader(title,label='Revisão da proposta') {
+      return `<header class="dialog-head"><div><span class="micro">${label} · ${clients[state.client].name} · ${products[state.product].name}</span><h2 id="dialog-title">${title}</h2></div><button type="button" class="icon-button" data-action="close" aria-label="Fechar painel">${icon('close')}</button></header>`;
+    }
+    function review(evidenceOnly=false) {
+      if(state.role!=='team'||data().approval!=='pending') return;
+      const p=proposal();
+      showDialog(`${dialogHeader(evidenceOnly?'Evidências da proposta':p.title)}<div class="dialog-body">${badge('Preparado por agente de IA','ai','bot')}
+      <p class="description">${evidenceOnly?'Veja as fontes antes de decidir.':'Confira o conteúdo, o destino e o efeito desta aprovação.'}</p>
+      ${!evidenceOnly?`<div><h3 style="margin-bottom:9px">O que será aprovado</h3><div class="preview-content">${p.preview}</div></div><div class="review-grid"><div class="review-box"><strong>Antes</strong><p>${p.before}</p></div><div class="review-box"><strong>Depois da aprovação</strong><p>${p.after}</p></div></div><div class="review-box"><strong>Destino</strong><p>${p.destination}</p></div>`:''}
+      <div><h3 style="margin-bottom:10px">Base da proposta</h3><ul class="evidence-list">${p.evidence.map(e=>`<li>${icon('source')}<span>${e}</span></li>`).join('')}</ul></div>
+      <div class="callout alert">${icon('shield')} <strong>Limite de autonomia:</strong> o agente prepara a proposta. Uma pessoa da equipe precisa aprovar. ${state.product==='hub'?'Um comentário publicado não pode ser desfeito automaticamente.':'Concluir a etapa não comprova, por si só, melhora nos resultados.'}</div>
+      ${!evidenceOnly?`<label class="review-check"><input id="review-check" type="checkbox" ${state.sourceError?'disabled':''}><span>Conferi o conteúdo, a clínica e o efeito desta ação.</span></label><div id="change-form" hidden><label class="field-label" for="feedback">O que o agente precisa ajustar?</label><textarea id="feedback" placeholder="Descreva o ajuste necessário…" maxlength="1000"></textarea><p id="feedback-error" class="form-error" role="alert" hidden>Descreva o ajuste antes de enviar.</p></div>`:''}
+      <p class="micro">Simulação: nenhuma mensagem, alteração de cronograma ou chamada de IA será enviada.</p></div><footer class="dialog-footer"><button type="button" class="btn link" data-action="close">Voltar</button><div class="actions">${evidenceOnly?'<button type="button" class="btn primary" data-action="review-from-evidence">Revisar proposta</button>':`<button type="button" class="btn" id="request-change" data-action="request-change">Solicitar ajuste</button><button type="button" class="btn primary" id="approve" data-action="approve" disabled>${p.execute}</button>`}</div></footer>`,evidenceOnly?'evidence':'review');
+    }
+    function task() {
+      const team=state.role==='team';
+      showDialog(`${dialogHeader(state.product==='hub'?'Revisar prioridades do período':'Revisar peças da campanha','Tarefa da clínica')}<div class="dialog-body">${badge('Responsável da clínica','','user')}<p class="description">${team?'Esta tarefa depende do retorno da clínica. A equipe acompanha o andamento.':'Confira o material preparado e registre sua revisão. Se houver alguma dúvida, informe o que precisa ser alterado.'}</p><div class="preview-content">${state.product==='hub'?'Prioridades propostas: revisar o atendimento, acompanhar agendamentos e preparar a pauta de conteúdo do próximo período.':'Material demonstrativo: seis peças de campanha e dois roteiros de vídeo organizados para revisão.'}</div><div class="review-box"><strong>Pronto quando</strong><p>${state.product==='hub'?'A clínica revisou as prioridades e registrou as observações.':'A clínica conferiu as peças e registrou o retorno à equipe.'}</p></div>${team?'<div class="callout">A clínica pode registrar a revisão na visualização “Clínica”. A equipe não conclui a tarefa em nome dela neste protótipo.</div>':`<label class="field-label" for="task-note">Observações da revisão <span class="micro">(opcional)</span><textarea id="task-note" maxlength="1000" placeholder="O que a equipe precisa saber?"></textarea></label>`}<p class="micro">O registro acontece somente nesta demonstração.</p></div><footer class="dialog-footer"><button type="button" class="btn" data-action="close">Voltar</button>${!team?'<button type="button" class="btn primary" data-action="complete-task">Registrar minha revisão</button>':''}</footer>`,'task');
+    }
+    function ask() {
+      if(state.role!=='team') return;
+      showDialog(`${dialogHeader('Que análise você precisa?','Orientar o agente')}<div class="dialog-body"><p class="description">O agente preparará uma análise para ${clients[state.client].name}. Publicar mensagens ou alterar etapas continuará exigindo aprovação.</p><label class="field-label" for="request">Objetivo da análise<textarea id="request" maxlength="1000" placeholder="Ex.: analisar os pontos de perda no atendimento desta semana"></textarea></label><p id="request-error" class="form-error" role="alert" hidden>Descreva o objetivo da análise.</p><div class="review-box"><strong>Escopo desta solicitação</strong><p>Somente a clínica selecionada · ${products[state.product].name} · leitura e preparação de proposta.</p></div><p class="micro">Simulação com dados demonstrativos. Nenhuma chamada de IA ou custo real.</p></div><footer class="dialog-footer"><button type="button" class="btn" data-action="close">Cancelar</button><button type="button" class="btn primary" data-action="start-analysis">Preparar análise ${icon('arrow')}</button></footer>`,'ask');
+    }
+    function validContext(kind,role='team') {
+      return modalContext?.key===key() && modalContext.role===state.role && (!role||state.role===role) && modalContext.kind===kind;
+    }
+    function approve() {
+      if(!validContext('review')||state.sourceError||data().approval!=='pending'||!document.getElementById('review-check')?.checked) return;
+      const d=data(), context=key(), p=proposal();
+      d.approval='executing';
+      d.runs.push({id:'approval',title:p.result,detail:'Executando apenas o cenário demonstrativo aprovado.',status:'running',source:'Proposta revisada'});
+      d.events.unshift({text:'Proposta aprovada pela equipe',detail:'Conteúdo, destino e efeito revisados · simulação',status:'Em andamento'});
+      closeDialog(); render(); document.getElementById('page-title').focus(); announce('Aprovação registrada. A simulação está em andamento.');
+      schedule(()=>{
+        const run=d.runs.find(r=>r.id==='approval');
+        if(!run||run.status!=='running') return;
+        completeApproval(d,run,p.result,context);
+      },1300);
+    }
+    function completeApproval(d,run,title,context) {
+      run.status='completed'; run.detail='Simulação concluída. Nenhuma ação foi enviada à operação.'; d.approval='approved';
+      d.completed.unshift(title); d.events.unshift({text:title,detail:'Após aprovação humana · nenhuma escrita externa',status:'Concluído'});
+      if(key()===context) {render();announce('Simulação concluída. O registro está no histórico desta clínica.');}
+    }
+    function requestChange() {
+      if(!validContext('review')||data().approval!=='pending') return;
+      const form=document.getElementById('change-form');
+      if(form.hidden) {form.hidden=false;document.getElementById('request-change').textContent='Enviar solicitação';document.getElementById('approve').hidden=true;document.getElementById('feedback').focus();return;}
+      const feedback=document.getElementById('feedback').value.trim();
+      if(!feedback) {document.getElementById('feedback-error').hidden=false;document.getElementById('feedback').focus();return;}
+      const d=data();d.approval='changes';d.feedback=feedback;d.events.unshift({text:'Ajuste solicitado à proposta',detail:feedback,status:'Aguardando ajuste'});
+      closeDialog();render();document.getElementById('page-title').focus();announce('Ajuste solicitado. A proposta não foi aprovada nem executada.');
+    }
+    function controlRun(id,action) {
+      if(state.role!=='team') return;
+      const d=data(),run=d.runs.find(r=>r.id===id);
+      if(!run||run.status==='completed') return;
+      run.status=action==='pause'?'paused':'running';
+      d.events.unshift({text:`${action==='pause'?'Pausa':'Retomada'}: ${run.title}`,detail:'Decisão da equipe · próximos passos controlados',status:action==='pause'?'Pausado':'Em andamento'});
+      if(action==='resume'&&id==='approval') {const context=key(),p=proposal();schedule(()=>{if(run.status==='running') completeApproval(d,run,p.result,context);},1300);}
+      render();document.querySelector(`[data-run="${id}"]`)?.focus();announce(action==='pause'?'Próximos passos pausados.':'Execução retomada no cenário demonstrativo.');
+    }
+    document.addEventListener('click',event=>{
+      const b=event.target.closest('button'); if(!b||b.disabled)return;
+      if(b.dataset.page) {navigate(b.dataset.page);return;}
+      if(b.dataset.product) {closeDialog();state.product=b.dataset.product;state.page='today';render();document.querySelector(`[data-product="${state.product}"]`).focus();return;}
+      const action=b.dataset.action;
+      if(action==='close')closeDialog();
+      if(action==='review')review();
+      if(action==='evidence')review(true);
+      if(action==='review-from-evidence'){closeDialog();review();}
+      if(action==='task')task();
+      if(action==='approve')approve();
+      if(action==='request-change')requestChange();
+      if(action==='ask')ask();
+      if(action==='theme'){state.theme=state.theme==='light'?'dark':'light';render();document.querySelector('[data-action="theme"]').focus();}
+      if(action==='retry'){state.sourceError=false;render();announce('Leitura recuperada no cenário demonstrativo.');}
+      if(action==='pause'||action==='resume')controlRun(b.dataset.run,action);
+      if(action==='complete-task'&&validContext('task','clinic')&&!data().clinicTaskDone){const d=data(),note=document.getElementById('task-note').value.trim();d.clinicTaskDone=true;d.completed.unshift('Revisão registrada pela clínica');d.events.unshift({text:'Revisão registrada pela clínica',detail:note||'Sem observações adicionais',status:'Concluído'});closeDialog();render();document.getElementById('page-title').focus();announce('Sua revisão foi registrada nesta demonstração.');}
+      if(action==='start-analysis'&&validContext('ask')){const request=document.getElementById('request').value.trim();if(!request){document.getElementById('request-error').hidden=false;document.getElementById('request').focus();return;}const d=data();d.runs.push({id:`request-${d.runs.length}`,title:'Análise solicitada por você',detail:request,status:'running',source:'Dados da clínica selecionada'});d.events.unshift({text:'Nova análise solicitada',detail:request,status:'Em andamento'});closeDialog();state.page='activity';render();document.getElementById('page-title').focus();announce('Análise adicionada à atividade desta clínica. Nenhuma IA real foi acionada.');}
+      if(action==='reset'){timers.forEach(clearTimeout);timers.clear();closeDialog();store={};state={...state,page:'today',sourceError:false};render();announce('Demonstração reiniciada. Todos os exemplos voltaram ao estado inicial.');}
+    });
+    document.addEventListener('change',event=>{
+      const target=event.target;
+      if(target.id==='client'&&state.role==='team'&&clients[target.value]){closeDialog();state.client=target.value;state.page='today';render();document.getElementById('client').focus();}
+      if(target.id==='role'){closeDialog();state.role=target.value==='clinic'?'clinic':'team';state.page='today';render();document.getElementById('role').focus();}
+      if(target.id==='source-error'){state.sourceError=target.checked;render();document.getElementById('source-error').focus();}
+      if(target.id==='review-check'){document.getElementById('approve').disabled=!target.checked||state.sourceError;}
+    });
+    dialog.addEventListener('close',()=>{if(!dialog.open) modalContext=null;});
+    render();
+  </script>
+</body>
+</html>
