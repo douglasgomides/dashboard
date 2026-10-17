@@ -1,4 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
 import { getRouteApi } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveDateRange } from "@/lib/date-range";
@@ -88,6 +90,7 @@ export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; on
           IA leu {a.lidas} de {a.conversas_periodo} conversas{a.nota_media != null ? ` · nota média do atendimento ${String(a.nota_media).replace(".", ",")}/10` : ""}
         </span>
       </div>
+      <EmJogo clientId={clientId} de={start} ate={end.slice(0, 10)} />
       {precoNaoDado > 0 && (
         <p className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--warn-border, var(--warn))", background: "var(--warn-bg, var(--surface))" }}>
           <b>{precoNaoDado}</b> pacientes pediram preço e não receberam. É o ponto do funil que mais costuma derrubar a conversão.
@@ -177,5 +180,70 @@ export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; on
         </p>
       )}
     </section>
+  );
+}
+
+// "R$ em jogo": recuperáveis do período × ticket da clínica (RPC receita_em_jogo). Potencial, não previsão.
+type EmJogoDados = { recuperaveis: number; ticket: number | null; fonte_ticket: "equipe" | "crm" | "sap" | null; vendas_crm: number; valor: number | null };
+const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const FONTE_TICKET = { equipe: "definido pela equipe", crm: "mediana das vendas do CRM", sap: "ficha do SAP" } as const;
+
+function EmJogo({ clientId, de, ate }: { clientId: string; de: string; ate: string }) {
+  const { isAdmin } = useAuth();
+  const qc = useQueryClient();
+  const [editando, setEditando] = useState(false);
+  const [valor, setValor] = useState("");
+  const q = useQuery({
+    queryKey: ["receita-em-jogo", clientId, de, ate],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("receita_em_jogo", { p_client: clientId, p_de: de, p_ate: ate });
+      if (error) return null;
+      return (data ?? null) as EmJogoDados | null;
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const salvar = useMutation({
+    mutationFn: async (v: number | null) => {
+      const { error } = await (supabase as any).rpc("definir_ticket_cliente", { p_client: clientId, p_valor: v });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => { setEditando(false); qc.invalidateQueries({ queryKey: ["receita-em-jogo", clientId] }); },
+  });
+  const d = q.data;
+  if (!d || d.recuperaveis === 0) return null;
+  const caixa = { borderColor: "var(--border)", background: "var(--surface)" };
+  const numero = Number(valor.replace(/\./g, "").replace(",", "."));
+  return (
+    <div className="rounded-xl border p-3" style={caixa}>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-dim)" }}>Em jogo no período</span>
+        {d.valor != null ? (
+          <span className="text-2xl font-semibold">{brl(d.valor)}</span>
+        ) : (
+          <span className="text-sm">{d.recuperaveis} pacientes recuperáveis · falta o ticket para calcular o valor</span>
+        )}
+      </div>
+      <p className="mt-1 text-sm" style={{ color: "var(--ink-2)" }}>
+        {d.recuperaveis} {d.recuperaveis === 1 ? "paciente mostrou" : "pacientes mostraram"} interesse real e não agendaram
+        {d.ticket != null && d.fonte_ticket ? <> · ticket {brl(d.ticket)} ({FONTE_TICKET[d.fonte_ticket]}{d.fonte_ticket === "crm" ? `, ${d.vendas_crm} vendas` : ""})</> : null}.
+        {" "}É o potencial se todos agendarem, não uma previsão. A lista está em "Resgatar hoje".
+      </p>
+      {isAdmin && (editando ? (
+        <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (numero > 0) salvar.mutate(numero); }}>
+          <label className="text-sm">Ticket médio (R$){" "}
+            <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} className="ml-1 min-h-[34px] w-32 rounded-lg border px-2 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg)" }} />
+          </label>
+          <button type="submit" disabled={!(numero > 0) || salvar.isPending} className="min-h-[34px] rounded-lg px-3 text-sm font-medium disabled:opacity-50" style={{ background: "var(--accent)", color: "var(--accent-ink)" }}>Salvar</button>
+          {d.fonte_ticket === "equipe" && <button type="button" className="text-xs underline" onClick={() => salvar.mutate(null)}>Voltar ao automático</button>}
+          <button type="button" className="text-xs underline" onClick={() => setEditando(false)}>Cancelar</button>
+          {salvar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</span>}
+        </form>
+      ) : (
+        <button type="button" className="mt-1 text-xs underline" style={{ color: "var(--text-dim)" }} onClick={() => { setValor(d.ticket ? String(d.ticket) : ""); setEditando(true); }}>
+          {d.ticket == null ? "Definir ticket médio" : "Ajustar ticket"}
+        </button>
+      ))}
+    </div>
   );
 }
