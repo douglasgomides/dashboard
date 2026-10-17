@@ -240,7 +240,8 @@ function Durante({ clinica, s, reg, inicio, fim, clientId, salvarTexto, marcar }
   const pos = inicio ? blocoNoTempo(s, decorrido) : null;
   const total = duracaoPlanejada(s);
   const [aberto, setAberto] = useState<number>(1);
-  useEffect(() => { if (pos && !fim) setAberto(pos.n); }, [pos?.n, fim]); // eslint-disable-line react-hooks/exhaustive-deps
+  const blocoAtual = pos?.n;
+  useEffect(() => { if (blocoAtual !== undefined && !fim) setAberto(blocoAtual); }, [blocoAtual, fim]);
 
   const encerrar = useMutation({
     mutationFn: async () => {

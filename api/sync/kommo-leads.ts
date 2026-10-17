@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
@@ -33,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!SYNC_SECRET || !KOMMO_API_TOKEN || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  if (!SYNC_SECRET || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     res.status(500).json({
       error: "Servidor sem SYNC_SECRET/KOMMO_API_TOKEN/SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY configurados",
     });
@@ -77,8 +77,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           resultados.push({ connectionId: conn.id, errors: ["sem subdomínio configurado"] });
           continue;
         }
+        if (!conn.access_token && !KOMMO_API_TOKEN) {
+          resultados.push({ connectionId: conn.id, errors: ["Conexão sem token Kommo"] });
+          continue;
+        }
         const r = await runKommoReconcile({
-          accessToken: conn.access_token || KOMMO_API_TOKEN,
+          accessToken: conn.access_token || KOMMO_API_TOKEN!,
           kommoDomain: conn.subdomain.includes(".") ? conn.subdomain : `${conn.subdomain}.kommo.com`,
           supabaseUrl: SUPABASE_URL,
           supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
@@ -107,9 +111,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         results.push({ connectionId: conn.id, errors: ["sem subdomínio configurado, não dá pra montar a URL da API"] });
         continue;
       }
+      if (!conn.access_token && !KOMMO_API_TOKEN) {
+        results.push({ connectionId: conn.id, errors: ["Conexão sem token Kommo"] });
+        continue;
+      }
       const result = await runKommoLeadsSync({
-        accessToken: conn.access_token || KOMMO_API_TOKEN,
-        kommoDomain: `${conn.subdomain}.kommo.com`,
+        accessToken: conn.access_token || KOMMO_API_TOKEN!,
+        kommoDomain: conn.subdomain,
         supabaseUrl: SUPABASE_URL,
         supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
         crmConnectionId: conn.id,

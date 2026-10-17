@@ -11,11 +11,13 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    "incremental": true,
+    "tsBuildInfoFile": "./node_modules/.cache/typecheck.tsbuildinfo",
     "types": ["vite/client", "node"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
     }
   },
-  "include": ["src", "scripts", "api"]
+  "include": ["src", "scripts", "api", "tests", "*.config.ts"]
 }

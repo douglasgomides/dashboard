@@ -29,6 +29,10 @@ create policy "read own or admin reads all pipeline statuses" on public.crm_pipe
     )
   );
 
+-- Cadastro inicial só se a conexão piloto já existir neste ambiente.
+do $$
+begin
+  if exists (select 1 from public.crm_connections where id = '26c4f791-dcb7-403e-b8f3-a471c822761b') then
 insert into public.crm_pipeline_statuses (crm_connection_id, pipeline_id, pipeline_name, status_id, status_name) values
 ('26c4f791-dcb7-403e-b8f3-a471c822761b','12452668','Comercial 1 - Dra Lana Torres','96193916','Incoming leads'),
 ('26c4f791-dcb7-403e-b8f3-a471c822761b','12452668','Comercial 1 - Dra Lana Torres','96193920','Em Qualificação'),
@@ -87,3 +91,6 @@ insert into public.crm_pipeline_statuses (crm_connection_id, pipeline_id, pipeli
 ('26c4f791-dcb7-403e-b8f3-a471c822761b','13365383','Leads Excluídos','103086455','Leads à Excluir'),
 ('26c4f791-dcb7-403e-b8f3-a471c822761b','13365383','Leads Excluídos','142','Venda ganha'),
 ('26c4f791-dcb7-403e-b8f3-a471c822761b','13365383','Leads Excluídos','143','Venda perdida');
+
+  end if;
+end $$;

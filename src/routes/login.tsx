@@ -4,6 +4,7 @@ import { BarChart3, Eye, EyeOff, Target, Wallet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { sendPasswordReset } from "@/lib/admin-data";
 import { ehEnderecoSap } from "@/lib/marca";
+import { safeLoginRedirect } from "@/lib/auth-session";
 
 // Entrada do Doctor Creator Hub: apresentação curta (o que é) + login. É a página inicial de quem não está
 // logado. No endereço sap.* o texto fala do Sistema de Aquisição. As regras de acesso não mudam: só entra
@@ -33,6 +34,7 @@ function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   async function handleForgotPassword() {
     if (!email.trim()) {
@@ -40,26 +42,39 @@ function LoginPage() {
       return;
     }
     setError(null);
-    await sendPasswordReset(email).catch((err) => setError((err as Error).message));
-    setResetSent(true);
+    setResetSent(false);
+    setResetLoading(true);
+    try {
+      await sendPasswordReset(email.trim());
+      setResetSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível enviar o link. Tente novamente.");
+    } finally {
+      setResetLoading(false);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    setLoading(false);
-    if (error) {
-      setError(MENSAGEM_ERRO[error.message] ?? error.message);
-      return;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) {
+        setError(MENSAGEM_ERRO[error.message] ?? error.message);
+        return;
+      }
+      const destino = safeLoginRedirect(voltarPara, window.location.origin);
+      if (destino) {
+        window.location.assign(destino);
+        return;
+      }
+      await navigate({ to: "/" });
+    } catch {
+      setError("Não foi possível entrar. Verifique sua conexão e tente novamente.");
+    } finally {
+      setLoading(false);
     }
-    // Volta para onde a pessoa estava (só caminhos internos); senão, a página inicial decide.
-    if (voltarPara && voltarPara.startsWith("/") && !voltarPara.startsWith("//") && !voltarPara.startsWith("/login")) {
-      window.location.assign(voltarPara);
-      return;
-    }
-    navigate({ to: "/" });
   }
 
   const itens = sap
@@ -102,7 +117,7 @@ function LoginPage() {
             ))}
           </ul>
         </div>
-        <p className="mt-8 hidden text-xs sm:block" style={{ color: "#64748B" }}>
+        <p className="mt-8 hidden text-xs sm:block" style={{ color: "#94A3B8" }}>
           Acesso por convite da equipe Doctor Creator. Os dados de cada clínica só aparecem para quem foi convidado por ela.
         </p>
       </section>
@@ -166,8 +181,8 @@ function LoginPage() {
             {loading ? "Entrando…" : "Entrar"}
           </button>
 
-          <button type="button" onClick={handleForgotPassword} className="mt-3 min-h-[40px] w-full text-center text-sm" style={{ color: "var(--text-dim)" }}>
-            {resetSent ? "Link enviado: confira seu e-mail" : "Esqueci minha senha"}
+          <button type="button" onClick={handleForgotPassword} disabled={resetLoading || loading} className="mt-3 min-h-[40px] w-full text-center text-sm disabled:opacity-60" style={{ color: "var(--text-dim)" }}>
+            {resetLoading ? "Enviando link…" : resetSent ? "Link enviado: confira seu e-mail" : "Esqueci minha senha"}
           </button>
 
           <p className="mt-8 text-center text-xs" style={{ color: "var(--muted)" }}>

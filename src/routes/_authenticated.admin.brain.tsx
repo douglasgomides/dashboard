@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, History, Loader2, Pencil, Plus, Sparkles, X } from "lucide-react";
 import { FONTES, MEMORIAS, NOME_MEMORIA, paraChave, textoSemDadoPessoal, type Memoria } from "@/lib/brand-brain";
 import { decidirItem, escreverItem, getClinicasBrain, getItensBrain, getUltimaLeitura, organizar, pedirPropostas, restaurarItem, type ItemBrain } from "@/lib/brain-data";
@@ -26,37 +26,58 @@ function BrandBrain() {
   const { c } = Route.useSearch();
   const navigate = Route.useNavigate();
   const clinicas = useQuery({ queryKey: ["brain-clinicas"], queryFn: getClinicasBrain });
-  const clientId = c ?? clinicas.data?.[0]?.client_id;
+  const clientId = clinicas.data?.find((x) => x.client_id === c)?.client_id ?? clinicas.data?.[0]?.client_id;
   const itens = useQuery({ queryKey: ["brain-itens", clientId], queryFn: () => getItensBrain(clientId!), enabled: !!clientId });
-  const leitura = useQuery({ queryKey: ["brain-leitura", clientId], queryFn: () => getUltimaLeitura(clientId!), enabled: !!clientId });
-  const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
+  // Falha desta informação auxiliar oferece retry manual. Não combine as
+  // tentativas automáticas do SDK com as do Query e dezenas de segundos de espera.
+  const leitura = useQuery({ queryKey: ["brain-leitura", clientId], queryFn: () => getUltimaLeitura(clientId!), enabled: !!clientId, retry: false });
+  const [aviso, setAviso] = useState<{ clientId: string; tipo: "ok" | "erro"; texto: string } | null>(null);
+  const clientAtual = useRef(clientId);
+  clientAtual.current = clientId;
+  const tentou = useRef(new Set<string>());
+  const emAndamento = useRef(new Set<string>());
+  const lendo = useIsMutating({ mutationKey: ["brain-pedir", clientId], exact: true }) > 0;
+  const aprovando = useIsMutating({ mutationKey: ["brain-aprovar", clientId], exact: true }) > 0;
   useEffect(() => setAviso(null), [clientId]);
-  const recarregar = () => { qc.invalidateQueries({ queryKey: ["brain-itens", clientId] }); qc.invalidateQueries({ queryKey: ["brain-leitura", clientId] }); };
+  const recarregar = (id = clientId) => { qc.invalidateQueries({ queryKey: ["brain-itens", id] }); qc.invalidateQueries({ queryKey: ["brain-leitura", id] }); };
 
   const pedir = useMutation({
-    mutationFn: () => pedirPropostas(clientId!),
-    onSuccess: (r) => {
+    mutationKey: ["brain-pedir", clientId],
+    mutationFn: (id: string) => pedirPropostas(id),
+    onSuccess: (r, id) => {
       const e = r.execucoes?.[0];
-      if (e?.estado === "falhou") setAviso({ tipo: "erro", texto: `Não deu certo: ${e.erro ?? "erro"}` });
-      else if (e?.estado === "concluida") setAviso({ tipo: "ok", texto: "Pronto. O que for novo está em \"Para revisar\"." });
-      else setAviso({ tipo: "ok", texto: "A leitura ainda está rodando. Atualize a tela em instantes." });
-      recarregar();
+      if (clientAtual.current === id) {
+        if (e?.estado === "falhou") setAviso({ clientId: id, tipo: "erro", texto: `Não deu certo: ${e.erro ?? "erro"}` });
+        else if (e?.estado === "concluida") setAviso({ clientId: id, tipo: "ok", texto: "Pronto. O que for novo está em \"Para revisar\"." });
+        else setAviso({ clientId: id, tipo: "ok", texto: "A leitura ainda está rodando. Atualize a tela em instantes." });
+      }
+      recarregar(id);
     },
-    onError: (e: Error) => setAviso({ tipo: "erro", texto: /ja existe|duplicate/.test(e.message) ? "Já existe uma leitura em andamento para esta clínica. Atualize a tela em instantes." : e.message }),
+    onError: (e: Error, id) => {
+      if (clientAtual.current === id) setAviso({ clientId: id, tipo: "erro", texto: /ja existe|duplicate/.test(e.message) ? "Já existe uma leitura em andamento para esta clínica. Atualize a tela em instantes." : e.message });
+    },
+    onSettled: (_data, _error, id) => { emAndamento.current.delete(id); },
   });
+  const { mutate: pedirLeitura } = pedir;
+  const iniciarLeitura = useCallback((id: string) => {
+    if (emAndamento.current.has(id)) return;
+    // Synchronous guards also cover StrictMode effects and manual clicks before
+    // React has rendered the mutation's pending state.
+    tentou.current.add(id);
+    emAndamento.current.add(id);
+    pedirLeitura(id);
+  }, [pedirLeitura]);
 
   // Atualiza sozinho ao abrir a clínica quando a última leitura tem mais de 12 h (ou nunca houve). Uma tentativa por
   // clínica a cada abertura da tela; se a última falhou há menos de 12 h, espera o botão para não repetir o erro.
-  const [tentou, setTentou] = useState<Set<string>>(new Set());
   useEffect(() => {
-    if (!clientId || leitura.isLoading || leitura.isError || pedir.isPending || tentou.has(clientId)) return;
+    if (!clientId || !leitura.isSuccess || leitura.isFetching || lendo || tentou.current.has(clientId)) return;
     const l = leitura.data;
     const velha = !l || Date.now() - new Date(l.quando).getTime() > 12 * 3_600_000;
     if (!velha || (l && !["concluida", "falhou", "cancelada"].includes(l.estado))) return;
-    setTentou((s) => new Set(s).add(clientId));
-    setAviso({ tipo: "ok", texto: l ? "A última leitura tem mais de 12 horas: atualizando agora." : "Primeira leitura desta clínica: lendo as fontes agora." });
-    pedir.mutate();
-  }, [clientId, leitura.isLoading, leitura.isError, leitura.data, pedir, tentou]);
+    setAviso({ clientId, tipo: "ok", texto: l ? "A última leitura tem mais de 12 horas: atualizando agora." : "Primeira leitura desta clínica: lendo as fontes agora." });
+    iniciarLeitura(clientId);
+  }, [clientId, leitura.isSuccess, leitura.isFetching, leitura.data, lendo, iniciarLeitura]);
 
   const grupos = useMemo(() => organizar(itens.data ?? []), [itens.data]);
   const propostas = grupos.flatMap((g) => g.propostas.map((p) => ({ p, atual: g.aprovado })));
@@ -64,9 +85,16 @@ function BrandBrain() {
   // disputa a mesma chave com outra) fica de fora: essa continua item a item, para ninguém sobrescrever sem ver.
   const novas = propostas.filter(({ p, atual }) => !atual && propostas.filter((x) => x.p.memoria === p.memoria && x.p.chave === p.chave).length === 1);
   const aprovarNovas = useMutation({
-    mutationFn: async () => { for (const { p } of novas) await decidirItem(p.id, "aprovar"); return novas.length; },
-    onSuccess: (n) => { setAviso({ tipo: "ok", texto: `${n} item(ns) aprovado(s).` }); recarregar(); },
-    onError: (e: Error) => { setAviso({ tipo: "erro", texto: e.message }); recarregar(); },
+    mutationKey: ["brain-aprovar", clientId],
+    mutationFn: async ({ propostas }: { clientId: string; propostas: ItemBrain[] }) => { for (const p of propostas) await decidirItem(p.id, "aprovar"); return propostas.length; },
+    onSuccess: (n, { clientId: id }) => {
+      if (clientAtual.current === id) setAviso({ clientId: id, tipo: "ok", texto: `${n} item(ns) aprovado(s).` });
+      recarregar(id);
+    },
+    onError: (e: Error, { clientId: id }) => {
+      if (clientAtual.current === id) setAviso({ clientId: id, tipo: "erro", texto: e.message });
+      recarregar(id);
+    },
   });
 
   if (clinicas.isLoading) return <p className="note">Carregando…</p>;
@@ -86,21 +114,22 @@ function BrandBrain() {
         <p className="max-w-3xl text-sm" style={dim}>
           A memória de marca da clínica, usada por quem cria conteúdo, anúncio e atendimento. Em "Atualizar sugestões", a IA lê o que já
           existe no Hub (Instagram, conversas, ficha e sessões do SAP, banco de anúncios) e sugere. Nada vale até alguém aprovar aqui.
-          Não entra nome, telefone nem caso de paciente: só padrões. Tudo se resolve nesta tela.
+          As sugestões devem registrar apenas padrões. Antes de aprovar, revise o texto e retire nomes, contatos ou detalhes que possam identificar pacientes.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-sm">Clínica{" "}
             <select value={clientId ?? ""} onChange={(e) => navigate({ search: { c: e.target.value } })}
+              disabled={lendo || aprovando}
               className="ml-1 min-h-[38px] rounded-lg border px-2 text-sm" style={campo}>
               {clinicas.data.map((x) => <option key={x.client_id} value={x.client_id}>{x.nome}{x.status === "beta" ? " (beta)" : ""}</option>)}
             </select>
           </label>
-          <button type="button" className={botao} style={principal} disabled={!clientId || pedir.isPending} onClick={() => { setAviso(null); pedir.mutate(); }}>
-            {pedir.isPending ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} {pedir.isPending ? "Lendo as fontes…" : "Atualizar sugestões"}
+          <button type="button" className={botao} style={principal} disabled={!clientId || lendo} onClick={() => { if (clientId) { setAviso(null); iniciarLeitura(clientId); } }}>
+            {lendo ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} {lendo ? "Lendo as fontes…" : "Atualizar sugestões"}
           </button>
-          <UltimaLeitura l={leitura.data ?? null} />
+          <UltimaLeitura l={leitura.data ?? null} carregando={leitura.isLoading} erro={leitura.isError} tentarNovamente={() => void leitura.refetch()} />
         </div>
-        {aviso && <p role="status" className="text-sm" style={{ color: aviso.tipo === "erro" ? "var(--crit)" : "var(--good)" }}>{aviso.texto}</p>}
+        {aviso && aviso.clientId === clientId && <p role="status" className="text-sm" style={{ color: aviso.tipo === "erro" ? "var(--crit)" : "var(--good)" }}>{aviso.texto}</p>}
       </header>
 
       {itens.isLoading ? <p className="note">Carregando…</p> : itens.isError ? (
@@ -111,9 +140,9 @@ function BrandBrain() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 id="revisar" className="font-medium">Para revisar {propostas.length ? `(${propostas.length})` : ""}</h2>
               {novas.length > 1 && (
-                <button type="button" className={botao} style={caixa} disabled={aprovarNovas.isPending}
-                  onClick={() => { if (window.confirm(`Aprovar ${novas.length} itens novos de uma vez? Os que trocam um texto já aprovado ficam para revisar um por um.`)) aprovarNovas.mutate(); }}>
-                  {aprovarNovas.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Aprovar os {novas.length} novos
+                <button type="button" className={botao} style={caixa} disabled={aprovando}
+                  onClick={() => { if (clientId && window.confirm(`Aprovar ${novas.length} itens novos de uma vez? Os que trocam um texto já aprovado ficam para revisar um por um.`)) aprovarNovas.mutate({ clientId, propostas: novas.map(({ p }) => p) }); }}>
+                  {aprovando ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Aprovar os {novas.length} novos
                 </button>
               )}
             </div>
@@ -135,7 +164,7 @@ function BrandBrain() {
                     {lista.map((g) => <LinhaItem key={g.chave} chave={g.chave} aprovado={g.aprovado} historico={g.historico} onFeito={recarregar} />)}
                   </ul>
                 )}
-                <NovoItem clientId={clientId!} memoria={m.id} onFeito={recarregar} />
+                <NovoItem key={`${clientId}:${m.id}`} clientId={clientId!} memoria={m.id} onFeito={recarregar} />
               </section>
             );
           })}
@@ -145,7 +174,18 @@ function BrandBrain() {
   );
 }
 
-function UltimaLeitura({ l }: { l: Awaited<ReturnType<typeof getUltimaLeitura>> }) {
+function UltimaLeitura({ l, carregando, erro, tentarNovamente }: {
+  l: Awaited<ReturnType<typeof getUltimaLeitura>>;
+  carregando: boolean;
+  erro: boolean;
+  tentarNovamente: () => void;
+}) {
+  if (carregando) return <span role="status" className="text-xs" style={dim}>Verificando a última leitura…</span>;
+  if (erro) return (
+    <span role="alert" className="text-xs" style={{ color: "var(--crit)" }}>
+      Não foi possível consultar a última leitura. <button type="button" className="underline" onClick={tentarNovamente}>Tentar novamente</button>
+    </span>
+  );
   if (!l) return <span className="text-xs" style={dim}>Ainda não houve leitura desta clínica.</span>;
   const quando = new Date(l.quando).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const n = Number((l.resultado as { propostas?: number } | null)?.propostas ?? 0);

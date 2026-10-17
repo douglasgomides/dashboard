@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { CfmScoreStatus, CrmProvider } from "@/integrations/supabase/types";
+import { avatarExtension } from "@/lib/avatar";
 
 export async function listAllClients() {
   const { data, error } = await supabase
@@ -175,17 +176,22 @@ export async function updateClientProfile(clientId: string, input: ClientProfile
   if (error) throw error;
 }
 
+export async function updateClientAvatar(clientId: string, avatarUrl: string) {
+  const { error } = await supabase.from("clients").update({ avatar_url: avatarUrl }).eq("id", clientId);
+  if (error) throw error;
+}
+
 /**
  * Sobe a foto e devolve a URL pública.
  *
  * O nome do arquivo carrega um carimbo de tempo em vez de ser fixo por
  * cliente: com nome fixo, o navegador e a CDN continuariam servindo a foto
  * antiga depois da troca, e a impressão seria de que o upload não funcionou.
- * O arquivo velho é apagado depois, para o bucket não virar depósito.
+ * A foto antiga só pode ser apagada depois de salvar a nova URL no perfil.
  */
-export async function uploadClientAvatar(clientId: string, file: File, avatarAtual?: string | null) {
-  const extensao = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-  const caminho = `${clientId}/${Date.now()}.${extensao}`;
+export async function uploadClientAvatar(clientId: string, file: File) {
+  const extensao = avatarExtension(file);
+  const caminho = `${clientId}/${crypto.randomUUID()}.${extensao}`;
 
   const { error: erroUpload } = await supabase.storage
     .from("client-avatars")
@@ -194,14 +200,16 @@ export async function uploadClientAvatar(clientId: string, file: File, avatarAtu
 
   const { data } = supabase.storage.from("client-avatars").getPublicUrl(caminho);
 
-  // Best-effort: se a limpeza falhar, sobra um arquivo órfão — não é motivo
-  // para a troca de foto falhar na cara do admin.
-  if (avatarAtual) {
-    const anterior = avatarAtual.split("/client-avatars/")[1];
-    if (anterior && anterior !== caminho) {
-      await supabase.storage.from("client-avatars").remove([anterior]).catch(() => undefined);
-    }
-  }
-
   return data.publicUrl;
+}
+
+/** Best-effort cleanup restricted to this client's own public bucket path. */
+export async function removeClientAvatar(clientId: string, avatarUrl: string | null | undefined) {
+  if (!avatarUrl) return;
+  const bucket = supabase.storage.from("client-avatars");
+  const prefix = bucket.getPublicUrl(`${clientId}/`).data.publicUrl;
+  if (!avatarUrl.startsWith(prefix)) return;
+  const filename = avatarUrl.slice(prefix.length);
+  if (!/^[\w.-]+$/.test(filename) || filename === "." || filename === "..") return;
+  await bucket.remove([`${clientId}/${filename}`]).catch(() => undefined);
 }

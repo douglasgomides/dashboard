@@ -1,5 +1,5 @@
 import { sincronizarShortio } from "../_lib/shortio-sync.js";
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";

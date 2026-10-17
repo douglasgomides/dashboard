@@ -47,6 +47,8 @@ export async function runBackfillThumbnails(env: BackfillThumbnailsEnv): Promise
       relative_url: `${p.windsor_media_id}?fields=thumbnail_url,media_url`,
     }));
     const res = await fetch(`${GRAPH_BASE}/`, {
+      signal: AbortSignal.timeout(30_000),
+      redirect: "error",
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ access_token: env.accessToken, batch: JSON.stringify(batchPayload) }),

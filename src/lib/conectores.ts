@@ -48,10 +48,14 @@ export interface RegistroSync { last_attempt_at: string | null; last_success_at:
 export function estadoDoCliente(ligado: boolean, sync: RegistroSync | null | undefined, agora = Date.now(), diasAtraso = 3): EstadoCliente {
   if (!ligado) return "nao_conectado";
   if (!sync) return "sem_registro";
-  const ok = sync.last_success_at ? new Date(sync.last_success_at).getTime() : 0;
-  const tentou = sync.last_attempt_at ? new Date(sync.last_attempt_at).getTime() : 0;
-  if (sync.last_error && tentou >= ok) return "erro";
-  if (!ok) return "sem_registro";
+  const timestamp = (iso: string | null): number | null => {
+    const value = iso ? Date.parse(iso) : NaN;
+    return Number.isFinite(value) ? value : null;
+  };
+  const ok = timestamp(sync.last_success_at);
+  const tentou = timestamp(sync.last_attempt_at);
+  if (sync.last_error?.trim() && (ok === null || tentou === null || tentou >= ok)) return "erro";
+  if (ok === null || ok > agora + 5 * 60_000) return "sem_registro";
   return agora - ok > diasAtraso * 86_400_000 ? "atrasado" : "conectado";
 }
 

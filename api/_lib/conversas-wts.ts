@@ -15,7 +15,7 @@ const BASE = "https://api.wts.chat";
 
 async function wtsGet(token: string, caminho: string): Promise<any> {
   for (let tentativa = 0; tentativa < 3; tentativa++) {
-    const r = await fetch(`${BASE}${caminho}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(25_000) });
+    const r = await fetch(`${BASE}${caminho}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(25_000), redirect: "error" });
     if (r.ok) return r.json();
     if (r.status === 429 || r.status >= 500) {
       await new Promise((ok) => setTimeout(ok, 800 * (tentativa + 1)));
@@ -112,7 +112,8 @@ export async function ingerirConversasWts(
   const ids = sessoes.map((s: any) => String(s.session_id));
   const existentes = new Map<string, string>();
   for (let i = 0; i < ids.length; i += 300) {
-    const { data: ex } = await supabase.from("conversas").select("externo_id, ultima_msg_em").eq("client_id", clientId).eq("provider", "wts").in("externo_id", ids.slice(i, i + 300));
+    const { data: ex, error } = await supabase.from("conversas").select("externo_id, ultima_msg_em").eq("client_id", clientId).eq("provider", "wts").in("externo_id", ids.slice(i, i + 300));
+    if (error) { r.erros.push(`conversas: ${error.message}`); return r; }
     for (const e of ex ?? []) existentes.set(e.externo_id, e.ultima_msg_em ?? "");
   }
   // Novas sempre; as já gravadas só se a sessão mudou depois da última mensagem conhecida.
@@ -123,6 +124,7 @@ export async function ingerirConversasWts(
   const mudaram = sessoes.filter((s: any) => {
     const ult = existentes.get(String(s.session_id));
     if (ult === undefined) return false;
+    if (!ult) return true; // conversa criada antes de uma falha na gravação das mensagens
     if (opts.refazer) return true;
     const up = s.updated_at ? new Date(s.updated_at).getTime() : 0;
     return !!ult && up > new Date(ult).getTime() + 60_000 && up >= limiteMudanca;
@@ -130,7 +132,8 @@ export async function ingerirConversasWts(
   const pendentes = [...novas, ...mudaram];
 
   // Códigos dos links rastreados deste cliente (casam com a primeira mensagem do paciente).
-  const { data: links } = await supabase.from("links_rastreados").select("id, codigo_ref, tipo, instagram_post_id, ad_campaign_id").eq("client_id", clientId);
+  const { data: links, error: erroLinks } = await supabase.from("links_rastreados").select("id, codigo_ref, tipo, instagram_post_id, ad_campaign_id").eq("client_id", clientId);
+  if (erroLinks) { r.erros.push(`links rastreados: ${erroLinks.message}`); return r; }
   const porCodigo = new Map<string, any>((links ?? []).map((l: any) => [String(l.codigo_ref).toUpperCase(), l]));
 
   const contatos = new Map<string, Contato | null>();
@@ -141,10 +144,7 @@ export async function ingerirConversasWts(
       const v: Contato = { phone: c.phoneNumber ?? null, nome: c.name ?? c.nameWhatsapp ?? null, email: c.email ?? null, instagram: typeof c.instagram === "string" ? c.instagram : null };
       contatos.set(id, v);
       return v;
-    } catch {
-      contatos.set(id, null);
-      return null;
-    }
+    } catch (e) { throw new Error(`contato WTS: ${e instanceof Error ? e.message : String(e)}`); }
   }
 
   // chave de telefone igual à do banco (DDD + 8 últimos dígitos)
@@ -158,7 +158,8 @@ export async function ingerirConversasWts(
   async function pessoaDe(c: Contato | null): Promise<string | null> {
     const k = chave(c?.phone);
     if (!c || !k) return null;
-    const { data: ex } = await supabase.from("pessoas").select("id").eq("client_id", clientId).eq("telefone_chave", k).maybeSingle();
+    const { data: ex, error: erroPessoa } = await supabase.from("pessoas").select("id").eq("client_id", clientId).eq("telefone_chave", k).maybeSingle();
+    if (erroPessoa) throw new Error(`pessoa: ${erroPessoa.message}`);
     if (ex?.id) return ex.id;
     const { data: novo, error: e } = await supabase
       .from("pessoas")
@@ -167,7 +168,8 @@ export async function ingerirConversasWts(
       .single();
     if (e) {
       const { data: de } = await supabase.from("pessoas").select("id").eq("client_id", clientId).eq("telefone_chave", k).maybeSingle();
-      return de?.id ?? null;
+      if (!de?.id) throw new Error(`pessoa: ${e.message}`);
+      return de.id;
     }
     r.pessoas++;
     return novo?.id ?? null;
@@ -176,29 +178,38 @@ export async function ingerirConversasWts(
   async function processar(s: any) {
     const sid = String(s.session_id);
     let msgs: any[] = [];
+    let leituraCompleta = false;
+    let erroLeitura = "WTS: nenhuma credencial conseguiu ler as mensagens";
     const ordem = [tokenAtivo, ...tokens.filter((t) => t !== tokenAtivo)];
     for (const tk of ordem) {
       msgs = [];
       try {
-        for (let pagina = 1; pagina <= 8; pagina++) {
-          const j = await wtsGet(tk, `/chat/v1/session/${sid}/message?PageSize=100&PageNumber=${pagina}`);
-          msgs.push(...(j.items ?? []));
-          if (!j.hasMorePages) break;
+        for (let pagina = 1; pagina <= 100; pagina++) {
+          if (Date.now() > fim) throw new Error("WTS: tempo esgotado ao ler mensagens, sessão será repetida");
+          const j = await wtsGet(tk, `/chat/v1/session/${encodeURIComponent(sid)}/message?PageSize=100&PageNumber=${pagina}`);
+          if (!Array.isArray(j?.items)) throw new Error("WTS: página de mensagens inválida");
+          msgs.push(...j.items);
+          if (!j.hasMorePages) { leituraCompleta = true; break; }
+          if (pagina === 100) throw new Error("WTS: paginação de mensagens incompleta");
         }
-      } catch {
+      } catch (e) {
+        erroLeitura = e instanceof Error ? e.message : String(e);
         msgs = [];
+        leituraCompleta = false;
       }
-      if (msgs.length > 0) {
+      if (leituraCompleta && msgs.length > 0) {
         tokenAtivo = tk;
         break;
       }
     }
+    if (!leituraCompleta) throw new Error(erroLeitura);
     if (msgs.length === 0) {
-      // Sessão sem mensagem (ou que a conta não enxerga): marca para não ser buscada de novo a cada rodada.
-      await supabase.from("conversas").upsert(
+      // Só uma resposta vazia bem-sucedida é sessão vazia. Falha de API precisa de nova tentativa.
+      const { error } = await supabase.from("conversas").upsert(
         { client_id: clientId, provider: "wts", canal: "whatsapp", externo_id: sid, iniciada_em: s.started_at, ultima_msg_em: s.updated_at ?? s.started_at },
         { onConflict: "client_id,provider,externo_id" },
       );
+      if (error) throw new Error(`conversa vazia: ${error.message}`);
       return;
     }
     msgs.sort((a, b) => String(a.timestamp ?? a.createdAt).localeCompare(String(b.timestamp ?? b.createdAt)));
@@ -227,7 +238,8 @@ export async function ingerirConversasWts(
       .upsert(
         {
           client_id: clientId, pessoa_id: pessoaId, provider: "wts", canal: "whatsapp", externo_id: sid,
-          iniciada_em: primeira.timestamp ?? primeira.createdAt, ultima_msg_em: ultima.timestamp ?? ultima.createdAt, codigo_ref: codigoAchado,
+          // O checkpoint só avança quando TODAS as mensagens tiverem sido gravadas.
+          iniciada_em: primeira.timestamp ?? primeira.createdAt, ultima_msg_em: existentes.get(sid) || null, codigo_ref: codigoAchado,
         },
         { onConflict: "client_id,provider,externo_id" },
       )
@@ -243,7 +255,7 @@ export async function ingerirConversasWts(
     const origem = acharOrigemAnuncio(entradas);
     if (origem) {
       const { error: eO } = await supabase.from("conversas_origem_anuncio").upsert({ conversa_id: conv.id, client_id: clientId, ...origem }, { onConflict: "conversa_id" });
-      if (eO) r.erros.push(`origem anúncio ${sid.slice(0, 8)}: ${eO.message}`);
+      if (eO) throw new Error(`origem anúncio ${sid.slice(0, 8)}: ${eO.message}`);
       else r.comAnuncio = (r.comAnuncio ?? 0) + 1;
     }
     // Nomes dos campos que o WTS devolve na 1ª mensagem do paciente (para saber onde mora a origem do anúncio).
@@ -271,13 +283,12 @@ export async function ingerirConversasWts(
     });
     for (let i = 0; i < linhas.length; i += 200) {
       const { error: eM } = await supabase.from("mensagens").upsert(linhas.slice(i, i + 200), { onConflict: "conversa_id,externo_id" });
-      if (eM) r.erros.push(`mensagens ${sid.slice(0, 8)}: ${eM.message}`);
+      if (eM) throw new Error(`mensagens ${sid.slice(0, 8)}: ${eM.message}`);
+      r.mensagens += linhas.slice(i, i + 200).length;
     }
-    r.mensagens += linhas.length;
-
     if (pessoaId) {
       const primeiraEntrada = msgs.find((x) => direcaoDaMensagem(x.direction) === "entrada") ?? primeira;
-      await supabase.from("toques").upsert(
+      const { error: erroToque } = await supabase.from("toques").upsert(
         {
           client_id: clientId, pessoa_id: pessoaId, tipo: "mensagem_whatsapp", origem_tipo: link?.tipo ?? null, link_id: link?.id ?? null,
           instagram_post_id: link?.instagram_post_id ?? null, ad_campaign_id: link?.ad_campaign_id ?? null,
@@ -285,7 +296,10 @@ export async function ingerirConversasWts(
         },
         { onConflict: "client_id,fonte,externo_id", ignoreDuplicates: true },
       );
+      if (erroToque) throw new Error(`toque da conversa: ${erroToque.message}`);
     }
+    const { error: erroCheckpoint } = await supabase.from("conversas").update({ ultima_msg_em: ultima.timestamp ?? ultima.createdAt }).eq("id", conv.id).eq("client_id", clientId);
+    if (erroCheckpoint) throw new Error(`checkpoint da conversa: ${erroCheckpoint.message}`);
     if (link) r.comCodigo++;
     r.sessoes++;
   }

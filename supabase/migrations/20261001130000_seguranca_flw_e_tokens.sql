@@ -1,9 +1,17 @@
 -- Parte 1 (urgente, independente do código): tabelas de importação do FlwChat
 -- estavam sem RLS e com todos os privilégios para anon. Guardam contatos de leads.
-alter table public._flw_stage enable row level security;
-alter table public._flw_steps enable row level security;
-revoke all on public._flw_stage from anon, authenticated, public;
-revoke all on public._flw_steps from anon, authenticated, public;
+-- São tabelas temporárias de uma importação manual, não estruturas do app.
+-- Endurece quando existem, sem exigir sua criação em um banco novo.
+do $$
+declare tabela text;
+begin
+  foreach tabela in array array['_flw_stage', '_flw_steps'] loop
+    if to_regclass(format('public.%I', tabela)) is not null then
+      execute format('alter table public.%I enable row level security', tabela);
+      execute format('revoke all on public.%I from anon, authenticated, public', tabela);
+    end if;
+  end loop;
+end $$;
 
 -- Parte 2 (aplicar SÓ depois que o front com colunas explícitas estiver no ar):
 -- tokens deixam de ser legíveis por membros. O service_role e as funções
