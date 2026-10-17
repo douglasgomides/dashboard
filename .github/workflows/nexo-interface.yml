@@ -24,7 +24,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run typecheck
-      - run: npx eslint src/components/product-brand.tsx src/routes/conhecer.tsx src/routes/login.tsx src/components/app-shell.tsx src/routes/_authenticated.admin.tsx src/routes/_authenticated.sap.tsx src/lib/product-copy.ts src/lib/login-destination.ts scripts/verify-nexo-interface.mjs
+      - run: npx eslint src/components/product-brand.tsx src/components/product-preview.tsx src/routes/conhecer.tsx src/routes/login.tsx src/components/app-shell.tsx src/routes/_authenticated.admin.tsx src/routes/_authenticated.sap.tsx src/lib/product-copy.ts src/lib/login-destination.ts scripts/verify-nexo-interface.mjs scripts/capture-product-previews.mjs
       - run: npx tsx scripts/test-nexo-navigation.ts
       - run: npx playwright install --with-deps chromium
       - run: node scripts/verify-nexo-interface.mjs

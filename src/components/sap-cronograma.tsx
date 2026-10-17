@@ -146,7 +146,7 @@ function BarraFases({ d0, pausas, hoje, dia, tarefas }: { d0: string; pausas: Pa
           <div className="absolute inset-y-0 w-0.5" title={`Hoje · D${dia}`} style={{ left: pct(dia), background: "var(--crit)" }} />
         </div>
         <div className="relative mt-1 h-4 text-[10px]" style={{ color: "var(--text-dim)" }}>
-          {[{ d: 0, t: "D0" }, { d: 60, t: "D60" }, { d: 62, t: "garantia" }, { d: 90, t: "D90" }].map((m) => (
+          {[{ d: 0, t: "D0" }, { d: 60, t: "D60" }, { d: 76, t: "garantia" }, { d: 90, t: "D90" }].map((m) => (
             <span key={m.t} className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: pct(m.d) }}>{m.t}</span>
           ))}
           <span className="absolute -translate-x-1/2 whitespace-nowrap font-semibold" style={{ left: pct(dia), color: "var(--crit)", top: 12 }}>hoje</span>

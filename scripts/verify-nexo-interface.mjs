@@ -102,6 +102,26 @@ try{
       await page.goto(origins.sap);await expect(page).toHaveURL(/\/conhecer$/);await expect(page.getByRole('heading',{level:1})).toContainText('Da atração à fidelização');
     }finally{await context.close();}
   });
+  await run('product screenshots load, enlarge accessibly and provide both platform logins',async()=>{
+    const {context,page}=await account();try{
+      for(const [product,origin] of Object.entries(origins))for(const width of [375,1440]){
+        await page.setViewportSize({width,height:1000});await page.goto(origin+'/conhecer');
+        const open=page.getByRole('button',{name:`Ampliar a tela do ${product==='nexo'?'Nexo':'SAP'}`,exact:true});
+        await open.scrollIntoViewIfNeeded();await expect(open.locator('img')).toHaveJSProperty('naturalWidth',1440);
+        await open.click();const dialog=page.getByRole('dialog');await expect(dialog).toBeVisible();
+        await expect(dialog.getByRole('button',{name:'Fechar prévia',exact:true})).toBeFocused();
+        await accessible(page,`${product}/image-dialog/${width}`);
+        await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();await expect(open).toBeFocused();
+        await open.click();await dialog.getByRole('button',{name:'Fechar prévia',exact:true}).click();await expect(open).toBeFocused();
+        const access=page.getByRole('navigation',{name:'Acesso às plataformas',exact:true});
+        await expect(access.getByRole('link')).toHaveCount(2);
+        await expect(access.getByRole('link',{name:/Acessar Nexo/})).toHaveAttribute('href','https://nexo.doctorcreator.com.br/login');
+        await expect(access.getByRole('link',{name:/Acessar SAP/})).toHaveAttribute('href','https://sap.doctorcreator.com.br/login');
+        await page.getByRole('navigation',{name:'Navegação pública',exact:true}).getByRole('link',{name:`Acessar ${product==='nexo'?'Nexo':'SAP'}`,exact:true}).click();
+        await expect(page.locator('.nx-login-form')).toBeVisible();await expect(page).toHaveURL(origin+'/login');
+      }
+    }finally{await context.close();}
+  });
   await run('password visibility and invalid credentials remain usable',async()=>{
     const {context,page}=await account('anonymous',{tokenFailure:true});try{
       await page.goto(base+'/login');await page.getByLabel('E-mail',{exact:true}).fill('qa@example.test');await page.getByLabel('Senha',{exact:true}).fill('incorrect-password');
