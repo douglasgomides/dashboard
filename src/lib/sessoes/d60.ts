@@ -125,11 +125,11 @@ export const SESSAO_D60: DefSessao = {
       passos: [
         "Mostrar o Score de Execução do D60 (11.04) e o resumo por item: Presença, Prazos, Treino, Gravação, Registro, Uso, Verba, com a evidência de cada um.",
         "Para cada item Parcial ou Não cumprido: o que falta, quem faz, até quando. Vira ajuste do bloco 5 ou pendência do Playbook.",
-        "Abaixo de 80%: a escalada ao Condutor já foi feita na preparação; seguir a forma de apresentar que ele decidiu. Lembrar só a regra assinada: a garantia pede Score de 80% ou mais no D90 (01.02, seção 1.1).",
+        "Abaixo de 80%: a escalada ao Fundador já foi feita na preparação; seguir a forma de apresentar que ele decidiu. Lembrar só a regra assinada: a garantia pede Score de 80% ou mais no D90 (01.02, seção 1.1).",
       ],
       registrar: [
         { chave: "score_execucao", rotulo: "Score de Execução no D60 (11.04) e itens Parcial ou Não cumprido" },
-        { chave: "escala_fundador", rotulo: "Escalado ao Condutor? (Sim/Não, data e decisão)" },
+        { chave: "escala_fundador", rotulo: "Escalado ao Fundador? (Sim/Não, data e decisão)" },
       ],
     },
     {
