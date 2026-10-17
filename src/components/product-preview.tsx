@@ -4,8 +4,8 @@ import { ArrowUpRight, X } from "lucide-react";
 const PREVIEWS = {
   nexo: {
     name: "Nexo",
-    title: "Conhecimento da clínica, pronto para revisar.",
-    description: "Na visão da equipe, o Brand Brain reúne propostas dos agentes para orientar conteúdo, anúncios e atendimento. Cada sugestão pode ser revisada antes de fazer parte da memória da clínica.",
+    title: "Conhecimento que dá contexto às decisões.",
+    description: "O Brand Brain transforma fontes da clínica em propostas de conhecimento para a equipe revisar. Posicionamento, público e aprendizados organizados para orientar conteúdo, anúncios e atendimento.",
     alt: "Tela do Brand Brain no Nexo: sugestões para revisar, fontes e memória de identidade da clínica.",
   },
   sap: {
