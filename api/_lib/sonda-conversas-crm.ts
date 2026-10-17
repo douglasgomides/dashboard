@@ -10,10 +10,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Forma de um JSON: tipos no lugar dos valores, até 4 níveis, 1º item de cada lista. */
-export function forma(v: unknown, d = 0): unknown {
+export function forma(v: unknown, d = 0, max = 4): unknown {
   if (v == null) return null;
-  if (Array.isArray(v)) return v.length ? [forma(v[0], d + 1)] : [];
-  if (typeof v === "object") return d > 4 ? "{…}" : Object.fromEntries(Object.keys(v as object).slice(0, 60).map((k) => [k, forma((v as Record<string, unknown>)[k], d + 1)]));
+  if (Array.isArray(v)) return v.length ? [forma(v[0], d + 1, max)] : [];
+  if (typeof v === "object") return d > max ? "{…}" : Object.fromEntries(Object.keys(v as object).slice(0, 60).map((k) => [k, forma((v as Record<string, unknown>)[k], d + 1, max)]));
   return typeof v;
 }
 
@@ -51,7 +51,7 @@ export async function sondarConversasCrm(admin: SupabaseClient<any, any, any>): 
     if (c.provider === "clint") {
       const cab = { "api-token": c.access_token };
       const base = "https://api.clint.digital";
-      for (const p of ["/v2/chats?limit=2", "/v2/chats?page=1&limit=2", "/v1/chats?limit=2"]) {
+      for (const p of ["/v2/chats?limit=2", "/v2/messages/chats?limit=2", "/v2/chat?limit=2", "/v2/conversations?limit=2", "/v2/messages?limit=2", "/v2/channels?limit=2", "/v2/channel-accounts?limit=2", "/v2/contacts?limit=1"]) {
         const t = await tentar(`${base}${p}`, cab);
         r[`GET ${p.split("?")[0]}`] = { status: t.status, forma: t.forma };
         const lista = primeiraLista(t.json);
@@ -63,20 +63,20 @@ export async function sondarConversasCrm(admin: SupabaseClient<any, any, any>): 
         }
       }
     } else {
-      const dom = c.config?.api_domain && typeof c.config.api_domain === "string" ? c.config.api_domain
-        : (c.subdomain ?? "").includes(".") ? c.subdomain : `${c.subdomain}.kommo.com`;
+      const dom = (c.subdomain ?? "").includes(".") ? c.subdomain : `${c.subdomain}.kommo.com`;
       const base = `https://${dom}`;
       const cab = { Authorization: `Bearer ${c.access_token}` };
       const talks = await tentar(`${base}/api/v4/talks?limit=2`, cab);
       r["GET /api/v4/talks"] = { status: talks.status, forma: talks.forma };
       for (const tipo of ["incoming_chat_message", "outgoing_chat_message"]) {
         const ev = await tentar(`${base}/api/v4/events?limit=2&filter[type]=${tipo}`, cab);
-        r[`GET /api/v4/events (${tipo})`] = { status: ev.status, forma: ev.forma };
+        const e0 = primeiraLista(ev.json)[0];
+        r[`GET /api/v4/events (${tipo})`] = { status: ev.status, value_after: e0 ? forma(e0.value_after, 0, 8) : null, total_na_pagina: primeiraLista(ev.json).length };
       }
       const contato = primeiraLista(talks.json)[0]?.contact_id;
       if (contato) {
         const ch = await tentar(`${base}/api/v4/contacts/chats?contact_id=${contato}`, cab);
-        r["GET /api/v4/contacts/chats"] = { status: ch.status, forma: ch.forma };
+        r["GET /api/v4/contacts/chats"] = { status: ch.status, forma: ch.forma, detalhe: ch.status >= 400 ? String(ch.json?.detail ?? ch.json?.title ?? "").slice(0, 120) : undefined };
       }
     }
     saida[`${c.provider} (${c.subdomain ?? c.client_id.slice(0, 8)})`] = r;
