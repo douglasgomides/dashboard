@@ -75,7 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.query.conversas === "1") {
     try {
       const dias = Number(req.query.dias) > 0 ? Math.min(90, Number(req.query.dias)) : 30;
-      const r = await ingerirConversasKommo(supabase, { orcamentoMs: 240_000, diasIniciais: dias, connectionId });
+      const r = await ingerirConversasKommo(supabase, { orcamentoMs: 240_000, diasIniciais: dias, connectionId, tokenPadrao: KOMMO_API_TOKEN });
       const problema = Object.values(r).some((x) => x.erros.length > 0);
       res.status(problema ? 207 : 200).json({ ok: !problema, conversas: r });
     } catch (err) {
