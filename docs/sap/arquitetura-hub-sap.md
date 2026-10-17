@@ -8,7 +8,7 @@ Premissa corrigida: **Hub = Dashboard**, um produto só. O SAP é um módulo que
 
 ## 0. Clientes existentes (levantamento real do banco, 17/10/2026)
 
-São 19 clientes ativos. **1 está no SAP** (Dra. Juliana Paola). **18 usam só o Hub.**
+São 19 clientes ativos e **todos são clientes só do Hub** (confirmado pelo Fundador em 17/10/2026). O Hub é a ferramenta que a equipe já usava para fazer a gestão desses clientes. A Dra. Juliana Paola aparece no SAP só porque foi usada como **beta de teste**: o SAP **não foi implantado** nela, e os registros SAP dela são de teste.
 
 | Cliente | Login do cliente | Instagram | CRM | Contas de anúncio | WhatsApp (WTS) | SAP | Último dado |
 |---|---|---|---|---|---|---|---|
@@ -35,7 +35,7 @@ São 19 clientes ativos. **1 está no SAP** (Dra. Juliana Paola). **18 usam só 
 **O que isso mostra:**
 - **15 dos 19 clientes não têm login.** O Hub deles é operado pela equipe (relatórios enviados). Só Lana Torres e Juliana Carrion entram como médico (viewer).
 - **Nenhum plano ou recurso contratado está registrado no sistema.** Não existe campo de plano, assinatura ou módulo. Hoje todo cliente vê o Hub inteiro, e o SAP existe só para quem tem linha em `sap_clinicas`.
-- **Você precisa me passar** o que cada cliente contratou (ou confirmar "todos têm o Hub completo como hoje"). Sem isso, não dá para controlar funcionalidade por plano sem arriscar tirar algo de alguém.
+- **Decisão (17/10/2026):** todos os 19 têm o Hub completo como hoje. Nenhum cliente real está no SAP. Ao criar `cliente_modulos`, o registro é "hub" para todos, e a Juliana Paola fica marcada como beta de teste do SAP (não conta como clínica implantada).
 
 ### Testes específicos para clientes exclusivos do Hub (17/10/2026)
 
@@ -394,7 +394,7 @@ Nenhum número de custo será afirmado antes de a `ia_execucoes` medir.
 
 ## O que preciso de você para começar
 
-1. **Recursos contratados por cliente**, ou "todos têm o Hub completo como hoje".
+1. ~~Recursos contratados por cliente~~ **Respondido em 17/10:** todos só Hub; a Juliana Paola é beta de teste do SAP, não implantado.
 2. **Ok para a correção R1** (rotas do SAP só para quem tem SAP). É a única mudança que toca a produção agora, é pequena e reversível.
 3. **Ok para o ambiente de teste:** criar um branch do Supabase (custo por hora enquanto existir) e uma pasta de teste no ClickUp a partir do modelo.
 4. **Divisão ClickUp × SAP:** ClickUp dono das 94 tarefas granulares e SAP dono dos 35 marcos (recomendo), ou outra.
