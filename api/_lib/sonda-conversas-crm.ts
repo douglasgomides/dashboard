@@ -51,15 +51,24 @@ export async function sondarConversasCrm(admin: SupabaseClient<any, any, any>): 
     if (c.provider === "clint") {
       const cab = { "api-token": c.access_token };
       const base = "https://api.clint.digital";
-      for (const p of ["/v2/chats?limit=2", "/v2/messages/chats?limit=2", "/v2/chat?limit=2", "/v2/conversations?limit=2", "/v2/messages?limit=2", "/v2/channels?limit=2", "/v2/channel-accounts?limit=2", "/v2/contacts?limit=1"]) {
-        const t = await tentar(`${base}${p}`, cab);
-        r[`GET ${p.split("?")[0]}`] = { status: t.status, forma: t.forma };
-        const lista = primeiraLista(t.json);
-        const id = lista[0]?.id ?? lista[0]?.chat_id ?? lista[0]?._id;
-        if (t.status === 200 && id) {
-          const m = await tentar(`${base}/v2/messages/chat/${id}?limit=3`, cab);
-          r["GET /v2/messages/chat/{chatId}"] = { status: m.status, forma: m.forma };
-          break;
+      // Contas de canal (WhatsApp oficial etc.): a lista de conversas pede uma delas.
+      const contas = await tentar(`${base}/v2/channel-accounts?limit=20`, cab);
+      const lista = primeiraLista(contas.json) as { id?: string; type?: string; status?: string }[];
+      r["GET /v2/channel-accounts"] = { status: contas.status, total: lista.length, tipos: lista.map((x) => `${x.type}/${x.status}`) };
+      const conta = lista[0]?.id;
+      const semConta = await tentar(`${base}/v2/messages/chats?limit=2`, cab);
+      r["GET /v2/messages/chats (sem parâmetro)"] = { status: semConta.status, mensagem: String(semConta.json?.message ?? "").slice(0, 200) };
+      if (conta) {
+        for (const q of [`channel_account_id=${conta}`, `channelAccountId=${conta}`, `channel_account=${conta}`]) {
+          const t = await tentar(`${base}/v2/messages/chats?limit=2&${q}`, cab);
+          r[`GET /v2/messages/chats?${q.split("=")[0]}=`] = { status: t.status, forma: t.status === 200 ? t.forma : undefined, mensagem: t.status !== 200 ? String(t.json?.message ?? "").slice(0, 200) : undefined };
+          const chat = primeiraLista(t.json)[0];
+          const id = chat?.id ?? chat?.chat_id;
+          if (t.status === 200 && id) {
+            const m = await tentar(`${base}/v2/messages/chat/${id}?limit=3`, cab);
+            r["GET /v2/messages/chat/{chatId}"] = { status: m.status, forma: m.forma };
+            break;
+          }
         }
       }
     } else {
