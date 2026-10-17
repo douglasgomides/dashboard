@@ -62,10 +62,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ?so_analisar=1: só a leitura por IA das conversas pendentes (sem sync), para uma 2ª chamada do n8n.
   if (req.query.so_analisar === "1") {
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-    let q = admin.from("conversas").select("client_id").gte("ultima_msg_em", new Date(Date.now() - 30 * 86400000).toISOString());
-    if (clientId) q = q.eq("client_id", clientId);
-    const { data } = await q.limit(5000);
-    const clientes = [...new Set((data ?? []).map((r: { client_id: string }) => r.client_id))];
+    // O banco devolve no máximo 1.000 linhas por consulta: pagina, senão os últimos clientes (ex.: IGM) ficam de fora.
+    const corte30 = new Date(Date.now() - 30 * 86400000).toISOString();
+    const vistos = new Set<string>();
+    for (let de = 0; de < 50_000; de += 1000) {
+      let q = admin.from("conversas").select("client_id").gte("ultima_msg_em", corte30).order("id").range(de, de + 999);
+      if (clientId) q = q.eq("client_id", clientId);
+      const { data } = await q;
+      for (const r of (data ?? []) as { client_id: string }[]) vistos.add(r.client_id);
+      if ((data ?? []).length < 1000) break;
+    }
+    const clientes = [...vistos];
     // Clientes em paralelo (cada um com o tempo todo): antes, um de cada vez dividia os 4 minutos e o atraso não baixava.
     const orcamentoMs = Math.max(15_000, 240_000 - (Date.now() - inicio));
     const resultados = await Promise.all(clientes.map((id) => analisarConversasPendentes(admin, id, { limite: 200, orcamentoMs }).then((r) => [id, r] as const)));
