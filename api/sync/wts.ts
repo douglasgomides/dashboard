@@ -5,6 +5,7 @@ import { runWtsSync } from "../_lib/wts-sync.js";
 import { ingerirConversasWts } from "../_lib/conversas-wts.js";
 import { analisarConversasPendentes } from "../_lib/resumo-conversa.js";
 import { ingerirConversasDigisac } from "../_lib/conversas-digisac.js";
+import { sondarConversasCrm } from "../_lib/sonda-conversas-crm.js";
 
 // Atendimento no WhatsApp via WTS Chat.
 // Roda para todo cliente ativo com wts_company_id preenchido.
@@ -49,6 +50,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const full = req.query.full === "1" || req.query.full === "true";
   const clientId = typeof req.query.client_id === "string" ? req.query.client_id : undefined;
   const inicio = Date.now();
+
+  // ?sonda_crm=1: testa os endpoints de conversa de Clint e Kommo com a chave real de cada conexão e devolve só a
+  // ESTRUTURA (status, nomes de campos e tipos), nunca o conteúdo. Serve para escrever a importação sem supor formato.
+  if (req.query.sonda_crm === "1") {
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+    res.status(200).json({ ok: true, sonda: await sondarConversasCrm(admin) });
+    return;
+  }
 
   // ?digisac_conversas=1: mensagens dos atendimentos do Digisac (IGM Palmas) viram conversas, como as da WTS.
   if (req.query.digisac_conversas === "1") {
