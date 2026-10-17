@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, Gauge, LayoutDashboard, ListChecks, ListTodo, Megaphone, Menu, Network, Target, ArrowLeftRight, Radar, Presentation, UsersRound, UserRoundCheck, BookOpen, X } from "lucide-react";
@@ -7,12 +7,30 @@ import { LogoutButton } from "@/components/logout-button";
 import { TrocaProduto } from "@/components/troca-produto";
 import { BotaoAjuda, PrimeiroAcesso } from "@/components/sap-ajuda";
 import { getClient } from "@/lib/client-data";
+import { supabase } from "@/integrations/supabase/client";
 import { diaAtual, faseDoDia, getClinicaSap } from "@/lib/sap-data";
 
 // Sistema de Aquisição de Pacientes: produto separado do Doctor Creator Hub, com menu, entrada (sap.*) e
 // página inicial próprios. Usa o mesmo login e os mesmos dados (CRM, WhatsApp, Meta) que o Hub já lê;
 // as regras de acesso são as mesmas (RLS por cliente).
+// Cliente que só usa o Hub não vê o SAP: quem não é da equipe e não tem clínica no SAP vai para o Hub antes de a
+// tela abrir (sem moldura e sem o tour do programa). Os dados já eram protegidos pelo banco; isto evita mostrar a tela.
 export const Route = createFileRoute("/_authenticated/sap")({
+  beforeLoad: async ({ location }) => {
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) return;
+    const { data: admin } = await supabase.rpc("is_app_admin");
+    if (admin) return;
+    const idNaRota = /^\/sap\/([0-9a-f-]{36})/.exec(location.pathname)?.[1] ?? null;
+    const { data } = await supabase.from("client_members").select("client_id").eq("user_id", u.user.id).order("created_at", { ascending: true });
+    const ids = ((data ?? []) as { client_id: string }[]).map((m) => m.client_id);
+    const alvo = idNaRota ? [idNaRota] : ids;
+    const comSap = await Promise.all(alvo.map(async (id) => !!(await getClinicaSap(id))));
+    if (comSap.some(Boolean)) return;
+    const destino = idNaRota ?? ids[0];
+    if (destino) throw redirect({ to: "/$clientId", params: { clientId: destino } });
+    throw redirect({ to: "/sem-acesso" });
+  },
   component: SapLayout,
 });
 
@@ -41,6 +59,10 @@ const TITULOS: Record<string, string> = { "/sap/guia": "Como operamos", "/sap/do
 
 function SapLayout() {
   const { isAdmin } = useAuth();
+  return <SapConteudo isAdmin={isAdmin} />;
+}
+
+function SapConteudo({ isAdmin }: { isAdmin: boolean }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname }).replace(/\/+$/, "") || "/sap";
   const clientId = /^\/sap\/([0-9a-f-]{36})/.exec(pathname)?.[1] ?? null;
   const sub = clientId ? pathname.slice(`/sap/${clientId}`.length) : null;

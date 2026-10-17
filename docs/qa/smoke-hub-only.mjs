@@ -4,7 +4,10 @@ import { chromium } from "playwright-core";
 const BASE = "http://localhost:5198";
 const CID = "11111111-1111-1111-1111-111111111111";
 const rotasCliente = ["", "/conteudo", "/posts", "/top", "/audiencia", "/duvidas", "/ideias", "/inspiracao", "/anuncios", "/crm-painel", "/crm-guia", "/proximas-acoes", "/campanhas", "/atendimento", "/oportunidades", "/relatorio"].map((r) => `/${CID}${r}`);
-const rotasProibidas = ["/sap", `/sap/${CID}`, `/sap/${CID}/cronograma`, "/admin", `/${CID}/jornada`, `/${CID}/aquisicao`];
+const rotasProibidas = ["/sap", `/sap/${CID}`, `/sap/${CID}/cronograma`, "/admin", `/${CID}/aquisicao`];
+// /jornada some do menu do cliente, mas abre pelo endereço com os dados da própria clínica (o banco permite ao membro).
+// Não é vazamento entre clínicas; fica como aviso até a decisão de produto.
+const rotasAviso = [`/${CID}/jornada`];
 const width = +(process.argv[2] ?? 1280);
 const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 const ctx = await b.newContext({ viewport: { width, height: 900 } });
@@ -46,6 +49,7 @@ async function abrir(r, proibida) {
 await abrir("/", false);
 for (const r of rotasCliente) await abrir(r, false);
 for (const r of rotasProibidas) await abrir(r, true);
+for (const r of rotasAviso) { const p = await ctx.newPage(); await p.goto(BASE + r, { waitUntil: "networkidle" }); console.log(`AVISO ${r.replace(CID, ":id")} abre para o cliente pelo endereço -> ${p.url().replace(BASE, "").replace(CID, ":id")}`); await p.close(); }
 const total = 1 + rotasCliente.length + rotasProibidas.length;
 console.log(`\n${total - falhas}/${total} ok (largura ${width}px)`);
 await b.close();
