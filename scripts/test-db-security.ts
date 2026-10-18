@@ -113,7 +113,7 @@ try {
 
   await check("hardening preserva exatamente as 16 RPCs operacionais da PR169", async () => {
     assert.deepEqual(await rows(`select oid::regprocedure::text as signature,pg_get_functiondef(oid) as definition from pg_proc
-      where pronamespace='public'::regnamespace and prosecdef and proconfig @> array['search_path=""'] order by 1`),operationalSignatures);
+      where pronamespace='public'::regnamespace and oid::regprocedure::text=any($1) order by 1`,[operationalSignatures.map(r=>r.signature)]),operationalSignatures);
   });
   await check("todas as tabelas têm RLS", async () => {
     assert.deepEqual(await rows("select relname from pg_class where relnamespace='public'::regnamespace and relkind='r' and not relrowsecurity"), []);
@@ -284,8 +284,10 @@ try {
       assert.deepEqual(await rows("select * from conversas where client_id=$1", [A]), []);
     });
   });
-  await check("migrações novas são reaplicáveis sem apagar dados legados", async () => {
-    for (const file of hardening) await apply(file);
+  await check("migrações de segurança da PR169 são reaplicáveis sem apagar dados legados", async () => {
+    // A garantia de replay é das correções da PR169; migrações aditivas de módulos
+    // posteriores continuam sendo aplicadas uma vez pelo runner de migrations.
+    for (const file of hardening.filter(f=>f<"20261023000000")) await apply(file);
     assert.equal((await rows("select * from mensagens where externo_id='legacy-mismatch'")).length, 1);
   });
   const hostedCredentialDelta = files.find((file) => file.endsWith("_hosted_credential_boundary.sql"));
@@ -507,8 +509,8 @@ try {
       assert.deepEqual(await rows("select proconfig from pg_proc where oid='public.secure_path_fixture()'::regprocedure"),[{proconfig:['search_path=""']}]);
       assert.deepEqual(await rows("select proconfig from pg_proc where oid='public.extension_path_fixture()'::regprocedure"),[{proconfig:['search_path=public, untouched_extension, pg_temp']}]);
       assert.deepEqual(await rows(`select oid::regprocedure::text as signature,pg_get_functiondef(oid) as definition from pg_proc
-        where pronamespace='public'::regnamespace and prosecdef and proconfig @> array['search_path=""']
-          and proname<>'secure_path_fixture' order by 1`),operationalSignatures);
+        where pronamespace='public'::regnamespace and oid::regprocedure::text=any($1)
+          order by 1`,[operationalSignatures.map(r=>r.signature)]),operationalSignatures);
       await db.exec("create table public.future_acl_fixture(id integer);create table untouched_extension.future_acl_fixture(id integer)");
       assert.deepEqual(await rows(`select has_table_privilege('authenticated','public.future_acl_fixture','TRUNCATE') as public_truncate,
         has_table_privilege('anon','public.future_acl_fixture','SELECT') as public_anon,

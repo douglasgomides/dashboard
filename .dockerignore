@@ -1,0 +1,10 @@
+.git
+**/node_modules
+.env*
+**/*.local
+.vercel
+work
+outputs
+dist
+playwright-report
+test-results

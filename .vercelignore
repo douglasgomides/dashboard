@@ -1,0 +1,7 @@
+workers/
+work/
+outputs/
+.env*.local
+.creative-*.local
+.creative-models.local
+scripts/creative-pilot-*.ts
