@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Carregando } from "@/components/sem-fonte";
+import { Carregando, ErroCarga } from "@/components/sem-fonte";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getCrmPipelineKanban } from "@/lib/client-data";
@@ -110,12 +110,12 @@ function KanbanBoard({ pipelineId, pipelineName, rows }: { pipelineId: string; p
 
 function CrmEstruturaPage() {
   const { clientId } = Route.useParams();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["crm-pipeline-kanban", clientId],
     queryFn: () => getCrmPipelineKanban(clientId),
   });
 
-  const rows = (data ?? []) as Row[];
+  const rows = useMemo(() => (data ?? []) as Row[], [data]);
 
   const byPipeline = useMemo(() => {
     const map = new Map<string, { name: string; rows: Row[] }>();
@@ -150,6 +150,8 @@ function CrmEstruturaPage() {
 
       {isLoading ? (
         <Carregando texto="Lendo a estrutura do CRM…" />
+      ) : error ? (
+        <ErroCarga texto="Não foi possível ler a estrutura do CRM. Tente novamente em instantes." />
       ) : totalLeads === 0 ? (
         <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
           Ainda sem leads sincronizados do Kommo pra esse cliente.

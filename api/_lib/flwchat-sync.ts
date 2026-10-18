@@ -79,7 +79,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 async function flwGet(token: string, path: string, query: Record<string, string | number> = {}): Promise<any> {
   const qs = new URLSearchParams(Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)])));
   const url = `${FLW_BASE}${path}${qs.size ? `?${qs.toString()}` : ""}`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(30_000), redirect: "error" });
   if (!res.ok) {
     throw new Error(`FlwChat ${path} falhou (${res.status}): ${(await res.text()).slice(0, 160)}`);
   }

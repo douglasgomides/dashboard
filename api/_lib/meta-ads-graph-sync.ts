@@ -16,6 +16,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
 import { diagnosticarContaAnuncios } from "./diagnostico-anuncios.js";
+import { graphPageUrl, integrationRequest } from "./integration-http.js";
 
 const API = "https://graph.facebook.com/v21.0";
 
@@ -134,15 +135,17 @@ async function buscarInsightsUmaJanela(
   // Teto de páginas: uma conta com muitas campanhas em janela longa pagina
   // bastante, e a função da Vercel tem tempo limitado.
   for (let pagina = 0; pagina < 20 && url; pagina++) {
-    const res = await fetch(url);
+    const res = await fetch(graphPageUrl(url), integrationRequest());
     const texto = await res.text();
     if (!res.ok) {
       throw new Error(`Meta insights ${conta} respondeu ${res.status}: ${texto.slice(0, 300)}`);
     }
     const corpo = JSON.parse(texto) as { data?: LinhaInsight[]; paging?: { next?: string } };
-    linhas.push(...(corpo.data ?? []));
+    if (!Array.isArray(corpo?.data)) throw new Error("Meta insights: resposta inválida");
+    linhas.push(...corpo.data);
     url = corpo.paging?.next ?? "";
   }
+  if (url) throw new Error("Meta insights: paginação incompleta, limite de páginas atingido");
   return linhas;
 }
 

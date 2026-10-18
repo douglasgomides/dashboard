@@ -1,15 +1,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { createAuthSessionController, INITIAL_AUTH_STATE, type AuthState } from "@/lib/auth-session";
 
-interface AuthState {
-  user: User | null;
-  session: Session | null;
-  loading: boolean;
-  isAdmin: boolean;
-}
-
-const AuthContext = createContext<AuthState>({ user: null, session: null, loading: true, isAdmin: false });
+const AuthContext = createContext<AuthState>(INITIAL_AUTH_STATE);
 
 async function fetchIsAdmin(): Promise<boolean> {
   const { data, error } = await supabase.rpc("is_app_admin");
@@ -18,23 +12,28 @@ async function fetchIsAdmin(): Promise<boolean> {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({ user: null, session: null, loading: true, isAdmin: false });
+  const queryClient = useQueryClient();
+  const [state, setState] = useState<AuthState>(INITIAL_AUTH_STATE);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      const user = data.session?.user ?? null;
-      const isAdmin = user ? await fetchIsAdmin() : false;
-      setState({ user, session: data.session, loading: false, isAdmin });
+    const controller = createAuthSessionController({ fetchIsAdmin, clearCache: () => queryClient.clear(), publish: setState });
+    let receivedEvent = false;
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      receivedEvent = true;
+      controller.accept(session);
+    });
+    // A later auth notification wins over this initial snapshot.
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!receivedEvent) controller.accept(data.session);
+    }).catch(() => {
+      if (!receivedEvent) controller.accept(null);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const user = session?.user ?? null;
-      const isAdmin = user ? await fetchIsAdmin() : false;
-      setState({ user, session, loading: false, isAdmin });
-    });
-
-    return () => sub.subscription.unsubscribe();
-  }, []);
+    return () => {
+      controller.dispose();
+      sub.subscription.unsubscribe();
+    };
+  }, [queryClient]);
 
   return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
 }

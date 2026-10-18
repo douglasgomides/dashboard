@@ -1,4 +1,4 @@
-import { RANGE_PRESETS, resolveDateRange, type DateRangeState } from "@/lib/date-range";
+import { isValidRangeDate, RANGE_PRESETS, resolveDateRange, type DateRangeState } from "@/lib/date-range";
 
 export function rotuloPeriodo(value: DateRangeState): string {
   if (value.preset === "personalizado") {
@@ -37,13 +37,10 @@ export function DateRangePicker({
   // O <input type="date"> dispara onChange a cada trecho digitado (ex.: ano 0002 enquanto
   // se escreve 2026), o que mandava uma consulta de dois mil anos e parecia que o filtro
   // não pegava. Só aceita data completa, de 2000 em diante, e mantém from <= to.
-  function dataValida(iso: string): boolean {
-    return /^\d{4}-\d{2}-\d{2}$/.test(iso) && Number(iso.slice(0, 4)) >= 2000;
-  }
   function mudarDatas(parcial: { from?: string; to?: string }) {
     const from = parcial.from ?? value.from ?? resolved.start;
     const to = parcial.to ?? value.to ?? resolved.end;
-    if (!dataValida(from) || !dataValida(to)) return;
+    if (!isValidRangeDate(from) || !isValidRangeDate(to)) return;
     onChange(from <= to ? { ...value, from, to } : { ...value, from: to, to: from });
   }
 
@@ -146,6 +143,7 @@ export function DateRangePicker({
         <>
           <input
             type="date"
+            aria-label="Data inicial"
             value={value.from ?? resolved.start}
             max={value.to ?? resolved.end}
             onChange={(e) => mudarDatas({ from: e.target.value })}
@@ -157,6 +155,7 @@ export function DateRangePicker({
           </span>
           <input
             type="date"
+            aria-label="Data final"
             value={value.to ?? resolved.end}
             min={value.from ?? resolved.start}
             onChange={(e) => mudarDatas({ to: e.target.value })}

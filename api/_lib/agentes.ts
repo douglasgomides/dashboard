@@ -40,6 +40,7 @@ export interface Execucao {
 // a entrada antes de chamar; erro de validação é falha do passo (registrada), nunca chamada com dado ruim.
 interface Ferramenta<E extends z.ZodTypeAny> {
   nome: string; descricao: string; risco: Risco; externa: boolean; timeoutMs: number;
+  escritaExterna?: boolean;
   entrada: E;
   executar: (admin: Admin, exec: Execucao, e: z.infer<E>) => Promise<any>;
 }
@@ -51,6 +52,44 @@ const operacaoSapSchema = z.object({
   acoes: z.array(z.object({ id: z.string(), codigo: z.string(), texto: z.string(), responsavel: z.string().nullable(), prazo: z.string().nullable(), status: z.string() })),
   proximo_passo: z.string().min(1),
 });
+
+class EfeitoExternoIncerto extends Error {}
+
+/**
+ * Uma intenção sem confirmação pode significar que o provedor aceitou a ação
+ * antes da conexão cair. Ela nunca é reenviada automaticamente. A chave única
+ * também impede duas reservas concorrentes de enviar o mesmo comentário.
+ */
+async function escritaExterna(
+  admin: Admin, exec: Execucao, nome: string, entrada: unknown, risco: Risco,
+  executar: () => Promise<unknown>,
+): Promise<unknown> {
+  const chave = `${exec.id}:externo:${exec.passo_atual}:${nome}:${exec.contexto.rodada ?? 0}:${exec.contexto.rodada_marco ?? 0}`;
+  const conferir = () => new EfeitoExternoIncerto(`${nome}: envio sem confirmação durável. Confira a tarefa no provedor e o registro ${chave} antes de retomar; reenvio automático bloqueado.`);
+  const { data: anterior, error: erroLeitura } = await admin.from("agente_passos").select("ok, saida")
+    .eq("chave_idempotencia", chave).maybeSingle();
+  if (erroLeitura) throw conferir();
+  if (anterior) {
+    if (anterior.ok === true) return anterior.saida;
+    throw conferir();
+  }
+  const { error: erroIntencao } = await admin.from("agente_passos").insert({
+    execucao_id: exec.id, ordem: exec.passo_atual, nome: `intencao:${nome}`, ferramenta: nome, risco,
+    entrada, ok: null, chave_idempotencia: chave, erro: "Intenção registrada; confirmação externa pendente",
+  });
+  // Até um erro de transporte no INSERT pode ter deixado uma intenção salva.
+  // Em qualquer caso o HTTP ainda não foi enviado por esta chamada.
+  if (erroIntencao) throw conferir();
+  const t0 = Date.now();
+  try {
+    const saida = await executar();
+    const { data: confirmacao, error } = await admin.from("agente_passos")
+      .update({ ok: true, saida, erro: null, ms: Date.now() - t0 })
+      .eq("chave_idempotencia", chave).select("id").single();
+    if (error || !confirmacao) throw conferir();
+    return saida;
+  } catch { throw conferir(); }
+}
 
 export const FERRAMENTAS = {
   "sap.ler_clinica": ferramenta({
@@ -200,13 +239,16 @@ type NomeFerramenta = keyof typeof FERRAMENTAS;
 async function usar<N extends NomeFerramenta>(admin: Admin, exec: Execucao, nome: N, entrada: z.infer<(typeof FERRAMENTAS)[N]["entrada"]>): Promise<any> {
   const f = FERRAMENTAS[nome] as Ferramenta<any>;
   const e = f.entrada.parse(entrada);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      f.executar(admin, exec, e),
-      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`${nome}: passou de ${f.timeoutMs / 1000}s`)), f.timeoutMs); }),
-    ]);
-  } finally { if (timer !== undefined) clearTimeout(timer); }
+  const executar = async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        f.executar(admin, exec, e),
+        new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`${nome}: passou de ${f.timeoutMs / 1000}s`)), f.timeoutMs); }),
+      ]);
+    } finally { if (timer !== undefined) clearTimeout(timer); }
+  };
+  return f.escritaExterna ? escritaExterna(admin, exec, nome, e, f.risco, executar) : executar();
 }
 
 // ---------------------------------------------------------------- contrato dos passos
@@ -418,13 +460,29 @@ const FLUXO_ACESSOS: Fluxo = {
 // ---------------------------------------------------------------- fluxo 2: Brand · carga do Brand Brain
 const corta = (t: unknown, n: number) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, n);
 
+/** Remove identificadores reconhecíveis ANTES de persistir o contexto ou enviar à IA. */
+function mensagemKommoSemIdentificadores(mensagem: Record<string, any>): string {
+  let texto = typeof mensagem.text === "string" ? mensagem.text.slice(0, 10_000) : "";
+  // Nomes fornecidos em metadados não precisam aparecer no texto agregado.
+  for (const nome of [mensagem.author?.name, mensagem.contact?.name, mensagem.sender?.name]) {
+    if (typeof nome !== "string" || nome.trim().length < 3 || nome.length > 200) continue;
+    texto = texto.replace(new RegExp(nome.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu"), "[pessoa]");
+  }
+  return texto.replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, "[e-mail]")
+    .replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, "[cpf]")
+    .replace(/(\+?55\s?)?\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}/g, "[telefone]")
+    .replace(/@[a-z0-9_.]+/gi, "[perfil]");
+}
+
 /** Junta o que a clínica já tem no Hub, em texto curto por fonte. Só entra fonte com dado. */
 /** Fontes da clínica para a IA (Brand Brain, copiloto dos documentos). `exigirModulo: false` lê mesmo sem o Brain ativo. */
 export async function lerFontesBrain(admin: Admin, clientId: string, opcoes: { exigirModulo?: boolean } = {}) {
-  const { data: modulo } = opcoes.exigirModulo === false ? { data: true } : await admin.rpc("tem_modulo", { p_client_id: clientId, p_modulo: "brand_brain" });
+  const { data: modulo, error: erroModulo } = opcoes.exigirModulo === false ? { data: true, error: null } : await admin.rpc("tem_modulo", { p_client_id: clientId, p_modulo: "brand_brain" });
+  if (erroModulo) throw new Error("Não foi possível conferir o módulo Brand Brain");
   if (!modulo) return { ativo: false, fontes: {} as Partial<Record<Fonte, string>>, aprovados: [] as string[] };
-  const { data: cli } = await admin.from("sap_clinicas").select("id, nome, especialidade, cidade, servicos, ticket_medio, consulta_paga, ambicao_d90, ajustes_acordados")
+  const { data: cli, error: erroClinica } = await admin.from("sap_clinicas").select("id, nome, especialidade, cidade, servicos, ticket_medio, consulta_paga, ambicao_d90, ajustes_acordados")
     .eq("client_id", clientId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (erroClinica) throw new Error(`Não foi possível ler a ficha da clínica: ${erroClinica.message}`);
   const desde = new Date(Date.now() - 120 * 86_400_000).toISOString();
   const [sessoes, resumos, posts, duvidas, pecas, aprovados, kommo] = await Promise.all([
     cli ? admin.from("sap_sessao_registro").select("sessao, chave, texto").eq("clinica_id", cli.id).not("texto", "is", null).limit(60) : Promise.resolve({ data: [] }),
@@ -433,9 +491,12 @@ export async function lerFontesBrain(admin: Admin, clientId: string, opcoes: { e
     admin.from("instagram_comments").select("text").eq("client_id", clientId).eq("is_question", true).gte("commented_at", desde).order("commented_at", { ascending: false }).limit(50),
     cli ? admin.from("sap_pecas").select("titulo, etapa, formato, ganchos, semaforo, status").eq("clinica_id", cli.id).limit(30) : Promise.resolve({ data: [] }),
     admin.from("brain_itens").select("memoria, chave, valor").eq("client_id", clientId).eq("estado", "aprovado"),
-    // Kommo manda pelo webhook as mensagens que o paciente envia (WhatsApp oficial e Direct). Só o lado do paciente.
+    // O webhook contém mensagens do CRM; a direção nem sempre está confirmada.
     admin.from("crm_raw_events").select("raw_payload").eq("client_id", clientId).eq("event_key", "message").gte("received_at", desde).order("received_at", { ascending: false }).limit(200),
   ]);
+  for (const result of [sessoes, resumos, posts, duvidas, pecas, aprovados, kommo]) {
+    if ("error" in result && result.error) throw new Error(`Não foi possível ler uma fonte do Brand Brain: ${result.error.message}`);
+  }
   const fontes: Partial<Record<Fonte, string>> = {};
   if (cli) {
     const ficha = [cli.especialidade && `Especialidade: ${cli.especialidade}`, cli.cidade && `Cidade: ${cli.cidade}`,
@@ -455,15 +516,18 @@ export async function lerFontesBrain(admin: Admin, clientId: string, opcoes: { e
   const pc = (pecas.data ?? []) as { titulo: string; etapa: string; formato: string; ganchos: unknown; semaforo: string; status: string }[];
   if (pc.length) fontes.banco_anuncios = pc.map((p) => `- ${p.etapa} · ${p.formato} · ${p.status} · ${p.semaforo ?? ""} · "${corta(p.titulo, 100)}" ganchos: ${corta(JSON.stringify(p.ganchos ?? []), 200)}`).join("\n");
   const msgs = ((kommo.data ?? []) as { raw_payload: any }[])
-    .map((r) => { const a = r.raw_payload?.add; const m = Array.isArray(a) ? a[0] : (a?.["0"] ?? a); return typeof m?.text === "string" ? m.text : ""; })
+    .flatMap((r) => { const a = r.raw_payload?.add; return Array.isArray(a) ? a : a && typeof a === "object" ? (typeof a.text === "string" ? [a] : Object.values(a)) : []; })
+    .filter((m): m is Record<string, any> => !!m && typeof m === "object" && !Array.isArray(m))
+    .map(mensagemKommoSemIdentificadores)
     .map((t) => corta(t, 200)).filter((t) => t.length >= 12);
   const unicas = [...new Set(msgs)].slice(0, 120);
-  if (unicas.length) fontes.mensagens_kommo = `${unicas.length} mensagens recebidas de pacientes (120 dias, as mais recentes; repetidas removidas):\n` + unicas.map((t) => `- ${t}`).join("\n");
+  if (unicas.length) fontes.mensagens_kommo = `${unicas.length} mensagens do CRM (120 dias, as mais recentes; repetidas removidas):\n` + unicas.map((t) => `- ${t}`).join("\n");
   // Objeções e falhas em %: todas as conversas lidas pela auditoria nos últimos 30 dias (não só as 40 acima).
   const corte30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
   const todos: unknown[] = [];
   for (let de = 0; de < 5000; de += 1000) {
-    const { data } = await admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", corte30).order("gerado_em").range(de, de + 999);
+    const { data, error } = await admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", corte30).order("gerado_em").range(de, de + 999);
+    if (error) throw new Error("Não foi possível ler a auditoria comercial do Brand Brain");
     todos.push(...((data ?? []) as { resumo: unknown }[]).map((r) => r.resumo));
     if ((data ?? []).length < 1000) break;
   }
@@ -536,10 +600,11 @@ const FLUXO_BRAIN: Fluxo = {
 async function lerContextoGrowth(admin: Admin, clientId: string) {
   const dia = 86_400_000;
   const desde = (d: number) => new Date(Date.now() - d * dia).toISOString();
-  const { data: cliente } = await admin.from("clients").select("name, specialty").eq("id", clientId).maybeSingle();
-  const { data: cli } = await admin.from("sap_clinicas").select("especialidade, cidade, servicos, ticket_medio, consulta_paga, ambicao_d90, verba_mensal")
+  const { data: cliente, error: erroCliente } = await admin.from("clients").select("name, specialty").eq("id", clientId).maybeSingle();
+  const { data: cli, error: erroClinica } = await admin.from("sap_clinicas").select("especialidade, cidade, servicos, ticket_medio, consulta_paga, ambicao_d90, verba_mensal")
     .eq("client_id", clientId).order("created_at", { ascending: false }).limit(1).maybeSingle();
-  const conta = (q: any) => q.then((r: { count: number | null }) => r.count ?? 0);
+  if (erroCliente || erroClinica) throw new Error("Não foi possível ler a ficha para estratégia");
+  const conta = (q: any) => q.then((r: { count: number | null; error?: { message: string } | null }) => { if (r.error) throw new Error("Não foi possível ler os totais do CRM"); return r.count ?? 0; });
   const leads = () => admin.from("crm_leads").select("id", { count: "exact", head: true }).eq("client_id", clientId).is("removido_na_origem", null);
   const [brain, posts, duvidas, ads, anteriores, leads90, ganhos90, perdidos180, abertosAntigos, ganhosFonte] = await Promise.all([
     admin.from("brain_itens").select("memoria, chave, valor").eq("client_id", clientId).eq("estado", "aprovado"),
@@ -553,6 +618,7 @@ async function lerContextoGrowth(admin: Admin, clientId: string) {
     conta(leads().or("outcome.is.null,outcome.eq.open").lt("occurred_at", desde(90))),
     admin.from("crm_leads").select("source, price").eq("client_id", clientId).eq("outcome", "won").is("removido_na_origem", null).gte("occurred_at", desde(180)).limit(3000),
   ]);
+  if ([brain, posts, duvidas, ads, anteriores, ganhosFonte].some(r => r.error)) throw new Error("Não foi possível ler as fontes para estratégia");
   const blocos: string[] = [];
   const esp = cli?.especialidade ?? cliente?.specialty ?? null;
   const ficha = [cliente?.name && `Clínica: ${cliente.name}`, esp && `Especialidade: ${esp}`, cli?.cidade && `Cidade: ${cli.cidade}`,
@@ -568,7 +634,8 @@ async function lerContextoGrowth(admin: Admin, clientId: string) {
 
   const resumos: Record<string, any>[] = [];
   for (let de = 0; de < 6000; de += 1000) {
-    const { data } = await admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", desde(60)).order("gerado_em").range(de, de + 999);
+    const { data, error } = await admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", desde(60)).order("gerado_em").range(de, de + 999);
+    if (error) throw new Error("Não foi possível ler as conversas para estratégia");
     resumos.push(...((data ?? []) as { resumo: any }[]).map((r) => r.resumo).filter((r) => r && typeof r === "object"));
     if ((data ?? []).length < 1000) break;
   }
@@ -864,10 +931,11 @@ export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas:
   const aprendizado = await aprenderTodas(admin, 120_000);
   // O que ninguém revisou some sozinho: o agente propõe de novo com dado novo se ainda fizer sentido.
   const agora = Date.now();
-  const { data: exp1 } = await admin.from("sugestoes_agentes").update({ estado: "descartada", resultado: "expirou sem revisão" })
+  const { data: exp1, error: erroExp1 } = await admin.from("sugestoes_agentes").update({ estado: "descartada", resultado: "expirou sem revisão" })
     .eq("estado", "proposta").lt("criado_em", new Date(agora - 14 * 86_400_000).toISOString()).select("id");
-  const { data: exp2 } = await admin.from("campanhas_ideias").update({ estado: "descartada", resultado: "expirou sem revisão" })
+  const { data: exp2, error: erroExp2 } = await admin.from("campanhas_ideias").update({ estado: "descartada", resultado: "expirou sem revisão" })
     .eq("estado", "proposta").lt("criado_em", new Date(agora - 30 * 86_400_000).toISOString()).select("id");
+  if (erroExp1 || erroExp2) throw new Error("Não foi possível expirar propostas antigas");
   const expiradas = (exp1?.length ?? 0) + (exp2?.length ?? 0);
   let cheias = 0;
   const { data: mods, error } = await admin.from("cliente_modulos").select("client_id, modulo").in("status", ["ativo", "beta"]);
@@ -882,12 +950,14 @@ export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas:
     const abertas = await abertasPorClinica(admin, ag.id);
     for (const client_id of clientes) {
       if ((abertas.get(client_id) ?? 0) >= ag.maxAbertas) { cheias++; puladas++; continue; }
-      const { data: ult } = await admin.from("agente_execucoes").select("estado, criado_em").eq("client_id", client_id).eq("fluxo", fluxo.id)
+      const { data: ult, error: erroUlt } = await admin.from("agente_execucoes").select("estado, criado_em").eq("client_id", client_id).eq("fluxo", fluxo.id)
         .order("criado_em", { ascending: false }).limit(1).maybeSingle();
+      if (erroUlt) throw new Error("Não foi possível verificar a última leitura do agente");
+      if (ult && (typeof ult.criado_em !== "string" || !Number.isFinite(Date.parse(ult.criado_em)))) throw new Error("Última execução com data inválida");
       const ativa = ult && !["concluida", "falhou", "cancelada"].includes(ult.estado as string);
       if (ativa || (ult && new Date(ult.criado_em as string).getTime() > limite)) { puladas++; continue; }
       const { error: e } = await admin.from("agente_execucoes").insert({ client_id, agente: fluxo.agente, fluxo: fluxo.id, objetivo: `${fluxo.objetivo} (agendado)`, criado_por: null });
-      if (e) { if (/duplicate/i.test(e.message)) { puladas++; continue; } throw new Error(e.message); }
+      if (e) { if (e.code === "23505") { puladas++; continue; } throw new Error(e.message); }
       enfileiradas++;
       por_agente[ag.id] = (por_agente[ag.id] ?? 0) + 1;
     }
@@ -906,7 +976,7 @@ export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas:
     // A marcação concluída não ganha outra execução diária. Revogação fica visível nas ações reconciliadas.
     if (ultimo && ((! ["concluida", "falhou", "cancelada"].includes(ultimo.estado)) || (ultimo.estado === "concluida" && !operacaoSap?.pendentes) || Date.parse(ultimo.criado_em) > agora - 24*3_600_000)) continue;
     const { error: erroInserir } = await admin.from("agente_execucoes").insert({ client_id, agente:"operations", fluxo:"acessos_criticos", objetivo:"Conduzir os acessos críticos até o marco 5 com evidência (agendado)", criado_por:null });
-    if (erroInserir && !/duplicate/i.test(erroInserir.message)) throw new Error(erroInserir.message);
+    if (erroInserir && erroInserir.code !== "23505") throw new Error(erroInserir.message);
     if (!erroInserir) { enfileiradas++; por_agente.operations=(por_agente.operations ?? 0)+1; }
   }
   return { enfileiradas, puladas, por_agente, medidas: Number(medidas ?? 0), cheias, expiradas, aprendizado };
@@ -998,7 +1068,7 @@ async function rodarUma(admin: Admin, exec: Execucao, maxPassos: number, fim: nu
       const erro = (e instanceof Error ? e.message : String(e)).slice(0, 400);
       const { error: erroRegistro } = await admin.from("agente_passos").insert({ execucao_id: exec.id, ordem: exec.passo_atual, nome: passo.nome, ferramenta: passo.ferramenta ?? null, risco: passo.risco, ok: false, erro, ms: Date.now() - t0 });
       if (erroRegistro) throw new Error(`Não foi possível registrar a falha do agente: ${erroRegistro.message}`);
-      if (e instanceof CacheIncompleto) {
+      if (e instanceof CacheIncompleto || e instanceof EfeitoExternoIncerto) {
         await atualizar({ estado: "pausada", estado_antes_pausa: "pendente", erro: `${passo.nome}: ${erro}`, proximo_em: null, lease_ate: null });
         return { id: exec.id, estado: "pausada", passos, erro };
       }

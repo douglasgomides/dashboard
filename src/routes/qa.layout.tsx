@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { Line, LineChart, Bar, BarChart, CartesianGrid, Legend, Tooltip, XAxis, YAxis } from "recharts";
 import { Users, Eye, Heart, MessageCircle } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -11,13 +11,13 @@ import type { DateRangeState } from "@/lib/date-range";
 
 // Página de QA visual, SÓ em desenvolvimento (npm run dev): mostra a casca do
 // Hub (menu, cabeçalho, abas, barra inferior) com dados de exemplo, para testar
-// o layout em várias larguras sem login. Em produção a rota existe mas não
-// renderiza nada: o bloco abaixo vira `null` no build (import.meta.env.DEV é
-// false) e o Vite descarta o conteúdo de exemplo.
+// o layout em várias larguras sem login. Em produção responde com a página
+// de rota não encontrada; o Vite descarta o conteúdo de exemplo.
 //
 // Uso: /qa/layout?p=/posts  (p = tela simulada)   &admin=0 (visão do cliente)
 
 export const Route = createFileRoute("/qa/layout")({
+  beforeLoad: () => { if (!import.meta.env.DEV) throw notFound(); },
   validateSearch: (s: Record<string, unknown>): { p?: string; admin?: string } => ({
     p: typeof s.p === "string" ? s.p : undefined,
     admin: typeof s.admin === "string" ? s.admin : undefined,

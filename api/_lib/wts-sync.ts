@@ -72,6 +72,8 @@ type WtsSession = {
 async function wtsGet<T>(token: string, path: string): Promise<T> {
   const res = await fetch(`${WTS_BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    signal: AbortSignal.timeout(30_000),
+    redirect: "error",
   });
   const texto = await res.text();
   if (!res.ok) {
@@ -161,13 +163,11 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  let consulta = supabase
+  const consulta = supabase
     .from("clients")
     .select("id, name, wts_company_id, wts_department_ids, wts_api_token")
     .eq("active", true)
     .not("wts_company_id", "is", null);
-  if (env.clientId) consulta = consulta.eq("id", env.clientId);
-
   const { data: clientes, error: erroClientes } = await consulta;
   if (erroClientes) throw new Error(erroClientes.message);
   if (!clientes || clientes.length === 0) return [];
@@ -198,17 +198,26 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
 
   const resultados: WtsSyncResult[] = [];
 
-  for (const [conta, doncos] of porConta) {
-    const donos = doncos as typeof clientes;
+  for (const [conta, donosDaConta] of porConta) {
+    // O sync de um cliente também precisa conhecer os demais donos da conta.
+    // Filtrar antes do roteamento fazia o cliente "Geral" receber as sessões
+    // privadas das equipes dos outros clientes.
+    const donos = donosDaConta.filter((c) => !env.clientId || c.id === env.clientId);
+    if (donos.length === 0) continue;
     // Cada conta WTS pode ter token proprio (cliente com conta separada, como o
     // Dr. Sergio Maia). Usa o token de qualquer dono da conta; se nenhum tiver,
     // cai no token global (env.wtsToken).
     const contaToken =
-      (donos.find((c) => c.wts_api_token)?.wts_api_token as string | undefined) ?? env.wtsToken;
-    const curinga = donos.find((c) => !c.wts_department_ids || c.wts_department_ids.length === 0);
+      (donosDaConta.find((c) => c.wts_api_token)?.wts_api_token as string | undefined) ?? env.wtsToken;
+    const curingas = donosDaConta.filter((c) => !c.wts_department_ids || c.wts_department_ids.length === 0);
+    const curinga = curingas.length === 1 ? curingas[0] : undefined;
     const porEquipe = new Map<string, string>();
-    for (const c of donos) {
-      for (const dep of c.wts_department_ids ?? []) porEquipe.set(dep, c.id);
+    const equipesAmbiguas = new Set<string>();
+    for (const c of donosDaConta) {
+      for (const dep of c.wts_department_ids ?? []) {
+        if (porEquipe.has(dep) && porEquipe.get(dep) !== c.id) equipesAmbiguas.add(dep);
+        porEquipe.set(dep, c.id);
+      }
     }
 
     const res = new Map<string, WtsSyncResult>();
@@ -221,7 +230,10 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
         sessoes: 0,
         departamentos: 0,
         agentes: 0,
-        errors: [],
+        errors: [
+          ...(curingas.length > 1 ? ["Conta WTS com vários clientes sem equipes: sessões sem dono explícito não serão importadas"] : []),
+          ...(equipesAmbiguas.size ? ["Conta WTS com equipes vinculadas a mais de um cliente: sessões ambíguas não serão importadas"] : []),
+        ],
       });
     }
 
@@ -246,7 +258,8 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
           `/chat/v1/session?PageSize=${PAGE_SIZE}&PageNumber=${pagina}` +
           `&OrderBy=createdat&OrderDirection=DESCENDING`;
         const resposta = await wtsGet<{ items: WtsSession[]; hasMorePages: boolean }>(contaToken, url);
-        const itens = resposta.items ?? [];
+        if (!Array.isArray(resposta?.items)) throw new Error("WTS devolveu página de sessões inválida");
+        const itens = resposta.items;
         for (const r of res.values()) r.paginas = pagina;
 
         if (itens.length === 0) break;
@@ -266,11 +279,12 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
         // Agrupa por dono antes de gravar: um upsert por cliente, não por linha.
         const porDono = new Map<string, ReturnType<typeof linhaDaSessao>[]>();
         for (const s of lote) {
+          if (s.departmentId && equipesAmbiguas.has(s.departmentId)) continue;
           const donoId = (s.departmentId ? porEquipe.get(s.departmentId) : undefined) ?? curinga?.id;
           // Sem equipe reivindicada e sem curinga, a conversa não tem dono.
           // Descartar em silêncio esconderia volume, então ela simplesmente
           // não é gravada e isso aparece na diferença entre total e somatório.
-          if (!donoId) continue;
+          if (!donoId || !res.has(donoId)) continue;
           if (!porDono.has(donoId)) porDono.set(donoId, []);
           (porDono.get(donoId) as ReturnType<typeof linhaDaSessao>[]).push(linhaDaSessao(donoId, s));
         }
@@ -305,10 +319,13 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
     }
 
     for (const r of res.values()) {
-      await supabase.from("wts_sync_state").upsert(
-        { client_id: r.client_id, last_session_at: r.mais_recente ?? null, updated_at: new Date().toISOString() },
-        { onConflict: "client_id" },
-      );
+      if (r.mais_recente && r.errors.length === 0) {
+        const { error } = await supabase.from("wts_sync_state").upsert(
+          { client_id: r.client_id, last_session_at: r.mais_recente, updated_at: new Date().toISOString() },
+          { onConflict: "client_id" },
+        );
+        if (error) r.errors.push(`estado do sync: ${error.message}`);
+      }
       resultados.push(r);
     }
   }

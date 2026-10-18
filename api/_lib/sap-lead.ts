@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "./http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 

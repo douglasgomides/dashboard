@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMonthlyMetrics, getPostsForAnalytics, getAdsDiagnosticoPorObjetivo, getAdsPorDia, getWtsResumo, getCrmResumoPeriodo, getCrmLeadsPorDiaPeriodo, getClientFontes } from "@/lib/client-data";
 import { getResumoPeriodo } from "@/lib/audiencia";
+import { completeInstagramPeriod } from "@/lib/report-period";
 import { montarResultado } from "@/lib/resultado";
 import { useQualidadeDados, problemasParaInsights } from "@/components/qualidade-dados";
 
@@ -40,7 +41,7 @@ export function useResultado(clientId: string, start: string, end: string) {
       posts: (posts.data as any[]) ?? [],
       // Métricas de 30 dias da Meta (alcance único etc.) só valem para período de até 30 dias.
       coberturaNoTopo: true,
-      periodoIg: diasPeriodo <= 30 ? periodoIg.data?.dados ?? null : null,
+      periodoIg: diasPeriodo <= 30 ? completeInstagramPeriod(periodoIg.data?.dados, start, fim) : null,
       adsDiag: adsDiag.data ?? null,
       adsPorDia: (adsDia.data ?? []).map((a: any) => ({ dia: a.dia, gasto: Number(a.gasto), conversas: Number(a.conversas) })),
       wts: wts.data ?? null,
@@ -49,7 +50,7 @@ export function useResultado(clientId: string, start: string, end: string) {
       fontes: fontes.data ?? null,
       problemasDados: problemasParaInsights(qualidade.data ?? []),
     });
-  }, [qualidade.data, metricas.data, anterior.data, posts.data, periodoIg.data, adsDiag.data, adsDia.data, wts.data, crm.data, leadsDia.data, fontes.data, start, fim, hoje]);
+  }, [qualidade.data, metricas.data, anterior.data, posts.data, periodoIg.data, adsDiag.data, adsDia.data, wts.data, crm.data, leadsDia.data, fontes.data, start, fim, hoje, diasPeriodo]);
 
   return { r, hoje, fim, diasPeriodo, carregando: metricas.isLoading, metricas, anterior, posts, periodoIg, fontes, qualidade };
 }

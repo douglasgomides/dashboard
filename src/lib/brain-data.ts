@@ -52,7 +52,8 @@ export async function escreverItem(clientId: string, memoria: Memoria, chave: st
 /** Última leitura das fontes desta clínica (para mostrar na própria tela do Brand Brain). */
 export async function getUltimaLeitura(clientId: string): Promise<{ estado: string; erro: string | null; resultado: Record<string, unknown> | null; quando: string } | null> {
   const { data, error } = await db.from("agente_execucoes").select("estado, erro, resultado, atualizado_em").eq("client_id", clientId).eq("fluxo", "brain_carga")
-    .order("criado_em", { ascending: false }).limit(1).maybeSingle();
+    .order("criado_em", { ascending: false }).limit(1).maybeSingle()
+    .abortSignal(AbortSignal.timeout(15_000)).retry(false);
   if (error) throw error;
   return data ? { estado: data.estado, erro: data.erro, resultado: data.resultado, quando: data.atualizado_em } : null;
 }

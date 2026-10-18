@@ -13,6 +13,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
+import { integrationHost, integrationRequest } from "./integration-http.js";
 
 const PAGE_SIZE = 250; // limite máximo da API da Kommo
 const INCREMENTAL_LOOKBACK_DAYS = 3; // margem de segurança sobre o intervalo do job diário
@@ -75,6 +76,7 @@ export function linhaDoLead(lead: KommoLead, crmConnectionId: string, clientId: 
     contact_name: lead.name ?? null,
     raw_payload: lead as any,
     received_at: new Date().toISOString(),
+    removido_na_origem: null,
   };
 }
 
@@ -102,19 +104,23 @@ async function fetchLeadsPage(
   params: Record<string, string>,
 ): Promise<{ leads: KommoLead[]; hasMore: boolean }> {
   const qs = new URLSearchParams({ limit: String(PAGE_SIZE), ...params });
-  const res = await fetch(`https://${domain}/api/v4/leads?${qs.toString()}`, {
+  const res = await fetch(`https://${domain}/api/v4/leads?${qs.toString()}`, integrationRequest({
     headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  }));
   if (res.status === 204) return { leads: [], hasMore: false };
   if (!res.ok) {
     throw new Error(`Kommo leads fetch failed (${res.status}): ${await res.text()}`);
   }
   const body = (await res.json()) as { _embedded?: { leads?: KommoLead[] }; _links?: { next?: unknown } };
-  const leads = body._embedded?.leads ?? [];
+  const leads = body?._embedded?.leads;
+  if (!Array.isArray(leads) || leads.some((l) => !l || !Number.isSafeInteger(l.id) || l.id <= 0)) {
+    throw new Error("Kommo leads: resposta inválida, cursor preservado");
+  }
   return { leads, hasMore: !!body._links?.next };
 }
 
 export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLeadsSyncResult> {
+  const domain = integrationHost(env.kommoDomain, "kommo");
   const supabase: SupabaseClient<Database> = createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -123,9 +129,9 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
   // Nomes dos motivos de perda: o lead só traz loss_reason_id. Sem o nome, ninguém sabe o que o número
   // significa e o SAP não consegue separar preço, medo, cônjuge... (07.07). Falha aqui não para o sync.
   try {
-    const res = await fetch(`https://${env.kommoDomain}/api/v4/leads/loss_reasons?limit=250`, {
+    const res = await fetch(`https://${domain}/api/v4/leads/loss_reasons?limit=250`, integrationRequest({
       headers: { Authorization: `Bearer ${env.accessToken}` },
-    });
+    }));
     if (res.ok && res.status !== 204) {
       const body = (await res.json()) as { _embedded?: { loss_reasons?: { id: number; name: string }[] } };
       const motivos = body._embedded?.loss_reasons ?? [];
@@ -140,13 +146,14 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
   } catch (err) {
     errors.push(`motivos de perda: ${err instanceof Error ? err.message : String(err)}`);
   }
-  const maxPages = env.maxPages ?? 5;
+  const maxPages = Number.isInteger(env.maxPages) && env.maxPages! > 0 ? Math.min(env.maxPages!, 100) : 5;
 
-  const { data: state } = await supabase
+  const { data: state, error: stateReadError } = await supabase
     .from("crm_leads_sync_state")
     .select("next_page, backfill_done")
     .eq("crm_connection_id", env.crmConnectionId)
     .maybeSingle();
+  if (stateReadError) return { leadsFetched: 0, leadsUpserted: 0, done: false, mode: "backfill", errors: [...errors, `state read: ${stateReadError.message}`] };
 
   const mode: "backfill" | "incremental" = state?.backfill_done ? "incremental" : "backfill";
   const baseParams: Record<string, string> =
@@ -158,7 +165,7 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
         }
       : {};
 
-  let page = mode === "backfill" ? (state?.next_page ?? 1) : 1;
+  let page = mode === "backfill" && Number.isInteger(state?.next_page) && state!.next_page > 0 ? state!.next_page : 1;
   let pagesLeft = maxPages;
   let leadsFetched = 0;
   let leadsUpserted = 0;
@@ -182,12 +189,13 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
       { onConflict: "crm_connection_id" },
     );
     if (stateError) errors.push(`state upsert: ${stateError.message}`);
+    return !stateError;
   }
 
   while (hasMore && pagesLeft > 0) {
     let result;
     try {
-      result = await fetchLeadsPage(env.kommoDomain, env.accessToken, {
+      result = await fetchLeadsPage(domain, env.accessToken, {
         ...baseParams,
         page: String(page),
         with: "custom_fields_values",
@@ -203,19 +211,22 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
       const { error } = await supabase
         .from("crm_leads")
         .upsert(rows, { onConflict: "crm_connection_id,external_lead_id" });
-      if (error) errors.push(`upsert page ${page}: ${error.message}`);
-      else leadsUpserted += rows.length;
+      if (error) {
+        errors.push(`upsert page ${page}: ${error.message}`);
+        break;
+      }
+      leadsUpserted += rows.length;
     }
 
-    hasMore = mode === "backfill" ? result.leads.length === PAGE_SIZE : result.hasMore;
+    // Grava o avanço imediatamente, página a página, para não perder o
+    // progresso. Nem a falha da página nem a do estado podem descartá-la.
+    const pageHasMore = mode === "backfill" ? result.leads.length === PAGE_SIZE : result.hasMore;
+    if (!(await persistState(page + 1, mode === "incremental" || !pageHasMore))) break;
+    hasMore = pageHasMore;
     page++;
     pagesLeft--;
-
-    // Grava o avanço imediatamente, página a página, para não perder o
-    // progresso se a próxima página estourar o tempo da função.
-    await persistState(page, mode === "incremental" || !hasMore);
   }
 
-  const backfillDone = mode === "incremental" || !hasMore;
-  return { leadsFetched, leadsUpserted, done: backfillDone, mode, errors };
+  if (mode === "incremental" && hasMore && pagesLeft === 0) errors.push("Kommo incremental incompleto: limite de páginas atingido; aumente max_pages para cobrir a janela");
+  return { leadsFetched, leadsUpserted, done: !hasMore, mode, errors };
 }

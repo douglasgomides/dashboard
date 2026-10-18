@@ -3,6 +3,7 @@ import { aplicarRastreio, diagnosticarAds, type LinhaAds, type CampanhaCadastro 
 import type { Acompanhamento } from "@/lib/oportunidades";
 import { lerDiagnosticoRpc, montarDadosReduzidos, type DadosComerciais, type MetricasEssenciais, type WtsResumoMin } from "@/lib/comercial";
 import { filtrarPerguntas, perguntasDaDeteccaoOriginal } from "@/lib/comentarios";
+import { fetchAllRows } from "@/lib/pagination";
 import type {
   ContentFormat,
   FunnelStage,
@@ -31,15 +32,15 @@ export async function listMyClients(userId: string) {
 }
 
 export async function getMonthlyMetrics(clientId: string, monthStart: string, monthEnd: string) {
-  const { data, error } = await supabase
+  return fetchAllRows((from, to) => supabase
     .from("instagram_account_daily_metrics")
     .select("*")
     .eq("client_id", clientId)
     .gte("date", monthStart)
     .lte("date", monthEnd)
-    .order("date", { ascending: true });
-  if (error) throw error;
-  return data;
+    .order("date", { ascending: true })
+    .order("id")
+    .range(from, to));
 }
 
 // Limites de um período em datas (YYYY-MM-DD) no fuso de Brasília. Comparar
@@ -55,28 +56,28 @@ export function limitesBR(de: string, ate: string): { desde: string; antesDe: st
 
 export async function getRankedPosts(clientId: string, monthStart: string, monthEnd: string) {
   const { desde, antesDe } = limitesBR(monthStart, monthEnd);
-  const { data, error } = await supabase
+  return fetchAllRows((from, to) => supabase
     .from("instagram_posts")
     .select("*")
     .eq("client_id", clientId)
     .gte("posted_at", desde)
     .lt("posted_at", antesDe)
-    .order("saved", { ascending: false, nullsFirst: false });
-  if (error) throw error;
-  return data;
+    .order("saved", { ascending: false, nullsFirst: false })
+    .order("id")
+    .range(from, to));
 }
 
 export async function getPostsForAnalytics(clientId: string, sinceDate: string, untilDate?: string) {
   const { desde, antesDe } = limitesBR(sinceDate, untilDate ?? sinceDate);
-  let query = supabase
+  return fetchAllRows((from, to) => {
+    let query = supabase
     .from("instagram_posts")
     .select("*")
     .eq("client_id", clientId)
     .gte("posted_at", desde);
   if (untilDate) query = query.lt("posted_at", antesDe);
-  const { data, error } = await query.order("posted_at", { ascending: false });
-  if (error) throw error;
-  return data;
+    return query.order("posted_at", { ascending: false }).order("id").range(from, to);
+  });
 }
 
 export async function getNextAngles(clientId: string, limit = 5) {
@@ -786,19 +787,13 @@ export async function getObjecoesWhatsapp(clientId: string, start: string, end: 
 // Posts para casar com campanhas de impulsionamento: o post costuma ser publicado antes do período do
 // anúncio, então busca desde alguns meses antes. Só as colunas usadas, paginado.
 export async function getPostsParaImpulsionados(clientId: string, desde: string) {
-  const out: { id: string; caption: string | null; posted_at: string; permalink: string | null; thumbnail_url: string | null; reach: number | null }[] = [];
-  const PAGINA = 1000;
-  for (let de = 0; ; de += PAGINA) {
-    const { data, error } = await (supabase as any)
+  const posts = await fetchAllRows((from, to) => supabase
       .from("instagram_posts")
       .select("id, caption, posted_at, permalink, thumbnail_url, reach")
       .eq("client_id", clientId)
       .gte("posted_at", desde)
       .order("posted_at", { ascending: false })
-      .range(de, de + PAGINA - 1);
-    if (error) throw error;
-    out.push(...(data ?? []));
-    if (!data || data.length < PAGINA) break;
-  }
-  return out;
+      .order("id")
+      .range(from, to));
+  return posts.filter((post): post is typeof post & { posted_at: string } => post.posted_at !== null);
 }

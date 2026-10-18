@@ -88,7 +88,8 @@ export async function chamarIAJson(admin: SupabaseClient<any, any, any>, p: Pedi
       throw new Error("Servidor sem OPENAI_API_KEY nem ANTHROPIC_API_KEY");
     }
     const c = custo(modelo, tIn, tOut);
-    await admin.from("ia_execucoes").insert({ client_id: p.clientId, execucao_id: p.execucaoId ?? null, finalidade: p.finalidade, modelo, tokens_entrada: tIn, tokens_saida: tOut, custo_usd: c, ok: true, ms: Date.now() - t0 });
+    const { error } = await admin.from("ia_execucoes").insert({ client_id: p.clientId, execucao_id: p.execucaoId ?? null, finalidade: p.finalidade, modelo, tokens_entrada: tIn, tokens_saida: tOut, custo_usd: c, ok: true, ms: Date.now() - t0 });
+    if (error) throw new Error("Não foi possível registrar o custo da chamada de IA");
     return { json, modelo, custoUsd: c };
   } catch (e) {
     const erro = (e instanceof Error ? e.message : String(e)).slice(0, 300);

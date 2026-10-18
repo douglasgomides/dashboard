@@ -16,7 +16,8 @@ function database(provider: Provider, sessions: Row[] = [{ session_id: "ticket-o
   const tables: Record<string, Row[]> = {
     wts_sessions: sessions.map(s => ({ client_id: CID, ...s })), conversas: conversations,
     operacao_recuperacao: [], mensagens: [], links_rastreados: [], crm_leads: [], pessoas: [],
-    crm_connections: [{ client_id: CID, provider, active: true, subdomain: "qa", access_token: TOKEN }],
+    clients: [{ id: CID, wts_company_id: null }],
+    crm_connections: [{ id: "connection", client_id: CID, provider, active: true, subdomain: "qa", access_token: TOKEN }],
   };
   let failMessages = false;
   const matches = (row: Row, url: URL) => [...url.searchParams].every(([key, value]) => {
@@ -116,8 +117,8 @@ for (const provider of ["wts", "digisac"] as const) {
   }
   {
     const f = database(provider, undefined, [existing(provider)]);
-    const { calls } = await run(provider, f, (page, tid) => body(provider, [message(provider, `page-${page}`, tid)], true, 99));
-    assert.equal(calls.length, provider === "wts" ? 8 : 6, "existing provider page limits remain bounded");
+    const { calls } = await run(provider, f, (page, tid) => body(provider, [message(provider, `page-${page}`, tid)], true, 101));
+    assert.equal(calls.length, provider === "wts" ? 8 : 100, "existing provider page limits remain bounded");
     assert.equal(f.tables.conversas[0].mensagens_cobertura, "parcial");
     assert.equal(f.tables.conversas[0].mensagens_conferidas_em, old);
   }
