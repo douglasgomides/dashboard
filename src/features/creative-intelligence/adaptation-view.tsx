@@ -7,6 +7,8 @@ import type {
   CreativeAsset,
 } from "@/lib/creative-intelligence/contracts";
 import { PrivateAsset, FactList } from "./analysis-view";
+import { BotaoCopiar } from "@/components/botao-copiar";
+import { speechInRange, spokenScript } from "@/lib/creative-intelligence/reference-script";
 
 export function AdaptationView({
   adaptation,
@@ -41,6 +43,10 @@ export function AdaptationView({
       (s) => s.position === unit.original_position,
     ),
     scene = analysis?.result.scenes[unit.original_position - 1];
+  const originalSpeech = scene && analysis
+      ? speechInRange(analysis.transcript, scene.start, scene.end)
+      : [],
+    adaptedScript = doc.units.map((u) => u.copy).join("\n\n");
   const evidence =
     assets.find((a) => a.id === slide?.asset_id) ||
     assets.find((a) => scene?.evidence_asset_ids.includes(a.id));
@@ -67,6 +73,18 @@ export function AdaptationView({
               : "Ainda não publicada"}
         </Selo>
       </div>
+      {doc.format === "reels" && (
+        <div className="mb-5 rounded-lg border p-4" style={{ borderColor: "var(--border)" }}>
+          <h3 className="font-semibold">Roteiro adaptado completo</h3>
+          <p className="my-3 whitespace-pre-wrap text-base leading-relaxed" aria-label="Fala completa do roteiro adaptado">
+            {adaptedScript}
+          </p>
+          <BotaoCopiar texto={adaptedScript} rotulo="Copiar roteiro adaptado completo" />
+          <p className="mt-3 text-xs" style={{ color: "var(--muted)" }}>
+            Proposta para gravação. Revise o texto antes de produzir.
+          </p>
+        </div>
+      )}
       <div
         className="mb-4 flex flex-wrap gap-2"
         aria-label="Selecionar unidade da adaptação"
@@ -86,14 +104,20 @@ export function AdaptationView({
       <div className="grid items-start gap-5 lg:grid-cols-2">
         <div>
           <h3 className="mb-3 font-semibold">
-            Original · {unit.original_position}
+            {doc.format === "reels" ? "Fala original" : "Original"} · {unit.original_position}
           </h3>
           {evidence && <PrivateAsset asset={evidence} />}
           <p className="mt-3 whitespace-pre-wrap text-sm">
-            {slide?.copy.full_text ||
-              scene?.narration ||
-              "Confira a análise original."}
+            {doc.format === "reels"
+              ? spokenScript(originalSpeech) || "Não há fala transcrita neste bloco."
+              : slide?.copy.full_text || "Confira a análise original."}
           </p>
+          {doc.format === "reels" && originalSpeech.length > 0 && (
+            <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
+              Áudio original: {originalSpeech[0].start.toFixed(1)}–{originalSpeech.at(-1)!.end.toFixed(1)}s.
+              Trechos que cruzam a borda do bloco são exibidos inteiros.
+            </p>
+          )}
           <p className="mt-2 text-sm" style={{ color: "var(--text-dim)" }}>
             {unit.structural_reference}
           </p>

@@ -42,6 +42,7 @@ import {
 } from "./data";
 import { AnalysisView } from "./analysis-view";
 import { AdaptationView } from "./adaptation-view";
+import { ReferenceScript } from "./reference-script";
 import { ProductionWorkspace } from "./production-workspace";
 import "./workspace.css";
 
@@ -620,6 +621,11 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
               titulo="Laboratório de adaptação"
               resumo={`Estrutura de origem: ${selectedStructure.theme}`}
             >
+              {structureAnalysis?.result.format === "reels" && (
+                <div className="mb-5">
+                  <ReferenceScript transcript={structureAnalysis.transcript} />
+                </div>
+              )}
               <form
                 onSubmit={(e) => {
                   e.preventDefault();

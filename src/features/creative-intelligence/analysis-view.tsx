@@ -9,6 +9,7 @@ import {
   type CreativeSource,
 } from "@/lib/creative-intelligence/contracts";
 import { signedAsset } from "./data";
+import { ReferenceScript } from "./reference-script";
 
 export function PrivateAsset({
   asset,
@@ -94,6 +95,9 @@ export function AnalysisView({
       : null;
   return (
     <div className="space-y-5">
+      {r.format === "reels" && (
+        <ReferenceScript transcript={analysis.transcript} />
+      )}
       <Painel
         icone={ShieldCheck}
         titulo="O que foi efetivamente analisado"
@@ -229,25 +233,6 @@ export function AnalysisView({
               ) : (
                 <p>Vídeo original indisponível.</p>
               )}
-              <div
-                className="mt-4 max-h-80 space-y-3 overflow-auto"
-                aria-label="Transcrição temporal"
-              >
-                {analysis.transcript.map((s, i) => (
-                  <p key={i} className="text-sm">
-                    <b>
-                      {s.start.toFixed(1)}–{s.end.toFixed(1)}s
-                    </b>{" "}
-                    {s.text}
-                  </p>
-                ))}
-                {!analysis.transcript.length && (
-                  <p className="note">
-                    Nenhuma fala transcrita. Confira os limites e a presença de
-                    áudio.
-                  </p>
-                )}
-              </div>
             </div>
             <div>
               {scene ? (

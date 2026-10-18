@@ -66,6 +66,8 @@ As correções de integridade usam FKs compostas `NOT VALID`: novas relações e
 
 ## Testes de navegador
 
+Na Inteligência Criativa, Reels com áudio transcrito exibem o roteiro falado original completo, com cópia do texto e consulta aos tempos. O laboratório envia todos os segmentos reconhecidos no áudio como fonte primária para a adaptação, junto da análise visual e do Brand Brain. A comparação por bloco usa os segmentos que cruzam aquele intervalo, mantendo as palavras e os tempos originais; um segmento que cruza blocos aparece inteiro para conferência. A fala original nunca é reconstruída a partir de descrições de cenas ou textos na tela. Transcrições são automáticas e precisam de conferência de termos e nomes; adaptações antigas só mudam quando uma nova proposta é solicitada.
+
 ```sh
 npx playwright install chromium
 npm run test:e2e
