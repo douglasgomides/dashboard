@@ -14,7 +14,7 @@ function MinhasTarefas() {
   const { isAdmin } = useAuth();
   return (
     <div className="space-y-6">
-      <MinhasTarefasClinica clientId={clientId} />
+      <MinhasTarefasClinica clientId={clientId} resumoSemana />
       {isAdmin && <LeadsAtencao clientId={clientId} />}
     </div>
   );

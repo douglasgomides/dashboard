@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Circle, CircleSlash, Cpu, ExternalLink, Paperclip, UserRoundCheck } from "lucide-react";
+import { SapWeekOverview } from "@/components/sap-week-overview";
+import { diaAtual } from "@/lib/sap-data";
 import { useAuth } from "@/hooks/use-auth";
 import { Painel, Selo } from "@/components/visual";
 import { TextoComCodigos } from "@/components/sap-docs";
@@ -82,9 +84,9 @@ export function CardTarefa({ t, clientId, clinicaId, hoje, nomeClinica, abertoIn
   const st = STATUS[t.status];
   const papel = `${NOME_PAPEL[t.papel]}${t.pessoa ? ` · ${t.pessoa}` : " · sem pessoa"}`;
   return (
-    <li className="rounded-xl border" style={{ borderColor: t.situacao === "atrasada" ? "color-mix(in srgb, var(--crit) 45%, var(--border))" : "var(--border)", background: "var(--surface)" }}>
+    <li className="sap-task-card rounded-xl border" data-situation={t.situacao} style={{ borderColor: t.situacao === "atrasada" ? "color-mix(in srgb, var(--crit) 45%, var(--border))" : "var(--border)", background: "var(--surface)" }}>
       <button type="button" onClick={() => setAberto(!aberto)} aria-expanded={aberto}
-        className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2.5 text-left">
+        className="sap-task-toggle flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2.5 text-left">
         {aberto ? <ChevronDown size={16} aria-hidden className="shrink-0" /> : <ChevronRight size={16} aria-hidden className="shrink-0" />}
         <span className="text-xs tabular-nums" style={{ color: "var(--muted)" }}>{t.codigo}</span>
         <span className="min-w-0 flex-1 font-medium" style={{ overflowWrap: "anywhere" }}>{nomeClinica ? <span style={{ color: "var(--text-dim)" }}>{nomeClinica} · </span> : null}{t.nome}</span>
@@ -357,7 +359,7 @@ export function AlertasFundador({ alertas, nomes }: { alertas: AlertaFundador[];
 
 // ---------------------------------------------------------------- Minhas tarefas (uma clínica)
 
-export function MinhasTarefasClinica({ clientId, filtroInicial = "minhas", grupos }: { clientId: string; filtroInicial?: Filtro; grupos?: Situacao[] }) {
+export function MinhasTarefasClinica({ clientId, filtroInicial = "minhas", grupos, resumoSemana = false }: { clientId: string; filtroInicial?: Filtro; grupos?: Situacao[]; resumoSemana?: boolean }) {
   const { isAdmin, user } = useAuth();
   const { lista, isLoading, error, hoje } = useTarefas(clientId);
   const [filtro, setFiltro] = useState<Filtro>(isAdmin ? filtroInicial : "minhas");
@@ -365,12 +367,15 @@ export function MinhasTarefasClinica({ clientId, filtroInicial = "minhas", grupo
   if (isLoading) return <p className="note">Carregando…</p>;
   if (error) return <p className="note" style={{ color: "var(--crit)" }}>{(error as Error).message}</p>;
   if (!c) return <p className="note">Esta clínica ainda não está no Sistema de Aquisição.</p>;
-  if (!c.entrada.clinica.d0) return <p className="note">Defina o D0 em Painel da clínica → Editar cadastro: as tarefas saem do cronograma, que conta a partir dele.</p>;
+  if (!c.entrada.clinica.d0) return <p className="note">{isAdmin ? "Defina a data de início em Painel da clínica → Editar cadastro para preparar as tarefas do programa." : "A equipe Doctor Creator vai definir a data de início. As tarefas aparecerão aqui quando o programa estiver preparado."}</p>;
   const meus = papeisDoUsuario(c.entrada, user?.id);
   const visiveis = filtrar(c, filtro, user?.id, isAdmin);
   const ehFundador = meus.includes("fundador");
   return (
-    <div className="space-y-4">
+    <>
+      {resumoSemana && <SapWeekOverview clientId={clientId} day={diaAtual(c.entrada.clinica.d0, c.entrada.clinica.pausas)} all={contarTarefas(c.tarefas)} next={filtrar(c, "minhas", user?.id, isAdmin).filter(t => t.status === "a_fazer" && t.situacao !== "depois").sort(porUrgencia)[0]} missingRole={isAdmin && !meus.length} hoje={hoje} />}
+    <section className="sap-my-tasks space-y-4" id="sap-tarefas" aria-labelledby="sap-tasks-title">
+      <div className="sap-section-heading"><p className="sap-eyebrow">Executar e acompanhar</p><h2 id="sap-tasks-title">Minhas tarefas</h2></div>
       <AlertaPapeis entrada={c.entrada} clientId={clientId} />
       {isAdmin && (ehFundador || filtro === "todas") && <AlertasFundador alertas={c.alertas} />}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -384,7 +389,8 @@ export function MinhasTarefasClinica({ clientId, filtroInicial = "minhas", grupo
       ) : (
         <ListaAgrupada itens={visiveis.map((t) => ({ t, clientId, clinicaId: c.entrada.clinica.id }))} hoje={hoje} vazio="Nada para fazer agora. Tudo em dia." grupos={grupos} />
       )}
-    </div>
+    </section>
+    </>
   );
 }
 
