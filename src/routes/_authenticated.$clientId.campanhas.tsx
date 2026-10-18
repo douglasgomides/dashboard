@@ -8,6 +8,7 @@ import { useLeituraConversas } from "@/components/atendimento-resumo";
 import { usePautas } from "@/components/planejador-conteudo";
 import { useClientRole } from "@/hooks/use-client-role";
 import { BotaoCopiar } from "@/components/botao-copiar";
+import { EstrategiasIA } from "@/components/estrategias-ia";
 import { Carregando, ResumoExecutivo } from "@/components/sem-fonte";
 import { resumirAtendimento } from "@/lib/conversa-leitura";
 import { datasDoMes, potencial, sugerirCampanhas, NOME_MES, type BaseCampanhas, type Campanha } from "@/lib/campanhas";
@@ -230,7 +231,7 @@ function CampanhasPage() {
     <div className="space-y-4">
       <div className="hpagehead">
         <h2>Campanhas de {NOME_MES[mes - 1]}</h2>
-        <p>Campanhas sugeridas para o mês a partir dos dados do cliente (CRM, WhatsApp, Instagram e anúncios) e das datas da especialidade. O painel sugere e monta o texto; quem envia é a equipe.</p>
+        <p>Estratégias da IA cruzando o Brand Brain com os dados da clínica, mais as campanhas de base do mês a partir dos dados do cliente (CRM, WhatsApp, Instagram e anúncios) e das datas da especialidade. O painel sugere e monta o texto; quem envia é a equipe.</p>
         <div role="tablist" aria-label="Mês" className="mt-2 inline-grid grid-cols-2 gap-1 rounded-lg p-1" style={{ background: "var(--surface-2)" }}>
           {([0, 1] as const).map((o) => {
             const m = ((agora.getUTCMonth() + o) % 12) + 1;
@@ -254,6 +255,8 @@ function CampanhasPage() {
               base.data?.tem_crm ? (base.data.parados_90d > 0 ? `O CRM tem ${n(base.data.parados_90d)} leads parados há mais de 90 dias: é a base mais barata para trabalhar.` : "") : "Sem CRM ligado: as campanhas de reativação e retorno precisam dele.",
             ]}
           />
+
+          <EstrategiasIA clientId={clientId} podeEditar={podeEditar} />
 
           <section aria-labelledby="camp-datas" className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
             <h3 id="camp-datas" className="flex items-center gap-1.5 text-sm font-semibold"><CalendarDays size={16} aria-hidden /> Datas de {NOME_MES[mes - 1]} para esta especialidade</h3>
