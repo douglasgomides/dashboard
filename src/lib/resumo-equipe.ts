@@ -14,28 +14,70 @@ export interface PendenciasClinica {
   agendaram: number; // pacientes recuperados que agendaram (7 dias, medido sozinho)
 }
 
-const ROTULOS: [keyof PendenciasClinica, string][] = [
-  ["recuperacao", "pacientes para recuperar"],
-  ["anuncios", "ajustes de anúncio"],
-  ["conteudo", "roteiros prontos"],
-  ["campanhas", "estratégias"],
-  ["brain", "itens do Brain para aprovar"],
-  ["aprovacoes", "aprovações na Central"],
-  ["falhas", "falhas de agente"],
+// Prioridade de hoje (perde dinheiro se esperar) e "quando puder" (planejamento).
+const ROTULOS: [keyof PendenciasClinica, string, string, boolean][] = [
+  ["falhas", "falha de agente", "falhas de agente", true],
+  ["recuperacao", "paciente para recuperar", "pacientes para recuperar", true],
+  ["anuncios", "ajuste de anúncio", "ajustes de anúncio", true],
+  ["aprovacoes", "aprovação na Central", "aprovações na Central", true],
+  ["conteudo", "roteiro pronto", "roteiros prontos", false],
+  ["campanhas", "estratégia", "estratégias", false],
+  ["brain", "item do Brain para aprovar", "itens do Brain para aprovar", false],
 ];
+
+/** Clínica de teste ou de dados fictícios não entra no resumo nem na Caixa de entrada. */
+export const ehClinicaTeste = (nome: string) => /\b(teste|test|fict[íi]ci[oa]s?|demo)\b/i.test(nome);
+
+type Cliente = { from: (t: string) => any };
+
+/** Junta as pendências por clínica. Serve ao servidor (chave de serviço) e à Caixa de entrada (admin logado).
+ *  Falha só conta se a última rodada daquele agente na clínica falhou (uma rodada boa depois apaga o alerta). */
+export async function coletarPendencias(db: Cliente): Promise<PendenciasClinica[]> {
+  const desde = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+  const [clientes, sug, camp, brain, apr, execs, rec] = await Promise.all([
+    db.from("clients").select("id, name").eq("active", true),
+    db.from("sugestoes_agentes").select("client_id, agente").eq("estado", "proposta").limit(10000),
+    db.from("campanhas_ideias").select("client_id").eq("estado", "proposta").limit(5000),
+    db.from("brain_itens").select("client_id").eq("estado", "proposto").limit(10000),
+    db.from("aprovacoes").select("client_id").eq("estado", "pendente").limit(1000),
+    db.from("agente_execucoes").select("client_id, fluxo, estado, criado_em").gte("criado_em", desde(24 * 3)).order("criado_em", { ascending: false }).limit(5000),
+    db.from("sugestoes_agentes").select("client_id").eq("agente", "recuperacao").eq("resultado", "agendou").gte("medido_em", desde(24 * 7)).limit(5000),
+  ]);
+  for (const r of [clientes, sug, camp, brain, apr, execs, rec]) if (r.error) throw new Error(r.error.message);
+  const por = new Map<string, PendenciasClinica>();
+  for (const c of clientes.data as { id: string; name: string }[]) if (!ehClinicaTeste(c.name))
+    por.set(c.id, { client_id: c.id, nome: c.name, recuperacao: 0, anuncios: 0, conteudo: 0, campanhas: 0, brain: 0, aprovacoes: 0, falhas: 0, agendaram: 0 });
+  const mais = (id: string, k: Exclude<keyof PendenciasClinica, "client_id" | "nome">) => { const p = por.get(id); if (p) p[k] += 1; };
+  for (const x of sug.data as { client_id: string; agente: "recuperacao" | "anuncios" | "conteudo" }[]) mais(x.client_id, x.agente);
+  for (const x of camp.data as { client_id: string }[]) mais(x.client_id, "campanhas");
+  for (const x of brain.data as { client_id: string }[]) mais(x.client_id, "brain");
+  for (const x of apr.data as { client_id: string }[]) mais(x.client_id, "aprovacoes");
+  const ultima = new Set<string>();
+  for (const x of execs.data as { client_id: string; fluxo: string; estado: string }[]) {
+    const k = `${x.client_id}:${x.fluxo}`;
+    if (ultima.has(k)) continue;
+    ultima.add(k);
+    if (x.estado === "falhou") mais(x.client_id, "falhas");
+  }
+  for (const x of rec.data as { client_id: string }[]) mais(x.client_id, "agendaram");
+  return [...por.values()];
+}
+
+const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 export function montarResumoEquipe(xs: PendenciasClinica[], baseUrl: string, data: string): { assunto: string; texto: string; html: string; total: number } {
   const linhas = xs
-    .map((c) => ({ c, itens: ROTULOS.filter(([k]) => Number(c[k]) > 0).map(([k, r]) => `${c[k]} ${r}`), peso: c.falhas * 1000 + c.recuperacao * 3 + c.anuncios * 2 + c.aprovacoes * 2 + c.conteudo + c.campanhas + c.brain }))
+    .map((c) => ({ c, itens: ROTULOS.filter(([k]) => Number(c[k]) > 0).map(([k, um, varios]) => plural(Number(c[k]), um, varios)), peso: c.falhas * 1000 + c.recuperacao * 3 + c.anuncios * 2 + c.aprovacoes * 2 + c.conteudo + c.campanhas + c.brain }))
     .filter((l) => l.itens.length || l.c.agendaram)
     .sort((a, b) => b.peso - a.peso);
   const soma = (k: keyof PendenciasClinica) => xs.reduce((s, c) => s + Number(c[k] || 0), 0);
   const total = ROTULOS.reduce((s, [k]) => s + soma(k), 0);
   const agendaram = soma("agendaram");
-  const assunto = total ? `Agentes: ${total} itens esperando a equipe (${data})` : `Agentes: nada pendente hoje (${data})`;
-  const topo = [`${soma("recuperacao")} pacientes para recuperar`, `${soma("anuncios")} ajustes de anúncio`, `${soma("conteudo")} roteiros`, `${soma("campanhas") + soma("brain")} estratégias e itens do Brain`].join(" · ");
+  const hoje = soma("recuperacao") + soma("anuncios") + soma("aprovacoes");
+  const assunto = !total ? `Agentes: nada pendente hoje (${data})` : hoje ? `Agentes: ${plural(hoje, "prioridade", "prioridades")} para hoje (${data})` : `Agentes: nada urgente, ${plural(total, "item", "itens")} para revisar (${data})`;
+  const topo = `Prioridade de hoje: ${plural(soma("recuperacao"), "paciente para recuperar", "pacientes para recuperar")}, ${plural(soma("anuncios"), "ajuste de anúncio", "ajustes de anúncio")}${soma("aprovacoes") ? `, ${plural(soma("aprovacoes"), "aprovação", "aprovações")}` : ""}. Quando puder: ${plural(soma("conteudo"), "roteiro", "roteiros")}, ${plural(soma("campanhas"), "estratégia", "estratégias")}, ${plural(soma("brain"), "item do Brain", "itens do Brain")}.`;
   const texto = [
     `Resumo dos agentes, ${data}.`, topo,
     agendaram ? `Nos últimos 7 dias, ${agendaram} pacientes recuperados pelos agentes agendaram (medido sozinho pelas conversas e pelo CRM).` : "",

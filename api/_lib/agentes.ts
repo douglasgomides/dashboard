@@ -728,11 +728,31 @@ const FLUXO_CONTEUDO: Fluxo = {
 
 export const FLUXOS: Record<string, Fluxo> = Object.fromEntries([FLUXO_ACESSOS, FLUXO_BRAIN, FLUXO_GROWTH, FLUXO_RECUPERACAO, FLUXO_ANUNCIOS, FLUXO_CONTEUDO].map((f) => [f.id, f]));
 
+/** Itens esperando revisão por clínica, para o limite de cada agente (maxAbertas). */
+async function abertasPorClinica(admin: Admin, id: string): Promise<Map<string, number>> {
+  const q = id === "brain" ? admin.from("brain_itens").select("client_id").eq("estado", "proposto")
+    : id === "campanhas" ? admin.from("campanhas_ideias").select("client_id").eq("estado", "proposta")
+    : admin.from("sugestoes_agentes").select("client_id").eq("agente", id).eq("estado", "proposta");
+  const { data, error } = await q.limit(20_000);
+  if (error) throw new Error(error.message);
+  const m = new Map<string, number>();
+  for (const r of (data ?? []) as { client_id: string }[]) m.set(r.client_id, (m.get(r.client_id) ?? 0) + 1);
+  return m;
+}
+
 /** Agendamento: para cada agente do catálogo (src/lib/agentes-catalogo.ts), põe na fila a rodada de cada clínica com o
  *  módulo do agente quando a última rodada é mais velha que o intervalo e não há uma em andamento. Antes, mede sozinho o
  *  resultado das sugestões de recuperação (sugestoes_medir). Os agentes só preparam; quem aprova é uma pessoa. */
-export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas: number; puladas: number; por_agente: Record<string, number>; medidas: number }> {
+export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas: number; puladas: number; por_agente: Record<string, number>; medidas: number; cheias: number; expiradas: number }> {
   const { data: medidas } = await admin.rpc("sugestoes_medir");
+  // O que ninguém revisou some sozinho: o agente propõe de novo com dado novo se ainda fizer sentido.
+  const agora = Date.now();
+  const { data: exp1 } = await admin.from("sugestoes_agentes").update({ estado: "descartada", resultado: "expirou sem revisão" })
+    .eq("estado", "proposta").lt("criado_em", new Date(agora - 14 * 86_400_000).toISOString()).select("id");
+  const { data: exp2 } = await admin.from("campanhas_ideias").update({ estado: "descartada", resultado: "expirou sem revisão" })
+    .eq("estado", "proposta").lt("criado_em", new Date(agora - 30 * 86_400_000).toISOString()).select("id");
+  const expiradas = (exp1?.length ?? 0) + (exp2?.length ?? 0);
+  let cheias = 0;
   const { data: mods, error } = await admin.from("cliente_modulos").select("client_id, modulo").in("status", ["ativo", "beta"]);
   if (error) throw new Error(error.message);
   let enfileiradas = 0, puladas = 0;
@@ -742,7 +762,9 @@ export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas:
     if (!fluxo) continue;
     const clientes = [...new Set(((mods ?? []) as { client_id: string; modulo: string }[]).filter((m) => m.modulo === ag.modulo).map((m) => m.client_id))];
     const limite = Date.now() - ag.intervaloHoras * 3_600_000;
+    const abertas = await abertasPorClinica(admin, ag.id);
     for (const client_id of clientes) {
+      if ((abertas.get(client_id) ?? 0) >= ag.maxAbertas) { cheias++; puladas++; continue; }
       const { data: ult } = await admin.from("agente_execucoes").select("estado, criado_em").eq("client_id", client_id).eq("fluxo", fluxo.id)
         .order("criado_em", { ascending: false }).limit(1).maybeSingle();
       const ativa = ult && !["concluida", "falhou", "cancelada"].includes(ult.estado as string);
@@ -753,7 +775,7 @@ export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas:
       por_agente[ag.id] = (por_agente[ag.id] ?? 0) + 1;
     }
   }
-  return { enfileiradas, puladas, por_agente, medidas: Number(medidas ?? 0) };
+  return { enfileiradas, puladas, por_agente, medidas: Number(medidas ?? 0), cheias, expiradas };
 }
 /** Nome antigo, usado pelo agendamento do n8n ("brain_enfileirar"): agora enfileira todos os agentes. */
 export const enfileirarBrain = enfileirarAgendados;
