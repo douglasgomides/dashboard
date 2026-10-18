@@ -13,6 +13,7 @@ import { grupoEspecialidade } from "../../src/lib/benchmark-estrategico.js";
 import { filtrarComentarios, filtrarConversas, filtrarPosts, somarFiltros, textoFiltro, type ResumoConversa } from "../../src/lib/aprendizado.js";
 import { lerLicoes, resultadosRecuperacao } from "./aprendizado.js";
 import { limitarTexto } from "./texto-ia.js";
+import { etapaDaCampanha, seguidoresEstimados, type Etapa, type PostEtapa } from "../../src/lib/funil-anuncios.js";
 
 type Admin = SupabaseClient<any, any, any>;
 const DIA = 86_400_000;
@@ -102,7 +103,25 @@ export async function lerAnuncios(admin: Admin, clientId: string) {
   if (erroMetricas || erroCampanhas) throw new Error("Não foi possível ler as métricas e campanhas de anúncios");
   const nomes: Record<string, string> = {};
   for (const c of (camps ?? []) as { campaign_id: string; name: string; objective: string | null }[]) nomes[c.campaign_id] = corta(c.name, 90) + (c.objective ? ` (${c.objective})` : "");
-  const sinais: SinalAds[] = diagnosticarAnuncios((linhas ?? []) as LinhaAds[], nomes, hoje);
+  // Etapa do funil de cada campanha (C1/C2 = visita ao perfil, julgada por seguidor; C3 = conversa). Seguidor por
+  // campanha é estimado pelo rateio dos novos seguidores do dia (src/lib/funil-anuncios.ts).
+  const [{ data: posts }, { data: segs }] = await Promise.all([
+    admin.from("instagram_posts").select("caption, funnel_stage").eq("client_id", clientId).gte("posted_at", desde(400)).not("funnel_stage", "is", null).limit(2000),
+    admin.from("instagram_account_daily_metrics").select("date, new_followers").eq("client_id", clientId).gte("date", desde(15).slice(0, 10)).limit(200),
+  ]);
+  const etapas = new Map<string, Etapa>();
+  for (const c of (camps ?? []) as { campaign_id: string; name: string; objective: string | null }[]) {
+    const e = etapaDaCampanha(c.name ?? "", c.objective, (posts ?? []) as PostEtapa[]).etapa;
+    if (e) etapas.set(c.campaign_id, e);
+  }
+  const perfilIds = new Set([...etapas].filter(([, e]) => e === "C1" || e === "C2").map(([id]) => id));
+  const novosPorDia = new Map<string, number>();
+  for (const x of (segs ?? []) as { date: string; new_followers: number | null }[]) if (x.new_followers != null) novosPorDia.set(x.date, (novosPorDia.get(x.date) ?? 0) + Number(x.new_followers));
+  const ini7 = desde(7).slice(0, 10);
+  const linhas7 = ((linhas ?? []) as LinhaAds[]).filter((l) => l.campaign_id && l.date >= ini7 && l.date <= hoje)
+    .map((l) => ({ campaign_id: l.campaign_id as string, date: l.date, spend: Number(l.spend ?? 0), link_clicks: Number(l.link_clicks ?? 0) }));
+  const seguidores7 = seguidoresEstimados(linhas7, [...novosPorDia].map(([date, novos]) => ({ date, novos })), perfilIds);
+  const sinais: SinalAds[] = diagnosticarAnuncios((linhas ?? []) as LinhaAds[], nomes, hoje, { etapas, seguidores7 });
   const [brain, f, hist, licoes] = await Promise.all([lerBrain(admin, clientId, ["identidade", "audiencia", "criativa"]), ficha(admin, clientId), aprendizado(admin, clientId, "anuncios", 30), lerLicoes(admin, clientId, "anuncios")]);
   const anteriores = hist.slice(0, 15).map((h) => `- [${h.estado}${h.resultado ? `, ${h.resultado}` : ""}] ${corta(h.titulo, 120)}`).join("\n");
   return { sinais, brain, ficha: f.texto, anteriores, licoes: licoes.texto, n_licoes: licoes.n };
