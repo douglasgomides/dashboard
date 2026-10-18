@@ -943,6 +943,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
+    if (alvo === "creative_worker") {
+      // Inteligência Criativa: dispara na hora o worker no GitHub Actions (o agendamento de 10 min é só reserva).
+      // Token fino com permissão "Actions: write" só neste repositório, em GITHUB_DISPATCH_TOKEN na Vercel.
+      if (!ehAdmin) { res.status(403).json({ error: "Só a equipe usa a Inteligência Criativa" }); return; }
+      const tokenGh = process.env.GITHUB_DISPATCH_TOKEN;
+      if (!tokenGh) { res.status(200).json({ alvo, ok: false, erro: "sem_token", agendado: true }); return; }
+      const r = await fetch("https://api.github.com/repos/douglasgomides/dashboard/actions/workflows/creative-worker.yml/dispatches", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tokenGh}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json" },
+        body: JSON.stringify({ ref: "claude/doctor-creator-hub-nixvw6" }),
+      });
+      res.status(200).json({ alvo, ok: r.status === 204, status: r.status, agendado: r.status !== 204 });
+      return;
+    }
+
     if (alvo === "sap_redigir") {
       // Copiloto dos documentos do SAP: rascunho + perguntas; respostas viram fatos propostos no Brand Brain.
       if (!ehAdmin) {

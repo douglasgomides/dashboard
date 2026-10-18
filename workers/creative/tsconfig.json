@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "incremental": false, "paths": { "@/*": ["src/*"] } },
+  "include": ["./*.ts", "../../src/lib/creative-intelligence/**/*.ts"]
+}
