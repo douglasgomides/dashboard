@@ -25,7 +25,7 @@ assert.equal(avaliarSeguidor("C1", 60, 50).veredicto, "manter"); // R$ 1,20
 assert.equal(avaliarSeguidor("C1", 40, 50).veredicto, "escalar"); // R$ 0,80
 assert.equal(avaliarSeguidor("C1", 100, 50).veredicto, "revisar"); // R$ 2,00
 assert.equal(avaliarSeguidor("C1", 200, 50).veredicto, "pausar"); // R$ 4,00
-assert.equal(avaliarSeguidor("C2", 100, 50).veredicto, "manter", "C2 aceita seguidor mais caro");
+assert.equal(avaliarSeguidor("C2", 150, 50).veredicto, "manter", "C2 aceita seguidor mais caro (R$ 3,00, teto R$ 4,00)");
 assert.equal(avaliarSeguidor("C1", 20, 5).veredicto, "pouco_dado");
 
 // ---- Diagnóstico: C1 sem conversa NÃO vira "sem resultado"

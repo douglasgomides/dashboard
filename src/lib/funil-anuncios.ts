@@ -16,7 +16,7 @@ const norm = (s: string) => (s ?? "").toLowerCase().normalize("NFD").replace(DIA
 
 export type Etapa = "C1" | "C2" | "C3";
 export interface ReguaEtapas { c1MaxSeguidor: number; c2MaxSeguidor: number }
-export const REGUA_PADRAO: ReguaEtapas = { c1MaxSeguidor: 1.5, c2MaxSeguidor: 3 };
+export const REGUA_PADRAO: ReguaEtapas = { c1MaxSeguidor: 1.5, c2MaxSeguidor: 4 };
 
 /** "Publicação do Instagram: O laser íntimo é um..." → "o laser intimo e um" (para achar o post pela legenda). */
 export function inicioDaLegenda(nomeCampanha: string): string | null {
