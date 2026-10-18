@@ -168,7 +168,7 @@ export function RecuperarHoje({ clientId, podeEditar }: { clientId: string; pode
 
 // ---------------------------------------------------------------- Gestor de anúncios
 
-const ROTULO_SINAL: Record<string, string> = { sem_resultado: "Gastando sem resultado", custo_subiu: "Custo subiu", fadiga: "Criativo cansado", escalar: "Pode escalar" };
+const ROTULO_SINAL: Record<string, string> = { sem_resultado: "Gastando sem resultado", custo_subiu: "Custo subiu", fadiga: "Criativo cansado", escalar: "Pode escalar", seguidor_caro: "Seguidor caro", perfil_escalar: "Seguidor barato: pode escalar" };
 
 function Copies({ copies }: { copies: CopyAnuncio[] }) {
   if (!copies?.length) return null;
@@ -209,7 +209,7 @@ function CartaoAnuncio({ s, podeEditar, decidir }: { s: Sugestao; podeEditar: bo
   const copies: CopyAnuncio[] = s.conteudo?.copies ?? [];
   return (
     <article className="flex flex-col rounded-xl border p-3" style={cartao(s)}>
-      <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: s.tipo === "escalar" ? "var(--accent)" : "var(--warn)" }}>{ROTULO_SINAL[s.tipo] ?? s.tipo}</span>
+      <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: s.tipo === "escalar" || s.tipo === "perfil_escalar" ? "var(--accent)" : "var(--warn)" }}>{ROTULO_SINAL[s.tipo] ?? s.tipo}</span>
       <h4 className="mt-0.5 text-[15px] font-semibold leading-snug">{s.titulo}</h4>
       {s.detalhe && <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--ink-2)" }}>{s.detalhe}</p>}
       <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs" style={{ color: "var(--ink-2)" }}>{s.evidencias.map((e) => <li key={e}>{e}</li>)}</ul>

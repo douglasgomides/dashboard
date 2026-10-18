@@ -398,7 +398,7 @@ Regras:
 - Só afirme o que está nas fontes. Quando for padrão, diga o tamanho da amostra (ex.: "em 12 de 40 resumos").
 - Da fonte auditoria_comercial, use as porcentagens como vieram (não arredonde de novo nem invente outras): objeções viram itens de audiencia (ex.: objecao_preco), falhas viram itens de comercial (ex.: falha_sem_follow_up), sempre com a % e o total de conversas.
 - NUNCA inclua nome, telefone, e-mail, CPF, @ de perfil ou caso clínico de paciente. Só padrões agregados.
-- Nada de promessa de resultado, antes e depois ou linguagem proibida pelo CFM.
+- Nada de promessa de resultado ou linguagem proibida pelo CFM. Antes e depois só como história (a jornada do paciente, com contexto educativo), com autorização por escrito do paciente e sem promessa de resultado (CFM 2.336/2023).
 - "fonte" é uma destas chaves: {FONTES}. Use a de onde o item saiu.
 - "confianca": alta (várias evidências), media, baixa (uma evidência só).
 - Se um item já aprovado continua certo, não repita. Se as fontes mostram que mudou, proponha a mesma chave com o texto novo.
@@ -537,7 +537,7 @@ Para cada ideia:
 - publico: quem recebe, descrito pelo dado (ex.: "quem perguntou sobre menopausa e não agendou nos últimos 60 dias").
 - oferta: para pacote/programa, o que inclui (consultas, exames, acompanhamento, materiais, retorno, canal direto com a equipe), pensado a partir dos serviços da ficha. NUNCA preço, desconto, condição especial, brinde, sorteio, "grátis", parcelamento ou promessa de resultado. Para outros tipos, a proposta de valor ou null.
 - canal: WhatsApp, Instagram orgânico, Meta Ads, presencial, parceiros etc.
-- mensagem: texto pronto em português do Brasil, tom do Brand Brain, com [colchetes] para personalizar; sem preço, sem promessa de resultado, sem antes e depois. Pode ser roteiro de Reels, copy de anúncio ou mensagem de WhatsApp.
+- mensagem: texto pronto em português do Brasil, tom do Brand Brain, com [colchetes] para personalizar; sem preço e sem promessa de resultado; Antes e depois só como história (a jornada do paciente, com contexto educativo), com autorização por escrito do paciente e sem promessa de resultado (CFM 2.336/2023). Pode ser roteiro de Reels, copy de anúncio ou mensagem de WhatsApp.
 - porque: a lógica da ideia em 1 a 3 frases, ligando dado e Brain.
 - evidencias: 1 a 4 fatos com número tirados do contexto (ex.: "preço aparece em 31% das conversas (n = 212)"). Não invente número.
 - brain: chaves do Brand Brain usadas, exatamente como aparecem (memoria.chave). Só as que existem.
@@ -598,7 +598,7 @@ const FLUXO_GROWTH: Fluxo = {
 // Mesmo desenho: a regra escolhe (quem, qual campanha); a IA escreve no tom do Brain; o servidor valida; grava como
 // proposta. Nada sai do Hub sem uma pessoa.
 
-const REGRAS_TEXTO = `Português do Brasil, natural, como gente fala. Frases curtas. Sem travessão. Sem jargão de marketing ("transforme", "jornada", "incrível", "não perca"). Nada de preço, desconto, condição especial, brinde, sorteio, "grátis", antes e depois ou promessa de resultado (CFM). Nada de diagnóstico ou indicação de tratamento individual. Nunca escreva nome, telefone, e-mail ou @ de paciente.`;
+const REGRAS_TEXTO = `Português do Brasil, natural, como gente fala. Frases curtas. Sem travessão. Sem jargão de marketing ("transforme", "jornada", "incrível", "não perca"). Nada de preço, desconto, condição especial, brinde, sorteio, "grátis" ou promessa de resultado (CFM). Antes e depois só como história (a jornada do paciente, com contexto educativo), com autorização por escrito do paciente e sem promessa de resultado (CFM 2.336/2023). Nada de diagnóstico ou indicação de tratamento individual. Nunca escreva nome, telefone, e-mail ou @ de paciente.`;
 
 const SISTEMA_RECUPERACAO = `Você escreve, para a secretária de uma clínica médica, a mensagem de WhatsApp que retoma a conversa com cada pessoa da lista. A secretária revisa e envia.
 Para cada caso: leia o que aconteceu e escreva UMA mensagem curta (2 a 4 frases), específica para aquela conversa: retome o assunto exato, responda a objeção com informação (sem preço e sem pressão) e termine com uma pergunta fácil de responder ou dois horários entre [colchetes] para a secretária preencher. Comece SEMPRE exatamente com "Oi, [nome]!" (a tela troca pelo primeiro nome). NUNCA invente data, dia da semana, horário, nome de médico ou disponibilidade de agenda: você não sabe a agenda. Também não afirme o estado do agendamento (confirmado, remarcado, cancelado) nem resultado de exame: você não sabe; pergunte. Onde precisar, escreva [dia] e [horário] entre colchetes para a secretária preencher. Se a pessoa estava esperando resposta da clínica, peça desculpa pela demora em uma frase.
@@ -649,8 +649,9 @@ const FLUXO_RECUPERACAO: Fluxo = {
 };
 
 const SISTEMA_ANUNCIOS = `Você é gestor de tráfego sênior de clínicas médicas no Brasil. Para cada sinal (campanha com número fora do normal), escreva a recomendação para o gestor de tráfego executar no Gerenciador de Anúncios.
-Tipos de sinal: sem_resultado (gastou e não trouxe conversa nem lead), custo_subiu (custo por resultado subiu mais de 40%), fadiga (frequência alta, o público já viu demais), escalar (custo bem abaixo da média, com volume).
-Para cada um: "titulo" (ação em até 10 palavras), "acao" (o que fazer e por quê, citando os números do sinal), "passos" (2 a 5 passos práticos e concretos no Gerenciador: público, posicionamento, orçamento em %, criativo, objetivo), e "copies" (para sem_resultado, custo_subiu e fadiga: 2 copies novas de anúncio no tom do Brand Brain, cada uma com "gancho" (primeira frase que para a rolagem), "texto" (2 a 4 frases) e "cta"; para escalar: lista vazia).
+Funil da Doctor Creator: C1 = post sobre o TEMA, sem serviço (visita ao perfil; indicador: custo por seguidor, até R$ 1,50 mantém). C2 = tema ligado a um serviço (visita ao perfil; seguidor mais caro é aceito). C3 = remarketing, depoimento ou case para página de conversão ou mensagem (indicador: conversa, lead, agendamento). Nunca julgue C1/C2 por conversa. Mensagem direta tende a trazer lead desqualificado; o lead mais qualificado vem de quem visitou o perfil e clicou na bio ou nos stories. Depoimento e case podem. Antes e depois só como história (a jornada do paciente, com contexto educativo), com autorização por escrito do paciente e sem promessa de resultado (CFM 2.336/2023). Se o criativo for antes e depois sem história ou com promessa, recomende reescrever no formato de jornada.
+Tipos de sinal: sem_resultado (C3 ou sem etapa: gastou e não trouxe conversa nem lead), custo_subiu (custo por resultado subiu mais de 40%), fadiga (frequência alta, o público já viu demais), escalar (custo bem abaixo da média, com volume), seguidor_caro (C1/C2: custo por seguidor estimado acima do teto), perfil_escalar (C1/C2: seguidor bem abaixo do teto, com volume).
+Para cada um: "titulo" (ação em até 10 palavras), "acao" (o que fazer e por quê, citando os números do sinal e a etapa), "passos" (2 a 5 passos práticos e concretos no Gerenciador: público, posicionamento, orçamento em %, criativo, objetivo), e "copies" (para sem_resultado, custo_subiu, fadiga e seguidor_caro: 2 copies novas no tom do Brand Brain e coerentes com a etapa, cada uma com "gancho" (primeira frase que para a rolagem), "texto" (2 a 4 frases) e "cta"; para escalar e perfil_escalar: lista vazia).
 Escalar = sugerir aumento gradual (15 a 25% a cada 3 dias), nunca dobrar. Não invente número que não está no sinal.
 ${REGRAS_TEXTO}
 Responda SOMENTE JSON: {"recomendacoes":[{"campanha_id":"...","titulo":"...","acao":"...","passos":["..."],"copies":[{"gancho":"...","texto":"...","cta":"..."}]}]}`;

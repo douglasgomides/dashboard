@@ -64,7 +64,7 @@ const peca = { formato: "reels", titulo: "3 sinais de que a sua pele pede avalia
   cenas: [{ fala: "Pinta que muda de cor merece olhar médico.", tela: "Mudou de cor?", visual: "Médica apontando" }, { fala: "Borda irregular também.", tela: "Borda irregular", visual: "Close" }, { fala: "E coceira que não passa.", tela: "Coça?", visual: "Médica sentada" }],
   legenda: "Muita gente acha que pinta é só estética. Não é. Salve este vídeo e compartilhe com quem precisa ver isso hoje. Ficou com dúvida? Me chama no direct.",
   cta: "Salve e mande para alguém", hashtags: ["dermatologia", "#pele"], evidencias: ["'pinta' aparece em 14 perguntas nos comentários"], brain: ["audiencia.duvida_pinta", "inventada.x"] };
-const cont = validarConteudo({ pecas: [peca, { ...peca, titulo: "Antes e depois do tratamento de manchas" }, { ...peca, titulo: "Reels curto demais", cenas: [peca.cenas[0]] }, { ...peca, formato: "carrossel", titulo: "Carrossel sem slides suficientes" }] }, ["audiencia.duvida_pinta"]);
+const cont = validarConteudo({ pecas: [peca, { ...peca, titulo: "Resultado garantido no tratamento de manchas" }, { ...peca, titulo: "Reels curto demais", cenas: [peca.cenas[0]] }, { ...peca, formato: "carrossel", titulo: "Carrossel sem slides suficientes" }] }, ["audiencia.duvida_pinta"]);
 assert.equal(cont.ok.length, 1);
 assert.equal(cont.ok[0].gancho, "Se você tem uma pinta assim, pare tudo.");
 assert.deepEqual(cont.ok[0].hashtags, ["#dermatologia", "#pele"]);

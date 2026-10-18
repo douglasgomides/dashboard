@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { ferirCFM, validarIdeias } from "../src/lib/campanhas-ia";
 
-// CFM: preço, desconto, promoção, grátis, brinde, antes e depois e garantia barrados; texto de cuidado passa.
+// CFM: preço, desconto, promoção, grátis, brinde e garantia barrados; texto de cuidado passa. Antes e depois com
+// história é permitido (CFM 2.336/2023), então o termo sozinho não barra.
 assert.equal(ferirCFM("Avaliação por R$ 199"), "preço");
 assert.equal(ferirCFM("20% de desconto no pacote"), "desconto");
 assert.equal(ferirCFM("Promoção de outubro"), "promoção");
 assert.equal(ferirCFM("Primeira consulta gratuita"), "grátis ou cortesia");
 assert.equal(ferirCFM("Sorteio de uma sessão"), "brinde, sorteio, cupom ou presente");
-assert.equal(ferirCFM("Veja o antes e depois"), "antes e depois");
+assert.equal(ferirCFM("A jornada da paciente: o antes e depois em 6 meses de acompanhamento"), null);
 assert.equal(ferirCFM("Resultado garantido em 30 dias"), "garantia de resultado");
 assert.equal(ferirCFM("Black Friday da pele"), "apelo comercial");
 assert.equal(ferirCFM("A médica esteja presente em todas as etapas"), null);

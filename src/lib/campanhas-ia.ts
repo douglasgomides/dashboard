@@ -40,14 +40,15 @@ export interface IdeiaCampanha {
 }
 
 // Termos que o CFM (Resolução 2.336/2023 e Código de Ética) não aceita em publicidade médica: preço, desconto,
-// promoção, brinde, sorteio, antes e depois, garantia ou promessa de resultado. Vale para oferta, mensagem e título.
+// promoção, brinde, sorteio, garantia ou promessa de resultado. Vale para oferta, mensagem e título.
+// Antes e depois NÃO entra aqui: a 2.336/2023 permite com contexto educativo (storytelling), autorização do paciente
+// e sem promessa de resultado; os prompts dos agentes trazem essas condições.
 const PROIBIDOS: [RegExp, string][] = [
   [/r\$\s?\d|\d+\s?reais\b|\bpre[çc]os?\s+(especial|promocional|reduzido|fechado)\b/i, "preço"],
   [/\bdesconto|\d+\s?%\s?(off|de desconto)|\boff\b/i, "desconto"],
   [/\bpromo[çc]/i, "promoção"],
   [/\bgr[aá]tis\b|\bgratuit[oa]s?\b|\bde gra[çc]a\b|\bcortesia\b/i, "grátis ou cortesia"],
   [/\bbrindes?\b|\bsorteios?\b|\bde presente\b|\bpresentear|\bpresente de\b|\bcupom|\bvoucher/i, "brinde, sorteio, cupom ou presente"],
-  [/antes\s+e\s+depois/i, "antes e depois"],
   [/\bgarant(ia|ido|ida|imos|e)\b|\bresultados?\s+(garantid|certo|definitiv)|\b100\s?%\s?(eficaz|seguro|garantid)/i, "garantia de resultado"],
   [/\bblack\s?friday\b|\bqueima\b|\bliquida[çc][aã]o\b|\bimperd[ií]ve(l|is)\b|\b[uú]ltimas vagas\b|\bs[oó] hoje\b/i, "apelo comercial"],
   [/\bcombo\b|\bleve\s+\d|\bpague\s+\d|\bparcel(a|e)\s+em\b/i, "condição comercial"],

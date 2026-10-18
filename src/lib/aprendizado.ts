@@ -244,10 +244,11 @@ export function licoesComerciais(resumos: ResumoConversa[], minGrupo = 8): Licao
 export interface LinhaCampanha { campaign_id: string | null; spend: number | null; leads: number | null; conversations: number | null }
 
 /** Anúncios: quanto custa um resultado em cada campanha (30 dias) e quais são referência ou desperdício. */
-export function licoesAnuncios(linhas: LinhaCampanha[], nomes: Record<string, string>): Licao[] {
+export function licoesAnuncios(linhas: LinhaCampanha[], nomes: Record<string, string>, ignorar: Set<string> = new Set()): Licao[] {
   const por = new Map<string, { gasto: number; res: number }>();
   for (const l of linhas) {
-    if (!l.campaign_id) continue;
+    // Campanhas de visita ao perfil, tráfego ou alcance (C1/C2) não são medidas por conversa: ficam fora.
+    if (!l.campaign_id || ignorar.has(l.campaign_id)) continue;
     const p = por.get(l.campaign_id) ?? { gasto: 0, res: 0 };
     p.gasto += Number(l.spend ?? 0); p.res += Number(l.conversations ?? 0) + Number(l.leads ?? 0);
     por.set(l.campaign_id, p);
@@ -364,7 +365,7 @@ Dê uma nota de 0 a 10 considerando, com o mesmo peso:
 2. Pronto para usar: a equipe consegue copiar e usar sem reescrever.
 3. Natural: soa como gente falando, sem clichê de marketing nem cara de IA.
 4. Chance de resultado: segue as lições aprendidas e tem um motivo claro para funcionar.
-Qualquer coisa que fira o CFM (preço, desconto, promessa, antes e depois), invente fato ou faça diagnóstico = nota 0.
+Qualquer coisa que fira o CFM (preço, desconto, promessa de resultado, antes e depois sensacionalista ou sem contexto), invente fato ou faça diagnóstico = nota 0. Antes e depois contado como história, com contexto educativo e sem promessa, é permitido.
 Em "motivo", diga em até 15 palavras o que mais pesou.
 Responda SOMENTE JSON: {"notas":[{"i":0,"nota":8,"motivo":"..."}]}`;
 

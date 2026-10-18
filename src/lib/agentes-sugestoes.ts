@@ -3,6 +3,7 @@
 // e a validação do que a IA escreve: CFM, dado pessoal, formato. A IA escreve; o servidor confere; uma pessoa aprova.
 import { textoSemDadoPessoal } from "./brand-brain.js";
 import { ferirCFM } from "./campanhas-ia.js";
+import { avaliarSeguidor, type ReguaEtapas } from "./funil-anuncios.js";
 
 const txt = (x: unknown, max: number) => (typeof x === "string" ? x.replace(/\s+/g, " ").trim().slice(0, max) : "");
 /** Sem travessão (padrão de escrita da Doctor Creator). */
@@ -72,9 +73,9 @@ export function validarRecuperacao(bruto: unknown, ids: Set<string>): { ok: Mens
 // ---------------------------------------------------------------- Gestor de anúncios
 
 export interface LinhaAds { campaign_id: string | null; date: string; spend: number | null; impressions: number | null; reach: number | null; frequency: number | null; leads: number | null; conversations: number | null; link_clicks: number | null }
-export type TipoSinal = "sem_resultado" | "custo_subiu" | "fadiga" | "escalar";
+export type TipoSinal = "sem_resultado" | "custo_subiu" | "fadiga" | "escalar" | "seguidor_caro" | "perfil_escalar";
 export interface SinalAds {
-  campanha_id: string; campanha: string; tipo: TipoSinal; prioridade: number;
+  campanha_id: string; campanha: string; tipo: TipoSinal; prioridade: number; etapa?: "C1" | "C2" | "C3" | null;
   gasto7: number; resultados7: number; custo7: number | null; custoAntes: number | null; frequencia7: number | null; evidencias: string[];
 }
 
@@ -82,7 +83,11 @@ const brl = (v: number) => `R$ ${v.toFixed(2).replace(".", ",")}`;
 
 /** Compara os últimos 7 dias com os 7 anteriores, por campanha. Resultado = conversas + leads. Só campanha com gasto
  *  relevante entra; os limites são conservadores para não gerar alarme com pouco dado. */
-export function diagnosticarAnuncios(linhas: LinhaAds[], nomes: Record<string, string>, hoje: string): SinalAds[] {
+/** Campanhas C1/C2 (visita ao perfil) são julgadas pelo custo por seguidor estimado (src/lib/funil-anuncios.ts), nunca
+ *  por conversa. `perfil.seguidores7` = seguidores estimados de cada campanha nos últimos 7 dias. */
+export interface PerfilEtapas { etapas: Map<string, "C1" | "C2" | "C3">; seguidores7: Map<string, number>; regua?: ReguaEtapas }
+
+export function diagnosticarAnuncios(linhas: LinhaAds[], nomes: Record<string, string>, hoje: string, perfil?: PerfilEtapas): SinalAds[] {
   const dia = (d: string) => Math.round((Date.parse(hoje) - Date.parse(d)) / 86_400_000);
   type Acc = { gasto: number; res: number; imp: number; freqImp: number };
   const novo = (): Acc => ({ gasto: 0, res: 0, imp: 0, freqImp: 0 });
@@ -100,7 +105,9 @@ export function diagnosticarAnuncios(linhas: LinhaAds[], nomes: Record<string, s
     acc.freqImp += Number(l.frequency ?? 0) * imp;
     por.set(l.campaign_id, g);
   }
-  const conta = [...por.values()].reduce((s, g) => ({ gasto: s.gasto + g.a.gasto, res: s.res + g.a.res }), { gasto: 0, res: 0 });
+  // Média da conta só entre campanhas julgadas por conversa (visita ao perfil gastaria sem conversa e distorceria).
+  const conta = [...por.entries()].filter(([id]) => { const e = perfil?.etapas.get(id); return e !== "C1" && e !== "C2"; })
+    .reduce((s, [, g]) => ({ gasto: s.gasto + g.a.gasto, res: s.res + g.a.res }), { gasto: 0, res: 0 });
   const custoConta = conta.res > 0 ? conta.gasto / conta.res : null;
   const sinais: SinalAds[] = [];
   for (const [id, { a, b }] of por) {
@@ -113,11 +120,28 @@ export function diagnosticarAnuncios(linhas: LinhaAds[], nomes: Record<string, s
     if (custoAntes) ev.push(`7 dias anteriores: ${brl(b.gasto)}, ${b.res} resultados, ${brl(custoAntes)} por resultado.`);
     if (custoConta) ev.push(`Média da conta nos últimos 7 dias: ${brl(custoConta)} por resultado.`);
     if (freq) ev.push(`Frequência média: ${freq.toFixed(1)}.`);
+    const etapa = perfil?.etapas.get(id) ?? null;
+    if (etapa === "C1" || etapa === "C2") {
+      // Visita ao perfil: o resultado é seguidor (estimado), não conversa.
+      const seg = perfil!.seguidores7.get(id) ?? 0;
+      const v = avaliarSeguidor(etapa, a.gasto, seg, perfil!.regua);
+      const evP = [`Etapa ${etapa} (${etapa === "C1" ? "tema, sem serviço" : "tema ligado a serviço"}): o indicador é seguidor, não conversa.`,
+        `Últimos 7 dias: ${brl(a.gasto)} investidos, cerca de ${Math.round(seg)} seguidores estimados${v.custo ? `, ${brl(v.custo)} por seguidor` : ""} (teto ${brl(v.teto)}).`,
+        "Seguidor estimado: novos seguidores do dia rateados pelos cliques no perfil de cada campanha (inclui orgânico, então o custo real é um pouco maior).",
+        ...(freq ? [`Frequência média: ${freq.toFixed(1)}.`] : [])];
+      const b2 = { ...base, etapa, resultados7: Math.round(seg), custo7: v.custo, custoAntes: null };
+      if (v.veredicto === "pausar" || v.veredicto === "revisar") sinais.push({ ...b2, tipo: "seguidor_caro", prioridade: v.veredicto === "pausar" ? 40 : 30, evidencias: evP });
+      else if (v.veredicto === "escalar" && (freq ?? 0) < 2.5) sinais.push({ ...b2, tipo: "perfil_escalar", prioridade: 25, evidencias: evP });
+      else if (freq && freq >= 3.2 && a.gasto >= 50) sinais.push({ ...b2, tipo: "fadiga", prioridade: 20, evidencias: evP });
+      continue;
+    }
+    if (etapa === "C3") ev.unshift("Etapa C3 (remarketing, depoimento ou case para página ou mensagem): o indicador é conversa, lead e agendamento.");
     const limiteSem = Math.max(80, (custoConta ?? 40) * 3);
     if (a.res === 0 && a.gasto >= limiteSem) sinais.push({ ...base, tipo: "sem_resultado", prioridade: 40, evidencias: ev });
     else if (custo7 && custoAntes && b.res >= 5 && custo7 > custoAntes * 1.4) sinais.push({ ...base, tipo: "custo_subiu", prioridade: 30, evidencias: ev });
     else if (freq && freq >= 3.2 && a.gasto >= 50) sinais.push({ ...base, tipo: "fadiga", prioridade: 20, evidencias: ev });
     else if (custo7 && custoConta && a.res >= 10 && custo7 <= custoConta * 0.7 && (freq ?? 0) < 2.5) sinais.push({ ...base, tipo: "escalar", prioridade: 25, evidencias: ev });
+    if (sinais.length && sinais[sinais.length - 1].campanha_id === id) sinais[sinais.length - 1].etapa = etapa;
   }
   return sinais.sort((x, y) => y.prioridade - x.prioridade || y.gasto7 - x.gasto7).slice(0, 8);
 }
