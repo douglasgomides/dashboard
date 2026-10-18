@@ -19,7 +19,7 @@ function ProductPresentation() {
     <div className={`nx-public nx-landing nx-landing--${product}`}>
       <a className="nx-skip" href="#presentation-main">Ir para o conteúdo</a>
       <header className="nx-public-nav">
-        <ProductBrand product={product} />
+        <ProductBrand product={product} dark />
         <nav aria-label="Navegação pública"><a className="nx-nav-method" href="#metodo">{sap ? "A implantação" : "O que você descobre"}</a><a className="nx-nav-method" href="#ferramenta">Por dentro</a><Link className="nx-button nx-button--outline" to="/login">Acessar {c.name}<ArrowRight size={15} aria-hidden /></Link></nav>
       </header>
       <main id="presentation-main" tabIndex={-1}>
