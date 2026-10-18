@@ -21,6 +21,7 @@ import {
 } from "./runtime.js";
 import { structured } from "./intelligence.js";
 import { checkpoint } from "./providers.js";
+import { hasEmbeddedCaptions } from "../../src/lib/creative-intelligence/caption-style.js";
 
 export async function motionAvailable() {
   if (
@@ -265,10 +266,11 @@ export async function renderMotion(
       output,
       duration: document.cuts.reduce((n, c) => n + c.end - c.start, 0),
       aspect: document.aspect,
-      subtitles: document.subtitles && !motion.source_has_captions,
+      subtitles: document.subtitles && !hasEmbeddedCaptions(document),
+      subtitleSize: document.subtitleSize,
       accent: motion.accent,
       captionPosition: motion.caption_position,
-      gentleZoom: motion.gentle_zoom && !motion.source_has_captions,
+      gentleZoom: motion.gentle_zoom && !hasEmbeddedCaptions(document),
       cuts: document.cuts.map((c) => ({ start: c.start, end: c.end })),
       words: cutWords(motion.words, document.cuts),
     }),

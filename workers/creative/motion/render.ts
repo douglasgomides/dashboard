@@ -20,6 +20,7 @@ const schema = z
     duration: z.number().positive().max(180),
     aspect: z.enum(["9:16", "1:1", "16:9"]),
     subtitles: z.boolean(),
+    subtitleSize: z.number().int().min(20).max(56).default(48),
     accent: z.string().regex(/^#[a-fA-F0-9]{6}$/),
     captionPosition: z.enum(["lower", "upper"]),
     gentleZoom: z.boolean(),
@@ -125,6 +126,7 @@ try {
     captionPosition: input.captionPosition,
     gentleZoom: input.gentleZoom,
     subtitles: input.subtitles,
+    subtitleSize: input.subtitleSize,
     pages: captionPages(input.words).map((p) =>
       p.map((w, i) => ({
         text: (i ? " " : "") + w.text,

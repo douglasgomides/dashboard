@@ -16,8 +16,12 @@ registerRoot(() => (
       accent: "#d3b66b",
       captionPosition: "lower" as const,
       gentleZoom: false,
-      subtitles: false,
-      pages: [],
+      subtitles: true,
+      subtitleSize: 48,
+      pages: [[
+        { text: "Informação clara", startMs: 0, endMs: 1400, timestampMs: null, confidence: null },
+        { text: " para decidir.", startMs: 1400, endMs: 3000, timestampMs: null, confidence: null },
+      ]],
       cutTimes: [0],
     }}
     calculateMetadata={({ props }) => ({

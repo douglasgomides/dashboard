@@ -68,7 +68,7 @@ export function captionPages(words: MotionPlan["words"]) {
       !last ||
       page.length >= 5 ||
       word.start - last.end > 0.4 ||
-      page.reduce((n, w) => n + w.text.length + 1, 0) + word.text.length > 36 ||
+      page.map((w) => w.text.trim()).join(" ").length + word.text.trim().length + 1 > 30 ||
       /[.!?]$/.test(last.text)
     )
       pages.push([word]);

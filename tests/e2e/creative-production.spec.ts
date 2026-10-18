@@ -290,6 +290,29 @@ test("conflito não apaga edição local nem declara salvamento", async ({
     page.getByRole("textbox", { name: "Texto do slide 1", exact: true }),
   ).toHaveValue("Minha edição preservada.");
 });
+test("legendas mostram tamanho e impedem uma segunda camada no original", async ({ context, page }) => {
+  const fixture = await studio(context, "admin", { video: true });
+  await page.setViewportSize({ width: 375, height: 1000 });
+  await page.goto(`/${CID}/inteligencia-criativa`);
+  await page.getByRole("button", { name: "Estúdio de produção", exact: true }).click();
+  await page.getByRole("button", { name: /Projeto de conteúdo da clínica/ }).click();
+  const editor = page.getByRole("region", { name: "Estúdio de produção" });
+  await expect(editor.getByLabel("Prévia de leitura das legendas")).toBeVisible();
+  const size = editor.getByRole("slider", { name: /Tamanho das legendas/ });
+  await expect(size).toHaveValue("48");
+  await size.press("End");
+  await expect(size).toHaveValue("56");
+  await editor.getByRole("checkbox", { name: "O vídeo original já possui legendas ou títulos" }).check();
+  await expect(editor.getByRole("checkbox", { name: "Adicionar legendas ao vídeo" })).toBeDisabled();
+  await expect(size).toBeDisabled();
+  await expect(editor.getByLabel("Prévia de leitura das legendas")).toHaveCount(0);
+  await expect(editor).toContainText("O tamanho acima não altera texto já gravado na imagem.");
+  await editor.getByRole("button", { name: "Salvar revisão", exact: true }).click();
+  await expect.poll(() => fixture.saved).toBe(1);
+  expect(fixture.revisions[0].document).toMatchObject({ sourceHasCaptions: true, subtitleSize: 56 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test("vídeo exige gravação e distingue roteiro de fala real", async ({
   context,
   page,

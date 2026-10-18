@@ -39,6 +39,7 @@ try {
       duration: 1.5,
       aspect: "9:16",
       subtitles: true,
+      subtitleSize: 56,
       accent: "#D4B464",
       captionPosition: "lower",
       gentleZoom: true,

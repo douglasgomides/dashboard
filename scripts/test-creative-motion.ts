@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { captionContrast, readableCaptionAccent, hasEmbeddedCaptions } from "../src/lib/creative-intelligence/caption-style";
 import {
   cutWords,
   captionPages,
@@ -37,7 +38,16 @@ for (const page of captionPages(
     end: (i + 1) * 0.3,
   })),
 ))
-  assert(page.length <= 5 && page.map((w) => w.text).join(" ").length <= 36);
+  assert(page.length <= 5 && page.map((w) => w.text).join(" ").length <= 30);
+assert(captionContrast("#ffffff") > 15);
+assert.equal(readableCaptionAccent("#101318"), "#F4D77C");
+assert(captionContrast(readableCaptionAccent("#202020")) >= 4.5);
+assert.equal(readableCaptionAccent("#FFD600"), "#FFD600");
+assert.equal(readableCaptionAccent("invalid"), "#F4D77C");
+assert.equal(hasEmbeddedCaptions({ motion: { source_has_captions: true } }), true);
+assert.equal(hasEmbeddedCaptions({ sourceHasCaptions: true }), true);
+assert.equal(hasEmbeddedCaptions({ sourceHasCaptions: false, motion: { source_has_captions: true } }), false);
+assert.equal(hasEmbeddedCaptions({}), false);
 const plan: MotionPlan = {
   version: 1,
   source_media_id: "11111111-1111-4111-8111-111111111111",
@@ -87,6 +97,8 @@ const d: VideoDocument = {
   motion: plan,
 };
 assert(productionDocumentSchema.safeParse(d).success);
+assert(productionDocumentSchema.safeParse({ ...d, sourceHasCaptions: true }).success);
+assert.equal((newDocument("reels") as VideoDocument).subtitleSize, 48);
 assert(
   !productionDocumentSchema.safeParse({
     ...d,

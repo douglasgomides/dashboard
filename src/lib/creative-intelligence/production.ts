@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { CreativeAdaptation } from "./contracts";
 import type { ReferenceSlide } from "./reference-design";
-import { motionPlanSchema } from "./video-motion";
+import { captionPages, motionPlanSchema } from "./video-motion";
+import { DEFAULT_CAPTION_SIZE } from "./caption-style";
 
 export const PRODUCTION_BUCKET = "nexo-production-private";
 export const PRODUCTION_IMAGE_BUCKET = "nexo-production-input-images";
@@ -87,6 +88,7 @@ export const videoSchema = z
     cuts: z.array(cutSchema).max(120),
     aspect: z.enum(["9:16", "1:1", "16:9"]),
     subtitles: z.boolean(),
+    sourceHasCaptions: z.boolean().optional(),
     subtitleSize: z.number().int().min(20).max(56),
     goalSeconds: z.number().int().min(15).max(MAX_EDIT_SECONDS),
     visualCoverage: z.enum(["not_analysed", "sampled_frames"]),
@@ -236,7 +238,7 @@ export function newDocument(
     cuts: [],
     aspect: "9:16",
     subtitles: true,
-    subtitleSize: 32,
+    subtitleSize: DEFAULT_CAPTION_SIZE,
     goalSeconds: 60,
     visualCoverage: "not_analysed",
     recordingBrief:
@@ -463,9 +465,23 @@ export function toAss(
   height: number,
   fontSize: number,
 ) {
+  // Sem tempos por palavra, a divisão é estimada dentro de cada segmento.
+  // O SRT separado preserva a transcrição e os tempos originais completos.
+  const pages = captions.flatMap((caption) => {
+    const words = plainCaption(caption.text).trim().split(/\s+/).filter(Boolean);
+    return captionPages(words.map((text, i) => ({
+      text,
+      start: caption.start + (caption.end - caption.start) * i / words.length,
+      end: caption.start + (caption.end - caption.start) * (i + 1) / words.length,
+    }))).map((page) => ({
+      start: page[0].start,
+      end: page.at(-1)!.end,
+      text: page.map((word) => word.text).join(" "),
+    }));
+  });
   const time = (seconds: number) => {
     const n = Math.round(seconds * 100);
     return `${Math.floor(n / 360000)}:${String(Math.floor(n / 6000) % 60).padStart(2, "0")}:${String(Math.floor(n / 100) % 60).padStart(2, "0")}.${String(n % 100).padStart(2, "0")}`;
   };
-  return `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,${fontSize},&H00FFFFFF,&H00FFFFFF,&H00161616,&H80000000,0,0,0,0,100,100,0,0,1,2,1,2,50,50,80,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n${captions.map((t) => `Dialogue: 0,${time(t.start)},${time(t.end)},Default,,0,0,0,,${plainCaption(t.text).replace(/\\/g, "＼")}`).join("\n")}\n`;
+  return `[Script Info]\nScriptType: v4.00+\nPlayResX: ${width}\nPlayResY: ${height}\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,${fontSize},&H00FFFFFF,&H00FFFFFF,&H00181310,&H00181310,-1,0,0,0,100,100,0,0,3,8,0,2,${Math.round(width * 0.075)},${Math.round(width * 0.075)},${Math.round(height * 0.2)},1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n${pages.map((t) => `Dialogue: 0,${time(t.start)},${time(t.end)},Default,,0,0,0,,${plainCaption(t.text).replace(/\\/g, "＼")}`).join("\n")}\n`;
 }

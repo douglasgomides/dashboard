@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Resvg } from "../workers/creative/node_modules/@resvg/resvg-js/index.js";
@@ -84,6 +84,18 @@ try {
   assert.deepEqual(output.dimensions, [720, 1280]);
   assert.equal(output.captions.length, 2);
   assert.equal(output.captions[1].start, 2);
+  const luma = async (path: string) => {
+    const log = await runMedia("ffmpeg", ["-ss", "0.5", "-i", path, "-vf", "signalstats,metadata=mode=print:key=lavfi.signalstats.YMAX", "-frames:v", "1", "-f", "null", "-"], signal);
+    const value = log.match(/lavfi\.signalstats\.YMAX=(\d+)/)?.[1];
+    assert(value, "A leitura de pixels do vídeo precisa estar disponível");
+    return Number(value);
+  };
+  assert(await luma(output.output) > 200, "A legenda branca foi renderizada");
+  const protectedDir = join(dir, "embedded");
+  await mkdir(protectedDir);
+  const protectedOutput = await renderVideoFile(source, { ...video, sourceHasCaptions: true }, protectedDir, signal);
+  assert(await luma(protectedOutput.output) < 150, "Um original já legendado não recebe nova camada de texto");
+  assert.equal(protectedOutput.captions.length, 2, "O SRT continua disponível para revisão");
   await assert.rejects(
     () =>
       renderVideoFile(

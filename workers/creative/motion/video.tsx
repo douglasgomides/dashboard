@@ -6,6 +6,7 @@ import {
   useVideoConfig,
 } from "remotion";
 import type { Caption } from "@remotion/captions";
+import { CAPTION_BACKGROUND, DEFAULT_CAPTION_SIZE, readableCaptionAccent } from "../../../src/lib/creative-intelligence/caption-style";
 export type MotionProps = {
   videoUrl: string;
   duration: number;
@@ -15,6 +16,7 @@ export type MotionProps = {
   captionPosition: "lower" | "upper";
   gentleZoom: boolean;
   subtitles: boolean;
+  subtitleSize: number;
   pages: Caption[][];
   cutTimes: number[];
 };
@@ -24,12 +26,15 @@ export const ReferenceVideo = ({
   captionPosition,
   gentleZoom,
   subtitles,
+  subtitleSize = DEFAULT_CAPTION_SIZE,
   pages,
   cutTimes,
 }: MotionProps) => {
   const frame = useCurrentFrame(),
     { fps, width, height } = useVideoConfig(),
-    seconds = frame / fps;
+    seconds = frame / fps,
+    scale = Math.min(width, height) / 720,
+    highlight = readableCaptionAccent(accent);
   const cutIndex = Math.max(
       0,
       cutTimes.findLastIndex((t) => seconds >= t),
@@ -90,28 +95,21 @@ export const ReferenceVideo = ({
               ? { top: height * 0.14 }
               : { bottom: height * 0.19 }),
             textAlign: "center",
-            fontSize: width * 0.059,
+            fontSize: subtitleSize * scale,
             fontWeight: 700,
-            lineHeight: 1.25,
-            letterSpacing: -0.5,
-            textShadow: "0 2px 8px #000",
-            opacity: interpolate(
-              frame,
-              [
-                (page[0].startMs / 1000) * fps,
-                (page[0].startMs / 1000) * fps + 3,
-              ],
-              [0.5, 1],
-              { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-            ),
+            lineHeight: 1.2,
+            color: "#fff",
           }}
         >
           <span
             style={{
-              background: "rgba(12,14,17,.82)",
-              boxDecorationBreak: "clone",
-              padding: "8px 14px",
-              borderRadius: 5,
+              display: "inline-block",
+              maxWidth: "100%",
+              boxSizing: "border-box",
+              background: CAPTION_BACKGROUND,
+              padding: `${10 * scale}px ${16 * scale}px`,
+              borderRadius: 8 * scale,
+              overflowWrap: "anywhere",
             }}
           >
             {page.map((word, i) => (
@@ -121,7 +119,7 @@ export const ReferenceVideo = ({
                   color:
                     seconds * 1000 >= word.startMs &&
                     seconds * 1000 < word.endMs
-                      ? accent
+                      ? highlight
                       : "#fff",
                   whiteSpace: "pre-wrap",
                 }}

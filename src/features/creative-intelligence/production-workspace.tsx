@@ -29,6 +29,7 @@ import {
 } from "@/lib/creative-intelligence/reference-design";
 import type { CreativeAdaptation } from "@/lib/creative-intelligence/contracts";
 import { enqueue, cancelJob } from "./data";
+import { CAPTION_BACKGROUND, hasEmbeddedCaptions, readableCaptionAccent } from "@/lib/creative-intelligence/caption-style";
 import {
   createProduction,
   listProductions,
@@ -306,6 +307,7 @@ function ProjectEditor({
           cuts: [],
           visualCoverage: "not_analysed",
           motion: undefined,
+          sourceHasCaptions: undefined,
         });
       else if (current.format === "carrossel")
         edit(
@@ -1012,6 +1014,7 @@ function ProjectEditor({
                     transcript: [],
                     cuts: [],
                     motion: undefined,
+                    sourceHasCaptions: undefined,
                     visualCoverage: "not_analysed",
                   })
                 }
@@ -1155,24 +1158,64 @@ function ProjectEditor({
                   min="20"
                   max="56"
                   value={document.subtitleSize}
-                  disabled={!editable}
+                  disabled={!editable || hasEmbeddedCaptions(document)}
                   onChange={(e) =>
                     edit({ ...document, subtitleSize: Number(e.target.value) })
                   }
                 />
+                <small>{document.subtitleSize} px · novos projetos começam em 48 px</small>
               </label>
             </div>
             <label className="production-check">
               <input
                 type="checkbox"
-                checked={document.subtitles}
+                checked={hasEmbeddedCaptions(document)}
                 disabled={!editable}
+                onChange={(e) => edit({ ...document, sourceHasCaptions: e.target.checked })}
+              />
+              O vídeo original já possui legendas ou títulos
+            </label>
+            {hasEmbeddedCaptions(document) && (
+              <p className="production-notice">
+                As legendas do original serão preservadas. Não será adicionada outra
+                camada. O tamanho acima não altera texto já gravado na imagem.
+              </p>
+            )}
+            <label className="production-check">
+              <input
+                type="checkbox"
+                checked={document.subtitles}
+                disabled={!editable || hasEmbeddedCaptions(document)}
                 onChange={(e) =>
                   edit({ ...document, subtitles: e.target.checked })
                 }
               />
-              Legendas no vídeo
+              Adicionar legendas ao vídeo
             </label>
+            {!hasEmbeddedCaptions(document) && document.subtitles && (
+              <div className="my-4">
+                <p className="mb-2 text-xs">Prévia de tamanho e contraste · largura de celular</p>
+                <div
+                  aria-label="Prévia de leitura das legendas"
+                  style={{ width: "100%", maxWidth: 360 }}
+                >
+                  <svg viewBox="0 0 720 300" className="block w-full" role="img" aria-label="Exemplo de legenda com o tamanho escolhido">
+                    <rect width="720" height="300" rx="16" fill="#e5e7eb" />
+                    <rect x="60" y="80" width="600" height="140" rx="8" fill={CAPTION_BACKGROUND} />
+                    <g fontFamily="Arial, sans-serif" fontSize={document.subtitleSize} fontWeight="700" textAnchor="middle" fill="#fff">
+                      <text x="360" y="137">Informação <tspan fill={readableCaptionAccent(document.motion?.accent || "#D4B464")}>clara</tspan></text>
+                      <text x="360" y="195">para decidir.</text>
+                    </g>
+                  </svg>
+                </div>
+                <small>
+                  {document.motionRequested
+                    ? "O tamanho escolhido também será aplicado pelo Remotion."
+                    : "Sem Remotion, o tempo das frases curtas é estimado dentro de cada trecho transcrito."}
+                  {document.subtitleSize < 40 ? " Abaixo de 40 px, a leitura no celular pode ficar pequena." : ""}
+                </small>
+              </div>
+            )}
             <h3>Cortes da edição</h3>
             {document.cuts.length === 0 && (
               <p>Envie a gravação e prepare uma proposta de edição.</p>

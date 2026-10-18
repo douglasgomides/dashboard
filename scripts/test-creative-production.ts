@@ -79,6 +79,13 @@ assert(ass.includes("Default,Arial,36,"));
 assert(ass.includes("0:00:00.00,0:00:01.20"));
 assert(!ass.includes("{\\an8}"));
 assert(!ass.includes("\\N"));
+const shortAss = toAss([{ start: 0, end: 8, text: "Uma explicação mais longa deve aparecer em frases curtas que sejam fáceis de ler no celular." }], 720, 1280, 48);
+const dialogues = shortAss.split("\n").filter((line) => line.startsWith("Dialogue:"));
+assert(dialogues.length >= 4);
+assert(dialogues.every((line) => line.split(",").slice(9).join(",").length <= 30));
+assert(shortAss.includes("0:00:08.00"));
+assert(shortAss.includes("Default,Arial,48,"));
+assert(shortAss.includes(",3,8,0,2,54,54,256,1"));
 assert.equal(
   toSrt([
     {
