@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { CATEGORIAS, CONECTORES, NOME_ESTADO, type Categoria, type Conector, type EstadoCliente } from "@/lib/conectores";
@@ -21,6 +21,9 @@ function Integracoes() {
   const categorias = Object.keys(CATEGORIAS) as Categoria[];
   return (
     <div className="space-y-6">
+      <Link to="/assistentes-ia" className="block max-w-3xl rounded-xl border p-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+        <b>Assistentes de IA · Doctor Creator MCP</b> <span style={dim}>(só leitura): conectar Claude ou ChatGPT ao Hub, ver acessos concedidos e revogar →</span>
+      </Link>
       <p className="max-w-3xl text-sm" style={dim}>
         Todas as conexões do Nexo num lugar só, com o estado real de cada cliente (lido das contas ligadas e da última
         sincronização). "Planejado" é conector que ainda não existe: está aqui para orientar, não para ligar.
