@@ -244,6 +244,15 @@ try{
       await page.getByRole('navigation',{name:'Áreas do SAP',exact:true}).getByRole('link',{name:/Equipe e acessos/}).click();
       await expect(page).toHaveURL(origins.sap+`/sap/${CID}/papeis`);
       await expect(page.getByRole('navigation',{name:'Telas de Equipe e acessos',exact:true}).getByRole('link',{name:'Ficha e acessos',exact:true})).toHaveAttribute('href',`/sap/${CID}/onboarding`);
+      await page.goto(origins.sap+'/sap');
+      const operation=page.getByRole('group',{name:'Visão da operação',exact:true});
+      await expect(page.getByRole('region',{name:'Clínicas e resultados',exact:true})).toBeVisible();
+      await expect(page.getByRole('region',{name:'Prioridades da equipe',exact:true})).not.toBeVisible();
+      await operation.getByRole('button',{name:'Minhas prioridades',exact:true}).click();
+      await expect(page.getByRole('region',{name:'Prioridades da equipe',exact:true})).toBeVisible();
+      await expect(page.getByRole('region',{name:'Clínicas e resultados',exact:true})).not.toBeVisible();
+      await operation.getByRole('button',{name:'Clínicas e resultados',exact:true}).click();
+      await expect(page.getByRole('region',{name:'Clínicas e resultados',exact:true})).toBeVisible();
     }finally{await context.close();}
   });
   await run('keyboard access works through presentation, login and return navigation',async()=>{
