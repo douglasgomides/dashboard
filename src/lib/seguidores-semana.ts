@@ -8,6 +8,7 @@
 // Posts impulsionados: campanhas que a Meta cria ao impulsionar um post se chamam "Post do Instagram: <início
 // da legenda>..." ou "Publicação do Instagram: ...". O post é achado pelo início da legenda; quando vários
 // posts começam igual, vale o publicado mais perto ANTES do primeiro gasto da campanha.
+import { hojeBrasilia } from "@/lib/status-fonte";
 
 export interface DiaSeguidores {
   date: string;
@@ -44,6 +45,7 @@ export function seguidoresPorSemana(dias: DiaSeguidores[], gastoPorDia: Map<stri
   for (const [dia, v] of gastoPorDia) gastoSemana.set(inicioDaSemana(dia), (gastoSemana.get(inicioDaSemana(dia)) ?? 0) + v);
   const semanas = [...porSemana.keys()].sort();
   let ultimoTotalAnterior: number | null = null;
+  let semanaAnterior: string | null = null;
   return semanas.map((s) => {
     const l = porSemana.get(s)!;
     const soma = (k: "new_followers" | "unfollowers") => {
@@ -52,8 +54,10 @@ export function seguidoresPorSemana(dias: DiaSeguidores[], gastoPorDia: Map<stri
     };
     const totais = l.map((d) => d.followers_count).filter((x): x is number => x !== null && x !== undefined);
     const ultimo = totais.length ? Number(totais[totais.length - 1]) : null;
-    const saldo = ultimo !== null && ultimoTotalAnterior !== null ? ultimo - ultimoTotalAnterior : null;
-    if (ultimo !== null) ultimoTotalAnterior = ultimo;
+    const consecutivas = semanaAnterior !== null && Date.parse(s) - Date.parse(semanaAnterior) === 7 * 86400000;
+    const saldo = consecutivas && ultimo !== null && ultimoTotalAnterior !== null ? ultimo - ultimoTotalAnterior : null;
+    ultimoTotalAnterior = ultimo;
+    semanaAnterior = s;
     return {
       semana: s,
       dias: l.length,
@@ -137,8 +141,8 @@ export function postsImpulsionados(campanhas: { campaign_id: string; name: strin
     const pref = prefixoDaCampanha(c.name!);
     const candidatos = pref.length >= 6 ? postsN.filter((x) => x.cap.startsWith(pref)).map((x) => x.p) : [];
     const ate = a.ini ?? "9999-12-31";
-    const antes = candidatos.filter((p) => p.posted_at.slice(0, 10) <= ate).sort((x, y) => y.posted_at.localeCompare(x.posted_at));
-    const post = antes[0] ?? candidatos.sort((x, y) => y.posted_at.localeCompare(x.posted_at))[0] ?? null;
+    const antes = candidatos.filter((p) => hojeBrasilia(new Date(p.posted_at)) <= ate).sort((x, y) => y.posted_at.localeCompare(x.posted_at));
+    const post = antes[0] ?? null;
     out.push({
       campaign_id: c.campaign_id,
       campanha: c.name!,

@@ -26,6 +26,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
 import { linhaDoLead, type KommoLead } from "./kommo-leads-sync.js";
+import { integrationHost, integrationRequest } from "./integration-http.js";
 
 const PAGE_SIZE = 250; // limite da API da Kommo
 const MAX_PAGINAS = 200; // 50 mil leads; acima disso é outra conversa
@@ -68,9 +69,9 @@ async function idsVivos(
   let page = 1;
   while (page <= MAX_PAGINAS) {
     const qs = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(page) });
-    const res = await fetch(`https://${domain}/api/v4/leads?${qs.toString()}`, {
+    const res = await fetch(`https://${domain}/api/v4/leads?${qs.toString()}`, integrationRequest({
       headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    }));
     if (res.status === 204) return { ids, leads, completo: true }; // fim normal da paginação
     if (!res.ok) {
       return { ids, leads, completo: false, erro: `Kommo respondeu ${res.status}: ${(await res.text()).slice(0, 200)}` };
@@ -79,7 +80,11 @@ async function idsVivos(
       _embedded?: { leads?: KommoLead[] };
       _links?: { next?: unknown };
     };
-    for (const l of body._embedded?.leads ?? []) {
+    const rows = body?._embedded?.leads;
+    if (!Array.isArray(rows) || rows.some((l) => !l || !Number.isSafeInteger(l.id) || l.id <= 0) || (rows.length === 0 && body._links?.next)) {
+      return { ids, leads, completo: false, erro: "Kommo devolveu página inválida" };
+    }
+    for (const l of rows) {
       ids.add(String(l.id));
       leads.set(String(l.id), l);
     }
@@ -95,7 +100,7 @@ export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoRe
   });
   const errors: string[] = [];
 
-  const { ids, leads, completo, erro } = await idsVivos(env.kommoDomain, env.accessToken);
+  const { ids, leads, completo, erro } = await idsVivos(integrationHost(env.kommoDomain, "kommo"), env.accessToken);
   if (erro) errors.push(erro);
 
   // Varredura incompleta não serve para concluir ausência: o que faltou ler
@@ -134,10 +139,12 @@ export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoRe
       .from("crm_leads")
       .select("external_lead_id, removido_na_origem")
       .eq("crm_connection_id", env.crmConnectionId)
+      .order("external_lead_id", { ascending: true })
       .range(de, de + LOTE - 1);
     if (error) {
       errors.push(`leitura local: ${error.message}`);
-      break;
+      // Base local incompleta também não permite inferir ausências/importações.
+      return { idsNaOrigem: ids.size, leadsLocais: locais.length, sumiram: 0, reapareceram: 0, marcados: 0, importados: 0, precisaConfirmar: false, errors };
     }
     if (!data || data.length === 0) break;
     locais.push(...data);

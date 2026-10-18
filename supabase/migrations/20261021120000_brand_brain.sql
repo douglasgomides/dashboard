@@ -125,5 +125,6 @@ grant execute on function public.brain_manual(uuid, text, text, text) to authent
 
 -- Beta só na clínica de teste (dados fictícios). Clientes reais continuam sem o módulo até você decidir.
 insert into public.cliente_modulos (client_id, modulo, status, origem)
-values ('6e2efb0e-c817-49f3-b559-48cd66c1e80b', 'brand_brain', 'beta', 'teste')
+select id, 'brand_brain', 'beta', 'teste'
+from public.clients where id = '6e2efb0e-c817-49f3-b559-48cd66c1e80b'
 on conflict (client_id, modulo) do nothing;

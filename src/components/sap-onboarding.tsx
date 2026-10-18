@@ -85,7 +85,7 @@ function ChecklistAcessos({ clinica }: { clinica: SapCadastro }) {
   const accQ = useQuery({ queryKey: ["sap-acessos", clinica.id], queryFn: () => getAcessosSap(clinica.id) });
   const marcosQ = useQuery({ queryKey: ["sap-marcos", clinica.id], queryFn: () => getMarcosSap(clinica.id) });
   const salvar = useMutation({ mutationFn: (r: RegistroAcesso) => salvarAcessoSap(clinica.id, r), onSuccess: () => qc.invalidateQueries({ queryKey: ["sap-acessos", clinica.id] }) });
-  const regs = accQ.data ?? [];
+  const regs = useMemo(() => accQ.data ?? [], [accQ.data]);
   const mapa = useMemo(() => new Map(regs.map((r) => [r.item, r])), [regs]);
   const dia = diaAtual(clinica.d0, clinica.pausas);
   const r = resumoAcessos(regs, dia);

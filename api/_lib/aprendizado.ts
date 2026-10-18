@@ -32,8 +32,9 @@ export async function resultadosRecuperacao(admin: Admin, clientId: string) {
 }
 
 async function postsDaClinica(admin: Admin, clientId: string, dias: number) {
-  const { data } = await admin.from("instagram_posts").select("format, tema, caption, reach, saved, shares, posted_at, transcricao")
+  const { data, error } = await admin.from("instagram_posts").select("format, tema, caption, reach, saved, shares, posted_at, transcricao")
     .eq("client_id", clientId).gte("posted_at", desde(dias)).order("posted_at", { ascending: false }).limit(500);
+  if (error) throw new Error("Não foi possível ler os posts para aprendizado");
   return (data ?? []) as (PostMetricas & { posted_at: string | null })[];
 }
 
@@ -41,7 +42,8 @@ async function postsDaClinica(admin: Admin, clientId: string, dias: number) {
 export async function calcularLicoes(admin: Admin, clientId: string): Promise<Licao[]> {
   const resumos: ResumoConversa[] = [];
   for (let de = 0; de < 4000; de += 1000) {
-    const { data } = await admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", desde(120)).order("gerado_em").range(de, de + 999);
+    const { data, error } = await admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", desde(120)).order("gerado_em").range(de, de + 999);
+    if (error) throw new Error("Não foi possível ler as conversas para aprendizado");
     resumos.push(...((data ?? []) as { resumo: ResumoConversa }[]).map((r) => r.resumo));
     if ((data ?? []).length < 1000) break;
   }
@@ -52,6 +54,7 @@ export async function calcularLicoes(admin: Admin, clientId: string): Promise<Li
     admin.from("sugestoes_agentes").select("agente, tipo, estado, resultado, conteudo").eq("client_id", clientId).gte("criado_em", desde(90)).limit(2000),
     resultadosRecuperacao(admin,clientId),
   ]);
+  if (ads.error || camps.error || sugs.error) throw new Error("Não foi possível ler as fontes para aprendizado");
   const nomes: Record<string, string> = {};
   for (const c of (camps.data ?? []) as { campaign_id: string; name: string }[]) nomes[c.campaign_id] = String(c.name ?? "").slice(0, 80);
   const conteudo = licoesConteudo(posts);
@@ -84,7 +87,10 @@ export async function aprenderClinica(admin: Admin, clientId: string): Promise<{
   }
   const vivas = new Set(licoes.map((l) => l.chave));
   const sumiram = [...porChave.values()].filter((a) => a.estado === "ativo" && !vivas.has(a.chave)).map((a) => a.id);
-  if (sumiram.length) await admin.from("agentes_aprendizados").update({ estado: "expirado", atualizado_em: agora }).in("id", sumiram);
+  if (sumiram.length) {
+    const { error: erroExpirar } = await admin.from("agentes_aprendizados").update({ estado: "expirado", atualizado_em: agora }).eq("client_id", clientId).in("id", sumiram);
+    if (erroExpirar) throw new Error("Não foi possível expirar as lições antigas");
+  }
   return { ativas: linhas.length, novas: linhas.filter((l) => !porChave.has(l.chave)).length, expiradas: sumiram.length };
 }
 
@@ -92,8 +98,9 @@ export async function aprenderClinica(admin: Admin, clientId: string): Promise<{
 export async function medirSugestoes(admin: Admin): Promise<{ conteudo: number; anuncios: number }> {
   let conteudo = 0, anuncios = 0;
   // Conteúdo: o roteiro virou post? (qualquer estado: a equipe às vezes publica sem marcar no painel)
-  const { data: cs } = await admin.from("sugestoes_agentes").select("id, client_id, titulo, conteudo, criado_em, estado, resultado")
+  const { data: cs, error: erroConteudo } = await admin.from("sugestoes_agentes").select("id, client_id, titulo, conteudo, criado_em, estado, resultado")
     .eq("agente", "conteudo").gte("criado_em", desde(45)).limit(3000);
+  if (erroConteudo) throw new Error("Não foi possível ler as sugestões de conteúdo para medição");
   const pend = ((cs ?? []) as { id: string; client_id: string; titulo: string; conteudo: { gancho?: string } | null; criado_em: string; estado: string; resultado: string | null }[])
     .filter((s) => !(s.resultado ?? "").startsWith("publicado"));
   const porCliente = new Map<string, typeof pend>();
@@ -109,22 +116,26 @@ export async function medirSugestoes(admin: Admin): Promise<{ conteudo: number; 
       const p = casarPublicacao({ titulo: s.titulo, gancho: s.conteudo?.gancho ?? null, criado_em: s.criado_em }, novos.filter((x) => !usados.has(`${x.posted_at}|${x.caption?.slice(0, 40)}`)));
       if (!p) continue;
       usados.add(`${p.posted_at}|${p.caption?.slice(0, 40)}`);
-      await admin.from("sugestoes_agentes").update({ estado: "feita", resultado: resultadoPublicacao(p, med), medido_em: new Date().toISOString() }).eq("id", s.id);
+      const { error: erroMedir } = await admin.from("sugestoes_agentes").update({ estado: "feita", resultado: resultadoPublicacao(p, med), medido_em: new Date().toISOString() }).eq("client_id", clientId).eq("id", s.id);
+      if (erroMedir) throw new Error("Não foi possível persistir a medição do conteúdo");
       conteudo++;
     }
   }
   // Anúncios: 7 dias depois da recomendação, o que aconteceu com a campanha.
-  const { data: as } = await admin.from("sugestoes_agentes").select("id, client_id, campanha_id, criado_em")
+  const { data: as, error: erroAnuncios } = await admin.from("sugestoes_agentes").select("id, client_id, campanha_id, criado_em")
     .eq("agente", "anuncios").is("medido_em", null).not("campanha_id", "is", null).lt("criado_em", desde(7)).gte("criado_em", desde(40)).limit(500);
+  if (erroAnuncios) throw new Error("Não foi possível ler as sugestões de anúncios para medição");
   for (const s of (as ?? []) as { id: string; client_id: string; campanha_id: string; criado_em: string }[]) {
     const t = Date.parse(s.criado_em);
     const d = (x: number) => new Date(t + x * DIA).toISOString().slice(0, 10);
-    const { data: linhas } = await admin.from("meta_ads_daily").select("date, campaign_id, spend, leads, conversations")
+    const { data: linhas, error: erroMetricas } = await admin.from("meta_ads_daily").select("date, campaign_id, spend, leads, conversations")
       .eq("client_id", s.client_id).eq("campaign_id", s.campanha_id).gte("date", d(-7)).lt("date", d(8)).limit(100);
+    if (erroMetricas) throw new Error("Não foi possível ler as métricas para medição");
     const xs = (linhas ?? []) as (LinhaCampanha & { date: string })[];
     const dia = d(0);
     const r = resultadoCampanha(xs.filter((l) => l.date < dia), xs.filter((l) => l.date > dia));
-    await admin.from("sugestoes_agentes").update({ resultado: r ?? "sem dado suficiente para medir", medido_em: new Date().toISOString() }).eq("id", s.id);
+    const { error: erroMedir } = await admin.from("sugestoes_agentes").update({ resultado: r ?? "sem dado suficiente para medir", medido_em: new Date().toISOString() }).eq("client_id", s.client_id).eq("id", s.id);
+    if (erroMedir) throw new Error("Não foi possível persistir a medição do anúncio");
     anuncios++;
   }
   return { conteudo, anuncios };
@@ -136,7 +147,8 @@ export async function aprenderTodas(admin: Admin, prazoMs = 120_000): Promise<{ 
   const erros: string[] = [];
   let medidas = { conteudo: 0, anuncios: 0 };
   try { medidas = await medirSugestoes(admin); } catch (e) { erros.push(`medir: ${e instanceof Error ? e.message : String(e)}`); }
-  const { data: mods } = await admin.from("cliente_modulos").select("client_id").eq("modulo", "hub").in("status", ["ativo", "beta"]);
+  const { data: mods, error: erroModulos } = await admin.from("cliente_modulos").select("client_id").eq("modulo", "hub").in("status", ["ativo", "beta"]);
+  if (erroModulos) throw new Error("Não foi possível ler as clínicas para aprendizado");
   const clientes = [...new Set(((mods ?? []) as { client_id: string }[]).map((m) => m.client_id))];
   let clinicas = 0, ativas = 0, novas = 0, expiradas = 0;
   for (const id of clientes) {
@@ -149,7 +161,8 @@ export async function aprenderTodas(admin: Admin, prazoMs = 120_000): Promise<{ 
 
 /** Lições ativas para o prompt de um agente. */
 export async function lerLicoes(admin: Admin, clientId: string, agente: AgenteLicao): Promise<{ texto: string; n: number }> {
-  const { data } = await admin.from("agentes_aprendizados").select("texto, evidencia, sinal, confianca").eq("client_id", clientId).eq("agente", agente).eq("estado", "ativo").limit(30);
+  const { data, error } = await admin.from("agentes_aprendizados").select("texto, evidencia, sinal, confianca").eq("client_id", clientId).eq("agente", agente).eq("estado", "ativo").limit(30);
+  if (error) throw new Error("Não foi possível ler as lições ativas");
   const xs = ((data ?? []) as { texto: string; evidencia: string[]; sinal: "faz" | "evita"; confianca: "alta" | "media" }[]).map((x) => ({ ...x, evidencia: Array.isArray(x.evidencia) ? x.evidencia : [] }));
   return { texto: licoesParaPrompt(xs), n: xs.length };
 }

@@ -8,17 +8,22 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "npm run routes:generate && tsc --noEmit",
+    "test:sync": "tsx scripts/test-sync-persistence.ts",
+    "test:migrations": "tsx scripts/test-migrations.ts",
     "sync:instagram": "tsx scripts/sync-instagram.ts",
-    "test": "node scripts/rodar-testes.mjs"
+    "routes:generate": "node scripts/generate-routes.mjs",
+    "test": "node scripts/run-tests.mjs",
+    "test:e2e": "playwright test",
+    "secrets:check": "node scripts/check-secrets.mjs",
+    "check": "npm run secrets:check && npm run lint && npm run typecheck && npm test",
+    "test:interface": "node scripts/verify-nexo-interface.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.8.1",
     "@supabase/supabase-js": "^2.105.4",
-    "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-query": "^5.83.0",
     "@tanstack/react-router": "^1.168.25",
-    "@tanstack/router-plugin": "^1.167.28",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.575.0",
@@ -26,24 +31,30 @@
     "react-dom": "^19.2.0",
     "recharts": "^2.15.4",
     "tailwind-merge": "^3.5.0",
-    "tailwindcss": "^4.2.1",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
+    "@electric-sql/pglite": "^0.5.10",
     "@playwright/test": "1.64.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/router-generator": "^1.167.45",
+    "@tanstack/router-plugin": "^1.168.47",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "@typescript-eslint/parser": "8.62.0",
-    "@vercel/node": "^3.2.24",
+    "@typescript-eslint/parser": "^8.71.2",
     "@vitejs/plugin-react": "^5.0.4",
     "eslint": "^9.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "supabase": "^2.30.0",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.19.2",
     "typescript": "^5.8.3",
     "vite": "^7.3.1",
     "vite-tsconfig-paths": "^6.0.2"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

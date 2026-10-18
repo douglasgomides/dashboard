@@ -1,11 +1,12 @@
 import { ProductBrand } from "@/components/product-brand";
-import { createFileRoute, Outlet, redirect, Link, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Navigate, Outlet, redirect, Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Bot, Brain, ClipboardCheck, FileText, Inbox, LayoutDashboard, Plug, Scale, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LogoutButton } from "@/components/logout-button";
 import { TrocaProduto } from "@/components/troca-produto";
 import { getClient } from "@/lib/client-data";
+import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   beforeLoad: async () => {
@@ -41,6 +42,12 @@ const TITULO: Record<string, string> = {
 };
 
 function AdminLayout() {
+  const { isAdmin } = useAuth();
+  if (!isAdmin) return <Navigate to="/" replace />;
+  return <AdminContent />;
+}
+
+function AdminContent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname }).replace(/\/+$/, "") || "/admin";
   // Dentro de um cliente (/admin/<id>): o título é o nome do cliente.
   const idCliente = /^\/admin\/([0-9a-f-]{36})$/.exec(pathname)?.[1] ?? null;

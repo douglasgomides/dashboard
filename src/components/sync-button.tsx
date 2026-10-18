@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, RefreshCw, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useClientRole } from "@/hooks/use-client-role";
 
 type Alvo = "posts" | "anuncios" | "atendimento" | "comentarios" | "crm" | "historico" | "tudo";
 
@@ -100,6 +101,11 @@ async function chamar(token: string, clientId: string, alvo: string): Promise<{ 
 // botões de uma fonte só, enche de forma suave até a resposta chegar (sem inventar
 // um percentual), com o tempo decorrido ao lado.
 export function SyncButton({ clientId, alvo }: { clientId: string; alvo: Alvo }) {
+  const { podeEditar } = useClientRole(clientId);
+  return podeEditar ? <EditableSyncButton clientId={clientId} alvo={alvo} /> : null;
+}
+
+function EditableSyncButton({ clientId, alvo }: { clientId: string; alvo: Alvo }) {
   const queryClient = useQueryClient();
   const [estado, setEstado] = useState<"parado" | "rodando" | "concluindo">("parado");
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);

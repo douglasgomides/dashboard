@@ -22,6 +22,7 @@ async function contextoCliente(admin: Admin, clientId: string): Promise<{ texto:
     leads().eq("outcome", "won").gte("occurred_at", desde(90)),
     admin.from("crm_leads").select("source, price").eq("client_id", clientId).eq("outcome", "won").is("removido_na_origem", null).gte("occurred_at", desde(180)).limit(3000),
   ]);
+  if (licoes.error || l90.error || g90.error || ganhos.error) throw new Error("Não foi possível conferir o contexto da clínica");
   const blocos: string[] = [];
   for (const [k, v] of Object.entries(f.fontes)) if (v) blocos.push(`### ${FONTES[k as keyof typeof FONTES] ?? k}\n${v}`);
   if (f.aprovados.length) blocos.push(`### Brand Brain aprovado\n${f.aprovados.map((a) => `- ${a}`).join("\n")}`);
@@ -48,7 +49,8 @@ export async function redigirSecao(admin: Admin, p: { clientId: string; titulo: 
   let brain_propostos = 0;
   if (v.aprendidos.length && p.turnos.some((t) => t.papel === "equipe")) {
     const { data, error } = await admin.rpc("brain_propor", { p_client_id: p.clientId, p_itens: v.aprendidos.map((a) => ({ ...a, fonte: "equipe", fonte_detalhe: `copiloto do documento: ${corta(p.titulo, 80)}`, confianca: "alta" })) });
-    if (!error) brain_propostos = Number(data ?? 0);
+    if (error) throw new Error("O rascunho foi gerado, mas os fatos não foram registrados no Brand Brain; confira antes de retomar");
+    brain_propostos = Number(data ?? 0);
   }
   return { ...v, brain_propostos };
 }

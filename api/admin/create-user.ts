@@ -1,5 +1,6 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
+import { createUserSchema } from "../_lib/request-validation.js";
 
 // Vercel serverless function — runs server-side only. Holds
 // SUPABASE_SERVICE_ROLE_KEY, which must NEVER be exposed to the client
@@ -13,6 +14,7 @@ function randomPassword(): string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
@@ -52,19 +54,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const { email, client_id, role } = (req.body ?? {}) as {
-    email?: string;
-    client_id?: string;
-    role?: string;
-  };
-  if (!email || !client_id || !role) {
-    res.status(400).json({ error: "Faltam email, client_id ou role" });
+  const parsedBody = createUserSchema.safeParse(req.body);
+  if (!parsedBody.success) {
+    res.status(400).json({ error: "Informe email válido, client_id e role (owner, strategist ou viewer)" });
     return;
   }
-  if (!["owner", "strategist", "viewer"].includes(role)) {
-    res.status(400).json({ error: "role inválida" });
-    return;
-  }
+  const { email, client_id, role } = parsedBody.data;
+  const { data: client, error: clientError } = await admin.from("clients").select("id").eq("id", client_id).maybeSingle();
+  if (clientError) { res.status(503).json({ error: "Não foi possível verificar o cliente" }); return; }
+  if (!client) { res.status(404).json({ error: "Cliente não encontrado" }); return; }
 
   const temporaryPassword = randomPassword();
   const emailNorm = email.trim().toLowerCase();

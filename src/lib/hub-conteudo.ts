@@ -6,6 +6,7 @@ import { confiancaPorAmostra, type Confianca, type Insight, type Limitacao } fro
 import { analisarVozDoPaciente, assuntoDoTexto, confiancaDoGrupo, type GrupoDuvida, type ResultadoVoz } from "@/lib/voz-do-paciente";
 import { MIN_POSTS_CONCLUSAO, confiancaPorPosts } from "@/lib/metricas";
 import { soPerguntas, classificarComentario } from "@/lib/classificar-comentario";
+import { hojeBrasilia } from "@/lib/status-fonte";
 
 // ---------- datas ----------
 const DAY_MS = 86400000;
@@ -94,7 +95,7 @@ export const DIAS_PARA_FECHAR = 2;
 
 export interface GrowthDay {
   date: string;
-  novos: number; // bruto
+  novos: number | null; // bruto; null = não medido
   saidas: number | null; // null = não medido
   liquido: number | null;
   aberto: boolean; // a Meta ainda não fechou o dia
@@ -108,6 +109,7 @@ export interface GrowthAnalysis {
   diasMedidos: number;
   diasFechados: number; // dias fechados do período que têm algum dado
   diasSemSaida: number; // fechados, sem saída gravada (histórico anterior à coleta)
+  diasSemGanhos: number; // fechados, sem ganhos gravados
   diasAbertos: number;
   novosTodosFechados: number; // bruto de todos os dias fechados, medidos ou não (compara com o Instagram)
   taxaSaida: number | null; // saíram / bruto, 0..1
@@ -117,7 +119,7 @@ export function analyzeGrowth(
   metrics: { date: string; new_followers?: number | null; unfollowers?: number | null }[],
   start: string,
   end: string,
-  today: string = msToIso(Date.now()),
+  today: string = hojeBrasilia(),
 ): GrowthAnalysis {
   const ultimoFechado = msToIso(isoToMs(today) - DIAS_PARA_FECHAR * DAY_MS);
   const days: GrowthDay[] = [];
@@ -126,13 +128,13 @@ export function analyzeGrowth(
     const aberto = m.date > ultimoFechado;
     const saidas = m.unfollowers == null ? null : Number(m.unfollowers);
     if (m.new_followers == null && saidas == null) continue;
-    const novos = Number(m.new_followers ?? 0);
-    days.push({ date: m.date, novos, saidas, liquido: saidas == null ? null : novos - saidas, aberto });
+    const novos = m.new_followers == null ? null : Number(m.new_followers);
+    days.push({ date: m.date, novos, saidas, liquido: saidas == null || novos == null ? null : novos - saidas, aberto });
   }
   days.sort((a, b) => a.date.localeCompare(b.date));
   const fechados = days.filter((d) => !d.aberto);
-  const medidos = fechados.filter((d) => d.saidas != null);
-  const novos = medidos.reduce((a, d) => a + d.novos, 0);
+  const medidos = fechados.filter((d) => d.saidas != null && d.novos != null);
+  const novos = medidos.reduce((a, d) => a + (d.novos ?? 0), 0);
   const saidas = medidos.reduce((a, d) => a + (d.saidas ?? 0), 0);
   return {
     days,
@@ -141,9 +143,10 @@ export function analyzeGrowth(
     liquido: novos - saidas,
     diasMedidos: medidos.length,
     diasFechados: fechados.length,
-    diasSemSaida: fechados.length - medidos.length,
+    diasSemSaida: fechados.filter((d) => d.saidas == null).length,
+    diasSemGanhos: fechados.filter((d) => d.novos == null).length,
     diasAbertos: days.length - fechados.length,
-    novosTodosFechados: fechados.reduce((a, d) => a + d.novos, 0),
+    novosTodosFechados: fechados.reduce((a, d) => a + (d.novos ?? 0), 0),
     taxaSaida: novos > 0 ? saidas / novos : null,
   };
 }
@@ -152,7 +155,7 @@ export function analyzeFollowers(
   metrics: { date: string; followers_count: number | null }[],
   start: string,
   end: string,
-  today: string = msToIso(Date.now()),
+  today: string = hojeBrasilia(),
 ): FollowerAnalysis {
   const effEnd = end > today ? today : end;
   const byDate = new Map<string, number>();
@@ -197,17 +200,17 @@ export function analyzeFollowers(
   } else {
     const { slope, intercept, t0, xLast } = regress(points);
     const lastDay = points[points.length - 1].date;
-    const projected = Math.round(slope * (xLast + PROJECAO_HORIZONTE) + intercept);
+    const projected = Math.max(0, Math.round(slope * (xLast + PROJECAO_HORIZONTE) + intercept));
     const target = msToIso(isoToMs(lastDay) + PROJECAO_HORIZONTE * DAY_MS);
     const line = [0, PROJECAO_HORIZONTE].map((h) => ({
       date: msToIso(isoToMs(lastDay) + h * DAY_MS),
-      followers: Math.round(slope * (xLast + h) + intercept),
+      followers: Math.max(0, Math.round(slope * (xLast + h) + intercept)),
     }));
     void t0;
     projection = {
       ok: true,
       slopePerDay: slope,
-      atEnd: Math.round(slope * xLast + intercept),
+      atEnd: Math.max(0, Math.round(slope * xLast + intercept)),
       projected,
       target,
       line,

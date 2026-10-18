@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { chromium, expect } from '@playwright/test';
+import { chromium, expect as playwrightExpect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+const expect=playwrightExpect.configure({timeout:15_000});
 
 // Fictional accounts and local responses only. Never loads a production session.
 const CID='11111111-1111-4111-8111-111111111111';
@@ -282,7 +283,12 @@ try{
   });
   await run('SAP clinic menu has its programme and no product switch',async()=>{
     const {context,page}=await account('viewer',{sap:true});try{
-      await page.goto(origins.sap+`/sap/${CID}/cronograma`);await expect(page.locator('.app')).toBeVisible();await expect(page.getByRole('navigation',{name:'Produto',exact:true})).not.toBeVisible();
+      await page.goto(origins.sap+`/sap/${CID}/cronograma`);
+      await expect(page.locator('.app')).toBeVisible().catch(async error=>{
+        await writeFile(new URL('sap-clinic-load-failure.json',output),JSON.stringify({url:page.url(),body:await page.locator('body').innerText(),requests},null,2));
+        throw error;
+      });
+      await expect(page.getByRole('navigation',{name:'Produto',exact:true})).not.toBeVisible();
       await expect(page.getByRole('link',{name:'Acompanhamento no Doctor Creator Hub',exact:true})).not.toBeVisible();
     }finally{await context.close();}
   });

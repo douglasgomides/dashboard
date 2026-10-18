@@ -42,7 +42,10 @@ export async function criarLinkShort(opts: { chave: string; dominio: string; des
   });
   const j: any = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`short.gy respondeu ${r.status}: ${String(j?.error ?? j?.message ?? "").slice(0, 160)}`);
-  return { id: String(j.idString ?? j.id ?? ""), shortUrl: String(j.secureShortURL ?? j.shortURL ?? "") };
+  const id = String(j.idString ?? j.id ?? "");
+  const shortUrl = String(j.secureShortURL ?? j.shortURL ?? "");
+  if (!id || !/^https:\/\//.test(shortUrl)) throw new Error("short.gy devolveu link inválido");
+  return { id, shortUrl };
 }
 
 export async function cliquesDoLink(chave: string, linkId: string): Promise<number | null> {
@@ -52,6 +55,8 @@ export async function cliquesDoLink(chave: string, linkId: string): Promise<numb
   });
   if (!r.ok) return null;
   const j: any = await r.json().catch(() => ({}));
-  const n = Number(j?.humanClicks ?? j?.totalClicks);
-  return Number.isFinite(n) ? n : null;
+  const value = j?.humanClicks ?? j?.totalClicks;
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }

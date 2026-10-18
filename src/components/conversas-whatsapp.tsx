@@ -13,6 +13,7 @@ import { CustoWhatsapp } from "@/components/custo-whatsapp";
 import { supabase } from "@/integrations/supabase/client";
 import { Painel, Selo } from "@/components/visual";
 import { fmtTaxa } from "@/lib/metricas";
+import { useClientRole } from "@/hooks/use-client-role";
 
 const COR_SIT: Record<string, string> = { ruim: "var(--crit)", atencao: "var(--warn)", bom: "var(--good)", neutro: "var(--muted)" };
 type Filtro = "todas" | "sem_resposta" | "demorou" | "sem_lead";
@@ -29,6 +30,7 @@ function Numero({ rotulo, valor, detalhe, cor }: { rotulo: string; valor: string
 
 /** Leitura da conversa aberta: fatos (regras fixas) + resumo por IA sob demanda. */
 function LeituraDaConversa({ l, conversaId, clientId }: { l: LeituraConversaBanco | undefined; conversaId: string; clientId: string }) {
+  const { podeEditar } = useClientRole(clientId);
   const qc = useQueryClient();
   const resumo = useQuery({
     queryKey: ["conversa-resumo", conversaId],
@@ -42,6 +44,7 @@ function LeituraDaConversa({ l, conversaId, clientId }: { l: LeituraConversaBanc
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState("");
   async function gerar() {
+    if (!podeEditar || gerando) return;
     setGerando(true);
     setErro("");
     try {
@@ -79,7 +82,7 @@ function LeituraDaConversa({ l, conversaId, clientId }: { l: LeituraConversaBanc
       <div className="border-t pt-3" style={{ borderColor: "var(--border)" }}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="flex items-center gap-1.5 text-sm font-semibold"><Sparkles size={14} aria-hidden /> Resumo por IA</span>
-          <button
+          {podeEditar && <button
             type="button"
             onClick={gerar}
             disabled={gerando}
@@ -88,7 +91,7 @@ function LeituraDaConversa({ l, conversaId, clientId }: { l: LeituraConversaBanc
           >
             {gerando ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Sparkles size={14} aria-hidden />}
             {gerando ? "Lendo a conversa…" : r ? (desatualizado ? "Atualizar (tem mensagem nova)" : "Gerar de novo") : "Resumir com IA"}
-          </button>
+          </button>}
         </div>
         {erro && <p className="mt-1 text-sm" style={{ color: "var(--crit)" }}>{erro}</p>}
         {!r && !gerando && (
@@ -171,6 +174,7 @@ const ROTULO_TIPO: Record<string, string> = {
 
 /** Conversas do WhatsApp, uma a uma, com a leitura e a auditoria comercial (aba "Conversas e auditoria" do Atendimento). */
 export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: string; conversaInicial?: string }) {
+  const { podeEditar } = useClientRole(clientId);
   const [aberta, setAberta] = useState<string | null>(conversaInicial ?? null);
   const [filtro, setFiltro] = useState<Filtro>("todas");
 
@@ -222,6 +226,7 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
 
   // Cada chamada traz até 150 conversas novas; "todas" repete até não sobrar nenhuma.
   async function puxar(modo: "mais" | "todas") {
+    if (!podeEditar || puxando) return;
     setPuxando(modo);
     setStatus("Buscando…");
     let total = 0;
@@ -302,9 +307,9 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
             </p>
           </section>
         )}
-        <div className="mb-3 flex flex-wrap items-center gap-2">
+        {podeEditar && <div className="mb-3 flex flex-wrap items-center gap-2">
           <button
-            disabled={!!puxando}
+            disabled={!podeEditar || !!puxando}
             onClick={() => puxar("mais")}
             className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
             style={{ borderColor: "var(--border)", background: "var(--surface)" }}
@@ -312,7 +317,7 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
             <Download size={14} /> Puxar mais conversas
           </button>
           <button
-            disabled={!!puxando}
+            disabled={!podeEditar || !!puxando}
             onClick={() => puxar("todas")}
             className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
             style={{ borderColor: "var(--accent)", background: "var(--surface)" }}
@@ -320,7 +325,7 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
             <Download size={14} /> Puxar todas
           </button>
           {status && <span className="text-xs" style={{ color: "var(--text-dim)" }}>{status}</span>}
-        </div>
+        </div>}
         {lista.isLoading && <Carregando texto="Lendo as conversas…" />}
         {lista.error && <p className="text-sm" style={{ color: "var(--danger, #c0392b)" }}>{(lista.error as Error).message}</p>}
         {lista.data && lista.data.length === 0 && (

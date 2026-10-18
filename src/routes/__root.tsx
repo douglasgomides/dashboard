@@ -18,13 +18,13 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error }: { error: Error }) {
+function ErrorComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="max-w-md text-center">
         <h1 className="text-lg font-semibold">Essa página não carregou</h1>
         <p className="mt-2 text-sm" style={{ color: "var(--text-dim)" }}>
-          {error.message || "Erro inesperado."}
+          Não foi possível carregar esta página. Verifique sua conexão e tente novamente.
         </p>
         <Link to="/" className="mt-6 inline-block text-sm" style={{ color: "var(--accent)" }}>
           Voltar pro início

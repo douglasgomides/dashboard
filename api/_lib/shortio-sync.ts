@@ -49,7 +49,7 @@ export function atribuir(link: { titulo: string; caminho: string; tags: string[]
 }
 
 async function get(url: string, chave: string): Promise<any> {
-  const r = await fetch(url, { headers: { authorization: chave, accept: "application/json" }, signal: AbortSignal.timeout(20_000) });
+  const r = await fetch(url, { headers: { authorization: chave, accept: "application/json" }, signal: AbortSignal.timeout(20_000), redirect: "error" });
   if (!r.ok) throw new Error(`short.io ${r.status}: ${(await r.text()).slice(0, 150)}`);
   return r.json();
 }
@@ -64,9 +64,10 @@ export async function sincronizarShortio(
   const erros: string[] = [];
 
   // Clientes: nome, @ e o link da bio (website do perfil), lido na Graph com o token de cada conta.
-  const { data: cls } = await admin.from("clients").select("id, name, instagram_handle, active");
-  const { data: igs } = await admin.from("instagram_accounts").select("id, client_id, ig_username, windsor_account_id, active");
-  const { data: segs } = await admin.from("instagram_account_secrets").select("instagram_account_id, meta_access_token");
+  const { data: cls, error: erroClientes } = await admin.from("clients").select("id, name, instagram_handle, active");
+  const { data: igs, error: erroContas } = await admin.from("instagram_accounts").select("id, client_id, ig_username, windsor_account_id, active");
+  const { data: segs, error: erroSegredos } = await admin.from("instagram_account_secrets").select("instagram_account_id, meta_access_token");
+  if (erroClientes || erroContas || erroSegredos) throw new Error("Não foi possível carregar os dados para atribuir os links com segurança");
   const tokenDe = new Map((segs ?? []).map((s: any) => [s.instagram_account_id, s.meta_access_token]));
   const clientes: Cliente[] = [];
   for (const c of (cls ?? []) as any[]) {
@@ -89,8 +90,13 @@ export async function sincronizarShortio(
 
   // Links de todos os domínios da conta.
   const dominios: any[] = await get(`${API}/api/domains`, chave).catch((e) => (erros.push(String(e.message ?? e)), []));
-  const { data: manuais } = await admin.from("shortio_links").select("id").eq("atribuicao", "manual");
-  const manual = new Set((manuais ?? []).map((m: any) => m.id));
+  const manual = new Set<string>();
+  for (let de = 0; ; de += 1000) {
+    const { data: manuais, error } = await admin.from("shortio_links").select("id").eq("atribuicao", "manual").order("id").range(de, de + 999);
+    if (error) throw new Error("Não foi possível verificar as atribuições manuais dos links");
+    for (const m of manuais ?? []) manual.add(String(m.id));
+    if ((manuais?.length ?? 0) < 1000) break;
+  }
   let links = 0;
   let atribuidos = 0;
   let semCliente = 0;
@@ -120,9 +126,15 @@ export async function sincronizarShortio(
         return { ...base, client_id: a?.client_id ?? null, atribuicao: a?.como ?? null, atribuicao_detalhe: a?.detalhe ?? null };
       });
       links += linhas.length;
-      for (let i = 0; i < linhas.length; i += 200) {
-        const { error } = await admin.from("shortio_links").upsert(linhas.slice(i, i + 200), { onConflict: "id" });
-        if (error) erros.push(`links: ${error.message}`);
+      // PostgREST une as colunas de um lote. Misturar linhas manuais sem
+      // client_id com automáticas faria o campo ausente virar null e apagaria
+      // a atribuição feita pela equipe.
+      const grupos = [linhas.filter((l) => manual.has(l.id)), linhas.filter((l) => !manual.has(l.id))];
+      for (const grupo of grupos) {
+        for (let i = 0; i < grupo.length; i += 200) {
+          const { error } = await admin.from("shortio_links").upsert(grupo.slice(i, i + 200), { onConflict: "id" });
+          if (error) erros.push(`links: ${error.message}`);
+        }
       }
       pageToken = j.nextPageToken ?? null;
       if (!pageToken || !lista.length) break;
@@ -131,25 +143,34 @@ export async function sincronizarShortio(
 
   // Cliques: os links com cliente, os mais antigos de atualização primeiro (limite por rodada).
   let stats = 0;
-  const { data: pend } = await admin
+  const { data: pend, error: erroPendentes } = await admin
     .from("shortio_links")
     .select("id")
     .not("client_id", "is", null)
     .order("stats_em", { ascending: true, nullsFirst: true })
     .limit(opts.maxStats ?? 120);
+  if (erroPendentes) throw new Error(`Não foi possível ler as estatísticas pendentes: ${erroPendentes.message}`);
   for (const p of (pend ?? []) as { id: string }[]) {
     if (Date.now() - inicio > orcamento) break;
     try {
       const j: any = await get(`${STATS}/statistics/link/${encodeURIComponent(p.id)}?period=last30&tzOffset=-180`, chave);
-      const total = Number(j?.totalClicks);
-      const humanos = Number(j?.humanClicks);
-      await admin.from("shortio_links").update({ cliques_total: Number.isFinite(total) ? total : null, cliques_humanos: Number.isFinite(humanos) ? humanos : null, stats_em: new Date().toISOString() }).eq("id", p.id);
+      const patch: Record<string, unknown> = { stats_em: new Date().toISOString() };
+      for (const [origem, destino] of [["totalClicks", "cliques_total"], ["humanClicks", "cliques_humanos"]]) {
+        const value = j?.[origem];
+        if (value != null && value !== "" && Number.isFinite(Number(value)) && Number(value) >= 0) patch[destino] = Number(value);
+      }
+      if (Object.keys(patch).length === 1) throw new Error("Short.io devolveu estatísticas inválidas");
+      const { error: erroStats } = await admin.from("shortio_links").update(patch).eq("id", p.id);
+      if (erroStats) throw new Error(erroStats.message);
       // Cliques por dia, quando o plano devolve (clickStatistics.datasets[].data[{x: data, y: n}]).
       const pontos: any[] = j?.clickStatistics?.datasets?.[0]?.data ?? [];
       const dias = pontos
         .map((pt) => ({ link_id: p.id, dia: String(pt.x ?? "").slice(0, 10), cliques: Number(pt.y) }))
         .filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.dia) && Number.isFinite(x.cliques));
-      if (dias.length) await admin.from("shortio_cliques_dia").upsert(dias, { onConflict: "link_id,dia" });
+      if (dias.length) {
+        const { error } = await admin.from("shortio_cliques_dia").upsert(dias, { onConflict: "link_id,dia" });
+        if (error) throw new Error(error.message);
+      }
       stats++;
     } catch (e) {
       erros.push(`stats ${p.id}: ${e instanceof Error ? e.message : String(e)}`);

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Upload, Trash2 } from "lucide-react";
-import { updateClientProfile, uploadClientAvatar, type ClientProfileInput } from "@/lib/admin-data";
+import { removeClientAvatar, updateClientAvatar, updateClientProfile, uploadClientAvatar, type ClientProfileInput } from "@/lib/admin-data";
 import { ClientAvatar } from "@/components/client-avatar";
 import type { CfmScoreStatus, Tables } from "@/integrations/supabase/types";
 
@@ -55,6 +55,11 @@ const estiloInput: React.CSSProperties = {
 type ClienteDoPerfil = Pick<Tables<"clients">, "id" | "name" | "specialty" | "instagram_handle" | "cfm_score_status" | "active" | "created_at" | "meta_ad_account_id" | "wts_company_id" | "avatar_url" | "wts_department_ids" | "em_onboarding">;
 
 export function ClientProfileForm({ client }: { client: ClienteDoPerfil }) {
+  // A new client gets a new form; refetching its avatar preserves unsaved fields.
+  return <ClientProfileEditor key={client.id} client={client} />;
+}
+
+function ClientProfileEditor({ client }: { client: ClienteDoPerfil }) {
   const queryClient = useQueryClient();
   const arquivoRef = useRef<HTMLInputElement>(null);
 
@@ -79,21 +84,6 @@ export function ClientProfileForm({ client }: { client: ClienteDoPerfil }) {
   const [erro, setErro] = useState<string | null>(null);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
 
-  // O admin pode trocar de cliente sem desmontar o formulário; sem isto os
-  // campos ficariam com os dados do cliente anterior.
-  useEffect(() => {
-    setNome(client.name);
-    setEspecialidade(client.specialty ?? "");
-    setInstagram(client.instagram_handle ?? "");
-    setAvatar(client.avatar_url ?? "");
-    setContaAds(client.meta_ad_account_id ?? "");
-    setContaWts(client.wts_company_id ?? "");
-    setCfm(client.cfm_score_status ?? "");
-    setAtivo(client.active);
-    setRecado(null);
-    setErro(null);
-  }, [client]);
-
   const salvar = useMutation({
     mutationFn: (input: ClientProfileInput) => updateClientProfile(client.id, input),
     onSuccess: async () => {
@@ -102,33 +92,33 @@ export function ClientProfileForm({ client }: { client: ClienteDoPerfil }) {
       await queryClient.invalidateQueries({ queryKey: ["client", client.id] });
       await queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
     },
-    onError: (e: unknown) => setErro(e instanceof Error ? e.message : String(e)),
+    onError: (e: unknown) => setErro(e instanceof Error ? e.message : "Não foi possível salvar o perfil. Verifique sua conexão e tente novamente."),
   });
 
   async function escolherFoto(file: File) {
+    if (enviandoFoto || salvar.isPending) return;
     setEnviandoFoto(true);
     setErro(null);
     setRecado(null);
     try {
-      const url = await uploadClientAvatar(client.id, file, avatar || client.avatar_url);
-      setAvatar(url);
+      const anterior = client.avatar_url;
+      const url = await uploadClientAvatar(client.id, file);
       // Grava só a foto na hora: quem sobe imagem espera vê-la valendo, não
       // descobrir depois que precisava clicar em "Salvar" também.
-      await updateClientProfile(client.id, {
-        name: nome.trim(),
-        specialty: ouNulo(especialidade),
-        instagram_handle: ouNulo(instagram),
-        avatar_url: url,
-        meta_ad_account_id: ouNulo(contaAds),
-        wts_company_id: ouNulo(contaWts),
-        cfm_score_status: cfm === "" ? null : cfm,
-        active: ativo,
-      });
+      try {
+        // Uploading a photo must not save the other, still unsubmitted fields.
+        await updateClientAvatar(client.id, url);
+      } catch (error) {
+        await removeClientAvatar(client.id, url);
+        throw error;
+      }
+      setAvatar(url);
+      await removeClientAvatar(client.id, anterior);
       setRecado("Foto atualizada.");
       await queryClient.invalidateQueries({ queryKey: ["client", client.id] });
       await queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
     } catch (e) {
-      setErro(e instanceof Error ? e.message : String(e));
+      setErro(e instanceof Error ? e.message : "Não foi possível atualizar a foto. Verifique sua conexão e tente novamente.");
     } finally {
       setEnviandoFoto(false);
       if (arquivoRef.current) arquivoRef.current.value = "";
@@ -137,6 +127,7 @@ export function ClientProfileForm({ client }: { client: ClienteDoPerfil }) {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (enviandoFoto || salvar.isPending) return;
     if (!nome.trim()) {
       setErro("O nome não pode ficar vazio.");
       return;
@@ -172,7 +163,7 @@ export function ClientProfileForm({ client }: { client: ClienteDoPerfil }) {
           />
           <button
             type="button"
-            disabled={enviandoFoto}
+            disabled={enviandoFoto || salvar.isPending}
             onClick={() => arquivoRef.current?.click()}
             className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium disabled:opacity-60"
             style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
@@ -183,6 +174,7 @@ export function ClientProfileForm({ client }: { client: ClienteDoPerfil }) {
           {avatar && (
             <button
               type="button"
+              disabled={enviandoFoto || salvar.isPending}
               onClick={() => setAvatar("")}
               className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium"
               style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}
@@ -289,7 +281,7 @@ export function ClientProfileForm({ client }: { client: ClienteDoPerfil }) {
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="submit"
-          disabled={salvar.isPending}
+          disabled={salvar.isPending || enviandoFoto}
           className="rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
           style={{ background: "var(--accent)" }}
         >
@@ -301,7 +293,7 @@ export function ClientProfileForm({ client }: { client: ClienteDoPerfil }) {
           </span>
         )}
         {erro && (
-          <span className="text-xs" style={{ color: "var(--danger)" }}>
+          <span role="alert" className="text-xs" style={{ color: "var(--danger)" }}>
             {erro}
           </span>
         )}

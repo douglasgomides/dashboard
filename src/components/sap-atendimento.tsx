@@ -27,7 +27,7 @@ export function AtendimentoSap({ clientId }: { clientId: string }) {
   const sinQ = useQuery({ queryKey: ["sap-sinais", clientId, j.de, j.ate], queryFn: () => getSinaisSap(clientId, j.de, j.ate) });
   const autoQ = useQuery({ queryKey: ["sap-auto", clientId, j.de, j.ate], queryFn: () => getTrackerAuto(clientId, j.de, j.ate) });
   const audQ = useQuery({ queryKey: ["sap-auditoria", clinica?.id], queryFn: () => getAuditoriasSap(clinica!.id), enabled: !!clinica });
-  const auds = audQ.data ?? [];
+  const auds = useMemo(() => audQ.data ?? [], [audQ.data]);
   const ind = useMemo(() => indicadoresAtendimento(sinQ.data ?? null, lerTrackerAuto(autoQ.data)?.agendados ?? 0, auds[0] ?? null), [sinQ.data, autoQ.data, auds]);
   if (!clinica) return null;
   const M = METAS_ATENDIMENTO;

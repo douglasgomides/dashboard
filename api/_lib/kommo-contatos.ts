@@ -9,6 +9,7 @@
  * Roda no servidor com o token da própria conexão: o token não sai do banco.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { integrationHost, integrationRequest } from "./integration-http.js";
 
 const PAGE = 250;
 const LOTE_CONTATOS = 100;
@@ -33,7 +34,7 @@ const dormir = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 
 async function kommoGet(dominio: string, token: string, caminho: string): Promise<any | null> {
   for (let tentativa = 0; tentativa < 4; tentativa++) {
-    const r = await fetch(`https://${dominio}${caminho}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30_000) });
+    const r = await fetch(`https://${dominio}${caminho}`, integrationRequest({ headers: { Authorization: `Bearer ${token}` } }));
     if (r.status === 204) return null;
     if (r.status === 429 || r.status >= 500) {
       await dormir(1200 * (tentativa + 1));
@@ -61,10 +62,10 @@ export async function enriquecerContatosKommo(
   conn: { id: string; client_id: string; subdomain: string; access_token: string },
   opts: { pagina?: number; paginas?: number; orcamentoMs?: number } = {},
 ): Promise<ResultadoContatosKommo> {
-  const dominio = conn.subdomain.includes(".") ? conn.subdomain : `${conn.subdomain}.kommo.com`;
+  const dominio = integrationHost(conn.subdomain, "kommo");
   const fim = Date.now() + (opts.orcamentoMs ?? 240_000);
-  let pagina = opts.pagina ?? 1;
-  let restantes = opts.paginas ?? 20;
+  let pagina = Number.isInteger(opts.pagina) && opts.pagina! > 0 ? opts.pagina! : 1;
+  let restantes = Number.isInteger(opts.paginas) && opts.paginas! > 0 ? Math.min(opts.paginas!, 60) : 20;
   const r: ResultadoContatosKommo = { paginasLidas: 0, leads: 0, comContato: 0, comTelefone: 0, comEmail: 0, gravados: 0, proximaPagina: pagina, erros: [] };
 
   while (restantes > 0 && Date.now() < fim) {
@@ -73,6 +74,10 @@ export async function enriquecerContatosKommo(
       corpo = await kommoGet(dominio, conn.access_token, `/api/v4/leads?with=contacts&limit=${PAGE}&page=${pagina}`);
     } catch (e) {
       r.erros.push(e instanceof Error ? e.message : String(e));
+      break;
+    }
+    if (corpo !== null && !Array.isArray(corpo?._embedded?.leads)) {
+      r.erros.push("Kommo devolveu página de leads inválida");
       break;
     }
     const leads: LeadComContatos[] = corpo?._embedded?.leads ?? [];
@@ -91,14 +96,17 @@ export async function enriquecerContatosKommo(
     }
     const ids = [...new Set(contatoDoLead.values())];
     const dados = new Map<number, { phone: string | null; email: string | null; nome: string | null }>();
+    let paginaFalhou = false;
     for (let i = 0; i < ids.length; i += LOTE_CONTATOS) {
       const filtro = ids.slice(i, i + LOTE_CONTATOS).map((id) => `filter[id][]=${id}`).join("&");
       try {
         const cc = await kommoGet(dominio, conn.access_token, `/api/v4/contacts?limit=${PAGE}&${filtro}`);
+        if (cc === null || !Array.isArray(cc?._embedded?.contacts)) throw new Error("Kommo devolveu página de contatos incompleta");
         for (const c of (cc?._embedded?.contacts ?? []) as Contato[]) {
           dados.set(c.id, { phone: campo(c, "PHONE"), email: campo(c, "EMAIL"), nome: c.name?.trim() || null });
         }
       } catch (e) {
+        paginaFalhou = true;
         r.erros.push(e instanceof Error ? e.message : String(e));
       }
       await dormir(180);
@@ -119,10 +127,11 @@ export async function enriquecerContatosKommo(
     // Função do banco que só atualiza as colunas de contato (um upsert exigiria raw_payload e o sobrescreveria).
     for (let i = 0; i < linhas.length; i += 250) {
       const { data, error } = await supabase.rpc("aplicar_contatos_kommo", { p_conn: conn.id, p_linhas: linhas.slice(i, i + 250) });
-      if (error) r.erros.push(`gravar página ${pagina}: ${error.message}`);
+      if (error) { paginaFalhou = true; r.erros.push(`gravar página ${pagina}: ${error.message}`); }
       else r.gravados += Number(data) || 0;
     }
 
+    if (paginaFalhou) break; // a próxima chamada repete a página com os contatos que faltaram
     r.paginasLidas++;
     pagina++;
     restantes--;

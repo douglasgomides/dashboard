@@ -12,6 +12,7 @@
  * - A IA não diagnostica nem inventa: o prompt manda dizer "não dá para saber" quando faltar dado.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { conversationSummarySchema } from "./ai-output.js";
 
 const MODELO_OPENAI = process.env.RESUMO_MODELO || process.env.CLASSIFICADOR_MODELO || "gpt-4o-mini";
 const MODELO_CLAUDE = process.env.RESUMO_MODELO || "claude-haiku-4-5-20251001";
@@ -115,13 +116,19 @@ export async function resumirConversa(
     return `[${hora(m.enviada_em)}] ${quemFala}: ${corpo}`;
   });
   const transcricao = `Conversa (${lista.length} mensagens, da mais antiga para a mais recente${lista.length === MAX_MSGS ? `; só as ${MAX_MSGS} últimas` : ""}):\n${linhas.join("\n")}`.slice(0, 60_000);
-  const { json, modelo } = await chamarIA(transcricao);
+  // Registro obrigatório antes de enviar o conteúdo ao provedor de IA.
+  const { error: erroAcesso } = await admin.from("acessos_conversas").insert({ user_id: userId, client_id: clientId, conversa_id: conversaId, acao: userId ? "resumo_ia" : "resumo_ia_automatico" });
+  if (erroAcesso) throw new Error("Não foi possível registrar o acesso à conversa");
+  const resposta = await chamarIA(transcricao);
+  const validado = conversationSummarySchema.safeParse(resposta.json);
+  if (!validado.success) throw new Error("IA devolveu resumo em formato inválido");
+  const { modelo } = resposta;
+  const json = validado.data;
   const ate = lista[lista.length - 1].enviada_em;
   const { error: erroGrava } = await admin
     .from("conversas_resumos")
     .upsert({ conversa_id: conversaId, client_id: clientId, resumo: json, modelo, ate_msg_em: ate, gerado_em: new Date().toISOString(), gerado_por: userId }, { onConflict: "conversa_id" });
   if (erroGrava) throw new Error(erroGrava.message);
-  await admin.from("acessos_conversas").insert({ user_id: userId, client_id: clientId, conversa_id: conversaId, acao: userId ? "resumo_ia" : "resumo_ia_automatico" });
   return { resumo: json, modelo, ate_msg_em: ate };
 }
 
@@ -151,12 +158,13 @@ export async function analisarConversasPendentes(
   const ids = (convs ?? []).map((c: { id: string }) => c.id);
   const feitos = new Map<string, string | null>();
   for (let i = 0; i < ids.length; i += 100) {
-    const { data } = await admin.from("conversas_resumos").select("conversa_id, ate_msg_em").in("conversa_id", ids.slice(i, i + 100));
+    const { data, error } = await admin.from("conversas_resumos").select("conversa_id, ate_msg_em").in("conversa_id", ids.slice(i, i + 100));
+    if (error) return { analisadas: 0, pendentes: 0, erros: [`leitura de resumos: ${error.message}`] };
     for (const r of (data ?? []) as { conversa_id: string; ate_msg_em: string | null }[]) feitos.set(r.conversa_id, r.ate_msg_em);
   }
   const pendentes = (convs ?? []).filter((c: { id: string; ultima_msg_em: string | null }) => {
     const ate = feitos.get(c.id);
-    return ate === undefined || (ate != null && c.ultima_msg_em != null && c.ultima_msg_em > ate);
+    return ate == null || (c.ultima_msg_em != null && c.ultima_msg_em > ate);
   });
   const erros: string[] = [];
   let analisadas = 0;

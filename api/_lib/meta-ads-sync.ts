@@ -116,7 +116,7 @@ async function windsorGet(
     filter: JSON.stringify([["account_id", "eq", adAccountId]]),
     _max_rows: "100000",
   });
-  const res = await fetch(`${WINDSOR_BASE}?${params.toString()}`);
+  const res = await fetch(`${WINDSOR_BASE}?${params.toString()}`, { signal: AbortSignal.timeout(30_000), redirect: "error" });
   if (!res.ok) {
     throw new Error(`Windsor.ai request failed (${res.status}): ${await res.text()}`);
   }

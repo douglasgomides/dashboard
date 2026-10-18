@@ -39,7 +39,7 @@ export function Carregando({ texto = "Carregando…", linhas = 3 }: { texto?: st
 
 export function ErroCarga({ texto }: { texto: string }) {
   return (
-    <div className="hempty">
+    <div role="alert" className="hempty">
       <h2>Não foi possível carregar</h2>
       <p>{texto}</p>
     </div>

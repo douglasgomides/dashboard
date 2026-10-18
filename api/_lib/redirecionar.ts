@@ -10,19 +10,26 @@ type Admin = SupabaseClient<any, any, any>;
 
 export async function redirecionarLink(admin: Admin, slug: string, userAgent: string | null, referer: string | null): Promise<string | null> {
   if (!/^[a-z0-9]{4,20}$/.test(slug)) return null;
-  const { data: l } = await admin.from("links_rastreados").select("id, client_id, destino_url").eq("slug", slug).maybeSingle();
+  const { data: l, error } = await admin.from("links_rastreados").select("id, client_id, destino_url").eq("slug", slug).maybeSingle();
+  if (error) throw new Error("Não foi possível conferir o link rastreado");
   if (!l) return null;
+  let destino: URL;
+  try { destino = new URL(l.destino_url); } catch { return null; }
+  if (destino.protocol !== "https:" || destino.username || destino.password) return null;
   if (!ehRobo(userAgent)) {
     // Falha ao registrar não pode impedir o paciente de chegar ao WhatsApp.
     await admin.from("link_cliques").insert({ link_id: l.id, client_id: l.client_id, dispositivo: dispositivo(userAgent), origem: origemReferer(referer) }).then(() => null, () => null);
   }
-  return l.destino_url as string;
+  return destino.toString();
 }
 
 /** Conversas dos últimos 3 dias ainda sem origem: tenta ligar a um link (ref → frase → horário). */
-export async function atribuirLinks(admin: Admin): Promise<{ clinicas: number; atribuidas: number; por: Record<string, number> }> {
+export async function atribuirLinks(admin: Admin, onlyClientId?: string): Promise<{ clinicas: number; atribuidas: number; por: Record<string, number> }> {
   const tres = new Date(Date.now() - 3 * 86_400_000).toISOString();
-  const { data: ativos } = await admin.from("links_rastreados").select("id, client_id, codigo_ref, mensagem_modelo, criado_em, destino_tipo").not("slug", "is", null).limit(5000);
+  let consulta = admin.from("links_rastreados").select("id, client_id, codigo_ref, mensagem_modelo, criado_em, destino_tipo").not("slug", "is", null).limit(5000);
+  if (onlyClientId) consulta = consulta.eq("client_id", onlyClientId);
+  const { data: ativos, error: erroLinks } = await consulta;
+  if (erroLinks) throw new Error("Não foi possível ler os links para atribuição");
   const porCliente = new Map<string, LinkAtrib[]>();
   for (const l of (ativos ?? []) as (LinkAtrib & { client_id: string })[]) porCliente.set(l.client_id, [...(porCliente.get(l.client_id) ?? []), l]);
   let atribuidas = 0;
@@ -30,17 +37,21 @@ export async function atribuirLinks(admin: Admin): Promise<{ clinicas: number; a
   for (const [clientId, links] of porCliente) {
     const desde = links.reduce((m, l) => (l.criado_em < m ? l.criado_em : m), links[0].criado_em);
     const corte = desde > tres ? desde : tres;
-    const [{ data: convs }, { data: cliques }] = await Promise.all([
+    const [{ data: convs, error: erroConversas }, { data: cliques, error: erroCliques }] = await Promise.all([
       admin.from("conversas").select("id, iniciada_em").eq("client_id", clientId).is("link_id", null).gte("iniciada_em", corte).limit(500),
       admin.from("link_cliques").select("link_id, em").eq("client_id", clientId).gte("em", new Date(Date.parse(corte) - 3_600_000).toISOString()).limit(5000),
     ]);
+    if (erroConversas || erroCliques) throw new Error("Não foi possível conferir as conversas e cliques para atribuição");
     for (const c of (convs ?? []) as { id: string; iniciada_em: string }[]) {
-      const { data: msgs } = await admin.from("mensagens").select("texto").eq("conversa_id", c.id).eq("direcao", "entrada").order("enviada_em").limit(3);
+      const { data: msgs, error: erroMensagens } = await admin.from("mensagens").select("texto").eq("client_id", clientId).eq("conversa_id", c.id).eq("direcao", "entrada").order("enviada_em").limit(3);
+      if (erroMensagens) throw new Error("Não foi possível ler as mensagens para atribuição");
       const primeira = ((msgs ?? []) as { texto: string | null }[]).map((m) => m.texto ?? "").join("\n");
       const a = atribuirConversa(primeira, c.iniciada_em, links, (cliques ?? []) as CliqueAtrib[]);
       if (!a) continue;
       const ref = a.como === "ref" ? links.find((l) => l.id === a.link_id)?.codigo_ref ?? null : null;
-      await admin.from("conversas").update({ link_id: a.link_id, atribuicao: a.como, ...(ref ? { codigo_ref: ref } : {}) }).eq("id", c.id);
+      const { data: gravada, error: erroAtribuir } = await admin.from("conversas").update({ link_id: a.link_id, atribuicao: a.como, ...(ref ? { codigo_ref: ref } : {}) }).eq("client_id", clientId).eq("id", c.id).is("link_id", null).select("id").maybeSingle();
+      if (erroAtribuir) throw new Error("Não foi possível persistir a atribuição da conversa");
+      if (!gravada) continue;
       atribuidas++;
       por[a.como] = (por[a.como] ?? 0) + 1;
     }

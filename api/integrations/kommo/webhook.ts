@@ -1,7 +1,8 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "../../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { Database } from "../../../src/integrations/supabase/types.js";
-import { readRawBody, parseBracketFormBody, extractLeadEvents } from "../../_lib/kommo-webhook.js";
+import { readRawBody, parseBracketFormBody, extractLeadEvents, WebhookBodyError } from "../../_lib/kommo-webhook.js";
 
 // Recebe os webhooks nativos da Kommo (lead adicionado/status mudou/
 // excluído). A URL é única por conexão (connection_id + secret gerados no
@@ -33,100 +34,132 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { data: connection } = await supabase
-    .from("crm_connections")
-    .select("id, client_id, provider, webhook_secret, active")
-    .eq("id", connectionId)
-    .maybeSingle();
-
-  if (!connection || connection.webhook_secret !== secret || !connection.active) {
-    res.status(404).end();
-    return;
-  }
-
-  const raw = await readRawBody(req);
-  const parsed = parseBracketFormBody(raw);
-  const events = extractLeadEvents(parsed);
-
-  // Evento de "mudança de etapa" da Kommo manda um payload bem mais magro
-  // que o de "lead criado" — sem custom_fields. Sobrescrever direto perderia
-  // Fonte do Lead/Tipo de Procedimento que um evento anterior já tinha
-  // capturado. Busca o que já existe e preserva custom_fields quando o
-  // evento novo não trouxer nenhum.
-  for (const event of events) {
-    const { data: existing } = await supabase
-      .from("crm_leads")
-      .select("raw_payload")
-      .eq("crm_connection_id", connection.id)
-      .eq("external_lead_id", event.externalLeadId)
+  try {
+    const { data: connection, error: connectionError } = await supabase
+      .from("crm_connections")
+      .select("id, client_id, provider, webhook_secret, active")
+      .eq("id", connectionId)
       .maybeSingle();
+    if (connectionError) throw connectionError;
 
-    const existingRaw = (existing?.raw_payload as Record<string, unknown> | null) ?? {};
-    const eventRaw = event.raw as Record<string, unknown>;
-    // O sync pela API guarda em "custom_fields_values" (array); o webhook
-    // guarda em "custom_fields" (objeto). Preserva qualquer um dos dois que
-    // já existia, já que um evento de mudança de etapa nunca traz nenhum.
-    const mergedRaw = {
-      ...existingRaw,
-      ...eventRaw,
-      custom_fields: "custom_fields" in eventRaw ? eventRaw.custom_fields : (existingRaw.custom_fields ?? null),
-      custom_fields_values: existingRaw.custom_fields_values ?? null,
-    };
-
-    // Colunas normalizadas. Só entram no payload quando têm valor: coluna
-    // ausente no upsert preserva o que já estava na linha, enquanto mandar
-    // null apagaria o dado que o sync pela API já tinha gravado — e um evento
-    // de mudança de etapa chega magro, sem created_at nem custom_fields.
-    const normalizado: Record<string, unknown> = {};
-    if (event.statusId != null) {
-      // 142 é ganho e 143 é perdido no Kommo. Justamente o evento de mudança
-      // de etapa é o que transforma um lead em ganho, então recalcular aqui
-      // é o que mantém o desfecho vivo.
-      normalizado.outcome = event.statusId === "142" ? "won" : event.statusId === "143" ? "lost" : "open";
-    }
-    const criadoEm = (mergedRaw as Record<string, unknown>).created_at;
-    if (criadoEm != null && String(criadoEm) !== "") {
-      normalizado.occurred_at = new Date(Number(criadoEm) * 1000).toISOString();
-    }
-    const nome = (mergedRaw as Record<string, unknown>).name;
-    if (typeof nome === "string" && nome !== "") {
-      normalizado.contact_name = nome;
+    const secretMatches = connection?.webhook_secret && timingSafeEqual(
+      createHash("sha256").update(connection.webhook_secret).digest(),
+      createHash("sha256").update(secret).digest(),
+    );
+    if (!connection || connection.provider !== "kommo" || !secretMatches || !connection.active) {
+      res.status(404).end();
+      return;
     }
 
-    const { error } = await supabase.from("crm_leads").upsert(
-      {
+    const raw = await readRawBody(req);
+    const parsed = parseBracketFormBody(raw);
+    const events = extractLeadEvents(parsed);
+
+    // Evento de "mudança de etapa" da Kommo manda um payload bem mais magro
+    // que o de "lead criado" — sem custom_fields. Sobrescrever direto perderia
+    // Fonte do Lead/Tipo de Procedimento que um evento anterior já tinha
+    // capturado. Busca o que já existe e preserva custom_fields quando o
+    // evento novo não trouxer nenhum.
+    for (const event of events) {
+      if (event.eventType === "delete") {
+        // Exclusão não é mudança para uma etapa vazia. Mantém o snapshot e
+        // usa a mesma marca que as consultas comerciais e a reconciliação.
+        const { error } = await supabase.from("crm_leads")
+          .update({ removido_na_origem: new Date().toISOString(), event_type: "delete", received_at: new Date().toISOString() })
+          .eq("crm_connection_id", connection.id)
+          .eq("external_lead_id", event.externalLeadId);
+        if (error) throw error;
+        continue;
+      }
+
+      const { data: existing, error: existingError } = await supabase
+        .from("crm_leads")
+        .select("raw_payload")
+        .eq("crm_connection_id", connection.id)
+        .eq("external_lead_id", event.externalLeadId)
+        .maybeSingle();
+      if (existingError) throw existingError;
+
+      const existingRaw = (existing?.raw_payload as Record<string, unknown> | null) ?? {};
+      const eventRaw = event.raw as Record<string, unknown>;
+      // O sync pela API guarda em "custom_fields_values" (array); o webhook
+      // guarda em "custom_fields" (objeto). Preserva qualquer um dos dois que
+      // já existia, já que um evento de mudança de etapa nunca traz nenhum.
+      const mergedRaw = {
+        ...existingRaw,
+        ...eventRaw,
+        custom_fields: "custom_fields" in eventRaw ? eventRaw.custom_fields : (existingRaw.custom_fields ?? null),
+        custom_fields_values: existingRaw.custom_fields_values ?? null,
+      };
+
+      // Colunas normalizadas. Só entram no payload quando têm valor: coluna
+      // ausente no upsert preserva o que já estava na linha, enquanto mandar
+      // null apagaria o dado que o sync pela API já tinha gravado — e um evento
+      // de mudança de etapa chega magro, sem created_at nem custom_fields.
+      const normalizado: Record<string, unknown> = {};
+      if (event.statusId != null) normalizado.status_id = event.statusId;
+      if (event.oldStatusId != null) normalizado.old_status_id = event.oldStatusId;
+      if (event.pipelineId != null) normalizado.pipeline_id = event.pipelineId;
+      if (event.price != null) normalizado.price = event.price;
+      if (event.statusId != null) {
+        // 142 é ganho e 143 é perdido no Kommo. Justamente o evento de mudança
+        // de etapa é o que transforma um lead em ganho, então recalcular aqui
+        // é o que mantém o desfecho vivo.
+        normalizado.outcome = event.statusId === "142" ? "won" : event.statusId === "143" ? "lost" : "open";
+      }
+      const criadoEm = (mergedRaw as Record<string, unknown>).created_at;
+      if (criadoEm != null && String(criadoEm) !== "") {
+        const date = new Date(Number(criadoEm) * 1000);
+        if (Number.isFinite(date.getTime())) normalizado.occurred_at = date.toISOString();
+      }
+      const nome = (mergedRaw as Record<string, unknown>).name;
+      if (typeof nome === "string" && nome !== "") {
+        normalizado.contact_name = nome;
+      }
+
+      const { error } = await supabase.from("crm_leads").upsert(
+        {
+          crm_connection_id: connection.id,
+          client_id: connection.client_id,
+          provider: connection.provider,
+          external_lead_id: event.externalLeadId,
+          event_type: event.eventType,
+          raw_payload: mergedRaw as any,
+          received_at: new Date().toISOString(),
+          ...normalizado,
+        },
+        { onConflict: "crm_connection_id,external_lead_id" },
+      );
+      if (error) throw error;
+    }
+
+    // Qualquer chave de topo além de "leads" (ex: "chat" — mensagem recebida)
+    // ainda não tem parser dedicado — a documentação pública da Kommo não
+    // detalha essa estrutura. Guarda bruto por enquanto pra inspecionar dado
+    // real antes de escrever o parser definitivo.
+    const otherKeys = Object.keys(parsed).filter((k) => k !== "leads");
+    for (const key of otherKeys) {
+      // A mesma entrega pode voltar depois de uma falha parcial. Um ID
+      // determinístico torna a captura bruta idempotente usando a PK existente.
+      const digest = createHash("sha256").update(JSON.stringify([connection.id, key, parsed[key]])).digest("hex").slice(0, 32);
+      const id = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20)}`;
+      const { error } = await supabase.from("crm_raw_events").upsert({
+        id,
         crm_connection_id: connection.id,
         client_id: connection.client_id,
-        provider: connection.provider,
-        external_lead_id: event.externalLeadId,
-        event_type: event.eventType,
-        status_id: event.statusId,
-        old_status_id: event.oldStatusId,
-        pipeline_id: event.pipelineId,
-        price: event.price,
-        raw_payload: mergedRaw as any,
-        received_at: new Date().toISOString(),
-        ...normalizado,
-      },
-      { onConflict: "crm_connection_id,external_lead_id" },
-    );
-    if (error) console.error(`[kommo webhook] ${connection.client_id}/${event.externalLeadId}:`, error.message);
-  }
+        event_key: key,
+        raw_payload: parsed[key] as any,
+      }, { onConflict: "id", ignoreDuplicates: true });
+      if (error) throw error;
+    }
 
-  // Qualquer chave de topo além de "leads" (ex: "chat" — mensagem recebida)
-  // ainda não tem parser dedicado — a documentação pública da Kommo não
-  // detalha essa estrutura. Guarda bruto por enquanto pra inspecionar dado
-  // real antes de escrever o parser definitivo.
-  const otherKeys = Object.keys(parsed).filter((k) => k !== "leads");
-  for (const key of otherKeys) {
-    const { error } = await supabase.from("crm_raw_events").insert({
-      crm_connection_id: connection.id,
-      client_id: connection.client_id,
-      event_key: key,
-      raw_payload: parsed[key] as any,
-    });
-    if (error) console.error(`[kommo webhook] raw ${connection.client_id}/${key}:`, error.message);
+    res.status(200).json({ received: events.length, rawEvents: otherKeys.length });
+  } catch (error) {
+    if (error instanceof WebhookBodyError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
+    console.error("[kommo webhook] falha ao persistir entrega:", error instanceof Error ? error.message : "erro de banco");
+    res.status(503).json({ error: "Não foi possível persistir a entrega. Tente novamente." });
   }
-
-  res.status(200).json({ received: events.length, rawEvents: otherKeys.length });
 }

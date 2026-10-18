@@ -14,6 +14,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
+import { z } from "zod";
 
 // CLASSIFICADOR_MODELO troca o modelo sem mexer no código.
 const MODELO_OPENAI = process.env.CLASSIFICADOR_MODELO || "gpt-4o-mini";
@@ -68,7 +69,13 @@ function lerLista(texto: string): Saida[] {
   const bruto = JSON.parse(texto.slice(inicio, fim + 1));
   const lista = Array.isArray(bruto) ? bruto : (bruto?.posts ?? Object.values(bruto ?? {}).find((v) => Array.isArray(v)));
   if (!Array.isArray(lista)) throw new Error("resposta sem lista de posts");
-  return lista as Saida[];
+  const parsed = z.array(z.object({
+    id: z.string().min(1), tema: z.string().max(200).nullable(),
+    funil: z.enum(["C0", "C1", "C2", "C3"]).nullable(),
+    estagio: z.enum(["percepcao", "confianca", "venda", "multiplicacao"]).nullable(),
+  })).safeParse(lista);
+  if (!parsed.success) throw new Error("resposta com posts inválidos");
+  return parsed.data;
 }
 
 async function chamarOpenAI(chave: string, usuario: string, ms: number): Promise<Saida[]> {
@@ -175,12 +182,10 @@ export async function classificarConteudoComIA(
       }),
     );
     for (const { lote, saida } of respostas) {
-      if (saida.length === 0) falhouLote = true;
-      else if (!falhouLote) {
-        const mais = lote.map((p) => p.posted_at ?? "").filter(Boolean).sort()[0];
-        if (mais) ultimoTratado = mais;
-      }
       const porId = new Map(lote.map((p) => [p.id, p]));
+      const respondidos = new Set(saida.map((s) => s.id));
+      let loteCompleto = saida.length === lote.length && respondidos.size === lote.length && lote.every((p) => respondidos.has(p.id));
+      if (saida.length > 0 && !loteCompleto) errors.push("conteudo-ia: resposta não incluiu exatamente os posts do lote");
       for (const s of saida) {
         const p = porId.get(s.id);
         if (!p) continue;
@@ -194,8 +199,15 @@ export async function classificarConteudoComIA(
         if (!p.methodology_stage && s.estagio && ESTAGIOS.has(s.estagio)) patch.methodology_stage = s.estagio as never;
         if (Object.keys(patch).length === 0) continue;
         const { error: upErr } = await supabase.from("instagram_posts").update(patch).eq("id", p.id);
-        if (upErr) errors.push(`conteudo-ia update: ${upErr.message}`);
+        if (upErr) { loteCompleto = false; errors.push(`conteudo-ia update: ${upErr.message}`); }
         else count++;
+      }
+      // O cursor vem DEPOIS da persistência e só atravessa lotes contíguos
+      // completos. Resposta parcial da IA ou erro de banco devem ser relidos.
+      if (!loteCompleto) falhouLote = true;
+      else if (!falhouLote) {
+        const mais = lote.map((p) => p.posted_at ?? "").filter(Boolean).sort()[0];
+        if (mais) ultimoTratado = mais;
       }
     }
     if (errors.length > 0 || atrasou) break;

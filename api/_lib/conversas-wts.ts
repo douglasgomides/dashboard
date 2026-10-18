@@ -23,7 +23,7 @@ function carimboConferencia(): string {
 
 async function wtsGet(token: string, caminho: string): Promise<any> {
   for (let tentativa = 0; tentativa < 3; tentativa++) {
-    const r = await fetch(`${BASE}${caminho}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(25_000) });
+    const r = await fetch(`${BASE}${caminho}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(25_000), redirect: "error" });
     if (r.ok) return r.json();
     if (r.status === 429 || r.status >= 500) {
       await new Promise((ok) => setTimeout(ok, 800 * (tentativa + 1)));
@@ -144,8 +144,9 @@ export async function ingerirConversasWts(
   // O PostgREST devolve no máximo 1000 linhas por chamada: pagina até acabar.
   const sessoes: any[] = [];
   const desde = opts.dias ? new Date(Date.now() - opts.dias * 86_400_000).toISOString() : null;
+  let sessoesCompletas = false;
   for (let de = 0; de < 20_000; de += 1000) {
-    let q = supabase.from("wts_sessions").select("session_id, contact_id, started_at, updated_at").eq("client_id", clientId).not("contact_id", "is", null).order("started_at", { ascending: false }).range(de, de + 999);
+    let q = supabase.from("wts_sessions").select("session_id, contact_id, started_at, updated_at").eq("client_id", clientId).not("contact_id", "is", null).order("started_at", { ascending: false }).order("session_id").range(de, de + 999);
     if (desde) q = q.gte("started_at", desde);
     const { data: pag, error } = await q;
     if (error) {
@@ -153,8 +154,9 @@ export async function ingerirConversasWts(
       return r;
     }
     sessoes.push(...(pag ?? []));
-    if ((pag ?? []).length < 1000) break;
+    if ((pag ?? []).length < 1000) { sessoesCompletas = true; break; }
   }
+  if (!sessoesCompletas) { r.erros.push("Lista de sessões incompleta: limite de paginação atingido"); return r; }
   const ids = sessoes.map((s: any) => String(s.session_id));
   const existentes = new Map<string, string>();
   const cobertura = new Map<string, string | null>();
@@ -183,21 +185,19 @@ export async function ingerirConversasWts(
   const pendentes = [...new Map([...prioritarias, ...novas, ...mudaram].map((s: any) => [String(s.session_id), s])).values()];
 
   // Códigos dos links rastreados deste cliente (casam com a primeira mensagem do paciente).
-  const { data: links } = await supabase.from("links_rastreados").select("id, codigo_ref, tipo, instagram_post_id, ad_campaign_id").eq("client_id", clientId);
+  const { data: links, error: erroLinks } = await supabase.from("links_rastreados").select("id, codigo_ref, tipo, instagram_post_id, ad_campaign_id").eq("client_id", clientId);
+  if (erroLinks) { r.erros.push(`links rastreados: ${erroLinks.message}`); return r; }
   const porCodigo = new Map<string, any>((links ?? []).map((l: any) => [String(l.codigo_ref).toUpperCase(), l]));
 
   const contatos = new Map<string, Contato | null>();
   async function contato(id: string): Promise<Contato | null> {
     if (contatos.has(id)) return contatos.get(id) ?? null;
     try {
-      const c = await wtsGet(tokenAtivo, `/core/v1/contact/${id}`);
+      const c = await wtsGet(tokenAtivo, `/core/v1/contact/${encodeURIComponent(id)}`);
       const v: Contato = { phone: c.phoneNumber ?? null, nome: c.name ?? c.nameWhatsapp ?? null, email: c.email ?? null, instagram: typeof c.instagram === "string" ? c.instagram : null };
       contatos.set(id, v);
       return v;
-    } catch {
-      contatos.set(id, null);
-      return null;
-    }
+    } catch (e) { throw new Error(`contato WTS: ${e instanceof Error ? e.message : String(e)}`); }
   }
 
   // chave de telefone igual à do banco (DDD + 8 últimos dígitos)
@@ -211,7 +211,8 @@ export async function ingerirConversasWts(
   async function pessoaDe(c: Contato | null): Promise<string | null> {
     const k = chave(c?.phone);
     if (!c || !k) return null;
-    const { data: ex } = await supabase.from("pessoas").select("id").eq("client_id", clientId).eq("telefone_chave", k).maybeSingle();
+    const { data: ex, error: erroPessoa } = await supabase.from("pessoas").select("id").eq("client_id", clientId).eq("telefone_chave", k).maybeSingle();
+    if (erroPessoa) throw new Error(`pessoa: ${erroPessoa.message}`);
     if (ex?.id) return ex.id;
     const { data: novo, error: e } = await supabase
       .from("pessoas")
@@ -219,8 +220,10 @@ export async function ingerirConversasWts(
       .select("id")
       .single();
     if (e) {
-      const { data: de } = await supabase.from("pessoas").select("id").eq("client_id", clientId).eq("telefone_chave", k).maybeSingle();
-      return de?.id ?? null;
+      if (e.code !== "23505") throw new Error(`pessoa: ${e.message}`);
+      const { data: de, error: erroRever } = await supabase.from("pessoas").select("id").eq("client_id", clientId).eq("telefone_chave", k).maybeSingle();
+      if (erroRever || !de?.id) throw new Error(`pessoa: ${e.message}`);
+      return de.id;
     }
     r.pessoas++;
     return novo?.id ?? null;
@@ -359,7 +362,7 @@ export async function ingerirConversasWts(
     await finalizarConferenciaMensagens(supabase, clientId, tentativa, falhou ? "erro" : completa ? "completa" : "parcial");
     terminada = true;
     if (link) r.comCodigo++;
-    r.sessoes++;
+    if (completa && !falhou) r.sessoes++;
     } finally {
       if (!terminada) await finalizarConferenciaMensagens(supabase, clientId, tentativa, "erro");
     }
@@ -380,9 +383,10 @@ export async function ingerirConversasWts(
   }
   await Promise.all([trabalhador(), trabalhador(), trabalhador(), trabalhador(), trabalhador()]);
   try {
-    await supabase.rpc("vincular_flwchat", { p_client: clientId });
+    const { error } = await supabase.rpc("vincular_flwchat", { p_client: clientId });
+    if (error) r.erros.push("Não foi possível reconciliar os vínculos de pessoas");
   } catch {
-    /* o vínculo roda de novo na próxima rodada */
+    r.erros.push("Não foi possível reconciliar os vínculos de pessoas");
   }
   r.restantes = Math.max(0, pendentes.length - Math.min(cursor, fila.length));
   return r;

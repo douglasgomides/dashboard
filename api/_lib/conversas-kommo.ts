@@ -18,6 +18,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { integrationHost } from "./integration-http.js";
+
 const DIA = 86_400_000;
 
 export type EventoKommo = {
@@ -68,9 +70,9 @@ async function eventosDoDia(dom: string, token: string, tipo: string, de: number
   const todos: EventoKommo[] = [];
   for (let page = 1; page <= 60; page++) {
     const qs = new URLSearchParams({ limit: "100", page: String(page), "filter[type]": tipo, "filter[created_at][from]": String(de), "filter[created_at][to]": String(ate) });
-    const r = await fetch(`https://${dom}/api/v4/events?${qs}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(20_000) });
+    const r = await fetch(`https://${dom}/api/v4/events?${qs}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(20_000), redirect: "error" });
     if (r.status === 204) break;
-    if (!r.ok) throw new Error(`events ${tipo} ${r.status}: ${(await r.text()).slice(0, 120)}`);
+    if (!r.ok) throw new Error(`events ${tipo} ${r.status}`);
     const j = (await r.json()) as { _embedded?: { events?: EventoKommo[] }; _links?: { next?: unknown } };
     const ev = j._embedded?.events ?? [];
     todos.push(...ev);
@@ -102,7 +104,9 @@ export async function ingerirConversasKommo(
       saida[c.id.slice(0, 8)] = { dias: 0, eventos: 0, conversas: 0, mensagens: 0, com_texto: 0, ate: null, erros: ["conexão sem subdomínio ou token"], valoresVistos: {} };
       continue;
     }
-    const dom = c.subdomain.includes(".") ? c.subdomain : `${c.subdomain}.kommo.com`;
+    let dom: string;
+    try { dom = integrationHost(c.subdomain, "kommo"); }
+    catch { saida[c.id.slice(0, 8)] = { dias: 0, eventos: 0, conversas: 0, mensagens: 0, com_texto: 0, ate: null, erros: ["Domínio Kommo inválido"], valoresVistos: {} }; continue; }
     const g = grupos.get(`${dom}|${token}`) ?? { dom, token, membros: [] };
     g.membros.push(c);
     grupos.set(`${dom}|${token}`, g);
@@ -195,13 +199,15 @@ async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoK
   const talks = [...porTalk.keys()];
   const existentes = new Map<string, { iniciada_em: string | null; ultima_msg_em: string | null; lead_id: string | null }>();
   for (let i = 0; i < talks.length; i += 200) {
-    const { data: ex } = await admin.from("conversas").select("externo_id, iniciada_em, ultima_msg_em, lead_id").eq("client_id", clientId).eq("provider", "kommo").in("externo_id", talks.slice(i, i + 200));
+    const { data: ex, error: erroExistentes } = await admin.from("conversas").select("externo_id, iniciada_em, ultima_msg_em, lead_id").eq("client_id", clientId).eq("provider", "kommo").in("externo_id", talks.slice(i, i + 200));
+    if (erroExistentes) { r.erros.push("Não foi possível ler as conversas existentes"); return; }
     for (const e of ex ?? []) existentes.set(e.externo_id as string, { iniciada_em: e.iniciada_em as string | null, ultima_msg_em: e.ultima_msg_em as string | null, lead_id: e.lead_id as string | null });
   }
   const leadsExt = [...new Set(msgs.map((m) => m.leadId).filter(Boolean))] as string[];
   const leadDe = new Map<string, string>();
   for (let i = 0; i < leadsExt.length; i += 200) {
-    const { data: ls } = await admin.from("crm_leads").select("id, external_lead_id").eq("crm_connection_id", conn.id).in("external_lead_id", leadsExt.slice(i, i + 200));
+    const { data: ls, error: erroLeads } = await admin.from("crm_leads").select("id, external_lead_id").eq("client_id", clientId).eq("crm_connection_id", conn.id).in("external_lead_id", leadsExt.slice(i, i + 200));
+    if (erroLeads) { r.erros.push("Não foi possível ler os vínculos de leads"); return; }
     for (const l of ls ?? []) leadDe.set(l.external_lead_id as string, l.id as string);
   }
   const linhasConv = talks.map((t) => {
