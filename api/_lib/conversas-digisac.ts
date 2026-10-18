@@ -10,6 +10,7 @@
  * Conversa é dado de saúde: aqui só escrita, com a service role; a leitura passa por listar_conversas/ler_mensagens.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { reconciliarJornada } from "./jornada-evidencias.js";
 import { baseUrl, digGet } from "./digisac-sync.js";
 import { conversasAtivasParaConferir, iniciarConferenciaMensagens, finalizarConferenciaMensagens } from "./conversas-wts.js";
 
@@ -175,6 +176,7 @@ export async function ingerirConversasDigisac(admin: SupabaseClient<any, any, an
       const ultima = msgs[msgs.length - 1];
       const lead = s.contact_id ? leadDe.get(s.contact_id as string) : undefined;
       const { data: conv, error: eC } = await admin.from("conversas").update({
+        source_connection_id: conn.id,
         ...(pessoaId ? { pessoa_id: pessoaId } : {}), ...(lead?.id ? { lead_id: lead.id } : {}),
         iniciada_em: primeira ? quando(primeira) : s.started_at, ultima_msg_em: ultima ? quando(ultima) : (s.updated_at ?? s.started_at),
       }).eq("client_id", clientId).eq("id", tentativa.id).eq("mensagens_conferencia_em", tentativa.em).select("id").maybeSingle();
@@ -208,6 +210,8 @@ export async function ingerirConversasDigisac(admin: SupabaseClient<any, any, an
         }
       }
     }
+      const erroJornada = await reconciliarJornada(admin, clientId);
+      if (erroJornada) r.erros.push(erroJornada);
     } catch { r.erros.push("Não foi possível concluir a importação dos atendimentos"); }
   }
   return saida;

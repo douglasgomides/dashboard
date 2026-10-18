@@ -292,6 +292,8 @@ export async function runDigisacSync(env: DigisacSyncEnv): Promise<DigisacSyncRe
           return {
             client_id: conn.client_id,
             session_id: t.id,
+            source_provider: "digisac",
+            source_connection_id: conn.id,
             started_at: inicio,
             ended_at: t.endedAt ?? null,
             status: statusDoAtendimento(t),

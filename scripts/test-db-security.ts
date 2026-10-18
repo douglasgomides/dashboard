@@ -576,7 +576,10 @@ try {
     assert.equal(reports.filter((row) => row.section === "unvalidated_constraint").length, invalidRelations.length + 1);
     assert.ok(reports.some((row) => row.section === "anonymous_default_grant" && row.default_source === "global_implicit" && row.object_type === "f" && row.grantee === "PUBLIC"), "default global implícito precisa ser visível");
     const generated = reports.filter((row) => row.section === "tenant_violation_query");
-    assert.equal(generated.length, invalidRelations.length);
+    assert.equal(generated.length, invalidRelations.length + 2);
+    for (const name of ["wts_sessions_source_connection_tenant_fk", "conversas_source_connection_tenant_fk"]) {
+      assert.ok(generated.some(row => row.constraint_name === name), `nova origem precisa entrar no preflight: ${name}`);
+    }
     for (const query of generated) {
       assert.equal(query.supported_match_simple, true);
       assert.equal(typeof query.count_sql, "string");
@@ -592,7 +595,7 @@ try {
   });
   await check("validação explícita detecta só a inconsistência legada sem apagar dados", async () => {
     const constraints = await db.query<{ table_name: string; constraint_name: string }>("select conrelid::regclass::text as table_name,conname as constraint_name from pg_constraint where conname like '%_tenant_fk' and connamespace='public'::regnamespace");
-    assert.equal(constraints.rows.length, invalidRelations.length);
+    assert.equal(constraints.rows.length, invalidRelations.length + 2);
     for (const constraint of constraints.rows) {
       const validate = () => db.exec(`alter table ${constraint.table_name} validate constraint ${constraint.constraint_name}`);
       if (constraint.constraint_name === "mensagens_conversa_id_tenant_fk") await denied(validate, "23503");

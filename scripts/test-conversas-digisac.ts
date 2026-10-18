@@ -60,6 +60,7 @@ try {
     }
     const table = url.pathname.split("/").at(-1)!;
     const method = init?.method ?? "GET";
+    if (table === "jornada_reconciliar") return json({ verificados: 1, conflitos: 0 });
     if (method === "GET") {
       if (table === failRead) return dbError();
       if (table === "crm_connections") {
@@ -90,6 +91,7 @@ try {
     if (table === "conversas") {
       const body = JSON.parse(String(init?.body));
       if (method === "PATCH" && body.mensagens_cobertura === "completa" && failCheckpoint) return dbError();
+      if (body.source_connection_id) assert.equal(body.source_connection_id, "connection");
       if (body.ultima_msg_em) checkpoint = body.ultima_msg_em;
       if (body.mensagens_cobertura) coverage = body.mensagens_cobertura;
       if (body.mensagens_conferidas_em) successStamp = body.mensagens_conferidas_em;
