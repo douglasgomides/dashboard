@@ -5,13 +5,14 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Brain, CalendarPlus, CheckCircle2, ChevronDown, Filter, Lightbulb, Loader2, MessageCircle, Play, ThumbsDown, XCircle } from "lucide-react";
+import { Bot, Brain, CalendarPlus, CheckCircle2, ChevronDown, Filter, Headset, Lightbulb, Loader2, MessageCircle, Play, ThumbsDown, ThumbsUp, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useClientRole } from "@/hooks/use-client-role";
 import { rodarFluxoAteFim } from "@/lib/agentes-data";
 import { AGENTES, type AgenteCatalogo, type IdAgente } from "@/lib/agentes-catalogo";
 import { pecaParaTexto, type CopyAnuncio, type PecaConteudo } from "@/lib/agentes-sugestoes";
+import { duracao, resumoPiloto } from "@/lib/atendente";
 import { usePautas } from "@/components/planejador-conteudo";
 import { BotaoCopiar } from "@/components/botao-copiar";
 
@@ -367,11 +368,113 @@ export function AprendizadosAgentes({ clientId, podeEditar }: { clientId: string
   );
 }
 
+// ---------------------------------------------------------------- atendente de IA (piloto, modo sombra)
+
+interface RascunhoAtendente {
+  id: string; gatilho_em: string; gatilho_texto: string; acao: string; mensagem: string | null; motivo: string | null; risco: string | null; erro: string | null;
+  faltou: string[]; resposta_humana: string | null; tempo_humano_s: number | null; avaliacao: string | null; avaliacao_motivo: string | null;
+}
+const ACAO_ATENDENTE: Record<string, string> = { responder: "Responderia", passar_humano: "Passaria para a equipe", descartado: "Barrado pelas regras" };
+
+/** Só admin: o que o atendente teria respondido a cada paciente, ao lado da resposta real da clínica. Nada é enviado. */
+export function AtendentePiloto({ clientId }: { clientId: string }) {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["atendente-piloto", clientId],
+    queryFn: async () => {
+      const desde = new Date(Date.now() - 7 * 86_400_000).toISOString();
+      const [cfg, rs, fatos] = await Promise.all([
+        db.from("atendente_config").select("modo").eq("client_id", clientId).maybeSingle(),
+        db.from("atendente_rascunhos").select("id, gatilho_em, gatilho_texto, acao, mensagem, motivo, risco, erro, faltou, resposta_humana, tempo_humano_s, avaliacao, avaliacao_motivo")
+          .eq("client_id", clientId).gte("gatilho_em", desde).order("gatilho_em", { ascending: false }).limit(300),
+        db.from("brain_itens").select("estado").eq("client_id", clientId).eq("memoria", "comercial").like("chave", "atend_%"),
+      ]);
+      const f = (fatos.data ?? []) as { estado: string }[];
+      return { modo: (cfg.data?.modo as string) ?? "desligado", rascunhos: (rs.data ?? []) as RascunhoAtendente[], aprovados: f.filter((x) => x.estado === "aprovado").length, propostos: f.filter((x) => x.estado === "proposto").length };
+    },
+  });
+  const [ver, setVer] = useState(12);
+  const atualizar = () => qc.invalidateQueries({ queryKey: ["atendente-piloto", clientId] });
+  async function modo(m: string) { await db.rpc("atendente_definir_modo", { p_client_id: clientId, p_modo: m }); await atualizar(); }
+  async function avaliar(r: RascunhoAtendente, a: "boa" | "ruim") {
+    let motivo: string | null = null;
+    if (a === "ruim") { motivo = window.prompt("O que estava errado? (o atendente aprende com isso)", r.avaliacao_motivo ?? ""); if (motivo === null) return; }
+    await db.rpc("atendente_avaliar", { p_id: r.id, p_avaliacao: r.avaliacao === a ? null : a, p_motivo: motivo });
+    await atualizar();
+  }
+  const d = q.data;
+  const rs = d?.rascunhos ?? [];
+  const n = resumoPiloto(rs.map((r) => ({ ...r, faltou: Array.isArray(r.faltou) ? r.faltou : [] })));
+  return (
+    <section aria-labelledby="ag-atendente" className="space-y-3 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 id="ag-atendente" className="flex items-center gap-1.5 text-sm font-semibold"><Headset size={16} aria-hidden style={{ color: "var(--accent)" }} /> Atendente de IA · piloto em modo sombra</h3>
+          <p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>Para cada mensagem de paciente, o atendente escreve o que responderia, só com fatos aprovados no Brand Brain, e passa para a equipe tudo o que for clínico, urgente ou reclamação. <b>Nada é enviado ao paciente.</b> Aqui você compara com a resposta real da clínica e avalia; as avaliações voltam para o atendente. Visível só para a equipe Doctor Creator.</p>
+        </div>
+        <label className="flex items-center gap-1.5 text-xs">Modo
+          <select value={d?.modo ?? "desligado"} onChange={(e) => modo(e.target.value)} className="min-h-[32px] rounded-md border px-1.5 text-xs" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+            <option value="desligado">Desligado</option>
+            <option value="sombra">Sombra (escreve, não envia)</option>
+          </select>
+        </label>
+      </div>
+      {d && (d.aprovados < 3) && (
+        <p className="rounded-md p-2 text-xs" style={{ background: "var(--surface-2)" }}>
+          <b>Fatos de atendimento:</b> {d.aprovados} aprovado{d.aprovados === 1 ? "" : "s"}{d.propostos ? `, ${d.propostos} proposto${d.propostos === 1 ? "" : "s"} pelo agente a partir das respostas da secretária` : ""}. Sem endereço, horário, convênios e como agendar aprovados, o atendente só acolhe e passa para a equipe. <Link to="/admin/brain" className="font-semibold" style={{ color: "var(--accent)" }}>Aprovar no Brand Brain →</Link>
+        </p>
+      )}
+      {rs.length > 0 && (
+        <dl className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+          <div className="rounded-md p-2" style={{ background: "var(--surface-2)" }}><dt style={{ color: "var(--muted)" }}>Mensagens de paciente (7 dias)</dt><dd className="text-base font-semibold">{n.total}</dd></div>
+          <div className="rounded-md p-2" style={{ background: "var(--surface-2)" }}><dt style={{ color: "var(--muted)" }}>Responderia sozinho</dt><dd className="text-base font-semibold">{n.total ? Math.round((100 * n.responderia) / n.total) : 0}%</dd></div>
+          <div className="rounded-md p-2" style={{ background: "var(--surface-2)" }}><dt style={{ color: "var(--muted)" }}>Tempo da clínica hoje (mediana)</dt><dd className="text-base font-semibold">{duracao(n.medianaHumanoS)}</dd></div>
+          <div className="rounded-md p-2" style={{ background: "var(--surface-2)" }}><dt style={{ color: "var(--muted)" }}>Clínica levou mais de 15 min</dt><dd className="text-base font-semibold">{n.demorou15} de {n.comTempo}</dd></div>
+        </dl>
+      )}
+      {n.faltou.length > 0 && <p className="text-xs" style={{ color: "var(--ink-2)" }}><b>O que mais faltou saber:</b> {n.faltou.map(([k, v]) => `${k} (${v})`).join("; ")}.</p>}
+      {q.isLoading ? null : rs.length === 0 ? (
+        <p className="text-sm" style={{ color: "var(--ink-2)" }}>{d?.modo === "sombra" ? "Ligado. Os primeiros rascunhos aparecem na próxima leitura das conversas (a cada 20 minutos, das 7h às 21h)." : "Desligado. Ligue o modo sombra para começar o piloto nesta clínica."}</p>
+      ) : (
+        <ul className="space-y-2">
+          {rs.slice(0, ver).map((r) => (
+            <li key={r.id} className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+              <div className="flex flex-wrap items-center justify-between gap-1 text-[11px]" style={{ color: "var(--muted)" }}>
+                <span>{new Date(r.gatilho_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                <span className="font-semibold uppercase tracking-wide" style={{ color: r.acao === "responder" ? "var(--accent)" : r.acao === "descartado" ? "var(--crit)" : "var(--ink-2)" }}>{ACAO_ATENDENTE[r.acao] ?? r.acao}{r.risco ? ` · ${r.risco}` : ""}</span>
+              </div>
+              <p className="mt-1 whitespace-pre-line text-xs" style={{ color: "var(--ink-2)" }}><b>Paciente:</b> {r.gatilho_texto}</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-md p-2" style={{ background: "var(--surface-2)" }}>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>Atendente (em menos de 1 min)</div>
+                  <p className="mt-0.5 whitespace-pre-line">{r.mensagem ?? "(sem texto)"}</p>
+                  {(r.erro || r.motivo) && <p className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>{r.erro ? `Barrado: ${r.erro}` : r.motivo}</p>}
+                </div>
+                <div className="rounded-md p-2" style={{ background: "var(--surface-2)" }}>
+                  <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>Clínica ({duracao(r.tempo_humano_s)})</div>
+                  <p className="mt-0.5 whitespace-pre-line">{r.resposta_humana ?? "Ainda sem resposta."}</p>
+                </div>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <button type="button" aria-pressed={r.avaliacao === "boa"} className="inline-flex min-h-[32px] items-center gap-1 text-xs" style={{ color: r.avaliacao === "boa" ? "var(--accent)" : "var(--muted)" }} onClick={() => avaliar(r, "boa")}><ThumbsUp size={13} aria-hidden /> Boa</button>
+                <button type="button" aria-pressed={r.avaliacao === "ruim"} className="inline-flex min-h-[32px] items-center gap-1 text-xs" style={{ color: r.avaliacao === "ruim" ? "var(--crit)" : "var(--muted)" }} onClick={() => avaliar(r, "ruim")}><ThumbsDown size={13} aria-hidden /> Ruim</button>
+                {r.avaliacao_motivo && <span className="text-[11px]" style={{ color: "var(--muted)" }}>“{r.avaliacao_motivo}”</span>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {rs.length > ver && <button type="button" className="text-xs font-semibold" style={{ color: "var(--accent)" }} onClick={() => setVer(ver + 20)}>Ver mais</button>}
+    </section>
+  );
+}
+
 // ---------------------------------------------------------------- painel "Agentes de IA"
 
 /** Uma linha por agente: o que faz, quando roda, o que está esperando a equipe e onde abrir. */
 export function PainelAgentes({ clientId, produto }: { clientId: string; produto: "hub" | "sap" }) {
   const { podeEditar } = useClientRole(clientId);
+  const { isAdmin } = useAuth();
   const q = useQuery({
     queryKey: ["painel-agentes", clientId],
     queryFn: async () => {
@@ -434,6 +537,7 @@ export function PainelAgentes({ clientId, produto }: { clientId: string; produto
           );
         })}
       </div>
+      {isAdmin && <AtendentePiloto clientId={clientId} />}
       <AprendizadosAgentes clientId={clientId} podeEditar={podeEditar} />
     </div>
   );
