@@ -4,6 +4,7 @@ import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runWtsSync } from "../_lib/wts-sync.js";
 import { ingerirConversasWts } from "../_lib/conversas-wts.js";
 import { analisarConversasPendentes } from "../_lib/resumo-conversa.js";
+import { rodarAtendenteSombra } from "../_lib/atendente.js";
 import { ingerirConversasDigisac } from "../_lib/conversas-digisac.js";
 import { sondarConversasCrm } from "../_lib/sonda-conversas-crm.js";
 
@@ -84,9 +85,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const clientes = [...vistos];
     // Clientes em paralelo (cada um com o tempo todo): antes, um de cada vez dividia os 4 minutos e o atraso não baixava.
     const orcamentoMs = Math.max(15_000, 240_000 - (Date.now() - inicio));
-    const resultados = await Promise.all(clientes.map((id) => analisarConversasPendentes(admin, id, { limite: 200, orcamentoMs }).then((r) => [id, r] as const)));
+    // Atendente de IA em modo sombra (piloto): roda em paralelo, só escreve rascunhos, nunca envia.
+    const [resultados, atendente] = await Promise.all([
+      Promise.all(clientes.map((id) => analisarConversasPendentes(admin, id, { limite: 200, orcamentoMs }).then((r) => [id, r] as const))),
+      rodarAtendenteSombra(admin, Math.min(150_000, orcamentoMs)).catch((e: unknown) => ({ erro: e instanceof Error ? e.message : String(e) })),
+    ]);
     const analise: Record<string, unknown> = Object.fromEntries(resultados);
-    res.status(200).json({ ok: true, analise });
+    res.status(200).json({ ok: true, analise, atendente });
     return;
   }
 
