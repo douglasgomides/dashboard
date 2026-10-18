@@ -12,8 +12,8 @@ export function SapDeliverables() {
         {SAP_DELIVERABLES.map((delivery, index) => (
           <article key={delivery.title}>
             <header><span className="nx-serial">0{index + 1}</span><h3>{delivery.title}</h3></header>
-            <p>{delivery.purpose}</p>
-            <ul>{delivery.items.map(item => <li key={item}><Check size={15} aria-hidden /><span>{item}</span></li>)}</ul>
+            <div className="sap-delivery-detail"><p>{delivery.purpose}</p>
+              <ul>{delivery.items.map(item => <li key={item}>{item}</li>)}</ul></div>
           </article>
         ))}
       </div>
