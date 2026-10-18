@@ -30,8 +30,12 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix workers/creative --ignore-scripts
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-liberation2
       - run: npm audit --audit-level=moderate
+      - run: npm audit --prefix workers/creative --omit=dev --audit-level=moderate
       - run: npm run check
+      - run: npm run check --prefix workers/creative
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
