@@ -32,7 +32,7 @@ export async function resultadosRecuperacao(admin: Admin, clientId: string) {
 }
 
 async function postsDaClinica(admin: Admin, clientId: string, dias: number) {
-  const { data } = await admin.from("instagram_posts").select("format, tema, caption, reach, saved, shares, posted_at")
+  const { data } = await admin.from("instagram_posts").select("format, tema, caption, reach, saved, shares, posted_at, transcricao")
     .eq("client_id", clientId).gte("posted_at", desde(dias)).order("posted_at", { ascending: false }).limit(500);
   return (data ?? []) as (PostMetricas & { posted_at: string | null })[];
 }

@@ -6,6 +6,7 @@ import { ingerirConversasWts } from "../_lib/conversas-wts.js";
 import { analisarConversasPendentes } from "../_lib/resumo-conversa.js";
 import { rodarAtendenteSombra } from "../_lib/atendente.js";
 import { atribuirLinks } from "../_lib/redirecionar.js";
+import { transcreverReels } from "../_lib/transcrever-reels.js";
 import { ingerirConversasDigisac } from "../_lib/conversas-digisac.js";
 import { sondarConversasCrm } from "../_lib/sonda-conversas-crm.js";
 
@@ -88,13 +89,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const orcamentoMs = Math.max(15_000, 240_000 - (Date.now() - inicio));
     // Atendente de IA em modo sombra (piloto): roda em paralelo, só escreve rascunhos, nunca envia.
     // Links rastreados: liga as conversas novas ao link de origem (ref, frase ou horário).
-    const [resultados, atendente, links] = await Promise.all([
+    // Reels: transcreve a fala de alguns vídeos por rodada (o roteiro vira contexto para os agentes).
+    const [resultados, atendente, links, reels] = await Promise.all([
       Promise.all(clientes.map((id) => analisarConversasPendentes(admin, id, { limite: 200, orcamentoMs }).then((r) => [id, r] as const))),
       rodarAtendenteSombra(admin, Math.min(150_000, orcamentoMs)).catch((e: unknown) => ({ erro: e instanceof Error ? e.message : String(e) })),
       atribuirLinks(admin).catch((e: unknown) => ({ erro: e instanceof Error ? e.message : String(e) })),
+      transcreverReels(admin, Math.min(150_000, orcamentoMs)).catch((e: unknown) => ({ erro: e instanceof Error ? e.message : String(e) })),
     ]);
     const analise: Record<string, unknown> = Object.fromEntries(resultados);
-    res.status(200).json({ ok: true, analise, atendente, links });
+    res.status(200).json({ ok: true, analise, atendente, links, reels });
     return;
   }
 
