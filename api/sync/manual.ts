@@ -22,6 +22,7 @@ import { rodarConferencia, rodarEtapa, ETAPAS, type EtapaId, type Achado, type V
 import { resumirConversa } from "../_lib/resumo-conversa.js";
 import { rascunharSessao } from "../_lib/sessao-ia.js";
 import { rodarAgentes, catalogoFluxos, enfileirarBrain } from "../_lib/agentes.js";
+import { resumoEquipe } from "../_lib/resumo-equipe.js";
 
 // Sincronização sob demanda, disparada pelo botão dentro do dashboard.
 //
@@ -90,12 +91,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Agendamento do n8n (SYNC_SECRET), restrito a duas ações que só GERAM SUGESTÕES para revisão humana:
   // - "brain_enfileirar" (ou "agendar"): mede o resultado das sugestões e põe na fila a rodada de cada agente do catálogo
   //   (Brain, Recuperação, Anúncios, Conteúdo, Campanhas) das clínicas cuja última rodada passou do intervalo;
-  // - "rodar": roda a fila de agentes (aprovações continuam esperando uma pessoa; nada é enviado a clínica ou paciente).
+  // - "rodar": roda a fila de agentes (aprovações continuam esperando uma pessoa; nada é enviado a clínica ou paciente);
+  // - "resumo_equipe": devolve o e-mail diário do que os agentes deixaram para a equipe e os e-mails dos admins
+  //   (quem envia é o n8n; só números e nomes de clínica).
   const SYNC_SECRET = process.env.SYNC_SECRET;
   if (SYNC_SECRET && token === SYNC_SECRET) {
     const corpo = (req.body ?? {}) as { alvo?: string; acao?: string };
-    if (corpo.alvo !== "agentes" || !["rodar", "brain_enfileirar", "agendar"].includes(corpo.acao ?? "")) { res.status(403).json({ error: "O segredo do agendamento só roda a fila de agentes" }); return; }
+    if (corpo.alvo !== "agentes" || !["rodar", "brain_enfileirar", "agendar", "resumo_equipe"].includes(corpo.acao ?? "")) { res.status(403).json({ error: "O segredo do agendamento só roda a fila de agentes" }); return; }
     try {
+      if (corpo.acao === "resumo_equipe") {
+        res.status(200).json({ alvo: "agentes", ok: true, ...(await resumoEquipe(admin)) });
+        return;
+      }
       if (corpo.acao === "brain_enfileirar" || corpo.acao === "agendar") {
         const r = await enfileirarBrain(admin);
         res.status(200).json({ alvo: "agentes", ok: true, agendado: true, ...r });

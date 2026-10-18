@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "sync:instagram": "tsx scripts/sync-instagram.ts"
+    "sync:instagram": "tsx scripts/sync-instagram.ts",
+    "test": "node scripts/rodar-testes.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.8.1",
