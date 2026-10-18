@@ -63,7 +63,7 @@ function CentralAgentes() {
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Resumo">
         <Numero rotulo="Precisam de você" valor={dados ? String(fila.length) : "…"} destaque={fila.length > 0} />
-        <Numero rotulo="Em andamento" valor={dados ? String(ativas.filter((e) => e.estado !== "falhou").length) : "…"} />
+        <Numero rotulo="Em andamento" valor={dados ? String(ativas.filter((e) => !["falhou", "pausada"].includes(e.estado)).length) : "…"} />
         <Numero rotulo="Concluídas" valor={dados ? String(encerradas.filter((e) => e.estado === "concluida").length) : "…"} />
         <Numero rotulo="Custo de IA no mês" valor={dados ? usd(dados.custoMes) : "…"} nota={dados ? `${dados.chamadasMes} chamada(s)${dados.falhasIaMes ? `, ${dados.falhasIaMes} com erro` : ""} · estimativa` : undefined} />
       </section>
