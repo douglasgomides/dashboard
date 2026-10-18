@@ -48,7 +48,7 @@ export function NextBestActionCard({ insight: i, onAbrir, destaque = false }: { 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         {destaque && (
           <span className="font-semibold uppercase tracking-wide" style={{ color: "var(--accent)" }}>
-            Próxima melhor ação
+            Prioridade recomendada
           </span>
         )}
         <span style={{ color: "var(--muted)" }}>{categoriaDaArea(i.area)}</span>
@@ -139,7 +139,7 @@ export function NextBestActionPanel({ insight: i, clientId, onFechar, rodape }: 
             </p>
             {i.impactoTexto && (
               <p className="mt-1 text-sm" style={{ color: "var(--ink-2)" }}>
-                Resultado esperado: {i.impactoTexto}
+                Impacto a acompanhar: {i.impactoTexto}
               </p>
             )}
             {i.acao.rota && (

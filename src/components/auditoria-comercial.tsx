@@ -16,16 +16,16 @@ import { MotivosComparados } from "@/components/motivos-comparados";
 const layout = getRouteApi("/_authenticated/$clientId");
 
 const ROTULO_OBJECAO: Record<string, string> = {
-  preco: "Preço", convenio: "Convênio/plano", distancia: "Distância", adiamento: "Adiamento (“vou pensar”)", agenda: "Agenda/horário",
+  preco: "Preço", convenio: "Convênio/plano", distancia: "Distância", adiamento: "Tempo para decidir", agenda: "Agenda/horário",
   medo: "Medo", desconfianca: "Desconfiança", outro: "Outro",
 };
 export const ROTULO_FALHA: Record<string, string> = {
-  sem_resposta: "Deixou o paciente sem resposta", demora: "Demorou para responder", desvio_preco: "Desviou da pergunta de preço",
-  preco_sem_ancoragem: "Deu preço sem ancorar valor", sem_cta: "Não conduziu para data/hora", sem_follow_up: "Sem follow-up quando o paciente sumiu",
-  nome_errado: "Errou o nome do paciente", informacao_inconsistente: "Informação inconsistente (valor, data)", pressao: "Pressionou o paciente",
-  so_emoji: "Respondeu só com emoji", desconto_reativo: "Desconto antes de construir valor", excesso_audio: "Excesso de áudio",
+  sem_resposta: "Paciente sem resposta", demora: "Demora no atendimento", desvio_preco: "Pergunta sobre preço sem resposta direta",
+  preco_sem_ancoragem: "Preço apresentado sem contexto de valor", sem_cta: "Sem proposta de data e horário", sem_follow_up: "Sem retorno após a interrupção da conversa",
+  nome_errado: "Nome do paciente incorreto", informacao_inconsistente: "Informação inconsistente (valor, data)", pressao: "Abordagem com pressão",
+  so_emoji: "Resposta apenas com emoji", desconto_reativo: "Desconto antes de apresentar o valor", excesso_audio: "Excesso de áudio",
 };
-const ROTULO_ORIGEM: Record<string, string> = { anuncio: "Anúncio", instagram: "Instagram", indicacao: "Indicação", paciente_antigo: "Paciente antigo", desconhecida: "Não dá para saber" };
+const ROTULO_ORIGEM: Record<string, string> = { anuncio: "Anúncio", instagram: "Instagram", indicacao: "Indicação", paciente_antigo: "Paciente antigo", desconhecida: "Origem não identificada" };
 
 type Auditoria = {
   conversas_periodo: number;
@@ -43,7 +43,7 @@ type Auditoria = {
 function Barras({ itens, rotulos, cor }: { itens: Record<string, number>; rotulos: Record<string, string>; cor: string }) {
   const lista = Object.entries(itens).sort((a, b) => b[1] - a[1]);
   const max = Math.max(1, ...lista.map(([, n]) => n));
-  if (!lista.length) return <p className="text-sm" style={{ color: "var(--text-dim)" }}>Nada apareceu no período.</p>;
+  if (!lista.length) return <p className="text-sm" style={{ color: "var(--text-dim)" }}>Nenhum registro identificado nas conversas analisadas deste período.</p>;
   return (
     <ul className="space-y-1.5">
       {lista.map(([k, n]) => (
@@ -75,8 +75,8 @@ export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; on
       <section className="mb-4 rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
         <h2 className="text-[15px] font-semibold">Auditoria comercial</h2>
         <p className="mt-1" style={{ color: "var(--ink-2)" }}>
-          {a.conversas_periodo} conversas no período, nenhuma lida pela IA ainda. A leitura roda sozinha todo dia, depois da sincronização do WhatsApp:
-          cada conversa ganha etapa do funil, objeção, falhas do atendimento, nota da atendente e o que ela deveria ter respondido.
+          {a.conversas_periodo} conversas no período, ainda sem análise disponível. Após a sincronização do WhatsApp, a rotina diária de leitura identifica
+          etapas da conversa, objeções, pontos de atenção no atendimento e sugestões de resposta para revisão da equipe.
         </p>
         {/* Receita por canal só depende do CRM: aparece mesmo sem leitura por IA (ex.: clínicas só com Kommo ou Clint). */}
         <div className="mt-3"><ReceitaPorCanal clientId={clientId} de={start} ate={end.slice(0, 10)} /></div>
@@ -94,7 +94,7 @@ export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; on
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-[15px] font-semibold">Auditoria comercial do período</h2>
         <span className="text-xs" style={{ color: "var(--text-dim)" }}>
-          IA leu {a.lidas} de {a.conversas_periodo} conversas{a.nota_media != null ? ` · nota média do atendimento ${String(a.nota_media).replace(".", ",")}/10` : ""}
+          {a.lidas} de {a.conversas_periodo} conversas analisadas{a.nota_media != null ? ` · avaliação média do atendimento ${String(a.nota_media).replace(".", ",")}/10` : ""}
         </span>
       </div>
       <EmJogo clientId={clientId} de={start} ate={end.slice(0, 10)} />
@@ -104,7 +104,7 @@ export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; on
       <MotivosComparados clientId={clientId} de={start} ate={end.slice(0, 10)} objecoes={a.objecoes} lidas={a.lidas} />
       {precoNaoDado > 0 && (
         <p className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--warn-border, var(--warn))", background: "var(--warn-bg, var(--surface))" }}>
-          <b>{precoNaoDado}</b> pacientes pediram preço e não receberam. É o ponto do funil que mais costuma derrubar a conversão.
+          A análise identificou <b>{precoNaoDado}</b> pedidos de preço sem apresentação de valor correspondente. Revise as conversas para entender o que impediu o avanço.
         </p>
       )}
       <div className="grid gap-4 md:grid-cols-3">
@@ -120,11 +120,11 @@ export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; on
           </ul>
         </div>
         <div className="rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-          <h3 className="mb-2 text-sm font-semibold">O que o paciente disse (objeções)</h3>
+          <h3 className="mb-2 text-sm font-semibold">Objeções identificadas nas conversas</h3>
           <Barras itens={a.objecoes} rotulos={ROTULO_OBJECAO} cor="var(--warn)" />
         </div>
         <div className="rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-          <h3 className="mb-2 text-sm font-semibold">O que a clínica errou (causa real da perda)</h3>
+          <h3 className="mb-2 text-sm font-semibold">Pontos de atenção no atendimento</h3>
           <Barras itens={a.falhas} rotulos={ROTULO_FALHA} cor="var(--crit)" />
         </div>
       </div>
@@ -136,7 +136,7 @@ export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; on
             <thead>
               <tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}>
                 <th className="px-3 py-1.5 font-medium">Atendente</th><th className="px-3 py-1.5 font-medium">Nota</th><th className="px-3 py-1.5 font-medium">Conversas</th>
-                <th className="px-3 py-1.5 font-medium">Agendou</th><th className="px-3 py-1.5 font-medium">Deu preço</th><th className="px-3 py-1.5 font-medium">Erro mais comum</th>
+                <th className="px-3 py-1.5 font-medium">Agendamentos</th><th className="px-3 py-1.5 font-medium">Preço apresentado</th><th className="px-3 py-1.5 font-medium">Ponto de atenção recorrente</th>
                 <th className="px-3 py-1.5 font-medium">O que melhorar</th>
               </tr>
             </thead>
@@ -159,8 +159,8 @@ export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; on
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-          <h3 className="text-sm font-semibold">Resgatar hoje ({a.resgate.length})</h3>
-          <p className="mb-2 text-xs" style={{ color: "var(--text-dim)" }}>Mostraram interesse real e não agendaram.</p>
+          <h3 className="text-sm font-semibold">Oportunidades para retomar ({a.resgate.length})</h3>
+          <p className="mb-2 text-xs" style={{ color: "var(--text-dim)" }}>Interesse identificado sem agendamento. Confira o histórico antes de definir o próximo contato.</p>
           <ul className="max-h-80 space-y-1.5 overflow-y-auto">
             {a.resgate.map((r) => (
               <li key={r.conversa_id}>
@@ -173,13 +173,13 @@ export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; on
           </ul>
         </div>
         <div className="rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-          <h3 className="mb-2 text-sm font-semibold">Exemplos reais: o que foi dito × como deveria</h3>
+          <h3 className="mb-2 text-sm font-semibold">Trechos da conversa e sugestões de abordagem</h3>
           <ul className="max-h-80 space-y-2 overflow-y-auto text-sm">
             {a.exemplos.map((e) => (
               <li key={e.conversa_id} className="rounded-lg border p-2" style={{ borderColor: "var(--border)" }}>
                 <div className="text-xs" style={{ color: "var(--text-dim)" }}>{e.atendente ?? "Clínica"} · {(e.falhas ?? []).map((x) => ROTULO_FALHA[x] ?? x).join(", ")}</div>
                 <div className="mt-0.5 italic">“{e.evidencia}”</div>
-                <div className="mt-1" style={{ color: "var(--good)" }}>Melhor: {e.como_deveria}</div>
+                <div className="mt-1" style={{ color: "var(--good)" }}>Abordagem sugerida: {e.como_deveria}</div>
               </li>
             ))}
           </ul>
@@ -187,7 +187,7 @@ export function AuditoriaComercial({ clientId, onAbrir }: { clientId: string; on
       </div>
       {Object.keys(a.origem).length > 0 && (
         <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          De onde vieram (lido na conversa): {Object.entries(a.origem).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${ROTULO_ORIGEM[k] ?? k} ${n}`).join(" · ")}. Leitura automática por IA: confira na conversa antes de agir.
+          Origem identificada no texto das conversas: {Object.entries(a.origem).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${ROTULO_ORIGEM[k] ?? k} ${n}`).join(" · ")}. Esta leitura é uma inferência do conteúdo; confira o histórico e o rastreamento disponível.
         </p>
       )}
     </section>
@@ -228,17 +228,17 @@ function EmJogo({ clientId, de, ate }: { clientId: string; de: string; ate: stri
   return (
     <div className="rounded-xl border p-3" style={caixa}>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-dim)" }}>Em jogo no período</span>
+        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-dim)" }}>Potencial das oportunidades identificadas</span>
         {d.valor != null ? (
           <span className="text-2xl font-semibold">{brl(d.valor)}</span>
         ) : (
-          <span className="text-sm">{d.recuperaveis} pacientes recuperáveis · falta o ticket para calcular o valor</span>
+          <span className="text-sm">{d.recuperaveis} oportunidades para retomar · defina um ticket de referência para estimar o potencial</span>
         )}
       </div>
       <p className="mt-1 text-sm" style={{ color: "var(--ink-2)" }}>
-        {d.recuperaveis} {d.recuperaveis === 1 ? "paciente mostrou" : "pacientes mostraram"} interesse real e não agendaram
+        {d.recuperaveis} {d.recuperaveis === 1 ? "contato com interesse identificado e sem agendamento" : "contatos com interesse identificado e sem agendamento"}
         {d.ticket != null && d.fonte_ticket ? <> · ticket {brl(d.ticket)} ({FONTE_TICKET[d.fonte_ticket]}{d.fonte_ticket === "crm" ? `, ${d.vendas_crm} vendas` : ""})</> : null}.
-        {" "}É o potencial se todos agendarem, não uma previsão. A lista está em "Resgatar hoje".
+        {" "}A estimativa multiplica os contatos pelo ticket de referência; não representa receita nem previsão de vendas. Confira a lista em "Oportunidades para retomar".
       </p>
       {isAdmin && (editando ? (
         <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (numero > 0) salvar.mutate(numero); }}>

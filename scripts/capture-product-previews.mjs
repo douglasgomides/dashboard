@@ -26,12 +26,13 @@ items.push({ id: 'demo-approved', client_id: clientId, memoria: 'identidade', ch
 const errors = [], unexpected = [];
 const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
 try {
-  for (const { product, file, path: routePath, ready, width = 1440, proof = false } of [
+  for (const { product, file, path: routePath, ready, width = 1440, proof = false, evolved = false } of [
     { product: 'nexo', file: 'nexo', path: `/${clientId}/atendimento?aba=conversas`, ready: 'Auditoria comercial do período' },
     { product: 'nexo', file: 'nexo-brain', path: '/admin/brain', ready: proposed[0][2] },
-    { product: 'sap', file: 'sap', path: `/sap/${clientId}/cronograma`, ready: 'Cronograma do programa' },
-    { product: 'sap', file: 'sap-semana', path: `/sap/${clientId}`, ready: 'O próximo passo, no lugar certo.', proof: true },
-    { product: 'sap', file: 'sap-semana-mobile', path: `/sap/${clientId}`, ready: 'O próximo passo, no lugar certo.', width: 375, proof: true },
+    { product: 'sap', file: 'sap', path: `/sap/${clientId}/painel`, ready: 'Resumo do programa', evolved: true },
+    { product: 'sap', file: 'sap-cronograma', path: `/sap/${clientId}/cronograma`, ready: 'Cronograma do programa', evolved: true },
+    { product: 'sap', file: 'sap-semana', path: `/sap/${clientId}`, ready: 'Minhas tarefas' },
+    { product: 'sap', file: 'sap-semana-mobile', path: `/sap/${clientId}`, ready: 'Minhas tarefas', width: 375, proof: true },
   ].filter(capture => !onlyProduct || capture.product === onlyProduct)) {
     const origin = origins[product];
     const context = await browser.newContext({ viewport: { width, height: 960 }, deviceScaleFactor: 1, locale: 'pt-BR', colorScheme: 'light' });
@@ -49,7 +50,7 @@ try {
           if (path === '/auth/v1/user') return respond(user);
           if (path.startsWith('/auth/')) return respond(session);
           if (path === '/rest/v1/rpc/is_app_admin') return respond(product === 'nexo');
-          const readRpc = ['sap_fontes_etapas', 'sap_papeis_pessoas', 'client_fontes', 'auditoria_comercial', 'cobertura_periodo', 'client_sync_status', 'experimento_atual', 'conversao_por_origem', 'textos_entrada_frequentes', 'receita_em_jogo', 'receita_por_canal', 'sap_sinais_auto', 'leitura_conversas', 'listar_conversas', 'custo_whatsapp'].map(name => `/rest/v1/rpc/${name}`);
+          const readRpc = ['sap_tracker_auto', 'sap_fontes_etapas', 'sap_papeis_pessoas', 'client_fontes', 'auditoria_comercial', 'cobertura_periodo', 'client_sync_status', 'experimento_atual', 'conversao_por_origem', 'textos_entrada_frequentes', 'receita_em_jogo', 'receita_por_canal', 'sap_sinais_auto', 'leitura_conversas', 'listar_conversas', 'custo_whatsapp'].map(name => `/rest/v1/rpc/${name}`);
           if (req.method() !== 'GET' && !readRpc.includes(path)) { unexpected.push({ path, method: req.method() }); return route.abort(); }
           if (path === '/rest/v1/rpc/client_sync_status') return respond(['instagram', 'anuncios', 'crm', 'atendimento'].map(fonte => ({ fonte, data_ate: '2026-10-16', last_attempt_at: date, last_success_at: date, last_error: null, last_rows: 80 })));
           if (path === '/rest/v1/instagram_comments') return rows([{ commented_at: date }]);
@@ -63,9 +64,15 @@ try {
           if (path === '/rest/v1/cliente_modulos') return rows([{ client_id: clientId, status: 'ativo', clients: { name: client.name } }]);
           if (path === '/rest/v1/brain_itens') return rows(items);
           if (path === '/rest/v1/agente_execucoes') return rows([{ estado: 'concluida', erro: null, resultado: { propostas: 2 }, atualizado_em: date }]);
-          if (path === '/rest/v1/sap_clinicas') return rows([clinic]);
+          if (path === '/rest/v1/sap_clinicas') return rows([{ ...clinic, d0: evolved ? '2026-09-02' : clinic.d0 }]);
+          if (path === '/rest/v1/sap_kpi_plano') return rows([
+            { kpi: 'resposta', baseline: 12, meta: 5, origem: 'Registro demonstrativo', amostra: 100 },
+            { kpi: 'comparecimento', baseline: 0.68, meta: 0.8, origem: 'Registro demonstrativo', amostra: 50 },
+            { kpi: 'conversao', baseline: 0.28, meta: 0.35, origem: 'Registro demonstrativo', amostra: 32 },
+          ]);
+          if (path === '/rest/v1/rpc/sap_tracker_auto') return respond({ tem_crm: true, tem_whatsapp: true, marcos_marcados: 8, marcos: ['qualificado', 'desqualificado', 'agendado', 'compareceu', 'faltou', 'pensando', 'nao_fechou', 'fechou'], leads: 168, qualificados: 120, agendados: 54, compareceram: 40, faltaram: 10, pensando: 14, nao_fecharam: 12, fechados: 14, fechados_com_valor: 14, perdidos: 26, perdidos_com_motivo: 24, perdidos_motivo_medivel: 24, receita: 63000, com_origem: 156, linhas_completas: 158, investido: 4800, leads_plataforma: 96, leads_crm_meta: 92, resposta_conversas: 140, resposta_mediana_min: 4, resposta_ate_5min: 112, canais: [], semanas: [] });
           if (path === '/rest/v1/sap_usuario_pref') return rows([{ tour_visto_em: date, comece_visto_em: date }]);
-          if (path === '/rest/v1/sap_marco_status') return rows([1, 2, 3, 6].map(marco => ({ clinica_id: clinicId, marco, estado: 'feito', concluido_em: '2026-10-16', evidencia: 'Registro demonstrativo', detectado_em: date })));
+          if (path === '/rest/v1/sap_marco_status') return rows((evolved ? Array.from({ length: 24 }, (_, i) => i + 1) : [1, 2, 3, 6]).map(marco => ({ clinica_id: clinicId, marco, estado: 'feito', concluido_em: '2026-10-16', evidencia: 'Registro demonstrativo', detectado_em: date })));
           if (path === '/rest/v1/rpc/sap_fontes_etapas') return respond([{ client_id: clientId, tem_crm: true, tem_atendimento: true, tem_anuncios: true, marcos: ['agendado'] }]);
           if (path === '/rest/v1/rpc/sap_papeis_pessoas') return respond(['comercial', 'coordenador', 'onboarding', 'trafego', 'editor', 'cs', 'condutor', 'clinica', 'fundador'].map(papel => ({ clinica_id: clinicId, papel, pessoa_id: `demo-${papel}`, user_id: null, nome: papel === 'clinica' ? 'Equipe da clínica' : 'Equipe Doctor Creator' })));
           if (path === '/rest/v1/rpc/client_fontes') return respond([{ tem_instagram: true, tem_anuncios: true, tem_crm: true, tem_atendimento: true }]);
@@ -80,7 +87,7 @@ try {
       await page.clock.setFixedTime(new Date(date));
       await page.goto(origin + routePath);
       try {
-        await expect(page.getByText(ready, { exact: true })).toBeVisible({ timeout: 25000 });
+        await expect(ready === 'Resumo do programa' ? page.getByRole('region', { name: ready, exact: true }) : page.getByText(ready, { exact: true })).toBeVisible({ timeout: 25000 });
       } catch (error) {
         console.error({ url: page.url(), body: await page.locator('body').innerText(), errors, unexpected });
         throw error;

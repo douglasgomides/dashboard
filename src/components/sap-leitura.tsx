@@ -64,7 +64,7 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
   }, [atualQ.data, antQ.data, planoQ.data, clinica, sinQ.data, audQ.data, fidQ.data]);
 
   if (atualQ.isLoading || cadQ.isLoading) return <p className="text-sm" style={{ color: "var(--text-dim)" }}>Montando a leitura da semana…</p>;
-  if (atualQ.error) return <p className="text-sm" style={{ color: "var(--crit)" }}>Não consegui montar a leitura: {(atualQ.error as Error).message}</p>;
+  if (atualQ.error) return <p className="text-sm" style={{ color: "var(--crit)" }}>Não foi possível preparar a análise da semana: {(atualQ.error as Error).message}</p>;
   if (!leitura) return null;
 
   const p = leitura.principal;
@@ -75,7 +75,7 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
           Leitura da semana{leitura.semanaPrograma && leitura.semanaPrograma <= 13 ? ` S${leitura.semanaPrograma}` : ""}
         </h2>
         <span className="text-xs" style={{ color: "var(--text-dim)" }}>
-          Últimas 4 semanas fechadas ({dm(atualJ.de)} a {dm(atualJ.ate)}) · regra do 08.05: uma ação por semana para cada lado
+          Últimas 4 semanas fechadas ({dm(atualJ.de)} a {dm(atualJ.ate)}) · uma prioridade de ação para a clínica e outra para a Doctor Creator
         </span>
       </div>
 
@@ -97,7 +97,7 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
         <section className="rounded-xl border p-4" style={{ borderColor: "color-mix(in srgb, var(--warn) 50%, var(--border))", background: "color-mix(in srgb, var(--warn) 7%, var(--surface))" }}>
           <div className="flex flex-wrap items-center gap-2">
             <Selo cor="var(--warn)">{p.v.codigo}</Selo>
-            <h3 className="text-base font-semibold">Vazamento da semana: {p.v.titulo}</h3>
+            <h3 className="text-base font-semibold">Prioridade da semana: {p.v.titulo}</h3>
           </div>
           <p className="mt-1 text-sm" style={{ color: "var(--text-dim)" }}>{p.motivo}</p>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -115,11 +115,11 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
             )}
           </div>
           <p className="mt-2 text-xs" style={{ color: "var(--text-dim)" }}>
-            Dono: {p.v.dono} · Prazo: {p.v.prazo}
+            Responsável: {p.v.dono} · Prazo: {p.v.prazo}
           </p>
         </section>
       ) : (
-        <Painel icone={CheckCircle2} titulo="Nenhum vazamento acima do limite" resumo="Todas as etapas medidas estão na meta nas últimas 4 semanas. Manter a rotina." cor="var(--good)">
+        <Painel icone={CheckCircle2} titulo="Nenhuma prioridade de correção identificada" resumo="A leitura não sinalizou uma etapa fora dos critérios de atenção. Mantenha os registros e o acompanhamento semanal." cor="var(--good)">
           <span />
         </Painel>
       )}
@@ -144,7 +144,7 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
           principal={p ? { titulo: p.v.titulo, acaoClinica: p.v.acaoClinica, acaoDc: p.v.acaoDc, prazo: p.v.prazo } : null} />
       )}
       {isAdmin && leitura.mensagem && (
-        <Painel icone={MessageCircle} titulo="Mensagem para a clínica" resumo="Modelo do 08.05, para mandar até 12h de segunda.">
+        <Painel icone={MessageCircle} titulo="Resumo para a clínica" resumo="Revise a análise e os próximos passos antes de compartilhar com a equipe da clínica.">
           <p className="whitespace-pre-wrap rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface-2, var(--surface))" }}>
             {leitura.mensagem}
           </p>
@@ -173,7 +173,7 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Painel icone={ClipboardCheck} titulo="Os 8 passos da leitura" resumo="Sempre nesta ordem: dado ruim e resposta lenta vêm antes de mexer em anúncio">
+        <Painel icone={ClipboardCheck} titulo="Roteiro da análise semanal" resumo="Verifique a qualidade dos registros e o tempo de resposta antes de ajustar os anúncios">
           <ol className="space-y-2.5">
             {leitura.passos.map((x) => {
               const { I, cor } = ICONE[x.status];

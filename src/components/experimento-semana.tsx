@@ -92,10 +92,10 @@ export function ExperimentoSemana({ clientId }: { clientId: string }) {
           {titulo}
           <span className="text-xs" style={{ color: "var(--text-dim)" }}>{data(e.inicio)} a {data(e.fim)}</span>
         </div>
-        <p className="mt-1 text-sm"><b>Falha:</b> {ROTULO_FALHA[e.falha] ?? e.falha}</p>
+        <p className="mt-1 text-sm"><b>Ponto de melhoria:</b> {ROTULO_FALHA[e.falha] ?? e.falha}</p>
         <p className="mt-0.5 text-sm"><b>Ação da equipe:</b> {e.acao}</p>
         <Comparacao antes={e.base_pct} depois={e.agora?.pct ?? null} nAntes={e.base_conversas} nDepois={e.agora?.conversas ?? null} rotuloDepois="Durante, até hoje" />
-        <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>Medido pela leitura por IA das conversas. Com poucas conversas a % oscila; olhe também o número absoluto.</p>
+        <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>Frequência identificada na análise das conversas. Compare o percentual e a quantidade de conversas; amostras pequenas podem variar bastante.</p>
         {isAdmin && (
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" disabled={!e.pode_concluir || concluir.isPending} onClick={() => concluir.mutate({ id: e.id, descartar: false })} className="min-h-[34px] rounded-lg px-3 text-sm font-medium disabled:opacity-50" style={botao}>
@@ -122,7 +122,7 @@ export function ExperimentoSemana({ clientId }: { clientId: string }) {
       )}
       {s && (
         <div className="mt-2">
-          <p className="text-sm">Falhas mais frequentes nos últimos 14 dias ({s.conversas} conversas comerciais lidas):</p>
+          <p className="text-sm">Pontos de melhoria recorrentes nos últimos 14 dias ({s.conversas} conversas comerciais analisadas):</p>
           <ul className="mt-1 space-y-1">
             {s.falhas.map((f) => (
               <li key={f.falha} className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -135,7 +135,7 @@ export function ExperimentoSemana({ clientId }: { clientId: string }) {
           </ul>
           {isAdmin && falha && (
             <form className="mt-2 space-y-2" onSubmit={(e) => { e.preventDefault(); iniciar.mutate(); }}>
-              <label className="block text-sm">Ação que a equipe vai fazer por 7 dias ({ROTULO_FALHA[falha] ?? falha})
+              <label className="block text-sm">Mudança que a equipe vai testar por 7 dias ({ROTULO_FALHA[falha] ?? falha})
                 <textarea value={acao} onChange={(e) => setAcao(e.target.value)} rows={2} maxLength={400} className="mt-1 w-full rounded-lg border px-2 py-1 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg)" }} />
               </label>
               <div className="flex flex-wrap items-center gap-2">
@@ -143,7 +143,7 @@ export function ExperimentoSemana({ clientId }: { clientId: string }) {
                 <button type="button" className="text-xs underline" onClick={() => setFalha(null)}>Cancelar</button>
                 {iniciar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{(iniciar.error as Error).message}</span>}
               </div>
-              <p className="text-xs" style={{ color: "var(--text-dim)" }}>A ação é da equipe da clínica; o Hub não envia nada a pacientes. Em 7 dias, compare a % antes e durante.</p>
+              <p className="text-xs" style={{ color: "var(--text-dim)" }}>Sua equipe executa a mudança no atendimento. O Nexo acompanha a frequência do ponto de melhoria antes e durante os 7 dias do teste.</p>
             </form>
           )}
         </div>

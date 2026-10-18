@@ -314,7 +314,7 @@ function DrillDownDoDia({ date, posts }: { date: string | null; posts: any[] }) 
       </h3>
       {dayPosts.length === 0 ? (
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          Nenhum post publicado nesse dia — o alcance/interações vieram de posts anteriores continuando a circular.
+          Nenhuma publicação identificada nesta data. O alcance e as interações podem incluir conteúdos anteriores que continuaram a circular.
         </p>
       ) : (
         <PostList posts={dayPosts} />
@@ -504,7 +504,7 @@ function MonthlyOverview() {
           <NextBestActionCard insight={principal} destaque onAbrir={() => painel.abrir(principal)} />
         ) : (
           <div className="rounded-xl border p-5 text-sm" style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--ink-2)" }}>
-            Nenhuma oportunidade com evidência suficiente neste período. Os números abaixo continuam valendo; com mais dias de dado, o painel volta a recomendar.
+            Os dados deste período ainda não sustentam uma recomendação. Consulte os indicadores abaixo e confira a disponibilidade das fontes.
           </div>
         )}
 
@@ -593,9 +593,9 @@ function MonthlyOverview() {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <BotaoAcao texto="Aprofundar em Social" rota="/$clientId/conteudo" clientId={clientId} variante="secundario" />
-          <BotaoAcao texto={fontes.data?.tem_crm ? "Aprofundar em Comercial" : "Ver anúncios"} rota={fontes.data?.tem_crm ? "/$clientId/crm-painel" : "/$clientId/anuncios"} clientId={clientId} variante="secundario" />
-          <BotaoAcao texto="Montar relatório para o cliente" rota="/$clientId/relatorio" clientId={clientId} variante="secundario" />
+          <BotaoAcao texto="Analisar conteúdo e audiência" rota="/$clientId/conteudo" clientId={clientId} variante="secundario" />
+          <BotaoAcao texto={fontes.data?.tem_crm ? "Analisar o funil comercial" : "Ver anúncios"} rota={fontes.data?.tem_crm ? "/$clientId/crm-painel" : "/$clientId/anuncios"} clientId={clientId} variante="secundario" />
+          <BotaoAcao texto="Preparar relatório" rota="/$clientId/relatorio" clientId={clientId} variante="secundario" />
         </div>
       </section>
 
@@ -619,7 +619,7 @@ function MonthlyOverview() {
 
             {r.insights.length > 0 && (
               <div className="space-y-3">
-                <h3 className="text-[18px] font-semibold">Por que aconteceu</h3>
+                <h3 className="text-[18px] font-semibold">O que ajuda a explicar o resultado</h3>
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                   {r.insights.map((i) => (
                     <InsightCard key={i.id} insight={i} clientId={clientId} />

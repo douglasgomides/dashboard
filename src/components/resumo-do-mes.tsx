@@ -171,7 +171,7 @@ export function ResumoDoMes({
           <Forte>
             {escalar.length} {escalar.length === 1 ? "campanha entrega" : "campanhas entregam"}
           </Forte>{" "}
-          bem mais barato que as outras do mesmo objetivo: {fmtBRL(g)} investidos{cv > 0 ? `, ${fmtNum(cv)} conversas` : ""}. É onde cabe mais verba.
+          com custo menor que as demais do mesmo objetivo: {fmtBRL(g)} investidos{cv > 0 ? `, ${fmtNum(cv)} conversas` : ""}. Avalie a qualidade dessas oportunidades antes de ampliar a verba.
         </>
       ) });
     }
@@ -233,7 +233,7 @@ export function ResumoDoMes({
           <Sparkles size={18} />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold leading-tight">O que aconteceu</h2>
+          <h2 className="text-sm font-semibold leading-tight">Os principais sinais do período</h2>
           <span className="text-xs" style={{ color: "var(--text-faint)" }}>
             {periodLabel}
           </span>

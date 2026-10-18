@@ -121,7 +121,7 @@ function LinkEvidencia({ valor }: { valor: string }) {
     <button type="button" className="underline" onClick={async () => {
       const url = await linkEvidenciaSap(valor);
       if (url) window.open(url, "_blank", "noopener"); else setErro(true);
-    }}>{valor.startsWith("arquivo:") ? "abrir print" : "abrir link"}{erro ? " (sem acesso)" : ""}</button>
+    }}>{valor.startsWith("arquivo:") ? "Abrir anexo" : "Abrir evidência"}{erro ? " (acesso indisponível)" : ""}</button>
   );
 }
 
@@ -140,13 +140,13 @@ function CorpoTarefa({ t, clientId, clinicaId, hoje, podeEditar }: { t: Tarefa; 
   const subsAbertas = t.subtarefas.filter((s) => !s.feito);
   return (
     <div className="space-y-3 border-t px-3 pb-3 pt-2 text-sm" style={{ borderColor: "var(--border)" }}>
-      <div><strong>Por que existe: </strong><span style={{ color: "var(--text-dim)" }}><TextoComCodigos texto={t.manual.porque} /></span></div>
+      <div><strong>Objetivo da entrega: </strong><span style={{ color: "var(--text-dim)" }}><TextoComCodigos texto={t.manual.porque} /></span></div>
       <div>
         <strong>Como fazer:</strong>
         <ol className="mt-1 list-decimal space-y-0.5 pl-5" style={{ color: "var(--text-dim)" }}>{t.manual.como.map((p) => <li key={p}><TextoComCodigos texto={p} /></li>)}</ol>
       </div>
       <div className="flex flex-wrap items-center gap-2"><strong>Onde fazer:</strong> <BotaoOnde t={t} clientId={clientId} /></div>
-      <div><strong>Pronto quando: </strong><span style={{ color: "var(--text-dim)" }}><TextoComCodigos texto={t.item.pronto} /></span></div>
+      <div><strong>Critério de conclusão: </strong><span style={{ color: "var(--text-dim)" }}><TextoComCodigos texto={t.item.pronto} /></span></div>
       <div className="text-xs" style={{ color: "var(--muted)" }}>
         Janela {t.janela} · prazo {dm(t.prazo)}{t.prazo !== t.prazoCalendario ? <> (o dia {dm(t.prazoCalendario)} não é útil: <span title={REGRA_DIA_UTIL} className="underline decoration-dotted">regra</span>)</> : null} · {t.item.tipo}{t.item.clinica ? " · a clínica participa" : ""}
       </div>
@@ -175,7 +175,7 @@ function CorpoTarefa({ t, clientId, clinicaId, hoje, podeEditar }: { t: Tarefa; 
 
       {t.status === "auto" && (
         <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--good)" }}>
-          <Cpu size={14} aria-hidden /> <strong>Detectado pelo sistema</strong> em {dm(t.feitoEm)}. Ele volta para "a fazer" sozinho se o dado deixar de existir.
+          <Cpu size={14} aria-hidden /> <strong>Conclusão identificada nos registros</strong> em {dm(t.feitoEm)}. A tarefa volta a ficar pendente se o registro que a comprova deixar de existir.
         </div>
       )}
       {(t.status === "manual" || t.status === "nao_se_aplica") && (
@@ -193,11 +193,11 @@ function CorpoTarefa({ t, clientId, clinicaId, hoje, podeEditar }: { t: Tarefa; 
       {podeEditar && t.status === "a_fazer" && modo === null && (
         <div className="space-y-2 rounded-lg border p-2" style={{ borderColor: "var(--border)" }}>
           <div className="flex flex-wrap items-end gap-2">
-            <label className="min-w-[200px] flex-1 text-xs">Evidência {semEvid ? "(opcional neste item)" : "(link ou print)"}
-              <input value={evid} onChange={(x) => setEvid(x.target.value)} placeholder="https://… (ClickUp, ata, Drive)" className="mt-0.5 block min-h-[38px] w-full rounded-md border px-2 text-sm" style={campo} />
+            <label className="min-w-[200px] flex-1 text-xs">Evidência {semEvid ? "(opcional neste item)" : "(link, imagem ou PDF)"}
+              <input value={evid} onChange={(x) => setEvid(x.target.value)} placeholder="Link do documento, material ou registro da entrega" className="mt-0.5 block min-h-[38px] w-full rounded-md border px-2 text-sm" style={campo} />
             </label>
             <label className="inline-flex min-h-[38px] cursor-pointer items-center gap-1 rounded-lg border px-3 text-sm" style={{ borderColor: "var(--border)" }}>
-              <Paperclip size={14} aria-hidden /> {enviando ? "Enviando…" : "Enviar print"}
+              <Paperclip size={14} aria-hidden /> {enviando ? "Anexando…" : "Anexar evidência"}
               <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" className="sr-only" disabled={enviando} onChange={async (x) => {
                 const f = x.target.files?.[0];
                 if (!f) return;
@@ -205,13 +205,13 @@ function CorpoTarefa({ t, clientId, clinicaId, hoje, podeEditar }: { t: Tarefa; 
                 try { setEvid(await enviarEvidenciaSap(clinicaId, t.n, f)); } catch (err) { alert((err as Error).message); } finally { setEnviando(false); }
               }} />
             </label>
-            <label className="text-xs">Data<input type="date" value={data} onChange={(x) => setData(x.target.value)} className="mt-0.5 block min-h-[38px] rounded-md border px-2 text-sm" style={campo} /></label>
+            <label className="text-xs">Data de conclusão<input type="date" value={data} onChange={(x) => setData(x.target.value)} className="mt-0.5 block min-h-[38px] rounded-md border px-2 text-sm" style={campo} /></label>
           </div>
-          {evid.startsWith("arquivo:") && <div className="text-xs" style={{ color: "var(--good)" }}>Print anexado.</div>}
+          {evid.startsWith("arquivo:") && <div className="text-xs" style={{ color: "var(--good)" }}>Evidência anexada. Confirme abaixo para concluir a tarefa.</div>}
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={acao.isPending || (!semEvid && !evid.trim())} onClick={() => acao.mutate("feito")}
               className="min-h-[38px] rounded-lg px-3 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--good)" }}
-              title={!semEvid && !evid.trim() ? "Cole o link ou envie o print da evidência para liberar" : undefined}>
+              title={!semEvid && !evid.trim() ? "Adicione um link ou anexe uma evidência para concluir esta tarefa" : undefined}>
               Marcar como feito{t.recorrente ? " nesta semana" : ""}
             </button>
             {!t.recorrente && <button type="button" onClick={() => setModo("nao_se_aplica")} className="min-h-[38px] rounded-lg border px-3 text-sm" style={{ borderColor: "var(--border)" }}>Não se aplica</button>}
@@ -241,8 +241,8 @@ const GRUPOS: { id: Situacao; titulo: string; recolhido?: boolean }[] = [
   { id: "atrasada", titulo: "Atrasadas" },
   { id: "hoje", titulo: "Hoje" },
   { id: "semana", titulo: "Esta semana" },
-  { id: "depois", titulo: "Depois", recolhido: true },
-  { id: "feita", titulo: "Feitas", recolhido: true },
+  { id: "depois", titulo: "Próximas etapas", recolhido: true },
+  { id: "feita", titulo: "Concluídas", recolhido: true },
 ];
 
 export function ListaAgrupada({ itens, hoje, vazio, grupos = GRUPOS.map((g) => g.id) }: {
@@ -316,7 +316,7 @@ export function LinhaContadores({ tarefas, prefixo }: { tarefas: Tarefa[]; prefi
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
       {prefixo && <span style={{ color: "var(--text-dim)" }}>{prefixo}</span>}
-      <span>Feitos: <strong>{c.feitos} de {c.total}</strong>{c.auto ? <span style={{ color: "var(--text-dim)" }}> ({c.auto} automático{c.auto > 1 ? "s" : ""})</span> : null}</span>
+      <span>Concluídas: <strong>{c.feitos} de {c.total}</strong>{c.auto ? <span style={{ color: "var(--text-dim)" }}> ({c.auto} por registro automático)</span> : null}</span>
       {c.naoSeAplica > 0 && <span style={{ color: "var(--text-dim)" }}>{c.naoSeAplica} não se aplica{c.naoSeAplica > 1 ? "m" : ""}</span>}
       <span style={{ color: c.atrasadas ? "var(--crit)" : "var(--text-dim)" }}>{c.atrasadas} atrasada{c.atrasadas === 1 ? "" : "s"}</span>
       <span style={{ color: "var(--text-dim)" }}>{c.hoje} hoje · {c.semana} nos próximos 7 dias</span>
@@ -331,8 +331,8 @@ export function AlertaPapeis({ entrada, clientId }: { entrada: EntradaTarefas; c
   return (
     <div role="alert" className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "color-mix(in srgb, var(--warn) 50%, var(--border))", background: "color-mix(in srgb, var(--warn) 8%, var(--surface))" }}>
       <AlertTriangle size={16} aria-hidden style={{ color: "var(--warn)" }} />
-      <span><strong>{faltam.length} papel(éis) sem pessoa:</strong> {faltam.map((p) => NOME_PAPEL[p]).join(", ")}. As tarefas deles não aparecem em "Minhas tarefas" de ninguém.</span>
-      <Link to="/sap/$clientId/papeis" params={{ clientId }} className="font-semibold underline" style={{ color: "var(--accent)" }}>Atribuir em Quem é quem</Link>
+      <span><strong>{faltam.length} responsabilidade(s) sem pessoa vinculada:</strong> {faltam.map((p) => NOME_PAPEL[p]).join(", ")}. Defina os responsáveis para que cada pessoa receba suas tarefas.</span>
+      <Link to="/sap/$clientId/papeis" params={{ clientId }} className="font-semibold underline" style={{ color: "var(--accent)" }}>Definir responsáveis</Link>
     </div>
   );
 }
@@ -380,14 +380,14 @@ export function MinhasTarefasClinica({ clientId, filtroInicial = "minhas", grupo
       {isAdmin && (ehFundador || filtro === "todas") && <AlertasFundador alertas={c.alertas} />}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {isAdmin && filtro === "minhas" && !meus.length
-          ? <span className="text-sm" style={{ color: "var(--text-dim)" }}>Você ainda não tem papel nesta clínica.</span>
+          ? <span className="text-sm" style={{ color: "var(--text-dim)" }}>Seu nome ainda não está vinculado a uma responsabilidade nesta clínica.</span>
           : <LinhaContadores tarefas={visiveis} prefixo={filtro === "minhas" && isAdmin ? `Seus papéis: ${meus.map((p) => NOME_PAPEL[p]).join(", ")}.` : undefined} />}
         {isAdmin && <SeletorFiltro valor={filtro} onChange={setFiltro} contagem={(f) => filtrar(c, f, user?.id, isAdmin).filter((t) => t.situacao !== "feita" && t.situacao !== "depois").length} />}
       </div>
       {isAdmin && filtro === "minhas" && !meus.length ? (
-        <p className="text-sm">Peça ao Coordenador para atribuir seu nome a um papel em <Link to="/sap/$clientId/papeis" params={{ clientId }} className="font-semibold underline" style={{ color: "var(--accent)" }}>Quem é quem</Link>, ou escolha "Todas" no seletor.</p>
+        <p className="text-sm">Peça à coordenação para vincular seu nome em <Link to="/sap/$clientId/papeis" params={{ clientId }} className="font-semibold underline" style={{ color: "var(--accent)" }}>Responsáveis</Link>. Para consultar a implantação completa, escolha "Todas" no filtro.</p>
       ) : (
-        <ListaAgrupada itens={visiveis.map((t) => ({ t, clientId, clinicaId: c.entrada.clinica.id }))} hoje={hoje} vazio="Nada para fazer agora. Tudo em dia." grupos={grupos} />
+        <ListaAgrupada itens={visiveis.map((t) => ({ t, clientId, clinicaId: c.entrada.clinica.id }))} hoje={hoje} vazio="Nenhuma tarefa disponível nesta seleção. Consulte o cronograma para acompanhar as próximas etapas." grupos={grupos} />
       )}
     </section>
     </>
@@ -407,17 +407,17 @@ export function MinhasTarefasTodas() {
   const alertas = lista.flatMap((c) => c.alertas);
   const nomes = new Map(lista.map((c) => [c.entrada.clinica.id, { nome: c.entrada.clinica.nome, clientId: c.entrada.clinica.clientId }]));
   return (
-    <Painel icone={UserRoundCheck} titulo="Minhas tarefas em todas as clínicas" resumo={`${itens.filter((i) => ["atrasada", "hoje", "semana"].includes(i.t.situacao)).length} para agora · ordenadas por urgência`}
-      ajuda={<>A mesma lista de cada clínica, juntando todas. Vem do cronograma de cada uma e do papel atribuído a você em Quem é quem.</>}>
+    <Painel icone={UserRoundCheck} titulo="Minhas tarefas em todas as clínicas" resumo={`${itens.filter((i) => ["atrasada", "hoje", "semana"].includes(i.t.situacao)).length} tarefas até os próximos 7 dias, incluindo atrasadas · ordem de urgência`}
+      ajuda={<>Tarefas dos cronogramas das clínicas, reunidas em uma lista. Suas tarefas seguem as atribuições definidas em Responsáveis.</>}>
       <div className="mt-2 space-y-3">
         {(ehFundadorEmAlguma || filtro === "todas") && <AlertasFundador alertas={alertas} nomes={nomes} />}
         {semPapel.length > 0 && (
           <p className="text-sm" style={{ color: "var(--warn)" }}>
-            {semPapel.length} clínica(s) com papel sem pessoa: {semPapel.map((c) => c.entrada.clinica.nome).join(", ")}. Atribua em Quem é quem de cada uma.
+            {semPapel.length} clínica(s) com responsabilidades sem pessoa vinculada: {semPapel.map((c) => c.entrada.clinica.nome).join(", ")}. Confira a área Responsáveis de cada clínica.
           </p>
         )}
         <SeletorFiltro valor={filtro} onChange={setFiltro} />
-        <ListaAgrupada itens={itens} hoje={hoje} vazio={filtro === "minhas" ? "Nenhuma tarefa sua agora (ou você ainda não tem papel atribuído)." : "Nada para fazer agora."} />
+        <ListaAgrupada itens={itens} hoje={hoje} vazio={filtro === "minhas" ? "Nenhuma tarefa vinculada ao seu usuário nesta seleção. Confira suas atribuições na área Responsáveis de cada clínica." : "Nenhuma tarefa disponível nesta seleção."} />
       </div>
     </Painel>
   );
@@ -442,7 +442,7 @@ export function QuemEQuem({ clientId }: { clientId: string }) {
   return (
     <div className="space-y-4">
       <AlertaPapeis entrada={c.entrada} clientId={clientId} />
-      <Painel icone={UserRoundCheck} titulo="Quem é quem" resumo="Uma pessoa da Equipe por papel nesta clínica"
+      <Painel icone={UserRoundCheck} titulo="Responsáveis da implantação" resumo="Vincule cada responsabilidade a uma pessoa da equipe ou da clínica"
         ajuda={<>Cada tarefa do cronograma tem um papel. A pessoa atribuída aqui vê essas tarefas em Minhas tarefas, e o nome aparece no card. O Condutor pode ser o Fundador (no piloto) ou outra pessoa. O Fundador fica só para alertas de escalonamento.</>}>
         <ul className="mt-2 divide-y" style={{ borderColor: "var(--border)" }}>
           {PAPEIS.map((p) => {
@@ -459,11 +459,11 @@ export function QuemEQuem({ clientId }: { clientId: string }) {
                   <select aria-label={`Pessoa para ${p.nome}`} value={atual?.pessoaId ?? ""} disabled={salvar.isPending}
                     onChange={(x) => salvar.mutate({ papel: p.id, pessoaId: x.target.value || null })}
                     className="min-h-[38px] min-w-[200px] rounded-lg border px-2 text-sm" style={{ ...campo, borderColor: atual ? "var(--border)" : "var(--warn)" }}>
-                    <option value="">Sem pessoa</option>
+                    <option value="">Responsável a definir</option>
                     {opcoes.map((x) => <option key={x.id} value={x.id}>{x.nome}{x.tipo === "clinica" ? " (clínica)" : ""}{x.tem_login ? "" : " · sem login"}</option>)}
                   </select>
                 ) : (
-                  <span className="text-sm">{atual?.nome ?? <span style={{ color: "var(--muted)" }}>sem pessoa</span>}</span>
+                  <span className="text-sm">{atual?.nome ?? <span style={{ color: "var(--muted)" }}>responsável a definir</span>}</span>
                 )}
               </li>
             );

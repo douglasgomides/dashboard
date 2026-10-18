@@ -25,7 +25,7 @@ if(!process.env.INTERFACE_BASE_URL){
 const browser=await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL||undefined});
 const cases=[],errors=[],unexpected=[];
 const client={id:CID,name:'Clínica Aurora',specialty:'Dermatologia',active:true,created_at:'2026-01-01T12:00:00Z',em_onboarding:false};
-async function account(profile='anonymous',{sap=false,tokenFailure=false,tokenNetworkFailure=false,recoveryFailure=false}={}){
+async function account(profile='anonymous',{sap=false,tokenFailure=false,tokenNetworkFailure=false,recoveryFailure=false,tracker=null}={}){
   const context=await browser.newContext({viewport:{width:1440,height:1000}});
   let signedIn=profile!=='anonymous';
   const requests=[];
@@ -57,6 +57,7 @@ async function account(profile='anonymous',{sap=false,tokenFailure=false,tokenNe
       }
       if(path==='/rest/v1/rpc/client_fontes')return respond([{tem_instagram:true,tem_anuncios:true,tem_crm:true,tem_atendimento:true}]);
       if(path==='/rest/v1/rpc/sap_fontes_etapas')return respond([{client_id:CID,tem_crm:true,tem_atendimento:true,tem_anuncios:true,marcos:['agendado']}]);
+      if(path==='/rest/v1/rpc/sap_tracker_auto')return respond(tracker);
       if(path.startsWith('/rest/v1/rpc/'))return respond([]);
       return respond(single?null:[]);
     }
@@ -99,7 +100,7 @@ try{
       for(const path of ['/admin',`/${CID}/conteudo`,`/sap/${CID}`]){
         await page.goto(base+path);await expect(page).toHaveURL(/\/login\?/);await expect(page.getByRole('button',{name:'Entrar no Nexo',exact:true})).toBeVisible();
       }
-      await page.goto(origins.sap);await expect(page).toHaveURL(/\/conhecer$/);await expect(page.getByRole('heading',{level:1})).toContainText('Cada etapa preparada para converter.');
+      await page.goto(origins.sap);await expect(page).toHaveURL(/\/conhecer$/);await expect(page.getByRole('heading',{level:1})).toContainText('Da primeira procura à decisão na consulta.');
     }finally{await context.close();}
   });
   await run('product screenshots load, enlarge accessibly and provide both platform logins',async()=>{
@@ -108,6 +109,12 @@ try{
         await page.setViewportSize({width,height:1000});await page.goto(origin+'/conhecer');
         const open=page.getByRole('button',{name:`Ampliar a tela do ${product==='nexo'?'Nexo':'SAP'}`,exact:true});
         await open.scrollIntoViewIfNeeded();await expect(open.locator('img')).toHaveJSProperty('naturalWidth',1440);
+        const picker=page.getByRole('group',{name:`Escolha uma tela do ${product==='nexo'?'Nexo':'SAP'}`,exact:true});
+        const screens=product==='sap'?[['Prioridades da semana','sap-semana'],['Agenda e entregas','sap-cronograma'],['Evolução da clínica','sap']]:[['Conhecimento da clínica','nexo-brain'],['Auditoria comercial','nexo']];
+        for(const [label,file] of screens){
+          const choice=picker.getByRole('button',{name:new RegExp(label)});await choice.focus();await page.keyboard.press('Enter');
+          await expect(choice).toHaveAttribute('aria-pressed','true');await expect(open.locator('img')).toHaveAttribute('src',`/product-previews/${file}.jpg`);await expect(open.locator('img')).toHaveJSProperty('naturalWidth',1440);
+        }
         await open.click();const dialog=page.getByRole('dialog');await expect(dialog).toBeVisible();
         await expect(dialog.getByRole('button',{name:'Fechar prévia',exact:true})).toBeFocused();
         await accessible(page,`${product}/image-dialog/${width}`);
@@ -178,8 +185,8 @@ try{
       const {context,page,requests}=await account('anonymous',{recoveryFailure});try{
         await page.goto(base+'/login');await page.getByRole('button',{name:'Esqueci minha senha',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Digite seu e-mail');assert.equal(requests.filter(r=>r.path==='/auth/v1/recover').length,0);
         await page.getByLabel('E-mail',{exact:true}).fill('qa@example.test');await page.getByRole('button',{name:'Esqueci minha senha',exact:true}).click();
-        if(recoveryFailure){await expect(page.getByRole('alert')).toBeVisible();await expect(page.getByText('Link enviado. Confira seu e-mail para recuperar o acesso.',{exact:true})).not.toBeVisible();}
-        else await expect(page.getByRole('status')).toContainText('Link enviado');
+        if(recoveryFailure){await expect(page.getByRole('alert')).toBeVisible();await expect(page.getByText('Solicitação recebida. Se este e-mail tiver acesso, você receberá um link para criar uma nova senha. Confira também a caixa de spam.',{exact:true})).not.toBeVisible();}
+        else await expect(page.getByRole('status')).toContainText('Solicitação recebida.');
       }finally{await context.close();}
     }
   });
@@ -213,7 +220,7 @@ try{
       const {context,page}=await account('viewer',{sap:true});try{
         await page.setViewportSize({width,height:1000});
         await page.goto(origins.sap+`/sap/${CID}`);
-        await expect(page.getByRole('heading',{name:'O próximo passo, no lugar certo.',exact:true})).toBeVisible();
+        await expect(page.getByRole('heading',{name:'Sua implantação, com prioridades claras.',exact:true})).toBeVisible();
         const opener=page.getByRole('button',{name:'Abrir o menu',exact:true});
         await opener.click();const menu=page.getByRole('dialog',{name:'Menu do Sistema de Aquisição',exact:true});
         await expect(menu).toBeVisible();await expect(menu.getByRole('button',{name:'Fechar o menu',exact:true})).toBeFocused();
@@ -254,6 +261,24 @@ try{
       await operation.getByRole('button',{name:'Clínicas e resultados',exact:true}).click();
       await expect(page.getByRole('region',{name:'Clínicas e resultados',exact:true})).toBeVisible();
     }finally{await context.close();}
+  });
+  await run('SAP overview displays recorded volumes only after required source configuration',async()=>{
+    const measured={tem_crm:true,tem_whatsapp:true,marcos_marcados:8,marcos:['qualificado','desqualificado','agendado','compareceu','faltou','pensando','nao_fechou','fechou'],leads:50,qualificados:40,agendados:20,compareceram:16,faltaram:4,fechados:6,fechados_com_valor:6,com_origem:49,linhas_completas:49,resposta_conversas:40,resposta_mediana_min:4,resposta_ate_5min:32};
+    for(const complete of [true,false]){
+      const {context,page}=await account('viewer',{sap:true,tracker:complete?measured:{...measured,marcos_marcados:0,marcos:[]}});try{
+        await page.goto(origins.sap+`/sap/${CID}/painel`);
+        await expect(page.getByRole('region',{name:'Resumo do programa',exact:true})).toBeVisible();
+        const funnel=page.getByRole('region',{name:'O caminho dos seus pacientes',exact:true});
+        if(complete){
+          await expect(funnel).toBeVisible();await expect(funnel.getByRole('listitem')).toHaveCount(5);
+          await expect(funnel).toContainText('50');await expect(funnel).toContainText('40');
+          for(const width of [375,768,1440]){await page.setViewportSize({width,height:1000});
+            assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'SAP measured overview fits viewport');
+            const a=await new AxeBuilder({page}).include('.sap-clinic-summary').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();assert.deepEqual(a.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],'SAP measured overview accessibility');
+          }
+        }else{await expect(funnel).not.toBeVisible();await expect(page.getByText('Dado incompleto',{exact:true}).first()).toBeVisible();}
+      }finally{await context.close();}
+    }
   });
   await run('keyboard access works through presentation, login and return navigation',async()=>{
     const {context,page}=await account();try{
