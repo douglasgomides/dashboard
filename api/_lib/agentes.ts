@@ -16,6 +16,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { chamarIAJson, iaDisponivel } from "./ia.js";
+import { limitarTexto } from "./texto-ia.js";
 import { FONTES, padroesComerciais, validarPropostas, type Fonte, type PropostaBrain } from "../../src/lib/brand-brain.js";
 import { validarIdeias, TIPOS_IDEIA, type IdeiaCampanha } from "../../src/lib/campanhas-ia.js";
 import { CALENDARIO } from "../../src/lib/campanhas.js";
@@ -458,7 +459,7 @@ const FLUXO_ACESSOS: Fluxo = {
 };
 
 // ---------------------------------------------------------------- fluxo 2: Brand · carga do Brand Brain
-const corta = (t: unknown, n: number) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+const corta = (t: unknown, n: number) => limitarTexto(String(t ?? "").replace(/\s+/g, " ").trim(), n);
 
 /** Remove identificadores reconhecíveis ANTES de persistir o contexto ou enviar à IA. */
 function mensagemKommoSemIdentificadores(mensagem: Record<string, any>): string {
@@ -572,7 +573,7 @@ const FLUXO_BRAIN: Fluxo = {
         if (!iaDisponivel()) return { tipo: "falhar", erro: "IA não configurada no servidor (OPENAI_API_KEY ou ANTHROPIC_API_KEY)." };
         const fontes = c.exec.contexto.fontes as Record<string, string>;
         const lidas = c.exec.contexto.fontes_lidas as Fonte[];
-        const texto = lidas.map((f) => `### ${f} (${FONTES[f]})\n${fontes[f]}`).join("\n\n").slice(0, 16_000);
+        const texto = limitarTexto(lidas.map((f) => `### ${f} (${FONTES[f]})\n${fontes[f]}`).join("\n\n"), 16_000);
         const aprovados = (c.exec.contexto.aprovados as string[]).join("\n") || "(nenhum)";
         const r = await c.usar("ia.gerar_json", { sistema: SISTEMA_BRAIN.replace("{FONTES}", lidas.join(", ")), finalidade: "agente_brain_carga", max_tokens: 2000, entrada: `JÁ APROVADO:\n${aprovados}\n\nFONTES:\n${texto}` });
         const { ok, descartes } = validarPropostas(r.json, lidas);
@@ -676,7 +677,7 @@ async function lerContextoGrowth(admin: Admin, clientId: string) {
   if (datas.length) blocos.push(`### Datas de saúde dos próximos 2 meses\n${datas.map((d) => `- ${d.dia ? `${d.dia}/` : ""}${d.mes} ${d.nome}: ${d.angulo}${d.cuidado ? ` (cuidado: ${d.cuidado})` : ""}`).join("\n")}`);
   const ant = (anteriores.data ?? []) as { titulo: string; tipo: string; estado: string; resultado: string | null }[];
   if (ant.length) blocos.push(`### Estratégias já propostas (não repita; aprenda com o estado e o resultado)\n${ant.map((a) => `- [${a.estado}] ${a.tipo}: ${corta(a.titulo, 120)}${a.resultado ? ` → resultado: ${corta(a.resultado, 160)}` : ""}`).join("\n")}`);
-  return { texto: blocos.join("\n\n").slice(0, 15_000), chaves, titulos: ant.map((a) => a.titulo), blocos: blocos.length, brain: itens.length, conversas: comerciais.length };
+  return { texto: limitarTexto(blocos.join("\n\n"), 15_000), chaves, titulos: ant.map((a) => a.titulo), blocos: blocos.length, brain: itens.length, conversas: comerciais.length };
 }
 
 const SISTEMA_GROWTH = `Você é o estrategista de crescimento da Doctor Creator para uma clínica médica. Proponha ideias de campanha concretas, criativas e executáveis pela equipe da clínica, cruzando o Brand Brain aprovado com os dados.
@@ -766,7 +767,7 @@ const FLUXO_RECUPERACAO: Fluxo = {
         const r = await c.usar("recuperacao.ler", { client_id: c.exec.client_id });
         if (!r.casos.length) return { tipo: "concluir", resultado: { mensagens: 0, motivo: r.bloqueio ?? "Ninguém elegível para recuperar hoje (ou as conversas ainda não foram lidas pela auditoria)." } };
         return { tipo: "seguir", saida: { casos: r.casos.length, filtro: r.filtro, licoes: r.n_licoes }, contexto: { casos: r.casos.map((x: any) => ({ conversa_id: x.conversa_id, motivo: x.motivo, prioridade: x.prioridade, dias: x.dias })), filtro: r.filtro,
-          texto: `### Clínica\n${r.ficha}\n\n### Tom e regras da clínica (Brand Brain)\n${r.brain.texto || "(sem Brain aprovado: use tom acolhedor e direto)"}\n\n${r.licoes ? `${r.licoes}\n\n` : ""}${r.aprendizado}\n\n### Lista de hoje\n${r.casos.map((x: any) => x.texto).join("\n\n")}`.slice(0, 16_000) } };
+          texto: limitarTexto(`### Clínica\n${r.ficha}\n\n### Tom e regras da clínica (Brand Brain)\n${r.brain.texto || "(sem Brain aprovado: use tom acolhedor e direto)"}\n\n${r.licoes ? `${r.licoes}\n\n` : ""}${r.aprendizado}\n\n### Lista de hoje\n${r.casos.map((x: any) => x.texto).join("\n\n")}`, 16_000) } };
       },
     },
     {
@@ -1025,6 +1026,13 @@ async function rodarUma(admin: Admin, exec: Execucao, maxPassos: number, fim: nu
   if (!fluxo) {
     await atualizar({ estado: "falhou", erro: `fluxo desconhecido: ${exec.fluxo}`, lease_ate: null, encerrado_em: new Date().toISOString() });
     return { id: exec.id, estado: "falhou", passos: 0, erro: "fluxo desconhecido" };
+  }
+  // Um processo encerrado antes de persistir a falha também consome uma tentativa.
+  // Sem esta conferência, leases vencidos podem recomeçar o mesmo passo indefinidamente.
+  if (exec.tentativas > MAX_TENTATIVAS) {
+    const erro = "Limite de tentativas excedido ao retomar o agente. Confira o histórico antes de iniciar uma nova execução.";
+    await atualizar({ estado: "falhou", erro, proximo_em: null, lease_ate: null, encerrado_em: new Date().toISOString() });
+    return { id: exec.id, estado: "falhou", passos: 0, erro };
   }
   let passos = 0;
   const ctx: Ctx = {
