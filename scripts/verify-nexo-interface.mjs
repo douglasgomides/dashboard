@@ -141,11 +141,11 @@ try{
           const choices=page.getByRole('group',{name:'Explore uma decisão de negócio',exact:true});
           await choices.getByRole('button',{name:/Conversão no atendimento/}).click();
           await expect(choices.getByRole('button',{name:/Conversão no atendimento/})).toHaveAttribute('aria-pressed','true');
-          await expect(page.getByRole('heading',{name:'Foi o preço ou o atendimento que interrompeu a conversa?',exact:true})).toBeVisible();
+          await expect(page.getByRole('heading',{name:'O que a conversa revela além do motivo de perda no CRM?',exact:true})).toBeVisible();
           await choices.getByRole('button',{name:/Evolução da equipe/}).focus();await page.keyboard.press('Enter');
-          await expect(page.getByRole('heading',{name:'O treinamento está mudando o que acontece na prática?',exact:true})).toBeVisible();
+          await expect(page.getByRole('heading',{name:'A equipe está aplicando o que foi combinado?',exact:true})).toBeVisible();
           await accessible(page,'decision-example-selected');
-          await page.getByRole('button',{name:'Conhecimento da clínica',exact:true}).click();
+          await page.getByRole('button',{name:/Conhecimento da clínica/}).click();
           await expect(page.locator('.nx-screen-button img')).toHaveAttribute('src','/product-previews/nexo-brain.jpg');
           await expect(page.locator('.nx-screen-button img')).toHaveJSProperty('naturalWidth',1440);
           await page.getByRole('button',{name:'Ampliar a tela do Nexo',exact:true}).click();
