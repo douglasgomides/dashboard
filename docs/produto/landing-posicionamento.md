@@ -33,3 +33,11 @@ Orientação do proprietário: a clínica não cresce e não sabe o que fazer; a
 - “Método testado pela Doctor Creator” é uma afirmação qualitativa fornecida pelo proprietário. Não acrescentar taxas de sucesso, número de clínicas, faturamento, depoimentos ou garantia de crescimento sem comprovação correspondente. As metas continuam operacionais e os termos contratuais preservados.
 
 Materiais retomados: proposta 01.01, roteiro comercial 01.03 e diagnóstico 01.05. Os exemplos e contas ilustrativas desses materiais não são casos reais a publicar como prova.
+
+## Nexo agêntico e entregas visíveis — 18/10/2026
+
+O caráter agêntico passa a constar no título principal. A oferta aparece logo após a demonstração inicial, com uma escala de leitura própria e seis frentes de entrega: recuperação, anúncios, conteúdo, estratégia de campanhas, auditoria comercial e Brand Brain. São cinco frentes agênticas do catálogo, além da auditoria comercial. As análises anteriores de investimento, retomada, treinamento e uso de dúvidas na comunicação foram incorporadas ao detalhamento.
+
+Fontes de produto: `src/lib/agentes-catalogo.ts`, `src/lib/agentes-sugestoes.ts`, `src/components/agentes-ia.tsx`, `api/_lib/agentes.ts` e a auditoria comercial. As mensagens, recomendações, copies, roteiros e estratégias são preparadas para revisão e execução pelas pessoas autorizadas. Módulos, fontes e rotinas dependem da implantação. Não apresentar envio, publicação, alteração de verba ou decisão clínica como autônomos; não prometer quantidade fixa de entregas ou faturamento.
+
+O painel real de frentes agênticas entra na primeira dobra e na galeria, capturado localmente com conta fictícia, dados interceptados e sem chamadas a provedores reais. Acesso interno e visão da clínica continuam distintos. A oferta e a identidade do SAP não são alteradas nesta revisão.

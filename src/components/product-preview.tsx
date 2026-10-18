@@ -4,10 +4,11 @@ import { ArrowUpRight, X } from "lucide-react";
 const PREVIEWS = {
   nexo: {
     name: "Nexo",
-    title: "Da conversa analisada ao ajuste que sua equipe vai testar.",
-    description: "Na auditoria, a equipe examina objeções, interrupções do atendimento e oportunidades de retomada. No conhecimento da clínica, revisa as informações que servem de referência para conteúdo, anúncios e atendimento.",
+    title: "Veja onde o trabalho dos agentes encontra a sua operação.",
+    description: "O painel reúne as frentes agênticas, suas entregas e as revisões da equipe. A auditoria investiga as conversas e os agendamentos. O Brand Brain organiza o conhecimento aprovado que orienta as próximas propostas.",
     audience: "Visão da equipe Doctor Creator; módulos e acessos seguem a contratação.",
     screens: [
+      { file: "nexo-agentes", label: "Frentes agênticas", outcome: "Saiba o que cada frente prepara e quem dá o próximo passo.", detail: "Recuperação, anúncios, conteúdo, campanhas e Brand Brain, com fontes, entregas para revisão e responsáveis pela execução.", alt: "Painel real do Nexo com as cinco frentes agênticas, entregas para revisão e quem aprova cada trabalho. Dados fictícios." },
       { file: "nexo", label: "Auditoria comercial", outcome: "Encontre o que interrompe o agendamento.", detail: "Origens, objeções e falhas recorrentes do atendimento reunidas para orientar o próximo ajuste da equipe.", alt: "Auditoria comercial do Nexo com funil de conversas, origem dos agendamentos e experimento da semana. Dados fictícios." },
       { file: "nexo-brain", label: "Conhecimento da clínica", outcome: "Mantenha a proposta de valor da clínica como referência para a equipe.", detail: "O Brand Brain reúne fontes e propostas de conhecimento sobre a clínica, com revisão e aprovação da equipe.", alt: "Brand Brain do Nexo com fontes, propostas de conhecimento e informações aprovadas da clínica. Dados fictícios." },
     ],

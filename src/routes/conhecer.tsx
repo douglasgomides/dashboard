@@ -3,6 +3,7 @@ import { ArrowDown, ArrowRight, Check, ChartNoAxesCombined, Layers, ScanLine } f
 import { ProductBrand } from "@/components/product-brand";
 import { ProductPreview } from "@/components/product-preview";
 import { SapDeliverables, SapSupport } from "@/components/sap-offer";
+import { NexoDeliveries } from "@/components/nexo-offer";
 import { ProductDecisions } from "@/components/product-decisions";
 import { ehEnderecoSap } from "@/lib/marca";
 import { PRODUCT_COPY, commercialUrl } from "@/lib/product-copy";
@@ -20,19 +21,20 @@ function ProductPresentation() {
       <a className="nx-skip" href="#presentation-main">Ir para o conteúdo</a>
       <header className="nx-public-nav">
         <ProductBrand product={product} dark />
-        <nav aria-label="Navegação pública"><a className="nx-nav-method" href="#metodo">{sap ? "A implantação" : "O que você descobre"}</a><a className="nx-nav-method" href="#ferramenta">Por dentro</a><Link className="nx-button nx-button--outline" to="/login">Acessar {c.name}<ArrowRight size={15} aria-hidden /></Link></nav>
+        <nav aria-label="Navegação pública"><a className="nx-nav-method" href="#metodo">{sap ? "A implantação" : "O que o Nexo entrega"}</a><a className="nx-nav-method" href="#ferramenta">Por dentro</a><Link className="nx-button nx-button--outline" to="/login">Acessar {c.name}<ArrowRight size={15} aria-hidden /></Link></nav>
       </header>
       <main id="presentation-main" tabIndex={-1}>
         <section className="nx-hero" aria-labelledby="presentation-title">
           <div className="nx-hero-copy">
             <div className="nx-hero-heading"><p className="nx-kicker">{c.kicker}</p><h1 id="presentation-title">{c.headline}<span>{c.emphasis}</span></h1></div>
-            <div className="nx-hero-detail"><p className="nx-intro">{c.intro}</p><div className="nx-actions"><a className="nx-button nx-button--primary" href={contact}>{c.cta}<ArrowRight size={17} aria-hidden /></a><a className="nx-text-link" href="#metodo">{sap ? "Ver o que está incluído" : "Ver as decisões na prática"}<ArrowDown size={15} aria-hidden /></a></div><p className="nx-hero-note">{c.note}</p></div>
+            <div className="nx-hero-detail"><p className="nx-intro">{c.intro}</p><div className="nx-actions"><a className="nx-button nx-button--primary" href={contact}>{c.cta}<ArrowRight size={17} aria-hidden /></a><a className="nx-text-link" href="#metodo">{sap ? "Ver o que está incluído" : "Explorar as entregas"}<ArrowDown size={15} aria-hidden /></a></div><p className="nx-hero-note">{c.note}</p></div>
           </div>
           {sap ? <ProgramCover /> : <IntelligenceCover />}
         </section>
         <div className="nx-value-strip" aria-label={sap ? "Estrutura do programa" : "Áreas de inteligência"}>
-          {sap ? <><span><b>90 dias</b> de implantação assistida</span><span><b>6 sessões</b> individuais + kickoff</span><span><b>18 criativos</b> editados para anúncios</span></> : <><span><ChartNoAxesCombined size={17} aria-hidden /><b>Investimento</b> com análise da procura</span><span><ScanLine size={17} aria-hidden /><b>Gargalos</b> investigados nas conversas</span><span><Layers size={17} aria-hidden /><b>Equipe</b> com um próximo passo</span></>}
+          {sap ? <><span><b>90 dias</b> de implantação assistida</span><span><b>6 sessões</b> individuais + kickoff</span><span><b>18 criativos</b> editados para anúncios</span></> : <><span><Layers size={17} aria-hidden /><b>5 frentes agênticas</b> com contexto da clínica</span><span><ScanLine size={17} aria-hidden /><b>Entregas prontas</b> para revisão e execução</span><span><ChartNoAxesCombined size={17} aria-hidden /><b>Dados e evidências</b> para orientar os ajustes</span></>}
         </div>
+        {!sap && <NexoDeliveries />}
         <section className="nx-section nx-problem" aria-labelledby="problem-title">
           <div className="nx-section-intro"><div><p className="nx-kicker">{sap ? "Antes do próximo investimento" : "Quando os números não explicam o resultado"}</p><h2 id="problem-title">{c.problemTitle}</h2></div><p>{c.problemIntro}</p></div>
           <div className="nx-question-grid">{c.problems.map(([statement, question], index) => <article key={statement}><span className="nx-serial">0{index + 1}</span><p>{statement}</p><h3>{question}</h3></article>)}</div>
@@ -42,9 +44,9 @@ function ProductPresentation() {
           <ol className="nx-delivery">{c.steps.map(([title, description], index) => <li key={title}><span className="nx-serial">0{index + 1}</span><h3>{title}</h3><p>{description}</p></li>)}</ol>
           <p className="nx-intelligence-note">{sap ? "Um método testado pela Doctor Creator, aplicado à realidade da sua clínica. A equipe conduz a implantação e os ajustes; o decisor e a recepção participam das etapas combinadas." : "A inteligência agêntica prepara análises e propostas a partir das fontes disponíveis. A Doctor Creator revisa as evidências e orienta a ação com a equipe. As conexões e os módulos são definidos na implantação."}</p>
         </div></section>
-        {sap ? <><SapDeliverables /><SapSupport /></> : <section className="nx-section nx-method" id="metodo" aria-labelledby="method-title">
+        {sap ? <><SapDeliverables /><SapSupport /></> : <section className="nx-section nx-method" id="decisoes" aria-labelledby="method-title">
           <div className="nx-section-intro"><div><p className="nx-kicker">Como isso se aplica à sua clínica</p><h2 id="method-title">{c.sectionTitle}</h2></div><p>{c.sectionIntro}</p></div>
-          <ProductDecisions /><div className="nx-capabilities">{PRODUCT_COPY.nexo.items.map(([title, description]) => <article key={title}><h3>{title}</h3><p>{description}</p></article>)}</div>
+          <ProductDecisions />
         </section>}
         <ProductPreview product={product} />
         <section className="nx-section nx-fit" aria-labelledby="fit-title"><div><p className="nx-kicker">Para o seu momento</p><h2 id="fit-title">{sap ? "Para quem quer crescer e precisa saber como começar." : "Para quem já investe e precisa decidir o que vai fazer a clínica avançar."}</h2></div><div><p>{sap ? "O SAP faz sentido quando existe um tratamento ou serviço que você quer crescer, capacidade de agenda e uma equipe para participar. Começamos pela sua realidade para definir o plano, executar as etapas e medir a evolução." : "Você já tem campanhas, conteúdo, CRM ou atendimento em operação, mas os relatórios não deixam claro onde mexer. O Nexo conecta as fontes disponíveis para estudar o crescimento pelo caminho real do paciente e orientar os próximos ajustes."}</p><ul>{(sap ? ["Decisor envolvido na estratégia", "Recepção disponível para treinamento", "Investimento em mídia e rotina de registros"] : ["Decisões de marketing e investimento", "Melhoria do atendimento e da conversão", "Aprendizados para conteúdo e equipe"]).map(item => <li key={item}><Check size={16} aria-hidden />{item}</li>)}</ul><a href={contact} className="nx-text-link">Conversar sobre minha clínica<ArrowRight size={16} aria-hidden /></a></div></section>
@@ -59,7 +61,7 @@ function ProductPresentation() {
 }
 
 function IntelligenceCover() {
-  return <aside className="nx-product-spread" aria-label="Demonstração da inteligência comercial do Nexo"><div className="nx-spread-caption"><p className="nx-eyebrow">Nexo em uso</p><h2>A próxima decisão começa aqui.</h2><p>O CRM diz “preço”. A conversa pode mostrar uma dúvida que ficou sem resposta.</p><a className="nx-text-link" href="#ferramenta">Explorar a plataforma<ArrowRight size={16} aria-hidden /></a><small>Interface real · dados fictícios<br />Visão da equipe Doctor Creator</small></div><a className="nx-hero-screen" href="#ferramenta" aria-label="Explorar as telas do Nexo"><img src="/product-previews/nexo.jpg" width={1440} height={960} fetchPriority="high" alt="Demonstração da auditoria comercial: origem dos agendamentos e experimento de melhoria do atendimento. Dados fictícios." /></a></aside>;
+  return <aside className="nx-product-spread" aria-label="Demonstração da plataforma agêntica Nexo"><div className="nx-spread-caption"><p className="nx-eyebrow">Nexo agêntico, por dentro</p><h2>Você recebe trabalho preparado.</h2><p>Frentes de recuperação, anúncios, conteúdo, campanhas e conhecimento. Cada uma mostra o que analisa, o que entrega e quem revisa.</p><a className="nx-text-link" href="#metodo">Ver as entregas em detalhe<ArrowRight size={16} aria-hidden /></a><small>Interface real · dados fictícios<br />Visão da equipe Doctor Creator</small></div><a className="nx-hero-screen" href="#ferramenta" aria-label="Explorar as telas do Nexo"><img src="/product-previews/nexo-agentes.jpg" width={1440} height={960} fetchPriority="high" alt="Plataforma agêntica Nexo com as cinco frentes de trabalho, entregas para revisão e responsáveis por aprovar. Dados fictícios." /></a></aside>;
 }
 
 function ProgramCover() {
