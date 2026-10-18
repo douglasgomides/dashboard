@@ -11,6 +11,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { baseUrl, digGet } from "./digisac-sync.js";
+import { conversasAtivasParaConferir, iniciarConferenciaMensagens, finalizarConferenciaMensagens } from "./conversas-wts.js";
 
 export type ResultadoDigisac = { atendimentos: number; mensagens: number; vazios: number; restantes: number; erros: string[]; valoresVistos: Record<string, Record<string, number>> };
 
@@ -56,11 +57,21 @@ export async function ingerirConversasDigisac(admin: SupabaseClient<any, any, an
     if (eS) { r.erros.push(eS.message); continue; }
     const ids = (sess ?? []).map((s: any) => String(s.session_id));
     const ja = new Map<string, string>();
+    const cobertura = new Map<string, string | null>();
+    let erroExistentes = false;
     for (let i = 0; i < ids.length; i += 300) {
-      const { data: ex } = await admin.from("conversas").select("externo_id, ultima_msg_em").eq("client_id", clientId).eq("provider", "digisac").in("externo_id", ids.slice(i, i + 300));
-      for (const e of ex ?? []) ja.set(e.externo_id as string, (e.ultima_msg_em as string) ?? "");
+      const { data: ex, error } = await admin.from("conversas").select("externo_id, ultima_msg_em, mensagens_cobertura").eq("client_id", clientId).eq("provider", "digisac").in("externo_id", ids.slice(i, i + 300));
+      if (error) { erroExistentes = true; break; }
+      for (const e of ex ?? []) { ja.set(e.externo_id as string, (e.ultima_msg_em as string) ?? ""); cobertura.set(e.externo_id, e.mensagens_cobertura); }
     }
-    const pendentes = (sess ?? []).filter((s: any) => !ja.has(String(s.session_id)) || (s.updated_at && ja.get(String(s.session_id))! < s.updated_at && Date.now() - new Date(s.updated_at).getTime() < 3 * 86_400_000));
+    if (erroExistentes) { r.erros.push("Não foi possível consultar as conversas existentes."); continue; }
+    let ativas;
+    try { ativas = await conversasAtivasParaConferir(admin, clientId, "digisac"); }
+    catch { r.erros.push("Não foi possível priorizar as conversas dos casos ativos."); continue; }
+    const porSessao = new Map<string, any>((sess ?? []).map((s: any) => [String(s.session_id), s]));
+    const prioritarias = ativas.map((c) => porSessao.get(c.externo_id) ?? { session_id: c.externo_id, contact_id: null, started_at: c.iniciada_em, updated_at: c.ultima_msg_em });
+    const novasOuMudaram = (sess ?? []).filter((s: any) => !ja.has(String(s.session_id)) || cobertura.get(String(s.session_id)) !== "completa" || (s.updated_at && ja.get(String(s.session_id))! < s.updated_at && Date.now() - new Date(s.updated_at).getTime() < 3 * 86_400_000));
+    const pendentes = [...new Map([...prioritarias, ...novasOuMudaram].map((s: any) => [String(s.session_id), s])).values()];
     r.restantes = pendentes.length;
 
     // Telefone e nome do contato vêm do CRM (crm_leads do Digisac), que já tem a pessoa quando existe.
@@ -87,37 +98,58 @@ export async function ingerirConversasDigisac(admin: SupabaseClient<any, any, an
     for (const s of pendentes.slice(0, limite)) {
       if (Date.now() > fim) break;
       const tid = String(s.session_id);
+      let tentativa: { id: string; em: string } | undefined;
+      let terminada = false;
+      try {
+      tentativa = await iniciarConferenciaMensagens(admin, clientId, "digisac", tid);
       let msgs: Record<string, any>[] = [];
+      let completa = false;
       try {
         for (let page = 1; page <= 6; page++) {
+          if (Date.now() >= fim) break;
           const body = await digGet(base, conn.access_token, "/messages", {
             perPage: 100, page,
             query: JSON.stringify({ where: { ticketId: tid }, order: [["timestamp", "ASC"]] }),
           });
-          const rows = (body?.data ?? []) as Record<string, any>[];
+          if (!Array.isArray(body?.data)) throw new Error("Formato de mensagens não confirmado.");
+          const rows = body.data as Record<string, any>[];
           msgs.push(...rows);
-          if (rows.length === 0 || page >= Number(body?.lastPage ?? page)) break;
+          const ultima = Number(body.lastPage);
+          if (body.currentPage != null && Number(body.currentPage) !== page) break;
+          if (Number.isSafeInteger(ultima) && ultima >= 1 && ultima === page) { completa = true; break; }
+          if (rows.length === 0 || !Number.isSafeInteger(ultima) || ultima < page) break;
         }
-      } catch (e) {
-        r.erros.push((e instanceof Error ? e.message : String(e)).slice(0, 160));
+      } catch {
+        await finalizarConferenciaMensagens(admin, clientId, tentativa, "erro");
+        terminada = true;
+        r.erros.push(`mensagens ${tid.slice(0, 8)}: consulta indisponível`);
         if (r.erros.length >= 3) break;
         continue;
       }
       // Filtro de segurança: só mensagens deste atendimento (se a API ignorar o filtro, não mistura conversas).
-      msgs = msgs.filter((m) => !m.ticketId || String(m.ticketId) === tid);
+      const validas = msgs.filter((m) => m && (!m.ticketId || String(m.ticketId) === tid) && m.id != null && String(m.id).trim()
+        && Number.isFinite(Date.parse(m.timestamp ?? m.createdAt)));
+      if (validas.length !== msgs.length || new Set(validas.map((m) => String(m.id))).size !== validas.length) completa = false;
+      msgs = validas;
+      if (!msgs.length) {
+        r.vazios++;
+        await finalizarConferenciaMensagens(admin, clientId, tentativa, "parcial");
+        terminada = true;
+        continue;
+      }
       for (const k of Object.keys(msgs[0] ?? {})) r.valoresVistos.chaves[k] = (r.valoresVistos.chaves[k] ?? 0) + 1;
-      const quando = (m: Record<string, any>) => (m.timestamp ?? m.createdAt ?? s.started_at) as string;
+      const quando = (m: Record<string, any>) => (m.timestamp ?? m.createdAt) as string;
       msgs.sort((a, b) => String(quando(a)).localeCompare(String(quando(b))));
       const pessoaId = await pessoaDe((s.contact_id as string) ?? null);
       const primeira = msgs[0];
       const ultima = msgs[msgs.length - 1];
       const lead = s.contact_id ? leadDe.get(s.contact_id as string) : undefined;
-      const { data: conv, error: eC } = await admin.from("conversas").upsert({
-        client_id: clientId, pessoa_id: pessoaId, lead_id: lead?.id ?? null, provider: "digisac", canal: "whatsapp", externo_id: tid,
+      const { data: conv, error: eC } = await admin.from("conversas").update({
+        ...(pessoaId ? { pessoa_id: pessoaId } : {}), ...(lead?.id ? { lead_id: lead.id } : {}),
         iniciada_em: primeira ? quando(primeira) : s.started_at, ultima_msg_em: ultima ? quando(ultima) : (s.updated_at ?? s.started_at),
-      }, { onConflict: "client_id,provider,externo_id" }).select("id").single();
-      if (eC || !conv) { r.erros.push(`conversa ${tid.slice(0, 8)}: ${eC?.message ?? "sem id"}`); continue; }
-      if (!msgs.length) { r.vazios++; continue; }
+      }).eq("client_id", clientId).eq("id", tentativa.id).eq("mensagens_conferencia_em", tentativa.em).select("id").maybeSingle();
+      if (eC) { r.erros.push(`conversa ${tid.slice(0, 8)}: ${eC.message}`); continue; }
+      if (!conv) { terminada = true; continue; }
       const linhas = msgs.filter((m) => m.id).map((m) => {
         const d = direcaoDigisac(m);
         r.valoresVistos.direcao[`${String(m.isFromMe ?? m.fromMe)}→${d}`] = (r.valoresVistos.direcao[`${String(m.isFromMe ?? m.fromMe)}→${d}`] ?? 0) + 1;
@@ -128,13 +160,24 @@ export async function ingerirConversasDigisac(admin: SupabaseClient<any, any, an
           texto: textoDigisac(m), tipo: String(m.type ?? "texto").toLowerCase(), enviada_em: quando(m), externo_id: String(m.id),
         };
       });
+      let erroPersistencia = false;
       for (let i = 0; i < linhas.length; i += 200) {
         const { error: eM } = await admin.from("mensagens").upsert(linhas.slice(i, i + 200), { onConflict: "conversa_id,externo_id" });
-        if (eM) r.erros.push(`mensagens ${tid.slice(0, 8)}: ${eM.message}`);
+        if (eM) { r.erros.push(`mensagens ${tid.slice(0, 8)}: ${eM.message}`); erroPersistencia = true; }
+        else r.mensagens += linhas.slice(i, i + 200).length;
       }
-      r.mensagens += linhas.length;
+      await finalizarConferenciaMensagens(admin, clientId, tentativa, erroPersistencia ? "erro" : completa ? "completa" : "parcial");
+      terminada = true;
       r.atendimentos++;
       r.restantes--;
+      } catch {
+        r.erros.push(`conversa ${tid.slice(0, 8)}: conferência não concluída`);
+      } finally {
+        if (tentativa && !terminada) {
+          try { await finalizarConferenciaMensagens(admin, clientId, tentativa, "erro"); }
+          catch { r.erros.push(`conversa ${tid.slice(0, 8)}: cobertura não registrada`); }
+        }
+      }
     }
   }
   return saida;

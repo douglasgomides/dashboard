@@ -11,7 +11,7 @@ import { escolherRecuperaveis, diagnosticarAnuncios, type Candidato, type LinhaA
 import { CALENDARIO } from "../../src/lib/campanhas.js";
 import { grupoEspecialidade } from "../../src/lib/benchmark-estrategico.js";
 import { filtrarComentarios, filtrarConversas, filtrarPosts, somarFiltros, textoFiltro, type ResumoConversa } from "../../src/lib/aprendizado.js";
-import { lerLicoes } from "./aprendizado.js";
+import { lerLicoes, resultadosRecuperacao } from "./aprendizado.js";
 
 type Admin = SupabaseClient<any, any, any>;
 const DIA = 86_400_000;
@@ -38,6 +38,7 @@ async function ficha(admin: Admin, clientId: string) {
 
 /** Taxas das sugestões anteriores do agente (medidas sozinhas ou marcadas), por tipo. */
 async function aprendizado(admin: Admin, clientId: string, agente: string, dias = 60) {
+  if (agente === "recuperacao") return resultadosRecuperacao(admin,clientId);
   const { data } = await admin.from("sugestoes_agentes").select("tipo, estado, resultado, titulo").eq("client_id", clientId).eq("agente", agente).gte("criado_em", desde(dias)).limit(500);
   const xs = (data ?? []) as { tipo: string; estado: string; resultado: string | null; titulo: string }[];
   return xs;
@@ -46,6 +47,9 @@ async function aprendizado(admin: Admin, clientId: string, agente: string, dias 
 // ---------------------------------------------------------------- Recuperação de pacientes
 
 export async function lerRecuperacao(admin: Admin, clientId: string) {
+  const { data: saude, error: erroFontes } = await admin.rpc("operacao_fontes", { p_client_id: clientId });
+  if (erroFontes) throw new Error(`Não foi possível verificar a cobertura da recuperação: ${erroFontes.message}`);
+  if (!saude?.apto) return { casos: [], brain: { texto: "", chaves: [] as string[], n: 0 }, ficha: "", aprendizado: "", bloqueio: "Atualizar a coleta de mensagens e o CRM antes de preparar novos contatos." };
   const resumos: { conversa_id: string; resumo: any; ate_msg_em: string | null }[] = [];
   for (let de = 0; de < 4000; de += 1000) {
     const { data } = await admin.from("conversas_resumos").select("conversa_id, resumo, ate_msg_em").eq("client_id", clientId).gte("gerado_em", desde(25)).order("gerado_em", { ascending: false }).range(de, de + 999);
@@ -78,8 +82,8 @@ export async function lerRecuperacao(admin: Admin, clientId: string) {
   const feitas = hist.filter((h) => h.estado !== "descartada" && h.resultado);
   const taxa = (t: string) => { const xs = feitas.filter((h) => h.tipo === t); const resp = xs.filter((h) => h.resultado === "respondeu" || h.resultado === "agendou").length; return xs.length >= 5 ? `${t}: ${resp} de ${xs.length} responderam (${Math.round((100 * resp) / xs.length)}%)` : null; };
   const aprendeu = ["aguardando_clinica", "pediu_preco", "interesse"].map(taxa).filter(Boolean);
-  return { casos, brain, ficha: f.texto, licoes: licoes.texto, n_licoes: licoes.n, filtro: textoFiltro(filtro),
-    aprendizado: aprendeu.length ? `Resultado das mensagens anteriores (60 dias): ${aprendeu.join("; ")}.` : "" };
+  return { casos, brain, ficha: f.texto, bloqueio: null, licoes: licoes.texto, n_licoes: licoes.n, filtro: textoFiltro(filtro),
+    aprendizado: aprendeu.length ? `Atividade observada após propostas anteriores (60 dias, sem atribuição causal às mensagens): ${aprendeu.join("; ")}.` : "" };
 }
 
 // ---------------------------------------------------------------- Gestor de anúncios

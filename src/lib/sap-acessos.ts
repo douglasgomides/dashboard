@@ -49,18 +49,25 @@ export interface ResumoAcessos {
   aRevogar: number;
 }
 
-const resolvido = (r?: RegistroAcesso) => !!r && r.status !== "pendente";
+/** Confirmação atual com evidência mínima; dispensa e revogação seguem a mesma regra do motor e do banco. */
+export function acessoResolvido(r?: RegistroAcesso): boolean {
+  const data = r?.confirmado_em;
+  const hoje = new Date(Date.now() - 3*3_600_000).toISOString().slice(0,10);
+  const valida = typeof data === "string" && /^\d{4}-\d{2}-\d{2}$/.test(data) && Number.isFinite(Date.parse(data)) && new Date(data).toISOString().slice(0,10) === data && data <= hoje;
+  return !!r && !r.revogado_em && valida && !!r.confirmado_por?.trim()
+    && (r.status === "confirmado" || (r.status === "nao_se_aplica" && (r.observacao?.trim().length ?? 0)>=5));
+}
 
 export function resumoAcessos(regs: RegistroAcesso[], dia: number | null): ResumoAcessos {
   const m = new Map(regs.map((r) => [r.item, r]));
   const conta = (p: PrazoAcesso) => {
     const it = ITENS_ACESSO.filter((i) => i.prazo === p);
-    return { feitos: it.filter((i) => resolvido(m.get(i.id))).length, total: it.length };
+    return { feitos: it.filter((i) => acessoResolvido(m.get(i.id))).length, total: it.length };
   };
   return {
     criticos: conta("C"),
     complementares: conta("P"),
-    atrasados: dia === null ? [] : ITENS_ACESSO.filter((i) => dia > i.ate && !resolvido(m.get(i.id))),
+    atrasados: dia === null ? [] : ITENS_ACESSO.filter((i) => dia > i.ate && !acessoResolvido(m.get(i.id))),
     aRevogar: regs.filter((r) => r.status === "confirmado" && !r.revogado_em).length,
   };
 }

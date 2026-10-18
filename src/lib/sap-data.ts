@@ -1173,7 +1173,7 @@ export async function getEntradasTarefas(clientId?: string, isAdmin = false): Pr
     db.from("sap_acessos").select("clinica_id, item, status, confirmado_em, confirmado_por, observacao, revogado_em").in("clinica_id", ids),
     db.from("sap_rastreamento_teste").select("clinica_id, item, status, evidencia, feito_em").in("clinica_id", ids),
     db.from("sap_kpi_plano").select("clinica_id, kpi, baseline, origem, meta").in("clinica_id", ids),
-    db.from("sap_acoes").select("clinica_id, id, semana, origem, texto, lado, responsavel, prazo, status").in("clinica_id", ids).is("removido_em", null),
+    db.from("sap_acoes").select("clinica_id, id, semana, origem, codigo, texto, lado, responsavel, prazo, status").in("clinica_id", ids).is("removido_em", null),
     db.from("sap_auditoria_semana").select("clinica_id, semana").in("clinica_id", ids),
     db.from("sap_fidelizacao_semana").select("clinica_id, semana").in("clinica_id", ids),
     db.from("sap_execucao_item").select("clinica_id, item, status, data_cumpriu, evidencia, observacao").in("clinica_id", ids),

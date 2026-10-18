@@ -289,7 +289,7 @@ export function licoesResultados(xs: SugestaoMedida[]): Licao[] {
       const rot = t === "aguardando_clinica" ? "quem estava esperando resposta da clínica" : t === "pediu_preco" ? "quem pediu o valor" : "quem teve interesse e parou";
       out.push({ agente: "recuperacao", chave: `resultado:recuperacao:${t}`, origem: "resultados", n: ys.length, efeito: Number(Math.abs(a - geral).toFixed(2)), sinal: a > geral ? "faz" : "evita",
         confianca: ys.length >= 15 ? "alta" : "media",
-        texto: `Das mensagens de recuperação enviadas para ${rot}, ${pct(a)} tiveram resposta (média de todas: ${pct(geral)}, ${ys.length} envios). ${a > geral ? "Priorize esse grupo." : "Mude a abordagem para esse grupo: mais curta e com pergunta fácil."}`,
+        texto: `Dos casos com contato vinculado para ${rot}, ${pct(a)} tiveram resposta observada (referência: ${pct(geral)}, ${ys.length} casos). Associação observada; não demonstra efeito causal da abordagem. ${a > geral ? "Priorize esse grupo." : "Mude a abordagem para esse grupo: mais curta e com pergunta fácil."}`,
         evidencia: [`${ys.filter((y) => y.resultado === "agendou").length} agendaram`] });
     }
   }

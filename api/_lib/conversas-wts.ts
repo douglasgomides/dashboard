@@ -12,6 +12,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { extrairCodigos } from "./shortio.js";
 
 const BASE = "https://api.wts.chat";
+let ultimoCarimboMicros = 0;
+
+function carimboConferencia(): string {
+  // Postgres keeps microseconds. Separate attempts started in the same JS millisecond as well.
+  const micros = Math.max(Date.now() * 1000 + Number((process.hrtime.bigint() / 1000n) % 1000n), ultimoCarimboMicros + 1);
+  ultimoCarimboMicros = micros;
+  return new Date(Math.floor(micros / 1000)).toISOString().replace("Z", `${String(micros % 1000).padStart(3, "0")}Z`);
+}
 
 async function wtsGet(token: string, caminho: string): Promise<any> {
   for (let tentativa = 0; tentativa < 3; tentativa++) {
@@ -48,6 +56,44 @@ export type ResultadoConversas = {
   erros: string[];
   valoresVistos: Record<string, Record<string, number>>;
 };
+
+/** Active cases must be checked even when the session's own metadata did not change. */
+export async function conversasAtivasParaConferir(db: SupabaseClient<any, any, any>, clientId: string, provider: string) {
+  const ids: string[] = [];
+  for (let de = 0; ; ) {
+    const { data, error } = await db.from("operacao_recuperacao").select("conversa_id").eq("client_id", clientId)
+      .not("estado", "in", "(resolvida,cancelada)").order("id").range(de, de + 999);
+    if (error) throw new Error("Não foi possível consultar os casos ativos.");
+    if (!data?.length) break;
+    ids.push(...data.map((r: any) => String(r.conversa_id)));
+    de += data.length;
+  }
+  const conversas: { id: string; externo_id: string; iniciada_em: string | null; ultima_msg_em: string | null; mensagens_conferencia_em: string | null }[] = [];
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data, error } = await db.from("conversas").select("id, externo_id, iniciada_em, ultima_msg_em, mensagens_conferencia_em")
+      .eq("client_id", clientId).eq("provider", provider).in("id", ids.slice(i, i + 300));
+    if (error) throw new Error("Não foi possível consultar as conversas dos casos ativos.");
+    conversas.push(...(data ?? []));
+  }
+  return conversas.sort((a, b) => (a.mensagens_conferencia_em ?? "").localeCompare(b.mensagens_conferencia_em ?? "") || a.id.localeCompare(b.id));
+}
+
+/** Invalidate prior coverage before requesting messages; never advance the success stamp on a failed attempt. */
+export async function iniciarConferenciaMensagens(db: SupabaseClient<any, any, any>, clientId: string, provider: string, externoId: string) {
+  const em = carimboConferencia();
+  const { data, error } = await db.from("conversas").upsert({
+    client_id: clientId, provider, externo_id: externoId, canal: "whatsapp", mensagens_conferencia_em: em, mensagens_cobertura: "parcial",
+  }, { onConflict: "client_id,provider,externo_id" }).select("id").single();
+  if (error || !data?.id) throw new Error("Não foi possível iniciar a conferência das mensagens.");
+  return { id: String(data.id), em };
+}
+
+export async function finalizarConferenciaMensagens(db: SupabaseClient<any, any, any>, clientId: string, tentativa: { id: string; em: string }, cobertura: "completa" | "parcial" | "erro") {
+  const patch: Record<string, string> = { mensagens_cobertura: cobertura };
+  if (cobertura === "completa") patch.mensagens_conferidas_em = new Date().toISOString();
+  const { error } = await db.from("conversas").update(patch).eq("client_id", clientId).eq("id", tentativa.id).eq("mensagens_conferencia_em", tentativa.em);
+  if (error) throw new Error("Não foi possível registrar a cobertura das mensagens.");
+}
 
 // Origem de anúncio (clique para WhatsApp): a Meta manda junto da 1ª mensagem um "referral" com o id do anúncio
 // (source_id), ctwa_clid, título e link. Não sabemos em que campo o WTS repassa isso, então procura em qualquer
@@ -111,9 +157,11 @@ export async function ingerirConversasWts(
   }
   const ids = sessoes.map((s: any) => String(s.session_id));
   const existentes = new Map<string, string>();
+  const cobertura = new Map<string, string | null>();
   for (let i = 0; i < ids.length; i += 300) {
-    const { data: ex } = await supabase.from("conversas").select("externo_id, ultima_msg_em").eq("client_id", clientId).eq("provider", "wts").in("externo_id", ids.slice(i, i + 300));
-    for (const e of ex ?? []) existentes.set(e.externo_id, e.ultima_msg_em ?? "");
+    const { data: ex, error } = await supabase.from("conversas").select("externo_id, ultima_msg_em, mensagens_cobertura").eq("client_id", clientId).eq("provider", "wts").in("externo_id", ids.slice(i, i + 300));
+    if (error) { r.erros.push("Não foi possível consultar as conversas existentes."); return r; }
+    for (const e of ex ?? []) { existentes.set(e.externo_id, e.ultima_msg_em ?? ""); cobertura.set(e.externo_id, e.mensagens_cobertura); }
   }
   // Novas sempre; as já gravadas só se a sessão mudou depois da última mensagem conhecida.
   // Sem conversa gravada primeiro (senão as sessões recentes que só mudaram de estado ocupam todo o lote e as antigas
@@ -123,11 +171,16 @@ export async function ingerirConversasWts(
   const mudaram = sessoes.filter((s: any) => {
     const ult = existentes.get(String(s.session_id));
     if (ult === undefined) return false;
-    if (opts.refazer) return true;
+    if (opts.refazer || cobertura.get(String(s.session_id)) !== "completa") return true;
     const up = s.updated_at ? new Date(s.updated_at).getTime() : 0;
     return !!ult && up > new Date(ult).getTime() + 60_000 && up >= limiteMudanca;
   });
-  const pendentes = [...novas, ...mudaram];
+  let ativas;
+  try { ativas = await conversasAtivasParaConferir(supabase, clientId, "wts"); }
+  catch { r.erros.push("Não foi possível priorizar as conversas dos casos ativos."); return r; }
+  const porSessao = new Map(sessoes.map((s: any) => [String(s.session_id), s]));
+  const prioritarias = ativas.map((c) => porSessao.get(c.externo_id) ?? { session_id: c.externo_id, contact_id: null, started_at: c.iniciada_em, updated_at: c.ultima_msg_em });
+  const pendentes = [...new Map([...prioritarias, ...novas, ...mudaram].map((s: any) => [String(s.session_id), s])).values()];
 
   // Códigos dos links rastreados deste cliente (casam com a primeira mensagem do paciente).
   const { data: links } = await supabase.from("links_rastreados").select("id, codigo_ref, tipo, instagram_post_id, ad_campaign_id").eq("client_id", clientId);
@@ -175,35 +228,49 @@ export async function ingerirConversasWts(
 
   async function processar(s: any) {
     const sid = String(s.session_id);
+    const tentativa = await iniciarConferenciaMensagens(supabase, clientId, "wts", sid);
+    let terminada = false;
+    try {
     let msgs: any[] = [];
+    let completa = false;
+    let falhou = false;
     const ordem = [tokenAtivo, ...tokens.filter((t) => t !== tokenAtivo)];
     for (const tk of ordem) {
-      msgs = [];
+      const recebidas: any[] = [];
+      let todas = false;
       try {
         for (let pagina = 1; pagina <= 8; pagina++) {
-          const j = await wtsGet(tk, `/chat/v1/session/${sid}/message?PageSize=100&PageNumber=${pagina}`);
-          msgs.push(...(j.items ?? []));
-          if (!j.hasMorePages) break;
+          if (Date.now() >= fim) break;
+          const j = await wtsGet(tk, `/chat/v1/session/${encodeURIComponent(sid)}/message?PageSize=100&PageNumber=${pagina}`);
+          if (!Array.isArray(j?.items)) throw new Error("Formato de mensagens não confirmado.");
+          recebidas.push(...j.items);
+          if (j.hasMorePages === false) { todas = true; break; }
+          if (j.hasMorePages !== true) break;
         }
       } catch {
-        msgs = [];
+        falhou = true;
       }
-      if (msgs.length > 0) {
+      if (recebidas.length > msgs.length || (todas && recebidas.length > 0)) msgs = recebidas;
+      if (todas && recebidas.length > 0) {
+        completa = true;
+        falhou = false;
         tokenAtivo = tk;
         break;
       }
     }
     if (msgs.length === 0) {
-      // Sessão sem mensagem (ou que a conta não enxerga): marca para não ser buscada de novo a cada rodada.
-      await supabase.from("conversas").upsert(
-        { client_id: clientId, provider: "wts", canal: "whatsapp", externo_id: sid, iniciada_em: s.started_at, ultima_msg_em: s.updated_at ?? s.started_at },
-        { onConflict: "client_id,provider,externo_id" },
-      );
+      await finalizarConferenciaMensagens(supabase, clientId, tentativa, falhou ? "erro" : "parcial");
+      terminada = true;
+      r.erros.push(`mensagens ${sid.slice(0, 8)}: ${falhou ? "consulta indisponível" : "nenhuma mensagem visível; cobertura não confirmada"}`);
       return;
     }
+    const validas = msgs.filter((m) => m && m.id != null && String(m.id).trim() && Number.isFinite(Date.parse(m.timestamp ?? m.createdAt)));
+    if (validas.length !== msgs.length || new Set(validas.map((m) => String(m.id))).size !== validas.length) completa = false;
+    msgs = validas;
+    if (!msgs.length) throw new Error("Mensagens sem identificador ou data válidos.");
     msgs.sort((a, b) => String(a.timestamp ?? a.createdAt).localeCompare(String(b.timestamp ?? b.createdAt)));
 
-    const c = await contato(String(s.contact_id));
+    const c = s.contact_id ? await contato(String(s.contact_id)) : null;
     const pessoaId = await pessoaDe(c);
 
     // código do link na primeira mensagem de entrada (até 3 primeiras)
@@ -224,26 +291,29 @@ export async function ingerirConversasWts(
     const ultima = msgs[msgs.length - 1];
     const { data: conv, error: eConv } = await supabase
       .from("conversas")
-      .upsert(
+      .update(
         {
-          client_id: clientId, pessoa_id: pessoaId, provider: "wts", canal: "whatsapp", externo_id: sid,
-          iniciada_em: primeira.timestamp ?? primeira.createdAt, ultima_msg_em: ultima.timestamp ?? ultima.createdAt, codigo_ref: codigoAchado,
+          ...(pessoaId ? { pessoa_id: pessoaId } : {}),
+          iniciada_em: primeira.timestamp ?? primeira.createdAt, ultima_msg_em: ultima.timestamp ?? ultima.createdAt, ...(codigoAchado ? { codigo_ref: codigoAchado } : {}),
         },
-        { onConflict: "client_id,provider,externo_id" },
       )
+      .eq("client_id", clientId).eq("id", tentativa.id).eq("mensagens_conferencia_em", tentativa.em)
       .select("id")
-      .single();
-    if (eConv || !conv) {
-      r.erros.push(`conversa ${sid.slice(0, 8)}: ${eConv?.message ?? "sem id"}`);
+      .maybeSingle();
+    if (eConv) {
+      r.erros.push(`conversa ${sid.slice(0, 8)}: ${eConv.message}`);
+      await finalizarConferenciaMensagens(supabase, clientId, tentativa, "erro");
+      terminada = true;
       return;
     }
+    if (!conv) { terminada = true; return; } // A newer request owns this conversation now.
 
     // Veio de anúncio? Guarda o que a Meta mandou (id do anúncio etc.) para cruzar anúncio → conversa → lead.
     const entradas = msgs.filter((x) => direcaoDaMensagem(x.direction) === "entrada");
     const origem = acharOrigemAnuncio(entradas);
     if (origem) {
       const { error: eO } = await supabase.from("conversas_origem_anuncio").upsert({ conversa_id: conv.id, client_id: clientId, ...origem }, { onConflict: "conversa_id" });
-      if (eO) r.erros.push(`origem anúncio ${sid.slice(0, 8)}: ${eO.message}`);
+      if (eO) { r.erros.push(`origem anúncio ${sid.slice(0, 8)}: ${eO.message}`); falhou = true; }
       else r.comAnuncio = (r.comAnuncio ?? 0) + 1;
     }
     // Nomes dos campos que o WTS devolve na 1ª mensagem do paciente (para saber onde mora a origem do anúncio).
@@ -271,13 +341,12 @@ export async function ingerirConversasWts(
     });
     for (let i = 0; i < linhas.length; i += 200) {
       const { error: eM } = await supabase.from("mensagens").upsert(linhas.slice(i, i + 200), { onConflict: "conversa_id,externo_id" });
-      if (eM) r.erros.push(`mensagens ${sid.slice(0, 8)}: ${eM.message}`);
+      if (eM) { r.erros.push(`mensagens ${sid.slice(0, 8)}: ${eM.message}`); completa = false; falhou = true; }
+      else r.mensagens += linhas.slice(i, i + 200).length;
     }
-    r.mensagens += linhas.length;
-
     if (pessoaId) {
       const primeiraEntrada = msgs.find((x) => direcaoDaMensagem(x.direction) === "entrada") ?? primeira;
-      await supabase.from("toques").upsert(
+      const { error: eToque } = await supabase.from("toques").upsert(
         {
           client_id: clientId, pessoa_id: pessoaId, tipo: "mensagem_whatsapp", origem_tipo: link?.tipo ?? null, link_id: link?.id ?? null,
           instagram_post_id: link?.instagram_post_id ?? null, ad_campaign_id: link?.ad_campaign_id ?? null,
@@ -285,9 +354,15 @@ export async function ingerirConversasWts(
         },
         { onConflict: "client_id,fonte,externo_id", ignoreDuplicates: true },
       );
+      if (eToque) { r.erros.push(`toque ${sid.slice(0, 8)}: ${eToque.message}`); falhou = true; }
     }
+    await finalizarConferenciaMensagens(supabase, clientId, tentativa, falhou ? "erro" : completa ? "completa" : "parcial");
+    terminada = true;
     if (link) r.comCodigo++;
     r.sessoes++;
+    } finally {
+      if (!terminada) await finalizarConferenciaMensagens(supabase, clientId, tentativa, "erro");
+    }
   }
 
   // Concorrência 5, dentro do orçamento de tempo.
