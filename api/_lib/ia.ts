@@ -63,7 +63,7 @@ export async function chamarIAJson(admin: SupabaseClient<any, any, any>, p: Pedi
           messages: [{ role: "system", content: p.sistema }, { role: "user", content: p.entrada }],
         }),
       });
-      if (!r.ok) throw new Error(`OpenAI respondeu ${r.status}`);
+      if (!r.ok) throw new Error(`OpenAI respondeu ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}`);
       const j = (await r.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
       tIn = j.usage?.prompt_tokens ?? null;
       tOut = j.usage?.completion_tokens ?? null;
