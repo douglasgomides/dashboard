@@ -103,6 +103,24 @@
 .nx-landing .nx-delivery p { font-size: 13px; line-height: 1.8; color: var(--lp-on-dark); }
 .nx-intelligence-note { border-top: 1px solid #52636e; margin-top: 36px; padding-top: 20px; font-size: 12px; line-height: 1.8; color: #bac8cf; max-width: 980px; }
 
+/* Nexo: the offer has its own reading scale and precedes the analysis examples. */
+.nx-landing .nexo-offer { padding-top: 72px; }
+.nx-landing .nexo-offer .nx-section-intro { align-items: start; margin-bottom: 52px; }
+.nx-landing .nexo-offer .nx-section-intro h2 { font-size: clamp(36px, 3.7vw, 52px); line-height: 1.09; max-width: 680px; }
+.nx-landing .nexo-offer .nx-section-intro>p { font-size: 17px; line-height: 1.8; padding-top: 42px; }
+.nexo-deliveries { border-bottom: 1px solid var(--lp-line); }
+.nexo-deliveries article { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1fr); gap: 110px; padding: 36px 0 40px; border-top: 1px solid var(--lp-line); }
+.nexo-deliveries header .nx-eyebrow { margin-bottom: 17px; font-size: 13px; }
+.nexo-deliveries h3 { max-width: 430px; font-size: 31px; line-height: 1.18; font-weight: 500; letter-spacing: -.9px; }
+.nexo-delivery-body>p { font-size: 16px; line-height: 1.8; color: var(--lp-muted); }
+.nexo-delivery-body dl { margin: 23px 0 0; }
+.nexo-delivery-body dl>div+div { margin-top: 22px; }
+.nexo-delivery-body dt { margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--lp-accent); }
+.nexo-delivery-body dd { margin: 0; font-size: 15px; line-height: 1.8; color: var(--lp-muted); }
+.nexo-delivery-body dl>div:first-child dd { font-size: 19px; line-height: 1.55; color: var(--lp-ink); font-weight: 450; }
+.nexo-offer-close { display: grid; grid-template-columns: 1fr auto; gap: 50px; align-items: center; padding-top: 30px; }
+.nexo-offer-close>p { max-width: 650px; font-size: 12px; line-height: 1.8; color: var(--lp-muted); }
+
 /* Nexo: an open analysis desk, with a persistent subject index. */
 .nx-decisions { display: grid; grid-template-columns: minmax(0, .6fr) minmax(0, 1fr); gap: 80px; padding-block: 32px 40px; border-block: 1px solid var(--lp-line); }
 .nx-decision-options { display: flex; flex-direction: column; gap: 0; }
@@ -219,6 +237,8 @@
   .nx-capabilities p { margin-top: 12px; }
   .nx-landing .nx-product-preview { gap: 0 30px; grid-template-columns: minmax(0, .45fr) minmax(0, 1fr); }
   .sap-delivery-grid ul { grid-template-columns: 1fr; }
+  .nexo-deliveries article { gap: 45px; }
+  .nexo-offer-close { grid-template-columns: 1fr; gap: 20px; justify-items: start; }
 }
 @media (max-width: 760px) {
   .nx-landing .nx-public-nav { padding-block: 21px; gap: 15px; }
@@ -258,6 +278,19 @@
   .nx-landing .nx-delivery p { grid-column: 2; margin-top: 7px; }
   .nx-intelligence-note { font-size: 11px; margin-top: 27px; }
   .nx-decisions { grid-template-columns: 1fr; gap: 32px; padding-top: 5px; }
+  .nx-landing .nexo-offer { padding-top: 45px; }
+  .nx-landing .nexo-offer .nx-section-intro { margin-bottom: 28px; }
+  .nx-landing .nexo-offer .nx-section-intro h2 { font-size: 37px; }
+  .nx-landing .nexo-offer .nx-section-intro>p { padding-top: 0; font-size: 16px; }
+  .nexo-deliveries article { grid-template-columns: 1fr; gap: 21px; padding-block: 28px 32px; }
+  .nexo-deliveries header .nx-eyebrow { margin-bottom: 12px; font-size: 12px; }
+  .nexo-deliveries h3 { font-size: 28px; max-width: 440px; }
+  .nexo-delivery-body>p { font-size: 15px; }
+  .nexo-delivery-body dl { margin-top: 20px; }
+  .nexo-delivery-body dl>div:first-child dd { font-size: 18px; }
+  .nexo-delivery-body dd { font-size: 14px; }
+  .nexo-offer-close .nx-button { width: 100%; text-align: left; justify-content: space-between; }
+  .nexo-offer-close .nx-button svg { flex: none; }
   .nx-decision-options button { font-size: 14px; min-height: 64px; padding-block: 18px; }
   .nx-decision-panel h3 { font-size: 25px; }
   .nx-decision-panel dd { font-size: 13px; }

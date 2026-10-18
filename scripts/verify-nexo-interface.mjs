@@ -110,7 +110,7 @@ try{
         const open=page.getByRole('button',{name:`Ampliar a tela do ${product==='nexo'?'Nexo':'SAP'}`,exact:true});
         await open.scrollIntoViewIfNeeded();await expect(open.locator('img')).toHaveJSProperty('naturalWidth',1440);
         const picker=page.getByRole('group',{name:`Escolha uma tela do ${product==='nexo'?'Nexo':'SAP'}`,exact:true});
-        const screens=product==='sap'?[['Prioridades da semana','sap-semana'],['Agenda e entregas','sap-cronograma'],['Evolução da clínica','sap']]:[['Conhecimento da clínica','nexo-brain'],['Auditoria comercial','nexo']];
+        const screens=product==='sap'?[['Prioridades da semana','sap-semana'],['Agenda e entregas','sap-cronograma'],['Evolução da clínica','sap']]:[['Conhecimento da clínica','nexo-brain'],['Auditoria comercial','nexo'],['Frentes agênticas','nexo-agentes']];
         for(const [label,file] of screens){
           const choice=picker.getByRole('button',{name:new RegExp(label)});await choice.focus();await page.keyboard.press('Enter');
           await expect(choice).toHaveAttribute('aria-pressed','true');await expect(open.locator('img')).toHaveAttribute('src',`/product-previews/${file}.jpg`);await expect(open.locator('img')).toHaveJSProperty('naturalWidth',1440);

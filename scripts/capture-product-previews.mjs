@@ -8,6 +8,8 @@ const base = process.env.CAPTURE_BASE_URL || 'http://127.0.0.1:5592';
 assert.equal(new URL(base).hostname, '127.0.0.1', 'Capture must use the local test application');
 const onlyProduct = process.env.CAPTURE_PRODUCT;
 assert.ok(!onlyProduct || ['nexo', 'sap'].includes(onlyProduct), 'Unknown capture product');
+const onlyFile = process.env.CAPTURE_FILE;
+assert.ok(!onlyFile || ['nexo', 'nexo-brain', 'nexo-agentes', 'sap', 'sap-cronograma', 'sap-semana', 'sap-semana-mobile'].includes(onlyFile), 'Unknown capture file');
 const origins = { nexo: base, sap: `http://sap.localhost:${new URL(base).port}` };
 const output = new URL('../public/product-previews/', import.meta.url);
 await mkdir(output, { recursive: true });
@@ -27,13 +29,14 @@ const errors = [], unexpected = [];
 const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
 try {
   for (const { product, file, path: routePath, ready, width = 1440, proof = false, evolved = false } of [
+    { product: 'nexo', file: 'nexo-agentes', path: `/${clientId}/agentes`, ready: 'Agentes de IA' },
     { product: 'nexo', file: 'nexo', path: `/${clientId}/atendimento?aba=conversas`, ready: 'Auditoria comercial do período' },
     { product: 'nexo', file: 'nexo-brain', path: '/admin/brain', ready: proposed[0][2] },
     { product: 'sap', file: 'sap', path: `/sap/${clientId}/painel`, ready: 'Resumo do programa', evolved: true },
     { product: 'sap', file: 'sap-cronograma', path: `/sap/${clientId}/cronograma`, ready: 'Cronograma do programa', evolved: true },
     { product: 'sap', file: 'sap-semana', path: `/sap/${clientId}`, ready: 'Minhas tarefas' },
     { product: 'sap', file: 'sap-semana-mobile', path: `/sap/${clientId}`, ready: 'Minhas tarefas', width: 375, proof: true },
-  ].filter(capture => !onlyProduct || capture.product === onlyProduct)) {
+  ].filter(capture => (!onlyProduct || capture.product === onlyProduct) && (!onlyFile || capture.file === onlyFile))) {
     const origin = origins[product];
     const context = await browser.newContext({ viewport: { width, height: 960 }, deviceScaleFactor: 1, locale: 'pt-BR', colorScheme: 'light' });
     try {
@@ -63,6 +66,8 @@ try {
           if (path === '/rest/v1/client_members') return rows([{ client_id: clientId, user_id: user.id, role: 'viewer', clients: client }]);
           if (path === '/rest/v1/cliente_modulos') return rows([{ client_id: clientId, status: 'ativo', clients: { name: client.name } }]);
           if (path === '/rest/v1/brain_itens') return rows(items);
+          if (path === '/rest/v1/sugestoes_agentes') return rows(['recuperacao', 'recuperacao', 'anuncios', 'anuncios', 'conteudo', 'conteudo'].map((agente, i) => ({ id: `demo-suggestion-${i}`, agente, estado: 'proposta', resultado: null, criado_em: date })));
+          if (path === '/rest/v1/campanhas_ideias') return rows([{ id: 'demo-campaign', estado: 'proposta', criado_em: date }]);
           if (path === '/rest/v1/agente_execucoes') return rows([{ estado: 'concluida', erro: null, resultado: { propostas: 2 }, atualizado_em: date }]);
           if (path === '/rest/v1/sap_clinicas') return rows([{ ...clinic, d0: evolved ? '2026-09-02' : clinic.d0 }]);
           if (path === '/rest/v1/sap_kpi_plano') return rows([
@@ -87,7 +92,9 @@ try {
       await page.clock.setFixedTime(new Date(date));
       await page.goto(origin + routePath);
       try {
-        await expect(ready === 'Resumo do programa' ? page.getByRole('region', { name: ready, exact: true }) : page.getByText(ready, { exact: true })).toBeVisible({ timeout: 25000 });
+        const target = ready === 'Resumo do programa' ? page.getByRole('region', { name: ready, exact: true })
+          : file === 'nexo-agentes' ? page.getByRole('heading', { name: ready, exact: true }) : page.getByText(ready, { exact: true });
+        await expect(target).toBeVisible({ timeout: 25000 });
       } catch (error) {
         console.error({ url: page.url(), body: await page.locator('body').innerText(), errors, unexpected });
         throw error;
