@@ -27,6 +27,7 @@ import { BotaoAcao, ListaLimitacoes, OQueE, SeloStatus } from "@/components/insi
 import { BotaoCopiar } from "@/components/botao-copiar";
 import { AcoesDaIdeia, PlanejadorSemana, usePautas } from "@/components/planejador-conteudo";
 import { useClientRole } from "@/hooks/use-client-role";
+import { RoteirosProntos } from "@/components/agentes-ia";
 
 export const Route = createFileRoute("/_authenticated/$clientId/ideias")({
   component: IdeiasPage,
@@ -430,7 +431,8 @@ function IdeiasPage() {
         Ideias{res && res.ideias.length > 0 ? ` (${res.ideias.length})` : ""}
         {orig && orig.extras.length > 0 ? ` + ${orig.extras.length} da regra original` : ""}
       </h2>
-      <p>Ideias de post com gancho e roteiro prontos, tiradas só de dúvidas reais repetidas e do que já funcionou no perfil. Transforme em pauta, gere o roteiro e monte a semana no planejador abaixo. Período: {periodLabel}.</p>
+      <p>No topo, os roteiros completos que o agente Roteirista escreve toda semana a partir do Brand Brain, das dúvidas reais e do que mais foi salvo: é só revisar, copiar ou levar ao planejador. Abaixo, as ideias por regra. Período: {periodLabel}.</p>
+      <div className="mt-3"><RoteirosProntos clientId={clientId} podeEditar={podeEditar} /></div>
     </div>
   );
 

@@ -2,7 +2,7 @@ import { ProductBrand } from "@/components/product-brand";
 import { createFileRoute, Link, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, Gauge, LayoutDashboard, ListChecks, ListTodo, Megaphone, Menu, Network, Target, Radar, Presentation, UsersRound, UserRoundCheck, BookOpen, X } from "lucide-react";
+import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, Gauge, LayoutDashboard, ListChecks, ListTodo, Megaphone, Menu, Network, Target, Radar, Presentation, UsersRound, UserRoundCheck, BookOpen, Bot, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { TrocaProduto } from "@/components/troca-produto";
@@ -52,6 +52,7 @@ const ITENS = [
   { grupo: "Rotina semanal", sub: "/leitura", label: "Leitura da semana", Icone: ClipboardCheck, clinica: true },
   { grupo: "Rotina semanal", sub: "/execucao", label: "Execução e saúde", Icone: ListChecks },
   { grupo: "Rotina semanal", sub: "/midia", label: "Mídia", Icone: Gauge },
+  { grupo: "Rotina semanal", sub: "/agentes", label: "Agentes de IA", Icone: Bot, clinica: true },
   { grupo: "Resultado", sub: "/metas", label: "Metas e garantia", Icone: Target, clinica: true },
   { grupo: "Resultado", sub: "/documentos", label: "Plano e relatório D90", Icone: FileText, clinica: true },
 ] as const;

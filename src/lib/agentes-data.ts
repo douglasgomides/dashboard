@@ -88,3 +88,17 @@ export function excecoes(execucoes: ExecucaoAgente[], aprovacoes: AprovacaoAgent
   }
   return out.sort((a, b) => b.risco - a.risco);
 }
+
+/** Inicia um fluxo do catálogo para a clínica e roda até terminar (cada chamada anda alguns passos; uma rodada com IA
+ *  leva de 30 s a 2 min). Devolve null se concluiu, ou a mensagem do que impediu. Só admin (agentes_iniciar). */
+export async function rodarFluxoAteFim(clientId: string, fluxo: { id: string; agente: string; objetivo: string }, aoAndar?: (t: string) => void): Promise<string | null> {
+  const id = await iniciarFluxo(clientId, { ...fluxo, nome: "", passos: [] });
+  const fim = ["concluida", "falhou", "cancelada", "pausada", "aguardando_aprovacao"];
+  for (let i = 0; i < 8; i++) {
+    aoAndar?.(i === 0 ? "Lendo os dados da clínica…" : "A IA está trabalhando…");
+    const r = (await rodarAgentes(id)) as { execucoes?: { id: string; estado: string; erro?: string }[] };
+    const e = r.execucoes?.find((x) => x.id === id);
+    if (e && fim.includes(e.estado)) return e.estado === "concluida" ? null : (e.erro ?? `execução ${NOME_ESTADO[e.estado as EstadoExecucao] ?? e.estado}`);
+  }
+  return "Ainda rodando. Atualize a página em 1 minuto.";
+}

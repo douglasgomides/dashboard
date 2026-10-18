@@ -11,9 +11,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const MODELO_OPENAI = process.env.AGENTES_MODELO || "gpt-4o-mini";
 const MODELO_CLAUDE = process.env.AGENTES_MODELO_CLAUDE || "claude-haiku-4-5-20251001";
+// Texto que vai para a clínica usar (roteiro, legenda, copy, mensagem ao paciente): modelo mais forte.
+const MODELO_OPENAI_FORTE = process.env.AGENTES_MODELO_FORTE || "gpt-4.1";
+const MODELO_CLAUDE_FORTE = process.env.AGENTES_MODELO_CLAUDE_FORTE || "claude-sonnet-5-5";
 // US$ por milhão de tokens (entrada, saída). Modelo fora da tabela: registra tokens e custo nulo.
 const PRECO: Record<string, [number, number]> = {
   "gpt-4o-mini": [0.15, 0.6],
+  "gpt-4.1": [2, 8],
   "claude-haiku-4-5-20251001": [1, 5],
 };
 
@@ -24,6 +28,8 @@ export interface PedidoIA {
   clientId: string | null;
   execucaoId?: string | null;
   maxTokens?: number;
+  /** "forte" para texto que a clínica vai usar; padrão é o modelo barato. */
+  qualidade?: "padrao" | "forte";
 }
 export interface RespostaIA { json: unknown; modelo: string; custoUsd: number | null }
 
@@ -45,11 +51,11 @@ export async function chamarIAJson(admin: SupabaseClient<any, any, any>, p: Pedi
   try {
     let json: unknown;
     if (process.env.OPENAI_API_KEY) {
-      modelo = MODELO_OPENAI;
+      modelo = p.qualidade === "forte" ? MODELO_OPENAI_FORTE : MODELO_OPENAI;
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-        signal: AbortSignal.timeout(45_000),
+        signal: AbortSignal.timeout(p.qualidade === "forte" ? 90_000 : 45_000),
         body: JSON.stringify({
           model: modelo,
           response_format: { type: "json_object" },
@@ -63,11 +69,11 @@ export async function chamarIAJson(admin: SupabaseClient<any, any, any>, p: Pedi
       tOut = j.usage?.completion_tokens ?? null;
       json = JSON.parse(j.choices?.[0]?.message?.content ?? "{}");
     } else if (process.env.ANTHROPIC_API_KEY) {
-      modelo = MODELO_CLAUDE;
+      modelo = p.qualidade === "forte" ? MODELO_CLAUDE_FORTE : MODELO_CLAUDE;
       const r = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
-        signal: AbortSignal.timeout(45_000),
+        signal: AbortSignal.timeout(p.qualidade === "forte" ? 90_000 : 45_000),
         body: JSON.stringify({ model: modelo, max_tokens: p.maxTokens ?? 800, system: p.sistema, messages: [{ role: "user", content: p.entrada }] }),
       });
       if (!r.ok) throw new Error(`Anthropic respondeu ${r.status}`);

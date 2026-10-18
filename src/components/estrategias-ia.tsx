@@ -6,16 +6,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Brain, ChevronDown, Loader2, Wand2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { iniciarFluxo, rodarAgentes } from "@/lib/agentes-data";
+import { rodarFluxoAteFim } from "@/lib/agentes-data";
 import { BotaoCopiar } from "@/components/botao-copiar";
 import { ESTADOS_IDEIA, TIPOS_IDEIA, type EstadoIdeia, type IdeiaCampanha } from "@/lib/campanhas-ia";
 
 const db = supabase as any;
 type Ideia = IdeiaCampanha & { id: string; estado: EstadoIdeia; resultado: string | null; criado_em: string };
 
-const FLUXO = { id: "campanhas_estrategia", agente: "growth", nome: "", passos: [],
+const FLUXO = { id: "campanhas_estrategia", agente: "growth",
   objetivo: "Cruzar o Brand Brain com os dados da clínica e propor estratégias de campanha, pacotes e abordagens. Nada é enviado nem publicado: a equipe aprova e executa na aba Campanhas." };
-const FIM = ["concluida", "falhou", "cancelada", "pausada", "aguardando_aprovacao"];
 const ESFORCO: Record<string, string> = { baixo: "esforço baixo", medio: "esforço médio", alto: "esforço alto" };
 const ORDEM: EstadoIdeia[] = ["em_andamento", "aprovada", "proposta", "concluida", "descartada"];
 
@@ -25,17 +24,7 @@ async function lerIdeias(clientId: string): Promise<Ideia[]> {
   return (data ?? []) as Ideia[];
 }
 
-/** Inicia o fluxo e roda até terminar (cada chamada ao servidor anda alguns passos; duas rodadas de IA levam ~1 min). */
-async function gerar(clientId: string, aoAndar: (t: string) => void): Promise<string | null> {
-  const id = await iniciarFluxo(clientId, FLUXO);
-  for (let i = 0; i < 6; i++) {
-    aoAndar(i === 0 ? "Lendo o Brand Brain e os dados da clínica…" : "A IA está montando as estratégias…");
-    const r = (await rodarAgentes(id)) as { execucoes?: { id: string; estado: string; erro?: string }[] };
-    const e = r.execucoes?.find((x) => x.id === id);
-    if (e && FIM.includes(e.estado)) return e.estado === "concluida" ? null : (e.erro ?? `execução ${e.estado}`);
-  }
-  return "Ainda rodando. Atualize a página em 1 minuto.";
-}
+const gerar = (clientId: string, aoAndar: (t: string) => void) => rodarFluxoAteFim(clientId, FLUXO, aoAndar);
 
 function Cartao({ i, podeEditar, onEstado }: { i: Ideia; podeEditar: boolean; onEstado: (estado: EstadoIdeia, resultado?: string) => Promise<void> }) {
   const [aberto, setAberto] = useState(false);
