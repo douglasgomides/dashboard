@@ -21,7 +21,12 @@ import {
   type ProductionDocument,
   type ProductionProject,
   type VideoDocument,
+  type MediaRef,
 } from "@/lib/creative-intelligence/production";
+import {
+  applyReferenceSlides,
+  referenceApproved,
+} from "@/lib/creative-intelligence/reference-design";
 import type { CreativeAdaptation } from "@/lib/creative-intelligence/contracts";
 import { enqueue, cancelJob } from "./data";
 import {
@@ -81,8 +86,9 @@ export function ProductionWorkspace(props: Props) {
           <span className="production-eyebrow">DA ESTRUTURA À PEÇA</span>
           <h2>Estúdio de produção</h2>
           <p>
-            Transforme a adaptação em carrossel editável ou envie uma gravação
-            para preparar a edição. Cada revisão mantém o material anterior.
+            Adapte o carrossel preservando o modelo original ou envie uma
+            gravação para preparar a edição. Cada revisão mantém o material
+            anterior.
           </p>
         </div>
         <Clapperboard size={32} aria-hidden />
@@ -180,7 +186,10 @@ function ProjectEditor({
     [slide, setSlide] = useState(0),
     [rights, setRights] = useState(false),
     [notice, setNotice] = useState(""),
-    [jobId, setJobId] = useState("");
+    [jobId, setJobId] = useState(""),
+    [designMode, setDesignMode] = useState<"reference" | "editable" | null>(
+      null,
+    );
   const undo = useRef<ProductionDocument[]>([]),
     redo = useRef<ProductionDocument[]>([]),
     saving = useRef<Promise<number> | null>(null),
@@ -296,6 +305,7 @@ function ProjectEditor({
           transcript: [],
           cuts: [],
           visualCoverage: "not_analysed",
+          motion: undefined,
         });
       else if (current.format === "carrossel")
         edit(
@@ -308,8 +318,20 @@ function ProjectEditor({
   });
   const run = useMutation({
     mutationFn: async (
-      kind: "production_prepare" | "production_render" | "production_image",
+      request:
+        | "production_prepare"
+        | "production_render"
+        | "production_image"
+        | {
+            kind: "production_image";
+            full_slide: true;
+            all_slides?: true;
+            reference?: MediaRef;
+            references?: { slide_index: number; reference: MediaRef }[];
+          },
     ) => {
+      const { kind, ...input } =
+        typeof request === "string" ? { kind: request } : request;
       if (!document) throw new Error("Projeto indisponível");
       const r = dirty
         ? await save.mutateAsync()
@@ -319,7 +341,10 @@ function ProjectEditor({
       return enqueue(clientId, accountId, kind, {
         project_id: project.id,
         revision: r,
-        ...(kind === "production_image" ? { slide_index: slide } : {}),
+        ...(kind === "production_image" && !("all_slides" in input)
+          ? { slide_index: slide }
+          : {}),
+        ...input,
       });
     },
     onSuccess: (id) => {
@@ -339,7 +364,9 @@ function ProjectEditor({
         (o) => o.revision === revision && o.kind === "production_prepare",
       ),
     currentOutputs =
-      detail.data?.outputs.filter((o) => o.revision === revision) || [];
+      detail.data?.outputs.filter(
+        (o) => o.revision === revision || o.result.reference_slides?.length,
+      ) || [];
   const error =
     detail.error ||
     save.error ||
@@ -348,6 +375,36 @@ function ProjectEditor({
     signed.error ||
     originals.error;
   const originalMedia = originals.data?.media || [];
+  const faithful = designMode
+    ? designMode === "reference"
+    : !!project.source_id ||
+      (document?.format === "carrossel" &&
+        document.slides.some((s) => s.renderMode === "reference"));
+  function referenceFor(index: number): MediaRef | null {
+    if (document?.format !== "carrossel") return null;
+    const s = document.slides[index];
+    const previous = detail.data?.outputs
+      .flatMap((o) => o.result.reference_slides || [])
+      .find((c) => c.media_id === s.image?.id);
+    if (s.renderMode === "reference" && previous) return previous.reference;
+    if (s.image?.origin === "creative") return s.image;
+    const position =
+      props.adaptations.find((a) => a.id === project.adaptation_id)?.document
+        .units[index]?.original_position || index + 1;
+    const own = originalMedia.find(
+      (m) => m.kind === "image" && m.position === position,
+    );
+    if (own) return { origin: "creative", id: own.id };
+    return s.renderMode !== "reference" ? s.image : null;
+  }
+  const reference = referenceFor(slide);
+  const fullReady =
+    document?.format === "carrossel" &&
+    document.slides.every(
+      (s) =>
+        s.renderMode === "reference" && s.renderedCopy === s.copy && s.image,
+    );
+
   function fileInput(target: "slide" | "logo" | "video") {
     return (
       <label className="production-file">
@@ -360,7 +417,9 @@ function ProjectEditor({
           ? "Enviar gravação"
           : target === "logo"
             ? "Enviar logo / assinatura"
-            : "Trocar imagem"}
+            : faithful
+              ? "Enviar modelo original autorizado"
+              : "Trocar imagem"}
         <input
           type="file"
           accept={
@@ -560,13 +619,41 @@ function ProjectEditor({
                 </button>
               ))}
             </div>
-            <SlidePreview document={document} slide={slide} urls={urls} />
+            {faithful && document.slides[slide]?.renderMode !== "reference" ? (
+              reference && urls[mediaKey(reference)] ? (
+                <img
+                  className="production-slide"
+                  src={urls[mediaKey(reference)]}
+                  alt={`Modelo original do slide ${slide + 1}`}
+                />
+              ) : (
+                <p>Escolha ou envie a arte original para preservar o modelo.</p>
+              )
+            ) : (
+              <SlidePreview document={document} slide={slide} urls={urls} />
+            )}
             <p className="production-note">
-              Texto, identidade e imagem são compostos separadamente. Confira a
-              quebra das linhas na prévia.
+              {faithful
+                ? document.slides[slide]?.renderMode === "reference"
+                  ? "Arte completa aplicada. Confira texto, fotografia e assinatura antes de exportar."
+                  : "Este é o modelo original. Gere a prévia para ver a nova copy dentro da arte."
+                : "Composição editável: confira a quebra das linhas na prévia."}
             </p>
           </div>
           <div className="production-controls">
+            <label>
+              Produção do carrossel
+              <select
+                value={faithful ? "reference" : "editable"}
+                disabled={!editable || busy}
+                onChange={(e) =>
+                  setDesignMode(e.target.value as "reference" | "editable")
+                }
+              >
+                <option value="reference">Manter modelo da referência</option>
+                <option value="editable">Composição editável (avançado)</option>
+              </select>
+            </label>
             <label>
               Texto do slide {slide + 1}
               <textarea
@@ -584,113 +671,121 @@ function ProjectEditor({
                 }
               />
             </label>
-            <div className="production-two">
-              <label>
-                Tamanho do texto
-                <input
-                  type="range"
-                  min="30"
-                  max="84"
-                  value={document.slides[slide]?.fontSize || 54}
-                  disabled={!editable}
-                  onChange={(e) =>
-                    edit({
-                      ...document,
-                      slides: document.slides.map((s, i) =>
-                        i === slide
-                          ? { ...s, fontSize: Number(e.target.value) }
-                          : s,
-                      ),
-                    })
-                  }
-                />
-              </label>
-              <button
-                className="btn"
-                disabled={!editable}
-                onClick={() => {
-                  const l = slideLayout(document, slide);
-                  edit({
-                    ...document,
-                    slides: document.slides.map((s, i) =>
-                      i === slide
-                        ? {
-                            ...s,
-                            fontSize: fittedFont(s.copy, l.width, l.height),
-                          }
-                        : s,
-                    ),
-                  });
-                }}
-              >
-                Ajustar texto ao espaço
-              </button>
-              <label>
-                Composição
-                <select
-                  value={document.slides[slide]?.layout || "editorial"}
-                  disabled={!editable}
-                  onChange={(e) =>
-                    edit({
-                      ...document,
-                      slides: document.slides.map((s, i) =>
-                        i === slide
-                          ? {
-                              ...s,
-                              layout: e.target.value as "editorial" | "split",
-                            }
-                          : s,
-                      ),
-                    })
-                  }
-                >
-                  <option value="editorial">Imagem abaixo</option>
-                  <option value="split">Imagem ao lado</option>
-                </select>
-              </label>
-            </div>
-            <div className="production-two">
-              <label>
-                Alinhamento
-                <select
-                  value={document.slides[slide]?.align || "left"}
-                  disabled={!editable}
-                  onChange={(e) =>
-                    edit({
-                      ...document,
-                      slides: document.slides.map((s, i) =>
-                        i === slide
-                          ? { ...s, align: e.target.value as "left" | "center" }
-                          : s,
-                      ),
-                    })
-                  }
-                >
-                  <option value="left">À esquerda</option>
-                  <option value="center">Centralizado</option>
-                </select>
-              </label>
-              <label>
-                Enquadramento da imagem
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={document.slides[slide]?.imageFocus || 0}
-                  disabled={!editable}
-                  onChange={(e) =>
-                    edit({
-                      ...document,
-                      slides: document.slides.map((s, i) =>
-                        i === slide
-                          ? { ...s, imageFocus: Number(e.target.value) }
-                          : s,
-                      ),
-                    })
-                  }
-                />
-              </label>
-            </div>
+            {!faithful && (
+              <>
+                <div className="production-two">
+                  <label>
+                    Tamanho do texto
+                    <input
+                      type="range"
+                      min="30"
+                      max="84"
+                      value={document.slides[slide]?.fontSize || 54}
+                      disabled={!editable}
+                      onChange={(e) =>
+                        edit({
+                          ...document,
+                          slides: document.slides.map((s, i) =>
+                            i === slide
+                              ? { ...s, fontSize: Number(e.target.value) }
+                              : s,
+                          ),
+                        })
+                      }
+                    />
+                  </label>
+                  <button
+                    className="btn"
+                    disabled={!editable}
+                    onClick={() => {
+                      const l = slideLayout(document, slide);
+                      edit({
+                        ...document,
+                        slides: document.slides.map((s, i) =>
+                          i === slide
+                            ? {
+                                ...s,
+                                fontSize: fittedFont(s.copy, l.width, l.height),
+                              }
+                            : s,
+                        ),
+                      });
+                    }}
+                  >
+                    Ajustar texto ao espaço
+                  </button>
+                  <label>
+                    Composição
+                    <select
+                      value={document.slides[slide]?.layout || "editorial"}
+                      disabled={!editable}
+                      onChange={(e) =>
+                        edit({
+                          ...document,
+                          slides: document.slides.map((s, i) =>
+                            i === slide
+                              ? {
+                                  ...s,
+                                  layout: e.target.value as
+                                    "editorial" | "split",
+                                }
+                              : s,
+                          ),
+                        })
+                      }
+                    >
+                      <option value="editorial">Imagem abaixo</option>
+                      <option value="split">Imagem ao lado</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="production-two">
+                  <label>
+                    Alinhamento
+                    <select
+                      value={document.slides[slide]?.align || "left"}
+                      disabled={!editable}
+                      onChange={(e) =>
+                        edit({
+                          ...document,
+                          slides: document.slides.map((s, i) =>
+                            i === slide
+                              ? {
+                                  ...s,
+                                  align: e.target.value as "left" | "center",
+                                }
+                              : s,
+                          ),
+                        })
+                      }
+                    >
+                      <option value="left">À esquerda</option>
+                      <option value="center">Centralizado</option>
+                    </select>
+                  </label>
+                  <label>
+                    Enquadramento da imagem
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={document.slides[slide]?.imageFocus || 0}
+                      disabled={!editable}
+                      onChange={(e) =>
+                        edit({
+                          ...document,
+                          slides: document.slides.map((s, i) =>
+                            i === slide
+                              ? { ...s, imageFocus: Number(e.target.value) }
+                              : s,
+                          ),
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              </>
+            )}
             {fileInput("slide")}
             {originalMedia.some((m) => m.kind === "image") && (
               <label>
@@ -714,6 +809,8 @@ function ProjectEditor({
                                   origin: "creative",
                                   id: e.target.value,
                                 },
+                                renderMode: "editable",
+                                renderedCopy: undefined,
                               }
                             : s,
                         ),
@@ -730,13 +827,16 @@ function ProjectEditor({
                     ))}
                 </select>
                 <small>
-                  O arquivo completo pode conter texto. Use a imagem de apoio ou
-                  substitua para evitar repetir a copy original.
+                  {faithful
+                    ? "O slide completo será enviado como modelo. A IA substituirá a copy e adaptará a fotografia preservando a composição."
+                    : "Use uma imagem de apoio sem texto para esta composição editável."}
                 </small>
               </label>
             )}
             <label>
-              Briefing da imagem
+              {faithful
+                ? "Imagem e ajustes para o novo tema"
+                : "Briefing da imagem"}
               <textarea
                 rows={3}
                 maxLength={4000}
@@ -753,85 +853,142 @@ function ProjectEditor({
               />
             </label>
             <button
-              className="btn"
-              disabled={!workerReady || !capabilities.production_image || busy}
-              onClick={() => run.mutate("production_image")}
+              className="btn production-primary"
+              disabled={
+                !workerReady ||
+                !(faithful
+                  ? capabilities.production_reference
+                  : capabilities.production_image) ||
+                busy ||
+                (faithful && !reference)
+              }
+              onClick={() =>
+                faithful && reference
+                  ? run.mutate({
+                      kind: "production_image",
+                      full_slide: true,
+                      reference,
+                    })
+                  : run.mutate("production_image")
+              }
             >
-              Criar / adaptar imagem deste slide
+              {faithful
+                ? "Gerar slide mantendo o modelo"
+                : "Criar / adaptar imagem deste slide"}
             </button>
-            {!capabilities.production_image && (
-              <small>
-                Geração por IA depende do modelo de imagem habilitado no worker.
-                O envio de imagens próprias já pode ser usado.
-              </small>
-            )}
-            <details>
-              <summary>Identidade visual</summary>
-              <label>
-                Nome da marca
-                <input
-                  value={document.brand.name}
-                  disabled={!editable}
-                  onChange={(e) =>
-                    edit({
-                      ...document,
-                      brand: { ...document.brand, name: e.target.value },
-                    })
+            {faithful && (
+              <>
+                <small>
+                  A arte será gerada inteira. Confira e aplique a primeira
+                  página antes de produzir as demais. Ajustes são feitos na copy
+                  e no briefing, seguidos de uma nova geração.
+                </small>
+                <button
+                  className="btn"
+                  disabled={
+                    !workerReady ||
+                    !capabilities.production_reference ||
+                    busy ||
+                    document.slides[0].renderMode !== "reference" ||
+                    document.slides[0].renderedCopy !==
+                      document.slides[0].copy ||
+                    fullReady ||
+                    document.slides.some((_, i) => !referenceFor(i))
                   }
-                />
-              </label>
-              <label>
-                Assinatura
-                <input
-                  value={document.brand.signature}
-                  disabled={!editable}
-                  onChange={(e) =>
-                    edit({
-                      ...document,
-                      brand: { ...document.brand, signature: e.target.value },
-                    })
-                  }
-                />
-              </label>
-              <div className="production-colors">
-                {(["background", "ink", "accent"] as const).map((k, i) => (
-                  <label key={k}>
-                    {["Fundo", "Texto", "Destaque"][i]}
-                    <input
-                      type="color"
-                      value={document.brand[k]}
-                      disabled={!editable}
-                      onChange={(e) =>
-                        edit({
-                          ...document,
-                          brand: { ...document.brand, [k]: e.target.value },
-                        })
-                      }
-                    />
-                  </label>
-                ))}
-              </div>
-              <label>
-                Tipografia
-                <select
-                  value={document.brand.font}
-                  disabled={!editable}
-                  onChange={(e) =>
-                    edit({
-                      ...document,
-                      brand: {
-                        ...document.brand,
-                        font: e.target.value as "sans" | "serif",
-                      },
+                  onClick={() =>
+                    run.mutate({
+                      kind: "production_image",
+                      full_slide: true,
+                      all_slides: true,
+                      references: document.slides.map((_, i) => ({
+                        slide_index: i,
+                        reference: referenceFor(i)!,
+                      })),
                     })
                   }
                 >
-                  <option value="sans">Sem serifa</option>
-                  <option value="serif">Com serifa</option>
-                </select>
-              </label>
-              {fileInput("logo")}
-            </details>
+                  Gerar restante do carrossel
+                </button>
+              </>
+            )}
+            {!(faithful
+              ? capabilities.production_reference
+              : capabilities.production_image) && (
+              <small>
+                Este worker ainda não confirmou a geração{" "}
+                {faithful ? "da arte completa com referência" : "de imagem"}. As
+                revisões continuam disponíveis.
+              </small>
+            )}
+            {!faithful && (
+              <details>
+                <summary>Identidade visual</summary>
+                <label>
+                  Nome da marca
+                  <input
+                    value={document.brand.name}
+                    disabled={!editable}
+                    onChange={(e) =>
+                      edit({
+                        ...document,
+                        brand: { ...document.brand, name: e.target.value },
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Assinatura
+                  <input
+                    value={document.brand.signature}
+                    disabled={!editable}
+                    onChange={(e) =>
+                      edit({
+                        ...document,
+                        brand: { ...document.brand, signature: e.target.value },
+                      })
+                    }
+                  />
+                </label>
+                <div className="production-colors">
+                  {(["background", "ink", "accent"] as const).map((k, i) => (
+                    <label key={k}>
+                      {["Fundo", "Texto", "Destaque"][i]}
+                      <input
+                        type="color"
+                        value={document.brand[k]}
+                        disabled={!editable}
+                        onChange={(e) =>
+                          edit({
+                            ...document,
+                            brand: { ...document.brand, [k]: e.target.value },
+                          })
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+                <label>
+                  Tipografia
+                  <select
+                    value={document.brand.font}
+                    disabled={!editable}
+                    onChange={(e) =>
+                      edit({
+                        ...document,
+                        brand: {
+                          ...document.brand,
+                          font: e.target.value as "sans" | "serif",
+                        },
+                      })
+                    }
+                  >
+                    <option value="sans">Sem serifa</option>
+                    <option value="serif">Com serifa</option>
+                  </select>
+                </label>
+                {fileInput("logo")}
+              </details>
+            )}
           </div>
         </div>
       ) : (
@@ -840,6 +997,92 @@ function ProjectEditor({
             <h3>Gravação original</h3>
             {fileInput("video")}
             <small>MP4 ou MOV · até 200 MiB · até três minutos</small>
+            {originalMedia.some((m) => m.kind === "video") && (
+              <button
+                className="btn"
+                disabled={!editable || busy}
+                onClick={() =>
+                  edit({
+                    ...document,
+                    source: {
+                      origin: "creative",
+                      id: originalMedia.find((m) => m.kind === "video")!.id,
+                    },
+                    duration: null,
+                    transcript: [],
+                    cuts: [],
+                    motion: undefined,
+                    visualCoverage: "not_analysed",
+                  })
+                }
+              >
+                Usar vídeo da própria referência
+              </button>
+            )}
+            <label className="production-check">
+              <input
+                type="checkbox"
+                checked={!!document.motionRequested}
+                disabled={!editable || busy || !capabilities.production_motion}
+                onChange={(e) =>
+                  edit({
+                    ...document,
+                    motionRequested: e.target.checked,
+                    motion: undefined,
+                  })
+                }
+              />
+              Edição visual com Remotion, orientada pela referência
+            </label>
+            {!capabilities.production_motion && (
+              <small>
+                O worker de composição visual ainda não está habilitado neste
+                ambiente.
+              </small>
+            )}
+            {document.motion && (
+              <details>
+                <summary>Direção de edição e evidências da referência</summary>
+                {document.motion.reference_performance && (
+                  <p className="production-note">
+                    Referência observada:{" "}
+                    {document.motion.reference_performance.saved?.toLocaleString(
+                      "pt-BR",
+                    ) ?? "—"}{" "}
+                    salvamentos · alcance{" "}
+                    {document.motion.reference_performance.reach?.toLocaleString(
+                      "pt-BR",
+                    ) ?? "—"}
+                    .{" "}
+                    {document.motion.reference_performance.relative_multiple?.toFixed(
+                      1,
+                    ) ?? "—"}
+                    × a mediana para{" "}
+                    {document.motion.reference_performance.objective}, em{" "}
+                    {document.motion.reference_performance.baseline_count}{" "}
+                    publicações comparáveis. Impulsionamento não confirmado; a
+                    comparação não demonstra que a edição causou o resultado.
+                  </p>
+                )}
+
+                <ul>
+                  {document.motion.observations.map((x, i) => (
+                    <li key={i}>{x}</li>
+                  ))}
+                </ul>
+                <p className="production-note">
+                  Leitura visual amostral ·{" "}
+                  {document.motion.timing === "provider_words"
+                    ? "fala com tempos por palavra"
+                    : "sem nova legenda por palavra"}
+                </p>
+                <ul>
+                  {document.motion.limitations.map((x, i) => (
+                    <li key={i}>{x}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
             {document.source && urls[mediaKey(document.source)] && (
               <video
                 controls
@@ -1040,7 +1283,11 @@ function ProjectEditor({
             !workerReady ||
             !capabilities.production_render ||
             busy ||
-            (document.format === "reels" && !document.cuts.length)
+            (document.format === "reels" &&
+              (!document.cuts.length ||
+                (!!document.motionRequested &&
+                  (!document.motion || !capabilities.production_motion)))) ||
+            (document.format === "carrossel" && faithful && !fullReady)
           }
           onClick={() => run.mutate("production_render")}
         >
@@ -1052,8 +1299,9 @@ function ProjectEditor({
           Gerar prévia / exportação
         </button>
         <small>
-          Renderiza a revisão salva. Alterações posteriores exigem uma nova
-          prévia.
+          {document.format === "carrossel" && faithful && !fullReady
+            ? "Aplique a arte de todas as páginas para exportar o carrossel completo mantendo o modelo."
+            : "Renderiza a revisão salva. Alterações posteriores exigem uma nova prévia."}
         </small>
       </div>
       {output?.result.document && (
@@ -1090,14 +1338,70 @@ function ProjectEditor({
                 {o.kind === "production_render"
                   ? "Exportação"
                   : o.kind === "production_image"
-                    ? "Imagem proposta"
+                    ? o.result.reference_slides
+                      ? "Arte completa para conferência"
+                      : "Imagem proposta"
                     : "Análise da gravação"}
               </b>{" "}
               · revisão {o.revision}
             </p>
+            {o.result.warnings?.map((warning, i) => (
+              <p className="production-note" key={i}>
+                {warning}
+              </p>
+            ))}
+            {!!o.result.reference_slides?.length &&
+              document.format === "carrossel" && (
+                <>
+                  <p className="production-note">
+                    Conferência automática de texto, composição e identidade.
+                    Revise visualmente; a aprovação continua com a equipe.
+                  </p>
+                  <button
+                    className="btn"
+                    disabled={
+                      !editable ||
+                      busy ||
+                      !o.result.reference_slides.some(
+                        (c) =>
+                          referenceApproved(c.quality) &&
+                          document.slides[c.slide_index]?.copy === c.copy,
+                      )
+                    }
+                    onClick={() => {
+                      edit(
+                        applyReferenceSlides(
+                          document,
+                          o.result.reference_slides!.filter(
+                            (c) =>
+                              referenceApproved(c.quality) &&
+                              document.slides[c.slide_index]?.copy === c.copy,
+                          ),
+                        ),
+                      );
+                      setNotice(
+                        "Artes aplicadas. A exportação preservará as imagens completas, sem recompor o layout.",
+                      );
+                    }}
+                  >
+                    Aplicar artes conferidas (
+                    {
+                      o.result.reference_slides.filter(
+                        (c) =>
+                          referenceApproved(c.quality) &&
+                          document.slides[c.slide_index]?.copy === c.copy,
+                      ).length
+                    }
+                    /{o.result.reference_slides.length})
+                  </button>
+                </>
+              )}
             {(o.result.media_ids || []).map((id) => {
               const m = detail.data?.media.find((m) => m.id === id),
-                url = urls[`production:${id}`];
+                url = urls[`production:${id}`],
+                candidate = o.result.reference_slides?.find(
+                  (c) => c.media_id === id,
+                );
               if (!m || !url || m.purpose === "frame") return null;
               return (
                 <div className="production-result" key={id}>
@@ -1125,7 +1429,45 @@ function ProjectEditor({
                         ? "Baixar legendas SRT"
                         : "Abrir arquivo"}
                   </a>
-                  {m.purpose === "image" &&
+                  {candidate && document.format === "carrossel" && (
+                    <>
+                      <small>
+                        Slide {candidate.slide_index + 1} · texto{" "}
+                        {candidate.quality.text_matches
+                          ? "conferido"
+                          : "divergente"}{" "}
+                        · modelo{" "}
+                        {candidate.quality.layout_preserved &&
+                        candidate.quality.identity_preserved
+                          ? "preservado na análise"
+                          : "precisa de ajuste"}
+                      </small>
+                      {!referenceApproved(candidate.quality) && (
+                        <p role="alert">
+                          Revise e gere outra prévia.{" "}
+                          {candidate.quality.issues.join(" ")}
+                        </p>
+                      )}
+                      <button
+                        className="btn"
+                        disabled={
+                          !editable ||
+                          busy ||
+                          !referenceApproved(candidate.quality) ||
+                          document.slides[candidate.slide_index]?.copy !==
+                            candidate.copy
+                        }
+                        onClick={() => {
+                          edit(applyReferenceSlides(document, [candidate]));
+                          setSlide(candidate.slide_index);
+                        }}
+                      >
+                        Aplicar arte ao slide {candidate.slide_index + 1}
+                      </button>
+                    </>
+                  )}
+                  {!candidate &&
+                    m.purpose === "image" &&
                     document.format === "carrossel" &&
                     editable && (
                       <button
@@ -1189,6 +1531,20 @@ function SlidePreview({
 }) {
   const index = Math.min(slide, document.slides.length - 1),
     layout = slideLayout(document, index);
+  const current = document.slides[index];
+  if (
+    current.renderMode === "reference" &&
+    (current.renderedCopy !== current.copy ||
+      !current.image ||
+      !urls[mediaKey(current.image)])
+  )
+    return (
+      <div className="production-overflow" role="alert">
+        {current.renderedCopy !== current.copy
+          ? "A copy mudou. Gere uma nova arte antes de exportar este slide."
+          : "Carregando a arte privada do slide…"}
+      </div>
+    );
   if (layout.overflow)
     return (
       <div className="production-overflow" role="alert">

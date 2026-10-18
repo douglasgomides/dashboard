@@ -1,0 +1,16 @@
+FROM node:24-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg chromium ca-certificates fonts-liberation2 && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY workers/creative/package*.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+COPY workers/creative/motion/package*.json ./workers/creative/motion/
+RUN npm ci --prefix workers/creative/motion --omit=dev --no-audit --no-fund
+COPY tsconfig.json ./
+COPY src/lib ./src/lib
+COPY src/integrations/supabase/types.ts ./src/integrations/supabase/types.ts
+COPY api/_lib ./api/_lib
+COPY workers/creative/*.ts ./workers/creative/
+COPY workers/creative/motion/*.tsx workers/creative/motion/*.ts ./workers/creative/motion/
+ENV FFMPEG_PATH=ffmpeg FFPROBE_PATH=ffprobe REMOTION_BROWSER_EXECUTABLE=/usr/bin/chromium CREATIVE_ENABLE_REMOTION=true NODE_ENV=production
+USER node
+CMD ["node","--import","tsx","workers/creative/main.ts","--once"]

@@ -1,0 +1,29 @@
+{
+  "name": "nexo-motion-renderer",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "studio": "remotion studio index.tsx --no-open",
+    "check": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "remotion": "4.0.536",
+    "@remotion/cli": "4.0.536",
+    "@remotion/renderer": "4.0.536",
+    "@remotion/bundler": "4.0.536",
+    "@remotion/media": "4.0.536",
+    "@remotion/captions": "4.0.536",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/node": "^22.16.5",
+    "typescript": "^5.8.3"
+  }
+}

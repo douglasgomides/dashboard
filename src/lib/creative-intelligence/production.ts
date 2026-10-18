@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { CreativeAdaptation } from "./contracts";
+import type { ReferenceSlide } from "./reference-design";
+import { motionPlanSchema } from "./video-motion";
 
 export const PRODUCTION_BUCKET = "nexo-production-private";
 export const PRODUCTION_IMAGE_BUCKET = "nexo-production-input-images";
@@ -63,6 +65,8 @@ export const carouselSchema = z
             fontSize: z.number().int().min(30).max(84),
             align: z.enum(["left", "center"]),
             imageFocus: z.number().int().min(0).max(100),
+            renderMode: z.enum(["editable", "reference"]).optional(),
+            renderedCopy: z.string().max(2400).optional(),
           })
           .strict(),
       )
@@ -87,6 +91,8 @@ export const videoSchema = z
     goalSeconds: z.number().int().min(15).max(MAX_EDIT_SECONDS),
     visualCoverage: z.enum(["not_analysed", "sampled_frames"]),
     recordingBrief: z.array(z.string().max(12000)).max(1000),
+    motionRequested: z.boolean().optional(),
+    motion: motionPlanSchema.optional(),
     warnings: z.array(z.string().max(2000)).max(50),
   })
   .strict();
@@ -100,6 +106,16 @@ export const productionDocumentSchema = z
     if (new Set(ids).size !== ids.length)
       c.addIssue({ code: "custom", message: "Unidades duplicadas" });
     if (d.format === "reels") {
+      if (
+        d.motion &&
+        (d.motion.source_media_id !== d.source?.id ||
+          !d.duration ||
+          d.motion.words.some((w) => w.end > d.duration! + 0.1))
+      )
+        c.addIssue({
+          code: "custom",
+          message: "Plano visual fora da gravação",
+        });
       if (d.cuts.length && (!d.source || !d.duration))
         c.addIssue({ code: "custom", message: "Plano sem arquivo ou duração" });
       d.cuts.forEach((s, i) => {
@@ -145,13 +161,7 @@ export interface ProductionMedia {
   account_id: string;
   project_id: string;
   purpose:
-    | "input"
-    | "image"
-    | "slide"
-    | "video"
-    | "archive"
-    | "subtitle"
-    | "frame";
+    "input" | "image" | "slide" | "video" | "archive" | "subtitle" | "frame";
   storage_path: string;
   storage_bucket?: string;
   mime: string;
@@ -170,6 +180,7 @@ export interface ProductionOutput {
     media_ids?: string[];
     warnings?: string[];
     duration?: number;
+    reference_slides?: ReferenceSlide[];
   };
   created_at: string;
 }
@@ -319,7 +330,8 @@ export function slideLayout(d: CarouselDocument, index: number) {
     width,
     height,
     lines,
-    overflow: lines.length * s.fontSize * 1.25 > height,
+    overflow:
+      s.renderMode !== "reference" && lines.length * s.fontSize * 1.25 > height,
   };
 }
 export function applySlideImage(
@@ -334,6 +346,8 @@ export function applySlideImage(
         ? {
             ...s,
             image,
+            renderMode: "editable",
+            renderedCopy: undefined,
             fontSize: Math.min(
               s.fontSize,
               fittedFont(
@@ -347,11 +361,40 @@ export function applySlideImage(
     ),
   };
 }
+function safeImageUrl(url: string | null) {
+  if (!url) return false;
+  if (/^data:image\/(png|jpeg|webp);base64,/.test(url)) return true;
+  try {
+    const parsed = new URL(url);
+    return (
+      !parsed.username &&
+      !parsed.password &&
+      (parsed.protocol === "https:" ||
+        (parsed.protocol === "http:" &&
+          ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname)))
+    );
+  } catch {
+    return false;
+  }
+}
 export function renderSlideSvg(
   d: CarouselDocument,
   index: number,
   resolveImage: (r: MediaRef) => string | null,
 ) {
+  const complete = d.slides[index];
+  if (complete?.renderMode === "reference") {
+    const image = complete.image && resolveImage(complete.image);
+    if (complete.renderedCopy !== complete.copy)
+      throw new Error(
+        `A copy do slide ${index + 1} mudou. Gere uma nova arte antes de exportar.`,
+      );
+    if (!image || !safeImageUrl(image))
+      throw new Error(
+        `A arte completa do slide ${index + 1} ainda não está disponível.`,
+      );
+    return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1080" height="1350" viewBox="0 0 1080 1350"><image width="1080" height="1350" preserveAspectRatio="xMidYMid meet" xlink:href="${xml(image)}"/></svg>`;
+  }
   const s = d.slides[index],
     l = slideLayout(d, index),
     split = s.layout === "split" && !!s.image;
@@ -361,8 +404,7 @@ export function renderSlideSvg(
     );
   const image = s.image && resolveImage(s.image),
     logo = d.brand.logo && resolveImage(d.brand.logo);
-  const safeImage = (url: string | null) =>
-    !!url && /^(data:image\/(png|jpeg|webp);base64,|https:\/\/)/.test(url);
+  const safeImage = safeImageUrl;
   const x = s.align === "center" ? 90 + l.width / 2 : 90;
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1080" height="1350" viewBox="0 0 1080 1350"><rect width="1080" height="1350" fill="${d.brand.background}"/><rect x="90" y="75" width="68" height="6" fill="${d.brand.accent}"/><text x="90" y="124" font-family="Arial, Liberation Sans, sans-serif" font-size="22" fill="${d.brand.ink}">${xml(d.brand.name)}</text>${image && safeImage(image) ? `<svg x="${split ? 580 : 90}" y="${split ? 210 : 780}" width="${split ? 410 : 900}" height="${split ? 850 : 370}" viewBox="0 0 ${split ? 410 : 900} ${split ? 850 : 370}"><image width="100%" height="100%" preserveAspectRatio="xMidY${s.imageFocus < 34 ? "Min" : s.imageFocus > 66 ? "Max" : "Mid"} slice" xlink:href="${xml(image)}"/></svg>` : ""}${l.lines.map((line, i) => `<text x="${x}" y="${235 + i * s.fontSize * 1.25}" font-family="${d.brand.font === "serif" ? "Times New Roman, Liberation Serif, serif" : "Arial, Liberation Sans, sans-serif"}" font-size="${s.fontSize}" font-weight="700" text-anchor="${s.align === "center" ? "middle" : "start"}" fill="${d.brand.ink}">${xml(line)}</text>`).join("")}<rect x="90" y="1210" width="900" height="1" fill="${d.brand.accent}"/>${logo && safeImage(logo) ? `<image x="90" y="1240" width="60" height="60" preserveAspectRatio="xMidYMid meet" xlink:href="${xml(logo)}"/>` : ""}<text x="${logo ? 170 : 90}" y="1272" font-family="Arial, Liberation Sans, sans-serif" font-size="20" fill="${d.brand.ink}">${xml(d.brand.signature)}</text><text x="990" y="1272" text-anchor="end" font-family="Arial, Liberation Sans, sans-serif" font-size="20" fill="${d.brand.accent}">${index + 1} / ${d.slides.length}</text></svg>`;
 }

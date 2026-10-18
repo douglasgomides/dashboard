@@ -219,7 +219,7 @@ export async function originalProductionImages(
 ) {
   if (!source)
     return {
-      media: [] as { id: string; kind: string }[],
+      media: [] as { id: string; kind: string; position: number }[],
       urls: {} as Record<string, string>,
     };
   const origin = await read<{ origin: string } | null>(
@@ -233,11 +233,11 @@ export async function originalProductionImages(
   );
   if (origin?.origin !== "own") return { media: [], urls: {} };
   const media = await read<
-    { id: string; storage_path: string; kind: string }[]
+    { id: string; storage_path: string; kind: string; position: number }[]
   >(
     db
       .from("creative_assets")
-      .select("id,storage_path,kind")
+      .select("id,storage_path,kind,position")
       .eq("client_id", client)
       .eq("account_id", account)
       .eq("source_id", source)

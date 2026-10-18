@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { createAdmin, checked, JobContext, CreativeError } from "./runtime.js";
 import { processJob } from "./pipeline.js";
 import { runMedia } from "./media.js";
+import { motionAvailable } from "./video-motion.js";
 import {
   PIPELINE_VERSION,
   type CreativeJob,
@@ -48,7 +49,15 @@ async function health() {
           !!process.env.APIFY_API_TOKEN,
         native_video: false,
         production_render: mediaReady,
+        production_motion: mediaReady && (await motionAvailable()),
         production_video_plan: mediaReady && !!process.env.OPENAI_API_KEY,
+        production_reference:
+          mediaReady &&
+          !!process.env.OPENAI_API_KEY &&
+          process.env.CREATIVE_ENABLE_IMAGE_GENERATION === "true" &&
+          !!process.env.CREATIVE_IMAGE_MODEL &&
+          !!process.env.CREATIVE_IMAGE_INPUT_USD_PER_MILLION &&
+          !!process.env.CREATIVE_IMAGE_OUTPUT_USD_PER_MILLION,
         production_image:
           process.env.CREATIVE_ENABLE_IMAGE_GENERATION === "true" &&
           !!process.env.CREATIVE_IMAGE_MODEL &&

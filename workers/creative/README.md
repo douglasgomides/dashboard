@@ -106,3 +106,32 @@ Na branch Supabase de teste, as duas primeiras migrations foram registradas como
 - [Google compreensão de vídeo e amostragem](https://ai.google.dev/gemini-api/docs/video-understanding)
 - [Apify Instagram Scraper](https://apify.com/apify/instagram-scraper/input-schema)
 - [Apify TikTok Scraper](https://apify.com/clockworks/tiktok-scraper/input-schema)
+
+## Adaptação pela arte completa
+
+Projetos derivados de referências próprias abrem em **Manter modelo da referência**. O worker envia o slide original inteiro e a nova copy ao modelo de edição de imagem, em 4:5 e qualidade alta. A arte retorna com o texto dentro da imagem. A exportação apenas dimensiona essa arte para 1080 × 1350, sem recompor tipografia, cores, rodapé ou fotografia no template genérico. O modo de composição editável anterior continua disponível como opção avançada.
+
+A primeira página precisa ser conferida e aplicada antes do lote. Cada página mantém seu próprio modelo original, associado pela posição da unidade adaptada. OCR e comparação visual auxiliares conferem texto, legibilidade e identidade. Divergência de copy dispara uma segunda leitura independente, sem revelar o texto esperado ao leitor; divergências persistentes bloqueiam a aplicação. Acentos não são descartados na comparação. A equipe continua responsável pela revisão visual, médica e editorial. Não há garantia de reprodução pixel a pixel ou reconhecimento exato de fonte. Alterar a copy invalida a arte aplicada e bloqueia a exportação até uma nova geração.
+
+Lotes têm checkpoints por página e o mesmo teto de US$ 2 por trabalho. Se houver interrupção após páginas conferidas, essas páginas são entregues como lote parcial, com aviso explícito. A equipe pode aplicá-las e solicitar as restantes; nenhum novo trabalho pago é solicitado automaticamente. Fontes sem confirmação de consumo continuam reservadas para reconciliação.
+
+## Composição visual com Remotion — avaliação isolada
+
+As skills oficiais de `remotion-dev/skills` orientaram a integração. O renderizador fica em `workers/creative/motion`, com dependências próprias fixadas em Remotion 4.0.536 e Zod 4.5.4. Isso preserva o Zod 3 e os SDKs do worker criativo e do frontend. Nenhum código JavaScript produzido pelo modelo é executado: a IA retorna um plano validado; uma composição React local confiável executa esse plano.
+
+O plano reaproveita a análise do Reel da própria conta, suas evidências de desempenho e a gravação autorizada. A comparação observacional e a ausência de confirmação de impulsionamento ficam explícitas. Não se atribui o resultado comercial ou a viralização aos efeitos de edição. A montagem preserva os trechos reais na ordem aprovada. Whisper fornece tempos por palavra; Remotion compõe legendas curtas, destaque da palavra atual e variações suaves de enquadramento quando autorizadas pelo plano. Texto já gravado nos pixels desativa novas legendas e zooms para evitar duplicidade e recortes. Música, b-roll, efeitos sonoros e recriação de transições de referência ainda não estão implementados.
+
+```sh
+npm ci --prefix workers/creative/motion
+npm run check --prefix workers/creative/motion
+# No ambiente protegido do worker:
+# CREATIVE_ENABLE_REMOTION=true
+# REMOTION_BROWSER_EXECUTABLE=/caminho/para/chrome-ou-chromium
+npx tsx workers/creative/main.ts --env=.env.creative.local
+```
+
+O processo de composição não recebe chaves de Supabase/OpenAI. Lê somente o manifesto e o MP4 derivados no diretório privado do trabalho, serve esse MP4 em loopback com rota aleatória e fecha o servidor ao concluir. O processo tem limite de dez minutos, cancelamento e encerramento do grupo de subprocessos. O worker valida novamente clínica, conta, projeto, análise e fonte antes de renderizar; o plano não pode ser aplicado a outra gravação. Não há função de publicação externa.
+
+`Dockerfile.motion` é uma imagem opcional com Chromium; o Dockerfile anterior continua válido. Ainda é necessário homologar a construção da imagem, dimensionar CPU/memória, estabelecer retenção, monitoramento e serviço permanente. A licença do Remotion permite avaliação não comercial; a elegibilidade/licença para operação comercial precisa ser confirmada antes da liberação, sem contratação automática. Referências: [skills oficiais](https://www.remotion.dev/docs/ai/skills), [SSR](https://www.remotion.dev/docs/ssr-node) e [licença](https://www.remotion.dev/license).
+
+O teste independente `scripts/verify-motion-render.ts` gera mídia sintética e verifica MP4 real, duração, dimensões e decodificação integral. Isso prova o renderizador, não o padrão editorial em gravações reais. O piloto com a conta autorizada usa um Reel previamente editado e deve ser identificado dessa forma; a validação de qualidade com uma gravação bruta continua pendente. A leitura visual permanece amostral. Não foram criadas migrations adicionais nesta revisão e não houve deploy em produção.
