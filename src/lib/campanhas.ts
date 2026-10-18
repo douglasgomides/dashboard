@@ -2,8 +2,8 @@
 // cliente (reativação, ativação, retorno, conteúdo da data, anúncio), cada uma com projeção.
 // O painel NÃO dispara mensagem nem cria anúncio: sugere, monta o texto e acompanha o status.
 // Regras CFM: nada de preço, desconto, promoção ou garantia de resultado nas mensagens e pautas.
-import { grupoEspecialidade } from "@/lib/benchmark-estrategico";
-import { fmtFracao } from "@/lib/metricas";
+import { grupoEspecialidade } from "./benchmark-estrategico.js";
+import { fmtFracao } from "./metricas.js";
 
 export type Area = "Ginecologia" | "Dermatologia" | "Oftalmologia" | "Nutrologia/Endocrinologia" | "Cardiologia" | "Ortopedia" | "Pediatria" | "Psiquiatria" | "Cirurgia plástica" | "Outras";
 
