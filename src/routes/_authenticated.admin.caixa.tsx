@@ -29,7 +29,7 @@ async function lerPendencias(): Promise<PendenciasClinica[]> {
   const por = new Map<string, PendenciasClinica>();
   for (const c of clientes.data as { id: string; name: string }[])
     por.set(c.id, { client_id: c.id, nome: c.name, recuperacao: 0, anuncios: 0, conteudo: 0, campanhas: 0, brain: 0, aprovacoes: 0, falhas: 0, agendaram: 0 });
-  const mais = (id: string, k: keyof PendenciasClinica) => { const p = por.get(id); if (p) (p[k] as number)++; };
+  const mais = (id: string, k: Exclude<keyof PendenciasClinica, "client_id" | "nome">) => { const p = por.get(id); if (p) p[k] += 1; };
   for (const s of sug.data as { client_id: string; agente: "recuperacao" | "anuncios" | "conteudo" }[]) mais(s.client_id, s.agente);
   for (const x of camp.data as { client_id: string }[]) mais(x.client_id, "campanhas");
   for (const x of brain.data as { client_id: string }[]) mais(x.client_id, "brain");
