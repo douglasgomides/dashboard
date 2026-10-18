@@ -336,8 +336,9 @@ const FLUXO_ACESSOS: Fluxo = {
 const corta = (t: unknown, n: number) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, n);
 
 /** Junta o que a clínica já tem no Hub, em texto curto por fonte. Só entra fonte com dado. */
-async function lerFontesBrain(admin: Admin, clientId: string) {
-  const { data: modulo } = await admin.rpc("tem_modulo", { p_client_id: clientId, p_modulo: "brand_brain" });
+/** Fontes da clínica para a IA (Brand Brain, copiloto dos documentos). `exigirModulo: false` lê mesmo sem o Brain ativo. */
+export async function lerFontesBrain(admin: Admin, clientId: string, opcoes: { exigirModulo?: boolean } = {}) {
+  const { data: modulo } = opcoes.exigirModulo === false ? { data: true } : await admin.rpc("tem_modulo", { p_client_id: clientId, p_modulo: "brand_brain" });
   if (!modulo) return { ativo: false, fontes: {} as Partial<Record<Fonte, string>>, aprovados: [] as string[] };
   const { data: cli } = await admin.from("sap_clinicas").select("id, nome, especialidade, cidade, servicos, ticket_medio, consulta_paga, ambicao_d90, ajustes_acordados")
     .eq("client_id", clientId).order("created_at", { ascending: false }).limit(1).maybeSingle();
