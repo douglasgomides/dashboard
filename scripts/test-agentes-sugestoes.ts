@@ -72,3 +72,14 @@ assert.deepEqual(cont.ok[0].brain, ["audiencia.duvida_pinta"]);
 assert.equal(cont.descartes.length, 3);
 assert.ok(pecaParaTexto(cont.ok[0]).includes("Cena 2\nFala: Borda irregular também."));
 console.log("ok");
+
+// Recuperação: data/horário inventados saem; "Oi!" sem nome ganha [nome]; " - " vira vírgula.
+const r2 = validarRecuperacao({ mensagens: [
+  { conversa_id: "a", mensagem: "Oi! Temos horário com a doutora nos dias 4 e 5 de novembro. Qual prefere para a sua consulta?" },
+  { conversa_id: "b", mensagem: "Oi! Desculpe a demora - vi sua dúvida sobre a avaliação. Posso ver um horário em [dia] às [horário] para você?" },
+  { conversa_id: "c", mensagem: "Olá, tudo bem? Posso reservar para quinta-feira às 14h a sua avaliação com a equipe da clínica?" },
+] }, new Set(["a", "b", "c"]));
+assert.deepEqual(r2.ok.map((m) => m.conversa_id), ["b"]);
+assert.equal(r2.ok[0].mensagem, "Oi, [nome]! Desculpe a demora, vi sua dúvida sobre a avaliação. Posso ver um horário em [dia] às [horário] para você?");
+assert.equal(r2.descartes.filter((d) => /inventou/.test(d)).length, 2);
+console.log("ok 2");

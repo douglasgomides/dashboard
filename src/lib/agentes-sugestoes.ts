@@ -6,7 +6,7 @@ import { ferirCFM } from "./campanhas-ia.js";
 
 const txt = (x: unknown, max: number) => (typeof x === "string" ? x.replace(/\s+/g, " ").trim().slice(0, max) : "");
 /** Sem travessão (padrão de escrita da Doctor Creator). */
-const semTravessao = (t: string) => t.replace(/\s*[—–]\s*/g, ", ");
+const semTravessao = (t: string) => t.replace(/\s*[—–]\s*|\s+-\s+/g, ", ");
 const lista = (x: unknown, n: number, max: number) => (Array.isArray(x) ? x.map((i) => semTravessao(txt(i, max))).filter((s) => s.length >= 2).slice(0, n) : []);
 const ok = (t: string) => !ferirCFM(t) && textoSemDadoPessoal(t);
 
@@ -44,6 +44,9 @@ export interface MensagemRecuperacao { conversa_id: string; mensagem: string; po
 
 /** A mensagem tem que ser de uma conversa da lista, curta, sem preço/promoção/garantia e sem telefone ou e-mail.
  *  O nome entra pela tela ([nome]), nunca pela IA. */
+// A IA não conhece a agenda: data, dia da semana ou horário concretos na mensagem são inventados.
+const AGENDA_INVENTADA = /\b\d{1,2}\s+de\s+(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b|\b\d{1,2}\/\d{1,2}\b|\b\d{1,2}(:\d{2}|h\d{0,2})\b|\b(segunda|ter[çc]a|quarta|quinta|sexta)(-feira)?\b|\bs[áa]bado\b/i;
+
 export function validarRecuperacao(bruto: unknown, ids: Set<string>): { ok: MensagemRecuperacao[]; descartes: string[] } {
   const saida: MensagemRecuperacao[] = [];
   const descartes: string[] = [];
@@ -55,11 +58,12 @@ export function validarRecuperacao(bruto: unknown, ids: Set<string>): { ok: Mens
     const mensagem = semTravessao(txt(i.mensagem, 600));
     if (!ids.has(id) || vistos.has(id)) { descartes.push(`${id.slice(0, 8)}: conversa fora da lista ou repetida`); continue; }
     if (mensagem.length < 30) { descartes.push(`${id.slice(0, 8)}: mensagem curta`); continue; }
+    if (AGENDA_INVENTADA.test(mensagem)) { descartes.push(`${id.slice(0, 8)}: inventou data ou horário`); continue; }
     const cfm = ferirCFM(mensagem);
     if (cfm) { descartes.push(`${id.slice(0, 8)}: fere o CFM (${cfm})`); continue; }
     if (!textoSemDadoPessoal(mensagem)) { descartes.push(`${id.slice(0, 8)}: dado pessoal`); continue; }
     vistos.add(id);
-    saida.push({ conversa_id: id, mensagem, por_que: semTravessao(txt(i.por_que, 240)) });
+    saida.push({ conversa_id: id, mensagem: /^\s*(oi|ol[áa])\b/i.test(mensagem) && !/\[nome\]/i.test(mensagem) ? mensagem.replace(/^\s*(oi|ol[áa])\b[!,.]?/i, "Oi, [nome]!") : mensagem, por_que: semTravessao(txt(i.por_que, 240)) });
   }
   return { ok: saida, descartes };
 }
