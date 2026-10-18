@@ -1,7 +1,7 @@
 import { ProductBrand } from "@/components/product-brand";
 import { createFileRoute, Link, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, Gauge, LayoutDashboard, ListChecks, ListTodo, Megaphone, Menu, Network, Target, Radar, Presentation, UsersRound, UserRoundCheck, BookOpen, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
@@ -9,6 +9,7 @@ import { TrocaProduto } from "@/components/troca-produto";
 import { BotaoAjuda, PrimeiroAcesso } from "@/components/sap-ajuda";
 import { getClient } from "@/lib/client-data";
 import { supabase } from "@/integrations/supabase/client";
+import "@/sap-workspace.css";
 import { diaAtual, faseDoDia, getClinicaSap } from "@/lib/sap-data";
 
 // Sistema de Aquisição de Pacientes: produto separado do Doctor Creator Hub, com menu, entrada (sap.*) e
@@ -56,6 +57,15 @@ const ITENS = [
 ] as const;
 // Na visão da clínica, os grupos viram um só e alguns nomes ficam mais diretos.
 const ROTULO_CLINICA: Record<string, string> = { "/cronograma": "Agenda do programa", "/leitura": "Números da semana", "/documentos": "Plano e relatório" };
+// Groups reuse the existing permission-filtered items; every original destination stays available.
+const AREAS_SAP = [
+  { id: "visao", label: "Visão geral", hint: "Programa e resultados", Icone: Flag, subs: ["/painel"] },
+  { id: "tarefas", label: "Minha semana", hint: "Prioridades e tarefas", Icone: ListTodo, subs: [""] },
+  { id: "implantacao", label: "Implantação", hint: "Etapas e entregas", Icone: CalendarClock, subs: ["/cronograma", "/sessao", "/rastreamento", "/anuncios", "/etapas"] },
+  { id: "resultado", label: "Acompanhamento", hint: "Números e evolução", Icone: Gauge, subs: ["/leitura", "/metas", "/execucao", "/midia"] },
+  { id: "materiais", label: "Plano e materiais", hint: "Decisões e continuidade", Icone: FileText, subs: ["/documentos"] },
+  { id: "equipe", label: "Equipe e acessos", hint: "Responsáveis e preparação", Icone: UsersRound, subs: ["/papeis", "/onboarding"] },
+];
 const TITULOS: Record<string, string> = { "/sap/guia": "Como operamos", "/sap/docs": "Documentos do SAP", "/sap/comece": "Comece aqui" };
 
 function SapLayout() {
@@ -72,8 +82,32 @@ function SapConteudo({ isAdmin }: { isAdmin: boolean }) {
   const dia = diaAtual(clinica?.d0 ?? null, clinica?.pausas);
   const itens = (isAdmin ? ITENS.filter(() => true) : ITENS.filter((i) => "clinica" in i))
     .map((i) => ({ ...i, grupo: isAdmin ? i.grupo : "", label: isAdmin ? i.label : (ROTULO_CLINICA[i.sub] ?? i.label) }));
-  const titulo = TITULOS[pathname] ?? (clientId ? (cliente?.name ?? "Carregando…") : isAdmin ? "Todas as clínicas" : "Sistema de Aquisição");
+  const areas = AREAS_SAP.map(area => ({ ...area, itens: area.subs.flatMap(caminho => itens.filter(it => it.sub === caminho)) })).filter(area => area.itens.length);
+  const areaAtual = areas.find(area => area.subs.includes(sub ?? "__nenhuma__"));
+  const pagina = itens.find(it => it.sub === sub);
+  const titulo = clientId ? (sub === "" ? "Minha semana" : pagina?.label ?? "Programa da clínica") : TITULOS[pathname] ?? (isAdmin ? "Todas as clínicas" : "Sistema de Aquisição");
   const [gaveta, setGaveta] = useState(false);
+  const menuRef = useRef<HTMLElement>(null);
+  const openMenuRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!gaveta) return;
+    const menu = menuRef.current;
+    const opener = openMenuRef.current;
+    const focusable = () => Array.from(menu?.querySelectorAll<HTMLElement>("a[href],button:not([disabled])") ?? []).filter(el => el.getClientRects().length > 0);
+    focusable()[0]?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); setGaveta(false); }
+      if (event.key !== "Tab") return;
+      const items = focusable(), first = items[0], last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    const desktop = window.matchMedia("(min-width: 821px)");
+    const onDesktop = () => { if (desktop.matches) setGaveta(false); };
+    document.addEventListener("keydown", onKey);
+    desktop.addEventListener("change", onDesktop);
+    return () => { document.removeEventListener("keydown", onKey); desktop.removeEventListener("change", onDesktop); opener?.focus(); };
+  }, [gaveta]);
   useEffect(() => { setGaveta(false); }, [pathname]);
 
   const links = (parte: "todas" | "clinica") => (
@@ -96,29 +130,22 @@ function SapConteudo({ isAdmin }: { isAdmin: boolean }) {
           <span>Documentos do SAP</span>
         </Link>
       )}
-      {parte === "clinica" &&
-        clientId &&
-        itens.map((it, i) => [
-          it.grupo && (i === 0 || itens[i - 1].grupo !== it.grupo) ? <div key={`g-${it.grupo}`} className="lbl" style={{ fontSize: 10, opacity: 0.8 }}>{it.grupo}</div> : null,
-          <Link
-            key={it.sub}
-            to={`/sap/$clientId${it.sub}` as never}
-            params={{ clientId } as never}
-            activeOptions={{ exact: true }}
-            data-on={sub === it.sub ? "" : undefined}
-            aria-current={sub === it.sub ? "page" : undefined}
-          >
-            <it.Icone aria-hidden size={18} />
-            <span>{it.label}</span>
-          </Link>,
-        ])}
+      {parte === "clinica" && clientId && areas.map(area => (
+        <Link key={area.id} to={`/sap/$clientId${area.itens[0].sub}` as never} params={{ clientId } as never} activeOptions={{ exact: true }}
+          data-on={areaAtual?.id === area.id ? "" : undefined}
+          aria-current={sub === area.itens[0].sub ? "page" : undefined}>
+          <area.Icone aria-hidden size={18} /><span><strong>{area.label}</strong><small>{area.hint}</small></span>
+        </Link>
+      ))}
+
     </>
   );
 
   return (
-    <div className="app">
+    <div className="app sap-workspace">
+      <a className="nx-skip" href="#sap-main">Ir para o conteúdo</a>
       {gaveta && <div className="sap-fundo-gaveta" aria-hidden onClick={() => setGaveta(false)} />}
-      <aside aria-label="Menu do Sistema de Aquisição" className={gaveta ? "gaveta" : undefined}>
+      <aside ref={menuRef} role={gaveta ? "dialog" : undefined} aria-modal={gaveta ? true : undefined} aria-label="Menu do Sistema de Aquisição" className={gaveta ? "gaveta" : undefined}>
         {gaveta && (
           <button type="button" aria-label="Fechar o menu" onClick={() => setGaveta(false)} className="sap-fechar-gaveta self-end rounded-md p-1"><X size={20} /></button>
         )}
@@ -126,36 +153,31 @@ function SapConteudo({ isAdmin }: { isAdmin: boolean }) {
           <ProductBrand product="sap" dark />
         </div>
         {isAdmin && <TrocaProduto atual="sap" clientId={clientId} />}
-        <nav className="side">
-          {links("todas")}
-          {clientId && <div className="lbl">{cliente?.name ?? "Clínica"}</div>}
-          {links("clinica")}
-        </nav>
+        {clientId && <div className="sap-clinic-context"><span>Programa da clínica</span><strong>{cliente?.name ?? "Carregando…"}</strong>{dia !== null && <small>{dia < 0 ? "Início agendado" : dia > 90 ? "Continuidade" : `Dia ${dia} de 90`}</small>}</div>}
+        {clientId && <nav className="side sap-area-nav" aria-label="Áreas do SAP">{links("clinica")}</nav>}
+        <nav className="side sap-system-nav" aria-label="Recursos do programa">{clientId && <div className="lbl">{isAdmin ? "Operação" : "Referências"}</div>}{links("todas")}</nav>
         <div className="side-foot so-aberta">
           <LogoutButton className="text-sm text-left min-h-[36px]" />
           <span>Sistema de Aquisição de Pacientes · Doctor Creator</span>
         </div>
       </aside>
-      <div className="mainwrap">
-        <div className="top admin-top">
+      <div className="mainwrap" inert={gaveta || undefined}>
+        <header className="top admin-top sap-workspace-header">
           <div className="who">
-            <button type="button" aria-label="Abrir o menu" aria-expanded={gaveta} onClick={() => setGaveta(true)} className="sap-menu-btn mr-2 rounded-md border p-1.5" style={{ borderColor: "var(--border)" }}><Menu size={20} /></button>
+            <button ref={openMenuRef} type="button" aria-label="Abrir o menu" aria-expanded={gaveta} onClick={() => setGaveta(true)} className="sap-menu-btn mr-2 rounded-md border p-1.5" style={{ borderColor: "var(--border)" }}><Menu size={20} /></button>
             <div style={{ minWidth: 0 }}>
-              <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--brand-gold-ink)" }}>
-                Sistema de Aquisição de Pacientes
-                {clientId && clinica?.d0 && dia !== null ? ` · ${dia > 90 ? "acompanhamento" : dia < 0 ? `começa em ${-dia} dia(s)` : `D${dia} de 90 · ${faseDoDia(dia)}`}` : ""}
-              </span>
+              <span className="sap-workspace-kicker">SAP / {clientId ? areaAtual?.label ?? "Programa" : "Operação Doctor Creator"}</span>
               <h1>{titulo}</h1>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="sap-header-tools">
+            {clientId && clinica?.d0 && dia !== null && <span className="sap-phase-tag">{dia > 90 ? "Acompanhamento" : dia < 0 ? `Começa em ${-dia} dia(s)` : `D${dia} de 90 · ${faseDoDia(dia)}`}</span>}
             <BotaoAjuda isAdmin={isAdmin} />
           </div>
-        </div>
+        </header>
+        {clientId && areaAtual && areaAtual.itens.length > 1 && <nav className="sap-context-tabs" aria-label={`Telas de ${areaAtual.label}`}>{areaAtual.itens.map(it => <Link key={it.sub} to={`/sap/$clientId${it.sub}` as never} params={{ clientId } as never} aria-current={sub === it.sub ? "page" : undefined}>{it.label}</Link>)}</nav>}
         <PrimeiroAcesso isAdmin={isAdmin} clientId={clientId} />
-        <div className="mt-4">
-          <Outlet />
-        </div>
+        <main className="sap-workspace-content" id="sap-main" tabIndex={-1}><Outlet /></main>
       </div>
     </div>
   );

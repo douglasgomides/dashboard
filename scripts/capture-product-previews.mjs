@@ -6,6 +6,8 @@ import { chromium, expect } from '@playwright/test';
 // Every provider response below is fictional. Nothing contacts a live account.
 const base = process.env.CAPTURE_BASE_URL || 'http://127.0.0.1:5592';
 assert.equal(new URL(base).hostname, '127.0.0.1', 'Capture must use the local test application');
+const onlyProduct = process.env.CAPTURE_PRODUCT;
+assert.ok(!onlyProduct || ['nexo', 'sap'].includes(onlyProduct), 'Unknown capture product');
 const origins = { nexo: base, sap: `http://sap.localhost:${new URL(base).port}` };
 const output = new URL('../public/product-previews/', import.meta.url);
 await mkdir(output, { recursive: true });
@@ -24,13 +26,15 @@ items.push({ id: 'demo-approved', client_id: clientId, memoria: 'identidade', ch
 const errors = [], unexpected = [];
 const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
 try {
-  for (const { product, file, path: routePath, ready } of [
+  for (const { product, file, path: routePath, ready, width = 1440, proof = false } of [
     { product: 'nexo', file: 'nexo', path: `/${clientId}/atendimento?aba=conversas`, ready: 'Auditoria comercial do período' },
     { product: 'nexo', file: 'nexo-brain', path: '/admin/brain', ready: proposed[0][2] },
     { product: 'sap', file: 'sap', path: `/sap/${clientId}/cronograma`, ready: 'Cronograma do programa' },
-  ]) {
+    { product: 'sap', file: 'sap-semana', path: `/sap/${clientId}`, ready: 'O próximo passo, no lugar certo.', proof: true },
+    { product: 'sap', file: 'sap-semana-mobile', path: `/sap/${clientId}`, ready: 'O próximo passo, no lugar certo.', width: 375, proof: true },
+  ].filter(capture => !onlyProduct || capture.product === onlyProduct)) {
     const origin = origins[product];
-    const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, deviceScaleFactor: 1, locale: 'pt-BR', colorScheme: 'light' });
+    const context = await browser.newContext({ viewport: { width, height: 960 }, deviceScaleFactor: 1, locale: 'pt-BR', colorScheme: 'light' });
     try {
       const claims = Buffer.from(JSON.stringify({ sub: user.id, exp: 2000000000, role: 'authenticated' })).toString('base64url');
       const session = { access_token: `eyJhbGciOiJIUzI1NiJ9.${claims}.fake-signature`, refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: 2000000000, user };
@@ -61,7 +65,7 @@ try {
           if (path === '/rest/v1/agente_execucoes') return rows([{ estado: 'concluida', erro: null, resultado: { propostas: 2 }, atualizado_em: date }]);
           if (path === '/rest/v1/sap_clinicas') return rows([clinic]);
           if (path === '/rest/v1/sap_usuario_pref') return rows([{ tour_visto_em: date, comece_visto_em: date }]);
-          if (path === '/rest/v1/sap_marco_status') return rows([1, 2, 3, 4, 6].map(marco => ({ clinica_id: clinicId, marco, estado: 'feito', concluido_em: '2026-10-16', evidencia: 'Registro demonstrativo', detectado_em: date })));
+          if (path === '/rest/v1/sap_marco_status') return rows([1, 2, 3, 6].map(marco => ({ clinica_id: clinicId, marco, estado: 'feito', concluido_em: '2026-10-16', evidencia: 'Registro demonstrativo', detectado_em: date })));
           if (path === '/rest/v1/rpc/sap_fontes_etapas') return respond([{ client_id: clientId, tem_crm: true, tem_atendimento: true, tem_anuncios: true, marcos: ['agendado'] }]);
           if (path === '/rest/v1/rpc/sap_papeis_pessoas') return respond(['comercial', 'coordenador', 'onboarding', 'trafego', 'editor', 'cs', 'condutor', 'clinica', 'fundador'].map(papel => ({ clinica_id: clinicId, papel, pessoa_id: `demo-${papel}`, user_id: null, nome: papel === 'clinica' ? 'Equipe da clínica' : 'Equipe Doctor Creator' })));
           if (path === '/rest/v1/rpc/client_fontes') return respond([{ tem_instagram: true, tem_anuncios: true, tem_crm: true, tem_atendimento: true }]);
@@ -83,7 +87,9 @@ try {
       }
       await expect(page.getByText('Carregando…', { exact: true })).toHaveCount(0);
       await expect(page.locator('body')).not.toContainText('Essa página não carregou');
-      await page.screenshot({ path: new URL(`${file}.jpg`, output).pathname, type: 'jpeg', quality: 88 });
+      const destination = proof ? new URL('../test-results/sap-workspace/', import.meta.url) : output;
+      await mkdir(destination, { recursive: true });
+      await page.screenshot({ path: new URL(`${file}.jpg`, destination).pathname, type: 'jpeg', quality: 88 });
       console.log(`Captured ${file}: actual application UI, fictional demonstration data.`);
     } finally { await context.close(); }
   }

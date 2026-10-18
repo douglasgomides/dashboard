@@ -1,0 +1,71 @@
+/* SAP workspace: programme navigation and execution hierarchy. */
+.sap-workspace{--sap-brass:#8c6c3d;--sap-tint:color-mix(in srgb,var(--sap-brass) 7%,var(--surface));--sap-deep:#152b37;--side:#132633;--side-hover:#203744;--side-active:#2c4350;grid-template-columns:250px minmax(0,1fr)}
+.sap-workspace>aside{--text-dim:#bdcbd5;--side-muted:#a8bdc8;--side-ink-2:#c9d7df;padding:29px 17px 18px;gap:23px}
+.sap-workspace .mainwrap{padding:30px 40px 70px;max-width:1500px}
+.sap-workspace .brand{padding-inline:10px}
+.sap-clinic-context{border-block:1px solid #ffffff1b;padding:18px 10px;display:flex;flex-direction:column;gap:7px;color:#e8eef0}
+.sap-clinic-context>span{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#a8bcc7}
+.sap-clinic-context strong{font-size:14px;font-weight:500;line-height:1.6}
+.sap-clinic-context small{font-size:10px;color:#d3bd94}
+.sap-workspace nav.sap-area-nav{gap:7px}
+.sap-workspace nav.sap-area-nav a{padding:12px 11px;gap:13px;align-items:center;min-height:61px;border:1px solid transparent;border-radius:5px}
+.sap-workspace nav.sap-area-nav a[data-on]{border-color:#ffffff13;box-shadow:inset 2px 0 0 #d1b17c;background:#2b4350}
+.sap-area-nav strong{display:block;font-size:12px;font-weight:500;line-height:1.5;color:#eff3f4}
+.sap-area-nav small{display:block;font-size:10px;line-height:1.6;color:#aabec8;margin-top:3px}
+.sap-workspace nav.sap-area-nav svg{color:#b8c7ce;flex:none}
+.sap-workspace nav.sap-area-nav a[data-on] svg{color:#d3bd94}
+.sap-workspace .sap-system-nav{border-top:1px solid #ffffff1a;padding-top:14px;gap:3px}
+.sap-workspace .sap-system-nav a{font-size:11px;padding:9px 11px;line-height:1.6}
+.sap-workspace .sap-system-nav svg{width:15px;height:15px}
+.sap-workspace-header{display:flex;justify-content:space-between;flex-wrap:nowrap;align-items:center;border-bottom:1px solid var(--border);padding:0 0 24px;margin:0;gap:15px}
+.sap-workspace-kicker{display:block;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.sap-workspace .sap-workspace-header h1{font-size:25px;letter-spacing:-.8px;font-weight:500;line-height:1.35}
+.sap-header-tools{display:flex;align-items:center;justify-content:end;gap:13px;flex-wrap:wrap}
+.sap-phase-tag{border:1px solid var(--border);border-radius:4px;padding:8px 11px;font-size:10px;color:var(--ink-2);background:var(--surface);line-height:1.7}
+.sap-context-tabs{display:flex;gap:24px;border-bottom:1px solid var(--border);overflow-x:auto;overscroll-behavior-x:contain;min-width:0}
+.sap-context-tabs a{padding:16px 0 14px;color:var(--muted);font-size:11px;white-space:nowrap;border-bottom:2px solid transparent;text-decoration:none;line-height:1.6}
+.sap-context-tabs a[aria-current=page]{border-color:var(--sap-brass);color:var(--ink);font-weight:550}
+.sap-workspace-content{padding-top:27px;min-width:0;outline:none}
+.sap-workspace-content:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.sap-eyebrow{font-size:9px;letter-spacing:.1em;text-transform:uppercase;line-height:1.8;color:var(--muted);margin:0}
+.sap-week-heading{display:flex;justify-content:space-between;align-items:end;gap:25px;margin-bottom:25px}
+.sap-week-heading h2{font-size:29px;font-weight:450;letter-spacing:-.9px;line-height:1.25;margin-top:10px}
+.sap-week-heading>div>p:last-child{font-size:12px;line-height:1.9;color:var(--ink-2);margin-top:13px;max-width:590px}
+.sap-quiet-link{display:inline-flex;align-items:center;gap:10px;font-size:11px;color:var(--ink-2);min-height:42px;text-decoration:none;flex:none}
+.sap-week-board{display:grid;grid-template-columns:1.25fr 1fr;border:1px solid var(--border);border-radius:7px;overflow:hidden;background:var(--surface)}
+.sap-next-action{background:var(--sap-deep);padding:29px;color:#edf3f4;display:flex;align-items:start;flex-direction:column}
+.sap-next-action .sap-eyebrow{color:#d3bd94}
+.sap-next-action h3{font-size:24px;letter-spacing:-.6px;font-weight:450;line-height:1.3;margin-top:18px;max-width:550px}
+.sap-next-action>p:not(.sap-eyebrow){font-size:11px;color:#b6c9d2;margin-top:14px;line-height:1.9}
+.sap-action-link{display:inline-flex;align-items:center;gap:15px;padding:11px 15px;min-height:43px;background:#e7d8b6;color:#263e48;font-size:11px;font-weight:550;text-decoration:none;border-radius:3px;margin-top:24px}
+.sap-action-foot{font-size:9px;line-height:1.9;color:#b6c9d2;margin-top:18px}
+.sap-program-progress{padding:29px;display:flex;flex-direction:column;justify-content:center}
+.sap-progress-number{display:flex;align-items:end;gap:18px;margin:20px 0 23px;flex-wrap:wrap}
+.sap-progress-number strong{font-size:43px;letter-spacing:-1.5px;line-height:1;font-weight:450}
+.sap-progress-number strong>span{font-size:23px;letter-spacing:-.6px;color:var(--muted)}
+.sap-progress-number>span{font-size:11px;color:var(--ink-2);line-height:1.8}
+.sap-progress-track{height:5px;background:var(--border);overflow:hidden;border-radius:2px}
+.sap-progress-track>span{display:block;height:100%;background:var(--sap-brass)}
+.sap-program-progress>p:not(.sap-eyebrow){font-size:10px;color:var(--muted);line-height:1.9;margin-top:12px}
+.sap-progress-phase{display:flex;align-items:center;gap:10px;border-top:1px solid var(--border);padding-top:21px;margin-top:22px;font-size:11px;line-height:1.8;color:var(--ink-2)}
+.sap-progress-phase svg{color:var(--sap-brass);flex:none}
+.sap-workspace-shortcuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-top:18px}
+.sap-workspace-shortcuts a{display:flex;gap:13px;align-items:center;border:1px solid var(--border);border-radius:5px;padding:19px 15px;background:var(--surface);text-decoration:none}
+.sap-workspace-shortcuts a:hover{border-color:var(--sap-brass)}
+.sap-workspace-shortcuts a>svg{flex:none;color:var(--sap-brass)}
+.sap-workspace-shortcuts a>svg:last-child{width:14px;margin-left:auto;color:var(--muted)}
+.sap-workspace-shortcuts strong{display:block;font-size:11px;font-weight:550;line-height:1.7}
+.sap-workspace-shortcuts small{display:block;font-size:10px;color:var(--muted);line-height:1.8;margin-top:3px}
+.sap-section-heading{border-bottom:1px solid var(--border);padding-bottom:17px;margin-bottom:20px}
+.sap-section-heading h2{font-size:22px;font-weight:500;letter-spacing:-.5px;line-height:1.4;margin-top:8px}
+.sap-my-tasks{padding-top:19px;scroll-margin-top:25px}
+.sap-workspace .sap-task-card{border-radius:5px;overflow:hidden;box-shadow:none}
+.sap-workspace .sap-task-toggle{padding:15px 16px;min-height:65px;font-size:12px}
+.sap-workspace .sap-task-card[data-situation=atrasada]{border-left:3px solid var(--crit)}
+.sap-workspace .sap-task-card[data-situation=hoje]{border-left:3px solid var(--warn)}
+.sap-workspace .sap-task-card[data-situation=semana]{border-left:3px solid var(--accent)}
+@media(min-width:821px){.sap-workspace .sap-menu-btn{display:none}}
+@media(max-width:1100px){.sap-workspace .mainwrap{padding-inline:25px}.sap-week-board{grid-template-columns:1.1fr 1fr}.sap-next-action,.sap-program-progress{padding:24px}.sap-workspace-shortcuts{grid-template-columns:1fr}.sap-workspace-shortcuts a{padding:15px 19px}.sap-workspace-shortcuts small{margin-top:0}}
+@media(max-width:820px){.sap-workspace{display:block}.sap-workspace .mainwrap{padding:20px 18px 40px}.sap-workspace>aside{padding-top:25px}.sap-workspace-header{padding-bottom:20px;align-items:start}.sap-workspace .sap-workspace-header .who{align-items:center;gap:3px;min-width:0}.sap-workspace .sap-workspace-header h1{font-size:22px}.sap-workspace-kicker{font-size:8px;letter-spacing:.06em}.sap-header-tools{gap:8px}.sap-phase-tag{display:none}.sap-context-tabs{gap:23px}.sap-context-tabs a{padding-block:14px 12px}.sap-workspace-content{padding-top:24px}.sap-week-heading{display:block;margin-bottom:20px}.sap-week-heading h2{font-size:27px}.sap-quiet-link{margin-top:12px;min-height:35px}.sap-week-board{grid-template-columns:1fr}.sap-next-action,.sap-program-progress{padding:25px 22px}.sap-next-action h3{font-size:23px}.sap-program-progress{border-top:1px solid var(--border)}.sap-progress-number strong{font-size:39px}.sap-workspace-shortcuts{gap:10px}.sap-my-tasks{padding-top:10px}.sap-workspace .sap-task-toggle{padding:13px 12px}.sap-workspace .sap-task-toggle>span{line-height:1.8}.sap-workspace .sap-task-toggle .selo{font-size:10px}.sap-workspace .sap-menu-btn{flex:none;margin-right:7px}}
+:root[data-theme=dark] .sap-workspace{--sap-brass:#c6aa7d}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]) .sap-workspace{--sap-brass:#c6aa7d}}

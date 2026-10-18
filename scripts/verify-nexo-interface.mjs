@@ -208,6 +208,44 @@ try{
       await expect(page.getByRole('link',{name:'Acompanhamento no Doctor Creator Hub',exact:true})).not.toBeVisible();
     }finally{await context.close();}
   });
+  await run('SAP grouped navigation preserves clinic boundaries and keyboard access on mobile tablet desktop',async()=>{
+    for(const width of [375,768]){
+      const {context,page}=await account('viewer',{sap:true});try{
+        await page.setViewportSize({width,height:1000});
+        await page.goto(origins.sap+`/sap/${CID}`);
+        await expect(page.getByRole('heading',{name:'O próximo passo, no lugar certo.',exact:true})).toBeVisible();
+        const opener=page.getByRole('button',{name:'Abrir o menu',exact:true});
+        await opener.click();const menu=page.getByRole('dialog',{name:'Menu do Sistema de Aquisição',exact:true});
+        await expect(menu).toBeVisible();await expect(menu.getByRole('button',{name:'Fechar o menu',exact:true})).toBeFocused();
+        await expect(menu.getByRole('link',{name:/Equipe e acessos/})).not.toBeVisible();
+        await expect(menu.getByRole('navigation',{name:'Produto',exact:true})).not.toBeVisible();
+        await page.keyboard.press('Escape');await expect(menu).not.toBeVisible();await expect(opener).toBeFocused();
+        await opener.click();await page.getByRole('dialog').getByRole('link',{name:/Acompanhamento/}).click();
+        await expect(page).toHaveURL(origins.sap+`/sap/${CID}/leitura`);await expect(page.getByRole('dialog')).not.toBeVisible();
+        const tabs=page.getByRole('navigation',{name:'Telas de Acompanhamento',exact:true});
+        await expect(tabs.getByRole('link')).toHaveCount(2);
+        await tabs.getByRole('link',{name:'Metas e garantia',exact:true}).click();
+        await expect(page).toHaveURL(origins.sap+`/sap/${CID}/metas`);
+        await expect(page.getByRole('heading',{name:'Metas e garantia',level:1,exact:true})).toBeVisible();
+        await opener.click();await expect(page.getByRole('navigation',{name:'Áreas do SAP',exact:true}).getByRole('link',{name:/Minha semana/})).not.toHaveAttribute('data-status','active');await page.keyboard.press('Escape');
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'SAP grouped tabs do not overflow');
+        await page.emulateMedia({colorScheme:'dark'});await page.goto(origins.sap+`/sap/${CID}`);
+        await expect(page.locator('.sap-week-overview')).toBeVisible();
+        const result=await new AxeBuilder({page}).include('.sap-week-overview').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
+        assert.deepEqual(result.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],'SAP overview is accessible in dark mode');
+      }finally{await context.close();}
+    }
+    const {context,page}=await account('admin',{sap:true});try{
+      await page.goto(origins.sap+`/sap/${CID}/cronograma`);
+      const tabs=page.getByRole('navigation',{name:'Telas de Implantação',exact:true});
+      for(const [label,path] of [['Cronograma','cronograma'],['Reuniões','sessao'],['Rastreamento','rastreamento'],['Banco de anúncios','anuncios'],['Etapas do funil','etapas']]){
+        await expect(tabs.getByRole('link',{name:label,exact:true})).toHaveAttribute('href',`/sap/${CID}/${path}`);
+      }
+      await page.getByRole('navigation',{name:'Áreas do SAP',exact:true}).getByRole('link',{name:/Equipe e acessos/}).click();
+      await expect(page).toHaveURL(origins.sap+`/sap/${CID}/papeis`);
+      await expect(page.getByRole('navigation',{name:'Telas de Equipe e acessos',exact:true}).getByRole('link',{name:'Ficha e acessos',exact:true})).toHaveAttribute('href',`/sap/${CID}/onboarding`);
+    }finally{await context.close();}
+  });
   await run('keyboard access works through presentation, login and return navigation',async()=>{
     const {context,page}=await account();try{
       await page.goto(base+'/conhecer');await expect(page.locator('.nx-hero')).toBeVisible();await page.keyboard.press('Tab');await expect(page.getByRole('link',{name:'Ir para o conteúdo',exact:true})).toBeFocused();
