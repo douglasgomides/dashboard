@@ -14,6 +14,7 @@ import { AGENTES, type AgenteCatalogo, type IdAgente } from "@/lib/agentes-catal
 import { pecaParaTexto, type CopyAnuncio, type PecaConteudo } from "@/lib/agentes-sugestoes";
 import { duracao, resumoPiloto } from "@/lib/atendente";
 import { usePautas } from "@/components/planejador-conteudo";
+import { AssumirRecuperacao, OperacaoRecuperacao } from "@/components/operacao-recuperacao";
 import { BotaoCopiar } from "@/components/botao-copiar";
 
 const db = supabase as any;
@@ -21,7 +22,7 @@ type Estado = "proposta" | "feita" | "descartada";
 interface Sugestao {
   id: string; agente: "recuperacao" | "anuncios" | "conteudo"; tipo: string; titulo: string; detalhe: string | null; evidencias: string[]; brain: string[];
   conteudo: any; mensagem: string | null; conversa_id: string | null; campanha_id: string | null; prioridade: number; estado: Estado;
-  resultado: string | null; medido_em: string | null; criado_em: string; nota?: number | null; critica?: string | null;
+  resultado: string | null; medido_em: string | null; medicao?: { versao?: number; legado?: { estado?: string } }; criado_em: string; nota?: number | null; critica?: string | null;
   conversa?: { canal: string | null; pessoa: { nome: string | null } | null } | null;
 }
 
@@ -40,6 +41,12 @@ function useSugestoes(clientId: string, ag: Sugestao["agente"], dias = 14) {
       const { data, error } = await db.from("sugestoes_agentes").select(sel).eq("client_id", clientId).eq("agente", ag)
         .gte("criado_em", new Date(Date.now() - dias * 86_400_000).toISOString()).order("criado_em", { ascending: false }).order("prioridade", { ascending: false }).limit(60);
       if (error) throw error;
+      if (ag === "recuperacao") {
+        const {data: assumidas,error:erroAssumidas} = await db.from("operacao_recuperacao").select("sugestao_id").eq("client_id",clientId);
+        if (erroAssumidas) throw erroAssumidas;
+        const ids = new Set((assumidas ?? []).map((t: {sugestao_id:string})=>t.sugestao_id));
+        return ((data ?? []) as Sugestao[]).filter(s=>!ids.has(s.id));
+      }
       return (data ?? []) as Sugestao[];
     },
   });
@@ -83,11 +90,12 @@ function Cabecalho({ a, clientId, ultima, aoTerminar }: { a: AgenteCatalogo; cli
   );
 }
 
-function Acoes({ s, podeEditar, decidir, extra }: { s: Sugestao; podeEditar: boolean; decidir: (e: Estado) => Promise<void>; extra?: React.ReactNode }) {
+function Acoes({ s, podeEditar, decidir, extra, somenteDescartar = false }: { s: Sugestao; podeEditar: boolean; decidir: (e: Estado) => Promise<void>; extra?: React.ReactNode; somenteDescartar?: boolean }) {
   const [salvando, setSalvando] = useState(false);
-  const ir = async (e: Estado) => { setSalvando(true); try { await decidir(e); } finally { setSalvando(false); } };
+  const [erro, setErro] = useState<string | null>(null);
+  const ir = async (e: Estado) => { setErro(null); setSalvando(true); try { await decidir(e); } catch { setErro("Não foi possível salvar a decisão. Tente novamente."); } finally { setSalvando(false); } };
   const medido = s.agente !== "recuperacao" && s.resultado && s.resultado !== "expirou sem revisão"
-    ? <p className="mt-2 w-full rounded-md p-2 text-xs" style={{ background: "var(--surface-2)" }}><b>Medido sozinho:</b> {s.resultado}</p> : null;
+    ? <p className="mt-2 w-full rounded-md p-2 text-xs" style={{ background: "var(--surface-2)" }}><b>Leitura posterior:</b> {s.resultado}</p> : null;
   const revisor = s.nota != null
     ? <p className="mt-1 text-[11px]" style={{ color: "var(--muted)" }} title="Um segundo agente revisa tudo antes de chegar aqui; abaixo de 6 é descartado.">Nota do revisor: <b style={{ color: s.nota >= 8 ? "var(--ok, var(--accent))" : "var(--ink-2)" }}>{s.nota}/10</b>{s.critica ? ` · ${s.critica}` : ""}</p> : null;
   if (!podeEditar) return <>{medido}{revisor}{extra ? <div className="mt-2 flex flex-wrap gap-2">{extra}</div> : null}</>;
@@ -95,9 +103,10 @@ function Acoes({ s, podeEditar, decidir, extra }: { s: Sugestao; podeEditar: boo
     <>{medido}{revisor}
     <div className="mt-2 flex flex-wrap items-center gap-2">
       {extra}
+      {erro && <p role="alert" className="w-full text-xs" style={{ color: "var(--crit)" }}>{erro}</p>}
       {s.estado === "proposta" ? (
         <>
-          <button type="button" className="btn inline-flex items-center gap-1" disabled={salvando} onClick={() => ir("feita")}><CheckCircle2 size={14} aria-hidden /> Feito</button>
+          {!somenteDescartar && <button type="button" className="btn inline-flex items-center gap-1" disabled={salvando} onClick={() => ir("feita")}><CheckCircle2 size={14} aria-hidden /> Feito</button>}
           <button type="button" className="inline-flex min-h-[36px] items-center gap-1 px-2 text-xs" style={{ color: "var(--muted)" }} disabled={salvando} onClick={() => ir("descartada")}><XCircle size={14} aria-hidden /> Descartar</button>
         </>
       ) : (
@@ -108,7 +117,7 @@ function Acoes({ s, podeEditar, decidir, extra }: { s: Sugestao; podeEditar: boo
   );
 }
 
-const RESULTADO: Record<string, string> = { enviada: "Mensagem enviada", respondeu: "Paciente respondeu", agendou: "Agendou" };
+const RESULTADO: Record<string, string> = { enviada: "Mensagem enviada", respondeu: "Paciente respondeu", agendou: "Agendamento registrado", compareceu: "Comparecimento registrado", fechou: "Venda registrada" };
 
 function Lista({ itens, render, vazio }: { itens: Sugestao[]; render: (s: Sugestao) => React.ReactNode; vazio: string }) {
   const [verTodas, setVerTodas] = useState(false);
@@ -118,7 +127,7 @@ function Lista({ itens, render, vazio }: { itens: Sugestao[]; render: (s: Sugest
   return (
     <>
       {visiveis.length === 0 ? <p className="text-sm" style={{ color: "var(--ink-2)" }}>{vazio}</p> : <div className="grid gap-3 lg:grid-cols-2">{visiveis.map(render)}</div>}
-      {outras.length > 0 && <button type="button" className="self-start text-xs font-semibold" style={{ color: "var(--accent)" }} onClick={() => setVerTodas(!verTodas)}>{verTodas ? "Esconder as feitas e descartadas" : `Ver ${outras.length} feita${outras.length === 1 ? "" : "s"} ou descartada${outras.length === 1 ? "" : "s"}`}</button>}
+      {outras.length > 0 && <button type="button" className="self-start text-xs font-semibold" style={{ color: "var(--accent)" }} onClick={() => setVerTodas(!verTodas)}>{verTodas ? "Esconder histórico" : `Ver histórico de ${outras.length} propostas`}</button>}
     </>
   );
 }
@@ -136,33 +145,36 @@ export function RecuperarHoje({ clientId, podeEditar }: { clientId: string; pode
   const decidir = useDecidir(clientId, "recuperacao");
   const a = agente("recuperacao");
   const itens = q.data ?? [];
-  const medidas = itens.filter((s) => s.resultado);
-  const resp = medidas.filter((s) => s.resultado === "respondeu" || s.resultado === "agendou").length;
-  const agendou = medidas.filter((s) => s.resultado === "agendou").length;
   return (
+    <div className="space-y-4">
+    <OperacaoRecuperacao key={clientId} clientId={clientId} podeEditar={podeEditar} />
     <Secao id="ag-recuperacao">
             <Cabecalho a={a} clientId={clientId} ultima={itens[0]?.criado_em ?? null} aoTerminar={() => q.refetch()} />
-      {medidas.length > 0 && <p className="text-xs" style={{ color: "var(--ink-2)" }}>Últimos 14 dias, medido sozinho pelas conversas e pelo CRM: {medidas.length} mensagens enviadas, {resp} responderam, {agendou} agendaram.</p>}
-      <Lista itens={itens} vazio="Ninguém para recuperar agora. O agente olha de novo amanhã cedo." render={(s) => {
+      {q.isError && <p role="alert" className="text-sm">Não foi possível carregar as propostas. <button type="button" className="underline" onClick={() => void q.refetch()}>Tentar novamente</button></p>}
+      {q.isSuccess && <Lista itens={itens} vazio="Nenhuma proposta pendente de revisão. Os casos assumidos ficam no acompanhamento acima." render={(s) => {
         const nome = primeiro(s.conversa?.pessoa?.nome);
         const msg = (s.mensagem ?? "").replace(/\[nome\]/gi, nome || "[nome]");
         return (
           <article key={s.id} className="flex flex-col rounded-xl border p-3" style={cartao(s)}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-semibold" style={{ color: "var(--ink)" }}>{s.conversa?.pessoa?.nome || "Sem nome"}{s.conversa?.canal ? <span className="font-normal" style={{ color: "var(--muted)" }}> · {s.conversa.canal}</span> : null}</span>
-              {s.resultado && <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: "var(--surface-2)", color: s.resultado === "agendou" ? "var(--ok, var(--accent))" : "var(--ink-2)" }}>{RESULTADO[s.resultado] ?? s.resultado}</span>}
+              {s.medicao?.versao === 2 && s.resultado && <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: "var(--surface-2)", color: s.resultado === "agendou" ? "var(--ok, var(--accent))" : "var(--ink-2)" }}>{RESULTADO[s.resultado] ?? s.resultado}</span>}
             </div>
             <p className="text-[11px]" style={{ color: "var(--muted)" }}>{s.titulo}</p>
             <p className="mt-2 rounded-lg p-2.5 text-sm leading-relaxed" style={{ background: "var(--surface-2)" }}>{msg}</p>
+            {s.estado === "proposta" && s.medicao?.legado?.estado === "feita" && <p className="mt-2 text-xs">Classificação automática anterior arquivada. Revise o caso com os dados atuais antes de novo contato.</p>}
             {s.detalhe && <p className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>Por quê: {s.detalhe}</p>}
-            <Acoes s={s} podeEditar={podeEditar} decidir={(e) => decidir(s.id, e)} extra={<>
-              <BotaoCopiar texto={msg} rotulo="Copiar mensagem" />
-              {s.conversa_id && isAdmin && <Link to="/$clientId/atendimento" params={{ clientId }} search={{ aba: "conversas", conversa: s.conversa_id } as never} className="inline-flex min-h-[36px] items-center gap-1 px-2 text-xs font-semibold" style={{ color: "var(--accent)" }}><MessageCircle size={14} aria-hidden /> Ver conversa</Link>}
-            </>} />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <BotaoCopiar texto={msg} rotulo="Copiar rascunho" />
+              {s.conversa_id && isAdmin && <Link to="/$clientId/atendimento" params={{ clientId }} search={{ aba: "conversas", conversa: s.conversa_id } as never} className="btn"><MessageCircle size={14} aria-hidden /> Ver conversa</Link>}
+            </div>
+            {podeEditar && s.estado === "proposta" && <AssumirRecuperacao key={s.id} clientId={clientId} sugestaoId={s.id} />}
+            <Acoes s={s} podeEditar={podeEditar} decidir={(e) => decidir(s.id, e)} somenteDescartar />
           </article>
         );
-      }} />
+      }} />}
     </Secao>
+    </div>
   );
 }
 
@@ -486,31 +498,30 @@ export function PainelAgentes({ clientId, produto }: { clientId: string; produto
         db.from("brain_itens").select("estado, criado_em").eq("client_id", clientId).gte("criado_em", desde).limit(500),
         db.from("agente_execucoes").select("fluxo, resultado, criado_em").eq("client_id", clientId).eq("estado", "concluida").in("fluxo", fluxos).order("criado_em", { ascending: false }).limit(40),
       ]);
-      const por: Record<string, { abertas: number; feitas: number; ultima: string | null; nota?: string; filtro?: string; descartadas?: number }> = {};
-      const soma = (id: string, aberta: boolean, feita: boolean, em: string) => {
-        const p = (por[id] ??= { abertas: 0, feitas: 0, ultima: null });
-        if (aberta) p.abertas++; if (feita) p.feitas++;
+      const por: Record<string, { abertas: number; ultima: string | null; nota?: string; filtro?: string; descartadas?: number }> = {};
+      const soma = (id: string, aberta: boolean, em: string) => {
+        const p = (por[id] ??= { abertas: 0, ultima: null });
+        if (aberta) p.abertas++;
         if (!p.ultima || em > p.ultima) p.ultima = em;
       };
-      for (const s of (sug.data ?? []) as { agente: string; estado: string; resultado: string | null; criado_em: string }[]) soma(s.agente, s.estado === "proposta", s.estado === "feita", s.criado_em);
-      for (const c of (camp.data ?? []) as { estado: string; criado_em: string }[]) soma("campanhas", c.estado === "proposta", ["aprovada", "em_andamento", "concluida"].includes(c.estado), c.criado_em);
-      for (const b of (brain.data ?? []) as { estado: string; criado_em: string }[]) soma("brain", b.estado === "proposto", b.estado === "aprovado", b.criado_em);
+      for (const s of (sug.data ?? []) as { agente: string; estado: string; resultado: string | null; criado_em: string }[]) soma(s.agente, s.estado === "proposta", s.criado_em);
+      for (const c of (camp.data ?? []) as { estado: string; criado_em: string }[]) soma("campanhas", c.estado === "proposta", c.criado_em);
+      for (const b of (brain.data ?? []) as { estado: string; criado_em: string }[]) soma("brain", b.estado === "proposto", b.criado_em);
+      for (const r of [sug, camp, brain, execs]) if (r.error) throw r.error;
       for (const e of (execs.data ?? []) as { fluxo: string; resultado: { filtro?: string | null; descartadas?: number } | null }[]) {
         const a = AGENTES.find((x) => x.fluxo === e.fluxo);
-        const p = a ? (por[a.id] ??= { abertas: 0, feitas: 0, ultima: null }) : null;
+        const p = a ? (por[a.id] ??= { abertas: 0, ultima: null }) : null;
         if (p && p.filtro === undefined && e.resultado?.filtro) { p.filtro = e.resultado.filtro; p.descartadas = e.resultado.descartadas; }
       }
-      const rec = ((sug.data ?? []) as { agente: string; resultado: string | null }[]).filter((s) => s.agente === "recuperacao" && s.resultado);
-      if (rec.length) (por.recuperacao ??= { abertas: 0, feitas: 0, ultima: null }).nota = `${rec.filter((s) => s.resultado === "respondeu" || s.resultado === "agendou").length} responderam e ${rec.filter((s) => s.resultado === "agendou").length} agendaram (30 dias, medido sozinho)`;
       return por;
     },
   });
-  const lista = AGENTES.filter((a) => produto === "hub" || a.ondeSap);
+  const lista = AGENTES.filter((a) => produto === "hub" || (a.ondeSap && a.id !== "recuperacao"));
   return (
     <div className="space-y-3">
       <div className="hpagehead">
         <h2>Agentes de IA</h2>
-        <p>Cada agente trabalha sozinho no horário. Ele puxa os dados, joga fora o ruído, segue o que o sistema já aprendeu com esta clínica, escreve, e um segundo agente revisa e dá nota antes de chegar à equipe. O resultado (respondeu, agendou, foi publicado, a campanha melhorou) é medido sozinho e vira aprendizado para a próxima rodada. Nenhum agente envia mensagem a paciente, publica, mexe em anúncio ou toma decisão clínica.</p>
+        <p>{produto === "sap" ? "O SAP conduz a implantação com tarefas, responsáveis e evidências. O acompanhamento de acessos reconfere as pendências e pede aprovação para fechar o marco. As demais rotinas preparam materiais para a equipe." : "As rotinas filtram os dados disponíveis, consultam as lições da clínica e preparam propostas, com revisão de qualidade antes da equipe. No acompanhamento de oportunidades do Nexo, cada caso assumido ganha responsável, prazo, contato vinculado e verificação do desfecho. A equipe realiza o contato e decide as intervenções. Dados sem atualização confiável bloqueiam esse piloto."}</p>
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
         {lista.map((a) => {
@@ -537,8 +548,8 @@ export function PainelAgentes({ clientId, produto }: { clientId: string; produto
           );
         })}
       </div>
-      {isAdmin && <AtendentePiloto clientId={clientId} />}
-      <AprendizadosAgentes clientId={clientId} podeEditar={podeEditar} />
+      {produto === "hub" && isAdmin && <AtendentePiloto clientId={clientId} />}
+      {produto === "hub" && <AprendizadosAgentes clientId={clientId} podeEditar={podeEditar} />}
     </div>
   );
 }

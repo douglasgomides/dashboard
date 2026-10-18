@@ -5,7 +5,7 @@
 // contadores saem de uma função só (contarTarefas). Lógica pura (teste: scripts/test-sap-tarefas.ts).
 
 import { CRONOGRAMA, FASES, dataDoDia, diaDoPrograma, diaUtilAnterior, entre, somar, type ItemCronograma, type Pausa } from "@/lib/sap-cronograma";
-import { ITENS_ACESSO, type RegistroAcesso } from "@/lib/sap-acessos";
+import { acessoResolvido, ITENS_ACESSO, type RegistroAcesso } from "@/lib/sap-acessos";
 import { TESTES_RASTREIO, dispensavel, recheckCategoria, resumoTestes, type CategoriaMeta, type RegistroTeste } from "@/lib/sap-rastreamento";
 import { calcularExecucao, resumoSaude, type ItemRegistro, type SemanaSaude } from "@/lib/sap-scores";
 import { kpisDaGarantia, type KpiPlano } from "@/lib/sap-metas";
@@ -137,7 +137,7 @@ export interface StatusRegistro {
   desfeito_motivo: string | null;
 }
 export interface RotinaRegistro { marco: number; semana: string; feito_em: string; evidencia: string | null; feito_por: string | null }
-export interface AcaoBruta { id: string; texto: string; lado: "clinica" | "dc"; responsavel: string | null; prazo: string | null; semana: string; status: string; origem: string }
+export interface AcaoBruta { id: string; codigo?: string | null; texto: string; lado: "clinica" | "dc"; responsavel: string | null; prazo: string | null; semana: string; status: string; origem: string }
 
 export interface EntradaTarefas {
   hoje: string;
@@ -254,8 +254,9 @@ function subtarefasDe(n: number, e: EntradaTarefas, dataDia: (d: number) => stri
       const m = new Map(e.acessos.map((r) => [r.item, r]));
       return ITENS_ACESSO.map((i) => {
         const r = m.get(i.id);
-        return sub(`acesso-${i.id}`, i.nome, papelDoDono(i.quem), !!r && r.status !== "pendente", {
-          auto: false, prazo: c.d0 ? dataDia(i.ate) : null, tela: "/onboarding",
+        const acao = e.acoes?.find(a => a.codigo === `agente_acesso_${i.id}`);
+        return sub(`acesso-${i.id}`, i.nome, papelDoDono(i.quem), acessoResolvido(r), {
+          auto: false, prazo: acao?.prazo ?? (c.d0 ? dataDia(i.ate) : null), tela: "/onboarding",
           detalhe: i.prazo === "C" ? "Crítico: bloqueia a Sessão 1" : i.prazo === "P" ? "Complementar" : "Até a sessão que usa",
         });
       });
@@ -305,7 +306,7 @@ function subtarefasDe(n: number, e: EntradaTarefas, dataDia: (d: number) => stri
     }
     case 30: {
       if (!e.acoes) return [];
-      return e.acoes.filter((a) => a.status === "aberta").map((a) => sub(`acao-${a.id}`, a.texto, a.lado === "clinica" ? "clinica" : papelDoDono(a.responsavel), false, {
+      return e.acoes.filter((a) => a.status === "aberta" && !a.codigo?.startsWith("agente_acesso_")).map((a) => sub(`acao-${a.id}`, a.texto, a.lado === "clinica" ? "clinica" : papelDoDono(a.responsavel), false, {
         auto: false, prazo: a.prazo ?? somar(a.semana < semana ? a.semana : semana, 4), tela: "/leitura", detalhe: a.responsavel ? `Ação combinada · ${a.responsavel}` : "Ação combinada",
       }));
     }

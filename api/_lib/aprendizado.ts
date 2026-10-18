@@ -17,6 +17,20 @@ type Admin = SupabaseClient<any, any, any>;
 const DIA = 86_400_000;
 const desde = (d: number) => new Date(Date.now() - d * DIA).toISOString();
 
+/** Somente contatos explicitamente vinculados alimentam lições de recuperação. */
+export async function resultadosRecuperacao(admin: Admin, clientId: string) {
+  const {data,error} = await admin.from("operacao_recuperacao").select("mensagem_id,observacao,sugestao:sugestoes_agentes(tipo)")
+    .eq("client_id",clientId).not("mensagem_id","is",null).gte("criado_em",desde(30)).limit(2000);
+  if(error) throw new Error(error.message);
+  return ((data ?? []) as {mensagem_id:string;observacao:{resposta?:unknown;eventos_crm?:{tipo:string}[]};sugestao:{tipo:string}|{tipo:string}[]|null}[]).map(t=>{
+    const sugestao=Array.isArray(t.sugestao) ? t.sugestao[0] : t.sugestao;
+    return {
+    agente:"recuperacao",tipo:sugestao?.tipo ?? "interesse",estado:"feita",titulo:"",
+    resultado:t.observacao.eventos_crm?.some(e=>e.tipo==="agendado") ? "agendou" : t.observacao.resposta ? "respondeu" : "enviada",
+  };
+  });
+}
+
 async function postsDaClinica(admin: Admin, clientId: string, dias: number) {
   const { data } = await admin.from("instagram_posts").select("format, tema, caption, reach, saved, shares, posted_at, transcricao")
     .eq("client_id", clientId).gte("posted_at", desde(dias)).order("posted_at", { ascending: false }).limit(500);
@@ -31,11 +45,12 @@ export async function calcularLicoes(admin: Admin, clientId: string): Promise<Li
     resumos.push(...((data ?? []) as { resumo: ResumoConversa }[]).map((r) => r.resumo));
     if ((data ?? []).length < 1000) break;
   }
-  const [posts, ads, camps, sugs] = await Promise.all([
+  const [posts, ads, camps, sugs, recuperacoes] = await Promise.all([
     postsDaClinica(admin, clientId, 180),
     admin.from("meta_ads_daily").select("campaign_id, spend, leads, conversations").eq("client_id", clientId).gte("date", desde(30).slice(0, 10)).limit(10_000),
     admin.from("meta_ads_campaigns").select("campaign_id, name").eq("client_id", clientId),
     admin.from("sugestoes_agentes").select("agente, tipo, estado, resultado, conteudo").eq("client_id", clientId).gte("criado_em", desde(90)).limit(2000),
+    resultadosRecuperacao(admin,clientId),
   ]);
   const nomes: Record<string, string> = {};
   for (const c of (camps.data ?? []) as { campaign_id: string; name: string }[]) nomes[c.campaign_id] = String(c.name ?? "").slice(0, 80);
@@ -48,7 +63,7 @@ export async function calcularLicoes(admin: Admin, clientId: string): Promise<Li
     ...comerciais.slice(0, 4).map((l) => ({ ...l, agente: "campanhas" as AgenteLicao, chave: `campanhas:${l.chave}` })),
     ...conteudo.slice(0, 3).map((l) => ({ ...l, agente: "campanhas" as AgenteLicao, chave: `campanhas:${l.chave}` })),
     ...licoesAnuncios((ads.data ?? []) as LinhaCampanha[], nomes),
-    ...licoesResultados((sugs.data ?? []) as SugestaoMedida[]),
+    ...licoesResultados([...(sugs.data ?? []).filter((s: SugestaoMedida)=>s.agente!=="recuperacao"),...recuperacoes] as SugestaoMedida[]),
   ];
 }
 

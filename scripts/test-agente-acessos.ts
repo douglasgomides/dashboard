@@ -11,10 +11,15 @@ assert.equal(s.pendentes.length, criticos.length);
 assert.equal(s.resolvidos.length, 0);
 
 // Confirmado e "não se aplica" resolvem; revogado volta a pendente; item não crítico não conta.
-s = situacaoCriticos([reg("A1", "confirmado"), reg("A5", "nao_se_aplica"), reg("A2", "confirmado", { revogado_em: "2026-10-17" })]);
+s = situacaoCriticos([reg("A1", "confirmado"), reg("A5", "nao_se_aplica", { observacao: "Pixel ainda não existe" }), reg("A2", "confirmado", { revogado_em: "2026-10-17" })]);
 assert.ok(s.resolvidos.some((r) => r.id === "A1") && s.resolvidos.some((r) => r.id === "A5" && r.status === "nao_se_aplica"));
 assert.ok(s.pendentes.some((p) => p.id === "A2"));
 assert.equal(s.pendentes.length + s.resolvidos.length, criticos.length);
+
+for (const extra of [{ confirmado_em: null }, { confirmado_por: " " }, { confirmado_em: "2026-02-30" }, { confirmado_em: "2999-01-01" }]) {
+  assert.equal(situacaoCriticos([reg("A1", "confirmado", extra)]).resolvidos.length, 0, "confirmação precisa de data válida não futura e responsável");
+}
+for (const observacao of [null, " ", "abcd"]) assert.equal(situacaoCriticos([reg("A5", "nao_se_aplica", { observacao })]).resolvidos.length, 0, "dispensa exige justificativa de pelo menos cinco caracteres");
 
 // Todos resolvidos: evidência cita a contagem e quem confirmou.
 s = situacaoCriticos(criticos.map((c) => reg(c.id, "confirmado")));

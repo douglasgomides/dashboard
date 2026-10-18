@@ -46,6 +46,11 @@ interface Ferramenta<E extends z.ZodTypeAny> {
 function ferramenta<E extends z.ZodTypeAny>(f: Ferramenta<E>) { return f; }
 
 const clickupToken = () => process.env.CLICKUP_API_TOKEN || "";
+const operacaoSapSchema = z.object({
+  pendentes: z.number().int().nonnegative(), resolvidos: z.number().int().nonnegative(),
+  acoes: z.array(z.object({ id: z.string(), codigo: z.string(), texto: z.string(), responsavel: z.string().nullable(), prazo: z.string().nullable(), status: z.string() })),
+  proximo_passo: z.string().min(1),
+});
 
 export const FERRAMENTAS = {
   "sap.ler_clinica": ferramenta({
@@ -62,9 +67,27 @@ export const FERRAMENTAS = {
     nome: "sap.ler_acessos", descricao: "Checklist de acessos 02.05 da clínica.", risco: "baixo", externa: false, timeoutMs: 10_000,
     entrada: z.object({ clinica_id: z.string().uuid() }),
     executar: async (admin, _x, e) => {
-      const { data, error } = await admin.from("sap_acessos").select("item, status, confirmado_em, confirmado_por, observacao, revogado_em").eq("clinica_id", e.clinica_id);
+      const { data, error } = await admin.from("sap_acessos").select("item, status, confirmado_em, confirmado_por, observacao, revogado_em, atualizado_em").eq("clinica_id", e.clinica_id);
       if (error) throw new Error(error.message);
       return data ?? [];
+    },
+  }),
+  "sap.conferir_operacao": ferramenta({
+    nome: "sap.conferir_operacao", descricao: "Reconcilia as ações de cada acesso crítico, com responsável e prazo, sem duplicar tarefas.", risco: "baixo", externa: false, timeoutMs: 10_000,
+    entrada: z.object({ clinica_id: z.string().uuid() }),
+    executar: async (admin, _x, e) => {
+      const { data, error } = await admin.rpc("operacao_sap_conferir", { p_clinica_id: e.clinica_id });
+      if (error) throw new Error(error.message);
+      return operacaoSapSchema.parse(data);
+    },
+  }),
+  "sap.ler_vinculo": ferramenta({
+    nome: "sap.ler_vinculo", descricao: "Lê o vínculo explícito do marco 5 com uma tarefa ClickUp.", risco: "baixo", externa: false, timeoutMs: 10_000,
+    entrada: z.object({ clinica_id: z.string().uuid() }),
+    executar: async (admin, _x, e) => {
+      const { data, error } = await admin.from("sap_marco_vinculos").select("clinica_id, marco, clickup_task_id, atualizado_em").eq("clinica_id", e.clinica_id).eq("marco", MARCO_ACESSOS).maybeSingle();
+      if (error) throw new Error(error.message);
+      return data;
     },
   }),
   "sap.registrar_evento": ferramenta({
@@ -144,41 +167,31 @@ export const FERRAMENTAS = {
       return { gravadas: e.itens.length };
     },
   }),
-  // ClickUp: API oficial v2 com token pessoal (CLICKUP_API_TOKEN no servidor). Sem token, a ferramenta responde
-  // "não configurada" e o fluxo segue registrando isso; nunca finge que leu ou comentou.
-  "clickup.ler_tarefas": ferramenta({
-    nome: "clickup.ler_tarefas", descricao: "Tarefas abertas da pasta da clínica no ClickUp.", risco: "baixo", externa: true, timeoutMs: 20_000,
-    entrada: z.object({ folder_id: z.string().regex(/^\d+$/).nullable(), contem: z.string().min(3) }),
+  // O piloto só consulta a tarefa explicitamente vinculada; não publica comentários nem altera tarefas.
+  "clickup.ler_tarefa": ferramenta({
+    nome: "clickup.ler_tarefa", descricao: "Confere ID, pasta e fechamento da tarefa ClickUp exata do marco.", risco: "baixo", externa: true, timeoutMs: 20_000,
+    entrada: z.object({ folder_id: z.string().nullable(), task_id: z.string().nullable() }),
     executar: async (_a, _x, e) => {
-      if (!clickupToken()) return { configurada: false, motivo: "CLICKUP_API_TOKEN não configurado no servidor" };
-      if (!e.folder_id) return { configurada: false, motivo: "clínica sem pasta do ClickUp (clickup_folder_id)" };
-      const h = { authorization: clickupToken() };
-      const listas = await fetch(`https://api.clickup.com/api/v2/folder/${e.folder_id}/list`, { headers: h, signal: AbortSignal.timeout(15_000) });
-      if (!listas.ok) throw new Error(`ClickUp respondeu ${listas.status} ao listar as listas`);
-      const lj = (await listas.json()) as { lists?: { id: string }[] };
-      const tarefas: { id: string; nome: string; status: string; url: string; prazo: string | null }[] = [];
-      for (const l of lj.lists ?? []) {
-        const r = await fetch(`https://api.clickup.com/api/v2/list/${l.id}/task?archived=false`, { headers: h, signal: AbortSignal.timeout(15_000) });
-        if (!r.ok) throw new Error(`ClickUp respondeu ${r.status} ao ler tarefas`);
-        const j = (await r.json()) as { tasks?: { id: string; name: string; status?: { status?: string }; url: string; due_date?: string | null }[] };
-        for (const t of j.tasks ?? []) if (t.name.toLowerCase().includes(e.contem.toLowerCase()))
-          tarefas.push({ id: t.id, nome: t.name, status: t.status?.status ?? "", url: t.url, prazo: t.due_date ? new Date(+t.due_date).toISOString().slice(0, 10) : null });
+      const bloqueada = (motivo: string) => ({ configurada: false, vinculada: false, confirmada: false, motivo });
+      if (!clickupToken()) return bloqueada("CLICKUP_API_TOKEN não configurado no servidor; configure a conexão para conferir o marco.");
+      if (!e.folder_id || !/^\d{1,30}$/.test(e.folder_id)) return bloqueada("Clínica sem pasta válida do ClickUp (clickup_folder_id); registre a pasta da clínica.");
+      if (!e.task_id || !/^[a-z0-9_-]{3,128}$/i.test(e.task_id)) return bloqueada("Nenhuma tarefa ClickUp válida vinculada ao marco 5; vincule a tarefa exata.");
+      try {
+        const r = await fetch(`https://api.clickup.com/api/v2/task/${encodeURIComponent(e.task_id)}`, {
+          headers: { authorization: clickupToken(), Accept: "application/json" }, redirect: "error", signal: AbortSignal.timeout(15_000),
+        });
+        if (!r.ok) return bloqueada(`Não foi possível confirmar a tarefa ClickUp (HTTP ${r.status}); confira a conexão e o vínculo.`);
+        const tarefa = await r.json() as { id?: unknown; folder?: { id?: unknown }; project?: { id?: unknown }; list?: { folder?: { id?: unknown } }; status?: { type?: unknown } };
+        if (tarefa?.id !== e.task_id) return bloqueada("O ClickUp retornou outra tarefa; confira o vínculo do marco 5.");
+        // project é o nome legado da pasta; parent é uma tarefa pai, não prova a pasta.
+        const pastas = [tarefa.folder?.id, tarefa.project?.id, tarefa.list?.folder?.id].filter((id) => id != null).map(String);
+        if (!pastas.length || pastas.some((id) => id !== e.folder_id)) return bloqueada("A tarefa ClickUp não pertence à pasta da clínica; corrija o vínculo antes de concluir.");
+        const fechada = tarefa.status?.type === "closed";
+        return { configurada: true, vinculada: true, confirmada: fechada, task_id: e.task_id, folder_id: e.folder_id, conferido_em: new Date().toISOString(),
+          status_type: fechada ? "closed" : "nao_fechada", motivo: fechada ? null : "A tarefa ClickUp vinculada continua aberta; conclua e confira a tarefa antes de liberar o marco." };
+      } catch {
+        return bloqueada("Não foi possível conferir a tarefa ClickUp; nenhuma conclusão externa foi confirmada.");
       }
-      return { configurada: true, tarefas };
-    },
-  }),
-  "clickup.comentar": ferramenta({
-    nome: "clickup.comentar", descricao: "Comenta numa tarefa do ClickUp ligada ao item do SAP.", risco: "baixo", externa: true, timeoutMs: 15_000,
-    entrada: z.object({ task_id: z.string().min(3).nullable(), texto: z.string().min(5).max(2000) }),
-    executar: async (_a, _x, e) => {
-      if (!clickupToken()) return { configurada: false, motivo: "CLICKUP_API_TOKEN não configurado no servidor" };
-      if (!e.task_id) return { configurada: false, motivo: "nenhuma tarefa do ClickUp ligada a este item" };
-      const r = await fetch(`https://api.clickup.com/api/v2/task/${e.task_id}/comment`, {
-        method: "POST", headers: { authorization: clickupToken(), "content-type": "application/json" },
-        body: JSON.stringify({ comment_text: e.texto, notify_all: false }), signal: AbortSignal.timeout(15_000),
-      });
-      if (!r.ok) throw new Error(`ClickUp respondeu ${r.status} ao comentar`);
-      return { configurada: true, ok: true };
     },
   }),
 } as const;
@@ -187,10 +200,13 @@ type NomeFerramenta = keyof typeof FERRAMENTAS;
 async function usar<N extends NomeFerramenta>(admin: Admin, exec: Execucao, nome: N, entrada: z.infer<(typeof FERRAMENTAS)[N]["entrada"]>): Promise<any> {
   const f = FERRAMENTAS[nome] as Ferramenta<any>;
   const e = f.entrada.parse(entrada);
-  return await Promise.race([
-    f.executar(admin, exec, e),
-    new Promise((_, rej) => setTimeout(() => rej(new Error(`${nome}: passou de ${f.timeoutMs / 1000}s`)), f.timeoutMs)),
-  ]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      f.executar(admin, exec, e),
+      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`${nome}: passou de ${f.timeoutMs / 1000}s`)), f.timeoutMs); }),
+    ]);
+  } finally { if (timer !== undefined) clearTimeout(timer); }
 }
 
 // ---------------------------------------------------------------- contrato dos passos
@@ -220,6 +236,37 @@ const SISTEMA_COBRANCA = `Você escreve, para a equipe da Doctor Creator revisar
 Regras: português do Brasil, cordial, direto, sem travessão, sem emoji em excesso (no máximo 1). Liste exatamente os itens recebidos, com o nome como veio. Não invente prazo, valor, nome de pessoa nem item. Nada de dado de paciente. No fim, ofereça ajuda.
 Responda SOMENTE um JSON: {"mensagem": "texto pronto para revisar"}`;
 
+async function conferirOperacaoAcessos(c: Ctx) {
+  const cli = await c.usar("sap.ler_clinica", { client_id: c.exec.client_id });
+  if (!cli) throw new Error("Esta clínica não está no SAP.");
+  if (c.exec.contexto.clinica_id && cli.id !== c.exec.contexto.clinica_id) throw new Error("A clínica da execução mudou; confira o vínculo antes de continuar.");
+  const operacao = await c.usar("sap.conferir_operacao", { clinica_id: cli.id }) as z.infer<typeof operacaoSapSchema>;
+  const regs = await c.usar("sap.ler_acessos", { clinica_id: cli.id });
+  const situacao = situacaoCriticos(regs);
+  if (situacao.pendentes.length !== operacao.pendentes || situacao.resolvidos.length !== operacao.resolvidos) throw new Error("O checklist mudou durante a conferência; confira os acessos novamente.");
+  const tarefaIncompleta = situacao.pendentes.some((item) => {
+    const acoes = operacao.acoes.filter((a) => a.codigo === `agente_acesso_${item.id}`);
+    return acoes.length !== 1 || !acoes[0].responsavel?.trim() || !acoes[0].prazo;
+  });
+  return { cli, operacao, ...situacao, evidencia: evidenciaCriticos(situacao.resolvidos), assinatura: JSON.stringify(situacao.resolvidos),
+    bloqueio: tarefaIncompleta ? "As ações de acesso precisam de responsável e prazo; confira os papéis da clínica e o D0." : null };
+}
+
+async function conferirClickupAcessos(c: Ctx, cli: { id: string; clickup_folder_id?: string | null }) {
+  const vinculo = await c.usar("sap.ler_vinculo", { clinica_id: cli.id });
+  const tarefa = await c.usar("clickup.ler_tarefa", { folder_id: cli.clickup_folder_id ?? null, task_id: vinculo?.clickup_task_id ?? null });
+  return { ...tarefa, vinculo_atualizado_em: vinculo?.atualizado_em ?? null };
+}
+
+function aprovacaoMarcoAtual(a: Awaited<ReturnType<Ctx["aprovacao"]>>, c: Ctx): boolean {
+  const p = a?.proposta;
+  return !!p && p.versao === 2 && p.rodada === c.exec.contexto.rodada_marco && p.marco === MARCO_ACESSOS
+    && p.clinica_id === c.exec.contexto.clinica_id && p.assinatura_acessos === c.exec.contexto.assinatura_acessos
+    && p.evidencia === c.exec.contexto.evidencia && p.clickup_task_id === c.exec.contexto.clickup?.task_id
+    && p.clickup_folder_id === c.exec.contexto.clickup?.folder_id
+    && p.vinculo_atualizado_em === c.exec.contexto.clickup?.vinculo_atualizado_em;
+}
+
 const FLUXO_ACESSOS: Fluxo = {
   id: "acessos_criticos", agente: "operations", nome: "Acessos críticos (item 5)",
   objetivo: "Garantir os acessos críticos do checklist 02.05 e fechar o item 5 do cronograma com evidência.",
@@ -227,18 +274,20 @@ const FLUXO_ACESSOS: Fluxo = {
     {
       nome: "ler_dados", descricao: "Lê a clínica e o checklist de acessos", ferramenta: "sap.ler_acessos", risco: "baixo",
       executar: async (c) => {
-        const cli = await c.usar("sap.ler_clinica", { client_id: c.exec.client_id });
-        if (!cli) return { tipo: "falhar", erro: "Esta clínica não está no SAP." };
-        const regs = await c.usar("sap.ler_acessos", { clinica_id: cli.id });
-        const { pendentes, resolvidos } = situacaoCriticos(regs);
-        const ctx = { clinica_id: cli.id, nome: cli.nome, clickup_folder_id: cli.clickup_folder_id ?? null, pendentes, resolvidos };
-        return { tipo: "seguir", saida: { pendentes: pendentes.length, resolvidos: resolvidos.length }, contexto: ctx, irPara: pendentes.length ? undefined : "conferir_acessos" };
+        const s = await conferirOperacaoAcessos(c);
+        if (s.bloqueio) return { tipo: "aguardar", minutos: 60, motivo: s.bloqueio };
+        const ctx = { versao_acessos: 2, clinica_id: s.cli.id, nome: s.cli.nome, clickup_folder_id: s.cli.clickup_folder_id ?? null,
+          pendentes: s.pendentes, resolvidos: s.resolvidos, operacao_sap: s.operacao, proximo_passo: s.operacao.proximo_passo };
+        return { tipo: "seguir", saida: s.operacao, contexto: ctx, irPara: s.pendentes.length ? undefined : "conferir_acessos" };
       },
     },
     {
-      nome: "conferir_clickup", descricao: "Confere as tarefas de acesso no ClickUp", ferramenta: "clickup.ler_tarefas", risco: "baixo",
+      nome: "conferir_clickup", descricao: "Confere a tarefa exata vinculada ao marco no ClickUp", ferramenta: "clickup.ler_tarefa", risco: "baixo",
       executar: async (c) => {
-        const r = await c.usar("clickup.ler_tarefas", { folder_id: c.exec.contexto.clickup_folder_id, contem: "acesso" });
+        const s = await conferirOperacaoAcessos(c);
+        if (s.bloqueio) return { tipo: "aguardar", minutos: 60, motivo: s.bloqueio, irPara: "ler_dados" };
+        const r = await conferirClickupAcessos(c, s.cli);
+        if (!r.vinculada) return { tipo: "aguardar", minutos: 60, motivo: r.motivo };
         return { tipo: "seguir", saida: r, contexto: { clickup: r } };
       },
     },
@@ -274,60 +323,94 @@ const FLUXO_ACESSOS: Fluxo = {
         }
         return {
           tipo: "aprovacao", risco: "alto",
-          resumo: `Mensagem para a ${c.exec.contexto.nome} cobrando ${(c.exec.contexto.pendentes as unknown[]).length} acesso(s). Ao aprovar, envie a mensagem no grupo da clínica: o agente só registra que a cobrança foi feita.`,
+          resumo: `Mensagem preparada para a equipe da ${c.exec.contexto.nome} sobre ${(c.exec.contexto.pendentes as unknown[]).length} acesso(s). Aprovar libera o texto para a equipe; o envio à clínica não está confirmado.`,
           proposta: { rodada, mensagem: c.exec.contexto.mensagem, origem: c.exec.contexto.origem_mensagem },
           evidencias: (c.exec.contexto.pendentes as ItemPendente[]).map((p) => ({ item: p.id, nome: p.nome, responsavel_dc: p.quem })),
         };
       },
     },
     {
-      nome: "registrar_cobranca", descricao: "Registra a cobrança no SAP e comenta no ClickUp", ferramenta: "sap.registrar_evento", risco: "baixo", idempotente: true,
+      nome: "registrar_cobranca", descricao: "Registra a mensagem aprovada para a equipe, com envio não confirmado", ferramenta: "sap.registrar_evento", risco: "baixo", idempotente: true,
       executar: async (c) => {
-        await c.usar("sap.registrar_evento", { clinica_id: c.exec.contexto.clinica_id, tipo: "agente_cobranca_acessos", payload: { itens: (c.exec.contexto.pendentes as ItemPendente[]).map((p) => p.id), aprovacao: c.exec.contexto.aprovacao_cobranca, execucao: c.exec.id } });
-        const tarefa = (c.exec.contexto.clickup?.tarefas ?? [])[0]?.id ?? null;
-        const ck = await c.usar("clickup.comentar", { task_id: tarefa, texto: `Cobrança de acessos enviada à clínica (aprovada na Central de Agentes). Itens: ${(c.exec.contexto.pendentes as ItemPendente[]).map((p) => p.id).join(", ")}.` });
-        return { tipo: "seguir", saida: { evento: true, clickup: ck } };
+        const a = await c.aprovacao("aprovar_cobranca");
+        if (!a || a.id !== c.exec.contexto.aprovacao_cobranca || a.estado !== "aprovada" || a.proposta?.rodada !== c.exec.contexto.rodada || a.proposta?.mensagem !== c.exec.contexto.mensagem) return { tipo: "seguir", irPara: "ler_dados" };
+        await c.usar("sap.registrar_evento", { clinica_id: c.exec.contexto.clinica_id, tipo: "agente_acessos_mensagem_aprovada", payload: {
+          itens: (c.exec.contexto.pendentes as ItemPendente[]).map((p) => p.id), aprovacao: a.id, execucao: c.exec.id, mensagem: c.exec.contexto.mensagem,
+          estado: "mensagem aprovada, envio não confirmado", envio_confirmado: false,
+        } });
+        return { tipo: "seguir", saida: { evento: true, envio_confirmado: false } };
       },
     },
     {
       nome: "conferir_acessos", descricao: "Confere de novo o checklist; espera 24 h se ainda faltar algo", ferramenta: "sap.ler_acessos", risco: "baixo",
       executar: async (c) => {
-        const regs = await c.usar("sap.ler_acessos", { clinica_id: c.exec.contexto.clinica_id });
-        const { pendentes, resolvidos } = situacaoCriticos(regs);
-        if (pendentes.length) return { tipo: "aguardar", minutos: 24 * 60, motivo: `Ainda faltam ${pendentes.length} acesso(s): ${pendentes.map((p) => p.id).join(", ")}` };
+        const s = await conferirOperacaoAcessos(c);
+        if (s.bloqueio) return { tipo: "aguardar", minutos: 60, motivo: s.bloqueio };
+        if (s.pendentes.length) return { tipo: "aguardar", minutos: 24 * 60, motivo: `Ainda faltam ${s.pendentes.length} acesso(s): ${s.pendentes.map((p) => p.id).join(", ")}. ${s.operacao.proximo_passo}` };
+        const clickup = await conferirClickupAcessos(c, s.cli);
+        if (!clickup.confirmada) return { tipo: "aguardar", minutos: 60, motivo: clickup.motivo };
         const rodada_marco = (Number(c.exec.contexto.rodada_marco) || 0) + 1;
-        return { tipo: "seguir", saida: { resolvidos: resolvidos.length }, contexto: { pendentes, resolvidos, evidencia: evidenciaCriticos(resolvidos), rodada_marco } };
+        return { tipo: "seguir", saida: { resolvidos: s.resolvidos.length, clickup }, contexto: { versao_acessos: 2, clinica_id: s.cli.id, nome: s.cli.nome,
+          pendentes: s.pendentes, resolvidos: s.resolvidos, evidencia: s.evidencia, assinatura_acessos: s.assinatura, rodada_marco, clickup,
+          operacao_sap: s.operacao, proximo_passo: s.operacao.proximo_passo } };
       },
     },
     {
       nome: "aprovar_marco", descricao: "Pede aprovação para dar o item 5 como feito (risco médio)", risco: "medio",
       executar: async (c) => {
+        if (c.exec.contexto.versao_acessos !== 2) return { tipo: "seguir", irPara: "conferir_acessos" };
         const a = await c.aprovacao("aprovar_marco");
         const rodada = c.exec.contexto.rodada_marco;
-        if (a && a.proposta?.rodada === rodada) {
-          if (a.estado === "aprovada") return { tipo: "seguir", saida: { aprovada: a.id }, contexto: { aprovacao_marco: a.id } };
+        if (a && aprovacaoMarcoAtual(a, c)) {
+          if (a.estado === "aprovada") {
+            const s = await conferirOperacaoAcessos(c);
+            if (s.bloqueio || s.pendentes.length || s.assinatura !== c.exec.contexto.assinatura_acessos) return { tipo: "aguardar", minutos: 60, motivo: s.bloqueio ?? "A evidência dos acessos mudou; confira e aprove o marco novamente.", irPara: "conferir_acessos" };
+            const clickup = await conferirClickupAcessos(c, s.cli);
+            if (!clickup.confirmada) return { tipo: "aguardar", minutos: 60, motivo: clickup.motivo, irPara: "conferir_acessos" };
+            if (clickup.task_id !== c.exec.contexto.clickup?.task_id || clickup.folder_id !== c.exec.contexto.clickup?.folder_id || clickup.vinculo_atualizado_em !== c.exec.contexto.clickup?.vinculo_atualizado_em) return { tipo: "seguir", irPara: "conferir_acessos" };
+            return { tipo: "seguir", saida: { aprovada: a.id, clickup }, contexto: { aprovacao_marco: a.id, clickup,
+              clickup_confirmado: { task_id: clickup.task_id, folder_id: clickup.folder_id, em: clickup.conferido_em, status: "closed" } } };
+          }
           if (a.estado === "correcao") return { tipo: "aguardar", minutos: 60, motivo: `Correção pedida: ${a.comentario}. O agente confere o checklist de novo em 1 hora.`, irPara: "conferir_acessos" };
         }
         return {
           tipo: "aprovacao", risco: "medio",
           resumo: `Todos os acessos críticos da ${c.exec.contexto.nome} estão resolvidos. Aprovar marca o item 5 do cronograma como feito, com a evidência abaixo.`,
-          proposta: { rodada, marco: MARCO_ACESSOS, evidencia: c.exec.contexto.evidencia },
+          proposta: { versao: 2, rodada, marco: MARCO_ACESSOS, clinica_id: c.exec.contexto.clinica_id, evidencia: c.exec.contexto.evidencia,
+            assinatura_acessos: c.exec.contexto.assinatura_acessos, clickup_task_id: c.exec.contexto.clickup.task_id, clickup_folder_id: c.exec.contexto.clickup.folder_id, vinculo_atualizado_em: c.exec.contexto.clickup.vinculo_atualizado_em },
           evidencias: (c.exec.contexto.resolvidos as ItemConfirmado[]).map((r) => ({ item: r.id, status: r.status, em: r.em, por: r.por })),
         };
       },
     },
     {
-      nome: "marcar_marco", descricao: "Marca o item 5 no cronograma do SAP", ferramenta: "sap.marcar_marco", risco: "medio", idempotente: true,
+      // O cache do passo antigo não prova a nova conferência. A RPC deve ser idempotente pela aprovação aplicada.
+      nome: "marcar_marco", descricao: "Reconfere acessos e ClickUp antes de marcar o item 5", ferramenta: "sap.marcar_marco", risco: "medio",
       executar: async (c) => {
-        await c.usar("sap.marcar_marco", { aprovacao_id: c.exec.contexto.aprovacao_marco, clinica_id: c.exec.contexto.clinica_id, marco: MARCO_ACESSOS, evidencia: c.exec.contexto.evidencia });
-        const tarefa = (c.exec.contexto.clickup?.tarefas ?? [])[0]?.id ?? null;
-        const ck = await c.usar("clickup.comentar", { task_id: tarefa, texto: `Item 5 (acessos críticos) marcado como feito no SAP. ${c.exec.contexto.evidencia}` });
-        return { tipo: "seguir", saida: { marcado: true, clickup: ck } };
+        const s = await conferirOperacaoAcessos(c);
+        if (s.bloqueio || s.pendentes.length) return { tipo: "aguardar", minutos: 60, motivo: s.bloqueio ?? "Um acesso crítico voltou a ficar pendente; confira as evidências antes de marcar.", irPara: "conferir_acessos" };
+        const clickup = await conferirClickupAcessos(c, s.cli);
+        if (!clickup.confirmada) return { tipo: "aguardar", minutos: 60, motivo: clickup.motivo, irPara: "conferir_acessos" };
+        if (c.exec.contexto.versao_acessos !== 2 || s.assinatura !== c.exec.contexto.assinatura_acessos || clickup.task_id !== c.exec.contexto.clickup?.task_id || clickup.folder_id !== c.exec.contexto.clickup?.folder_id || clickup.vinculo_atualizado_em !== c.exec.contexto.clickup?.vinculo_atualizado_em) return { tipo: "seguir", irPara: "conferir_acessos" };
+        const a = await c.aprovacao("aprovar_marco");
+        if (!a || a.estado !== "aprovada" || a.id !== c.exec.contexto.aprovacao_marco || !aprovacaoMarcoAtual(a, c)) return { tipo: "seguir", irPara: "conferir_acessos" };
+        const prova = c.exec.contexto.clickup_confirmado;
+        const idade = Date.now() - Date.parse(prova?.em);
+        if (prova?.status !== "closed" || prova.task_id !== clickup.task_id || prova.folder_id !== clickup.folder_id || !Number.isFinite(idade) || idade < 0 || idade > 10 * 60_000) return { tipo: "seguir", irPara: "aprovar_marco" };
+        await c.usar("sap.marcar_marco", { aprovacao_id: a.id, clinica_id: s.cli.id, marco: MARCO_ACESSOS, evidencia: s.evidencia });
+        return { tipo: "seguir", saida: { marcado: true, clickup }, contexto: { marco_confirmado: 2, clickup } };
       },
     },
     {
       nome: "concluir", descricao: "Encerra com o resumo", risco: "baixo",
-      executar: async (c) => ({ tipo: "concluir", resultado: { marco: MARCO_ACESSOS, resolvidos: (c.exec.contexto.resolvidos as unknown[]).length, evidencia: c.exec.contexto.evidencia } }),
+      executar: async (c) => {
+        const s = await conferirOperacaoAcessos(c);
+        if (s.bloqueio || s.pendentes.length) return { tipo: "aguardar", minutos: 60, motivo: s.bloqueio ?? "Há acesso crítico pendente; o marco precisa ser conferido novamente.", irPara: "conferir_acessos" };
+        const clickup = await conferirClickupAcessos(c, s.cli);
+        if (!clickup.confirmada) return { tipo: "aguardar", minutos: 60, motivo: clickup.motivo, irPara: "conferir_acessos" };
+        if (c.exec.contexto.marco_confirmado !== 2 || c.exec.contexto.versao_acessos !== 2 || s.assinatura !== c.exec.contexto.assinatura_acessos || clickup.task_id !== c.exec.contexto.clickup?.task_id || clickup.folder_id !== c.exec.contexto.clickup?.folder_id || clickup.vinculo_atualizado_em !== c.exec.contexto.clickup?.vinculo_atualizado_em) return { tipo: "seguir", irPara: "conferir_acessos" };
+        return { tipo: "concluir", resultado: { marco: MARCO_ACESSOS, resolvidos: s.resolvidos.length, evidencia: s.evidencia, clickup,
+          acoes: s.operacao.acoes, proximo_passo: "Coordenador de Implementação: conferir kickoff, formulário e baseline e preparar a Sessão 1.", envio_confirmado: false } };
+      },
     },
   ],
 };
@@ -614,7 +697,7 @@ const FLUXO_RECUPERACAO: Fluxo = {
       nome: "ler", descricao: "A regra escolhe quem recuperar hoje e lê o tom da clínica e o que funcionou antes", ferramenta: "recuperacao.ler", risco: "baixo",
       executar: async (c) => {
         const r = await c.usar("recuperacao.ler", { client_id: c.exec.client_id });
-        if (!r.casos.length) return { tipo: "concluir", resultado: { mensagens: 0, motivo: "Ninguém para recuperar hoje (ou as conversas ainda não foram lidas pela auditoria)." } };
+        if (!r.casos.length) return { tipo: "concluir", resultado: { mensagens: 0, motivo: r.bloqueio ?? "Ninguém elegível para recuperar hoje (ou as conversas ainda não foram lidas pela auditoria)." } };
         return { tipo: "seguir", saida: { casos: r.casos.length, filtro: r.filtro, licoes: r.n_licoes }, contexto: { casos: r.casos.map((x: any) => ({ conversa_id: x.conversa_id, motivo: x.motivo, prioridade: x.prioridade, dias: x.dias })), filtro: r.filtro,
           texto: `### Clínica\n${r.ficha}\n\n### Tom e regras da clínica (Brand Brain)\n${r.brain.texto || "(sem Brain aprovado: use tom acolhedor e direto)"}\n\n${r.licoes ? `${r.licoes}\n\n` : ""}${r.aprendizado}\n\n### Lista de hoje\n${r.casos.map((x: any) => x.texto).join("\n\n")}`.slice(0, 16_000) } };
       },
@@ -774,8 +857,10 @@ async function abertasPorClinica(admin: Admin, id: string): Promise<Map<string, 
  *  módulo do agente quando a última rodada é mais velha que o intervalo e não há uma em andamento. Antes, mede sozinho o
  *  resultado das sugestões de recuperação (sugestoes_medir). Os agentes só preparam; quem aprova é uma pessoa. */
 export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas: number; puladas: number; por_agente: Record<string, number>; medidas: number; cheias: number; expiradas: number; aprendizado: Awaited<ReturnType<typeof aprenderTodas>> }> {
-  const { data: medidas } = await admin.rpc("sugestoes_medir");
-  // Antes de pôr os agentes na fila: mede o resultado do que já foi sugerido e recalcula as lições de cada clínica.
+  const { data: medidas, error: erroMedir } = await admin.rpc("sugestoes_medir");
+  if (erroMedir) throw new Error(`Medição de sugestões indisponível: ${erroMedir.message}`);
+  const { error: erroVerificar } = await admin.rpc("operacao_verificar", { p_client_id: null });
+  if (erroVerificar) throw new Error(`Acompanhamento de casos indisponível: ${erroVerificar.message}`);
   const aprendizado = await aprenderTodas(admin, 120_000);
   // O que ninguém revisou some sozinho: o agente propõe de novo com dado novo se ainda fizer sentido.
   const agora = Date.now();
@@ -807,6 +892,23 @@ export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas:
       por_agente[ag.id] = (por_agente[ag.id] ?? 0) + 1;
     }
   }
+  // Um marco SAP completo, usando as ações e aprovações existentes; sem comunicação externa automática.
+  const clientesSap = [...new Set(((mods ?? []) as { client_id: string; modulo: string }[]).filter(m => m.modulo === "sap").map(m => m.client_id))];
+  for (const client_id of clientesSap) {
+    const { data: cli, error: erroCli } = await admin.from("sap_clinicas").select("id,status,d0").eq("client_id", client_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (erroCli) throw new Error(erroCli.message);
+    if (!cli || ["pausada", "encerrada"].includes(cli.status)) continue;
+    const { data: operacaoSap, error: erroOperacao } = await admin.rpc("operacao_sap_conferir", { p_clinica_id: cli.id });
+    if (erroOperacao) throw new Error(erroOperacao.message);
+    if (!cli.d0) continue;
+    const { data: ultimo, error: erroUltimo } = await admin.from("agente_execucoes").select("estado,criado_em").eq("client_id",client_id).eq("fluxo","acessos_criticos").order("criado_em", { ascending:false }).limit(1).maybeSingle();
+    if (erroUltimo) throw new Error(erroUltimo.message);
+    // A marcação concluída não ganha outra execução diária. Revogação fica visível nas ações reconciliadas.
+    if (ultimo && ((! ["concluida", "falhou", "cancelada"].includes(ultimo.estado)) || (ultimo.estado === "concluida" && !operacaoSap?.pendentes) || Date.parse(ultimo.criado_em) > agora - 24*3_600_000)) continue;
+    const { error: erroInserir } = await admin.from("agente_execucoes").insert({ client_id, agente:"operations", fluxo:"acessos_criticos", objetivo:"Conduzir os acessos críticos até o marco 5 com evidência (agendado)", criado_por:null });
+    if (erroInserir && !/duplicate/i.test(erroInserir.message)) throw new Error(erroInserir.message);
+    if (!erroInserir) { enfileiradas++; por_agente.operations=(por_agente.operations ?? 0)+1; }
+  }
   return { enfileiradas, puladas, por_agente, medidas: Number(medidas ?? 0), cheias, expiradas, aprendizado };
 }
 /** Nome antigo, usado pelo agendamento do n8n ("brain_enfileirar"): agora enfileira todos os agentes. */
@@ -837,7 +939,19 @@ export async function rodarAgentes(admin: Admin, opcoes: { execucaoId?: string |
 
 async function rodarUma(admin: Admin, exec: Execucao, maxPassos: number, fim: number) {
   const fluxo = FLUXOS[exec.fluxo];
-  const atualizar = (campos: Record<string, unknown>) => admin.from("agente_execucoes").update({ ...campos, atualizado_em: new Date().toISOString() }).eq("id", exec.id);
+  const atualizar = async (campos: Record<string, unknown>) => {
+    const { data, error } = await admin.from("agente_execucoes").update({ ...campos, atualizado_em: new Date().toISOString() }).eq("id", exec.id).eq("estado", "rodando").select("id").maybeSingle();
+    if (error) throw new Error(`Não foi possível persistir o estado do agente: ${error.message}`);
+    if (!data) throw new Error("A execução não está mais disponível para este processamento; nenhum passo adicional foi executado.");
+  };
+  class CacheIncompleto extends Error {}
+  const cacheSchema = z.object({
+    versao: z.literal(1), ordem: z.number().int(), nome: z.string(), custo_usd: z.number().finite().nonnegative(),
+    resultado: z.discriminatedUnion("tipo", [
+      z.object({ tipo: z.literal("seguir"), saida: z.unknown().optional(), contexto: z.record(z.unknown()).optional(), irPara: z.string().min(1).optional() }),
+      z.object({ tipo: z.literal("concluir"), resultado: z.record(z.unknown()) }),
+    ]),
+  });
   if (!fluxo) {
     await atualizar({ estado: "falhou", erro: `fluxo desconhecido: ${exec.fluxo}`, lease_ate: null, encerrado_em: new Date().toISOString() });
     return { id: exec.id, estado: "falhou", passos: 0, erro: "fluxo desconhecido" };
@@ -847,7 +961,8 @@ async function rodarUma(admin: Admin, exec: Execucao, maxPassos: number, fim: nu
     admin, exec,
     usar: (n, e) => usar(admin, exec, n, e),
     aprovacao: async (passo) => {
-      const { data } = await admin.from("aprovacoes").select("id, estado, comentario, proposta").eq("execucao_id", exec.id).eq("passo", passo).order("criado_em", { ascending: false }).limit(1).maybeSingle();
+      const { data, error } = await admin.from("aprovacoes").select("id, estado, comentario, proposta").eq("execucao_id", exec.id).eq("passo", passo).order("criado_em", { ascending: false }).limit(1).maybeSingle();
+      if (error) throw new Error(`Não foi possível verificar a aprovação: ${error.message}`);
       return (data as any) ?? null;
     },
   };
@@ -857,24 +972,36 @@ async function rodarUma(admin: Admin, exec: Execucao, maxPassos: number, fim: nu
       await atualizar({ estado: "concluida", lease_ate: null, encerrado_em: new Date().toISOString() });
       return { id: exec.id, estado: "concluida", passos };
     }
+    const custoAntes = await custoDaExecucao(admin, exec.id);
+    exec.custo_usd = Math.max(Number(exec.custo_usd), custoAntes);
     if (Number(exec.custo_usd) >= Number(exec.teto_custo_usd)) {
-      await atualizar({ estado: "pausada", estado_antes_pausa: "pendente", erro: `teto de custo de IA atingido (US$ ${exec.teto_custo_usd})`, lease_ate: null });
+      await atualizar({ estado: "pausada", estado_antes_pausa: "pendente", erro: `teto de custo de IA atingido (US$ ${exec.teto_custo_usd})`, custo_usd: exec.custo_usd, lease_ate: null });
       return { id: exec.id, estado: "pausada", passos, erro: "teto de custo" };
     }
     const chave = passo.idempotente ? `${exec.id}:${passo.nome}:${exec.contexto.rodada ?? 0}` : null;
     const t0 = Date.now();
-    const custoAntes = await custoDaExecucao(admin, exec.id);
     let r: Resultado;
     let jaFeito = false;
+    let custoCache = 0;
     try {
       if (chave) {
-        const { data: feito } = await admin.from("agente_passos").select("saida").eq("chave_idempotencia", chave).eq("ok", true).maybeSingle();
-        if (feito) { jaFeito = true; r = { tipo: "seguir", saida: { ...(feito.saida as object), repetido: "já tinha rodado; não repetiu a ação" } }; }
+        const { data: feito, error } = await admin.from("agente_passos").select("saida").eq("chave_idempotencia", chave).eq("ok", true).maybeSingle();
+        if (error) throw new Error(`Não foi possível conferir a idempotência: ${error.message}`);
+        if (feito) {
+          const salvo = cacheSchema.safeParse(feito.saida?.__motor);
+          if (!salvo.success || salvo.data.ordem !== exec.passo_atual || salvo.data.nome !== passo.nome) throw new CacheIncompleto("O registro antigo ou incompleto deste passo não prova seu resultado/contexto; confira a execução antes de retomar.");
+          jaFeito = true; r = salvo.data.resultado; custoCache = salvo.data.custo_usd;
+        }
         else r = await passo.executar(ctx);
       } else r = await passo.executar(ctx);
     } catch (e) {
       const erro = (e instanceof Error ? e.message : String(e)).slice(0, 400);
-      await admin.from("agente_passos").insert({ execucao_id: exec.id, ordem: exec.passo_atual, nome: passo.nome, ferramenta: passo.ferramenta ?? null, risco: passo.risco, ok: false, erro, ms: Date.now() - t0 });
+      const { error: erroRegistro } = await admin.from("agente_passos").insert({ execucao_id: exec.id, ordem: exec.passo_atual, nome: passo.nome, ferramenta: passo.ferramenta ?? null, risco: passo.risco, ok: false, erro, ms: Date.now() - t0 });
+      if (erroRegistro) throw new Error(`Não foi possível registrar a falha do agente: ${erroRegistro.message}`);
+      if (e instanceof CacheIncompleto) {
+        await atualizar({ estado: "pausada", estado_antes_pausa: "pendente", erro: `${passo.nome}: ${erro}`, proximo_em: null, lease_ate: null });
+        return { id: exec.id, estado: "pausada", passos, erro };
+      }
       const tentativas = exec.tentativas;
       if (tentativas >= MAX_TENTATIVAS) {
         await atualizar({ estado: "falhou", erro: `${passo.nome}: ${erro}`, lease_ate: null, encerrado_em: new Date().toISOString() });
@@ -884,37 +1011,50 @@ async function rodarUma(admin: Admin, exec: Execucao, maxPassos: number, fim: nu
       await atualizar({ estado: "aguardando", erro: `${passo.nome}: ${erro} (nova tentativa em ${espera} min)`, proximo_em: new Date(Date.now() + espera * 60_000).toISOString(), lease_ate: null });
       return { id: exec.id, estado: "aguardando", passos, erro };
     }
-    passos++;
-    const custoPasso = Math.max(0, (await custoDaExecucao(admin, exec.id)) - custoAntes);
-    exec.custo_usd = Number(exec.custo_usd) + custoPasso;
+    const custoDepois = await custoDaExecucao(admin, exec.id);
+    const custoPasso = Math.max(0, custoDepois - custoAntes);
+    const custoTotal = Math.max(Number(exec.custo_usd), custoDepois, custoCache);
     const linha = { execucao_id: exec.id, ordem: exec.passo_atual, nome: passo.nome, ferramenta: passo.ferramenta ?? null, risco: passo.risco, custo_usd: custoPasso, ms: Date.now() - t0 };
-    if (!jaFeito) await admin.from("agente_passos").insert({ ...linha, ok: r.tipo !== "falhar", saida: resumoSaida(r), erro: r.tipo === "falhar" ? r.erro : null, chave_idempotencia: chave });
+    if (!jaFeito) {
+      const cacheavel = !!chave && (r.tipo === "seguir" || r.tipo === "concluir");
+      const resumo = resumoSaida(r);
+      const saida = cacheavel ? { ...(resumo && typeof resumo === "object" && !Array.isArray(resumo) ? resumo : { resultado: resumo }),
+        __motor: { versao: 1, ordem: exec.passo_atual, nome: passo.nome, resultado: r, custo_usd: custoTotal } } : resumo;
+      const { error } = await admin.from("agente_passos").insert({ ...linha, ok: r.tipo !== "falhar", saida, erro: r.tipo === "falhar" ? r.erro : null, chave_idempotencia: cacheavel ? chave : null });
+      if (error) throw new Error(`Não foi possível persistir o passo do agente: ${error.message}`);
+    }
+    passos++;
 
     if (r.tipo === "seguir") {
       const contexto = { ...exec.contexto, ...(r.contexto ?? {}) };
       const prox = r.irPara ? fluxo.passos.findIndex((p) => p.nome === r.irPara) : exec.passo_atual + 1;
-      exec.contexto = contexto;
-      exec.passo_atual = prox < 0 ? exec.passo_atual + 1 : prox;
-      exec.tentativas = 0;
-      await atualizar({ contexto, passo_atual: exec.passo_atual, tentativas: 0, custo_usd: exec.custo_usd, erro: null, lease_ate: new Date(Date.now() + LEASE_S * 1000).toISOString() });
+      if (r.irPara && prox < 0) throw new Error(`Destino de passo inválido: ${r.irPara}`);
+      const proximo = prox;
+      await atualizar({ contexto, passo_atual: proximo, tentativas: 0, custo_usd: custoTotal, erro: null, lease_ate: new Date(Date.now() + LEASE_S * 1000).toISOString() });
+      exec.contexto = contexto; exec.passo_atual = proximo; exec.tentativas = 0; exec.custo_usd = custoTotal;
       continue;
     }
     if (r.tipo === "aprovacao") {
       const { error } = await admin.from("aprovacoes").insert({ execucao_id: exec.id, client_id: exec.client_id, passo: passo.nome, risco: r.risco, resumo: r.resumo, proposta: r.proposta, evidencias: r.evidencias ?? [] });
-      if (error && !/duplicate/i.test(error.message)) throw new Error(error.message);
-      await atualizar({ estado: "aguardando_aprovacao", custo_usd: exec.custo_usd, lease_ate: null });
+      if (error) {
+        if (error.code !== "23505") throw new Error(`Não foi possível persistir a aprovação: ${error.message}`);
+        const { data: pendente, error: erroPendente } = await admin.from("aprovacoes").select("id").eq("execucao_id", exec.id).eq("passo", passo.nome).eq("estado", "pendente").maybeSingle();
+        if (erroPendente || !pendente) throw new Error("Não foi possível confirmar a aprovação pendente após conflito de gravação.");
+      }
+      await atualizar({ estado: "aguardando_aprovacao", custo_usd: custoTotal, lease_ate: null });
       return { id: exec.id, estado: "aguardando_aprovacao", passos };
     }
     if (r.tipo === "aguardar") {
-      if (r.irPara) { const i = fluxo.passos.findIndex((p) => p.nome === r.irPara); if (i >= 0) exec.passo_atual = i; }
-      await atualizar({ estado: "aguardando", passo_atual: exec.passo_atual, proximo_em: new Date(Date.now() + r.minutos * 60_000).toISOString(), erro: r.motivo, custo_usd: exec.custo_usd, tentativas: 0, lease_ate: null });
+      const proximo = r.irPara ? fluxo.passos.findIndex((p) => p.nome === r.irPara) : exec.passo_atual;
+      if (proximo < 0) throw new Error(`Destino de passo inválido: ${r.irPara}`);
+      await atualizar({ estado: "aguardando", passo_atual: proximo, proximo_em: new Date(Date.now() + r.minutos * 60_000).toISOString(), erro: r.motivo, custo_usd: custoTotal, tentativas: 0, lease_ate: null });
       return { id: exec.id, estado: "aguardando", passos };
     }
     if (r.tipo === "concluir") {
-      await atualizar({ estado: "concluida", resultado: r.resultado, custo_usd: exec.custo_usd, erro: null, lease_ate: null, encerrado_em: new Date().toISOString() });
+      await atualizar({ estado: "concluida", resultado: r.resultado, custo_usd: custoTotal, erro: null, lease_ate: null, encerrado_em: new Date().toISOString() });
       return { id: exec.id, estado: "concluida", passos };
     }
-    await atualizar({ estado: "falhou", erro: r.erro, lease_ate: null, encerrado_em: new Date().toISOString() });
+    await atualizar({ estado: "falhou", erro: r.erro, custo_usd: custoTotal, lease_ate: null, encerrado_em: new Date().toISOString() });
     return { id: exec.id, estado: "falhou", passos, erro: r.erro };
   }
   // Limite de passos ou de tempo desta chamada: devolve para a fila, de onde parou.
@@ -923,8 +1063,11 @@ async function rodarUma(admin: Admin, exec: Execucao, maxPassos: number, fim: nu
 }
 
 async function custoDaExecucao(admin: Admin, id: string): Promise<number> {
-  const { data } = await admin.from("ia_execucoes").select("custo_usd").eq("execucao_id", id);
-  return ((data ?? []) as { custo_usd: number | null }[]).reduce((s, r) => s + Number(r.custo_usd ?? 0), 0);
+  const { data, error } = await admin.from("ia_execucoes").select("custo_usd").eq("execucao_id", id);
+  if (error) throw new Error(`Não foi possível verificar o custo do agente: ${error.message}`);
+  const custos = ((data ?? []) as { custo_usd: number | null }[]).map((r) => Number(r.custo_usd ?? 0));
+  if (custos.some((c) => !Number.isFinite(c) || c < 0)) throw new Error("Custo do agente inválido; confira os registros antes de continuar.");
+  return custos.reduce((s, c) => s + c, 0);
 }
 
 function resumoSaida(r: Resultado): unknown {

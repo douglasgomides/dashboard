@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PainelAgentes, RecuperarHoje, RoteirosProntos } from "@/components/agentes-ia";
+import { PainelAgentes, RoteirosProntos } from "@/components/agentes-ia";
+import { SapAcessosOperacao } from "@/components/sap-acessos-operacao";
 import { useClientRole } from "@/hooks/use-client-role";
 
-// Sistema agêntico no SAP: os mesmos agentes do Hub. Recuperação e Roteirista entregam aqui mesmo; Anúncios e
-// Campanhas entregam na tela Mídia.
+// A operação de implantação pertence ao SAP. Recuperação de pacientes fica no Nexo.
 export const Route = createFileRoute("/_authenticated/sap/$clientId/agentes")({
   component: AgentesSap,
 });
@@ -13,8 +13,8 @@ function AgentesSap() {
   const { podeEditar } = useClientRole(clientId);
   return (
     <div className="space-y-4">
+      <SapAcessosOperacao clientId={clientId} />
       <PainelAgentes clientId={clientId} produto="sap" />
-      <RecuperarHoje clientId={clientId} podeEditar={podeEditar} />
       <RoteirosProntos clientId={clientId} podeEditar={podeEditar} />
     </div>
   );

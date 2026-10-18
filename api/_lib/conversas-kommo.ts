@@ -75,6 +75,7 @@ async function eventosDoDia(dom: string, token: string, tipo: string, de: number
     const ev = j._embedded?.events ?? [];
     todos.push(...ev);
     if (!j._links?.next || ev.length < 100) break;
+    if (page === 60) throw new Error("Paginação de mensagens incompleta: limite de 60 páginas.");
   }
   return todos;
 }
@@ -150,12 +151,19 @@ export async function ingerirConversasKommo(
       r.dias++;
       r.ate = new Date(cursor).toISOString();
       for (const conn of membros) {
-        const config = { ...(conn.config && typeof conn.config === "object" ? conn.config : {}), kommo_conversas_ate: r.ate };
+        const config = { ...(conn.config && typeof conn.config === "object" ? conn.config : {}), kommo_conversas_ate: r.ate, kommo_conversas_cobertura: cursor >= limite ? "completa" : "parcial", kommo_conversas_conferencia_em: new Date().toISOString() };
         const { error: eS } = await admin.from("crm_connections").update({ config }).eq("id", conn.id);
         if (eS) r.erros.push(`cursor: ${eS.message}`);
         conn.config = config;
       }
       if (r.erros.length) break;
+    }
+    if (r.erros.length || cursor < limite) {
+      for (const conn of membros) {
+        const config = { ...(conn.config ?? {}), kommo_conversas_cobertura: r.erros.length ? "erro" : "parcial", kommo_conversas_conferencia_em: new Date().toISOString() };
+        const { error: erroCobertura } = await admin.from("crm_connections").update({ config }).eq("id", conn.id);
+        if (erroCobertura) r.erros.push("Não foi possível registrar cobertura incompleta das mensagens.");
+      }
     }
   }
   return saida;
