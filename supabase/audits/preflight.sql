@@ -40,15 +40,15 @@ select 'migration_history' as section,
          'version', 'version', 'version', '20261022170000', nspname, relname)
         from history where has_version) as history_count_sql;
 
--- As 131 migrações versionadas têm três timestamps repetidos no histórico
+-- As 133 migrações versionadas têm três timestamps repetidos no histórico
 -- anterior ao hardening. Atualize este manifesto se adicionar arquivos.
 -- Uma linha por versão no Supabase não equivale a um
--- arquivo por versão; não exigir count(*)=131 nem reparar o histórico aqui.
+-- arquivo por versão; não exigir count(*)=133 nem reparar o histórico aqui.
 select 'migration_manifest_note' as section,
-       131 as repository_sql_files,
-       128 as repository_distinct_versions,
+       133 as repository_sql_files,
+       130 as repository_distinct_versions,
        array['20261014120000', '20261018120000', '20261018130000']::text[] as historical_duplicate_versions,
-       '20261022190000'::text as latest_repository_version;
+       '20261023091000'::text as latest_repository_version;
 
 -- Paths vazios são seguros nas RPCs recentes, que qualificam seus objetos.
 -- Resumo para triagem. As sete contagens de falhas devem ser zero depois

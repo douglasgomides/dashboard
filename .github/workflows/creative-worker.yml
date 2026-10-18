@@ -1,0 +1,64 @@
+name: Inteligência Criativa (worker)
+
+# Processa a fila da Inteligência Criativa (creative_jobs) a cada 10 minutos, das 6h às 21h (Brasília).
+# Só roda com os segredos SUPABASE_SERVICE_ROLE_KEY e OPENAI_API_KEY cadastrados no repositório.
+# Limites de custo ficam no banco (US$ 2 por trabalho, US$ 10 por cliente/dia). Para pausar: desative este workflow.
+on:
+  schedule:
+    - cron: "*/10 9-23 * * *"
+    - cron: "*/10 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: creative-worker
+  cancel-in-progress: false
+
+jobs:
+  fila:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SUPABASE_URL: https://cvdnzoqduliopscfsrkc.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      CREATIVE_ALLOW_PRODUCTION: "true"
+      CREATIVE_WORKER_ID: github-actions
+      CREATIVE_ENABLE_APIFY: "false"
+      FFMPEG_PATH: /usr/bin/ffmpeg
+      FFPROBE_PATH: /usr/bin/ffprobe
+    steps:
+      - name: Segredos cadastrados?
+        id: pronto
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] || [ -z "$OPENAI_API_KEY" ]; then
+            echo "Segredos ausentes: cadastre SUPABASE_SERVICE_ROLE_KEY e OPENAI_API_KEY em Settings > Secrets." >> "$GITHUB_STEP_SUMMARY"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        if: steps.pronto.outputs.ok == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        if: steps.pronto.outputs.ok == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            workers/creative/package-lock.json
+      - name: FFmpeg
+        if: steps.pronto.outputs.ok == 'true'
+        run: command -v ffmpeg || (sudo apt-get update -q && sudo apt-get install -y -q ffmpeg)
+      - name: Dependências
+        if: steps.pronto.outputs.ok == 'true'
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix workers/creative --no-audit --no-fund
+      - name: Processar fila
+        if: steps.pronto.outputs.ok == 'true'
+        run: npx --prefix workers/creative tsx workers/creative/main.ts --drain
