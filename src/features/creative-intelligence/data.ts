@@ -40,6 +40,10 @@ export type JobProgress = Pick<
   CreativeJob,
   "id" | "status" | "progress" | "message" | "cost_usd" | "reserved_usd"
 >;
+export const readWorkerHealth = () =>
+  read<{ seen_at?: string; capabilities?: Record<string, boolean> }>(
+    db.rpc("creative_worker_health"),
+  );
 export const readJobProgress = (clientId: string, accountId: string) =>
   read<JobProgress[]>(
     db
@@ -91,9 +95,7 @@ export async function readWorkspace(clientId: string, accountId: string) {
         .order("observed_at", { ascending: false })
         .limit(200),
     ),
-    read<{ seen_at?: string; capabilities?: Record<string, boolean> }>(
-      db.rpc("creative_worker_health"),
-    ),
+    readWorkerHealth(),
   ]);
   return {
     sources,

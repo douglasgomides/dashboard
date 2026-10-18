@@ -221,3 +221,38 @@ test("vídeo exige gravação e distingue roteiro de fala real", async ({
     page.getByText("A IA propõe cortes sobre a fala real.", { exact: false }),
   ).toBeVisible();
 });
+
+test("estúdio reconhece worker reconectado sem recarregar ou apagar a edição", async ({
+  context,
+  page,
+}) => {
+  await studio(context, "admin");
+  let connected = false;
+  await context.route("**/rest/v1/rpc/creative_worker_health", (r) =>
+    r.fulfill({
+      json: {
+        seen_at: new Date(Date.now() - (connected ? 0 : 180000)).toISOString(),
+        capabilities: { vision: true, production_render: true },
+      },
+    }),
+  );
+  await page.clock.install();
+  await page.goto(`/${CID}/inteligencia-criativa`);
+  await page
+    .getByRole("button", { name: "Estúdio de produção", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: /Projeto de conteúdo da clínica/ })
+    .click();
+  const render = page.getByRole("button", {
+    name: "Gerar prévia / exportação",
+    exact: true,
+  });
+  await expect(render).toBeDisabled();
+  connected = true;
+  await page.clock.fastForward(31000);
+  await expect(render).toBeEnabled();
+  await expect(
+    page.getByRole("textbox", { name: "Texto do slide 1", exact: true }),
+  ).toHaveValue("Sua saúde merece informação clara.");
+});

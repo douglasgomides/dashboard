@@ -2,6 +2,13 @@ import { z } from "zod";
 import type { CreativeAdaptation } from "./contracts";
 
 export const PRODUCTION_BUCKET = "nexo-production-private";
+export const PRODUCTION_IMAGE_BUCKET = "nexo-production-input-images";
+export function productionBucket(media: { storage_bucket?: string }) {
+  const bucket = media.storage_bucket || PRODUCTION_BUCKET;
+  if (![PRODUCTION_BUCKET, PRODUCTION_IMAGE_BUCKET].includes(bucket))
+    throw new Error("Armazenamento de produção inválido.");
+  return bucket;
+}
 export const MAX_UPLOAD = 200 * 1024 * 1024;
 export const MAX_EDIT_SECONDS = 180;
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
@@ -146,6 +153,7 @@ export interface ProductionMedia {
     | "subtitle"
     | "frame";
   storage_path: string;
+  storage_bucket?: string;
   mime: string;
   bytes: number;
   sha256: string | null;

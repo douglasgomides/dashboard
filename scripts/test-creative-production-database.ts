@@ -26,7 +26,7 @@ try {
   await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb);
  create function auth.uid() returns uuid language sql stable as $$select (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid$$;
  create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb$$;
- create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,unique(bucket_id,name));
+ create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,metadata jsonb,name text,unique(bucket_id,name));
  alter table storage.objects enable row level security;grant usage on schema public,auth,storage to anon,authenticated,service_role;grant select,insert,update,delete on storage.objects to authenticated,service_role;alter default privileges in schema public grant all on tables to anon,authenticated,service_role;`);
   for (const f of (await readdir(dir)).filter((f) => f.endsWith(".sql")).sort())
     await db.exec(await readFile(new URL(f, dir), "utf8"));
@@ -101,21 +101,45 @@ try {
     "create policy permissive_legacy_select on storage.objects for select to authenticated using(true);create policy permissive_legacy_insert on storage.objects for insert to authenticated with check(true);create policy permissive_legacy_update on storage.objects for update to authenticated using(true) with check(true);",
   );
   await role("authenticated", U);
+  await assert.rejects(
+    () =>
+      db.query(
+        "insert into storage.objects(bucket_id,name,metadata) values($1,$2,$3)",
+        [
+          "nexo-production-input-images",
+          upload.path,
+          { size: 1000, mimetype: "image/png" },
+        ],
+      ),
+    /row.level security/,
+  );
+  await assert.rejects(
+    () =>
+      db.query(
+        "insert into storage.objects(bucket_id,name,metadata) values($1,$2,$3)",
+        [
+          "nexo-production-input-images",
+          upload.path,
+          { size: 100, mimetype: "video/mp4" },
+        ],
+      ),
+    /row.level security/,
+  );
   await db.query("insert into storage.objects(bucket_id,name) values($1,$2)", [
-    "nexo-production-private",
+    "nexo-production-input-images",
     upload.path,
   ]);
   await assert.rejects(
     () =>
       db.query("insert into storage.objects(bucket_id,name) values($1,$2)", [
-        "nexo-production-private",
+        "nexo-production-input-images",
         upload.path + "-other",
       ]),
     /row.level security/,
   );
   const moved = await db.query(
     "update storage.objects set name=name||'-moved' where bucket_id=$1 returning id",
-    ["nexo-production-private"],
+    ["nexo-production-input-images"],
   );
   assert.equal(moved.rows.length, 0);
   await assert.rejects(
@@ -189,20 +213,20 @@ try {
     /Chave já utilizada/,
   );
   // Cota da clínica soma reservas de upload em todos os projetos, mesmo sem arquivo enviado.
-  await scalar(
-    "select creative_production_upload($1,$2,'video/mp4',209715200)",
-    [A, p],
-  );
-  await scalar(
-    "select creative_production_upload($1,$2,'video/mp4',209715200)",
-    [A, another],
-  );
+  await scalar("select creative_production_upload($1,$2,'video/mp4',1)", [
+    A,
+    p,
+  ]);
+  await scalar("select creative_production_upload($1,$2,'video/mp4',1)", [
+    A,
+    another,
+  ]);
   await assert.rejects(
     () =>
-      db.query(
-        "select creative_production_upload($1,$2,'video/mp4',117440512)",
-        [A, another],
-      ),
+      db.query("select creative_production_upload($1,$2,'video/mp4',1)", [
+        A,
+        another,
+      ]),
     /512 MiB/,
   );
   await assert.rejects(
@@ -240,7 +264,7 @@ try {
   await assert.rejects(
     () =>
       db.query("insert into storage.objects(bucket_id,name) values($1,$2)", [
-        "nexo-production-private",
+        "nexo-production-input-images",
         upload.path + "-viewer",
       ]),
     /row.level security/,
@@ -249,7 +273,7 @@ try {
   assert.equal(await scalar("select count(*) from creative_productions"), 0);
   assert.equal(
     await scalar(
-      "select count(*) from storage.objects where bucket_id='nexo-production-private'",
+      "select count(*) from storage.objects where bucket_id='nexo-production-input-images'",
     ),
     0,
   );

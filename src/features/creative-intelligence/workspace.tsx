@@ -33,6 +33,7 @@ import {
   listAccounts,
   readWorkspace,
   readJobProgress,
+  readWorkerHealth,
   readAssets,
   enqueue,
   cancelJob,
@@ -103,6 +104,13 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
     enabled: !!accountId,
     queryFn: () => readJobProgress(clientId, accountId),
     refetchInterval: 5000,
+  });
+  const workerHealth = useQuery({
+    queryKey: ["creative-worker-health", clientId, accountId],
+    enabled: !!accountId,
+    queryFn: readWorkerHealth,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
   });
   const completed = progress.data
     ?.filter((j) => ["completed", "failed", "cancelled"].includes(j.status))
@@ -215,9 +223,10 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
     },
   });
   const dispatch = (fn: () => Promise<unknown>) => action.mutate(fn);
+  const workerState = workerHealth.data ?? w?.health;
   const healthy =
-    !!w?.health.seen_at && Date.now() - Date.parse(w.health.seen_at) < 120_000;
-  const canAnalyse = podeEditar && healthy && !!w?.health.capabilities?.vision;
+    !!workerState?.seen_at && Date.now() - Date.parse(workerState.seen_at) < 120_000;
+  const canAnalyse = podeEditar && healthy && !!workerState?.capabilities?.vision;
   const busy = action.isPending;
   function chooseStructure(s: CreativeStructure) {
     setStructureId(s.id);
@@ -335,7 +344,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
           </button>
         ))}
       </nav>
-      {tab === "producao" && <ProductionWorkspace key={`${clientId}:${accountId}`} clientId={clientId} accountId={accountId} editable={podeEditar} healthy={healthy} capabilities={w?.health.capabilities || {}} adaptations={w?.adaptations || []} />}
+      {tab === "producao" && <ProductionWorkspace key={`${clientId}:${accountId}`} clientId={clientId} accountId={accountId} editable={podeEditar} healthy={healthy} capabilities={workerState?.capabilities || {}} adaptations={w?.adaptations || []} />}
       {tab === "acervo" && (
         <Painel
           icone={Trophy}
@@ -823,14 +832,14 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
               disabled={
                 !podeEditar ||
                 !healthy ||
-                !w?.health.capabilities?.external_search ||
+                !workerState?.capabilities?.external_search ||
                 busy
               }
             >
               Pesquisar referências públicas
             </button>
           </form>
-          {!w?.health.capabilities?.external_search && (
+          {!workerState?.capabilities?.external_search && (
             <p className="creative-notice mt-4">
               A coleta externa ainda precisa ser habilitada e homologada neste
               ambiente. Nenhum resultado demonstrativo será apresentado como

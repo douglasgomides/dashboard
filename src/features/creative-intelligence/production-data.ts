@@ -6,7 +6,7 @@ import {
 } from "@/lib/creative-intelligence/contracts";
 import {
   MAX_UPLOAD,
-  PRODUCTION_BUCKET,
+  productionBucket,
   productionDocumentSchema,
   type ProductionDocument,
   type ProductionProject,
@@ -178,7 +178,7 @@ export async function uploadProduction(
     throw new Error(
       "Envie JPG, PNG ou WebP de até 20 MiB, ou MP4/MOV de até 200 MiB e três minutos.",
     );
-  const target = await read<{ id: string; path: string }>(
+  const target = await read<{ id: string; path: string; bucket?: string }>(
     db.rpc("creative_production_upload", {
       p_client_id: client,
       p_project_id: project,
@@ -187,7 +187,7 @@ export async function uploadProduction(
     }),
   );
   const { error } = await db.storage
-    .from(PRODUCTION_BUCKET)
+    .from(productionBucket({ storage_bucket: target.bucket }))
     .upload(target.path, file, { contentType: file.type, upsert: false });
   if (error) throw new Error("O envio não foi concluído. Tente novamente.");
   return target.id;
@@ -204,7 +204,7 @@ export async function productionUrls(
   await Promise.all(
     allowed.map(async (m) => {
       const { data, error } = await db.storage
-        .from(PRODUCTION_BUCKET)
+        .from(productionBucket(m))
         .createSignedUrl(m.storage_path, 300);
       if (!error && data?.signedUrl)
         urls[`production:${m.id}`] = data.signedUrl;

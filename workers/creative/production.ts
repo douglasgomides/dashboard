@@ -23,6 +23,7 @@ import {
   timelineCaptions,
   toSrt,
   toAss,
+  productionBucket,
   type MediaRef,
   type ProductionDocument,
   type ProductionMedia,
@@ -90,7 +91,7 @@ export function assertMagic(bytes: Uint8Array, mime: string) {
       "O conteúdo do arquivo não corresponde ao formato permitido.",
     );
 }
-async function productionFile(
+export async function productionFile(
   ctx: JobContext,
   p: ProductionProject,
   ref: MediaRef,
@@ -135,7 +136,7 @@ async function productionFile(
   )) as ProductionMedia;
   const response = await fetch(
     new URL(
-      `/storage/v1/object/authenticated/${PRODUCTION_BUCKET}/${m.storage_path}`,
+      `/storage/v1/object/authenticated/${productionBucket(m)}/${m.storage_path}`,
       requireSecret("SUPABASE_URL"),
     ),
     {
