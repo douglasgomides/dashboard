@@ -10,6 +10,8 @@ import { padroesComerciais } from "../../src/lib/brand-brain.js";
 import { escolherRecuperaveis, diagnosticarAnuncios, type Candidato, type LinhaAds, type SinalAds } from "../../src/lib/agentes-sugestoes.js";
 import { CALENDARIO } from "../../src/lib/campanhas.js";
 import { grupoEspecialidade } from "../../src/lib/benchmark-estrategico.js";
+import { filtrarComentarios, filtrarConversas, filtrarPosts, somarFiltros, textoFiltro, type ResumoConversa } from "../../src/lib/aprendizado.js";
+import { lerLicoes } from "./aprendizado.js";
 
 type Admin = SupabaseClient<any, any, any>;
 const DIA = 86_400_000;
@@ -71,11 +73,13 @@ export async function lerRecuperacao(admin: Admin, clientId: string) {
       r.resumo && `O que aconteceu: ${corta(r.resumo, 420)}`, r.interesse && `Interesse: ${corta(r.interesse, 80)}`,
       Array.isArray(r.objecoes) && r.objecoes.length ? `Objeções: ${r.objecoes.join(", ")}` : null, r.como_deveria && `O que a clínica deveria ter dito: ${corta(r.como_deveria, 240)}`].filter(Boolean).join("\n") };
   });
-  const [brain, f, hist] = await Promise.all([lerBrain(admin, clientId, ["identidade", "comercial", "audiencia"]), ficha(admin, clientId), aprendizado(admin, clientId, "recuperacao")]);
+  const [brain, f, hist, licoes] = await Promise.all([lerBrain(admin, clientId, ["identidade", "comercial", "audiencia"]), ficha(admin, clientId), aprendizado(admin, clientId, "recuperacao"), lerLicoes(admin, clientId, "recuperacao")]);
+  const filtro = filtrarConversas(resumos.map((r) => r.resumo as ResumoConversa)).filtro;
   const feitas = hist.filter((h) => h.estado !== "descartada" && h.resultado);
   const taxa = (t: string) => { const xs = feitas.filter((h) => h.tipo === t); const resp = xs.filter((h) => h.resultado === "respondeu" || h.resultado === "agendou").length; return xs.length >= 5 ? `${t}: ${resp} de ${xs.length} responderam (${Math.round((100 * resp) / xs.length)}%)` : null; };
   const aprendeu = ["aguardando_clinica", "pediu_preco", "interesse"].map(taxa).filter(Boolean);
-  return { casos, brain, ficha: f.texto, aprendizado: aprendeu.length ? `Resultado das mensagens anteriores (60 dias): ${aprendeu.join("; ")}.` : "" };
+  return { casos, brain, ficha: f.texto, licoes: licoes.texto, n_licoes: licoes.n, filtro: textoFiltro(filtro),
+    aprendizado: aprendeu.length ? `Resultado das mensagens anteriores (60 dias): ${aprendeu.join("; ")}.` : "" };
 }
 
 // ---------------------------------------------------------------- Gestor de anúncios
@@ -88,32 +92,41 @@ export async function lerAnuncios(admin: Admin, clientId: string) {
   const nomes: Record<string, string> = {};
   for (const c of (camps ?? []) as { campaign_id: string; name: string; objective: string | null }[]) nomes[c.campaign_id] = corta(c.name, 90) + (c.objective ? ` (${c.objective})` : "");
   const sinais: SinalAds[] = diagnosticarAnuncios((linhas ?? []) as LinhaAds[], nomes, hoje);
-  const [brain, f, hist] = await Promise.all([lerBrain(admin, clientId, ["identidade", "audiencia", "criativa"]), ficha(admin, clientId), aprendizado(admin, clientId, "anuncios", 30)]);
+  const [brain, f, hist, licoes] = await Promise.all([lerBrain(admin, clientId, ["identidade", "audiencia", "criativa"]), ficha(admin, clientId), aprendizado(admin, clientId, "anuncios", 30), lerLicoes(admin, clientId, "anuncios")]);
   const anteriores = hist.slice(0, 15).map((h) => `- [${h.estado}${h.resultado ? `, ${h.resultado}` : ""}] ${corta(h.titulo, 120)}`).join("\n");
-  return { sinais, brain, ficha: f.texto, anteriores };
+  return { sinais, brain, ficha: f.texto, anteriores, licoes: licoes.texto, n_licoes: licoes.n };
 }
 
 // ---------------------------------------------------------------- Roteirista de conteúdo
 
 export async function lerConteudo(admin: Admin, clientId: string) {
-  const [brain, f, posts, duvidas, hist, pautas] = await Promise.all([
+  const [brain, f, posts, comentarios, hist, pautas, licoes] = await Promise.all([
     lerBrain(admin, clientId),
     ficha(admin, clientId),
-    admin.from("instagram_posts").select("tema, format, caption, reach, saved, shares, engagement").eq("client_id", clientId).gte("posted_at", desde(120)).order("saved", { ascending: false, nullsFirst: false }).limit(10),
-    admin.from("instagram_comments").select("text").eq("client_id", clientId).eq("is_question", true).gte("commented_at", desde(90)).order("commented_at", { ascending: false }).limit(60),
+    admin.from("instagram_posts").select("tema, format, caption, reach, saved, shares, engagement").eq("client_id", clientId).gte("posted_at", desde(120)).order("saved", { ascending: false, nullsFirst: false }).limit(40),
+    admin.from("instagram_comments").select("text").eq("client_id", clientId).gte("commented_at", desde(90)).order("commented_at", { ascending: false }).limit(800),
     aprendizado(admin, clientId, "conteudo", 90),
     admin.from("pautas_conteudo").select("titulo, status").eq("client_id", clientId).gte("criado_em", desde(60)).limit(60),
+    lerLicoes(admin, clientId, "conteudo"),
   ]);
   const blocos: string[] = [];
   if (f.texto) blocos.push(`### Ficha\n${f.texto}`);
   if (brain.n) blocos.push(`### Brand Brain aprovado (use o tom e cite as chaves em "brain")\n${brain.texto}`);
-  const ps = (posts.data ?? []) as any[];
+  if (licoes.texto) blocos.push(licoes.texto);
+  // Filtro de ruído: só post com alcance para comparar, só comentário que é pergunta ou relato, só conversa comercial.
+  const fp = filtrarPosts((posts.data ?? []) as any[]);
+  const ps = fp.uteis.slice(0, 10) as any[];
   if (ps.length) blocos.push(`### Posts que mais foram salvos (120 dias): o que o público valoriza\n${ps.map((p) => `- ${p.format ?? "post"} · tema ${p.tema ?? "?"} · alcance ${p.reach ?? "?"} · salvos ${p.saved ?? "?"} · compart. ${p.shares ?? "?"} · início: "${corta(p.caption, 140)}"`).join("\n")}`);
-  const dv = [...new Set(((duvidas.data ?? []) as { text: string }[]).map((d) => corta(d.text, 140)).filter((t) => t.length >= 12))];
-  if (dv.length) blocos.push(`### Perguntas reais nos comentários (90 dias)\n${dv.slice(0, 40).map((t) => `- ${t}`).join("\n")}`);
-  const resumos: any[] = [];
+  const fc = filtrarComentarios((comentarios.data ?? []) as { text: string }[]);
+  const perguntas = fc.uteis.filter((c) => c.tipo === "pergunta").map((c) => corta(c.text, 140));
+  const relatos = fc.uteis.filter((c) => c.tipo === "relato").map((c) => corta(c.text, 140));
+  if (perguntas.length) blocos.push(`### Perguntas reais nos comentários (90 dias, já sem elogio, emoji e marcação)\n${perguntas.slice(0, 35).map((t) => `- ${t}`).join("\n")}`);
+  if (relatos.length) blocos.push(`### Relatos do público nos comentários (o que as pessoas vivem; bom para identificação)\n${relatos.slice(0, 12).map((t) => `- ${t}`).join("\n")}`);
+  const brutos: any[] = [];
   const { data: rs } = await admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", desde(45)).limit(1500);
-  resumos.push(...((rs ?? []) as { resumo: any }[]).map((r) => r.resumo).filter((r) => r && typeof r === "object"));
+  brutos.push(...((rs ?? []) as { resumo: any }[]).map((r) => r.resumo));
+  const fr = filtrarConversas(brutos);
+  const resumos = fr.uteis as any[];
   const padroes = padroesComerciais(resumos, 45);
   if (padroes) blocos.push(`### O que aparece nas conversas do WhatsApp (45 dias)\n${padroes}`);
   const motivos = new Map<string, number>();
@@ -129,5 +142,6 @@ export async function lerConteudo(admin: Admin, clientId: string) {
   const titulos = [...hist.map((h) => h.titulo), ...((pautas.data ?? []) as { titulo: string }[]).map((p) => p.titulo)];
   if (usadas.length || descartadas.length) blocos.push(`### Aprendizado com as peças anteriores\n${usadas.length ? `A equipe USOU: ${usadas.slice(0, 12).map((t) => `"${corta(t, 80)}"`).join("; ")}.\n` : ""}${descartadas.length ? `A equipe DESCARTOU (evite o estilo): ${descartadas.slice(0, 12).map((t) => `"${corta(t, 80)}"`).join("; ")}.` : ""}`);
   if (titulos.length) blocos.push(`### Já propostos ou no planejador (não repita)\n${titulos.slice(0, 40).map((t) => `- ${corta(t, 100)}`).join("\n")}`);
-  return { texto: blocos.join("\n\n").slice(0, 16_000), chaves: brain.chaves, titulos, blocos: blocos.length, especialidade: f.especialidade };
+  const filtro = textoFiltro(somarFiltros(fp.filtro, fc.filtro, fr.filtro));
+  return { texto: blocos.join("\n\n").slice(0, 16_000), chaves: brain.chaves, titulos, blocos: blocos.length, especialidade: f.especialidade, filtro, n_licoes: licoes.n };
 }

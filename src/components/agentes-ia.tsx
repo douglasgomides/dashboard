@@ -5,9 +5,10 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Brain, CalendarPlus, CheckCircle2, ChevronDown, Loader2, MessageCircle, Play, XCircle } from "lucide-react";
+import { Bot, Brain, CalendarPlus, CheckCircle2, ChevronDown, Filter, Lightbulb, Loader2, MessageCircle, Play, ThumbsDown, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useClientRole } from "@/hooks/use-client-role";
 import { rodarFluxoAteFim } from "@/lib/agentes-data";
 import { AGENTES, type AgenteCatalogo, type IdAgente } from "@/lib/agentes-catalogo";
 import { pecaParaTexto, type CopyAnuncio, type PecaConteudo } from "@/lib/agentes-sugestoes";
@@ -19,7 +20,7 @@ type Estado = "proposta" | "feita" | "descartada";
 interface Sugestao {
   id: string; agente: "recuperacao" | "anuncios" | "conteudo"; tipo: string; titulo: string; detalhe: string | null; evidencias: string[]; brain: string[];
   conteudo: any; mensagem: string | null; conversa_id: string | null; campanha_id: string | null; prioridade: number; estado: Estado;
-  resultado: string | null; medido_em: string | null; criado_em: string;
+  resultado: string | null; medido_em: string | null; criado_em: string; nota?: number | null; critica?: string | null;
   conversa?: { canal: string | null; pessoa: { nome: string | null } | null } | null;
 }
 
@@ -84,8 +85,13 @@ function Cabecalho({ a, clientId, ultima, aoTerminar }: { a: AgenteCatalogo; cli
 function Acoes({ s, podeEditar, decidir, extra }: { s: Sugestao; podeEditar: boolean; decidir: (e: Estado) => Promise<void>; extra?: React.ReactNode }) {
   const [salvando, setSalvando] = useState(false);
   const ir = async (e: Estado) => { setSalvando(true); try { await decidir(e); } finally { setSalvando(false); } };
-  if (!podeEditar) return extra ? <div className="mt-2 flex flex-wrap gap-2">{extra}</div> : null;
+  const medido = s.agente !== "recuperacao" && s.resultado && s.resultado !== "expirou sem revisão"
+    ? <p className="mt-2 w-full rounded-md p-2 text-xs" style={{ background: "var(--surface-2)" }}><b>Medido sozinho:</b> {s.resultado}</p> : null;
+  const revisor = s.nota != null
+    ? <p className="mt-1 text-[11px]" style={{ color: "var(--muted)" }} title="Um segundo agente revisa tudo antes de chegar aqui; abaixo de 6 é descartado.">Nota do revisor: <b style={{ color: s.nota >= 8 ? "var(--ok, var(--accent))" : "var(--ink-2)" }}>{s.nota}/10</b>{s.critica ? ` · ${s.critica}` : ""}</p> : null;
+  if (!podeEditar) return <>{medido}{revisor}{extra ? <div className="mt-2 flex flex-wrap gap-2">{extra}</div> : null}</>;
   return (
+    <>{medido}{revisor}
     <div className="mt-2 flex flex-wrap items-center gap-2">
       {extra}
       {s.estado === "proposta" ? (
@@ -97,6 +103,7 @@ function Acoes({ s, podeEditar, decidir, extra }: { s: Sugestao; podeEditar: boo
         <button type="button" className="inline-flex min-h-[36px] items-center px-2 text-xs" style={{ color: "var(--muted)" }} disabled={salvando} onClick={() => ir("proposta")}>Desfazer</button>
       )}
     </div>
+    </>
   );
 }
 
@@ -300,20 +307,83 @@ function CartaoPeca({ s, podeEditar, decidir, levar }: { s: Sugestao; podeEditar
   );
 }
 
+// ---------------------------------------------------------------- o que os agentes aprenderam
+
+interface Licao { id: string; agente: string; texto: string; evidencia: string[]; n: number; sinal: "faz" | "evita"; confianca: "alta" | "media"; origem: string; estado: string; atualizado_em: string }
+const ORIGEM: Record<string, string> = { posts: "Instagram", conversas: "conversas do WhatsApp", anuncios: "anúncios", resultados: "resultado das sugestões" };
+const NOME_AGENTE: Record<string, string> = { conteudo: "Roteirista", recuperacao: "Recuperação e atendimento", anuncios: "Gestor de anúncios", campanhas: "Estrategista" };
+
+/** Lições que o sistema tirou sozinho dos dados da clínica e que os agentes usam em toda rodada. A equipe pode vetar. */
+export function AprendizadosAgentes({ clientId, podeEditar }: { clientId: string; podeEditar: boolean }) {
+  const qc = useQueryClient();
+  const [verVetadas, setVerVetadas] = useState(false);
+  const q = useQuery({
+    queryKey: ["agentes-aprendizados", clientId],
+    queryFn: async () => {
+      const { data, error } = await db.from("agentes_aprendizados").select("id, agente, texto, evidencia, n, sinal, confianca, origem, estado, atualizado_em")
+        .eq("client_id", clientId).in("estado", ["ativo", "vetado"]).order("confianca").order("n", { ascending: false }).limit(80);
+      if (error) throw error;
+      return (data ?? []) as Licao[];
+    },
+  });
+  async function vetar(id: string, v: boolean) {
+    await db.rpc("aprendizado_vetar", { p_id: id, p_vetar: v });
+    await qc.invalidateQueries({ queryKey: ["agentes-aprendizados", clientId] });
+  }
+  // A mesma lição aparece para mais de um agente (o Estrategista reaproveita); na tela, uma vez só.
+  const vistas = new Set<string>();
+  const todas = (q.data ?? []).filter((l) => { if (vistas.has(l.texto)) return false; vistas.add(l.texto); return true; });
+  const ativas = todas.filter((l) => l.estado === "ativo"), vetadas = todas.filter((l) => l.estado === "vetado");
+  const lista = verVetadas ? [...ativas, ...vetadas] : ativas;
+  return (
+    <section aria-labelledby="ag-aprendeu" className="space-y-3 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+      <div>
+        <h3 id="ag-aprendeu" className="flex items-center gap-1.5 text-sm font-semibold"><Lightbulb size={16} aria-hidden style={{ color: "var(--accent)" }} /> O que os agentes aprenderam com os dados desta clínica</h3>
+        <p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>Todo dia o sistema compara o que funcionou e o que não funcionou (posts, conversas, anúncios e o resultado das próprias sugestões) e reescreve estas lições. Só vira lição o que tem amostra mínima e diferença grande; o que deixa de valer some sozinho. Os agentes seguem estas lições em toda rodada.{podeEditar ? " Se uma lição não faz sentido, vete: o agente para de usar." : ""}</p>
+      </div>
+      {q.isLoading ? null : lista.length === 0 ? (
+        <p className="text-sm" style={{ color: "var(--ink-2)" }}>Ainda sem lições. Elas aparecem quando há dado suficiente (pelo menos 12 posts com alcance, 25 conversas comerciais lidas ou 3 campanhas com resultado).</p>
+      ) : (
+        <ul className="space-y-2">
+          {lista.map((l) => (
+            <li key={l.id} className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)", opacity: l.estado === "vetado" ? 0.55 : 1 }}>
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide">
+                <span style={{ color: l.sinal === "faz" ? "var(--ok, var(--accent))" : "var(--crit)" }}>{l.sinal === "faz" ? "Fazer" : "Evitar"}</span>
+                <span style={{ color: "var(--muted)" }}>· {NOME_AGENTE[l.agente] ?? l.agente} · fonte: {ORIGEM[l.origem] ?? l.origem} · confiança {l.confianca}</span>
+              </div>
+              <p className="mt-1 leading-relaxed" style={{ color: "var(--ink)" }}>{l.texto}</p>
+              {Array.isArray(l.evidencia) && l.evidencia.length > 0 && <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs" style={{ color: "var(--ink-2)" }}>{l.evidencia.slice(0, 5).map((e) => <li key={e}>{e}</li>)}</ul>}
+              {podeEditar && (
+                <button type="button" className="mt-1 inline-flex min-h-[32px] items-center gap-1 text-xs" style={{ color: "var(--muted)" }} onClick={() => vetar(l.id, l.estado !== "vetado")}>
+                  <ThumbsDown size={13} aria-hidden /> {l.estado === "vetado" ? "Voltar a usar" : "Não faz sentido, vetar"}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {vetadas.length > 0 && <button type="button" className="text-xs font-semibold" style={{ color: "var(--accent)" }} onClick={() => setVerVetadas(!verVetadas)}>{verVetadas ? "Esconder vetadas" : `Ver ${vetadas.length} vetada${vetadas.length === 1 ? "" : "s"}`}</button>}
+    </section>
+  );
+}
+
 // ---------------------------------------------------------------- painel "Agentes de IA"
 
 /** Uma linha por agente: o que faz, quando roda, o que está esperando a equipe e onde abrir. */
 export function PainelAgentes({ clientId, produto }: { clientId: string; produto: "hub" | "sap" }) {
+  const { podeEditar } = useClientRole(clientId);
   const q = useQuery({
     queryKey: ["painel-agentes", clientId],
     queryFn: async () => {
       const desde = new Date(Date.now() - 30 * 86_400_000).toISOString();
-      const [sug, camp, brain] = await Promise.all([
+      const fluxos = AGENTES.map((a) => a.fluxo);
+      const [sug, camp, brain, execs] = await Promise.all([
         db.from("sugestoes_agentes").select("agente, estado, resultado, criado_em").eq("client_id", clientId).gte("criado_em", desde).limit(2000),
         db.from("campanhas_ideias").select("estado, criado_em").eq("client_id", clientId).gte("criado_em", desde).limit(500),
         db.from("brain_itens").select("estado, criado_em").eq("client_id", clientId).gte("criado_em", desde).limit(500),
+        db.from("agente_execucoes").select("fluxo, resultado, criado_em").eq("client_id", clientId).eq("estado", "concluida").in("fluxo", fluxos).order("criado_em", { ascending: false }).limit(40),
       ]);
-      const por: Record<string, { abertas: number; feitas: number; ultima: string | null; nota?: string }> = {};
+      const por: Record<string, { abertas: number; feitas: number; ultima: string | null; nota?: string; filtro?: string; descartadas?: number }> = {};
       const soma = (id: string, aberta: boolean, feita: boolean, em: string) => {
         const p = (por[id] ??= { abertas: 0, feitas: 0, ultima: null });
         if (aberta) p.abertas++; if (feita) p.feitas++;
@@ -322,6 +392,11 @@ export function PainelAgentes({ clientId, produto }: { clientId: string; produto
       for (const s of (sug.data ?? []) as { agente: string; estado: string; resultado: string | null; criado_em: string }[]) soma(s.agente, s.estado === "proposta", s.estado === "feita", s.criado_em);
       for (const c of (camp.data ?? []) as { estado: string; criado_em: string }[]) soma("campanhas", c.estado === "proposta", ["aprovada", "em_andamento", "concluida"].includes(c.estado), c.criado_em);
       for (const b of (brain.data ?? []) as { estado: string; criado_em: string }[]) soma("brain", b.estado === "proposto", b.estado === "aprovado", b.criado_em);
+      for (const e of (execs.data ?? []) as { fluxo: string; resultado: { filtro?: string | null; descartadas?: number } | null }[]) {
+        const a = AGENTES.find((x) => x.fluxo === e.fluxo);
+        const p = a ? (por[a.id] ??= { abertas: 0, feitas: 0, ultima: null }) : null;
+        if (p && p.filtro === undefined && e.resultado?.filtro) { p.filtro = e.resultado.filtro; p.descartadas = e.resultado.descartadas; }
+      }
       const rec = ((sug.data ?? []) as { agente: string; resultado: string | null }[]).filter((s) => s.agente === "recuperacao" && s.resultado);
       if (rec.length) (por.recuperacao ??= { abertas: 0, feitas: 0, ultima: null }).nota = `${rec.filter((s) => s.resultado === "respondeu" || s.resultado === "agendou").length} responderam e ${rec.filter((s) => s.resultado === "agendou").length} agendaram (30 dias, medido sozinho)`;
       return por;
@@ -332,7 +407,7 @@ export function PainelAgentes({ clientId, produto }: { clientId: string; produto
     <div className="space-y-3">
       <div className="hpagehead">
         <h2>Agentes de IA</h2>
-        <p>Cada agente trabalha sozinho no horário: puxa os dados, a IA pensa a partir do Brand Brain e prepara o trabalho. A equipe só revisa e executa. Cada um aprende com o resultado do que propôs antes. Nenhum agente envia mensagem a paciente, publica, mexe em anúncio ou toma decisão clínica.</p>
+        <p>Cada agente trabalha sozinho no horário. Ele puxa os dados, joga fora o ruído, segue o que o sistema já aprendeu com esta clínica, escreve, e um segundo agente revisa e dá nota antes de chegar à equipe. O resultado (respondeu, agendou, foi publicado, a campanha melhorou) é medido sozinho e vira aprendizado para a próxima rodada. Nenhum agente envia mensagem a paciente, publica, mexe em anúncio ou toma decisão clínica.</p>
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
         {lista.map((a) => {
@@ -352,12 +427,14 @@ export function PainelAgentes({ clientId, produto }: { clientId: string; produto
                 <div><dt className="inline font-semibold">Quando: </dt><dd className="inline">{a.frequencia}{p?.ultima ? ` · última entrega ${ha(p.ultima)}` : " · ainda sem entrega"}</dd></div>
                 <div><dt className="inline font-semibold">Quem aprova: </dt><dd className="inline">{a.quemAprova}</dd></div>
                 {p?.nota && <div><dt className="inline font-semibold">Resultado: </dt><dd className="inline">{p.nota}</dd></div>}
+                {p?.filtro && <div className="flex items-start gap-1"><Filter size={12} aria-hidden className="mt-0.5 shrink-0" /><span><b>Filtro na última rodada:</b> {p.filtro}{p.descartadas ? `; o revisor e as regras de qualidade barraram ${p.descartadas} item${p.descartadas === 1 ? "" : "s"}` : ""}.</span></div>}
               </dl>
               <a href={rota} className="mt-2 self-start text-xs font-semibold" style={{ color: "var(--accent)" }}>Abrir →</a>
             </article>
           );
         })}
       </div>
+      <AprendizadosAgentes clientId={clientId} podeEditar={podeEditar} />
     </div>
   );
 }

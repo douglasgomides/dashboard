@@ -20,9 +20,11 @@ import { FONTES, padroesComerciais, validarPropostas, type Fonte, type PropostaB
 import { validarIdeias, TIPOS_IDEIA, type IdeiaCampanha } from "../../src/lib/campanhas-ia.js";
 import { CALENDARIO } from "../../src/lib/campanhas.js";
 import { grupoEspecialidade } from "../../src/lib/benchmark-estrategico.js";
-import { validarRecuperacao, validarAnuncios, validarConteudo, type PecaConteudo, type RecomendacaoAds, type SinalAds, type MensagemRecuperacao } from "../../src/lib/agentes-sugestoes.js";
+import { validarRecuperacao, validarAnuncios, validarConteudo, pecaParaTexto, type PecaConteudo, type RecomendacaoAds, type SinalAds, type MensagemRecuperacao } from "../../src/lib/agentes-sugestoes.js";
 import { AGENTES } from "../../src/lib/agentes-catalogo.js";
 import { lerRecuperacao, lerAnuncios, lerConteudo } from "./agentes-leitura.js";
+import { aplicarCritica, filtrarComentarios, lerNotas, SISTEMA_CRITICO, type NotaCritica } from "../../src/lib/aprendizado.js";
+import { aprenderTodas, lerLicoes } from "./aprendizado.js";
 import { MARCO_ACESSOS, evidenciaCriticos, mensagemPadrao, mensagemValida, situacaoCriticos, type ItemConfirmado, type ItemPendente } from "../../src/lib/agente-acessos.js";
 
 type Admin = SupabaseClient<any, any, any>;
@@ -201,6 +203,17 @@ type Resultado =
 interface Ctx { admin: Admin; exec: Execucao; usar: <N extends NomeFerramenta>(n: N, e: z.infer<(typeof FERRAMENTAS)[N]["entrada"]>) => Promise<any>; aprovacao: (passo: string) => Promise<{ id: string; estado: string; comentario: string | null; proposta: any } | null> }
 interface Passo { nome: string; descricao: string; ferramenta?: NomeFerramenta; risco: Risco; idempotente?: boolean; executar: (c: Ctx) => Promise<Resultado> }
 interface Fluxo { id: string; agente: string; nome: string; objetivo: string; passos: Passo[] }
+
+/** Autocrítica: um segundo agente dá nota a cada item (src/lib/aprendizado.ts, SISTEMA_CRITICO). Se a crítica falhar,
+ *  os itens seguem sem nota: erro do crítico não joga fora o trabalho. */
+async function criticar(c: Ctx, contexto: string, itens: string[], finalidade: string): Promise<Map<number, NotaCritica>> {
+  if (!itens.length) return new Map();
+  try {
+    const r = await c.usar("ia.gerar_json", { sistema: SISTEMA_CRITICO, finalidade: `critico_${finalidade}`, max_tokens: 1200,
+      entrada: `### Contexto da clínica (resumo)\n${contexto.slice(0, 7000)}\n\n### Itens para avaliar\n${itens.map((t, i) => `[${i}] ${t.slice(0, 1500)}`).join("\n\n")}`.slice(0, 19_000) });
+    return lerNotas(r.json, itens.length);
+  } catch { return new Map(); }
+}
 
 // ---------------------------------------------------------------- fluxo 1: Operations · acessos críticos (item 5)
 const SISTEMA_COBRANCA = `Você escreve, para a equipe da Doctor Creator revisar, uma mensagem curta de WhatsApp para o grupo de uma clínica médica cliente, cobrando os acessos que ainda faltam no programa.
@@ -447,7 +460,7 @@ async function lerContextoGrowth(admin: Admin, clientId: string) {
   const [brain, posts, duvidas, ads, anteriores, leads90, ganhos90, perdidos180, abertosAntigos, ganhosFonte] = await Promise.all([
     admin.from("brain_itens").select("memoria, chave, valor").eq("client_id", clientId).eq("estado", "aprovado"),
     admin.from("instagram_posts").select("tema, format, caption, reach, saved, engagement").eq("client_id", clientId).gte("posted_at", desde(90)).order("engagement", { ascending: false, nullsFirst: false }).limit(8),
-    admin.from("instagram_comments").select("text").eq("client_id", clientId).eq("is_question", true).gte("commented_at", desde(90)).order("commented_at", { ascending: false }).limit(30),
+    admin.from("instagram_comments").select("text").eq("client_id", clientId).gte("commented_at", desde(90)).order("commented_at", { ascending: false }).limit(600),
     admin.from("meta_ads_daily").select("spend, leads, conversations").eq("client_id", clientId).gte("date", desde(30).slice(0, 10)).limit(5000),
     admin.from("campanhas_ideias").select("titulo, tipo, estado, resultado").eq("client_id", clientId).order("criado_em", { ascending: false }).limit(40),
     conta(leads().gte("occurred_at", desde(90))),
@@ -466,6 +479,8 @@ async function lerContextoGrowth(admin: Admin, clientId: string) {
   const itens = (brain.data ?? []) as { memoria: string; chave: string; valor: string }[];
   const chaves = itens.map((i) => `${i.memoria}.${i.chave}`);
   if (itens.length) blocos.push(`### Brand Brain aprovado (cite as chaves em "brain")\n${itens.map((i) => `- ${i.memoria}.${i.chave}: ${corta(i.valor, 300)}`).join("\n")}`);
+  const licoes = await lerLicoes(admin, clientId, "campanhas");
+  if (licoes.texto) blocos.push(licoes.texto);
 
   const resumos: Record<string, any>[] = [];
   for (let de = 0; de < 6000; de += 1000) {
@@ -495,7 +510,7 @@ async function lerContextoGrowth(admin: Admin, clientId: string) {
 
   const ps = (posts.data ?? []) as { tema: string | null; format: string | null; caption: string | null; reach: number | null; saved: number | null }[];
   if (ps.length) blocos.push(`### Posts com mais engajamento (90 dias)\n${ps.map((p) => `- ${p.format ?? "post"} · tema ${p.tema ?? "?"} · alcance ${p.reach ?? "?"} · salvos ${p.saved ?? "?"} · "${corta(p.caption, 100)}"`).join("\n")}`);
-  const dv = [...new Set(((duvidas.data ?? []) as { text: string }[]).map((d) => corta(d.text, 140)).filter((t) => t.length >= 10))];
+  const dv = filtrarComentarios((duvidas.data ?? []) as { text: string }[], ["pergunta"]).uteis.map((d) => corta(d.text, 140));
   if (dv.length) blocos.push(`### Perguntas nos comentários (90 dias)\n${dv.slice(0, 25).map((t) => `- ${t}`).join("\n")}`);
   const ad = (ads.data ?? []) as { spend: number | null; leads: number | null; conversations: number | null }[];
   const gasto = ad.reduce((s, a) => s + Number(a.spend ?? 0), 0);
@@ -556,7 +571,10 @@ const FLUXO_GROWTH: Fluxo = {
         const titulos = [...(c.exec.contexto.titulos as string[]), ...ja.map((i) => i.titulo)];
         const r = await c.usar("ia.gerar_json", { sistema: SISTEMA_GROWTH.replace("{FOCO}", texto), finalidade: `agente_growth_${foco}`, max_tokens: 2500,
           entrada: `${c.exec.contexto.texto}${ja.length ? `\n\n### Ideias desta rodada (não repita)\n${ja.map((i) => `- ${i.titulo}`).join("\n")}` : ""}` });
-        const { ok, descartes } = validarIdeias(r.json, c.exec.contexto.chaves as string[], titulos);
+        const v = validarIdeias(r.json, c.exec.contexto.chaves as string[], titulos);
+        const notas = await criticar(c, c.exec.contexto.texto, v.ok.map((i) => `${i.titulo} (${i.tipo})\nPara quem: ${i.publico}\nPor quê: ${i.porque}\nEvidências: ${i.evidencias.join("; ")}\nTexto: ${i.mensagem ?? ""}`), `growth_${foco}`);
+        const { ok, descartes: dc } = aplicarCritica(v.ok, notas);
+        const descartes = [...v.descartes, ...dc];
         return { tipo: "seguir", saida: { ideias: ok.length, descartes, modelo: r.modelo }, contexto: { ideias: [...ja, ...ok], descartes: [...(c.exec.contexto.descartes as string[]), ...descartes] } };
       },
     })),
@@ -596,8 +614,8 @@ const FLUXO_RECUPERACAO: Fluxo = {
       executar: async (c) => {
         const r = await c.usar("recuperacao.ler", { client_id: c.exec.client_id });
         if (!r.casos.length) return { tipo: "concluir", resultado: { mensagens: 0, motivo: "Ninguém para recuperar hoje (ou as conversas ainda não foram lidas pela auditoria)." } };
-        return { tipo: "seguir", saida: { casos: r.casos.length }, contexto: { casos: r.casos.map((x: any) => ({ conversa_id: x.conversa_id, motivo: x.motivo, prioridade: x.prioridade, dias: x.dias })),
-          texto: `### Clínica\n${r.ficha}\n\n### Tom e regras da clínica (Brand Brain)\n${r.brain.texto || "(sem Brain aprovado: use tom acolhedor e direto)"}\n\n${r.aprendizado}\n\n### Lista de hoje\n${r.casos.map((x: any) => x.texto).join("\n\n")}`.slice(0, 16_000) } };
+        return { tipo: "seguir", saida: { casos: r.casos.length, filtro: r.filtro, licoes: r.n_licoes }, contexto: { casos: r.casos.map((x: any) => ({ conversa_id: x.conversa_id, motivo: x.motivo, prioridade: x.prioridade, dias: x.dias })), filtro: r.filtro,
+          texto: `### Clínica\n${r.ficha}\n\n### Tom e regras da clínica (Brand Brain)\n${r.brain.texto || "(sem Brain aprovado: use tom acolhedor e direto)"}\n\n${r.licoes ? `${r.licoes}\n\n` : ""}${r.aprendizado}\n\n### Lista de hoje\n${r.casos.map((x: any) => x.texto).join("\n\n")}`.slice(0, 16_000) } };
       },
     },
     {
@@ -606,8 +624,11 @@ const FLUXO_RECUPERACAO: Fluxo = {
         if (!iaDisponivel()) return { tipo: "falhar", erro: "IA não configurada no servidor (OPENAI_API_KEY ou ANTHROPIC_API_KEY)." };
         const casos = c.exec.contexto.casos as { conversa_id: string }[];
         const r = await c.usar("ia.gerar_json", { sistema: SISTEMA_RECUPERACAO, entrada: c.exec.contexto.texto, finalidade: "agente_recuperacao", max_tokens: 3000, qualidade: "forte" });
-        const { ok, descartes } = validarRecuperacao(r.json, new Set(casos.map((x) => x.conversa_id)));
-        return { tipo: "seguir", saida: { mensagens: ok.length, descartes, modelo: r.modelo }, contexto: { mensagens: ok, descartes, texto: null } };
+        const v = validarRecuperacao(r.json, new Set(casos.map((x) => x.conversa_id)));
+        const notas = await criticar(c, c.exec.contexto.texto, v.ok.map((m) => `Mensagem de recuperação para a conversa ${m.conversa_id}: ${m.mensagem}`), "recuperacao");
+        const cr = aplicarCritica(v.ok, notas);
+        const descartes = [...v.descartes, ...cr.descartes];
+        return { tipo: "seguir", saida: { mensagens: cr.ok.length, descartes, modelo: r.modelo }, contexto: { mensagens: cr.ok, descartes, texto: null } };
       },
     },
     {
@@ -615,12 +636,12 @@ const FLUXO_RECUPERACAO: Fluxo = {
       executar: async (c) => {
         const casos = new Map((c.exec.contexto.casos as { conversa_id: string; motivo: string; prioridade: number; dias: number }[]).map((x) => [x.conversa_id, x]));
         const ROT: Record<string, string> = { aguardando_clinica: "Esperando resposta da clínica", pediu_preco: "Pediu valor e não agendou", interesse: "Teve interesse e não agendou" };
-        const itens = (c.exec.contexto.mensagens as MensagemRecuperacao[]).map((m) => {
+        const itens = (c.exec.contexto.mensagens as (MensagemRecuperacao & { nota?: number | null; critica?: string | null })[]).map((m) => {
           const k = casos.get(m.conversa_id)!;
-          return { tipo: k.motivo, titulo: `${ROT[k.motivo] ?? "Recuperar"} · parada há ${k.dias} dia${k.dias === 1 ? "" : "s"}`, detalhe: m.por_que || null, mensagem: m.mensagem, conversa_id: m.conversa_id, prioridade: k.prioridade };
+          return { tipo: k.motivo, titulo: `${ROT[k.motivo] ?? "Recuperar"} · parada há ${k.dias} dia${k.dias === 1 ? "" : "s"}`, detalhe: m.por_que || null, mensagem: m.mensagem, conversa_id: m.conversa_id, prioridade: k.prioridade, nota: m.nota ?? null, critica: m.critica ?? null };
         });
         const r = await c.usar("sugestoes.gravar", { client_id: c.exec.client_id, agente: "recuperacao", itens });
-        return { tipo: "concluir", resultado: { mensagens: r.gravadas, descartadas: (c.exec.contexto.descartes as string[]).length, revisar_em: "Atendimento e vendas → WhatsApp" } };
+        return { tipo: "concluir", resultado: { mensagens: r.gravadas, descartadas: (c.exec.contexto.descartes as string[]).length, filtro: c.exec.contexto.filtro ?? null, revisar_em: "Atendimento e vendas → WhatsApp" } };
       },
     },
   ],
@@ -644,7 +665,7 @@ const FLUXO_ANUNCIOS: Fluxo = {
         if (!r.sinais.length) return { tipo: "concluir", resultado: { recomendacoes: 0, motivo: "Nenhuma campanha fora do normal nos últimos 7 dias (ou a conta não tem gasto)." } };
         const sinais = r.sinais as SinalAds[];
         return { tipo: "seguir", saida: { sinais: sinais.map((s) => `${s.tipo}: ${s.campanha}`) }, contexto: { sinais,
-          texto: `### Clínica\n${r.ficha}\n\n### Brand Brain (tom, público e o que funciona em criativo)\n${r.brain.texto || "(sem Brain aprovado)"}\n\n${r.anteriores ? `### Recomendações anteriores (30 dias)\n${r.anteriores}\n\n` : ""}### Sinais\n${sinais.map((s) => `campanha_id: ${s.campanha_id}\nCampanha: ${s.campanha}\nSinal: ${s.tipo}\n${s.evidencias.join("\n")}`).join("\n\n")}` } };
+          texto: `### Clínica\n${r.ficha}\n\n### Brand Brain (tom, público e o que funciona em criativo)\n${r.brain.texto || "(sem Brain aprovado)"}\n\n${r.licoes ? `${r.licoes}\n\n` : ""}${r.anteriores ? `### Recomendações anteriores (30 dias) e o que aconteceu depois\n${r.anteriores}\n\n` : ""}### Sinais\n${sinais.map((s) => `campanha_id: ${s.campanha_id}\nCampanha: ${s.campanha}\nSinal: ${s.tipo}\n${s.evidencias.join("\n")}`).join("\n\n")}` } };
       },
     },
     {
@@ -653,17 +674,20 @@ const FLUXO_ANUNCIOS: Fluxo = {
         if (!iaDisponivel()) return { tipo: "falhar", erro: "IA não configurada no servidor (OPENAI_API_KEY ou ANTHROPIC_API_KEY)." };
         const sinais = c.exec.contexto.sinais as SinalAds[];
         const r = await c.usar("ia.gerar_json", { sistema: SISTEMA_ANUNCIOS, entrada: c.exec.contexto.texto, finalidade: "agente_anuncios", max_tokens: 3000, qualidade: "forte" });
-        const { ok, descartes } = validarAnuncios(r.json, new Set(sinais.map((s) => s.campanha_id)));
-        return { tipo: "seguir", saida: { recomendacoes: ok.length, descartes, modelo: r.modelo }, contexto: { recomendacoes: ok, descartes, texto: null } };
+        const v = validarAnuncios(r.json, new Set(sinais.map((s) => s.campanha_id)));
+        const notas = await criticar(c, c.exec.contexto.texto, v.ok.map((x) => `${x.titulo}\n${x.acao}\nPassos: ${x.passos.join(" | ")}\nCopies: ${x.copies.map((k) => `${k.gancho} ${k.texto} ${k.cta}`).join(" || ")}`), "anuncios");
+        const cr = aplicarCritica(v.ok, notas);
+        const descartes = [...v.descartes, ...cr.descartes];
+        return { tipo: "seguir", saida: { recomendacoes: cr.ok.length, descartes, modelo: r.modelo }, contexto: { recomendacoes: cr.ok, descartes, texto: null } };
       },
     },
     {
       nome: "gravar", descricao: "Grava as recomendações para o gestor de tráfego", ferramenta: "sugestoes.gravar", risco: "baixo", idempotente: true,
       executar: async (c) => {
         const sinais = new Map((c.exec.contexto.sinais as SinalAds[]).map((s) => [s.campanha_id, s]));
-        const itens = (c.exec.contexto.recomendacoes as RecomendacaoAds[]).map((r) => {
+        const itens = (c.exec.contexto.recomendacoes as (RecomendacaoAds & { nota?: number | null; critica?: string | null })[]).map((r) => {
           const s = sinais.get(r.campanha_id)!;
-          return { tipo: s.tipo, titulo: r.titulo, detalhe: r.acao, evidencias: [`Campanha: ${s.campanha}`, ...s.evidencias], campanha_id: r.campanha_id, prioridade: s.prioridade, conteudo: { passos: r.passos, copies: r.copies } };
+          return { tipo: s.tipo, titulo: r.titulo, detalhe: r.acao, evidencias: [`Campanha: ${s.campanha}`, ...s.evidencias], campanha_id: r.campanha_id, prioridade: s.prioridade, conteudo: { passos: r.passos, copies: r.copies }, nota: r.nota ?? null, critica: r.critica ?? null };
         });
         const r = await c.usar("sugestoes.gravar", { client_id: c.exec.client_id, agente: "anuncios", itens });
         return { tipo: "concluir", resultado: { recomendacoes: r.gravadas, revisar_em: "Anúncios" } };
@@ -701,7 +725,7 @@ const FLUXO_CONTEUDO: Fluxo = {
       executar: async (c) => {
         const r = await c.usar("conteudo.ler", { client_id: c.exec.client_id });
         if (r.blocos < 2) return { tipo: "concluir", resultado: { pecas: 0, motivo: "Pouco dado ainda (Brain, Instagram ou conversas)." } };
-        return { tipo: "seguir", saida: { blocos: r.blocos }, contexto: { texto: r.texto, chaves: r.chaves, titulos: r.titulos, pecas: [], descartes: [] } };
+        return { tipo: "seguir", saida: { blocos: r.blocos, filtro: r.filtro, licoes: r.n_licoes }, contexto: { texto: r.texto, chaves: r.chaves, titulos: r.titulos, pecas: [], descartes: [], filtro: r.filtro } };
       },
     },
     ...FOCOS_CONTEUDO.map(([foco, texto]): Passo => ({
@@ -711,16 +735,21 @@ const FLUXO_CONTEUDO: Fluxo = {
         const ja = c.exec.contexto.pecas as PecaConteudo[];
         const r = await c.usar("ia.gerar_json", { sistema: SISTEMA_CONTEUDO.replace("{FOCO}", texto), finalidade: `agente_conteudo_${foco}`, max_tokens: 4000, qualidade: "forte",
           entrada: `${c.exec.contexto.texto}${ja.length ? `\n\n### Já escritas nesta rodada (não repita o tema)\n${ja.map((p) => `- ${p.titulo}`).join("\n")}` : ""}` });
-        const { ok, descartes } = validarConteudo(r.json, c.exec.contexto.chaves as string[], [...(c.exec.contexto.titulos as string[]), ...ja.map((p) => p.titulo)]);
+        const v = validarConteudo(r.json, c.exec.contexto.chaves as string[], [...(c.exec.contexto.titulos as string[]), ...ja.map((p) => p.titulo)]);
+        const notas = await criticar(c, c.exec.contexto.texto, v.ok.map((p) => pecaParaTexto(p)), `conteudo_${foco}`);
+        const { ok, descartes: dc } = aplicarCritica(v.ok, notas);
+        const descartes = [...v.descartes, ...dc];
         return { tipo: "seguir", saida: { pecas: ok.length, descartes, modelo: r.modelo }, contexto: { pecas: [...ja, ...ok], descartes: [...(c.exec.contexto.descartes as string[]), ...descartes] } };
       },
     })),
     {
       nome: "gravar", descricao: "Grava as peças para a equipe revisar", ferramenta: "sugestoes.gravar", risco: "baixo", idempotente: true,
       executar: async (c) => {
-        const itens = (c.exec.contexto.pecas as PecaConteudo[]).map((p, n) => ({ tipo: p.formato, titulo: p.titulo, detalhe: p.por_que || null, evidencias: p.evidencias, brain: p.brain, conteudo: p, prioridade: 10 - n }));
+        // Melhor nota primeiro: a equipe vê antes o que o crítico achou mais forte.
+        const pecas = [...(c.exec.contexto.pecas as (PecaConteudo & { nota?: number | null; critica?: string | null })[])].sort((a, b) => (b.nota ?? 0) - (a.nota ?? 0));
+        const itens = pecas.map(({ nota, critica, ...p }, n) => ({ tipo: p.formato, titulo: p.titulo, detalhe: p.por_que || null, evidencias: p.evidencias, brain: p.brain, conteudo: p, prioridade: 10 - n, nota: nota ?? null, critica: critica ?? null }));
         const r = await c.usar("sugestoes.gravar", { client_id: c.exec.client_id, agente: "conteudo", itens });
-        return { tipo: "concluir", resultado: { pecas: r.gravadas, descartadas: (c.exec.contexto.descartes as string[]).length, revisar_em: "Conteúdo → Ideias" } };
+        return { tipo: "concluir", resultado: { pecas: r.gravadas, descartadas: (c.exec.contexto.descartes as string[]).length, filtro: c.exec.contexto.filtro ?? null, revisar_em: "Conteúdo → Ideias" } };
       },
     },
   ],
@@ -743,8 +772,10 @@ async function abertasPorClinica(admin: Admin, id: string): Promise<Map<string, 
 /** Agendamento: para cada agente do catálogo (src/lib/agentes-catalogo.ts), põe na fila a rodada de cada clínica com o
  *  módulo do agente quando a última rodada é mais velha que o intervalo e não há uma em andamento. Antes, mede sozinho o
  *  resultado das sugestões de recuperação (sugestoes_medir). Os agentes só preparam; quem aprova é uma pessoa. */
-export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas: number; puladas: number; por_agente: Record<string, number>; medidas: number; cheias: number; expiradas: number }> {
+export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas: number; puladas: number; por_agente: Record<string, number>; medidas: number; cheias: number; expiradas: number; aprendizado: Awaited<ReturnType<typeof aprenderTodas>> }> {
   const { data: medidas } = await admin.rpc("sugestoes_medir");
+  // Antes de pôr os agentes na fila: mede o resultado do que já foi sugerido e recalcula as lições de cada clínica.
+  const aprendizado = await aprenderTodas(admin, 120_000);
   // O que ninguém revisou some sozinho: o agente propõe de novo com dado novo se ainda fizer sentido.
   const agora = Date.now();
   const { data: exp1 } = await admin.from("sugestoes_agentes").update({ estado: "descartada", resultado: "expirou sem revisão" })
@@ -775,7 +806,7 @@ export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas:
       por_agente[ag.id] = (por_agente[ag.id] ?? 0) + 1;
     }
   }
-  return { enfileiradas, puladas, por_agente, medidas: Number(medidas ?? 0), cheias, expiradas };
+  return { enfileiradas, puladas, por_agente, medidas: Number(medidas ?? 0), cheias, expiradas, aprendizado };
 }
 /** Nome antigo, usado pelo agendamento do n8n ("brain_enfileirar"): agora enfileira todos os agentes. */
 export const enfileirarBrain = enfileirarAgendados;
@@ -785,7 +816,7 @@ export function catalogoFluxos() {
 }
 
 // ---------------------------------------------------------------- motor
-const LEASE_S = 120;
+const LEASE_S = 300; // escrever (até 90 s) + autocrítica (até 95 s) cabem num passo sem perder a posse
 const MAX_TENTATIVAS = 3;
 
 export async function rodarAgentes(admin: Admin, opcoes: { execucaoId?: string | null; maxPassos?: number; prazoMs?: number }): Promise<{ execucoes: { id: string; estado: string; passos: number; erro?: string }[] }> {
