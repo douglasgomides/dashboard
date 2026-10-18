@@ -24,7 +24,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run typecheck
-      - run: npx eslint src/components/product-brand.tsx src/components/product-preview.tsx src/components/product-decisions.tsx src/components/sap-offer.tsx src/components/sap-week-overview.tsx src/components/sap-tarefas.tsx 'src/routes/_authenticated.sap.$clientId.index.tsx' src/lib/sap-offer.ts src/routes/conhecer.tsx src/routes/login.tsx src/components/app-shell.tsx src/routes/_authenticated.admin.tsx src/routes/_authenticated.sap.tsx src/lib/product-copy.ts src/lib/login-destination.ts scripts/verify-nexo-interface.mjs scripts/capture-product-previews.mjs
+      - run: npx eslint src/components/product-brand.tsx src/components/product-preview.tsx src/components/product-decisions.tsx src/components/sap-offer.tsx src/components/sap-week-overview.tsx src/routes/_authenticated.sap.index.tsx src/components/sap-tarefas.tsx 'src/routes/_authenticated.sap.$clientId.index.tsx' src/lib/sap-offer.ts src/routes/conhecer.tsx src/routes/login.tsx src/components/app-shell.tsx src/routes/_authenticated.admin.tsx src/routes/_authenticated.sap.tsx src/lib/product-copy.ts src/lib/login-destination.ts scripts/verify-nexo-interface.mjs scripts/capture-product-previews.mjs
       - run: npx tsx scripts/test-nexo-navigation.ts
       - run: npx playwright install --with-deps chromium
       - run: node scripts/verify-nexo-interface.mjs

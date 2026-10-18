@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,6 +14,7 @@ export const Route = createFileRoute("/_authenticated/sap/")({
 
 function InicioSap() {
   const { isAdmin, user } = useAuth();
+  const [visao, setVisao] = useState<"clinicas" | "prioridades">("clinicas");
   const { data, isLoading } = useQuery({
     queryKey: ["sap-minhas-clinicas", user?.id],
     enabled: !isAdmin && !!user?.id,
@@ -25,9 +27,11 @@ function InicioSap() {
   });
   if (isAdmin) {
     return (
-      <div className="space-y-6">
-        <MinhasTarefasTodas />
-        <PortfolioSap />
+      <div className="sap-operation-home">
+        <div className="sap-week-heading"><div><p className="sap-eyebrow">Operação Doctor Creator</p><h2>Clínicas acompanhadas. Execução com prioridade.</h2><p>Acompanhe a carteira ou concentre-se nas tarefas que precisam da sua atuação.</p></div></div>
+        <div className="sap-operation-switch" role="group" aria-label="Visão da operação"><button type="button" aria-pressed={visao === "clinicas"} aria-controls="sap-operation-clinics" onClick={() => setVisao("clinicas")}>Clínicas e resultados</button><button type="button" aria-pressed={visao === "prioridades"} aria-controls="sap-operation-priorities" onClick={() => setVisao("prioridades")}>Minhas prioridades</button></div>
+        <section id="sap-operation-clinics" aria-label="Clínicas e resultados" hidden={visao !== "clinicas"}><PortfolioSap /></section>
+        <section id="sap-operation-priorities" aria-label="Prioridades da equipe" hidden={visao !== "prioridades"}><MinhasTarefasTodas /></section>
       </div>
     );
   }
