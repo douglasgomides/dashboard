@@ -14,6 +14,7 @@ import { AGENTES, type AgenteCatalogo, type IdAgente } from "@/lib/agentes-catal
 import { pecaParaTexto, type CopyAnuncio, type PecaConteudo } from "@/lib/agentes-sugestoes";
 import { duracao, resumoPiloto } from "@/lib/atendente";
 import { acoesDoSinal, brlCentavos, type TipoAcao } from "@/lib/anuncios-acoes";
+import { ProvaResultado } from "@/components/prova-resultado";
 import { usePautas } from "@/components/planejador-conteudo";
 import { BotaoCopiar } from "@/components/botao-copiar";
 
@@ -599,6 +600,7 @@ export function PainelAgentes({ clientId, produto }: { clientId: string; produto
           );
         })}
       </div>
+      <ProvaResultado clientId={clientId} />
       {isAdmin && <AtendentePiloto clientId={clientId} />}
       <AprendizadosAgentes clientId={clientId} podeEditar={podeEditar} />
     </div>
