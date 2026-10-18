@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/r/:slug",
+      "destination": "/api/sync/manual?r=:slug"
+    },
+    {
       "source": "/((?!api/|assets/).*)",
       "destination": "/index.html"
     }
