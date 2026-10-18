@@ -25,6 +25,7 @@ import { resumirConversa } from "../_lib/resumo-conversa.js";
 import { rascunharSessao } from "../_lib/sessao-ia.js";
 import { redirecionarLink } from "../_lib/redirecionar.js";
 import { redigirSecao } from "../_lib/copiloto.js";
+import { aplicarAcao, desfazerAcao, tokenEscritaConfigurado } from "../_lib/anuncios-acoes.js";
 import { destinoSite, destinoWhatsApp, novaRef, novoSlug, POSICOES, mensagemComRef, type Posicao } from "../../src/lib/rastreio.js";
 import { rodarAgentes, catalogoFluxos, enfileirarBrain } from "../_lib/agentes.js";
 import { resumoEquipe } from "../_lib/resumo-equipe.js";
@@ -151,7 +152,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes", "sap_redigir"];
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes", "sap_redigir", "anuncio_acao"];
   // "conferencia" e "agentes" olham todos os clientes de uma vez (só admin), por isso não exigem client_id.
   const alvoGlobal = alvo === "conferencia" || alvo === "agentes";
   if ((!client_id && !alvoGlobal) || !alvo || !ALVOS.includes(alvo)) {
@@ -923,6 +924,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const host = (req.headers["x-forwarded-host"] as string) || req.headers.host || "dash.doctorcreator.com.br";
       res.status(200).json({ alvo, ok: true, id: criado?.id, url: `https://${host}/r/${slug}`, ref });
+      return;
+    }
+
+    if (alvo === "anuncio_acao") {
+      // Ação nos anúncios com 1 clique (pausar, reativar, orçamento ±20%). Só a equipe; aplica pela API da Meta.
+      if (!ehAdmin) {
+        res.status(403).json({ error: "Só a equipe aplica ações nos anúncios" });
+        return;
+      }
+      const b = (req.body ?? {}) as { acao?: string; campanha_id?: string; tipo?: string; pct?: number; sugestao_id?: string; id?: string };
+      if (b.acao === "status") { res.status(200).json({ alvo, ok: true, token: tokenEscritaConfigurado() }); return; }
+      if (b.acao === "desfazer") { res.status(200).json({ alvo, ...(await desfazerAcao(admin, { clientId: client_id as string, id: String(b.id ?? ""), userId: quem.user.id })) }); return; }
+      const tipo = b.tipo === "pausar" || b.tipo === "ativar" || b.tipo === "orcamento" ? b.tipo : null;
+      if (!tipo || !b.campanha_id) { res.status(400).json({ error: "Informe campanha_id e tipo (pausar, ativar ou orcamento)" }); return; }
+      const r = await aplicarAcao(admin, { clientId: client_id as string, campanhaId: b.campanha_id, tipo, pct: Number(b.pct ?? 0), sugestaoId: b.sugestao_id ?? null, userId: quem.user.id });
+      res.status(200).json({ alvo, ...r });
       return;
     }
 

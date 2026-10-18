@@ -211,6 +211,34 @@ try {
       assert.equal((await rows("select * from acessos_conversas where user_id=$1", [viewer])).length, 3);
     });
   });
+  await check("agendou lido na conversa entra na fila de conversões só com a chave ligada e sem duplicar o CRM", async () => {
+    await db.exec("begin");
+    try {
+      const fila = () => rows<{ origem: string; external_lead_id: string; n: number }>(
+        "select origem, external_lead_id, count(*)::int as n from sap_conversoes where clinica_id=$1 group by 1,2 order by 1", [clinicA]);
+      await db.query("insert into conversas_resumos(conversa_id,client_id,resumo,ate_msg_em,gerado_em) values ($1,$2,'{\"situacao\":\"agendou\"}',now(),now())", [conversationA, A]);
+      assert.deepEqual(await fila(), [], "desligado por padrão");
+      await db.query("update sap_clinicas set conversoes_da_conversa=true where id=$1", [clinicA]);
+      await db.query("update conversas_resumos set resumo=resumo where conversa_id=$1", [conversationA]);
+      assert.deepEqual(await fila(), [{ origem: "conversa", external_lead_id: `conv_${conversationA}`, n: 2 }]);
+      await db.query("update sap_clinicas set conversoes_meta=true, meta_pixel_id='123' where id=$1", [clinicA]);
+      const lote = (await rows<{ l: { origem_crm: string; ph: string | null; em: string | null; etapa: string }[] }>("select sap_conversoes_lote('meta',10) as l"))[0].l;
+      assert.equal(lote.length, 1);
+      assert.equal(lote[0].etapa, "EtapaB");
+      assert.equal(lote[0].origem_crm, "conversa_wts");
+      assert.ok(lote[0].ph && lote[0].em, "casa pelo telefone e e-mail da pessoa, já com hash");
+      // Conversa ligada a lead do CRM: usa a chave do lead (a mesma que o CRM criaria).
+      await db.query("delete from sap_conversoes where clinica_id=$1", [clinicA]);
+      await db.query("update conversas set lead_id=$1 where id=$2", [leadA, conversationA]);
+      await db.query("update conversas_resumos set resumo=resumo where conversa_id=$1", [conversationA]);
+      await db.query("update conversas_resumos set resumo=resumo where conversa_id=$1", [conversationA]);
+      assert.deepEqual(await fila(), [{ origem: "crm", external_lead_id: "fixture", n: 2 }]);
+      // Conversa antiga (fora do prazo de 7 dias da Meta) não entra.
+      await db.query("delete from sap_conversoes where clinica_id=$1", [clinicA]);
+      await db.query("update conversas_resumos set ate_msg_em=now()-interval '8 days', resumo=resumo where conversa_id=$1", [conversationA]);
+      assert.deepEqual(await fila(), []);
+    } finally { await db.exec("rollback"); }
+  });
   await check("service_role consegue propor Brand Brain ativo", async () => {
     await role("service_role", null, async () => {
       assert.deepEqual(await rows("select tem_modulo($1,'brand_brain') as ok", [A]), [{ ok: true }]);

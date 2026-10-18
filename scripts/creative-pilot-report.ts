@@ -120,6 +120,8 @@ const report = {
   account_id: account,
   base_commit: "72f39da752e3d85cd0aeb0e45cb9f5d5932f8627",
   branch: "codex/inteligencia-criativa",
+  integrated_base_commit: "157aa785010338fc7030e5d4799e576d893d242f",
+  validation: {scripts_after_integration:86,browser_before_integration:166,browser_after_integration:11,interface_checks_before_integration:19},
   result: "Primeira fatia funcional; missão completa ainda pendente",
   tests: {
     carousel: {

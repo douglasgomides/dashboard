@@ -619,6 +619,7 @@ export type SapCadastro = SapClinica & {
   categoria_verificada_em: string | null;
   conversoes_meta: boolean | null;
   conversoes_google: boolean | null;
+  conversoes_da_conversa?: boolean | null;
   rastreamento_conferido_por: string | null;
   rastreamento_conferido_em: string | null;
   drive_pasta_url: string | null;
@@ -627,7 +628,7 @@ export type SapCadastro = SapClinica & {
 export async function getClinicaSap(clientId: string): Promise<SapCadastro | null> {
   const { data, error } = await db
     .from("sap_clinicas")
-    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto, consulta_paga, verba_em_dia, score_execucao, baseline_de, baseline_ate, aceite_metas_em, aceite_metas_por, ajustes_acordados, garantia_status, garantia_inicio, pos_contrato, decisor_nome, decisor_contato, ambicao_d90, coordenador, caminho_tecnologia, categoria_fonte_meta, verba_mensal, meta_pixel_id, meta_ad_account_id, google_ads_customer_id, google_acoes_conversao, status_categoria_meta, categoria_verificada_em, conversoes_meta, conversoes_google, rastreamento_conferido_por, rastreamento_conferido_em, drive_pasta_url, sap_pausas(id, tipo, inicio, fim, motivo, removido_em)")
+    .select("id, client_id, nome, cidade, especialidade, d0, status, servicos, ticket_medio, piloto, consulta_paga, verba_em_dia, score_execucao, baseline_de, baseline_ate, aceite_metas_em, aceite_metas_por, ajustes_acordados, garantia_status, garantia_inicio, pos_contrato, decisor_nome, decisor_contato, ambicao_d90, coordenador, caminho_tecnologia, categoria_fonte_meta, verba_mensal, meta_pixel_id, meta_ad_account_id, google_ads_customer_id, google_acoes_conversao, status_categoria_meta, categoria_verificada_em, conversoes_meta, conversoes_google, conversoes_da_conversa, rastreamento_conferido_por, rastreamento_conferido_em, drive_pasta_url, sap_pausas(id, tipo, inicio, fim, motivo, removido_em)")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -1002,7 +1003,7 @@ export async function conferirRastreioSap(clinicaId: string, por: string) {
 export type ConfigRastreio = {
   meta_pixel_id: string; meta_ad_account_id: string; google_ads_customer_id: string;
   google_acoes_conversao: Record<string, string>; status_categoria_meta: CategoriaMeta | "";
-  categoria_verificada_em: string; conversoes_meta: boolean; conversoes_google: boolean;
+  categoria_verificada_em: string; conversoes_meta: boolean; conversoes_google: boolean; conversoes_da_conversa: boolean;
 };
 
 export async function salvarConfigRastreioSap(clinicaId: string, c: ConfigRastreio) {

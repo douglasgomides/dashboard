@@ -54,7 +54,9 @@ Em 18 de outubro de 2026, uma única conta autorizada foi usada na branch de tes
 | Adaptação do Reel      | Dezenove blocos, referências de 1 a 19 e duração preservada em 146,632 s                                                             |
 | Busca semântica        | Embeddings reais e resultados restritos às duas estruturas da própria conta                                                          |
 | Custos do piloto       | US$ 0,18918572 registrados, incluindo gerações intermediárias; transcrição estimada pela duração; infraestrutura e Storage excluídos |
-| Verificações locais    | 83 scripts de teste, 166 testes de navegador com fixtures, typecheck, lint, build, 19 verificações de interface e auditorias npm sem vulnerabilidades reportadas                                |
+| Verificações locais    | 86 scripts de teste na base integrada, 166 testes de navegador com fixtures antes da integração e 11 após a integração, typecheck, lint, build, 19 verificações de interface e auditorias npm sem vulnerabilidades reportadas                                |
+
+A branch foi atualizada com a referência `157aa785010338fc7030e5d4799e576d893d242f`, preservando as novas funções de prova de resultado e conversões offline.
 
 Os testes de banco exercitam as migrations completas com roles e RLS reais em PostgreSQL embarcado, incluindo acesso anônimo, viewer, outro cliente, duplicação de solicitações, leases, cancelamento, orçamento e bucket protegido contra policy legada permissiva. Os testes de evidência rejeitam cobertura falsa e roteiros que descartem ou reordenem blocos.
 

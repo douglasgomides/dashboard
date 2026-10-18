@@ -13,6 +13,8 @@ import { rodarFluxoAteFim } from "@/lib/agentes-data";
 import { AGENTES, type AgenteCatalogo, type IdAgente } from "@/lib/agentes-catalogo";
 import { pecaParaTexto, type CopyAnuncio, type PecaConteudo } from "@/lib/agentes-sugestoes";
 import { duracao, resumoPiloto } from "@/lib/atendente";
+import { acoesDoSinal, brlCentavos, type TipoAcao } from "@/lib/anuncios-acoes";
+import { ProvaResultado } from "@/components/prova-resultado";
 import { usePautas } from "@/components/planejador-conteudo";
 import { AssumirRecuperacao, OperacaoRecuperacao } from "@/components/operacao-recuperacao";
 import { BotaoCopiar } from "@/components/botao-copiar";
@@ -180,7 +182,7 @@ export function RecuperarHoje({ clientId, podeEditar }: { clientId: string; pode
 
 // ---------------------------------------------------------------- Gestor de anúncios
 
-const ROTULO_SINAL: Record<string, string> = { sem_resultado: "Gastando sem resultado", custo_subiu: "Custo subiu", fadiga: "Criativo cansado", escalar: "Pode escalar" };
+const ROTULO_SINAL: Record<string, string> = { sem_resultado: "Gastando sem resultado", custo_subiu: "Custo subiu", fadiga: "Criativo cansado", escalar: "Pode escalar", seguidor_caro: "Seguidor caro", perfil_escalar: "Seguidor barato: pode escalar" };
 
 function Copies({ copies }: { copies: CopyAnuncio[] }) {
   if (!copies?.length) return null;
@@ -202,6 +204,65 @@ function Copies({ copies }: { copies: CopyAnuncio[] }) {
   );
 }
 
+async function chamarAcaoAnuncio(clientId: string, corpo: Record<string, unknown>) {
+  const { data: ses } = await supabase.auth.getSession();
+  const r = await fetch("/api/sync/manual", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${ses.session?.access_token ?? ""}` }, body: JSON.stringify({ client_id: clientId, alvo: "anuncio_acao", ...corpo }) });
+  return (await r.json().catch(() => ({ ok: false, erro: `Falhou (${r.status})` }))) as { ok: boolean; erro?: string; token?: boolean };
+}
+interface AcaoAnuncio { id: string; tipo: string; pct: number | null; estado: string; erro: string | null; aplicado_em: string | null; criado_em: string; antes: any; depois: any }
+
+/** Aplicar com 1 clique (só a equipe): a mudança vai pela API da Meta, com limite de 20% no orçamento, 1 mudança por
+ *  campanha a cada 24 h e botão de desfazer. Sem o token de escrita, os botões ficam desligados com o aviso. */
+function AcoesMeta({ clientId, s }: { clientId: string; s: Sugestao }) {
+  const qc = useQueryClient();
+  const st = useQuery({ queryKey: ["meta-escrita"], staleTime: 300_000, queryFn: () => chamarAcaoAnuncio(clientId, { acao: "status" }) });
+  const hist = useQuery({
+    queryKey: ["anuncios-acoes", s.campanha_id],
+    enabled: !!s.campanha_id,
+    queryFn: async () => {
+      const { data } = await db.from("anuncios_mudancas").select("id, tipo, pct, estado, erro, aplicado_em, criado_em, antes, depois").eq("campanha_id", s.campanha_id).order("criado_em", { ascending: false }).limit(5);
+      return (data ?? []) as AcaoAnuncio[];
+    },
+  });
+  const [ocupado, setOcupado] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const opcoes = acoesDoSinal(s.tipo);
+  if (!s.campanha_id || (!opcoes.length && !(hist.data ?? []).length)) return null;
+  const temToken = st.data?.token === true;
+  async function ir(corpo: Record<string, unknown>, confirmar: string) {
+    if (!window.confirm(confirmar)) return;
+    setOcupado(true); setErro(null);
+    const r = await chamarAcaoAnuncio(clientId, corpo);
+    if (!r.ok) setErro(r.erro ?? "Não foi possível aplicar.");
+    setOcupado(false);
+    await qc.invalidateQueries({ queryKey: ["anuncios-acoes", s.campanha_id] });
+    await qc.invalidateQueries({ queryKey: ["sugestoes-agentes", clientId, "anuncios"] });
+  }
+  const desc = (a: AcaoAnuncio) => a.tipo === "pausar" ? "Campanha pausada" : a.tipo === "ativar" ? "Campanha reativada"
+    : `Orçamento ${Number(a.pct) > 0 ? "+" : ""}${a.pct}%${(a.antes?.orcamentos ?? []).length ? ` (${brlCentavos((a.antes.orcamentos as { daily_budget: number }[]).reduce((t, o) => t + o.daily_budget, 0))} → ${brlCentavos(((a.depois?.orcamentos ?? []) as { daily_budget: number }[]).reduce((t, o) => t + o.daily_budget, 0))}/dia)` : ""}`;
+  return (
+    <div className="mt-2 rounded-lg border p-2" style={{ borderColor: "var(--border)" }}>
+      <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>Aplicar na Meta (com aprovação)</div>
+      {!temToken && st.data && <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>Aguardando o token de escrita da Meta na Vercel (META_ADS_WRITE_TOKEN). Até lá, faça a mudança no Gerenciador.</p>}
+      <div className="mt-1 flex flex-wrap gap-2">
+        {opcoes.map((o) => (
+          <button key={o.rotulo} type="button" disabled={!temToken || ocupado} className="inline-flex min-h-[34px] items-center rounded-lg border px-2.5 text-xs font-semibold disabled:opacity-50" style={{ borderColor: o.tipo === "pausar" ? "var(--crit)" : "var(--accent)", color: o.tipo === "pausar" ? "var(--crit)" : "var(--accent)" }}
+            onClick={() => ir({ tipo: o.tipo as TipoAcao, pct: o.pct, campanha_id: s.campanha_id, sugestao_id: s.id }, `${o.rotulo} na Meta agora? Dá para desfazer depois.`)}>
+            {ocupado ? <Loader2 size={13} className="mr-1 animate-spin" aria-hidden /> : null}{o.rotulo}
+          </button>
+        ))}
+      </div>
+      {erro && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{erro}</p>}
+      {(hist.data ?? []).map((a) => (
+        <p key={a.id} className="mt-1 flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--ink-2)" }}>
+          <span>{a.estado === "falhou" ? `Falhou: ${a.erro}` : `${desc(a)} · ${new Date(a.aplicado_em ?? a.criado_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}${a.estado === "desfeita" ? " · desfeita" : ""}`}</span>
+          {a.estado === "aplicada" && temToken && <button type="button" disabled={ocupado} className="font-semibold underline" style={{ color: "var(--accent)" }} onClick={() => ir({ acao: "desfazer", id: a.id }, "Desfazer esta mudança na Meta?")}>Desfazer</button>}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export function GestorAnunciosIA({ clientId, podeEditar }: { clientId: string; podeEditar: boolean }) {
   const q = useSugestoes(clientId, "anuncios", 10);
   const decidir = useDecidir(clientId, "anuncios");
@@ -210,18 +271,19 @@ export function GestorAnunciosIA({ clientId, podeEditar }: { clientId: string; p
   return (
     <Secao id="ag-anuncios">
       <Cabecalho a={a} clientId={clientId} ultima={itens[0]?.criado_em ?? null} aoTerminar={() => q.refetch()} />
-      <Lista itens={itens} vazio="Nenhuma campanha fora do normal. O agente olha a conta de novo amanhã cedo." render={(s) => <CartaoAnuncio key={s.id} s={s} podeEditar={podeEditar} decidir={(e) => decidir(s.id, e)} />} />
+      <Lista itens={itens} vazio="Nenhuma campanha fora do normal. O agente olha a conta de novo amanhã cedo." render={(s) => <CartaoAnuncio key={s.id} s={s} clientId={clientId} podeEditar={podeEditar} decidir={(e) => decidir(s.id, e)} />} />
     </Secao>
   );
 }
 
-function CartaoAnuncio({ s, podeEditar, decidir }: { s: Sugestao; podeEditar: boolean; decidir: (e: Estado) => Promise<void> }) {
+function CartaoAnuncio({ s, clientId, podeEditar, decidir }: { s: Sugestao; clientId: string; podeEditar: boolean; decidir: (e: Estado) => Promise<void> }) {
+  const { isAdmin } = useAuth();
   const [aberto, setAberto] = useState(false);
   const passos: string[] = s.conteudo?.passos ?? [];
   const copies: CopyAnuncio[] = s.conteudo?.copies ?? [];
   return (
     <article className="flex flex-col rounded-xl border p-3" style={cartao(s)}>
-      <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: s.tipo === "escalar" ? "var(--accent)" : "var(--warn)" }}>{ROTULO_SINAL[s.tipo] ?? s.tipo}</span>
+      <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: s.tipo === "escalar" || s.tipo === "perfil_escalar" ? "var(--accent)" : "var(--warn)" }}>{ROTULO_SINAL[s.tipo] ?? s.tipo}</span>
       <h4 className="mt-0.5 text-[15px] font-semibold leading-snug">{s.titulo}</h4>
       {s.detalhe && <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--ink-2)" }}>{s.detalhe}</p>}
       <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs" style={{ color: "var(--ink-2)" }}>{s.evidencias.map((e) => <li key={e}>{e}</li>)}</ul>
@@ -234,6 +296,7 @@ function CartaoAnuncio({ s, podeEditar, decidir }: { s: Sugestao; podeEditar: bo
           <Copies copies={copies} />
         </div>
       )}
+      {isAdmin && <AcoesMeta clientId={clientId} s={s} />}
       <Acoes s={s} podeEditar={podeEditar} decidir={decidir} />
     </article>
   );
@@ -548,6 +611,7 @@ export function PainelAgentes({ clientId, produto }: { clientId: string; produto
           );
         })}
       </div>
+      <ProvaResultado clientId={clientId} />
       {produto === "hub" && isAdmin && <AtendentePiloto clientId={clientId} />}
       {produto === "hub" && <AprendizadosAgentes clientId={clientId} podeEditar={podeEditar} />}
     </div>

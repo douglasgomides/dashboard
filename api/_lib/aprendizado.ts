@@ -50,13 +50,17 @@ export async function calcularLicoes(admin: Admin, clientId: string): Promise<Li
   const [posts, ads, camps, sugs, recuperacoes] = await Promise.all([
     postsDaClinica(admin, clientId, 180),
     admin.from("meta_ads_daily").select("campaign_id, spend, leads, conversations").eq("client_id", clientId).gte("date", desde(30).slice(0, 10)).limit(10_000),
-    admin.from("meta_ads_campaigns").select("campaign_id, name").eq("client_id", clientId),
+    admin.from("meta_ads_campaigns").select("campaign_id, name, objective").eq("client_id", clientId),
     admin.from("sugestoes_agentes").select("agente, tipo, estado, resultado, conteudo").eq("client_id", clientId).gte("criado_em", desde(90)).limit(2000),
     resultadosRecuperacao(admin,clientId),
   ]);
   if (ads.error || camps.error || sugs.error) throw new Error("Não foi possível ler as fontes para aprendizado");
   const nomes: Record<string, string> = {};
-  for (const c of (camps.data ?? []) as { campaign_id: string; name: string }[]) nomes[c.campaign_id] = String(c.name ?? "").slice(0, 80);
+  const naoConversa = new Set<string>();
+  for (const c of (camps.data ?? []) as { campaign_id: string; name: string; objective: string | null }[]) {
+    nomes[c.campaign_id] = String(c.name ?? "").slice(0, 80);
+    if (!c.objective || !/MESSAGES|LEAD|SALES|CONVERSIONS/.test(c.objective)) naoConversa.add(c.campaign_id);
+  }
   const conteudo = licoesConteudo(posts);
   // O Estrategista de campanhas usa as lições de conteúdo e de atendimento também.
   const comerciais = licoesComerciais(resumos);
@@ -65,7 +69,7 @@ export async function calcularLicoes(admin: Admin, clientId: string): Promise<Li
     ...comerciais,
     ...comerciais.slice(0, 4).map((l) => ({ ...l, agente: "campanhas" as AgenteLicao, chave: `campanhas:${l.chave}` })),
     ...conteudo.slice(0, 3).map((l) => ({ ...l, agente: "campanhas" as AgenteLicao, chave: `campanhas:${l.chave}` })),
-    ...licoesAnuncios((ads.data ?? []) as LinhaCampanha[], nomes),
+    ...licoesAnuncios((ads.data ?? []) as LinhaCampanha[], nomes, naoConversa),
     ...licoesResultados([...(sugs.data ?? []).filter((s: SugestaoMedida)=>s.agente!=="recuperacao"),...recuperacoes] as SugestaoMedida[]),
   ];
 }

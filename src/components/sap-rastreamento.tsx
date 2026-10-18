@@ -129,6 +129,7 @@ function ConfigRastreioPainel({ clinica }: { clinica: SapCadastro }) {
     meta_pixel_id: clinica.meta_pixel_id ?? "", meta_ad_account_id: clinica.meta_ad_account_id ?? "", google_ads_customer_id: clinica.google_ads_customer_id ?? "",
     google_acoes_conversao: clinica.google_acoes_conversao ?? {}, status_categoria_meta: clinica.status_categoria_meta ?? "",
     categoria_verificada_em: clinica.categoria_verificada_em ?? "", conversoes_meta: !!clinica.conversoes_meta, conversoes_google: !!clinica.conversoes_google,
+    conversoes_da_conversa: !!clinica.conversoes_da_conversa,
   };
   const [ed, setEd] = useState<ConfigRastreio | null>(null);
   const salvar = useMutation({ mutationFn: (c: ConfigRastreio) => salvarConfigRastreioSap(clinica.id, c), onSuccess: () => { setEd(null); qc.invalidateQueries({ queryKey: ["sap-cadastro"] }); } });
@@ -157,6 +158,7 @@ function ConfigRastreioPainel({ clinica }: { clinica: SapCadastro }) {
             <div><span style={{ color: "var(--text-dim)" }}>Ações de conversão no Google: </span>{Object.values(clinica.google_acoes_conversao ?? {}).filter(Boolean).length} de 4</div>
             <div><span style={{ color: "var(--text-dim)" }}>Envio à Meta: </span><strong>{clinica.conversoes_meta ? "ligado" : "desligado"}</strong></div>
             <div><span style={{ color: "var(--text-dim)" }}>Envio ao Google: </span><strong>{clinica.conversoes_google ? "ligado" : "desligado"}</strong></div>
+            <div className="sm:col-span-2"><span style={{ color: "var(--text-dim)" }}>Agendamento lido pela IA na conversa entra na fila: </span><strong>{clinica.conversoes_da_conversa ? "sim" : "não"}</strong></div>
           </div>
           <button type="button" className="text-sm font-semibold underline" style={{ color: "var(--accent)" }} onClick={() => setEd(atual)}>Editar</button>
         </div>
@@ -182,6 +184,7 @@ function ConfigRastreioPainel({ clinica }: { clinica: SapCadastro }) {
           </div>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ed.conversoes_meta} onChange={(x) => setEd({ ...ed, conversoes_meta: x.target.checked })} /> Ligar envio das etapas à Meta</label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ed.conversoes_google} onChange={(x) => setEd({ ...ed, conversoes_google: x.target.checked })} /> Ligar envio das etapas ao Google</label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={ed.conversoes_da_conversa} onChange={(x) => setEd({ ...ed, conversoes_da_conversa: x.target.checked })} /> Também usar o "agendou" que a IA lê nas conversas do WhatsApp (EtapaB), sem depender da secretária mover o card no CRM</label>
           <div className="flex gap-2">
             <button type="button" disabled={salvar.isPending} onClick={() => salvar.mutate(ed)} className="min-h-[34px] rounded-lg px-3 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>Salvar</button>
             <button type="button" onClick={() => setEd(null)} className="min-h-[34px] px-2 text-sm" style={{ color: "var(--text-dim)" }}>Cancelar</button>
@@ -207,7 +210,7 @@ function FilaConversoes({ clinica }: { clinica: SapCadastro }) {
   return (
     <Painel icone={Send} titulo="Devolução das etapas às plataformas (equipe)"
       resumo={linhas.length ? `${linhas.length} etapa(s) nos últimos 90 dias` : "Nenhuma etapa registrada"}
-      ajuda={<>Cada mudança de etapa no CRM marcada como marco do SAP (em Etapas no funil) entra aqui com nome neutro: EtapaA lead qualificado, EtapaB agendou, EtapaC compareceu, EtapaD fechou com valor em R$. O n8n envia uma vez por dia; a Meta só aceita até 7 dias de atraso, o Google até 63. Só saem telefone e e-mail com SHA-256, nunca nome, serviço ou nome da etapa do CRM.</>}>
+      ajuda={<>Cada mudança de etapa no CRM marcada como marco do SAP (em Etapas no funil) entra aqui com nome neutro (e, se ligado, o "agendou" que a IA lê na conversa): EtapaA lead qualificado, EtapaB agendou, EtapaC compareceu, EtapaD fechou com valor em R$. O n8n envia uma vez por dia; a Meta só aceita até 7 dias de atraso, o Google até 63. Só saem telefone e e-mail com SHA-256, nunca nome, serviço ou nome da etapa do CRM.</>}>
       {q.isLoading ? <p className="note">Carregando…</p> : (
         <div className="mt-2 grid gap-3 lg:grid-cols-2">
           {plats.map((p) => {
