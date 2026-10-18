@@ -24,7 +24,12 @@ items.push({ id: 'demo-approved', client_id: clientId, memoria: 'identidade', ch
 const errors = [], unexpected = [];
 const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined });
 try {
-  for (const [product, origin] of Object.entries(origins)) {
+  for (const { product, file, path: routePath, ready } of [
+    { product: 'nexo', file: 'nexo', path: `/${clientId}/atendimento?aba=conversas`, ready: 'Auditoria comercial do período' },
+    { product: 'nexo', file: 'nexo-brain', path: '/admin/brain', ready: proposed[0][2] },
+    { product: 'sap', file: 'sap', path: `/sap/${clientId}/cronograma`, ready: 'Cronograma do programa' },
+  ]) {
+    const origin = origins[product];
     const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, deviceScaleFactor: 1, locale: 'pt-BR', colorScheme: 'light' });
     try {
       const claims = Buffer.from(JSON.stringify({ sub: user.id, exp: 2000000000, role: 'authenticated' })).toString('base64url');
@@ -40,8 +45,15 @@ try {
           if (path === '/auth/v1/user') return respond(user);
           if (path.startsWith('/auth/')) return respond(session);
           if (path === '/rest/v1/rpc/is_app_admin') return respond(product === 'nexo');
-          const readRpc = ['/rest/v1/rpc/sap_fontes_etapas', '/rest/v1/rpc/sap_papeis_pessoas', '/rest/v1/rpc/client_fontes'];
+          const readRpc = ['sap_fontes_etapas', 'sap_papeis_pessoas', 'client_fontes', 'auditoria_comercial', 'cobertura_periodo', 'client_sync_status', 'experimento_atual', 'conversao_por_origem', 'textos_entrada_frequentes', 'receita_em_jogo', 'receita_por_canal', 'sap_sinais_auto', 'leitura_conversas', 'listar_conversas', 'custo_whatsapp'].map(name => `/rest/v1/rpc/${name}`);
           if (req.method() !== 'GET' && !readRpc.includes(path)) { unexpected.push({ path, method: req.method() }); return route.abort(); }
+          if (path === '/rest/v1/rpc/client_sync_status') return respond(['instagram', 'anuncios', 'crm', 'atendimento'].map(fonte => ({ fonte, data_ate: '2026-10-16', last_attempt_at: date, last_success_at: date, last_error: null, last_rows: 80 })));
+          if (path === '/rest/v1/instagram_comments') return rows([{ commented_at: date }]);
+          if (path === '/rest/v1/rpc/auditoria_comercial') return respond({ conversas_periodo: 80, lidas: 72, nota_media: 7.2, funil: { engajou: 64, preco_pedido: 38, preco_apresentado: 29, agendamento_em_curso: 24, agendou: 19 }, objecoes: { preco: 12, adiamento: 8, agenda: 4 }, falhas: { sem_follow_up: 17, sem_cta: 12, demora: 8 }, origem: { anuncio: 30, instagram: 18, indicacao: 10, desconhecida: 14 }, por_atendente: [], resgate: [], exemplos: [] });
+          if (path === '/rest/v1/rpc/experimento_atual') return respond({ atual: { id: 'demo-test', falha: 'sem_follow_up', acao: 'Combinar o próximo contato antes de encerrar cada conversa e registrar o retorno no CRM.', inicio: '2026-10-15', fim: '2026-10-22', estado: 'em_andamento', base_pct: 32, base_conversas: 50, agora: { pct: 24, n: 6, conversas: 25 } }, ultimo: null, sugestao: null });
+          if (path === '/rest/v1/rpc/conversao_por_origem') return respond({ total: 72, pelo_texto: 48, origens: [{ origem: 'anuncio', conversas: 30, agendaram: 9, pct: 30 }, { origem: 'instagram', conversas: 18, agendaram: 4, pct: 22.2 }, { origem: 'indicacao', conversas: 10, agendaram: 4, pct: 40 }, { origem: 'desconhecida', conversas: 14, agendaram: 2, pct: 14.3 }] });
+          if (['receita_em_jogo', 'receita_por_canal', 'custo_whatsapp'].some(name => path.endsWith(`/rpc/${name}`))) return respond(null);
+          if (path === '/rest/v1/rpc/sap_sinais_auto') return respond({ perdidos_com_motivo: 20, motivos: [{ categoria: 'Preço', total: 14 }, { categoria: 'Tempo para decidir', total: 6 }] });
           if (path === '/rest/v1/clients') return rows([client]);
           if (path === '/rest/v1/client_members') return rows([{ client_id: clientId, user_id: user.id, role: 'viewer', clients: client }]);
           if (path === '/rest/v1/cliente_modulos') return rows([{ client_id: clientId, status: 'ativo', clients: { name: client.name } }]);
@@ -62,17 +74,17 @@ try {
       const page = await context.newPage();
       page.on('pageerror', e => errors.push(e.message));
       await page.clock.setFixedTime(new Date(date));
-      await page.goto(origin + (product === 'nexo' ? '/admin/brain' : `/sap/${clientId}/cronograma`));
+      await page.goto(origin + routePath);
       try {
-        await expect(page.getByText(product === 'nexo' ? proposed[0][2] : 'Cronograma do programa', { exact: true })).toBeVisible({ timeout: 25000 });
+        await expect(page.getByText(ready, { exact: true })).toBeVisible({ timeout: 25000 });
       } catch (error) {
         console.error({ url: page.url(), body: await page.locator('body').innerText(), errors, unexpected });
         throw error;
       }
       await expect(page.getByText('Carregando…', { exact: true })).toHaveCount(0);
       await expect(page.locator('body')).not.toContainText('Essa página não carregou');
-      await page.screenshot({ path: new URL(`${product}.jpg`, output).pathname, type: 'jpeg', quality: 88 });
-      console.log(`Captured ${product}: actual application UI, fictional demonstration data.`);
+      await page.screenshot({ path: new URL(`${file}.jpg`, output).pathname, type: 'jpeg', quality: 88 });
+      console.log(`Captured ${file}: actual application UI, fictional demonstration data.`);
     } finally { await context.close(); }
   }
   assert.deepEqual(errors, [], 'No rendering exceptions');

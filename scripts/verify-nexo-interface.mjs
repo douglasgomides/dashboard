@@ -95,11 +95,11 @@ try{
   });
   await run('guest root opens product presentation while protected deep links retain their login destination',async()=>{
     const {context,page}=await account();try{
-      await page.goto(base);await expect(page).toHaveURL(/\/conhecer$/);await page.getByRole('link',{name:'Entrar no Nexo',exact:true}).click();await expect(page.locator('.nx-login-form')).toBeVisible();
+      await page.goto(base);await expect(page).toHaveURL(/\/conhecer$/);await page.getByRole('navigation',{name:'Navegação pública',exact:true}).getByRole('link',{name:'Acessar Nexo',exact:true}).click();await expect(page.locator('.nx-login-form')).toBeVisible();
       for(const path of ['/admin',`/${CID}/conteudo`,`/sap/${CID}`]){
         await page.goto(base+path);await expect(page).toHaveURL(/\/login\?/);await expect(page.getByRole('button',{name:'Entrar no Nexo',exact:true})).toBeVisible();
       }
-      await page.goto(origins.sap);await expect(page).toHaveURL(/\/conhecer$/);await expect(page.getByRole('heading',{level:1})).toContainText('Com método, dados e direção.');
+      await page.goto(origins.sap);await expect(page).toHaveURL(/\/conhecer$/);await expect(page.getByRole('heading',{level:1})).toContainText('Cada etapa preparada para converter.');
     }finally{await context.close();}
   });
   await run('product screenshots load, enlarge accessibly and provide both platform logins',async()=>{
@@ -115,10 +115,36 @@ try{
         await open.click();await dialog.getByRole('button',{name:'Fechar prévia',exact:true}).click();await expect(open).toBeFocused();
         const access=page.getByRole('navigation',{name:'Acesso às plataformas',exact:true});
         await expect(access.getByRole('link')).toHaveCount(2);
-        await expect(access.getByRole('link',{name:/Acessar Nexo/})).toHaveAttribute('href','https://nexo.doctorcreator.com.br/login');
-        await expect(access.getByRole('link',{name:/Acessar SAP/})).toHaveAttribute('href','https://sap.doctorcreator.com.br/login');
+        await expect(access.getByRole('link',{name:/Entrar no Nexo/})).toHaveAttribute('href','https://nexo.doctorcreator.com.br/login');
+        await expect(access.getByRole('link',{name:/Entrar no SAP/})).toHaveAttribute('href','https://sap.doctorcreator.com.br/login');
         await page.getByRole('navigation',{name:'Navegação pública',exact:true}).getByRole('link',{name:`Acessar ${product==='nexo'?'Nexo':'SAP'}`,exact:true}).click();
         await expect(page.locator('.nx-login-form')).toBeVisible();await expect(page).toHaveURL(origin+'/login');
+      }
+    }finally{await context.close();}
+  });
+  await run('commercial calls to action and decision examples work independently of customer access',async()=>{
+    const {context,page}=await account();try{
+      for(const [product,origin] of Object.entries(origins)){
+        await page.goto(origin+'/conhecer');
+        const call=page.locator('.nx-hero .nx-button--primary');
+        const url=new URL(await call.getAttribute('href'));
+        assert.equal(url.origin,'https://wa.me');assert.equal(url.pathname,'/552192339218');
+        assert.match(url.searchParams.get('text'),product==='sap'?/SAP/:/Nexo/);
+        if(product==='nexo'){
+          const choices=page.getByRole('group',{name:'Explore uma decisão de negócio',exact:true});
+          await choices.getByRole('button',{name:/Conversão no atendimento/}).click();
+          await expect(choices.getByRole('button',{name:/Conversão no atendimento/})).toHaveAttribute('aria-pressed','true');
+          await expect(page.getByRole('heading',{name:'Foi o preço ou o atendimento que interrompeu a conversa?',exact:true})).toBeVisible();
+          await choices.getByRole('button',{name:/Evolução da equipe/}).focus();await page.keyboard.press('Enter');
+          await expect(page.getByRole('heading',{name:'O treinamento está mudando o que acontece na prática?',exact:true})).toBeVisible();
+          await accessible(page,'decision-example-selected');
+          await page.getByRole('button',{name:'Conhecimento da clínica',exact:true}).click();
+          await expect(page.locator('.nx-screen-button img')).toHaveAttribute('src','/product-previews/nexo-brain.jpg');
+          await expect(page.locator('.nx-screen-button img')).toHaveJSProperty('naturalWidth',1440);
+          await page.getByRole('button',{name:'Ampliar a tela do Nexo',exact:true}).click();
+          await expect(page.getByRole('dialog').locator('img')).toHaveAttribute('src','/product-previews/nexo-brain.jpg');
+          await page.keyboard.press('Escape');
+        }
       }
     }finally{await context.close();}
   });
@@ -186,7 +212,7 @@ try{
     const {context,page}=await account();try{
       await page.goto(base+'/conhecer');await expect(page.locator('.nx-hero')).toBeVisible();await page.keyboard.press('Tab');await expect(page.getByRole('link',{name:'Ir para o conteúdo',exact:true})).toBeFocused();
       await page.keyboard.press('Enter');await expect(page.locator('#presentation-main')).toBeFocused();
-      await page.getByRole('link',{name:'Entrar no Nexo',exact:true}).focus();await page.keyboard.press('Enter');await expect(page.locator('.nx-login-form')).toBeVisible();
+      await page.getByRole('navigation',{name:'Navegação pública',exact:true}).getByRole('link',{name:'Acessar Nexo',exact:true}).focus();await page.keyboard.press('Enter');await expect(page.locator('.nx-login-form')).toBeVisible();
       await page.getByRole('link',{name:'Voltar à apresentação',exact:true}).focus();await page.keyboard.press('Enter');await expect(page.locator('.nx-hero')).toBeVisible();
     }finally{await context.close();}
   });
