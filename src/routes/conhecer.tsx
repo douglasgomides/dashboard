@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowDown, ArrowRight, Check, ChartNoAxesCombined, Layers, ScanLine } from "lucide-react";
 import { ProductBrand } from "@/components/product-brand";
 import { ProductPreview } from "@/components/product-preview";
+import { SapDeliverables, SapSupport } from "@/components/sap-offer";
 import { ProductDecisions } from "@/components/product-decisions";
 import { ehEnderecoSap } from "@/lib/marca";
 import { PRODUCT_COPY, commercialUrl } from "@/lib/product-copy";
@@ -27,16 +28,19 @@ function ProductPresentation() {
           {sap ? <ProgramCover /> : <IntelligenceCover />}
         </section>
         <div className="nx-value-strip" aria-label={sap ? "Estrutura do programa" : "Áreas de inteligência"}>
-          {sap ? <><span><b>90 dias</b> de implantação assistida</span><span><b>6 sessões</b> individuais + kickoff</span><span><b>Do anúncio à indicação</b> uma jornada conectada</span></> : <><span><ChartNoAxesCombined size={17} aria-hidden /><b>Marketing</b> com leitura comercial</span><span><ScanLine size={17} aria-hidden /><b>Atendimento</b> com evidências</span><span><Layers size={17} aria-hidden /><b>Equipe</b> com prioridades</span></>}
+          {sap ? <><span><b>90 dias</b> de implantação assistida</span><span><b>6 sessões</b> individuais + kickoff</span><span><b>18 criativos</b> editados para anúncios</span></> : <><span><ChartNoAxesCombined size={17} aria-hidden /><b>Marketing</b> com leitura comercial</span><span><ScanLine size={17} aria-hidden /><b>Atendimento</b> com evidências</span><span><Layers size={17} aria-hidden /><b>Equipe</b> com prioridades</span></>}
         </div>
+        {sap ? <SapDeliverables /> : <>
         <section className="nx-section nx-problem" aria-labelledby="problem-title">
           <div className="nx-section-intro"><div><p className="nx-kicker">{sap ? "O caminho do paciente" : "O ponto cego da operação"}</p><h2 id="problem-title">{c.problemTitle}</h2></div><p>{c.problemIntro}</p></div>
           <div className="nx-question-grid">{c.problems.map(([statement, question], index) => <article key={statement}><span className="nx-serial">0{index + 1}</span><p>{statement}</p><h3>{question}</h3></article>)}</div>
         </section>
         <section className="nx-section nx-method" id="metodo" aria-labelledby="method-title">
           <div className="nx-section-intro"><div><p className="nx-kicker">{sap ? "A entrega" : "Da informação à decisão"}</p><h2 id="method-title">{c.sectionTitle}</h2></div><p>{c.sectionIntro}</p></div>
-          {sap ? <div className="nx-deliverables">{c.items.map(([title, description], index) => <article key={title}><span className="nx-serial">0{index + 1}</span><div><h3>{title}</h3><p>{description}</p></div><Check size={18} aria-hidden /></article>)}</div> : <><ProductDecisions /><div className="nx-capabilities">{c.items.map(([title, description]) => <article key={title}><h3>{title}</h3><p>{description}</p></article>)}</div></>}
+          <ProductDecisions /><div className="nx-capabilities">{PRODUCT_COPY.nexo.items.map(([title, description]) => <article key={title}><h3>{title}</h3><p>{description}</p></article>)}</div>
         </section>
+        </>}
+        {sap && <SapSupport />}
         <ProductPreview product={product} />
         <section className="nx-intelligence" aria-labelledby="delivery-title"><div className="nx-section">
           <div className="nx-section-intro"><div><p className="nx-kicker">{sap ? "Da estratégia à rotina" : "Inteligência agêntica aplicada"}</p><h2 id="delivery-title">{c.deliveryTitle}</h2></div><p>{c.deliveryIntro}</p></div>
@@ -59,5 +63,5 @@ function IntelligenceCover() {
 }
 
 function ProgramCover() {
-  return <aside className="nx-program-cover" aria-label="Visão do programa de implantação"><div className="nx-cover-heading"><span>DOCTOR CREATOR / SAP</span><span>IMPLANTAÇÃO ASSISTIDA</span></div><p className="nx-program-number">90<span>dias para estruturar<br />a sua aquisição</span></p><div className="nx-program-journey">{["Atrair", "Qualificar", "Agendar e confirmar", "Conduzir a consulta", "Acompanhar a decisão", "Fidelizar e gerar indicações"].map((step, index) => <div key={step}><span>0{index + 1}</span><p>{step}</p></div>)}</div><div className="nx-program-foot"><b>Método + execução + equipe preparada</b><span>Um plano. Responsáveis. Acompanhamento.</span></div></aside>;
+  return <aside className="nx-program-cover" aria-label="Resumo das entregas incluídas no SAP"><div className="nx-cover-heading"><span>DOCTOR CREATOR / SAP</span><span>IMPLANTAÇÃO ASSISTIDA</span></div><p className="nx-program-number">90<span>dias de implantação<br />com a nossa equipe</span></p><ul className="sap-cover-inclusions">{["Diagnóstico, estratégia e plano de ação", "18 criativos editados + gravação dirigida", "Gestão de tráfego e rastreamento", "Treino da recepção e scripts de atendimento", "Roteiro de consulta, objeções e follow-up", "Fidelização, indicadores e plano de continuidade"].map(item => <li key={item}><Check size={14} aria-hidden /><span>{item}</span></li>)}</ul><div className="nx-program-foot"><b>Kickoff + 6 sessões individuais</b><span>Reuniões semanais em grupo, suporte e plataforma SAP.</span></div></aside>;
 }
