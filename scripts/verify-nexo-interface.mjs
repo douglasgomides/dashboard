@@ -100,7 +100,7 @@ try{
       for(const path of ['/admin',`/${CID}/conteudo`,`/sap/${CID}`]){
         await page.goto(base+path);await expect(page).toHaveURL(/\/login\?/);await expect(page.getByRole('button',{name:'Entrar no Nexo',exact:true})).toBeVisible();
       }
-      await page.goto(origins.sap);await expect(page).toHaveURL(/\/conhecer$/);await expect(page.getByRole('heading',{level:1})).toContainText('Da primeira procura à decisão na consulta.');
+      await page.goto(origins.sap);await expect(page).toHaveURL(/\/conhecer$/);await expect(page.getByRole('heading',{level:1})).toContainText('Uma equipe para colocar em prática.');
     }finally{await context.close();}
   });
   await run('product screenshots load, enlarge accessibly and provide both platform logins',async()=>{

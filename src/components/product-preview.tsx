@@ -4,18 +4,18 @@ import { ArrowUpRight, X } from "lucide-react";
 const PREVIEWS = {
   nexo: {
     name: "Nexo",
-    title: "Veja o que os dados revelam sobre a sua operação.",
-    description: "Da leitura das conversas ao conhecimento da clínica: explore duas áreas que ajudam a equipe Doctor Creator a investigar perdas e preparar decisões de marketing e vendas.",
+    title: "Da conversa analisada ao ajuste que sua equipe vai testar.",
+    description: "Na auditoria, a equipe examina objeções, interrupções do atendimento e oportunidades de retomada. No conhecimento da clínica, revisa as informações que servem de referência para conteúdo, anúncios e atendimento.",
     audience: "Visão da equipe Doctor Creator; módulos e acessos seguem a contratação.",
     screens: [
       { file: "nexo", label: "Auditoria comercial", outcome: "Encontre o que interrompe o agendamento.", detail: "Origens, objeções e falhas recorrentes do atendimento reunidas para orientar o próximo ajuste da equipe.", alt: "Auditoria comercial do Nexo com funil de conversas, origem dos agendamentos e experimento da semana. Dados fictícios." },
-      { file: "nexo-brain", label: "Conhecimento da clínica", outcome: "Dê contexto à análise antes de decidir.", detail: "O Brand Brain reúne fontes e propostas de conhecimento sobre a clínica, com revisão e aprovação da equipe.", alt: "Brand Brain do Nexo com fontes, propostas de conhecimento e informações aprovadas da clínica. Dados fictícios." },
+      { file: "nexo-brain", label: "Conhecimento da clínica", outcome: "Mantenha a proposta de valor da clínica como referência para a equipe.", detail: "O Brand Brain reúne fontes e propostas de conhecimento sobre a clínica, com revisão e aprovação da equipe.", alt: "Brand Brain do Nexo com fontes, propostas de conhecimento e informações aprovadas da clínica. Dados fictícios." },
     ],
   },
   sap: {
     name: "SAP",
-    title: "Você vê o avanço. Sua equipe sabe como agir.",
-    description: "A plataforma conecta o plano de implantação à rotina da clínica. Acompanhe os indicadores, encontre sua próxima tarefa e consulte as entregas dos 90 dias em um só lugar.",
+    title: "Veja o plano da sua clínica ganhando forma.",
+    description: "Você acompanha o que já foi entregue, o que depende da clínica e como os indicadores evoluem. O SAP dá visibilidade ao caminho dos 90 dias e aos ajustes combinados com a equipe.",
     audience: "Visão da clínica durante o programa.",
     screens: [
       { file: "sap", label: "Evolução da clínica", outcome: "Compare a operação com o ponto de partida.", detail: "Indicadores do período, referências iniciais e próxima reunião para acompanhar a implantação com dados registrados.", alt: "Visão geral do SAP com indicadores de atendimento e conversão comparados ao ponto de partida, fase do programa e próxima reunião. Dados fictícios." },

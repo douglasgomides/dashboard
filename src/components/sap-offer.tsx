@@ -5,8 +5,8 @@ export function SapDeliverables() {
   return (
     <section className="nx-section nx-method sap-offer" id="metodo" aria-labelledby="method-title">
       <div className="nx-section-intro">
-        <div><p className="nx-kicker">O que sua clínica recebe</p><h2 id="method-title">Um processo de aquisição, com as entregas para fazê-lo funcionar.</h2></div>
-        <p>Em 90 dias, a Doctor Creator entrega estratégia, produção de criativos, gestão de campanhas e treinamento. A plataforma SAP mostra o plano, os responsáveis e a evolução. Conheça cada parte da implantação.</p>
+        <div><p className="nx-kicker">O que sua clínica recebe</p><h2 id="method-title">O mapa vira campanhas, atendimento preparado e acompanhamento da decisão.</h2></div>
+        <p>A clínica participa das decisões. A Doctor Creator prepara os materiais, executa a parte técnica e treina a equipe. Cada entrega abaixo faz parte do caminho entre atrair um paciente com perfil e acompanhar sua decisão.</p>
       </div>
       <div className="sap-delivery-grid">
         {SAP_DELIVERABLES.map((delivery, index) => (
@@ -26,8 +26,8 @@ export function SapSupport() {
   return (
     <section className="nx-section sap-support" aria-labelledby="sap-support-title">
       <div className="nx-section-intro">
-        <div><p className="nx-kicker">Método com acompanhamento</p><h2 id="sap-support-title">Sua equipe participa. A Doctor Creator conduz.</h2></div>
-        <p>As seis sessões individuais conectam a estratégia à rotina de quem atrai, atende e conversa com o paciente. Entre elas, você conta com execução técnica, encontros em grupo, suporte e leitura dos indicadores.</p>
+        <div><p className="nx-kicker">Método com acompanhamento</p><h2 id="sap-support-title">Você tem uma equipe para fazer o plano sair do papel.</h2></div>
+        <p>Em cada sessão, uma parte da aquisição é definida e preparada para uso. Entre os encontros, a Doctor Creator produz os materiais, configura as campanhas e acompanha a execução. Você tem suporte para aplicar o plano e entender os números.</p>
       </div>
       <div className="sap-support-columns">
         <div className="sap-session-list"><h3>6 sessões individuais, com entregas definidas</h3><ol>{SAP_SESSIONS.map(([title, description], index) => <li key={title}><span>0{index + 1}</span><div><h4>{title}</h4><p>{description}</p></div></li>)}</ol><p className="sap-session-duration">Sessões de 90 a 120 minutos, conforme a etapa, com participação do decisor e das pessoas envolvidas na execução.</p></div>
