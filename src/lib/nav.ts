@@ -91,6 +91,7 @@ export const AREAS: NavArea[] = [
       { path: "/top", label: "Top conteúdos", Icone: Trophy, fonte: "instagram" },
       { path: "/audiencia", label: "Audiência", Icone: Users, fonte: "instagram" },
       { path: "/ideias", label: "Ideias", Icone: Lightbulb },
+      { path: "/inteligencia-criativa", label: "Inteligência Criativa", Icone: Network, fonte: "instagram" },
       { path: "/inspiracao", label: "Inspiração", Icone: Star },
     ],
   },

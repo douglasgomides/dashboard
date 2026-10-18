@@ -78,7 +78,7 @@ export function JornadaFunil({ clientId, start, end }: { clientId: string; start
   const semNada = funil && funil.medidas === 0;
 
   return (
-    <Painel icone={Workflow} titulo="Funil do período: do alcance à venda" resumo={`7 etapas · ${formatRangeLabel({ start, end })}`}>
+    <Painel icone={Workflow} titulo="Volumes do período: do alcance ao CRM" resumo={`7 indicadores de fontes distintas · ${formatRangeLabel({ start, end })}`}>
       {q.isLoading && (
         <div className="space-y-2" aria-busy="true">
           {[0, 1, 2].map((i) => <div key={i} className="h-14 animate-pulse rounded-lg" style={{ background: "var(--surface-2)" }} />)}
@@ -95,8 +95,8 @@ export function JornadaFunil({ clientId, start, end }: { clientId: string; start
             {semNada
               ? "Nenhuma etapa pode ser medida ainda: cada uma abaixo diz qual integração falta e qual dado seria necessário."
               : `${funil.medidas} de 7 etapas com dado. A porcentagem entre etapas só aparece quando as duas são medidas. O funil não é uma fila única: lead de formulário, por exemplo, não passa pelo WhatsApp.`}
-            {funil.maiorQueda && ` Maior queda no comercial: de ${NOME[funil.maiorQueda.de]} para ${NOME[funil.maiorQueda.para]} (${pct(funil.maiorQueda.taxa)} passam).`}
-            {funil.receita > 0 && ` Receita registrada: ${funil.receita.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}.`}
+            {funil.maiorQueda && ` Maior diferença de volumes: de ${NOME[funil.maiorQueda.de]} para ${NOME[funil.maiorQueda.para]}. Esta leitura agregada não identifica uma perda individual.`}
+            {funil.receita > 0 && ` Valor dos negócios ganhos no CRM: ${funil.receita.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}. Não comprova recebimento.`}
           </p>
           <ol className="space-y-0">
             {funil.etapas.map((e) => (

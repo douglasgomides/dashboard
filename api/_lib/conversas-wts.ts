@@ -9,6 +9,7 @@
  * (acesso restrito e registrado). Aqui é só escrita, com a service role.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { reconciliarJornada } from "./jornada-evidencias.js";
 import { extrairCodigos } from "./shortio.js";
 
 const BASE = "https://api.wts.chat";
@@ -389,5 +390,7 @@ export async function ingerirConversasWts(
     r.erros.push("Não foi possível reconciliar os vínculos de pessoas");
   }
   r.restantes = Math.max(0, pendentes.length - Math.min(cursor, fila.length));
+  const erroJornada = await reconciliarJornada(supabase, clientId);
+  if (erroJornada) r.erros.push(erroJornada);
   return r;
 }

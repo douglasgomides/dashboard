@@ -143,6 +143,8 @@ async function sincronizarAgentes(
 function linhaDaSessao(clientId: string, s: WtsSession) {
   return {
     client_id: clientId,
+    source_provider: "wts",
+    source_connection_id: null,
     session_id: s.id,
     started_at: s.startAt ?? s.createdAt,
     ended_at: s.endAt ?? null,

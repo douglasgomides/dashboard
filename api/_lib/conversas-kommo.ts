@@ -17,6 +17,7 @@
  * Conversa é dado de saúde: aqui só escrita, com a service role; a leitura passa por listar_conversas/ler_mensagens.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { registrarVinculosKommo, type VinculoKommo } from "./jornada-evidencias.js";
 
 import { integrationHost } from "./integration-http.js";
 
@@ -214,9 +215,11 @@ async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoK
     const ms = porTalk.get(t)!;
     const ex = existentes.get(t);
     const datas = ms.map((m) => m.enviadaEm).concat(ex?.iniciada_em ?? [], ex?.ultima_msg_em ?? []).sort();
-    const lead = ms.find((m) => m.leadId)?.leadId;
+    // Uma talk pode mencionar mais de um negócio. Não escolher o primeiro.
+    const ids = [...new Set(ms.map((m) => m.leadId).filter(Boolean))];
+    const lead = ids.length === 1 ? ids[0] : null;
     return {
-      client_id: clientId, provider: "kommo", externo_id: t, canal: canalKommo(ms[0].origem),
+      client_id: clientId, provider: "kommo", externo_id: t, canal: canalKommo(ms[0].origem), source_connection_id: conn.id,
       lead_id: (lead && leadDe.get(lead)) || ex?.lead_id || null,
       iniciada_em: datas[0], ultima_msg_em: datas[datas.length - 1],
     };
@@ -245,5 +248,20 @@ async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoK
     const { error: eM } = await admin.from("mensagens").upsert(linhasMsg.slice(i, i + 500), { onConflict: "conversa_id,externo_id" });
     if (eM) r.erros.push(`mensagens: ${eM.message}`);
   }
+  const vinculos: VinculoKommo[] = [];
+  for (const [talk, ms] of porTalk) {
+    const ids = [...new Set(ms.map((m) => m.leadId).filter(Boolean))];
+    const conversa = idConv.get(talk);
+    for (const ext of ids) {
+      const lead = ext ? leadDe.get(ext) : null;
+      const evidencia = ms.find((m) => m.leadId === ext);
+      // Duas referências explícitas à mesma talk geram conflito no servidor;
+      // não mantêm silenciosamente uma confirmação anterior.
+      if (ext && lead && conversa && evidencia) vinculos.push({ conversa_id: conversa, lead_id: lead,
+        lead_externo_id: ext, conversa_externo_id: talk, referencia_externa: evidencia.messageId, metodo: "kommo_evento" });
+    }
+  }
+  const erroJornada = await registrarVinculosKommo(admin, clientId, vinculos);
+  if (erroJornada) r.erros.push(erroJornada);
   r.mensagens += linhasMsg.length;
 }

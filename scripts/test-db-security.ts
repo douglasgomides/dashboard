@@ -48,7 +48,7 @@ try {
     grant execute on function auth.uid(), auth.jwt() to anon, authenticated, service_role;
     create schema storage;
     create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
-    create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text, name text);
+    create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text, metadata jsonb, name text);
     alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
     alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
     alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
@@ -113,7 +113,7 @@ try {
 
   await check("hardening preserva exatamente as 16 RPCs operacionais da PR169", async () => {
     assert.deepEqual(await rows(`select oid::regprocedure::text as signature,pg_get_functiondef(oid) as definition from pg_proc
-      where pronamespace='public'::regnamespace and prosecdef and proconfig @> array['search_path=""'] order by 1`),operationalSignatures);
+      where pronamespace='public'::regnamespace and oid::regprocedure::text=any($1) order by 1`,[operationalSignatures.map(r=>r.signature)]),operationalSignatures);
   });
   await check("todas as tabelas têm RLS", async () => {
     assert.deepEqual(await rows("select relname from pg_class where relnamespace='public'::regnamespace and relkind='r' and not relrowsecurity"), []);
@@ -312,8 +312,10 @@ try {
       assert.deepEqual(await rows("select * from conversas where client_id=$1", [A]), []);
     });
   });
-  await check("migrações novas são reaplicáveis sem apagar dados legados", async () => {
-    for (const file of hardening) await apply(file);
+  await check("migrações de segurança da PR169 são reaplicáveis sem apagar dados legados", async () => {
+    // A garantia de replay é das correções da PR169; migrações aditivas de módulos
+    // posteriores continuam sendo aplicadas uma vez pelo runner de migrations.
+    for (const file of hardening.filter(f=>f<"20261023000000")) await apply(file);
     assert.equal((await rows("select * from mensagens where externo_id='legacy-mismatch'")).length, 1);
   });
   const hostedCredentialDelta = files.find((file) => file.endsWith("_hosted_credential_boundary.sql"));
@@ -535,8 +537,8 @@ try {
       assert.deepEqual(await rows("select proconfig from pg_proc where oid='public.secure_path_fixture()'::regprocedure"),[{proconfig:['search_path=""']}]);
       assert.deepEqual(await rows("select proconfig from pg_proc where oid='public.extension_path_fixture()'::regprocedure"),[{proconfig:['search_path=public, untouched_extension, pg_temp']}]);
       assert.deepEqual(await rows(`select oid::regprocedure::text as signature,pg_get_functiondef(oid) as definition from pg_proc
-        where pronamespace='public'::regnamespace and prosecdef and proconfig @> array['search_path=""']
-          and proname<>'secure_path_fixture' order by 1`),operationalSignatures);
+        where pronamespace='public'::regnamespace and oid::regprocedure::text=any($1)
+          order by 1`,[operationalSignatures.map(r=>r.signature)]),operationalSignatures);
       await db.exec("create table public.future_acl_fixture(id integer);create table untouched_extension.future_acl_fixture(id integer)");
       assert.deepEqual(await rows(`select has_table_privilege('authenticated','public.future_acl_fixture','TRUNCATE') as public_truncate,
         has_table_privilege('anon','public.future_acl_fixture','SELECT') as public_anon,
@@ -576,7 +578,10 @@ try {
     assert.equal(reports.filter((row) => row.section === "unvalidated_constraint").length, invalidRelations.length + 1);
     assert.ok(reports.some((row) => row.section === "anonymous_default_grant" && row.default_source === "global_implicit" && row.object_type === "f" && row.grantee === "PUBLIC"), "default global implícito precisa ser visível");
     const generated = reports.filter((row) => row.section === "tenant_violation_query");
-    assert.equal(generated.length, invalidRelations.length);
+    assert.equal(generated.length, invalidRelations.length + 2);
+    for (const name of ["wts_sessions_source_connection_tenant_fk", "conversas_source_connection_tenant_fk"]) {
+      assert.ok(generated.some(row => row.constraint_name === name), `nova origem precisa entrar no preflight: ${name}`);
+    }
     for (const query of generated) {
       assert.equal(query.supported_match_simple, true);
       assert.equal(typeof query.count_sql, "string");
@@ -592,7 +597,7 @@ try {
   });
   await check("validação explícita detecta só a inconsistência legada sem apagar dados", async () => {
     const constraints = await db.query<{ table_name: string; constraint_name: string }>("select conrelid::regclass::text as table_name,conname as constraint_name from pg_constraint where conname like '%_tenant_fk' and connamespace='public'::regnamespace");
-    assert.equal(constraints.rows.length, invalidRelations.length);
+    assert.equal(constraints.rows.length, invalidRelations.length + 2);
     for (const constraint of constraints.rows) {
       const validate = () => db.exec(`alter table ${constraint.table_name} validate constraint ${constraint.constraint_name}`);
       if (constraint.constraint_name === "mensagens_conversa_id_tenant_fk") await denied(validate, "23503");

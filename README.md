@@ -66,6 +66,8 @@ As correções de integridade usam FKs compostas `NOT VALID`: novas relações e
 
 ## Testes de navegador
 
+Na Inteligência Criativa, Reels com áudio transcrito exibem o roteiro falado original completo, com cópia do texto e consulta aos tempos. O laboratório envia todos os segmentos reconhecidos no áudio como fonte primária para a adaptação, junto da análise visual e do Brand Brain. A comparação por bloco usa os segmentos que cruzam aquele intervalo, mantendo as palavras e os tempos originais; um segmento que cruza blocos aparece inteiro para conferência. A fala original nunca é reconstruída a partir de descrições de cenas ou textos na tela. Transcrições são automáticas e precisam de conferência de termos e nomes; adaptações antigas só mudam quando uma nova proposta é solicitada.
+
 ```sh
 npx playwright install chromium
 npm run test:e2e
@@ -81,6 +83,10 @@ PLAYWRIGHT_CHANNEL=chrome npm run test:e2e
 Os testes cobrem rotas em 375 e 1280 px, acesso anônimo, perfil de leitura, falhas de autenticação/dados e regras básicas de acessibilidade do login. A suíte de interface também confere os produtos em 375, 768 e 1440 px e os fluxos de acompanhamento do Nexo e acessos do SAP. Eles não comprovam que as integrações externas estejam configuradas corretamente. Capturas e traces de falhas ficam em `test-results/`, fora do Git.
 
 ## Integrações e execução
+
+Ideias e Dúvidas usam explicitamente a FK original entre comentários e posts para manter compatibilidade com bancos que também possuem a FK composta de isolamento. Os filtros de clínica e as políticas RLS continuam aplicados. Uma falha na consulta de comentários é identificada separadamente da leitura dos posts e permite nova tentativa.
+
+O Roteirista distingue carregamento, erro de leitura e ausência de propostas. Administradores podem consultar o estado e a data da última execução do fluxo, sem carregar seu contexto; membros da clínica continuam sem acesso ao histórico administrativo. A frequência do catálogo é uma cadência prevista: a execução automática depende do agendador externo chamar `agendar` e processar a fila com `rodar`. O intervalo semanal, isoladamente, não garante uma entrega na segunda-feira.
 
 O botão de atualização usa a sessão do usuário; operações de escrita exigem papel de edição. Sincronizações automáticas usam o segredo do servidor. Provedores, contas, tokens e equipes podem variar por cliente; contas compartilhadas precisam de atribuição explícita para não misturar atendimentos.
 

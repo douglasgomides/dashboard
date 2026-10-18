@@ -1,0 +1,405 @@
+.production {
+  --production-line: var(--border);
+  display: grid;
+  gap: 22px;
+  color: var(--ink);
+}
+.production-intro,
+.production-toolbar,
+.production-create,
+.production-buttons,
+.production-render {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.production-intro {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--production-line);
+  border-left: 4px solid var(--accent);
+  border-radius: 12px;
+}
+.production-intro h2 {
+  font-size: 25px;
+  letter-spacing: -0.6px;
+  margin: 6px 0;
+}
+.production-intro p {
+  max-width: 700px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+.production-eyebrow {
+  font-size: 10px;
+  letter-spacing: 1.8px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.production label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 0;
+}
+.production
+  input:not([type="checkbox"]):not([type="range"]):not([type="color"]),
+.production select,
+.production textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 10px;
+  border: 1px solid var(--production-line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.production textarea {
+  resize: vertical;
+}
+.production input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.production input[type="color"] {
+  width: 100%;
+  height: 38px;
+}
+.production input:disabled,
+.production textarea:disabled {
+  opacity: 0.7;
+}
+.production input:focus-visible,
+.production select:focus-visible,
+.production textarea:focus-visible,
+.production button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.production-create label {
+  flex: 1;
+  min-width: 220px;
+}
+.production-projects {
+  display: flex;
+  gap: 10px;
+  overflow: auto;
+  padding-bottom: 4px;
+}
+.production-projects > button {
+  display: grid;
+  gap: 7px;
+  text-align: left;
+  min-width: 190px;
+  max-width: 280px;
+  border: 1px solid var(--production-line);
+  border-radius: 9px;
+  padding: 14px;
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 600;
+}
+.production-projects > button[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.production-projects span {
+  font-size: 9px;
+  letter-spacing: 1.4px;
+  color: var(--accent);
+}
+.production small {
+  display: block;
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 1.6;
+  font-weight: 400;
+}
+.production-editor {
+  display: grid;
+  gap: 20px;
+}
+.production-toolbar {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--production-line);
+}
+.production-common {
+  display: grid;
+  gap: 14px;
+}
+.production-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.1fr) minmax(260px, 1fr);
+  gap: 26px;
+}
+.production-preview {
+  padding: 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--production-line);
+  border-radius: 10px;
+  align-self: start;
+}
+.production-slide {
+  width: 100%;
+  max-height: 650px;
+  object-fit: contain;
+  box-shadow: 0 6px 20px #00000012;
+}
+.production-slide-nav {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.production-slide-nav button {
+  min-width: 36px;
+  min-height: 36px;
+  border: 1px solid var(--production-line);
+  border-radius: 5px;
+  font-size: 12px;
+}
+.production-slide-nav button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink, #fff);
+}
+.production-controls {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.production-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.production-colors {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.production-file {
+  position: relative;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border: 1px dashed var(--production-line);
+  border-radius: 7px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.production-file input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.production-check {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 8px !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  line-height: 1.6;
+}
+.production-check input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+.production details {
+  border: 1px solid var(--production-line);
+  border-radius: 7px;
+  padding: 12px;
+}
+.production summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 24px;
+}
+.production details label,
+.production details .production-file {
+  margin-top: 12px;
+}
+.production-note {
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.7;
+  margin: 10px 0;
+}
+.production-primary {
+  background: var(--accent) !important;
+  color: var(--accent-ink, #fff) !important;
+  border-color: var(--accent) !important;
+  min-height: 44px !important;
+}
+.production-error,
+.production-overflow {
+  padding: 14px;
+  border: 1px solid var(--crit);
+  border-radius: 7px;
+  color: var(--crit);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.production-empty {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 50px 20px;
+  background: var(--surface);
+  border: 1px solid var(--production-line);
+  border-radius: 10px;
+}
+.production-video {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(260px, 1.2fr);
+  gap: 24px;
+}
+.production-video-source,
+.production-cuts {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+.production-video video,
+.production-result video {
+  width: 100%;
+  max-height: 500px;
+  border-radius: 8px;
+  background: #111;
+}
+.production h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.production-cut {
+  padding: 14px;
+  border: 1px solid var(--production-line);
+  border-radius: 7px;
+  display: grid;
+  gap: 10px;
+}
+.production-cut strong {
+  font-size: 12px;
+}
+.production-cut p,
+.production-proposal p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.production-proposal {
+  padding: 18px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+}
+.production-results > div {
+  padding: 16px;
+  border: 1px solid var(--production-line);
+  border-radius: 9px;
+  margin-bottom: 12px;
+}
+.production-result {
+  display: inline-flex;
+  vertical-align: top;
+  max-width: 300px;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 12px 0 0;
+}
+.production-result img {
+  max-height: 360px;
+  object-fit: contain;
+}
+.production .btn {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  font-size: 12px;
+}
+.production .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+@media (max-width: 780px) {
+  .production-grid,
+  .production-video {
+    grid-template-columns: 1fr;
+  }
+  .production-intro {
+    padding: 18px;
+  }
+  .production-create {
+    align-items: stretch;
+  }
+  .production-create label {
+    min-width: 100%;
+  }
+  .production-create > .btn {
+    flex: 1;
+  }
+  .production-toolbar {
+    align-items: flex-start;
+  }
+  .production-two {
+    gap: 8px;
+  }
+  .production-intro h2 {
+    font-size: 22px;
+  }
+  .production-projects {
+    max-width: 100%;
+  }
+  .production-result {
+    max-width: 100%;
+    margin-right: 0;
+  }
+  .production-preview {
+    padding: 10px;
+  }
+  .production-editor {
+    min-width: 0;
+  }
+}
+
+.production-slide svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 650px;
+}
+.production .production-file input {
+  opacity: 0 !important;
+  border: 0;
+}
+.production-file:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.production-jobs {
+  display: grid;
+  gap: 8px;
+}
+.production-jobs > div {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 12px;
+  font-size: 12px;
+}
+.production-jobs progress {
+  width: 100%;
+  accent-color: var(--accent);
+}
