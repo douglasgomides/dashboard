@@ -25,6 +25,7 @@ import {
   ClipboardList,
   ListTodo,
   Bot,
+  Link2,
 } from "lucide-react";
 
 // Navegação do Hub: 5 categorias (Início, Social, Comercial, Oportunidades,
@@ -112,6 +113,7 @@ export const AREAS: NavArea[] = [
       { path: "/crm-painel", label: "Comercial", Icone: Briefcase, fonte: "crm" },
       { path: "/crm-guia", label: "Organizar o CRM", Icone: ClipboardList, fonte: "crm" },
       { path: "/atendimento", label: "WhatsApp", Icone: MessageCircle, fonte: "atendimento" },
+      { path: "/links", label: "Links rastreados", Icone: Link2 },
       { path: "/duvidas", label: "Dúvidas", Icone: HelpCircle, fonte: "instagram" },
       { path: "/jornada", label: "Jornada", Icone: Route, admin: true },
     ],

@@ -16,11 +16,13 @@ import { lerAudiencia, lerResumoPeriodo } from "../_lib/meta-audiencia.js";
 import { classificarConteudoComIA } from "../_lib/conteudo-ia.js";
 import { ingerirConversasWts } from "../_lib/conversas-wts.js";
 import { enriquecerContatosKommo } from "../_lib/kommo-contatos.js";
-import { criarLinkShort, cliquesDoLink, destinoWhatsApp, novoCodigoRef } from "../_lib/shortio.js";
+import { cliquesDoLink } from "../_lib/shortio.js";
 import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_lib/sync-status.js";
 import { rodarConferencia, rodarEtapa, ETAPAS, type EtapaId, type Achado, type Verificado } from "../_lib/conferencia.js";
 import { resumirConversa } from "../_lib/resumo-conversa.js";
 import { rascunharSessao } from "../_lib/sessao-ia.js";
+import { redirecionarLink } from "../_lib/redirecionar.js";
+import { destinoSite, destinoWhatsApp, novaRef, novoSlug, POSICOES, mensagemComRef, type Posicao } from "../../src/lib/rastreio.js";
 import { rodarAgentes, catalogoFluxos, enfileirarBrain } from "../_lib/agentes.js";
 import { resumoEquipe } from "../_lib/resumo-equipe.js";
 
@@ -57,6 +59,17 @@ function temErro(r: { ok?: boolean; contas?: { errors: string[] }[] } | undefine
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Link rastreado próprio: /r/<slug> (rewrite no vercel.json) registra o clique e leva ao destino. Público, sem token.
+  if (req.method === "GET" && typeof req.query.r === "string") {
+    const url = process.env.SUPABASE_URL, chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const destino = url && chave
+      ? await redirecionarLink(createClient(url, chave, { auth: { persistSession: false, autoRefreshToken: false } }), req.query.r, (req.headers["user-agent"] as string) ?? null, (req.headers.referer as string) ?? null).catch(() => null)
+      : null;
+    res.setHeader("Cache-Control", "no-store");
+    if (!destino) { res.status(404).send("Link não encontrado."); return; }
+    res.redirect(302, destino);
+    return;
+  }
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
@@ -833,64 +846,70 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    if (alvo === "link_rastreado" || alvo === "links_stats") {
+    if (alvo === "link_rastreado") {
+      // Gerador de links próprio (src/lib/rastreio.ts): slug no nosso domínio, clique registrado, frase natural + ref.
       if (!ehAdmin) {
-        res.status(403).json({ error: "Só admin cria e atualiza links rastreados" });
+        res.status(403).json({ error: "Só a equipe cria links rastreados" });
         return;
       }
-      const chaveShort = process.env.SHORTIO_API_KEY;
-      const dominioShort = process.env.SHORTIO_DOMAIN;
-      if (!chaveShort || !dominioShort) {
-        res.status(200).json({ alvo, ok: false, erro: "Servidor sem SHORTIO_API_KEY e SHORTIO_DOMAIN configurados na Vercel." });
+      const b = (req.body ?? {}) as { acao?: string; id?: string; tipo?: string; titulo?: string; campanha?: string; destino_tipo?: string; numero_whatsapp?: string; frase?: string; site_url?: string; instagram_post_id?: string | null };
+      if (b.acao === "ativo" || b.acao === "inativo") {
+        const { error } = await admin.from("links_rastreados").update({ ativo: b.acao === "ativo" }).eq("id", b.id ?? "").eq("client_id", client_id);
+        res.status(200).json({ alvo, ok: !error, erro: error?.message });
         return;
       }
-
-      if (alvo === "links_stats") {
-        const { data: links } = await admin.from("links_rastreados").select("id, shortio_id").eq("client_id", client_id).not("shortio_id", "is", null);
-        let atualizados = 0;
-        for (const l of links ?? []) {
-          const n = await cliquesDoLink(chaveShort, l.shortio_id as string);
-          if (n == null) continue;
-          await admin.from("links_rastreados").update({ cliques_total: n, cliques_atualizado_em: new Date().toISOString() }).eq("id", l.id);
-          atualizados++;
+      const tipo = (b.tipo ?? "") as Posicao;
+      if (!(tipo in POSICOES)) {
+        res.status(400).json({ error: `Informe tipo: ${Object.keys(POSICOES).join(", ")}` });
+        return;
+      }
+      const titulo = String(b.titulo ?? "").trim().slice(0, 120) || POSICOES[tipo].rotulo;
+      const frase = String(b.frase ?? "").replace(/\s+/g, " ").trim().slice(0, 200) || POSICOES[tipo].frase;
+      const ref = novaRef();
+      const slug = novoSlug();
+      let destino: string | null = null;
+      if (b.destino_tipo === "site") destino = destinoSite(String(b.site_url ?? ""), tipo, b.campanha || titulo, ref);
+      else {
+        let numero = String(b.numero_whatsapp ?? "");
+        if (!numero) {
+          const { data: cli } = await admin.from("sap_clinicas").select("whatsapp_numero").eq("client_id", client_id).not("whatsapp_numero", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle();
+          numero = String(cli?.whatsapp_numero ?? "");
         }
-        res.status(200).json({ alvo, ok: true, atualizados, total: (links ?? []).length });
+        destino = destinoWhatsApp(numero, frase, ref);
+      }
+      if (!destino) {
+        res.status(400).json({ error: b.destino_tipo === "site" ? "Endereço do site inválido (use https://...)" : "Número de WhatsApp da clínica inválido ou não cadastrado (DDD + número)" });
         return;
       }
-
-      const b = (req.body ?? {}) as {
-        tipo?: string; titulo?: string; numero_whatsapp?: string; mensagem?: string; instagram_post_id?: string | null; ad_campaign_id?: string | null;
-      };
-      const tipos = ["bio", "post", "story", "anuncio", "email", "outro"];
-      if (!b.tipo || !tipos.includes(b.tipo) || !b.numero_whatsapp || !b.mensagem) {
-        res.status(400).json({ error: "Informe tipo (bio, post, story, anuncio, email ou outro), numero_whatsapp e mensagem" });
-        return;
-      }
-      const codigo = novoCodigoRef();
-      const destino = destinoWhatsApp(b.numero_whatsapp, b.mensagem, codigo);
-      const curto = await criarLinkShort({ chave: chaveShort, dominio: dominioShort, destino, titulo: b.titulo, tags: [b.tipo, codigo] });
-      const { data: criado, error: erroIns } = await admin
-        .from("links_rastreados")
-        .insert({
-          client_id,
-          codigo_ref: codigo,
-          tipo: b.tipo,
-          instagram_post_id: b.instagram_post_id ?? null,
-          ad_campaign_id: b.ad_campaign_id ?? null,
-          titulo: b.titulo ?? null,
-          destino_url: destino,
-          mensagem_modelo: b.mensagem,
-          shortio_id: curto.id,
-          short_url: curto.shortUrl,
-          criado_por: quem.user.id,
-        } as never)
-        .select("id")
-        .single();
+      const { data: criado, error: erroIns } = await admin.from("links_rastreados").insert({
+        client_id, codigo_ref: ref, slug, tipo, titulo, campanha: b.campanha ? String(b.campanha).slice(0, 80) : null, destino_tipo: b.destino_tipo === "site" ? "site" : "whatsapp",
+        instagram_post_id: b.instagram_post_id ?? null, destino_url: destino, mensagem_modelo: b.destino_tipo === "site" ? null : mensagemComRef(frase, ref), criado_por: quem.user.id,
+      } as never).select("id").single();
       if (erroIns) {
-        res.status(200).json({ alvo, ok: false, erro: `Link criado no short.gy (${curto.shortUrl}) mas não gravado: ${erroIns.message}` });
+        res.status(200).json({ alvo, ok: false, erro: erroIns.message });
         return;
       }
-      res.status(200).json({ alvo, ok: true, id: criado?.id, codigo_ref: codigo, short_url: curto.shortUrl });
+      const host = (req.headers["x-forwarded-host"] as string) || req.headers.host || "dash.doctorcreator.com.br";
+      res.status(200).json({ alvo, ok: true, id: criado?.id, url: `https://${host}/r/${slug}`, ref });
+      return;
+    }
+
+    if (alvo === "links_stats") {
+      // Legado: cliques totais dos links antigos do short.gy.
+      const chaveShort = process.env.SHORTIO_API_KEY;
+      if (!ehAdmin || !chaveShort) {
+        res.status(200).json({ alvo, ok: false, erro: "Só admin, com SHORTIO_API_KEY configurada" });
+        return;
+      }
+      const { data: links } = await admin.from("links_rastreados").select("id, shortio_id").eq("client_id", client_id).not("shortio_id", "is", null);
+      let atualizados = 0;
+      for (const l of links ?? []) {
+        const n = await cliquesDoLink(chaveShort, l.shortio_id as string);
+        if (n == null) continue;
+        await admin.from("links_rastreados").update({ cliques_total: n, cliques_atualizado_em: new Date().toISOString() }).eq("id", l.id);
+        atualizados++;
+      }
+      res.status(200).json({ alvo, ok: true, atualizados, total: (links ?? []).length });
       return;
     }
 
