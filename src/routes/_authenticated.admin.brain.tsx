@@ -74,8 +74,7 @@ function BrandBrain() {
   if (!clinicas.data?.length) {
     return (
       <div className="rounded-xl border p-4 text-sm" style={caixa}>
-        Nenhuma clínica com o Brand Brain ativo. O módulo é ligado por clínica (cliente_modulos) e hoje está só na clínica de teste.
-        Clientes do Nexo continuam iguais.
+        Nenhuma clínica com o Brand Brain habilitado para este acesso. A administração define a disponibilidade do módulo por clínica.
       </div>
     );
   }
@@ -84,9 +83,9 @@ function BrandBrain() {
     <div className="space-y-6">
       <header className="space-y-3">
         <p className="max-w-3xl text-sm" style={dim}>
-          A memória de marca da clínica, usada por quem cria conteúdo, anúncio e atendimento. Em "Atualizar sugestões", a IA lê o que já
-          existe no Nexo (Instagram, conversas, ficha e sessões do SAP, banco de anúncios) e sugere. Nada vale até alguém aprovar aqui.
-          Não entra nome, telefone nem caso de paciente: só padrões. Tudo se resolve nesta tela.
+          O conhecimento aprovado da clínica para orientar conteúdo, anúncios e atendimento. Em "Atualizar sugestões", a inteligência analisa as fontes
+          disponíveis no Nexo e prepara propostas de posicionamento e contexto. Revise as fontes, ajuste o texto e aprove o que deve fazer parte dessa base.
+          O registro reúne padrões e aprendizados, sem nomes, telefones ou casos individuais de pacientes.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-sm">Clínica{" "}
@@ -109,7 +108,7 @@ function BrandBrain() {
         <>
           <section aria-labelledby="revisar" className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 id="revisar" className="font-medium">Para revisar {propostas.length ? `(${propostas.length})` : ""}</h2>
+              <h2 id="revisar" className="font-medium">Sugestões para revisão {propostas.length ? `(${propostas.length})` : ""}</h2>
               {novas.length > 1 && (
                 <button type="button" className={botao} style={caixa} disabled={aprovarNovas.isPending}
                   onClick={() => { if (window.confirm(`Aprovar ${novas.length} itens novos de uma vez? Os que trocam um texto já aprovado ficam para revisar um por um.`)) aprovarNovas.mutate(); }}>
@@ -117,7 +116,7 @@ function BrandBrain() {
                 </button>
               )}
             </div>
-            {!propostas.length ? <p className="note">Nenhuma proposta pendente.</p> : (
+            {!propostas.length ? <p className="note">Nenhuma sugestão pendente de revisão. Use "Atualizar sugestões" para analisar as fontes disponíveis.</p> : (
               <ul className="space-y-2">
                 {propostas.map(({ p, atual }) => <CardProposta key={p.id} item={p} atual={atual} onFeito={recarregar} />)}
               </ul>
@@ -130,7 +129,7 @@ function BrandBrain() {
               <section key={m.id} aria-labelledby={`mem-${m.id}`} className="rounded-xl border p-4" style={caixa}>
                 <h2 id={`mem-${m.id}`} className="font-medium">{m.nome}</h2>
                 <p className="text-xs" style={dim}>{m.resumo}</p>
-                {!lista.length ? <p className="mt-2 text-sm" style={{ color: "var(--muted)" }}>Nada aprovado ainda.</p> : (
+                {!lista.length ? <p className="mt-2 text-sm" style={{ color: "var(--muted)" }}>Nenhum conhecimento aprovado nesta área. Revise as sugestões ou adicione um registro.</p> : (
                   <ul className="mt-2 divide-y" style={{ borderColor: "var(--border)" }}>
                     {lista.map((g) => <LinhaItem key={g.chave} chave={g.chave} aprovado={g.aprovado} historico={g.historico} onFeito={recarregar} />)}
                   </ul>
@@ -149,7 +148,7 @@ function UltimaLeitura({ l }: { l: Awaited<ReturnType<typeof getUltimaLeitura>> 
   if (!l) return <span className="text-xs" style={dim}>Ainda não houve leitura desta clínica.</span>;
   const quando = new Date(l.quando).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const n = Number((l.resultado as { propostas?: number } | null)?.propostas ?? 0);
-  const texto = l.estado === "concluida" ? `${n} sugestão(ões) nova(s)` : l.estado === "falhou" ? `não deu certo: ${l.erro ?? "erro"}` : "em andamento";
+  const texto = l.estado === "concluida" ? `${n} sugestão(ões) nova(s)` : l.estado === "falhou" ? `não concluída: ${l.erro ?? "tente atualizar as sugestões novamente"}` : "em andamento";
   return <span className="text-xs" style={{ color: l.estado === "falhou" ? "var(--crit)" : "var(--text-dim)" }}>Última leitura: {quando} · {texto}</span>;
 }
 
@@ -157,7 +156,7 @@ function Selos({ item }: { item: ItemBrain }) {
   return (
     <span className="text-xs" style={dim}>
       {nomeFonte(item.fonte)}{item.fonte_detalhe ? ` · ${item.fonte_detalhe}` : ""} · confiança {item.confianca}
-      {item.origem === "restaurado" ? " · restaurado" : item.origem === "manual" ? " · escrito à mão" : ""}
+      {item.origem === "restaurado" ? " · restaurado" : item.origem === "manual" ? " · registrado pela equipe" : ""}
     </span>
   );
 }

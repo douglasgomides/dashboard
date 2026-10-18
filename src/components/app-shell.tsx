@@ -185,8 +185,8 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
   const nome = client?.name ?? "Carregando…";
   const linhaInfo = [client?.specialty, client?.instagram_handle ? `@${client.instagram_handle}` : null].filter(Boolean).join(" · ");
   const cfm = client?.cfm_score_status === "verde" && (
-    <span className="hchip good" title="Status definido pela equipe no cadastro do cliente (campo cfm_score_status). Não é uma verificação automática das publicações.">
-      <ShieldCheck /> CFM em conformidade
+    <span className="hchip good" title="A equipe registrou status favorável no cadastro da clínica. Este selo não substitui a revisão das publicações e das regras aplicáveis.">
+      <ShieldCheck /> CFM · status da equipe
     </span>
   );
 
@@ -264,7 +264,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
           )}
         </nav>
         <div className="side-foot so-aberta">
-          <Link to="/bem-vindo" className="text-sm">Tour do painel</Link>
+          <Link to="/bem-vindo" className="text-sm">Conheça o Nexo</Link>
           <TemaBotoes />
           <LogoutButton className="text-sm text-left min-h-[36px]" />
           <span>Nexo · Marketing e vendas</span>
@@ -311,7 +311,7 @@ export function AppShell({ clientId, client, pathname, dateRange, onDateRange, v
         {(area || naAvancado) && (
           <p className="areadesc">
             <b>{naAvancado ? "Equipe" : area!.label}</b>
-            <span>{naAvancado ? "Telas de uso da equipe Doctor Creator" : area!.descricao}</span>
+            <span>{naAvancado ? "Configuração e análise da equipe Doctor Creator" : area!.descricao}</span>
           </p>
         )}
 

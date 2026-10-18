@@ -34,16 +34,16 @@ export function PortfolioSap() {
   const ordenadas = [...linhas].sort((a, b) => riscoSaude(b) - riscoSaude(a) || PESO[piorFarol(b)] - PESO[piorFarol(a)] || (a.dia ?? 0) - (b.dia ?? 0));
 
   if (isLoading && !exemplo) return <p style={{ color: "var(--text-dim)" }}>Carregando…</p>;
-  if (error && !exemplo) return <p style={{ color: "var(--crit)" }}>Não consegui ler o portfólio: {(error as Error).message}</p>;
+  if (error && !exemplo) return <p style={{ color: "var(--crit)" }}>Não foi possível carregar as clínicas: {(error as Error).message}</p>;
 
   if (!ordenadas.length) {
     return (
-      <Painel icone={Target} titulo="Sistema de Aquisição · todas as clínicas" resumo={data === null ? "As tabelas sap_* ainda não existem no banco." : "Nenhuma clínica cadastrada ainda."}>
+      <Painel icone={Target} titulo="Clínicas do SAP" resumo={data === null ? "O ambiente de dados do SAP ainda precisa ser configurado pela administração." : "Cadastre a primeira clínica para acompanhar a implantação."}>
         <div className="space-y-3 text-sm" style={{ color: "var(--text-dim)" }}>
           <p>
-            Aqui aparece cada clínica do sistema com o dia em que está, a fase, o próximo marco, o semáforo e os números da última
-            semana. Toda clínica nova entra aqui: clique em <strong>Cadastrar nova clínica</strong>. Depois do D90 ela segue
-            no Nexo como acompanhamento. Os números saem sozinhos do CRM e do WhatsApp.
+            Acompanhe a fase, o próximo marco, os alertas e os indicadores de cada clínica. Comece em <strong>Cadastrar nova clínica</strong>.
+            Os números disponíveis dependem das fontes conectadas e dos registros da operação. Ao fim dos 90 dias, o histórico é preservado;
+            a continuidade no Nexo depende de contratação e liberação próprias.
           </p>
           <AbrirClinica />
           <button type="button" onClick={() => setExemplo(true)} className="rounded-lg px-3 py-2 text-sm font-medium" style={{ background: "var(--accent)", color: "#fff" }}>
@@ -74,13 +74,13 @@ export function PortfolioSap() {
       <AbrirClinica />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2 text-sm" style={{ color: "var(--text-dim)" }}>
-          <strong style={{ color: "var(--text)" }}>Sistema de Aquisição · {ordenadas.length} clínica(s)</strong>
+          <strong style={{ color: "var(--text)" }}>SAP · {ordenadas.length} clínica(s) em acompanhamento</strong>
           <span>· últimos 7 dias fechados</span>
           {ordenadas.some((l) => l.automatico) && <span>· números do CRM e do WhatsApp</span>}
-          {exemplo && <Selo cor="var(--warn)">clínicas de exemplo, nada disso está no banco</Selo>}
+          {exemplo && <Selo cor="var(--warn)">Demonstração · dados fictícios</Selo>}
           <Ajuda>
-            Ordem: primeiro quem tem luz vermelha, depois quem está mais no começo do programa. Semáforo com as regras do 08.05; as
-            faixas são referências iniciais da Doctor Creator, a validar no piloto. Variação contra os 7 dias anteriores.
+            A lista prioriza o risco de saúde da operação, os alertas dos indicadores e o início do programa.
+            As faixas são referências iniciais da Doctor Creator, em validação no piloto. A variação compara os últimos 7 dias fechados com os 7 dias anteriores.
           </Ajuda>
         </div>
         {exemplo && (
@@ -93,7 +93,7 @@ export function PortfolioSap() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         {[
           ["Saúde média da carteira", mediaSaude === null ? "sem registro" : `${mediaSaude.toFixed(1).replace(".", ",")}${mediaSaude < 7 ? " · abaixo de 7" : ""}`],
-          ["Clínicas com vermelho", fmtNum(tot.vermelhas)],
+          ["Clínicas com alerta crítico", fmtNum(tot.vermelhas)],
           ["Leads", fmtNum(tot.leads)],
           ["Consultas", fmtNum(tot.consultas)],
           ["Fechamentos", fmtNum(tot.fechamentos)],
@@ -116,7 +116,7 @@ export function PortfolioSap() {
               <th className="px-3 py-2.5 font-medium">Semáforo</th>
               <th className="px-3 py-2.5 text-right font-medium">Leads</th>
               <th className="px-3 py-2.5 text-right font-medium">Consultas</th>
-              <th className="px-3 py-2.5 text-right font-medium">Fechou</th>
+              <th className="px-3 py-2.5 text-right font-medium">Fechamentos</th>
               <th className="px-3 py-2.5 text-right font-medium">Receita</th>
               <th className="px-3 py-2.5 text-right font-medium">1ª resposta</th>
               <th className="px-3 py-2.5 text-right font-medium">Saúde</th>
@@ -167,7 +167,7 @@ export function PortfolioSap() {
                       ))}
                     </div>
                     <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
-                      {s.alertas.filter((x) => x.farol === "vermelho").map((x) => x.titulo).join(", ") || "sem vermelho"}
+                      {s.alertas.filter((x) => x.farol === "vermelho").map((x) => x.titulo).join(", ") || "sem alerta crítico"}
                     </div>
                   </td>
                   <Num v={s.leads} ant={a.leads} />
@@ -262,15 +262,16 @@ function AbrirClinica() {
       {aberto && (
         <form onSubmit={(e) => { e.preventDefault(); if (f.nome.trim()) criar.mutate(); }} className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
           <p className="mb-3 text-sm" style={{ color: "var(--text-dim)" }}>
-            Toda clínica nova entra por aqui. Ela nasce no Sistema de Aquisição e, depois do D90, segue no Nexo como acompanhamento, com os mesmos dados.
-            O D0 é o dia da assinatura e do pagamento; se ainda não fechou, deixe em branco.
+            Crie o cadastro para organizar a implantação e vincular os dados da clínica. O histórico permanece disponível ao fim do SAP;
+            o acesso ao Nexo é liberado conforme a contratação. Informe a data da assinatura e do pagamento como início do programa (D0).
+            Se a contratação ainda não foi concluída, deixe a data em branco.
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {input("nome", "Nome da clínica ou do médico *", { required: true, autoComplete: "off" })}
             {input("especialidade", "Especialidade")}
             {input("cidade", "Cidade")}
             {input("instagram", "@ do Instagram")}
-            {input("d0", "D0 (assinatura)", { type: "date" })}
+            {input("d0", "Início do programa (D0)", { type: "date" })}
             {input("servico", "Serviço prioritário")}
             {input("ticket", "Ticket médio (R$)", { inputMode: "decimal" })}
             <label className="flex items-end gap-2 pb-2 text-sm"><input type="checkbox" checked={f.piloto} onChange={(e) => setF({ ...f, piloto: e.target.checked })} /> Piloto</label>

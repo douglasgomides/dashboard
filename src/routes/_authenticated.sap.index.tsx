@@ -28,7 +28,7 @@ function InicioSap() {
   if (isAdmin) {
     return (
       <div className="sap-operation-home">
-        <div className="sap-week-heading"><div><p className="sap-eyebrow">Operação Doctor Creator</p><h2>Clínicas acompanhadas. Execução com prioridade.</h2><p>Acompanhe a carteira ou concentre-se nas tarefas que precisam da sua atuação.</p></div></div>
+        <div className="sap-week-heading"><div><p className="sap-eyebrow">Operação Doctor Creator</p><h2>Saiba qual clínica precisa da sua equipe.</h2><p>Compare o avanço e os indicadores das clínicas. Em Minhas prioridades, encontre as tarefas que dependem da sua atuação.</p></div></div>
         <div className="sap-operation-switch" role="group" aria-label="Visão da operação"><button type="button" aria-pressed={visao === "clinicas"} aria-controls="sap-operation-clinics" onClick={() => setVisao("clinicas")}>Clínicas e resultados</button><button type="button" aria-pressed={visao === "prioridades"} aria-controls="sap-operation-priorities" onClick={() => setVisao("prioridades")}>Minhas prioridades</button></div>
         <section id="sap-operation-clinics" aria-label="Clínicas e resultados" hidden={visao !== "clinicas"}><PortfolioSap /></section>
         <section id="sap-operation-priorities" aria-label="Prioridades da equipe" hidden={visao !== "prioridades"}><MinhasTarefasTodas /></section>
@@ -40,9 +40,9 @@ function InicioSap() {
   if (!clinicas.length) {
     return (
       <div className="rounded-xl border p-5 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-        <p className="font-semibold">Sua clínica ainda não está no Sistema de Aquisição.</p>
+        <p className="font-semibold">Nenhuma implantação SAP vinculada ao seu acesso.</p>
         <p className="mt-1" style={{ color: "var(--text-dim)" }}>
-          O Sistema de Aquisição de Pacientes é o programa de 90 dias da Doctor Creator. Para saber mais, fale com a equipe.
+          Se sua clínica já contratou o SAP, peça à equipe Doctor Creator para conferir seu vínculo e liberar o ambiente do programa.
         </p>
         <Link to="/" className="mt-3 inline-block font-semibold underline" style={{ color: "var(--accent)" }}>
           Voltar para o Nexo · Doctor Creator

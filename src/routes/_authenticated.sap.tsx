@@ -48,7 +48,7 @@ const ITENS = [
   { grupo: "Implantação", sub: "/rastreamento", label: "Rastreamento", Icone: Radar },
   { grupo: "Implantação", sub: "/anuncios", label: "Banco de anúncios", Icone: Megaphone, admin: true },
   { grupo: "Implantação", sub: "/etapas", label: "Etapas do funil", Icone: Network, admin: true },
-  { grupo: "Implantação", sub: "/papeis", label: "Quem é quem", Icone: UserRoundCheck },
+  { grupo: "Implantação", sub: "/papeis", label: "Responsáveis", Icone: UserRoundCheck },
   { grupo: "Rotina semanal", sub: "/leitura", label: "Leitura da semana", Icone: ClipboardCheck, clinica: true },
   { grupo: "Rotina semanal", sub: "/execucao", label: "Execução e saúde", Icone: ListChecks },
   { grupo: "Rotina semanal", sub: "/midia", label: "Mídia", Icone: Gauge },

@@ -68,7 +68,7 @@ export const AREAS: NavArea[] = [
   {
     id: "resumo",
     label: "Resumo",
-    descricao: "O que está acontecendo e o que fazer",
+    descricao: "Resultados do período e prioridades para agir",
     Icone: Home,
     tabs: [
       { path: "", label: "Resumo", Icone: Activity },
@@ -80,7 +80,7 @@ export const AREAS: NavArea[] = [
   {
     id: "conteudo",
     label: "Conteúdo",
-    descricao: "Instagram: posts, público e ideias",
+    descricao: "Conteúdo, audiência e sinais de interesse",
     Icone: AlignLeft,
     tabs: [
       { path: "/conteudo", label: "Conteúdo", Icone: AlignLeft },
@@ -94,7 +94,7 @@ export const AREAS: NavArea[] = [
   {
     id: "anuncios",
     label: "Anúncios",
-    descricao: "Investimento e resultado por objetivo",
+    descricao: "Investimento, campanhas e resultados por objetivo",
     Icone: Megaphone,
     tabs: [
       { path: "/anuncios", label: "Anúncios", Icone: Megaphone, fonte: "anuncios" },
@@ -104,7 +104,7 @@ export const AREAS: NavArea[] = [
     id: "vendas",
     label: "Atendimento e vendas",
     curto: "Vendas",
-    descricao: "CRM, WhatsApp, dúvidas e jornada",
+    descricao: "Conversas, agendamentos e oportunidades comerciais",
     Icone: Briefcase,
     tabs: [
       { path: "/crm-painel", label: "Comercial", Icone: Briefcase, fonte: "crm" },
@@ -117,7 +117,7 @@ export const AREAS: NavArea[] = [
   {
     id: "relatorio",
     label: "Relatório",
-    descricao: "Texto e PDF para enviar ao cliente",
+    descricao: "Síntese dos resultados para compartilhar",
     Icone: FileText,
     tabs: [{ path: "/relatorio", label: "Relatório", Icone: FileText }],
   },

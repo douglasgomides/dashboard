@@ -74,3 +74,23 @@
 .sap-operation-switch button{min-height:49px;padding:12px 0;border-bottom:2px solid transparent;font-size:12px;color:var(--muted);font-weight:500}
 .sap-operation-switch button[aria-pressed=true]{color:var(--ink);border-bottom-color:var(--sap-brass)}
 .sap-operation-home section[hidden]{display:none}
+
+/* Clinic overview: programme time, operational indicators and recorded volumes. */
+.sap-clinic-summary .sap-clinic-phase{background:var(--sap-deep)!important;color:#edf3f4;padding:26px 28px;border-color:#2b4654!important;border-radius:6px}
+.sap-clinic-phase-label{color:#d3bd94!important;font-size:10px;letter-spacing:.08em}
+.sap-clinic-phase-day{font-size:34px;font-weight:450;letter-spacing:-1px;line-height:1.5}
+.sap-clinic-phase-day span,.sap-clinic-phase-dates{color:#c3d1d8!important}
+.sap-clinic-phase>div[role=progressbar]{background:#3a505b!important;height:4px;margin-top:22px}
+.sap-clinic-kpis{gap:15px}
+.sap-clinic-summary .sap-clinic-kpi{padding:23px 22px;border-radius:6px}
+.sap-clinic-kpi-value{margin-block:13px}
+.sap-clinic-kpi-value>span{font-size:35px;font-weight:450;letter-spacing:-1px;line-height:1.2}
+.sap-clinic-funnel{border:1px solid var(--border);border-radius:6px;background:var(--surface);padding:24px 25px}
+.sap-clinic-funnel h2{font-size:20px;font-weight:500;letter-spacing:-.5px;line-height:1.4;margin-top:6px}
+.sap-clinic-funnel>div>p:last-child{font-size:10px;line-height:1.8;color:var(--muted);margin-top:7px}
+.sap-clinic-funnel ol{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:24px;list-style:none;margin:23px 0 0;padding:0}
+.sap-clinic-funnel li>span{font-size:11px;color:var(--ink-2)}
+.sap-clinic-funnel li>strong{display:block;font-size:31px;font-weight:450;letter-spacing:-.8px;line-height:1.4;margin-top:7px}
+.sap-clinic-funnel li>div{background:var(--border);height:4px;margin-top:13px;border-radius:2px;overflow:hidden}
+.sap-clinic-funnel li>div>span{display:block;height:100%;background:var(--sap-brass)}
+@media(max-width:820px){.sap-clinic-summary .sap-clinic-phase{padding:23px 22px}.sap-clinic-summary .sap-clinic-kpi{padding:20px}.sap-clinic-funnel{padding:23px 21px}.sap-clinic-funnel ol{grid-template-columns:1fr;gap:15px}.sap-clinic-funnel li{display:grid;grid-template-columns:1fr auto;gap:0 15px;align-items:center}.sap-clinic-funnel li>strong{font-size:25px;margin:0}.sap-clinic-funnel li>div{grid-column:1/-1;margin-top:7px}.sap-clinic-phase-day{font-size:30px}}

@@ -155,3 +155,21 @@
 .sap-responsibilities h3{font-size:16px;font-weight:550;line-height:1.6}
 .sap-responsibilities p{font-size:12px;line-height:1.9;color:#5e6265;margin-top:11px}
 @media(max-width:760px){.sap-delivery-grid,.sap-support-columns,.sap-responsibilities{grid-template-columns:1fr;gap:23px}.sap-delivery-grid article{padding:23px 21px}.sap-delivery-grid h3{font-size:17px}.sap-delivery-grid header{gap:12px}.sap-delivery-grid li{gap:10px}.sap-cost-note{padding:21px}.sap-cost-note strong{font-size:13px}.sap-support-columns{gap:31px}.sap-responsibilities{gap:24px}.sap-cover-inclusions li{font-size:11px}}
+
+/* Product proof belongs in the first fold, with readable details below it. */
+.nx-landing .nx-hero{grid-template-columns:1.05fr 1.1fr;gap:48px}
+.nx-sap-cover{background:#ede9df;border-color:#d3c5b0;box-shadow:12px 14px 0 #e5ded0}
+.nx-sap-cover .nx-cover-heading{color:#6b573b;border-color:#d1c5b0}
+.nx-sap-cover .nx-cover-footer{background:#1a3340;color:#eaf0f3}
+.nx-sap-cover .nx-hero-insight>span{color:#69563c}
+.nx-sap-cover .nx-hero-insight>p{color:#223a46}
+.nx-sap-cover .nx-hero-screen{display:block;border-color:#cec4b2;aspect-ratio:1.48}
+.nx-sap-cover .nx-hero-screen img{width:145%;margin-left:-24%}
+.nx-preview-picker button{display:flex;align-items:center;gap:12px}
+.nx-preview-picker button>span{font-size:9px;opacity:1}
+.nx-preview-value{display:grid;grid-template-columns:1fr 1fr;gap:45px;margin-top:23px;padding:24px 27px;background:#e9eee8;border-left:2px solid var(--lp-accent)}
+.nx-landing--sap .nx-preview-value{background:#ede7da}
+.nx-preview-value h3{font-size:20px;font-weight:500;line-height:1.4;letter-spacing:-.4px}
+.nx-preview-value p{font-size:12px;line-height:1.9;color:var(--lp-muted)}
+@media(max-width:1100px){.nx-landing .nx-hero{gap:32px}.nx-landing .nx-hero h1{font-size:45px}}
+@media(max-width:760px){.nx-landing .nx-hero{grid-template-columns:1fr;gap:34px}.nx-sap-cover{box-shadow:8px 9px 0 #e5ded0}.nx-preview-value{grid-template-columns:1fr;gap:12px;padding:21px}.nx-preview-value h3{font-size:20px}.nx-preview-picker{gap:7px}.nx-preview-picker button{padding:10px 12px;gap:8px}}

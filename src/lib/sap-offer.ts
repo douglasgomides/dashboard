@@ -3,7 +3,7 @@
 export const SAP_DELIVERABLES = [
   {
     title: "Diagnóstico da aquisição e plano de 90 dias",
-    purpose: "Saber por onde começar e o que precisa melhorar.",
+    purpose: "Uma leitura do ponto de partida, com prioridades e metas para orientar a implantação.",
     items: [
       "Raio-X do funil com os números de partida da clínica.",
       "Identificação dos 3 principais pontos de perda de pacientes.",
@@ -13,7 +13,7 @@ export const SAP_DELIVERABLES = [
   },
   {
     title: "Paciente ideal e proposta de valor",
-    purpose: "Definir qual serviço crescer, para quem e com qual argumento.",
+    purpose: "Clareza sobre qual serviço crescer, quem você quer atrair e por que esse paciente escolheria sua clínica.",
     items: [
       "Escolha do serviço prioritário com critérios comerciais e capacidade da clínica.",
       "Perfil do paciente ideal para esse serviço.",
@@ -22,7 +22,7 @@ export const SAP_DELIVERABLES = [
   },
   {
     title: "18 criativos editados para anúncios",
-    purpose: "Ter peças prontas para colocar a estratégia em campanha.",
+    purpose: "Da ideia ao anúncio pronto: roteiro, direção da gravação e edição feitos com a Doctor Creator.",
     items: [
       "Pauta e roteiros preparados pela Doctor Creator.",
       "Gravação no celular do médico, dirigida ao vivo por videochamada, de 60 a 90 minutos.",
@@ -33,7 +33,7 @@ export const SAP_DELIVERABLES = [
   },
   {
     title: "Gestão de tráfego durante o programa",
-    purpose: "Ter uma equipe responsável por configurar e acompanhar as campanhas.",
+    purpose: "Sua estratégia colocada no ar e acompanhada por uma equipe, com ajustes semanais.",
     items: [
       "Plano de campanhas para Meta Ads e/ou Google Ads, conforme a estratégia, com públicos, objetivos e distribuição da verba.",
       "Configuração e publicação das campanhas aprovadas.",
@@ -43,7 +43,7 @@ export const SAP_DELIVERABLES = [
   },
   {
     title: "Rastreamento e qualificação dos interessados",
-    purpose: "Acompanhar o caminho da campanha até o resultado registrado.",
+    purpose: "Mais clareza sobre a origem dos interessados e o avanço até o agendamento, a consulta e a decisão.",
     items: [
       "Configuração e testes de pixel, API de Conversões, tags, UTMs e eventos, conforme os canais e as permissões disponíveis.",
       "Formulário de filtro, pontuação dos interessados e sequência de nutrição.",
@@ -53,7 +53,7 @@ export const SAP_DELIVERABLES = [
   },
   {
     title: "Recepção treinada e atendimento organizado",
-    purpose: "Dar à equipe um roteiro para conduzir a conversa até o agendamento.",
+    purpose: "Uma recepção preparada para responder, conduzir ao agendamento e acompanhar a presença.",
     items: [
       "Script do primeiro contato ao agendamento e mapa de conversa.",
       "Mensagens e rotina de confirmação, preparação e recuperação de faltas.",
@@ -63,7 +63,7 @@ export const SAP_DELIVERABLES = [
   },
   {
     title: "Roteiro de consulta e cadências de follow-up",
-    purpose: "Preparar a apresentação do plano e acompanhar quem precisa decidir.",
+    purpose: "Uma apresentação de valor bem preparada e uma rotina para acompanhar quem ainda está decidindo.",
     items: [
       "Roteiro de comunicação consultiva e simulação de consulta.",
       "Material para apresentar o investimento no tratamento.",
@@ -73,7 +73,7 @@ export const SAP_DELIVERABLES = [
   },
   {
     title: "Fidelização, indicadores e continuidade",
-    purpose: "Manter o relacionamento e saber como continuar depois do programa.",
+    purpose: "Relacionamento após a consulta e um plano de continuidade sustentado pelos indicadores da clínica.",
     items: [
       "Mensagens e rotinas de retorno, relacionamento e reativação.",
       "Processo de indicação com registro de origem.",
@@ -84,19 +84,19 @@ export const SAP_DELIVERABLES = [
 ] as const;
 
 export const SAP_SESSIONS = [
-  ["Diagnóstico", "Raio-X, prioridades e plano de ação."],
-  ["Paciente ideal e proposta de valor", "Serviço prioritário, público e argumento."],
-  ["Atração e anúncios", "Campanhas, verba, criativos e rastreamento."],
-  ["Conversa e confirmação", "Treino da recepção e rotina de agendamento."],
-  ["Consulta e follow-up", "Comunicação consultiva e retomada da decisão."],
-  ["Fidelização, indicações e controle", "Relacionamento e leitura dos indicadores."],
+  ["Diagnóstico e plano de ação", "Onde a clínica está hoje, os principais pontos de perda e o que mudar primeiro."],
+  ["Paciente ideal e proposta de valor", "Qual serviço priorizar, quem atrair e como apresentar o valor da clínica."],
+  ["Atração e anúncios", "Como campanhas, criativos, verba e rastreamento se conectam à estratégia."],
+  ["Conversa e confirmação", "Como conduzir o primeiro contato, preparar o agendamento e reduzir faltas."],
+  ["Consulta e follow-up", "Como apresentar o plano de tratamento e acompanhar a decisão do paciente."],
+  ["Fidelização, indicações e controle", "Como manter o relacionamento, acompanhar indicações e ler o funil."],
 ] as const;
 
 export const SAP_SUPPORT = [
   ["Kickoff com Douglas Gomides", "Conversa inicial de 20 a 30 minutos para alinhar a implantação."],
-  ["Reunião de números de partida", "Coleta dos dados da clínica para medir a evolução do programa."],
+  ["Levantamento do ponto de partida", "Reunião para coletar os dados da clínica e preparar a comparação com a evolução."],
   ["Reunião semanal em grupo", "De 60 a 90 minutos com Douglas Gomides e as outras clínicas."],
   ["Ajustes na fase de otimização", "Check-ins quinzenais, ajustes de anúncios e auditoria das conversas entre D61 e D89."],
   ["Comunidade e suporte da equipe", "Comunidade de clínicas e suporte em dias úteis durante o programa."],
-  ["Acesso à plataforma SAP", "Cronograma, tarefas, materiais, decisões e andamento da implantação no mesmo ambiente."],
+  ["Plataforma para acompanhar a implantação", "Prioridades, cronograma, responsáveis, materiais e indicadores em um ambiente da clínica."],
 ] as const;

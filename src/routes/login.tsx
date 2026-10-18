@@ -92,8 +92,8 @@ function LoginPage() {
         <ProductBrand product={product} dark />
         <div className="nx-login-copy">
           <p className="nx-kicker">{acesso === "admin" ? "Administração Doctor Creator" : internal ? "Equipe Doctor Creator" : sap ? "Sistema de Aquisição de Pacientes" : "Inteligência de dados para marketing e vendas"}</p>
-          <h1>{acesso === "admin" ? <>Uma visão completa.<br /><em>Acesso com responsabilidade.</em></> : internal ? <>Contexto para analisar.<br /><em>Clareza para entregar.</em></> : sap ? <>Sua aquisição de pacientes,<br /><em>com método e direção.</em></> : <>Clareza para decidir.<br /><em>Direção para avançar.</em></>}</h1>
-          <p>{internal ? "Acesse seu ambiente de trabalho e acompanhe as análises, entregas e responsabilidades da sua operação." : sap ? "Acompanhe o plano de 90 dias, as tarefas e as entregas que organizam a jornada de aquisição da sua clínica." : "Acesse os dados, as análises e o conhecimento da sua clínica. Inteligência agêntica para dar contexto às decisões de marketing e vendas."}</p>
+          <h1>{acesso === "admin" ? <>Clínicas, acessos e operação.<br /><em>Uma visão para coordenar.</em></> : internal ? <>Saiba o que analisar.<br /><em>Veja o que entregar.</em></> : sap ? <>Seu plano de aquisição,<br /><em>em execução.</em></> : <>Os dados da sua clínica.<br /><em>As decisões que vêm a seguir.</em></>}</h1>
+          <p>{internal ? "Acompanhe as clínicas, confira as prioridades e encontre as entregas sob sua responsabilidade." : sap ? "Entre para ver sua próxima tarefa, acompanhar a implantação e consultar as metas e os materiais do programa de 90 dias." : "Acompanhe marketing, atendimento e resultados comerciais nas fontes disponíveis. Encontre análises para orientar o próximo investimento e os ajustes da equipe."}</p>
           <div className="nx-login-context"><ShieldCheck size={17} aria-hidden /><p>Seu acesso é individual. As áreas disponíveis seguem as permissões concedidas ao seu usuário.</p></div>
         </div>
         <p className="nx-login-aside-footer">{name} · Doctor Creator</p>
@@ -102,7 +102,7 @@ function LoginPage() {
         <Link className="nx-back" to="/conhecer"><ArrowLeft size={14} aria-hidden />Voltar à apresentação</Link>
         <form onSubmit={handleSubmit} className="nx-login-form" aria-labelledby="titulo-login">
           <p className="nx-access-label">{acesso === "admin" ? "Administrativo" : internal ? "Equipe interna" : "Acesso da clínica"} / {name}</p>
-          <h2 id="titulo-login">Bem-vindo de volta.</h2>
+          <h2 id="titulo-login">Acesse o {name}.</h2>
           <p className="nx-login-intro">{internal ? "Acesse seu ambiente de trabalho." : "Entre no ambiente da sua clínica."}</p>
           <label htmlFor="email">E-mail</label>
           <input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} disabled={loading} />
@@ -111,7 +111,7 @@ function LoginPage() {
           {error && <p role="alert" className="nx-form-error">{error}</p>}
           <button type="submit" disabled={loading || resetLoading} className="nx-button nx-button--primary nx-login-submit">{loading ? "Entrando…" : `Entrar no ${name}`}<ArrowRight size={16} aria-hidden /></button>
           <button type="button" disabled={loading || resetLoading} onClick={handleForgotPassword} className="nx-forgot">{resetLoading ? "Solicitando link…" : "Esqueci minha senha"}</button>
-          {resetSent && <p role="status" className="nx-form-status">Link enviado. Confira seu e-mail para recuperar o acesso.</p>}
+          {resetSent && <p role="status" className="nx-form-status">Solicitação recebida. Se este e-mail tiver acesso, você receberá um link para criar uma nova senha. Confira também a caixa de spam.</p>}
           <p className="nx-login-help">Ainda não tem acesso? Solicite um convite ao responsável pela sua clínica ou à equipe Doctor Creator.</p>
         </form>
         <p className="nx-login-footer">{name} · Acesso individual</p>
