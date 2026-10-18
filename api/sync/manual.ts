@@ -22,6 +22,7 @@ import { rodarConferencia, rodarEtapa, ETAPAS, type EtapaId, type Achado, type V
 import { resumirConversa } from "../_lib/resumo-conversa.js";
 import { rascunharSessao } from "../_lib/sessao-ia.js";
 import { redirecionarLink } from "../_lib/redirecionar.js";
+import { redigirSecao } from "../_lib/copiloto.js";
 import { destinoSite, destinoWhatsApp, novaRef, novoSlug, POSICOES, mensagemComRef, type Posicao } from "../../src/lib/rastreio.js";
 import { rodarAgentes, catalogoFluxos, enfileirarBrain } from "../_lib/agentes.js";
 import { resumoEquipe } from "../_lib/resumo-equipe.js";
@@ -137,7 +138,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes"];
+  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes", "sap_redigir"];
   // "conferencia" e "agentes" olham todos os clientes de uma vez (só admin), por isso não exigem client_id.
   const alvoGlobal = alvo === "conferencia" || alvo === "agentes";
   if ((!client_id && !alvoGlobal) || !alvo || !ALVOS.includes(alvo)) {
@@ -891,6 +892,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const host = (req.headers["x-forwarded-host"] as string) || req.headers.host || "dash.doctorcreator.com.br";
       res.status(200).json({ alvo, ok: true, id: criado?.id, url: `https://${host}/r/${slug}`, ref });
+      return;
+    }
+
+    if (alvo === "sap_redigir") {
+      // Copiloto dos documentos do SAP: rascunho + perguntas; respostas viram fatos propostos no Brand Brain.
+      if (!ehAdmin) {
+        res.status(403).json({ error: "Só a equipe usa o copiloto" });
+        return;
+      }
+      const b = (req.body ?? {}) as { titulo?: string; dica?: string; texto_atual?: string; turnos?: { papel: string; texto: string }[] };
+      const turnos = (Array.isArray(b.turnos) ? b.turnos : []).filter((t) => (t.papel === "ia" || t.papel === "equipe") && typeof t.texto === "string").slice(-12) as { papel: "ia" | "equipe"; texto: string }[];
+      try {
+        const r = await redigirSecao(admin, { clientId: client_id as string, titulo: String(b.titulo ?? "").slice(0, 120), dica: String(b.dica ?? "").slice(0, 600), textoAtual: String(b.texto_atual ?? ""), turnos });
+        res.status(200).json({ alvo, ok: true, ...r });
+      } catch (e) {
+        res.status(200).json({ alvo, ok: false, erro: e instanceof Error ? e.message : String(e) });
+      }
       return;
     }
 

@@ -103,7 +103,7 @@ export async function lerConteudo(admin: Admin, clientId: string) {
   const [brain, f, posts, comentarios, hist, pautas, licoes] = await Promise.all([
     lerBrain(admin, clientId),
     ficha(admin, clientId),
-    admin.from("instagram_posts").select("tema, format, caption, reach, saved, shares, engagement").eq("client_id", clientId).gte("posted_at", desde(120)).order("saved", { ascending: false, nullsFirst: false }).limit(40),
+    admin.from("instagram_posts").select("tema, format, caption, reach, saved, shares, engagement, transcricao").eq("client_id", clientId).gte("posted_at", desde(120)).order("saved", { ascending: false, nullsFirst: false }).limit(40),
     admin.from("instagram_comments").select("text").eq("client_id", clientId).gte("commented_at", desde(90)).order("commented_at", { ascending: false }).limit(800),
     aprendizado(admin, clientId, "conteudo", 90),
     admin.from("pautas_conteudo").select("titulo, status").eq("client_id", clientId).gte("criado_em", desde(60)).limit(60),
@@ -116,7 +116,10 @@ export async function lerConteudo(admin: Admin, clientId: string) {
   // Filtro de ruído: só post com alcance para comparar, só comentário que é pergunta ou relato, só conversa comercial.
   const fp = filtrarPosts((posts.data ?? []) as any[]);
   const ps = fp.uteis.slice(0, 10) as any[];
-  if (ps.length) blocos.push(`### Posts que mais foram salvos (120 dias): o que o público valoriza\n${ps.map((p) => `- ${p.format ?? "post"} · tema ${p.tema ?? "?"} · alcance ${p.reach ?? "?"} · salvos ${p.saved ?? "?"} · compart. ${p.shares ?? "?"} · início: "${corta(p.caption, 140)}"`).join("\n")}`);
+  if (ps.length) blocos.push(`### Posts que mais foram salvos (120 dias): o que o público valoriza\n${ps.map((p) => `- ${p.format ?? "post"} · tema ${p.tema ?? "?"} · alcance ${p.reach ?? "?"} · salvos ${p.saved ?? "?"} · compart. ${p.shares ?? "?"} · legenda: "${corta(p.caption, 140)}"`).join("\n")}`);
+  // O roteiro falado dos Reels campeões (transcrição): estrutura real de gancho, desenvolvimento e chamada.
+  const falados = ps.filter((p) => p.transcricao).slice(0, 4);
+  if (falados.length) blocos.push(`### Roteiro falado dos Reels mais salvos (transcrição; use a estrutura, não copie)\n${falados.map((p) => `- (${p.saved ?? "?"} salvos) "${corta(p.transcricao, 700)}"`).join("\n")}`);
   const fc = filtrarComentarios((comentarios.data ?? []) as { text: string }[]);
   const perguntas = fc.uteis.filter((c) => c.tipo === "pergunta").map((c) => corta(c.text, 140));
   const relatos = fc.uteis.filter((c) => c.tipo === "relato").map((c) => corta(c.text, 140));

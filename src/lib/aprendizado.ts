@@ -76,7 +76,7 @@ export function filtrarConversas<T extends ResumoConversa>(rows: T[]): { uteis: 
   return { uteis, filtro: f };
 }
 
-export interface PostMetricas { format: string | null; tema: string | null; caption: string | null; reach: number | null; saved: number | null; shares: number | null; posted_at?: string | null; permalink?: string | null }
+export interface PostMetricas { format: string | null; tema: string | null; caption: string | null; reach: number | null; saved: number | null; shares: number | null; posted_at?: string | null; permalink?: string | null; transcricao?: string | null }
 
 /** Posts com alcance suficiente para comparar (abaixo de 100 de alcance, a taxa é sorte). */
 export function filtrarPosts<T extends PostMetricas>(rows: T[], alcanceMin = 100): { uteis: T[]; filtro: Filtro } {
@@ -164,7 +164,7 @@ export function licoesConteudo(posts: PostMetricas[], minGrupo = 6): Licao[] {
         texto: faz
           ? `${nome} faz o público salvar ${vezes(lift)} mais que a média da clínica (${pct(m)} contra ${pct(base)} do alcance, ${xs.length} posts). ${comoFazer}`
           : `${nome} é salvo ${pct(1 - lift)} menos que a média (${pct(m)} contra ${pct(base)} do alcance, ${xs.length} posts). Use menos ou mude o ângulo.`,
-        evidencia: [...xs].sort((a, b) => taxa(b) - taxa(a)).slice(0, 2).map((p) => `"${(p.caption ?? "").split(/\n/)[0].slice(0, 90)}" (${pct(taxa(p))})`),
+        evidencia: [...xs].sort((a, b) => taxa(b) - taxa(a)).slice(0, 2).map((p) => `"${(p.transcricao ? p.transcricao.split(/(?<=[.!?])\s/)[0] : (p.caption ?? "").split(/\n/)[0]).slice(0, 90)}" (${pct(taxa(p))})`),
       });
     }
   };
@@ -174,7 +174,9 @@ export function licoesConteudo(posts: PostMetricas[], minGrupo = 6): Licao[] {
     return m;
   };
   for (const [fmt, xs] of por((p) => p.format as string | null)) grupo(ROT_FORMATO[fmt] ?? fmt, `formato:${fmt}`, xs, "Priorize esse formato.");
-  for (const [g, xs] of por((p) => tipoGancho(p.caption))) grupo(`Abertura que ${ROTULO_GANCHO[g]}`, `gancho:${g}`, xs, "Use esse tipo de gancho.");
+  // No Reels com fala transcrita, o gancho é a primeira frase FALADA (o que o público ouve), não a legenda.
+  const abertura = (p: PostMetricas) => (p.transcricao ? p.transcricao.split(/(?<=[.!?])\s/)[0] : p.caption);
+  for (const [g, xs] of por((p) => tipoGancho(abertura(p)))) grupo(`Abertura que ${ROTULO_GANCHO[g]}`, `gancho:${g}`, xs, "Use esse tipo de gancho.");
   for (const [t, xs] of por((p) => { const t = p.tema ? norm(p.tema).slice(0, 40) : ""; return t && !["nulo", "null", "outro", "outros"].includes(t) ? t : null; })) grupo(`O tema "${t}"`, `tema:${t}`, xs, "Faça mais peças nesse tema, com ângulos novos.");
   const tam = por((p) => ((p.caption ?? "").length >= 600 ? "longa" : (p.caption ?? "").length > 0 ? "curta" : null));
   for (const [t, xs] of tam) grupo(t === "longa" ? "Legenda longa (600+ caracteres)" : "Legenda curta", `legenda:${t}`, xs, t === "longa" ? "Vale entregar conteúdo na legenda." : "Seja direto na legenda.");
@@ -183,7 +185,7 @@ export function licoesConteudo(posts: PostMetricas[], minGrupo = 6): Licao[] {
   if (top.length >= 3) out.push({
     agente: "conteudo", chave: "conteudo:campeoes", origem: "posts", n: uteis.length, efeito: Number((mediana(top.map(taxa)) / base).toFixed(2)), sinal: "faz", confianca: "alta",
     texto: `Os posts campeões da clínica (pelo menos 2x a média de salvamento) abrem assim; siga o estilo, não copie.`,
-    evidencia: top.map((p) => `"${(p.caption ?? "").split(/\n/)[0].slice(0, 100)}" (${ROT_FORMATO[p.format ?? ""] ?? p.format}, ${pct(taxa(p))})`),
+    evidencia: top.map((p) => `"${(p.transcricao ? p.transcricao.split(/(?<=[.!?])\s/)[0] : (p.caption ?? "").split(/\n/)[0]).slice(0, 100)}" (${ROT_FORMATO[p.format ?? ""] ?? p.format}, ${pct(taxa(p))})`),
   });
   return out.sort((a, b) => Math.abs(Math.log(b.efeito)) - Math.abs(Math.log(a.efeito))).slice(0, 8);
 }

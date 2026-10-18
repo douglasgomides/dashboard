@@ -15,6 +15,8 @@ import { fmtKpi, linhasKpis, planoPorQuinzena, RISCOS_PADRAO, ROTULO_STATUS_D90,
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { resumoFidelizacao } from "@/lib/sap-fidelizacao";
 import { LEGENDA } from "@/components/grafico";
+import { useParams } from "@tanstack/react-router";
+import { CopilotoSecao } from "@/components/copiloto-secao";
 
 const dmy = (iso: string | null | undefined) => (iso ? iso.split("-").reverse().join("/") : "—");
 const dm = (iso: string) => iso.split("-").reverse().slice(0, 2).join("/");
@@ -33,9 +35,12 @@ function Secao({ titulo, children }: { titulo: string; children: React.ReactNode
   );
 }
 
-/** Texto livre de uma seção: a equipe edita; a clínica lê. Vazio mostra a orientação do modelo. */
+/** Texto livre de uma seção: a equipe edita (ou pede ao copiloto, que escreve com os dados da clínica e pergunta o que
+ *  falta); a clínica lê. Vazio mostra a orientação do modelo. */
 function TextoLivre({ clinicaId, documento, secao, dica, textos }: { clinicaId: string; documento: "plano" | "d90"; secao: string; dica: string; textos: Record<string, string> }) {
   const { isAdmin } = useAuth();
+  const { clientId } = useParams({ strict: false }) as { clientId?: string };
+  const titulo = (SECOES_TEXTO[documento] as readonly { id: string; titulo: string }[]).find((x) => x.id === secao)?.titulo ?? secao;
   const qc = useQueryClient();
   const [ed, setEd] = useState<string | null>(null);
   const salvar = useMutation({ mutationFn: () => salvarDocumentoTextoSap(clinicaId, documento, secao, ed ?? ""), onSuccess: () => { setEd(null); qc.invalidateQueries({ queryKey: ["sap-doc", clinicaId, documento] }); } });
@@ -49,12 +54,14 @@ function TextoLivre({ clinicaId, documento, secao, dica, textos }: { clinicaId: 
           <button type="button" onClick={() => setEd(null)} className="min-h-[34px] px-2 text-sm" style={{ color: "var(--text-dim)" }}>Cancelar</button>
           {salvar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</span>}
         </div>
+        {clientId && <div className="mt-2"><CopilotoSecao clientId={clientId} titulo={titulo} dica={dica} textoAtual={ed} usar={(t) => setEd(t)} /></div>}
       </div>
     );
   return (
     <div>
       {atual ? <p className="whitespace-pre-line text-sm">{atual}</p> : <p className="text-sm italic" style={{ color: "var(--muted)" }}>{isAdmin ? `A preencher: ${dica}` : "Em elaboração."}</p>}
       {isAdmin && <button type="button" onClick={() => setEd(atual)} className="no-print mt-1 text-sm font-semibold underline" style={{ color: "var(--accent)" }}>{atual ? "Editar" : "Escrever"}</button>}
+      {isAdmin && clientId && <div className="mt-2"><CopilotoSecao clientId={clientId} titulo={titulo} dica={dica} textoAtual={atual} usar={(t) => setEd(t)} /></div>}
     </div>
   );
 }
