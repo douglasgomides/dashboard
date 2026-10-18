@@ -156,6 +156,13 @@ try {
   const rejeitada = iniciar([]); await rodar(rejeitada); rejeitada.decidir("aprovar_cobranca", "rejeitada", "não agora"); await rodar(rejeitada); assert.equal(rejeitada.e.estado, "cancelada"); assert.equal(rejeitada.t.sap_eventos.length, 0);
   const falhaEvento = iniciar([]); await rodar(falhaEvento); falhaEvento.decidir("aprovar_cobranca", "aprovada"); falhaEvento.falhas.evento = true; await rodar(falhaEvento); assert.equal(falhaEvento.e.estado, "aguardando"); assert.match(falhaEvento.e.erro, /falha simulada/); acordar(falhaEvento); await rodar(falhaEvento); assert.equal(falhaEvento.t.sap_eventos.length, 1);
   const teto = iniciar(); teto.e.custo_usd = 0.5; await rodar(teto); assert.equal(teto.e.estado, "pausada"); assert.equal(teto.t.agente_passos.length, 0); assert.ok(chamadas.length > 0);
+  // Queda antes de salvar o contexto: leases antigos também respeitam o limite.
+  const travada = iniciar(); Object.assign(travada.e, { estado: "rodando", tentativas: 25, lease_ate: new Date(Date.now() - 1000).toISOString() });
+  const chamadasAntes = chamadas.length; await rodar(travada);
+  assert.equal(travada.e.estado, "falhou"); assert.match(travada.e.erro, /Limite de tentativas/);
+  assert.equal(travada.t.agente_passos.length, 0); assert.equal(travada.e.lease_ate, null); assert.equal(chamadas.length, chamadasAntes);
+  const ultimaTentativa = iniciar(); ultimaTentativa.e.tentativas = 2; await rodar(ultimaTentativa);
+  assert.equal(ultimaTentativa.e.estado, "aguardando_aprovacao", "a terceira tentativa ainda pode progredir");
 
   // Fluxos locais mínimos exercitam o motor sem IA nem efeitos externos.
   FLUXOS.__teste_contexto = { id: "__teste_contexto", agente: "teste", nome: "Teste", objetivo: "Teste", passos: [

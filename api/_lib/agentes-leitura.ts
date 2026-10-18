@@ -12,11 +12,12 @@ import { CALENDARIO } from "../../src/lib/campanhas.js";
 import { grupoEspecialidade } from "../../src/lib/benchmark-estrategico.js";
 import { filtrarComentarios, filtrarConversas, filtrarPosts, somarFiltros, textoFiltro, type ResumoConversa } from "../../src/lib/aprendizado.js";
 import { lerLicoes, resultadosRecuperacao } from "./aprendizado.js";
+import { limitarTexto } from "./texto-ia.js";
 
 type Admin = SupabaseClient<any, any, any>;
 const DIA = 86_400_000;
 const desde = (d: number) => new Date(Date.now() - d * DIA).toISOString();
-const corta = (t: unknown, n: number) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+const corta = (t: unknown, n: number) => limitarTexto(String(t ?? "").replace(/\s+/g, " ").trim(), n);
 
 /** Brain aprovado em texto + as chaves (para a IA citar e o servidor conferir). */
 export async function lerBrain(admin: Admin, clientId: string, memorias?: string[]) {
@@ -150,5 +151,5 @@ export async function lerConteudo(admin: Admin, clientId: string) {
   if (usadas.length || descartadas.length) blocos.push(`### Aprendizado com as peças anteriores\n${usadas.length ? `A equipe USOU: ${usadas.slice(0, 12).map((t) => `"${corta(t, 80)}"`).join("; ")}.\n` : ""}${descartadas.length ? `A equipe DESCARTOU (evite o estilo): ${descartadas.slice(0, 12).map((t) => `"${corta(t, 80)}"`).join("; ")}.` : ""}`);
   if (titulos.length) blocos.push(`### Já propostos ou no planejador (não repita)\n${titulos.slice(0, 40).map((t) => `- ${corta(t, 100)}`).join("\n")}`);
   const filtro = textoFiltro(somarFiltros(fp.filtro, fc.filtro, fr.filtro));
-  return { texto: blocos.join("\n\n").slice(0, 16_000), chaves: brain.chaves, titulos, blocos: blocos.length, especialidade: f.especialidade, filtro, n_licoes: licoes.n };
+  return { texto: limitarTexto(blocos.join("\n\n"), 16_000), chaves: brain.chaves, titulos, blocos: blocos.length, especialidade: f.especialidade, filtro, n_licoes: licoes.n };
 }
