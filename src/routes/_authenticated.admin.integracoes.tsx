@@ -27,6 +27,7 @@ function Integracoes() {
       <p className="max-w-3xl text-sm" style={dim}>
         Todas as conexões do Nexo num lugar só, com o estado real de cada cliente (lido das contas ligadas e da última
         sincronização). "Planejado" é conector que ainda não existe: está aqui para orientar, não para ligar.
+        Os selos de conexão e sincronização não comprovam a completude dos dados. Confira a qualidade e os vínculos de cada clínica na Jornada.
       </p>
       {mapa.isLoading ? <p role="status" className="note">Carregando integrações…</p> : mapa.isError ? (
         <p role="alert" className="note" style={{ color: "var(--crit)" }}>Não foi possível carregar as integrações. <button type="button" className="underline" onClick={() => void mapa.refetch()}>Tentar novamente</button></p>
@@ -81,6 +82,7 @@ function CardConector({ c, linhas }: { c: Conector; linhas: LinhaConexao[] }) {
                   <span className="min-w-[180px] flex-1">{l.cliente}{l.detalhe ? <span style={dim}> · {l.detalhe}</span> : null}</span>
                   <span style={{ color: COR[l.estado] }}>{NOME_ESTADO[l.estado]}</span>
                   <span className="text-xs" style={dim}>último sucesso {data(l.ultimoSucesso)}</span>
+                  {(c.categoria === "crm" || c.categoria === "atendimento") && <Link to="/$clientId/jornada" params={{clientId:l.clientId}} className="min-h-[44px] content-center text-xs underline">Conferir qualidade e vínculos</Link>}
                   {l.estado === "erro" && l.erro && <span className="w-full text-xs" style={{ color: "var(--crit)" }}>{l.erro.slice(0, 200)}</span>}
                 </li>
               ))}

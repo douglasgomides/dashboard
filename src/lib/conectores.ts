@@ -20,7 +20,7 @@ export interface Conector {
 }
 
 export const CATEGORIAS: Record<Categoria, string> = {
-  conteudo: "Conteúdo", anuncios: "Anúncios", crm: "CRM e vendas", atendimento: "Atendimento", links: "Links", agenda: "Agenda e prontuário",
+  conteudo: "Conteúdo", anuncios: "Anúncios", crm: "CRM e vendas", atendimento: "Atendimento", links: "Links", agenda: "Agenda clínica · eventos administrativos",
 };
 
 export const CONECTORES: Conector[] = [

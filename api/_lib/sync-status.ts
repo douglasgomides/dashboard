@@ -8,6 +8,7 @@
  * (inclusive a tabela ainda não existir) é engolida.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { reconciliarJornada } from "./jornada-evidencias.js";
 
 export type FonteSync = "instagram" | "comentarios" | "anuncios" | "crm" | "atendimento";
 
@@ -57,6 +58,16 @@ export async function recordSyncStatus(
     } catch {
       /* a função pode ainda não existir */
     }
+  }
+  if ((fonte === "crm" || fonte === "atendimento") && r.ok) {
+    try {
+      const erro = await reconciliarJornada(supabase, clientId);
+      if (erro) {
+        // Falha separada da importação: não muda last_success_at ou apaga histórico.
+        await supabase.from("sync_status").upsert({ client_id: clientId, fonte,
+          motivo: erro, motivo_dono: "equipe", motivo_em: new Date().toISOString() }, { onConflict: "client_id,fonte" });
+      }
+    } catch { /* registrar evidência não pode interromper o sync */ }
   }
 }
 

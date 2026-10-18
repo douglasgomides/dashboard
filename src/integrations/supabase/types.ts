@@ -907,6 +907,7 @@ export type Database = {
           iniciada_em: string | null
           lead_id: string | null
           pessoa_id: string | null
+          source_connection_id: string | null
           provider: string
           ultima_msg_em: string | null
         }
@@ -919,6 +920,7 @@ export type Database = {
           iniciada_em?: string | null
           lead_id?: string | null
           pessoa_id?: string | null
+          source_connection_id?: string | null
           provider: string
           ultima_msg_em?: string | null
         }
@@ -931,6 +933,7 @@ export type Database = {
           iniciada_em?: string | null
           lead_id?: string | null
           pessoa_id?: string | null
+          source_connection_id?: string | null
           provider?: string
           ultima_msg_em?: string | null
         }
@@ -4491,6 +4494,8 @@ export type Database = {
           ended_at: string | null
           first_response_at: string | null
           service_seconds: number | null
+          source_provider: string | null
+          source_connection_id: string | null
           session_id: string
           started_at: string
           status: string | null
@@ -4507,6 +4512,8 @@ export type Database = {
           ended_at?: string | null
           first_response_at?: string | null
           service_seconds?: number | null
+          source_provider?: string | null
+          source_connection_id?: string | null
           session_id: string
           started_at: string
           status?: string | null
@@ -4523,6 +4530,8 @@ export type Database = {
           ended_at?: string | null
           first_response_at?: string | null
           service_seconds?: number | null
+          source_provider?: string | null
+          source_connection_id?: string | null
           session_id?: string
           started_at?: string
           status?: string | null
