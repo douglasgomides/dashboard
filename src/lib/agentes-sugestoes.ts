@@ -59,6 +59,7 @@ export function validarRecuperacao(bruto: unknown, ids: Set<string>): { ok: Mens
     if (!ids.has(id) || vistos.has(id)) { descartes.push(`${id.slice(0, 8)}: conversa fora da lista ou repetida`); continue; }
     if (mensagem.length < 30) { descartes.push(`${id.slice(0, 8)}: mensagem curta`); continue; }
     if (AGENDA_INVENTADA.test(mensagem)) { descartes.push(`${id.slice(0, 8)}: inventou data ou horário`); continue; }
+    if (/\b(est[áa]|segue|fica|ficou)\s+(confirmad|agendad|marcad|remarcad|cancelad)/i.test(mensagem)) { descartes.push(`${id.slice(0, 8)}: afirmou estado de agendamento`); continue; }
     const cfm = ferirCFM(mensagem);
     if (cfm) { descartes.push(`${id.slice(0, 8)}: fere o CFM (${cfm})`); continue; }
     if (!textoSemDadoPessoal(mensagem)) { descartes.push(`${id.slice(0, 8)}: dado pessoal`); continue; }

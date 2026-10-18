@@ -83,3 +83,11 @@ assert.deepEqual(r2.ok.map((m) => m.conversa_id), ["b"]);
 assert.equal(r2.ok[0].mensagem, "Oi, [nome]! Desculpe a demora, vi sua dúvida sobre a avaliação. Posso ver um horário em [dia] às [horário] para você?");
 assert.equal(r2.descartes.filter((d) => /inventou/.test(d)).length, 2);
 console.log("ok 2");
+
+// Recuperação: não afirma estado de agendamento que não conhece.
+const r3 = validarRecuperacao({ mensagens: [
+  { conversa_id: "a", mensagem: "Oi, [nome]! Seu agendamento segue confirmado com a doutora. Caso precise mudar algo, me avise por aqui." },
+  { conversa_id: "b", mensagem: "Oi, [nome]! Você conseguiu confirmar o melhor horário para a consulta? Posso ajudar a marcar." },
+] }, new Set(["a", "b"]));
+assert.deepEqual(r3.ok.map((m) => m.conversa_id), ["b"]);
+console.log("ok 3");
