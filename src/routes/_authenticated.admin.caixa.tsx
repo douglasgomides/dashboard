@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Bot, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Carregando } from "@/components/sem-fonte";
-import type { PendenciasClinica } from "@/lib/resumo-equipe";
+import { coletarPendencias, type PendenciasClinica } from "@/lib/resumo-equipe";
 
 // Caixa de entrada da equipe: o que os agentes deixaram esperando uma pessoa, em todas as clínicas, por ordem de
 // urgência (falha de agente, pacientes para recuperar, anúncios, aprovações, roteiros, estratégias, Brain). As mesmas
@@ -14,30 +14,7 @@ export const Route = createFileRoute("/_authenticated/admin/caixa")({
 
 const db = supabase as any;
 
-async function lerPendencias(): Promise<PendenciasClinica[]> {
-  const desde = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
-  const [clientes, sug, camp, brain, apr, falhas, rec] = await Promise.all([
-    db.from("clients").select("id, name").eq("active", true),
-    db.from("sugestoes_agentes").select("client_id, agente").eq("estado", "proposta").gte("criado_em", desde(24 * 7)).limit(5000),
-    db.from("campanhas_ideias").select("client_id").eq("estado", "proposta").limit(2000),
-    db.from("brain_itens").select("client_id").eq("estado", "proposto").limit(5000),
-    db.from("aprovacoes").select("client_id").eq("estado", "pendente").limit(1000),
-    db.from("agente_execucoes").select("client_id").eq("estado", "falhou").gte("atualizado_em", desde(24)).limit(1000),
-    db.from("sugestoes_agentes").select("client_id").eq("agente", "recuperacao").eq("resultado", "agendou").gte("medido_em", desde(24 * 7)).limit(5000),
-  ]);
-  for (const r of [clientes, sug, camp, brain, apr, falhas, rec]) if (r.error) throw r.error;
-  const por = new Map<string, PendenciasClinica>();
-  for (const c of clientes.data as { id: string; name: string }[])
-    por.set(c.id, { client_id: c.id, nome: c.name, recuperacao: 0, anuncios: 0, conteudo: 0, campanhas: 0, brain: 0, aprovacoes: 0, falhas: 0, agendaram: 0 });
-  const mais = (id: string, k: Exclude<keyof PendenciasClinica, "client_id" | "nome">) => { const p = por.get(id); if (p) p[k] += 1; };
-  for (const s of sug.data as { client_id: string; agente: "recuperacao" | "anuncios" | "conteudo" }[]) mais(s.client_id, s.agente);
-  for (const x of camp.data as { client_id: string }[]) mais(x.client_id, "campanhas");
-  for (const x of brain.data as { client_id: string }[]) mais(x.client_id, "brain");
-  for (const x of apr.data as { client_id: string }[]) mais(x.client_id, "aprovacoes");
-  for (const x of falhas.data as { client_id: string }[]) mais(x.client_id, "falhas");
-  for (const x of rec.data as { client_id: string }[]) mais(x.client_id, "agendaram");
-  return [...por.values()];
-}
+const lerPendencias = () => coletarPendencias(db);
 
 const ITENS: { k: keyof PendenciasClinica; rotulo: string; onde: (id: string) => string }[] = [
   { k: "falhas", rotulo: "falhas de agente", onde: () => "/admin/agentes" },
