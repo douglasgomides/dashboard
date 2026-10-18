@@ -1,21 +1,21 @@
 // Operations Agent · item 5 do cronograma ("Acessos críticos confirmados"). Lógica pura do fluxo, sem banco nem IA,
 // para testar (scripts/test-agente-acessos.ts). O motor (api/_lib/agentes) usa estas funções nos passos.
-import { ITENS_ACESSO, type RegistroAcesso } from "./sap-acessos.js";
+import { acessoResolvido, ITENS_ACESSO, type RegistroAcesso } from "./sap-acessos.js";
 
 export const MARCO_ACESSOS = 5;
 
 export interface ItemPendente { id: string; nome: string; quem: string; dica: string }
-export interface ItemConfirmado { id: string; nome: string; status: "confirmado" | "nao_se_aplica"; em: string | null; por: string | null; obs: string | null }
+export interface ItemConfirmado { id: string; nome: string; status: "confirmado" | "nao_se_aplica"; em: string | null; por: string | null; obs: string | null; atualizado_em: string | null }
 
-/** Críticos (prazo "C") que faltam e os que já estão resolvidos (confirmado ou não se aplica, sem revogação). */
-export function situacaoCriticos(regs: RegistroAcesso[]): { pendentes: ItemPendente[]; resolvidos: ItemConfirmado[] } {
+/** Críticos com confirmação identificada/data válida; dispensas também exigem justificativa. */
+export function situacaoCriticos(regs: (RegistroAcesso & { atualizado_em?: string | null })[]): { pendentes: ItemPendente[]; resolvidos: ItemConfirmado[] } {
   const m = new Map(regs.map((r) => [r.item, r]));
   const pendentes: ItemPendente[] = [];
   const resolvidos: ItemConfirmado[] = [];
   for (const it of ITENS_ACESSO.filter((i) => i.prazo === "C")) {
     const r = m.get(it.id);
-    const ok = r && !r.revogado_em && (r.status === "confirmado" || r.status === "nao_se_aplica");
-    if (ok) resolvidos.push({ id: it.id, nome: it.nome, status: r.status as ItemConfirmado["status"], em: r.confirmado_em, por: r.confirmado_por, obs: r.observacao });
+    const ok = acessoResolvido(r);
+    if (ok && r) resolvidos.push({ id: it.id, nome: it.nome, status: r.status as ItemConfirmado["status"], em: r.confirmado_em, por: r.confirmado_por, obs: r.observacao, atualizado_em: r.atualizado_em ?? null });
     else pendentes.push({ id: it.id, nome: it.nome, quem: it.quem, dica: it.dica });
   }
   return { pendentes, resolvidos };
@@ -34,7 +34,7 @@ export function mensagemPadrao(nomeClinica: string, pendentes: ItemPendente[]): 
 
 /** Evidência do item 5, montada só com o que está registrado no SAP (quem confirmou e quando). */
 export function evidenciaCriticos(resolvidos: ItemConfirmado[]): string {
-  const partes = resolvidos.map((r) => `${r.id} ${r.status === "nao_se_aplica" ? "não se aplica" : "confirmado"}${r.em ? ` em ${r.em}` : ""}${r.por ? ` por ${r.por}` : ""}`);
+  const partes = resolvidos.map((r) => `${r.id} ${r.status === "nao_se_aplica" ? "não se aplica" : "confirmado"}${r.em ? ` em ${r.em}` : ""}${r.por ? ` por ${r.por}` : ""}${r.status === "nao_se_aplica" && r.obs ? ` (${r.obs})` : ""}`);
   return `Checklist 02.05: ${resolvidos.length} acessos críticos resolvidos (${partes.join("; ")}).`;
 }
 

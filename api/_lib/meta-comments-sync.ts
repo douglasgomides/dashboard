@@ -14,6 +14,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
 import { isQuestion } from "./question-classifier.js";
+import { graphPageUrl, integrationRequest } from "./integration-http.js";
 
 const GRAPH_BASE = "https://graph.facebook.com/v21.0";
 const COMMENTS_BATCH_SIZE = 50; // limite da API de lote da Meta
@@ -66,6 +67,7 @@ export interface CommentsAccountSyncResult {
 async function fetchCommentsBatch(
   postsWithMediaId: { id: string; windsor_media_id: string }[],
   accessToken: string,
+  errors: string[],
 ): Promise<Map<string, MetaComment[]>> {
   const result = new Map<string, MetaComment[]>();
   const proximas: { postId: string; url: string }[] = [];
@@ -76,11 +78,11 @@ async function fetchCommentsBatch(
       method: "GET",
       relative_url: `${p.windsor_media_id}/comments?fields=${CAMPOS_COMENTARIO}&limit=50`,
     }));
-    const res = await fetch(`${GRAPH_BASE}/`, {
+    const res = await fetch(`${GRAPH_BASE}/`, integrationRequest({
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ access_token: accessToken, batch: JSON.stringify(batchPayload) }),
-    });
+    }));
     if (!res.ok) {
       throw new Error(`Meta Graph batch comments failed (${res.status}): ${await res.text()}`);
     }
@@ -88,10 +90,16 @@ async function fetchCommentsBatch(
     for (let j = 0; j < batch.length; j++) {
       const post = batch[j];
       const sub = responses[j];
-      if (!sub || sub.code !== 200) continue; // comentários desativados nesse post não derrubam o sync
-      const parsed = JSON.parse(sub.body) as { data?: MetaComment[]; paging?: { next?: string } };
-      result.set(post.id, achatar(parsed.data));
-      if (parsed.paging?.next) proximas.push({ postId: post.id, url: parsed.paging.next });
+      if (!sub || sub.code !== 200) {
+        errors.push(`comentários ${post.id}: Graph respondeu ${sub?.code ?? "sem resposta"}`);
+        continue;
+      }
+      try {
+        const parsed = JSON.parse(sub.body) as { data?: MetaComment[]; paging?: { next?: string } };
+        if (!Array.isArray(parsed?.data)) throw new Error("página inválida");
+        result.set(post.id, achatar(parsed.data));
+        if (parsed.paging?.next) proximas.push({ postId: post.id, url: parsed.paging.next });
+      } catch { errors.push(`comentários ${post.id}: resposta inválida da Graph`); }
     }
   }
 
@@ -102,17 +110,17 @@ async function fetchCommentsBatch(
     const item = proximas.shift()!;
     gastas++;
     try {
-      const res = await fetch(item.url);
-      if (!res.ok) continue;
+      const res = await fetch(graphPageUrl(item.url), integrationRequest());
+      if (!res.ok) { errors.push(`comentários ${item.postId}: página respondeu ${res.status}`); continue; }
       const parsed = (await res.json()) as { data?: MetaComment[]; paging?: { next?: string } };
+      if (!Array.isArray(parsed?.data)) throw new Error("página inválida");
       const atual = result.get(item.postId) ?? [];
       atual.push(...achatar(parsed.data));
       result.set(item.postId, atual);
       if (parsed.paging?.next) proximas.push({ postId: item.postId, url: parsed.paging.next });
-    } catch {
-      // uma página que falha não derruba o resto do perfil
-    }
+    } catch { errors.push(`comentários ${item.postId}: não foi possível ler a página`); }
   }
+  if (proximas.length) errors.push("Comentários incompletos: limite de páginas extras atingido");
   return result;
 }
 
@@ -135,9 +143,10 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
   // legível só por admin (e pelo service role daqui).
   const tokensPorConta = new Map<string, string>();
   {
-    const { data: segredos } = await supabase
+    const { data: segredos, error: erroSegredos } = await supabase
       .from("instagram_account_secrets")
       .select("instagram_account_id, meta_access_token");
+    if (erroSegredos) throw new Error(`Não foi possível carregar os tokens de comentários: ${erroSegredos.message}`);
     for (const seg of segredos ?? []) {
       if (seg.meta_access_token) tokensPorConta.set(seg.instagram_account_id, seg.meta_access_token);
     }
@@ -150,16 +159,17 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
     const errors: string[] = [];
     const tokenDaConta = tokensPorConta.get(account.id) ?? env.accessToken;
     if (!tokenDaConta) {
-      results.push({ accountId: account.id, clientId: account.client_id, postsChecked: 0, comments: 0, questions: 0, done: true,
+      results.push({ accountId: account.id, clientId: account.client_id, postsChecked: 0, comments: 0, questions: 0, done: false,
         errors: ["Sem token da Meta: nem na conta, nem no ambiente"] });
       continue;
     }
     try {
-      const { data: state } = await supabase
+      const { data: state, error: erroEstado } = await supabase
         .from("instagram_comments_sync_state")
         .select("last_synced_post_posted_at")
         .eq("instagram_account_id", account.id)
         .maybeSingle();
+      if (erroEstado) throw new Error(`Estado dos comentários: ${erroEstado.message}`);
 
       // Frescor primeiro, histórico com o que sobrar.
       //
@@ -211,7 +221,7 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
       // nunca "termina".
       const done = (antigos?.length ?? 0) < cotaBackfill;
 
-      const commentsByPost = await fetchCommentsBatch(posts ?? [], tokenDaConta);
+      const commentsByPost = await fetchCommentsBatch(posts ?? [], tokenDaConta, errors);
       const now = new Date().toISOString();
       const rows = [];
       for (const post of posts ?? []) {
@@ -264,7 +274,7 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
         postsChecked: posts?.length ?? 0,
         comments: commentsCount,
         questions: questionsCount,
-        done,
+        done: done && errors.length === 0,
         errors,
       });
     } catch (err) {
@@ -274,7 +284,7 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
         postsChecked: 0,
         comments: 0,
         questions: 0,
-        done: true,
+        done: false,
         errors: [err instanceof Error ? err.message : String(err)],
       });
     }

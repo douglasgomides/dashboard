@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { runBackfillThumbnails } from "../_lib/backfill-thumbnails.js";
 
 // Endpoint de manutenção pontual — preenche thumbnail_url dos posts que

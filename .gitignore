@@ -20,6 +20,10 @@ src/routeTree.gen.ts
 .DS_Store
 .vercel
 .env*
+!.env.example
 .claude/worktrees/
 test-results/
 playwright-report/
+
+# Supabase CLI runtime metadata
+supabase/.temp/

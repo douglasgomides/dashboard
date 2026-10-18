@@ -28,6 +28,7 @@ import {
   getAtendimentosWhatsapp,
 } from "@/lib/client-data";
 import { getResumoPeriodo } from "@/lib/audiencia";
+import { completeInstagramPeriod } from "@/lib/report-period";
 import { aplicarRastreio, diagnosticarAds, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { buildRelatorioEnvio, type RelatorioEnvio } from "@/lib/relatorio-envio";
 import { resumirAtendimento, type ResumoAtendimento } from "@/lib/conversa-leitura";
@@ -196,7 +197,7 @@ export async function coletarRelatorioCompleto(args: {
       metrics: metrics ?? [],
       posts: posts ?? [],
       perguntas: perguntas ?? [],
-      alcanceUnico: periodoIg?.dados?.alcance_unico ?? null,
+      alcanceUnico: completeInstagramPeriod(periodoIg?.dados, start, end)?.alcance_unico ?? null,
       ads: ads?.objetivo ? { diag: ads.objetivo, diasComDado: ads.diasComDado } : null,
       wts: wts ? { resumo: wts.resumo, diasComDado: (wts.volumeDiario ?? []).filter((d: any) => Number(d.atendimentos) > 0).map((d: any) => String(d.dia).slice(0, 10)) } : null,
       crm: crmPeriodo,

@@ -193,7 +193,7 @@ export function RelatorioD90Sap({ clientId }: { clientId: string }) {
   const ontem = somar(hoje, -1);
   const cadQ = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId) });
   const c = cadQ.data ?? null;
-  const pausas = c?.pausas ?? [];
+  const pausas = useMemo(() => c?.pausas ?? [], [c?.pausas]);
   const d0 = c?.d0 ?? null;
   const jan = useMemo(() => {
     if (!d0) return null;

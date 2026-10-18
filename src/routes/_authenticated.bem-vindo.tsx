@@ -52,18 +52,30 @@ function BemVindo() {
     if (senha.length < 8) return setErro("A senha precisa ter pelo menos 8 caracteres.");
     if (senha !== senha2) return setErro("As duas senhas não são iguais.");
     setSalvando(true);
-    const { error } = await supabase.auth.updateUser({ password: senha });
-    setSalvando(false);
-    if (error) return setErro(error.message);
-    setPasso(2);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: senha });
+      if (error) return setErro(error.message);
+      setPasso(2);
+    } catch {
+      setErro("Não foi possível salvar sua senha. Verifique sua conexão e tente novamente.");
+    } finally {
+      setSalvando(false);
+    }
   }
 
   async function concluir() {
     setSalvando(true);
-    await supabase.auth.updateUser({ data: { primeiro_acesso: false, onboarding_em: new Date().toISOString() } });
-    setSalvando(false);
-    if (cliente) navigate({ to: "/$clientId", params: { clientId: cliente.id }, search: { preset: "30d" } as never });
-    else navigate({ to: "/" });
+    setErro(null);
+    try {
+      const { error } = await supabase.auth.updateUser({ data: { primeiro_acesso: false, onboarding_em: new Date().toISOString() } });
+      if (error) return setErro(error.message);
+      if (cliente) await navigate({ to: "/$clientId", params: { clientId: cliente.id }, search: { preset: "30d" } as never });
+      else await navigate({ to: "/" });
+    } catch {
+      setErro("Não foi possível concluir. Verifique sua conexão e tente novamente.");
+    } finally {
+      setSalvando(false);
+    }
   }
 
   const passos = primeiroAcesso ? ["Sua senha", "Como o painel funciona", "O que o CRM precisa ter"] : ["Como o painel funciona", "O que o CRM precisa ter"];
@@ -152,6 +164,7 @@ function BemVindo() {
               <button type="button" onClick={concluir} disabled={salvando} className="min-h-[44px] rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
                 {salvando ? "Abrindo…" : "Ir para o painel"}
               </button>
+              {erro && <p role="alert" className="text-sm" style={{ color: "var(--crit)" }}>{erro}</p>}
             </div>
           )}
         </section>

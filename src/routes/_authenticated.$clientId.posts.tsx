@@ -41,6 +41,8 @@ import type { ContentFormat, FunnelStage, MethodologyStage } from "@/integration
 import { fmtNum } from "@/lib/format";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { SyncButton } from "@/components/sync-button";
+import { useClientRole } from "@/hooks/use-client-role";
+import { ErroCarga } from "@/components/sem-fonte";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { Painel, Selo, Miniatura, BarraFina, Numero, Kpi, IconeFormato, COR_FORMATO } from "@/components/visual";
 import {
@@ -118,13 +120,21 @@ function ClassifySelect<T extends string>({
 // ícone e a classificação como selos. Os campos para editar (tema, funil, estágio, formato) ficam
 // atrás do lápis, para não ocupar a tela inteira com caixas de seleção.
 function PostCard({ post, posicao, maxSalvos, clientId }: { post: Post; posicao: number; maxSalvos: number; clientId: string }) {
+  const { podeEditar } = useClientRole(clientId);
   const queryClient = useQueryClient();
   const [editando, setEditando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
   async function update(fields: Parameters<typeof classifyPost>[1]) {
-    await classifyPost(post.id, fields);
-    queryClient.invalidateQueries({ queryKey: ["ranked-posts", clientId] });
-    queryClient.invalidateQueries({ queryKey: ["next-angles", clientId] });
+    if (!podeEditar) return;
+    setErro(null);
+    try {
+      await classifyPost(post.id, fields);
+      await queryClient.invalidateQueries({ queryKey: ["ranked-posts", clientId] });
+      await queryClient.invalidateQueries({ queryKey: ["next-angles", clientId] });
+    } catch {
+      setErro("Não foi possível salvar a classificação. Tente novamente.");
+    }
   }
 
   const titulo = firstLine(post.caption) ?? post.windsor_media_id;
@@ -151,7 +161,7 @@ function PostCard({ post, posicao, maxSalvos, clientId }: { post: Post; posicao:
             <a href={post.permalink ?? "#"} target="_blank" rel="noreferrer" className="line-clamp-2 text-sm font-medium" style={{ color: "var(--text)" }} title={post.caption ?? undefined}>
               {titulo}
             </a>
-            <button
+            {podeEditar && <button
               type="button"
               onClick={() => setEditando((v) => !v)}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
@@ -161,7 +171,7 @@ function PostCard({ post, posicao, maxSalvos, clientId }: { post: Post; posicao:
               title="Classificar (tema, funil, estágio, formato)"
             >
               <Pencil size={14} />
-            </button>
+            </button>}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             <Numero icone={Bookmark} valor={fmtNum(post.saved)} rotulo="Salvos" cor="var(--accent)" />
@@ -188,7 +198,7 @@ function PostCard({ post, posicao, maxSalvos, clientId }: { post: Post; posicao:
               </Selo>
             )}
             {post.methodology_stage && <Selo>{methodologyLabel(post.methodology_stage)}</Selo>}
-            {semClassificar && (
+            {semClassificar && podeEditar && (
               <button type="button" onClick={() => setEditando(true)} className="text-[11px] font-medium" style={{ color: "var(--accent)" }}>
                 + classificar
               </button>
@@ -196,7 +206,8 @@ function PostCard({ post, posicao, maxSalvos, clientId }: { post: Post; posicao:
           </div>
         </div>
       </div>
-      {editando && (
+      {erro && <p role="alert" className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{erro}</p>}
+      {editando && podeEditar && (
         <div className="mt-3 grid grid-cols-2 gap-2 border-t pt-3 sm:grid-cols-4" style={{ borderColor: "var(--border)" }}>
           <input
             defaultValue={post.tema ?? ""}
@@ -1077,12 +1088,13 @@ function PostsRankingPage() {
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
 
-  const { data: posts, isLoading } = useQuery({
+  const { data: posts, isLoading, error } = useQuery({
     queryKey: ["ranked-posts", clientId, start, end],
     queryFn: () => getRankedPosts(clientId, start, end),
   });
 
   if (isLoading) return <p style={{ color: "var(--text-dim)" }}>Carregando posts…</p>;
+  if (error) return <ErroCarga texto="Não foi possível ler os posts deste período. Tente novamente em instantes." />;
 
   const rows = posts ?? [];
 

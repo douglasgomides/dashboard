@@ -4,7 +4,7 @@ import { ITENS_ACESSO, prontoParaSessao1, resumoAcessos, type RegistroAcesso } f
 assert.equal(ITENS_ACESSO.length, 29);
 // Críticos do 02.05: A1–A6, A11, D1, D3.
 assert.deepEqual(ITENS_ACESSO.filter((i) => i.prazo === "C").map((i) => i.id), ["A1", "A2", "A3", "A4", "A5", "A6", "A11", "D1", "D3"]);
-const reg = (item: string, status: RegistroAcesso["status"] = "confirmado"): RegistroAcesso => ({ item, status, confirmado_em: "2026-10-15", confirmado_por: "Gestor de Tráfego", observacao: null, revogado_em: null });
+const reg = (item: string, status: RegistroAcesso["status"] = "confirmado"): RegistroAcesso => ({ item, status, confirmado_em: "2026-10-15", confirmado_por: "Gestor de Tráfego", observacao: status === "nao_se_aplica" ? "Justificativa de teste" : null, revogado_em: null });
 
 let r = resumoAcessos([reg("A1"), reg("A5", "nao_se_aplica")], 8);
 assert.deepEqual(r.criticos, { feitos: 2, total: 9 });
@@ -18,4 +18,7 @@ assert.equal(p.pronto, false);
 assert.deepEqual(p.falta, ["reunião de baseline"]);
 p = prontoParaSessao1(todos, new Set([3, 4, 8]));
 assert.equal(p.pronto, true);
+p = prontoParaSessao1(todos.map(r => r.item === "A1" ? { ...r, revogado_em: "2026-10-17" } : r), new Set([3,4,8]));
+assert.equal(p.pronto, false, "Revogação não pode liberar a sessão");
+assert.equal(resumoAcessos([{...reg("A5","nao_se_aplica"),observacao:null}], 8).criticos.feitos,0);
 console.log("ok sap-acessos");

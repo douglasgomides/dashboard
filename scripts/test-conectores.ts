@@ -12,6 +12,11 @@ assert.equal(estadoDoCliente(true, { last_attempt_at: h(100), last_success_at: h
 assert.equal(estadoDoCliente(true, { last_attempt_at: h(1), last_success_at: h(30), last_error: "401" }, agora), "erro");
 assert.equal(estadoDoCliente(true, { last_attempt_at: h(30), last_success_at: h(1), last_error: "401" }, agora), "conectado");
 assert.equal(estadoDoCliente(true, { last_attempt_at: h(1), last_success_at: null, last_error: null }, agora), "sem_registro");
+assert.equal(estadoDoCliente(true, { last_attempt_at: "invalid", last_success_at: "invalid", last_error: null }, agora), "sem_registro");
+assert.equal(estadoDoCliente(true, { last_attempt_at: null, last_success_at: h(1), last_error: "erro sem data de tentativa" }, agora), "erro");
+assert.equal(estadoDoCliente(true, { last_attempt_at: h(1), last_success_at: h(1), last_error: "  " }, agora), "conectado");
+assert.equal(estadoDoCliente(true, { last_attempt_at: h(-24), last_success_at: h(-24), last_error: null }, agora), "sem_registro");
+assert.equal(estadoDoCliente(true, { last_attempt_at: "1970-01-01T00:00:00Z", last_success_at: "1970-01-01T00:00:00Z", last_error: null }, agora), "atrasado");
 
 // Catálogo: ids únicos; planejados não têm fonte de sincronização (não fingem estado).
 assert.equal(new Set(CONECTORES.map((c) => c.id)).size, CONECTORES.length);

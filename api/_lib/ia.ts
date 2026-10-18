@@ -8,6 +8,7 @@
  * execução e para comparar clínicas.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { textoValido } from "./texto-ia.js";
 
 const MODELO_OPENAI = process.env.AGENTES_MODELO || "gpt-4o-mini";
 const MODELO_CLAUDE = process.env.AGENTES_MODELO_CLAUDE || "claude-haiku-4-5-20251001";
@@ -60,7 +61,7 @@ export async function chamarIAJson(admin: SupabaseClient<any, any, any>, p: Pedi
           model: modelo,
           response_format: { type: "json_object" },
           max_completion_tokens: p.maxTokens ?? 800,
-          messages: [{ role: "system", content: p.sistema }, { role: "user", content: p.entrada }],
+          messages: [{ role: "system", content: textoValido(p.sistema) }, { role: "user", content: textoValido(p.entrada) }],
         }),
       });
       if (!r.ok) throw new Error(`OpenAI respondeu ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}`);
@@ -74,7 +75,7 @@ export async function chamarIAJson(admin: SupabaseClient<any, any, any>, p: Pedi
         method: "POST",
         headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
         signal: AbortSignal.timeout(p.qualidade === "forte" ? 90_000 : 45_000),
-        body: JSON.stringify({ model: modelo, max_tokens: p.maxTokens ?? 800, system: p.sistema, messages: [{ role: "user", content: p.entrada }] }),
+        body: JSON.stringify({ model: modelo, max_tokens: p.maxTokens ?? 800, system: textoValido(p.sistema), messages: [{ role: "user", content: textoValido(p.entrada) }] }),
       });
       if (!r.ok) throw new Error(`Anthropic respondeu ${r.status}`);
       const j = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
@@ -88,7 +89,8 @@ export async function chamarIAJson(admin: SupabaseClient<any, any, any>, p: Pedi
       throw new Error("Servidor sem OPENAI_API_KEY nem ANTHROPIC_API_KEY");
     }
     const c = custo(modelo, tIn, tOut);
-    await admin.from("ia_execucoes").insert({ client_id: p.clientId, execucao_id: p.execucaoId ?? null, finalidade: p.finalidade, modelo, tokens_entrada: tIn, tokens_saida: tOut, custo_usd: c, ok: true, ms: Date.now() - t0 });
+    const { error } = await admin.from("ia_execucoes").insert({ client_id: p.clientId, execucao_id: p.execucaoId ?? null, finalidade: p.finalidade, modelo, tokens_entrada: tIn, tokens_saida: tOut, custo_usd: c, ok: true, ms: Date.now() - t0 });
+    if (error) throw new Error("Não foi possível registrar o custo da chamada de IA");
     return { json, modelo, custoUsd: c };
   } catch (e) {
     const erro = (e instanceof Error ? e.message : String(e)).slice(0, 300);

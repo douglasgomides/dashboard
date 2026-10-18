@@ -15,6 +15,7 @@ import {
   getWtsVolumeDiario,
 } from "@/lib/client-data";
 import { getResumoPeriodo } from "@/lib/audiencia";
+import { completeInstagramPeriod } from "@/lib/report-period";
 import { aplicarRastreio, diagnosticarAds } from "@/lib/anuncios-objetivo";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { buildRelatorioEnvio, LIMITE_WHATSAPP, SECOES, type AlteracaoLinguagem, type ChecagemItem, type RelatorioEnvio } from "@/lib/relatorio-envio";
@@ -110,7 +111,7 @@ function RelatorioPage() {
       metrics: metrics.data ?? [],
       posts: posts.data ?? [],
       perguntas: perguntas.data ?? [],
-      alcanceUnico: periodoIg.data?.dados?.alcance_unico ?? null,
+      alcanceUnico: completeInstagramPeriod(periodoIg.data?.dados, start, end)?.alcance_unico ?? null,
       ads: ads.data ?? null,
       wts: wts.data ?? null,
       crm: crm.data ?? null,

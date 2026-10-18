@@ -78,7 +78,7 @@ function normalizeOutcome(status: unknown): "open" | "won" | "lost" {
 }
 
 async function clintGet(token: string, path: string): Promise<any> {
-  const res = await fetch(`${CLINT_BASE}${path}`, { headers: { "api-token": token } });
+  const res = await fetch(`${CLINT_BASE}${path}`, { headers: { "api-token": token }, signal: AbortSignal.timeout(30_000), redirect: "error" });
   if (!res.ok) {
     throw new Error(`Clint ${path} falhou (${res.status}): ${(await res.text()).slice(0, 200)}`);
   }
