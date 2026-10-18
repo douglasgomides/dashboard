@@ -28,6 +28,7 @@ import { BotaoCopiar } from "@/components/botao-copiar";
 import { AcoesDaIdeia, PlanejadorSemana, usePautas } from "@/components/planejador-conteudo";
 import { useClientRole } from "@/hooks/use-client-role";
 import { RoteirosProntos } from "@/components/agentes-ia";
+import { EditorialDeliveries } from "@/features/creative-intelligence/editorial-deliveries";
 
 export const Route = createFileRoute("/_authenticated/$clientId/ideias")({
   component: IdeiasPage,
@@ -431,7 +432,8 @@ function IdeiasPage() {
         Ideias{res && res.ideias.length > 0 ? ` (${res.ideias.length})` : ""}
         {orig && orig.extras.length > 0 ? ` + ${orig.extras.length} da regra original` : ""}
       </h2>
-      <p>Revise os roteiros preparados pelo Roteirista e leve os aprovados ao planejador. Abaixo, veja ideias baseadas nos posts e nas dúvidas disponíveis no período. Período: {periodLabel}.</p>
+      <p>Revise os conteúdos adaptados e os roteiros disponíveis, produza no estúdio e organize a semana no planejador. As ideias por regra usam os posts e as dúvidas do período: {periodLabel}.</p>
+      <EditorialDeliveries clientId={clientId} editable={podeEditar} />
       <div className="mt-3"><RoteirosProntos clientId={clientId} podeEditar={podeEditar} /></div>
     </div>
   );

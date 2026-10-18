@@ -23,7 +23,8 @@ export const Route = createFileRoute("/_authenticated/$clientId")({
 // o quê) fica em src/lib/nav.ts; a casca visual em src/components/app-shell.tsx.
 function ClientLayout() {
   const { clientId } = Route.useParams();
-  const dateRange = Route.useSearch();
+  // useSearch inclui campos das rotas filhas. Links gerais só devem carregar o período.
+  const dateRange = parseDateRangeSearch(Route.useSearch());
   const navigate = useNavigate();
   const currentPathname = useRouterState({ select: (s) => s.location.pathname });
   const { isAdmin } = useAuth();

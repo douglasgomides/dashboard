@@ -50,12 +50,13 @@ type Props = {
   healthy: boolean;
   capabilities: Record<string, boolean>;
   adaptations: CreativeAdaptation[];
+  initialAdaptationId?: string;
 };
 export function ProductionWorkspace(props: Props) {
   const { clientId, accountId, adaptations, editable } = props;
   const qc = useQueryClient();
   const [selected, setSelected] = useState(""),
-    [adaptation, setAdaptation] = useState("");
+    [adaptation, setAdaptation] = useState(props.initialAdaptationId ?? "");
   const projects = useQuery({
     queryKey: ["productions", clientId, accountId],
     queryFn: () => listProductions(clientId, accountId),
@@ -78,7 +79,9 @@ export function ProductionWorkspace(props: Props) {
       setSelected(id);
     },
   });
-  const project = projects.data?.find((p) => p.id === selected);
+  const project = selected
+    ? projects.data?.find((p) => p.id === selected)
+    : projects.data?.find((p) => !!props.initialAdaptationId && p.adaptation_id === props.initialAdaptationId);
   const chosen = adaptations.find((a) => a.id === adaptation);
   return (
     <section className="production" aria-label="Estúdio de produção">
@@ -144,7 +147,7 @@ export function ProductionWorkspace(props: Props) {
         {projects.data?.map((p) => (
           <button
             key={p.id}
-            aria-pressed={p.id === selected}
+            aria-pressed={p.id === project?.id}
             onClick={() => setSelected(p.id)}
           >
             <span>{p.format === "carrossel" ? "CARROSSEL" : "VÍDEO"}</span>

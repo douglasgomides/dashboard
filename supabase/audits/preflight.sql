@@ -42,10 +42,10 @@ select 'migration_history' as section,
 
 -- Manifesto combinado; versões históricas repetidas continuam identificadas.
 select 'migration_manifest_note' as section,
-       137 as repository_sql_files,
-       134 as repository_distinct_versions,
+       138 as repository_sql_files,
+       135 as repository_distinct_versions,
        array['20261014120000', '20261018120000', '20261018130000']::text[] as historical_duplicate_versions,
-       '20261023103000'::text as latest_repository_version;
+       '20261023103100'::text as latest_repository_version;
 
 -- Paths vazios são seguros nas RPCs recentes, que qualificam seus objetos.
 -- Resumo para triagem. As sete contagens de falhas devem ser zero depois

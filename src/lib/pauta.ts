@@ -1,6 +1,8 @@
 // Planejador de conteúdo: ideia → pauta → plano da semana → produzida → publicada → medida.
 // Regras puras (sem banco); a tela grava em pautas_conteudo.
 import type { Ideia } from "@/lib/hub-conteudo";
+import { adaptationSchema } from "./creative-intelligence/contracts";
+import { adaptationBrief, creativeAdaptationId } from "./creative-intelligence/editorial";
 
 export type FormatoPauta = "reels" | "carrossel" | "estatico" | "stories";
 export type ObjetivoPauta = "alcance" | "salvamento" | "conversa" | "autoridade";
@@ -82,7 +84,13 @@ export function ideiaParaPauta(i: Ideia, clientId: string, extra: Partial<NovaPa
 }
 
 /** "Gerar roteiro": o roteiro completo, pronto para a gravação ou para o designer, a partir da pauta. */
-export function roteiroCompleto(p: Pick<Pauta, "titulo" | "formato" | "objetivo" | "gancho" | "roteiro" | "cta" | "aviso" | "motivo">): string {
+export function roteiroCompleto(p: Pick<Pauta, "titulo" | "formato" | "objetivo" | "gancho" | "roteiro" | "cta" | "aviso" | "motivo"> & Partial<Pick<Pauta, "ideia_id">>, creativeDocument?: unknown): string {
+  if (creativeAdaptationId(p.ideia_id ?? null)) {
+    const parsed = adaptationSchema.safeParse(creativeDocument);
+    if (parsed.success) return adaptationBrief({ document: parsed.data });
+    // Versões antigas ainda preservam os trechos salvos; não inventar capa ou falas adicionais.
+    return [p.titulo, ...p.roteiro, p.cta, p.aviso].filter(Boolean).join("\n\n");
+  }
   const passos = p.roteiro.length ? p.roteiro : ["Explique o tema em uma frase simples.", "Dê um exemplo do dia a dia do paciente.", "Diga o que a pessoa deve observar ou fazer."];
   const estrutura =
     p.formato === "carrossel"

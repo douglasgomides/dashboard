@@ -51,7 +51,7 @@ export const AGENTES: AgenteCatalogo[] = [
     id: "campanhas", fluxo: "campanhas_estrategia", agente: "growth", nome: "Estrategista de campanhas",
     papel: "O estrategista de crescimento.",
     le: "Brand Brain, ficha, conversas, CRM, Instagram, anúncios, datas de saúde e o resultado das estratégias anteriores.",
-    entrega: "Estratégias, pacotes de cuidado e abordagens com público, texto pronto, passos e métrica.",
+    entrega: "Planos com estratégia online e presencial, jornada comercial, responsáveis a atribuir, recursos, rastreio e critérios de decisão.",
     frequencia: "Semanal", intervaloHoras: 6 * 24 + 12, maxAbertas: 10, modulo: "hub", ondeHub: "campanhas", ondeSap: "midia",
     quemAprova: "Estrategista e clínica: aprovam, executam e registram o resultado, que volta para o agente.",
   },

@@ -1,4 +1,7 @@
 import { useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { creativeAdaptationId } from "@/lib/creative-intelligence/editorial";
+import { readEditorialDelivery } from "@/features/creative-intelligence/data";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarPlus, CalendarDays, ClipboardList, FileText, Loader2, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -133,6 +136,13 @@ function Sel<T extends string>({ rotulo, valor, opcoes, onChange, disabled }: { 
 
 function CartaoPauta({ p, dias, api, podeEditar }: { p: Pauta; dias: { data: string; rotulo: string }[]; api: Api; podeEditar: boolean }) {
   const [aberto, setAberto] = useState(false);
+  const adaptationId = creativeAdaptationId(p.ideia_id);
+  const creative = useQuery({
+    queryKey: ["creative-entry", p.client_id, adaptationId],
+    enabled: aberto && !!adaptationId,
+    queryFn: () => readEditorialDelivery(p.client_id, adaptationId!), retry: false,
+  });
+  const text = roteiroCompleto(p, creative.data?.document);
   const muda = (campos: Partial<Pauta>) => api.atualizar.mutate({ id: p.id, campos });
   const opDias = [{ v: "", r: "Sem dia" }, ...dias.map((d) => ({ v: d.data, r: d.rotulo })), ...(p.dia && !dias.some((d) => d.data === p.dia) ? [{ v: p.dia, r: `${p.dia.slice(8, 10)}/${p.dia.slice(5, 7)}` }] : [])];
   return (
@@ -157,12 +167,16 @@ function CartaoPauta({ p, dias, api, podeEditar }: { p: Pauta; dias: { data: str
           </button>
         )}
       </div>
+      {adaptationId && <Link className="btn mt-2 inline-flex text-xs" to="/$clientId/inteligencia-criativa" params={{ clientId: p.client_id }} search={{ aba: "producao", adaptacao: adaptationId }}>Abrir produção vinculada</Link>}
       {aberto && (
         <div className="mt-1 space-y-1.5 text-xs leading-relaxed" style={{ color: "var(--ink-2)" }}>
           {p.motivo && <p><b style={{ color: "var(--ink)" }}>Motivo:</b> {p.motivo}</p>}
           {p.origem_texto && <p><b style={{ color: "var(--ink)" }}>Originou de:</b> {p.origem_texto}</p>}
-          <pre className="whitespace-pre-wrap break-words rounded-md p-2" style={{ font: "inherit", background: "var(--surface-2)" }}>{roteiroCompleto(p)}</pre>
-          <BotaoCopiar texto={roteiroCompleto(p)} rotulo="Copiar roteiro" />
+          {adaptationId && creative.isPending ? <p role="status">Carregando documento original da adaptação…</p> : <>
+            {adaptationId && (creative.isError || !creative.data) && <p role="alert">Não foi possível recuperar o documento da adaptação. Abaixo estão apenas os trechos já salvos na pauta.</p>}
+            <pre className="whitespace-pre-wrap break-words rounded-md p-2" style={{ font: "inherit", background: "var(--surface-2)" }}>{text}</pre>
+            <BotaoCopiar texto={text} rotulo="Copiar roteiro" />
+          </>}
         </div>
       )}
     </li>

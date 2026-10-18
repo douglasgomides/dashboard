@@ -19,6 +19,7 @@ export function AdaptationView({
   busy,
   onPlanner,
   onLink,
+  onProduce,
 }: {
   adaptation: CreativeAdaptation;
   analysis?: CreativeAnalysis;
@@ -34,6 +35,7 @@ export function AdaptationView({
   busy: boolean;
   onPlanner: () => void;
   onLink: (postId: string) => void;
+  onProduce?: () => void;
 }) {
   const [selected, setSelected] = useState(1),
     [postId, setPostId] = useState("");
@@ -64,6 +66,7 @@ export function AdaptationView({
       resumo={`Novo tema: ${doc.theme} · Objetivo: ${doc.objective}`}
     >
       <div className="mb-4 flex flex-wrap gap-2">
+        {onProduce && <button type="button" className="btn" onClick={onProduce}>{editable ? "Produzir esta adaptação" : "Ver produção desta adaptação"}</button>}
         <Selo>Proposta para revisão</Selo>
         <Selo>
           {adaptation.published_post_id

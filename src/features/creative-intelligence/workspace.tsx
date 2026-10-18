@@ -44,6 +44,8 @@ import { AnalysisView } from "./analysis-view";
 import { AdaptationView } from "./adaptation-view";
 import { ReferenceScript } from "./reference-script";
 import { ProductionWorkspace } from "./production-workspace";
+import type { CreativeEntry } from "@/lib/creative-intelligence/editorial";
+import { readAnalysis, readEditorialDelivery } from "./data";
 import "./workspace.css";
 
 const parentRoute = getRouteApi("/_authenticated/$clientId");
@@ -64,14 +66,14 @@ const OBJECTIVES: { id: Objective; label: string }[] = [
 ];
 const number = (n: unknown) =>
   typeof n === "number" ? n.toLocaleString("pt-BR") : "—";
-export function CreativeWorkspace({ clientId }: { clientId: string }) {
-  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("acervo"),
+export function CreativeWorkspace({ clientId, entry = {} }: { clientId: string; entry?: CreativeEntry }) {
+  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>(entry.aba ?? "acervo"),
     [account, setAccount] = useState(""),
     [sourceId, setSourceId] = useState(""),
     [objective, setObjective] = useState<Objective>("salvamento"),
     [format, setFormat] = useState(""),
     [structureId, setStructureId] = useState(""),
-    [adaptationId, setAdaptationId] = useState(""),
+    [adaptationId, setAdaptationId] = useState(entry.adaptacao ?? ""),
     [theme, setTheme] = useState(""),
     [partial, setPartial] = useState(false),
     [query, setQuery] = useState(""),
@@ -88,8 +90,15 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
   const accounts = useQuery({
       queryKey: ["creative-accounts", clientId],
       queryFn: () => listAccounts(clientId),
-    }),
-    accountId = account || accounts.data?.[0]?.id || "";
+    });
+  const requested = useQuery({
+    queryKey: ["creative-entry", clientId, entry.adaptacao],
+    enabled: !!entry.adaptacao,
+    queryFn: () => readEditorialDelivery(clientId, entry.adaptacao!),
+    retry: false,
+  });
+  const initialAccount = entry.conta || requested.data?.account_id;
+  const accountId = account || initialAccount || (entry.adaptacao ? "" : accounts.data?.[0]?.id) || "";
   const posts = useQuery({
     queryKey: ["creative-posts", clientId, dates.start, dates.end],
     queryFn: () => getPostsForAnalytics(clientId, dates.start, dates.end),
@@ -153,7 +162,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
     (s) => s.analysis_id === analysis?.id,
   );
   const selectedStructure =
-    w?.structures.find((s) => s.id === structureId) ??
+    w?.structures.find((s) => s.id === (structureId || (requested.data?.account_id === accountId ? requested.data.structure_id : ""))) ??
     w?.structures.find((s) => s.analysis_id === analysis?.id) ??
     w?.structures[0];
   const structureAnalysis = w?.analyses.find(
@@ -161,23 +170,28 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
   );
   const adaptation =
     w?.adaptations.find((a) => a.id === adaptationId) ??
+    (requested.data?.id === adaptationId && requested.data.account_id === accountId ? requested.data : undefined) ??
     w?.adaptations.find((a) => a.structure_id === selectedStructure?.id);
-  const adaptationAnalysis = w?.analyses.find(
+  const savedAnalysis = w?.analyses.find(
     (a) => a.id === adaptation?.analysis_id,
   );
-  const comparisonSource = w?.sources.find(
-    (s) => s.id === adaptationAnalysis?.source_id,
-  );
+  const historicalAnalysis = useQuery({
+    queryKey: ["creative-historical-analysis", clientId, accountId, adaptation?.analysis_id],
+    enabled: tab === "biblioteca" && !!adaptation && !!w && !savedAnalysis,
+    queryFn: () => readAnalysis(clientId, accountId, adaptation!.analysis_id), retry: false,
+  });
+  const adaptationAnalysis = savedAnalysis ?? historicalAnalysis.data ?? undefined;
+  const comparisonSourceId = adaptationAnalysis?.source_id;
   const comparisonAssets = useQuery({
     queryKey: [
       "creative-comparison-assets",
       clientId,
       accountId,
-      comparisonSource?.id,
+      comparisonSourceId,
       adaptationAnalysis?.id,
     ],
-    enabled: !!comparisonSource && tab === "biblioteca",
-    queryFn: () => readAssets(clientId, accountId, comparisonSource!.id),
+    enabled: !!comparisonSourceId && tab === "biblioteca",
+    queryFn: () => readAssets(clientId, accountId, comparisonSourceId!),
   });
   const rankings = useMemo(
     () =>
@@ -221,6 +235,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
     onSuccess: async () => {
       await invalidate();
       await qc.invalidateQueries({ queryKey: ["pautas", clientId] });
+      await qc.invalidateQueries({ queryKey: ["creative-editorial", clientId] });
     },
   });
   const dispatch = (fn: () => Promise<unknown>) => action.mutate(fn);
@@ -244,6 +259,11 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
     setSearchJob("");
     setPartial(false);
   }
+  const workspaceAdaptations = requested.data && requested.data.account_id === accountId && !w?.adaptations.some((a) => a.id === requested.data?.id)
+    ? [...(w?.adaptations || []), requested.data] : w?.adaptations || [];
+  if (entry.adaptacao && !account && requested.isPending) return <p role="status">Localizando o conteúdo desta clínica…</p>;
+  if (entry.adaptacao && !account && (requested.isError || (requested.isSuccess && (!requested.data || (entry.conta && requested.data.account_id !== entry.conta)))))
+    return <div role="alert"><h1>Conteúdo indisponível</h1><p>Não foi possível abrir esta adaptação para a clínica e a conta selecionadas. Confira o acesso e o endereço.</p>{requested.isError && <button type="button" className="btn" onClick={() => void requested.refetch()}>Tentar abrir conteúdo novamente</button>}</div>;
   return (
     <div className="creative-workspace space-y-6">
       <header className="creative-heading">
@@ -345,7 +365,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
           </button>
         ))}
       </nav>
-      {tab === "producao" && <ProductionWorkspace key={`${clientId}:${accountId}`} clientId={clientId} accountId={accountId} editable={podeEditar} healthy={healthy} capabilities={workerState?.capabilities || {}} adaptations={w?.adaptations || []} />}
+      {tab === "producao" && <ProductionWorkspace key={`${clientId}:${accountId}:${adaptationId}`} clientId={clientId} accountId={accountId} editable={podeEditar} healthy={healthy} capabilities={workerState?.capabilities || {}} adaptations={workspaceAdaptations} initialAdaptationId={adaptationId} />}
       {tab === "acervo" && (
         <Painel
           icone={Trophy}
@@ -719,6 +739,8 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
             </label>
           )}
           {adaptation && (
+            <>
+            {historicalAnalysis.isError && <p role="alert">Não foi possível carregar a análise original. A proposta permanece disponível; tente novamente para conferir a referência.</p>}
             <AdaptationView
               key={adaptation.id}
               adaptation={adaptation}
@@ -730,10 +752,12 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
               onPlanner={() =>
                 dispatch(() => toPlanner(clientId, adaptation.id))
               }
+              onProduce={() => { setAdaptationId(adaptation.id); setTab("producao"); }}
               onLink={(postId) =>
                 dispatch(() => linkPublication(clientId, adaptation.id, postId))
               }
             />
+            </>
           )}
         </div>
       )}

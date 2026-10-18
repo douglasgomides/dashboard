@@ -36,6 +36,17 @@ export const listAccounts = (clientId: string) =>
       .eq("active", true)
       .order("id"),
   );
+/** Entregas editoriais não dependem do período das métricas nem do histórico do agente legado. */
+export const listEditorialDeliveries = (clientId: string, offset = 0) =>
+  read<CreativeAdaptation[]>(db.from("creative_adaptations").select("*")
+    .eq("client_id", clientId).order("created_at", { ascending: false }).order("id")
+    .range(offset, offset + 19));
+export const readEditorialDelivery = (clientId: string, adaptationId: string) =>
+  read<CreativeAdaptation | null>(db.from("creative_adaptations").select("*")
+    .eq("client_id", clientId).eq("id", adaptationId).maybeSingle());
+export const readAnalysis = (clientId: string, accountId: string, analysisId: string) =>
+  read<CreativeAnalysis | null>(db.from("creative_analyses").select("*")
+    .eq("client_id", clientId).eq("account_id", accountId).eq("id", analysisId).maybeSingle());
 export type JobProgress = Pick<
   CreativeJob,
   "id" | "status" | "progress" | "message" | "cost_usd" | "reserved_usd"

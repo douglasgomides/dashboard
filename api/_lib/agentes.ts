@@ -19,6 +19,7 @@ import { chamarIAJson, iaDisponivel } from "./ia.js";
 import { limitarTexto } from "./texto-ia.js";
 import { FONTES, padroesComerciais, validarPropostas, type Fonte, type PropostaBrain } from "../../src/lib/brand-brain.js";
 import { validarIdeias, TIPOS_IDEIA, type IdeiaCampanha } from "../../src/lib/campanhas-ia.js";
+import { CAMPAIGN_STRATEGY_PROMPT, campaignStrategyText, type CampaignEvidence } from "../../src/lib/campanha-estrategia.js";
 import { CALENDARIO } from "../../src/lib/campanhas.js";
 import { grupoEspecialidade } from "../../src/lib/benchmark-estrategico.js";
 import { validarRecuperacao, validarAnuncios, validarConteudo, pecaParaTexto, type PecaConteudo, type RecomendacaoAds, type SinalAds, type MensagemRecuperacao } from "../../src/lib/agentes-sugestoes.js";
@@ -265,11 +266,11 @@ interface Fluxo { id: string; agente: string; nome: string; objetivo: string; pa
 
 /** Autocrítica: um segundo agente dá nota a cada item (src/lib/aprendizado.ts, SISTEMA_CRITICO). Se a crítica falhar,
  *  os itens seguem sem nota: erro do crítico não joga fora o trabalho. */
-async function criticar(c: Ctx, contexto: string, itens: string[], finalidade: string): Promise<Map<number, NotaCritica>> {
+async function criticar(c: Ctx, contexto: string, itens: string[], finalidade: string, maxItemChars = 1500): Promise<Map<number, NotaCritica>> {
   if (!itens.length) return new Map();
   try {
     const r = await c.usar("ia.gerar_json", { sistema: SISTEMA_CRITICO, finalidade: `critico_${finalidade}`, max_tokens: 1200,
-      entrada: `### Contexto da clínica (resumo)\n${contexto.slice(0, 7000)}\n\n### Itens para avaliar\n${itens.map((t, i) => `[${i}] ${t.slice(0, 1500)}`).join("\n\n")}`.slice(0, 19_000) });
+      entrada: `### Contexto da clínica (resumo)\n${contexto.slice(0, 7000)}\n\n### Itens para avaliar\n${itens.map((t, i) => `[${i}] ${t.slice(0, maxItemChars)}`).join("\n\n")}`.slice(0, 19_000) });
     return lerNotas(r.json, itens.length);
   } catch { return new Map(); }
 }
@@ -652,12 +653,12 @@ async function lerContextoGrowth(admin: Admin, clientId: string) {
   if (origem.length) blocos.push(`### De onde chegam as conversas (estimado pela IA)\n${origem.map(([k, n]) => `- ${k}: ${n}`).join("\n")}`);
 
   const gf = (ganhosFonte.data ?? []) as { source: string | null; price: number | null }[];
-  const crm = [`Leads nos últimos 90 dias: ${leads90}`, `Vendas ganhas nos últimos 90 dias: ${ganhos90}`, `Perdidos nos últimos 180 dias: ${perdidos180}`,
+  const crm = [`Leads criados nos últimos 90 dias: ${leads90}`, `Dessa coorte de 90 dias, atualmente ganhos no CRM: ${ganhos90}`, `Leads criados nos últimos 180 dias atualmente perdidos: ${perdidos180}`,
     `Leads em aberto criados há mais de 90 dias (base para reativar): ${abertosAntigos}`];
   const receita = gf.reduce((s, g) => s + Number(g.price ?? 0), 0);
-  if (gf.length) crm.push(`Vendas ganhas em 180 dias: ${gf.length}${receita ? `, receita registrada R$ ${Math.round(receita).toLocaleString("pt-BR")}` : ""}`);
-  const fontes = tally(gf.map((g) => g.source)).slice(0, 6);
-  if (fontes.length) crm.push(`Fonte registrada das vendas: ${fontes.map(([k, n]) => `${k} ${n}`).join("; ")}`);
+  if (gf.length) crm.push(`Leads criados em 180 dias atualmente ganhos: ${gf.length}${receita ? `, valor das oportunidades ganhas R$ ${Math.round(receita).toLocaleString("pt-BR")} (não confirma receita recebida)` : ""}`);
+  const fontesCrm = tally(gf.map((g) => g.source)).slice(0, 6);
+  if (fontesCrm.length) crm.push(`Fonte registrada das oportunidades ganhas: ${fontesCrm.map(([k, n]) => `${k} ${n}`).join("; ")}`);
   if (leads90 || gf.length) blocos.push(`### CRM\n${crm.join("\n")}`);
 
   const ps = (posts.data ?? []) as { tema: string | null; format: string | null; caption: string | null; reach: number | null; saved: number | null }[];
@@ -677,7 +678,15 @@ async function lerContextoGrowth(admin: Admin, clientId: string) {
   if (datas.length) blocos.push(`### Datas de saúde dos próximos 2 meses\n${datas.map((d) => `- ${d.dia ? `${d.dia}/` : ""}${d.mes} ${d.nome}: ${d.angulo}${d.cuidado ? ` (cuidado: ${d.cuidado})` : ""}`).join("\n")}`);
   const ant = (anteriores.data ?? []) as { titulo: string; tipo: string; estado: string; resultado: string | null }[];
   if (ant.length) blocos.push(`### Estratégias já propostas (não repita; aprenda com o estado e o resultado)\n${ant.map((a) => `- [${a.estado}] ${a.tipo}: ${corta(a.titulo, 120)}${a.resultado ? ` → resultado: ${corta(a.resultado, 160)}` : ""}`).join("\n")}`);
-  return { texto: limitarTexto(blocos.join("\n\n"), 15_000), chaves, titulos: ant.map((a) => a.titulo), blocos: blocos.length, brain: itens.length, conversas: comerciais.length };
+  const periodo = (days: number) => `${desde(days).slice(0,10)} a ${hoje.toISOString().slice(0,10)}`;
+  const fontes: CampaignEvidence[] = [];
+  if (ficha.length) fontes.push({ id: "ficha", fonte: "Ficha cadastrada", periodo: "Cadastro atual; confirmar disponibilidade dos serviços", fatos: ficha, limitacoes: ["Capacidade da agenda, custos e parceiros não confirmados."] });
+  if (itens.length) fontes.push({ id: "brain", fonte: "Brand Brain aprovado", periodo: "Memórias aprovadas atuais", fatos: [`${itens.length} itens aprovados; primeiras chaves: ${chaves.slice(0,20).join(", ")}`], limitacoes: ["Aprovação da marca não aprova conduta clínica nem orçamento."] });
+  if (leads90 || gf.length) fontes.push({ id: "crm", fonte: "CRM", periodo: periodo(90), fatos: crm, limitacoes: ["Coortes por criação e estado atual; não comprova a data do fechamento, comparecimento ou recebimento. Parte dos totais usa janela de 180 dias, indicada em cada fato."] });
+  if (ps.length) fontes.push({ id: "instagram", fonte: "Instagram", periodo: periodo(90), fatos: [`${ps.length} posts selecionados por engajamento; dados por post no contexto.`], limitacoes: ["Amostra de até oito posts; salvamento não comprova aquisição de paciente."] });
+  if (gasto > 0) fontes.push({ id: "meta", fonte: "Meta Ads", periodo: periodo(30), fatos: [`Investimento registrado: R$ ${Math.round(gasto)}; ${ad.reduce((s,a)=>s+Number(a.conversations ?? 0),0)} conversas reportadas; ${ad.reduce((s,a)=>s+Number(a.leads ?? 0),0)} leads de formulário.`], limitacoes: ["Não deduplicar conversas e leads nem atribuir receita sem vínculo; a consulta tem limite de 5.000 linhas."] });
+  const catalogo = `### Catálogo de evidências permitido\n${JSON.stringify(fontes)}`;
+  return { texto: `${catalogo}\n\n${limitarTexto(blocos.join("\n\n"), 15_000 - catalogo.length)}`, fontes, chaves, titulos: ant.map((a) => a.titulo), blocos: blocos.length, brain: itens.length, conversas: comerciais.length };
 }
 
 const SISTEMA_GROWTH = `Você é o estrategista de crescimento da Doctor Creator para uma clínica médica. Proponha ideias de campanha concretas, criativas e executáveis pela equipe da clínica, cruzando o Brand Brain aprovado com os dados.
@@ -705,14 +714,14 @@ const FOCOS_GROWTH: [string, string][] = [
 
 const FLUXO_GROWTH: Fluxo = {
   id: "campanhas_estrategia", agente: "growth", nome: "Estrategista de Campanhas: estratégias, pacotes e abordagens",
-  objetivo: "Cruzar o Brand Brain com os dados da clínica e propor estratégias de campanha, pacotes e abordagens. Nada é enviado nem publicado: a equipe aprova e executa na aba Campanhas.",
+  objetivo: "Planejar campanhas online e presenciais conectando Brand Brain, evidências, jornada comercial, recursos e medição. A equipe revisa e executa; nenhuma ação externa é automática.",
   passos: [
     {
       nome: "ler_contexto", descricao: "Lê Brand Brain, ficha, conversas, CRM, Instagram, anúncios, datas e estratégias anteriores", ferramenta: "growth.ler_contexto", risco: "baixo",
       executar: async (c) => {
         const r = await c.usar("growth.ler_contexto", { client_id: c.exec.client_id });
         if (r.blocos < 2) return { tipo: "concluir", resultado: { ideias: 0, motivo: "Pouco dado da clínica ainda (ficha, Brain, conversas, CRM ou Instagram). Ligue as fontes ou aprove o Brand Brain." } };
-        return { tipo: "seguir", saida: { blocos: r.blocos, brain: r.brain, conversas: r.conversas }, contexto: { texto: r.texto, chaves: r.chaves, titulos: r.titulos, ideias: [], descartes: [] } };
+        return { tipo: "seguir", saida: { blocos: r.blocos, brain: r.brain, conversas: r.conversas }, contexto: { texto: r.texto, chaves: r.chaves, titulos: r.titulos, fontes: r.fontes, estrategia_v2: true, ideias: [], descartes: [] } };
       },
     },
     ...FOCOS_GROWTH.map(([foco, texto]): Passo => ({
@@ -721,10 +730,11 @@ const FLUXO_GROWTH: Fluxo = {
         if (!iaDisponivel()) return { tipo: "falhar", erro: "IA não configurada no servidor (OPENAI_API_KEY ou ANTHROPIC_API_KEY)." };
         const ja = c.exec.contexto.ideias as IdeiaCampanha[];
         const titulos = [...(c.exec.contexto.titulos as string[]), ...ja.map((i) => i.titulo)];
-        const r = await c.usar("ia.gerar_json", { sistema: SISTEMA_GROWTH.replace("{FOCO}", texto), finalidade: `agente_growth_${foco}`, max_tokens: 2500,
+        const v2 = c.exec.contexto.estrategia_v2 === true;
+        const r = await c.usar("ia.gerar_json", { sistema: (v2 ? CAMPAIGN_STRATEGY_PROMPT : SISTEMA_GROWTH).replace("{FOCO}", v2 ? foco === "aquisicao" ? "Uma campanha de aquisição e conversão de pacientes novos, com estratégia digital e presencial conectada." : "Uma campanha de relacionamento, reativação ou continuidade com estratégia digital e presencial conectada, conforme finalidade autorizada." : texto), finalidade: `agente_growth_${foco}`, max_tokens: v2 ? 4000 : 2500, ...(v2 ? { qualidade: "forte" } : {}),
           entrada: `${c.exec.contexto.texto}${ja.length ? `\n\n### Ideias desta rodada (não repita)\n${ja.map((i) => `- ${i.titulo}`).join("\n")}` : ""}` });
-        const v = validarIdeias(r.json, c.exec.contexto.chaves as string[], titulos);
-        const notas = await criticar(c, c.exec.contexto.texto, v.ok.map((i) => `${i.titulo} (${i.tipo})\nPara quem: ${i.publico}\nPor quê: ${i.porque}\nEvidências: ${i.evidencias.join("; ")}\nTexto: ${i.mensagem ?? ""}`), `growth_${foco}`);
+        const v = validarIdeias(r.json, c.exec.contexto.chaves as string[], titulos, { requireStrategy: v2, sources: c.exec.contexto.fontes ?? [] });
+        const notas = await criticar(c, c.exec.contexto.texto, v.ok.map((i) => `${i.titulo} (${i.tipo})\nPara quem: ${i.publico}\nPor quê: ${i.porque}\nEvidências: ${i.evidencias.join("; ")}\n${i.estrategia ? campaignStrategyText(i.estrategia) : `Texto: ${i.mensagem ?? ""}`}`), `growth_${foco}`, v2 ? 11000 : 1500);
         const { ok, descartes: dc } = aplicarCritica(v.ok, notas);
         const descartes = [...v.descartes, ...dc];
         return { tipo: "seguir", saida: { ideias: ok.length, descartes, modelo: r.modelo }, contexto: { ideias: [...ja, ...ok], descartes: [...(c.exec.contexto.descartes as string[]), ...descartes] } };
@@ -734,6 +744,8 @@ const FLUXO_GROWTH: Fluxo = {
       nome: "gravar", descricao: "Grava as ideias como propostas na aba Campanhas", ferramenta: "growth.gravar_ideias", risco: "baixo", idempotente: true,
       executar: async (c) => {
         const ideias = c.exec.contexto.ideias as IdeiaCampanha[];
+        if (c.exec.contexto.estrategia_v2 === true && !ideias.length)
+          return { tipo: "falhar", erro: `Nenhum plano estratégico completo passou pela validação. Confira as fontes e os campos exigidos antes de gerar novamente. ${(c.exec.contexto.descartes ?? []).slice(0,2).join("; ")}`.slice(0,1000) };
         const r = await c.usar("growth.gravar_ideias", { client_id: c.exec.client_id, ideias: ideias as unknown as Record<string, unknown>[] });
         return { tipo: "seguir", saida: r, contexto: { gravadas: r.gravadas, texto: null } };
       },

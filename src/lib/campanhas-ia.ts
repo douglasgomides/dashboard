@@ -3,6 +3,7 @@
 // dados da clínica; aqui o servidor descarta o que fere o CFM, tem dado pessoal ou não diz de onde veio.
 // Nada é enviado nem publicado: uma pessoa aprova, executa e registra o resultado.
 import { textoSemDadoPessoal } from "./brand-brain.js";
+import { validateCampaignStrategy, type CampaignStrategy, type CampaignEvidence } from "./campanha-estrategia.js";
 
 export const TIPOS_IDEIA = {
   pacote: "Pacote ou programa de cuidado",
@@ -24,6 +25,7 @@ export const ESTADOS_IDEIA = { proposta: "Proposta", aprovada: "Aprovada", em_an
 export type EstadoIdeia = keyof typeof ESTADOS_IDEIA;
 
 export interface IdeiaCampanha {
+  estrategia?: CampaignStrategy;
   tipo: TipoIdeia;
   titulo: string;
   publico: string;
@@ -65,7 +67,7 @@ const lista = (x: unknown, maxItens: number, maxTexto: number) => (Array.isArray
 
 /** Filtra a resposta da IA. Só fica a ideia com título, público, porquê com evidência, passos e métrica, sem termo
  *  proibido pelo CFM e sem dado pessoal. Chaves do Brain que não existem são removidas (a IA não pode inventar fonte). */
-export function validarIdeias(bruto: unknown, chavesBrain: string[], titulosAnteriores: string[] = []): { ok: IdeiaCampanha[]; descartes: string[] } {
+export function validarIdeias(bruto: unknown, chavesBrain: string[], titulosAnteriores: string[] = [], options: { requireStrategy?: boolean; sources?: CampaignEvidence[] } = {}): { ok: IdeiaCampanha[]; descartes: string[] } {
   const ok: IdeiaCampanha[] = [];
   const descartes: string[] = [];
   const itens = Array.isArray((bruto as { ideias?: unknown })?.ideias) ? (bruto as { ideias: unknown[] }).ideias : [];
@@ -93,6 +95,16 @@ export function validarIdeias(bruto: unknown, chavesBrain: string[], titulosAnte
       esforco: (ESFORCOS as readonly string[]).includes(String(i.esforco)) ? (i.esforco as Esforco) : "medio",
       prazo_dias: Math.min(90, Math.max(3, Math.round(Number(i.prazo_dias) || 30))),
     };
+    if (options.requireStrategy || i.estrategia != null) {
+      const plan = validateCampaignStrategy(i.estrategia, options.sources ?? []);
+      if (!plan.data) { descartes.push(`${rotulo}: ${plan.error}`); continue; }
+      ideia.estrategia = plan.data;
+      ideia.porque = plan.data.diagnostico;
+      ideia.passos = plan.data.fases.map((f) => `${f.fase} (${f.periodo}): ${f.entrega}. Avançar quando: ${f.criterio_avanco}`);
+      // Evidência exibida vem do catálogo lido pelo servidor, não de números escritos pelo modelo.
+      ideia.evidencias = (options.sources ?? []).filter((s) => plan.data!.evidencias_ids.includes(s.id))
+        .map((s) => `${s.fonte} · ${s.periodo}: ${s.fatos.join("; ")}. Limitações: ${s.limitacoes.join("; ")}`);
+    }
     if (titulo.length < 8) { descartes.push(`${rotulo}: título curto`); continue; }
     if (!ideia.publico || !ideia.porque || !ideia.metrica) { descartes.push(`${rotulo}: falta público, porquê ou métrica`); continue; }
     if (ideia.passos.length < 2) { descartes.push(`${rotulo}: menos de 2 passos`); continue; }
@@ -100,7 +112,9 @@ export function validarIdeias(bruto: unknown, chavesBrain: string[], titulosAnte
     if (tipo === "pacote" && !ideia.oferta) { descartes.push(`${rotulo}: pacote sem descrição do que inclui`); continue; }
     // O que vai ao paciente (título, oferta, mensagem, público) passa pelo CFM. Passos são instrução interna e podem
     // citar orçamento de anúncio; evidências podem citar o ticket médio.
-    const publicos = [titulo, ideia.oferta ?? "", ideia.mensagem ?? "", ideia.publico];
+    const publicos = [titulo, ideia.oferta ?? "", ideia.mensagem ?? "", ideia.publico,
+      // O plano é interno e pode descrever restrições (ex.: "sem desconto"). A copy de cada canal é pública.
+      ...(ideia.estrategia ? [...ideia.estrategia.online, ...ideia.estrategia.presencial].flatMap((a) => [a.publico, a.mensagem]) : [])];
     const cfm = publicos.map(ferirCFM).find(Boolean);
     if (cfm) { descartes.push(`${rotulo}: fere o CFM (${cfm})`); continue; }
     if (![...publicos, ideia.porque, ...ideia.evidencias, ...ideia.passos].every(textoSemDadoPessoal)) { descartes.push(`${rotulo}: parece ter dado pessoal`); continue; }

@@ -231,7 +231,7 @@ function CampanhasPage() {
     <div className="space-y-4">
       <div className="hpagehead">
         <h2>Campanhas de {NOME_MES[mes - 1]}</h2>
-        <p>Estratégias da IA cruzando o Brand Brain com os dados da clínica, mais as campanhas de base do mês a partir dos dados do cliente (CRM, WhatsApp, Instagram e anúncios) e das datas da especialidade. O painel sugere e monta o texto; quem envia é a equipe.</p>
+        <p>Planeje como atrair, atender e converter com ações digitais e presenciais conectadas. Revise os planos estratégicos e use os sinais do CRM, WhatsApp, Instagram e anúncios para escolher as ações do mês. A equipe confirma responsáveis, recursos e execução.</p>
         <div role="tablist" aria-label="Mês" className="mt-2 inline-grid grid-cols-2 gap-1 rounded-lg p-1" style={{ background: "var(--surface-2)" }}>
           {([0, 1] as const).map((o) => {
             const m = ((agora.getUTCMonth() + o) % 12) + 1;
@@ -250,7 +250,7 @@ function CampanhasPage() {
         <>
           <ResumoExecutivo
             frases={[
-              `${campanhas.filter((c) => !c.faltaDado).length} campanhas sugeridas para ${NOME_MES[mes - 1]}${datas.length ? `, com ${datas.length} data${datas.length === 1 ? "" : "s"} da especialidade` : ""}.`,
+              `${campanhas.filter((c) => !c.faltaDado).length} ações táticas sugeridas para ${NOME_MES[mes - 1]}${datas.length ? `, com ${datas.length} data${datas.length === 1 ? "" : "s"} da especialidade` : ""}.`,
               pot.respostas > 0 ? `Potencial estimado: ${n(pot.respostas)} respostas ou conversas e cerca de ${n(pot.consultas)} consultas${pot.custo ? `, com ${brl(pot.custo)} em anúncio` : ""}.` : "",
               base.data?.tem_crm ? (base.data.parados_90d > 0 ? `O CRM tem ${n(base.data.parados_90d)} leads parados há mais de 90 dias: é a base mais barata para trabalhar.` : "") : "Sem CRM ligado: as campanhas de reativação e retorno precisam dele.",
             ]}
@@ -275,6 +275,7 @@ function CampanhasPage() {
             )}
           </section>
 
+          <div><h3 className="text-base font-semibold">Ações táticas sugeridas pelos dados</h3><p className="mt-1 text-sm" style={{ color: "var(--ink-2)" }}>Estas ações e as datas acima seguem o mês selecionado. Use-as para compor a execução; elas não substituem o plano integrado da campanha.</p></div>
           {erro && <p className="text-sm" style={{ color: "var(--crit)" }}>{erro}</p>}
           {campanhas.length === 0 ? (
             <div className="hempty"><h2>Nenhuma campanha com base nos dados</h2><p>Sem CRM, WhatsApp e posts suficientes, o painel não inventa campanha. Ligue as fontes em Admin.</p></div>
