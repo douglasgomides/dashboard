@@ -24,6 +24,8 @@ import { Wallet, MessageCircle, Coins, Eye, MousePointerClick, Percent, PauseCir
 import { Painel, Kpi, BarraFina } from "@/components/visual";
 import { fmtFracao } from "@/lib/metricas";
 import { nomeObjetivo, objetivoNaoContaConversa } from "@/lib/rastreio-anuncios";
+import { GestorAnunciosIA } from "@/components/agentes-ia";
+import { useClientRole } from "@/hooks/use-client-role";
 
 export const Route = createFileRoute("/_authenticated/$clientId/anuncios")({
   component: AnunciosPage,
@@ -265,6 +267,7 @@ function ObjetivosDasCampanhas({ d }: { d: DiagnosticoAds }) {
 
 function AnunciosPage() {
   const { clientId } = Route.useParams();
+  const { podeEditar } = useClientRole(clientId);
   const dateRangeState = clientLayoutRoute.useSearch();
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
@@ -356,6 +359,7 @@ function AnunciosPage() {
 
       <MotivoParada clientId={clientId} />
       <ContaCompartilhada clientId={clientId} />
+      <GestorAnunciosIA clientId={clientId} podeEditar={podeEditar} />
       {suspeito && (
         <Faixa icone={AlertTriangle} cor="var(--crit)" alerta>
           {diag.rastreio?.mensagem}

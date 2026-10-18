@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { RegrasMidiaSap } from "@/components/sap-midia";
 import { VerbaSap } from "@/components/sap-verba-fidelizacao";
 import { EstrategiasIA } from "@/components/estrategias-ia";
+import { GestorAnunciosIA } from "@/components/agentes-ia";
 import { useClientRole } from "@/hooks/use-client-role";
 
 // Sistema de Aquisição · Mídia: regras do SAP sobre as campanhas (verba por consulta, fadiga, pausa, escala) e as
@@ -15,6 +16,7 @@ function MidiaSap() {
   const { podeEditar } = useClientRole(clientId);
   return (
     <div className="space-y-4">
+      <GestorAnunciosIA clientId={clientId} podeEditar={podeEditar} />
       <VerbaSap clientId={clientId} />
       <RegrasMidiaSap clientId={clientId} />
       <EstrategiasIA clientId={clientId} podeEditar={podeEditar} />

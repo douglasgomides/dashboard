@@ -24,6 +24,7 @@ import {
   type LucideIcon,
   ClipboardList,
   ListTodo,
+  Bot,
 } from "lucide-react";
 
 // Navegação do Hub: 5 categorias (Início, Social, Comercial, Oportunidades,
@@ -72,6 +73,7 @@ export const AREAS: NavArea[] = [
     Icone: Home,
     tabs: [
       { path: "", label: "Resumo", Icone: Activity },
+      { path: "/agentes", label: "Agentes de IA", Icone: Bot },
       { path: "/proximas-acoes", label: "Próximas ações", Icone: ListTodo },
       { path: "/campanhas", label: "Campanhas do mês", Icone: Megaphone },
       { path: "/oportunidades", label: "Oportunidades (score)", Icone: Target },

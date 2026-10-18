@@ -20,6 +20,9 @@ import { FONTES, padroesComerciais, validarPropostas, type Fonte, type PropostaB
 import { validarIdeias, TIPOS_IDEIA, type IdeiaCampanha } from "../../src/lib/campanhas-ia.js";
 import { CALENDARIO } from "../../src/lib/campanhas.js";
 import { grupoEspecialidade } from "../../src/lib/benchmark-estrategico.js";
+import { validarRecuperacao, validarAnuncios, validarConteudo, type PecaConteudo, type RecomendacaoAds, type SinalAds, type MensagemRecuperacao } from "../../src/lib/agentes-sugestoes.js";
+import { AGENTES } from "../../src/lib/agentes-catalogo.js";
+import { lerRecuperacao, lerAnuncios, lerConteudo } from "./agentes-leitura.js";
 import { MARCO_ACESSOS, evidenciaCriticos, mensagemPadrao, mensagemValida, situacaoCriticos, type ItemConfirmado, type ItemPendente } from "../../src/lib/agente-acessos.js";
 
 type Admin = SupabaseClient<any, any, any>;
@@ -81,9 +84,9 @@ export const FERRAMENTAS = {
     },
   }),
   "ia.gerar_json": ferramenta({
-    nome: "ia.gerar_json", descricao: "Texto ou classificação por IA, com custo registrado.", risco: "baixo", externa: true, timeoutMs: 50_000,
-    entrada: z.object({ sistema: z.string().min(20), entrada: z.string().min(1).max(20_000), finalidade: z.string(), max_tokens: z.number().int().min(100).max(2500).optional() }),
-    executar: async (admin, exec, e) => chamarIAJson(admin, { sistema: e.sistema, entrada: e.entrada, finalidade: e.finalidade, clientId: exec.client_id, execucaoId: exec.id, maxTokens: e.max_tokens ?? 700 }),
+    nome: "ia.gerar_json", descricao: "Texto ou classificação por IA, com custo registrado.", risco: "baixo", externa: true, timeoutMs: 95_000,
+    entrada: z.object({ sistema: z.string().min(20), entrada: z.string().min(1).max(20_000), finalidade: z.string(), max_tokens: z.number().int().min(100).max(4000).optional(), qualidade: z.enum(["padrao", "forte"]).optional() }),
+    executar: async (admin, exec, e) => chamarIAJson(admin, { sistema: e.sistema, entrada: e.entrada, finalidade: e.finalidade, clientId: exec.client_id, execucaoId: exec.id, maxTokens: e.max_tokens ?? 700, qualidade: e.qualidade }),
   }),
   "brain.ler_fontes": ferramenta({
     nome: "brain.ler_fontes", descricao: "Lê as fontes atuais da clínica para o Brand Brain (ficha, sessões, conversas, Instagram, banco de anúncios) e o que já está aprovado.", risco: "baixo", externa: false, timeoutMs: 20_000,
@@ -112,6 +115,31 @@ export const FERRAMENTAS = {
       const { error } = await admin.from("campanhas_ideias").insert(e.ideias.map((i) => ({ ...i, client_id: e.client_id, execucao_id: exec.id })));
       if (error) throw new Error(error.message);
       return { gravadas: e.ideias.length };
+    },
+  }),
+  "recuperacao.ler": ferramenta({
+    nome: "recuperacao.ler", descricao: "Escolhe por regra quem recuperar hoje (interesse sem agendar, esperando a clínica) e lê o tom da clínica e o resultado das mensagens anteriores.", risco: "baixo", externa: false, timeoutMs: 30_000,
+    entrada: z.object({ client_id: z.string().uuid() }),
+    executar: async (admin, _x, e) => lerRecuperacao(admin, e.client_id),
+  }),
+  "anuncios.ler": ferramenta({
+    nome: "anuncios.ler", descricao: "Compara cada campanha da Meta (7 dias contra 7 anteriores) e acha o que pausar, revisar, trocar criativo ou escalar.", risco: "baixo", externa: false, timeoutMs: 25_000,
+    entrada: z.object({ client_id: z.string().uuid() }),
+    executar: async (admin, _x, e) => lerAnuncios(admin, e.client_id),
+  }),
+  "conteudo.ler": ferramenta({
+    nome: "conteudo.ler", descricao: "Lê Brain, posts mais salvos, dúvidas reais, conversas, datas e o que a equipe usou ou descartou antes.", risco: "baixo", externa: false, timeoutMs: 25_000,
+    entrada: z.object({ client_id: z.string().uuid() }),
+    executar: async (admin, _x, e) => lerConteudo(admin, e.client_id),
+  }),
+  "sugestoes.gravar": ferramenta({
+    nome: "sugestoes.gravar", descricao: "Grava o que o agente preparou para a equipe (estado proposta; nada é enviado, publicado ou alterado).", risco: "baixo", externa: false, timeoutMs: 10_000,
+    entrada: z.object({ client_id: z.string().uuid(), agente: z.enum(["recuperacao", "anuncios", "conteudo"]), itens: z.array(z.record(z.any())).max(20) }),
+    executar: async (admin, exec, e) => {
+      if (!e.itens.length) return { gravadas: 0 };
+      const { error } = await admin.from("sugestoes_agentes").insert(e.itens.map((i) => ({ ...i, client_id: e.client_id, agente: e.agente, execucao_id: exec.id })));
+      if (error) throw new Error(error.message);
+      return { gravadas: e.itens.length };
     },
   }),
   // ClickUp: API oficial v2 com token pessoal (CLICKUP_API_TOKEN no servidor). Sem token, a ferramenta responde
@@ -547,26 +575,188 @@ const FLUXO_GROWTH: Fluxo = {
   ],
 };
 
-export const FLUXOS: Record<string, Fluxo> = { [FLUXO_ACESSOS.id]: FLUXO_ACESSOS, [FLUXO_BRAIN.id]: FLUXO_BRAIN, [FLUXO_GROWTH.id]: FLUXO_GROWTH };
+// ---------------------------------------------------------------- fluxos 4 a 6: Recuperação, Anúncios, Conteúdo
+// Mesmo desenho: a regra escolhe (quem, qual campanha); a IA escreve no tom do Brain; o servidor valida; grava como
+// proposta. Nada sai do Hub sem uma pessoa.
 
-/** Agendamento (duas vezes por dia): põe na fila a leitura do Brand Brain de cada clínica com o módulo, se a última
- *  leitura tem mais de 11 h e não há uma em andamento. A leitura só gera sugestões; quem aprova é uma pessoa. */
-export async function enfileirarBrain(admin: Admin): Promise<{ enfileiradas: number; puladas: number }> {
-  const { data: mods, error } = await admin.from("cliente_modulos").select("client_id").eq("modulo", "brand_brain").in("status", ["ativo", "beta"]);
+const REGRAS_TEXTO = `Português do Brasil, natural, como gente fala. Frases curtas. Sem travessão. Sem jargão de marketing ("transforme", "jornada", "incrível", "não perca"). Nada de preço, desconto, condição especial, brinde, sorteio, "grátis", antes e depois ou promessa de resultado (CFM). Nada de diagnóstico ou indicação de tratamento individual. Nunca escreva nome, telefone, e-mail ou @ de paciente.`;
+
+const SISTEMA_RECUPERACAO = `Você escreve, para a secretária de uma clínica médica, a mensagem de WhatsApp que retoma a conversa com cada pessoa da lista. A secretária revisa e envia.
+Para cada caso: leia o que aconteceu e escreva UMA mensagem curta (2 a 4 frases), específica para aquela conversa: retome o assunto exato, responda a objeção com informação (sem preço e sem pressão) e termine com uma pergunta fácil de responder ou dois horários entre [colchetes] para a secretária preencher. Comece com "Oi, [nome]!". Se a pessoa estava esperando resposta da clínica, peça desculpa pela demora em uma frase.
+Use o tom do Brand Brain. Se houver resultado das mensagens anteriores, siga o estilo que teve mais resposta.
+${REGRAS_TEXTO}
+Responda SOMENTE JSON: {"mensagens":[{"conversa_id":"...","mensagem":"...","por_que":"em 1 frase, por que esta abordagem"}]}`;
+
+const FLUXO_RECUPERACAO: Fluxo = {
+  id: "recuperacao_pacientes", agente: "recuperacao", nome: "Recuperação de pacientes: lista do dia com mensagem pronta",
+  objetivo: "Achar quem teve interesse e não agendou ou ficou esperando a clínica, e preparar a mensagem individual. A secretária revisa e envia; o sistema mede sozinho se respondeu e se agendou.",
+  passos: [
+    {
+      nome: "ler", descricao: "A regra escolhe quem recuperar hoje e lê o tom da clínica e o que funcionou antes", ferramenta: "recuperacao.ler", risco: "baixo",
+      executar: async (c) => {
+        const r = await c.usar("recuperacao.ler", { client_id: c.exec.client_id });
+        if (!r.casos.length) return { tipo: "concluir", resultado: { mensagens: 0, motivo: "Ninguém para recuperar hoje (ou as conversas ainda não foram lidas pela auditoria)." } };
+        return { tipo: "seguir", saida: { casos: r.casos.length }, contexto: { casos: r.casos.map((x: any) => ({ conversa_id: x.conversa_id, motivo: x.motivo, prioridade: x.prioridade, dias: x.dias })),
+          texto: `### Clínica\n${r.ficha}\n\n### Tom e regras da clínica (Brand Brain)\n${r.brain.texto || "(sem Brain aprovado: use tom acolhedor e direto)"}\n\n${r.aprendizado}\n\n### Lista de hoje\n${r.casos.map((x: any) => x.texto).join("\n\n")}`.slice(0, 16_000) } };
+      },
+    },
+    {
+      nome: "escrever", descricao: "A IA escreve cada mensagem; o servidor descarta o que fere o CFM ou tem dado pessoal", ferramenta: "ia.gerar_json", risco: "baixo",
+      executar: async (c) => {
+        if (!iaDisponivel()) return { tipo: "falhar", erro: "IA não configurada no servidor (OPENAI_API_KEY ou ANTHROPIC_API_KEY)." };
+        const casos = c.exec.contexto.casos as { conversa_id: string }[];
+        const r = await c.usar("ia.gerar_json", { sistema: SISTEMA_RECUPERACAO, entrada: c.exec.contexto.texto, finalidade: "agente_recuperacao", max_tokens: 3000, qualidade: "forte" });
+        const { ok, descartes } = validarRecuperacao(r.json, new Set(casos.map((x) => x.conversa_id)));
+        return { tipo: "seguir", saida: { mensagens: ok.length, descartes, modelo: r.modelo }, contexto: { mensagens: ok, descartes, texto: null } };
+      },
+    },
+    {
+      nome: "gravar", descricao: "Grava a lista do dia para a secretária", ferramenta: "sugestoes.gravar", risco: "baixo", idempotente: true,
+      executar: async (c) => {
+        const casos = new Map((c.exec.contexto.casos as { conversa_id: string; motivo: string; prioridade: number; dias: number }[]).map((x) => [x.conversa_id, x]));
+        const ROT: Record<string, string> = { aguardando_clinica: "Esperando resposta da clínica", pediu_preco: "Pediu valor e não agendou", interesse: "Teve interesse e não agendou" };
+        const itens = (c.exec.contexto.mensagens as MensagemRecuperacao[]).map((m) => {
+          const k = casos.get(m.conversa_id)!;
+          return { tipo: k.motivo, titulo: `${ROT[k.motivo] ?? "Recuperar"} · parada há ${k.dias} dia${k.dias === 1 ? "" : "s"}`, detalhe: m.por_que || null, mensagem: m.mensagem, conversa_id: m.conversa_id, prioridade: k.prioridade };
+        });
+        const r = await c.usar("sugestoes.gravar", { client_id: c.exec.client_id, agente: "recuperacao", itens });
+        return { tipo: "concluir", resultado: { mensagens: r.gravadas, descartadas: (c.exec.contexto.descartes as string[]).length, revisar_em: "Atendimento e vendas → WhatsApp" } };
+      },
+    },
+  ],
+};
+
+const SISTEMA_ANUNCIOS = `Você é gestor de tráfego sênior de clínicas médicas no Brasil. Para cada sinal (campanha com número fora do normal), escreva a recomendação para o gestor de tráfego executar no Gerenciador de Anúncios.
+Tipos de sinal: sem_resultado (gastou e não trouxe conversa nem lead), custo_subiu (custo por resultado subiu mais de 40%), fadiga (frequência alta, o público já viu demais), escalar (custo bem abaixo da média, com volume).
+Para cada um: "titulo" (ação em até 10 palavras), "acao" (o que fazer e por quê, citando os números do sinal), "passos" (2 a 5 passos práticos e concretos no Gerenciador: público, posicionamento, orçamento em %, criativo, objetivo), e "copies" (para sem_resultado, custo_subiu e fadiga: 2 copies novas de anúncio no tom do Brand Brain, cada uma com "gancho" (primeira frase que para a rolagem), "texto" (2 a 4 frases) e "cta"; para escalar: lista vazia).
+Escalar = sugerir aumento gradual (15 a 25% a cada 3 dias), nunca dobrar. Não invente número que não está no sinal.
+${REGRAS_TEXTO}
+Responda SOMENTE JSON: {"recomendacoes":[{"campanha_id":"...","titulo":"...","acao":"...","passos":["..."],"copies":[{"gancho":"...","texto":"...","cta":"..."}]}]}`;
+
+const FLUXO_ANUNCIOS: Fluxo = {
+  id: "gestor_anuncios", agente: "anuncios", nome: "Gestor de anúncios: o que pausar, revisar, trocar ou escalar",
+  objetivo: "Comparar cada campanha da Meta com a semana anterior e preparar a recomendação com copies novas. O gestor de tráfego decide e faz; o agente não mexe na conta nem no orçamento.",
+  passos: [
+    {
+      nome: "ler", descricao: "A regra compara 7 dias contra 7 anteriores por campanha", ferramenta: "anuncios.ler", risco: "baixo",
+      executar: async (c) => {
+        const r = await c.usar("anuncios.ler", { client_id: c.exec.client_id });
+        if (!r.sinais.length) return { tipo: "concluir", resultado: { recomendacoes: 0, motivo: "Nenhuma campanha fora do normal nos últimos 7 dias (ou a conta não tem gasto)." } };
+        const sinais = r.sinais as SinalAds[];
+        return { tipo: "seguir", saida: { sinais: sinais.map((s) => `${s.tipo}: ${s.campanha}`) }, contexto: { sinais,
+          texto: `### Clínica\n${r.ficha}\n\n### Brand Brain (tom, público e o que funciona em criativo)\n${r.brain.texto || "(sem Brain aprovado)"}\n\n${r.anteriores ? `### Recomendações anteriores (30 dias)\n${r.anteriores}\n\n` : ""}### Sinais\n${sinais.map((s) => `campanha_id: ${s.campanha_id}\nCampanha: ${s.campanha}\nSinal: ${s.tipo}\n${s.evidencias.join("\n")}`).join("\n\n")}` } };
+      },
+    },
+    {
+      nome: "escrever", descricao: "A IA escreve a recomendação e as copies; o servidor confere CFM", ferramenta: "ia.gerar_json", risco: "baixo",
+      executar: async (c) => {
+        if (!iaDisponivel()) return { tipo: "falhar", erro: "IA não configurada no servidor (OPENAI_API_KEY ou ANTHROPIC_API_KEY)." };
+        const sinais = c.exec.contexto.sinais as SinalAds[];
+        const r = await c.usar("ia.gerar_json", { sistema: SISTEMA_ANUNCIOS, entrada: c.exec.contexto.texto, finalidade: "agente_anuncios", max_tokens: 3000, qualidade: "forte" });
+        const { ok, descartes } = validarAnuncios(r.json, new Set(sinais.map((s) => s.campanha_id)));
+        return { tipo: "seguir", saida: { recomendacoes: ok.length, descartes, modelo: r.modelo }, contexto: { recomendacoes: ok, descartes, texto: null } };
+      },
+    },
+    {
+      nome: "gravar", descricao: "Grava as recomendações para o gestor de tráfego", ferramenta: "sugestoes.gravar", risco: "baixo", idempotente: true,
+      executar: async (c) => {
+        const sinais = new Map((c.exec.contexto.sinais as SinalAds[]).map((s) => [s.campanha_id, s]));
+        const itens = (c.exec.contexto.recomendacoes as RecomendacaoAds[]).map((r) => {
+          const s = sinais.get(r.campanha_id)!;
+          return { tipo: s.tipo, titulo: r.titulo, detalhe: r.acao, evidencias: [`Campanha: ${s.campanha}`, ...s.evidencias], campanha_id: r.campanha_id, prioridade: s.prioridade, conteudo: { passos: r.passos, copies: r.copies } };
+        });
+        const r = await c.usar("sugestoes.gravar", { client_id: c.exec.client_id, agente: "anuncios", itens });
+        return { tipo: "concluir", resultado: { recomendacoes: r.gravadas, revisar_em: "Anúncios" } };
+      },
+    },
+  ],
+};
+
+const SISTEMA_CONTEUDO = `Você é o roteirista sênior de Instagram de uma clínica médica, especialista em conteúdo que o médico grava sozinho com o celular e que o público SALVA e COMPARTILHA. Entregue peças prontas para usar, não ideias.
+FOCO DESTA RODADA: {FOCO}
+Como escrever:
+- Tema: tire de uma dúvida real, de uma objeção das conversas, do que o público procura ou de um tema que já foi muito salvo. Diga de onde veio em "evidencias" (com número) e quais itens do Brain usou em "brain".
+- Gancho: a primeira frase falada e escrita na tela, até 12 palavras, que para a rolagem: pergunta direta, erro comum, mito, número, ou "se você [situação], ...". Nada genérico como "Você sabia?" sozinho.
+- Reels: 30 a 60 segundos, 4 a 8 cenas. Em cada cena: "fala" (exatamente o que o médico diz, em primeira pessoa, como conversa), "tela" (texto curto na tela, até 6 palavras) e "visual" (o que aparece: médico falando para a câmera, mostrando algo, b-roll do consultório). Uma ideia por cena. Termine com a chamada.
+- Carrossel: 6 a 9 slides. Slide 1 = gancho forte; do 2 ao penúltimo, uma ideia por slide com "titulo" curto e "texto" de até 30 palavras; último = resumo + chamada.
+- Legenda: 3 a 6 linhas, começa reforçando o gancho, entrega um ponto extra, fecha com a chamada. Pode usar quebras de linha.
+- Chamada: salvar, compartilhar com alguém, comentar uma palavra ou chamar no direct/WhatsApp para tirar dúvida. Sem oferta.
+- Hashtags: 3 a 6, específicas da especialidade e da cidade quando houver.
+- "objetivo": alcance, salvamento, conversa ou autoridade.
+- Use o tom e as palavras do Brand Brain. Siga o estilo das peças que a equipe USOU e evite o das DESCARTADAS.
+${REGRAS_TEXTO}
+Responda SOMENTE JSON: {"pecas":[{"formato":"reels","titulo":"...","objetivo":"salvamento","gancho":"...","cenas":[{"fala":"...","tela":"...","visual":"..."}],"slides":[],"legenda":"...","cta":"...","hashtags":["#..."],"por_que":"...","evidencias":["..."],"brain":["audiencia.duvida_x"]}]}`;
+
+const FOCOS_CONTEUDO: [string, string][] = [
+  ["reels", "3 roteiros de Reels completos, de ângulos diferentes (uma dúvida real, uma objeção ou mito, um tema que já foi muito salvo)."],
+  ["carrossel", "3 carrosséis completos, de ângulos diferentes (um guia prático, um erro comum, uma resposta a objeção das conversas)."],
+];
+
+const FLUXO_CONTEUDO: Fluxo = {
+  id: "conteudo_semana", agente: "conteudo", nome: "Roteirista de conteúdo: a semana pronta para gravar",
+  objetivo: "Entregar roteiros de Reels cena a cena e carrosséis slide a slide, com legenda e chamada, a partir do Brain, das dúvidas reais e do que mais foi salvo. A equipe revisa, grava e publica.",
+  passos: [
+    {
+      nome: "ler", descricao: "Lê Brain, posts mais salvos, dúvidas, conversas, datas e o que foi usado ou descartado", ferramenta: "conteudo.ler", risco: "baixo",
+      executar: async (c) => {
+        const r = await c.usar("conteudo.ler", { client_id: c.exec.client_id });
+        if (r.blocos < 2) return { tipo: "concluir", resultado: { pecas: 0, motivo: "Pouco dado ainda (Brain, Instagram ou conversas)." } };
+        return { tipo: "seguir", saida: { blocos: r.blocos }, contexto: { texto: r.texto, chaves: r.chaves, titulos: r.titulos, pecas: [], descartes: [] } };
+      },
+    },
+    ...FOCOS_CONTEUDO.map(([foco, texto]): Passo => ({
+      nome: `escrever_${foco}`, descricao: `A IA escreve ${foco === "reels" ? "os Reels" : "os carrosséis"}; o servidor confere CFM, formato e dado pessoal`, ferramenta: "ia.gerar_json", risco: "baixo",
+      executar: async (c) => {
+        if (!iaDisponivel()) return { tipo: "falhar", erro: "IA não configurada no servidor (OPENAI_API_KEY ou ANTHROPIC_API_KEY)." };
+        const ja = c.exec.contexto.pecas as PecaConteudo[];
+        const r = await c.usar("ia.gerar_json", { sistema: SISTEMA_CONTEUDO.replace("{FOCO}", texto), finalidade: `agente_conteudo_${foco}`, max_tokens: 4000, qualidade: "forte",
+          entrada: `${c.exec.contexto.texto}${ja.length ? `\n\n### Já escritas nesta rodada (não repita o tema)\n${ja.map((p) => `- ${p.titulo}`).join("\n")}` : ""}` });
+        const { ok, descartes } = validarConteudo(r.json, c.exec.contexto.chaves as string[], [...(c.exec.contexto.titulos as string[]), ...ja.map((p) => p.titulo)]);
+        return { tipo: "seguir", saida: { pecas: ok.length, descartes, modelo: r.modelo }, contexto: { pecas: [...ja, ...ok], descartes: [...(c.exec.contexto.descartes as string[]), ...descartes] } };
+      },
+    })),
+    {
+      nome: "gravar", descricao: "Grava as peças para a equipe revisar", ferramenta: "sugestoes.gravar", risco: "baixo", idempotente: true,
+      executar: async (c) => {
+        const itens = (c.exec.contexto.pecas as PecaConteudo[]).map((p, n) => ({ tipo: p.formato, titulo: p.titulo, detalhe: p.por_que || null, evidencias: p.evidencias, brain: p.brain, conteudo: p, prioridade: 10 - n }));
+        const r = await c.usar("sugestoes.gravar", { client_id: c.exec.client_id, agente: "conteudo", itens });
+        return { tipo: "concluir", resultado: { pecas: r.gravadas, descartadas: (c.exec.contexto.descartes as string[]).length, revisar_em: "Conteúdo → Ideias" } };
+      },
+    },
+  ],
+};
+
+export const FLUXOS: Record<string, Fluxo> = Object.fromEntries([FLUXO_ACESSOS, FLUXO_BRAIN, FLUXO_GROWTH, FLUXO_RECUPERACAO, FLUXO_ANUNCIOS, FLUXO_CONTEUDO].map((f) => [f.id, f]));
+
+/** Agendamento: para cada agente do catálogo (src/lib/agentes-catalogo.ts), põe na fila a rodada de cada clínica com o
+ *  módulo do agente quando a última rodada é mais velha que o intervalo e não há uma em andamento. Antes, mede sozinho o
+ *  resultado das sugestões de recuperação (sugestoes_medir). Os agentes só preparam; quem aprova é uma pessoa. */
+export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas: number; puladas: number; por_agente: Record<string, number>; medidas: number }> {
+  const { data: medidas } = await admin.rpc("sugestoes_medir");
+  const { data: mods, error } = await admin.from("cliente_modulos").select("client_id, modulo").in("status", ["ativo", "beta"]);
   if (error) throw new Error(error.message);
-  const limite = Date.now() - 11 * 3_600_000;
   let enfileiradas = 0, puladas = 0;
-  for (const { client_id } of (mods ?? []) as { client_id: string }[]) {
-    const { data: ult } = await admin.from("agente_execucoes").select("estado, criado_em").eq("client_id", client_id).eq("fluxo", FLUXO_BRAIN.id)
-      .order("criado_em", { ascending: false }).limit(1).maybeSingle();
-    const ativa = ult && !["concluida", "falhou", "cancelada"].includes(ult.estado as string);
-    if (ativa || (ult && new Date(ult.criado_em as string).getTime() > limite)) { puladas++; continue; }
-    const { error: e } = await admin.from("agente_execucoes").insert({ client_id, agente: FLUXO_BRAIN.agente, fluxo: FLUXO_BRAIN.id, objetivo: `${FLUXO_BRAIN.objetivo} (agendado)`, criado_por: null });
-    if (e) { if (/duplicate/i.test(e.message)) { puladas++; continue; } throw new Error(e.message); }
-    enfileiradas++;
+  const por_agente: Record<string, number> = {};
+  for (const ag of AGENTES) {
+    const fluxo = FLUXOS[ag.fluxo];
+    if (!fluxo) continue;
+    const clientes = [...new Set(((mods ?? []) as { client_id: string; modulo: string }[]).filter((m) => m.modulo === ag.modulo).map((m) => m.client_id))];
+    const limite = Date.now() - ag.intervaloHoras * 3_600_000;
+    for (const client_id of clientes) {
+      const { data: ult } = await admin.from("agente_execucoes").select("estado, criado_em").eq("client_id", client_id).eq("fluxo", fluxo.id)
+        .order("criado_em", { ascending: false }).limit(1).maybeSingle();
+      const ativa = ult && !["concluida", "falhou", "cancelada"].includes(ult.estado as string);
+      if (ativa || (ult && new Date(ult.criado_em as string).getTime() > limite)) { puladas++; continue; }
+      const { error: e } = await admin.from("agente_execucoes").insert({ client_id, agente: fluxo.agente, fluxo: fluxo.id, objetivo: `${fluxo.objetivo} (agendado)`, criado_por: null });
+      if (e) { if (/duplicate/i.test(e.message)) { puladas++; continue; } throw new Error(e.message); }
+      enfileiradas++;
+      por_agente[ag.id] = (por_agente[ag.id] ?? 0) + 1;
+    }
   }
-  return { enfileiradas, puladas };
+  return { enfileiradas, puladas, por_agente, medidas: Number(medidas ?? 0) };
 }
+/** Nome antigo, usado pelo agendamento do n8n ("brain_enfileirar"): agora enfileira todos os agentes. */
+export const enfileirarBrain = enfileirarAgendados;
 /** Catálogo para a Central (sem funções). */
 export function catalogoFluxos() {
   return Object.values(FLUXOS).map((f) => ({ id: f.id, agente: f.agente, nome: f.nome, objetivo: f.objetivo, passos: f.passos.map((p) => ({ nome: p.nome, descricao: p.descricao, risco: p.risco, ferramenta: p.ferramenta ?? null })) }));

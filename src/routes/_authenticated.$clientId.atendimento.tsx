@@ -15,6 +15,8 @@ import { fmtNum } from "@/lib/format";
 import { CustoWhatsapp } from "@/components/custo-whatsapp";
 import { ConversasWhatsapp } from "@/components/conversas-whatsapp";
 import { useAuth } from "@/hooks/use-auth";
+import { useClientRole } from "@/hooks/use-client-role";
+import { RecuperarHoje } from "@/components/agentes-ia";
 
 // Atendimento no WhatsApp: uma tela só com duas abas. "Números" (volume, espera, equipe) e, para a equipe,
 // "Conversas e auditoria" (cada conversa com a leitura e a auditoria comercial), que antes era /conversas.
@@ -71,11 +73,13 @@ function AtendimentoPage() {
   const { clientId } = Route.useParams();
   const { aba, conversa } = Route.useSearch();
   const { isAdmin } = useAuth();
+  const { podeEditar } = useClientRole(clientId);
   const navigate = Route.useNavigate();
   const atual = aba === "conversas" && isAdmin ? "conversas" : "numeros";
   const ir = (a: "numeros" | "conversas") => navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, aba: a === "conversas" ? "conversas" : undefined, conversa: undefined }) as never });
   return (
     <div className="space-y-4">
+      <RecuperarHoje clientId={clientId} podeEditar={podeEditar} />
       {isAdmin && (
         <div className="flex gap-1 rounded-lg border p-1 text-sm" role="tablist" aria-label="Atendimento no WhatsApp" style={{ borderColor: "var(--border)", width: "fit-content", background: "var(--surface)" }}>
           {([["numeros", "Números do atendimento"], ["conversas", "Conversas e auditoria"]] as const).map(([id, rot]) => (

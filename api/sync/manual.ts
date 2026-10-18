@@ -88,19 +88,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   });
 
   // Agendamento do n8n (SYNC_SECRET), restrito a duas ações que só GERAM SUGESTÕES para revisão humana:
-  // - "brain_enfileirar": coloca na fila a leitura do Brand Brain das clínicas com o módulo cuja última leitura tem mais de 11 h;
+  // - "brain_enfileirar" (ou "agendar"): mede o resultado das sugestões e põe na fila a rodada de cada agente do catálogo
+  //   (Brain, Recuperação, Anúncios, Conteúdo, Campanhas) das clínicas cuja última rodada passou do intervalo;
   // - "rodar": roda a fila de agentes (aprovações continuam esperando uma pessoa; nada é enviado a clínica ou paciente).
   const SYNC_SECRET = process.env.SYNC_SECRET;
   if (SYNC_SECRET && token === SYNC_SECRET) {
     const corpo = (req.body ?? {}) as { alvo?: string; acao?: string };
-    if (corpo.alvo !== "agentes" || !["rodar", "brain_enfileirar"].includes(corpo.acao ?? "")) { res.status(403).json({ error: "O segredo do agendamento só roda a fila de agentes" }); return; }
+    if (corpo.alvo !== "agentes" || !["rodar", "brain_enfileirar", "agendar"].includes(corpo.acao ?? "")) { res.status(403).json({ error: "O segredo do agendamento só roda a fila de agentes" }); return; }
     try {
-      if (corpo.acao === "brain_enfileirar") {
+      if (corpo.acao === "brain_enfileirar" || corpo.acao === "agendar") {
         const r = await enfileirarBrain(admin);
         res.status(200).json({ alvo: "agentes", ok: true, agendado: true, ...r });
         return;
       }
-      const r = await rodarAgentes(admin, { execucaoId: null, maxPassos: 8, prazoMs: 45_000 });
+      // Agendado: até 3 min de passos novos por chamada (um passo de IA pode levar mais 1,5 min; a função aceita 5), para a fila do dia andar em poucas chamadas.
+      const r = await rodarAgentes(admin, { execucaoId: null, maxPassos: 8, prazoMs: 180_000 });
       res.status(200).json({ alvo: "agentes", ok: true, agendado: true, ...r });
     } catch (e) {
       res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
