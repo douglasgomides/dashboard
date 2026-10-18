@@ -1,7 +1,7 @@
 import { ProductBrand } from "@/components/product-brand";
 import { createFileRoute, Outlet, redirect, Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, Brain, ClipboardCheck, FileText, LayoutDashboard, Plug, Scale, Users } from "lucide-react";
+import { Bot, Brain, ClipboardCheck, FileText, Inbox, LayoutDashboard, Plug, Scale, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { LogoutButton } from "@/components/logout-button";
 import { TrocaProduto } from "@/components/troca-produto";
@@ -17,6 +17,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
 
 // Admin no MESMO layout do painel do cliente (barra lateral, tipografia, cartões): parece parte do mesmo produto.
 const ITENS = [
+  { to: "/admin/caixa", label: "Caixa de entrada", Icone: Inbox },
   { to: "/admin", label: "Clientes do Nexo", Icone: LayoutDashboard, exato: true },
   { to: "/admin/referencia", label: "Referência entre clientes", Icone: Scale },
   { to: "/admin/conferencia", label: "Conferência de dados", Icone: ClipboardCheck },
@@ -28,6 +29,7 @@ const ITENS = [
 ] as const;
 
 const TITULO: Record<string, string> = {
+  "/admin/caixa": "Caixa de entrada",
   "/admin": "Clientes do Nexo",
   "/admin/referencia": "Referência entre clientes",
   "/admin/conferencia": "Conferência de dados",

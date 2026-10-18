@@ -17,6 +17,9 @@ jobs:
       VITE_SUPABASE_PUBLISHABLE_KEY: fake-public-test-key
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          # Dois testes comparam com um commit antigo (scripts/baseline-477eb43.ts): precisa do histórico.
+          fetch-depth: 0
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: 24
@@ -24,8 +27,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run typecheck
-      - run: npx eslint src/components/product-brand.tsx src/components/product-preview.tsx src/components/product-decisions.tsx src/components/sap-offer.tsx src/components/sap-week-overview.tsx src/components/sap-inicio-clinica.tsx src/components/sap-portfolio.tsx src/components/sap-leitura.tsx src/components/auditoria-comercial.tsx src/components/experimento-semana.tsx src/components/next-best-action.tsx src/components/resumo-do-mes.tsx src/lib/nav.ts src/routes/_authenticated.sap.index.tsx src/components/sap-tarefas.tsx 'src/routes/_authenticated.sap.$clientId.index.tsx' src/lib/sap-offer.ts src/routes/conhecer.tsx src/routes/login.tsx src/components/app-shell.tsx src/routes/_authenticated.admin.tsx src/routes/_authenticated.sap.tsx src/lib/product-copy.ts src/lib/login-destination.ts scripts/verify-nexo-interface.mjs scripts/capture-product-previews.mjs
-      - run: npx tsx scripts/test-nexo-navigation.ts
+      - run: npm run lint
+      - run: npm test
       - run: npx playwright install --with-deps chromium
       - run: node scripts/verify-nexo-interface.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

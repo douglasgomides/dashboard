@@ -51,7 +51,10 @@ const estiloInput: React.CSSProperties = {
 };
 
 // O token do WTS não chega ao navegador (getClient usa colunas explícitas), por isso fica fora do tipo.
-export function ClientProfileForm({ client }: { client: Omit<Tables<"clients">, "wts_api_token"> }) {
+// Só as colunas que getClient entrega (sem tokens e segredos da tabela clients).
+type ClienteDoPerfil = Pick<Tables<"clients">, "id" | "name" | "specialty" | "instagram_handle" | "cfm_score_status" | "active" | "created_at" | "meta_ad_account_id" | "wts_company_id" | "avatar_url" | "wts_department_ids" | "em_onboarding">;
+
+export function ClientProfileForm({ client }: { client: ClienteDoPerfil }) {
   const queryClient = useQueryClient();
   const arquivoRef = useRef<HTMLInputElement>(null);
 
