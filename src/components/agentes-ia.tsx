@@ -9,7 +9,7 @@ import { Bot, Brain, CalendarPlus, CheckCircle2, ChevronDown, Filter, Headset, L
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useClientRole } from "@/hooks/use-client-role";
-import { rodarFluxoAteFim } from "@/lib/agentes-data";
+import { rodarFluxoAteFim, NOME_ESTADO, type EstadoExecucao } from "@/lib/agentes-data";
 import { AGENTES, type AgenteCatalogo, type IdAgente } from "@/lib/agentes-catalogo";
 import { pecaParaTexto, type CopyAnuncio, type PecaConteudo } from "@/lib/agentes-sugestoes";
 import { duracao, resumoPiloto } from "@/lib/atendente";
@@ -38,6 +38,7 @@ const primeiro = (nome?: string | null) => (nome ?? "").trim().split(/\s+/)[0] |
 function useSugestoes(clientId: string, ag: Sugestao["agente"], dias = 14) {
   return useQuery({
     queryKey: ["sugestoes-agentes", clientId, ag],
+    retry: false,
     queryFn: async () => {
       const sel = ag === "recuperacao" ? "*, conversa:conversas(canal, pessoa:pessoas(nome))" : "*";
       const { data, error } = await db.from("sugestoes_agentes").select(sel).eq("client_id", clientId).eq("agente", ag)
@@ -79,7 +80,7 @@ function Cabecalho({ a, clientId, ultima, aoTerminar }: { a: AgenteCatalogo; cli
       <div className="min-w-0">
         <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Bot size={16} aria-hidden style={{ color: "var(--accent)" }} /> {a.nome}</h3>
         <p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>{a.entrega}</p>
-        <p className="mt-0.5 text-[11px]" style={{ color: "var(--muted)" }}>Roda sozinho: {a.frequencia.toLowerCase()}{ultima ? ` · última entrega ${ha(ultima)}` : ""} · {a.quemAprova}</p>
+        <p className="mt-0.5 text-[11px]" style={{ color: "var(--muted)" }}>Frequência prevista: {a.frequencia.toLowerCase()}{ultima ? ` · última entrega ${ha(ultima)}` : ""} · {a.quemAprova}</p>
         {andando && <p className="mt-1 text-xs" style={{ color: "var(--muted)" }} aria-live="polite">{andando}</p>}
         {erro && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{erro}</p>}
       </div>
@@ -305,7 +306,20 @@ function CartaoAnuncio({ s, clientId, podeEditar, decidir }: { s: Sugestao; clie
 // ---------------------------------------------------------------- Roteirista de conteúdo
 
 export function RoteirosProntos({ clientId, podeEditar }: { clientId: string; podeEditar: boolean }) {
+  const { isAdmin } = useAuth();
   const q = useSugestoes(clientId, "conteudo", 21);
+  const ultimaExecucao = useQuery({
+    queryKey: ["roteirista-execucao", clientId],
+    enabled: isAdmin,
+    retry: false,
+    queryFn: async () => {
+      const { data, error } = await db.from("agente_execucoes")
+        .select("estado,atualizado_em").eq("client_id", clientId).eq("fluxo", "conteudo_semana")
+        .order("atualizado_em", { ascending: false }).limit(1).maybeSingle();
+      if (error) throw error;
+      return data as { estado: EstadoExecucao; atualizado_em: string } | null;
+    },
+  });
   const decidir = useDecidir(clientId, "conteudo");
   const pautas = usePautas(clientId);
   const a = agente("conteudo");
@@ -322,10 +336,23 @@ export function RoteirosProntos({ clientId, podeEditar }: { clientId: string; po
   }
   return (
     <Secao id="ag-conteudo">
-      <Cabecalho a={a} clientId={clientId} ultima={itens[0]?.criado_em ?? null} aoTerminar={() => q.refetch()} />
-      <Lista itens={itens} vazio="Nenhum roteiro aberto. O agente entrega a próxima semana na segunda-feira." render={(s) => (
+      <Cabecalho a={a} clientId={clientId} ultima={itens[0]?.criado_em ?? null} aoTerminar={() => { void q.refetch(); if (isAdmin) void ultimaExecucao.refetch(); }} />
+      {q.isPending ? <p role="status">Carregando roteiros…</p> : q.isError ? (
+        <div role="alert" className="space-y-2 text-sm">
+          <p>Não foi possível carregar os roteiros. Isso não confirma ausência de entregas.</p>
+          <button type="button" className="btn" onClick={() => void q.refetch()}>Tentar carregar roteiros novamente</button>
+        </div>
+      ) : <Lista itens={itens} vazio={isAdmin ? "Nenhum roteiro disponível para revisão. Você pode iniciar uma rodada em Rodar agora." : "Nenhum roteiro disponível para revisão. A equipe Doctor Creator pode verificar o agente e preparar uma nova rodada."} render={(s) => (
         <CartaoPeca key={s.id} s={s} podeEditar={podeEditar} decidir={(e) => decidir(s.id, e)} levar={podeEditar && !noPlanejador.has(`agente:${s.id}`) ? () => levar(s) : undefined} />
-      )} />
+      )} />}
+      {isAdmin && ultimaExecucao.isSuccess && (
+        <p className="text-xs" style={{ color: "var(--muted)" }}>
+          {ultimaExecucao.data
+            ? `Última execução: ${NOME_ESTADO[ultimaExecucao.data.estado] ?? "estado indisponível"} · ${ha(ultimaExecucao.data.atualizado_em)}.`
+            : "Ainda não há execução do Roteirista registrada para esta clínica."}
+        </p>
+      )}
+      {isAdmin && ultimaExecucao.isError && <p className="text-xs">Histórico do Roteirista indisponível.</p>}
     </Secao>
   );
 }

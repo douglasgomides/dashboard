@@ -220,9 +220,10 @@ async function donosDoPerfil(clientId: string): Promise<string[]> {
 }
 
 export async function getPatientQuestions(clientId: string, limit = 200) {
+  // A FK explícita evita ambiguidade quando a FK composta de isolamento também existe.
   const { data, error } = await supabase
     .from("instagram_comments")
-    .select("*, instagram_posts(caption, permalink, thumbnail_url, posted_at, tema)")
+    .select("*, instagram_posts!instagram_comments_instagram_post_id_fkey(caption, permalink, thumbnail_url, posted_at, tema)")
     .eq("client_id", clientId)
     .eq("is_question", true)
     .order("commented_at", { ascending: false, nullsFirst: false })
@@ -565,7 +566,7 @@ export async function getComentariosVozDoPaciente(clientId: string, start: strin
   const [{ data, error }, donos] = await Promise.all([
     supabase
       .from("instagram_comments")
-      .select("id, text, like_count, instagram_post_id, commented_at, author_username, is_question, instagram_posts(caption, permalink, thumbnail_url, posted_at, tema)")
+      .select("id, text, like_count, instagram_post_id, commented_at, author_username, is_question, instagram_posts!instagram_comments_instagram_post_id_fkey(caption, permalink, thumbnail_url, posted_at, tema)")
       .eq("client_id", clientId)
       .or(filtro)
       .gte("commented_at", desde)
@@ -693,7 +694,7 @@ export async function getPerguntasDeteccaoOriginal(clientId: string, periodo?: {
   const max = limit ?? (periodo ? 1000 : 200);
   let consulta = supabase
     .from("instagram_comments")
-    .select("id, text, like_count, instagram_post_id, commented_at, author_username, is_question, instagram_posts(caption, permalink, thumbnail_url, posted_at, tema)")
+    .select("id, text, like_count, instagram_post_id, commented_at, author_username, is_question, instagram_posts!instagram_comments_instagram_post_id_fkey(caption, permalink, thumbnail_url, posted_at, tema)")
     .eq("client_id", clientId)
     .eq("is_question", true);
   if (periodo) {
@@ -767,7 +768,7 @@ export async function getComentariosPeriodo(clientId: string, start: string, end
   const { desde, antesDe } = limitesBR(start, end);
   const { data, error } = await supabase
     .from("instagram_comments")
-    .select("id, text, author_username, instagram_post_id, instagram_posts(tema)")
+    .select("id, text, author_username, instagram_post_id, instagram_posts!instagram_comments_instagram_post_id_fkey(tema)")
     .eq("client_id", clientId)
     .gte("commented_at", desde)
     .lt("commented_at", antesDe)

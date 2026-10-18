@@ -431,7 +431,7 @@ function IdeiasPage() {
         Ideias{res && res.ideias.length > 0 ? ` (${res.ideias.length})` : ""}
         {orig && orig.extras.length > 0 ? ` + ${orig.extras.length} da regra original` : ""}
       </h2>
-      <p>No topo, os roteiros completos que o agente Roteirista escreve toda semana a partir do Brand Brain, das dúvidas reais e do que mais foi salvo: é só revisar, copiar ou levar ao planejador. Abaixo, as ideias por regra. Período: {periodLabel}.</p>
+      <p>Revise os roteiros preparados pelo Roteirista e leve os aprovados ao planejador. Abaixo, veja ideias baseadas nos posts e nas dúvidas disponíveis no período. Período: {periodLabel}.</p>
       <div className="mt-3"><RoteirosProntos clientId={clientId} podeEditar={podeEditar} /></div>
     </div>
   );
@@ -440,7 +440,10 @@ function IdeiasPage() {
   if (fontes.error) return <div>{head}<ErroCarga texto="Não consegui verificar as fontes deste cliente. Atualize a página." /></div>;
   if (!temIg) return <div>{head}<SemFonte {...SEM_INSTAGRAM} /></div>;
   if (posts.isLoading || comentarios.isLoading) return <div>{head}<Carregando texto="Calculando ideias…" /></div>;
-  if (posts.error || comentarios.error || !res) return <div>{head}<ErroCarga texto="Falha ao ler posts e comentários do período." /></div>;
+  if (posts.error || comentarios.error || !res) return <div>{head}
+    <ErroCarga texto={posts.error && comentarios.error ? "Não foi possível carregar posts e comentários do período." : posts.error ? "Não foi possível carregar os posts do período." : "Não foi possível carregar os comentários do período. Os posts foram carregados."} />
+    <button type="button" className="btn mt-3" onClick={() => { void posts.refetch(); void comentarios.refetch(); void todosComentarios.refetch(); void perguntasOriginais.refetch(); }}>Tentar carregar dados novamente</button>
+  </div>;
 
   const limitacoes = [...faltasParaLimitacoes(res.faltas), ...res.limitacoesVoz];
 

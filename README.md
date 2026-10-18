@@ -84,6 +84,10 @@ Os testes cobrem rotas em 375 e 1280 px, acesso anônimo, perfil de leitura, fal
 
 ## Integrações e execução
 
+Ideias e Dúvidas usam explicitamente a FK original entre comentários e posts para manter compatibilidade com bancos que também possuem a FK composta de isolamento. Os filtros de clínica e as políticas RLS continuam aplicados. Uma falha na consulta de comentários é identificada separadamente da leitura dos posts e permite nova tentativa.
+
+O Roteirista distingue carregamento, erro de leitura e ausência de propostas. Administradores podem consultar o estado e a data da última execução do fluxo, sem carregar seu contexto; membros da clínica continuam sem acesso ao histórico administrativo. A frequência do catálogo é uma cadência prevista: a execução automática depende do agendador externo chamar `agendar` e processar a fila com `rodar`. O intervalo semanal, isoladamente, não garante uma entrega na segunda-feira.
+
 O botão de atualização usa a sessão do usuário; operações de escrita exigem papel de edição. Sincronizações automáticas usam o segredo do servidor. Provedores, contas, tokens e equipes podem variar por cliente; contas compartilhadas precisam de atribuição explícita para não misturar atendimentos.
 
 Os conectores preservam checkpoints quando há falha de persistência. Reenvios de webhook devem ser idempotentes, e exclusões da origem usam marcação para preservar o histórico. Métricas ausentes não devem ser convertidas em zero nem apagar valores anteriores.
