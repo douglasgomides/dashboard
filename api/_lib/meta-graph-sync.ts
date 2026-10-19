@@ -123,20 +123,31 @@ async function fetchInsightsBatch(
   if (mediaIds.length === 0) return result;
 
   for (const idsBatch of chunk(mediaIds, INSIGHTS_BATCH_SIZE)) {
-    const batchPayload = idsBatch.map((id) => ({
-      method: "GET",
-      relative_url: `${id}/insights?metric=${metrics}`,
-    }));
-
-    const res = await fetch(`${GRAPH_BASE}/`, integrationRequest({
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ access_token: accessToken, batch: JSON.stringify(batchPayload) }),
-    }));
-    if (!res.ok) {
-      throw new Error(`Meta Graph batch insights failed (${res.status}): ${await res.text()}`);
-    }
-    const responses = (await res.json()) as { code: number; body: string }[];
+    // Lote que estoura o tempo (conta grande, posts antigos): divide ao meio até 5 posts. O que ainda assim falhar
+    // fica sem métrica (o post é gravado mesmo assim) e entra em `errors`, em vez de derrubar a página inteira de 100 posts
+    // (Doctor Creator e Douglas não conseguiam completar o histórico).
+    const pedirLote = async (ids: string[]): Promise<({ code: number; body: string } | null)[]> => {
+      const batchPayload = ids.map((id) => ({ method: "GET", relative_url: `${id}/insights?metric=${metrics}` }));
+      try {
+        const res = await fetch(`${GRAPH_BASE}/`, integrationRequest({
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ access_token: accessToken, batch: JSON.stringify(batchPayload) }),
+        }));
+        if (!res.ok) throw new Error(`Meta Graph batch insights failed (${res.status}): ${await res.text()}`);
+        return (await res.json()) as { code: number; body: string }[];
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!/timeout|aborted|timed out/i.test(msg)) throw err;
+        if (ids.length > 5) {
+          const meio = Math.ceil(ids.length / 2);
+          return [...(await pedirLote(ids.slice(0, meio))), ...(await pedirLote(ids.slice(meio)))];
+        }
+        errors.push(`insights de ${ids.length} post(s): Meta não respondeu a tempo`);
+        return ids.map(() => null);
+      }
+    };
+    const responses = await pedirLote(idsBatch);
 
     for (let i = 0; i < idsBatch.length; i++) {
       const id = idsBatch[i];
