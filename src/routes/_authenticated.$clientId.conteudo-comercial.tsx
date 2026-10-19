@@ -29,6 +29,19 @@ interface Dados {
   cobertura: { conversas: number; lidas: number; sem_texto: number; com_tema: number; posts: number; posts_com_tema: number };
 }
 
+const lista = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+/** Resposta fora do formato (ou sem permissão) vira null; listas ausentes viram vazias, para a tela nunca quebrar. */
+function normalizar(data: unknown): Dados | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const d = data as Partial<Dados>;
+  const c = (d.cobertura ?? {}) as Partial<Dados["cobertura"]>;
+  return {
+    dias: lista(d.dias), grade: lista(d.grade), temas: lista(d.temas), semanas: lista(d.semanas), objecoes: lista(d.objecoes), assuntos: lista(d.assuntos),
+    efeito_post: d.efeito_post && typeof d.efeito_post === "object" ? d.efeito_post : null,
+    cobertura: { conversas: Number(c.conversas ?? 0), lidas: Number(c.lidas ?? 0), sem_texto: Number(c.sem_texto ?? 0), com_tema: Number(c.com_tema ?? 0), posts: Number(c.posts ?? 0), posts_com_tema: Number(c.posts_com_tema ?? 0) },
+  };
+}
+
 function ConteudoComercialPage() {
   const { clientId } = Route.useParams();
   const { start, end } = resolveDateRange(clientLayoutRoute.useSearch());
@@ -38,7 +51,7 @@ function ConteudoComercialPage() {
     queryFn: async () => {
       const { data, error } = await db.rpc("conteudo_comercial", { p_client: clientId, p_de: start, p_ate: end });
       if (error) throw new Error(error.message);
-      return data as Dados | null;
+      return normalizar(data);
     },
   });
 
