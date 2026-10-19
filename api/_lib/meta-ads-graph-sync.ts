@@ -149,7 +149,8 @@ async function buscarInsightsUmaJanela(
   return linhas;
 }
 
-const ERRO_DE_CARGA = /"code":\s*(1|2)\b|temporarily unavailable|respondeu 5\d\d|unknown error|reduce the amount of data/i;
+// "aborted due to timeout": a conta do Douglas (127 campanhas) estourava os 30 s numa janela de 30 dias e ficava sem dado; timeout também é erro de carga.
+const ERRO_DE_CARGA = /"code":\s*(1|2)\b|temporarily unavailable|respondeu 5\d\d|unknown error|reduce the amount of data|aborted due to timeout|timed out|timeout/i;
 const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const somaDias = (iso: string, n: number) => new Date(new Date(iso + "T12:00:00Z").getTime() + n * 86400_000).toISOString().slice(0, 10);
 
