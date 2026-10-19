@@ -19,5 +19,6 @@ assert.ok(m.includes("Proposta para vocês: confirmar na véspera às 17h. Prazo
 assert.ok(m.includes("Próxima reunião: Sessão 5, 03/11."));
 assert.ok(!/garant/i.test(m)); // sem promessa
 const vazio = montarResumoMedico({ dia: null, kpis: [], principal: null });
-assert.ok(vazio.includes("Nenhum ponto crítico"));
+assert.ok(vazio.includes("Ainda faltam dados"));
+assert.ok(!vazio.includes("Nenhum ponto crítico"));
 console.log("ok sap-resumo-medico");

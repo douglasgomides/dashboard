@@ -78,7 +78,8 @@ try {
     assert.equal(problemaDaLinha(c, linha(fonte, { data_ate: "2026-10-09" })), null);
     assert.equal(problemaDaLinha(c, linha(fonte, { data_ate: "2026-10-08" }))?.gravidade, "baixa");
   }
-  assert.equal(problemaDaLinha(c, linha("instagram", { data_ate: "2026-10-09" }))?.gravidade, "media", "Instagram continua contando dias corridos");
+  assert.equal(problemaDaLinha(c, linha("instagram", { data_ate: "2026-10-09" }))?.gravidade, "baixa", "Instagram desconta a folga de dois dias da Meta");
+  assert.equal(problemaDaLinha(c, linha("instagram", { data_ate: "2026-10-07" }))?.gravidade, "media", "Instagram parado além da folga continua visível");
   mock.timers.setTime(segunda);
 
   // Montagem: fonte desligada ignora a linha; Instagram desligado vira configuração incompleta;

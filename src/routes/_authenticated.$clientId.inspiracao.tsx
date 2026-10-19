@@ -180,6 +180,7 @@ function InspiracaoPage() {
 
       <div className="flex flex-wrap items-center gap-2 rounded-xl border p-3" style={{ borderColor: "var(--border)" }}>
         <select
+          aria-label="Grupo de referências"
           value={grupo}
           onChange={(e) => setGrupo(e.target.value)}
           className="rounded-md border px-2 py-1.5 text-sm"
@@ -190,6 +191,7 @@ function InspiracaoPage() {
           <option value="Referências Nacionais">Referências Nacionais</option>
         </select>
         <select
+          aria-label="Especialidade"
           value={especialidade}
           onChange={(e) => setEspecialidade(e.target.value)}
           className="rounded-md border px-2 py-1.5 text-sm"
@@ -203,6 +205,7 @@ function InspiracaoPage() {
           ))}
         </select>
         <select
+          aria-label="Formato de referência"
           value={midia}
           onChange={(e) => setMidia(e.target.value)}
           className="rounded-md border px-2 py-1.5 text-sm"
@@ -213,6 +216,7 @@ function InspiracaoPage() {
           <option value="reel">Reel</option>
         </select>
         <input
+          aria-label="Buscar referências"
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           placeholder="Buscar por título, gancho, tema…"

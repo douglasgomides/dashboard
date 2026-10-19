@@ -124,7 +124,7 @@ export function OperacaoRecuperacao({ clientId, podeEditar }: { clientId: string
     queryFn: async () => {
       const [fontes, trabalhos] = await Promise.all([
         db.rpc("operacao_fontes", { p_client_id: clientId }),
-        db.from("operacao_recuperacao").select("*,sugestao:sugestoes_agentes(mensagem,titulo),conversa:conversas(pessoa:pessoas(nome))").eq("client_id", clientId)
+        db.from("operacao_recuperacao").select("*,sugestao:sugestoes_agentes(mensagem,titulo),conversa:conversas(pessoa:pessoas!conversas_pessoa_id_fkey(nome))").eq("client_id", clientId)
           .gte("criado_em", new Date(Date.now() - 30 * 86_400_000).toISOString()).order("atualizado_em", { ascending: false }).limit(100),
       ]);
       for (const r of [fontes, trabalhos]) if (r.error) throw new Error("Não foi possível carregar o acompanhamento e a cobertura das fontes.");

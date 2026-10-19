@@ -114,8 +114,8 @@ export function ResumoParaMedico({ clientId, clinica, dia, principal }: {
         melhorou: a === null || b === null || a === b ? null : MENOR_MELHOR.has(k) ? a < b : a > b,
       };
     });
-    return montarResumoMedico({ nomeContato: clinica.decisor_nome, dia, kpis, principal });
-  }, [autoQ.data, planoQ.data, clinica, dia, principal]);
+    return montarResumoMedico({ nomeContato: clinica.decisor_nome, dia, kpis, principal, dadosSuficientes: !autoQ.isPending && !planoQ.isPending && !autoQ.error && !planoQ.error });
+  }, [autoQ.data, autoQ.isPending, autoQ.error, planoQ.data, planoQ.isPending, planoQ.error, clinica, dia, principal]);
   return (
     <Painel icone={Send} titulo="Resumo semanal para o médico" resumo="Com os 3 números contra o ponto de partida. Revisar e enviar na segunda."
       ajuda={<>Versão com números da mensagem da semana, para o decisor ver o progresso em 10 segundos. Nada é enviado automaticamente: copie ou abra no WhatsApp, revise e envie.</>}>

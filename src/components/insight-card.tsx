@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -94,10 +94,13 @@ export function BotaoAcao({
   clientId?: string;
   variante?: "primario" | "secundario";
 }) {
+  const local = useLocation();
+  const periodo = Object.fromEntries(Object.entries(local.search).filter(([k]) => ["preset", "from", "to"].includes(k)));
   const cls = `ws-action ws-action--${variante === "primario" ? "primary" : "secondary"}`;
   if (!rota) return null;
   return (
     <Link
+      search={periodo as any}
       to={rota as any}
       params={clientId ? ({ clientId } as any) : undefined}
       className={cls}

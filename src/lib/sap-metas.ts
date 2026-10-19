@@ -172,7 +172,7 @@ export interface Garantia {
   kpis: AvaliacaoKpi[];
   naoMelhoraram: number;
   score: number | null;
-  aplica: boolean | null; // null = falta o Score de Execução
+  aplica: boolean | null; // null = faltam dados para concluir
   texto: string;
 }
 
@@ -198,17 +198,26 @@ export function avaliarGarantia(args: {
   const principais = kpisDaGarantia(args.consultaPaga);
   const kpis = principais
     .map((id) => args.plano.find((p) => p.kpi === id) ?? { kpi: id, baseline: null, meta: null, conta_garantia: true, origem: null, amostra: null })
-    .filter((p) => p.conta_garantia)
-    .map((p) => avaliarKpi({ kpi: p.kpi, baseline: p.baseline, meta: p.meta, atual: valor(p.kpi), amostra: amostra[p.kpi] ?? 0, verbaEmDia: args.verbaEmDia }));
+    .filter((p) => p.conta_garantia || p.baseline === null)
+    .map((p): AvaliacaoKpi => {
+      const semFonte = p.kpi === "resposta" ? !args.atual.tem_whatsapp : !args.atual.tem_crm;
+      const incompleto = l.kpis.find((k) => k.id === p.kpi)?.incompleto;
+      if (p.baseline !== null && (semFonte || incompleto)) return { kpi: p.kpi, resultado: "nao_avaliavel", atual: null, motivo: "Fonte ou configuração indisponível: complete a coleta antes de avaliar este indicador." };
+      return avaliarKpi({ kpi: p.kpi, baseline: p.baseline, meta: p.meta, atual: valor(p.kpi), amostra: amostra[p.kpi] ?? 0, verbaEmDia: args.verbaEmDia });
+    });
   const naoMelhoraram = kpis.filter((k) => k.resultado === "nao_melhorou").length;
   const indicadores = naoMelhoraram >= 2;
   let aplica: boolean | null;
   let texto: string;
-  if (args.score === null) {
+  const pendentes = kpis.filter((k) => k.resultado === "sem_baseline" || k.resultado === "nao_avaliavel");
+  if (pendentes.length > 0) {
+    aplica = null;
+    texto = `Garantia ainda não avaliável: ${pendentes.length} KPI(s) sem baseline ou sem amostra avaliável. Complete os dados antes de concluir se a garantia se aplica.`;
+  } else if (args.score === null) {
     aplica = null;
     texto = indicadores
       ? `${naoMelhoraram} dos KPIs principais não melhoraram. A garantia depende do Score de Execução (≥ 80%), ainda não informado.`
-      : `${kpis.length - naoMelhoraram} de ${kpis.length} KPIs principais melhoraram ou não entram: a garantia não se aplica pelos indicadores.`;
+      : "Score de Execução ainda não informado. A avaliação da garantia está pendente.";
   } else if (args.score < 80) {
     aplica = false;
     texto = `Score de Execução de ${Math.round(args.score)}% (abaixo de 80%): a garantia não se aplica.`;

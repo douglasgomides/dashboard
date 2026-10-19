@@ -134,6 +134,9 @@ function problemaBruto(c: Pick<EntradaCliente, "id" | "nome">, l: LinhaFonte): P
     // Atrasada 2–3 dias, sem erro e sem causa: só acompanhar.
     return { ...base, id: `${c.id}:${l.fonte}:atraso`, tipo: "sem_dado_origem", gravidade: "baixa", quem: "ninguem", titulo: `${nome} com 2 a 3 dias de atraso`, detalhe: `${quando}. Sem erro na atualização; a causa aparece aqui se passar de 3 dias.`, acao: "Aguardar a próxima atualização automática." };
   }
+  if (m.dono === "nos" && /sem subdom[ií]nio|n[aã]o configurad|sem.*token/i.test(l.last_error ?? "")) {
+    return { ...base, id: `${c.id}:${l.fonte}:config`, tipo: "config_incompleta", gravidade: "alta", quem: "equipe", titulo: `${nome}: configuração incompleta`, detalhe: `${quando}. ${m.texto}`, acao: "Conferir o provedor e completar o cadastro em Gerenciar. Se o CRM é manual, revisar o vínculo do conector antes de sincronizar." };
+  }
   if (m.dono === "nos") {
     return { ...base, id: `${c.id}:${l.fonte}:erro`, tipo: "falha_tecnica", gravidade: parado ? "alta" : "media", quem: "equipe", titulo: parado ? `${nome} parado por erro na atualização` : `${nome} em dia, mas a última atualização deu erro`, detalhe: `${quando}. ${m.texto}`, acao: ACAO.equipe };
   }

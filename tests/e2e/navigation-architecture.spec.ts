@@ -79,12 +79,12 @@ for (const profile of ["admin", "viewer"] as const) {
     await mockAccount(context, profile);
     await page.goto(`/${CID}/crm-painel`);
     const commercial = page.getByRole("navigation", { name: "Telas de Comercial", exact: true });
-    const result = commercial.getByRole("link", { name: "Vendas por origem (Kommo)", exact: true });
+    const result = commercial.getByRole("link", { name: "Resultados por origem do CRM", exact: true });
     await expect(result).toHaveCount(profile === "admin" ? 1 : 0);
     if (profile === "admin") {
       await expect(result).toBeVisible();
       await page.getByRole("button", { name: "Equipe e configuração", exact: true }).click();
-      await expect(page.getByRole("navigation", { name: "Equipe", exact: true }).getByRole("link", { name: "Vendas por origem (Kommo)", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("navigation", { name: "Equipe", exact: true }).getByRole("link", { name: "Resultados por origem do CRM", exact: true })).toHaveCount(0);
     }
     await expect(commercial.getByRole("link", { name: "Guia de organização do CRM", exact: true })).toBeVisible();
   });

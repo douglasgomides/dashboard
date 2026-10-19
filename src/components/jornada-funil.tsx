@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Painel } from "@/components/visual";
 import { montarFunil, type EtapaFunil, type FunilBanco } from "@/lib/jornada-funil";
 import { formatRangeLabel } from "@/lib/date-range";
+import { useDiagnosticoComercial } from "@/components/comercial-diagnostico";
 import { fmtFracao } from "@/lib/metricas";
 
 // Funil de 7 etapas do período. Etapa sem dado mostra o que falta (integração, dado e onde resolver),
@@ -72,7 +73,8 @@ function Passagem({ e }: { e: EtapaFunil }) {
 
 export function JornadaFunil({ clientId, start, end }: { clientId: string; start: string; end: string }) {
   const q = useQuery({ queryKey: ["jornada-funil", clientId, start, end], queryFn: () => lerFunil(clientId, start, end), staleTime: 5 * 60_000, retry: false });
-  const funil = q.data !== undefined ? montarFunil(q.data) : null;
+  const diagnostico = useDiagnosticoComercial(clientId, start, end);
+  const funil = q.data !== undefined ? montarFunil(q.data, diagnostico.data?.dados.escopo === "periodo" ? diagnostico.data.funil : null) : null;
   // Barras em escala log: alcance (centenas de milhares) e venda (unidades) no mesmo eixo.
   const maxLog = funil ? Math.max(1, ...funil.etapas.map((e) => (e.valor ? Math.log10(e.valor + 1) : 0))) : 1;
   const semNada = funil && funil.medidas === 0;

@@ -106,7 +106,7 @@ export function calcularExecucao(registros: ItemRegistro[], dia: number | null):
       ? "Sem dado"
       : dia !== null && dia >= 85
         ? d90 >= 0.8 ? "Sim: execução cumprida (80% ou mais no D90)" : "Não: execução abaixo de 80% no D90"
-        : (atual ?? 0) >= 0.8 ? "Prévia: no caminho (80% ou mais nos itens vencidos)" : "Prévia: abaixo de 80% nos itens vencidos. Avisar a clínica";
+        : atual === null ? "Ainda sem itens vencidos ou avaliados: Score atual não disponível" : atual >= 0.8 ? "Prévia: no caminho (80% ou mais nos itens vencidos)" : "Prévia: abaixo de 80% nos itens vencidos. Avisar a clínica";
   return {
     atual,
     d90,

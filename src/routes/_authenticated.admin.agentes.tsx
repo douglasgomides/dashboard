@@ -31,6 +31,11 @@ function CentralAgentes() {
       return (data ?? []) as { client_id: string; nome: string }[];
     },
   });
+  const clientes = useQuery({ queryKey: ["central-clientes"], queryFn: async () => {
+    const { data, error } = await supabase.from("clients").select("id, name");
+    if (error) throw error;
+    return data ?? [];
+  } });
   const [erro, setErro] = useState<string | null>(null);
   const recarregar = () => qc.invalidateQueries({ queryKey: ["central-agentes"] });
   const rodar = useMutation({
@@ -39,7 +44,7 @@ function CentralAgentes() {
     onError: (e: Error) => setErro(e.message),
   });
 
-  const nomeCliente = useMemo(() => new Map((clinicas.data ?? []).map((c) => [c.client_id, c.nome])), [clinicas.data]);
+  const nomeCliente = useMemo(() => new Map([...(clientes.data ?? []).map((c) => [c.id, c.name] as const), ...(clinicas.data ?? []).map((c) => [c.client_id, c.nome] as const)]), [clinicas.data, clientes.data]);
   const fluxoPorId = useMemo(() => new Map((catalogo.data ?? []).map((f) => [f.id, f])), [catalogo.data]);
   const dados = central.data;
   const fila = dados ? excecoes(dados.execucoes, dados.aprovacoes) : [];
@@ -75,12 +80,12 @@ function CentralAgentes() {
         {dados && fila.map((f) => {
           if (f.tipo === "aprovacao") {
             const a = dados.aprovacoes.find((x) => x.id === f.id)!;
-            return <CardAprovacao key={a.id} a={a} cliente={nomeCliente.get(a.client_id) ?? "Clínica"} aoDecidir={async (id) => { await recarregar(); rodar.mutate(id); }} onErro={setErro} />;
+            return <CardAprovacao key={a.id} a={a} cliente={nomeCliente.get(a.client_id) ?? `Clínica ${a.client_id.slice(0, 8)}`} aoDecidir={async (id) => { await recarregar(); rodar.mutate(id); }} onErro={setErro} />;
           }
           const e = dados.execucoes.find((x) => x.id === f.id)!;
           return (
             <div key={e.id} className="rounded-xl border p-4 text-sm" style={caixa}>
-              <p className="flex items-center gap-2 font-semibold"><AlertTriangle size={16} aria-hidden /> {f.tipo === "falha" ? "Falhou" : "Pausada pelo teto de custo"}: {fluxoPorId.get(e.fluxo)?.nome ?? e.fluxo} · {nomeCliente.get(e.client_id) ?? "Clínica"}</p>
+              <p className="flex items-center gap-2 font-semibold"><AlertTriangle size={16} aria-hidden /> {f.tipo === "falha" ? "Falhou" : f.tipo === "configuracao" ? "Configuração pendente" : "Pausada pelo teto de custo"}: {fluxoPorId.get(e.fluxo)?.nome ?? e.fluxo} · {nomeCliente.get(e.client_id) ?? `Clínica ${e.client_id.slice(0, 8)}`}</p>
               <p className="mt-1" style={dim}>{e.erro}</p>
             </div>
           );
@@ -98,7 +103,7 @@ function CentralAgentes() {
         </div>
         {dados && dados.execucoes.length === 0 && <p className="text-sm" style={dim}>Nenhuma execução ainda. Inicie um serviço acima.</p>}
         {[...ativas, ...encerradas].map((e) => (
-          <LinhaExecucao key={e.id} e={e} fluxo={fluxoPorId.get(e.fluxo)} cliente={nomeCliente.get(e.client_id) ?? "Clínica"} rodando={rodar.isPending && rodar.variables === e.id}
+          <LinhaExecucao key={e.id} e={e} fluxo={fluxoPorId.get(e.fluxo)} cliente={nomeCliente.get(e.client_id) ?? `Clínica ${e.client_id.slice(0, 8)}`} rodando={rodar.isPending && rodar.variables === e.id}
             aoRodar={() => rodar.mutate(e.id)} aoControlar={async (acao) => { try { await controlarExecucao(e.id, acao); recarregar(); } catch (x) { setErro((x as Error).message); } }} />
         ))}
       </section>

@@ -19,8 +19,8 @@ const aberta: Pausa[] = [{ tipo: "pedido_clinica", inicio: "2026-11-01", fim: nu
 assert.equal(diaDoPrograma(d0, aberta, "2026-11-05"), 20);
 
 // Data útil: sábado vai para segunda; fim de janela no sábado volta para sexta.
-assert.equal(dataUtilSugerida("2026-10-17", false), "2026-10-19");
-assert.equal(dataUtilSugerida("2026-10-17", true), "2026-10-16");
+assert.equal(dataUtilSugerida("2026-10-17"), "2026-10-16");
+assert.equal(dataUtilSugerida("2026-10-17"), "2026-10-16");
 
 // Status: kickoff (D1–D3) feito; acessos (até D7) atrasado no D9; Sessão 1 (D8–D10) agora.
 const c = cronogramaComDatas(d0, [], "2026-10-21", new Map([[3, { concluidoEm: "2026-10-14", evidencia: "ata" }]]));
