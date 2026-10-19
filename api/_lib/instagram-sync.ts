@@ -275,6 +275,18 @@ async function classifyMissingTemas(
   return { count, errors };
 }
 
+// Pergunta à Meta o alcance dos últimos dias da conta. 200 = a leitura direta funciona e a Windsor não é necessária.
+async function metaCobreAConta(igId: string, token: string): Promise<boolean> {
+  try {
+    const agora = Math.floor(Date.now() / 1000);
+    const url = `https://graph.facebook.com/v21.0/${igId}/insights?metric=reach&period=day&since=${agora - 4 * 86400}&until=${agora}&access_token=${encodeURIComponent(token)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function syncDailyMetrics(
   supabase: SupabaseClient<Database>,
   windsorApiKey: string,
@@ -456,17 +468,31 @@ export async function runInstagramSync(env: SyncEnv): Promise<AccountSyncResult[
             return { count: 0, errors: [] as string[] };
           })
         : { count: 0, errors: [] as string[] };
-    const daily = await syncDailyMetrics(
-      supabase,
-      env.windsorApiKey,
-      range,
-      account.id,
-      account.windsor_account_id,
-      account.client_id,
-    ).catch((err) => {
-      errors.push(`daily: ${err instanceof Error ? err.message : String(err)}`);
-      return { count: 0, errors: [] };
-    });
+    // Conta com token próprio lê as métricas diárias direto da Meta (meta-graph-sync.ts, validado igual à Windsor em
+    // 19/10/2026). A Windsor fica só para quem não tem esse token (ex.: Lana). Sem isso, a falha de login da Windsor
+    // continuava marcando erro nas 12+ contas que a Meta já cobre.
+    const { data: segredo } = await supabase
+      .from("instagram_account_secrets")
+      .select("meta_access_token")
+      .eq("instagram_account_id", account.id)
+      .maybeSingle();
+    // Só pula a Windsor se a Meta realmente responde por esta conta (token próprio válido, sem "API access blocked").
+    const temTokenProprio = segredo?.meta_access_token
+      ? await metaCobreAConta(account.windsor_account_id, segredo.meta_access_token)
+      : false;
+    const daily = temTokenProprio
+      ? { count: 0, errors: [] as string[] }
+      : await syncDailyMetrics(
+          supabase,
+          env.windsorApiKey,
+          range,
+          account.id,
+          account.windsor_account_id,
+          account.client_id,
+        ).catch((err) => {
+          errors.push(`daily: ${err instanceof Error ? err.message : String(err)}`);
+          return { count: 0, errors: [] };
+        });
     const temas = await classifyMissingTemas(supabase, account.id, account.windsor_account_id).catch((err) => {
       errors.push(`classify: ${err instanceof Error ? err.message : String(err)}`);
       return { count: 0, errors: [] };
