@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { atribuirConversa, destinoSite, destinoWhatsApp, dispositivo, ehRobo, mensagemComRef, novaRef, novoSlug, origemReferer, POSICOES } from "../src/lib/rastreio";
+import { atribuirConversa, destinoSite, destinoWhatsApp, dispositivo, ehRobo, mensagemComRef, novaRef, novoSlug, origemReferer, POSICOES, slugPersonalizado, slugValido } from "../src/lib/rastreio";
 import { extrairCodigos } from "../api/_lib/shortio";
 
 // ---- Slug, ref e destino
@@ -44,4 +44,12 @@ assert.equal(atribuirConversa("Boa tarde, quanto custa?", ini, links, [{ link_id
 assert.equal(atribuirConversa("Boa tarde", ini, links, [{ link_id: "bio", em: min(40) }]), null, "clique antigo não conta");
 assert.equal(atribuirConversa("Boa tarde", ini, links, [{ link_id: "bio", em: new Date(Date.parse(ini) + 60_000).toISOString() }]), null, "clique depois da conversa não conta");
 
+// Final do link escolhido pela equipe.
+assert.equal(slugPersonalizado("Dra. Júlia Bio"), "dra-julia-bio");
+assert.equal(slugPersonalizado("  DRAJULIA  "), "drajulia");
+assert.equal(slugPersonalizado("ab"), null);
+assert.equal(slugPersonalizado("admin"), null);
+assert.equal(slugPersonalizado("a".repeat(31)), null);
+assert.ok(slugValido(novoSlug()));
+assert.ok(!slugValido("-abc") && !slugValido("abc,def") && !slugValido("a}b"));
 console.log("rastreio: ok");

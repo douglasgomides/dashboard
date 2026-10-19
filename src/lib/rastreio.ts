@@ -38,6 +38,16 @@ export function aleatorio(n: number, alfabeto = ALFABETO): string {
 export const novoSlug = () => aleatorio(7).toLowerCase();
 export const novaRef = () => aleatorio(6);
 
+/** Final do link: 3 a 30 letras minúsculas, números e hífen, sem hífen nas pontas. Vale para o aleatório e o escolhido. */
+export const slugValido = (s: string) => /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(s);
+// Palavras que confundem quem lê o link ou parecem página do sistema.
+const RESERVADOS = new Set(["api", "admin", "login", "assets", "r", "app", "sap", "www"]);
+/** Transforma o texto digitado pela equipe ("Dra. Júlia Bio") em final de link ("dra-julia-bio"); null se não servir. */
+export function slugPersonalizado(texto: string): string | null {
+  const s = texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slugValido(s) && !RESERVADOS.has(s) ? s : null;
+}
+
 export function mensagemComRef(frase: string, ref: string): string {
   return `${frase.trim()} (ref ${ref})`;
 }

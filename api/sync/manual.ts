@@ -23,10 +23,10 @@ import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_li
 import { rodarConferencia, rodarEtapa, ETAPAS, type EtapaId, type Achado, type Verificado } from "../_lib/conferencia.js";
 import { resumirConversa } from "../_lib/resumo-conversa.js";
 import { rascunharSessao } from "../_lib/sessao-ia.js";
-import { redirecionarLink } from "../_lib/redirecionar.js";
+import { redirecionarLink, slugLivre } from "../_lib/redirecionar.js";
 import { redigirSecao } from "../_lib/copiloto.js";
 import { aplicarAcao, desfazerAcao, tokenEscritaConfigurado } from "../_lib/anuncios-acoes.js";
-import { destinoSite, destinoWhatsApp, novaRef, novoSlug, POSICOES, mensagemComRef, type Posicao } from "../../src/lib/rastreio.js";
+import { destinoSite, destinoWhatsApp, novaRef, novoSlug, POSICOES, mensagemComRef, slugPersonalizado, type Posicao } from "../../src/lib/rastreio.js";
 import { rodarAgentes, catalogoFluxos, enfileirarBrain } from "../_lib/agentes.js";
 import { resumoEquipe } from "../_lib/resumo-equipe.js";
 import { manualRequestSchema } from "../_lib/request-validation.js";
@@ -885,10 +885,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(403).json({ error: "Só a equipe cria links rastreados" });
         return;
       }
-      const b = (req.body ?? {}) as { acao?: string; id?: string; tipo?: string; titulo?: string; campanha?: string; destino_tipo?: string; numero_whatsapp?: string; frase?: string; site_url?: string; instagram_post_id?: string | null };
+      const b = (req.body ?? {}) as { acao?: string; id?: string; slug?: string; tipo?: string; titulo?: string; campanha?: string; destino_tipo?: string; numero_whatsapp?: string; frase?: string; site_url?: string; instagram_post_id?: string | null };
       if (b.acao === "ativo" || b.acao === "inativo") {
         const { error } = await admin.from("links_rastreados").update({ ativo: b.acao === "ativo" }).eq("id", b.id ?? "").eq("client_id", client_id);
         res.status(200).json({ alvo, ok: !error, erro: error?.message });
+        return;
+      }
+      const host = (req.headers["x-forwarded-host"] as string) || req.headers.host || "dash.doctorcreator.com.br";
+      const pedido = b.slug != null && String(b.slug).trim() !== "" ? slugPersonalizado(String(b.slug)) : null;
+      if (b.slug != null && String(b.slug).trim() !== "" && !pedido) {
+        res.status(400).json({ error: "Final do link inválido: use de 3 a 30 letras, números ou hífen (ex.: drajulia)" });
+        return;
+      }
+      if (b.acao === "renomear") {
+        // Troca o final do link; o final anterior continua redirecionando (fica em slugs_antigos).
+        if (!pedido) { res.status(400).json({ error: "Informe o novo final do link" }); return; }
+        const { data: atual, error: erroAtual } = await admin.from("links_rastreados").select("id, slug, slugs_antigos").eq("id", b.id ?? "").eq("client_id", client_id).maybeSingle();
+        if (erroAtual || !atual?.slug) { res.status(404).json({ error: "Link não encontrado" }); return; }
+        if (!(await slugLivre(admin, pedido, atual.id))) { res.status(409).json({ error: "Esse final já está em uso em outro link" }); return; }
+        const antigos = [...new Set([...((atual.slugs_antigos as string[] | null) ?? []), atual.slug])].filter((x) => x !== pedido);
+        const { error } = await admin.from("links_rastreados").update({ slug: pedido, slugs_antigos: antigos } as never).eq("id", atual.id).eq("client_id", client_id);
+        if (error) { res.status(200).json({ alvo, ok: false, erro: error.message }); return; }
+        res.status(200).json({ alvo, ok: true, url: `https://${host}/r/${pedido}` });
         return;
       }
       const tipo = (b.tipo ?? "") as Posicao;
@@ -899,7 +917,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const titulo = String(b.titulo ?? "").trim().slice(0, 120) || POSICOES[tipo].rotulo;
       const frase = String(b.frase ?? "").replace(/\s+/g, " ").trim().slice(0, 200) || POSICOES[tipo].frase;
       const ref = novaRef();
-      const slug = novoSlug();
+      if (pedido && !(await slugLivre(admin, pedido))) {
+        res.status(409).json({ error: "Esse final já está em uso em outro link" });
+        return;
+      }
+      const slug = pedido ?? novoSlug();
       let destino: string | null = null;
       if (b.destino_tipo === "site") destino = destinoSite(String(b.site_url ?? ""), tipo, b.campanha || titulo, ref);
       else {
@@ -922,7 +944,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(200).json({ alvo, ok: false, erro: erroIns.message });
         return;
       }
-      const host = (req.headers["x-forwarded-host"] as string) || req.headers.host || "dash.doctorcreator.com.br";
       res.status(200).json({ alvo, ok: true, id: criado?.id, url: `https://${host}/r/${slug}`, ref });
       return;
     }

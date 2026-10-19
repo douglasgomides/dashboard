@@ -9,6 +9,44 @@ import {
   type CreativeSource,
 } from "@/lib/creative-intelligence/contracts";
 import { signedAsset } from "./data";
+import { supabase } from "@/integrations/supabase/client";
+import { BotaoCopiar } from "@/components/botao-copiar";
+
+/** Copy inteira do carrossel: texto de todos os slides, em ordem, mais a legenda completa da publicação. */
+function CopyCompleta({ analysis, source }: { analysis: CreativeAnalysis; source: CreativeSource }) {
+  const legenda = useQuery({
+    queryKey: ["creative-legenda", source.post_id],
+    enabled: !!source.post_id,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("instagram_posts").select("caption").eq("id", source.post_id!).maybeSingle();
+      if (error) throw error;
+      return (data?.caption as string | null) ?? null;
+    },
+  });
+  const slides = [...analysis.result.slides].sort((a, b) => a.position - b.position);
+  const textoLegenda = source.post_id ? legenda.data ?? "" : source.title;
+  const tudo = [
+    ...slides.map((s) => `Slide ${s.position}\n${s.copy.full_text || "(sem texto legível)"}`),
+    textoLegenda ? `Legenda\n${textoLegenda}` : "",
+  ].filter(Boolean).join("\n\n");
+  return (
+    <Painel icone={FileText} titulo="Copy completa do carrossel" resumo={`Texto de todos os ${slides.length} slides, na ordem, e a legenda da publicação.`}>
+      <div className="mb-3"><BotaoCopiar texto={tudo} rotulo="Copiar copy inteira" /></div>
+      <ol className="space-y-3">
+        {slides.map((s) => (
+          <li key={s.position} className="text-sm">
+            <span className="font-semibold">Slide {s.position}</span>
+            <p className="mt-1 whitespace-pre-wrap">{s.copy.full_text || "Nenhum texto legível identificado."}</p>
+          </li>
+        ))}
+      </ol>
+      <div className="mt-4 border-t pt-3 text-sm" style={{ borderColor: "var(--border)" }}>
+        <span className="font-semibold">Legenda</span>
+        <p className="mt-1 whitespace-pre-wrap">{legenda.isLoading ? "Carregando legenda…" : textoLegenda || "Publicação sem legenda."}</p>
+      </div>
+    </Painel>
+  );
+}
 
 export function PrivateAsset({
   asset,
@@ -151,6 +189,7 @@ export function AnalysisView({
           comprovação clínica.
         </p>
       </Painel>
+      {r.format === "carrossel" && r.slides.length > 0 && <CopyCompleta analysis={analysis} source={source} />}
       {r.format === "carrossel" && slide ? (
         <Painel icone={Layers} titulo="Carrossel · leitura por slide">
           <div
