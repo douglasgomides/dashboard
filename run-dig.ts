@@ -1,0 +1,24 @@
+import fs from "node:fs"; import os from "node:os";
+import { createClient } from "@supabase/supabase-js";
+import { runDigisacSync } from "./api/_lib/digisac-sync.js";
+import { recordSyncStatusPorCliente } from "./api/_lib/sync-status.js";
+const cofre = fs.readFileSync(os.homedir() + "/doctor-creator-infra.md", "utf8");
+const SK = cofre.match(/Dashboards de Clientes[\s\S]*?service_role[^`]*`(eyJ[\w.-]+)`/)![1];
+const URL = "https://cvdnzoqduliopscfsrkc.supabase.co";
+const sb = createClient(URL, SK, { auth: { persistSession: false } });
+const ANT = "378838c6-17da-489c-bf5d-f058cc55f019", RAF = "10f18af2-5260-4d8c-b813-48bbad7c679b";
+const { data: ja } = await sb.from("crm_connections").select("id").eq("client_id", ANT).eq("provider", "digisac");
+if (!ja?.length) {
+  const { data: raf } = await sb.from("crm_connections").select("*").eq("client_id", RAF).eq("provider", "digisac").single();
+  const nova = { client_id: ANT, provider: "digisac", subdomain: (raf as any).subdomain, access_token: (raf as any).access_token, active: true, config: {} };
+  const { error } = await sb.from("crm_connections").insert(nova as any);
+  console.log("conexão criada:", error ? error.message : "ok");
+} else console.log("já existia conexão");
+const { data: cli } = await sb.from("clients").select("digisac_url,digisac_token").eq("id", RAF).single();
+const { error: e2 } = await sb.from("clients").update({ digisac_url: (cli as any).digisac_url, digisac_token: (cli as any).digisac_token } as any).eq("id", ANT);
+console.log("digisac_url/token no cliente:", e2 ? e2.message : "ok");
+const t0 = Date.now();
+const r = await runDigisacSync({ supabaseUrl: URL, supabaseServiceRoleKey: SK, onlyClientId: ANT } as any);
+console.log(`${Math.round((Date.now() - t0) / 1000)}s`, JSON.stringify(r).slice(0, 400));
+await recordSyncStatusPorCliente(sb as any, "crm", r.map((x: any) => ({ clientId: x.clientId, rows: x.contatos, errors: x.errors })));
+await recordSyncStatusPorCliente(sb as any, "atendimento", r.map((x: any) => ({ clientId: x.clientId, rows: x.atendimentos, errors: x.errors })));
