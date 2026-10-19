@@ -90,12 +90,15 @@ export interface PerfilEtapas { etapas: Map<string, "C1" | "C2" | "C3">; seguido
 export function diagnosticarAnuncios(linhas: LinhaAds[], nomes: Record<string, string>, hoje: string, perfil?: PerfilEtapas): SinalAds[] {
   const dia = (d: string) => Math.round((Date.parse(hoje) - Date.parse(d)) / 86_400_000);
   type Acc = { gasto: number; res: number; imp: number; freqImp: number };
+  // Último dia com gasto de cada campanha: campanha parada não recebe sugestão (pausar o que já está pausado).
+  const ultimoGasto = new Map<string, number>();
   const novo = (): Acc => ({ gasto: 0, res: 0, imp: 0, freqImp: 0 });
   const por = new Map<string, { a: Acc; b: Acc }>();
   for (const l of linhas) {
     if (!l.campaign_id) continue;
     const d = dia(l.date);
     if (d < 0 || d >= 14) continue;
+    if (Number(l.spend ?? 0) > 0) ultimoGasto.set(l.campaign_id, Math.min(ultimoGasto.get(l.campaign_id) ?? d, d));
     const g = por.get(l.campaign_id) ?? { a: novo(), b: novo() };
     const acc = d < 7 ? g.a : g.b;
     acc.gasto += Number(l.spend ?? 0);
@@ -112,6 +115,7 @@ export function diagnosticarAnuncios(linhas: LinhaAds[], nomes: Record<string, s
   const sinais: SinalAds[] = [];
   for (const [id, { a, b }] of por) {
     if (a.gasto < 30) continue;
+    if ((ultimoGasto.get(id) ?? 99) > 2) continue; // sem gasto nos últimos 3 dias: já está parada, não há o que pausar
     const custo7 = a.res > 0 ? a.gasto / a.res : null;
     const custoAntes = b.res > 0 ? b.gasto / b.res : null;
     const freq = a.imp > 0 ? a.freqImp / a.imp : null;
