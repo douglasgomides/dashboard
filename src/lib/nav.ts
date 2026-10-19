@@ -10,6 +10,7 @@ import {
   Route,
   LayoutGrid,
   Lightbulb,
+  CalendarDays,
   Megaphone,
   MessageCircle,
   Network,
@@ -37,15 +38,26 @@ export type Fontes =
   | null
   | undefined;
 
+export type ContentView = "roteiros" | "semana" | "ideias";
+export function parseContentView(value: unknown): ContentView {
+  return value === "semana" || value === "ideias" ? value : "roteiros";
+}
+export function parseContentViewSearch(search: Record<string, unknown>): { visao: ContentView } {
+  return { visao: parseContentView(search.visao) };
+}
+
 export interface NavTab {
   /** Sufixo depois de /$clientId ("" = a própria página do cliente). Fora do cliente: caminho absoluto com `absoluto`. */
   path: string;
+  search?: { visao: ContentView };
   label: string;
   Icone: LucideIcon;
   descricao?: string;
   termos?: string;
   grupo?: string;
   admin?: boolean;
+  /** Preserva as restrições da navegação administrativa ao mover uma ferramenta para sua área. */
+  equipe?: boolean;
   fonte?: Fonte;
   absoluto?: boolean;
   /** Tela do Sistema de Aquisição: aparece para o cliente só com o SAP ativo (a equipe sempre vê). */
@@ -85,12 +97,37 @@ export const AREAS: NavArea[] = [
     Icone: Megaphone,
     tabs: [
       {
+        path: "/marketing",
+        label: "Visão geral de Marketing",
+        Icone: LayoutDashboard,
+        descricao: "Escolha entre produzir conteúdo, planejar campanhas e analisar resultados.",
+        termos: "marketing aquisicao visao geral",
+      },
+      {
         path: "/ideias",
-        label: "Roteiros e planejamento",
+        search: { visao: "roteiros" },
+        label: "Revisar roteiros",
         Icone: Lightbulb,
-        descricao: "Revise os roteiros e organize a semana no planejador.",
-        termos:
-          "ideias calendario editorial agenda criar roteiro reels carrossel legenda",
+        descricao: "Leia os roteiros prontos e revise o que será produzido.",
+        termos: "roteiro criar reels carrossel legenda",
+        grupo: "Conteúdo",
+      },
+      {
+        path: "/ideias",
+        search: { visao: "semana" },
+        label: "Planejar a semana",
+        Icone: CalendarDays,
+        descricao: "Organize as pautas, as datas e o andamento da produção.",
+        termos: "calendario editorial agenda planejamento semana",
+        grupo: "Conteúdo",
+      },
+      {
+        path: "/ideias",
+        search: { visao: "ideias" },
+        label: "Encontrar ideias",
+        Icone: Lightbulb,
+        descricao: "Encontre temas a partir dos posts e das dúvidas do público.",
+        termos: "ideias temas perguntas sugestoes",
         grupo: "Conteúdo",
       },
       {
@@ -115,7 +152,7 @@ export const AREAS: NavArea[] = [
       },
       {
         path: "/conteudo",
-        label: "Resultados do conteúdo",
+        label: "Analisar desempenho",
         Icone: AlignLeft,
         descricao: "Compare temas e formatos para orientar a produção.",
         termos: "desempenho metricas analise conteudo",
@@ -123,7 +160,7 @@ export const AREAS: NavArea[] = [
       },
       {
         path: "/posts",
-        label: "Publicações",
+        label: "Consultar publicações",
         Icone: LayoutGrid,
         fonte: "instagram",
         descricao: "Consulte os posts publicados e seus indicadores.",
@@ -132,11 +169,11 @@ export const AREAS: NavArea[] = [
       },
       {
         path: "/top",
-        label: "Melhores conteúdos",
+        label: "Encontrar destaques",
         Icone: Trophy,
         fonte: "instagram",
         descricao: "Identifique as publicações que mais se destacaram.",
-        termos: "top campeoes performance ranking",
+        termos: "top melhores conteudos campeoes performance ranking",
         grupo: "Conteúdo",
       },
       {
@@ -198,7 +235,9 @@ export const AREAS: NavArea[] = [
       },
       {
         path: "/crm-guia",
-        label: "Organizar o CRM",
+        label: "Guia de organização do CRM",
+        termos: "organizar crm manual guia preenchimento",
+        descricao: "Veja o que ajustar no CRM externo e como organizar os dados.",
         Icone: ClipboardList,
         fonte: "crm",
         grupo: "CRM e oportunidades",
@@ -211,6 +250,16 @@ export const AREAS: NavArea[] = [
         descricao: "Analise as conversas e os pontos de atenção do WhatsApp.",
         termos: "whatsapp atendimento auditoria conversas resposta",
         grupo: "Atendimento",
+      },
+      {
+        path: "/vendas-kommo",
+        label: "Vendas por origem (Kommo)",
+        Icone: ShoppingBag,
+        admin: true,
+        equipe: true,
+        fonte: "crm",
+        descricao: "Consulte as vendas por origem registradas no Kommo.",
+        grupo: "Resultados comerciais",
       },
       {
         path: "/jornada",
@@ -238,11 +287,11 @@ export const AREAS: NavArea[] = [
       },
       {
         path: "/agentes",
-        label: "Trabalhos do Nexo",
+        label: "Agentes e entregas",
         Icone: Bot,
         descricao:
           "Acompanhe os agentes, revise entregas e aprove o que depende de você.",
-        termos: "agentes inteligencia artificial ia automacao aprovacoes",
+        termos: "agentes inteligencia artificial ia automacao aprovacoes trabalhos execucoes entregas",
       },
       {
         path: "/oportunidades",
@@ -289,13 +338,6 @@ export const AVANCADO: NavTab[] = [
     path: "/crm-estrutura",
     label: "Etapas do CRM",
     Icone: Network,
-    admin: true,
-    fonte: "crm",
-  },
-  {
-    path: "/vendas-kommo",
-    label: "Vendas por origem (Kommo)",
-    Icone: ShoppingBag,
     admin: true,
     fonte: "crm",
   },
@@ -351,6 +393,7 @@ export interface Visibilidade {
 export function tabVisivel(t: NavTab, v: Visibilidade): boolean {
   return (
     (!t.admin || v.isAdmin) &&
+    (!t.equipe || (v.papel !== "owner" && v.papel !== "viewer")) &&
     (!t.sap || !!v.sap || v.isAdmin) &&
     fonteOk(t.fonte, v.fontes) &&
     (!v.soCrm || !!t.admin || t.fonte === "crm" || (!!t.sap && !!v.sap)) &&
@@ -416,4 +459,15 @@ export function buscarTelas(
     const termos = texto.split(/[^a-z0-9]+/).filter(Boolean);
     return palavras.every((p) => termos.some((termo) => termo.startsWith(p)));
   });
+}
+
+/** A mesma rota pode ter atalhos para visões diferentes, sem duplicar a ferramenta. */
+export function navTabKey(tab: NavTab): string {
+  return tab.path + (tab.search ? `?visao=${tab.search.visao}` : "");
+}
+export function tabAtiva(tab: NavTab, path: string, search: Record<string, unknown> = {}): boolean {
+  return tab.path === path && (!tab.search || tab.search.visao === parseContentView(search.visao));
+}
+export function navSearch<T extends object>(tab: NavTab, period: T) {
+  return { ...period, ...tab.search };
 }

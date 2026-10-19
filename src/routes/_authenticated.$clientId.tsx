@@ -33,7 +33,8 @@ export const Route = createFileRoute("/_authenticated/$clientId")({
 // Configuração da navegação em nav.ts; permissões e dados continuam nesta rota.
 function ClientLayout() {
   const { clientId } = Route.useParams();
-  const dateRange = Route.useSearch();
+  const dateRange = parseDateRangeSearch(Route.useSearch());
+  const currentSearch = useRouterState({ select: (s) => s.location.search }) as unknown as Record<string, unknown>;
   const navigate = useNavigate();
   const currentPathname = useRouterState({
     select: (s) => s.location.pathname,
@@ -121,8 +122,9 @@ function ClientLayout() {
         client={client ?? undefined}
         pathname={currentPathname}
         dateRange={dateRange}
+        currentSearch={currentSearch}
         onDateRange={(next) =>
-          navigate({ to: currentPathname, search: next, replace: true })
+          navigate({ to: currentPathname, search: (prev: Record<string, unknown>) => ({ ...prev, ...next, from: next.from, to: next.to }) as never, replace: true })
         }
         vis={{ isAdmin, fontes, soCrm, semAudiencia, papel, sap: !!clinicaSap }}
         frescor={<SyncFreshnessBadge clientId={clientId} />}
@@ -139,7 +141,7 @@ function ClientLayout() {
           onUsarPeriodo={(from, to) =>
             navigate({
               to: currentPathname,
-              search: { preset: "personalizado", from, to },
+              search: (prev: Record<string, unknown>) => ({ ...prev, preset: "personalizado", from, to }) as never,
               replace: true,
             })
           }

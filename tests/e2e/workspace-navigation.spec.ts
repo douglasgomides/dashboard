@@ -12,7 +12,7 @@ test("desktop: task search leads to existing tools and preserves clinic and peri
   await mockAccount(context, "viewer");
   await page.goto(`/${CID}/ideias?preset=7d`);
   await expect(page.locator(".workspace-heading h1")).toHaveText(
-    "Roteiros e planejamento",
+    "Revisar roteiros",
   );
   const sidebar = page.getByRole("complementary", { name: "Menu principal" });
   await expect(
@@ -24,7 +24,7 @@ test("desktop: task search leads to existing tools and preserves clinic and peri
     sidebar
       .getByRole("navigation", { name: "Telas de Marketing" })
       .getByRole("link"),
-  ).toHaveCount(10);
+  ).toHaveCount(13);
   await expect(
     sidebar.getByText("Conteúdo", { exact: true }),
   ).toBeVisible();
@@ -269,7 +269,7 @@ for (const width of [375, 1440]) {
       const areas = page.getByRole("navigation", { name: "Áreas do Nexo", exact: true });
       await expect(areas.getByRole("link")).toHaveText(labels);
       const marketing = page.getByRole("navigation", { name: "Telas de Marketing", exact: true });
-      for (const label of ["Roteiros e planejamento", "Estratégias e campanhas", "Resultados dos anúncios", "Links rastreados", "Dúvidas do público"])
+      for (const label of ["Revisar roteiros", "Estratégias e campanhas", "Resultados dos anúncios", "Links rastreados", "Dúvidas do público"])
         await expect(marketing.getByRole("link", { name: label, exact: true })).toBeVisible();
       await mkdir(outputs, { recursive: true });
       await page.screenshot({ path: `${outputs}nexo-menu-marketing.png` });

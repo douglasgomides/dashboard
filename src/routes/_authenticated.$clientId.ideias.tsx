@@ -63,10 +63,12 @@ import {
   usePautas,
 } from "@/components/planejador-conteudo";
 import { useClientRole } from "@/hooks/use-client-role";
+import { parseContentViewSearch } from "@/lib/nav";
 import { RoteirosProntos } from "@/components/agentes-ia";
 
 export const Route = createFileRoute("/_authenticated/$clientId/ideias")({
   component: IdeiasPage,
+  validateSearch: parseContentViewSearch,
 });
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
@@ -597,9 +599,8 @@ function IdeiasPage() {
   const dateRangeState = clientLayoutRoute.useSearch();
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
-  const [visao, setVisao] = useState<"roteiros" | "semana" | "ideias">(
-    "roteiros",
-  );
+  const { visao } = Route.useSearch();
+  const navigate = Route.useNavigate();
 
   const fontes = useQuery({
     queryKey: ["fontes", clientId],
@@ -739,7 +740,7 @@ function IdeiasPage() {
             type="button"
             key={id}
             aria-pressed={visao === id}
-            onClick={() => setVisao(id)}
+            onClick={() => void navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, visao: id }) as never, resetScroll: false })}
           >
             <b>{rotulo}</b>
             <span>{ajuda}</span>
