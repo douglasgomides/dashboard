@@ -33,7 +33,7 @@ export async function mockAccount(context: BrowserContext, profile: "admin" | "v
         const limit = Number(url.searchParams.get("limit") ?? (range ? range[1] - range[0] + 1 : 1000));
         value = value.slice(offset, offset + limit);
       }
-      return route.fulfill({ status, json: value });
+      return route.fulfill({ status, json: value, headers: request.method() === "HEAD" ? { "content-range": `*/${Array.isArray(value) ? value.length : 0}`, "access-control-expose-headers": "content-range" } : {} });
     };
     if (path === "/auth/v1/token") { signedIn = true; return fulfill(session); }
     if (path === "/auth/v1/logout") { signedIn = false; return fulfill({}); }

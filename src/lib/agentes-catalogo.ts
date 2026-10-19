@@ -28,7 +28,7 @@ export const AGENTES: AgenteCatalogo[] = [
     papel: "A secretária que não deixa ninguém esfriar.",
     le: "Conversas lidas pela auditoria: quem teve interesse e não agendou, quem ficou esperando resposta da clínica.",
     entrega: "Lista do dia com a mensagem individual pronta para cada pessoa, no tom da clínica.",
-    frequencia: "Todo dia de manhã", intervaloHoras: 20, maxAbertas: 30, modulo: "hub", ondeHub: "atendimento", ondeSap: "agentes#ag-recuperacao",
+    frequencia: "Rotina diária", intervaloHoras: 20, maxAbertas: 30, modulo: "hub", ondeHub: "atendimento", ondeSap: "agentes#ag-recuperacao",
     quemAprova: "Secretária ou atendimento: revisa, envia pelo WhatsApp da clínica e marca o que aconteceu.",
   },
   {
@@ -36,7 +36,7 @@ export const AGENTES: AgenteCatalogo[] = [
     papel: "O gestor de tráfego que olha a conta todo dia.",
     le: "Investimento, conversas, leads e frequência de cada campanha na Meta (últimos 7 dias contra os 7 anteriores).",
     entrega: "O que pausar, revisar, trocar o criativo ou escalar, com os números e copies novas prontas.",
-    frequencia: "Todo dia de manhã", intervaloHoras: 20, maxAbertas: 10, modulo: "hub", ondeHub: "anuncios", ondeSap: "midia",
+    frequencia: "Rotina diária", intervaloHoras: 20, maxAbertas: 10, modulo: "hub", ondeHub: "anuncios", ondeSap: "midia",
     quemAprova: "Gestor de tráfego: decide e faz a mudança no Gerenciador de Anúncios. O agente não mexe na conta.",
   },
   {
@@ -44,7 +44,7 @@ export const AGENTES: AgenteCatalogo[] = [
     papel: "O roteirista que entrega a semana pronta para gravar.",
     le: "Brand Brain, posts que mais funcionaram, dúvidas reais nos comentários e nas conversas, objeções e datas.",
     entrega: "Roteiros de Reels cena a cena, carrosséis slide a slide, legenda e chamada, prontos para copiar ou levar ao planejador.",
-    frequencia: "Toda segunda-feira", intervaloHoras: 6 * 24 + 12, maxAbertas: 8, modulo: "hub", ondeHub: "ideias", ondeSap: "agentes#ag-conteudo",
+    frequencia: "Rotina semanal", intervaloHoras: 6 * 24 + 12, maxAbertas: 8, modulo: "hub", ondeHub: "ideias", ondeSap: "agentes#ag-conteudo",
     quemAprova: "Social media e médico: revisam, gravam e publicam.",
   },
   {
@@ -52,7 +52,7 @@ export const AGENTES: AgenteCatalogo[] = [
     papel: "O estrategista de crescimento.",
     le: "Brand Brain, ficha, conversas, CRM, Instagram, anúncios, datas de saúde e o resultado das estratégias anteriores.",
     entrega: "Estratégias, pacotes de cuidado e abordagens com público, texto pronto, passos e métrica.",
-    frequencia: "Toda segunda-feira", intervaloHoras: 6 * 24 + 12, maxAbertas: 10, modulo: "hub", ondeHub: "campanhas", ondeSap: "midia",
+    frequencia: "Rotina semanal", intervaloHoras: 6 * 24 + 12, maxAbertas: 10, modulo: "hub", ondeHub: "campanhas", ondeSap: "midia",
     quemAprova: "Estrategista e clínica: aprovam, executam e registram o resultado, que volta para o agente.",
   },
   {

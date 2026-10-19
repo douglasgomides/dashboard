@@ -76,7 +76,7 @@ function Cartao({ i, podeEditar, onEstado }: { i: Ideia; podeEditar: boolean; on
   );
 }
 
-export function EstrategiasIA({ clientId, podeEditar }: { clientId: string; podeEditar: boolean }) {
+export function EstrategiasIA({ clientId, podeEditar, mostrarExecutar = true }: { clientId: string; podeEditar: boolean; mostrarExecutar?: boolean }) {
   const { isAdmin } = useAuth();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["campanhas-ideias", clientId], queryFn: () => lerIdeias(clientId) });
@@ -94,6 +94,7 @@ export function EstrategiasIA({ clientId, podeEditar }: { clientId: string; pode
     } finally {
       setAndamento(null);
       await qc.invalidateQueries({ queryKey: ["campanhas-ideias", clientId] });
+      await qc.invalidateQueries({ queryKey: ["agentes-trabalho", clientId] });
     }
   }
   async function decidir(id: string, estado: EstadoIdeia, resultado?: string) {
@@ -101,6 +102,7 @@ export function EstrategiasIA({ clientId, podeEditar }: { clientId: string; pode
     const { error } = await db.rpc("campanha_ideia_decidir", { p_id: id, p_estado: estado, p_resultado: resultado ?? null });
     if (error) setErro(error.message);
     await qc.invalidateQueries({ queryKey: ["campanhas-ideias", clientId] });
+    await qc.invalidateQueries({ queryKey: ["agentes-trabalho", clientId] });
   }
 
   const todas = [...(q.data ?? [])].sort((a, b) => ORDEM.indexOf(a.estado) - ORDEM.indexOf(b.estado));
@@ -114,7 +116,7 @@ export function EstrategiasIA({ clientId, podeEditar }: { clientId: string; pode
           <h3 id="camp-ia" className="flex items-center gap-1.5 text-sm font-semibold"><Wand2 size={16} aria-hidden /> Estratégias da IA, cruzando o Brand Brain com os dados</h3>
           <p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>Pacotes e programas de cuidado, captação, anúncios, conteúdo, reativação, retorno, abordagens de atendimento e parcerias. Cada ideia cita o dado e o item do Brain que a sustentam. Sem preço, desconto ou promessa de resultado (CFM); quem executa é a equipe.</p>
         </div>
-        {isAdmin && (
+        {isAdmin && mostrarExecutar && (
           <button type="button" className="btn inline-flex items-center gap-1.5" disabled={!!andamento} onClick={pedir}>
             {andamento ? <Loader2 size={14} aria-hidden className="animate-spin" /> : <Wand2 size={14} aria-hidden />} {andamento ? "Gerando…" : todas.length ? "Gerar novas estratégias" : "Gerar estratégias"}
           </button>
@@ -122,7 +124,7 @@ export function EstrategiasIA({ clientId, podeEditar }: { clientId: string; pode
       </div>
       {andamento && <p className="text-xs" style={{ color: "var(--muted)" }} aria-live="polite">{andamento}</p>}
       {erro && <p className="text-sm" style={{ color: "var(--crit)" }}>{erro}</p>}
-      {q.isLoading ? null : visiveis.length === 0 ? (
+      {q.isLoading ? <p role="status">Carregando estratégias…</p> : q.isError ? <p role="alert">Não foi possível carregar as estratégias. <button type="button" className="underline" onClick={() => void q.refetch()}>Tentar novamente</button></p> : visiveis.length === 0 ? (
         <p className="text-sm" style={{ color: "var(--ink-2)" }}>{todas.length ? "Nenhuma estratégia aberta." : isAdmin ? "Ainda sem estratégias. Gere as primeiras: o agente lê o Brand Brain aprovado, as conversas, o CRM, o Instagram e os anúncios." : "A equipe Doctor Creator ainda não gerou estratégias para esta clínica."}</p>
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
