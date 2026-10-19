@@ -142,7 +142,11 @@ async function fetchInsightsBatch(
       const id = idsBatch[i];
       const sub = responses[i];
       if (!sub || sub.code !== 200) {
-        errors.push(`insights ${id}: Graph respondeu ${sub?.code ?? "sem resposta"}`);
+        // Subcódigo 2108006: o post é de antes de a conta virar comercial (ex.: post de 2016 do Douglas). A Meta nunca
+        // mede esse post, em nenhuma rodada, então não é erro: contava como falha do sync em toda atualização manual.
+        let semMedicaoPermanente = false;
+        try { semMedicaoPermanente = JSON.parse(sub?.body ?? "{}")?.error?.error_subcode === 2108006; } catch { /* corpo inválido */ }
+        if (!semMedicaoPermanente) errors.push(`insights ${id}: Graph respondeu ${sub?.code ?? "sem resposta"}`);
         continue;
       }
       try {
