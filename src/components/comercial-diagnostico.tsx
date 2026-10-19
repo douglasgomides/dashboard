@@ -15,6 +15,7 @@ import {
 import { ROTULO_FAIXA, type Faixa } from "@/lib/benchmarks";
 import { ROTULO_RESPONSAVEL, type Insight, type Tom } from "@/lib/insight";
 import { BotaoAcao, InsightCard, OQueE, SeloStatus } from "@/components/insight-card";
+import { ehNegocioProprio } from "@/lib/negocio-proprio";
 
 // Peças da leitura comercial ("onde o funil quebra"), usadas pelas telas
 // Comercial e Jornada. A lógica está toda em src/lib/comercial.ts.
@@ -24,7 +25,15 @@ export function useDiagnosticoComercial(clientId: string, start: string, end: st
     queryKey: ["diagnostico-comercial", clientId, start, end],
     queryFn: async () => {
       const d = await getDiagnosticoComercial(clientId, start, end);
-      return { dados: d, ...lerComercial(d) };
+      const leitura = lerComercial(d);
+      if (!ehNegocioProprio(clientId)) return { dados: d, ...leitura };
+      // Doctor Creator e Douglas vendem curso: "consulta agendada" não é etapa do funil deles.
+      return {
+        dados: d,
+        ...leitura,
+        checklist: leitura.checklist.filter((i) => i.id !== "etapas"),
+        insights: leitura.insights.filter((i) => !i.id.endsWith("etapas")),
+      };
     },
   });
 }

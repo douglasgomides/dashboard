@@ -1,3 +1,4 @@
+import { ehNegocioProprio } from "@/lib/negocio-proprio";
 import { useState, type FormEvent } from "react";
 import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -296,7 +297,7 @@ function AdminClientsPage() {
     staleTime: 5 * 60_000,
     retry: false,
   });
-  const semLogin = (id: string) => !!logins && !logins.get(id);
+  const semLogin = (id: string) => !!logins && !logins.get(id) && !ehNegocioProprio(id);
 
   // ROI dos últimos 30 dias por cliente (mesma regra do bloco "Retorno do investimento" do Resultado).
   const ult30 = resolveDateRange({ preset: "30d" });
