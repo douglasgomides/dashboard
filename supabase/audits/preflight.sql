@@ -45,8 +45,8 @@ select 'migration_history' as section,
 -- Uma linha por versão no Supabase não equivale a um
 -- arquivo por versão; não exigir count(*)=133 nem reparar o histórico aqui.
 select 'migration_manifest_note' as section,
-       133 as repository_sql_files,
-       130 as repository_distinct_versions,
+       134 as repository_sql_files,
+       131 as repository_distinct_versions,
        array['20261014120000', '20261018120000', '20261018130000']::text[] as historical_duplicate_versions,
        '20261023091000'::text as latest_repository_version;
 
