@@ -2,10 +2,10 @@
 // trabalha (Recuperação no WhatsApp, Gestor de anúncios em Anúncios, Roteirista em Ideias). Os agentes rodam sozinhos
 // no horário (src/lib/agentes-catalogo.ts); o resultado da recuperação é medido sozinho pelas conversas e pelo CRM.
 // Marcar à mão é atalho, não obrigação. Nada é enviado, publicado ou alterado em anúncio pelo painel.
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Brain, CalendarPlus, CheckCircle2, ChevronDown, Filter, Headset, Lightbulb, Loader2, MessageCircle, Play, ThumbsDown, ThumbsUp, XCircle } from "lucide-react";
+import { Bot, Brain, CalendarPlus, CheckCircle2, ChevronDown, Headset, Lightbulb, Loader2, MessageCircle, Play, ThumbsDown, ThumbsUp, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useClientRole } from "@/hooks/use-client-role";
@@ -18,6 +18,9 @@ import { ProvaResultado } from "@/components/prova-resultado";
 import { usePautas } from "@/components/planejador-conteudo";
 import { AssumirRecuperacao, OperacaoRecuperacao } from "@/components/operacao-recuperacao";
 import { BotaoCopiar } from "@/components/botao-copiar";
+import { CentroTrabalhoAgentes } from "@/components/agentes-trabalho";
+import { EstrategiasIA } from "@/components/estrategias-ia";
+import { TRABALHOS_AGENTE } from "@/lib/agentes-trabalho";
 
 const db = supabase as any;
 type Estado = "proposta" | "feita" | "descartada";
@@ -59,12 +62,13 @@ function useDecidir(clientId: string, ag: string) {
   return async (id: string, estado: Estado, resultado?: string) => {
     const { error } = await db.rpc("sugestao_decidir", { p_id: id, p_estado: estado, p_resultado: resultado ?? null });
     await qc.invalidateQueries({ queryKey: ["sugestoes-agentes", clientId, ag] });
+    await qc.invalidateQueries({ queryKey: ["agentes-trabalho", clientId] });
     if (error) throw error;
   };
 }
 
 /** Cabeçalho comum: quem é o agente, quando roda, quando entregou, e "Rodar agora" para a equipe. */
-function Cabecalho({ a, clientId, ultima, aoTerminar }: { a: AgenteCatalogo; clientId: string; ultima: string | null; aoTerminar: () => void }) {
+function Cabecalho({ a, clientId, ultima, aoTerminar, mostrarExecutar = true }: { a: AgenteCatalogo; clientId: string; ultima: string | null; aoTerminar: () => void; mostrarExecutar?: boolean }) {
   const { isAdmin } = useAuth();
   const [andando, setAndando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -78,14 +82,14 @@ function Cabecalho({ a, clientId, ultima, aoTerminar }: { a: AgenteCatalogo; cli
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div className="min-w-0">
         <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Bot size={16} aria-hidden style={{ color: "var(--accent)" }} /> {a.nome}</h3>
-        <p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>{a.entrega}</p>
-        <p className="mt-0.5 text-[11px]" style={{ color: "var(--muted)" }}>Roda sozinho: {a.frequencia.toLowerCase()}{ultima ? ` · última entrega ${ha(ultima)}` : ""} · {a.quemAprova}</p>
+        {mostrarExecutar && <><p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>{a.entrega}</p>
+        <p className="mt-0.5 text-[11px]" style={{ color: "var(--muted)" }}>Rotina prevista: {a.frequencia.toLowerCase()}{ultima ? ` · última entrega ${ha(ultima)}` : ""} · {a.quemAprova}</p></>}
         {andando && <p className="mt-1 text-xs" style={{ color: "var(--muted)" }} aria-live="polite">{andando}</p>}
         {erro && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{erro}</p>}
       </div>
-      {isAdmin && (
+      {isAdmin && mostrarExecutar && (
         <button type="button" className="btn inline-flex items-center gap-1.5" disabled={!!andando} onClick={rodar} title="Rodar este agente agora para esta clínica">
-          {andando ? <Loader2 size={14} aria-hidden className="animate-spin" /> : <Play size={14} aria-hidden />} {andando ? "Rodando…" : "Rodar agora"}
+          {andando ? <Loader2 size={14} aria-hidden className="animate-spin" /> : <Play size={14} aria-hidden />} {andando ? "Preparando…" : TRABALHOS_AGENTE[a.id].acao}
         </button>
       )}
     </div>
@@ -141,7 +145,7 @@ const Secao = ({ id, children }: { id: string; children: React.ReactNode }) => (
 
 // ---------------------------------------------------------------- Recuperação de pacientes
 
-export function RecuperarHoje({ clientId, podeEditar }: { clientId: string; podeEditar: boolean }) {
+export function RecuperarHoje({ clientId, podeEditar, mostrarExecutar = true }: { clientId: string; podeEditar: boolean; mostrarExecutar?: boolean }) {
   const { isAdmin } = useAuth();
   const q = useSugestoes(clientId, "recuperacao");
   const decidir = useDecidir(clientId, "recuperacao");
@@ -151,7 +155,7 @@ export function RecuperarHoje({ clientId, podeEditar }: { clientId: string; pode
     <div className="space-y-4">
     <OperacaoRecuperacao key={clientId} clientId={clientId} podeEditar={podeEditar} />
     <Secao id="ag-recuperacao">
-            <Cabecalho a={a} clientId={clientId} ultima={itens[0]?.criado_em ?? null} aoTerminar={() => q.refetch()} />
+            <Cabecalho a={a} clientId={clientId} ultima={itens[0]?.criado_em ?? null} aoTerminar={() => q.refetch()} mostrarExecutar={mostrarExecutar} />
       {q.isError && <p role="alert" className="text-sm">Não foi possível carregar as propostas. <button type="button" className="underline" onClick={() => void q.refetch()}>Tentar novamente</button></p>}
       {q.isSuccess && <Lista itens={itens} vazio="Nenhuma proposta pendente de revisão. Os casos assumidos ficam no acompanhamento acima." render={(s) => {
         const nome = primeiro(s.conversa?.pessoa?.nome);
@@ -263,15 +267,15 @@ function AcoesMeta({ clientId, s }: { clientId: string; s: Sugestao }) {
   );
 }
 
-export function GestorAnunciosIA({ clientId, podeEditar }: { clientId: string; podeEditar: boolean }) {
+export function GestorAnunciosIA({ clientId, podeEditar, mostrarExecutar = true }: { clientId: string; podeEditar: boolean; mostrarExecutar?: boolean }) {
   const q = useSugestoes(clientId, "anuncios", 10);
   const decidir = useDecidir(clientId, "anuncios");
   const a = agente("anuncios");
   const itens = q.data ?? [];
   return (
     <Secao id="ag-anuncios">
-      <Cabecalho a={a} clientId={clientId} ultima={itens[0]?.criado_em ?? null} aoTerminar={() => q.refetch()} />
-      <Lista itens={itens} vazio="Nenhuma campanha fora do normal. O agente olha a conta de novo amanhã cedo." render={(s) => <CartaoAnuncio key={s.id} s={s} clientId={clientId} podeEditar={podeEditar} decidir={(e) => decidir(s.id, e)} />} />
+      <Cabecalho a={a} clientId={clientId} ultima={itens[0]?.criado_em ?? null} aoTerminar={() => q.refetch()} mostrarExecutar={mostrarExecutar} />
+      {q.isPending ? <p role="status">Carregando recomendações…</p> : q.isError ? <p role="alert">Não foi possível carregar as recomendações. <button type="button" className="underline" onClick={() => void q.refetch()}>Tentar novamente</button></p> : <Lista itens={itens} vazio="Nenhuma recomendação neste intervalo. Confira o estado da rodada e a cobertura dos anúncios; isso não confirma que a conta está saudável." render={(s) => <CartaoAnuncio key={s.id} s={s} clientId={clientId} podeEditar={podeEditar} decidir={(e) => decidir(s.id, e)} />} />}
     </Secao>
   );
 }
@@ -304,33 +308,48 @@ function CartaoAnuncio({ s, clientId, podeEditar, decidir }: { s: Sugestao; clie
 
 // ---------------------------------------------------------------- Roteirista de conteúdo
 
-export function RoteirosProntos({ clientId, podeEditar }: { clientId: string; podeEditar: boolean }) {
+export function RoteirosProntos({ clientId, podeEditar, mostrarExecutar = true }: { clientId: string; podeEditar: boolean; mostrarExecutar?: boolean }) {
   const q = useSugestoes(clientId, "conteudo", 21);
   const decidir = useDecidir(clientId, "conteudo");
   const pautas = usePautas(clientId);
   const a = agente("conteudo");
   const itens = q.data ?? [];
+  const [levando, setLevando] = useState(false);
+  const [erroPlanejador, setErroPlanejador] = useState<string | null>(null);
+  const [sucessoPlanejador, setSucessoPlanejador] = useState<string | null>(null);
+  const guardaPlanejador = useRef(false);
   const noPlanejador = new Set((pautas.q.data?.pautas ?? []).map((p) => p.ideia_id));
-  function levar(s: Sugestao) {
+  async function levar(s: Sugestao) {
+    if (guardaPlanejador.current || !pautas.q.isSuccess || pautas.q.data.semTabela) return;
+    guardaPlanejador.current = true; setLevando(true); setErroPlanejador(null); setSucessoPlanejador(null);
     const p = s.conteudo as PecaConteudo;
-    pautas.criar.mutate({
+    try {
+    await pautas.criar.mutateAsync({
       client_id: clientId, ideia_id: `agente:${s.id}`, titulo: p.titulo, formato: p.formato, objetivo: p.objetivo, status: "escolhida",
       motivo: p.por_que || null, origem_tipo: "dado", origem_texto: p.evidencias.join(" · ") || null, gancho: p.gancho,
       roteiro: p.formato === "reels" ? p.cenas.map((c) => `${c.fala}${c.tela ? ` [tela: ${c.tela}]` : ""}${c.visual ? ` (imagem: ${c.visual})` : ""}`) : p.slides.map((sl, n) => `Slide ${n + 1}: ${sl.titulo}${sl.texto ? `. ${sl.texto}` : ""}`),
       cta: p.cta, aviso: null, dia: null, post_id: null,
-    }, { onSuccess: () => decidir(s.id, "feita") });
+    });
+    try { await decidir(s.id, "feita"); setSucessoPlanejador("Roteiro salvo no planejador. Abra o planejamento da semana para definir a data e acompanhar a produção."); }
+    catch { setErroPlanejador("O roteiro foi salvo no planejador, mas a fila de revisão não foi atualizada. Confira a pauta no planejador antes de repetir a operação."); }
+    } catch { setErroPlanejador("Não foi possível salvar o roteiro no planejador. A proposta foi preservada; tente novamente."); }
+    finally { guardaPlanejador.current = false; setLevando(false); }
   }
   return (
     <Secao id="ag-conteudo">
-      <Cabecalho a={a} clientId={clientId} ultima={itens[0]?.criado_em ?? null} aoTerminar={() => q.refetch()} />
-      <Lista itens={itens} vazio="Nenhum roteiro aberto. O agente entrega a próxima semana na segunda-feira." render={(s) => (
-        <CartaoPeca key={s.id} s={s} podeEditar={podeEditar} decidir={(e) => decidir(s.id, e)} levar={podeEditar && !noPlanejador.has(`agente:${s.id}`) ? () => levar(s) : undefined} />
-      )} />
+      <Cabecalho a={a} clientId={clientId} ultima={itens[0]?.criado_em ?? null} aoTerminar={() => q.refetch()} mostrarExecutar={mostrarExecutar} />
+      {pautas.q.isError && <p role="alert">Não foi possível conferir o planejador. <button type="button" className="underline" onClick={() => void pautas.q.refetch()}>Tentar novamente</button></p>}
+      {pautas.q.data?.semTabela && <p role="status">Planejador indisponível nesta instalação. Os roteiros continuam disponíveis para revisão e cópia.</p>}
+      {erroPlanejador && <p role="alert">{erroPlanejador}</p>}
+      {sucessoPlanejador && <p role="status">{sucessoPlanejador}</p>}
+      {q.isPending ? <p role="status">Carregando roteiros…</p> : q.isError ? <p role="alert">Não foi possível carregar os roteiros. <button type="button" className="underline" onClick={() => void q.refetch()}>Tentar novamente</button></p> : <Lista itens={itens} vazio="Nenhum roteiro aberto neste intervalo. Confira os dados e o estado da rodada antes de preparar novos materiais." render={(s) => (
+        <CartaoPeca key={s.id} s={s} podeEditar={podeEditar} decidir={(e) => decidir(s.id, e)} levando={levando} levar={podeEditar && pautas.q.isSuccess && !pautas.q.data.semTabela && !noPlanejador.has(`agente:${s.id}`) ? () => void levar(s) : undefined} />
+      )} />}
     </Secao>
   );
 }
 
-function CartaoPeca({ s, podeEditar, decidir, levar }: { s: Sugestao; podeEditar: boolean; decidir: (e: Estado) => Promise<void>; levar?: () => void }) {
+function CartaoPeca({ s, podeEditar, decidir, levar, levando }: { s: Sugestao; podeEditar: boolean; decidir: (e: Estado) => Promise<void>; levar?: () => void; levando?: boolean }) {
   const [aberto, setAberto] = useState(false);
   const p = s.conteudo as PecaConteudo;
   if (!p?.formato) return null;
@@ -377,7 +396,7 @@ function CartaoPeca({ s, podeEditar, decidir, levar }: { s: Sugestao; podeEditar
       )}
       <Acoes s={s} podeEditar={podeEditar} decidir={decidir} extra={<>
         <BotaoCopiar texto={pecaParaTexto(p)} rotulo="Copiar tudo" />
-        {levar && <button type="button" className="btn inline-flex items-center gap-1" onClick={levar}><CalendarPlus size={14} aria-hidden /> Levar ao planejador</button>}
+        {levar && <button type="button" className="btn inline-flex items-center gap-1" disabled={levando} onClick={levar}><CalendarPlus size={14} aria-hidden /> {levando ? "Salvando no planejador…" : "Levar ao planejador"}</button>}
       </>} />
     </article>
   );
@@ -393,6 +412,8 @@ const NOME_AGENTE: Record<string, string> = { conteudo: "Roteirista", recuperaca
 export function AprendizadosAgentes({ clientId, podeEditar }: { clientId: string; podeEditar: boolean }) {
   const qc = useQueryClient();
   const [verVetadas, setVerVetadas] = useState(false);
+  const [vetando, setVetando] = useState(false);
+  const [erroLicao, setErroLicao] = useState<string | null>(null);
   const q = useQuery({
     queryKey: ["agentes-aprendizados", clientId],
     queryFn: async () => {
@@ -403,8 +424,13 @@ export function AprendizadosAgentes({ clientId, podeEditar }: { clientId: string
     },
   });
   async function vetar(id: string, v: boolean) {
-    await db.rpc("aprendizado_vetar", { p_id: id, p_vetar: v });
-    await qc.invalidateQueries({ queryKey: ["agentes-aprendizados", clientId] });
+    setVetando(true); setErroLicao(null);
+    try {
+      const { error } = await db.rpc("aprendizado_vetar", { p_id: id, p_vetar: v });
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["agentes-aprendizados", clientId] });
+    } catch { setErroLicao("Não foi possível salvar a decisão sobre esta lição. Tente novamente."); }
+    finally { setVetando(false); }
   }
   // A mesma lição aparece para mais de um agente (o Estrategista reaproveita); na tela, uma vez só.
   const vistas = new Set<string>();
@@ -417,7 +443,8 @@ export function AprendizadosAgentes({ clientId, podeEditar }: { clientId: string
         <h3 id="ag-aprendeu" className="flex items-center gap-1.5 text-sm font-semibold"><Lightbulb size={16} aria-hidden style={{ color: "var(--accent)" }} /> O que os agentes aprenderam com os dados desta clínica</h3>
         <p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>Todo dia o sistema compara o que funcionou e o que não funcionou (posts, conversas, anúncios e o resultado das próprias sugestões) e reescreve estas lições. Só vira lição o que tem amostra mínima e diferença grande; o que deixa de valer some sozinho. Os agentes seguem estas lições em toda rodada.{podeEditar ? " Se uma lição não faz sentido, vete: o agente para de usar." : ""}</p>
       </div>
-      {q.isLoading ? null : lista.length === 0 ? (
+      {erroLicao && <p role="alert">{erroLicao}</p>}
+      {q.isLoading ? <p role="status">Conferindo as lições da clínica…</p> : q.isError ? <p role="alert">Não foi possível carregar o aprendizado. <button type="button" className="underline" onClick={() => void q.refetch()}>Tentar novamente</button></p> : lista.length === 0 ? (
         <p className="text-sm" style={{ color: "var(--ink-2)" }}>Ainda sem lições. Elas aparecem quando há dado suficiente (pelo menos 12 posts com alcance, 25 conversas comerciais lidas ou 3 campanhas com resultado).</p>
       ) : (
         <ul className="space-y-2">
@@ -430,7 +457,7 @@ export function AprendizadosAgentes({ clientId, podeEditar }: { clientId: string
               <p className="mt-1 leading-relaxed" style={{ color: "var(--ink)" }}>{l.texto}</p>
               {Array.isArray(l.evidencia) && l.evidencia.length > 0 && <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs" style={{ color: "var(--ink-2)" }}>{l.evidencia.slice(0, 5).map((e) => <li key={e}>{e}</li>)}</ul>}
               {podeEditar && (
-                <button type="button" className="mt-1 inline-flex min-h-[32px] items-center gap-1 text-xs" style={{ color: "var(--muted)" }} onClick={() => vetar(l.id, l.estado !== "vetado")}>
+                <button type="button" disabled={vetando} className="mt-1 inline-flex min-h-[32px] items-center gap-1 text-xs" style={{ color: "var(--muted)" }} onClick={() => void vetar(l.id, l.estado !== "vetado")}>
                   <ThumbsDown size={13} aria-hidden /> {l.estado === "vetado" ? "Voltar a usar" : "Não faz sentido, vetar"}
                 </button>
               )}
@@ -546,74 +573,29 @@ export function AtendentePiloto({ clientId }: { clientId: string }) {
 
 // ---------------------------------------------------------------- painel "Agentes de IA"
 
-/** Uma linha por agente: o que faz, quando roda, o que está esperando a equipe e onde abrir. */
-export function PainelAgentes({ clientId, produto }: { clientId: string; produto: "hub" | "sap" }) {
+/** Um espaço de trabalho por problema, reutilizando as entregas e ações das telas de origem. */
+export function PainelAgentes({ clientId, produto, selecionado, onSelecionar }: {
+  clientId: string; produto: "hub" | "sap"; selecionado?: string; onSelecionar: (id: IdAgente, irParaEntregas?: boolean) => void;
+}) {
   const { podeEditar } = useClientRole(clientId);
   const { isAdmin } = useAuth();
-  const q = useQuery({
-    queryKey: ["painel-agentes", clientId],
-    queryFn: async () => {
-      const desde = new Date(Date.now() - 30 * 86_400_000).toISOString();
-      const fluxos = AGENTES.map((a) => a.fluxo);
-      const [sug, camp, brain, execs] = await Promise.all([
-        db.from("sugestoes_agentes").select("agente, estado, resultado, criado_em").eq("client_id", clientId).gte("criado_em", desde).limit(2000),
-        db.from("campanhas_ideias").select("estado, criado_em").eq("client_id", clientId).gte("criado_em", desde).limit(500),
-        db.from("brain_itens").select("estado, criado_em").eq("client_id", clientId).gte("criado_em", desde).limit(500),
-        db.from("agente_execucoes").select("fluxo, resultado, criado_em").eq("client_id", clientId).eq("estado", "concluida").in("fluxo", fluxos).order("criado_em", { ascending: false }).limit(40),
-      ]);
-      const por: Record<string, { abertas: number; ultima: string | null; nota?: string; filtro?: string; descartadas?: number }> = {};
-      const soma = (id: string, aberta: boolean, em: string) => {
-        const p = (por[id] ??= { abertas: 0, ultima: null });
-        if (aberta) p.abertas++;
-        if (!p.ultima || em > p.ultima) p.ultima = em;
-      };
-      for (const s of (sug.data ?? []) as { agente: string; estado: string; resultado: string | null; criado_em: string }[]) soma(s.agente, s.estado === "proposta", s.criado_em);
-      for (const c of (camp.data ?? []) as { estado: string; criado_em: string }[]) soma("campanhas", c.estado === "proposta", c.criado_em);
-      for (const b of (brain.data ?? []) as { estado: string; criado_em: string }[]) soma("brain", b.estado === "proposto", b.criado_em);
-      for (const r of [sug, camp, brain, execs]) if (r.error) throw r.error;
-      for (const e of (execs.data ?? []) as { fluxo: string; resultado: { filtro?: string | null; descartadas?: number } | null }[]) {
-        const a = AGENTES.find((x) => x.fluxo === e.fluxo);
-        const p = a ? (por[a.id] ??= { abertas: 0, ultima: null }) : null;
-        if (p && p.filtro === undefined && e.resultado?.filtro) { p.filtro = e.resultado.filtro; p.descartadas = e.resultado.descartadas; }
-      }
-      return por;
-    },
-  });
-  const lista = AGENTES.filter((a) => produto === "hub" || (a.ondeSap && a.id !== "recuperacao"));
-  return (
-    <div className="space-y-3">
-      <div className="hpagehead">
-        <h2>Agentes de IA</h2>
-        <p>{produto === "sap" ? "O SAP conduz a implantação com tarefas, responsáveis e evidências. O acompanhamento de acessos reconfere as pendências e pede aprovação para fechar o marco. As demais rotinas preparam materiais para a equipe." : "As rotinas filtram os dados disponíveis, consultam as lições da clínica e preparam propostas, com revisão de qualidade antes da equipe. No acompanhamento de oportunidades do Nexo, cada caso assumido ganha responsável, prazo, contato vinculado e verificação do desfecho. A equipe realiza o contato e decide as intervenções. Dados sem atualização confiável bloqueiam esse piloto."}</p>
-      </div>
-      <div className="grid gap-3 lg:grid-cols-2">
-        {lista.map((a) => {
-          const p = q.data?.[a.id];
-          const destino = produto === "sap" ? a.ondeSap : a.ondeHub;
-          const rota = destino?.startsWith("/") ? destino : produto === "sap" ? `/sap/${clientId}/${destino}` : `/${clientId}/${destino}`;
-          return (
-            <article key={a.id} className="flex flex-col rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="flex items-center gap-1.5 text-[15px] font-semibold"><Bot size={16} aria-hidden style={{ color: "var(--accent)" }} /> {a.nome}</h3>
-                {p?.abertas ? <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: "var(--accent)", color: "var(--on-accent, #fff)" }}>{p.abertas} para revisar</span> : null}
-              </div>
-              <p className="mt-0.5 text-xs italic" style={{ color: "var(--muted)" }}>{a.papel}</p>
-              <dl className="mt-2 space-y-1 text-xs" style={{ color: "var(--ink-2)" }}>
-                <div><dt className="inline font-semibold">Lê: </dt><dd className="inline">{a.le}</dd></div>
-                <div><dt className="inline font-semibold">Entrega: </dt><dd className="inline">{a.entrega}</dd></div>
-                <div><dt className="inline font-semibold">Quando: </dt><dd className="inline">{a.frequencia}{p?.ultima ? ` · última entrega ${ha(p.ultima)}` : " · ainda sem entrega"}</dd></div>
-                <div><dt className="inline font-semibold">Quem aprova: </dt><dd className="inline">{a.quemAprova}</dd></div>
-                {p?.nota && <div><dt className="inline font-semibold">Resultado: </dt><dd className="inline">{p.nota}</dd></div>}
-                {p?.filtro && <div className="flex items-start gap-1"><Filter size={12} aria-hidden className="mt-0.5 shrink-0" /><span><b>Filtro na última rodada:</b> {p.filtro}{p.descartadas ? `; o revisor e as regras de qualidade barraram ${p.descartadas} item${p.descartadas === 1 ? "" : "s"}` : ""}.</span></div>}
-              </dl>
-              <a href={rota} className="mt-2 self-start text-xs font-semibold" style={{ color: "var(--accent)" }}>Abrir →</a>
-            </article>
-          );
-        })}
-      </div>
-      <ProvaResultado clientId={clientId} />
-      {produto === "hub" && isAdmin && <AtendentePiloto clientId={clientId} />}
-      {produto === "hub" && <AprendizadosAgentes clientId={clientId} podeEditar={podeEditar} />}
-    </div>
-  );
+  const [verResultados, setVerResultados] = useState(false);
+  const [verPiloto, setVerPiloto] = useState(false);
+  return <div className="space-y-5">
+    <CentroTrabalhoAgentes clientId={clientId} produto={produto} selecionado={selecionado} onSelecionar={onSelecionar} renderEntregas={(id) => {
+      if (id === "conteudo") return <RoteirosProntos clientId={clientId} podeEditar={podeEditar} mostrarExecutar={false} />;
+      if (id === "recuperacao" && produto === "hub") return <RecuperarHoje clientId={clientId} podeEditar={podeEditar} mostrarExecutar={false} />;
+      if (id === "anuncios") return <GestorAnunciosIA clientId={clientId} podeEditar={podeEditar} mostrarExecutar={false} />;
+      if (id === "campanhas") return <EstrategiasIA clientId={clientId} podeEditar={podeEditar} mostrarExecutar={false} />;
+      return null;
+    }} />
+    <details className="agent-secondary-panel" onToggle={(e) => setVerResultados(e.currentTarget.open)}>
+      <summary>Acompanhar indicadores e aprendizado da clínica</summary>
+      {verResultados && <div className="space-y-4"><ProvaResultado clientId={clientId} />{produto === "hub" && <AprendizadosAgentes clientId={clientId} podeEditar={podeEditar} />}</div>}
+    </details>
+    {produto === "hub" && isAdmin && <details className="agent-secondary-panel" onToggle={(e) => setVerPiloto(e.currentTarget.open)}>
+      <summary>Teste de atendimento: avaliar respostas sem enviar ao paciente</summary>
+      {verPiloto && <AtendentePiloto clientId={clientId} />}
+    </details>}
+  </div>;
 }

@@ -459,8 +459,8 @@ try{
         await expect(page.getByRole('heading',{name:'Do próximo contato ao desfecho registrado.',exact:true})).not.toBeVisible();
         await expect(page.getByRole('heading',{name:'Atendente de IA · piloto em modo sombra',exact:true})).not.toBeVisible();
         await expect(page.getByRole('heading',{name:'O que os agentes aprenderam com os dados desta clínica',exact:true})).not.toBeVisible();
-        await expect(page.locator('.hpagehead')).toContainText('O SAP conduz a implantação com tarefas, responsáveis e evidências.');
-        await expect(page.locator('.hpagehead')).not.toContainText('oportunidades do Nexo');
+        await expect(page.locator('.agent-intro')).toContainText('O SAP conduz a implantação com tarefas, responsáveis e evidências.');
+        await expect(page.locator('.agent-intro')).not.toContainText('oportunidades do Nexo');
         const organize=panel.getByRole('button',{name:'Conferir e organizar pendências',exact:true});
         await organize.click();const actions=panel.getByRole('region',{name:'Ações de acesso do SAP',exact:true});
         await expect(actions).toContainText('Confirmar acesso: Doctor Creator como parceira');await expect(actions).toContainText('Gestor de Tráfego · Jordan QA');await expect(actions).toContainText('prazo:');

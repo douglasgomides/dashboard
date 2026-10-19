@@ -32,7 +32,9 @@ export function ProvaResultado({ clientId }: { clientId: string }) {
     },
   });
   const linhas = q.data ?? [];
-  if (q.isLoading || !linhas.length) return null;
+  if (q.isLoading) return <p role="status">Conferindo os indicadores da clínica…</p>;
+  if (q.isError) return <p role="alert">Não foi possível carregar os indicadores. <button type="button" className="underline" onClick={() => void q.refetch()}>Tentar novamente</button></p>;
+  if (!linhas.length) return <p className="text-sm">Ainda não há histórico suficiente para comparar a evolução dos indicadores da clínica.</p>;
   const { atual, anterior } = compararPeriodos(linhas, new Date().toISOString());
   const temAnterior = anterior.semanas > 0;
   const a: Bloco = atual, b: Bloco | null = temAnterior ? anterior : null;
@@ -40,7 +42,7 @@ export function ProvaResultado({ clientId }: { clientId: string }) {
     <section aria-labelledby="prova" className="space-y-3 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <div>
         <h3 id="prova" className="flex items-center gap-1.5 text-sm font-semibold"><TrendingUp size={16} aria-hidden style={{ color: "var(--accent)" }} /> O que mudou: últimas {a.semanas} semanas{b ? ` contra as ${b.semanas} anteriores` : ""}</h3>
-        <p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>Medido sozinho, das conversas do WhatsApp, da leitura da IA e dos anúncios. É o número que mostra se o trabalho da equipe e dos agentes está funcionando.{!b ? ` O histórico de conversas começa em ${new Date(linhas[0].semana + "T12:00:00").toLocaleDateString("pt-BR")}: este é o ponto de partida.` : ""}</p>
+        <p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>Indicadores das conversas, da leitura da IA e dos anúncios para acompanhar a evolução da clínica. A comparação não atribui a mudança aos agentes. Agendamentos classificados pela IA precisam de conferência; o investimento por agendamento não é custo de aquisição atribuído.{!b ? ` O histórico de conversas começa em ${new Date(linhas[0].semana + "T12:00:00").toLocaleDateString("pt-BR")}: este é o ponto de partida.` : ""}</p>
       </div>
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Indicador rotulo="Tempo até a 1ª resposta" atual={a.resposta_s} anterior={b?.resposta_s ?? null} fmt={duracaoCurta} menorMelhor ajuda="Mediana do tempo entre a primeira mensagem do paciente e a primeira resposta da clínica." />

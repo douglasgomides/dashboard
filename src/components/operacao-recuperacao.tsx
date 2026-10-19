@@ -20,6 +20,7 @@ function useAtualizar(clientId: string) {
     qc.invalidateQueries({ queryKey: ["operacao-recuperacao", clientId] }),
     qc.invalidateQueries({ queryKey: ["sugestoes-agentes", clientId, "recuperacao"] }),
     qc.invalidateQueries({ queryKey: ["painel-agentes", clientId] }),
+    qc.invalidateQueries({ queryKey: ["agentes-trabalho", clientId] }),
   ]);
 }
 
