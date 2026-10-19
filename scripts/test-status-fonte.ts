@@ -51,4 +51,8 @@ assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-17", fonte: "ins
 assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-15", fonte: "instagram" }, "2026-10-19").cor, "amarelo");
 assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-12", fonte: "instagram" }, "2026-10-19").cor, "vermelho", "5 dias de atraso real continua vermelho");
 assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-17", fonte: "anuncios" }, "2026-10-19").cor, "amarelo", "anúncios não ganham folga");
+// A folga da Meta NÃO esconde sincronização parada: dado em "hoje menos 2", mas última atualização bem-sucedida há 2+ dias.
+assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-17", fonte: "instagram", ultimo_sucesso: "2026-10-19T09:30:00Z" }, "2026-10-19").cor, "verde");
+assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-17", fonte: "instagram", ultimo_sucesso: "2026-10-17T09:30:00Z" }, "2026-10-19").cor, "amarelo");
+assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-14", fonte: "instagram", ultimo_sucesso: "2026-10-14T09:30:00Z" }, "2026-10-19").cor, "vermelho");
 console.log("status-fonte: ok");

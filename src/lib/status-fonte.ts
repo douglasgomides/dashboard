@@ -28,6 +28,8 @@ export interface EntradaStatus {
   /** Dia do último dado gravado (YYYY-MM-DD), do próprio dado, não da sincronização. */
   data_ate: string | null;
   last_error?: string | null;
+  /** Quando a última atualização deu certo (sync_status.last_success_at). Evita que a folga da Meta esconda uma sincronização parada. */
+  ultimo_sucesso?: string | null;
   motivo?: string | null;
   motivo_dono?: string | null;
   /** A equipe marcou que o cliente não usa esta fonte de propósito. */
@@ -91,7 +93,12 @@ export function statusDaFonte(e: EntradaStatus, hoje: string = hojeBrasilia()): 
     return { cor: "cinza", ligado, naoUsa: false, rotulo: "Não ligado", dias: null, data: null, detalhe: "Fonte não conectada", motivo: null, peso: 0 };
   }
   const data = e.data_ate ? ddmm(e.data_ate) : null;
-  const dias = e.data_ate ? Math.max(0, (contaDiasUteis(e.fonte) ? diasUteisEntre(hoje, e.data_ate) : diasEntre(hoje, e.data_ate)) - folgaDaFonte(e.fonte)) : null;
+  let dias = e.data_ate ? Math.max(0, (contaDiasUteis(e.fonte) ? diasUteisEntre(hoje, e.data_ate) : diasEntre(hoje, e.data_ate)) - folgaDaFonte(e.fonte)) : null;
+  // A folga da Meta só vale se a sincronização está rodando: Instagram com a última atualização bem-sucedida há 2+ dias
+  // é atraso nosso, não da Meta. Sem isso, uma sincronização parada ficaria verde por 2 dias a mais.
+  if (dias != null && e.fonte === "instagram" && e.ultimo_sucesso) {
+    dias = Math.max(dias, Math.max(0, diasEntre(hoje, e.ultimo_sucesso.slice(0, 10))));
+  }
   const erro = e.last_error ? e.last_error.replace(/\s+/g, " ").trim() : null;
   const base = { ligado, naoUsa: false, data, dias, motivo: motivo ?? (erro ? `Erro na última atualização: ${erro.slice(0, 140)}` : null) };
   if (dias == null) return { ...base, cor: "vermelho", rotulo: erro ? "Erro" : "Sem dado", detalhe: "Nenhum dado gravado ainda", peso: 3 };
