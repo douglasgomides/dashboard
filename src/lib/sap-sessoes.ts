@@ -230,7 +230,7 @@ export interface PassoTrilha { s: DefSessao; data: string | null; estado: Estado
 /** Cada reunião na ordem do programa, com a data-alvo do cronograma e o estado. "proxima" = a primeira ainda aberta. */
 export function trilha(
   sessoes: DefSessao[],
-  crono: { n: number; dataAlvo: string; dataIni: string; dataFim: string; status: string }[],
+  crono: { n: number; dataAlvo: string; dataUtil?: string; dataIni: string; dataFim: string; status: string }[],
   hoje: string,
 ): { passos: PassoTrilha[]; proxima: PassoTrilha | null } {
   const porN = new Map(crono.map((c) => [c.n, c]));
@@ -240,8 +240,8 @@ export function trilha(
       const c = porN.get(s.cronoN);
       if (!c) return { s, data: null, estado: "futura" as EstadoTrilha, diasAte: null };
       const estado: EstadoTrilha = c.status === "feito" ? "feita" : c.status === "atrasado" ? "atrasada" : c.status === "agora" ? "agora" : "futura";
-      const diasAte = Math.round((Date.parse(`${c.dataAlvo}T12:00:00Z`) - Date.parse(`${hoje}T12:00:00Z`)) / 86_400_000);
-      return { s, data: c.dataAlvo, estado, diasAte };
+      const diasAte = Math.round((Date.parse(`${c.dataUtil ?? c.dataAlvo}T12:00:00Z`) - Date.parse(`${hoje}T12:00:00Z`)) / 86_400_000);
+      return { s, data: c.dataUtil ?? c.dataAlvo, estado, diasAte };
     });
   const i = passos.findIndex((p) => p.estado !== "feita");
   if (i >= 0 && passos[i].estado === "futura") passos[i] = { ...passos[i], estado: "proxima" };

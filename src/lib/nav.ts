@@ -253,7 +253,7 @@ export const AREAS: NavArea[] = [
       },
       {
         path: "/vendas-kommo",
-        label: "Vendas por origem (Kommo)",
+        label: "Resultados por origem do CRM",
         Icone: ShoppingBag,
         admin: true,
         equipe: true,

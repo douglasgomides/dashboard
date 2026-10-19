@@ -645,11 +645,11 @@ function IdeiasPage() {
   });
 
   const res = useMemo(() => {
-    if (!posts.data || !comentarios.data) return null;
-    const voz = analisarVozDoPaciente(comentarios.data.comentarios, {
-      donos: comentarios.data.donos,
+    if (!posts.data) return null;
+    const voz = analisarVozDoPaciente(comentarios.data?.comentarios ?? [], {
+      donos: comentarios.data?.donos ?? [],
     });
-    const base = buildIdeias(posts.data, comentarios.data.comentarios, { voz });
+    const base = buildIdeias(posts.data, comentarios.data?.comentarios ?? [], { voz });
     const ident = ideiasDeIdentificacao(todosComentarios.data ?? []);
     return {
       ...base,
@@ -800,7 +800,7 @@ function IdeiasPage() {
         <Carregando texto="Calculando ideias…" />
       </div>
     );
-  if (posts.error || comentarios.error || !res)
+  if (posts.error || !res)
     return (
       <div>
         {head}
@@ -836,6 +836,7 @@ function IdeiasPage() {
   return (
     <div className="space-y-4">
       {head}
+      {comentarios.error && <p role="alert" className="rounded-xl border p-3 text-sm">Não foi possível carregar os comentários. As ideias abaixo usam somente os posts disponíveis; dúvidas e relatos do público estão incompletos. <button type="button" className="underline" onClick={() => void comentarios.refetch()}>Tentar comentários novamente</button></p>}
       {melhores.frases.length > 0 && (
         <section
           className="rounded-xl border p-4"

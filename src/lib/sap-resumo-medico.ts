@@ -11,6 +11,7 @@ export function montarResumoMedico(a: {
   kpis: KpiResumo[];
   principal?: { titulo: string; acaoClinica?: string | null; acaoDc?: string | null; prazo?: string | null } | null;
   proximaReuniao?: string | null;
+  dadosSuficientes?: boolean;
 }): string {
   const linhas: string[] = [];
   linhas.push(`Bom dia${a.nomeContato ? `, ${a.nomeContato}` : ""}! Resumo da semana do programa${a.dia !== null && a.dia >= 0 && a.dia <= 90 ? ` (dia ${a.dia} de 90)` : ""}:`);
@@ -26,6 +27,8 @@ export function montarResumoMedico(a: {
     linhas.push("", `Ponto principal da semana: ${a.principal.titulo}.`);
     if (a.principal.acaoDc) linhas.push(`Nossa ação: ${minuscula(a.principal.acaoDc)}`);
     if (a.principal.acaoClinica) linhas.push(`Proposta para vocês: ${minuscula(a.principal.acaoClinica)}${a.principal.prazo ? ` Prazo: ${a.principal.prazo.toLowerCase()}.` : ""}`);
+  } else if (a.dadosSuficientes === false || a.kpis.length < 3 || a.kpis.some((k) => k.agora === "—" || k.partida === "—")) {
+    linhas.push("", "Ainda faltam dados e baseline para concluir a leitura da semana. Vamos conferir as fontes e completar os registros antes de avaliar os indicadores.");
   } else {
     linhas.push("", "Nenhum ponto crítico nesta semana: seguimos a rotina combinada.");
   }

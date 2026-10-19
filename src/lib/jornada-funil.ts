@@ -2,6 +2,8 @@
 // Cada etapa diz o número E se ele é confiável: medido, zero de verdade, ou sem como medir (e por quê).
 // Etapa sem integração NUNCA vira zero: vira "falta X" com o dado que seria necessário.
 
+import type { Funil as FunilComercial } from "./comercial";
+
 export interface FunilBanco {
   alcance: number;
   dias_alcance: number;
@@ -53,7 +55,7 @@ export interface Funil {
 
 const NOME_CRM: Record<string, string> = { kommo: "Kommo", clint: "Clint", rdstation: "RD Station", flwchat: "flwChat", digisac: "Digisac", feegow: "Feegow", ninsaude: "Ninsaúde", planilha: "planilha" };
 
-export function montarFunil(d: FunilBanco | null | undefined): Funil {
+export function montarFunil(d: FunilBanco | null | undefined, comercial?: FunilComercial | null): Funil {
   const f = d?.fontes;
   const crm = f?.crm_provider ? NOME_CRM[f.crm_provider] ?? f.crm_provider : "o CRM";
   const e: Omit<EtapaFunil, "taxa">[] = [];
@@ -81,7 +83,8 @@ export function montarFunil(d: FunilBanco | null | undefined): Funil {
   if (!f?.tem_instagram || !f.tem_comentarios) {
     e.push({ id: "comentario", n: 3, nome: "Comentário ou direct", valor: null, unidade: "pessoas que comentaram", estado: "sem_integracao", explicacao: "Os comentários desta conta ainda não são coletados. Directs do Instagram não são lidos pelo painel (a Meta só libera para apps aprovados de mensagens).", falta: { integracao: "Coleta de comentários do Instagram", dado: "Comentários com o @ de quem comentou", onde: "Botão de atualizar no topo do painel (Comentários)" } });
   } else {
-    e.push({ id: "comentario", n: 3, nome: "Comentário ou direct", valor: d!.comentaristas, unidade: "pessoas que comentaram", estado: d!.comentaristas > 0 ? "parcial" : "zero", explicacao: `${d!.comentarios.toLocaleString("pt-BR")} comentários de ${d!.comentaristas.toLocaleString("pt-BR")} pessoas. Directs não entram (a Meta não libera a leitura para o painel), então esta etapa sempre fica abaixo do real.` });
+    const semAutores = d!.comentarios > 0 && d!.comentaristas === 0;
+    e.push({ id: "comentario", n: 3, nome: "Comentário ou direct", valor: semAutores ? null : d!.comentaristas, unidade: "pessoas que comentaram", estado: semAutores || d!.comentaristas > 0 ? "parcial" : "zero", explicacao: semAutores ? `${d!.comentarios.toLocaleString("pt-BR")} comentários disponíveis, mas sem identificação dos autores. A quantidade de pessoas e a conversão desta etapa não podem ser medidas.` : `${d!.comentarios.toLocaleString("pt-BR")} comentários de ${d!.comentaristas.toLocaleString("pt-BR")} pessoas. Directs não entram (a Meta não libera a leitura para o painel), então esta etapa sempre fica abaixo do real.` });
   }
 
   // 4. Conversa no WhatsApp
@@ -118,6 +121,18 @@ export function montarFunil(d: FunilBanco | null | undefined): Funil {
     e.push({ id: "venda", n: 7, nome: "Venda", valor: d!.vendas, unidade: "vendas", estado: d!.vendas > 0 ? "medido" : "zero", explicacao: d!.vendas > 0 ? "Leads do período marcados como ganho." : "Nenhum lead do período foi marcado como ganho (ainda)." });
   }
 
+  // Mesmos passos e critérios do diagnóstico comercial; sem diagnóstico, não afirmar venda.
+  if (comercial !== undefined) {
+    for (const [id, passoId] of [["agendamento", "agendaram"], ["venda", "compraram"]] as const) {
+      const etapa = e.find((x) => x.id === id)!;
+      if (!f?.tem_crm) continue;
+      const passo = comercial?.passos.find((x) => x.id === passoId);
+      etapa.valor = passo?.valor ?? null;
+      etapa.estado = etapa.valor === null || passo?.estimado || !passo?.confiavel ? "parcial" : etapa.valor === 0 ? "zero" : "medido";
+      etapa.explicacao = passo?.aviso ?? passo?.explica ?? "Diagnóstico comercial indisponível: não é possível confirmar esta etapa.";
+    }
+  }
+
   // Taxas só entre etapas vizinhas medidas (o funil não é uma fila única: lead de formulário pula a conversa).
   const etapas: EtapaFunil[] = e.map((x, i) => {
     const ant = i > 0 ? e[i - 1] : null;
@@ -132,6 +147,6 @@ export function montarFunil(d: FunilBanco | null | undefined): Funil {
     etapas,
     medidas: etapas.filter((x) => x.valor != null).length,
     maiorQueda: q ? { de: etapas[q.n - 2].id, para: q.id, taxa: q.taxa! } : null,
-    receita: d?.receita ?? 0,
+    receita: e.find((x) => x.id === "venda")?.valor == null ? 0 : d?.receita ?? 0,
   };
 }

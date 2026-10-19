@@ -46,12 +46,11 @@ export function motivoDoErro(fonte: string, erro: string): Motivo | null {
 // "sync roda sem erro, mas a origem não tem dado novo" > falha nossa sem causa conhecida.
 export function motivoDaLinha(l: LinhaFonte | undefined): Motivo | null {
   if (!l) return null;
-  if (l.motivo) return { texto: l.motivo, dono: (l.motivo_dono as Dono) || "cliente" };
   if (l.last_error) {
-    const m = motivoDoErro(l.fonte, l.last_error);
-    if (m) return m;
-    return { texto: `Erro técnico na última atualização: ${l.last_error.replace(/\s+/g, " ").slice(0, 140)}`, dono: "nos" };
+    const traduzido = motivoDoErro(l.fonte, l.last_error);
+    return traduzido ?? { texto: `Erro técnico na última atualização: ${l.last_error.replace(/\s+/g, " ").slice(0, 140)}`, dono: "nos" };
   }
+  if (l.motivo) return { texto: l.motivo, dono: (l.motivo_dono as Dono) || "cliente" };
   if (l.data_ate && atrasoDaFonte(l) > 3) {
     const rodouOk = !!l.last_success_at && diasDeAtraso(l.last_success_at.slice(0, 10)) <= 1;
     if (rodouOk || !l.last_attempt_at) {

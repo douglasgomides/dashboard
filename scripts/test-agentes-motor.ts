@@ -131,7 +131,7 @@ try {
     if (caso === "vinculo") c.t.sap_marco_vinculos = []; if (caso === "token") delete process.env.CLICKUP_API_TOKEN;
     if (caso === "pasta") c.t.sap_clinicas[0].clickup_folder_id = null; if (caso === "pasta_errada") pasta = "99999";
     if (caso === "sem_pasta") pasta = null; if (caso === "outra_tarefa") idRetornado = "outra-tarefa"; if (caso === "aberta") tipoStatus = "open"; if (caso === "http") respostaHttp = 401;
-    await rodar(c); assert.equal(c.e.estado, "aguardando", caso); assert.ok(c.e.erro && c.e.erro.length > 10, caso); assert.equal(c.t.marcados.length, 0, caso); assert.equal(c.t.aprovacoes.length, 0, caso); process.env.CLICKUP_API_TOKEN = "token-ficticio";
+    await rodar(c); assert.equal(c.e.estado, caso === "token" ? "pausada" : "aguardando", caso); assert.ok(c.e.erro && c.e.erro.length > 10, caso); assert.equal(c.t.marcados.length, 0, caso); assert.equal(c.t.aprovacoes.length, 0, caso); process.env.CLICKUP_API_TOKEN = "token-ficticio";
   }
   pasta = FOLDER; idRetornado = TASK; tipoStatus = "closed"; respostaHttp = 200; usarProject = true;
   const legadoPasta = iniciar(); await rodar(legadoPasta); assert.equal(legadoPasta.e.estado, "aguardando_aprovacao", "project identifica a pasta no formato legado"); usarProject = false;

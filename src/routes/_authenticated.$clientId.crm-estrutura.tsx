@@ -3,6 +3,8 @@ import { Carregando, ErroCarga } from "@/components/sem-fonte";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getCrmPipelineKanban } from "@/lib/client-data";
+import { nomeCrm } from "@/lib/crm-provedor";
+import { getCrmProvider } from "@/lib/client-data";
 import { fmtTaxa } from "@/lib/metricas";
 
 export const Route = createFileRoute("/_authenticated/$clientId/crm-estrutura")({
@@ -24,10 +26,10 @@ function fmtN(n: number) {
 const WON_STATUS_ID = "142";
 const LOST_STATUS_ID = "143";
 
-function classify(row: Row, maxTotal: number): "won" | "lost" | "biggest" | "mapped" | "empty" {
+function classify(row: Row, maxTotal: number, statusKommo: boolean): "won" | "lost" | "biggest" | "mapped" | "empty" {
   if (row.total === 0) return "empty";
-  if (row.status_id === WON_STATUS_ID) return "won";
-  if (row.status_id === LOST_STATUS_ID) return "lost";
+  if (statusKommo && row.status_id === WON_STATUS_ID) return "won";
+  if (statusKommo && row.status_id === LOST_STATUS_ID) return "lost";
   if (row.total === maxTotal) return "biggest";
   return "mapped";
 }
@@ -40,7 +42,7 @@ const TAG_COLOR: Record<string, string> = {
   mapped: "var(--accent)",
 };
 
-function KanbanBoard({ pipelineId, pipelineName, rows }: { pipelineId: string; pipelineName: string; rows: Row[] }) {
+function KanbanBoard({ pipelineId, pipelineName, rows, statusKommo }: { pipelineId: string; pipelineName: string; rows: Row[]; statusKommo: boolean }) {
   const total = rows.reduce((a, r) => a + r.total, 0);
   const valor = rows.reduce((a, r) => a + r.valor_total, 0);
   const maxTotal = Math.max(...rows.map((r) => r.total), 0);
@@ -66,7 +68,7 @@ function KanbanBoard({ pipelineId, pipelineName, rows }: { pipelineId: string; p
       <p className="rola-aviso px-4 pt-3" style={{ marginBottom: 0 }}>Arraste para o lado para ver todas as etapas →</p>
       <div className="flex gap-3 overflow-x-auto p-4">
         {rows.map((r) => {
-          const state = classify(r, maxTotal);
+          const state = classify(r, maxTotal, statusKommo);
           const isEmpty = state === "empty";
           return (
             <div
@@ -110,6 +112,9 @@ function KanbanBoard({ pipelineId, pipelineName, rows }: { pipelineId: string; p
 
 function CrmEstruturaPage() {
   const { clientId } = Route.useParams();
+  const { data: provider } = useQuery({ queryKey: ["crm-provider", clientId], queryFn: () => getCrmProvider(clientId) });
+  const crm = nomeCrm(provider);
+  const statusKommo = provider === "kommo";
   const { data, isLoading, error } = useQuery({
     queryKey: ["crm-pipeline-kanban", clientId],
     queryFn: () => getCrmPipelineKanban(clientId),
@@ -143,9 +148,9 @@ function CrmEstruturaPage() {
         className="rounded-xl border p-4 text-sm"
         style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
       >
-        Raio-x de como o CRM (Kommo) está organizado agora — todos os pipelines e etapas reais, com a posição de
+        Raio-x de como o CRM ({crm}) está organizado agora — todos os pipelines e etapas reais, com a posição de
         cada lead sincronizado. Não é auditoria de atendimento (não medimos resposta nem conteúdo de conversa), é um
-        retrato da estrutura. Atualiza sozinho com o sync diário.
+        retrato da estrutura na base inteira, sem filtro do período do topo. Atualiza com a sincronização.
       </div>
 
       {isLoading ? (
@@ -154,7 +159,7 @@ function CrmEstruturaPage() {
         <ErroCarga texto="Não foi possível ler a estrutura do CRM. Tente novamente em instantes." />
       ) : totalLeads === 0 ? (
         <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
-          Ainda sem leads sincronizados do Kommo pra esse cliente.
+          Ainda sem leads sincronizados do {crm} para este cliente.
         </p>
       ) : (
         <>
@@ -163,7 +168,7 @@ function CrmEstruturaPage() {
               { n: fmtN(totalLeads), l: "Leads na base" },
               { n: String(byPipeline.length), l: "Pipelines ativos" },
               { n: String(totalStages), l: "Etapas configuradas" },
-              { n: String(won), l: 'Marcados "venda ganha"' },
+              { n: statusKommo ? String(won) : "—", l: 'Marcados "venda ganha"' },
               { n: `${emptyStages}/${totalStages}`, l: "Etapas nunca usadas" },
             ].map((s) => (
               <div key={s.l} className="p-4" style={{ background: "var(--surface)" }}>
@@ -177,7 +182,7 @@ function CrmEstruturaPage() {
 
           <div className="space-y-4">
             {byPipeline.map(([pid, pl]) => (
-              <KanbanBoard key={pid} pipelineId={pid} pipelineName={pl.name} rows={pl.rows} />
+              <KanbanBoard key={pid} pipelineId={pid} pipelineName={pl.name} rows={pl.rows} statusKommo={statusKommo} />
             ))}
           </div>
 
@@ -191,13 +196,13 @@ function CrmEstruturaPage() {
                   toda a conta.
                 </li>
               )}
-              <li className="rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>
+              {statusKommo ? <li className="rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>
                 O status formal <b>"Venda Ganha"</b> foi usado em só <b>{won}</b> {won === 1 ? "lead" : "leads"} de{" "}
                 {fmtN(totalLeads)} ({won > 0 ? ((won / totalLeads) * 100).toFixed(2) : "0"}%), contra{" "}
                 <b>{fmtN(lost)}</b> marcados como perdidos. Se a conversão real é maior que isso, a equipe
                 provavelmente sinaliza "virou paciente" de outro jeito (movendo o lead de pipeline, por exemplo) —
                 vale confirmar com quem opera o CRM.
-              </li>
+              </li> : <li className="rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>O significado de ganho e perda depende das etapas configuradas no {crm}. Consulte o diagnóstico comercial; os códigos de status do Kommo não se aplicam a este provedor.</li>}
               <li className="rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>
                 <b>
                   {emptyStages} das {totalStages} etapas

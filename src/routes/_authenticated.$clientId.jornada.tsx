@@ -38,15 +38,15 @@ const ROTULO: Record<string, string> = {
   clique_link: "Clicou num link",
 };
 
-function Etapa({ n, rotulo, base }: { n: number; rotulo: string; base: number }) {
+function Etapa({ n, rotulo, base }: { n: number | null; rotulo: string; base: number }) {
   return (
     <div className="rounded-lg border p-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-      <div className="text-2xl font-semibold tabular-nums">{n.toLocaleString("pt-BR")}</div>
+      <div className="text-2xl font-semibold tabular-nums">{n === null ? "—" : n.toLocaleString("pt-BR")}</div>
       <div className="text-xs" style={{ color: "var(--text-dim)" }}>
         {rotulo}
       </div>
       <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-faint)" }}>
-        {pct(n, base)} das pessoas
+        {n === null ? "Sem venda confirmada para medir" : `${pct(n, base)} das pessoas`}
       </div>
     </div>
   );
@@ -126,6 +126,8 @@ function JornadaPage() {
   });
 
   const r = resumo.data;
+  const compra = diag.data?.funil.passos.find((p) => p.id === "compraram");
+  const compraConfiavel = diag.data?.dados.escopo === "periodo" && compra?.valor != null && compra.confiavel;
   const d = diag.data;
   const tabelas = r && ((r.por_origem?.length ?? 0) > 0 || (r.posts?.length ?? 0) > 0 || (r.links?.length ?? 0) > 0);
   return (
@@ -196,7 +198,7 @@ function JornadaPage() {
               <Etapa n={r.comentaram} rotulo="comentaram em posts" base={r.pessoas} />
               <Etapa n={r.conversaram} rotulo="têm conversa no WhatsApp" base={r.pessoas} />
               <Etapa n={r.viraram_lead} rotulo="viraram lead no CRM" base={r.pessoas} />
-              <Etapa n={r.ganhos} rotulo={`compraram${r.receita > 0 ? ` · ${brl(r.receita)}` : ""}`} base={r.pessoas} />
+              <Etapa n={compraConfiavel ? r.ganhos : null} rotulo={`compras confirmadas${compraConfiavel && r.receita > 0 ? ` · ${brl(r.receita)}` : ""}`} base={r.pessoas} />
             </div>
             <div className="mt-3 grid gap-2 text-sm md:grid-cols-3">
               <div>
@@ -221,15 +223,15 @@ function JornadaPage() {
           </summary>
           <div className="space-y-4 p-3 pt-0 sm:p-4 sm:pt-0">
             {r && (r.por_origem?.length ?? 0) > 0 && (
-              <Painel icone={RouteIcon} titulo="Resultado por origem do lead" resumo="Origem que o CRM registrou: leads, vendas e receita.">
+              <Painel icone={RouteIcon} titulo="Resultado por origem do lead" resumo="Origem registrada no CRM. Ganhos e receita só são exibidos como venda quando o diagnóstico comercial confirma o significado da etapa.">
                 <Tabela
                   cab={["Origem", "Leads", "Vendas", "Conversão", "Receita"]}
                   linhas={r.por_origem.map((o: any) => [
                     o.o,
                     o.leads,
-                    o.ganhos,
-                    pct(o.ganhos, o.leads),
-                    o.receita > 0 ? brl(o.receita) : "—",
+                    compraConfiavel ? o.ganhos : "—",
+                    compraConfiavel ? pct(o.ganhos, o.leads) : "—",
+                    compraConfiavel && o.receita > 0 ? brl(o.receita) : "—",
                   ])}
                 />
               </Painel>
@@ -249,8 +251,8 @@ function JornadaPage() {
                     </a>,
                     p.comentaristas,
                     p.viraram_lead,
-                    p.ganhos,
-                    p.receita > 0 ? brl(p.receita) : "—",
+                    compraConfiavel ? p.ganhos : "—",
+                    compraConfiavel && p.receita > 0 ? brl(p.receita) : "—",
                   ])}
                 />
               </Painel>
@@ -270,7 +272,7 @@ function JornadaPage() {
                     l.cliques_total ?? 0,
                     l.conversas,
                     l.viraram_lead,
-                    l.ganhos,
+                    compraConfiavel ? l.ganhos : "—",
                   ])}
                 />
               </Painel>

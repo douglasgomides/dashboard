@@ -63,8 +63,9 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
     });
   }, [atualQ.data, antQ.data, planoQ.data, clinica, sinQ.data, audQ.data, fidQ.data]);
 
-  if (atualQ.isLoading || cadQ.isLoading) return <p className="text-sm" style={{ color: "var(--text-dim)" }}>Montando a leitura da semana…</p>;
-  if (atualQ.error) return <p className="text-sm" style={{ color: "var(--crit)" }}>Não foi possível preparar a análise da semana: {(atualQ.error as Error).message}</p>;
+  if (atualQ.isLoading || cadQ.isLoading || planoQ.isLoading || antQ.isLoading || sinQ.isLoading || audQ.isLoading || fidQ.isLoading) return <p className="text-sm" style={{ color: "var(--text-dim)" }}>Montando a leitura da semana…</p>;
+  const erroLeitura = atualQ.error || cadQ.error || planoQ.error || antQ.error || sinQ.error || audQ.error || fidQ.error;
+  if (erroLeitura) return <p className="text-sm" style={{ color: "var(--crit)" }}>Não foi possível preparar a análise da semana: {(erroLeitura as Error).message}</p>;
   if (!leitura) return null;
 
   const p = leitura.principal;
@@ -118,6 +119,8 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
             Responsável: {p.v.dono} · Prazo: {p.v.prazo}
           </p>
         </section>
+      ) : !leitura.dadosSuficientes ? (
+        <Painel icone={CircleDashed} titulo="Dados insuficientes para concluir a leitura" resumo="Complete as fontes, etapas do CRM e baseline indicadas abaixo. A ausência de alertas ainda não confirma que os indicadores estão saudáveis." cor="var(--warn)"><span /></Painel>
       ) : (
         <Painel icone={CheckCircle2} titulo="Nenhuma prioridade de correção identificada" resumo="A leitura não sinalizou uma etapa fora dos critérios de atenção. Mantenha os registros e o acompanhamento semanal." cor="var(--good)">
           <span />

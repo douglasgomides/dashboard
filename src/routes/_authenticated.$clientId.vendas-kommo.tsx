@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { nomeCrm } from "@/lib/crm-provedor";
+import { getCrmProvider } from "@/lib/client-data";
 import { fmtTaxa } from "@/lib/metricas";
 import { Carregando, ResumoExecutivo } from "@/components/sem-fonte";
 import { useQuery } from "@tanstack/react-query";
@@ -21,7 +23,7 @@ function resumoVendas(rows: FunilRow[], total: number): string[] {
   return [
     `${total.toLocaleString("pt-BR")} leads no CRM: ${ganhos.toLocaleString("pt-BR")} ganhos (${pct(ganhos, total)}), ${perdidos.toLocaleString("pt-BR")} perdidos e ${(total - ganhos - perdidos).toLocaleString("pt-BR")} ainda em aberto.`,
     maior ? `A fonte que mais traz leads é “${maior.chave}” (${pct(maior.total, total)} do total).` : "",
-    melhor && melhor.ganhos > 0 ? `A que mais vira venda é “${melhor.chave}”: ${pct(melhor.ganhos, melhor.total)} dos leads fecharam.` : "Nenhuma fonte com 10+ leads tem venda marcada ainda: confira se o ganho está sendo registrado no CRM.",
+    melhor && melhor.ganhos > 0 ? `A fonte com maior taxa de status ganho é “${melhor.chave}”: ${pct(melhor.ganhos, melhor.total)} dos leads têm esse status. Confirme o significado da etapa antes de interpretar como venda.` : "Nenhuma fonte com 10+ leads tem status ganho registrado ainda: confira se o ganho está sendo registrado no CRM.",
   ];
 }
 
@@ -70,6 +72,8 @@ function FunilTable({ title, rows, colLabel }: { title: string; rows: FunilRow[]
 
 function VendasKommoPage() {
   const { clientId } = Route.useParams();
+  const { data: provider } = useQuery({ queryKey: ["crm-provider", clientId], queryFn: () => getCrmProvider(clientId) });
+  const crm = nomeCrm(provider);
 
   const { data: porFonte, isLoading: loadingFonte } = useQuery({
     queryKey: ["crm-funil-fonte", clientId],
@@ -93,16 +97,14 @@ function VendasKommoPage() {
         className="rounded-xl border p-4 text-sm"
         style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}
       >
-        Cruzamento real de origem × resultado, direto do CRM (Kommo) — "Fonte do Lead" e "Tipo de Procedimento" são
-        preenchidos pela própria equipe comercial, não inferidos. Status "Ganho"/"Perdido" é o mesmo em qualquer
-        funil da conta. O sync roda automaticamente todo dia.
+        Cruzamento de origem × status no CRM ({crm}), na base inteira sincronizada. Este relatório não usa o período do topo. Os campos dependem do provedor e do cadastro da equipe. Status ganho/perdido representa o registro da origem: ganho pode significar agendamento e exige conferência antes de ser tratado como venda.
       </div>
 
       {isLoading ? (
         <Carregando texto="Lendo as vendas…" />
       ) : totalLeads === 0 ? (
         <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
-          Ainda sem leads sincronizados do Kommo pra esse cliente.
+          Ainda sem leads sincronizados do {crm} para este cliente.
         </p>
       ) : (
         <>

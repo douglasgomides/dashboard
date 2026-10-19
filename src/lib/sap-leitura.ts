@@ -70,6 +70,7 @@ export interface Perda {
 
 export interface LeituraSemanal {
   semanaPrograma: number | null;
+  dadosSuficientes: boolean;
   passos: PassoLeitura[];
   principal: { v: Vazamento; motivo: string; perda?: Perda } | null;
   outros: { v: Vazamento; motivo: string }[];
@@ -206,9 +207,14 @@ export function montarLeitura(args: {
   if (args.dia !== null && args.dia >= 60 && args.score !== null && args.score < 80) escalar.push(`Score de Execução de ${Math.round(args.score)}% no D60 ou depois (abaixo de 80%).`);
   if (principal?.v.codigo === "V18") escalar.push("Anúncio parou de entregar (V18): possível conta restrita.");
 
+  const dadosSuficientes = passos.slice(0, 6).every((p) => p.status !== "sem_dado")
+    && garantiaIds.every((id) => base(id) !== null && kv(id).valor !== null);
+  if (!dadosSuficientes && !principal) {
+    for (const p of passos.slice(6)) { p.status = "sem_dado"; p.resposta = "Complete as fontes e a baseline antes de concluir a leitura."; }
+  }
   const mensagem = principal
     ? `Bom dia${args.nomeContato ? `, ${args.nomeContato}` : ""}. Leitura da semana${semanaPrograma ? ` S${semanaPrograma}` : ""}: ${principal.perda ? `o maior vazamento está em ${principal.perda.rotulo.split(" (")[0].toLowerCase()}, ${pct(principal.perda.atual)} contra meta de ${pct(principal.perda.meta)}` : `o ponto principal é: ${principal.v.titulo}`}. ${principal.v.acaoDc ? `A nossa ação da semana: ${principal.v.acaoDc.charAt(0).toLowerCase()}${principal.v.acaoDc.slice(1)} ` : ""}${principal.v.acaoClinica ? `A proposta para vocês: ${principal.v.acaoClinica.charAt(0).toLowerCase()}${principal.v.acaoClinica.slice(1)} Prazo: ${principal.v.prazo.toLowerCase()}. ` : ""}Faz sentido?`
     : null;
 
-  return { semanaPrograma, passos, principal, outros, perdas, vermelhosGarantia, escalar, mensagem };
+  return { semanaPrograma, dadosSuficientes, passos, principal, outros, perdas, vermelhosGarantia, escalar, mensagem };
 }

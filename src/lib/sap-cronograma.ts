@@ -113,12 +113,9 @@ export interface ItemComData extends ItemCronograma {
   evidencia: string | null;
 }
 
-/** Sábado/domingo: o alvo vai para o próximo dia útil; se o alvo é o último dia da janela, para o dia útil anterior. */
-export function dataUtilSugerida(alvo: string, ehFimDaJanela: boolean): string {
-  const dow = new Date(`${alvo}T12:00:00Z`).getUTCDay();
-  if (dow !== 0 && dow !== 6) return alvo;
-  if (ehFimDaJanela) return somar(alvo, dow === 6 ? -1 : -2);
-  return somar(alvo, dow === 6 ? 2 : 1);
+/** Data de reunião segue a mesma antecipação por dia útil das tarefas. */
+export function dataUtilSugerida(alvo: string): string {
+  return diaUtilAnterior(alvo);
 }
 
 export function cronogramaComDatas(
@@ -142,7 +139,7 @@ export function cronogramaComDatas(
           : hoje < dataIni && entre(hoje, dataIni) <= 7
             ? "proximo"
             : "futuro";
-    return { ...it, dataIni, dataFim, dataAlvo, dataUtil: dataUtilSugerida(dataAlvo, it.alvo === it.fim), status, concluidoEm: c?.concluidoEm ?? null, evidencia: c?.evidencia ?? null };
+    return { ...it, dataIni, dataFim, dataAlvo, dataUtil: diaUtilAnterior(dataAlvo), status, concluidoEm: c?.concluidoEm ?? null, evidencia: c?.evidencia ?? null };
   });
 }
 

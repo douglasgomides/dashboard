@@ -79,11 +79,12 @@ export async function controlarExecucao(id: string, acao: "pausar" | "retomar" |
 }
 
 /** Fila de exceções: o que precisa de uma pessoa agora, do mais urgente para o menos. */
-export function excecoes(execucoes: ExecucaoAgente[], aprovacoes: AprovacaoAgente[]): { tipo: "aprovacao" | "falha" | "teto"; id: string; risco: number }[] {
-  const out: { tipo: "aprovacao" | "falha" | "teto"; id: string; risco: number }[] = [];
+export function excecoes(execucoes: ExecucaoAgente[], aprovacoes: AprovacaoAgente[]): { tipo: "aprovacao" | "falha" | "teto" | "configuracao"; id: string; risco: number }[] {
+  const out: { tipo: "aprovacao" | "falha" | "teto" | "configuracao"; id: string; risco: number }[] = [];
   for (const a of aprovacoes) out.push({ tipo: "aprovacao", id: a.id, risco: a.risco === "alto" ? 3 : 2 });
   for (const e of execucoes) {
-    if (e.estado === "falhou") out.push({ tipo: "falha", id: e.id, risco: 3 });
+    if (["pausada", "aguardando"].includes(e.estado) && /CLICKUP_API_TOKEN|Configuração pendente/i.test(e.erro ?? "")) out.push({ tipo: "configuracao", id: e.id, risco: 3 });
+    else if (e.estado === "falhou") out.push({ tipo: "falha", id: e.id, risco: 3 });
     else if (e.estado === "pausada" && /teto/.test(e.erro ?? "")) out.push({ tipo: "teto", id: e.id, risco: 2 });
   }
   return out.sort((a, b) => b.risco - a.risco);

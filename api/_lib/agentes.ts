@@ -55,6 +55,7 @@ const operacaoSapSchema = z.object({
 });
 
 class EfeitoExternoIncerto extends Error {}
+class ConfiguracaoPendente extends Error {}
 
 /**
  * Uma intenção sem confirmação pode significar que o provedor aceitou a ação
@@ -213,7 +214,7 @@ export const FERRAMENTAS = {
     entrada: z.object({ folder_id: z.string().nullable(), task_id: z.string().nullable() }),
     executar: async (_a, _x, e) => {
       const bloqueada = (motivo: string) => ({ configurada: false, vinculada: false, confirmada: false, motivo });
-      if (!clickupToken()) return bloqueada("CLICKUP_API_TOKEN não configurado no servidor; configure a conexão para conferir o marco.");
+      if (!clickupToken()) throw new ConfiguracaoPendente("Configuração pendente: CLICKUP_API_TOKEN ausente no servidor. Configure a integração e retome a execução.");
       if (!e.folder_id || !/^\d{1,30}$/.test(e.folder_id)) return bloqueada("Clínica sem pasta válida do ClickUp (clickup_folder_id); registre a pasta da clínica.");
       if (!e.task_id || !/^[a-z0-9_-]{3,128}$/i.test(e.task_id)) return bloqueada("Nenhuma tarefa ClickUp válida vinculada ao marco 5; vincule a tarefa exata.");
       try {
@@ -1077,7 +1078,7 @@ async function rodarUma(admin: Admin, exec: Execucao, maxPassos: number, fim: nu
       const erro = (e instanceof Error ? e.message : String(e)).slice(0, 400);
       const { error: erroRegistro } = await admin.from("agente_passos").insert({ execucao_id: exec.id, ordem: exec.passo_atual, nome: passo.nome, ferramenta: passo.ferramenta ?? null, risco: passo.risco, ok: false, erro, ms: Date.now() - t0 });
       if (erroRegistro) throw new Error(`Não foi possível registrar a falha do agente: ${erroRegistro.message}`);
-      if (e instanceof CacheIncompleto || e instanceof EfeitoExternoIncerto) {
+      if (e instanceof CacheIncompleto || e instanceof EfeitoExternoIncerto || e instanceof ConfiguracaoPendente) {
         await atualizar({ estado: "pausada", estado_antes_pausa: "pendente", erro: `${passo.nome}: ${erro}`, proximo_em: null, lease_ate: null });
         return { id: exec.id, estado: "pausada", passos, erro };
       }

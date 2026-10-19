@@ -42,7 +42,7 @@ function useSugestoes(clientId: string, ag: Sugestao["agente"], dias = 14) {
   return useQuery({
     queryKey: ["sugestoes-agentes", clientId, ag],
     queryFn: async () => {
-      const sel = ag === "recuperacao" ? "*, conversa:conversas(canal, pessoa:pessoas(nome))" : "*";
+      const sel = ag === "recuperacao" ? "*, conversa:conversas(canal, pessoa:pessoas!conversas_pessoa_id_fkey(nome))" : "*";
       const { data, error } = await db.from("sugestoes_agentes").select(sel).eq("client_id", clientId).eq("agente", ag)
         .gte("criado_em", new Date(Date.now() - dias * 86_400_000).toISOString()).order("criado_em", { ascending: false }).order("prioridade", { ascending: false }).limit(60);
       if (error) throw error;

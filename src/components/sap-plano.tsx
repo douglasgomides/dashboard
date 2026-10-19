@@ -345,6 +345,8 @@ function TabelaPlano({ clientId, clinica, plano, atual, carregando, hoje }: { cl
                       <td className="py-2">
                         {editando && r ? (
                           <input type="checkbox" aria-label={`${k.rotulo} conta para a garantia`} checked={r.garantia} disabled={!principais.includes(k.id)} onChange={(e) => setRascunho({ ...rascunho!, [k.id]: { ...r, garantia: e.target.checked } })} />
+                        ) : principais.includes(k.id) && l?.baseline == null ? (
+                          <span className="text-xs" style={{ color: "var(--warn)" }}>aguarda baseline</span>
                         ) : l?.conta_garantia ? (
                           <Selo cor="var(--accent)">conta</Selo>
                         ) : principais.includes(k.id) && l ? (

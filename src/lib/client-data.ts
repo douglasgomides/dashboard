@@ -3,6 +3,7 @@ import { aplicarRastreio, diagnosticarAds, type LinhaAds, type CampanhaCadastro 
 import type { Acompanhamento } from "@/lib/oportunidades";
 import { lerDiagnosticoRpc, montarDadosReduzidos, type DadosComerciais, type MetricasEssenciais, type WtsResumoMin } from "@/lib/comercial";
 import { filtrarPerguntas, perguntasDaDeteccaoOriginal } from "@/lib/comentarios";
+import { normalizarTemas } from "@/lib/classificacao-post";
 import { fetchAllRows } from "@/lib/pagination";
 import type {
   ContentFormat,
@@ -56,7 +57,7 @@ export function limitesBR(de: string, ate: string): { desde: string; antesDe: st
 
 export async function getRankedPosts(clientId: string, monthStart: string, monthEnd: string) {
   const { desde, antesDe } = limitesBR(monthStart, monthEnd);
-  return fetchAllRows((from, to) => supabase
+  return normalizarTemas(await fetchAllRows((from, to) => supabase
     .from("instagram_posts")
     .select("*")
     .eq("client_id", clientId)
@@ -64,12 +65,12 @@ export async function getRankedPosts(clientId: string, monthStart: string, month
     .lt("posted_at", antesDe)
     .order("saved", { ascending: false, nullsFirst: false })
     .order("id")
-    .range(from, to));
+    .range(from, to)));
 }
 
 export async function getPostsForAnalytics(clientId: string, sinceDate: string, untilDate?: string) {
   const { desde, antesDe } = limitesBR(sinceDate, untilDate ?? sinceDate);
-  return fetchAllRows((from, to) => {
+  return normalizarTemas(await fetchAllRows((from, to) => {
     let query = supabase
     .from("instagram_posts")
     .select("*")
@@ -77,7 +78,7 @@ export async function getPostsForAnalytics(clientId: string, sinceDate: string, 
     .gte("posted_at", desde);
   if (untilDate) query = query.lt("posted_at", antesDe);
     return query.order("posted_at", { ascending: false }).order("id").range(from, to);
-  });
+  }));
 }
 
 export async function getNextAngles(clientId: string, limit = 5) {
@@ -222,7 +223,7 @@ async function donosDoPerfil(clientId: string): Promise<string[]> {
 export async function getPatientQuestions(clientId: string, limit = 200) {
   const { data, error } = await supabase
     .from("instagram_comments")
-    .select("*, instagram_posts(caption, permalink, thumbnail_url, posted_at, tema)")
+    .select("*, instagram_posts!instagram_comments_instagram_post_id_fkey(caption, permalink, thumbnail_url, posted_at, tema)")
     .eq("client_id", clientId)
     .eq("is_question", true)
     .order("commented_at", { ascending: false, nullsFirst: false })
@@ -565,7 +566,7 @@ export async function getComentariosVozDoPaciente(clientId: string, start: strin
   const [{ data, error }, donos] = await Promise.all([
     supabase
       .from("instagram_comments")
-      .select("id, text, like_count, instagram_post_id, commented_at, author_username, is_question, instagram_posts(caption, permalink, thumbnail_url, posted_at, tema)")
+      .select("id, text, like_count, instagram_post_id, commented_at, author_username, is_question, instagram_posts!instagram_comments_instagram_post_id_fkey(caption, permalink, thumbnail_url, posted_at, tema)")
       .eq("client_id", clientId)
       .or(filtro)
       .gte("commented_at", desde)
@@ -693,7 +694,7 @@ export async function getPerguntasDeteccaoOriginal(clientId: string, periodo?: {
   const max = limit ?? (periodo ? 1000 : 200);
   let consulta = supabase
     .from("instagram_comments")
-    .select("id, text, like_count, instagram_post_id, commented_at, author_username, is_question, instagram_posts(caption, permalink, thumbnail_url, posted_at, tema)")
+    .select("id, text, like_count, instagram_post_id, commented_at, author_username, is_question, instagram_posts!instagram_comments_instagram_post_id_fkey(caption, permalink, thumbnail_url, posted_at, tema)")
     .eq("client_id", clientId)
     .eq("is_question", true);
   if (periodo) {
@@ -767,7 +768,7 @@ export async function getComentariosPeriodo(clientId: string, start: string, end
   const { desde, antesDe } = limitesBR(start, end);
   const { data, error } = await supabase
     .from("instagram_comments")
-    .select("id, text, author_username, instagram_post_id, instagram_posts(tema)")
+    .select("id, text, author_username, instagram_post_id, instagram_posts!instagram_comments_instagram_post_id_fkey(tema)")
     .eq("client_id", clientId)
     .gte("commented_at", desde)
     .lt("commented_at", antesDe)

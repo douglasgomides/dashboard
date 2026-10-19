@@ -10,7 +10,7 @@ import {
 import { lerTrackerAuto, montarKpisSap, type TrackerAutoBruto } from "@/lib/sap-auto";
 import { avaliarGarantia, janelaBaseline, janelaGarantia, kpisDaGarantia, type KpiPlano, type LinhaPlano } from "@/lib/sap-metas";
 import { calcularExecucao } from "@/lib/sap-scores";
-import { CRONOGRAMA, dataDoDia, somar } from "@/lib/sap-cronograma";
+import { CRONOGRAMA, dataDoDia, diaUtilAnterior, somar } from "@/lib/sap-cronograma";
 import { fmtKpi, linhasKpis, planoPorQuinzena, RISCOS_PADRAO, ROTULO_STATUS_D90, SECOES_TEXTO, type StatusKpiD90 } from "@/lib/sap-documentos";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { resumoFidelizacao } from "@/lib/sap-fidelizacao";
@@ -99,7 +99,7 @@ export function PlanoAcaoSap({ clientId }: { clientId: string }) {
   if (!c) return <p className="note">Esta clínica ainda não está no Sistema de Aquisição.</p>;
   if (!c.d0) return <p className="note">Defina o D0 em Programa → Editar cadastro para gerar o plano.</p>;
   const pausas = c.pausas ?? [];
-  const dataItem = (n: number) => marcosQ.data?.find((m) => m.marco === n)?.concluido_em ?? dataDoDia(c.d0!, pausas, CRONOGRAMA.find((i) => i.n === n)!.alvo, hoje);
+  const dataItem = (n: number) => marcosQ.data?.find((m) => m.marco === n)?.concluido_em ?? diaUtilAnterior(dataDoDia(c.d0!, pausas, CRONOGRAMA.find((i) => i.n === n)!.alvo, hoje));
   const plano = planoQ.data ?? [];
   const linhas = linhasKpis(plano, () => null);
   const receita = plano.find((p) => p.kpi === "receita_mensal")?.baseline ?? null;
