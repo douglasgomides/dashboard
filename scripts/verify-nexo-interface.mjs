@@ -307,7 +307,8 @@ try{
         await opener.click();await page.getByRole('dialog').getByRole('link',{name:/Acompanhamento/}).click();
         await expect(page).toHaveURL(origins.sap+`/sap/${CID}/leitura`);await expect(page.getByRole('dialog')).not.toBeVisible();
         const tabs=page.getByRole('navigation',{name:'Telas de Acompanhamento',exact:true});
-        await expect(tabs.getByRole('link')).toHaveCount(2);
+        await expect(tabs.getByRole('link')).toHaveCount(3);
+        await expect(tabs.getByRole('link',{name:'Agentes de IA',exact:true})).toHaveAttribute('href',`/sap/${CID}/agentes`);
         await tabs.getByRole('link',{name:'Metas e garantia',exact:true}).click();
         await expect(page).toHaveURL(origins.sap+`/sap/${CID}/metas`);
         await expect(page.getByRole('heading',{name:'Metas e garantia',level:1,exact:true})).toBeVisible();

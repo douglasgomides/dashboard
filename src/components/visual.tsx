@@ -71,7 +71,7 @@ export function Painel({
 }) {
   return (
     <section
-      className="rounded-xl border p-4"
+      className="ws-panel rounded-xl border p-4"
       style={{ background: destaque ? "var(--accent-soft)" : "var(--surface)", borderColor: "var(--border)" }}
     >
       <header className="mb-3 flex items-start gap-3">
@@ -176,7 +176,7 @@ export function Numero({
 export function InfoDica({ texto, rotulo = "Mais informações" }: { texto: string; rotulo?: string }) {
   const [aberto, setAberto] = useState(false);
   return (
-    <span className="relative ml-auto inline-flex">
+    <span className="ws-info relative ml-auto inline-flex">
       <button
         type="button"
         aria-label={rotulo}
@@ -186,7 +186,7 @@ export function InfoDica({ texto, rotulo = "Mais informações" }: { texto: stri
           e.stopPropagation();
           setAberto(!aberto);
         }}
-        className="inline-flex h-6 w-6 items-center justify-center rounded-full"
+        className="ws-info-button inline-flex h-6 w-6 items-center justify-center rounded-full"
         style={{ color: "var(--text-faint)" }}
       >
         <Info size={14} aria-hidden />
@@ -223,7 +223,7 @@ export function Kpi({
   info?: string;
 }) {
   return (
-    <div className="rounded-xl border p-3.5" style={{ background: "var(--surface)", borderColor: "var(--border)" }} title={dica}>
+    <div className="ws-metric rounded-xl border p-3.5" style={{ background: "var(--surface)", borderColor: "var(--border)" }} title={dica}>
       <div className="flex items-center gap-2">
         <span
           aria-hidden
@@ -237,7 +237,7 @@ export function Kpi({
         </span>
         {info && <InfoDica texto={info} rotulo={`Sobre ${rotulo}`} />}
       </div>
-      <div className="mt-2 text-2xl font-semibold tabular-nums leading-none">{valor}</div>
+      <div className="ws-metric-value mt-2 text-2xl font-semibold tabular-nums leading-none">{valor}</div>
       {tendencia && (
         <div className="mt-1.5 text-xs font-medium" style={{ color: tendencia.sobe ? "var(--good-text)" : "var(--crit)" }}>
           {tendencia.sobe ? "▲" : "▼"} {tendencia.texto}

@@ -63,6 +63,7 @@ export function VisaoClinica({ clientId }: { clientId: string }) {
             </div>
           </>
         )}
+        <div className="sap-phase-actions"><Link to="/sap/$clientId" params={{ clientId }} className="ws-action ws-action--primary">Ver minhas tarefas</Link><Link to="/sap/$clientId/cronograma" params={{ clientId }} className="ws-action ws-action--secondary">Consultar cronograma</Link></div>
       </div>
 
       <div className="sap-clinic-kpis grid gap-3 sm:grid-cols-3">

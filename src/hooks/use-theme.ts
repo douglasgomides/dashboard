@@ -14,12 +14,19 @@ import { useCallback, useEffect, useState } from "react";
  */
 
 export type ThemeChoice = "light" | "dark" | "system";
-export type AccentChoice = "indigo" | "teal" | "violet" | "rose" | "amber" | "slate";
+export type AccentChoice =
+  "indigo" | "teal" | "violet" | "rose" | "amber" | "slate";
+
+const EVENTO_APARENCIA = "dc:aparencia-alterada";
 
 const CHAVE_TEMA = "dc:tema";
 const CHAVE_ACCENT = "dc:accent";
 
-export const ACCENTS: { value: AccentChoice; label: string; amostra: string }[] = [
+export const ACCENTS: {
+  value: AccentChoice;
+  label: string;
+  amostra: string;
+}[] = [
   { value: "indigo", label: "Azul", amostra: "#3a5fd8" },
   { value: "teal", label: "Verde-água", amostra: "#0f7a71" },
   { value: "violet", label: "Violeta", amostra: "#6c47c9" },
@@ -70,21 +77,54 @@ export function aplicarTemaSalvo() {
 }
 
 export function useTheme() {
-  const [tema, setTemaState] = useState<ThemeChoice>(() => temaValido(ler(CHAVE_TEMA)));
-  const [accent, setAccentState] = useState<AccentChoice>(() => accentValido(ler(CHAVE_ACCENT)));
+  const [tema, setTemaState] = useState<ThemeChoice>(() =>
+    temaValido(ler(CHAVE_TEMA)),
+  );
+  const [accent, setAccentState] = useState<AccentChoice>(() =>
+    accentValido(ler(CHAVE_ACCENT)),
+  );
 
   useEffect(() => {
     aplicar(tema, accent);
   }, [tema, accent]);
 
+  // O menu lateral, a folha móvel e as outras abas refletem a mesma preferência.
+  useEffect(() => {
+    const local = (event: Event) => {
+      const choice = (
+        event as CustomEvent<{ tema?: ThemeChoice; accent?: AccentChoice }>
+      ).detail;
+      if (choice?.tema) setTemaState(choice.tema);
+      if (choice?.accent) setAccentState(choice.accent);
+    };
+    const outraAba = (event: StorageEvent) => {
+      if (event.key === CHAVE_TEMA || event.key === null)
+        setTemaState(temaValido(ler(CHAVE_TEMA)));
+      if (event.key === CHAVE_ACCENT || event.key === null)
+        setAccentState(accentValido(ler(CHAVE_ACCENT)));
+    };
+    window.addEventListener(EVENTO_APARENCIA, local);
+    window.addEventListener("storage", outraAba);
+    return () => {
+      window.removeEventListener(EVENTO_APARENCIA, local);
+      window.removeEventListener("storage", outraAba);
+    };
+  }, []);
+
   const setTema = useCallback((v: ThemeChoice) => {
     gravar(CHAVE_TEMA, v);
     setTemaState(v);
+    window.dispatchEvent(
+      new CustomEvent(EVENTO_APARENCIA, { detail: { tema: v } }),
+    );
   }, []);
 
   const setAccent = useCallback((v: AccentChoice) => {
     gravar(CHAVE_ACCENT, v);
     setAccentState(v);
+    window.dispatchEvent(
+      new CustomEvent(EVENTO_APARENCIA, { detail: { accent: v } }),
+    );
   }, []);
 
   return { tema, setTema, accent, setAccent };

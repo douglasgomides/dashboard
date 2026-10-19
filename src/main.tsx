@@ -5,6 +5,7 @@ import { getRouter } from "./router";
 import { aplicarTemaSalvo } from "./hooks/use-theme";
 import "./styles.css";
 import "./nexo.css";
+import "./styles/product-workspace.css";
 import { ehEnderecoSap } from "./lib/marca";
 
 document.title = ehEnderecoSap() ? "SAP · Doctor Creator" : "Nexo · Doctor Creator";

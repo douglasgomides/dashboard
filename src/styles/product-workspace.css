@@ -1,0 +1,994 @@
+/* Foundation for the authenticated products only. Public pages retain their own identity. */
+.product-workspace {
+  --page: #eaf0f5;
+  --surface: #ffffff;
+  --surface-2: #e8eef5;
+  --ink: #12263b;
+  --ink-2: #344c63;
+  --muted: #52677d;
+  --border: #bbc9d7;
+  --grid: #d6e0e9;
+  --control-border: #7b8fa4;
+  --accent: #194f73;
+  --accent-hover: #103953;
+  --accent-ink: #ffffff;
+  --action-bg: #163f5c;
+  --action-hover: #0d2d44;
+  --action-ink: #ffffff;
+  --focus: #176b9d;
+  --side: #101f30;
+  --side-hover: #20364c;
+  --side-active: #28445e;
+  --side-ink: #f7fafc;
+  --side-ink-2: #d1deea;
+  --side-muted: #adbed0;
+  --side-border: #3a5066;
+  --good: #126347;
+  --good-text: #126347;
+  --warn: #845006;
+  --crit: #a32235;
+  --shadow: 0 2px 3px #0f233b08, 0 8px 20px #0f233b05;
+  background: var(--page);
+  color: var(--ink);
+}
+:root[data-theme="dark"] .product-workspace {
+  --page: #0b1420;
+  --surface: #17283b;
+  --surface-2: #20364b;
+  --ink: #f2f7fc;
+  --ink-2: #d4e1ee;
+  --muted: #afc2d6;
+  --border: #425b73;
+  --grid: #354b60;
+  --control-border: #829bb5;
+  --accent: #acd3f3;
+  --accent-hover: #d3e9fa;
+  --accent-ink: #10263c;
+  --action-bg: #b4d7f2;
+  --action-hover: #d4ebfc;
+  --action-ink: #10263c;
+  --focus: #9cd8ff;
+  --good: #8be0b8;
+  --good-text: #8be0b8;
+  --warn: #ffd18a;
+  --crit: #ffacb7;
+  --shadow: 0 3px 16px #0002;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .product-workspace {
+    --page: #0b1420;
+    --surface: #17283b;
+    --surface-2: #20364b;
+    --ink: #f2f7fc;
+    --ink-2: #d4e1ee;
+    --muted: #afc2d6;
+    --border: #425b73;
+    --grid: #354b60;
+    --control-border: #829bb5;
+    --accent: #acd3f3;
+    --accent-hover: #d3e9fa;
+    --accent-ink: #10263c;
+    --action-bg: #b4d7f2;
+    --action-hover: #d4ebfc;
+    --action-ink: #10263c;
+    --focus: #9cd8ff;
+    --good: #8be0b8;
+    --good-text: #8be0b8;
+    --warn: #ffd18a;
+    --crit: #ffacb7;
+    --shadow: 0 3px 16px #0002;
+  }
+}
+.product-workspace :focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+.product-workspace .mainwrap {
+  padding-top: 26px;
+}
+.product-workspace.workspace-guided {
+  grid-template-columns: 264px minmax(0, 1fr);
+}
+.product-workspace.workspace-guided.recolhida {
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+.product-workspace .workspace-context {
+  border-color: var(--border);
+  padding-bottom: 18px;
+}
+.product-workspace .workspace-clinic b {
+  font-size: 14px;
+}
+.product-workspace .workspace-clinic p {
+  font-size: 13px;
+}
+.product-workspace .workspace-heading {
+  padding-block: 28px 14px;
+}
+.product-workspace .workspace-heading h1 {
+  font-size: clamp(28px, 3vw, 36px);
+  font-weight: 680;
+  line-height: 1.15;
+}
+.product-workspace .workspace-heading p:not(.workspace-eyebrow) {
+  font-size: 15px;
+}
+.product-workspace .workspace-eyebrow,
+.product-workspace .workspace-nav-label {
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  font-weight: 650;
+}
+.product-workspace .workspace-data-status {
+  margin-bottom: 26px;
+}
+.product-workspace .workspace-data-status summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.product-workspace .workspace-data-status summary::before {
+  content: "+";
+  font-weight: 700;
+}
+.product-workspace .workspace-data-status details[open] summary::before {
+  content: "−";
+}
+.product-workspace nav.side.areas {
+  gap: 3px;
+}
+.workspace-nav-section + .workspace-nav-section {
+  margin-top: 12px;
+}
+.workspace-nav-section > p {
+  color: var(--side-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0 10px;
+  margin-bottom: 6px;
+}
+.product-workspace nav.side.areas a {
+  min-height: 46px;
+  font-size: 14px;
+}
+.product-workspace nav.side a[data-on] {
+  box-shadow: inset 3px 0 0 #e5c78e;
+  background: var(--side-active);
+  color: #fff;
+}
+.product-workspace .workspace-pages a {
+  min-height: 42px;
+  font-size: 13px;
+}
+.product-workspace aside .workspace-pages a[data-on] {
+  background: #28445e;
+  color: #fff;
+  box-shadow: inset 3px 0 0 #e5c78e;
+}
+.product-workspace .workspace-section {
+  border-top-color: var(--side-border);
+}
+.product-workspace .workspace-pages a:not([data-on]):hover {
+  background: var(--surface-2);
+}
+.product-workspace aside .workspace-pages a:not([data-on]):hover {
+  background: var(--side-hover);
+}
+.product-workspace.recolhida .workspace-nav-section > p {
+  display: none;
+}
+.product-workspace .kbar {
+  background: #20364c;
+  border-color: #698198;
+  color: #e4edf5;
+  min-height: 46px;
+}
+.product-workspace .kbar:hover {
+  background: #2c4964;
+}
+.product-workspace .kbar kbd {
+  color: #e4edf5;
+  border-color: #698198;
+}
+
+/* Controls: generous hit targets, visible boundaries and distinct action levels. */
+.product-workspace main button:not(.ws-inline-help),
+.product-workspace .themes button {
+  min-height: 44px;
+  cursor: pointer;
+}
+.product-workspace .btn,
+.product-workspace .ws-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px #102b4210;
+}
+.product-workspace .btn:hover,
+.product-workspace .ws-action:hover {
+  background: var(--surface-2);
+  border-color: var(--accent);
+}
+.product-workspace .btn.pri,
+.product-workspace .ws-action--primary {
+  background: var(--action-bg);
+  color: var(--action-ink);
+  border-color: var(--action-bg);
+}
+.product-workspace .btn.pri:hover,
+.product-workspace .ws-action--primary:hover {
+  background: var(--action-hover);
+  border-color: var(--action-hover);
+}
+.product-workspace .ws-action--quiet {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--accent);
+}
+.product-workspace button:disabled,
+.product-workspace .btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.product-workspace
+  main
+  :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]):not(
+    [type="file"]
+  ):not([type="range"]):not([type="hidden"]) {
+  min-height: 44px;
+  border: 1px solid var(--control-border);
+  border-radius: 7px;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: 14px;
+  padding: 9px 11px;
+}
+.product-workspace main textarea {
+  line-height: 1.65;
+}
+.product-workspace main input::placeholder,
+.product-workspace main textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.product-workspace main :is(input, select, textarea):disabled {
+  background: var(--surface-2);
+  cursor: not-allowed;
+}
+.product-workspace main .text-xs,
+.product-workspace main .text-\[11px\] {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.product-workspace main .hpagehead h2 {
+  font-size: 25px;
+  font-weight: 650;
+}
+.product-workspace main table {
+  border-collapse: collapse;
+}
+.product-workspace main table th {
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-weight: 650;
+}
+.product-workspace main table :is(th, td) {
+  border-bottom: 1px solid var(--border);
+  padding-block: 12px;
+}
+.product-workspace main table tbody tr:hover {
+  background: var(--surface-2);
+}
+.product-workspace .ws-panel,
+.product-workspace .ws-metric,
+.product-workspace .card {
+  border-color: var(--border);
+  border-radius: 11px;
+  box-shadow: var(--shadow);
+}
+.product-workspace .ws-panel {
+  padding: 22px;
+}
+.product-workspace .ws-panel > header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+}
+.product-workspace .ws-panel h2 {
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 650;
+}
+.product-workspace .ws-metric {
+  padding: 21px 18px;
+  border-top: 3px solid var(--accent);
+}
+.product-workspace .ws-metric-value {
+  font-size: 32px;
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  margin-top: 15px;
+}
+.product-workspace .ws-info-button {
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+.ws-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.ws-section-heading h2 {
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+.ws-section-heading p {
+  font-size: 14px;
+  color: var(--ink-2);
+  margin-top: 5px;
+}
+.product-workspace .ws-empty {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  border: 1px dashed var(--control-border);
+  border-radius: 10px;
+  padding: 24px;
+  background: var(--surface-2);
+}
+.ws-empty-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.product-workspace .ws-empty h3 {
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.product-workspace .ws-empty p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ink-2);
+  max-width: 65ch;
+  margin-top: 7px;
+}
+.ws-empty-action {
+  margin-top: 16px;
+}
+.product-workspace .workspace-content-views {
+  border-color: var(--control-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.product-workspace .workspace-content-views button {
+  min-height: 100px;
+  padding: 20px;
+  border-bottom-width: 4px;
+}
+.product-workspace .workspace-content-views b {
+  font-size: 16px;
+}
+.product-workspace .workspace-content-views span {
+  font-size: 13px;
+}
+.product-workspace .workspace-content-views button[aria-pressed="true"] {
+  background: var(--action-bg);
+  color: var(--action-ink);
+  border-bottom-color: #d8b87c;
+}
+.product-workspace .workspace-content-views button[aria-pressed="true"] span {
+  color: inherit;
+  opacity: 0.9;
+}
+.product-workspace
+  .workspace-content-views
+  button:not([aria-pressed="true"]):hover {
+  background: var(--surface-2);
+}
+
+/* An action gets a focal surface; data panels stay neutral. */
+.product-workspace .ws-priority {
+  --surface: #173851;
+  --surface-2: #244b69;
+  --ink: #f5f9fd;
+  --ink-2: #d6e4ef;
+  --muted: #c2d5e4;
+  --accent: #ead5ad;
+  --accent-ink: #142d43;
+  --border: #54748d;
+  --action-bg: #f0dfbd;
+  --action-hover: #fff1d7;
+  --action-ink: #142d43;
+  --crit: #962039;
+  --danger-bg: #fff0f2;
+  --warn: #774b09;
+  --warn-bg: #fff1d6;
+  background: #173851;
+  border-color: #173851;
+  padding: 28px;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.product-workspace .ws-priority h2 {
+  font-size: clamp(22px, 2.2vw, 28px);
+  font-weight: 600;
+  line-height: 1.3;
+  max-width: 36ch;
+}
+.product-workspace .ws-priority p {
+  font-size: 15px;
+  line-height: 1.65;
+}
+.ws-priority .ws-action {
+  margin-top: 20px;
+}
+.product-workspace .ws-priority .ws-priority-label {
+  color: #ead5ad;
+}
+.product-workspace .ws-priority-empty .ws-priority-symbol {
+  width: 46px;
+  height: 46px;
+  border: 1px solid #7894aa;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #ead5ad;
+  margin-bottom: 16px;
+}
+.product-workspace .ws-priority-empty h3 {
+  font-size: 25px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.product-workspace .ws-priority-empty p {
+  color: var(--ink-2);
+  max-width: 65ch;
+  margin-top: 10px;
+}
+.ws-workflow-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+.ws-workflow-foot a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.product-workspace #todas-analises {
+  border-color: var(--control-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.product-workspace #todas-analises > button {
+  padding: 22px;
+  min-height: 88px;
+  background: var(--surface);
+  border-radius: inherit;
+}
+
+/* SAP: readable programme map and controls, with one clear task to act on. */
+.product-workspace.sap-workspace {
+  --sap-brass: #7b5b23;
+  --sap-tint: var(--surface-2);
+  --sap-deep: #173851;
+}
+.product-workspace.sap-workspace > aside {
+  gap: 18px;
+}
+.product-workspace .sap-clinic-context > span,
+.product-workspace .sap-clinic-context small {
+  font-size: 12px;
+}
+.product-workspace .sap-clinic-context strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.product-workspace .sap-area-nav strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.product-workspace .sap-area-nav small {
+  font-size: 12px;
+  color: #bfd0df;
+}
+.product-workspace nav.sap-area-nav a {
+  min-height: 68px;
+  border-radius: 8px;
+}
+.product-workspace .sap-system-nav a {
+  font-size: 13px;
+  min-height: 44px;
+}
+.product-workspace .sap-workspace-kicker,
+.product-workspace .sap-eyebrow {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+}
+.product-workspace .sap-workspace-header h1 {
+  font-size: clamp(28px, 3vw, 36px);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+.product-workspace .sap-phase-tag {
+  font-size: 12px;
+  border-radius: 7px;
+}
+.product-workspace .sap-context-tabs {
+  gap: 10px;
+  border: 0;
+  padding-block: 16px 0;
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.product-workspace .sap-context-tabs a {
+  min-height: 44px;
+  padding: 10px 15px;
+  border: 1px solid var(--control-border);
+  border-radius: 7px;
+  font-size: 14px;
+  color: var(--ink-2);
+  background: var(--surface);
+}
+.product-workspace .sap-context-tabs a[aria-current="page"] {
+  background: var(--action-bg);
+  color: var(--action-ink);
+  border-color: var(--action-bg);
+  font-weight: 600;
+}
+.product-workspace .sap-week-heading h2 {
+  font-size: 30px;
+  font-weight: 600;
+}
+.product-workspace .sap-week-heading > div > p:last-child {
+  font-size: 15px;
+  line-height: 1.7;
+}
+.product-workspace .sap-quiet-link {
+  font-size: 14px;
+  min-height: 44px;
+  color: var(--accent);
+  font-weight: 600;
+}
+.product-workspace .sap-week-board {
+  border-color: var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.product-workspace .sap-next-action h3 {
+  font-size: 28px;
+  font-weight: 600;
+}
+.product-workspace .sap-next-action > p:not(.sap-eyebrow) {
+  font-size: 14px;
+  color: #d3e1ec;
+  line-height: 1.65;
+}
+.product-workspace .sap-action-link {
+  min-height: 48px;
+  font-size: 14px;
+  background: #f0dfbd;
+  color: #142d43;
+  border-radius: 8px;
+  font-weight: 650;
+  padding: 12px 18px;
+}
+.product-workspace .sap-action-link:hover {
+  background: #fff1d7;
+}
+.product-workspace .sap-action-foot {
+  font-size: 12px;
+  color: #c4d7e5;
+}
+.product-workspace .sap-progress-number strong {
+  font-size: 48px;
+  font-weight: 650;
+}
+.product-workspace .sap-progress-number > span,
+.product-workspace .sap-progress-phase {
+  font-size: 14px;
+}
+.product-workspace .sap-program-progress > p:not(.sap-eyebrow) {
+  font-size: 13px;
+}
+.product-workspace .sap-progress-track {
+  height: 8px;
+}
+.product-workspace .sap-workspace-shortcuts {
+  gap: 16px;
+}
+.product-workspace .sap-workspace-shortcuts a {
+  padding: 20px;
+  border-color: var(--control-border);
+  border-radius: 9px;
+  box-shadow: var(--shadow);
+}
+.product-workspace .sap-workspace-shortcuts a:hover {
+  background: var(--surface-2);
+  border-color: var(--accent);
+}
+.product-workspace .sap-workspace-shortcuts strong {
+  font-size: 15px;
+  font-weight: 650;
+}
+.product-workspace .sap-workspace-shortcuts small {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.product-workspace .sap-section-heading h2 {
+  font-size: 24px;
+  font-weight: 650;
+}
+.product-workspace .sap-task-card {
+  border-radius: 9px;
+  border-color: var(--border);
+  box-shadow: var(--shadow);
+}
+.product-workspace .sap-task-toggle {
+  font-size: 14px;
+  min-height: 76px;
+  padding: 18px;
+}
+.product-workspace .sap-clinic-phase-label {
+  font-size: 12px;
+}
+.product-workspace .sap-clinic-phase-day {
+  font-weight: 600;
+}
+.product-workspace .sap-clinic-kpi {
+  border-top: 3px solid var(--accent);
+  box-shadow: var(--shadow);
+}
+.product-workspace .sap-clinic-kpi-value > span {
+  font-weight: 600;
+}
+.product-workspace .sap-clinic-funnel h2 {
+  font-size: 23px;
+  font-weight: 650;
+}
+.product-workspace .sap-clinic-funnel > div > p:last-child,
+.product-workspace .sap-clinic-funnel li > span {
+  font-size: 13px;
+}
+.product-workspace .sap-clinic-funnel li > strong {
+  font-weight: 650;
+}
+.sap-phase-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+.product-workspace .sap-phase-actions .ws-action--primary {
+  --action-bg: #f0dfbd;
+  --action-hover: #fff1d7;
+  --action-ink: #142d43;
+}
+.product-workspace .sap-phase-actions .ws-action--secondary {
+  background: transparent;
+  color: #f4f8fc;
+  border-color: #9cb4c6;
+}
+.product-workspace .sap-phase-actions .ws-action--secondary:hover {
+  background: #2b4c66;
+}
+:root[data-theme="dark"] .product-workspace.sap-workspace {
+  --sap-brass: #dfc58e;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .product-workspace.sap-workspace {
+    --sap-brass: #dfc58e;
+  }
+}
+@media (max-width: 820px) {
+  .product-workspace.workspace-guided,
+  .product-workspace.workspace-guided.recolhida {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .product-workspace .mainwrap {
+    padding: 0 18px calc(92px + env(safe-area-inset-bottom));
+  }
+  .product-workspace.sap-workspace .mainwrap {
+    padding: 22px 18px 40px;
+  }
+  .product-workspace .workspace-heading {
+    padding-top: 24px;
+  }
+  .product-workspace .ws-priority {
+    padding: 22px;
+  }
+  .product-workspace .ws-empty {
+    flex-direction: column;
+    padding: 20px;
+  }
+  .product-workspace .ws-panel {
+    padding: 18px;
+  }
+  .product-workspace .sap-workspace-shortcuts {
+    grid-template-columns: 1fr;
+  }
+  .product-workspace .sap-week-heading h2 {
+    font-size: 27px;
+  }
+  .product-workspace .sap-next-action h3 {
+    font-size: 25px;
+  }
+  .product-workspace .sap-context-tabs {
+    gap: 8px;
+    padding-top: 18px;
+  }
+  .product-workspace .sap-task-toggle {
+    padding: 16px 12px;
+  }
+  .product-workspace .workspace-content-views button {
+    min-height: 80px;
+    padding: 15px;
+  }
+}
+@media print {
+  .product-workspace {
+    --page: #fff;
+    --surface: #fff;
+    --surface-2: #eee;
+    --ink: #111;
+    --ink-2: #333;
+    --muted: #444;
+    --border: #bbb;
+    background: #fff;
+    color: #111;
+  }
+  .product-workspace .ws-priority {
+    background: #fff;
+    color: #111;
+    --ink: #111;
+    --ink-2: #333;
+    --muted: #444;
+  }
+}
+/* Legacy names resolve inside each product, including when its theme changes. */
+.product-workspace {
+  --bg: var(--page);
+  --text: var(--ink);
+  --text-dim: var(--ink-2);
+  --text-faint: var(--muted);
+  --accent-soft: var(--surface-2);
+  --danger: var(--crit);
+  --good-bg: color-mix(in srgb, var(--good) 10%, var(--surface));
+  --good-border: color-mix(in srgb, var(--good) 45%, var(--surface));
+  --warn-bg: color-mix(in srgb, var(--warn) 10%, var(--surface));
+  --warn-border: color-mix(in srgb, var(--warn) 45%, var(--surface));
+  --danger-bg: color-mix(in srgb, var(--crit) 10%, var(--surface));
+  --danger-border: color-mix(in srgb, var(--crit) 45%, var(--surface));
+}
+.product-workspace aside {
+  --focus: #efd19a;
+}
+.product-workspace .sap-clinic-phase {
+  --surface: #21435d;
+  --surface-2: #2c536f;
+  --ink: #f6faff;
+  --ink-2: #d4e3ef;
+  --muted: #c2d6e5;
+  --text: var(--ink);
+  --text-dim: var(--ink-2);
+  --text-faint: var(--muted);
+  --accent: #ead5ad;
+  --border: #7090a6;
+}
+.product-workspace .creative-tabs button {
+  font-size: 14px;
+  min-height: 44px;
+  border-color: var(--control-border);
+}
+.product-workspace .creative-tabs button[aria-current="page"] {
+  background: var(--action-bg);
+  color: var(--action-ink);
+  border-color: var(--action-bg);
+}
+@media (max-width: 580px) {
+  .product-workspace .workspace-content-views {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .product-workspace .workspace-content-views button {
+    border: 0;
+    border-bottom: 4px solid transparent;
+    min-height: 80px;
+    padding: 12px 9px;
+    text-align: center;
+    align-items: center;
+    justify-content: center;
+  }
+  .product-workspace .workspace-content-views button + button {
+    border-left: 1px solid var(--border);
+  }
+  .product-workspace .workspace-content-views b {
+    font-size: 14px;
+  }
+  .product-workspace .workspace-content-views span {
+    display: none;
+  }
+}
+.product-workspace .workspace-context {
+  flex-wrap: wrap;
+}
+.workspace-context-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-left: auto;
+}
+.product-workspace .workspace-context select {
+  min-height: 44px;
+  --border: var(--control-border);
+}
+.product-workspace main :is(input, select, textarea) {
+  --border: var(--control-border);
+}
+.product-workspace .ws-metric {
+  position: relative;
+}
+.product-workspace .ws-metric > div:first-child {
+  padding-right: 25px;
+}
+.product-workspace .ws-metric .ws-info {
+  position: absolute;
+  top: 7px;
+  right: 4px;
+  margin: 0;
+}
+@media (max-width: 580px) {
+  .product-workspace .ws-metric > div:first-child > span[aria-hidden] {
+    display: none;
+  }
+}
+@media print {
+  :root .product-workspace,
+  :root[data-theme] .product-workspace {
+    --page: #fff;
+    --surface: #fff;
+    --surface-2: #eee;
+    --ink: #111;
+    --ink-2: #333;
+    --muted: #444;
+    --border: #bbb;
+    --accent: #174265;
+  }
+  .product-workspace .ws-priority {
+    --surface: #fff;
+    --ink: #111;
+    --ink-2: #333;
+    --muted: #444;
+    background: #fff;
+  }
+}
+.product-workspace .side-foot button {
+  min-height: 44px;
+}
+.workspace-admin .admin-top {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 24px;
+}
+.workspace-admin .admin-top .who h1 {
+  font-size: clamp(28px, 3vw, 36px);
+  font-weight: 650;
+  line-height: 1.25;
+}
+.workspace-admin .side a {
+  min-height: 46px;
+  font-size: 14px;
+}
+.ws-admin-menu {
+  display: none;
+}
+@media (max-width: 820px) {
+  .ws-admin-menu {
+    display: block;
+    border: 1px solid var(--control-border);
+    border-radius: 8px;
+    margin-top: 18px;
+    background: var(--surface);
+  }
+  .ws-admin-menu > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px;
+    min-height: 48px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    list-style: none;
+  }
+  .ws-admin-menu > nav {
+    padding: 4px 14px 14px;
+  }
+  .ws-admin-menu nav h2 {
+    font-size: 12px;
+    font-weight: 650;
+    color: var(--muted);
+    margin-block: 14px 6px;
+  }
+  .ws-admin-menu nav a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 46px;
+    padding: 10px;
+    text-decoration: none;
+    border-radius: 6px;
+  }
+  .ws-admin-menu nav a[aria-current="page"] {
+    background: var(--action-bg);
+    color: var(--action-ink);
+    font-weight: 600;
+  }
+  .ws-admin-menu > .ws-action {
+    margin: 0 14px 14px;
+  }
+  .ws-admin-menu .workspace-product-switch {
+    margin: 12px;
+  }
+}
+.product-workspace [aria-label="Produto"] a {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+@media (max-width: 820px) {
+  .ws-admin-menu > [aria-label="Produto"] {
+    background: var(--side);
+    margin: 0 12px 14px;
+    padding: 8px;
+  }
+}
+.product-workspace .ws-priority {
+  color: var(--ink);
+}
+@media print {
+  .product-workspace .ws-admin-menu {
+    display: none;
+  }
+}
