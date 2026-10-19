@@ -95,7 +95,7 @@ const ORDEM_TIPO: Record<TipoProblema, number> = { falha_tecnica: 0, config_inco
 
 // Mesma regra de cor do admin (status-fonte.ts): parado = vermelho por tempo (mais de 3 dias ou sem dado).
 function velho(l: LinhaFonte): boolean {
-  return !l.data_ate || statusDaFonte({ cadastro: true, data_ate: l.data_ate }).cor === "vermelho";
+  return !l.data_ate || statusDaFonte({ fonte: l.fonte, cadastro: true, data_ate: l.data_ate }).cor === "vermelho";
 }
 
 /** Problema de uma fonte ligada (sync_status), ou null se está em dia. Mesmas regras de saudeDaFonte. */
@@ -122,7 +122,7 @@ function problemaBruto(c: Pick<EntradaCliente, "id" | "nome">, l: LinhaFonte): P
   if (!l.data_ate && !l.last_error) {
     return { ...base, id: `${c.id}:${l.fonte}:sem-dado`, tipo: "config_incompleta", gravidade: "alta", quem: "equipe", titulo: `${nome} ligado, mas nenhum dado chegou ainda`, detalhe: "A fonte está marcada como ligada no cadastro, mas a sincronização nunca gravou dado.", acao: ACAO.semDado };
   }
-  if (!l.last_error && l.data_ate && statusDaFonte({ cadastro: true, data_ate: l.data_ate }).cor === "verde") return null;
+  if (!l.last_error && l.data_ate && statusDaFonte({ fonte: l.fonte, cadastro: true, data_ate: l.data_ate }).cor === "verde") return null;
   const m = motivoDaLinha(l);
   const parado = velho(l);
   const quando = l.data_ate ? `Último dado: ${l.data_ate.slice(8, 10)}/${l.data_ate.slice(5, 7)}` : "Sem dado";

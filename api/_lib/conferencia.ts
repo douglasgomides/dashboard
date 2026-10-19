@@ -400,7 +400,7 @@ async function etapaParados(_supabase: Sb, { nome, statusFontes }: Base): Promis
   for (const r of statusFontes) {
     const fonte = r.fonte as FonteId;
     if (!PARADA[fonte]) continue;
-    const e = { cadastro: !!r.cadastro, data_ate: r.data_ate ? String(r.data_ate).slice(0, 10) : null, last_error: r.last_error, motivo: r.motivo, motivo_dono: r.motivo_dono, naoUsa: !!r.nao_usa };
+    const e = { fonte, cadastro: !!r.cadastro, data_ate: r.data_ate ? String(r.data_ate).slice(0, 10) : null, last_error: r.last_error, motivo: r.motivo, motivo_dono: r.motivo_dono, naoUsa: !!r.nao_usa };
     if (!fonteLigada(e)) continue; // não ligada: aparece em "fontes obrigatórias"
     const st = statusDaFonte(e, hoje);
     const cli = nome.get(r.client_id) ?? null;
