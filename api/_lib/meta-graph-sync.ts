@@ -423,26 +423,34 @@ export async function gravarMetricasDiariasPelaGraph(
   token: string,
 ): Promise<string[]> {
   try {
-    const hojeBr = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+    // A Meta é a fonte destas métricas (validado contra a Windsor em 19/10/2026: alcance, novos seguidores e saídas
+    // batem dia a dia). Antes ela só entrava se a Windsor ficasse mais de 3 dias parada, e nunca refazia os dias
+    // que a Windsor gravou pela metade (a Windsor trava quando o login do Facebook dela cai e deixa o dia aberto
+    // com valor parcial). Agora toda rodada relê os 7 últimos dias fechados e, se houver buraco, anda para trás até
+    // 28 dias a partir do último dia completo.
+    const hojeLa = laData(Date.now()).split("-").map(Number);
+    const diaK = (k: number) => {
+      const meia = laMeiaNoiteMs(hojeLa[0], hojeLa[1], hojeLa[2]) - k * 86_400_000;
+      return { meia, data: laData(meia + 12 * 3600_000) };
+    };
+    const fechado = diaK(2).data;
     const { data: ult } = await supabase
       .from("instagram_account_daily_metrics")
       .select("date")
       .eq("instagram_account_id", accountId)
+      .lte("date", fechado)
       .not("reach", "is", null)
+      .not("new_followers", "is", null)
       .order("date", { ascending: false })
       .limit(1)
       .maybeSingle();
     const ultimo: string | null = (ult as { date?: string } | null)?.date ?? null;
-    const dias = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / 86_400_000);
-    if (ultimo && dias(hojeBr, ultimo) <= 3) { return []; } // a Windsor está cobrindo esta conta
 
-    // Dias da Califórnia fechados (de 2 dias atrás para trás), do dia seguinte ao último com alcance, no máximo 28.
-    const hojeLa = laData(Date.now()).split("-").map(Number);
+    // Dias da Califórnia fechados (de 2 dias atrás para trás): sempre os 7 mais recentes; depois, até o último completo (máx. 28).
     const alvo: { data: string; since: number; until: number }[] = [];
     for (let k = 2; k < 2 + 28; k++) {
-      const meia = laMeiaNoiteMs(hojeLa[0], hojeLa[1], hojeLa[2]) - k * 86_400_000;
-      const data = laData(meia + 12 * 3600_000);
-      if (ultimo && data <= ultimo) { break; }
+      const { meia, data } = diaK(k);
+      if (ultimo && data <= ultimo && k >= 9) { break; }
       alvo.push({ data, since: Math.floor(meia / 1000), until: Math.floor(meia / 1000) + 86_399 });
     }
     if (alvo.length === 0) { return []; }
