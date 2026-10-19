@@ -113,18 +113,21 @@ export function diasUteisDeAtraso(dataAte: string, hoje: Date = new Date()): num
 }
 
 /* Atraso de uma fonte: anúncios e Instagram têm dado todo dia (dias corridos); CRM e WhatsApp, só em dia útil. */
-export function atrasoDaFonte(l: { fonte?: string; data_ate: string | null }): number {
+export function atrasoDaFonte(l: { fonte?: string; data_ate: string | null; last_success_at?: string | null }): number {
   if (!l.data_ate) { return 0; }
-  if (l.fonte === "instagram") { return Math.max(0, diasDeAtraso(l.data_ate) - FOLGA_META_INSTAGRAM); }
+  if (l.fonte === "instagram") {
+    const porDado = Math.max(0, diasDeAtraso(l.data_ate) - FOLGA_META_INSTAGRAM);
+    return l.last_success_at ? Math.max(porDado, Math.max(0, diasDeAtraso(l.last_success_at.slice(0, 10)))) : porDado;
+  }
   return l.fonte === "crm" || l.fonte === "atendimento" ? diasUteisDeAtraso(l.data_ate) : diasDeAtraso(l.data_ate);
 }
 
 export type Tom = "bom" | "atencao" | "ruim" | "neutro";
 const TOM_DA_COR: Record<CorStatus, Tom> = { verde: "bom", amarelo: "atencao", vermelho: "ruim", cinza: "neutro" };
 /** Tom da fonte pela regra única (src/lib/status-fonte.ts). Linha sem data nem erro = sem dado para mostrar. */
-export function tomDaFonte(l: Pick<LinhaFonte, "data_ate" | "last_error"> & { fonte?: string } | undefined): Tom {
+export function tomDaFonte(l: Pick<LinhaFonte, "data_ate" | "last_error"> & { fonte?: string; last_success_at?: string | null } | undefined): Tom {
   if (!l || (!l.data_ate && !l.last_error)) return "neutro";
-  return TOM_DA_COR[statusDaFonte({ fonte: l.fonte ?? null, cadastro: true, data_ate: l.data_ate, last_error: l.last_error }).cor];
+  return TOM_DA_COR[statusDaFonte({ fonte: l.fonte ?? null, ultimo_sucesso: l.last_success_at ?? null, cadastro: true, data_ate: l.data_ate, last_error: l.last_error }).cor];
 }
 
 // ---------------------------------------------------------------- todos os clientes (admin)
