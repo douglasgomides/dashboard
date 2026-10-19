@@ -24,7 +24,7 @@ test("desktop: task search leads to existing tools and preserves clinic and peri
     sidebar
       .getByRole("navigation", { name: "Telas de Marketing" })
       .getByRole("link"),
-  ).toHaveCount(13);
+  ).toHaveCount(14);
   await expect(
     sidebar.getByText("Conteúdo", { exact: true }),
   ).toBeVisible();

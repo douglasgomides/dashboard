@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   Lightbulb,
   CalendarDays,
+  GitCompare,
   Megaphone,
   MessageCircle,
   Network,
@@ -206,6 +207,15 @@ export const AREAS: NavArea[] = [
         fonte: "instagram",
         descricao: "Entenda quem acompanha o perfil.",
         termos: "audiencia seguidores cidades idade genero",
+        grupo: "Público e demanda",
+      },
+      {
+        path: "/conteudo-comercial",
+        label: "Conteúdo × Comercial",
+        Icone: GitCompare,
+        fonte: "instagram",
+        descricao: "Cruze os posts com as conversas e os agendamentos por dia, horário e tema.",
+        termos: "cruzamento conteudo comercial conversas whatsapp temas objecoes horario agendamento",
         grupo: "Público e demanda",
       },
       {

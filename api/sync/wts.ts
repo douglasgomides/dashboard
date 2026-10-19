@@ -9,6 +9,7 @@ import { analisarConversasPendentes } from "../_lib/resumo-conversa.js";
 import { rodarAtendenteSombra } from "../_lib/atendente.js";
 import { atribuirLinks } from "../_lib/redirecionar.js";
 import { transcreverReels } from "../_lib/transcrever-reels.js";
+import { classificarTemasConversas } from "../_lib/tema-conversa.js";
 import { ingerirConversasDigisac } from "../_lib/conversas-digisac.js";
 import { sondarConversasCrm } from "../_lib/sonda-conversas-crm.js";
 
@@ -97,16 +98,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const extra = async (acao: () => Promise<unknown>) => {
         try { return await acao(); } catch { return { erro: "Rotina auxiliar não concluída" }; }
       };
-      const [_, atendente, links, reels] = await Promise.all([
+      const [_, atendente, links, reels, temas] = await Promise.all([
         Promise.all(Array.from({ length: Math.min(3, clientes.length) }, () => trabalhador())),
         extra(() => rodarAtendenteSombra(admin, Math.max(1, Math.min(150_000, fim - Date.now())), clientId)),
         extra(() => atribuirLinks(admin, clientId)),
         extra(() => transcreverReels(admin, Math.max(1, Math.min(150_000, fim - Date.now())), 8, clientId)),
+        extra(() => classificarTemasConversas(admin, clientes, Math.max(1, Math.min(180_000, fim - Date.now())))),
       ]);
       const pendentes = clientes.length - Object.keys(analise).length;
       const falhou = (v: unknown): boolean => !!v && typeof v === "object" && ("erro" in v || ("erros" in v && Array.isArray(v.erros) && v.erros.length > 0) || Object.values(v).some(falhou));
-      const ok = pendentes === 0 && !falhou({ analise, atendente, links, reels });
-      res.status(ok ? 200 : 207).json({ ok, analise, clientes_pendentes: pendentes, atendente, links, reels });
+      const ok = pendentes === 0 && !falhou({ analise, atendente, links, reels, temas });
+      res.status(ok ? 200 : 207).json({ ok, analise, clientes_pendentes: pendentes, atendente, links, reels, temas });
       return;
     }
     if (!WTS_API_TOKEN) { res.status(500).json({ error: "Servidor sem WTS_API_TOKEN configurado" }); return; }

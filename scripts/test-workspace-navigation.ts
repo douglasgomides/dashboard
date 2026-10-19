@@ -35,6 +35,7 @@ const esperados = [
   "/posts",
   "/top",
   "/audiencia",
+  "/conteudo-comercial",
   "/ideias",
   "/marketing",
   "/vendas-kommo",

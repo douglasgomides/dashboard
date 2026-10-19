@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { BotaoCopiar } from "@/components/botao-copiar";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
-import { POSICOES, taxa, type Posicao } from "@/lib/rastreio";
+import { POSICOES, slugPersonalizado, taxa, type Posicao } from "@/lib/rastreio";
 
 // Links rastreados (src/lib/rastreio.ts): de onde vem cada conversa. A equipe gera um link para cada lugar (bio,
 // story, destaque, QR...), o clique é registrado e a conversa que chega é ligada ao link. O funil mostra
@@ -35,14 +35,15 @@ function Gerador({ clientId, aoCriar }: { clientId: string; aoCriar: () => void 
   const [destino, setDestino] = useState<"whatsapp" | "site">("whatsapp");
   const [site, setSite] = useState("");
   const [numero, setNumero] = useState("");
+  const [final, setFinal] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [novo, setNovo] = useState<string | null>(null);
   async function criar() {
     setSalvando(true); setErro(null); setNovo(null);
     try {
-      const r = await chamar(clientId, { tipo, titulo, frase, destino_tipo: destino, site_url: site, numero_whatsapp: numero, campanha: titulo });
-      setNovo(r.url); setTitulo(""); aoCriar();
+      const r = await chamar(clientId, { tipo, titulo, frase, destino_tipo: destino, site_url: site, numero_whatsapp: numero, campanha: titulo, slug: final });
+      setNovo(r.url); setTitulo(""); setFinal(""); aoCriar();
     } catch (e) { setErro(e instanceof Error ? e.message : String(e)); } finally { setSalvando(false); }
   }
   const campo = "min-h-[36px] w-full rounded-md border px-2 text-sm";
@@ -58,6 +59,10 @@ function Gerador({ clientId, aoCriar }: { clientId: string; aoCriar: () => void 
         </label>
         <label className="text-xs font-semibold">Nome para achar depois
           <input className={campo} style={estilo} value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder={tipo === "story" ? "Ex.: Story 20/10 caixinha de dúvidas" : "Ex.: Bio principal"} autoComplete="off" />
+        </label>
+        <label className="text-xs font-semibold">Final do link (opcional)
+          <input className={campo} style={estilo} value={final} onChange={(e) => setFinal(e.target.value)} placeholder="Ex.: drajulia (vazio = gera um curto)" autoComplete="off" />
+          <span className="mt-0.5 block font-normal" style={{ color: "var(--muted)" }}>{final.trim() ? (slugPersonalizado(final) ? `Fica: ${window.location.host}/r/${slugPersonalizado(final)}` : "Use de 3 a 30 letras, números ou hífen.") : "Dá para trocar depois sem quebrar o link antigo."}</span>
         </label>
         <label className="text-xs font-semibold">Destino
           <select className={campo} style={estilo} value={destino} onChange={(e) => setDestino(e.target.value as "whatsapp" | "site")} autoComplete="off">
@@ -114,6 +119,12 @@ function LinksPage() {
     const x = f(l.id), t = porTipo.get(l.tipo) ?? { link_id: l.tipo, cliques: 0, conversas: 0, provaveis: 0, agendou: 0, vendas: 0, receita: 0 };
     porTipo.set(l.tipo, { ...t, cliques: t.cliques + Number(x.cliques), conversas: t.conversas + Number(x.conversas), provaveis: t.provaveis + Number(x.provaveis), agendou: t.agendou + Number(x.agendou), vendas: t.vendas + Number(x.vendas), receita: t.receita + Number(x.receita) });
   }
+  async function renomear(l: LinkRow) {
+    const novo = window.prompt("Novo final do link (o endereço antigo continua funcionando):", l.slug ?? "");
+    if (novo == null || novo.trim() === "" || novo.trim() === l.slug) return;
+    try { await chamar(clientId, { acao: "renomear", id: l.id, slug: novo }); await qc.invalidateQueries({ queryKey: ["links-rastreados", clientId] }); }
+    catch (e) { window.alert(e instanceof Error ? e.message : String(e)); }
+  }
   async function alternar(l: LinkRow) { await chamar(clientId, { acao: l.ativo ? "inativo" : "ativo", id: l.id }).catch(() => null); await qc.invalidateQueries({ queryKey: ["links-rastreados", clientId] }); }
   const th = "px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide";
   const td = "px-2 py-1.5 text-sm tabular-nums";
@@ -156,7 +167,12 @@ function LinksPage() {
                   <p className="mt-2 text-xs tabular-nums" style={{ color: "var(--ink-2)" }}>
                     <b>{x.cliques}</b> cliques · <b>{x.conversas}</b> conversas{x.provaveis ? ` (${x.provaveis} pelo horário)` : ""} · <b>{x.agendou}</b> agendaram · <b>{x.vendas}</b> vendas{x.receita ? ` (${brl(Number(x.receita))})` : ""}
                   </p>
-                  {isAdmin && l.slug && <button type="button" className="mt-1 text-xs" style={{ color: "var(--muted)" }} onClick={() => alternar(l)}>{l.ativo ? "Arquivar (o link continua funcionando)" : "Desarquivar"}</button>}
+                  {isAdmin && l.slug && (
+                    <div className="mt-1 flex flex-wrap gap-3 text-xs">
+                      <button type="button" style={{ color: "var(--accent)" }} onClick={() => renomear(l)}>Editar final do link</button>
+                      <button type="button" style={{ color: "var(--muted)" }} onClick={() => alternar(l)}>{l.ativo ? "Arquivar (o link continua funcionando)" : "Desarquivar"}</button>
+                    </div>
+                  )}
                 </article>
               );
             })}

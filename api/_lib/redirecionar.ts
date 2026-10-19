@@ -4,13 +4,14 @@
  * Também liga as conversas novas ao link que as originou (atribuirLinks), rodando junto da leitura das conversas.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { atribuirConversa, dispositivo, ehRobo, origemReferer, type CliqueAtrib, type LinkAtrib } from "../../src/lib/rastreio.js";
+import { atribuirConversa, dispositivo, ehRobo, origemReferer, slugValido, type CliqueAtrib, type LinkAtrib } from "../../src/lib/rastreio.js";
 
 type Admin = SupabaseClient<any, any, any>;
 
 export async function redirecionarLink(admin: Admin, slug: string, userAgent: string | null, referer: string | null): Promise<string | null> {
-  if (!/^[a-z0-9]{4,20}$/.test(slug)) return null;
-  const { data: l, error } = await admin.from("links_rastreados").select("id, client_id, destino_url").eq("slug", slug).maybeSingle();
+  if (!slugValido(slug)) return null;
+  // Final antigo (antes de a equipe renomear) continua levando ao mesmo destino: o link na bio não quebra.
+  const { data: l, error } = await admin.from("links_rastreados").select("id, client_id, destino_url").or(`slug.eq.${slug},slugs_antigos.cs.{${slug}}`).limit(1).maybeSingle();
   if (error) throw new Error("Não foi possível conferir o link rastreado");
   if (!l) return null;
   let destino: URL;
@@ -21,6 +22,13 @@ export async function redirecionarLink(admin: Admin, slug: string, userAgent: st
     await admin.from("link_cliques").insert({ link_id: l.id, client_id: l.client_id, dispositivo: dispositivo(userAgent), origem: origemReferer(referer) }).then(() => null, () => null);
   }
   return destino.toString();
+}
+
+/** Final de link livre: nenhum outro link usa como final atual nem antigo. */
+export async function slugLivre(admin: Admin, slug: string, exceto?: string): Promise<boolean> {
+  const { data, error } = await admin.from("links_rastreados").select("id").or(`slug.eq.${slug},slugs_antigos.cs.{${slug}}`).limit(5);
+  if (error) throw new Error("Não foi possível conferir o final do link");
+  return ((data ?? []) as { id: string }[]).every((r) => r.id === exceto);
 }
 
 /** Conversas dos últimos 3 dias ainda sem origem: tenta ligar a um link (ref → frase → horário). */
