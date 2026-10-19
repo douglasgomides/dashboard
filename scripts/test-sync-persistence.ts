@@ -22,9 +22,12 @@ async function testInstagram() {
   let rejectInsights = true;
   let rejectPosts = false;
   let rejectState = false;
+  let rejectDailyMetrics = false;
   let malformed = false;
   let finalPage = false;
   const batches: Record<string, unknown>[][] = [];
+  const dailyMetrics = new Map<string, Record<string, unknown>>();
+  let dailyWrites = 0;
   globalThis.fetch = async (input, init) => {
     const u = new URL(String(input));
     if (u.host === "review.supabase.co") {
@@ -40,6 +43,17 @@ async function testInstagram() {
           for (const row of rows) {
             const patch = Object.fromEntries([...columns].map((k) => [k, row[k] ?? null]));
             posts.set(String(row.windsor_media_id), { ...posts.get(String(row.windsor_media_id)), ...patch });
+          }
+        } else if (table === "instagram_account_daily_metrics") {
+          if (rejectDailyMetrics) return dbError();
+          dailyWrites++;
+          const rows: Record<string, unknown>[] = Array.isArray(body) ? body : [body];
+          assert.equal(u.searchParams.get("on_conflict"), "instagram_account_id,date");
+          for (const row of rows) {
+            assert.equal(row.client_id, "client");
+            assert.equal(row.instagram_account_id, "account");
+            assert.match(String(row.date), /^\d{4}-\d{2}-\d{2}$/);
+            dailyMetrics.set(String(row.date), { ...dailyMetrics.get(String(row.date)), ...row });
           }
         } else if (table === "instagram_backfill_state") {
           if (rejectState) return dbError();
@@ -67,6 +81,18 @@ async function testInstagram() {
         : { code: 200, body: malformed ? "invalid json" : JSON.stringify({ data: [{ name: "reach", values: [{ value: 0 }] }, { name: "saved", values: [{ value: 5 }] }, { name: "likes", values: [] }] }) }));
     }
     if (u.pathname.endsWith("/stories")) return json({ data: [] });
+    if (u.pathname.endsWith("/ig/insights")) {
+      const metrics = u.searchParams.get("metric")!.split(",");
+      if (metrics[0] === "follows_and_unfollows") return json({ data: [{
+        name: "follows_and_unfollows",
+        total_value: { breakdowns: [{ results: [
+          { dimension_values: ["FOLLOWER"], value: 4 },
+          { dimension_values: ["NON_FOLLOWER"], value: 1 },
+        ] }] },
+      }] });
+      const values: Record<string, number> = { reach: 0, total_interactions: 12, likes: 6, comments: 1, saves: 3, shares: 2, profile_links_taps: 5 };
+      return json({ data: metrics.map((name) => ({ name, total_value: { value: values[name] } })) });
+    }
     return json({});
   };
 
@@ -106,6 +132,19 @@ async function testInstagram() {
   assert.equal(state.backfill_done, true);
   assert.equal(recovered.done, true);
   assert.equal(recovered.nextCursor, null);
+  assert.ok(dailyWrites > 0, "a sincronização deve persistir as métricas diárias da Graph");
+  assert.equal(dailyMetrics.size, 7, "os sete dias fechados são relidos mesmo com dados recentes");
+  for (const row of dailyMetrics.values()) {
+    assert.equal(row.reach, 0, "alcance zero deve ser preservado também nas métricas diárias");
+    assert.equal(row.saves, 3);
+    assert.equal(row.new_followers, 4);
+    assert.equal(row.unfollowers, 1);
+  }
+  const beforeDaily = structuredClone([...dailyMetrics]);
+  rejectDailyMetrics = true;
+  const dailyFailure = (await runMetaGraphSync(syncEnv))[0];
+  assert.ok(dailyFailure.errors.some((error) => /métricas diárias pela Graph: simulated database failure/.test(error)), "falha ao gravar métricas diárias deve ser informada");
+  assert.deepEqual([...dailyMetrics], beforeDaily, "falha ao gravar não deve alterar o último retrato das métricas");
 }
 
 async function testWebhook() {
