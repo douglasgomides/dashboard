@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Columns2, CalendarPlus, Link2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Columns2, CalendarPlus, Link2, ImagePlus, Loader2 } from "lucide-react";
+import { gerarArtes, listarArtes, revisarArte } from "./data";
 import { Painel, Selo } from "@/components/visual";
 import type {
   CreativeAdaptation,
@@ -67,6 +69,9 @@ export function AdaptationView({
               : "Ainda não publicada"}
         </Selo>
       </div>
+      {doc.format === "carrossel" && (
+        <ArtesSlides clientId={adaptation.client_id} adaptacaoId={adaptation.id} total={doc.units.length} editable={editable} />
+      )}
       <div
         className="mb-4 flex flex-wrap gap-2"
         aria-label="Selecionar unidade da adaptação"
@@ -209,5 +214,65 @@ export function AdaptationView({
         </div>
       )}
     </Painel>
+  );
+}
+
+/** Arte dos slides: gera como rascunho, mostra lado a lado e deixa a equipe aprovar ou descartar. */
+function ArtesSlides({ clientId, adaptacaoId, total, editable }: { clientId: string; adaptacaoId: string; total: number; editable: boolean }) {
+  const qc = useQueryClient();
+  const chave = ["creative-artes", clientId, adaptacaoId];
+  const q = useQuery({ queryKey: chave, queryFn: () => listarArtes(clientId, adaptacaoId), staleTime: 300_000 });
+  const [gerando, setGerando] = useState<number[] | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+  async function gerar(slides?: number[]) {
+    setGerando(slides ?? Array.from({ length: total }, (_, i) => i + 1));
+    setAviso(null);
+    try {
+      const r = await gerarArtes(clientId, adaptacaoId, slides);
+      setAviso(r.erros.length ? `${r.geradas} arte(s) prontas. Falharam: ${r.erros.join(" · ")}` : `${r.geradas} arte(s) prontas para revisão.`);
+    } catch (e) {
+      setAviso(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGerando(null);
+      await qc.invalidateQueries({ queryKey: chave });
+    }
+  }
+  async function revisar(id: string, status: "aprovada" | "descartada") {
+    try { await revisarArte(clientId, id, status); } catch (e) { setAviso(e instanceof Error ? e.message : String(e)); }
+    await qc.invalidateQueries({ queryKey: chave });
+  }
+  const artes = q.data ?? [];
+  return (
+    <section className="mb-5 rounded-lg border p-3" style={{ borderColor: "var(--border)" }} aria-label="Arte dos slides">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="flex items-center gap-1.5 font-semibold"><ImagePlus size={16} aria-hidden /> Arte dos slides (rascunho)</h3>
+        {editable && (
+          <button className="btn" type="button" disabled={!!gerando} onClick={() => gerar()}>
+            {gerando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <ImagePlus size={15} aria-hidden />}
+            {gerando ? `Gerando ${gerando.length} arte(s)… pode levar 1 a 3 min` : artes.length ? "Gerar todas de novo" : `Gerar arte dos ${total} slides`}
+          </button>
+        )}
+      </div>
+      <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
+        Rascunho feito por IA a partir do briefing de cada slide. Revise texto e imagem (CFM) antes de usar. Custo aproximado de US$ 0,06 por arte, com teto diário por clínica.
+      </p>
+      {aviso && <p className="mt-2 text-sm" role="status">{aviso}</p>}
+      {q.isError && <p className="mt-2 text-sm" style={{ color: "var(--crit)" }}>Não consegui carregar as artes.</p>}
+      {artes.length > 0 && (
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {artes.map((a) => (
+            <figure key={a.id} className="space-y-1.5">
+              <a href={a.url} target="_blank" rel="noopener noreferrer"><img src={a.url} alt={`Arte do slide ${a.position}`} className="w-full rounded-md border" style={{ borderColor: "var(--border)" }} loading="lazy" /></a>
+              <figcaption className="flex flex-wrap items-center gap-1.5 text-xs">
+                <Selo cor={a.status === "aprovada" ? "var(--good)" : "var(--warn)"}>Slide {a.position} · {a.status === "aprovada" ? "aprovada" : "rascunho"}</Selo>
+                {editable && a.status !== "aprovada" && <button type="button" className="underline" onClick={() => revisar(a.id, "aprovada")}>Aprovar</button>}
+                {editable && <button type="button" className="underline" disabled={!!gerando} onClick={() => gerar([a.position])}>Refazer</button>}
+                {editable && <button type="button" className="underline" style={{ color: "var(--muted)" }} onClick={() => revisar(a.id, "descartada")}>Descartar</button>}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

@@ -24,6 +24,7 @@ import { rodarConferencia, rodarEtapa, ETAPAS, type EtapaId, type Achado, type V
 import { resumirConversa } from "../_lib/resumo-conversa.js";
 import { rascunharSessao } from "../_lib/sessao-ia.js";
 import { redirecionarLink, slugLivre } from "../_lib/redirecionar.js";
+import { gerarArtes, listarArtes, revisarArte } from "../_lib/creative-arte.js";
 import { redigirSecao } from "../_lib/copiloto.js";
 import { aplicarAcao, desfazerAcao, tokenEscritaConfigurado } from "../_lib/anuncios-acoes.js";
 import { destinoSite, destinoWhatsApp, novaRef, novoSlug, POSICOES, mensagemComRef, slugPersonalizado, type Posicao } from "../../src/lib/rastreio.js";
@@ -976,6 +977,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         body: JSON.stringify({ ref: "claude/doctor-creator-hub-nixvw6" }),
       });
       res.status(200).json({ alvo, ok: r.status === 204, status: r.status, agendado: r.status !== 204 });
+      return;
+    }
+
+    if (alvo === "creative_arte") {
+      // Arte dos slides de uma adaptação (rascunho para revisão). Só a equipe; teto diário por clínica.
+      if (!ehAdmin) { res.status(403).json({ error: "Só a equipe usa a Inteligência Criativa" }); return; }
+      const b = (req.body ?? {}) as { acao?: string; adaptacao_id?: string; slides?: unknown; arte_id?: string; status?: string };
+      try {
+        if (b.acao === "gerar") { res.status(200).json({ alvo, ok: true, ...(await gerarArtes(admin, client_id as string, String(b.adaptacao_id ?? ""), quem.user.id, b.slides)) }); return; }
+        if (b.acao === "revisar") { await revisarArte(admin, client_id as string, String(b.arte_id ?? ""), String(b.status ?? ""), quem.user.id); res.status(200).json({ alvo, ok: true }); return; }
+        res.status(200).json({ alvo, ok: true, artes: await listarArtes(admin, client_id as string, String(b.adaptacao_id ?? "")) });
+      } catch (e) {
+        res.status(200).json({ alvo, ok: false, erro: e instanceof Error ? e.message : String(e) });
+      }
       return;
     }
 
