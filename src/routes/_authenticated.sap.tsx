@@ -2,7 +2,8 @@ import { ProductBrand } from "@/components/product-brand";
 import { createFileRoute, Link, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, FileText, KeyRound, ClipboardCheck, Flag, Gauge, LayoutDashboard, ListChecks, ListTodo, Megaphone, Menu, Network, Target, Radar, Presentation, UsersRound, UserRoundCheck, BookOpen, Bot, X } from "lucide-react";
+import { LayoutDashboard, Menu, UsersRound, BookOpen, X } from "lucide-react";
+import { ITENS, ROTULO_CLINICA, areasSapVisiveis } from "@/lib/sap-navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { TrocaProduto } from "@/components/troca-produto";
@@ -36,37 +37,6 @@ export const Route = createFileRoute("/_authenticated/sap")({
   component: SapLayout,
 });
 
-// Menu da clínica em 5 grupos: Minhas tarefas, Painel da clínica, Implantação, Rotina semanal e Resultado.
-// clinica: o que a clínica vê (menu enxuto). O resto é ferramenta da equipe. Rotas antigas (/semana, /passo-a-passo)
-// redirecionam para Minhas tarefas.
-const ITENS = [
-  { grupo: "", sub: "", label: "Minhas tarefas", Icone: ListTodo, clinica: true },
-  { grupo: "", sub: "/painel", label: "Painel da clínica", Icone: Flag, clinica: true },
-  { grupo: "Implantação", sub: "/cronograma", label: "Cronograma", Icone: CalendarClock, clinica: true },
-  { grupo: "Implantação", sub: "/sessao", label: "Reuniões", Icone: Presentation, admin: true },
-  { grupo: "Implantação", sub: "/onboarding", label: "Ficha e acessos", Icone: KeyRound },
-  { grupo: "Implantação", sub: "/rastreamento", label: "Rastreamento", Icone: Radar },
-  { grupo: "Implantação", sub: "/anuncios", label: "Banco de anúncios", Icone: Megaphone, admin: true },
-  { grupo: "Implantação", sub: "/etapas", label: "Etapas do funil", Icone: Network, admin: true },
-  { grupo: "Implantação", sub: "/papeis", label: "Responsáveis", Icone: UserRoundCheck },
-  { grupo: "Rotina semanal", sub: "/leitura", label: "Leitura da semana", Icone: ClipboardCheck, clinica: true },
-  { grupo: "Rotina semanal", sub: "/execucao", label: "Execução e saúde", Icone: ListChecks },
-  { grupo: "Rotina semanal", sub: "/midia", label: "Mídia", Icone: Gauge },
-  { grupo: "Rotina semanal", sub: "/agentes", label: "Agentes de IA", Icone: Bot, clinica: true },
-  { grupo: "Resultado", sub: "/metas", label: "Metas e garantia", Icone: Target, clinica: true },
-  { grupo: "Resultado", sub: "/documentos", label: "Plano e relatório D90", Icone: FileText, clinica: true },
-] as const;
-// Na visão da clínica, os grupos viram um só e alguns nomes ficam mais diretos.
-const ROTULO_CLINICA: Record<string, string> = { "/cronograma": "Agenda do programa", "/leitura": "Números da semana", "/documentos": "Plano e relatório" };
-// Groups reuse the existing permission-filtered items; every original destination stays available.
-const AREAS_SAP = [
-  { id: "visao", label: "Visão geral", hint: "Programa e resultados", Icone: Flag, subs: ["/painel"] },
-  { id: "tarefas", label: "Minha semana", hint: "Prioridades e tarefas", Icone: ListTodo, subs: [""] },
-  { id: "implantacao", label: "Implantação", hint: "Etapas e entregas", Icone: CalendarClock, subs: ["/cronograma", "/sessao", "/rastreamento", "/anuncios", "/etapas"] },
-  { id: "resultado", label: "Acompanhamento", hint: "Números e evolução", Icone: Gauge, subs: ["/leitura", "/metas", "/execucao", "/midia"] },
-  { id: "materiais", label: "Plano e materiais", hint: "Decisões e continuidade", Icone: FileText, subs: ["/documentos"] },
-  { id: "equipe", label: "Equipe e acessos", hint: "Responsáveis e preparação", Icone: UsersRound, subs: ["/papeis", "/onboarding"] },
-];
 const TITULOS: Record<string, string> = { "/sap/guia": "Como operamos", "/sap/docs": "Documentos do SAP", "/sap/comece": "Comece aqui" };
 
 function SapLayout() {
@@ -83,7 +53,7 @@ function SapConteudo({ isAdmin }: { isAdmin: boolean }) {
   const dia = diaAtual(clinica?.d0 ?? null, clinica?.pausas);
   const itens = (isAdmin ? ITENS.filter(() => true) : ITENS.filter((i) => "clinica" in i))
     .map((i) => ({ ...i, grupo: isAdmin ? i.grupo : "", label: isAdmin ? i.label : (ROTULO_CLINICA[i.sub] ?? i.label) }));
-  const areas = AREAS_SAP.map(area => ({ ...area, itens: area.subs.flatMap(caminho => itens.filter(it => it.sub === caminho)) })).filter(area => area.itens.length);
+  const areas = areasSapVisiveis(isAdmin);
   const areaAtual = areas.find(area => area.subs.includes(sub ?? "__nenhuma__"));
   const pagina = itens.find(it => it.sub === sub);
   const titulo = clientId ? (sub === "" ? "Minha semana" : pagina?.label ?? "Programa da clínica") : TITULOS[pathname] ?? (isAdmin ? "Todas as clínicas" : "Sistema de Aquisição");
@@ -143,7 +113,7 @@ function SapConteudo({ isAdmin }: { isAdmin: boolean }) {
   );
 
   return (
-    <div className="app sap-workspace">
+    <div className="app product-workspace sap-workspace">
       <a className="nx-skip" href="#sap-main">Ir para o conteúdo</a>
       {gaveta && <div className="sap-fundo-gaveta" aria-hidden onClick={() => setGaveta(false)} />}
       <aside ref={menuRef} role={gaveta ? "dialog" : undefined} aria-modal={gaveta ? true : undefined} aria-label="Menu do Sistema de Aquisição" className={gaveta ? "gaveta" : undefined}>

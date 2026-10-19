@@ -240,7 +240,7 @@ export function PlanejadorSemana({ clientId, api, podeEditar }: { clientId: stri
 
           {todas.length === 0 ? (
             <p className="mt-3 text-sm" style={{ color: "var(--text-dim)" }}>
-              Nenhuma pauta ainda. Use “Transformar em pauta” ou “Adicionar ao plano da semana” nas ideias acima{podeEditar ? ", ou crie uma à mão abaixo" : ""}.
+              Nenhuma pauta ainda. Leve um conteúdo de “Revisar roteiros” ao planejador ou escolha uma sugestão em “Encontrar ideias”{podeEditar ? ", ou crie uma à mão abaixo" : ""}.
             </p>
           ) : (
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

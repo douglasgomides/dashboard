@@ -10,13 +10,10 @@ import {
   Route,
   LayoutGrid,
   Lightbulb,
-  ListChecks,
   Megaphone,
   MessageCircle,
   Network,
   Settings,
-  Flag,
-  ClipboardCheck,
   ShoppingBag,
   Star,
   Trophy,
@@ -28,24 +25,26 @@ import {
   Link2,
 } from "lucide-react";
 
-// Navegação do Hub: 5 categorias (Início, Social, Comercial, Oportunidades,
-// Relatórios) com uma frase que diz para que serve cada uma. Dentro de cada área, abas (as telas que já existiam, com
-// os mesmos endereços). O que é de uso da equipe fica em "Avançado".
-//
-// Regras de visibilidade (iguais às de antes):
-// - admin: só a equipe Doctor Creator vê;
-// - fonte: só aparece se o cliente tem aquela fonte conectada (ninguém cai em
-//   aba vazia). Enquanto as fontes carregam, tudo aparece (não pisca).
-// - clientes "só CRM" veem apenas o que é do CRM.
-
+// Navegação por finalidade. Os endereços e as regras de acesso são preservados.
 export type Fonte = "instagram" | "anuncios" | "crm" | "atendimento";
-export type Fontes = { tem_instagram: boolean; tem_anuncios: boolean; tem_crm: boolean; tem_atendimento: boolean } | null | undefined;
+export type Fontes =
+  | {
+      tem_instagram: boolean;
+      tem_anuncios: boolean;
+      tem_crm: boolean;
+      tem_atendimento: boolean;
+    }
+  | null
+  | undefined;
 
 export interface NavTab {
   /** Sufixo depois de /$clientId ("" = a própria página do cliente). Fora do cliente: caminho absoluto com `absoluto`. */
   path: string;
   label: string;
   Icone: LucideIcon;
+  descricao?: string;
+  termos?: string;
+  grupo?: string;
   admin?: boolean;
   fonte?: Fonte;
   absoluto?: boolean;
@@ -54,45 +53,139 @@ export interface NavTab {
 }
 
 export interface NavArea {
-  id: "resumo" | "conteudo" | "anuncios" | "vendas" | "relatorio";
+  id: "resumo" | "acoes" | "conteudo" | "anuncios" | "vendas" | "relatorio";
   label: string;
-  /** Rótulo da barra inferior do celular (cabe em 1/6 da tela). */
+  /** Rótulo da barra inferior do celular (cabe na barra inferior). */
   curto?: string;
   descricao: string;
   Icone: LucideIcon;
   tabs: NavTab[];
 }
 
-// Cinco grupos (pedido de out/2026): Resumo, Conteúdo, Anúncios, Atendimento e vendas, Relatório.
-// Nenhuma tela saiu e nenhum endereço mudou: cada rota antiga é um item de um grupo. A primeira aba é a
-// página inicial do grupo (em Conteúdo, a aba "Conteúdo"). O que é da equipe fica em "Sistema".
 export const AREAS: NavArea[] = [
   {
     id: "resumo",
-    label: "Resumo",
-    descricao: "Resultados do período e prioridades para agir",
+    label: "Início",
+    descricao: "Resultados da clínica e a prioridade do momento",
     Icone: Home,
     tabs: [
-      { path: "", label: "Resumo", Icone: Activity },
-      { path: "/agentes", label: "Agentes de IA", Icone: Bot },
-      { path: "/proximas-acoes", label: "Próximas ações", Icone: ListTodo },
-      { path: "/campanhas", label: "Campanhas do mês", Icone: Megaphone },
-      { path: "/oportunidades", label: "Oportunidades (score)", Icone: Target },
+      {
+        path: "",
+        label: "Início",
+        Icone: Activity,
+        descricao: "Entenda os resultados e por onde começar.",
+        termos: "resumo painel dashboard resultado crescimento",
+      },
+    ],
+  },
+  {
+    id: "acoes",
+    label: "Plano de ação",
+    curto: "Ações",
+    descricao: "Decida o que fazer e acompanhe a execução",
+    Icone: ListTodo,
+    tabs: [
+      {
+        path: "/proximas-acoes",
+        label: "Prioridades da equipe",
+        Icone: ListTodo,
+        descricao: "Veja o que precisa de atenção, quem cuida e o andamento.",
+        termos: "tarefas fazer pendencias proximas acoes responsavel",
+      },
+      {
+        path: "/agentes",
+        label: "Trabalhos do Nexo",
+        Icone: Bot,
+        descricao:
+          "Acompanhe os agentes, revise entregas e aprove o que depende de você.",
+        termos: "agentes inteligencia artificial ia automacao aprovacoes",
+      },
+      {
+        path: "/campanhas",
+        label: "Estratégias e campanhas",
+        Icone: Megaphone,
+        descricao: "Planeje as campanhas e os canais de aquisição.",
+        termos: "campanhas do mes estrategia online offline marketing",
+      },
+      {
+        path: "/oportunidades",
+        label: "Oportunidades de melhoria",
+        Icone: Target,
+        descricao: "Investigue os sinais encontrados nos dados antes de agir.",
+        termos: "score diagnostico gargalos oportunidades",
+      },
     ],
   },
   {
     id: "conteudo",
     label: "Conteúdo",
-    descricao: "Conteúdo, audiência e sinais de interesse",
+    descricao: "Planeje, produza e entenda o que funciona",
     Icone: AlignLeft,
     tabs: [
-      { path: "/conteudo", label: "Conteúdo", Icone: AlignLeft },
-      { path: "/posts", label: "Posts", Icone: LayoutGrid, fonte: "instagram" },
-      { path: "/top", label: "Top conteúdos", Icone: Trophy, fonte: "instagram" },
-      { path: "/audiencia", label: "Audiência", Icone: Users, fonte: "instagram" },
-      { path: "/ideias", label: "Ideias", Icone: Lightbulb },
-      { path: "/inteligencia-criativa", label: "Inteligência Criativa", Icone: Network, fonte: "instagram", admin: true },
-      { path: "/inspiracao", label: "Inspiração", Icone: Star },
+      {
+        path: "/ideias",
+        label: "Roteiros e planejamento",
+        Icone: Lightbulb,
+        grupo: "Criar e planejar",
+        descricao: "Revise os roteiros e organize a semana no planejador.",
+        termos:
+          "ideias calendario editorial agenda criar roteiro reels carrossel legenda",
+      },
+      {
+        path: "/inteligencia-criativa",
+        label: "Inteligência Criativa",
+        admin: true,
+        Icone: Network,
+        fonte: "instagram",
+        grupo: "Criar e planejar",
+        descricao:
+          "Analise referências e adapte estruturas de conteúdo.",
+        termos:
+          "inteligencia criativa video editar analise multimodal biblioteca radar aprendizado",
+      },
+      {
+        path: "/inspiracao",
+        label: "Referências salvas",
+        Icone: Star,
+        grupo: "Criar e planejar",
+        descricao: "Encontre inspirações guardadas para novos conteúdos.",
+        termos: "inspiracao modelos templates referencias",
+      },
+      {
+        path: "/conteudo",
+        label: "Resultados do conteúdo",
+        Icone: AlignLeft,
+        grupo: "Analisar resultados",
+        descricao: "Compare temas e formatos para orientar a produção.",
+        termos: "desempenho metricas analise conteudo",
+      },
+      {
+        path: "/posts",
+        label: "Publicações",
+        Icone: LayoutGrid,
+        fonte: "instagram",
+        grupo: "Analisar resultados",
+        descricao: "Consulte os posts publicados e seus indicadores.",
+        termos: "posts instagram publicados",
+      },
+      {
+        path: "/top",
+        label: "Melhores conteúdos",
+        Icone: Trophy,
+        fonte: "instagram",
+        grupo: "Analisar resultados",
+        descricao: "Identifique as publicações que mais se destacaram.",
+        termos: "top campeoes performance ranking",
+      },
+      {
+        path: "/audiencia",
+        label: "Público do Instagram",
+        Icone: Users,
+        fonte: "instagram",
+        grupo: "Analisar resultados",
+        descricao: "Entenda quem acompanha o perfil.",
+        termos: "audiencia seguidores cidades idade genero",
+      },
     ],
   },
   {
@@ -101,7 +194,14 @@ export const AREAS: NavArea[] = [
     descricao: "Investimento, campanhas e resultados por objetivo",
     Icone: Megaphone,
     tabs: [
-      { path: "/anuncios", label: "Anúncios", Icone: Megaphone, fonte: "anuncios" },
+      {
+        path: "/anuncios",
+        label: "Resultados dos anúncios",
+        Icone: Megaphone,
+        fonte: "anuncios",
+        descricao: "Acompanhe investimento, campanhas e resultados.",
+        termos: "trafego pago meta ads custo cpl campanhas",
+      },
     ],
   },
   {
@@ -111,20 +211,59 @@ export const AREAS: NavArea[] = [
     descricao: "Conversas, agendamentos e oportunidades comerciais",
     Icone: Briefcase,
     tabs: [
-      { path: "/crm-painel", label: "Comercial", Icone: Briefcase, fonte: "crm" },
-      { path: "/crm-guia", label: "Organizar o CRM", Icone: ClipboardList, fonte: "crm" },
-      { path: "/atendimento", label: "WhatsApp", Icone: MessageCircle, fonte: "atendimento" },
+      {
+        path: "/crm-painel",
+        label: "Funil comercial",
+        Icone: Briefcase,
+        fonte: "crm",
+        descricao: "Veja os leads e as oportunidades em cada etapa.",
+        termos: "crm comercial conversao vendas leads",
+      },
+      {
+        path: "/crm-guia",
+        label: "Organizar o CRM",
+        Icone: ClipboardList,
+        fonte: "crm",
+      },
+      {
+        path: "/atendimento",
+        label: "Qualidade do atendimento",
+        Icone: MessageCircle,
+        fonte: "atendimento",
+        descricao: "Analise as conversas e os pontos de atenção do WhatsApp.",
+        termos: "whatsapp atendimento auditoria conversas resposta",
+      },
       { path: "/links", label: "Links rastreados", Icone: Link2 },
-      { path: "/duvidas", label: "Dúvidas", Icone: HelpCircle, fonte: "instagram" },
-      { path: "/jornada", label: "Jornada", Icone: Route, admin: true },
+      {
+        path: "/duvidas",
+        label: "Dúvidas do público",
+        Icone: HelpCircle,
+        fonte: "instagram",
+        termos: "perguntas comentarios duvidas",
+      },
+      {
+        path: "/jornada",
+        label: "Jornada comercial",
+        Icone: Route,
+        admin: true,
+        termos: "atribuicao receita aquisicao comparecimento",
+      },
     ],
   },
   {
     id: "relatorio",
-    label: "Relatório",
+    label: "Relatórios",
     descricao: "Síntese dos resultados para compartilhar",
     Icone: FileText,
-    tabs: [{ path: "/relatorio", label: "Relatório", Icone: FileText }],
+    tabs: [
+      {
+        path: "/relatorio",
+        label: "Relatório do período",
+        Icone: FileText,
+        descricao: "Prepare uma síntese dos resultados para compartilhar.",
+        termos: "pdf exportar download relatorio",
+      },
+    ],
   },
 ];
 
@@ -136,21 +275,54 @@ export const AREAS: NavArea[] = [
  * endereços continuam funcionando.
  */
 export const AVANCADO: NavTab[] = [
-  { path: "/admin/$clientId", label: "Configurar este cliente", Icone: Settings, admin: true, absoluto: true },
-  { path: "/crm-estrutura", label: "Etapas do CRM", Icone: Network, admin: true, fonte: "crm" },
-  { path: "/vendas-kommo", label: "Vendas por origem (Kommo)", Icone: ShoppingBag, admin: true, fonte: "crm" },
-  { path: "/admin", label: "Todos os clientes", Icone: LayoutDashboard, admin: true, absoluto: true },
+  {
+    path: "/admin/$clientId",
+    label: "Configurar este cliente",
+    Icone: Settings,
+    admin: true,
+    absoluto: true,
+  },
+  {
+    path: "/crm-estrutura",
+    label: "Etapas do CRM",
+    Icone: Network,
+    admin: true,
+    fonte: "crm",
+  },
+  {
+    path: "/vendas-kommo",
+    label: "Vendas por origem (Kommo)",
+    Icone: ShoppingBag,
+    admin: true,
+    fonte: "crm",
+  },
+  {
+    path: "/admin",
+    label: "Todos os clientes",
+    Icone: LayoutDashboard,
+    admin: true,
+    absoluto: true,
+  },
 ];
 
 // Clientes que só têm CRM ligado e não têm Business Manager: veem só o
 // Comercial. Quem abrir outro endereço é levado ao Funil. Dra. Fernanda Nunes (RD Station CRM).
-export const CLIENTES_SO_CRM = new Set(["8770500e-ab5d-4ae8-9489-c49c9991303c"]);
-export const ROTAS_DO_CRM = ["/crm-painel", "/crm-guia", "/crm-estrutura", "/vendas-kommo"];
+export const CLIENTES_SO_CRM = new Set([
+  "8770500e-ab5d-4ae8-9489-c49c9991303c",
+]);
+export const ROTAS_DO_CRM = [
+  "/crm-painel",
+  "/crm-guia",
+  "/crm-estrutura",
+  "/vendas-kommo",
+];
 
 // Clientes sem Business Manager próprio: a Meta não libera a Audiência ao vivo
 // (cidades, idade, gênero), então a aba fica escondida e o endereço direto volta
 // para o Resultado. Dra. Marcelly Achkar. Para voltar, tire o id daqui.
-export const CLIENTES_SEM_AUDIENCIA = new Set(["633e6ee6-cb55-4796-8ffe-ce9c6e34cc12"]);
+export const CLIENTES_SEM_AUDIENCIA = new Set([
+  "633e6ee6-cb55-4796-8ffe-ce9c6e34cc12",
+]);
 
 export function fonteOk(fonte: Fonte | undefined, fontes: Fontes): boolean {
   if (!fonte || !fontes) return true;
@@ -175,10 +347,17 @@ export interface Visibilidade {
 // Médico (owner) e viewer: resultado, oportunidades e relatório primeiro.
 // Estrategista e equipe: análise primeiro. Todas as áreas continuam disponíveis.
 const ORDEM_POR_PAPEL: Record<string, NavArea["id"][]> = {
-  owner: ["resumo", "relatorio", "conteudo", "anuncios", "vendas"],
-  viewer: ["resumo", "relatorio", "conteudo", "anuncios", "vendas"],
-  strategist: ["resumo", "conteudo", "anuncios", "vendas", "relatorio"],
-  admin: ["resumo", "conteudo", "anuncios", "vendas", "relatorio"],
+  owner: ["resumo", "acoes", "vendas", "conteudo", "anuncios", "relatorio"],
+  viewer: ["resumo", "acoes", "vendas", "conteudo", "anuncios", "relatorio"],
+  strategist: [
+    "resumo",
+    "acoes",
+    "conteudo",
+    "anuncios",
+    "vendas",
+    "relatorio",
+  ],
+  admin: ["resumo", "acoes", "conteudo", "anuncios", "vendas", "relatorio"],
 };
 
 export function tabVisivel(t: NavTab, v: Visibilidade): boolean {
@@ -194,8 +373,13 @@ export function tabVisivel(t: NavTab, v: Visibilidade): boolean {
 export type AreaVisivel = NavArea & { visiveis: NavTab[] };
 
 export function areasVisiveis(v: Visibilidade): AreaVisivel[] {
-  const ordem = ORDEM_POR_PAPEL[v.papel ?? (v.isAdmin ? "admin" : "strategist")] ?? ORDEM_POR_PAPEL.strategist;
-  return AREAS.map((a) => ({ ...a, visiveis: a.tabs.filter((t) => tabVisivel(t, v)) }))
+  const ordem =
+    ORDEM_POR_PAPEL[v.papel ?? (v.isAdmin ? "admin" : "strategist")] ??
+    ORDEM_POR_PAPEL.strategist;
+  return AREAS.map((a) => ({
+    ...a,
+    visiveis: a.tabs.filter((t) => tabVisivel(t, v)),
+  }))
     .filter((a) => a.visiveis.length > 0)
     .sort((x, y) => ordem.indexOf(x.id) - ordem.indexOf(y.id));
 }
@@ -209,7 +393,7 @@ export function avancadoVisivel(v: Visibilidade): NavTab[] {
 /** Parte do endereço depois de /<clientId>: "" para a página do cliente, "/posts" etc. */
 export function subcaminho(pathname: string, clientId: string): string {
   const base = `/${clientId}`;
-  if (!pathname.startsWith(base)) return pathname;
+  if (pathname !== base && !pathname.startsWith(`${base}/`)) return pathname;
   const resto = pathname.slice(base.length).replace(/\/+$/, "");
   return resto;
 }
@@ -219,4 +403,48 @@ export function areaDoCaminho(sub: string): NavArea["id"] | "mais" | null {
   for (const a of AREAS) if (a.tabs.some((t) => t.path === sub)) return a.id;
   if (AVANCADO.some((t) => !t.absoluto && t.path === sub)) return "mais";
   return null;
+}
+
+export interface TelaEncontrada {
+  tab: NavTab;
+  area: string;
+}
+
+/** Busca local: só indexa os destinos visíveis para esta clínica e este papel. */
+export function buscarTelas(
+  v: Visibilidade,
+  consulta: string,
+): TelaEncontrada[] {
+  const normalizar = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  const palavras = normalizar(consulta).trim().split(/\s+/).filter(Boolean);
+  const telas = areasVisiveis(v).flatMap((a) =>
+    a.visiveis.map((tab) => ({ tab, area: a.label })),
+  );
+  telas.push(...avancadoVisivel(v).map((tab) => ({ tab, area: "Equipe" })));
+  return telas.filter(({ tab, area }) => {
+    const texto = normalizar(
+      [area, tab.label, tab.descricao, tab.termos].filter(Boolean).join(" "),
+    );
+    const termos = texto.split(/[^a-z0-9]+/).filter(Boolean);
+    return palavras.every((p) => termos.some((termo) => termo.startsWith(p)));
+  });
+}
+
+/** Agrupa destinos já filtrados; nunca adiciona acesso nem descarta uma área. */
+export function gruposDeNavegacao(areas: AreaVisivel[]) {
+  const definicoes = [
+    { label: "Entender e agir", ids: ["resumo", "acoes"] },
+    { label: "Marketing e vendas", ids: ["conteudo", "anuncios", "vendas"] },
+    { label: "Compartilhar resultados", ids: ["relatorio"] },
+  ];
+  return definicoes
+    .map((g) => ({
+      label: g.label,
+      areas: areas.filter((a) => g.ids.includes(a.id)),
+    }))
+    .filter((g) => g.areas.length);
 }

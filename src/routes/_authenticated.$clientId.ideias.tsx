@@ -1,9 +1,31 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Clapperboard, Filter, Gauge, Layers, MessageSquareQuote, Newspaper, ShieldAlert, Target, Users } from "lucide-react";
-import { getClientFontes, getComentariosPeriodo, getComentariosVozDoPaciente, getObjecoesWhatsapp, getPerguntasDeteccaoOriginal, getPostsForAnalytics } from "@/lib/client-data";
-import { ETAPAS, montarRoteiros, type Etapa, type RoteiroAnuncio } from "@/lib/roteiros-anuncio";
+import {
+  Clapperboard,
+  Filter,
+  Gauge,
+  Layers,
+  MessageSquareQuote,
+  Newspaper,
+  ShieldAlert,
+  Target,
+  Users,
+} from "lucide-react";
+import {
+  getClientFontes,
+  getComentariosPeriodo,
+  getComentariosVozDoPaciente,
+  getObjecoesWhatsapp,
+  getPerguntasDeteccaoOriginal,
+  getPostsForAnalytics,
+} from "@/lib/client-data";
+import {
+  ETAPAS,
+  montarRoteiros,
+  type Etapa,
+  type RoteiroAnuncio,
+} from "@/lib/roteiros-anuncio";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import {
   buildIdeias,
@@ -22,10 +44,24 @@ import { ROTULO_CONFIANCA } from "@/lib/insight";
 import { limparTexto } from "@/lib/hub-relatorio";
 import { padroesDoTop, topN } from "@/lib/top-conteudo";
 import { horasDosPosts } from "@/lib/horarios";
-import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
-import { BotaoAcao, ListaLimitacoes, OQueE, SeloStatus } from "@/components/insight-card";
+import {
+  Carregando,
+  ErroCarga,
+  SemFonte,
+  SEM_INSTAGRAM,
+} from "@/components/sem-fonte";
+import {
+  BotaoAcao,
+  ListaLimitacoes,
+  OQueE,
+  SeloStatus,
+} from "@/components/insight-card";
 import { BotaoCopiar } from "@/components/botao-copiar";
-import { AcoesDaIdeia, PlanejadorSemana, usePautas } from "@/components/planejador-conteudo";
+import {
+  AcoesDaIdeia,
+  PlanejadorSemana,
+  usePautas,
+} from "@/components/planejador-conteudo";
 import { useClientRole } from "@/hooks/use-client-role";
 import { RoteirosProntos } from "@/components/agentes-ia";
 
@@ -42,9 +78,22 @@ const ORIGEM: Record<Ideia["regra"], string> = {
   formato: "Formato que mais alcança",
 };
 
-function Chip({ icone: Icon, children }: { icone: typeof Users; children: React.ReactNode }) {
+function Chip({
+  icone: Icon,
+  children,
+}: {
+  icone: typeof Users;
+  children: React.ReactNode;
+}) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium" style={{ background: "var(--surface-2)", borderColor: "var(--border)", color: "var(--ink-2)" }}>
+    <span
+      className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium"
+      style={{
+        background: "var(--surface-2)",
+        borderColor: "var(--border)",
+        color: "var(--ink-2)",
+      }}
+    >
       <Icon size={11} aria-hidden /> {children}
     </span>
   );
@@ -52,7 +101,10 @@ function Chip({ icone: Icon, children }: { icone: typeof Users; children: React.
 
 function Rotulo({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[11px] font-bold uppercase tracking-wide" style={{ color: "var(--ink-2)" }}>
+    <div
+      className="text-[11px] font-bold uppercase tracking-wide"
+      style={{ color: "var(--ink-2)" }}
+    >
       {children}
     </div>
   );
@@ -72,8 +124,17 @@ function Exemplos({ itens }: { itens?: string[] }) {
       <Rotulo>Comentários reais (confira se a leitura faz sentido)</Rotulo>
       <ul className="mt-1 space-y-1">
         {itens.slice(0, 3).map((t, k) => (
-          <li key={k} className="flex gap-1.5 rounded-md px-2 py-1.5 text-[13px] leading-snug" style={{ background: "var(--surface-2)", color: "var(--ink)" }}>
-            <MessageSquareQuote size={14} aria-hidden className="mt-0.5 shrink-0" style={{ color: "var(--muted)" }} />
+          <li
+            key={k}
+            className="flex gap-1.5 rounded-md px-2 py-1.5 text-[13px] leading-snug"
+            style={{ background: "var(--surface-2)", color: "var(--ink)" }}
+          >
+            <MessageSquareQuote
+              size={14}
+              aria-hidden
+              className="mt-0.5 shrink-0"
+              style={{ color: "var(--muted)" }}
+            />
             <span>“{t}”</span>
           </li>
         ))}
@@ -94,25 +155,59 @@ function RoteiroCard({ r }: { r: RoteiroAnuncio }) {
     `Base: ${r.baseTexto} (${r.origem})`,
   ].join("\n");
   return (
-    <article className="flex min-w-0 flex-col gap-3 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)", borderTop: `3px solid ${ETAPAS[r.etapa].cor}` }}>
+    <article
+      className="flex min-w-0 flex-col gap-3 rounded-xl border p-4"
+      style={{
+        background: "var(--surface)",
+        borderColor: "var(--border)",
+        borderTop: `3px solid ${ETAPAS[r.etapa].cor}`,
+      }}
+    >
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold" style={{ background: `color-mix(in srgb, ${ETAPAS[r.etapa].cor} 16%, transparent)`, color: "var(--ink)" }}>
+        <span
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold"
+          style={{
+            background: `color-mix(in srgb, ${ETAPAS[r.etapa].cor} 16%, transparent)`,
+            color: "var(--ink)",
+          }}
+        >
           <Clapperboard size={11} aria-hidden /> Anúncio {r.etapa}
         </span>
         <Chip icone={Target}>Campanha: {r.objetivoCampanha}</Chip>
         <Chip icone={Users}>{r.baseTexto}</Chip>
       </div>
       <div>
-        <h3 className="text-base font-semibold leading-snug" style={{ color: "var(--ink)" }}>{r.titulo}</h3>
-        <p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>Vem de: {r.origem}</p>
+        <h3
+          className="text-base font-semibold leading-snug"
+          style={{ color: "var(--ink)" }}
+        >
+          {r.titulo}
+        </h3>
+        <p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>
+          Vem de: {r.origem}
+        </p>
       </div>
-      <div className="rounded-lg border p-3 text-sm" style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}>
+      <div
+        className="rounded-lg border p-3 text-sm"
+        style={{
+          background: "var(--accent-soft)",
+          borderColor: "var(--border)",
+        }}
+      >
         <Rotulo>Gancho (primeiros 3 segundos)</Rotulo>
-        <p className="mt-0.5 font-semibold leading-snug" style={{ color: "var(--ink)" }}>{r.gancho}</p>
+        <p
+          className="mt-0.5 font-semibold leading-snug"
+          style={{ color: "var(--ink)" }}
+        >
+          {r.gancho}
+        </p>
       </div>
       <div className="text-sm">
         <Rotulo>O que gravar</Rotulo>
-        <ol className="mt-1 list-decimal space-y-1 pl-5 leading-relaxed" style={{ color: "var(--ink)" }}>
+        <ol
+          className="mt-1 list-decimal space-y-1 pl-5 leading-relaxed"
+          style={{ color: "var(--ink)" }}
+        >
           {r.roteiro.map((x, k) => (
             <li key={k}>{x}</li>
           ))}
@@ -120,32 +215,74 @@ function RoteiroCard({ r }: { r: RoteiroAnuncio }) {
       </div>
       <div className="text-sm">
         <Rotulo>Texto do anúncio</Rotulo>
-        <p className="mt-0.5" style={{ color: "var(--ink)" }}>{r.copy}</p>
-        <p className="mt-1 text-xs font-semibold" style={{ color: "var(--ink-2)" }}>Botão: {r.cta}</p>
+        <p className="mt-0.5" style={{ color: "var(--ink)" }}>
+          {r.copy}
+        </p>
+        <p
+          className="mt-1 text-xs font-semibold"
+          style={{ color: "var(--ink-2)" }}
+        >
+          Botão: {r.cta}
+        </p>
       </div>
       <Exemplos itens={r.exemplos} />
       <p className="flex gap-1.5 text-xs" style={{ color: "var(--ink-2)" }}>
-        <ShieldAlert size={14} aria-hidden className="shrink-0" style={{ color: "var(--warn)" }} /> {r.aviso}
+        <ShieldAlert
+          size={14}
+          aria-hidden
+          className="shrink-0"
+          style={{ color: "var(--warn)" }}
+        />{" "}
+        {r.aviso}
       </p>
       <div className="mt-auto">
-        <BotaoCopiar texto={texto} rotulo="Copiar roteiro do anúncio" variante="primario" />
+        <BotaoCopiar
+          texto={texto}
+          rotulo="Copiar roteiro do anúncio"
+          variante="primario"
+        />
       </div>
     </article>
   );
 }
 
-function IdeiaCard({ i, clientId, planner }: { i: Ideia; clientId: string; planner?: { api: ReturnType<typeof usePautas>; podeEditar: boolean } }) {
+function IdeiaCard({
+  i,
+  clientId,
+  planner,
+}: {
+  i: Ideia;
+  clientId: string;
+  planner?: { api: ReturnType<typeof usePautas>; podeEditar: boolean };
+}) {
   return (
-    <article className="flex min-w-0 flex-col gap-3 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)", borderTop: `3px solid ${ETAPAS[etapaDaIdeia(i)].cor}` }}>
+    <article
+      className="flex min-w-0 flex-col gap-3 rounded-xl border p-4"
+      style={{
+        background: "var(--surface)",
+        borderColor: "var(--border)",
+        borderTop: `3px solid ${ETAPAS[etapaDaIdeia(i)].cor}`,
+      }}
+    >
       <div className="flex flex-wrap items-center gap-1.5">
-        <SeloStatus tom={i.regra === "pergunta" ? "atencao" : "bom"} texto={i.regraOriginal ? `Regra original · ${REGRA_ORIGINAL_ROTULO[i.regra]}` : ORIGEM[i.regra]} />
+        <SeloStatus
+          tom={i.regra === "pergunta" ? "atencao" : "bom"}
+          texto={
+            i.regraOriginal
+              ? `Regra original · ${REGRA_ORIGINAL_ROTULO[i.regra]}`
+              : ORIGEM[i.regra]
+          }
+        />
         <Chip icone={Target}>{ROTULO_OBJETIVO[i.objetivo]}</Chip>
         <Chip icone={Gauge}>{ROTULO_CONFIANCA[i.confianca]}</Chip>
         <Chip icone={Filter}>Funil: {i.funil}</Chip>
         <Chip icone={Layers}>Estágio: {i.estagio}</Chip>
       </div>
       <div>
-        <h3 className="text-base font-semibold leading-snug" style={{ color: "var(--ink)" }}>
+        <h3
+          className="text-base font-semibold leading-snug"
+          style={{ color: "var(--ink)" }}
+        >
           {i.titulo}
         </h3>
         <p className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
@@ -161,7 +298,10 @@ function IdeiaCard({ i, clientId, planner }: { i: Ideia; clientId: string; plann
       )}
 
       {i.gancho && (
-        <div className="rounded-lg p-3 text-sm" style={{ background: "var(--accent-soft)" }}>
+        <div
+          className="rounded-lg p-3 text-sm"
+          style={{ background: "var(--accent-soft)" }}
+        >
           <Rotulo>Gancho pronto</Rotulo>
           <p className="mt-0.5 font-medium italic leading-snug">{i.gancho}</p>
           <div className="mt-2">
@@ -175,7 +315,10 @@ function IdeiaCard({ i, clientId, planner }: { i: Ideia; clientId: string; plann
       {i.roteiro.length > 0 && (
         <div className="text-sm">
           <Rotulo>Roteiro curto</Rotulo>
-          <ol className="mt-1 list-decimal space-y-1 pl-5 leading-relaxed" style={{ color: "var(--text)" }}>
+          <ol
+            className="mt-1 list-decimal space-y-1 pl-5 leading-relaxed"
+            style={{ color: "var(--text)" }}
+          >
             {i.roteiro.map((r, k) => (
               <li key={k}>{r}</li>
             ))}
@@ -198,7 +341,10 @@ function IdeiaCard({ i, clientId, planner }: { i: Ideia; clientId: string; plann
       </div>
 
       <details className="text-xs" style={{ color: "var(--text-dim)" }}>
-        <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center font-medium" style={{ color: "var(--text-faint)" }}>
+        <summary
+          className="inline-flex min-h-[44px] cursor-pointer list-none items-center font-medium"
+          style={{ color: "var(--text-faint)" }}
+        >
           Ver a evidência, a confiança e o que fazer
         </summary>
         <p className="leading-relaxed tabular-nums">{i.evidencia}</p>
@@ -207,12 +353,25 @@ function IdeiaCard({ i, clientId, planner }: { i: Ideia; clientId: string; plann
           Funil: {i.funil} · Estágio: {i.estagio} · Formato: {i.formato}
         </p>
         {!i.regraOriginal && <p className="mt-1">O que fazer: {i.acao}</p>}
-        {i.porque && i.porque !== i.evidencia && <p className="mt-1">Por quê: {i.porque}</p>}
+        {i.porque && i.porque !== i.evidencia && (
+          <p className="mt-1">Por quê: {i.porque}</p>
+        )}
       </details>
 
       {i.avisoSeguranca && (
-        <div className="flex gap-2 rounded-lg border p-3 text-xs leading-relaxed" style={{ borderColor: "var(--warn-border)", background: "var(--warn-bg)" }}>
-          <ShieldAlert size={14} className="mt-0.5 shrink-0" style={{ color: "var(--warn)" }} aria-hidden />
+        <div
+          className="flex gap-2 rounded-lg border p-3 text-xs leading-relaxed"
+          style={{
+            borderColor: "var(--warn-border)",
+            background: "var(--warn-bg)",
+          }}
+        >
+          <ShieldAlert
+            size={14}
+            className="mt-0.5 shrink-0"
+            style={{ color: "var(--warn)" }}
+            aria-hidden
+          />
           <span>
             <b>Segurança médica: </b>
             {i.avisoSeguranca}
@@ -220,13 +379,28 @@ function IdeiaCard({ i, clientId, planner }: { i: Ideia; clientId: string; plann
         </div>
       )}
 
-      {planner && <AcoesDaIdeia ideia={i} clientId={clientId} api={planner.api} podeEditar={planner.podeEditar} />}
+      {planner && (
+        <AcoesDaIdeia
+          ideia={i}
+          clientId={clientId}
+          api={planner.api}
+          podeEditar={planner.podeEditar}
+        />
+      )}
 
       <div className="mt-auto flex flex-wrap gap-2">
-        <BotaoCopiar texto={ideiaParaTexto(i)} rotulo="Copiar ideia completa" variante="primario" />
+        <BotaoCopiar
+          texto={ideiaParaTexto(i)}
+          rotulo="Copiar ideia completa"
+          variante="primario"
+        />
         {i.regra === "pergunta" && i.pessoas ? (
           <BotaoAcao
-            texto={i.regraOriginal ? `Ver os ${i.pessoas} comentários em Dúvidas` : `Ver as ${i.pessoas} pessoas que perguntaram`}
+            texto={
+              i.regraOriginal
+                ? `Ver os ${i.pessoas} comentários em Dúvidas`
+                : `Ver as ${i.pessoas} pessoas que perguntaram`
+            }
             rota="/$clientId/duvidas"
             clientId={clientId}
             variante="secundario"
@@ -238,53 +412,107 @@ function IdeiaCard({ i, clientId, planner }: { i: Ideia; clientId: string; plann
 }
 
 // Plano da semana montado só com as ideias da lista, para copiar e colar na agenda da equipe.
-function PlanoDaSemana({ ideias, originais, hora }: { ideias: Ideia[]; originais: Ideia[]; hora: number | null }) {
+function PlanoDaSemana({
+  ideias,
+  originais,
+  hora,
+}: {
+  ideias: Ideia[];
+  originais: Ideia[];
+  hora: number | null;
+}) {
   const [comOriginais, setComOriginais] = useState(ideias.length === 0);
   // As ideias da regra original entram depois das novas (a ordem das novas não muda).
   const texto = useMemo(() => {
     if (!comOriginais) return limparTexto(montarPlano7Dias(ideias, hora));
-    const pergFirst = (xs: Ideia[]) => [...xs].sort((a, b) => Number(b.regra === "pergunta") - Number(a.regra === "pergunta"));
-    return limparTexto(montarPlano7Dias([...pergFirst(ideias), ...pergFirst(originais)], hora, { manterOrdem: true }));
+    const pergFirst = (xs: Ideia[]) =>
+      [...xs].sort(
+        (a, b) =>
+          Number(b.regra === "pergunta") - Number(a.regra === "pergunta"),
+      );
+    return limparTexto(
+      montarPlano7Dias([...pergFirst(ideias), ...pergFirst(originais)], hora, {
+        manterOrdem: true,
+      }),
+    );
   }, [comOriginais, ideias, originais, hora]);
   if (!texto) return null;
   return (
-    <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+    <section
+      className="rounded-xl border p-4"
+      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold">Plano de 7 dias</h2>
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-            Monta a semana com as ideias acima. Dúvidas de pacientes entram primeiro.
+            Monta a semana com as ideias acima. Dúvidas de pacientes entram
+            primeiro.
           </p>
         </div>
         <BotaoCopiar texto={texto} rotulo="Copiar plano da semana" />
       </div>
       {originais.length > 0 && (
-        <label className="mt-2 flex min-h-[44px] cursor-pointer items-center gap-2 text-xs" style={{ color: "var(--text-dim)" }}>
-          <input type="checkbox" checked={comOriginais} onChange={(e) => setComOriginais(e.target.checked)} />
+        <label
+          className="mt-2 flex min-h-[44px] cursor-pointer items-center gap-2 text-xs"
+          style={{ color: "var(--text-dim)" }}
+        >
+          <input
+            type="checkbox"
+            checked={comOriginais}
+            onChange={(e) => setComOriginais(e.target.checked)}
+          />
           Incluir as {originais.length} ideia(s) da regra original no plano
         </label>
       )}
-      <pre className="mt-2 whitespace-pre-wrap break-words text-[13px] leading-relaxed" style={{ font: "inherit" }}>
+      <pre
+        className="mt-2 whitespace-pre-wrap break-words text-[13px] leading-relaxed"
+        style={{ font: "inherit" }}
+      >
         {texto}
       </pre>
     </section>
   );
 }
 
-type Cruzamento = ReturnType<typeof buildIdeiasRegraOriginal> & ReturnType<typeof ideiasOriginaisSemRepetir>;
+type Cruzamento = ReturnType<typeof buildIdeiasRegraOriginal> &
+  ReturnType<typeof ideiasOriginaisSemRepetir>;
 
 // Ideias geradas pelas regras originais (477eb43), sem repetir as da regra nova.
-function IdeiasRegraOriginal({ orig, carregando, erro, clientId, planner }: { orig: Cruzamento | null; carregando: boolean; erro: boolean; clientId: string; planner?: { api: ReturnType<typeof usePautas>; podeEditar: boolean } }) {
-  if (carregando) return <Carregando texto="Calculando as ideias da regra original…" />;
-  if (erro) return <ErroCarga texto="Não consegui ler as perguntas para a regra original. Atualize a página." />;
+function IdeiasRegraOriginal({
+  orig,
+  carregando,
+  erro,
+  clientId,
+  planner,
+}: {
+  orig: Cruzamento | null;
+  carregando: boolean;
+  erro: boolean;
+  clientId: string;
+  planner?: { api: ReturnType<typeof usePautas>; podeEditar: boolean };
+}) {
+  if (carregando)
+    return <Carregando texto="Calculando as ideias da regra original…" />;
+  if (erro)
+    return (
+      <ErroCarga texto="Não consegui ler as perguntas para a regra original. Atualize a página." />
+    );
   if (!orig) return null;
   return (
-    <section className="space-y-3 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+    <section
+      className="space-y-3 rounded-xl border p-4"
+      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+    >
       <div>
-        <h2 className="text-sm font-semibold">Ideias pela regra original ({orig.extras.length})</h2>
+        <h2 className="text-sm font-semibold">
+          Ideias pela regra original ({orig.extras.length})
+        </h2>
         <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          As regras de antes continuam valendo. Aqui só entra o que a regra nova não trouxe: {orig.ideias.length} ideia(s) pela regra original,{" "}
-          {orig.repetidas.length} já estão na lista acima (mesmos comentários, mesmo tema ou mesmo formato).
+          As regras de antes continuam valendo. Aqui só entra o que a regra nova
+          não trouxe: {orig.ideias.length} ideia(s) pela regra original,{" "}
+          {orig.repetidas.length} já estão na lista acima (mesmos comentários,
+          mesmo tema ou mesmo formato).
         </p>
       </div>
       {orig.extras.length > 0 ? (
@@ -295,23 +523,34 @@ function IdeiasRegraOriginal({ orig, carregando, erro, clientId, planner }: { or
         </div>
       ) : (
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          Nenhuma ideia a mais: tudo o que a regra original encontrou já está na lista acima.
+          Nenhuma ideia a mais: tudo o que a regra original encontrou já está na
+          lista acima.
         </p>
       )}
-      {(orig.repetidas.length > 0 || orig.diferencas.length > 0 || orig.faltas.length > 0) && (
+      {(orig.repetidas.length > 0 ||
+        orig.diferencas.length > 0 ||
+        orig.faltas.length > 0) && (
         <details className="text-xs" style={{ color: "var(--text-dim)" }}>
-          <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center font-medium" style={{ color: "var(--text-faint)" }}>
+          <summary
+            className="inline-flex min-h-[44px] cursor-pointer list-none items-center font-medium"
+            style={{ color: "var(--text-faint)" }}
+          >
             Ver o que a regra original encontrou e o que faltou
           </summary>
           {orig.repetidas.length > 0 && (
             <>
-              <p className="mt-1 font-semibold" style={{ color: "var(--text)" }}>
+              <p
+                className="mt-1 font-semibold"
+                style={{ color: "var(--text)" }}
+              >
                 Já na lista acima
               </p>
               <ul className="mt-1 list-disc space-y-1 pl-5">
                 {orig.repetidas.map(({ original, nova }) => (
                   <li key={original.id}>
-                    {REGRA_ORIGINAL_ROTULO[original.regra]}: "{original.titulo}" ({original.formato}; funil {original.funil}; estágio {original.estagio}) = "{nova.titulo}"
+                    {REGRA_ORIGINAL_ROTULO[original.regra]}: "{original.titulo}"
+                    ({original.formato}; funil {original.funil}; estágio{" "}
+                    {original.estagio}) = "{nova.titulo}"
                   </li>
                 ))}
               </ul>
@@ -319,7 +558,10 @@ function IdeiasRegraOriginal({ orig, carregando, erro, clientId, planner }: { or
           )}
           {orig.diferencas.length > 0 && (
             <>
-              <p className="mt-2 font-semibold" style={{ color: "var(--text)" }}>
+              <p
+                className="mt-2 font-semibold"
+                style={{ color: "var(--text)" }}
+              >
                 Mesma ideia, detalhe diferente
               </p>
               <ul className="mt-1 list-disc space-y-1 pl-5">
@@ -331,7 +573,10 @@ function IdeiasRegraOriginal({ orig, carregando, erro, clientId, planner }: { or
           )}
           {orig.faltas.length > 0 && (
             <>
-              <p className="mt-2 font-semibold" style={{ color: "var(--text)" }}>
+              <p
+                className="mt-2 font-semibold"
+                style={{ color: "var(--text)" }}
+              >
                 Regras sem ideia neste período (regra original)
               </p>
               <ul className="mt-1 list-disc space-y-1 pl-5">
@@ -352,8 +597,14 @@ function IdeiasPage() {
   const dateRangeState = clientLayoutRoute.useSearch();
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
+  const [visao, setVisao] = useState<"roteiros" | "semana" | "ideias">(
+    "roteiros",
+  );
 
-  const fontes = useQuery({ queryKey: ["fontes", clientId], queryFn: () => getClientFontes(clientId) });
+  const fontes = useQuery({
+    queryKey: ["fontes", clientId],
+    queryFn: () => getClientFontes(clientId),
+  });
   const pautasApi = usePautas(clientId);
   const { podeEditar } = useClientRole(clientId);
   const planner = { api: pautasApi, podeEditar };
@@ -361,26 +612,26 @@ function IdeiasPage() {
   const posts = useQuery({
     queryKey: ["ideias-posts", clientId, start, end],
     queryFn: () => getPostsForAnalytics(clientId, start, end + "T23:59:59"),
-    enabled: temIg,
+    enabled: temIg && visao === "ideias",
   });
   const comentarios = useQuery({
     queryKey: ["voz-do-paciente", clientId, start, end],
     queryFn: () => getComentariosVozDoPaciente(clientId, start, end),
-    enabled: temIg,
+    enabled: temIg && visao === "ideias",
   });
 
   // Todos os comentários do período (com o tema do post): elogios e relatos viram "Tema que gera identificação".
   const todosComentarios = useQuery({
     queryKey: ["comentarios-periodo", clientId, start, end],
     queryFn: () => getComentariosPeriodo(clientId, start, end),
-    enabled: temIg,
+    enabled: temIg && visao === "ideias",
     staleTime: 5 * 60_000,
   });
   // Objeções das conversas de WhatsApp (auditoria por IA), para os anúncios C3.
   const objecoes = useQuery({
     queryKey: ["objecoes-whatsapp", clientId, start, end],
     queryFn: () => getObjecoesWhatsapp(clientId, start, end),
-    enabled: fontes.data?.tem_atendimento === true,
+    enabled: fontes.data?.tem_atendimento === true && visao === "ideias",
     staleTime: 10 * 60_000,
     retry: false,
   });
@@ -389,23 +640,45 @@ function IdeiasPage() {
   const perguntasOriginais = useQuery({
     queryKey: ["perguntas-deteccao-original", clientId, start, end],
     queryFn: () => getPerguntasDeteccaoOriginal(clientId, { start, end }),
-    enabled: temIg,
+    enabled: temIg && visao === "ideias",
   });
 
   const res = useMemo(() => {
     if (!posts.data || !comentarios.data) return null;
-    const voz = analisarVozDoPaciente(comentarios.data.comentarios, { donos: comentarios.data.donos });
+    const voz = analisarVozDoPaciente(comentarios.data.comentarios, {
+      donos: comentarios.data.donos,
+    });
     const base = buildIdeias(posts.data, comentarios.data.comentarios, { voz });
     const ident = ideiasDeIdentificacao(todosComentarios.data ?? []);
-    return { ...base, ideias: [...base.ideias, ...ident.ideias], faltas: [...base.faltas, ...(todosComentarios.data ? ident.faltas : [])], limitacoesVoz: voz.limitacoes, voz };
+    return {
+      ...base,
+      ideias: [...base.ideias, ...ident.ideias],
+      faltas: [...base.faltas, ...(todosComentarios.data ? ident.faltas : [])],
+      limitacoesVoz: voz.limitacoes,
+      voz,
+    };
   }, [posts.data, comentarios.data, todosComentarios.data]);
 
   // Anúncios para gravar, por etapa (C1/C2/C3), das dores e objeções reais.
   const roteiros = useMemo(() => {
     if (!res) return [];
     return montarRoteiros({
-      grupos: res.voz.grupos.map((g) => ({ id: g.id, rotulo: g.rotulo, termo: g.termo, intencao: g.intencao, pessoas: g.pessoas, exemplos: g.exemplos, cuidadoMedico: g.cuidadoMedico })),
-      identificacao: res.ideias.filter((i) => i.regra === "identificacao").map((i) => ({ tema: i.tema, pessoas: i.pessoas ?? 0, exemplos: i.exemplos ?? [] })),
+      grupos: res.voz.grupos.map((g) => ({
+        id: g.id,
+        rotulo: g.rotulo,
+        termo: g.termo,
+        intencao: g.intencao,
+        pessoas: g.pessoas,
+        exemplos: g.exemplos,
+        cuidadoMedico: g.cuidadoMedico,
+      })),
+      identificacao: res.ideias
+        .filter((i) => i.regra === "identificacao")
+        .map((i) => ({
+          tema: i.tema,
+          pessoas: i.pessoas ?? 0,
+          exemplos: i.exemplos ?? [],
+        })),
       objecoesWhatsapp: objecoes.data ?? null,
     });
   }, [res, objecoes.data]);
@@ -413,45 +686,169 @@ function IdeiasPage() {
   // Ideias da regra original que a regra nova não trouxe (sem repetir; repetidas e diferenças ficam listadas).
   const orig = useMemo(() => {
     if (!res || !posts.data || !perguntasOriginais.data) return null;
-    const r = buildIdeiasRegraOriginal(posts.data, perguntasOriginais.data.perguntas);
-    return { ...r, ...ideiasOriginaisSemRepetir(res.ideias, r.ideias, res.voz) };
+    const r = buildIdeiasRegraOriginal(
+      posts.data,
+      perguntasOriginais.data.perguntas,
+    );
+    return {
+      ...r,
+      ...ideiasOriginaisSemRepetir(res.ideias, r.ideias, res.voz),
+    };
   }, [res, posts.data, perguntasOriginais.data]);
 
   // O que o melhor conteúdo do período tem em comum, e a hora em que os posts renderam mais (para o plano da semana).
   const melhores = useMemo(() => {
     const todos = posts.data ?? [];
-    const top = topN(todos, "post", "saved", 20).concat(topN(todos, "reel", "saved", 20)).sort((x, y) => y.v - x.v).slice(0, 20);
-    return padroesDoTop(top.map((x) => x.p), todos);
+    const top = topN(todos, "post", "saved", 20)
+      .concat(topN(todos, "reel", "saved", 20))
+      .sort((x, y) => y.v - x.v)
+      .slice(0, 20);
+    return padroesDoTop(
+      top.map((x) => x.p),
+      todos,
+    );
   }, [posts.data]);
-  const horaSugerida = useMemo(() => horasDosPosts(posts.data ?? [])[0]?.hora ?? null, [posts.data]);
+  const horaSugerida = useMemo(
+    () => horasDosPosts(posts.data ?? [])[0]?.hora ?? null,
+    [posts.data],
+  );
 
   const head = (
-    <div className="hpagehead">
-      <h2>
-        Ideias{res && res.ideias.length > 0 ? ` (${res.ideias.length})` : ""}
-        {orig && orig.extras.length > 0 ? ` + ${orig.extras.length} da regra original` : ""}
-      </h2>
-      <p>No topo, os roteiros completos que o agente Roteirista escreve toda semana a partir do Brand Brain, das dúvidas reais e do que mais foi salvo: é só revisar, copiar ou levar ao planejador. Abaixo, as ideias por regra. Período: {periodLabel}.</p>
-      <div className="mt-3"><RoteirosProntos clientId={clientId} podeEditar={podeEditar} /></div>
+    <div className="space-y-4">
+      <nav className="workspace-content-views" aria-label="Organizar conteúdo">
+        {(
+          [
+            [
+              "roteiros",
+              "Revisar roteiros",
+              "Entregas prontas para a sua revisão",
+            ],
+            [
+              "semana",
+              "Planejar a semana",
+              "Pautas, datas e andamento da produção",
+            ],
+            [
+              "ideias",
+              "Encontrar ideias",
+              "Sugestões a partir dos seus resultados",
+            ],
+          ] as const
+        ).map(([id, rotulo, ajuda]) => (
+          <button
+            type="button"
+            key={id}
+            aria-pressed={visao === id}
+            onClick={() => setVisao(id)}
+          >
+            <b>{rotulo}</b>
+            <span>{ajuda}</span>
+          </button>
+        ))}
+      </nav>
+      {visao === "roteiros" && (
+        <>
+          <RoteirosProntos clientId={clientId} podeEditar={podeEditar} />
+        </>
+      )}
+      {visao === "semana" && (
+        <PlanejadorSemana
+          clientId={clientId}
+          api={pautasApi}
+          podeEditar={podeEditar}
+        />
+      )}
+      {visao === "ideias" && (
+        <p className="text-sm" style={{ color: "var(--ink-2)" }}>
+          Ideias a partir dos posts, das dúvidas do público e dos sinais de
+          interesse de {periodLabel}. Abra a evidência antes de escolher o que
+          produzir.
+        </p>
+      )}
     </div>
   );
 
-  if (fontes.isLoading) return <div>{head}<Carregando /></div>;
-  if (fontes.error) return <div>{head}<ErroCarga texto="Não consegui verificar as fontes deste cliente. Atualize a página." /></div>;
-  if (!temIg) return <div>{head}<SemFonte {...SEM_INSTAGRAM} /></div>;
-  if (posts.isLoading || comentarios.isLoading) return <div>{head}<Carregando texto="Calculando ideias…" /></div>;
-  if (posts.error || comentarios.error || !res) return <div>{head}<ErroCarga texto="Falha ao ler posts e comentários do período." /></div>;
+  // Roteiros e planejador não dependem da disponibilidade das métricas do Instagram.
+  if (visao !== "ideias") return head;
 
-  const limitacoes = [...faltasParaLimitacoes(res.faltas), ...res.limitacoesVoz];
+  if (fontes.isLoading)
+    return (
+      <div>
+        {head}
+        <Carregando />
+      </div>
+    );
+  if (fontes.error)
+    return (
+      <div>
+        {head}
+        <ErroCarga texto="Não consegui verificar as fontes deste cliente. Atualize a página." />
+      </div>
+    );
+  if (!temIg)
+    return (
+      <div>
+        {head}
+        <SemFonte {...SEM_INSTAGRAM} />
+      </div>
+    );
+  if (posts.isLoading || comentarios.isLoading)
+    return (
+      <div>
+        {head}
+        <Carregando texto="Calculando ideias…" />
+      </div>
+    );
+  if (posts.error || comentarios.error || !res)
+    return (
+      <div>
+        {head}
+        <ErroCarga
+          texto={
+            posts.error && comentarios.error
+              ? "Não foi possível carregar posts e comentários do período."
+              : posts.error
+                ? "Não foi possível carregar os posts do período."
+                : "Não foi possível carregar os comentários do período. Os posts foram carregados."
+          }
+        />
+        <button
+          type="button"
+          className="btn mt-3"
+          onClick={() => {
+            void posts.refetch();
+            void comentarios.refetch();
+            void todosComentarios.refetch();
+            void perguntasOriginais.refetch();
+          }}
+        >
+          Tentar carregar dados novamente
+        </button>
+      </div>
+    );
+
+  const limitacoes = [
+    ...faltasParaLimitacoes(res.faltas),
+    ...res.limitacoesVoz,
+  ];
 
   return (
     <div className="space-y-4">
       {head}
       {melhores.frases.length > 0 && (
-        <section className="rounded-xl border p-4" style={{ background: "var(--accent-soft)", borderColor: "var(--border)" }}>
-          <h2 className="text-sm font-semibold">O que o seu melhor conteúdo tem em comum</h2>
+        <section
+          className="rounded-xl border p-4"
+          style={{
+            background: "var(--accent-soft)",
+            borderColor: "var(--border)",
+          }}
+        >
+          <h2 className="text-sm font-semibold">
+            O que o seu melhor conteúdo tem em comum
+          </h2>
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-            Os 20 posts e Reels que mais foram salvos no período, comparados com todos os outros. Padrão para testar, não regra.
+            Os 20 posts e Reels que mais foram salvos no período, comparados com
+            todos os outros. Padrão para testar, não regra.
           </p>
           <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm">
             {melhores.frases.map((f) => (
@@ -461,13 +858,27 @@ function IdeiasPage() {
         </section>
       )}
 
-      <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-dim)" }}>
+      <p
+        className="flex flex-wrap gap-x-4 gap-y-1 text-xs"
+        style={{ color: "var(--text-dim)" }}
+      >
         <span>{res.totalPosts} posts no período</span>
         <span>
-          {res.totalPerguntas} perguntas reais de pacientes (de {res.totalComentarios} comentários lidos)
+          {res.totalPerguntas} perguntas reais de pacientes (de{" "}
+          {res.totalComentarios} comentários lidos)
         </span>
-        {res.pedidosDeCuidado > 0 && <span>{res.pedidosDeCuidado} pedidos de dose ou remédio ficaram fora das ideias</span>}
-        {perguntasOriginais.data && <span>{perguntasOriginais.data.perguntas.length} perguntas de pacientes pela detecção original</span>}
+        {res.pedidosDeCuidado > 0 && (
+          <span>
+            {res.pedidosDeCuidado} pedidos de dose ou remédio ficaram fora das
+            ideias
+          </span>
+        )}
+        {perguntasOriginais.data && (
+          <span>
+            {perguntasOriginais.data.perguntas.length} perguntas de pacientes
+            pela detecção original
+          </span>
+        )}
       </p>
 
       {/* Atalhos por etapa do funil, com quantas ideias e anúncios há em cada uma. */}
@@ -476,9 +887,24 @@ function IdeiasPage() {
           const nPosts = res.ideias.filter((i) => etapaDaIdeia(i) === e).length;
           const nAds = roteiros.filter((r) => r.etapa === e).length;
           return (
-            <a key={e} href={`#etapa-${e}`} className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: ETAPAS[e].cor, color: "var(--ink)", background: `color-mix(in srgb, ${ETAPAS[e].cor} 10%, var(--surface))` }}>
+            <a
+              key={e}
+              href={`#etapa-${e}`}
+              className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border px-3 text-sm font-semibold"
+              style={{
+                borderColor: ETAPAS[e].cor,
+                color: "var(--ink)",
+                background: `color-mix(in srgb, ${ETAPAS[e].cor} 10%, var(--surface))`,
+              }}
+            >
               {ETAPAS[e].nome}
-              <span className="text-xs font-normal" style={{ color: "var(--ink-2)" }}>{nPosts} post{nPosts === 1 ? "" : "s"} · {nAds} anúncio{nAds === 1 ? "" : "s"}</span>
+              <span
+                className="text-xs font-normal"
+                style={{ color: "var(--ink-2)" }}
+              >
+                {nPosts} post{nPosts === 1 ? "" : "s"} · {nAds} anúncio
+                {nAds === 1 ? "" : "s"}
+              </span>
             </a>
           );
         })}
@@ -494,24 +920,57 @@ function IdeiasPage() {
           const ideiasEtapa = res.ideias.filter((i) => etapaDaIdeia(i) === e);
           const adsEtapa = roteiros.filter((r) => r.etapa === e);
           return (
-            <section key={e} id={`etapa-${e}`} className="scroll-mt-4 rounded-2xl border p-4 sm:p-5" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
-              <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-l-4 pl-3" style={{ borderColor: ETAPAS[e].cor }}>
-                <h2 className="text-lg font-bold" style={{ color: "var(--ink)" }}>{ETAPAS[e].nome}</h2>
-                <span className="text-sm" style={{ color: "var(--ink-2)" }}>{ETAPAS[e].papel} · anúncio com objetivo de {ETAPAS[e].objetivoCampanha.toLowerCase()}</span>
+            <section
+              key={e}
+              id={`etapa-${e}`}
+              className="scroll-mt-4 rounded-2xl border p-4 sm:p-5"
+              style={{
+                borderColor: "var(--border)",
+                background: "var(--surface-2)",
+              }}
+            >
+              <div
+                className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-l-4 pl-3"
+                style={{ borderColor: ETAPAS[e].cor }}
+              >
+                <h2
+                  className="text-lg font-bold"
+                  style={{ color: "var(--ink)" }}
+                >
+                  {ETAPAS[e].nome}
+                </h2>
+                <span className="text-sm" style={{ color: "var(--ink-2)" }}>
+                  {ETAPAS[e].papel} · anúncio com objetivo de{" "}
+                  {ETAPAS[e].objetivoCampanha.toLowerCase()}
+                </span>
               </div>
-              <h3 className="mb-2 flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide" style={{ color: "var(--ink-2)" }}>
+              <h3
+                className="mb-2 flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide"
+                style={{ color: "var(--ink-2)" }}
+              >
                 <Newspaper size={15} aria-hidden /> Posts para publicar
               </h3>
               {ideiasEtapa.length ? (
                 <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-2">
                   {ideiasEtapa.map((i) => (
-                    <IdeiaCard key={i.id} i={i} clientId={clientId} planner={planner} />
+                    <IdeiaCard
+                      key={i.id}
+                      i={i}
+                      clientId={clientId}
+                      planner={planner}
+                    />
                   ))}
                 </div>
               ) : (
-                <p className="mb-5 text-sm" style={{ color: "var(--ink-2)" }}>Nenhuma ideia de post com base suficiente nesta etapa no período.</p>
+                <p className="mb-5 text-sm" style={{ color: "var(--ink-2)" }}>
+                  Nenhuma ideia de post com base suficiente nesta etapa no
+                  período.
+                </p>
               )}
-              <h3 className="mb-2 flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide" style={{ color: "var(--ink-2)" }}>
+              <h3
+                className="mb-2 flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide"
+                style={{ color: "var(--ink-2)" }}
+              >
                 <Clapperboard size={15} aria-hidden /> Anúncios para gravar
               </h3>
               {adsEtapa.length ? (
@@ -534,33 +993,78 @@ function IdeiasPage() {
         })
       )}
 
-      <IdeiasRegraOriginal orig={orig} carregando={perguntasOriginais.isLoading} erro={!!perguntasOriginais.error} clientId={clientId} planner={planner} />
+      <IdeiasRegraOriginal
+        orig={orig}
+        carregando={perguntasOriginais.isLoading}
+        erro={!!perguntasOriginais.error}
+        clientId={clientId}
+        planner={planner}
+      />
 
-      <PlanejadorSemana clientId={clientId} api={pautasApi} podeEditar={podeEditar} />
+      {(res.ideias.length > 0 || (orig?.extras.length ?? 0) > 0) && (
+        <PlanoDaSemana
+          ideias={res.ideias}
+          originais={orig?.extras ?? []}
+          hora={horaSugerida}
+        />
+      )}
 
-      {(res.ideias.length > 0 || (orig?.extras.length ?? 0) > 0) && <PlanoDaSemana ideias={res.ideias} originais={orig?.extras ?? []} hora={horaSugerida} />}
+      <ListaLimitacoes
+        itens={limitacoes}
+        titulo="O que ainda limita as ideias"
+      />
 
-      <ListaLimitacoes itens={limitacoes} titulo="O que ainda limita as ideias" />
-
-      <section className="rounded-xl border p-4 text-xs" style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-dim)" }}>
+      <section
+        className="rounded-xl border p-4 text-xs"
+        style={{
+          background: "var(--surface)",
+          borderColor: "var(--border)",
+          color: "var(--text-dim)",
+        }}
+      >
         <h2 className="text-sm font-semibold" style={{ color: "var(--text)" }}>
           De onde vêm as ideias
         </h2>
         <ul className="mt-1 list-disc space-y-1 pl-5">
-          <li>Dúvida de pacientes: só comentários classificados como pergunta (elogio, relato pessoal e marcação de amigo não entram), quando 2 ou mais pessoas diferentes perguntaram sobre o mesmo assunto. O gancho nunca copia o comentário.</li>
-          <li>Tema que gera identificação: elogios e relatos pessoais de 3 ou mais pessoas diferentes nos posts do mesmo tema.</li>
-          <li>Anúncios para gravar: C1 dos temas que geram identificação; C2 das dúvidas de saúde e comparações; C3 das objeções (preço, convênio, medo, "não é para mim", adiar, agenda) nos comentários e nas conversas de WhatsApp lidas pela IA. C3 é para campanha de mensagens.</li>
-          <li>Tema que o público mais salva: tema com 8+ posts em que o post típico foi salvo pelo menos 25% mais que o post típico da conta.</li>
-          <li>Formato que mais alcança: formato com 8+ posts em que o post típico chegou a mais pessoas que o post típico da conta. Com menos de 8 posts, o dado não vira conclusão.</li>
           <li>
-            Regra original: as mesmas três regras como eram antes. A pergunta repetida usa todos os comentários marcados como pergunta (sem a triagem nova), agrupa por
-            palavras em comum e conta comentários; o título é o próprio comentário e o formato vem do tipo da dúvida (preço, agendar, uso, sintoma, resultado, geral).
-            Só aparece o que a regra nova não trouxe.
+            Dúvida de pacientes: só comentários classificados como pergunta
+            (elogio, relato pessoal e marcação de amigo não entram), quando 2 ou
+            mais pessoas diferentes perguntaram sobre o mesmo assunto. O gancho
+            nunca copia o comentário.
+          </li>
+          <li>
+            Tema que gera identificação: elogios e relatos pessoais de 3 ou mais
+            pessoas diferentes nos posts do mesmo tema.
+          </li>
+          <li>
+            Anúncios para gravar: C1 dos temas que geram identificação; C2 das
+            dúvidas de saúde e comparações; C3 das objeções (preço, convênio,
+            medo, "não é para mim", adiar, agenda) nos comentários e nas
+            conversas de WhatsApp lidas pela IA. C3 é para campanha de
+            mensagens.
+          </li>
+          <li>
+            Tema que o público mais salva: tema com 8+ posts em que o post
+            típico foi salvo pelo menos 25% mais que o post típico da conta.
+          </li>
+          <li>
+            Formato que mais alcança: formato com 8+ posts em que o post típico
+            chegou a mais pessoas que o post típico da conta. Com menos de 8
+            posts, o dado não vira conclusão.
+          </li>
+          <li>
+            Regra original: as mesmas três regras como eram antes. A pergunta
+            repetida usa todos os comentários marcados como pergunta (sem a
+            triagem nova), agrupa por palavras em comum e conta comentários; o
+            título é o próprio comentário e o formato vem do tipo da dúvida
+            (preço, agendar, uso, sintoma, resultado, geral). Só aparece o que a
+            regra nova não trouxe.
           </li>
         </ul>
         <OQueE>
-          "Post típico" é o do meio: colocando os posts em ordem, é o que fica no centro. Ele não é puxado por um único post que viralizou. Temas e formatos só entram com 8 ou
-          mais posts no período.
+          "Post típico" é o do meio: colocando os posts em ordem, é o que fica
+          no centro. Ele não é puxado por um único post que viralizou. Temas e
+          formatos só entram com 8 ou mais posts no período.
         </OQueE>
       </section>
     </div>

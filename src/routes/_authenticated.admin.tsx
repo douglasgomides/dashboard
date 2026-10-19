@@ -29,6 +29,12 @@ const ITENS = [
   { to: "/admin/equipe", label: "Equipe", Icone: Users },
 ] as const;
 
+const GRUPOS = [
+  { label: "Operação do dia", paths: ["/admin/caixa", "/admin/agentes"] },
+  { label: "Clínicas e resultados", paths: ["/admin", "/admin/relatorios", "/admin/referencia"] },
+  { label: "Inteligência e controle", paths: ["/admin/brain", "/admin/conferencia", "/admin/integracoes", "/admin/equipe"] },
+];
+
 const TITULO: Record<string, string> = {
   "/admin/caixa": "Caixa de entrada",
   "/admin": "Clientes do Nexo",
@@ -54,23 +60,21 @@ function AdminContent() {
   const { data: cliente } = useQuery({ queryKey: ["client", idCliente], queryFn: () => getClient(idCliente!), enabled: !!idCliente });
   const titulo = idCliente ? (cliente?.name ?? "Carregando…") : (TITULO[pathname] ?? "Nexo · Administração");
 
-  const itens = ITENS.map((it) => (
+  const itens = (paths: string[]) => ITENS.filter((it) => paths.includes(it.to)).map((it) => (
     <Link key={it.to} to={it.to} activeOptions={{ exact: "exato" in it ? true : false }} activeProps={{ "aria-current": "page" }}>
-      <it.Icone aria-hidden size={18} />
-      <span>{it.label}</span>
+      <it.Icone aria-hidden size={18} /><span>{it.label}</span>
     </Link>
   ));
 
   return (
-    <div className="app">
+    <div className="app product-workspace workspace-admin">
       <aside aria-label="Menu do admin">
         <div className="brand">
           <ProductBrand product="nexo" dark />
         </div>
         <TrocaProduto atual="hub" clientId={null} />
-        <nav className="side">
-          <div className="lbl">Portfólio</div>
-          {itens}
+        <nav className="side" aria-label="Ferramentas administrativas">
+          {GRUPOS.map((g) => <div className="workspace-nav-section" key={g.label}><p>{g.label}</p>{itens(g.paths)}</div>)}
         </nav>
         <div className="side-foot so-aberta">
           <LogoutButton className="text-sm text-left min-h-[36px]" />
@@ -88,18 +92,13 @@ function AdminContent() {
             </div>
           </div>
         </div>
-        {/* Celular: a barra lateral some; os mesmos atalhos numa linha que rola de lado. */}
-        <nav className="admin-mnav" aria-label="Menu do admin">
-          {ITENS.map((it) => (
-            <Link key={it.to} to={it.to} activeOptions={{ exact: "exato" in it ? true : false }} activeProps={{ "aria-current": "page" }}>
-              {it.label}
-            </Link>
-          ))}
-          <LogoutButton className="text-sm" />
-        </nav>
-        <div className="mt-4">
-          <Outlet />
-        </div>
+        <details className="ws-admin-menu" key={pathname}>
+          <summary>Áreas da administração <span aria-hidden>⌄</span></summary>
+          <TrocaProduto atual="hub" clientId={null} />
+          <nav aria-label="Menu do admin">{GRUPOS.map((g) => <div key={g.label}><h2>{g.label}</h2>{itens(g.paths)}</div>)}</nav>
+          <LogoutButton className="ws-action ws-action--secondary" />
+        </details>
+        <main className="mt-6" id="admin-content"><Outlet /></main>
       </div>
     </div>
   );
