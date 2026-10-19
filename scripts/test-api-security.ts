@@ -125,6 +125,39 @@ async function testAuthorizationAndCreation() {
   assert.equal(absent.headers.get("Cache-Control"), "no-store");
 }
 
+async function testCreativeWorkerDispatch() {
+  process.env.GITHUB_DISPATCH_TOKEN = "offline-dispatch-token";
+  let admin = true;
+  let dispatches = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    if (url.origin === origin) {
+      if (url.pathname === "/auth/v1/user") return json({ id: USER });
+      if (url.pathname.endsWith("/app_admins")) return json(admin ? { user_id: USER } : null);
+      if (url.pathname.endsWith("/client_members")) return json({ user_id: USER, role: "strategist" });
+      throw new Error(`Unexpected creative read ${url.pathname}`);
+    }
+    assert.equal(url.href, "https://api.github.com/repos/douglasgomides/dashboard/actions/workflows/creative-worker.yml/dispatches");
+    assert.equal(init?.method, "POST");
+    assert.equal(new Headers(init?.headers).get("authorization"), "Bearer offline-dispatch-token");
+    assert.deepEqual(JSON.parse(String(init?.body)), { ref: "claude/doctor-creator-hub-nixvw6" });
+    dispatches++;
+    return new Response(null, { status: 204 });
+  };
+  assert.equal((await invoke(manual, { alvo: "creative_worker" })).status, 400, "dispatch still requires a client");
+  const response = await invoke(manual, { client_id: CLIENT, alvo: "creative_worker" });
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.result, { alvo: "creative_worker", ok: true, status: 204, agendado: false });
+  assert.equal(dispatches, 1, "valid requests must reach the workflow dispatch handler");
+  admin = false;
+  assert.equal((await invoke(manual, { client_id: CLIENT, alvo: "creative_worker" })).status, 403, "client members cannot dispatch the worker");
+  assert.equal(dispatches, 1);
+  admin = true;
+  delete process.env.GITHUB_DISPATCH_TOKEN;
+  assert.equal((await invoke(manual, { client_id: CLIENT, alvo: "creative_worker" })).result.erro, "sem_token");
+  assert.equal(dispatches, 1);
+}
+
 async function testSummaryAuditAndOutput() {
   process.env.OPENAI_API_KEY = "fake-key";
   let auditFails = true;
@@ -233,6 +266,7 @@ try {
   testValidation();
   await assert.rejects(() => readRawBody(Readable.from([Buffer.alloc(1024 * 1024), Buffer.alloc(1)])), (error: unknown) => error instanceof WebhookBodyError && error.status === 413);
   await testAuthorizationAndCreation();
+  await testCreativeWorkerDispatch();
   await testSummaryAuditAndOutput();
   await testSchedulerAuthorization();
   console.log("ok api-security (prototype pollution, limites, SSRF, entrada, autorização, IDOR, IA e segredo restrito do agendamento)");

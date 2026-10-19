@@ -9,7 +9,7 @@ const id = z.string().uuid();
 const vazioOpcional = (v: unknown) => typeof v === "string" && !v.trim() ? undefined : v;
 export const manualRequestSchema = z.object({
   client_id: id.optional(),
-  alvo: z.enum(["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes", "sap_redigir"]),
+  alvo: z.enum(["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes", "sap_redigir", "creative_worker"]),
   acao: z.string().max(40).optional(), execucao_id: id.optional(),
   etapa: z.string().max(80).optional(), conferencia_id: id.optional(),
   de: isoDate.optional(), ate: isoDate.optional(),
