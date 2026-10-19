@@ -26,7 +26,9 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       CREATIVE_ALLOW_PRODUCTION: "true"
       CREATIVE_WORKER_ID: github-actions
-      CREATIVE_ENABLE_APIFY: "false"
+      # Radar de mercado: liga sozinho quando o segredo APIFY_API_TOKEN existir no repositório.
+      APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
+      CREATIVE_ENABLE_APIFY: ${{ secrets.APIFY_API_TOKEN != '' && 'true' || 'false' }}
       FFMPEG_PATH: /usr/bin/ffmpeg
       FFPROBE_PATH: /usr/bin/ffprobe
     steps:

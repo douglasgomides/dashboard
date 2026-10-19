@@ -183,3 +183,22 @@ export const linkPublication = (
       p_post_id: postId,
     }),
   );
+// Arte dos slides (rascunho para revisão), gerada no servidor. Pode levar 1 a 3 minutos para um carrossel inteiro.
+export interface ArteSlide { id: string; position: number; status: string; url: string; criado_em: string }
+async function chamarArte<T>(clientId: string, corpo: Record<string, unknown>): Promise<T> {
+  const token = (await supabase.auth.getSession()).data.session?.access_token;
+  const r = await fetch("/api/sync/manual", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+    body: JSON.stringify({ client_id: clientId, alvo: "creative_arte", ...corpo }),
+  });
+  const j = await r.json().catch(() => null);
+  if (!r.ok || j?.ok === false) throw new Error(j?.erro ?? j?.error ?? `Falhou (${r.status})`);
+  return j as T;
+}
+export const listarArtes = (clientId: string, adaptacaoId: string) =>
+  chamarArte<{ artes: ArteSlide[] }>(clientId, { acao: "listar", adaptacao_id: adaptacaoId }).then((j) => j.artes);
+export const gerarArtes = (clientId: string, adaptacaoId: string, slides?: number[]) =>
+  chamarArte<{ geradas: number; erros: string[] }>(clientId, { acao: "gerar", adaptacao_id: adaptacaoId, slides });
+export const revisarArte = (clientId: string, arteId: string, status: "aprovada" | "descartada") =>
+  chamarArte<{ ok: boolean }>(clientId, { acao: "revisar", arte_id: arteId, status });

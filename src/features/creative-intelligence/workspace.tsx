@@ -869,60 +869,72 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
       {tab === "aprendizado" && (
         <Painel
           icone={ChartNoAxesCombined}
-          titulo="O que aconteceu depois da adaptação"
-          resumo="A medição começa após o vínculo com uma publicação real. Criar pauta não conta como publicar."
+          titulo="Aprendizado: a adaptação deu resultado?"
+          resumo="Aqui o Nexo compara o desempenho de cada adaptação publicada com a média da conta, para saber quais estruturas vale repetir."
         >
-          {!w?.observations.length ? (
+          <ol className="mb-5 grid gap-3 text-sm sm:grid-cols-3">
+            <li className="creative-structure">
+              <p className="font-semibold">1. Criar a adaptação</p>
+              <p className="mt-1" style={{ color: "var(--muted)" }}>
+                Em Biblioteca e adaptações, escolha uma estrutura, um tema novo e clique em Criar proposta.
+              </p>
+            </li>
+            <li className="creative-structure">
+              <p className="font-semibold">2. Publicar e vincular</p>
+              <p className="mt-1" style={{ color: "var(--muted)" }}>
+                Depois de postar no Instagram, volte na adaptação e use "Vincular publicação" para dizer qual post é ela.
+              </p>
+            </li>
+            <li className="creative-structure">
+              <p className="font-semibold">3. Medir sozinho</p>
+              <p className="mt-1" style={{ color: "var(--muted)" }}>
+                O Nexo mede alcance, salvos e compartilhamentos 1, 3, 7 e 28 dias depois. Nada mais a fazer.
+              </p>
+            </li>
+          </ol>
+          {!w?.adaptations.length ? (
             <p className="note">
-              Ainda não há medições de adaptações publicadas. Vincule a
-              publicação real no comparador para acompanhar D1, D3, D7 e D28.
+              Nenhuma adaptação criada ainda. Comece pelo passo 1.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr>
-                    <th>Publicação</th>
-                    <th>Janela</th>
-                    <th>Qualidade da observação</th>
-                    <th>Alcance</th>
-                    <th>Salvos</th>
-                    <th>Compart.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {w.observations.map((o) => (
-                    <tr key={o.id}>
-                      <td>
-                        {w.adaptations.find((a) => a.id === o.adaptation_id)
-                          ?.document.title || "Adaptação"}
-                      </td>
-                      <td>D{o.window_day}</td>
-                      <td>
-                        {
-                          (
-                            {
-                              within_window: "Dentro da janela",
-                              late: "Fora da janela",
-                              stale: "Métrica desatualizada",
-                              missing: "Sem métrica confirmada",
-                            } as Record<string, string>
-                          )[o.quality]
-                        }
-                      </td>
-                      <td>{number(o.metrics.reach)}</td>
-                      <td>{number(o.metrics.saved)}</td>
-                      <td>{number(o.metrics.shares)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-3">
+              {w.adaptations.map((a) => {
+                const obs = w.observations.filter((o) => o.adaptation_id === a.id);
+                const medidos = new Set(obs.map((o) => o.window_day));
+                const ultima = [...obs].sort((x, y) => y.window_day - x.window_day)[0];
+                const etapa = !a.published_post_id ? 2 : obs.length === 0 ? 3 : 4;
+                return (
+                  <article key={a.id} className="creative-structure">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="font-semibold">{a.document.title || "Adaptação"}</h3>
+                      <Selo cor={etapa === 4 ? "var(--good)" : etapa === 3 ? "var(--accent)" : "var(--warn)"}>
+                        {etapa === 2 ? "Falta vincular a publicação" : etapa === 3 ? "Publicada: aguardando a 1ª medição (D1)" : `Medida até D${ultima?.window_day}`}
+                      </Selo>
+                    </div>
+                    <p className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                      {[1, 3, 7, 28].map((d) => (
+                        <Selo key={d} cor={medidos.has(d) ? "var(--good)" : "var(--muted)"}>
+                          D{d} {medidos.has(d) ? "medido" : "pendente"}
+                        </Selo>
+                      ))}
+                    </p>
+                    {etapa === 2 && (
+                      <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
+                        Já postou? Abra Biblioteca e adaptações, escolha esta adaptação em "Adaptação para comparar" e vincule o post.
+                      </p>
+                    )}
+                    {ultima && (
+                      <p className="mt-2 text-sm tabular-nums">
+                        Alcance {number(ultima.metrics.reach)} · Salvos {number(ultima.metrics.saved)} · Compartilhamentos {number(ultima.metrics.shares)}
+                      </p>
+                    )}
+                  </article>
+                );
+              })}
             </div>
           )}
           <p className="mt-4 text-xs" style={{ color: "var(--muted)" }}>
-            O histórico anterior à coleta não é reconstruído. Comparações
-            observacionais não comprovam causalidade; estruturas não recebem
-            validação definitiva por um único resultado.
+            Uma publicação sozinha não prova que a estrutura funciona: o Nexo só sugere repetir uma estrutura depois de várias medições.
           </p>
         </Painel>
       )}
