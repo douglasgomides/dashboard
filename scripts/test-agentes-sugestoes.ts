@@ -41,7 +41,7 @@ for (let n = 0; n < 14; n++) {
   add("cansou", n, 15, 2, n < 7 ? 3.6 : 2);  // frequência alta
   add("boa", n, 20, 6, 1.2);                 // custo bem abaixo da média
   add("pouco", n, 2, 0);                     // gasto pequeno: não entra
-  if (n >= 5) add("parada", n, 30, 0);       // gastou 5 a 13 dias atrás e parou: já está pausada, sem sugestão
+  if (n >= 3) add("parada", n, 50, 0);       // gastou até 3 dias atrás e parou: já está pausada, sem sugestão
 }
 const sinais = diagnosticarAnuncios(linhas, { sem: "Avaliação", boa: "Mensagens" }, hoje);
 const porTipo = Object.fromEntries(sinais.map((s) => [s.campanha_id, s.tipo]));
