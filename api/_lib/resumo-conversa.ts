@@ -153,7 +153,7 @@ export async function analisarConversasPendentes(
     .neq("provider", "kommo") // só o lado do paciente tem texto: ver resumirConversa
     .gte("ultima_msg_em", desde)
     .order("ultima_msg_em", { ascending: false })
-    .limit(400);
+    .limit(1500);
   if (error) return { analisadas: 0, pendentes: 0, erros: [error.message] };
   const ids = (convs ?? []).map((c: { id: string }) => c.id);
   const feitos = new Map<string, string | null>();
