@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import {
   areasVisiveis,
-  gruposDeNavegacao,
   type Visibilidade,
 } from "../src/lib/nav";
 import { AREAS_SAP, ITENS, areasSapVisiveis } from "../src/lib/sap-navigation";
@@ -20,13 +19,9 @@ for (const papel of ["admin", "owner", "strategist", "viewer"] as const) {
       },
     };
     const areas = areasVisiveis(vis);
-    const grupos = gruposDeNavegacao(areas);
-    assert.deepEqual(
-      grupos.flatMap((g) => g.areas.map((a) => a.id)).sort(),
-      areas.map((a) => a.id).sort(),
-      "Agrupamento não perde nem duplica uma área autorizada",
-    );
-    assert.ok(grupos.every((g) => g.areas.length > 0));
+    assert.deepEqual(areas.map((a) => a.label), temFontes || papel === "admin" ? ["Início", "Marketing", "Comercial", "Plano de ação", "Relatórios"] : ["Início", "Marketing", "Plano de ação", "Relatórios"]);
+    const paths = areas.flatMap((a) => a.visiveis.map((t) => t.path));
+    assert.equal(new Set(paths).size, paths.length, "Cada ferramenta aparece uma única vez no menu");
   }
 }
 // Toda ferramenta real do SAP precisa ter um caminho no mapa, inclusive os agentes existentes.
