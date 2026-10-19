@@ -30,4 +30,35 @@ export function podeAplicar(campanhaId: string, historico: AcaoAnterior[], agora
   return { ok: true };
 }
 
+/** Uma reserva (em_andamento ou desfazendo) que passou deste tempo é tratada como presa por queda do servidor. */
+export const RESERVA_EXPIRA_MIN = 10;
+export const reservaExpirada = (criadoEm: string, agora = Date.now()) => agora - Date.parse(criadoEm) > RESERVA_EXPIRA_MIN * 60_000;
+
+export interface EstadoCampanha { status?: string; orcamentos: { id: string; nivel: "campanha" | "conjunto"; daily_budget: number }[] }
+
+/**
+ * O desfazer só é seguro se a Meta ainda está do jeito que a ação deixou. Se alguém mexeu depois (status ou orçamento),
+ * desfazer apagaria essa mudança. Retorna o motivo da recusa, ou null quando pode desfazer.
+ * `atual` traz o status da campanha (quando a ação foi pausar/ativar) e o orçamento atual de cada item que a ação mexeu.
+ */
+export function motivoRecusarDesfazer(
+  tipo: string,
+  depois: Partial<EstadoCampanha>,
+  atual: { status?: string; orcamentos: Record<string, number | undefined> },
+): string | null {
+  if (tipo === "pausar" || tipo === "ativar") {
+    if (!depois.status) return "Registro da ação sem o estado final; confira na Meta e ajuste manualmente.";
+    if (atual.status !== depois.status) return `A campanha foi alterada depois desta ação (status atual: ${atual.status ?? "desconhecido"}). Desfazer sobrescreveria essa mudança; ajuste direto na Meta.`;
+    return null;
+  }
+  const itens = depois.orcamentos ?? [];
+  if (!itens.length) return "Registro da ação sem o orçamento final; confira na Meta e ajuste manualmente.";
+  for (const o of itens) {
+    const agora = atual.orcamentos[o.id];
+    if (agora === undefined) return "Não consegui ler o orçamento atual na Meta; nada foi desfeito.";
+    if (agora !== o.daily_budget) return `O orçamento foi alterado depois desta ação (agora ${brlCentavos(agora)}, a ação deixou ${brlCentavos(o.daily_budget)}). Desfazer sobrescreveria essa mudança; ajuste direto na Meta.`;
+  }
+  return null;
+}
+
 export const brlCentavos = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });

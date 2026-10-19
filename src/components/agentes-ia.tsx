@@ -255,7 +255,7 @@ function AcoesMeta({ clientId, s }: { clientId: string; s: Sugestao }) {
       {erro && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{erro}</p>}
       {(hist.data ?? []).map((a) => (
         <p key={a.id} className="mt-1 flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--ink-2)" }}>
-          <span>{a.estado === "falhou" ? `Falhou: ${a.erro}` : `${desc(a)} · ${new Date(a.aplicado_em ?? a.criado_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}${a.estado === "desfeita" ? " · desfeita" : ""}`}</span>
+          <span>{a.estado === "falhou" ? `Falhou: ${a.erro}` : `${desc(a)} · ${new Date(a.aplicado_em ?? a.criado_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}${a.estado === "desfeita" ? " · desfeita" : a.estado === "em_andamento" ? " · em andamento" : a.estado === "desfazendo" ? " · desfazendo" : ""}`}</span>
           {a.estado === "aplicada" && temToken && <button type="button" disabled={ocupado} className="font-semibold underline" style={{ color: "var(--accent)" }} onClick={() => ir({ acao: "desfazer", id: a.id }, "Desfazer esta mudança na Meta?")}>Desfazer</button>}
         </p>
       ))}
