@@ -2,7 +2,7 @@
 // Usa a RPC client_sync_status quando ela existe; se a migração ainda não foi aplicada, lê as
 // tabelas com as mesmas regras (RLS vale igual), para o selo e a Visão geral não sumirem.
 import { supabase } from "@/integrations/supabase/client";
-import { statusDaFonte, diasEntre, hojeBrasilia, FONTES, type FonteId, type CorStatus } from "@/lib/status-fonte";
+import { statusDaFonte, diasEntre, hojeBrasilia, FOLGA_META_INSTAGRAM, FONTES, type FonteId, type CorStatus } from "@/lib/status-fonte";
 
 export type LinhaFonte = {
   fonte: string;
@@ -115,6 +115,7 @@ export function diasUteisDeAtraso(dataAte: string, hoje: Date = new Date()): num
 /* Atraso de uma fonte: anúncios e Instagram têm dado todo dia (dias corridos); CRM e WhatsApp, só em dia útil. */
 export function atrasoDaFonte(l: { fonte?: string; data_ate: string | null }): number {
   if (!l.data_ate) { return 0; }
+  if (l.fonte === "instagram") { return Math.max(0, diasDeAtraso(l.data_ate) - FOLGA_META_INSTAGRAM); }
   return l.fonte === "crm" || l.fonte === "atendimento" ? diasUteisDeAtraso(l.data_ate) : diasDeAtraso(l.data_ate);
 }
 

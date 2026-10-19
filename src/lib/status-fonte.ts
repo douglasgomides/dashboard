@@ -6,6 +6,7 @@
 //   amarelo   2 a 3 dias
 //   vermelho  mais de 3 dias, nenhum dado ainda, ou erro na última atualização
 //   (CRM e WhatsApp só ganham dado em dia de expediente: para eles os dias contados são úteis, sem fim de semana e feriado)
+//   (Instagram: a Meta só fecha o dia 2 dias depois, então o último dia completo é sempre "hoje menos 2"; esses 2 dias não contam como atraso)
 //   cinza     não ligado (ou marcado como "não usa", quando é intencional)
 //
 // "Ligado" também é uma regra só: há cadastro da fonte OU já existe dado gravado OU a fonte é lida
@@ -72,6 +73,9 @@ export function diasUteisEntre(hoje: string, dia: string): number {
 }
 
 const contaDiasUteis = (fonte?: string | null) => fonte === "crm" || fonte === "atendimento";
+/** Dias que a Meta leva para fechar um dia de métricas do Instagram (alcance, novos seguidores, saídas). Não é atraso nosso. */
+export const FOLGA_META_INSTAGRAM = 2;
+const folgaDaFonte = (fonte?: string | null) => (fonte === "instagram" ? FOLGA_META_INSTAGRAM : 0);
 
 const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 
@@ -87,7 +91,7 @@ export function statusDaFonte(e: EntradaStatus, hoje: string = hojeBrasilia()): 
     return { cor: "cinza", ligado, naoUsa: false, rotulo: "Não ligado", dias: null, data: null, detalhe: "Fonte não conectada", motivo: null, peso: 0 };
   }
   const data = e.data_ate ? ddmm(e.data_ate) : null;
-  const dias = e.data_ate ? Math.max(0, contaDiasUteis(e.fonte) ? diasUteisEntre(hoje, e.data_ate) : diasEntre(hoje, e.data_ate)) : null;
+  const dias = e.data_ate ? Math.max(0, (contaDiasUteis(e.fonte) ? diasUteisEntre(hoje, e.data_ate) : diasEntre(hoje, e.data_ate)) - folgaDaFonte(e.fonte)) : null;
   const erro = e.last_error ? e.last_error.replace(/\s+/g, " ").trim() : null;
   const base = { ligado, naoUsa: false, data, dias, motivo: motivo ?? (erro ? `Erro na última atualização: ${erro.slice(0, 140)}` : null) };
   if (dias == null) return { ...base, cor: "vermelho", rotulo: erro ? "Erro" : "Sem dado", detalhe: "Nenhum dado gravado ainda", peso: 3 };

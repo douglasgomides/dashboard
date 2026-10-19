@@ -41,9 +41,14 @@ assert.equal(piorStatus([s({ cadastro: true, data_ate: hoje }), carrion])?.cor, 
 const quintaSemLead = { cadastro: true, data_ate: "2026-10-15" };
 assert.equal(statusDaFonte({ ...quintaSemLead, fonte: "crm" }, "2026-10-19").cor, "amarelo");
 assert.equal(statusDaFonte({ ...quintaSemLead, fonte: "crm" }, "2026-10-19").dias, 2);
-assert.equal(statusDaFonte({ ...quintaSemLead, fonte: "instagram" }, "2026-10-19").cor, "vermelho", "Instagram segue em dias corridos");
+assert.equal(statusDaFonte({ ...quintaSemLead, fonte: "instagram" }, "2026-10-19").dias, 2, "Instagram conta dias corridos (4) menos a folga de 2 da Meta");
 // Passou de 3 dias úteis: continua vermelho no CRM (ex.: Juliana Carrion, parada desde 05/09).
 assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-09", fonte: "crm" }, "2026-10-19").cor, "vermelho");
 // Erro continua vermelho mesmo em dia útil.
 assert.equal(statusDaFonte({ ...quintaSemLead, fonte: "crm", last_error: "falhou" }, "2026-10-16").cor, "vermelho");
+// Instagram: a Meta fecha o dia em 2 dias, então "até hoje menos 2" é em dia; só passa a atrasar depois disso.
+assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-17", fonte: "instagram" }, "2026-10-19").cor, "verde");
+assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-15", fonte: "instagram" }, "2026-10-19").cor, "amarelo");
+assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-12", fonte: "instagram" }, "2026-10-19").cor, "vermelho", "5 dias de atraso real continua vermelho");
+assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-17", fonte: "anuncios" }, "2026-10-19").cor, "amarelo", "anúncios não ganham folga");
 console.log("status-fonte: ok");

@@ -1,0 +1,13 @@
+import fs from "node:fs"; import os from "node:os";
+import { createClient } from "@supabase/supabase-js";
+import { rodarConferencia } from "./api/_lib/conferencia.js";
+const cofre = fs.readFileSync(os.homedir() + "/doctor-creator-infra.md", "utf8");
+const SK = cofre.match(/Dashboards de Clientes[\s\S]*?service_role[^`]*`(eyJ[\w.-]+)`/)![1];
+const sb = createClient("https://cvdnzoqduliopscfsrkc.supabase.co", SK, { auth: { persistSession: false } });
+const r: any = await rodarConferencia(sb as any, {});
+const alvo = (x: any) => /Doctor Creator|Douglas/i.test(x.cliente ?? x.titulo ?? "");
+console.log("TOTAL achados:", r.achados?.length, "| verificados:", r.verificados?.length);
+for (const a of (r.achados ?? []).filter(alvo)) console.log(`- [${a.gravidade}] ${a.cliente ?? ""} | ${a.titulo} | ${String(a.detalhe ?? "").slice(0, 220)}`);
+const v = (r.verificados ?? []).filter(alvo);
+console.log("VERIFICADOS dos dois:", v.length, "| não ok:", v.filter((x: any) => !x.ok).length);
+for (const x of v.filter((x: any) => !x.ok)) console.log("  não ok:", x.etapa, x.tipo, x.cliente, x.nota);
