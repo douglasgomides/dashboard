@@ -37,4 +37,13 @@ for (let d = 0; d < 60; d++) {
   assert.ok(r.data && r.cor !== "cinza", `data ${dia} sem cor`);
 }
 assert.equal(piorStatus([s({ cadastro: true, data_ate: hoje }), carrion])?.cor, "vermelho");
+// CRM e WhatsApp contam dias úteis: quinta 15/10 sem lead e hoje segunda 19/10 são 2 dias úteis (amarelo), não 4 (vermelho).
+const quintaSemLead = { cadastro: true, data_ate: "2026-10-15" };
+assert.equal(statusDaFonte({ ...quintaSemLead, fonte: "crm" }, "2026-10-19").cor, "amarelo");
+assert.equal(statusDaFonte({ ...quintaSemLead, fonte: "crm" }, "2026-10-19").dias, 2);
+assert.equal(statusDaFonte({ ...quintaSemLead, fonte: "instagram" }, "2026-10-19").cor, "vermelho", "Instagram segue em dias corridos");
+// Passou de 3 dias úteis: continua vermelho no CRM (ex.: Juliana Carrion, parada desde 05/09).
+assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-09", fonte: "crm" }, "2026-10-19").cor, "vermelho");
+// Erro continua vermelho mesmo em dia útil.
+assert.equal(statusDaFonte({ ...quintaSemLead, fonte: "crm", last_error: "falhou" }, "2026-10-16").cor, "vermelho");
 console.log("status-fonte: ok");

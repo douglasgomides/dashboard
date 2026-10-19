@@ -121,9 +121,9 @@ export function atrasoDaFonte(l: { fonte?: string; data_ate: string | null }): n
 export type Tom = "bom" | "atencao" | "ruim" | "neutro";
 const TOM_DA_COR: Record<CorStatus, Tom> = { verde: "bom", amarelo: "atencao", vermelho: "ruim", cinza: "neutro" };
 /** Tom da fonte pela regra única (src/lib/status-fonte.ts). Linha sem data nem erro = sem dado para mostrar. */
-export function tomDaFonte(l: Pick<LinhaFonte, "data_ate" | "last_error"> | undefined): Tom {
+export function tomDaFonte(l: Pick<LinhaFonte, "data_ate" | "last_error"> & { fonte?: string } | undefined): Tom {
   if (!l || (!l.data_ate && !l.last_error)) return "neutro";
-  return TOM_DA_COR[statusDaFonte({ cadastro: true, data_ate: l.data_ate, last_error: l.last_error }).cor];
+  return TOM_DA_COR[statusDaFonte({ fonte: l.fonte ?? null, cadastro: true, data_ate: l.data_ate, last_error: l.last_error }).cor];
 }
 
 // ---------------------------------------------------------------- todos os clientes (admin)

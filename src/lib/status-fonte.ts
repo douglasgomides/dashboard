@@ -5,6 +5,7 @@
 //   verde     0 a 1 dia sem dado novo
 //   amarelo   2 a 3 dias
 //   vermelho  mais de 3 dias, nenhum dado ainda, ou erro na última atualização
+//   (CRM e WhatsApp só ganham dado em dia de expediente: para eles os dias contados são úteis, sem fim de semana e feriado)
 //   cinza     não ligado (ou marcado como "não usa", quando é intencional)
 //
 // "Ligado" também é uma regra só: há cadastro da fonte OU já existe dado gravado OU a fonte é lida
@@ -19,6 +20,8 @@ export const NOME_FONTE: Record<FonteId, string> = { instagram: "Instagram", anu
 export const FONTES: FonteId[] = ["instagram", "anuncios", "crm", "atendimento"];
 
 export interface EntradaStatus {
+  /** Qual fonte é. CRM e WhatsApp contam dias úteis; Instagram e anúncios, dias corridos. */
+  fonte?: FonteId | string | null;
   /** Cadastro da fonte (client_fontes: conta/conexão ativa). */
   cadastro: boolean;
   /** Dia do último dado gravado (YYYY-MM-DD), do próprio dado, não da sincronização. */
@@ -51,6 +54,25 @@ export function diasEntre(hoje: string, dia: string): number {
   return Math.round((Date.parse(hoje.slice(0, 10)) - Date.parse(dia.slice(0, 10))) / 86_400_000);
 }
 
+// Feriados nacionais (e pontos facultativos que a clínica costuma folgar) para contar dias úteis. Atualizar todo ano.
+const FERIADOS = new Set([
+  "2026-01-01", "2026-02-16", "2026-02-17", "2026-04-03", "2026-04-21", "2026-05-01", "2026-06-04",
+  "2026-09-07", "2026-10-12", "2026-11-02", "2026-11-20", "2026-12-25", "2027-01-01",
+]);
+const diaUtil = (ms: number) => {
+  const dow = new Date(ms).getUTCDay();
+  return dow !== 0 && dow !== 6 && !FERIADOS.has(new Date(ms).toISOString().slice(0, 10));
+};
+
+/** Dias úteis (segunda a sexta, sem feriado) depois de `dia`, até `hoje` inclusive. */
+export function diasUteisEntre(hoje: string, dia: string): number {
+  let n = 0;
+  for (let t = Date.parse(dia.slice(0, 10)) + 86_400_000; t <= Date.parse(hoje.slice(0, 10)); t += 86_400_000) { if (diaUtil(t)) n++; }
+  return n;
+}
+
+const contaDiasUteis = (fonte?: string | null) => fonte === "crm" || fonte === "atendimento";
+
 const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 
 export function fonteLigada(e: Pick<EntradaStatus, "cadastro" | "data_ate" | "motivo_dono">): boolean {
@@ -65,11 +87,12 @@ export function statusDaFonte(e: EntradaStatus, hoje: string = hojeBrasilia()): 
     return { cor: "cinza", ligado, naoUsa: false, rotulo: "Não ligado", dias: null, data: null, detalhe: "Fonte não conectada", motivo: null, peso: 0 };
   }
   const data = e.data_ate ? ddmm(e.data_ate) : null;
-  const dias = e.data_ate ? Math.max(0, diasEntre(hoje, e.data_ate)) : null;
+  const dias = e.data_ate ? Math.max(0, contaDiasUteis(e.fonte) ? diasUteisEntre(hoje, e.data_ate) : diasEntre(hoje, e.data_ate)) : null;
   const erro = e.last_error ? e.last_error.replace(/\s+/g, " ").trim() : null;
   const base = { ligado, naoUsa: false, data, dias, motivo: motivo ?? (erro ? `Erro na última atualização: ${erro.slice(0, 140)}` : null) };
   if (dias == null) return { ...base, cor: "vermelho", rotulo: erro ? "Erro" : "Sem dado", detalhe: "Nenhum dado gravado ainda", peso: 3 };
-  const quando = `até ${data} · ${dias === 0 ? "hoje" : dias === 1 ? "1 dia sem dado novo" : `${dias} dias sem dado novo`}`;
+  const un = contaDiasUteis(e.fonte) ? "útil" : "";
+  const quando = `até ${data} · ${dias === 0 ? "hoje" : dias === 1 ? `1 dia${un ? " útil" : ""} sem dado novo` : `${dias} dias${un ? " úteis" : ""} sem dado novo`}`;
   if (erro) return { ...base, cor: "vermelho", rotulo: "Erro", detalhe: quando, peso: 3 };
   if (dias <= 1) return { ...base, cor: "verde", rotulo: "Em dia", detalhe: `até ${data}`, peso: 1 };
   if (dias <= 3) return { ...base, cor: "amarelo", rotulo: "Atrasada", detalhe: quando, peso: 2 };
