@@ -8,7 +8,7 @@ const ID = "44444444-4444-4444-8444-444444444444";
 const NOW = new Date().toISOString();
 const peca = { formato: "reels", titulo: "Como se preparar para uma consulta", objetivo: "salvamento", gancho: "O que levar na primeira consulta?", cenas: [{ fala: "Leve sua lista de dúvidas para conversar com o médico.", visual: "Médico em consultório", tela: "Prepare suas dúvidas" }], slides: [], legenda: "Prepare as perguntas antes da consulta.", cta: "Salve para consultar depois.", hashtags: [], evidencias: ["Dúvida recorrente nos comentários da clínica de teste."], brain: [], por_que: "Responder a uma dúvida do público." } satisfies PecaConteudo;
 
-async function center(context: BrowserContext, profile: "admin" | "viewer", options: { failedCount?: boolean; failedPlanner?: boolean; running?: boolean; empty?: boolean } = {}) {
+async function center(context: BrowserContext, profile: "admin" | "viewer", options: { failedCount?: boolean; failedPlanner?: boolean; running?: boolean; empty?: boolean; pendingCount?: number } = {}) {
   await mockAccount(context, profile);
   let estado = "proposta";
   let preparada = false;
@@ -23,7 +23,7 @@ async function center(context: BrowserContext, profile: "admin" | "viewer", opti
     if (path === "/rest/v1/agente_execucoes") return responder({ id: ID, estado: options.running ? "rodando" : "concluida", criado_em: NOW, atualizado_em: NOW, resultado: preparada ? { pecas: 1 } : { pecas: 0, motivo: "Pouco dado ainda (Brain, Instagram ou conversas)." } });
     if (["/rest/v1/sugestoes_agentes", "/rest/v1/campanhas_ideias", "/rest/v1/brain_itens"].includes(path) && req.method() === "HEAD") {
       if (options.failedCount && url.searchParams.get("agente") === "eq.anuncios") return responder({ message: "source unavailable" }, 503);
-      const count = path.endsWith("sugestoes_agentes") && url.searchParams.get("agente") === "eq.conteudo" && estado === "proposta" && !options.empty ? 1 : 0;
+      const count = path.endsWith("sugestoes_agentes") && url.searchParams.get("agente") === "eq.conteudo" && estado === "proposta" && !options.empty ? options.pendingCount ?? 1 : 0;
       return route.fulfill({ headers: { "content-range": `*/${count}`, "access-control-expose-headers": "content-range" } });
     }
     if (path === "/rest/v1/sugestoes_agentes") {
@@ -125,6 +125,15 @@ test("a paused module keeps its previous deliveries visible and blocks a new pre
   await context.route("**/rest/v1/cliente_modulos*", (r) => r.fulfill({ json: [{ modulo: "hub", status: "pausado" }] }));
   await page.goto(`/${CID}/agentes`);
   await expect(page.getByText("Módulo pausado ou encerrado", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Preparar roteiros agora", exact: true })).toBeDisabled();
+  await expect(page.getByRole("heading", { name: peca.titulo, exact: true })).toBeVisible();
+  expect(api.escritas).toEqual([]);
+});
+
+test("a full review queue explains why preparation waits and does not create more work", async ({ page, context }) => {
+  const api = await center(context, "admin", { pendingCount: 8 });
+  await page.goto(`/${CID}/agentes`);
+  await expect(page.getByText("Revise a fila antes de pedir novos materiais.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Preparar roteiros agora", exact: true })).toBeDisabled();
   await expect(page.getByRole("heading", { name: peca.titulo, exact: true })).toBeVisible();
   expect(api.escritas).toEqual([]);

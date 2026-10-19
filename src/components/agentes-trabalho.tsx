@@ -39,10 +39,11 @@ export function CentroTrabalhoAgentes({ clientId, produto, selecionado, onSeleci
   const [aviso, setAviso] = useState<{ id: IdAgente; texto: string; erro: boolean } | null>(null);
   const guard = useRef(false);
   const emCurso = rodadaEmCurso(dados?.rodada);
+  const filaCheia = !q.isError && (dados?.pendentes ?? 0) >= a.maxAbertas;
   const fila = agentes.flatMap((ag, n) => !resultados[n].isError && (resultados[n].data?.pendentes ?? 0) > 0 ? [{ ag, n: resultados[n].data!.pendentes }] : []);
 
   async function preparar() {
-    if (guard.current || !isAdmin || !q.isSuccess || q.isError || emCurso || !modulos.isSuccess || (modulo && !ativo)) return;
+    if (guard.current || !isAdmin || !q.isSuccess || q.isError || emCurso || filaCheia || !modulos.isSuccess || (modulo && !ativo)) return;
     guard.current = true;
     setAviso(null);
     setAndamento({ id, texto: "Iniciando a leitura dos dados…" });
@@ -100,11 +101,12 @@ export function CentroTrabalhoAgentes({ clientId, produto, selecionado, onSeleci
           {isAdmin && dados?.rodada && <p>Estado da execução conferido em {quando(dados.rodada.atualizado_em)}.</p>}
         </>}
       </div>
+      {filaCheia && <p className="agent-queue-limit" role="status"><b>Revise a fila antes de pedir novos materiais.</b> Há {dados!.pendentes} propostas recentes para revisar; o limite desta rotina é {a.maxAbertas}. Abra as entregas abaixo, use o que faz sentido ou descarte com critério. A fila é atualizada após a decisão.</p>}
       <div className="agent-schedule"><Clock3 size={16} aria-hidden /><div>
         {modulos.isPending ? <p>Conferindo a rotina automática…</p> : modulos.isError ? <p role="alert">Agendamento não conferido. <button type="button" onClick={() => void modulos.refetch()}>Tentar novamente</button></p> : <p><b>{ativo ? `Rotina prevista: ${a.frequencia.toLowerCase()}` : modulo ? "Módulo pausado ou encerrado" : "Rotina automática não configurada"}.</b> {ativo ? isAdmin ? "Depende do agendamento, dos dados e da fila de revisão. O estado acima confirma o que foi executado." : "Depende do agendamento, dos dados e da fila de revisão. A equipe Doctor Creator acompanha as execuções." : "Os materiais anteriores continuam disponíveis; a equipe pode conferir a configuração."}</p>}
       </div></div>
       <div className="agent-assignment-actions">
-        {isAdmin && id !== "brain" && <button className="btn agent-prepare" type="button" disabled={!!andamento || q.isPending || q.isError || emCurso || !modulos.isSuccess || !!modulo && !ativo} onClick={() => void preparar()}>
+        {isAdmin && id !== "brain" && <button className="btn agent-prepare" type="button" disabled={!!andamento || q.isPending || q.isError || emCurso || filaCheia || !modulos.isSuccess || !!modulo && !ativo} onClick={() => void preparar()}>
           {andamento?.id === id ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <RefreshCw size={16} aria-hidden />}{andamento?.id === id ? "Preparando…" : t.acao}
         </button>}
         {isAdmin && <Link to="/admin/agentes" className="agent-secondary-link">Conferir execuções e aprovações</Link>}

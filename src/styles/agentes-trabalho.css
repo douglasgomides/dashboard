@@ -35,6 +35,7 @@
 .agent-live-status[data-tone="atencao"] { border-left: 4px solid var(--warn); }
 .agent-live-status p + p { margin-top: 7px; }
 .agent-live-status .btn { margin-top: 10px; }
+.agent-queue-limit { border-left: 4px solid var(--accent); padding: 10px 14px; background: var(--surface-2); font-size: 14px; line-height: 1.6; }
 .agent-schedule { display: flex; align-items: flex-start; gap: 9px; }
 .agent-schedule > svg { flex: none; margin-top: 3px; color: var(--ink-2); }
 .agent-schedule button { text-decoration: underline; }
