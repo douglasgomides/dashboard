@@ -21,7 +21,6 @@ import { ClientAvatar } from "@/components/client-avatar";
 import { DateRangePicker, rotuloPeriodo } from "@/components/date-range-picker";
 import type { DateRangeState } from "@/lib/date-range";
 import {
-  gruposDeNavegacao,
   areaDoCaminho,
   areasVisiveis,
   avancadoVisivel,
@@ -260,7 +259,7 @@ export function AppShell({
     .join(" · ");
   const encontrados = busca ? buscarTelas(vis, consulta) : [];
   const atalhosMobile = areas.filter((a) =>
-    ["resumo", "acoes", "conteudo", "vendas"].includes(a.id),
+    ["resumo", "marketing", "comercial", "acoes"].includes(a.id),
   );
 
   useEffect(() => {
@@ -363,23 +362,18 @@ export function AppShell({
           <kbd>Ctrl K</kbd>
         </button>
         <nav className="side areas" aria-label="Áreas do Nexo">
-          {gruposDeNavegacao(areas).map((grupo) => (
-            <div className="workspace-nav-section" key={grupo.label}>
-              <p className="so-aberta">{grupo.label}</p>
-              {grupo.areas.map((a) => (
-                <TabLink
-                  key={a.id}
-                  tab={a.visiveis[0]}
-                  clientId={clientId}
-                  dateRange={dateRange}
-                  ativo={a.id === ativa}
-                >
-                  <a.Icone aria-hidden />
-                  <span className="so-aberta">{a.label}</span>
-                  {recolhida && <span className="sr-only">{a.label}</span>}
-                </TabLink>
-              ))}
-            </div>
+          {areas.map((a) => (
+            <TabLink
+              key={a.id}
+              tab={a.visiveis[0]}
+              clientId={clientId}
+              dateRange={dateRange}
+              ativo={a.id === ativa}
+            >
+              <a.Icone aria-hidden />
+              <span className="so-aberta">{a.label}</span>
+              {recolhida && <span className="sr-only">{a.label}</span>}
+            </TabLink>
           ))}
         </nav>
         {area && area.visiveis.length > 1 && (
@@ -561,9 +555,7 @@ export function AppShell({
           <Search aria-hidden />
           Encontrar uma ferramenta
         </button>
-        {[...areas]
-          .sort((a, b) => Number(b.id === ativa) - Number(a.id === ativa))
-          .map((a) => (
+        {areas.map((a) => (
             <details
               className="workspace-menu-group"
               key={a.id}

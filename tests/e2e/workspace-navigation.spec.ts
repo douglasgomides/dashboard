@@ -19,17 +19,17 @@ test("desktop: task search leads to existing tools and preserves clinic and peri
     sidebar
       .getByRole("navigation", { name: "Áreas do Nexo" })
       .getByRole("link"),
-  ).toHaveCount(6);
+  ).toHaveCount(5);
   await expect(
     sidebar
-      .getByRole("navigation", { name: "Telas de Conteúdo" })
+      .getByRole("navigation", { name: "Telas de Marketing" })
       .getByRole("link"),
-  ).toHaveCount(6);
+  ).toHaveCount(10);
   await expect(
-    sidebar.getByText("Criar e planejar", { exact: true }),
+    sidebar.getByText("Conteúdo", { exact: true }),
   ).toBeVisible();
   await expect(
-    sidebar.getByText("Analisar resultados", { exact: true }),
+    sidebar.getByText("Campanhas e anúncios", { exact: true }),
   ).toBeVisible();
   await expect(page.locator(".areatabs")).toHaveCount(0);
   await page.keyboard.press("Control+k");
@@ -53,7 +53,7 @@ test("mobile: every area is reachable through the menu, without horizontal overf
   await mockAccount(context, "viewer");
   await page.goto(`/${CID}/ideias?preset=7d`);
   await page
-    .getByRole("button", { name: "Telas de Conteúdo", exact: true })
+    .getByRole("button", { name: "Telas de Marketing", exact: true })
     .click();
   const menu = page.getByRole("dialog", { name: "Navegar no Nexo" });
   await expect(menu).toBeVisible();
@@ -66,7 +66,7 @@ test("mobile: every area is reachable through the menu, without horizontal overf
   await page.keyboard.press("Escape");
   await expect(menu).not.toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Telas de Conteúdo", exact: true }),
+    page.getByRole("button", { name: "Telas de Marketing", exact: true }),
   ).toBeFocused();
   await page
     .getByRole("navigation", { name: "Áreas", exact: true })
@@ -258,3 +258,47 @@ test("visual evidence: content desktop and mobile menu, including stored collaps
     .click();
   await page.screenshot({ path: `${outputs}nexo-navegacao-mobile.png` });
 });
+
+for (const width of [375, 1440]) {
+  test(`Marketing keeps content and ads together; Comercial keeps CRM and service together at ${width}px`, async ({ page, context }) => {
+    await mockAccount(context, "viewer");
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/${CID}/ideias?preset=7d`);
+    const labels = ["Início", "Marketing", "Comercial", "Plano de ação", "Relatórios"];
+    if (width === 1440) {
+      const areas = page.getByRole("navigation", { name: "Áreas do Nexo", exact: true });
+      await expect(areas.getByRole("link")).toHaveText(labels);
+      const marketing = page.getByRole("navigation", { name: "Telas de Marketing", exact: true });
+      for (const label of ["Roteiros e planejamento", "Estratégias e campanhas", "Resultados dos anúncios", "Links rastreados", "Dúvidas do público"])
+        await expect(marketing.getByRole("link", { name: label, exact: true })).toBeVisible();
+      await mkdir(outputs, { recursive: true });
+      await page.screenshot({ path: `${outputs}nexo-menu-marketing.png` });
+      await marketing.getByRole("link", { name: "Resultados dos anúncios", exact: true }).click();
+      await expect(areas.getByRole("link", { name: "Marketing", exact: true })).toHaveAttribute("data-on", "");
+      await areas.getByRole("link", { name: "Comercial", exact: true }).click();
+      const comercial = page.getByRole("navigation", { name: "Telas de Comercial", exact: true });
+      await expect(comercial.getByRole("link", { name: "Funil comercial", exact: true })).toBeVisible();
+      await comercial.getByRole("link", { name: "Qualidade do atendimento", exact: true }).click();
+      await expect(areas.getByRole("link", { name: "Comercial", exact: true })).toHaveAttribute("data-on", "");
+      await expect(areas.getByRole("link")).toHaveText(labels);
+      await page.screenshot({ path: `${outputs}nexo-menu-comercial.png` });
+    } else {
+      const areas = page.getByRole("navigation", { name: "Áreas", exact: true });
+      await expect(areas.getByRole("link")).toHaveText(["Início", "Marketing", "Comercial", "Ações"]);
+      await page.getByRole("button", { name: "Telas de Marketing", exact: true }).click();
+      const menu = page.getByRole("dialog", { name: "Navegar no Nexo" });
+      await expect(menu.locator("summary > span")).toHaveText(labels);
+      await menu.getByRole("link", { name: "Resultados dos anúncios", exact: true }).click();
+      await expect(areas.getByRole("link", { name: "Marketing", exact: true })).toHaveAttribute("data-on", "");
+      await areas.getByRole("link", { name: "Comercial", exact: true }).click();
+      await page.getByRole("button", { name: "Telas de Comercial", exact: true }).click();
+      await expect(menu.locator("summary > span")).toHaveText(labels);
+      await mkdir(outputs, { recursive: true });
+      await page.screenshot({ path: `${outputs}nexo-menu-mobile.png` });
+      await menu.getByRole("link", { name: "Qualidade do atendimento", exact: true }).click();
+      await expect(areas.getByRole("link", { name: "Comercial", exact: true })).toHaveAttribute("data-on", "");
+    }
+    await expect(page).toHaveURL(new RegExp(`/${CID}/atendimento\\?preset=7d`));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  });
+}

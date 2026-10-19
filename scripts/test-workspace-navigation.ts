@@ -53,7 +53,7 @@ assert.deepEqual(
 assert.equal(new Set(esperados).size, esperados.length);
 assert.deepEqual(
   areasVisiveis(base).map((a) => a.id),
-  ["resumo", "acoes", "vendas", "conteudo", "anuncios", "relatorio"],
+  ["resumo", "marketing", "comercial", "acoes", "relatorio"],
 );
 for (const papel of ["owner", "viewer", "strategist"] as const) {
   const v = { ...base, papel };
@@ -96,3 +96,8 @@ for (const a of AREAS)
 console.log(
   "Navegação: destinos preservados, busca por tarefa, fontes, papéis e limites de clínica verificados.",
 );
+
+// Marketing reúne conteúdo e aquisição; Comercial reúne CRM e atendimento.
+for (const path of ["/ideias", "/inteligencia-criativa", "/inspiracao", "/conteudo", "/posts", "/top", "/campanhas", "/anuncios", "/links", "/audiencia", "/duvidas"]) assert.equal(areaDoCaminho(path), "marketing", path);
+for (const path of ["/crm-painel", "/crm-guia", "/atendimento", "/jornada"]) assert.equal(areaDoCaminho(path), "comercial", path);
+for (const papel of ["owner", "viewer", "strategist", "admin"] as const) assert.deepEqual(areasVisiveis({ ...base, papel, isAdmin: papel === "admin" }).map((a) => a.id), ["resumo", "marketing", "comercial", "acoes", "relatorio"]);

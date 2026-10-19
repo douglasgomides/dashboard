@@ -53,7 +53,7 @@ export interface NavTab {
 }
 
 export interface NavArea {
-  id: "resumo" | "acoes" | "conteudo" | "anuncios" | "vendas" | "relatorio";
+  id: "resumo" | "marketing" | "comercial" | "acoes" | "relatorio";
   label: string;
   /** Rótulo da barra inferior do celular (cabe na barra inferior). */
   curto?: string;
@@ -79,10 +79,154 @@ export const AREAS: NavArea[] = [
     ],
   },
   {
+    id: "marketing",
+    label: "Marketing",
+    descricao: "Conteúdo, campanhas e aquisição de pacientes",
+    Icone: Megaphone,
+    tabs: [
+      {
+        path: "/ideias",
+        label: "Roteiros e planejamento",
+        Icone: Lightbulb,
+        descricao: "Revise os roteiros e organize a semana no planejador.",
+        termos:
+          "ideias calendario editorial agenda criar roteiro reels carrossel legenda",
+        grupo: "Conteúdo",
+      },
+      {
+        path: "/inteligencia-criativa",
+        label: "Inteligência Criativa",
+        admin: true,
+        Icone: Network,
+        fonte: "instagram",
+        descricao:
+          "Analise referências e adapte estruturas de conteúdo.",
+        termos:
+          "inteligencia criativa video editar analise multimodal biblioteca radar aprendizado",
+        grupo: "Conteúdo",
+      },
+      {
+        path: "/inspiracao",
+        label: "Referências salvas",
+        Icone: Star,
+        descricao: "Encontre inspirações guardadas para novos conteúdos.",
+        termos: "inspiracao modelos templates referencias",
+        grupo: "Conteúdo",
+      },
+      {
+        path: "/conteudo",
+        label: "Resultados do conteúdo",
+        Icone: AlignLeft,
+        descricao: "Compare temas e formatos para orientar a produção.",
+        termos: "desempenho metricas analise conteudo",
+        grupo: "Conteúdo",
+      },
+      {
+        path: "/posts",
+        label: "Publicações",
+        Icone: LayoutGrid,
+        fonte: "instagram",
+        descricao: "Consulte os posts publicados e seus indicadores.",
+        termos: "posts instagram publicados",
+        grupo: "Conteúdo",
+      },
+      {
+        path: "/top",
+        label: "Melhores conteúdos",
+        Icone: Trophy,
+        fonte: "instagram",
+        descricao: "Identifique as publicações que mais se destacaram.",
+        termos: "top campeoes performance ranking",
+        grupo: "Conteúdo",
+      },
+      {
+        path: "/campanhas",
+        label: "Estratégias e campanhas",
+        Icone: Megaphone,
+        descricao: "Planeje as campanhas e os canais de aquisição.",
+        termos: "campanhas do mes estrategia online offline marketing",
+        grupo: "Campanhas e anúncios",
+      },
+      {
+        path: "/anuncios",
+        label: "Resultados dos anúncios",
+        Icone: Megaphone,
+        fonte: "anuncios",
+        descricao: "Acompanhe investimento, campanhas e resultados.",
+        termos: "trafego pago meta ads custo cpl campanhas",
+        grupo: "Campanhas e anúncios",
+      },
+      {
+        path: "/links",
+        label: "Links rastreados",
+        Icone: Link2,
+        grupo: "Campanhas e anúncios",
+      },
+      {
+        path: "/audiencia",
+        label: "Público do Instagram",
+        Icone: Users,
+        fonte: "instagram",
+        descricao: "Entenda quem acompanha o perfil.",
+        termos: "audiencia seguidores cidades idade genero",
+        grupo: "Público e demanda",
+      },
+      {
+        path: "/duvidas",
+        label: "Dúvidas do público",
+        Icone: HelpCircle,
+        fonte: "instagram",
+        termos: "perguntas comentarios duvidas",
+        grupo: "Público e demanda",
+      },
+    ],
+  },
+  {
+    id: "comercial",
+    label: "Comercial",
+    descricao: "Atendimento, CRM e resultados comerciais",
+    Icone: Briefcase,
+    tabs: [
+      {
+        path: "/crm-painel",
+        label: "Funil comercial",
+        Icone: Briefcase,
+        fonte: "crm",
+        descricao: "Veja os leads e as oportunidades em cada etapa.",
+        termos: "crm comercial conversao vendas leads",
+        grupo: "CRM e oportunidades",
+      },
+      {
+        path: "/crm-guia",
+        label: "Organizar o CRM",
+        Icone: ClipboardList,
+        fonte: "crm",
+        grupo: "CRM e oportunidades",
+      },
+      {
+        path: "/atendimento",
+        label: "Qualidade do atendimento",
+        Icone: MessageCircle,
+        fonte: "atendimento",
+        descricao: "Analise as conversas e os pontos de atenção do WhatsApp.",
+        termos: "whatsapp atendimento auditoria conversas resposta",
+        grupo: "Atendimento",
+      },
+      {
+        path: "/jornada",
+        label: "Jornada comercial",
+        Icone: Route,
+        admin: true,
+        termos: "atribuicao receita aquisicao comparecimento",
+        grupo: "Jornada comercial",
+      },
+    ],
+  },
+  {
     id: "acoes",
     label: "Plano de ação",
     curto: "Ações",
-    descricao: "Decida o que fazer e acompanhe a execução",
+    descricao: "Prioridades, entregas dos agentes e execução da equipe",
     Icone: ListTodo,
     tabs: [
       {
@@ -101,152 +245,11 @@ export const AREAS: NavArea[] = [
         termos: "agentes inteligencia artificial ia automacao aprovacoes",
       },
       {
-        path: "/campanhas",
-        label: "Estratégias e campanhas",
-        Icone: Megaphone,
-        descricao: "Planeje as campanhas e os canais de aquisição.",
-        termos: "campanhas do mes estrategia online offline marketing",
-      },
-      {
         path: "/oportunidades",
         label: "Oportunidades de melhoria",
         Icone: Target,
         descricao: "Investigue os sinais encontrados nos dados antes de agir.",
         termos: "score diagnostico gargalos oportunidades",
-      },
-    ],
-  },
-  {
-    id: "conteudo",
-    label: "Conteúdo",
-    descricao: "Planeje, produza e entenda o que funciona",
-    Icone: AlignLeft,
-    tabs: [
-      {
-        path: "/ideias",
-        label: "Roteiros e planejamento",
-        Icone: Lightbulb,
-        grupo: "Criar e planejar",
-        descricao: "Revise os roteiros e organize a semana no planejador.",
-        termos:
-          "ideias calendario editorial agenda criar roteiro reels carrossel legenda",
-      },
-      {
-        path: "/inteligencia-criativa",
-        label: "Inteligência Criativa",
-        admin: true,
-        Icone: Network,
-        fonte: "instagram",
-        grupo: "Criar e planejar",
-        descricao:
-          "Analise referências e adapte estruturas de conteúdo.",
-        termos:
-          "inteligencia criativa video editar analise multimodal biblioteca radar aprendizado",
-      },
-      {
-        path: "/inspiracao",
-        label: "Referências salvas",
-        Icone: Star,
-        grupo: "Criar e planejar",
-        descricao: "Encontre inspirações guardadas para novos conteúdos.",
-        termos: "inspiracao modelos templates referencias",
-      },
-      {
-        path: "/conteudo",
-        label: "Resultados do conteúdo",
-        Icone: AlignLeft,
-        grupo: "Analisar resultados",
-        descricao: "Compare temas e formatos para orientar a produção.",
-        termos: "desempenho metricas analise conteudo",
-      },
-      {
-        path: "/posts",
-        label: "Publicações",
-        Icone: LayoutGrid,
-        fonte: "instagram",
-        grupo: "Analisar resultados",
-        descricao: "Consulte os posts publicados e seus indicadores.",
-        termos: "posts instagram publicados",
-      },
-      {
-        path: "/top",
-        label: "Melhores conteúdos",
-        Icone: Trophy,
-        fonte: "instagram",
-        grupo: "Analisar resultados",
-        descricao: "Identifique as publicações que mais se destacaram.",
-        termos: "top campeoes performance ranking",
-      },
-      {
-        path: "/audiencia",
-        label: "Público do Instagram",
-        Icone: Users,
-        fonte: "instagram",
-        grupo: "Analisar resultados",
-        descricao: "Entenda quem acompanha o perfil.",
-        termos: "audiencia seguidores cidades idade genero",
-      },
-    ],
-  },
-  {
-    id: "anuncios",
-    label: "Anúncios",
-    descricao: "Investimento, campanhas e resultados por objetivo",
-    Icone: Megaphone,
-    tabs: [
-      {
-        path: "/anuncios",
-        label: "Resultados dos anúncios",
-        Icone: Megaphone,
-        fonte: "anuncios",
-        descricao: "Acompanhe investimento, campanhas e resultados.",
-        termos: "trafego pago meta ads custo cpl campanhas",
-      },
-    ],
-  },
-  {
-    id: "vendas",
-    label: "Atendimento e vendas",
-    curto: "Vendas",
-    descricao: "Conversas, agendamentos e oportunidades comerciais",
-    Icone: Briefcase,
-    tabs: [
-      {
-        path: "/crm-painel",
-        label: "Funil comercial",
-        Icone: Briefcase,
-        fonte: "crm",
-        descricao: "Veja os leads e as oportunidades em cada etapa.",
-        termos: "crm comercial conversao vendas leads",
-      },
-      {
-        path: "/crm-guia",
-        label: "Organizar o CRM",
-        Icone: ClipboardList,
-        fonte: "crm",
-      },
-      {
-        path: "/atendimento",
-        label: "Qualidade do atendimento",
-        Icone: MessageCircle,
-        fonte: "atendimento",
-        descricao: "Analise as conversas e os pontos de atenção do WhatsApp.",
-        termos: "whatsapp atendimento auditoria conversas resposta",
-      },
-      { path: "/links", label: "Links rastreados", Icone: Link2 },
-      {
-        path: "/duvidas",
-        label: "Dúvidas do público",
-        Icone: HelpCircle,
-        fonte: "instagram",
-        termos: "perguntas comentarios duvidas",
-      },
-      {
-        path: "/jornada",
-        label: "Jornada comercial",
-        Icone: Route,
-        admin: true,
-        termos: "atribuicao receita aquisicao comparecimento",
       },
     ],
   },
@@ -340,26 +343,11 @@ export interface Visibilidade {
   semAudiencia?: boolean;
   /** Cliente com o Sistema de Aquisição ativo (linha em sap_clinicas). */
   sap?: boolean;
-  /** Papel no cliente. Muda só a ORDEM de apresentação, nunca o acesso. */
+  /** Papel no cliente, usado nas restrições das ferramentas administrativas. */
   papel?: "admin" | "owner" | "strategist" | "viewer" | null;
 }
 
-// Médico (owner) e viewer: resultado, oportunidades e relatório primeiro.
-// Estrategista e equipe: análise primeiro. Todas as áreas continuam disponíveis.
-const ORDEM_POR_PAPEL: Record<string, NavArea["id"][]> = {
-  owner: ["resumo", "acoes", "vendas", "conteudo", "anuncios", "relatorio"],
-  viewer: ["resumo", "acoes", "vendas", "conteudo", "anuncios", "relatorio"],
-  strategist: [
-    "resumo",
-    "acoes",
-    "conteudo",
-    "anuncios",
-    "vendas",
-    "relatorio",
-  ],
-  admin: ["resumo", "acoes", "conteudo", "anuncios", "vendas", "relatorio"],
-};
-
+// A ordem do menu é a mesma para todos. Permissões e fontes filtram apenas os destinos disponíveis.
 export function tabVisivel(t: NavTab, v: Visibilidade): boolean {
   return (
     (!t.admin || v.isAdmin) &&
@@ -373,15 +361,11 @@ export function tabVisivel(t: NavTab, v: Visibilidade): boolean {
 export type AreaVisivel = NavArea & { visiveis: NavTab[] };
 
 export function areasVisiveis(v: Visibilidade): AreaVisivel[] {
-  const ordem =
-    ORDEM_POR_PAPEL[v.papel ?? (v.isAdmin ? "admin" : "strategist")] ??
-    ORDEM_POR_PAPEL.strategist;
   return AREAS.map((a) => ({
     ...a,
     visiveis: a.tabs.filter((t) => tabVisivel(t, v)),
   }))
-    .filter((a) => a.visiveis.length > 0)
-    .sort((x, y) => ordem.indexOf(x.id) - ordem.indexOf(y.id));
+    .filter((a) => a.visiveis.length > 0);
 }
 
 /** Itens de Sistema/Admin: só a equipe (app admin). Médico (owner) e viewer nunca veem. */
@@ -432,19 +416,4 @@ export function buscarTelas(
     const termos = texto.split(/[^a-z0-9]+/).filter(Boolean);
     return palavras.every((p) => termos.some((termo) => termo.startsWith(p)));
   });
-}
-
-/** Agrupa destinos já filtrados; nunca adiciona acesso nem descarta uma área. */
-export function gruposDeNavegacao(areas: AreaVisivel[]) {
-  const definicoes = [
-    { label: "Entender e agir", ids: ["resumo", "acoes"] },
-    { label: "Marketing e vendas", ids: ["conteudo", "anuncios", "vendas"] },
-    { label: "Compartilhar resultados", ids: ["relatorio"] },
-  ];
-  return definicoes
-    .map((g) => ({
-      label: g.label,
-      areas: areas.filter((a) => g.ids.includes(a.id)),
-    }))
-    .filter((g) => g.areas.length);
 }
