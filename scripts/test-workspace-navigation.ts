@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  navTabKey, parseContentViewSearch, tabAtiva, navSearch,
   AREAS,
   AVANCADO,
   areasVisiveis,
@@ -35,6 +36,8 @@ const esperados = [
   "/top",
   "/audiencia",
   "/ideias",
+  "/marketing",
+  "/vendas-kommo",
   "/inteligencia-criativa",
   "/inspiracao",
   "/anuncios",
@@ -47,7 +50,7 @@ const esperados = [
   "/relatorio",
 ];
 assert.deepEqual(
-  AREAS.flatMap((a) => a.tabs.map((t) => t.path)).sort(),
+  [...new Set(AREAS.flatMap((a) => a.tabs.map((t) => t.path)))].sort(),
   esperados.sort(),
 );
 assert.equal(new Set(esperados).size, esperados.length);
@@ -101,3 +104,21 @@ console.log(
 for (const path of ["/ideias", "/inteligencia-criativa", "/inspiracao", "/conteudo", "/posts", "/top", "/campanhas", "/anuncios", "/links", "/audiencia", "/duvidas"]) assert.equal(areaDoCaminho(path), "marketing", path);
 for (const path of ["/crm-painel", "/crm-guia", "/atendimento", "/jornada"]) assert.equal(areaDoCaminho(path), "comercial", path);
 for (const papel of ["owner", "viewer", "strategist", "admin"] as const) assert.deepEqual(areasVisiveis({ ...base, papel, isAdmin: papel === "admin" }).map((a) => a.id), ["resumo", "marketing", "comercial", "acoes", "relatorio"]);
+
+const allTabs = AREAS.flatMap((a) => a.tabs);
+assert.equal(new Set(allTabs.map(navTabKey)).size, allTabs.length);
+assert.equal(AREAS.find((a) => a.id === "marketing")?.tabs[0]?.path, "/marketing");
+assert.equal(areaDoCaminho("/vendas-kommo"), "comercial");
+assert.equal(AVANCADO.some((t) => t.path === "/vendas-kommo"), false);
+for (const papel of ["owner", "viewer", "strategist"] as const) assert.equal(paths({ ...base, papel }).includes("/vendas-kommo"), false);
+assert.equal(paths(admin).includes("/vendas-kommo"), true);
+for (const papel of ["owner", "viewer"] as const) assert.equal(paths({ ...admin, papel }).includes("/vendas-kommo"), false);
+assert.deepEqual(parseContentViewSearch({ visao: "invalida" }), { visao: "roteiros" });
+assert.equal(buscarTelas(base, "calendário")[0]?.tab.search?.visao, "semana");
+assert.equal(buscarTelas(base, "encontrar ideias")[0]?.tab.search?.visao, "ideias");
+for (const visao of ["roteiros", "semana", "ideias"] as const) {
+ const tabs = allTabs.filter((t) => t.path === "/ideias");
+ assert.equal(tabs.filter((t) => tabAtiva(t, "/ideias", { visao })).length, 1);
+ assert.deepEqual(navSearch(tabs.find((t) => t.search?.visao === visao)!, { preset: "7d" }), { preset: "7d", visao });
+}
+assert.equal(allTabs.filter((t) => tabAtiva(t, "/ideias", {})).length, 1);

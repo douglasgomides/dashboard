@@ -1,0 +1,15 @@
+.marketing-navigation { display: grid; gap: 22px; }
+.marketing-navigation-intro { font-size: 17px; font-weight: 600; color: var(--ink); }
+.marketing-task-group { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow: hidden; }
+.marketing-task-group > header { padding: 20px 22px; border-bottom: 1px solid var(--border); }
+.marketing-task-group h2 { font-size: 17px; font-weight: 650; letter-spacing: -.02em; }
+.marketing-task-group header p { color: var(--ink-2); font-size: 14px; margin-top: 5px; }
+.marketing-task-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; padding: 6px 22px; }
+.marketing-task-links a { display: flex; align-items: center; gap: 14px; min-height: 88px; padding: 15px 6px; border-radius: 5px; color: var(--ink); text-decoration: none; }
+.marketing-task-links a:hover { background: var(--surface-2); }
+.marketing-task-links a > svg { flex: none; color: var(--ink-2); }
+.marketing-task-links a > svg:last-child { margin-left: auto; }
+.marketing-task-links a > span { display: grid; gap: 4px; min-width: 0; }
+.marketing-task-links b { font-size: 14px; font-weight: 650; }
+.marketing-task-links span span { font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+@media (max-width: 640px) { .marketing-task-links { grid-template-columns: 1fr; padding-inline: 12px; } .marketing-task-group > header { padding: 18px; } }

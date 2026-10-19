@@ -21,6 +21,9 @@ import { ClientAvatar } from "@/components/client-avatar";
 import { DateRangePicker, rotuloPeriodo } from "@/components/date-range-picker";
 import type { DateRangeState } from "@/lib/date-range";
 import {
+  navTabKey,
+  tabAtiva,
+  navSearch,
   areaDoCaminho,
   areasVisiveis,
   avancadoVisivel,
@@ -47,6 +50,7 @@ export interface AppShellProps {
   dateRange: DateRangeState;
   onDateRange: (next: DateRangeState) => void;
   vis: Visibilidade;
+  currentSearch?: Record<string, unknown>;
   frescor?: ReactNode;
   frescorCompacto?: ReactNode;
   fontesLinha?: ReactNode;
@@ -76,7 +80,8 @@ function TabLink({
     className,
     onClick,
     "data-on": ativo ? "" : undefined,
-    activeOptions: { exact: true, includeSearch: false },
+    activeOptions: { exact: true, includeSearch: !!tab.search },
+    "aria-current": ativo ? (tab.path === "/marketing" ? "location" as const : "page" as const) : undefined,
   };
   if (tab.absoluto)
     return (
@@ -94,7 +99,7 @@ function TabLink({
     <Link
       to={`/$clientId${tab.path}` as never}
       params={{ clientId } as never}
-      search={dateRange as never}
+      search={navSearch(tab, dateRange) as never}
       {...comum}
     >
       {children}
@@ -184,7 +189,9 @@ function TelasDaArea({
   clientId,
   dateRange,
   onEscolher,
+  currentSearch,
 }: {
+  currentSearch?: Record<string, unknown>;
   area: AreaVisivel;
   sub: string;
   clientId: string;
@@ -194,7 +201,7 @@ function TelasDaArea({
   return (
     <nav className="workspace-pages" aria-label={`Telas de ${area.label}`}>
       {area.visiveis.map((t, i) => (
-        <div key={t.path}>
+        <div key={navTabKey(t)}>
           {t.grupo && t.grupo !== area.visiveis[i - 1]?.grupo && (
             <p className="workspace-nav-label">{t.grupo}</p>
           )}
@@ -202,7 +209,7 @@ function TelasDaArea({
             tab={t}
             clientId={clientId}
             dateRange={dateRange}
-            ativo={t.path === sub}
+            ativo={tabAtiva(t, sub, currentSearch)}
             onClick={onEscolher}
           >
             <t.Icone size={16} aria-hidden />
@@ -221,6 +228,7 @@ export function AppShell({
   dateRange,
   onDateRange,
   vis,
+  currentSearch = {},
   frescor,
   frescorCompacto,
   fontesLinha,
@@ -234,7 +242,7 @@ export function AppShell({
   const avancado = avancadoVisivel(vis);
   const area = areas.find((a) => a.id === ativa);
   const tela =
-    area?.visiveis.find((t) => t.path === sub) ??
+    area?.visiveis.find((t) => tabAtiva(t, sub, currentSearch)) ??
     avancado.find((t) => !t.absoluto && t.path === sub);
   const [recolhida, setRecolhida] = useState(() => {
     try {
@@ -381,6 +389,7 @@ export function AppShell({
             <p className="workspace-nav-label">Em {area.label}</p>
             <TelasDaArea
               area={area}
+              currentSearch={currentSearch}
               sub={sub}
               clientId={clientId}
               dateRange={dateRange}
@@ -568,6 +577,7 @@ export function AppShell({
               </summary>
               <TelasDaArea
                 area={a}
+                currentSearch={currentSearch}
                 sub={sub}
                 clientId={clientId}
                 dateRange={dateRange}
@@ -634,11 +644,11 @@ export function AppShell({
         >
           {encontrados.map(({ tab, area: grupo }) => (
             <TabLink
-              key={tab.path}
+              key={navTabKey(tab)}
               tab={tab}
               clientId={clientId}
               dateRange={dateRange}
-              ativo={tab.path === sub}
+              ativo={tabAtiva(tab, sub, currentSearch)}
               onClick={() => setBusca(false)}
             >
               <tab.Icone size={19} aria-hidden />
