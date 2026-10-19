@@ -30,3 +30,6 @@ supabase/.temp/
 
 # Mídias reais e evidências privadas de homologação; nunca entram no deploy.
 work/creative-pilot/
+
+# Artefatos locais de homologação e auditoria não integram o produto.
+work/

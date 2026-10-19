@@ -2,6 +2,7 @@ import { useEffect, useId, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getPrefUsuarioSap, marcarVistoSap } from "@/lib/sap-data";
+import { WorkspaceButton } from "@/components/workspace-ui";
 import { BookOpen, X } from "lucide-react";
 import { GLOSSARIO, explicacao, passosDoTour } from "@/lib/sap-glossario";
 
@@ -15,7 +16,7 @@ export function Termo({ t, children }: { t: string; children?: ReactNode }) {
     <span className="relative inline-block">
       <button type="button" aria-describedby={aberto ? id : undefined} aria-expanded={aberto} onClick={() => setAberto(!aberto)} onBlur={() => setAberto(false)}
         onMouseEnter={() => setAberto(true)} onMouseLeave={() => setAberto(false)}
-        className="cursor-help underline decoration-dotted underline-offset-2" style={{ color: "inherit", font: "inherit" }}>
+        className="ws-inline-help cursor-help underline decoration-dotted underline-offset-2" style={{ color: "inherit", font: "inherit" }}>
         {children ?? t}
       </button>
       {aberto && (
@@ -94,22 +95,22 @@ export function PrimeiroAcesso({ isAdmin, clientId }: { isAdmin: boolean; client
   const p = passos[passo];
   const destino = p.sub === "/comece" ? { to: "/sap/comece" } : clientId ? { to: `/sap/$clientId${p.sub}`, params: { clientId } } : null;
   return (
-    <section aria-label="Primeiro acesso" className="mt-3 rounded-xl border p-4" style={{ borderColor: "#C49A5C", background: "color-mix(in srgb, #C49A5C 10%, var(--surface))" }}>
+    <section aria-label="Primeiro acesso" className="mt-3 rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#C49A5C" }}>Passo {passo + 1} de {passos.length}</div>
+          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--sap-brass)" }}>Passo {passo + 1} de {passos.length}</div>
           <h2 className="mt-0.5 text-base font-semibold">{p.titulo}</h2>
           <p className="mt-1 text-sm" style={{ color: "var(--text-dim)" }}>{p.texto}</p>
         </div>
-        <button type="button" aria-label="Fechar o tour" onClick={fechar} className="rounded-md p-1"><X size={18} /></button>
+        <button type="button" aria-label="Fechar o tour" onClick={fechar} className="icobtn"><X size={18} /></button>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <div className="mr-auto flex gap-1" aria-hidden>{passos.map((_, i) => <span key={i} className="h-1.5 w-6 rounded-full" style={{ background: i <= passo ? "#C49A5C" : "var(--border)" }} />)}</div>
-        {destino && <Link to={destino.to as never} params={destino.params as never} className="min-h-[34px] rounded-lg border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: "var(--border)" }}>{p.sub === "/comece" ? "Abrir o Comece aqui" : "Abrir esta tela"}</Link>}
+        {destino && <Link to={destino.to as never} params={destino.params as never} className="ws-action ws-action--secondary">{p.sub === "/comece" ? "Abrir o Comece aqui" : "Abrir esta tela"}</Link>}
         {passo < passos.length - 1 ? (
-          <button type="button" onClick={() => setPasso(passo + 1)} className="min-h-[34px] rounded-lg px-4 text-xs font-semibold text-white" style={{ background: "#C49A5C" }}>Próximo</button>
+          <WorkspaceButton onClick={() => setPasso(passo + 1)}>Próximo</WorkspaceButton>
         ) : (
-          <button type="button" onClick={fechar} className="min-h-[34px] rounded-lg px-4 text-xs font-semibold text-white" style={{ background: "#C49A5C" }}>Entendi</button>
+          <WorkspaceButton onClick={fechar}>Entendi</WorkspaceButton>
         )}
       </div>
     </section>
@@ -130,7 +131,7 @@ export function BotaoAjuda({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="relative">
       <button type="button" aria-label="Ajuda" aria-expanded={aberto} onClick={() => setAberto(!aberto)}
-        className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-full border text-sm font-bold" style={{ borderColor: "var(--border)" }}>?</button>
+        className="inline-flex h-11 w-11 items-center justify-center rounded-full border text-sm font-bold" style={{ borderColor: "var(--border)" }}>?</button>
       {aberto && (
         <div role="menu" className="absolute right-0 top-full z-40 mt-1 w-56 rounded-xl border p-1 shadow-lg" style={{ borderColor: "var(--border)", background: "var(--surface)" }} onClick={() => setAberto(false)}>
           <Link to="/sap/comece" className={item} role="menuitem">Comece aqui (2 min)</Link>

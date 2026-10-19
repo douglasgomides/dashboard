@@ -210,7 +210,7 @@ function CorpoTarefa({ t, clientId, clinicaId, hoje, podeEditar }: { t: Tarefa; 
           {evid.startsWith("arquivo:") && <div className="text-xs" style={{ color: "var(--good)" }}>Evidência anexada. Confirme abaixo para concluir a tarefa.</div>}
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={acao.isPending || (!semEvid && !evid.trim())} onClick={() => acao.mutate("feito")}
-              className="min-h-[38px] rounded-lg px-3 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--good)" }}
+              className="ws-action ws-action--primary disabled:opacity-50"
               title={!semEvid && !evid.trim() ? "Adicione um link ou anexe uma evidência para concluir esta tarefa" : undefined}>
               Marcar como feito{t.recorrente ? " nesta semana" : ""}
             </button>
