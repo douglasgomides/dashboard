@@ -91,7 +91,11 @@ async function fetchCommentsBatch(
       const post = batch[j];
       const sub = responses[j];
       if (!sub || sub.code !== 200) {
-        errors.push(`comentários ${post.id}: Graph respondeu ${sub?.code ?? "sem resposta"}`);
+        // Subcódigo 33: o post foi apagado no Instagram (ou saiu da visibilidade da conta). Não é falha do sync: some da próxima
+        // listagem sozinho, e contava como erro vermelho de "comentários" no painel do cliente.
+        let apagado = false;
+        try { apagado = JSON.parse(sub?.body ?? "{}")?.error?.error_subcode === 33; } catch { /* corpo inválido */ }
+        if (!apagado) errors.push(`comentários ${post.id}: Graph respondeu ${sub?.code ?? "sem resposta"}`);
         continue;
       }
       try {
