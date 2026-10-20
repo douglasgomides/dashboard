@@ -7,6 +7,7 @@ import "./styles.css";
 import "./nexo.css";
 import "./styles/product-workspace.css";
 import { ehEnderecoSap } from "./lib/marca";
+import { createDeployRecovery } from "./lib/deploy-recovery";
 
 document.title = ehEnderecoSap() ? "SAP · Doctor Creator" : "Nexo · Doctor Creator";
 
@@ -19,15 +20,10 @@ aplicarTemaSalvo();
 // navegador mostrava "'text/html' is not a valid JavaScript MIME type" (tela em branco).
 // O Vite avisa por vite:preloadError: recarregamos UMA vez para pegar a versão nova. A
 // marca em sessionStorage evita laço de recarga se o problema for outro.
+const recoverDeploy = createDeployRecovery({ getItem: (key) => sessionStorage.getItem(key), setItem: (key, value) => sessionStorage.setItem(key, value) });
 window.addEventListener("vite:preloadError", (evento) => {
+  if (!recoverDeploy()) return;
   evento.preventDefault();
-  try {
-    const ultima = Number(sessionStorage.getItem("recarga-por-deploy") ?? 0);
-    if (Date.now() - ultima < 60_000) return;
-    sessionStorage.setItem("recarga-por-deploy", String(Date.now()));
-  } catch {
-    // sessionStorage bloqueado: recarrega mesmo assim, uma vez por evento
-  }
   window.location.reload();
 });
 

@@ -145,7 +145,7 @@ function ProgramaSap() {
 
 /** Progresso do cronograma (mesma conta de Minhas tarefas e do Cronograma), com atalho para as tarefas. */
 function ProgressoCronograma({ clientId }: { clientId: string }) {
-  const { lista } = useTarefas(clientId);
+  const { lista } = useTarefas(clientId, false);
   const c = lista[0];
   if (!c || !c.tarefas.length) return null;
   return (

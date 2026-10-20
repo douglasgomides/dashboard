@@ -221,8 +221,9 @@ export function AdaptationView({
 function ArtesSlides({ clientId, adaptacaoId, total, editable }: { clientId: string; adaptacaoId: string; total: number; editable: boolean }) {
   const qc = useQueryClient();
   const chave = ["creative-artes", clientId, adaptacaoId];
-  const q = useQuery({ queryKey: chave, queryFn: () => listarArtes(clientId, adaptacaoId), staleTime: 300_000 });
+  const q = useQuery({ queryKey: chave, queryFn: () => listarArtes(clientId, adaptacaoId), staleTime: 240_000, refetchInterval: 240_000, retry: false, enabled: editable });
   const [gerando, setGerando] = useState<number[] | null>(null);
+  const [revisando, setRevisando] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   async function gerar(slides?: number[]) {
     setGerando(slides ?? Array.from({ length: total }, (_, i) => i + 1));
@@ -238,8 +239,9 @@ function ArtesSlides({ clientId, adaptacaoId, total, editable }: { clientId: str
     }
   }
   async function revisar(id: string, status: "aprovada" | "descartada") {
+    setRevisando(id); setAviso(null);
     try { await revisarArte(clientId, id, status); } catch (e) { setAviso(e instanceof Error ? e.message : String(e)); }
-    await qc.invalidateQueries({ queryKey: chave });
+    finally { setRevisando(null); await qc.invalidateQueries({ queryKey: chave }); }
   }
   const artes = q.data ?? [];
   return (
@@ -247,17 +249,18 @@ function ArtesSlides({ clientId, adaptacaoId, total, editable }: { clientId: str
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 font-semibold"><ImagePlus size={16} aria-hidden /> Arte dos slides (rascunho)</h3>
         {editable && (
-          <button className="btn" type="button" disabled={!!gerando} onClick={() => gerar()}>
+          <button className="btn" type="button" disabled={!!gerando || !!revisando || q.isPending || q.isError} onClick={() => gerar()}>
             {gerando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <ImagePlus size={15} aria-hidden />}
             {gerando ? `Gerando ${gerando.length} arte(s)… pode levar 1 a 3 min` : artes.length ? "Gerar todas de novo" : `Gerar arte dos ${total} slides`}
           </button>
         )}
       </div>
       <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
-        Rascunho feito por IA a partir do briefing de cada slide. Revise texto e imagem (CFM) antes de usar. Custo aproximado de US$ 0,06 por arte, com teto diário por clínica.
+        Rascunho vertical de 1024 × 1536 px feito por IA. Revise texto, imagem e enquadramento antes de publicar. O custo inclui imagem e texto de entrada, com orçamento reservado e teto diário por clínica.
       </p>
+      {!editable && <p className="mt-2 text-sm">A equipe Doctor Creator prepara e revisa as artes desta proposta.</p>}
       {aviso && <p className="mt-2 text-sm" role="status">{aviso}</p>}
-      {q.isError && <p className="mt-2 text-sm" style={{ color: "var(--crit)" }}>Não consegui carregar as artes.</p>}
+      {q.isError && <div role="alert" className="mt-2 text-sm"><p style={{ color: "var(--crit)" }}>Não consegui carregar as artes. Confira as imagens existentes antes de solicitar uma nova geração.</p><button type="button" className="btn" disabled={q.isFetching} onClick={() => void q.refetch()}>Carregar artes novamente</button></div>}
       {artes.length > 0 && (
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {artes.map((a) => (
@@ -265,9 +268,9 @@ function ArtesSlides({ clientId, adaptacaoId, total, editable }: { clientId: str
               <a href={a.url} target="_blank" rel="noopener noreferrer"><img src={a.url} alt={`Arte do slide ${a.position}`} className="w-full rounded-md border" style={{ borderColor: "var(--border)" }} loading="lazy" /></a>
               <figcaption className="flex flex-wrap items-center gap-1.5 text-xs">
                 <Selo cor={a.status === "aprovada" ? "var(--good)" : "var(--warn)"}>Slide {a.position} · {a.status === "aprovada" ? "aprovada" : "rascunho"}</Selo>
-                {editable && a.status !== "aprovada" && <button type="button" className="underline" onClick={() => revisar(a.id, "aprovada")}>Aprovar</button>}
-                {editable && <button type="button" className="underline" disabled={!!gerando} onClick={() => gerar([a.position])}>Refazer</button>}
-                {editable && <button type="button" className="underline" style={{ color: "var(--muted)" }} onClick={() => revisar(a.id, "descartada")}>Descartar</button>}
+                {editable && a.status !== "aprovada" && <button type="button" className="underline" disabled={!!gerando || !!revisando} onClick={() => revisar(a.id, "aprovada")}>Aprovar</button>}
+                {editable && <button type="button" className="underline" disabled={!!gerando || !!revisando} onClick={() => gerar([a.position])}>Refazer</button>}
+                {editable && <button type="button" className="underline" disabled={!!gerando || !!revisando} style={{ color: "var(--muted)" }} onClick={() => revisar(a.id, "descartada")}>Descartar</button>}
               </figcaption>
             </figure>
           ))}

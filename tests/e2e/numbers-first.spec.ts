@@ -237,3 +237,23 @@ for (const width of [375, 1440]) {
     await expect(summary.getByRole("tooltip")).toContainText("comparecimento");
   });
 }
+
+test("advertising summary and period comparison retain conversions attributed without new spend or impressions", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  const date = new Date().toISOString().slice(0, 10);
+  await context.route("**/rest/v1/meta_ads_daily?**", r => r.fulfill({ json: [
+    { date, campaign_id: "delivery", spend: 100, impressions: 1000, link_clicks: 100, conversations: 18, leads: 0, landing_page_views: 0 },
+    { date, campaign_id: "late-attribution", spend: 0, impressions: 0, link_clicks: 0, conversations: 1, leads: 0, landing_page_views: 0 },
+  ] }));
+  await context.route("**/rest/v1/meta_ads_campaigns?**", r => r.fulfill({ json: [
+    { campaign_id: "delivery", name: "Veiculação fictícia", objective: "MESSAGES" },
+    { campaign_id: "late-attribution", name: "Atribuição posterior fictícia", objective: "MESSAGES" },
+  ] }));
+  await context.route("**/rest/v1/rpc/ads_resumo", r => r.fulfill({ json: [{ gasto: 100, impressoes: 1000, cliques_link: 100, conversas: 19, campanhas: 2, ctr: 10, cpc: 1, cpm: 100, custo_por_conversa: 100 / 19 }] }));
+  await page.goto(`/${CID}/anuncios`);
+  const numbers = page.getByRole("region", { name: "Indicadores dos anúncios", exact: true });
+  await expect(numbers.locator(".ws-metric-value").nth(1)).toHaveText("19");
+  const comparison = page.getByRole("region", { name: "Este período e o anterior", exact: true });
+  await expect(comparison.getByRole("row").filter({ hasText: "Conversas iniciadas" }).getByRole("cell").nth(1)).toHaveText("19");
+  await expect(comparison.getByRole("row").filter({ hasText: "Campanhas com registros" }).getByRole("cell").nth(1)).toHaveText("2");
+});

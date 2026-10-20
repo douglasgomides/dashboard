@@ -4,6 +4,7 @@ import {
   AREAS,
   AVANCADO,
   areasVisiveis,
+  navegacaoClinica,
   avancadoVisivel,
   buscarTelas,
   subcaminho,
@@ -90,6 +91,14 @@ assert.equal(
   false,
 );
 assert.deepEqual(paths({ ...base, soCrm: true }), ["/crm-painel", "/crm-guia"]);
+const clinica = navegacaoClinica(areasVisiveis(base), false);
+assert.deepEqual(clinica.principais.map(a => a.id), ["resumo", "acoes", "relatorio"]);
+assert.equal(clinica.principais[1].visiveis[0].path, "/agentes");
+assert.deepEqual(clinica.detalhes.map(a => a.id), ["marketing", "comercial"]);
+const apenasCrm = navegacaoClinica(areasVisiveis({ ...base, soCrm: true }), false);
+assert.deepEqual(apenasCrm.principais.map(a => a.id), ["comercial"]);
+assert.equal(apenasCrm.detalhes.length, 0);
+assert.deepEqual(navegacaoClinica(areasVisiveis(base), true).principais, areasVisiveis(base));
 const admin = { ...base, isAdmin: true, papel: "admin" as const };
 assert.equal(paths(admin).includes("/jornada"), true);
 assert.equal(avancadoVisivel(admin).length, AVANCADO.length);

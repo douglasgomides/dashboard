@@ -14,7 +14,7 @@ const PRAZO = { C: "Crítico (até D7, bloqueia a Sessão 1)", P: "Complementar 
 
 /** Ficha do Cliente mínima (02.06) e Checklist de Dados e Acessos (02.05), com o portão da Sessão 1. */
 export function OnboardingSap({ clientId }: { clientId: string }) {
-  const cadQ = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId) });
+  const cadQ = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId), retry: false });
   const clinica = cadQ.data ?? null;
   if (cadQ.isLoading) return <p className="note">Carregando…</p>;
   if (!clinica) return <p className="note">Esta clínica ainda não está no Sistema de Aquisição.</p>;
@@ -82,8 +82,8 @@ function ChecklistAcessos({ clinica }: { clinica: SapCadastro }) {
   const { isAdmin } = useAuth();
   const qc = useQueryClient();
   const hoje = hojeBrasilia();
-  const accQ = useQuery({ queryKey: ["sap-acessos", clinica.id], queryFn: () => getAcessosSap(clinica.id) });
-  const marcosQ = useQuery({ queryKey: ["sap-marcos", clinica.id], queryFn: () => getMarcosSap(clinica.id) });
+  const accQ = useQuery({ queryKey: ["sap-acessos", clinica.id], queryFn: () => getAcessosSap(clinica.id), retry: false });
+  const marcosQ = useQuery({ queryKey: ["sap-marcos", clinica.id], queryFn: () => getMarcosSap(clinica.id), retry: false });
   const salvar = useMutation({ mutationFn: (r: RegistroAcesso) => salvarAcessoSap(clinica.id, r), onSuccess: () => qc.invalidateQueries({ queryKey: ["sap-acessos", clinica.id] }) });
   const regs = useMemo(() => accQ.data ?? [], [accQ.data]);
   const mapa = useMemo(() => new Map(regs.map((r) => [r.item, r])), [regs]);

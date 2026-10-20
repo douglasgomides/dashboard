@@ -387,7 +387,7 @@ function AnunciosPage() {
           </>
         }
       >
-        Meta Ads · {periodLabel} · {diag.campanhas.length} campanhas · dados reais da conta
+        Meta Ads · {periodLabel} · {diag.campanhas.length} campanhas com atividade · dados reais da conta
       </Faixa>
 
       {soConversa && (
@@ -401,7 +401,7 @@ function AnunciosPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3" role="region" aria-label="Indicadores dos anúncios">
-        <Kpi icone={Wallet} rotulo="Investido" valor={fmtBRL(gasto)} dica={`${diag.campanhas.length} campanhas`} cor="var(--s1)" />
+        <Kpi icone={Wallet} rotulo="Investido" valor={fmtBRL(gasto)} dica={`${diag.campanhas.length} campanhas com atividade`} cor="var(--s1)" />
         <Kpi icone={MessageCircle} rotulo="Conversas iniciadas" valor={int(diag.conversas)} dica="WhatsApp e Direct, de todas as campanhas" cor="var(--good)" />
         <Kpi
           icone={Coins}

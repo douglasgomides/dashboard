@@ -8,6 +8,11 @@ on:
     - cron: "*/10 9-23 * * *"
     - cron: "*/10 0 * * *"
   workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Trabalho específico (vazio mantém a rotina da fila)"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -31,6 +36,7 @@ jobs:
       CREATIVE_ENABLE_APIFY: ${{ secrets.APIFY_API_TOKEN != '' && 'true' || 'false' }}
       FFMPEG_PATH: /usr/bin/ffmpeg
       FFPROBE_PATH: /usr/bin/ffprobe
+      CREATIVE_JOB_ID: ${{ inputs.job_id }}
     steps:
       - name: Segredos cadastrados?
         id: pronto
@@ -63,4 +69,9 @@ jobs:
           npm ci --prefix workers/creative --no-audit --no-fund
       - name: Processar fila
         if: steps.pronto.outputs.ok == 'true'
-        run: npx --prefix workers/creative tsx workers/creative/main.ts --drain
+        run: |
+          if [ -n "$CREATIVE_JOB_ID" ]; then
+            npx --prefix workers/creative tsx workers/creative/main.ts --once --job="$CREATIVE_JOB_ID"
+          else
+            npx --prefix workers/creative tsx workers/creative/main.ts --drain
+          fi

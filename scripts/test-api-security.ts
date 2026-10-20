@@ -129,18 +129,24 @@ async function testCreativeWorkerDispatch() {
   process.env.GITHUB_DISPATCH_TOKEN = "offline-dispatch-token";
   let admin = true;
   let dispatches = 0;
+  let missingJob = false;
+  let expectedJob: string | null = null;
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input));
     if (url.origin === origin) {
       if (url.pathname === "/auth/v1/user") return json({ id: USER });
       if (url.pathname.endsWith("/app_admins")) return json(admin ? { user_id: USER } : null);
       if (url.pathname.endsWith("/client_members")) return json({ user_id: USER, role: "strategist" });
+      if (url.pathname.endsWith("/creative_jobs")) {
+        assert.equal(url.searchParams.get("client_id"), `eq.${CLIENT}`);
+        return json(missingJob ? null : { id: CONV });
+      }
       throw new Error(`Unexpected creative read ${url.pathname}`);
     }
     assert.equal(url.href, "https://api.github.com/repos/douglasgomides/dashboard/actions/workflows/creative-worker.yml/dispatches");
     assert.equal(init?.method, "POST");
     assert.equal(new Headers(init?.headers).get("authorization"), "Bearer offline-dispatch-token");
-    assert.deepEqual(JSON.parse(String(init?.body)), { ref: "claude/doctor-creator-hub-nixvw6" });
+    assert.deepEqual(JSON.parse(String(init?.body)), { ref: "claude/doctor-creator-hub-nixvw6", ...(expectedJob ? { inputs: { job_id: expectedJob } } : {}) });
     dispatches++;
     return new Response(null, { status: 204 });
   };
@@ -149,13 +155,19 @@ async function testCreativeWorkerDispatch() {
   assert.equal(response.status, 200);
   assert.deepEqual(response.result, { alvo: "creative_worker", ok: true, status: 204, agendado: false });
   assert.equal(dispatches, 1, "valid requests must reach the workflow dispatch handler");
+  expectedJob = CONV;
+  assert.equal((await invoke(manual, { client_id: CLIENT, alvo: "creative_worker", job_id: CONV })).result.ok, true);
+  assert.equal(dispatches, 2, "a scoped dispatch sends only its job to the workflow");
+  missingJob = true;
+  assert.equal((await invoke(manual, { client_id: CLIENT, alvo: "creative_worker", job_id: OTHER })).status, 404);
+  assert.equal(dispatches, 2, "a job outside the clinic must not reach the worker");
   admin = false;
   assert.equal((await invoke(manual, { client_id: CLIENT, alvo: "creative_worker" })).status, 403, "client members cannot dispatch the worker");
-  assert.equal(dispatches, 1);
+  assert.equal(dispatches, 2);
   admin = true;
   delete process.env.GITHUB_DISPATCH_TOKEN;
   assert.equal((await invoke(manual, { client_id: CLIENT, alvo: "creative_worker" })).result.erro, "sem_token");
-  assert.equal(dispatches, 1);
+  assert.equal(dispatches, 2);
 }
 
 async function testSummaryAuditAndOutput() {

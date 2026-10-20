@@ -1,3 +1,4 @@
+import { withApiObservability } from "../_lib/observability.js";
 import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { runBackfillThumbnails } from "../_lib/backfill-thumbnails.js";
 
@@ -5,7 +6,7 @@ import { runBackfillThumbnails } from "../_lib/backfill-thumbnails.js";
 // sincronizaram antes da correção do campo (ver api/_lib/backfill-thumbnails.ts).
 // Mesmo SYNC_SECRET dos outros endpoints de sync.
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST" && req.method !== "GET") {
     res.status(405).json({ error: "Method not allowed" });
     return;
@@ -45,3 +46,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 }
+
+export default withApiObservability(handler, "sync/backfill-thumbnails");

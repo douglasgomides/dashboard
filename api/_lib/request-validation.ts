@@ -11,7 +11,7 @@ export const manualRequestSchema = z.object({
   client_id: id.optional(),
   alvo: z.enum(["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes", "sap_redigir", "creative_worker", "creative_arte", "plano_semana", "plano_item"]),
   acao: z.string().max(40).optional(), execucao_id: id.optional(),
-  adaptacao_id: id.optional(), arte_id: id.optional(),
+  adaptacao_id: id.optional(), arte_id: id.optional(), job_id: id.optional(),
   slides: z.array(z.number().int().positive()).max(12).optional(),
   status: z.enum(["aprovada", "descartada"]).optional(),
   etapa: z.string().max(80).optional(), conferencia_id: id.optional(),
@@ -23,6 +23,7 @@ export const manualRequestSchema = z.object({
   limite: z.number().int().min(1).max(300).optional(), dias: z.number().int().min(1).max(365).optional(),
   refazer: z.boolean().optional(), pagina: z.number().int().min(1).max(1_000_000).optional(), paginas: z.number().int().min(1).max(60).optional(),
   tipo: z.string().min(1).max(40).optional(), id: id.optional(),
+  slug: z.string().trim().max(100).optional(),
   campanha: z.string().max(80).optional(), destino_tipo: z.enum(["site", "whatsapp"]).optional(),
   frase: z.string().max(200).optional(), site_url: z.preprocess(vazioOpcional, z.string().url().max(2048).optional()),
   dica: z.string().max(600).optional(), texto_atual: z.string().max(60_000).optional(),
@@ -30,7 +31,6 @@ export const manualRequestSchema = z.object({
   numero_whatsapp: z.preprocess(vazioOpcional, z.string().max(30).refine((v) => /^\d{10,15}$/.test(v.replace(/\D/g, ""))).optional()),
   mensagem: z.string().trim().min(1).max(2000).optional(), instagram_post_id: id.nullable().optional(), ad_campaign_id: id.nullable().optional(),
   antes_de: z.string().datetime({ offset: true }).nullable().optional(),
-  slug: z.string().max(60).optional(),
   estado: z.enum(["proposta", "feita", "nao_feita", "descartada"]).optional(), nota: z.string().max(500).optional(),
 }).strip().superRefine((value, ctx) => {
   if (value.alvo !== "conferencia" && value.alvo !== "agentes" && !value.client_id) ctx.addIssue({ code: "custom", path: ["client_id"], message: "Informe client_id" });
@@ -43,6 +43,10 @@ export const manualRequestSchema = z.object({
     }
   }
   if (value.alvo === "plano_item" && (!value.id || !value.estado)) ctx.addIssue({ code: "custom", path: ["estado"], message: "Informe id e estado" });
+  if (value.alvo === "link_rastreado") {
+    if (value.acao && !["renomear", "ativo", "inativo"].includes(value.acao)) ctx.addIssue({ code: "custom", path: ["acao"], message: "Ação de link inválida" });
+    if (value.acao && !value.id) ctx.addIssue({ code: "custom", path: ["id"], message: "Informe id" });
+  }
   if (value.de && value.ate && (value.de > value.ate || Date.parse(value.ate) - Date.parse(value.de) > 366 * 86_400_000)) {
     ctx.addIssue({ code: "custom", path: ["ate"], message: "Período inválido ou maior que um ano" });
   }

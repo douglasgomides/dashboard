@@ -130,6 +130,7 @@ export const ROTULO_CLINICA: Record<string, string> = {
   "/cronograma": "Agenda do programa",
   "/leitura": "Números da semana",
   "/documentos": "Plano e relatório",
+  "/agentes": "Entregas e aprovações",
 };
 // Groups reuse the existing permission-filtered items; every original destination stays available.
 export const AREAS_SAP = [
@@ -183,7 +184,12 @@ export function areasSapVisiveis(isAdmin: boolean) {
     ...i,
     label: isAdmin ? i.label : (ROTULO_CLINICA[i.sub] ?? i.label),
   }));
-  return AREAS_SAP.map((area) => ({
+  const areas = isAdmin ? AREAS_SAP : [
+    { id: "visao", label: "Resultados", hint: "Números, evolução e metas", Icone: Flag, subs: ["/painel", "/leitura", "/metas"] },
+    { id: "tarefas", label: "Entregas e agenda", hint: "Tarefas, prazos e plano do programa", Icone: CalendarClock, subs: ["", "/cronograma", "/documentos"] },
+    { id: "resultado", label: "Para revisar", hint: "Materiais e aprovações", Icone: ClipboardCheck, subs: ["/agentes"] },
+  ];
+  return areas.map((area) => ({
     ...area,
     itens: area.subs.flatMap((sub) => itens.filter((i) => i.sub === sub)),
   })).filter((area) => area.itens.length);

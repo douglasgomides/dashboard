@@ -1,5 +1,5 @@
 import { TextoComCodigos } from "@/components/sap-docs";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, ClipboardList, FolderOpen, Mic, Sparkles, Timer } from "lucide-react";
@@ -333,14 +333,23 @@ function Bloco({ b, aberto, agora, onToggle, clinica, reg, salvarTexto }: { b: B
 function CampoNota({ rotulo, dica, linhas, valor, salvar }: { rotulo: string; dica?: string; linhas: number; valor: string; salvar: (t: string) => Promise<void> }) {
   const [v, setV] = useState(valor);
   const [estado, setEstado] = useState<"" | "salvando" | "salvo" | "erro">("");
-  useEffect(() => setV(valor), [valor]);
+  const dirty = useRef(false), saving = useRef(false);
+  useEffect(() => { if (!dirty.current) setV(valor); }, [valor]);
+  async function salvarNota() {
+    if (saving.current || !dirty.current) return;
+    saving.current = true; setEstado("salvando");
+    try { await salvar(v); dirty.current = false; setEstado("salvo"); }
+    catch { setEstado("erro"); }
+    finally { saving.current = false; }
+  }
   return (
     <label className="block text-xs">
       <span className="font-semibold">{rotulo}</span>{dica && <span style={{ color: "var(--muted)" }}> · {dica}</span>}
-      <textarea rows={linhas} value={v} onChange={(x) => setV(x.target.value)}
-        onBlur={async () => { if (v === valor) return; setEstado("salvando"); try { await salvar(v); setEstado("salvo"); } catch { setEstado("erro"); } }}
+      <textarea aria-label={rotulo} rows={linhas} value={v} disabled={estado === "salvando"} onChange={(x) => { dirty.current = true; setV(x.target.value); setEstado(""); }}
+        onBlur={() => void salvarNota()}
         className="mt-0.5 block w-full rounded-md border px-2 py-1 text-sm" style={campo} />
       {estado && <span style={{ color: estado === "erro" ? "var(--crit)" : "var(--muted)" }}>{estado === "salvando" ? "salvando…" : estado === "salvo" ? "salvo" : "não salvou; tente de novo"}</span>}
+      {estado === "erro" && <button type="button" className="btn mt-1" onClick={() => void salvarNota()}>Tentar salvar esta nota</button>}
     </label>
   );
 }

@@ -143,21 +143,25 @@ export async function enqueue(
       p_request_key: crypto.randomUUID(),
     }),
   );
-  void dispararWorker(clientId);
+  const iniciado = await dispararWorker(clientId, id);
+  if (!iniciado) throw new Error("O pedido foi salvo na fila, mas não foi possível iniciar o processamento imediato. A equipe Doctor Creator precisa conferir a execução. Acompanhe ou cancele o trabalho abaixo antes de solicitar outro.");
   return id;
 }
-// Liga o worker na hora (GitHub Actions). Se falhar, o agendamento de 10 minutos processa do mesmo jeito.
-async function dispararWorker(clientId: string) {
+// A fila é persistida antes do acionamento. Uma falha de acionamento não pode parecer processamento confirmado.
+async function dispararWorker(clientId: string, jobId: string) {
   try {
     const token = (await supabase.auth.getSession()).data.session?.access_token;
-    if (!token) return;
-    await fetch("/api/sync/manual", {
+    if (!token) return false;
+    const response = await fetch("/api/sync/manual", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ client_id: clientId, alvo: "creative_worker" }),
+      body: JSON.stringify({ client_id: clientId, alvo: "creative_worker", job_id: jobId }),
+      signal: AbortSignal.timeout(15_000),
     });
+    const result = await response.json().catch(() => null);
+    return response.ok && result?.ok === true;
   } catch {
-    /* o agendamento cobre */
+    return false;
   }
 }
 export const cancelJob = (clientId: string, jobId: string) =>
