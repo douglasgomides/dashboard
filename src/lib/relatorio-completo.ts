@@ -145,7 +145,7 @@ export async function coletarRelatorioCompleto(args: {
       resumo,
       porDia: porDia ?? [],
       porObjetivo: porObjetivo ?? [],
-      objetivo: campanhas ? aplicarRastreio(diagnosticarAds(campanhas.linhas, campanhas.cadastro, start, end), await getAtendimentosWhatsapp(clientId, start, end)) : null,
+      objetivo: campanhas ? aplicarRastreio(diagnosticarAds(campanhas.linhas, campanhas.cadastro, start, end), await tentar("anúncios, atribuição de atendimento", falhas, () => getAtendimentosWhatsapp(clientId, start, end), null)) : null,
       diasComDado: campanhas ? Array.from(new Set(campanhas.linhas.filter((l) => Number(l.spend) > 0 || Number(l.impressions) > 0).map((l) => String(l.date).slice(0, 10)))) : [],
     };
   } else {
@@ -187,7 +187,7 @@ export async function coletarRelatorioCompleto(args: {
   // Conteúdo validado: o da tela (quando veio do Relatório) ou montado aqui com os mesmos dados.
   let envio = args.envio;
   if (!envio) {
-    const periodoIg = fontes.tem_instagram ? await getResumoPeriodo(clientId, start, end).catch(() => null) : null;
+    const periodoIg = fontes.tem_instagram ? await tentar("Instagram, alcance único do período", falhas, () => getResumoPeriodo(clientId, start, end), null) : null;
     envio = buildRelatorioEnvio({
       clientName: client.name,
       periodLabel: args.periodLabel,

@@ -136,7 +136,7 @@ function JornadaPage() {
 
       <Painel icone={Filter} titulo="Onde a jornada quebra" resumo={`Do lead à venda · ${formatRangeLabel({ start, end })}`}>
         {diag.isLoading && <Carregando texto="Calculando onde a jornada quebra…" linhas={2} />}
-        {diag.error && <p className="text-sm">{(diag.error as Error).message}</p>}
+        {diag.error && <div role="alert"><p>Não foi possível conferir o diagnóstico comercial. Os resultados não foram considerados zero.</p><button type="button" className="btn" disabled={diag.isFetching} onClick={() => void diag.refetch()}>Tentar novamente</button></div>}
         {d && <FunilOndeQuebra funil={d.funil} />}
         {d && (d.limitacoes?.length ?? 0) > 0 && <ListaLimitacoes itens={d.limitacoes} titulo="O que limita esta leitura" />}
       </Painel>

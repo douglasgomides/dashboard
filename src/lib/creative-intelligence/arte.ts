@@ -17,8 +17,21 @@ export interface UnidadeArte {
 export const CUSTO_ARTE: Record<"low" | "medium" | "high", number> = { low: 0.016, medium: 0.063, high: 0.25 };
 export const TETO_DIARIO_ARTE_USD = 10;
 
+/** Limite conservador: um token de entrada nunca exige menos de um byte.
+ * Inclui margem para arredondamento da tabela por imagem. Modelo GPT Image 1. */
+export function reservaArte(prompt: string, qualidade: "low" | "medium" | "high"): number {
+  return Math.ceil((CUSTO_ARTE[qualidade] + new TextEncoder().encode(prompt).length * 0.000005 + 0.005) * 1_000_000) / 1_000_000;
+}
+
+export function custoArte(usage: unknown, reserva: number): number {
+  if (!usage || typeof usage !== "object") return reserva;
+  const u = usage as { input_tokens?: unknown; output_tokens?: unknown };
+  if (![u.input_tokens, u.output_tokens].every((v) => typeof v === "number" && Number.isInteger(v) && v >= 0)) return reserva;
+  return Math.ceil(((u.input_tokens as number) * 0.000005 + (u.output_tokens as number) * 0.00004) * 1_000_000) / 1_000_000;
+}
+
 const REGRAS = [
-  "Formato retrato 4:5 para carrossel do Instagram, visual limpo e profissional da área da saúde.",
+  "Imagem vertical de 1024 por 1536 pixels, visual limpo e profissional da área da saúde. Mantenha texto e elementos principais na área central para permitir ajuste posterior ao formato de publicação.",
   "Escreva na imagem EXATAMENTE o texto indicado, em português do Brasil, com ortografia correta e boa legibilidade.",
   "Não mostre antes e depois, corpo de paciente identificável, sangue, procedimento invasivo, nome de remédio, preço ou promessa de resultado.",
   "Não invente logotipos, selos, números ou estudos.",

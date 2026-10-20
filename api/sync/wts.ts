@@ -1,3 +1,4 @@
+import { withApiObservability } from "../_lib/observability.js";
 import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -32,7 +33,7 @@ const querySchema = z.object({
   sonda_crm: z.literal("1").optional(), digisac_conversas: z.literal("1").optional(), so_analisar: z.literal("1").optional(),
 }).refine((q) => [q.sonda_crm, q.digisac_conversas, q.so_analisar].filter(Boolean).length <= 1, "Escolha apenas um modo");
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST" && req.method !== "GET") { res.status(405).json({ error: "Method not allowed" }); return; }
   const entrada = querySchema.safeParse(req.query);
@@ -161,3 +162,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 }
+
+export default withApiObservability(handler, "sync/wts");

@@ -12,6 +12,7 @@ import { getClient } from "@/lib/client-data";
 import { supabase } from "@/integrations/supabase/client";
 import "@/sap-workspace.css";
 import { diaAtual, faseDoDia, getClinicaSap } from "@/lib/sap-data";
+import { SapReadGuard } from "@/components/sap-read-guard";
 
 // Sistema de Aquisição de Pacientes: produto separado do Doctor Creator Hub, com menu, entrada (sap.*) e
 // página inicial próprios. Usa o mesmo login e os mesmos dados (CRM, WhatsApp, Meta) que o Hub já lê;
@@ -22,10 +23,12 @@ export const Route = createFileRoute("/_authenticated/sap")({
   beforeLoad: async ({ location }) => {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
-    const { data: admin } = await supabase.rpc("is_app_admin");
+    const { data: admin, error: adminError } = await supabase.rpc("is_app_admin");
+    if (adminError) throw adminError;
     if (admin) return;
     const idNaRota = /^\/sap\/([0-9a-f-]{36})/.exec(location.pathname)?.[1] ?? null;
-    const { data } = await supabase.from("client_members").select("client_id").eq("user_id", u.user.id).order("created_at", { ascending: true });
+    const { data, error: memberError } = await supabase.from("client_members").select("client_id").eq("user_id", u.user.id).order("created_at", { ascending: true });
+    if (memberError) throw memberError;
     const ids = ((data ?? []) as { client_id: string }[]).map((m) => m.client_id);
     const alvo = idNaRota ? [idNaRota] : ids;
     const comSap = await Promise.all(alvo.map(async (id) => !!(await getClinicaSap(id))));
@@ -148,7 +151,7 @@ function SapConteudo({ isAdmin }: { isAdmin: boolean }) {
         </header>
         {clientId && areaAtual && areaAtual.itens.length > 1 && <nav className="sap-context-tabs" aria-label={`Telas de ${areaAtual.label}`}>{areaAtual.itens.map(it => <Link key={it.sub} to={`/sap/$clientId${it.sub}` as never} params={{ clientId } as never} aria-current={sub === it.sub ? "page" : undefined}>{it.label}</Link>)}</nav>}
         <PrimeiroAcesso isAdmin={isAdmin} clientId={clientId} />
-        <main className="sap-workspace-content" id="sap-main" tabIndex={-1}><Outlet /></main>
+        <main className="sap-workspace-content" id="sap-main" tabIndex={-1}>{["/painel", "/leitura", "/agentes"].includes(sub ?? "") ? <Outlet /> : <SapReadGuard><Outlet /></SapReadGuard>}</main>
       </div>
     </div>
   );

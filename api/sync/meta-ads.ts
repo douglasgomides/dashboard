@@ -1,3 +1,4 @@
+import { withApiObservability } from "../_lib/observability.js";
 import { sincronizarShortio } from "../_lib/shortio-sync.js";
 import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
@@ -26,7 +27,7 @@ import { runAdsPlanilhaSync } from "../_lib/ads-planilha-sync.js";
 // vez, sem comparar os números lado a lado antes, é o tipo de mudança que
 // altera relatório de cliente sem ninguém perceber.
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST" && req.method !== "GET") {
     res.status(405).json({ error: "Method not allowed" });
     return;
@@ -201,3 +202,5 @@ const PISO_DIAS_ANUNCIOS = 30;
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 }
+
+export default withApiObservability(handler, "sync/meta-ads");

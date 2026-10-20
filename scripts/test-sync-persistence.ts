@@ -182,7 +182,7 @@ async function testWebhook() {
   async function deliver(body: string) {
     const req = Object.assign(Readable.from([body]), { method: "POST", query: { connection_id: "connection", secret: "secret" }, headers: {} }) as unknown as VercelRequest;
     let status = 0;
-    const res = { status(s: number) { status = s; return this; }, json() { return this; }, end() { return this; } } as unknown as VercelResponse;
+    const res = { setHeader() { return this; }, status(s: number) { status = s; return this; }, json() { return this; }, end() { return this; } } as unknown as VercelResponse;
     await webhook(req, res);
     return status;
   }

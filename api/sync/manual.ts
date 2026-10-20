@@ -1,3 +1,4 @@
+import { withApiObservability } from "../_lib/observability.js";
 import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -65,7 +66,7 @@ function temErro(r: { ok?: boolean; contas?: { errors: string[] }[] } | undefine
   return r?.ok === false || (r?.contas ?? []).some((c) => c.errors.length > 0);
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Cache-Control", "no-store");
   // Link rastreado próprio: /r/<slug> (rewrite no vercel.json) registra o clique e leva ao destino. Público, sem token.
   if (req.method === "GET" && typeof req.query.r === "string") {
@@ -888,11 +889,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const b = (req.body ?? {}) as { acao?: string; id?: string; slug?: string; tipo?: string; titulo?: string; campanha?: string; destino_tipo?: string; numero_whatsapp?: string; frase?: string; site_url?: string; instagram_post_id?: string | null };
       if (b.acao === "ativo" || b.acao === "inativo") {
-        const { error } = await admin.from("links_rastreados").update({ ativo: b.acao === "ativo" }).eq("id", b.id ?? "").eq("client_id", client_id);
-        res.status(200).json({ alvo, ok: !error, erro: error?.message });
+        const { data, error } = await admin.from("links_rastreados").update({ ativo: b.acao === "ativo" }).eq("id", b.id ?? "").eq("client_id", client_id).select("id").maybeSingle();
+        if (error) { res.status(503).json({ error: "Não foi possível atualizar o link" }); return; }
+        if (!data) { res.status(404).json({ error: "Link não encontrado nesta clínica" }); return; }
+        res.status(200).json({ alvo, ok: true });
         return;
       }
-      const host = (req.headers["x-forwarded-host"] as string) || req.headers.host || "dash.doctorcreator.com.br";
+      const host = "dash.doctorcreator.com.br";
       const pedido = b.slug != null && String(b.slug).trim() !== "" ? slugPersonalizado(String(b.slug)) : null;
       if (b.slug != null && String(b.slug).trim() !== "" && !pedido) {
         res.status(400).json({ error: "Final do link inválido: use de 3 a 30 letras, números ou hífen (ex.: drajulia)" });
@@ -1163,3 +1166,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 }
+
+export default withApiObservability(handler, "sync/manual");

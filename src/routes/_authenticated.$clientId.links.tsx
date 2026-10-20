@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2, Loader2, Plus, QrCode } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { BotaoCopiar } from "@/components/botao-copiar";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { POSICOES, slugPersonalizado, taxa, type Posicao } from "@/lib/rastreio";
+import { limitesBR } from "@/lib/client-data";
+import { fetchAllRows } from "@/lib/pagination";
 
 // Links rastreados (src/lib/rastreio.ts): de onde vem cada conversa. A equipe gera um link para cada lugar (bio,
 // story, destaque, QR...), o clique é registrado e a conversa que chega é ligada ao link. O funil mostra
@@ -22,7 +24,7 @@ async function chamar(clientId: string, corpo: Record<string, unknown>) {
   const { data: s } = await supabase.auth.getSession();
   const r = await fetch("/api/sync/manual", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.session?.access_token ?? ""}` }, body: JSON.stringify({ client_id: clientId, alvo: "link_rastreado", ...corpo }) });
   const j = await r.json().catch(() => null);
-  if (!r.ok || j?.ok === false) throw new Error(j?.error ?? j?.erro ?? `Falhou (${r.status})`);
+  if (!r.ok || j?.ok !== true) throw new Error(j?.error ?? j?.erro ?? `Não foi possível confirmar a alteração (${r.status}).`);
   return j as { url: string; ref: string };
 }
 const urlDo = (l: LinkRow) => (l.slug ? `${window.location.origin}/r/${l.slug}` : l.short_url ?? "");
@@ -99,18 +101,24 @@ function LinksPage() {
   const qc = useQueryClient();
   const { start, end } = resolveDateRange(clientLayoutRoute.useSearch());
   const q = useQuery({
-    queryKey: ["links-rastreados", clientId, start],
+    queryKey: ["links-rastreados", clientId, start, end],
+    retry: false,
     queryFn: async () => {
+      const { desde, antesDe } = limitesBR(start, end);
       const [ls, f] = await Promise.all([
-        db.from("links_rastreados").select("id, slug, short_url, tipo, titulo, campanha, destino_tipo, ativo, criado_em, codigo_ref").eq("client_id", clientId).order("criado_em", { ascending: false }).limit(300),
-        db.rpc("links_funil", { p_client_id: clientId, p_desde: `${start}T00:00:00-03:00` }),
+        fetchAllRows<LinkRow>((from, to) => db.from("links_rastreados").select("id, slug, short_url, tipo, titulo, campanha, destino_tipo, ativo, criado_em, codigo_ref").eq("client_id", clientId).order("criado_em", { ascending: false }).order("id").range(from, to)),
+        fetchAllRows<Funil>((from, to) => db.rpc("links_funil", { p_client_id: clientId, p_desde: desde, p_antes_de: antesDe }).order("link_id").range(from, to)),
       ]);
-      if (ls.error) throw ls.error;
-      const funil = new Map<string, Funil>(((f.data ?? []) as Funil[]).map((x) => [x.link_id, x]));
-      return { links: (ls.data ?? []) as LinkRow[], funil };
+      const funil = new Map<string, Funil>(f.map((x) => [x.link_id, x]));
+      return { links: ls, funil };
     },
   });
   const [verInativos, setVerInativos] = useState(false);
+  const [edicao, setEdicao] = useState<{ id: string; slug: string } | null>(null);
+  const alterar = useMutation({
+    mutationFn: (corpo: Record<string, unknown>) => chamar(clientId, corpo),
+    onSuccess: async () => { setEdicao(null); await qc.invalidateQueries({ queryKey: ["links-rastreados", clientId] }); },
+  });
   const links = (q.data?.links ?? []).filter((l) => verInativos || l.ativo);
   const f = (id: string) => q.data?.funil.get(id) ?? { link_id: id, cliques: 0, conversas: 0, provaveis: 0, agendou: 0, vendas: 0, receita: 0 };
   // Total por lugar (bio, story...): o resumo que responde "de onde vêm os pacientes".
@@ -119,13 +127,6 @@ function LinksPage() {
     const x = f(l.id), t = porTipo.get(l.tipo) ?? { link_id: l.tipo, cliques: 0, conversas: 0, provaveis: 0, agendou: 0, vendas: 0, receita: 0 };
     porTipo.set(l.tipo, { ...t, cliques: t.cliques + Number(x.cliques), conversas: t.conversas + Number(x.conversas), provaveis: t.provaveis + Number(x.provaveis), agendou: t.agendou + Number(x.agendou), vendas: t.vendas + Number(x.vendas), receita: t.receita + Number(x.receita) });
   }
-  async function renomear(l: LinkRow) {
-    const novo = window.prompt("Novo final do link (o endereço antigo continua funcionando):", l.slug ?? "");
-    if (novo == null || novo.trim() === "" || novo.trim() === l.slug) return;
-    try { await chamar(clientId, { acao: "renomear", id: l.id, slug: novo }); await qc.invalidateQueries({ queryKey: ["links-rastreados", clientId] }); }
-    catch (e) { window.alert(e instanceof Error ? e.message : String(e)); }
-  }
-  async function alternar(l: LinkRow) { await chamar(clientId, { acao: l.ativo ? "inativo" : "ativo", id: l.id }).catch(() => null); await qc.invalidateQueries({ queryKey: ["links-rastreados", clientId] }); }
   const th = "px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide";
   const td = "px-2 py-1.5 text-sm tabular-nums";
   return (
@@ -133,8 +134,12 @@ function LinksPage() {
       <div className="hpagehead">
         <h2>Links rastreados</h2>
         <p>Um link para cada lugar (bio, cada story, destaques, QR code no consultório, parceiros). O sistema conta os cliques, reconhece a conversa que chega no WhatsApp e mostra quantas viraram agendamento e venda. Período: {formatRangeLabel({ start, end })}.</p>
+        <p className="mt-2 text-xs">Cliques e início das conversas respeitam o período. Agendamento reflete o resumo atual dessas conversas. Vendas exigem evento de ganho registrado até a data final; o valor é o cadastrado no CRM e não comprova pagamento. Um mesmo lead pode aparecer em mais de um link.</p>
       </div>
       {isAdmin && <Gerador clientId={clientId} aoCriar={() => qc.invalidateQueries({ queryKey: ["links-rastreados", clientId] })} />}
+      {q.isError && <div role="alert" className="card"><p>Não foi possível carregar os links e suas contagens. Nenhum resultado foi considerado zero.</p><button type="button" className="btn" disabled={q.isFetching} onClick={() => void q.refetch()}>Tentar novamente</button></div>}
+      {alterar.isError && <p role="alert" style={{ color: "var(--crit)" }}>{alterar.error.message}</p>}
+      {alterar.isSuccess && <p role="status">Alteração salva.</p>}
       {porTipo.size > 0 && (
         <section aria-labelledby="por-lugar" className="overflow-x-auto rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
           <h3 id="por-lugar" className="px-4 pt-3 text-sm font-semibold">De onde vêm as conversas</h3>
@@ -149,7 +154,7 @@ function LinksPage() {
       <section aria-labelledby="todos" className="space-y-2">
         <div className="flex items-center justify-between gap-2"><h3 id="todos" className="text-sm font-semibold">Todos os links</h3>
           <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={verInativos} onChange={(e) => setVerInativos(e.target.checked)} /> Mostrar arquivados</label></div>
-        {q.isLoading ? null : links.length === 0 ? (
+        {q.isLoading ? <p role="status">Carregando links e resultados…</p> : q.isError && !q.data ? null : links.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--ink-2)" }}>{isAdmin ? "Nenhum link ainda. Gere o primeiro (comece pelo link da bio) e troque no Instagram." : "A equipe Doctor Creator ainda não criou links rastreados para esta clínica."}</p>
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
@@ -169,10 +174,16 @@ function LinksPage() {
                   </p>
                   {isAdmin && l.slug && (
                     <div className="mt-1 flex flex-wrap gap-3 text-xs">
-                      <button type="button" style={{ color: "var(--accent)" }} onClick={() => renomear(l)}>Editar final do link</button>
-                      <button type="button" style={{ color: "var(--muted)" }} onClick={() => alternar(l)}>{l.ativo ? "Arquivar (o link continua funcionando)" : "Desarquivar"}</button>
+                      <button type="button" disabled={alterar.isPending} style={{ color: "var(--accent)" }} onClick={() => { alterar.reset(); setEdicao({ id: l.id, slug: l.slug! }); }}>Editar final do link</button>
+                      <button type="button" disabled={alterar.isPending} style={{ color: "var(--muted)" }} onClick={() => alterar.mutate({ acao: l.ativo ? "inativo" : "ativo", id: l.id })}>{l.ativo ? "Arquivar (o link continua funcionando)" : "Desarquivar"}</button>
                     </div>
                   )}
+                  {isAdmin && edicao?.id === l.id && <form className="mt-3 space-y-2" onSubmit={(e) => { e.preventDefault(); alterar.mutate({ acao: "renomear", id: l.id, slug: edicao.slug }); }}>
+                    <label className="block text-sm">Novo final do link<input className="input block w-full" value={edicao.slug} onChange={(e) => setEdicao({ ...edicao, slug: e.target.value })} maxLength={100} /></label>
+                    <p className="text-xs">O endereço antigo continua funcionando.</p>
+                    <button type="submit" className="btn" disabled={alterar.isPending || !slugPersonalizado(edicao.slug)}>Salvar final do link</button>{" "}
+                    <button type="button" className="btn" disabled={alterar.isPending} onClick={() => setEdicao(null)}>Cancelar edição</button>
+                  </form>}
                 </article>
               );
             })}

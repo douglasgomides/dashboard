@@ -23,6 +23,7 @@ export const manualRequestSchema = z.object({
   limite: z.number().int().min(1).max(300).optional(), dias: z.number().int().min(1).max(365).optional(),
   refazer: z.boolean().optional(), pagina: z.number().int().min(1).max(1_000_000).optional(), paginas: z.number().int().min(1).max(60).optional(),
   tipo: z.string().min(1).max(40).optional(), id: id.optional(),
+  slug: z.string().trim().max(100).optional(),
   campanha: z.string().max(80).optional(), destino_tipo: z.enum(["site", "whatsapp"]).optional(),
   frase: z.string().max(200).optional(), site_url: z.preprocess(vazioOpcional, z.string().url().max(2048).optional()),
   dica: z.string().max(600).optional(), texto_atual: z.string().max(60_000).optional(),
@@ -39,6 +40,10 @@ export const manualRequestSchema = z.object({
       if (!value.arte_id) ctx.addIssue({ code: "custom", path: ["arte_id"], message: "Informe arte_id" });
       if (!value.status) ctx.addIssue({ code: "custom", path: ["status"], message: "Informe status" });
     }
+  }
+  if (value.alvo === "link_rastreado") {
+    if (value.acao && !["renomear", "ativo", "inativo"].includes(value.acao)) ctx.addIssue({ code: "custom", path: ["acao"], message: "Ação de link inválida" });
+    if (value.acao && !value.id) ctx.addIssue({ code: "custom", path: ["id"], message: "Informe id" });
   }
   if (value.de && value.ate && (value.de > value.ate || Date.parse(value.ate) - Date.parse(value.de) > 366 * 86_400_000)) {
     ctx.addIssue({ code: "custom", path: ["ate"], message: "Período inválido ou maior que um ano" });

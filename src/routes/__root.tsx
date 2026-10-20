@@ -26,6 +26,7 @@ function ErrorComponent() {
         <p className="mt-2 text-sm" style={{ color: "var(--text-dim)" }}>
           Não foi possível carregar esta página. Verifique sua conexão e tente novamente.
         </p>
+        <button type="button" className="btn mt-4" onClick={() => window.location.reload()}>Tentar carregar novamente</button>
         <Link to="/" className="mt-6 inline-block text-sm" style={{ color: "var(--accent)" }}>
           Voltar pro início
         </Link>
