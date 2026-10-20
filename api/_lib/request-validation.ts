@@ -9,7 +9,7 @@ const id = z.string().uuid();
 const vazioOpcional = (v: unknown) => typeof v === "string" && !v.trim() ? undefined : v;
 export const manualRequestSchema = z.object({
   client_id: id.optional(),
-  alvo: z.enum(["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes", "sap_redigir", "creative_worker", "creative_arte"]),
+  alvo: z.enum(["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes", "sap_redigir", "creative_worker", "creative_arte", "plano_semana", "plano_item"]),
   acao: z.string().max(40).optional(), execucao_id: id.optional(),
   adaptacao_id: id.optional(), arte_id: id.optional(),
   slides: z.array(z.number().int().positive()).max(12).optional(),
@@ -30,6 +30,8 @@ export const manualRequestSchema = z.object({
   numero_whatsapp: z.preprocess(vazioOpcional, z.string().max(30).refine((v) => /^\d{10,15}$/.test(v.replace(/\D/g, ""))).optional()),
   mensagem: z.string().trim().min(1).max(2000).optional(), instagram_post_id: id.nullable().optional(), ad_campaign_id: id.nullable().optional(),
   antes_de: z.string().datetime({ offset: true }).nullable().optional(),
+  slug: z.string().max(60).optional(),
+  estado: z.enum(["proposta", "feita", "nao_feita", "descartada"]).optional(), nota: z.string().max(500).optional(),
 }).strip().superRefine((value, ctx) => {
   if (value.alvo !== "conferencia" && value.alvo !== "agentes" && !value.client_id) ctx.addIssue({ code: "custom", path: ["client_id"], message: "Informe client_id" });
   if (value.alvo === "creative_arte") {
@@ -40,6 +42,7 @@ export const manualRequestSchema = z.object({
       if (!value.status) ctx.addIssue({ code: "custom", path: ["status"], message: "Informe status" });
     }
   }
+  if (value.alvo === "plano_item" && (!value.id || !value.estado)) ctx.addIssue({ code: "custom", path: ["estado"], message: "Informe id e estado" });
   if (value.de && value.ate && (value.de > value.ate || Date.parse(value.ate) - Date.parse(value.de) > 366 * 86_400_000)) {
     ctx.addIssue({ code: "custom", path: ["ate"], message: "Período inválido ou maior que um ano" });
   }

@@ -26,6 +26,7 @@ import { AGENTES } from "../../src/lib/agentes-catalogo.js";
 import { lerRecuperacao, lerAnuncios, lerConteudo } from "./agentes-leitura.js";
 import { aplicarCritica, filtrarComentarios, lerNotas, SISTEMA_CRITICO, type NotaCritica } from "../../src/lib/aprendizado.js";
 import { aprenderTodas, lerLicoes } from "./aprendizado.js";
+import { atualizarPlanos } from "./plano-semana.js";
 import { MARCO_ACESSOS, evidenciaCriticos, mensagemPadrao, mensagemValida, situacaoCriticos, type ItemConfirmado, type ItemPendente } from "../../src/lib/agente-acessos.js";
 
 type Admin = SupabaseClient<any, any, any>;
@@ -926,12 +927,14 @@ async function abertasPorClinica(admin: Admin, id: string): Promise<Map<string, 
 /** Agendamento: para cada agente do catálogo (src/lib/agentes-catalogo.ts), põe na fila a rodada de cada clínica com o
  *  módulo do agente quando a última rodada é mais velha que o intervalo e não há uma em andamento. Antes, mede sozinho o
  *  resultado das sugestões de recuperação (sugestoes_medir). Os agentes só preparam; quem aprova é uma pessoa. */
-export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas: number; puladas: number; por_agente: Record<string, number>; medidas: number; cheias: number; expiradas: number; aprendizado: Awaited<ReturnType<typeof aprenderTodas>> }> {
+export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas: number; puladas: number; por_agente: Record<string, number>; medidas: number; cheias: number; expiradas: number; aprendizado: Awaited<ReturnType<typeof aprenderTodas>>; plano: Awaited<ReturnType<typeof atualizarPlanos>> | { erro: string } }> {
   const { data: medidas, error: erroMedir } = await admin.rpc("sugestoes_medir");
   if (erroMedir) throw new Error(`Medição de sugestões indisponível: ${erroMedir.message}`);
   const { error: erroVerificar } = await admin.rpc("operacao_verificar", { p_client_id: null });
   if (erroVerificar) throw new Error(`Acompanhamento de casos indisponível: ${erroVerificar.message}`);
   const aprendizado = await aprenderTodas(admin, 120_000);
+  // Plano da semana de cada clínica: confere a semana anterior e monta a atual (uma vez por semana).
+  const plano = await atualizarPlanos(admin, 60_000).catch((e: unknown) => ({ erro: (e instanceof Error ? e.message : String(e)).slice(0, 160) }));
   // O que ninguém revisou some sozinho: o agente propõe de novo com dado novo se ainda fizer sentido.
   const agora = Date.now();
   const { data: exp1, error: erroExp1 } = await admin.from("sugestoes_agentes").update({ estado: "descartada", resultado: "expirou sem revisão" })
@@ -982,7 +985,7 @@ export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas:
     if (erroInserir && erroInserir.code !== "23505") throw new Error(erroInserir.message);
     if (!erroInserir) { enfileiradas++; por_agente.operations=(por_agente.operations ?? 0)+1; }
   }
-  return { enfileiradas, puladas, por_agente, medidas: Number(medidas ?? 0), cheias, expiradas, aprendizado };
+  return { enfileiradas, puladas, por_agente, medidas: Number(medidas ?? 0), cheias, expiradas, aprendizado, plano };
 }
 /** Nome antigo, usado pelo agendamento do n8n ("brain_enfileirar"): agora enfileira todos os agentes. */
 export const enfileirarBrain = enfileirarAgendados;

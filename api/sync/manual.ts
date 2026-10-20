@@ -25,6 +25,7 @@ import { resumirConversa } from "../_lib/resumo-conversa.js";
 import { rascunharSessao } from "../_lib/sessao-ia.js";
 import { redirecionarLink, slugLivre } from "../_lib/redirecionar.js";
 import { gerarArtes, listarArtes, revisarArte } from "../_lib/creative-arte.js";
+import { atualizarPlano } from "../_lib/plano-semana.js";
 import { redigirSecao } from "../_lib/copiloto.js";
 import { aplicarAcao, desfazerAcao, tokenEscritaConfigurado } from "../_lib/anuncios-acoes.js";
 import { destinoSite, destinoWhatsApp, novaRef, novoSlug, POSICOES, mensagemComRef, slugPersonalizado, type Posicao } from "../../src/lib/rastreio.js";
@@ -977,6 +978,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         body: JSON.stringify({ ref: "claude/doctor-creator-hub-nixvw6" }),
       });
       res.status(200).json({ alvo, ok: r.status === 204, status: r.status, agendado: r.status !== 204 });
+      return;
+    }
+
+    if (alvo === "plano_semana") {
+      // Plano da semana: confere as ações anteriores e monta a desta semana (se ainda não existir).
+      try { res.status(200).json({ alvo, ok: true, ...(await atualizarPlano(admin, client_id as string)) }); }
+      catch (e) { res.status(200).json({ alvo, ok: false, erro: e instanceof Error ? e.message : String(e) }); }
+      return;
+    }
+    if (alvo === "plano_item") {
+      // Feita / não deu / descartada, decidido pela equipe (owner, strategist ou admin).
+      const b = (req.body ?? {}) as { id?: string; estado?: string; nota?: string };
+      if (!/^[0-9a-f-]{36}$/.test(String(b.id ?? "")) || !["proposta", "feita", "nao_feita", "descartada"].includes(String(b.estado))) { res.status(400).json({ error: "Pedido inválido" }); return; }
+      const { error } = await admin.from("plano_itens").update({ estado: b.estado, nota: b.nota ? String(b.nota).slice(0, 500) : null, decidido_por: quem.user.id, decidido_em: new Date().toISOString() })
+        .eq("id", b.id as string).eq("client_id", client_id as string);
+      res.status(200).json({ alvo, ok: !error, erro: error?.message });
       return;
     }
 

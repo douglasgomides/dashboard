@@ -29,6 +29,7 @@ const esperados = [
   "",
   "/agentes",
   "/proximas-acoes",
+  "/plano",
   "/campanhas",
   "/oportunidades",
   "/conteudo",
