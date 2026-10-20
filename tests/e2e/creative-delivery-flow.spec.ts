@@ -76,3 +76,23 @@ test("isolated creative flow: queue, partial analysis, adaptation, image approva
   await expect(images.getByText("Slide 1 · aprovada", { exact: true })).toBeVisible();
   expect(jobs).toHaveLength(2); expect(planned && approved).toBe(true);
 });
+
+test("a saved creative request stays visible when immediate dispatch fails", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  let queued = false;
+  await context.route("**/rest/v1/instagram_accounts?**", r => r.fulfill({ json: [{ id: fixture.source.account_id, client_id: CID, active: true, ig_username: "qa_ficticia" }] }));
+  await context.route("**/rest/v1/instagram_posts?**", r => {
+    const u = new URL(r.request().url()), offset = Number(u.searchParams.get("offset") ?? r.request().headers().range?.split("-")[0] ?? 0);
+    return r.fulfill({ json: offset ? [] : [{ id: "55555555-5555-4555-8555-555555555555", instagram_account_id: fixture.source.account_id, format: "carrossel", posted_at: new Date().toISOString(), reach: 1000, saved: 30, shares: 10, caption: "QA fictício" }] });
+  });
+  await context.route("**/rest/v1/rpc/creative_worker_health", r => r.fulfill({ json: { seen_at: new Date().toISOString(), capabilities: { vision: true } } }));
+  await context.route("**/rest/v1/rpc/creative_enqueue", r => { queued = true; return r.fulfill({ json: fixture.analysis.job_id }); });
+  await context.route("**/rest/v1/creative_jobs?**", r => r.fulfill({ json: queued ? [{ id: fixture.analysis.job_id, kind: "analyse", status: "queued", progress: 0, message: "Pedido fictício salvo", input: { post_id: "55555555-5555-4555-8555-555555555555" }, output: {}, budget_usd: 2, reserved_usd: 0, cost_usd: 0 }] : [] }));
+  await context.route("**/api/sync/manual", r => r.fulfill({ json: { ok: false, erro: "sem_token", agendado: true } }));
+  await page.goto(`/${CID}/inteligencia-criativa`);
+  await page.getByRole("button", { name: "Analisar mídia original", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("O pedido foi salvo na fila");
+  await expect(page.getByRole("status").filter({ hasText: "Pedido fictício salvo" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cancelar", exact: true })).toBeVisible();
+  expect(queued).toBe(true);
+});
