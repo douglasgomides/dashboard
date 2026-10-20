@@ -184,16 +184,10 @@ for (const width of [375, 1440])
         exact: true,
       });
       await expect(start).toBeVisible();
-      expect(
-        await start.evaluate(
-          (el) =>
-            !!(
-              el.compareDocumentPosition(
-                document.querySelector('[aria-labelledby="roi-titulo"]')!,
-              ) & Node.DOCUMENT_POSITION_FOLLOWING
-            ),
-        ),
-      ).toBe(true);
+      const metrics = page.getByRole("region", { name: "Resultados do Instagram", exact: true });
+      expect(await metrics.evaluate(el => !!(el.compareDocumentPosition(document.querySelector('[aria-label="Por onde começar"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+      const firstNumber = page.locator('.nexo-results-overview .ws-metric-value').first();
+      await expect(firstNumber).toBeInViewport();
       await expect(
         page.getByRole("region", {
           name: "Retorno do investimento",
@@ -245,10 +239,10 @@ test("SAP: overview links to the same tasks and programme, including the restore
   ).toBeVisible();
   await page
     .getByRole("navigation", { name: "Áreas do SAP" })
-    .getByRole("link", { name: /Acompanhamento/ })
+    .getByRole("link", { name: /Rotina e execução/ })
     .click();
   const tabs = page.getByRole("navigation", {
-    name: "Telas de Acompanhamento",
+    name: "Telas de Rotina e execução",
   });
   await tabs.getByRole("link", { name: "Agentes de IA", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/sap/${CID}/agentes`));

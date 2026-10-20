@@ -432,3 +432,30 @@ aside .workspace-pages a[data-on] {
 .workspace-menu-group[open] > summary > svg:last-child {
   transform: rotate(180deg);
 }
+
+/* Resultados primeiro, ferramentas agrupadas e navegação por teclado nativa. */
+.workspace-nav-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+  color: var(--side-ink-2);
+}
+.workspace-nav-group > summary::-webkit-details-marker { display: none; }
+.workspace-nav-count { margin-left: auto; font-size: 11px; color: var(--side-muted); }
+.workspace-nav-group[open] > summary > svg { transform: rotate(180deg); }
+.workspace-nav-group > div { padding-left: 8px; }
+.workspace-nav-group > summary:focus-visible { outline: 2px solid var(--side-ink); outline-offset: -2px; border-radius: 6px; }
+.product-workspace .nexo-results-overview .ws-metric-value { font-size: clamp(22px, 2.25vw, 32px); }
+.product-workspace .nexo-results-overview .ws-metric-value--currency { font-size: clamp(20px, 2vw, 28px); }
+.ws-currency { display: inline-flex; align-items: baseline; gap: .12em; white-space: nowrap; }
+.ws-currency > span:first-child { font-size: .62em; font-weight: 500; }
+.product-workspace .nexo-results-overview .ws-metric { min-width: 0; }
+.roi-details > summary { gap: 8px; }
+.roi-details > summary::before { content: "+"; }
+.roi-details[open] > summary::before { content: "−"; }

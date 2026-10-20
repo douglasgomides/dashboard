@@ -41,7 +41,7 @@ test("viewer is redirected out of admin and unassigned SAP", async ({ page, cont
   await mockAccount(context, "viewer");
   await page.goto(`/${CID}`);
   await expect(page).not.toHaveURL(/\/login/);
-  await expect(page.getByRole("heading", { name: "Início", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Resultados da clínica", exact: true })).toBeVisible();
   for (const path of ["/admin", "/admin/equipe", "/admin/agentes", "/admin/brain", `/sap/${CID}/sessao`]) {
     await page.goto(path, { waitUntil: "networkidle" });
     await expect(page).not.toHaveURL(new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?:\\?|$)"));

@@ -132,7 +132,7 @@ export function PortfolioSap() {
                 <tr key={l.clinica.id} className="border-t align-top" style={{ borderColor: "var(--border)" }}>
                   <td className="px-3 py-2.5">
                     {l.clinica.client_id ? (
-                      <Link to="/sap/$clientId" params={{ clientId: l.clinica.client_id }} className="font-medium underline-offset-2 hover:underline">
+                      <Link to="/sap/$clientId/painel" params={{ clientId: l.clinica.client_id }} className="font-medium underline-offset-2 hover:underline">
                         {l.clinica.nome}
                       </Link>
                     ) : (
@@ -167,7 +167,7 @@ export function PortfolioSap() {
                       ))}
                     </div>
                     <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
-                      {s.alertas.filter((x) => x.farol === "vermelho").map((x) => x.titulo).join(", ") || "sem alerta crítico"}
+                      {s.alertas.filter((x) => x.farol === "vermelho").map((x) => x.titulo).join(", ") || (s.alertas.some(x => x.farol === "cinza") || !s.alertas.length ? "Leitura incompleta" : "Sem alerta crítico")}
                     </div>
                   </td>
                   <Num v={s.leads} ant={a.leads} />
@@ -252,7 +252,7 @@ function AbrirClinica() {
         {noSap.length > 0 && (
           <label className="flex flex-wrap items-center gap-2 text-sm">
             <span style={{ color: "var(--text-dim)" }}>Abrir clínica do programa:</span>
-            <select defaultValue="" onChange={(e) => e.target.value && navigate({ to: "/sap/$clientId", params: { clientId: e.target.value } })} className="min-h-[38px] rounded-lg border px-2 text-sm" style={campo}>
+            <select defaultValue="" onChange={(e) => e.target.value && navigate({ to: "/sap/$clientId/painel", params: { clientId: e.target.value } })} className="min-h-[38px] rounded-lg border px-2 text-sm" style={campo}>
               <option value="">Escolha…</option>
               {noSap.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -289,7 +289,7 @@ function AbrirClinica() {
         <details className="text-sm">
           <summary className="cursor-pointer" style={{ color: "var(--text-dim)" }}>Exceção: trazer para o SAP um cliente que já está no Nexo</summary>
           <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>Clientes que já estavam com a Doctor Creator continuam no Nexo. Use só para um piloto combinado.</p>
-          <select defaultValue="" onChange={(e) => e.target.value && navigate({ to: "/sap/$clientId", params: { clientId: e.target.value } })} className="mt-1 min-h-[38px] rounded-lg border px-2 text-sm" style={campo}>
+          <select defaultValue="" onChange={(e) => e.target.value && navigate({ to: "/sap/$clientId/painel", params: { clientId: e.target.value } })} className="mt-1 min-h-[38px] rounded-lg border px-2 text-sm" style={campo}>
             <option value="">Escolha o cliente do Nexo…</option>
             {soHub.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>

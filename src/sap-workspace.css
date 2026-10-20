@@ -94,3 +94,9 @@
 .sap-clinic-funnel li>div{background:var(--border);height:4px;margin-top:13px;border-radius:2px;overflow:hidden}
 .sap-clinic-funnel li>div>span{display:block;height:100%;background:var(--sap-brass)}
 @media(max-width:820px){.sap-clinic-summary .sap-clinic-phase{padding:23px 22px}.sap-clinic-summary .sap-clinic-kpi{padding:20px}.sap-clinic-funnel{padding:23px 21px}.sap-clinic-funnel ol{grid-template-columns:1fr;gap:15px}.sap-clinic-funnel li{display:grid;grid-template-columns:1fr auto;gap:0 15px;align-items:center}.sap-clinic-funnel li>strong{font-size:25px;margin:0}.sap-clinic-funnel li>div{grid-column:1/-1;margin-top:7px}.sap-clinic-phase-day{font-size:30px}}
+
+.sap-results-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.sap-results-heading h2 { font-size: clamp(20px, 2.2vw, 25px); font-weight: 650; letter-spacing: -.025em; }
+.sap-results-heading p:not(.sap-eyebrow) { margin-top: 4px; font-size: 13px; color: var(--text-dim); }
+.sap-clinic-kpi { min-width: 0; }
+.sap-clinic-kpi-value > span { font-size: clamp(26px, 2.5vw, 36px); overflow-wrap: anywhere; }

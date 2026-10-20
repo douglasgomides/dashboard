@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { montarRoi, resumoRoi, type DadosRoi } from "../src/lib/roi";
+import { montarRoi, resumoRoi, numerosDisponiveisRoi, type DadosRoi } from "../src/lib/roi";
 
 const base: DadosRoi = { tem_anuncios: true, tem_crm: true, investido: 1000, leads: 100, leads_com_origem: 90, ganhos: 4, ganhos_com_valor: 4, receita: 6000, ganho_identificavel: true, crm_compartilhado: false };
 
@@ -47,4 +47,10 @@ assert.equal(resumoRoi(semGasto), "Sem investimento em anúncios no período.");
 
 // ROI negativo.
 assert.equal(resumoRoi(montarRoi({ ...base, receita: 500 })), "-50%");
+// Os números conhecidos continuam legíveis sem inferir zeros de fontes ausentes ou de outro cliente.
+assert.deepEqual(numerosDisponiveisRoi({ ...base, ganhos_com_valor: 0 }), { investido: 1000, leads: 100, ganhos: 4 });
+assert.deepEqual(numerosDisponiveisRoi({ ...base, tem_crm: false, tem_anuncios: false }), { investido: null, leads: null, ganhos: null });
+assert.deepEqual(numerosDisponiveisRoi({ ...base, crm_compartilhado: true }), { investido: 1000, leads: null, ganhos: null });
+assert.deepEqual(numerosDisponiveisRoi({ ...base, investido: 0, leads: 0, ganhos: 0 }), { investido: 0, leads: 0, ganhos: 0 });
+assert.equal(numerosDisponiveisRoi({ ...base, ganho_identificavel: false }).ganhos, null);
 console.log("test-roi: ok");

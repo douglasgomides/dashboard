@@ -54,7 +54,7 @@ function InicioSap() {
     <ul className="space-y-2">
       {clinicas.map((c) => (
         <li key={c.id}>
-          <Link to="/sap/$clientId" params={{ clientId: c.id }} className="block rounded-xl border p-4 font-semibold" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+          <Link to="/sap/$clientId/painel" params={{ clientId: c.id }} className="block rounded-xl border p-4 font-semibold" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
             {c.nome} →
           </Link>
         </li>

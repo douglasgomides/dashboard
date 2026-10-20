@@ -304,11 +304,12 @@ try{
         await expect(menu.getByRole('link',{name:/Equipe e acessos/})).not.toBeVisible();
         await expect(menu.getByRole('navigation',{name:'Produto',exact:true})).not.toBeVisible();
         await page.keyboard.press('Escape');await expect(menu).not.toBeVisible();await expect(opener).toBeFocused();
-        await opener.click();await page.getByRole('dialog').getByRole('link',{name:/Acompanhamento/}).click();
-        await expect(page).toHaveURL(origins.sap+`/sap/${CID}/leitura`);await expect(page.getByRole('dialog')).not.toBeVisible();
-        const tabs=page.getByRole('navigation',{name:'Telas de Acompanhamento',exact:true});
+        await opener.click();await page.getByRole('dialog').getByRole('link',{name:/^Resultados/}).click();
+        await expect(page).toHaveURL(origins.sap+`/sap/${CID}/painel`);await expect(page.getByRole('dialog')).not.toBeVisible();
+        const tabs=page.getByRole('navigation',{name:'Telas de Resultados',exact:true});
         await expect(tabs.getByRole('link')).toHaveCount(3);
-        await expect(tabs.getByRole('link',{name:'Agentes de IA',exact:true})).toHaveAttribute('href',`/sap/${CID}/agentes`);
+        await expect(tabs.getByRole('link',{name:'Números da semana',exact:true})).toHaveAttribute('href',`/sap/${CID}/leitura`);
+        await opener.click();await expect(page.getByRole('dialog').getByRole('link',{name:/Rotina e execução/})).toHaveAttribute('href',`/sap/${CID}/agentes`);await page.keyboard.press('Escape');
         await tabs.getByRole('link',{name:'Metas e garantia',exact:true}).click();
         await expect(page).toHaveURL(origins.sap+`/sap/${CID}/metas`);
         await expect(page.getByRole('heading',{name:'Metas e garantia',level:1,exact:true})).toBeVisible();

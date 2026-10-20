@@ -19,7 +19,7 @@ for (const papel of ["admin", "owner", "strategist", "viewer"] as const) {
       },
     };
     const areas = areasVisiveis(vis);
-    assert.deepEqual(areas.map((a) => a.label), temFontes || papel === "admin" ? ["Início", "Marketing", "Comercial", "Plano de ação", "Relatórios"] : ["Início", "Marketing", "Plano de ação", "Relatórios"]);
+    assert.deepEqual(areas.map((a) => a.label), temFontes || papel === "admin" ? ["Resultados", "Marketing", "Comercial", "Plano de ação", "Relatórios"] : ["Resultados", "Marketing", "Plano de ação", "Relatórios"]);
     const paths = areas.flatMap((a) => a.visiveis.map(navTabKey));
     assert.equal(new Set(paths).size, paths.length, "Cada ferramenta aparece uma única vez no menu");
   }
@@ -51,3 +51,7 @@ assert.equal(
   areasSapVisiveis(false).some((g) => g.id === "equipe"),
   false,
 );
+
+assert.equal(areasSapVisiveis(false)[0].itens[0].sub, "/painel");
+assert.ok(areasSapVisiveis(false)[0].itens.some(i => i.sub === "/leitura"));
+assert.ok(areasSapVisiveis(false)[0].itens.some(i => i.sub === "/metas"));

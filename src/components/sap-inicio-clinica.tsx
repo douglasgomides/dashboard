@@ -38,6 +38,7 @@ export function VisaoClinica({ clientId }: { clientId: string }) {
   }, [c, marcosQ.data, hoje]);
 
   if (cadQ.isLoading) return <p className="note">Carregando…</p>;
+  if (cadQ.isError) return <div role="alert" className="space-y-2"><p>Não foi possível consultar o programa da clínica.</p><button type="button" className="btn" onClick={() => void cadQ.refetch()}>Tentar novamente</button></div>;
   if (!c) return <p className="note">Esta clínica ainda não está no Sistema de Aquisição.</p>;
   const dia = diaAtual(c.d0, c.pausas);
   const pct = dia === null ? 0 : Math.max(0, Math.min(100, Math.round((dia / 90) * 100)));
@@ -46,6 +47,44 @@ export function VisaoClinica({ clientId }: { clientId: string }) {
 
   return (
     <section aria-label="Resumo do programa" className="sap-clinic-summary space-y-4">
+      <header className="sap-results-heading"><div><p className="sap-eyebrow">Resultados da clínica</p><h2>Números das últimas 4 semanas</h2><p>{dmy(de)} a {dmy(ate)} · compare o resultado atual com o ponto de partida e a meta.</p></div><Link to="/sap/$clientId/leitura" params={{ clientId }} className="ws-action ws-action--secondary">Ver leitura da semana</Link></header>
+      {(autoQ.isError || planoQ.isError) && <div role="alert" className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--warn)" }}><p>{autoQ.isError ? "Não foi possível carregar os números atuais." : "Os números atuais estão disponíveis, mas o ponto de partida não pôde ser consultado."}</p><button type="button" className="btn mt-2" onClick={() => { void autoQ.refetch(); void planoQ.refetch(); }}>Tentar novamente</button></div>}
+      {!autoQ.isError && <div className="sap-clinic-kpis grid gap-3 sm:grid-cols-3" aria-busy={autoQ.isPending}>
+        {kpis.map((k) => {
+          const rot = KPIS_PLANO.find((x) => x.id === k)?.rotulo ?? k;
+          const base = (planoQ.data ?? []).find((p) => p.kpi === k);
+          const agora = atual.find((p) => p.kpi === k)?.baseline ?? null;
+          const b = base?.baseline ?? null;
+          const melhorou = b !== null && agora !== null ? (MENOR_MELHOR.has(k) ? agora < b : agora > b) : null;
+          const igual = b !== null && agora !== null && Math.abs(agora - b) < 1e-9;
+          const Icone = igual ? Minus : melhorou ? (MENOR_MELHOR.has(k) ? ArrowDownRight : ArrowUpRight) : MENOR_MELHOR.has(k) ? ArrowUpRight : ArrowDownRight;
+          const cor = igual || melhorou === null ? "var(--text-dim)" : melhorou ? "var(--good)" : "var(--crit)";
+          const inc = leitura?.kpis.find((x) => x.id === k)?.incompleto;
+          const partida = planoQ.isError ? "indisponível" : b !== null ? fmtKpi(k, b) : inc ? "não medido (dado incompleto)" : "ainda não medido";
+          return (
+            <div key={k} className="sap-clinic-kpi rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+              <div className="text-xs font-medium" style={{ color: "var(--text-dim)" }}>{TERMO[k] ? <Termo t={TERMO[k]!}>{rot}</Termo> : rot}</div>
+              {inc ? <DadoIncompleto inc={inc} clientId={clientId} compacto /> : (
+                <div className="sap-clinic-kpi-value mt-1 flex items-baseline gap-2">
+                  <span className="text-2xl font-semibold tabular-nums">{autoQ.isPending ? "Carregando…" : agora === null ? <span className="text-base font-normal" style={{ color: "var(--muted)" }}>sem dado no período</span> : fmtKpi(k, agora)}</span>
+                  {melhorou !== null && <Icone size={18} aria-label={igual ? "igual" : melhorou ? "melhorou" : "piorou"} style={{ color: cor }} />}
+                </div>
+              )}
+              <div className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
+                Últimas 4 semanas · <Termo t="Baseline">ponto de partida</Termo>: {partida}{base?.meta != null ? <> · <Termo t="Meta">meta</Termo>: {fmtKpi(k, base.meta)}</> : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>}
+
+      {leitura && leitura.pendencias.length === 0 && leitura.funil.some(etapa => etapa.valor > 0) && (
+        <section className="sap-clinic-funnel" aria-labelledby="sap-funnel-title">
+          <div><p className="sap-eyebrow">Da procura à decisão</p><h2 id="sap-funnel-title">O caminho dos seus pacientes</h2><p>Volumes registrados nas últimas 4 semanas · etapas do CRM</p></div>
+          <ol>{leitura.funil.map(etapa => <li key={etapa.id}><span>{etapa.id === "leads" ? "Interessados" : etapa.id === "compareceram" ? "Consultas realizadas" : etapa.rotulo}</span><strong>{etapa.valor.toLocaleString("pt-BR")}</strong><div aria-hidden="true"><span style={{ width: `${Math.max(0, Math.min(100, etapa.valor / maxVolume * 100))}%` }} /></div></li>)}</ol>
+        </section>
+      )}
+
       <div className="sap-clinic-phase rounded-2xl border p-4 sm:p-5" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
         {dia === null ? (
           <p className="text-sm">O programa ainda não tem data de início. A equipe Doctor Creator define o <Termo t="D0" /> no primeiro contato.</p>
@@ -65,42 +104,6 @@ export function VisaoClinica({ clientId }: { clientId: string }) {
         )}
         <div className="sap-phase-actions"><Link to="/sap/$clientId" params={{ clientId }} className="ws-action ws-action--primary">Ver minhas tarefas</Link><Link to="/sap/$clientId/cronograma" params={{ clientId }} className="ws-action ws-action--secondary">Consultar cronograma</Link></div>
       </div>
-
-      <div className="sap-clinic-kpis grid gap-3 sm:grid-cols-3">
-        {kpis.map((k) => {
-          const rot = KPIS_PLANO.find((x) => x.id === k)?.rotulo ?? k;
-          const base = (planoQ.data ?? []).find((p) => p.kpi === k);
-          const agora = atual.find((p) => p.kpi === k)?.baseline ?? null;
-          const b = base?.baseline ?? null;
-          const melhorou = b !== null && agora !== null ? (MENOR_MELHOR.has(k) ? agora < b : agora > b) : null;
-          const igual = b !== null && agora !== null && Math.abs(agora - b) < 1e-9;
-          const Icone = igual ? Minus : melhorou ? (MENOR_MELHOR.has(k) ? ArrowDownRight : ArrowUpRight) : MENOR_MELHOR.has(k) ? ArrowUpRight : ArrowDownRight;
-          const cor = igual || melhorou === null ? "var(--text-dim)" : melhorou ? "var(--good)" : "var(--crit)";
-          const inc = leitura?.kpis.find((x) => x.id === k)?.incompleto;
-          const partida = b !== null ? fmtKpi(k, b) : inc ? "não medido (dado incompleto)" : "ainda não medido";
-          return (
-            <div key={k} className="sap-clinic-kpi rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-              <div className="text-xs font-medium" style={{ color: "var(--text-dim)" }}>{TERMO[k] ? <Termo t={TERMO[k]!}>{rot}</Termo> : rot}</div>
-              {inc ? <DadoIncompleto inc={inc} clientId={clientId} compacto /> : (
-                <div className="sap-clinic-kpi-value mt-1 flex items-baseline gap-2">
-                  <span className="text-2xl font-semibold tabular-nums">{agora === null ? <span className="text-base font-normal" style={{ color: "var(--muted)" }}>sem dado no período</span> : fmtKpi(k, agora)}</span>
-                  {melhorou !== null && <Icone size={18} aria-label={igual ? "igual" : melhorou ? "melhorou" : "piorou"} style={{ color: cor }} />}
-                </div>
-              )}
-              <div className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
-                Últimas 4 semanas · <Termo t="Baseline">ponto de partida</Termo>: {partida}{base?.meta != null ? <> · <Termo t="Meta">meta</Termo>: {fmtKpi(k, base.meta)}</> : null}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {leitura && leitura.pendencias.length === 0 && leitura.funil.some(etapa => etapa.valor > 0) && (
-        <section className="sap-clinic-funnel" aria-labelledby="sap-funnel-title">
-          <div><p className="sap-eyebrow">Da procura à decisão</p><h2 id="sap-funnel-title">O caminho dos seus pacientes</h2><p>Volumes registrados nas últimas 4 semanas · etapas do CRM</p></div>
-          <ol>{leitura.funil.map(etapa => <li key={etapa.id}><span>{etapa.id === "leads" ? "Interessados" : etapa.id === "compareceram" ? "Consultas realizadas" : etapa.rotulo}</span><strong>{etapa.valor.toLocaleString("pt-BR")}</strong><div aria-hidden="true"><span style={{ width: `${Math.max(0, Math.min(100, etapa.valor / maxVolume * 100))}%` }} /></div></li>)}</ol>
-        </section>
-      )}
 
       <div className="flex flex-wrap gap-3">
         <div className="flex min-w-[240px] flex-1 items-start gap-3 rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>

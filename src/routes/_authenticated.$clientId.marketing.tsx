@@ -6,7 +6,7 @@ import { useClientRole } from "@/hooks/use-client-role";
 import { getClientFontes } from "@/lib/client-data";
 import { parseDateRangeSearch } from "@/lib/date-range";
 import {
-  areasVisiveis, navSearch, navTabKey,
+  areasVisiveis, navSearch, navTabKey, MARKETING_GROUPS,
   CLIENTES_SO_CRM, CLIENTES_SEM_AUDIENCIA,
 } from "@/lib/nav";
 import { Carregando, ErroCarga } from "@/components/sem-fonte";
@@ -14,11 +14,7 @@ import "@/styles/marketing-navigation.css";
 
 export const Route = createFileRoute("/_authenticated/$clientId/marketing")({ component: MarketingPage });
 const clientRoute = getRouteApi("/_authenticated/$clientId");
-const groups = [
-  { id: "Conteúdo", title: "Produzir e planejar conteúdo", description: "Revise os roteiros, organize a semana e descubra o que funciona no perfil." },
-  { id: "Campanhas e anúncios", title: "Planejar campanhas e acompanhar anúncios", description: "Defina a estratégia, acompanhe o investimento e consulte os links de aquisição." },
-  { id: "Público e demanda", title: "Entender o público", description: "Conheça quem acompanha o perfil e as perguntas que orientam os próximos conteúdos." },
-];
+
 
 function MarketingPage() {
   const { clientId } = Route.useParams();
@@ -37,13 +33,13 @@ function MarketingPage() {
     soCrm: CLIENTES_SO_CRM.has(clientId), semAudiencia: CLIENTES_SEM_AUDIENCIA.has(clientId),
   }).find((area) => area.id === "marketing")?.visiveis ?? [];
   return <div className="marketing-navigation">
-    <p className="marketing-navigation-intro">O que você precisa fazer no marketing da clínica?</p>
-    {groups.map((group) => {
+    <p className="marketing-navigation-intro">Comece pelos números. Depois, planeje o que sua equipe vai produzir e executar.</p>
+    {MARKETING_GROUPS.map((group, groupIndex) => {
       const entries = tools.filter((tab) => tab.grupo === group.id);
       if (!entries.length) return null;
-      return <section key={group.id} aria-labelledby={`marketing-${group.id === "Conteúdo" ? "conteudo" : group.id === "Campanhas e anúncios" ? "campanhas" : "publico"}`} className="marketing-task-group">
+      return <section key={group.id} aria-labelledby={`marketing-group-${groupIndex}`} className="marketing-task-group">
         <header>
-          <h2 id={`marketing-${group.id === "Conteúdo" ? "conteudo" : group.id === "Campanhas e anúncios" ? "campanhas" : "publico"}`}>{group.title}</h2>
+          <h2 id={`marketing-group-${groupIndex}`}>{group.title}</h2>
           <p>{group.description}</p>
         </header>
         <div className="marketing-task-links">

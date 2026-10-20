@@ -23,7 +23,7 @@ test("desktop: task search leads to existing tools and preserves clinic and peri
   await expect(
     sidebar
       .getByRole("navigation", { name: "Telas de Marketing" })
-      .getByRole("link"),
+      .getByRole("link", { includeHidden: true }),
   ).toHaveCount(14);
   await expect(
     sidebar.getByText("Conteúdo", { exact: true }),
@@ -264,11 +264,14 @@ for (const width of [375, 1440]) {
     await mockAccount(context, "viewer");
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`/${CID}/ideias?preset=7d`);
-    const labels = ["Início", "Marketing", "Comercial", "Plano de ação", "Relatórios"];
+    const labels = ["Resultados", "Marketing", "Comercial", "Plano de ação", "Relatórios"];
     if (width === 1440) {
       const areas = page.getByRole("navigation", { name: "Áreas do Nexo", exact: true });
       await expect(areas.getByRole("link")).toHaveText(labels);
       const marketing = page.getByRole("navigation", { name: "Telas de Marketing", exact: true });
+      for (const group of await marketing.locator("details").all()) {
+        if (await group.getAttribute("open") === null) await group.locator("summary").click();
+      }
       for (const label of ["Revisar roteiros", "Estratégias e campanhas", "Resultados dos anúncios", "Links rastreados", "Dúvidas do público"])
         await expect(marketing.getByRole("link", { name: label, exact: true })).toBeVisible();
       await mkdir(outputs, { recursive: true });
@@ -284,7 +287,7 @@ for (const width of [375, 1440]) {
       await page.screenshot({ path: `${outputs}nexo-menu-comercial.png` });
     } else {
       const areas = page.getByRole("navigation", { name: "Áreas", exact: true });
-      await expect(areas.getByRole("link")).toHaveText(["Início", "Marketing", "Comercial", "Ações"]);
+      await expect(areas.getByRole("link")).toHaveText(["Resultados", "Marketing", "Comercial", "Ações"]);
       await page.getByRole("button", { name: "Telas de Marketing", exact: true }).click();
       const menu = page.getByRole("dialog", { name: "Navegar no Nexo" });
       await expect(menu.locator("summary > span")).toHaveText(labels);
