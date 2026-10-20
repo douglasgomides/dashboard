@@ -153,10 +153,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
-  const ALVOS = ["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes", "sap_redigir", "anuncio_acao", "creative_worker"];
   // "conferencia" e "agentes" olham todos os clientes de uma vez (só admin), por isso não exigem client_id.
+  // O alvo já passou pelo enum de manualRequestSchema; uma segunda lista fica desatualizada e bloqueia novas funções.
   const alvoGlobal = alvo === "conferencia" || alvo === "agentes";
-  if ((!client_id && !alvoGlobal) || !alvo || !ALVOS.includes(alvo)) {
+  if ((!client_id && !alvoGlobal) || !alvo) {
     res.status(400).json({ error: "Informe client_id e alvo ('tudo', 'posts', 'anuncios', 'atendimento', 'comentarios' ou 'crm')" });
     return;
   }
