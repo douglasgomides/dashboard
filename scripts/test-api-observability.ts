@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import { withApiObservability } from "../api/_lib/observability";
+import type { VercelRequest, VercelResponse } from "../api/_lib/http-types";
+let status = 0, body: any;
+const headers = new Map<string, unknown>(), logs: string[] = [];
+const response = () => ({ setHeader(k: string, v: unknown) { headers.set(k, v); return this; }, status(n: number) { status = n; return this; }, json(v: unknown) { body = v; return this; } }) as unknown as VercelResponse;
+const req = { body: { token: "fictional-sensitive-token", message: "fictional-private-message" } } as VercelRequest;
+await withApiObservability(async () => { throw new Error("fictional-sensitive-provider-error"); }, "test", (s) => logs.push(s))(req, response());
+assert.equal(status, 503); assert.match(body.error, /Referência:/);
+assert.ok(!JSON.stringify(body).includes("provider-error"));
+assert.match(String(headers.get("X-Request-Id")), /^[a-f0-9-]{36}$/);
+assert.equal(JSON.parse(logs[0]).ok, false);
+assert.ok(!logs.join("").includes("fictional-sensitive"));
+await withApiObservability(async (_req, res) => { res.status(200).json({ ok: false, erro: "provider unavailable" }); }, "test", (s) => logs.push(s))(req, response());
+assert.equal(JSON.parse(logs[1]).ok, false, "HTTP 200 with ok:false remains an operational failure");
+await withApiObservability(async (_req, res) => { res.status(201).json({ ok: true }); }, "test", (s) => logs.push(s))(req, response());
+assert.equal(JSON.parse(logs[2]).status, 201); assert.equal(JSON.parse(logs[2]).ok, true);
+console.log("API observability: safe reference, failure correlation, provider exception containment and data-free logs passed.");

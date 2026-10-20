@@ -483,7 +483,7 @@ export type EtapaParaAnalise = {
 
 // rpc fora do types.ts gerado. Chamar pelo client: soltar supabase.rpc perde o `this`.
 type RpcClient = {
-  rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message?: string } | null }>;
+  rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message?: string; code?: string } | null }>;
 };
 
 export async function listEtapasParaAnalise(clientId: string): Promise<EtapaParaAnalise[]> {
@@ -586,23 +586,26 @@ export async function getComentariosVozDoPaciente(clientId: string, start: strin
 
 export async function getDiagnosticoComercial(clientId: string, start: string, end: string): Promise<DadosComerciais> {
   const cli = supabase as unknown as RpcClient;
-  const fontes = await getClientFontes(clientId).catch(() => null);
+  const fontes = await getClientFontes(clientId);
   const whatsappConectado = !!fontes?.tem_atendimento;
-  const wts: WtsResumoMin | null = whatsappConectado ? await getWtsResumo(clientId, start, end).catch(() => null) : null;
+  const wts: WtsResumoMin | null = whatsappConectado ? await getWtsResumo(clientId, start, end) : null;
 
   const { data, error } = await cli.rpc("crm_diagnostico_comercial", { p_client_id: clientId, p_from: start, p_to: end });
   if (!error && data && typeof data === "object") {
     return lerDiagnosticoRpc(data as Record<string, any>, { whatsappConectado, wts });
   }
+  // Compatibilidade só para função ausente. Rede, permissão e falha de banco
+  // precisam chegar à tela; não podem virar um diagnóstico de funil vazio.
+  if (error && !["42883", "PGRST202"].includes(error.code ?? "")) throw error;
+  if (!error) throw new Error("O diagnóstico comercial não retornou dados válidos. Tente novamente.");
 
   const [provider, metricas, etapas, jornada] = await Promise.all([
-    getCrmProvider(clientId).catch(() => null),
-    getCrmMetricasEssenciais(clientId).catch(() => null),
-    getCrmLeadsPorEtapa(clientId).catch(() => []),
+    getCrmProvider(clientId),
+    getCrmMetricasEssenciais(clientId),
+    getCrmLeadsPorEtapa(clientId),
     cli
       .rpc("jornada_resumo", { p_client: clientId })
-      .then((r) => (r.error ? null : (r.data as { leads_total: number; leads_sem_pessoa: number } | null)))
-      .catch(() => null),
+      .then((r) => { if (r.error) throw r.error; return r.data as { leads_total: number; leads_sem_pessoa: number } | null; }),
   ]);
   return montarDadosReduzidos({
     provider,
@@ -630,10 +633,10 @@ function gravarLocal(clientId: string, xs: Acompanhamento[]) {
   try {
     localStorage.setItem(chaveLocal(clientId), JSON.stringify(xs));
   } catch {
-    /* navegador sem armazenamento: segue sem persistir */
+    throw new Error("Não foi possível guardar o acompanhamento neste navegador. A alteração não foi salva.");
   }
 }
-const semTabela = (e: any) => e?.code === "42P01" || e?.code === "PGRST205" || /acoes_acompanhamento/.test(e?.message ?? "");
+const semTabela = (e: any) => e?.code === "42P01" || e?.code === "PGRST205";
 
 export async function getAcompanhamentos(clientId: string): Promise<{ itens: Acompanhamento[]; local: boolean }> {
   const { data, error } = await (supabase as any).from("acoes_acompanhamento").select("*").eq("client_id", clientId);

@@ -52,5 +52,9 @@ export function useResultado(clientId: string, start: string, end: string) {
     });
   }, [qualidade.data, metricas.data, anterior.data, posts.data, periodoIg.data, adsDiag.data, adsDia.data, wts.data, crm.data, leadsDia.data, fontes.data, start, fim, hoje, diasPeriodo]);
 
-  return { r, hoje, fim, diasPeriodo, carregando: metricas.isLoading, metricas, anterior, posts, periodoIg, fontes, qualidade };
+  const leituras = [metricas, anterior, posts, fontes, adsDiag, adsDia, wts, crm, leadsDia, qualidade];
+  return { r, hoje, fim, diasPeriodo, carregando: metricas.isLoading, metricas, anterior, posts, periodoIg, fontes, qualidade,
+    fontesComFalha: leituras.some((q) => q.isError), carregandoFontes: leituras.some((q) => q.isLoading),
+    refazerFontes: () => Promise.all(leituras.filter((q) => q.isError).map((q) => q.refetch())),
+  };
 }

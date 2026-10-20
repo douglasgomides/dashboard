@@ -1,3 +1,4 @@
+import { withApiObservability } from "../_lib/observability.js";
 import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { createAdminSchema } from "../_lib/request-validation.js";
@@ -13,7 +14,7 @@ function randomPassword(): string {
   return Buffer.from(bytes).toString("base64url");
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -81,3 +82,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   res.status(200).json({ user_id: created.user.id, temporary_password: password ? null : finalPassword });
 }
+
+export default withApiObservability(handler, "admin/create-admin");

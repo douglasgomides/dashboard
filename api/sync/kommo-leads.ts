@@ -1,3 +1,4 @@
+import { withApiObservability } from "../_lib/observability.js";
 import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
@@ -25,7 +26,7 @@ import { ingerirConversasKommo } from "../_lib/conversas-kommo.js";
 //   conversas=1      importa as conversas (talks) pelos eventos de mensagem, em vez do sync de leads
 //   dias=            na 1ª importação de conversas, quantos dias para trás (padrão 30)
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST" && req.method !== "GET") {
     res.status(405).json({ error: "Method not allowed" });
     return;
@@ -156,3 +157,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 }
+
+export default withApiObservability(handler, "sync/kommo-leads");

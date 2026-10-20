@@ -202,7 +202,7 @@ function OportunidadesPage() {
   const { podeEditar } = useClientRole(clientId);
   const { start, end } = resolveDateRange(clientLayoutRoute.useSearch());
   const periodLabel = formatRangeLabel({ start, end });
-  const { r, carregando } = useResultado(clientId, start, end);
+  const { r, carregando, fontesComFalha, carregandoFontes, refazerFontes } = useResultado(clientId, start, end);
   const qc = useQueryClient();
   const salvos = useQuery({ queryKey: ["acoes", clientId], queryFn: () => getAcompanhamentos(clientId), retry: false });
   const [aba, setAba] = useState("abertas");
@@ -210,9 +210,9 @@ function OportunidadesPage() {
 
   const salvar = useMutation({
     mutationFn: salvarAcompanhamento,
-    onSuccess: (_res, a) => {
+    onSuccess: (res, a) => {
       qc.setQueryData(["acoes", clientId], (old: { itens: Acompanhamento[]; local: boolean } | undefined) => ({
-        local: old?.local ?? true,
+        local: res.local,
         itens: [...(old?.itens ?? []).filter((x) => x.insightId !== a.insightId), a],
       }));
       setAberto((cur) => (cur && cur.acomp.insightId === a.insightId ? { ...cur, acomp: a } : cur));
@@ -223,9 +223,11 @@ function OportunidadesPage() {
   const filtro = ABAS.find((a) => a.id === aba)!.filtro;
   const visiveis = lista.filter((x) => filtro(x.acomp.status));
 
-  if (carregando || !r) {
+  if (fontesComFalha) return <div className="card" role="alert"><h1>As recomendações não puderam ser conferidas</h1><p>Uma fonte de resultados falhou. Tente novamente antes de iniciar uma ação.</p><button className="btn" type="button" onClick={() => void refazerFontes()}>Tentar novamente</button></div>;
+  if (carregando || carregandoFontes || !r || salvos.isLoading) {
     return <div className="mx-auto h-40 w-full max-w-5xl animate-pulse rounded-xl" style={{ background: "var(--surface-2)" }} aria-busy="true" />;
   }
+  if (salvos.isError) return <div className="card" role="alert"><h1>O acompanhamento não carregou</h1><p>Não foi possível conferir o histórico. Tente novamente antes de alterar uma ação.</p><button className="btn" type="button" disabled={salvos.isFetching} onClick={() => void salvos.refetch()}>Tentar novamente</button></div>;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
@@ -338,7 +340,7 @@ function OportunidadesPage() {
           }
           clientId={clientId}
           onFechar={() => setAberto(null)}
-          rodape={<Execucao acomp={aberto.acomp} podeEditar={podeEditar} email={user?.email ?? null} onSalvar={(a) => salvar.mutate(a)} salvando={salvar.isPending} />}
+          rodape={<>{salvar.isError && <p role="alert" style={{ color: "var(--crit)" }}>A alteração não foi salva. {salvar.error.message}</p>}<Execucao acomp={aberto.acomp} podeEditar={podeEditar} email={user?.email ?? null} onSalvar={(a) => salvar.mutate(a)} salvando={salvar.isPending} /></>}
         />
       )}
     </div>

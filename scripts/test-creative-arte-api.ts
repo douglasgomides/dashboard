@@ -11,8 +11,9 @@ const origin = "https://creative-arte.offline.invalid";
 const originalFetch = globalThis.fetch, originalEnv = { ...process.env };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 const path = `artes/${CLIENT}/${ADAPTATION}/2-fixture.png`;
-let isAdmin = true, missingAdaptation = false, failure = "", providerCalls = 0, calls = 0;
+let isAdmin = true, missingAdaptation = false, missingArt = false, failure = "", providerCalls = 0, calls = 0, cleaned = 0;
 const saved: Record<string, unknown>[] = [], reviews: Record<string, unknown>[] = [];
+const settlements: Record<string, unknown>[] = [];
 
 async function invoke(body: Record<string, unknown>, token = "Bearer fictional-session") {
   const req = Object.assign(Readable.from([]), { method: "POST", query: {}, headers: { authorization: token }, body }) as unknown as VercelRequest;
@@ -36,12 +37,27 @@ try {
       assert.equal(method, "POST");
       assert.match(JSON.parse(String(init?.body)).prompt, /Slide 2 de 2/);
       providerCalls++;
-      return failure === "provider" ? json({ error: { message: "fictional provider failure" } }, 403) : json({ data: [{ b64_json: Buffer.from("fictional image").toString("base64") }] });
+      if (failure === "network") throw new Error("simulated unknown provider outcome");
+      return failure === "provider" ? json({ error: { message: "fictional provider failure" } }, 403) : json({ data: [{ b64_json: Buffer.from("fictional image").toString("base64") }], usage: { input_tokens: 100, output_tokens: 1000 } });
     }
     assert.equal(u.origin, origin, "no request may reach a real service during regression tests");
     if (u.pathname === "/auth/v1/user") return json({ id: USER });
     if (u.pathname.endsWith("/app_admins")) return json(isAdmin ? { user_id: USER } : null);
     if (u.pathname.endsWith("/client_members")) return json({ user_id: USER, role: "strategist" });
+    if (u.pathname.endsWith("/rpc/creative_arte_reservar")) {
+      const b = JSON.parse(String(init?.body));
+      assert.equal(b.p_client_id, CLIENT); assert.equal(b.p_adaptation_id, ADAPTATION);
+      assert.ok(b.p_valor_usd > 0.063);
+      return failure === "reserve" ? json({ message: "Teto diário", code: "P0001" }, 400) : json(b.p_positions.map((position: number) => ({ id: `fictional-reservation-${position}`, position })));
+    }
+    if (u.pathname.endsWith("/rpc/creative_arte_finalizar")) {
+      settlements.push(JSON.parse(String(init?.body)));
+      return failure === "settlement" ? json({ message: "DB unavailable" }, 503) : json(true);
+    }
+    if (u.pathname === "/storage/v1/object/nexo-creative-private" && method === "DELETE") {
+      assert.equal(JSON.parse(String(init?.body)).prefixes.length, 1); cleaned++;
+      return json([]);
+    }
     if (u.pathname.startsWith("/storage/v1/object/sign/")) {
       assert.deepEqual(JSON.parse(String(init?.body)), { expiresIn: 600, paths: [path] });
       return json([{ path, signedURL: `/object/sign/nexo-creative-private/${path}?token=fictional` }]);
@@ -72,7 +88,7 @@ try {
       assert.equal(u.searchParams.get("client_id"), `eq.${CLIENT}`);
       assert.equal(u.searchParams.get("id"), `eq.${ART}`, "arte_id must survive validation");
       reviews.push(JSON.parse(String(init?.body)));
-      return json([{ id: ART }]);
+      return json(missingArt ? null : [{ id: ART }]);
     }
     if (table === "ia_execucoes" && method === "POST") return json(null);
     throw new Error(`Unexpected request: ${method} ${u.pathname}`);
@@ -89,6 +105,8 @@ try {
   assert.equal(providerCalls, 1, "refazer must retain the requested slide rather than charge for every slide");
   assert.equal(saved[0].position, 2);
   assert.equal(saved[0].adaptation_id, ADAPTATION);
+  assert.equal(saved[0].custo_usd, 0.0405, "the paid cost includes the provider's input and output usage");
+  assert.equal(settlements.at(-1)?.p_ok, true);
   for (const status of ["aprovada", "descartada"]) {
     assert.equal((await invoke(request({ acao: "revisar", arte_id: ART, status }))).result.ok, true);
     assert.equal(reviews.at(-1)?.status, status);
@@ -111,12 +129,22 @@ try {
   assert.match((await invoke(request({ acao: "gerar", adaptacao_id: ADAPTATION }))).result.erro, /não encontrada/);
   assert.equal(providerCalls, 1, "missing or foreign adaptations never call the paid provider");
   missingAdaptation = false;
-  for (const boundary of ["provider", "storage", "record"]) {
+  missingArt = true;
+  assert.equal((await invoke(request({ acao: "revisar", arte_id: ART, status: "aprovada" }))).result.ok, false, "zero-row review is not a success");
+  missingArt = false;
+  failure = "reserve";
+  const beforeReservation = providerCalls;
+  assert.equal((await invoke(request({ acao: "gerar", adaptacao_id: ADAPTATION, slides: [2] }))).result.ok, false);
+  assert.equal(providerCalls, beforeReservation, "a denied budget never calls the paid provider");
+  for (const boundary of ["provider", "storage", "record", "network", "settlement"]) {
     failure = boundary;
     const r = await invoke(request({ acao: "gerar", adaptacao_id: ADAPTATION, slides: [2] }));
     assert.equal(r.result.geradas, 0, `failure at ${boundary} must never count a completed image`);
     assert.equal(r.result.erros.length, 1);
+    const cost = Number(settlements.at(-1)?.p_custo_usd);
+    assert.equal(cost === 0, boundary === "provider", "a paid or uncertain request keeps its cost even when persistence fails");
   }
+  assert.equal(cleaned, 1, "a private file is cleaned up if its database record fails");
   console.log("ok creative-arte-api (payload real → autenticação → geração → arquivo privado → registro → URL assinada → revisão; falhas e isolamento)");
 } finally {
   globalThis.fetch = originalFetch;

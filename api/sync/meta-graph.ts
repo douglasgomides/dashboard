@@ -1,3 +1,4 @@
+import { withApiObservability } from "../_lib/observability.js";
 import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
@@ -7,7 +8,7 @@ import { runMetaGraphSync, listMetaGraphAccountIds } from "../_lib/meta-graph-sy
 // pra puxar posts, porque ela trava em consultas de período histórico.
 // Protegido pelo mesmo SYNC_SECRET do endpoint da Windsor.
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST" && req.method !== "GET") {
     res.status(405).json({ error: "Method not allowed" });
     return;
@@ -74,3 +75,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 }
+
+export default withApiObservability(handler, "sync/meta-graph");

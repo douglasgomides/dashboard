@@ -1,3 +1,4 @@
+import { withApiObservability } from "../../_lib/observability.js";
 import type { VercelRequest, VercelResponse } from "../../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -10,7 +11,7 @@ import { readRawBody, parseBracketFormBody, extractLeadEvents, WebhookBodyError 
 // proteção do endpoint. Precisa responder em até 2s com status 100–299 pra
 // não disparar retry (a Kommo tenta de novo até 4x numa janela de 1h).
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     res.status(405).end();
     return;
@@ -163,3 +164,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(503).json({ error: "Não foi possível persistir a entrega. Tente novamente." });
   }
 }
+
+export default withApiObservability(handler, "integrations/kommo/webhook");
