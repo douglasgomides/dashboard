@@ -80,7 +80,7 @@ export function PrimeiroAcesso({ isAdmin, clientId }: { isAdmin: boolean; client
   const prefQ = useQuery({ queryKey: ["sap-pref"], queryFn: getPrefUsuarioSap, staleTime: Infinity });
   const [aberto, setAberto] = useState(false);
   const [passo, setPasso] = useState(0);
-  useEffect(() => { if (prefQ.data && !prefQ.data.tour_visto_em) setAberto(true); }, [prefQ.data]);
+  useEffect(() => { if (isAdmin && prefQ.data && !prefQ.data.tour_visto_em) setAberto(true); }, [prefQ.data, isAdmin]);
   useEffect(() => {
     const abrir = () => { setPasso(0); setAberto(true); };
     window.addEventListener("sap-abrir-tour", abrir);
@@ -91,7 +91,7 @@ export function PrimeiroAcesso({ isAdmin, clientId }: { isAdmin: boolean; client
     setAberto(false); setPasso(0);
     if (prefQ.data && !prefQ.data.tour_visto_em) marcarVistoSap("tour").then(() => qc.invalidateQueries({ queryKey: ["sap-pref"] })).catch(() => undefined);
   };
-  if (!aberto) return null;
+  if (!aberto) return !isAdmin && prefQ.data && !prefQ.data.tour_visto_em ? <button type="button" className="mt-3 min-h-[44px] text-sm font-semibold underline" style={{ color: "var(--accent)" }} onClick={() => setAberto(true)}>Primeiro acesso? Conheça seu programa (2 min)</button> : null;
   const p = passos[passo];
   const destino = p.sub === "/comece" ? { to: "/sap/comece" } : clientId ? { to: `/sap/$clientId${p.sub}`, params: { clientId } } : null;
   return (

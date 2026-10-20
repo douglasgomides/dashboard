@@ -102,3 +102,16 @@ for (const source of ["instagram", "anuncios", "crm", "atendimento", "todas"] as
     await expect(page.getByRole("button", { name: "Baixar PDF detalhado", exact: true })).toBeEnabled();
   });
 }
+
+test("a clinic's first SAP visit puts results before the optional tour", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await context.route("**/rest/v1/sap_clinicas?**", r => r.fulfill({ json: (r.request().headers().accept ?? "").includes("vnd.pgrst.object") ? { id: SID, client_id: CID, d0: date, nome: "QA fictício", status: "rodando", sap_pausas: [] } : [{ id: SID, client_id: CID, d0: date, nome: "QA fictício", status: "rodando", sap_pausas: [] }] }));
+  await context.route("**/rest/v1/sap_usuario_pref?**", r => r.fulfill({ json: { tour_visto_em: null } }));
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/sap/${CID}/painel`);
+  await expect(page.getByRole("region", { name: "Primeiro acesso", exact: true })).toHaveCount(0);
+  const intro = page.getByRole("button", { name: "Primeiro acesso? Conheça seu programa (2 min)", exact: true });
+  await expect(intro).toBeVisible();
+  await intro.click();
+  await expect(page.getByRole("region", { name: "Primeiro acesso", exact: true })).toBeVisible();
+});
