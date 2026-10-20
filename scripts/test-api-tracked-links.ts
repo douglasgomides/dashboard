@@ -8,7 +8,7 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
 let exists = true, write: Record<string, unknown> | null = null;
 async function invoke(body: Record<string, unknown>) {
   let status = 0, result: any;
-  const req = Object.assign(Readable.from([]), { method: "POST", query: {}, body: { client_id: CID, alvo: "link_rastreado", ...body }, headers: { authorization: "Bearer fictional", "x-forwarded-host": "untrusted.invalid", host: "untrusted.invalid" } }) as VercelRequest;
+  const req = Object.assign(Readable.from([]), { method: "POST", query: {}, body: { client_id: CID, alvo: "link_rastreado", ...body }, headers: { authorization: "Bearer fictional", "x-forwarded-host": "untrusted.invalid", host: "untrusted.invalid" } }) as unknown as VercelRequest;
   const res = { setHeader() { return this; }, status(s: number) { status = s; return this; }, json(v: unknown) { result = v; return this; } } as unknown as VercelResponse;
   await manual(req, res); return { status, result };
 }
