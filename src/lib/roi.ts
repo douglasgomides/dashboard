@@ -45,6 +45,16 @@ export interface Roi {
 export const MIN_VALOR = 0.8;
 export const MIN_ORIGEM = 0.8;
 
+/** Um ROI incompleto não apaga os volumes medidos; fonte ausente ou compartilhada nunca vira zero. */
+export function numerosDisponiveisRoi(d: DadosRoi) {
+  const crmDaClinica = d.tem_crm && !d.crm_compartilhado;
+  return {
+    investido: d.tem_anuncios ? d.investido : null,
+    leads: crmDaClinica ? d.leads : null,
+    ganhos: crmDaClinica && d.ganho_identificavel ? d.ganhos : null,
+  };
+}
+
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "—");
 
 export function montarRoi(d: DadosRoi): Roi {

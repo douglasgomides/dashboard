@@ -720,7 +720,7 @@ function MonthlyOverview() {
   const saldoTotal = seguidoresNoPeriodo(data as DiaSeguidores[], start, fim);
   const taxaUnica =
     meta?.alcance_unico && meta.interacoes != null
-      ? ((meta.interacoes / meta.alcance_unico) * 100).toFixed(1) + "%"
+      ? ((meta.interacoes / meta.alcance_unico) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + "%"
       : null;
   const sinal = (n: number) =>
     `${n >= 0 ? "+" : "-"}${Math.abs(n).toLocaleString("pt-BR")}`;
@@ -735,7 +735,7 @@ function MonthlyOverview() {
   const interactions = sum(data, "total_interactions");
   const contactTaps = sum(data, "profile_links_taps");
   const engagementRate =
-    reach > 0 ? ((interactions / reach) * 100).toFixed(1) + "%" : "—";
+    reach > 0 ? ((interactions / reach) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + "%" : "—";
   // Comparação com o período anterior: só com 80%+ dos dias com alcance dos dois lados e 7+ dias.
   const diasReach = data.filter((d) => d.reach != null).length;
   const temAnterior =
@@ -832,93 +832,17 @@ function MonthlyOverview() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-8">
-      {/* Avisos que mudam a leitura dos números ficam sempre visíveis. */}
-      {alertasCriticos.length > 0 && (
-        <div className="space-y-2" role="status">
-          {alertasCriticos.map((a, i) => (
-            <p
-              key={i}
-              className="rounded-lg border px-3 py-2 text-sm"
-              style={{
-                background: COR_TOM[a.tom].fundo,
-                borderColor: COR_TOM[a.tom].borda,
-                color: "var(--ink)",
-              }}
-            >
-              {a.texto}
-            </p>
-          ))}
-        </div>
-      )}
-
+    <div className="nexo-results-overview mx-auto w-full max-w-5xl space-y-6">
       {/* Dado com erro na origem: muda a leitura de tudo abaixo, por isso vem antes. */}
       <QualidadeDados clientId={clientId} compacto />
 
-      {/* ===== CAMADA 1: primeira dobra ===== */}
-      <section className="space-y-4" aria-label="Por onde começar">
-        <header className="ws-section-heading">
-          <div>
-            <h2>Por onde começar</h2>
-            <p>Entenda o cenário e defina o próximo passo da equipe.</p>
-          </div>
-        </header>
-        {principal ? (
-          <NextBestActionCard
-            insight={principal}
-            destaque
-            onAbrir={() => painel.abrir(principal)}
-          />
-        ) : (
-          <div className="ws-priority ws-priority-empty">
-            <span className="ws-priority-symbol" aria-hidden>
-              <Target size={24} />
-            </span>
-            <h3>Sem recomendação para este período</h3>
-            <p>
-              Os dados deste período ainda não sustentam uma recomendação.
-              Confira as fontes e consulte as prioridades identificadas para a
-              equipe.
-            </p>
-            <Link
-              to="/$clientId/proximas-acoes"
-              params={{ clientId }}
-              search={dateRangeState}
-              className="ws-action ws-action--primary"
-            >
-              Ver prioridades da equipe <ChevronRight size={18} aria-hidden />
-            </Link>
-          </div>
-        )}
-
-        <div className="ws-workflow-foot">
-          {principal && (
-            <Link
-              to="/$clientId/proximas-acoes"
-              params={{ clientId }}
-              search={dateRangeState}
-            >
-              Ver prioridades da equipe <ChevronRight size={16} aria-hidden />
-            </Link>
-          )}
-          <Link
-            to="/$clientId/ideias"
-            params={{ clientId }}
-            search={dateRangeState}
-          >
-            Preparar os próximos conteúdos{" "}
-            <ChevronRight size={16} aria-hidden />
-          </Link>
-        </div>
-      </section>
       <RetornoInvestimento clientId={clientId} start={start} end={fim} />
       <section className="space-y-4" aria-label="Resultados do Instagram">
         <header className="ws-section-heading">
           <div>
             <h2>Resultados do Instagram</h2>
             <p>
-              Indicadores do período selecionado. As definições e limitações
-              estão junto de cada número.
+              {periodLabel} · Fonte: Instagram. Consulte a definição de cada indicador no ícone de informação.
             </p>
           </div>
         </header>
@@ -939,7 +863,7 @@ function MonthlyOverview() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             {periodo30 ? (
               <Kpi
                 icone={UserPlus}
@@ -1020,6 +944,83 @@ function MonthlyOverview() {
           Ver todas as análises do período{" "}
           <ChevronRight size={16} aria-hidden />
         </WorkspaceButton>
+      </section>
+
+      {/* Avisos que mudam a leitura dos números ficam sempre visíveis. */}
+      {alertasCriticos.length > 0 && (
+        <div className="space-y-2" role="status">
+          {alertasCriticos.map((a, i) => (
+            <p
+              key={i}
+              className="rounded-lg border px-3 py-2 text-sm"
+              style={{
+                background: COR_TOM[a.tom].fundo,
+                borderColor: COR_TOM[a.tom].borda,
+                color: "var(--ink)",
+              }}
+            >
+              {a.texto}
+            </p>
+          ))}
+        </div>
+      )}
+
+
+      {/* ===== CAMADA 1: primeira dobra ===== */}
+      <section className="space-y-4" aria-label="Por onde começar">
+        <header className="ws-section-heading">
+          <div>
+            <h2>Por onde começar</h2>
+            <p>Entenda o cenário e defina o próximo passo da equipe.</p>
+          </div>
+        </header>
+        {principal ? (
+          <NextBestActionCard
+            insight={principal}
+            destaque
+            onAbrir={() => painel.abrir(principal)}
+          />
+        ) : (
+          <div className="ws-priority ws-priority-empty">
+            <span className="ws-priority-symbol" aria-hidden>
+              <Target size={24} />
+            </span>
+            <h3>Sem recomendação para este período</h3>
+            <p>
+              Os dados deste período ainda não sustentam uma recomendação.
+              Confira as fontes e consulte as prioridades identificadas para a
+              equipe.
+            </p>
+            <Link
+              to="/$clientId/proximas-acoes"
+              params={{ clientId }}
+              search={dateRangeState}
+              className="ws-action ws-action--primary"
+            >
+              Ver prioridades da equipe <ChevronRight size={18} aria-hidden />
+            </Link>
+          </div>
+        )}
+
+        <div className="ws-workflow-foot">
+          {principal && (
+            <Link
+              to="/$clientId/proximas-acoes"
+              params={{ clientId }}
+              search={dateRangeState}
+            >
+              Ver prioridades da equipe <ChevronRight size={16} aria-hidden />
+            </Link>
+          )}
+          <Link
+            to="/$clientId/ideias"
+            params={{ clientId }}
+            search={dateRangeState}
+          >
+            Preparar os próximos conteúdos{" "}
+            <ChevronRight size={16} aria-hidden />
+          </Link>
+        </div>
       </section>
 
       {/* ===== CAMADAS 2 e 3: todas as análises (nada removido; só recolhido) ===== */}

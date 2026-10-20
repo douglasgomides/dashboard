@@ -14,7 +14,7 @@ for (const width of [375, 1440]) {
     await expect(page).toHaveURL(new RegExp(`/${CID}/marketing\\?preset=7d`));
     await expect(page.getByRole("heading", { name: "Visão geral de Marketing", exact: true })).toBeVisible();
     const main = page.getByRole("main");
-    for (const name of ["Produzir e planejar conteúdo", "Planejar campanhas e acompanhar anúncios", "Entender o público"])
+    for (const name of ["Analisar os números", "Produzir e planejar conteúdo", "Planejar campanhas e aquisição"])
       await expect(main.getByRole("heading", { name, exact: true })).toBeVisible();
     await expect(main.getByRole("link", { name: /^Inteligência Criativa/ })).toHaveCount(0);
     const audit = await new AxeBuilder({ page }).include(".mainwrap").withTags(["wcag2a", "wcag2aa"]).analyze();
@@ -35,7 +35,7 @@ for (const width of [375, 1440]) {
       await page.getByRole("combobox", { name: "Período", exact: true }).selectOption("30d");
       await expect.poll(() => new URL(page.url()).searchParams.get("preset")).toBe("30d");
       expect(new URL(page.url()).searchParams.get("visao")).toBe("semana");
-      const ads = await sidebar.getByRole("link", { name: "Resultados dos anúncios", exact: true }).getAttribute("href");
+      const ads = await sidebar.getByRole("link", { name: "Resultados dos anúncios", exact: true, includeHidden: true }).getAttribute("href");
       expect(new URL(ads!, "http://localhost").searchParams.has("visao")).toBe(false);
     }
     await main.getByRole("button", { name: /^Encontrar ideias/ }).click();

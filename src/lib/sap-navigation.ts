@@ -31,7 +31,7 @@ export const ITENS = [
   {
     grupo: "",
     sub: "/painel",
-    label: "Painel da clínica",
+    label: "Resultados da clínica",
     Icone: Flag,
     clinica: true,
   },
@@ -127,10 +127,10 @@ export const ROTULO_CLINICA: Record<string, string> = {
 export const AREAS_SAP = [
   {
     id: "visao",
-    label: "Visão geral",
-    hint: "Programa e resultados",
+    label: "Resultados",
+    hint: "Números, evolução e metas",
     Icone: Flag,
-    subs: ["/painel"],
+    subs: ["/painel", "/leitura", "/metas"],
   },
   {
     id: "tarefas",
@@ -148,10 +148,10 @@ export const AREAS_SAP = [
   },
   {
     id: "resultado",
-    label: "Acompanhamento",
-    hint: "Números e evolução",
+    label: "Rotina e execução",
+    hint: "Saúde, mídia e agentes",
     Icone: Gauge,
-    subs: ["/leitura", "/metas", "/execucao", "/midia", "/agentes"],
+    subs: ["/execucao", "/midia", "/agentes"],
   },
   {
     id: "materiais",

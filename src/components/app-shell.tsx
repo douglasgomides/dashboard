@@ -190,7 +190,9 @@ function TelasDaArea({
   dateRange,
   onEscolher,
   currentSearch,
+  compacto = false,
 }: {
+  compacto?: boolean;
   currentSearch?: Record<string, unknown>;
   area: AreaVisivel;
   sub: string;
@@ -198,27 +200,31 @@ function TelasDaArea({
   dateRange: DateRangeState;
   onEscolher?: () => void;
 }) {
-  return (
-    <nav className="workspace-pages" aria-label={`Telas de ${area.label}`}>
-      {area.visiveis.map((t, i) => (
-        <div key={navTabKey(t)}>
-          {t.grupo && t.grupo !== area.visiveis[i - 1]?.grupo && (
-            <p className="workspace-nav-label">{t.grupo}</p>
-          )}
-          <TabLink
-            tab={t}
-            clientId={clientId}
-            dateRange={dateRange}
-            ativo={tabAtiva(t, sub, currentSearch)}
-            onClick={onEscolher}
-          >
-            <t.Icone size={16} aria-hidden />
-            <span>{t.label}</span>
-          </TabLink>
-        </div>
-      ))}
-    </nav>
+  const item = (t: NavTab) => (
+    <TabLink key={navTabKey(t)} tab={t} clientId={clientId} dateRange={dateRange} ativo={tabAtiva(t, sub, currentSearch)} onClick={onEscolher}>
+      <t.Icone size={16} aria-hidden /><span>{t.label}</span>
+    </TabLink>
   );
+  if (compacto && area.id === "marketing") {
+    const grupos = [...new Set(area.visiveis.map(t => t.grupo).filter((g): g is string => !!g))];
+    return <nav className="workspace-pages" aria-label={`Telas de ${area.label}`}>
+      {area.visiveis.filter(t => !t.grupo).map(item)}
+      {grupos.map((grupo, index) => {
+        const telas = area.visiveis.filter(t => t.grupo === grupo);
+        const ativo = telas.some(t => tabAtiva(t, sub, currentSearch));
+        return <details key={grupo} className="workspace-nav-group" open={ativo || (sub === "/marketing" && index === 0)}>
+          <summary><span>{grupo}</span><span className="workspace-nav-count">{telas.length}</span><ChevronDown size={14} aria-hidden /></summary>
+          <div>{telas.map(item)}</div>
+        </details>;
+      })}
+    </nav>;
+  }
+  return <nav className="workspace-pages" aria-label={`Telas de ${area.label}`}>
+    {area.visiveis.map((t, i) => <div key={navTabKey(t)}>
+      {t.grupo && t.grupo !== area.visiveis[i - 1]?.grupo && <p className="workspace-nav-label">{t.grupo}</p>}
+      {item(t)}
+    </div>)}
+  </nav>;
 }
 
 export function AppShell({
@@ -388,6 +394,7 @@ export function AppShell({
           <div className="workspace-section so-aberta">
             <p className="workspace-nav-label">Em {area.label}</p>
             <TelasDaArea
+              compacto
               area={area}
               currentSearch={currentSearch}
               sub={sub}

@@ -504,7 +504,7 @@ function AdminClientsPage() {
                             const sp = sapPorCliente.get(c.id)!;
                             const txt = sp.dia === null ? "SAP · sem D0" : sp.dia > 90 ? "Terminou o SAP · acompanhamento" : sp.dia < 0 ? `SAP · começa em ${-sp.dia} dia(s)` : `SAP · D${sp.dia} de 90`;
                             return (
-                              <Link to="/sap/$clientId" params={{ clientId: c.id }} className="mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: "color-mix(in srgb, #C49A5C 18%, transparent)", color: "#8a6a35" }} title="Abrir no Sistema de Aquisição">
+                              <Link to="/sap/$clientId/painel" params={{ clientId: c.id }} className="mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: "color-mix(in srgb, #C49A5C 18%, transparent)", color: "#8a6a35" }} title="Abrir no Sistema de Aquisição">
                                 {txt}
                               </Link>
                             );

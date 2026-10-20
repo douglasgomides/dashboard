@@ -12,7 +12,7 @@ export function TrocaProduto({ atual, clientId }: { atual: "hub" | "sap"; client
       color: on ? "#fff" : "var(--side-ink-2, var(--text-dim))",
     };
     const cls = "flex-1 rounded-md px-2 py-1.5 text-center text-xs font-semibold leading-tight";
-    if (p === "sap") return clientId ? <Link to="/sap/$clientId" params={{ clientId }} className={cls} style={estilo} aria-current={on ? "page" : undefined}>{rot}</Link> : <Link to="/sap" className={cls} style={estilo} aria-current={on ? "page" : undefined}>{rot}</Link>;
+    if (p === "sap") return clientId ? <Link to="/sap/$clientId/painel" params={{ clientId }} className={cls} style={estilo} aria-current={on ? "page" : undefined}>{rot}</Link> : <Link to="/sap" className={cls} style={estilo} aria-current={on ? "page" : undefined}>{rot}</Link>;
     return clientId ? <Link to="/$clientId" params={{ clientId }} className={cls} style={estilo} aria-current={on ? "page" : undefined}>{rot}</Link> : <Link to="/admin" className={cls} style={estilo} aria-current={on ? "page" : undefined}>{rot}</Link>;
   };
   return (
