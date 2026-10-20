@@ -192,3 +192,31 @@ test("an unclassified content topic is labelled clearly and is not used as a top
   await expect(page.getByRole("cell", { name: "null", exact: true })).toHaveCount(0);
   await expect(page.getByText("Muito post, nenhuma conversa sobre o tema", { exact: true })).toHaveCount(0);
 });
+
+for (const vision of [false, true]) {
+  test(`creative analysis uses configured capability rather than blocking its on-demand restart after an old heartbeat (${vision})`, async ({ page, context }) => {
+    await mockAccount(context, "admin");
+    const accountId = "44444444-4444-4444-8444-444444444444";
+    const postId = "55555555-5555-4555-8555-555555555555";
+    await context.route("**/rest/v1/instagram_accounts?**", r => r.fulfill({ json: [{ id: accountId, client_id: CID, active: true, ig_username: "conta_ficticia" }] }));
+    await context.route("**/rest/v1/instagram_posts?**", r => r.fulfill({ json: [{ id: postId, instagram_account_id: accountId, format: "carrossel", posted_at: new Date().toISOString(), reach: 1000, saved: 30, shares: 10, views: 1500, caption: "Conteúdo fictício para QA" }] }));
+    await context.route("**/rest/v1/rpc/creative_worker_health", r => r.fulfill({ json: { seen_at: "2020-01-01T00:00:00Z", capabilities: { vision, external_search: false } } }));
+    let queued: Record<string, any> | undefined;
+    let restarted = false;
+    await context.route("**/rest/v1/rpc/creative_enqueue", r => { queued = r.request().postDataJSON(); return r.fulfill({ json: "66666666-6666-4666-8666-666666666666" }); });
+    await context.route("**/api/sync/manual", r => { if (r.request().postDataJSON().alvo === "creative_worker") restarted = true; return r.fulfill({ json: { ok: true } }); });
+    await page.goto(`/${CID}/inteligencia-criativa`);
+    const analyse = page.getByRole("button", { name: "Analisar mídia original", exact: true });
+    await expect(analyse).toBeVisible();
+    if (!vision) {
+      await expect(analyse).toBeDisabled();
+    } else {
+      await expect(analyse).toBeEnabled();
+      await expect(page.getByText(/O processador está sem sinal recente/)).toBeVisible();
+      await analyse.click();
+      await expect.poll(() => queued?.p_kind).toBe("analyse");
+      expect(queued?.p_input).toEqual({ account_id: accountId, post_id: postId });
+      await expect.poll(() => restarted).toBe(true);
+    }
+  });
+}
