@@ -403,7 +403,9 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
   > & { naoMedido: boolean };
   const base: Base[] = [];
   for (const [id, a] of acc) {
-    if (a.g <= 0 && a.i <= 0) continue;
+    // Conversões podem ser atribuídas depois da veiculação, sem gasto ou
+    // impressões novos no período. Só descartar campanhas sem nenhum sinal.
+    if (![a.g, a.i, a.lc, a.cv, a.ld, a.lpv, a.r, a.ck].some((v) => v > 0)) continue;
     const c = cad.get(id);
     const grupo = grupoDoObjetivo(c?.objective, a.cv, a.lc);
     let resultados = 0;
