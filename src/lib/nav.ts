@@ -436,6 +436,7 @@ export function navegacaoClinica(areas: AreaVisivel[], equipe: boolean) {
     descricao: "Materiais preparados, revisões e próximos passos",
     visiveis: [...entregas.visiveis].sort((a, b) => Number(b.path === "/agentes") - Number(a.path === "/agentes")).map(t => t.path === "/agentes" ? { ...t, label: "Entregas e aprovações", descricao: "Veja os materiais preparados e o que precisa de revisão." } : t),
   }, areas.find(a => a.id === "relatorio")].filter((a): a is AreaVisivel => !!a);
+  if (!principais.length) return { principais: areas, detalhes: [] as AreaVisivel[] };
   return { principais, detalhes: areas.filter(a => !principais.some(p => p.id === a.id)) };
 }
 
