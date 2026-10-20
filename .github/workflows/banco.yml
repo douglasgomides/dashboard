@@ -1,0 +1,102 @@
+name: Banco de dados
+
+# Mudanças no banco só por aqui: nada de SQL à mão em produção.
+#  - conferir: remonta o esquema a partir das migrações do repositório e compara com o banco (diário e a pedido).
+#  - homolog: aplica as migrações novas no homolog quando entram na base.
+#  - producao: aplica em produção depois do homolog, com aprovação manual (ambiente "producao" no GitHub).
+# Segredos: SUPABASE_DB_URL_HOMOLOG e SUPABASE_DB_URL_PROD (string de conexão do pooler de sessão, com senha).
+# Sem os segredos, os passos registram o aviso no resumo e terminam sem erro.
+
+on:
+  push:
+    branches: [claude/doctor-creator-hub-nixvw6]
+    paths: ["supabase/migrations/**"]
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+    inputs:
+      acao:
+        description: "conferir (só compara), aplicar (homolog e depois produção com aprovação) ou registrar-base (marca tudo como aplicado em produção, uma vez, depois de a conferência dar zero)"
+        type: choice
+        options: [conferir, aplicar, registrar-base]
+        default: conferir
+
+permissions:
+  contents: read
+
+concurrency:
+  group: banco-de-dados
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+jobs:
+  conferir:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.acao == 'conferir')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DB_URL: ${{ secrets.SUPABASE_DB_URL_PROD }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Esquema que o repositório produz
+        run: npx tsx scripts/banco/remontar.ts > repo.json
+      - name: Comparar com produção
+        run: |
+          if [ -z "$DB_URL" ]; then
+            echo "Sem SUPABASE_DB_URL_PROD: conferência com produção não executada." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          sudo apt-get install -y -qq postgresql-client >/dev/null
+          scripts/banco/catalogo-json.sh > banco.json
+          npx tsx scripts/banco/comparar.ts repo.json banco.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+  homolog:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.acao == 'aplicar')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DB_URL: ${{ secrets.SUPABASE_DB_URL_HOMOLOG }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Aplicar no homolog
+        run: |
+          if [ -z "$DB_URL" ]; then echo "Sem SUPABASE_DB_URL_HOMOLOG: nada aplicado." >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          sudo apt-get install -y -qq postgresql-client >/dev/null
+          scripts/banco/aplicar.sh | tee -a "$GITHUB_STEP_SUMMARY"
+
+  producao:
+    if: always() && needs.homolog.result != 'failure' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.acao != 'conferir'))
+    needs: homolog
+    # Pausa aqui até alguém autorizado aprovar (Settings > Environments > producao > Required reviewers).
+    environment: producao
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DB_URL: ${{ secrets.SUPABASE_DB_URL_PROD }}
+      BASELINE: ${{ inputs.acao == 'registrar-base' && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Aplicar em produção
+        run: |
+          if [ -z "$DB_URL" ]; then echo "Sem SUPABASE_DB_URL_PROD: nada aplicado." >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          sudo apt-get install -y -qq postgresql-client >/dev/null
+          scripts/banco/aplicar.sh | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Conferir produção depois de aplicar
+        run: |
+          if [ -z "$DB_URL" ]; then exit 0; fi
+          npm ci
+          npx tsx scripts/banco/remontar.ts > repo.json
+          scripts/banco/catalogo-json.sh > banco.json
+          npx tsx scripts/banco/comparar.ts repo.json banco.json | tee -a "$GITHUB_STEP_SUMMARY"
