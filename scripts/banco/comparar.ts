@@ -11,9 +11,9 @@ const [repoArq, bancoArq] = process.argv.slice(2);
 const repo = new Map(ler(repoArq).map((l) => [`${l.tipo}:${l.nome}`, l.assinatura]));
 const banco = new Map(ler(bancoArq).map((l) => [`${l.tipo}:${l.nome}`, l.assinatura]));
 
-// Staging do FlwChat existe só onde a carga antiga rodou; 20261001130000 protege sem recriar a estrutura.
-// Continua conferido quanto a RLS (semRls), mas não conta como falta no repositório.
-const SO_NO_BANCO_ESPERADO = /^[a-z]+:_flw_/;
+// Staging do FlwChat existe só onde a carga antiga rodou (20261001130000 protege sem recriar a estrutura) e
+// _migracoes_repo é o registro criado por aplicar.sh. Continuam conferidos quanto a RLS, mas não contam como falta.
+const SO_NO_BANCO_ESPERADO = /^[a-z]+:(_flw_|_migracoes_repo)/;
 const soBanco = [...banco.keys()].filter((k) => !repo.has(k) && !SO_NO_BANCO_ESPERADO.test(k)).sort();
 const soRepo = [...repo.keys()].filter((k) => !banco.has(k)).sort();
 const diferentes = [...repo.keys()].filter((k) => banco.has(k) && banco.get(k) !== repo.get(k)).sort();
