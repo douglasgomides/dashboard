@@ -126,7 +126,7 @@ for (const width of [375, 1440]) {
     await page.goto(`/${CID}/anuncios`);
     const numbers = page.getByRole("region", { name: "Indicadores dos anúncios", exact: true });
     await expect(numbers).toBeVisible();
-    await expect(numbers.getByText(/6.000,00/)).toBeVisible();
+    await expect(numbers.locator(".ws-metric-value").first()).toHaveText(/6.000,00/);
     const recommendations = page.locator("details").filter({ has: page.locator("summary").filter({ hasText: "Ver recomendações e ações para os anúncios" }) });
     await expect(recommendations).not.toHaveAttribute("open", "");
     expect(await numbers.evaluate(el => !!(el.compareDocumentPosition(document.querySelector('#ag-anuncios')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
@@ -199,7 +199,10 @@ for (const vision of [false, true]) {
     const accountId = "44444444-4444-4444-8444-444444444444";
     const postId = "55555555-5555-4555-8555-555555555555";
     await context.route("**/rest/v1/instagram_accounts?**", r => r.fulfill({ json: [{ id: accountId, client_id: CID, active: true, ig_username: "conta_ficticia" }] }));
-    await context.route("**/rest/v1/instagram_posts?**", r => r.fulfill({ json: [{ id: postId, instagram_account_id: accountId, format: "carrossel", posted_at: new Date().toISOString(), reach: 1000, saved: 30, shares: 10, views: 1500, caption: "Conteúdo fictício para QA" }] }));
+    await context.route("**/rest/v1/instagram_posts?**", r => {
+      const offset = Number(new URL(r.request().url()).searchParams.get("offset") ?? r.request().headers()["range"]?.split("-")[0] ?? 0);
+      return r.fulfill({ json: offset > 0 ? [] : [{ id: postId, instagram_account_id: accountId, format: "carrossel", posted_at: new Date().toISOString(), reach: 1000, saved: 30, shares: 10, views: 1500, caption: "Conteúdo fictício para QA" }] });
+    });
     await context.route("**/rest/v1/rpc/creative_worker_health", r => r.fulfill({ json: { seen_at: "2020-01-01T00:00:00Z", capabilities: { vision, external_search: false } } }));
     let queued: Record<string, any> | undefined;
     let restarted = false;
@@ -218,5 +221,19 @@ for (const vision of [false, true]) {
       expect(queued?.p_input).toEqual({ account_id: accountId, post_id: postId });
       await expect.poll(() => restarted).toBe(true);
     }
+  });
+}
+
+for (const width of [375, 1440]) {
+  test(`SAP indicator explanations remain open after clicking instead of closing from the hover/click sequence at ${width}px`, async ({ page, context }) => {
+    await mockAccount(context, "admin");
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/sap/${CID}/painel`);
+    const summary = page.getByRole("region", { name: "Resumo do programa", exact: true });
+    await summary.getByRole("button", { name: "Tempo de 1ª resposta", exact: true }).click();
+    await expect(summary.getByRole("tooltip")).toContainText("Quanto tempo a clínica leva para responder");
+    await summary.getByRole("button", { name: "Taxa de comparecimento", exact: true }).click();
+    await expect(summary.getByRole("tooltip")).toHaveCount(1);
+    await expect(summary.getByRole("tooltip")).toContainText("comparecimento");
   });
 }

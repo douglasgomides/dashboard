@@ -275,10 +275,12 @@ function AnunciosPage() {
   const diagnosticoQ = useQuery({
     queryKey: ["ads-diag-objetivo", clientId, start, end],
     queryFn: () => getAdsDiagnosticoPorObjetivo(clientId, start, end),
+    retry: false,
   });
   const diasQ = useQuery({
     queryKey: ["ads-dia", clientId, start, end],
     queryFn: () => getAdsPorDia(clientId, start, end),
+    retry: false,
   });
   const { data: diag, isLoading: loadingDiag } = diagnosticoQ;
   const { data: porDia, isLoading: loadingDia } = diasQ;

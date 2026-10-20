@@ -14,7 +14,7 @@ export function Termo({ t, children }: { t: string; children?: ReactNode }) {
   if (!exp) return <>{children ?? t}</>;
   return (
     <span className="relative inline-block">
-      <button type="button" aria-describedby={aberto ? id : undefined} aria-expanded={aberto} onClick={() => setAberto(!aberto)} onBlur={() => setAberto(false)}
+      <button type="button" aria-describedby={aberto ? id : undefined} aria-expanded={aberto} onClick={() => setAberto(true)} onBlur={() => setAberto(false)}
         onMouseEnter={() => setAberto(true)} onMouseLeave={() => setAberto(false)}
         className="ws-inline-help cursor-help underline decoration-dotted underline-offset-2" style={{ color: "inherit", font: "inherit" }}>
         {children ?? t}
