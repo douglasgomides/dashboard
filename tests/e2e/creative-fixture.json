@@ -1,0 +1,188 @@
+{
+  "source": {
+    "id": "75b6a38c-6c00-4fa8-b243-52b89d11dbe7",
+    "title": "QA fictício — não publicar",
+    "format": "carrossel",
+    "origin": "external",
+    "post_id": null,
+    "metadata": {
+      "qa_fixture": true
+    },
+    "platform": "instagram",
+    "client_id": "11111111-1111-4111-8111-111111111111",
+    "account_id": "44444444-4444-4444-8444-444444444444",
+    "created_at": "2026-10-20T10:23:38.299802+00:00",
+    "external_id": "qa-image-20261020",
+    "canonical_url": "https://example.invalid/qa-image-20261020"
+  },
+  "analysis": {
+    "id": "484ac99c-b9af-43ca-b364-b678f744506b",
+    "model": "qa-fixture",
+    "job_id": "eed727dd-21a0-47c8-ad0c-febaf710b4c8",
+    "result": {
+      "dna": {
+        "cta_pattern": "Nenhum",
+        "hook_pattern": "Exemplo fictício",
+        "text_density": [],
+        "uncertainties": [
+          "Fixture de QA; não analisada por IA"
+        ],
+        "visual_system": {
+          "palette": [
+            "azul",
+            "branco"
+          ],
+          "contrast": "Alto",
+          "hierarchy": [
+            "Título"
+          ],
+          "continuity": "Uma unidade",
+          "image_type": "Arte fictícia",
+          "typography": "Sem serifa",
+          "whitespace": "Amplo",
+          "composition": "Central",
+          "text_position": "Centro",
+          "designer_brief": "Arte de teste sem conteúdo clínico",
+          "graphic_elements": [],
+          "people_and_framing": "Sem pessoas",
+          "objects_and_setting": "Formas abstratas",
+          "image_text_relationship": "Exemplo de teste"
+        },
+        "editing_pattern": [],
+        "narrative_sequence": [],
+        "reusable_principles": [],
+        "argument_progression": [],
+        "retention_techniques": [],
+        "theme_specific_elements": []
+      },
+      "format": "carrossel",
+      "scenes": [],
+      "slides": [],
+      "summary": "Fixture sintética para testar imagens; não representa análise de publicação.",
+      "confidence": 0,
+      "original_theme": "QA fictício de geração de imagem",
+      "medical_review_flags": [
+        "Somente teste; não publicar"
+      ]
+    },
+    "version": "qa-fixture",
+    "cost_usd": 0,
+    "coverage": {
+      "status": "parcial",
+      "missing": [
+        "Fixture sintética; sem análise"
+      ],
+      "limitations": [
+        "Teste exclusivo de geração de imagens"
+      ],
+      "visual_method": "none",
+      "acquired_assets": 0,
+      "analysed_assets": 0,
+      "expected_assets": 1,
+      "duration_seconds": null,
+      "audio_processed_seconds": 0,
+      "visual_processed_seconds": 0,
+      "maximum_frame_gap_seconds": null
+    },
+    "client_id": "11111111-1111-4111-8111-111111111111",
+    "source_id": "75b6a38c-6c00-4fa8-b243-52b89d11dbe7",
+    "account_id": "44444444-4444-4444-8444-444444444444",
+    "created_at": "2026-10-20T10:23:38.299802+00:00",
+    "transcript": []
+  },
+  "structure": {
+    "id": "2e990f16-0095-4c53-a1a8-b7213e17b376",
+    "dna": {
+      "cta_pattern": "Nenhum",
+      "hook_pattern": "Exemplo fictício",
+      "text_density": [],
+      "uncertainties": [
+        "Fixture de QA; não analisada por IA"
+      ],
+      "visual_system": {
+        "palette": [
+          "azul",
+          "branco"
+        ],
+        "contrast": "Alto",
+        "hierarchy": [
+          "Título"
+        ],
+        "continuity": "Uma unidade",
+        "image_type": "Arte fictícia",
+        "typography": "Sem serifa",
+        "whitespace": "Amplo",
+        "composition": "Central",
+        "text_position": "Centro",
+        "designer_brief": "Arte de teste sem conteúdo clínico",
+        "graphic_elements": [],
+        "people_and_framing": "Sem pessoas",
+        "objects_and_setting": "Formas abstratas",
+        "image_text_relationship": "Exemplo de teste"
+      },
+      "editing_pattern": [],
+      "narrative_sequence": [],
+      "reusable_principles": [],
+      "argument_progression": [],
+      "retention_techniques": [],
+      "theme_specific_elements": []
+    },
+    "state": "candidata",
+    "theme": "Teste fictício de imagem",
+    "title": "QA fictício — não publicar",
+    "format": "carrossel",
+    "evidence": {},
+    "client_id": "11111111-1111-4111-8111-111111111111",
+    "embedding": null,
+    "source_id": "75b6a38c-6c00-4fa8-b243-52b89d11dbe7",
+    "account_id": "44444444-4444-4444-8444-444444444444",
+    "created_at": "2026-10-20T10:23:38.299802+00:00",
+    "analysis_id": "484ac99c-b9af-43ca-b364-b678f744506b",
+    "embedding_model": null
+  },
+  "adaptation": {
+    "id": "9292a8a0-4f29-46e2-b429-fa1cc46e6cde",
+    "model": "qa-fixture",
+    "job_id": "3a0c6d36-232a-4a3b-8631-ef86b09c1190",
+    "document": {
+      "cta": "",
+      "hook": "Teste",
+      "theme": "Teste fictício de geração de imagem",
+      "title": "QA 20/10 — imagem fictícia, não publicar",
+      "units": [
+        {
+          "end": null,
+          "copy": "Teste de imagem",
+          "start": null,
+          "position": 1,
+          "image_brief": "Formas geométricas abstratas azuis em fundo branco, sem pessoas, sem logotipos e sem informações médicas.",
+          "layout_brief": "Título central legível, fundo branco, margens amplas.",
+          "editing_brief": "",
+          "narrative_role": "Exemplo fictício",
+          "on_screen_text": "Teste de imagem",
+          "recording_brief": "",
+          "justified_changes": [],
+          "original_position": 1,
+          "structural_reference": "Fixture sintética de QA"
+        }
+      ],
+      "format": "carrossel",
+      "caption": "Conteúdo fictício exclusivo de QA. Não publicar.",
+      "objective": "alcance",
+      "brain_keys": [],
+      "justified_changes": [],
+      "medical_review_flags": [
+        "Somente teste; não publicar"
+      ],
+      "preserved_principles": [],
+      "clinical_claims_requiring_verification": []
+    },
+    "pauta_id": null,
+    "client_id": "11111111-1111-4111-8111-111111111111",
+    "account_id": "44444444-4444-4444-8444-444444444444",
+    "created_at": "2026-10-20T10:23:38.299802+00:00",
+    "analysis_id": "484ac99c-b9af-43ca-b364-b678f744506b",
+    "structure_id": "2e990f16-0095-4c53-a1a8-b7213e17b376",
+    "published_post_id": null
+  }
+}
