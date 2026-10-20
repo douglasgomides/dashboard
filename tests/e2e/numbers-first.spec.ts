@@ -145,6 +145,8 @@ test("CRM period numbers appear before funnel diagnostics and remain separate fr
   await expect(period).toBeVisible();
   const history = page.getByRole("heading", { name: "Base geral do CRM · histórico completo", exact: true });
   await expect(history).toBeVisible();
+  await expect(page.getByText("Campo de origem preenchido", { exact: true })).toBeVisible();
+  await expect(page.getByText("Fonte identificada", { exact: true })).toHaveCount(0);
   expect(await period.evaluate(el => !!(el.compareDocumentPosition([...document.querySelectorAll('h2')].find(h => h.textContent?.includes('Onde o funil quebra'))!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
   await expect(page.getByText("68", { exact: true })).toBeVisible();
   await expect(page.getByText("500", { exact: true }).first()).toBeVisible();

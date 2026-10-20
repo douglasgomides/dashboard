@@ -356,7 +356,7 @@ function CrmPainelPage() {
   const baseCurta = decididos > 0 && decididos < m.total_leads * 0.3;
 
   const base = m.total_leads;
-  const fontePct = m.fonte_preenchida_pct ?? 0;
+  const fontePct = m.fonte_preenchida_pct;
   const ehRelatorio = clientId === "8d4b3b3f-74a7-419a-a113-35ebc02cb37f";
 
   return (
@@ -464,9 +464,9 @@ function CrmPainelPage() {
         <Kpi icone={Sparkles} rotulo="Novos (7 dias)" valor={fmtN(m.novos_7d)} cor="var(--s3)" />
         <Kpi
           icone={Target}
-          rotulo="Fonte identificada"
-          valor={`${fontePct}%`}
-          dica={fontePct === 0 ? "nenhum lead com origem preenchida" : "dos leads têm origem preenchida"}
+          rotulo="Campo de origem preenchido"
+          valor={fontePct == null ? "—" : `${fontePct}%`}
+          dica={fontePct == null ? "preenchimento indisponível" : "Mede o preenchimento, inclusive nomes de funil. A validade da origem aparece no checklist de dados."}
           cor={fontePct === 0 ? "var(--warn)" : "var(--s2)"}
         />
       </div>
