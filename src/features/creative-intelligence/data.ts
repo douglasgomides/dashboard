@@ -143,18 +143,18 @@ export async function enqueue(
       p_request_key: crypto.randomUUID(),
     }),
   );
-  void dispararWorker(clientId);
+  void dispararWorker(clientId, id);
   return id;
 }
 // Liga o worker na hora (GitHub Actions). Se falhar, o agendamento de 10 minutos processa do mesmo jeito.
-async function dispararWorker(clientId: string) {
+async function dispararWorker(clientId: string, jobId: string) {
   try {
     const token = (await supabase.auth.getSession()).data.session?.access_token;
     if (!token) return;
     await fetch("/api/sync/manual", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ client_id: clientId, alvo: "creative_worker" }),
+      body: JSON.stringify({ client_id: clientId, alvo: "creative_worker", job_id: jobId }),
     });
   } catch {
     /* o agendamento cobre */

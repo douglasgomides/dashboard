@@ -26,6 +26,7 @@ import {
   navSearch,
   areaDoCaminho,
   areasVisiveis,
+  navegacaoClinica,
   avancadoVisivel,
   buscarTelas,
   subcaminho,
@@ -244,7 +245,9 @@ export function AppShell({
 }: AppShellProps) {
   const sub = subcaminho(pathname, clientId);
   const ativa = areaDoCaminho(sub);
-  const areas = areasVisiveis(vis);
+  const todasAreas = areasVisiveis(vis);
+  const { principais, detalhes } = navegacaoClinica(todasAreas, vis.isAdmin);
+  const areas = [...principais, ...detalhes];
   const avancado = avancadoVisivel(vis);
   const area = areas.find((a) => a.id === ativa);
   const tela =
@@ -272,9 +275,7 @@ export function AppShell({
     .filter(Boolean)
     .join(" · ");
   const encontrados = busca ? buscarTelas(vis, consulta) : [];
-  const atalhosMobile = areas.filter((a) =>
-    ["resumo", "marketing", "comercial", "acoes"].includes(a.id),
-  );
+  const atalhosMobile = vis.isAdmin ? areas.filter(a => ["resumo", "marketing", "comercial", "acoes"].includes(a.id)) : principais;
 
   useEffect(() => {
     setMais(false);
@@ -376,7 +377,7 @@ export function AppShell({
           <kbd>Ctrl K</kbd>
         </button>
         <nav className="side areas" aria-label="Áreas do Nexo">
-          {areas.map((a) => (
+          {principais.map((a) => (
             <TabLink
               key={a.id}
               tab={a.visiveis[0]}
@@ -390,6 +391,10 @@ export function AppShell({
             </TabLink>
           ))}
         </nav>
+        {detalhes.length > 0 && <details className="workspace-section so-aberta" open={detalhes.some(a => a.id === ativa)}>
+          <summary className="workspace-nav-label">Explorar análises e ferramentas</summary>
+          <nav className="side areas" aria-label="Análises detalhadas">{detalhes.map(a => <TabLink key={a.id} tab={a.visiveis[0]} clientId={clientId} dateRange={dateRange} ativo={a.id === ativa}><a.Icone aria-hidden /><span>{a.label}</span></TabLink>)}</nav>
+        </details>}
         {area && area.visiveis.length > 1 && (
           <div className="workspace-section so-aberta">
             <p className="workspace-nav-label">Em {area.label}</p>

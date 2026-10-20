@@ -969,12 +969,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Inteligência Criativa: dispara na hora o worker no GitHub Actions (o agendamento de 10 min é só reserva).
       // Token fino com permissão "Actions: write" só neste repositório, em GITHUB_DISPATCH_TOKEN na Vercel.
       if (!ehAdmin) { res.status(403).json({ error: "Só a equipe usa a Inteligência Criativa" }); return; }
+      const jobId = parsedBody.data.job_id;
+      if (jobId) {
+        const { data: job, error } = await admin.from("creative_jobs").select("id").eq("id", jobId).eq("client_id", client_id as string).maybeSingle();
+        if (error) { res.status(503).json({ error: "Não foi possível conferir o trabalho solicitado" }); return; }
+        if (!job) { res.status(404).json({ error: "Trabalho não encontrado nesta clínica" }); return; }
+      }
       const tokenGh = process.env.GITHUB_DISPATCH_TOKEN;
       if (!tokenGh) { res.status(200).json({ alvo, ok: false, erro: "sem_token", agendado: true }); return; }
       const r = await fetch("https://api.github.com/repos/douglasgomides/dashboard/actions/workflows/creative-worker.yml/dispatches", {
         method: "POST",
         headers: { Authorization: `Bearer ${tokenGh}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json" },
-        body: JSON.stringify({ ref: "claude/doctor-creator-hub-nixvw6" }),
+        body: JSON.stringify({ ref: "claude/doctor-creator-hub-nixvw6", ...(jobId ? { inputs: { job_id: jobId } } : {}) }),
       });
       res.status(200).json({ alvo, ok: r.status === 204, status: r.status, agendado: r.status !== 204 });
       return;

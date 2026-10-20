@@ -32,14 +32,14 @@ function montar(entradas: Omit<EntradaTarefas, "hoje">[], hoje: string): Clinica
 }
 
 /** Tarefas de uma clínica (clientId) ou de todas as que o usuário vê. A equipe guarda a 1ª data de cada detecção. */
-export function useTarefas(clientId?: string) {
+export function useTarefas(clientId?: string, registrarDeteccoes = true) {
   const { isAdmin } = useAuth();
   const hoje = hojeBrasilia();
   const q = useQuery({ queryKey: ["sap-tarefas", clientId ?? "todas", isAdmin], queryFn: () => getEntradasTarefas(clientId, isAdmin) });
   const lista = useMemo(() => (q.data ? montar(q.data, hoje) : []), [q.data, hoje]);
   const gravado = useRef<string>("");
   useEffect(() => {
-    if (!isAdmin || !lista.length) return;
+    if (!registrarDeteccoes || !isAdmin || !lista.length) return;
     for (const c of lista) {
       const d = deteccoes(c.tarefas, c.entrada);
       const ja = new Map(c.entrada.status.map((s) => [s.marco, s.detectado_em]));
@@ -50,7 +50,7 @@ export function useTarefas(clientId?: string) {
         registrarDeteccaoSap(c.entrada.clinica.id, d.detectados, d.avaliados).catch(() => undefined);
       }
     }
-  }, [lista, isAdmin]);
+  }, [lista, isAdmin, registrarDeteccoes]);
   return { ...q, lista, hoje };
 }
 

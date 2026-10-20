@@ -19,7 +19,7 @@ test("desktop: task search leads to existing tools and preserves clinic and peri
     sidebar
       .getByRole("navigation", { name: "Áreas do Nexo" })
       .getByRole("link"),
-  ).toHaveCount(5);
+  ).toHaveCount(3);
   await expect(
     sidebar
       .getByRole("navigation", { name: "Telas de Marketing" })
@@ -141,7 +141,7 @@ test("home: detailed analyses remain accessible without competing with the first
   await mockAccount(context, "viewer");
   await page.goto(`/${CID}`);
   await expect(
-    page.getByRole("heading", { name: "Por onde começar", exact: true }),
+    page.getByRole("heading", { name: "O que merece atenção nos resultados", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Resumo do período", exact: true }),
@@ -184,7 +184,7 @@ test("home data failure offers retry and navigation instead of an endless skelet
     .getByRole("button", { name: "Tentar novamente", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Por onde começar", exact: true }),
+    page.getByRole("heading", { name: "O que merece atenção nos resultados", exact: true }),
   ).toBeVisible();
 });
 
@@ -260,48 +260,28 @@ test("visual evidence: content desktop and mobile menu, including stored collaps
 });
 
 for (const width of [375, 1440]) {
-  test(`Marketing keeps content and ads together; Comercial keeps CRM and service together at ${width}px`, async ({ page, context }) => {
+  test(`clinic navigation prioritizes the service and preserves detailed analyses at ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "viewer");
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`/${CID}/ideias?preset=7d`);
-    const labels = ["Resultados", "Marketing", "Comercial", "Plano de ação", "Relatórios"];
+    const primary = page.getByRole("navigation", { name: width === 1440 ? "Áreas do Nexo" : "Áreas", exact: true });
+    await expect(primary.getByRole("link")).toHaveText(width === 1440 ? ["Resultados", "Entregas e aprovações", "Relatórios"] : ["Resultados", "Entregas", "Relatórios"]);
     if (width === 1440) {
-      const areas = page.getByRole("navigation", { name: "Áreas do Nexo", exact: true });
-      await expect(areas.getByRole("link")).toHaveText(labels);
-      const marketing = page.getByRole("navigation", { name: "Telas de Marketing", exact: true });
-      for (const group of await marketing.locator("details").all()) {
-        if (await group.getAttribute("open") === null) await group.locator("summary").click();
-      }
-      for (const label of ["Revisar roteiros", "Estratégias e campanhas", "Resultados dos anúncios", "Links rastreados", "Dúvidas do público"])
-        await expect(marketing.getByRole("link", { name: label, exact: true })).toBeVisible();
-      await mkdir(outputs, { recursive: true });
-      await page.screenshot({ path: `${outputs}nexo-menu-marketing.png` });
-      await marketing.getByRole("link", { name: "Resultados dos anúncios", exact: true }).click();
-      await expect(areas.getByRole("link", { name: "Marketing", exact: true })).toHaveAttribute("data-on", "");
-      await areas.getByRole("link", { name: "Comercial", exact: true }).click();
-      const comercial = page.getByRole("navigation", { name: "Telas de Comercial", exact: true });
-      await expect(comercial.getByRole("link", { name: "Funil comercial", exact: true })).toBeVisible();
-      await comercial.getByRole("link", { name: "Qualidade do atendimento", exact: true }).click();
-      await expect(areas.getByRole("link", { name: "Comercial", exact: true })).toHaveAttribute("data-on", "");
-      await expect(areas.getByRole("link")).toHaveText(labels);
-      await page.screenshot({ path: `${outputs}nexo-menu-comercial.png` });
+      const secondary = page.getByRole("navigation", { name: "Análises detalhadas", exact: true });
+      await expect(secondary.getByRole("link")).toHaveText(["Marketing", "Comercial"]);
+      await secondary.getByRole("link", { name: "Comercial", exact: true }).click();
+      await page.getByRole("navigation", { name: "Telas de Comercial", exact: true }).getByRole("link", { name: "Qualidade do atendimento", exact: true }).click();
     } else {
-      const areas = page.getByRole("navigation", { name: "Áreas", exact: true });
-      await expect(areas.getByRole("link")).toHaveText(["Resultados", "Marketing", "Comercial", "Ações"]);
-      await page.getByRole("button", { name: "Telas de Marketing", exact: true }).click();
+      await primary.getByRole("button", { name: "Menu", exact: true }).click();
       const menu = page.getByRole("dialog", { name: "Navegar no Nexo" });
-      await expect(menu.locator("summary > span")).toHaveText(labels);
-      await menu.getByRole("link", { name: "Resultados dos anúncios", exact: true }).click();
-      await expect(areas.getByRole("link", { name: "Marketing", exact: true })).toHaveAttribute("data-on", "");
-      await areas.getByRole("link", { name: "Comercial", exact: true }).click();
-      await page.getByRole("button", { name: "Telas de Comercial", exact: true }).click();
-      await expect(menu.locator("summary > span")).toHaveText(labels);
-      await mkdir(outputs, { recursive: true });
-      await page.screenshot({ path: `${outputs}nexo-menu-mobile.png` });
+      await expect(menu.locator("summary > span")).toHaveText(["Resultados", "Entregas e aprovações", "Relatórios", "Marketing", "Comercial"]);
+      await menu.locator("summary").filter({ hasText: "Comercial" }).click();
       await menu.getByRole("link", { name: "Qualidade do atendimento", exact: true }).click();
-      await expect(areas.getByRole("link", { name: "Comercial", exact: true })).toHaveAttribute("data-on", "");
     }
-    await expect(page).toHaveURL(new RegExp(`/${CID}/atendimento\\?preset=7d`));
+    await expect(page).toHaveURL(new RegExp(`/${CID}/atendimento`));
+    expect(new URL(page.url()).searchParams.get("preset")).toBe("7d");
+    await primary.getByRole("link", { name: width === 1440 ? "Entregas e aprovações" : "Entregas", exact: true }).click();
+    await expect(page).toHaveURL(/agentes/);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   });
 }

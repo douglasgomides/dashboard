@@ -11,6 +11,7 @@ import { KPIS_PLANO, baselineDoTracker, kpisDaGarantia, type KpiPlano } from "@/
 import { fmtKpi } from "@/lib/sap-documentos";
 import { SESSOES, trilha } from "@/lib/sap-sessoes";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import { AcompanhamentoServico } from "@/components/acompanhamento-servico";
 
 const MENOR_MELHOR = new Set<KpiPlano>(["resposta", "custo_consulta"]);
 const TERMO: Partial<Record<KpiPlano, string>> = { resposta: "Tempo de 1ª resposta", comparecimento: "Taxa de comparecimento", conversao: "Conversão da consulta", agendamento: "Taxa de agendamento" };
@@ -84,6 +85,8 @@ export function VisaoClinica({ clientId }: { clientId: string }) {
           <ol>{leitura.funil.map(etapa => <li key={etapa.id}><span>{etapa.id === "leads" ? "Interessados" : etapa.id === "compareceram" ? "Consultas realizadas" : etapa.rotulo}</span><strong>{etapa.valor.toLocaleString("pt-BR")}</strong><div aria-hidden="true"><span style={{ width: `${Math.max(0, Math.min(100, etapa.valor / maxVolume * 100))}%` }} /></div></li>)}</ol>
         </section>
       )}
+
+      <AcompanhamentoServico clientId={clientId} produto="sap" />
 
       <div className="sap-clinic-phase rounded-2xl border p-4 sm:p-5" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
         {dia === null ? (

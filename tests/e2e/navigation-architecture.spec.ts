@@ -9,8 +9,12 @@ for (const width of [375, 1440]) {
     await mockAccount(context, "viewer");
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`/${CID}/ideias?preset=7d`);
-    const primary = page.getByRole("navigation", { name: width === 375 ? "Áreas" : "Áreas do Nexo", exact: true });
-    await primary.getByRole("link", { name: "Marketing", exact: true }).click();
+    if (width === 375) {
+      await page.getByRole("navigation", { name: "Áreas", exact: true }).getByRole("button", { name: "Menu", exact: true }).click();
+      await page.getByRole("dialog", { name: "Navegar no Nexo" }).getByRole("link", { name: "Visão geral de Marketing", exact: true }).click();
+    } else {
+      await page.getByRole("navigation", { name: "Análises detalhadas", exact: true }).getByRole("link", { name: "Marketing", exact: true }).click();
+    }
     await expect(page).toHaveURL(new RegExp(`/${CID}/marketing\\?preset=7d`));
     await expect(page.getByRole("heading", { name: "Visão geral de Marketing", exact: true })).toBeVisible();
     const main = page.getByRole("main");
