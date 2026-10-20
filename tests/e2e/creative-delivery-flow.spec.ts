@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
-import fixture from "./creative-fixture.json";
+import { readFileSync } from "node:fs";
+const fixture = JSON.parse(readFileSync(new URL("./creative-fixture.json", import.meta.url), "utf8")) as typeof import("./creative-fixture.json");
 
 // Todos os provedores e a persistência deste percurso são fictícios. Nenhuma publicação ou conta real é usada.
 test("isolated creative flow: queue, partial analysis, adaptation, image approval, planner and reload", async ({ page, context }) => {
