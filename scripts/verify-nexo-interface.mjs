@@ -309,11 +309,11 @@ try{
         const tabs=page.getByRole('navigation',{name:'Telas de Resultados',exact:true});
         await expect(tabs.getByRole('link')).toHaveCount(3);
         await expect(tabs.getByRole('link',{name:'Números da semana',exact:true})).toHaveAttribute('href',`/sap/${CID}/leitura`);
-        await opener.click();await expect(page.getByRole('dialog').getByRole('link',{name:/Rotina e execução/})).toHaveAttribute('href',`/sap/${CID}/agentes`);await page.keyboard.press('Escape');
+        await opener.click();await expect(page.getByRole('dialog').getByRole('link',{name:/^Para revisar/})).toHaveAttribute('href',`/sap/${CID}/agentes`);await page.keyboard.press('Escape');
         await tabs.getByRole('link',{name:'Metas e garantia',exact:true}).click();
         await expect(page).toHaveURL(origins.sap+`/sap/${CID}/metas`);
         await expect(page.getByRole('heading',{name:'Metas e garantia',level:1,exact:true})).toBeVisible();
-        await opener.click();await expect(page.getByRole('navigation',{name:'Áreas do SAP',exact:true}).getByRole('link',{name:/Minha semana/})).not.toHaveAttribute('data-status','active');await page.keyboard.press('Escape');
+        await opener.click();await expect(page.getByRole('navigation',{name:'Áreas do SAP',exact:true}).getByRole('link',{name:/^Entregas e agenda/})).not.toHaveAttribute('data-status','active');await page.keyboard.press('Escape');
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'SAP grouped tabs do not overflow');
         await page.emulateMedia({colorScheme:'dark'});await page.goto(origins.sap+`/sap/${CID}`);
         await expect(page.locator('.sap-week-overview')).toBeVisible();
