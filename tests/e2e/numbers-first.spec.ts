@@ -83,3 +83,18 @@ test("Marketing sidebar reveals a group's tools on demand and opens the current 
   await page.reload();
   await expect(nav.getByRole("link", { name: "Planejar a semana", exact: true })).toBeVisible();
 });
+
+test("mobile product switch remains available to the team even after collapsing the desktop sidebar", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await page.goto(`/${CID}`);
+  await page.getByRole("button", { name: "Recolher menu lateral", exact: true }).click();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.getByRole("navigation", { name: "Áreas", exact: true }).getByRole("button", { name: "Menu", exact: true }).click();
+  const menu = page.getByRole("dialog", { name: "Navegar no Nexo", exact: true });
+  const link = menu.getByRole("navigation", { name: "Produto", exact: true }).getByRole("link", { name: "Sistema de Aquisição", exact: true });
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute("href", `/sap/${CID}/painel`);
+  await link.click();
+  await expect(page).toHaveURL(new RegExp(`/sap/${CID}/painel`));
+  await expect(menu).not.toBeVisible();
+});

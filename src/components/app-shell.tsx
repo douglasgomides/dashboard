@@ -567,6 +567,7 @@ export function AppShell({
         <p className="workspace-menu-help">
           Escolha o que você precisa fazer em {nome}.
         </p>
+        {vis.isAdmin && <TrocaProduto atual="hub" clientId={vis.sap ? clientId : null} noMenu />}
         <button type="button" className="mais-item" onClick={abrirBusca}>
           <Search aria-hidden />
           Encontrar uma ferramenta
