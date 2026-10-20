@@ -33,7 +33,7 @@ export function ComparativoConta({ clientId, start, end }: { clientId: string; s
     { rot: "CTR (clique no link ÷ aparições)", at: n(a.ctr), an: n(b?.ctr), fmt: (v) => pctTxt(v == null ? null : v / 100), bomSobe: true, dica: "Mede se a arte chama atenção." },
     { rot: "CPC (custo por clique)", at: n(a.cpc), an: n(b?.cpc), fmt: brl, bomSobe: false, dica: "Quanto custa cada clique no link." },
     { rot: "CPM (custo por mil aparições)", at: n(a.cpm), an: n(b?.cpm), fmt: brl, bomSobe: false, dica: "Quanto custa aparecer. Sobe com público disputado ou criativo cansado." },
-    { rot: "Campanhas com gasto", at: n(a.campanhas), an: n(b?.campanhas), fmt: int, bomSobe: null, dica: "" },
+    { rot: "Campanhas com registros", at: n(a.campanhas), an: n(b?.campanhas), fmt: int, bomSobe: null, dica: "Campanhas presentes nos dados do período, inclusive atribuições sem novo gasto." },
   ];
   // Leitura em uma frase: gasto x resultado.
   const vg = variacao(n(a.gasto), n(b?.gasto));

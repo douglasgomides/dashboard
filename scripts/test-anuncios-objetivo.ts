@@ -184,5 +184,16 @@ const planoS = planoDeAcao(sint);
 check(planoS.some((i) => /msg cara|msg parada/.test(i.acao?.texto ?? "")), "o plano corta 'Cortar'/'Sem tração' do mesmo objetivo");
 check(!planoS.some((i) => /^(Pausar|Reduzir)[^,]*alcance sozinho/.test(i.acao?.texto ?? "")), "o plano não pausa a de alcance que entregou aparições (só foi julgada pela conversa)");
 
+const atribuidoDepois = montar([
+  [1, "com-veiculacao", "MESSAGES", 100, 1000, 100, 18, 0, 0, 1, "Veiculação no período"],
+  [1, "atribuicao-posterior", "MESSAGES", 0, 0, 0, 1, 2, 3, 0, "Atribuição posterior"],
+  [1, "sem-atividade", "MESSAGES", 0, 0, 0, 0, 0, 0, 0, "Sem atividade"],
+]);
+check(atribuidoDepois.conversas === 19 && atribuidoDepois.conversasMensagem === 19, "atribuição sem gasto ou impressões novos permanece no total de conversas");
+check(atribuidoDepois.leads === 2 && atribuidoDepois.visitasPagina === 3, "demais resultados atribuídos também permanecem no resumo");
+check(atribuidoDepois.campanhas.length === 2 && atribuidoDepois.gasto === 100 && atribuidoDepois.impressoes === 1000, "campanha sem sinal é descartada; atribuição preserva investimento e impressões corretos");
+const posterior = atribuidoDepois.campanhas.find((c) => c.campaign_id === "atribuicao-posterior")!;
+check(posterior.vereditoOficial === "Volume insuficiente", "atribuição sem veiculação não vira recomendação de escalar");
+
 console.log(falhas ? `\n${falhas} verificação(ões) falharam` : "\nTodas as verificações passaram");
 if (falhas) process.exit(1);
