@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { lerRespostaTema, montarEntradaTema } from "../src/lib/tema-conversa";
+import { lerRespostaTema, montarEntradaTema, temaMaisProximo } from "../src/lib/tema-conversa";
 
 const temas = ["Emagrecimento e canetas", "Menopausa"];
 
@@ -30,4 +30,8 @@ assert.equal(lerRespostaTema({ itens: [{ i: 3, intencao: "administrativo" }] }, 
 // Resposta fora do formato não grava nada.
 assert.deepEqual(lerRespostaTema({ foo: 1 }, temas, [1]), []);
 assert.deepEqual(lerRespostaTema(null, temas, [1]), []);
+// Tema parecido (palavras em comum) encaixa no da lista; sem relação continua null.
+assert.equal(temaMaisProximo("Emagrecimento com canetas", temas), "Emagrecimento e canetas");
+assert.equal(temaMaisProximo("menopausa precoce", temas), "Menopausa");
+assert.equal(temaMaisProximo("nota fiscal", temas), null);
 console.log("tema-conversa ok");
