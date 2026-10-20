@@ -14,7 +14,7 @@ export interface ConversaParaTema { i: number; mensagens: string[] }
 export const SISTEMA_TEMA = `Você lê só as mensagens do PACIENTE em conversas de WhatsApp de uma clínica médica e devolve JSON.
 Não há texto da clínica. Não julgue o atendimento. Não invente: se não der para saber, use null ou lista vazia.
 Formato: {"itens":[{"i": número da conversa,
- "tema": "um tema EXATAMENTE como está na lista de temas da clínica, ou null se nenhum se encaixa",
+ "tema": "o tema da lista da clínica MAIS PRÓXIMO do que o paciente quer, copiado exatamente como está na lista; escolha o mais parecido mesmo que não seja idêntico (ex.: paciente pergunta de emagrecimento e a lista tem 'Obesidade e canetas'); null só se for administrativo ou não tiver relação com nenhum",
  "assunto": "o que o paciente quer, em até 8 palavras (ex.: consulta para emagrecimento, valor do implante), sem nome nem dado pessoal",
  "intencao": "agendar" | "informacao" | "retorno" | "administrativo" | "outro",
  "comercial": true | false,
@@ -61,6 +61,24 @@ export interface TemaConversa {
 
 const normal = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 
+const palavras = (t: string) => new Set(normal(t).split(/[^a-z0-9]+/).filter((w) => w.length > 2));
+
+/** Tema da lista que mais se parece com o devolvido pela IA (palavras em comum), quando não veio idêntico. */
+export function temaMaisProximo(devolvido: string, temas: string[]): string | null {
+  const exato = temas.find((t) => normal(t) === normal(devolvido));
+  if (exato) return exato;
+  const a = palavras(devolvido);
+  if (!a.size) return null;
+  let melhor: string | null = null, nota = 0;
+  for (const t of temas) {
+    const b = palavras(t);
+    const comuns = [...a].filter((w) => b.has(w)).length;
+    const j = comuns / (a.size + b.size - comuns || 1);
+    if (j > nota) { nota = j; melhor = t; }
+  }
+  return nota >= 0.4 ? melhor : null;
+}
+
 /** Valida a resposta: tema só se estiver na lista (sem diferença de acento/caixa), objeções e intenção só do vocabulário. */
 export function lerRespostaTema(json: unknown, temas: string[], indices: number[]): TemaConversa[] {
   const bruto = json && typeof json === "object" && "itens" in json ? (json as { itens: unknown }).itens : null;
@@ -75,7 +93,7 @@ export function lerRespostaTema(json: unknown, temas: string[], indices: number[
     const intencao = INTENCOES.find((x) => x === d.intencao) ?? "outro";
     saida.set(d.i, {
       i: d.i,
-      tema: d.tema ? porNome.get(normal(d.tema)) ?? null : null,
+      tema: d.tema ? porNome.get(normal(d.tema)) ?? temaMaisProximo(d.tema, temas) : null,
       assunto: d.assunto ? mascarar(d.assunto).trim().slice(0, 80) || null : null,
       intencao,
       comercial: d.comercial ?? intencao !== "administrativo",
