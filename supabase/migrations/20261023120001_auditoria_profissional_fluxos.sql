@@ -93,6 +93,9 @@ begin
  if coalesce(auth.jwt()->>'role','')<>'service_role' then raise exception 'Somente servidor' using errcode='42501'; end if;
  select * into r from public.creative_arte_reservas where id=p_reserva for update;
  if not found then raise exception 'Reserva não encontrada'; end if;
+ -- Finalização e reserva usam o mesmo lock: o cálculo não pode ler gasto
+ -- antes de uma finalização e reservas abertas depois dela.
+ perform pg_advisory_xact_lock(hashtextextended(r.client_id::text,239019902));
  if r.encerrado_em is not null then return false; end if;
  if p_custo_usd is null or p_custo_usd<0 or p_custo_usd>r.valor_usd or p_ok is null then raise exception 'Custo inválido'; end if;
  insert into public.ia_execucoes(client_id,finalidade,modelo,tokens_entrada,tokens_saida,custo_usd,ok,erro,ms,criado_em)
