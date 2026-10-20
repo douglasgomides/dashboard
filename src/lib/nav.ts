@@ -427,6 +427,19 @@ export function areasVisiveis(v: Visibilidade): AreaVisivel[] {
     .filter((a) => a.visiveis.length > 0);
 }
 
+/** A clínica acompanha o serviço; análises detalhadas continuam acessíveis por expansão e busca. */
+export function navegacaoClinica(areas: AreaVisivel[], equipe: boolean) {
+  if (equipe) return { principais: areas, detalhes: [] as AreaVisivel[] };
+  const entregas = areas.find(a => a.id === "acoes");
+  const principais = [areas.find(a => a.id === "resumo"), entregas && {
+    ...entregas, label: "Entregas e aprovações", curto: "Entregas",
+    descricao: "Materiais preparados, revisões e próximos passos",
+    visiveis: [...entregas.visiveis].sort((a, b) => Number(b.path === "/agentes") - Number(a.path === "/agentes")).map(t => t.path === "/agentes" ? { ...t, label: "Entregas e aprovações", descricao: "Veja os materiais preparados e o que precisa de revisão." } : t),
+  }, areas.find(a => a.id === "relatorio")].filter((a): a is AreaVisivel => !!a);
+  if (!principais.length) return { principais: areas, detalhes: [] as AreaVisivel[] };
+  return { principais, detalhes: areas.filter(a => !principais.some(p => p.id === a.id)) };
+}
+
 /** Itens de Sistema/Admin: só a equipe (app admin). Médico (owner) e viewer nunca veem. */
 export function avancadoVisivel(v: Visibilidade): NavTab[] {
   if (!v.isAdmin || v.papel === "owner" || v.papel === "viewer") return [];

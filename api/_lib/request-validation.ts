@@ -11,7 +11,7 @@ export const manualRequestSchema = z.object({
   client_id: id.optional(),
   alvo: z.enum(["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes", "sap_redigir", "creative_worker", "creative_arte"]),
   acao: z.string().max(40).optional(), execucao_id: id.optional(),
-  adaptacao_id: id.optional(), arte_id: id.optional(),
+  adaptacao_id: id.optional(), arte_id: id.optional(), job_id: id.optional(),
   slides: z.array(z.number().int().positive()).max(12).optional(),
   status: z.enum(["aprovada", "descartada"]).optional(),
   etapa: z.string().max(80).optional(), conferencia_id: id.optional(),

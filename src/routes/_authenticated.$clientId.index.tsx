@@ -34,6 +34,7 @@ import {
 import { ResumoDoMes } from "@/components/resumo-do-mes";
 import { WorkspaceButton } from "@/components/workspace-ui";
 import { RetornoInvestimento } from "@/components/retorno-investimento";
+import { AcompanhamentoServico } from "@/components/acompanhamento-servico";
 import { QualidadeDados } from "@/components/qualidade-dados";
 import { fmtFormatKey } from "@/lib/report-metrics";
 import { analyzeGrowth } from "@/lib/hub-conteudo";
@@ -946,6 +947,8 @@ function MonthlyOverview() {
         </WorkspaceButton>
       </section>
 
+      <AcompanhamentoServico clientId={clientId} produto="hub" />
+
       {/* Avisos que mudam a leitura dos números ficam sempre visíveis. */}
       {alertasCriticos.length > 0 && (
         <div className="space-y-2" role="status">
@@ -970,8 +973,8 @@ function MonthlyOverview() {
       <section className="space-y-4" aria-label="Por onde começar">
         <header className="ws-section-heading">
           <div>
-            <h2>Por onde começar</h2>
-            <p>Entenda o cenário e defina o próximo passo da equipe.</p>
+            <h2>O que merece atenção nos resultados</h2>
+            <p>A equipe Doctor Creator confere estes sinais e define a ação. As entregas para revisão estão no acompanhamento acima.</p>
           </div>
         </header>
         {principal ? (

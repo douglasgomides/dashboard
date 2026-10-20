@@ -207,7 +207,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
     ]);
   const action = useMutation({
     mutationFn: async (fn: () => Promise<unknown>) => fn(),
-    onSuccess: async () => {
+    onSettled: async () => {
       await invalidate();
       await qc.invalidateQueries({ queryKey: ["pautas", clientId] });
     },

@@ -169,7 +169,7 @@ function RelatorioPage() {
   );
 
   if (loading) return <div>{head}<Carregando texto="Conferindo os dados e montando o relatório…" /></div>;
-  if (erro || !envio) return <div>{head}<ErroCarga texto="Falha ao ler os dados do período. Tente novamente em instantes." /></div>;
+  if (erro || !envio) return <div>{head}<ErroCarga texto="Falha ao ler os dados do período. Os números não foram substituídos por zeros." /><button type="button" className="btn mt-3" onClick={() => { queries.filter(q => q.isError).forEach(q => void q.refetch()); }}>Tentar novamente</button></div>;
   if (!temIg && !temAds && !temWts && !temCrm) {
     return (
       <div>
