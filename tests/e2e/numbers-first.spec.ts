@@ -113,3 +113,80 @@ for (const measured of [false, true]) {
     await expect(portfolio.getByText("0 de 1 clínicas com dados disponíveis", { exact: true })).toHaveCount(measured ? 0 : 4);
   });
 }
+
+const crmMetrics = { total_leads: 500, ganhos: 40, perdidos: 30, consultas_agendadas: 40, em_atendimento: 100, em_atendimento_valor: 20000, novos_7d: 15, fonte_preenchida_pct: 80 };
+const crmPeriod = [{ novos: 68, ganhos: 4, perdidos: 3, valor: 12000 }];
+
+for (const width of [375, 1440]) {
+  test(`advertising numbers precede expandable recommendations at ${width}px`, async ({ page, context }) => {
+    await mockAccount(context, "viewer");
+    await context.route("**/rest/v1/meta_ads_daily?**", r => r.fulfill({ json: [{ date: new Date().toISOString().slice(0, 10), campaign_id: "fictional", spend: 6000, impressions: 100000, link_clicks: 300, conversations: 100, leads: 0, landing_page_views: 0, reach: 80000, clicks: 300 }] }));
+    await context.route("**/rest/v1/meta_ads_campaigns?**", r => r.fulfill({ json: [{ campaign_id: "fictional", name: "Campanha fictícia", objective: "OUTCOME_ENGAGEMENT" }] }));
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/${CID}/anuncios`);
+    const numbers = page.getByRole("region", { name: "Indicadores dos anúncios", exact: true });
+    await expect(numbers).toBeVisible();
+    await expect(numbers.getByText(/6.000,00/)).toBeVisible();
+    const recommendations = page.locator("details").filter({ has: page.locator("summary").filter({ hasText: "Ver recomendações e ações para os anúncios" }) });
+    await expect(recommendations).not.toHaveAttribute("open", "");
+    expect(await numbers.evaluate(el => !!(el.compareDocumentPosition(document.querySelector('#ag-anuncios')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+    await recommendations.locator("summary").click();
+    await expect(page.locator("#ag-anuncios")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  });
+}
+
+test("CRM period numbers appear before funnel diagnostics and remain separate from the full historical base", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await context.route("**/rest/v1/rpc/crm_metricas_essenciais", r => r.fulfill({ json: [crmMetrics] }));
+  await context.route("**/rest/v1/rpc/crm_leads_resumo_periodo", r => r.fulfill({ json: crmPeriod }));
+  await page.goto(`/${CID}/crm-painel?preset=7d`);
+  const period = page.getByRole("heading", { name: "No período selecionado", exact: true });
+  await expect(period).toBeVisible();
+  const history = page.getByRole("heading", { name: "Base geral do CRM · histórico completo", exact: true });
+  await expect(history).toBeVisible();
+  expect(await period.evaluate(el => !!(el.compareDocumentPosition([...document.querySelectorAll('h2')].find(h => h.textContent?.includes('Onde o funil quebra'))!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  await expect(page.getByText("68", { exact: true })).toBeVisible();
+  await expect(page.getByText("500", { exact: true }).first()).toBeVisible();
+});
+
+test("CRM period failure keeps the historical base and offers a working retry without displaying zero period counts", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  let fail = true;
+  await context.route("**/rest/v1/rpc/crm_metricas_essenciais", r => r.fulfill({ json: [crmMetrics] }));
+  await context.route("**/rest/v1/rpc/crm_leads_resumo_periodo", r => fail ? r.fulfill({ status: 503, json: { message: "fictional failure" } }) : r.fulfill({ json: crmPeriod }));
+  await page.goto(`/${CID}/crm-painel`);
+  const alert = page.getByRole("alert").filter({ hasText: "Não foi possível consultar os números deste período" });
+  await expect(alert).toBeVisible({ timeout: 20000 });
+  await expect(page.getByText("500", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Leads novos", { exact: true })).toHaveCount(0);
+  fail = false;
+  await alert.getByRole("button", { name: "Tentar novamente", exact: true }).click();
+  await expect(page.getByText("68", { exact: true })).toBeVisible();
+});
+
+for (const source of ["anuncios", "crm-painel", "atendimento"] as const) {
+  test(`${source}: a failed primary query is not reported as an empty period and retry recovers`, async ({ page, context }) => {
+    await mockAccount(context, "viewer");
+    let fail = true;
+    const path = source === "anuncios" ? "**/rest/v1/meta_ads_daily?**" : `**/rest/v1/rpc/${source === "crm-painel" ? "crm_metricas_essenciais" : "wts_resumo"}`;
+    await context.route(path, r => fail ? r.fulfill({ status: 503, json: { message: "fictional failure" } }) : r.fulfill({ json: [] }));
+    await page.goto(`/${CID}/${source}`);
+    const alert = page.getByRole("alert").filter({ has: page.getByRole("heading", { name: /^Não foi possível carregar os números/ }) });
+    await expect(alert).toBeVisible({ timeout: 20000 });
+    await expect(page.getByText(/Nenhum atendimento no período|Ainda sem leads|Sem investimento no período/)).toHaveCount(0);
+    fail = false;
+    await alert.getByRole("button", { name: "Tentar novamente", exact: true }).click();
+    await expect(alert).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: /Não foi possível carregar os números/ })).toHaveCount(0);
+  });
+}
+
+test("an unclassified content topic is labelled clearly and is not used as a topic performance recommendation", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await context.route("**/rest/v1/rpc/conteudo_comercial", r => r.fulfill({ json: { dias: [], grade: [], temas: [{ tema: "null", posts: 12, alcance: 1000, conversas: 0, comerciais: 0, pediram_preco: 0, agendaram: 0 }], semanas: [], objecoes: [], assuntos: [], cobertura: { conversas: 0, lidas: 0, sem_texto: 0, com_tema: 0, posts: 12, posts_com_tema: 0 } } }));
+  await page.goto(`/${CID}/conteudo-comercial`);
+  await expect(page.getByRole("cell", { name: "Sem tema identificado", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "null", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Muito post, nenhuma conversa sobre o tema", { exact: true })).toHaveCount(0);
+});
