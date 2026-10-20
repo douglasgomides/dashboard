@@ -29,6 +29,9 @@ interface Dados {
   cobertura: { conversas: number; lidas: number; sem_texto: number; com_tema: number; posts: number; posts_com_tema: number };
 }
 
+const temaIdentificado = (tema: unknown): tema is string => typeof tema === "string" && tema.trim() !== "" && !["null", "undefined"].includes(tema.trim().toLowerCase());
+const nomeTema = (tema: unknown) => temaIdentificado(tema) ? tema.trim() : "Sem tema identificado";
+
 const lista = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 /** Resposta fora do formato (ou sem permissão) vira null; listas ausentes viram vazias, para a tela nunca quebrar. */
 function normalizar(data: unknown): Dados | null {
@@ -73,9 +76,9 @@ function ConteudoComercialPage() {
   const c = d.cobertura;
   const e = d.efeito_post;
   const lidasPct = c.conversas > 0 ? Math.round(((c.lidas + c.sem_texto) / c.conversas) * 100) : 0;
-  const temasComDemanda = d.temas.filter((t) => t.conversas > 0);
+  const temasComDemanda = d.temas.filter((t) => temaIdentificado(t.tema) && t.conversas > 0);
   const semConteudo = temasComDemanda.filter((t) => t.posts === 0).slice(0, 5);
-  const semDemanda = d.temas.filter((t) => t.posts >= 2 && t.conversas === 0).slice(0, 5);
+  const semDemanda = d.temas.filter((t) => temaIdentificado(t.tema) && t.posts >= 2 && t.conversas === 0).slice(0, 5);
   const maxGrade = Math.max(1, ...d.grade.map((g) => g.conversas));
   const grade = new Map(d.grade.map((g) => [`${g.dow}-${g.hora}`, g]));
   const horas = Array.from({ length: 18 }, (_, i) => i + 6);
@@ -125,7 +128,7 @@ function ConteudoComercialPage() {
               <tbody>
                 {d.temas.slice(0, 20).map((t) => (
                   <tr key={t.tema} className="border-t" style={{ borderColor: "var(--border)" }}>
-                    <td className="py-1.5 pr-3">{t.tema}</td>
+                    <td className="py-1.5 pr-3">{nomeTema(t.tema)}</td>
                     <td className="pr-3 text-right tabular-nums">{fmtN(t.posts)}</td>
                     <td className="pr-3 text-right tabular-nums">{fmtN(t.alcance)}</td>
                     <td className="pr-3 text-right tabular-nums">{fmtN(t.conversas)}</td>

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { lerTrackerAuto, montarKpisSap } from "../src/lib/sap-auto";
+import { lerTrackerAuto, montarKpisSap, disponibilidadeVolumesSap } from "../src/lib/sap-auto";
 
 // Caso real (Dra. Juliana Paola, 30 dias, sem marcos): KPIs que dependem de etapa não marcada não inventam número.
 const juliana = lerTrackerAuto({
@@ -62,3 +62,9 @@ assert.equal(kp("receita").incompleto?.resolver, "crm");
 assert.equal(kp("custo_consulta").incompleto?.resolver, "rastreamento");
 assert.equal(kp("conversao").incompleto, undefined);
 console.log("test-sap-auto: ok");
+// Sem fonte não são quatro zeros; etapa configurada com zero registros é uma medição válida.
+assert.deepEqual(disponibilidadeVolumesSap(null), { leads: false, consultas: false, fechamentos: false, receita: false });
+assert.deepEqual(disponibilidadeVolumesSap(lerTrackerAuto({ tem_crm: false })), { leads: false, consultas: false, fechamentos: false, receita: false });
+assert.deepEqual(disponibilidadeVolumesSap(lerTrackerAuto({ tem_crm: true, marcos: ["compareceu", "fechou"], fechados: 0 })), { leads: true, consultas: true, fechamentos: true, receita: true });
+assert.deepEqual(disponibilidadeVolumesSap(lerTrackerAuto({ tem_crm: true, marcos: [], fechados: 0 })), { leads: true, consultas: false, fechamentos: false, receita: false });
+assert.equal(disponibilidadeVolumesSap(lerTrackerAuto({ tem_crm: true, fechados: 4, fechados_com_valor: 2 })).receita, false);

@@ -213,10 +213,11 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
     },
   });
   const dispatch = (fn: () => Promise<unknown>) => action.mutate(fn);
-  // O worker roda agendado (GitHub Actions a cada 10 min, 6h–21h): visto há menos de 40 min = disponível.
+  // O processamento também é acionado por enqueue. Um sinal antigo indica inatividade,
+  // não ausência de capacidade; bloquear aqui impediria a própria retomada sob demanda.
   const healthy =
     !!w?.health.seen_at && Date.now() - Date.parse(w.health.seen_at) < 40 * 60_000;
-  const canAnalyse = podeEditar && healthy && !!w?.health.capabilities?.vision;
+  const canAnalyse = podeEditar && !!w?.health.capabilities?.vision;
   const busy = action.isPending;
   function chooseStructure(s: CreativeStructure) {
     setStructureId(s.id);
@@ -315,7 +316,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
       )}
       {!!w && canAnalyse && (
         <p className="creative-notice">
-          Ao pedir uma análise, o processamento começa na hora e leva cerca de 2 a 3 minutos. O resultado aparece aqui sozinho.
+          {healthy ? "As solicitações entram na fila e tentam iniciar o processamento. Acompanhe o andamento e o resultado nesta tela." : "O processador está sem sinal recente. Você pode solicitar uma análise: o pedido fica na fila e tenta iniciar uma nova execução. Acompanhe o andamento nesta tela; o início pode demorar."}
         </p>
       )}
       {action.isError && (
@@ -825,7 +826,6 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
               className="btn"
               disabled={
                 !podeEditar ||
-                !healthy ||
                 !w?.health.capabilities?.external_search ||
                 busy
               }

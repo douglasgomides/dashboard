@@ -107,7 +107,7 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
 
-  const { data: resumo, isLoading: loadingResumo } = useQuery({
+  const resumoQ = useQuery({
     queryKey: ["wts-resumo", clientId, start, end],
     queryFn: () => getWtsResumo(clientId, start, end),
   });
@@ -124,12 +124,15 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
     queryFn: () => getWtsVolumeDiario(clientId, start, end),
   });
 
+  const { data: resumo, isLoading: loadingResumo } = resumoQ;
   const isLoading = loadingResumo || loadingDep || loadingAgente || loadingDia;
   const atendimentos = n(resumo?.atendimentos);
 
   if (isLoading) {
     return <Carregando texto="Lendo o atendimento…" />;
   }
+
+  if (resumoQ.isError) return <div role="alert" className="space-y-3 rounded-xl border p-5" style={{ borderColor: "var(--border)" }}><h2 className="font-semibold">Não foi possível carregar os números do atendimento</h2><p className="text-sm">A fonte está indisponível. Isso não significa que não houve atendimentos.</p><button type="button" className="ws-action ws-action--secondary" disabled={resumoQ.isFetching} onClick={() => void resumoQ.refetch()}>Tentar novamente</button></div>;
 
   if (!resumo || atendimentos === 0) {
     return (

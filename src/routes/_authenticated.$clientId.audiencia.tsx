@@ -85,7 +85,7 @@ function Demografia({ a }: { a: Audiencia }) {
         <Painel icone={Cake} titulo="Idade dos seguidores" resumo="Quem segue hoje" ajuda={<>Quem segue a conta hoje. A Meta só informa para contas com 100 seguidores ou mais.</>}>
           <div style={{ marginTop: 12 }}>
             {a.seguidores.ok ? (
-              <Barras itens={a.seguidores.dados.faixa_etaria.map((p) => ({ rotulo: `${p.chave} anos`, valor: p.valor }))} />
+              <Barras itens={a.seguidores.dados.faixa_etaria.map((p) => ({ rotulo: p.chave === "U" ? "Idade não informada" : `${p.chave} anos`, valor: p.valor }))} />
             ) : (
               <Falha b={a.seguidores} />
             )}
@@ -124,7 +124,7 @@ function Demografia({ a }: { a: Audiencia }) {
           <div style={{ marginTop: 12 }}>
             {a.engajados_no_mes.ok ? (
               soma(a.engajados_no_mes.dados.faixa_etaria) >= 50 ? (
-                <Barras itens={a.engajados_no_mes.dados.faixa_etaria.map((p) => ({ rotulo: `${p.chave} anos`, valor: p.valor }))} cor="var(--ai, #8b7cf6)" />
+                <Barras itens={a.engajados_no_mes.dados.faixa_etaria.map((p) => ({ rotulo: p.chave === "U" ? "Idade não informada" : `${p.chave} anos`, valor: p.valor }))} cor="var(--ai, #8b7cf6)" />
               ) : (
                 <p className="note">Poucas pessoas engajaram neste mês para mostrar a divisão por idade.</p>
               )

@@ -98,3 +98,142 @@ test("mobile product switch remains available to the team even after collapsing 
   await expect(page).toHaveURL(new RegExp(`/sap/${CID}/painel`));
   await expect(menu).not.toBeVisible();
 });
+
+for (const measured of [false, true]) {
+  test(`SAP portfolio distinguishes an unavailable commercial source from a measured zero (${measured})`, async ({ page, context }) => {
+    await mockAccount(context, "admin");
+    await context.route("**/rest/v1/rpc/sap_tracker_auto", r => r.fulfill({ json: { tem_crm: measured, tem_whatsapp: false, marcos: measured ? ["compareceu", "fechou"] : [], leads: 0, compareceram: 0, fechados: 0, fechados_com_valor: 0, receita: 0 } }));
+    await page.goto("/sap");
+    const portfolio = page.getByRole("region", { name: "Clínicas e resultados", exact: true });
+    const row = portfolio.getByRole("row").filter({ hasText: "Clínica de teste" });
+    await expect(row.getByRole("cell").nth(4)).toHaveText(measured ? "0" : "sem dado");
+    await expect(row.getByRole("cell").nth(5)).toHaveText(measured ? "0" : "sem dado");
+    await expect(row.getByRole("cell").nth(6)).toHaveText(measured ? "0" : "sem dado");
+    await expect(row.getByRole("cell").nth(7)).toHaveText(measured ? /0,00/ : "sem dado confiável");
+    await expect(portfolio.getByText("0 de 1 clínicas com dados disponíveis", { exact: true })).toHaveCount(measured ? 0 : 4);
+  });
+}
+
+const crmMetrics = { total_leads: 500, ganhos: 40, perdidos: 30, consultas_agendadas: 40, em_atendimento: 100, em_atendimento_valor: 20000, novos_7d: 15, fonte_preenchida_pct: 80 };
+const crmPeriod = [{ novos: 68, ganhos: 4, perdidos: 3, valor: 12000 }];
+
+for (const width of [375, 1440]) {
+  test(`advertising numbers precede expandable recommendations at ${width}px`, async ({ page, context }) => {
+    await mockAccount(context, "viewer");
+    await context.route("**/rest/v1/meta_ads_daily?**", r => r.fulfill({ json: [{ date: new Date().toISOString().slice(0, 10), campaign_id: "fictional", spend: 6000, impressions: 100000, link_clicks: 300, conversations: 100, leads: 0, landing_page_views: 0, reach: 80000, clicks: 300 }] }));
+    await context.route("**/rest/v1/meta_ads_campaigns?**", r => r.fulfill({ json: [{ campaign_id: "fictional", name: "Campanha fictícia", objective: "OUTCOME_ENGAGEMENT" }] }));
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/${CID}/anuncios`);
+    const numbers = page.getByRole("region", { name: "Indicadores dos anúncios", exact: true });
+    await expect(numbers).toBeVisible();
+    await expect(numbers.locator(".ws-metric-value").first()).toHaveText(/6.000,00/);
+    const recommendations = page.locator("details").filter({ has: page.locator("summary").filter({ hasText: "Ver recomendações e ações para os anúncios" }) });
+    await expect(recommendations).not.toHaveAttribute("open", "");
+    expect(await numbers.evaluate(el => !!(el.compareDocumentPosition(document.querySelector('#ag-anuncios')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+    await recommendations.locator("summary").click();
+    await expect(page.locator("#ag-anuncios")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  });
+}
+
+test("CRM period numbers appear before funnel diagnostics and remain separate from the full historical base", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await context.route("**/rest/v1/rpc/crm_metricas_essenciais", r => r.fulfill({ json: [crmMetrics] }));
+  await context.route("**/rest/v1/rpc/crm_leads_resumo_periodo", r => r.fulfill({ json: crmPeriod }));
+  await page.goto(`/${CID}/crm-painel?preset=7d`);
+  const period = page.getByRole("heading", { name: "No período selecionado", exact: true });
+  await expect(period).toBeVisible();
+  const history = page.getByRole("heading", { name: "Base geral do CRM · histórico completo", exact: true });
+  await expect(history).toBeVisible();
+  await expect(page.getByText("Campo de origem preenchido", { exact: true })).toBeVisible();
+  await expect(page.getByText("Fonte identificada", { exact: true })).toHaveCount(0);
+  expect(await period.evaluate(el => !!(el.compareDocumentPosition([...document.querySelectorAll('h2')].find(h => h.textContent?.includes('Onde o funil quebra'))!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  await expect(page.getByText("68", { exact: true })).toBeVisible();
+  await expect(page.getByText("500", { exact: true }).first()).toBeVisible();
+});
+
+test("CRM period failure keeps the historical base and offers a working retry without displaying zero period counts", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  let fail = true;
+  await context.route("**/rest/v1/rpc/crm_metricas_essenciais", r => r.fulfill({ json: [crmMetrics] }));
+  await context.route("**/rest/v1/rpc/crm_leads_resumo_periodo", r => fail ? r.fulfill({ status: 503, json: { message: "fictional failure" } }) : r.fulfill({ json: crmPeriod }));
+  await page.goto(`/${CID}/crm-painel`);
+  const alert = page.getByRole("alert").filter({ hasText: "Não foi possível consultar os números deste período" });
+  await expect(alert).toBeVisible({ timeout: 20000 });
+  await expect(page.getByText("500", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Leads novos", { exact: true })).toHaveCount(0);
+  fail = false;
+  await alert.getByRole("button", { name: "Tentar novamente", exact: true }).click();
+  await expect(page.getByText("68", { exact: true })).toBeVisible();
+});
+
+for (const source of ["anuncios", "crm-painel", "atendimento"] as const) {
+  test(`${source}: a failed primary query is not reported as an empty period and retry recovers`, async ({ page, context }) => {
+    await mockAccount(context, "viewer");
+    let fail = true;
+    const path = source === "anuncios" ? "**/rest/v1/meta_ads_daily?**" : `**/rest/v1/rpc/${source === "crm-painel" ? "crm_metricas_essenciais" : "wts_resumo"}`;
+    await context.route(path, r => fail ? r.fulfill({ status: 503, json: { message: "fictional failure" } }) : r.fulfill({ json: [] }));
+    await page.goto(`/${CID}/${source}`);
+    const alert = page.getByRole("alert").filter({ has: page.getByRole("heading", { name: /^Não foi possível carregar os números/ }) });
+    await expect(alert).toBeVisible({ timeout: 20000 });
+    await expect(page.getByText(/Nenhum atendimento no período|Ainda sem leads|Sem investimento no período/)).toHaveCount(0);
+    fail = false;
+    await alert.getByRole("button", { name: "Tentar novamente", exact: true }).click();
+    await expect(alert).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: /Não foi possível carregar os números/ })).toHaveCount(0);
+  });
+}
+
+test("an unclassified content topic is labelled clearly and is not used as a topic performance recommendation", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await context.route("**/rest/v1/rpc/conteudo_comercial", r => r.fulfill({ json: { dias: [], grade: [], temas: [{ tema: "null", posts: 12, alcance: 1000, conversas: 0, comerciais: 0, pediram_preco: 0, agendaram: 0 }], semanas: [], objecoes: [], assuntos: [], cobertura: { conversas: 0, lidas: 0, sem_texto: 0, com_tema: 0, posts: 12, posts_com_tema: 0 } } }));
+  await page.goto(`/${CID}/conteudo-comercial`);
+  await expect(page.getByRole("cell", { name: "Sem tema identificado", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "null", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Muito post, nenhuma conversa sobre o tema", { exact: true })).toHaveCount(0);
+});
+
+for (const vision of [false, true]) {
+  test(`creative analysis uses configured capability rather than blocking its on-demand restart after an old heartbeat (${vision})`, async ({ page, context }) => {
+    await mockAccount(context, "admin");
+    const accountId = "44444444-4444-4444-8444-444444444444";
+    const postId = "55555555-5555-4555-8555-555555555555";
+    await context.route("**/rest/v1/instagram_accounts?**", r => r.fulfill({ json: [{ id: accountId, client_id: CID, active: true, ig_username: "conta_ficticia" }] }));
+    await context.route("**/rest/v1/instagram_posts?**", r => {
+      const offset = Number(new URL(r.request().url()).searchParams.get("offset") ?? r.request().headers()["range"]?.split("-")[0] ?? 0);
+      return r.fulfill({ json: offset > 0 ? [] : [{ id: postId, instagram_account_id: accountId, format: "carrossel", posted_at: new Date().toISOString(), reach: 1000, saved: 30, shares: 10, views: 1500, caption: "Conteúdo fictício para QA" }] });
+    });
+    await context.route("**/rest/v1/rpc/creative_worker_health", r => r.fulfill({ json: { seen_at: "2020-01-01T00:00:00Z", capabilities: { vision, external_search: false } } }));
+    let queued: Record<string, any> | undefined;
+    let restarted = false;
+    await context.route("**/rest/v1/rpc/creative_enqueue", r => { queued = r.request().postDataJSON(); return r.fulfill({ json: "66666666-6666-4666-8666-666666666666" }); });
+    await context.route("**/api/sync/manual", r => { if (r.request().postDataJSON().alvo === "creative_worker") restarted = true; return r.fulfill({ json: { ok: true } }); });
+    await page.goto(`/${CID}/inteligencia-criativa`);
+    const analyse = page.getByRole("button", { name: "Analisar mídia original", exact: true });
+    await expect(analyse).toBeVisible();
+    if (!vision) {
+      await expect(analyse).toBeDisabled();
+    } else {
+      await expect(analyse).toBeEnabled();
+      await expect(page.getByText(/O processador está sem sinal recente/)).toBeVisible();
+      await analyse.click();
+      await expect.poll(() => queued?.p_kind).toBe("analyse");
+      expect(queued?.p_input).toEqual({ account_id: accountId, post_id: postId });
+      await expect.poll(() => restarted).toBe(true);
+    }
+  });
+}
+
+for (const width of [375, 1440]) {
+  test(`SAP indicator explanations remain open after clicking instead of closing from the hover/click sequence at ${width}px`, async ({ page, context }) => {
+    await mockAccount(context, "admin");
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/sap/${CID}/painel`);
+    const summary = page.getByRole("region", { name: "Resumo do programa", exact: true });
+    await summary.getByRole("button", { name: "Tempo de 1ª resposta", exact: true }).click();
+    await expect(summary.getByRole("tooltip")).toContainText("Quanto tempo a clínica leva para responder");
+    await summary.getByRole("button", { name: "Taxa de comparecimento", exact: true }).click();
+    await expect(summary.getByRole("tooltip")).toHaveCount(1);
+    await expect(summary.getByRole("tooltip")).toContainText("comparecimento");
+  });
+}

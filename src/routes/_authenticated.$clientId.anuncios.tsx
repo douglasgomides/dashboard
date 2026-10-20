@@ -272,14 +272,18 @@ function AnunciosPage() {
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
 
-  const { data: diag, isLoading: loadingDiag } = useQuery({
+  const diagnosticoQ = useQuery({
     queryKey: ["ads-diag-objetivo", clientId, start, end],
     queryFn: () => getAdsDiagnosticoPorObjetivo(clientId, start, end),
+    retry: false,
   });
-  const { data: porDia, isLoading: loadingDia } = useQuery({
+  const diasQ = useQuery({
     queryKey: ["ads-dia", clientId, start, end],
     queryFn: () => getAdsPorDia(clientId, start, end),
+    retry: false,
   });
+  const { data: diag, isLoading: loadingDiag } = diagnosticoQ;
+  const { data: porDia, isLoading: loadingDia } = diasQ;
   const isLoading = loadingDiag || loadingDia;
   const gasto = diag?.gasto ?? 0;
 
@@ -315,6 +319,8 @@ function AnunciosPage() {
   if (isLoading) {
     return <Carregando texto="Lendo os anúncios…" />;
   }
+
+  if (diagnosticoQ.isError || diasQ.isError) return <div role="alert" className="space-y-3 rounded-xl border p-5" style={{ borderColor: "var(--border)" }}><h2 className="font-semibold">Não foi possível carregar os números dos anúncios</h2><p className="text-sm">A fonte está indisponível. Isso não significa que o investimento ou os resultados foram zero.</p><button type="button" className="ws-action ws-action--secondary" disabled={diagnosticoQ.isFetching || diasQ.isFetching} onClick={() => { void diagnosticoQ.refetch(); void diasQ.refetch(); }}>Tentar novamente</button></div>;
 
   if (!diag || gasto === 0) {
     const dataBR = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
@@ -359,7 +365,6 @@ function AnunciosPage() {
 
       <MotivoParada clientId={clientId} />
       <ContaCompartilhada clientId={clientId} />
-      <GestorAnunciosIA clientId={clientId} podeEditar={podeEditar} />
       {suspeito && (
         <Faixa icone={AlertTriangle} cor="var(--crit)" alerta>
           {diag.rastreio?.mensagem}
@@ -395,14 +400,7 @@ function AnunciosPage() {
         </Faixa>
       )}
 
-      <AgirHoje d={diag} clientId={clientId} />
-
-      <ComparativoConta clientId={clientId} start={start} end={end} />
-
-      <QualidadeLeadsCampanha clientId={clientId} start={start} end={end} />
-      <PostsImpulsionados clientId={clientId} start={start} end={end} />
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3" role="region" aria-label="Indicadores dos anúncios">
         <Kpi icone={Wallet} rotulo="Investido" valor={fmtBRL(gasto)} dica={`${diag.campanhas.length} campanhas`} cor="var(--s1)" />
         <Kpi icone={MessageCircle} rotulo="Conversas iniciadas" valor={int(diag.conversas)} dica="WhatsApp e Direct, de todas as campanhas" cor="var(--good)" />
         <Kpi
@@ -425,6 +423,17 @@ function AnunciosPage() {
           curtida nem clique na foto.
         </OQueE>
       </div>
+
+      <details className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+        <summary className="min-h-[44px] cursor-pointer py-3 font-semibold">Ver recomendações e ações para os anúncios</summary>
+        <div className="mt-3 space-y-4"><GestorAnunciosIA clientId={clientId} podeEditar={podeEditar} /><AgirHoje d={diag} clientId={clientId} /></div>
+      </details>
+
+
+      <ComparativoConta clientId={clientId} start={start} end={end} />
+
+      <QualidadeLeadsCampanha clientId={clientId} start={start} end={end} />
+      <PostsImpulsionados clientId={clientId} start={start} end={end} />
 
       {suspeito ? <ObjetivosDasCampanhas d={diag} /> : <DiagnosticoCampanhas d={diag} />}
 

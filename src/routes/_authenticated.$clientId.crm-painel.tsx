@@ -312,7 +312,7 @@ function AtividadeRecente({ clientId }: { clientId: string }) {
 
 function CrmPainelPage() {
   const { clientId } = Route.useParams();
-  const { data: m, isLoading } = useQuery({
+  const metricasQ = useQuery({
     queryKey: ["crm-metricas-essenciais", clientId],
     queryFn: () => getCrmMetricasEssenciais(clientId),
   });
@@ -323,14 +323,18 @@ function CrmPainelPage() {
   const crmNome = nomeCrm(crmProvider);
   // Periodo do seletor do cabecalho (inclui "Ultimos 7 dias").
   const { start, end } = resolveDateRange(clientLayoutRoute.useSearch());
-  const { data: periodo } = useQuery({
+  const periodoQ = useQuery({
     queryKey: ["crm-resumo-periodo", clientId, start, end],
     queryFn: () => getCrmResumoPeriodo(clientId, start, end),
   });
-  // Camada 1: "onde o funil quebra", problemas por tipo e checklist (src/lib/comercial.ts).
+  const { data: m, isLoading } = metricasQ;
+  const { data: periodo } = periodoQ;
+  // A leitura usa o mesmo período dos números do topo.
   const diag = useDiagnosticoComercial(clientId, start, end);
 
   if (isLoading) return <Carregando texto="Lendo o CRM…" />;
+
+  if (metricasQ.isError) return <div role="alert" className="space-y-3 rounded-xl border p-5" style={{ borderColor: "var(--border)" }}><h2 className="font-semibold">Não foi possível carregar os números do CRM</h2><p className="text-sm">A consulta falhou. Nenhum resultado foi substituído por zero.</p><button type="button" className="ws-action ws-action--secondary" disabled={metricasQ.isFetching} onClick={() => void metricasQ.refetch()}>Tentar novamente</button></div>;
 
   if (!m || m.total_leads === 0) {
     return (
@@ -352,15 +356,12 @@ function CrmPainelPage() {
   const baseCurta = decididos > 0 && decididos < m.total_leads * 0.3;
 
   const base = m.total_leads;
-  const fontePct = m.fonte_preenchida_pct ?? 0;
+  const fontePct = m.fonte_preenchida_pct;
   const ehRelatorio = clientId === "8d4b3b3f-74a7-419a-a113-35ebc02cb37f";
 
   return (
     <div className="space-y-4">
       {!ehRelatorio && <QualidadeDados clientId={clientId} fonte="crm" titulo="Dados do CRM com erro" />}
-      {!ehRelatorio && <BaseVivaCrm clientId={clientId} />}
-      {!ehRelatorio && <AtendimentoResumo clientId={clientId} />}
-      {!ehRelatorio && <LinksShortio clientId={clientId} />}
       {(crmProvider === "kommo" || crmProvider === "clint" || crmProvider === "rdstation" || crmProvider === "flwchat" || crmProvider === "digisac") && !ehRelatorio && (
         <div className="flex justify-end">
           <SyncButton clientId={clientId} alvo="crm" />
@@ -414,6 +415,63 @@ function CrmPainelPage() {
       )}
 
       <Painel
+        icone={Sparkles}
+        titulo="No período selecionado"
+        resumo={`Leads criados entre ${formatRangeLabel({ start, end })}`}
+        cor="var(--s3)"
+      >
+        {periodoQ.isPending ? <p role="status" className="text-sm">Carregando os números do período…</p> : periodoQ.isError ? <div role="alert" className="space-y-2 text-sm"><p>Não foi possível consultar os números deste período. A base geral continua disponível abaixo.</p><button type="button" className="ws-action ws-action--secondary" disabled={periodoQ.isFetching} onClick={() => void periodoQ.refetch()}>Tentar novamente</button></div> : periodo && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Kpi icone={Users} rotulo="Leads novos" valor={fmtN(periodo.novos)} cor="var(--accent)" />
+          <Kpi icone={Trophy} rotulo="Ganhos" valor={fmtN(periodo.ganhos)} cor="var(--good)" />
+          <Kpi icone={XCircle} rotulo="Perdidos" valor={fmtN(periodo.perdidos)} cor="var(--crit)" />
+          <Kpi icone={Target} rotulo="Valor dos cards" valor={fmtBRL(periodo.valor)} cor="var(--s1)" />
+        </div>}
+      </Painel>
+
+      {/* Camada 2: a leitura de sempre do CRM — mesmos números, fórmulas e janelas de antes. */}
+      <h2 className="pt-2 text-sm font-semibold" style={{ color: "var(--text-dim)" }}>
+        Base geral do CRM · histórico completo
+      </h2>
+
+      {etapasPorConfirmar && (
+        <Faixa icone={AlertTriangle} cor="var(--warn)" alerta>
+          <b>A configurar:</b> as etapas de consulta agendada e em atendimento ainda não foram marcadas.
+        </Faixa>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <Kpi icone={Users} rotulo="Leads na base" valor={fmtN(m.total_leads)} cor="var(--s1)" dica="todo o histórico, sem os removidos no CRM e só leads com etapa conhecida (não segue o período)" />
+        <Kpi
+          icone={CalendarCheck}
+          rotulo="Consultas agendadas"
+          valor={etapasPorConfirmar ? "—" : fmtN(m.consultas_agendadas)}
+          dica={etapasPorConfirmar ? "a configurar: as etapas ainda não foram marcadas" : undefined}
+          cor="var(--accent)"
+        />
+        <Kpi
+          icone={Headset}
+          rotulo="Em atendimento"
+          valor={etapasPorConfirmar ? "—" : fmtN(m.em_atendimento)}
+          dica={
+            etapasPorConfirmar
+              ? "a configurar: as etapas ainda não foram marcadas"
+              : m.em_atendimento_valor > 0
+                ? fmtBRL(m.em_atendimento_valor)
+                : undefined
+          }
+          cor="var(--good)"
+        />
+        <Kpi icone={Sparkles} rotulo="Novos (7 dias)" valor={fmtN(m.novos_7d)} cor="var(--s3)" />
+        <Kpi
+          icone={Target}
+          rotulo="Campo de origem preenchido"
+          valor={fontePct == null ? "—" : `${fontePct}%`}
+          dica={fontePct == null ? "preenchimento indisponível" : "Mede o preenchimento, inclusive nomes de funil. A validade da origem aparece no checklist de dados."}
+          cor={fontePct === 0 ? "var(--warn)" : "var(--s2)"}
+        />
+      </div>
+
+      <Painel
         icone={Filter}
         titulo="Onde o funil quebra"
         resumo={`Entrou → foi atendido → agendou → comprou · ${formatRangeLabel({ start, end })}`}
@@ -456,49 +514,6 @@ function CrmPainelPage() {
       )}
 
       {diag.data && <ListaLimitacoes itens={diag.data.limitacoes} />}
-
-      {/* Camada 2: a leitura de sempre do CRM — mesmos números, fórmulas e janelas de antes. */}
-      <h2 className="pt-2 text-sm font-semibold" style={{ color: "var(--text-dim)" }}>
-        Números do CRM
-      </h2>
-
-      {etapasPorConfirmar && (
-        <Faixa icone={AlertTriangle} cor="var(--warn)" alerta>
-          <b>A configurar:</b> as etapas de consulta agendada e em atendimento ainda não foram marcadas.
-        </Faixa>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Kpi icone={Users} rotulo="Leads na base" valor={fmtN(m.total_leads)} cor="var(--s1)" dica="todo o histórico, sem os removidos no CRM e só leads com etapa conhecida (não segue o período)" />
-        <Kpi
-          icone={CalendarCheck}
-          rotulo="Consultas agendadas"
-          valor={etapasPorConfirmar ? "—" : fmtN(m.consultas_agendadas)}
-          dica={etapasPorConfirmar ? "a configurar: as etapas ainda não foram marcadas" : undefined}
-          cor="var(--accent)"
-        />
-        <Kpi
-          icone={Headset}
-          rotulo="Em atendimento"
-          valor={etapasPorConfirmar ? "—" : fmtN(m.em_atendimento)}
-          dica={
-            etapasPorConfirmar
-              ? "a configurar: as etapas ainda não foram marcadas"
-              : m.em_atendimento_valor > 0
-                ? fmtBRL(m.em_atendimento_valor)
-                : undefined
-          }
-          cor="var(--good)"
-        />
-        <Kpi icone={Sparkles} rotulo="Novos (7 dias)" valor={fmtN(m.novos_7d)} cor="var(--s3)" />
-        <Kpi
-          icone={Target}
-          rotulo="Fonte identificada"
-          valor={`${fontePct}%`}
-          dica={fontePct === 0 ? "nenhum lead com origem preenchida" : "dos leads têm origem preenchida"}
-          cor={fontePct === 0 ? "var(--warn)" : "var(--s2)"}
-        />
-      </div>
 
       <Painel
         icone={Filter}
@@ -565,20 +580,9 @@ function CrmPainelPage() {
         </div>
       </Painel>
 
-      <Painel
-        icone={Sparkles}
-        titulo="No período selecionado"
-        resumo={`Leads criados entre ${formatRangeLabel({ start, end })}`}
-        cor="var(--s3)"
-      >
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Kpi icone={Users} rotulo="Leads novos" valor={fmtN(periodo?.novos ?? 0)} cor="var(--accent)" />
-          <Kpi icone={Trophy} rotulo="Ganhos" valor={fmtN(periodo?.ganhos ?? 0)} cor="var(--good)" />
-          <Kpi icone={XCircle} rotulo="Perdidos" valor={fmtN(periodo?.perdidos ?? 0)} cor="var(--crit)" />
-          <Kpi icone={Target} rotulo="Valor dos cards" valor={fmtBRL(periodo?.valor ?? 0)} cor="var(--s1)" />
-        </div>
-      </Painel>
-
+      {!ehRelatorio && <BaseVivaCrm clientId={clientId} />}
+      {!ehRelatorio && <AtendimentoResumo clientId={clientId} />}
+      {!ehRelatorio && <LinksShortio clientId={clientId} />}
       {/* Coorte, estoque e movimentos (src/lib/crm-visoes.ts). */}
       <VisoesComerciais clientId={clientId} start={start} end={end} />
 
