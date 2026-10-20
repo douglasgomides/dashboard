@@ -54,16 +54,15 @@ export function PortfolioSap() {
     );
   }
 
-  const tot = ordenadas.reduce(
-    (s, l) => ({
-      leads: s.leads + l.semana.leads,
-      consultas: s.consultas + l.semana.consultas,
-      fechamentos: s.fechamentos + l.semana.fechamentos,
-      receita: s.receita + l.semana.receita,
-      vermelhas: s.vermelhas + (piorFarol(l) === "vermelho" ? 1 : 0),
-    }),
-    { leads: 0, consultas: 0, fechamentos: 0, receita: 0, vermelhas: 0 },
-  );
+  const campos = ["leads", "consultas", "fechamentos", "receita"] as const;
+  const totais = Object.fromEntries(campos.map(campo => {
+    const medidas = ordenadas.filter(l => l.disponibilidade?.[campo] !== false);
+    return [campo, { valor: medidas.reduce((sum, l) => sum + l.semana[campo], 0), clinicas: medidas.length }];
+  })) as Record<typeof campos[number], { valor: number; clinicas: number }>;
+  const vermelhas = ordenadas.filter(l => piorFarol(l) === "vermelho").length;
+  const volume = (campo: typeof campos[number], dinheiro = false) => totais[campo].clinicas ? (dinheiro ? fmtBRL(totais[campo].valor) : fmtNum(totais[campo].valor)) : "—";
+  const cobertura = (campo: typeof campos[number]) => totais[campo].clinicas === ordenadas.length ? "" : `${totais[campo].clinicas} de ${ordenadas.length} clínicas com dados disponíveis`;
+
 
   // 11.04: média da carteira abaixo de 7 por 2 semanas é gatilho de contratação (11.01).
   const notas = ordenadas.map((l) => l.saude?.ultima?.nota).filter((n): n is number => typeof n === "number");
@@ -92,16 +91,17 @@ export function PortfolioSap() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         {[
-          ["Saúde média da carteira", mediaSaude === null ? "sem registro" : `${mediaSaude.toFixed(1).replace(".", ",")}${mediaSaude < 7 ? " · abaixo de 7" : ""}`],
-          ["Clínicas com alerta crítico", fmtNum(tot.vermelhas)],
-          ["Leads", fmtNum(tot.leads)],
-          ["Consultas", fmtNum(tot.consultas)],
-          ["Fechamentos", fmtNum(tot.fechamentos)],
-          ["Receita atribuída", fmtBRL(tot.receita)],
-        ].map(([r, v]) => (
+          ["Saúde média da carteira", mediaSaude === null ? "sem registro" : `${mediaSaude.toFixed(1).replace(".", ",")}${mediaSaude < 7 ? " · abaixo de 7" : ""}`, ""],
+          ["Clínicas com alerta crítico", fmtNum(vermelhas), "Alertas encontrados nos dados disponíveis"],
+          ["Leads", volume("leads"), cobertura("leads")],
+          ["Consultas", volume("consultas"), cobertura("consultas")],
+          ["Fechamentos", volume("fechamentos"), cobertura("fechamentos")],
+          ["Receita atribuída", volume("receita", true), cobertura("receita")],
+        ].map(([r, v, detalhe]) => (
           <div key={r} className="rounded-xl border p-3.5" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
             <div className="text-xs" style={{ color: "var(--text-dim)" }}>{r}</div>
             <div className="mt-1.5 text-2xl font-semibold tabular-nums">{v}</div>
+            {detalhe && <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>{detalhe}</div>}
           </div>
         ))}
       </div>
@@ -170,12 +170,12 @@ export function PortfolioSap() {
                       {s.alertas.filter((x) => x.farol === "vermelho").map((x) => x.titulo).join(", ") || (s.alertas.some(x => x.farol === "cinza") || !s.alertas.length ? "Leitura incompleta" : "Sem alerta crítico")}
                     </div>
                   </td>
-                  <Num v={s.leads} ant={a.leads} />
-                  <Num v={s.consultas} ant={a.consultas} />
-                  <Num v={s.fechamentos} ant={a.fechamentos} />
+                  <Num v={s.leads} ant={a.leads} medido={l.disponibilidade?.leads !== false} anteriorMedido={l.disponibilidadeAnterior?.leads !== false} />
+                  <Num v={s.consultas} ant={a.consultas} medido={l.disponibilidade?.consultas !== false} anteriorMedido={l.disponibilidadeAnterior?.consultas !== false} />
+                  <Num v={s.fechamentos} ant={a.fechamentos} medido={l.disponibilidade?.fechamentos !== false} anteriorMedido={l.disponibilidadeAnterior?.fechamentos !== false} />
                   <td className="px-3 py-2.5 text-right tabular-nums">
-                    {fmtBRL(s.receita)}
-                    <div className="text-xs" style={{ color: "var(--muted)" }}>{variacao(s.receita, a.receita)}</div>
+                    {l.disponibilidade?.receita === false ? <span style={{ color: "var(--muted)" }}>sem dado confiável</span> : fmtBRL(s.receita)}
+                    {l.disponibilidade?.receita !== false && l.disponibilidadeAnterior?.receita !== false && <div className="text-xs" style={{ color: "var(--muted)" }}>{variacao(s.receita, a.receita)}</div>}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{s.medianaResposta === null ? "sem dado" : `${Math.round(s.medianaResposta)} min`}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">
@@ -208,11 +208,11 @@ export function PortfolioSap() {
   );
 }
 
-function Num({ v, ant }: { v: number; ant: number }) {
+function Num({ v, ant, medido, anteriorMedido }: { v: number; ant: number; medido: boolean; anteriorMedido: boolean }) {
   return (
     <td className="px-3 py-2.5 text-right tabular-nums">
-      {fmtNum(v)}
-      <div className="text-xs" style={{ color: "var(--muted)" }}>{variacao(v, ant)}</div>
+      {medido ? fmtNum(v) : <span style={{ color: "var(--muted)" }}>sem dado</span>}
+      {medido && anteriorMedido && <div className="text-xs" style={{ color: "var(--muted)" }}>{variacao(v, ant)}</div>}
     </td>
   );
 }

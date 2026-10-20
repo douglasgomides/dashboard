@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { lerTrackerAuto, montarKpisSap, type TrackerAutoBruto } from "@/lib/sap-auto";
+import { lerTrackerAuto, montarKpisSap, disponibilidadeVolumesSap, type DisponibilidadeVolumesSap, type TrackerAutoBruto } from "@/lib/sap-auto";
 import type { LinhaPlano } from "@/lib/sap-metas";
 import { ITENS_EXECUCAO, resumoSaude, type ItemRegistro, type ResumoSaude, type SemanaSaude } from "@/lib/sap-scores";
 import { diaDoPrograma, MARCOS_PRINCIPAIS, type Pausa } from "@/lib/sap-cronograma";
@@ -446,6 +446,8 @@ export type SapLinhaPortfolio = {
   semana: SapResumo;
   semanaAnterior: SapResumo;
   automatico?: boolean; // números do tracker automático (CRM + WhatsApp), não de sap_leads
+  disponibilidade?: DisponibilidadeVolumesSap;
+  disponibilidadeAnterior?: DisponibilidadeVolumesSap;
   execucao?: number | null; // Score de Execução (% do D90), de sap_clinicas.score_execucao
   saude?: ResumoSaude | null; // Score de Saúde semanal (11.04)
 };
@@ -530,7 +532,7 @@ export async function getSapPortfolio(): Promise<SapLinhaPortfolio[] | null> {
       const [a, b] = await Promise.all([getTrackerAuto(l.clinica.client_id, j.ini, j.fim), getTrackerAuto(l.clinica.client_id, j.iniAnt, j.fimAnt)]);
       const ra = lerTrackerAuto(a);
       const rb = lerTrackerAuto(b);
-      return { ...l, semana: ra ? resumoDoAuto(ra) : l.semana, semanaAnterior: rb ? resumoDoAuto(rb) : l.semanaAnterior, automatico: true };
+      return { ...l, semana: ra ? resumoDoAuto(ra) : l.semana, semanaAnterior: rb ? resumoDoAuto(rb) : l.semanaAnterior, automatico: true, disponibilidade: disponibilidadeVolumesSap(ra), disponibilidadeAnterior: disponibilidadeVolumesSap(rb) };
     }),
   );
 }

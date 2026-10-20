@@ -98,3 +98,18 @@ test("mobile product switch remains available to the team even after collapsing 
   await expect(page).toHaveURL(new RegExp(`/sap/${CID}/painel`));
   await expect(menu).not.toBeVisible();
 });
+
+for (const measured of [false, true]) {
+  test(`SAP portfolio distinguishes an unavailable commercial source from a measured zero (${measured})`, async ({ page, context }) => {
+    await mockAccount(context, "admin");
+    await context.route("**/rest/v1/rpc/sap_tracker_auto", r => r.fulfill({ json: { tem_crm: measured, tem_whatsapp: false, marcos: measured ? ["compareceu", "fechou"] : [], leads: 0, compareceram: 0, fechados: 0, fechados_com_valor: 0, receita: 0 } }));
+    await page.goto("/sap");
+    const portfolio = page.getByRole("region", { name: "Clínicas e resultados", exact: true });
+    const row = portfolio.getByRole("row").filter({ hasText: "Clínica de teste" });
+    await expect(row.getByRole("cell").nth(4)).toHaveText(measured ? "0" : "sem dado");
+    await expect(row.getByRole("cell").nth(5)).toHaveText(measured ? "0" : "sem dado");
+    await expect(row.getByRole("cell").nth(6)).toHaveText(measured ? "0" : "sem dado");
+    await expect(row.getByRole("cell").nth(7)).toHaveText(measured ? /0,00/ : "sem dado confiável");
+    await expect(portfolio.getByText("0 de 1 clínicas com dados disponíveis", { exact: true })).toHaveCount(measured ? 0 : 4);
+  });
+}

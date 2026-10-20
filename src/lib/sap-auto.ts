@@ -57,6 +57,16 @@ export interface TrackerAutoBruto {
   semanas: { semana: string; leads: number; agendados: number; compareceram: number; fechados: number; receita: number }[];
 }
 
+export type DisponibilidadeVolumesSap = Record<"leads" | "consultas" | "fechamentos" | "receita", boolean>;
+
+/** Distingue ausência de medição de um zero observado no portfólio. Não altera contagens ou fórmulas. */
+export function disponibilidadeVolumesSap(t: TrackerAutoBruto | null): DisponibilidadeVolumesSap {
+  const crm = !!t?.tem_crm;
+  const consultas = crm && !!t?.marcos.some(m => ["compareceu", "faltou", "pensando", "nao_fechou"].includes(m));
+  const fechamentos = crm && !!t && (t.marcos.includes("fechou") || t.fechados > 0);
+  return { leads: crm, consultas, fechamentos, receita: fechamentos && !!t && t.fechados_com_valor >= t.fechados };
+}
+
 export type Farol = "verde" | "amarelo" | "vermelho" | "cinza";
 
 export type IdKpi = "resposta" | "agendamento" | "comparecimento" | "conversao" | "custo_consulta" | "receita";
