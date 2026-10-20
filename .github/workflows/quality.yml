@@ -40,6 +40,15 @@ jobs:
       - run: npm run test:e2e
       - run: npm run test:interface
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: clinic-service-evidence
+          path: |
+            test-results/service-delivery-*/clinica-*.png
+            test-results/service-delivery-*/relatorio-*.pdf
+          if-no-files-found: ignore
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
           name: browser-diagnostics

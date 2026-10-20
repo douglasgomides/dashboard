@@ -6,7 +6,7 @@ import { CID, SID, mockAccount } from "./fixtures";
 const date = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
 const now = `${date}T12:00:00Z`;
 for (const width of [375, 1440]) for (const product of ["hub", "sap"] as const) {
-  test(`${product} clinic sees numbers, at most three next steps and their delivery at ${width}px`, async ({ page, context }) => {
+  test(`${product} clinic sees numbers, at most three next steps and their delivery at ${width}px`, async ({ page, context }, info) => {
     await mockAccount(context, "viewer");
     const writes: string[] = [];
     await context.route("**/rest/v1/**", async route => {
@@ -33,12 +33,16 @@ for (const width of [375, 1440]) for (const product of ["hub", "sap"] as const) 
       const numbers = page.getByRole("region", { name: "Retorno do investimento", exact: true });
       expect(await numbers.evaluate(el => !!(el.compareDocumentPosition(document.querySelector('[aria-label="Entregas e próximos passos"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
     } else {
+      if (width === 375) await page.getByRole("button", { name: "Abrir o menu", exact: true }).click();
       const nav = page.getByRole("navigation", { name: "Áreas do SAP", exact: true });
       await expect(nav.getByRole("link")).toHaveCount(3);
+      if (width === 375) await page.keyboard.press("Escape");
     }
     const audit = await new AxeBuilder({ page }).include(".service-followup").withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(audit.violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await mkdir(info.outputDir, { recursive: true });
+    await page.screenshot({ path: info.outputPath(`clinica-${product}-${width}.png`), fullPage: true });
     await summary.getByRole("link", { name: "Ver entrega", exact: true }).first().click();
     await expect(page).toHaveURL(/agente=conteudo/);
     await expect(page.getByRole("region", { name: "Área de revisão das entregas" })).toBeVisible();
