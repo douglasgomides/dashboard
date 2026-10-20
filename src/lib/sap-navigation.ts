@@ -1,5 +1,6 @@
 import {
   CalendarClock,
+  CalendarCheck,
   FileText,
   KeyRound,
   ClipboardCheck,
@@ -26,6 +27,13 @@ export const ITENS = [
     sub: "",
     label: "Minhas tarefas",
     Icone: ListTodo,
+    clinica: true,
+  },
+  {
+    grupo: "",
+    sub: "/plano",
+    label: "Plano da semana",
+    Icone: CalendarCheck,
     clinica: true,
   },
   {
@@ -136,9 +144,9 @@ export const AREAS_SAP = [
   {
     id: "tarefas",
     label: "Minha semana",
-    hint: "Prioridades e tarefas",
+    hint: "Plano, prioridades e tarefas",
     Icone: ListTodo,
-    subs: [""],
+    subs: ["/plano", ""],
   },
   {
     id: "implantacao",

@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   Lightbulb,
   CalendarDays,
+  CalendarCheck,
   GitCompare,
   Megaphone,
   MessageCircle,
@@ -294,6 +295,13 @@ export const AREAS: NavArea[] = [
     descricao: "Prioridades, entregas dos agentes e execução da equipe",
     Icone: ListTodo,
     tabs: [
+      {
+        path: "/plano",
+        label: "Plano da semana",
+        Icone: CalendarCheck,
+        descricao: "As 3 a 5 ações que mais trazem resultado nesta semana, com o valor em jogo e o que mudou na semana passada.",
+        termos: "plano semana prioridade fazer valor dinheiro resultado inteligencia recomendacao",
+      },
       {
         path: "/proximas-acoes",
         label: "Prioridades da equipe",
