@@ -101,6 +101,16 @@ export function AdsPlanilhaPainel({ linhas: todas, start, end }: { linhas: AdsPl
   const mensagens = linhasPeriodo.reduce((a, l) => a + (l.mensagens_periodo ?? 0), 0);
   const gastoComMensagem = linhasPeriodo.filter((l) => l.mensagens_periodo != null).reduce((a, l) => a + (l.valor_periodo ?? 0), 0);
 
+  // Linhas lançadas à mão (acao começa com "Lançado à mão"): mostra a data e a hora da última leitura.
+  const manual = (() => {
+    const m = linhas.filter((l) => /^lançado à mão/i.test((l.acao ?? "").trim()));
+    if (!m.length) return null;
+    const ult = m.reduce((a, l) => (l.atualizado_em > a ? l.atualizado_em : a), m[0].atualizado_em);
+    const d = new Date(ult);
+    const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }).replace(":00", "h").replace(":", "h");
+    return { dia: d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }), hora };
+  })();
+
   const serie = validas.slice(-14).map((s) => ({ dia: dd(s.dia), gasto: s.gasto ?? 0, incompleta: s.semValor > 0 }));
 
   const postsUltima = ultima
@@ -115,10 +125,21 @@ export function AdsPlanilhaPainel({ linhas: todas, start, end }: { linhas: AdsPl
       >
         <FileSpreadsheet size={16} aria-hidden className="shrink-0" style={{ color: "var(--warn)" }} />
         <div className="min-w-0 flex-1">
-          <b>Fonte: planilha de distribuição de conteúdo da equipe Doctor Creator, atualizada a cada análise semanal.</b>{" "}
-          <span style={{ color: "var(--text-dim)" }}>
-            Não é a conta de anúncios da Meta. O valor é por semana de análise, não por dia.
-          </span>
+          {manual ? (
+            <>
+              <b>Parte destes dados foi lançada à mão pela equipe Doctor Creator, lida no Meta Business Suite. Última atualização: {ddmmaaaa(manual.dia)} às {manual.hora}.</b>{" "}
+              <span style={{ color: "var(--text-dim)" }}>
+                Não é a conta de anúncios da Meta ligada ao dashboard. O valor do período vai de 09/10 até a data da leitura, não por dia.
+              </span>
+            </>
+          ) : (
+            <>
+              <b>Fonte: planilha de distribuição de conteúdo da equipe Doctor Creator, atualizada a cada análise semanal.</b>{" "}
+              <span style={{ color: "var(--text-dim)" }}>
+                Não é a conta de anúncios da Meta. O valor é por semana de análise, não por dia.
+              </span>
+            </>
+          )}
         </div>
         <Ajuda>
           Os impulsionamentos desta cliente correm numa conta de anúncios que ainda não está ligada ao dashboard. Enquanto isso, os números vêm da
