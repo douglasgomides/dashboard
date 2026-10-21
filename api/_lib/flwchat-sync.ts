@@ -107,6 +107,23 @@ function procedimentoDaDescricao(descricao: unknown): string | null {
   return nome ? nome : null;
 }
 
+// A equipe do Instituto Geia passou a registrar a origem do contato nas observações do card
+// (Orgânico, Instagram, Conteúdo; Indicação aparece nos cards reais). Só vale quando a observação
+// cita exatamente uma categoria: citando duas ou nenhuma, fica vazio em vez de adivinhar.
+const ORIGENS_DA_DESCRICAO: Array<[string, RegExp]> = [
+  ["Orgânico", /\borganic[oa]\b/],
+  ["Instagram", /\binstagram\b/],
+  ["Conteúdo", /\bconteudo\b/],
+  ["Indicação", /\bindicacao\b/],
+];
+
+export function origemDaDescricao(descricao: unknown): string | null {
+  if (typeof descricao !== "string") return null;
+  const texto = descricao.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ");
+  const achadas = ORIGENS_DA_DESCRICAO.filter(([, re]) => re.test(texto)).map(([nome]) => nome);
+  return achadas.length === 1 ? achadas[0] : null;
+}
+
 export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncResult[]> {
   const supabase: SupabaseClient = createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -209,7 +226,9 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
             price: typeof c.monetaryAmount === "number" && c.monetaryAmount > 0 ? c.monetaryAmount : null,
             occurred_at: c.createdAt ?? null,
             outcome: confirmadas.get(`${panelId}|${c.stepId ?? ""}`) ?? resultadoDaEtapa(stepNames.get(c.stepId ?? "") ?? ""),
-            source: typeof origem === "string" && origem.trim() ? origem.trim() : null,
+            source: typeof origem === "string" && origem.trim()
+              ? origem.trim()
+              : origemDaDescricao((c as { description?: unknown }).description),
             contact_name: titulo || null,
             raw_payload: (procedimento
               ? { ...c, custom_fields_values: [{ field_name: "Tipo de Procedimento", values: [{ value: procedimento }] }] }
