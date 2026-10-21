@@ -403,6 +403,7 @@ export interface AdsPlanilhaLinha {
   mensagens_periodo: number | null;
   custo_seguidor: number | null;
   custo_mensagem: number | null;
+  atualizado_em: string;
 }
 
 export async function getAdsPlanilha(clientId: string): Promise<AdsPlanilhaLinha[]> {
@@ -418,7 +419,7 @@ export async function getAdsPlanilha(clientId: string): Promise<AdsPlanilhaLinha
   };
   const { data, error } = await cliente
     .from("ads_planilha_semanal")
-    .select("analise_em, post_url, nome, tipo, status, acao, orcamento_dia, valor_total, valor_periodo, seguidores_antes, seguidores_apos, seguidores_periodo, mensagens_antes, mensagens_depois, mensagens_periodo, custo_seguidor, custo_mensagem")
+    .select("analise_em, post_url, nome, tipo, status, acao, orcamento_dia, valor_total, valor_periodo, seguidores_antes, seguidores_apos, seguidores_periodo, mensagens_antes, mensagens_depois, mensagens_periodo, custo_seguidor, custo_mensagem, atualizado_em")
     .eq("client_id", clientId)
     .order("analise_em", { ascending: false });
   if (error) throw error;
