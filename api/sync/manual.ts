@@ -18,6 +18,7 @@ import { runDigisacSync } from "../_lib/digisac-sync.js";
 import { lerAudiencia, lerResumoPeriodo } from "../_lib/meta-audiencia.js";
 import { classificarConteudoComIA } from "../_lib/conteudo-ia.js";
 import { ingerirConversasWts } from "../_lib/conversas-wts.js";
+import { ingerirConversasClint } from "../_lib/conversas-clint.js";
 import { enriquecerContatosKommo } from "../_lib/kommo-contatos.js";
 import { cliquesDoLink } from "../_lib/shortio.js";
 import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_lib/sync-status.js";
@@ -739,6 +740,14 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     if (alvo === "conversas") {
       if (!ehAdmin) {
         res.status(403).json({ error: "Só admin ingere conversas" });
+        return;
+      }
+      const clint = await admin.from("crm_connections").select("id,config").eq("client_id", client_id).eq("provider", "clint").eq("active", true);
+      if (clint.error) throw new Error("Não foi possível conferir a conexão da Clint");
+      if (clint.data?.some(c => c.config?.clint_conversas_ativo === true)) {
+        const r = await ingerirConversasClint(admin, { onlyClientId: client_id, orcamentoMs: 200_000 });
+        const ok = r.length > 0 && r.every(c => c.erros.length === 0 && !c.parcial);
+        res.status(ok ? 200 : 207).json({ alvo, ok, clint: r, conversas: r.reduce((n,c) => n+c.conversas, 0), mensagens: r.reduce((n,c) => n+c.mensagens, 0), erros: r.flatMap(c => c.erros) });
         return;
       }
       if (!WTS_API_TOKEN) {
