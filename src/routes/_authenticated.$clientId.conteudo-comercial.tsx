@@ -1,7 +1,8 @@
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
-import { CalendarDays, Clock, MessageCircle, Tag, Layers, ShieldAlert, Search, Info, Sparkles } from "lucide-react";
+import { CalendarDays, Clock, MessageCircle, Tag, Layers, ShieldAlert, Search, Info, Sparkles, Lightbulb, ArrowRight } from "lucide-react";
+import { conclusoes, type Tom } from "@/lib/conteudo-comercial";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { Painel, Kpi, Selo, Ajuda } from "@/components/visual";
@@ -28,6 +29,8 @@ interface Dados {
   assuntos: { assunto: string; n: number; agendaram: number }[];
   cobertura: { conversas: number; lidas: number; sem_texto: number; com_tema: number; posts: number; posts_com_tema: number };
 }
+
+const COR_TOM: Record<Tom, string> = { bom: "var(--good-text)", atencao: "var(--warn)", neutro: "var(--text-dim)" };
 
 const temaIdentificado = (tema: unknown): tema is string => typeof tema === "string" && tema.trim() !== "" && !["null", "undefined"].includes(tema.trim().toLowerCase());
 const nomeTema = (tema: unknown) => temaIdentificado(tema) ? tema.trim() : "Sem tema identificado";
@@ -100,7 +103,19 @@ function ConteudoComercialPage() {
         <Kpi icone={Clock} rotulo="Dia seguinte ao post" valor={e?.media_dia_seguinte_com_post != null ? String(e.media_dia_seguinte_com_post).replace(".", ",") : "—"} dica={`sem post na véspera: ${e?.media_dia_seguinte_sem_post != null ? String(e.media_dia_seguinte_sem_post).replace(".", ",") : "—"}`} info="Média de conversas novas no dia seguinte a um dia com post, comparada com o dia seguinte a um dia sem post. Anúncios e sazonalidade também mexem nesse número." />
       </div>
 
-      <Painel icone={CalendarDays} titulo="Posts e conversas por dia" resumo="Barras: posts publicados. Linha: conversas novas e agendamentos.">
+      <Painel icone={Lightbulb} titulo="O que os números dizem" cor="var(--warn)" destaque resumo="Leitura automática do período. Coincidência no tempo e no assunto, não prova de que um post gerou uma conversa.">
+        <ul className="mt-2 grid gap-3">
+          {conclusoes(d).map((x) => (
+            <li key={x.titulo} className="rounded-lg border p-3" style={{ borderColor: "var(--border)", borderLeft: `3px solid ${COR_TOM[x.tom]}` }}>
+              <p className="text-sm font-semibold">{x.titulo}</p>
+              <p className="mt-0.5 text-sm" style={{ color: "var(--text-dim)" }}>{x.texto}</p>
+              {x.acao && <p className="mt-1 flex items-start gap-1.5 text-sm"><ArrowRight size={14} aria-hidden className="mt-0.5 shrink-0" style={{ color: COR_TOM[x.tom] }} />{x.acao}</p>}
+            </li>
+          ))}
+        </ul>
+      </Painel>
+
+      <Painel icone={CalendarDays} titulo="Posts e conversas por dia" resumo="Como ler: as barras são os posts do dia; as linhas, as conversas novas e quantas agendaram. Se a linha sobe nos dias de barra, o conteúdo está puxando conversa.">
         <div style={{ width: "100%", height: 260 }}>
           <ResponsiveContainer>
             <ComposedChart data={d.dias.map((x) => ({ ...x, rotulo: x.dia.slice(8, 10) + "/" + x.dia.slice(5, 7) }))}>
@@ -118,13 +133,13 @@ function ConteudoComercialPage() {
         </div>
       </Painel>
 
-      <Painel icone={Tag} titulo="Tema do post × assunto da conversa" resumo="Quantos posts cada tema teve e quantas conversas chegaram pedindo esse mesmo tema.">
+      <Painel icone={Tag} titulo="Tema do post × assunto da conversa" resumo="Como ler: cada linha é um tema. À esquerda, o que foi postado; à direita, quantos pacientes chegaram falando desse assunto e quantos agendaram. Tema com muita conversa e pouco post é pauta pronta.">
         {temasComDemanda.length === 0 && d.temas.length === 0 ? (
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>Ainda sem temas lidos neste período.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}><th className="py-1 pr-3">Tema</th><th className="pr-3 text-right">Posts</th><th className="pr-3 text-right">Alcance</th><th className="pr-3 text-right">Conversas</th><th className="pr-3 text-right">Pediram preço</th><th className="text-right">Agendaram</th></tr></thead>
+              <thead><tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}><th className="py-1 pr-3">Tema</th><th className="pr-3 text-right">Posts</th><th className="pr-3 text-right">Alcance</th><th className="pr-3 text-right">Conversas</th><th className="pr-3 text-right">Pediram preço</th><th className="text-right">Agendaram (taxa)</th></tr></thead>
               <tbody>
                 {d.temas.slice(0, 20).map((t) => (
                   <tr key={t.tema} className="border-t" style={{ borderColor: "var(--border)" }}>
@@ -148,7 +163,7 @@ function ConteudoComercialPage() {
         )}
       </Painel>
 
-      <Painel icone={Clock} titulo="Dia da semana e hora" resumo="Cor: conversas novas naquele horário. Número: posts publicados naquele horário.">
+      <Painel icone={Clock} titulo="Dia da semana e hora" resumo="Como ler: quanto mais escura a célula, mais pacientes chamaram naquele dia e hora. O número dentro é quantos posts saíram ali. O ideal é ter posts perto das células escuras.">
         <div className="overflow-x-auto">
           <table className="text-[11px] tabular-nums">
             <thead><tr><th />{horas.map((h) => <th key={h} className="px-0.5 font-normal" style={{ color: "var(--text-dim)" }}>{h}h</th>)}</tr></thead>
@@ -168,7 +183,7 @@ function ConteudoComercialPage() {
         </div>
       </Painel>
 
-      <Painel icone={Layers} titulo="Etapa do funil por semana" resumo="Posts C0 a C3 de cada semana, ao lado das conversas e agendamentos da mesma semana.">
+      <Painel icone={Layers} titulo="Etapa do funil por semana" resumo="Como ler: C0 e C1 atraem gente nova; C2 e C3 chamam para consulta. Semanas com mais C2/C3 deveriam ter mais conversas e agendamentos.">
         <div className="overflow-x-auto">
           <table className="w-full text-sm tabular-nums">
             <thead><tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}><th className="py-1 pr-3">Semana</th><th className="pr-3 text-right">C0</th><th className="pr-3 text-right">C1</th><th className="pr-3 text-right">C2</th><th className="pr-3 text-right">C3</th><th className="pr-3 text-right">Conversas</th><th className="text-right">Agendaram</th></tr></thead>

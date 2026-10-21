@@ -193,6 +193,26 @@ test("an unclassified content topic is labelled clearly and is not used as a top
   await expect(page.getByText("Muito post, nenhuma conversa sobre o tema", { exact: true })).toHaveCount(0);
 });
 
+test("content × commercial opens with plain-language conclusions and the next action", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  const tema = (t: string, posts: number, conversas: number, agendaram: number) => ({ tema: t, posts, alcance: 1000, conversas, comerciais: conversas, pediram_preco: 0, agendaram });
+  await context.route("**/rest/v1/rpc/conteudo_comercial", r => r.fulfill({ json: {
+    dias: [], grade: [], semanas: [], assuntos: [],
+    efeito_post: { dias_com_post: 12, media_com_post: 6, dias_sem_post: 9, media_sem_post: 4, media_dia_seguinte_com_post: 5, media_dia_seguinte_sem_post: 4 },
+    temas: [tema("Menopausa", 1, 12, 6), tema("Canetas", 0, 7, 1), tema("null", 0, 40, 40)],
+    objecoes: [{ objecao: "preco", n: 5, agendaram: 2 }],
+    cobertura: { conversas: 60, lidas: 60, sem_texto: 0, com_tema: 50, posts: 13, posts_com_tema: 12 },
+  } }));
+  await page.goto(`/${CID}/conteudo-comercial`);
+  const painel = page.locator("section, div").filter({ has: page.getByText("O que os números dizem", { exact: true }) }).last();
+  await expect(page.getByText("Dia com post tem 50% mais conversas", { exact: true })).toBeVisible();
+  await expect(page.getByText('"Menopausa" é o assunto que mais vira agendamento', { exact: true })).toBeVisible();
+  await expect(page.getByText("Pacientes perguntam sobre temas que não tiveram post", { exact: true })).toBeVisible();
+  await expect(page.getByText("A objeção mais comum é preço", { exact: true })).toBeVisible();
+  await expect(painel.getByText(/null/)).toHaveCount(0);
+  await page.screenshot({ path: "test-results/conteudo-comercial-conclusoes.png", fullPage: true });
+});
+
 for (const vision of [false, true]) {
   test(`creative analysis uses configured capability rather than blocking its on-demand restart after an old heartbeat (${vision})`, async ({ page, context }) => {
     await mockAccount(context, "admin");
