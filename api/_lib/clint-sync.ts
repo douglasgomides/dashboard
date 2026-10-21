@@ -1,9 +1,9 @@
 /**
  * Sync de negócios da Clint para crm_leads.
  *
- * A Clint só expõe dois endpoints de leitura úteis: GET /v1/deals (paginado,
- * filtrável por origin_id) e GET /v1/origins. Não existe /v1/pipelines nem
- * /v1/stages — o nome da etapa vem junto do próprio negócio, no campo `stage`.
+ * GET /v1/deals traz os negócios e GET /v1/origins traz os funis e todas
+ * as suas etapas, inclusive as vazias. O campo fields.fonte/UTM guarda a
+ * origem de aquisição; o nome do funil não substitui esse campo.
  *
  * Modelagem: a "origem" da Clint faz o papel de pipeline, e a etapa faz o
  * papel de status. Isso deixa os dados no mesmo formato que o Kommo já grava
@@ -46,7 +46,7 @@ interface ClintDeal {
   stage?: string | null;
   stage_id?: string | null;
   status?: string | null;
-  value?: number | null;
+  value?: number | string | null;
   created_at?: string | null;
   updated_at?: string | null;
   won_at?: string | null;
@@ -59,6 +59,31 @@ interface ClintDeal {
     ddi?: string | null;
     instagram?: string | null;
   } | null;
+}
+
+interface ClintOrigin {
+  id: string;
+  name?: string;
+  stages?: { id: string; label: string }[];
+}
+
+export function clintSource(fields: ClintDeal["fields"]): string | null {
+  // Algumas automações acrescentam a qualificação depois de "|". Ela
+  // continua no raw_payload, sem fragmentar o agrupamento por origem.
+  for (const key of ["fonte", "origem", "utm_source", "parameters_utm_source"]) {
+    const raw = fields?.[key];
+    if (typeof raw !== "string") continue;
+    const value = raw.split("|")[0].trim();
+    if (value) return value;
+  }
+  return null;
+}
+
+export function clintPrice(value: ClintDeal["value"]): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || !/^[+-]?\d+(?:\.\d+)?$/.test(value.trim())) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -80,18 +105,25 @@ function normalizeOutcome(status: unknown): "open" | "won" | "lost" {
 async function clintGet(token: string, path: string): Promise<any> {
   const res = await fetch(`${CLINT_BASE}${path}`, { headers: { "api-token": token }, signal: AbortSignal.timeout(30_000), redirect: "error" });
   if (!res.ok) {
-    throw new Error(`Clint ${path} falhou (${res.status}): ${(await res.text()).slice(0, 200)}`);
+    // O corpo do provedor pode conter contatos ou credenciais. Só o status
+    // e o recurso são necessários para identificar a falha no painel.
+    throw new Error(`Clint ${path.split("?")[0]} falhou (${res.status})`);
   }
   return res.json();
 }
 
-async function fetchOrigins(token: string): Promise<Map<string, string>> {
-  const body = await clintGet(token, "/origins");
-  const map = new Map<string, string>();
-  for (const o of body?.data ?? []) {
-    if (o?.id) map.set(String(o.id), String(o.name ?? o.id));
+async function fetchOrigins(token: string): Promise<Map<string, ClintOrigin>> {
+  const map = new Map<string, ClintOrigin>();
+  for (let page = 1; page <= 200; page++) {
+    const body = await clintGet(token, `/origins?limit=${PAGE_SIZE}&page=${page}`);
+    if (!Array.isArray(body?.data)) throw new Error("Clint origins: resposta sem lista de funis");
+    for (const o of body.data) {
+      if (o?.id) map.set(String(o.id), o);
+    }
+    if (!body.hasNext) return map;
+    if (body.data.length === 0) throw new Error("Clint origins: paginação inconsistente");
   }
-  return map;
+  throw new Error("Clint origins: limite de paginação atingido");
 }
 
 // Puxa todos os negócios de uma origem, página a página. A Clint devolve
@@ -113,9 +145,12 @@ async function fetchDealsByOrigin(
       break;
     }
     const body = await clintGet(token, `/deals?origin_id=${originId}&limit=${PAGE_SIZE}&page=${page}`);
-    const rows: ClintDeal[] = body?.data ?? [];
+    if (!Array.isArray(body?.data)) throw new Error("Clint deals: resposta sem lista de negócios");
+    const rows: ClintDeal[] = body.data;
     all.push(...rows);
-    if (!body?.hasNext || rows.length === 0) break;
+    if (!body?.hasNext) break;
+    if (rows.length === 0) throw new Error("Clint deals: paginação inconsistente");
+    if (page === 200) truncated = true;
     page++;
   }
   return { deals: all, truncated };
@@ -140,7 +175,10 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
   for (const conn of connections ?? []) {
     const errors: string[] = [];
     const token = conn.access_token as string | null;
-    const origins: string[] = (conn.config as any)?.origins ?? [];
+    const configuredOrigins: unknown = (conn.config as any)?.origins;
+    const origins = Array.isArray(configuredOrigins)
+      ? [...new Set(configuredOrigins.filter((id): id is string => typeof id === "string" && id.length > 0))]
+      : [];
 
     if (!token) {
       results.push({ clientId: conn.client_id, connectionId: conn.id, origens: 0, negocios: 0, errors: ["Conexão sem access_token"] });
@@ -153,11 +191,25 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
 
     const originNames = await fetchOrigins(token).catch((err) => {
       errors.push(`origins: ${err instanceof Error ? err.message : String(err)}`);
-      return new Map<string, string>();
+      return new Map<string, ClintOrigin>();
     });
 
-    const leadRows: Record<string, unknown>[] = [];
+    const leadRows = new Map<string, Record<string, unknown>>();
     const stageRows = new Map<string, Record<string, unknown>>();
+
+    for (const originId of origins) {
+      const origin = originNames.get(originId);
+      for (const stage of origin?.stages ?? []) {
+        if (!stage.id || !stage.label) continue;
+        stageRows.set(`${originId}:${stage.id}`, {
+          crm_connection_id: conn.id,
+          pipeline_id: originId,
+          pipeline_name: origin?.name ?? originId,
+          status_id: stage.id,
+          status_name: stage.label,
+        });
+      }
+    }
 
     for (const originId of origins) {
       const { deals, truncated } = await fetchDealsByOrigin(token, originId, env.deadlineMs).catch((err) => {
@@ -166,12 +218,18 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
       });
       if (truncated) errors.push(`origem ${originId}: tempo esgotado, dados parciais — rode de novo`);
 
-      const originName = originNames.get(originId) ?? originId;
+      const originName = originNames.get(originId)?.name ?? originId;
 
       for (const d of deals) {
         if (!d?.id) continue;
+        // Uma resposta fora do recorte não pode trazer negócios de outro
+        // cliente da mesma conta Clint.
+        if (d.origin_id && d.origin_id !== originId) {
+          errors.push(`origem ${originId}: negócio fora do funil solicitado`);
+          continue;
+        }
 
-        leadRows.push({
+        leadRows.set(d.id, {
           crm_connection_id: conn.id,
           client_id: conn.client_id,
           provider: "clint",
@@ -179,12 +237,10 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
           event_type: "sync",
           status_id: d.stage_id ?? null,
           pipeline_id: d.origin_id ?? originId,
-          price: typeof d.value === "number" ? d.value : null,
+          price: clintPrice(d.value),
           occurred_at: d.created_at ?? null,
           outcome: normalizeOutcome(d.status),
-          // A origem é o que mais se aproxima de "de onde veio o lead" na
-          // Clint — o equivalente ao campo "Fonte do Lead" do Kommo.
-          source: originName,
+          source: clintSource(d.fields),
           contact_name: d.contact?.name ?? null,
           contact_email: d.contact?.email ?? null,
           contact_phone: d.contact?.phone ?? null,
@@ -192,9 +248,8 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
           received_at: d.updated_at ?? d.created_at ?? new Date().toISOString(),
         });
 
-        // A etapa só existe dentro do negócio, então o catálogo de etapas é
-        // descoberto a partir deles. Map por chave composta evita repetir a
-        // mesma etapa uma vez por negócio.
+        // Etapas antigas ainda referenciadas por negócios ficam disponíveis
+        // como fallback, sem substituir o catálogo atual da Clint.
         if (d.stage_id && d.stage) {
           const key = `${d.origin_id ?? originId}:${d.stage_id}`;
           if (!stageRows.has(key)) {
@@ -211,7 +266,7 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
     }
 
     let gravados = 0;
-    for (const batch of chunk(leadRows, BATCH_SIZE)) {
+    for (const batch of chunk([...leadRows.values()], BATCH_SIZE)) {
       const { error: upsertError } = await supabase
         .from("crm_leads")
         .upsert(batch, { onConflict: "crm_connection_id,external_lead_id" });

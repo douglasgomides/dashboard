@@ -903,9 +903,9 @@ export function limitacoesComerciais(d: DadosComerciais): Limitacao[] {
   out.push({
     id: "comercial-no-show",
     area: "comercial",
-    texto: "Faltas (no-show) não são registradas: não dá para saber quantos que agendaram deixaram de ir à consulta.",
+    texto: "O agendamento sozinho não confirma o comparecimento. A análise de faltas (no-show) depende do registro de quem compareceu ou faltou no CRM.",
     resolve: "atendimento",
-    comoResolver: 'Criar a etapa "Faltou" no funil e mover para lá quem não compareceu.',
+    comoResolver: 'Usar as etapas de comparecimento e falta ("No-show" ou "Faltou") e atualizar cada agendamento após a data marcada.',
   });
   return out;
 }
