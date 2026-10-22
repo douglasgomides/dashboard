@@ -61,6 +61,8 @@ for (const width of [375,1440]) {
   await suggestion.getByRole("button",{name:"Aprovar mudança",exact:true}).click();
   await expect(dialog.getByText("IA com aprovação da equipe",{exact:true})).toBeVisible();
   expect(cards[0].etapa).toBe("agendamento");
+  await expect(dialog.getByLabel("Mover para",{exact:true})).toHaveValue("agendamento");
+  await expect(dialog.getByLabel("Motivo da mudança",{exact:true})).toHaveValue("");
   await dialog.getByRole("button",{name:"Desfazer última movimentação",exact:true}).click();
   await expect.poll(()=>cards[0].etapa).toBe("interesse");
   await page.keyboard.press("Escape");

@@ -47,7 +47,7 @@ function KanbanCrm() {
   {lista.isError&&<div role="alert"><p>Não foi possível carregar o quadro. Nenhuma contagem foi substituída por zero.</p><button className="ws-action" onClick={()=>void lista.refetch()}>Tentar novamente</button></div>}
   {dados&&<>
    <p className="text-xs" role="status">{dados.filtradas===0?"Nenhuma oportunidade encontrada.":`Mostrando ${offset+1}–${Math.min(offset+50,dados.filtradas)} de ${dados.filtradas} oportunidades`}{busca?" nesta busca.":" no quadro completo, sem filtro de período."}</p>
-   <div className="crm-board-scroll" tabIndex={0} aria-label="Quadro de oportunidades">
+   <div className="crm-board-scroll" role="region" tabIndex={0} aria-label="Quadro de oportunidades">
     <div className="crm-board">{ETAPAS_CRM.map(etapa=><section key={etapa.id} className="crm-column" aria-label={etapa.nome}
      onDragOver={e=>{if(editar&&arrastando)e.preventDefault();}}
      onDrop={e=>{e.preventDefault();if(arrastando&&arrastando.etapa!==etapa.id){setAberto(arrastando);setDestino(etapa.id);}setArrastando(null);}}>
@@ -134,8 +134,9 @@ function CardAberto({clientId,inicial,destino,editar,onClose,onSaved}:{clientId:
     const body=await resp.json().catch(()=>null);
     if(!resp.ok)throw new Error(body?.error??"Não foi possível analisar a conversa.");
    }
-   const r=await operacaoCrm<{aviso?:string;versao?:number}>(clientId,nome,{id:card.id,versao:formVersao,...dados});
+   const r=await operacaoCrm<{aviso?:string;versao?:number;etapa?:EtapaCrm}>(clientId,nome,{id:card.id,versao:formVersao,...dados});
    if(r.versao) setFormVersao(r.versao);
+   if(r.etapa) {setEtapa(r.etapa);setMotivo("");setConfirmado(false);}
    setAviso(r?.aviso??"Alteração salva.");
    await qc.invalidateQueries({queryKey:["crm-operacao-detalhe",clientId,card.id]});
    await onSaved();
