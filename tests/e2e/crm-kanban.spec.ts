@@ -3,6 +3,13 @@ import AxeBuilder from "@axe-core/playwright";
 import { CID, mockAccount } from "./fixtures";
 import type { CardCrm, EventoCrm, SugestaoCrm } from "../../src/lib/crm-kanban";
 
+test.afterEach(async({page},info)=>{
+ if(info.status!==info.expectedStatus) {
+  console.log("CRM_FAILURE:"+JSON.stringify(info.errors.map(e=>e.message)));
+  console.log("CRM_DOM:"+(await page.locator("body").innerText().catch(()=>"page unavailable")));
+  console.log("CRM_FAILURE_SCREENSHOT:"+(await page.screenshot().catch(()=>Buffer.from(""))).toString("base64"));
+ }
+});
 for (const width of [375,1440]) {
  test(`Kanban: create, move, AI review, undo and reload at ${width}px`,async({page,context})=>{
   await mockAccount(context,"admin");
