@@ -58,6 +58,7 @@ function ClientLayout() {
   });
 
   const operacao = useQuery({ queryKey: ["crm-operacao-config", clientId], queryFn: () => configCrm(clientId), retry: false, staleTime: 60_000 });
+  const ehOperacaoCrm = /\/crm-contatos\/?$/.test(currentPathname);
   const soCrm = CLIENTES_SO_CRM.has(clientId);
   const semAudiencia = CLIENTES_SEM_AUDIENCIA.has(clientId);
   useEffect(() => {
@@ -86,6 +87,7 @@ function ClientLayout() {
   // Primeiro dia com dado de cada fonte: a tela só oferece período que tem dado.
   const { data: cobertura } = useQuery({
     queryKey: ["cobertura-geral", clientId],
+    enabled: !ehOperacaoCrm,
     queryFn: async () => {
       const hoje = new Date().toISOString().slice(0, 10);
       const { data } = await (supabase as any).rpc("cobertura_periodo", {
@@ -124,20 +126,21 @@ function ClientLayout() {
         client={client ?? undefined}
         pathname={currentPathname}
         dateRange={dateRange}
+        semPeriodo={ehOperacaoCrm}
         currentSearch={currentSearch}
         onDateRange={(next) =>
           navigate({ to: currentPathname, search: (prev: Record<string, unknown>) => ({ ...prev, ...next, from: next.from, to: next.to }) as never, replace: true })
         }
         vis={{ isAdmin, fontes, soCrm, semAudiencia, papel, sap: !!clinicaSap, crmOperacional: operacao.data?.ativo === true }}
-        frescor={<SyncFreshnessBadge clientId={clientId} />}
-        frescorCompacto={<SyncFreshnessBadge clientId={clientId} compacto />}
+        frescor={ehOperacaoCrm ? undefined : <SyncFreshnessBadge clientId={clientId} />}
+        frescorCompacto={ehOperacaoCrm ? undefined : <SyncFreshnessBadge clientId={clientId} compacto />}
         fontesLinha={
-          <DisponibilidadeFontes clientId={clientId} fontes={fontes} />
+          !ehOperacaoCrm && <DisponibilidadeFontes clientId={clientId} fontes={fontes} />
         }
         onBuscarCliente={isAdmin ? () => setPal(true) : undefined}
         inicioDados={inicioDados}
       >
-        <CoberturaPeriodo
+        {!ehOperacaoCrm && <CoberturaPeriodo
           clientId={clientId}
           {...resolveDateRange(dateRange)}
           onUsarPeriodo={(from, to) =>
@@ -147,7 +150,7 @@ function ClientLayout() {
               replace: true,
             })
           }
-        />
+        />}
         <Outlet />
       </AppShell>
       {isAdmin && pal && (

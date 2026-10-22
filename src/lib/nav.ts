@@ -424,7 +424,7 @@ export function tabVisivel(t: NavTab, v: Visibilidade): boolean {
     (!t.admin || v.isAdmin) &&
     (!t.equipe || (v.papel !== "owner" && v.papel !== "viewer")) &&
     (!t.sap || !!v.sap || v.isAdmin) &&
-    fonteOk(t.fonte, v.fontes) &&
+    ((t.kanban && !!v.crmOperacional) || fonteOk(t.fonte, v.fontes)) &&
     (!v.soCrm || !!t.admin || t.fonte === "crm" || (!!t.sap && !!v.sap)) &&
     !(v.semAudiencia && t.path.endsWith("audiencia"))
   );

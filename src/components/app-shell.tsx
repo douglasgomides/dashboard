@@ -57,6 +57,7 @@ export interface AppShellProps {
   fontesLinha?: ReactNode;
   onBuscarCliente?: () => void;
   inicioDados?: string | null;
+  semPeriodo?: boolean;
   children: ReactNode;
 }
 
@@ -241,6 +242,7 @@ export function AppShell({
   fontesLinha,
   onBuscarCliente,
   inicioDados,
+  semPeriodo = false,
   children,
 }: AppShellProps) {
   const sub = subcaminho(pathname, clientId);
@@ -452,7 +454,7 @@ export function AppShell({
             >
               <Search size={20} />
             </button>
-            <button
+            {!semPeriodo && <button
               type="button"
               className="periodo-chip"
               onClick={() => setPeriodo(true)}
@@ -460,7 +462,7 @@ export function AppShell({
             >
               <CalendarDays size={16} aria-hidden />
               <span>{rotuloPeriodo(dateRange)}</span>
-            </button>
+            </button>}
           </div>
         </header>
         <div className="workspace-context">
@@ -483,11 +485,11 @@ export function AppShell({
                 Trocar clínica
               </button>
             )}
-            <DateRangePicker
+            {!semPeriodo && <DateRangePicker
               value={dateRange}
               onChange={onDateRange}
               inicioDados={inicioDados}
-            />
+            />}
           </div>
         </div>
         <header className="workspace-heading">
@@ -549,7 +551,7 @@ export function AppShell({
         </button>
       </nav>
       <BottomSheet
-        aberto={periodo}
+        aberto={periodo && !semPeriodo}
         onFechar={() => setPeriodo(false)}
         titulo="Período"
       >
