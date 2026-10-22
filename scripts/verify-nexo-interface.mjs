@@ -48,7 +48,8 @@ function pilotFixture({started=false,blocked=false,sapPrepared=false}={}){
   state.prepareSap=()=>{state.actions=[{id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',clinica_id:SID,semana:new Date(now).toISOString().slice(0,10),origem:'outro',codigo:'agente_acesso_A2',
     texto:'Confirmar acesso: Doctor Creator como parceira',lado:'dc',responsavel:'Gestor de Tráfego · Jordan QA',prazo:new Date(now+86400000).toISOString().slice(0,10),status:'aberta',resultado:'Falta confirmação com data e responsável.'}];};
   if(started)state.assume();if(sapPrepared)state.prepareSap();
-  state.accesses=[{clinica_id:SID,item:'A1',status:'confirmado',confirmado_em:new Date(now).toISOString().slice(0,10),confirmado_por:'Equipe fictícia',observacao:'Acesso testado no ambiente fictício.',revogado_em:null}];
+  // Data de Brasília: depois das 21h a data UTC já é amanhã, e o app recusa confirmação com data futura.
+  state.accesses=[{clinica_id:SID,item:'A1',status:'confirmado',confirmado_em:new Date(now-3*3600000).toISOString().slice(0,10),confirmado_por:'Equipe fictícia',observacao:'Acesso testado no ambiente fictício.',revogado_em:null}];
   return state;
 }
 async function account(profile='anonymous',{sap=false,tokenFailure=false,tokenNetworkFailure=false,recoveryFailure=false,tracker=null,pilot=null}={}){
