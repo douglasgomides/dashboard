@@ -18,12 +18,17 @@ assert.match(JSON.parse(String(calls[1].init?.body)).message, /Preparando adapta
 assert.equal(calls[1].url.searchParams.get("status"), "in.(queued,retry)", "a preparation update never changes a running or finished job");
 kind = "analyse";
 assert.deepEqual(await prepareWorker(env, request), { needsMedia: true });
+status = "running";
+const beforeRunning = calls.length;
+assert.deepEqual(await prepareWorker(env, request), { needsMedia: true }, "an expired media lease can still be resumed with its binaries available");
+assert.equal(calls.length, beforeRunning + 1, "preparation does not overwrite a running job");
 status = "completed";
 const before = calls.length;
 assert.deepEqual(await prepareWorker(env, request), { needsMedia: false });
 assert.equal(calls.length, before + 1, "finished work is read only");
 await assert.rejects(() => prepareWorker({ ...env, CREATIVE_JOB_ID: "bad" }, request), /inválido/);
 await assert.rejects(() => prepareWorker(env, async () => new Response("provider details", { status: 500 })), /conferir a fila/);
+assert.deepEqual(await prepareWorker({ ...env, CREATIVE_JOB_ID: "" }, request), { needsMedia: true }, "a general drain can receive media jobs after its initial queue check");
 const workflow = readFileSync(new URL("../.github/workflows/creative-worker.yml", import.meta.url), "utf8");
 assert.match(workflow, /steps.preparar.outputs.needs_media == 'true'/);
 assert.match(workflow, /timeout-minutes: 3/);

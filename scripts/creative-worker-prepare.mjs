@@ -8,6 +8,9 @@ export async function prepareWorker(env = process.env, request = fetch) {
   const base = new URL(env.SUPABASE_URL);
   if (base.protocol !== "https:" || !/^[a-z0-9]+\.supabase\.co$/.test(base.hostname)) throw new Error("Projeto Supabase inválido");
   if (!env.SUPABASE_SERVICE_ROLE_KEY) throw new Error("Configuração de processamento ausente");
+  // A rotina pode receber uma análise nova enquanto drena a fila; precisa estar pronta para mídia.
+  // O pedido específico de adaptação continua sem instalar FFmpeg.
+  if (!jobId) return { needsMedia: true };
   const url = new URL("/rest/v1/creative_jobs", base);
   url.searchParams.set("select", "id,kind,status");
   if (jobId) url.searchParams.set("id", `eq.${jobId}`);
@@ -20,7 +23,7 @@ export async function prepareWorker(env = process.env, request = fetch) {
   if (!response.ok) throw new Error("Não foi possível conferir a fila de processamento");
   const jobs = await response.json();
   if (!Array.isArray(jobs) || (jobId && jobs.length !== 1)) throw new Error("Trabalho não encontrado");
-  const needsMedia = jobs.some(j => j.kind === "analyse" && ["queued", "retry"].includes(j.status));
+  const needsMedia = jobs.some(j => j.kind === "analyse" && ["queued", "retry", "running"].includes(j.status));
   if (jobId && jobs.some(j => ["queued", "retry"].includes(j.status))) {
     const update = new URL("/rest/v1/creative_jobs", base);
     update.searchParams.set("id", `eq.${jobId}`);
