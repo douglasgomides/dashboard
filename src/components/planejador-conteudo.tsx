@@ -136,12 +136,14 @@ function CartaoPauta({ p, dias, api, podeEditar }: { p: Pauta; dias: { data: str
   const [aberto, setAberto] = useState(false);
   const muda = (campos: Partial<Pauta>) => api.atualizar.mutate({ id: p.id, campos });
   const referencia = publicationUrl(p.origem_texto, "instagram") ?? publicationUrl(p.origem_texto, "tiktok");
+  const doRadar = p.ideia_id?.startsWith("radar:") === true;
+  const orientacao = doRadar ? [`Pauta: ${p.titulo}`, `Objetivo: ${ROTULO_OBJETIVO_PAUTA[p.objetivo]}`, p.motivo, ...p.roteiro, p.aviso].filter(Boolean).join("\n\n") : roteiroCompleto(p);
   const opDias = [{ v: "", r: "Sem dia" }, ...dias.map((d) => ({ v: d.data, r: d.rotulo })), ...(p.dia && !dias.some((d) => d.data === p.dia) ? [{ v: p.dia, r: `${p.dia.slice(8, 10)}/${p.dia.slice(5, 7)}` }] : [])];
   return (
     <li className="rounded-lg border p-2.5" style={{ borderColor: "var(--border)", background: "var(--surface)", borderLeft: `3px solid ${COR_STATUS[p.status]}` }}>
       <div className="text-[13px] font-semibold leading-snug" style={{ color: "var(--ink)" }}>{p.titulo}</div>
       <div className="mt-0.5 text-[11px]" style={{ color: "var(--muted)" }}>
-        {ROTULO_ORIGEM[p.origem_tipo]} · objetivo: {ROTULO_OBJETIVO_PAUTA[p.objetivo].toLowerCase()}
+        {doRadar ? "Referência do Radar" : ROTULO_ORIGEM[p.origem_tipo]} · objetivo: {ROTULO_OBJETIVO_PAUTA[p.objetivo].toLowerCase()}
       </div>
       <div className="mt-2 grid grid-cols-2 gap-1.5">
         <Sel rotulo="Status" valor={p.status} disabled={!podeEditar} onChange={(v) => muda({ status: v })} opcoes={STATUS.map((s) => ({ v: s, r: ROTULO_STATUS[s] }))} />
@@ -151,7 +153,7 @@ function CartaoPauta({ p, dias, api, podeEditar }: { p: Pauta; dias: { data: str
       </div>
       <div className="mt-1.5 flex items-center justify-between gap-2">
         <button type="button" className="min-h-[32px] text-xs font-semibold" style={{ color: "var(--accent)" }} aria-expanded={aberto} onClick={() => setAberto(!aberto)}>
-          {aberto ? "Fechar" : "Motivo e roteiro"}
+          {aberto ? "Fechar" : doRadar ? "Motivo e orientação" : "Motivo e roteiro"}
         </button>
         {podeEditar && (
           <button type="button" aria-label="Remover pauta" title="Remover pauta" className="inline-flex min-h-[32px] items-center px-1" style={{ color: "var(--muted)" }} onClick={() => confirm(`Remover a pauta “${p.titulo}”?`) && api.apagar.mutate(p.id)}>
@@ -163,8 +165,8 @@ function CartaoPauta({ p, dias, api, podeEditar }: { p: Pauta; dias: { data: str
         <div className="mt-1 space-y-1.5 text-xs leading-relaxed" style={{ color: "var(--ink-2)" }}>
           {p.motivo && <p><b style={{ color: "var(--ink)" }}>Motivo:</b> {p.motivo}</p>}
           {p.origem_texto && <p><b style={{ color: "var(--ink)" }}>Originou de:</b> {referencia ? <a className="underline" href={referencia} target="_blank" rel="noopener noreferrer">Conferir referência original</a> : p.origem_texto}</p>}
-          <pre className="whitespace-pre-wrap break-words rounded-md p-2" style={{ font: "inherit", background: "var(--surface-2)" }}>{roteiroCompleto(p)}</pre>
-          <BotaoCopiar texto={roteiroCompleto(p)} rotulo="Copiar roteiro" />
+          <pre className="whitespace-pre-wrap break-words rounded-md p-2" style={{ font: "inherit", background: "var(--surface-2)" }}>{orientacao}</pre>
+          <BotaoCopiar texto={orientacao} rotulo={doRadar ? "Copiar orientação" : "Copiar roteiro"} />
         </div>
       )}
     </li>
