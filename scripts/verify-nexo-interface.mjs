@@ -49,6 +49,7 @@ function pilotFixture({started=false,blocked=false,sapPrepared=false}={}){
   state.prepareSap=()=>{state.actions=[{id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',clinica_id:SID,semana:diaDaClinica(now),origem:'outro',codigo:'agente_acesso_A2',
     texto:'Confirmar acesso: Doctor Creator como parceira',lado:'dc',responsavel:'Gestor de Tráfego · Jordan QA',prazo:diaDaClinica(now+86400000),status:'aberta',resultado:'Falta confirmação com data e responsável.'}];};
   if(started)state.assume();if(sapPrepared)state.prepareSap();
+  // Data de Brasília: confirmações com data futura são recusadas pela aplicação.
   state.accesses=[{clinica_id:SID,item:'A1',status:'confirmado',confirmado_em:diaDaClinica(now),confirmado_por:'Equipe fictícia',observacao:'Acesso testado no ambiente fictício.',revogado_em:null}];
   return state;
 }

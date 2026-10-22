@@ -1,9 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 
-// A tela usa o dia civil do Brasil. UTC muda de data às 21h e criava registros fictícios no futuro.
-const dataDaClinica = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-
 const roi = { tem_anuncios: true, tem_crm: true, investido: 6000, leads: 240, leads_com_origem: 240, ganhos: 30, ganhos_com_valor: 0, receita: 0, ganho_identificavel: true, crm_compartilhado: false };
 
 for (const width of [375, 1440]) {
@@ -117,13 +114,15 @@ for (const measured of [false, true]) {
   });
 }
 
+// Dia dentro de qualquer período padrão, nos dois fusos: a data de hoje em UTC já é amanhã em Brasília depois das 21h.
+const diaRecente = new Date(Date.now() - 3 * 86400_000).toISOString().slice(0, 10);
 const crmMetrics = { total_leads: 500, ganhos: 40, perdidos: 30, consultas_agendadas: 40, em_atendimento: 100, em_atendimento_valor: 20000, novos_7d: 15, fonte_preenchida_pct: 80 };
 const crmPeriod = [{ novos: 68, ganhos: 4, perdidos: 3, valor: 12000 }];
 
 for (const width of [375, 1440]) {
   test(`advertising numbers precede expandable recommendations at ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "viewer");
-    await context.route("**/rest/v1/meta_ads_daily?**", r => r.fulfill({ json: [{ date: dataDaClinica(), campaign_id: "fictional", spend: 6000, impressions: 100000, link_clicks: 300, conversations: 100, leads: 0, landing_page_views: 0, reach: 80000, clicks: 300 }] }));
+    await context.route("**/rest/v1/meta_ads_daily?**", r => r.fulfill({ json: [{ date: diaRecente, campaign_id: "fictional", spend: 6000, impressions: 100000, link_clicks: 300, conversations: 100, leads: 0, landing_page_views: 0, reach: 80000, clicks: 300 }] }));
     await context.route("**/rest/v1/meta_ads_campaigns?**", r => r.fulfill({ json: [{ campaign_id: "fictional", name: "Campanha fictícia", objective: "OUTCOME_ENGAGEMENT" }] }));
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/anuncios`);
@@ -196,6 +195,47 @@ test("an unclassified content topic is labelled clearly and is not used as a top
   await expect(page.getByText("Muito post, nenhuma conversa sobre o tema", { exact: true })).toHaveCount(0);
 });
 
+test("content × commercial opens with plain-language conclusions and the next action", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  const tema = (t: string, posts: number, conversas: number, agendaram: number) => ({ tema: t, posts, alcance: 1000, conversas, comerciais: conversas, pediram_preco: 0, agendaram });
+  await context.route("**/rest/v1/rpc/conteudo_comercial", r => r.fulfill({ json: {
+    dias: [], grade: [], semanas: [], assuntos: [],
+    efeito_post: { dias_com_post: 12, media_com_post: 6, dias_sem_post: 9, media_sem_post: 4, media_dia_seguinte_com_post: 5, media_dia_seguinte_sem_post: 4 },
+    temas: [tema("Menopausa", 1, 12, 6), tema("Canetas", 0, 7, 1), tema("null", 0, 40, 40)],
+    objecoes: [{ objecao: "preco", n: 5, agendaram: 2 }],
+    cobertura: { conversas: 60, lidas: 60, sem_texto: 0, com_tema: 50, posts: 13, posts_com_tema: 12 },
+  } }));
+  await page.goto(`/${CID}/conteudo-comercial`);
+  const painel = page.locator("section, div").filter({ has: page.getByText("O que os números dizem", { exact: true }) }).last();
+  await expect(page.getByText("Dia com post tem 50% mais conversas", { exact: true })).toBeVisible();
+  await expect(page.getByText('"Menopausa" é o assunto que mais vira agendamento', { exact: true })).toBeVisible();
+  await expect(page.getByText("Pacientes perguntam sobre temas que não tiveram post", { exact: true })).toBeVisible();
+  await expect(page.getByText("A objeção mais comum é preço", { exact: true })).toBeVisible();
+  await expect(painel.getByText(/null/)).toHaveCount(0);
+  await page.screenshot({ path: "test-results/conteudo-comercial-conclusoes.png", fullPage: true });
+});
+
+test("content × commercial links buying comments to posts, topics to closed revenue and response time to bookings", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await context.route("**/rest/v1/rpc/conteudo_comercial", r => r.fulfill({ json: { dias: [], grade: [], temas: [], semanas: [], objecoes: [], assuntos: [], efeito_post: null, cobertura: { conversas: 900, lidas: 900, sem_texto: 0, com_tema: 300, posts: 20, posts_com_tema: 18 } } }));
+  await context.route("**/rest/v1/rpc/conteudo_comercial_profundo", r => r.fulfill({ json: {
+    posts_compra: [{ post_id: "p1", comentarios: 574, compra: 14, preco: 2, agendar: 6, onde: 0, convenio: 4, contato: 5, permalink: "https://instagram.com/p/ficticio", thumbnail_url: null, legenda: "Post fictício sobre menopausa", tema: "Menopausa", formato: "reels", posted_at: "2026-10-01T12:00:00Z" }],
+    comentarios: { total: 2971, compra: 70, posts_com_compra: 32 }, compra_por_formato: [],
+    temas_valor: [{ tema: "Catarata", conversas: 60, com_lead: 50, ganhos: 12, perdidos: 8, ganhos_com_valor: 12, receita: 60000 }],
+    resposta: [{ faixa: "1_ate_15min", conversas: 400, agendaram: 40 }, { faixa: "3_1_a_4h", conversas: 100, agendaram: 4 }, { faixa: "5_sem_resposta", conversas: 50, agendaram: 1 }],
+    resposta_tema: [], cobertura: { conversas: 900, com_lead: 800, com_tema: 300, horario_comercial: 550 },
+  } }));
+  await page.goto(`/${CID}/conteudo-comercial`);
+  await expect(page.getByText("70 comentários pedem preço, horário ou contato", { exact: true })).toBeVisible();
+  await expect(page.getByText('"Catarata" é o tema que mais fatura', { exact: true })).toBeVisible();
+  await expect(page.getByText("Responder em até 15 min agenda 10%; depois de 1 hora, 4%", { exact: true })).toBeVisible();
+  await expect(page.getByText("Post fictício sobre menopausa", { exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Catarata", exact: true })).toBeVisible();
+  await expect(page.getByText("Sem resposta humana", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.screenshot({ path: "test-results/conteudo-comercial-profundo.png", fullPage: true });
+});
+
 for (const vision of [false, true]) {
   test(`creative analysis uses configured capability rather than blocking its on-demand restart after an old heartbeat (${vision})`, async ({ page, context }) => {
     await mockAccount(context, "admin");
@@ -243,7 +283,7 @@ for (const width of [375, 1440]) {
 
 test("advertising summary and period comparison retain conversions attributed without new spend or impressions", async ({ page, context }) => {
   await mockAccount(context, "viewer");
-  const date = dataDaClinica();
+  const date = diaRecente;
   await context.route("**/rest/v1/meta_ads_daily?**", r => r.fulfill({ json: [
     { date, campaign_id: "delivery", spend: 100, impressions: 1000, link_clicks: 100, conversations: 18, leads: 0, landing_page_views: 0 },
     { date, campaign_id: "late-attribution", spend: 0, impressions: 0, link_clicks: 0, conversations: 1, leads: 0, landing_page_views: 0 },

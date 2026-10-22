@@ -1,7 +1,8 @@
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
-import { CalendarDays, Clock, MessageCircle, Tag, Layers, ShieldAlert, Search, Info, Sparkles } from "lucide-react";
+import { CalendarDays, Clock, MessageCircle, Tag, Layers, ShieldAlert, Search, Info, Sparkles, Lightbulb, ArrowRight, ShoppingBag, BadgeDollarSign, Timer, ExternalLink } from "lucide-react";
+import { conclusoes, conclusoesProfundas, nomeFormato, temaValido, FAIXA_RESPOSTA, MIN_CONVERSAS_FAIXA, type DadosProfundos, type Tom } from "@/lib/conteudo-comercial";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { Painel, Kpi, Selo, Ajuda } from "@/components/visual";
@@ -27,6 +28,24 @@ interface Dados {
   objecoes: { objecao: string; n: number; agendaram: number }[];
   assuntos: { assunto: string; n: number; agendaram: number }[];
   cobertura: { conversas: number; lidas: number; sem_texto: number; com_tema: number; posts: number; posts_com_tema: number };
+}
+
+const COR_TOM: Record<Tom, string> = { bom: "var(--good-text)", atencao: "var(--warn)", neutro: "var(--text-dim)" };
+
+const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const INTENCOES: [keyof DadosProfundos["posts_compra"][number], string][] = [["preco", "preço"], ["agendar", "agendar"], ["convenio", "convênio"], ["onde", "onde atende"], ["contato", "contato"]];
+
+function profundoValido(data: unknown): DadosProfundos | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const d = data as Partial<DadosProfundos>;
+  const lista2 = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+  const c = (d.comentarios ?? {}) as Partial<DadosProfundos["comentarios"]>;
+  const cb = (d.cobertura ?? {}) as Partial<DadosProfundos["cobertura"]>;
+  return {
+    posts_compra: lista2(d.posts_compra), compra_por_formato: lista2(d.compra_por_formato), temas_valor: lista2(d.temas_valor), resposta: lista2(d.resposta), resposta_tema: lista2(d.resposta_tema),
+    comentarios: { total: Number(c.total ?? 0), compra: Number(c.compra ?? 0), posts_com_compra: Number(c.posts_com_compra ?? 0) },
+    cobertura: { conversas: Number(cb.conversas ?? 0), com_lead: Number(cb.com_lead ?? 0), com_tema: Number(cb.com_tema ?? 0), horario_comercial: Number(cb.horario_comercial ?? 0) },
+  };
 }
 
 const temaIdentificado = (tema: unknown): tema is string => typeof tema === "string" && tema.trim() !== "" && !["null", "undefined"].includes(tema.trim().toLowerCase());
@@ -57,6 +76,16 @@ function ConteudoComercialPage() {
       return normalizar(data);
     },
   });
+
+  const qp = useQuery({
+    queryKey: ["conteudo-comercial-profundo", clientId, start, end],
+    queryFn: async () => {
+      const { data, error } = await db.rpc("conteudo_comercial_profundo", { p_client: clientId, p_de: start, p_ate: end });
+      if (error) throw new Error(error.message);
+      return profundoValido(data);
+    },
+  });
+  const pr = qp.data ?? null;
 
   const head = (
     <div className="hpagehead">
@@ -100,7 +129,19 @@ function ConteudoComercialPage() {
         <Kpi icone={Clock} rotulo="Dia seguinte ao post" valor={e?.media_dia_seguinte_com_post != null ? String(e.media_dia_seguinte_com_post).replace(".", ",") : "—"} dica={`sem post na véspera: ${e?.media_dia_seguinte_sem_post != null ? String(e.media_dia_seguinte_sem_post).replace(".", ",") : "—"}`} info="Média de conversas novas no dia seguinte a um dia com post, comparada com o dia seguinte a um dia sem post. Anúncios e sazonalidade também mexem nesse número." />
       </div>
 
-      <Painel icone={CalendarDays} titulo="Posts e conversas por dia" resumo="Barras: posts publicados. Linha: conversas novas e agendamentos.">
+      <Painel icone={Lightbulb} titulo="O que os números dizem" cor="var(--warn)" destaque resumo="Leitura automática do período. Coincidência no tempo e no assunto, não prova de que um post gerou uma conversa.">
+        <ul className="mt-2 grid gap-3">
+          {[...conclusoes(d), ...(pr ? conclusoesProfundas(pr) : [])].map((x) => (
+            <li key={x.titulo} className="rounded-lg border p-3" style={{ borderColor: "var(--border)", borderLeft: `3px solid ${COR_TOM[x.tom]}` }}>
+              <p className="text-sm font-semibold">{x.titulo}</p>
+              <p className="mt-0.5 text-sm" style={{ color: "var(--text-dim)" }}>{x.texto}</p>
+              {x.acao && <p className="mt-1 flex items-start gap-1.5 text-sm"><ArrowRight size={14} aria-hidden className="mt-0.5 shrink-0" style={{ color: COR_TOM[x.tom] }} />{x.acao}</p>}
+            </li>
+          ))}
+        </ul>
+      </Painel>
+
+      <Painel icone={CalendarDays} titulo="Posts e conversas por dia" resumo="Como ler: as barras são os posts do dia; as linhas, as conversas novas e quantas agendaram. Se a linha sobe nos dias de barra, o conteúdo está puxando conversa.">
         <div style={{ width: "100%", height: 260 }}>
           <ResponsiveContainer>
             <ComposedChart data={d.dias.map((x) => ({ ...x, rotulo: x.dia.slice(8, 10) + "/" + x.dia.slice(5, 7) }))}>
@@ -118,13 +159,13 @@ function ConteudoComercialPage() {
         </div>
       </Painel>
 
-      <Painel icone={Tag} titulo="Tema do post × assunto da conversa" resumo="Quantos posts cada tema teve e quantas conversas chegaram pedindo esse mesmo tema.">
+      <Painel icone={Tag} titulo="Tema do post × assunto da conversa" resumo="Como ler: cada linha é um tema. À esquerda, o que foi postado; à direita, quantos pacientes chegaram falando desse assunto e quantos agendaram. Tema com muita conversa e pouco post é pauta pronta.">
         {temasComDemanda.length === 0 && d.temas.length === 0 ? (
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>Ainda sem temas lidos neste período.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}><th className="py-1 pr-3">Tema</th><th className="pr-3 text-right">Posts</th><th className="pr-3 text-right">Alcance</th><th className="pr-3 text-right">Conversas</th><th className="pr-3 text-right">Pediram preço</th><th className="text-right">Agendaram</th></tr></thead>
+              <thead><tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}><th className="py-1 pr-3">Tema</th><th className="pr-3 text-right">Posts</th><th className="pr-3 text-right">Alcance</th><th className="pr-3 text-right">Conversas</th><th className="pr-3 text-right">Pediram preço</th><th className="text-right">Agendaram (taxa)</th></tr></thead>
               <tbody>
                 {d.temas.slice(0, 20).map((t) => (
                   <tr key={t.tema} className="border-t" style={{ borderColor: "var(--border)" }}>
@@ -148,7 +189,7 @@ function ConteudoComercialPage() {
         )}
       </Painel>
 
-      <Painel icone={Clock} titulo="Dia da semana e hora" resumo="Cor: conversas novas naquele horário. Número: posts publicados naquele horário.">
+      <Painel icone={Clock} titulo="Dia da semana e hora" resumo="Como ler: quanto mais escura a célula, mais pacientes chamaram naquele dia e hora. O número dentro é quantos posts saíram ali. O ideal é ter posts perto das células escuras.">
         <div className="overflow-x-auto">
           <table className="text-[11px] tabular-nums">
             <thead><tr><th />{horas.map((h) => <th key={h} className="px-0.5 font-normal" style={{ color: "var(--text-dim)" }}>{h}h</th>)}</tr></thead>
@@ -168,7 +209,7 @@ function ConteudoComercialPage() {
         </div>
       </Painel>
 
-      <Painel icone={Layers} titulo="Etapa do funil por semana" resumo="Posts C0 a C3 de cada semana, ao lado das conversas e agendamentos da mesma semana.">
+      <Painel icone={Layers} titulo="Etapa do funil por semana" resumo="Como ler: C0 e C1 atraem gente nova; C2 e C3 chamam para consulta. Semanas com mais C2/C3 deveriam ter mais conversas e agendamentos.">
         <div className="overflow-x-auto">
           <table className="w-full text-sm tabular-nums">
             <thead><tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}><th className="py-1 pr-3">Semana</th><th className="pr-3 text-right">C0</th><th className="pr-3 text-right">C1</th><th className="pr-3 text-right">C2</th><th className="pr-3 text-right">C3</th><th className="pr-3 text-right">Conversas</th><th className="text-right">Agendaram</th></tr></thead>
@@ -183,6 +224,86 @@ function ConteudoComercialPage() {
             </tbody>
           </table>
         </div>
+      </Painel>
+
+      <Painel icone={ShoppingBag} titulo="Posts que atraem quem quer comprar" resumo="Como ler: comentários que pedem preço, horário, convênio, endereço ou contato, contados no próprio post. Aqui a ligação é direta: o comentário está naquele post. Directs do Instagram não entram.">
+        {qp.isLoading ? <p className="text-xs" style={{ color: "var(--text-dim)" }}>Lendo os comentários…</p> : qp.error || !pr ? <p className="text-xs" style={{ color: "var(--text-dim)" }}>Não consegui ler os comentários agora. Atualize a página.</p> : pr.posts_compra.length === 0 ? (
+          <p className="text-xs" style={{ color: "var(--text-dim)" }}>Nenhum comentário com intenção de compra no período ({fmtN(pr.comentarios.total)} comentários lidos).</p>
+        ) : (
+          <>
+            <p className="mb-2 text-xs" style={{ color: "var(--text-dim)" }}>{fmtN(pr.comentarios.compra)} de {fmtN(pr.comentarios.total)} comentários ({pct(pr.comentarios.compra, pr.comentarios.total)}) em {fmtN(pr.comentarios.posts_com_compra)} posts.</p>
+            <ul className="grid gap-2">
+              {pr.posts_compra.slice(0, 8).map((p) => (
+                <li key={p.post_id} className="flex items-start gap-3 rounded-lg border p-2" style={{ borderColor: "var(--border)" }}>
+                  {p.thumbnail_url ? <img src={p.thumbnail_url} alt="" loading="lazy" className="h-14 w-14 shrink-0 rounded object-cover" /> : <div className="h-14 w-14 shrink-0 rounded" style={{ background: "var(--s3)" }} />}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{p.legenda || "Post sem legenda"}</p>
+                    <p className="text-xs" style={{ color: "var(--text-dim)" }}>{nomeFormato(p.formato)} · {temaValido(p.tema) ? p.tema : "sem tema"} · {new Date(p.posted_at).toLocaleDateString("pt-BR")}</p>
+                    <div className="mt-1 flex flex-wrap gap-1">{INTENCOES.filter(([k]) => Number(p[k]) > 0).map(([k, r]) => <Selo key={k}>{r} · {String(p[k])}</Selo>)}</div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-lg font-semibold tabular-nums">{p.compra}</p>
+                    <p className="text-[11px]" style={{ color: "var(--text-dim)" }}>de {fmtN(p.comentarios)}</p>
+                    {p.permalink && <a href={p.permalink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] underline">Abrir <ExternalLink size={10} aria-hidden /></a>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {pr.compra_por_formato.length > 1 && <p className="mt-2 text-xs" style={{ color: "var(--text-dim)" }}>Por formato: {pr.compra_por_formato.map((f) => `${nomeFormato(f.formato)} ${fmtN(f.compra)} em ${f.posts} posts`).join(" · ")}</p>}
+          </>
+        )}
+      </Painel>
+
+      <Painel icone={BadgeDollarSign} titulo="Tema da conversa × venda fechada no CRM" resumo="Como ler: cada conversa tem o tema lido pela IA e está ligada ao lead do CRM. Mostra quantas viraram venda e quanto faturaram. Depende de a equipe marcar o lead como ganho e preencher o valor.">
+        {qp.isLoading ? <p className="text-xs" style={{ color: "var(--text-dim)" }}>Cruzando com o CRM…</p> : !pr ? <p className="text-xs" style={{ color: "var(--text-dim)" }}>Não consegui cruzar com o CRM agora.</p> : pr.temas_valor.filter((t) => temaValido(t.tema)).length === 0 ? (
+          <p className="text-xs" style={{ color: "var(--text-dim)" }}>Ainda sem conversas com tema lido no período ({fmtN(pr.cobertura.com_tema)} de {fmtN(pr.cobertura.conversas)}).</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm tabular-nums">
+              <thead><tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}><th className="py-1 pr-3">Tema</th><th className="pr-3 text-right">Conversas</th><th className="pr-3 text-right">Com lead</th><th className="pr-3 text-right">Vendas</th><th className="pr-3 text-right">Fechamento</th><th className="pr-3 text-right">Faturado</th><th className="text-right">Ticket médio</th></tr></thead>
+              <tbody>
+                {pr.temas_valor.filter((t) => temaValido(t.tema)).slice(0, 15).map((t) => (
+                  <tr key={t.tema} className="border-t" style={{ borderColor: "var(--border)" }}>
+                    <td className="py-1.5 pr-3">{t.tema}</td><td className="pr-3 text-right">{fmtN(t.conversas)}</td><td className="pr-3 text-right">{fmtN(t.com_lead)}</td>
+                    <td className="pr-3 text-right">{fmtN(t.ganhos)}</td><td className="pr-3 text-right">{pct(t.ganhos, t.com_lead)}</td>
+                    <td className="pr-3 text-right">{t.receita > 0 ? brl(t.receita) : "—"}</td><td className="text-right">{t.ganhos_com_valor > 0 ? brl(t.receita / t.ganhos_com_valor) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-2 text-xs" style={{ color: "var(--text-dim)" }}>{fmtN(pr.cobertura.com_tema)} de {fmtN(pr.cobertura.conversas)} conversas do período já têm tema lido; {fmtN(pr.cobertura.com_lead)} estão ligadas a um lead.</p>
+          </div>
+        )}
+      </Painel>
+
+      <Painel icone={Timer} titulo="Tempo da primeira resposta × agendamento" resumo="Como ler: quanto tempo o paciente esperou pela primeira resposta de uma pessoa (robô não conta) e quantos agendaram. Só conversas que começaram em horário comercial (seg a sex 8h–18h, sáb 8h–12h). É correlação, não prova.">
+        {qp.isLoading ? <p className="text-xs" style={{ color: "var(--text-dim)" }}>Medindo as respostas…</p> : !pr || pr.cobertura.horario_comercial < MIN_CONVERSAS_FAIXA ? (
+          <p className="text-xs" style={{ color: "var(--text-dim)" }}>Poucas conversas em horário comercial no período para comparar (mínimo de {MIN_CONVERSAS_FAIXA}).</p>
+        ) : (
+          <>
+            <ul className="grid gap-1.5">
+              {pr.resposta.map((r) => {
+                const taxa = r.conversas > 0 ? r.agendaram / r.conversas : 0;
+                const maxTaxa = Math.max(0.01, ...pr.resposta.map((x) => (x.conversas > 0 ? x.agendaram / x.conversas : 0)));
+                return (
+                  <li key={r.faixa} className="grid grid-cols-[120px_1fr_auto] items-center gap-2 text-sm">
+                    <span>{FAIXA_RESPOSTA[r.faixa] ?? r.faixa}</span>
+                    <span className="h-3 rounded" style={{ width: `${Math.max(2, (taxa / maxTaxa) * 100)}%`, background: r.faixa.startsWith("1") || r.faixa.startsWith("2") ? "var(--good-text)" : "var(--warn)" }} />
+                    <span className="tabular-nums text-xs">{pct(r.agendaram, r.conversas)} agendaram · {fmtN(r.conversas)} conversas</span>
+                  </li>
+                );
+              })}
+            </ul>
+            {pr.resposta_tema.filter((t) => temaValido(t.tema) && t.rapidas >= 10 && t.lentas >= 10).length > 0 && (
+              <table className="mt-3 w-full text-sm tabular-nums">
+                <thead><tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}><th className="py-1 pr-3">Tema</th><th className="pr-3 text-right">Respondidas em até 1 h</th><th className="text-right">Depois de 1 h ou sem resposta</th></tr></thead>
+                <tbody>{pr.resposta_tema.filter((t) => temaValido(t.tema) && t.rapidas >= 10 && t.lentas >= 10).map((t) => (
+                  <tr key={t.tema} className="border-t" style={{ borderColor: "var(--border)" }}><td className="py-1.5 pr-3">{t.tema}</td><td className="pr-3 text-right">{pct(t.rapidas_agendaram, t.rapidas)} agendaram</td><td className="text-right">{pct(t.lentas_agendaram, t.lentas)} agendaram</td></tr>
+                ))}</tbody>
+              </table>
+            )}
+          </>
+        )}
       </Painel>
 
       <div className="grid gap-4 lg:grid-cols-2">
