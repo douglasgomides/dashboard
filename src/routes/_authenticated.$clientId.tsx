@@ -1,3 +1,4 @@
+import { configCrm } from "@/lib/crm-operacao-data";
 import { getClinicaSap } from "@/lib/sap-data";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -56,6 +57,7 @@ function ClientLayout() {
     queryFn: () => getClinicaSap(clientId),
   });
 
+  const operacao = useQuery({ queryKey: ["crm-operacao-config", clientId], queryFn: () => configCrm(clientId), retry: false, staleTime: 60_000 });
   const soCrm = CLIENTES_SO_CRM.has(clientId);
   const semAudiencia = CLIENTES_SEM_AUDIENCIA.has(clientId);
   useEffect(() => {
@@ -126,7 +128,7 @@ function ClientLayout() {
         onDateRange={(next) =>
           navigate({ to: currentPathname, search: (prev: Record<string, unknown>) => ({ ...prev, ...next, from: next.from, to: next.to }) as never, replace: true })
         }
-        vis={{ isAdmin, fontes, soCrm, semAudiencia, papel, sap: !!clinicaSap }}
+        vis={{ isAdmin, fontes, soCrm, semAudiencia, papel, sap: !!clinicaSap, crmOperacional: operacao.data?.ativo === true }}
         frescor={<SyncFreshnessBadge clientId={clientId} />}
         frescorCompacto={<SyncFreshnessBadge clientId={clientId} compacto />}
         fontesLinha={
