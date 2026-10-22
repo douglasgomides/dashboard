@@ -215,6 +215,27 @@ test("content × commercial opens with plain-language conclusions and the next a
   await page.screenshot({ path: "test-results/conteudo-comercial-conclusoes.png", fullPage: true });
 });
 
+test("content × commercial links buying comments to posts, topics to closed revenue and response time to bookings", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await context.route("**/rest/v1/rpc/conteudo_comercial", r => r.fulfill({ json: { dias: [], grade: [], temas: [], semanas: [], objecoes: [], assuntos: [], efeito_post: null, cobertura: { conversas: 900, lidas: 900, sem_texto: 0, com_tema: 300, posts: 20, posts_com_tema: 18 } } }));
+  await context.route("**/rest/v1/rpc/conteudo_comercial_profundo", r => r.fulfill({ json: {
+    posts_compra: [{ post_id: "p1", comentarios: 574, compra: 14, preco: 2, agendar: 6, onde: 0, convenio: 4, contato: 5, permalink: "https://instagram.com/p/ficticio", thumbnail_url: null, legenda: "Post fictício sobre menopausa", tema: "Menopausa", formato: "reels", posted_at: "2026-10-01T12:00:00Z" }],
+    comentarios: { total: 2971, compra: 70, posts_com_compra: 32 }, compra_por_formato: [],
+    temas_valor: [{ tema: "Catarata", conversas: 60, com_lead: 50, ganhos: 12, perdidos: 8, ganhos_com_valor: 12, receita: 60000 }],
+    resposta: [{ faixa: "1_ate_15min", conversas: 400, agendaram: 40 }, { faixa: "3_1_a_4h", conversas: 100, agendaram: 4 }, { faixa: "5_sem_resposta", conversas: 50, agendaram: 1 }],
+    resposta_tema: [], cobertura: { conversas: 900, com_lead: 800, com_tema: 300, horario_comercial: 550 },
+  } }));
+  await page.goto(`/${CID}/conteudo-comercial`);
+  await expect(page.getByText("70 comentários pedem preço, horário ou contato", { exact: true })).toBeVisible();
+  await expect(page.getByText('"Catarata" é o tema que mais fatura', { exact: true })).toBeVisible();
+  await expect(page.getByText("Responder em até 15 min agenda 10%; depois de 1 hora, 4%", { exact: true })).toBeVisible();
+  await expect(page.getByText("Post fictício sobre menopausa", { exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Catarata", exact: true })).toBeVisible();
+  await expect(page.getByText("Sem resposta humana", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.screenshot({ path: "test-results/conteudo-comercial-profundo.png", fullPage: true });
+});
+
 for (const vision of [false, true]) {
   test(`creative analysis uses configured capability rather than blocking its on-demand restart after an old heartbeat (${vision})`, async ({ page, context }) => {
     await mockAccount(context, "admin");

@@ -88,3 +88,62 @@ export function conclusoes(d: DadosCruzamento): Conclusao[] {
 
   return out;
 }
+
+/** Cruzamentos com ligação real (RPC conteudo_comercial_profundo): comentário → post, conversa → lead → valor. */
+export interface DadosProfundos {
+  posts_compra: { post_id: string; comentarios: number; compra: number; preco: number; agendar: number; onde: number; convenio: number; contato: number; permalink: string | null; thumbnail_url: string | null; legenda: string; tema: string | null; formato: string | null; posted_at: string }[];
+  comentarios: { total: number; compra: number; posts_com_compra: number };
+  compra_por_formato: { formato: string; posts: number; compra: number; comentarios: number }[];
+  temas_valor: { tema: string; conversas: number; com_lead: number; ganhos: number; perdidos: number; ganhos_com_valor: number; receita: number }[];
+  resposta: { faixa: string; conversas: number; agendaram: number }[];
+  resposta_tema: { tema: string; rapidas: number; rapidas_agendaram: number; lentas: number; lentas_agendaram: number }[];
+  cobertura: { conversas: number; com_lead: number; com_tema: number; horario_comercial: number };
+}
+
+export const FAIXA_RESPOSTA: Record<string, string> = { "1_ate_15min": "Até 15 min", "2_15_a_60min": "15 a 60 min", "3_1_a_4h": "1 a 4 horas", "4_mais_de_4h": "Mais de 4 horas", "5_sem_resposta": "Sem resposta humana" };
+export const MIN_GANHOS_TEMA = 5;
+export const MIN_CONVERSAS_FAIXA = 30;
+const FORMATO: Record<string, string> = { reels: "Reels", carrossel: "Carrossel", estatico: "Post estático", CAROUSEL_ALBUM: "Carrossel", VIDEO: "Vídeo", IMAGE: "Imagem" };
+export const nomeFormato = (f: string | null) => (f ? FORMATO[f] ?? f : "Formato não informado");
+const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+
+export function conclusoesProfundas(d: DadosProfundos): Conclusao[] {
+  const out: Conclusao[] = [];
+
+  // Comentários com intenção de compra: ligação direta com o post.
+  const c = d.comentarios;
+  if (c.total >= 50 && d.posts_compra.length) {
+    const p = d.posts_compra[0];
+    const tema = temaValido(p.tema) ? `"${p.tema}"` : "sem tema identificado";
+    out.push({ titulo: `${c.compra} comentários pedem preço, horário ou contato`, tom: "bom", texto: `São ${pct(c.compra, c.total)}% dos ${c.total} comentários do período, em ${c.posts_com_compra} posts. O que mais atraiu quem quer comprar foi um ${nomeFormato(p.formato).toLowerCase()} de tema ${tema} (${p.compra} comentários assim).`, acao: "Responda esses comentários chamando para o WhatsApp e repita o tema e o formato desse post." });
+  } else if (c.total > 0) {
+    out.push({ titulo: "Poucos comentários para concluir", tom: "neutro", texto: `Foram ${c.total} comentários no período. Com 50 ou mais dá para ver quais posts atraem quem quer comprar.` });
+  }
+
+  // Tema × valor fechado no CRM.
+  const comValor = d.temas_valor.filter((t) => temaValido(t.tema) && t.ganhos_com_valor >= MIN_GANHOS_TEMA);
+  if (comValor.length) {
+    const t = [...comValor].sort((a, b) => b.receita - a.receita)[0];
+    out.push({ titulo: `"${t.tema}" é o tema que mais fatura`, tom: "bom", texto: `${t.ganhos} vendas fechadas a partir de conversas sobre esse tema, ${brl(t.receita)} no total (ticket médio de ${brl(t.receita / t.ganhos_com_valor)}). Fechamento: ${pct(t.ganhos, t.com_lead)}% das conversas com lead.`, acao: "Priorize esse tema no conteúdo e nos anúncios." });
+  } else if (d.temas_valor.some((t) => t.ganhos > 0)) {
+    out.push({ titulo: "Ainda não dá para dizer qual tema fatura mais", tom: "neutro", texto: `É preciso ao menos ${MIN_GANHOS_TEMA} vendas com valor no CRM em um mesmo tema. Peça para a equipe preencher o valor ao marcar a venda como ganha.` });
+  } else {
+    out.push({ titulo: "O CRM não tem vendas ligadas às conversas", tom: "atencao", texto: "Sem venda marcada como ganha (com valor) nas conversas do período, não dá para saber quanto cada tema fatura.", acao: "Combine com a equipe: ao fechar, marcar o lead como ganho e preencher o valor." });
+  }
+
+  // Tempo de resposta × agendamento (horário comercial).
+  const f = new Map(d.resposta.map((r) => [r.faixa, r]));
+  const rapida = f.get("1_ate_15min"), lenta = [f.get("3_1_a_4h"), f.get("4_mais_de_4h")].filter(Boolean) as DadosProfundos["resposta"];
+  const lentaN = lenta.reduce((s, r) => s + r.conversas, 0), lentaA = lenta.reduce((s, r) => s + r.agendaram, 0);
+  if (rapida && rapida.conversas >= MIN_CONVERSAS_FAIXA && lentaN >= MIN_CONVERSAS_FAIXA) {
+    const tr = pct(rapida.agendaram, rapida.conversas), tl = pct(lentaA, lentaN);
+    out.push(tr > tl
+      ? { titulo: `Responder em até 15 min agenda ${tr}%; depois de 1 hora, ${tl}%`, tom: "atencao", texto: `Em horário comercial, ${pct(lentaN, d.cobertura.horario_comercial)}% das conversas esperaram mais de 1 hora pela primeira resposta de uma pessoa. É correlação, não prova, mas o sinal é claro.`, acao: "Defina um responsável por responder em até 15 minutos no horário comercial." }
+      : { titulo: "A demora na resposta não mudou o agendamento", tom: "neutro", texto: `Até 15 min: ${tr}% agendaram. Mais de 1 hora: ${tl}%. O gargalo está em outra etapa do atendimento.` });
+  }
+  const sem = f.get("5_sem_resposta");
+  if (sem && d.cobertura.horario_comercial >= MIN_CONVERSAS_FAIXA && pct(sem.conversas, d.cobertura.horario_comercial) >= 15) {
+    out.push({ titulo: `${pct(sem.conversas, d.cobertura.horario_comercial)}% das conversas em horário comercial sem resposta de uma pessoa`, tom: "atencao", texto: `${sem.conversas} conversas receberam só mensagem automática ou nenhuma resposta registrada.`, acao: "Confira se a equipe responde por outro número ou se essas conversas ficaram sem atendimento." });
+  }
+  return out;
+}
