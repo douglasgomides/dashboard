@@ -27,13 +27,19 @@ export function discoveryFormat(item: Record<string, unknown>, platform: Discove
 }
 
 /** PPE events can be final before usageTotalUsd updates. Never settle a known paid event as zero. */
-export function apifyRunCost(data: Record<string, any>): number | null {
+export function apifyRunCost(data: Record<string, any>, expectedItems = 0): number | null {
   const valid = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && n >= 0;
   const usage = valid(data.usageTotalUsd) ? data.usageTotalUsd : null;
   if (data.pricingInfo?.pricingModel !== "PAY_PER_EVENT") return usage;
-  if (!data.chargedEventCounts || typeof data.chargedEventCounts !== "object") return usage && usage > 0 ? usage : null;
+  if (!data.chargedEventCounts || typeof data.chargedEventCounts !== "object") return expectedItems > 0 ? null : usage && usage > 0 ? usage : null;
   const prices = data.pricingInfo.pricingPerEvent?.actorChargeEvents;
-  let events = 0;
+  let events = 0, primaryCount = 0;
+  if (expectedItems > 0) {
+    for (const [key, info] of Object.entries(prices ?? {}) as [string, any][]) {
+      if (info.isPrimaryEvent === true && valid(data.chargedEventCounts[key])) primaryCount += data.chargedEventCounts[key];
+    }
+    if (primaryCount < expectedItems) return null;
+  }
   for (const [key, count] of Object.entries(data.chargedEventCounts)) {
     if (!valid(count) || !Number.isInteger(count)) return null;
     if (count === 0) continue;

@@ -14,7 +14,10 @@ assert.equal(publicationUrl("https://www.instagram.com/p/ABC123/?utm_source=qa",
 assert.equal(publicationUrl("https://www.tiktok.com/@qa/video/123456?tracking=x", "tiktok"), "https://www.tiktok.com/@qa/video/123456");
 assert.equal(discoveryFormat({ type: "Image" }, "instagram", "https://instagram.com/p/QA/"), null);
 assert.equal(discoveryFormat({ type: "Sidecar" }, "instagram", "https://instagram.com/p/QA/"), "carrossel");
-const terminal = { status: "SUCCEEDED", usageTotalUsd: 0, pricingInfo: { pricingModel: "PAY_PER_EVENT", pricingPerEvent: { actorChargeEvents: { result: { eventPriceUsd: 0.0023 } } } }, chargedEventCounts: { result: 1 } };
+const terminal = { status: "SUCCEEDED", usageTotalUsd: 0, pricingInfo: { pricingModel: "PAY_PER_EVENT", pricingPerEvent: { actorChargeEvents: { result: { eventPriceUsd: 0.0023, isPrimaryEvent: true } } } }, chargedEventCounts: { result: 1 } };
+assert.equal(apifyRunCost({ ...terminal, chargedEventCounts: { result: 6 }, usageTotalUsd: 0.0138 }, 20), null, "partial event counters must not settle the final cost");
+assert.equal(apifyRunCost({ ...terminal, chargedEventCounts: undefined, usageTotalUsd: 0.0138 }, 20), null, "missing counters must not settle a partial total");
+assert.equal(apifyRunCost({ ...terminal, chargedEventCounts: { result: 20 }, usageTotalUsd: 0.0138 }, 20), 0.046);
 assert.equal(apifyRunCost(terminal), 0.0023, "metering delay must not turn a paid event into zero cost");
 assert.equal(apifyRunCost({ ...terminal, usageTotalUsd: 0.01 }), 0.01);
 assert.equal(apifyRunCost({ ...terminal, pricingInfo: { pricingModel: "PAY_PER_EVENT" } }), null);
@@ -48,6 +51,7 @@ try {
       return Response.json({data:{id:"fictional-run"}});
     }
     if(u.pathname.includes("actor-runs")) return Response.json({data:{...terminal,defaultDatasetId:"fictional-dataset"}});
+    if(!u.pathname.includes("/items")) return Response.json({data:{itemCount:1}});
     return Response.json(mode === "invalid" ? [{url:"https://www.instagram.com/explore/tags/chadson",id:"chadson"}] : [{id:"qa",url:platform === "instagram" ? "https://www.instagram.com/p/QA/" : "https://www.tiktok.com/@qa/video/123456",type:"Sidecar",caption:"Referência fictícia"}]);
   };
   await discover(context());assert.equal(finished.count,1);assert.equal(saves.length,1);assert.equal(settlements[0],0.0023);
