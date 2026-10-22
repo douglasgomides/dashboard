@@ -148,7 +148,7 @@ export async function enqueue(
   return id;
 }
 // A fila é persistida antes do acionamento. Uma falha de acionamento não pode parecer processamento confirmado.
-async function dispararWorker(clientId: string, jobId: string) {
+export async function dispararWorker(clientId: string, jobId: string) {
   try {
     const token = (await supabase.auth.getSession()).data.session?.access_token;
     if (!token) return false;

@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
+import { pendingSlides, deliveryCaption, deliveryFiles } from "../src/lib/creative-intelligence/delivery";
+import fixture from "../tests/e2e/creative-fixture.json";
+import type { CreativeAdaptation } from "../src/lib/creative-intelligence/contracts";
+const doc = { ...fixture.adaptation.document, units: [1, 2, 3].map(position => ({ ...fixture.adaptation.document.units[0], position })) } as CreativeAdaptation["document"];
+assert.deepEqual(pendingSlides(doc.units, [{ position: 2 }]), [1, 3]);
+assert.throws(() => deliveryFiles(doc, [{ position: 2, bytes: strToU8("png2") }]), /faltam artes/);
+assert.equal(deliveryCaption({ ...doc, caption: "Texto\n\nSalve este post", cta: "Salve este post" }), "Texto\n\nSalve este post");
+const files = deliveryFiles(doc, [3, 1, 2].map(position => ({ position, bytes: strToU8(`png${position}`) })));
+assert.deepEqual(files.images.map(i => i.name), ["slide-01.png", "slide-02.png", "slide-03.png"]);
+const zip = zipSync({ "legenda.txt": strToU8(files.caption), ...Object.fromEntries(files.images.map(i => [i.name, i.bytes])) });
+const unpacked = unzipSync(zip);
+assert.equal(strFromU8(unpacked["slide-01.png"]), "png1");
+assert.equal(strFromU8(unpacked["legenda.txt"]), deliveryCaption(doc));
+console.log("ok creative-delivery (retomada só de faltantes, pacote completo e ordenado, legenda sem CTA duplicado)");

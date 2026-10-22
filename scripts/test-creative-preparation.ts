@@ -1,0 +1,31 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { prepareWorker } from "./creative-worker-prepare.mjs";
+
+const id = "11111111-1111-4111-8111-111111111111";
+const env = { SUPABASE_URL: "https://fixture.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "ficticio", CREATIVE_JOB_ID: id };
+const calls: { url: URL; init?: RequestInit }[] = [];
+let kind = "adapt", status = "queued";
+const request = async (url: URL, init?: RequestInit) => {
+  calls.push({ url, init });
+  assert.equal(url.hostname, "fixture.supabase.co");
+  assert.equal(url.searchParams.get("id"), `eq.${id}`);
+  return init?.method === "PATCH" ? new Response(null, { status: 204 }) : Response.json([{ id, kind, status }]);
+};
+assert.deepEqual(await prepareWorker(env, request), { needsMedia: false }, "text adaptation must never install FFmpeg");
+assert.equal(calls.length, 2);
+assert.match(JSON.parse(String(calls[1].init?.body)).message, /Preparando adaptação/);
+assert.equal(calls[1].url.searchParams.get("status"), "in.(queued,retry)", "a preparation update never changes a running or finished job");
+kind = "analyse";
+assert.deepEqual(await prepareWorker(env, request), { needsMedia: true });
+status = "completed";
+const before = calls.length;
+assert.deepEqual(await prepareWorker(env, request), { needsMedia: false });
+assert.equal(calls.length, before + 1, "finished work is read only");
+await assert.rejects(() => prepareWorker({ ...env, CREATIVE_JOB_ID: "bad" }, request), /inválido/);
+await assert.rejects(() => prepareWorker(env, async () => new Response("provider details", { status: 500 })), /conferir a fila/);
+const workflow = readFileSync(new URL("../.github/workflows/creative-worker.yml", import.meta.url), "utf8");
+assert.match(workflow, /steps.preparar.outputs.needs_media == 'true'/);
+assert.match(workflow, /timeout-minutes: 3/);
+assert.match(workflow, /npm ci --prefix workers\/creative --ignore-scripts/);
+console.log("ok creative-preparation (adaptação sem FFmpeg, status persistido, mídia e isolamento de trabalhos concluídos)");
