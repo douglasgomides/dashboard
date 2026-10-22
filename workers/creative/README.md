@@ -80,3 +80,14 @@ A branch Supabase de homologação tem histórico próprio de catálogo. As migr
 - [Google compreensão de vídeo e amostragem](https://ai.google.dev/gemini-api/docs/video-understanding)
 - [Apify Instagram Scraper](https://apify.com/apify/instagram-scraper/input-schema)
 - [Apify TikTok Scraper](https://apify.com/clockworks/tiktok-scraper/input-schema)
+
+
+## Radar: configuração da Apify (22/10/2026)
+
+Cadastre `APIFY_API_TOKEN` nos secrets do GitHub Actions. Use um token exclusivo, com Read, Run e List runs apenas nos Actors `apify/instagram-scraper` e `clockworks/tiktok-scraper`, acesso aos storages padrão das execuções e execução em modo restrito. O workflow habilita a Apify quando o secret existe; a próxima execução atualiza a saúde exibida no Nexo.
+
+Instagram usa a URL direta da hashtag, sem pesquisa que possa devolver metadados de outra hashtag. Somente URLs de publicações reais entram no Radar; páginas de perfil/hashtag, erros do fornecedor e fotos únicas não são apresentadas como vídeos. A interface aceita uma hashtag sem espaços para Instagram e uma busca livre para TikTok.
+
+O teto padrão do Instagram é US$ 0,25, reduzido ao orçamento restante do trabalho quando necessário. O TikTok exige atualmente um teto mínimo de US$ 0,50 no fornecedor e fica desabilitado até a variável do repositório `CREATIVE_ENABLE_APIFY_TIKTOK=true` ser configurada após aprovação desse orçamento. Essa variável não é uma credencial. O limite é uma autorização máxima por chamada, não uma cobrança fixa. Nenhuma conta ou plano é contratado automaticamente.
+
+Custos PPE consideram os eventos cobrados quando o total agregado ainda está atrasado. Recusas explícitas de início liberam a reserva com custo zero; falhas incertas mantêm a reserva para reconciliação. Uma coleta já iniciada conserva o checkpoint para evitar geração duplicada.

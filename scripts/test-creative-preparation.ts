@@ -16,6 +16,9 @@ assert.deepEqual(await prepareWorker(env, request), { needsMedia: false }, "text
 assert.equal(calls.length, 2);
 assert.match(JSON.parse(String(calls[1].init?.body)).message, /Preparando adaptação/);
 assert.equal(calls[1].url.searchParams.get("status"), "in.(queued,retry)", "a preparation update never changes a running or finished job");
+kind = "discover";
+await prepareWorker(env, request);
+assert.match(JSON.parse(String(calls.at(-1)?.init?.body)).message, /pesquisa de referências públicas/);
 kind = "analyse";
 assert.deepEqual(await prepareWorker(env, request), { needsMedia: true });
 status = "running";

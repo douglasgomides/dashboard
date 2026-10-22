@@ -30,7 +30,7 @@ export async function prepareWorker(env = process.env, request = fetch) {
     update.searchParams.set("status", "in.(queued,retry)");
     const result = await request(update, {
       method: "PATCH", headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ message: needsMedia ? "Preparando leitura da mídia original. A análise ainda não começou." : "Preparando adaptação e conexão com a IA. O processamento começará em seguida." }),
+      body: JSON.stringify({ message: jobs[0]?.kind === "discover" ? "Preparando pesquisa de referências públicas. A coleta começará em seguida." : needsMedia ? "Preparando leitura da mídia original. A análise ainda não começou." : "Preparando adaptação e conexão com a IA. O processamento começará em seguida." }),
       signal: AbortSignal.timeout(15_000),
     });
     if (!result.ok) throw new Error("Não foi possível atualizar a preparação do trabalho");

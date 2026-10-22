@@ -35,6 +35,8 @@ jobs:
       # Radar de mercado: liga sozinho quando o segredo APIFY_API_TOKEN existir no repositório.
       APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
       CREATIVE_ENABLE_APIFY: ${{ secrets.APIFY_API_TOKEN != '' && 'true' || 'false' }}
+      # TikTok currently requires a provider run ceiling of at least US$ 0.50; enable only after approval.
+      CREATIVE_ENABLE_APIFY_TIKTOK: ${{ vars.CREATIVE_ENABLE_APIFY_TIKTOK || 'false' }}
       FFMPEG_PATH: /usr/bin/ffmpeg
       FFPROBE_PATH: /usr/bin/ffprobe
       CREATIVE_JOB_ID: ${{ inputs.job_id }}

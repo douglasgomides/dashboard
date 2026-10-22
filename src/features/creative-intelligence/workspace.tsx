@@ -1,3 +1,4 @@
+import { publicationUrl } from "@/lib/creative-intelligence/discovery";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -769,7 +770,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
             }}
           >
             <label className="block text-sm">
-              Tema, especialidade, problema, palavra-chave, hashtag ou perfil
+              {platform === "instagram" ? "Hashtag do Instagram" : "Tema ou palavra-chave do TikTok"}
               <input
                 className="field mt-1 w-full"
                 value={query}
@@ -777,7 +778,9 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                 minLength={2}
                 maxLength={200}
                 required
-                placeholder="Ex.: menopausa"
+                pattern={platform === "instagram" ? "#?[\\p{L}\\p{N}_]{2,100}" : undefined}
+                title={platform === "instagram" ? "Use uma hashtag sem espaços ou endereço de perfil." : undefined}
+                placeholder={platform === "instagram" ? "Ex.: marketingmedico" : "Ex.: marketing médico"}
               />
             </label>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -789,7 +792,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                   onChange={(e) => setPlatform(e.target.value)}
                 >
                   <option value="instagram">Instagram · hashtags</option>
-                  <option value="tiktok">TikTok · busca pública</option>
+                  <option value="tiktok" disabled={!w?.health.capabilities?.external_search_tiktok}>TikTok · busca pública{!w?.health.capabilities?.external_search_tiktok ? " · em configuração" : ""}</option>
                 </select>
               </label>
               <label className="text-sm">
@@ -835,7 +838,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                   value={format}
                   onChange={(e) => setFormat(e.target.value)}
                 >
-                  <option value="">Todos</option>
+                  <option value="">Carrosséis e vídeos</option>
                   <option value="carrossel">Carrosséis</option>
                   <option value="reels">Vídeos</option>
                 </select>
@@ -845,7 +848,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
               className="btn"
               disabled={
                 !podeEditar ||
-                !w?.health.capabilities?.external_search ||
+                (!w?.health.capabilities?.external_search || (platform === "tiktok" && !w?.health.capabilities?.external_search_tiktok)) ||
                 busy
               }
             >
@@ -860,7 +863,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
             </p>
           )}
           <div className="mt-5 grid gap-3 md:grid-cols-2">
-            {w?.discoveries.map((d) => (
+            {w?.discoveries.filter(d => publicationUrl(d.canonical_url, d.platform as "instagram" | "tiktok")).map((d) => (
               <article className="creative-structure" key={d.id}>
                 <Selo>Popularidade observada</Selo>
                 <h3 className="mt-2 font-semibold">{d.title}</h3>
