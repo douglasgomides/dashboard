@@ -39,3 +39,27 @@ A migração aditiva `20261022090000_acompanhamento_verificavel.sql` é aplicada
 ## Limite desta entrega
 
 São dois pilotos operacionais, com contato humano e decisão supervisionada. Integração de agenda, envio automático a pacientes, alteração de mídia, pagamento conciliado e retorno de conversões exigem suas próprias integrações, autorizações e testes. Nenhuma dessas capacidades é ativada por esta entrega.
+
+## Atualização de 22/10/2026: central de atendimento
+
+A rota `/$clientId/central-atendimento`, em Comercial, reúne fila, histórico, responsável e situação. A clínica começa pelos números de conversas em aberto, sem resposta, sem responsável e aguardando retorno. Admin, owner e strategist podem operar; viewer não recebe históricos pela nova RPC. Os acessos às conversas são auditados. O filtro de relatório do cabeçalho não limita a fila operacional.
+
+O vínculo com Contatos e oportunidades reutiliza o contato e o cartão existentes. Criar uma oportunidade exige o piloto CRM ativo e não altera os registros do CRM externo. O endereço `crm-contatos?card=<uuid>` abre o cartão com a autorização da própria clínica. Nenhuma etapa do funil é movida automaticamente por esta central.
+
+O transporte implementado recebe webhooks oficiais da Meta e envia respostas manuais de texto. Os dois endereços públicos usam rewrites para a função HTTP existente, respeitando o limite de 12 funções do plano Hobby. Os handlers mantêm autenticação independente, e o webhook lê o corpo bruto antes de qualquer desserialização. O servidor verifica HMAC SHA-256 sobre os bytes originais, roteia pela conta externa conectada e deduplica IDs de mensagens. Contas desconhecidas não geram registros. Mensagens não textuais aparecem como indicação para conferência no aplicativo; não há envio ou reprodução de anexos nesta versão. O histórico recebido desde a ativação permanece marcado como parcial, sem inventar cobertura anterior.
+
+O envio só usa uma conversa que chegou pelo canal oficial e com mensagem de entrada nas últimas 24 horas. Histórico importado permanece para consulta. O pedido tem UUID persistente; apenas uma requisição reivindica o envio. Não há repetição automática de POST à Meta. Timeout, falha de rede, erro 5xx ou ausência de ID de confirmação deixam o envio incerto e bloqueiam outro envio até conferência. Recibos não rebaixam uma mensagem já lida para enviada. Uma resposta apenas preparada pode ser descartada por outro operador com justificativa auditada; a trava do banco impede descartar se o envio já começou. Confirmação manual fica identificada como declaração da equipe, com justificativa auditada.
+
+### Ativação assistida dos canais
+
+Publicar o código não conecta contas Meta. Antes de operar com pacientes, a equipe deve concluir o aplicativo, permissões e teste com destinatário autorizado:
+
+1. Identificar o aplicativo Meta destinado ao Nexo e a empresa que o administra. Aprovar os produtos e permissões necessários, respeitando a revisão da Meta para contas de outras empresas.
+2. Configurar no servidor `NEXO_META_APP_ID`, `NEXO_META_APP_SECRET`, `NEXO_META_VERIFY_TOKEN` e `NEXO_CHANNELS_ENCRYPTION_KEY` (32 bytes aleatórios em hexadecimal). Nunca usar prefixo `VITE_` nesses segredos. `META_GRAPH_API_VERSION` é opcional; padrão `v23.0`.
+3. Cadastrar `https://dash.doctorcreator.com.br/api/atendimento/meta-webhook` e o token de verificação no aplicativo. Assinar mensagens de WhatsApp Business e Instagram.
+4. Em Canais e conexão, validar o telefone dentro da WABA e conectar com token de `whatsapp_business_messaging` e `whatsapp_business_management`. Para Instagram Login, validar `user_id` em `/me` e usar `instagram_business_basic` e `instagram_business_manage_messages`. Tokens ficam cifrados com AES-256-GCM, AAD de clínica/canal/conta, IV aleatório e autenticação; nunca retornam pela RPC de configuração.
+5. Conferir o primeiro evento real de uma conta de teste autorizada. Até esse evento, a tela mostra “aguardando primeiro evento”, sem afirmar conexão operacional. Conferir recebimento, resposta, recibo, repetição do webhook e desconexão. Não usar contatos reais para homologação.
+
+Conexão com um clique, modelos para iniciar conversas fora da janela, anexos, importação retroativa e secretária autônoma não fazem parte desta etapa. A tela informa a ativação pendente quando faltam segredos do aplicativo; não gera dados demonstrativos em produção.
+
+Validação: `test-central-db.ts` executa todas as migrações em banco local e verifica clínicas, papéis, conflitos de versão, janela, repetição, CRM, recibos e paginação. `test-central-meta.ts` usa transportes fictícios para validar criptografia, assinatura, autorização, hosts, falhas e envio idempotente. `central-atendimento.spec.ts` cobre operação no computador/celular, acessibilidade, consulta importada, envio incerto, viewer e indisponibilidade. Testes interceptados não comprovam aprovação nem entrega real da Meta; essa homologação depende da ativação descrita acima.

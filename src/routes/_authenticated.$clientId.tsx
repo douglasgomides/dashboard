@@ -58,7 +58,7 @@ function ClientLayout() {
   });
 
   const operacao = useQuery({ queryKey: ["crm-operacao-config", clientId], queryFn: () => configCrm(clientId), retry: false, staleTime: 60_000 });
-  const ehOperacaoCrm = /\/crm-contatos\/?$/.test(currentPathname);
+  const ehOperacaoCrm = /\/(crm-contatos|central-atendimento)\/?$/.test(currentPathname);
   const soCrm = CLIENTES_SO_CRM.has(clientId);
   const semAudiencia = CLIENTES_SEM_AUDIENCIA.has(clientId);
   useEffect(() => {

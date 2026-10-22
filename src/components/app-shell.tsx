@@ -370,13 +370,12 @@ export function AppShell({
           type="button"
           className="kbar"
           onClick={abrirBusca}
-          aria-label="Encontrar uma ferramenta"
           aria-keyshortcuts="Control+K Meta+K"
           title="Buscar ferramenta · Ctrl+K ou ⌘K"
         >
           <Search size={16} aria-hidden />
-          <span>Buscar ferramenta</span>
-          <kbd>Ctrl K</kbd>
+          <span>Encontrar uma ferramenta</span>
+          <kbd aria-hidden>Ctrl K</kbd>
         </button>
         <nav className="side areas" aria-label="Áreas do Nexo">
           {principais.map((a) => (
@@ -434,7 +433,7 @@ export function AppShell({
             Conheça o Nexo
           </Link>
           <TemaBotoes />
-          <LogoutButton className="text-sm text-left min-h-[36px]" />
+          <LogoutButton dark className="text-sm text-left min-h-[36px]" />
           <span>Nexo · Marketing e vendas</span>
         </div>
       </aside>
@@ -482,7 +481,7 @@ export function AppShell({
                 aria-label="Trocar de clínica"
               >
                 <Users size={16} aria-hidden />
-                Trocar clínica
+                Trocar de clínica
               </button>
             )}
             {!semPeriodo && <DateRangePicker

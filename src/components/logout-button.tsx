@@ -2,7 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export function LogoutButton({ className = "text-sm" }: { className?: string }) {
+export function LogoutButton({ className = "text-sm", dark = false }: { className?: string; dark?: boolean }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -28,7 +28,7 @@ export function LogoutButton({ className = "text-sm" }: { className?: string }) 
       onClick={handleLogout}
       disabled={loading}
       className={className}
-      style={{ color: "var(--text-dim)" }}
+      style={{ color: dark ? "var(--side-ink-2)" : "var(--text-dim)" }}
     >
       {loading ? "Saindo…" : "Sair"}
     </button>

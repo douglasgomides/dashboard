@@ -67,7 +67,7 @@ test("legacy and invalid content links open scripts and only their own menu item
 test("task search leads straight to the weekly planner and closes for a different view on the same route", async ({ page, context }) => {
   await mockAccount(context, "viewer");
   await page.goto(`/${CID}/ideias?preset=7d`);
-  await expect(page.getByRole("button", { name: "Encontrar uma ferramenta", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Encontrar uma ferramenta/ }).filter({visible:true})).toBeVisible();
   await page.keyboard.press("Control+k");
   const dialog = page.getByRole("dialog", { name: "O que você quer fazer?" });
   await dialog.getByRole("searchbox").fill("calendário");
