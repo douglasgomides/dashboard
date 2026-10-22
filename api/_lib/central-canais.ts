@@ -1,8 +1,8 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
-import { withApiObservability } from "../_lib/observability.js";
-import { criptografarToken, descriptografarToken, ErroMeta, MetaOficial } from "../_lib/central-meta.js";
+import type { VercelRequest, VercelResponse } from "./http-types.js";
+import { withApiObservability } from "./observability.js";
+import { criptografarToken, descriptografarToken, ErroMeta, MetaOficial } from "./central-meta.js";
 
 const uuid=z.string().uuid(),id=z.string().regex(/^\d{4,40}$/);
 const schema=z.discriminatedUnion("acao",[

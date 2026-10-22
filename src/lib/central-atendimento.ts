@@ -23,3 +23,7 @@ export async function canalApi<T>(client:string,body?:Record<string,unknown>):Pr
 }
 export const horarioCentral=(iso:string|null)=>iso?new Date(iso).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",timeZone:"America/Sao_Paulo"}):"Sem mensagem";
 export const NOME_ESTADO:Record<EstadoAtendimento,string>={aberta:"Em aberto",pendente:"Aguardando retorno",resolvida:"Resolvida"};
+export async function cancelarPreparado(clientId:string,pedido:string,observacao:string) {
+ const {error}=await (supabase as any).rpc("central_cancelar_preparado",{p_client_id:clientId,p_pedido_id:pedido,p_observacao:observacao});
+ if(error)throw new Error(error.message);
+}

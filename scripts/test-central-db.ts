@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 const db=new PGlite();
-const cid="11111111-1111-4111-8111-111111111111",other="22222222-2222-4222-8222-222222222222",owner="33333333-3333-4333-8333-333333333333",viewer="44444444-4444-4444-8444-444444444444",stranger="55555555-5555-4555-8555-555555555555";
+const cid="11111111-1111-4111-8111-111111111111",other="22222222-2222-4222-8222-222222222222",owner="33333333-3333-4333-8333-333333333333",viewer="44444444-4444-4444-8444-444444444444",stranger="55555555-5555-4555-8555-555555555555",secondOperator="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 async function login(user:string,service=false){await db.exec("reset role");await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:service?undefined:user,role:service?"service_role":"authenticated"})]);await db.exec(service?"set role service_role":"set role authenticated");}
 async function call(acao:string,dados:object={},client=cid):Promise<any>{const r=await db.query<{r:any}>("select public.central_atendimento($1,$2,$3::jsonb) r",[client,acao,JSON.stringify(dados)]);return r.rows[0].r;}
 async function worker(acao:string,dados:object={}):Promise<any>{const r=await db.query<{r:any}>("select public.central_atendimento_worker($1,$2::jsonb) r",[acao,JSON.stringify(dados)]);return r.rows[0].r;}
@@ -24,8 +24,9 @@ try {
  for(const f of (await readdir(folder)).filter(x=>x.endsWith(".sql")).sort()) await db.exec(await readFile(new URL(f,folder),"utf8"));
 
  await db.query("insert into clients(id,name) values ($1,'Clínica fictícia A'),($2,'Clínica fictícia B')",[cid,other]);
- for(const user of [owner,viewer,stranger])await db.query("insert into auth.users(id,email,raw_user_meta_data) values ($1,$2,'{}')",[user,user+"@example.test"]);
+ for(const user of [owner,viewer,stranger,secondOperator])await db.query("insert into auth.users(id,email,raw_user_meta_data) values ($1,$2,'{}')",[user,user+"@example.test"]);
  await db.query("insert into client_members(client_id,user_id,role) values ($1,$2,'owner'),($1,$3,'viewer'),($4,$5,'owner')",[cid,owner,viewer,other,stranger]);
+ await db.query("insert into client_members(client_id,user_id,role) values ($1,$2,'strategist')",[cid,secondOperator]);
  await db.query("insert into crm_operacional.pilotos values ($1,true)",[cid]);
  await login(owner);
  assert.equal((await call("config")).pode_atender,true);
@@ -55,6 +56,14 @@ try {
  await login("",true);await worker("receber",event);
  await login(owner);detail=await call("mensagens",{conversa_id:conv});assert.equal(detail.estado,"resolvida","a delayed duplicate cannot reopen resolved work");
  const card=await call("criar_card",{conversa_id:conv});assert.ok(card.id);assert.equal((await call("criar_card",{conversa_id:conv})).id,card.id);
+ const abandoned="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+ const cancel=(pedidoId:string,clientId=cid)=>db.query("select public.central_cancelar_preparado($1,$2,$3)",[clientId,pedidoId,"Resposta fictícia abandonada, descarte autorizado na QA."]);
+ await call("preparar_envio",{conversa_id:conv,pedido_id:abandoned,texto:"Texto preparado por outra pessoa"});
+ await login(viewer);await assert.rejects(()=>cancel(abandoned),/Sem permissão/);
+ await login(stranger);await assert.rejects(()=>cancel(abandoned),/Sem permissão/);
+ await login(secondOperator);await cancel(abandoned);
+ await assert.rejects(()=>cancel(abandoned),/já foi processada/);
+ await login(owner);
  const request="88888888-8888-4888-8888-888888888888";
  await call("preparar_envio",{conversa_id:conv,pedido_id:request,texto:"Resposta fictícia"});
  assert.equal((await call("preparar_envio",{conversa_id:conv,pedido_id:request,texto:"Resposta fictícia"})).estado,"preparada");
@@ -62,6 +71,7 @@ try {
  await login(stranger);await assert.rejects(()=>call("mensagens",{conversa_id:conv},other),/indisponível/);
  await login("",true);const claim=await worker("reivindicar_envio",{client_id:cid,autor:owner,pedido_id:request});assert.ok(claim.credencial);assert.equal(claim.destinatario,event.participante);
  assert.equal((await worker("reivindicar_envio",{client_id:cid,autor:owner,pedido_id:request})).credencial,undefined,"only one request may send");
+ await login(secondOperator);await assert.rejects(()=>cancel(request),/já foi processada/);await login("",true);
  await worker("concluir_envio",{pedido_id:request,estado:"incerta",erro:"Timeout fictício"});
  await login(owner);await assert.rejects(()=>call("preparar_envio",{conversa_id:conv,pedido_id:"99999999-9999-4999-8999-999999999999",texto:"Outra resposta"}),/aguardando confirmação/);
  await login("",true);await worker("recibo",{canal:"whatsapp",conta_externa:"12345678",mid:"wamid.fictional-out",pedido_id:request,entrega:"lida",em:now});

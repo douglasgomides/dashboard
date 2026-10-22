@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
-import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
-import { withApiObservability } from "../_lib/observability.js";
-import { assinaturaValida, normalizarEventos, segredoIgual } from "../_lib/central-meta.js";
+import type { VercelRequest, VercelResponse } from "./http-types.js";
+import { withApiObservability } from "./observability.js";
+import { assinaturaValida, normalizarEventos, segredoIgual } from "./central-meta.js";
 
 export async function handler(req:VercelRequest,res:VercelResponse) {
  if(req.method==="GET") {

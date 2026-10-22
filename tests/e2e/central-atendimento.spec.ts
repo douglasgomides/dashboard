@@ -6,6 +6,7 @@ async function setup(context:BrowserContext,options:{official?:boolean;viewer?:b
  await mockAccount(context,options.viewer?'viewer':'admin');
  const state={official:options.official!==false,estado:'aberta',versao:0,responsavel:null as string|null,card:null as string|null,send:0,uncertain:options.uncertain===true,viewed:0,writes:[] as string[],messages:[{id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',direcao:'entrada',autor:'Contato',texto:'Olá! Esta é uma mensagem fictícia para QA.',tipo:'text',enviada_em:new Date().toISOString(),entrega:null as string|null}],envios:options.uncertain?[{id:'99999999-9999-4999-8999-999999999999',estado:'incerta',texto:'Resposta fictícia sem confirmação',erro:'Timeout fictício',criado_em:new Date().toISOString()}]:[] as any[]};
  const equipe=[{id:UID,nome:'Equipe QA'}];
+ await context.route('**/rest/v1/rpc/central_cancelar_preparado',r=>{const b=r.request().postDataJSON();expect(b.p_client_id).toBe(CID);expect(b.p_pedido_id).toBe(state.envios[0].id);expect(b.p_observacao.trim().length).toBeGreaterThanOrEqual(10);state.envios=[];return r.fulfill({json:{ok:true}});});
  await context.route('**/rest/v1/rpc/central_atendimento',async r=>{
   const b=r.request().postDataJSON(),d=b.p_dados;expect(b.p_client_id).toBe(CID);
   const reply=(json:unknown)=>r.fulfill({json});
@@ -70,6 +71,11 @@ test('Imported history stays read-only and uncertain sends require an explicit r
 });
 test('Viewers cannot open patient histories or see the operational navigation',async({page,context})=>{
  const state=await setup(context,{viewer:true});await page.goto(`/${CID}/central-atendimento`);await expect(page.getByRole('heading',{name:'Acesso de consulta',exact:true})).toBeVisible();expect(state.viewed).toBe(0);await expect(page.getByRole('link',{name:'Central de atendimento',exact:true})).toHaveCount(0);
+});
+test('An operator can discard an abandoned prepared answer without sending it',async({page,context})=>{
+ const state=await setup(context);state.envios=[{id:'99999999-9999-4999-8999-999999999999',estado:'preparada',texto:'Resposta fictícia abandonada',erro:null,criado_em:new Date().toISOString()}];
+ await page.goto(`/${CID}/central-atendimento`);await page.getByRole('button',{name:/Contato fictício QA/}).click();await page.getByLabel('Resposta para o contato',{exact:true}).fill('Nova resposta da equipe');await expect(page.getByRole('button',{name:'Enviar resposta',exact:true})).toBeDisabled();
+ await page.getByRole('button',{name:'Descartar resposta preparada',exact:true}).click();await expect(page.getByRole('button',{name:'Confirmar descarte sem envio',exact:true})).toBeDisabled();await page.getByLabel('Motivo para descartar a resposta',{exact:true}).fill('Resposta fictícia abandonada, conferida pela equipe.');await page.getByRole('button',{name:'Confirmar descarte sem envio',exact:true}).click();await expect(page.getByText('Resposta preparada descartada. Nenhuma mensagem foi enviada.',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Enviar resposta',exact:true})).toBeEnabled();expect(state.send).toBe(0);
 });
 test('Empty and unavailable queues never invent successful connections or zero counts',async({page,context})=>{
  await setup(context,{empty:true});await page.goto(`/${CID}/central-atendimento`);await expect(page.getByText('Nenhuma conversa com estes filtros.',{exact:true})).toBeVisible();
