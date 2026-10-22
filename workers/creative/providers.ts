@@ -261,31 +261,28 @@ export async function runActor(
     if (
       ["SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"].includes(data?.status)
     ) {
-      const cost = apifyRunCost(data);
+      // The terminal status can arrive before all charged events. Read the dataset first,
+      // then wait for primary-event accounting to cover every output item.
+      const dataset = encodeURIComponent(data.defaultDatasetId);
+      const [metadata, result] = await Promise.all([
+        apifyRequest(ctx, `datasets/${dataset}`),
+        apifyRequest(ctx, `datasets/${dataset}/items?clean=true&limit=30`),
+      ]);
+      if (!Array.isArray(result) || !Number.isInteger(metadata.data?.itemCount) || metadata.data.itemCount < 0)
+        throw new CreativeError("INVALID_PROVIDER_RESPONSE", "O coletor não confirmou a quantidade de resultados. Reserva mantida para conferência.");
+      const expectedItems = Math.max(metadata.data.itemCount, result.length);
+      let billing = data, cost = apifyRunCost(billing, expectedItems);
+      for (let check = 0; cost === null && check < 10; check++) {
+        await ctx.beat(90, "Conferindo o custo final da coleta");
+        await delay(3000, undefined, { signal: ctx.signal });
+        billing = (await apifyRequest(ctx, `actor-runs/${encodeURIComponent(run.runId)}`)).data;
+        cost = apifyRunCost(billing, expectedItems);
+      }
       if (cost === null)
-        throw new CreativeError(
-          "PROVIDER_COST_UNKNOWN",
-          "Custo externo não confirmado; reserva mantida para reconciliação.",
-        );
-      await ctx.settle(run.reservation, cost, {
-        provider: "apify",
-        run_id: run.runId,
-        status: data.status,
-      });
+        throw new CreativeError("PROVIDER_COST_UNKNOWN", "Contabilização externa ainda incompleta; reserva mantida para reconciliação.");
+      await ctx.settle(run.reservation, cost, { provider: "apify", run_id: run.runId, status: data.status, dataset_items: expectedItems, charged_events: billing.chargedEventCounts });
       if (data.status !== "SUCCEEDED")
-        throw new CreativeError(
-          "COLLECTION_INCOMPLETE",
-          "O coletor terminou sem concluir a pesquisa.",
-        );
-      const result = await apifyRequest(
-        ctx,
-        `datasets/${encodeURIComponent(data.defaultDatasetId)}/items?clean=true&limit=30`,
-      );
-      if (!Array.isArray(result))
-        throw new CreativeError(
-          "INVALID_PROVIDER_RESPONSE",
-          "Lista de referências inválida.",
-        );
+        throw new CreativeError("COLLECTION_INCOMPLETE", "O coletor terminou sem concluir a pesquisa.");
       return result;
     }
     await delay(3000, undefined, { signal: ctx.signal });
