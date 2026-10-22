@@ -199,9 +199,9 @@ export const AREAS: NavArea[] = [
         Icone: Network,
         fonte: "instagram",
         descricao:
-          "Analise referências e adapte estruturas de conteúdo.",
+          "Analise publicações, estruturas e referências de mercado.",
         termos:
-          "inteligencia criativa video editar analise multimodal biblioteca radar aprendizado",
+          "inteligencia criativa analise multimodal dna radar aprendizado",
         grupo: "Conteúdo",
       },
       {
