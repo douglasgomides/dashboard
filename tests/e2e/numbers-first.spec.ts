@@ -114,13 +114,15 @@ for (const measured of [false, true]) {
   });
 }
 
+// Dia dentro de qualquer período padrão, nos dois fusos: a data de hoje em UTC já é amanhã em Brasília depois das 21h.
+const diaRecente = new Date(Date.now() - 3 * 86400_000).toISOString().slice(0, 10);
 const crmMetrics = { total_leads: 500, ganhos: 40, perdidos: 30, consultas_agendadas: 40, em_atendimento: 100, em_atendimento_valor: 20000, novos_7d: 15, fonte_preenchida_pct: 80 };
 const crmPeriod = [{ novos: 68, ganhos: 4, perdidos: 3, valor: 12000 }];
 
 for (const width of [375, 1440]) {
   test(`advertising numbers precede expandable recommendations at ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "viewer");
-    await context.route("**/rest/v1/meta_ads_daily?**", r => r.fulfill({ json: [{ date: new Date().toISOString().slice(0, 10), campaign_id: "fictional", spend: 6000, impressions: 100000, link_clicks: 300, conversations: 100, leads: 0, landing_page_views: 0, reach: 80000, clicks: 300 }] }));
+    await context.route("**/rest/v1/meta_ads_daily?**", r => r.fulfill({ json: [{ date: diaRecente, campaign_id: "fictional", spend: 6000, impressions: 100000, link_clicks: 300, conversations: 100, leads: 0, landing_page_views: 0, reach: 80000, clicks: 300 }] }));
     await context.route("**/rest/v1/meta_ads_campaigns?**", r => r.fulfill({ json: [{ campaign_id: "fictional", name: "Campanha fictícia", objective: "OUTCOME_ENGAGEMENT" }] }));
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/anuncios`);
@@ -260,7 +262,7 @@ for (const width of [375, 1440]) {
 
 test("advertising summary and period comparison retain conversions attributed without new spend or impressions", async ({ page, context }) => {
   await mockAccount(context, "viewer");
-  const date = new Date().toISOString().slice(0, 10);
+  const date = diaRecente;
   await context.route("**/rest/v1/meta_ads_daily?**", r => r.fulfill({ json: [
     { date, campaign_id: "delivery", spend: 100, impressions: 1000, link_clicks: 100, conversations: 18, leads: 0, landing_page_views: 0 },
     { date, campaign_id: "late-attribution", spend: 0, impressions: 0, link_clicks: 0, conversations: 1, leads: 0, landing_page_views: 0 },
