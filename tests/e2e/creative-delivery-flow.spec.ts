@@ -186,6 +186,6 @@ test("queued adaptation shows its real state and opens the new result instead of
   complete = true;
   await expect(page.getByRole("heading", { name: latest.document.title, exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Adaptação para comparar", exact: true })).toHaveValue(latest.id);
-  await page.getByRole("heading", { name: "Laboratório de adaptação", exact: true }).click();
+  await page.locator(".creative-jobs > summary").click();
   await expect(page.getByRole("button", { name: "Abrir adaptação", exact: true })).toBeVisible();
 });
