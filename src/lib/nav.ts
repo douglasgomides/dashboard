@@ -63,6 +63,7 @@ export interface NavTab {
   absoluto?: boolean;
   /** Tela do Sistema de Aquisição: aparece para o cliente só com o SAP ativo (a equipe sempre vê). */
   sap?: boolean;
+  kanban?: boolean;
 }
 
 export interface NavArea {
@@ -241,6 +242,7 @@ export const AREAS: NavArea[] = [
     descricao: "Atendimento, CRM e resultados comerciais",
     Icone: Briefcase,
     tabs: [
+      { path: "/crm-contatos", label: "Contatos e oportunidades", Icone: Users, fonte: "crm", kanban: true, descricao: "Organize contatos, próximas ações e sugestões de IA no Kanban.", termos: "kanban contatos oportunidades responsavel proxima acao ia", grupo: "CRM e oportunidades" },
       {
         path: "/crm-painel",
         label: "Funil comercial",
@@ -380,6 +382,7 @@ export const CLIENTES_SO_CRM = new Set([
   "8770500e-ab5d-4ae8-9489-c49c9991303c",
 ]);
 export const ROTAS_DO_CRM = [
+  "/crm-contatos",
   "/crm-painel",
   "/crm-guia",
   "/crm-estrutura",
@@ -407,6 +410,7 @@ export interface Visibilidade {
   fontes: Fontes;
   soCrm: boolean;
   semAudiencia?: boolean;
+  crmOperacional?: boolean;
   /** Cliente com o Sistema de Aquisição ativo (linha em sap_clinicas). */
   sap?: boolean;
   /** Papel no cliente, usado nas restrições das ferramentas administrativas. */
@@ -416,6 +420,7 @@ export interface Visibilidade {
 // A ordem do menu é a mesma para todos. Permissões e fontes filtram apenas os destinos disponíveis.
 export function tabVisivel(t: NavTab, v: Visibilidade): boolean {
   return (
+    (!t.kanban || !!v.crmOperacional) &&
     (!t.admin || v.isAdmin) &&
     (!t.equipe || (v.papel !== "owner" && v.papel !== "viewer")) &&
     (!t.sap || !!v.sap || v.isAdmin) &&
@@ -430,7 +435,7 @@ export type AreaVisivel = NavArea & { visiveis: NavTab[] };
 export function areasVisiveis(v: Visibilidade): AreaVisivel[] {
   return AREAS.map((a) => ({
     ...a,
-    visiveis: a.tabs.filter((t) => tabVisivel(t, v)),
+    visiveis: a.tabs.filter((t) => tabVisivel(t, v)).map(t => v.crmOperacional && t.path === "/crm-painel" ? { ...t, label: "Funil comercial · resultados", descricao: "Consulte os indicadores importados do CRM. Trabalhe os contatos em Contatos e oportunidades." } : t),
   }))
     .filter((a) => a.visiveis.length > 0);
 }

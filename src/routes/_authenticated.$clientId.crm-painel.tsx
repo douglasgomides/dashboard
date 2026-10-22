@@ -1,4 +1,5 @@
-import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router";
+import { configCrm } from "@/lib/crm-operacao-data";
 import { fmtTaxa } from "@/lib/metricas";
 import { Carregando } from "@/components/sem-fonte";
 import { useQuery } from "@tanstack/react-query";
@@ -310,6 +311,17 @@ function AtividadeRecente({ clientId }: { clientId: string }) {
   );
 }
 
+
+function EntradaDoKanban({clientId}:{clientId:string}) {
+ const q=useQuery({queryKey:["crm-operacao-config",clientId],queryFn:()=>configCrm(clientId),retry:false,staleTime:60_000});
+ if(!q.data?.ativo)return null;
+ return <section className="rounded-xl border p-4 space-y-2" style={{borderColor:"var(--border)"}} aria-label="Onde acompanhar os contatos">
+  <h2 className="font-semibold">Este painel reúne os resultados importados do CRM</h2>
+  <p className="text-sm">Para organizar responsáveis, retornos e próximas ações da clínica, use Contatos e oportunidades. As movimentações do quadro ficam no acompanhamento da equipe.</p>
+  <Link to="/$clientId/crm-contatos" params={{clientId}} className="ws-action">Trabalhar os contatos</Link>
+ </section>;
+}
+
 function CrmPainelPage() {
   const { clientId } = Route.useParams();
   const metricasQ = useQuery({
@@ -339,6 +351,7 @@ function CrmPainelPage() {
   if (!m || m.total_leads === 0) {
     return (
       <div className="space-y-4">
+      <EntradaDoKanban clientId={clientId}/>
       <QualidadeDados clientId={clientId} fonte="crm" titulo="Dados do CRM com erro" />
       <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>
         Ainda sem leads sincronizados do {crmNome} pra esse cliente.
@@ -361,6 +374,7 @@ function CrmPainelPage() {
 
   return (
     <div className="space-y-4">
+      <EntradaDoKanban clientId={clientId}/>
       {!ehRelatorio && <QualidadeDados clientId={clientId} fonte="crm" titulo="Dados do CRM com erro" />}
       {(crmProvider === "kommo" || crmProvider === "clint" || crmProvider === "rdstation" || crmProvider === "flwchat" || crmProvider === "digisac") && !ehRelatorio && (
         <div className="flex justify-end">

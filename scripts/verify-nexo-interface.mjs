@@ -1,3 +1,4 @@
+const diaDaClinica = (instant = Date.now()) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(instant));
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -45,11 +46,11 @@ function pilotFixture({started=false,blocked=false,sapPrepared=false}={}){
     {id:PILOT.message,enviada_em:sent,texto:'Contato revisado pela equipe fictícia',externo_id:'provider-outgoing-qa',direcao:'saida',tipo:'texto'},
   ];
   state.assume=prazo=>{state.work??=makeWork(prazo);return state.work.id;};
-  state.prepareSap=()=>{state.actions=[{id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',clinica_id:SID,semana:new Date(now).toISOString().slice(0,10),origem:'outro',codigo:'agente_acesso_A2',
-    texto:'Confirmar acesso: Doctor Creator como parceira',lado:'dc',responsavel:'Gestor de Tráfego · Jordan QA',prazo:new Date(now+86400000).toISOString().slice(0,10),status:'aberta',resultado:'Falta confirmação com data e responsável.'}];};
+  state.prepareSap=()=>{state.actions=[{id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',clinica_id:SID,semana:diaDaClinica(now),origem:'outro',codigo:'agente_acesso_A2',
+    texto:'Confirmar acesso: Doctor Creator como parceira',lado:'dc',responsavel:'Gestor de Tráfego · Jordan QA',prazo:diaDaClinica(now+86400000),status:'aberta',resultado:'Falta confirmação com data e responsável.'}];};
   if(started)state.assume();if(sapPrepared)state.prepareSap();
-  // Data de Brasília: depois das 21h a data UTC já é amanhã, e o app recusa confirmação com data futura.
-  state.accesses=[{clinica_id:SID,item:'A1',status:'confirmado',confirmado_em:new Date(now-3*3600000).toISOString().slice(0,10),confirmado_por:'Equipe fictícia',observacao:'Acesso testado no ambiente fictício.',revogado_em:null}];
+  // Data de Brasília: confirmações com data futura são recusadas pela aplicação.
+  state.accesses=[{clinica_id:SID,item:'A1',status:'confirmado',confirmado_em:diaDaClinica(now),confirmado_por:'Equipe fictícia',observacao:'Acesso testado no ambiente fictício.',revogado_em:null}];
   return state;
 }
 async function account(profile='anonymous',{sap=false,tokenFailure=false,tokenNetworkFailure=false,recoveryFailure=false,tracker=null,pilot=null}={}){
@@ -83,7 +84,7 @@ async function account(profile='anonymous',{sap=false,tokenFailure=false,tokenNe
       }
       if(path==='/rest/v1/clients')return respond(single?client:[client]);
       if(path==='/rest/v1/sap_clinicas'){
-        const clinic={id:SID,client_id:CID,nome:client.name,d0:new Date(Date.now()-7*86400000).toISOString().slice(0,10),status:'onboarding',ticket_medio:4500,consulta_paga:true,servicos:[],sap_pausas:[]};
+        const clinic={id:SID,client_id:CID,nome:client.name,d0:diaDaClinica(Date.now()-7*86400000),status:'onboarding',ticket_medio:4500,consulta_paga:true,servicos:[],sap_pausas:[]};
         return respond(sap||profile==='admin'?(single?clinic:[clinic]):(single?null:[]));
       }
       if(path==='/rest/v1/rpc/client_fontes')return respond([{tem_instagram:true,tem_anuncios:true,tem_crm:true,tem_atendimento:true}]);
