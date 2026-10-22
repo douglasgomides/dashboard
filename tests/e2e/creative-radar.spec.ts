@@ -97,7 +97,8 @@ test("Radar filters existing references, saves once and persists a pauta with th
   await expect(page.getByRole("button", { name: "Salva", exact: true })).toBeDisabled();
   await page.getByRole("link", { name: "Ver pauta no planejador", exact: true }).click();
   await expect(page.getByText(pautas[0].titulo, { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Motivo e roteiro", exact: true }).click();
+  await expect(page.getByText("Referência do Radar · objetivo: autoridade", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Motivo e orientação", exact: true }).click();
   await expect(page.getByRole("link", { name: "Conferir referência original", exact: true })).toHaveAttribute("href", references[0].canonical_url);
   expect(writes).toEqual(["creative_save_reference", "creative_reference_to_pauta"]); expect(pautas).toHaveLength(1);
 });
