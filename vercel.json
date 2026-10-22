@@ -23,7 +23,8 @@
       "maxDuration": 300
     },
     "api/sync/manual.ts": {
-      "maxDuration": 300
+      "maxDuration": 300,
+      "includeFiles": "api/_assets/creative/**"
     },
     "api/sync/meta-ads.ts": {
       "maxDuration": 300
