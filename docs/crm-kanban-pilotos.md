@@ -33,3 +33,5 @@ O teste PostgreSQL descartável e os testes de navegador usam apenas clínicas, 
 Esta versão oferece prioridades dentro da ferramenta; não envia notificações fora dela. A fila depende dos contatos e conversas já importados, e não resolve automaticamente conversas sem pessoa vinculada.
 A IA permanece supervisionada, com cobertura completa exigida. A integração da agenda, novas mensagens de WhatsApp, automação de mudanças de etapa e Google Ads/Perfil da Empresa são entregas seguintes.
 A migration deste PR foi revisada antes de qualquer publicação em produção; o ALTER ADD COLUMN IF NOT EXISTS permite atualizar a homologação que recebeu a versão inicial. Não houve ativação das clínicas piloto nem mudanças nos registros reais durante os testes.
+
+Prazos são exibidos e editados no horário de Brasília, inclusive quando o navegador usa outro fuso. O histórico identifica a pessoa pelo nome de exibição; o ID original é mantido no evento.

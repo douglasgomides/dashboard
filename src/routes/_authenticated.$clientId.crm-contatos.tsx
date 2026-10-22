@@ -5,11 +5,11 @@ import { Plus, RefreshCw, Sparkles, ArrowRight, Undo2 } from "lucide-react";
 import { BottomSheet } from "@/components/app-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { configCrm, operacaoCrm } from "@/lib/crm-operacao-data";
-import { ETAPAS_CRM, nomeEtapa, prazoVencido, dataParaInput, type CardCrm, type ContatoCrm, type DetalheCrm, type EtapaCrm, type ListaCrm, type MembroCrm, type EntradaCrm, type RotinaCrm } from "@/lib/crm-kanban";
+import { ETAPAS_CRM, nomeEtapa, prazoVencido, dataParaInput, inputParaData, type CardCrm, type ContatoCrm, type DetalheCrm, type EtapaCrm, type ListaCrm, type MembroCrm, type EntradaCrm, type RotinaCrm } from "@/lib/crm-kanban";
 import "@/styles/crm-kanban.css";
 
 export const Route = createFileRoute("/_authenticated/$clientId/crm-contatos")({ component: KanbanCrm });
-const quando = (iso: string) => new Date(iso).toLocaleString("pt-BR",{ day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit" });
+const quando = (iso: string) => new Date(iso).toLocaleString("pt-BR",{ day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",timeZone:"America/Sao_Paulo" });
 const NOMES_ROTINA:Record<RotinaCrm,string>={todas:"Todas as oportunidades",hoje:"Para hoje e atrasadas",atrasadas:"Ações atrasadas",sem_acao:"Sem próximo passo"};
 
 function KanbanCrm() {
@@ -142,7 +142,7 @@ function NovoCard({clientId,equipe,selecionado,onClose,onSaved}:{clientId:string
  const contatos=useQuery({queryKey:["crm-operacao-contatos",clientId,busca,pagina],queryFn:()=>operacaoCrm<ContatoCrm[]>(clientId,"contatos",{busca,offset:pagina*20}),retry:false});
  async function salvar(e:FormEvent) {
   e.preventDefault(); if(salvando)return; setSalvando(true);setErro("");
-  try { await operacaoCrm(clientId,"criar",{id,pessoa_id:contato?.id,conversa_id:contato?.conversa_id,titulo,origem,responsavel_id:responsavel||null,proxima_acao:proxima,prazo:prazo?new Date(prazo).toISOString():null});await onSaved(); }
+  try { await operacaoCrm(clientId,"criar",{id,pessoa_id:contato?.id,conversa_id:contato?.conversa_id,titulo,origem,responsavel_id:responsavel||null,proxima_acao:proxima,prazo:prazo?inputParaData(prazo):null});await onSaved(); }
   catch(e){setErro((e as Error).message);} finally{setSalvando(false);}
  }
  return <BottomSheet aberto onFechar={onClose} titulo="Nova oportunidade"><form onSubmit={salvar} className="crm-form">
@@ -169,7 +169,7 @@ function CamposAcao(p:{equipe:MembroCrm[];responsavel:string;setResponsavel:(v:s
  {p.equipe.map(m=><option key={m.id} value={m.id}>{m.nome}</option>)}
  </select></label>
  <label className="crm-field">Próxima ação<textarea value={p.proxima} maxLength={500} rows={2} onChange={e=>p.setProxima(e.target.value)}/></label>
- <label className="crm-field">Prazo da próxima ação<input type="datetime-local" value={p.prazo} onChange={e=>p.setPrazo(e.target.value)}/></label></>;
+ <label className="crm-field">Prazo da próxima ação<input type="datetime-local" value={p.prazo} onChange={e=>p.setPrazo(e.target.value)}/><small>Horário de Brasília.</small></label></>;
 }
 function CardAberto({clientId,equipe,inicial,destino,editar,onClose,onSaved}:{clientId:string;equipe:MembroCrm[];inicial:CardCrm;destino:EtapaCrm|null;editar:boolean;onClose:()=>void;onSaved:()=>Promise<void>}) {
  const qc=useQueryClient();
@@ -225,7 +225,7 @@ function CardAberto({clientId,equipe,inicial,destino,editar,onClose,onSaved}:{cl
   {card.versao!==formVersao&&<p role="alert">O cartão foi atualizado. <button className="crm-link" onClick={()=>{setResponsavel(card.responsavel_id??"");setProxima(card.proxima_acao);setPrazo(dataParaInput(card.prazo));setEtapa(card.etapa);setFormVersao(card.versao);}}>Carregar versão atual</button></p>}
   <fieldset disabled={!editar||ocupado||!q.data||card.versao!==formVersao} className="crm-form">
    <CamposAcao equipe={equipe} responsavel={responsavel} setResponsavel={setResponsavel} proxima={proxima} setProxima={setProxima} prazo={prazo} setPrazo={setPrazo}/>
-   {editar&&<button className="ws-action ws-action--secondary" onClick={()=>void acao("salvar",{responsavel_id:responsavel||null,proxima_acao:proxima,prazo:prazo?new Date(prazo).toISOString():null})}>Salvar acompanhamento</button>}
+   {editar&&<button className="ws-action ws-action--secondary" onClick={()=>void acao("salvar",{responsavel_id:responsavel||null,proxima_acao:proxima,prazo:prazo?inputParaData(prazo):null})}>Salvar acompanhamento</button>}
    {editar&&<section className="crm-box crm-form" aria-label="Movimentar oportunidade">
     <label className="crm-field"><span id={etapaLabel}>Mover para</span><select aria-labelledby={etapaLabel} value={etapa} onChange={e=>{setEtapa(e.target.value as EtapaCrm);setConfirmado(false);}}>{ETAPAS_CRM.map(e=><option value={e.id} key={e.id}>{e.nome}</option>)}</select></label>
     <label className="crm-field">Motivo da mudança<textarea value={motivo} maxLength={500} onChange={e=>setMotivo(e.target.value)} rows={2}/></label>
@@ -253,6 +253,6 @@ function CardAberto({clientId,equipe,inicial,destino,editar,onClose,onSaved}:{cl
    {s.versao!==card.versao&&<p>O cartão mudou. Gere uma nova leitura para avançar.</p>}
   </section>)}
   {ultimo&&editar&&<button className="ws-action ws-action--secondary" disabled={ocupado} onClick={()=>void acao("desfazer",{evento_id:ultimo.id})}><Undo2 size={16} aria-hidden/> Desfazer última movimentação</button>}
-  <section aria-label="Histórico da oportunidade"><h3 className="font-semibold">Histórico da oportunidade</h3><ol className="crm-history">{q.data?.historico.map(e=><li key={e.id}><strong>{e.origem==="ia_aprovada"?"IA com aprovação da equipe":"Equipe"}</strong> · {quando(e.criado_em)}<p>{e.motivo}</p>{e.antes&&e.antes.etapa!==e.depois.etapa&&<p>{nomeEtapa(e.antes.etapa)} → {nomeEtapa(e.depois.etapa)}</p>}<small>Usuário {e.autor.slice(0,8)}</small></li>)}</ol></section>
+  <section aria-label="Histórico da oportunidade"><h3 className="font-semibold">Histórico da oportunidade</h3><ol className="crm-history">{q.data?.historico.map(e=><li key={e.id}><strong>{e.origem==="ia_aprovada"?"IA com aprovação da equipe":"Equipe"}</strong> · {quando(e.criado_em)}<p>{e.motivo}</p>{e.antes&&e.antes.etapa!==e.depois.etapa&&<p>{nomeEtapa(e.antes.etapa)} → {nomeEtapa(e.depois.etapa)}</p>}<small>{e.autor_nome||equipe.find(m=>m.id===e.autor)?.nome||"Pessoa da equipe"}</small></li>)}</ol></section>
  </div></BottomSheet>;
 }

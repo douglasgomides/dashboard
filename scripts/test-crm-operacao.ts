@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
+import { dataParaInput, inputParaData } from "../src/lib/crm-kanban";
 import { PGlite } from "@electric-sql/pglite";
 
+assert.equal(dataParaInput("2026-10-22T11:30:00Z"),"2026-10-22T08:30");
+assert.equal(inputParaData("2026-10-22T08:30"),"2026-10-22T11:30:00.000Z");
+assert.equal(inputParaData("2026-10-22T23:50"),"2026-10-23T02:50:00.000Z");
+assert.throws(()=>inputParaData("2026-02-30T08:30"),/Confira/);
 const db=new PGlite();
 const cid="11111111-1111-4111-8111-111111111111", other="22222222-2222-4222-8222-222222222222";
 const owner="33333333-3333-4333-8333-333333333333", viewer="44444444-4444-4444-8444-444444444444", stranger="55555555-5555-4555-8555-555555555555";

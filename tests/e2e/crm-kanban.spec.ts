@@ -161,6 +161,7 @@ for(const width of [375,1440]) {
   await expect(page.getByRole("region",{name:"Novo contato",exact:true})).toHaveCount(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
   await test.info().attach("rotina-"+width,{body:await page.screenshot({fullPage:true}),contentType:"image/png"});
+  console.log("CRM_VISUAL_"+width+":"+(await page.screenshot()).toString("base64"));
  });
  test(`Fila: consultar e escolher contato não altera registros até confirmar em ${width}px`,async({page,context})=>{
   await mockAccount(context,"admin");await page.setViewportSize({width,height:1000});
@@ -172,7 +173,7 @@ for(const width of [375,1440]) {
    if(p_acao==="entrada")return route.fulfill({json:{total:created?0:1,contatos:created?[]:[contact]}});
    if(p_acao==="contatos")return route.fulfill({json:[contact]});
    if(p_acao==="listar")return route.fulfill({json:{total:created?1:0,hoje:0,atrasadas:0,sem_acao:created?1:0,entrada_total:created?0:1,agendados:0,filtradas:created?1:0,por_etapa:created?{novo:1}:{},cards:created?[created]:[]}});
-   if(p_acao==="criar"){writes++;expect(d.responsavel_id).toBe(OWNER);expect(d.pessoa_id).toBe(contact.id);
+   if(p_acao==="criar"){writes++;expect(d.responsavel_id).toBe(OWNER);expect(d.prazo).toBe("2030-11-01T11:30:00.000Z");expect(d.pessoa_id).toBe(contact.id);
     created={...fixtureCard(d.id,contact.nome),pessoa_id:contact.id,conversa_id:contact.conversa_id,prazo:null};return route.fulfill({json:created});}
    throw Error("Unexpected mutation "+p_acao);
   });
@@ -188,6 +189,7 @@ for(const width of [375,1440]) {
   await fila.getByRole("button",{name:"Acompanhar Contato fictício da fila",exact:true}).click();
   modal=page.getByRole("dialog",{name:"Nova oportunidade",exact:true});
   await modal.getByRole("combobox",{name:"Responsável",exact:true}).selectOption(OWNER);
+  await modal.getByLabel("Prazo da próxima ação",{exact:false}).fill("2030-11-01T08:30");
   await modal.getByRole("button",{name:"Criar oportunidade",exact:true}).click();
   await expect(modal).not.toBeVisible();expect(writes).toBe(1);
   await expect(fila.getByText("Nenhum contato sem oportunidade corresponde à busca.",{exact:true})).toBeVisible();

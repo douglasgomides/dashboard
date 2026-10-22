@@ -211,7 +211,7 @@ begin
   return jsonb_build_object('card',to_jsonb(v_card),
    'ia_disponivel',coalesce(v_conv.id is not null and v_conv.mensagens_cobertura='completa' and v_conv.provider<>'kommo',false),
    'ia_motivo',case when v_card.conversa_id is null then 'Esta oportunidade não tem conversa vinculada.' when v_conv.provider='kommo' then 'Esta fonte não entrega o texto completo da clínica.' when v_conv.mensagens_cobertura is distinct from 'completa' then 'A importação da conversa ainda precisa ser conferida pela equipe.' else null end,
-   'historico',(select coalesce(jsonb_agg(to_jsonb(e) order by e.criado_em desc,e.id),'[]'::jsonb) from (select * from crm_operacional.eventos where card_id=v_card.id and client_id=p_client order by criado_em desc,id limit 50) e),
+   'historico',(select coalesce(jsonb_agg(to_jsonb(e)||jsonb_build_object('autor_nome',coalesce(nullif(public.sap_nome_usuario(e.autor),''),'Pessoa da equipe')) order by e.criado_em desc,e.id),'[]'::jsonb) from (select * from crm_operacional.eventos where card_id=v_card.id and client_id=p_client order by criado_em desc,id limit 50) e),
    'sugestoes',(select coalesce(jsonb_agg(to_jsonb(s) order by s.criado_em desc,s.id),'[]'::jsonb) from (select * from crm_operacional.sugestoes where card_id=v_card.id and client_id=p_client order by criado_em desc,id limit 10) s));
  end if;
  if not v_edita then raise exception 'Seu acesso é somente leitura' using errcode='42501'; end if;
