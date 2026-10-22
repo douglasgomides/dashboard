@@ -44,6 +44,7 @@ const esperados = [
   "/inteligencia-criativa",
   "/inspiracao",
   "/anuncios",
+  "/crm-contatos",
   "/crm-painel",
   "/crm-guia",
   "/atendimento",
@@ -133,3 +134,7 @@ for (const visao of ["roteiros", "semana", "ideias"] as const) {
  assert.deepEqual(navSearch(tabs.find((t) => t.search?.visao === visao)!, { preset: "7d" }), { preset: "7d", visao });
 }
 assert.equal(allTabs.filter((t) => tabAtiva(t, "/ideias", {})).length, 1);
+
+assert.equal(paths(base).includes("/crm-contatos"),false);
+assert.equal(paths({...base,crmOperacional:true}).includes("/crm-contatos"),true);
+assert.equal(buscarTelas({...base,crmOperacional:true},"kanban")[0]?.tab.path,"/crm-contatos");

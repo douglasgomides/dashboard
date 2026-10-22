@@ -68,6 +68,7 @@ for (const width of [375,1440]) {
   await page.reload();
   await expect(page.getByRole("button",{name:"Abrir oportunidade de Pessoa fictícia QA",exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+  console.log("CRM_SCREENSHOT_"+width+":"+(await page.screenshot()).toString("base64"));
   const audit=await new AxeBuilder({page}).include(".crm-board-scroll").withTags(["wcag2a","wcag2aa"]).analyze();
   expect(audit.violations).toEqual([]);
  });

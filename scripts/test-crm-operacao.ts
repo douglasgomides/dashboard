@@ -92,6 +92,11 @@ try {
  await db.exec("set role authenticated");
  assert.match((await call("sugerir",{id:cardId,versao:c.versao})).aviso,/evidência não/);
  await db.exec("reset role");
+ await db.query("update conversas_resumos set resumo=jsonb_set(resumo,'{alerta}','\"Relato que requer avaliação humana\"') where conversa_id=$1",[conv]);
+ await db.exec("set role authenticated");
+ assert.match((await call("sugerir",{id:cardId,versao:c.versao})).aviso,/revisão humana/);
+ await fail("mover",{id:cardId,versao:c.versao,etapa:"pagou",motivo:"Não pode inferir pagamento"},/Etapa inválida/);
+ await db.exec("reset role");
  const anon=await db.query<{allowed:boolean}>("select has_function_privilege('anon','public.crm_operacao(uuid,text,jsonb)','execute') allowed");
  assert.equal(anon.rows[0].allowed,false);
  const perms=await db.query<{rls:boolean}>("select bool_and(relrowsecurity) rls from pg_class where relnamespace='crm_operacional'::regnamespace and relkind='r'");
