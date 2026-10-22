@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw, Sparkles, ArrowRight, Undo2 } from "lucide-react";
@@ -115,6 +115,7 @@ function CardAberto({clientId,inicial,destino,editar,onClose,onSaved}:{clientId:
  const qc=useQueryClient();
  const q=useQuery({queryKey:["crm-operacao-detalhe",clientId,inicial.id],queryFn:()=>operacaoCrm<DetalheCrm>(clientId,"detalhe",{id:inicial.id}),retry:false});
  const card=q.data?.card??inicial;
+ const etapaLabel=useId();
  const [responsavel,setResponsavel]=useState(inicial.responsavel);
  const [proxima,setProxima]=useState(inicial.proxima_acao);
  const [prazo,setPrazo]=useState(dataParaInput(inicial.prazo));
@@ -154,7 +155,7 @@ function CardAberto({clientId,inicial,destino,editar,onClose,onSaved}:{clientId:
    <CamposAcao responsavel={responsavel} setResponsavel={setResponsavel} proxima={proxima} setProxima={setProxima} prazo={prazo} setPrazo={setPrazo}/>
    {editar&&<button className="ws-action ws-action--secondary" onClick={()=>void acao("salvar",{responsavel,proxima_acao:proxima,prazo:prazo?new Date(prazo).toISOString():null})}>Salvar acompanhamento</button>}
    {editar&&<section className="crm-box crm-form" aria-label="Movimentar oportunidade">
-    <label className="crm-field">Mover para<select value={etapa} onChange={e=>{setEtapa(e.target.value as EtapaCrm);setConfirmado(false);}}>{ETAPAS_CRM.map(e=><option value={e.id} key={e.id}>{e.nome}</option>)}</select></label>
+    <label className="crm-field"><span id={etapaLabel}>Mover para</span><select aria-labelledby={etapaLabel} value={etapa} onChange={e=>{setEtapa(e.target.value as EtapaCrm);setConfirmado(false);}}>{ETAPAS_CRM.map(e=><option value={e.id} key={e.id}>{e.nome}</option>)}</select></label>
     <label className="crm-field">Motivo da mudança<textarea value={motivo} maxLength={500} onChange={e=>setMotivo(e.target.value)} rows={2}/></label>
     {etapa==="agendado"&&<label className="crm-check"><input type="checkbox" checked={confirmado} onChange={e=>setConfirmado(e.target.checked)}/> O horário foi confirmado com a pessoa.</label>}
     <button className="ws-action" disabled={etapa===card.etapa||motivo.trim().length<8||(etapa==="agendado"&&!confirmado)} onClick={()=>void acao("mover",{etapa,motivo,horario_confirmado:confirmado})}><ArrowRight size={16} aria-hidden/> Mover oportunidade</button>
