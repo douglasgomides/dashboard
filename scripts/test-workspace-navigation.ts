@@ -141,3 +141,9 @@ assert.equal(buscarTelas({...base,crmOperacional:true},"kanban")[0]?.tab.path,"/
 
 assert.equal(areasVisiveis({...base,crmOperacional:true}).flatMap(a=>a.visiveis).find(t=>t.path==="/crm-painel")?.label,"Funil comercial · resultados");
 assert.equal(areasVisiveis(base).flatMap(a=>a.visiveis).find(t=>t.path==="/crm-painel")?.label,"Funil comercial");
+
+const pilotoSemCrmExterno={...semFontes,crmOperacional:true};
+assert.equal(paths(pilotoSemCrmExterno).includes("/crm-contatos"),true,"O Kanban nativo não depende de um CRM externo");
+assert.equal(paths(pilotoSemCrmExterno).includes("/crm-painel"),false,"Relatórios importados continuam condicionados à fonte");
+assert.equal(paths({...pilotoSemCrmExterno,crmOperacional:false}).includes("/crm-contatos"),false);
+assert.equal(buscarTelas(pilotoSemCrmExterno,"kanban")[0]?.tab.path,"/crm-contatos");

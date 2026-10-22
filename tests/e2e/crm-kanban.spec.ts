@@ -199,3 +199,25 @@ for(const width of [375,1440]) {
   await expect(page.getByRole("combobox",{name:"Mostrar",exact:true})).toHaveValue("todas");
  });
 }
+
+for(const width of [375,1440]) {
+ test(`Kanban nativo funciona sem CRM externo e sem filtros de relatório em ${width}px`,async({page,context})=>{
+  await mockAccount(context,"admin");await page.setViewportSize({width,height:1000});
+  let coverageRequests=0;
+  await context.route("**/rest/v1/rpc/client_fontes",r=>r.fulfill({json:[{tem_instagram:true,tem_crm:false,tem_anuncios:false,tem_atendimento:false}]}));
+  await context.route("**/rest/v1/rpc/cobertura_periodo",r=>{coverageRequests++;return r.fulfill({json:[]});});
+  await context.route("**/rest/v1/rpc/crm_operacao",r=>{
+   const b=r.request().postDataJSON();
+   return r.fulfill({json:b.p_acao==="config"?{ativo:true,pode_editar:true,equipe:[]}:{total:0,hoje:0,atrasadas:0,sem_acao:0,agendados:0,entrada_total:0,filtradas:0,por_etapa:{},cards:[]}});
+  });
+  await page.goto(`/${CID}/crm-contatos`);
+  await expect(page.getByRole("heading",{name:"Contatos e oportunidades",exact:true})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Nova oportunidade",exact:true})).toBeVisible();
+  await expect(page.getByRole("combobox",{name:"Período",exact:true})).toHaveCount(0);
+  await expect(page.getByRole("button",{name:/Trocar período/})).toHaveCount(0);
+  await expect(page.getByText(/Totais e comparações valem só/)).toHaveCount(0);
+  expect(coverageRequests).toBe(0);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+  await test.info().attach("kanban-nativo-sem-crm-"+width,{body:await page.screenshot({fullPage:true}),contentType:"image/png"});
+ });
+}
