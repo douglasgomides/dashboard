@@ -18,7 +18,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: creative-worker
+  # Pedidos distintos não ficam atrás de uma análise longa. O banco mantém leases e o limite de dois por clínica.
+  group: creative-worker-${{ inputs.job_id || 'fila-agendada' }}
   cancel-in-progress: false
 
 jobs:

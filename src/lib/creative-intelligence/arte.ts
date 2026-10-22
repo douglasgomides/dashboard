@@ -35,10 +35,12 @@ const REGRAS = [
   "Escreva na imagem EXATAMENTE o texto indicado, em português do Brasil, com ortografia correta e boa legibilidade.",
   "Não mostre antes e depois, corpo de paciente identificável, sangue, procedimento invasivo, nome de remédio, preço ou promessa de resultado.",
   "Não invente logotipos, selos, números ou estudos.",
+  "Quando o briefing pedir retrato do autor sem uma foto fornecida, use elementos gráficos na composição; não invente a aparência de uma pessoa real.",
 ];
 
 export function promptArte(u: UnidadeArte, contexto: { tema: string; total: number; estilo?: string | null }): string {
-  const texto = (u.on_screen_text || u.copy || "").trim().slice(0, 600);
+  const texto = (u.copy || u.on_screen_text || "").trim().replace(/\\n/g, "\n");
+  if (texto.length > 1600) throw new Error(`O texto do slide ${u.position} excede o limite de leitura da arte. Revise o texto antes de gerar; nenhuma imagem foi solicitada.`);
   return [
     `Slide ${u.position} de ${contexto.total} de um carrossel sobre: ${contexto.tema.slice(0, 200)}.`,
     u.narrative_role ? `Função do slide: ${u.narrative_role.slice(0, 200)}.` : "",
