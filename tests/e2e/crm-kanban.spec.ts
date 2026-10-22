@@ -44,6 +44,10 @@ for (const width of [375,1440]) {
    history.unshift({id:crypto.randomUUID(),autor:"33333333-3333-4333-8333-333333333333",acao:b.p_acao,origem:b.p_acao==="aprovar"?"ia_aprovada":"manual",motivo:d.motivo||"Movimentação revisada pela equipe",antes:before,depois:{...cards[0]},criado_em:new Date().toISOString()});
    return reply(cards[0]);
   });
+  await context.route("**/rest/v1/rpc/ler_mensagens**",route=>{
+   expect(route.request().postDataJSON().p_conversa).toBe("77777777-7777-4777-8777-777777777777");
+   return route.fulfill({json:[{id:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",direcao:"entrada",texto:"Gostaria de marcar uma consulta amanhã",tipo:"texto",enviada_em:new Date().toISOString()}]});
+  });
   await context.route("**/api/sync/manual",route=>route.fulfill({json:{ok:true}}));
   await page.goto(`/${CID}/crm-contatos`);
   await expect(page.getByRole("button",{name:"Nova oportunidade",exact:true})).toBeVisible();
@@ -57,6 +61,9 @@ for (const width of [375,1440]) {
   await page.getByRole("button",{name:"Abrir oportunidade de Pessoa fictícia QA",exact:true}).click();
   const dialog=page.getByRole("dialog",{name:"Pessoa fictícia QA",exact:true});
   await expect(dialog.getByRole("heading",{name:"Histórico da oportunidade",exact:true})).toBeVisible();
+  await dialog.getByRole("button",{name:"Ver conversa vinculada",exact:true}).click();
+  await expect(dialog.getByRole("region",{name:"Conversa vinculada",exact:true}).getByText("Gostaria de marcar uma consulta amanhã",{exact:true})).toBeVisible();
+  await dialog.getByRole("button",{name:"Recolher conversa",exact:true}).click();
   await dialog.getByLabel("Mover para",{exact:true}).selectOption("interesse");
   await dialog.getByLabel("Motivo da mudança",{exact:true}).fill("Interesse confirmado em conversa fictícia");
   await dialog.getByRole("button",{name:"Mover oportunidade",exact:true}).click();

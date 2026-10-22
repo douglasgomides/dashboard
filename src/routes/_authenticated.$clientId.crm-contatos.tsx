@@ -124,6 +124,16 @@ function CardAberto({clientId,inicial,destino,editar,onClose,onSaved}:{clientId:
  const [confirmado,setConfirmado]=useState(false);
  const [ocupado,setOcupado]=useState(false);
  const [formVersao,setFormVersao]=useState(inicial.versao);
+ const [verConversa,setVerConversa]=useState(false);
+ const mensagens=useQuery({
+  queryKey:["crm-operacao-mensagens",clientId,card.conversa_id],
+  enabled:verConversa&&!!card.conversa_id,retry:false,
+  queryFn:async()=>{
+   const {data,error}=await (supabase as any).rpc("ler_mensagens",{p_conversa:card.conversa_id}).order("enviada_em",{ascending:false}).order("id",{ascending:false}).limit(100);
+   if(error)throw new Error("Não foi possível abrir a conversa.");
+   return (data??[]) as {id:string;direcao:string;texto:string|null;tipo:string|null;enviada_em:string}[];
+  },
+ });
  const [aviso,setAviso]=useState("");
  const [erro,setErro]=useState("");
  async function acao(nome:string,dados:Record<string,unknown>={}) {
@@ -163,6 +173,16 @@ function CardAberto({clientId,inicial,destino,editar,onClose,onSaved}:{clientId:
    {editar&&<button className="ws-action ws-action--secondary" disabled={!card.conversa_id||q.data?.ia_disponivel!==true} onClick={()=>void acao("sugerir")}><Sparkles size={16} aria-hidden/> {ocupado?"Processando…":"Analisar conversa com IA"}</button>}
   </fieldset>
   {q.data&&!q.data.ia_disponivel&&<p className="text-xs" role="status">{q.data.ia_motivo||"A conversa precisa ser conferida antes da análise por IA."} A equipe pode manter o acompanhamento manual enquanto isso.</p>}
+  {card.conversa_id&&<section className="crm-box crm-form" aria-label="Conversa vinculada">
+   <button className="ws-action ws-action--secondary" aria-expanded={verConversa} onClick={()=>setVerConversa(!verConversa)}>{verConversa?"Recolher conversa":"Ver conversa vinculada"}</button>
+   {verConversa&&<>
+    <p className="text-xs">Últimas 100 mensagens disponíveis. A abertura fica registrada para auditoria. Confira o contexto antes de aprovar uma mudança.</p>
+    {mensagens.isPending&&<p role="status">Abrindo conversa…</p>}
+    {mensagens.isError&&<p role="alert">{mensagens.error.message} <button className="crm-link" onClick={()=>void mensagens.refetch()}>Tentar novamente</button></p>}
+    {mensagens.data?.length===0&&<p>Nenhuma mensagem disponível. Confira a importação com a equipe.</p>}
+    <ol className="crm-history max-h-80 overflow-y-auto" aria-label="Últimas mensagens da conversa">{mensagens.data?.slice().reverse().map(m=><li key={m.id}><strong>{m.direcao==="entrada"?"Contato":m.direcao==="saida"?"Clínica":"Sistema"}</strong> · {quando(m.enviada_em)}<p className="whitespace-pre-wrap break-words">{m.texto||`Mensagem sem texto (${m.tipo||"mídia"})`}</p></li>)}</ol>
+   </>}
+  </section>}
   {aviso&&<p role="status">{aviso}</p>}
   {erro&&<p role="alert" className="crm-atrasado">{erro}</p>}
   {sugestoes.map(s=><section className="crm-box crm-form" key={s.id} aria-label="Sugestão da IA">
