@@ -8,12 +8,14 @@ import { configCrm, operacaoCrm } from "@/lib/crm-operacao-data";
 import { ETAPAS_CRM, nomeEtapa, prazoVencido, dataParaInput, inputParaData, type CardCrm, type ContatoCrm, type DetalheCrm, type EtapaCrm, type ListaCrm, type MembroCrm, type EntradaCrm, type RotinaCrm } from "@/lib/crm-kanban";
 import "@/styles/crm-kanban.css";
 
-export const Route = createFileRoute("/_authenticated/$clientId/crm-contatos")({ component: KanbanCrm });
+export const Route = createFileRoute("/_authenticated/$clientId/crm-contatos")({ component: KanbanCrm, validateSearch: (search:Record<string,unknown>):{card?:string} => ({card:typeof search.card==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(search.card)?search.card:undefined}) });
 const quando = (iso: string) => new Date(iso).toLocaleString("pt-BR",{ day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",timeZone:"America/Sao_Paulo" });
 const NOMES_ROTINA:Record<RotinaCrm,string>={todas:"Todas as oportunidades",hoje:"Para hoje e atrasadas",atrasadas:"Ações atrasadas",sem_acao:"Sem próximo passo"};
 
 function KanbanCrm() {
  const { clientId } = Route.useParams();
+ const {card:cardLink}=Route.useSearch();
+ const navigate=Route.useNavigate();
  const qc = useQueryClient();
  const config = useQuery({ queryKey:["crm-operacao-config",clientId],queryFn:()=>configCrm(clientId),retry:false });
  const [busca,setBusca] = useState("");
@@ -28,6 +30,9 @@ function KanbanCrm() {
  const [aberto,setAberto] = useState<CardCrm|null>(null);
  const [destino,setDestino] = useState<EtapaCrm|null>(null);
  const [arrastando,setArrastando] = useState<CardCrm|null>(null);
+ const linkDetalhe=useQuery({queryKey:["crm-operacao-detalhe",clientId,cardLink],queryFn:()=>operacaoCrm<DetalheCrm>(clientId,"detalhe",{id:cardLink}),enabled:config.data?.ativo===true&&!!cardLink,retry:false});
+ const cardAberto=aberto??linkDetalhe.data?.card;
+ function fecharCard(){setAberto(null);if(cardLink)void navigate({search:(prev:Record<string,unknown>)=>({...prev,card:undefined}),replace:true});}
  const lista = useQuery({
   queryKey:["crm-operacao-lista",clientId,buscaConsulta,rotina,responsavel,etapaFiltro,paginas],
   queryFn:()=>operacaoCrm<ListaCrm>(clientId,"listar",{busca:buscaConsulta,rotina,filtro_responsavel:responsavel,filtro_etapa:etapaFiltro,paginas}),
@@ -103,7 +108,9 @@ function KanbanCrm() {
    </div>
   </>}
   {novo&&<NovoCard clientId={clientId} equipe={equipe} selecionado={selecionado} onClose={()=>setNovo(false)} onSaved={async()=>{setNovo(false);filtrar(()=>setRotina("todas"));await atualizar();}}/>}
-  {aberto&&<CardAberto key={aberto.id} clientId={clientId} equipe={equipe} inicial={aberto} destino={destino} editar={editar} onClose={()=>setAberto(null)} onSaved={async()=>{setPaginas({});await atualizar();}}/>}
+  {cardLink&&linkDetalhe.isPending&&<p role="status">Abrindo oportunidade vinculada…</p>}
+  {cardLink&&linkDetalhe.isError&&<div role="alert"><p>A oportunidade vinculada não está disponível nesta clínica.</p><button className="crm-link" onClick={fecharCard}>Fechar aviso</button></div>}
+  {cardAberto&&<CardAberto key={cardAberto.id} clientId={clientId} equipe={equipe} inicial={cardAberto} destino={destino} editar={editar} onClose={fecharCard} onSaved={async()=>{setPaginas({});await atualizar();}}/>}
  </div>;
 }
 
