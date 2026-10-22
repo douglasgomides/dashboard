@@ -201,7 +201,7 @@ export const AREAS: NavArea[] = [
         descricao:
           "Analise publicações, estruturas e referências de mercado.",
         termos:
-          "inteligencia criativa analise multimodal dna radar aprendizado",
+          "inteligencia criativa video analise multimodal dna radar aprendizado",
         grupo: "Conteúdo",
       },
       {

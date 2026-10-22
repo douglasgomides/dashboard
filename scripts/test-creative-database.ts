@@ -272,10 +272,36 @@ try {
     /permission denied/,
   );
   await role("anon");
-  await assert.rejects(
-    () => db.query("select * from creative_sources"),
-    /permission denied/,
-  );
+  await assert.rejects(() => db.query("select * from creative_sources"), /permission denied/);
+  await assert.rejects(() => db.query("select creative_save_reference($1,$2)", [A, job]), /permission denied/);
+  await role("service_role");
+  const discovery = await scalar<string>("insert into creative_discoveries(client_id,account_id,job_id,platform,external_id,canonical_url,title,format,metadata) values($1,$2,$3,'instagram','radar-qa','https://www.instagram.com/p/RADARQA/','Referência fictícia','carrossel','{}') returning id", [A, AA, job]);
+  const another = await scalar<string>("insert into creative_discoveries(client_id,account_id,job_id,platform,external_id,canonical_url,title,format,metadata) values($1,$2,$3,'instagram','radar-qa-repeat','https://www.instagram.com/p/RADARQA/','Referência repetida','carrossel','{}') returning id", [A, AA, job]);
+  const outside = await scalar<string>("insert into creative_discoveries(client_id,account_id,job_id,platform,external_id,canonical_url,title,format,metadata) values($1,$2,$3,'instagram','radar-qa-other','https://www.instagram.com/p/OTHERQA/','Outra clínica fictícia','reels','{}') returning id", [B, AB, otherJob]);
+  await db.query("insert into creative_reference_bookmarks(client_id,account_id,discovery_id,canonical_url,saved_by) values($1,$2,$3,'https://www.instagram.com/p/OTHERQA/',$4)", [B, AB, outside, V]);
+  await role("authenticated", V);
+  await assert.rejects(() => db.query("select creative_save_reference($1,$2)", [A, discovery]), /permissão/);
+  await role("authenticated", U);
+  const bookmark = await scalar<any>("select creative_save_reference($1,$2)", [A, discovery]);
+  assert.equal(Number(await scalar("select count(*) from creative_reference_bookmarks")), 1, "RLS hides bookmarks from another clinic without a client filter");
+  assert.equal((await scalar<any>("select creative_save_reference($1,$2)", [A, another])).id, bookmark.id, "recollection of the same URL reuses its bookmark");
+  await assert.rejects(() => db.query("select creative_save_reference($1,$2)", [A, outside]), /indisponível/);
+  await assert.rejects(() => db.query("select creative_save_reference($1,$2)", [B, outside]), /permissão/);
+  await assert.rejects(() => db.query("select creative_reference_to_pauta($1,$2,'  ','curto','inventado')", [A, bookmark.id]), /objetivo/);
+  const args = [A, bookmark.id, "Pauta fictícia sobre proteção da pele", "Assunto observado e revisado pela equipe fictícia.", "autoridade"];
+  const pauta = await scalar<string>("select creative_reference_to_pauta($1,$2,$3,$4,$5)", args);
+  assert.equal(await scalar("select creative_reference_to_pauta($1,$2,$3,$4,$5)", args), pauta, "double submit does not duplicate the pauta");
+  assert.equal(await scalar("select origem_texto from pautas_conteudo where id=$1", [pauta]), "https://www.instagram.com/p/RADARQA/");
+  assert.equal(await scalar("select pauta_id from creative_reference_bookmarks where id=$1", [bookmark.id]), pauta);
+  await assert.rejects(() => db.query("update creative_reference_bookmarks set client_id=$1 where id=$2", [B, bookmark.id]), /permission denied/);
+  await role("authenticated", V);
+  await assert.rejects(() => db.query("select creative_reference_to_pauta($1,$2,$3,$4,$5)", args), /permissão/);
+  await role("service_role");
+  const otherPauta = await scalar<string>("insert into pautas_conteudo(client_id,titulo,formato,objetivo) values($1,'Outra clínica','reels','autoridade') returning id", [B]);
+  await role("authenticated", U);
+  await assert.rejects(() => db.query("update creative_reference_bookmarks set pauta_id=$1 where id=$2", [otherPauta, bookmark.id]), /foreign key/);
+  await db.query("delete from pautas_conteudo where id=$1", [pauta]);
+  assert.equal(await scalar("select pauta_id from creative_reference_bookmarks where id=$1", [bookmark.id]), null, "removing a pauta preserves its saved reference");
   console.log(
     "test-creative-database: ok (RLS, account FK, viewer, queue idempotency, leases, cancellation, budget, cost settlement, evidence requirements)",
   );

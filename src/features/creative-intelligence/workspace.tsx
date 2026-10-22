@@ -1,5 +1,4 @@
-import { publicationUrl } from "@/lib/creative-intelligence/discovery";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import {
@@ -46,6 +45,7 @@ import { AdaptationView } from "./adaptation-view";
 import "./workspace.css";
 
 const parentRoute = getRouteApi("/_authenticated/$clientId");
+const RadarView = lazy(() => import("./radar-view").then(m => ({ default: m.RadarView })));
 // Criação pausada na interface publicada. Manter propostas, artes e histórico salvos.
 const CREATION_ENABLED = false;
 const TABS = [
@@ -75,12 +75,6 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
     [adaptationJob, setAdaptationJob] = useState(""),
     [theme, setTheme] = useState(""),
     [partial, setPartial] = useState(false),
-    [query, setQuery] = useState(""),
-    [platform, setPlatform] = useState("instagram"),
-    [country, setCountry] = useState("BR"),
-    [language, setLanguage] = useState("pt"),
-    [since, setSince] = useState(""),
-    [until, setUntil] = useState(""),
     [libraryQuery, setLibraryQuery] = useState(""),
     [searchJob, setSearchJob] = useState("");
   const { podeEditar } = useClientRole(clientId),
@@ -749,148 +743,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
           )}
         </div>
       )}
-      {tab === "radar" && (
-        <Painel
-          icone={Search}
-          titulo="Radar de mercado"
-          resumo="Encontre referências públicas para comparar com o repertório desta conta."
-        >
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              dispatch(() =>
-                enqueue(clientId, accountId, "discover", {
-                  platform,
-                  query,
-                  country,
-                  language,
-                  since: since || null,
-                  until: until || null,
-                  format: format || null,
-                }),
-              );
-            }}
-          >
-            <label className="block text-sm">
-              {platform === "instagram" ? "Hashtag do Instagram" : "Tema ou palavra-chave do TikTok"}
-              <input
-                className="field mt-1 w-full"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                minLength={2}
-                maxLength={200}
-                required
-                pattern={platform === "instagram" ? "#?[\\p{L}\\p{N}_]{2,100}" : undefined}
-                title={platform === "instagram" ? "Use uma hashtag sem espaços ou endereço de perfil." : undefined}
-                placeholder={platform === "instagram" ? "Ex.: marketingmedico" : "Ex.: marketing médico"}
-              />
-            </label>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="text-sm">
-                Plataforma
-                <select
-                  className="field mt-1 w-full"
-                  value={platform}
-                  onChange={(e) => setPlatform(e.target.value)}
-                >
-                  <option value="instagram">Instagram · hashtags</option>
-                  <option value="tiktok" disabled={!w?.health.capabilities?.external_search_tiktok}>TikTok · busca pública{!w?.health.capabilities?.external_search_tiktok ? " · em configuração" : ""}</option>
-                </select>
-              </label>
-              <label className="text-sm">
-                País desejado
-                <input
-                  className="field mt-1 w-full"
-                  value={country}
-                  maxLength={2}
-                  onChange={(e) => setCountry(e.target.value.toUpperCase())}
-                />
-              </label>
-              <label className="text-sm">
-                Idioma desejado
-                <input
-                  className="field mt-1 w-full"
-                  value={language}
-                  maxLength={10}
-                  onChange={(e) => setLanguage(e.target.value)}
-                />
-              </label>
-              <label className="text-sm">
-                Desde
-                <input
-                  className="field mt-1 w-full"
-                  type="date"
-                  value={since}
-                  onChange={(e) => setSince(e.target.value)}
-                />
-              </label>
-              <label className="text-sm">
-                Até
-                <input
-                  className="field mt-1 w-full"
-                  type="date"
-                  value={until}
-                  onChange={(e) => setUntil(e.target.value)}
-                />
-              </label>
-              <label className="text-sm">
-                Formato
-                <select
-                  className="field mt-1 w-full"
-                  value={format}
-                  onChange={(e) => setFormat(e.target.value)}
-                >
-                  <option value="">Carrosséis e vídeos</option>
-                  <option value="carrossel">Carrosséis</option>
-                  <option value="reels">Vídeos</option>
-                </select>
-              </label>
-            </div>
-            <button
-              className="btn"
-              disabled={
-                !podeEditar ||
-                (!w?.health.capabilities?.external_search || (platform === "tiktok" && !w?.health.capabilities?.external_search_tiktok)) ||
-                busy
-              }
-            >
-              Pesquisar referências públicas
-            </button>
-          </form>
-          {!w?.health.capabilities?.external_search && (
-            <p className="creative-notice mt-4">
-              A coleta externa ainda precisa ser habilitada e homologada neste
-              ambiente. Nenhum resultado demonstrativo será apresentado como
-              pesquisa real.
-            </p>
-          )}
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
-            {w?.discoveries.filter(d => publicationUrl(d.canonical_url, d.platform as "instagram" | "tiktok")).map((d) => (
-              <article className="creative-structure" key={d.id}>
-                <Selo>Popularidade observada</Selo>
-                <h3 className="mt-2 font-semibold">{d.title}</h3>
-                <p className="my-2 text-sm">
-                  {d.platform} · {number(d.metadata.views)} visualizações ·{" "}
-                  {number(d.metadata.likes)} curtidas
-                </p>
-                <a
-                  className="underline"
-                  href={d.canonical_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Conferir referência original
-                </a>
-                <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
-                  Aceleração, país e idioma ainda não confirmados. Uma
-                  observação não comprova tendência.
-                </p>
-              </article>
-            ))}
-          </div>
-        </Painel>
-      )}
+      {tab === "radar" && <Suspense fallback={<p role="status">Carregando Radar…</p>}><RadarView key={`${clientId}:${accountId}`} clientId={clientId} accountId={accountId} discoveries={w?.discoveries ?? []} capabilities={w?.health.capabilities ?? {}} editable={podeEditar} busy={busy} collect={input => dispatch(() => enqueue(clientId, accountId, "discover", input))} /></Suspense>}
       {tab === "aprendizado" && (
         <Painel
           icone={ChartNoAxesCombined}

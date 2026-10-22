@@ -354,7 +354,7 @@ export async function discover(ctx: JobContext) {
     platform = input.platform as "instagram" | "tiktok",
     query = String(input.query);
   let request: Record<string, unknown>;
-  try { request = discoveryInput(platform, query); }
+  try { request = discoveryInput(platform, query, { since: typeof input.since === "string" ? input.since : undefined }); }
   catch (e) { throw new CreativeError("INVALID_DISCOVERY_QUERY", e instanceof Error ? e.message : "Pesquisa inválida"); }
   const rows = await runActor(ctx, platform, request);
   const result = [];
@@ -368,16 +368,18 @@ export async function discover(ctx: JobContext) {
     const timestamp = item.timestamp || item.createTimeISO || null;
     if (
       input.since &&
-      (!timestamp || Date.parse(timestamp) < Date.parse(String(input.since)))
+      (!timestamp || !Number.isFinite(Date.parse(timestamp)) || Date.parse(timestamp) < Date.parse(String(input.since)))
     )
       continue;
     if (
       input.until &&
       (!timestamp ||
-        Date.parse(timestamp) > Date.parse(String(input.until)) + 86_400_000)
+        !Number.isFinite(Date.parse(timestamp)) || Date.parse(timestamp) >= Date.parse(String(input.until)) + 86_400_000)
     )
       continue;
     const metadata = {
+      caption: String(item.caption || item.text || "").slice(0, 12000),
+      location_name: typeof item.locationName === "string" ? item.locationName.slice(0, 180) : null,
       likes: item.likesCount ?? item.diggCount ?? null,
       comments: item.commentsCount ?? item.commentCount ?? null,
       views: item.videoViewCount ?? item.playCount ?? null,
