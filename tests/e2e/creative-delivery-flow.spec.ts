@@ -48,7 +48,7 @@ test("isolated creative flow: queue, partial analysis, adaptation, image approva
     expect(body.alvo).toBe("creative_arte");
     if (body.acao === "gerar") art = true;
     if (body.acao === "revisar") { expect(body.status).toBe("aprovada"); approved = true; }
-    return route.fulfill({ json: { ok: true, geradas: 1, erros: [], artes: art ? [{ id: post, position: 1, status: approved ? "aprovada" : "rascunho", criado_em: new Date().toISOString(), url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jh1sAAAAASUVORK5CYII=" }] : [] } });
+    return route.fulfill({ json: { ok: true, geradas: 1, erros: [], artes: art ? [{ id: post, position: 1, status: approved ? "aprovada" : "rascunho", criado_em: new Date().toISOString(), url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII=" }] : [] } });
   });
   await page.goto(`/${CID}/inteligencia-criativa`);
   await page.getByRole("button", { name: "Analisar mídia original", exact: true }).click();
@@ -105,7 +105,7 @@ test("carousel resumes only missing slides in small batches and downloads the co
   const arts = new Set([1]);
   const batches: number[][] = [];
   let fail = true;
-  const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jh1sAAAAASUVORK5CYII=";
+  const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII=";
   await context.route("**/rest/v1/**", async route => {
     const url = new URL(route.request().url()), name = url.pathname.split("/").at(-1);
     const rows: Record<string, unknown> = {
