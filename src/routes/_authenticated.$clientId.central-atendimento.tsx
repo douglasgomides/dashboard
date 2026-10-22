@@ -41,7 +41,7 @@ function CentralDaClinica({clientId}:{clientId:string}) {
   {lista.isError&&<div role="alert" className="crm-box"><p>A fila não foi atualizada. Os últimos dados podem estar desatualizados.</p><button className="crm-link" onClick={()=>void lista.refetch()}>Tentar novamente</button></div>}
   <div className={`central-inbox ${selecionada?'central-inbox--selected':''}`}>
    <section className="crm-box central-list" aria-label="Conversas da fila">
-    <h2>{dados?`${dados.total_filtradas} conversas nos filtros`:"Conversas"}</h2>
+    <h2>{dados?`Conversas nos filtros: ${dados.total_filtradas}`:"Conversas"}</h2>
     {lista.isPending&&<p role="status">Carregando a fila…</p>}
     {dados?.conversas.length===0&&<div className="central-empty"><MessageCircle aria-hidden/><p>Nenhuma conversa com estes filtros.</p><button className="crm-link" onClick={()=>filtrar(()=>{setBusca('');setCanal('todos');setEstado('todas');setResponsavel('todos');})}>Ver todas as conversas</button><p className="text-xs">As mensagens dos canais oficiais aparecem a partir da conexão. O histórico importado fica disponível para consulta.</p></div>}
     {dados?.conversas.map(c=><button key={c.id} className="central-conversation" aria-pressed={selecionada?.id===c.id} onClick={()=>setSelecionada(c)}><span className="central-conversation-title"><strong>{c.pessoa_nome}</strong><time>{horarioCentral(c.ultima_msg_em)}</time></span><span>{c.canal==='instagram'?'Instagram':'WhatsApp'} · {c.oficial?'Canal oficial':'Histórico importado'}</span><span className="central-preview">{c.ultima_msg_texto||'Sem texto disponível'}</span><span>{NOME_ESTADO[c.estado]} · {c.responsavel_nome||'Sem responsável'}{c.sem_resposta&&c.estado!=='resolvida'?' · Espera resposta':''}</span></button>)}
