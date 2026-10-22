@@ -18,7 +18,7 @@ export interface ListaCrm { total: number; atrasadas: number; por_etapa: Partial
 export interface ContatoCrm { id: string; nome: string | null; telefone_final: string | null; origem: string; conversa_id: string | null }
 export interface EventoCrm { id: string; autor: string; acao: string; origem: string; motivo: string; antes: CardCrm | null; depois: CardCrm; criado_em: string }
 export interface SugestaoCrm { id: string; etapa: EtapaCrm; versao: number; motivo: string; evidencia: string; estado: string; criado_em: string }
-export interface DetalheCrm { card: CardCrm; historico: EventoCrm[]; sugestoes: SugestaoCrm[] }
+export interface DetalheCrm { card: CardCrm; ia_disponivel: boolean; ia_motivo: string | null; historico: EventoCrm[]; sugestoes: SugestaoCrm[] }
 export function prazoVencido(card: Pick<CardCrm,"etapa"|"prazo">, agora = Date.now()) {
  return !["agendado","encerrado"].includes(card.etapa) && !!card.prazo && Date.parse(card.prazo) < agora;
 }

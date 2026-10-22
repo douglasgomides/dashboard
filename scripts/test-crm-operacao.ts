@@ -50,6 +50,7 @@ try {
  await fail("mover",{id:cardId,versao:1,etapa:"agendado",motivo:"Confirmação fictícia"},/Confirme/);
  await call("sugerir",{id:cardId,versao:1});
  let detail=await call("detalhe",{id:cardId});
+ assert.equal(detail.ia_disponivel,true);
  assert.equal(detail.card.etapa,"novo","AI suggestions cannot move the card");
  assert.equal(detail.sugestoes[0].etapa,"agendamento","AI cannot confirm an appointment from a summary");
  const suggestion=detail.sugestoes[0].id;
@@ -96,6 +97,11 @@ try {
  await db.exec("set role authenticated");
  assert.match((await call("sugerir",{id:cardId,versao:c.versao})).aviso,/revisão humana/);
  await fail("mover",{id:cardId,versao:c.versao,etapa:"pagou",motivo:"Não pode inferir pagamento"},/Etapa inválida/);
+ await db.exec("reset role");
+ await db.query("update conversas set mensagens_cobertura=null where id=$1",[conv]);
+ await db.exec("set role authenticated");
+ assert.equal((await call("detalhe",{id:cardId})).ia_disponivel,false);
+ await fail("sugerir",{id:cardId,versao:c.versao},/Conversa incompleta/);
  await db.exec("reset role");
  const anon=await db.query<{allowed:boolean}>("select has_function_privilege('anon','public.crm_operacao(uuid,text,jsonb)','execute') allowed");
  assert.equal(anon.rows[0].allowed,false);

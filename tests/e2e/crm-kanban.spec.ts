@@ -24,7 +24,7 @@ for (const width of [375,1440]) {
    if(b.p_acao==="config")return reply({ativo:true,pode_editar:true});
    if(b.p_acao==="contatos")return reply([{id:"66666666-6666-4666-8666-666666666666",nome:"Pessoa fictícia QA",origem:"indicacao",telefone_final:"…0000",conversa_id:"77777777-7777-4777-8777-777777777777"}]);
    if(b.p_acao==="listar")return reply({total:cards.length,filtradas:cards.length,atrasadas:0,por_etapa:Object.fromEntries(cards.map(c=>[c.etapa,1])),cards});
-   if(b.p_acao==="detalhe")return reply({card:cards[0],historico:history,sugestoes:suggestions});
+   if(b.p_acao==="detalhe")return reply({card:cards[0],ia_disponivel:true,ia_motivo:null,historico:history,sugestoes:suggestions});
    if(b.p_acao==="criar"){
     cards=[{...d,client_id:CID,pessoa_id:d.pessoa_id,conversa_id:d.conversa_id,origem:d.origem||"Não identificada",etapa:"novo",versao:1,atualizado_em:new Date().toISOString()}];
     return reply(cards[0]);
@@ -94,4 +94,25 @@ test("Kanban: denied pilot and viewer do not expose editing",async({page,context
  active=true;await page.reload();
  await expect(page.getByText("Nenhuma oportunidade encontrada.",{exact:false})).toBeVisible();
  await expect(page.getByRole("button",{name:"Nova oportunidade",exact:true})).toHaveCount(0);
+});
+
+test("Kanban: incomplete imported conversations do not trigger AI requests",async({page,context})=>{
+ await mockAccount(context,"admin");
+ let aiCalls=0;
+ const card={id:"88888888-8888-4888-8888-888888888888",client_id:CID,pessoa_id:"66666666-6666-4666-8666-666666666666",conversa_id:"77777777-7777-4777-8777-777777777777",titulo:"Pessoa fictícia sem cobertura",origem:"Não identificada",etapa:"novo",responsavel:"Equipe QA",proxima_acao:"Conferir importação",prazo:null,versao:1,atualizado_em:new Date().toISOString()};
+ await context.route("**/rest/v1/rpc/crm_operacao",route=>{
+  const b=route.request().postDataJSON();
+  if(b.p_acao==="config")return route.fulfill({json:{ativo:true,pode_editar:true}});
+  if(b.p_acao==="listar")return route.fulfill({json:{total:1,filtradas:1,atrasadas:0,por_etapa:{novo:1},cards:[card]}});
+  if(b.p_acao==="detalhe")return route.fulfill({json:{card,ia_disponivel:false,ia_motivo:"A importação da conversa ainda precisa ser conferida pela equipe.",historico:[],sugestoes:[]}});
+  throw new Error("No mutation expected");
+ });
+ await context.route("**/api/sync/manual",route=>{aiCalls++;return route.fulfill({json:{ok:true}});});
+ await page.goto(`/${CID}/crm-contatos`);
+ await page.getByRole("button",{name:"Abrir oportunidade de Pessoa fictícia sem cobertura",exact:true}).click();
+ const dialog=page.getByRole("dialog",{name:"Pessoa fictícia sem cobertura",exact:true});
+ await expect(dialog.getByRole("button",{name:"Analisar conversa com IA",exact:true})).toBeDisabled();
+ await expect(dialog.getByText(/A importação da conversa ainda precisa ser conferida/)).toBeVisible();
+ await expect(dialog.getByRole("button",{name:"Salvar acompanhamento",exact:true})).toBeEnabled();
+ expect(aiCalls).toBe(0);
 });

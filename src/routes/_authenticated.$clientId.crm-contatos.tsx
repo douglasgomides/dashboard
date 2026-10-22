@@ -160,9 +160,9 @@ function CardAberto({clientId,inicial,destino,editar,onClose,onSaved}:{clientId:
     {etapa==="agendado"&&<label className="crm-check"><input type="checkbox" checked={confirmado} onChange={e=>setConfirmado(e.target.checked)}/> O horário foi confirmado com a pessoa.</label>}
     <button className="ws-action" disabled={etapa===card.etapa||motivo.trim().length<8||(etapa==="agendado"&&!confirmado)} onClick={()=>void acao("mover",{etapa,motivo,horario_confirmado:confirmado})}><ArrowRight size={16} aria-hidden/> Mover oportunidade</button>
    </section>}
-   {editar&&<button className="ws-action ws-action--secondary" disabled={!card.conversa_id} onClick={()=>void acao("sugerir")}><Sparkles size={16} aria-hidden/> {ocupado?"Processando…":"Analisar conversa com IA"}</button>}
+   {editar&&<button className="ws-action ws-action--secondary" disabled={!card.conversa_id||q.data?.ia_disponivel!==true} onClick={()=>void acao("sugerir")}><Sparkles size={16} aria-hidden/> {ocupado?"Processando…":"Analisar conversa com IA"}</button>}
   </fieldset>
-  {!card.conversa_id&&<p className="text-xs">A análise por IA estará disponível para oportunidades criadas a partir de um contato com conversa vinculada.</p>}
+  {q.data&&!q.data.ia_disponivel&&<p className="text-xs" role="status">{q.data.ia_motivo||"A conversa precisa ser conferida antes da análise por IA."} A equipe pode manter o acompanhamento manual enquanto isso.</p>}
   {aviso&&<p role="status">{aviso}</p>}
   {erro&&<p role="alert" className="crm-atrasado">{erro}</p>}
   {sugestoes.map(s=><section className="crm-box crm-form" key={s.id} aria-label="Sugestão da IA">
