@@ -8,7 +8,11 @@ import "@/styles/central-atendimento.css";
 
 export const Route=createFileRoute("/_authenticated/$clientId/central-atendimento")({component:CentralAtendimento});
 function CentralAtendimento() {
- const {clientId}=Route.useParams(),qc=useQueryClient();
+ const {clientId}=Route.useParams();
+ return <CentralDaClinica key={clientId} clientId={clientId}/>;
+}
+function CentralDaClinica({clientId}:{clientId:string}) {
+ const qc=useQueryClient();
  const config=useQuery({queryKey:["central-config",clientId],queryFn:()=>central<ConfigCentral>(clientId,"config"),retry:false});
  const [busca,setBusca]=useState(""),consulta=useDeferredValue(busca);
  const [canal,setCanal]=useState("todos"),[estado,setEstado]=useState("sem_resposta"),[responsavel,setResponsavel]=useState("todos"),[pagina,setPagina]=useState(0);
