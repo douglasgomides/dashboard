@@ -79,7 +79,7 @@ function KanbanCrm() {
    </div>
    {dados.filtradas===0&&rotina==="hoje"&&<p className="crm-box">Nenhuma ação com prazo até hoje corresponde aos filtros. Confira também os contatos sem oportunidade e os cartões sem próximo passo.</p>}
    <div className="crm-board-scroll" role="region" tabIndex={0} aria-label="Quadro de oportunidades">
-    <div className="crm-board">{ETAPAS_CRM.filter(e=>etapaFiltro==="todas"||e.id===etapaFiltro).map(etapa=>{
+    <div className={etapaFiltro==="todas"?"crm-board":"crm-board crm-board-single"}>{ETAPAS_CRM.filter(e=>etapaFiltro==="todas"||e.id===etapaFiltro).map(etapa=>{
      const total=dados.por_etapa[etapa.id]??0,offset=paginas[etapa.id]??0,limite=dados.limite_coluna??12;
      const cards=dados.cards.filter(c=>c.etapa===etapa.id);
      return <section key={etapa.id} className="crm-column" aria-label={etapa.nome}

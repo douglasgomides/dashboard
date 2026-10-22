@@ -140,7 +140,7 @@ for(const width of [375,1440]) {
    if(d.paginas?.novo===12)cards=[fixtureCard("c","Retorno da segunda página"),cards[1]];
    const empty=d.filtro_responsavel==="sem";
    return route.fulfill({json:{total:53,hoje:2,atrasadas:2,sem_acao:0,agendados:1,entrada_total:3,limite_coluna:12,
-    filtradas:empty?0:53,por_etapa:empty?{}:{novo:52,interesse:1},cards:empty?[]:cards}});
+    filtradas:empty?0:d.filtro_etapa==="interesse"?1:53,por_etapa:empty?{}:d.filtro_etapa==="interesse"?{interesse:1}:{novo:52,interesse:1},cards:empty?[]:d.filtro_etapa==="interesse"?cards.filter(c=>c.etapa==="interesse"):cards}});
   });
   await page.goto(`/${CID}/crm-contatos`);
   await expect(page.getByRole("combobox",{name:"Mostrar",exact:true})).toHaveValue("hoje");
@@ -160,6 +160,8 @@ for(const width of [375,1440]) {
   await expect.poll(()=>last.filtro_etapa).toBe("interesse");
   await expect(page.getByRole("region",{name:"Novo contato",exact:true})).toHaveCount(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+  expect(await page.locator(".crm-board-scroll").evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+  await page.evaluate(()=>window.scrollTo(0,0));
   await test.info().attach("rotina-"+width,{body:await page.screenshot({fullPage:true}),contentType:"image/png"});
   console.log("CRM_VISUAL_"+width+":"+(await page.screenshot()).toString("base64"));
  });
