@@ -4,6 +4,7 @@ import { CalendarPlus, CalendarDays, ClipboardList, FileText, Loader2, Plus, Tra
 import { supabase } from "@/integrations/supabase/client";
 import { BotaoCopiar } from "@/components/botao-copiar";
 import type { Ideia } from "@/lib/hub-conteudo";
+import { publicationUrl } from "@/lib/creative-intelligence/discovery";
 import {
   contarStatus,
   ideiaParaPauta,
@@ -134,6 +135,7 @@ function Sel<T extends string>({ rotulo, valor, opcoes, onChange, disabled }: { 
 function CartaoPauta({ p, dias, api, podeEditar }: { p: Pauta; dias: { data: string; rotulo: string }[]; api: Api; podeEditar: boolean }) {
   const [aberto, setAberto] = useState(false);
   const muda = (campos: Partial<Pauta>) => api.atualizar.mutate({ id: p.id, campos });
+  const referencia = publicationUrl(p.origem_texto, "instagram") ?? publicationUrl(p.origem_texto, "tiktok");
   const opDias = [{ v: "", r: "Sem dia" }, ...dias.map((d) => ({ v: d.data, r: d.rotulo })), ...(p.dia && !dias.some((d) => d.data === p.dia) ? [{ v: p.dia, r: `${p.dia.slice(8, 10)}/${p.dia.slice(5, 7)}` }] : [])];
   return (
     <li className="rounded-lg border p-2.5" style={{ borderColor: "var(--border)", background: "var(--surface)", borderLeft: `3px solid ${COR_STATUS[p.status]}` }}>
@@ -160,7 +162,7 @@ function CartaoPauta({ p, dias, api, podeEditar }: { p: Pauta; dias: { data: str
       {aberto && (
         <div className="mt-1 space-y-1.5 text-xs leading-relaxed" style={{ color: "var(--ink-2)" }}>
           {p.motivo && <p><b style={{ color: "var(--ink)" }}>Motivo:</b> {p.motivo}</p>}
-          {p.origem_texto && <p><b style={{ color: "var(--ink)" }}>Originou de:</b> {p.origem_texto}</p>}
+          {p.origem_texto && <p><b style={{ color: "var(--ink)" }}>Originou de:</b> {referencia ? <a className="underline" href={referencia} target="_blank" rel="noopener noreferrer">Conferir referência original</a> : p.origem_texto}</p>}
           <pre className="whitespace-pre-wrap break-words rounded-md p-2" style={{ font: "inherit", background: "var(--surface-2)" }}>{roteiroCompleto(p)}</pre>
           <BotaoCopiar texto={roteiroCompleto(p)} rotulo="Copiar roteiro" />
         </div>

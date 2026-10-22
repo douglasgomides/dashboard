@@ -12,12 +12,13 @@ export function publicationUrl(value: unknown, platform: DiscoveryPlatform): str
     return u.href;
   } catch { return null; }
 }
-export function discoveryInput(platform: DiscoveryPlatform, query: string): Record<string, unknown> {
+export function discoveryInput(platform: DiscoveryPlatform, query: string, options: { since?: string } = {}): Record<string, unknown> {
+  if (options.since && (!/^\d{4}-\d{2}-\d{2}$/.test(options.since) || !Number.isFinite(Date.parse(options.since)) || new Date(options.since).toISOString().slice(0, 10) !== options.since)) throw new Error("Data inicial da coleta inválida.");
   if (platform === "tiktok") return { searchQueries: [query.trim()], searchSection: "/video", resultsPerPage: 20, shouldDownloadVideos: false, commentsPerPost: 0 };
   const tag = query.trim().replace(/^#/, "").normalize("NFC");
   if (!/^[\p{L}\p{N}_]{2,100}$/u.test(tag)) throw new Error("No Instagram, informe uma hashtag sem espaços, @ ou endereço de perfil. Ex.: marketingmedico.");
   // Search can return hashtag/profile metadata instead of posts. Request the exact hashtag feed.
-  return { directUrls: [`https://www.instagram.com/explore/tags/${encodeURIComponent(tag)}/`], resultsType: "posts", resultsLimit: 20 };
+  return { directUrls: [`https://www.instagram.com/explore/tags/${encodeURIComponent(tag)}/`], resultsType: "posts", resultsLimit: 20, ...(options.since ? { onlyPostsNewerThan: options.since } : {}) };
 }
 export function discoveryFormat(item: Record<string, unknown>, platform: DiscoveryPlatform, url: string): "carrossel" | "reels" | null {
   if (platform === "tiktok") return url.includes("/photo/") || item.isSlideshow === true ? "carrossel" : "reels";

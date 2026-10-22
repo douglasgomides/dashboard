@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import type { SavedReference } from "@/lib/creative-intelligence/radar";
 import {
   BUCKET,
   type CreativeSource,
@@ -10,6 +11,9 @@ import {
   type CreativeAdaptation,
 } from "@/lib/creative-intelligence/contracts";
 const db = supabase as unknown as SupabaseClient;
+export const listSavedReferences = (clientId: string, accountId: string) => read<SavedReference[]>(db.from("creative_reference_bookmarks").select("*,discovery:creative_discoveries!creative_reference_discovery_fkey(*)").eq("client_id", clientId).eq("account_id", accountId).order("saved_at", { ascending: false }).limit(200));
+export const saveReference = (clientId: string, discoveryId: string) => read<Omit<SavedReference, "discovery">>(db.rpc("creative_save_reference", { p_client_id: clientId, p_discovery_id: discoveryId }));
+export const referenceToPlanner = (clientId: string, referenceId: string, title: string, reason: string, objective: string) => read<string>(db.rpc("creative_reference_to_pauta", { p_client_id: clientId, p_reference_id: referenceId, p_title: title.trim(), p_reason: reason.trim(), p_objective: objective }));
 async function read<T>(
   query: PromiseLike<{
     data: unknown;
