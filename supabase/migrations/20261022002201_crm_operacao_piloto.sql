@@ -16,12 +16,16 @@ create table if not exists crm_operacional.cards (
  origem text not null default 'Não identificada' check(length(origem)<=160),
  etapa text not null default 'novo' check(etapa in ('novo','atendimento','interesse','agendamento','agendado','encerrado')),
  responsavel text not null default '' check(length(responsavel)<=100),
+ responsavel_id uuid references auth.users(id) on delete set null,
  proxima_acao text not null default '' check(length(proxima_acao)<=500),
  prazo timestamptz,
  versao integer not null default 1,
  criado_em timestamptz not null default clock_timestamp(),
  atualizado_em timestamptz not null default now()
 );
+-- Idempotente também na homologação que recebeu a primeira versão deste PR ainda não publicado.
+alter table crm_operacional.cards add column if not exists responsavel_id uuid references auth.users(id) on delete set null;
+create index if not exists crm_operacional_cards_rotina on crm_operacional.cards(client_id,responsavel_id,prazo) where etapa not in ('agendado','encerrado');
 create unique index if not exists crm_operacional_conversa_unica on crm_operacional.cards(client_id,conversa_id) where conversa_id is not null;
 create index if not exists crm_operacional_cards_lista on crm_operacional.cards(client_id,atualizado_em desc,id);
 create index if not exists crm_operacional_cards_pessoa on crm_operacional.cards(pessoa_id);
@@ -81,7 +85,13 @@ declare
  v_origem text := 'manual';
  v_q text := left(btrim(coalesce(p_dados->>'busca','')),100);
  v_offset integer := greatest(0,least(coalesce((p_dados->>'offset')::integer,0),1000000));
- v_limit integer := 50;
+ v_rotina text := coalesce(p_dados->>'rotina','todas');
+ v_responsavel text := coalesce(p_dados->>'filtro_responsavel','todos');
+ v_filtro_etapa text := coalesce(p_dados->>'filtro_etapa','todas');
+ v_responsavel_id uuid;
+ v_responsavel_nome text;
+ v_fim timestamptz := (date_trunc('day',now() at time zone 'America/Sao_Paulo')+interval '1 day') at time zone 'America/Sao_Paulo';
+ v_limit integer := 12;
  v_result jsonb;
 begin
  if v_user is null or p_client is null or not (public.is_app_admin() or public.is_client_member(p_client)) then
@@ -89,22 +99,64 @@ begin
  end if;
  v_edita := public.is_app_admin() or exists(select 1 from public.client_members m where m.client_id=p_client and m.user_id=v_user and m.role in ('owner','strategist'));
  if p_acao='config' then
-  return jsonb_build_object('ativo',exists(select 1 from crm_operacional.pilotos where client_id=p_client and ativo),'pode_editar',v_edita);
+  return jsonb_build_object('ativo',exists(select 1 from crm_operacional.pilotos where client_id=p_client and ativo),'pode_editar',v_edita,'usuario_id',v_user,
+   'equipe',case when exists(select 1 from crm_operacional.pilotos where client_id=p_client and ativo) then
+    (select coalesce(jsonb_agg(jsonb_build_object('id',x.user_id,'nome',left(coalesce(nullif(public.sap_nome_usuario(x.user_id),''),'Pessoa da equipe'),100)) order by public.sap_nome_usuario(x.user_id),x.user_id),'[]'::jsonb)
+     from (select user_id from public.client_members where client_id=p_client and role in ('owner','strategist')
+      union select v_user where public.is_app_admin()) x)
+    else '[]'::jsonb end);
  end if;
  if not exists(select 1 from crm_operacional.pilotos where client_id=p_client and ativo) then
   raise exception 'Kanban ainda não liberado para esta clínica' using errcode='42501';
  end if;
  if p_acao='listar' then
+  if v_rotina not in ('todas','hoje','atrasadas','sem_acao') or
+   v_filtro_etapa not in ('todas','novo','atendimento','interesse','agendamento','agendado','encerrado') then raise exception 'Filtro inválido'; end if;
+  if v_responsavel not in ('todos','meus','sem') then v_responsavel_id:=v_responsavel::uuid; end if;
+  with filtrados as materialized (
+   select c.* from crm_operacional.cards c where c.client_id=p_client
+    and (v_q='' or c.titulo ilike '%'||v_q||'%' or c.responsavel ilike '%'||v_q||'%')
+    and (v_filtro_etapa='todas' or c.etapa=v_filtro_etapa)
+    and (v_responsavel='todos' or (v_responsavel='meus' and c.responsavel_id=v_user) or (v_responsavel='sem' and c.responsavel_id is null) or c.responsavel_id=v_responsavel_id)
+    and (v_rotina='todas' or (c.etapa not in ('agendado','encerrado') and (
+     (v_rotina='hoje' and c.prazo<v_fim) or (v_rotina='atrasadas' and c.prazo<now()) or (v_rotina='sem_acao' and (c.proxima_acao='' or c.prazo is null))
+    )))
+  ), numerados as (
+   select f.*,row_number() over(partition by etapa order by prazo asc nulls last,atualizado_em desc,id) rn from filtrados f
+  ), pagina as (
+   select n.* from numerados n where n.rn>greatest(0,least(coalesce((p_dados->'paginas'->>n.etapa)::integer,0),1000000))
+    and n.rn<=greatest(0,least(coalesce((p_dados->'paginas'->>n.etapa)::integer,0),1000000))+v_limit
+  )
   select jsonb_build_object(
    'total',(select count(*) from crm_operacional.cards where client_id=p_client),
    'atrasadas',(select count(*) from crm_operacional.cards where client_id=p_client and etapa not in ('agendado','encerrado') and prazo<now()),
-   'por_etapa',(select coalesce(jsonb_object_agg(etapa,n),'{}'::jsonb) from (select etapa,count(*) n from crm_operacional.cards where client_id=p_client group by etapa) x),
-   'filtradas',(select count(*) from crm_operacional.cards where client_id=p_client and (v_q='' or titulo ilike '%'||v_q||'%' or responsavel ilike '%'||v_q||'%')),
-   'cards',(select coalesce(jsonb_agg(to_jsonb(c) order by c.atualizado_em desc,c.id),'[]'::jsonb) from (
-    select * from crm_operacional.cards where client_id=p_client and (v_q='' or titulo ilike '%'||v_q||'%' or responsavel ilike '%'||v_q||'%')
-    order by atualizado_em desc,id limit v_limit offset v_offset
-   ) c)
+   'hoje',(select count(*) from crm_operacional.cards where client_id=p_client and etapa not in ('agendado','encerrado') and prazo<v_fim),
+   'sem_acao',(select count(*) from crm_operacional.cards where client_id=p_client and etapa not in ('agendado','encerrado') and (proxima_acao='' or prazo is null)),
+   'agendados',(select count(*) from crm_operacional.cards where client_id=p_client and etapa='agendado'),
+   'entrada_total',(select count(*) from public.pessoas p where p.client_id=p_client
+    and exists(select 1 from public.conversas c where c.client_id=p_client and c.pessoa_id=p.id)
+    and not exists(select 1 from crm_operacional.cards c where c.client_id=p_client and c.pessoa_id=p.id)),
+   'por_etapa',(select coalesce(jsonb_object_agg(etapa,n),'{}'::jsonb) from (select etapa,count(*) n from filtrados group by etapa) x),
+   'filtradas',(select count(*) from filtrados),
+   'limite_coluna',v_limit,
+   'cards',(select coalesce(jsonb_agg(to_jsonb(c)-'rn' order by c.etapa,c.rn),'[]'::jsonb) from pagina c)
   ) into v_result;
+  return v_result;
+ end if;
+ if p_acao='entrada' then
+  with disponiveis as materialized (
+   select p.id,p.nome,case when p.telefone is not null then '…'||right(regexp_replace(p.telefone,'\D','','g'),4) end telefone_final,
+    coalesce(nullif(p.origem_primeira,''),'Não identificada') origem,c.id conversa_id,c.ultima_msg_em
+   from public.pessoas p join lateral (
+    select id,ultima_msg_em from public.conversas where client_id=p_client and pessoa_id=p.id order by ultima_msg_em desc nulls last,id limit 1
+   ) c on true
+   where p.client_id=p_client and (v_q='' or coalesce(p.nome,'') ilike '%'||v_q||'%')
+    and not exists(select 1 from crm_operacional.cards k where k.client_id=p_client and k.pessoa_id=p.id)
+  )
+  select jsonb_build_object('total',(select count(*) from disponiveis),
+   'contatos',(select coalesce(jsonb_agg(to_jsonb(x) order by x.ultima_msg_em desc nulls last,x.id),'[]'::jsonb)
+    from (select * from disponiveis order by ultima_msg_em desc nulls last,id limit 20 offset v_offset) x))
+   into v_result;
   return v_result;
  end if;
  if p_acao='contatos' then
@@ -133,10 +185,15 @@ begin
    select * into v_conv from public.conversas where id=(p_dados->>'conversa_id')::uuid and client_id=p_client;
    if not found or v_pessoa.id is null or v_conv.pessoa_id is distinct from v_pessoa.id then raise exception 'Conversa não pertence a este contato'; end if;
   end if;
-  insert into crm_operacional.cards(id,client_id,pessoa_id,conversa_id,titulo,origem,responsavel,proxima_acao,prazo)
+  v_responsavel_id:=nullif(p_dados->>'responsavel_id','')::uuid;
+  if v_responsavel_id is not null then
+   if not exists(select 1 from public.client_members where client_id=p_client and user_id=v_responsavel_id and role in ('owner','strategist')) and not (v_responsavel_id=v_user and public.is_app_admin()) then raise exception 'Escolha um responsável da equipe desta clínica'; end if;
+   v_responsavel_nome:=left(coalesce(nullif(public.sap_nome_usuario(v_responsavel_id),''),'Pessoa da equipe'),100);
+  elsif nullif(btrim(p_dados->>'responsavel'),'') is not null then raise exception 'Escolha um responsável da equipe desta clínica'; end if;
+  insert into crm_operacional.cards(id,client_id,pessoa_id,conversa_id,titulo,origem,responsavel,responsavel_id,proxima_acao,prazo)
   values(v_id,p_client,v_pessoa.id,v_conv.id,coalesce(nullif(btrim(v_pessoa.nome),''),btrim(p_dados->>'titulo')),
    coalesce(nullif(v_pessoa.origem_primeira,''),nullif(btrim(p_dados->>'origem'),''),'Não identificada'),
-   coalesce(btrim(p_dados->>'responsavel'),''),coalesce(btrim(p_dados->>'proxima_acao'),''),nullif(p_dados->>'prazo','')::timestamptz)
+   coalesce(v_responsavel_nome,''),v_responsavel_id,coalesce(btrim(p_dados->>'proxima_acao'),''),nullif(p_dados->>'prazo','')::timestamptz)
   on conflict(id) do nothing returning * into v_card;
   if not found then
    select * into v_card from crm_operacional.cards where id=v_id and client_id=p_client;
@@ -208,7 +265,15 @@ begin
   if v_etapa=v_card.etapa then return to_jsonb(v_card); end if;
   v_card.etapa:=v_etapa;
  elsif p_acao='salvar' then
-  v_card.responsavel:=coalesce(btrim(p_dados->>'responsavel'),'');
+  if p_dados ? 'responsavel_id' then
+   v_responsavel_id:=nullif(p_dados->>'responsavel_id','')::uuid;
+   if v_responsavel_id is not null and v_responsavel_id is distinct from v_card.responsavel_id then
+    if not exists(select 1 from public.client_members where client_id=p_client and user_id=v_responsavel_id and role in ('owner','strategist')) and not (v_responsavel_id=v_user and public.is_app_admin()) then raise exception 'Escolha um responsável da equipe desta clínica'; end if;
+   end if;
+   v_card.responsavel_id:=v_responsavel_id;
+   v_card.responsavel:=case when v_responsavel_id is null then '' else left(coalesce(nullif(public.sap_nome_usuario(v_responsavel_id),''),'Pessoa da equipe'),100) end;
+  elsif nullif(btrim(p_dados->>'responsavel'),'') is not null then raise exception 'Escolha um responsável da equipe desta clínica';
+  end if;
   v_card.proxima_acao:=coalesce(btrim(p_dados->>'proxima_acao'),'');
   v_card.prazo:=nullif(p_dados->>'prazo','')::timestamptz;
   v_motivo:='Responsável e próxima ação atualizados';
@@ -218,7 +283,7 @@ begin
   v_card.etapa:=v_evento.antes->>'etapa';
   v_motivo:='Movimentação desfeita pela equipe';
  else raise exception 'Ação inválida'; end if;
- update crm_operacional.cards set etapa=v_card.etapa,responsavel=v_card.responsavel,proxima_acao=v_card.proxima_acao,prazo=v_card.prazo,
+ update crm_operacional.cards set etapa=v_card.etapa,responsavel=v_card.responsavel,responsavel_id=v_card.responsavel_id,proxima_acao=v_card.proxima_acao,prazo=v_card.prazo,
   versao=versao+1,atualizado_em=clock_timestamp() where id=v_card.id returning * into v_card;
  insert into crm_operacional.eventos(client_id,card_id,autor,acao,origem,motivo,antes,depois)
  values(p_client,v_card.id,v_user,p_acao,v_origem,v_motivo,v_antes,to_jsonb(v_card));

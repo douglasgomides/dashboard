@@ -1,82 +1,138 @@
-import { useId, useState, type FormEvent } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { useDeferredValue, useId, useState, type FormEvent } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw, Sparkles, ArrowRight, Undo2 } from "lucide-react";
 import { BottomSheet } from "@/components/app-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { configCrm, operacaoCrm } from "@/lib/crm-operacao-data";
-import { ETAPAS_CRM, nomeEtapa, prazoVencido, dataParaInput, type CardCrm, type ContatoCrm, type DetalheCrm, type EtapaCrm, type ListaCrm } from "@/lib/crm-kanban";
+import { ETAPAS_CRM, nomeEtapa, prazoVencido, dataParaInput, type CardCrm, type ContatoCrm, type DetalheCrm, type EtapaCrm, type ListaCrm, type MembroCrm, type EntradaCrm, type RotinaCrm } from "@/lib/crm-kanban";
 import "@/styles/crm-kanban.css";
 
 export const Route = createFileRoute("/_authenticated/$clientId/crm-contatos")({ component: KanbanCrm });
 const quando = (iso: string) => new Date(iso).toLocaleString("pt-BR",{ day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit" });
+const NOMES_ROTINA:Record<RotinaCrm,string>={todas:"Todas as oportunidades",hoje:"Para hoje e atrasadas",atrasadas:"Ações atrasadas",sem_acao:"Sem próximo passo"};
 
 function KanbanCrm() {
  const { clientId } = Route.useParams();
  const qc = useQueryClient();
  const config = useQuery({ queryKey:["crm-operacao-config",clientId],queryFn:()=>configCrm(clientId),retry:false });
  const [busca,setBusca] = useState("");
- const [offset,setOffset] = useState(0);
+ const buscaConsulta=useDeferredValue(busca);
+ const [rotina,setRotina] = useState<RotinaCrm>("hoje");
+ const [responsavel,setResponsavel] = useState("todos");
+ const [etapaFiltro,setEtapaFiltro] = useState("todas");
+ const [paginas,setPaginas] = useState<Partial<Record<EtapaCrm,number>>>({});
  const [novo,setNovo] = useState(false);
+ const [selecionado,setSelecionado] = useState<ContatoCrm|null>(null);
+ const [entradaAberta,setEntradaAberta] = useState(false);
  const [aberto,setAberto] = useState<CardCrm|null>(null);
  const [destino,setDestino] = useState<EtapaCrm|null>(null);
  const [arrastando,setArrastando] = useState<CardCrm|null>(null);
  const lista = useQuery({
-  queryKey:["crm-operacao-lista",clientId,busca,offset],
-  queryFn:()=>operacaoCrm<ListaCrm>(clientId,"listar",{busca,offset}),
-  enabled:config.data?.ativo===true,retry:false,
+  queryKey:["crm-operacao-lista",clientId,buscaConsulta,rotina,responsavel,etapaFiltro,paginas],
+  queryFn:()=>operacaoCrm<ListaCrm>(clientId,"listar",{busca:buscaConsulta,rotina,filtro_responsavel:responsavel,filtro_etapa:etapaFiltro,paginas}),
+  enabled:config.data?.ativo===true,retry:false,refetchInterval:30_000,
  });
  const dados = lista.data;
  const editar = config.data?.pode_editar===true;
- async function atualizar() { await qc.invalidateQueries({ queryKey:["crm-operacao-lista",clientId] }); }
+ const equipe = config.data?.equipe??[];
+ function filtrar(mudar:()=>void){mudar();setPaginas({});}
+ async function atualizar() {
+  await Promise.all([
+   qc.invalidateQueries({queryKey:["crm-operacao-lista",clientId]}),
+   qc.invalidateQueries({queryKey:["crm-operacao-entrada",clientId]}),
+   qc.invalidateQueries({queryKey:["crm-operacao-contatos",clientId]}),
+  ]);
+ }
  if (config.isPending) return <p role="status">Conferindo acesso ao Kanban…</p>;
  if (config.isError) return <div role="alert"><p>Não foi possível conferir o acesso ao Kanban.</p><button className="ws-action" onClick={()=>void config.refetch()}>Tentar novamente</button></div>;
- if (!config.data?.ativo) return <section className="crm-box"><h2>Kanban em preparação</h2><p>A liberação começa pelas clínicas piloto. Seus registros atuais continuam disponíveis no Funil comercial.</p></section>;
+ if (!config.data?.ativo) return <section className="crm-box"><h2>Kanban em preparação</h2><p>A liberação começa pelas clínicas piloto. Seus resultados atuais continuam disponíveis no Funil comercial.</p></section>;
  return <div className="space-y-4">
-  <p className="text-sm">Organize os contatos e combine o próximo passo. A IA sugere; a equipe confirma.</p>
-  <div className="crm-numeros" aria-label="Números do Kanban">
-   {[["Oportunidades",dados?.total],["Ações atrasadas",dados?.atrasadas],["Agendados",dados?.por_etapa.agendado??(dados?0:undefined)]].map(([nome,n])=><div className="crm-box" key={nome}><span>{nome}</span><strong>{n??"—"}</strong></div>)}
+  <p className="text-sm">Comece pelas ações de hoje. Organize os contatos aqui e confirme as sugestões da IA antes de avançar.</p>
+  <div className="crm-numeros" aria-label="Prioridades do dia">
+   {(["hoje","atrasadas","sem_acao"] as const).map(f=><button className="crm-box crm-numero" key={f} aria-pressed={rotina===f} onClick={()=>filtrar(()=>setRotina(f))}>
+    <span>{NOMES_ROTINA[f]}</span><strong>{dados?.[f]??"—"}</strong>
+   </button>)}
   </div>
+  <p className="text-xs">Prioridades da clínica inteira · dia de Brasília. {dados?`${dados.total} oportunidades no total · ${dados.agendados??dados.por_etapa.agendado??0} com horário confirmado pela equipe.`:"Carregando os totais…"} Os filtros abaixo alteram apenas o quadro.</p>
+  <section className="crm-box crm-inbox-call" aria-label="Contatos sem oportunidade">
+   <div><h2>Contatos sem oportunidade</h2><p className="text-sm">{dados?.entrada_total==null?"Consultando a fila…":`${dados.entrada_total} contatos com conversa importada ainda não têm acompanhamento neste quadro.`}</p><p className="text-xs">Confira a fila para escolher quem acompanhar. Nenhum contato é convertido automaticamente.</p></div>
+   <button className="ws-action ws-action--secondary" aria-expanded={entradaAberta} onClick={()=>setEntradaAberta(!entradaAberta)}>{entradaAberta?"Recolher fila":"Ver contatos para acompanhar"}</button>
+  </section>
+  {entradaAberta&&<FilaEntrada clientId={clientId} editar={editar} onEscolher={c=>{setSelecionado(c);setNovo(true);}}/>}
   <div className="crm-toolbar">
-   <label className="crm-field grow">Buscar contato ou responsável<input type="search" value={busca} maxLength={100} onChange={e=>{setBusca(e.target.value);setOffset(0);}} /></label>
+   <label className="crm-field grow">Buscar contato ou responsável<input type="search" value={busca} maxLength={100} onChange={e=>filtrar(()=>setBusca(e.target.value))}/></label>
+   <label className="crm-field">Mostrar<select value={rotina} onChange={e=>filtrar(()=>setRotina(e.target.value as RotinaCrm))}>{Object.entries(NOMES_ROTINA).map(([id,nome])=><option key={id} value={id}>{nome}</option>)}</select></label>
+   <label className="crm-field">Filtrar responsável<select value={responsavel} onChange={e=>filtrar(()=>setResponsavel(e.target.value))}>
+    <option value="todos">Toda a equipe</option><option value="meus">Minhas oportunidades</option><option value="sem">Sem responsável da equipe</option>{equipe.map(m=><option value={m.id} key={m.id}>{m.nome}</option>)}
+   </select></label>
+   <label className="crm-field">Filtrar etapa<select value={etapaFiltro} onChange={e=>filtrar(()=>setEtapaFiltro(e.target.value))}><option value="todas">Todas as etapas</option>{ETAPAS_CRM.map(e=><option value={e.id} key={e.id}>{e.nome}</option>)}</select></label>
    <button className="ws-action ws-action--secondary" disabled={lista.isFetching} onClick={()=>void atualizar()}><RefreshCw size={16} aria-hidden/> Atualizar quadro</button>
-   {editar&&<button className="ws-action" onClick={()=>setNovo(true)}><Plus size={16} aria-hidden/> Nova oportunidade</button>}
+   {editar&&<button className="ws-action" onClick={()=>{setSelecionado(null);setNovo(true);}}><Plus size={16} aria-hidden/> Nova oportunidade</button>}
   </div>
-  <p className="text-xs">Este quadro registra o acompanhamento da equipe. As etapas importadas do WTS e dos outros CRMs continuam no Funil comercial. O quadro não confirma comparecimento nem pagamento e não envia mensagens.</p>
+  <p className="text-xs">Use este quadro para trabalhar os contatos. Consulte os indicadores importados em <Link to="/$clientId/crm-painel" params={{clientId}} className="crm-link">Funil comercial · resultados</Link>. As mudanças aqui ficam no acompanhamento da clínica e não atualizam o WTS, outros CRMs ou a agenda.</p>
   {lista.isPending&&<p role="status">Carregando oportunidades…</p>}
   {lista.isError&&<div role="alert"><p>Não foi possível carregar o quadro. Nenhuma contagem foi substituída por zero.</p><button className="ws-action" onClick={()=>void lista.refetch()}>Tentar novamente</button></div>}
   {dados&&<>
-   <p className="text-xs" role="status">{dados.filtradas===0?"Nenhuma oportunidade encontrada.":`Mostrando ${offset+1}–${Math.min(offset+50,dados.filtradas)} de ${dados.filtradas} oportunidades`}{busca?" nesta busca.":" no quadro completo, sem filtro de período."}</p>
-   <div className="crm-board-scroll" role="region" tabIndex={0} aria-label="Quadro de oportunidades">
-    <div className="crm-board">{ETAPAS_CRM.map(etapa=><section key={etapa.id} className="crm-column" aria-label={etapa.nome}
-     onDragOver={e=>{if(editar&&arrastando)e.preventDefault();}}
-     onDrop={e=>{e.preventDefault();if(arrastando&&arrastando.etapa!==etapa.id){setAberto(arrastando);setDestino(etapa.id);}setArrastando(null);}}>
-     <h2>{etapa.nome}<span aria-label="Total nesta etapa">{dados.por_etapa[etapa.id]??0}</span></h2>
-     {dados.cards.filter(c=>c.etapa===etapa.id).map(card=><article key={card.id} className="crm-card" draggable={editar} onDragStart={()=>setArrastando(card)} onDragEnd={()=>setArrastando(null)}>
-      <button className="crm-card-open" onClick={()=>{setAberto(card);setDestino(null);}} aria-label={`Abrir oportunidade de ${card.titulo}`}>
-       <h3>{card.titulo}</h3><p>Origem: {card.origem}</p><p>{card.responsavel||"Sem responsável"}</p><p>{card.proxima_acao||"Definir próxima ação"}</p>
-       {card.prazo&&<p className={prazoVencido(card)?"crm-atrasado":""}>{prazoVencido(card)?"Atrasada · ":"Prazo · "}{quando(card.prazo)}</p>}
-      </button>
-     </article>)}
-     {!dados.cards.some(c=>c.etapa===etapa.id)&&<p className="crm-empty">Nenhum cartão nesta página.</p>}
-    </section>)}</div>
+   <div className="crm-toolbar"><p className="text-xs" role="status">{dados.filtradas===0?"Nenhuma oportunidade encontrada.":`${dados.filtradas} oportunidades com estes filtros.`}</p>
+    {(rotina!=="todas"||responsavel!=="todos"||etapaFiltro!=="todas"||busca)&&<button className="crm-link" onClick={()=>filtrar(()=>{setRotina("todas");setResponsavel("todos");setEtapaFiltro("todas");setBusca("");})}>Ver todas as oportunidades</button>}
    </div>
-   <nav aria-label="Páginas das oportunidades" className="crm-toolbar">
-    <button className="ws-action ws-action--secondary" disabled={offset===0} onClick={()=>setOffset(Math.max(0,offset-50))}>Página anterior</button>
-    <button className="ws-action ws-action--secondary" disabled={offset+50>=dados.filtradas} onClick={()=>setOffset(offset+50)}>Próxima página</button>
-   </nav>
+   {dados.filtradas===0&&rotina==="hoje"&&<p className="crm-box">Nenhuma ação com prazo até hoje corresponde aos filtros. Confira também os contatos sem oportunidade e os cartões sem próximo passo.</p>}
+   <div className="crm-board-scroll" role="region" tabIndex={0} aria-label="Quadro de oportunidades">
+    <div className="crm-board">{ETAPAS_CRM.filter(e=>etapaFiltro==="todas"||e.id===etapaFiltro).map(etapa=>{
+     const total=dados.por_etapa[etapa.id]??0,offset=paginas[etapa.id]??0,limite=dados.limite_coluna??12;
+     const cards=dados.cards.filter(c=>c.etapa===etapa.id);
+     return <section key={etapa.id} className="crm-column" aria-label={etapa.nome}
+      onDragOver={e=>{if(editar&&arrastando)e.preventDefault();}}
+      onDrop={e=>{e.preventDefault();if(arrastando&&arrastando.etapa!==etapa.id){setAberto(arrastando);setDestino(etapa.id);}setArrastando(null);}}>
+      <h2>{etapa.nome}<span aria-label="Total nesta etapa">{total}</span></h2>
+      {cards.map(card=><article key={card.id} className="crm-card" draggable={editar} onDragStart={()=>setArrastando(card)} onDragEnd={()=>setArrastando(null)}>
+       <button className="crm-card-open" onClick={()=>{setAberto(card);setDestino(null);}} aria-label={`Abrir oportunidade de ${card.titulo}`}>
+        <h3>{card.titulo}</h3><p>Origem: {card.origem}</p><p>{card.responsavel||"Sem responsável"}</p><p>{card.proxima_acao||"Definir próxima ação"}</p>
+        {card.prazo&&<p className={prazoVencido(card)?"crm-atrasado":""}>{prazoVencido(card)?"Atrasada · ":"Prazo · "}{quando(card.prazo)}</p>}
+       </button>
+      </article>)}
+      {!cards.length&&<p className="crm-empty">{total===0?"Nenhuma oportunidade com estes filtros.":"Esta página ficou vazia. Volte para as oportunidades anteriores."}</p>}
+      {total>0&&<p className="text-xs">{cards.length?`${offset+1}–${Math.min(offset+cards.length,total)} de ${total}`:`0 de ${total}`}</p>}
+      {(offset>0||total>limite)&&<nav aria-label={`Páginas de ${etapa.nome}`} className="crm-column-pages">
+       <button className="crm-link" disabled={offset===0} onClick={()=>setPaginas(p=>({...p,[etapa.id]:Math.max(0,offset-limite)}))} aria-label={`Anteriores em ${etapa.nome}`}>Anteriores</button>
+       <button className="crm-link" disabled={offset+limite>=total} onClick={()=>setPaginas(p=>({...p,[etapa.id]:offset+limite}))} aria-label={`Mais em ${etapa.nome}`}>Mais oportunidades</button>
+      </nav>}
+     </section>;
+    })}</div>
+   </div>
   </>}
-  {novo&&<NovoCard clientId={clientId} onClose={()=>setNovo(false)} onSaved={async()=>{setNovo(false);await atualizar();}}/>}
-  {aberto&&<CardAberto key={aberto.id} clientId={clientId} inicial={aberto} destino={destino} editar={editar} onClose={()=>setAberto(null)} onSaved={atualizar}/>}
+  {novo&&<NovoCard clientId={clientId} equipe={equipe} selecionado={selecionado} onClose={()=>setNovo(false)} onSaved={async()=>{setNovo(false);filtrar(()=>setRotina("todas"));await atualizar();}}/>}
+  {aberto&&<CardAberto key={aberto.id} clientId={clientId} equipe={equipe} inicial={aberto} destino={destino} editar={editar} onClose={()=>setAberto(null)} onSaved={async()=>{setPaginas({});await atualizar();}}/>}
  </div>;
 }
 
-function NovoCard({clientId,onClose,onSaved}:{clientId:string;onClose:()=>void;onSaved:()=>Promise<void>}) {
+function FilaEntrada({clientId,editar,onEscolher}:{clientId:string;editar:boolean;onEscolher:(c:ContatoCrm)=>void}) {
+ const [busca,setBusca]=useState("");
+ const consulta=useDeferredValue(busca);
+ const [pagina,setPagina]=useState(0);
+ const q=useQuery({queryKey:["crm-operacao-entrada",clientId,consulta,pagina],queryFn:()=>operacaoCrm<EntradaCrm>(clientId,"entrada",{busca:consulta,offset:pagina*20}),retry:false,refetchInterval:30_000});
+ return <section className="crm-box crm-form" aria-label="Fila de contatos para acompanhar">
+  <label className="crm-field">Buscar contato na fila<input type="search" maxLength={100} value={busca} onChange={e=>{setBusca(e.target.value);setPagina(0);}}/></label>
+  <p className="text-xs">Mais recentes primeiro, pela última mensagem importada. Uma oportunidade existente já retira o contato desta fila, inclusive quando encerrada. Conversas ainda sem contato identificado precisam de conferência da importação.</p>
+  {q.isPending&&<p role="status">Buscando contatos sem oportunidade…</p>}
+  {q.isError&&<div role="alert"><p>Não foi possível consultar a fila.</p><button className="crm-link" onClick={()=>void q.refetch()}>Tentar novamente</button></div>}
+  {q.data&&<>
+   <p role="status" className="text-sm">{q.data.total===0?"Nenhum contato sem oportunidade corresponde à busca.":`${q.data.total} contatos aguardam acompanhamento nesta busca.`}</p>
+   <ul className="crm-entry-list">{q.data.contatos.map(c=><li key={c.id}><div><strong>{c.nome||"Contato sem nome"} {c.telefone_final}</strong><p className="text-xs">{c.origem}{c.ultima_msg_em?` · Última mensagem ${quando(c.ultima_msg_em)}`:""}</p></div>
+    {editar&&<button className="ws-action ws-action--secondary" aria-label={`Acompanhar ${c.nome||"contato sem nome"}`} onClick={()=>onEscolher(c)}>Acompanhar contato</button>}
+   </li>)}</ul>
+   <nav className="crm-toolbar" aria-label="Páginas dos contatos sem oportunidade"><button className="crm-link" disabled={pagina===0} onClick={()=>setPagina(pagina-1)}>Contatos anteriores na fila</button><button className="crm-link" disabled={(pagina+1)*20>=q.data.total} onClick={()=>setPagina(pagina+1)}>Mais contatos na fila</button></nav>
+  </>}
+ </section>;
+}
+
+function NovoCard({clientId,equipe,selecionado,onClose,onSaved}:{clientId:string;equipe:MembroCrm[];selecionado:ContatoCrm|null;onClose:()=>void;onSaved:()=>Promise<void>}) {
  const [id]=useState(()=>crypto.randomUUID());
  const [busca,setBusca]=useState("");
  const [pagina,setPagina]=useState(0);
- const [contato,setContato]=useState<ContatoCrm|null>(null);
- const [titulo,setTitulo]=useState("");
+ const [contato,setContato]=useState<ContatoCrm|null>(selecionado);
+ const [titulo,setTitulo]=useState(selecionado?.nome??"");
  const [origem,setOrigem]=useState("");
  const [responsavel,setResponsavel]=useState("");
  const [proxima,setProxima]=useState("");
@@ -86,7 +142,7 @@ function NovoCard({clientId,onClose,onSaved}:{clientId:string;onClose:()=>void;o
  const contatos=useQuery({queryKey:["crm-operacao-contatos",clientId,busca,pagina],queryFn:()=>operacaoCrm<ContatoCrm[]>(clientId,"contatos",{busca,offset:pagina*20}),retry:false});
  async function salvar(e:FormEvent) {
   e.preventDefault(); if(salvando)return; setSalvando(true);setErro("");
-  try { await operacaoCrm(clientId,"criar",{id,pessoa_id:contato?.id,conversa_id:contato?.conversa_id,titulo,origem,responsavel,proxima_acao:proxima,prazo:prazo?new Date(prazo).toISOString():null});await onSaved(); }
+  try { await operacaoCrm(clientId,"criar",{id,pessoa_id:contato?.id,conversa_id:contato?.conversa_id,titulo,origem,responsavel_id:responsavel||null,proxima_acao:proxima,prazo:prazo?new Date(prazo).toISOString():null});await onSaved(); }
   catch(e){setErro((e as Error).message);} finally{setSalvando(false);}
  }
  return <BottomSheet aberto onFechar={onClose} titulo="Nova oportunidade"><form onSubmit={salvar} className="crm-form">
@@ -101,22 +157,26 @@ function NovoCard({clientId,onClose,onSaved}:{clientId:string;onClose:()=>void;o
   {contato&&<p role="status">Selecionado: {contato.nome||"Contato sem nome"}. <button type="button" className="crm-link" onClick={()=>{setContato(null);setTitulo("");}}>Usar cadastro manual</button></p>}
   <label className="crm-field">Nome do contato ou oportunidade<input required value={titulo} maxLength={160} disabled={!!contato?.nome} onChange={e=>setTitulo(e.target.value)}/></label>
   {!contato&&<label className="crm-field">Origem informada<input value={origem} maxLength={160} placeholder="Se não souber, deixe em branco" onChange={e=>setOrigem(e.target.value)}/></label>}
-  <CamposAcao responsavel={responsavel} setResponsavel={setResponsavel} proxima={proxima} setProxima={setProxima} prazo={prazo} setPrazo={setPrazo}/>
+  <CamposAcao equipe={equipe} responsavel={responsavel} setResponsavel={setResponsavel} proxima={proxima} setProxima={setProxima} prazo={prazo} setPrazo={setPrazo}/>
   {erro&&<p role="alert" className="crm-atrasado">{erro}</p>}
   <button className="ws-action" disabled={salvando||!titulo.trim()}>{salvando?"Salvando…":"Criar oportunidade"}</button>
  </form></BottomSheet>;
 }
-function CamposAcao(p:{responsavel:string;setResponsavel:(v:string)=>void;proxima:string;setProxima:(v:string)=>void;prazo:string;setPrazo:(v:string)=>void}) {
- return <><label className="crm-field">Responsável (nome)<input value={p.responsavel} maxLength={100} onChange={e=>p.setResponsavel(e.target.value)}/></label>
+function CamposAcao(p:{equipe:MembroCrm[];responsavel:string;setResponsavel:(v:string)=>void;proxima:string;setProxima:(v:string)=>void;prazo:string;setPrazo:(v:string)=>void}) {
+ return <><label className="crm-field"><span>Responsável</span><select aria-label="Responsável" value={p.responsavel} onChange={e=>p.setResponsavel(e.target.value)}>
+ <option value="">Sem responsável</option>
+ {p.responsavel&&!p.equipe.some(m=>m.id===p.responsavel)&&<option value={p.responsavel} disabled>Responsável anterior (sem acesso atual)</option>}
+ {p.equipe.map(m=><option key={m.id} value={m.id}>{m.nome}</option>)}
+ </select></label>
  <label className="crm-field">Próxima ação<textarea value={p.proxima} maxLength={500} rows={2} onChange={e=>p.setProxima(e.target.value)}/></label>
  <label className="crm-field">Prazo da próxima ação<input type="datetime-local" value={p.prazo} onChange={e=>p.setPrazo(e.target.value)}/></label></>;
 }
-function CardAberto({clientId,inicial,destino,editar,onClose,onSaved}:{clientId:string;inicial:CardCrm;destino:EtapaCrm|null;editar:boolean;onClose:()=>void;onSaved:()=>Promise<void>}) {
+function CardAberto({clientId,equipe,inicial,destino,editar,onClose,onSaved}:{clientId:string;equipe:MembroCrm[];inicial:CardCrm;destino:EtapaCrm|null;editar:boolean;onClose:()=>void;onSaved:()=>Promise<void>}) {
  const qc=useQueryClient();
  const q=useQuery({queryKey:["crm-operacao-detalhe",clientId,inicial.id],queryFn:()=>operacaoCrm<DetalheCrm>(clientId,"detalhe",{id:inicial.id}),retry:false});
  const card=q.data?.card??inicial;
  const etapaLabel=useId();
- const [responsavel,setResponsavel]=useState(inicial.responsavel);
+ const [responsavel,setResponsavel]=useState(inicial.responsavel_id??"");
  const [proxima,setProxima]=useState(inicial.proxima_acao);
  const [prazo,setPrazo]=useState(dataParaInput(inicial.prazo));
  const [etapa,setEtapa]=useState<EtapaCrm>(destino??inicial.etapa);
@@ -160,10 +220,12 @@ function CardAberto({clientId,inicial,destino,editar,onClose,onSaved}:{clientId:
   {q.isPending&&<p role="status">Abrindo histórico…</p>}
   {q.isError&&<p role="alert">Não foi possível abrir os detalhes. <button className="crm-link" onClick={()=>void q.refetch()}>Tentar novamente</button></p>}
   <p>Etapa atual: <strong>{nomeEtapa(card.etapa)}</strong> · Origem: {card.origem}</p>
-  {card.versao!==formVersao&&<p role="alert">O cartão foi atualizado. <button className="crm-link" onClick={()=>{setResponsavel(card.responsavel);setProxima(card.proxima_acao);setPrazo(dataParaInput(card.prazo));setEtapa(card.etapa);setFormVersao(card.versao);}}>Carregar versão atual</button></p>}
+  {card.responsavel&&!card.responsavel_id&&<p className="text-xs">Responsável registrado anteriormente: {card.responsavel}. Selecione uma pessoa da equipe ao salvar o acompanhamento.</p>}
+  {card.etapa==="agendado"&&<p className="text-xs">Horário informado pela equipe. Confira a agenda da clínica para data, horário e comparecimento.</p>}
+  {card.versao!==formVersao&&<p role="alert">O cartão foi atualizado. <button className="crm-link" onClick={()=>{setResponsavel(card.responsavel_id??"");setProxima(card.proxima_acao);setPrazo(dataParaInput(card.prazo));setEtapa(card.etapa);setFormVersao(card.versao);}}>Carregar versão atual</button></p>}
   <fieldset disabled={!editar||ocupado||!q.data||card.versao!==formVersao} className="crm-form">
-   <CamposAcao responsavel={responsavel} setResponsavel={setResponsavel} proxima={proxima} setProxima={setProxima} prazo={prazo} setPrazo={setPrazo}/>
-   {editar&&<button className="ws-action ws-action--secondary" onClick={()=>void acao("salvar",{responsavel,proxima_acao:proxima,prazo:prazo?new Date(prazo).toISOString():null})}>Salvar acompanhamento</button>}
+   <CamposAcao equipe={equipe} responsavel={responsavel} setResponsavel={setResponsavel} proxima={proxima} setProxima={setProxima} prazo={prazo} setPrazo={setPrazo}/>
+   {editar&&<button className="ws-action ws-action--secondary" onClick={()=>void acao("salvar",{responsavel_id:responsavel||null,proxima_acao:proxima,prazo:prazo?new Date(prazo).toISOString():null})}>Salvar acompanhamento</button>}
    {editar&&<section className="crm-box crm-form" aria-label="Movimentar oportunidade">
     <label className="crm-field"><span id={etapaLabel}>Mover para</span><select aria-labelledby={etapaLabel} value={etapa} onChange={e=>{setEtapa(e.target.value as EtapaCrm);setConfirmado(false);}}>{ETAPAS_CRM.map(e=><option value={e.id} key={e.id}>{e.nome}</option>)}</select></label>
     <label className="crm-field">Motivo da mudança<textarea value={motivo} maxLength={500} onChange={e=>setMotivo(e.target.value)} rows={2}/></label>

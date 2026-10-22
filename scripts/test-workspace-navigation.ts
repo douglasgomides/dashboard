@@ -138,3 +138,6 @@ assert.equal(allTabs.filter((t) => tabAtiva(t, "/ideias", {})).length, 1);
 assert.equal(paths(base).includes("/crm-contatos"),false);
 assert.equal(paths({...base,crmOperacional:true}).includes("/crm-contatos"),true);
 assert.equal(buscarTelas({...base,crmOperacional:true},"kanban")[0]?.tab.path,"/crm-contatos");
+
+assert.equal(areasVisiveis({...base,crmOperacional:true}).flatMap(a=>a.visiveis).find(t=>t.path==="/crm-painel")?.label,"Funil comercial · resultados");
+assert.equal(areasVisiveis(base).flatMap(a=>a.visiveis).find(t=>t.path==="/crm-painel")?.label,"Funil comercial");

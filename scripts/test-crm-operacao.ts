@@ -30,7 +30,7 @@ try {
  const folder=new URL("../supabase/migrations/",import.meta.url);
  for(const f of (await readdir(folder)).filter(x=>x.endsWith(".sql")).sort()) await db.exec(await readFile(new URL(f,folder),"utf8"));
  await db.query("insert into clients(id,name) values ($1,'Clínica fictícia A'),($2,'Clínica fictícia B')",[cid,other]);
- for(const user of [owner,viewer,stranger]) await db.query("insert into auth.users(id,email) values ($1,$2)",[user,user+"@example.test"]);
+ for(const user of [owner,viewer,stranger]) await db.query("insert into auth.users(id,email,raw_user_meta_data) values ($1,$2,$3::jsonb)",[user,user+"@example.test",JSON.stringify({full_name:user===owner?"Equipe fictícia":"Outra pessoa fictícia"})]);
  await db.query("insert into client_members(client_id,user_id,role) values ($1,$2,'owner'),($1,$3,'viewer'),($4,$5,'owner')",[cid,owner,viewer,other,stranger]);
  await db.query("insert into crm_operacional.pilotos values ($1,true),($2,false)",[cid,other]);
  await db.query("insert into pessoas(id,client_id,nome,origem_primeira) values ($1,$2,'Pessoa fictícia','indicacao')",[person,cid]);
@@ -39,11 +39,19 @@ try {
  await db.query("insert into conversas_resumos(conversa_id,client_id,resumo,modelo,ate_msg_em) values ($1,$2,$3::jsonb,'fictional-model',$4)",[conv,cid,JSON.stringify({comercial:true,etapa:"agendou",evidencia:"Gostaria de marcar uma consulta amanhã",alerta:null}),at]);
  await claims(owner);
  await db.exec("set role authenticated");
- assert.deepEqual(await call("config"),{ativo:true,pode_editar:true});
+ const config=await call("config");
+ assert.equal(config.ativo,true);assert.equal(config.pode_editar,true);assert.equal(config.usuario_id,owner);
+ assert.deepEqual(config.equipe,[{id:owner,nome:"Equipe fictícia"}]);
+ assert.equal((await call("entrada")).total,1,"inbox includes an imported contact before opportunity creation");
+ assert.equal((await call("entrada")).contatos[0].id,person);
+ assert.equal((await call("listar")).entrada_total,1);
  assert.equal((await call("contatos"))[0].id,person);
- let c=await call("criar",{id:cardId,pessoa_id:person,conversa_id:conv,titulo:"Ignorado",responsavel:"Equipe fictícia"});
+ let c=await call("criar",{id:cardId,pessoa_id:person,conversa_id:conv,titulo:"Ignorado",responsavel_id:owner});
  assert.equal(c.titulo,"Pessoa fictícia");
  assert.equal(c.origem,"indicacao");
+ assert.equal(c.responsavel_id,owner);assert.equal(c.responsavel,"Equipe fictícia");
+ assert.equal((await call("entrada")).total,0,"inbox removes an existing opportunity without changing imported contacts");
+ assert.equal((await call("listar")).entrada_total,0);
  assert.equal((await call("criar",{id:cardId,pessoa_id:person})).id,cardId,"retry is idempotent");
  assert.equal((await call("listar")).total,1);
  await fail("salvar",{id:cardId,versao:0},/cartão mudou/);
@@ -62,14 +70,21 @@ try {
  c=await call("desfazer",{id:cardId,versao:c.versao,evento_id:event});
  assert.equal(c.etapa,"novo");
  await fail("desfazer",{id:cardId,versao:c.versao,evento_id:event},/última movimentação/);
- c=await call("salvar",{id:cardId,versao:c.versao,responsavel:"Equipe QA",proxima_acao:"Confirmar preferência",prazo:"2020-01-01T10:00:00Z"});
+ c=await call("salvar",{id:cardId,versao:c.versao,responsavel_id:owner,proxima_acao:"Confirmar preferência",prazo:"2020-01-01T10:00:00Z"});
  assert.equal((await call("listar")).atrasadas,1);
+ assert.equal((await call("listar",{rotina:"hoje",filtro_responsavel:"meus"})).filtradas,1);
+ assert.equal((await call("listar",{filtro_responsavel:"sem"})).filtradas,0);
+ assert.equal((await call("listar",{filtro_responsavel:stranger})).filtradas,0);
+ await fail("salvar",{id:cardId,versao:c.versao,responsavel_id:viewer},/responsável da equipe/);
+ await fail("salvar",{id:cardId,versao:c.versao,responsavel_id:stranger},/responsável da equipe/);
+ await fail("salvar",{id:cardId,versao:c.versao,responsavel:"Nome livre"},/responsável da equipe/);
  await claims(viewer);
  assert.equal((await call("config")).pode_editar,false);
  assert.equal((await call("listar")).total,1);
  await fail("mover",{id:cardId,versao:c.versao,etapa:"atendimento",motivo:"Atualização fictícia"},/somente leitura/);
  await claims(stranger);
  await fail("listar",{},/Sem acesso/);
+ await fail("entrada",{},/Sem acesso/);
  assert.equal((await call("config",{},other)).ativo,false);
  await fail("listar",{},/não liberado/,other);
  await claims(owner);
@@ -102,6 +117,38 @@ try {
  await db.exec("set role authenticated");
  assert.equal((await call("detalhe",{id:cardId})).ia_disponivel,false);
  await fail("sugerir",{id:cardId,versao:c.versao},/Conversa incompleta/);
+ await db.exec("reset role");
+
+ // Regression: every column has its own page, including when another column has 50+ records.
+ await db.query(`insert into crm_operacional.cards(client_id,titulo,etapa,proxima_acao,prazo,responsavel_id,responsavel)
+  select $1,'Fictícia nova '||g,'novo','Retornar',now()+interval '2 days',$2,'Equipe fictícia' from generate_series(1,51) g`,[cid,owner]);
+ await db.query(`insert into crm_operacional.cards(client_id,titulo,etapa,proxima_acao,prazo)
+  select $1,'Fictícia interesse '||g,'interesse','Retornar',now()+interval '2 days' from generate_series(1,13) g`,[cid]);
+ await db.query(`insert into crm_operacional.cards(client_id,titulo,etapa,proxima_acao,prazo) values
+  ($1,'Fictícia sem ação','atendimento','',null),
+  ($1,'Fictícia para hoje','atendimento','Retornar',((date_trunc('day',now() at time zone 'America/Sao_Paulo')+interval '1 day') at time zone 'America/Sao_Paulo')-interval '1 microsecond'),
+  ($1,'Fictícia agendada antiga','agendado','',now()-interval '3 days'),
+  ($1,'Fictícia encerrada antiga','encerrado','',now()-interval '3 days'),
+  ($2,'Oportunidade de outra clínica','novo','',null)`,[cid,other]);
+ await claims(owner);await db.exec("set role authenticated");
+ let board=await call("listar");
+ assert.equal(board.por_etapa.novo,52);assert.equal(board.por_etapa.interesse,13);
+ assert.equal(board.cards.filter((r:any)=>r.etapa==="novo").length,12);
+ assert.equal(board.cards.filter((r:any)=>r.etapa==="interesse").length,12);
+ const firstNew=board.cards.filter((r:any)=>r.etapa==="novo").map((r:any)=>r.id);
+ board=await call("listar",{paginas:{novo:12}});
+ assert.equal(board.cards.filter((r:any)=>r.etapa==="interesse").length,12,"paging Novo must keep Interesse visible");
+ assert.equal(board.cards.some((r:any)=>firstNew.includes(r.id)),false,"next page must not repeat Novo cards");
+ assert.equal((await call("listar",{paginas:{interesse:12}})).cards.filter((r:any)=>r.etapa==="interesse").length,1);
+ assert.equal((await call("listar",{rotina:"hoje"})).filtradas,2,"Brasília today includes overdue and today, excluding future/closed/confirmed");
+ assert.equal((await call("listar",{rotina:"atrasadas"})).filtradas,1);
+ assert.equal((await call("listar",{rotina:"sem_acao"})).filtradas,1);
+ const searched=await call("listar",{busca:"interesse"});
+ assert.equal(searched.filtradas,13);assert.equal(searched.por_etapa.novo,undefined);assert.equal(searched.cards.length,12);
+ assert.equal((await call("listar",{filtro_responsavel:"meus"})).filtradas,52);
+ assert.equal((await call("listar",{filtro_etapa:"interesse"})).filtradas,13);
+ assert.equal(board.cards.some((r:any)=>r.client_id!==cid),false);
+ await fail("listar",{rotina:"inventada"},/Filtro inválido/);
  await db.exec("reset role");
  const anon=await db.query<{allowed:boolean}>("select has_function_privilege('anon','public.crm_operacao(uuid,text,jsonb)','execute') allowed");
  assert.equal(anon.rows[0].allowed,false);

@@ -435,7 +435,7 @@ export type AreaVisivel = NavArea & { visiveis: NavTab[] };
 export function areasVisiveis(v: Visibilidade): AreaVisivel[] {
   return AREAS.map((a) => ({
     ...a,
-    visiveis: a.tabs.filter((t) => tabVisivel(t, v)),
+    visiveis: a.tabs.filter((t) => tabVisivel(t, v)).map(t => v.crmOperacional && t.path === "/crm-painel" ? { ...t, label: "Funil comercial · resultados", descricao: "Consulte os indicadores importados do CRM. Trabalhe os contatos em Contatos e oportunidades." } : t),
   }))
     .filter((a) => a.visiveis.length > 0);
 }
