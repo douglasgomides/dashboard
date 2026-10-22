@@ -1,6 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 
+// A tela usa o dia civil do Brasil. UTC muda de data às 21h e criava registros fictícios no futuro.
+const dataDaClinica = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+
 const roi = { tem_anuncios: true, tem_crm: true, investido: 6000, leads: 240, leads_com_origem: 240, ganhos: 30, ganhos_com_valor: 0, receita: 0, ganho_identificavel: true, crm_compartilhado: false };
 
 for (const width of [375, 1440]) {
@@ -120,7 +123,7 @@ const crmPeriod = [{ novos: 68, ganhos: 4, perdidos: 3, valor: 12000 }];
 for (const width of [375, 1440]) {
   test(`advertising numbers precede expandable recommendations at ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "viewer");
-    await context.route("**/rest/v1/meta_ads_daily?**", r => r.fulfill({ json: [{ date: new Date().toISOString().slice(0, 10), campaign_id: "fictional", spend: 6000, impressions: 100000, link_clicks: 300, conversations: 100, leads: 0, landing_page_views: 0, reach: 80000, clicks: 300 }] }));
+    await context.route("**/rest/v1/meta_ads_daily?**", r => r.fulfill({ json: [{ date: dataDaClinica(), campaign_id: "fictional", spend: 6000, impressions: 100000, link_clicks: 300, conversations: 100, leads: 0, landing_page_views: 0, reach: 80000, clicks: 300 }] }));
     await context.route("**/rest/v1/meta_ads_campaigns?**", r => r.fulfill({ json: [{ campaign_id: "fictional", name: "Campanha fictícia", objective: "OUTCOME_ENGAGEMENT" }] }));
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/anuncios`);
@@ -240,7 +243,7 @@ for (const width of [375, 1440]) {
 
 test("advertising summary and period comparison retain conversions attributed without new spend or impressions", async ({ page, context }) => {
   await mockAccount(context, "viewer");
-  const date = new Date().toISOString().slice(0, 10);
+  const date = dataDaClinica();
   await context.route("**/rest/v1/meta_ads_daily?**", r => r.fulfill({ json: [
     { date, campaign_id: "delivery", spend: 100, impressions: 1000, link_clicks: 100, conversations: 18, leads: 0, landing_page_views: 0 },
     { date, campaign_id: "late-attribution", spend: 0, impressions: 0, link_clicks: 0, conversations: 1, leads: 0, landing_page_views: 0 },
