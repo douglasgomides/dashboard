@@ -27,7 +27,7 @@ test("Radar preserves real publication links, rejects invalid hashtags and gates
   await expect(page.getByText("Hashtag incorreta não é publicação",{exact:true})).toHaveCount(0);
   await expect(page.getByText("Referência pública fictícia válida",{exact:true})).toBeVisible();
   const platform=page.getByRole("combobox",{name:"Plataforma",exact:true});
-  await expect(platform.locator('option[value="tiktok"]')).toBeDisabled();
+  await expect(platform.locator('option[value="tiktok"]')).toHaveJSProperty("disabled",true);
   const query=page.getByRole("textbox",{name:"Hashtag do Instagram",exact:true});
   await query.fill("marketing médico");
   await page.getByRole("button",{name:"Pesquisar referências públicas",exact:true}).click();
@@ -38,7 +38,7 @@ test("Radar preserves real publication links, rejects invalid hashtags and gates
   expect(enqueued[0].p_input).toMatchObject({platform:"instagram",query:"marketingmedico"});
   tiktok=true;await page.reload();
   await page.getByRole("button",{name:"Radar de mercado",exact:true}).click();
-  await expect(platform.locator('option[value="tiktok"]')).toBeEnabled();
+  await expect(platform.locator('option[value="tiktok"]')).toHaveJSProperty("disabled",false);
   await platform.selectOption("tiktok");
   await page.getByRole("textbox",{name:"Tema ou palavra-chave do TikTok",exact:true}).fill("marketing médico");
   await page.getByRole("button",{name:"Pesquisar referências públicas",exact:true}).click();
