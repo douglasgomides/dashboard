@@ -1,0 +1,21 @@
+name: Gerar migração do Kanban
+on:
+  pull_request:
+    paths: [".github/workflows/crm-migration.yml"]
+permissions:
+  contents: read
+jobs:
+  gerar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx supabase --help
+      - run: npx supabase migration --help
+      - run: npx supabase migration new --help
+      - run: npx supabase migration new crm_operacao_piloto
