@@ -104,7 +104,7 @@ test("carousel resumes only missing slides in small batches and downloads the co
   const adaptation = { ...fixture.adaptation, document: { ...fixture.adaptation.document, title: "QA pacote completo fictício", units } };
   const arts = new Set([1]);
   const batches: number[][] = [];
-  let fail = true;
+  let fail = true, rebuilding = false;
   const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII=";
   await context.route("**/rest/v1/**", async route => {
     const url = new URL(route.request().url()), name = url.pathname.split("/").at(-1);
@@ -122,7 +122,7 @@ test("carousel resumes only missing slides in small batches and downloads the co
     if (body.acao === "gerar") {
       batches.push(body.slides);
       expect(body.slides.length).toBeLessThanOrEqual(4);
-      expect(body.slides).not.toContain(1);
+      if (!rebuilding) expect(body.slides).not.toContain(1);
       for (const p of body.slides) if (!(fail && p === 3)) arts.add(p);
       if (fail) { fail = false; return route.fulfill({ json: { ok: true, geradas: 3, erros: ["Slide 3: indisponível no teste"] } }); }
       return route.fulfill({ json: { ok: true, geradas: body.slides.length, erros: [] } });
@@ -153,6 +153,11 @@ test("carousel resumes only missing slides in small batches and downloads the co
   expect(pngHeader.getUint32(16)).toBe(1080);
   expect(pngHeader.getUint32(20)).toBe(1350);
   expect(strFromU8(files["revisao.txt"])).toContain("Revise todas as artes");
+  rebuilding = true;
+  await panel.getByRole("button", { name: "Refazer todas as artes", exact: true }).click();
+  await expect(panel.getByText("14 arte(s) salvas. Confira as imagens e baixe o post com a legenda.", { exact: true })).toBeVisible();
+  expect(batches.slice(4)).toEqual([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14]]);
+
   await page.reload();
   await page.getByRole("button", { name: "Biblioteca e adaptações", exact: true }).click();
   await expect(panel.getByRole("status").first()).toContainText("14 de 14 artes prontas");

@@ -6,6 +6,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { custoArte, reservaArte, promptArte, slidesPedidos, type UnidadeArte } from "../../src/lib/creative-intelligence/arte.js";
+import { composeSlide, layoutSlide, type SlideLayout } from "./creative-compositor.js";
 
 type Admin = SupabaseClient<any, any, any>;
 const BUCKET = "nexo-creative-private";
@@ -22,7 +23,7 @@ async function carregar(admin: Admin, clientId: string, adaptacaoId: string): Pr
   return data as Adaptacao;
 }
 
-async function gerarUma(admin: Admin, a: Adaptacao, u: UnidadeArte, userId: string, reservaId: string, valorReservado: number, prompt: string, prazo: number): Promise<void> {
+async function gerarUma(admin: Admin, a: Adaptacao, u: UnidadeArte, userId: string, reservaId: string, valorReservado: number, prompt: string, prazo: number, layout: SlideLayout): Promise<void> {
   const t0 = Date.now();
   let ok = false, erro: string | null = null;
   let custo = 0;
@@ -35,7 +36,7 @@ async function gerarUma(admin: Admin, a: Adaptacao, u: UnidadeArte, userId: stri
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
       signal: AbortSignal.timeout(Math.min(150_000, prazo - Date.now())),
-      body: JSON.stringify({ model: MODELO, prompt, size: "1024x1536", quality: QUALIDADE, n: 1 }),
+      body: JSON.stringify({ model: MODELO, prompt, size: "1024x1536", quality: QUALIDADE, background: "opaque", output_format: "png", n: 1 }),
     });
     if (!r.ok) { if (r.status < 500) custo = 0; throw new Error(`O serviço de imagens recusou a solicitação (${r.status}). Tente novamente mais tarde.`); }
     const j = (await r.json()) as { data?: { b64_json?: string }[]; usage?: unknown };
@@ -43,7 +44,8 @@ async function gerarUma(admin: Admin, a: Adaptacao, u: UnidadeArte, userId: stri
     const b64 = j.data?.[0]?.b64_json;
     if (!b64) throw new Error("A geração não devolveu imagem");
     const caminho = `artes/${a.client_id}/${a.id}/${u.position}-${Date.now()}.png`;
-    const { error: erroUp } = await admin.storage.from(BUCKET).upload(caminho, Buffer.from(b64, "base64"), { contentType: "image/png", upsert: false });
+    const composed = composeSlide(u, a.document.units.length, Buffer.from(b64, "base64"), layout);
+    const { error: erroUp } = await admin.storage.from(BUCKET).upload(caminho, composed, { contentType: "image/png", upsert: false });
     if (erroUp) throw new Error("Não foi possível guardar a arte");
     const { error: erroIns } = await admin.from("creative_artes").insert({ client_id: a.client_id, adaptation_id: a.id, position: u.position, storage_path: caminho, modelo: MODELO, qualidade: QUALIDADE, custo_usd: custo, criado_por: userId });
     if (erroIns) {
@@ -69,6 +71,8 @@ export async function gerarArtes(admin: Admin, clientId: string, adaptacaoId: st
   const slides = slidesPedidos(a.document.units, pedidos);
   if (!slides.length) throw new Error("Nenhum slide válido para gerar.");
   const fila = slides.map((p) => a.document.units.find((u) => u.position === p)!);
+  // Font availability, unsupported glyphs and overflow fail before reserving or spending.
+  const layouts = fila.map(layoutSlide);
   const prompts = fila.map((u) => promptArte(u, { tema: a.document.theme, total: a.document.units.length }));
   const valorReservado = Math.max(...prompts.map((prompt) => reservaArte(prompt, QUALIDADE)));
   const { data: reservas, error: erroReserva } = await admin.rpc("creative_arte_reservar", { p_client_id: clientId, p_adaptation_id: adaptacaoId, p_positions: slides, p_valor_usd: valorReservado });
@@ -82,7 +86,7 @@ export async function gerarArtes(admin: Admin, clientId: string, adaptacaoId: st
   await Promise.all(Array.from({ length: Math.min(PARALELO, fila.length) }, async () => {
     while (i < fila.length) {
       const indice = i++, u = fila[indice];
-      try { await gerarUma(admin, a, u, userId, porPosicao.get(u.position)!, valorReservado, prompts[indice], prazo); geradas++; }
+      try { await gerarUma(admin, a, u, userId, porPosicao.get(u.position)!, valorReservado, prompts[indice], prazo, layouts[indice]); geradas++; }
       catch (e) { erros.push(`Slide ${u.position}: ${(e instanceof Error ? e.message : String(e)).slice(0, 160)}`); }
     }
   }));

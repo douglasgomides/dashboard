@@ -242,7 +242,7 @@ function ArtesSlides({ clientId, adaptacaoId, doc, editable }: { clientId: strin
         const r = await gerarArtes(clientId, adaptacaoId, lote);
         prontas += r.geradas;
         await qc.invalidateQueries({ queryKey: chave });
-        if (r.erros.length) throw new Error(`${prontas} arte(s) salvas nesta solicitação. ${r.erros.join(" · ")} As artes prontas foram preservadas. Gere somente as que faltam.`);
+        if (r.erros.length) throw new Error(`${prontas} arte(s) salvas nesta solicitação. ${r.erros.join(" · ")} As artes prontas foram preservadas. Use Refazer no slide com erro ou gere os slides que faltam.`);
       }
       setAviso(`${prontas} arte(s) salvas. Confira as imagens e baixe o post com a legenda.`);
     } catch (e) {
@@ -307,6 +307,10 @@ function ArtesSlides({ clientId, adaptacaoId, doc, editable }: { clientId: strin
         {!!faltam.length && <button className="btn" type="button" disabled={bloqueado || q.isPending || q.isError} onClick={() => gerar()}>
           {gerando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <ImagePlus size={15} aria-hidden />}
           {gerando ? `Gerando artes · ${gerando.length} pendentes…` : artes.length ? `Gerar ${faltam.length} arte(s) que faltam` : `Gerar arte dos ${total} slides`}
+        </button>}
+        {!faltam.length && <button className="btn" type="button" disabled={bloqueado || q.isPending || q.isError} onClick={() => gerar(doc.units.map(u => u.position))}>
+          {gerando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <ImagePlus size={15} aria-hidden />}
+          {gerando ? `Refazendo artes · ${gerando.length} pendentes…` : "Refazer todas as artes"}
         </button>}
         <button className="btn" type="button" disabled={bloqueado || q.isPending || q.isError || !!faltam.length} onClick={() => baixar()}><Download size={15} aria-hidden />{baixando ? "Preparando download…" : "Baixar post (artes + legenda)"}</button>
         <button className="btn" type="button" onClick={() => copiarLegenda()}><Copy size={15} aria-hidden />Copiar legenda</button>
