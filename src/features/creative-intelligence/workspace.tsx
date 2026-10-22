@@ -46,6 +46,8 @@ import { AdaptationView } from "./adaptation-view";
 import "./workspace.css";
 
 const parentRoute = getRouteApi("/_authenticated/$clientId");
+// Criação pausada na interface publicada. Manter propostas, artes e histórico salvos.
+const CREATION_ENABLED = false;
 const TABS = [
   { id: "acervo", label: "Conteúdos em destaque", icon: Trophy },
   { id: "analises", label: "Análises e DNA", icon: Fingerprint },
@@ -128,7 +130,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
   const finishedAdaptationId = finishedAdaptation?.output?.record_id as string | undefined;
   const waitingAdaptation = !!adaptationJob && !w?.jobs.some(j => j.id === adaptationJob && ["completed", "failed", "cancelled"].includes(j.status));
   useEffect(() => {
-    if (finishedAdaptationId) {
+    if (CREATION_ENABLED && finishedAdaptationId) {
       setAdaptationId(finishedAdaptationId);
       setTab("biblioteca");
       setAdaptationJob("");
@@ -178,7 +180,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
       comparisonSource?.id,
       adaptationAnalysis?.id,
     ],
-    enabled: !!comparisonSource && tab === "biblioteca",
+    enabled: CREATION_ENABLED && !!comparisonSource && tab === "biblioteca",
     queryFn: () => readAssets(clientId, accountId, comparisonSource!.id),
   });
   const rankings = useMemo(
@@ -233,6 +235,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
   const canAnalyse = podeEditar && !!w?.health.capabilities?.vision;
   const busy = action.isPending;
   function chooseStructure(s: CreativeStructure) {
+    if (!CREATION_ENABLED) return;
     setStructureId(s.id);
     setSourceId(s.source_id);
     setAdaptationId("");
@@ -257,8 +260,8 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
           </span>
           <h1>Inteligência Criativa</h1>
           <p>
-            Entenda a estrutura das suas melhores publicações. Transforme
-            evidências em novos conteúdos para testar.
+            Entenda a estrutura das suas melhores publicações e compare
+            referências de mercado.
           </p>
         </div>
         <label className="text-sm">
@@ -326,7 +329,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
         <p className="creative-notice">
           {podeEditar
             ? "O processamento de mídia ainda não está disponível neste ambiente. As análises já concluídas continuam acessíveis."
-            : "Seu acesso permite consultar as evidências. Novas análises e adaptações são solicitadas pelos responsáveis da clínica."}
+            : "Seu acesso permite consultar as evidências. Novas análises são solicitadas pelos responsáveis da clínica."}
         </p>
       )}
       {!!w && canAnalyse && (
@@ -343,7 +346,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
         className="creative-tabs"
         aria-label="Áreas da Inteligência Criativa"
       >
-        {TABS.map((t) => (
+        {TABS.filter((t) => CREATION_ENABLED || t.id !== "biblioteca").map((t) => (
           <button
             type="button"
             key={t.id}
@@ -541,7 +544,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                 source={source}
                 assets={assets.data ?? []}
               />
-              {analysisStructure && (
+              {CREATION_ENABLED && analysisStructure && (
                 <button
                   className="btn"
                   onClick={() => chooseStructure(analysisStructure)}
@@ -560,7 +563,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
           )}
         </div>
       )}
-      {tab === "biblioteca" && (
+      {CREATION_ENABLED && tab === "biblioteca" && (
         <div className="space-y-5">
           <Painel
             icone={BookOpen}
@@ -894,7 +897,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
           titulo="Aprendizado: a adaptação deu resultado?"
           resumo="Aqui o Nexo compara o desempenho de cada adaptação publicada com a média da conta, para saber quais estruturas vale repetir."
         >
-          <ol className="mb-5 grid gap-3 text-sm sm:grid-cols-3">
+          {CREATION_ENABLED && <ol className="mb-5 grid gap-3 text-sm sm:grid-cols-3">
             <li className="creative-structure">
               <p className="font-semibold">1. Criar a adaptação</p>
               <p className="mt-1" style={{ color: "var(--muted)" }}>
@@ -913,10 +916,10 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                 O Nexo mede alcance, salvos e compartilhamentos 1, 3, 7 e 28 dias depois. Nada mais a fazer.
               </p>
             </li>
-          </ol>
+          </ol>}
           {!w?.adaptations.length ? (
             <p className="note">
-              Nenhuma adaptação criada ainda. Comece pelo passo 1.
+              Nenhuma publicação vinculada para comparar neste momento.
             </p>
           ) : (
             <div className="space-y-3">
@@ -940,7 +943,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                         </Selo>
                       ))}
                     </p>
-                    {etapa === 2 && (
+                    {CREATION_ENABLED && etapa === 2 && (
                       <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
                         Já postou? Abra Biblioteca e adaptações, escolha esta adaptação em "Adaptação para comparar" e vincule o post.
                       </p>
@@ -987,7 +990,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                 retry={() => dispatch(async () => {
                   if (!await dispararWorker(clientId, j.id)) throw new Error("Não foi possível iniciar o processamento. O pedido continua salvo; tente novamente em instantes.");
                 })}
-                openResult={j.kind === "adapt" && j.status === "completed" && typeof j.output?.record_id === "string" ? () => {
+                openResult={CREATION_ENABLED && j.kind === "adapt" && j.status === "completed" && typeof j.output?.record_id === "string" ? () => {
                   setAdaptationId(j.output?.record_id as string);
                   setTab("biblioteca");
                 } : undefined}
@@ -1033,7 +1036,7 @@ function JobRow({
           }{" "}
           · {job.status === "queued" ? "Aguardando início" : job.status === "retry" ? "Aguardando nova tentativa" : job.status === "completed" ? "Concluída" : job.status === "failed" ? "Falhou" : job.status === "cancelled" ? "Cancelada" : `${job.progress}%`}
         </p>
-        {job.kind === "adapt" && job.status === "completed" && <p className="text-sm">Texto adaptado. Abra a proposta para gerar ou baixar as artes.</p>}
+        {CREATION_ENABLED && job.kind === "adapt" && job.status === "completed" && <p className="text-sm">Texto adaptado. Abra a proposta para gerar ou baixar as artes.</p>}
         <p className="text-sm" role="status">
           {job.message}
         </p>
@@ -1045,7 +1048,7 @@ function JobRow({
       </div>
       {active && editable && (
         <div className="flex flex-wrap gap-2">
-          {["queued", "retry"].includes(job.status) && <button className="btn" type="button" disabled={busy} onClick={retry}>Tentar iniciar agora</button>}
+          {["queued", "retry"].includes(job.status) && (CREATION_ENABLED || job.kind !== "adapt") && <button className="btn" type="button" disabled={busy} onClick={retry}>Tentar iniciar agora</button>}
           <button className="btn" type="button" disabled={busy} onClick={cancel}>Cancelar</button>
         </div>
       )}
