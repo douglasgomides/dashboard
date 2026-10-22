@@ -149,6 +149,9 @@ test("carousel resumes only missing slides in small batches and downloads the co
   const files = unzipSync(await readFile((await file.path())!));
   expect(Object.keys(files).filter(n => n.endsWith(".png"))).toHaveLength(14);
   expect(strFromU8(files["legenda.txt"])).toContain(adaptation.document.caption);
+  const pngHeader = new DataView(files["slide-01.png"].buffer, files["slide-01.png"].byteOffset);
+  expect(pngHeader.getUint32(16)).toBe(1080);
+  expect(pngHeader.getUint32(20)).toBe(1350);
   expect(strFromU8(files["revisao.txt"])).toContain("Revise todas as artes");
   await page.reload();
   await page.getByRole("button", { name: "Biblioteca e adaptações", exact: true }).click();

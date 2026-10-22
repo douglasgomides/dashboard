@@ -8,7 +8,7 @@ import type {
   CreativeAnalysis,
   CreativeAsset,
 } from "@/lib/creative-intelligence/contracts";
-import { pendingSlides, deliveryCaption, deliveryFiles } from "@/lib/creative-intelligence/delivery";
+import { pendingSlides, deliveryCaption, deliveryFiles, preparePostImage } from "@/lib/creative-intelligence/delivery";
 import { PrivateAsset, FactList } from "./analysis-view";
 
 export function AdaptationView({
@@ -281,7 +281,7 @@ function ArtesSlides({ clientId, adaptacaoId, doc, editable }: { clientId: strin
         const image = new Uint8Array(await response.arrayBuffer());
         bytes += image.byteLength;
         if (bytes > 100 * 1024 * 1024) throw new Error("O pacote excede 100 MB. Baixe as artes individualmente.");
-        imagens.push({ position: a.position, bytes: image });
+        imagens.push({ position: a.position, bytes: await preparePostImage(image) });
       }
       if (slide) salvar(new Blob([imagens[0].bytes as BlobPart], { type: "image/png" }), `slide-${String(slide).padStart(2, "0")}.png`);
       else {
@@ -301,7 +301,7 @@ function ArtesSlides({ clientId, adaptacaoId, doc, editable }: { clientId: strin
       <p className="mt-2 text-sm" role="status">Texto adaptado · {total - faltam.length} de {total} artes prontas · {artes.filter(a => a.status === "aprovada").length} revisadas</p>
       <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
         {faltam.length ? "Falta gerar as imagens para ter o post completo. Cada lote salvo aparece abaixo; você pode retomar somente os slides pendentes." : "Artes e legenda disponíveis para baixar. Confira o texto e o enquadramento antes de publicar."}
-        {" "}Imagens de 1024 × 1536 px, com orçamento reservado e teto diário por clínica. A geração tem custo e pode levar alguns minutos. Nada é publicado automaticamente.
+        {" "}Download vertical para o feed (1080 × 1350 px), sem cortar o conteúdo. A geração tem orçamento reservado e teto diário por clínica. A geração tem custo e pode levar alguns minutos. Nada é publicado automaticamente.
       </p>
       {editable && <div className="mt-3 flex flex-wrap gap-2">
         {!!faltam.length && <button className="btn" type="button" disabled={bloqueado || q.isPending || q.isError} onClick={() => gerar()}>
