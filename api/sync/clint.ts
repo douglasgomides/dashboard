@@ -6,6 +6,7 @@ import { runClintSync } from "../_lib/clint-sync.js";
 import { runRdStationSync } from "../_lib/rdstation-sync.js";
 import { runFlwChatSync } from "../_lib/flwchat-sync.js";
 import { runDigisacSync } from "../_lib/digisac-sync.js";
+import { ingerirConversasClint } from "../_lib/conversas-clint.js";
 
 // Sync dos negócios da Clint, chamado pelo n8n. Máquina chamando máquina,
 // então autoriza por SYNC_SECRET — o mesmo padrão de api/sync/kommo-leads.
@@ -14,6 +15,7 @@ import { runDigisacSync } from "../_lib/digisac-sync.js";
 // por cliente, porque cada cliente pode ter conta própria.
 
 async function handler(req: VercelRequest, res: VercelResponse) {
+  const startedAt = Date.now();
   if (req.method !== "POST" && req.method !== "GET") {
     res.status(405).json({ error: "Method not allowed" });
     return;
@@ -93,7 +95,14 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     await recordSyncStatusPorCliente(supabaseStatus, "crm", digisac.map((r) => ({ clientId: r.clientId, rows: r.contatos, errors: r.errors })));
     await recordSyncStatusPorCliente(supabaseStatus, "atendimento", digisac.map((r) => ({ clientId: r.clientId, rows: r.atendimentos, errors: r.errors })));
     await recordSyncStatusPorCliente(supabaseStatus, "crm", rdstation.map((r) => ({ clientId: r.clientId, rows: r.negocios, errors: r.errors })));
+    // Conversas usam apenas o tempo restante, depois dos provedores já atendidos
+    // por este endpoint. O cursor permite continuar na próxima rodada.
+    const clintConversas = await ingerirConversasClint(supabaseStatus, {
+      onlyClientId: clientId,
+      orcamentoMs: Math.max(1, Math.min(110_000, 270_000 - (Date.now() - startedAt))),
+    });
     const hasErrors =
+      clintConversas.some((r) => r.erros.length > 0 || r.parcial) ||
       results.some((r) => r.errors.length > 0) ||
       rdstation.some((r) => r.errors.length > 0) ||
       flwchat.some((r) => r.errors.length > 0) ||
@@ -104,6 +113,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(hasErrors ? 207 : 200).json({
       synced_at: new Date().toISOString(),
       connections: results,
+      clint_conversas: clintConversas,
       rdstation,
       flwchat,
       digisac,
