@@ -36,6 +36,7 @@ import {
   readAssets,
   enqueue,
   cancelJob,
+  dispararWorker,
   toPlanner,
   linkPublication,
 } from "./data";
@@ -68,6 +69,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
     [format, setFormat] = useState(""),
     [structureId, setStructureId] = useState(""),
     [adaptationId, setAdaptationId] = useState(""),
+    [adaptationJob, setAdaptationJob] = useState(""),
     [theme, setTheme] = useState(""),
     [partial, setPartial] = useState(false),
     [query, setQuery] = useState(""),
@@ -121,6 +123,16 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
         })),
       }
     : undefined;
+  const finishedAdaptation = w?.jobs.find(j => j.id === adaptationJob && j.status === "completed");
+  const finishedAdaptationId = finishedAdaptation?.output?.record_id as string | undefined;
+  const waitingAdaptation = !!adaptationJob && !w?.jobs.some(j => j.id === adaptationJob && ["completed", "failed", "cancelled"].includes(j.status));
+  useEffect(() => {
+    if (finishedAdaptationId) {
+      setAdaptationId(finishedAdaptationId);
+      setTab("biblioteca");
+      setAdaptationJob("");
+    }
+  }, [finishedAdaptationId]);
   const source = w?.sources.find((s) => s.id === sourceId) ?? w?.sources[0];
   const analysis = w?.analyses.find((a) => a.source_id === source?.id);
   const assetIds = analysis
@@ -231,6 +243,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
     setSourceId("");
     setStructureId("");
     setAdaptationId("");
+    setAdaptationJob("");
     setSearchJob("");
     setPartial(false);
   }
@@ -278,16 +291,17 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
           Resultados observados, sem promessas
         </span>
       </div>
-      {(accounts.isError || posts.isError || workspace.isError) && (
+      {(accounts.isError || posts.isError || workspace.isError || progress.isError) && (
         <div role="alert" className="creative-notice">
           {accounts.error?.message ||
             posts.error?.message ||
-            workspace.error?.message}
+            workspace.error?.message || progress.error?.message}
           <button
             className="btn ml-3"
             onClick={() => {
               void accounts.refetch();
               void workspace.refetch();
+              void progress.refetch();
               void posts.refetch();
             }}
           >
@@ -618,14 +632,15 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  dispatch(() =>
-                    enqueue(clientId, accountId, "adapt", {
+                  dispatch(async () => {
+                    const id = await enqueue(clientId, accountId, "adapt", {
                       structure_id: selectedStructure.id,
                       theme,
                       objective,
                       allow_partial: partial,
-                    }),
-                  );
+                    });
+                    setAdaptationJob(id);
+                  });
                 }}
                 className="space-y-4"
               >
@@ -675,12 +690,13 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                   disabled={
                     !canAnalyse ||
                     busy ||
+                    waitingAdaptation ||
                     theme.trim().length < 3 ||
                     (structureAnalysis?.coverage.status !== "completa" &&
                       !partial)
                   }
                 >
-                  Criar proposta para revisão
+                  {waitingAdaptation ? "Aguardando nova adaptação…" : "Criar proposta para revisão"}
                   <ArrowRight size={15} aria-hidden />
                 </button>
                 <p className="text-xs" style={{ color: "var(--muted)" }}>
@@ -689,6 +705,9 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                   publicada.
                 </p>
               </form>
+              {waitingAdaptation && (
+                <p className="mt-3 text-sm" role="status">Pedido salvo. A nova adaptação aparecerá aqui quando a IA concluir. As artes serão geradas na próxima etapa.</p>
+              )}
             </Painel>
           )}
           {!!w?.adaptations.length && (
@@ -962,6 +981,13 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                 editable={podeEditar}
                 busy={busy}
                 cancel={() => dispatch(() => cancelJob(clientId, j.id))}
+                retry={() => dispatch(async () => {
+                  if (!await dispararWorker(clientId, j.id)) throw new Error("Não foi possível iniciar o processamento. O pedido continua salvo; tente novamente em instantes.");
+                })}
+                openResult={j.kind === "adapt" && j.status === "completed" && typeof j.output?.record_id === "string" ? () => {
+                  setAdaptationId(j.output?.record_id as string);
+                  setTab("biblioteca");
+                } : undefined}
               />
             ))}
           </div>
@@ -975,11 +1001,15 @@ function JobRow({
   editable,
   busy,
   cancel,
+  retry,
+  openResult,
 }: {
   job: CreativeJob;
   editable: boolean;
   busy: boolean;
   cancel: () => void;
+  retry: () => void;
+  openResult?: () => void;
 }) {
   const active = ["running", "queued", "retry"].includes(job.status);
   return (
@@ -998,8 +1028,9 @@ function JobRow({
               measure: "Medição",
             }[job.kind]
           }{" "}
-          · {job.progress}%
+          · {job.status === "queued" ? "Aguardando início" : job.status === "retry" ? "Aguardando nova tentativa" : job.status === "completed" ? "Concluída" : job.status === "failed" ? "Falhou" : job.status === "cancelled" ? "Cancelada" : `${job.progress}%`}
         </p>
+        {job.kind === "adapt" && job.status === "completed" && <p className="text-sm">Texto adaptado. Abra a proposta para gerar ou baixar as artes.</p>}
         <p className="text-sm" role="status">
           {job.message}
         </p>
@@ -1010,10 +1041,12 @@ function JobRow({
         </p>
       </div>
       {active && editable && (
-        <button className="btn" type="button" disabled={busy} onClick={cancel}>
-          Cancelar
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {["queued", "retry"].includes(job.status) && <button className="btn" type="button" disabled={busy} onClick={retry}>Tentar iniciar agora</button>}
+          <button className="btn" type="button" disabled={busy} onClick={cancel}>Cancelar</button>
+        </div>
       )}
+      {openResult && <button className="btn" type="button" onClick={openResult}>Abrir adaptação</button>}
     </div>
   );
 }

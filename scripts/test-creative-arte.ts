@@ -4,7 +4,7 @@ import { promptArte, slidesPedidos, reservaArte, custoArte } from "../src/lib/cr
 const u = { position: 2, copy: "Corpo do slide", image_brief: "Mulher dormindo tranquila", layout_brief: "Título no topo", on_screen_text: "Insônia na menopausa", narrative_role: "Gancho" };
 const p = promptArte(u, { tema: "sono no climatério", total: 9 });
 assert.ok(p.includes("Slide 2 de 9"));
-assert.ok(p.includes('"Insônia na menopausa"'));
+assert.ok(p.includes('"Corpo do slide"'), "the complete slide copy, rather than its shortened overlay, must reach the image");
 assert.ok(/antes e depois/.test(p));
 assert.match(p, /1024 por 1536/);
 assert.ok(!p.includes("4:5"), "the prompt must match the actual generated dimensions");
@@ -15,6 +15,8 @@ assert.equal(custoArte({ input_tokens: -1, output_tokens: 0 }, 0.08), 0.08);
 // Sem texto na tela usa a copy; sem nada, avisa.
 assert.ok(promptArte({ ...u, on_screen_text: "" }, { tema: "x", total: 1 }).includes('"Corpo do slide"'));
 assert.ok(promptArte({ ...u, on_screen_text: "", copy: "" }, { tema: "x", total: 1 }).includes("Sem texto na arte."));
+assert.throws(() => promptArte({ ...u, copy: "a".repeat(1601) }, { tema: "x", total: 1 }), /excede o limite/, "long copy must never be silently truncated in a paid image");
+assert.ok(promptArte({ ...u, copy: "Linha 1\\nLinha 2" }, { tema: "x", total: 1 }).includes("Linha 1\nLinha 2"));
 
 const unidades = [1, 2, 3].map((position) => ({ position }));
 assert.deepEqual(slidesPedidos(unidades), [1, 2, 3]);

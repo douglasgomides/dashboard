@@ -18,7 +18,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: creative-worker
+  # Pedidos distintos não ficam atrás de uma análise longa. O banco mantém leases e o limite de dois por clínica.
+  group: creative-worker-${{ inputs.job_id || 'fila-agendada' }}
   cancel-in-progress: false
 
 jobs:
@@ -59,14 +60,23 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             workers/creative/package-lock.json
-      - name: FFmpeg
+      - name: Preparar trabalho e informar andamento
+        id: preparar
         if: steps.pronto.outputs.ok == 'true'
-        run: command -v ffmpeg || (sudo apt-get update -q && sudo apt-get install -y -q ffmpeg)
+        run: node scripts/creative-worker-prepare.mjs
+      - name: FFmpeg (somente para análise de mídia)
+        if: steps.pronto.outputs.ok == 'true' && steps.preparar.outputs.needs_media == 'true'
+        timeout-minutes: 3
+        run: |
+          if ! command -v ffmpeg || ! command -v ffprobe; then
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 update -q
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 install -y -q --no-install-recommends ffmpeg
+          fi
       - name: Dependências
         if: steps.pronto.outputs.ok == 'true'
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
-          npm ci --prefix workers/creative --no-audit --no-fund
+          npm ci --prefix workers/creative --ignore-scripts --no-audit --no-fund
       - name: Processar fila
         if: steps.pronto.outputs.ok == 'true'
         run: |
