@@ -58,7 +58,7 @@ export async function diagnosticarContaAnuncios(contaId: string, token: string, 
 
   switch (c.corpo.account_status) {
     case 3:
-      return { texto: `Erro de pagamento na conta de anúncios: a Meta não conseguiu cobrar e pausou a entrega. ${ACAO_PAGAMENTO}`, dono: "cliente" };
+      return { texto: `Erro de pagamento na conta de anúncios: as campanhas continuam ativas, mas a Meta não conseguiu cobrar e interrompeu a entrega até o pagamento ser regularizado. ${ACAO_PAGAMENTO}`, dono: "cliente" };
     case 9:
       return { texto: `Conta de anúncios em período de carência por pagamento pendente. ${ACAO_PAGAMENTO}`, dono: "cliente" };
     case 2:
