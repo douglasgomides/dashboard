@@ -11,6 +11,7 @@ const origin = "https://creative-arte.offline.invalid";
 const originalFetch = globalThis.fetch, originalEnv = { ...process.env };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 const path = `artes/${CLIENT}/${ADAPTATION}/2-fixture.png`;
+let copy = "Teste";
 let isAdmin = true, missingAdaptation = false, missingArt = false, failure = "", providerCalls = 0, calls = 0, cleaned = 0;
 const saved: Record<string, unknown>[] = [], reviews: Record<string, unknown>[] = [];
 const settlements: Record<string, unknown>[] = [];
@@ -38,7 +39,7 @@ try {
       assert.match(JSON.parse(String(init?.body)).prompt, /Slide 2 de 2/);
       providerCalls++;
       if (failure === "network") throw new Error("simulated unknown provider outcome");
-      return failure === "provider" ? json({ error: { message: "fictional provider failure" } }, 403) : json({ data: [{ b64_json: Buffer.from("fictional image").toString("base64") }], usage: { input_tokens: 100, output_tokens: 1000 } });
+      return failure === "provider" ? json({ error: { message: "fictional provider failure" } }, 403) : json({ data: [{ b64_json: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII=" }], usage: { input_tokens: 100, output_tokens: 1000 } });
     }
     assert.equal(u.origin, origin, "no request may reach a real service during regression tests");
     if (u.pathname === "/auth/v1/user") return json({ id: USER });
@@ -64,6 +65,9 @@ try {
     }
     if (u.pathname.startsWith("/storage/v1/object/nexo-creative-private/artes/")) {
       assert.equal(method, "POST");
+      const png = Buffer.from(await new Response(init?.body).arrayBuffer());
+      assert.equal(png.readUInt32BE(16), 1080, "stored image is typeset in final feed dimensions");
+      assert.equal(png.readUInt32BE(20), 1350);
       assert.ok(u.pathname.includes(`/${CLIENT}/${ADAPTATION}/2-`));
       return failure === "storage" ? json({ message: "fictional upload failure" }, 400) : json({ Key: path });
     }
@@ -72,7 +76,7 @@ try {
       assert.equal(u.searchParams.get("client_id"), `eq.${CLIENT}`);
       if (table === "creative_adaptations") {
         assert.equal(u.searchParams.get("id"), `eq.${ADAPTATION}`, "adaptacao_id must survive request validation");
-        return json(missingAdaptation ? null : { id: ADAPTATION, client_id: CLIENT, document: { theme: "Teste fictício", units: [1, 2].map((position) => ({ position, copy: "Teste", image_brief: "Fundo abstrato", layout_brief: "Título", on_screen_text: "Teste", narrative_role: "exemplo" })) } });
+        return json(missingAdaptation ? null : { id: ADAPTATION, client_id: CLIENT, document: { theme: "Teste fictício", units: [1, 2].map((position) => ({ position, copy, image_brief: "Fundo abstrato", layout_brief: "Título", on_screen_text: "Teste", narrative_role: "exemplo" })) } });
       }
       if (table === "ia_execucoes") return json([]);
       if (table === "creative_artes") {
@@ -112,6 +116,11 @@ try {
     assert.equal(reviews.at(-1)?.status, status);
     assert.equal(reviews.at(-1)?.revisado_por, USER);
   }
+  copy = "palavra ".repeat(200).trim();
+  const beforeOverflow = providerCalls;
+  assert.equal((await invoke(request({ acao: "gerar", adaptacao_id: ADAPTATION, slides: [2] }))).result.ok, false);
+  assert.equal(providerCalls, beforeOverflow, "unreadable copy must fail before a paid request");
+  copy = "Teste";
   const before = calls;
   for (const bad of [
     { acao: "listar" }, { acao: "gerar", adaptacao_id: "invalid" },

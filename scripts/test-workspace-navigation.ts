@@ -49,6 +49,7 @@ const esperados = [
   "/crm-painel",
   "/crm-guia",
   "/atendimento",
+  "/central-atendimento",
   "/links",
   "/duvidas",
   "/jornada",
@@ -97,6 +98,11 @@ const clinica = navegacaoClinica(areasVisiveis(base), false);
 assert.deepEqual(clinica.principais.map(a => a.id), ["resumo", "acoes", "relatorio"]);
 assert.equal(clinica.principais[1].visiveis[0].path, "/agentes");
 assert.deepEqual(clinica.detalhes.map(a => a.id), ["marketing", "comercial"]);
+const operadora=navegacaoClinica(areasVisiveis({...base,papel:"owner"}),false);
+assert.deepEqual(operadora.principais.map(a=>a.id),["resumo","comercial","acoes","relatorio"]);
+assert.equal(operadora.principais[1].label,"Atendimento e CRM");
+assert.equal(paths(base).includes("/central-atendimento"),false,"viewer cannot see patient inbox navigation");
+assert.equal(paths({...semFontes,papel:"owner"}).includes("/central-atendimento"),true,"operator can configure a first channel without an existing feed");
 const apenasCrm = navegacaoClinica(areasVisiveis({ ...base, soCrm: true }), false);
 assert.deepEqual(apenasCrm.principais.map(a => a.id), ["comercial"]);
 assert.equal(apenasCrm.detalhes.length, 0);

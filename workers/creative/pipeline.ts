@@ -1,3 +1,4 @@
+import { discoveryInput, publicationUrl, discoveryFormat } from "../../src/lib/creative-intelligence/discovery.js";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -352,59 +353,33 @@ export async function discover(ctx: JobContext) {
   const input = ctx.job.input,
     platform = input.platform as "instagram" | "tiktok",
     query = String(input.query);
-  const rows = await runActor(
-    ctx,
-    platform,
-    platform === "instagram"
-      ? {
-          search: query.replace(/^#/, ""),
-          searchType: "hashtag",
-          resultsType: "posts",
-          resultsLimit: 20,
-        }
-      : {
-          searchQueries: [query],
-          searchSection: "/video",
-          resultsPerPage: 20,
-          shouldDownloadVideos: false,
-          commentsPerPost: 0,
-        },
-  );
+  let request: Record<string, unknown>;
+  try { request = discoveryInput(platform, query, { since: typeof input.since === "string" ? input.since : undefined }); }
+  catch (e) { throw new CreativeError("INVALID_DISCOVERY_QUERY", e instanceof Error ? e.message : "Pesquisa inválida"); }
+  const rows = await runActor(ctx, platform, request);
   const result = [];
   for (const item of rows.slice(0, 20)) {
-    const url = item.url || item.webVideoUrl;
-    let canonical: URL;
-    try {
-      canonical = new URL(url);
-    } catch {
-      continue;
-    }
-    if (
-      canonical.protocol !== "https:" ||
-      !(
-        platform === "instagram"
-          ? /^(www\.)?instagram\.com$/
-          : /^(www\.)?tiktok\.com$/
-      ).test(canonical.hostname)
-    )
-      continue;
-    canonical.search = "";
-    canonical.hash = "";
-    const format = item.type === "Sidecar" ? "carrossel" : "reels";
+    if (!item || typeof item !== "object" || item.error) continue;
+    const url = publicationUrl(item.url || item.webVideoUrl, platform);
+    if (!url) continue;
+    const format = discoveryFormat(item, platform, url);
+    if (!format) continue;
     if (input.format && input.format !== format) continue;
     const timestamp = item.timestamp || item.createTimeISO || null;
     if (
       input.since &&
-      (!timestamp || Date.parse(timestamp) < Date.parse(String(input.since)))
+      (!timestamp || !Number.isFinite(Date.parse(timestamp)) || Date.parse(timestamp) < Date.parse(String(input.since)))
     )
       continue;
     if (
       input.until &&
       (!timestamp ||
-        Date.parse(timestamp) > Date.parse(String(input.until)) + 86_400_000)
+        !Number.isFinite(Date.parse(timestamp)) || Date.parse(timestamp) >= Date.parse(String(input.until)) + 86_400_000)
     )
       continue;
     const metadata = {
+      caption: String(item.caption || item.text || "").slice(0, 12000),
+      location_name: typeof item.locationName === "string" ? item.locationName.slice(0, 180) : null,
       likes: item.likesCount ?? item.diggCount ?? null,
       comments: item.commentsCount ?? item.commentCount ?? null,
       views: item.videoViewCount ?? item.playCount ?? null,
@@ -428,8 +403,8 @@ export async function discover(ctx: JobContext) {
       account_id: ctx.job.account_id,
       job_id: ctx.job.id,
       platform,
-      external_id: String(item.id || canonical.pathname),
-      canonical_url: canonical.href,
+      external_id: String(item.id || new URL(url).pathname),
+      canonical_url: url,
       title: String(item.caption || item.text || "Referência externa").slice(
         0,
         180,
@@ -438,6 +413,8 @@ export async function discover(ctx: JobContext) {
       metadata,
     });
   }
+  if (rows.length && !result.length && !input.format && !input.since && !input.until)
+    throw new CreativeError("NO_VALID_REFERENCES", "O coletor não devolveu publicações válidas de carrosséis ou vídeos. Nenhuma página de hashtag ou perfil foi salva como publicação.");
   if (result.length)
     await checked(
       ctx.admin

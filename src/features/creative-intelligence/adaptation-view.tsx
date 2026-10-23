@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Columns2, CalendarPlus, Link2, ImagePlus, Loader2 } from "lucide-react";
+import { Columns2, CalendarPlus, Link2, ImagePlus, Loader2, Download, Copy } from "lucide-react";
 import { gerarArtes, listarArtes, revisarArte } from "./data";
 import { Painel, Selo } from "@/components/visual";
 import type {
@@ -8,6 +8,7 @@ import type {
   CreativeAnalysis,
   CreativeAsset,
 } from "@/lib/creative-intelligence/contracts";
+import { pendingSlides, deliveryCaption, deliveryFiles, preparePostImage } from "@/lib/creative-intelligence/delivery";
 import { PrivateAsset, FactList } from "./analysis-view";
 
 export function AdaptationView({
@@ -70,7 +71,7 @@ export function AdaptationView({
         </Selo>
       </div>
       {doc.format === "carrossel" && (
-        <ArtesSlides clientId={adaptation.client_id} adaptacaoId={adaptation.id} total={doc.units.length} editable={editable} />
+        <ArtesSlides clientId={adaptation.client_id} adaptacaoId={adaptation.id} doc={doc} editable={editable} />
       )}
       <div
         className="mb-4 flex flex-wrap gap-2"
@@ -134,8 +135,7 @@ export function AdaptationView({
             items={unit.justified_changes}
           />
           <p className="text-xs" style={{ color: "var(--muted)" }}>
-            Os briefings orientam a produção. Imagens e vídeo da adaptação ainda
-            precisam ser produzidos.
+            Os briefings orientam a produção. Confira acima as artes geradas para este carrossel. Roteiros de vídeo exigem gravação e edição pela equipe.
           </p>
         </div>
       </div>
@@ -217,20 +217,34 @@ export function AdaptationView({
   );
 }
 
-/** Arte dos slides: gera como rascunho, mostra lado a lado e deixa a equipe aprovar ou descartar. */
-function ArtesSlides({ clientId, adaptacaoId, total, editable }: { clientId: string; adaptacaoId: string; total: number; editable: boolean }) {
+/** Geração em lotes pequenos: cada lote salvo aparece e uma retomada pede apenas o que falta. */
+function ArtesSlides({ clientId, adaptacaoId, doc, editable }: { clientId: string; adaptacaoId: string; doc: CreativeAdaptation["document"]; editable: boolean }) {
   const qc = useQueryClient();
   const chave = ["creative-artes", clientId, adaptacaoId];
-  const q = useQuery({ queryKey: chave, queryFn: () => listarArtes(clientId, adaptacaoId), staleTime: 240_000, refetchInterval: 240_000, retry: false, enabled: editable });
   const [gerando, setGerando] = useState<number[] | null>(null);
   const [revisando, setRevisando] = useState<string | null>(null);
+  const [baixando, setBaixando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
-  async function gerar(slides?: number[]) {
-    setGerando(slides ?? Array.from({ length: total }, (_, i) => i + 1));
+  const q = useQuery({ queryKey: chave, queryFn: () => listarArtes(clientId, adaptacaoId), staleTime: 240_000, refetchInterval: gerando ? 5000 : 240_000, retry: false, enabled: editable });
+  const artes = q.data ?? [];
+  const faltam = pendingSlides(doc.units, artes);
+  const total = doc.units.length;
+  const bloqueado = !!gerando || !!revisando || baixando;
+  async function gerar(slides = faltam) {
+    if (!slides.length) return;
+    setGerando(slides);
     setAviso(null);
+    let prontas = 0;
     try {
-      const r = await gerarArtes(clientId, adaptacaoId, slides);
-      setAviso(r.erros.length ? `${r.geradas} arte(s) prontas. Falharam: ${r.erros.join(" · ")}` : `${r.geradas} arte(s) prontas para revisão.`);
+      for (let i = 0; i < slides.length; i += 4) {
+        const lote = slides.slice(i, i + 4);
+        setGerando(slides.slice(i));
+        const r = await gerarArtes(clientId, adaptacaoId, lote);
+        prontas += r.geradas;
+        await qc.invalidateQueries({ queryKey: chave });
+        if (r.erros.length) throw new Error(`${prontas} arte(s) salvas nesta solicitação. ${r.erros.join(" · ")} As artes prontas foram preservadas. Use Refazer no slide com erro ou gere os slides que faltam.`);
+      }
+      setAviso(`${prontas} arte(s) salvas. Confira as imagens e baixe o post com a legenda.`);
     } catch (e) {
       setAviso(e instanceof Error ? e.message : String(e));
     } finally {
@@ -243,21 +257,64 @@ function ArtesSlides({ clientId, adaptacaoId, total, editable }: { clientId: str
     try { await revisarArte(clientId, id, status); } catch (e) { setAviso(e instanceof Error ? e.message : String(e)); }
     finally { setRevisando(null); await qc.invalidateQueries({ queryKey: chave }); }
   }
-  const artes = q.data ?? [];
+  async function copiarLegenda() {
+    try { await navigator.clipboard.writeText(deliveryCaption(doc)); setAviso("Legenda copiada."); }
+    catch { setAviso("Não foi possível copiar. Abra ‘Legenda, CTA e revisão’ abaixo e copie o texto."); }
+  }
+  function salvar(blob: Blob, nome: string) {
+    const url = URL.createObjectURL(blob), link = document.createElement("a");
+    link.href = url; link.download = nome; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+  async function baixar(slide?: number) {
+    setBaixando(true); setAviso(null);
+    try {
+      // Renova as URLs privadas antes do download; um erro não dispara outra geração paga.
+      const atuais = await listarArtes(clientId, adaptacaoId);
+      const selecionadas = slide ? atuais.filter(a => a.position === slide) : atuais;
+      if (!selecionadas.length || (!slide && pendingSlides(doc.units, atuais).length)) throw new Error("Ainda faltam artes. Gere os slides pendentes antes de baixar o post completo.");
+      const imagens: { position: number; bytes: Uint8Array }[] = [];
+      let bytes = 0;
+      for (const a of selecionadas) {
+        const response = await fetch(a.url, { signal: AbortSignal.timeout(30_000) });
+        if (!response.ok) throw new Error("Não foi possível baixar uma das artes. Tente novamente; as imagens salvas foram preservadas.");
+        const image = new Uint8Array(await response.arrayBuffer());
+        bytes += image.byteLength;
+        if (bytes > 100 * 1024 * 1024) throw new Error("O pacote excede 100 MB. Baixe as artes individualmente.");
+        imagens.push({ position: a.position, bytes: await preparePostImage(image) });
+      }
+      if (slide) salvar(new Blob([imagens[0].bytes as BlobPart], { type: "image/png" }), `slide-${String(slide).padStart(2, "0")}.png`);
+      else {
+        const { zipSync, strToU8 } = await import("fflate");
+        const files = deliveryFiles(doc, imagens);
+        const entries: Record<string, Uint8Array> = { "legenda.txt": strToU8(files.caption), "revisao.txt": strToU8(files.review) };
+        for (const image of files.images) entries[image.name] = image.bytes;
+        salvar(new Blob([zipSync(entries, { level: 0 }) as BlobPart], { type: "application/zip" }), "post-adaptado.zip");
+      }
+      setAviso(slide ? "Arte baixada." : "Post baixado: artes em ordem e legenda no arquivo ZIP. Revise antes de publicar.");
+    } catch (e) { setAviso(e instanceof Error ? e.message : String(e)); }
+    finally { setBaixando(false); }
+  }
   return (
     <section className="mb-5 rounded-lg border p-3" style={{ borderColor: "var(--border)" }} aria-label="Arte dos slides">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="flex items-center gap-1.5 font-semibold"><ImagePlus size={16} aria-hidden /> Arte dos slides (rascunho)</h3>
-        {editable && (
-          <button className="btn" type="button" disabled={!!gerando || !!revisando || q.isPending || q.isError} onClick={() => gerar()}>
-            {gerando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <ImagePlus size={15} aria-hidden />}
-            {gerando ? `Gerando ${gerando.length} arte(s)… pode levar 1 a 3 min` : artes.length ? "Gerar todas de novo" : `Gerar arte dos ${total} slides`}
-          </button>
-        )}
-      </div>
+      <h3 className="flex items-center gap-1.5 font-semibold"><ImagePlus size={16} aria-hidden /> Preparar post · artes e legenda</h3>
+      <p className="mt-2 text-sm" role="status">Texto adaptado · {total - faltam.length} de {total} artes prontas · {artes.filter(a => a.status === "aprovada").length} revisadas</p>
       <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
-        Rascunho vertical de 1024 × 1536 px feito por IA. Revise texto, imagem e enquadramento antes de publicar. O custo inclui imagem e texto de entrada, com orçamento reservado e teto diário por clínica.
+        {faltam.length ? "Falta gerar as imagens para ter o post completo. Cada lote salvo aparece abaixo; você pode retomar somente os slides pendentes." : "Artes e legenda disponíveis para baixar. Confira o texto e o enquadramento antes de publicar."}
+        {" "}Download vertical para o feed (1080 × 1350 px), sem cortar o conteúdo. A geração tem orçamento reservado e teto diário por clínica. A geração tem custo e pode levar alguns minutos. Nada é publicado automaticamente.
       </p>
+      {editable && <div className="mt-3 flex flex-wrap gap-2">
+        {!!faltam.length && <button className="btn" type="button" disabled={bloqueado || q.isPending || q.isError} onClick={() => gerar()}>
+          {gerando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <ImagePlus size={15} aria-hidden />}
+          {gerando ? `Gerando artes · ${gerando.length} pendentes…` : artes.length ? `Gerar ${faltam.length} arte(s) que faltam` : `Gerar arte dos ${total} slides`}
+        </button>}
+        {!faltam.length && <button className="btn" type="button" disabled={bloqueado || q.isPending || q.isError} onClick={() => gerar(doc.units.map(u => u.position))}>
+          {gerando ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <ImagePlus size={15} aria-hidden />}
+          {gerando ? `Refazendo artes · ${gerando.length} pendentes…` : "Refazer todas as artes"}
+        </button>}
+        <button className="btn" type="button" disabled={bloqueado || q.isPending || q.isError || !!faltam.length} onClick={() => baixar()}><Download size={15} aria-hidden />{baixando ? "Preparando download…" : "Baixar post (artes + legenda)"}</button>
+        <button className="btn" type="button" onClick={() => copiarLegenda()}><Copy size={15} aria-hidden />Copiar legenda</button>
+      </div>}
       {!editable && <p className="mt-2 text-sm">A equipe Doctor Creator prepara e revisa as artes desta proposta.</p>}
       {aviso && <p className="mt-2 text-sm" role="status">{aviso}</p>}
       {q.isError && <div role="alert" className="mt-2 text-sm"><p style={{ color: "var(--crit)" }}>Não consegui carregar as artes. Confira as imagens existentes antes de solicitar uma nova geração.</p><button type="button" className="btn" disabled={q.isFetching} onClick={() => void q.refetch()}>Carregar artes novamente</button></div>}
@@ -268,9 +325,10 @@ function ArtesSlides({ clientId, adaptacaoId, total, editable }: { clientId: str
               <a href={a.url} target="_blank" rel="noopener noreferrer"><img src={a.url} alt={`Arte do slide ${a.position}`} className="w-full rounded-md border" style={{ borderColor: "var(--border)" }} loading="lazy" /></a>
               <figcaption className="flex flex-wrap items-center gap-1.5 text-xs">
                 <Selo cor={a.status === "aprovada" ? "var(--good)" : "var(--warn)"}>Slide {a.position} · {a.status === "aprovada" ? "aprovada" : "rascunho"}</Selo>
-                {editable && a.status !== "aprovada" && <button type="button" className="underline" disabled={!!gerando || !!revisando} onClick={() => revisar(a.id, "aprovada")}>Aprovar</button>}
-                {editable && <button type="button" className="underline" disabled={!!gerando || !!revisando} onClick={() => gerar([a.position])}>Refazer</button>}
-                {editable && <button type="button" className="underline" disabled={!!gerando || !!revisando} style={{ color: "var(--muted)" }} onClick={() => revisar(a.id, "descartada")}>Descartar</button>}
+                {editable && a.status !== "aprovada" && <button type="button" className="underline" disabled={bloqueado} onClick={() => revisar(a.id, "aprovada")}>Aprovar</button>}
+                {editable && <button type="button" className="underline" disabled={bloqueado} onClick={() => baixar(a.position)}>Baixar slide {a.position}</button>}
+                {editable && <button type="button" className="underline" disabled={bloqueado} onClick={() => gerar([a.position])}>Refazer</button>}
+                {editable && <button type="button" className="underline" disabled={bloqueado} style={{ color: "var(--muted)" }} onClick={() => revisar(a.id, "descartada")}>Descartar</button>}
               </figcaption>
             </figure>
           ))}

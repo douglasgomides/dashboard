@@ -65,6 +65,7 @@ export interface NavTab {
   /** Tela do Sistema de Aquisição: aparece para o cliente só com o SAP ativo (a equipe sempre vê). */
   sap?: boolean;
   kanban?: boolean;
+  atendimentoOperacional?: boolean;
 }
 
 export interface NavArea {
@@ -200,9 +201,9 @@ export const AREAS: NavArea[] = [
         Icone: Network,
         fonte: "instagram",
         descricao:
-          "Analise referências e adapte estruturas de conteúdo.",
+          "Analise publicações, estruturas e referências de mercado.",
         termos:
-          "inteligencia criativa video editar analise multimodal biblioteca radar aprendizado",
+          "inteligencia criativa video analise multimodal dna radar aprendizado",
         grupo: "Conteúdo",
       },
       {
@@ -243,6 +244,16 @@ export const AREAS: NavArea[] = [
     descricao: "Atendimento, CRM e resultados comerciais",
     Icone: Briefcase,
     tabs: [
+      { path: "/central-atendimento", label: "Central de atendimento", Icone: MessageCircle, atendimentoOperacional: true, descricao: "Distribua conversas do WhatsApp e Instagram e acompanhe o contato no CRM.", termos: "pacientes inbox caixa entrada responder mensagem whatsapp instagram direct central fila", grupo: "Atendimento" },
+      {
+        path: "/atendimento",
+        label: "Qualidade do atendimento",
+        Icone: MessageCircle,
+        fonte: "atendimento",
+        descricao: "Analise as conversas e os pontos de atenção do WhatsApp.",
+        termos: "whatsapp atendimento auditoria conversas resposta",
+        grupo: "Atendimento",
+      },
       { path: "/crm-contatos", label: "Contatos e oportunidades", Icone: Users, fonte: "crm", kanban: true, descricao: "Organize contatos, próximas ações e sugestões de IA no Kanban.", termos: "kanban contatos oportunidades responsavel proxima acao ia", grupo: "CRM e oportunidades" },
       {
         path: "/crm-painel",
@@ -261,15 +272,6 @@ export const AREAS: NavArea[] = [
         Icone: ClipboardList,
         fonte: "crm",
         grupo: "CRM e oportunidades",
-      },
-      {
-        path: "/atendimento",
-        label: "Qualidade do atendimento",
-        Icone: MessageCircle,
-        fonte: "atendimento",
-        descricao: "Analise as conversas e os pontos de atenção do WhatsApp.",
-        termos: "whatsapp atendimento auditoria conversas resposta",
-        grupo: "Atendimento",
       },
       {
         path: "/vendas-kommo",
@@ -391,6 +393,7 @@ export const CLIENTES_SO_CRM = new Set([
   "8770500e-ab5d-4ae8-9489-c49c9991303c",
 ]);
 export const ROTAS_DO_CRM = [
+  "/central-atendimento",
   "/crm-contatos",
   "/crm-painel",
   "/crm-guia",
@@ -429,12 +432,13 @@ export interface Visibilidade {
 // A ordem do menu é a mesma para todos. Permissões e fontes filtram apenas os destinos disponíveis.
 export function tabVisivel(t: NavTab, v: Visibilidade): boolean {
   return (
+    (!t.atendimentoOperacional || v.isAdmin || v.papel === "owner" || v.papel === "strategist") &&
     (!t.kanban || !!v.crmOperacional) &&
     (!t.admin || v.isAdmin) &&
     (!t.equipe || (v.papel !== "owner" && v.papel !== "viewer")) &&
     (!t.sap || !!v.sap || v.isAdmin) &&
     ((t.kanban && !!v.crmOperacional) || fonteOk(t.fonte, v.fontes)) &&
-    (!v.soCrm || !!t.admin || t.fonte === "crm" || (!!t.sap && !!v.sap)) &&
+    (!v.soCrm || !!t.admin || !!t.atendimentoOperacional || t.fonte === "crm" || (!!t.sap && !!v.sap)) &&
     !(v.semAudiencia && t.path.endsWith("audiencia"))
   );
 }
@@ -453,7 +457,8 @@ export function areasVisiveis(v: Visibilidade): AreaVisivel[] {
 export function navegacaoClinica(areas: AreaVisivel[], equipe: boolean) {
   if (equipe) return { principais: areas, detalhes: [] as AreaVisivel[] };
   const entregas = areas.find(a => a.id === "acoes");
-  const principais = [areas.find(a => a.id === "resumo"), entregas && {
+  const atendimento = areas.find(a => a.id === "comercial" && a.visiveis.some(t => t.atendimentoOperacional));
+  const principais = [areas.find(a => a.id === "resumo"), atendimento && {...atendimento,label:"Atendimento e CRM",curto:"Atendimento"}, entregas && {
     ...entregas, label: "Entregas e aprovações", curto: "Entregas",
     descricao: "Materiais preparados, revisões e próximos passos",
     visiveis: [...entregas.visiveis].sort((a, b) => Number(b.path === "/agentes") - Number(a.path === "/agentes")).map(t => t.path === "/agentes" ? { ...t, label: "Entregas e aprovações", descricao: "Veja os materiais preparados e o que precisa de revisão." } : t),

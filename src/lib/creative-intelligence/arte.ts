@@ -30,24 +30,15 @@ export function custoArte(usage: unknown, reserva: number): number {
   return Math.ceil(((u.input_tokens as number) * 0.000005 + (u.output_tokens as number) * 0.00004) * 1_000_000) / 1_000_000;
 }
 
-const REGRAS = [
-  "Imagem vertical de 1024 por 1536 pixels, visual limpo e profissional da área da saúde. Mantenha texto e elementos principais na área central para permitir ajuste posterior ao formato de publicação.",
-  "Escreva na imagem EXATAMENTE o texto indicado, em português do Brasil, com ortografia correta e boa legibilidade.",
-  "Não mostre antes e depois, corpo de paciente identificável, sangue, procedimento invasivo, nome de remédio, preço ou promessa de resultado.",
-  "Não invente logotipos, selos, números ou estudos.",
-];
-
+/** Only decorative shapes are generated; the server typesets the full copy separately. */
 export function promptArte(u: UnidadeArte, contexto: { tema: string; total: number; estilo?: string | null }): string {
-  const texto = (u.on_screen_text || u.copy || "").trim().slice(0, 600);
   return [
-    `Slide ${u.position} de ${contexto.total} de um carrossel sobre: ${contexto.tema.slice(0, 200)}.`,
-    u.narrative_role ? `Função do slide: ${u.narrative_role.slice(0, 200)}.` : "",
-    u.image_brief ? `Imagem: ${u.image_brief.slice(0, 900)}` : "",
-    u.layout_brief ? `Layout: ${u.layout_brief.slice(0, 600)}` : "",
-    texto ? `Texto na arte: "${texto}"` : "Sem texto na arte.",
-    contexto.estilo ? `Identidade visual: ${contexto.estilo.slice(0, 400)}` : "",
-    ...REGRAS,
-  ].filter(Boolean).join("\n");
+    `Slide ${u.position} de ${contexto.total}: fundo abstrato decorativo para uma faixa horizontal de um carrossel editorial.`,
+    "Imagem vertical de 1024 por 1536 pixels. Formas geométricas grandes, curvas e camadas de papel, poucas formas, composição sofisticada e simples.",
+    "Paleta consistente: azul-petróleo #102d40, azul-claro #86dbef e papel marfim #f6f4ef. Iluminação suave e acabamento fosco.",
+    "Apenas formas abstratas. Não inclua texto, letras, números, símbolos escritos, ícones de aplicativos, logotipos, pessoas, rostos, retratos, fotos ou partes do corpo.",
+    "Não mostre antes e depois, procedimentos, sangue, remédios, preços, selos ou estudos. O texto será aplicado depois com fonte real; não desenhe palavras.",
+  ].join("\n");
 }
 
 /** Slides pedidos válidos (existem na adaptação), sem repetição, no máximo 12 por pedido. */

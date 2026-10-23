@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/atendimento/canais",
+      "destination": "/api/sync/manual?_central=canais"
+    },
+    {
+      "source": "/api/atendimento/meta-webhook",
+      "destination": "/api/sync/manual?_central=meta-webhook"
+    },
+    {
       "source": "/r/:slug",
       "destination": "/api/sync/manual?r=:slug"
     },
@@ -23,7 +31,8 @@
       "maxDuration": 300
     },
     "api/sync/manual.ts": {
-      "maxDuration": 300
+      "maxDuration": 300,
+      "includeFiles": "api/_assets/creative/**"
     },
     "api/sync/meta-ads.ts": {
       "maxDuration": 300

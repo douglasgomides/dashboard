@@ -14,15 +14,14 @@ for (const width of [375, 1440]) {
   test(`team notes a meeting, processes it and sees summary, weekly deliveries and Brain proposals at ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "admin");
     const reuniao: Record<string, unknown> = { id: RID, data: "2026-10-23", titulo: "Reunião semanal", participantes: null, notas: "", transcricao: null, resultado: null, memorias_propostas: 0, processada_em: null, atualizado_em: "2026-10-23T12:00:00Z" };
-    let salvo: Record<string, unknown> | null = null;
-    let pedido: Record<string, unknown> | null = null;
+    const visto: { salvo?: Record<string, unknown>; pedido?: Record<string, unknown> } = {};
     await context.route("http://localhost:9/rest/v1/reunioes**", (r) => {
       const m = r.request().method();
-      if (m === "PATCH") { salvo = r.request().postDataJSON(); Object.assign(reuniao, salvo); return r.fulfill({ status: 204, body: "" }); }
+      if (m === "PATCH") { visto.salvo = r.request().postDataJSON(); Object.assign(reuniao, visto.salvo); return r.fulfill({ status: 204, body: "" }); }
       return r.fulfill({ json: [reuniao] });
     });
     await context.route("**/api/sync/manual", (r) => {
-      pedido = r.request().postDataJSON();
+      visto.pedido = r.request().postDataJSON();
       Object.assign(reuniao, { resultado, memorias_propostas: 1, processada_em: "2026-10-23T13:00:00Z" });
       return r.fulfill({ json: { alvo: "reuniao", ok: true, memorias_propostas: 1, brain_erro: null } });
     });
@@ -34,8 +33,8 @@ for (const width of [375, 1440]) {
     await page.getByLabel("Notas").fill("- Quer focar em menopausa\n- Secretária demora para responder");
     await processar.click();
     await expect(page.getByRole("status")).toHaveText("1 memória(s) proposta(s) no Brain para aprovar.");
-    expect(salvo?.notas).toContain("focar em menopausa");
-    expect(pedido).toMatchObject({ client_id: CID, alvo: "reuniao", id: RID });
+    expect(visto.salvo?.notas).toContain("focar em menopausa");
+    expect(visto.pedido).toMatchObject({ client_id: CID, alvo: "reuniao", id: RID });
     await expect(page.getByText(resultado.resumo, { exact: true })).toBeVisible();
     await expect(page.getByText("Roteiro de Reels: sintomas da menopausa")).toBeVisible();
     await expect(page.getByText("Foco em menopausa até dezembro", { exact: true })).toBeVisible();

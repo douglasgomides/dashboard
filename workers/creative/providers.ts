@@ -1,3 +1,4 @@
+import { apifyRunCost } from "../../src/lib/creative-intelligence/discovery.js";
 import { setTimeout as delay } from "node:timers/promises";
 import type { CreativeSource } from "../../src/lib/creative-intelligence/contracts.js";
 import {
@@ -204,12 +205,12 @@ async function apifyRequest(
     redirect: "error",
     signal: AbortSignal.any([ctx.signal, AbortSignal.timeout(30_000)]),
   });
-  if (!response.ok)
-    throw new CreativeError(
-      "APIFY_REQUEST_FAILED",
-      "O coletor externo não concluiu a solicitação.",
-      response.status === 429 || response.status >= 500,
-    );
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null) as { error?: { type?: string } } | null;
+    const type = detail?.error?.type;
+    const code = type && /^[a-z0-9_-]{1,80}$/i.test(type) ? ` · ${type}` : "";
+    throw new CreativeError("APIFY_REQUEST_FAILED", `O coletor externo recusou a solicitação (${response.status}${code}).`, response.status === 429 || response.status >= 500);
+  }
   return response.json();
 }
 export async function runActor(
@@ -222,18 +223,27 @@ export async function runActor(
       "PROVIDER_NOT_ENABLED",
       "Pesquisa externa ainda não habilitada e homologada neste ambiente.",
     );
+  if (platform === "tiktok" && process.env.CREATIVE_ENABLE_APIFY_TIKTOK !== "true")
+    throw new CreativeError("PROVIDER_NOT_ENABLED", "A pesquisa do TikTok aguarda configuração do orçamento mínimo do fornecedor.");
   const run = await checkpoint(ctx, "apify-run", async () => {
+    const ceiling = Math.min(platform === "tiktok" ? 0.50 : 0.25, Number(ctx.job.budget_usd) - Number(ctx.job.cost_usd) - Number(ctx.job.reserved_usd));
+    if (ceiling < (platform === "tiktok" ? 0.50 : 0.0027))
+      throw new CreativeError("INSUFFICIENT_PROVIDER_BUDGET", "O orçamento restante não atende ao mínimo do coletor. Nenhuma chamada foi iniciada.");
     const reservation = await ctx.reserve(
       "apify",
       ACTORS[platform],
       "external_collection",
-      0.25,
+      ceiling,
     );
-    const response = await apifyRequest(
-      ctx,
-      `acts/${ACTORS[platform]}/runs?maxTotalChargeUsd=0.25&timeout=180&memory=512`,
-      { method: "POST", body: JSON.stringify(input) },
-    );
+    let response;
+    try {
+      response = await apifyRequest(ctx, `acts/${ACTORS[platform]}/runs?maxTotalChargeUsd=${ceiling}&timeout=180&memory=${platform === "tiktok" ? 4096 : 1024}`, { method: "POST", body: JSON.stringify(input) });
+    } catch (e) {
+      // An explicit 4xx rejection (except throttling/timeouts) did not create a run.
+      if (e instanceof CreativeError && /\((400|401|402|403|404|422)(?: · |\))/.test(e.message))
+        await ctx.settle(reservation, 0, { provider: "apify", rejected: true });
+      throw e;
+    }
     if (!response.data?.id)
       throw new CreativeError(
         "INVALID_PROVIDER_RESPONSE",
@@ -251,30 +261,28 @@ export async function runActor(
     if (
       ["SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"].includes(data?.status)
     ) {
-      if (typeof data.usageTotalUsd !== "number")
-        throw new CreativeError(
-          "PROVIDER_COST_UNKNOWN",
-          "Custo externo não confirmado; reserva mantida para reconciliação.",
-        );
-      await ctx.settle(run.reservation, data.usageTotalUsd, {
-        provider: "apify",
-        run_id: run.runId,
-        status: data.status,
-      });
+      // The terminal status can arrive before all charged events. Read the dataset first,
+      // then wait for primary-event accounting to cover every output item.
+      const dataset = encodeURIComponent(data.defaultDatasetId);
+      const [metadata, result] = await Promise.all([
+        apifyRequest(ctx, `datasets/${dataset}`),
+        apifyRequest(ctx, `datasets/${dataset}/items?clean=true&limit=30`),
+      ]);
+      if (!Array.isArray(result) || !Number.isInteger(metadata.data?.itemCount) || metadata.data.itemCount < 0)
+        throw new CreativeError("INVALID_PROVIDER_RESPONSE", "O coletor não confirmou a quantidade de resultados. Reserva mantida para conferência.");
+      const expectedItems = Math.max(metadata.data.itemCount, result.length);
+      let billing = data, cost = apifyRunCost(billing, expectedItems);
+      for (let check = 0; cost === null && check < 10; check++) {
+        await ctx.beat(90, "Conferindo o custo final da coleta");
+        await delay(3000, undefined, { signal: ctx.signal });
+        billing = (await apifyRequest(ctx, `actor-runs/${encodeURIComponent(run.runId)}`)).data;
+        cost = apifyRunCost(billing, expectedItems);
+      }
+      if (cost === null)
+        throw new CreativeError("PROVIDER_COST_UNKNOWN", "Contabilização externa ainda incompleta; reserva mantida para reconciliação.");
+      await ctx.settle(run.reservation, cost, { provider: "apify", run_id: run.runId, status: data.status, dataset_items: expectedItems, charged_events: billing.chargedEventCounts });
       if (data.status !== "SUCCEEDED")
-        throw new CreativeError(
-          "COLLECTION_INCOMPLETE",
-          "O coletor terminou sem concluir a pesquisa.",
-        );
-      const result = await apifyRequest(
-        ctx,
-        `datasets/${encodeURIComponent(data.defaultDatasetId)}/items?clean=true&limit=30`,
-      );
-      if (!Array.isArray(result))
-        throw new CreativeError(
-          "INVALID_PROVIDER_RESPONSE",
-          "Lista de referências inválida.",
-        );
+        throw new CreativeError("COLLECTION_INCOMPLETE", "O coletor terminou sem concluir a pesquisa.");
       return result;
     }
     await delay(3000, undefined, { signal: ctx.signal });

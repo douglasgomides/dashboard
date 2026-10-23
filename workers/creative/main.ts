@@ -43,6 +43,8 @@ async function health() {
           external_search:
             process.env.CREATIVE_ENABLE_APIFY === "true" &&
             !!process.env.APIFY_API_TOKEN,
+          external_search_instagram: process.env.CREATIVE_ENABLE_APIFY === "true" && !!process.env.APIFY_API_TOKEN,
+          external_search_tiktok: process.env.CREATIVE_ENABLE_APIFY === "true" && !!process.env.APIFY_API_TOKEN && process.env.CREATIVE_ENABLE_APIFY_TIKTOK === "true",
           native_video: false,
           semantic_search: !!process.env.OPENAI_API_KEY,
         },

@@ -71,6 +71,15 @@ function temErro(r: { ok?: boolean; contas?: { errors: string[] }[] } | undefine
 
 async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Cache-Control", "no-store");
+  // Rotas da central compartilham a função existente no plano Hobby. Cada handler
+  // mantém sua própria autenticação; o webhook lê os bytes antes de req.body.
+  if (req.query._central === "canais") {
+    await (await import("../_lib/central-canais.js")).default(req, res); return;
+  }
+  if (req.query._central === "meta-webhook") {
+    await (await import("../_lib/central-webhook.js")).default(req, res); return;
+  }
+
   // Link rastreado próprio: /r/<slug> (rewrite no vercel.json) registra o clique e leva ao destino. Público, sem token.
   if (req.method === "GET" && typeof req.query.r === "string") {
     const url = process.env.SUPABASE_URL, chave = process.env.SUPABASE_SERVICE_ROLE_KEY;

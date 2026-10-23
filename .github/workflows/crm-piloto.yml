@@ -30,6 +30,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix workers/creative --ignore-scripts
       - run: npm run typecheck
       - run: node --import ./scripts/test-network-guard.mjs --import tsx scripts/test-crm-operacao.ts
       - run: npm run build

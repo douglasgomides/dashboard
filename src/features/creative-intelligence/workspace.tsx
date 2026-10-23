@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import {
@@ -36,6 +36,7 @@ import {
   readAssets,
   enqueue,
   cancelJob,
+  dispararWorker,
   toPlanner,
   linkPublication,
 } from "./data";
@@ -44,6 +45,9 @@ import { AdaptationView } from "./adaptation-view";
 import "./workspace.css";
 
 const parentRoute = getRouteApi("/_authenticated/$clientId");
+const RadarView = lazy(() => import("./radar-view").then(m => ({ default: m.RadarView })));
+// Criação pausada na interface publicada. Manter propostas, artes e histórico salvos.
+const CREATION_ENABLED = false;
 const TABS = [
   { id: "acervo", label: "Conteúdos em destaque", icon: Trophy },
   { id: "analises", label: "Análises e DNA", icon: Fingerprint },
@@ -68,14 +72,9 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
     [format, setFormat] = useState(""),
     [structureId, setStructureId] = useState(""),
     [adaptationId, setAdaptationId] = useState(""),
+    [adaptationJob, setAdaptationJob] = useState(""),
     [theme, setTheme] = useState(""),
     [partial, setPartial] = useState(false),
-    [query, setQuery] = useState(""),
-    [platform, setPlatform] = useState("instagram"),
-    [country, setCountry] = useState("BR"),
-    [language, setLanguage] = useState("pt"),
-    [since, setSince] = useState(""),
-    [until, setUntil] = useState(""),
     [libraryQuery, setLibraryQuery] = useState(""),
     [searchJob, setSearchJob] = useState("");
   const { podeEditar } = useClientRole(clientId),
@@ -121,6 +120,16 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
         })),
       }
     : undefined;
+  const finishedAdaptation = w?.jobs.find(j => j.id === adaptationJob && j.status === "completed");
+  const finishedAdaptationId = finishedAdaptation?.output?.record_id as string | undefined;
+  const waitingAdaptation = !!adaptationJob && !w?.jobs.some(j => j.id === adaptationJob && ["completed", "failed", "cancelled"].includes(j.status));
+  useEffect(() => {
+    if (CREATION_ENABLED && finishedAdaptationId) {
+      setAdaptationId(finishedAdaptationId);
+      setTab("biblioteca");
+      setAdaptationJob("");
+    }
+  }, [finishedAdaptationId]);
   const source = w?.sources.find((s) => s.id === sourceId) ?? w?.sources[0];
   const analysis = w?.analyses.find((a) => a.source_id === source?.id);
   const assetIds = analysis
@@ -165,7 +174,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
       comparisonSource?.id,
       adaptationAnalysis?.id,
     ],
-    enabled: !!comparisonSource && tab === "biblioteca",
+    enabled: CREATION_ENABLED && !!comparisonSource && tab === "biblioteca",
     queryFn: () => readAssets(clientId, accountId, comparisonSource!.id),
   });
   const rankings = useMemo(
@@ -220,6 +229,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
   const canAnalyse = podeEditar && !!w?.health.capabilities?.vision;
   const busy = action.isPending;
   function chooseStructure(s: CreativeStructure) {
+    if (!CREATION_ENABLED) return;
     setStructureId(s.id);
     setSourceId(s.source_id);
     setAdaptationId("");
@@ -231,6 +241,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
     setSourceId("");
     setStructureId("");
     setAdaptationId("");
+    setAdaptationJob("");
     setSearchJob("");
     setPartial(false);
   }
@@ -243,8 +254,8 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
           </span>
           <h1>Inteligência Criativa</h1>
           <p>
-            Entenda a estrutura das suas melhores publicações. Transforme
-            evidências em novos conteúdos para testar.
+            Entenda a estrutura das suas melhores publicações e compare
+            referências de mercado.
           </p>
         </div>
         <label className="text-sm">
@@ -278,16 +289,17 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
           Resultados observados, sem promessas
         </span>
       </div>
-      {(accounts.isError || posts.isError || workspace.isError) && (
+      {(accounts.isError || posts.isError || workspace.isError || progress.isError) && (
         <div role="alert" className="creative-notice">
           {accounts.error?.message ||
             posts.error?.message ||
-            workspace.error?.message}
+            workspace.error?.message || progress.error?.message}
           <button
             className="btn ml-3"
             onClick={() => {
               void accounts.refetch();
               void workspace.refetch();
+              void progress.refetch();
               void posts.refetch();
             }}
           >
@@ -311,7 +323,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
         <p className="creative-notice">
           {podeEditar
             ? "O processamento de mídia ainda não está disponível neste ambiente. As análises já concluídas continuam acessíveis."
-            : "Seu acesso permite consultar as evidências. Novas análises e adaptações são solicitadas pelos responsáveis da clínica."}
+            : "Seu acesso permite consultar as evidências. Novas análises são solicitadas pelos responsáveis da clínica."}
         </p>
       )}
       {!!w && canAnalyse && (
@@ -328,7 +340,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
         className="creative-tabs"
         aria-label="Áreas da Inteligência Criativa"
       >
-        {TABS.map((t) => (
+        {TABS.filter((t) => CREATION_ENABLED || t.id !== "biblioteca").map((t) => (
           <button
             type="button"
             key={t.id}
@@ -526,7 +538,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                 source={source}
                 assets={assets.data ?? []}
               />
-              {analysisStructure && (
+              {CREATION_ENABLED && analysisStructure && (
                 <button
                   className="btn"
                   onClick={() => chooseStructure(analysisStructure)}
@@ -545,7 +557,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
           )}
         </div>
       )}
-      {tab === "biblioteca" && (
+      {CREATION_ENABLED && tab === "biblioteca" && (
         <div className="space-y-5">
           <Painel
             icone={BookOpen}
@@ -618,14 +630,15 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  dispatch(() =>
-                    enqueue(clientId, accountId, "adapt", {
+                  dispatch(async () => {
+                    const id = await enqueue(clientId, accountId, "adapt", {
                       structure_id: selectedStructure.id,
                       theme,
                       objective,
                       allow_partial: partial,
-                    }),
-                  );
+                    });
+                    setAdaptationJob(id);
+                  });
                 }}
                 className="space-y-4"
               >
@@ -675,12 +688,13 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                   disabled={
                     !canAnalyse ||
                     busy ||
+                    waitingAdaptation ||
                     theme.trim().length < 3 ||
                     (structureAnalysis?.coverage.status !== "completa" &&
                       !partial)
                   }
                 >
-                  Criar proposta para revisão
+                  {waitingAdaptation ? "Aguardando nova adaptação…" : "Criar proposta para revisão"}
                   <ArrowRight size={15} aria-hidden />
                 </button>
                 <p className="text-xs" style={{ color: "var(--muted)" }}>
@@ -689,6 +703,9 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                   publicada.
                 </p>
               </form>
+              {waitingAdaptation && (
+                <p className="mt-3 text-sm" role="status">Pedido salvo. A nova adaptação aparecerá aqui quando a IA concluir. As artes serão geradas na próxima etapa.</p>
+              )}
             </Painel>
           )}
           {!!w?.adaptations.length && (
@@ -726,153 +743,14 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
           )}
         </div>
       )}
-      {tab === "radar" && (
-        <Painel
-          icone={Search}
-          titulo="Radar de mercado"
-          resumo="Encontre referências públicas para comparar com o repertório desta conta."
-        >
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              dispatch(() =>
-                enqueue(clientId, accountId, "discover", {
-                  platform,
-                  query,
-                  country,
-                  language,
-                  since: since || null,
-                  until: until || null,
-                  format: format || null,
-                }),
-              );
-            }}
-          >
-            <label className="block text-sm">
-              Tema, especialidade, problema, palavra-chave, hashtag ou perfil
-              <input
-                className="field mt-1 w-full"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                minLength={2}
-                maxLength={200}
-                required
-                placeholder="Ex.: menopausa"
-              />
-            </label>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="text-sm">
-                Plataforma
-                <select
-                  className="field mt-1 w-full"
-                  value={platform}
-                  onChange={(e) => setPlatform(e.target.value)}
-                >
-                  <option value="instagram">Instagram · hashtags</option>
-                  <option value="tiktok">TikTok · busca pública</option>
-                </select>
-              </label>
-              <label className="text-sm">
-                País desejado
-                <input
-                  className="field mt-1 w-full"
-                  value={country}
-                  maxLength={2}
-                  onChange={(e) => setCountry(e.target.value.toUpperCase())}
-                />
-              </label>
-              <label className="text-sm">
-                Idioma desejado
-                <input
-                  className="field mt-1 w-full"
-                  value={language}
-                  maxLength={10}
-                  onChange={(e) => setLanguage(e.target.value)}
-                />
-              </label>
-              <label className="text-sm">
-                Desde
-                <input
-                  className="field mt-1 w-full"
-                  type="date"
-                  value={since}
-                  onChange={(e) => setSince(e.target.value)}
-                />
-              </label>
-              <label className="text-sm">
-                Até
-                <input
-                  className="field mt-1 w-full"
-                  type="date"
-                  value={until}
-                  onChange={(e) => setUntil(e.target.value)}
-                />
-              </label>
-              <label className="text-sm">
-                Formato
-                <select
-                  className="field mt-1 w-full"
-                  value={format}
-                  onChange={(e) => setFormat(e.target.value)}
-                >
-                  <option value="">Todos</option>
-                  <option value="carrossel">Carrosséis</option>
-                  <option value="reels">Vídeos</option>
-                </select>
-              </label>
-            </div>
-            <button
-              className="btn"
-              disabled={
-                !podeEditar ||
-                !w?.health.capabilities?.external_search ||
-                busy
-              }
-            >
-              Pesquisar referências públicas
-            </button>
-          </form>
-          {!w?.health.capabilities?.external_search && (
-            <p className="creative-notice mt-4">
-              A coleta externa ainda precisa ser habilitada e homologada neste
-              ambiente. Nenhum resultado demonstrativo será apresentado como
-              pesquisa real.
-            </p>
-          )}
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
-            {w?.discoveries.map((d) => (
-              <article className="creative-structure" key={d.id}>
-                <Selo>Popularidade observada</Selo>
-                <h3 className="mt-2 font-semibold">{d.title}</h3>
-                <p className="my-2 text-sm">
-                  {d.platform} · {number(d.metadata.views)} visualizações ·{" "}
-                  {number(d.metadata.likes)} curtidas
-                </p>
-                <a
-                  className="underline"
-                  href={d.canonical_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Conferir referência original
-                </a>
-                <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
-                  Aceleração, país e idioma ainda não confirmados. Uma
-                  observação não comprova tendência.
-                </p>
-              </article>
-            ))}
-          </div>
-        </Painel>
-      )}
+      {tab === "radar" && <Suspense fallback={<p role="status">Carregando Radar…</p>}><RadarView key={`${clientId}:${accountId}`} clientId={clientId} accountId={accountId} discoveries={w?.discoveries ?? []} capabilities={w?.health.capabilities ?? {}} editable={podeEditar} busy={busy} collect={input => dispatch(() => enqueue(clientId, accountId, "discover", input))} /></Suspense>}
       {tab === "aprendizado" && (
         <Painel
           icone={ChartNoAxesCombined}
           titulo="Aprendizado: a adaptação deu resultado?"
           resumo="Aqui o Nexo compara o desempenho de cada adaptação publicada com a média da conta, para saber quais estruturas vale repetir."
         >
-          <ol className="mb-5 grid gap-3 text-sm sm:grid-cols-3">
+          {CREATION_ENABLED && <ol className="mb-5 grid gap-3 text-sm sm:grid-cols-3">
             <li className="creative-structure">
               <p className="font-semibold">1. Criar a adaptação</p>
               <p className="mt-1" style={{ color: "var(--muted)" }}>
@@ -891,10 +769,10 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                 O Nexo mede alcance, salvos e compartilhamentos 1, 3, 7 e 28 dias depois. Nada mais a fazer.
               </p>
             </li>
-          </ol>
+          </ol>}
           {!w?.adaptations.length ? (
             <p className="note">
-              Nenhuma adaptação criada ainda. Comece pelo passo 1.
+              Nenhuma publicação vinculada para comparar neste momento.
             </p>
           ) : (
             <div className="space-y-3">
@@ -918,7 +796,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                         </Selo>
                       ))}
                     </p>
-                    {etapa === 2 && (
+                    {CREATION_ENABLED && etapa === 2 && (
                       <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
                         Já postou? Abra Biblioteca e adaptações, escolha esta adaptação em "Adaptação para comparar" e vincule o post.
                       </p>
@@ -962,6 +840,13 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                 editable={podeEditar}
                 busy={busy}
                 cancel={() => dispatch(() => cancelJob(clientId, j.id))}
+                retry={() => dispatch(async () => {
+                  if (!await dispararWorker(clientId, j.id)) throw new Error("Não foi possível iniciar o processamento. O pedido continua salvo; tente novamente em instantes.");
+                })}
+                openResult={CREATION_ENABLED && j.kind === "adapt" && j.status === "completed" && typeof j.output?.record_id === "string" ? () => {
+                  setAdaptationId(j.output?.record_id as string);
+                  setTab("biblioteca");
+                } : undefined}
               />
             ))}
           </div>
@@ -975,11 +860,15 @@ function JobRow({
   editable,
   busy,
   cancel,
+  retry,
+  openResult,
 }: {
   job: CreativeJob;
   editable: boolean;
   busy: boolean;
   cancel: () => void;
+  retry: () => void;
+  openResult?: () => void;
 }) {
   const active = ["running", "queued", "retry"].includes(job.status);
   return (
@@ -998,8 +887,9 @@ function JobRow({
               measure: "Medição",
             }[job.kind]
           }{" "}
-          · {job.progress}%
+          · {job.status === "queued" ? "Aguardando início" : job.status === "retry" ? "Aguardando nova tentativa" : job.status === "completed" ? "Concluída" : job.status === "failed" ? "Falhou" : job.status === "cancelled" ? "Cancelada" : `${job.progress}%`}
         </p>
+        {CREATION_ENABLED && job.kind === "adapt" && job.status === "completed" && <p className="text-sm">Texto adaptado. Abra a proposta para gerar ou baixar as artes.</p>}
         <p className="text-sm" role="status">
           {job.message}
         </p>
@@ -1010,10 +900,12 @@ function JobRow({
         </p>
       </div>
       {active && editable && (
-        <button className="btn" type="button" disabled={busy} onClick={cancel}>
-          Cancelar
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {["queued", "retry"].includes(job.status) && (CREATION_ENABLED || job.kind !== "adapt") && <button className="btn" type="button" disabled={busy} onClick={retry}>Tentar iniciar agora</button>}
+          <button className="btn" type="button" disabled={busy} onClick={cancel}>Cancelar</button>
+        </div>
       )}
+      {openResult && <button className="btn" type="button" onClick={openResult}>Abrir adaptação</button>}
     </div>
   );
 }
