@@ -110,7 +110,10 @@ export async function recordSyncStatusPorCliente(
     a.errors.push(...i.errors);
     porCliente.set(i.clientId, a);
   }
-  for (const [clientId, a] of porCliente) {
+  for (const [clientId, todos] of porCliente) {
+    // A classificação de tema/funil por IA é um enriquecimento: se a IA devolver o lote incompleto, os posts ficam
+    // sem classificar e voltam na próxima rodada. Isso não pode marcar a coleta do Instagram do cliente como falha.
+    const a = { rows: todos.rows, errors: todos.errors.filter((e) => !e.startsWith("conteudo-ia")) };
     await recordSyncStatus(supabase, clientId, fonte, {
       // Anúncios têm duas fontes (Graph e Windsor) e o erro da fonte que não
       // serve aquela conta é esperado — ali, entrar linha vale como sucesso.
