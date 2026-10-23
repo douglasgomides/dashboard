@@ -168,6 +168,48 @@ export async function getCrmResumoPeriodo(clientId: string, from: string, to: st
   return data?.[0] ?? { novos: 0, ganhos: 0, perdidos: 0, valor: 0 };
 }
 
+// Pessoas x cards (migração 20261023170000). Em painéis como "Orçamentos" da
+// WTS cada card é um orçamento e a mesma pessoa tem vários; contar card como
+// "lead novo" infla o número. Se a RPC não existir ainda, devolve null e a tela
+// segue com a contagem por card.
+export interface CrmPessoasPeriodo {
+  cards: number;
+  pessoas: number;
+  pessoas_novas: number;
+  pessoas_recorrentes: number;
+  cards_de_recorrentes: number;
+  ganhos: number;
+  perdidos: number;
+  abertos: number;
+  valor: number;
+  valor_ganho: number;
+  max_cards_por_pessoa: number;
+}
+
+export async function getCrmPessoasPeriodo(clientId: string, from: string, to: string): Promise<CrmPessoasPeriodo | null> {
+  const cliente = supabase as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: CrmPessoasPeriodo[] | null; error: unknown }>;
+  };
+  const { data, error } = await cliente.rpc("crm_pessoas_resumo_periodo", { p_client_id: clientId, p_from: from, p_to: to });
+  if (error || !data?.[0]) return null;
+  const r = data[0];
+  return {
+    cards: Number(r.cards), pessoas: Number(r.pessoas), pessoas_novas: Number(r.pessoas_novas),
+    pessoas_recorrentes: Number(r.pessoas_recorrentes), cards_de_recorrentes: Number(r.cards_de_recorrentes),
+    ganhos: Number(r.ganhos), perdidos: Number(r.perdidos), abertos: Number(r.abertos),
+    valor: Number(r.valor), valor_ganho: Number(r.valor_ganho), max_cards_por_pessoa: Number(r.max_cards_por_pessoa),
+  };
+}
+
+export async function getCrmPessoasNovasPorDia(clientId: string, from: string, to: string) {
+  const cliente = supabase as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: { dia: string; pessoas_novas: number; cards: number }[] | null; error: unknown }>;
+  };
+  const { data, error } = await cliente.rpc("crm_pessoas_novas_por_dia_periodo", { p_client_id: clientId, p_from: from, p_to: to });
+  if (error) return null;
+  return (data ?? []).map((r) => ({ dia: r.dia, pessoas_novas: Number(r.pessoas_novas), cards: Number(r.cards) }));
+}
+
 // Leads por etapa nomeada, em todos os pipelines do cliente — mesmo motivo
 // de agregar no banco.
 export async function getCrmLeadsPorEtapa(clientId: string) {
