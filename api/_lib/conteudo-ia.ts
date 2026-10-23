@@ -69,13 +69,27 @@ function lerLista(texto: string): Saida[] {
   const bruto = JSON.parse(texto.slice(inicio, fim + 1));
   const lista = Array.isArray(bruto) ? bruto : (bruto?.posts ?? Object.values(bruto ?? {}).find((v) => Array.isArray(v)));
   if (!Array.isArray(lista)) throw new Error("resposta sem lista de posts");
-  const parsed = z.array(z.object({
+  // Valida item a item: um post fora do formato (campo faltando, "c1" minúsculo, "percepção" com acento, id numérico)
+  // não derruba o lote inteiro nem marca a sincronização de Instagram do cliente como falha.
+  const item = z.object({
     id: z.string().min(1), tema: z.string().max(200).nullable(),
     funil: z.enum(["C0", "C1", "C2", "C3"]).nullable(),
     estagio: z.enum(["percepcao", "confianca", "venda", "multiplicacao"]).nullable(),
-  })).safeParse(lista);
-  if (!parsed.success) throw new Error("resposta com posts inválidos");
-  return parsed.data;
+  });
+  const normaliza = (x: unknown) => {
+    const o = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
+    const semAcento = (v: unknown) => (typeof v === "string" ? v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim() : null);
+    const funil = typeof o.funil === "string" ? o.funil.toUpperCase().trim() : null;
+    return {
+      id: o.id === null || o.id === undefined ? "" : String(o.id),
+      tema: typeof o.tema === "string" ? o.tema : null,
+      funil: funil && FUNIS.has(funil) ? funil : null,
+      estagio: semAcento(o.estagio) && ESTAGIOS.has(semAcento(o.estagio) as string) ? semAcento(o.estagio) : null,
+    };
+  };
+  const validos = lista.map(normaliza).map((x) => item.safeParse(x)).flatMap((r) => (r.success ? [r.data] : []));
+  if (lista.length > 0 && validos.length === 0) throw new Error("resposta com posts inválidos");
+  return validos;
 }
 
 async function chamarOpenAI(chave: string, usuario: string, ms: number): Promise<Saida[]> {
