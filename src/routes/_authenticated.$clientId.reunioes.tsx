@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Brain, CalendarDays, CheckCircle2, ClipboardList, Loader2, NotebookPen, Plus, Sparkles, Users } from "lucide-react";
+import { Brain, CalendarDays, CheckCircle2, ClipboardList, Loader2, NotebookPen, Plus, Sparkles, Upload, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Painel, Selo } from "@/components/visual";
 import { Carregando, ErroCarga } from "@/components/sem-fonte";
 import { NOME_MEMORIA } from "@/lib/brand-brain";
+import { EXTENSOES_TRANSCRICAO, textoDoArquivo } from "@/lib/reunioes-arquivo";
 import { lerResultado, MAX_NOTAS, MAX_TRANSCRICAO, TIPOS_ENTREGA, type ResultadoReuniao } from "@/lib/reunioes";
 
 // Reuniões com a clínica: a equipe anota do jeito que quiser; "Processar reunião" vira resumo, entregas da semana e
@@ -150,6 +151,16 @@ function Editor({ clientId, r, aoSalvar }: { clientId: string; r: Reuniao; aoSal
     finally { setEstado("parado"); }
   }
   const vazio = !notas.trim() && !transcricao.trim();
+  async function onArquivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = e.target.files?.[0];
+    e.target.value = "";
+    if (!arquivo) return;
+    try {
+      const { texto, cortado } = textoDoArquivo(arquivo.name, new Uint8Array(await arquivo.arrayBuffer()));
+      setTranscricao(texto); setVerTranscricao(true);
+      setAviso({ tom: "ok", texto: `Transcrição carregada de ${arquivo.name}${cortado ? " (cortada no limite de 60 mil caracteres)" : ""}. Salve ou processe a reunião.` });
+    } catch (erro) { setAviso({ tom: "erro", texto: erro instanceof Error ? erro.message : String(erro) }); }
+  }
 
   return (
     <div className="grid gap-4">
@@ -163,10 +174,18 @@ function Editor({ clientId, r, aoSalvar }: { clientId: string; r: Reuniao; aoSal
           <textarea className="input" rows={12} value={notas} maxLength={MAX_NOTAS} onChange={(e) => setNotas(e.target.value)} placeholder={"Ex.:\n- Quer focar em menopausa até dezembro\n- Reclamou que a secretária demora para responder\n- Combinado: 2 Reels por semana, revisar campanha de estética"} />
         </label>
         {verTranscricao ? (
-          <label className="mt-2 grid gap-1 text-xs">Transcrição da reunião (opcional; no Meet: Google Drive › Meet Recordings › arquivo de transcrição)
+          <label className="mt-2 grid gap-1 text-xs">Transcrição da reunião (opcional)
             <textarea className="input" rows={6} value={transcricao} maxLength={MAX_TRANSCRICAO} onChange={(e) => setTranscricao(e.target.value)} />
           </label>
-        ) : <button type="button" className="mt-2 text-xs underline" onClick={() => setVerTranscricao(true)}>Colar transcrição do Meet</button>}
+        ) : null}
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+          <label className="btn cursor-pointer">
+            <Upload size={14} className="mr-1 inline" aria-hidden />Enviar arquivo da transcrição
+            <input type="file" className="sr-only" accept={EXTENSOES_TRANSCRICAO.join(",")} onChange={onArquivo} />
+          </label>
+          {!verTranscricao && <button type="button" className="underline" onClick={() => setVerTranscricao(true)}>ou colar o texto</button>}
+          <span style={{ color: "var(--text-dim)" }}>.docx, .txt, .vtt ou .srt. No Meet: Google Drive › Meet Recordings › transcrição › Arquivo › Fazer download.</span>
+        </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button type="button" className="btn" onClick={onSalvar} disabled={estado !== "parado" || !alterado}>{estado === "salvando" ? "Salvando…" : "Salvar notas"}</button>
           <button type="button" className="btn btn-primary" onClick={onProcessar} disabled={estado !== "parado" || vazio}>

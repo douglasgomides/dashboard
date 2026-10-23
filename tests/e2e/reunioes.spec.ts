@@ -52,3 +52,18 @@ test("meeting notes stay with the Doctor Creator team", async ({ page, context }
   await expect(page.getByText("As reuniões ficam visíveis só para a equipe da Doctor Creator.")).toBeVisible();
   expect(lido).toBe(false);
 });
+
+test("a Meet transcript file fills the transcript field, and an unsupported file explains what to send", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  const reuniao = { id: RID, data: "2026-10-23", titulo: "Reunião semanal", participantes: null, notas: "", transcricao: null, resultado: null, memorias_propostas: 0, processada_em: null, atualizado_em: "2026-10-23T12:00:00Z" };
+  await context.route("http://localhost:9/rest/v1/reunioes**", (r) => r.fulfill({ json: [reuniao] }));
+  await page.goto(`/${CID}/reunioes`);
+  await page.getByRole("button", { name: /Reunião semanal/ }).click();
+  const arquivo = page.getByLabel("Enviar arquivo da transcrição");
+  await arquivo.setInputFiles({ name: "transcricao.vtt", mimeType: "text/vtt", buffer: Buffer.from("WEBVTT\n\n00:00:01.000 --> 00:00:03.000\n<v Dra. Ana>Quero focar em menopausa</v>\n") });
+  await expect(page.getByLabel("Transcrição da reunião (opcional)")).toHaveValue("Dra. Ana: Quero focar em menopausa");
+  await expect(page.getByRole("status")).toContainText("Transcrição carregada de transcricao.vtt");
+  await expect(page.getByRole("button", { name: "Processar reunião" })).toBeEnabled();
+  await arquivo.setInputFiles({ name: "ata.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF") });
+  await expect(page.getByRole("alert")).toContainText("Envie a transcrição em .docx, .txt, .vtt ou .srt");
+});
