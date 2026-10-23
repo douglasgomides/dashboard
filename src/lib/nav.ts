@@ -11,6 +11,7 @@ import {
   Lightbulb,
   CalendarDays,
   CalendarCheck,
+  NotebookPen,
   GitCompare,
   Megaphone,
   MessageCircle,
@@ -303,6 +304,14 @@ export const AREAS: NavArea[] = [
         Icone: CalendarCheck,
         descricao: "As 3 a 5 ações que mais trazem resultado nesta semana, com o valor em jogo e o que mudou na semana passada.",
         termos: "plano semana prioridade fazer valor dinheiro resultado inteligencia recomendacao",
+      },
+      {
+        path: "/reunioes",
+        label: "Reuniões",
+        admin: true,
+        Icone: NotebookPen,
+        descricao: "Anote o que foi falado com a clínica e transforme em resumo, entregas da semana e memória no Brain.",
+        termos: "reuniao reunioes notas ata meet transcricao combinados brain memoria pos reuniao",
       },
       {
         path: "/proximas-acoes",
