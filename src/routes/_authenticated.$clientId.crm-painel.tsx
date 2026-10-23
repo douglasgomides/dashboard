@@ -35,6 +35,8 @@ import {
   getCrmFunilPorCampoPeriodoAlt,
   getCrmLeadsPorDiaPeriodo,
   getCrmResumoPeriodo,
+  getCrmPessoasPeriodo,
+  getCrmPessoasNovasPorDia,
 } from "@/lib/client-data";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { SyncButton } from "@/components/sync-button";
@@ -153,14 +155,26 @@ function TendenciaDeLeads({ clientId, start, end }: { clientId: string; start: s
     queryKey: ["crm-leads-dia-periodo", clientId, start, end],
     queryFn: () => getCrmLeadsPorDiaPeriodo(clientId, start, end),
   });
+  const pessoasQ = useQuery({
+    queryKey: ["crm-pessoas-dia-periodo", clientId, start, end],
+    queryFn: () => getCrmPessoasNovasPorDia(clientId, start, end),
+  });
+  const porPessoa = pessoasQ.data && pessoasQ.data.some((r) => r.cards > r.pessoas_novas) ? pessoasQ.data : null;
 
-  const rows = (data ?? []).map((r) => ({
-    dia: new Date(r.dia + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-    total: r.total,
-  }));
+  const rows = porPessoa
+    ? porPessoa.map((r) => ({
+        dia: new Date(r.dia + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+        total: r.pessoas_novas,
+        cards: r.cards,
+      }))
+    : (data ?? []).map((r) => ({
+        dia: new Date(r.dia + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+        total: r.total,
+        cards: r.total,
+      }));
 
   return (
-    <Painel icone={TrendingUp} titulo="Novos leads por dia" resumo={`Período: ${formatRangeLabel({ start, end })}`} cor="var(--s1)">
+    <Painel icone={TrendingUp} titulo={porPessoa ? "Pessoas novas por dia" : "Novos leads por dia"} resumo={`Período: ${formatRangeLabel({ start, end })}`} cor="var(--s1)">
       {isLoading ? (
         <p className="text-xs" style={{ color: "var(--text-dim)" }}>
           Carregando…
@@ -175,7 +189,7 @@ function TendenciaDeLeads({ clientId, start, end }: { clientId: string; start: s
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis dataKey="dia" tick={{ fontSize: 10 }} stroke="var(--text-faint)" interval="preserveStartEnd" />
             <YAxis tick={{ fontSize: 10 }} stroke="var(--text-faint)" allowDecimals={false} width={32} />
-            <Tooltip formatter={(value: number) => [fmtN(value), "leads"]} labelFormatter={(l) => `Dia ${l}`} />
+            <Tooltip formatter={(value: number, _n: string, item: { payload?: { cards?: number } }) => [porPessoa ? `${fmtN(value)} (${fmtN(item.payload?.cards ?? 0)} orçamentos no dia)` : fmtN(value), porPessoa ? "pessoas novas" : "leads"]} labelFormatter={(l) => `Dia ${l}`} />
             <Bar dataKey="total" fill="var(--accent)" radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
@@ -339,6 +353,11 @@ function CrmPainelPage() {
     queryKey: ["crm-resumo-periodo", clientId, start, end],
     queryFn: () => getCrmResumoPeriodo(clientId, start, end),
   });
+  const pessoasQ = useQuery({
+    queryKey: ["crm-pessoas-periodo", clientId, start, end],
+    queryFn: () => getCrmPessoasPeriodo(clientId, start, end),
+  });
+  const pessoas = pessoasQ.data && pessoasQ.data.pessoas < pessoasQ.data.cards ? pessoasQ.data : null;
   const { data: m, isLoading } = metricasQ;
   const { data: periodo } = periodoQ;
   // A leitura usa o mesmo período dos números do topo.
@@ -431,10 +450,23 @@ function CrmPainelPage() {
       <Painel
         icone={Sparkles}
         titulo="No período selecionado"
-        resumo={`Leads criados entre ${formatRangeLabel({ start, end })}`}
+        resumo={`${pessoas ? "Orçamentos criados" : "Leads criados"} entre ${formatRangeLabel({ start, end })}`}
         cor="var(--s3)"
       >
-        {periodoQ.isPending ? <p role="status" className="text-sm">Carregando os números do período…</p> : periodoQ.isError ? <div role="alert" className="space-y-2 text-sm"><p>Não foi possível consultar os números deste período. A base geral continua disponível abaixo.</p><button type="button" className="ws-action ws-action--secondary" disabled={periodoQ.isFetching} onClick={() => void periodoQ.refetch()}>Tentar novamente</button></div> : periodo && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {periodoQ.isPending ? <p role="status" className="text-sm">Carregando os números do período…</p> : periodoQ.isError ? <div role="alert" className="space-y-2 text-sm"><p>Não foi possível consultar os números deste período. A base geral continua disponível abaixo.</p><button type="button" className="ws-action ws-action--secondary" disabled={periodoQ.isFetching} onClick={() => void periodoQ.refetch()}>Tentar novamente</button></div> : periodo && pessoas ? <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Kpi icone={Users} rotulo="Pessoas novas" valor={fmtN(pessoas.pessoas_novas)} cor="var(--accent)" dica="pessoas que aparecem pela primeira vez no CRM dentro do período" />
+            <Kpi icone={Users} rotulo="Pessoas com orçamento" valor={fmtN(pessoas.pessoas)} cor="var(--s1)" dica="pessoas diferentes com pelo menos um orçamento criado no período, novas ou não" />
+            <Kpi icone={Target} rotulo="Orçamentos criados" valor={fmtN(pessoas.cards)} cor="var(--s3)" dica="cada card do painel é um orçamento; a mesma pessoa pode ter vários" />
+            <Kpi icone={Trophy} rotulo="Orçamentos ganhos" valor={fmtN(pessoas.ganhos)} cor="var(--good)" dica={`valor dos ganhos: ${fmtBRL(pessoas.valor_ganho)}`} />
+          </div>
+          <p className="text-xs" style={{ color: "var(--text-dim)" }}>
+            Neste CRM cada card é um <b>orçamento</b>, não uma pessoa. No período foram {fmtN(pessoas.cards)} orçamentos de {fmtN(pessoas.pessoas)} pessoas
+            (até {fmtN(pessoas.max_cards_por_pessoa)} por pessoa): {fmtN(pessoas.pessoas_novas)} apareceram pela primeira vez e{" "}
+            {fmtN(pessoas.pessoas_recorrentes)} já tinham orçamento antes ({fmtN(pessoas.cards_de_recorrentes)} dos orçamentos). Valor dos cards no período:{" "}
+            {fmtBRL(pessoas.valor)}.
+          </p>
+        </div> : periodo && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Kpi icone={Users} rotulo="Leads novos" valor={fmtN(periodo.novos)} cor="var(--accent)" />
           <Kpi icone={Trophy} rotulo="Ganhos" valor={fmtN(periodo.ganhos)} cor="var(--good)" />
           <Kpi icone={XCircle} rotulo="Perdidos" valor={fmtN(periodo.perdidos)} cor="var(--crit)" />

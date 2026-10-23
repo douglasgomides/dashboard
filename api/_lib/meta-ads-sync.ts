@@ -124,6 +124,37 @@ async function windsorGet(
   return body.data ?? [];
 }
 
+// Conta grande (ex.: Dra. Lana, 113 campanhas e linha por anúncio) estoura os 30 s da Windsor numa janela de 7 dias
+// e ficava dias sem atualizar. No timeout, refaz em janelas de 2 dias e junta; qualquer outro erro continua subindo.
+const ERRO_DE_TEMPO = /aborted due to timeout|timed out|timeout/i;
+const JANELA_FALLBACK_DIAS = 2;
+
+function somaDias(iso: string, n: number): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+async function windsorGetComFallback(
+  windsorApiKey: string,
+  dateFrom: string,
+  dateTo: string,
+  adAccountId: string,
+): Promise<Record<string, unknown>[]> {
+  try {
+    return await windsorGet(windsorApiKey, dateFrom, dateTo, adAccountId);
+  } catch (e) {
+    const msg = e instanceof Error ? `${e.name} ${e.message}` : String(e);
+    if (!ERRO_DE_TEMPO.test(msg) || dateFrom >= dateTo) throw e;
+  }
+  const out: Record<string, unknown>[] = [];
+  for (let ini = dateFrom; ini <= dateTo; ini = somaDias(ini, JANELA_FALLBACK_DIAS)) {
+    const fim = somaDias(ini, JANELA_FALLBACK_DIAS - 1);
+    out.push(...(await windsorGet(windsorApiKey, ini, fim > dateTo ? dateTo : fim, adAccountId)));
+  }
+  return out;
+}
+
 async function syncAccount(
   supabase: SupabaseClient<Database>,
   windsorApiKey: string,
@@ -139,7 +170,7 @@ async function syncAccount(
     errors: [],
   };
 
-  const raw = await windsorGet(windsorApiKey, range.from, range.to, client.meta_ad_account_id);
+  const raw = await windsorGetComFallback(windsorApiKey, range.from, range.to, client.meta_ad_account_id);
 
   const campanhas = new Map<string, Database["public"]["Tables"]["meta_ads_campaigns"]["Insert"]>();
   // Agregado por (data, campanha), não uma linha por linha da Windsor.
