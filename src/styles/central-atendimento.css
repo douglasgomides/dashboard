@@ -2,3 +2,9 @@
 @media(max-width:900px){.central-numeros{grid-template-columns:repeat(2,minmax(0,1fr))}.central-inbox{grid-template-columns:1fr}.central-inbox--selected>.central-list{display:none}.central-back{display:inline-flex;align-items:center;gap:.3rem}.central-heading{align-items:start;flex-wrap:wrap}.central-inbox:not(.central-inbox--selected)>[aria-label="Histórico da conversa"]{display:none}.central-messages{max-height:55vh}.central-composer .central-heading{display:grid}.central-composer .ws-action{width:100%}}
 
 .central-conversation-title strong{min-width:0;overflow-wrap:anywhere}.central-page code{overflow-wrap:anywhere}.central-conversation:focus-visible,.central-check input:focus-visible{outline:2px solid var(--focus,var(--accent));outline-offset:-3px}
+
+/* Paciente novo × já é paciente (relacionamento_pessoas). */
+.central-relacao{display:inline-flex;align-items:center;gap:4px;width:fit-content;margin-top:2px;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid var(--border);color:var(--text-dim)}
+.central-relacao small{font-weight:400}
+.central-relacao--paciente{color:var(--good-text);border-color:color-mix(in srgb,var(--good-text) 40%,transparent);background:color-mix(in srgb,var(--good-text) 8%,transparent)}
+.central-relacao--contato_antigo{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent)}
