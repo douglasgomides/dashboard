@@ -11,15 +11,15 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "4.0.96",
-    "ai": "7.0.143",
     "@supabase/supabase-js": "^2.105.4",
+    "ai": "7.0.143",
     "tsx": "^4.19.2",
-    "zod": "^3.24.2"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.16.5",
-    "typescript": "^5.8.3",
     "ffmpeg-static": "^5.3.0",
-    "ffprobe-static": "^3.1.0"
+    "ffprobe-static": "^3.1.0",
+    "typescript": "^5.8.3"
   }
 }

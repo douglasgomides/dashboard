@@ -18,7 +18,7 @@ export const manualRequestSchema = z.object({
   de: isoDate.optional(), ate: isoDate.optional(),
   sessao: z.string().regex(/^[A-Z0-9]{1,6}$/).optional(), titulo: z.string().trim().min(1).max(200).optional(),
   entregas: z.array(z.string().max(500)).max(20).optional(),
-  rotulos: z.record(z.string().max(200)).refine((v) => Object.keys(v).length <= 100).optional(),
+  rotulos: z.record(z.string(), z.string().max(200)).refine((v) => Object.keys(v).length <= 100).optional(),
   transcricao: z.string().max(60_000).optional(), conversa_id: id.optional(),
   limite: z.number().int().min(1).max(300).optional(), dias: z.number().int().min(1).max(365).optional(),
   refazer: z.boolean().optional(), pagina: z.number().int().min(1).max(1_000_000).optional(), paginas: z.number().int().min(1).max(60).optional(),

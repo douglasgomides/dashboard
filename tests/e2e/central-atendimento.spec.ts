@@ -81,3 +81,23 @@ test('Empty and unavailable queues never invent successful connections or zero c
  await setup(context,{empty:true});await page.goto(`/${CID}/central-atendimento`);await expect(page.getByText('Nenhuma conversa com estes filtros.',{exact:true})).toBeVisible();
  await context.route('**/rest/v1/rpc/central_atendimento',r=>r.request().postDataJSON().p_acao==='listar'?r.fulfill({status:503,json:{message:'offline'}}):r.fallback());await page.reload();await expect(page.getByRole('alert').filter({hasText:'A fila não foi atualizada'})).toBeVisible();await expect(page.getByRole('button',{name:/Esperam resposta/})).toContainText('—');
 });
+test('The queue shows whether the contact is already a patient, from CRM history only, and a failure never blocks the queue',async({page,context})=>{
+ await setup(context);
+ let pedido:{p_client:string;p_pessoas:string[]}|undefined;
+ await context.route('**/rest/v1/rpc/relacionamento_pessoas',r=>{pedido=r.request().postDataJSON();return r.fulfill({json:[{pessoa_id:'66666666-6666-4666-8666-666666666666',ja_paciente:true,compras:2,ultima_compra:'2026-03-12',conversou_antes:true,primeiro_contato:'2025-11-02'}]});});
+ await page.goto(`/${CID}/central-atendimento`);
+ const fila=page.getByRole('region',{name:'Conversas da fila'});
+ await expect(fila.getByText('Já é paciente',{exact:true})).toBeVisible();
+ expect(pedido).toEqual({p_client:CID,p_pessoas:['66666666-6666-4666-8666-666666666666']});
+ await fila.getByRole('button',{name:/Contato fictício QA/}).click();
+ await expect(page.getByRole('region',{name:'Conversa com Contato fictício QA'})).toContainText('Já é paciente · 2 compras · última compra em 12/03/2026');
+ await page.unroute('**/rest/v1/rpc/relacionamento_pessoas');
+});
+test('A relationship lookup failure leaves the queue usable without a label',async({page,context})=>{
+ await setup(context);
+ await context.route('**/rest/v1/rpc/relacionamento_pessoas',r=>r.fulfill({status:503,json:{message:'fictional failure'}}));
+ await page.goto(`/${CID}/central-atendimento`);
+ const fila=page.getByRole('region',{name:'Conversas da fila'});
+ await expect(fila.getByRole('button',{name:/Contato fictício QA/})).toBeVisible();
+ await expect(fila.getByText(/Já é paciente|Primeiro contato|Já falou com a clínica/)).toHaveCount(0);
+});

@@ -2,7 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDeferredValue, useRef, useState, type FormEvent } from "react";
 import { MessageCircle, RefreshCw, Settings, Send, ArrowLeft, ExternalLink } from "lucide-react";
-import { canalApi, central, cancelarPreparado, horarioCentral, NOME_ESTADO, type ConfigCentral, type ConversaCentral, type DetalheCentral, type EstadoAtendimento, type ListaCentral, type MensagemCentral } from "@/lib/central-atendimento";
+import { rotuloRelacionamento, type Relacionamento } from "@/lib/relacionamento";
+import { canalApi, central, cancelarPreparado, relacionamentos, horarioCentral, NOME_ESTADO, type ConfigCentral, type ConversaCentral, type DetalheCentral, type EstadoAtendimento, type ListaCentral, type MensagemCentral } from "@/lib/central-atendimento";
 import "@/styles/crm-kanban.css";
 import "@/styles/central-atendimento.css";
 
@@ -18,6 +19,9 @@ function CentralDaClinica({clientId}:{clientId:string}) {
  const [canal,setCanal]=useState("todos"),[estado,setEstado]=useState("sem_resposta"),[responsavel,setResponsavel]=useState("todos"),[pagina,setPagina]=useState(0);
  const [selecionada,setSelecionada]=useState<ConversaCentral|null>(null),[ajustes,setAjustes]=useState(false),[rascunhos,setRascunhos]=useState<Record<string,string>>({});
  const lista=useQuery({queryKey:["central-lista",clientId,consulta,canal,estado,responsavel,pagina],queryFn:()=>central<ListaCentral>(clientId,"listar",{busca:consulta,canal,estado,responsavel,offset:pagina*40}),enabled:config.data?.pode_atender===true,retry:false,refetchInterval:30_000});
+ const idsPessoas=(lista.data?.conversas??[]).flatMap(c=>c.pessoa_id?[c.pessoa_id]:[]);
+ // Paciente novo × já é paciente: histórico do CRM e das conversas, sem prontuário. Falha aqui não bloqueia a fila.
+ const rel=useQuery({queryKey:["central-relacionamento",clientId,idsPessoas.join(",")],queryFn:()=>relacionamentos(clientId,idsPessoas),enabled:idsPessoas.length>0,retry:false,staleTime:300_000});
  async function atualizar(){await Promise.all([qc.invalidateQueries({queryKey:["central-lista",clientId]}),qc.invalidateQueries({queryKey:["central-config",clientId]}),qc.invalidateQueries({queryKey:["central-detalhe",clientId]})]);}
  function filtrar(fn:()=>void){fn();setPagina(0);}
  if(config.isPending)return <p role="status">Conferindo acesso à central…</p>;
@@ -44,15 +48,15 @@ function CentralDaClinica({clientId}:{clientId:string}) {
     <h2>{dados?`Conversas nos filtros: ${dados.total_filtradas}`:"Conversas"}</h2>
     {lista.isPending&&<p role="status">Carregando a fila…</p>}
     {dados?.conversas.length===0&&<div className="central-empty"><MessageCircle aria-hidden/><p>Nenhuma conversa com estes filtros.</p><button className="crm-link" onClick={()=>filtrar(()=>{setBusca('');setCanal('todos');setEstado('todas');setResponsavel('todos');})}>Ver todas as conversas</button><p className="text-xs">As mensagens dos canais oficiais aparecem a partir da conexão. O histórico importado fica disponível para consulta.</p></div>}
-    {dados?.conversas.map(c=><button key={c.id} className="central-conversation" aria-pressed={selecionada?.id===c.id} onClick={()=>setSelecionada(c)}><span className="central-conversation-title"><strong>{c.pessoa_nome}</strong><time>{horarioCentral(c.ultima_msg_em)}</time></span><span>{c.canal==='instagram'?'Instagram':'WhatsApp'} · {c.oficial?'Canal oficial':'Histórico importado'}</span><span className="central-preview">{c.ultima_msg_texto||'Sem texto disponível'}</span><span>{NOME_ESTADO[c.estado]} · {c.responsavel_nome||'Sem responsável'}{c.sem_resposta&&c.estado!=='resolvida'?' · Espera resposta':''}</span></button>)}
+    {dados?.conversas.map(c=><button key={c.id} className="central-conversation" aria-pressed={selecionada?.id===c.id} onClick={()=>setSelecionada(c)}><span className="central-conversation-title"><strong>{c.pessoa_nome}</strong><time>{horarioCentral(c.ultima_msg_em)}</time></span><span>{c.canal==='instagram'?'Instagram':'WhatsApp'} · {c.oficial?'Canal oficial':'Histórico importado'}</span><SeloRelacionamento r={c.pessoa_id?rel.data?.[c.pessoa_id]:undefined}/><span className="central-preview">{c.ultima_msg_texto||'Sem texto disponível'}</span><span>{NOME_ESTADO[c.estado]} · {c.responsavel_nome||'Sem responsável'}{c.sem_resposta&&c.estado!=='resolvida'?' · Espera resposta':''}</span></button>)}
     {dados&&(pagina>0||dados.total_filtradas>40)&&<nav className="central-pages" aria-label="Páginas da fila"><button disabled={pagina===0} className="crm-link" onClick={()=>setPagina(p=>p-1)}>Anteriores</button><span>{pagina*40+1}–{Math.min((pagina+1)*40,dados.total_filtradas)}</span><button disabled={(pagina+1)*40>=dados.total_filtradas} className="crm-link" onClick={()=>setPagina(p=>p+1)}>Mais conversas</button></nav>}
    </section>
-   {selecionada?<Conversa key={`${clientId}:${selecionada.id}`} clientId={clientId} inicial={selecionada} config={config.data} texto={rascunhos[selecionada.id]??''} onTexto={v=>setRascunhos(r=>({...r,[selecionada.id]:v}))} onChanged={atualizar} onClose={()=>setSelecionada(null)}/>:<section className="crm-box central-empty" aria-label="Histórico da conversa"><MessageCircle aria-hidden/><h2>Escolha uma conversa</h2><p>O histórico, o responsável e o próximo passo aparecem aqui.</p></section>}
+   {selecionada?<Conversa key={`${clientId}:${selecionada.id}`} clientId={clientId} inicial={selecionada} relacionamento={selecionada.pessoa_id?rel.data?.[selecionada.pessoa_id]:undefined} config={config.data} texto={rascunhos[selecionada.id]??''} onTexto={v=>setRascunhos(r=>({...r,[selecionada.id]:v}))} onChanged={atualizar} onClose={()=>setSelecionada(null)}/>:<section className="crm-box central-empty" aria-label="Histórico da conversa"><MessageCircle aria-hidden/><h2>Escolha uma conversa</h2><p>O histórico, o responsável e o próximo passo aparecem aqui.</p></section>}
   </div>
  </div>;
 }
 
-function Conversa({clientId,inicial,config,texto,onTexto,onChanged,onClose}:{clientId:string;inicial:ConversaCentral;config:ConfigCentral;texto:string;onTexto:(v:string)=>void;onChanged:()=>Promise<void>;onClose:()=>void}) {
+function Conversa({clientId,inicial,relacionamento,config,texto,onTexto,onChanged,onClose}:{clientId:string;inicial:ConversaCentral;relacionamento?:Relacionamento;config:ConfigCentral;texto:string;onTexto:(v:string)=>void;onChanged:()=>Promise<void>;onClose:()=>void}) {
  const q=useQuery({queryKey:["central-detalhe",clientId,inicial.id],queryFn:()=>central<DetalheCentral>(clientId,"mensagens",{conversa_id:inicial.id}),retry:false,refetchInterval:15_000});
  const [erro,setErro]=useState(''),[aviso,setAviso]=useState(''),[ocupado,setOcupado]=useState(false),[antigas,setAntigas]=useState<MensagemCentral[]>([]),[fimAntigas,setFimAntigas]=useState(false);
  const [observacao,setObservacao]=useState(''),[conferencia,setConferencia]=useState<string|null>(null);
@@ -85,7 +89,7 @@ function Conversa({clientId,inicial,config,texto,onTexto,onChanged,onClose}:{cli
  async function descartar(id:string){setOcupado(true);setErro('');try{await cancelarPreparado(clientId,id,observacao);setConferencia(null);setObservacao('');setAviso('Resposta preparada descartada. Nenhuma mensagem foi enviada.');await onChanged();}catch(e){setErro((e as Error).message);await q.refetch();}finally{setOcupado(false);}}
  async function vincular(){setOcupado(true);setErro('');try{await central(clientId,'criar_card',{conversa_id:inicial.id});setAviso('Oportunidade vinculada ao CRM.');await onChanged();}catch(e){setErro((e as Error).message);}finally{setOcupado(false);}}
  return <section className="crm-box central-detail" aria-label={`Conversa com ${inicial.pessoa_nome}`} aria-busy={ocupado}>
-  <div className="central-heading"><div><h2>{inicial.pessoa_nome}</h2><p className="text-xs">{inicial.canal==='instagram'?'Instagram':'WhatsApp'} {inicial.telefone_final??''}</p></div><button className="crm-link central-back" onClick={onClose}><ArrowLeft size={16} aria-hidden/> Voltar à fila</button></div>
+  <div className="central-heading"><div><h2>{inicial.pessoa_nome}</h2><p className="text-xs">{inicial.canal==='instagram'?'Instagram':'WhatsApp'} {inicial.telefone_final??''}</p><SeloRelacionamento r={relacionamento} detalhe/></div><button className="crm-link central-back" onClick={onClose}><ArrowLeft size={16} aria-hidden/> Voltar à fila</button></div>
   {q.isPending&&<p role="status">Carregando histórico…</p>}
   {q.isError&&<div role="alert"><p>Não foi possível atualizar a conversa.</p><button className="crm-link" onClick={()=>void q.refetch()}>Tentar novamente</button></div>}
   {erro&&<p role="alert" className="central-error">{erro}</p>}{aviso&&<p role="status" className="central-notice">{aviso}</p>}
@@ -104,6 +108,10 @@ function Conversa({clientId,inicial,config,texto,onTexto,onChanged,onClose}:{cli
  </section>;
 }
 
+function SeloRelacionamento({r,detalhe}:{r?:Relacionamento;detalhe?:boolean}) {
+ const x=rotuloRelacionamento(r);if(!x)return null;
+ return <span className={`central-relacao central-relacao--${x.tipo}`}>{x.rotulo}{detalhe?<small> · {x.detalhe}</small>:null}</span>;
+}
 function Canais({clientId,config,onChanged}:{clientId:string;config:ConfigCentral;onChanged:()=>Promise<void>}) {
  const ready=useQuery({queryKey:['central-servidor',clientId],queryFn:()=>canalApi<{configurada:boolean;webhook:string}>(clientId),retry:false});
  const [canal,setCanal]=useState<'whatsapp'|'instagram'>('whatsapp'),[conta,setConta]=useState(''),[waba,setWaba]=useState(''),[token,setToken]=useState(''),[confirmo,setConfirmo]=useState(false),[ocupado,setOcupado]=useState(false),[erro,setErro]=useState(''),[aviso,setAviso]=useState(''),[desligar,setDesligar]=useState<string|null>(null);
