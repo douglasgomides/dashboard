@@ -4,6 +4,7 @@ import { generateText, Output, transcribe, embed } from "ai";
 import { z } from "zod";
 import {
   slideSchema,
+  sceneBaseSchema,
   sceneSchema,
   dnaSchema,
   adaptationSchema,
@@ -197,9 +198,7 @@ export async function analyseVideoFrames(
     const result = await structured(
       ctx,
       `scene:${start}`,
-      sceneSchema
-        .innerType()
-        .omit({ start: true, end: true, evidence_asset_ids: true }),
+      sceneBaseSchema.omit({ start: true, end: true, evidence_asset_ids: true }),
       `Analise o bloco ${start.toFixed(2)}–${end.toFixed(2)} segundos do vídeo. Você recebe frames com timestamps, extraídos a 1fps e em mudanças de cena. Sua observação é AMOSTRAL: não declare que viu todos os frames nem que conhece transições entre imagens não observadas. Leia textos na tela e descreva gancho visual, takes, enquadramento, possíveis cortes, montagem, ritmo e relação com a fala. Não deduza música ou áudio a partir de imagens. Fala transcrita do bloco: ${JSON.stringify(speech)}. No campo de incertezas explicite elementos cuja duração ou edição não pôde confirmar.`,
       group.slice(0, 24).map((f) => ({
         path: f.path,

@@ -134,7 +134,7 @@ export const FERRAMENTAS = {
   }),
   "sap.registrar_evento": ferramenta({
     nome: "sap.registrar_evento", descricao: "Registra um evento da clínica (sap_eventos).", risco: "baixo", externa: false, timeoutMs: 10_000,
-    entrada: z.object({ clinica_id: z.string().uuid(), tipo: z.string().regex(/^agente_[a-z_]{3,40}$/), payload: z.record(z.any()) }),
+    entrada: z.object({ clinica_id: z.string().uuid(), tipo: z.string().regex(/^agente_[a-z_]{3,40}$/), payload: z.record(z.string(), z.any()) }),
     executar: async (admin, _x, e) => {
       const { error } = await admin.from("sap_eventos").insert({ clinica_id: e.clinica_id, tipo: e.tipo, payload: e.payload });
       if (error) throw new Error(error.message);
@@ -176,7 +176,7 @@ export const FERRAMENTAS = {
   }),
   "growth.gravar_ideias": ferramenta({
     nome: "growth.gravar_ideias", descricao: "Grava as estratégias validadas como propostas (nada é enviado; uma pessoa aprova e executa).", risco: "baixo", externa: false, timeoutMs: 10_000,
-    entrada: z.object({ client_id: z.string().uuid(), ideias: z.array(z.record(z.any())).max(14) }),
+    entrada: z.object({ client_id: z.string().uuid(), ideias: z.array(z.record(z.string(), z.any())).max(14) }),
     executar: async (admin, exec, e) => {
       if (!e.ideias.length) return { gravadas: 0 };
       const { error } = await admin.from("campanhas_ideias").insert(e.ideias.map((i) => ({ ...i, client_id: e.client_id, execucao_id: exec.id })));
@@ -201,7 +201,7 @@ export const FERRAMENTAS = {
   }),
   "sugestoes.gravar": ferramenta({
     nome: "sugestoes.gravar", descricao: "Grava o que o agente preparou para a equipe (estado proposta; nada é enviado, publicado ou alterado).", risco: "baixo", externa: false, timeoutMs: 10_000,
-    entrada: z.object({ client_id: z.string().uuid(), agente: z.enum(["recuperacao", "anuncios", "conteudo"]), itens: z.array(z.record(z.any())).max(20) }),
+    entrada: z.object({ client_id: z.string().uuid(), agente: z.enum(["recuperacao", "anuncios", "conteudo"]), itens: z.array(z.record(z.string(), z.any())).max(20) }),
     executar: async (admin, exec, e) => {
       if (!e.itens.length) return { gravadas: 0 };
       const { error } = await admin.from("sugestoes_agentes").insert(e.itens.map((i) => ({ ...i, client_id: e.client_id, agente: e.agente, execucao_id: exec.id })));
@@ -1024,8 +1024,8 @@ async function rodarUma(admin: Admin, exec: Execucao, maxPassos: number, fim: nu
   const cacheSchema = z.object({
     versao: z.literal(1), ordem: z.number().int(), nome: z.string(), custo_usd: z.number().finite().nonnegative(),
     resultado: z.discriminatedUnion("tipo", [
-      z.object({ tipo: z.literal("seguir"), saida: z.unknown().optional(), contexto: z.record(z.unknown()).optional(), irPara: z.string().min(1).optional() }),
-      z.object({ tipo: z.literal("concluir"), resultado: z.record(z.unknown()) }),
+      z.object({ tipo: z.literal("seguir"), saida: z.unknown().optional(), contexto: z.record(z.string(), z.unknown()).optional(), irPara: z.string().min(1).optional() }),
+      z.object({ tipo: z.literal("concluir"), resultado: z.record(z.string(), z.unknown()) }),
     ]),
   });
   if (!fluxo) {

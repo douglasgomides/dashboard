@@ -70,7 +70,8 @@ export const transcriptSegmentSchema = z
     text,
   })
   .refine((s) => s.end > s.start, "Trecho temporal inválido");
-export const sceneSchema = z
+// Base sem a regra de tempo: o worker deriva o pedido por bloco com .omit (o zod 4 não permite omit/innerType depois de refine).
+export const sceneBaseSchema = z
   .object({
     start: z.number().nonnegative(),
     end: z.number().nonnegative(),
@@ -86,8 +87,8 @@ export const sceneSchema = z
     visual: visualSchema,
     confidence,
     uncertainties: strings,
-  })
-  .refine((s) => s.end > s.start, "Cena temporal inválida");
+  });
+export const sceneSchema = sceneBaseSchema.refine((s) => s.end > s.start, "Cena temporal inválida");
 
 export const dnaSchema = z.object({
   hook_pattern: short,
