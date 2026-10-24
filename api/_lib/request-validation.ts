@@ -9,7 +9,7 @@ const id = z.string().uuid();
 const vazioOpcional = (v: unknown) => typeof v === "string" && !v.trim() ? undefined : v;
 export const manualRequestSchema = z.object({
   client_id: id.optional(),
-  alvo: z.enum(["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes", "sap_redigir", "creative_worker", "creative_arte", "plano_semana", "plano_item"]),
+  alvo: z.enum(["posts", "anuncios", "atendimento", "comentarios", "crm", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes", "sap_redigir", "creative_worker", "creative_arte", "plano_semana", "plano_item", "reuniao"]),
   acao: z.string().max(40).optional(), execucao_id: id.optional(),
   adaptacao_id: id.optional(), arte_id: id.optional(), job_id: id.optional(),
   slides: z.array(z.number().int().positive()).max(12).optional(),
@@ -34,6 +34,7 @@ export const manualRequestSchema = z.object({
   estado: z.enum(["proposta", "feita", "nao_feita", "descartada"]).optional(), nota: z.string().max(500).optional(),
 }).strip().superRefine((value, ctx) => {
   if (value.alvo !== "conferencia" && value.alvo !== "agentes" && !value.client_id) ctx.addIssue({ code: "custom", path: ["client_id"], message: "Informe client_id" });
+  if (value.alvo === "reuniao" && !value.id) ctx.addIssue({ code: "custom", path: ["id"], message: "Informe a reunião" });
   if (value.alvo === "creative_arte") {
     if (!["listar", "gerar", "revisar"].includes(value.acao ?? "")) ctx.addIssue({ code: "custom", path: ["acao"], message: "Ação de arte inválida" });
     if ((value.acao === "listar" || value.acao === "gerar") && !value.adaptacao_id) ctx.addIssue({ code: "custom", path: ["adaptacao_id"], message: "Informe adaptacao_id" });

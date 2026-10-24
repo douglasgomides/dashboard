@@ -28,6 +28,7 @@ import { rascunharSessao } from "../_lib/sessao-ia.js";
 import { redirecionarLink, slugLivre } from "../_lib/redirecionar.js";
 import { gerarArtes, listarArtes, revisarArte } from "../_lib/creative-arte.js";
 import { atualizarPlano } from "../_lib/plano-semana.js";
+import { processarReuniao } from "../_lib/reuniao.js";
 import { redigirSecao } from "../_lib/copiloto.js";
 import { aplicarAcao, desfazerAcao, tokenEscritaConfigurado } from "../_lib/anuncios-acoes.js";
 import { destinoSite, destinoWhatsApp, novaRef, novoSlug, POSICOES, mensagemComRef, slugPersonalizado, type Posicao } from "../../src/lib/rastreio.js";
@@ -1008,6 +1009,13 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
+    if (alvo === "reuniao") {
+      // Reunião com a clínica: resumo, entregas da semana e propostas de memória para o Brain (só admin, como o Brain).
+      if (!ehAdmin) { res.status(403).json({ error: "Só admin" }); return; }
+      try { res.status(200).json({ alvo, ok: true, ...(await processarReuniao(admin, client_id as string, String((req.body as { id?: string }).id), quem.user.id)) }); }
+      catch (e) { res.status(200).json({ alvo, ok: false, erro: e instanceof Error ? e.message : String(e) }); }
+      return;
+    }
     if (alvo === "plano_semana") {
       // Plano da semana: confere as ações anteriores e monta a desta semana (se ainda não existir).
       try { res.status(200).json({ alvo, ok: true, ...(await atualizarPlano(admin, client_id as string)) }); }

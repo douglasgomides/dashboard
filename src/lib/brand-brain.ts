@@ -17,6 +17,7 @@ export const NOME_MEMORIA = Object.fromEntries(MEMORIAS.map((m) => [m.id, m.nome
 export const FONTES = {
   ficha_sap: "Ficha da clínica no SAP",
   sessoes: "Registros das sessões",
+  reunioes: "Notas das reuniões com a clínica",
   conversas: "Resumos de conversas do WhatsApp",
   mensagens_kommo: "Mensagens recebidas no Kommo (WhatsApp e Direct, só o lado do paciente)",
   instagram_posts: "Posts do Instagram",
