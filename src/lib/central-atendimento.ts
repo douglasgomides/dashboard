@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { ConfigCrm, MembroCrm } from "./crm-kanban";
+import type { Relacionamento } from "./relacionamento";
 export type EstadoAtendimento="aberta"|"pendente"|"resolvida";
 export interface CanalAtendimento {id:string;canal:"instagram"|"whatsapp";nome:string;ativo:boolean;ultimo_evento_em:string|null}
 export interface ConfigCentral {pode_atender:boolean;usuario_id:string;equipe:MembroCrm[];crm:ConfigCrm;canais:CanalAtendimento[]}
@@ -26,4 +27,10 @@ export const NOME_ESTADO:Record<EstadoAtendimento,string>={aberta:"Em aberto",pe
 export async function cancelarPreparado(clientId:string,pedido:string,observacao:string) {
  const {error}=await (supabase as any).rpc("central_cancelar_preparado",{p_client_id:clientId,p_pedido_id:pedido,p_observacao:observacao});
  if(error)throw new Error(error.message);
+}
+export async function relacionamentos(client:string,pessoas:string[]):Promise<Record<string,Relacionamento>> {
+ if(!pessoas.length)return {};
+ const {data,error}=await (supabase as any).rpc("relacionamento_pessoas",{p_client:client,p_pessoas:[...new Set(pessoas)].slice(0,100)});
+ if(error)throw new Error(error.message);
+ return Object.fromEntries(((data??[]) as Relacionamento[]).map(r=>[r.pessoa_id,r]));
 }
