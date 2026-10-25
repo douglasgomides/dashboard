@@ -1,11 +1,8 @@
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Boxes, CheckCircle2, Info, MessagesSquare, ScanSearch, Users } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getCrmNegocioProprio } from "@/lib/crm-negocio-data";
-import { resumirNegocio } from "@/lib/crm-negocio-proprio";
-import { limitesBR } from "@/lib/client-data";
 import { formatRangeLabel } from "@/lib/date-range";
 import { Painel, Kpi } from "@/components/visual";
 import { SyncButton } from "@/components/sync-button";
@@ -15,17 +12,11 @@ const n = (value: number) => value.toLocaleString("pt-BR");
 
 export function CrmNegocioProprio({clientId,start,end}: {clientId:string;start:string;end:string}) {
   const {isAdmin} = useAuth();
-  const q = useQuery({queryKey:["crm-negocio-proprio",clientId],queryFn:()=>getCrmNegocioProprio(clientId),staleTime:60_000});
-  const resumo = useMemo(()=> {
-    if (!q.data) return null;
-    const {desde,antesDe} = limitesBR(start,end);
-    return resumirNegocio(q.data.registros,q.data.etapas,desde,antesDe);
-  },[q.data,start,end]);
+  const q = useQuery({queryKey:["crm-negocio-proprio",clientId,start,end],queryFn:()=>getCrmNegocioProprio(clientId,start,end),staleTime:60_000});
+  const resumo=q.data?.resumo;
   if(q.isPending) return <p role="status">Conferindo negócios, origens e conversas…</p>;
   if(q.isError || !resumo) return <div role="alert" className="space-y-2"><p>Não foi possível conferir os dados comerciais. Nenhum resultado foi substituído por zero.</p><button className="btn" disabled={q.isFetching} onClick={()=>void q.refetch()}>Tentar novamente</button></div>;
-  const conversas=q.data!.conversas;
-  const completas=conversas.filter(c=>c.mensagens_cobertura==="completa").length;
-  const conferencia=conversas.map(c=>c.mensagens_conferidas_em).filter((d):d is string=>!!d).sort().at(-1);
+  const {total:totalConversas,completas,ultimaConferencia:conferencia}=q.data!.conversas;
   return <div className="space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4" style={{background:"var(--surface)",borderColor:"var(--border)"}}>
       <p className="flex max-w-3xl items-start gap-2 text-sm"><Info size={18} className="shrink-0" aria-hidden/>Esta conta acompanha conteúdo, produtos e vendas. Cadastros de materiais, assinaturas e pós-venda aparecem separados para orientar a revisão comercial.</p>
@@ -49,7 +40,7 @@ export function CrmNegocioProprio({clientId,start,end}: {clientId:string;start:s
         <li><b>{n(resumo.semResponsavel)} negócios abertos sem responsável.</b> O responsável administrativo organiza a revisão; não identifica quem realizou cada atendimento histórico.</li>
         <li><b>{n(resumo.semOrigem)} negócios sem origem documentada.</b> A origem existente é preservada. Um canal identificado pelo funil não comprova campanha, anúncio ou post.</li>
         <li><b>{n(resumo.perdasSemMotivo)} perdas sem motivo registrado.</b> O motivo precisa ser recuperado de evidência ou confirmado pela equipe.</li>
-        <li><b>{n(completas)} de {n(conversas.length)} conversas com mensagens conferidas.</b> A leitura cobre as conversas importadas da Clint vinculadas aos negócios desta conta{conferencia ? `; última conferência em ${new Date(conferencia).toLocaleString("pt-BR")}` : ""}. Uma nova conversa ou mensagem pode exigir atualização.</li>
+        <li><b>{n(completas)} de {n(totalConversas)} conversas com mensagens conferidas.</b> A leitura cobre as conversas importadas da Clint vinculadas aos negócios desta conta{conferencia ? `; última conferência em ${new Date(conferencia).toLocaleString("pt-BR")}` : ""}. Uma nova conversa ou mensagem pode exigir atualização.</li>
       </ul>
       {isAdmin && <Link to="/$clientId/conversas" params={{clientId}} className="mt-3 inline-flex min-h-11 items-center gap-2 font-semibold" style={{color:"var(--accent)"}}><MessagesSquare size={16} aria-hidden/>Ver e atualizar conversas da Clint</Link>}
     </Painel>

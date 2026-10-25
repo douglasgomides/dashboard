@@ -73,3 +73,5 @@ export function resultadoImportacaoConversas(raw: unknown) {
   if (typeof r.sessoes !== "number" || typeof r.restantes !== "number") throw new Error("A atualização não informou a cobertura das conversas.");
   return { total: count(r.sessoes), completa: r.restantes === 0, restantes: count(r.restantes) };
 }
+
+export interface LeituraCrmNegocio { resumo: ReturnType<typeof resumirNegocio>; conversas: { total: number; completas: number; ultimaConferencia: string | null } }

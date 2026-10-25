@@ -35,6 +35,8 @@ import { destinoSite, destinoWhatsApp, novaRef, novoSlug, POSICOES, mensagemComR
 import { rodarAgentes, catalogoFluxos, enfileirarBrain } from "../_lib/agentes.js";
 import { resumoEquipe } from "../_lib/resumo-equipe.js";
 import { manualRequestSchema } from "../_lib/request-validation.js";
+import { lerResumoCrmNegocio } from "../_lib/crm-negocio-resumo.js";
+import { ehNegocioProprio } from "../../src/lib/negocio-proprio.js";
 import { forma as formaSonda } from "../_lib/sonda-conversas-crm.js";
 import { integrationHost, integrationRequest } from "../_lib/integration-http.js";
 
@@ -197,13 +199,19 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(403).json({ error: "Sem acesso a este cliente" });
       return;
     }
-    if (!["owner", "strategist"].includes(ehMembro.role) && !["audiencia", "periodo_instagram"].includes(alvo)) {
+    if (!["owner", "strategist"].includes(ehMembro.role) && !["audiencia", "periodo_instagram", "crm_negocio_resumo"].includes(alvo)) {
       res.status(403).json({ error: "Seu acesso é somente leitura" });
       return;
     }
   }
 
   try {
+    if (alvo === "crm_negocio_resumo") {
+      const {de,ate}=req.body as {de?:string;ate?:string};
+      if(!de || !ate || !ehNegocioProprio(client_id!)) { res.status(400).json({error:"Conta ou período inválido para esta leitura."}); return; }
+      const leitura=await lerResumoCrmNegocio(admin,client_id!,de,ate);
+      res.status(200).json({alvo,ok:true,...leitura}); return;
+    }
     // Agentic Core: a Central de Agentes pede para rodar a fila (ou uma execução) e o catálogo de fluxos.
     if (alvo === "agentes") {
       const { acao, execucao_id } = (req.body ?? {}) as { acao?: string; execucao_id?: string };
