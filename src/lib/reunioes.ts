@@ -3,7 +3,7 @@
  * semana e propostas de memória para o Brain. Funções puras: montar a entrada mascarada e validar o que a IA devolve.
  * A chamada e a gravação ficam em api/_lib/reuniao.ts.
  */
-import { MEMORIAS, type Confianca, type Memoria } from "./brand-brain";
+import { MEMORIAS, type Confianca, type Memoria } from "./brand-brain.js";
 
 export const MAX_NOTAS = 30_000;
 export const MAX_TRANSCRICAO = 60_000;
