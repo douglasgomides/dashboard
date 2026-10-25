@@ -20,9 +20,10 @@ import { ehNegocioProprio } from "@/lib/negocio-proprio";
 // Peças da leitura comercial ("onde o funil quebra"), usadas pelas telas
 // Comercial e Jornada. A lógica está toda em src/lib/comercial.ts.
 
-export function useDiagnosticoComercial(clientId: string, start: string, end: string) {
+export function useDiagnosticoComercial(clientId: string, start: string, end: string, enabled = true) {
   return useQuery({
     queryKey: ["diagnostico-comercial", clientId, start, end],
+    enabled,
     queryFn: async () => {
       const d = await getDiagnosticoComercial(clientId, start, end);
       const leitura = lerComercial(d);

@@ -46,6 +46,9 @@ import { AtendimentoResumo } from "@/components/atendimento-resumo";
 import { LinksShortio } from "@/components/links-shortio";
 import { ChecklistDados, FunilOndeQuebra, ProblemasPorTipo, useDiagnosticoComercial } from "@/components/comercial-diagnostico";
 
+import { ehNegocioProprio } from "@/lib/negocio-proprio";
+import { CrmNegocioProprio } from "@/components/crm-negocio-proprio";
+
 // Nome de exibição do CRM — evita chamar tudo de "Kommo" quando o cliente é Clint.
 function nomeCrm(provider: string | null | undefined): string {
   if (provider === "clint") return "Clint";
@@ -337,6 +340,12 @@ function EntradaDoKanban({clientId}:{clientId:string}) {
 }
 
 function CrmPainelPage() {
+  const { clientId } = Route.useParams();
+  const { start, end } = resolveDateRange(clientLayoutRoute.useSearch());
+  return ehNegocioProprio(clientId) ? <CrmNegocioProprio clientId={clientId} start={start} end={end} /> : <CrmClinicaPage />;
+}
+
+function CrmClinicaPage() {
   const { clientId } = Route.useParams();
   const metricasQ = useQuery({
     queryKey: ["crm-metricas-essenciais", clientId],

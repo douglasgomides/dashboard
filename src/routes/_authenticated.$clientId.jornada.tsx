@@ -12,6 +12,9 @@ import { JornadaFunil } from "@/components/jornada-funil";
 import { fmtTaxa } from "@/lib/metricas";
 import { ListaLimitacoes } from "@/components/insight-card";
 
+import { ehNegocioProprio } from "@/lib/negocio-proprio";
+import { CrmNegocioProprio } from "@/components/crm-negocio-proprio";
+
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 
 export const Route = createFileRoute("/_authenticated/$clientId/jornada")({
@@ -86,7 +89,8 @@ function JornadaPage() {
   const [q, setQ] = useState("");
   const [pessoa, setPessoa] = useState<string | null>(null);
   const { start, end } = resolveDateRange(clientLayoutRoute.useSearch());
-  const diag = useDiagnosticoComercial(clientId, start, end);
+  const proprio = ehNegocioProprio(clientId);
+  const diag = useDiagnosticoComercial(clientId, start, end, !proprio);
 
   const resumo = useQuery({
     queryKey: ["jornada", clientId, start, end],
@@ -132,6 +136,7 @@ function JornadaPage() {
   const tabelas = r && ((r.por_origem?.length ?? 0) > 0 || (r.posts?.length ?? 0) > 0 || (r.links?.length ?? 0) > 0);
   return (
     <div className="space-y-4">
+      {proprio ? <CrmNegocioProprio clientId={clientId} start={start} end={end} /> : <>
       <JornadaFunil clientId={clientId} start={start} end={end} />
 
       <Painel icone={Filter} titulo="Onde a jornada quebra" resumo={`Do lead à venda · ${formatRangeLabel({ start, end })}`}>
@@ -151,6 +156,8 @@ function JornadaPage() {
           <ChecklistDados itens={d.checklist} clientId={clientId} compacto />
         </Painel>
       )}
+
+      </>}
 
       <Painel
         icone={RouteIcon}

@@ -15,6 +15,10 @@ import { Painel, Selo } from "@/components/visual";
 import { fmtTaxa } from "@/lib/metricas";
 import { useClientRole } from "@/hooks/use-client-role";
 
+import { ehNegocioProprio } from "@/lib/negocio-proprio";
+import { fetchAllRows } from "@/lib/pagination";
+import { resultadoImportacaoConversas } from "@/lib/crm-negocio-proprio";
+
 const COR_SIT: Record<string, string> = { ruim: "var(--crit)", atencao: "var(--warn)", bom: "var(--good)", neutro: "var(--muted)" };
 type Filtro = "todas" | "sem_resposta" | "demorou" | "sem_lead";
 
@@ -31,6 +35,7 @@ function Numero({ rotulo, valor, detalhe, cor }: { rotulo: string; valor: string
 /** Leitura da conversa aberta: fatos (regras fixas) + resumo por IA sob demanda. */
 function LeituraDaConversa({ l, conversaId, clientId }: { l: LeituraConversaBanco | undefined; conversaId: string; clientId: string }) {
   const { podeEditar } = useClientRole(clientId);
+  const proprio = ehNegocioProprio(clientId);
   const qc = useQueryClient();
   const resumo = useQuery({
     queryKey: ["conversa-resumo", conversaId],
@@ -72,10 +77,10 @@ function LeituraDaConversa({ l, conversaId, clientId }: { l: LeituraConversaBanc
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold">Leitura da conversa</span>
-            <Selo cor={COR_SIT[TOM_SITUACAO[sit]]}>{ROTULO_SITUACAO[sit]}</Selo>
+            <Selo cor={COR_SIT[TOM_SITUACAO[sit]]}>{proprio ? ROTULO_SITUACAO[sit].replace(/Paciente/g,"Contato").replace(/paciente/g,"contato") : ROTULO_SITUACAO[sit]}</Selo>
           </div>
           <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-sm" style={{ color: "var(--ink-2)" }}>
-            {frasesDa(l).map((f, i) => <li key={i}>{f}</li>)}
+            {frasesDa(l).map((f, i) => <li key={i}>{proprio ? f.replace(/O paciente/g,"O contato").replace(/o paciente/g,"o contato") : f}</li>)}
           </ul>
         </div>
       )}
@@ -96,7 +101,7 @@ function LeituraDaConversa({ l, conversaId, clientId }: { l: LeituraConversaBanc
         {erro && <p className="mt-1 text-sm" style={{ color: "var(--crit)" }}>{erro}</p>}
         {!r && !gerando && (
           <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
-            A IA lê a conversa (telefone, e-mail e CPF mascarados, sem o nome do paciente) e diz o motivo do contato, as objeções, como foi o atendimento e o próximo passo. Fica registrado quem gerou.
+            A IA lê a conversa (telefone, e-mail e CPF mascarados, sem o nome do contato) e diz o motivo do contato, as objeções, como foi o atendimento e o próximo passo. Fica registrado quem gerou.
           </p>
         )}
         {r && (
@@ -175,6 +180,7 @@ const ROTULO_TIPO: Record<string, string> = {
 /** Conversas do WhatsApp, uma a uma, com a leitura e a auditoria comercial (aba "Conversas e auditoria" do Atendimento). */
 export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: string; conversaInicial?: string }) {
   const { podeEditar } = useClientRole(clientId);
+  const proprio = ehNegocioProprio(clientId);
   const [aberta, setAberta] = useState<string | null>(conversaInicial ?? null);
   const [filtro, setFiltro] = useState<Filtro>("todas");
 
@@ -194,9 +200,10 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
   const lista = useQuery({
     queryKey: ["conversas", clientId],
     queryFn: async () => {
-      const { data, error } = await rpc("listar_conversas", { p_client: clientId, p_limite: 200, p_offset: 0 });
-      if (error) throw new Error(error.message);
-      return (data ?? []) as Conversa[];
+      return fetchAllRows<Conversa>(async (from) => {
+        const { data, error } = await rpc("listar_conversas", { p_client: clientId, p_limite: 200, p_offset: from });
+        return { data: data as Conversa[] | null, error };
+      });
     },
   });
 
@@ -233,7 +240,7 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
     try {
       const { data: sessao } = await supabase.auth.getSession();
       const token = sessao.session?.access_token;
-      for (let rodada = 1; rodada <= 60; rodada++) {
+      for (let rodada = 1; rodada <= 10; rodada++) {
         const resp = await fetch("/api/sync/manual", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -241,11 +248,16 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
         });
         const j = await resp.json().catch(() => null);
         if (!resp.ok || !j) throw new Error(j?.error ?? `Falha (${resp.status})`);
-        total += j.sessoes ?? 0;
-        await qc.invalidateQueries({ queryKey: ["conversas", clientId] });
-        const falta = j.restantes ?? 0;
-        setStatus(falta > 0 ? `${total} conversas trazidas… faltam ${falta}` : `${total} conversas trazidas. Nada mais a buscar.`);
-        if (modo === "mais" || falta === 0 || (j.sessoes ?? 0) === 0) break;
+        const resultado = resultadoImportacaoConversas(j);
+        total += resultado.total;
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ["conversas", clientId] }),
+          qc.invalidateQueries({ queryKey: ["leitura-conversas", clientId] }),
+          qc.invalidateQueries({ queryKey: ["crm-negocio-proprio", clientId] }),
+        ]);
+        setStatus(resultado.completa ? `${total} conversas processadas. Leitura concluída nesta rodada.` : `${total} conversas processadas. Leitura parcial; o progresso foi salvo para continuar${resultado.restantes === null ? "." : ` (${resultado.restantes} restantes).`}`);
+        if (modo === "mais" || resultado.completa) break;
+        if (rodada === 10) setStatus(`${total} conversas processadas. A leitura continua parcial; use “Puxar todas” para retomar do ponto salvo.`);
       }
     } catch (e) {
       setStatus(`Parou: ${(e as Error).message}. ${total} trazidas até aqui.`);
@@ -260,8 +272,8 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
     <div className="space-y-4">
       <Painel
         icone={MessageSquare}
-        titulo="Conversas do WhatsApp"
-        resumo="O que o paciente escreveu e o que a clínica respondeu, ligado ao lead e ao link de origem."
+        titulo={proprio ? "Conversas da Clint" : "Conversas do WhatsApp"}
+        resumo={proprio ? "Mensagens dos contatos e da equipe nos canais da Clint, vinculadas aos negócios desta conta." : "O que o paciente escreveu e o que a clínica respondeu, ligado ao lead e ao link de origem."}
         ajuda="Telefone aparece só com os 4 últimos dígitos. Cada abertura de conversa fica registrada (quem, quando)."
       >
         <div className="mb-3 flex items-center gap-2 text-xs" style={{ color: "var(--text-dim)" }}>
@@ -273,7 +285,7 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
           <section className="mb-4 space-y-3" aria-label="Como está o atendimento">
             <h2 className="text-[15px] font-semibold">Como está o atendimento (últimas {geral.conversas} conversas)</h2>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              <Numero rotulo="Paciente sem resposta" valor={`${geral.semResposta}`} detalhe={`${fmtTaxa(geral.semResposta, geral.comPaciente)} das conversas${geral.soRobo ? ` · ${geral.soRobo} só com robô` : ""}`} cor={geral.semResposta ? "var(--crit)" : undefined} />
+              <Numero rotulo={proprio ? "Contatos sem resposta" : "Paciente sem resposta"} valor={`${geral.semResposta}`} detalhe={`${fmtTaxa(geral.semResposta, geral.comPaciente)} das conversas${geral.soRobo ? ` · ${geral.soRobo} só com robô` : ""}`} cor={geral.semResposta ? "var(--crit)" : undefined} />
               <Numero rotulo="1ª resposta humana (mediana)" valor={duracao(geral.medianaPrimeiraResposta)} detalhe="sem contar robô/menu" cor={(geral.medianaPrimeiraResposta ?? 0) > 3600 ? "var(--crit)" : undefined} />
               <Numero rotulo="Resposta em horário comercial" valor={duracao(geral.medianaComercial)} detalhe="seg–sex 8h–18h, sáb 8h–12h" />
               <Numero rotulo="Conversas sem lead no CRM" valor={`${geral.semLead}`} detalhe="telefone não bate com nenhum lead" cor={geral.semLead ? "var(--warn)" : undefined} />
@@ -303,7 +315,7 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
               </div>
             )}
             <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-              Como se calcula: mensagem automática = texto sem assinatura de atendente que se repete igual em muitas conversas (menu, boas-vindas); não conta como resposta. Espera = da primeira mensagem do paciente até a próxima resposta de uma pessoa (tempo corrido). “Sem resposta” = a última mensagem é do paciente e não é só um “ok/obrigada”. Referência: responder na primeira hora dá ~7x mais chance de qualificar o lead (Harvard Business Review, 2011).
+              Como se calcula: mensagem automática = texto sem assinatura de atendente que se repete igual em muitas conversas (menu, boas-vindas); não conta como resposta. Espera = da primeira mensagem do contato até a próxima resposta de uma pessoa (tempo corrido). “Sem resposta” = a última mensagem é do contato e não é só um “ok/obrigada”. Referência: responder na primeira hora dá ~7x mais chance de qualificar o lead (Harvard Business Review, 2011).
             </p>
           </section>
         )}
@@ -324,13 +336,15 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
           >
             <Download size={14} /> Puxar todas
           </button>
-          {status && <span className="text-xs" style={{ color: "var(--text-dim)" }}>{status}</span>}
+          {status && <span role="status" className="text-xs" style={{ color: "var(--text-dim)" }}>{status}</span>}
         </div>}
         {lista.isLoading && <Carregando texto="Lendo as conversas…" />}
+        {lista.data && <p className="mb-2 text-xs">{lista.data.length.toLocaleString("pt-BR")} conversas disponíveis. {leitura.data?.length ? `A análise de atendimento usa as últimas ${leitura.data.length.toLocaleString("pt-BR")}.` : ""}</p>}
+        {leitura.isError && <p role="alert">A análise de atendimento não pôde ser carregada. A lista e as mensagens continuam disponíveis.</p>}
         {lista.error && <p className="text-sm" style={{ color: "var(--danger, #c0392b)" }}>{(lista.error as Error).message}</p>}
         {lista.data && lista.data.length === 0 && (
           <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-            Nenhuma conversa guardada ainda para este cliente. Elas entram a cada sincronização do WhatsApp.
+            Nenhuma conversa guardada ainda para este cliente. Elas entram a cada sincronização dos canais conectados.
           </p>
         )}
         {!!leitura.data?.length && (
@@ -378,7 +392,7 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
                     {c.codigo_ref && <Selo cor="var(--accent)" titulo="Veio de um link rastreado">via link</Selo>}
                     {sit && sit !== "ok" && sit !== "sem_dado" && (
                       <Selo cor={COR_SIT[TOM_SITUACAO[sit]]}>
-                        {sit === "demorou" ? `1ª resposta ${duracao(l!.primeira_resposta_seg)}` : `${ROTULO_SITUACAO[sit]} · ${duracao(l!.aguardando_seg)}`}
+                        {sit === "demorou" ? `1ª resposta ${duracao(l!.primeira_resposta_seg)}` : `${proprio ? ROTULO_SITUACAO[sit].replace(/Paciente/g,"Contato").replace(/paciente/g,"contato") : ROTULO_SITUACAO[sit]} · ${duracao(l!.aguardando_seg)}`}
                       </Selo>
                     )}
                   </div>
@@ -413,7 +427,7 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
                         >
                           {corpo}
                           <div className="mt-0.5 text-[10px] opacity-70">
-                            {paciente ? "Paciente" : ehRobo ? "🤖 Robô (resposta automática)" : m.autor || "Clínica"} · {quando(m.enviada_em)}
+                            {paciente ? (proprio ? "Contato" : "Paciente") : ehRobo ? "🤖 Robô (resposta automática)" : m.autor || (proprio ? "Equipe" : "Clínica")} · {quando(m.enviada_em)}
                           </div>
                         </div>
                       </div>
