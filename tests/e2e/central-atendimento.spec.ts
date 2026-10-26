@@ -52,6 +52,8 @@ for(const width of [1440,375])test(`Central: assign, reply, resolve, reload and 
  await page.getByLabel('Resposta para o contato',{exact:true}).fill('Resposta fictícia de QA, não enviar a pacientes.');
  await page.getByRole('button',{name:'Enviar resposta',exact:true}).click();await expect(page.getByText('Resposta aceita pelo canal. A entrega depende da confirmação do provedor.',{exact:true})).toBeVisible();expect(state.send).toBe(1);
  await expect(page.getByRole('region',{name:'Mensagens da conversa'}).getByText('Resposta fictícia de QA, não enviar a pacientes.',{exact:true})).toBeVisible();
+ // Respondida, a conversa sai do filtro "Esperam resposta", mas continua na lista enquanto estiver aberta.
+ if(width===1440)await expect(page.getByRole('region',{name:'Conversas da fila'}).getByRole('button',{name:/Contato fictício QA.*Fora deste filtro/})).toBeVisible();
  await page.getByRole('combobox',{name:'Situação da conversa',exact:true}).selectOption('resolvida');await expect(page.getByRole('combobox',{name:'Situação da conversa',exact:true})).toHaveValue('resolvida');
  await page.getByRole('button',{name:'Acompanhar este contato no CRM',exact:true}).click();await expect(page.getByRole('link',{name:'Abrir oportunidade no CRM'})).toBeVisible();
  const axe=await new AxeBuilder({page}).analyze();expect(axe.violations.filter(v=>['critical','serious'].includes(v.impact??''))).toEqual([]);
