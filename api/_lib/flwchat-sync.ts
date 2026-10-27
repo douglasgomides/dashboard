@@ -5,9 +5,10 @@
  * (Ajustes > Integrações > Integração via API). Mesma plataforma do WTS Chat.
  *
  * Duas particularidades da API:
- *  - GET /crm/v1/panel só lista os painéis pessoais ("Minhas tarefas"); os painéis
- *    de Vendas existem mas não aparecem na lista. Eles respondem normalmente pelo
- *    ID, então os IDs ficam em crm_connections.config.panel_ids.
+ *  - GET /crm/v1/panel varia por conta: na Synkronos (Marcella) só lista os painéis
+ *    pessoais ("Minhas tarefas"); no Support Clinic (Sergio) lista todos os painéis da
+ *    empresa (scope COMPANY). Por isso os painéis lidos ficam explícitos em
+ *    crm_connections.config.panel_ids, e painel interno (Enfermagem, Administrativo) fica de fora.
  *  - As etapas só vêm com `?includeDetails=Steps`; sem isso o card traz stepTitle nulo.
  *  - A listagem devolve só os cards ABERTOS: ganho/perdido fechado não aparece.
  *    Painéis sem etapa final (Marcella) só mostram o que está aberto.
@@ -124,6 +125,43 @@ export function origemDaDescricao(descricao: unknown): string | null {
   return achadas.length === 1 ? achadas[0] : null;
 }
 
+// Tags do contato (Ajustes > Etiquetas no WTS). A equipe do Dr. Sergio Maia marca o contato com
+// "Origem · Instagram", "Tipo · Paciente" etc. A tag fica no CONTATO, não no card, e a listagem
+// de contatos só devolve as tags com IncludeDetails=Tags. Liga por conexão com config.tags_contato.
+const PREFIXO_ORIGEM = /^origem\s*[·:\-]\s*/i;
+const PREFIXO_TIPO = /^tipo\s*[·:\-]\s*/i;
+
+/** Origem pela tag "Origem · X". Duas origens diferentes ou "Não identificada" ficam vazias, em vez de adivinhar. */
+export function origemDasTags(nomes: string[]): string | null {
+  const origens = [...new Set(nomes.filter((n) => PREFIXO_ORIGEM.test(n)).map((n) => n.replace(PREFIXO_ORIGEM, "").trim()).filter(Boolean))];
+  if (origens.length !== 1) return null;
+  return /^n[ãa]o identificad/i.test(origens[0]) ? null : origens[0];
+}
+
+/** Tipo do contato pela tag "Tipo · X" (Paciente, Lead novo, Equipe, Fornecedor ou representante…). Só quando há um. */
+export function tipoDasTags(nomes: string[]): string | null {
+  const tipos = [...new Set(nomes.filter((n) => PREFIXO_TIPO.test(n)).map((n) => n.replace(PREFIXO_TIPO, "").trim()).filter(Boolean))];
+  return tipos.length === 1 ? tipos[0] : null;
+}
+
+async function tagsDosContatos(token: string, deadlineMs?: number): Promise<{ porContato: Map<string, string[]>; parcial: boolean }> {
+  const nomes = new Map<string, string>();
+  for (const t of ((await flwGet(token, "/core/v1/tag", { pageSize: 200 })) ?? []) as Array<{ id?: string; name?: string }>) {
+    if (t?.id && t.name) nomes.set(t.id, t.name);
+  }
+  const porContato = new Map<string, string[]>();
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const body = await flwGet(token, "/core/v1/contact", { pageSize: PAGE_SIZE, pageNumber: page, IncludeDetails: "Tags" });
+    for (const c of (body?.items ?? []) as Array<{ id?: string; tagIds?: string[] | null }>) {
+      const tags = (c.tagIds ?? []).map((id) => nomes.get(id)).filter((n): n is string => !!n);
+      if (c.id && tags.length) porContato.set(c.id, tags);
+    }
+    if (!body?.hasMorePages) return { porContato, parcial: false };
+    if (deadlineMs && Date.now() > deadlineMs) return { porContato, parcial: true };
+  }
+  return { porContato, parcial: true };
+}
+
 export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncResult[]> {
   const supabase: SupabaseClient = createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -148,6 +186,7 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
       painel_desde?: Record<string, string>;
       etapas_ganho?: string[];
       etapas_perdido?: string[];
+      tags_contato?: boolean;
     };
     // Mapeamento confirmado pela equipe (aba "A analisar"). Tabela ausente = sem mapeamento.
     const confirmadas = new Map<string, "won" | "lost" | "open">();
@@ -179,6 +218,17 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
         errors: ["Conexão sem config.panel_ids (a API não lista os painéis de vendas, os IDs vêm da URL do painel)"],
       });
       continue;
+    }
+
+    let tagsPorContato = new Map<string, string[]>();
+    if (config.tags_contato) {
+      try {
+        const t = await tagsDosContatos(token, env.deadlineMs);
+        tagsPorContato = t.porContato;
+        if (t.parcial) errors.push("tags dos contatos: leitura interrompida por tempo, a origem pela tag fica incompleta nesta rodada");
+      } catch (err) {
+        errors.push(`tags dos contatos: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
     const stageRows: Record<string, unknown>[] = [];
@@ -215,6 +265,8 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
           if (desde && c.createdAt && c.createdAt.slice(0, 10) < desde) continue;
           const origem = c.customFields?.["origem-do-lead"];
           const procedimento = procedimentoDaDescricao((c as { description?: unknown }).description);
+          const tagsContato = tagsPorContato.get(c.contactIds?.[0] ?? "") ?? [];
+          const origemTag = origemDasTags(tagsContato);
           leadRows.push({
             crm_connection_id: conn.id,
             client_id: conn.client_id,
@@ -226,13 +278,16 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
             price: typeof c.monetaryAmount === "number" && c.monetaryAmount > 0 ? c.monetaryAmount : null,
             occurred_at: c.createdAt ?? null,
             outcome: confirmadas.get(`${panelId}|${c.stepId ?? ""}`) ?? resultadoDaEtapa(stepNames.get(c.stepId ?? "") ?? ""),
-            source: typeof origem === "string" && origem.trim()
-              ? origem.trim()
-              : origemDaDescricao((c as { description?: unknown }).description),
+            source: origemTag
+              ?? (typeof origem === "string" && origem.trim()
+                ? origem.trim()
+                : origemDaDescricao((c as { description?: unknown }).description)),
             contact_name: titulo || null,
-            raw_payload: (procedimento
-              ? { ...c, custom_fields_values: [{ field_name: "Tipo de Procedimento", values: [{ value: procedimento }] }] }
-              : c) as unknown as Record<string, unknown>,
+            raw_payload: {
+              ...c,
+              ...(procedimento ? { custom_fields_values: [{ field_name: "Tipo de Procedimento", values: [{ value: procedimento }] }] } : {}),
+              ...(tagsContato.length ? { contato_tags: tagsContato, contato_tipo: tipoDasTags(tagsContato) } : {}),
+            } as unknown as Record<string, unknown>,
             received_at: c.updatedAt ?? c.createdAt ?? new Date().toISOString(),
           });
         }

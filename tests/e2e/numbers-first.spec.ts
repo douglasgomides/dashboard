@@ -154,6 +154,41 @@ test("CRM period numbers appear before funnel diagnostics and remain separate fr
   await expect(page.getByText("500", { exact: true }).first()).toBeVisible();
 });
 
+test("CRM budgets are grouped by procedure type and patient, and the team can correct a procedure type", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await context.route("**/rest/v1/rpc/crm_metricas_essenciais", r => r.fulfill({ json: [crmMetrics] }));
+  await context.route("**/rest/v1/rpc/crm_leads_resumo_periodo", r => r.fulfill({ json: crmPeriod }));
+  const linha = (tipo: string, itens: number, aprovados: number, valor: number, esfriados: number) => ({ tipo, itens, pessoas: itens, aprovados, pessoas_aprovadas: aprovados, valor_aprovado: valor, aprovados_sem_valor: 0, perdidos: 0, esfriados, em_aberto: itens - aprovados - esfriados });
+  await context.route("**/rest/v1/rpc/crm_orcamentos_por_tipo", r => r.fulfill({ json: {
+    itens: 120, cards_sem_procedimento: 0, pessoas: 40, pessoas_aprovadas: 35, valor_aprovado: 150000, valor_por_paciente: 4286,
+    pessoas_com_consulta: 20, consulta_e_compra: 12, esfriados: 30,
+    tipos: [linha("Medicação", 60, 40, 100000, 10), linha("Exame", 40, 10, 30000, 20), linha("Consulta", 20, 20, 20000, 0)],
+    procedimentos: [{ procedimento: "Calorimetria fictícia", tipo: "Exame", corrigido: false, itens: 40 }],
+  } }));
+  const visto: { corrigido?: Record<string, unknown> } = {};
+  await context.route("http://localhost:9/rest/v1/crm_procedimento_tipo**", r => { visto.corrigido = r.request().postDataJSON(); return r.fulfill({ status: 201, json: [] }); });
+  await page.goto(`/${CID}/crm-painel`);
+  const painel = page.getByRole("heading", { name: "Orçamentos por tipo de procedimento", exact: true });
+  await expect(painel).toBeVisible();
+  await expect(page.getByText("40 pacientes · 120 itens de orçamento", { exact: false })).toBeVisible();
+  await expect(page.getByRole("rowheader", { name: "Medicação", exact: true })).toBeVisible();
+  await expect(page.getByText(/São 120 itens de orçamento, mas só 40 pacientes/)).toBeVisible();
+  await expect(page.getByText(/Medicação responde por 67% do valor aprovado/)).toBeVisible();
+  await page.getByText("Revisar o tipo de cada procedimento (1)").click();
+  await page.getByLabel("Tipo de Calorimetria fictícia").selectOption("Consulta");
+  await expect.poll(() => visto.corrigido).toMatchObject({ client_id: CID, procedimento: "Calorimetria fictícia", tipo: "Consulta" });
+});
+
+test("a doctor sees the budget grouping but not the correction list", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await context.route("**/rest/v1/rpc/crm_metricas_essenciais", r => r.fulfill({ json: [crmMetrics] }));
+  await context.route("**/rest/v1/rpc/crm_leads_resumo_periodo", r => r.fulfill({ json: crmPeriod }));
+  await context.route("**/rest/v1/rpc/crm_orcamentos_por_tipo", r => r.fulfill({ json: { itens: 30, pessoas: 30, tipos: [{ tipo: "Consulta", itens: 30, pessoas: 30, aprovados: 20, perdidos: 5, esfriados: 0, em_aberto: 5, aprovados_sem_valor: 0, valor_aprovado: 20000 }], procedimentos: [{ procedimento: "Consulta fictícia", tipo: "Consulta", corrigido: false, itens: 30 }] } }));
+  await page.goto(`/${CID}/crm-painel`);
+  await expect(page.getByRole("heading", { name: "Orçamentos por tipo de procedimento", exact: true })).toBeVisible();
+  await expect(page.getByText(/Revisar o tipo de cada procedimento/)).toHaveCount(0);
+});
+
 test("CRM period failure keeps the historical base and offers a working retry without displaying zero period counts", async ({ page, context }) => {
   await mockAccount(context, "viewer");
   let fail = true;
