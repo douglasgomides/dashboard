@@ -12,5 +12,5 @@ export const Route = createFileRoute("/_authenticated/sap/$clientId/gerador")({
 function GeradorPage() {
   const { clientId } = Route.useParams();
   const { data: clinica } = useQuery({ queryKey: ["sap-cadastro", clientId], queryFn: () => getClinicaSap(clientId) });
-  return <GeradorSap clientId={clientId} clinica={(clinica as { nome?: string } | null | undefined)?.nome ?? ""} />;
+  return <GeradorSap clientId={clientId} clinicaId={(clinica as { id?: string } | null | undefined)?.id ?? null} clinica={(clinica as { nome?: string } | null | undefined)?.nome ?? ""} />;
 }
