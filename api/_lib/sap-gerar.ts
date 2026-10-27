@@ -29,6 +29,8 @@ export interface PedidoGerar {
 
 export interface ResultadoGerar {
   texto: string;
+  /** Anexos que vieram salvos na clínica (rótulos), para a tela mostrar de onde saiu cada coisa. */
+  usadosSalvos: string[];
   modelo: string;
   custoUsd: number | null;
   faltaram: string[];
@@ -64,7 +66,20 @@ export function montarEntrada(codigo: string, anexos: Record<string, string>, pe
 export async function gerarComPrompt(admin: SupabaseClient<any, any, any>, p: PedidoGerar): Promise<ResultadoGerar> {
   const def = PROMPT_POR_CODIGO.get(p.codigo);
   if (!def) throw new Error("Prompt desconhecido");
-  const m = montarEntrada(p.codigo, p.anexos, p.pedido.slice(0, 600));
+  // Anexo não colado na tela vem do que está salvo na clínica (sap_anexos, por slot).
+  const anexos = { ...p.anexos };
+  const usadosSalvos: string[] = [];
+  const faltam = def.entradas.filter((e) => !(anexos[e.id] ?? "").trim());
+  if (faltam.length) {
+    const { data: cli } = await admin.from("sap_clinicas").select("id").eq("client_id", p.clientId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (cli?.id) {
+      const { data: salvos, error } = await admin.from("sap_anexos").select("slot, texto").eq("clinica_id", cli.id).in("slot", faltam.map((e) => e.slot));
+      if (error) throw new Error("Não foi possível ler os anexos salvos da clínica");
+      const porSlot = new Map((salvos ?? []).map((r: { slot: string; texto: string }) => [r.slot, r.texto]));
+      for (const e of faltam) { const t = porSlot.get(e.slot); if (t) { anexos[e.id] = t; usadosSalvos.push(e.rotulo); } }
+    }
+  }
+  const m = montarEntrada(p.codigo, anexos, p.pedido.slice(0, 600));
   if (m.erro) throw new Error(m.erro);
   const t0 = Date.now();
   const finalidade = `sap_prompt:${p.codigo}`;
@@ -77,7 +92,7 @@ export async function gerarComPrompt(admin: SupabaseClient<any, any, any>, p: Pe
   };
   try {
     let texto = "";
-    if (process.env.OPENAI_API_KEY) {
+    const chamarOpenAI = async () => {
       modelo = MODELO_OPENAI;
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -89,16 +104,17 @@ export async function gerarComPrompt(admin: SupabaseClient<any, any, any>, p: Pe
           messages: [{ role: "system", content: textoValido(def.sistema) }, { role: "user", content: textoValido(m.entrada) }],
         }),
       });
-      if (!r.ok) throw new Error(`OpenAI respondeu ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}`);
+      if (!r.ok) return { recusada: r.status, erro: `OpenAI respondeu ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}` };
       const j = (await r.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
       tIn = j.usage?.prompt_tokens ?? null;
       tOut = j.usage?.completion_tokens ?? null;
-      texto = j.choices?.[0]?.message?.content ?? "";
-    } else if (process.env.ANTHROPIC_API_KEY) {
+      return { texto: j.choices?.[0]?.message?.content ?? "" };
+    };
+    const chamarClaude = async () => {
       modelo = MODELO_CLAUDE;
       const r = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+        headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY as string, "anthropic-version": "2023-06-01" },
         signal: AbortSignal.timeout(270_000),
         body: JSON.stringify({ model: modelo, max_tokens: MAX_TOKENS_SAIDA, system: textoValido(def.sistema), messages: [{ role: "user", content: textoValido(m.entrada) }] }),
       });
@@ -106,14 +122,24 @@ export async function gerarComPrompt(admin: SupabaseClient<any, any, any>, p: Pe
       const j = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
       tIn = j.usage?.input_tokens ?? null;
       tOut = j.usage?.output_tokens ?? null;
-      texto = (j.content ?? []).map((b) => b.text ?? "").join("");
+      return (j.content ?? []).map((b) => b.text ?? "").join("");
+    };
+    if (process.env.OPENAI_API_KEY) {
+      const o = await chamarOpenAI();
+      if ("texto" in o) texto = o.texto ?? "";
+      // Chave recusada (401/403) ou sem crédito (402/429): usa a Anthropic se houver; senão, diz o que trocar.
+      else if ([401, 402, 403, 429].includes(o.recusada) && process.env.ANTHROPIC_API_KEY) texto = await chamarClaude();
+      else if (o.recusada === 401 || o.recusada === 403) throw new Error("A chave de IA do servidor (OPENAI_API_KEY na Vercel do Hub) foi recusada. Troque por uma chave válida e refaça o deploy. " + o.erro.slice(0, 80));
+      else throw new Error(o.erro);
+    } else if (process.env.ANTHROPIC_API_KEY) {
+      texto = await chamarClaude();
     } else {
       throw new Error("Servidor sem OPENAI_API_KEY nem ANTHROPIC_API_KEY");
     }
     if (!texto.trim()) throw new Error("A IA devolveu resposta vazia");
     const c = custo();
     await admin.from("ia_execucoes").insert({ client_id: p.clientId, execucao_id: null, finalidade, modelo, tokens_entrada: tIn, tokens_saida: tOut, custo_usd: c, ok: true, ms: Date.now() - t0 });
-    return { texto, modelo, custoUsd: c, faltaram: m.faltaram };
+    return { texto, modelo, custoUsd: c, faltaram: m.faltaram, usadosSalvos };
   } catch (e) {
     const erro = (e instanceof Error ? e.message : String(e)).slice(0, 300);
     await admin.from("ia_execucoes").insert({ client_id: p.clientId, execucao_id: null, finalidade, modelo: modelo || null, tokens_entrada: tIn, tokens_saida: tOut, custo_usd: custo(), ok: false, erro, ms: Date.now() - t0 });
