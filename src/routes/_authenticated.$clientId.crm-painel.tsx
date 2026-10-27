@@ -48,6 +48,7 @@ import { ChecklistDados, FunilOndeQuebra, ProblemasPorTipo, useDiagnosticoComerc
 
 import { ehNegocioProprio } from "@/lib/negocio-proprio";
 import { CrmNegocioProprio } from "@/components/crm-negocio-proprio";
+import { OrcamentosPorTipo } from "@/components/orcamentos-por-tipo";
 
 // Nome de exibição do CRM — evita chamar tudo de "Kommo" quando o cliente é Clint.
 function nomeCrm(provider: string | null | undefined): string {
@@ -482,6 +483,8 @@ function CrmClinicaPage() {
           <Kpi icone={Target} rotulo="Valor dos cards" valor={fmtBRL(periodo.valor)} cor="var(--s1)" />
         </div>}
       </Painel>
+
+      {!ehRelatorio && <OrcamentosPorTipo clientId={clientId} start={start} end={end} />}
 
       {/* Camada 2: a leitura de sempre do CRM — mesmos números, fórmulas e janelas de antes. */}
       <h2 className="pt-2 text-sm font-semibold" style={{ color: "var(--text-dim)" }}>
