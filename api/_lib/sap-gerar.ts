@@ -29,6 +29,8 @@ export interface PedidoGerar {
 
 export interface ResultadoGerar {
   texto: string;
+  /** Anexos que vieram salvos na clínica (rótulos), para a tela mostrar de onde saiu cada coisa. */
+  usadosSalvos: string[];
   modelo: string;
   custoUsd: number | null;
   faltaram: string[];
@@ -64,7 +66,20 @@ export function montarEntrada(codigo: string, anexos: Record<string, string>, pe
 export async function gerarComPrompt(admin: SupabaseClient<any, any, any>, p: PedidoGerar): Promise<ResultadoGerar> {
   const def = PROMPT_POR_CODIGO.get(p.codigo);
   if (!def) throw new Error("Prompt desconhecido");
-  const m = montarEntrada(p.codigo, p.anexos, p.pedido.slice(0, 600));
+  // Anexo não colado na tela vem do que está salvo na clínica (sap_anexos, por slot).
+  const anexos = { ...p.anexos };
+  const usadosSalvos: string[] = [];
+  const faltam = def.entradas.filter((e) => !(anexos[e.id] ?? "").trim());
+  if (faltam.length) {
+    const { data: cli } = await admin.from("sap_clinicas").select("id").eq("client_id", p.clientId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (cli?.id) {
+      const { data: salvos, error } = await admin.from("sap_anexos").select("slot, texto").eq("clinica_id", cli.id).in("slot", faltam.map((e) => e.slot));
+      if (error) throw new Error("Não foi possível ler os anexos salvos da clínica");
+      const porSlot = new Map((salvos ?? []).map((r: { slot: string; texto: string }) => [r.slot, r.texto]));
+      for (const e of faltam) { const t = porSlot.get(e.slot); if (t) { anexos[e.id] = t; usadosSalvos.push(e.rotulo); } }
+    }
+  }
+  const m = montarEntrada(p.codigo, anexos, p.pedido.slice(0, 600));
   if (m.erro) throw new Error(m.erro);
   const t0 = Date.now();
   const finalidade = `sap_prompt:${p.codigo}`;
@@ -113,7 +128,7 @@ export async function gerarComPrompt(admin: SupabaseClient<any, any, any>, p: Pe
     if (!texto.trim()) throw new Error("A IA devolveu resposta vazia");
     const c = custo();
     await admin.from("ia_execucoes").insert({ client_id: p.clientId, execucao_id: null, finalidade, modelo, tokens_entrada: tIn, tokens_saida: tOut, custo_usd: c, ok: true, ms: Date.now() - t0 });
-    return { texto, modelo, custoUsd: c, faltaram: m.faltaram };
+    return { texto, modelo, custoUsd: c, faltaram: m.faltaram, usadosSalvos };
   } catch (e) {
     const erro = (e instanceof Error ? e.message : String(e)).slice(0, 300);
     await admin.from("ia_execucoes").insert({ client_id: p.clientId, execucao_id: null, finalidade, modelo: modelo || null, tokens_entrada: tIn, tokens_saida: tOut, custo_usd: custo(), ok: false, erro, ms: Date.now() - t0 });

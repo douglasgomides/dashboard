@@ -2,6 +2,8 @@
 // servidor (api/_lib/sap-prompts.ts); aqui vão os rótulos dos anexos, para a tela e para a validação.
 export interface EntradaPrompt {
   id: string;
+  /** Chave do anexo salvo por clínica (sap_anexos.slot): o mesmo documento serve a vários prompts. */
+  slot: string;
   rotulo: string;
   dica: string;
   obrigatoria: boolean;
@@ -19,7 +21,15 @@ export interface PromptTela {
 }
 
 
-const e = (id: string, rotulo: string, dica: string, obrigatoria = false): EntradaPrompt => ({ id, rotulo, dica, obrigatoria });
+// Documentos que se repetem entre prompts compartilham o slot; as transcrições são por tipo de reunião.
+const SLOT: Record<string, string> = {
+  proposta: "doc_04_05", template: "doc_04_03", casos: "doc_04_04", arvore: "doc_05_02", conhecimento: "conhecimento_atracao", testes: "doc_05_16", dados: "dados_criativos",
+  raiox: "doc_03_03", analise: "doc_03_01", formulario: "doc_02_04", ficha: "doc_02_06",
+  conversas: "conversas_reais", filtro: "doc_05_08", plano: "doc_05_10", politicas: "politicas_clinica", clinica: "dados_clinica", medico: "respostas_medico", modelos: "modelos_v2",
+  precos: "tabela_precos", politica: "politica_sinal", registros: "registros_07_07", diagnostico: "doc_03_06",
+  servicos: "servicos_retorno", tracker: "doc_08_04", score: "doc_11_04", historico: "historico_checkins", lista: "lista_clinicas_call", calendario: "doc_09_02",
+};
+const e = (id: string, rotulo: string, dica: string, obrigatoria = false, slot?: string): EntradaPrompt => ({ id, slot: slot ?? SLOT[id] ?? id, rotulo, dica, obrigatoria });
 
 export const PROMPTS_TELA: PromptTela[] = [
   {
@@ -45,7 +55,7 @@ export const PROMPTS_TELA: PromptTela[] = [
     quando: "Até 4 horas depois da Sessão 1.",
     entradas: [
       e("raiox", "03.03 · Raio-X e Baseline D0", "Abas Baseline D0, Raio-X e Referências exportadas, já congeladas.", true),
-      e("transcricao", "Transcrição da Sessão 1", "Texto da gravação. Troque nome de paciente por [paciente].", true),
+      e("transcricao", "Transcrição da Sessão 1", "Texto da gravação. Troque nome de paciente por [paciente].", true, "transcricao_s1"),
       e("analise", "03.01 · Análise externa e lead oculto", "Síntese e blocos."),
       e("formulario", "02.04 · Respostas do formulário pré-diagnóstico", "A linha de respostas da clínica."),
       e("ficha", "02.06 · Ficha do Cliente", "Nome, cidade, especialidade, decisor e datas."),
@@ -92,7 +102,7 @@ export const PROMPTS_TELA: PromptTela[] = [
     saida: "Régua, indicação, plano de otimização, Playbook de Continuidade e, no D90, o Relatório de Encerramento.",
     quando: "Até 24 h depois da Sessão 6 (blocos 1 a 3), no D60 (bloco 4) e entre D85 e D88 (bloco 5).",
     entradas: [
-      e("transcricao", "Transcrição da Sessão 6", "Troque nome de paciente por [paciente].", true),
+      e("transcricao", "Transcrição da Sessão 6", "Troque nome de paciente por [paciente].", true, "transcricao_s6"),
       e("proposta", "04.05 · Paciente Ideal e Proposta de Valor", "Texto do documento da clínica."),
       e("servicos", "Lista de serviços com prazo de retorno", "Prazo definido pelo médico para cada serviço."),
       e("tracker", "08.04 · Tracker de Controle (export)", "Abas Painel, Semanas e Garantia, mais Baseline e Metas e Indicações e retornos.", true),
@@ -109,7 +119,7 @@ export const PROMPTS_TELA: PromptTela[] = [
     saida: "Registro no formato do 09.03, mensagem da comunidade, mensagens dos grupos individuais e lista de cobrança de segunda.",
     quando: "Logo depois de cada call em grupo.",
     entradas: [
-      e("transcricao", "Transcrição da call", "Com marcação de tempo, se a ferramenta gerar.", true),
+      e("transcricao", "Transcrição da call", "Com marcação de tempo, se a ferramenta gerar.", true, "transcricao_call"),
       e("lista", "Clínicas presentes e ausentes", "Com semana do programa, KPI foco e autorização de nome e de número.", true),
       e("calendario", "09.02 · Tema previsto da semana", "Tema e material de apoio."),
       e("modelos", "Modelos 09.01 e 09.03", "Cole os modelos v2."),
