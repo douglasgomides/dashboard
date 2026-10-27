@@ -92,7 +92,7 @@ export async function gerarComPrompt(admin: SupabaseClient<any, any, any>, p: Pe
   };
   try {
     let texto = "";
-    if (process.env.OPENAI_API_KEY) {
+    const chamarOpenAI = async () => {
       modelo = MODELO_OPENAI;
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -104,16 +104,17 @@ export async function gerarComPrompt(admin: SupabaseClient<any, any, any>, p: Pe
           messages: [{ role: "system", content: textoValido(def.sistema) }, { role: "user", content: textoValido(m.entrada) }],
         }),
       });
-      if (!r.ok) throw new Error(`OpenAI respondeu ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}`);
+      if (!r.ok) return { recusada: r.status, erro: `OpenAI respondeu ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}` };
       const j = (await r.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
       tIn = j.usage?.prompt_tokens ?? null;
       tOut = j.usage?.completion_tokens ?? null;
-      texto = j.choices?.[0]?.message?.content ?? "";
-    } else if (process.env.ANTHROPIC_API_KEY) {
+      return { texto: j.choices?.[0]?.message?.content ?? "" };
+    };
+    const chamarClaude = async () => {
       modelo = MODELO_CLAUDE;
       const r = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+        headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY as string, "anthropic-version": "2023-06-01" },
         signal: AbortSignal.timeout(270_000),
         body: JSON.stringify({ model: modelo, max_tokens: MAX_TOKENS_SAIDA, system: textoValido(def.sistema), messages: [{ role: "user", content: textoValido(m.entrada) }] }),
       });
@@ -121,7 +122,17 @@ export async function gerarComPrompt(admin: SupabaseClient<any, any, any>, p: Pe
       const j = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
       tIn = j.usage?.input_tokens ?? null;
       tOut = j.usage?.output_tokens ?? null;
-      texto = (j.content ?? []).map((b) => b.text ?? "").join("");
+      return (j.content ?? []).map((b) => b.text ?? "").join("");
+    };
+    if (process.env.OPENAI_API_KEY) {
+      const o = await chamarOpenAI();
+      if ("texto" in o) texto = o.texto ?? "";
+      // Chave recusada (401/403) ou sem crédito (402/429): usa a Anthropic se houver; senão, diz o que trocar.
+      else if ([401, 402, 403, 429].includes(o.recusada) && process.env.ANTHROPIC_API_KEY) texto = await chamarClaude();
+      else if (o.recusada === 401 || o.recusada === 403) throw new Error("A chave de IA do servidor (OPENAI_API_KEY na Vercel do Hub) foi recusada. Troque por uma chave válida e refaça o deploy. " + o.erro.slice(0, 80));
+      else throw new Error(o.erro);
+    } else if (process.env.ANTHROPIC_API_KEY) {
+      texto = await chamarClaude();
     } else {
       throw new Error("Servidor sem OPENAI_API_KEY nem ANTHROPIC_API_KEY");
     }
