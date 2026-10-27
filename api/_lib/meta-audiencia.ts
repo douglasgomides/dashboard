@@ -122,7 +122,16 @@ function mapaDeHorarios(valores: { end_time: string; value: Record<string, numbe
 }
 
 export async function storiesAoVivo(token: string, ig: string): Promise<StoryAoVivo[]> {
-  const lista = await g(token, `${ig}/stories`, { fields: "id,media_type,timestamp,permalink,thumbnail_url,media_url", limit: 50 });
+  // thumbnail_url na LISTA faz a Meta gerar a miniatura de cada story de vídeo e estourar com "reduce the amount of data"
+  // (Marcella, 27/10, com 6 stories no ar). Tenta com a miniatura e, se a Meta recusar, lista sem ela: a imagem
+  // cai para media_url.
+  const base = "id,media_type,timestamp,permalink,media_url";
+  let lista: any;
+  try {
+    lista = await g(token, `${ig}/stories`, { fields: `${base},thumbnail_url`, limit: 50 });
+  } catch {
+    lista = await g(token, `${ig}/stories`, { fields: base, limit: 50 });
+  }
   const itens: any[] = (lista?.data ?? []).slice(0, 25);
   const saida: StoryAoVivo[] = [];
   for (let i = 0; i < itens.length; i += 5) {
