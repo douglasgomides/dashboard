@@ -30,6 +30,8 @@ import { gerarArtes, listarArtes, revisarArte } from "../_lib/creative-arte.js";
 import { atualizarPlano } from "../_lib/plano-semana.js";
 import { processarReuniao } from "../_lib/reuniao.js";
 import { redigirSecao } from "../_lib/copiloto.js";
+import { gerarComPrompt } from "../_lib/sap-gerar.js";
+import { PROMPT_POR_CODIGO } from "../_lib/sap-prompts.js";
 import { aplicarAcao, desfazerAcao, tokenEscritaConfigurado } from "../_lib/anuncios-acoes.js";
 import { destinoSite, destinoWhatsApp, novaRef, novoSlug, POSICOES, mensagemComRef, slugPersonalizado, type Posicao } from "../../src/lib/rastreio.js";
 import { rodarAgentes, catalogoFluxos, enfileirarBrain } from "../_lib/agentes.js";
@@ -1064,6 +1066,30 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       const turnos = (Array.isArray(b.turnos) ? b.turnos : []).filter((t) => (t.papel === "ia" || t.papel === "equipe") && typeof t.texto === "string").slice(-12) as { papel: "ia" | "equipe"; texto: string }[];
       try {
         const r = await redigirSecao(admin, { clientId: client_id as string, titulo: String(b.titulo ?? "").slice(0, 120), dica: String(b.dica ?? "").slice(0, 600), textoAtual: String(b.texto_atual ?? ""), turnos });
+        res.status(200).json({ alvo, ok: true, ...r });
+      } catch (e) {
+        res.status(200).json({ alvo, ok: false, erro: e instanceof Error ? e.message : String(e) });
+      }
+      return;
+    }
+
+    if (alvo === "sap_prompt") {
+      // Gerador dos prompts do SAP (05.13, 03.05, 06.10, 07.08, 08.08, 09.04): anexos colados pela equipe viram rascunho.
+      if (!ehAdmin) {
+        res.status(403).json({ error: "Só a equipe usa o gerador" });
+        return;
+      }
+      const b = (req.body ?? {}) as { codigo?: string; anexos?: Record<string, unknown>; pedido?: string };
+      const codigo = String(b.codigo ?? "");
+      const def = PROMPT_POR_CODIGO.get(codigo);
+      if (!def) {
+        res.status(400).json({ error: "Informe um codigo de prompt valido" });
+        return;
+      }
+      const anexos: Record<string, string> = {};
+      for (const e of def.entradas) if (typeof b.anexos?.[e.id] === "string") anexos[e.id] = b.anexos[e.id] as string;
+      try {
+        const r = await gerarComPrompt(admin, { clientId: client_id as string, codigo, anexos, pedido: String(b.pedido ?? def.pedido) });
         res.status(200).json({ alvo, ok: true, ...r });
       } catch (e) {
         res.status(200).json({ alvo, ok: false, erro: e instanceof Error ? e.message : String(e) });

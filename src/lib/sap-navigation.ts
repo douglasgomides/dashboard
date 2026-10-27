@@ -16,6 +16,7 @@ import {
   UsersRound,
   UserRoundCheck,
   Bot,
+  Sparkles,
 } from "lucide-react";
 
 // Mapa do programa em seis áreas, preservando os destinos e as regras de visibilidade.
@@ -111,6 +112,13 @@ export const ITENS = [
     clinica: true,
   },
   {
+    grupo: "Rotina semanal",
+    sub: "/gerador",
+    label: "Gerador de prompts",
+    Icone: Sparkles,
+    admin: true,
+  },
+  {
     grupo: "Resultado",
     sub: "/metas",
     label: "Metas e garantia",
@@ -160,7 +168,7 @@ export const AREAS_SAP = [
     label: "Rotina e execução",
     hint: "Saúde, mídia e agentes",
     Icone: Gauge,
-    subs: ["/execucao", "/midia", "/agentes"],
+    subs: ["/execucao", "/midia", "/agentes", "/gerador"],
   },
   {
     id: "materiais",

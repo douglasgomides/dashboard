@@ -9,7 +9,7 @@ const id = z.string().uuid();
 const vazioOpcional = (v: unknown) => typeof v === "string" && !v.trim() ? undefined : v;
 export const manualRequestSchema = z.object({
   client_id: id.optional(),
-  alvo: z.enum(["posts", "anuncios", "atendimento", "comentarios", "crm", "crm_negocio_resumo", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes", "sap_redigir", "creative_worker", "creative_arte", "plano_semana", "plano_item", "reuniao"]),
+  alvo: z.enum(["posts", "anuncios", "atendimento", "comentarios", "crm", "crm_negocio_resumo", "historico", "tudo", "audiencia", "classificar", "link_rastreado", "links_stats", "jornada", "sonda_conversas", "conversas", "kommo_contatos", "conferencia", "periodo_instagram", "resumo_conversa", "sessao_ia", "agentes", "sap_redigir", "sap_prompt", "creative_worker", "creative_arte", "plano_semana", "plano_item", "reuniao"]),
   acao: z.string().max(40).optional(), execucao_id: id.optional(),
   adaptacao_id: id.optional(), arte_id: id.optional(), job_id: id.optional(),
   slides: z.array(z.number().int().positive()).max(12).optional(),
@@ -32,9 +32,13 @@ export const manualRequestSchema = z.object({
   mensagem: z.string().trim().min(1).max(2000).optional(), instagram_post_id: id.nullable().optional(), ad_campaign_id: id.nullable().optional(),
   antes_de: z.string().datetime({ offset: true }).nullable().optional(),
   estado: z.enum(["proposta", "feita", "nao_feita", "descartada"]).optional(), nota: z.string().max(500).optional(),
+  // Gerador de prompts do SAP (alvo sap_prompt): código do prompt, anexos colados pela equipe e a linha do pedido.
+  codigo: z.string().regex(/^\d{2}\.\d{2}$/).optional(), pedido: z.string().max(600).optional(),
+  anexos: z.record(z.string().regex(/^[a-z_]{1,20}$/), z.string().max(60_000)).refine((v) => Object.keys(v).length <= 12).optional(),
 }).strip().superRefine((value, ctx) => {
   if (value.alvo === "crm_negocio_resumo" && (!value.de || !value.ate)) ctx.addIssue({code:"custom",path:["de"],message:"Informe o período da leitura"});
   if (value.alvo !== "conferencia" && value.alvo !== "agentes" && !value.client_id) ctx.addIssue({ code: "custom", path: ["client_id"], message: "Informe client_id" });
+  if (value.alvo === "sap_prompt" && !value.codigo) ctx.addIssue({ code: "custom", path: ["codigo"], message: "Informe o prompt" });
   if (value.alvo === "reuniao" && !value.id) ctx.addIssue({ code: "custom", path: ["id"], message: "Informe a reunião" });
   if (value.alvo === "creative_arte") {
     if (!["listar", "gerar", "revisar"].includes(value.acao ?? "")) ctx.addIssue({ code: "custom", path: ["acao"], message: "Ação de arte inválida" });
