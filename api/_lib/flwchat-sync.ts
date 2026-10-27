@@ -162,6 +162,56 @@ async function tagsDosContatos(token: string, deadlineMs?: number): Promise<{ po
   return { porContato, parcial: true };
 }
 
+// Support Clinic → WTS (Dr. Sergio Maia): cada mudança de status do orçamento cria um card NOVO no painel, e o card
+// antigo do mesmo item fica parado em Pendente ou Orçado. Em 2.895 cards, 458 abertos tinham um card mais novo do mesmo
+// paciente e procedimento (339 viraram Liberado). Contados como "em aberto", inflavam o funil e o "esfriou".
+// Com config.cards_por_item, o card aberto que tem um card mais novo do mesmo item (painel + contato + procedimento)
+// é marcado em removido_na_origem, como os cards que somem do CRM, e guarda o id do card que o substituiu. Liberado
+// repetido no mesmo dia e com o mesmo valor também é marcado (cópia). A marcação é refeita a cada sync.
+type LinhaCard = Record<string, unknown> & { outcome?: unknown; occurred_at?: unknown; price?: unknown; pipeline_id?: unknown; raw_payload?: Record<string, unknown> };
+
+export function marcarSubstituidos<T extends LinhaCard>(
+  linhas: T[],
+  agora: string,
+): Array<T & { removido_na_origem: string | null; raw_payload: NonNullable<T["raw_payload"]> & { substituido_por: string | null } }> {
+  const chave = (l: T) => {
+    const raw = l.raw_payload ?? {};
+    const contato = Array.isArray(raw.contactIds) ? String(raw.contactIds[0] ?? "") : "";
+    const campos = Array.isArray(raw.custom_fields_values) ? (raw.custom_fields_values as Array<{ values?: Array<{ value?: unknown }> }>) : [];
+    const proc = String(campos[0]?.values?.[0]?.value ?? "").trim().toLowerCase();
+    return contato && proc ? `${String(l.pipeline_id ?? "")}|${contato}|${proc}` : null;
+  };
+  const ordem = (l: T) => Number(l.raw_payload?.number ?? 0) || Date.parse(String(l.occurred_at ?? "")) || 0;
+  const grupos = new Map<string, T[]>();
+  for (const l of linhas) {
+    const k = chave(l);
+    if (k) grupos.set(k, [...(grupos.get(k) ?? []), l]);
+  }
+  const marcados = new Map<T, string>();
+  for (const g of grupos.values()) {
+    if (g.length < 2) continue;
+    g.sort((a, b) => ordem(a) - ordem(b));
+    g.forEach((l, i) => {
+      const prox = g[i + 1];
+      if (!prox) return;
+      if (l.outcome === "open") marcados.set(l, String(prox.raw_payload?.id ?? ""));
+    });
+    for (let i = 1; i < g.length; i++) {
+      const a = g[i - 1], b = g[i];
+      const mesmoDia = String(a.occurred_at ?? "").slice(0, 10) === String(b.occurred_at ?? "").slice(0, 10);
+      if (a.outcome === "won" && b.outcome === "won" && mesmoDia && (a.price ?? null) === (b.price ?? null)) marcados.set(b, String(a.raw_payload?.id ?? ""));
+    }
+  }
+  return linhas.map((l) => {
+    const por = marcados.get(l);
+    return {
+      ...l,
+      removido_na_origem: por !== undefined ? agora : null,
+      raw_payload: { ...(l.raw_payload ?? {}), substituido_por: por ?? null },
+    };
+  });
+}
+
 export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncResult[]> {
   const supabase: SupabaseClient = createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -187,6 +237,7 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
       etapas_ganho?: string[];
       etapas_perdido?: string[];
       tags_contato?: boolean;
+      cards_por_item?: boolean;
     };
     // Mapeamento confirmado pela equipe (aba "A analisar"). Tabela ausente = sem mapeamento.
     const confirmadas = new Map<string, "won" | "lost" | "open">();
@@ -297,7 +348,8 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
     }
 
     let gravados = 0;
-    for (const batch of chunk(leadRows, BATCH_SIZE)) {
+    const linhas = config.cards_por_item ? marcarSubstituidos(leadRows, new Date().toISOString()) : leadRows;
+    for (const batch of chunk(linhas, BATCH_SIZE)) {
       const { error: upsertError } = await supabase
         .from("crm_leads")
         .upsert(batch, { onConflict: "crm_connection_id,external_lead_id" });
