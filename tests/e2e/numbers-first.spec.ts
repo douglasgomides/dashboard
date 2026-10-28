@@ -189,6 +189,26 @@ test("a doctor sees the budget grouping but not the correction list", async ({ p
   await expect(page.getByText(/Revisar o tipo de cada procedimento/)).toHaveCount(0);
 });
 
+test("CRM wins are shown per funnel and period, grouped like the CRM, without summing different win stages", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await context.route("**/rest/v1/rpc/crm_metricas_essenciais", r => r.fulfill({ json: [crmMetrics] }));
+  await context.route("**/rest/v1/rpc/crm_leads_resumo_periodo", r => r.fulfill({ json: crmPeriod }));
+  const pedidos: Record<string, unknown>[] = [];
+  const linha = (grupo: string | null, funil: string, entraram: number, ganhos: number, etapa: string | null) => ({ grupo, funil, entraram, consultas_agendadas: 3, ganhos, ganhos_sem_valor: 1, perdidos: 2, valor_ganho: ganhos * 1000, etapa_do_ganho: etapa });
+  await context.route("**/rest/v1/rpc/crm_funis_periodo", r => { pedidos.push(r.request().postDataJSON()); return r.fulfill({ json: [
+    linha("Atendimento fictício", "Consultas", 40, 18, "Consulta agendada"),
+    linha("Atendimento fictício", "Procedimentos", 20, 17, "Procedimento agendado"),
+    linha(null, "Funil avulso", 5, 0, null),
+  ] }); });
+  await page.goto(`/${CID}/crm-painel`);
+  await expect(page.getByRole("heading", { name: "Por funil, no período", exact: true })).toBeVisible();
+  await expect(page.getByText("Atendimento fictício · 60 leads · 35 ganhos")).toBeVisible();
+  await expect(page.getByText("Outros funis · 5 leads · 0 ganhos")).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Procedimento agendado", exact: true })).toBeVisible();
+  expect(pedidos[0]).toMatchObject({ p_client_id: CID });
+  expect(typeof pedidos[0].p_from).toBe("string");
+});
+
 test("CRM period failure keeps the historical base and offers a working retry without displaying zero period counts", async ({ page, context }) => {
   await mockAccount(context, "viewer");
   let fail = true;

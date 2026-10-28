@@ -49,6 +49,7 @@ import { ChecklistDados, FunilOndeQuebra, ProblemasPorTipo, useDiagnosticoComerc
 import { ehNegocioProprio } from "@/lib/negocio-proprio";
 import { CrmNegocioProprio } from "@/components/crm-negocio-proprio";
 import { OrcamentosPorTipo } from "@/components/orcamentos-por-tipo";
+import { FunisPeriodo } from "@/components/funis-periodo";
 
 // Nome de exibição do CRM — evita chamar tudo de "Kommo" quando o cliente é Clint.
 function nomeCrm(provider: string | null | undefined): string {
@@ -484,6 +485,7 @@ function CrmClinicaPage() {
         </div>}
       </Painel>
 
+      {!ehRelatorio && <FunisPeriodo clientId={clientId} start={start} end={end} />}
       {!ehRelatorio && <OrcamentosPorTipo clientId={clientId} start={start} end={end} />}
 
       {/* Camada 2: a leitura de sempre do CRM — mesmos números, fórmulas e janelas de antes. */}
@@ -503,7 +505,7 @@ function CrmClinicaPage() {
           icone={CalendarCheck}
           rotulo="Consultas agendadas"
           valor={etapasPorConfirmar ? "—" : fmtN(m.consultas_agendadas)}
-          dica={etapasPorConfirmar ? "a configurar: as etapas ainda não foram marcadas" : undefined}
+          dica={etapasPorConfirmar ? "a configurar: as etapas ainda não foram marcadas" : "todo o histórico, não segue o período. O número do período está em \"Por funil, no período\"."}
           cor="var(--accent)"
         />
         <Kpi

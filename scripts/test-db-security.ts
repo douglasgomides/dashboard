@@ -206,9 +206,13 @@ try {
       assert.deepEqual(await rows("select * from ler_mensagens($1)", [conversationB]), []);
       assert.equal((await rows("select * from listar_conversas($1,-1,-5)", [A])).length, 1);
       assert.equal((await rows("select * from listar_conversas($1,10000,0)", [A])).length, 1);
+      const comCanal = await rows<{ canal: string }>("select canal from listar_conversas_canal($1,10,0)", [A]);
+      assert.equal(comCanal.length, 1);
+      assert.ok(["whatsapp", "instagram", "facebook"].includes(comCanal[0].canal));
+      assert.deepEqual(await rows("select * from listar_conversas_canal($1,10,0)", [B]), [], "outra clínica não lista");
       // Lê o audit log como owner dentro da transação, sem concedê-lo ao membro.
       await db.exec("reset role");
-      assert.equal((await rows("select * from acessos_conversas where user_id=$1", [viewer])).length, 3);
+      assert.equal((await rows("select * from acessos_conversas where user_id=$1", [viewer])).length, 4);
     });
   });
   await check("agendou lido na conversa entra na fila de conversões só com a chave ligada e sem duplicar o CRM", async () => {

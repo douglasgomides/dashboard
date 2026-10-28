@@ -53,7 +53,7 @@ try {
           if (path === '/auth/v1/user') return respond(user);
           if (path.startsWith('/auth/')) return respond(session);
           if (path === '/rest/v1/rpc/is_app_admin') return respond(product === 'nexo');
-          const readRpc = ['sap_tracker_auto', 'sap_fontes_etapas', 'sap_papeis_pessoas', 'client_fontes', 'auditoria_comercial', 'cobertura_periodo', 'client_sync_status', 'experimento_atual', 'conversao_por_origem', 'textos_entrada_frequentes', 'receita_em_jogo', 'receita_por_canal', 'sap_sinais_auto', 'leitura_conversas', 'listar_conversas', 'custo_whatsapp'].map(name => `/rest/v1/rpc/${name}`);
+          const readRpc = ['sap_tracker_auto', 'sap_fontes_etapas', 'sap_papeis_pessoas', 'client_fontes', 'auditoria_comercial', 'cobertura_periodo', 'client_sync_status', 'experimento_atual', 'conversao_por_origem', 'textos_entrada_frequentes', 'receita_em_jogo', 'receita_por_canal', 'sap_sinais_auto', 'leitura_conversas', 'listar_conversas', 'listar_conversas_canal', 'custo_whatsapp'].map(name => `/rest/v1/rpc/${name}`);
           if (req.method() !== 'GET' && !readRpc.includes(path)) { unexpected.push({ path, method: req.method() }); return route.abort(); }
           if (path === '/rest/v1/rpc/client_sync_status') return respond(['instagram', 'anuncios', 'crm', 'atendimento'].map(fonte => ({ fonte, data_ate: '2026-10-16', last_attempt_at: date, last_success_at: date, last_error: null, last_rows: 80 })));
           if (path === '/rest/v1/instagram_comments') return rows([{ commented_at: date }]);

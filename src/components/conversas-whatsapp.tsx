@@ -22,6 +22,27 @@ import { resultadoImportacaoConversas } from "@/lib/crm-negocio-proprio";
 const COR_SIT: Record<string, string> = { ruim: "var(--crit)", atencao: "var(--warn)", bom: "var(--good)", neutro: "var(--muted)" };
 type Filtro = "todas" | "sem_resposta" | "demorou" | "sem_lead";
 
+const ROTULO_CANAL: Record<string, string> = { whatsapp: "WhatsApp", instagram: "Instagram", facebook: "Facebook" };
+
+type Canal = "todos" | "whatsapp" | "instagram" | "facebook";
+
+/** Botões do filtro: "Todos os canais" e cada canal com conversa, com a contagem. */
+function opcoesCanal(lista: { canal?: string | null; total_msgs: number }[]): [Canal, string, number][] {
+  const total = lista.filter((c) => c.total_msgs > 0).length;
+  return [["todos", "Todos os canais", total], ...contagemCanal(lista).map(([k, n]): [Canal, string, number] => [k, ROTULO_CANAL[k] ?? k, n])];
+}
+
+/** Quantas conversas com mensagem há em cada canal, na ordem WhatsApp, Instagram, Facebook. */
+function contagemCanal(lista: { canal?: string | null; total_msgs: number }[]): ["whatsapp" | "instagram" | "facebook", number][] {
+  const conta = { whatsapp: 0, instagram: 0, facebook: 0 };
+  for (const c of lista) {
+    if (c.total_msgs <= 0) continue;
+    const k = (c.canal ?? "whatsapp") as keyof typeof conta;
+    if (k in conta) conta[k]++;
+  }
+  return (Object.entries(conta) as ["whatsapp" | "instagram" | "facebook", number][]).filter(([, n]) => n > 0);
+}
+
 function Numero({ rotulo, valor, detalhe, cor }: { rotulo: string; valor: string; detalhe?: string; cor?: string }) {
   return (
     <div className="min-w-0 rounded-lg border p-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
@@ -141,6 +162,8 @@ type Conversa = {
   pessoa_nome: string;
   telefone_final: string | null;
   provider: string;
+  /** whatsapp, instagram ou facebook (listar_conversas_canal). */
+  canal?: string | null;
   ultima_msg_em: string | null;
   ultima_msg_texto: string | null;
   total_msgs: number;
@@ -183,6 +206,8 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
   const proprio = ehNegocioProprio(clientId);
   const [aberta, setAberta] = useState<string | null>(conversaInicial ?? null);
   const [filtro, setFiltro] = useState<Filtro>("todas");
+  // Instagram e WhatsApp são públicos e momentos diferentes da paciente: a lista separa os dois.
+  const [canal, setCanal] = useState<Canal>("todos");
 
   const leitura = useLeituraConversas(clientId);
   const porId = new Map((leitura.data ?? []).map((l) => [l.conversa_id, l]));
@@ -201,7 +226,7 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
     queryKey: ["conversas", clientId],
     queryFn: async () => {
       return fetchAllRows<Conversa>(async (from) => {
-        const { data, error } = await rpc("listar_conversas", { p_client: clientId, p_limite: 200, p_offset: from });
+        const { data, error } = await rpc("listar_conversas_canal", { p_client: clientId, p_limite: 200, p_offset: from });
         return { data: data as Conversa[] | null, error };
       });
     },
@@ -363,9 +388,25 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
             ))}
           </div>
         )}
+        {!!lista.data?.length && contagemCanal(lista.data).length > 1 && (
+          <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por canal">
+            {opcoesCanal(lista.data).map(([k, rot, n]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setCanal(k)}
+                aria-pressed={canal === k}
+                className="min-h-[36px] rounded-full border px-3 text-sm"
+                style={{ borderColor: canal === k ? "var(--accent)" : "var(--border)", background: canal === k ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "var(--surface)" }}
+              >
+                {rot} · {n.toLocaleString("pt-BR")}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="grid gap-4 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
           <ul className="max-h-[70vh] min-w-0 space-y-1 overflow-y-auto pr-1">
-            {lista.data?.filter((c) => c.total_msgs > 0 && passa(c.id)).map((c) => {
+            {lista.data?.filter((c) => c.total_msgs > 0 && passa(c.id) && (canal === "todos" || (c.canal ?? "whatsapp") === canal)).map((c) => {
               const l = porId.get(c.id);
               const sit = l ? situacaoDa(l) : null;
               return (
@@ -386,6 +427,7 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
                     {c.ultima_msg_texto || "(mídia)"}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1">
+                    <Selo cor={(c.canal ?? "whatsapp") === "instagram" ? "var(--s3)" : "var(--good)"}>{ROTULO_CANAL[c.canal ?? "whatsapp"] ?? c.canal}</Selo>
                     {c.telefone_final && <Selo>{c.telefone_final}</Selo>}
                     <Selo>{c.total_msgs} msgs</Selo>
                     {c.lead_id && <Selo cor="var(--accent)">lead</Selo>}

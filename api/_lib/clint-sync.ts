@@ -64,6 +64,7 @@ interface ClintDeal {
 interface ClintOrigin {
   id: string;
   name?: string;
+  group?: { id?: string; name?: string } | null;
   stages?: { id: string; label: string }[];
 }
 
@@ -215,6 +216,9 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
       ? ((conn.config as any).etapas_base as unknown[]).filter((x): x is string => typeof x === "string" && x.trim().length > 0)
       : [];
     const agora = new Date().toISOString();
+    // Grupo de cada funil no Clint (Dra. Marcelly: "Resgate" = base antiga, "Skin Place - Gyn" = atendimento,
+    // "Campanhas"). Fica em config.grupos_funil para o painel separar os números por grupo.
+    const gruposDoFunil: Record<string, string> = {};
     // Funil que é um canal por si (Dra. Marcelly: "Social Seller" é prospecção ativa no direct). Sem origem no
     // negócio, o funil vira a origem com o nome configurado, e o canal aparece separado nos números por origem.
     const origemDoFunil = (conn.config as any)?.origem_por_funil && typeof (conn.config as any).origem_por_funil === "object"
@@ -244,6 +248,8 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
       if (truncated) errors.push(`origem ${originId}: tempo esgotado, dados parciais — rode de novo`);
 
       const originName = originNames.get(originId)?.name ?? originId;
+      const originGroup = originNames.get(originId)?.group?.name?.trim() || null;
+      if (originGroup) gruposDoFunil[originId] = originGroup;
 
       for (const d of deals) {
         if (!d?.id) continue;
@@ -268,7 +274,7 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
           price: clintPrice(d.value),
           occurred_at: d.created_at ?? null,
           outcome: normalizeOutcome(d.status),
-          source: clintSource(d.fields) ?? origemPorFunil(originName, origemDoFunil),
+          source: clintSource(d.fields) ?? origemPorFunil(originName, origemDoFunil) ?? origemPorFunil(originGroup, origemDoFunil),
           contact_name: d.contact?.name ?? null,
           contact_email: d.contact?.email ?? null,
           contact_phone: d.contact?.phone ?? null,
@@ -307,6 +313,16 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
         .from("crm_pipeline_statuses")
         .upsert([...stageRows.values()], { onConflict: "crm_connection_id,pipeline_id,status_id" });
       if (stageError) errors.push(`etapas: ${stageError.message}`);
+    }
+
+    if (Object.keys(gruposDoFunil).length > 0) {
+      // Relê a config para não sobrescrever o que mudou durante a rodada (cursor de conversas, por exemplo).
+      const { data: atual } = await supabase.from("crm_connections").select("config").eq("id", conn.id).single();
+      const { error: grupoError } = await supabase
+        .from("crm_connections")
+        .update({ config: { ...((atual?.config as Record<string, unknown>) ?? {}), grupos_funil: gruposDoFunil } })
+        .eq("id", conn.id);
+      if (grupoError) errors.push(`grupos dos funis: ${grupoError.message}`);
     }
 
     results.push({
