@@ -189,6 +189,19 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
       continue;
     }
 
+    // Nomes dos motivos de perda: o negócio só traz lost_status_id, e sem o nome o painel mostra um código
+    // (Dra. Marcelly: 171 perdas com motivo, nenhuma com nome). Falha aqui não para o sync.
+    try {
+      const body = await clintGet(token, "/lost-status?limit=200");
+      const motivos = motivosPerdaClint(body, conn.id);
+      if (motivos.length) {
+        const { error: eMotivos } = await supabase.from("crm_motivos_perda").upsert(motivos, { onConflict: "crm_connection_id,motivo_id" });
+        if (eMotivos) errors.push(`motivos de perda: ${eMotivos.message}`);
+      }
+    } catch (err) {
+      errors.push(`motivos de perda: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
     const originNames = await fetchOrigins(token).catch((err) => {
       errors.push(`origins: ${err instanceof Error ? err.message : String(err)}`);
       return new Map<string, ClintOrigin>();
@@ -202,6 +215,11 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
       ? ((conn.config as any).etapas_base as unknown[]).filter((x): x is string => typeof x === "string" && x.trim().length > 0)
       : [];
     const agora = new Date().toISOString();
+    // Funil que é um canal por si (Dra. Marcelly: "Social Seller" é prospecção ativa no direct). Sem origem no
+    // negócio, o funil vira a origem com o nome configurado, e o canal aparece separado nos números por origem.
+    const origemDoFunil = (conn.config as any)?.origem_por_funil && typeof (conn.config as any).origem_por_funil === "object"
+      ? ((conn.config as any).origem_por_funil as Record<string, unknown>)
+      : {};
     const stageRows = new Map<string, Record<string, unknown>>();
 
     for (const originId of origins) {
@@ -250,7 +268,7 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
           price: clintPrice(d.value),
           occurred_at: d.created_at ?? null,
           outcome: normalizeOutcome(d.status),
-          source: clintSource(d.fields),
+          source: clintSource(d.fields) ?? origemPorFunil(originName, origemDoFunil),
           contact_name: d.contact?.name ?? null,
           contact_email: d.contact?.email ?? null,
           contact_phone: d.contact?.phone ?? null,
@@ -308,4 +326,23 @@ export function ehEtapaBase(etapa: string, padroes: string[]): boolean {
   const norm = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   const e = norm(etapa);
   return !!e && padroes.some((p) => norm(p) && e.includes(norm(p)));
+}
+
+
+/** GET /v1/lost-status → linhas de crm_motivos_perda. */
+export function motivosPerdaClint(body: unknown, crmConnectionId: string) {
+  const lista = (body as { data?: unknown })?.data;
+  if (!Array.isArray(lista)) return [];
+  const agora = new Date().toISOString();
+  return lista
+    .map((m) => m as { id?: unknown; name?: unknown })
+    .filter((m) => typeof m.id === "string" && m.id && typeof m.name === "string" && m.name.trim())
+    .map((m) => ({ crm_connection_id: crmConnectionId, motivo_id: m.id as string, nome: (m.name as string).trim(), atualizado_em: agora }));
+}
+
+/** Origem pelo nome do funil, quando a conexão diz que aquele funil é um canal (config.origem_por_funil). */
+export function origemPorFunil(funil: string | null | undefined, mapa: Record<string, unknown>): string | null {
+  if (!funil) return null;
+  const valor = mapa[funil.trim()];
+  return typeof valor === "string" && valor.trim() ? valor.trim() : null;
 }
