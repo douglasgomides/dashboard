@@ -49,7 +49,7 @@ async function testKommoCursor() {
     assert.equal(url.hostname, "clinic.kommo.com");
     assert.equal(init?.redirect, "error");
     assert.ok(init?.signal instanceof AbortSignal, "provider requests need a timeout");
-    if (url.pathname.endsWith("loss_reasons")) return new Response(null, { status: 204 });
+    if (url.pathname.endsWith("loss_reasons") || url.pathname.endsWith("leads/pipelines")) return new Response(null, { status: 204 });
     leadRequests++;
     return json(malformed ? {} : { _embedded: { leads: [{ id: 1, pipeline_id: 10, status_id: 142, price: 0 }] } });
   };
