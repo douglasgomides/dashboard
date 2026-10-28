@@ -80,6 +80,25 @@ export function linhaDoLead(lead: KommoLead, crmConnectionId: string, clientId: 
   };
 }
 
+/** GET /api/v4/leads/pipelines → linhas de crm_pipeline_statuses (funil = pipeline, etapa = status). */
+export function etapasDosFunis(body: unknown, crmConnectionId: string) {
+  const funis = (body as { _embedded?: { pipelines?: unknown[] } })?._embedded?.pipelines;
+  if (!Array.isArray(funis)) return [];
+  return funis.flatMap((f) => {
+    const funil = f as { id?: number; name?: string; _embedded?: { statuses?: Array<{ id?: number; name?: string }> } };
+    if (!Number.isSafeInteger(funil.id)) return [];
+    return (funil._embedded?.statuses ?? [])
+      .filter((s) => Number.isSafeInteger(s.id) && typeof s.name === "string" && s.name.trim())
+      .map((s) => ({
+        crm_connection_id: crmConnectionId,
+        pipeline_id: String(funil.id),
+        pipeline_name: String(funil.name ?? funil.id).trim(),
+        status_id: String(s.id),
+        status_name: s.name!.trim(),
+      }));
+  });
+}
+
 export interface KommoLeadsSyncEnv {
   accessToken: string;
   kommoDomain: string; // ex: "gtlabiscentral.kommo.com"
@@ -145,6 +164,23 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
     }
   } catch (err) {
     errors.push(`motivos de perda: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  // Nomes dos funis e etapas: sem isso, etapa criada no Kommo depois da carga inicial aparece como "?" e não entra em
+  // "consulta agendada" nem na aba "A analisar" (Dra. Lana: 591 leads no funil Cadência em 3 etapas sem nome).
+  // Falha aqui não para o sync.
+  try {
+    const res = await fetch(`https://${domain}/api/v4/leads/pipelines`, integrationRequest({
+      headers: { Authorization: `Bearer ${env.accessToken}` },
+    }));
+    if (res.ok && res.status !== 204) {
+      const etapas = etapasDosFunis(await res.json(), env.crmConnectionId);
+      if (etapas.length) {
+        const { error } = await (supabase as any).from("crm_pipeline_statuses").upsert(etapas, { onConflict: "crm_connection_id,pipeline_id,status_id" });
+        if (error) errors.push(`etapas: ${error.message}`);
+      }
+    }
+  } catch (err) {
+    errors.push(`etapas: ${err instanceof Error ? err.message : String(err)}`);
   }
   const maxPages = Number.isInteger(env.maxPages) && env.maxPages! > 0 ? Math.min(env.maxPages!, 100) : 5;
 

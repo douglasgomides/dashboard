@@ -195,6 +195,13 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
     });
 
     const leadRows = new Map<string, Record<string, unknown>>();
+    // Listas de base importadas para reativação (Dra. Marcelly: "Base (não abordado)" em Toxina, Preenchimento,
+    // Fotona…) não são leads novos. Com config.etapas_base, o card nessas etapas fica fora das contas (removido_na_origem)
+    // e volta a contar quando a equipe o tira da etapa. A marcação é refeita a cada sync.
+    const etapasBase = Array.isArray((conn.config as any)?.etapas_base)
+      ? ((conn.config as any).etapas_base as unknown[]).filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+      : [];
+    const agora = new Date().toISOString();
     const stageRows = new Map<string, Record<string, unknown>>();
 
     for (const originId of origins) {
@@ -229,7 +236,10 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
           continue;
         }
 
+        const nomeEtapa = d.stage ?? String((stageRows.get(`${d.origin_id ?? originId}:${d.stage_id}`) as { status_name?: unknown } | undefined)?.status_name ?? "");
+        const base = etapasBase.length > 0 && ehEtapaBase(nomeEtapa, etapasBase);
         leadRows.set(d.id, {
+          ...(etapasBase.length > 0 ? { removido_na_origem: base ? agora : null } : {}),
           crm_connection_id: conn.id,
           client_id: conn.client_id,
           provider: "clint",
@@ -291,4 +301,11 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
   }
 
   return results;
+}
+
+/** A etapa é de lista de base (não abordada)? Compara sem acento e sem diferenciar maiúscula. */
+export function ehEtapaBase(etapa: string, padroes: string[]): boolean {
+  const norm = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const e = norm(etapa);
+  return !!e && padroes.some((p) => norm(p) && e.includes(norm(p)));
 }
