@@ -221,3 +221,21 @@ for(const width of [375,1440]) {
   await test.info().attach("kanban-nativo-sem-crm-"+width,{body:await page.screenshot({fullPage:true}),contentType:"image/png"});
  });
 }
+
+test("conversations separate Instagram from WhatsApp with a channel filter", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  const conversa = (id: string, nome: string, canal: string) => ({ id, pessoa_nome: nome, telefone_final: null, provider: "flwchat", canal, ultima_msg_em: new Date().toISOString(), ultima_msg_texto: "Olá", total_msgs: 3, lead_id: null, codigo_ref: null });
+  await context.route("**/rest/v1/rpc/listar_conversas_canal", r => r.fulfill({ json: r.request().postDataJSON().p_offset > 0 ? [] : [
+    conversa("00000000-0000-4000-8000-0000000000a1", "Paciente fictícia WA", "whatsapp"),
+    conversa("00000000-0000-4000-8000-0000000000a2", "Paciente fictícia IG", "instagram"),
+    conversa("00000000-0000-4000-8000-0000000000a3", "Outra fictícia WA", "whatsapp"),
+  ] }));
+  await page.goto(`/${CID}/atendimento?aba=conversas`);
+  const filtro = page.getByRole("group", { name: "Filtrar por canal" });
+  await expect(filtro.getByRole("button", { name: "WhatsApp · 2" })).toBeVisible();
+  await filtro.getByRole("button", { name: "Instagram · 1" }).click();
+  await expect(page.getByText("Paciente fictícia IG", { exact: true })).toBeVisible();
+  await expect(page.getByText("Paciente fictícia WA", { exact: true })).toHaveCount(0);
+  await filtro.getByRole("button", { name: /Todos os canais/ }).click();
+  await expect(page.getByText("Outra fictícia WA", { exact: true })).toBeVisible();
+});
