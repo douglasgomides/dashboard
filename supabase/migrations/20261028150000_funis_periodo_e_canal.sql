@@ -5,34 +5,46 @@
 --    agendada, ganhos, perdidos, valor, e a etapa em que o ganho costuma ficar. O grupo do funil vem de
 --    crm_connections.config.grupos_funil (Clint: "Resgate", "Skin Place - Gyn", "Campanhas").
 --    Período = data de entrada do lead. Só leitura; admin ou membro da clínica.
+--    Importação manual: 15 ou mais leads criados no mesmo minuto na mesma conexão é planilha importada, não lead
+--    que chegou (Dra. Marcelly, 28/09: a base antiga entrou em lote). Esses leads saem de "entraram" e aparecem em
+--    "importados"; ganho e perda deles continuam contando, porque o atendimento sobre a base é trabalho real.
 -- 2) listar_conversas_canal: igual a listar_conversas, com o canal (whatsapp, instagram, facebook…), para a tela
 --    separar Instagram de WhatsApp. listar_conversas fica como está.
 -- Reversão: drop function public.crm_funis_periodo(uuid, date, date); drop function public.listar_conversas_canal(uuid, integer, integer);
 
-create or replace function public.crm_funis_periodo(p_client_id uuid, p_from date, p_to date)
+drop function if exists public.crm_funis_periodo(uuid, date, date);
+create function public.crm_funis_periodo(p_client_id uuid, p_from date, p_to date)
 returns table(
-  grupo text, funil text, entraram bigint, consultas_agendadas bigint, ganhos bigint, ganhos_sem_valor bigint,
+  grupo text, funil text, entraram bigint, importados bigint, consultas_agendadas bigint, ganhos bigint, ganhos_sem_valor bigint,
   perdidos bigint, valor_ganho numeric, etapa_do_ganho text
 )
 language sql stable security definer set search_path = public, pg_temp
 as $function$
-  with l as (
+  with lote as (
+    select x.crm_connection_id, date_trunc('minute', x.occurred_at) as minuto, count(*) as n
+    from crm_leads x
+    where x.client_id = p_client_id and x.occurred_at is not null
+      and (x.occurred_at at time zone 'America/Sao_Paulo')::date between p_from and p_to
+    group by 1, 2
+  ), l as (
     select cl.crm_connection_id, cl.pipeline_id, cl.status_id, cl.outcome, cl.price,
       coalesce(s.pipeline_name, cl.pipeline_id) as funil, s.status_name,
       nullif(btrim(cc.config->'grupos_funil'->>cl.pipeline_id), '') as grupo,
       (exists (select 1 from crm_etapa_kpi k where k.crm_connection_id = cl.crm_connection_id and k.pipeline_id = cl.pipeline_id
                  and k.status_id = cl.status_id and k.kpi = 'consulta_agendada')
-        or coalesce(s.status_name, '') ilike '%consulta agendada%') as em_consulta
+        or coalesce(s.status_name, '') ilike '%consulta agendada%') as em_consulta,
+      coalesce(lote.n, 0) >= 15 as importado
     from crm_leads cl
     join crm_connections cc on cc.id = cl.crm_connection_id
     left join crm_pipeline_statuses s on s.crm_connection_id = cl.crm_connection_id and s.pipeline_id = cl.pipeline_id and s.status_id = cl.status_id
+    left join lote on lote.crm_connection_id = cl.crm_connection_id and lote.minuto = date_trunc('minute', cl.occurred_at)
     where cl.client_id = p_client_id
       and cl.removido_na_origem is null
       and cl.occurred_at is not null
       and (cl.occurred_at at time zone 'America/Sao_Paulo')::date between p_from and p_to
       and (public.is_app_admin() or public.is_client_member(p_client_id))
   )
-  select grupo, funil, count(*), count(*) filter (where em_consulta),
+  select grupo, funil, count(*) filter (where not importado), count(*) filter (where importado), count(*) filter (where em_consulta),
     count(*) filter (where outcome = 'won'), count(*) filter (where outcome = 'won' and coalesce(price, 0) = 0),
     count(*) filter (where outcome = 'lost'), coalesce(sum(price) filter (where outcome = 'won'), 0),
     (select l2.status_name from l l2 where l2.funil = l.funil and l2.outcome = 'won' and l2.status_name is not null

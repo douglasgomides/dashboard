@@ -24,7 +24,9 @@ export function FunisPeriodo({ clientId, start, end }: { clientId: string; start
           Cada funil marca "ganho" num momento diferente: em um funil de consultas, o ganho costuma ser a consulta agendada;
           num de procedimentos, o procedimento agendado. Por isso os ganhos aparecem por funil, com a etapa em que ficam, e
           não somados. Os números contam só os leads que entraram no período escolhido no topo da página. Os grupos são os
-          mesmos do CRM (por exemplo, Resgate para a base antiga e Campanhas).
+          mesmos do CRM (por exemplo, Resgate para a base antiga e Campanhas). Leads criados em lote (15 ou mais no mesmo
+          minuto) são planilha importada: aparecem como "importados" e não contam como leads que entraram, mas os ganhos
+          deles contam.
         </>
       }
     >
@@ -52,7 +54,10 @@ export function FunisPeriodo({ clientId, start, end }: { clientId: string; start
                   {g.linhas.map((l) => (
                     <tr key={l.funil} className="border-t" style={{ borderColor: "var(--border)" }}>
                       <th scope="row" className="py-1.5 pr-2 text-left font-medium">{l.funil}</th>
-                      <td className="py-1.5 pr-2 text-right tabular-nums">{num(l.entraram)}</td>
+                      <td className="py-1.5 pr-2 text-right tabular-nums">
+                        {num(l.entraram)}
+                        {l.importados > 0 && <span className="block text-[11px]" style={{ color: "var(--muted)" }}>+{num(l.importados)} importados</span>}
+                      </td>
                       <td className="py-1.5 pr-2 text-right tabular-nums">{num(l.consultas_agendadas)}</td>
                       <td className="py-1.5 pr-2 text-right tabular-nums">{num(l.ganhos)}</td>
                       <td className="py-1.5 pr-2 text-xs" style={{ color: "var(--text-dim)" }}>{l.etapa_do_ganho ?? "—"}</td>

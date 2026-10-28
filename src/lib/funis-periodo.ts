@@ -9,6 +9,8 @@ export interface LinhaFunil {
   grupo: string | null;
   funil: string;
   entraram: number;
+  /** Leads que entraram em lote (planilha importada): não contam como leads que chegaram. */
+  importados: number;
   consultas_agendadas: number;
   ganhos: number;
   ganhos_sem_valor: number;
@@ -26,7 +28,7 @@ export function lerFunis(bruto: unknown): LinhaFunil[] {
     return {
       grupo: typeof x.grupo === "string" && x.grupo.trim() ? x.grupo.trim() : null,
       funil: String(x.funil ?? "?"),
-      entraram: n(x.entraram), consultas_agendadas: n(x.consultas_agendadas), ganhos: n(x.ganhos),
+      entraram: n(x.entraram), importados: n(x.importados), consultas_agendadas: n(x.consultas_agendadas), ganhos: n(x.ganhos),
       ganhos_sem_valor: n(x.ganhos_sem_valor), perdidos: n(x.perdidos), valor_ganho: n(x.valor_ganho),
       etapa_do_ganho: typeof x.etapa_do_ganho === "string" ? x.etapa_do_ganho : null,
     };
