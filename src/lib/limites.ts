@@ -19,4 +19,11 @@ export const LIMITES = {
     /** Acima desta fatia do investimento separada por estimativa (sem destino nem meta de otimização), fica Parcial. */
     investimentoEstimadoMaximo: 0,
   },
+  /** Conferência diária: contagem do Nexo contra a contagem do CRM ao vivo. */
+  conferenciaCrm: {
+    /** Acima desta fatia de diferença entre Nexo e CRM, vira alerta. */
+    divergenciaMaxima: 0.03,
+    /** Diferenças menores que isto (em leads) nunca alertam: são os leads do dia entre uma sincronização e outra. */
+    divergenciaMinimaLeads: 30,
+  },
 } as const;

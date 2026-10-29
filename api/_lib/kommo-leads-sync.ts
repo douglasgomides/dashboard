@@ -237,7 +237,7 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
       result = await fetchLeadsPage(domain, env.accessToken, {
         ...baseParams,
         page: String(page),
-        with: "custom_fields_values,source_id",
+        with: "custom_fields_values,source_id,contacts",
       });
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
