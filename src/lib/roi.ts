@@ -24,6 +24,12 @@ export interface DadosRoi {
   receita: number;
   ganho_identificavel: boolean;
   crm_compartilhado: boolean;
+  /** Clientes que leem a mesma conta de CRM (os números deles são os mesmos). */
+  crm_compartilhado_com?: string[];
+  /** Anúncios lançados à mão na planilha, sem conta da Meta ligada. */
+  anuncios_planilha?: boolean;
+  /** Último dia com dado de anúncios (Meta ou planilha). */
+  anuncios_ate?: string | null;
 }
 
 export type IdItemRoi = "anuncios" | "crm" | "compartilhado" | "etapas" | "valor" | "origem";
@@ -98,15 +104,35 @@ export function passosValor(provider: string | null): string[] {
   }
 }
 
-/** Um ROI incompleto não apaga os volumes medidos; fonte ausente ou compartilhada nunca vira zero. */
+/** Um ROI incompleto não apaga os volumes medidos; fonte ausente nunca vira zero. CRM compartilhado mostra os
+ * números da conta inteira, com o aviso de que são os mesmos dos outros clientes dela (o ROI continua bloqueado). */
 export function numerosDisponiveisRoi(d: DadosRoi) {
-  const crmDaClinica = d.tem_crm && !d.crm_compartilhado;
   return {
     investido: d.tem_anuncios ? d.investido_aquisicao : null,
     investidoCrescimento: d.tem_anuncios ? d.investido_crescimento : null,
-    leads: crmDaClinica ? d.leads : null,
-    ganhos: crmDaClinica && d.ganho_identificavel ? d.ganhos : null,
+    leads: d.tem_crm ? d.leads : null,
+    ganhos: d.tem_crm && d.ganho_identificavel ? d.ganhos : null,
   };
+}
+
+const dataCurta = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+
+/** Texto curto da situação da fonte de anúncios, igual ao que o admin mostra. */
+export function situacaoAnuncios(d: DadosRoi, hoje = new Date().toISOString().slice(0, 10)): string {
+  if (!d.tem_anuncios) return "Conta de anúncios não conectada";
+  if (d.anuncios_planilha) return "Lançado à mão na planilha";
+  if (d.anuncios_ate && d.anuncios_ate < hoje && (Date.parse(hoje) - Date.parse(d.anuncios_ate)) / 86400_000 > 3) return `Conta parada desde ${dataCurta(d.anuncios_ate)}`;
+  return "mensagens, leads e conversão";
+}
+
+/** Texto curto da situação do CRM para os números de leads e vendas. */
+export function situacaoCrm(d: DadosRoi): string | null {
+  if (!d.tem_crm) return "CRM não ligado";
+  if (d.crm_compartilhado) {
+    const outros = d.crm_compartilhado_com ?? [];
+    return `CRM compartilhado${outros.length ? ` com ${outros.join(", ")}` : " com outro cliente"}: mesmos números`;
+  }
+  return null;
 }
 
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "sem dado");

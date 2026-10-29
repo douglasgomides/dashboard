@@ -31,7 +31,7 @@ for (const width of [375, 1440]) {
   });
 }
 
-test("missing or shared commercial sources do not become zero or another clinic's numbers", async ({ page, context }) => {
+test("missing sources do not become zero and a shared CRM shows its numbers with the warning", async ({ page, context }) => {
   await mockAccount(context, "viewer");
   let shared = false;
   await context.route("**/rest/v1/rpc/roi_periodo", r => r.fulfill({ json: shared ? { ...roi, crm_compartilhado: true } : { ...roi, tem_anuncios: false, tem_crm: false } }));
@@ -40,7 +40,8 @@ test("missing or shared commercial sources do not become zero or another clinic'
   await expect(values).toHaveText(["sem dado", "sem dado", "sem dado", "sem dado"]);
   shared = true;
   await page.reload();
-  await expect(values).toHaveText([/4.500,00/, /1.500,00/, "sem dado", "sem dado"]);
+  await expect(values).toHaveText([/4.500,00/, /1.500,00/, "240", "30"]);
+  await expect(page.getByRole("region", { name: "Retorno do investimento", exact: true }).getByText(/CRM compartilhado com outro cliente: mesmos números/).first()).toBeVisible();
 });
 
 test("a failed financial source offers a working retry instead of a blank result or a fabricated zero", async ({ page, context }) => {

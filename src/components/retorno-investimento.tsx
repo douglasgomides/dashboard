@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { CircleDashed, Coins, Info } from "lucide-react";
 import { getRoiPeriodo } from "@/lib/client-data";
-import { montarRoi, numerosDisponiveisRoi, NOTA_DEFASAGEM } from "@/lib/roi";
+import { montarRoi, numerosDisponiveisRoi, situacaoAnuncios, situacaoCrm, NOTA_DEFASAGEM } from "@/lib/roi";
 import { SeloConfianca } from "@/components/selo-confianca";
 import { InfoDica } from "@/components/visual";
 import { fmtBRL } from "@/lib/format";
@@ -127,10 +127,10 @@ export function RetornoInvestimento({
             <>
               <p className="mb-3 text-sm" style={{ color: "var(--ink-2)" }}>{r.motivoSemCalculo}</p>
               <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                <Numero rotulo="Investimento em aquisição" valor={numeros.investido === null ? "sem dado" : fmtBRL(numeros.investido)} sub={numeros.investido === null ? "Conta de anúncios não conectada" : "mensagens, leads e conversão"} dica="Soma do gasto das campanhas de mensagem, lead ou conversão no período." />
-                <Numero rotulo="Investimento em crescimento" valor={numeros.investidoCrescimento === null ? "sem dado" : fmtBRL(numeros.investidoCrescimento)} sub={numeros.investidoCrescimento === null ? "Conta de anúncios não conectada" : "seguidores, engajamento e alcance"} dica="Soma do gasto das campanhas de seguidores, engajamento, alcance e visita ao perfil." />
-                <Numero rotulo="Leads no CRM" valor={numeros.leads === null ? "sem dado" : numeros.leads.toLocaleString("pt-BR")} sub={numeros.leads === null ? "CRM não ligado ou compartilhado com outro cliente" : "Novos contatos no período"} />
-                <Numero rotulo="Vendas ganhas no CRM" valor={numeros.ganhos === null ? "sem dado" : numeros.ganhos.toLocaleString("pt-BR")} sub={numeros.ganhos === null ? "Etapa de venda não marcada ou CRM compartilhado" : "Fechamentos registrados no período"} />
+                <Numero rotulo="Investimento em aquisição" valor={numeros.investido === null ? "sem dado" : fmtBRL(numeros.investido)} sub={situacaoAnuncios(q.data!)} dica="Soma do gasto das campanhas de mensagem, lead ou conversão no período." />
+                <Numero rotulo="Investimento em crescimento" valor={numeros.investidoCrescimento === null ? "sem dado" : fmtBRL(numeros.investidoCrescimento)} sub={numeros.investidoCrescimento === null ? situacaoAnuncios(q.data!) : "seguidores, engajamento e alcance"} dica="Soma do gasto das campanhas de seguidores, engajamento, alcance e visita ao perfil." />
+                <Numero rotulo="Leads no CRM" valor={numeros.leads === null ? "sem dado" : numeros.leads.toLocaleString("pt-BR")} sub={situacaoCrm(q.data!) ?? "Novos contatos no período"} />
+                <Numero rotulo="Vendas ganhas no CRM" valor={numeros.ganhos === null ? "sem dado" : numeros.ganhos.toLocaleString("pt-BR")} sub={numeros.ganhos === null ? (situacaoCrm(q.data!) ?? "Etapa de venda não marcada no CRM") : situacaoCrm(q.data!) ?? "Fechamentos registrados no período"} />
               </div>
             </>
           )}
