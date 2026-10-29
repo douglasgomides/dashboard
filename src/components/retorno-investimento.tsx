@@ -2,7 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { CircleDashed, Coins, Info } from "lucide-react";
 import { getRoiPeriodo } from "@/lib/client-data";
-import { montarRoi, numerosDisponiveisRoi } from "@/lib/roi";
+import { montarRoi, numerosDisponiveisRoi, NOTA_DEFASAGEM } from "@/lib/roi";
+import { SeloConfianca } from "@/components/selo-confianca";
+import { InfoDica } from "@/components/visual";
 import { fmtBRL } from "@/lib/format";
 import { useAuth } from "@/hooks/use-auth";
 import { formatRangeLabel } from "@/lib/date-range";
@@ -15,11 +17,14 @@ function Numero({
   valor,
   sub,
   destaque,
+  dica,
 }: {
   rotulo: string;
   valor: string;
   sub?: string;
   destaque?: string;
+  /** Fórmula em português simples, no "i" ao lado do rótulo. */
+  dica?: string;
 }) {
   const moeda = /^(-?R\$)\s*(.+)$/.exec(valor);
   return (
@@ -27,8 +32,9 @@ function Numero({
       className="ws-metric rounded-lg border p-3"
       style={{ borderColor: "var(--border)", background: "var(--surface)" }}
     >
-      <div className="text-xs font-medium" style={{ color: "var(--ink-2)" }}>
-        {rotulo}
+      <div className="flex items-start gap-1 text-xs font-medium" style={{ color: "var(--ink-2)" }}>
+        <span>{rotulo}</span>
+        {dica && <InfoDica texto={dica} rotulo={`Como calculamos: ${rotulo}`} />}
       </div>
       <div
         className={`ws-metric-value mt-1 text-2xl font-semibold tabular-nums${moeda ? " ws-metric-value--currency" : ""}`}
@@ -105,26 +111,37 @@ export function RetornoInvestimento({
       )}
       {r && numeros && (
         <>
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--ink-2)" }}>
+            <span>Retorno:</span> <SeloConfianca selo={r.selo} />
+            <span className="ml-2">Investimento separado por objetivo:</span> <SeloConfianca selo={r.seloInvestimento} />
+          </div>
           {r.calculavel ? (
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-              <Numero rotulo="Investido em anúncios" valor={fmtBRL(r.investido)} />
-              <Numero rotulo="Receita (vendas ganhas no CRM)" valor={fmtBRL(r.receita)} sub={`${r.ganhos} ${r.ganhos === 1 ? "venda" : "vendas"} no período`} />
-              <Numero rotulo="ROI" valor={`${r.roi! >= 0 ? "+" : ""}${Math.round(r.roi! * 100).toLocaleString("pt-BR")}%`} sub={`cada R$ 1 investido voltou ${fmtBRL(r.retornoPorReal!)}`} destaque={r.roi! >= 0 ? "var(--good)" : "var(--crit)"} />
-              <Numero rotulo="Custo por paciente" valor={fmtBRL(r.custoPorPaciente!)} sub="investido ÷ vendas ganhas" />
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+              <Numero rotulo="Investimento em aquisição" valor={fmtBRL(r.investido)} sub="mensagens, leads e conversão" dica="Soma do gasto das campanhas de mensagem, lead ou conversão no período. É a base do retorno." />
+              <Numero rotulo="Investimento em crescimento" valor={fmtBRL(r.investidoCrescimento)} sub="seguidores, engajamento e alcance" dica="Soma do gasto das campanhas de seguidores, engajamento, alcance e visita ao perfil. Não entra no retorno, porque não busca venda direta." />
+              <Numero rotulo="Receita (vendas ganhas no CRM)" valor={fmtBRL(r.receita)} sub={`${r.ganhos} ${r.ganhos === 1 ? "venda" : "vendas"} no período`} dica="Soma do valor dos cards marcados como ganho no CRM, com data de fechamento no período." />
+              <Numero rotulo="ROI" valor={`${r.roi! >= 0 ? "+" : ""}${Math.round(r.roi! * 100).toLocaleString("pt-BR")}%`} sub={`cada R$ 1 em aquisição voltou ${fmtBRL(r.retornoPorReal!)}`} destaque={r.roi! >= 0 ? "var(--good)" : "var(--crit)"} dica="(receita menos investimento em aquisição) dividido pelo investimento em aquisição." />
+              <Numero rotulo={r.rotuloCusto} valor={fmtBRL(r.custo!)} sub="aquisição ÷ vendas ganhas" dica={`Investimento em aquisição dividido pelo número de vendas ganhas no período.`} />
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-              <Numero rotulo="Investido em anúncios" valor={numeros.investido === null ? "—" : fmtBRL(numeros.investido)} sub={numeros.investido === null ? "Conta de anúncios não conectada" : "No período selecionado"} />
-              <Numero rotulo="Leads no CRM" valor={numeros.leads === null ? "—" : numeros.leads.toLocaleString("pt-BR")} sub={numeros.leads === null ? "Fonte da clínica não conferida" : "Novos contatos no período"} />
-              <Numero rotulo="Vendas ganhas no CRM" valor={numeros.ganhos === null ? "—" : numeros.ganhos.toLocaleString("pt-BR")} sub={numeros.ganhos === null ? "Etapas ou fonte não conferidas" : "Fechamentos registrados no período"} />
-              <Numero rotulo="ROI" valor="—" sub={r.motivoSemCalculo ?? "Faltam dados para calcular o retorno"} />
-            </div>
+            <>
+              <p className="mb-3 text-sm" style={{ color: "var(--ink-2)" }}>{r.motivoSemCalculo}</p>
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                <Numero rotulo="Investimento em aquisição" valor={numeros.investido === null ? "sem dado" : fmtBRL(numeros.investido)} sub={numeros.investido === null ? "Conta de anúncios não conectada" : "mensagens, leads e conversão"} dica="Soma do gasto das campanhas de mensagem, lead ou conversão no período." />
+                <Numero rotulo="Investimento em crescimento" valor={numeros.investidoCrescimento === null ? "sem dado" : fmtBRL(numeros.investidoCrescimento)} sub={numeros.investidoCrescimento === null ? "Conta de anúncios não conectada" : "seguidores, engajamento e alcance"} dica="Soma do gasto das campanhas de seguidores, engajamento, alcance e visita ao perfil." />
+                <Numero rotulo="Leads no CRM" valor={numeros.leads === null ? "sem dado" : numeros.leads.toLocaleString("pt-BR")} sub={numeros.leads === null ? "CRM não ligado ou compartilhado com outro cliente" : "Novos contatos no período"} />
+                <Numero rotulo="Vendas ganhas no CRM" valor={numeros.ganhos === null ? "sem dado" : numeros.ganhos.toLocaleString("pt-BR")} sub={numeros.ganhos === null ? "Etapa de venda não marcada ou CRM compartilhado" : "Fechamentos registrados no período"} />
+              </div>
+            </>
           )}
+          <p className="mt-2 flex items-start gap-1.5 text-xs" style={{ color: "var(--muted)" }}>
+            <Info size={13} aria-hidden className="mt-0.5 shrink-0" />
+            {NOTA_DEFASAGEM}
+          </p>
           <details className="roi-details mt-3">
             <summary className="flex min-h-[44px] cursor-pointer items-center text-sm font-semibold" style={{ color: "var(--accent)" }}>
               {pendentes.length ? `Conferir ${pendentes.length === 1 ? "1 pendência" : `${pendentes.length} pendências`} e o cálculo` : "Como calculamos estes números"}
             </summary>
-            {!r.calculavel && <p className="mb-3 text-sm" style={{ color: "var(--ink-2)" }}>{r.motivoSemCalculo ?? "O retorno ainda não pode ser calculado. Os indicadores já medidos continuam disponíveis acima."}</p>}
             {pendentes.length > 0 && (
               <ul className="space-y-2" aria-label="O que falta para o retorno do investimento">
                 {pendentes.map((i) => (
@@ -134,6 +151,11 @@ export function RetornoInvestimento({
                       <b>{i.preciso}</b>
                       <p style={{ color: "var(--ink-2)" }}>Para mostrar {i.paraMostrar}.</p>
                       {i.detalhe && <p className="text-xs" style={{ color: "var(--ink-2)" }}>{i.detalhe}</p>}
+                      {i.passos.length > 0 && (
+                        <ol className="mt-1 list-decimal space-y-0.5 pl-4 text-xs" style={{ color: "var(--ink-2)" }} aria-label={`Como corrigir: ${i.preciso}`}>
+                          {i.passos.map((p) => <li key={p}>{p}</li>)}
+                        </ol>
+                      )}
                     </div>
                     {i.link.soAdmin && !isAdmin ? (
                       <span className="text-xs" style={{ color: "var(--muted)" }}>A equipe Doctor Creator resolve</span>
@@ -146,7 +168,7 @@ export function RetornoInvestimento({
             )}
             <p className="mt-3 flex items-start gap-1.5 text-xs" style={{ color: "var(--muted)" }}>
               <Info size={13} aria-hidden className="mt-0.5 shrink-0" />
-              Receita = soma do valor dos cards marcados como ganho no CRM, com data no período. ROI = (receita − investido) ÷ investido. Conta todas as vendas do período, não só as que vieram de anúncio{r.itens.find((x) => x.id === "origem")?.feito ? "" : ": para separar, falta a origem do lead"}.
+              Receita é a soma do valor dos cards marcados como ganho no CRM, com data no período. ROI é a receita menos o investimento em aquisição, dividido pelo investimento em aquisição. O investimento em crescimento fica de fora. Conta todas as vendas do período, não só as que vieram de anúncio.
             </p>
           </details>
         </>

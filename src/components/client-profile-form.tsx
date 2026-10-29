@@ -52,7 +52,7 @@ const estiloInput: React.CSSProperties = {
 
 // O token do WTS não chega ao navegador (getClient usa colunas explícitas), por isso fica fora do tipo.
 // Só as colunas que getClient entrega (sem tokens e segredos da tabela clients).
-type ClienteDoPerfil = Pick<Tables<"clients">, "id" | "name" | "specialty" | "instagram_handle" | "cfm_score_status" | "active" | "created_at" | "meta_ad_account_id" | "wts_company_id" | "avatar_url" | "wts_department_ids" | "em_onboarding">;
+type ClienteDoPerfil = Pick<Tables<"clients">, "id" | "name" | "specialty" | "instagram_handle" | "cfm_score_status" | "active" | "created_at" | "meta_ad_account_id" | "wts_company_id" | "avatar_url" | "wts_department_ids" | "em_onboarding"> & { rotulo_custo?: string | null };
 
 export function ClientProfileForm({ client }: { client: ClienteDoPerfil }) {
   // A new client gets a new form; refetching its avatar preserves unsaved fields.
@@ -80,6 +80,7 @@ function ClientProfileEditor({ client }: { client: ClienteDoPerfil }) {
   const [contaWts, setContaWts] = useState(client.wts_company_id ?? "");
   const [cfm, setCfm] = useState<CfmScoreStatus | "">(client.cfm_score_status ?? "");
   const [ativo, setAtivo] = useState(client.active);
+  const [rotuloCusto, setRotuloCusto] = useState<"venda" | "paciente">(client.rotulo_custo === "paciente" ? "paciente" : "venda");
   const [recado, setRecado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
@@ -142,6 +143,7 @@ function ClientProfileEditor({ client }: { client: ClienteDoPerfil }) {
       meta_ad_account_id: ouNulo(contaAds),
       wts_company_id: ouNulo(contaWts),
       cfm_score_status: cfm === "" ? null : cfm,
+      rotulo_custo: rotuloCusto,
       active: ativo,
     });
   }
@@ -231,6 +233,17 @@ function ClientProfileEditor({ client }: { client: ClienteDoPerfil }) {
                 {o.label}
               </option>
             ))}
+          </select>
+        </Campo>
+        <Campo label="Rótulo do custo no Resultado" hint="Como o custo aparece no retorno do investimento: por venda fechada ou por paciente.">
+          <select
+            value={rotuloCusto}
+            onChange={(e) => setRotuloCusto(e.target.value === "paciente" ? "paciente" : "venda")}
+            className="mt-1 w-full rounded-md border px-2.5 py-1.5 text-sm"
+            style={estiloInput}
+          >
+            <option value="venda">Custo por venda</option>
+            <option value="paciente">Custo por paciente</option>
           </select>
         </Campo>
       </div>

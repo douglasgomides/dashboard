@@ -254,7 +254,7 @@ export function montarKpisSap(t: TrackerAutoBruto): LeituraTracker {
     texto: t.investido <= 0 ? "sem investimento no período" : !temComparecimento ? "etapa não marcada" : cc === null ? "nenhuma consulta realizada" : brl(cc),
     farol: "cinza",
     regra: "Comparado com a meta da clínica (a partir do D14)",
-    base: `${brl(t.investido)} investidos em anúncios · ${n(t.compareceram)} consultas`,
+    base: `${brl(t.investido)} investidos em aquisição (mensagens e leads) · ${n(t.compareceram)} consultas`,
     falta: !temComparecimento ? "Marcar no CRM a etapa de consulta realizada." : undefined,
     amostraPequena: t.compareceram < REF_SAP.amostra.consultas,
     ehMeta: true,

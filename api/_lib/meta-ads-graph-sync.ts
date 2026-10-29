@@ -149,6 +149,32 @@ async function buscarInsightsUmaJanela(
   return linhas;
 }
 
+// Meta de otimização e destino de cada conjunto de anúncios, agrupados por campanha. É o que separa
+// investimento em aquisição (mensagem, lead) de investimento em crescimento (perfil, alcance) no ROI.
+// Inclui conjuntos pausados e arquivados: campanha antiga ainda tem gasto no período consultado.
+export async function buscarConjuntos(contaId: string, token: string): Promise<Map<string, { otimizacoes: string[]; destinos: string[] }>> {
+  const conta = contaId.startsWith("act_") ? contaId : `act_${contaId}`;
+  const filtro = JSON.stringify([{ field: "effective_status", operator: "IN", value: ["ACTIVE", "PAUSED", "ARCHIVED", "CAMPAIGN_PAUSED", "ADSET_PAUSED", "IN_PROCESS", "WITH_ISSUES"] }]);
+  let url = `${API}/${conta}/adsets?fields=campaign_id,optimization_goal,destination_type&limit=500` +
+    `&filtering=${encodeURIComponent(filtro)}&access_token=${encodeURIComponent(token)}`;
+  const porCampanha = new Map<string, { otimizacoes: string[]; destinos: string[] }>();
+  for (let pagina = 0; pagina < 20 && url; pagina++) {
+    const res = await fetch(graphPageUrl(url), integrationRequest());
+    const texto = await res.text();
+    if (!res.ok) throw new Error(`Meta adsets ${conta} respondeu ${res.status}: ${texto.slice(0, 300)}`);
+    const corpo = JSON.parse(texto) as { data?: { campaign_id?: string; optimization_goal?: string; destination_type?: string }[]; paging?: { next?: string } };
+    for (const a of corpo.data ?? []) {
+      if (!a.campaign_id) continue;
+      const atual = porCampanha.get(a.campaign_id) ?? { otimizacoes: [], destinos: [] };
+      if (a.optimization_goal && !atual.otimizacoes.includes(a.optimization_goal)) atual.otimizacoes.push(a.optimization_goal);
+      if (a.destination_type && !atual.destinos.includes(a.destination_type)) atual.destinos.push(a.destination_type);
+      porCampanha.set(a.campaign_id, atual);
+    }
+    url = corpo.paging?.next ?? "";
+  }
+  return porCampanha;
+}
+
 // "aborted due to timeout": a conta do Douglas (127 campanhas) estourava os 30 s numa janela de 30 dias e ficava sem dado; timeout também é erro de carga.
 const ERRO_DE_CARGA = /"code":\s*(1|2)\b|temporarily unavailable|respondeu 5\d\d|unknown error|reduce the amount of data|aborted due to timeout|timed out|timeout/i;
 const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -284,6 +310,17 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
         r.conversations += conv;
       }
 
+      // Sem a meta de otimização a campanha ainda é classificada (pelo objetivo ou pelas conversas), só que
+      // como estimativa; por isso uma falha aqui vira aviso e não derruba o sync das métricas.
+      let conjuntos = new Map<string, { otimizacoes: string[]; destinos: string[] }>();
+      if (campanhas.size > 0) {
+        try {
+          conjuntos = await buscarConjuntos(conta.ad_account_id, tokenConta);
+        } catch (e) {
+          r.errors.push(`conjuntos de anúncios (meta de otimização): ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+
       if (campanhas.size > 0) {
         // Só nome e objetivo. Miniatura e permalink do criativo vêm de outro
         // caminho e seriam apagados se entrassem nulos aqui.
@@ -293,6 +330,9 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
           campaign_id: id,
           name: c.name,
           objective: c.objective,
+          // Todas as linhas do lote com as mesmas colunas: o upsert usa a união das chaves e preencheria nulo
+          // nas que faltassem. Sem resposta de /adsets (falha), as colunas ficam de fora e o que havia continua.
+          ...(conjuntos.size > 0 ? { otimizacoes: conjuntos.get(id)?.otimizacoes ?? null, destinos: conjuntos.get(id)?.destinos ?? null } : {}),
           updated_at: new Date().toISOString(),
         }));
         for (let i = 0; i < linhasCamp.length; i += 200) {

@@ -41,6 +41,9 @@ const FIELDS = [
   "effective_instagram_media_id",
   "effective_instagram_media__permalink",
   "effective_instagram_media__thumbnail_url",
+  // Destino do conjunto de anúncios (WhatsApp, Direct, site, perfil): separa
+  // investimento em aquisição de investimento em crescimento no ROI.
+  "adset_destination_type",
 ];
 
 export interface AdsSyncEnv {
@@ -83,6 +86,13 @@ function num(v: unknown): number {
   if (v === null || v === undefined || v === "") return 0;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+/** Junta o destino de mais um anúncio à lista da campanha, sem repetir. Sem destino na linha, mantém o que já havia. */
+export function juntarDestino(lista: string[] | null | undefined, destino: string | null): string[] | null {
+  if (!destino) return lista ?? null;
+  const atual = lista ?? [];
+  return atual.includes(destino) ? atual : [...atual, destino];
 }
 
 function texto(v: unknown): string | null {
@@ -200,6 +210,7 @@ async function syncAccount(
       instagram_media_id: texto(r.effective_instagram_media_id) ?? anterior?.instagram_media_id ?? null,
       permalink: texto(r.effective_instagram_media__permalink) ?? anterior?.permalink ?? null,
       thumbnail_url: texto(r.effective_instagram_media__thumbnail_url) ?? anterior?.thumbnail_url ?? null,
+      destinos: juntarDestino(anterior?.destinos, texto(r.adset_destination_type)),
     });
 
     const chave = `${date}|${campaignId}`;

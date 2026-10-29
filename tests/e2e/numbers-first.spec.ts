@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 
-const roi = { tem_anuncios: true, tem_crm: true, investido: 6000, leads: 240, leads_com_origem: 240, ganhos: 30, ganhos_com_valor: 0, receita: 0, ganho_identificavel: true, crm_compartilhado: false };
+const roi = { tem_anuncios: true, tem_crm: true, crm_provider: "kommo", rotulo_custo: "venda", investido: 6000, investido_aquisicao: 4500, investido_crescimento: 1500, investido_estimado: 0, leads: 240, leads_com_origem: 240, ganhos: 30, ganhos_com_valor: 0, receita: 0, ganho_identificavel: true, crm_compartilhado: false };
 
 for (const width of [375, 1440]) {
   test(`known numbers appear before recommendations even when ROI is incomplete at ${width}px`, async ({ page, context }) => {
@@ -10,14 +10,17 @@ for (const width of [375, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}?preset=7d`);
     const results = page.getByRole("region", { name: "Retorno do investimento", exact: true });
-    await expect(results.locator(".ws-metric-value")).toHaveText([/6.000,00/, "240", "30", "—"]);
+    await expect(results.locator(".ws-metric-value")).toHaveText([/4.500,00/, /1.500,00/, "240", "30"]);
     await expect(results.locator(".ws-metric-value").first()).toBeInViewport();
+    await expect(results.getByText(/Não dá pra calcular o retorno porque falta: preencher o valor da venda/)).toBeVisible();
+    await expect(results.getByRole("button", { name: /^Não dá pra ler:/ })).toBeVisible();
     const next = page.getByRole("region", { name: "Por onde começar", exact: true });
     expect(await results.evaluate(el => !!(el.compareDocumentPosition(document.querySelector('[aria-label="Por onde começar"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
     await expect(next).toBeVisible();
     await expect(results.getByRole("list")).toHaveCount(0);
     await results.locator("summary").click();
-    await expect(results.getByRole("listitem")).toHaveCount(1);
+    await expect(results.getByRole("list", { name: "O que falta para o retorno do investimento" }).locator(":scope > li")).toHaveCount(1);
+    await expect(results.getByRole("list", { name: /Como corrigir: Preencher o valor/ })).toContainText("No Kommo");
     const link = results.getByRole("link", { name: /Ver como organizar o CRM/ });
     const target = new URL((await link.getAttribute("href"))!, "http://localhost");
     expect(target.pathname).toBe(`/${CID}/crm-guia`);
@@ -34,10 +37,10 @@ test("missing or shared commercial sources do not become zero or another clinic'
   await context.route("**/rest/v1/rpc/roi_periodo", r => r.fulfill({ json: shared ? { ...roi, crm_compartilhado: true } : { ...roi, tem_anuncios: false, tem_crm: false } }));
   await page.goto(`/${CID}`);
   const values = page.getByRole("region", { name: "Retorno do investimento", exact: true }).locator(".ws-metric-value");
-  await expect(values).toHaveText(["—", "—", "—", "—"]);
+  await expect(values).toHaveText(["sem dado", "sem dado", "sem dado", "sem dado"]);
   shared = true;
   await page.reload();
-  await expect(values).toHaveText([/6.000,00/, "—", "—", "—"]);
+  await expect(values).toHaveText([/4.500,00/, /1.500,00/, "sem dado", "sem dado"]);
 });
 
 test("a failed financial source offers a working retry instead of a blank result or a fabricated zero", async ({ page, context }) => {
@@ -50,7 +53,24 @@ test("a failed financial source offers a working retry instead of a blank result
   await expect(results.locator(".ws-metric-value")).toHaveCount(0);
   fail = false;
   await results.getByRole("button", { name: "Tentar novamente", exact: true }).click();
-  await expect(results.locator(".ws-metric-value")).toHaveText([/6.000,00/, "240", "30", "—"]);
+  await expect(results.locator(".ws-metric-value")).toHaveText([/4.500,00/, /1.500,00/, "240", "30"]);
+});
+
+test("ROI uses only acquisition spend, shows the chosen cost label, the confidence badge and the lag note", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await context.route("**/rest/v1/rpc/roi_periodo", r => r.fulfill({ json: { ...roi, rotulo_custo: "paciente", leads_com_origem: 200, ganhos: 10, ganhos_com_valor: 10, receita: 9000, investido_estimado: 600 } }));
+  await page.goto(`/${CID}`);
+  const results = page.getByRole("region", { name: "Retorno do investimento", exact: true });
+  // (9.000 − 4.500) ÷ 4.500 = +100%. O crescimento (1.500) não entra. Custo = 4.500 ÷ 10.
+  await expect(results.locator(".ws-metric-value")).toHaveText([/4.500,00/, /1.500,00/, /9.000,00/, "+100%", /450,00/]);
+  await expect(results.getByText("Custo por paciente", { exact: true })).toBeVisible();
+  await expect(results.getByText("Venda fechada no período pode ter vindo de contato de períodos anteriores.")).toBeVisible();
+  const selo = results.getByRole("button", { name: /^Parcial:.*sem origem/ });
+  await expect(selo).toBeVisible();
+  await selo.click();
+  await expect(results.getByRole("tooltip")).toContainText("sem origem");
+  await results.getByRole("button", { name: "Como calculamos: ROI" }).click();
+  await expect(results.getByRole("tooltip").last()).toContainText("investimento em aquisição");
 });
 
 test("SAP clinic selection opens results while explicit task links remain available", async ({ page, context }) => {

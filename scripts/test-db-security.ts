@@ -161,6 +161,8 @@ try {
     for (const user of [viewer, admin]) for (const column of ["wts_api_token", "digisac_token", "digisac_url"]) await denied(() => role("authenticated", user, () => rows(`select ${column} from clients`)));
     await denied(() => role("authenticated", admin, () => rows("select access_token from client_ad_accounts")));
     assert.equal((await role("authenticated", viewer, () => rows("select name from clients"))).length, 1);
+    // Rótulo do custo do ROI: lido pela tela do cliente junto com o perfil (getClient).
+    assert.deepEqual(await role("authenticated", viewer, () => rows("select rotulo_custo from clients")), [{ rotulo_custo: "venda" }]);
   });
   await check("editor classifica post próprio e não pode alterar identidade/métricas", async () => {
     await role("authenticated", editor, async () => { assert.equal((await rows("update instagram_posts set tema='Tema profissional' where id=$1 returning tema", [postA])).length, 1); });

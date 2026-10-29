@@ -167,6 +167,7 @@ export type ClientProfileInput = {
   avatar_url: string | null;
   meta_ad_account_id: string | null;
   wts_company_id: string | null;
+  rotulo_custo?: "venda" | "paciente";
   cfm_score_status: CfmScoreStatus | null;
   active: boolean;
 };
