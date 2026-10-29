@@ -179,7 +179,7 @@ function TendenciaDeLeads({ clientId, start, end }: { clientId: string; start: s
       }));
 
   return (
-    <Painel icone={TrendingUp} titulo={porPessoa ? "Pessoas novas por dia" : "Novos leads por dia"} resumo={`Período: ${formatRangeLabel({ start, end })}`} cor="var(--s1)">
+    <Painel icone={TrendingUp} titulo="Leads novos por dia" resumo={`Período: ${formatRangeLabel({ start, end })}`} cor="var(--s1)">
       {isLoading ? (
         <p className="text-xs" style={{ color: "var(--text-dim)" }}>
           Carregando…
@@ -461,20 +461,20 @@ function CrmClinicaPage() {
       <Painel
         icone={Sparkles}
         titulo="No período selecionado"
-        resumo={`${pessoas ? "Orçamentos criados" : "Leads criados"} entre ${formatRangeLabel({ start, end })}`}
+        resumo={`Leads criados entre ${formatRangeLabel({ start, end })}`}
         cor="var(--s3)"
       >
         {periodoQ.isPending ? <p role="status" className="text-sm">Carregando os números do período…</p> : periodoQ.isError ? <div role="alert" className="space-y-2 text-sm"><p>Não foi possível consultar os números deste período. A base geral continua disponível abaixo.</p><button type="button" className="ws-action ws-action--secondary" disabled={periodoQ.isFetching} onClick={() => void periodoQ.refetch()}>Tentar novamente</button></div> : periodo && pessoas ? <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Kpi icone={Users} rotulo="Pessoas novas" valor={fmtN(pessoas.pessoas_novas)} cor="var(--accent)" dica="pessoas que aparecem pela primeira vez no CRM dentro do período" />
-            <Kpi icone={Users} rotulo="Pessoas com orçamento" valor={fmtN(pessoas.pessoas)} cor="var(--s1)" dica="pessoas diferentes com pelo menos um orçamento criado no período, novas ou não" />
-            <Kpi icone={Target} rotulo="Orçamentos criados" valor={fmtN(pessoas.cards)} cor="var(--s3)" dica="cada card do painel é um orçamento; a mesma pessoa pode ter vários" />
-            <Kpi icone={Trophy} rotulo="Orçamentos ganhos" valor={fmtN(pessoas.ganhos)} cor="var(--good)" dica={`valor dos ganhos: ${fmtBRL(pessoas.valor_ganho)}`} />
+            <Kpi icone={Users} rotulo="Leads novos" valor={fmtN(pessoas.pessoas_novas)} cor="var(--accent)" dica="pessoas que aparecem pela primeira vez no CRM no período, em funil de captação; não conta quem já é paciente nem funil de compra" />
+            <Kpi icone={Users} rotulo="Pessoas no período" valor={fmtN(pessoas.pessoas)} cor="var(--s1)" dica="pessoas diferentes com pelo menos um card criado no período, novas ou não" />
+            <Kpi icone={Target} rotulo="Cards criados" valor={fmtN(pessoas.cards)} cor="var(--s3)" dica="a mesma pessoa pode ter vários cards (orçamentos, retornos, funis diferentes)" />
+            <Kpi icone={Trophy} rotulo="Cards ganhos" valor={fmtN(pessoas.ganhos)} cor="var(--good)" dica={`valor dos ganhos: ${fmtBRL(pessoas.valor_ganho)}`} />
           </div>
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-            Neste CRM cada card é um <b>orçamento</b>, não uma pessoa. No período foram {fmtN(pessoas.cards)} orçamentos de {fmtN(pessoas.pessoas)} pessoas
-            (até {fmtN(pessoas.max_cards_por_pessoa)} por pessoa): {fmtN(pessoas.pessoas_novas)} apareceram pela primeira vez e{" "}
-            {fmtN(pessoas.pessoas_recorrentes)} já tinham orçamento antes ({fmtN(pessoas.cards_de_recorrentes)} dos orçamentos). Valor dos cards no período:{" "}
+            Leads novos contam <b>pessoas</b>, não cards. No período foram {fmtN(pessoas.cards)} cards de {fmtN(pessoas.pessoas)} pessoas
+            (até {fmtN(pessoas.max_cards_por_pessoa)} por pessoa): {fmtN(pessoas.pessoas_novas)} são leads novos e{" "}
+            {fmtN(pessoas.pessoas_recorrentes)} já tinham registro antes, são pacientes da casa ou estão só em funil de compra ({fmtN(pessoas.cards_de_recorrentes)} dos cards). Valor dos cards no período:{" "}
             {fmtBRL(pessoas.valor)}.
           </p>
         </div> : periodo && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
