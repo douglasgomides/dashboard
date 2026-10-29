@@ -25,6 +25,8 @@ alter table public.clients add column if not exists rotulo_custo text not null d
 do $$ begin
   alter table public.clients add constraint clients_rotulo_custo_check check (rotulo_custo in ('venda', 'paciente'));
 exception when duplicate_object then null; end $$;
+-- clients libera leitura coluna a coluna (o token do WTS não pode chegar ao navegador): a nova precisa do grant.
+grant select (rotulo_custo) on public.clients to authenticated;
 comment on column public.clients.rotulo_custo is 'Rótulo do custo no Resultado: "venda" (custo por venda) ou "paciente" (custo por paciente).';
 
 create or replace function public.ads_finalidade(p_objective text, p_otimizacoes text[], p_destinos text[], p_conversas_leads numeric)
