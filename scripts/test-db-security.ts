@@ -494,6 +494,11 @@ try {
         ["o12", "clint", { contato_tags: ["Social Selling", "ig-social"] }, null, "Prospecção ativa", "etiqueta"],
         ["o13", "kommo", { _embedded: { tags: [{ name: "Origem-PacienteAntigo" }] } }, null, "Paciente antigo", "etiqueta"],
         ["o14", "clint", { contato_tags: ["Nexo | Origem não documentada"] }, null, null, null],
+        ["o16", "kommo", { custom_fields_values: [{ field_code: "UTM_SOURCE", values: [{ value: "{{placement}}" }] }] }, null, "Anúncio", "utm"],
+        ["o17", "kommo", { custom_fields_values: [{ field_code: "UTM_SOURCE", values: [{ value: "meta_ads" }] }] }, null, "Anúncio", "utm"],
+        ["o18", "clint", { contato_tags: ["whatsapp", "disparo_1-Black"] }, null, "Disparo para lista", "etiqueta"],
+        ["o19", "clint", { contato_tags: ["resgate", "ue:base"] }, null, "Paciente antigo", "etiqueta"],
+        ["o20", "clint", { contato_tags: ["hubla", "import_datacrazy"] }, null, "Base importada", "etiqueta"],
       ];
       for (const [id, provider, raw, source] of casos) {
         await db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,source,occurred_at) values ($1,$2,$3,$4,'add',$5,$6,now())", [A, connectionA, provider, id, raw, source]);
