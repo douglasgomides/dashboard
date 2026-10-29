@@ -8,6 +8,7 @@ import { ClientAvatar } from "@/components/client-avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { getQualidadeDados, getRoiPeriodo } from "@/lib/client-data";
 import { montarRoi, resumoRoi, type Roi } from "@/lib/roi";
+import { SeloConfianca } from "@/components/selo-confianca";
 import { resolveDateRange } from "@/lib/date-range";
 import { getSapPorCliente } from "@/lib/sap-data";
 import { lerStatusDasFontes, type FontesDoCliente } from "@/lib/saude-fontes";
@@ -526,9 +527,12 @@ function AdminClientsPage() {
                         if (!r) return <span className="text-xs" style={{ color: "var(--muted)" }}>…</span>;
                         const cor = r.calculavel ? (r.roi! >= 0 ? "var(--good)" : "var(--crit)") : "var(--warn)";
                         return (
-                          <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} className="whitespace-nowrap text-sm font-semibold" style={{ color: cor }} title={r.itens.filter((i) => !i.feito).map((i) => `Falta: ${i.preciso}`).join("\n") || "Ver o retorno no Resultado"}>
-                            {resumoRoi(r)}
-                          </Link>
+                          <span className="inline-flex flex-col items-start gap-1">
+                            <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} className="whitespace-nowrap text-sm font-semibold" style={{ color: cor }} title={r.motivoSemCalculo ?? "Ver o retorno no Resultado"}>
+                              {resumoRoi(r)}
+                            </Link>
+                            <SeloConfianca selo={r.selo} />
+                          </span>
                         );
                       })()}
                     </td>

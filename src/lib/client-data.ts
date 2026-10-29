@@ -15,7 +15,7 @@ export async function getClient(clientId: string) {
   const { data, error } = await supabase.from("clients")
     // Colunas explícitas: `select *` entregaria wts_api_token ao navegador de qualquer membro.
     .select(
-      "id, name, specialty, instagram_handle, cfm_score_status, active, created_at, meta_ad_account_id, wts_company_id, avatar_url, wts_department_ids, em_onboarding",
+      "id, name, specialty, instagram_handle, cfm_score_status, active, created_at, meta_ad_account_id, wts_company_id, avatar_url, wts_department_ids, em_onboarding, rotulo_custo",
     )
     .eq("id", clientId)
     .single();
@@ -798,7 +798,13 @@ export async function getRoiPeriodo(clientId: string, de: string, ate: string): 
   return {
     tem_anuncios: !!data.tem_anuncios,
     tem_crm: !!data.tem_crm,
+    crm_provider: typeof data.crm_provider === "string" ? data.crm_provider : null,
+    rotulo_custo: data.rotulo_custo === "paciente" ? "paciente" : "venda",
     investido: n(data.investido),
+    // Banco ainda sem a separação por objetivo: tudo conta como aquisição, como antes, e o selo avisa que é estimativa.
+    investido_aquisicao: data.investido_aquisicao === undefined ? n(data.investido) : n(data.investido_aquisicao),
+    investido_crescimento: n(data.investido_crescimento),
+    investido_estimado: data.investido_estimado === undefined ? n(data.investido) : n(data.investido_estimado),
     leads: n(data.leads),
     leads_com_origem: n(data.leads_com_origem),
     ganhos: n(data.ganhos),

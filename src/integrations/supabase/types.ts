@@ -768,6 +768,7 @@ export type Database = {
           instagram_handle: string | null
           meta_ad_account_id: string | null
           name: string
+          rotulo_custo: string
           specialty: string | null
           ticket_medio: number | null
           wts_api_token: string | null
@@ -787,6 +788,7 @@ export type Database = {
           instagram_handle?: string | null
           meta_ad_account_id?: string | null
           name: string
+          rotulo_custo?: string
           specialty?: string | null
           ticket_medio?: number | null
           wts_api_token?: string | null
@@ -806,6 +808,7 @@ export type Database = {
           instagram_handle?: string | null
           meta_ad_account_id?: string | null
           name?: string
+          rotulo_custo?: string
           specialty?: string | null
           ticket_medio?: number | null
           wts_api_token?: string | null
@@ -2257,6 +2260,8 @@ export type Database = {
           instagram_media_id: string | null
           name: string
           objective: string | null
+          destinos: string[] | null
+          otimizacoes: string[] | null
           permalink: string | null
           thumbnail_url: string | null
           updated_at: string
@@ -2268,6 +2273,8 @@ export type Database = {
           instagram_media_id?: string | null
           name: string
           objective?: string | null
+          destinos?: string[] | null
+          otimizacoes?: string[] | null
           permalink?: string | null
           thumbnail_url?: string | null
           updated_at?: string
@@ -2279,6 +2286,8 @@ export type Database = {
           instagram_media_id?: string | null
           name?: string
           objective?: string | null
+          destinos?: string[] | null
+          otimizacoes?: string[] | null
           permalink?: string | null
           thumbnail_url?: string | null
           updated_at?: string
