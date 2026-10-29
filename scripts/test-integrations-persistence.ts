@@ -110,6 +110,33 @@ async function testReconcile() {
   result = await runKommoReconcile({ ...env, confirmar: true });
   assert.equal(writes, 1);
   assert.equal(result.marcados, 1);
+  assert.equal(result.completados, 0, "lead sem canal nem contato no Kommo não é regravado");
+
+  // Lead antigo: no Kommo tem canal de entrada e contato, aqui está sem. A varredura completa (e só uma vez).
+  let completouCanal = false;
+  writes = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    if (url.origin !== origin) {
+      return json({ _embedded: { leads: [{ id: 1, status_id: 10, pipeline_id: 1, price: 0, source_id: 77, _embedded: { contacts: [{ id: 9 }] } }] }, _links: {} });
+    }
+    if ((init?.method ?? "GET") !== "GET") {
+      writes++;
+      const corpo = JSON.parse(String(init?.body ?? "[]"));
+      if (Array.isArray(corpo) && corpo[0]?.canal_id === "77") { completouCanal = true; completou = true; }
+      return json(null);
+    }
+    return json(completou
+      ? [{ external_lead_id: "1", removido_na_origem: null, canal_id: "77", contatos: [{ id: 9 }] }]
+      : [{ external_lead_id: "1", removido_na_origem: null, canal_id: null, contatos: null }]);
+  };
+  let completou = false;
+  result = await runKommoReconcile({ ...env, confirmar: true });
+  assert.equal(result.completados, 1);
+  assert.ok(completouCanal, "a linha regravada leva o canal de entrada");
+  assert.equal(writes, 1);
+  result = await runKommoReconcile({ ...env, confirmar: true });
+  assert.equal(result.completados, 0, "na varredura seguinte não há o que completar");
 }
 
 async function testWtsRouting() {

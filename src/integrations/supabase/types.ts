@@ -1249,6 +1249,7 @@ export type Database = {
           external_lead_id: string
           id: string
           occurred_at: string | null
+          origem_como: string | null
           old_status_id: string | null
           outcome: string | null
           pessoa_id: string | null
@@ -1272,6 +1273,7 @@ export type Database = {
           external_lead_id: string
           id?: string
           occurred_at?: string | null
+          origem_como?: string | null
           old_status_id?: string | null
           outcome?: string | null
           pessoa_id?: string | null
@@ -1295,6 +1297,7 @@ export type Database = {
           external_lead_id?: string
           id?: string
           occurred_at?: string | null
+          origem_como?: string | null
           old_status_id?: string | null
           outcome?: string | null
           pessoa_id?: string | null
