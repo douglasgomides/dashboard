@@ -489,6 +489,11 @@ try {
         ["o7", "flwchat", { contato_tags: ["Tipo · Paciente", "pacientes base"] }, null, "Paciente antigo", "etiqueta"],
         ["o8", "clint", { fields: { form_id: "1", ad_id: "2" } }, null, "Anúncio", "formulario"],
         ["o9", "clint", { fields: { fonte: "Google | qualificado" } }, null, "Google", "campo"],
+        ["o10", "clint", { contact: { id: "c1" }, contato_tags: ["Nexo | Origem não documentada", "bk_perfil_medico", "site_doctor"] }, null, "Site", "etiqueta"],
+        ["o11", "clint", { contato_tags: ["black_lp1_autoridade"] }, null, "Site", "etiqueta"],
+        ["o12", "clint", { contato_tags: ["Social Selling", "ig-social"] }, null, "Prospecção ativa", "etiqueta"],
+        ["o13", "kommo", { _embedded: { tags: [{ name: "Origem-PacienteAntigo" }] } }, null, "Paciente antigo", "etiqueta"],
+        ["o14", "clint", { contato_tags: ["Nexo | Origem não documentada"] }, null, null, null],
       ];
       for (const [id, provider, raw, source] of casos) {
         await db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,source,occurred_at) values ($1,$2,$3,$4,'add',$5,$6,now())", [A, connectionA, provider, id, raw, source]);
@@ -502,6 +507,13 @@ try {
       // A equipe preenche o campo no CRM: o campo passa a valer.
       await db.query("update crm_leads set source='Google Ads' where client_id=$1 and external_lead_id='o2'", [A]);
       assert.deepEqual(await rows("select source, origem_como from crm_leads where client_id=$1 and external_lead_id='o2'", [A]), [{ source: "Google Ads", origem_como: "crm" }]);
+      // Tags lidas do contato da Clint chegam aos leads do contato e dão a origem.
+      await db.query(`insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,occurred_at) values ($1,$2,'clint','o15','add','{"contact":{"id":"c9"}}',now())`, [A, connectionA]);
+      await db.query("insert into crm_contato_tags(crm_connection_id,contato_id,tags) values ($1,'c9',array['instagram_douglas'])", [connectionA]);
+      assert.deepEqual(await rows("select crm_aplicar_tags_contato($1) as n", [connectionA]), [{ n: 1 }]);
+      assert.deepEqual(await rows("select source, origem_como from crm_leads where client_id=$1 and external_lead_id='o15'", [A]), [{ source: "Instagram", origem_como: "etiqueta" }]);
+      assert.deepEqual(await rows("select crm_aplicar_tags_contato($1) as n", [connectionA]), [{ n: 0 }], "segunda vez não regrava");
+      await denied(() => role("authenticated", admin, () => rows("select crm_aplicar_tags_contato($1)", [connectionA])));
     } finally {
       await db.exec("rollback");
     }

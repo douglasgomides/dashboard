@@ -15,6 +15,7 @@
  * que muda sem deploy.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { tagsDaConexao } from "./flwchat-sync.js";
 
 const CLINT_BASE = "https://api.clint.digital/v1";
 const PAGE_SIZE = 200;
@@ -53,6 +54,7 @@ interface ClintDeal {
   lost_at?: string | null;
   fields?: Record<string, unknown> | null;
   contact?: {
+    id?: string | null;
     name?: string | null;
     email?: string | null;
     phone?: string | null;
@@ -225,6 +227,14 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
       ? ((conn.config as any).origem_por_funil as Record<string, unknown>)
       : {};
     const stageRows = new Map<string, Record<string, unknown>>();
+    // Tags dos contatos já lidas (api/_lib/clint-tags.ts). Entram no raw_payload para a origem pela tag não sumir
+    // quando o negócio é regravado. Falha aqui não para o sync.
+    let tagsPorContato = new Map<string, string[]>();
+    try {
+      tagsPorContato = await tagsDaConexao(supabase, conn.id);
+    } catch (err) {
+      errors.push(`tags dos contatos: ${err instanceof Error ? err.message : String(err)}`);
+    }
 
     for (const originId of origins) {
       const origin = originNames.get(originId);
@@ -278,7 +288,10 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
           contact_name: d.contact?.name ?? null,
           contact_email: d.contact?.email ?? null,
           contact_phone: d.contact?.phone ?? null,
-          raw_payload: d as unknown as Record<string, unknown>,
+          raw_payload: {
+            ...(d as unknown as Record<string, unknown>),
+            ...(d.contact?.id && tagsPorContato.has(String(d.contact.id)) ? { contato_tags: tagsPorContato.get(String(d.contact.id)) } : {}),
+          },
           received_at: d.updated_at ?? d.created_at ?? new Date().toISOString(),
         });
 
