@@ -61,14 +61,14 @@ $function$;
 revoke all on function public.fontes_base(uuid) from public, anon, authenticated;
 grant execute on function public.fontes_base(uuid) to service_role;
 
--- Admin (todas as clínicas). Mesma assinatura de antes; agora com "planilha".
-drop function if exists public.status_das_fontes();
-create function public.status_das_fontes()
-returns table(client_id uuid, fonte text, cadastro boolean, planilha boolean, data_ate date, last_attempt_at timestamptz,
+-- Admin (todas as clínicas). Mesma assinatura de antes (a coluna "planilha" fica para status_fontes_do_cliente).
+create or replace function public.status_das_fontes()
+returns table(client_id uuid, fonte text, cadastro boolean, data_ate date, last_attempt_at timestamptz,
   last_success_at timestamptz, last_error text, motivo text, motivo_dono text, nao_usa boolean)
 language sql stable security definer set search_path = public, pg_temp
 as $function$
-  select * from public.fontes_base(null) where public.is_app_admin() or auth.uid() is null;
+  select client_id, fonte, cadastro, data_ate, last_attempt_at, last_success_at, last_error, motivo, motivo_dono, nao_usa
+  from public.fontes_base(null) where public.is_app_admin() or auth.uid() is null;
 $function$;
 revoke all on function public.status_das_fontes() from public, anon;
 grant execute on function public.status_das_fontes() to authenticated, service_role;
