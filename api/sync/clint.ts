@@ -8,6 +8,7 @@ import { runFlwChatSync } from "../_lib/flwchat-sync.js";
 import { runDigisacSync } from "../_lib/digisac-sync.js";
 import { ingerirConversasClint } from "../_lib/conversas-clint.js";
 import { runConferenciaCrm, type BuscarJson } from "../_lib/conferencia-crm.js";
+import { runClintTags, buscarContatoClint } from "../_lib/clint-tags.js";
 
 // Sync dos negócios da Clint, chamado pelo n8n. Máquina chamando máquina,
 // então autoriza por SYNC_SECRET — o mesmo padrão de api/sync/kommo-leads.
@@ -17,6 +18,7 @@ import { runConferenciaCrm, type BuscarJson } from "../_lib/conferencia-crm.js";
 //
 // ?conferencia=1 roda a conferência diária (Nexo x CRM ao vivo, todos os CRMs) em vez do sync. Fica aqui e não num
 // arquivo novo porque o plano da Vercel aceita no máximo 12 funções e o projeto já está no teto.
+// ?tags=1 lê, em partes, as tags dos contatos da Clint (onde fica a origem de muitos leads). Mesmo motivo.
 
 // Somente leitura: GET com timeout. Resposta que não é JSON vira corpo nulo (a conferência registra o status).
 const buscarJson: BuscarJson = async (url, headers) => {
@@ -57,6 +59,17 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
       const r = await runConferenciaCrm(supabase, buscarJson, { tokenKommoPadrao: process.env.KOMMO_API_TOKEN, onlyClientId: clientId });
       res.status(200).json({ ok: true, conferencia: r, alertas: r.filter((x) => x.alerta).length });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  if (req.query.tags === "1") {
+    try {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+      const r = await runClintTags(supabase, buscarContatoClint, { onlyClientId: clientId, deadlineMs: startedAt + 240_000 });
+      res.status(r.some((x) => x.errors.length) ? 207 : 200).json({ ok: true, tags: r });
     } catch (err) {
       res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
     }

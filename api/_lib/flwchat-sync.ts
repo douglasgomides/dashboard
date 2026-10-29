@@ -231,7 +231,7 @@ async function nomesDasTags(token: string): Promise<Map<string, string>> {
   return nomes;
 }
 
-async function tagsDaConexao(supabase: SupabaseClient, connId: string): Promise<Map<string, string[]>> {
+export async function tagsDaConexao(supabase: SupabaseClient, connId: string): Promise<Map<string, string[]>> {
   const porContato = new Map<string, string[]>();
   for (let de = 0; ; de += 1000) {
     const { data, error } = await supabase
