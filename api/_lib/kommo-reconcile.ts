@@ -68,7 +68,7 @@ async function idsVivos(
   const leads = new Map<string, KommoLead>();
   let page = 1;
   while (page <= MAX_PAGINAS) {
-    const qs = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(page) });
+    const qs = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(page), with: "source_id" });
     const res = await fetch(`https://${domain}/api/v4/leads?${qs.toString()}`, integrationRequest({
       headers: { Authorization: `Bearer ${accessToken}` },
     }));

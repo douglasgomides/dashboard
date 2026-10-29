@@ -1212,6 +1212,7 @@ export type Database = {
       }
       crm_leads: {
         Row: {
+          canal_id: string | null
           client_id: string
           contact_email: string | null
           contact_name: string | null
@@ -1234,6 +1235,7 @@ export type Database = {
           status_id: string | null
         }
         Insert: {
+          canal_id?: string | null
           client_id: string
           contact_email?: string | null
           contact_name?: string | null
@@ -1256,6 +1258,7 @@ export type Database = {
           status_id?: string | null
         }
         Update: {
+          canal_id?: string | null
           client_id?: string
           contact_email?: string | null
           contact_name?: string | null

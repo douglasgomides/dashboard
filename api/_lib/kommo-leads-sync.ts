@@ -73,6 +73,9 @@ export function linhaDoLead(lead: KommoLead, crmConnectionId: string, clientId: 
     outcome: kommoOutcome(lead.status_id),
     // "Fonte do Lead" (Lana) ou "Origem do Lead" (HOMS): o mesmo dado, nomes diferentes por conta.
     source: kommoCampo(lead, /(Fonte|Origem) do Lead/i),
+    // Canal de entrada (WhatsApp, comentários do Instagram, formulário...). O Kommo só devolve
+    // quando se pede with=source_id; sem isso o campo vem ausente e fica nulo aqui.
+    canal_id: lead.source_id != null ? String(lead.source_id) : null,
     contact_name: lead.name ?? null,
     raw_payload: lead as any,
     received_at: new Date().toISOString(),
@@ -234,7 +237,7 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
       result = await fetchLeadsPage(domain, env.accessToken, {
         ...baseParams,
         page: String(page),
-        with: "custom_fields_values",
+        with: "custom_fields_values,source_id",
       });
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
