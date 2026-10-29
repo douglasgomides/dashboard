@@ -7,12 +7,25 @@ import { runRdStationSync } from "../_lib/rdstation-sync.js";
 import { runFlwChatSync } from "../_lib/flwchat-sync.js";
 import { runDigisacSync } from "../_lib/digisac-sync.js";
 import { ingerirConversasClint } from "../_lib/conversas-clint.js";
+import { runConferenciaCrm, type BuscarJson } from "../_lib/conferencia-crm.js";
 
 // Sync dos negócios da Clint, chamado pelo n8n. Máquina chamando máquina,
 // então autoriza por SYNC_SECRET — o mesmo padrão de api/sync/kommo-leads.
 //
 // O token da Clint NÃO vive aqui: ele fica em crm_connections.access_token,
 // por cliente, porque cada cliente pode ter conta própria.
+//
+// ?conferencia=1 roda a conferência diária (Nexo x CRM ao vivo, todos os CRMs) em vez do sync. Fica aqui e não num
+// arquivo novo porque o plano da Vercel aceita no máximo 12 funções e o projeto já está no teto.
+
+// Somente leitura: GET com timeout. Resposta que não é JSON vira corpo nulo (a conferência registra o status).
+const buscarJson: BuscarJson = async (url, headers) => {
+  const res = await fetch(url, { headers: { Accept: "application/json", ...headers }, signal: AbortSignal.timeout(30_000), redirect: "error" });
+  const texto = await res.text();
+  let corpo: unknown = null;
+  try { corpo = texto ? JSON.parse(texto) : null; } catch { corpo = null; }
+  return { status: res.status, corpo };
+};
 
 async function handler(req: VercelRequest, res: VercelResponse) {
   const startedAt = Date.now();
@@ -38,6 +51,17 @@ async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const clientId = typeof req.query.client_id === "string" ? req.query.client_id : undefined;
+
+  if (req.query.conferencia === "1") {
+    try {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+      const r = await runConferenciaCrm(supabase, buscarJson, { tokenKommoPadrao: process.env.KOMMO_API_TOKEN, onlyClientId: clientId });
+      res.status(200).json({ ok: true, conferencia: r, alertas: r.filter((x) => x.alerta).length });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
 
   try {
     const results = await runClintSync({
