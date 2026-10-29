@@ -475,6 +475,37 @@ try {
       assert.deepEqual(await rows("select pg_get_function_identity_arguments('public.receita_em_jogo(uuid,date,date)'::regprocedure) as args,pg_get_function_result('public.receita_em_jogo(uuid,date,date)'::regprocedure) as result"), [{ args: "p_client uuid, p_de date, p_ate date", result: "jsonb" }]);
     } finally { await db.exec("rollback"); }
   });
+  await check("origem do lead vem de todos os sinais do CRM, com o campo do CRM em primeiro", async () => {
+    await db.exec("begin");
+    try {
+      const casos: [string, string, unknown, string | null, string | null, string | null][] = [
+        // [id externo, provedor, payload, source enviado, origem esperada, caminho esperado]
+        ["o1", "kommo", { _embedded: { tags: [{ name: "Paciente ativo" }, { name: "Origem-Instagram" }] } }, null, "Instagram", "etiqueta"],
+        ["o2", "kommo", { _embedded: { tags: [{ name: "Aguardando Retorno" }, { name: "Follow D1" }] } }, null, null, null],
+        ["o3", "kommo", { _embedded: { tags: [{ name: "fb1773403903694094" }] } }, null, "Anúncio", "etiqueta"],
+        ["o4", "kommo", { custom_fields_values: [{ field_code: "UTM_SOURCE", values: [{ value: "ig" }] }] }, null, "Instagram", "utm"],
+        ["o5", "kommo", { _embedded: { tags: [{ name: "Origem-Instagram" }] } }, "Indicação da Dra.", "Indicação da Dra.", "crm"],
+        ["o6", "digisac", { etiquetas: ["Dra. Rafaela", "Unimed [Origem]"] }, null, "Unimed", "etiqueta"],
+        ["o7", "flwchat", { contato_tags: ["Tipo · Paciente", "pacientes base"] }, null, "Paciente antigo", "etiqueta"],
+        ["o8", "clint", { fields: { form_id: "1", ad_id: "2" } }, null, "Anúncio", "formulario"],
+        ["o9", "clint", { fields: { fonte: "Google | qualificado" } }, null, "Google", "campo"],
+      ];
+      for (const [id, provider, raw, source] of casos) {
+        await db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,source,occurred_at) values ($1,$2,$3,$4,'add',$5,$6,now())", [A, connectionA, provider, id, raw, source]);
+      }
+      for (const [id, , , , origem, como] of casos) {
+        assert.deepEqual(await rows("select source, origem_como from crm_leads where client_id=$1 and external_lead_id=$2", [A, id]), [{ source: origem, origem_como: como }], id);
+      }
+      // A sincronização seguinte manda o campo vazio de novo e uma etiqueta nova: a origem acompanha o CRM.
+      await db.query(`update crm_leads set source=null, raw_payload='{"_embedded":{"tags":[{"name":"Indicação"}]}}' where client_id=$1 and external_lead_id='o2'`, [A]);
+      assert.deepEqual(await rows("select source, origem_como from crm_leads where client_id=$1 and external_lead_id='o2'", [A]), [{ source: "Indicação", origem_como: "etiqueta" }]);
+      // A equipe preenche o campo no CRM: o campo passa a valer.
+      await db.query("update crm_leads set source='Google Ads' where client_id=$1 and external_lead_id='o2'", [A]);
+      assert.deepEqual(await rows("select source, origem_como from crm_leads where client_id=$1 and external_lead_id='o2'", [A]), [{ source: "Google Ads", origem_como: "crm" }]);
+    } finally {
+      await db.exec("rollback");
+    }
+  });
   await check("ticket rejeita não finitos e preserva decimal, mediana CRM, SAP e ausência de fonte", async () => {
     await db.exec("begin");
     try {

@@ -56,6 +56,8 @@ export interface KommoReconcileResult {
   marcados: number;
   /** Leads que existem no Kommo e não existiam aqui, importados agora. */
   importados: number;
+  /** Leads que já existiam aqui sem o canal de entrada ou o contato e foram completados agora. */
+  completados?: number;
   precisaConfirmar: boolean;
   errors: string[];
 }
@@ -92,6 +94,23 @@ async function idsVivos(
     page += 1;
   }
   return { ids, leads, completo: false, erro: `parou no teto de ${MAX_PAGINAS} páginas` };
+}
+
+/**
+ * Lead antigo que entrou antes de a sincronização pedir with=source_id,contacts: o canal de entrada e o contato
+ * ficaram vazios aqui, e o sync incremental só relê o que mudou nos últimos dias, então nunca seriam preenchidos.
+ * Sem o canal a origem pelo canal (crm_canais_origem) não funciona; sem o contato a contagem por pessoa não junta os
+ * cards da mesma pessoa. A varredura já lê todos os leads com esses dados: completa os que faltam.
+ */
+export function precisaCompletar(
+  local: { canal_id: string | null; contatos: unknown },
+  kommo: KommoLead,
+): boolean {
+  const semCanal = local.canal_id == null && kommo.source_id != null;
+  const contatosKommo = (kommo as { _embedded?: { contacts?: unknown[] } })._embedded?.contacts;
+  const semContato = !(Array.isArray(local.contatos) && local.contatos.length > 0)
+    && Array.isArray(contatosKommo) && contatosKommo.length > 0;
+  return semCanal || semContato;
 }
 
 export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoReconcileResult> {
@@ -132,12 +151,12 @@ export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoRe
 
   // Puxa os ids locais em páginas: são dezenas de milhares e o PostgREST
   // trunca resposta grande sem avisar.
-  const locais: { external_lead_id: string; removido_na_origem: string | null }[] = [];
+  const locais: { external_lead_id: string; removido_na_origem: string | null; canal_id: string | null; contatos: unknown }[] = [];
   const LOTE = 1000;
   for (let de = 0; ; de += LOTE) {
     const { data, error } = await supabase
       .from("crm_leads")
-      .select("external_lead_id, removido_na_origem")
+      .select("external_lead_id, removido_na_origem, canal_id, contatos:raw_payload->_embedded->contacts")
       .eq("crm_connection_id", env.crmConnectionId)
       .order("external_lead_id", { ascending: true })
       .range(de, de + LOTE - 1);
@@ -213,6 +232,22 @@ export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoRe
     }
   }
 
+  let completados = 0;
+  if (!errors.some((e) => e.startsWith("leitura local"))) {
+    const aCompletar = locais
+      .filter((l) => {
+        const k = leads.get(l.external_lead_id);
+        return !!k && precisaCompletar(l, k);
+      })
+      .map((l) => linhaDoLead(leads.get(l.external_lead_id)!, env.crmConnectionId, env.clientId));
+    for (let i = 0; i < aCompletar.length; i += 500) {
+      const lote = aCompletar.slice(i, i + 500);
+      const { error } = await supabase.from("crm_leads").upsert(lote as any, { onConflict: "crm_connection_id,external_lead_id" });
+      if (error) errors.push(`completar canal e contato: ${error.message}`);
+      else completados += lote.length;
+    }
+  }
+
   return {
     idsNaOrigem: ids.size,
     leadsLocais: distintosLocais,
@@ -220,6 +255,7 @@ export async function runKommoReconcile(env: KommoReconcileEnv): Promise<KommoRe
     reapareceram: reapareceram.length,
     marcados,
     importados,
+    completados,
     precisaConfirmar,
     errors,
   };
