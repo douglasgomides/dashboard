@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { montarRoi, resumoRoi, numerosDisponiveisRoi, passosOrigem, passosValor, NOTA_DEFASAGEM, type DadosRoi } from "../src/lib/roi";
+import { montarRoi, resumoRoi, numerosDisponiveisRoi, passosOrigem, passosValor, situacaoAnuncios, situacaoCrm, NOTA_DEFASAGEM, type DadosRoi } from "../src/lib/roi";
 import { LIMITES } from "../src/lib/limites";
 
 const base: DadosRoi = {
@@ -88,6 +88,13 @@ for (const t of [NOTA_DEFASAGEM, ...ok.itens.flatMap((i) => [i.preciso, i.detalh
 // Os números conhecidos continuam legíveis sem inferir zeros de fontes ausentes ou de outro cliente.
 assert.deepEqual(numerosDisponiveisRoi({ ...base, ganhos_com_valor: 0 }), { investido: 1000, investidoCrescimento: 500, leads: 100, ganhos: 4 });
 assert.deepEqual(numerosDisponiveisRoi({ ...base, tem_crm: false, tem_anuncios: false }), { investido: null, investidoCrescimento: null, leads: null, ganhos: null });
-assert.deepEqual(numerosDisponiveisRoi({ ...base, crm_compartilhado: true }), { investido: 1000, investidoCrescimento: 500, leads: null, ganhos: null });
+// CRM compartilhado (IGM Palmas): os números aparecem, com o aviso; o ROI continua bloqueado.
+assert.deepEqual(numerosDisponiveisRoi({ ...base, crm_compartilhado: true }), { investido: 1000, investidoCrescimento: 500, leads: 100, ganhos: 4 });
+assert.equal(situacaoCrm({ ...base, crm_compartilhado: true, crm_compartilhado_com: ["Dr. Antonione (IGM Palmas)"] }), "CRM compartilhado com Dr. Antonione (IGM Palmas): mesmos números");
+assert.equal(situacaoCrm(base), null);
+// Anúncios: planilha conta como ligada; conta sem dado há mais de 3 dias aparece como parada, não como "não conectada".
+assert.equal(situacaoAnuncios({ ...base, anuncios_planilha: true }), "Lançado à mão na planilha");
+assert.equal(situacaoAnuncios({ ...base, anuncios_ate: "2026-10-21" }, "2026-10-29"), "Conta parada desde 21/10");
+assert.equal(situacaoAnuncios({ ...base, tem_anuncios: false }), "Conta de anúncios não conectada");
 assert.equal(numerosDisponiveisRoi({ ...base, ganho_identificavel: false }).ganhos, null);
 console.log("test-roi: ok");

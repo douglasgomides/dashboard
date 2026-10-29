@@ -144,22 +144,107 @@ export function tipoDasTags(nomes: string[]): string | null {
   return tipos.length === 1 ? tipos[0] : null;
 }
 
-async function tagsDosContatos(token: string, deadlineMs?: number): Promise<{ porContato: Map<string, string[]>; parcial: boolean }> {
-  const nomes = new Map<string, string>();
-  for (const t of ((await flwGet(token, "/core/v1/tag", { pageSize: 200 })) ?? []) as Array<{ id?: string; name?: string }>) {
-    if (t?.id && t.name) nomes.set(t.id, t.name);
-  }
-  const porContato = new Map<string, string[]>();
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const body = await flwGet(token, "/core/v1/contact", { pageSize: PAGE_SIZE, pageNumber: page, IncludeDetails: "Tags" });
-    for (const c of (body?.items ?? []) as Array<{ id?: string; tagIds?: string[] | null }>) {
-      const tags = (c.tagIds ?? []).map((id) => nomes.get(id)).filter((n): n is string => !!n);
-      if (c.id && tags.length) porContato.set(c.id, tags);
+// Leitura das tags dos contatos em partes, com retomada. A conta da Clinic Desk tem mais de 24 mil contatos e a
+// leitura inteira não cabe numa rodada: antes ela parava na página 50 e os cards cujo contato não tinha sido lido
+// eram gravados SEM a tag, apagando a origem que já existia. Agora:
+//  - as tags lidas ficam em crm_contato_tags (só cresce; um contato sem tag é gravado com lista vazia);
+//  - a primeira leitura percorre todos os contatos por data de criação, em várias rodadas, guardando a página em
+//    config.tags_varredura; ao terminar, config.tags_ate recebe o início da varredura;
+//  - depois, cada rodada lê só os contatos alterados desde config.tags_ate (ordem por alteração, mais novo primeiro);
+//  - enquanto a primeira leitura não termina, a origem pela tag fica Parcial.
+export interface EstadoTags {
+  tags_ate?: string | null;
+  tags_varredura?: { pagina: number; inicio: string } | null;
+}
+
+export interface PaginaContatos {
+  itens: Array<{ id?: string; tagIds?: string[] | null; updatedAt?: string | null }>;
+  temMais: boolean;
+  totalPaginas?: number;
+}
+
+export const MAX_PAGINAS_TAGS = 120;
+const TEMPO_TAGS_MS = 60_000;
+
+export async function lerTagsDosContatos(opts: {
+  estado: EstadoTags;
+  nomes: Map<string, string>;
+  buscarPagina: (modo: "varredura" | "alteracoes", pagina: number) => Promise<PaginaContatos>;
+  salvar: (linhas: Array<{ contato_id: string; tags: string[]; atualizado_em: string | null }>) => Promise<void>;
+  agora: string;
+  deadlineMs?: number;
+  maxPaginas?: number;
+}): Promise<{ estado: EstadoTags; completa: boolean; aviso: string | null }> {
+  const max = opts.maxPaginas ?? MAX_PAGINAS_TAGS;
+  const paraLinha = (c: PaginaContatos["itens"][number]) => ({
+    contato_id: c.id!,
+    tags: (c.tagIds ?? []).map((id) => opts.nomes.get(id)).filter((n): n is string => !!n),
+    atualizado_em: c.updatedAt ?? null,
+  });
+  const varredura = opts.estado.tags_varredura ?? (opts.estado.tags_ate ? null : { pagina: 1, inicio: opts.agora });
+
+  if (varredura) {
+    let pagina = varredura.pagina;
+    let total: number | undefined;
+    for (let lidas = 0; lidas < max; lidas++, pagina++) {
+      const p = await opts.buscarPagina("varredura", pagina);
+      total = p.totalPaginas ?? total;
+      await opts.salvar(p.itens.filter((c) => c.id).map(paraLinha));
+      if (!p.temMais) return { estado: { tags_ate: varredura.inicio, tags_varredura: null }, completa: true, aviso: null };
+      if (opts.deadlineMs && Date.now() > opts.deadlineMs) { pagina++; break; }
+      if (lidas === max - 1) { pagina++; break; }
     }
-    if (!body?.hasMorePages) return { porContato, parcial: false };
-    if (deadlineMs && Date.now() > deadlineMs) return { porContato, parcial: true };
+    return {
+      estado: { tags_ate: opts.estado.tags_ate ?? null, tags_varredura: { pagina, inicio: varredura.inicio } },
+      completa: false,
+      aviso: `tags dos contatos: primeira leitura em andamento (página ${pagina - 1}${total ? ` de ${total}` : ""}); a origem pela tag fica parcial até terminar`,
+    };
   }
-  return { porContato, parcial: true };
+
+  // Só as alterações desde a última leitura completa. O marco só avança quando chega ao fim do que mudou.
+  const desde = opts.estado.tags_ate!;
+  let maior = desde;
+  for (let pagina = 1; pagina <= max; pagina++) {
+    const p = await opts.buscarPagina("alteracoes", pagina);
+    const novos = p.itens.filter((c) => c.id && (c.updatedAt ?? "") > desde);
+    await opts.salvar(novos.map(paraLinha));
+    for (const c of novos) if ((c.updatedAt ?? "") > maior) maior = c.updatedAt!;
+    const chegouAoMarco = novos.length < p.itens.length;
+    if (!p.temMais || chegouAoMarco) return { estado: { tags_ate: maior, tags_varredura: null }, completa: true, aviso: null };
+    if (opts.deadlineMs && Date.now() > opts.deadlineMs) break;
+  }
+  return {
+    estado: { tags_ate: desde, tags_varredura: null },
+    completa: true,
+    aviso: "tags dos contatos: as alterações não couberam nesta rodada e continuam na próxima",
+  };
+}
+
+async function nomesDasTags(token: string): Promise<Map<string, string>> {
+  const nomes = new Map<string, string>();
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const body = await flwGet(token, "/core/v1/tag", { pageSize: 200, pageNumber: page });
+    const itens = (Array.isArray(body) ? body : (body?.items ?? [])) as Array<{ id?: string; name?: string }>;
+    for (const t of itens) if (t?.id && t.name) nomes.set(t.id, t.name);
+    if (Array.isArray(body) || !body?.hasMorePages) break;
+  }
+  return nomes;
+}
+
+async function tagsDaConexao(supabase: SupabaseClient, connId: string): Promise<Map<string, string[]>> {
+  const porContato = new Map<string, string[]>();
+  for (let de = 0; ; de += 1000) {
+    const { data, error } = await supabase
+      .from("crm_contato_tags")
+      .select("contato_id, tags")
+      .eq("crm_connection_id", connId)
+      .neq("tags", "{}")
+      .order("contato_id")
+      .range(de, de + 999);
+    if (error) throw error;
+    for (const r of data ?? []) porContato.set(r.contato_id as string, r.tags as string[]);
+    if ((data ?? []).length < 1000) return porContato;
+  }
 }
 
 // Support Clinic → WTS (Dr. Sergio Maia): cada mudança de status do orçamento cria um card NOVO no painel, e o card
@@ -238,7 +323,7 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
       etapas_perdido?: string[];
       tags_contato?: boolean;
       cards_por_item?: boolean;
-    };
+    } & EstadoTags;
     // Mapeamento confirmado pela equipe (aba "A analisar"). Tabela ausente = sem mapeamento.
     const confirmadas = new Map<string, "won" | "lost" | "open">();
     {
@@ -274,11 +359,45 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
     let tagsPorContato = new Map<string, string[]>();
     if (config.tags_contato) {
       try {
-        const t = await tagsDosContatos(token, env.deadlineMs);
-        tagsPorContato = t.porContato;
-        if (t.parcial) errors.push("tags dos contatos: leitura interrompida por tempo, a origem pela tag fica incompleta nesta rodada");
+        const nomes = await nomesDasTags(token);
+        const leitura = await lerTagsDosContatos({
+          estado: { tags_ate: config.tags_ate ?? null, tags_varredura: config.tags_varredura ?? null },
+          nomes,
+          agora: new Date().toISOString(),
+          // Teto próprio: a leitura das tags vem antes dos cards e não pode gastar o tempo da rodada inteira.
+          deadlineMs: Math.min(env.deadlineMs ?? Number.POSITIVE_INFINITY, Date.now() + TEMPO_TAGS_MS),
+          buscarPagina: async (modo, pagina) => {
+            const body = await flwGet(token, "/core/v1/contact", {
+              pageSize: PAGE_SIZE,
+              pageNumber: pagina,
+              IncludeDetails: "Tags",
+              orderBy: modo === "varredura" ? "createdAt" : "updatedAt",
+              orderDirection: modo === "varredura" ? "ASCENDING" : "DESCENDING",
+            });
+            return { itens: body?.items ?? [], temMais: !!body?.hasMorePages, totalPaginas: body?.totalPages };
+          },
+          salvar: async (linhas) => {
+            if (!linhas.length) return;
+            const { error: e } = await supabase
+              .from("crm_contato_tags")
+              .upsert(linhas.map((l) => ({ crm_connection_id: conn.id, ...l, lido_em: new Date().toISOString() })), { onConflict: "crm_connection_id,contato_id" });
+            if (e) throw e;
+          },
+        });
+        if (leitura.aviso) errors.push(leitura.aviso);
+        const { error: e } = await supabase
+          .from("crm_connections")
+          .update({ config: { ...(conn.config ?? {}), ...leitura.estado } })
+          .eq("id", conn.id);
+        if (e) errors.push(`tags dos contatos: não deu para guardar o progresso (${e.message})`);
       } catch (err) {
         errors.push(`tags dos contatos: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      // Sempre do que já foi guardado: um contato que não foi lido nesta rodada mantém a tag da rodada anterior.
+      try {
+        tagsPorContato = await tagsDaConexao(supabase, conn.id);
+      } catch (err) {
+        errors.push(`tags guardadas: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 

@@ -51,14 +51,15 @@ on conflict (crm_connection_id, canal_id) do nothing;
 -- Trava: só substitui a função se ela ainda for exatamente a que foi lida em 29/10/2026.
 do $$
 begin
-  if md5(pg_get_functiondef('public.qualidade_dados(uuid)'::regprocedure)) <> 'a509b3304c480d53f91838b31dcd62b9' then
+  -- a509… é a definição de produção em 29/10/2026; c853… é a mesma função montada só pelas migrations (banco do CI).
+  if md5(pg_get_functiondef('public.qualidade_dados(uuid)'::regprocedure)) not in ('a509b3304c480d53f91838b31dcd62b9', 'c853828fb8fdddb60b046d124574bf4a') then
     raise exception 'qualidade_dados mudou desde a leitura; reavaliar antes de substituir';
   end if;
 end $$;
 
 create or replace function public.qualidade_dados(p_client_id uuid)
 returns jsonb
-language plpgsql stable security definer set search_path to 'public'
+language plpgsql stable security definer set search_path = public, pg_temp
 as $function$
 declare
   out jsonb := '[]'::jsonb;

@@ -812,6 +812,9 @@ export async function getRoiPeriodo(clientId: string, de: string, ate: string): 
     receita: n(data.receita),
     ganho_identificavel: !!data.ganho_identificavel,
     crm_compartilhado: !!data.crm_compartilhado,
+    crm_compartilhado_com: Array.isArray(data.crm_compartilhado_com) ? data.crm_compartilhado_com.map(String) : [],
+    anuncios_planilha: !!data.anuncios_planilha,
+    anuncios_ate: typeof data.anuncios_ate === "string" ? data.anuncios_ate : null,
   };
 }
 

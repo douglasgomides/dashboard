@@ -1057,6 +1057,30 @@ export type Database = {
           },
         ]
       }
+      crm_contato_tags: {
+        Row: {
+          atualizado_em: string | null
+          contato_id: string
+          crm_connection_id: string
+          lido_em: string
+          tags: string[]
+        }
+        Insert: {
+          atualizado_em?: string | null
+          contato_id: string
+          crm_connection_id: string
+          lido_em?: string
+          tags?: string[]
+        }
+        Update: {
+          atualizado_em?: string | null
+          contato_id?: string
+          crm_connection_id?: string
+          lido_em?: string
+          tags?: string[]
+        }
+        Relationships: []
+      }
       crm_connections: {
         Row: {
           access_token: string | null
