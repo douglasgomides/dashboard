@@ -597,6 +597,31 @@ export async function definirEtapaKpi(args: {
   if (error) throw new Error(error.message ?? "falha ao salvar");
 }
 
+// ---- Papel de cada funil (migração 20261030170000) ----------------------------
+// Sem linha em crm_funil_papel o funil é de captação. Só compra e base saem da contagem de lead novo.
+export type PapelFunil = "captacao" | "venda" | "operacional" | "compra" | "base";
+
+export async function listPapeisFunil(connectionIds: string[]): Promise<Map<string, { papel: PapelFunil; definido_por: "regra" | "equipe" }>> {
+  const out = new Map<string, { papel: PapelFunil; definido_por: "regra" | "equipe" }>();
+  if (connectionIds.length === 0) return out;
+  const cliente = supabase as unknown as {
+    from: (t: string) => { select: (c: string) => { in: (col: string, v: string[]) => Promise<{ data: { crm_connection_id: string; pipeline_id: string; papel: PapelFunil; definido_por: "regra" | "equipe" }[] | null; error: { message?: string } | null }> } };
+  };
+  const { data, error } = await cliente.from("crm_funil_papel").select("crm_connection_id, pipeline_id, papel, definido_por").in("crm_connection_id", connectionIds);
+  if (error) throw new Error(error.message ?? "falha ao ler o papel dos funis");
+  for (const r of data ?? []) out.set(`${r.crm_connection_id}|${r.pipeline_id}`, { papel: r.papel, definido_por: r.definido_por });
+  return out;
+}
+
+export async function definirPapelFunil(args: { connectionId: string; pipelineId: string; papel: PapelFunil }): Promise<void> {
+  const { error } = await (supabase as unknown as RpcClient).rpc("crm_definir_papel_funil", {
+    p_connection_id: args.connectionId,
+    p_pipeline_id: args.pipelineId,
+    p_papel: args.papel,
+  });
+  if (error) throw new Error(error.message ?? "falha ao salvar");
+}
+
 // ---- Central de voz do paciente (Dúvidas e Ideias) ---------------------------
 // Comentários CRUS do período, antes da triagem: os marcados como pergunta e os que
 // falam de preço ou agendamento mesmo sem "?". A triagem (lib/voz-do-paciente.ts) roda

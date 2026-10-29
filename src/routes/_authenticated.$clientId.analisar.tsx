@@ -4,10 +4,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   definirEtapaKpi,
   definirEtapaResultado,
+  definirPapelFunil,
   listEtapasKpi,
   listEtapasParaAnalise,
+  listPapeisFunil,
   type EtapaKpi,
   type EtapaParaAnalise,
+  type PapelFunil,
 } from "@/lib/client-data";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -18,6 +21,14 @@ export const Route = createFileRoute("/_authenticated/$clientId/analisar")({
 type Resultado = "open" | "won" | "lost";
 
 const ROTULO: Record<Resultado, string> = { open: "Aberto", won: "Ganho", lost: "Perdido" };
+
+const PAPEL: Record<PapelFunil, { rotulo: string; dica: string }> = {
+  captacao: { rotulo: "Captação", dica: "onde o lead entra; conta como lead novo" },
+  venda: { rotulo: "Venda", dica: "comercial, orçamento, procedimento; o lead já existe, conta só uma vez por pessoa" },
+  operacional: { rotulo: "Operacional", dica: "confirmação, acompanhamento, jornada; conta só uma vez por pessoa" },
+  compra: { rotulo: "Compra", dica: "registro de quem já comprou (checkout, assinatura); não conta como lead" },
+  base: { rotulo: "Base / reativação", dica: "lista importada ou pacientes antigos; não conta como lead" },
+};
 
 const fmtN = (n: number) => n.toLocaleString("pt-BR");
 const fmtBRL = (n: number) => "R$ " + Math.round(n).toLocaleString("pt-BR");
@@ -198,6 +209,8 @@ function AnalisarPage() {
         </div>
       )}
 
+      <SecaoPapelFunil clientId={clientId} etapas={linhas} />
+
       {[...porConexao.entries()].map(([conexao, grupo]) => {
         const painelNome = (id: string) => grupo.find((g) => g.pipeline_id === id)?.pipeline_name ?? id;
         const paineis = [...new Set(grupo.map((g) => g.pipeline_id))];
@@ -308,6 +321,90 @@ function AnalisarPage() {
         </div>
       ) : (
         kpis.length > 0 && <SecaoKpi etapas={kpis} salvar={salvarKpi} />
+      )}
+    </div>
+  );
+}
+
+// Papel de cada funil: decide o que entra em "leads novos". Sem escolha da equipe vale a regra pelo nome do funil.
+function SecaoPapelFunil({ clientId, etapas }: { clientId: string; etapas: EtapaParaAnalise[] }) {
+  const queryClient = useQueryClient();
+  const funis = [...new Map(etapas.map((e) => [`${e.connection_id}|${e.pipeline_id}`, e])).values()].map((e) => ({
+    chave: `${e.connection_id}|${e.pipeline_id}`,
+    connectionId: e.connection_id,
+    pipelineId: e.pipeline_id,
+    nome: e.pipeline_name,
+    cards: etapas.filter((x) => x.connection_id === e.connection_id && x.pipeline_id === e.pipeline_id).reduce((a, x) => a + x.total, 0),
+  }));
+  const conexoes = [...new Set(funis.map((f) => f.connectionId))];
+  const papeis = useQuery({
+    queryKey: ["crm-funil-papel", clientId, conexoes],
+    queryFn: () => listPapeisFunil(conexoes),
+    enabled: conexoes.length > 0,
+  });
+  const salvar = useMutation({
+    mutationFn: definirPapelFunil,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm-funil-papel", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["crm-resumo-periodo", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["crm-pessoas-periodo", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["crm-resumo", clientId] });
+    },
+  });
+  if (funis.length === 0) return null;
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <h2>Papel de cada funil</h2>
+      <p className="sub">
+        Decide o que conta como lead novo. Captação, venda e operacional contam a pessoa uma vez só (no Kommo e na Clint o
+        card muda de funil). Compra e base não contam como lead.
+      </p>
+      {papeis.error ? (
+        <p className="note">Não consegui ler o papel dos funis: {papeis.error instanceof Error ? papeis.error.message : "erro desconhecido"}.</p>
+      ) : (
+        <div style={{ overflowX: "auto", marginTop: 10 }}>
+          <table className="t empilha">
+            <thead>
+              <tr>
+                <th className="l">Funil</th>
+                <th>Cards</th>
+                <th className="l">Papel</th>
+              </tr>
+            </thead>
+            <tbody>
+              {funis.map((f) => {
+                const atual = papeis.data?.get(f.chave);
+                const papel: PapelFunil = atual?.papel ?? "captacao";
+                const gravando = salvar.isPending && salvar.variables?.connectionId === f.connectionId && salvar.variables?.pipelineId === f.pipelineId;
+                return (
+                  <tr key={f.chave}>
+                    <td className="l">{f.nome}</td>
+                    <td data-label="Cards">{fmtN(f.cards)}</td>
+                    <td data-label="Papel" className="l">
+                      <select
+                        value={papel}
+                        disabled={gravando || papeis.isLoading}
+                        aria-label={`Papel do funil ${f.nome}`}
+                        onChange={(ev) => salvar.mutate({ connectionId: f.connectionId, pipelineId: f.pipelineId, papel: ev.target.value as PapelFunil })}
+                        style={{ padding: "5px 8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--ink)", fontSize: 12.5 }}
+                      >
+                        {(Object.keys(PAPEL) as PapelFunil[]).map((p) => (
+                          <option key={p} value={p}>{PAPEL[p].rotulo}</option>
+                        ))}
+                      </select>
+                      <span className="sub2">
+                        {gravando ? "salvando…" : `${PAPEL[papel].dica}${atual?.definido_por === "equipe" ? " · definido pela equipe" : " · regra pelo nome"}`}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {salvar.isError && (
+        <p className="note">Não consegui salvar: {salvar.error instanceof Error ? salvar.error.message : "erro desconhecido"}.</p>
       )}
     </div>
   );

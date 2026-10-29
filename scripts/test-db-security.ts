@@ -523,6 +523,50 @@ try {
       await db.exec("rollback");
     }
   });
+  await check("lead novo conta pessoa nova em funil de captação; ganho sem valor alerta", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("delete from crm_leads where client_id=$1", [A]);
+      const lead = (id: string, pipeline: string, phone: string | null, dias: number, outcome = "open", price: number | null = null, source: string | null = null) =>
+        db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,pipeline_id,contact_phone,raw_payload,outcome,price,source,occurred_at) values ($1,$2,'kommo',$3,'add',$4,$5,'{}',$6,$7,$8,now() - make_interval(days => $9))", [A, connectionA, id, pipeline, phone, outcome, price, source, dias]);
+      await db.query("insert into crm_funil_papel(crm_connection_id,pipeline_id,papel) values ($1,'compras','compra')", [connectionA]);
+      await lead("p1a", "captacao", "(67) 99999-1111", 3, "won", null, "Instagram"); // pessoa nova, 3 cards
+      await lead("p1b", "captacao", "+55 67 9999-1111", 2, "won");
+      await lead("p1c", "comercial", "67999991111", 1, "lost");
+      await lead("p2a", "captacao", "(67) 98888-2222", 60);                        // já existia antes: recorrente
+      await lead("p2b", "captacao", "(67) 98888-2222", 2, "won", 300);
+      await lead("p3a", "compras", "(67) 97777-3333", 2, "won", 500);               // só funil de compra
+      await lead("p4a", "captacao", "(67) 96666-4444", 2, "open", null, "Paciente antigo"); // paciente da casa
+      await lead("p5a", "captacao", null, 1, "won");                               // sem telefone: o card é a pessoa
+      await lead("p6a", "captacao", "(67) 95555-6666", 1, "won");
+      await lead("p7a", "captacao", "(67) 94444-7777", 1, "open", null, "Já sou paciente"); // texto da equipe: paciente da casa
+      await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ sub: admin, role: "authenticated" })]);
+      await db.exec("set local role authenticated");
+      const de = "current_date - 10", ate = "current_date";
+      assert.deepEqual(await rows(`select novos, ganhos, perdidos from crm_leads_resumo_periodo($1, ${de}, ${ate})`, [A]), [{ novos: 3, ganhos: 5, perdidos: 0 }]);
+      assert.deepEqual(await rows(`select sum(total)::int as t from crm_leads_por_dia_periodo($1, ${de}, ${ate})`, [A]), [{ t: 3 }]);
+      const p = (await rows<{ cards: number; pessoas: number; pessoas_novas: number }>(`select cards, pessoas, pessoas_novas from crm_pessoas_resumo_periodo($1, ${de}, ${ate})`, [A]))[0];
+      assert.deepEqual({ ...p }, { cards: 9, pessoas: 7, pessoas_novas: 3 });
+      const roi = (await rows<{ r: { leads: number; leads_com_origem: number } }>(`select roi_periodo($1, ${de}, ${ate}) as r`, [A]))[0].r;
+      assert.equal(roi.leads, 3);
+      assert.equal(roi.leads_com_origem, 1);
+      // 6 ganhos em 90 dias, 2 com valor: alerta.
+      const alertas = await rows<{ id: string }>("select x->>'id' as id from jsonb_array_elements(qualidade_dados($1)) x", [A]);
+      assert.ok(alertas.some((a) => a.id === "crm-ganho-sem-valor"), JSON.stringify(alertas));
+      // A equipe define o papel do funil; usuário comum não.
+      await rows("select crm_definir_papel_funil($1,'comercial','venda')", [connectionA]);
+      await db.exec("reset role");
+    } finally {
+      await db.exec("rollback");
+    }
+    await db.exec("begin");
+    try {
+      await assert.rejects(() => role("authenticated", viewer, () => rows("select crm_definir_papel_funil($1,'x','compra')", [connectionA])), /apenas a equipe/);
+      await denied(() => role("authenticated", admin, () => rows("select * from crm_pessoas_leads($1)", [A])));
+    } finally {
+      await db.exec("rollback");
+    }
+  });
   await check("ticket rejeita não finitos e preserva decimal, mediana CRM, SAP e ausência de fonte", async () => {
     await db.exec("begin");
     try {
