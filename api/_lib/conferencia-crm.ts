@@ -125,9 +125,13 @@ export async function contarNoCrm(
   }
 }
 
-/** Kommo compara com os vivos (apagados saem pela reconciliação); os outros com tudo o que foi guardado. */
+/**
+ * Kommo e RD Station comparam com os vivos: os dois marcam o que foi apagado na origem (removido_na_origem). A Clint
+ * também marca, mas usa o mesmo campo para as etapas de base (config.etapas_base, Dra. Marcelly), que continuam
+ * existindo na Clint: compara com tudo. FlwChat só lista abertos e o Digisac conta contatos.
+ */
 export function contaVivosNoNexo(provider: string): boolean {
-  return provider === "kommo";
+  return provider === "kommo" || provider === "rdstation";
 }
 
 export async function runConferenciaCrm(

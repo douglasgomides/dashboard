@@ -916,7 +916,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
               ) : null}
               {crm.porDia.length > 1 ? (
                 <>
-                  <Subtitulo>Novos leads por dia</Subtitulo>
+                  <Subtitulo>Cards criados por dia</Subtitulo>
                   <Linha valores={crm.porDia.map((x: any) => num(x.total))} cor={GOLD} />
                 </>
               ) : null}

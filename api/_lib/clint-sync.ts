@@ -210,6 +210,20 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
       return new Map<string, ClintOrigin>();
     });
 
+    // Funil da conta Clint que nenhuma conexão lê (Dra. Marcelly: "Black November 26" entrou sem aviso; a conferência
+    // só soma os funis configurados e não via). A mesma conta pode servir mais de um cliente (Doctor Creator e
+    // Douglas), então vale a soma dos funis de todas as conexões com este token. Vira alerta em qualidade_dados.
+    if (originNames.size > 0) {
+      const { data: irmas } = await supabase.from("crm_connections").select("config").eq("provider", "clint").eq("active", true).eq("access_token", token);
+      const lidos = new Set<string>((irmas ?? []).flatMap((c) => (Array.isArray((c.config as any)?.origins) ? (c.config as any).origins.map(String) : [])));
+      const fora = [...originNames.entries()].filter(([id]) => !lidos.has(id)).map(([, o]) => o.name ?? "").filter(Boolean).sort();
+      const anterior = JSON.stringify((conn.config as any)?.funis_fora_da_config ?? []);
+      if (JSON.stringify(fora) !== anterior) {
+        const { data: atualCfg } = await supabase.from("crm_connections").select("config").eq("id", conn.id).single();
+        await supabase.from("crm_connections").update({ config: { ...((atualCfg?.config as Record<string, unknown>) ?? {}), funis_fora_da_config: fora } }).eq("id", conn.id);
+      }
+    }
+
     const leadRows = new Map<string, Record<string, unknown>>();
     // Listas de base importadas para reativação (Dra. Marcelly: "Base (não abordado)" em Toxina, Preenchimento,
     // Fotona…) não são leads novos. Com config.etapas_base, o card nessas etapas fica fora das contas (removido_na_origem)
@@ -318,6 +332,9 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
     // da Hubla, auditoria de 30/10/2026). Se o mesmo contato já tem um card ganho em outro funil criado até 3 dias antes ou
     // depois, é a mesma compra (40 de 89) e não conta de novo.
     aplicarCompraAprovada([...leadRows.values()], (conn.config as any)?.funis_compra_aprovada);
+    // Reembolso continuava como venda (Doctor Creator: 7 pares pela mesma transação). Card no funil de reembolso
+    // (config.funis_reembolso) desfaz o ganho do mesmo contato criado até 30 dias antes.
+    aplicarReembolso([...leadRows.values()], (conn.config as any)?.funis_reembolso);
 
     let gravados = 0;
     for (const batch of chunk([...leadRows.values()], BATCH_SIZE)) {
@@ -404,6 +421,27 @@ export function aplicarCompraAprovada(linhas: Record<string, any>[], funis: unkn
       l.raw_payload = { ...l.raw_payload, compra_repetida: true };
     } else {
       l.outcome = "won";
+    }
+  }
+}
+
+const TRINTA_DIAS_MS = 30 * 86_400_000;
+
+/** Desfaz o ganho que foi reembolsado: card no funil de reembolso anula o ganho do mesmo contato até 30 dias antes. */
+export function aplicarReembolso(linhas: Record<string, any>[], funis: unknown): void {
+  if (!Array.isArray(funis) || funis.length === 0) return;
+  const reembolso = new Set(funis.map(String));
+  const contato = (l: Record<string, any>) => String(l.raw_payload?.contact?.id ?? "");
+  const reembolsos = linhas.filter((l) => reembolso.has(String(l.pipeline_id)) && contato(l) && l.occurred_at);
+  for (const r of reembolsos) {
+    const quando = Date.parse(r.occurred_at);
+    const venda = linhas
+      .filter((l) => !reembolso.has(String(l.pipeline_id)) && l.outcome === "won" && contato(l) === contato(r) && l.occurred_at)
+      .filter((l) => { const t = Date.parse(l.occurred_at); return t <= quando && quando - t <= TRINTA_DIAS_MS; })
+      .sort((a, b) => Date.parse(b.occurred_at) - Date.parse(a.occurred_at))[0];
+    if (venda) {
+      venda.outcome = "lost";
+      venda.raw_payload = { ...venda.raw_payload, reembolsada: true };
     }
   }
 }

@@ -223,6 +223,25 @@ async function buscarInsights(contaId: string, token: string, since: string, unt
   }
 }
 
+/**
+ * Quantos dias de gasto faltam até o limite de gastos da conta (spend_cap), pelo gasto médio dos últimos 7 dias.
+ * Null quando a conta não tem limite ou não gastou. Antes ninguém lia o limite e a conta parava sem aviso
+ * (auditoria de 30/10/2026: Antônio a cerca de 10 dias do fim).
+ */
+export function diasAteOLimite(spendCapCentavos: unknown, gastoCentavos: unknown, gastoMedioDia: number): number | null {
+  const cap = Number(spendCapCentavos);
+  const gasto = Number(gastoCentavos);
+  if (!Number.isFinite(cap) || cap <= 0 || !Number.isFinite(gasto) || !(gastoMedioDia > 0)) return null;
+  return Math.max(0, (cap - gasto) / 100 / gastoMedioDia);
+}
+
+async function lerLimiteDeGasto(contaId: string, token: string): Promise<{ spend_cap?: string; amount_spent?: string } | null> {
+  const conta = contaId.startsWith("act_") ? contaId : `act_${contaId}`;
+  const res = await fetch(graphPageUrl(`${API}/${conta}?fields=spend_cap,amount_spent&access_token=${encodeURIComponent(token)}`), integrationRequest());
+  if (!res.ok) return null;
+  return (await res.json()) as { spend_cap?: string; amount_spent?: string };
+}
+
 export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAdsGraphResult[]> {
   const supabase: SupabaseClient<Database> = createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -357,6 +376,18 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
           .upsert(diarias.slice(i, i + 300), { onConflict: "client_id,ad_account_id,date,campaign_id" });
         if (e) r.errors.push(`diárias: ${e.message}`);
         else r.rows += diarias.slice(i, i + 300).length;
+      }
+      // Limite de gastos da conta: dias que faltam pelo gasto médio dos últimos 7 dias (alerta em qualidade_dados).
+      try {
+        const lim = await lerLimiteDeGasto(conta.ad_account_id, tokenConta);
+        const desde7 = new Date(hoje.getTime() - 7 * 86400_000).toISOString().slice(0, 10);
+        const gasto7 = diarias.filter((d) => d.date >= desde7).reduce((t, d) => t + Number(d.spend ?? 0), 0);
+        const dias = lim ? diasAteOLimite(lim.spend_cap, lim.amount_spent, gasto7 / 7) : null;
+        await (supabase as any).from("client_ad_accounts")
+          .update({ limite_gasto_dias: dias == null ? null : Math.round(dias * 10) / 10, limite_lido_em: new Date().toISOString() })
+          .eq("client_id", conta.client_id).eq("ad_account_id", conta.ad_account_id);
+      } catch {
+        /* o limite é um extra: não derruba o sync */
       }
     } catch (err) {
       r.errors.push(err instanceof Error ? err.message : String(err));

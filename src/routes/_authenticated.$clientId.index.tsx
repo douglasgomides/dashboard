@@ -890,7 +890,7 @@ function MonthlyOverview() {
                     ? "variação do total de seguidores do primeiro ao último dia com dado"
                     : "sem o total de seguidores no começo e no fim do período"
                 }
-                info="Total de seguidores no último dia com dado menos o total no primeiro. Novos seguidores e saídas só aparecem em períodos de até 30 dias: o Instagram não entrega esses números para trás."
+                info="Total de seguidores no último dia com dado menos o total no primeiro."
               />
             )}
             {meta?.alcance_unico != null ? (

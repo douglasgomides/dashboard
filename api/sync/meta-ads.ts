@@ -164,6 +164,28 @@ const PISO_DIAS_ANUNCIOS = 30;
       // a Graph alimenta é esperado e apagaria o sucesso registrado pela Graph.
       results.filter((r) => r.rows > 0).map((r) => ({ clientId: r.clientId, rows: r.rows, errors: [] })),
     );
+    // Conta que nenhuma via enxerga: a Windsor não devolve nada e a Graph não tem a conta (sem token próprio). Antes
+    // ficava em silêncio e o diagnóstico só via "sem gasto" (Dra. Glauce: conta sem ads_read, auditoria 30/10/2026).
+    try {
+      const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+      const vazias = results.filter((r) => r.rows === 0).map((r) => r.clientId);
+      if (vazias.length) {
+        const { data: viaGraph } = await sb.from("client_ad_accounts").select("client_id").in("client_id", vazias).eq("active", true).not("access_token", "is", null);
+        const cobertas = new Set((viaGraph ?? []).map((c) => c.client_id as string));
+        // Conta pausada também volta vazia: só é "invisível" se nunca trouxe dado nos últimos 120 dias.
+        const desde = new Date(Date.now() - 120 * 86400_000).toISOString().slice(0, 10);
+        const { data: comDado } = await sb.from("meta_ads_daily").select("client_id").in("client_id", vazias).gte("date", desde).limit(5000);
+        const jaTrouxe = new Set((comDado ?? []).map((c) => c.client_id as string));
+        const invisiveis = results.filter((r) => r.rows === 0 && !cobertas.has(r.clientId) && !jaTrouxe.has(r.clientId));
+        await recordSyncStatusPorCliente(sb, "anuncios", invisiveis.map((r) => ({
+          clientId: r.clientId,
+          rows: 0,
+          errors: [r.errors[0] ?? "A conta de anúncios cadastrada não devolve nenhum dado: confira se o dono da conta deu acesso de leitura (ads_read)"],
+        })));
+      }
+    } catch {
+      /* o aviso é um extra: não derruba o sync */
+    }
     let graph: unknown = undefined;
     let graphComErro = false;
     if (fonte === "ambas") {
