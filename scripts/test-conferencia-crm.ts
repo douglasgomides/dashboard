@@ -18,14 +18,18 @@ async function main() {
   const kommo: BuscarJson = async (url, headers) => {
     paginas.push(url);
     assert.equal(headers.Authorization, "Bearer tok-falso");
-    const p = Number(new URL(url).searchParams.get("page"));
+    const u = new URL(url);
+    // Funis com uma etapa de Entrada (type 1): os leads dela não vêm na listagem padrão e somam à parte.
+    if (u.pathname.endsWith("/pipelines")) return { status: 200, corpo: { _embedded: { pipelines: [{ id: 10, _embedded: { statuses: [{ id: 100, type: 1 }, { id: 101, type: 0 }] } }] } } };
+    if (u.searchParams.get("filter[statuses][0][status_id]") === "100") return { status: 200, corpo: { _embedded: { leads: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }] }, _links: {} } };
+    const p = Number(u.searchParams.get("page"));
     if (p < 3) return { status: 200, corpo: { _embedded: { leads: Array(250).fill({}) }, _links: { next: {} } } };
     return { status: 200, corpo: { _embedded: { leads: Array(96).fill({}) }, _links: {} } };
   };
-  assert.deepEqual(await contarNoCrm(conn("kommo"), kommo), { total: 596, metodo: "total", aviso: null });
-  assert.equal(paginas.length, 3);
+  assert.deepEqual(await contarNoCrm(conn("kommo"), kommo), { total: 600, metodo: "total", aviso: null });
+  assert.equal(paginas.length, 5);
   // Kommo sem token próprio usa o token geral do servidor; sem nenhum, não inventa número.
-  assert.equal((await contarNoCrm(conn("kommo", { access_token: null }), kommo, { tokenKommoPadrao: "tok-falso" })).total, 596);
+  assert.equal((await contarNoCrm(conn("kommo", { access_token: null }), kommo, { tokenKommoPadrao: "tok-falso" })).total, 600);
   const semToken = await contarNoCrm(conn("kommo", { access_token: null }), kommo);
   assert.equal(semToken.total, null);
   assert.match(semToken.aviso!, /sem token/);

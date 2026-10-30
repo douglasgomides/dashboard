@@ -730,7 +730,7 @@ function MonthlyOverview() {
   const novosKpi = cresc.diasMedidos ? cresc.novos : newFollowers;
   const dicaSeguidores = cresc.diasMedidos
     ? `bruto em ${cresc.diasMedidos} dias com ganhos e saídas medidos · saíram ${cresc.saidas.toLocaleString("pt-BR")} · líquido ${sinal(cresc.liquido)}${newFollowers !== cresc.novos ? ` · somando também dias sem saída medida: ${newFollowers.toLocaleString("pt-BR")}` : ""}`
-    : "bruto de todos os dias com dado · saídas ainda não medidas neste período (o Instagram só informa ganhos e saídas dos últimos 30 dias)";
+    : "bruto de todos os dias com dado · saídas ainda não medidas neste período";
   const reach = sum(data, "reach");
   const saves = sum(data, "saves");
   const interactions = sum(data, "total_interactions");
@@ -818,7 +818,7 @@ function MonthlyOverview() {
 
   const explicacao = {
     seguidores:
-      "Fonte: Instagram (métrica diária “seguidores ganhos”). Fórmula: soma dos novos seguidores de cada dia do período, sem descontar quem saiu (igual ao número do Instagram). Limitação: o Instagram só entrega cerca de 30 dias de histórico diário; quem saiu só é medido nos dias já fechados.",
+      "Fonte: Instagram (métrica diária “seguidores ganhos”). Fórmula: soma dos novos seguidores de cada dia do período, sem descontar quem saiu (igual ao número do Instagram). Limitação: quem saiu só é medido nos dias já fechados (a Meta leva cerca de 2 dias para fechar o dia).",
     alcance:
       meta?.alcance_unico != null
         ? `Fonte: Instagram, “Contas alcançadas” do período (${dd(meta.de)} a ${dd(meta.ate)}${meta.recortado ? ", últimos 30 dias do período" : ""}). Conta pessoas únicas. Limitação: a Meta só calcula para até 30 dias; a soma dos alcances diários (${reach.toLocaleString("pt-BR")}) é maior porque repete pessoas.`

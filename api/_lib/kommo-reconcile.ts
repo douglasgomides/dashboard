@@ -25,7 +25,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
-import { linhaDoLead, type KommoLead } from "./kommo-leads-sync.js";
+import { buscarKommo, leadsDaEntradaKommo, linhaDoLead, type KommoLead } from "./kommo-leads-sync.js";
 import { integrationHost, integrationRequest } from "./integration-http.js";
 
 const PAGE_SIZE = 250; // limite da API da Kommo
@@ -68,13 +68,23 @@ async function idsVivos(
 ): Promise<{ ids: Set<string>; leads: Map<string, KommoLead>; completo: boolean; erro?: string }> {
   const ids = new Set<string>();
   const leads = new Map<string, KommoLead>();
+  // A listagem padrão não traz os leads da Entrada: sem eles aqui, viravam "apagados" depois de importados.
+  const comEntrada = async (): Promise<{ ids: Set<string>; leads: Map<string, KommoLead>; completo: boolean; erro?: string }> => {
+    const entrada = await leadsDaEntradaKommo(buscarKommo, domain, accessToken, { comDetalhes: true });
+    if (entrada.erro) return { ids, leads, completo: false, erro: entrada.erro };
+    for (const l of entrada.leads) {
+      ids.add(String(l.id));
+      leads.set(String(l.id), l);
+    }
+    return { ids, leads, completo: true };
+  };
   let page = 1;
   while (page <= MAX_PAGINAS) {
     const qs = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(page), with: "source_id,contacts" });
     const res = await fetch(`https://${domain}/api/v4/leads?${qs.toString()}`, integrationRequest({
       headers: { Authorization: `Bearer ${accessToken}` },
     }));
-    if (res.status === 204) return { ids, leads, completo: true }; // fim normal da paginação
+    if (res.status === 204) return comEntrada(); // fim normal da paginação
     if (!res.ok) {
       return { ids, leads, completo: false, erro: `Kommo respondeu ${res.status}: ${(await res.text()).slice(0, 200)}` };
     }
@@ -90,7 +100,7 @@ async function idsVivos(
       ids.add(String(l.id));
       leads.set(String(l.id), l);
     }
-    if (!body._links?.next) return { ids, leads, completo: true };
+    if (!body._links?.next) return comEntrada();
     page += 1;
   }
   return { ids, leads, completo: false, erro: `parou no teto de ${MAX_PAGINAS} páginas` };
