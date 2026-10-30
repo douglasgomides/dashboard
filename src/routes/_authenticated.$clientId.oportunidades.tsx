@@ -9,7 +9,6 @@ import { getAcompanhamentos, salvarAcompanhamento } from "@/lib/client-data";
 import {
   combinar,
   mudarStatus,
-  dimensoes,
   PESOS_PADRAO,
   ROTULO_STATUS,
   TRANSICOES,
@@ -232,7 +231,7 @@ function OportunidadesPage() {
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
       <header>
-        <h1 className="text-[28px] font-semibold leading-tight">Oportunidades</h1>
+        <h1 className="text-[28px] font-semibold leading-tight">Oportunidades de melhoria</h1>
         <p className="mt-1 text-[15px]" style={{ color: "var(--ink-2)" }}>
           Recomendações do período ({periodLabel}), em ordem de prioridade, e o acompanhamento do que foi feito com cada uma.
         </p>
@@ -277,7 +276,7 @@ function OportunidadesPage() {
               </tr>
             </thead>
             <tbody>
-              {visiveis.map(({ insight, acomp, score }) => (
+              {visiveis.map(({ insight, acomp }) => (
                 <tr key={acomp.insightId} className="border-t" style={{ borderColor: "var(--border)" }}>
                   <td className="px-4 py-3" data-label="Oportunidade">
                     <span className="block text-xs" style={{ color: "var(--muted)" }}>{insight ? categoriaDaArea(insight.area) : "Regra não disparou mais neste período"}</span>
@@ -287,9 +286,6 @@ function OportunidadesPage() {
                     {insight ? (
                       <span className="inline-flex flex-wrap items-center gap-2">
                         <PriorityBadge p={prioridadeDe(insight)} />
-                        <span className="tabular-nums text-xs" style={{ color: "var(--muted)" }} title={`impacto ${dimensoes(insight).impacto}, urgência ${dimensoes(insight).urgencia}, confiança ${dimensoes(insight).confianca}, facilidade ${dimensoes(insight).facilidade}, alinhamento ${dimensoes(insight).alinhamento} (0–5)`}>
-                          {score}/100
-                        </span>
                       </span>
                     ) : (
                       "—"

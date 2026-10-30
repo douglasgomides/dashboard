@@ -4,7 +4,7 @@
 
 import type { ProblemaDado } from "@/lib/client-data";
 import type { DiagnosticoAds } from "@/lib/anuncios-objetivo";
-import type { ResumoAtendimento } from "@/lib/conversa-leitura";
+import { resumirAtendimento, type LeituraConversaBanco, type ResumoAtendimento } from "@/lib/conversa-leitura";
 
 export type Severidade = "alta" | "media" | "baixa";
 export type Categoria = "dados" | "conteudo" | "anuncios" | "atendimento" | "crm";
@@ -16,7 +16,7 @@ export const ROTULO_CATEGORIA: Record<Categoria, string> = { dados: "Dados", con
 export const ROTULO_DONO: Record<Dono, string> = { doctor_creator: "Doctor Creator", cliente: "Cliente", trafego: "Tráfego", conteudo: "Conteúdo", atendimento: "Atendimento" };
 export const ROTULO_STATUS_ACAO: Record<StatusAcao, string> = { pendente: "Pendente", em_andamento: "Em andamento", resolvido: "Resolvido", ignorado: "Ignorado" };
 
-// O status fica na mesma tabela das Oportunidades (acoes_acompanhamento), para as duas telas concordarem.
+// O status fica na mesma tabela das Oportunidades (acoes_acompanhamento), com o prefixo "pa:" (cada tela lê o seu).
 export const STATUS_PARA_BANCO: Record<StatusAcao, string> = { pendente: "nova", em_andamento: "em_execucao", resolvido: "concluida", ignorado: "dispensada" };
 export function statusDoBanco(s: string | null | undefined): StatusAcao {
   if (s === "em_analise" || s === "em_execucao") return "em_andamento";
@@ -44,7 +44,34 @@ export interface EntradaAcoes {
   posts?: { id?: string; permalink?: string | null; caption?: string | null; format?: string | null; reach?: number | null; saved?: number | null; shares?: number | null }[] | null;
   duvidas?: { rotulo: string; pessoas: number; resumo?: string; cuidadoMedico?: boolean; sugestaoPost?: { formato: string; titulo: string } | null }[] | null;
   atendimento?: ResumoAtendimento | null;
+  /** Sem resposta, mas parados há mais de 7 dias (fora do "responder hoje"; caso de recuperação). */
+  atendimentoParados?: number | null;
   precoPedidoSemResposta?: number | null;
+  /** Perfil da clínica: esconde pendência interna de baixa severidade da equipe Doctor Creator. */
+  ocultarInternasBaixas?: boolean;
+}
+
+/** Janela do "responder hoje": quem escreveu nos últimos 7 dias (a mesma do Plano da semana). */
+export const DIAS_ESPERANDO = 7;
+
+/**
+ * Leitura das conversas para as ações de atendimento, dentro do período escolhido. Cards fechados na origem
+ * (lead com resultado "closed") não contam. "Sem resposta" para responder hoje só vale para quem escreveu nos
+ * últimos 7 dias; os mais antigos são contados à parte, como caso de recuperação.
+ */
+export function atendimentoParaAcoes(ls: LeituraConversaBanco[], de: string, ate: string, agora = Date.now()): { resumo: ResumoAtendimento; parados: number } | null {
+  const ini = Date.parse(`${de.slice(0, 10)}T00:00:00-03:00`), fim = Date.parse(`${ate.slice(0, 10)}T23:59:59.999-03:00`);
+  const doPeriodo = ls.filter((l) => {
+    if (l.lead_resultado === "closed" || !l.ultima_msg_em) return false;
+    const t = Date.parse(l.ultima_msg_em);
+    return t >= ini && t <= fim;
+  });
+  if (!doPeriodo.length) return null;
+  const recente = (l: LeituraConversaBanco) => Date.parse(l.ultima_msg_em!) >= agora - DIAS_ESPERANDO * 86_400_000;
+  const geral = resumirAtendimento(doPeriodo);
+  const recentes = resumirAtendimento(doPeriodo.filter(recente));
+  const antigos = resumirAtendimento(doPeriodo.filter((l) => !recente(l)));
+  return { resumo: { ...geral, semResposta: recentes.semResposta, soRobo: recentes.soRobo }, parados: antigos.semResposta };
 }
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -65,9 +92,11 @@ export function montarProximasAcoes(e: EntradaAcoes): ProximaAcao[] {
 
   // 1. Fontes paradas e lacunas de dado (qualidade_dados): sem isso, o resto do painel lê errado.
   for (const p of e.problemas ?? []) {
+    // Pendência de configuração da equipe, de baixa severidade, não é tarefa da clínica.
+    if (e.ocultarInternasBaixas && p.severidade === "baixa" && p.responsavel === "equipe_hub") continue;
     out.push({
       id: `dado-${p.id}`,
-      severidade: p.severidade === "alta" ? "alta" : "media",
+      severidade: p.severidade === "alta" ? "alta" : p.severidade === "baixa" ? "baixa" : "media",
       categoria: CATEGORIA_DO_PROBLEMA(p.fonte),
       recomendacao: p.correcao,
       porque: p.causa,
@@ -169,12 +198,24 @@ export function montarProximasAcoes(e: EntradaAcoes): ProximaAcao[] {
         id: "atend-sem-resposta",
         severidade: at.semResposta >= 5 ? "alta" : "media",
         categoria: "atendimento",
-        recomendacao: `Responder hoje os ${int(at.semResposta)} pacientes que ficaram sem resposta.`,
+        recomendacao: `Responder hoje os ${int(at.semResposta)} pacientes que escreveram nos últimos ${DIAS_ESPERANDO} dias e ficaram sem resposta.`,
         porque: `A última mensagem dessas conversas é do paciente${at.soRobo ? ` (${int(at.soRobo)} só receberam mensagem automática)` : ""}.`,
         impacto: "É o lead mais barato que existe: já pediu contato e só falta resposta.",
         responsavel: "atendimento",
-        evidencia: `${int(at.semResposta)} de ${int(at.comPaciente)} conversas`,
+        evidencia: `${int(at.semResposta)} conversas dos últimos ${DIAS_ESPERANDO} dias esperando a clínica${(e.atendimentoParados ?? 0) === 1 ? ". Outra conversa está parada há mais tempo (ver Recuperação)" : (e.atendimentoParados ?? 0) > 1 ? `. Outras ${int(e.atendimentoParados ?? 0)} estão paradas há mais tempo (ver Recuperação)` : ""}`,
         rota: "/$clientId/conversas",
+      });
+    if (!at.semResposta && (e.atendimentoParados ?? 0) >= 3)
+      out.push({
+        id: "atend-parados",
+        severidade: "baixa",
+        categoria: "atendimento",
+        recomendacao: `Retomar os ${int(e.atendimentoParados ?? 0)} pacientes que ficaram sem resposta há mais de ${DIAS_ESPERANDO} dias.`,
+        porque: "A última mensagem é do paciente, mas faz tempo: vale uma mensagem de retomada, não uma resposta de rotina.",
+        impacto: "Parte desses pacientes ainda pode agendar se for chamada de novo.",
+        responsavel: "atendimento",
+        evidencia: `${int(e.atendimentoParados ?? 0)} conversas do período paradas há mais de ${DIAS_ESPERANDO} dias`,
+        rota: "/$clientId/agentes",
       });
     if ((at.medianaPrimeiraResposta ?? 0) > 3600)
       out.push({

@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { AgenteCatalogo } from "./agentes-catalogo";
-import { TRABALHOS_AGENTE, type RodadaAgente, type TrabalhoAgente } from "./agentes-trabalho";
+import { TRABALHOS_AGENTE, type RodadaAgente, type SaudeRotina, type TrabalhoAgente } from "./agentes-trabalho";
 
 const db = supabase as any;
 
@@ -27,6 +27,13 @@ export async function lerTrabalhoAgente(clientId: string, agente: AgenteCatalogo
   for (const r of [p, u, e]) if (r.error) throw new Error("Não foi possível conferir as entregas e o estado deste agente.");
   if (!Number.isSafeInteger(p.count) || p.count < 0) throw new Error("A contagem de entregas está indisponível.");
   return { pendentes: p.count, ultimaEntrega: u.data?.criado_em ?? null, rodada: e.data as RodadaAgente | null };
+}
+
+/** Última rodada de cada fluxo da clínica (datas e estado). Disponível para membros da clínica e admin. */
+export async function lerSaudeAgentes(clientId: string): Promise<SaudeRotina[]> {
+  const { data, error } = await db.rpc("agentes_saude", { p_client: clientId });
+  if (error) throw new Error("Não foi possível conferir a última rodada dos agentes.");
+  return (data ?? []) as SaudeRotina[];
 }
 
 export async function lerModulosAgentes(clientId: string): Promise<{ modulo: string; status: string }[]> {

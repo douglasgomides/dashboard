@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { agenteSelecionado, rodadaEmCurso, situacaoRodada, TRABALHOS_AGENTE, type RodadaAgente } from "../src/lib/agentes-trabalho";
+import { agenteSelecionado, rodadaEmCurso, saudeRotina, situacaoRodada, TRABALHOS_AGENTE, type RodadaAgente } from "../src/lib/agentes-trabalho";
 import { AGENTES } from "../src/lib/agentes-catalogo";
 
 for (const a of AGENTES) {
@@ -23,4 +23,17 @@ for (const e of ["pendente", "rodando", "aguardando", "aguardando_aprovacao", "p
 for (const e of ["concluida", "falhou", "cancelada"] as const) assert.equal(rodadaEmCurso(rodada(e)), false);
 assert.equal(rodadaEmCurso(null), false);
 assert.equal(typeof situacaoRodada(rodada("concluida", { motivo: {} as string, pecas: Infinity }), true).detalhe, "string");
+// Rotina parada ou com falha não aparece como "prevista" para ninguém.
+const agora = Date.parse("2026-10-30T12:00:00Z");
+const diario = AGENTES.find((x) => x.id === "anuncios")!, recup = AGENTES.find((x) => x.id === "recuperacao")!;
+const saude = (ok: string | null, estado = "concluida", ultima = ok) => ({ fluxo: "f", ultima_ok_em: ok, ultima_em: ultima, ultimo_estado: estado });
+assert.equal(saudeRotina(diario, saude("2026-10-30T06:00:00Z"), 0, agora).estado, "em_dia");
+const atrasada = saudeRotina(diario, saude("2026-10-20T06:00:00Z"), 0, agora);
+assert.equal(atrasada.estado, "atrasada");
+assert.match(atrasada.texto, /há 10 dias/);
+assert.equal(saudeRotina(diario, saude("2026-10-29T06:00:00Z", "falhou", "2026-10-30T06:00:00Z"), 0, agora).estado, "falha");
+assert.equal(saudeRotina(recup, saude("2026-10-21T06:00:00Z"), 30, agora).estado, "fila_cheia");
+assert.equal(saudeRotina(diario, null, 0, agora).estado, "sem_execucao");
+assert.equal(saudeRotina(diario, saude(null, "falhou", "2026-10-25T06:00:00Z"), 0, agora).estado, "falha");
+for (const r of [atrasada, saudeRotina(diario, null, 0, agora)]) { assert.equal(r.atencao, true); assert.doesNotMatch(r.texto, /—/); }
 console.log("Agent work descriptions, role/product boundaries and truthful execution states verified.");

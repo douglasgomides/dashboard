@@ -4,8 +4,8 @@ import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Bot, Clock3, Loader2, RefreshCw } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { AGENTES, type IdAgente } from "@/lib/agentes-catalogo";
-import { TRABALHOS_AGENTE, agenteSelecionado, rodadaEmCurso, situacaoRodada } from "@/lib/agentes-trabalho";
-import { lerModulosAgentes, lerTrabalhoAgente } from "@/lib/agentes-trabalho-data";
+import { TRABALHOS_AGENTE, agenteSelecionado, rodadaEmCurso, saudeRotina, situacaoRodada } from "@/lib/agentes-trabalho";
+import { lerModulosAgentes, lerSaudeAgentes, lerTrabalhoAgente } from "@/lib/agentes-trabalho-data";
 import { rodarFluxoAteFim } from "@/lib/agentes-data";
 import "@/styles/agentes-trabalho.css";
 
@@ -28,6 +28,10 @@ export function CentroTrabalhoAgentes({ clientId, produto, selecionado, onSeleci
     refetchInterval: 30_000,
   })) });
   const modulos = useQuery({ queryKey: ["agentes-modulos", clientId], queryFn: () => lerModulosAgentes(clientId), retry: false });
+  const saude = useQuery({ queryKey: ["agentes-saude", clientId], queryFn: () => lerSaudeAgentes(clientId), retry: false, refetchInterval: 60_000 });
+  // Situação real da rotina (em dia, atrasada, com falha, travada pela fila): "0 para revisar" sem rodada não é "tudo certo".
+  const rotinaDe = (ag: (typeof agentes)[number], pendentes: number) =>
+    saude.isSuccess ? saudeRotina(ag, saude.data.find((x) => x.fluxo === ag.fluxo), pendentes) : null;
   const a = agentes.find((x) => x.id === id)!;
   const t = TRABALHOS_AGENTE[id];
   const q = resultados[agentes.indexOf(a)];
@@ -57,6 +61,7 @@ export function CentroTrabalhoAgentes({ clientId, produto, selecionado, onSeleci
       setAndamento(null);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["agentes-trabalho", clientId] }),
+        qc.invalidateQueries({ queryKey: ["agentes-saude", clientId] }),
         qc.invalidateQueries({ queryKey: ["sugestoes-agentes", clientId] }),
         qc.invalidateQueries({ queryKey: ["campanhas-ideias", clientId] }),
         qc.invalidateQueries({ queryKey: ["brain-itens", clientId] }),
@@ -86,7 +91,7 @@ export function CentroTrabalhoAgentes({ clientId, produto, selecionado, onSeleci
     <div className="agent-choices" role="group" aria-label="Escolher o problema da clínica">
       {agentes.map((ag, n) => <button key={ag.id} type="button" aria-pressed={id === ag.id} onClick={() => onSelecionar(ag.id)}>
         <Bot size={19} aria-hidden /><span><b>{TRABALHOS_AGENTE[ag.id].problema}</b><span>{ag.nome}</span></span>
-        <span className="agent-choice-count">{resultados[n].isError ? "Não conferido" : resultados[n].isPending ? "Conferindo…" : `${resultados[n].data?.pendentes ?? 0} para revisar`}</span>
+        <span className="agent-choice-count">{resultados[n].isError ? "Não conferido" : resultados[n].isPending ? "Conferindo…" : `${resultados[n].data?.pendentes ?? 0} para revisar${!resultados[n].data?.pendentes && rotinaDe(ag, 0)?.atencao ? " · rotina parada" : ""}`}</span>
       </button>)}
     </div>
 
@@ -103,7 +108,12 @@ export function CentroTrabalhoAgentes({ clientId, produto, selecionado, onSeleci
       </div>
       {filaCheia && <p className="agent-queue-limit" role="status"><b>Revise a fila antes de pedir novos materiais.</b> Há {dados!.pendentes} propostas recentes para revisar; o limite desta rotina é {a.maxAbertas}. Abra as entregas abaixo, use o que faz sentido ou descarte com critério. A fila é atualizada após a decisão.</p>}
       <div className="agent-schedule"><Clock3 size={16} aria-hidden /><div>
-        {modulos.isPending ? <p>Conferindo a rotina automática…</p> : modulos.isError ? <p role="alert">Agendamento não conferido. <button type="button" onClick={() => void modulos.refetch()}>Tentar novamente</button></p> : <p><b>{ativo ? `Rotina prevista: ${a.frequencia.toLowerCase()}` : modulo ? "Módulo pausado ou encerrado" : "Rotina automática não configurada"}.</b> {ativo ? isAdmin ? "Depende do agendamento, dos dados e da fila de revisão. O estado acima confirma o que foi executado." : "Depende do agendamento, dos dados e da fila de revisão. A equipe Doctor Creator acompanha as execuções." : "Os materiais anteriores continuam disponíveis; a equipe pode conferir a configuração."}</p>}
+        {modulos.isPending ? <p>Conferindo a rotina automática…</p> : modulos.isError ? <p role="alert">Agendamento não conferido. <button type="button" onClick={() => void modulos.refetch()}>Tentar novamente</button></p> : !ativo ? <p><b>{modulo ? "Módulo pausado ou encerrado" : "Rotina automática não configurada"}.</b> Os materiais anteriores continuam disponíveis; a equipe pode conferir a configuração.</p> : (() => {
+          const r = rotinaDe(a, dados?.pendentes ?? 0);
+          if (saude.isPending) return <p>Conferindo a última rodada…</p>;
+          if (!r) return <p role="alert"><b>Rotina {a.frequencia.toLowerCase()}.</b> Não foi possível conferir a última rodada; isso não quer dizer que ela rodou. <button type="button" onClick={() => void saude.refetch()}>Tentar novamente</button></p>;
+          return <p role={r.atencao ? "alert" : undefined}><b>{r.texto}</b>{r.atencao && !dados?.pendentes ? " Por isso, \"0 para revisar\" aqui não quer dizer que está tudo certo." : ""}</p>;
+        })()}
       </div></div>
       <div className="agent-assignment-actions">
         {isAdmin && id !== "brain" && <button className="btn agent-prepare" type="button" disabled={!!andamento || q.isPending || q.isError || emCurso || filaCheia || !modulos.isSuccess || !!modulo && !ativo} onClick={() => void preparar()}>

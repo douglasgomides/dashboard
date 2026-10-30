@@ -18,13 +18,13 @@ import {
 } from "@/lib/client-data";
 import { resolveDateRange } from "@/lib/date-range";
 import { analisarVozDoPaciente } from "@/lib/voz-do-paciente";
-import { resumirAtendimento } from "@/lib/conversa-leitura";
 import type { Acompanhamento, Status } from "@/lib/oportunidades";
 import type { Responsavel } from "@/lib/insight";
 import { useQualidadeDados } from "@/components/qualidade-dados";
 import { useLeituraConversas } from "@/components/atendimento-resumo";
 import { useClientRole } from "@/hooks/use-client-role";
 import {
+  atendimentoParaAcoes,
   montarProximasAcoes,
   statusDoBanco,
   STATUS_PARA_BANCO,
@@ -238,7 +238,7 @@ function CartaoAcao({
 function ProximasAcoesPage() {
   const { clientId } = Route.useParams();
   const { start, end } = resolveDateRange(layout.useSearch());
-  const { podeEditar } = useClientRole(clientId);
+  const { podeEditar, papel } = useClientRole(clientId);
   const qc = useQueryClient();
   const opts = { staleTime: 5 * 60_000, retry: false } as const;
 
@@ -308,7 +308,7 @@ function ProximasAcoesPage() {
           donos: (voz.data as any).donos,
         })
       : null;
-    const leituras = conversas.data ?? [];
+    const atend = atendimentoParaAcoes(conversas.data ?? [], start, end);
     const f = auditoria.data?.funil;
     return montarProximasAcoes({
       problemas: problemas.data ?? [],
@@ -322,10 +322,13 @@ function ProximasAcoesPage() {
         })),
       posts: (posts.data as any[]) ?? [],
       duvidas: vozR?.grupos ?? [],
-      atendimento: leituras.length ? resumirAtendimento(leituras) : null,
-      precoPedidoSemResposta: f
-        ? Math.max(0, Number(f.preco_pedido) - Number(f.preco_apresentado))
-        : null,
+      atendimento: atend?.resumo ?? null,
+      atendimentoParados: atend?.parados ?? null,
+      // Contado por conversa no banco (pediu e não recebeu). Subtrair os totais dava zero quando havia
+      // quem recebesse o preço sem pedir; sem o campo, a ação não aparece em vez de mostrar número errado.
+      precoPedidoSemResposta:
+        f?.preco_sem_resposta != null ? Number(f.preco_sem_resposta) : null,
+      ocultarInternasBaixas: papel !== "admin",
     });
   }, [
     problemas.data,
@@ -335,6 +338,9 @@ function ProximasAcoesPage() {
     voz.data,
     conversas.data,
     auditoria.data,
+    start,
+    end,
+    papel,
   ]);
 
   const statusDe = (id: string): StatusAcao =>
@@ -651,9 +657,10 @@ function ProximasAcoesPage() {
           (verificação de qualidade), campanha com veredito “Cortar” ou “Atrai
           mas não converte”, campanha com 5+ leads e nenhum qualificado no CRM,
           post com 1,5x mais salvamento/compartilhamento que o típico, dúvida
-          feita por 2+ pessoas, paciente sem resposta, 1ª resposta acima de 1
-          hora e preço pedido sem resposta. A lista completa com pontuação e
-          histórico está em Oportunidades de melhoria.
+          feita por 2+ pessoas, paciente que escreveu nos últimos 7 dias e
+          ficou sem resposta (dentro do período escolhido, sem contar card
+          fechado no CRM), 1ª resposta acima de 1 hora e preço pedido sem
+          resposta, contado em cada conversa.
         </p>
       </details>
     </div>
