@@ -102,7 +102,7 @@ async function gastoDosUltimos30(id: string, token: string): Promise<number> {
 type Sb = SupabaseClient<any, any, any>;
 
 async function base(supabase: Sb) {
-  const { data: clientes } = await supabase.from("clients").select("id, name, meta_ad_account_id").eq("active", true);
+  const { data: clientes } = await supabase.from("clients").select("id, name, meta_ad_account_id").eq("active", true).eq("eh_teste", false);
   const nome = new Map<string, string>((clientes ?? []).map((c: any) => [c.id, c.name]));
   const ativos = new Set(nome.keys());
   const { data: contasAds } = await supabase.from("client_ad_accounts").select("client_id, ad_account_id, name, active, access_token");

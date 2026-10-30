@@ -10,7 +10,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { getClient, getClientFontes } from "@/lib/client-data";
 import { supabase } from "@/integrations/supabase/client";
-import { listAllClients } from "@/lib/admin-data";
+import { listAllClientsComTeste } from "@/lib/admin-data";
 import { useAuth } from "@/hooks/use-auth";
 import { AppShell, BottomSheet } from "@/components/app-shell";
 import {
@@ -171,8 +171,8 @@ function ClientPalette({
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const { data: clients } = useQuery({
-    queryKey: ["admin-clients"],
-    queryFn: listAllClients,
+    queryKey: ["admin-clients", "com-teste"],
+    queryFn: listAllClientsComTeste,
   });
 
   useEffect(() => {
