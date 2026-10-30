@@ -5,6 +5,7 @@ import { lerDiagnosticoRpc, montarDadosReduzidos, type DadosComerciais, type Met
 import { filtrarPerguntas, perguntasDaDeteccaoOriginal } from "@/lib/comentarios";
 import { normalizarTemas } from "@/lib/classificacao-post";
 import { fetchAllRows } from "@/lib/pagination";
+import { normalizarVendas, type VendasPeriodoBanco } from "@/lib/vendas-periodo";
 import type {
   ContentFormat,
   FunnelStage,
@@ -166,6 +167,18 @@ export async function getCrmResumoPeriodo(clientId: string, from: string, to: st
   const { data, error } = await cliente.rpc("crm_leads_resumo_periodo", { p_client_id: clientId, p_from: from, p_to: to });
   if (error) throw error;
   return data?.[0] ?? { novos: 0, ganhos: 0, perdidos: 0, valor: 0 };
+}
+
+// Vendas do período por evento "ganhou" e pela coorte, cards fechados sem resultado, planilha parada e pessoas
+// novas por origem classificada (migração 20261031100000). Sem a RPC (banco ainda sem a migração), devolve null e
+// as telas seguem com os ganhos de crm_leads_resumo_periodo, com o rótulo de coorte.
+export async function getCrmVendasPeriodo(clientId: string, from: string, to: string): Promise<VendasPeriodoBanco | null> {
+  const cliente = supabase as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+  };
+  const { data, error } = await cliente.rpc("crm_vendas_periodo", { p_client_id: clientId, p_from: from, p_to: to });
+  if (error) return null;
+  return normalizarVendas(data);
 }
 
 // Pessoas x cards (migração 20261023170000). Em painéis como "Orçamentos" da

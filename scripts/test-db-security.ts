@@ -570,6 +570,49 @@ try {
       await db.exec("rollback");
     }
   });
+  await check("vendas do período: evento ganhou, coorte, fechado sem resultado e planilha parada", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("delete from crm_leads where client_id=$1", [A]);
+      await db.query("delete from crm_lead_eventos where client_id=$1", [A]);
+      const planilha = id(32);
+      await db.query("insert into crm_connections(id,client_id,provider,active) values ($1,$2,'planilha',true)", [planilha, A]);
+      const lead = (conn: string, provider: string, ext: string, dias: number, outcome = "open", source: string | null = null) =>
+        db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,outcome,source,occurred_at) values ($1,$2,$3,$4,'add','{}',$5,$6,now() - make_interval(days => $7))",
+          [A, conn, provider, ext, outcome, source, dias]);
+      // Período: de 10 dias atrás até ontem. Card antigo (60 dias) ganho há 2 dias: venda do período, fora da coorte.
+      await lead(connectionA, "kommo", "v1", 60);
+      await db.query("update crm_leads set outcome='won' where client_id=$1 and external_lead_id='v1'", [A]);
+      await db.query("update crm_lead_eventos set ocorreu_em = now() - interval '2 days' where client_id=$1 and external_lead_id='v1' and tipo='ganhou'", [A]);
+      // Card que entrou há 3 dias e foi ganho hoje (depois do período): conta na coorte, não nas vendas do período.
+      await lead(connectionA, "kommo", "v2", 3, "open", "Instagram");
+      await db.query("update crm_leads set outcome='won' where client_id=$1 and external_lead_id='v2'", [A]);
+      // Card novo fechado na origem sem resultado.
+      await lead(connectionA, "kommo", "v3", 2, "open", "hubla_test");
+      await db.query("update crm_leads set outcome='closed' where client_id=$1 and external_lead_id='v3'", [A]);
+      // Linha da planilha, já nascida ganha, 50 dias atrás: última venda e planilha parada.
+      await lead(planilha, "planilha", "v4", 50, "won");
+      for (let i = 0; i < 20; i++) await lead(connectionA, "kommo", `n${i}`, 1);
+      await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ sub: admin, role: "authenticated" })]);
+      await db.exec("set local role authenticated");
+      const v = (await rows<{ v: Record<string, any> }>("select crm_vendas_periodo($1, current_date - 10, current_date - 1) as v", [A]))[0].v;
+      assert.equal(v.vendas_no_periodo, 1, JSON.stringify(v));
+      assert.equal(v.vendas_coorte, 1);
+      assert.equal(v.fechados_sem_resultado, 1);
+      assert.equal(v.planilha_ultimo, (await rows<{ d: string }>("select to_char(current_date - 50, 'YYYY-MM-DD') as d"))[0].d);
+      assert.ok(v.eventos_desde, "eventos_desde preenchido");
+      const origens = Object.fromEntries((v.por_origem as { origem: string; pessoas: number }[]).map((o) => [o.origem, o.pessoas]));
+      assert.equal(origens["Instagram"], 1);
+      assert.ok(!("hubla_test" in origens), "origem crua de teste não aparece");
+      const alertas = await rows<{ id: string }>("select x->>'id' as id from jsonb_array_elements(qualidade_dados($1)) x", [A]);
+      assert.ok(alertas.some((a) => a.id === "crm-fonte-vendas-parada"), JSON.stringify(alertas));
+      await db.exec("reset role");
+      const fora = await role("authenticated", outsider, () => rows<{ v: unknown }>("select crm_vendas_periodo($1, current_date - 10, current_date) as v", [A]));
+      assert.deepEqual(fora, [{ v: null }], "quem não é da clínica não vê as vendas");
+    } finally {
+      await db.exec("rollback");
+    }
+  });
   await check("auditoria de alertas médios: tags do FlwChat nos cards antigos e parados sem Digisac nem arquivo", async () => {
     await db.exec("begin");
     try {
