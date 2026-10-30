@@ -5,6 +5,7 @@ import type { Database } from "../../src/integrations/supabase/types.js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runKommoLeadsSync } from "../_lib/kommo-leads-sync.js";
 import { runKommoReconcile } from "../_lib/kommo-reconcile.js";
+import { enriquecerContatosKommoPorCursor } from "../_lib/kommo-contatos.js";
 import { ingerirConversasKommo } from "../_lib/conversas-kommo.js";
 
 // Sync ativo de leads da Kommo via API — complementa o webhook passivo
@@ -51,6 +52,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  const inicio = Date.now();
   const reconciliar = req.query.reconcile === "1" || req.query.reconcile === "true";
   const confirmar = req.query.confirmar === "1" || req.query.confirmar === "true";
   const connectionId = typeof req.query.connection_id === "string" ? req.query.connection_id : undefined;
@@ -108,10 +110,12 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         });
         resultados.push({ connectionId: conn.id, clientId: conn.client_id, ...r });
       }
+      // Telefone dos leads (contato do Kommo) com o tempo que sobrar: sem ele o lead não vira pessoa.
+      const contatos = await enriquecerContatosKommoPorCursor(supabase, connections ?? [], KOMMO_API_TOKEN, Math.max(0, 230_000 - (Date.now() - inicio)));
       const problema = resultados.some(
         (r) => ((r as { errors?: string[] }).errors?.length ?? 0) > 0 || (r as { precisaConfirmar?: boolean }).precisaConfirmar,
       );
-      res.status(problema ? 207 : 200).json({ reconciliado_em: new Date().toISOString(), conexoes: resultados });
+      res.status(problema ? 207 : 200).json({ reconciliado_em: new Date().toISOString(), conexoes: resultados, contatos });
       return;
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });

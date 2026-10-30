@@ -173,7 +173,37 @@ export async function ingerirConversasKommo(
   return saida;
 }
 
-/** Grava as mensagens de uma janela para um cliente: conversas (talks), texto do webhook e mensagens. */
+/** Intervalo sem mensagem que encerra o atendimento do lead: depois disso começa outra conversa. */
+const PAUSA_NOVA_CONVERSA_MS = 7 * 86_400_000;
+
+/**
+ * Conversa de cada mensagem: o atendimento do lead ("lead:<id>:<dia em Brasília em que começou>"), que continua
+ * enquanto o lead manda ou recebe mensagem com menos de 7 dias de intervalo. Sem lead, fica o talk do Kommo.
+ * `ultimas` traz, por lead, a conversa mais recente já gravada (para continuar o atendimento aberto).
+ */
+export function chavesConversaKommo(
+  msgs: Pick<MensagemKommo, "messageId" | "leadId" | "talkId" | "enviadaEm">[],
+  ultimas: Map<string, { externo_id: string; ultima_msg_em: string }>,
+): Map<string, string> {
+  const chave = new Map<string, string>();
+  const atual = new Map(ultimas);
+  for (const m of [...msgs].sort((a, b) => a.enviadaEm.localeCompare(b.enviadaEm))) {
+    if (!m.leadId) { chave.set(m.messageId, m.talkId); continue; }
+    const aberta = atual.get(m.leadId);
+    if (aberta && Date.parse(m.enviadaEm) - Date.parse(aberta.ultima_msg_em) <= PAUSA_NOVA_CONVERSA_MS) {
+      chave.set(m.messageId, aberta.externo_id);
+      if (m.enviadaEm > aberta.ultima_msg_em) atual.set(m.leadId, { ...aberta, ultima_msg_em: m.enviadaEm });
+      continue;
+    }
+    const dia = new Date(Date.parse(m.enviadaEm) - 3 * 3_600_000).toISOString().slice(0, 10);
+    const nova = { externo_id: `lead:${m.leadId}:${dia}`, ultima_msg_em: m.enviadaEm };
+    atual.set(m.leadId, nova);
+    chave.set(m.messageId, nova.externo_id);
+  }
+  return chave;
+}
+
+/** Grava as mensagens de uma janela para um cliente: conversas (lead no dia), texto do webhook e mensagens. */
 async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoKommo, msgs: MensagemKommo[], cursor: number, fimJanela: number, r: ResultadoKommo): Promise<void> {
   const clientId = conn.client_id;
   // Texto das recebidas: webhook do mesmo período (com folga), pelo id da mensagem.
@@ -193,22 +223,39 @@ async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoK
     }
   }
 
-  // Conversas (talks): junta com o que já existe para não encolher início/fim.
-  const porTalk = new Map<string, MensagemKommo[]>();
-  for (const m of msgs) porTalk.set(m.talkId, [...(porTalk.get(m.talkId) ?? []), m]);
-  const talks = [...porTalk.keys()];
-  const existentes = new Map<string, { iniciada_em: string | null; ultima_msg_em: string | null; lead_id: string | null }>();
-  for (let i = 0; i < talks.length; i += 200) {
-    const { data: ex, error: erroExistentes } = await admin.from("conversas").select("externo_id, iniciada_em, ultima_msg_em, lead_id").eq("client_id", clientId).eq("provider", "kommo").in("externo_id", talks.slice(i, i + 200));
-    if (erroExistentes) { r.erros.push("Não foi possível ler as conversas existentes"); return; }
-    for (const e of ex ?? []) existentes.set(e.externo_id as string, { iniciada_em: e.iniciada_em as string | null, ultima_msg_em: e.ultima_msg_em as string | null, lead_id: e.lead_id as string | null });
-  }
   const leadsExt = [...new Set(msgs.map((m) => m.leadId).filter(Boolean))] as string[];
   const leadDe = new Map<string, string>();
   for (let i = 0; i < leadsExt.length; i += 200) {
     const { data: ls, error: erroLeads } = await admin.from("crm_leads").select("id, external_lead_id").eq("client_id", clientId).eq("crm_connection_id", conn.id).in("external_lead_id", leadsExt.slice(i, i + 200));
     if (erroLeads) { r.erros.push("Não foi possível ler os vínculos de leads"); return; }
     for (const l of ls ?? []) leadDe.set(l.external_lead_id as string, l.id as string);
+  }
+  // Atendimento aberto de cada lead (a conversa mais recente dele), para a mensagem nova continuar nele.
+  const ultimas = new Map<string, { externo_id: string; ultima_msg_em: string }>();
+  const extDe = new Map([...leadDe].map(([ext, id]) => [id, ext]));
+  const idsLead = [...leadDe.values()];
+  for (let i = 0; i < idsLead.length; i += 200) {
+    const { data: us, error: erroUlt } = await admin.from("conversas").select("lead_id, externo_id, ultima_msg_em").eq("client_id", clientId).eq("provider", "kommo").like("externo_id", "lead:%").in("lead_id", idsLead.slice(i, i + 200));
+    if (erroUlt) { r.erros.push("Não foi possível ler as conversas abertas dos leads"); return; }
+    for (const u of (us ?? []) as { lead_id: string; externo_id: string; ultima_msg_em: string | null }[]) {
+      const ext = extDe.get(u.lead_id);
+      if (!ext || !u.ultima_msg_em) continue;
+      const atual = ultimas.get(ext);
+      if (!atual || u.ultima_msg_em > atual.ultima_msg_em) ultimas.set(ext, { externo_id: u.externo_id, ultima_msg_em: u.ultima_msg_em });
+    }
+  }
+  const chaveDe = chavesConversaKommo(msgs, ultimas);
+  const chave = (m: MensagemKommo) => chaveDe.get(m.messageId)!;
+
+  // Junta com o que já existe para não encolher início/fim.
+  const porTalk = new Map<string, MensagemKommo[]>();
+  for (const m of msgs) porTalk.set(chave(m), [...(porTalk.get(chave(m)) ?? []), m]);
+  const talks = [...porTalk.keys()];
+  const existentes = new Map<string, { iniciada_em: string | null; ultima_msg_em: string | null; lead_id: string | null }>();
+  for (let i = 0; i < talks.length; i += 200) {
+    const { data: ex, error: erroExistentes } = await admin.from("conversas").select("externo_id, iniciada_em, ultima_msg_em, lead_id").eq("client_id", clientId).eq("provider", "kommo").in("externo_id", talks.slice(i, i + 200));
+    if (erroExistentes) { r.erros.push("Não foi possível ler as conversas existentes"); return; }
+    for (const e of ex ?? []) existentes.set(e.externo_id as string, { iniciada_em: e.iniciada_em as string | null, ultima_msg_em: e.ultima_msg_em as string | null, lead_id: e.lead_id as string | null });
   }
   const linhasConv = talks.map((t) => {
     const ms = porTalk.get(t)!;
@@ -229,12 +276,12 @@ async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoK
   }
   r.conversas += idConv.size;
 
-  const linhasMsg = msgs.filter((m) => idConv.has(m.talkId)).map((m) => {
+  const linhasMsg = msgs.filter((m) => idConv.has(chave(m))).map((m) => {
     const w = m.direcao === "entrada" ? texto.get(m.messageId) : undefined;
     if (w?.texto) r.com_texto++;
     r.valoresVistos.direcao[m.direcao] = (r.valoresVistos.direcao[m.direcao] ?? 0) + 1;
     return {
-      conversa_id: idConv.get(m.talkId)!, client_id: clientId, direcao: m.direcao,
+      conversa_id: idConv.get(chave(m))!, client_id: clientId, direcao: m.direcao,
       autor: m.direcao === "saida" ? "Clínica" : "Paciente",
       texto: w?.texto ?? null,
       tipo: m.direcao === "saida" ? "kommo_sem_texto" : w ? tipoKommo(w.tipo) : "kommo_sem_texto",

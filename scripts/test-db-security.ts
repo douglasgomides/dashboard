@@ -585,6 +585,23 @@ try {
       await db.exec("rollback");
     }
   });
+  await check("reclassificar etapa não vira venda; card que já chega ganho tem o evento", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,pipeline_id,status_id,outcome,occurred_at) values ($1,$2,'kommo','ev1','add','{}','p1','s-ganho','won',now()),($1,$2,'kommo','ev2','add','{}','p1','s-x','open',now())", [A, connectionA]);
+      const tipos = async (id: string) => (await rows<{ tipo: string }>("select tipo from crm_lead_eventos where external_lead_id=$1 order by tipo", [id])).map((r) => r.tipo);
+      assert.deepEqual(await tipos("ev1"), ["entrou", "ganhou"]);
+      await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: admin })]);
+      await rows("select crm_definir_etapa_resultado($1,'p1','s-x','won')", [connectionA]);
+      assert.deepEqual(await rows("select outcome from crm_leads where external_lead_id='ev2'"), [{ outcome: "won" }]);
+      assert.deepEqual(await tipos("ev2"), ["entrou"], "reclassificação não grava ganhou");
+      // Mudança vinda do CRM continua gravando.
+      await db.query("update crm_leads set outcome='lost' where external_lead_id='ev2'");
+      assert.deepEqual(await tipos("ev2"), ["entrou", "perdeu"]);
+    } finally {
+      await db.exec("rollback");
+    }
+  });
   await check("origem pela mensagem pronta de link e pela etapa de paciente; o sync seguinte não apaga", async () => {
     await db.exec("begin");
     try {

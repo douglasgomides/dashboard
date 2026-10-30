@@ -790,12 +790,14 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const b = (req.body ?? {}) as { pagina?: number; paginas?: number };
       const { data: conns } = await admin.from("crm_connections").select("id, client_id, subdomain, access_token, provider").eq("client_id", client_id).eq("provider", "kommo").eq("active", true);
-      const conn = (conns ?? []).find((c) => c.subdomain && c.access_token);
+      // Token da conexão ou, se não houver (Lana), o token geral do servidor, igual ao sync de leads.
+      const tokenServidor = process.env.KOMMO_API_TOKEN;
+      const conn = (conns ?? []).find((c) => c.subdomain && (c.access_token || tokenServidor));
       if (!conn) {
         res.status(200).json({ alvo, ok: false, erro: "Cliente sem conexão Kommo com subdomínio e token" });
         return;
       }
-      const r = await enriquecerContatosKommo(admin, { id: conn.id, client_id: conn.client_id, subdomain: conn.subdomain as string, access_token: conn.access_token as string }, { pagina: Number(b.pagina) || 1, paginas: Math.min(Number(b.paginas) || 20, 60), orcamentoMs: 240_000 });
+      const r = await enriquecerContatosKommo(admin, { id: conn.id, client_id: conn.client_id, subdomain: conn.subdomain as string, access_token: (conn.access_token || tokenServidor) as string }, { pagina: Number(b.pagina) || 1, paginas: Math.min(Number(b.paginas) || 20, 60), orcamentoMs: 240_000 });
       if (r.proximaPagina === null) {
         try {
           await admin.rpc("vincular_pessoas", { p_client: client_id });
