@@ -54,6 +54,8 @@ async function main() {
   // Kommo compara com os vivos; os outros com tudo o que o Nexo guardou.
   assert.equal(contaVivosNoNexo("kommo"), true);
   assert.equal(contaVivosNoNexo("clint"), false);
+  assert.equal(contaVivosNoNexo("rdstation"), true);
+  assert.equal(contaVivosNoNexo("flwchat"), false);
   console.log("test-conferencia-crm: ok");
 }
 

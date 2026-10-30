@@ -521,7 +521,7 @@ function CrmClinicaPage() {
           }
           cor="var(--good)"
         />
-        <Kpi icone={Sparkles} rotulo="Novos (7 dias)" valor={fmtN(m.novos_7d)} cor="var(--s3)" />
+        <Kpi icone={Sparkles} rotulo="Cards criados (7 dias)" valor={fmtN(m.novos_7d)} cor="var(--s3)" />
         <Kpi
           icone={Target}
           rotulo="Campo de origem preenchido"

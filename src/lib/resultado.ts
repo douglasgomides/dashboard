@@ -247,13 +247,18 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
     const seguidores = [...dias].reverse().find((d) => d.followers_count != null)?.followers_count ?? null;
     if (comNovos.length > 0 && (novos > 0 || seguidores)) {
       const diasMedidos = comNovos.length;
-      const mensal = seguidores ? (novos / seguidores) * (30 / diasMedidos) : null;
+      // A régua de crescimento é líquida: com as saídas medidas nos mesmos dias, a avaliação usa o saldo. Antes a
+      // Dra. Betina aparecia com +81 e boa avaliação com saldo de -11 (auditoria de 30/10/2026).
+      const comSaidas = comNovos.every((d) => (d as { unfollowers?: number | null }).unfollowers != null);
+      const saidas = comSaidas ? soma(comNovos, "unfollowers" as never) : null;
+      const saldo = saidas != null ? novos - saidas : null;
+      const mensal = seguidores ? ((saldo ?? novos) / seguidores) * (30 / diasMedidos) : null;
       const f = mensal != null ? avaliar(BENCHMARKS.crescimentoMensal, mensal, { seguidores: seguidores ?? 0 }) : null;
       out.push({
         id: "seguidores",
         rotulo: "Novos seguidores",
         valor: `+${int(novos)}`,
-        explicacao: `Quantas pessoas começaram a seguir em ${diasMedidos} dias com esse dado (sem descontar quem saiu). ${mensal != null ? `Equivale a ${pct(mensal, 1)} do perfil por mês.` : ""} Referência: ${BENCHMARKS.crescimentoMensal.referencia}.`,
+        explicacao: `Quantas pessoas começaram a seguir em ${diasMedidos} dias com esse dado${saldo != null ? `; descontando quem saiu, o saldo foi de ${saldo >= 0 ? "+" : ""}${int(saldo)}` : " (sem descontar quem saiu)"}. ${mensal != null ? `O ${saldo != null ? "saldo" : "ganho"} equivale a ${pct(mensal, 1)} do perfil por mês.` : ""} Referência: ${BENCHMARKS.crescimentoMensal.referencia}.`,
         status: faixaParaTom(f),
         selo: f ? SELO_FAIXA[f] : undefined,
         statusTexto: f ? TEXTO_FAIXA[f] : undefined,

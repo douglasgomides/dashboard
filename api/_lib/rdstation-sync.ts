@@ -187,6 +187,8 @@ export async function runRdStationSync(env: RdStationSyncEnv): Promise<RdStation
           contact_phone: contato?.phones?.[0]?.phone ?? null,
           raw_payload: d as unknown as Record<string, unknown>,
           received_at: d.updated_at ?? d.created_at ?? new Date().toISOString(),
+          // Negócio que voltou a aparecer deixa de estar removido.
+          removido_na_origem: null,
         };
       });
 
@@ -204,6 +206,28 @@ export async function runRdStationSync(env: RdStationSyncEnv): Promise<RdStation
         .from("crm_pipeline_statuses")
         .upsert(stageRows, { onConflict: "crm_connection_id,pipeline_id,status_id" });
       if (stageError) errors.push(`etapas: ${stageError.message}`);
+    }
+
+    // Negócio apagado no RD continuava contando (auditoria de 30/10/2026). Só com a lista completa e sem erro; trava de
+    // 20% para falha da API não virar exclusão em massa.
+    if (errors.length === 0 && leadRows.length > 0) {
+      const vivos = new Set(leadRows.map((l) => l.external_lead_id));
+      const { data: locais, error: eLocais } = await supabase.from("crm_leads").select("external_lead_id")
+        .eq("crm_connection_id", conn.id).is("removido_na_origem", null).limit(50_000);
+      if (eLocais) errors.push(`apagados: ${eLocais.message}`);
+      else {
+        const sumiram = (locais ?? []).map((l) => l.external_lead_id as string).filter((id) => !vivos.has(id));
+        if (sumiram.length > Math.max(20, 0.2 * (locais ?? []).length)) {
+          errors.push(`apagados: ${sumiram.length} negócios sumiram do RD de uma vez; nada foi marcado, conferir antes`);
+        } else {
+          const agora = new Date().toISOString();
+          for (const lote of chunk(sumiram, 200)) {
+            const { error: eMarca } = await supabase.from("crm_leads").update({ removido_na_origem: agora, event_type: "delete" })
+              .eq("crm_connection_id", conn.id).in("external_lead_id", lote).is("removido_na_origem", null);
+            if (eMarca) { errors.push(`apagados: ${eMarca.message}`); break; }
+          }
+        }
+      }
     }
 
     results.push({ clientId: conn.client_id, connectionId: conn.id, funis: pipelines.length, negocios: gravados, errors });

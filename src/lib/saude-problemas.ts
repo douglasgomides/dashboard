@@ -171,6 +171,7 @@ const TIPO_QUALIDADE: Record<string, TipoProblema> = {
   "crm-compartilhado": "config_incompleta",
   "ads-sem-objetivo": "config_incompleta",
   "ads-sem-gasto": "sem_dado_origem",
+  "crm-funil-fora": "config_incompleta",
   "ig-alcance-parado": "falha_tecnica",
   "ig-posts-parados": "falha_tecnica",
   "ig-seguidores-nao-fecham": "falha_tecnica",

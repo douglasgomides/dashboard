@@ -26,6 +26,8 @@ export interface DadosRoi {
   crm_compartilhado: boolean;
   /** Clientes que leem a mesma conta de CRM (os números deles são os mesmos). */
   crm_compartilhado_com?: string[];
+  /** Outros clientes com a mesma conta de anúncios: o investimento é da conta inteira. */
+  anuncios_compartilhados_com?: string[];
   /** Anúncios lançados à mão na planilha, sem conta da Meta ligada. */
   anuncios_planilha?: boolean;
   /** Último dia com dado de anúncios (Meta ou planilha). */
@@ -121,6 +123,7 @@ const dataCurta = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 export function situacaoAnuncios(d: DadosRoi, hoje = new Date().toISOString().slice(0, 10)): string {
   if (!d.tem_anuncios) return "Conta de anúncios não conectada";
   if (d.anuncios_planilha) return "Lançado à mão na planilha";
+  if (d.anuncios_compartilhados_com?.length) return `Conta de anúncios compartilhada com ${d.anuncios_compartilhados_com.join(", ")}: o investimento é da conta inteira`;
   if (d.anuncios_ate && d.anuncios_ate < hoje && (Date.parse(hoje) - Date.parse(d.anuncios_ate)) / 86400_000 > 3) return `Conta parada desde ${dataCurta(d.anuncios_ate)}`;
   return "mensagens, leads e conversão";
 }

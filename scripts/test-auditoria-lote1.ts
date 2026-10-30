@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { leads } from "../api/_lib/meta-ads-graph-sync";
 import { conversationSummarySchema, normalizarResumoConversa } from "../api/_lib/ai-output";
-import { aplicarCompraAprovada } from "../api/_lib/clint-sync";
+import { aplicarCompraAprovada, aplicarReembolso } from "../api/_lib/clint-sync";
 
 // Leads da Graph: "lead" já soma formulário + pixel; o pixel sozinho só conta quando falta o "lead".
 assert.equal(leads([{ action_type: "lead", value: "4" }, { action_type: "offsite_conversion.fb_pixel_lead", value: "4" }]), 4);
@@ -40,4 +40,13 @@ const linhas: Record<string, any>[] = [
 aplicarCompraAprovada(linhas, ["aprov"]);
 assert.deepEqual(linhas.map((l) => l.outcome), ["won", "open", "won", "won", "lost"]);
 assert.equal(linhas[1].raw_payload.compra_repetida, true);
+// Reembolso desfaz o ganho mais recente do mesmo contato em até 30 dias.
+const comReembolso: Record<string, any>[] = [
+  { pipeline_id: "venda", outcome: "won", occurred_at: "2026-10-01T10:00:00Z", raw_payload: { contact: { id: "c1" } } },
+  { pipeline_id: "venda", outcome: "won", occurred_at: "2026-08-01T10:00:00Z", raw_payload: { contact: { id: "c1" } } },
+  { pipeline_id: "reemb", outcome: "lost", occurred_at: "2026-10-05T10:00:00Z", raw_payload: { contact: { id: "c1" } } },
+  { pipeline_id: "venda", outcome: "won", occurred_at: "2026-10-01T10:00:00Z", raw_payload: { contact: { id: "c2" } } },
+];
+aplicarReembolso(comReembolso, ["reemb"]);
+assert.deepEqual(comReembolso.map((l) => l.outcome), ["lost", "won", "lost", "won"]);
 console.log("test-auditoria-lote1: ok");
