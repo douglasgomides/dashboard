@@ -29,6 +29,12 @@ if (ok.success) {
 const semResumo = { ...base, resumo: undefined };
 assert.equal(conversationSummarySchema.safeParse(normalizarResumoConversa(semResumo)).success, false);
 assert.equal(conversationSummarySchema.safeParse(normalizarResumoConversa({ ...base, etapa: "inventada" })).success, false);
+// Categoria escrita de outro jeito é padronizada; origem fora da lista vira "desconhecida", nunca um chute.
+const escrita = conversationSummarySchema.safeParse(normalizarResumoConversa({ ...base, origem: "Paciente antigo", etapa: "Preço apresentado " }));
+assert.equal(escrita.success, true);
+if (escrita.success) { assert.equal(escrita.data.origem, "paciente_antigo"); assert.equal(escrita.data.etapa, "preco_apresentado"); }
+const origemNova = conversationSummarySchema.safeParse(normalizarResumoConversa({ ...base, origem: "google" }));
+assert.equal(origemNova.success && origemNova.data.origem, "desconhecida");
 // Funil de compra aprovada: vira venda, menos a que repete um ganho do mesmo contato em até 3 dias; perda fica perda.
 const linhas: Record<string, any>[] = [
   { pipeline_id: "fechado", outcome: "won", occurred_at: "2026-10-10T10:00:00Z", raw_payload: { contact: { id: "c1" } } },
