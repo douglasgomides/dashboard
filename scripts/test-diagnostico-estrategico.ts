@@ -9,7 +9,7 @@ const ant = Array.from({ length: 10 }, (_, i) => dia(`2026-09-${String(i + 1).pa
 // Variação: alcance dobrou, interações caíram; mesmos dias = não limitada.
 const v = variacoes(atual, ant);
 assert.equal(v.limitada, false);
-assert.equal(v.lista.find((x) => x.nome === "Alcance")!.var, 1);
+assert.equal(v.lista.find((x) => x.nome === "Alcance diário")!.var, 1);
 assert.ok(Math.abs(v.lista.find((x) => x.nome === "Interações")!.var + 1 / 3) < 1e-9);
 // Novos seguidores com base pequena (50 < 20? não: 50 >= 20 entra); sem anterior: limitada.
 assert.equal(variacoes(atual, undefined).limitada, true);
@@ -17,7 +17,15 @@ assert.equal(variacoes(atual, undefined).limitada, true);
 const curto = variacoes(atual.slice(0, 5), ant);
 assert.equal(curto.limitada, true);
 assert.match(curto.motivo!, /5 x 10/);
-assert.equal(curto.lista.find((x) => x.nome === "Alcance")!.var, 1);
+assert.equal(curto.lista.find((x) => x.nome === "Alcance diário")!.var, 1);
+// A evidência mostra a mesma base do percentual (média por dia), não as somas: 28 x 30 dias da Doctor Creator.
+{
+  const a28 = Array.from({ length: 28 }, (_, i) => dia(`2026-10-${String(i + 1).padStart(2, "0")}`, 4_556_269 / 28, 10, 0, 0));
+  const b30 = Array.from({ length: 30 }, (_, i) => dia(`2026-09-${String(i + 1).padStart(2, "0")}`, 1_155_230 / 30, 10, 0, 0));
+  const dc = montarDiagnostico({ resultado: null, diario: a28, diarioAnterior: b30 }).find((x) => x.id === "melhorou")!;
+  assert.match(dc.resposta!, /\+323%/);
+  assert.equal(dc.evidencia, "162.724 por dia (28 dias) contra 38.508 por dia (30 dias)");
+}
 
 const ins = (id: string, tom: string, titulo: string, extra: any = {}) => ({ id, tom, titulo, area: "conteudo", diagnostico: "", evidencia: "ev " + titulo, confianca: "media", impacto: "medio", responsavel: "social_media", ...extra });
 const resultado: any = {
@@ -38,7 +46,7 @@ const ads: any = { campanhas: [
 const d = montarDiagnostico({ resultado, diario: atual, diarioAnterior: ant, ads, posts });
 const por = Object.fromEntries(d.map((x) => [x.id, x]));
 assert.equal(d.length, 8);
-assert.match(por.melhorou.resposta!, /Alcance subiu \+100%/);
+assert.match(por.melhorou.resposta!, /Alcance diário subiu \+100%/);
 assert.match(por.piorou.resposta!, /Interações caiu -33%/);
 assert.equal(por.oportunidade.resposta, "Carrossel salva 2x mais");
 assert.equal(por.oportunidade.rota, "/ideias");

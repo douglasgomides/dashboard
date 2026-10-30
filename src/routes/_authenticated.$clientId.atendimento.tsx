@@ -8,7 +8,9 @@ import {
   getWtsPorDepartamento,
   getWtsPorAgente,
   getWtsVolumeDiario,
+  getWtsFilaDoCliente,
 } from "@/lib/client-data";
+import { avisoContaCompartilhada, avisoFilaEsquecida, avisoLote } from "@/lib/fila-whatsapp";
 import { SyncButton } from "@/components/sync-button";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum } from "@/lib/format";
@@ -123,6 +125,12 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
     queryKey: ["wts-dia", clientId, start, end],
     queryFn: () => getWtsVolumeDiario(clientId, start, end),
   });
+  // Abertas agora, lote de encerramento e conta compartilhada, com o dado deste cliente. Sem a RPC: null.
+  const { data: fila } = useQuery({
+    queryKey: ["wts-fila", clientId, start, end],
+    queryFn: () => getWtsFilaDoCliente(clientId, start, end),
+    retry: false,
+  });
 
   const { data: resumo, isLoading: loadingResumo } = resumoQ;
   const isLoading = loadingResumo || loadingDep || loadingAgente || loadingDia;
@@ -179,17 +187,20 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
 
       <CustoWhatsapp clientId={clientId} />
 
-      {/* O dado da WTS é de uma clínica só, com as duas médicas dentro. Dizer
-          isso na tela evita que alguém leia estes números como sendo de uma. */}
-      <div
-        className="rounded-xl border p-4 text-sm"
-        style={{ background: "var(--surface-2)", borderColor: "var(--border)", color: "var(--text-dim)" }}
-      >
-        Estes números são <strong style={{ color: "var(--text)" }}>da clínica inteira</strong>, não de uma médica.
-        A conta do WhatsApp é compartilhada: mesma recepção, mesma equipe. Não há no dado uma forma confiável de
-        separar os atendimentos por médica — departamento, tag do contato, número e agente foram testados e
-        nenhum separa.
-      </div>
+      {/* Conta do WTS ligada a mais de um cliente: o aviso sai do cadastro, não de texto fixo. */}
+      {fila && avisoContaCompartilhada(fila) && (
+        <div
+          className="rounded-xl border p-4 text-sm"
+          style={{ background: "var(--surface-2)", borderColor: "var(--border)", color: "var(--text-dim)" }}
+        >
+          {avisoContaCompartilhada(fila)}
+        </div>
+      )}
+      {fila && avisoFilaEsquecida(fila) && (
+        <div role="note" className="rounded-xl border p-4 text-sm" style={{ background: "var(--surface-2)", borderColor: "var(--warn)" }}>
+          <strong>Fila esquecida:</strong> {avisoFilaEsquecida(fila)}
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Atendimentos" value={fmtNum(atendimentos)} hint={`${fmtNum(n(resumo?.contatos_distintos))} pessoas diferentes`} />
@@ -201,13 +212,21 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
         <KpiCard
           label="Tempo até fechar"
           value={dur(nOrNull(resumo?.atendimento_mediano_seg))}
-          hint="quando a conversa é encerrada — não é tempo de atendimento"
+          hint="quando a conversa é encerrada, não é tempo de atendimento"
         />
-        <KpiCard
-          label="Em andamento agora"
-          value={fmtNum(n(resumo?.em_andamento))}
-          hint={`${fmtNum(n(resumo?.concluidos))} concluídos no período`}
-        />
+        {fila ? (
+          <KpiCard
+            label="Abertas nos últimos 7 dias"
+            value={fmtNum(fila.abertas7d)}
+            hint={fila.abertasAntigas > 0 ? `mais ${fmtNum(fila.abertasAntigas)} abertas há mais de 7 dias (fila esquecida)` : "nenhuma conversa esquecida aberta"}
+          />
+        ) : (
+          <KpiCard
+            label="Ainda abertas"
+            value={fmtNum(n(resumo?.em_andamento))}
+            hint={`das iniciadas no período, inclusive as esquecidas; ${fmtNum(n(resumo?.concluidos))} concluídas`}
+          />
+        )}
       </div>
 
       <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
@@ -226,18 +245,16 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
         </p>
       </div>
 
-      {/* O timeService da WTS é relógio de parede entre abrir e encerrar, e nesta
-          conta 33% dos encerramentos saem em lote (o maior: 216 conversas no mesmo
-          minuto). Chamar isso de "duração do atendimento" seria vender arrumação de
-          fila como qualidade de atendimento. */}
+      {/* O timeService da WTS é relógio de parede entre abrir e encerrar. Quando muitos encerramentos saem em lote
+          (calculado por cliente em wts_fila_do_cliente), o número descreve a arrumação da fila, não o atendimento. */}
       <div
         className="rounded-xl border p-4 text-sm"
         style={{ background: "var(--surface-2)", borderColor: "var(--border)", color: "var(--text-dim)" }}
       >
         <strong style={{ color: "var(--text)" }}>Sobre o “tempo até fechar”:</strong> ele mede o intervalo entre
-        abrir e encerrar a conversa, não o tempo de conversa. Um terço dos encerramentos desta conta acontece em
-        lote — o maior teve 216 conversas fechadas no mesmo minuto — então o número descreve o hábito de arrumar a
-        fila, não o atendimento. A métrica que vale olhar aqui é a{" "}
+        abrir e encerrar a conversa, não o tempo de conversa.{" "}
+        {fila && avisoLote(fila) ? `${avisoLote(fila)} Por isso o número descreve o hábito de arrumar a fila, não o atendimento. ` : ""}
+        A métrica que vale olhar aqui é a{" "}
         <strong style={{ color: "var(--text)" }}>espera até a 1ª resposta</strong>.
       </div>
 

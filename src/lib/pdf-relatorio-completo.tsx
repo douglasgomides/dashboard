@@ -6,13 +6,15 @@
 // anúncios (diagnóstico por campanha), WhatsApp, CRM, dúvidas, ideias, ações e a
 // mensagem pronta para o cliente. Seções sem fonte saem do PDF e viram aviso.
 // Tudo é medido ou calculado por regra, nada é gerado por IA.
-import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
+import { MIN_POSTS_CONCLUSAO, saldoSeguidores } from "@/lib/metricas";
+import { lerVendas } from "@/lib/vendas-periodo";
 import { Document, Link, Page, Path, pdf, Svg, Text, View, Line } from "@react-pdf/renderer";
 import {
   computeCasosDestacados,
   computeConceitosVencedores,
   computeFormatBreakdown,
   computeFormatInsight,
+  fmtTaxaPct,
   computeHeadline,
   computeMelhoresHorarios,
   computeReachByFormat,
@@ -238,9 +240,9 @@ const rotuloFunil = (f: string | null | undefined) => (f ? f : "Não classificad
 export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   const metrics = [...d.metrics].sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const reach = metrics.reduce((a, m) => a + num(m.reach), 0);
-  // Mesma regra da tela: só dias em que o Instagram trouxe o dado (null não vira 0 na cobertura).
-  const diasNovos = metrics.filter((m) => m.new_followers != null).length;
-  const novos = metrics.reduce((a, m) => a + num(m.new_followers), 0);
+  // Seguidores: o saldo líquido, mesma régua da tela Resultados e do texto do WhatsApp (saldoSeguidores).
+  const saldoSeg = saldoSeguidores(metrics, d.start, d.end);
+  const fmtSaldo = (v: number) => `${v >= 0 ? "+" : "-"}${fmtNum(Math.abs(v))}`;
   const saves = metrics.reduce((a, m) => a + num(m.saves), 0);
   const interacoes = metrics.reduce((a, m) => a + num(m.total_interactions), 0);
   const taxaEng = reach > 0 ? (interacoes / reach) * 100 : 0;
@@ -258,7 +260,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   const manter = d.envio.manterOriginal ?? [];
   const seguro = (t: string) => tornarSeguro(t, { manter }).texto || t;
   const { ranked: horarios, overallMedian: horaMediana } = temIg ? computeMelhoresHorarios(posts) : { ranked: [] as any[], overallMedian: 0 };
-  const formatos = temIg ? computeFormatBreakdown(posts).sort((a, b) => b.medianEngagement - a.medianEngagement) : [];
+  const formatos = temIg ? computeFormatBreakdown(posts).sort((a, b) => Number(a.amostraPequena) - Number(b.amostraPequena) || (b.taxaMediana ?? -1) - (a.taxaMediana ?? -1)) : [];
   const reachFormato = temIg ? separarAmostra(computeReachByFormat(posts)).conclusivos : [];
   const temasClassificados = temIg ? computeReachByTema(posts).length : 0;
   const reachTema = temIg ? separarAmostra(computeReachByTema(posts)).conclusivos.slice(0, 8) : [];
@@ -312,12 +314,30 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   const wts = d.wts;
   const wRes = wts?.resumo ?? null;
   const crm = d.crm;
-  const cm = crm?.metricas ?? null;
+  // Vendas e origem do PERÍODO (a página 7 mostrava o histórico inteiro do CRM ao lado do período na página 1).
+  const cm = crm?.resumo ?? null;
+  const vendas = cm ? lerVendas(cm.ganhos, crm?.vendas ?? null, d.start) : null;
+  const pessoasNovas = crm?.vendas?.pessoas_novas ?? cm?.novos ?? 0;
+  const pctOrigem = crm?.vendas && crm.vendas.pessoas_novas > 0 ? (crm.vendas.pessoas_novas_com_origem / crm.vendas.pessoas_novas) * 100 : null;
+  // Até 6 origens classificadas; o resto vira "Outras". "Não informado" fica sempre por último.
+  const origens = (() => {
+    const xs = [...(crm?.vendas?.por_origem ?? [])];
+    const ni = xs.filter((o) => o.origem === "Não informado");
+    const com = xs.filter((o) => o.origem !== "Não informado").sort((a, b) => b.pessoas - a.pessoas);
+    const top = com.slice(0, 6);
+    const resto = com.slice(6);
+    if (resto.length) top.push({ origem: "Outras", pessoas: resto.reduce((s, o) => s + o.pessoas, 0), vendas: resto.reduce((s, o) => s + o.vendas, 0) });
+    return [...top, ...ni];
+  })();
 
   // KPIs do sumário: Instagram primeiro, depois o que existir de anúncio/WhatsApp/CRM.
   const kpis: { label: string; value: string; hint?: string }[] = [];
   if (temIg) {
-    kpis.push({ label: "Novos seguidores", value: diasNovos ? fmtNum(novos) : "sem dado", hint: `${diasNovos} de ${metrics.length} dias com o dado` });
+    kpis.push({
+      label: "Seguidores: saldo no período",
+      value: saldoSeg.saldo != null ? fmtSaldo(saldoSeg.saldo) : "sem dado",
+      hint: saldoSeg.regua === "total" ? "variação do total de seguidores" : saldoSeg.regua === "ganhos_saidas" ? "quem começou a seguir menos quem saiu" : undefined,
+    });
     if (d.envio.alcanceUnico != null && d.envio.alcanceUnico > 0)
       kpis.push({ label: "Alcance (contas únicas)", value: fmtNum(d.envio.alcanceUnico), hint: "pessoas diferentes no período, segundo a Meta" });
     kpis.push({ label: "Soma dos alcances diários", value: fmtNum(reach), hint: `${metrics.length} dias; a mesma pessoa conta em mais de um dia` });
@@ -341,9 +361,9 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
     kpis.push({ label: "Atendimentos no WhatsApp", value: fmtNum(num(wRes.atendimentos)), hint: `${fmtNum(num(wRes.contatos_distintos))} contatos diferentes` });
     kpis.push({ label: "Espera até a 1ª resposta", value: fmtSeg(wRes.espera_mediana_seg), hint: "metade esperou até isso" });
   }
-  if (cm) {
-    kpis.push({ label: "Leads no CRM", value: fmtNum(num(cm.total_leads)), hint: d.crmNome ? `CRM ${d.crmNome}` : undefined });
-    kpis.push({ label: "Ganhos", value: fmtNum(num(cm.ganhos)), hint: `${fmtNum(num(cm.perdidos))} perdidos` });
+  if (cm && vendas) {
+    kpis.push({ label: "Contatos novos no CRM", value: fmtNum(pessoasNovas), hint: d.crmNome ? `CRM ${d.crmNome}, no período` : "no período" });
+    kpis.push({ label: vendas.rotulo, value: vendas.numero != null ? fmtNum(vendas.numero) : "não disponível", hint: vendas.indisponivel ? "a fonte de vendas não informa o resultado" : vendas.base === "coorte" ? "dos contatos que entraram no período" : undefined });
   }
 
   // Blocos do "O que aconteceu" do relatório antigo, restaurados dentro da seção certa da página 1.
@@ -369,11 +389,12 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
         </Caixa>,
       );
     }
-    if (cm) {
+    if (cm && vendas) {
       extras.resumo!.push(
         <Caixa key="crm">
           <Text>
-            <Text style={{ fontWeight: 700 }}>{fmtNum(num(cm.total_leads))} leads</Text> no CRM{d.crmNome ? ` ${d.crmNome}` : ""} (histórico da conta): {fmtNum(num(cm.ganhos))} ganhos, {fmtNum(num(cm.perdidos))} perdidos e {fmtNum(num(cm.em_atendimento))} em atendimento.
+            <Text style={{ fontWeight: 700 }}>{fmtNum(pessoasNovas)} contatos novos</Text> no CRM{d.crmNome ? ` ${d.crmNome}` : ""} no período
+            {vendas.frase ? `; ${vendas.frase}` : ""}.{vendas.indisponivel ? ` ${vendas.indisponivel}` : ""}
           </Text>
         </Caixa>,
       );
@@ -383,10 +404,16 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
     extras.vitorias!.push(
       <Caixa key="formato-engaj">
         <Text>
-          <Text style={{ fontWeight: 700 }}>{fmtFormatKey(insight.best.format)}</Text> é o formato mais forte em engajamento: engajamento (mediana) de {fmtNum(Math.round(insight.best.median))} em {insight.best.count} posts,{" "}
-          {insight.bestPct >= 0 ? "+" : ""}
-          {insight.bestPct.toFixed(0)}% sobre a mediana geral.
-          {insight.worst.format !== insight.best.format ? ` ${fmtFormatKey(insight.worst.format)} ficou ${Math.abs(insight.worstPct).toFixed(0)}% abaixo (${insight.worst.count} posts).` : ""}
+          {insight.empate ? (
+            <>
+              Os formatos tiveram taxa de interação parecida: <Text style={{ fontWeight: 700 }}>{fmtFormatKey(insight.best.format)}</Text> com {fmtTaxaPct(insight.best.median)} ({insight.best.count} posts) e {fmtFormatKey(insight.worst.format)} com {fmtTaxaPct(insight.worst.median)} ({insight.worst.count} posts). A diferença de engajamento entre eles vem do alcance, não do conteúdo.
+            </>
+          ) : (
+            <>
+              <Text style={{ fontWeight: 700 }}>{fmtFormatKey(insight.best.format)}</Text> teve a maior taxa de interação (interações ÷ alcance, mediana): {fmtTaxaPct(insight.best.median)} em {insight.best.count} posts, contra {fmtTaxaPct(insight.overallMedian)} da conta.
+              {insight.worst.format !== insight.best.format ? ` ${fmtFormatKey(insight.worst.format)} ficou com ${fmtTaxaPct(insight.worst.median)} (${insight.worst.count} posts).` : ""}
+            </>
+          )}
         </Text>
       </Caixa>,
     );
@@ -465,7 +492,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
           <Kpis
             items={[
               { label: "Seguidores hoje", value: seguidoresHoje != null ? fmtNum(num(seguidoresHoje)) : "sem dado" },
-              { label: "Seguidores ganhos", value: fmtNum(novos), hint: "no período" },
+              { label: "Saldo de seguidores", value: saldoSeg.saldo != null ? fmtSaldo(saldoSeg.saldo) : "sem dado", hint: "no período" },
               { label: "Interações", value: fmtNum(interacoes) },
               { label: "Dias com coleta", value: `${metrics.length} de ${dias}` },
             ]}
@@ -492,14 +519,14 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
                   { h: "Dia", flex: 2 },
                   { h: "Período", flex: 2 },
                   { h: "Posts", flex: 1, alinhar: "right" },
-                  { h: "Engaj. (mediana)", flex: 2, alinhar: "right" },
-                  { h: "Sobre a mediana", flex: 2, alinhar: "right" },
+                  { h: "Taxa de interação", flex: 2, alinhar: "right" },
+                  { h: "Sobre a conta", flex: 2, alinhar: "right" },
                 ]}
                 linhas={horarios.slice(0, 6).map((r: any) => [
                   r.weekday,
                   r.period,
                   String(r.count),
-                  fmtNum(Math.round(r.median)),
+                  fmtTaxaPct(r.median),
                   horaMediana > 0 ? `${r.median >= horaMediana ? "+" : ""}${(((r.median - horaMediana) / horaMediana) * 100).toFixed(0)}%` : "sem base",
                 ])}
               />
@@ -516,14 +543,20 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
 
           {formatos.length > 0 ? (
             <>
-              <Subtitulo>Engajamento (mediana) por formato</Subtitulo>
+              <Subtitulo>Taxa de interação por formato (mediana)</Subtitulo>
               <Tabela
                 colunas={[
                   { h: "Formato", flex: 3 },
                   { h: "Posts", flex: 1, alinhar: "right" },
+                  { h: "Taxa de interação", flex: 2, alinhar: "right" },
                   { h: "Engaj. (mediana)", flex: 2, alinhar: "right" },
                 ]}
-                linhas={formatos.map((f) => [f.formato, String(f.count), fmtNum(f.medianEngagement)])}
+                linhas={formatos.map((f) => [
+                  f.formato,
+                  String(f.count),
+                  f.taxaMediana == null ? "sem alcance" : f.amostraPequena ? `${fmtTaxaPct(f.taxaMediana)} (amostra pequena)` : fmtTaxaPct(f.taxaMediana),
+                  fmtNum(f.medianEngagement),
+                ])}
               />
             </>
           ) : null}
@@ -812,7 +845,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
       ) : null}
 
       {/* 7. WhatsApp e CRM */}
-      {(wts && wRes) || (crm && cm) ? (
+      {(wts && wRes) || (crm && cm && vendas) ? (
         <Page size="A4" style={styles.page} wrap>
           {wts && wRes ? (
             <>
@@ -867,57 +900,60 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
             </>
           ) : null}
 
-          {crm && cm ? (
+          {crm && cm && vendas ? (
             <>
-              <Titulo dica="Visão do funil comercial. O CRM mostra o histórico inteiro da conta, não só o período do relatório.">{`Comercial${d.crmNome ? `, CRM ${d.crmNome}` : ""}`}</Titulo>
+              <Titulo dica="Só o período do relatório. Contato novo = pessoa que entrou pela primeira vez no CRM no período, em funil de captação (paciente antigo não conta).">{`Comercial${d.crmNome ? `, CRM ${d.crmNome}` : ""}`}</Titulo>
               <Kpis
                 items={[
-                  { label: "Leads no CRM", value: fmtNum(num(cm.total_leads)) },
-                  { label: "Novos nos últimos 7 dias", value: fmtNum(num(cm.novos_7d)) },
-                  { label: "Ganhos", value: fmtNum(num(cm.ganhos)) },
-                  { label: "Perdidos", value: fmtNum(num(cm.perdidos)) },
-                  { label: "Em atendimento", value: fmtNum(num(cm.em_atendimento)), hint: num(cm.em_atendimento_valor) > 0 ? fmtBRL(num(cm.em_atendimento_valor)) : undefined },
-                  { label: "Consultas agendadas", value: fmtNum(num(cm.consultas_agendadas)) },
-                  { label: "Leads com origem", value: `${num(cm.fonte_preenchida_pct).toFixed(0)}%`, hint: "preenchimento da fonte do lead" },
+                  { label: "Contatos novos", value: fmtNum(pessoasNovas), hint: "no período" },
+                  { label: vendas.rotulo, value: vendas.numero != null ? fmtNum(vendas.numero) : "não disponível", hint: vendas.base === "coorte" && vendas.numero != null ? "dos contatos que entraram no período" : undefined },
+                  ...(crm.vendas && crm.vendas.fechados_sem_resultado > 0 ? [{ label: "Fechados sem resultado", value: fmtNum(crm.vendas.fechados_sem_resultado), hint: "o CRM não diz se viraram venda" }] : []),
+                  ...(num(cm.perdidos) > 0 ? [{ label: "Perdidos", value: fmtNum(num(cm.perdidos)), hint: "contatos do período" }] : []),
+                  ...(pctOrigem != null ? [{ label: "Contatos novos com origem", value: `${pctOrigem.toFixed(0)}%`, hint: "mesma conta do retorno do investimento" }] : []),
                 ]}
               />
-              {crm.porEtapa.length > 0 ? (
-                <>
-                  <Subtitulo>Leads por etapa</Subtitulo>
-                  <BarChartBlock
-                    rows={[...crm.porEtapa].sort((a: any, b: any) => num(b.total) - num(a.total)).slice(0, 10).map((e: any) => ({ label: String(e.etapa).slice(0, 26), value: num(e.total) }))}
-                    maxValue={Math.max(1, ...crm.porEtapa.map((e: any) => num(e.total)))}
-                  />
-                </>
+              {vendas.indisponivel ? (
+                <Caixa>
+                  <Text>{vendas.indisponivel}</Text>
+                </Caixa>
+              ) : vendas.base === "coorte" && vendas.numero != null ? (
+                <Text style={{ fontSize: 8, color: GRAY, marginBottom: 6 }}>
+                  As vendas contam os contatos que entraram no período e hoje estão marcados como venda. O histórico de vendas por data ainda não cobre o período inteiro, então o número pode crescer depois.
+                </Text>
               ) : null}
-              {crm.porOrigem.length > 0 ? (
+              {origens.length > 0 ? (
                 <>
-                  <Subtitulo>Origem dos leads e conversão</Subtitulo>
+                  <Subtitulo>De onde vieram os contatos novos</Subtitulo>
                   <Tabela
                     colunas={[
                       { h: "Origem", flex: 4 },
-                      { h: "Leads", flex: 1.2, alinhar: "right" },
-                      { h: "Ganhos", flex: 1.2, alinhar: "right" },
-                      { h: "Perdidos", flex: 1.2, alinhar: "right" },
-                      { h: "Ganho/lead", flex: 1.4, alinhar: "right" },
+                      { h: "Contatos novos", flex: 1.6, alinhar: "right" },
+                      { h: "Fatia", flex: 1.2, alinhar: "right" },
+                      { h: "Viraram venda", flex: 1.6, alinhar: "right" },
                     ]}
-                    linhas={[...crm.porOrigem]
-                      .sort((a: any, b: any) => num(b.total) - num(a.total))
-                      .slice(0, 12)
-                      .map((o: any) => [
-                        String(o.chave ?? "sem origem"),
-                        fmtNum(num(o.total)),
-                        fmtNum(num(o.ganhos)),
-                        fmtNum(num(o.perdidos)),
-                        num(o.total) > 0 ? pct((num(o.ganhos) / num(o.total)) * 100, 1) : "n/d",
-                      ])}
+                    linhas={origens.map((o) => [
+                      o.origem,
+                      fmtNum(o.pessoas),
+                      pessoasNovas > 0 ? pct((o.pessoas / pessoasNovas) * 100, 0) : "n/d",
+                      fmtNum(o.vendas),
+                    ])}
                   />
                 </>
               ) : null}
               {crm.porDia.length > 1 ? (
                 <>
-                  <Subtitulo>Cards criados por dia</Subtitulo>
-                  <Linha valores={crm.porDia.map((x: any) => num(x.total))} cor={GOLD} />
+                  <Subtitulo>Contatos novos por dia</Subtitulo>
+                  <Linha valores={crm.porDia.map((x) => x.pessoas_novas)} cor={GOLD} />
+                </>
+              ) : null}
+              {crm.porEtapaHistorico.length > 0 ? (
+                <>
+                  <Subtitulo>Histórico total do CRM: cards por etapa</Subtitulo>
+                  <Text style={{ fontSize: 8, color: GRAY, marginBottom: 4 }}>Todos os cards da conta, de qualquer data. Não é o período do relatório.</Text>
+                  <BarChartBlock
+                    rows={[...crm.porEtapaHistorico].sort((a: any, b: any) => num(b.total) - num(a.total)).slice(0, 10).map((e: any) => ({ label: String(e.etapa).slice(0, 26), value: num(e.total) }))}
+                    maxValue={Math.max(1, ...crm.porEtapaHistorico.map((e: any) => num(e.total)))}
+                  />
                 </>
               ) : null}
             </>

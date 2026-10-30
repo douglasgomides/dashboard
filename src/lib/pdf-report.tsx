@@ -3,6 +3,7 @@ import {
   computeCasosDestacados,
   computeFormatBreakdown,
   computeFormatInsight,
+  fmtTaxaPct,
   computeHeadline,
   computeMelhoresHorarios,
   computeReachByFormat,
@@ -201,12 +202,10 @@ function ClientReportDocument({
         {insight && (
           <View style={[styles.highlightBox, styles.highlightGood]}>
             <Text>
-              <Text style={{ fontWeight: 700 }}>{fmtFormatKey(insight.best.format)}</Text> é o formato mais forte —
-              engajamento (mediana) de {fmtNum(Math.round(insight.best.median))} ({insight.best.count} posts),{" "}
-              {insight.bestPct >= 0 ? "+" : ""}
-              {insight.bestPct.toFixed(0)}% acima da mediana geral.
+              <Text style={{ fontWeight: 700 }}>{fmtFormatKey(insight.best.format)}</Text> teve a maior taxa de interação:{" "}
+              {fmtTaxaPct(insight.best.median)} ({insight.best.count} posts), contra {fmtTaxaPct(insight.overallMedian)} da conta.
               {insight.worst.format !== insight.best.format &&
-                ` ${fmtFormatKey(insight.worst.format)} ficou ${Math.abs(insight.worstPct).toFixed(0)}% abaixo (${insight.worst.count} posts) — vale revisar frequência ou abordagem nesse formato.`}
+                ` ${fmtFormatKey(insight.worst.format)} ficou com ${fmtTaxaPct(insight.worst.median)} (${insight.worst.count} posts).`}
             </Text>
           </View>
         )}
@@ -218,9 +217,8 @@ function ClientReportDocument({
               <Text style={{ fontWeight: 700 }}>
                 {horarios[0].weekday} à(o) {horarios[0].period.toLowerCase()}
               </Text>{" "}
-              — engajamento (mediana) de {fmtNum(Math.round(horarios[0].median))} em {horarios[0].count} posts,{" "}
-              {horaMedian > 0 ? (((horarios[0].median - horaMedian) / horaMedian) * 100).toFixed(0) : "0"}% acima da
-              mediana da conta.
+              : taxa de interação de {fmtTaxaPct(horarios[0].median)} em {horarios[0].count} posts, contra{" "}
+              {fmtTaxaPct(horaMedian)} da conta.
             </Text>
           </View>
         )}
@@ -340,14 +338,14 @@ function ClientReportDocument({
                 <Text style={[styles.th, styles.colWide]}>Dia</Text>
                 <Text style={[styles.th, styles.colWide]}>Período</Text>
                 <Text style={[styles.th, styles.col]}>Posts</Text>
-                <Text style={[styles.th, styles.col]}>Engaj. (mediana)</Text>
+                <Text style={[styles.th, styles.col]}>Taxa de interação</Text>
               </View>
               {horarios.map((r) => (
                 <View key={`${r.weekday}-${r.period}`} style={styles.tableRow}>
                   <Text style={[styles.td, styles.colWide]}>{r.weekday}</Text>
                   <Text style={[styles.td, styles.colWide]}>{r.period}</Text>
                   <Text style={[styles.td, styles.col]}>{r.count}</Text>
-                  <Text style={[styles.td, styles.col]}>{fmtNum(Math.round(r.median))}</Text>
+                  <Text style={[styles.td, styles.col]}>{fmtTaxaPct(r.median)}</Text>
                 </View>
               ))}
             </View>

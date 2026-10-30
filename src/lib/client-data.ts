@@ -1,10 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
+import { lerFilaWhatsapp } from "@/lib/fila-whatsapp";
 import { aplicarRastreio, diagnosticarAds, type AlcanceJanela, type LinhaAds, type CampanhaCadastro } from "@/lib/anuncios-objetivo";
 import type { Acompanhamento } from "@/lib/oportunidades";
 import { lerDiagnosticoRpc, montarDadosReduzidos, type DadosComerciais, type MetricasEssenciais, type WtsResumoMin } from "@/lib/comercial";
 import { filtrarPerguntas, perguntasDaDeteccaoOriginal } from "@/lib/comentarios";
 import { normalizarTemas } from "@/lib/classificacao-post";
 import { fetchAllRows } from "@/lib/pagination";
+import { normalizarVendas, type VendasPeriodoBanco } from "@/lib/vendas-periodo";
 import type {
   ContentFormat,
   FunnelStage,
@@ -166,6 +168,18 @@ export async function getCrmResumoPeriodo(clientId: string, from: string, to: st
   const { data, error } = await cliente.rpc("crm_leads_resumo_periodo", { p_client_id: clientId, p_from: from, p_to: to });
   if (error) throw error;
   return data?.[0] ?? { novos: 0, ganhos: 0, perdidos: 0, valor: 0 };
+}
+
+// Vendas do período por evento "ganhou" e pela coorte, cards fechados sem resultado, planilha parada e pessoas
+// novas por origem classificada (migração 20261031100000). Sem a RPC (banco ainda sem a migração), devolve null e
+// as telas seguem com os ganhos de crm_leads_resumo_periodo, com o rótulo de coorte.
+export async function getCrmVendasPeriodo(clientId: string, from: string, to: string): Promise<VendasPeriodoBanco | null> {
+  const cliente = supabase as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+  };
+  const { data, error } = await cliente.rpc("crm_vendas_periodo", { p_client_id: clientId, p_from: from, p_to: to });
+  if (error) return null;
+  return normalizarVendas(data);
 }
 
 // Pessoas x cards (migração 20261023170000). Em painéis como "Orçamentos" da
@@ -360,7 +374,7 @@ export async function getAdsCampanhasPeriodo(clientId: string, start: string, en
   }
   const { data: cad, error: e2 } = await (supabase as any)
     .from("meta_ads_campaigns")
-    .select("campaign_id, name, objective, permalink, thumbnail_url")
+    .select("campaign_id, name, objective, permalink, thumbnail_url, destinos, otimizacoes")
     .eq("client_id", clientId);
   if (e2) throw e2;
   // Alcance de 7 dias pela campanha inteira (frequência real). Extra: sem a tabela ou com erro, vale a conta antiga.
@@ -398,6 +412,17 @@ export async function getWtsResumo(clientId: string, start: string, end: string)
   });
   if (error) throw error;
   return data?.[0] ?? null;
+}
+
+// Fila do WhatsApp com o dado do cliente: abertas agora (7 dias e mais antigas), lote de encerramento e conta
+// compartilhada. null = RPC ausente (banco sem a migração) ou sem acesso.
+export async function getWtsFilaDoCliente(clientId: string, start: string, end: string) {
+  const { data, error } = await (supabase as unknown as RpcClient).rpc("wts_fila_do_cliente", { p_client_id: clientId, p_start: start, p_end: end });
+  if (error) {
+    if (error.code === "PGRST202" || /wts_fila_do_cliente/.test(error.message ?? "")) return null;
+    throw new Error(error.message ?? "falha ao ler a fila do WhatsApp");
+  }
+  return lerFilaWhatsapp(data);
 }
 
 export async function getWtsPorDepartamento(clientId: string, start: string, end: string) {
@@ -525,6 +550,8 @@ export type EtapaParaAnalise = {
   ganhos: number;
   perdidos: number;
   abertos: number;
+  /** Fechados na origem sem resultado (outcome 'closed'): o resto do total. Confirmar a etapa não muda esses cards. */
+  fechados: number;
   confirmado: boolean;
   resultado_confirmado: "open" | "won" | "lost" | null;
 };
@@ -544,6 +571,8 @@ export async function listEtapasParaAnalise(clientId: string): Promise<EtapaPara
     ganhos: Number(r.ganhos),
     perdidos: Number(r.perdidos),
     abertos: Number(r.abertos),
+    // A RPC conta total, ganhos, perdidos e abertos; o que sobra é o card fechado na origem sem resultado.
+    fechados: Math.max(0, Number(r.total) - Number(r.ganhos) - Number(r.perdidos) - Number(r.abertos)),
   }));
 }
 
@@ -633,11 +662,37 @@ export async function definirPapelFunil(args: { connectionId: string; pipelineId
 // na tela, para mostrar também o que ficou de fora e por quê.
 const TERMOS_COMERCIAIS = ["valor", "preço", "preco", "quanto custa", "agendar", "consulta", "atende", "convênio", "convenio"];
 
-export async function getComentariosVozDoPaciente(clientId: string, start: string, end: string, limit = 1500) {
+/**
+ * Lê em páginas de 1.000 (o teto do PostgREST) até `max` linhas. A consulta precisa ter ordem única.
+ * Antes, um `.limit(2000)` devolvia no máximo 1.000 linhas, sem aviso (Doctor Creator, out/2026: 6.197 comentários).
+ */
+async function lerEmPaginas<T>(readPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>, max: number): Promise<T[]> {
+  const linhas: T[] = [];
+  while (linhas.length < max) {
+    const { data, error } = await readPage(linhas.length, Math.min(max, linhas.length + 1000) - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    linhas.push(...data);
+  }
+  return linhas.slice(0, max);
+}
+
+/** Total de comentários do período (sem baixar as linhas), para dizer "lidos X de Y". */
+async function contarComentariosPeriodo(clientId: string, desde: string, antesDe: string): Promise<number | null> {
+  const { count, error } = await supabase
+    .from("instagram_comments")
+    .select("id", { count: "exact", head: true })
+    .eq("client_id", clientId)
+    .gte("commented_at", desde)
+    .lt("commented_at", antesDe);
+  return error ? null : count ?? null;
+}
+
+export async function getComentariosVozDoPaciente(clientId: string, start: string, end: string, limit = 10000) {
   const { desde, antesDe } = limitesBR(start, end);
   const filtro = ["is_question.eq.true", ...TERMOS_COMERCIAIS.map((t) => `text.ilike.*${t}*`)].join(",");
-  const [{ data, error }, donos] = await Promise.all([
-    supabase
+  const [comentarios, donos, totalPeriodo] = await Promise.all([
+    lerEmPaginas((from, to) => supabase
       .from("instagram_comments")
       .select("id, text, like_count, instagram_post_id, commented_at, author_username, is_question, instagram_posts!instagram_comments_instagram_post_id_fkey(caption, permalink, thumbnail_url, posted_at, tema)")
       .eq("client_id", clientId)
@@ -645,12 +700,13 @@ export async function getComentariosVozDoPaciente(clientId: string, start: strin
       .gte("commented_at", desde)
       .lt("commented_at", antesDe)
       .order("commented_at", { ascending: false })
-      .limit(limit),
+      .order("id")
+      .range(from, to), limit),
     donosDoPerfil(clientId),
+    contarComentariosPeriodo(clientId, desde, antesDe),
   ]);
-  if (error) throw error;
-  const comentarios = data ?? [];
-  return { comentarios, donos, noLimite: comentarios.length >= limit };
+  // totalPeriodo: todos os comentários do período; `comentarios` é só a parte com pergunta, preço ou agendamento.
+  return { comentarios, donos, noLimite: comentarios.length >= limit, totalPeriodo };
 }
 
 // ---- Comercial: "onde o funil quebra" + checklist de dados -------------------
@@ -840,6 +896,13 @@ export async function getRoiPeriodo(clientId: string, de: string, ate: string): 
     ganhos: n(data.ganhos),
     ganhos_com_valor: n(data.ganhos_com_valor),
     receita: n(data.receita),
+    // Banco sem a separação por origem: null, e a tela não calcula o retorno com a receita total.
+    ganhos_anuncio: data.ganhos_anuncio === undefined ? null : n(data.ganhos_anuncio),
+    ganhos_anuncio_com_valor: data.ganhos_anuncio_com_valor === undefined ? null : n(data.ganhos_anuncio_com_valor),
+    receita_anuncio: data.receita_anuncio === undefined ? null : n(data.receita_anuncio),
+    receita_por_origem: Array.isArray(data.receita_por_origem)
+      ? data.receita_por_origem.map((o: { origem?: unknown; ganhos?: unknown; receita?: unknown }) => ({ origem: String(o.origem ?? "Sem origem"), ganhos: n(o.ganhos), receita: n(o.receita) }))
+      : [],
     ganho_identificavel: !!data.ganho_identificavel,
     crm_compartilhado: !!data.crm_compartilhado,
     crm_compartilhado_com: Array.isArray(data.crm_compartilhado_com) ? data.crm_compartilhado_com.map(String) : [],
@@ -850,18 +913,25 @@ export async function getRoiPeriodo(clientId: string, de: string, ate: string): 
 }
 
 // Comentários do período (todos, não só perguntas), com o tema do post: base de "Tema que gera identificação".
-export async function getComentariosPeriodo(clientId: string, start: string, end: string, limit = 2000) {
+// Lê em páginas até `limit`; `total` é o número real do período, para a tela dizer quantos foram lidos.
+export type ComentarioPeriodo = { id: string; text: string; author_username: string | null; instagram_post_id: string | null; instagram_posts: { tema: string | null } | null };
+export async function getComentariosPeriodo(clientId: string, start: string, end: string, limit = 20000): Promise<{ comentarios: ComentarioPeriodo[]; total: number; cortado: boolean }> {
   const { desde, antesDe } = limitesBR(start, end);
-  const { data, error } = await supabase
-    .from("instagram_comments")
-    .select("id, text, author_username, instagram_post_id, instagram_posts!instagram_comments_instagram_post_id_fkey(tema)")
-    .eq("client_id", clientId)
-    .gte("commented_at", desde)
-    .lt("commented_at", antesDe)
-    .order("commented_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return (data ?? []) as { id: string; text: string; author_username: string | null; instagram_post_id: string | null; instagram_posts: { tema: string | null } | null }[];
+  const [linhas, total] = await Promise.all([
+    lerEmPaginas((from, to) => supabase
+      .from("instagram_comments")
+      .select("id, text, author_username, instagram_post_id, instagram_posts!instagram_comments_instagram_post_id_fkey(tema)")
+      .eq("client_id", clientId)
+      .gte("commented_at", desde)
+      .lt("commented_at", antesDe)
+      .order("commented_at", { ascending: false })
+      .order("id")
+      .range(from, to), limit),
+    contarComentariosPeriodo(clientId, desde, antesDe),
+  ]);
+  const comentarios = linhas as ComentarioPeriodo[];
+  const t = Math.max(total ?? 0, comentarios.length);
+  return { comentarios, total: t, cortado: t > comentarios.length };
 }
 
 // Objeções das conversas de WhatsApp lidas pela IA (auditoria comercial), por tipo. null quando não há.

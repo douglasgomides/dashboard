@@ -181,10 +181,16 @@ function AnalisarPage() {
   for (const grupo of porConexao.values()) {
     const comCards = grupo.filter((g) => g.total > 0);
     const decididos = grupo.reduce((a, g) => a + g.ganhos + g.perdidos, 0);
+    const fechados = grupo.reduce((a, g) => a + g.fechados, 0);
     const aConfirmar = comCards.filter((g) => !g.confirmado);
     if (comCards.length > 0 && decididos === 0) {
       alertas.push(
-        "Nenhum card está como ganho ou perdido. Sem isso o dashboard não calcula conversão, e tudo aparece como em disputa.",
+        "Nenhum card está como ganho ou perdido. Sem isso o dashboard não calcula conversão.",
+      );
+    }
+    if (fechados > 0) {
+      alertas.push(
+        `${fmtN(fechados)} cards foram fechados no CRM sem dizer se ganharam ou perderam (o CRM não informa). Eles não contam como abertos, nem como ganho, nem como perdido, e confirmar a etapa não muda esses cards.`,
       );
     }
     if (aConfirmar.length > 0) {
@@ -209,7 +215,15 @@ function AnalisarPage() {
         </div>
       )}
 
-      <SecaoPapelFunil clientId={clientId} etapas={linhas} />
+      <SecaoPapelFunil clientId={clientId} etapas={[...linhas, ...kpis]} />
+      {linhas.length === 0 && kpis.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <p className="note txt">
+            Neste CRM o ganho e o perdido vêm do próprio CRM, então não há etapa para confirmar aqui. O papel de cada funil e as
+            etapas de consulta agendada e em atendimento continuam valendo.
+          </p>
+        </div>
+      )}
 
       {[...porConexao.entries()].map(([conexao, grupo]) => {
         const painelNome = (id: string) => grupo.find((g) => g.pipeline_id === id)?.pipeline_name ?? id;
@@ -218,7 +232,8 @@ function AnalisarPage() {
           <div key={conexao} className="card" style={{ marginBottom: 16 }}>
             <h2>{paineis.map(painelNome).join(" · ")}</h2>
             <p className="sub">
-              Para cada etapa, diga o que significa. Ao mudar, os cards da etapa são atualizados na hora.
+              Para cada etapa, diga o que significa. Ao mudar, os cards abertos, ganhos e perdidos da etapa são atualizados na hora. Os
+              fechados na origem sem resultado ficam como estão.
             </p>
             <ConfirmarEmLote
               pendentes={grupo.filter((g) => g.total > 0 && !g.confirmado)}
@@ -261,7 +276,7 @@ function AnalisarPage() {
                         <td data-label="Hoje conta como">
                           {e.total === 0
                             ? "—"
-                            : `${fmtN(e.ganhos)} ganho · ${fmtN(e.perdidos)} perdido · ${fmtN(e.abertos)} aberto`}
+                            : `${fmtN(e.ganhos)} ganho · ${fmtN(e.perdidos)} perdido · ${fmtN(e.abertos)} aberto${e.fechados > 0 ? ` · ${fmtN(e.fechados)} fechado na origem` : ""}`}
                         </td>
                         <td data-label="Significa" className="l">
                           <select
@@ -327,8 +342,10 @@ function AnalisarPage() {
 }
 
 // Papel de cada funil: decide o que entra em "leads novos". Sem escolha da equipe vale a regra pelo nome do funil.
-function SecaoPapelFunil({ clientId, etapas }: { clientId: string; etapas: EtapaParaAnalise[] }) {
+// Recebe as etapas das duas leituras (FlwChat e de KPI, que cobre todos os CRMs): cada etapa conta uma vez só.
+function SecaoPapelFunil({ clientId, etapas: todas }: { clientId: string; etapas: Pick<EtapaParaAnalise, "connection_id" | "pipeline_id" | "pipeline_name" | "status_id" | "total">[] }) {
   const queryClient = useQueryClient();
+  const etapas = [...new Map(todas.map((e) => [`${e.connection_id}|${e.pipeline_id}|${e.status_id}`, e])).values()];
   const funis = [...new Map(etapas.map((e) => [`${e.connection_id}|${e.pipeline_id}`, e])).values()].map((e) => ({
     chave: `${e.connection_id}|${e.pipeline_id}`,
     connectionId: e.connection_id,
@@ -429,7 +446,7 @@ function SecaoKpi({
         hora.
       </p>
       {nenhumaMarcada && (
-        <p className="note">Hoje nenhuma etapa deste cliente conta como consulta agendada, e o card mostra 0.</p>
+        <p className="note">Hoje nenhuma etapa deste cliente conta como consulta agendada, e o Comercial mostra "sem dado" nesse número.</p>
       )}
       {[...porConexao.entries()].map(([conexao, grupo]) => (
         <div key={conexao} style={{ overflowX: "auto", marginTop: 10 }}>

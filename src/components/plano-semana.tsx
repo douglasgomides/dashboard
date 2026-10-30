@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Painel, Kpi, Selo } from "@/components/visual";
 import { Carregando, ErroCarga } from "@/components/sem-fonte";
 import { useClientRole } from "@/hooks/use-client-role";
-import { ROTULO_ORIGEM, semanaDe, type EstadoPlano, type OrigemPlano } from "@/lib/plano-semana";
+import { MATURACAO_DIAS, MINIMO_ATENDIDOS, parcial, ROTULO_ORIGEM, semanaDe, type EstadoPlano, type OrigemPlano } from "@/lib/plano-semana";
 
 interface ItemPlano {
   id: string; semana: string; ordem: number; origem: OrigemPlano; titulo: string; porque: string; acao: string; onde: string | null;
@@ -18,6 +18,14 @@ const db = supabase as unknown as { from: (t: string) => any };
 const brl = (v: number | null | undefined) => (v == null ? "—" : "R$ " + Math.round(Number(v)).toLocaleString("pt-BR"));
 const dataBR = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const ROTULO_ESTADO: Record<EstadoPlano, string> = { proposta: "A fazer", feita: "Feita", nao_feita: "Não foi feita", descartada: "Descartada" };
+
+/** Selo do estado: "conferido" só acompanha "Feita"; lista atendida em parte mostra quanto falta. */
+function seloEstado(i: Pick<ItemPlano, "estado" | "verificado" | "medicao">): { texto: string; cor: string } {
+  const p = i.estado !== "feita" && i.estado !== "descartada" ? parcial(i.medicao) : null;
+  if (p) return { texto: `Parcial: ${p.respondidas} de ${p.n}`, cor: "var(--warn)" };
+  if (i.estado === "feita") return { texto: i.verificado ? "Feita · conferido" : "Feita (marcada pela equipe)", cor: "var(--good)" };
+  return { texto: ROTULO_ESTADO[i.estado], cor: i.estado === "proposta" ? "var(--warn)" : "var(--muted)" };
+}
 
 async function chamar(clientId: string, corpo: Record<string, unknown>) {
   const token = (await supabase.auth.getSession()).data.session?.access_token;
@@ -75,14 +83,16 @@ export function PlanoSemana({ clientId, base, contexto }: { clientId: string; ba
   const emJogo = atual.filter((i) => i.estado !== "descartada").reduce((s, i) => s + Number(i.valor_brl ?? 0), 0);
   const historico = anteriores.filter((i) => i.estado !== "descartada");
   const feitas = historico.filter((i) => i.estado === "feita").length;
-  const gerado = historico.reduce((s, i) => s + Number(i.resultado_brl ?? 0), 0);
+  // Receita estimada (agendamentos × ticket) e gasto evitado em anúncio são coisas diferentes: não somam.
+  const gerado = historico.filter((i) => i.origem !== "anuncio").reduce((s, i) => s + Number(i.resultado_brl ?? 0), 0);
+  const evitado = historico.filter((i) => i.origem === "anuncio").reduce((s, i) => s + Number(i.resultado_brl ?? 0), 0);
 
   return (
     <div className="grid gap-4">
       <div className="grid gap-3 sm:grid-cols-3">
         <Kpi icone={CircleDollarSign} rotulo="Em jogo nesta semana" valor={emJogo ? brl(emJogo) : "—"} dica={`${atual.length} ação(ões) priorizada(s)`} info="Soma do valor estimado das ações: pacientes × chance de agendar × ticket médio. Ações de conteúdo não entram em reais." />
-        <Kpi icone={CheckCircle2} rotulo="Ações feitas (12 semanas)" valor={historico.length ? `${feitas} de ${historico.length}` : "—"} dica="Conferido pelos dados, não só pelo clique" />
-        <Kpi icone={History} rotulo="Resultado medido (12 semanas)" valor={gerado ? brl(gerado) : "—"} dica="Agendamentos das listas × ticket; corte de gasto em anúncio" info="Coincidência no tempo: o paciente pode ter agendado por outro motivo. É a melhor medida disponível, não prova de causa." cor="var(--good-text)" />
+        <Kpi icone={CheckCircle2} rotulo="Ações feitas (12 semanas)" valor={historico.length ? `${feitas} de ${historico.length}` : "—"} dica="Conferido pelos dados ou marcado pela equipe" info="Uma ação de pacientes conta como feita quando pelo menos 8 de cada 10 pacientes da lista receberam resposta. Na ação de preço, o valor precisa ter sido informado." />
+        <Kpi icone={History} rotulo="Receita estimada (12 semanas)" valor={gerado ? brl(gerado) : "—"} dica={evitado ? `Agendamentos das listas × ticket. À parte: ${brl(evitado)} de gasto evitado em anúncios` : "Agendamentos das listas × ticket"} info="Coincidência no tempo: o paciente pode ter agendado por outro motivo. É a melhor medida disponível, não prova de causa. O gasto evitado em anúncios não entra nesta soma." cor="var(--good-text)" />
       </div>
 
       <Painel icone={CalendarCheck} titulo={`Plano da semana de ${dataBR(semana)}`} resumo={contexto === "sap" ? "As ações que mais aproximam a clínica da meta do programa, em ordem de valor." : "As ações que mais trazem resultado nesta semana, em ordem de valor."}>
@@ -104,14 +114,14 @@ export function PlanoSemana({ clientId, base, contexto }: { clientId: string; ba
                   <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--accent)" }}>{k + 1}. {ROTULO_ORIGEM[i.origem]}</span>
                   <span className="flex flex-wrap gap-1.5">
                     {i.valor_brl != null && <Selo cor="var(--good-text)">{brl(i.valor_brl)} em jogo</Selo>}
-                    <Selo cor={i.estado === "feita" ? "var(--good)" : i.estado === "proposta" ? "var(--warn)" : "var(--muted)"}>{ROTULO_ESTADO[i.estado]}{i.verificado ? " · conferido" : ""}</Selo>
+                    <Selo cor={seloEstado(i).cor}>{seloEstado(i).texto}</Selo>
                   </span>
                 </div>
                 <h3 className="mt-1 text-[15px] font-semibold">{i.titulo}</h3>
                 <p className="mt-1 text-sm" style={{ color: "var(--text-dim)" }}>{i.porque}</p>
                 <p className="mt-2 text-sm"><b>O que fazer:</b> {i.acao}</p>
                 {i.valor_calculo && <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>Como calculamos: {i.valor_calculo}</p>}
-                {i.resultado_texto && <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>Até agora: {i.resultado_texto}{i.resultado_brl ? ` (≈ ${brl(i.resultado_brl)})` : ""}</p>}
+                {i.resultado_texto && <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>Até agora: {i.resultado_texto}{i.resultado_brl ? (i.origem === "anuncio" ? ` (${brl(i.resultado_brl)} de gasto evitado)` : ` (≈ ${brl(i.resultado_brl)})`) : ""}</p>}
                 <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
                   {i.onde && <Link to={`${base}${i.onde}` as never} className="font-semibold underline" style={{ color: "var(--accent)" }}>Abrir a lista</Link>}
                   {podeEditar && i.estado !== "feita" && <button type="button" className="underline" onClick={() => decidir(i.id, "feita")}>Marcar como feita</button>}
@@ -129,10 +139,10 @@ export function PlanoSemana({ clientId, base, contexto }: { clientId: string; ba
             {passada.map((i) => (
               <li key={i.id} className="flex flex-wrap items-start justify-between gap-2 border-b pb-2" style={{ borderColor: "var(--border)" }}>
                 <span className="flex items-start gap-2">
-                  {i.estado === "feita" ? <CheckCircle2 size={16} className="mt-0.5 shrink-0" style={{ color: "var(--good-text)" }} aria-label="Feita" /> : <XCircle size={16} className="mt-0.5 shrink-0" style={{ color: "var(--muted)" }} aria-label="Não feita" />}
+                  {i.estado === "feita" ? <CheckCircle2 size={16} className="mt-0.5 shrink-0" style={{ color: "var(--good-text)" }} aria-label="Feita" /> : <XCircle size={16} className="mt-0.5 shrink-0" style={{ color: "var(--muted)" }} aria-label={seloEstado(i).texto} />}
                   <span><b>{i.titulo}</b>{i.resultado_texto && <span className="block text-xs" style={{ color: "var(--text-dim)" }}>{i.resultado_texto}</span>}</span>
                 </span>
-                {i.resultado_brl ? <Selo cor="var(--good-text)">≈ {brl(i.resultado_brl)}</Selo> : null}
+                {i.resultado_brl ? <Selo cor="var(--good-text)">{i.origem === "anuncio" ? `${brl(i.resultado_brl)} de gasto evitado` : `≈ ${brl(i.resultado_brl)}`}</Selo> : i.estado !== "feita" && parcial(i.medicao) ? <Selo cor="var(--warn)">{seloEstado(i).texto}</Selo> : null}
               </li>
             ))}
           </ul>
@@ -141,7 +151,7 @@ export function PlanoSemana({ clientId, base, contexto }: { clientId: string; ba
 
       <p className="flex items-start gap-2 text-xs" style={{ color: "var(--muted)" }}>
         <Sparkles size={13} className="mt-0.5 shrink-0" aria-hidden />
-        O plano aprende com a própria clínica: depois de 20 pacientes medidos, a chance de agendar usada no cálculo passa a ser a real desta clínica. Nada é enviado a paciente pelo Nexo; a equipe executa.
+        O plano aprende com a própria clínica: quando {MINIMO_ATENDIDOS} pacientes já tiverem recebido resposta em ações de pelo menos duas semanas, e cada ação tiver {MATURACAO_DIAS} dias de acompanhamento, a chance de agendar passa a usar o histórico desta clínica. Quem nunca foi contatado não entra na conta. Nada é enviado a paciente pelo Nexo; a equipe executa.
       </p>
     </div>
   );

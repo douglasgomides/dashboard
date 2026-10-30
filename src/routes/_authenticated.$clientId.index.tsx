@@ -37,7 +37,6 @@ import { RetornoInvestimento } from "@/components/retorno-investimento";
 import { AcompanhamentoServico } from "@/components/acompanhamento-servico";
 import { QualidadeDados } from "@/components/qualidade-dados";
 import { fmtFormatKey } from "@/lib/report-metrics";
-import { analyzeGrowth } from "@/lib/hub-conteudo";
 import { completeInstagramPeriod } from "@/lib/report-period";
 import { Link } from "@tanstack/react-router";
 import { SyncButton } from "@/components/sync-button";
@@ -48,12 +47,14 @@ import {
   brazilWeekdayAndHour,
   computeFormatBreakdown,
   computeFormatInsight,
+  fmtTaxaPct,
   median,
+  taxaDoPost,
 } from "@/lib/report-metrics";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { fmtNum } from "@/lib/format";
 import {
-  seguidoresNoPeriodo,
+  saldoSeguidores,
   confiancaPorPosts,
   MIN_POSTS_CONCLUSAO,
   ROTULO_AMOSTRA_PEQUENA,
@@ -71,7 +72,6 @@ import {
   Loader2,
   Lightbulb,
   UserPlus,
-  MousePointerClick,
   Trophy,
   TrendingDown,
   LineChart as LineIcon,
@@ -107,29 +107,6 @@ function sum(rows: { [k: string]: any }[], key: string) {
 
 function tickDate(d: string) {
   return d.slice(5);
-}
-
-// Alcance e seguidores ficam só no cartão principal (um número de alcance por tela); aqui, o sinal de interesse.
-function SinaisDeInteresse({ contactTaps }: { contactTaps: number }) {
-  return (
-    <Painel
-      icone={MousePointerClick}
-      cor="var(--s1)"
-      titulo="Sinais de interesse"
-      resumo="Toques nos botões de contato do perfil"
-      ajuda="A Meta depreciou “visitas ao perfil” na API, então não dá mais para montar um funil real com % de conversão entre alcance, visita e contato. O alcance e os seguidores estão no cartão do topo."
-    >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Kpi
-          icone={MousePointerClick}
-          cor="var(--s2)"
-          rotulo="Toques em contato"
-          valor={contactTaps.toLocaleString("pt-BR")}
-          info="Endereço, ligar, e-mail e mensagem, somados de cada dia do período."
-        />
-      </div>
-    </Painel>
-  );
 }
 
 // Lista compacta de posts, reutilizada no drill-down de dia e na
@@ -210,9 +187,11 @@ function MelhoresHorarios({
       { weekday: string; period: string; values: number[]; posts: any[] }
     >();
     const allEng: number[] = [];
+    // Taxa de interação (interações ÷ alcance) e não engajamento absoluto: o absoluto mede alcance.
     for (const p of posts) {
-      if (!p.posted_at || p.engagement == null) continue;
-      allEng.push(p.engagement);
+      const taxa = taxaDoPost(p);
+      if (!p.posted_at || taxa == null) continue;
+      allEng.push(taxa);
       const { weekday: weekdayIdx, hour } = brazilWeekdayAndHour(p.posted_at);
       const weekday = WEEKDAYS[weekdayIdx];
       const period = PERIODS.find((per) => per.test(hour))?.label ?? "—";
@@ -223,7 +202,7 @@ function MelhoresHorarios({
         values: [],
         posts: [],
       };
-      entry.values.push(p.engagement);
+      entry.values.push(taxa);
       entry.posts.push(p);
       buckets.set(key, entry);
     }
@@ -247,7 +226,7 @@ function MelhoresHorarios({
         count: b.values.length,
         median: median(b.values),
         posts: [...b.posts].sort(
-          (a, c) => (c.engagement ?? 0) - (a.engagement ?? 0),
+          (a, c) => (taxaDoPost(c) ?? 0) - (taxaDoPost(a) ?? 0),
         ),
       }))
       .sort((a, b) => b.median - a.median)
@@ -255,14 +234,14 @@ function MelhoresHorarios({
     return { ranked, overallMedian, poucosDados };
   }, [posts]);
 
-  const maxMediana = Math.max(1, ...ranked.map((r) => r.median));
+  const maxMediana = Math.max(0.0001, ...ranked.map((r) => r.median));
   return (
     <Painel
       icone={Clock}
       cor="var(--s7)"
       titulo="Melhores horários para postar"
       resumo="Toque numa linha para ver os posts"
-      ajuda={`${periodLabel}, por engajamento (mediana; horário de Brasília). Clique numa linha para ver os posts que sustentam o número.`}
+      ajuda={`${periodLabel}, pela taxa de interação do post típico (interações ÷ alcance, mediana; horário de Brasília). A taxa não depende de quanto alcance ou anúncio o post recebeu. Clique numa linha para ver os posts que sustentam o número.`}
     >
       {ranked.length === 0 ? (
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
@@ -339,7 +318,7 @@ function MelhoresHorarios({
                       style={{ color: "var(--text-dim)" }}
                     >
                       <b style={{ color: "var(--text)" }}>
-                        {fmtNum(Math.round(r.median))}
+                        {fmtTaxaPct(r.median)}
                       </b>{" "}
                       · {r.count} posts
                     </span>
@@ -359,11 +338,8 @@ function MelhoresHorarios({
                     >
                       {r.count} post{r.count > 1 ? "s" : ""} em{" "}
                       {r.weekday.toLowerCase()}, {r.period.toLowerCase()}:
-                      engajamento{" "}
-                      {vsMedian >= 0
-                        ? vsMedian.toFixed(0) + "% acima"
-                        : Math.abs(vsMedian).toFixed(0) + "% abaixo"}{" "}
-                      da mediana da conta ({fmtNum(Math.round(overallMedian))}).
+                      taxa de interação de {fmtTaxaPct(r.median)}, contra{" "}
+                      {fmtTaxaPct(overallMedian)} da conta.
                     </p>
                     <PostList posts={r.posts} />
                   </div>
@@ -391,7 +367,7 @@ function MelhoresHorarios({
               >
                 {b.weekday} · {b.period.toLowerCase()} · {b.count}{" "}
                 {b.count === 1 ? "post" : "posts"} ·{" "}
-                {fmtNum(Math.round(b.median))} engaj.
+                {fmtTaxaPct(b.median)} de taxa
               </li>
             ))}
           </ul>
@@ -402,23 +378,31 @@ function MelhoresHorarios({
 }
 
 function EngajamentoPorFormato({ posts }: { posts: any[] }) {
-  const data = useMemo(() => {
-    return computeFormatBreakdown(posts).map((f) => ({
-      formato: f.formato,
-      "Engajamento (mediana)": f.medianEngagement,
-    }));
+  const { data, poucos } = useMemo(() => {
+    const todos = computeFormatBreakdown(posts);
+    return {
+      data: todos
+        .filter((f) => !f.amostraPequena && f.taxaMediana != null)
+        .map((f) => ({
+          formato: f.formato,
+          "Taxa de interação (mediana)": Math.round((f.taxaMediana ?? 0) * 1000) / 10,
+        })),
+      poucos: todos.filter((f) => f.amostraPequena),
+    };
   }, [posts]);
 
   return (
     <Painel
       icone={BarChart3}
       cor="var(--s3)"
-      titulo="Engajamento por formato"
-      resumo="Mediana de cada formato"
+      titulo="Taxa de interação por formato"
+      resumo="Interações ÷ alcance, post típico de cada formato"
+      ajuda={`Compara a taxa (interações ÷ alcance) e não o engajamento total, para um formato que recebeu mais alcance ou anúncio não parecer melhor só por isso. Formato com menos de ${MIN_POSTS_CONCLUSAO} posts no período não ganha barra.`}
     >
       {data.length === 0 ? (
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          Sem posts suficientes ainda.
+          Nenhum formato tem {MIN_POSTS_CONCLUSAO} posts ou mais com alcance no
+          período.
         </p>
       ) : (
         <ResponsiveContainer width="100%" height={220}>
@@ -432,16 +416,26 @@ function EngajamentoPorFormato({ posts }: { posts: any[] }) {
             <YAxis
               tick={{ fontSize: 11 }}
               stroke="var(--text-faint)"
-              tickFormatter={fmtNum}
+              tickFormatter={(v: number) => `${v.toLocaleString("pt-BR")}%`}
             />
-            <Tooltip formatter={(value: number) => fmtNum(value)} />
+            <Tooltip
+              formatter={(value: number) =>
+                `${value.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
+              }
+            />
             <Bar
-              dataKey="Engajamento (mediana)"
+              dataKey="Taxa de interação (mediana)"
               fill="var(--s3)"
               radius={[4, 4, 0, 0]}
             />
           </BarChart>
         </ResponsiveContainer>
+      )}
+      {poucos.length > 0 && (
+        <p className="mt-2 text-xs" style={{ color: "var(--text-dim)" }}>
+          {ROTULO_AMOSTRA_PEQUENA[0].toUpperCase() + ROTULO_AMOSTRA_PEQUENA.slice(1)}, sem barra:{" "}
+          {poucos.map((f) => `${f.formato} (${f.count} ${f.count === 1 ? "post" : "posts"})`).join(", ")}.
+        </p>
       )}
     </Painel>
   );
@@ -465,7 +459,7 @@ function InsightDeFormato({
   const insight = useMemo(() => computeFormatInsight(posts), [posts]);
 
   if (!insight) return null;
-  const { best, worst, bestPct, worstPct } = insight;
+  const { best, worst, empate, overallMedian } = insight;
 
   return (
     <div
@@ -478,21 +472,32 @@ function InsightDeFormato({
         className="mt-0.5 shrink-0"
         style={{ color: "var(--warn)" }}
       />
-      <span>
-        {periodLabel}, <strong>{fmtFormatLabel(best.format)}</strong> foi o
-        formato mais forte — engajamento (mediana) de{" "}
-        {fmtNum(Math.round(best.median))} ({best.count} posts),{" "}
-        {bestPct >= 0 ? "+" : ""}
-        {bestPct.toFixed(0)}% acima da mediana geral da conta.
-        {worst.format !== best.format && (
-          <>
-            {" "}
-            <strong>{fmtFormatLabel(worst.format)}</strong> ficou{" "}
-            {Math.abs(worstPct).toFixed(0)}% abaixo ({worst.count} posts) — vale
-            revisar frequência ou abordagem nesse formato.
-          </>
-        )}
-      </span>
+      {empate ? (
+        <span>
+          {periodLabel}, os formatos tiveram taxa de interação parecida:{" "}
+          <strong>{fmtFormatLabel(best.format)}</strong> com{" "}
+          {fmtTaxaPct(best.median)} ({best.count} posts) e{" "}
+          <strong>{fmtFormatLabel(worst.format)}</strong> com{" "}
+          {fmtTaxaPct(worst.median)} ({worst.count} posts). Se um formato
+          parece engajar mais, é porque alcançou mais gente, não porque o
+          conteúdo prende mais.
+        </span>
+      ) : (
+        <span>
+          {periodLabel}, <strong>{fmtFormatLabel(best.format)}</strong> teve a
+          maior taxa de interação (interações ÷ alcance, mediana):{" "}
+          {fmtTaxaPct(best.median)} em {best.count} posts, contra{" "}
+          {fmtTaxaPct(overallMedian)} da conta.
+          {worst.format !== best.format && (
+            <>
+              {" "}
+              <strong>{fmtFormatLabel(worst.format)}</strong> ficou com{" "}
+              {fmtTaxaPct(worst.median)} ({worst.count} posts): vale testar
+              outra abordagem nesse formato antes de deixar de usá-lo.
+            </>
+          )}
+        </span>
+      )}
     </div>
   );
 }
@@ -702,39 +707,23 @@ function MonthlyOverview() {
   const data = metricas.data ?? [];
   const ant = anterior.data ?? [];
   const semInstagram = data.length === 0;
-  const newFollowers = sum(data, "new_followers");
-  const cresc = analyzeGrowth(
-    data as {
-      date: string;
-      new_followers?: number | null;
-      unfollowers?: number | null;
-    }[],
-    start,
-    fim,
-  );
   // Métricas que a Meta só entrega para até 30 dias (alcance único, salvamentos por data da ação, novos seguidores)
   // só aparecem quando o período é de até 30 dias. Em períodos maiores, a versão "soma dos dias", com rótulo.
   const periodo30 = diasPeriodo <= 30;
   const meta = periodo30
     ? completeInstagramPeriod(periodoIg.data?.dados, start, fim)
     : null;
-  const saldoTotal = seguidoresNoPeriodo(data as DiaSeguidores[], start, fim);
+  // Seguidores: um número só, o saldo líquido (mesma régua do cartão do resumo, do PDF e do WhatsApp).
+  const saldo = saldoSeguidores(data as DiaSeguidores[], start, fim);
   const taxaUnica =
     meta?.alcance_unico && meta.interacoes != null
       ? ((meta.interacoes / meta.alcance_unico) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + "%"
       : null;
   const sinal = (n: number) =>
     `${n >= 0 ? "+" : "-"}${Math.abs(n).toLocaleString("pt-BR")}`;
-  // Bruto, saídas e líquido com a MESMA cobertura (dias fechados que têm os dois números). O bruto de
-  // todos os dias continua informado, com a sua própria cobertura, para não sumir com dado.
-  const novosKpi = cresc.diasMedidos ? cresc.novos : newFollowers;
-  const dicaSeguidores = cresc.diasMedidos
-    ? `bruto em ${cresc.diasMedidos} dias com ganhos e saídas medidos · saíram ${cresc.saidas.toLocaleString("pt-BR")} · líquido ${sinal(cresc.liquido)}${newFollowers !== cresc.novos ? ` · somando também dias sem saída medida: ${newFollowers.toLocaleString("pt-BR")}` : ""}`
-    : "bruto de todos os dias com dado · saídas ainda não medidas neste período";
   const reach = sum(data, "reach");
   const saves = sum(data, "saves");
   const interactions = sum(data, "total_interactions");
-  const contactTaps = sum(data, "profile_links_taps");
   const engagementRate =
     reach > 0 ? ((interactions / reach) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + "%" : "—";
   // Comparação com o período anterior: só com 80%+ dos dias com alcance dos dois lados e 7+ dias.
@@ -753,7 +742,6 @@ function MonthlyOverview() {
       texto: `${Math.abs(p).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}% vs. período anterior`,
     };
   };
-  const vsNovos = variacao(newFollowers, sum(ant, "new_followers"));
   const vsAlcance = variacao(reach, sum(ant, "reach"));
   const vsSalvos = variacao(saves, sum(ant, "saves"));
   const dd = (iso: string) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
@@ -818,7 +806,7 @@ function MonthlyOverview() {
 
   const explicacao = {
     seguidores:
-      "Fonte: Instagram (métrica diária “seguidores ganhos”). Fórmula: soma dos novos seguidores de cada dia do período, sem descontar quem saiu (igual ao número do Instagram). Limitação: quem saiu só é medido nos dias já fechados (a Meta leva cerca de 2 dias para fechar o dia).",
+      "Fonte: Instagram (total de seguidores de cada dia; sem ele, seguidores ganhos e perdidos de cada dia). É o mesmo número do relatório em PDF e do texto do WhatsApp. Limitação: a Meta leva cerca de 2 dias para fechar o dia, então os últimos dias ainda podem mudar.",
     alcance:
       meta?.alcance_unico != null
         ? `Fonte: Instagram, “Contas alcançadas” do período (${dd(meta.de)} a ${dd(meta.ate)}${meta.recortado ? ", últimos 30 dias do período" : ""}). Conta pessoas únicas. Limitação: a Meta só calcula para até 30 dias; a soma dos alcances diários (${reach.toLocaleString("pt-BR")}) é maior porque repete pessoas.`
@@ -865,34 +853,20 @@ function MonthlyOverview() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            {periodo30 ? (
-              <Kpi
-                icone={UserPlus}
-                cor="var(--s3)"
-                rotulo="Novos seguidores (bruto)"
-                valor={novosKpi.toLocaleString("pt-BR")}
-                tendencia={cresc.diasMedidos ? undefined : vsNovos}
-                dica={dicaSeguidores}
-                info={`${dicaSeguidores}. ${explicacao.seguidores}`}
-              />
-            ) : (
-              <Kpi
-                icone={UserPlus}
-                cor="var(--s3)"
-                rotulo="Seguidores: saldo no período"
-                valor={
-                  saldoTotal.saldoTotal != null
-                    ? sinal(saldoTotal.saldoTotal)
-                    : "—"
-                }
-                dica={
-                  saldoTotal.saldoTotal != null
-                    ? "variação do total de seguidores do primeiro ao último dia com dado"
+            <Kpi
+              icone={UserPlus}
+              cor="var(--s3)"
+              rotulo="Seguidores: saldo no período"
+              valor={saldo.saldo != null ? sinal(saldo.saldo) : "sem dado"}
+              dica={
+                saldo.regua === "total"
+                  ? "variação do total de seguidores no período"
+                  : saldo.regua === "ganhos_saidas"
+                    ? "quem começou a seguir menos quem deixou de seguir"
                     : "sem o total de seguidores no começo e no fim do período"
-                }
-                info="Total de seguidores no último dia com dado menos o total no primeiro."
-              />
-            )}
+              }
+              info={`${saldo.detalhe} ${explicacao.seguidores}`}
+            />
             {meta?.alcance_unico != null ? (
               <Kpi
                 icone={Eye}
@@ -916,7 +890,7 @@ function MonthlyOverview() {
             <Kpi
               icone={Activity}
               cor="var(--s2)"
-              rotulo="Taxa de engajamento"
+              rotulo="Taxa de interação"
               valor={taxaUnica ?? engagementRate}
               dica={
                 taxaUnica
@@ -1204,8 +1178,6 @@ function MonthlyOverview() {
 
             {!semInstagram && (
               <>
-                <SinaisDeInteresse contactTaps={contactTaps} />
-
                 {/* O aviso de histórico curto fica uma vez só, na faixa do topo; aqui só o botão de buscar histórico. */}
                 {avisoCobertura && isAdmin && (
                   <div className="flex justify-end">
@@ -1213,21 +1185,21 @@ function MonthlyOverview() {
                   </div>
                 )}
 
-                {formatInsight && (
+                {formatInsight && !formatInsight.empate && (
                   <div className="grid grid-cols-2 gap-3">
                     <Kpi
                       icone={Trophy}
                       cor="var(--good-text)"
                       rotulo="Melhor formato"
                       valor={fmtFormatKey(formatInsight.best.format)}
-                      dica={`${fmtNum(Math.round(formatInsight.best.median))} engaj. (mediana) · ${formatInsight.best.count} posts · ${ROTULO_CONFIANCA[confiancaPorPosts(formatInsight.best.count)].toLowerCase()}`}
+                      dica={`${fmtTaxaPct(formatInsight.best.median)} de taxa de interação (mediana) · ${formatInsight.best.count} posts · ${ROTULO_CONFIANCA[confiancaPorPosts(formatInsight.best.count)].toLowerCase()}`}
                     />
                     <Kpi
                       icone={TrendingDown}
                       cor="var(--crit)"
                       rotulo="Formato mais fraco"
                       valor={fmtFormatKey(formatInsight.worst.format)}
-                      dica={`${fmtNum(Math.round(formatInsight.worst.median))} engaj. (mediana) · ${formatInsight.worst.count} posts · ${ROTULO_CONFIANCA[confiancaPorPosts(formatInsight.worst.count)].toLowerCase()}`}
+                      dica={`${fmtTaxaPct(formatInsight.worst.median)} de taxa de interação (mediana) · ${formatInsight.worst.count} posts · ${ROTULO_CONFIANCA[confiancaPorPosts(formatInsight.worst.count)].toLowerCase()}`}
                     />
                   </div>
                 )}

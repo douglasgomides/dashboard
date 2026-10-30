@@ -44,7 +44,8 @@ const int = (v: number) => Math.round(v).toLocaleString("pt-BR");
 const pctTxt = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}%`;
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
-interface Variacao { nome: string; atual: number; anterior: number; var: number }
+// atual/anterior: média por dia com dado (a mesma base do percentual); diasAtual/diasAnterior: quantos dias entram.
+interface Variacao { nome: string; atual: number; anterior: number; diasAtual: number; diasAnterior: number; var: number }
 
 // Soma das métricas diárias no período e no anterior. Só compara com cobertura parecida (dias com dado).
 export function variacoes(diario: EntradaDiag["diario"], anterior: EntradaDiag["diario"] | undefined): { lista: Variacao[]; limitada: boolean; motivo?: string } {
@@ -56,9 +57,10 @@ export function variacoes(diario: EntradaDiag["diario"], anterior: EntradaDiag["
   // Normaliza por dia com dado: período com menos dias coletados não parece "queda".
   const soma = (xs: EntradaDiag["diario"], k: "reach" | "total_interactions" | "new_followers" | "saves") => xs.reduce((s, d) => s + Number(d[k] ?? 0), 0);
   const met: [string, "reach" | "total_interactions" | "new_followers" | "saves", number][] = [
-    ["Alcance", "reach", 500],
+    // "Alcance diário": é a soma do alcance de cada dia, não as contas únicas do cartão do topo.
+    ["Alcance diário", "reach", 500],
     ["Interações", "total_interactions", 50],
-    ["Novos seguidores", "new_followers", 20],
+    ["Seguidores ganhos", "new_followers", 20],
     ["Salvamentos", "saves", 20],
   ];
   const lista: Variacao[] = [];
@@ -66,10 +68,17 @@ export function variacoes(diario: EntradaDiag["diario"], anterior: EntradaDiag["
     const a = soma(diario, k) / dA;
     const b = soma(anterior, k) / dB;
     if (b * dB < minimo || b <= 0) continue; // base pequena: variação enganosa
-    lista.push({ nome, atual: a * dA, anterior: b * dB, var: a / b - 1 });
+    lista.push({ nome, atual: a, anterior: b, diasAtual: dA, diasAnterior: dB, var: a / b - 1 });
   }
   const desigual = Math.min(dA, dB) / Math.max(dA, dB) < 0.8;
   return { lista, limitada: desigual, motivo: desigual ? `Dias com dado diferentes (${dA} x ${dB}); comparado pela média por dia.` : undefined };
+}
+
+// A evidência mostra a mesma base do percentual: média por dia. Antes mostrava as somas (4.556.269 contra
+// 1.155.230 = +294%) ao lado de "+323%", que é a razão das médias por dia (28 x 30 dias).
+const fmtMedia = (v: number) => (v >= 100 ? int(v) : v.toLocaleString("pt-BR", { maximumFractionDigits: 1 }));
+export function evidenciaVariacao(x: Variacao): string {
+  return `${fmtMedia(x.atual)} por dia (${x.diasAtual} dias) contra ${fmtMedia(x.anterior)} por dia (${x.diasAnterior} dias)`;
 }
 
 function primeiro(xs: Insight[], f: (i: Insight) => boolean): Insight | undefined {
@@ -89,8 +98,8 @@ export function montarDiagnostico(e: EntradaDiag): RespostaDiag[] {
     add("melhorou", { resposta: null, limitada: true, motivoLimite: v.motivo ?? "Base pequena demais para comparar." });
     add("piorou", { resposta: null, limitada: true, motivoLimite: v.motivo ?? "Base pequena demais para comparar." });
   } else {
-    add("melhorou", sobe ? { resposta: `${sobe.nome} subiu ${pctTxt(sobe.var)} em relação ao período anterior.`, evidencia: `${int(sobe.atual)} contra ${int(sobe.anterior)}`, limitada: v.limitada, motivoLimite: v.motivo } : { resposta: "Nenhuma métrica do Instagram subiu 10% ou mais.", limitada: v.limitada, motivoLimite: v.motivo });
-    add("piorou", desce ? { resposta: `${desce.nome} caiu ${pctTxt(desce.var)} em relação ao período anterior.`, evidencia: `${int(desce.atual)} contra ${int(desce.anterior)}`, limitada: v.limitada, motivoLimite: v.motivo } : { resposta: "Nenhuma métrica do Instagram caiu 10% ou mais.", limitada: v.limitada, motivoLimite: v.motivo });
+    add("melhorou", sobe ? { resposta: `${sobe.nome} subiu ${pctTxt(sobe.var)} em relação ao período anterior.`, evidencia: evidenciaVariacao(sobe), limitada: v.limitada, motivoLimite: v.motivo } : { resposta: "Nenhuma métrica do Instagram subiu 10% ou mais.", limitada: v.limitada, motivoLimite: v.motivo });
+    add("piorou", desce ? { resposta: `${desce.nome} caiu ${pctTxt(desce.var)} em relação ao período anterior.`, evidencia: evidenciaVariacao(desce), limitada: v.limitada, motivoLimite: v.motivo } : { resposta: "Nenhuma métrica do Instagram caiu 10% ou mais.", limitada: v.limitada, motivoLimite: v.motivo });
   }
 
   // 3–5. Oportunidade, risco, próxima ação (das recomendações que passaram na checagem)

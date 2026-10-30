@@ -2,6 +2,7 @@ import type { ContentFormat } from "@/integrations/supabase/types";
 import { formatLabel } from "@/lib/methodology";
 import { analisarVozDoPaciente } from "@/lib/voz-do-paciente";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
+import { chaveTema } from "@/lib/classificacao-post";
 
 const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const PERIODS = [
@@ -47,21 +48,37 @@ export function median(nums: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
-// Mesma lógica do componente InsightDeFormato — extraída pra ser reutilizada
-// tanto na tela quanto no relatório em PDF, sem duplicar o cálculo.
+// Taxa de interação do post: engajamento ÷ alcance. "Melhor formato" e "melhor horário" comparam a TAXA, não o
+// engajamento absoluto: o absoluto mede alcance (impulsionamento), não a qualidade do conteúdo. Na Doctor Creator
+// (out/2026) o estático aparecia "muito acima" com 2.219 de engajamento contra 149 do carrossel, mas o estático
+// tinha 14x mais alcance; as taxas eram 4,6% e 4,3% (auditoria de 31/10/2026). Mesma régua no Resultado, no PDF e no
+// texto do relatório (relatorio-envio.ts).
+export function taxaDoPost(p: { engagement?: number | null; reach?: number | null }): number | null {
+  const e = Number(p.engagement);
+  const r = Number(p.reach);
+  if (p.engagement == null || p.reach == null || !Number.isFinite(e) || !Number.isFinite(r) || r <= 0) return null;
+  return e / r;
+}
+
+/** Diferença relativa abaixo disso entre melhor e pior formato = taxas parecidas (não há formato "mais forte"). */
+export const EMPATE_TAXA = 0.15;
+
+// Mesma lógica do componente InsightDeFormato, reutilizada na tela e no PDF.
+// median = taxa mediana (0..1) dos posts do formato.
 export function computeFormatInsight(posts: any[]) {
   const groups = new Map<string, number[]>();
-  const allEng: number[] = [];
+  const all: number[] = [];
   for (const p of posts) {
-    if (p.engagement == null) continue;
+    const t = taxaDoPost(p);
+    if (t == null) continue;
     const key = p.format ?? "não classificado";
     const entry = groups.get(key) ?? [];
-    entry.push(p.engagement);
+    entry.push(t);
     groups.set(key, entry);
-    allEng.push(p.engagement);
+    all.push(t);
   }
-  if (allEng.length === 0) return null;
-  const overallMedian = median(allEng);
+  if (all.length === 0) return null;
+  const overallMedian = median(all);
   // "Melhor" e "pior" só entre formatos com amostra mínima (MIN_POSTS_CONCLUSAO posts).
   const ranked = Array.from(groups.entries())
     .filter(([, v]) => v.length >= MIN_POSTS_CONCLUSAO)
@@ -72,25 +89,32 @@ export function computeFormatInsight(posts: any[]) {
   const worst = ranked[ranked.length - 1];
   const bestPct = overallMedian > 0 ? ((best.median - overallMedian) / overallMedian) * 100 : 0;
   const worstPct = overallMedian > 0 ? ((worst.median - overallMedian) / overallMedian) * 100 : 0;
-  return { best, worst, bestPct, worstPct };
+  const empate = best.median > 0 ? (best.median - worst.median) / best.median < EMPATE_TAXA : true;
+  return { best, worst, bestPct, worstPct, overallMedian, empate };
 }
 
-// Mesma lógica do componente MelhoresHorarios.
+/** Taxa (0..1) em % com uma casa: 0,0463 → "4,6%". */
+export function fmtTaxaPct(v: number): string {
+  return `${(v * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
+// Mesma lógica do componente MelhoresHorarios: taxa mediana de interação por dia e faixa de horário.
 export function computeMelhoresHorarios(posts: any[]) {
   const buckets = new Map<string, { weekday: string; period: string; values: number[] }>();
-  const allEng: number[] = [];
+  const all: number[] = [];
   for (const p of posts) {
-    if (!p.posted_at || p.engagement == null) continue;
-    allEng.push(p.engagement);
+    const t = taxaDoPost(p);
+    if (!p.posted_at || t == null) continue;
+    all.push(t);
     const { weekday: weekdayIdx, hour } = brazilWeekdayAndHour(p.posted_at);
     const weekday = WEEKDAYS[weekdayIdx];
-    const period = PERIODS.find((per) => per.test(hour))?.label ?? "—";
+    const period = PERIODS.find((per) => per.test(hour))?.label ?? "sem horário";
     const key = `${weekday}__${period}`;
     const entry = buckets.get(key) ?? { weekday, period, values: [] };
-    entry.values.push(p.engagement);
+    entry.values.push(t);
     buckets.set(key, entry);
   }
-  const overallMedian = median(allEng);
+  const overallMedian = median(all);
   const todos = Array.from(buckets.values()).map((b) => ({ weekday: b.weekday, period: b.period, count: b.values.length, median: median(b.values) }));
   // Ranking só entre horários com amostra mínima; os demais vão para "poucos dados", sem ordem de melhor.
   const ranked = todos.filter((b) => b.count >= MIN_POSTS_CONCLUSAO).sort((a, b) => b.median - a.median).slice(0, 5);
@@ -98,19 +122,25 @@ export function computeMelhoresHorarios(posts: any[]) {
   return { ranked, overallMedian, poucosDados };
 }
 
-// Mesma lógica do componente EngajamentoPorFormato.
+// Mesma lógica do componente EngajamentoPorFormato: taxa mediana por formato; abaixo da amostra mínima o formato
+// sai marcado como amostra pequena (a tela não desenha barra para ele).
 export function computeFormatBreakdown(posts: any[]) {
-  const groups = new Map<string, number[]>();
+  const groups = new Map<string, { taxas: number[]; eng: number[]; n: number }>();
   for (const p of posts) {
     const key: ContentFormat | "não classificado" = p.format ?? "não classificado";
-    const entry = groups.get(key) ?? [];
-    entry.push(p.engagement ?? 0);
+    const entry = groups.get(key) ?? { taxas: [], eng: [], n: 0 };
+    entry.n += 1;
+    entry.eng.push(p.engagement ?? 0);
+    const t = taxaDoPost(p);
+    if (t != null) entry.taxas.push(t);
     groups.set(key, entry);
   }
   return Array.from(groups.entries()).map(([key, v]) => ({
     formato: fmtFormatKey(key),
-    count: v.length,
-    medianEngagement: Math.round(median(v)),
+    count: v.n,
+    medianEngagement: Math.round(median(v.eng)),
+    taxaMediana: v.taxas.length ? median(v.taxas) : null,
+    amostraPequena: v.taxas.length < MIN_POSTS_CONCLUSAO,
   }));
 }
 
@@ -135,12 +165,15 @@ export function computeTopPostsPorTaxaDeSalvamento(posts: any[], limit = 5) {
   return computeTopByRate(posts, "saved", limit);
 }
 
+// Compartilhamentos ÷ alcance em todos os formatos: a Meta preenche shares também em carrossel e post estático
+// (Doctor Creator, out/2026: 35 mil compartilhamentos em estáticos, que ficavam fora quando só reels entrava).
+export function computeTopPorTaxaDeCompartilhamento(posts: any[], limit = 5) {
+  return computeTopByRate(posts, "shares", limit);
+}
+
+/** Só reels: mantido para os relatórios em PDF, que têm o título "Reels com maior taxa de compartilhamento". */
 export function computeTopReelsPorTaxaDeCompartilhamento(posts: any[], limit = 5) {
-  return computeTopByRate(
-    posts.filter((p) => p.format === "reels"),
-    "shares",
-    limit,
-  );
+  return computeTopByRate(posts.filter((p) => p.format === "reels"), "shares", limit);
 }
 
 // Amostra mínima para comparar grupos (tema, formato, tema × formato): com menos de MIN_POSTS_CONCLUSAO
@@ -186,25 +219,66 @@ export function computeReachByFormat(posts: any[]) {
 // Mesma lógica do componente RepetirOuRevisar — por tema, mediana da taxa de
 // engajamento por post (engajamento ÷ alcance de cada post, não soma÷soma —
 // um post viral isolado não deve carregar o tema inteiro), mínimo de posts
-// pra entrar na conta.
-export function computeRepetirOuRevisar(posts: any[], minPosts = 10) {
+// pra entrar na conta. A linha de base é a mediana de TODOS os posts do período
+// (não a dos temas que passaram: com um tema só, ele era comparado com ele mesmo),
+// e só conclui com pelo menos MIN_TEMAS_REPETIR temas com amostra.
+export const MIN_TEMAS_REPETIR = 3;
+export function computeRepetirOuRevisar(posts: any[], minPosts = MIN_POSTS_CONCLUSAO) {
   const groups = new Map<string, { tema: string; rates: number[] }>();
+  const todas: number[] = [];
   for (const p of posts) {
-    if (!p.tema || p.engagement == null || p.reach == null || p.reach <= 0) continue;
-    const entry = groups.get(p.tema) ?? { tema: p.tema, rates: [] as number[] };
+    if (p.engagement == null || p.reach == null || p.reach <= 0) continue;
+    todas.push(p.engagement / p.reach);
+    const k = chaveTema(p.tema);
+    if (!k) continue;
+    const entry = groups.get(k) ?? { tema: String(p.tema).trim(), rates: [] as number[] };
     entry.rates.push(p.engagement / p.reach);
-    groups.set(p.tema, entry);
+    groups.set(k, entry);
   }
   const qualifying = Array.from(groups.values())
     .filter((g) => g.rates.length >= minPosts)
     .map((g) => ({ tema: g.tema, count: g.rates.length, rate: median(g.rates) }));
-  if (qualifying.length === 0) return { repetir: [], revisar: [], hasEnough: false };
-  const baseline = median(qualifying.map((g) => g.rate));
+  const baseline = median(todas);
+  if (qualifying.length < MIN_TEMAS_REPETIR) return { repetir: [], revisar: [], hasEnough: false, baseline, temasComAmostra: qualifying.length, totalPosts: todas.length };
   return {
     repetir: qualifying.filter((g) => g.rate >= baseline).sort((a, b) => b.rate - a.rate),
     revisar: qualifying.filter((g) => g.rate < baseline).sort((a, b) => a.rate - b.rate),
     hasEnough: true,
+    baseline,
+    temasComAmostra: qualifying.length,
+    totalPosts: todas.length,
   };
+}
+
+// "Próximos ângulos": temas cujo post típico (mediana de salvamentos) fica acima do post típico da conta no
+// período escolhido. Mediana e mínimo de posts para um post viral não decidir sozinho (a RPC antiga usava média
+// com 2 posts e janela fixa de 90 dias: "Suplementos" com 228 de média eram um post com 1 e outro com 455).
+export const MIN_POSTS_ANGULO = 5;
+export interface AnguloSugerido { tema: string; count: number; medianSaved: number; baseline: number; formato: string | null; formatoCount: number }
+export function computeProximosAngulos(posts: any[], limit = 4, minPosts = MIN_POSTS_ANGULO): { angulos: AnguloSugerido[]; baseline: number; temasComAmostra: number } {
+  const groups = new Map<string, { tema: string; saved: number[]; formatos: Map<string, number[]> }>();
+  const todos: number[] = [];
+  for (const p of posts) {
+    if (p.saved == null) continue;
+    todos.push(Number(p.saved));
+    const k = chaveTema(p.tema);
+    if (!k) continue;
+    const g = groups.get(k) ?? { tema: String(p.tema).trim(), saved: [] as number[], formatos: new Map<string, number[]>() };
+    g.saved.push(Number(p.saved));
+    if (p.format) g.formatos.set(p.format, [...(g.formatos.get(p.format) ?? []), Number(p.saved)]);
+    groups.set(k, g);
+  }
+  const baseline = median(todos);
+  const comAmostra = [...groups.values()].filter((g) => g.saved.length >= minPosts);
+  const angulos = comAmostra
+    .map((g) => {
+      const fmt = [...g.formatos.entries()].filter(([, v]) => v.length >= 2).sort((a, b) => median(b[1]) - median(a[1]) || b[1].length - a[1].length)[0];
+      return { tema: g.tema, count: g.saved.length, medianSaved: median(g.saved), baseline, formato: fmt?.[0] ?? null, formatoCount: fmt?.[1].length ?? 0 };
+    })
+    .filter((a) => a.medianSaved > baseline)
+    .sort((a, b) => b.medianSaved - a.medianSaved || b.count - a.count)
+    .slice(0, limit);
+  return { angulos, baseline, temasComAmostra: comAmostra.length };
 }
 
 // Alcance/engajamento de tema dentro de cada formato — mesma lógica do

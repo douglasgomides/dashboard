@@ -105,6 +105,62 @@ export function seguidoresNoPeriodo(dias: DiaSeguidores[], de: string, ate: stri
   };
 }
 
+/**
+ * Um número só de seguidores para tela, PDF e texto do WhatsApp: o SALDO LÍQUIDO do período.
+ * Régua, em ordem:
+ *   1. variação do total de seguidores do primeiro ao último dia com o total gravado (é o que o médico vê no perfil);
+ *   2. sem o total em 2 dias, ganhos menos saídas nos dias em que a Meta trouxe os dois números;
+ *   3. sem nenhum dos dois, não há saldo (os ganhos sozinhos não viram "saldo").
+ * Os ganhos e as saídas ficam como detalhe (texto do "i"), nunca como o número principal.
+ */
+export interface SaldoSeguidores {
+  saldo: number | null;
+  regua: "total" | "ganhos_saidas" | null;
+  de: string | null;
+  ate: string | null;
+  totalFinal: number | null;
+  ganhos: number | null;
+  saidas: number | null;
+  /** Detalhe para o "i": de onde vem o saldo e os ganhos/saídas, em português simples. */
+  detalhe: string;
+}
+
+export function saldoSeguidores(dias: DiaSeguidores[], de: string, ate: string): SaldoSeguidores {
+  const s = seguidoresNoPeriodo(dias, de, ate);
+  const fmt = (v: number) => v.toLocaleString("pt-BR");
+  const sinal = (v: number) => `${v >= 0 ? "+" : "-"}${fmt(Math.abs(v))}`;
+  const dm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+  const comTotal = dias.filter((d) => d.date >= de && d.date <= ate && d.followers_count != null).sort((a, b) => a.date.localeCompare(b.date));
+  const totalFinal = comTotal.length ? Number(comTotal[comTotal.length - 1].followers_count) : null;
+  const ganhosTxt =
+    s.ganhos != null && s.saidas != null
+      ? ` Nos ${s.coberturaGanhos.diasComDado} dias em que a Meta informou entradas e saídas, ${fmt(s.ganhos)} começaram a seguir e ${fmt(s.saidas)} deixaram de seguir.`
+      : "";
+  if (s.saldoTotal != null)
+    return {
+      saldo: s.saldoTotal,
+      regua: "total",
+      de: s.coberturaTotal.de,
+      ate: s.coberturaTotal.ate,
+      totalFinal,
+      ganhos: s.ganhos,
+      saidas: s.saidas,
+      detalhe: `Saldo de ${sinal(s.saldoTotal)}: total de seguidores em ${dm(s.coberturaTotal.ate!)} (${fmt(totalFinal ?? 0)}) menos o total em ${dm(s.coberturaTotal.de!)}.${ganhosTxt}`,
+    };
+  if (s.saldoGanhosSaidas != null)
+    return {
+      saldo: s.saldoGanhosSaidas,
+      regua: "ganhos_saidas",
+      de: s.coberturaGanhos.de,
+      ate: s.coberturaGanhos.ate,
+      totalFinal,
+      ganhos: s.ganhos,
+      saidas: s.saidas,
+      detalhe: `Saldo de ${sinal(s.saldoGanhosSaidas)}: quem começou a seguir menos quem deixou de seguir, em ${s.coberturaGanhos.diasComDado} dias com os dois números (o total de seguidores não foi gravado em 2 dias do período).${ganhosTxt}`,
+    };
+  return { saldo: null, regua: null, de: null, ate: null, totalFinal, ganhos: s.ganhos, saidas: s.saidas, detalhe: "Sem o total de seguidores em 2 dias nem as saídas medidas: não dá para calcular o saldo do período." };
+}
+
 // ---------------------------------------------------------------- amostra mínima de posts
 
 /**

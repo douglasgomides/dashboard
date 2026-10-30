@@ -22,10 +22,12 @@
 //
 // Lógica pura e determinística (sem IA, sem banco): testável com `npx tsx`.
 import { conversaMaisBarata, GRUPOS, MIN_IMPRESSOES, MIN_GASTO, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
-import { analyzeFollowers, daysBetween, fmtDiaBR } from "@/lib/hub-conteudo";
+import { daysBetween, fmtDiaBR } from "@/lib/hub-conteudo";
 import { confiancaPorAmostra, type Area, type Impacto, type Insight, type Limitacao, type Responsavel, type Tom } from "@/lib/insight";
 import { checarLinguagemCFM, tornarSeguro } from "@/lib/linguagem-cfm";
-import { fmtFormatKey, median } from "@/lib/report-metrics";
+import { fmtFormatKey, fmtTaxaPct, median, taxaDoPost } from "@/lib/report-metrics";
+import { saldoSeguidores } from "@/lib/metricas";
+import { lerVendas, type VendasPeriodoBanco } from "@/lib/vendas-periodo";
 
 // ---------------------------------------------------------------- tipos
 
@@ -49,7 +51,7 @@ export interface EnvioInput {
   alcanceUnico?: number | null; // getResumoPeriodo (contas únicas do período), quando a Meta responde
   ads: { diag: DiagnosticoAds; diasComDado: string[] } | null;
   wts: { resumo: any | null; diasComDado: string[] } | null;
-  crm: { resumo: { novos: number; ganhos: number; perdidos: number } | null; diasComDado: string[] } | null;
+  crm: { resumo: { novos: number; ganhos: number; perdidos: number } | null; diasComDado: string[]; vendas?: VendasPeriodoBanco | null } | null;
   // O que a equipe tirou do envio (vale para WhatsApp, executiva e PDF). Cada entrada é
   // "secao:<SecaoId>" (a seção inteira) ou "<SecaoId>:<id do item>" (um bloco). Ver `blocos`.
   excluir?: string[];
@@ -393,23 +395,19 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
     }
     if (posts.length > 0) resumo.push({ id: "posts", curto: `${posts.length} ${plural(posts.length, "publicação", "publicações")}`, texto: `${posts.length} ${plural(posts.length, "publicação", "publicações")} no período.` });
 
-    const seg = analyzeFollowers(metrics, start, end, hoje);
-    if (seg.delta != null && seg.points.length >= 2) {
-      const de = seg.points[0];
-      const ate = seg.points[seg.points.length - 1];
-      const texto = `O perfil ${seg.delta >= 0 ? "ganhou" : "perdeu"} ${fmtN(Math.abs(seg.delta))} seguidores entre ${fmtDiaBR(de.date)} e ${fmtDiaBR(ate.date)} e está com ${fmtN(ate.followers)}.`;
-      if (seg.delta > 0) {
-        vitorias.push({ id: "seguidores", curto: `+${fmtN(seg.delta)} seguidores (agora ${fmtCompacto(ate.followers)})`, texto, evidencia: `Contagem de seguidores em ${seg.daysWithData} dias.` });
-      } else if (seg.delta < 0) {
-        atencao.push({ id: "seguidores", curto: `${fmtN(seg.delta)} seguidores no período`, texto, evidencia: `Contagem de seguidores em ${seg.daysWithData} dias.` });
+    // Seguidores: o saldo líquido, mesma régua da tela Resultados e do PDF (saldoSeguidores).
+    const seg = saldoSeguidores(metrics, start, end);
+    if (seg.saldo != null && seg.de && seg.ate) {
+      const agora = seg.totalFinal != null ? ` e está com ${fmtN(seg.totalFinal)}` : "";
+      const evidencia = seg.regua === "total" ? `Total de seguidores em ${fmtDiaBR(seg.ate)} menos o total em ${fmtDiaBR(seg.de)}.` : `Quem começou a seguir menos quem deixou de seguir, de ${fmtDiaBR(seg.de)} a ${fmtDiaBR(seg.ate)}.`;
+      const texto = `Saldo de seguidores entre ${fmtDiaBR(seg.de)} e ${fmtDiaBR(seg.ate)}: ${seg.saldo >= 0 ? "+" : "-"}${fmtN(Math.abs(seg.saldo))}. O perfil ${seg.saldo > 0 ? "ganhou" : seg.saldo < 0 ? "perdeu" : "não ganhou nem perdeu"}${seg.saldo !== 0 ? ` ${fmtN(Math.abs(seg.saldo))}` : ""} seguidores${agora}.`;
+      const agoraCurto = seg.totalFinal != null ? ` (agora ${fmtCompacto(seg.totalFinal)})` : "";
+      if (seg.saldo > 0) {
+        vitorias.push({ id: "seguidores", curto: `saldo de +${fmtN(seg.saldo)} seguidores${agoraCurto}`, texto, evidencia });
+      } else if (seg.saldo < 0) {
+        atencao.push({ id: "seguidores", curto: `saldo de -${fmtN(Math.abs(seg.saldo))} seguidores no período`, texto, evidencia });
       } else {
-        // Sem ganho nem perda: o relatório antigo mostrava mesmo assim ("ganhou 0"); continua no resumo.
-        resumo.push({
-          id: "seguidores",
-          curto: `seguidores estáveis (${fmtCompacto(ate.followers)})`,
-          texto: `O perfil não ganhou nem perdeu seguidores entre ${fmtDiaBR(de.date)} e ${fmtDiaBR(ate.date)} e está com ${fmtN(ate.followers)}.`,
-          evidencia: `Contagem de seguidores em ${seg.daysWithData} dias.`,
-        });
+        resumo.push({ id: "seguidores", curto: `seguidores estáveis${agoraCurto}`, texto, evidencia });
       }
     } else {
       omitidos.push("seguidores (menos de 2 dias com contagem gravada no período)");
@@ -430,12 +428,17 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
       omitidos.push("post destaque (nenhum post com alcance no período)");
     }
 
-    // Formato que mais alcança
+    // Formato com maior taxa de interação (interações ÷ alcance). Mesma régua da tela Resultados e do PDF
+    // (report-metrics.ts): o alcance absoluto mede impulsionamento, não a qualidade do formato.
     const porFormato = new Map<string, number[]>();
-    for (const p of posts) if (p.format) (porFormato.get(p.format) ?? porFormato.set(p.format, []).get(p.format)!).push(num(p.reach));
+    for (const p of posts) {
+      const t = taxaDoPost(p);
+      if (p.format && t != null) (porFormato.get(p.format) ?? porFormato.set(p.format, []).get(p.format)!).push(t);
+    }
     const formatos = [...porFormato.entries()].map(([k, v]) => ({ k, n: v.length, med: median(v) })).filter((x) => x.n >= MIN_POR_FORMATO).sort((a, b) => b.med - a.med);
-    const geral = median(posts.map((p) => num(p.reach)));
-    if (formatos.length >= 1) {
+    const comTaxa = [...porFormato.values()].flat();
+    const geral = median(comTaxa);
+    if (formatos.length >= 1 && geral > 0) {
       const b = formatos[0];
       const outro = formatos.find((x) => x.k !== b.k);
       const nome = fmtFormatKey(b.k);
@@ -447,23 +450,23 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
           tom: "bom",
           impacto: "medio",
           responsavel: "social_media",
-          titulo: `${nome} é o formato que mais alcança`,
-          diagnostico: `O ${nome.toLowerCase()} típico do período alcançou ${fmtN(b.med)} contas, contra ${fmtN(geral)} do post típico da conta.`,
-          evidencia: `${b.n} posts em ${nome.toLowerCase()}; ${posts.length} posts no período${outro ? `; ${fmtFormatKey(outro.k).toLowerCase()} típico: ${fmtN(outro.med)}` : ""}.`,
-          amostra: formatos.length >= 2 ? posts.length : 0,
+          titulo: `${nome} é o formato com maior taxa de interação`,
+          diagnostico: `O ${nome.toLowerCase()} típico do período teve ${fmtTaxaPct(b.med)} de interação (interações ÷ alcance), contra ${fmtTaxaPct(geral)} do post típico da conta.`,
+          evidencia: `${b.n} posts em ${nome.toLowerCase()}; ${comTaxa.length} posts com alcance no período${outro ? `; ${fmtFormatKey(outro.k).toLowerCase()} típico: ${fmtTaxaPct(outro.med)}` : ""}.`,
+          amostra: formatos.length >= 2 ? comTaxa.length : 0,
           minimo: MIN_POSTS_FORMATO,
           unidadeAmostra: "posts com alcance, em 2+ formatos",
           acao: `Fazer pelo menos metade das próximas publicações em ${nome.toLowerCase()}, mantendo os temas que já funcionam.`,
           acaoCurta: `priorizar ${nome.toLowerCase()} nas próximas publicações`,
           rota: "/$clientId/conteudo",
-          botao: "Ver alcance por formato",
+          botao: "Ver comparação de formatos",
           teste: outro
-            ? { curto: `mesmo tema em ${nome.toLowerCase()} e em ${fmtFormatKey(outro.k).toLowerCase()}`, texto: `Publicar o mesmo tema em ${nome.toLowerCase()} e em ${fmtFormatKey(outro.k).toLowerCase()} na mesma semana e comparar o alcance depois de 7 dias.` }
+            ? { curto: `mesmo tema em ${nome.toLowerCase()} e em ${fmtFormatKey(outro.k).toLowerCase()}`, texto: `Publicar o mesmo tema em ${nome.toLowerCase()} e em ${fmtFormatKey(outro.k).toLowerCase()} na mesma semana e comparar a taxa de interação depois de 7 dias.` }
             : undefined,
           risco: "Um post fora da curva pode puxar o formato para cima; por isso a comparação usa o post típico, não a média.",
         });
-        if (destaca && formatos.length >= 2 && posts.length >= MIN_POSTS_FORMATO) {
-          vitorias.push({ id: "formato", curto: `${nome.toLowerCase()} alcança ${(b.med / Math.max(1, geral)).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}x o post típico`, texto: `O ${nome.toLowerCase()} típico alcançou ${fmtN(b.med)} contas, contra ${fmtN(geral)} do post típico da conta.`, evidencia: `${b.n} posts em ${nome.toLowerCase()}, ${posts.length} no total.` });
+        if (formatos.length >= 2 && comTaxa.length >= MIN_POSTS_FORMATO) {
+          vitorias.push({ id: "formato", curto: `${nome.toLowerCase()} engaja ${(b.med / geral).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}x mais por pessoa alcançada que o post típico`, texto: `O ${nome.toLowerCase()} típico teve ${fmtTaxaPct(b.med)} de interação (interações ÷ alcance), contra ${fmtTaxaPct(geral)} do post típico da conta.`, evidencia: `${b.n} posts em ${nome.toLowerCase()}, ${comTaxa.length} com alcance no total.` });
         }
       }
     }
@@ -718,9 +721,30 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
     detalhesDado.push(`CRM: novos contatos registrados em ${cov.com} de ${cov.total} dias.`);
     const novos = num(r?.novos);
     if (novos > 0) {
-      resumo.push({ id: "crm", curto: `${fmtN(novos)} novos contatos no CRM`, texto: `${fmtN(novos)} novos contatos no CRM, ${fmtN(num(r!.ganhos))} marcados como ganhos e ${fmtN(num(r!.perdidos))} como perdidos.` });
-      if (num(r!.ganhos) > 0) vitorias.push({ id: "crm-ganhos", curto: `${fmtN(num(r!.ganhos))} ${plural(num(r!.ganhos), "contato fechado", "contatos fechados")} no CRM`, texto: `${fmtN(num(r!.ganhos))} contatos foram marcados como ganhos no CRM.` });
-      if (num(r!.ganhos) === 0) {
+      // Vendas numa régua só (vendas-periodo.ts): fechadas no período por evento, ou a coorte com o rótulo dela.
+      const v = lerVendas(num(r!.ganhos), inp.crm.vendas ?? null, start);
+      resumo.push({ id: "crm", curto: `${fmtN(novos)} novos contatos no CRM`, texto: `${fmtN(novos)} novos contatos no CRM${v.frase ? `; ${v.frase}` : ""}.${v.indisponivel ? ` ${v.indisponivel}` : ""}` });
+      if (v.numero != null && v.numero > 0)
+        vitorias.push({
+          id: "crm-ganhos",
+          curto: v.base === "evento" ? `${fmtN(v.numero)} ${plural(v.numero, "venda fechada", "vendas fechadas")} no período` : `${fmtN(v.numero)} ${plural(v.numero, "venda", "vendas")} entre os contatos que entraram no período`,
+          texto: `${v.frase[0].toUpperCase()}${v.frase.slice(1)}.`,
+          evidencia: v.base === "evento" ? "Vendas registradas no CRM com data no período." : "Contatos que entraram no período e hoje estão marcados como venda no CRM. O número pode crescer depois, conforme mais contatos do período fecham.",
+        });
+      if (v.indisponivel) {
+        // A fonte de vendas não informa o resultado (card fechado na origem) ou a planilha parou: não é a equipe
+        // que deixou de marcar. Vai como limitação, sem pedir para "marcar ganhos".
+        limitar(
+          {
+            id: "crm-vendas-indisponivel",
+            area: "comercial",
+            texto: v.indisponivel,
+            resolve: "equipe_hub",
+            comoResolver: "Combinar com a clínica de onde vem o registro de venda e ligar essa fonte ao Nexo.",
+          },
+          "vendas do período não disponíveis",
+        );
+      } else if (v.numero === 0) {
         candidatas.push({
           id: "crm-ganhos",
           area: "comercial",
@@ -914,14 +938,14 @@ const ROTULO_BLOCO: Record<string, string> = {
   posts: "Publicações",
   seguidores: "Seguidores",
   "post-top": "Post destaque",
-  formato: "Formato que mais alcança",
+  formato: "Formato com maior taxa de interação",
   ads: "Anúncios",
   "ads-desperdicio": "Anúncios: verba sem retorno",
   "ads-escalar": "Anúncios: campanhas mais baratas",
   wts: "Atendimento",
   "wts-espera": "Atendimento: espera",
   crm: "CRM",
-  "crm-ganhos": "CRM: contatos fechados",
+  "crm-ganhos": "CRM: vendas",
   duvida: "Dúvida repetida",
 };
 

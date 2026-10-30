@@ -9,7 +9,7 @@ assert.match(ref, /^[A-Z2-9]{6}$/);
 assert.ok(!/[01OIL]/.test(ref));
 const wa = destinoWhatsApp("(67) 99999-1234", POSICOES.bio.frase, "A7K9QX")!;
 assert.ok(wa.startsWith("https://wa.me/5567999991234?text="));
-assert.equal(decodeURIComponent(wa.split("text=")[1]), "Oi! Vi o link na bio e quero saber mais. (ref A7K9QX)");
+assert.equal(decodeURIComponent(wa.split("text=")[1]), "Olá! Vim pelo link da bio (A7K9QX)");
 assert.equal(destinoWhatsApp("123", "x", "A7K9QX"), null);
 assert.deepEqual(extrairCodigos(mensagemComRef("Oi!", "A7K9QX")), ["A7K9QX"], "o leitor de código das conversas encontra a ref");
 const site = new URL(destinoSite("https://clinica.com.br/agenda", "story", "Outubro Rosa", "A7K9QX")!);

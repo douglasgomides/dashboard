@@ -3,7 +3,8 @@
 // O painel NÃO dispara mensagem nem cria anúncio: sugere, monta o texto e acompanha o status.
 // Regras CFM: nada de preço, desconto, promoção ou garantia de resultado nas mensagens e pautas.
 import { grupoEspecialidade } from "./benchmark-estrategico.js";
-import { fmtFracao } from "./metricas.js";
+import { fmtFracao, MIN_POSTS_CONCLUSAO } from "./metricas.js";
+import { chaveTema, rotuloDoTema } from "./classificacao-post.js";
 
 export type Area = "Ginecologia" | "Dermatologia" | "Oftalmologia" | "Nutrologia/Endocrinologia" | "Cardiologia" | "Ortopedia" | "Pediatria" | "Psiquiatria" | "Cirurgia plástica" | "Outras";
 
@@ -57,6 +58,10 @@ export function datasDoMes(mes: number, especialidade: string | null | undefined
 
 // ---------------------------------------------------------------- campanhas
 
+/**
+ * Contagens da RPC campanhas_base. Desde a migração 20261031120000 são PESSOAS (uma pessoa com dois cards conta uma
+ * vez), e a pessoa só é parada se nenhum card dela se mexeu no prazo. Card fechado na origem não entra em aberto.
+ */
 export interface BaseCampanhas {
   tem_crm: boolean;
   abertos: number;
@@ -103,8 +108,48 @@ export interface EntradaCampanhas {
   nomeMedico: string;
   base: BaseCampanhas | null;
   semResposta?: number; // conversas com paciente sem resposta (leitura_conversas)
-  temaForte?: { tema: string; formato: string; alcanceMediano: number; salvamentoMediano: number } | null;
+  temaForte?: TemaForte | null;
   ads?: { custoPorConversa: number | null; gastoDiaMedio: number | null; melhorCampanha: string | null } | null;
+}
+
+export interface TemaForte { tema: string | null; formato: string; alcanceMediano: number; salvamentoMediano: number }
+
+const medianaDe = (v: number[]) => {
+  if (!v.length) return 0;
+  const s = [...v].sort((a, b) => a - b), m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
+/**
+ * Formato e tema que o público mais salva, dos posts com alcance. Mesma regra de amostra do resto do painel
+ * (MIN_POSTS_CONCLUSAO = 8 posts por tema e por formato) e o tema pela chave única (sem acento e maiúscula).
+ * Sem tema com amostra, `tema` fica nulo e a campanha não cita tema.
+ */
+export function temaForteDosPosts(posts: { tema?: string | null; format?: string | null; reach?: number | null; saved?: number | null }[]): TemaForte | null {
+  const ps = posts.filter((p) => Number(p.reach) > 0);
+  if (ps.length < MIN_POSTS_CONCLUSAO) return null;
+  const porTema = new Map<string, { grafias: string[]; taxas: number[] }>();
+  for (const p of ps) {
+    const k = chaveTema(p.tema);
+    if (!k) continue;
+    const g = porTema.get(k) ?? { grafias: [], taxas: [] };
+    g.grafias.push(String(p.tema).trim());
+    g.taxas.push(Number(p.saved ?? 0) / Number(p.reach));
+    porTema.set(k, g);
+  }
+  const tema = [...porTema.values()].filter((g) => g.taxas.length >= MIN_POSTS_CONCLUSAO).map((g) => ({ t: rotuloDoTema(g.grafias), v: medianaDe(g.taxas) })).sort((a, b) => b.v - a.v)[0];
+  const porFormato = new Map<string, typeof ps>();
+  for (const p of ps) porFormato.set(p.format ?? "outro", [...(porFormato.get(p.format ?? "outro") ?? []), p]);
+  const fmt = [...porFormato.entries()].filter(([f, xs]) => f !== "outro" && xs.length >= MIN_POSTS_CONCLUSAO).map(([f, xs]) => ({ f, salv: medianaDe(xs.map((p) => Number(p.saved ?? 0))), alc: medianaDe(xs.map((p) => Number(p.reach))) })).sort((a, b) => b.salv - a.salv)[0];
+  if (!fmt) return null;
+  const rot: Record<string, string> = { reels: "Reels", carrossel: "carrossel", estatico: "post estático" };
+  return { tema: tema?.t ?? null, formato: rot[fmt.f] ?? fmt.f, alcanceMediano: fmt.alc, salvamentoMediano: fmt.salv };
+}
+
+/** Gasto médio por dia no período de/até (inclusive dos dois lados: 30 dias atrás até hoje são 31 dias). */
+export function gastoPorDia(gasto: number, de: string, ate: string): number {
+  const dias = Math.round((new Date(`${ate.slice(0, 10)}T12:00:00Z`).getTime() - new Date(`${de.slice(0, 10)}T12:00:00Z`).getTime()) / 86400000) + 1;
+  return dias > 0 ? gasto / dias : 0;
 }
 
 // Réguas conservadoras quando o cliente não tem histórico (sempre marcadas como estimativa).
@@ -145,8 +190,8 @@ export function sugerirCampanhas(e: EntradaCampanhas): Campanha[] {
     out.push({
       id: "reativacao",
       tipo: "reativacao",
-      titulo: `Reativar ${n(lote)} leads parados há mais de 90 dias`,
-      porque: `${n(b.parados_90d)} leads em aberto no CRM não se movem há mais de 90 dias. São pessoas que já demonstraram interesse.${b.parados_90d > lote ? ` Sugerimos um lote de ${n(lote)} por mês, começando pelos mais recentes.` : ""}`,
+      titulo: `Reativar ${n(lote)} pessoas paradas há mais de 90 dias`,
+      porque: `${n(b.parados_90d)} pessoas com card em aberto no CRM não têm movimento há mais de 90 dias (quem tem mais de um card conta uma vez). Já demonstraram interesse.${b.parados_90d > lote ? ` Sugerimos um lote de ${n(lote)} por mês, começando pelos mais recentes.` : ""}`,
       passos: ["Filtrar no CRM os leads em aberto sem movimento há 90+ dias (mais recentes primeiro).", "Enviar a mensagem abaixo pelo WhatsApp da clínica, de forma individual.", "Quem responder: atender em até 1 hora e oferecer horário.", "Quem não responder em 7 dias: mover para perdido com motivo 'sem retorno', para limpar a base."],
       mensagem: `Olá, [nome]! Aqui é da equipe ${e.nomeMedico}. Você conversou com a gente há um tempo sobre [assunto]. Ficou alguma dúvida? Se quiser, vejo um horário para você com ${doc}.`,
       canal: "WhatsApp (envio individual pela equipe)",
@@ -161,8 +206,8 @@ export function sugerirCampanhas(e: EntradaCampanhas): Campanha[] {
     out.push({
       id: "ativacao",
       tipo: "ativacao",
-      titulo: `Ativar ${n(b.novos_parados_14d)} leads novos que pararam`,
-      porque: `${n(b.novos_parados_14d)} leads que entraram nos últimos 45 dias estão sem movimento há 14+ dias. Lead novo esfria rápido: é a campanha de maior retorno por mensagem.`,
+      titulo: `Ativar ${n(b.novos_parados_14d)} pessoas novas que pararam`,
+      porque: `${n(b.novos_parados_14d)} pessoas que entraram nos últimos 45 dias estão sem movimento há 14 dias ou mais (quem tem mais de um card conta uma vez). Contato novo esfria rápido: é a campanha de maior retorno por mensagem.`,
       passos: ["Listar no CRM os leads criados no último mês e parados há 2 semanas.", "Mandar uma mensagem curta retomando a dúvida que a pessoa trouxe.", "Oferecer 2 horários concretos.", "Marcar no CRM a etapa certa depois do contato."],
       mensagem: `Oi, [nome]! Vi que você falou com a gente sobre [assunto] e a conversa ficou parada. Posso te ajudar com alguma dúvida? Tenho horário com ${doc} [dia] ou [dia].`,
       canal: "WhatsApp",
@@ -211,7 +256,7 @@ export function sugerirCampanhas(e: EntradaCampanhas): Campanha[] {
       id: `data-${d.id}`,
       tipo: "conteudo",
       titulo: `${d.nome}: série de conteúdo sobre ${d.tema}`,
-      porque: `${d.nome}${d.dia ? ` (${String(d.dia).padStart(2, "0")}/${String(d.mes).padStart(2, "0")})` : " (o mês todo)"} combina com a especialidade.${forte ? ` O formato que mais é salvo neste perfil é ${forte.formato}; o tema "${forte.tema}" é o que o público mais guarda.` : ""}`,
+      porque: `${d.nome}${d.dia ? ` (${String(d.dia).padStart(2, "0")}/${String(d.mes).padStart(2, "0")})` : " (o mês todo)"} combina com a especialidade.${forte ? ` O formato que mais é salvo neste perfil é ${forte.formato}${forte.tema ? `; o tema "${forte.tema}" é o que o público mais guarda (com ${MIN_POSTS_CONCLUSAO} posts ou mais)` : ""}.` : ""}`,
       passos: [d.angulo, `Publicar 2 a 3 posts na semana da data${forte ? `, priorizando ${forte.formato}` : ""}.`, "Fechar com chamada para tirar dúvidas no WhatsApp (sem oferta)."],
       canal: "Instagram (orgânico)",
       responsavel: "Social media",

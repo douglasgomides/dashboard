@@ -4957,6 +4957,7 @@ export type Database = {
       crm_funil_por_campo: {
         Args: { p_client_id: string; p_field_name_pattern: string }
         Returns: {
+          abertos: number
           chave: string
           ganhos: number
           perdidos: number
@@ -5012,10 +5013,13 @@ export type Database = {
       crm_metricas_essenciais: {
         Args: { p_client_id: string }
         Returns: {
+          abertos: number
+          consulta_configurada: boolean
           consultas_agendadas: number
           em_atendimento: number
           em_atendimento_valor: number
           fonte_preenchida_pct: number
+          fechados: number
           ganhos: number
           novos_7d: number
           perdidos: number

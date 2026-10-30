@@ -570,6 +570,49 @@ try {
       await db.exec("rollback");
     }
   });
+  await check("vendas do período: evento ganhou, coorte, fechado sem resultado e planilha parada", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("delete from crm_leads where client_id=$1", [A]);
+      await db.query("delete from crm_lead_eventos where client_id=$1", [A]);
+      const planilha = id(32);
+      await db.query("insert into crm_connections(id,client_id,provider,active) values ($1,$2,'planilha',true)", [planilha, A]);
+      const lead = (conn: string, provider: string, ext: string, dias: number, outcome = "open", source: string | null = null) =>
+        db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,outcome,source,occurred_at) values ($1,$2,$3,$4,'add','{}',$5,$6,now() - make_interval(days => $7))",
+          [A, conn, provider, ext, outcome, source, dias]);
+      // Período: de 10 dias atrás até ontem. Card antigo (60 dias) ganho há 2 dias: venda do período, fora da coorte.
+      await lead(connectionA, "kommo", "v1", 60);
+      await db.query("update crm_leads set outcome='won' where client_id=$1 and external_lead_id='v1'", [A]);
+      await db.query("update crm_lead_eventos set ocorreu_em = now() - interval '2 days' where client_id=$1 and external_lead_id='v1' and tipo='ganhou'", [A]);
+      // Card que entrou há 3 dias e foi ganho hoje (depois do período): conta na coorte, não nas vendas do período.
+      await lead(connectionA, "kommo", "v2", 3, "open", "Instagram");
+      await db.query("update crm_leads set outcome='won' where client_id=$1 and external_lead_id='v2'", [A]);
+      // Card novo fechado na origem sem resultado.
+      await lead(connectionA, "kommo", "v3", 2, "open", "hubla_test");
+      await db.query("update crm_leads set outcome='closed' where client_id=$1 and external_lead_id='v3'", [A]);
+      // Linha da planilha, já nascida ganha, 50 dias atrás: última venda e planilha parada.
+      await lead(planilha, "planilha", "v4", 50, "won");
+      for (let i = 0; i < 20; i++) await lead(connectionA, "kommo", `n${i}`, 1);
+      await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ sub: admin, role: "authenticated" })]);
+      await db.exec("set local role authenticated");
+      const v = (await rows<{ v: Record<string, any> }>("select crm_vendas_periodo($1, current_date - 10, current_date - 1) as v", [A]))[0].v;
+      assert.equal(v.vendas_no_periodo, 1, JSON.stringify(v));
+      assert.equal(v.vendas_coorte, 1);
+      assert.equal(v.fechados_sem_resultado, 1);
+      assert.equal(v.planilha_ultimo, (await rows<{ d: string }>("select to_char(current_date - 50, 'YYYY-MM-DD') as d"))[0].d);
+      assert.ok(v.eventos_desde, "eventos_desde preenchido");
+      const origens = Object.fromEntries((v.por_origem as { origem: string; pessoas: number }[]).map((o) => [o.origem, o.pessoas]));
+      assert.equal(origens["Instagram"], 1);
+      assert.ok(!("hubla_test" in origens), "origem crua de teste não aparece");
+      const alertas = await rows<{ id: string }>("select x->>'id' as id from jsonb_array_elements(qualidade_dados($1)) x", [A]);
+      assert.ok(alertas.some((a) => a.id === "crm-fonte-vendas-parada"), JSON.stringify(alertas));
+      await db.exec("reset role");
+      const fora = await role("authenticated", outsider, () => rows<{ v: unknown }>("select crm_vendas_periodo($1, current_date - 10, current_date) as v", [A]));
+      assert.deepEqual(fora, [{ v: null }], "quem não é da clínica não vê as vendas");
+    } finally {
+      await db.exec("rollback");
+    }
+  });
   await check("auditoria de alertas médios: tags do FlwChat nos cards antigos e parados sem Digisac nem arquivo", async () => {
     await db.exec("begin");
     try {
@@ -599,6 +642,94 @@ try {
       // Mudança vinda do CRM continua gravando.
       await db.query("update crm_leads set outcome='lost' where external_lead_id='ev2'");
       assert.deepEqual(await tipos("ev2"), ["entrou", "perdeu"]);
+    } finally {
+      await db.exec("rollback");
+    }
+  });
+  await check("fechado na origem: confirmar etapa não reabre; em aberto é só open; procedimento sem cair na origem", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("delete from crm_leads where client_id=$1", [A]);
+      await db.query("insert into crm_pipeline_statuses(crm_connection_id,pipeline_id,status_id,pipeline_name,status_name) values ($1,'pa','acomp','Atendimento','Acompanhamento'),($1,'pa','ag','Atendimento','Agendamento de Implante')", [connectionA]);
+      const card = (id: string, status: string, outcome: string, price: number | null, source: string | null) =>
+        db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,pipeline_id,status_id,outcome,price,source,occurred_at) values ($1,$2,'kommo',$3,'add','{}','pa',$4,$5,$6,$7,now())", [A, connectionA, id, status, outcome, price, source]);
+      await card("f1", "acomp", "open", 100, "Instagram");
+      await card("f2", "acomp", "closed", 40750, "Instagram");
+      await card("f3", "acomp", "lost", 50, null);
+      await card("f4", "ag", "closed", null, "Paciente antigo");
+      await card("f5", "ag", "open", null, null);
+      await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: admin })]);
+      await db.exec("set local role authenticated");
+      const m = (await rows<Record<string, unknown>>("select total_leads, em_atendimento, em_atendimento_valor, abertos, fechados, ganhos, perdidos, consulta_configurada from crm_metricas_essenciais($1)", [A]))[0];
+      assert.deepEqual({ ...m, em_atendimento_valor: Number(m.em_atendimento_valor) }, { total_leads: 5, em_atendimento: 1, em_atendimento_valor: 100, abertos: 2, fechados: 2, ganhos: 0, perdidos: 1, consulta_configurada: false });
+      // Confirmar a etapa como aberta (o "confirmar em lote") não reabre o card fechado na origem.
+      await rows("select crm_definir_etapa_resultado($1,'pa','ag','open')", [connectionA]);
+      assert.deepEqual(await rows("select external_lead_id id, outcome from crm_leads where status_id='ag' order by 1"), [{ id: "f4", outcome: "closed" }, { id: "f5", outcome: "open" }]);
+      await rows("select crm_definir_etapa_resultado($1,'pa','acomp','won')", [connectionA]);
+      assert.deepEqual(await rows("select external_lead_id id, outcome from crm_leads where status_id='acomp' order by 1"), [{ id: "f1", outcome: "won" }, { id: "f2", outcome: "closed" }, { id: "f3", outcome: "won" }]);
+      // Etapa marcada como consulta agendada: o número passa a ser fato.
+      await rows("select crm_definir_etapa_kpi($1,'pa','ag','consulta_agendada',true)", [connectionA]);
+      assert.deepEqual(await rows("select consultas_agendadas, consulta_configurada from crm_metricas_essenciais($1)", [A]), [{ consultas_agendadas: 2, consulta_configurada: true }]);
+      // Sem o campo de procedimento, a linha é "Não informado" (não a origem); por fonte, vale a origem. Abertos à parte.
+      assert.deepEqual(await rows("select chave, total, abertos from crm_funil_por_campo($1,'%Tipo de Procedim%')", [A]), [{ chave: "Não informado", total: 5, abertos: 1 }]);
+      const fonte = await rows<{ chave: string }>("select chave from crm_funil_por_campo($1,'%Fonte do Lead%') order by chave", [A]);
+      assert.deepEqual(fonte.map((r) => r.chave), ["Instagram", "Não informado", "Paciente antigo"]);
+      assert.deepEqual(await rows("select chave from crm_funil_por_campo_periodo($1,'%Tipo de Procedim%',current_date - 1,current_date + 1)", [A]), [{ chave: "Não informado" }]);
+      await db.exec("reset role");
+    } finally {
+      await db.exec("rollback");
+    }
+  });
+  await check("ROI só com a receita de pessoa vinda de anúncio; CRM do passo a passo pelo volume", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("delete from crm_leads where client_id=$1", [A]);
+      await db.query("delete from meta_ads_daily where client_id=$1", [A]);
+      const lead = (id: string, pipeline: string, phone: string | null, outcome: string, price: number | null, source: string | null) =>
+        db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,pipeline_id,contact_phone,raw_payload,outcome,price,source,occurred_at) values ($1,$2,'kommo',$3,'add',$4,$5,'{}',$6,$7,$8,now() - interval '2 days')", [A, connectionA, id, pipeline, phone, outcome, price, source]);
+      await db.query("insert into crm_funil_papel(crm_connection_id,pipeline_id,papel) values ($1,'compras','compra')", [connectionA]);
+      await lead("a1", "captacao", "(67) 99999-1111", "open", null, "Anúncio");         // chegou pelo anúncio
+      await lead("a2", "compras", "(67) 99999-1111", "won", 1000, null);              // e comprou no checkout
+      await lead("b1", "compras", "(67) 98888-2222", "won", 800, null);               // checkout sem origem
+      await lead("c1", "captacao", "(67) 97777-3333", "won", 300, "import_base");     // base importada
+      await lead("d1", "captacao", null, "won", 200, "Facebook Ads");                // anúncio no próprio card
+      await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: admin })]);
+      await db.exec("set local role authenticated");
+      const r = (await rows<{ r: Record<string, unknown> }>("select roi_periodo($1, current_date - 10, current_date) as r", [A]))[0].r;
+      assert.equal(r.ganhos, 4);
+      assert.equal(Number(r.receita), 2300);
+      assert.equal(r.ganhos_anuncio, 2);
+      assert.equal(r.ganhos_anuncio_com_valor, 2);
+      assert.equal(Number(r.receita_anuncio), 1200);
+      assert.deepEqual((r.receita_por_origem as { origem: string; ganhos: number; receita: number }[]).map((o) => [o.origem, o.ganhos, Number(o.receita)]), [
+        ["Anúncio", 2, 1200], ["Funil de compra, sem origem", 1, 800], ["Base importada", 1, 300],
+      ]);
+      assert.equal(r.crm_provider, "kommo");
+      await db.exec("reset role");
+    } finally {
+      await db.exec("rollback");
+    }
+  });
+  await check("fila do WhatsApp: abertas antigas à parte, lote de encerramento e conta compartilhada pelo dado do cliente", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("update clients set wts_company_id='empresa-x', active=true where id in ($1,$2)", [A, B]);
+      const sessao = (id: string, inicio: string, status: string, fim: string | null) =>
+        db.query(`insert into wts_sessions(client_id,session_id,started_at,status,ended_at) values ($1,$2,now() - ${inicio}::interval,$3,${fim ? `now() - ${fim}::interval` : "null"})`, [A, id, status]);
+      await sessao("s1", "'1 day'", "IN_PROGRESS", null);
+      await sessao("s2", "'20 days'", "IN_PROGRESS", null);
+      await sessao("s3", "'30 days'", "IN_PROGRESS", null);
+      for (let i = 0; i < 6; i++) await sessao(`l${i}`, "'3 days'", "COMPLETED", "'2 days'");
+      await sessao("u1", "'3 days'", "COMPLETED", "'1 day'");
+      await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: editor })]);
+      await db.exec("set local role authenticated");
+      const f = (await rows<{ f: Record<string, unknown> }>("select wts_fila_do_cliente($1, current_date - 10, current_date) as f", [A]))[0].f;
+      assert.deepEqual(f, { abertas_7d: 1, abertas_antigas: 2, encerradas: 7, maior_lote: 6, encerradas_em_lote: 6, conta_compartilhada_com: ["Clínica B"] });
+      await db.exec("reset role");
+      await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: outsider })]);
+      await db.exec("set local role authenticated");
+      assert.deepEqual(await rows("select wts_fila_do_cliente($1, current_date - 10, current_date) as f", [A]), [{ f: null }]);
+      await db.exec("reset role");
     } finally {
       await db.exec("rollback");
     }
@@ -791,6 +922,35 @@ try {
       assert.equal(exposed?.anon_can_execute, true);
       assert.ok(reports.some((row) => row.section === "anonymous_default_grant" && row.default_source === "global_implicit" && row.object_type === "f" && row.grantee === "PUBLIC"));
     } finally { await db.exec("drop function public.preflight_implicit_grant_fixture()"); }
+  });
+  await check("auditoria_comercial conta preço pedido sem resposta por conversa, não por subtração", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("insert into conversas_resumos(conversa_id,client_id,resumo,ate_msg_em,gerado_em) values ($1,$2,$3,now(),now()) on conflict (conversa_id) do update set resumo=excluded.resumo", [conversationA, A, { preco_pedido: true, preco_apresentado: false, etapa: "em_negociacao" }]);
+      const conv2 = (await rows<{ id: string }>("insert into conversas(client_id,provider,externo_id,iniciada_em,ultima_msg_em) values ($1,'wts','preco-2',now(),now()) returning id", [A]))[0].id;
+      await db.query("insert into conversas_resumos(conversa_id,client_id,resumo,ate_msg_em,gerado_em) values ($1,$2,$3,now(),now())", [conv2, A, { preco_pedido: false, preco_apresentado: true, etapa: "em_negociacao" }]);
+      await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ sub: viewer, role: "authenticated" })]);
+      await db.exec("set local role authenticated");
+      const f = (await rows<{ f: Record<string, number> }>("select auditoria_comercial($1,current_date,current_date)->'funil' as f", [A]))[0].f;
+      assert.equal(f.preco_pedido, 1);
+      assert.equal(f.preco_apresentado, 1);
+      assert.equal(f.preco_sem_resposta, 1, "pedido 1 menos apresentado 1 daria 0; o certo é 1");
+    } finally { await db.exec("rollback"); }
+  });
+  await check("agentes_saude mostra só data e estado da última rodada, e só para a própria clínica", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("insert into agente_execucoes(client_id,agente,fluxo,objetivo,estado,criado_em,atualizado_em,erro) values ($1,'anuncios','gestor_anuncios','x','concluida',now()-interval '10 days',now()-interval '10 days',null),($1,'anuncios','gestor_anuncios','x','falhou',now()-interval '1 day',now()-interval '1 day','segredo técnico')", [A]);
+      await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ sub: viewer, role: "authenticated" })]);
+      await db.exec("set local role authenticated");
+      const r = await rows<Record<string, unknown>>("select * from agentes_saude($1) where fluxo='gestor_anuncios'", [A]);
+      assert.equal(r.length, 1);
+      assert.equal(r[0].ultimo_estado, "falhou");
+      assert.ok(r[0].ultima_ok_em, "data da última rodada concluída");
+      assert.deepEqual(Object.keys(r[0]).sort(), ["fluxo", "ultima_em", "ultima_ok_em", "ultimo_estado"], "sem erro nem contexto");
+      await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ sub: outsider, role: "authenticated" })]);
+      assert.deepEqual(await rows("select * from agentes_saude($1)", [A]), []);
+    } finally { await db.exec("rollback"); }
   });
   await check("estado final bloqueia toda função public para anon, incluindo migrações novas", async () => {
     assert.deepEqual(await rows("select oid::regprocedure::text as signature from pg_proc where pronamespace='public'::regnamespace and prokind='f' and has_function_privilege('anon',oid,'EXECUTE')"), []);

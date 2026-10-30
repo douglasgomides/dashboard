@@ -1,22 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
 import { fmtTaxa } from "@/lib/metricas";
 import { supabase } from "@/integrations/supabase/client";
+import { AMOSTRA_MINIMA, custosQualidade, pessoas } from "@/lib/qualidade-leads";
 
 // Qualidade do lead por campanha: o anúncio trouxe gente que avança no funil ou só volume?
 // Duas leituras separadas: DIRETA (o lead traz a campanha) e ESTIMADA POR HORÁRIO (conversas do dia repartidas
 // entre as campanhas que a Meta informou naquele dia). Regras em qualidade_leads_campanha (banco).
 
 const brl = (v: number | null) => (v == null || !isFinite(v) ? "—" : v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }));
-const num = (v: number) => (Number.isInteger(v) ? v.toLocaleString("pt-BR") : v.toLocaleString("pt-BR", { maximumFractionDigits: 1 }));
+// Contagem de pessoas sempre inteira (a estimativa por horário reparte conversas e gerava "0,9 pessoa").
+const num = (v: number) => pessoas(v).toLocaleString("pt-BR");
 const curto = (s: string) => (s.length > 60 ? s.slice(0, 58) + "…" : s);
 
 type Linha = { campaign_id: string; campanha: string; gasto: number; leads?: number; conversas_atribuidas?: number; com_lead?: number; avancaram: number; agendaram: number; ganhos: number };
 
 function Tabela({ linhas, base, rotuloBase }: { linhas: Linha[]; base: (l: Linha) => number; rotuloBase: string }) {
-  const comBase = linhas.filter((l) => base(l) > 0);
+  const comBase = linhas.filter((l) => pessoas(base(l)) > 0);
   if (!comBase.length) return null;
-  const melhores = comBase.filter((l) => l.avancaram > 0 && l.gasto > 0).map((l) => l.gasto / l.avancaram);
-  const melhor = melhores.length ? Math.min(...melhores) : null;
+  const custos = custosQualidade(comBase, base);
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -34,18 +35,24 @@ function Tabela({ linhas, base, rotuloBase }: { linhas: Linha[]; base: (l: Linha
         <tbody>
           {comBase.map((l) => {
             const b = base(l);
-            const custoAv = l.avancaram > 0 ? l.gasto / l.avancaram : null;
-            const zero = l.avancaram === 0 && b >= 5;
+            const c = custos.get(l.campaign_id)!;
             return (
               <tr key={l.campaign_id} className="border-t" style={{ borderColor: "var(--border)" }}>
                 <td className="py-1.5 pr-3" title={l.campanha}>{curto(l.campanha)}</td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">{brl(l.gasto)}</td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">{num(b)}</td>
-                <td className="py-1.5 pr-3 text-right tabular-nums">{num(l.avancaram)} <span className="text-xs" style={{ color: "var(--text-dim)" }}>({fmtTaxa(l.avancaram, b)})</span></td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">
+                  {num(l.avancaram)}
+                  {c.tipo !== "amostra_pequena" && <span className="text-xs" style={{ color: "var(--text-dim)" }}> ({fmtTaxa(pessoas(l.avancaram), pessoas(b))})</span>}
+                </td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">{num(l.agendaram)}</td>
                 <td className="py-1.5 pr-3 text-right tabular-nums">{num(l.ganhos)}</td>
-                <td className="py-1.5 text-right tabular-nums font-semibold" style={{ color: zero ? "var(--crit)" : custoAv != null && melhor != null && custoAv === melhor ? "var(--good)" : undefined }}>
-                  {zero ? "nenhum avançou" : brl(custoAv)}
+                <td
+                  className="py-1.5 text-right tabular-nums font-semibold"
+                  style={{ color: c.tipo === "nenhum_avancou" ? "var(--crit)" : c.tipo === "custo" && c.melhor ? "var(--good)" : c.tipo === "amostra_pequena" ? "var(--text-dim)" : undefined }}
+                  title={c.tipo === "amostra_pequena" ? `Menos de ${AMOSTRA_MINIMA} ${rotuloBase.toLowerCase()} nesta campanha: pouco para calcular custo` : undefined}
+                >
+                  {c.tipo === "amostra_pequena" ? "amostra pequena" : c.tipo === "nenhum_avancou" ? "nenhum avançou" : brl(c.valor)}
                 </td>
               </tr>
             );
@@ -70,13 +77,23 @@ export function QualidadeLeadsCampanha({ clientId, start, end }: { clientId: str
   if (!data) return null;
   const c = data.cobertura ?? {};
   const temDireto = data.direto.length > 0;
-  const temEstimado = data.estimado.some((l) => (l.conversas_atribuidas ?? 0) > 0);
+  const temEstimado = data.estimado.some((l) => pessoas(l.conversas_atribuidas ?? 0) > 0);
+  // Causa raiz primeiro: quando nenhum lead do CRM traz a campanha, a ligação direta não existe.
+  const leadsPeriodo = c.leads_periodo ?? 0;
+  const semCampanhaNoLead = leadsPeriodo > 0 && (c.leads_com_campanha ?? 0) === 0;
   return (
     <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }} aria-label="Qualidade do lead por campanha">
       <h2 className="text-[15px] font-semibold">O anúncio trouxe lead bom ou só volume?</h2>
       <p className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
         Segue cada lead do anúncio até a etapa do CRM. “Avançou” = chegou a qualificação, negociação, proposta, agendamento, consulta ou venda (follow-up e “mensagem enviada” não contam).
+        Custo por lead que avançou só aparece em campanha com {AMOSTRA_MINIMA} ou mais leads ou conversas.
       </p>
+      {semCampanhaNoLead && (temDireto || temEstimado) && (
+        <p className="mt-2 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
+          <b>Pendência principal:</b> nenhum dos {num(leadsPeriodo)} leads do período traz a campanha de origem, então não dá para ligar um lead a um anúncio
+          com certeza. Gravar a campanha no lead (código de rastreio no anúncio ou integração do formulário) resolve: passo a passo em “Organizar o CRM”.
+        </p>
+      )}
       {temDireto && (
         <div className="mt-3">
           <h3 className="mb-1 text-sm font-semibold">Ligação direta (o lead traz a campanha)</h3>
