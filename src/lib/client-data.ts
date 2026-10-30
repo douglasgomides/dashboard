@@ -786,7 +786,7 @@ export async function getPerguntasDeteccaoOriginal(clientId: string, periodo?: {
 export interface ProblemaDado {
   id: string;
   fonte: "crm" | "instagram" | "anuncios" | "atendimento" | "comentarios" | string;
-  severidade: "alta" | "media";
+  severidade: "alta" | "media" | "baixa";
   titulo: string;
   evidencia: string;
   causa: string;

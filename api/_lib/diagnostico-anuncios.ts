@@ -36,6 +36,15 @@ async function g<T>(caminho: string, token: string, params: Record<string, strin
 const ACAO_PAGAMENTO = "Atualizar o método de pagamento ou quitar o saldo em Faturamento, no Gerenciador de Anúncios.";
 
 const PARECE_PAGAMENTO = /pagamento|payment|billing|fatura|cobran|cart[aã]o|saldo|funding/i;
+/**
+ * Conta pré-paga com saldo zerado: a Meta mostra "Saldo disponível (0,00 R$ (BRL))" (ou "Available balance (0.00 ...")
+ * e não entrega nada, mesmo com campanha ligada. Caso real (Dra. Betina, 29/10/2026): 3 campanhas ativas, gasto zero
+ * desde 04/09, e o painel mandava conferir orçamento e público.
+ */
+export function saldoPrePagoZerado(displayString: string | null | undefined): boolean {
+  return /(saldo dispon[ií]vel|available balance|available funds)\s*\(\s*0+(?:[.,]0+)?(?![\d.,])/i.test(displayString ?? "");
+}
+
 const ERRO_TRANSITORIO_DA_META = /temporarily unavailable|"code":\s*(1|2)\b|respondeu 5\d\d|unknown error/i;
 
 // erroInsights: texto do erro que o próprio sync recebeu ao pedir o gasto, se houve.
@@ -94,6 +103,12 @@ export async function diagnosticarContaAnuncios(contaId: string, token: string, 
       /* campo não veio (permissão): não conclui nada */
     } else if (!c.corpo.funding_source && !c.corpo.funding_source_details?.display_string) {
       return { texto: `A conta de anúncios está sem forma de pagamento cadastrada. ${ACAO_PAGAMENTO}`, dono: "cliente" };
+    }
+    if (saldoPrePagoZerado(c.corpo.funding_source_details?.display_string)) {
+      return {
+        texto: `${ativas} campanha${ativas === 1 ? "" : "s"} ligada${ativas === 1 ? "" : "s"}, mas o saldo pré-pago da conta está zerado, então a Meta não entrega nada. Adicionar saldo em Faturamento, no Gerenciador de Anúncios.`,
+        dono: "cliente",
+      };
     }
     // Problemas apontados pela Meta em campanhas e anúncios (além dos conjuntos): o erro de pagamento costuma aparecer aí.
     const [campIss, adIss] = await Promise.all([

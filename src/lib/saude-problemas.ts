@@ -5,6 +5,7 @@
 // Não cria regra nova de saúde: o estado vem de saudeDaFonte (tomDaFonte + motivoDaLinha) e os
 // problemas de dado vêm de qualidade_dados (banco). Aqui só se classifica e se ordena.
 import { type Fontes, type LinhaFonte } from "@/lib/saude-fontes";
+import { LIMITES } from "@/lib/limites";
 import { motivoDaLinha } from "@/lib/motivos";
 import { statusDaFonte } from "@/lib/status-fonte";
 import type { ProblemaDado } from "@/lib/client-data";
@@ -93,9 +94,22 @@ const ACAO = {
 const ORDEM_GRAVIDADE: Record<Gravidade, number> = { alta: 0, media: 1, baixa: 2 };
 const ORDEM_TIPO: Record<TipoProblema, number> = { falha_tecnica: 0, config_incompleta: 1, cliente: 2, sem_dado_origem: 3 };
 
+// Fonte de planilha (anúncios anotados à mão pela equipe, uma vez por semana): sem tentativa de sincronização
+// automática, ou marcada como manual. Caso real (Dra. Marcelly e Dra. Mariela, 29/10/2026): planilha com 8 dias
+// aparecia como "parado sem causa", gravidade média, sendo o ritmo normal da planilha.
+export function ehPlanilha(l: Pick<LinhaFonte, "fonte" | "motivo" | "motivo_dono" | "last_attempt_at" | "data_ate">): boolean {
+  return l.motivo_dono === "manual" || (l.fonte === "anuncios" && !l.last_attempt_at && !l.motivo && !!l.data_ate);
+}
+
 // Mesma regra de cor do admin (status-fonte.ts): parado = vermelho por tempo (mais de 3 dias ou sem dado).
-function velho(l: LinhaFonte): boolean {
-  return !l.data_ate || statusDaFonte({ fonte: l.fonte, ultimo_sucesso: l.last_success_at, cadastro: true, data_ate: l.data_ate }).cor === "vermelho";
+// Planilha: parada só depois de LIMITES.planilha.diasParaParada.
+function velho(l: LinhaFonte, hoje: Date = new Date()): boolean {
+  if (!l.data_ate) return true;
+  if (ehPlanilha(l)) {
+    const dias = (hoje.getTime() - new Date(`${l.data_ate}T12:00:00`).getTime()) / 86_400_000;
+    return dias > LIMITES.planilha.diasParaParada;
+  }
+  return statusDaFonte({ fonte: l.fonte, ultimo_sucesso: l.last_success_at, cadastro: true, data_ate: l.data_ate }).cor === "vermelho";
 }
 
 /** Problema de uma fonte ligada (sync_status), ou null se está em dia. Mesmas regras de saudeDaFonte. */
@@ -123,6 +137,8 @@ function problemaBruto(c: Pick<EntradaCliente, "id" | "nome">, l: LinhaFonte): P
     return { ...base, id: `${c.id}:${l.fonte}:sem-dado`, tipo: "config_incompleta", gravidade: "alta", quem: "equipe", titulo: `${nome} ligado, mas nenhum dado chegou ainda`, detalhe: "A fonte está marcada como ligada no cadastro, mas a sincronização nunca gravou dado.", acao: ACAO.semDado };
   }
   if (!l.last_error && l.data_ate && statusDaFonte({ fonte: l.fonte, ultimo_sucesso: l.last_success_at, cadastro: true, data_ate: l.data_ate }).cor === "verde") return null;
+  // Planilha dentro do ritmo semanal: em dia, não é atraso.
+  if (!l.last_error && ehPlanilha(l) && !velho(l)) return null;
   const m = motivoDaLinha(l);
   const parado = velho(l);
   const quando = l.data_ate ? `Último dado: ${l.data_ate.slice(8, 10)}/${l.data_ate.slice(5, 7)}` : "Sem dado";
@@ -164,7 +180,8 @@ export function problemaDeQualidade(c: Pick<EntradaCliente, "id" | "nome">, p: P
   if (p.id.startsWith("sync-erro-")) return null;
   const tipo: TipoProblema = TIPO_QUALIDADE[p.id] ?? (p.responsavel === "equipe_hub" ? "falha_tecnica" : "cliente");
   const quem: QuemResolve = tipo === "sem_dado_origem" ? "ninguem" : p.responsavel === "equipe_hub" ? "equipe" : "cliente";
-  const gravidade: Gravidade = tipo === "sem_dado_origem" ? "baixa" : p.severidade === "alta" ? "alta" : "media";
+  // "baixa" do banco continua baixa (ex.: CRM compartilhado de propósito); antes virava média aqui.
+  const gravidade: Gravidade = tipo === "sem_dado_origem" || p.severidade === "baixa" ? "baixa" : p.severidade === "alta" ? "alta" : "media";
   return {
     id: `${c.id}:q:${p.id}`,
     clientId: c.id,

@@ -20,7 +20,7 @@ async function main() {
   // Primeira rodada com teto de 2 páginas: lê 200, guarda o progresso, avisa que a origem fica parcial.
   const r1 = await lerTagsDosContatos({ estado: {}, nomes, buscarPagina, salvar, agora: "2026-10-29T12:00:00Z", maxPaginas: 2 });
   assert.equal(r1.completa, false);
-  assert.deepEqual(r1.estado, { tags_ate: null, tags_varredura: { pagina: 3, inicio: "2026-10-29T12:00:00Z" } });
+  assert.deepEqual(r1.estado, { tags_ate: null, tags_varredura: { pagina: 3, inicio: "2026-10-29T12:00:00Z", ordem: "desc" } });
   assert.match(r1.aviso!, /primeira leitura em andamento \(página 2 de 3\)/);
   assert.equal(salvos.size, 200);
   // Contato sem tag fica gravado com lista vazia (lido, sem tag); com tag, pelo nome.
@@ -61,6 +61,17 @@ async function main() {
   });
   assert.equal(r4.estado.tags_ate, "2026-10-30T09:00:00Z");
   assert.match(r4.aviso!, /continuam na próxima/);
+
+  // Varredura que começou na ordem antiga (crescente, sem "ordem"): recomeça da página 1 na ordem nova, senão os
+  // contatos mais novos (os dos leads recentes) ficariam para o fim. Caso real: Juliana Paola parada na página 121.
+  pedidas.length = 0;
+  const r5 = await lerTagsDosContatos({ estado: { tags_varredura: { pagina: 121, inicio: "2026-10-29T10:00:00Z" } }, nomes, buscarPagina, salvar, agora: "2026-10-30T12:00:00Z", maxPaginas: 1 });
+  assert.deepEqual(pedidas, ["varredura:1"]);
+  assert.deepEqual(r5.estado.tags_varredura, { pagina: 2, inicio: "2026-10-30T12:00:00Z", ordem: "desc" });
+  // Varredura antiga já concluída (tags_ate) segue normal, só pelas alterações.
+  pedidas.length = 0;
+  await lerTagsDosContatos({ estado: { tags_ate: "2026-10-29T12:00:00Z" }, nomes, salvar, agora: "2026-10-30T12:00:00Z", buscarPagina: async (modo, pagina) => { pedidas.push(`${modo}:${pagina}`); return { itens: [], temMais: false }; } });
+  assert.deepEqual(pedidas, ["alteracoes:1"]);
   console.log("test-flwchat-tags: ok");
 }
 
