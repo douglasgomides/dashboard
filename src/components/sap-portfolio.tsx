@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { listAllClients } from "@/lib/admin-data";
+import { listAllClientsComTeste } from "@/lib/admin-data";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Target } from "lucide-react";
 import { getSapPorCliente, getSapPortfolio, novaClinicaSap, portfolioDeExemplo, faseDoDia, proximoMarco, type Farol, type SapLinhaPortfolio } from "@/lib/sap-data";
@@ -225,7 +225,7 @@ function AbrirClinica() {
   const qc = useQueryClient();
   const [aberto, setAberto] = useState(false);
   const [f, setF] = useState({ nome: "", especialidade: "", cidade: "", instagram: "", d0: "", servico: "", ticket: "", piloto: false });
-  const clientesQ = useQuery({ queryKey: ["admin-clients"], queryFn: listAllClients });
+  const clientesQ = useQuery({ queryKey: ["admin-clients", "com-teste"], queryFn: listAllClientsComTeste });
   const sapQ = useQuery({ queryKey: ["sap-por-cliente"], queryFn: getSapPorCliente });
   const todos = ((clientesQ.data ?? []) as { id: string; name: string }[]).slice().sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   const noSap = todos.filter((c) => sapQ.data?.has(c.id));

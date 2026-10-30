@@ -261,7 +261,7 @@ function ConferenciaPage() {
     queryFn: async () => {
       const [{ data: nu }, { data: cs }] = await Promise.all([
         (supabase as any).from("fontes_nao_usadas").select("client_id, fonte"),
-        supabase.from("clients").select("id, name"),
+        supabase.from("clients").select("id, name").eq("eh_teste", false),
       ]);
       return {
         naoUsa: new Set<string>(((nu ?? []) as { client_id: string; fonte: string }[]).map((r) => `${r.client_id}:${r.fonte}`)),

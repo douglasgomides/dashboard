@@ -35,7 +35,7 @@ type Cliente = { from: (t: string) => any };
 export async function coletarPendencias(db: Cliente): Promise<PendenciasClinica[]> {
   const desde = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
   const [clientes, sug, camp, brain, apr, execs, rec] = await Promise.all([
-    db.from("clients").select("id, name").eq("active", true),
+    db.from("clients").select("id, name").eq("active", true).eq("eh_teste", false),
     db.from("sugestoes_agentes").select("client_id, agente").eq("estado", "proposta").limit(10000),
     db.from("campanhas_ideias").select("client_id").eq("estado", "proposta").limit(5000),
     db.from("brain_itens").select("client_id").eq("estado", "proposto").limit(10000),

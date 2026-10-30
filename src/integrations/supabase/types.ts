@@ -764,6 +764,7 @@ export type Database = {
           digisac_token: string | null
           digisac_url: string | null
           em_onboarding: boolean
+          eh_teste: boolean
           id: string
           instagram_handle: string | null
           meta_ad_account_id: string | null
@@ -784,6 +785,7 @@ export type Database = {
           digisac_token?: string | null
           digisac_url?: string | null
           em_onboarding?: boolean
+          eh_teste?: boolean
           id?: string
           instagram_handle?: string | null
           meta_ad_account_id?: string | null
@@ -804,6 +806,7 @@ export type Database = {
           digisac_token?: string | null
           digisac_url?: string | null
           em_onboarding?: boolean
+          eh_teste?: boolean
           id?: string
           instagram_handle?: string | null
           meta_ad_account_id?: string | null

@@ -163,6 +163,8 @@ try {
     assert.equal((await role("authenticated", viewer, () => rows("select name from clients"))).length, 1);
     // Rótulo do custo do ROI: lido pela tela do cliente junto com o perfil (getClient).
     assert.deepEqual(await role("authenticated", viewer, () => rows("select rotulo_custo from clients")), [{ rotulo_custo: "venda" }]);
+    // Marca de clínica de teste: lida pelas listas do admin (fica fora das contagens de problema).
+    assert.deepEqual(await role("authenticated", viewer, () => rows("select eh_teste from clients")), [{ eh_teste: false }]);
   });
   await check("editor classifica post próprio e não pode alterar identidade/métricas", async () => {
     await role("authenticated", editor, async () => { assert.equal((await rows("update instagram_posts set tema='Tema profissional' where id=$1 returning tema", [postA])).length, 1); });
