@@ -84,3 +84,34 @@ export function situacaoRodada(r: RodadaAgente | null, admin: boolean): { titulo
 export function rodadaEmCurso(r?: RodadaAgente | null): boolean {
   return !!r && !["concluida", "falhou", "cancelada"].includes(r.estado);
 }
+
+/** Última rodada por fluxo (RPC agentes_saude: só datas e estado, sem conteúdo nem erro). */
+export interface SaudeRotina { fluxo: string; ultima_ok_em: string | null; ultima_em: string | null; ultimo_estado: string | null }
+export type EstadoRotina = "em_dia" | "atrasada" | "falha" | "fila_cheia" | "sem_execucao";
+
+const HORA = 3_600_000;
+function haQuanto(iso: string, agora: number): string {
+  const dias = Math.floor((agora - Date.parse(iso)) / (24 * HORA));
+  return dias <= 0 ? "hoje" : dias === 1 ? "ontem" : `há ${dias} dias`;
+}
+
+/**
+ * Situação real da rotina automática, para todos os perfis: "0 para revisar" só quer dizer "nada a revisar" quando a
+ * rotina está em dia. Atrasada = sem rodada concluída por mais de 2 vezes o intervalo (no mínimo intervalo + 24 h).
+ */
+export function saudeRotina(ag: { intervaloHoras: number; frequencia: string; maxAbertas: number }, s: SaudeRotina | null | undefined, pendentes: number, agora = Date.now()): { estado: EstadoRotina; texto: string; atencao: boolean } {
+  const freq = ag.frequencia.toLowerCase();
+  if (!s?.ultima_ok_em) {
+    return s?.ultimo_estado === "falhou"
+      ? { estado: "falha", atencao: true, texto: "A última tentativa não terminou e ainda não há rodada concluída para esta clínica. A equipe Doctor Creator precisa conferir." }
+      : { estado: "sem_execucao", atencao: true, texto: `Ainda não há rodada concluída para esta clínica (rotina prevista: ${freq}).` };
+  }
+  const ha = haQuanto(s.ultima_ok_em, agora);
+  const atrasada = agora - Date.parse(s.ultima_ok_em) > Math.max(ag.intervaloHoras * 2, ag.intervaloHoras + 24) * HORA;
+  if (atrasada && pendentes >= ag.maxAbertas)
+    return { estado: "fila_cheia", atencao: true, texto: `Parada: a fila de revisão está cheia (${pendentes} de ${ag.maxAbertas}). A rotina só volta a preparar depois que as propostas forem decididas. Última rodada concluída ${ha}.` };
+  if (s.ultimo_estado === "falhou")
+    return { estado: "falha", atencao: true, texto: `A última tentativa${s.ultima_em ? ` (${haQuanto(s.ultima_em, agora)})` : ""} não terminou. Última rodada concluída ${ha}. A equipe Doctor Creator precisa conferir.` };
+  if (atrasada) return { estado: "atrasada", atencao: true, texto: `Atrasada: a última rodada concluída foi ${ha}, e a rotina prevista é ${freq}.` };
+  return { estado: "em_dia", atencao: false, texto: `Em dia: última rodada concluída ${ha} (${freq}).` };
+}
