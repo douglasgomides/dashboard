@@ -646,11 +646,37 @@ export async function definirPapelFunil(args: { connectionId: string; pipelineId
 // na tela, para mostrar também o que ficou de fora e por quê.
 const TERMOS_COMERCIAIS = ["valor", "preço", "preco", "quanto custa", "agendar", "consulta", "atende", "convênio", "convenio"];
 
-export async function getComentariosVozDoPaciente(clientId: string, start: string, end: string, limit = 1500) {
+/**
+ * Lê em páginas de 1.000 (o teto do PostgREST) até `max` linhas. A consulta precisa ter ordem única.
+ * Antes, um `.limit(2000)` devolvia no máximo 1.000 linhas, sem aviso (Doctor Creator, out/2026: 6.197 comentários).
+ */
+async function lerEmPaginas<T>(readPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>, max: number): Promise<T[]> {
+  const linhas: T[] = [];
+  while (linhas.length < max) {
+    const { data, error } = await readPage(linhas.length, Math.min(max, linhas.length + 1000) - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    linhas.push(...data);
+  }
+  return linhas.slice(0, max);
+}
+
+/** Total de comentários do período (sem baixar as linhas), para dizer "lidos X de Y". */
+async function contarComentariosPeriodo(clientId: string, desde: string, antesDe: string): Promise<number | null> {
+  const { count, error } = await supabase
+    .from("instagram_comments")
+    .select("id", { count: "exact", head: true })
+    .eq("client_id", clientId)
+    .gte("commented_at", desde)
+    .lt("commented_at", antesDe);
+  return error ? null : count ?? null;
+}
+
+export async function getComentariosVozDoPaciente(clientId: string, start: string, end: string, limit = 10000) {
   const { desde, antesDe } = limitesBR(start, end);
   const filtro = ["is_question.eq.true", ...TERMOS_COMERCIAIS.map((t) => `text.ilike.*${t}*`)].join(",");
-  const [{ data, error }, donos] = await Promise.all([
-    supabase
+  const [comentarios, donos, totalPeriodo] = await Promise.all([
+    lerEmPaginas((from, to) => supabase
       .from("instagram_comments")
       .select("id, text, like_count, instagram_post_id, commented_at, author_username, is_question, instagram_posts!instagram_comments_instagram_post_id_fkey(caption, permalink, thumbnail_url, posted_at, tema)")
       .eq("client_id", clientId)
@@ -658,12 +684,13 @@ export async function getComentariosVozDoPaciente(clientId: string, start: strin
       .gte("commented_at", desde)
       .lt("commented_at", antesDe)
       .order("commented_at", { ascending: false })
-      .limit(limit),
+      .order("id")
+      .range(from, to), limit),
     donosDoPerfil(clientId),
+    contarComentariosPeriodo(clientId, desde, antesDe),
   ]);
-  if (error) throw error;
-  const comentarios = data ?? [];
-  return { comentarios, donos, noLimite: comentarios.length >= limit };
+  // totalPeriodo: todos os comentários do período; `comentarios` é só a parte com pergunta, preço ou agendamento.
+  return { comentarios, donos, noLimite: comentarios.length >= limit, totalPeriodo };
 }
 
 // ---- Comercial: "onde o funil quebra" + checklist de dados -------------------
@@ -863,18 +890,25 @@ export async function getRoiPeriodo(clientId: string, de: string, ate: string): 
 }
 
 // Comentários do período (todos, não só perguntas), com o tema do post: base de "Tema que gera identificação".
-export async function getComentariosPeriodo(clientId: string, start: string, end: string, limit = 2000) {
+// Lê em páginas até `limit`; `total` é o número real do período, para a tela dizer quantos foram lidos.
+export type ComentarioPeriodo = { id: string; text: string; author_username: string | null; instagram_post_id: string | null; instagram_posts: { tema: string | null } | null };
+export async function getComentariosPeriodo(clientId: string, start: string, end: string, limit = 20000): Promise<{ comentarios: ComentarioPeriodo[]; total: number; cortado: boolean }> {
   const { desde, antesDe } = limitesBR(start, end);
-  const { data, error } = await supabase
-    .from("instagram_comments")
-    .select("id, text, author_username, instagram_post_id, instagram_posts!instagram_comments_instagram_post_id_fkey(tema)")
-    .eq("client_id", clientId)
-    .gte("commented_at", desde)
-    .lt("commented_at", antesDe)
-    .order("commented_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return (data ?? []) as { id: string; text: string; author_username: string | null; instagram_post_id: string | null; instagram_posts: { tema: string | null } | null }[];
+  const [linhas, total] = await Promise.all([
+    lerEmPaginas((from, to) => supabase
+      .from("instagram_comments")
+      .select("id, text, author_username, instagram_post_id, instagram_posts!instagram_comments_instagram_post_id_fkey(tema)")
+      .eq("client_id", clientId)
+      .gte("commented_at", desde)
+      .lt("commented_at", antesDe)
+      .order("commented_at", { ascending: false })
+      .order("id")
+      .range(from, to), limit),
+    contarComentariosPeriodo(clientId, desde, antesDe),
+  ]);
+  const comentarios = linhas as ComentarioPeriodo[];
+  const t = Math.max(total ?? 0, comentarios.length);
+  return { comentarios, total: t, cortado: t > comentarios.length };
 }
 
 // Objeções das conversas de WhatsApp lidas pela IA (auditoria comercial), por tipo. null quando não há.
