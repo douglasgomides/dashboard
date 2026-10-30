@@ -90,6 +90,14 @@ async function flwGet(token: string, path: string, query: Record<string, string 
   return res.json();
 }
 
+/** Abertos no Nexo que não vieram na lista completa do painel. null quando a lista parece incompleta (menos da
+ *  metade dos abertos): melhor não fechar nada do que fechar o painel inteiro por uma resposta ruim da API. */
+export function cardsFechadosNaOrigem(abertosNoNexo: string[], vistos: Set<string>): string[] | null {
+  const fechados = abertosNoNexo.filter((id) => !vistos.has(id));
+  if (abertosNoNexo.length >= 20 && vistos.size < abertosNoNexo.length / 2) return null;
+  return fechados;
+}
+
 async function fetchCards(token: string, panelId: string, deadlineMs?: number): Promise<{ cards: FlwCard[]; parcial: boolean; teto?: boolean }> {
   const all: FlwCard[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -417,6 +425,8 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
     const stageRows: Record<string, unknown>[] = [];
     const leadRows: Record<string, unknown>[] = [];
     let paineisLidos = 0;
+    // Painéis listados por inteiro nesta rodada, com todos os ids vistos (inclusive os ignorados por teste ou data).
+    const vistosPorPainel = new Map<string, Set<string>>();
 
     for (const panelId of panelIds) {
       try {
@@ -440,6 +450,7 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
         if (teto) errors.push(`${panelName}: passou de ${MAX_PAGES * PAGE_SIZE} cards, o teto de leitura; os mais recentes podem ter ficado de fora`);
         else if (parcial) errors.push(`${panelName}: listagem interrompida por tempo, o restante entra na próxima rodada`);
         paineisLidos++;
+        if (!parcial && !teto) vistosPorPainel.set(panelId, new Set(cards.map((c) => String(c?.id ?? "")).filter(Boolean)));
 
         const desde = config.painel_desde?.[panelId] ?? null;
         for (const c of cards) {
@@ -488,6 +499,37 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
         .upsert(batch, { onConflict: "crm_connection_id,external_lead_id" });
       if (upsertError) errors.push(`cards (${batch.length}): ${upsertError.message}`);
       else gravados += batch.length;
+    }
+
+    // A API só lista cards abertos: o que estava aberto no Nexo e sumiu da lista completa do painel foi fechado no
+    // FlwChat (ganho ou perdido, a API não diz). Vira "closed" (fechado, resultado não informado) em vez de seguir
+    // aberto para sempre. Se voltar a aparecer, o upsert acima devolve o resultado da etapa.
+    if (gravados === linhas.length) {
+      for (const [panelId, vistos] of vistosPorPainel) {
+        try {
+          const abertos: string[] = [];
+          for (let de = 0; ; de += 1000) {
+            const { data, error } = await supabase.from("crm_leads").select("external_lead_id")
+              .eq("crm_connection_id", conn.id).eq("pipeline_id", panelId).eq("outcome", "open").is("removido_na_origem", null)
+              .order("external_lead_id").range(de, de + 999);
+            if (error) throw new Error(error.message);
+            abertos.push(...(data ?? []).map((r) => String(r.external_lead_id)));
+            if ((data?.length ?? 0) < 1000) break;
+          }
+          const fechados = cardsFechadosNaOrigem(abertos, vistos);
+          if (fechados === null) {
+            avisos.push(`painel ${panelId}: a lista veio com menos da metade dos cards abertos; nenhum card foi dado como fechado nesta rodada`);
+            continue;
+          }
+          for (const lote of chunk(fechados, 300)) {
+            const { error } = await supabase.from("crm_leads").update({ outcome: "closed" })
+              .eq("crm_connection_id", conn.id).eq("pipeline_id", panelId).eq("outcome", "open").in("external_lead_id", lote);
+            if (error) throw new Error(error.message);
+          }
+        } catch (err) {
+          errors.push(`cards fechados no painel ${panelId}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
     }
 
     if (stageRows.length > 0) {
