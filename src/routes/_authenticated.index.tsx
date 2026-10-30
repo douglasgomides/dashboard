@@ -40,6 +40,6 @@ export const Route = createFileRoute("/_authenticated/")({
       const dia = diaAtual(sap.d0, pausasValidas(sap.sap_pausas));
       if (dia === null || dia <= 90) throw redirect({ to: "/sap/$clientId/painel", params: { clientId: membership.client_id } });
     }
-    throw redirect({ to: "/$clientId", params: { clientId: membership.client_id } });
+    throw redirect({ to: "/$clientId/pacientes", params: { clientId: membership.client_id } });
   },
 });

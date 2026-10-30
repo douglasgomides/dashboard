@@ -513,7 +513,7 @@ function AdminClientDetailPage() {
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={44} />
-          <Link to="/$clientId" params={{ clientId }} className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
+          <Link to="/$clientId/pacientes" params={{ clientId }} className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
             Ver o painel deste cliente →
           </Link>
         </div>

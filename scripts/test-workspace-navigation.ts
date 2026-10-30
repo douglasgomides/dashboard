@@ -28,6 +28,7 @@ const paths = (v: Visibilidade) =>
 // Cada tela anterior continua acessível, uma única vez no catálogo.
 const esperados = [
   "",
+  "/pacientes",
   "/agentes",
   "/proximas-acoes",
   "/plano",
@@ -154,3 +155,5 @@ assert.equal(paths(pilotoSemCrmExterno).includes("/crm-contatos"),true,"O Kanban
 assert.equal(paths(pilotoSemCrmExterno).includes("/crm-painel"),false,"Relatórios importados continuam condicionados à fonte");
 assert.equal(paths({...pilotoSemCrmExterno,crmOperacional:false}).includes("/crm-contatos"),false);
 assert.equal(buscarTelas(pilotoSemCrmExterno,"kanban")[0]?.tab.path,"/crm-contatos");
+// Pacientes do período é a primeira tela da clínica; Resultados continua logo abaixo, no mesmo endereço de sempre.
+assert.deepEqual(AREAS.find((a) => a.id === "resumo")?.tabs.map((t) => t.path), ["/pacientes", ""]);

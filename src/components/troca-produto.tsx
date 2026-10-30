@@ -13,7 +13,7 @@ export function TrocaProduto({ atual, clientId, noMenu = false }: { atual: "hub"
     };
     const cls = `flex-1 rounded-md px-2 py-1.5 text-center text-xs font-semibold leading-tight${noMenu ? " inline-flex min-h-[44px] items-center justify-center" : ""}`;
     if (p === "sap") return clientId ? <Link to="/sap/$clientId/painel" params={{ clientId }} className={cls} style={estilo} aria-current={on ? "page" : undefined}>{rot}</Link> : <Link to="/sap" className={cls} style={estilo} aria-current={on ? "page" : undefined}>{rot}</Link>;
-    return clientId ? <Link to="/$clientId" params={{ clientId }} className={cls} style={estilo} aria-current={on ? "page" : undefined}>{rot}</Link> : <Link to="/admin" className={cls} style={estilo} aria-current={on ? "page" : undefined}>{rot}</Link>;
+    return clientId ? <Link to="/$clientId/pacientes" params={{ clientId }} className={cls} style={estilo} aria-current={on ? "page" : undefined}>{rot}</Link> : <Link to="/admin" className={cls} style={estilo} aria-current={on ? "page" : undefined}>{rot}</Link>;
   };
   return (
     <div className={`${noMenu ? "" : "so-aberta "}mb-3 flex gap-1 rounded-lg border p-1`} role="navigation" aria-label="Produto" style={{ borderColor: noMenu ? "var(--border)" : "var(--side-border, var(--border))" }}>

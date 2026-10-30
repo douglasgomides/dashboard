@@ -107,7 +107,7 @@ function ClientLayout() {
     cobertura?.find((c) => c.fonte === f)?.primeiro_geral ?? null;
   const fonteDaTela = /\/anuncios/.test(currentPathname)
     ? ["anuncios"]
-    : /\/(crm|vendas|consultas|jornada|analisar)/.test(currentPathname)
+    : /\/(crm|vendas|consultas|jornada|analisar|pacientes)/.test(currentPathname)
       ? ["crm"]
       : /\/(atendimento|conversas)/.test(currentPathname)
         ? ["whatsapp"]
@@ -196,7 +196,7 @@ function ClientPalette({
   function go(id: string) {
     onClose();
     navigate({
-      to: "/$clientId",
+      to: "/$clientId/pacientes",
       params: { clientId: id },
       search: { preset: "30d" },
     });
