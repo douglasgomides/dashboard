@@ -19,8 +19,9 @@ import { classifyTema } from "./tema-classifier.js";
 import { classificarConteudoComIA } from "./conteudo-ia.js";
 import { storiesAoVivo, g as graphGet } from "./meta-audiencia.js";
 import { graphPageUrl, integrationRequest } from "./integration-http.js";
+import { META_GRAPH_URL } from "./meta-graph-versao.js";
 
-const GRAPH_BASE = "https://graph.facebook.com/v21.0";
+const GRAPH_BASE = META_GRAPH_URL;
 const INSIGHTS_METRICS = "reach,likes,comments,shares,saved,views,total_interactions";
 
 // Métricas extras pedidas numa SEGUNDA passada, separada da base — de

@@ -10,7 +10,8 @@
  * Os limites vêm da própria Meta: demografia exige 100+ seguidores, e o intervalo máximo das métricas por
  * período é 30 dias.
  */
-const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v23.0"}`;
+import { META_GRAPH_URL } from "./meta-graph-versao.js";
+const GRAPH = META_GRAPH_URL;
 const DIA = 86400;
 
 export type Par = { chave: string; valor: number };

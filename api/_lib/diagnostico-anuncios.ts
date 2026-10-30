@@ -8,7 +8,8 @@
  *
  * Só leitura (account_status e effective_status das campanhas). Nunca derruba o sync.
  */
-const API = "https://graph.facebook.com/v21.0";
+import { META_GRAPH_URL } from "./meta-graph-versao.js";
+const API = META_GRAPH_URL;
 
 export type DonoMotivo = "cliente" | "meta" | "nos";
 export type MotivoAnuncios = { texto: string; dono: DonoMotivo };
@@ -42,7 +43,18 @@ const PARECE_PAGAMENTO = /pagamento|payment|billing|fatura|cobran|cart[aã]o|sal
  * desde 04/09, e o painel mandava conferir orçamento e público.
  */
 export function saldoPrePagoZerado(displayString: string | null | undefined): boolean {
-  return /(saldo dispon[ií]vel|available balance|available funds)\s*\(\s*0+(?:[.,]0+)?(?![\d.,])/i.test(displayString ?? "");
+  // A moeda pode vir antes do número ("Available balance (R$0.00 BRL)").
+  return /(saldo dispon[ií]vel|available balance|available funds)\s*\(\s*(?:[^\d\s()]{1,4}\s?)?0+(?:[.,]0+)?(?![\d.,])/i.test(displayString ?? "");
+}
+
+/**
+ * Limite de gasto da conta (spend_cap) atingido: a Meta para a entrega sem erro em campanha nenhuma. Antes ninguém lia
+ * o limite (auditoria de 30/10/2026: Antônio a cerca de 10 dias do fim). Valores em centavos, como a Meta devolve.
+ */
+export function limiteDeGastoAtingido(spendCap: string | number | null | undefined, amountSpent: string | number | null | undefined): boolean {
+  const cap = Number(spendCap);
+  const gasto = Number(amountSpent);
+  return Number.isFinite(cap) && cap > 0 && Number.isFinite(gasto) && gasto >= cap;
 }
 
 const ERRO_TRANSITORIO_DA_META = /temporarily unavailable|"code":\s*(1|2)\b|respondeu 5\d\d|unknown error/i;
@@ -51,8 +63,8 @@ const ERRO_TRANSITORIO_DA_META = /temporarily unavailable|"code":\s*(1|2)\b|resp
 export async function diagnosticarContaAnuncios(contaId: string, token: string, erroInsights?: string): Promise<MotivoAnuncios | null> {
   const conta = contaId.startsWith("act_") ? contaId : `act_${contaId}`;
 
-  const c = await g<{ account_status?: number; disable_reason?: number; funding_source?: string; funding_source_details?: { display_string?: string } }>(conta, token, {
-    fields: "account_status,disable_reason,funding_source,funding_source_details{display_string}",
+  const c = await g<{ account_status?: number; disable_reason?: number; funding_source?: string; funding_source_details?: { display_string?: string }; spend_cap?: string; amount_spent?: string }>(conta, token, {
+    fields: "account_status,disable_reason,funding_source,funding_source_details{display_string},spend_cap,amount_spent",
   });
   if (!c.ok) {
     // 190/200/10 e família: token vencido, revogado ou sem permissão — é acesso, não instabilidade.
@@ -103,6 +115,12 @@ export async function diagnosticarContaAnuncios(contaId: string, token: string, 
       /* campo não veio (permissão): não conclui nada */
     } else if (!c.corpo.funding_source && !c.corpo.funding_source_details?.display_string) {
       return { texto: `A conta de anúncios está sem forma de pagamento cadastrada. ${ACAO_PAGAMENTO}`, dono: "cliente" };
+    }
+    if (limiteDeGastoAtingido(c.corpo.spend_cap, c.corpo.amount_spent)) {
+      return {
+        texto: `${ativas} campanha${ativas === 1 ? "" : "s"} ligada${ativas === 1 ? "" : "s"}, mas a conta atingiu o limite de gastos definido nela, então a Meta parou a entrega. Aumentar ou zerar o limite em Faturamento, no Gerenciador de Anúncios.`,
+        dono: "cliente",
+      };
     }
     if (saldoPrePagoZerado(c.corpo.funding_source_details?.display_string)) {
       return {

@@ -273,7 +273,8 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
         const nomeEtapa = d.stage ?? String((stageRows.get(`${d.origin_id ?? originId}:${d.stage_id}`) as { status_name?: unknown } | undefined)?.status_name ?? "");
         const base = etapasBase.length > 0 && ehEtapaBase(nomeEtapa, etapasBase);
         leadRows.set(d.id, {
-          ...(etapasBase.length > 0 ? { removido_na_origem: base ? agora : null } : {}),
+          // Negócio que voltou a aparecer deixa de estar removido.
+          removido_na_origem: etapasBase.length > 0 && base ? agora : null,
           crm_connection_id: conn.id,
           client_id: conn.client_id,
           provider: "clint",
@@ -336,6 +337,32 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
         .update({ config: { ...((atual?.config as Record<string, unknown>) ?? {}), grupos_funil: gruposDoFunil } })
         .eq("id", conn.id);
       if (grupoError) errors.push(`grupos dos funis: ${grupoError.message}`);
+    }
+
+    // Negócio apagado na Clint continuava contando no Nexo (auditoria de 30/10/2026: 26 fantasmas na Doctor Creator,
+    // "Deal not found" na API). Só com leitura completa e sem erro: o que sumiu dos funis lidos é marcado como removido.
+    // Trava: se sumir mais de 20% dos negócios do funil, não marca e avisa (provável falha da API, não exclusão).
+    if (errors.length === 0 && leadRows.size > 0) {
+      const { data: locais, error: eLocais } = await supabase
+        .from("crm_leads")
+        .select("external_lead_id, pipeline_id")
+        .eq("crm_connection_id", conn.id)
+        .in("pipeline_id", origins)
+        .is("removido_na_origem", null)
+        .limit(50_000);
+      if (eLocais) errors.push(`apagados: ${eLocais.message}`);
+      else {
+        const sumiram = (locais ?? []).filter((l) => !leadRows.has(l.external_lead_id as string)).map((l) => l.external_lead_id as string);
+        if (sumiram.length > Math.max(20, 0.2 * (locais ?? []).length)) {
+          errors.push(`apagados: ${sumiram.length} negócios sumiram da Clint de uma vez; nada foi marcado, conferir antes`);
+        } else {
+          for (const lote of chunk(sumiram, 200)) {
+            const { error: eMarca } = await supabase.from("crm_leads").update({ removido_na_origem: agora, event_type: "delete" })
+              .eq("crm_connection_id", conn.id).in("external_lead_id", lote).is("removido_na_origem", null);
+            if (eMarca) { errors.push(`apagados: ${eMarca.message}`); break; }
+          }
+        }
+      }
     }
 
     results.push({

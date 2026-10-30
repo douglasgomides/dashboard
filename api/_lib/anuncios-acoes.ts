@@ -6,9 +6,10 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { novoOrcamento, podeAplicar, type TipoAcao } from "../../src/lib/anuncios-acoes.js";
+import { META_GRAPH_URL } from "./meta-graph-versao.js";
 
 type Admin = SupabaseClient<any, any, any>;
-const GRAPH = "https://graph.facebook.com/v21.0";
+const GRAPH = META_GRAPH_URL;
 const token = () => process.env.META_ADS_WRITE_TOKEN || "";
 export const tokenEscritaConfigurado = () => !!token();
 

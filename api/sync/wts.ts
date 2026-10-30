@@ -136,7 +136,10 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         const { data: lig, error: erroLigacoes } = await admin.from("crm_connections").select("access_token").eq("client_id", id).eq("provider", "flwchat").eq("active", true);
         if (erroLigacoes) throw new Error("Não foi possível ler as credenciais adicionais de conversas");
         const extras = (lig ?? []).map((l) => l.access_token as string).filter(Boolean);
-        const c = await ingerirConversasWts(admin, WTS_API_TOKEN, id, { tokensExtras: extras, limite: 80, orcamentoMs: Math.floor(100_000 / Math.max(1, clientes.length)), dias: 7 });
+        // dias= na chamada manual (com client_id) traz o passado que a janela de 7 dias nunca importou
+        // (auditoria de 30/10/2026: Marcella 753 conversas e Sergio 28 antes de 10/10).
+        const carga = !!query.dias && !!clientId;
+        const c = await ingerirConversasWts(admin, WTS_API_TOKEN, id, { tokensExtras: extras, limite: carga ? 300 : 80, orcamentoMs: carga ? 150_000 : Math.floor(100_000 / Math.max(1, clientes.length)), dias: query.dias ?? 7 });
         conversas[id] = { sessoes: c.sessoes, mensagens: c.mensagens, com_anuncio: c.comAnuncio ?? 0, campos_primeira_msg: c.valoresVistos.chaves, erros: c.erros.slice(0, 3) };
       }
     } catch (e) {
