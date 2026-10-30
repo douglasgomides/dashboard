@@ -34,7 +34,7 @@ export const Route = createFileRoute("/_authenticated/sap")({
     const comSap = await Promise.all(alvo.map(async (id) => !!(await getClinicaSap(id))));
     if (comSap.some(Boolean)) return;
     const destino = idNaRota ?? ids[0];
-    if (destino) throw redirect({ to: "/$clientId", params: { clientId: destino } });
+    if (destino) throw redirect({ to: "/$clientId/pacientes", params: { clientId: destino } });
     throw redirect({ to: "/sem-acesso" });
   },
   component: SapLayout,

@@ -93,6 +93,13 @@ export const AREAS: NavArea[] = [
     Icone: LayoutDashboard,
     tabs: [
       {
+        path: "/pacientes",
+        label: "Pacientes do período",
+        Icone: Users,
+        descricao: "Quantas pessoas chamaram, agendaram, foram na consulta e fecharam, e quem chamar agora.",
+        termos: "pacientes pessoas leads novos antigos agendaram negociacao compareceram fecharam recompra follow-up retorno",
+      },
+      {
         path: "",
         label: "Resultados da clínica",
         Icone: Activity,

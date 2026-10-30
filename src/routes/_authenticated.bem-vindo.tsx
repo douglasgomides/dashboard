@@ -69,7 +69,7 @@ function BemVindo() {
     try {
       const { error } = await supabase.auth.updateUser({ data: { primeiro_acesso: false, onboarding_em: new Date().toISOString() } });
       if (error) return setErro(error.message);
-      if (cliente) await navigate({ to: "/$clientId", params: { clientId: cliente.id }, search: { preset: "30d" } as never });
+      if (cliente) await navigate({ to: "/$clientId/pacientes", params: { clientId: cliente.id }, search: { preset: "30d" } as never });
       else await navigate({ to: "/" });
     } catch {
       setErro("Não foi possível concluir. Verifique sua conexão e tente novamente.");
