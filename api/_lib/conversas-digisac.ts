@@ -88,16 +88,22 @@ export async function ingerirConversasDigisac(admin: SupabaseClient<any, any, an
       const ids = sessoes.map((s) => s.session_id);
       const ja = new Map<string, string | null>();
       const cobertura = new Map<string, string | null>();
+      const conferida = new Map<string, string | null>();
       for (let i = 0; i < ids.length; i += 300) {
-        const { data: ex, error } = await admin.from("conversas").select("externo_id, ultima_msg_em, mensagens_cobertura").eq("client_id", clientId).eq("provider", "digisac").in("externo_id", ids.slice(i, i + 300));
+        const { data: ex, error } = await admin.from("conversas").select("externo_id, ultima_msg_em, mensagens_cobertura, mensagens_conferencia_em").eq("client_id", clientId).eq("provider", "digisac").in("externo_id", ids.slice(i, i + 300));
         if (error) throw new Error("Não foi possível ler os checkpoints das conversas");
-        for (const e of ex ?? []) { ja.set(e.externo_id as string, e.ultima_msg_em as string | null); cobertura.set(e.externo_id, e.mensagens_cobertura); }
+        for (const e of ex ?? []) { ja.set(e.externo_id as string, e.ultima_msg_em as string | null); cobertura.set(e.externo_id, e.mensagens_cobertura); conferida.set(e.externo_id, e.mensagens_conferencia_em); }
       }
       const ativas = await conversasAtivasParaConferir(admin, clientId, "digisac");
       const porSessao = new Map(sessoes.map(s => [s.session_id, s]));
       const prioritarias = ativas.map(c => porSessao.get(c.externo_id) ?? { session_id: c.externo_id, contact_id: null, started_at: c.iniciada_em, updated_at: c.ultima_msg_em });
-      const novasOuMudaram = sessoes.filter(s => !ja.has(s.session_id) || cobertura.get(s.session_id) !== "completa" || !ja.get(s.session_id) || (s.updated_at && Date.parse(s.updated_at) > Date.parse(ja.get(s.session_id)!)));
-      const pendentes = [...new Map([...prioritarias, ...novasOuMudaram].map(s => [s.session_id, s])).values()];
+      // "Mudou" compara com a última leitura do Nexo, não com a última mensagem: o atendimento é alterado ao ser
+      // encerrado, depois da última mensagem, e a comparação antiga relia sempre os mesmos atendimentos recentes.
+      // Os nunca lidos vêm antes dos relidos, para a carga do passado avançar a cada chamada.
+      const nuncaLidas = sessoes.filter(s => !ja.has(s.session_id) || cobertura.get(s.session_id) !== "completa" || !ja.get(s.session_id));
+      const mudaram = sessoes.filter(s => ja.has(s.session_id) && cobertura.get(s.session_id) === "completa" && !!ja.get(s.session_id) && !!s.updated_at
+        && Date.parse(s.updated_at) > Date.parse(conferida.get(s.session_id) ?? ja.get(s.session_id)!));
+      const pendentes = [...new Map([...prioritarias, ...nuncaLidas, ...mudaram].map(s => [s.session_id, s])).values()];
       r.restantes = pendentes.length;
       const contatos = [...new Set(pendentes.slice(0, limite).map((s) => s.contact_id).filter(Boolean))] as string[];
       const leadDe = new Map<string, { id: string; phone: string | null; nome: string | null; pessoa_id: string | null }>();
