@@ -6,16 +6,17 @@
  *   Preço: perguntou o valor e não recebeu (14 dias).
  *   Anúncio: sinal mais recente do gestor de anúncios pedindo correção, valorado pelo gasto de 7 dias.
  *   Conteúdo: tema mais pedido pelos pacientes em 14 dias sem post em 21 dias.
- * Conferência: respondeu? agendou? (pacientes); gasto caiu? (anúncio); publicou? (conteúdo). A taxa de agendamento
- * aprendida na clínica (20+ pacientes medidos) substitui a padrão no valor em jogo das próximas semanas.
+ * Conferência: respondeu a maior parte da lista? agendou? (pacientes; no preço, o valor foi apresentado?); gasto caiu
+ * com a campanha ainda no ar ou com mudança registrada? (anúncio); publicou? (conteúdo). A taxa de agendamento
+ * aprendida na clínica (pacientes atendidos, ações com 14+ dias) substitui a padrão no valor em jogo.
  * Nada é enviado a paciente: a ação aponta a lista e a equipe executa.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ordenar, resultadoConversas, semanaDe, TAXA_PADRAO, taxaAprendida, valorEmJogo, type OrigemPlano } from "../../src/lib/plano-semana.js";
+import { estadoConferido, ordenar, resultadoConversas, semanaDe, TAXA_PADRAO, taxaAprendida, valorEmJogo, type MedicaoHistorico, type OrigemPlano } from "../../src/lib/plano-semana.js";
 
 type Admin = SupabaseClient<any, any, any>;
 type Resumo = { conversa_id: string; ate_msg_em: string; resumo: Record<string, unknown> };
-interface Item { id: string; client_id: string; semana: string; origem: OrigemPlano; estado: string; criado_em: string; refs: Record<string, unknown>; n: number }
+interface Item { id: string; client_id: string; semana: string; origem: OrigemPlano; estado: string; criado_em: string; refs: Record<string, unknown>; n: number; decidido_por: string | null }
 
 const DIA = 86_400_000;
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -27,11 +28,11 @@ async function ticketDe(admin: Admin, clientId: string): Promise<number | null> 
   return data == null ? null : Number(data);
 }
 
-async function taxaDe(admin: Admin, clientId: string, origem: "responder" | "recuperar" | "preco", semana: string): Promise<number> {
-  const { data, error } = await admin.from("plano_itens").select("medicao").eq("client_id", clientId).eq("origem", origem)
+async function taxaDe(admin: Admin, clientId: string, origem: "responder" | "recuperar" | "preco", semana: string): Promise<{ taxa: number; aprendida: boolean }> {
+  const { data, error } = await admin.from("plano_itens").select("medicao, criado_em, semana, estado").eq("client_id", clientId).eq("origem", origem)
     .lt("semana", semana).gte("semana", iso(Date.now() - 120 * DIA).slice(0, 10)).not("medido_em", "is", null);
   if (error) throw new Error("Não foi possível ler o histórico do plano");
-  return taxaAprendida(((data ?? []) as { medicao: { n?: number; agendaram?: number } }[]).map((r) => r.medicao), TAXA_PADRAO[origem]);
+  return taxaAprendida((data ?? []) as MedicaoHistorico[], TAXA_PADRAO[origem]);
 }
 
 /** Conversas paradas desde a última leitura (nenhuma mensagem depois). */
@@ -60,7 +61,7 @@ async function resumosDesde(admin: Admin, clientId: string, desdeMs: number): Pr
 async function medirConversas(admin: Admin, it: Item, ticket: number | null) {
   const ids = (Array.isArray(it.refs.conversas) ? it.refs.conversas : []) as string[];
   if (!ids.length) return null;
-  const respondidas = new Set<string>(), agendaram = new Set<string>();
+  const respondidas = new Set<string>(), agendaram = new Set<string>(), precoDado = new Set<string>();
   for (let i = 0; i < ids.length; i += 100) {
     const lote = ids.slice(i, i + 100);
     const [{ data: msgs, error: e1 }, { data: res, error: e2 }, { data: convs, error: e3 }] = await Promise.all([
@@ -70,7 +71,10 @@ async function medirConversas(admin: Admin, it: Item, ticket: number | null) {
     ]);
     if (e1 || e2 || e3) throw new Error("Não foi possível conferir as conversas");
     for (const m of (msgs ?? []) as { conversa_id: string }[]) respondidas.add(m.conversa_id);
-    for (const r of (res ?? []) as { conversa_id: string; resumo: Record<string, unknown> }[]) if (r.resumo?.situacao === "agendou" || r.resumo?.etapa === "agendou") agendaram.add(r.conversa_id);
+    for (const r of (res ?? []) as { conversa_id: string; resumo: Record<string, unknown> }[]) {
+      if (r.resumo?.situacao === "agendou" || r.resumo?.etapa === "agendou") agendaram.add(r.conversa_id);
+      if (sim(r.resumo?.preco_apresentado)) precoDado.add(r.conversa_id);
+    }
     const porLead = new Map(((convs ?? []) as { id: string; lead_id: string }[]).map((c) => [c.lead_id, c.id]));
     if (porLead.size) {
       const { data: leads, error: e4 } = await admin.from("crm_leads").select("id").in("id", [...porLead.keys()]).eq("outcome", "won").gt("occurred_at", it.criado_em);
@@ -78,15 +82,18 @@ async function medirConversas(admin: Admin, it: Item, ticket: number | null) {
       for (const l of (leads ?? []) as { id: string }[]) agendaram.add(porLead.get(l.id)!);
     }
   }
-  return resultadoConversas(ids.length, respondidas.size, agendaram.size, ticket);
+  // Preço: só conta quem recebeu o valor (releitura da conversa depois da ação), não qualquer mensagem da equipe.
+  const atendidas = it.origem === "preco" ? [...respondidas].filter((id) => precoDado.has(id)).length : respondidas.size;
+  return resultadoConversas(ids.length, atendidas, agendaram.size, ticket, it.origem);
 }
 
-async function medirItem(admin: Admin, it: Item, ticket: number | null): Promise<void> {
+async function medirItem(admin: Admin, it: Item, ticket: number | null, semanaAtual: string): Promise<void> {
   const desde = Date.parse(it.criado_em);
+  const conferir = (feita: boolean) => estadoConferido(it.estado, feita, it.decidido_por != null, it.semana < semanaAtual);
   let upd: Record<string, unknown> | null = null;
   if (it.origem === "responder" || it.origem === "recuperar" || it.origem === "preco") {
     const r = await medirConversas(admin, it, ticket);
-    if (r) upd = { medicao: r.medicao, resultado_brl: r.resultado_brl, resultado_texto: r.resultado_texto, ...(r.feita ? { verificado: true, ...(it.estado === "proposta" ? { estado: "feita" } : {}) } : {}) };
+    if (r) upd = { medicao: r.medicao, resultado_brl: r.resultado_brl, resultado_texto: r.resultado_texto, ...conferir(r.feita) };
   } else if (it.origem === "anuncio") {
     const camp = String(it.refs.campanha ?? "");
     const dia = (ms: number) => iso(ms).slice(0, 10);
@@ -96,12 +103,17 @@ async function medirItem(admin: Admin, it: Item, ticket: number | null): Promise
       return ((data ?? []) as { spend: number | null }[]).reduce((s, r) => s + Number(r.spend ?? 0), 0);
     };
     const antes = await soma(desde - 7 * DIA, desde - DIA), depois = await soma(desde, desde + 6 * DIA);
-    const caiu = antes > 0 && depois < antes * 0.7;
+    // Gasto que só caiu porque a campanha acabou não é resultado: exige campanha ainda no ar ou mudança aprovada.
+    const { count: mudancas, error: eM } = await admin.from("anuncios_mudancas").select("id", { count: "exact", head: true })
+      .eq("client_id", it.client_id).eq("campanha_id", camp).eq("estado", "aplicada").gte("aplicado_em", it.criado_em);
+    if (eM) throw new Error("Não foi possível conferir as mudanças no anúncio");
+    const caiu = antes > 0 && depois < antes * 0.7 && (depois > 0 || (mudancas ?? 0) > 0);
     upd = {
-      medicao: { gasto_antes: Math.round(antes), gasto_depois: Math.round(depois) },
+      medicao: { gasto_antes: Math.round(antes), gasto_depois: Math.round(depois), mudancas: mudancas ?? 0 },
       resultado_brl: caiu ? Math.round(antes - depois) : null,
-      resultado_texto: `Gasto na campanha: R$ ${Math.round(antes)} nos 7 dias antes, R$ ${Math.round(depois)} nos 7 dias depois`,
-      ...(caiu ? { verificado: true, ...(it.estado === "proposta" ? { estado: "feita" } : {}) } : {}),
+      resultado_texto: `Gasto na campanha: R$ ${Math.round(antes)} nos 7 dias antes, R$ ${Math.round(depois)} nos 7 dias depois`
+        + (antes > 0 && depois === 0 && !mudancas ? " (a campanha parou sem mudança registrada: não conta como gasto evitado)" : ""),
+      ...conferir(caiu),
     };
   } else if (it.origem === "conteudo") {
     const tema = String(it.refs.tema ?? "");
@@ -113,7 +125,7 @@ async function medirItem(admin: Admin, it: Item, ticket: number | null): Promise
     upd = {
       medicao: { posts: posts ?? 0, conversas_depois: conv ?? 0, conversas_antes: Number(it.refs.n ?? 0) },
       resultado_texto: `${posts ?? 0} post(s) sobre o tema publicados; ${conv ?? 0} conversas pediram esse tema depois`,
-      ...((posts ?? 0) > 0 ? { verificado: true, ...(it.estado === "proposta" ? { estado: "feita" } : {}) } : {}),
+      ...conferir((posts ?? 0) > 0),
     };
   }
   if (!upd) return;
@@ -133,7 +145,8 @@ async function candidatos(admin: Admin, clientId: string, semana: string, ticket
   const porPaciente = async (origem: "responder" | "recuperar" | "preco", ids: string[], textos: { titulo: string; porque: string; acao: string; onde: string }) => {
     if (!ids.length) return;
     ids.forEach((id) => usados.add(id));
-    const v = valorEmJogo(ids.length, await taxaDe(admin, clientId, origem, semana), ticket);
+    const t = await taxaDe(admin, clientId, origem, semana);
+    const v = valorEmJogo(ids.length, t.taxa, ticket, t.aprendida);
     novos.push({ origem, ...textos, n: ids.length, valor_brl: v.valor, valor_calculo: v.calculo, refs: { conversas: ids } });
   };
 
@@ -201,10 +214,10 @@ async function candidatos(admin: Admin, clientId: string, semana: string, ticket
 export async function atualizarPlano(admin: Admin, clientId: string): Promise<{ semana: string; criados: number; conferidos: number }> {
   const semana = semanaDe(new Date());
   const ticket = await ticketDe(admin, clientId);
-  const { data: abertos, error } = await admin.from("plano_itens").select("id, client_id, semana, origem, estado, criado_em, refs, n")
+  const { data: abertos, error } = await admin.from("plano_itens").select("id, client_id, semana, origem, estado, criado_em, refs, n, decidido_por")
     .eq("client_id", clientId).gte("semana", iso(Date.parse(semana) - 21 * DIA).slice(0, 10)).neq("estado", "descartada");
   if (error) throw new Error("Não foi possível ler o plano");
-  for (const it of (abertos ?? []) as Item[]) await medirItem(admin, it, ticket);
+  for (const it of (abertos ?? []) as Item[]) await medirItem(admin, it, ticket, semana);
   const { error: eVenc } = await admin.from("plano_itens").update({ estado: "nao_feita" }).eq("client_id", clientId).lt("semana", semana).eq("estado", "proposta");
   if (eVenc) throw new Error("Não foi possível fechar a semana anterior");
   if (((abertos ?? []) as Item[]).some((i) => i.semana === semana)) return { semana, criados: 0, conferidos: abertos?.length ?? 0 };
