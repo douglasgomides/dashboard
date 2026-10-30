@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { META_GRAPH_VERSAO } from "./meta-graph-versao.js";
 
 export type CanalMeta = "whatsapp" | "instagram";
 export interface EventoMeta {
@@ -73,7 +74,7 @@ export class ErroMeta extends Error {
  constructor(public incerto: boolean,public codigo?: number) {super(incerto?"O canal não confirmou o resultado. Confira no aplicativo antes de repetir.":`O canal recusou a solicitação${codigo?` (código ${codigo})`:""}. Confira permissões, token e conta na Meta.`);}
 }
 export class MetaOficial {
- constructor(private transport:typeof fetch=fetch,private version=process.env.META_GRAPH_API_VERSION||"v23.0") {
+ constructor(private transport:typeof fetch=fetch,private version=process.env.META_GRAPH_API_VERSION||META_GRAPH_VERSAO) {
   if(!/^v\d{2}\.0$/.test(version))throw new Error("Versão da API inválida");
  }
  async requisitar(canal:CanalMeta,path:string,token:string,method:"GET"|"POST"="GET",body?:unknown,query?:Record<string,string>) {

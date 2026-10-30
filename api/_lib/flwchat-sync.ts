@@ -31,8 +31,9 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const FLW_BASE = "https://api.wts.chat";
 const PAGE_SIZE = 100;
 const BATCH_SIZE = 500;
-// Trava de segurança: 50 páginas x 100 = 5 mil cards por painel.
-const MAX_PAGES = 50;
+// Trava de segurança: 150 páginas x 100 = 15 mil cards por painel. Com 50 (5 mil) a Dra. Juliana Paola, com 4.276
+// cards e a API listando do mais antigo para o mais novo, ia perder justamente os cards novos (auditoria 30/10/2026).
+const MAX_PAGES = 150;
 
 export interface FlwChatSyncEnv {
   supabaseUrl: string;
@@ -89,7 +90,7 @@ async function flwGet(token: string, path: string, query: Record<string, string 
   return res.json();
 }
 
-async function fetchCards(token: string, panelId: string, deadlineMs?: number): Promise<{ cards: FlwCard[]; parcial: boolean }> {
+async function fetchCards(token: string, panelId: string, deadlineMs?: number): Promise<{ cards: FlwCard[]; parcial: boolean; teto?: boolean }> {
   const all: FlwCard[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
     const body = await flwGet(token, "/crm/v1/panel/card", { panelId, pageSize: PAGE_SIZE, pageNumber: page });
@@ -97,7 +98,7 @@ async function fetchCards(token: string, panelId: string, deadlineMs?: number): 
     if (!body?.hasMorePages) return { cards: all, parcial: false };
     if (deadlineMs && Date.now() > deadlineMs) return { cards: all, parcial: true };
   }
-  return { cards: all, parcial: true };
+  return { cards: all, parcial: true, teto: true };
 }
 
 // O painel de orçamentos descreve cada card como "NOME DO PROCEDIMENTO - 1 Sessão(ões) 1 Vez(es) a cada 7 dias".
@@ -435,8 +436,9 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
           });
         }
 
-        const { cards, parcial } = await fetchCards(token, panelId, env.deadlineMs);
-        if (parcial) errors.push(`${panelName}: listagem interrompida por tempo, o restante entra na próxima rodada`);
+        const { cards, parcial, teto } = await fetchCards(token, panelId, env.deadlineMs);
+        if (teto) errors.push(`${panelName}: passou de ${MAX_PAGES * PAGE_SIZE} cards, o teto de leitura; os mais recentes podem ter ficado de fora`);
+        else if (parcial) errors.push(`${panelName}: listagem interrompida por tempo, o restante entra na próxima rodada`);
         paineisLidos++;
 
         const desde = config.painel_desde?.[panelId] ?? null;

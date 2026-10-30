@@ -8,8 +8,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { erroCurto, lerDadosAte } from "./sync-status.js";
 import { statusDaFonte, fonteLigada, NOME_FONTE, type FonteId } from "../../src/lib/status-fonte.js";
+import { META_GRAPH_URL } from "./meta-graph-versao.js";
 
-const GRAPH = "https://graph.facebook.com/v23.0";
+const GRAPH = META_GRAPH_URL;
 
 export type Gravidade = "alta" | "media" | "baixa";
 

@@ -6,9 +6,10 @@
  * Vídeo acima de 25 MB (limite da transcrição) fica marcado e não é tentado de novo.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { META_GRAPH_URL } from "./meta-graph-versao.js";
 
 type Admin = SupabaseClient<any, any, any>;
-const GRAPH = "https://graph.facebook.com/v21.0";
+const GRAPH = META_GRAPH_URL;
 const MODELO = process.env.TRANSCRICAO_MODELO || "gpt-4o-mini-transcribe";
 const LIMITE_BYTES = 25 * 1024 * 1024;
 const USD_POR_MIN = 0.003;

@@ -6,8 +6,9 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
+import { META_GRAPH_URL } from "./meta-graph-versao.js";
 
-const GRAPH_BASE = "https://graph.facebook.com/v21.0";
+const GRAPH_BASE = META_GRAPH_URL;
 const BATCH_SIZE = 50;
 
 export interface BackfillThumbnailsEnv {

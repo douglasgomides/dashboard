@@ -17,8 +17,9 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
 import { diagnosticarContaAnuncios } from "./diagnostico-anuncios.js";
 import { graphPageUrl, integrationRequest } from "./integration-http.js";
+import { META_GRAPH_URL } from "./meta-graph-versao.js";
 
-const API = "https://graph.facebook.com/v21.0";
+const API = META_GRAPH_URL;
 
 export type MetaAdsGraphEnv = {
   // Reserva global (META_ADS_TOKEN). Opcional: cada conta pode ter o seu token

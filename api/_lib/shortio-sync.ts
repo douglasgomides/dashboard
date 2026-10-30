@@ -11,10 +11,11 @@
  * aparece no Admin para atribuir.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { META_GRAPH_URL } from "./meta-graph-versao.js";
 
 const API = "https://api.short.io";
 const STATS = "https://api-v2.short.io";
-const GRAPH = "https://graph.facebook.com/v21.0";
+const GRAPH = META_GRAPH_URL;
 
 const norm = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
