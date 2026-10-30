@@ -5,10 +5,12 @@
 --      "vim do site...", "*Google Ads* Sua resposta foi registrada...". O texto vem do link (bio, site, anúncio do
 --      Google), então diz a origem. Só textos fixos contam; texto livre do paciente não é interpretado.
 --      Juliana Paola +121, Mariela +36, Lana +25 (leads abertos, 90 dias).
---  1c. Card na etapa "Paciente Recorrente" ou "Reativação" é paciente da casa (Samira: 3).
+--  1c. Card na etapa "Paciente Recorrente" é paciente da casa (Samira: 3). "Reativação" ficou de fora: na Samira a
+--      etapa mistura 9 leads de Instagram com 8 pacientes (auditoria de 30/10/2026).
 -- O resultado vai para crm_leads.source com origem_como = 'mensagem' ou 'etapa'. Nada é escrito no CRM do cliente.
--- O gatilho de origem passa a preservar esses dois quando o card volta do CRM sem origem; se a equipe preencher o
--- campo no CRM, o campo vale (origem_como = 'crm').
+-- O gatilho de origem passa a preservar esses dois quando o card volta do CRM sem origem e sem canal ou etiqueta que
+-- digam a origem (o que o CRM informa vale mais que a mensagem); se a equipe preencher o campo no CRM, o campo vale
+-- (origem_como = 'crm').
 --
 -- Reversão: update crm_leads set source = null where origem_como in ('mensagem','etapa');
 --   recriar crm_leads_origem_gatilho como em 20261030140000; drop function crm_aplicar_origem_externa(uuid),
@@ -39,12 +41,6 @@ declare
   r record;
 begin
   if nullif(btrim(new.source), '') is null then
-    -- Origem lida da mensagem ou da etapa (crm_aplicar_origem_externa) continua quando o CRM manda o campo vazio.
-    if tg_op = 'UPDATE' and old.origem_como in ('mensagem', 'etapa') then
-      new.source := old.source;
-      new.origem_como := old.origem_como;
-      return new;
-    end if;
     new.source := null;
     new.origem_como := null;
     if new.canal_id is not null then
@@ -56,6 +52,11 @@ begin
       r := public.crm_origem_inferida(new.provider, new.raw_payload);
       new.source := r.origem;
       new.origem_como := case when r.origem is null then null else r.como end;
+    end if;
+    -- Sem nada no CRM, a origem lida da mensagem ou da etapa (crm_aplicar_origem_externa) continua.
+    if new.source is null and tg_op = 'UPDATE' and old.origem_como in ('mensagem', 'etapa') then
+      new.source := old.source;
+      new.origem_como := old.origem_como;
     end if;
   elsif tg_op = 'INSERT' or new.source is distinct from old.source then
     -- crm_aplicar_origem_externa grava já com origem_como 'mensagem'/'etapa': não vira "do CRM".
@@ -95,7 +96,7 @@ as $$
     select s.id,
       coalesce(
         case when public.crm_origem_da_mensagem(p.texto) is not null then public.crm_origem_da_mensagem(p.texto) end,
-        case when st.status_name ~* '(paciente recorrente|reativa[cç])' then 'Paciente antigo' end
+        case when st.status_name ~* 'paciente recorrente' then 'Paciente antigo' end
       ) as origem,
       case when public.crm_origem_da_mensagem(p.texto) is not null then 'mensagem' else 'etapa' end as como
     from sem s

@@ -603,6 +603,9 @@ try {
       // Card na etapa de paciente da casa.
       await db.query("insert into crm_pipeline_statuses(crm_connection_id,pipeline_id,status_id,pipeline_name,status_name) values ($1,'pp','rec','Atendimento','Paciente Recorrente')", [connectionA]);
       await db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,pipeline_id,status_id,occurred_at) values ($1,$2,'kommo','km1','add','{}','pp','rec',now())", [A, connectionA]);
+      // "Reativação" mistura lead novo e paciente: não vira paciente antigo.
+      await db.query("insert into crm_pipeline_statuses(crm_connection_id,pipeline_id,status_id,pipeline_name,status_name) values ($1,'pp','rea','Atendimento','Reativação')", [connectionA]);
+      await db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,pipeline_id,status_id,occurred_at) values ($1,$2,'kommo','km2','add','{}','pp','rea',now())", [A, connectionA]);
       assert.deepEqual(await rows("select crm_aplicar_origem_externa($1) as n", [A]), [{ n: 2 }]);
       assert.deepEqual(await rows("select external_lead_id id, source, origem_como from crm_leads where external_lead_id in ('fm1','km1') order by 1"), [
         { id: "fm1", source: "Instagram", origem_como: "mensagem" },
@@ -611,6 +614,10 @@ try {
       // O sync seguinte manda o campo vazio: a origem lida fica. A equipe preenche no CRM: o campo vale.
       await db.query(`update crm_leads set source=null, raw_payload='{"sessionId":"s-1","novo":1}' where external_lead_id='fm1'`);
       assert.deepEqual(await rows("select source, origem_como from crm_leads where external_lead_id='fm1'"), [{ source: "Instagram", origem_como: "mensagem" }]);
+      // Etiqueta que diz a origem chega depois: vale mais que a mensagem.
+      await db.query(`update crm_leads set source=null, raw_payload='{"sessionId":"s-1","contato_tags":["Anúncio"]}' where external_lead_id='fm1'`);
+      const depois = await rows<{ source: string | null; origem_como: string | null }>("select source, origem_como from crm_leads where external_lead_id='fm1'");
+      assert.notEqual(depois[0].origem_como, "mensagem", "etiqueta do CRM vale mais que a mensagem");
       await db.query("update crm_leads set source='Indicação' where external_lead_id='fm1'");
       assert.deepEqual(await rows("select source, origem_como from crm_leads where external_lead_id='fm1'"), [{ source: "Indicação", origem_como: "crm" }]);
       assert.deepEqual(await rows("select crm_aplicar_origem_externa($1) as n", [A]), [{ n: 0 }], "nada novo para aplicar");

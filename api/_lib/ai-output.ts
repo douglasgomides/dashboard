@@ -3,6 +3,41 @@ import { z } from "zod";
 const texto = z.string().max(4000);
 const lista = z.array(z.string().max(2000)).max(100);
 
+const OBJECOES = ["preco", "convenio", "distancia", "adiamento", "agenda", "medo", "desconfianca", "outro"];
+const FALHAS = ["sem_resposta", "demora", "desvio_preco", "preco_sem_ancoragem", "sem_cta", "sem_follow_up", "nome_errado", "informacao_inconsistente", "pressao", "so_emoji", "desconto_reativo", "excesso_audio"];
+
+/**
+ * Arruma desvios de forma comuns da IA antes de validar, sem inventar conteúdo: texto nulo vira "", item fora
+ * da lista sai da lista, nota fora de 0 a 10 é limitada, e conversa não comercial perde a ação comercial.
+ * Campos que faltam ou com valor fora do esperado continuam reprovando na validação.
+ */
+export function normalizarResumoConversa(bruto: unknown): unknown {
+  if (!bruto || typeof bruto !== "object" || Array.isArray(bruto)) return bruto;
+  const r = { ...(bruto as Record<string, unknown>) };
+  const corta = (v: unknown, n: number) => (typeof v === "string" ? v.slice(0, n) : v);
+  for (const k of ["motivo", "resumo", "interesse", "atendente", "evidencia", "como_deveria", "proximo_passo", "alerta"]) r[k] = corta(r[k], 4000);
+  for (const k of ["evidencia", "como_deveria"]) if (r[k] == null) r[k] = "";
+  const filtra = (v: unknown, ok: string[], max: number) => (Array.isArray(v) ? [...new Set(v.filter((x) => typeof x === "string" && ok.includes(x)))].slice(0, max) : v);
+  r.objecoes = filtra(r.objecoes ?? [], OBJECOES, 8);
+  r.falhas = filtra(r.falhas ?? [], FALHAS, 12);
+  const a = r.atendimento;
+  if (a && typeof a === "object" && !Array.isArray(a)) {
+    const at = { ...(a as Record<string, unknown>) };
+    if (typeof at.nota_0a10 === "string" && at.nota_0a10.trim() !== "" && Number.isFinite(Number(at.nota_0a10))) at.nota_0a10 = Number(at.nota_0a10);
+    if (typeof at.nota_0a10 === "number") at.nota_0a10 = Math.min(10, Math.max(0, at.nota_0a10));
+    for (const k of ["pontos_fortes", "pontos_a_melhorar"]) {
+      if (at[k] == null) at[k] = [];
+      if (Array.isArray(at[k])) at[k] = (at[k] as unknown[]).filter((x) => typeof x === "string").map((x) => (x as string).slice(0, 2000)).slice(0, 100);
+    }
+    r.atendimento = at;
+  }
+  if (r.comercial === false) {
+    r.recuperavel = false;
+    r.proximo_passo = null;
+  }
+  return r;
+}
+
 /** JSON do provedor é dado externo: só entra no banco depois de validar o contrato. */
 export const conversationSummarySchema = z.object({
   motivo: texto.min(1), resumo: texto.min(1), comercial: z.boolean(), interesse: texto.nullable(),

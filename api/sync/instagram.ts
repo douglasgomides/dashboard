@@ -61,7 +61,9 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     await recordSyncStatusPorCliente(
       createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
       "instagram",
-      results.map((r) => ({ clientId: r.clientId, rows: r.posts + r.dailyMetrics, errors: r.errors })),
+      // Rodada da Windsor que não trouxe nada e não deu erro não diz nada sobre a fonte: gravar "sucesso" apagava o
+      // erro que a leitura pela Graph tinha registrado (auditoria 30/10/2026).
+      results.filter((r) => r.errors.length > 0 || r.posts + r.dailyMetrics > 0).map((r) => ({ clientId: r.clientId, rows: r.posts + r.dailyMetrics, errors: r.errors })),
       { preservaBloqueio: true },
     );
     const hasErrors = results.some((r) => r.errors.length > 0);
