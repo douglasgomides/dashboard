@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { lerFilaWhatsapp } from "@/lib/fila-whatsapp";
 import { aplicarRastreio, diagnosticarAds, type AlcanceJanela, type LinhaAds, type CampanhaCadastro } from "@/lib/anuncios-objetivo";
 import type { Acompanhamento } from "@/lib/oportunidades";
 import { lerDiagnosticoRpc, montarDadosReduzidos, type DadosComerciais, type MetricasEssenciais, type WtsResumoMin } from "@/lib/comercial";
@@ -373,7 +374,7 @@ export async function getAdsCampanhasPeriodo(clientId: string, start: string, en
   }
   const { data: cad, error: e2 } = await (supabase as any)
     .from("meta_ads_campaigns")
-    .select("campaign_id, name, objective, permalink, thumbnail_url")
+    .select("campaign_id, name, objective, permalink, thumbnail_url, destinos, otimizacoes")
     .eq("client_id", clientId);
   if (e2) throw e2;
   // Alcance de 7 dias pela campanha inteira (frequência real). Extra: sem a tabela ou com erro, vale a conta antiga.
@@ -411,6 +412,17 @@ export async function getWtsResumo(clientId: string, start: string, end: string)
   });
   if (error) throw error;
   return data?.[0] ?? null;
+}
+
+// Fila do WhatsApp com o dado do cliente: abertas agora (7 dias e mais antigas), lote de encerramento e conta
+// compartilhada. null = RPC ausente (banco sem a migração) ou sem acesso.
+export async function getWtsFilaDoCliente(clientId: string, start: string, end: string) {
+  const { data, error } = await (supabase as unknown as RpcClient).rpc("wts_fila_do_cliente", { p_client_id: clientId, p_start: start, p_end: end });
+  if (error) {
+    if (error.code === "PGRST202" || /wts_fila_do_cliente/.test(error.message ?? "")) return null;
+    throw new Error(error.message ?? "falha ao ler a fila do WhatsApp");
+  }
+  return lerFilaWhatsapp(data);
 }
 
 export async function getWtsPorDepartamento(clientId: string, start: string, end: string) {
@@ -538,6 +550,8 @@ export type EtapaParaAnalise = {
   ganhos: number;
   perdidos: number;
   abertos: number;
+  /** Fechados na origem sem resultado (outcome 'closed'): o resto do total. Confirmar a etapa não muda esses cards. */
+  fechados: number;
   confirmado: boolean;
   resultado_confirmado: "open" | "won" | "lost" | null;
 };
@@ -557,6 +571,8 @@ export async function listEtapasParaAnalise(clientId: string): Promise<EtapaPara
     ganhos: Number(r.ganhos),
     perdidos: Number(r.perdidos),
     abertos: Number(r.abertos),
+    // A RPC conta total, ganhos, perdidos e abertos; o que sobra é o card fechado na origem sem resultado.
+    fechados: Math.max(0, Number(r.total) - Number(r.ganhos) - Number(r.perdidos) - Number(r.abertos)),
   }));
 }
 
@@ -880,6 +896,13 @@ export async function getRoiPeriodo(clientId: string, de: string, ate: string): 
     ganhos: n(data.ganhos),
     ganhos_com_valor: n(data.ganhos_com_valor),
     receita: n(data.receita),
+    // Banco sem a separação por origem: null, e a tela não calcula o retorno com a receita total.
+    ganhos_anuncio: data.ganhos_anuncio === undefined ? null : n(data.ganhos_anuncio),
+    ganhos_anuncio_com_valor: data.ganhos_anuncio_com_valor === undefined ? null : n(data.ganhos_anuncio_com_valor),
+    receita_anuncio: data.receita_anuncio === undefined ? null : n(data.receita_anuncio),
+    receita_por_origem: Array.isArray(data.receita_por_origem)
+      ? data.receita_por_origem.map((o: { origem?: unknown; ganhos?: unknown; receita?: unknown }) => ({ origem: String(o.origem ?? "Sem origem"), ganhos: n(o.ganhos), receita: n(o.receita) }))
+      : [],
     ganho_identificavel: !!data.ganho_identificavel,
     crm_compartilhado: !!data.crm_compartilhado,
     crm_compartilhado_com: Array.isArray(data.crm_compartilhado_com) ? data.crm_compartilhado_com.map(String) : [],

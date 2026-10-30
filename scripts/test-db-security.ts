@@ -646,6 +646,94 @@ try {
       await db.exec("rollback");
     }
   });
+  await check("fechado na origem: confirmar etapa não reabre; em aberto é só open; procedimento sem cair na origem", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("delete from crm_leads where client_id=$1", [A]);
+      await db.query("insert into crm_pipeline_statuses(crm_connection_id,pipeline_id,status_id,pipeline_name,status_name) values ($1,'pa','acomp','Atendimento','Acompanhamento'),($1,'pa','ag','Atendimento','Agendamento de Implante')", [connectionA]);
+      const card = (id: string, status: string, outcome: string, price: number | null, source: string | null) =>
+        db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,pipeline_id,status_id,outcome,price,source,occurred_at) values ($1,$2,'kommo',$3,'add','{}','pa',$4,$5,$6,$7,now())", [A, connectionA, id, status, outcome, price, source]);
+      await card("f1", "acomp", "open", 100, "Instagram");
+      await card("f2", "acomp", "closed", 40750, "Instagram");
+      await card("f3", "acomp", "lost", 50, null);
+      await card("f4", "ag", "closed", null, "Paciente antigo");
+      await card("f5", "ag", "open", null, null);
+      await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: admin })]);
+      await db.exec("set local role authenticated");
+      const m = (await rows<Record<string, unknown>>("select total_leads, em_atendimento, em_atendimento_valor, abertos, fechados, ganhos, perdidos, consulta_configurada from crm_metricas_essenciais($1)", [A]))[0];
+      assert.deepEqual({ ...m, em_atendimento_valor: Number(m.em_atendimento_valor) }, { total_leads: 5, em_atendimento: 1, em_atendimento_valor: 100, abertos: 2, fechados: 2, ganhos: 0, perdidos: 1, consulta_configurada: false });
+      // Confirmar a etapa como aberta (o "confirmar em lote") não reabre o card fechado na origem.
+      await rows("select crm_definir_etapa_resultado($1,'pa','ag','open')", [connectionA]);
+      assert.deepEqual(await rows("select external_lead_id id, outcome from crm_leads where status_id='ag' order by 1"), [{ id: "f4", outcome: "closed" }, { id: "f5", outcome: "open" }]);
+      await rows("select crm_definir_etapa_resultado($1,'pa','acomp','won')", [connectionA]);
+      assert.deepEqual(await rows("select external_lead_id id, outcome from crm_leads where status_id='acomp' order by 1"), [{ id: "f1", outcome: "won" }, { id: "f2", outcome: "closed" }, { id: "f3", outcome: "won" }]);
+      // Etapa marcada como consulta agendada: o número passa a ser fato.
+      await rows("select crm_definir_etapa_kpi($1,'pa','ag','consulta_agendada',true)", [connectionA]);
+      assert.deepEqual(await rows("select consultas_agendadas, consulta_configurada from crm_metricas_essenciais($1)", [A]), [{ consultas_agendadas: 2, consulta_configurada: true }]);
+      // Sem o campo de procedimento, a linha é "Não informado" (não a origem); por fonte, vale a origem. Abertos à parte.
+      assert.deepEqual(await rows("select chave, total, abertos from crm_funil_por_campo($1,'%Tipo de Procedim%')", [A]), [{ chave: "Não informado", total: 5, abertos: 1 }]);
+      const fonte = await rows<{ chave: string }>("select chave from crm_funil_por_campo($1,'%Fonte do Lead%') order by chave", [A]);
+      assert.deepEqual(fonte.map((r) => r.chave), ["Instagram", "Não informado", "Paciente antigo"]);
+      assert.deepEqual(await rows("select chave from crm_funil_por_campo_periodo($1,'%Tipo de Procedim%',current_date - 1,current_date + 1)", [A]), [{ chave: "Não informado" }]);
+      await db.exec("reset role");
+    } finally {
+      await db.exec("rollback");
+    }
+  });
+  await check("ROI só com a receita de pessoa vinda de anúncio; CRM do passo a passo pelo volume", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("delete from crm_leads where client_id=$1", [A]);
+      await db.query("delete from meta_ads_daily where client_id=$1", [A]);
+      const lead = (id: string, pipeline: string, phone: string | null, outcome: string, price: number | null, source: string | null) =>
+        db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,pipeline_id,contact_phone,raw_payload,outcome,price,source,occurred_at) values ($1,$2,'kommo',$3,'add',$4,$5,'{}',$6,$7,$8,now() - interval '2 days')", [A, connectionA, id, pipeline, phone, outcome, price, source]);
+      await db.query("insert into crm_funil_papel(crm_connection_id,pipeline_id,papel) values ($1,'compras','compra')", [connectionA]);
+      await lead("a1", "captacao", "(67) 99999-1111", "open", null, "Anúncio");         // chegou pelo anúncio
+      await lead("a2", "compras", "(67) 99999-1111", "won", 1000, null);              // e comprou no checkout
+      await lead("b1", "compras", "(67) 98888-2222", "won", 800, null);               // checkout sem origem
+      await lead("c1", "captacao", "(67) 97777-3333", "won", 300, "import_base");     // base importada
+      await lead("d1", "captacao", null, "won", 200, "Facebook Ads");                // anúncio no próprio card
+      await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: admin })]);
+      await db.exec("set local role authenticated");
+      const r = (await rows<{ r: Record<string, unknown> }>("select roi_periodo($1, current_date - 10, current_date) as r", [A]))[0].r;
+      assert.equal(r.ganhos, 4);
+      assert.equal(Number(r.receita), 2300);
+      assert.equal(r.ganhos_anuncio, 2);
+      assert.equal(r.ganhos_anuncio_com_valor, 2);
+      assert.equal(Number(r.receita_anuncio), 1200);
+      assert.deepEqual((r.receita_por_origem as { origem: string; ganhos: number; receita: number }[]).map((o) => [o.origem, o.ganhos, Number(o.receita)]), [
+        ["Anúncio", 2, 1200], ["Funil de compra, sem origem", 1, 800], ["Base importada", 1, 300],
+      ]);
+      assert.equal(r.crm_provider, "kommo");
+      await db.exec("reset role");
+    } finally {
+      await db.exec("rollback");
+    }
+  });
+  await check("fila do WhatsApp: abertas antigas à parte, lote de encerramento e conta compartilhada pelo dado do cliente", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("update clients set wts_company_id='empresa-x', active=true where id in ($1,$2)", [A, B]);
+      const sessao = (id: string, inicio: string, status: string, fim: string | null) =>
+        db.query(`insert into wts_sessions(client_id,session_id,started_at,status,ended_at) values ($1,$2,now() - ${inicio}::interval,$3,${fim ? `now() - ${fim}::interval` : "null"})`, [A, id, status]);
+      await sessao("s1", "'1 day'", "IN_PROGRESS", null);
+      await sessao("s2", "'20 days'", "IN_PROGRESS", null);
+      await sessao("s3", "'30 days'", "IN_PROGRESS", null);
+      for (let i = 0; i < 6; i++) await sessao(`l${i}`, "'3 days'", "COMPLETED", "'2 days'");
+      await sessao("u1", "'3 days'", "COMPLETED", "'1 day'");
+      await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: editor })]);
+      await db.exec("set local role authenticated");
+      const f = (await rows<{ f: Record<string, unknown> }>("select wts_fila_do_cliente($1, current_date - 10, current_date) as f", [A]))[0].f;
+      assert.deepEqual(f, { abertas_7d: 1, abertas_antigas: 2, encerradas: 7, maior_lote: 6, encerradas_em_lote: 6, conta_compartilhada_com: ["Clínica B"] });
+      await db.exec("reset role");
+      await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: outsider })]);
+      await db.exec("set local role authenticated");
+      assert.deepEqual(await rows("select wts_fila_do_cliente($1, current_date - 10, current_date) as f", [A]), [{ f: null }]);
+      await db.exec("reset role");
+    } finally {
+      await db.exec("rollback");
+    }
+  });
   await check("origem pela mensagem pronta de link e pela etapa de paciente; o sync seguinte não apaga", async () => {
     await db.exec("begin");
     try {

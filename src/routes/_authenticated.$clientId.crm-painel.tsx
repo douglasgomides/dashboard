@@ -392,10 +392,17 @@ function CrmClinicaPage() {
 
   const decididos = m.ganhos + m.perdidos;
   const taxaConversao = decididos > 0 ? fmtTaxa(m.ganhos, decididos) : null;
-  const emDisputa = m.total_leads - decididos;
+  // Em aberto é só o card aberto. O card fechado na origem sem resultado (FlwChat) aparece à parte.
+  // Banco sem a contagem nova: vale a conta antiga (total menos ganhos e perdidos).
+  const temAbertos = m.abertos != null && Number.isFinite(Number(m.abertos));
+  const fechadosSemResultado = temAbertos ? Number(m.fechados ?? 0) : 0;
+  const emDisputa = temAbertos ? Number(m.abertos) : m.total_leads - decididos;
   // Zero que não é fato: há leads em aberto, mas nenhuma etapa foi marcada como "consulta agendada"
   // nem "em atendimento". O número real só aparece depois que a equipe marca as etapas em "A analisar".
   const etapasPorConfirmar = emDisputa > 0 && m.consultas_agendadas === 0 && m.em_atendimento === 0;
+  // Consulta agendada sem nenhuma etapa marcada (pelo nome ou pela equipe): "sem dado", nunca 0.
+  const consultaSemEtapa = m.consulta_configurada === false || (m.consulta_configurada == null && etapasPorConfirmar);
+  const MOTIVO_CONSULTA = "sem dado: nenhuma etapa do CRM está marcada como consulta agendada (a equipe marca em A analisar)";
   const baseCurta = decididos > 0 && decididos < m.total_leads * 0.3;
 
   const base = m.total_leads;
@@ -493,9 +500,19 @@ function CrmClinicaPage() {
         Base geral do CRM · histórico completo
       </h2>
 
-      {etapasPorConfirmar && (
+      {(etapasPorConfirmar || consultaSemEtapa) && (
         <Faixa icone={AlertTriangle} cor="var(--warn)" alerta>
-          <b>A configurar:</b> as etapas de consulta agendada e em atendimento ainda não foram marcadas.
+          <b>A configurar:</b>{" "}
+          {etapasPorConfirmar
+            ? "as etapas de consulta agendada e em atendimento ainda não foram marcadas."
+            : "nenhuma etapa do CRM está marcada como consulta agendada, então esse número fica sem dado."}
+        </Faixa>
+      )}
+      {fechadosSemResultado > 0 && (
+        <Faixa icone={Info} cor="var(--warn)" alerta>
+          <b>{fmtN(fechadosSemResultado)} cards fechados sem resultado:</b> o {crmNome} fechou esses cards sem dizer se ganharam ou perderam.
+          Eles não contam como em aberto, nem como ganho, nem como perdido. Para entrarem na conversão, a equipe precisa marcar ganho ou
+          perdido no próprio {crmNome}.
         </Faixa>
       )}
 
@@ -504,8 +521,8 @@ function CrmClinicaPage() {
         <Kpi
           icone={CalendarCheck}
           rotulo="Consultas agendadas"
-          valor={etapasPorConfirmar ? "—" : fmtN(m.consultas_agendadas)}
-          dica={etapasPorConfirmar ? "a configurar: as etapas ainda não foram marcadas" : "todo o histórico, não segue o período. O número do período está em \"Por funil, no período\"."}
+          valor={consultaSemEtapa ? "sem dado" : fmtN(m.consultas_agendadas)}
+          dica={consultaSemEtapa ? MOTIVO_CONSULTA : "todo o histórico, não segue o período. O número do período está em \"Por funil, no período\"."}
           cor="var(--accent)"
         />
         <Kpi
@@ -582,7 +599,8 @@ function CrmClinicaPage() {
         ajuda={
           <>
             Cada barra mostra quantos leads estão naquela situação e o percentual sobre os {fmtN(base)} leads da base. Taxa de conversão =
-            ganhos ÷ (ganhos + perdidos). “Ainda em disputa” são os leads que não foram nem ganhos nem perdidos.
+            ganhos ÷ (ganhos + perdidos). “Ainda em disputa” são os cards abertos. Os fechados no CRM sem dizer se ganharam ou perderam
+            aparecem à parte e não entram em nenhuma das contas.
           </>
         }
       >
@@ -595,8 +613,18 @@ function CrmClinicaPage() {
               valor={emDisputa}
               base={base}
               cor="var(--s3)"
-              extra="não ganhos nem perdidos"
+              extra="cards abertos"
             />
+            {fechadosSemResultado > 0 && (
+              <EtapaFunil
+                icone={XCircle}
+                rotulo="Fechados sem resultado"
+                valor={fechadosSemResultado}
+                base={base}
+                cor="var(--muted)"
+                extra="o CRM fechou sem dizer se ganhou ou perdeu"
+              />
+            )}
             <EtapaFunil
               icone={Headset}
               rotulo="Em atendimento"
@@ -608,10 +636,10 @@ function CrmClinicaPage() {
             <EtapaFunil
               icone={CalendarCheck}
               rotulo="Consultas agendadas"
-              valor={etapasPorConfirmar ? null : m.consultas_agendadas}
+              valor={consultaSemEtapa ? null : m.consultas_agendadas}
               base={base}
               cor="var(--accent)"
-              extra={etapasPorConfirmar ? "a configurar" : undefined}
+              extra={consultaSemEtapa ? "sem dado: nenhuma etapa marcada como consulta agendada" : undefined}
             />
             <EtapaFunil icone={Trophy} rotulo="Ganhos" valor={m.ganhos} base={base} cor="var(--good)" />
             <EtapaFunil icone={XCircle} rotulo="Perdidos" valor={m.perdidos} base={base} cor="var(--crit)" />
@@ -677,7 +705,7 @@ function CrmClinicaPage() {
               end={end}
               title="Leads por tipo de procedimento"
               fieldPatterns={["%Tipo de Procedim%"]}
-              emptyLabel="Nenhum lead com procedimento identificado ainda."
+              emptyLabel="O CRM não tem o campo de tipo de procedimento preenchido nos cards deste período."
               color="var(--good)"
               icone={Stethoscope}
             />

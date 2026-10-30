@@ -32,7 +32,7 @@ import { median } from "@/lib/report-metrics";
 import { BENCHMARKS } from "@/lib/benchmarks";
 import { confiancaPorAmostra, type Confianca, type Impacto, type Insight, type Limitacao, type Tom } from "@/lib/insight";
 import { fmtFracao } from "@/lib/metricas";
-import { avaliarRastreio, type Rastreio } from "@/lib/rastreio-anuncios";
+import { avaliarRastreio, cliqueLevaAoPerfil, type Rastreio } from "@/lib/rastreio-anuncios";
 
 export type Grupo = "mensagem" | "lead" | "trafego" | "engajamento" | "alcance" | "venda" | "outro";
 
@@ -168,6 +168,10 @@ export interface CampanhaCadastro {
   objective: string | null;
   permalink?: string | null;
   thumbnail_url?: string | null;
+  /** destination_type dos conjuntos (INSTAGRAM_PROFILE, WHATSAPP, WEBSITE…). */
+  destinos?: string[] | null;
+  /** optimization_goal dos conjuntos (VISIT_INSTAGRAM_PROFILE, CONVERSATIONS…). */
+  otimizacoes?: string[] | null;
 }
 /** Alcance da janela de 7 dias lido da Meta pela campanha inteira (meta_ads_alcance_janela). */
 export interface AlcanceJanela {
@@ -202,6 +206,8 @@ export interface CampanhaDiag {
   gasto: number;
   impressoes: number;
   cliquesLink: number;
+  /** O clique leva ao perfil do Instagram (destino ou otimização), não ao WhatsApp nem ao site. */
+  cliquePerfil: boolean;
   conversas: number;
   leads: number;
   visitasPagina: number;
@@ -275,6 +281,8 @@ export interface DiagnosticoAds {
   gasto: number;
   impressoes: number;
   cliquesLink: number;
+  /** Parte de cliquesLink que vem de campanhas que levam ao perfil do Instagram. */
+  cliquesPerfil: number;
   conversas: number; // de todas as campanhas
   leads: number;
   visitasPagina: number;
@@ -297,7 +305,9 @@ export interface DiagnosticoAds {
  * conversas atribuídas) continuam, para o alerta citar.
  */
 export function aplicarRastreio(d: DiagnosticoAds, atendimentosWhatsapp: number | null | undefined): DiagnosticoAds {
-  const rastreio = avaliarRastreio({ cliquesLink: d.cliquesLink, conversas: d.conversas, atendimentosWhatsapp });
+  // Visita ao perfil não é clique para conversar: fica fora da regra (rastreio-anuncios.ts).
+  const perfil = d.cliquesPerfil ?? 0;
+  const rastreio = avaliarRastreio({ cliquesLink: d.cliquesLink - perfil, cliquesPerfil: perfil, conversas: d.conversas, atendimentosWhatsapp });
   if (!rastreio.suspeito) return { ...d, rastreio };
   return {
     ...d,
@@ -317,7 +327,7 @@ function insightRastreio(d: DiagnosticoAds): Insight {
     tom: "atencao",
     titulo: "Provável problema de rastreio das conversas dos anúncios",
     diagnostico: d.rastreio?.mensagem ?? "",
-    evidencia: `${int(d.cliquesLink)} cliques no link, ${int(d.conversas)} conversas atribuídas pela Meta no período.`,
+    evidencia: `${int(d.cliquesLink - (d.cliquesPerfil ?? 0))} cliques para WhatsApp ou site${d.cliquesPerfil ? ` (mais ${int(d.cliquesPerfil)} visitas ao perfil, que não contam)` : ""}, ${int(d.conversas)} conversas atribuídas pela Meta no período.`,
     confianca: "media",
     motivoConfianca: "Conta de cliques e conversas no período; o WhatsApp entra quando está ligado.",
     impacto: "alto",
@@ -419,7 +429,7 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
 
   type Base = Pick<
     CampanhaDiag,
-    | "campaign_id" | "campanha" | "objetivo" | "grupo" | "permalink" | "thumbnail_url" | "gasto" | "impressoes" | "cliquesLink" | "conversas" | "leads"
+    | "campaign_id" | "campanha" | "objetivo" | "grupo" | "permalink" | "thumbnail_url" | "gasto" | "impressoes" | "cliquesLink" | "cliquePerfil" | "conversas" | "leads"
     | "visitasPagina" | "diasAtivos" | "gastoDiario" | "resultados" | "custoPorResultado" | "custoPorConversa" | "ctrLink" | "ctrLink1" | "ctrLink2"
     | "cansando" | "atencaoCaindo" | "cpm" | "cpcLink" | "ctrTodos" | "frequenciaDia" | "frequencia7d" | "alcanceDiarioSomado" | "conversaPorClique" | "custoPorVisita"
   > & { naoMedido: boolean };
@@ -454,6 +464,7 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
       gasto: a.g,
       impressoes: a.i,
       cliquesLink: a.lc,
+      cliquePerfil: cliqueLevaAoPerfil(c),
       conversas: a.cv,
       leads: a.ld,
       visitasPagina: a.lpv,
@@ -765,6 +776,7 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
     gasto: gastoTotal,
     impressoes: campanhas.reduce((s, c) => s + c.impressoes, 0),
     cliquesLink: campanhas.reduce((s, c) => s + c.cliquesLink, 0),
+    cliquesPerfil: campanhas.reduce((s, c) => s + (c.cliquePerfil ? c.cliquesLink : 0), 0),
     conversas: conversasTotal,
     leads: campanhas.reduce((s, c) => s + c.leads, 0),
     visitasPagina: campanhas.reduce((s, c) => s + c.visitasPagina, 0),

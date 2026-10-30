@@ -6,6 +6,7 @@ const base: DadosRoi = {
   tem_anuncios: true, tem_crm: true, crm_provider: "kommo", rotulo_custo: "venda",
   investido: 1500, investido_aquisicao: 1000, investido_crescimento: 500, investido_estimado: 0,
   leads: 100, leads_com_origem: 95, ganhos: 4, ganhos_com_valor: 4, receita: 6000, ganho_identificavel: true, crm_compartilhado: false,
+  ganhos_anuncio: 4, ganhos_anuncio_com_valor: 4, receita_anuncio: 6000, receita_por_origem: [{ origem: "Anúncio", ganhos: 4, receita: 6000 }],
 };
 
 // ROI só com aquisição: (6000 − 1000) ÷ 1000 = 500%. O crescimento (500) fica de fora. Custo = 1000 ÷ 4.
@@ -23,7 +24,7 @@ assert.equal(montarRoi({ ...base, rotulo_custo: "paciente" }).rotuloCusto, "Cust
 
 // Caso Doctor Creator antes da correção: todo o gasto dividia a receita. Com 5.518 investidos, 3.996 em aquisição e
 // 3.046 de receita, o ROI sai de −45% para −24%.
-const dc = montarRoi({ ...base, investido: 5518, investido_aquisicao: 3996, investido_crescimento: 1522, investido_estimado: 1700, leads: 334, leads_com_origem: 287, ganhos: 11, ganhos_com_valor: 11, receita: 3046 });
+const dc = montarRoi({ ...base, investido: 5518, investido_aquisicao: 3996, investido_crescimento: 1522, investido_estimado: 1700, leads: 334, leads_com_origem: 287, ganhos: 11, ganhos_com_valor: 11, receita: 3046, ganhos_anuncio: 11, ganhos_anuncio_com_valor: 11, receita_anuncio: 3046 });
 assert.equal(Math.round(dc.roi! * 100), -24);
 // Parte do gasto separada por estimativa e 14% dos leads sem origem: Parcial, com os dois motivos.
 assert.equal(dc.selo.nivel, "parcial");
@@ -50,7 +51,7 @@ assert.equal(resumoRoi(juliana), "faltam 2 itens");
 // Valor em poucas vendas: não calcula (a receita sairia menor).
 assert.equal(montarRoi({ ...base, ganhos: 10, ganhos_com_valor: 7 }).calculavel, false);
 // Valor acima do mínimo mas incompleto: lê, como Parcial.
-const valorQuase = montarRoi({ ...base, ganhos: 10, ganhos_com_valor: 9 });
+const valorQuase = montarRoi({ ...base, ganhos: 10, ganhos_com_valor: 9, ganhos_anuncio: 10, ganhos_anuncio_com_valor: 9 });
 assert.equal(valorQuase.calculavel, true);
 assert.equal(valorQuase.selo.nivel, "parcial");
 assert.match(valorQuase.selo.motivo, /sem valor/);
@@ -74,7 +75,37 @@ assert.match(montarRoi({ ...base, investido: 0, investido_aquisicao: 0, investid
 assert.match(montarRoi({ ...base, ganhos: 0, ganhos_com_valor: 0, receita: 0 }).motivoSemCalculo!, /falta: preencher o valor/);
 
 // ROI negativo.
-assert.equal(resumoRoi(montarRoi({ ...base, receita: 500 })), "-50%");
+assert.equal(resumoRoi(montarRoi({ ...base, receita: 500, receita_anuncio: 500 })), "-50%");
+
+// Doctor Creator, outubro (auditoria de 30/10/2026): R$ 4.826 de 19 vendas, nenhuma de pessoa vinda de anúncio.
+// Antes: ROI de +101%. Agora: não calcula e diz de onde veio a receita.
+const dcOut = montarRoi({
+  ...base, investido: 5303.55, investido_aquisicao: 2397.14, investido_crescimento: 2906.41, leads: 242, leads_com_origem: 200,
+  ganhos: 19, ganhos_com_valor: 19, receita: 4826.22, ganhos_anuncio: 0, ganhos_anuncio_com_valor: 0, receita_anuncio: 0,
+  receita_por_origem: [
+    { origem: "Funil de compra, sem origem", ganhos: 14, receita: 3546 },
+    { origem: "Base importada", ganhos: 2, receita: 832 },
+    { origem: "Site", ganhos: 2, receita: 301 },
+    { origem: "Disparo para lista", ganhos: 1, receita: 147 },
+  ],
+});
+assert.equal(dcOut.calculavel, false);
+assert.equal(dcOut.roi, null);
+assert.equal(dcOut.receitaTotal, 4826.22);
+assert.equal(dcOut.ganhosTotal, 19);
+assert.match(dcOut.motivoSemCalculo!, /nenhuma das 19 vendas do período veio de pessoa com origem anúncio/);
+assert.match(dcOut.motivoSemCalculo!, /funil de compra, sem origem \(14 vendas, R\$\s?3\.546\)/);
+assert.ok(!/[—–]/.test(dcOut.motivoSemCalculo!));
+// Parte das vendas veio de anúncio: o ROI usa só essa parte; a receita total fica ao lado.
+const parte = montarRoi({ ...base, ganhos: 10, ganhos_com_valor: 10, receita: 9000, ganhos_anuncio: 2, ganhos_anuncio_com_valor: 2, receita_anuncio: 3000 });
+assert.equal(parte.calculavel, true);
+assert.equal(parte.roi, 2);
+assert.equal(parte.custo, 500);
+assert.equal(parte.receitaTotal, 9000);
+// Banco sem a separação: não usa a receita total como se fosse do anúncio.
+const antigo = montarRoi({ ...base, ganhos_anuncio: null, ganhos_anuncio_com_valor: null, receita_anuncio: null, receita_por_origem: [] });
+assert.equal(antigo.calculavel, false);
+assert.match(antigo.motivoSemCalculo!, /separar a receita que veio dos anúncios/);
 
 // Passo a passo por CRM; o Digisac não registra venda e diz isso.
 assert.match(passosValor("digisac").join(" "), /não registra venda/);

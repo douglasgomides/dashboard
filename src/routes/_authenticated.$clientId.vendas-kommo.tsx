@@ -5,30 +5,15 @@ import { fmtTaxa } from "@/lib/metricas";
 import { Carregando, ResumoExecutivo } from "@/components/sem-fonte";
 import { useQuery } from "@tanstack/react-query";
 import { getCrmFunilPorCampoAlt, getCrmLeadsPorEtapa } from "@/lib/client-data";
+import { abertosDaLinha, fechadosDaLinha, resumoVendas, soNaoInformado, type FunilRow } from "@/lib/vendas-origem";
 
 export const Route = createFileRoute("/_authenticated/$clientId/vendas-kommo")({
   component: VendasKommoPage,
 });
 
-type FunilRow = { chave: string; total: number; ganhos: number; perdidos: number };
-
-// Resumo em frases: volume, quanto já fechou e qual fonte converte mais (com 10+ leads, para não exagerar fonte pequena).
-function resumoVendas(rows: FunilRow[], total: number): string[] {
-  const ganhos = rows.reduce((s, r) => s + r.ganhos, 0);
-  const perdidos = rows.reduce((s, r) => s + r.perdidos, 0);
-  const comVolume = rows.filter((r) => r.total >= 10);
-  const melhor = [...comVolume].sort((a, b) => b.ganhos / b.total - a.ganhos / a.total)[0];
-  const maior = [...rows].sort((a, b) => b.total - a.total)[0];
-  const pct = (a: number, b: number) => fmtTaxa(a, b);
-  return [
-    `${total.toLocaleString("pt-BR")} leads no CRM: ${ganhos.toLocaleString("pt-BR")} ganhos (${pct(ganhos, total)}), ${perdidos.toLocaleString("pt-BR")} perdidos e ${(total - ganhos - perdidos).toLocaleString("pt-BR")} ainda em aberto.`,
-    maior ? `A fonte que mais traz leads é “${maior.chave}” (${pct(maior.total, total)} do total).` : "",
-    melhor && melhor.ganhos > 0 ? `A fonte com maior taxa de status ganho é “${melhor.chave}”: ${pct(melhor.ganhos, melhor.total)} dos leads têm esse status. Confirme o significado da etapa antes de interpretar como venda.` : "Nenhuma fonte com 10+ leads tem status ganho registrado ainda: confira se o ganho está sendo registrado no CRM.",
-  ];
-}
-
 function FunilTable({ title, rows, colLabel }: { title: string; rows: FunilRow[]; colLabel: string }) {
   if (rows.length === 0) return null;
+  const comFechados = rows.some((r) => fechadosDaLinha(r) > 0);
   return (
     <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <h2 className="mb-3 text-sm font-semibold">{title}</h2>
@@ -40,12 +25,13 @@ function FunilTable({ title, rows, colLabel }: { title: string; rows: FunilRow[]
             <th className="pb-2 text-right">Ganhos</th>
             <th className="pb-2 text-right">Perdidos</th>
             <th className="pb-2 text-right">Em andamento</th>
+            {comFechados && <th className="pb-2 text-right">Fechados sem resultado</th>}
             <th className="pb-2 text-right">Taxa de ganho</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => {
-            const emAndamento = r.total - r.ganhos - r.perdidos;
+            const emAndamento = abertosDaLinha(r);
             const taxaGanho = r.total > 0 ? (r.ganhos / r.total) * 100 : 0;
             return (
               <tr key={r.chave} className="border-t" style={{ borderColor: "var(--border)" }}>
@@ -60,6 +46,11 @@ function FunilTable({ title, rows, colLabel }: { title: string; rows: FunilRow[]
                 <td data-label="Em andamento" className="py-1.5 text-right" style={{ color: "var(--text-dim)" }}>
                   {emAndamento}
                 </td>
+                {comFechados && (
+                  <td data-label="Fechados sem resultado" className="py-1.5 text-right" style={{ color: "var(--text-dim)" }}>
+                    {fechadosDaLinha(r)}
+                  </td>
+                )}
                 <td data-label="Taxa de ganho" className="py-1.5 text-right font-medium">{fmtTaxa(r.ganhos, r.total)}</td>
               </tr>
             );
@@ -110,13 +101,23 @@ function VendasKommoPage() {
         <>
           <ResumoExecutivo frases={resumoVendas(porFonte ?? [], totalLeads)} />
           <FunilTable title="Por fonte do lead" rows={porFonte ?? []} colLabel="Fonte" />
-          <FunilTable title="Por tipo de procedimento" rows={porProcedimento ?? []} colLabel="Procedimento" />
+          {soNaoInformado(porProcedimento ?? []) ? (
+            <div className="rounded-xl border p-4 text-sm" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+              <h2 className="mb-1 text-sm font-semibold">Por tipo de procedimento</h2>
+              <p style={{ color: "var(--text-dim)" }}>
+                O {crm} não tem o campo de tipo de procedimento preenchido nos cards, então não dá para separar por procedimento.
+              </p>
+            </div>
+          ) : (
+            <FunilTable title="Por tipo de procedimento" rows={porProcedimento ?? []} colLabel="Procedimento" />
+          )}
 
           {(porEtapa?.length ?? 0) > 0 && (
             <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
               <h2 className="mb-1 text-sm font-semibold">Leads por etapa (todos os funis)</h2>
               <p className="mb-3 text-xs" style={{ color: "var(--text-dim)" }}>
-                Onde os leads sincronizados estão parados agora, em qualquer pipeline da conta.
+                Onde estão todos os cards sincronizados, abertos ou já encerrados (ganhos, perdidos e fechados sem resultado), em qualquer
+                pipeline da conta.
               </p>
               <table className="w-full text-sm empilha">
                 <thead>

@@ -337,7 +337,7 @@ function JornadaPage() {
             <div className="flex flex-wrap gap-1.5">
               {detalhe.data.leads.map((l: any, i: number) => (
                 <Selo key={i} cor={l.resultado === "won" ? "var(--accent)" : "var(--muted)"}>
-                  {l.resultado === "won" ? "Comprou" : l.resultado === "lost" ? "Perdido" : "Em aberto"}
+                  {l.resultado === "won" ? "Comprou" : l.resultado === "lost" ? "Perdido" : l.resultado === "closed" ? "Encerrado sem resultado" : "Em aberto"}
                   {l.valor > 0 ? ` · ${brl(Number(l.valor))}` : ""}
                   {l.origem ? ` · ${l.origem}` : ""}
                 </Selo>
