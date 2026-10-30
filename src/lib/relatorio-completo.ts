@@ -145,7 +145,7 @@ export async function coletarRelatorioCompleto(args: {
       resumo,
       porDia: porDia ?? [],
       porObjetivo: porObjetivo ?? [],
-      objetivo: campanhas ? aplicarRastreio(diagnosticarAds(campanhas.linhas, campanhas.cadastro, start, end), await tentar("anúncios, atribuição de atendimento", falhas, () => getAtendimentosWhatsapp(clientId, start, end), null)) : null,
+      objetivo: campanhas ? aplicarRastreio(diagnosticarAds(campanhas.linhas, campanhas.cadastro, start, end, campanhas.janela), await tentar("anúncios, atribuição de atendimento", falhas, () => getAtendimentosWhatsapp(clientId, start, end), null)) : null,
       diasComDado: campanhas ? Array.from(new Set(campanhas.linhas.filter((l) => Number(l.spend) > 0 || Number(l.impressions) > 0).map((l) => String(l.date).slice(0, 10)))) : [],
     };
   } else {

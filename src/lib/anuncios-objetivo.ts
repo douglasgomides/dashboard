@@ -169,6 +169,26 @@ export interface CampanhaCadastro {
   permalink?: string | null;
   thumbnail_url?: string | null;
 }
+/** Alcance da janela de 7 dias lido da Meta pela campanha inteira (meta_ads_alcance_janela). */
+export interface AlcanceJanela {
+  campaign_id: string;
+  desde?: string | null;
+  ate: string;
+  reach: number | null;
+  impressions: number | null;
+  frequency: number | null;
+}
+
+/** Frequência de 7 dias da Meta quando a janela termina a até 1 dia do fim do período; senão null. */
+export function frequenciaDaJanela(j: AlcanceJanela | undefined, end: string): number | null {
+  if (!j?.ate) return null;
+  const dif = Math.abs(new Date(String(j.ate).slice(0, 10) + "T12:00:00Z").getTime() - new Date(end + "T12:00:00Z").getTime());
+  if (!(dif <= 86400000)) return null;
+  const f = j.frequency == null ? NaN : Number(j.frequency);
+  if (Number.isFinite(f) && f > 0) return f;
+  const i = Number(j.impressions), r = Number(j.reach);
+  return Number.isFinite(i) && Number.isFinite(r) && r > 0 && i > 0 ? i / r : null;
+}
 
 export type NivelRisco = "baixo" | "medio" | "alto";
 
@@ -198,7 +218,7 @@ export interface CampanhaDiag {
   cpcLink: number | null; // custo por clique no link
   ctrTodos: number | null; // todos os cliques ÷ aparições
   frequenciaDia: number | null; // aparições ÷ alcance diário somado = vezes que a mesma pessoa viu, em média, por dia
-  frequencia7d: number | null; // mesma conta nos últimos 7 dias do período (fadiga recente)
+  frequencia7d: number | null; // últimos 7 dias do período (fadiga recente): da Meta quando em dia, senão pelo alcance diário somado
   alcanceDiarioSomado: number; // soma do alcance de cada dia (repete pessoas entre dias)
   conversaPorClique: number | null; // conversas ÷ cliques no link (o clique vira conversa?)
   custoPorVisita: number | null; // gasto ÷ visitas à página
@@ -363,7 +383,9 @@ function vereditoPelaConta(c: { impressoes: number; gasto: number; conversas: nu
   return "Manter";
 }
 
-export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[], start: string, end: string): DiagnosticoAds {
+export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[], start: string, end: string, janela7d: AlcanceJanela[] = []): DiagnosticoAds {
+  // Frequência de 7 dias: a da Meta para a janela inteira vale quando está em dia; somar o alcance diário repete pessoas.
+  const janela = new Map(janela7d.map((j) => [j.campaign_id, j]));
   const meio = new Date((new Date(start + "T12:00:00Z").getTime() + new Date(end + "T12:00:00Z").getTime()) / 2).toISOString().slice(0, 10);
   const cad = new Map(cadastro.map((c) => [c.campaign_id, c]));
   type Acc = { g: number; i: number; lc: number; cv: number; ld: number; lpv: number; i1: number; c1: number; i2: number; c2: number; dias: Set<string>; r: number; ck: number; i7: number; r7: number };
@@ -449,7 +471,7 @@ export function diagnosticarAds(linhas: LinhaAds[], cadastro: CampanhaCadastro[]
       cpcLink: a.lc > 0 ? a.g / a.lc : null,
       ctrTodos: a.i > 0 && a.ck > 0 ? a.ck / a.i : null,
       frequenciaDia: a.r > 0 ? a.i / a.r : null,
-      frequencia7d: a.r7 > 0 ? a.i7 / a.r7 : null,
+      frequencia7d: frequenciaDaJanela(janela.get(id), end) ?? (a.r7 > 0 ? a.i7 / a.r7 : null),
       alcanceDiarioSomado: a.r,
       conversaPorClique: a.lc >= 20 ? a.cv / a.lc : null,
       custoPorVisita: a.lpv > 0 ? a.g / a.lpv : null,

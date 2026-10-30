@@ -20,6 +20,7 @@ import {
   MIN_CAMPANHAS_REGUA,
   type LinhaAds,
   type CampanhaCadastro,
+  type AlcanceJanela,
 } from "../src/lib/anuncios-objetivo";
 
 // [metade, campaign_id, objective, gasto, impressoes, cliques_link, conversas, leads, visitas_pagina, dias_com_gasto, nome]
@@ -194,6 +195,26 @@ check(atribuidoDepois.leads === 2 && atribuidoDepois.visitasPagina === 3, "demai
 check(atribuidoDepois.campanhas.length === 2 && atribuidoDepois.gasto === 100 && atribuidoDepois.impressoes === 1000, "campanha sem sinal é descartada; atribuição preserva investimento e impressões corretos");
 const posterior = atribuidoDepois.campanhas.find((c) => c.campaign_id === "atribuicao-posterior")!;
 check(posterior.vereditoOficial === "Volume insuficiente", "atribuição sem veiculação não vira recomendação de escalar");
+
+// Frequência de 7 dias (achado 33): somar o alcance diário repete pessoas e subestima a frequência. Com a janela
+// da Meta em dia, vale a da Meta; sem ela, ou com ela velha, vale a conta antiga.
+{
+  const fim = "2026-10-12";
+  const linhas7: LinhaAds[] = [];
+  for (let j = 0; j < 7; j++) {
+    const date = new Date(new Date(fim + "T12:00:00Z").getTime() - j * 86400000).toISOString().slice(0, 10);
+    linhas7.push({ date, campaign_id: "dc", spend: 20, impressions: 1120, link_clicks: 10, conversations: 1, leads: 0, landing_page_views: 0, reach: 1000 });
+  }
+  const cad7: CampanhaCadastro[] = [{ campaign_id: "dc", name: "DC", objective: "OUTCOME_ENGAGEMENT" }];
+  const freq = (janela?: AlcanceJanela[], end = fim) => diagnosticarAds(linhas7, cad7, "2026-10-01", end, janela).campanhas.find((c) => c.campaign_id === "dc")!.frequencia7d;
+  const perto = (a: number | null, b: number) => a != null && Math.abs(a - b) < 1e-9;
+  check(perto(freq(), 1.12), "sem janela da Meta: frequência de 7 dias pelo alcance diário somado (1,12)");
+  check(perto(freq([{ campaign_id: "dc", desde: "2026-10-05", ate: "2026-10-11", reach: 5681, impressions: 7840, frequency: 1.38 }]), 1.38), "janela da Meta em dia (termina 1 dia antes do fim): vale a frequência dela (1,38)");
+  check(perto(freq([{ campaign_id: "dc", ate: "2026-10-12", reach: 5000, impressions: 7000, frequency: null }]), 1.4), "janela sem frequência: aparições ÷ alcance da janela");
+  check(perto(freq([{ campaign_id: "dc", ate: "2026-10-05", reach: 5681, impressions: 7840, frequency: 1.38 }]), 1.12), "janela velha (7 dias antes do fim): volta para a conta antiga");
+  check(perto(freq([{ campaign_id: "outra", ate: "2026-10-11", reach: 1, impressions: 9, frequency: 9 }]), 1.12), "janela de outra campanha não é usada");
+  check(diagnosticarAds(linhas7, cad7, "2026-10-01", fim, [{ campaign_id: "dc", ate: "2026-10-11", reach: 5681, impressions: 7840, frequency: 1.38 }]).campanhas[0].frequenciaDia === diagnosticarAds(linhas7, cad7, "2026-10-01", fim).campanhas[0].frequenciaDia, "frequência por dia não muda com a janela");
+}
 
 console.log(falhas ? `\n${falhas} verificação(ões) falharam` : "\nTodas as verificações passaram");
 if (falhas) process.exit(1);

@@ -69,8 +69,8 @@ function RelatorioPage() {
   const ads = useQuery({
     queryKey: ["rel-ads-objetivo", clientId, start, end],
     queryFn: async () => {
-      const [{ linhas, cadastro }, whatsapp] = await Promise.all([getAdsCampanhasPeriodo(clientId, start, end), getAtendimentosWhatsapp(clientId, start, end)]);
-      return { diag: aplicarRastreio(diagnosticarAds(linhas, cadastro, start, end), whatsapp), diasComDado: Array.from(new Set(linhas.filter((l) => Number(l.spend) > 0 || Number(l.impressions) > 0).map((l) => String(l.date).slice(0, 10)))) };
+      const [{ linhas, cadastro, janela }, whatsapp] = await Promise.all([getAdsCampanhasPeriodo(clientId, start, end), getAtendimentosWhatsapp(clientId, start, end)]);
+      return { diag: aplicarRastreio(diagnosticarAds(linhas, cadastro, start, end, janela), whatsapp), diasComDado: Array.from(new Set(linhas.filter((l) => Number(l.spend) > 0 || Number(l.impressions) > 0).map((l) => String(l.date).slice(0, 10)))) };
     },
     enabled: temAds,
   });

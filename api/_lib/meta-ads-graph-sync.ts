@@ -156,6 +156,36 @@ async function buscarInsightsUmaJanela(
   return linhas;
 }
 
+type LinhaAlcance = { campaign_id?: string; reach?: string; impressions?: string; frequency?: string; date_start?: string; date_stop?: string };
+
+/** Ontem e seis dias antes, no fuso de São Paulo (a janela last_7d da Meta). */
+export function janelaSeteDias(agora = new Date()): { desde: string; ate: string } {
+  const hojeSp = agora.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  const dia = (delta: number) => new Date(new Date(hojeSp + "T12:00:00Z").getTime() - delta * 86400_000).toISOString().slice(0, 10);
+  return { desde: dia(7), ate: dia(1) };
+}
+
+// Alcance e frequência dos últimos 7 dias pela campanha inteira. Alcance não se soma dia a dia (a mesma pessoa
+// contaria de novo), então a frequência de 7 dias só sai certa lida da Meta para a janela toda.
+export async function buscarAlcanceJanela(contaId: string, token: string): Promise<LinhaAlcance[]> {
+  const conta = contaId.startsWith("act_") ? contaId : `act_${contaId}`;
+  let url =
+    `${API}/${conta}/insights?level=campaign&date_preset=last_7d` +
+    `&fields=campaign_id,reach,impressions,frequency&limit=500&access_token=${encodeURIComponent(token)}`;
+  const linhas: LinhaAlcance[] = [];
+  for (let pagina = 0; pagina < 20 && url; pagina++) {
+    const res = await fetch(graphPageUrl(url), integrationRequest());
+    const texto = await res.text();
+    if (!res.ok) throw new Error(`Meta alcance 7 dias ${conta} respondeu ${res.status}: ${texto.slice(0, 300)}`);
+    const corpo = JSON.parse(texto) as { data?: LinhaAlcance[]; paging?: { next?: string } };
+    if (!Array.isArray(corpo?.data)) throw new Error("Meta alcance 7 dias: resposta inválida");
+    linhas.push(...corpo.data);
+    url = corpo.paging?.next ?? "";
+  }
+  if (url) throw new Error("Meta alcance 7 dias: paginação incompleta, limite de páginas atingido");
+  return linhas;
+}
+
 // Meta de otimização e destino de cada conjunto de anúncios, agrupados por campanha. É o que separa
 // investimento em aquisição (mensagem, lead) de investimento em crescimento (perfil, alcance) no ROI.
 // Inclui conjuntos pausados e arquivados: campanha antiga ainda tem gasto no período consultado.
@@ -377,6 +407,32 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
         if (e) r.errors.push(`diárias: ${e.message}`);
         else r.rows += diarias.slice(i, i + 300).length;
       }
+      // Frequência de 7 dias real (alcance da janela inteira). Extra: falha vira aviso, não derruba o sync.
+      try {
+        const padrao = janelaSeteDias();
+        const janela = (await buscarAlcanceJanela(conta.ad_account_id, tokenConta))
+          .filter((l) => l.campaign_id)
+          .map((l) => ({
+            client_id: conta.client_id,
+            ad_account_id: conta.ad_account_id,
+            campaign_id: l.campaign_id!,
+            desde: l.date_start ?? padrao.desde,
+            ate: l.date_stop ?? padrao.ate,
+            reach: l.reach != null ? n(l.reach) : null,
+            impressions: l.impressions != null ? n(l.impressions) : null,
+            frequency: l.frequency != null ? n(l.frequency) : null,
+            lido_em: new Date().toISOString(),
+          }));
+        for (let i = 0; i < janela.length; i += 300) {
+          const { error: e } = await (supabase as any)
+            .from("meta_ads_alcance_janela")
+            .upsert(janela.slice(i, i + 300), { onConflict: "client_id,campaign_id" });
+          if (e) r.errors.push(`alcance de 7 dias: ${e.message}`);
+        }
+      } catch (e) {
+        r.errors.push(`alcance de 7 dias (frequência): ${e instanceof Error ? e.message : String(e)}`);
+      }
+
       // Limite de gastos da conta: dias que faltam pelo gasto médio dos últimos 7 dias (alerta em qualidade_dados).
       try {
         const lim = await lerLimiteDeGasto(conta.ad_account_id, tokenConta);
