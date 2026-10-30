@@ -545,7 +545,8 @@ try {
       await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ sub: admin, role: "authenticated" })]);
       await db.exec("set local role authenticated");
       const de = "current_date - 10", ate = "current_date";
-      assert.deepEqual(await rows(`select novos, ganhos, perdidos from crm_leads_resumo_periodo($1, ${de}, ${ate})`, [A]), [{ novos: 3, ganhos: 5, perdidos: 0 }]);
+      // Ganhos contam cards (vendas), como no ROI e no painel; novos contam pessoas.
+      assert.deepEqual(await rows(`select novos, ganhos, perdidos from crm_leads_resumo_periodo($1, ${de}, ${ate})`, [A]), [{ novos: 3, ganhos: 6, perdidos: 0 }]);
       assert.deepEqual(await rows(`select sum(total)::int as t from crm_leads_por_dia_periodo($1, ${de}, ${ate})`, [A]), [{ t: 3 }]);
       const p = (await rows<{ cards: number; pessoas: number; pessoas_novas: number }>(`select cards, pessoas, pessoas_novas from crm_pessoas_resumo_periodo($1, ${de}, ${ate})`, [A]))[0];
       assert.deepEqual({ ...p }, { cards: 9, pessoas: 7, pessoas_novas: 3 });

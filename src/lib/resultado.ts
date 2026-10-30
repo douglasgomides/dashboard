@@ -327,7 +327,7 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
       id: "leads",
       rotulo: "Novos contatos no CRM",
       valor: int(e.crm.novos),
-      explicacao: `Pessoas que entraram no CRM da clínica no período${e.crm.ganhos ? `; ${int(e.crm.ganhos)} foram marcadas como ganhas (viraram paciente/venda)` : ""}. Depende de a equipe registrar no CRM.`,
+      explicacao: `Pessoas que entraram no CRM da clínica no período${e.crm.ganhos ? `. No mesmo período, ${int(e.crm.ganhos)} ${e.crm.ganhos === 1 ? "venda foi marcada" : "vendas foram marcadas"} como ganha no CRM, de contatos novos ou antigos` : ""}. Depende de a equipe registrar no CRM.`,
       status: null,
       rota: "/$clientId/crm-painel",
       botao: "Ver onde o funil perde gente",
@@ -439,7 +439,7 @@ export function montarResultado(e: EntradaResultado): Resultado {
   if (alc) resumo.push(`${alc.rotulo}: ${alc.valor}${seg ? `; ${seg.valor.replace("+", "")} começaram a seguir` : ""}${posts ? `; ${int(posts)} publicações` : ""}.`);
   if (e.adsDiag && e.adsDiag.gasto > 0)
     resumo.push(`${brl(e.adsDiag.gasto)} investidos em anúncio${e.adsDiag.conversasMensagem ? `; os anúncios de mensagem trouxeram ${int(e.adsDiag.conversasMensagem)} conversas` : ""}.`);
-  if (e.crm && e.crm.novos > 0) resumo.push(`${int(e.crm.novos)} novos contatos entraram no CRM${e.crm.ganhos ? ` e ${int(e.crm.ganhos)} viraram paciente/venda` : ""}.`);
+  if (e.crm && e.crm.novos > 0) resumo.push(`${int(e.crm.novos)} novos contatos entraram no CRM${e.crm.ganhos ? `; ${int(e.crm.ganhos)} ${e.crm.ganhos === 1 ? "venda ganha" : "vendas ganhas"} no período, de contatos novos ou antigos` : ""}.`);
   if (n(e.wts?.atendimentos) > 0) resumo.push(`${int(n(e.wts?.atendimentos))} atendimentos no WhatsApp${n(e.wts?.espera_mediana_seg) > 0 ? `, com ${dur(n(e.wts?.espera_mediana_seg))} de espera típica pela primeira resposta` : ""}.`);
   const melhor = confiaveis.find((i) => i.tom === "bom");
   const pior = confiaveis.find((i) => i.tom !== "bom");

@@ -119,7 +119,7 @@ export function RetornoInvestimento({
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
               <Numero rotulo="Investimento em aquisição" valor={fmtBRL(r.investido)} sub="mensagens, leads e conversão" dica="Soma do gasto das campanhas de mensagem, lead ou conversão no período. É a base do retorno." />
               <Numero rotulo="Investimento em crescimento" valor={fmtBRL(r.investidoCrescimento)} sub="seguidores, engajamento e alcance" dica="Soma do gasto das campanhas de seguidores, engajamento, alcance e visita ao perfil. Não entra no retorno, porque não busca venda direta." />
-              <Numero rotulo="Receita (vendas ganhas no CRM)" valor={fmtBRL(r.receita)} sub={`${r.ganhos} ${r.ganhos === 1 ? "venda" : "vendas"} no período`} dica="Soma do valor dos cards marcados como ganho no CRM, com data de fechamento no período." />
+              <Numero rotulo="Receita (vendas ganhas no CRM)" valor={fmtBRL(r.receita)} sub={`${r.ganhos} ${r.ganhos === 1 ? "venda" : "vendas"} no período`} dica="Soma do valor dos cards marcados como ganho no CRM, criados no período. A data de fechamento não é usada porque o CRM costuma fechar cards em lote, na faxina do funil." />
               <Numero rotulo="ROI" valor={`${r.roi! >= 0 ? "+" : ""}${Math.round(r.roi! * 100).toLocaleString("pt-BR")}%`} sub={`cada R$ 1 em aquisição voltou ${fmtBRL(r.retornoPorReal!)}`} destaque={r.roi! >= 0 ? "var(--good)" : "var(--crit)"} dica="(receita menos investimento em aquisição) dividido pelo investimento em aquisição." />
               <Numero rotulo={r.rotuloCusto} valor={fmtBRL(r.custo!)} sub="aquisição ÷ vendas ganhas" dica={`Investimento em aquisição dividido pelo número de vendas ganhas no período.`} />
             </div>
