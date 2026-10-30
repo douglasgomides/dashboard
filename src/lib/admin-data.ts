@@ -2,14 +2,21 @@ import { supabase } from "@/integrations/supabase/client";
 import type { CfmScoreStatus, CrmProvider } from "@/integrations/supabase/types";
 import { avatarExtension } from "@/lib/avatar";
 
-export async function listAllClients() {
-  const { data, error } = await supabase
+/** Clínicas de teste (dados fictícios) ficam fora por padrão: não contam como cliente nem como problema. */
+async function lerClientes(incluirTeste: boolean) {
+  let q = supabase
     .from("clients")
-    .select("id, name, specialty, instagram_handle, avatar_url, active, created_at")
+    .select("id, name, specialty, instagram_handle, avatar_url, active, created_at, eh_teste")
     .order("created_at", { ascending: false });
+  if (!incluirTeste) q = q.eq("eh_teste", false);
+  const { data, error } = await q;
   if (error) throw error;
   return data;
 }
+
+export const listAllClients = () => lerClientes(false);
+/** Para o SAP e o seletor de cliente, que precisam enxergar a clínica de teste. */
+export const listAllClientsComTeste = () => lerClientes(true);
 
 export async function createClient(input: { name: string; specialty?: string; instagram_handle?: string }) {
   const { data, error } = await supabase.from("clients").insert(input).select("id").single();
