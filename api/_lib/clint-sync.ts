@@ -313,6 +313,12 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
       }
     }
 
+    // Funil de compra aprovada (config.funis_compra_aprovada): todo card nele é uma venda paga, mesmo que a Clint não o
+    // marque como ganho (Doctor Creator: venda no cartão pela Hubla não virava ganho; receita no Nexo era menos da metade
+    // da Hubla, auditoria de 30/10/2026). Se o mesmo contato já tem um card ganho em outro funil criado até 3 dias antes ou
+    // depois, é a mesma compra (40 de 89) e não conta de novo.
+    aplicarCompraAprovada([...leadRows.values()], (conn.config as any)?.funis_compra_aprovada);
+
     let gravados = 0;
     for (const batch of chunk([...leadRows.values()], BATCH_SIZE)) {
       const { error: upsertError } = await supabase
@@ -375,6 +381,31 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
   }
 
   return results;
+}
+
+const TRES_DIAS_MS = 3 * 86_400_000;
+
+/** Marca como ganho o card de funil de compra aprovada que não repete uma venda já ganha do mesmo contato. */
+export function aplicarCompraAprovada(linhas: Record<string, any>[], funis: unknown): void {
+  if (!Array.isArray(funis) || funis.length === 0) return;
+  const aprovados = new Set(funis.map(String));
+  const contato = (l: Record<string, any>) => String(l.raw_payload?.contact?.id ?? "");
+  const ganhosFora = new Map<string, number[]>();
+  for (const l of linhas) {
+    if (aprovados.has(String(l.pipeline_id)) || l.outcome !== "won" || !contato(l) || !l.occurred_at) continue;
+    ganhosFora.set(contato(l), [...(ganhosFora.get(contato(l)) ?? []), Date.parse(l.occurred_at)]);
+  }
+  for (const l of linhas) {
+    if (!aprovados.has(String(l.pipeline_id)) || l.outcome === "lost") continue;
+    const quando = l.occurred_at ? Date.parse(l.occurred_at) : NaN;
+    const repetida = (ganhosFora.get(contato(l)) ?? []).some((t) => Math.abs(t - quando) <= TRES_DIAS_MS);
+    if (repetida) {
+      l.outcome = "open";
+      l.raw_payload = { ...l.raw_payload, compra_repetida: true };
+    } else {
+      l.outcome = "won";
+    }
+  }
 }
 
 /** A etapa é de lista de base (não abordada)? Compara sem acento e sem diferenciar maiúscula. */

@@ -252,12 +252,36 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
       }
     }
 
+    // Conta com mais de um cliente: o card do FlwChat diz de quem é a sessão (raw_payload.sessionId do card). Vale
+    // antes da equipe: o atendimento da Juliana Paola caía na Mariela pela equipe "curinga" (auditoria de 30/10/2026:
+    // 265 conversas). Sessão com card nos dois clientes fica pela regra da equipe.
+    const donoPeloCard = new Map<string, string>();
+    if (donosDaConta.length > 1) {
+      const ambiguas = new Set<string>();
+      leitura: for (const c of donosDaConta) {
+        for (let de = 0; de < 50_000; de += 1000) {
+          const { data, error } = await supabase.from("crm_leads").select("raw_payload->>sessionId").eq("client_id", c.id).eq("provider", "flwchat").not("raw_payload->>sessionId", "is", null).range(de, de + 999);
+          // Sem os cards, segue pela regra da equipe (como antes), sem derrubar o sync.
+          if (error) { donoPeloCard.clear(); break leitura; }
+          for (const row of (data ?? []) as unknown as { sessionId: string | null }[]) {
+            if (!row.sessionId) continue;
+            const atual = donoPeloCard.get(row.sessionId);
+            if (atual && atual !== c.id) ambiguas.add(row.sessionId);
+            donoPeloCard.set(row.sessionId, c.id);
+          }
+          if ((data ?? []).length < 1000) break;
+        }
+      }
+      for (const id of ambiguas) donoPeloCard.delete(id);
+    }
+
     // Agrupa por dono antes de gravar: um upsert por cliente, não por linha.
     const gravarLote = async (lote: WtsSession[], onde: string) => {
       const porDono = new Map<string, ReturnType<typeof linhaDaSessao>[]>();
       for (const s of lote) {
-        if (s.departmentId && equipesAmbiguas.has(s.departmentId)) continue;
-        const donoId = (s.departmentId ? porEquipe.get(s.departmentId) : undefined) ?? curinga?.id;
+        const peloCard = donoPeloCard.get(s.id);
+        if (!peloCard && s.departmentId && equipesAmbiguas.has(s.departmentId)) continue;
+        const donoId = peloCard ?? (s.departmentId ? porEquipe.get(s.departmentId) : undefined) ?? curinga?.id;
         // Sem equipe reivindicada e sem curinga, a conversa não tem dono.
         // Descartar em silêncio esconderia volume, então ela simplesmente
         // não é gravada e isso aparece na diferença entre total e somatório.
