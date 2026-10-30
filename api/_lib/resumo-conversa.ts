@@ -141,6 +141,21 @@ export async function resumirConversa(
   return { resumo: json, modelo, ate_msg_em: ate };
 }
 
+/** Tipos de mensagem de entrada que não são mensagem de verdade (mesma lista de public.mensagem_eh_interacao). */
+export const TIPOS_SO_INTERACAO = ["COMMENT", "REPLY", "SHARE_MEDIA", "REACTION", "STORY_MENTION"] as const;
+
+/** A conversa só tem entrada de comentário, reação ou story (e tem alguma entrada). */
+export function soInteracaoNaEntrada(msgs: { direcao: string; tipo: string | null }[]): boolean {
+  const entradas = msgs.filter((m) => m.direcao === "entrada");
+  return entradas.length > 0 && entradas.every((m) => (TIPOS_SO_INTERACAO as readonly string[]).includes((m.tipo ?? "").trim().toUpperCase()));
+}
+
+/** Resposta de conversas_so_interacao (setof uuid): o PostgREST devolve a lista de ids. */
+function idsSoInteracao(data: unknown): string[] {
+  if (!Array.isArray(data)) return [];
+  return data.map((x) => (typeof x === "string" ? x : x && typeof x === "object" ? String(Object.values(x)[0] ?? "") : "")).filter(Boolean);
+}
+
 /**
  * Lote diário: lê com IA as conversas dos últimos `dias` que ainda não têm leitura ou que receberam
  * mensagem depois dela. Mais recentes primeiro, até `limite` conversas ou o fim do `orcamentoMs`.
@@ -178,8 +193,17 @@ export async function analisarConversasPendentes(
     if (error) return { analisadas: 0, pendentes: 0, erros: [`leitura de falhas da IA: ${error.message}`] };
     for (const r of (data ?? []) as { conversa_id: string; falhas: number; ate_msg_em: string | null }[]) falhas.set(r.conversa_id, r);
   }
+  // Conversa que só tem comentário em post ou reação/resposta a story (a Clint grava como conversa) não é conversa de
+  // verdade: a IA não lê (migração 20261031150000, conversas_so_interacao).
+  const soInteracao = new Set<string>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await admin.rpc("conversas_so_interacao", { p_ids: ids.slice(i, i + 200) });
+    if (error) return { analisadas: 0, pendentes: 0, erros: [`conversas só de comentário ou reação: ${error.message}`] };
+    for (const id of idsSoInteracao(data)) soInteracao.add(id);
+  }
   const ms = (v: string | null | undefined) => (v ? Math.floor(Date.parse(v) / 1000) : null);
   const pendentes = (convs ?? []).filter((c: { id: string; ultima_msg_em: string | null }) => {
+    if (soInteracao.has(c.id)) return false;
     const ate = feitos.get(c.id);
     const precisa = ate == null || (c.ultima_msg_em != null && (ms(c.ultima_msg_em) ?? 0) > (ms(ate) ?? 0));
     if (!precisa) return false;
