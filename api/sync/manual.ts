@@ -25,7 +25,7 @@ import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_li
 import { rodarConferencia, rodarEtapa, ETAPAS, type EtapaId, type Achado, type Verificado } from "../_lib/conferencia.js";
 import { resumirConversa } from "../_lib/resumo-conversa.js";
 import { rascunharSessao } from "../_lib/sessao-ia.js";
-import { redirecionarLink, slugLivre } from "../_lib/redirecionar.js";
+import { codigoLivre, paginaLinkDesativado, redirecionarLink, slugLivre } from "../_lib/redirecionar.js";
 import { gerarArtes, listarArtes, revisarArte } from "../_lib/creative-arte.js";
 import { atualizarPlano } from "../_lib/plano-semana.js";
 import { processarReuniao } from "../_lib/reuniao.js";
@@ -33,7 +33,7 @@ import { redigirSecao } from "../_lib/copiloto.js";
 import { gerarComPrompt } from "../_lib/sap-gerar.js";
 import { PROMPT_POR_CODIGO } from "../_lib/sap-prompts.js";
 import { aplicarAcao, desfazerAcao, tokenEscritaConfigurado } from "../_lib/anuncios-acoes.js";
-import { destinoSite, destinoWhatsApp, novaRef, novoSlug, POSICOES, mensagemComRef, slugPersonalizado, type Posicao } from "../../src/lib/rastreio.js";
+import { baseDoLink, candidatosCodigo, destinoSite, destinoWhatsApp, numeroDoDestino, novoSlug, POSICOES, mensagemComRef, urlDoLink, validarNomeLink, type Posicao } from "../../src/lib/rastreio.js";
 import { rodarAgentes, catalogoFluxos, enfileirarBrain } from "../_lib/agentes.js";
 import { resumoEquipe } from "../_lib/resumo-equipe.js";
 import { manualRequestSchema } from "../_lib/request-validation.js";
@@ -87,12 +87,20 @@ async function handler(req: VercelRequest, res: VercelResponse) {
   // Link rastreado próprio: /r/<slug> (rewrite no vercel.json) registra o clique e leva ao destino. Público, sem token.
   if (req.method === "GET" && typeof req.query.r === "string") {
     const url = process.env.SUPABASE_URL, chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const slug = req.query.r;
+    if (!url || !chave) console.error("[links] servidor sem SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY para abrir link");
     const destino = url && chave
-      ? await redirecionarLink(createClient(url, chave, { auth: { persistSession: false, autoRefreshToken: false } }), req.query.r, (req.headers["user-agent"] as string) ?? null, (req.headers.referer as string) ?? null).catch(() => null)
+      ? await redirecionarLink(createClient(url, chave, { auth: { persistSession: false, autoRefreshToken: false } }), slug, (req.headers["user-agent"] as string) ?? null, (req.headers.referer as string) ?? null)
+        .catch((e: unknown) => { console.error("[links] falha ao abrir link", { slug: slug.slice(0, 40), erro: e instanceof Error ? e.message : String(e) }); return null; })
       : null;
     res.setHeader("Cache-Control", "no-store");
     if (!destino) { res.status(404).send("Link não encontrado."); return; }
-    res.redirect(302, destino);
+    if (destino.tipo === "inativo") {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.status(410).send(paginaLinkDesativado(destino.whatsapp));
+      return;
+    }
+    res.redirect(302, destino.url);
     return;
   }
   if (req.method !== "POST") {
@@ -914,7 +922,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (alvo === "link_rastreado") {
-      // Gerador de links próprio (src/lib/rastreio.ts): slug no nosso domínio, clique registrado, frase natural + ref.
+      // Gerador de links próprio (src/lib/rastreio.ts): nome curto no nosso domínio, clique registrado, frase + código.
       if (!ehAdmin) {
         res.status(403).json({ error: "Só a equipe cria links rastreados" });
         return;
@@ -927,22 +935,47 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(200).json({ alvo, ok: true });
         return;
       }
-      const host = "dash.doctorcreator.com.br";
-      const pedido = b.slug != null && String(b.slug).trim() !== "" ? slugPersonalizado(String(b.slug)) : null;
-      if (b.slug != null && String(b.slug).trim() !== "" && !pedido) {
-        res.status(400).json({ error: "Final do link inválido: use de 3 a 30 letras, números ou hífen (ex.: drajulia)" });
+      // Domínio curto configurável (LINK_BASE_URL); nunca o host do pedido, que vem de quem chama.
+      const base = baseDoLink(process.env.LINK_BASE_URL);
+      const informado = b.slug != null && String(b.slug).trim() !== "";
+      const nome = informado ? validarNomeLink(String(b.slug)) : null;
+      if (b.acao === "conferir") {
+        // A tela confere enquanto a equipe digita: o nome serve e ainda está livre?
+        if (!nome) { res.status(400).json({ error: "Informe o nome do link" }); return; }
+        if (!nome.ok) { res.status(200).json({ alvo, ok: true, valido: false, motivo: nome.motivo }); return; }
+        const livre = await slugLivre(admin, nome.slug, b.id);
+        res.status(200).json({ alvo, ok: true, valido: true, slug: nome.slug, livre, url: urlDoLink(nome.slug, base) });
         return;
       }
+      if (nome && !nome.ok) {
+        res.status(400).json({ error: nome.motivo });
+        return;
+      }
+      const pedido = nome?.ok ? nome.slug : null;
       if (b.acao === "renomear") {
         // Troca o final do link; o final anterior continua redirecionando (fica em slugs_antigos).
-        if (!pedido) { res.status(400).json({ error: "Informe o novo final do link" }); return; }
+        if (!pedido) { res.status(400).json({ error: "Informe o novo nome do link" }); return; }
         const { data: atual, error: erroAtual } = await admin.from("links_rastreados").select("id, slug, slugs_antigos").eq("id", b.id ?? "").eq("client_id", client_id).maybeSingle();
         if (erroAtual || !atual?.slug) { res.status(404).json({ error: "Link não encontrado" }); return; }
-        if (!(await slugLivre(admin, pedido, atual.id))) { res.status(409).json({ error: "Esse final já está em uso em outro link" }); return; }
+        if (!(await slugLivre(admin, pedido, atual.id))) { res.status(409).json({ error: "Esse nome já está em uso em outro link. Escolha outro." }); return; }
         const antigos = [...new Set([...((atual.slugs_antigos as string[] | null) ?? []), atual.slug])].filter((x) => x !== pedido);
         const { error } = await admin.from("links_rastreados").update({ slug: pedido, slugs_antigos: antigos } as never).eq("id", atual.id).eq("client_id", client_id);
         if (error) { res.status(200).json({ alvo, ok: false, erro: error.message }); return; }
-        res.status(200).json({ alvo, ok: true, url: `https://${host}/r/${pedido}` });
+        res.status(200).json({ alvo, ok: true, url: urlDoLink(pedido, base) });
+        return;
+      }
+      if (b.acao === "frase") {
+        // A equipe reescreve a mensagem pronta; o código e o número continuam os mesmos.
+        const frase = String(b.frase ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+        if (!frase) { res.status(400).json({ error: "Escreva a mensagem que o paciente vai mandar" }); return; }
+        const { data: atual, error: erroAtual } = await admin.from("links_rastreados").select("id, codigo_ref, destino_tipo, destino_url").eq("id", b.id ?? "").eq("client_id", client_id).maybeSingle();
+        if (erroAtual || !atual) { res.status(404).json({ error: "Link não encontrado" }); return; }
+        const numero = atual.destino_tipo === "site" ? null : numeroDoDestino(atual.destino_url);
+        const novoDestino = numero ? destinoWhatsApp(numero, frase, atual.codigo_ref) : null;
+        if (!novoDestino) { res.status(400).json({ error: "Este link não leva ao WhatsApp, então não tem mensagem pronta" }); return; }
+        const { error } = await admin.from("links_rastreados").update({ destino_url: novoDestino, mensagem_modelo: mensagemComRef(frase, atual.codigo_ref) } as never).eq("id", atual.id).eq("client_id", client_id);
+        if (error) { res.status(200).json({ alvo, ok: false, erro: error.message }); return; }
+        res.status(200).json({ alvo, ok: true, mensagem: mensagemComRef(frase, atual.codigo_ref) });
         return;
       }
       const tipo = (b.tipo ?? "") as Posicao;
@@ -952,11 +985,13 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const titulo = String(b.titulo ?? "").trim().slice(0, 120) || POSICOES[tipo].rotulo;
       const frase = String(b.frase ?? "").replace(/\s+/g, " ").trim().slice(0, 200) || POSICOES[tipo].frase;
-      const ref = novaRef();
       if (pedido && !(await slugLivre(admin, pedido))) {
-        res.status(409).json({ error: "Esse final já está em uso em outro link" });
+        res.status(409).json({ error: "Esse nome já está em uso em outro link. Escolha outro." });
         return;
       }
+      // Código curto (R27) único entre todas as clínicas: duas clínicas podem dividir o mesmo WhatsApp.
+      const ref = await codigoLivre(admin, candidatosCodigo());
+      if (!ref) { res.status(503).json({ error: "Não foi possível gerar o código do link. Tente de novo." }); return; }
       const slug = pedido ?? novoSlug();
       let destino: string | null = null;
       if (b.destino_tipo === "site") destino = destinoSite(String(b.site_url ?? ""), tipo, b.campanha || titulo, ref);
@@ -977,10 +1012,12 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         instagram_post_id: b.instagram_post_id ?? null, destino_url: destino, mensagem_modelo: b.destino_tipo === "site" ? null : mensagemComRef(frase, ref), criado_por: quem.user.id,
       } as never).select("id").single();
       if (erroIns) {
+        // 23505: outro pedido pegou o mesmo nome ou código no mesmo instante.
+        if (erroIns.code === "23505") { res.status(409).json({ error: "Esse nome ou código acabou de ser usado. Tente de novo." }); return; }
         res.status(200).json({ alvo, ok: false, erro: erroIns.message });
         return;
       }
-      res.status(200).json({ alvo, ok: true, id: criado?.id, url: `https://${host}/r/${slug}`, ref });
+      res.status(200).json({ alvo, ok: true, id: criado?.id, url: urlDoLink(slug, base), ref, mensagem: b.destino_tipo === "site" ? null : mensagemComRef(frase, ref) });
       return;
     }
 
