@@ -650,11 +650,20 @@ function IdeiasPage() {
       donos: comentarios.data?.donos ?? [],
     });
     const base = buildIdeias(posts.data, comentarios.data?.comentarios ?? [], { voz });
-    const ident = ideiasDeIdentificacao(todosComentarios.data ?? []);
+    const ident = ideiasDeIdentificacao(todosComentarios.data?.comentarios ?? []);
     return {
       ...base,
       ideias: [...base.ideias, ...ident.ideias],
-      faltas: [...base.faltas, ...(todosComentarios.data ? ident.faltas : [])],
+      faltas: [
+        ...base.faltas,
+        ...(todosComentarios.data ? ident.faltas : []),
+        ...(todosComentarios.data?.cortado
+          ? [`"Tema que gera identificação" leu ${todosComentarios.data.comentarios.length.toLocaleString("pt-BR")} de ${todosComentarios.data.total.toLocaleString("pt-BR")} comentários do período (os mais recentes). Diminua o período para ler todos.`]
+          : []),
+        ...(comentarios.data?.noLimite
+          ? [`As dúvidas leram os ${comentarios.data.comentarios.length.toLocaleString("pt-BR")} comentários com pergunta mais recentes; o período tem mais. Diminua o período para ler todos.`]
+          : []),
+      ],
       limitacoesVoz: voz.limitacoes,
       voz,
     };
@@ -866,8 +875,11 @@ function IdeiasPage() {
       >
         <span>{res.totalPosts} posts no período</span>
         <span>
-          {res.totalPerguntas} perguntas reais de pacientes (de{" "}
-          {res.totalComentarios} comentários lidos)
+          {res.totalPerguntas} perguntas reais de pacientes, entre{" "}
+          {res.totalComentarios} comentários com pergunta, preço ou agendamento
+          {comentarios.data?.totalPeriodo != null
+            ? ` (de ${comentarios.data.totalPeriodo.toLocaleString("pt-BR")} comentários do período)`
+            : ""}
         </span>
         {res.pedidosDeCuidado > 0 && (
           <span>

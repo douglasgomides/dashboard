@@ -28,7 +28,7 @@ import {
   Repeat2 as Repeat2Icon,
   Tags,
 } from "lucide-react";
-import { classifyPost, getNextAngles, getRankedPosts } from "@/lib/client-data";
+import { classifyPost, getRankedPosts } from "@/lib/client-data";
 import {
   CONTENT_FORMATS,
   FUNNEL_STAGES,
@@ -55,7 +55,10 @@ import {
   computeRepetirOuRevisar,
   computeRetencaoDeReels,
   computeTopPostsPorTaxaDeSalvamento,
-  computeTopReelsPorTaxaDeCompartilhamento,
+  computeTopPorTaxaDeCompartilhamento,
+  computeProximosAngulos,
+  MIN_POSTS_ANGULO,
+  MIN_TEMAS_REPETIR,
 } from "@/lib/report-metrics";
 
 export const Route = createFileRoute("/_authenticated/$clientId/posts")({
@@ -424,19 +427,21 @@ function ListaRepetir({ itens, cor, vazio }: { itens: { tema: string; rate: numb
 }
 
 function RepetirOuRevisar({ posts, periodLabel }: { posts: Post[]; periodLabel: string }) {
-  const MIN_POSTS = 10;
-  const { repetir, revisar, hasEnough } = useMemo(() => computeRepetirOuRevisar(posts, MIN_POSTS), [posts]);
+  const MIN_POSTS = MIN_POSTS_CONCLUSAO;
+  const { repetir, revisar, hasEnough, baseline, temasComAmostra } = useMemo(() => computeRepetirOuRevisar(posts, MIN_POSTS_CONCLUSAO), [posts]);
 
   return (
     <Painel
       icone={Repeat2Icon}
       titulo="O que repetir e o que revisar"
-      resumo="Temas acima e abaixo da mediana de engajamento"
-      ajuda={`Calculado a partir da mediana da taxa de engajamento dos temas com volume relevante (${MIN_POSTS}+ posts) no período selecionado (${periodLabel}). Não é opinião, é o que os dados mostraram.`}
+      resumo={`Temas acima e abaixo do post típico da conta (${(baseline * 100).toFixed(1)}% de engajamento)`}
+      ajuda={`Cada tema com ${MIN_POSTS} posts ou mais é comparado com a mediana da taxa de engajamento (engajamento ÷ alcance) de todos os posts do período (${periodLabel}). Só aparece com ${MIN_TEMAS_REPETIR} temas ou mais com amostra, para ter com o que comparar.`}
     >
       {!hasEnough ? (
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          Preencha o <strong>tema</strong> de pelo menos {MIN_POSTS} posts do mesmo assunto (lápis no ranking acima) para liberar este painel.
+          {temasComAmostra === 0
+            ? <>Nenhum tema tem {MIN_POSTS} posts ou mais no período. Com menos posts, um post fora da curva decide sozinho.</>
+            : <>Só {temasComAmostra} {temasComAmostra === 1 ? "tema tem" : "temas têm"} {MIN_POSTS} posts ou mais no período. É preciso pelo menos {MIN_TEMAS_REPETIR} para comparar sem enganar.</>}
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -444,13 +449,13 @@ function RepetirOuRevisar({ posts, periodLabel }: { posts: Post[]; periodLabel: 
             <h3 className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--good-text)" }}>
               <TrendingUp size={14} /> Repetir
             </h3>
-            <ListaRepetir itens={repetir} cor="var(--good)" vazio="Nenhum tema acima da mediana ainda." />
+            <ListaRepetir itens={repetir} cor="var(--good)" vazio="Nenhum tema acima do post típico da conta." />
           </div>
           <div>
             <h3 className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--crit)" }}>
               <TrendingDown size={14} /> Revisar ou descontinuar
             </h3>
-            <ListaRepetir itens={revisar} cor="var(--crit)" vazio="Nenhum tema abaixo da mediana ainda." />
+            <ListaRepetir itens={revisar} cor="var(--crit)" vazio="Nenhum tema abaixo do post típico da conta." />
           </div>
         </div>
       )}
@@ -516,7 +521,7 @@ function LinhaTaxa({ post, rate, max, cor }: { post: Post; rate: number; max: nu
 
 function TopPorTaxa({ posts }: { posts: Post[] }) {
   const porSalvamento = useMemo(() => computeTopPostsPorTaxaDeSalvamento(posts, 5), [posts]);
-  const porCompartilhamento = useMemo(() => computeTopReelsPorTaxaDeCompartilhamento(posts, 5), [posts]);
+  const porCompartilhamento = useMemo(() => computeTopPorTaxaDeCompartilhamento(posts, 5), [posts]);
 
   if (porSalvamento.length === 0 && porCompartilhamento.length === 0) return null;
 
@@ -542,8 +547,8 @@ function TopPorTaxa({ posts }: { posts: Post[] }) {
           icone={Share2}
           cor="var(--s2)"
           titulo="Quem mais circula"
-          resumo="Reels com maior taxa de compartilhamento"
-          ajuda="Compartilhamentos ÷ alcance. É o sinal mais forte de que o conteúdo circulou sozinho. Só existe para reels, que é onde a Meta preenche esse campo."
+          resumo="Posts com maior taxa de compartilhamento"
+          ajuda="Compartilhamentos ÷ alcance, em todos os formatos (Reels, carrossel e post estático). É o sinal mais forte de que o conteúdo circulou sozinho."
         >
           <ul className="space-y-2">
             {porCompartilhamento.map(({ post, rate }) => (
@@ -567,9 +572,9 @@ function ConversionByTag({ posts }: { posts: Post[] }) {
     <Painel
       icone={Target}
       cor="var(--s3)"
-      titulo="Conversão real por tema e formato"
-      resumo="Salvamentos (mediana) de cada combinação"
-      ajuda={`Proxy de conversão real: usa salvamentos, não curtidas. Só entra no ranking a combinação com ${MIN_POSTS_CONCLUSAO} posts ou mais; as outras aparecem à parte, sem conclusão.`}
+      titulo="Salvamentos por tema e formato"
+      resumo="Salvamentos do post típico (mediana) de cada combinação"
+      ajuda={`Mostra salvamentos, não conversas nem vendas. Quanto do conteúdo vira conversa e agendamento está em Conteúdo × Comercial. Só entra no ranking a combinação com ${MIN_POSTS_CONCLUSAO} posts ou mais; as outras aparecem à parte, sem conclusão.`}
     >
       {top.length === 0 && <SemAmostra />}
       <ul className="space-y-2.5">
@@ -862,11 +867,9 @@ function RetencaoDeReels({ posts }: { posts: Post[] }) {
   );
 }
 
-function NextAngles({ clientId }: { clientId: string }) {
-  const { data: angles, isLoading } = useQuery({
-    queryKey: ["next-angles", clientId],
-    queryFn: () => getNextAngles(clientId),
-  });
+function NextAngles({ posts, periodLabel }: { posts: Post[]; periodLabel: string }) {
+  const { angulos, baseline, temasComAmostra } = useMemo(() => computeProximosAngulos(posts), [posts]);
+  const fmtSalvos = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
   return (
     <Painel
@@ -875,35 +878,31 @@ function NextAngles({ clientId }: { clientId: string }) {
       destaque
       titulo="Próximos ângulos"
       resumo="Direções para testar"
-      ajuda="Sugestão de direção, nunca conteúdo pronto. A produção continua com o médico ou quem ele contratar."
+      ajuda={`Temas com ${MIN_POSTS_ANGULO} posts ou mais no período (${periodLabel}) cujo post típico (mediana) foi mais salvo que o post típico da conta. Sugestão de direção, nunca conteúdo pronto.`}
     >
-      {isLoading && (
+      {angulos.length === 0 && (
         <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          Calculando…
-        </p>
-      )}
-      {!isLoading && (angles?.length ?? 0) === 0 && (
-        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          Classifique alguns posts (tema, funil e estágio) para a sugestão ter o que comparar.
+          {temasComAmostra === 0
+            ? `Poucos dados: nenhum tema tem ${MIN_POSTS_ANGULO} posts ou mais neste período. Aumente o período no topo da tela.`
+            : `Poucos dados: nenhum dos ${temasComAmostra} temas com ${MIN_POSTS_ANGULO} posts ou mais ficou acima do post típico da conta (${fmtSalvos(baseline)} salvamentos).`}
         </p>
       )}
       <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-        {angles?.map((a, i) => (
-          <li key={i} className="rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+        {angulos.map((a) => (
+          <li key={a.tema} className="rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
             <div className="flex flex-wrap items-center gap-1.5">
               <Selo cor="var(--ai)">
                 <Sparkles size={11} /> {a.tema}
               </Selo>
-              <Selo cor={COR_FUNIL[a.funnel_stage as string]} titulo={funnelLabel(a.funnel_stage)}>
-                {a.funnel_stage}
-              </Selo>
-              <Selo>{methodologyLabel(a.methodology_stage)}</Selo>
-              <Selo cor={COR_FORMATO[a.format as string]}>
-                <IconeFormato formato={a.format} size={11} /> {formatLabel(a.format)}
-              </Selo>
+              {a.formato && (
+                <Selo cor={COR_FORMATO[a.formato]}>
+                  <IconeFormato formato={a.formato} size={11} /> {formatLabel(a.formato as Post["format"])}
+                </Selo>
+              )}
             </div>
             <p className="mt-2 text-xs leading-relaxed" style={{ color: "var(--text-dim)" }}>
-              {a.rationale}
+              {nPosts(a.count)} no período. O post típico do tema teve {fmtSalvos(a.medianSaved)} salvamentos, contra {fmtSalvos(a.baseline)} do post típico da conta.
+              {a.formato ? ` Dentro do tema, ${formatLabel(a.formato as Post["format"]).toLowerCase()} foi o formato mais salvo (${nPosts(a.formatoCount)}).` : ""} Teste outro ângulo, caso ou pergunta do mesmo tema.
             </p>
           </li>
         ))}
@@ -1115,7 +1114,7 @@ function PostsRankingPage() {
       <FormatoPorTema posts={rows} />
       <MelhoresGanchos posts={rows} />
       <RetencaoDeReels posts={rows} />
-      <NextAngles clientId={clientId} />
+      <NextAngles posts={rows} periodLabel={periodLabel} />
       <ExploradorDePosts posts={rows} periodLabel={periodLabel} />
     </div>
   );

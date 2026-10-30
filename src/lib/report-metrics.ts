@@ -2,6 +2,7 @@ import type { ContentFormat } from "@/integrations/supabase/types";
 import { formatLabel } from "@/lib/methodology";
 import { analisarVozDoPaciente } from "@/lib/voz-do-paciente";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
+import { chaveTema } from "@/lib/classificacao-post";
 
 const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const PERIODS = [
@@ -135,12 +136,15 @@ export function computeTopPostsPorTaxaDeSalvamento(posts: any[], limit = 5) {
   return computeTopByRate(posts, "saved", limit);
 }
 
+// Compartilhamentos ÷ alcance em todos os formatos: a Meta preenche shares também em carrossel e post estático
+// (Doctor Creator, out/2026: 35 mil compartilhamentos em estáticos, que ficavam fora quando só reels entrava).
+export function computeTopPorTaxaDeCompartilhamento(posts: any[], limit = 5) {
+  return computeTopByRate(posts, "shares", limit);
+}
+
+/** Só reels: mantido para os relatórios em PDF, que têm o título "Reels com maior taxa de compartilhamento". */
 export function computeTopReelsPorTaxaDeCompartilhamento(posts: any[], limit = 5) {
-  return computeTopByRate(
-    posts.filter((p) => p.format === "reels"),
-    "shares",
-    limit,
-  );
+  return computeTopByRate(posts.filter((p) => p.format === "reels"), "shares", limit);
 }
 
 // Amostra mínima para comparar grupos (tema, formato, tema × formato): com menos de MIN_POSTS_CONCLUSAO
@@ -186,25 +190,66 @@ export function computeReachByFormat(posts: any[]) {
 // Mesma lógica do componente RepetirOuRevisar — por tema, mediana da taxa de
 // engajamento por post (engajamento ÷ alcance de cada post, não soma÷soma —
 // um post viral isolado não deve carregar o tema inteiro), mínimo de posts
-// pra entrar na conta.
-export function computeRepetirOuRevisar(posts: any[], minPosts = 10) {
+// pra entrar na conta. A linha de base é a mediana de TODOS os posts do período
+// (não a dos temas que passaram: com um tema só, ele era comparado com ele mesmo),
+// e só conclui com pelo menos MIN_TEMAS_REPETIR temas com amostra.
+export const MIN_TEMAS_REPETIR = 3;
+export function computeRepetirOuRevisar(posts: any[], minPosts = MIN_POSTS_CONCLUSAO) {
   const groups = new Map<string, { tema: string; rates: number[] }>();
+  const todas: number[] = [];
   for (const p of posts) {
-    if (!p.tema || p.engagement == null || p.reach == null || p.reach <= 0) continue;
-    const entry = groups.get(p.tema) ?? { tema: p.tema, rates: [] as number[] };
+    if (p.engagement == null || p.reach == null || p.reach <= 0) continue;
+    todas.push(p.engagement / p.reach);
+    const k = chaveTema(p.tema);
+    if (!k) continue;
+    const entry = groups.get(k) ?? { tema: String(p.tema).trim(), rates: [] as number[] };
     entry.rates.push(p.engagement / p.reach);
-    groups.set(p.tema, entry);
+    groups.set(k, entry);
   }
   const qualifying = Array.from(groups.values())
     .filter((g) => g.rates.length >= minPosts)
     .map((g) => ({ tema: g.tema, count: g.rates.length, rate: median(g.rates) }));
-  if (qualifying.length === 0) return { repetir: [], revisar: [], hasEnough: false };
-  const baseline = median(qualifying.map((g) => g.rate));
+  const baseline = median(todas);
+  if (qualifying.length < MIN_TEMAS_REPETIR) return { repetir: [], revisar: [], hasEnough: false, baseline, temasComAmostra: qualifying.length, totalPosts: todas.length };
   return {
     repetir: qualifying.filter((g) => g.rate >= baseline).sort((a, b) => b.rate - a.rate),
     revisar: qualifying.filter((g) => g.rate < baseline).sort((a, b) => a.rate - b.rate),
     hasEnough: true,
+    baseline,
+    temasComAmostra: qualifying.length,
+    totalPosts: todas.length,
   };
+}
+
+// "Próximos ângulos": temas cujo post típico (mediana de salvamentos) fica acima do post típico da conta no
+// período escolhido. Mediana e mínimo de posts para um post viral não decidir sozinho (a RPC antiga usava média
+// com 2 posts e janela fixa de 90 dias: "Suplementos" com 228 de média eram um post com 1 e outro com 455).
+export const MIN_POSTS_ANGULO = 5;
+export interface AnguloSugerido { tema: string; count: number; medianSaved: number; baseline: number; formato: string | null; formatoCount: number }
+export function computeProximosAngulos(posts: any[], limit = 4, minPosts = MIN_POSTS_ANGULO): { angulos: AnguloSugerido[]; baseline: number; temasComAmostra: number } {
+  const groups = new Map<string, { tema: string; saved: number[]; formatos: Map<string, number[]> }>();
+  const todos: number[] = [];
+  for (const p of posts) {
+    if (p.saved == null) continue;
+    todos.push(Number(p.saved));
+    const k = chaveTema(p.tema);
+    if (!k) continue;
+    const g = groups.get(k) ?? { tema: String(p.tema).trim(), saved: [] as number[], formatos: new Map<string, number[]>() };
+    g.saved.push(Number(p.saved));
+    if (p.format) g.formatos.set(p.format, [...(g.formatos.get(p.format) ?? []), Number(p.saved)]);
+    groups.set(k, g);
+  }
+  const baseline = median(todos);
+  const comAmostra = [...groups.values()].filter((g) => g.saved.length >= minPosts);
+  const angulos = comAmostra
+    .map((g) => {
+      const fmt = [...g.formatos.entries()].filter(([, v]) => v.length >= 2).sort((a, b) => median(b[1]) - median(a[1]) || b[1].length - a[1].length)[0];
+      return { tema: g.tema, count: g.saved.length, medianSaved: median(g.saved), baseline, formato: fmt?.[0] ?? null, formatoCount: fmt?.[1].length ?? 0 };
+    })
+    .filter((a) => a.medianSaved > baseline)
+    .sort((a, b) => b.medianSaved - a.medianSaved || b.count - a.count)
+    .slice(0, limit);
+  return { angulos, baseline, temasComAmostra: comAmostra.length };
 }
 
 // Alcance/engajamento de tema dentro de cada formato — mesma lógica do

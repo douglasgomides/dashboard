@@ -578,7 +578,9 @@ function DuvidasPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
             <div className="text-2xl font-semibold tabular-nums">{voz.total}</div>
-            <div className="text-xs" style={{ color: "var(--text-dim)" }}>comentários lidos</div>
+            <div className="text-xs" style={{ color: "var(--text-dim)" }}>
+              comentários com pergunta, preço ou agendamento{q.data?.totalPeriodo != null ? ` (de ${q.data.totalPeriodo.toLocaleString("pt-BR")} no período)` : ""}
+            </div>
           </div>
           <div>
             <div className="text-2xl font-semibold tabular-nums">{voz.mantidos.length}</div>
@@ -599,7 +601,7 @@ function DuvidasPage() {
           </p>
           <p className="mt-1">
             <b style={{ color: "var(--text)" }}>Triagem nova</b> (Voz do paciente, aqui em cima): remove spam, piada, profissionais de saúde, conversa entre seguidores e
-            repetidos. <b style={{ color: "var(--text)" }}>{voz.mantidos.length}</b> perguntas reais de {voz.total} comentários lidos no período.
+            repetidos. <b style={{ color: "var(--text)" }}>{voz.mantidos.length}</b> perguntas reais entre {voz.total} comentários com pergunta, preço ou agendamento no período.
           </p>
           <p className="mt-1">
             <b style={{ color: "var(--text)" }}>Detecção original</b> (Todas as perguntas detectadas, no fim da página): todos os comentários marcados como pergunta, menos

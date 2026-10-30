@@ -7,6 +7,7 @@ import { analisarVozDoPaciente, assuntoDoTexto, confiancaDoGrupo, type GrupoDuvi
 import { MIN_POSTS_CONCLUSAO, confiancaPorPosts } from "@/lib/metricas";
 import { soPerguntas, classificarComentario } from "@/lib/classificar-comentario";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import { chaveTema, normalizarTemas, rotuloDoTema } from "@/lib/classificacao-post";
 
 // ---------- datas ----------
 const DAY_MS = 86400000;
@@ -264,7 +265,9 @@ export const MIN_PERGUNTAS = 3;
 // Tema só entra se a mediana de salvos for pelo menos 25% acima da da conta (evita ruído de 1 ou 2 salvos).
 export const MARGEM_TEMA = 1.25;
 
-export function analyzeFormatsAndTemas(posts: any[]) {
+export function analyzeFormatsAndTemas(postsBrutos: any[]) {
+  // Mesmo tema com ou sem acento ou maiúscula conta uma vez só (chaveTema), em todas as telas.
+  const posts = normalizarTemas(postsBrutos.map((p) => ({ ...p, tema: p.tema ?? null })));
   const porFormato = groupStats(
     posts,
     (p) => p.format ?? "não classificado",
@@ -1049,17 +1052,20 @@ export const MIN_PESSOAS_IDENTIFICACAO = 3;
 export function ideiasDeIdentificacao(
   comentarios: { id: string; text: string; author_username?: string | null; instagram_posts?: { tema?: string | null } | null }[],
 ): { ideias: Ideia[]; faltas: string[] } {
-  const porTema = new Map<string, { autores: Set<string>; itens: { id: string; text: string; tipo: string }[] }>();
+  const porChave = new Map<string, { grafias: string[]; autores: Set<string>; itens: { id: string; text: string; tipo: string }[] }>();
   for (const c of comentarios) {
     const tema = c.instagram_posts?.tema?.trim();
-    if (!tema) continue;
+    const chave = chaveTema(tema);
+    if (!tema || !chave) continue;
     const tipo = classificarComentario(c.text);
     if (tipo !== "elogio" && tipo !== "relato") continue;
-    const g = porTema.get(tema) ?? { autores: new Set<string>(), itens: [] };
+    const g = porChave.get(chave) ?? { grafias: [], autores: new Set<string>(), itens: [] };
+    g.grafias.push(tema);
     g.autores.add((c.author_username ?? c.id).toLowerCase());
     g.itens.push({ id: c.id, text: c.text, tipo });
-    porTema.set(tema, g);
+    porChave.set(chave, g);
   }
+  const porTema = new Map([...porChave.values()].map((g) => [rotuloDoTema(g.grafias), g] as const));
   const grupos = [...porTema.entries()].filter(([, g]) => g.autores.size >= MIN_PESSOAS_IDENTIFICACAO).sort((a, b) => b[1].autores.size - a[1].autores.size).slice(0, 3);
   const faltas: string[] = grupos.length
     ? []

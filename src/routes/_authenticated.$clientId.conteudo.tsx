@@ -10,7 +10,7 @@ import { Painel, Kpi, Selo, BarraFina, Ajuda, IconeFormato, COR_FORMATO } from "
 import { Users, UserPlus, UserMinus, Scale, TrendingUp, Target, CalendarCheck, LineChart as LineIcon, Trophy, Layers, Tag, Bookmark, FileText, AlertTriangle, Info } from "lucide-react";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 import { SyncButton } from "@/components/sync-button";
-import { fmtFracao } from "@/lib/metricas";
+import { fmtFracao, MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { SeguidoresSemana } from "@/components/seguidores-impulsionados";
 
 export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
@@ -20,9 +20,13 @@ export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 const fmtN = (n: number) => Math.round(n).toLocaleString("pt-BR");
 
-function TabelaGrupo({ titulo, sub, rows, col, icone }: { titulo: string; sub: string; rows: GroupStat[]; col: string; icone: typeof Layers }) {
+function TabelaGrupo({ titulo, sub, rows: todas, col, icone }: { titulo: string; sub: string; rows: GroupStat[]; col: string; icone: typeof Layers }) {
+  // Só disputa o "1º" quem tem a amostra mínima do painel (8 posts): um post isolado, talvez impulsionado,
+  // não vira o melhor pilar. Os grupos menores vêm depois, marcados como amostra pequena.
+  const comAmostra = (r: GroupStat) => r.count >= MIN_POSTS_CONCLUSAO && r.key !== "não classificado";
+  const rows = [...todas.filter(comAmostra), ...todas.filter((r) => !comAmostra(r))];
   const max = Math.max(1, ...rows.map((r) => r.reachMedian));
-  const melhor = rows.length > 0 ? rows[0].key : null;
+  const melhor = rows.find(comAmostra)?.key ?? null;
   return (
     <Painel icone={icone} titulo={titulo} resumo={sub}>
       {rows.length === 0 ? (
@@ -38,7 +42,8 @@ function TabelaGrupo({ titulo, sub, rows, col, icone }: { titulo: string; sub: s
                 <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
                   {titulo.includes("formato") && <IconeFormato formato={r.key} />}
                   <span className="truncate" title={String(r.label ?? "")}>{r.label}</span>
-                  {r.key === melhor && <Selo cor="var(--good-text)" titulo="Maior alcance mediano"><Trophy size={11} aria-hidden /> 1º</Selo>}
+                  {r.key === melhor && <Selo cor="var(--good-text)" titulo={`Maior alcance mediano entre os grupos com ${MIN_POSTS_CONCLUSAO} posts ou mais`}><Trophy size={11} aria-hidden /> 1º</Selo>}
+                  {!comAmostra(r) && r.key !== "não classificado" && <Selo titulo={`Menos de ${MIN_POSTS_CONCLUSAO} posts: um post fora da curva decide sozinho`}>amostra pequena</Selo>}
                 </span>
                 <span className="shrink-0 text-sm font-semibold tabular-nums" title="Alcance mediano">{fmtN(r.reachMedian)}</span>
               </div>
