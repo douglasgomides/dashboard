@@ -360,7 +360,7 @@ export async function getAdsCampanhasPeriodo(clientId: string, start: string, en
   }
   const { data: cad, error: e2 } = await (supabase as any)
     .from("meta_ads_campaigns")
-    .select("campaign_id, name, objective, permalink, thumbnail_url")
+    .select("campaign_id, name, objective, permalink, thumbnail_url, destinos, otimizacoes")
     .eq("client_id", clientId);
   if (e2) throw e2;
   // Alcance de 7 dias pela campanha inteira (frequência real). Extra: sem a tabela ou com erro, vale a conta antiga.

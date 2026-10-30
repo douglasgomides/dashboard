@@ -7,7 +7,7 @@ import { getAdsCampanhasPeriodo, getAtendimentosWhatsapp } from "@/lib/client-da
 import { getClinicaSap, getPlanoSap, getTrackerAuto } from "@/lib/sap-data";
 import { lerTrackerAuto } from "@/lib/sap-auto";
 import { somarDias } from "@/lib/sap-metas";
-import { avaliarRastreio } from "@/lib/rastreio-anuncios";
+import { avaliarRastreio, separarCliques } from "@/lib/rastreio-anuncios";
 import { regrasDeMidia, type TipoRegra } from "@/lib/sap-midia";
 
 const ESTILO: Record<TipoRegra, { I: typeof Ban; cor: string; rotulo: string }> = {
@@ -33,9 +33,10 @@ export function RegrasMidiaSap({ clientId }: { clientId: string }) {
   const leitura = useMemo(() => {
     if (!adsQ.data) return null;
     const t = lerTrackerAuto(autoQ.data);
-    const cliques = adsQ.data.linhas.reduce((s, l) => s + (Number(l.link_clicks) || 0), 0);
+    // Visita ao perfil não é clique para conversar (rastreio-anuncios.ts).
+    const cliques = separarCliques(adsQ.data.linhas, adsQ.data.cadastro);
     const conversas = adsQ.data.linhas.reduce((s, l) => s + (Number(l.conversations) || 0), 0);
-    const rastreio = avaliarRastreio({ cliquesLink: cliques, conversas, atendimentosWhatsapp: whatsQ.data ?? null });
+    const rastreio = avaliarRastreio({ cliquesLink: cliques.paraFora, cliquesPerfil: cliques.paraPerfil, conversas, atendimentosWhatsapp: whatsQ.data ?? null });
     const meta = planoQ.data?.find((p) => p.kpi === "custo_consulta")?.meta ?? null;
     return regrasDeMidia({
       linhas: adsQ.data.linhas,

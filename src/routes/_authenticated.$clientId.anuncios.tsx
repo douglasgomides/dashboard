@@ -411,7 +411,19 @@ function AnunciosPage() {
           cor="var(--accent)"
         />
         <Kpi icone={Eye} rotulo="Aparições do anúncio" valor={int(diag.impressoes)} dica={custoMil != null ? `${fmtBRL(custoMil)} a cada mil aparições` : undefined} cor="var(--s2)" />
-        <Kpi icone={MousePointerClick} rotulo="Cliques no link" valor={int(diag.cliquesLink)} dica={diag.cliquesLink > 0 ? `${fmtBRL(diag.gasto / diag.cliquesLink)} por clique` : undefined} cor="var(--s3)" />
+        <Kpi
+          icone={MousePointerClick}
+          rotulo="Cliques no link"
+          valor={int(diag.cliquesLink)}
+          dica={
+            diag.cliquesPerfil > 0
+              ? `${int(diag.cliquesPerfil)} foram visitas ao perfil do Instagram e ${int(diag.cliquesLink - diag.cliquesPerfil)} foram para WhatsApp ou site`
+              : diag.cliquesLink > 0
+                ? `${fmtBRL(diag.gasto / diag.cliquesLink)} por clique`
+                : undefined
+          }
+          cor="var(--s3)"
+        />
         <Kpi icone={Percent} rotulo="Cliques a cada 100 aparições" valor={porCem(ctrConta)} dica="Cliques no link ÷ aparições × 100" cor="var(--s7)" />
       </div>
       <div className="rounded-xl border p-3" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
@@ -420,7 +432,8 @@ function AnunciosPage() {
           dividir a verba de todos os objetivos pelas conversas deixaria o número inflado. Referência de mercado, sem estudo
           independente e por isso sem cor: {BENCHMARKS.custoPorConversa.referencia}. <b>Aparições</b> são as vezes que o anúncio
           apareceu na tela (a mesma pessoa pode ver mais de uma vez). <b>Cliques a cada 100 aparições</b> conta só clique no link, não
-          curtida nem clique na foto.
+          curtida nem clique na foto. <b>Clique no link</b> pode levar ao perfil do Instagram, ao WhatsApp ou ao site, conforme o destino da
+          campanha: visita ao perfil faz o médico ser conhecido, mas não é pedido de atendimento.
         </OQueE>
       </div>
 

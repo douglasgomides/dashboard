@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { getAdsResumo } from "@/lib/client-data";
+import { getAdsCampanhasPeriodo, getAdsResumo } from "@/lib/client-data";
+import { leituraComparativo, resumirLado } from "@/lib/comparativo-anuncios";
 
 // A conta inteira, este período × o período anterior do mesmo tamanho, independente de quais
 // campanhas estavam ativas em cada um. Mesma fonte (ads_resumo) nos dois lados, para comparar igual.
@@ -21,31 +22,44 @@ export function ComparativoConta({ clientId, start, end }: { clientId: string; s
   const antIni = iso(new Date(start + "T12:00:00Z").getTime() - dias * 86400000);
   const atual = useQuery({ queryKey: ["ads-resumo", clientId, start, end], queryFn: () => getAdsResumo(clientId, start, end.slice(0, 10)), staleTime: 5 * 60_000 });
   const ant = useQuery({ queryKey: ["ads-resumo", clientId, antIni, antFim], queryFn: () => getAdsResumo(clientId, antIni, antFim), staleTime: 5 * 60_000 });
+  // Campanha a campanha nos dois períodos: cadastros (leads) e a divisão da verba por objetivo.
+  const campAtual = useQuery({ queryKey: ["ads-campanhas-periodo", clientId, start, end], queryFn: () => getAdsCampanhasPeriodo(clientId, start, end), staleTime: 5 * 60_000 });
+  const campAnt = useQuery({ queryKey: ["ads-campanhas-periodo", clientId, antIni, antFim], queryFn: () => getAdsCampanhasPeriodo(clientId, antIni, antFim), staleTime: 5 * 60_000 });
   const a = atual.data as any;
   const b = ant.data as any;
   if (!a) return null;
+  const ladoA = campAtual.data ? resumirLado(campAtual.data.linhas, campAtual.data.cadastro) : null;
+  const ladoB = campAnt.data ? resumirLado(campAnt.data.linhas, campAnt.data.cadastro) : null;
+  const comCadastro = (ladoA?.leads ?? 0) > 0 || (ladoB?.leads ?? 0) > 0;
+  const custoConversaVazio = n(a.custo_por_conversa) == null && n(b?.custo_por_conversa) == null;
   const linhas: { rot: string; at: number | null; an: number | null; fmt: (v: number | null) => string; bomSobe: boolean | null; dica: string }[] = [
     { rot: "Investido", at: n(a.gasto), an: n(b?.gasto), fmt: brl, bomSobe: null, dica: "Tudo o que foi gasto na conta, de qualquer campanha." },
     { rot: "Conversas iniciadas", at: n(a.conversas), an: n(b?.conversas), fmt: int, bomSobe: true, dica: "WhatsApp e Direct, de todas as campanhas." },
-    { rot: "Custo por conversa", at: n(a.custo_por_conversa), an: n(b?.custo_por_conversa), fmt: brl, bomSobe: false, dica: "Só campanhas de mensagem." },
+    ...(comCadastro
+      ? [
+          { rot: "Cadastros (leads)", at: ladoA?.leads ?? null, an: ladoB?.leads ?? null, fmt: int, bomSobe: true, dica: "Formulário e pixel, de todas as campanhas." },
+          {
+            rot: "Contatos gerados",
+            at: ladoA ? ladoA.conversas + ladoA.leads : null,
+            an: ladoB ? ladoB.conversas + ladoB.leads : null,
+            fmt: int,
+            bomSobe: true,
+            dica: "Conversas mais cadastros: quem pediu contato, por qualquer caminho.",
+          },
+        ]
+      : []),
+    // Linha morta quando nenhuma campanha é de mensagem nos dois períodos.
+    ...(custoConversaVazio ? [] : [{ rot: "Custo por conversa", at: n(a.custo_por_conversa), an: n(b?.custo_por_conversa), fmt: brl, bomSobe: false, dica: "Só campanhas de mensagem." }]),
     { rot: "Aparições (impressões)", at: n(a.impressoes), an: n(b?.impressoes), fmt: int, bomSobe: true, dica: "Vezes que o anúncio apareceu." },
-    { rot: "Cliques no link", at: n(a.cliques_link), an: n(b?.cliques_link), fmt: int, bomSobe: true, dica: "Só clique que leva para fora (WhatsApp, site)." },
+    { rot: "Cliques no link", at: n(a.cliques_link), an: n(b?.cliques_link), fmt: int, bomSobe: true, dica: "Clique no link do anúncio: pode levar ao perfil do Instagram, ao WhatsApp ou ao site, conforme o destino da campanha." },
     { rot: "CTR (clique no link ÷ aparições)", at: n(a.ctr), an: n(b?.ctr), fmt: (v) => pctTxt(v == null ? null : v / 100), bomSobe: true, dica: "Mede se a arte chama atenção." },
     { rot: "CPC (custo por clique)", at: n(a.cpc), an: n(b?.cpc), fmt: brl, bomSobe: false, dica: "Quanto custa cada clique no link." },
     { rot: "CPM (custo por mil aparições)", at: n(a.cpm), an: n(b?.cpm), fmt: brl, bomSobe: false, dica: "Quanto custa aparecer. Sobe com público disputado ou criativo cansado." },
     { rot: "Campanhas com registros", at: n(a.campanhas), an: n(b?.campanhas), fmt: int, bomSobe: null, dica: "Campanhas presentes nos dados do período, inclusive atribuições sem novo gasto." },
   ];
-  // Leitura em uma frase: gasto x resultado.
-  const vg = variacao(n(a.gasto), n(b?.gasto));
-  const vc = variacao(n(a.conversas), n(b?.conversas));
+  // Leitura em uma frase: gasto x contatos, e a troca de objetivo antes de culpar o anúncio (comparativo-anuncios.ts).
   const pc = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)}%`;
-  let leitura = "";
-  if (b && vg != null && vc != null) {
-    if (vg > 0.1 && vc < vg - 0.1) leitura = `O investimento subiu ${pc(vg)} e as conversas ${vc >= 0 ? `só ${pc(vc)}` : `caíram ${pc(vc)}`}: o dinheiro a mais rendeu menos. Ver criativos cansados e público.`;
-    else if (vg < -0.1 && vc > vg + 0.1) leitura = `O investimento caiu ${pc(vg)} e as conversas ${vc >= 0 ? `subiram ${pc(vc)}` : `caíram só ${pc(vc)}`}: a conta ficou mais eficiente.`;
-    else if (Math.abs(vg) <= 0.1 && vc < -0.15) leitura = `Mesmo investimento (${pc(vg)}) e ${pc(vc)} de conversas: algo piorou no anúncio ou no público.`;
-    else leitura = `Investimento ${pc(vg)} e conversas ${pc(vc)} em relação ao período anterior.`;
-  } else if (!b || !n(b.gasto)) leitura = "Sem gasto no período anterior para comparar.";
+  const leitura = ladoA && (ladoB || campAnt.isFetched) ? leituraComparativo(ladoA, ladoB) : "";
   return (
     <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }} aria-label="Este período e o anterior">
       <h2 className="text-[15px] font-semibold">A conta inteira: este período × o anterior</h2>
