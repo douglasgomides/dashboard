@@ -583,6 +583,42 @@ try {
       await db.exec("rollback");
     }
   });
+  await check("origem pela mensagem pronta de link e pela etapa de paciente; o sync seguinte não apaga", async () => {
+    await db.exec("begin");
+    try {
+      // Só textos fixos de link contam; texto livre não é interpretado.
+      const m = async (t: string) => (await rows<{ o: string | null }>("select crm_origem_da_mensagem($1) as o", [t]))[0].o;
+      assert.equal(await m("Olá, vim do Instagram e quero agendar uma consulta com a Dra. Mariela."), "Instagram");
+      assert.equal(await m("Olá, tudo bem? Estava no Instagram da Dra Lana e gostaria de agendar um horário."), "Instagram");
+      assert.equal(await m("Bom dia! Tudo bem?\nVim do Instagram e gostaria de tirar uma dúvida."), "Instagram");
+      assert.equal(await m("Olá, vim do Google e gostaria de mais informações sobre Lipedema"), "Google");
+      assert.equal(await m("Olá, vim do site e gostaria de mais informações"), "Site");
+      assert.equal(await m("*Google Ads*\n\nSua resposta foi registrada como uma ativação"), "Anúncio");
+      assert.equal(await m("devo começar a reposição hormonal e se tenho indicação"), null);
+      assert.equal(await m("Então só oq vi pelo insta"), null);
+      // Card do FlwChat ligado à conversa pela sessão (mesmo se a conversa estiver em outro cliente).
+      await db.query(`insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,occurred_at) values ($1,$2,'flwchat','fm1','add','{"sessionId":"s-1","contactIds":["x"]}',now())`, [A, connectionA]);
+      const conv = (await rows<{ id: string }>("insert into conversas(client_id,provider,externo_id) values ($1,'wts','s-1') returning id", [B]))[0].id;
+      await db.query("insert into mensagens(conversa_id,client_id,direcao,texto,enviada_em,externo_id) values ($1,$2,'entrada','Olá, vim do Instagram e quero agendar',now(),'m1'),($1,$2,'entrada','Quero saber valores',now()+interval '1 minute','m2')", [conv, B]);
+      // Card na etapa de paciente da casa.
+      await db.query("insert into crm_pipeline_statuses(crm_connection_id,pipeline_id,status_id,pipeline_name,status_name) values ($1,'pp','rec','Atendimento','Paciente Recorrente')", [connectionA]);
+      await db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,pipeline_id,status_id,occurred_at) values ($1,$2,'kommo','km1','add','{}','pp','rec',now())", [A, connectionA]);
+      assert.deepEqual(await rows("select crm_aplicar_origem_externa($1) as n", [A]), [{ n: 2 }]);
+      assert.deepEqual(await rows("select external_lead_id id, source, origem_como from crm_leads where external_lead_id in ('fm1','km1') order by 1"), [
+        { id: "fm1", source: "Instagram", origem_como: "mensagem" },
+        { id: "km1", source: "Paciente antigo", origem_como: "etapa" },
+      ]);
+      // O sync seguinte manda o campo vazio: a origem lida fica. A equipe preenche no CRM: o campo vale.
+      await db.query(`update crm_leads set source=null, raw_payload='{"sessionId":"s-1","novo":1}' where external_lead_id='fm1'`);
+      assert.deepEqual(await rows("select source, origem_como from crm_leads where external_lead_id='fm1'"), [{ source: "Instagram", origem_como: "mensagem" }]);
+      await db.query("update crm_leads set source='Indicação' where external_lead_id='fm1'");
+      assert.deepEqual(await rows("select source, origem_como from crm_leads where external_lead_id='fm1'"), [{ source: "Indicação", origem_como: "crm" }]);
+      assert.deepEqual(await rows("select crm_aplicar_origem_externa($1) as n", [A]), [{ n: 0 }], "nada novo para aplicar");
+      await denied(() => role("authenticated", admin, () => rows("select crm_aplicar_origem_externa(null)")));
+    } finally {
+      await db.exec("rollback");
+    }
+  });
   await check("ticket rejeita não finitos e preserva decimal, mediana CRM, SAP e ausência de fonte", async () => {
     await db.exec("begin");
     try {

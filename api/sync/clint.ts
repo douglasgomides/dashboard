@@ -138,6 +138,10 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       onlyClientId: clientId,
       orcamentoMs: Math.max(1, Math.min(110_000, 270_000 - (Date.now() - startedAt))),
     });
+    // Origem pela primeira mensagem (mensagem pronta de link) e pela etapa de paciente da casa, para todos os
+    // clientes (migração 20261030200000). Falha aqui não derruba o sync.
+    const { error: eOrigem } = await supabaseStatus.rpc("crm_aplicar_origem_externa", {});
+    if (eOrigem) console.error("crm_aplicar_origem_externa:", eOrigem.message);
     const hasErrors =
       clintConversas.some((r) => r.erros.length > 0 || r.parcial) ||
       results.some((r) => r.errors.length > 0) ||
