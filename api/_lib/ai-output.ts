@@ -11,6 +11,8 @@ const FALHAS = ["sem_resposta", "demora", "desvio_preco", "preco_sem_ancoragem",
  * da lista sai da lista, nota fora de 0 a 10 é limitada, e conversa não comercial perde a ação comercial.
  * Campos que faltam ou com valor fora do esperado continuam reprovando na validação.
  */
+const ORIGENS = ["anuncio", "instagram", "indicacao", "paciente_antigo", "desconhecida"] as const;
+
 export function normalizarResumoConversa(bruto: unknown): unknown {
   if (!bruto || typeof bruto !== "object" || Array.isArray(bruto)) return bruto;
   const r = { ...(bruto as Record<string, unknown>) };
@@ -31,6 +33,12 @@ export function normalizarResumoConversa(bruto: unknown): unknown {
     }
     r.atendimento = at;
   }
+  // A IA às vezes escreve a categoria com acento, maiúscula ou espaço ("Paciente antigo", "agendou "). Padroniza a
+  // escrita; origem fora da lista vira "desconhecida" (nunca chutar origem). Etapa fora da lista continua inválida.
+  const chaveIA = (v: unknown) => (typeof v === "string" ? v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/[\s-]+/g, "_") : v);
+  r.origem = chaveIA(r.origem);
+  if (r.origem == null || (typeof r.origem === "string" && !(ORIGENS as readonly string[]).includes(r.origem))) r.origem = "desconhecida";
+  r.etapa = chaveIA(r.etapa);
   if (r.comercial === false) {
     r.recuperavel = false;
     r.proximo_passo = null;
@@ -41,7 +49,7 @@ export function normalizarResumoConversa(bruto: unknown): unknown {
 /** JSON do provedor é dado externo: só entra no banco depois de validar o contrato. */
 export const conversationSummarySchema = z.object({
   motivo: texto.min(1), resumo: texto.min(1), comercial: z.boolean(), interesse: texto.nullable(),
-  origem: z.enum(["anuncio", "instagram", "indicacao", "paciente_antigo", "desconhecida"]),
+  origem: z.enum(ORIGENS),
   etapa: z.enum(["so_robo", "sem_resposta_paciente", "engajou", "qualificacao", "preco_apresentado", "agendamento_em_curso", "agendou", "nao_e_paciente"]),
   preco_pedido: z.boolean(), preco_apresentado: z.boolean(),
   objecoes: z.array(z.enum(["preco", "convenio", "distancia", "adiamento", "agenda", "medo", "desconfianca", "outro"])).max(8),
