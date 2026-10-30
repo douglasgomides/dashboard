@@ -47,21 +47,37 @@ export function median(nums: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
-// Mesma lógica do componente InsightDeFormato — extraída pra ser reutilizada
-// tanto na tela quanto no relatório em PDF, sem duplicar o cálculo.
+// Taxa de interação do post: engajamento ÷ alcance. "Melhor formato" e "melhor horário" comparam a TAXA, não o
+// engajamento absoluto: o absoluto mede alcance (impulsionamento), não a qualidade do conteúdo. Na Doctor Creator
+// (out/2026) o estático aparecia "muito acima" com 2.219 de engajamento contra 149 do carrossel, mas o estático
+// tinha 14x mais alcance; as taxas eram 4,6% e 4,3% (auditoria de 31/10/2026). Mesma régua no Resultado, no PDF e no
+// texto do relatório (relatorio-envio.ts).
+export function taxaDoPost(p: { engagement?: number | null; reach?: number | null }): number | null {
+  const e = Number(p.engagement);
+  const r = Number(p.reach);
+  if (p.engagement == null || p.reach == null || !Number.isFinite(e) || !Number.isFinite(r) || r <= 0) return null;
+  return e / r;
+}
+
+/** Diferença relativa abaixo disso entre melhor e pior formato = taxas parecidas (não há formato "mais forte"). */
+export const EMPATE_TAXA = 0.15;
+
+// Mesma lógica do componente InsightDeFormato, reutilizada na tela e no PDF.
+// median = taxa mediana (0..1) dos posts do formato.
 export function computeFormatInsight(posts: any[]) {
   const groups = new Map<string, number[]>();
-  const allEng: number[] = [];
+  const all: number[] = [];
   for (const p of posts) {
-    if (p.engagement == null) continue;
+    const t = taxaDoPost(p);
+    if (t == null) continue;
     const key = p.format ?? "não classificado";
     const entry = groups.get(key) ?? [];
-    entry.push(p.engagement);
+    entry.push(t);
     groups.set(key, entry);
-    allEng.push(p.engagement);
+    all.push(t);
   }
-  if (allEng.length === 0) return null;
-  const overallMedian = median(allEng);
+  if (all.length === 0) return null;
+  const overallMedian = median(all);
   // "Melhor" e "pior" só entre formatos com amostra mínima (MIN_POSTS_CONCLUSAO posts).
   const ranked = Array.from(groups.entries())
     .filter(([, v]) => v.length >= MIN_POSTS_CONCLUSAO)
@@ -72,25 +88,32 @@ export function computeFormatInsight(posts: any[]) {
   const worst = ranked[ranked.length - 1];
   const bestPct = overallMedian > 0 ? ((best.median - overallMedian) / overallMedian) * 100 : 0;
   const worstPct = overallMedian > 0 ? ((worst.median - overallMedian) / overallMedian) * 100 : 0;
-  return { best, worst, bestPct, worstPct };
+  const empate = best.median > 0 ? (best.median - worst.median) / best.median < EMPATE_TAXA : true;
+  return { best, worst, bestPct, worstPct, overallMedian, empate };
 }
 
-// Mesma lógica do componente MelhoresHorarios.
+/** Taxa (0..1) em % com uma casa: 0,0463 → "4,6%". */
+export function fmtTaxaPct(v: number): string {
+  return `${(v * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
+// Mesma lógica do componente MelhoresHorarios: taxa mediana de interação por dia e faixa de horário.
 export function computeMelhoresHorarios(posts: any[]) {
   const buckets = new Map<string, { weekday: string; period: string; values: number[] }>();
-  const allEng: number[] = [];
+  const all: number[] = [];
   for (const p of posts) {
-    if (!p.posted_at || p.engagement == null) continue;
-    allEng.push(p.engagement);
+    const t = taxaDoPost(p);
+    if (!p.posted_at || t == null) continue;
+    all.push(t);
     const { weekday: weekdayIdx, hour } = brazilWeekdayAndHour(p.posted_at);
     const weekday = WEEKDAYS[weekdayIdx];
-    const period = PERIODS.find((per) => per.test(hour))?.label ?? "—";
+    const period = PERIODS.find((per) => per.test(hour))?.label ?? "sem horário";
     const key = `${weekday}__${period}`;
     const entry = buckets.get(key) ?? { weekday, period, values: [] };
-    entry.values.push(p.engagement);
+    entry.values.push(t);
     buckets.set(key, entry);
   }
-  const overallMedian = median(allEng);
+  const overallMedian = median(all);
   const todos = Array.from(buckets.values()).map((b) => ({ weekday: b.weekday, period: b.period, count: b.values.length, median: median(b.values) }));
   // Ranking só entre horários com amostra mínima; os demais vão para "poucos dados", sem ordem de melhor.
   const ranked = todos.filter((b) => b.count >= MIN_POSTS_CONCLUSAO).sort((a, b) => b.median - a.median).slice(0, 5);
@@ -98,19 +121,25 @@ export function computeMelhoresHorarios(posts: any[]) {
   return { ranked, overallMedian, poucosDados };
 }
 
-// Mesma lógica do componente EngajamentoPorFormato.
+// Mesma lógica do componente EngajamentoPorFormato: taxa mediana por formato; abaixo da amostra mínima o formato
+// sai marcado como amostra pequena (a tela não desenha barra para ele).
 export function computeFormatBreakdown(posts: any[]) {
-  const groups = new Map<string, number[]>();
+  const groups = new Map<string, { taxas: number[]; eng: number[]; n: number }>();
   for (const p of posts) {
     const key: ContentFormat | "não classificado" = p.format ?? "não classificado";
-    const entry = groups.get(key) ?? [];
-    entry.push(p.engagement ?? 0);
+    const entry = groups.get(key) ?? { taxas: [], eng: [], n: 0 };
+    entry.n += 1;
+    entry.eng.push(p.engagement ?? 0);
+    const t = taxaDoPost(p);
+    if (t != null) entry.taxas.push(t);
     groups.set(key, entry);
   }
   return Array.from(groups.entries()).map(([key, v]) => ({
     formato: fmtFormatKey(key),
-    count: v.length,
-    medianEngagement: Math.round(median(v)),
+    count: v.n,
+    medianEngagement: Math.round(median(v.eng)),
+    taxaMediana: v.taxas.length ? median(v.taxas) : null,
+    amostraPequena: v.taxas.length < MIN_POSTS_CONCLUSAO,
   }));
 }
 

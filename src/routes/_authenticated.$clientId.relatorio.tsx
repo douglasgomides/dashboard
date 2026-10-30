@@ -8,6 +8,7 @@ import {
   getClientFontes,
   getCrmLeadsPorDiaPeriodo,
   getCrmResumoPeriodo,
+  getCrmVendasPeriodo,
   getMonthlyMetrics,
   getPatientQuestionsPeriodo,
   getPostsForAnalytics,
@@ -85,8 +86,8 @@ function RelatorioPage() {
   const crm = useQuery({
     queryKey: ["rel-crm", clientId, start, end],
     queryFn: async () => {
-      const [resumo, dias] = await Promise.all([getCrmResumoPeriodo(clientId, start, end), getCrmLeadsPorDiaPeriodo(clientId, start, end)]);
-      return { resumo, diasComDado: dias.filter((d) => Number(d.total) > 0).map((d) => String(d.dia).slice(0, 10)) };
+      const [resumo, dias, vendas] = await Promise.all([getCrmResumoPeriodo(clientId, start, end), getCrmLeadsPorDiaPeriodo(clientId, start, end), getCrmVendasPeriodo(clientId, start, end)]);
+      return { resumo, diasComDado: dias.filter((d) => Number(d.total) > 0).map((d) => String(d.dia).slice(0, 10)), vendas };
     },
     enabled: temCrm,
   });

@@ -135,7 +135,7 @@ for (const c of [juliana, lana]) {
 console.log("\n=== Recomendação sem amostra mínima ===");
 const pouco = buildRelatorioEnvio({
   ...entrada(lana),
-  posts: [["reels", "Exames", 90000, 900], ["reels", "Exames", 80000, 800], ["reels", "Sono", 70000, 10], ["carrossel", "Sono", 900, 1], ["carrossel", "Sono", 800, 1], ["carrossel", "Pele", 700, 1]].map(([format, tema, reach, saved], i) => ({ id: String(i), format, tema, reach, saved, caption: "x" })),
+  posts: [["reels", "Exames", 90000, 900], ["reels", "Exames", 80000, 800], ["reels", "Sono", 70000, 10], ["carrossel", "Sono", 900, 1], ["carrossel", "Sono", 800, 1], ["carrossel", "Pele", 700, 1]].map(([format, tema, reach, saved], i) => ({ id: String(i), format, tema, reach, saved, caption: "x", engagement: Math.round(Number(reach) * (format === "reels" ? 0.06 : 0.02)) })),
   perguntas: [{ text: "Qual exame pedir para tireoide?", author_username: "a" }],
 });
 console.log(pouco.checagem.find((k) => k.id === "recomendacao")!.detalhes.filter((d) => d.startsWith("Descartada")).join("\n"));
@@ -215,7 +215,13 @@ await (async () => {
       frequencia: Object.fromEntries(diag.campanhas.map((c, i) => [c.campaign_id, 1 + (i % 5) / 10])),
     },
     wts: null,
-    crm: { metricas: { total_leads: 970, ganhos: 0, perdidos: 48, em_atendimento: 12, novos_7d: 50, consultas_agendadas: 3, fonte_preenchida_pct: 40 }, porEtapa: [], porOrigem: [], porDia: [] },
+    crm: {
+      resumo: { novos: 120, ganhos: 9, perdidos: 48 },
+      pessoas: null,
+      vendas: { vendas_no_periodo: 7, vendas_coorte: 9, fechados_sem_resultado: 0, ultima_venda: PERIODO.end, eventos_desde: "2020-01-01", planilha_ultimo: null, pessoas_novas: 120, pessoas_novas_com_origem: 84, por_origem: [{ origem: "Instagram", pessoas: 60, vendas: 4 }, { origem: "Anúncio", pessoas: 24, vendas: 2 }, { origem: "Não informado", pessoas: 36, vendas: 1 }] },
+      porDia: [],
+      porEtapaHistorico: [{ etapa: "Contato inicial", total: 900 }],
+    },
     omitidos: ["WhatsApp de atendimento (não conectado)"],
     falhas: [],
     envio,
@@ -235,7 +241,7 @@ await (async () => {
     const plano = texto.replace(/\s+/g, " ");
     for (const [rot, re] of [
       ["O achado do período", /O achado do período/],
-      ["insight de formato por engajamento", /formato mais forte em engajamento/],
+      ["insight de formato por taxa de interação", /taxa de interação/],
       // Rótulo de KPI e de caixa saem em maiúsculas no PDF.
       ["Impressões e CTR na página 1", /Impressões[\s\S]{0,400}CTR 1,23%/i],
       ["coluna Conv.", /Conv\./],
@@ -244,7 +250,9 @@ await (async () => {
       ["ideias que vêm de dúvidas", /Dúvida repetida[\s\S]{0,300}pessoas diferentes perguntaram sobre/i],
       ["6 seções", /Resumo do período[\s\S]*Principais vitórias[\s\S]*Ações recomendadas/],
       ["diagnóstico por objetivo", /Resultado por objetivo/],
-      ["CRM em atendimento na página 1", /12 em atendimento/],
+      ["vendas do período na página 1", /7 vendas fechadas no período/],
+      ["comercial do período, sem histórico misturado", /De onde vieram os contatos novos[\s\S]*Histórico total do CRM/i],
+      ["origem com a mesma régua do ROI", /70%/],
       ["nota dos algoritmos de dúvida", /Como as dúvidas foram contadas/],
       ["Não incluído por falta de dado", /Não incluído por falta de dado/],
       ["exclusão registrada", /Retirado do envio por escolha da equipe/],

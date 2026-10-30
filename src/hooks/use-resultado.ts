@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getMonthlyMetrics, getPostsForAnalytics, getAdsDiagnosticoPorObjetivo, getAdsPorDia, getWtsResumo, getCrmResumoPeriodo, getCrmLeadsPorDiaPeriodo, getClientFontes } from "@/lib/client-data";
+import { getMonthlyMetrics, getPostsForAnalytics, getAdsDiagnosticoPorObjetivo, getAdsPorDia, getWtsResumo, getCrmResumoPeriodo, getCrmVendasPeriodo, getCrmLeadsPorDiaPeriodo, getClientFontes } from "@/lib/client-data";
 import { getResumoPeriodo } from "@/lib/audiencia";
 import { completeInstagramPeriod } from "@/lib/report-period";
 import { montarResultado } from "@/lib/resultado";
@@ -26,6 +26,7 @@ export function useResultado(clientId: string, start: string, end: string) {
   const adsDia = useQuery({ queryKey: ["ads-dia", clientId, start, fim], queryFn: () => getAdsPorDia(clientId, start, fim), ...opts });
   const wts = useQuery({ queryKey: ["wts-resumo", clientId, start, fim], queryFn: () => getWtsResumo(clientId, start, fim), ...opts });
   const crm = useQuery({ queryKey: ["crm-resumo", clientId, start, fim], queryFn: () => getCrmResumoPeriodo(clientId, start, fim), ...opts });
+  const vendas = useQuery({ queryKey: ["crm-vendas", clientId, start, fim], queryFn: () => getCrmVendasPeriodo(clientId, start, fim), ...opts });
   const leadsDia = useQuery({ queryKey: ["crm-leads-dia", clientId, start, fim], queryFn: () => getCrmLeadsPorDiaPeriodo(clientId, start, fim), ...opts });
 
   const qualidade = useQualidadeDados(clientId);
@@ -45,14 +46,14 @@ export function useResultado(clientId: string, start: string, end: string) {
       adsDiag: adsDiag.data ?? null,
       adsPorDia: (adsDia.data ?? []).map((a: any) => ({ dia: a.dia, gasto: Number(a.gasto), conversas: Number(a.conversas) })),
       wts: wts.data ?? null,
-      crm: crm.data ? { novos: Number(crm.data.novos), ganhos: Number(crm.data.ganhos) } : null,
+      crm: crm.data ? { novos: Number(crm.data.novos), ganhos: Number(crm.data.ganhos), vendas: vendas.data ?? null } : null,
       leadsPorDia: leadsDia.data?.length ? leadsDia.data.map((l) => ({ dia: l.dia, total: Number(l.total) })) : fontes.data?.tem_crm ? [] : undefined,
       fontes: fontes.data ?? null,
       problemasDados: problemasParaInsights(qualidade.data ?? []),
     });
-  }, [qualidade.data, metricas.data, anterior.data, posts.data, periodoIg.data, adsDiag.data, adsDia.data, wts.data, crm.data, leadsDia.data, fontes.data, start, fim, hoje, diasPeriodo]);
+  }, [qualidade.data, metricas.data, anterior.data, posts.data, periodoIg.data, adsDiag.data, adsDia.data, wts.data, crm.data, vendas.data, leadsDia.data, fontes.data, start, fim, hoje, diasPeriodo]);
 
-  const leituras = [metricas, anterior, posts, fontes, adsDiag, adsDia, wts, crm, leadsDia, qualidade];
+  const leituras = [metricas, anterior, posts, fontes, adsDiag, adsDia, wts, crm, vendas, leadsDia, qualidade];
   return { r, hoje, fim, diasPeriodo, carregando: metricas.isLoading, metricas, anterior, posts, periodoIg, fontes, qualidade,
     fontesComFalha: leituras.some((q) => q.isError), carregandoFontes: leituras.some((q) => q.isLoading),
     refazerFontes: () => Promise.all(leituras.filter((q) => q.isError).map((q) => q.refetch())),

@@ -13,6 +13,8 @@ import { insightsDeAnuncios, limitacoesDeAnuncios, type DiagnosticoAds } from "@
 import { BENCHMARKS, avaliar, type Faixa } from "@/lib/benchmarks";
 import { ordenarPorScore } from "@/lib/oportunidades";
 import { confiancaPorAmostra, type Insight, type Limitacao, type Responsavel, type Area, type Tom } from "@/lib/insight";
+import { saldoSeguidores } from "@/lib/metricas";
+import { lerVendas, type VendasPeriodoBanco } from "@/lib/vendas-periodo";
 
 export interface EntradaResultado {
   /** A tela já mostra a faixa de cobertura no topo: não repetir "Período incompleto" nos alertas. */
@@ -26,8 +28,9 @@ export interface EntradaResultado {
   periodoIg?: { alcance_unico?: number | null; interacoes?: number | null; salvamentos?: number | null; de: string; ate: string; recortado?: boolean } | null;
   adsDiag?: DiagnosticoAds | null;
   adsPorDia?: { dia: string; gasto: number | null; conversas?: number | null }[];
-  wts?: { atendimentos?: number | null; espera_mediana_seg?: number | null; sem_roteamento?: number | null } | null;
-  crm?: { novos: number; ganhos: number } | null;
+  wts?: { atendimentos?: number | null; espera_mediana_seg?: number | null; espera_cobertura?: number | null; sem_roteamento?: number | null } | null;
+  /** ganhos = coorte de crm_leads_resumo_periodo; vendas = crm_vendas_periodo (por evento, fechados sem resultado...). */
+  crm?: { novos: number; ganhos: number; vendas?: VendasPeriodoBanco | null } | null;
   leadsPorDia?: { dia: string; total: number }[];
   fontes?: { tem_instagram?: boolean; tem_anuncios?: boolean; tem_crm?: boolean; tem_atendimento?: boolean } | null;
   problemasDados?: Insight[]; // dado com erro (qualidade_dados); ids começam com "dado-"
@@ -228,9 +231,9 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
       const f = avaliar(BENCHMARKS.engajamentoPorAlcance, taxa);
       out.push({
         id: "interacao",
-        rotulo: "Interação",
-        valor: `${(taxa * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} em cada 100`,
-        explicacao: `De cada 100 pessoas que viram o perfil, quantas curtiram, comentaram, salvaram ou compartilharam. Mostra se o conteúdo prende ou só passa. Referência: ${BENCHMARKS.engajamentoPorAlcance.referencia}.`,
+        rotulo: "Taxa de interação",
+        valor: `${(taxa * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`,
+        explicacao: `Interações ÷ alcance: de cada 100 pessoas que viram o perfil, quantas curtiram, comentaram, salvaram ou compartilharam. Mostra se o conteúdo prende ou só passa. Referência: ${BENCHMARKS.engajamentoPorAlcance.referencia}.`,
         status: faixaParaTom(f),
         selo: f ? SELO_FAIXA[f] : undefined,
         statusTexto: f ? TEXTO_FAIXA[f] : undefined,
@@ -238,31 +241,25 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
       });
     }
 
-    // Seguidores: líquido no período, normalizado para 30 dias contra a base.
-    // Cobertura própria: só dias em que o Instagram trouxe novos seguidores (ele só fornece os últimos
-    // 30 dias). Antes dividia pelos dias com alcance, o que subestimava o ritmo mensal.
-    const comNovos = dias.filter((d) => d.new_followers != null);
-    const antNovos = ant.filter((d) => d.new_followers != null);
-    const novos = soma(comNovos, "new_followers");
-    const seguidores = [...dias].reverse().find((d) => d.followers_count != null)?.followers_count ?? null;
-    if (comNovos.length > 0 && (novos > 0 || seguidores)) {
-      const diasMedidos = comNovos.length;
-      // A régua de crescimento é líquida: com as saídas medidas nos mesmos dias, a avaliação usa o saldo. Antes a
-      // Dra. Betina aparecia com +81 e boa avaliação com saldo de -11 (auditoria de 30/10/2026).
-      const comSaidas = comNovos.every((d) => (d as { unfollowers?: number | null }).unfollowers != null);
-      const saidas = comSaidas ? soma(comNovos, "unfollowers" as never) : null;
-      const saldo = saidas != null ? novos - saidas : null;
-      const mensal = seguidores ? ((saldo ?? novos) / seguidores) * (30 / diasMedidos) : null;
-      const f = mensal != null ? avaliar(BENCHMARKS.crescimentoMensal, mensal, { seguidores: seguidores ?? 0 }) : null;
+    // Seguidores: um número só, o saldo líquido do período (mesma régua da tela, do PDF e do WhatsApp; ver
+    // saldoSeguidores). Antes o cartão mostrava os ganhos brutos (+7.819 na Doctor Creator em outubro) e o relatório
+    // a variação do total (+4.816): auditoria de 31/10/2026.
+    const sg = saldoSeguidores(dias, e.start, e.end);
+    if (sg.saldo != null && sg.de && sg.ate) {
+      const diasCobertos = Math.max(1, Math.round((ms(sg.ate) - ms(sg.de)) / DAY) + (sg.regua === "total" ? 0 : 1));
+      const mensal = sg.totalFinal ? (sg.saldo / sg.totalFinal) * (30 / diasCobertos) : null;
+      const f = mensal != null ? avaliar(BENCHMARKS.crescimentoMensal, mensal, { seguidores: sg.totalFinal ?? 0 }) : null;
+      const datasAnt = ant.map((d) => d.date).sort();
+      const antSg = datasAnt.length ? saldoSeguidores(ant, datasAnt[0], datasAnt[datasAnt.length - 1]) : null;
       out.push({
         id: "seguidores",
-        rotulo: "Novos seguidores",
-        valor: `+${int(novos)}`,
-        explicacao: `Quantas pessoas começaram a seguir em ${diasMedidos} dias com esse dado${saldo != null ? `; descontando quem saiu, o saldo foi de ${saldo >= 0 ? "+" : ""}${int(saldo)}` : " (sem descontar quem saiu)"}. ${mensal != null ? `O ${saldo != null ? "saldo" : "ganho"} equivale a ${pct(mensal, 1)} do perfil por mês.` : ""} Referência: ${BENCHMARKS.crescimentoMensal.referencia}.`,
+        rotulo: "Seguidores: saldo no período",
+        valor: `${sg.saldo >= 0 ? "+" : "-"}${int(Math.abs(sg.saldo))}`,
+        explicacao: `${sg.detalhe}${mensal != null ? ` O saldo equivale a ${pct(mensal, 1)} do perfil por mês.` : ""} Referência: ${BENCHMARKS.crescimentoMensal.referencia}.`,
         status: faixaParaTom(f),
         selo: f ? SELO_FAIXA[f] : undefined,
         statusTexto: f ? TEXTO_FAIXA[f] : undefined,
-        comparacao: comNovos.length >= 7 && antNovos.length >= comNovos.length * 0.8 ? variacaoTexto(novos, soma(antNovos, "new_followers")) : undefined,
+        comparacao: comparavel && antSg?.regua === sg.regua && antSg.saldo != null ? variacaoTexto(sg.saldo, antSg.saldo) : undefined,
         fonte: BENCHMARKS.crescimentoMensal.fonte,
       });
     }
@@ -326,17 +323,19 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
       });
   }
 
-  // CRM.
-  if (e.crm && e.crm.novos > 0)
+  // CRM. Vendas numa régua só (vendas-periodo.ts): fechadas no período por evento, ou a coorte com o rótulo dela.
+  if (e.crm && e.crm.novos > 0) {
+    const v = lerVendas(e.crm.ganhos, e.crm.vendas ?? null, e.start);
     out.push({
       id: "leads",
       rotulo: "Novos contatos no CRM",
       valor: int(e.crm.novos),
-      explicacao: `Pessoas que entraram no CRM da clínica no período${e.crm.ganhos ? `. No mesmo período, ${int(e.crm.ganhos)} ${e.crm.ganhos === 1 ? "venda foi marcada" : "vendas foram marcadas"} como ganha no CRM, de contatos novos ou antigos` : ""}. Depende de a equipe registrar no CRM.`,
+      explicacao: `Pessoas que entraram no CRM da clínica no período.${v.frase ? ` ${v.frase[0].toUpperCase()}${v.frase.slice(1)}.` : ""}${v.indisponivel ? ` ${v.indisponivel}` : ""} Depende de a equipe registrar no CRM.`,
       status: null,
       rota: "/$clientId/crm-painel",
       botao: "Ver onde o funil perde gente",
     });
+  }
 
   // WhatsApp.
   const espera = n(e.wts?.espera_mediana_seg);
@@ -346,7 +345,7 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
       id: "resposta",
       rotulo: "Tempo até responder",
       valor: dur(espera),
-      explicacao: `Quanto tempo o paciente típico esperou pela primeira resposta no WhatsApp (${int(n(e.wts?.atendimentos))} atendimentos). 63% dos brasileiros esperam resposta em até 5 minutos; quem responde em até 1 hora tem ~7x mais chance de converter.`,
+      explicacao: `Quanto tempo o paciente típico esperou pela primeira resposta no WhatsApp (${n(e.wts?.espera_cobertura) > 0 && n(e.wts?.espera_cobertura) < n(e.wts?.atendimentos) ? `mediana de ${int(n(e.wts?.espera_cobertura))} atendimentos com espera medida, de ${int(n(e.wts?.atendimentos))}` : `${int(n(e.wts?.atendimentos))} atendimentos`}). 63% dos brasileiros esperam resposta em até 5 minutos; quem responde em até 1 hora tem ~7x mais chance de converter.`,
       status: faixaParaTom(f),
       selo: f ? (f === "bom" ? "Rápido" : f === "ok" ? "Aceitável" : "Lento") : undefined,
       statusTexto: f ? (f === "bom" ? "Rápido" : f === "ok" ? "Aceitável" : "Lento: paciente esfria") : undefined,
@@ -421,18 +420,22 @@ export function montarResultado(e: EntradaResultado): Resultado {
   // Veredito: pelo saldo dos insights com confiança não baixa.
   const pesos = { alto: 3, medio: 2, baixo: 1 } as const;
   const confiaveis = ordenados.filter((i) => i.confianca !== "baixa" && !i.id.startsWith("dado-"));
-  // As métricas com referência de mercado também contam (1 ponto cada), para o
-  // veredito bater com as cores que a pessoa vê nos cards.
+  // As métricas com referência de mercado também contam, para o veredito bater com as cores dos cards:
+  // "bom" vale 1 ponto, "ruim" vale 1 ponto contra e "atenção" (na média, no mínimo, pode melhorar) meio ponto contra.
   const bom = confiaveis.filter((i) => i.tom === "bom").reduce((s, i) => s + pesos[i.impacto], 0) + metricas.filter((m) => m.status === "bom").length;
   const ruim =
     confiaveis.filter((i) => i.tom === "ruim").reduce((s, i) => s + pesos[i.impacto], 0) +
     confiaveis.filter((i) => i.tom === "atencao").reduce((s, i) => s + pesos[i.impacto] * 0.5, 0) +
-    metricas.filter((m) => m.status === "ruim").length;
+    metricas.filter((m) => m.status === "ruim").length +
+    metricas.filter((m) => m.status === "atencao").length * 0.5;
+  const temRuim = confiaveis.some((i) => i.tom === "ruim");
   let veredito: Resultado["veredito"];
   if (confiaveis.length === 0 && metricas.every((m) => m.status == null)) veredito = { tom: "neutro", titulo: "Ainda não há dado suficiente para dizer se o período foi bom ou ruim." };
-  else if (bom >= ruim * 1.5) veredito = { tom: "bom", titulo: ruim > 0 ? "Período bom, com um ponto para corrigir." : "Período bom." };
+  // "Período bom" só com pelo menos um sinal positivo; 0 contra 0 não é período bom.
+  else if (bom > 0 && bom >= ruim * 1.5) veredito = { tom: "bom", titulo: ruim > 0 ? "Período bom, com um ponto para corrigir." : "Período bom." };
   else if (ruim >= bom * 1.5 && ruim >= 3) veredito = { tom: "ruim", titulo: "Período fraco: tem coisa travando o resultado." };
-  else if (ruim >= bom * 1.5) veredito = { tom: "atencao", titulo: "Período estável: nada piorou de forma importante, mas pouca coisa se destacou." };
+  else if (ruim >= bom * 1.5 && !temRuim) veredito = { tom: "atencao", titulo: "Período estável: nada piorou de forma importante, mas pouca coisa se destacou." };
+  else if (ruim >= bom * 1.5) veredito = { tom: "atencao", titulo: "Período com pontos de atenção: há um alerta para corrigir e pouca coisa se destacou." };
   else veredito = { tom: "atencao", titulo: "Período misto: uma parte funcionou, outra precisa de ajuste." };
 
   // Resumo: o que aconteceu, em frases simples com número.
@@ -441,10 +444,13 @@ export function montarResultado(e: EntradaResultado): Resultado {
   const alc = mt("alcance");
   const seg = mt("seguidores");
   const posts = (e.posts ?? []).length;
-  if (alc) resumo.push(`${alc.rotulo}: ${alc.valor}${seg ? `; ${seg.valor.replace("+", "")} começaram a seguir` : ""}${posts ? `; ${int(posts)} publicações` : ""}.`);
+  if (alc) resumo.push(`${alc.rotulo}: ${alc.valor}${seg ? `; saldo de seguidores de ${seg.valor}` : ""}${posts ? `; ${int(posts)} publicações` : ""}.`);
   if (e.adsDiag && e.adsDiag.gasto > 0)
     resumo.push(`${brl(e.adsDiag.gasto)} investidos em anúncio${e.adsDiag.conversasMensagem ? `; os anúncios de mensagem trouxeram ${int(e.adsDiag.conversasMensagem)} conversas` : ""}.`);
-  if (e.crm && e.crm.novos > 0) resumo.push(`${int(e.crm.novos)} novos contatos entraram no CRM${e.crm.ganhos ? `; ${int(e.crm.ganhos)} ${e.crm.ganhos === 1 ? "venda ganha" : "vendas ganhas"} no período, de contatos novos ou antigos` : ""}.`);
+  if (e.crm && e.crm.novos > 0) {
+    const v = lerVendas(e.crm.ganhos, e.crm.vendas ?? null, e.start);
+    resumo.push(`${int(e.crm.novos)} novos contatos entraram no CRM${v.frase ? `; ${v.frase}` : ""}.${v.indisponivel ? ` ${v.indisponivel}` : ""}`);
+  }
   if (n(e.wts?.atendimentos) > 0) resumo.push(`${int(n(e.wts?.atendimentos))} atendimentos no WhatsApp${n(e.wts?.espera_mediana_seg) > 0 ? `, com ${dur(n(e.wts?.espera_mediana_seg))} de espera típica pela primeira resposta` : ""}.`);
   const melhor = confiaveis.find((i) => i.tom === "bom");
   const pior = confiaveis.find((i) => i.tom !== "bom");

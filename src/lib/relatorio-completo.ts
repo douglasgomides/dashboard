@@ -12,12 +12,13 @@ import {
   getAdsPorDia,
   getAdsPorObjetivo,
   getAdsResumo,
-  getCrmFunilPorCampo,
-  getCrmLeadsPorDia,
   getCrmLeadsPorEtapa,
-  getCrmMetricasEssenciais,
   getCrmLeadsPorDiaPeriodo,
+  getCrmPessoasNovasPorDia,
+  getCrmPessoasPeriodo,
   getCrmResumoPeriodo,
+  getCrmVendasPeriodo,
+  type CrmPessoasPeriodo,
   getMonthlyMetrics,
   getPatientQuestionsPeriodo,
   getPostsForAnalytics,
@@ -34,6 +35,7 @@ import { buildRelatorioEnvio, type RelatorioEnvio } from "@/lib/relatorio-envio"
 import { resumirAtendimento, type ResumoAtendimento } from "@/lib/conversa-leitura";
 import { avisosDeCobertura, type CoberturaFonte } from "@/lib/cobertura";
 import { supabase } from "@/integrations/supabase/client";
+import type { VendasPeriodoBanco } from "@/lib/vendas-periodo";
 
 export interface FontesCliente {
   tem_instagram: boolean;
@@ -74,11 +76,14 @@ export interface RelatorioCompletoData {
     porAgente: any[];
     volumeDiario: any[];
   } | null;
+  // Comercial SÓ do período do relatório (auditoria de 31/10/2026: a página 7 mostrava o histórico inteiro do CRM,
+  // 242 ganhos, ao lado dos 19 do período na página 1). O histórico por etapa fica num bloco com título explícito.
   crm: {
-    metricas: any | null;
-    porEtapa: any[];
-    porOrigem: any[];
-    porDia: any[];
+    resumo: { novos: number; ganhos: number; perdidos: number } | null; // crm_leads_resumo_periodo
+    pessoas: CrmPessoasPeriodo | null; // crm_pessoas_resumo_periodo
+    vendas: VendasPeriodoBanco | null; // crm_vendas_periodo (vendas por evento, coorte, origem classificada)
+    porDia: { dia: string; pessoas_novas: number }[]; // crm_pessoas_novas_por_dia_periodo
+    porEtapaHistorico: any[]; // crm_leads_por_etapa: histórico total da conta
   } | null;
   // Auditoria comercial: leitura por IA de cada conversa (auditoria_comercial) + tempos por regra fixa.
   auditoria: any | null;
@@ -114,8 +119,6 @@ export async function coletarRelatorioCompleto(args: {
   const { clientId, client, fontes, start, end } = args;
   const falhas: string[] = [];
   const omitidos: string[] = [];
-
-  const dias = Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1);
 
   const [metrics, posts, perguntas] = fontes.tem_instagram
     ? await Promise.all([
@@ -166,20 +169,24 @@ export async function coletarRelatorioCompleto(args: {
   }
 
   let crm: RelatorioCompletoData["crm"] = null;
-  let crmPeriodo: { resumo: { novos: number; ganhos: number; perdidos: number } | null; diasComDado: string[] } | null = null;
+  let crmPeriodo: { resumo: { novos: number; ganhos: number; perdidos: number } | null; diasComDado: string[]; vendas: VendasPeriodoBanco | null } | null = null;
   if (fontes.tem_crm) {
-    const [resumoP, diasP] = await Promise.all([
+    const [resumoP, diasP, vendas, pessoas, porDia, porEtapa] = await Promise.all([
       tentar("CRM, resumo do período", falhas, () => getCrmResumoPeriodo(clientId, start, end), null),
       tentar("CRM, contatos por dia", falhas, () => getCrmLeadsPorDiaPeriodo(clientId, start, end), [] as { dia: string; total: number }[]),
+      tentar("CRM, vendas do período", falhas, () => getCrmVendasPeriodo(clientId, start, end), null),
+      tentar("CRM, pessoas do período", falhas, () => getCrmPessoasPeriodo(clientId, start, end), null),
+      tentar("CRM, pessoas novas por dia", falhas, () => getCrmPessoasNovasPorDia(clientId, start, end), null),
+      tentar("CRM, etapas (histórico)", falhas, () => getCrmLeadsPorEtapa(clientId), [] as any[]),
     ]);
-    crmPeriodo = { resumo: resumoP, diasComDado: (diasP ?? []).filter((d) => Number(d.total) > 0).map((d) => String(d.dia).slice(0, 10)) };
-    const [metricas, porEtapa, porOrigem, porDia] = await Promise.all([
-      tentar("CRM, métricas", falhas, () => getCrmMetricasEssenciais(clientId), null as any),
-      tentar("CRM, etapas", falhas, () => getCrmLeadsPorEtapa(clientId), [] as any[]),
-      tentar("CRM, origem", falhas, () => getCrmFunilPorCampo(clientId, "%Fonte do Lead%"), [] as any[]),
-      tentar("CRM, leads por dia", falhas, () => getCrmLeadsPorDia(clientId, Math.min(Math.max(dias, 7), 120)), [] as any[]),
-    ]);
-    crm = { metricas, porEtapa: porEtapa ?? [], porOrigem: porOrigem ?? [], porDia: porDia ?? [] };
+    crmPeriodo = { resumo: resumoP, diasComDado: (diasP ?? []).filter((d) => Number(d.total) > 0).map((d) => String(d.dia).slice(0, 10)), vendas };
+    crm = {
+      resumo: resumoP ? { novos: Number(resumoP.novos), ganhos: Number(resumoP.ganhos), perdidos: Number(resumoP.perdidos) } : null,
+      pessoas,
+      vendas,
+      porDia: (porDia ?? []).map((x) => ({ dia: String(x.dia).slice(0, 10), pessoas_novas: Number(x.pessoas_novas) })),
+      porEtapaHistorico: porEtapa ?? [],
+    };
   } else {
     omitidos.push("CRM (não conectado)");
   }

@@ -63,12 +63,13 @@ import("../src/lib/comercial").then(({ fmtPct }) => {
   assert.equal(confiancaPorPosts(20), "alta");
   assert.equal(podeConcluir(7), false);
   // "Quarta de manhã +834%" com 3 posts: vai para poucos dados, sem ranking.
-  const post = (dia: string, hora: string, eng: number, format = "reels") => ({ posted_at: `${dia}T${hora}:00-03:00`, engagement: eng, format });
+  // Horário e formato comparam a taxa (engajamento ÷ alcance): com alcance de 10.000, 900 de engajamento = 9%.
+  const post = (dia: string, hora: string, eng: number, format = "reels") => ({ posted_at: `${dia}T${hora}:00-03:00`, engagement: eng, reach: 10_000, format });
   const qua = ["2026-09-02", "2026-09-09", "2026-09-16"].map((d) => post(d, "09", 900));
   const outros = Array.from({ length: 8 }, (_, i) => post(`2026-09-0${(i % 3) + 4}`, "19", 100));
   const h = computeMelhoresHorarios([...qua, ...outros]);
   assert.ok(h.ranked.every((r) => r.count >= 8));
-  assert.ok(h.poucosDados.some((r) => r.count === 3 && r.median === 900));
+  assert.ok(h.poucosDados.some((r) => r.count === 3 && Math.abs(r.median - 0.09) < 1e-9));
   // Formato com 3 posts não vira "melhor".
   assert.equal(computeFormatInsight([...qua.map((p) => ({ ...p, format: "image" })), ...outros]), null);
 }
