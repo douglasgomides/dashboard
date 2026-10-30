@@ -119,9 +119,9 @@ export function RetornoInvestimento({
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
               <Numero rotulo="Investimento em aquisição" valor={fmtBRL(r.investido)} sub="mensagens, leads e conversão" dica="Soma do gasto das campanhas de mensagem, lead ou conversão no período. É a base do retorno." />
               <Numero rotulo="Investimento em crescimento" valor={fmtBRL(r.investidoCrescimento)} sub="seguidores, engajamento e alcance" dica="Soma do gasto das campanhas de seguidores, engajamento, alcance e visita ao perfil. Não entra no retorno, porque não busca venda direta." />
-              <Numero rotulo="Receita (vendas ganhas no CRM)" valor={fmtBRL(r.receita)} sub={`${r.ganhos} ${r.ganhos === 1 ? "venda" : "vendas"} no período`} dica="Soma do valor dos cards marcados como ganho no CRM, criados no período. A data de fechamento não é usada porque o CRM costuma fechar cards em lote, na faxina do funil." />
-              <Numero rotulo="ROI" valor={`${r.roi! >= 0 ? "+" : ""}${Math.round(r.roi! * 100).toLocaleString("pt-BR")}%`} sub={`cada R$ 1 em aquisição voltou ${fmtBRL(r.retornoPorReal!)}`} destaque={r.roi! >= 0 ? "var(--good)" : "var(--crit)"} dica="(receita menos investimento em aquisição) dividido pelo investimento em aquisição." />
-              <Numero rotulo={r.rotuloCusto} valor={fmtBRL(r.custo!)} sub="aquisição ÷ vendas ganhas" dica={`Investimento em aquisição dividido pelo número de vendas ganhas no período.`} />
+              <Numero rotulo="Receita de leads vindos de anúncio" valor={fmtBRL(r.receita)} sub={`${r.ganhos} ${r.ganhos === 1 ? "venda" : "vendas"} · de ${fmtBRL(r.receitaTotal)} no CRM`} dica="Soma do valor dos cards ganhos de pessoas com origem anúncio (no próprio card ou em outro card da mesma pessoa), criados no período. A data de fechamento não é usada porque o CRM costuma fechar cards em lote, na faxina do funil." />
+              <Numero rotulo="ROI" valor={`${r.roi! >= 0 ? "+" : ""}${Math.round(r.roi! * 100).toLocaleString("pt-BR")}%`} sub={`cada R$ 1 em aquisição voltou ${fmtBRL(r.retornoPorReal!)}`} destaque={r.roi! >= 0 ? "var(--good)" : "var(--crit)"} dica="Receita de leads vindos de anúncio menos o investimento em aquisição, dividido pelo investimento em aquisição." />
+              <Numero rotulo={r.rotuloCusto} valor={fmtBRL(r.custo!)} sub="aquisição ÷ vendas vindas de anúncio" dica="Investimento em aquisição dividido pelo número de vendas de pessoas com origem anúncio no período." />
             </div>
           ) : (
             <>
@@ -130,9 +130,18 @@ export function RetornoInvestimento({
                 <Numero rotulo="Investimento em aquisição" valor={numeros.investido === null ? "sem dado" : fmtBRL(numeros.investido)} sub={situacaoAnuncios(q.data!)} dica="Soma do gasto das campanhas de mensagem, lead ou conversão no período." />
                 <Numero rotulo="Investimento em crescimento" valor={numeros.investidoCrescimento === null ? "sem dado" : fmtBRL(numeros.investidoCrescimento)} sub={numeros.investidoCrescimento === null ? situacaoAnuncios(q.data!) : "seguidores, engajamento e alcance"} dica="Soma do gasto das campanhas de seguidores, engajamento, alcance e visita ao perfil." />
                 <Numero rotulo="Leads no CRM" valor={numeros.leads === null ? "sem dado" : numeros.leads.toLocaleString("pt-BR")} sub={situacaoCrm(q.data!) ?? "Novos contatos no período"} />
-                <Numero rotulo="Vendas ganhas no CRM" valor={numeros.ganhos === null ? "sem dado" : numeros.ganhos.toLocaleString("pt-BR")} sub={numeros.ganhos === null ? (situacaoCrm(q.data!) ?? "Etapa de venda não marcada no CRM") : situacaoCrm(q.data!) ?? "Fechamentos registrados no período"} />
+                <Numero rotulo="Vendas ganhas no CRM" valor={numeros.ganhos === null ? "sem dado" : numeros.ganhos.toLocaleString("pt-BR")} sub={numeros.ganhos === null ? (situacaoCrm(q.data!) ?? "Etapa de venda não marcada no CRM") : situacaoCrm(q.data!) ?? (r.receitaTotal > 0 ? `cards criados no período · ${fmtBRL(r.receitaTotal)}` : "cards criados no período")} />
               </div>
             </>
+          )}
+          {r.ganhosTotal > 0 && r.origensReceita.length > 0 && (
+            <p className="mt-2 text-xs" style={{ color: "var(--ink-2)" }}>
+              <b>De onde veio a receita do período ({fmtBRL(r.receitaTotal)}):</b>{" "}
+              {r.origensReceita
+                .map((o) => `${o.origem} ${o.receita > 0 ? fmtBRL(o.receita) : "sem valor"} (${o.ganhos} ${o.ganhos === 1 ? "venda" : "vendas"})`)
+                .join(" · ")}
+              . Só a parte de anúncio entra no retorno.
+            </p>
           )}
           <p className="mt-2 flex items-start gap-1.5 text-xs" style={{ color: "var(--muted)" }}>
             <Info size={13} aria-hidden className="mt-0.5 shrink-0" />
@@ -168,7 +177,7 @@ export function RetornoInvestimento({
             )}
             <p className="mt-3 flex items-start gap-1.5 text-xs" style={{ color: "var(--muted)" }}>
               <Info size={13} aria-hidden className="mt-0.5 shrink-0" />
-              Receita é a soma do valor dos cards marcados como ganho no CRM, com data no período. ROI é a receita menos o investimento em aquisição, dividido pelo investimento em aquisição. O investimento em crescimento fica de fora. Conta todas as vendas do período, não só as que vieram de anúncio.
+              A receita do retorno é a soma do valor dos cards ganhos de pessoas com origem anúncio (no próprio card ou em outro card da mesma pessoa), criados no período. Vendas de checkout, base importada ou sem origem aparecem na receita total, mas não entram no retorno. ROI é essa receita menos o investimento em aquisição, dividido pelo investimento em aquisição. O investimento em crescimento fica de fora.
             </p>
           </details>
         </>

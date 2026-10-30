@@ -1,6 +1,9 @@
 // Retorno do investimento (ROI) do período: o objetivo principal do Hub.
 // O ROI usa só o investimento em AQUISIÇÃO (mensagens, leads, conversão). O investimento em CRESCIMENTO (seguidores,
 // engajamento, alcance, visita ao perfil) aparece separado e não entra na conta.
+// A receita do ROI é só a de pessoas com origem anúncio (auditoria de 30/10/2026: a Doctor Creator via ROI de +101%
+// com R$ 4.826 de checkout e base importada, sem nenhuma venda vinda de anúncio). A receita total do CRM aparece ao
+// lado, com a divisão por origem, mas não entra na conta.
 // Só aparece quando os dados permitem ler (limites em src/lib/limites.ts); senão diz por que não dá e o passo a passo.
 // Dados: RPC roi_periodo (supabase/migrations/20261029120000_roi_por_objetivo.sql).
 
@@ -21,7 +24,14 @@ export interface DadosRoi {
   leads_com_origem: number;
   ganhos: number;
   ganhos_com_valor: number;
+  /** Receita de todas as vendas do período no CRM, de qualquer origem. */
   receita: number;
+  /** Vendas e receita de pessoas com origem anúncio (no card ou em outro card da mesma pessoa). null = banco sem a separação. */
+  ganhos_anuncio: number | null;
+  ganhos_anuncio_com_valor: number | null;
+  receita_anuncio: number | null;
+  /** Receita do período por origem, maior primeiro. */
+  receita_por_origem: { origem: string; ganhos: number; receita: number }[];
   ganho_identificavel: boolean;
   crm_compartilhado: boolean;
   /** Clientes que leem a mesma conta de CRM (os números deles são os mesmos). */
@@ -54,11 +64,18 @@ export interface Roi {
   investido: number;
   investidoCrescimento: number;
   investidoTotal: number;
+  /** Receita de leads com origem anúncio: a base do ROI. */
   receita: number;
+  /** Vendas de leads com origem anúncio. */
   ganhos: number;
-  roi: number | null; // (receita − investido em aquisição) ÷ investido em aquisição
-  retornoPorReal: number | null; // receita ÷ investido em aquisição
-  custo: number | null; // investido em aquisição ÷ vendas ganhas
+  /** Receita e vendas de todas as origens, só para mostrar ao lado. */
+  receitaTotal: number;
+  ganhosTotal: number;
+  /** De onde veio a receita do período, em português simples (ex.: "Funil de compra, sem origem R$ 3.546"). */
+  origensReceita: { origem: string; ganhos: number; receita: number }[];
+  roi: number | null; // (receita de anúncio − investido em aquisição) ÷ investido em aquisição
+  retornoPorReal: number | null; // receita de anúncio ÷ investido em aquisição
+  custo: number | null; // investido em aquisição ÷ vendas de anúncio
   rotuloCusto: string; // "Custo por venda" ou "Custo por paciente", escolhido no cadastro do cliente
   itens: ItemRoi[];
   pendentes: number; // itens não feitos (para "faltam N itens")
@@ -67,8 +84,9 @@ export interface Roi {
   seloInvestimento: Selo;
 }
 
-/** Nota fixa: o CRM registra a venda no dia em que fechou, e o contato pode ter vindo antes. */
-export const NOTA_DEFASAGEM = "Venda fechada no período pode ter vindo de contato de períodos anteriores.";
+/** Nota fixa: uma definição só da data da venda, igual à do cálculo (data de criação do card no CRM). */
+export const NOTA_DEFASAGEM =
+  "Vendas do período são os cards ganhos que foram criados no período, pela data de criação no CRM. A data de fechamento não é usada, porque o CRM costuma fechar cards em lote.";
 
 const NOME_CRM: Record<string, string> = { kommo: "Kommo", clint: "Clint", flwchat: "FlwChat", rdstation: "RD Station CRM", digisac: "Digisac", planilha: "planilha de vendas" };
 
@@ -138,6 +156,7 @@ export function situacaoCrm(d: DadosRoi): string | null {
   return null;
 }
 
+const brl0 = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "sem dado");
 const pctLimite = (x: number) => `${Math.round(x * 100)}%`;
 
@@ -240,6 +259,14 @@ export function montarRoi(d: DadosRoi): Roi {
   const pendentes = itens.filter((i) => !i.feito).length;
   const bloqueios = itens.filter((i) => i.bloqueia && !i.feito);
   const semAquisicao = d.investido_aquisicao <= 0;
+  const receitaAnuncio = d.receita_anuncio ?? 0;
+  const ganhosAnuncio = d.ganhos_anuncio ?? 0;
+  const origens = d.receita_por_origem ?? [];
+  const deOnde = origens
+    .filter((o) => o.origem !== "Anúncio")
+    .slice(0, 3)
+    .map((o) => `${o.origem.charAt(0).toLowerCase() + o.origem.slice(1)} (${o.ganhos} ${o.ganhos === 1 ? "venda" : "vendas"}${o.receita > 0 ? `, ${brl0(o.receita)}` : ""})`)
+    .join("; ");
   const motivoSemCalculo = bloqueios.length
     ? `Não dá pra calcular o retorno porque falta: ${bloqueios.map((i) => i.preciso.charAt(0).toLowerCase() + i.preciso.slice(1)).join("; ")}.`
     : semAquisicao
@@ -248,13 +275,18 @@ export function montarRoi(d: DadosRoi): Roi {
         : "Não dá pra calcular o retorno porque não houve investimento em anúncios no período."
       : d.ganhos <= 0
         ? "Não dá pra calcular o retorno porque nenhuma venda foi ganha no período."
-        : null;
+        : d.ganhos_anuncio == null
+          ? "Não dá pra separar a receita que veio dos anúncios: o banco ainda não tem essa conta. A receita total aparece abaixo, mas não mede o anúncio."
+          : ganhosAnuncio <= 0
+            ? `Não dá pra calcular o retorno dos anúncios porque nenhuma das ${d.ganhos} ${d.ganhos === 1 ? "venda" : "vendas"} do período veio de pessoa com origem anúncio.${deOnde ? ` A receita veio de: ${deOnde}.` : ""}`
+            : null;
   const calculavel = motivoSemCalculo === null;
   const seloInvestimento = seloDoInvestimento(d);
   const seloDados: Selo[] = [];
   if (calculavel) {
     if (fracOrigem < LIMITES.selo.origemConfiavel) seloDados.push({ nivel: "parcial", motivo: `${pct(d.leads - d.leads_com_origem, d.leads)} dos leads do período estão sem origem.` });
-    if (fracValor < LIMITES.selo.valorConfiavel) seloDados.push({ nivel: "parcial", motivo: `${pct(d.ganhos - d.ganhos_com_valor, d.ganhos)} das vendas ganhas estão sem valor, então a receita está abaixo do real.` });
+    const fracValorAnuncio = ganhosAnuncio > 0 ? (d.ganhos_anuncio_com_valor ?? 0) / ganhosAnuncio : 0;
+    if (fracValorAnuncio < LIMITES.selo.valorConfiavel) seloDados.push({ nivel: "parcial", motivo: `${pct(ganhosAnuncio - (d.ganhos_anuncio_com_valor ?? 0), ganhosAnuncio)} das vendas vindas de anúncio estão sem valor, então a receita está abaixo do real.` });
   }
   if (calculavel && seloInvestimento.nivel === "parcial") seloDados.push(seloInvestimento);
   const selo: Selo = !calculavel
@@ -267,11 +299,14 @@ export function montarRoi(d: DadosRoi): Roi {
     investido: d.investido_aquisicao,
     investidoCrescimento: d.investido_crescimento,
     investidoTotal: d.investido,
-    receita: d.receita,
-    ganhos: d.ganhos,
-    roi: calculavel ? (d.receita - d.investido_aquisicao) / d.investido_aquisicao : null,
-    retornoPorReal: calculavel ? d.receita / d.investido_aquisicao : null,
-    custo: calculavel ? d.investido_aquisicao / d.ganhos : null,
+    receita: receitaAnuncio,
+    ganhos: ganhosAnuncio,
+    receitaTotal: d.receita,
+    ganhosTotal: d.ganhos,
+    origensReceita: origens,
+    roi: calculavel ? (receitaAnuncio - d.investido_aquisicao) / d.investido_aquisicao : null,
+    retornoPorReal: calculavel ? receitaAnuncio / d.investido_aquisicao : null,
+    custo: calculavel ? d.investido_aquisicao / ganhosAnuncio : null,
     rotuloCusto: d.rotulo_custo === "paciente" ? "Custo por paciente" : "Custo por venda",
     itens,
     pendentes,
