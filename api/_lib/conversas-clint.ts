@@ -33,12 +33,19 @@ export async function ingerirConversasClint(admin: SupabaseClient<any, any, any>
   const { data: conns, error } = await q;
   if (error) throw new Error("Não foi possível ler as conexões da Clint");
   const results: Result[] = [];
-  for (const conn of conns ?? []) {
-    // Ativação por conexão: nenhuma outra clínica entra implicitamente no piloto.
-    if (conn.config?.clint_conversas_ativo !== true) continue;
+  // Ativação por conexão: nenhuma outra clínica entra implicitamente no piloto.
+  // Rodízio: começa pela conexão conferida há mais tempo e cada uma recebe uma parte do prazo. Antes a primeira da
+  // lista gastava o prazo inteiro e as outras ficavam dias sem conversa nova (auditoria 30/10/2026: Marcelly e
+  // Doctor Creator paradas com status verde).
+  const ativas = (conns ?? [])
+    .filter((c) => c.config?.clint_conversas_ativo === true)
+    .sort((a, b) => String(a.config?.clint_conversas_conferencia_em ?? "").localeCompare(String(b.config?.clint_conversas_conferencia_em ?? "")));
+  const prazoGeral = deadline;
+  for (const [pos, conn] of ativas.entries()) {
     const result: Result = { clientId: conn.client_id, conversas: 0, mensagens: 0, ignoradas_sem_negocio: 0, parcial: false, canais_desconectados: [], erros: [] };
     results.push(result);
-    if (Date.now() >= deadline) { result.parcial = true; continue; }
+    if (Date.now() >= prazoGeral) { result.parcial = true; continue; }
+    const deadline = Date.now() + Math.floor((prazoGeral - Date.now()) / (ativas.length - pos));
     if (!conn.access_token) { result.erros.push("Conexão sem credencial"); continue; }
     const state: Record<string, Cursor & { complete?: boolean }> = { ...(conn.config?.clint_conversas_canais ?? {}) };
     const checkpoint = async () => {

@@ -12,11 +12,13 @@
  * - A IA não diagnostica nem inventa: o prompt manda dizer "não dá para saber" quando faltar dado.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { conversationSummarySchema } from "./ai-output.js";
+import { conversationSummarySchema, normalizarResumoConversa } from "./ai-output.js";
 
 const MODELO_OPENAI = process.env.RESUMO_MODELO || process.env.CLASSIFICADOR_MODELO || "gpt-4o-mini";
 const MODELO_CLAUDE = process.env.RESUMO_MODELO || "claude-haiku-4-5-20251001";
 const MAX_MSGS = 300;
+/** Tentativas da IA na mesma conversa sem mensagem nova (ver conversas_ia_falhas). */
+const MAX_FALHAS = 3;
 
 const SISTEMA = `Você é auditor comercial de clínicas médicas no Brasil. Lê a conversa de WhatsApp entre um paciente (ou interessado) e a equipe da clínica e devolve uma leitura objetiva para o dono da clínica e o time de marketing, para AUMENTAR A CONVERSÃO.
 Regras: português do Brasil, frases curtas, sem jargão. Não invente: se algo não aparece na conversa, use null, false ou lista vazia. Não faça diagnóstico nem opine sobre conduta médica. Mensagens da clínica que começam com "*Nome:*" são de uma atendente (o nome é a assinatura); as sem assinatura repetidas são do robô e não contam como atendimento humano. Os horários estão entre colchetes: use-os para julgar demora.
@@ -96,8 +98,8 @@ export async function resumirConversa(
   conversaId: string,
   userId: string | null,
 ): Promise<{ resumo: unknown; modelo: string; ate_msg_em: string }> {
-  const { data: conv } = await admin.from("conversas").select("id, client_id, provider").eq("id", conversaId).maybeSingle();
-  const c = conv as { id: string; client_id: string; provider: string | null } | null;
+  const { data: conv } = await admin.from("conversas").select("id, client_id, provider, ultima_msg_em").eq("id", conversaId).maybeSingle();
+  const c = conv as { id: string; client_id: string; provider: string | null; ultima_msg_em: string | null } | null;
   if (!c || c.client_id !== clientId) throw new Error("Conversa não encontrada para este cliente");
   // Kommo: só o lado do paciente tem texto (a API não entrega o da clínica). A IA julgaria o atendimento sem vê-lo.
   if (c.provider === "kommo") throw new Error("Conversa do Kommo: o Kommo não entrega o texto da clínica, então a leitura por IA não se aplica");
@@ -120,11 +122,18 @@ export async function resumirConversa(
   const { error: erroAcesso } = await admin.from("acessos_conversas").insert({ user_id: userId, client_id: clientId, conversa_id: conversaId, acao: userId ? "resumo_ia" : "resumo_ia_automatico" });
   if (erroAcesso) throw new Error("Não foi possível registrar o acesso à conversa");
   const resposta = await chamarIA(transcricao);
-  const validado = conversationSummarySchema.safeParse(resposta.json);
-  if (!validado.success) throw new Error("IA devolveu resumo em formato inválido");
+  const validado = conversationSummarySchema.safeParse(normalizarResumoConversa(resposta.json));
+  if (!validado.success) {
+    const campo = validado.error.issues[0]?.path.join(".") || "geral";
+    throw new Error(`IA devolveu resumo em formato inválido (${campo})`);
+  }
   const { modelo } = resposta;
   const json = validado.data;
-  const ate = lista[lista.length - 1].enviada_em;
+  // A leitura cobre tudo o que está guardado. A conversa pode marcar um horário mais novo que a última mensagem
+  // guardada (reação, mídia ou evento que não vira mensagem): sem isto a conversa parecia ter mensagem nova e
+  // voltava para a fila a cada hora.
+  const ultimaGuardada = lista[lista.length - 1].enviada_em;
+  const ate = c.ultima_msg_em && Date.parse(c.ultima_msg_em) > Date.parse(ultimaGuardada) ? c.ultima_msg_em : ultimaGuardada;
   const { error: erroGrava } = await admin
     .from("conversas_resumos")
     .upsert({ conversa_id: conversaId, client_id: clientId, resumo: json, modelo, ate_msg_em: ate, gerado_em: new Date().toISOString(), gerado_por: userId }, { onConflict: "conversa_id" });
@@ -162,9 +171,22 @@ export async function analisarConversasPendentes(
     if (error) return { analisadas: 0, pendentes: 0, erros: [`leitura de resumos: ${error.message}`] };
     for (const r of (data ?? []) as { conversa_id: string; ate_msg_em: string | null }[]) feitos.set(r.conversa_id, r.ate_msg_em);
   }
+  // Conversa em que a IA já falhou: tenta de novo só quando chega mensagem nova, e no máximo MAX_FALHAS vezes.
+  const falhas = new Map<string, { falhas: number; ate_msg_em: string | null }>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const { data, error } = await admin.from("conversas_ia_falhas").select("conversa_id, falhas, ate_msg_em").in("conversa_id", ids.slice(i, i + 100));
+    if (error) return { analisadas: 0, pendentes: 0, erros: [`leitura de falhas da IA: ${error.message}`] };
+    for (const r of (data ?? []) as { conversa_id: string; falhas: number; ate_msg_em: string | null }[]) falhas.set(r.conversa_id, r);
+  }
+  const ms = (v: string | null | undefined) => (v ? Math.floor(Date.parse(v) / 1000) : null);
   const pendentes = (convs ?? []).filter((c: { id: string; ultima_msg_em: string | null }) => {
     const ate = feitos.get(c.id);
-    return ate == null || (c.ultima_msg_em != null && c.ultima_msg_em > ate);
+    const precisa = ate == null || (c.ultima_msg_em != null && (ms(c.ultima_msg_em) ?? 0) > (ms(ate) ?? 0));
+    if (!precisa) return false;
+    const f = falhas.get(c.id);
+    if (!f) return true;
+    if (f.falhas >= MAX_FALHAS) return false;
+    return (ms(c.ultima_msg_em) ?? 0) > (ms(f.ate_msg_em) ?? 0);
   });
   const erros: string[] = [];
   let analisadas = 0;
@@ -173,8 +195,16 @@ export async function analisarConversasPendentes(
     try {
       await resumirConversa(admin, clientId, c.id, null);
       analisadas++;
+      if (falhas.has(c.id)) await admin.from("conversas_ia_falhas").delete().eq("conversa_id", c.id);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      if (!/OPENAI_API_KEY|ANTHROPIC_API_KEY|respondeu (4\d\d|5\d\d)/.test(msg)) {
+        // Falha da própria conversa (sem mensagens, formato inválido): anota para não repetir a cada hora.
+        await admin.from("conversas_ia_falhas").upsert(
+          { conversa_id: c.id, client_id: clientId, falhas: (falhas.get(c.id)?.falhas ?? 0) + 1, ultimo_erro: msg.slice(0, 300), ate_msg_em: (c as { ultima_msg_em: string | null }).ultima_msg_em, ultima_em: new Date().toISOString() },
+          { onConflict: "conversa_id" },
+        );
+      }
       if (/sem mensagens/i.test(msg)) continue;
       erros.push(msg);
       if (/OPENAI_API_KEY|ANTHROPIC_API_KEY|respondeu 4\d\d/.test(msg)) break; // sem chave ou chave recusada: não insiste

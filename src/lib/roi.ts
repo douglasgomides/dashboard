@@ -141,7 +141,12 @@ const pctLimite = (x: number) => `${Math.round(x * 100)}%`;
 /** Selo do investimento separado por objetivo: Parcial quando parte dele foi separada por estimativa. */
 export function seloDoInvestimento(d: DadosRoi): Selo {
   if (!d.tem_anuncios) return { nivel: "ilegivel", motivo: "A conta de anúncios não está ligada." };
-  if (d.investido <= 0) return { nivel: "confiavel", motivo: "Nenhum gasto em anúncios no período." };
+  if (d.investido <= 0) {
+    // Planilha semanal sem lançamento no período não prova que não houve gasto (Marcelly, auditoria 30/10/2026).
+    if (d.anuncios_planilha) return { nivel: "parcial", motivo: "Os anúncios vêm só da planilha semanal da equipe e não há lançamento neste período. O gasto pode estar faltando." };
+    return { nivel: "confiavel", motivo: "Nenhum gasto em anúncios no período." };
+  }
+  if (d.anuncios_planilha) return { nivel: "parcial", motivo: "Os anúncios vêm só da planilha semanal lançada à mão pela equipe, não da conta da Meta." };
   const fracEstimado = d.investido_estimado / d.investido;
   if (fracEstimado > LIMITES.selo.investimentoEstimadoMaximo) {
     return {

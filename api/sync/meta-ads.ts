@@ -120,8 +120,26 @@ const PISO_DIAS_ANUNCIOS = 30;
         contas.map((c) => ({ clientId: c.client_id, rows: c.rows, errors: c.errors })),
         { okSeHouveLinhas: true },
       );
-      const temErro = contas.some((c) => c.errors.length > 0);
-      res.status(temErro ? 207 : 200).json({ fonte: "graph", synced_at: new Date().toISOString(), contas });
+      // Planilha de distribuição também roda aqui: o n8n chama Windsor e Graph separados, e só o caminho "ambas" a lia,
+      // então ela ficou sem leitura desde 19/10/2026 (auditoria 30/10).
+      let planilha: unknown = undefined;
+      let planilhaComErro = false;
+      try {
+        const contasPlanilha = await runAdsPlanilhaSync({ supabaseUrl: urlSb, supabaseServiceRoleKey: chaveSb, onlyClientId: clientId });
+        await recordSyncStatusPorCliente(
+          createClient(urlSb, chaveSb, { auth: { persistSession: false, autoRefreshToken: false } }),
+          "anuncios",
+          contasPlanilha.map((c) => ({ clientId: c.client_id, rows: c.rows, errors: c.errors })),
+          { okSeHouveLinhas: true },
+        );
+        planilha = contasPlanilha;
+        planilhaComErro = contasPlanilha.some((c) => c.errors.length > 0);
+      } catch (err) {
+        planilha = { erro: err instanceof Error ? err.message : String(err) };
+        planilhaComErro = true;
+      }
+      const temErro = contas.some((c) => c.errors.length > 0) || planilhaComErro;
+      res.status(temErro ? 207 : 200).json({ fonte: "graph", synced_at: new Date().toISOString(), contas, planilha });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }

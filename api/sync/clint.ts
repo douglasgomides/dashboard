@@ -76,11 +76,32 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  // Conversas da Clint têm rota própria (antes usavam só a sobra desta e a primeira conexão gastava tudo).
+  if (req.query.conversas === "1") {
+    try {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+      const r = await ingerirConversasClint(supabase, { onlyClientId: clientId, orcamentoMs: 240_000 - (Date.now() - startedAt) });
+      // Rodada que não leu nada e ficou pela metade não é sucesso: o status mostra o problema em vez de verde.
+      await recordSyncStatusPorCliente(supabase, "atendimento", r.map((x) => ({
+        clientId: x.clientId,
+        rows: x.conversas,
+        errors: x.erros.length ? x.erros : x.parcial && x.conversas === 0 ? ["Conversas da Clint: a rodada terminou sem ler nenhuma conversa nova"] : [],
+      })));
+      res.status(r.some((x) => x.erros.length > 0) ? 207 : 200).json({ ok: true, clint_conversas: r });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  // Prazo interno de 240 s (a Vercel corta em 300 s): cada CRM recebe um limite, e o que sobrar fica para a
+  // próxima hora pelo cursor de cada um. Antes só o Digisac tinha prazo e a rota chegava a 272 s.
   try {
     const results = await runClintSync({
       supabaseUrl: SUPABASE_URL,
       supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
       onlyClientId: clientId,
+      deadlineMs: startedAt + 140_000,
     });
     await recordSyncStatusPorCliente(
       createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
@@ -96,6 +117,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         supabaseUrl: SUPABASE_URL,
         supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
         onlyClientId: clientId,
+        deadlineMs: startedAt + 165_000,
       });
     } catch (err) {
       rdErro = err instanceof Error ? err.message : String(err);
@@ -108,6 +130,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         supabaseUrl: SUPABASE_URL,
         supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
         onlyClientId: clientId,
+        deadlineMs: startedAt + 205_000,
       });
     } catch (err) {
       flwErro = err instanceof Error ? err.message : String(err);
@@ -120,7 +143,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         supabaseUrl: SUPABASE_URL,
         supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
         onlyClientId: clientId,
-        deadlineMs: Date.now() + 45_000,
+        deadlineMs: Math.min(Date.now() + 45_000, startedAt + 235_000),
       });
     } catch (err) {
       digErro = err instanceof Error ? err.message : String(err);
@@ -132,14 +155,11 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     await recordSyncStatusPorCliente(supabaseStatus, "crm", digisac.map((r) => ({ clientId: r.clientId, rows: r.contatos, errors: r.errors })));
     await recordSyncStatusPorCliente(supabaseStatus, "atendimento", digisac.map((r) => ({ clientId: r.clientId, rows: r.atendimentos, errors: r.errors })));
     await recordSyncStatusPorCliente(supabaseStatus, "crm", rdstation.map((r) => ({ clientId: r.clientId, rows: r.negocios, errors: r.errors })));
-    // Conversas usam apenas o tempo restante, depois dos provedores já atendidos
-    // por este endpoint. O cursor permite continuar na próxima rodada.
-    const clintConversas = await ingerirConversasClint(supabaseStatus, {
-      onlyClientId: clientId,
-      orcamentoMs: Math.max(1, Math.min(110_000, 270_000 - (Date.now() - startedAt))),
-    });
+    // Origem pela primeira mensagem (mensagem pronta de link) e pela etapa de paciente da casa, para todos os
+    // clientes (migração 20261030205000). Falha aqui não derruba o sync.
+    const { error: eOrigem } = await supabaseStatus.rpc("crm_aplicar_origem_externa", {});
+    if (eOrigem) console.error("crm_aplicar_origem_externa:", eOrigem.message);
     const hasErrors =
-      clintConversas.some((r) => r.erros.length > 0 || r.parcial) ||
       results.some((r) => r.errors.length > 0) ||
       rdstation.some((r) => r.errors.length > 0) ||
       flwchat.some((r) => r.errors.length > 0) ||
@@ -150,7 +170,6 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(hasErrors ? 207 : 200).json({
       synced_at: new Date().toISOString(),
       connections: results,
-      clint_conversas: clintConversas,
       rdstation,
       flwchat,
       digisac,

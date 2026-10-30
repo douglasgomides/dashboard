@@ -92,8 +92,14 @@ function somaAcao(acoes: AcaoMeta[] | undefined, casa: (tipo: string) => boolean
 function conversas(acoes: AcaoMeta[] | undefined): number {
   return somaAcao(acoes, (t) => t.includes("messaging_conversation_started"));
 }
-function leads(acoes: AcaoMeta[] | undefined): number {
-  return somaAcao(acoes, (t) => t === "lead" || t === "offsite_conversion.fb_pixel_lead");
+/**
+ * "lead" já é o total da Meta (formulário + pixel). Somar com "offsite_conversion.fb_pixel_lead" contava o lead
+ * do pixel duas vezes (auditoria 30/10/2026: Doctor Creator com 116 no banco contra 59 na Meta). O pixel só
+ * entra quando a Meta não manda o "lead".
+ */
+export function leads(acoes: AcaoMeta[] | undefined): number {
+  if (acoes?.some((a) => a.action_type === "lead")) return somaAcao(acoes, (t) => t === "lead");
+  return somaAcao(acoes, (t) => t === "offsite_conversion.fb_pixel_lead");
 }
 function landingPageViews(acoes: AcaoMeta[] | undefined): number {
   return somaAcao(acoes, (t) => t === "landing_page_view");
