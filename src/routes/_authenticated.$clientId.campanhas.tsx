@@ -11,7 +11,7 @@ import { BotaoCopiar } from "@/components/botao-copiar";
 import { EstrategiasIA } from "@/components/estrategias-ia";
 import { Carregando, ResumoExecutivo } from "@/components/sem-fonte";
 import { resumirAtendimento } from "@/lib/conversa-leitura";
-import { datasDoMes, potencial, sugerirCampanhas, NOME_MES, type BaseCampanhas, type Campanha } from "@/lib/campanhas";
+import { datasDoMes, gastoPorDia, potencial, sugerirCampanhas, temaForteDosPosts, NOME_MES, type BaseCampanhas, type Campanha } from "@/lib/campanhas";
 import { formatoDe } from "@/lib/pauta";
 import type { Acompanhamento, Status } from "@/lib/oportunidades";
 
@@ -38,13 +38,6 @@ async function lerBase(clientId: string): Promise<BaseCampanhas | null> {
   if (!j) return null;
   const num = (k: string) => Number(j[k] ?? 0);
   return { tem_crm: !!j.tem_crm, abertos: num("abertos"), parados_90d: num("parados_90d"), parados_30_90d: num("parados_30_90d"), novos_parados_14d: num("novos_parados_14d"), ganhos_ha_um_ano: num("ganhos_ha_um_ano"), perdidos_180d: num("perdidos_180d"), leads_90d: num("leads_90d"), agendados_90d: num("agendados_90d"), ganhos_90d: num("ganhos_90d") };
-}
-
-function mediana(xs: number[]): number {
-  if (!xs.length) return 0;
-  const o = [...xs].sort((a, b) => a - b);
-  const m = Math.floor(o.length / 2);
-  return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2;
 }
 
 function CartaoCampanha({ c, status, podeEditar, onStatus, onPauta, salvando, pautaCriada }: { c: Campanha; status: StatusCamp; podeEditar: boolean; onStatus: (s: StatusCamp) => void; onPauta?: () => void; salvando: boolean; pautaCriada: boolean }) {
@@ -136,25 +129,13 @@ function CampanhasPage() {
   const [salvando, setSalvando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  const temaForte = useMemo(() => {
-    const ps = ((posts.data ?? []) as any[]).filter((p) => Number(p.reach) > 0);
-    if (ps.length < 5) return null;
-    const porTema = new Map<string, any[]>();
-    for (const p of ps) if (p.tema) porTema.set(p.tema, [...(porTema.get(p.tema) ?? []), p]);
-    const tema = [...porTema.entries()].filter(([, xs]) => xs.length >= 2).map(([t, xs]) => ({ t, v: mediana(xs.map((p) => Number(p.saved ?? 0) / Number(p.reach))) })).sort((a, b) => b.v - a.v)[0];
-    const porFormato = new Map<string, any[]>();
-    for (const p of ps) porFormato.set(p.format ?? "outro", [...(porFormato.get(p.format ?? "outro") ?? []), p]);
-    const fmt = [...porFormato.entries()].filter(([, xs]) => xs.length >= 3).map(([f, xs]) => ({ f, salv: mediana(xs.map((p) => Number(p.saved ?? 0))), alc: mediana(xs.map((p) => Number(p.reach))) })).sort((a, b) => b.salv - a.salv)[0];
-    if (!fmt) return null;
-    const rot: Record<string, string> = { reels: "Reels", carrossel: "carrossel", estatico: "post estático" };
-    return { tema: tema?.t ?? "o tema mais salvo", formato: rot[fmt.f] ?? fmt.f, alcanceMediano: fmt.alc, salvamentoMediano: fmt.salv };
-  }, [posts.data]);
+  const temaForte = useMemo(() => temaForteDosPosts((posts.data ?? []) as any[]), [posts.data]);
 
   const adsResumo = useMemo(() => {
     const d = ads.data;
     if (!d || !d.campanhas.length) return null;
     const melhor = d.campanhas.filter((c) => c.vereditoOficial === "Escalar" || c.vereditoOficial === "Manter").sort((a, b) => b.conversas - a.conversas)[0];
-    return { custoPorConversa: d.custoPorConversaMensagem, gastoDiaMedio: d.gasto / 30, melhorCampanha: melhor?.campanha ?? null };
+    return { custoPorConversa: d.custoPorConversaMensagem, gastoDiaMedio: gastoPorDia(d.gasto, isoMenos(30), isoMenos(0)), melhorCampanha: melhor?.campanha ?? null };
   }, [ads.data]);
 
   const campanhas = useMemo(() => {
@@ -252,7 +233,7 @@ function CampanhasPage() {
             frases={[
               `${campanhas.filter((c) => !c.faltaDado).length} campanhas sugeridas para ${NOME_MES[mes - 1]}${datas.length ? `, com ${datas.length} data${datas.length === 1 ? "" : "s"} da especialidade` : ""}.`,
               pot.respostas > 0 ? `Potencial estimado: ${n(pot.respostas)} respostas ou conversas e cerca de ${n(pot.consultas)} consultas${pot.custo ? `, com ${brl(pot.custo)} em anúncio` : ""}.` : "",
-              base.data?.tem_crm ? (base.data.parados_90d > 0 ? `O CRM tem ${n(base.data.parados_90d)} leads parados há mais de 90 dias: é a base mais barata para trabalhar.` : "") : "Sem CRM ligado: as campanhas de reativação e retorno precisam dele.",
+              base.data?.tem_crm ? (base.data.parados_90d > 0 ? `O CRM tem ${n(base.data.parados_90d)} pessoas paradas há mais de 90 dias: é a base mais barata para trabalhar.` : "") : "Sem CRM ligado: as campanhas de reativação e retorno precisam dele.",
             ]}
           />
 
