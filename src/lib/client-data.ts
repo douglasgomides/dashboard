@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { aplicarRastreio, diagnosticarAds, type LinhaAds, type CampanhaCadastro } from "@/lib/anuncios-objetivo";
+import { aplicarRastreio, diagnosticarAds, type AlcanceJanela, type LinhaAds, type CampanhaCadastro } from "@/lib/anuncios-objetivo";
 import type { Acompanhamento } from "@/lib/oportunidades";
 import { lerDiagnosticoRpc, montarDadosReduzidos, type DadosComerciais, type MetricasEssenciais, type WtsResumoMin } from "@/lib/comercial";
 import { filtrarPerguntas, perguntasDaDeteccaoOriginal } from "@/lib/comentarios";
@@ -363,13 +363,18 @@ export async function getAdsCampanhasPeriodo(clientId: string, start: string, en
     .select("campaign_id, name, objective, permalink, thumbnail_url")
     .eq("client_id", clientId);
   if (e2) throw e2;
-  return { linhas, cadastro: (cad ?? []) as CampanhaCadastro[] };
+  // Alcance de 7 dias pela campanha inteira (frequência real). Extra: sem a tabela ou com erro, vale a conta antiga.
+  const { data: jan, error: e3 } = await (supabase as any)
+    .from("meta_ads_alcance_janela")
+    .select("campaign_id, desde, ate, reach, impressions, frequency")
+    .eq("client_id", clientId);
+  return { linhas, cadastro: (cad ?? []) as CampanhaCadastro[], janela: (e3 ? [] : (jan ?? [])) as AlcanceJanela[] };
 }
 
 export async function getAdsDiagnosticoPorObjetivo(clientId: string, start: string, end: string) {
-  const [{ linhas, cadastro }, whatsapp] = await Promise.all([getAdsCampanhasPeriodo(clientId, start, end), getAtendimentosWhatsapp(clientId, start, end)]);
+  const [{ linhas, cadastro, janela }, whatsapp] = await Promise.all([getAdsCampanhasPeriodo(clientId, start, end), getAtendimentosWhatsapp(clientId, start, end)]);
   // Confiabilidade do rastreio antes de qualquer diagnóstico (src/lib/rastreio-anuncios.ts).
-  return aplicarRastreio(diagnosticarAds(linhas, cadastro, start, end.slice(0, 10)), whatsapp);
+  return aplicarRastreio(diagnosticarAds(linhas, cadastro, start, end.slice(0, 10), janela), whatsapp);
 }
 
 /** Atendimentos no WhatsApp do cliente no período; null quando não há WhatsApp ligado ou a leitura falha. */
