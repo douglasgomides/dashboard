@@ -19,6 +19,8 @@
 --      src/lib/config/recompra.ts: o banco não guarda prazo).
 --   6. pacientes_periodo(client, de, ate): os números da tela com {valor, fonte, motivo_sem_dado, responsavel} e as
 --      listas de pessoas (até 200 por lista, com o total), sem telefone.
+-- Comparecimento: só pelo nome da etapa (compareceu, atendido, consulta realizada, pós-consulta). A marca
+-- "em_atendimento" de crm_etapa_kpi está posta em etapas de negociação nesses CRMs e não indica comparecimento.
 -- Funil de prospecção ativa: config.origem_por_funil da conexão com valor começando por "Prospecção" (Marcelly:
 -- {"Social Seller":"Prospecção ativa (Social Seller)"}), nome do funil com "social seller" ou "prospec", papel
 -- 'prospeccao' em crm_funil_papel (hoje o papel não existe; a comparação fica pronta) ou origem classificada como
@@ -103,10 +105,10 @@ as $$
   etapas as (
     select s.crm_connection_id, s.pipeline_id, s.status_id, s.status_name,
            exists (select 1 from crm_etapa_kpi k where k.crm_connection_id = s.crm_connection_id and k.pipeline_id = s.pipeline_id
-                     and k.status_id = s.status_id and k.kpi = 'consulta_agendada') or s.status_name ~* 'agendad' as agendamento,
+                     and k.status_id = s.status_id and k.kpi = 'consulta_agendada') or s.status_name ~* '(agendad|agendament)' as agendamento,
            exists (select 1 from crm_etapa_kpi k where k.crm_connection_id = s.crm_connection_id and k.pipeline_id = s.pipeline_id
-                     and k.status_id = s.status_id and k.kpi = 'em_atendimento')
-             or s.status_name ~* '(compareceu|atendid|consulta realizada|em atendimento|pós|pos-consulta)' as comparecimento
+                     and k.status_id = s.status_id and false and k.kpi = 'em_atendimento')
+             or s.status_name ~* '(compareceu|atendid[oa]|consulta realizada|p[oó]s[- ]?consulta)' as comparecimento
       from crm_pipeline_statuses s join crm_connections c on c.id = s.crm_connection_id
      where c.client_id = p_client
   ),
@@ -163,6 +165,8 @@ as $$
     from public.pacientes_cards(p_client) c
     left join g on g.cx = c.cx and g.ext = c.ext
    where c.outcome = 'won'
+     -- "Ganho" sem valor em etapa de agendamento é agendamento, não venda (Dra. Juliana e Dra. Mariela: "Agendado").
+     and not (c.em_agendamento and coalesce(c.price, 0) = 0)
      and (g.no_periodo is not null or (g.n is null and c.d between p_de and p_ate));
 $$;
 revoke all on function public.pacientes_vendas_janela(uuid, date, date) from public, anon, authenticated;
@@ -194,8 +198,8 @@ begin
            ia.conversa_id, ia.interesse
       from vend v
       join crm_leads cl on cl.id = v.id
-      left join pessoas p on v.u like 'p:%' and p.id = substr(v.u, 3)::uuid
-      left join ia on v.u like 'p:%' and ia.pessoa_id = substr(v.u, 3)::uuid
+      left join pessoas p on v.u like 'p:%' and p.id::text = substr(v.u, 3)
+      left join ia on v.u like 'p:%' and ia.pessoa_id::text = substr(v.u, 3)
   )
   select jsonb_build_object(
     'total', (select count(*) from itens),
@@ -272,10 +276,10 @@ begin
   ev_etapa as (
     select e.crm_connection_id as cx, e.external_lead_id as ext, e.ocorreu_em,
            exists (select 1 from crm_etapa_kpi k where k.crm_connection_id = e.crm_connection_id and k.pipeline_id = e.pipeline_para
-                     and k.status_id = e.status_para and k.kpi = 'consulta_agendada') or s.status_name ~* 'agendad' as agendamento,
+                     and k.status_id = e.status_para and k.kpi = 'consulta_agendada') or s.status_name ~* '(agendad|agendament)' as agendamento,
            exists (select 1 from crm_etapa_kpi k where k.crm_connection_id = e.crm_connection_id and k.pipeline_id = e.pipeline_para
-                     and k.status_id = e.status_para and k.kpi = 'em_atendimento')
-             or s.status_name ~* '(compareceu|atendid|consulta realizada|em atendimento|pós|pos-consulta)' as comparecimento
+                     and k.status_id = e.status_para and false and k.kpi = 'em_atendimento')
+             or s.status_name ~* '(compareceu|atendid[oa]|consulta realizada|p[oó]s[- ]?consulta)' as comparecimento
       from crm_lead_eventos e
       left join crm_pipeline_statuses s on s.crm_connection_id = e.crm_connection_id and s.pipeline_id = e.pipeline_para and s.status_id = e.status_para
      where e.client_id = p_client and e.tipo in ('entrou', 'mudou_etapa')
@@ -305,10 +309,10 @@ begin
   ),
   comp_cfg as (select exists (select 1 from cards where em_comparecimento)
                    or exists (select 1 from crm_etapa_kpi k join crm_connections c on c.id = k.crm_connection_id
-                               where c.client_id = p_client and k.kpi = 'em_atendimento')
+                               where c.client_id = p_client and false and k.kpi = 'em_atendimento')
                    or exists (select 1 from crm_pipeline_statuses s join crm_connections c on c.id = s.crm_connection_id
                                where c.client_id = p_client
-                                 and s.status_name ~* '(compareceu|atendid|consulta realizada|em atendimento|pós|pos-consulta)') as tem),
+                                 and s.status_name ~* '(compareceu|atendid[oa]|consulta realizada|p[oó]s[- ]?consulta)') as tem),
   comp_ev as (select cx, ext, min(ocorreu_em) as primeiro, max(ocorreu_em) as ultimo,
                      bool_or(ocorreu_em >= v_ini and ocorreu_em < v_fim) as no_periodo
                 from ev_etapa where comparecimento group by 1, 2),
@@ -406,8 +410,10 @@ begin
   neg_crm as (
     select distinct c.u from cards c
      where c.outcome = 'open' and not c.em_agendamento and not c.em_comparecimento
-       and c.papel in ('captacao', 'venda', 'prospeccao')
-       and (not c.prospec or c.u in (select u from pm_real))
+       and c.papel in ('captacao', 'venda')
+       -- Prospecção tem linha própria ("Abordados pela equipe"); etapa de entrada ainda não é negociação.
+       and not c.prospec
+       and coalesce(c.etapa, '') !~* '(caixa de leads|novo lead|^lead$|contato inicial|^base\M|selecionada para prospec|enviei a primeira|mensagem enviada|abordagem realizada|levantou a m)'
        and (c.d between p_de and p_ate or exists (select 1 from mexeu m where m.cx = c.cx and m.ext = c.ext))
   ),
   neg_ia as (select distinct u from ia where comercial and etapa in ('preco_apresentado', 'agendamento_em_curso', 'qualificacao')),
@@ -471,7 +477,7 @@ begin
            case when cu.u is not null then jsonb_build_object('funil', cu.funil, 'etapa', cu.etapa, 'resultado', cu.outcome) end as crm,
            case when lu.u is not null then jsonb_build_object('etapa', lu.etapa, 'interesse', lu.interesse) end as leitura
       from (select distinct u from membros) x
-      left join pessoas p on x.u like 'p:%' and p.id = substr(x.u, 3)::uuid
+      left join pessoas p on x.u like 'p:%' and p.id::text = substr(x.u, 3)
       left join nome_card nc on nc.u = x.u
       left join conv_ult cvu on cvu.u = x.u
       left join card_ult cu on cu.u = x.u
@@ -500,6 +506,7 @@ begin
            exists (select 1 from cards where prospec) as tem_prospeccao,
            coalesce((select eh_teste from clients where id = p_client), false) as teste,
            (select count(*) from cards c where c.outcome = 'closed' and c.d between p_de and p_ate) as fechados_sem_resultado,
+           exists (select 1 from cards c where c.outcome = 'won' and c.em_agendamento and coalesce(c.price, 0) = 0) as ganho_e_agendamento,
            (select max(cl.occurred_at) from crm_leads cl join crm_connections cc on cc.id = cl.crm_connection_id
              where cl.client_id = p_client and cc.active and cc.provider = 'planilha' and cl.removido_na_origem is null) as planilha_ultimo,
            exists (select 1 from crm_connections cc where cc.client_id = p_client and cc.active and cc.provider = 'planilha') as tem_planilha
@@ -582,6 +589,10 @@ begin
           then jsonb_build_object('valor', null, 'fonte', 'crm',
             'motivo_sem_dado', format('A planilha de vendas não é atualizada desde %s.', to_char(f.planilha_ultimo at time zone 'America/Sao_Paulo', 'DD/MM/YYYY')),
             'responsavel', 'comercial', 'alerta', 'crm-fonte-vendas-parada')
+        when not exists (select 1 from vendas) and f.ganho_e_agendamento
+          then jsonb_build_object('valor', null, 'fonte', 'crm',
+            'motivo_sem_dado', 'O CRM marca como ganho o agendamento, e não a venda. Nenhuma venda com valor foi registrada.',
+            'responsavel', 'comercial', 'alerta', 'crm-ganho-e-agendamento')
         when not exists (select 1 from vendas) and f.fechados_sem_resultado > 0
           then jsonb_build_object('valor', null, 'fonte', 'crm',
             'motivo_sem_dado', format('%s atendimentos foram encerrados no CRM sem dizer se viraram venda.', f.fechados_sem_resultado),

@@ -208,6 +208,30 @@ try {
   // Voltou a comprar a mesma coisa: a venda nova substitui a antiga.
   assert.equal(paraChamarAgora([antiga, v0], [], "2026-10-30").length, 0);
 
+  // Regras vistas nos dados reais (Dra. Juliana, Dra. Mariela, Dra. Marcella): "ganho" sem valor na etapa "Agendado" é
+  // agendamento, não venda; etapa de entrada não é negociação; "Abordagem realizada" e a marca em_atendimento em etapa de
+  // negociação não são comparecimento.
+  await q("reset role");
+  const conn2 = "66666666-6666-4666-8666-666666666666";
+  await q("insert into crm_connections(id,client_id,provider,active,config) values ($1,$2,'flwchat',true,'{}')", [conn2, outra]);
+  await q(`insert into crm_pipeline_statuses(crm_connection_id,pipeline_id,pipeline_name,status_id,status_name) values
+    ($1,'g','Agendamento - Ginecologia','a1','1. Contato Inicial'),($1,'g','Agendamento - Ginecologia','a2','2.Avaliação da proposta'),
+    ($1,'g','Agendamento - Ginecologia','a3','Agendado'),($1,'g','Agendamento - Ginecologia','a4','Abordagem realizada')`, [conn2]);
+  await q("insert into crm_etapa_kpi(crm_connection_id,pipeline_id,status_id,kpi) values ($1,'g','a2','em_atendimento')", [conn2]);
+  const card2 = (ext: string, status: string, outcome: string) => q(`insert into crm_leads(crm_connection_id,client_id,provider,external_lead_id,event_type,raw_payload,pipeline_id,status_id,outcome,price,occurred_at,contact_name)
+    values ($1,$2,'flwchat',$3,'sync','{}','g',$4,$5,null,'2026-10-08T14:00:00Z',$3)`, [conn2, outra, ext, status, outcome]);
+  await card2("Q1", "a1", "open");
+  await card2("Q2", "a2", "open");
+  await card2("Q3", "a3", "won");
+  await card2("Q4", "a4", "open");
+  await como(intruso);
+  const rReal = (await q("select public.pacientes_periodo($1,'2026-10-01','2026-10-31') r", [outra])).rows[0].r as R;
+  assert.equal(rReal.numeros.fecharam.valor, null, "ganho sem valor em Agendado não é venda");
+  assert.match(rReal.numeros.fecharam.motivo_sem_dado, /marca como ganho o agendamento/);
+  assert.equal(rReal.numeros.agendaram.valor, 1, "o ganho em Agendado conta como agendamento");
+  assert.equal(rReal.numeros.compareceram.valor, null, "em_atendimento em negociação e Abordagem realizada não são comparecimento");
+  assert.equal(rReal.numeros.negociacao.valor, 1, "Contato Inicial não é negociação; Avaliação da proposta é");
+
   console.log("pacientes do período: ok");
 } finally {
   await db.close();
