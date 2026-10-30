@@ -568,13 +568,16 @@ export async function listMetaGraphAccountIds(env: {
   const supabase = createClient<Database>(env.supabaseUrl, env.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  // Só de cliente ativo: a conta de cliente inativo (Dra. Juliana Carrion) seguia sendo lida a cada hora, gastando
+  // chamadas da Meta e gerando alerta de dia zerado para quem nem está no painel (auditoria de 30/10/2026).
   const { data, error } = await supabase
     .from("instagram_accounts")
-    .select("id, client_id")
+    .select("id, client_id, clients!inner(active)")
     .eq("active", true)
-    .eq("sync_source", "meta_graph");
+    .eq("sync_source", "meta_graph")
+    .eq("clients.active", true);
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((a) => ({ id: a.id, client_id: a.client_id }));
 }
 
 // windsor_account_id guarda o Instagram Business Account ID — o mesmo
