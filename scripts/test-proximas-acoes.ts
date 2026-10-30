@@ -1,6 +1,7 @@
 // npx tsx scripts/test-proximas-acoes.ts
 import assert from "node:assert/strict";
-import { montarProximasAcoes, statusDoBanco, STATUS_PARA_BANCO } from "../src/lib/proximas-acoes";
+import { atendimentoParaAcoes, montarProximasAcoes, statusDoBanco, STATUS_PARA_BANCO } from "../src/lib/proximas-acoes";
+import type { LeituraConversaBanco } from "../src/lib/conversa-leitura";
 
 // Vazio: nenhuma ação inventada.
 assert.deepEqual(montarProximasAcoes({}), []);
@@ -58,4 +59,33 @@ assert.equal(acoes.find((a) => a.id === "ads-cortar-1")?.responsavel, "trafego")
 for (const s of ["pendente", "em_andamento", "resolvido", "ignorado"] as const) assert.equal(statusDoBanco(STATUS_PARA_BANCO[s]), s);
 assert.equal(statusDoBanco("resultado_avaliado"), "resolvido");
 assert.equal(statusDoBanco(undefined), "pendente");
+
+// Severidade baixa não sobe para média; pendência interna baixa some do perfil da clínica.
+const crmFora = { id: "crm-funil-fora", fonte: "crm", severidade: "baixa" as const, titulo: "5 funis fora", evidencia: "x", causa: "Funil novo.", correcao: "Equipe Doctor Creator: confirmar.", responsavel: "equipe_hub", afeta: "leads" };
+assert.equal(montarProximasAcoes({ problemas: [crmFora] })[0].severidade, "baixa");
+assert.deepEqual(montarProximasAcoes({ problemas: [crmFora], ocultarInternasBaixas: true }), []);
+// Pendência interna média continua aparecendo (fonte parada afeta a leitura da clínica).
+assert.equal(montarProximasAcoes({ problemas: [{ ...crmFora, severidade: "media" }], ocultarInternasBaixas: true }).length, 1);
+
+// Atendimento: período, 7 dias e card fechado na origem.
+const agora = Date.parse("2026-10-30T15:00:00Z");
+const diasAtras = (d: number) => new Date(agora - d * 86_400_000).toISOString();
+const conv = (id: string, d: number, extra: Partial<LeituraConversaBanco> = {}): LeituraConversaBanco => ({
+  conversa_id: id, msgs_paciente: 2, msgs_clinica: 0, msgs_automaticas: 0, primeira_resposta_seg: null, mediana_resposta_comercial_seg: null,
+  maior_espera_seg: null, esperas_longas: 0, vezes_paciente: 1, ultima_de: "paciente", ultima_msg_em: diasAtras(d), aguardando_seg: d * 86_400,
+  atendente: null, lead_etapa: null, lead_resultado: "open", ...extra,
+});
+const leituras = [conv("a", 1), conv("b", 3), conv("c", 20), conv("d", 142), conv("e", 2, { lead_resultado: "closed" }), conv("f", 5, { ultima_de: "clinica" })];
+const r30 = atendimentoParaAcoes(leituras, "2026-10-01", "2026-10-30", agora)!;
+assert.equal(r30.resumo.semResposta, 2, "só a e b: escreveram nos últimos 7 dias; e está fechado na origem");
+assert.equal(r30.parados, 1, "c fica à parte; d (142 dias) está fora do período");
+assert.equal(r30.resumo.comPaciente, 4);
+assert.equal(atendimentoParaAcoes(leituras, "2026-09-01", "2026-09-30", agora), null);
+const ac = montarProximasAcoes({ atendimento: r30.resumo, atendimentoParados: r30.parados }).find((a) => a.id === "atend-sem-resposta")!;
+assert.ok(ac.recomendacao.includes("os 2 pacientes") && ac.recomendacao.includes("7 dias"));
+assert.ok(ac.evidencia.includes("Outra conversa está parada"));
+// Só parados antigos: vira retomada de baixa severidade, não "responder hoje".
+const soAntigos = atendimentoParaAcoes([conv("x", 10), conv("y", 12), conv("z", 15)], "2026-10-01", "2026-10-30", agora)!;
+const ids2 = montarProximasAcoes({ atendimento: soAntigos.resumo, atendimentoParados: soAntigos.parados }).map((a) => `${a.id}:${a.severidade}`);
+assert.deepEqual(ids2, ["atend-parados:baixa"]);
 console.log(`proximas-acoes: ok (${acoes.length} ações)`);

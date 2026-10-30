@@ -792,6 +792,20 @@ try {
       assert.ok(reports.some((row) => row.section === "anonymous_default_grant" && row.default_source === "global_implicit" && row.object_type === "f" && row.grantee === "PUBLIC"));
     } finally { await db.exec("drop function public.preflight_implicit_grant_fixture()"); }
   });
+  await check("auditoria_comercial conta preço pedido sem resposta por conversa, não por subtração", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("insert into conversas_resumos(conversa_id,client_id,resumo,ate_msg_em,gerado_em) values ($1,$2,$3,now(),now()) on conflict (conversa_id) do update set resumo=excluded.resumo", [conversationA, A, { preco_pedido: true, preco_apresentado: false, etapa: "em_negociacao" }]);
+      const conv2 = (await rows<{ id: string }>("insert into conversas(client_id,provider,externo_id,iniciada_em,ultima_msg_em) values ($1,'wts','preco-2',now(),now()) returning id", [A]))[0].id;
+      await db.query("insert into conversas_resumos(conversa_id,client_id,resumo,ate_msg_em,gerado_em) values ($1,$2,$3,now(),now())", [conv2, A, { preco_pedido: false, preco_apresentado: true, etapa: "em_negociacao" }]);
+      await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ sub: viewer, role: "authenticated" })]);
+      await db.exec("set local role authenticated");
+      const f = (await rows<{ f: Record<string, number> }>("select auditoria_comercial($1,current_date,current_date)->'funil' as f", [A]))[0].f;
+      assert.equal(f.preco_pedido, 1);
+      assert.equal(f.preco_apresentado, 1);
+      assert.equal(f.preco_sem_resposta, 1, "pedido 1 menos apresentado 1 daria 0; o certo é 1");
+    } finally { await db.exec("rollback"); }
+  });
   await check("estado final bloqueia toda função public para anon, incluindo migrações novas", async () => {
     assert.deepEqual(await rows("select oid::regprocedure::text as signature from pg_proc where pronamespace='public'::regnamespace and prokind='f' and has_function_privilege('anon',oid,'EXECUTE')"), []);
   });
