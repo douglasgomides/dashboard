@@ -4,12 +4,14 @@
  * Para cada sessão já sincronizada em wts_sessions: busca as mensagens, busca o contato (telefone) e grava
  *  - pessoa (pelo telefone), conversa e mensagens
  *  - o toque "mensagem_whatsapp", ligado ao link rastreado quando a primeira mensagem do paciente traz o código
+ *  - com o código: conversas.link_id (atribuição "ref") e o toque "clique_link" da pessoa, para a jornada e o funil
  *
  * Conversa é dado de saúde: a leitura pelo dashboard passa só pelas funções listar_conversas/ler_mensagens
  * (acesso restrito e registrado). Aqui é só escrita, com a service role.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { extrairCodigos } from "./shortio.js";
+import { codigosNaMensagem } from "../../src/lib/rastreio.js";
+import { registrarToqueLink } from "./redirecionar.js";
 
 const BASE = "https://api.wts.chat";
 let ultimoCarimboMicros = 0;
@@ -280,7 +282,7 @@ export async function ingerirConversasWts(
     let link: any = null;
     let codigoAchado: string | null = null;
     for (const m of msgs.filter((x) => direcaoDaMensagem(x.direction) === "entrada").slice(0, 3)) {
-      for (const cod of extrairCodigos(m.text)) {
+      for (const cod of codigosNaMensagem(m.text)) {
         if (porCodigo.has(cod)) {
           link = porCodigo.get(cod);
           codigoAchado = cod;
@@ -297,7 +299,7 @@ export async function ingerirConversasWts(
       .update(
         {
           ...(pessoaId ? { pessoa_id: pessoaId } : {}),
-          iniciada_em: primeira.timestamp ?? primeira.createdAt, ultima_msg_em: ultima.timestamp ?? ultima.createdAt, ...(codigoAchado ? { codigo_ref: codigoAchado } : {}),
+          iniciada_em: primeira.timestamp ?? primeira.createdAt, ultima_msg_em: ultima.timestamp ?? ultima.createdAt, ...(codigoAchado ? { codigo_ref: codigoAchado, link_id: link.id, atribuicao: "ref" } : {}),
         },
       )
       .eq("client_id", clientId).eq("id", tentativa.id).eq("mensagens_conferencia_em", tentativa.em)
@@ -358,6 +360,10 @@ export async function ingerirConversasWts(
         { onConflict: "client_id,fonte,externo_id", ignoreDuplicates: true },
       );
       if (eToque) { r.erros.push(`toque ${sid.slice(0, 8)}: ${eToque.message}`); falhou = true; }
+      if (link) {
+        const eLink = await registrarToqueLink(supabase, { clientId, conversaId: conv.id, pessoaId, link, em: primeiraEntrada.timestamp ?? primeiraEntrada.createdAt, como: "ref" });
+        if (eLink) { r.erros.push(`toque do link ${sid.slice(0, 8)}: ${eLink}`); falhou = true; }
+      }
     }
     await finalizarConferenciaMensagens(supabase, clientId, tentativa, falhou ? "erro" : completa ? "completa" : "parcial");
     terminada = true;
