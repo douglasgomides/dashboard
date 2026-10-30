@@ -24,7 +24,7 @@ export interface NotaFontes {
 const PONTOS: Record<CorStatus, number | null> = { verde: 100, amarelo: 60, vermelho: 0, cinza: null };
 const OBRIGATORIAS: FonteId[] = ["instagram", "anuncios", "crm"];
 
-export function notaDasFontes(status: Partial<Record<FonteId, StatusFonte>>, problemas: { severidade: "alta" | "media" }[] = []): NotaFontes {
+export function notaDasFontes(status: Partial<Record<FonteId, StatusFonte>>, problemas: { severidade: "alta" | "media" | "baixa" }[] = []): NotaFontes {
   const motivos: string[] = [];
   const ligadas = (Object.entries(status) as [FonteId, StatusFonte][]).filter(([, s]) => s.ligado);
   if (!ligadas.length) return { nota: null, faixa: null, cor: "cinza", motivos: ["Nenhuma fonte ligada"] };
@@ -46,7 +46,8 @@ export function notaDasFontes(status: Partial<Record<FonteId, StatusFonte>>, pro
   }
 
   const altas = problemas.filter((p) => p.severidade === "alta").length;
-  const medias = problemas.length - altas;
+  // "baixa" é informativo (ex.: CRM compartilhado de propósito): não desconta da nota.
+  const medias = problemas.filter((p) => p.severidade === "media").length;
   const desconto = Math.min(40, altas * 15 + medias * 5);
   if (desconto) {
     nota -= desconto;

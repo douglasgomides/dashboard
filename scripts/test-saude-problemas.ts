@@ -119,6 +119,16 @@ try {
   assert.equal(filtrarProblemas(ps, {}).length, 5);
 
   console.log("test-saude-problemas: ok");
+  // Planilha semanal de anúncios (sem sincronização automática): 8 dias é o ritmo normal, não é problema;
+  // passou de 10 dias, é parada. Caso real: Dra. Marcelly e Dra. Mariela, 29/10/2026.
+  assert.equal(problemaDaLinha(c, linha("anuncios", { data_ate: dia(8) })), null);
+  assert.equal(problemaDaLinha(c, linha("anuncios", { data_ate: dia(8), motivo_dono: "manual", motivo: "Planilha da equipe", last_attempt_at: "2026-10-12T10:00:00Z" })), null);
+  assert.equal(problemaDaLinha(c, linha("anuncios", { data_ate: dia(12) }))!.gravidade, "media");
+  // Fonte automática continua com a régua de 3 dias.
+  assert.ok(problemaDaLinha(c, linha("anuncios", { data_ate: dia(8), last_attempt_at: "2026-10-19T07:00:00Z", last_success_at: "2026-10-19T07:00:00Z" })));
+  // Alerta de dado "baixa" no banco continua baixa na tela (antes virava média).
+  const baixa = montarProblemasFontes([{ ...c, fontes: todas, linhas: [], qualidade: [{ id: "crm-compartilhado", fonte: "crm", severidade: "baixa", titulo: "t", evidencia: "e", causa: "", correcao: "", responsavel: "equipe_hub", afeta: "" } as any] }]);
+  assert.equal(baixa.find((p) => p.id.endsWith(":q:crm-compartilhado"))?.gravidade, "baixa");
 } finally {
   mock.timers.reset();
 }

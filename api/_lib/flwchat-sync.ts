@@ -47,6 +47,8 @@ export interface FlwChatSyncResult {
   paineis: number;
   cards: number;
   errors: string[];
+  /** Situação que não é erro (ex.: leitura das tags ainda em andamento). Não vai para last_error. */
+  avisos?: string[];
 }
 
 interface FlwStep {
@@ -154,7 +156,8 @@ export function tipoDasTags(nomes: string[]): string | null {
 //  - enquanto a primeira leitura não termina, a origem pela tag fica Parcial.
 export interface EstadoTags {
   tags_ate?: string | null;
-  tags_varredura?: { pagina: number; inicio: string } | null;
+  /** ordem "desc": do contato mais novo para o mais antigo. Varredura sem ordem é da versão antiga (crescente). */
+  tags_varredura?: { pagina: number; inicio: string; ordem?: "desc" } | null;
 }
 
 export interface PaginaContatos {
@@ -181,7 +184,11 @@ export async function lerTagsDosContatos(opts: {
     tags: (c.tagIds ?? []).map((id) => opts.nomes.get(id)).filter((n): n is string => !!n),
     atualizado_em: c.updatedAt ?? null,
   });
-  const varredura = opts.estado.tags_varredura ?? (opts.estado.tags_ate ? null : { pagina: 1, inicio: opts.agora });
+  // Varredura iniciada na ordem antiga (crescente) recomeça na ordem nova: retomar da página onde parou pularia os
+  // contatos mais novos. O que já foi lido continua guardado.
+  const emAndamento = opts.estado.tags_varredura?.ordem === "desc" ? opts.estado.tags_varredura : null;
+  const recomecar = !!opts.estado.tags_varredura && !emAndamento;
+  const varredura = emAndamento ?? (opts.estado.tags_ate && !recomecar ? null : { pagina: 1, inicio: opts.agora, ordem: "desc" as const });
 
   if (varredura) {
     let pagina = varredura.pagina;
@@ -195,7 +202,7 @@ export async function lerTagsDosContatos(opts: {
       if (lidas === max - 1) { pagina++; break; }
     }
     return {
-      estado: { tags_ate: opts.estado.tags_ate ?? null, tags_varredura: { pagina, inicio: varredura.inicio } },
+      estado: { tags_ate: opts.estado.tags_ate ?? null, tags_varredura: { pagina, inicio: varredura.inicio, ordem: "desc" } },
       completa: false,
       aviso: `tags dos contatos: primeira leitura em andamento (página ${pagina - 1}${total ? ` de ${total}` : ""}); a origem pela tag fica parcial até terminar`,
     };
@@ -315,6 +322,7 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
 
   for (const conn of connections ?? []) {
     const errors: string[] = [];
+    const avisos: string[] = [];
     const token = conn.access_token as string | null;
     const config = (conn.config ?? {}) as {
       panel_ids?: string[];
@@ -371,8 +379,11 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
               pageSize: PAGE_SIZE,
               pageNumber: pagina,
               IncludeDetails: "Tags",
+              // Do mais novo para o mais antigo também na primeira leitura: os contatos dos leads recentes são os que
+              // contam nos números do período (antes, em ordem crescente, 776 dos 805 leads recentes da Juliana Paola
+              // ficavam sem a tag lida até a varredura inteira acabar).
               orderBy: modo === "varredura" ? "createdAt" : "updatedAt",
-              orderDirection: modo === "varredura" ? "ASCENDING" : "DESCENDING",
+              orderDirection: "DESCENDING",
             });
             return { itens: body?.items ?? [], temMais: !!body?.hasMorePages, totalPaginas: body?.totalPages };
           },
@@ -384,7 +395,8 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
             if (e) throw e;
           },
         });
-        if (leitura.aviso) errors.push(leitura.aviso);
+        // Leitura em andamento não é falha: antes ia para last_error e acendia "sync com erro" (Juliana Paola e Mariela).
+        if (leitura.aviso) avisos.push(leitura.aviso);
         const { error: e } = await supabase
           .from("crm_connections")
           .update({ config: { ...(conn.config ?? {}), ...leitura.estado } })
@@ -483,7 +495,12 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
       if (stageError) errors.push(`etapas: ${stageError.message}`);
     }
 
-    results.push({ clientId: conn.client_id, connectionId: conn.id, paineis: paineisLidos, cards: gravados, errors });
+    // Tags do contato lidas e guardadas chegam também aos cards que não estão mais abertos (a API só relista os abertos).
+    if (config.tags_contato) {
+      const { error: eAplicar } = await supabase.rpc("crm_aplicar_tags_contato", { p_connection_id: conn.id });
+      if (eAplicar) errors.push(`aplicar tags nos cards: ${eAplicar.message}`);
+    }
+    results.push({ clientId: conn.client_id, connectionId: conn.id, paineis: paineisLidos, cards: gravados, errors, avisos });
   }
 
   return results;

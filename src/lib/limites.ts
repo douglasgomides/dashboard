@@ -19,6 +19,11 @@ export const LIMITES = {
     /** Acima desta fatia do investimento separada por estimativa (sem destino nem meta de otimização), fica Parcial. */
     investimentoEstimadoMaximo: 0,
   },
+  /** Fontes preenchidas à mão (planilha semanal do gestor): o dado chega uma vez por semana. */
+  planilha: {
+    /** Acima de tantos dias sem dado novo, a fonte de planilha conta como parada. Fonte automática: 3 dias. */
+    diasParaParada: 10,
+  },
   /** Conferência diária: contagem do Nexo contra a contagem do CRM ao vivo. */
   conferenciaCrm: {
     /** Acima desta fatia de diferença entre Nexo e CRM, vira alerta. */

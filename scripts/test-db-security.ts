@@ -567,6 +567,22 @@ try {
       await db.exec("rollback");
     }
   });
+  await check("auditoria de alertas médios: tags do FlwChat nos cards antigos e parados sem Digisac nem arquivo", async () => {
+    await db.exec("begin");
+    try {
+      // Card antigo do FlwChat (fora do painel): a tag do contato lida depois chega ao card e dá a origem.
+      await db.query(`insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,occurred_at) values ($1,$2,'flwchat','fw1','add','{"contactIds":["f9"]}',now())`, [A, connectionA]);
+      await db.query("insert into crm_contato_tags(crm_connection_id,contato_id,tags) values ($1,'f9',array['pacientes base'])", [connectionA]);
+      assert.deepEqual(await rows("select crm_aplicar_tags_contato($1) as n", [connectionA]), [{ n: 1 }]);
+      assert.deepEqual(await rows("select source, origem_como from crm_leads where external_lead_id='fw1'"), [{ source: "Paciente antigo", origem_como: "etiqueta" }]);
+      // Parados: Digisac não conta; etapa de arquivo ou consulta confirmada não conta; etapa de negociação conta.
+      await db.query("insert into crm_pipeline_statuses(crm_connection_id,pipeline_id,status_id,pipeline_name,status_name) values ($1,'p','arq','Funil','LEADS ANTIGOS DO OUTRO FUNIL'),($1,'p','conf','Funil','CONFIRMADO'),($1,'p','neg','Funil','NEGOCIAÇÃO')", [connectionA]);
+      assert.deepEqual(await rows("select crm_conta_como_aberto('digisac',$1,'p','neg') as v", [connectionA]), [{ v: false }]);
+      assert.deepEqual(await rows("select crm_conta_como_aberto('kommo',$1,'p','arq') as a, crm_conta_como_aberto('kommo',$1,'p','conf') as c, crm_conta_como_aberto('kommo',$1,'p','neg') as n, crm_conta_como_aberto('kommo',$1,'p','sem-nome') as s", [connectionA]), [{ a: false, c: false, n: true, s: true }]);
+    } finally {
+      await db.exec("rollback");
+    }
+  });
   await check("ticket rejeita não finitos e preserva decimal, mediana CRM, SAP e ausência de fonte", async () => {
     await db.exec("begin");
     try {
