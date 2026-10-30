@@ -102,6 +102,53 @@ export function etapasDosFunis(body: unknown, crmConnectionId: string) {
   });
 }
 
+type BuscarKommo = (url: string, headers: Record<string, string>) => Promise<{ status: number; corpo: unknown }>;
+
+/** GET JSON no Kommo pelo mesmo caminho seguro dos outros pedidos (corpo nulo no 204). */
+export const buscarKommo: BuscarKommo = async (url, headers) => {
+  const res = await fetch(url, integrationRequest({ headers }));
+  return { status: res.status, corpo: res.status === 200 ? await res.json() : null };
+};
+
+/**
+ * Leads da "Entrada" do Kommo (etapa de leads não aceitos, type = 1 em cada funil). A listagem padrão de /leads não
+ * devolve esses leads, então eles nunca entravam no Nexo (auditoria de 30/10/2026: Samira com 199 desde julho,
+ * HOMS com 114) e a conferência, que conta pela mesma listagem, não via a diferença. Busca pela etapa, funil a funil.
+ */
+export async function leadsDaEntradaKommo(
+  buscar: BuscarKommo,
+  domain: string,
+  accessToken: string,
+  opts: { maxPaginas?: number; comDetalhes?: boolean } = {},
+): Promise<{ leads: KommoLead[]; completo: boolean; erro?: string }> {
+  const auth = { Authorization: `Bearer ${accessToken}` };
+  const funis = await buscar(`https://${domain}/api/v4/leads/pipelines`, auth);
+  if (funis.status !== 200) return { leads: [], completo: false, erro: `Kommo respondeu ${funis.status} ao listar os funis` };
+  const entradas: { funil: number; etapa: number }[] = [];
+  for (const f of ((funis.corpo as { _embedded?: { pipelines?: unknown[] } })?._embedded?.pipelines ?? []) as { id?: number; _embedded?: { statuses?: { id?: number; type?: number }[] } }[]) {
+    for (const st of f._embedded?.statuses ?? []) {
+      if (st.type === 1 && Number.isSafeInteger(f.id) && Number.isSafeInteger(st.id)) entradas.push({ funil: f.id!, etapa: st.id! });
+    }
+  }
+  const leads: KommoLead[] = [];
+  const maxPaginas = opts.maxPaginas ?? 40;
+  for (const e of entradas) {
+    for (let pagina = 1; ; pagina++) {
+      if (pagina > maxPaginas) return { leads, completo: false, erro: `Entrada do Kommo passou de ${maxPaginas} páginas no funil ${e.funil}` };
+      const qs = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(pagina), [`filter[statuses][0][pipeline_id]`]: String(e.funil), [`filter[statuses][0][status_id]`]: String(e.etapa) });
+      if (opts.comDetalhes) qs.set("with", "source_id,contacts");
+      const r = await buscar(`https://${domain}/api/v4/leads?${qs.toString()}`, auth);
+      if (r.status === 204) break;
+      if (r.status !== 200) return { leads, completo: false, erro: `Kommo respondeu ${r.status} na Entrada do funil ${e.funil}` };
+      const corpo = r.corpo as { _embedded?: { leads?: KommoLead[] }; _links?: { next?: unknown } };
+      const rows = corpo?._embedded?.leads ?? [];
+      leads.push(...rows.filter((l) => l && Number.isSafeInteger(l.id) && l.id > 0));
+      if (!corpo?._links?.next) break;
+    }
+  }
+  return { leads, completo: true };
+}
+
 export interface KommoLeadsSyncEnv {
   accessToken: string;
   kommoDomain: string; // ex: "gtlabiscentral.kommo.com"
@@ -264,6 +311,21 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
     hasMore = pageHasMore;
     page++;
     pagesLeft--;
+  }
+
+  // Leads da Entrada (não aceitos): a listagem acima não os traz. São poucos; relidos inteiros a cada rodada.
+  try {
+    const entrada = await leadsDaEntradaKommo(buscarKommo, domain, env.accessToken, { comDetalhes: true });
+    if (entrada.erro) errors.push(entrada.erro);
+    for (let i = 0; i < entrada.leads.length; i += 250) {
+      const rows = entrada.leads.slice(i, i + 250).map((lead) => linhaDoLead(lead, env.crmConnectionId, env.clientId));
+      const { error } = await supabase.from("crm_leads").upsert(rows, { onConflict: "crm_connection_id,external_lead_id" });
+      if (error) { errors.push(`Entrada do Kommo: ${error.message}`); break; }
+      leadsFetched += rows.length;
+      leadsUpserted += rows.length;
+    }
+  } catch (err) {
+    errors.push(`Entrada do Kommo: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   if (mode === "incremental" && hasMore && pagesLeft === 0) errors.push("Kommo incremental incompleto: limite de páginas atingido; aumente max_pages para cobrir a janela");

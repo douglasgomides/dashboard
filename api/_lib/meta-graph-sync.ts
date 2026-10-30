@@ -412,6 +412,8 @@ const laOffsetHoras = (ms: number) => {
   return -Number(/GMT([+-]\d+)/.exec(t)?.[1] ?? -8);
 };
 const laMeiaNoiteMs = (ano: number, mes: number, dia: number) => Date.UTC(ano, mes - 1, dia) + laOffsetHoras(Date.UTC(ano, mes - 1, dia, 12)) * 3600_000;
+/** Quantos dias para trás a Graph é relida em busca de dia incompleto. */
+const JANELA_GRAPH_DIAS = 120;
 const METRICAS_DIA = ["reach", "total_interactions", "likes", "comments", "saves", "shares", "profile_links_taps"] as const;
 
 async function metricasDoDia(token: string, igId: string, since: number, until: number): Promise<Record<string, number>> {
@@ -445,33 +447,31 @@ export async function gravarMetricasDiariasPelaGraph(
     // A Meta é a fonte destas métricas (validado contra a Windsor em 19/10/2026: alcance, novos seguidores e saídas
     // batem dia a dia). Antes ela só entrava se a Windsor ficasse mais de 3 dias parada, e nunca refazia os dias
     // que a Windsor gravou pela metade (a Windsor trava quando o login do Facebook dela cai e deixa o dia aberto
-    // com valor parcial). Agora toda rodada relê os 7 últimos dias fechados e, se houver buraco, anda para trás até
-    // 28 dias a partir do último dia completo.
+    // com valor parcial). Agora toda rodada relê os 7 últimos dias fechados e até 28 dias incompletos mais antigos.
     const hojeLa = laData(Date.now()).split("-").map(Number);
     const diaK = (k: number) => {
       const meia = laMeiaNoiteMs(hojeLa[0], hojeLa[1], hojeLa[2]) - k * 86_400_000;
       return { meia, data: laData(meia + 12 * 3600_000) };
     };
-    const fechado = diaK(2).data;
-    const { data: ult } = await supabase
+    // Dias completos dos últimos 120 dias (a Meta guarda as métricas diárias por pelo menos 6 meses: auditoria de
+    // 30/10/2026). Antes a busca parava no último dia completo e nunca voltava a um buraco mais antigo.
+    const { data: lidos } = await supabase
       .from("instagram_account_daily_metrics")
-      .select("date")
+      .select("date, reach, new_followers")
       .eq("instagram_account_id", accountId)
-      .lte("date", fechado)
-      .not("reach", "is", null)
-      .not("new_followers", "is", null)
-      .order("date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const ultimo: string | null = (ult as { date?: string } | null)?.date ?? null;
+      .gte("date", diaK(JANELA_GRAPH_DIAS).data);
+    const completos = new Set(((lidos ?? []) as { date: string; reach: number | null; new_followers: number | null }[])// Dia gravado como zero em tudo (Windsor que travou) não conta como completo.
+      .filter((r) => r.reach != null && r.new_followers != null && !(r.reach === 0 && r.new_followers === 0)).map((r) => r.date));
 
-    // Dias da Califórnia fechados (de 2 dias atrás para trás): sempre os 7 mais recentes; depois, até o último completo (máx. 28).
+    // Sempre os 7 dias fechados mais recentes (a Meta ainda revisa) e, por rodada, até 28 dias incompletos mais antigos:
+    // primeiro os do último mês, do mais antigo para o mais novo; depois os demais.
     const alvo: { data: string; since: number; until: number }[] = [];
-    for (let k = 2; k < 2 + 28; k++) {
-      const { meia, data } = diaK(k);
-      if (ultimo && data <= ultimo && k >= 9) { break; }
-      alvo.push({ data, since: Math.floor(meia / 1000), until: Math.floor(meia / 1000) + 86_399 });
-    }
+    const dia = (k: number) => { const { meia, data } = diaK(k); return { data, since: Math.floor(meia / 1000), until: Math.floor(meia / 1000) + 86_399 }; };
+    for (let k = 2; k < 9; k++) alvo.push(dia(k));
+    const buracos = Array.from({ length: JANELA_GRAPH_DIAS - 9 }, (_, i) => 9 + i).filter((k) => !completos.has(diaK(k).data));
+    const recentes = buracos.filter((k) => k <= 30).sort((a, b) => b - a);
+    const antigos = buracos.filter((k) => k > 30);
+    for (const k of [...recentes, ...antigos].slice(0, 28)) alvo.push(dia(k));
     if (alvo.length === 0) { return []; }
 
     const linhas: Record<string, unknown>[] = [];

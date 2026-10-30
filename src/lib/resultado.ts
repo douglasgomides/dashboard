@@ -253,7 +253,7 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
         id: "seguidores",
         rotulo: "Novos seguidores",
         valor: `+${int(novos)}`,
-        explicacao: `Quantas pessoas começaram a seguir em ${diasMedidos} dias com esse dado (sem descontar quem saiu; o Instagram só informa os últimos 30 dias). ${mensal != null ? `Equivale a ${pct(mensal, 1)} do perfil por mês.` : ""} Referência: ${BENCHMARKS.crescimentoMensal.referencia}.`,
+        explicacao: `Quantas pessoas começaram a seguir em ${diasMedidos} dias com esse dado (sem descontar quem saiu). ${mensal != null ? `Equivale a ${pct(mensal, 1)} do perfil por mês.` : ""} Referência: ${BENCHMARKS.crescimentoMensal.referencia}.`,
         status: faixaParaTom(f),
         selo: f ? SELO_FAIXA[f] : undefined,
         statusTexto: f ? TEXTO_FAIXA[f] : undefined,

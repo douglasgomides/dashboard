@@ -133,7 +133,8 @@ async function testInstagram() {
   assert.equal(recovered.done, true);
   assert.equal(recovered.nextCursor, null);
   assert.ok(dailyWrites > 0, "a sincronização deve persistir as métricas diárias da Graph");
-  assert.equal(dailyMetrics.size, 7, "os sete dias fechados são relidos mesmo com dados recentes");
+  // Os 7 dias fechados mais recentes sempre; sem histórico gravado, mais 28 dias incompletos por rodada.
+  assert.equal(dailyMetrics.size, 35, "os sete dias fechados e até 28 buracos mais antigos são relidos");
   for (const row of dailyMetrics.values()) {
     assert.equal(row.reach, 0, "alcance zero deve ser preservado também nas métricas diárias");
     assert.equal(row.saves, 3);

@@ -16,6 +16,7 @@
  *  - Digisac: a API conta todos os contatos, inclusive grupos e quem nunca conversou, que o sync deixa de fora de
  *    propósito. Registra, sem alerta (metodo "contatos").
  */
+import { leadsDaEntradaKommo } from "./kommo-leads-sync.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LIMITES } from "../../src/lib/limites.js";
 
@@ -66,11 +67,15 @@ export async function contarNoCrm(
       let total = 0;
       for (let pagina = 1; pagina <= MAX_PAGINAS_KOMMO; pagina++) {
         const r = await buscar(`https://${conn.subdomain}.kommo.com/api/v4/leads?limit=250&page=${pagina}`, { Authorization: `Bearer ${token}` });
-        if (r.status === 204) return { total, metodo: "total", aviso: null };
-        if (r.status !== 200) return { total: null, metodo: "total", aviso: `Kommo respondeu ${r.status} na página ${pagina}` };
+        if (r.status !== 200 && r.status !== 204) return { total: null, metodo: "total", aviso: `Kommo respondeu ${r.status} na página ${pagina}` };
         const corpo = r.corpo as { _embedded?: { leads?: unknown[] }; _links?: { next?: unknown } };
         total += corpo?._embedded?.leads?.length ?? 0;
-        if (!corpo?._links?.next) return { total, metodo: "total", aviso: null };
+        if (r.status === 204 || !corpo?._links?.next) {
+          // Leads da Entrada (não aceitos) não vêm na listagem padrão: somam aqui também.
+          const entrada = await leadsDaEntradaKommo(buscar, `${conn.subdomain}.kommo.com`, token);
+          if (entrada.erro) return { total: null, metodo: "total", aviso: entrada.erro };
+          return { total: total + entrada.leads.length, metodo: "total", aviso: null };
+        }
       }
       return { total: null, metodo: "total", aviso: "Kommo com mais de 50 mil leads: contagem interrompida" };
     }

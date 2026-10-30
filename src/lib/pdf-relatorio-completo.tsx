@@ -317,7 +317,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   // KPIs do sumário: Instagram primeiro, depois o que existir de anúncio/WhatsApp/CRM.
   const kpis: { label: string; value: string; hint?: string }[] = [];
   if (temIg) {
-    kpis.push({ label: "Novos seguidores", value: diasNovos ? fmtNum(novos) : "sem dado", hint: `${diasNovos} de ${metrics.length} dias com o dado (o Instagram só informa os últimos 30)` });
+    kpis.push({ label: "Novos seguidores", value: diasNovos ? fmtNum(novos) : "sem dado", hint: `${diasNovos} de ${metrics.length} dias com o dado` });
     if (d.envio.alcanceUnico != null && d.envio.alcanceUnico > 0)
       kpis.push({ label: "Alcance (contas únicas)", value: fmtNum(d.envio.alcanceUnico), hint: "pessoas diferentes no período, segundo a Meta" });
     kpis.push({ label: "Soma dos alcances diários", value: fmtNum(reach), hint: `${metrics.length} dias; a mesma pessoa conta em mais de um dia` });
@@ -454,7 +454,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
       {/* 2. Instagram: evolução e audiência */}
       {temIg ? (
         <Page size="A4" style={styles.page} wrap>
-          <Titulo dica="Dia a dia da conta. O Instagram só guarda ganho de seguidores dos últimos 30 dias.">Instagram: evolução da conta</Titulo>
+          <Titulo dica="Dia a dia da conta.">Instagram: evolução da conta</Titulo>
           <Subtitulo>Alcance por dia</Subtitulo>
           <Linha valores={metrics.map((m) => num(m.reach))} rotuloIni={metrics[0] ? fmtDiaBR(String(metrics[0].date)) : ""} rotuloFim={metrics.length ? fmtDiaBR(String(metrics[metrics.length - 1].date)) : ""} />
           <Subtitulo>Seguidores ganhos por dia</Subtitulo>
@@ -1099,7 +1099,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
         </Text>
         <Text style={styles.methodTitle}>Limites que valem a pena conhecer</Text>
         <Text style={styles.methodP}>
-          O Instagram só informa o ganho diário de seguidores dos últimos 30 dias. Melhor formato, horário ou tema exige 8 posts ou mais no grupo, e a leitura por tema exige 10 posts classificados no mesmo assunto. O CRM mostra o histórico inteiro da conta, não só o período. A detecção de dúvida nos comentários é uma regra de pontuação e palavra interrogativa, então pode incluir elogios com interrogação.
+          Melhor formato, horário ou tema exige 8 posts ou mais no grupo, e a leitura por tema exige 10 posts classificados no mesmo assunto. O CRM mostra o histórico inteiro da conta, não só o período. A detecção de dúvida nos comentários é uma regra de pontuação e palavra interrogativa, então pode incluir elogios com interrogação.
         </Text>
         <Text style={styles.methodTitle}>Como as dúvidas foram contadas</Text>
         <Text style={styles.methodP}>
