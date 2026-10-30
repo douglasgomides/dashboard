@@ -21,7 +21,7 @@ try {
     if (u.pathname.endsWith("/app_admins")) return json({ user_id: ID });
     assert.ok(u.pathname.endsWith("/links_rastreados"));
     if (method === "GET") {
-      if (u.searchParams.has("or")) return json([]);
+      if (u.searchParams.has("or") || u.searchParams.has("codigo_ref")) return json([]);
       assert.equal(u.searchParams.get("client_id"), `eq.${CID}`);
       return json(exists ? { id: ID, slug: "qa-antigo", slugs_antigos: [] } : null);
     }

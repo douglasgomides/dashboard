@@ -50,8 +50,8 @@ export const manualRequestSchema = z.object({
   }
   if (value.alvo === "plano_item" && (!value.id || !value.estado)) ctx.addIssue({ code: "custom", path: ["estado"], message: "Informe id e estado" });
   if (value.alvo === "link_rastreado") {
-    if (value.acao && !["renomear", "ativo", "inativo"].includes(value.acao)) ctx.addIssue({ code: "custom", path: ["acao"], message: "Ação de link inválida" });
-    if (value.acao && !value.id) ctx.addIssue({ code: "custom", path: ["id"], message: "Informe id" });
+    if (value.acao && !["renomear", "ativo", "inativo", "frase", "conferir"].includes(value.acao)) ctx.addIssue({ code: "custom", path: ["acao"], message: "Ação de link inválida" });
+    if (value.acao && value.acao !== "conferir" && !value.id) ctx.addIssue({ code: "custom", path: ["id"], message: "Informe id" });
   }
   if (value.de && value.ate && (value.de > value.ate || Date.parse(value.ate) - Date.parse(value.de) > 366 * 86_400_000)) {
     ctx.addIssue({ code: "custom", path: ["ate"], message: "Período inválido ou maior que um ano" });
