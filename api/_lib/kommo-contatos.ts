@@ -141,3 +141,52 @@ export async function enriquecerContatosKommo(
   }
   return r;
 }
+
+/**
+ * Passo automático da reconciliação diária: telefone dos leads do Kommo, algumas páginas por rodada, com o cursor
+ * guardado na conexão (config.kommo_contatos_pagina). Antes isso só rodava pelo botão do admin e exigia o token no
+ * banco, então a Lana (token só no servidor) nunca teve telefone e a Jornada do Kommo saía zerada (auditoria de
+ * 30/10/2026). Ao terminar a volta inteira, liga leads e pessoas (vincular_pessoas) e recomeça depois de 7 dias.
+ */
+export async function enriquecerContatosKommoPorCursor(
+  supabase: SupabaseClient<any, any, any>,
+  conexoes: { id: string; client_id: string; subdomain: string | null; access_token: string | null }[],
+  tokenPadrao: string | undefined,
+  orcamentoMs: number,
+): Promise<{ connectionId: string; paginaInicial: number; paginasLidas: number; gravados: number; terminou: boolean; erros: string[] }[]> {
+  const fim = Date.now() + orcamentoMs;
+  const saida = [];
+  const { data: cfgs } = await supabase.from("crm_connections").select("id, config").in("id", conexoes.map((c) => c.id));
+  const config = new Map(((cfgs ?? []) as { id: string; config: Record<string, unknown> | null }[]).map((c) => [c.id, c.config ?? {}]));
+  // Primeiro a conexão parada há mais tempo.
+  const ordem = [...conexoes].sort((a, b) => String(config.get(a.id)?.kommo_contatos_em ?? "").localeCompare(String(config.get(b.id)?.kommo_contatos_em ?? "")));
+  for (const conn of ordem) {
+    if (Date.now() > fim - 10_000) break;
+    const token = conn.access_token || tokenPadrao;
+    if (!conn.subdomain || !token) continue;
+    const cfg = config.get(conn.id) ?? {};
+    const completo = typeof cfg.kommo_contatos_completo_em === "string" ? Date.parse(cfg.kommo_contatos_completo_em) : 0;
+    if (cfg.kommo_contatos_pagina == null && completo > Date.now() - 7 * 86_400_000) continue;
+    const pagina = Number(cfg.kommo_contatos_pagina) > 0 ? Number(cfg.kommo_contatos_pagina) : 1;
+    const r = await enriquecerContatosKommo(supabase, { id: conn.id, client_id: conn.client_id, subdomain: conn.subdomain, access_token: token }, { pagina, paginas: 15, orcamentoMs: Math.max(5_000, fim - Date.now()) });
+    const terminou = r.proximaPagina === null;
+    if (terminou) {
+      const { error } = await supabase.rpc("vincular_pessoas", { p_client: conn.client_id });
+      if (error) r.erros.push(`vincular pessoas: ${error.message}`);
+    }
+    // Conversa ligada a um lead que já tem pessoa herda a pessoa (Jornada do Kommo).
+    const { error: eConv } = await supabase.rpc("conversas_pessoa_pelo_lead", { p_client: conn.client_id });
+    if (eConv) r.erros.push(`pessoa das conversas: ${eConv.message}`);
+    const { data: atual } = await supabase.from("crm_connections").select("config").eq("id", conn.id).single();
+    await supabase.from("crm_connections").update({
+      config: {
+        ...((atual as { config: Record<string, unknown> | null } | null)?.config ?? {}),
+        kommo_contatos_pagina: terminou ? null : r.proximaPagina,
+        kommo_contatos_em: new Date().toISOString(),
+        ...(terminou ? { kommo_contatos_completo_em: new Date().toISOString() } : {}),
+      },
+    }).eq("id", conn.id);
+    saida.push({ connectionId: conn.id, paginaInicial: pagina, paginasLidas: r.paginasLidas, gravados: r.gravados, terminou, erros: r.erros.slice(0, 3) });
+  }
+  return saida;
+}

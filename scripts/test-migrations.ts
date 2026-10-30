@@ -61,7 +61,8 @@ try {
   await db.query(`insert into crm_leads(crm_connection_id,client_id,provider,external_lead_id,event_type,status_id,pipeline_id,price,outcome,raw_payload)
     values ($1,$2,'kommo','123','add','142','pipeline',500,'won','{}')`, [connection, client]);
   await db.query(`update crm_leads set event_type='delete',removido_na_origem=now() where crm_connection_id=$1 and external_lead_id='123'`, [connection]);
-  const events = await db.query<{ tipo: string }>(`select tipo from crm_lead_eventos where crm_connection_id=$1`, [connection]);
-  assert.deepEqual(events.rows.map((r) => r.tipo), ["entrou"]);
+  const events = await db.query<{ tipo: string }>(`select tipo from crm_lead_eventos where crm_connection_id=$1 order by tipo`, [connection]);
+  // O card já chegou ganho (gera "ganhou" na entrada); a exclusão não cria mudança de etapa nem outro evento.
+  assert.deepEqual(events.rows.map((r) => r.tipo), ["entrou", "ganhou"]);
   console.log(`test-migrations: ok (${files.length} migrações, credenciais, staging e trigger de exclusão)`);
 } finally { await db.close(); }
