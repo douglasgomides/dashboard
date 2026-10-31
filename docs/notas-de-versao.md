@@ -1,5 +1,8 @@
 # Notas de versão
 
+Mudanças no significado de números que o cliente vê. A linha mais nova fica em cima.
+
+- **31/10/2026, Retorno do investimento (ROI):** o percentual só aparece com pelo menos 5 vendas vindas de anúncio no período e com 70% ou mais das vendas do período com canal conhecido (além dos 70% dos leads com origem que já valiam). Com 1 a 4 vendas de anúncio, a tela mostra só a frase em R$, por exemplo "1 venda de anúncio, R$ 197, para R$ 12.196 investidos em aquisição." A confiança alta (Confiável) pede 15 vendas de anúncio. Limites em `src/lib/limites.ts` (`LIMITES.roi`). Caso que motivou: Doctor Creator em 90 dias mostrava ROI de -98% tirado de 1 venda.
 Mudanças no significado de números que o cliente vê. Uma linha por mudança, a mais nova em cima.
 
 - 31/10/2026. Prova de resultado (tela Agentes, "O que mudou"): "Agendaram (das conversas de venda)" passou a contar só as conversas de venda que terminaram em agendamento. Antes contava todas as conversas com agendamento e a taxa podia passar de 100% (Dr. Sergio, 05/10 a 26/10: 117%; agora 40%). O "Investimento por agendamento" usa o mesmo número e por isso fica maior. Se algum dia vierem mais agendamentos que conversas de venda, a tela mostra "erro de dado" no lugar da taxa. Migração 20261101100000.

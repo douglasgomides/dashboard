@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { CircleDashed, Coins, Info } from "lucide-react";
 import { getRoiPeriodo } from "@/lib/client-data";
-import { montarRoi, numerosDisponiveisRoi, situacaoAnuncios, situacaoCrm, NOTA_DEFASAGEM } from "@/lib/roi";
+import { montarRoi, numerosDisponiveisRoi, situacaoAnuncios, situacaoCrm, NOTA_DEFASAGEM, AVISO_MUDANCA_ROI } from "@/lib/roi";
 import { SeloConfianca } from "@/components/selo-confianca";
 import { InfoDica } from "@/components/visual";
 import { fmtBRL } from "@/lib/format";
@@ -126,6 +126,9 @@ export function RetornoInvestimento({
           ) : (
             <>
               <p className="mb-3 text-sm" style={{ color: "var(--ink-2)" }}>{r.motivoSemCalculo}</p>
+              {r.fraseVendasAnuncio && (
+                <p className="mb-3 text-sm font-semibold" style={{ color: "var(--ink)" }}>{r.fraseVendasAnuncio}</p>
+              )}
               <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <Numero rotulo="Investimento em aquisição" valor={numeros.investido === null ? "sem dado" : fmtBRL(numeros.investido)} sub={situacaoAnuncios(q.data!)} dica="Soma do gasto das campanhas de mensagem, lead ou conversão no período." />
                 <Numero rotulo="Investimento em crescimento" valor={numeros.investidoCrescimento === null ? "sem dado" : fmtBRL(numeros.investidoCrescimento)} sub={numeros.investidoCrescimento === null ? situacaoAnuncios(q.data!) : "seguidores, engajamento e alcance"} dica="Soma do gasto das campanhas de seguidores, engajamento, alcance e visita ao perfil." />
@@ -146,6 +149,10 @@ export function RetornoInvestimento({
           <p className="mt-2 flex items-start gap-1.5 text-xs" style={{ color: "var(--muted)" }}>
             <Info size={13} aria-hidden className="mt-0.5 shrink-0" />
             {NOTA_DEFASAGEM}
+          </p>
+          <p className="mt-1 flex items-start gap-1.5 text-xs" style={{ color: "var(--muted)" }}>
+            <Info size={13} aria-hidden className="mt-0.5 shrink-0" />
+            {AVISO_MUDANCA_ROI}
           </p>
           <details className="roi-details mt-3">
             <summary className="flex min-h-[44px] cursor-pointer items-center text-sm font-semibold" style={{ color: "var(--accent)" }}>

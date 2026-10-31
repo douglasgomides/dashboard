@@ -701,6 +701,8 @@ try {
       assert.equal(r.ganhos_anuncio, 2);
       assert.equal(r.ganhos_anuncio_com_valor, 2);
       assert.equal(Number(r.receita_anuncio), 1200);
+      // Vendas com canal conhecido: 2 de anúncio e 1 de base importada; o checkout sem origem fica de fora.
+      assert.equal(r.ganhos_com_canal, 3);
       assert.deepEqual((r.receita_por_origem as { origem: string; ganhos: number; receita: number }[]).map((o) => [o.origem, o.ganhos, Number(o.receita)]), [
         ["Anúncio", 2, 1200], ["Funil de compra, sem origem", 1, 800], ["Base importada", 1, 300],
       ]);
