@@ -15,7 +15,7 @@ end
 $migra$;
 
 -- Reaplica a regra: o que a equipe definiu continua; o que a regra deixou de reconhecer sai.
-delete from public.crm_funil_papel fp
- where fp.definido_por = 'regra'
+update public.crm_funil_papel fp set papel = 'captacao', atualizado_em = now()
+ where fp.definido_por = 'regra' and fp.papel = 'operacional'
    and public.crm_papel_pela_regra((select s.pipeline_name from public.crm_pipeline_statuses s
                                      where s.crm_connection_id = fp.crm_connection_id and s.pipeline_id = fp.pipeline_id limit 1)) is null;

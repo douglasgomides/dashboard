@@ -37,6 +37,7 @@ export interface ItemPessoa {
   valor?: number | null;
   funil?: string | null;
   procedimento?: string | null;
+  produto?: string | null;
 }
 
 export interface Lista {
@@ -177,6 +178,39 @@ export function emQuePe(item: ItemPessoa): string | null {
 }
 
 /** O que a pessoa pediu ou fechou. */
+// Com checkout ligado (Doctor Creator: Hubla), "Fecharam" vem das vendas pagas do checkout, e não do CRM.
+export const ROTULO_CHECKOUT: Record<string, string> = { hubla: "Hubla", hotmart: "Hotmart", eduzz: "Eduzz", kiwify: "Kiwify" };
+
+export function nomeCheckout(numero: Numero | undefined): string {
+  const p = String(numero?.provedor ?? "").split(",").filter(Boolean);
+  return p.length ? p.map((x) => ROTULO_CHECKOUT[x] ?? x).join(" e ") : "checkout";
+}
+
+export function vemDoCheckout(numero: Numero | undefined): boolean {
+  return numero?.fonte === "checkout";
+}
+
+/** Legenda do número: "pela Hubla" quando "Fecharam" vem do checkout. */
+export function legendaDoNumero(chave: ChaveNumero, numero: Numero | undefined): string {
+  const base = TEXTO_NUMERO[chave].legenda;
+  return chave === "fecharam" && vemDoCheckout(numero) ? `${base}, pela ${nomeCheckout(numero)}` : base;
+}
+
+/** Texto de ajuda do número, com a fonte certa quando "Fecharam" vem do checkout. */
+export function fonteDoNumero(chave: ChaveNumero, numero: Numero | undefined): string {
+  if (chave === "fecharam" && vemDoCheckout(numero))
+    return `${nomeCheckout(numero)}: vendas pagas no período. Order bump e combo contam como uma venda só, com o valor somado. Reembolso e chargeback não contam como venda e aparecem à parte.`;
+  return TEXTO_NUMERO[chave].fonte;
+}
+
+/** "2 reembolsos ou chargebacks no período (R$ 300,00)", ou null quando não houve. */
+export function textoReembolsos(numero: Numero | undefined, formatarValor: (v: number) => string): string | null {
+  const r = numero?.reembolsos as { vendas?: number; valor_total?: number } | undefined;
+  const n = Number(r?.vendas ?? 0);
+  if (!r || n <= 0) return null;
+  return `${n} ${n === 1 ? "reembolso ou chargeback" : "reembolsos ou chargebacks"} no período (${formatarValor(Number(r.valor_total ?? 0))})`;
+}
+
 export function oQue(item: ItemPessoa): string | null {
   return item.procedimento ?? item.leitura?.interesse ?? item.funil ?? null;
 }
