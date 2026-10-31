@@ -59,6 +59,8 @@ export type ChaveNumero = (typeof CHAVES_NUMEROS)[number] | "engajaram_instagram
 export interface PacientesPeriodo {
   periodo: { de: string; ate: string };
   cliente_de_teste: boolean;
+  /** Outras clínicas ligadas à mesma conta do CRM: os números são da conta inteira. */
+  crm_compartilhado_com?: string[];
   tem_crm: boolean;
   tem_conversas: boolean;
   tem_leitura_ia: boolean;

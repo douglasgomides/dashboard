@@ -108,6 +108,12 @@ function PacientesDoPeriodo() {
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
           {formatRangeLabel({ start, end })}. Cada número é de pessoas, não de conversas. Toque num número para ver quem são.
         </p>
+        {(d.crm_compartilhado_com?.length ?? 0) > 0 && (
+          <p className="text-sm font-medium" style={{ color: "var(--warn, var(--text))" }}>
+            O CRM desta clínica é o mesmo de {d.crm_compartilhado_com!.join(", ")}. Os números abaixo são da conta inteira, não só deste médico.
+            Para separar, a clínica precisa marcar o médico em cada lead (um campo "Médico" no CRM).
+          </p>
+        )}
         {d.cliente_de_teste && (
           <p className="text-xs" style={{ color: "var(--warn, var(--muted))" }}>
             Clínica de teste: estes números não entram nas somas da carteira.
@@ -261,8 +267,14 @@ function Divisao({ chave, numero, dados }: { chave: ChaveNumero; numero: Numero;
     const f = obj("por_fonte");
     partes.push(`pelo CRM: ${fmt(f.crm ?? 0)}`, `pela conversa: ${fmt(f.conversa ?? 0)}`, `nos dois: ${fmt(f.crm_e_conversa ?? 0)}`);
   } else if (chave === "fecharam") {
-    partes.push(`${fmt(Number(numero.vendas ?? 0))} vendas`, `total ${fmtBRL(Number(numero.valor_total ?? 0))}`);
-    if (Number(numero.sem_valor ?? 0) > 0) partes.push(`${fmt(Number(numero.sem_valor))} sem valor no CRM`);
+    const vendas = Number(numero.vendas ?? 0), semValor = Number(numero.sem_valor ?? 0);
+    partes.push(`${fmt(vendas)} vendas`);
+    // Com metade ou mais das vendas sem valor, a soma engana (HOMS: 100 vendas, só 1 com valor, "total R$ 86").
+    if (vendas > 0 && semValor * 2 >= vendas) partes.push(`só ${fmt(vendas - semValor)} com valor no CRM, então o total não aparece`);
+    else {
+      partes.push(`total ${fmtBRL(Number(numero.valor_total ?? 0))}`);
+      if (semValor > 0) partes.push(`${fmt(semValor)} sem valor no CRM`);
+    }
     if (Number(numero.ganho_prospeccao_sem_valor ?? 0) > 0)
       partes.push(`${fmt(Number(numero.ganho_prospeccao_sem_valor))} "ganhos" sem valor da prospecção contados como resposta, não como venda`);
   } else if (chave === "engajaram_instagram") {
