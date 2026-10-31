@@ -21,6 +21,8 @@ import {
   emQuePe,
   fonteDoNumero,
   legendaDoNumero,
+  coberturaDoNumero,
+  avisoNaoMedido,
   nomeCheckout,
   oQue,
   textoReembolsos,
@@ -118,6 +120,9 @@ function PacientesDoPeriodo() {
             O CRM desta clínica é o mesmo de {d.crm_compartilhado_com!.join(", ")}. Os números abaixo são da conta inteira, não só deste médico.
             Para separar, a clínica precisa marcar o médico em cada lead (um campo "Médico" no CRM).
           </p>
+        )}
+        {avisoNaoMedido(d) && (
+          <p className="text-xs" style={{ color: "var(--text-dim)" }}>{avisoNaoMedido(d)}</p>
         )}
         {d.cliente_de_teste && (
           <p className="text-xs" style={{ color: "var(--warn, var(--muted))" }}>
@@ -225,6 +230,7 @@ function NumeroGrande({ chave, numero, ativo, onAbrir }: { chave: ChaveNumero; n
           <>
             <span className="text-3xl font-semibold tabular-nums leading-none">{fmt(numero!.valor)}</span>
             <span className="text-xs" style={{ color: "var(--text-dim)" }}>{legendaDoNumero(chave, numero)}</span>
+            {coberturaDoNumero(numero) && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{coberturaDoNumero(numero)}</span>}
           </>
         )}
       </button>

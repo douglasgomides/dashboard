@@ -167,7 +167,8 @@ export async function getCrmResumoPeriodo(clientId: string, from: string, to: st
   };
   const { data, error } = await cliente.rpc("crm_leads_resumo_periodo", { p_client_id: clientId, p_from: from, p_to: to });
   if (error) throw error;
-  return data?.[0] ?? { novos: 0, ganhos: 0, perdidos: 0, valor: 0 };
+  // Sem linha é "sem dado", não zero: as telas mostram "Sem dado" em vez de 0 (diagnóstico de medição, PR 4).
+  return data?.[0] ?? null;
 }
 
 // Vendas do período por evento "ganhou" e pela coorte, cards fechados sem resultado, planilha parada e pessoas

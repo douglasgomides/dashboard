@@ -1,5 +1,8 @@
 # Notas de versão
 
+Mudanças no significado de números que o cliente vê. Uma linha por mudança, a mais nova primeiro.
+
+- 31/10/2026: "Não medido" no lugar de zero. Em Pacientes do período, "Interagiram no Instagram" mostra "Sem dado" quando as conversas ligadas ao Nexo não trazem comentários nem reações (Kommo, WTS Chat); "Mandaram mensagem", "Pacientes antigos" e "Interagiram no Instagram" mostram "Sem dado" em período anterior ao início das conversas, e os números que vêm só do CRM fazem o mesmo antes do primeiro registro do CRM; quando o período começa antes das conversas, o número ganha o aviso "conta só a partir de". Em Resultado, "Novos contatos no CRM" mostra 0 quando o CRM está ligado e ninguém novo entrou (antes o cartão sumia) e "Sem dado" quando o CRM não responde (antes virava 0). Migração 20261101130000.
 Mudanças no significado de números que o cliente vê. A linha mais nova fica em cima.
 
 - **31/10/2026, Retorno do investimento (ROI):** o percentual só aparece com pelo menos 5 vendas vindas de anúncio no período e com 70% ou mais das vendas do período com canal conhecido (além dos 70% dos leads com origem que já valiam). Com 1 a 4 vendas de anúncio, a tela mostra só a frase em R$, por exemplo "1 venda de anúncio, R$ 197, para R$ 12.196 investidos em aquisição." A confiança alta (Confiável) pede 15 vendas de anúncio. Limites em `src/lib/limites.ts` (`LIMITES.roi`). Caso que motivou: Doctor Creator em 90 dias mostrava ROI de -98% tirado de 1 venda.

@@ -211,6 +211,26 @@ export function textoReembolsos(numero: Numero | undefined, formatarValor: (v: n
   return `${n} ${n === 1 ? "reembolso ou chargeback" : "reembolsos ou chargebacks"} no período (${formatarValor(Number(r.valor_total ?? 0))})`;
 }
 
+/**
+ * O número conta só parte do período: as conversas começaram a chegar no meio dele (pacientes_periodo devolve
+ * 'cobertura_desde'). Devolve o aviso curto, ou null quando o período todo está coberto.
+ */
+export function coberturaDoNumero(numero: Numero | undefined): string | null {
+  const desde = typeof numero?.cobertura_desde === "string" ? numero.cobertura_desde : null;
+  if (!desde || numero?.valor == null) return null;
+  return `Conta só a partir de ${dataBr(desde)}, quando as conversas começaram a chegar.`;
+}
+
+/** Mudança de leitura de 31/10 (docs/notas-de-versao.md): aparece só quando atinge algum número da tela. */
+export const AVISO_NAO_MEDIDO =
+  "Mudou em 31/10: quando a fonte não mede (as conversas ainda não chegavam ao Nexo, ou não trazem comentários e reações do Instagram), o número aparece como \"Sem dado\" em vez de 0.";
+
+export function avisoNaoMedido(d: Pick<PacientesPeriodo, "numeros">): string | null {
+  const nums = Object.values(d.numeros ?? {}) as (Numero | undefined)[];
+  const atinge = nums.some((n) => n && (n.medido_desde != null || n.cobertura_desde != null || n.comentarios_instagram != null));
+  return atinge ? AVISO_NAO_MEDIDO : null;
+}
+
 export function oQue(item: ItemPessoa): string | null {
   return item.procedimento ?? item.leitura?.interesse ?? item.funil ?? null;
 }

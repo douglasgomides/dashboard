@@ -46,12 +46,13 @@ export function useResultado(clientId: string, start: string, end: string) {
       adsDiag: adsDiag.data ?? null,
       adsPorDia: (adsDia.data ?? []).map((a: any) => ({ dia: a.dia, gasto: Number(a.gasto), conversas: Number(a.conversas) })),
       wts: wts.data ?? null,
-      crm: crm.data ? { novos: Number(crm.data.novos), ganhos: Number(crm.data.ganhos), vendas: vendas.data ?? null } : null,
+      // Carregando: undefined (o cartão espera). Respondeu sem linha ou falhou: null ("Sem dado", nunca 0).
+      crm: crm.isPending ? undefined : crm.data ? { novos: Number(crm.data.novos), ganhos: Number(crm.data.ganhos), vendas: vendas.data ?? null } : null,
       leadsPorDia: leadsDia.data?.length ? leadsDia.data.map((l) => ({ dia: l.dia, total: Number(l.total) })) : fontes.data?.tem_crm ? [] : undefined,
       fontes: fontes.data ?? null,
       problemasDados: problemasParaInsights(qualidade.data ?? []),
     });
-  }, [qualidade.data, metricas.data, anterior.data, posts.data, periodoIg.data, adsDiag.data, adsDia.data, wts.data, crm.data, vendas.data, leadsDia.data, fontes.data, start, fim, hoje, diasPeriodo]);
+  }, [qualidade.data, metricas.data, anterior.data, posts.data, periodoIg.data, adsDiag.data, adsDia.data, wts.data, crm.data, crm.isPending, vendas.data, leadsDia.data, fontes.data, start, fim, hoje, diasPeriodo]);
 
   const leituras = [metricas, anterior, posts, fontes, adsDiag, adsDia, wts, crm, vendas, leadsDia, qualidade];
   return { r, hoje, fim, diasPeriodo, carregando: metricas.isLoading, metricas, anterior, posts, periodoIg, fontes, qualidade,

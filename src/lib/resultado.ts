@@ -29,11 +29,27 @@ export interface EntradaResultado {
   adsDiag?: DiagnosticoAds | null;
   adsPorDia?: { dia: string; gasto: number | null; conversas?: number | null }[];
   wts?: { atendimentos?: number | null; espera_mediana_seg?: number | null; espera_cobertura?: number | null; sem_roteamento?: number | null } | null;
-  /** ganhos = coorte de crm_leads_resumo_periodo; vendas = crm_vendas_periodo (por evento, fechados sem resultado...). */
+  /** ganhos = coorte de crm_leads_resumo_periodo; vendas = crm_vendas_periodo (por evento, fechados sem resultado...).
+   *  null = o CRM não respondeu (sem dado); undefined = ainda carregando ou não pedido. */
   crm?: { novos: number; ganhos: number; vendas?: VendasPeriodoBanco | null } | null;
   leadsPorDia?: { dia: string; total: number }[];
   fontes?: { tem_instagram?: boolean; tem_anuncios?: boolean; tem_crm?: boolean; tem_atendimento?: boolean } | null;
   problemasDados?: Insight[]; // dado com erro (qualidade_dados); ids começam com "dado-"
+}
+
+/** Aviso de mudança de leitura, mostrado junto do número (notas em docs/notas-de-versao.md). */
+export const AVISO_CRM_ZERO = "Mudou em 31/10: quando nenhum contato novo entra, o painel mostra 0 em vez de esconder o número; quando o CRM não responde, mostra \"Sem dado\".";
+
+/**
+ * Como ler o CRM no Resultado: "medido" (número, inclusive 0), "sem_dado" (CRM ligado e sem resposta) ou "fora"
+ * (sem CRM ligado: não é zero medido, e a falta de fonte já aparece em outro lugar). Zero só conta como medido
+ * quando sabemos que o CRM está ligado; número acima de zero vale mesmo antes de as fontes carregarem.
+ */
+export function leituraCrm(e: Pick<EntradaResultado, "crm" | "fontes">): "medido" | "sem_dado" | "fora" {
+  const novos = e.crm ? Number(e.crm.novos) : NaN;
+  if (Number.isFinite(novos) && novos > 0) return "medido";
+  if (e.crm === undefined || e.fontes?.tem_crm !== true) return "fora"; // undefined = ainda carregando
+  return Number.isFinite(novos) ? "medido" : "sem_dado";
 }
 
 export interface Metrica {
@@ -324,16 +340,29 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
   }
 
   // CRM. Vendas numa régua só (vendas-periodo.ts): fechadas no período por evento, ou a coorte com o rótulo dela.
-  if (e.crm && e.crm.novos > 0) {
-    const v = lerVendas(e.crm.ganhos, e.crm.vendas ?? null, e.start);
+  // Zero medido aparece (CRM ligado e respondeu). CRM ligado sem resposta: "Sem dado", nunca 0.
+  const crmLeitura = leituraCrm(e);
+  if (crmLeitura === "medido") {
+    const crm = e.crm!;
+    const v = lerVendas(crm.ganhos, crm.vendas ?? null, e.start);
     out.push({
       id: "leads",
       rotulo: "Novos contatos no CRM",
-      valor: int(e.crm.novos),
-      explicacao: `Pessoas que entraram no CRM da clínica no período.${v.frase ? ` ${v.frase[0].toUpperCase()}${v.frase.slice(1)}.` : ""}${v.indisponivel ? ` ${v.indisponivel}` : ""} Depende de a equipe registrar no CRM.`,
+      valor: int(crm.novos),
+      explicacao: `Pessoas que entraram no CRM da clínica no período.${v.frase ? ` ${v.frase[0].toUpperCase()}${v.frase.slice(1)}.` : ""}${v.indisponivel ? ` ${v.indisponivel}` : ""} Depende de a equipe registrar no CRM. ${AVISO_CRM_ZERO}`,
       status: null,
       rota: "/$clientId/crm-painel",
       botao: "Ver onde o funil perde gente",
+    });
+  } else if (crmLeitura === "sem_dado") {
+    out.push({
+      id: "leads",
+      rotulo: "Novos contatos no CRM",
+      valor: "Sem dado",
+      explicacao: `O CRM está ligado, mas não devolveu os números deste período. Isso não quer dizer que foram zero. ${AVISO_CRM_ZERO}`,
+      status: null,
+      rota: "/$clientId/crm-painel",
+      botao: "Ver o CRM",
     });
   }
 
@@ -447,9 +476,14 @@ export function montarResultado(e: EntradaResultado): Resultado {
   if (alc) resumo.push(`${alc.rotulo}: ${alc.valor}${seg ? `; saldo de seguidores de ${seg.valor}` : ""}${posts ? `; ${int(posts)} publicações` : ""}.`);
   if (e.adsDiag && e.adsDiag.gasto > 0)
     resumo.push(`${brl(e.adsDiag.gasto)} investidos em anúncio${e.adsDiag.conversasMensagem ? `; os anúncios de mensagem trouxeram ${int(e.adsDiag.conversasMensagem)} conversas` : ""}.`);
-  if (e.crm && e.crm.novos > 0) {
-    const v = lerVendas(e.crm.ganhos, e.crm.vendas ?? null, e.start);
-    resumo.push(`${int(e.crm.novos)} novos contatos entraram no CRM${v.frase ? `; ${v.frase}` : ""}.${v.indisponivel ? ` ${v.indisponivel}` : ""}`);
+  const crmLeitura = leituraCrm(e);
+  if (crmLeitura === "medido" && e.crm!.novos > 0) {
+    const v = lerVendas(e.crm!.ganhos, e.crm!.vendas ?? null, e.start);
+    resumo.push(`${int(e.crm!.novos)} novos contatos entraram no CRM${v.frase ? `; ${v.frase}` : ""}.${v.indisponivel ? ` ${v.indisponivel}` : ""}`);
+  } else if (crmLeitura === "medido") {
+    resumo.push("Nenhum contato novo entrou no CRM no período.");
+  } else if (crmLeitura === "sem_dado") {
+    resumo.push("O CRM não devolveu os números do período: sem dado de contatos novos.");
   }
   if (n(e.wts?.atendimentos) > 0) resumo.push(`${int(n(e.wts?.atendimentos))} atendimentos no WhatsApp${n(e.wts?.espera_mediana_seg) > 0 ? `, com ${dur(n(e.wts?.espera_mediana_seg))} de espera típica pela primeira resposta` : ""}.`);
   const melhor = confiaveis.find((i) => i.tom === "bom");
