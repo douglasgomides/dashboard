@@ -6,6 +6,7 @@ import { montarFunil, type EtapaFunil, type FunilBanco } from "@/lib/jornada-fun
 import { formatRangeLabel } from "@/lib/date-range";
 import { useDiagnosticoComercial } from "@/components/comercial-diagnostico";
 import { fmtFracao } from "@/lib/metricas";
+import { AVISO_MUDANCA_FUNIL, fmtNdeM } from "@/lib/funil-taxa";
 
 // Funil de 7 etapas do período. Etapa sem dado mostra o que falta (integração, dado e onde resolver),
 // nunca um zero que parece resultado.
@@ -36,7 +37,7 @@ function LinhaEtapa({ e, largura }: { e: EtapaFunil; largura: number }) {
         <div className="text-right">
           {sem ? (
             <span className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--muted)" }}>
-              <Plug size={13} aria-hidden /> {e.estado === "sem_integracao" ? "Sem integração" : "Sem como medir ainda"}
+              <Plug size={13} aria-hidden /> {e.estado === "sem_integracao" ? "Sem integração" : "Não medido"}
             </span>
           ) : (
             <span className="text-lg font-semibold tabular-nums" style={{ color: "var(--ink)" }}>
@@ -63,10 +64,11 @@ function LinhaEtapa({ e, largura }: { e: EtapaFunil; largura: number }) {
 }
 
 function Passagem({ e }: { e: EtapaFunil }) {
-  if (e.taxa == null) return <div className="h-3" aria-hidden />;
+  if (e.taxa == null && !e.fracao) return <div className="h-3" aria-hidden />;
   return (
     <div className="flex items-center gap-1.5 py-1 pl-4 text-xs" style={{ color: "var(--muted)" }}>
-      <ArrowDown size={12} aria-hidden /> {pct(e.taxa)} passam para {NOME[e.id] ?? e.id}
+      <ArrowDown size={12} aria-hidden />{" "}
+      {e.taxa != null ? `${pct(e.taxa)} passam para ${NOME[e.id] ?? e.id}` : `${fmtNdeM(e.fracao!)} passam para ${NOME[e.id] ?? e.id} (poucos casos para %)`}
     </div>
   );
 }
@@ -96,10 +98,11 @@ export function JornadaFunil({ clientId, start, end }: { clientId: string; start
           <p className="mb-3 text-sm" style={{ color: "var(--ink-2)" }}>
             {semNada
               ? "Nenhuma etapa pode ser medida ainda: cada uma abaixo diz qual integração falta e qual dado seria necessário."
-              : `${funil.medidas} de 7 etapas com dado. A porcentagem entre etapas só aparece quando as duas são medidas. O funil não é uma fila única: lead de formulário, por exemplo, não passa pelo WhatsApp.`}
+              : `${funil.medidas} de 7 etapas com dado. A porcentagem entre etapas só aparece quando as duas são medidas e a etapa de base tem casos suficientes. O funil não é uma fila única: lead de formulário, por exemplo, não passa pelo WhatsApp.`}
             {funil.maiorQueda && ` Maior queda no comercial: de ${NOME[funil.maiorQueda.de]} para ${NOME[funil.maiorQueda.para]} (${pct(funil.maiorQueda.taxa)} passam).`}
             {funil.receita > 0 && ` Receita registrada: ${funil.receita.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}.`}
           </p>
+          <p className="mb-3 text-xs" style={{ color: "var(--muted)" }}>{AVISO_MUDANCA_FUNIL}</p>
           <ol className="space-y-0">
             {funil.etapas.map((e) => (
               <div key={e.id}>

@@ -25,6 +25,7 @@
 
 import { BENCHMARKS, CITACAO_HBR_RESPOSTA, avaliar, type Faixa } from "./benchmarks";
 import { fmtFracao } from "@/lib/metricas";
+import { agendadosSaoGanhos, avisoAgendadosSaoGanhos, minimoDaBase, passagem, type BaseFunil } from "./funil-taxa";
 import { confiancaPorAmostra, type Impacto, type Insight, type Limitacao, type Responsavel, type Tom } from "./insight";
 
 // ---------------------------------------------------------------- regras de etapa
@@ -280,7 +281,8 @@ export interface PassoFunil {
   rotulo: string;
   explica: string; // o que conta neste passo, numa frase
   valor: number | null;
-  pctDoAnterior: number | null; // 0..1
+  pctDoAnterior: number | null; // 0..1, só com a base no mínimo (LIMITES.funil)
+  fracaoDoAnterior: { n: number; m: number } | null; // "N de M" quando a base é pequena demais para %
   anterior: string | null; // rótulo do passo usado como base do % (pula passo sem número)
   deCada: string | null; // "de cada 10 que entraram, 4 agendaram"
   faixa: Faixa | null; // só com referência de mercado confiável
@@ -350,6 +352,9 @@ export function agendamentoConfirmado(d: DadosComerciais): boolean {
   return !(parece >= 20 && parece > 5 * (b.emConsulta ?? 0));
 }
 
+/** Unidade de cada passo quando ele é a base da passagem seguinte (mínimos em LIMITES.funil). */
+const BASE_DO_PASSO: Record<IdPasso, BaseFunil> = { entraram: "leads", atendidos: "leads", agendaram: "agendamentos", compraram: "consultas" };
+
 export function montarFunil(d: DadosComerciais): Funil {
   const c = d.c;
   const entraram = c.leads;
@@ -369,6 +374,12 @@ export function montarFunil(d: DadosComerciais): Funil {
   } else {
     agAviso = 'Nenhuma etapa do CRM está marcada como "consulta agendada", então não dá para contar quem agendou.';
   }
+  // Agendados que são só os ganhos não medem agendamento (a passagem daria 100% de agendou para comprou).
+  if (agendadosSaoGanhos(agendados, c.ganhos)) {
+    agAviso = avisoAgendadosSaoGanhos(agendados!, c.ganhos);
+    agendados = null;
+    agEstimado = false;
+  }
 
   let compraram: number | null = c.ganhos;
   let coAviso: string | undefined;
@@ -386,7 +397,7 @@ export function montarFunil(d: DadosComerciais): Funil {
   }
 
   const atendidos = c.atendidos;
-  const brutos: Omit<PassoFunil, "pctDoAnterior" | "anterior" | "deCada" | "faixa">[] = [
+  const brutos: Omit<PassoFunil, "pctDoAnterior" | "fracaoDoAnterior" | "anterior" | "deCada" | "faixa">[] = [
     {
       id: "entraram",
       rotulo: "Entraram",
@@ -430,19 +441,24 @@ export function montarFunil(d: DadosComerciais): Funil {
     compraram: ["comprou", "compraram"],
   };
   let anterior: number | null = null;
+  let anteriorId: IdPasso | null = null;
   let anteriorRotulo: string | null = null;
   const passos: PassoFunil[] = brutos.map((p, i) => {
-    const pctDoAnterior = i > 0 && p.valor !== null && anterior !== null && anterior > 0 ? Math.min(1, p.valor / anterior) : null;
-    const deCada = i > 0 && p.valor !== null ? deCadaFrase(p.valor, entraram, "entraram", verbos[p.id]) : null;
+    const pas = i > 0 && anteriorId ? passagem(p.valor, anterior, BASE_DO_PASSO[anteriorId]) : { taxa: null, fracao: null };
+    const pctDoAnterior = pas.taxa === null ? null : Math.min(1, pas.taxa);
+    const fracaoDoAnterior = pas.fracao;
+    // "De cada 10 que entraram" também é taxa: só com o mínimo de leads.
+    const deCada = i > 0 && p.valor !== null && entraram >= minimoDaBase("leads") ? deCadaFrase(p.valor, entraram, "entraram", verbos[p.id]) : null;
     let faixa: Faixa | null = null;
-    if (p.id === "agendaram" && p.valor !== null && p.confiavel && entraram >= 30)
+    if (p.id === "agendaram" && p.valor !== null && p.confiavel && entraram >= minimoDaBase("leads"))
       faixa = avaliar(BENCHMARKS.leadParaAgendamento, pct(p.valor, entraram));
-    const base = pctDoAnterior !== null ? anteriorRotulo : null;
+    const base = pctDoAnterior !== null || fracaoDoAnterior !== null ? anteriorRotulo : null;
     if (p.valor !== null) {
       anterior = p.valor;
+      anteriorId = p.id;
       anteriorRotulo = p.rotulo.toLowerCase();
     }
-    return { ...p, pctDoAnterior, anterior: base, deCada, faixa };
+    return { ...p, pctDoAnterior, fracaoDoAnterior, anterior: base, deCada, faixa };
   });
 
   // Maior perda: a passagem (entre passos com número confiável) onde mais gente fica pelo caminho.
@@ -456,8 +472,9 @@ export function montarFunil(d: DadosComerciais): Funil {
   for (let i = 1; i < passos.length; i++) {
     const a = passos[i - 1];
     const b = passos[i];
-    if (a.valor === null || b.valor === null || !a.confiavel || !b.confiavel || a.valor < 10) continue;
+    if (a.valor === null || b.valor === null || !a.confiavel || !b.confiavel || a.valor < minimoDaBase(BASE_DO_PASSO[a.id])) continue;
     const perdidos = Math.max(0, a.valor - b.valor);
+    if (perdidos === 0) continue;
     const p = perdidos / a.valor;
     if (!maiorPerda || p > maiorPerda.pct)
       maiorPerda = {

@@ -16,6 +16,7 @@ import { ROTULO_FAIXA, type Faixa } from "@/lib/benchmarks";
 import { ROTULO_RESPONSAVEL, type Insight, type Tom } from "@/lib/insight";
 import { BotaoAcao, InsightCard, OQueE, SeloStatus } from "@/components/insight-card";
 import { ehNegocioProprio } from "@/lib/negocio-proprio";
+import { AVISO_MUDANCA_FUNIL, fmtNdeM } from "@/lib/funil-taxa";
 
 // Peças da leitura comercial ("onde o funil quebra"), usadas pelas telas
 // Comercial e Jornada. A lógica está toda em src/lib/comercial.ts.
@@ -119,11 +120,17 @@ export function FunilOndeQuebra({ funil }: { funil: Funil }) {
                 </span>
               )}
             </div>
-            <div className="mt-1 text-3xl font-semibold tabular-nums">{p.valor === null ? "—" : fmtN(p.valor)}</div>
+            <div className="mt-1 text-3xl font-semibold tabular-nums">{p.valor === null ? <span className="text-base font-medium" style={{ color: "var(--text-dim)" }}>não medido</span> : fmtN(p.valor)}</div>
             {p.pctDoAnterior !== null && (
               <div className="text-xs tabular-nums" style={{ color: "var(--text-dim)" }}>
                 <ArrowDown size={11} className="mr-0.5 inline" aria-hidden />
                 {fmtPct(p.pctDoAnterior)} dos que {p.anterior}
+              </div>
+            )}
+            {p.fracaoDoAnterior && (
+              <div className="text-xs tabular-nums" style={{ color: "var(--text-dim)" }}>
+                <ArrowDown size={11} className="mr-0.5 inline" aria-hidden />
+                {fmtNdeM(p.fracaoDoAnterior)} dos que {p.anterior} (poucos casos para %)
               </div>
             )}
             {p.deCada && (
@@ -146,6 +153,7 @@ export function FunilOndeQuebra({ funil }: { funil: Funil }) {
         Contando {funil.escopoTexto}, pela situação de hoje no CRM; em "agendaram" entram também os que já passaram por uma etapa de consulta e depois andaram. Só pintamos de verde/vermelho o que tem referência de mercado confiável
         (agendamento: clínicas agendam perto de 4 em cada 10 leads).
       </p>
+      <p className="text-xs" style={{ color: "var(--text-faint)" }}>{AVISO_MUDANCA_FUNIL}</p>
     </div>
   );
 }
