@@ -19,7 +19,12 @@ import {
   TEXTO_NUMERO,
   dataBr,
   emQuePe,
+  fonteDoNumero,
+  legendaDoNumero,
+  nomeCheckout,
   oQue,
+  textoReembolsos,
+  vemDoCheckout,
   paraChamarAgora,
   recompraDe,
   rotuloRecompra,
@@ -219,12 +224,12 @@ function NumeroGrande({ chave, numero, ativo, onAbrir }: { chave: ChaveNumero; n
         ) : (
           <>
             <span className="text-3xl font-semibold tabular-nums leading-none">{fmt(numero!.valor)}</span>
-            <span className="text-xs" style={{ color: "var(--text-dim)" }}>{t.legenda}</span>
+            <span className="text-xs" style={{ color: "var(--text-dim)" }}>{legendaDoNumero(chave, numero)}</span>
           </>
         )}
       </button>
       <span className="absolute right-1.5 top-1.5">
-        <Ajuda>{t.fonte}</Ajuda>
+        <Ajuda>{fonteDoNumero(chave, numero)}</Ajuda>
       </span>
     </li>
   );
@@ -268,13 +273,16 @@ function Divisao({ chave, numero, dados }: { chave: ChaveNumero; numero: Numero;
     partes.push(`pelo CRM: ${fmt(f.crm ?? 0)}`, `pela conversa: ${fmt(f.conversa ?? 0)}`, `nos dois: ${fmt(f.crm_e_conversa ?? 0)}`);
   } else if (chave === "fecharam") {
     const vendas = Number(numero.vendas ?? 0), semValor = Number(numero.sem_valor ?? 0);
-    partes.push(`${fmt(vendas)} vendas`);
+    const checkout = vemDoCheckout(numero);
+    partes.push(`${fmt(vendas)} vendas${checkout ? ` pela ${nomeCheckout(numero)}` : ""}`);
     // Com metade ou mais das vendas sem valor, a soma engana (HOMS: 100 vendas, só 1 com valor, "total R$ 86").
-    if (vendas > 0 && semValor * 2 >= vendas) partes.push(`só ${fmt(vendas - semValor)} com valor no CRM, então o total não aparece`);
+    if (vendas > 0 && semValor * 2 >= vendas) partes.push(`só ${fmt(vendas - semValor)} com valor ${checkout ? "no checkout" : "no CRM"}, então o total não aparece`);
     else {
       partes.push(`total ${fmtBRL(Number(numero.valor_total ?? 0))}`);
-      if (semValor > 0) partes.push(`${fmt(semValor)} sem valor no CRM`);
+      if (semValor > 0) partes.push(`${fmt(semValor)} sem valor ${checkout ? "no checkout" : "no CRM"}`);
     }
+    const reembolsos = textoReembolsos(numero, fmtBRL);
+    if (reembolsos) partes.push(reembolsos);
     if (Number(numero.ganho_prospeccao_sem_valor ?? 0) > 0)
       partes.push(`${fmt(Number(numero.ganho_prospeccao_sem_valor))} "ganhos" sem valor da prospecção contados como resposta, não como venda`);
   } else if (chave === "engajaram_instagram") {
@@ -336,7 +344,7 @@ function LinhaPessoa({ chave, item, clientId, isAdmin, hoje }: { chave: ChaveNum
   let recompra: string | null = null;
   if (chave === "fecharam") {
     if (item.valor != null && Number(item.valor) > 0) detalhes.push(fmtBRL(Number(item.valor)));
-    else detalhes.push("sem valor no CRM");
+    else detalhes.push(item.fonte === "checkout" ? "sem valor no checkout" : "sem valor no CRM");
     if (item.data) detalhes.push(`em ${dataBr(item.data)}`);
     if (item.data) recompra = rotuloRecompra(recompraDe({ data: item.data, procedimento: item.procedimento ?? null, interesse: item.leitura?.interesse ?? null, funil: item.funil ?? null }, undefined, hoje));
   } else if (item.data && chave !== "agendaram") {
