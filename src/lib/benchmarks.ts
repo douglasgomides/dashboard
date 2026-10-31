@@ -82,7 +82,7 @@ export const BENCHMARKS = {
     id: "primeiraResposta",
     nome: "Tempo até a 1ª resposta",
     formula: "mediana do tempo entre a 1ª mensagem do paciente e a 1ª resposta",
-    referencia: "63% dos brasileiros esperam resposta em até 5 min; responder em até 1h dá ~7x mais chance de qualificar",
+    referencia: "63% dos brasileiros esperam resposta em até 5 min (Opinion Box); num estudo com leads de empresas nos EUA (HBR, 2011), quem respondeu em até 1h teve ~7x mais chance de qualificar o lead, sem medir pacientes",
     fonte: "HBR, The Short Life of Online Sales Leads (2011); Opinion Box/Mobile Time",
     ano: "2011–2025",
     confiabilidade: "alta",
@@ -141,6 +141,13 @@ export const BENCHMARKS = {
     confiabilidade: "baixa",
   },
 } satisfies Record<string, Benchmark>;
+
+/**
+ * Citação da Harvard Business Review (2011) com o contexto certo. O estudo mediu leads de empresas
+ * nos EUA e fala em "qualificar" o lead, não em converter nem em paciente. Usar sempre este texto.
+ */
+export const CITACAO_HBR_RESPOSTA =
+  "Num estudo com leads de empresas nos EUA (Harvard Business Review, 2011), quem respondeu na primeira hora teve cerca de 7 vezes mais chance de qualificar o lead. O estudo não mediu pacientes de clínica.";
 
 export const ROTULO_FAIXA: Record<Faixa, string> = { bom: "acima do mercado", ok: "na média do mercado", fraco: "abaixo do mercado" };
 export const COR_FAIXA: Record<Faixa, string> = { bom: "var(--good-text)", ok: "var(--text-dim)", fraco: "var(--crit)" };

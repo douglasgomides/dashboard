@@ -4,7 +4,7 @@
 // conteúdo orgânico ou a verba de anúncio? E quais posts vieram antes dos
 // picos de lead? Sem identificar a pessoa (isso é a Jornada), a única leitura
 // honesta é temporal: comparar as séries dia a dia e os 2 dias depois de cada
-// post. É correlação, não causa — e o texto diz isso.
+// post. É correlação, não causa, e o texto diz isso.
 //
 // Lógica pura, testável com `npx tsx scripts/test-cruzamento.ts`.
 import { median } from "@/lib/report-metrics";
@@ -44,6 +44,15 @@ export interface Cruzamento {
 export const MIN_DIAS_CORRELACAO = 21;
 export const MIN_LEADS = 20;
 export const PICO = 1.5;
+
+// Regras exibidas em "Como calculamos". A janela tem que bater com o código: janela() soma o dia do
+// lead e os 2 dias anteriores (o mesmo que "leads no mesmo dia ou nos 2 dias seguintes ao estímulo").
+// Correlação não prova causa e não há teste de significância: nenhuma frase pode afirmar que um
+// canal "traz" paciente. O que sai daqui é hipótese (teste: scripts/test-textos-sem-fonte.ts).
+export const REGRA_CRUZ_CORRELACAO =
+  "Leads do CRM de cada dia comparados com a soma do engajamento e do gasto em anúncio do mesmo dia e dos 2 dias anteriores, sem o efeito do dia da semana (correlação de Spearman; 0,3 ou mais = relação moderada, 0,5 ou mais = forte). Mínimo de 21 dias com dado e 20 leads. Não há teste de significância. Mostra que as séries andam juntas, não que uma causa a outra.";
+export const REGRA_CRUZ_POSTS =
+  "Leads do CRM no dia do post e no dia seguinte (48h), comparados com o normal do período (mediana das janelas de 48h). Pico = 1,5x o normal ou mais e pelo menos 3 leads a mais. A leitura é por dia, não por post. Mostra que as coisas aconteceram juntas, não que o post trouxe o lead.";
 
 const DAY = 86400000;
 const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -178,33 +187,33 @@ export function cruzar(e: EntradaCruzamento): Cruzamento {
     const temAds = corrAnuncio != null;
     const anuncioPuxa = temAds && corrAnuncio! >= 0.3 && corrAnuncio! >= corrOrganico + 0.15;
     const organicoPuxa = corrOrganico >= 0.3 && (!temAds || corrOrganico >= corrAnuncio! + 0.15);
-    const evid = `Em ${comAmbos.length} dias: lead x engajamento orgânico ${corrOrganico.toFixed(2)}${temAds ? `; lead x gasto em anúncio ${corrAnuncio!.toFixed(2)}` : ""} (de -1 a 1; acima de 0,3 já é relação real). ${int(leadsTotal)} leads no período.`;
+    const evid = `Em ${comAmbos.length} dias: lead x engajamento orgânico ${corrOrganico.toFixed(2)}${temAds ? `; lead x gasto em anúncio ${corrAnuncio!.toFixed(2)}` : ""} (de -1 a 1; de 0,3 para cima as duas séries andam juntas, o que ainda pode ser coincidência). ${int(leadsTotal)} leads no período.`;
     if (organicoPuxa) {
       insights.push({
         id: "cruz-organico", area: "resumo", tom: "bom",
         titulo: "Os leads acompanham o engajamento do Instagram.",
-        diagnostico: `Nos dias em que o perfil teve mais interação, entraram mais leads nos 2 dias seguintes (relação ${forca(corrOrganico)}). O conteúdo orgânico está trazendo paciente, não só curtida.`,
+        diagnostico: `Nos dias em que o perfil teve mais interação, entraram mais leads no mesmo dia ou nos 2 dias seguintes (relação ${forca(corrOrganico)}). Hipótese: o conteúdo pode estar ajudando a gerar contato, não só curtida. Para confirmar: marcar a origem do lead no CRM.`,
         evidencia: evid, confianca: confCorr, motivoConfianca: `${comAmbos.length} dias com Instagram e CRM juntos`,
         impacto: "alto", acao: { texto: "Manter a frequência de posts e repetir os assuntos dos posts que vieram antes dos picos de lead (lista abaixo).", rota: "/$clientId/posts", botao: "Ver os posts do período" },
-        responsavel: "social_media", risco: riscoCorr,
+        responsavel: "social_media", risco: riscoCorr, regra: REGRA_CRUZ_CORRELACAO,
       });
     } else if (anuncioPuxa) {
       insights.push({
         id: "cruz-anuncio", area: "resumo", tom: "atencao",
         titulo: "Os leads acompanham a verba de anúncio, não o engajamento orgânico.",
-        diagnostico: `Quando o anúncio gasta mais, entram mais leads (relação ${forca(corrAnuncio!)}). O engajamento dos posts quase não mexe no número de leads (relação ${forca(corrOrganico)}). Hoje o paciente chega pelo anúncio; o conteúdo está gerando audiência, mas pouco contato.`,
+        diagnostico: `Quando o anúncio gasta mais, entram mais leads (relação ${forca(corrAnuncio!)}). O engajamento dos posts quase não mexe no número de leads (relação ${forca(corrOrganico)}). Hipótese: hoje o anúncio pode responder por boa parte dos contatos, e o conteúdo pode estar gerando mais audiência do que contato. Para confirmar: marcar a origem do lead no CRM.`,
         evidencia: evid, confianca: confCorr, motivoConfianca: `${comAmbos.length} dias com Instagram, anúncio e CRM juntos`,
         impacto: "alto", acao: { texto: "Colocar chamada para o WhatsApp em 1 de cada 3 posts (\"me chama no direct com a palavra X\") e medir se os leads orgânicos sobem em 3 semanas.", rota: "/$clientId/ideias", botao: "Ver ideias com chamada para conversa" },
-        responsavel: "social_media", risco: riscoCorr + " Pausar o anúncio derruba os leads: não corte verba com base nesta leitura sozinha.",
+        responsavel: "social_media", regra: REGRA_CRUZ_CORRELACAO, risco: riscoCorr + " Pausar o anúncio pode derrubar os leads: não corte verba com base nesta leitura sozinha.",
       });
     } else {
       insights.push({
         id: "cruz-nenhum", area: "resumo", tom: "atencao",
         titulo: "Os leads não acompanham nem o engajamento nem a verba de anúncio dia a dia.",
-        diagnostico: "O número de leads sobe e desce sem relação clara com o Instagram ou com o anúncio. Normalmente isso quer dizer que a maior parte dos leads vem de outro lugar (indicação, Google, paciente antigo) ou que a data do lead no CRM não é a data do primeiro contato.",
+        diagnostico: "O número de leads sobe e desce sem relação clara com o Instagram ou com o anúncio. Hipótese: a maior parte dos leads pode vir de outro lugar (indicação, Google, paciente antigo), ou a data do lead no CRM pode não ser a data do primeiro contato.",
         evidencia: evid, confianca: confCorr === "alta" ? "media" : confCorr,
         impacto: "medio", acao: { texto: "Preencher a origem do lead no CRM por 30 dias para saber de onde o paciente vem.", rota: "/$clientId/crm-painel", botao: "Ver o checklist do CRM" },
-        responsavel: "comercial", risco: riscoCorr,
+        responsavel: "comercial", risco: riscoCorr, regra: REGRA_CRUZ_CORRELACAO,
       });
     }
   }
@@ -222,16 +231,17 @@ export function cruzar(e: EntradaCruzamento): Cruzamento {
         ? "Os posts que mais engajam não são os que vêm antes de lead."
         : `${sobreposicao} dos 5 posts que mais engajaram ${sobreposicao === 1 ? "saiu num dia seguido" : "saíram em dias seguidos"} de pico de lead.`,
       diagnostico: (sobreposicao === 0
-        ? `Os 5 posts com mais curtidas e comentários saíram em dias normais de lead. Já depois de ${descDia(top)} entraram ${top.leads48h} leads em 48h, ${vz(top.vezes)}x o normal. Curtida mede interesse; lead mede intenção de marcar — costumam ser assuntos diferentes.`
-        : `Nesses dias engajamento e lead andaram juntos: são assuntos que atraem e convertem. O maior pico veio depois de ${descDia(top)}: ${top.leads48h} leads em 48h, ${vz(top.vezes)}x o normal.`) +
+        ? `Os 5 posts com mais curtidas e comentários saíram em dias normais de lead. Já depois de ${descDia(top)} entraram ${top.leads48h} leads em 48h, ${vz(top.vezes)}x o normal. Curtida mede interesse; lead mede intenção de marcar. Hipótese: podem ser assuntos diferentes.`
+        : `Nesses dias engajamento e lead andaram juntos. Hipótese: podem ser assuntos que atraem e também geram contato. O maior pico veio depois de ${descDia(top)}: ${top.leads48h} leads em 48h, ${vz(top.vezes)}x o normal.`) +
         (misturado ? ` Como o perfil publica ${vz(postsPorDia)} posts por dia, a leitura é do dia, não de um post isolado.` : ""),
-      evidencia: diasDePico.map((d) => `${dm(d.dia)} (${d.posts.length} post${d.posts.length > 1 ? "s" : ""}): ${d.leads48h} leads em 48h, normal ${int(d.base48h)}${d.comAnuncioForte ? " — anúncio forte nesses dias" : ""}`).join(" · "),
+      evidencia: diasDePico.map((d) => `${dm(d.dia)} (${d.posts.length} post${d.posts.length > 1 ? "s" : ""}): ${d.leads48h} leads em 48h, normal ${int(d.base48h)}${d.comAnuncioForte ? ", com anúncio forte nesses dias" : ""}`).join(" · "),
       confianca: misturado || diasDePico.some((d) => d.comAnuncioForte) ? "baixa" : confiancaPorAmostra(diasComPost.length, 10),
       motivoConfianca: `${diasComPost.length} dias com post; lead contado no dia do post e no seguinte${misturado ? "; vários posts por dia" : ""}`,
       impacto: "alto",
-      acao: { texto: top.posts.length === 1 ? `Fazer mais 2 posts no assunto de ${legenda(top.posts[0])} nas próximas 2 semanas, publicados sozinhos no dia, para confirmar se trazem lead.` : `Testar por 2 semanas um post por dia nos assuntos de ${dm(top.dia)}, para separar qual deles traz lead.`, rota: "/$clientId/posts", botao: "Ver os posts desses dias" },
+      acao: { texto: top.posts.length === 1 ? `Fazer mais 2 posts no assunto de ${legenda(top.posts[0])} nas próximas 2 semanas, publicados sozinhos no dia, para testar se o assunto pode trazer lead.` : `Testar por 2 semanas um post por dia nos assuntos de ${dm(top.dia)}, para separar qual deles pode trazer lead.`, rota: "/$clientId/posts", botao: "Ver os posts desses dias" },
       responsavel: "social_media",
       risco: "Correlação no tempo, não prova de causa. Dias com anúncio forte estão marcados.",
+      regra: REGRA_CRUZ_POSTS,
     });
   }
 

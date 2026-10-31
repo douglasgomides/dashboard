@@ -18,6 +18,7 @@ import { useClientRole } from "@/hooks/use-client-role";
 import { ehNegocioProprio } from "@/lib/negocio-proprio";
 import { fetchAllRows } from "@/lib/pagination";
 import { resultadoImportacaoConversas } from "@/lib/crm-negocio-proprio";
+import { CITACAO_HBR_RESPOSTA } from "@/lib/benchmarks";
 
 const COR_SIT: Record<string, string> = { ruim: "var(--crit)", atencao: "var(--warn)", bom: "var(--good)", neutro: "var(--muted)" };
 type Filtro = "todas" | "sem_resposta" | "demorou" | "sem_lead";
@@ -340,7 +341,7 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
               </div>
             )}
             <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-              Como se calcula: mensagem automática = texto sem assinatura de atendente que se repete igual em muitas conversas (menu, boas-vindas); não conta como resposta. Espera = da primeira mensagem do contato até a próxima resposta de uma pessoa (tempo corrido). “Sem resposta” = a última mensagem é do contato e não é só um “ok/obrigada”. Referência: responder na primeira hora dá ~7x mais chance de qualificar o lead (Harvard Business Review, 2011).
+              Como se calcula: mensagem automática = texto sem assinatura de atendente que se repete igual em muitas conversas (menu, boas-vindas); não conta como resposta. Espera = da primeira mensagem do contato até a próxima resposta de uma pessoa (tempo corrido). “Sem resposta” = a última mensagem é do contato e não é só um “ok/obrigada”. Referência: {CITACAO_HBR_RESPOSTA}
             </p>
           </section>
         )}

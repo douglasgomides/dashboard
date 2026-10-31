@@ -3,8 +3,9 @@
 //
 // - Coorte: os leads que ENTRARAM em cada semana e onde estão hoje (atendidos, agendados, ganhos).
 //   Semana recente ainda não teve tempo de andar; a taxa só aparece com 20 leads ou mais na semana.
-// - Estoque: leads abertos hoje por etapa e há quanto tempo entraram. Lead aberto há mais de 30 dias
-//   quase nunca é oportunidade viva: ou se trabalha (reativação) ou se encerra como perdido.
+// - Estoque: leads abertos hoje por etapa e há quanto tempo entraram. Os 30 dias são só uma faixa de
+//   idade: não há fonte para dizer que lead aberto há mais tempo está perdido (num cliente, 41% dos ganhos
+//   saem depois de 30 dias). Por isso a leitura não manda dar lead como perdido pela idade.
 // - Movimentos: mudanças de etapa, agendamentos, ganhos e perdas por semana, do histórico gravado a
 //   partir da migração (não existe histórico anterior).
 
@@ -71,7 +72,7 @@ export function leituraDoEstoque(v: VisoesComerciais): string | null {
   if (!r.abertos) return null;
   const partes: string[] = [];
   if (r.pctParados !== null && r.pctParados >= 0.5)
-    partes.push(`${Math.round(r.pctParados * 100)}% dos leads abertos entraram há mais de 30 dias: encerre como perdido o que não tem chance, ou faça uma reativação, para o funil mostrar só o que está vivo.`);
+    partes.push(`${Math.round(r.pctParados * 100)}% dos leads abertos entraram há mais de 30 dias. Lead parado há mais tempo ainda pode fechar: em algumas clínicas boa parte das vendas sai depois de 30 dias. Vale revisar esses leads e tentar uma reativação antes de mudar o status.`);
   if (r.naEntrada7 > 0) partes.push(`${r.naEntrada7.toLocaleString("pt-BR")} lead(s) estão na primeira etapa há mais de 7 dias, sem ninguém ter mexido.`);
   return partes.join(" ") || "O estoque está em ordem: poucos leads parados há muito tempo.";
 }

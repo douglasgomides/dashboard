@@ -8,9 +8,9 @@
 // Lógica pura. Junta as regras da leitura do período (leitura-periodo.ts),
 // o cruzamento leads x engajamento (cruzamento.ts) e os benchmarks.
 import { lerPeriodo, type Achado } from "@/lib/leitura-periodo";
-import { cruzar, type EntradaCruzamento } from "@/lib/cruzamento";
+import { cruzar, REGRA_CRUZ_CORRELACAO, type EntradaCruzamento } from "@/lib/cruzamento";
 import { insightsDeAnuncios, limitacoesDeAnuncios, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
-import { BENCHMARKS, avaliar, type Faixa } from "@/lib/benchmarks";
+import { BENCHMARKS, CITACAO_HBR_RESPOSTA, avaliar, type Faixa } from "@/lib/benchmarks";
 import { ordenarPorScore } from "@/lib/oportunidades";
 import { confiancaPorAmostra, type Insight, type Limitacao, type Responsavel, type Area, type Tom } from "@/lib/insight";
 import { saldoSeguidores } from "@/lib/metricas";
@@ -345,7 +345,7 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
       id: "resposta",
       rotulo: "Tempo até responder",
       valor: dur(espera),
-      explicacao: `Quanto tempo o paciente típico esperou pela primeira resposta no WhatsApp (${n(e.wts?.espera_cobertura) > 0 && n(e.wts?.espera_cobertura) < n(e.wts?.atendimentos) ? `mediana de ${int(n(e.wts?.espera_cobertura))} atendimentos com espera medida, de ${int(n(e.wts?.atendimentos))}` : `${int(n(e.wts?.atendimentos))} atendimentos`}). 63% dos brasileiros esperam resposta em até 5 minutos; quem responde em até 1 hora tem ~7x mais chance de converter.`,
+      explicacao: `Quanto tempo o paciente típico esperou pela primeira resposta no WhatsApp (${n(e.wts?.espera_cobertura) > 0 && n(e.wts?.espera_cobertura) < n(e.wts?.atendimentos) ? `mediana de ${int(n(e.wts?.espera_cobertura))} atendimentos com espera medida, de ${int(n(e.wts?.atendimentos))}` : `${int(n(e.wts?.atendimentos))} atendimentos`}). 63% dos brasileiros esperam resposta em até 5 minutos (Opinion Box). ${CITACAO_HBR_RESPOSTA}`,
       status: faixaParaTom(f),
       selo: f ? (f === "bom" ? "Rápido" : f === "ok" ? "Aceitável" : "Lento") : undefined,
       statusTexto: f ? (f === "bom" ? "Rápido" : f === "ok" ? "Aceitável" : "Lento: paciente esfria") : undefined,
@@ -403,7 +403,7 @@ export function montarResultado(e: EntradaResultado): Resultado {
     if (!i.regra && i.area === "anuncios")
       i.regra = "Cada campanha é medida pelo resultado do próprio objetivo e comparada com a campanha típica (mediana) do mesmo objetivo: até 0,6x o custo típico = Escalar; 2x ou mais = Cortar (mesma régua de fadiga da Meta). Mínimo de 3 campanhas com volume no objetivo.";
     if (!i.regra && i.id.startsWith("cruz-"))
-      i.regra = "Leads do CRM por dia comparados com o engajamento e o gasto em anúncio dos 3 dias anteriores, sem o efeito do dia da semana (correlação de Spearman; 0,3 ou mais = relação real). Mínimo de 21 dias com dado e 20 leads. Mostra que as séries andam juntas, não que uma causa a outra.";
+      i.regra = REGRA_CRUZ_CORRELACAO; // o cruzamento já preenche a regra de cada insight; isto é só a reserva
     if (i.id.startsWith("cruz-")) i.fonte = "CRM da clínica + Instagram + Meta Ads";
   }
 

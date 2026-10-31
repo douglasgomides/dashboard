@@ -35,6 +35,7 @@ import type { RelatorioCompletoData } from "@/lib/relatorio-completo";
 import { GRUPOS } from "@/lib/anuncios-objetivo";
 import { NOTA_ALGORITMO_DUVIDAS, SECOES, duvidasRepetidas, type SecaoId } from "@/lib/relatorio-envio";
 import { tornarSeguro } from "@/lib/linguagem-cfm";
+import { CITACAO_HBR_RESPOSTA } from "@/lib/benchmarks";
 
 const GOLD = "#b8935a";
 const GREEN = "#3f8f5f";
@@ -1052,7 +1053,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
           {d.atendimento ? (
             <Text style={styles.methodP}>
               Tempo até a 1ª resposta de uma pessoa (mediana): {duracao(d.atendimento.medianaPrimeiraResposta)}; em horário comercial: {duracao(d.atendimento.medianaComercial)}. Pacientes que ficaram sem resposta: {d.atendimento.semResposta} de {d.atendimento.comPaciente}
-              {d.atendimento.soRobo ? ` (${d.atendimento.soRobo} só receberam mensagem automática)` : ""}. Referência: responder na 1ª hora dá cerca de 7x mais chance de qualificar o lead (Harvard Business Review, 2011).
+              {d.atendimento.soRobo ? ` (${d.atendimento.soRobo} só receberam mensagem automática)` : ""}. Referência: {CITACAO_HBR_RESPOSTA}
             </Text>
           ) : null}
           <Text style={styles.methodTitle}>Funil da conversa</Text>
