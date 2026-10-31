@@ -9,6 +9,13 @@ export const LIMITES = {
     origemMinima: 0.7,
     /** Fatia mínima das vendas ganhas do período com valor preenchido para o ROI aparecer. */
     valorMinimo: 0.8,
+    /** Fatia mínima das vendas ganhas do período com canal conhecido (origem classificada) para o ROI aparecer.
+     * Texto de origem que não vira canal (ex.: "Material de isca") e venda sem origem não contam. */
+    ganhosComCanalMinimo: 0.7,
+    /** Abaixo de tantas vendas vindas de anúncio, o ROI não vira percentual: aparece só a frase em R$. */
+    vendasAnuncioMinimas: 5,
+    /** A partir de tantas vendas vindas de anúncio, o ROI pode ter confiança alta (Confiável). Abaixo, no máximo Parcial. */
+    vendasAnuncioAlta: 15,
   },
   /** Selo de confiança dos números de resultado (Confiável, Parcial, Não dá pra ler). */
   selo: {

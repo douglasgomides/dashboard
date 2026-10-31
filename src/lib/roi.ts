@@ -5,6 +5,10 @@
 // com R$ 4.826 de checkout e base importada, sem nenhuma venda vinda de anúncio). A receita total do CRM aparece ao
 // lado, com a divisão por origem, mas não entra na conta.
 // Só aparece quando os dados permitem ler (limites em src/lib/limites.ts); senão diz por que não dá e o passo a passo.
+// Travas de 31/10/2026 (Doctor Creator, 90 dias: ROI de -98% tirado de 1 venda de anúncio, com 159 de 176 vendas sem
+// canal conhecido): o percentual só sai com pelo menos 5 vendas de anúncio (Confiável só a partir de 15) e com 70% ou
+// mais das vendas do período com canal conhecido, além da trava de origem dos leads. Com 1 a 4 vendas de anúncio, a
+// tela mostra só a frase em R$ ("1 venda de anúncio, R$ 197, para R$ 12.196 investidos").
 // Dados: RPC roi_periodo (supabase/migrations/20261029120000_roi_por_objetivo.sql).
 
 import { LIMITES } from "@/lib/limites";
@@ -30,6 +34,8 @@ export interface DadosRoi {
   ganhos_anuncio: number | null;
   ganhos_anuncio_com_valor: number | null;
   receita_anuncio: number | null;
+  /** Vendas do período com canal conhecido (anúncio ou origem classificada). null = banco sem essa conta. */
+  ganhos_com_canal?: number | null;
   /** Receita do período por origem, maior primeiro. */
   receita_por_origem: { origem: string; ganhos: number; receita: number }[];
   ganho_identificavel: boolean;
@@ -44,7 +50,7 @@ export interface DadosRoi {
   anuncios_ate?: string | null;
 }
 
-export type IdItemRoi = "anuncios" | "crm" | "compartilhado" | "etapas" | "valor" | "origem";
+export type IdItemRoi = "anuncios" | "crm" | "compartilhado" | "etapas" | "valor" | "origem" | "origem_vendas";
 
 export interface ItemRoi {
   id: IdItemRoi;
@@ -80,11 +86,18 @@ export interface Roi {
   itens: ItemRoi[];
   pendentes: number; // itens não feitos (para "faltam N itens")
   motivoSemCalculo: string | null; // frase "Não dá pra calcular o retorno porque..." quando não aparece
+  /** Fato em R$ quando o percentual não sai mas houve venda de anúncio e investimento em aquisição
+   * (ex.: "1 venda de anúncio, R$ 197, para R$ 12.196 investidos em aquisição."). null quando o ROI aparece em %. */
+  fraseVendasAnuncio: string | null;
   selo: Selo;
   seloInvestimento: Selo;
 }
 
 /** Nota fixa: uma definição só da data da venda, igual à do cálculo (data de criação do card no CRM). */
+/** Aviso de mudança de régua, mostrado na tela do retorno. */
+export const AVISO_MUDANCA_ROI =
+  "Mudou em 31/10: o retorno em percentual só aparece com pelo menos 5 vendas vindas de anúncio e com 70% ou mais das vendas do período com canal conhecido. Com menos de 5, aparece só quanto vendeu e quanto foi investido, em R$. A confiança alta pede 15 vendas de anúncio.";
+
 export const NOTA_DEFASAGEM =
   "Vendas do período são os cards ganhos que foram criados no período, pela data de criação no CRM. A data de fechamento não é usada, porque o CRM costuma fechar cards em lote.";
 
@@ -105,6 +118,16 @@ export function passosOrigem(provider: string | null): string[] {
     default:
       return ["No CRM, abra o card do lead.", "Preencha de onde a pessoa veio: anúncio, Instagram, indicação ou Google.", "Faça isso no primeiro atendimento de todo lead novo."];
   }
+}
+
+export function passosOrigemVendas(provider: string | null): string[] {
+  const crm = (provider && NOME_CRM[provider]) || "CRM";
+  if (provider === "digisac") return ["O Digisac não registra venda.", "Para saber de onde veio quem comprou, registre as vendas num CRM ou na planilha de vendas da clínica, com a origem."];
+  return [
+    `No ${crm}, ao marcar a venda como ganha, confira se o card tem a origem: anúncio, Instagram, indicação ou Google.`,
+    "Se a venda foi registrada num card novo (funil de compra, checkout), copie a origem do card em que a pessoa chegou.",
+    "Texto que não diz o canal (ex.: nome de material ou de página) não conta: escreva o canal.",
+  ];
 }
 
 export function passosValor(provider: string | null): string[] {
@@ -182,6 +205,8 @@ export function seloDoInvestimento(d: DadosRoi): Selo {
 export function montarRoi(d: DadosRoi): Roi {
   const fracValor = d.ganhos > 0 ? d.ganhos_com_valor / d.ganhos : 0;
   const fracOrigem = d.leads > 0 ? d.leads_com_origem / d.leads : 0;
+  const ganhosComCanal = d.ganhos_com_canal ?? null;
+  const fracCanal = ganhosComCanal != null && d.ganhos > 0 ? ganhosComCanal / d.ganhos : 0;
   const crm = (d.crm_provider && NOME_CRM[d.crm_provider]) || "CRM";
   const itens: ItemRoi[] = [
     {
@@ -254,6 +279,20 @@ export function montarRoi(d: DadosRoi): Roi {
         passos: passosOrigem(d.crm_provider),
         link: { to: "/$clientId/crm-guia", rotulo: "Ver como organizar o CRM" },
       },
+      {
+        id: "origem_vendas",
+        preciso: "Registrar a origem de quem comprou (o canal da venda)",
+        paraMostrar: "se o retorno dos anúncios está completo",
+        feito: d.ganhos > 0 && ganhosComCanal != null && fracCanal >= LIMITES.roi.ganhosComCanalMinimo,
+        detalhe: d.ganhos <= 0
+          ? "Nenhuma venda ganha no período para conferir a origem."
+          : ganhosComCanal == null
+            ? "O banco ainda não separa as vendas por canal conhecido."
+            : `Hoje ${pct(ganhosComCanal, d.ganhos)} das vendas do período têm canal conhecido (${ganhosComCanal} de ${d.ganhos}). O mínimo para ler é ${pctLimite(LIMITES.roi.ganhosComCanalMinimo)}. Sem o canal, uma venda de anúncio pode estar contada como "sem origem".`,
+        bloqueia: true,
+        passos: passosOrigemVendas(d.crm_provider),
+        link: { to: "/$clientId/crm-guia", rotulo: "Ver como organizar o CRM" },
+      },
     );
   }
   const pendentes = itens.filter((i) => !i.feito).length;
@@ -279,11 +318,17 @@ export function montarRoi(d: DadosRoi): Roi {
           ? "Não dá pra separar a receita que veio dos anúncios: o banco ainda não tem essa conta. A receita total aparece abaixo, mas não mede o anúncio."
           : ganhosAnuncio <= 0
             ? `Não dá pra calcular o retorno dos anúncios porque nenhuma das ${d.ganhos} ${d.ganhos === 1 ? "venda" : "vendas"} do período veio de pessoa com origem anúncio.${deOnde ? ` A receita veio de: ${deOnde}.` : ""}`
-            : null;
+            : ganhosAnuncio < LIMITES.roi.vendasAnuncioMinimas
+              ? `Ainda não dá pra ler o retorno em percentual: ${ganhosAnuncio} ${ganhosAnuncio === 1 ? "venda veio" : "vendas vieram"} de anúncio no período, e o mínimo é ${LIMITES.roi.vendasAnuncioMinimas}. Com tão poucas vendas, uma venda a mais ou a menos muda o resultado inteiro.`
+              : null;
   const calculavel = motivoSemCalculo === null;
+  const fraseVendasAnuncio = !calculavel && ganhosAnuncio > 0 && d.investido_aquisicao > 0
+    ? `${ganhosAnuncio} ${ganhosAnuncio === 1 ? "venda de anúncio" : "vendas de anúncio"}, ${receitaAnuncio > 0 ? brl0(receitaAnuncio) : "sem valor"}, para ${brl0(d.investido_aquisicao)} investidos em aquisição.`
+    : null;
   const seloInvestimento = seloDoInvestimento(d);
   const seloDados: Selo[] = [];
   if (calculavel) {
+    if (ganhosAnuncio < LIMITES.roi.vendasAnuncioAlta) seloDados.push({ nivel: "parcial", motivo: `O retorno sai de ${ganhosAnuncio} vendas vindas de anúncio. A confiança alta pede ${LIMITES.roi.vendasAnuncioAlta}.` });
     if (fracOrigem < LIMITES.selo.origemConfiavel) seloDados.push({ nivel: "parcial", motivo: `${pct(d.leads - d.leads_com_origem, d.leads)} dos leads do período estão sem origem.` });
     const fracValorAnuncio = ganhosAnuncio > 0 ? (d.ganhos_anuncio_com_valor ?? 0) / ganhosAnuncio : 0;
     if (fracValorAnuncio < LIMITES.selo.valorConfiavel) seloDados.push({ nivel: "parcial", motivo: `${pct(ganhosAnuncio - (d.ganhos_anuncio_com_valor ?? 0), ganhosAnuncio)} das vendas vindas de anúncio estão sem valor, então a receita está abaixo do real.` });
@@ -293,7 +338,7 @@ export function montarRoi(d: DadosRoi): Roi {
     ? { nivel: "ilegivel", motivo: motivoSemCalculo! }
     : seloDados.length
       ? piorSelo(seloDados)
-      : { nivel: "confiavel", motivo: "Origem dos leads, valor das vendas e separação do investimento estão completos." };
+      : { nivel: "confiavel", motivo: `Origem dos leads e das vendas, valor das vendas e separação do investimento estão completos, com ${ganhosAnuncio} vendas vindas de anúncio.` };
   return {
     calculavel,
     investido: d.investido_aquisicao,
@@ -311,6 +356,7 @@ export function montarRoi(d: DadosRoi): Roi {
     itens,
     pendentes,
     motivoSemCalculo,
+    fraseVendasAnuncio,
     selo,
     seloInvestimento,
   };
@@ -319,6 +365,8 @@ export function montarRoi(d: DadosRoi): Roi {
 /** Texto curto para a coluna ROI do admin. */
 export function resumoRoi(r: Roi): string {
   if (r.calculavel && r.roi != null) return `${r.roi >= 0 ? "+" : ""}${Math.round(r.roi * 100).toLocaleString("pt-BR")}%`;
+  // Poucas vendas de anúncio e nada mais faltando: o fato em R$, nunca um percentual.
+  if (r.fraseVendasAnuncio && r.pendentes === 0) return `${r.ganhos} ${r.ganhos === 1 ? "venda" : "vendas"} de anúncio, ${r.receita > 0 ? brl0(r.receita) : "sem valor"}`;
   if (r.pendentes > 0) return `faltam ${r.pendentes} ${r.pendentes === 1 ? "item" : "itens"}`;
   return "não dá pra ler";
 }

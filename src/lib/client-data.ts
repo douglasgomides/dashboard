@@ -900,6 +900,8 @@ export async function getRoiPeriodo(clientId: string, de: string, ate: string): 
     ganhos_anuncio: data.ganhos_anuncio === undefined ? null : n(data.ganhos_anuncio),
     ganhos_anuncio_com_valor: data.ganhos_anuncio_com_valor === undefined ? null : n(data.ganhos_anuncio_com_valor),
     receita_anuncio: data.receita_anuncio === undefined ? null : n(data.receita_anuncio),
+    // Banco sem a conta de vendas com canal conhecido: null, e a trava de origem das vendas não libera o retorno.
+    ganhos_com_canal: data.ganhos_com_canal === undefined || data.ganhos_com_canal === null ? null : n(data.ganhos_com_canal),
     receita_por_origem: Array.isArray(data.receita_por_origem)
       ? data.receita_por_origem.map((o: { origem?: unknown; ganhos?: unknown; receita?: unknown }) => ({ origem: String(o.origem ?? "Sem origem"), ganhos: n(o.ganhos), receita: n(o.receita) }))
       : [],
