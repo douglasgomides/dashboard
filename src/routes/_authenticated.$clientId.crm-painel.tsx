@@ -484,12 +484,12 @@ function CrmClinicaPage() {
             {fmtN(pessoas.pessoas_recorrentes)} já tinham registro antes, são pacientes da casa ou estão só em funil de compra ({fmtN(pessoas.cards_de_recorrentes)} dos cards). Valor dos cards no período:{" "}
             {fmtBRL(pessoas.valor)}.
           </p>
-        </div> : periodo && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        </div> : periodo ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Kpi icone={Users} rotulo="Leads novos" valor={fmtN(periodo.novos)} cor="var(--accent)" />
           <Kpi icone={Trophy} rotulo="Ganhos" valor={fmtN(periodo.ganhos)} cor="var(--good)" />
           <Kpi icone={XCircle} rotulo="Perdidos" valor={fmtN(periodo.perdidos)} cor="var(--crit)" />
           <Kpi icone={Target} rotulo="Valor dos cards" valor={fmtBRL(periodo.valor)} cor="var(--s1)" />
-        </div>}
+        </div> : <p className="text-sm" style={{ color: "var(--text-dim)" }}>Sem dado: o CRM não devolveu os números deste período. Isso não quer dizer que foram zero.</p>}
       </Painel>
 
       {!ehRelatorio && <FunisPeriodo clientId={clientId} start={start} end={end} />}
