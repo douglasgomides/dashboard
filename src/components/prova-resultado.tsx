@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { compararPeriodos, direcao, duracaoCurta, type Bloco, type Direcao, type SemanaProva } from "@/lib/prova-resultado";
+import { compararPeriodos, direcao, duracaoCurta, MUDOU_AGENDOU_EM, semanaInconsistente, type Bloco, type Direcao, type SemanaProva } from "@/lib/prova-resultado";
 
 const db = supabase as any;
 const pct = (x: number | null) => (x == null ? "—" : `${Math.round(x * 100)}%`);
@@ -11,12 +11,14 @@ const brl = (x: number | null) => (x == null ? "—" : x.toLocaleString("pt-BR",
 const COR: Record<Direcao, string> = { melhor: "var(--ok, var(--accent))", pior: "var(--crit)", igual: "var(--muted)", sem_dado: "var(--muted)" };
 const SETA: Record<Direcao, string> = { melhor: "melhorou", pior: "piorou", igual: "estável", sem_dado: "" };
 
-function Indicador({ rotulo, atual, anterior, fmt, menorMelhor, ajuda }: { rotulo: string; atual: number | null; anterior: number | null; fmt: (x: number | null) => string; menorMelhor?: boolean; ajuda: string }) {
+function Indicador({ rotulo, atual, anterior, fmt, menorMelhor, ajuda, erroDado }: { rotulo: string; atual: number | null; anterior: number | null; fmt: (x: number | null) => string; menorMelhor?: boolean; ajuda: string; erroDado?: boolean }) {
   const d = direcao(atual, anterior, menorMelhor);
   return (
     <div className="rounded-lg p-3" style={{ background: "var(--surface-2)" }} title={ajuda}>
       <div className="text-[11px]" style={{ color: "var(--muted)" }}>{rotulo}</div>
-      <div className="text-lg font-semibold tabular-nums">{fmt(atual)}</div>
+      {erroDado
+        ? <div className="text-sm font-semibold" role="note" style={{ color: "var(--crit)" }}>Erro de dado: mais agendamentos que conversas de venda</div>
+        : <div className="text-lg font-semibold tabular-nums">{fmt(atual)}</div>}
       <div className="text-[11px] tabular-nums" style={{ color: COR[d] }}>{anterior != null ? `antes: ${fmt(anterior)}${SETA[d] ? ` · ${SETA[d]}` : ""}` : "sem período anterior ainda"}</div>
     </div>
   );
@@ -42,13 +44,14 @@ export function ProvaResultado({ clientId }: { clientId: string }) {
     <section aria-labelledby="prova" className="space-y-3 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
       <div>
         <h3 id="prova" className="flex items-center gap-1.5 text-sm font-semibold"><TrendingUp size={16} aria-hidden style={{ color: "var(--accent)" }} /> O que mudou: últimas {a.semanas} semanas{b ? ` contra as ${b.semanas} anteriores` : ""}</h3>
+        <p className="mt-1 text-xs" role="note" style={{ color: "var(--ink-2)" }}>Mudou em {MUDOU_AGENDOU_EM}: "Agendaram" agora conta só as conversas de venda que terminaram em agendamento. Antes contava todas as conversas com agendamento, e a taxa podia passar de 100%. O investimento por agendamento usa o mesmo número.</p>
         <p className="mt-0.5 text-xs" style={{ color: "var(--ink-2)" }}>Indicadores das conversas, da leitura da IA e dos anúncios para acompanhar a evolução da clínica. A comparação não atribui a mudança aos agentes. Agendamentos classificados pela IA precisam de conferência; o investimento por agendamento não é custo de aquisição atribuído.{!b ? ` O histórico de conversas começa em ${new Date(linhas[0].semana + "T12:00:00").toLocaleDateString("pt-BR")}: este é o ponto de partida.` : ""}</p>
       </div>
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Indicador rotulo="Tempo até a 1ª resposta" atual={a.resposta_s} anterior={b?.resposta_s ?? null} fmt={duracaoCurta} menorMelhor ajuda="Mediana do tempo entre a primeira mensagem do paciente e a primeira resposta da clínica." />
         <Indicador rotulo="Respondidas em até 5 min" atual={a.em5} anterior={b?.em5 ?? null} fmt={pct} ajuda="Das conversas respondidas, quantas tiveram resposta em até 5 minutos." />
-        <Indicador rotulo="Agendaram (das conversas de venda)" atual={a.taxa} anterior={b?.taxa ?? null} fmt={pct} ajuda="Das conversas que a IA classificou como comerciais, quantas terminaram em agendamento." />
-        <Indicador rotulo="Investimento por agendamento" atual={a.custo_agendamento} anterior={b?.custo_agendamento ?? null} fmt={brl} menorMelhor ajuda="Investimento em anúncios no período dividido pelos agendamentos lidos nas conversas." />
+        <Indicador rotulo="Agendaram (das conversas de venda)" atual={a.taxa} anterior={b?.erro_dado ? null : b?.taxa ?? null} fmt={pct} erroDado={a.erro_dado} ajuda="Das conversas que a IA classificou como comerciais, quantas terminaram em agendamento. Só entram agendamentos de conversas de venda." />
+        <Indicador rotulo="Investimento por agendamento" atual={a.custo_agendamento} anterior={b?.custo_agendamento ?? null} fmt={brl} menorMelhor erroDado={a.erro_dado} ajuda="Investimento em anúncios no período dividido pelos agendamentos lidos nas conversas de venda." />
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[520px] text-xs tabular-nums">
@@ -56,7 +59,7 @@ export function ProvaResultado({ clientId }: { clientId: string }) {
           <tbody>{linhas.slice(-8).map((s) => (
             <tr key={s.semana} className="border-t" style={{ borderColor: "var(--border)" }}>
               <td className="py-1 pr-2">{new Date(s.semana + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</td>
-              <td className="pr-2">{s.conversas}</td><td className="pr-2">{s.comerciais}</td><td className="pr-2">{s.agendou}</td>
+              <td className="pr-2">{s.conversas}</td><td className="pr-2">{s.comerciais}</td><td className="pr-2">{semanaInconsistente(s) ? <span style={{ color: "var(--crit)" }} title="Mais agendamentos que conversas de venda: erro de dado">erro de dado</span> : s.agendou}</td>
               <td className="pr-2">{duracaoCurta(s.resposta_mediana_s)}</td><td className="pr-2">{s.respondidas ? `${Math.round((100 * s.resp_5min) / s.respondidas)}%` : "—"}</td>
               <td className="pr-2">{s.investimento ? brl(s.investimento) : "—"}</td>
             </tr>
