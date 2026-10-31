@@ -1,12 +1,26 @@
 // Prova de resultado por clínica (função prova_resultado no banco): compara as últimas 4 semanas com as 4 anteriores
 // em atendimento (tempo de resposta, % em até 5 min), conversão (% das conversas comerciais que agendaram) e custo
 // (investimento em anúncio por agendamento). É o número que mostra se o trabalho (equipe + agentes) está funcionando.
+// "agendou" conta só conversas comerciais que agendaram (subconjunto de "comerciais", migração 20261101100000).
+// Se mesmo assim vier agendou > comerciais, é erro de dado: a taxa não é exibida (erro_dado = true).
 // Testes: scripts/test-prova-resultado.ts.
 
 export interface SemanaProva { semana: string; conversas: number; comerciais: number; agendou: number; resposta_mediana_s: number | null; respondidas: number; resp_5min: number; investimento: number }
-export interface Bloco { semanas: number; conversas: number; comerciais: number; agendou: number; taxa: number | null; resposta_s: number | null; em5: number | null; investimento: number; custo_agendamento: number | null }
+export interface Bloco { semanas: number; conversas: number; comerciais: number; agendou: number; taxa: number | null; resposta_s: number | null; em5: number | null; investimento: number; custo_agendamento: number | null; erro_dado: boolean }
 
 const soma = (xs: SemanaProva[], f: (s: SemanaProva) => number) => xs.reduce((t, s) => t + Number(f(s) ?? 0), 0);
+
+/** Data em que "agendou" passou a ser só das conversas de venda (aviso na tela e docs/notas-de-versao.md). */
+export const MUDOU_AGENDOU_EM = "31/10";
+
+/** Taxa numerador/denominador. Numerador maior que o denominador é erro de dado: devolve null, nunca mais de 100%. */
+export function taxaContida(numerador: number, denominador: number, minimo = 10): { taxa: number | null; erro_dado: boolean } {
+  if (numerador > denominador) return { taxa: null, erro_dado: true };
+  return { taxa: denominador >= minimo ? numerador / denominador : null, erro_dado: false };
+}
+
+/** Semana com mais agendamentos que conversas de venda (dado inconsistente). */
+export const semanaInconsistente = (s: SemanaProva) => Number(s.agendou) > Number(s.comerciais);
 
 export function bloco(xs: SemanaProva[]): Bloco {
   const comerciais = soma(xs, (s) => s.comerciais), agendou = soma(xs, (s) => s.agendou), respondidas = soma(xs, (s) => s.respondidas);
@@ -15,12 +29,15 @@ export function bloco(xs: SemanaProva[]): Bloco {
   const pesos = soma(comTempo, (s) => s.respondidas);
   const resposta_s = pesos ? Math.round(soma(comTempo, (s) => Number(s.resposta_mediana_s) * s.respondidas) / pesos) : null;
   const investimento = soma(xs, (s) => s.investimento);
+  // Qualquer semana com agendou > comerciais contamina o bloco: sem taxa e sem custo, com erro de dado.
+  const erro_dado = xs.some(semanaInconsistente);
+  const t = taxaContida(agendou, comerciais);
   return {
     semanas: xs.length, conversas: soma(xs, (s) => s.conversas), comerciais, agendou,
-    taxa: comerciais >= 10 ? agendou / comerciais : null,
+    taxa: erro_dado ? null : t.taxa, erro_dado: erro_dado || t.erro_dado,
     resposta_s, em5: respondidas >= 10 ? soma(xs, (s) => s.resp_5min) / respondidas : null,
     investimento: Math.round(investimento * 100) / 100,
-    custo_agendamento: investimento > 0 && agendou >= 3 ? investimento / agendou : null,
+    custo_agendamento: !erro_dado && investimento > 0 && agendou >= 3 ? investimento / agendou : null,
   };
 }
 
