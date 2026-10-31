@@ -180,7 +180,7 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
           `${fmtNum(atendimentos)} atendimentos de ${fmtNum(n(resumo?.contatos_distintos))} pessoas no período.`,
           nOrNull(resumo?.espera_mediana_seg) == null
             ? "Sem dado de espera até a 1ª resposta neste período."
-            : `Na metade dos atendimentos, a 1ª resposta veio em até ${dur(nOrNull(resumo?.espera_mediana_seg))}${(nOrNull(resumo?.espera_mediana_seg) ?? 0) > 3600 ? ": acima de 1 hora, quando a chance de agendar cai bastante." : "."}`,
+            : `Na metade dos atendimentos, a 1ª resposta veio em até ${dur(nOrNull(resumo?.espera_mediana_seg))}${(nOrNull(resumo?.espera_mediana_seg) ?? 0) > 3600 ? ": acima de 1 hora. Resposta demorada pode fazer o paciente procurar outra clínica." : "."}`,
           fatiaSemRoteamento > 40 ? `${fatiaSemRoteamento.toFixed(0)}% das conversas não foram para nenhuma equipe: organizar o roteamento é o primeiro ajuste.` : "",
         ]}
       />

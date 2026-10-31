@@ -23,7 +23,7 @@
 // - rastreamento: o dado não existe ou está errado (origem vazia, etapas sem
 //   significado, ganho/perda não marcados, sem telefone/@ para cruzar).
 
-import { BENCHMARKS, avaliar, type Faixa } from "./benchmarks";
+import { BENCHMARKS, CITACAO_HBR_RESPOSTA, avaliar, type Faixa } from "./benchmarks";
 import { fmtFracao } from "@/lib/metricas";
 import { confiancaPorAmostra, type Impacto, type Insight, type Limitacao, type Responsavel, type Tom } from "./insight";
 
@@ -736,13 +736,13 @@ export function insightsComerciais(d: DadosComerciais): Insight[] {
       area: "comercial",
       tom: p >= 0.3 ? "ruim" : "atencao",
       titulo: `${fmtN(c.naEntrada3d)} leads estão parados na primeira etapa há mais de 3 dias`,
-      diagnostico: "Lead que espera dias esfria: quem responde na primeira hora tem muito mais chance de marcar consulta.",
+      diagnostico: `Lead que espera dias pode esfriar. ${CITACAO_HBR_RESPOSTA}`,
       evidencia: `${fmtN(c.naEntrada3d)} de ${fmtN(c.leads)} leads ${escopo} (${fmtPct(p)}) continuam na etapa inicial do CRM, criados há mais de 3 dias.`,
       confianca: "media",
       motivoConfianca: "Conta pela etapa do CRM; se a equipe conversa sem mover o card, parte deles já foi atendida.",
       impacto: p >= 0.3 ? "alto" : "medio",
       acao: {
-        texto: `Abrir o CRM na primeira etapa, ordenar pelos mais antigos e responder (ou marcar como perdido) os ${fmtN(c.naEntrada3d)} leads parados.`,
+        texto: `Abrir o CRM na primeira etapa, ordenar pelos mais antigos e responder os ${fmtN(c.naEntrada3d)} leads parados. Marcar como perdido só quem disser que não tem mais interesse.`,
       },
       responsavel: "atendimento",
     });
@@ -779,8 +779,8 @@ export function insightsComerciais(d: DadosComerciais): Insight[] {
         titulo: `No WhatsApp, o paciente espera em geral ${fmtTempo(w.esperaMedianaSeg)} pela primeira resposta`,
         diagnostico:
           faixa === "bom"
-            ? "Resposta rápida — dentro do que o paciente espera (até 5 minutos)."
-            : "A maioria dos pacientes espera resposta em até 5 minutos; quem responde em até 1 hora tem muito mais chance de marcar consulta.",
+            ? "Resposta rápida, dentro do que o paciente espera (até 5 minutos)."
+            : `63% dos brasileiros esperam resposta em até 5 minutos (Opinion Box). ${CITACAO_HBR_RESPOSTA}`,
         evidencia: `Tempo típico (metade espera menos, metade mais) em ${fmtN(w.respondidas ?? 0)} conversas atendidas no período. Referência: ${BENCHMARKS.primeiraResposta.referencia}.`,
         confianca: confiancaPorAmostra(w.respondidas ?? 0, 20),
         impacto: faixa === "fraco" ? "alto" : "medio",

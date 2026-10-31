@@ -1,9 +1,10 @@
 // Leitura de cada conversa do WhatsApp em linguagem simples, a partir de leitura_conversas (banco).
 // Regras fixas, sem IA. A IA (resumo) é uma camada opcional por cima, pedida conversa a conversa.
 //
-// Referência de tempo de resposta: leads respondidos na primeira hora têm ~7x mais chance de
-// qualificação do que os respondidos depois (Oldroyd, McElheran e Elkington, "The Short Life of
-// Online Sales Leads", Harvard Business Review, 2011). Por isso 1 hora é a linha de "demorou".
+// Referência de tempo de resposta: num estudo com leads de empresas nos EUA, os respondidos na
+// primeira hora tiveram ~7x mais chance de qualificação do que os respondidos depois (Oldroyd,
+// McElheran e Elkington, "The Short Life of Online Sales Leads", Harvard Business Review, 2011).
+// Não mediu pacientes. 1 hora é a linha de "demorou" da casa, inspirada nesse estudo.
 
 export interface LeituraConversaBanco {
   conversa_id: string;

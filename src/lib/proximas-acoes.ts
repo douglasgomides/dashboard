@@ -5,6 +5,7 @@
 import type { ProblemaDado } from "@/lib/client-data";
 import type { DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { resumirAtendimento, type LeituraConversaBanco, type ResumoAtendimento } from "@/lib/conversa-leitura";
+import { CITACAO_HBR_RESPOSTA } from "@/lib/benchmarks";
 
 export type Severidade = "alta" | "media" | "baixa";
 export type Categoria = "dados" | "conteudo" | "anuncios" | "atendimento" | "crm";
@@ -224,7 +225,7 @@ export function montarProximasAcoes(e: EntradaAcoes): ProximaAcao[] {
         categoria: "atendimento",
         recomendacao: "Responder a primeira mensagem em até 1 hora no horário comercial.",
         porque: `Hoje a primeira resposta de uma pessoa leva ${Math.round((at.medianaPrimeiraResposta ?? 0) / 60)} min (mediana).`,
-        impacto: "Responder na primeira hora dá cerca de 7x mais chance de qualificar o lead (Harvard Business Review, 2011).",
+        impacto: CITACAO_HBR_RESPOSTA,
         responsavel: "atendimento",
         evidencia: `Mediana da 1ª resposta humana: ${Math.round((at.medianaPrimeiraResposta ?? 0) / 60)} min`,
         rota: "/$clientId/conversas",

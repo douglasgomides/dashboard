@@ -1,0 +1,87 @@
+{
+  "cruzamento.organico": {
+    "insights": [
+      {
+        "id": "cruz-organico",
+        "titulo": "Os leads acompanham o engajamento do Instagram.",
+        "diagnostico": "Nos dias em que o perfil teve mais interação, entraram mais leads no mesmo dia ou nos 2 dias seguintes (relação forte). Hipótese: o conteúdo pode estar ajudando a gerar contato, não só curtida. Para confirmar: marcar a origem do lead no CRM.",
+        "evidencia": "Em 30 dias: lead x engajamento orgânico 0.74 (de -1 a 1; de 0,3 para cima as duas séries andam juntas, o que ainda pode ser coincidência). 1.220 leads no período.",
+        "risco": "Correlação mostra que as duas coisas sobem e descem juntas, não prova que uma causa a outra. Feriado, campanha de anúncio e sazonalidade mexem nos dois ao mesmo tempo.",
+        "regra": "Leads do CRM de cada dia comparados com a soma do engajamento e do gasto em anúncio do mesmo dia e dos 2 dias anteriores, sem o efeito do dia da semana (correlação de Spearman; 0,3 ou mais = relação moderada, 0,5 ou mais = forte). Mínimo de 21 dias com dado e 20 leads. Não há teste de significância. Mostra que as séries andam juntas, não que uma causa a outra.",
+        "acao": "Manter a frequência de posts e repetir os assuntos dos posts que vieram antes dos picos de lead (lista abaixo)."
+      }
+    ],
+    "limitacoes": [
+      "A verba de anúncio foi quase a mesma todo dia, então não dá para medir dia a dia quanto do lead vem do anúncio."
+    ]
+  },
+  "cruzamento.anuncio": {
+    "insights": [
+      {
+        "id": "cruz-anuncio",
+        "titulo": "Os leads acompanham a verba de anúncio, não o engajamento orgânico.",
+        "diagnostico": "Quando o anúncio gasta mais, entram mais leads (relação forte). O engajamento dos posts quase não mexe no número de leads (relação fraca). Hipótese: hoje o anúncio pode responder por boa parte dos contatos, e o conteúdo pode estar gerando mais audiência do que contato. Para confirmar: marcar a origem do lead no CRM.",
+        "evidencia": "Em 30 dias: lead x engajamento orgânico 0.25; lead x gasto em anúncio 0.83 (de -1 a 1; de 0,3 para cima as duas séries andam juntas, o que ainda pode ser coincidência). 905 leads no período.",
+        "risco": "Correlação mostra que as duas coisas sobem e descem juntas, não prova que uma causa a outra. Feriado, campanha de anúncio e sazonalidade mexem nos dois ao mesmo tempo. Pausar o anúncio pode derrubar os leads: não corte verba com base nesta leitura sozinha.",
+        "regra": "Leads do CRM de cada dia comparados com a soma do engajamento e do gasto em anúncio do mesmo dia e dos 2 dias anteriores, sem o efeito do dia da semana (correlação de Spearman; 0,3 ou mais = relação moderada, 0,5 ou mais = forte). Mínimo de 21 dias com dado e 20 leads. Não há teste de significância. Mostra que as séries andam juntas, não que uma causa a outra.",
+        "acao": "Colocar chamada para o WhatsApp em 1 de cada 3 posts (\"me chama no direct com a palavra X\") e medir se os leads orgânicos sobem em 3 semanas."
+      }
+    ],
+    "limitacoes": []
+  },
+  "cruzamento.nenhum": {
+    "insights": [
+      {
+        "id": "cruz-nenhum",
+        "titulo": "Os leads não acompanham nem o engajamento nem a verba de anúncio dia a dia.",
+        "diagnostico": "O número de leads sobe e desce sem relação clara com o Instagram ou com o anúncio. Hipótese: a maior parte dos leads pode vir de outro lugar (indicação, Google, paciente antigo), ou a data do lead no CRM pode não ser a data do primeiro contato.",
+        "evidencia": "Em 30 dias: lead x engajamento orgânico 0.04 (de -1 a 1; de 0,3 para cima as duas séries andam juntas, o que ainda pode ser coincidência). 788 leads no período.",
+        "risco": "Correlação mostra que as duas coisas sobem e descem juntas, não prova que uma causa a outra. Feriado, campanha de anúncio e sazonalidade mexem nos dois ao mesmo tempo.",
+        "regra": "Leads do CRM de cada dia comparados com a soma do engajamento e do gasto em anúncio do mesmo dia e dos 2 dias anteriores, sem o efeito do dia da semana (correlação de Spearman; 0,3 ou mais = relação moderada, 0,5 ou mais = forte). Mínimo de 21 dias com dado e 20 leads. Não há teste de significância. Mostra que as séries andam juntas, não que uma causa a outra.",
+        "acao": "Preencher a origem do lead no CRM por 30 dias para saber de onde o paciente vem."
+      }
+    ],
+    "limitacoes": [
+      "A verba de anúncio foi quase a mesma todo dia, então não dá para medir dia a dia quanto do lead vem do anúncio."
+    ]
+  },
+  "cruzamento.lana": {
+    "insights": [
+      {
+        "id": "cruz-organico",
+        "titulo": "Os leads acompanham o engajamento do Instagram.",
+        "diagnostico": "Nos dias em que o perfil teve mais interação, entraram mais leads no mesmo dia ou nos 2 dias seguintes (relação moderada). Hipótese: o conteúdo pode estar ajudando a gerar contato, não só curtida. Para confirmar: marcar a origem do lead no CRM.",
+        "evidencia": "Em 30 dias: lead x engajamento orgânico 0.40 (de -1 a 1; de 0,3 para cima as duas séries andam juntas, o que ainda pode ser coincidência). 978 leads no período.",
+        "risco": "Correlação mostra que as duas coisas sobem e descem juntas, não prova que uma causa a outra. Feriado, campanha de anúncio e sazonalidade mexem nos dois ao mesmo tempo.",
+        "regra": "Leads do CRM de cada dia comparados com a soma do engajamento e do gasto em anúncio do mesmo dia e dos 2 dias anteriores, sem o efeito do dia da semana (correlação de Spearman; 0,3 ou mais = relação moderada, 0,5 ou mais = forte). Mínimo de 21 dias com dado e 20 leads. Não há teste de significância. Mostra que as séries andam juntas, não que uma causa a outra.",
+        "acao": "Manter a frequência de posts e repetir os assuntos dos posts que vieram antes dos picos de lead (lista abaixo)."
+      },
+      {
+        "id": "cruz-posts",
+        "titulo": "1 dos 5 posts que mais engajaram saiu num dia seguido de pico de lead.",
+        "diagnostico": "Nesses dias engajamento e lead andaram juntos. Hipótese: podem ser assuntos que atraem e também geram contato. O maior pico veio depois de 2 posts em 15/09 (“O mesmo peso pode representar corpos”, “Quer engravidar nos próximos 6 meses?”): 119 leads em 48h, 2x o normal. Como o perfil publica 2,5 posts por dia, a leitura é do dia, não de um post isolado.",
+        "evidencia": "15/09 (2 posts): 119 leads em 48h, normal 61 · 14/09 (3 posts): 108 leads em 48h, normal 61 · 29/09 (3 posts): 104 leads em 48h, normal 61 · 30/09 (2 posts): 92 leads em 48h, normal 61",
+        "risco": "Correlação no tempo, não prova de causa. Dias com anúncio forte estão marcados.",
+        "regra": "Leads do CRM no dia do post e no dia seguinte (48h), comparados com o normal do período (mediana das janelas de 48h). Pico = 1,5x o normal ou mais e pelo menos 3 leads a mais. A leitura é por dia, não por post. Mostra que as coisas aconteceram juntas, não que o post trouxe o lead.",
+        "acao": "Testar por 2 semanas um post por dia nos assuntos de 15/09, para separar qual deles pode trazer lead."
+      }
+    ],
+    "limitacoes": [
+      "A verba de anúncio foi quase a mesma todo dia, então não dá para medir dia a dia quanto do lead vem do anúncio."
+    ]
+  },
+  "cruzamento.semCrm": {
+    "insights": [],
+    "limitacoes": [
+      "Sem leads do CRM neste período: não dá para saber se o conteúdo ou o anúncio está trazendo paciente."
+    ]
+  },
+  "estoque.muitosParados": "86% dos leads abertos entraram há mais de 30 dias. Lead parado há mais tempo ainda pode fechar: em algumas clínicas boa parte das vendas sai depois de 30 dias. Vale revisar esses leads e tentar uma reativação antes de mudar o status. 50 lead(s) estão na primeira etapa há mais de 7 dias, sem ninguém ter mexido.",
+  "estoque.poucosParados": "5 lead(s) estão na primeira etapa há mais de 7 dias, sem ninguém ter mexido.",
+  "resultado.resposta": "Quanto tempo o paciente típico esperou pela primeira resposta no WhatsApp (mediana de 274 atendimentos com espera medida, de 337). 63% dos brasileiros esperam resposta em até 5 minutos (Opinion Box). Num estudo com leads de empresas nos EUA (Harvard Business Review, 2011), quem respondeu na primeira hora teve cerca de 7 vezes mais chance de qualificar o lead. O estudo não mediu pacientes de clínica.",
+  "resultado.regrasCruz": [
+    "Leads do CRM de cada dia comparados com a soma do engajamento e do gasto em anúncio do mesmo dia e dos 2 dias anteriores, sem o efeito do dia da semana (correlação de Spearman; 0,3 ou mais = relação moderada, 0,5 ou mais = forte). Mínimo de 21 dias com dado e 20 leads. Não há teste de significância. Mostra que as séries andam juntas, não que uma causa a outra."
+  ],
+  "hbr.citacao": "Num estudo com leads de empresas nos EUA (Harvard Business Review, 2011), quem respondeu na primeira hora teve cerca de 7 vezes mais chance de qualificar o lead. O estudo não mediu pacientes de clínica.",
+  "hbr.referencia": "63% dos brasileiros esperam resposta em até 5 min (Opinion Box); num estudo com leads de empresas nos EUA (HBR, 2011), quem respondeu em até 1h teve ~7x mais chance de qualificar o lead, sem medir pacientes"
+}

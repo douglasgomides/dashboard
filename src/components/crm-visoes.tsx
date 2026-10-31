@@ -72,7 +72,7 @@ export function VisoesComerciais({ clientId, start, end }: { clientId: string; s
         icone={Boxes}
         titulo="Estoque de leads abertos"
         resumo={`${fmtN(v.abertos)} abertos hoje, por etapa e por quanto tempo estão no CRM`}
-        ajuda={<>Leads que não foram marcados como ganhos nem perdidos, contados pela data em que entraram. Lead aberto há mais de 30 dias quase nunca é oportunidade viva: trabalhe numa reativação ou encerre como perdido.</>}
+        ajuda={<>Leads que não foram marcados como ganhos nem perdidos, contados pela data em que entraram. Lead aberto há mais de 30 dias ainda pode fechar: em algumas clínicas boa parte das vendas sai depois disso. Não há prazo com fonte para dar um lead como perdido.</>}
       >
         {leitura && <p className="mt-1 text-sm">{leitura}</p>}
         {!v.estoque.length ? (
