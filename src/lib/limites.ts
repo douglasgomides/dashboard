@@ -24,6 +24,18 @@ export const LIMITES = {
     /** Acima de tantos dias sem dado novo, a fonte de planilha conta como parada. Fonte automática: 3 dias. */
     diasParaParada: 10,
   },
+  /**
+   * Funis (Jornada e Funil comercial): tamanho mínimo da etapa de base para mostrar a passagem em %.
+   * Abaixo disso a tela mostra "N de M", sem %. Os mesmos números da amostra do SAP (sap-auto.ts).
+   */
+  funil: {
+    /** Base em leads (ou contatos antes do lead): conversas, entraram, foram atendidos. */
+    minLeads: 30,
+    /** Base em agendamentos: passagem de agendou para comprou. */
+    minAgendamentos: 20,
+    /** Base em consultas realizadas: passagem de compareceu para fechou. */
+    minConsultas: 15,
+  },
   /** Conferência diária: contagem do Nexo contra a contagem do CRM ao vivo. */
   conferenciaCrm: {
     /** Acima desta fatia de diferença entre Nexo e CRM, vira alerta. */

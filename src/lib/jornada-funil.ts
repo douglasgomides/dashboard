@@ -3,6 +3,7 @@
 // Etapa sem integração NUNCA vira zero: vira "falta X" com o dado que seria necessário.
 
 import type { Funil as FunilComercial } from "./comercial";
+import { agendadosSaoGanhos, avisoAgendadosSaoGanhos, passagem, type BaseFunil } from "./funil-taxa";
 
 export interface FunilBanco {
   alcance: number;
@@ -40,8 +41,10 @@ export interface EtapaFunil {
   valor: number | null; // null = não dá para medir
   unidade: string;
   estado: EstadoEtapa;
-  // Taxa sobre a etapa anterior medida (só quando as duas são medidas e a anterior > 0).
+  // Taxa sobre a etapa anterior medida (só quando as duas são medidas e a anterior tem o mínimo de LIMITES.funil).
   taxa: number | null;
+  // "N de M" quando a etapa anterior é pequena demais para %.
+  fracao: { n: number; m: number } | null;
   explicacao: string | null; // o que falta / por que é zero / limite da leitura
   falta?: { integracao: string; dado: string; onde: string } | null;
 }
@@ -55,10 +58,13 @@ export interface Funil {
 
 const NOME_CRM: Record<string, string> = { kommo: "Kommo", clint: "Clint", rdstation: "RD Station", flwchat: "flwChat", digisac: "Digisac", feegow: "Feegow", ninsaude: "Ninsaúde", planilha: "planilha" };
 
+/** Etapas comerciais que servem de base com mínimo de casos. As de Instagram (alcance, engajamento, comentário) ficam sem mínimo. */
+const BASE_DA_ETAPA: Partial<Record<IdEtapa, BaseFunil>> = { conversa: "leads", lead: "leads", agendamento: "agendamentos" };
+
 export function montarFunil(d: FunilBanco | null | undefined, comercial?: FunilComercial | null): Funil {
   const f = d?.fontes;
   const crm = f?.crm_provider ? NOME_CRM[f.crm_provider] ?? f.crm_provider : "o CRM";
-  const e: Omit<EtapaFunil, "taxa">[] = [];
+  const e: Omit<EtapaFunil, "taxa" | "fracao">[] = [];
 
   // 1. Alcance
   if (!f?.tem_instagram) {
@@ -108,6 +114,8 @@ export function montarFunil(d: FunilBanco | null | undefined, comercial?: FunilC
     e.push({ id: "agendamento", n: 6, nome: "Consulta agendada", valor: null, unidade: "leads com agendamento", estado: "sem_integracao", explicacao: "Depende do CRM.", falta: { integracao: "CRM", dado: "Etapa de agendamento no funil", onde: "Admin > cliente > CRM" } });
   } else if (!f.tem_etapa_agendamento) {
     e.push({ id: "agendamento", n: 6, nome: "Consulta agendada", valor: null, unidade: "leads com agendamento", estado: "parcial", explicacao: `O funil do ${crm} não tem etapa com “agendado”, “consulta” ou “confirmado” no nome, então o painel não sabe quem agendou.`, falta: { integracao: `Funil do ${crm}`, dado: "Uma etapa “Consulta agendada” (ou parecida) usada pela equipe", onde: "Comercial > Guia do CRM" } });
+  } else if (f.tem_venda_registrada && agendadosSaoGanhos(d!.agendados, d!.vendas)) {
+    e.push({ id: "agendamento", n: 6, nome: "Consulta agendada", valor: null, unidade: "leads com agendamento", estado: "parcial", explicacao: avisoAgendadosSaoGanhos(d!.agendados, d!.vendas) });
   } else {
     e.push({ id: "agendamento", n: 6, nome: "Consulta agendada", valor: d!.agendados, unidade: "leads com agendamento", estado: d!.agendados > 0 ? "medido" : "zero", explicacao: `Leads do período que chegaram à etapa de agendamento (ou compraram), pela situação de hoje no ${crm}.${d!.leads > 0 && d!.leads_com_etapa < d!.leads * 0.5 ? " Mais da metade dos leads está sem etapa reconhecida: o número pode estar baixo." : ""}` });
   }
@@ -134,10 +142,15 @@ export function montarFunil(d: FunilBanco | null | undefined, comercial?: FunilC
   }
 
   // Taxas só entre etapas vizinhas medidas (o funil não é uma fila única: lead de formulário pula a conversa).
+  // Com a etapa anterior abaixo do mínimo (30 leads, 20 agendamentos), fica "N de M", sem %.
   const etapas: EtapaFunil[] = e.map((x, i) => {
     const ant = i > 0 ? e[i - 1] : null;
     const ok = ant && ant.valor != null && ant.valor > 0 && x.valor != null && ant.estado !== "sem_integracao" && x.estado !== "sem_integracao";
-    return { ...x, taxa: ok ? x.valor! / ant!.valor! : null };
+    if (!ok) return { ...x, taxa: null, fracao: null };
+    const base = BASE_DA_ETAPA[ant!.id];
+    if (!base) return { ...x, taxa: x.valor! / ant!.valor!, fracao: null };
+    const p = passagem(x.valor, ant!.valor, base);
+    return { ...x, taxa: p.taxa, fracao: p.fracao };
   });
   // Maior queda: só nas etapas do comercial (conversa→lead→agendamento→venda), onde a taxa tem leitura de negócio.
   const comerciais: IdEtapa[] = ["lead", "agendamento", "venda"];
