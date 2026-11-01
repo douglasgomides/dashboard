@@ -10,6 +10,7 @@ import type { Database } from "../../src/integrations/supabase/types.js";
 import { classifyTema } from "./tema-classifier.js";
 import { META_GRAPH_URL } from "./meta-graph-versao.js";
 import { fetchMeta } from "./meta-limite.js";
+import { linhasWindsor } from "./windsor-resposta.js";
 
 const WINDSOR_BASE = "https://connectors.windsor.ai/instagram";
 
@@ -98,8 +99,8 @@ async function windsorGetRange(
   if (!res.ok) {
     throw new Error(`Windsor.ai request failed (${res.status}): ${await res.text()}`);
   }
-  const body = (await res.json()) as { data?: Record<string, unknown>[] };
-  return body.data ?? [];
+  // HTTP 200 com `error` no corpo não vira mais "lista vazia" (windsor-resposta.ts).
+  return linhasWindsor(res);
 }
 
 const WINDSOR_CHUNK_DAYS = 30;

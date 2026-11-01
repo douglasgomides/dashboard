@@ -15,6 +15,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
 import { protegerContraZero } from "./anuncios-protecao.js";
 import { registrarLeiturasContas } from "./anuncios-status.js";
+import { linhasWindsor } from "./windsor-resposta.js";
 
 const WINDSOR_BASE = "https://connectors.windsor.ai/facebook";
 
@@ -134,8 +135,8 @@ async function windsorGet(
   if (!res.ok) {
     throw new Error(`Windsor.ai request failed (${res.status}): ${await res.text()}`);
   }
-  const body = (await res.json()) as { data?: Record<string, unknown>[] };
-  return body.data ?? [];
+  // HTTP 200 com `error` no corpo não vira mais "lista vazia" (windsor-resposta.ts).
+  return linhasWindsor(res);
 }
 
 // Conta grande (ex.: Dra. Lana, 113 campanhas e linha por anúncio) estoura os 30 s da Windsor numa janela de 7 dias

@@ -67,18 +67,34 @@ type Provedor = "openai" | "anthropic";
 
 /** Erro de provedor com o status HTTP, para decidir se vale passar para a reserva. */
 export class ErroProvedorIA extends Error {
-  constructor(message: string, readonly status: number | null, readonly provedor: Provedor) {
+  constructor(message: string, readonly status: number | null, readonly provedor: Provedor, readonly codigo: string | null = null) {
     super(message);
+  }
+}
+
+/** `error.code` do corpo de erro da OpenAI (`{"error":{"code":"model_not_found",...}}`); null quando não há. */
+export function codigoErroOpenAI(corpo: string): string | null {
+  try {
+    const c = (JSON.parse(corpo) as { error?: { code?: unknown } })?.error?.code;
+    return typeof c === "string" && c ? c : null;
+  } catch {
+    return null;
   }
 }
 
 /**
  * Passa para a Anthropic quando a OpenAI recusa a chave (401/403), fica sem crédito (402), pede para ir mais devagar (429), falha do lado
  * dela (5xx) ou não responde (rede/tempo). De 23 a 27/10/2026 a chave da OpenAI ficou recusada e 2.764 chamadas
- * falharam sem tentar a reserva. Erro de formato (400, JSON inválido) não muda de provedor: o pedido é o problema.
+ * falharam sem tentar a reserva. Também passa quando o modelo deixou de existir (404 ou `model_not_found`): a OpenAI
+ * anunciou o desligamento dos modelos padrão (ver docs/apis/openai-anthropic.md) e, no dia, a rota de chat devolve 404
+ * para o modelo; sem isso toda chamada falharia até alguém trocar a variável. Erro de formato (400, JSON inválido)
+ * não muda de provedor: o pedido é o problema.
  */
 export function deveUsarReserva(e: unknown): boolean {
-  if (e instanceof ErroProvedorIA) return e.status == null || e.status === 401 || e.status === 402 || e.status === 403 || e.status === 429 || e.status >= 500;
+  if (e instanceof ErroProvedorIA) {
+    if (e.codigo === "model_not_found" || e.status === 404) return true;
+    return e.status == null || e.status === 401 || e.status === 402 || e.status === 403 || e.status === 429 || e.status >= 500;
+  }
   if (e instanceof Error) return e.name === "TimeoutError" || e.name === "AbortError" || e instanceof TypeError;
   return false;
 }
@@ -128,7 +144,10 @@ async function textoOpenAI(p: PedidoTextoIA): Promise<RespostaTextoIA> {
   } catch (e) {
     throw Object.assign(e instanceof Error ? e : new Error(String(e)), { modelo });
   }
-  if (!r.ok) throw Object.assign(new ErroProvedorIA(`OpenAI respondeu ${r.status}: ${semChave((await r.text().catch(() => "")).slice(0, 160))}`, r.status, "openai"), { modelo });
+  if (!r.ok) {
+    const corpo = await r.text().catch(() => "");
+    throw Object.assign(new ErroProvedorIA(`OpenAI respondeu ${r.status}: ${semChave(corpo.slice(0, 160))}`, r.status, "openai", codigoErroOpenAI(corpo)), { modelo });
+  }
   const j = (await r.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
   return { texto: j.choices?.[0]?.message?.content ?? "", modelo, provedor: "openai", reserva: false, tIn: j.usage?.prompt_tokens ?? null, tOut: j.usage?.completion_tokens ?? null };
 }
