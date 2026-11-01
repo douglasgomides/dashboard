@@ -1,0 +1,31 @@
+{
+  "_sobre": "Amostra inventada no formato da API da WTS Chat / FlwChat (Helena) que o Nexo lê. Sem dado real. Ver docs/apis/wts-flwchat.md.",
+  "departamentos": [ { "id": "dep-exemplo-1", "name": "Recepção" } ],
+  "agentes": [ { "id": "ag-exemplo-1", "userId": "usr-exemplo-1", "name": "Atendente Exemplo", "email": "atendente@exemplo.com", "profile": "AGENT" } ],
+  "sessoes": {
+    "items": [
+      { "id": "ses-exemplo-1", "createdAt": "2026-10-20T12:00:00Z", "startAt": "2026-10-20T12:00:05Z", "endAt": "2026-10-20T13:10:00Z", "status": "COMPLETED", "departmentId": "dep-exemplo-1", "userId": "usr-exemplo-1", "channelId": "chn-1", "contactId": "ctt-exemplo-1", "timeWait": "00:12:30", "timeService": "01:09:55", "firstResponseAt": "2026-10-20T12:12:35Z" },
+      { "id": "ses-exemplo-2", "createdAt": "2026-10-20T14:00:00Z", "startAt": null, "endAt": null, "status": "PENDING", "departmentId": "dep-exemplo-1", "userId": null, "channelId": "chn-1", "contactId": "ctt-exemplo-2", "timeWait": null, "timeService": null, "firstResponseAt": null }
+    ],
+    "hasMorePages": false
+  },
+  "mensagens": {
+    "items": [
+      { "id": "wm-1", "timestamp": "2026-10-20T12:00:05Z", "direction": "FROM_HUB", "type": "TEXT", "origin": "CONTACT", "text": "Olá" },
+      { "id": "wm-2", "timestamp": "2026-10-20T12:12:35Z", "direction": "TO_HUB", "type": "TEXT", "origin": "AGENT", "text": "Bom dia! Como posso ajudar?" },
+      { "id": "wm-3", "createdAt": "2026-10-20T12:20:00Z", "direction": "FROM_HUB", "type": "AUDIO", "origin": "CONTACT", "text": null, "details": { "transcription": "áudio transcrito de exemplo" } }
+    ],
+    "hasMorePages": false
+  },
+  "contato": { "id": "ctt-exemplo-1", "phoneNumber": "5511900000000", "name": "Paciente Exemplo", "nameWhatsapp": "Paciente", "email": "paciente@exemplo.com", "instagram": null },
+  "painel": { "id": "pnl-exemplo-1", "title": "Vendas", "steps": [ { "id": "stp-1", "title": "Novo" }, { "id": "stp-2", "title": "Consulta agendada" }, { "id": "stp-3", "title": "Perdido" } ] },
+  "cards": {
+    "items": [
+      { "id": "crd-exemplo-1", "title": "Card de exemplo", "stepId": "stp-2", "monetaryAmount": 800, "createdAt": "2026-10-19T10:00:00Z", "updatedAt": "2026-10-20T10:00:00Z", "customFields": { "origem-do-lead": "Instagram" }, "description": "Veio pelo anúncio do Instagram", "contactIds": ["ctt-exemplo-1"], "archived": false, "stepTitle": null, "sessionId": "ses-exemplo-1", "number": 101 }
+    ],
+    "hasMorePages": false,
+    "totalPages": 1
+  },
+  "etiquetas": { "items": [ { "id": "tag-1", "name": "Origem · Instagram" }, { "id": "tag-2", "name": "Tipo · Paciente" } ], "hasMorePages": false },
+  "contatos_tags": { "items": [ { "id": "ctt-exemplo-1", "tagIds": ["tag-1", "tag-2"], "updatedAt": "2026-10-20T10:00:00Z" } ], "hasMorePages": false, "totalPages": 1 }
+}

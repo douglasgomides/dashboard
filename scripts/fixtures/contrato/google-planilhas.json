@@ -1,0 +1,4 @@
+{
+  "_sobre": "Amostra inventada no formato da planilha de distribuição de anúncios (CSV público do Google Planilhas) que o Nexo lê. Sem dado real. Ver docs/apis/google-planilhas.md.",
+  "csv": "Dia da Análise,Status,Ações,Nome da Campanha,Link do Post,Tipo,Orçamento,Valor Investido Total,Seguidores Antes,Valor no Período,Seguidores Após,Seguidores Periodo,Custo por Seguidor,Custo por Mensagem,Mensagens Antes,Mensagens Depois,Mensagens Período\n21/10/2026,Ativo,Manter,Campanha exemplo,https://www.instagram.com/p/EXEMPLO1/,Reels,20,\"R$ 140,00\",1000,\"R$ 70,00\",1010,10,\"R$ 7,00\",\"R$ 3,50\",30,50,20\n21/10/2026,Pausado,Pausar,\"Campanha com vírgula, no nome\",https://www.instagram.com/p/EXEMPLO2/,Carrossel,10,\"R$ 50,00\",1000,\"R$ 25,00\",1000,5,\"R$ 5,00\",,10,12,2\n,,,,,,,,,,,,,,,,\n,Ativo,,Ativo sem data,https://www.instagram.com/p/EXEMPLO3/,Reels,15,\"R$ 15,00\",,,,,,,,,\n"
+}

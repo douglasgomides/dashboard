@@ -1,0 +1,54 @@
+{
+  "_sobre": "Amostra inventada no formato da Meta Marketing API v26.0 que o Nexo lê. Números vêm como texto, como na Meta. Sem dado real. Ver docs/apis/meta-marketing.md.",
+  "insights": {
+    "data": [
+      {
+        "date_start": "2026-10-20",
+        "date_stop": "2026-10-20",
+        "campaign_id": "120200000000000001",
+        "campaign_name": "Campanha de exemplo",
+        "objective": "OUTCOME_ENGAGEMENT",
+        "spend": "45.10",
+        "impressions": "3200",
+        "reach": "2100",
+        "clicks": "60",
+        "unique_clicks": "55",
+        "frequency": "1.52",
+        "inline_link_clicks": "41",
+        "actions": [
+          { "action_type": "link_click", "value": "41" },
+          { "action_type": "onsite_conversion.messaging_conversation_started_7d", "value": "9" },
+          { "action_type": "lead", "value": "2" },
+          { "action_type": "offsite_conversion.fb_pixel_lead", "value": "2" }
+        ]
+      },
+      {
+        "date_start": "2026-10-20",
+        "date_stop": "2026-10-20",
+        "campaign_id": "120200000000000002",
+        "campaign_name": "Post impulsionado de exemplo",
+        "objective": "OUTCOME_AWARENESS",
+        "spend": "10.00",
+        "impressions": "900",
+        "reach": "800",
+        "clicks": "5",
+        "unique_clicks": "5",
+        "frequency": "1.12",
+        "inline_link_clicks": "3"
+      }
+    ],
+    "paging": { "cursors": { "before": "MAZDZD", "after": "MQZDZD" } }
+  },
+  "alcance_janela": {
+    "data": [
+      { "campaign_id": "120200000000000001", "reach": "9100", "impressions": "15000", "frequency": "1.65", "date_start": "2026-10-14", "date_stop": "2026-10-20" }
+    ]
+  },
+  "conjuntos": {
+    "data": [
+      { "id": "120200000000000101", "campaign_id": "120200000000000001", "optimization_goal": "CONVERSATIONS", "destination_type": "WHATSAPP" },
+      { "id": "120200000000000102", "campaign_id": "120200000000000002", "optimization_goal": "REACH" }
+    ]
+  },
+  "limite": { "spend_cap": "300000", "amount_spent": "250000", "id": "act_100000000000000" }
+}

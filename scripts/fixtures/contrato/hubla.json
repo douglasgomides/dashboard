@@ -1,0 +1,42 @@
+{
+  "_sobre": "Amostra inventada no formato do webhook v2 da Hubla (como chega pelo n8n) e da carga normalizada. Sem dado real. Ver docs/apis/hubla.md.",
+  "webhook_pago": {
+    "type": "invoice.payment_succeeded",
+    "version": "2.0.0",
+    "event": {
+      "product": { "id": "prd-exemplo-1", "name": "Produto de exemplo" },
+      "products": [ { "id": "prd-exemplo-1", "name": "Produto de exemplo", "offers": [ { "id": "ofr-exemplo-1" } ] } ],
+      "invoice": {
+        "id": "inv-exemplo-0001",
+        "status": "paid",
+        "type": "sell",
+        "version": 3,
+        "paymentMethod": "pix",
+        "currency": "BRL",
+        "amount": { "subtotalCents": 49700, "totalCents": 49700 },
+        "paidAt": "2026-10-20T13:00:00.000Z",
+        "updatedAt": "2026-10-20T13:00:05.000Z",
+        "payer": { "firstName": "Paciente", "lastName": "Exemplo", "email": "comprador@exemplo.com", "document": "00000000000", "phone": "+5511900000000" },
+        "paymentSession": { "utm": { "source": "instagram", "medium": "bio", "campaign": "exemplo" } }
+      }
+    }
+  },
+  "webhook_reembolso": {
+    "type": "invoice.refunded",
+    "version": "2.0.0",
+    "event": {
+      "invoice": {
+        "id": "inv-exemplo-0001",
+        "status": "refunded",
+        "type": "sell",
+        "amount": { "subtotalCents": 49700, "totalCents": 49700 },
+        "paidAt": "2026-10-20T13:00:00.000Z",
+        "refundedAt": "2026-10-25T10:00:00.000Z"
+      }
+    }
+  },
+  "webhook_sem_fatura": { "type": "subscription.activated", "version": "2.0.0", "event": { "subscription": { "id": "sub-exemplo-1" } } },
+  "carga": [
+    { "externo_id": "inv-exemplo-0002", "status": "paid", "tipo": "sell", "metodo": "credit_card", "valor_centavos": 120000, "moeda": "BRL", "pago_em": "2026-09-01T00:26:00.000Z", "produto": "Produto de exemplo", "oferta_id": "ofr-exemplo-1", "telefone": "+55 11 90000-0000" }
+  ]
+}
