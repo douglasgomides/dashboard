@@ -16,6 +16,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { tagsDaConexao } from "./flwchat-sync.js";
+import { lerTodasAsLinhas } from "./ler-paginas.js";
 
 const CLINT_BASE = "https://api.clint.digital/v1";
 const PAGE_SIZE = 200;
@@ -97,12 +98,27 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 // OPEN / WON / LOST na Clint. Qualquer coisa que não reconhecemos vira
 // "open" em vez de null: um negócio sem desfecho conhecido está, por
-// definição, em aberto — e null quebraria as contagens do painel.
-function normalizeOutcome(status: unknown): "open" | "won" | "lost" {
+// definição, em aberto, e null quebraria as contagens do painel. Mas o status
+// desconhecido não passa calado: statusClintDesconhecido avisa e o sync registra.
+export function normalizeOutcome(status: unknown): "open" | "won" | "lost" {
   const s = String(status ?? "").toUpperCase();
   if (s === "WON") return "won";
   if (s === "LOST") return "lost";
   return "open";
+}
+
+/** Status que a Clint mandou e o Nexo não conhece (ex.: um "ARCHIVED" novo). Vazio ou ausente não conta. */
+export function statusClintDesconhecido(status: unknown): string | null {
+  if (typeof status !== "string" || !status.trim()) return null;
+  const s = status.trim().toUpperCase();
+  return s === "OPEN" || s === "WON" || s === "LOST" ? null : s;
+}
+
+/** Aviso de status desconhecido, por status e quantidade (ex.: 'status "ARCHIVED" em 3 negócios'). */
+export function avisoStatusDesconhecido(contagem: Map<string, number>): string | null {
+  if (contagem.size === 0) return null;
+  const itens = [...contagem.entries()].sort((a, b) => b[1] - a[1]).map(([st, n]) => `"${st}" em ${n} ${n === 1 ? "negócio" : "negócios"}`);
+  return `status desconhecido da Clint (${itens.join(", ")}): contados como em aberto até o Nexo conhecer o status`;
 }
 
 async function clintGet(token: string, path: string): Promise<any> {
@@ -241,6 +257,7 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
       ? ((conn.config as any).origem_por_funil as Record<string, unknown>)
       : {};
     const stageRows = new Map<string, Record<string, unknown>>();
+    const statusDesconhecidos = new Map<string, number>();
     // Tags dos contatos já lidas (api/_lib/clint-tags.ts). Entram no raw_payload para a origem pela tag não sumir
     // quando o negócio é regravado. Falha aqui não para o sync.
     let tagsPorContato = new Map<string, string[]>();
@@ -284,6 +301,8 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
           continue;
         }
 
+        const desconhecido = statusClintDesconhecido(d.status);
+        if (desconhecido) statusDesconhecidos.set(desconhecido, (statusDesconhecidos.get(desconhecido) ?? 0) + 1);
         const nomeEtapa = d.stage ?? String((stageRows.get(`${d.origin_id ?? originId}:${d.stage_id}`) as { status_name?: unknown } | undefined)?.status_name ?? "");
         const base = etapasBase.length > 0 && ehEtapaBase(nomeEtapa, etapasBase);
         leadRows.set(d.id, {
@@ -297,6 +316,9 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
           status_id: d.stage_id ?? null,
           pipeline_id: d.origin_id ?? originId,
           price: clintPrice(d.value),
+          // occurred_at é a ENTRADA do negócio (régua de leads novos). A data da venda não é esta: é d.won_at (e a da
+          // perda, d.lost_at), que segue no raw_payload e o banco lê em crm_data_desfecho (gatilho de eventos,
+          // crm_vendas_periodo, pacientes_periodo). Antes a venda caía no mês em que o lead entrou.
           occurred_at: d.created_at ?? null,
           outcome: normalizeOutcome(d.status),
           source: clintSource(d.fields) ?? origemPorFunil(originName, origemDoFunil) ?? origemPorFunil(originGroup, origemDoFunil),
@@ -326,6 +348,9 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
         }
       }
     }
+
+    const avisoStatus = avisoStatusDesconhecido(statusDesconhecidos);
+    if (avisoStatus) errors.push(avisoStatus);
 
     // Funil de compra aprovada (config.funis_compra_aprovada): todo card nele é uma venda paga, mesmo que a Clint não o
     // marque como ganho (Doctor Creator: venda no cartão pela Hubla não virava ganho; receita no Nexo era menos da metade
@@ -365,14 +390,22 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
     // Negócio apagado na Clint continuava contando no Nexo (auditoria de 30/10/2026: 26 fantasmas na Doctor Creator,
     // "Deal not found" na API). Só com leitura completa e sem erro: o que sumiu dos funis lidos é marcado como removido.
     // Trava: se sumir mais de 20% dos negócios do funil, não marca e avisa (provável falha da API, não exclusão).
+    // Leitura em páginas de 1.000: o banco corta cada pedido em 1.000 linhas, e o que passava disso nunca era conferido.
     if (errors.length === 0 && leadRows.size > 0) {
-      const { data: locais, error: eLocais } = await supabase
-        .from("crm_leads")
-        .select("external_lead_id, pipeline_id")
-        .eq("crm_connection_id", conn.id)
-        .in("pipeline_id", origins)
-        .is("removido_na_origem", null)
-        .limit(50_000);
+      let locais: { external_lead_id: unknown; pipeline_id: unknown }[] | null = null;
+      let eLocais: { message: string } | null = null;
+      try {
+        locais = await lerTodasAsLinhas((de, ate) => supabase
+          .from("crm_leads")
+          .select("external_lead_id, pipeline_id")
+          .eq("crm_connection_id", conn.id)
+          .in("pipeline_id", origins)
+          .is("removido_na_origem", null)
+          .order("external_lead_id")
+          .range(de, ate));
+      } catch (err) {
+        eLocais = { message: err instanceof Error ? err.message : String(err) };
+      }
       if (eLocais) errors.push(`apagados: ${eLocais.message}`);
       else {
         const sumiram = (locais ?? []).filter((l) => !leadRows.has(l.external_lead_id as string)).map((l) => l.external_lead_id as string);

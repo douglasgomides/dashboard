@@ -349,7 +349,7 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
       id: "leads",
       rotulo: "Novos contatos no CRM",
       valor: int(crm.novos),
-      explicacao: `Pessoas que entraram no CRM da clínica no período.${v.frase ? ` ${v.frase[0].toUpperCase()}${v.frase.slice(1)}.` : ""}${v.indisponivel ? ` ${v.indisponivel}` : ""} Depende de a equipe registrar no CRM. ${AVISO_CRM_ZERO}`,
+      explicacao: `Pessoas que entraram no CRM da clínica no período.${v.frase ? ` ${v.frase[0].toUpperCase()}${v.frase.slice(1)}.` : ""}${v.aviso ? ` ${v.aviso}` : ""}${v.indisponivel ? ` ${v.indisponivel}` : ""} Depende de a equipe registrar no CRM. ${AVISO_CRM_ZERO}`,
       status: null,
       rota: "/$clientId/crm-painel",
       botao: "Ver onde o funil perde gente",
