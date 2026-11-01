@@ -17,9 +17,10 @@ import type { Database } from "../../src/integrations/supabase/types.js";
 import { numOrNull, chunk, BATCH_SIZE, normalizeFormat } from "./instagram-sync.js";
 import { classifyTema } from "./tema-classifier.js";
 import { classificarConteudoComIA } from "./conteudo-ia.js";
-import { storiesAoVivo, g as graphGet } from "./meta-audiencia.js";
+import { storiesAoVivo, insightsDoStory, g as graphGet, type StoryAoVivo } from "./meta-audiencia.js";
 import { graphPageUrl, integrationRequest } from "./integration-http.js";
 import { META_GRAPH_URL } from "./meta-graph-versao.js";
+import { janelaDoDia, laData, laMeiaNoiteMs, somarDias } from "./dia-meta.js";
 
 const GRAPH_BASE = META_GRAPH_URL;
 const INSIGHTS_METRICS = "reach,likes,comments,shares,saved,views,total_interactions";
@@ -59,6 +60,11 @@ export interface MetaSyncEnv {
   // nextCursor/done pra quem chama continuar de onde parou.
   maxPages?: number;
   after?: string;
+  // Relê à força as métricas diárias desde esta data (AAAA-MM-DD, dia da Califórnia), mesmo as que parecem completas.
+  // Uso: corrigir dias gravados errados (ex.: 24/10/2026 em diante, pelo erro de horário de verão).
+  relerDesde?: string;
+  // Só atualiza os stories (leitura rápida), para rodar com mais frequência que o sync completo.
+  soStories?: boolean;
 }
 
 export interface MetaAccountSyncResult {
@@ -189,7 +195,7 @@ async function syncAccountPosts(
   clientId: string,
   maxPages: number,
   after: string | undefined,
-): Promise<{ count: number; errors: string[]; nextCursor: string | null; done: boolean; persisted: boolean }> {
+): Promise<{ count: number; errors: string[]; nextCursor: string | null; done: boolean; persisted: boolean; vistos: { id: string; timestamp: string }[] }> {
   const { media, nextCursor, done } = await fetchMediaPage(igAccountId, accessToken, maxPages, after);
   const errors: string[] = [];
   const insightsById = await fetchInsightsBatch(
@@ -268,7 +274,59 @@ async function syncAccountPosts(
     }
     else count += batch.length;
   }
-  return { count, errors, nextCursor, done, persisted };
+  const vistos = media.filter((m) => m.id && m.timestamp).map((m) => ({ id: m.id, timestamp: m.timestamp as string }));
+  return { count, errors, nextCursor, done, persisted, vistos };
+}
+
+/** Acima disto (ou de 5% da listagem) de posts "sumidos" numa mesma listagem, desconfia da resposta e não marca nada. */
+const MAX_REMOVIDOS_POR_RODADA = 10;
+
+/**
+ * Posts apagados ou arquivados no Instagram somem da listagem /media, mas continuavam no Nexo contando nos "posts do
+ * período" e nas médias (auditoria de 01/11/2026: Doctor Creator com 13 posts em 27-30/10, a Meta com 10).
+ * A listagem a partir do topo é contínua: todo post publicado entre o mais antigo e o mais novo que ela trouxe
+ * deveria estar nela. O que está no banco nesse intervalo e não veio é marcado com removido_em (nada é apagado; as
+ * telas e os agentes filtram removido_em is null). Se a listagem chegou ao fim (done), o intervalo vai até o começo.
+ * Post marcado que volta a aparecer (desarquivado) perde a marca.
+ */
+export async function marcarPostsRemovidos(
+  supabase: SupabaseClient<Database>,
+  accountId: string,
+  vistos: { id: string; timestamp: string }[],
+  listagemAteOFim: boolean,
+): Promise<{ removidos: number; errors: string[] }> {
+  if (vistos.length === 0) return { removidos: 0, errors: [] };
+  const ids = vistos.map((v) => v.id);
+  const errors: string[] = [];
+  // Limite inferior = o ÚLTIMO item na ordem da Meta (do mais novo para o mais antigo), não o menor timestamp: post
+  // fixado no topo do perfil pode ser antigo e alargaria o intervalo para posts que a listagem nem chegou a cobrir.
+  const maisAntigo = new Date(Date.parse(vistos[vistos.length - 1].timestamp)).toISOString();
+  // Volta a contar o post que reapareceu.
+  for (const lote of chunk(ids, BATCH_SIZE)) {
+    const { error } = await supabase.from("instagram_posts").update({ removido_em: null })
+      .eq("instagram_account_id", accountId).in("windsor_media_id", lote).not("removido_em", "is", null);
+    if (error) { errors.push(`posts removidos: ${error.message}`); return { removidos: 0, errors }; }
+  }
+  const noBanco: { id: string; windsor_media_id: string | null }[] = [];
+  for (let inicio = 0; ; inicio += 1000) {
+    let q = supabase.from("instagram_posts").select("id, windsor_media_id")
+      .eq("instagram_account_id", accountId).is("removido_em", null).not("windsor_media_id", "is", null);
+    if (!listagemAteOFim) q = q.gte("posted_at", maisAntigo);
+    const { data, error } = await q.order("id").range(inicio, inicio + 999);
+    if (error) { errors.push(`posts removidos: ${error.message}`); return { removidos: 0, errors }; }
+    noBanco.push(...(data ?? []));
+    if (!data || data.length < 1000) break;
+  }
+  const vistosSet = new Set(ids);
+  const sumidos = noBanco.filter((p) => p.windsor_media_id && !vistosSet.has(p.windsor_media_id)).map((p) => p.id);
+  if (sumidos.length === 0) return { removidos: 0, errors };
+  if (sumidos.length > Math.max(MAX_REMOVIDOS_POR_RODADA, Math.ceil(vistos.length * 0.05))) {
+    errors.push(`posts removidos: ${sumidos.length} posts não vieram na listagem da Meta; nada foi marcado (conferir a conta)`);
+    return { removidos: 0, errors };
+  }
+  const { error } = await supabase.from("instagram_posts").update({ removido_em: new Date().toISOString() }).in("id", sumidos);
+  if (error) { errors.push(`posts removidos: ${error.message}`); return { removidos: 0, errors }; }
+  return { removidos: sumidos.length, errors };
 }
 
 
@@ -301,32 +359,66 @@ async function gravarSeguidoresDeHoje(
 
 // Stories duram 24 horas e a Meta não devolve os que já saíram do ar. Por isso o que está no ar na hora do sync
 // é gravado em instagram_stories (uma linha por story). Sem a tabela (migração ainda não aplicada), não faz nada.
+// A métrica que a Meta não devolveu nesta leitura fica de fora da linha: não apaga (nem zera) a leitura anterior.
+// Além dos que estão na lista "no ar", relê pelo id os stories gravados que ainda estão dentro de 24 h + margem
+// (STORY_RELEITURA_HORAS): a lista pode deixar de trazê-los antes do fim, e o número final ficava parado em ~15 h.
+export const STORY_RELEITURA_HORAS = 26;
+const COLUNAS_STORY: [keyof StoryAoVivo, string][] = [
+  ["alcance", "reach"], ["views", "views"], ["respostas", "replies"], ["compartilhamentos", "shares"],
+  ["interacoes", "total_interactions"], ["visitas_ao_perfil", "profile_visits"], ["novos_seguidores", "follows"],
+];
+const DA_METRICA: Record<string, string> = { reach: "reach", views: "views", replies: "replies", shares: "shares", total_interactions: "total_interactions", profile_visits: "profile_visits", follows: "follows" };
+
 export async function guardarStories(supabase: SupabaseClient<Database>, igAccountId: string, accountId: string, clientId: string, token: string): Promise<string[]> {
   try {
     const stories = await storiesAoVivo(token, igAccountId);
-    if (stories.length === 0) return [];
-    const linhas = stories.map((s) => ({
-      client_id: clientId,
-      instagram_account_id: accountId,
-      ig_media_id: s.id,
-      posted_at: s.postado_em,
-      media_type: s.media_type,
-      permalink: s.permalink,
-      thumbnail_url: s.thumbnail_url,
-      reach: s.alcance,
-      views: s.views,
-      replies: s.respostas,
-      shares: s.compartilhamentos,
-      total_interactions: s.interacoes,
-      profile_visits: s.visitas_ao_perfil,
-      follows: s.novos_seguidores,
-      metrics_updated_at: new Date().toISOString(),
-    }));
-    const { error } = await (supabase as any).from("instagram_stories").upsert(linhas, { onConflict: "instagram_account_id,ig_media_id" });
-    if (error) {
-      // 42P01 = tabela inexistente: migração ainda não aplicada, não é falha do sync.
-      if (error.code === "42P01" || /instagram_stories/.test(error.message ?? "")) return [];
-      return [`stories: ${error.message}`];
+    const agora = new Date().toISOString();
+    const linhas: Record<string, unknown>[] = stories.map((s) => {
+      const linha: Record<string, unknown> = {
+        client_id: clientId,
+        instagram_account_id: accountId,
+        ig_media_id: s.id,
+        posted_at: s.postado_em,
+        media_type: s.media_type,
+        permalink: s.permalink,
+        thumbnail_url: s.thumbnail_url,
+      };
+      let medido = false;
+      for (const [campo, coluna] of COLUNAS_STORY) { const v = s[campo]; if (typeof v === "number") { linha[coluna] = v; medido = true; } }
+      if (medido) linha.metrics_updated_at = agora;
+      return linha;
+    });
+
+    // Stories gravados que ainda podem ter número novo e não vieram na lista.
+    const noAr = new Set(stories.map((s) => s.id));
+    const { data: recentes, error: erroRecentes } = await (supabase as any)
+      .from("instagram_stories")
+      .select("ig_media_id")
+      .eq("instagram_account_id", accountId)
+      .gte("posted_at", new Date(Date.now() - STORY_RELEITURA_HORAS * 3600_000).toISOString())
+      .limit(200);
+    if (erroRecentes && !(erroRecentes.code === "42P01" || /instagram_stories/.test(erroRecentes.message ?? ""))) return [`stories: ${erroRecentes.message}`];
+    const faltam = ((recentes ?? []) as { ig_media_id: string }[]).map((r) => r.ig_media_id).filter((id) => id && !noAr.has(id));
+    for (let i = 0; i < faltam.length; i += 5) {
+      const lidos = await Promise.all(faltam.slice(i, i + 5).map(async (id) => ({ id, m: await insightsDoStory(token, id) })));
+      for (const { id, m } of lidos) {
+        const linha: Record<string, unknown> = { client_id: clientId, instagram_account_id: accountId, ig_media_id: id };
+        for (const [nome, coluna] of Object.entries(DA_METRICA)) if (typeof m[nome] === "number") linha[coluna] = m[nome];
+        if (Object.keys(linha).length > 3) { linha.metrics_updated_at = agora; linhas.push(linha); }
+      }
+    }
+    if (linhas.length === 0) return [];
+
+    // Mesmo conjunto de colunas por lote: o upsert em lote preencheria com null a coluna que falta.
+    const grupos = new Map<string, Record<string, unknown>[]>();
+    for (const l of linhas) { const k = Object.keys(l).sort().join(","); grupos.set(k, [...(grupos.get(k) ?? []), l]); }
+    for (const grupo of grupos.values()) {
+      const { error } = await (supabase as any).from("instagram_stories").upsert(grupo, { onConflict: "instagram_account_id,ig_media_id" });
+      if (error) {
+        // 42P01 = tabela inexistente: migração ainda não aplicada, não é falha do sync.
+        if (error.code === "42P01" || /instagram_stories/.test(error.message ?? "")) return [];
+        return [`stories: ${error.message}`];
+      }
     }
     return [];
   } catch (e) {
@@ -334,9 +426,26 @@ export async function guardarStories(supabase: SupabaseClient<Database>, igAccou
   }
 }
 
+// Seguiram e deixaram de seguir num intervalo (follows_and_unfollows por follow_type).
+// "vazio": a Meta respondeu sem o detalhamento (dia ainda aberto ou sem medida: a doc diz que vem "empty data set
+// instead of 0"). Isso NÃO é "0 seguidores novos": quem chama grava null e relê depois. Erro de chamada sobe.
+export type SeguiramEDeixaram = { status: "ok"; novos: number; saidas: number } | { status: "vazio" };
+export async function lerSeguiramEDeixaram(token: string, igId: string, since: number, until: number): Promise<SeguiramEDeixaram> {
+  const c = await graphGet(token, `${igId}/insights`, { metric: "follows_and_unfollows", period: "day", metric_type: "total_value", breakdown: "follow_type", since, until });
+  const r: any[] = c?.data?.[0]?.total_value?.breakdowns?.[0]?.results ?? [];
+  const valor = (k: string) => { const v = Number(r.find((x: any) => x.dimension_values?.[0] === k)?.value); return Number.isFinite(v) ? v : null; };
+  const novos = valor("FOLLOWER"), saidas = valor("NON_FOLLOWER");
+  if (novos == null && saidas == null) return { status: "vazio" };
+  // Com o detalhamento presente, o tipo que falta é zero de fato (a Meta só lista quem teve movimento).
+  return { status: "ok", novos: novos ?? 0, saidas: saidas ?? 0 };
+}
+
 // Reconstrói os últimos 28 dias de seguidores com os números REAIS da Meta: seguiram e deixaram de seguir por dia
 // (follows_and_unfollows). Parte do total de hoje e volta dia a dia: total do dia anterior = total do dia menos o saldo.
-// Só preenche dia sem total gravado, nunca sobrescreve o que foi medido. A Meta conta o dia no fuso da Califórnia.
+// Só preenche dia sem total gravado, nunca sobrescreve o que foi medido. A Meta conta o dia no fuso da Califórnia,
+// e cada dia tem a sua própria meia-noite (dia-meta.ts): voltar de 24 em 24 horas errava 1 hora depois da mudança
+// de horário dos EUA. Se um dia falhar ou vier sem dado, a reconstrução PARA ali: antes a falha virava saldo 0 e
+// todos os totais mais antigos saíam errados sem aviso.
 export async function reconstruirSeguidores(supabase: SupabaseClient<Database>, igAccountId: string, accountId: string, clientId: string, token: string): Promise<string[]> {
   try {
     const hojeBr = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
@@ -352,69 +461,59 @@ export async function reconstruirSeguidores(supabase: SupabaseClient<Database>, 
     const faltando = Array.from({ length: 28 }, (_, i) => new Date(Date.now() - (i + 1) * 86400 * 1000 - 3 * 3600 * 1000).toISOString().slice(0, 10)).filter((d) => !conhecidos.has(d));
     if (faltando.length < 5) return [];
 
-    // Início do dia atual na Califórnia, em segundos UTC.
     const agora = Date.now();
-    const la = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(agora));
-    const [ya, ma, da] = la.split("-").map(Number);
-    const offs = (instante: number) => {
-      const t = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", timeZoneName: "shortOffset" }).formatToParts(new Date(instante)).find((p) => p.type === "timeZoneName")?.value ?? "GMT-8";
-      return -Number(/GMT([+-]\d+)/.exec(t)?.[1] ?? -8);
-    };
-    const meiaNoite = (ano: number, mes: number, dia: number) => Date.UTC(ano, mes - 1, dia) + offs(Date.UTC(ano, mes - 1, dia, 12)) * 3600_000;
-    const fimDoDia0 = meiaNoite(ya, ma, da) / 1000; // início de hoje (LA) = fim do dia de ontem
-
-    const saldo = async (de: number, ate: number): Promise<number> => {
-      const c = await graphGet(token, `${igAccountId}/insights`, { metric: "follows_and_unfollows", period: "day", metric_type: "total_value", breakdown: "follow_type", since: de, until: ate });
-      const r = c?.data?.[0]?.total_value?.breakdowns?.[0]?.results ?? [];
-      const seg = Number(r.find((x: any) => x.dimension_values?.[0] === "FOLLOWER")?.value ?? 0);
-      const per = Number(r.find((x: any) => x.dimension_values?.[0] === "NON_FOLLOWER")?.value ?? 0);
-      return seg - per;
+    const hojeLa = laData(agora);
+    const inicioDeHoje = Math.floor(laMeiaNoiteMs(hojeLa) / 1000);
+    const erros: string[] = [];
+    const saldo = async (de: number, ate: number): Promise<number | null> => {
+      try {
+        const f = await lerSeguiramEDeixaram(token, igAccountId, de, ate);
+        return f.status === "ok" ? f.novos - f.saidas : null;
+      } catch (e) {
+        erros.push(`seguidores (histórico): ${e instanceof Error ? e.message : String(e)}`);
+        return null;
+      }
     };
 
-    const parcial = await saldo(fimDoDia0, Math.floor(agora / 1000));
-    const saldos: number[] = new Array(28).fill(0);
+    const parcial = await saldo(inicioDeHoje, Math.floor(agora / 1000));
+    if (parcial == null) return erros.slice(0, 1);
+    // saldos[i] = saldo do dia i+1 antes de hoje (Califórnia).
+    const dias = Array.from({ length: 28 }, (_, i) => janelaDoDia(somarDias(hojeLa, -(i + 1))));
+    const saldos: (number | null)[] = new Array(28).fill(null);
     for (let k = 0; k < 28; k += 7) {
-      await Promise.all(
-        Array.from({ length: Math.min(7, 28 - k) }, (_, j) => k + j).map(async (i) => {
-          const ate = fimDoDia0 - i * 86400;
-          // Janela de UM dia exato: do início do dia até 1 segundo antes do fim. Com 24 h cheias a Meta devolve dois dias.
-          saldos[i] = await saldo(ate - 86400, ate - 1).catch(() => 0);
-        }),
-      );
+      await Promise.all(dias.slice(k, k + 7).map(async (d, j) => { saldos[k + j] = await saldo(d.since, d.until); }));
     }
-    // total ao fim do dia i = total ao fim do dia i-1 (mais recente) menos o saldo do dia i-1 ... partindo de hoje menos o saldo parcial.
+    // total ao fim do dia i = total ao fim do dia mais recente menos o saldo daquele dia, partindo de hoje menos o parcial.
     let total = totalHoje - parcial;
     const linhas: { instagram_account_id: string; client_id: string; date: string; followers_count: number }[] = [];
     for (let i = 0; i < 28; i++) {
-      const diaLA = new Date(meiaNoite(ya, ma, da) - (i + 1) * 86400_000 + 12 * 3600_000);
-      const data = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(diaLA);
+      const data = dias[i].data;
       if (!conhecidos.has(data) && data < hojeBr) linhas.push({ instagram_account_id: accountId, client_id: clientId, date: data, followers_count: Math.round(total) });
-      total -= saldos[i];
+      const s = saldos[i];
+      if (s == null) break; // sem o saldo deste dia, o total dos dias mais antigos seria inventado
+      total -= s;
     }
-    if (linhas.length === 0) return [];
-    // Linhas só com a coluna do total: o upsert não toca nas outras métricas do dia.
-    const { error } = await supabase.from("instagram_account_daily_metrics").upsert(linhas as never, { onConflict: "instagram_account_id,date" });
-    return error ? [`seguidores (histórico): ${error.message}`] : [];
+    if (linhas.length > 0) {
+      // Linhas só com a coluna do total: o upsert não toca nas outras métricas do dia.
+      const { error } = await supabase.from("instagram_account_daily_metrics").upsert(linhas as never, { onConflict: "instagram_account_id,date" });
+      if (error) erros.push(`seguidores (histórico): ${error.message}`);
+    }
+    return erros.slice(0, 1);
   } catch (e) {
     return [`seguidores (histórico): ${e instanceof Error ? e.message : String(e)}`];
   }
 }
 
-// ---- Métricas diárias da conta direto da Graph (para contas que a Windsor não cobre) ----
-// Alcance, interações, salvos, compartilhamentos, toques no perfil, novos seguidores e saídas por dia vêm da Windsor para quase
-// todas as contas. Quem não está no conector Instagram da Windsor (Doctor Creator, Juliana Carrion) ficava com esses números
-// parados enquanto o "sync com sucesso" seguia verde. Aqui a Graph preenche, com o token da própria conta, só os dias que
-// a Windsor não trouxe: se o último dia com alcance for recente, não faz nada (a Windsor está cobrindo).
-// A Meta conta o dia no fuso da Califórnia e leva ~2 dias para fechar; o dia gravado é o da Califórnia (igual a reconstruirSeguidores).
-const LA = "America/Los_Angeles";
-const laData = (ms: number) => new Intl.DateTimeFormat("en-CA", { timeZone: LA, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
-const laOffsetHoras = (ms: number) => {
-  const t = new Intl.DateTimeFormat("en-US", { timeZone: LA, timeZoneName: "shortOffset" }).formatToParts(new Date(ms)).find((p) => p.type === "timeZoneName")?.value ?? "GMT-8";
-  return -Number(/GMT([+-]\d+)/.exec(t)?.[1] ?? -8);
-};
-const laMeiaNoiteMs = (ano: number, mes: number, dia: number) => Date.UTC(ano, mes - 1, dia) + laOffsetHoras(Date.UTC(ano, mes - 1, dia, 12)) * 3600_000;
+// ---- Métricas diárias da conta direto da Graph ----
+// Alcance, interações, salvos, compartilhamentos, toques no perfil, novos seguidores e saídas por dia.
+// A Meta conta o dia no fuso da Califórnia e leva ~2 dias para fechar; o dia gravado é o da Califórnia (igual a
+// reconstruirSeguidores), e a janela de cada dia vem de janelaDoDia (meia-noite daquela data até a do dia seguinte).
 /** Quantos dias para trás a Graph é relida em busca de dia incompleto. */
 const JANELA_GRAPH_DIAS = 120;
+/** Dias forçados por rodada com relerDesde (o resto fica para a rodada seguinte com o mesmo parâmetro). */
+const MAX_RELEITURA_FORCADA = 60;
+/** Dia com 0 seguidores novos E 0 saídas e alcance a partir disto é tratado como não medido (relido). */
+const ALCANCE_MINIMO_ZERO_SUSPEITO = 500;
 const METRICAS_DIA = ["reach", "total_interactions", "likes", "comments", "saves", "shares", "profile_links_taps"] as const;
 
 async function metricasDoDia(token: string, igId: string, since: number, until: number): Promise<Record<string, number>> {
@@ -428,13 +527,42 @@ async function metricasDoDia(token: string, igId: string, since: number, until: 
   return out;
 }
 
-async function seguiramEDeixaram(token: string, igId: string, since: number, until: number): Promise<{ novos: number; saidas: number } | null> {
-  try {
-    const c = await graphGet(token, `${igId}/insights`, { metric: "follows_and_unfollows", period: "day", metric_type: "total_value", breakdown: "follow_type", since, until });
-    const r = c?.data?.[0]?.total_value?.breakdowns?.[0]?.results ?? [];
-    const v = (k: string) => Number(r.find((x: any) => x.dimension_values?.[0] === k)?.value ?? 0);
-    return { novos: v("FOLLOWER"), saidas: v("NON_FOLLOWER") };
-  } catch { return null; }
+type LinhaDiaria = { date: string; reach: number | null; new_followers: number | null; unfollowers: number | null };
+
+/**
+ * Um dia gravado só é "completo" (não precisa ser relido) quando tem alcance, novos E saídas. Não contam como completos:
+ * - zero em tudo (Windsor que travou);
+ * - novos = 0 com saídas vazias (formato da Windsor de reserva: Douglas e Lana em 24-25/08, Doctor Creator em 29-30/09);
+ * - 0 novos e 0 saídas com alcance alto (dia aberto gravado como zero).
+ */
+export function diaCompleto(r: LinhaDiaria): boolean {
+  if (r.reach == null || r.new_followers == null || r.unfollowers == null) return false;
+  if (r.reach === 0 && r.new_followers === 0) return false;
+  if (r.new_followers === 0 && r.unfollowers === 0 && r.reach >= ALCANCE_MINIMO_ZERO_SUSPEITO) return false;
+  return true;
+}
+
+/**
+ * Quais dias (Califórnia) reler nesta rodada: sempre os 7 fechados mais recentes (k=2..8, a Meta ainda revisa),
+ * depois os forçados por relerDesde (do mais antigo para o mais novo) e, por fim, até 28 dias incompletos mais
+ * antigos (primeiro os do último mês, do mais antigo para o mais novo; depois os demais).
+ */
+export function diasParaReler(hojeLa: string, completos: Set<string>, relerDesde?: string): string[] {
+  const dataK = (k: number) => somarDias(hojeLa, -k);
+  const alvo: string[] = [];
+  for (let k = 2; k < 9; k++) alvo.push(dataK(k));
+  const vistos = new Set(alvo);
+  if (relerDesde && /^\d{4}-\d{2}-\d{2}$/.test(relerDesde)) {
+    const limite = dataK(JANELA_GRAPH_DIAS - 1);
+    const forcados: string[] = [];
+    for (let d = relerDesde < limite ? limite : relerDesde; d <= dataK(2); d = somarDias(d, 1)) if (!vistos.has(d)) forcados.push(d);
+    for (const d of forcados.slice(0, MAX_RELEITURA_FORCADA)) { alvo.push(d); vistos.add(d); }
+  }
+  const buracos = Array.from({ length: JANELA_GRAPH_DIAS - 9 }, (_, i) => 9 + i).filter((k) => !completos.has(dataK(k)) && !vistos.has(dataK(k)));
+  const recentes = buracos.filter((k) => k <= 30).sort((a, b) => b - a);
+  const antigos = buracos.filter((k) => k > 30);
+  for (const k of [...recentes, ...antigos].slice(0, 28)) alvo.push(dataK(k));
+  return alvo;
 }
 
 export async function gravarMetricasDiariasPelaGraph(
@@ -443,51 +571,37 @@ export async function gravarMetricasDiariasPelaGraph(
   accountId: string,
   clientId: string,
   token: string,
+  relerDesde?: string,
 ): Promise<string[]> {
   try {
     // A Meta é a fonte destas métricas (validado contra a Windsor em 19/10/2026: alcance, novos seguidores e saídas
-    // batem dia a dia). Antes ela só entrava se a Windsor ficasse mais de 3 dias parada, e nunca refazia os dias
-    // que a Windsor gravou pela metade (a Windsor trava quando o login do Facebook dela cai e deixa o dia aberto
-    // com valor parcial). Agora toda rodada relê os 7 últimos dias fechados e até 28 dias incompletos mais antigos.
-    const hojeLa = laData(Date.now()).split("-").map(Number);
-    const diaK = (k: number) => {
-      const meia = laMeiaNoiteMs(hojeLa[0], hojeLa[1], hojeLa[2]) - k * 86_400_000;
-      return { meia, data: laData(meia + 12 * 3600_000) };
-    };
+    // batem dia a dia). Toda rodada relê os 7 últimos dias fechados e até 28 dias incompletos mais antigos.
+    const hojeLa = laData(Date.now());
     // Dias completos dos últimos 120 dias (a Meta guarda as métricas diárias por pelo menos 6 meses: auditoria de
     // 30/10/2026). Antes a busca parava no último dia completo e nunca voltava a um buraco mais antigo.
     const { data: lidos } = await supabase
       .from("instagram_account_daily_metrics")
-      .select("date, reach, new_followers")
+      .select("date, reach, new_followers, unfollowers")
       .eq("instagram_account_id", accountId)
-      .gte("date", diaK(JANELA_GRAPH_DIAS).data);
-    const completos = new Set(((lidos ?? []) as { date: string; reach: number | null; new_followers: number | null }[])// Dia gravado como zero em tudo (Windsor que travou) não conta como completo.
-      .filter((r) => r.reach != null && r.new_followers != null && !(r.reach === 0 && r.new_followers === 0)).map((r) => r.date));
-
-    // Sempre os 7 dias fechados mais recentes (a Meta ainda revisa) e, por rodada, até 28 dias incompletos mais antigos:
-    // primeiro os do último mês, do mais antigo para o mais novo; depois os demais.
-    const alvo: { data: string; since: number; until: number }[] = [];
-    const dia = (k: number) => { const { meia, data } = diaK(k); return { data, since: Math.floor(meia / 1000), until: Math.floor(meia / 1000) + 86_399 }; };
-    for (let k = 2; k < 9; k++) alvo.push(dia(k));
-    const buracos = Array.from({ length: JANELA_GRAPH_DIAS - 9 }, (_, i) => 9 + i).filter((k) => !completos.has(diaK(k).data));
-    const recentes = buracos.filter((k) => k <= 30).sort((a, b) => b - a);
-    const antigos = buracos.filter((k) => k > 30);
-    for (const k of [...recentes, ...antigos].slice(0, 28)) alvo.push(dia(k));
-    if (alvo.length === 0) { return []; }
+      .gte("date", somarDias(hojeLa, -JANELA_GRAPH_DIAS));
+    const completos = new Set(((lidos ?? []) as LinhaDiaria[]).filter(diaCompleto).map((r) => r.date));
+    const alvo = diasParaReler(hojeLa, completos, relerDesde).map(janelaDoDia);
 
     const linhas: Record<string, unknown>[] = [];
     for (let i = 0; i < alvo.length; i += 7) {
       await Promise.all(alvo.slice(i, i + 7).map(async (d) => {
-        const [m, f] = await Promise.all([metricasDoDia(token, igAccountId, d.since, d.until), seguiramEDeixaram(token, igAccountId, d.since, d.until)]);
+        const [m, f] = await Promise.all([
+          metricasDoDia(token, igAccountId, d.since, d.until),
+          lerSeguiramEDeixaram(token, igAccountId, d.since, d.until).catch(() => null),
+        ]);
         const linha: Record<string, unknown> = { instagram_account_id: accountId, client_id: clientId, date: d.data };
-        if ("reach" in m) linha.reach = m.reach;
-        if ("total_interactions" in m) linha.total_interactions = m.total_interactions;
-        if ("likes" in m) linha.likes = m.likes;
-        if ("comments" in m) linha.comments = m.comments;
-        if ("saves" in m) linha.saves = m.saves;
-        if ("shares" in m) linha.shares = m.shares;
-        if ("profile_links_taps" in m) linha.profile_links_taps = m.profile_links_taps;
-        if (f) { linha.new_followers = f.novos; linha.unfollowers = f.saidas; }
+        for (const k of METRICAS_DIA) if (k in m) linha[k] = m[k];
+        const temMetrica = Object.keys(linha).length > 3;
+        if (f?.status === "ok") { linha.new_followers = f.novos; linha.unfollowers = f.saidas; }
+        // A Meta respondeu o dia sem o detalhamento: "sem dado", não "0 seguidores novos". Fica null e o dia é relido.
+        // Só grava o null quando a Meta devolveu outras métricas do dia (resposta vazia em tudo pode ser instabilidade).
+        else if (f?.status === "vazio" && temMetrica) { linha.new_followers = null; linha.unfollowers = null; }
+        // Erro na chamada (f = null): não grava as colunas, o valor anterior fica.
         if (Object.keys(linha).length > 3) { linhas.push(linha); } // só grava o dia se a Meta devolveu alguma métrica
       }));
     }
@@ -636,7 +750,13 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
       .maybeSingle();
     const tokenDaConta = segredo?.meta_access_token ?? env.accessToken;
 
-    const vazio = { count: 0, errors: [] as string[], nextCursor: null as string | null, done: true, persisted: false };
+    if (env.soStories) {
+      results.push({ accountId: account.id, clientId: account.client_id, igAccountId: account.windsor_account_id, posts: 0, temasClassified: 0,
+        nextCursor: null, done: true, errors: await guardarStories(supabase, account.windsor_account_id, account.id, account.client_id, tokenDaConta) });
+      continue;
+    }
+
+    const vazio = { count: 0, errors: [] as string[], nextCursor: null as string | null, done: true, persisted: false, vistos: [] as { id: string; timestamp: string }[] };
     const buscar = (cursor: string | undefined, paginas: number) =>
       syncAccountPosts(
         supabase,
@@ -666,6 +786,7 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
       postsTopo = topo.count;
       topoPersistido = topo.persisted;
       errors.push(...topo.errors);
+      if (topo.persisted) errors.push(...(await marcarPostsRemovidos(supabase, account.id, topo.vistos, topo.done)).errors);
     }
 
     let posts = await buscar(after, maxPages).catch((err) => {
@@ -682,6 +803,9 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
         return vazio;
       });
     }
+    // Sem cursor (after undefined), a listagem começou do topo: serve para achar post apagado/arquivado.
+    // Retomando o backfill, quem faz isso é a releitura do topo acima.
+    if (!retomando && after === undefined && posts.persisted) errors.push(...(await marcarPostsRemovidos(supabase, account.id, posts.vistos, posts.done)).errors);
     posts = { ...posts, count: posts.count + postsTopo };
     errors.push(...posts.errors);
 
@@ -710,7 +834,7 @@ export async function runMetaGraphSync(env: MetaSyncEnv): Promise<MetaAccountSyn
     const errosSeguidores = await gravarSeguidoresDeHoje(supabase, account.windsor_account_id, account.id, account.client_id, tokenDaConta);
     errosSeguidores.push(...(await reconstruirSeguidores(supabase, account.windsor_account_id, account.id, account.client_id, tokenDaConta)));
     errosSeguidores.push(...(await guardarStories(supabase, account.windsor_account_id, account.id, account.client_id, tokenDaConta)));
-    errosSeguidores.push(...(await gravarMetricasDiariasPelaGraph(supabase, account.windsor_account_id, account.id, account.client_id, tokenDaConta)));
+    errosSeguidores.push(...(await gravarMetricasDiariasPelaGraph(supabase, account.windsor_account_id, account.id, account.client_id, tokenDaConta, env.relerDesde)));
 
     // Tema, funil e estágio por IA para o que as regras não cobrem (só roda com ANTHROPIC_API_KEY).
     const ia = await classificarConteudoComIA(supabase, account.id).catch((err) => ({

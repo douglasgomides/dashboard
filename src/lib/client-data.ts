@@ -63,6 +63,7 @@ export async function getRankedPosts(clientId: string, monthStart: string, month
     .from("instagram_posts")
     .select("*")
     .eq("client_id", clientId)
+    .is("removido_em", null) // apagado/arquivado no Instagram não conta
     .gte("posted_at", desde)
     .lt("posted_at", antesDe)
     .order("saved", { ascending: false, nullsFirst: false })
@@ -77,6 +78,7 @@ export async function getPostsForAnalytics(clientId: string, sinceDate: string, 
     .from("instagram_posts")
     .select("*")
     .eq("client_id", clientId)
+    .is("removido_em", null) // apagado/arquivado no Instagram não conta
     .gte("posted_at", desde);
   if (untilDate) query = query.lt("posted_at", antesDe);
     return query.order("posted_at", { ascending: false }).order("id").range(from, to);
@@ -965,6 +967,7 @@ export async function getPostsParaImpulsionados(clientId: string, desde: string)
       .from("instagram_posts")
       .select("id, caption, posted_at, permalink, thumbnail_url, reach")
       .eq("client_id", clientId)
+      .is("removido_em", null)
       .gte("posted_at", desde)
       .order("posted_at", { ascending: false })
       .order("id")

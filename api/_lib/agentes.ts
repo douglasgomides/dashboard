@@ -490,7 +490,7 @@ export async function lerFontesBrain(admin: Admin, clientId: string, opcoes: { e
   const [sessoes, resumos, posts, duvidas, pecas, aprovados, kommo] = await Promise.all([
     cli ? admin.from("sap_sessao_registro").select("sessao, chave, texto").eq("clinica_id", cli.id).not("texto", "is", null).limit(60) : Promise.resolve({ data: [] }),
     admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", desde).order("gerado_em", { ascending: false }).limit(40),
-    admin.from("instagram_posts").select("tema, format, caption, reach, saved, engagement").eq("client_id", clientId).gte("posted_at", desde).order("engagement", { ascending: false, nullsFirst: false }).limit(15),
+    admin.from("instagram_posts").select("tema, format, caption, reach, saved, engagement").eq("client_id", clientId).is("removido_em", null).gte("posted_at", desde).order("engagement", { ascending: false, nullsFirst: false }).limit(15),
     admin.from("instagram_comments").select("text").eq("client_id", clientId).eq("is_question", true).gte("commented_at", desde).order("commented_at", { ascending: false }).limit(50),
     cli ? admin.from("sap_pecas").select("titulo, etapa, formato, ganchos, semaforo, status").eq("clinica_id", cli.id).limit(30) : Promise.resolve({ data: [] }),
     admin.from("brain_itens").select("memoria, chave, valor").eq("client_id", clientId).eq("estado", "aprovado"),
@@ -611,7 +611,7 @@ async function lerContextoGrowth(admin: Admin, clientId: string) {
   const leads = () => admin.from("crm_leads").select("id", { count: "exact", head: true }).eq("client_id", clientId).is("removido_na_origem", null);
   const [brain, posts, duvidas, ads, anteriores, leads90, ganhos90, perdidos180, abertosAntigos, ganhosFonte] = await Promise.all([
     admin.from("brain_itens").select("memoria, chave, valor").eq("client_id", clientId).eq("estado", "aprovado"),
-    admin.from("instagram_posts").select("tema, format, caption, reach, saved, engagement").eq("client_id", clientId).gte("posted_at", desde(90)).order("engagement", { ascending: false, nullsFirst: false }).limit(8),
+    admin.from("instagram_posts").select("tema, format, caption, reach, saved, engagement").eq("client_id", clientId).is("removido_em", null).gte("posted_at", desde(90)).order("engagement", { ascending: false, nullsFirst: false }).limit(8),
     admin.from("instagram_comments").select("text").eq("client_id", clientId).gte("commented_at", desde(90)).order("commented_at", { ascending: false }).limit(600),
     admin.from("meta_ads_daily").select("spend, leads, conversations").eq("client_id", clientId).gte("date", desde(30).slice(0, 10)).limit(5000),
     admin.from("campanhas_ideias").select("titulo, tipo, estado, resultado").eq("client_id", clientId).order("criado_em", { ascending: false }).limit(40),

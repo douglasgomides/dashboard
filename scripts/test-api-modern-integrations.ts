@@ -90,7 +90,8 @@ try {
   assert.equal(r.feitas, 0); assert.equal(patches.length, before, "missing cost audit cannot be reported as a saved transcription");
   rejectCost = false; invalidTranscript = true;
   r = await transcreverReels(db(), 10_000, 1, CID);
-  assert.equal(r.feitas, 0); assert.equal(patches.length, before, "malformed provider output must not become a completed transcript");
+  assert.equal(r.feitas, 0);
+  assert.ok(patches.slice(before).every((p) => !p.transcricao && !p.transcricao_em), "malformed provider output must not become a completed transcript");
   invalidTranscript = false; unsafeVideo = true; const beforeVideo = videoCalls, beforeAi = providerCalls;
   r = await transcreverReels(db(), 10_000, 1, CID);
   assert.equal(r.feitas, 0); assert.equal(videoCalls, beforeVideo); assert.equal(providerCalls, beforeAi);

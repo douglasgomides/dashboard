@@ -38,13 +38,22 @@ const CAMPOS_COMENTARIO = "id,text,username,like_count,timestamp,replies.limit(5
 // da função e o resto do perfil fica sem ler.
 const PAGINAS_EXTRAS_POR_CHAMADA = 120;
 
-function achatar(lista: MetaComment[] | undefined): MetaComment[] {
+// Achata comentários e respostas. Comentário com mais de 50 respostas traz replies.paging.next: essa URL vai para
+// `proximasRespostas` e é seguida depois (antes as respostas além da 50ª eram perdidas).
+function achatar(lista: MetaComment[] | undefined, proximasRespostas?: string[]): MetaComment[] {
   const out: MetaComment[] = [];
   for (const c of lista ?? []) {
     out.push(c);
     for (const r of c.replies?.data ?? []) out.push(r);
+    if (c.replies?.paging?.next && proximasRespostas) proximasRespostas.push(c.replies.paging.next);
   }
   return out;
+}
+
+export interface ResultadoLote {
+  comentarios: Map<string, MetaComment[]>;
+  /** Posts que falharam nesta rodada (registrados em errors). */
+  falharam: Set<string>;
 }
 
 export interface CommentsSyncEnv {
@@ -63,15 +72,20 @@ export interface CommentsAccountSyncResult {
   questions: number;
   done: boolean;
   errors: string[];
+  /** Posts cujos comentários não puderam ser lidos nesta rodada. */
+  failedPosts?: string[];
 }
 
-async function fetchCommentsBatch(
+export async function fetchCommentsBatch(
   postsWithMediaId: { id: string; windsor_media_id: string }[],
   accessToken: string,
   errors: string[],
-): Promise<Map<string, MetaComment[]>> {
+): Promise<ResultadoLote> {
   const result = new Map<string, MetaComment[]>();
-  const proximas: { postId: string; url: string }[] = [];
+  const falharam = new Set<string>();
+  // Páginas a seguir: de comentários do post ou de respostas de um comentário (as duas devolvem lista de comentários).
+  const proximas: { postId: string; url: string; respostas: boolean }[] = [];
+  const empilharRespostas = (postId: string, urls: string[]) => { for (const url of urls) proximas.push({ postId, url, respostas: true }); };
 
   for (let i = 0; i < postsWithMediaId.length; i += COMMENTS_BATCH_SIZE) {
     const batch = postsWithMediaId.slice(i, i + COMMENTS_BATCH_SIZE);
@@ -96,15 +110,17 @@ async function fetchCommentsBatch(
         // listagem sozinho, e contava como erro vermelho de "comentários" no painel do cliente.
         let apagado = false;
         try { apagado = JSON.parse(sub?.body ?? "{}")?.error?.error_subcode === 33; } catch { /* corpo inválido */ }
-        if (!apagado) errors.push(`comentários ${post.id}: Graph respondeu ${sub?.code ?? "sem resposta"}`);
+        if (!apagado) { errors.push(`comentários ${post.id}: Graph respondeu ${sub?.code ?? "sem resposta"}`); falharam.add(post.id); }
         continue;
       }
       try {
         const parsed = JSON.parse(sub.body) as { data?: MetaComment[]; paging?: { next?: string } };
         if (!Array.isArray(parsed?.data)) throw new Error("página inválida");
-        result.set(post.id, achatar(parsed.data));
-        if (parsed.paging?.next) proximas.push({ postId: post.id, url: parsed.paging.next });
-      } catch { errors.push(`comentários ${post.id}: resposta inválida da Graph`); }
+        const urlsRespostas: string[] = [];
+        result.set(post.id, achatar(parsed.data, urlsRespostas));
+        if (parsed.paging?.next) proximas.push({ postId: post.id, url: parsed.paging.next, respostas: false });
+        empilharRespostas(post.id, urlsRespostas);
+      } catch { errors.push(`comentários ${post.id}: resposta inválida da Graph`); falharam.add(post.id); }
     }
   }
 
@@ -116,17 +132,23 @@ async function fetchCommentsBatch(
     gastas++;
     try {
       const res = await fetch(graphPageUrl(item.url), integrationRequest());
-      if (!res.ok) { errors.push(`comentários ${item.postId}: página respondeu ${res.status}`); continue; }
+      if (!res.ok) { errors.push(`comentários ${item.postId}: página respondeu ${res.status}`); falharam.add(item.postId); continue; }
       const parsed = (await res.json()) as { data?: MetaComment[]; paging?: { next?: string } };
       if (!Array.isArray(parsed?.data)) throw new Error("página inválida");
       const atual = result.get(item.postId) ?? [];
-      atual.push(...achatar(parsed.data));
+      const urlsRespostas: string[] = [];
+      // Página de respostas: os itens já são respostas (sem respostas dentro).
+      atual.push(...(item.respostas ? parsed.data : achatar(parsed.data, urlsRespostas)));
       result.set(item.postId, atual);
-      if (parsed.paging?.next) proximas.push({ postId: item.postId, url: parsed.paging.next });
-    } catch { errors.push(`comentários ${item.postId}: não foi possível ler a página`); }
+      if (parsed.paging?.next) proximas.push({ postId: item.postId, url: parsed.paging.next, respostas: item.respostas });
+      empilharRespostas(item.postId, urlsRespostas);
+    } catch { errors.push(`comentários ${item.postId}: não foi possível ler a página`); falharam.add(item.postId); }
   }
-  if (proximas.length) errors.push("Comentários incompletos: limite de páginas extras atingido");
-  return result;
+  if (proximas.length) {
+    errors.push("Comentários incompletos: limite de páginas extras atingido");
+    for (const p of proximas) falharam.add(p.postId);
+  }
+  return { comentarios: result, falharam };
 }
 
 export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<CommentsAccountSyncResult[]> {
@@ -195,6 +217,7 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
         .from("instagram_posts")
         .select("id, windsor_media_id, posted_at")
         .eq("instagram_account_id", account.id)
+        .is("removido_em", null)
         .not("posted_at", "is", null)
         .order("posted_at", { ascending: false })
         .limit(RECENTES);
@@ -204,6 +227,7 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
         .from("instagram_posts")
         .select("id, windsor_media_id, posted_at")
         .eq("instagram_account_id", account.id)
+        .is("removido_em", null)
         .not("posted_at", "is", null)
         .order("posted_at", { ascending: false })
         .limit(cotaBackfill);
@@ -226,7 +250,7 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
       // nunca "termina".
       const done = (antigos?.length ?? 0) < cotaBackfill;
 
-      const commentsByPost = await fetchCommentsBatch(posts ?? [], tokenDaConta, errors);
+      const { comentarios: commentsByPost, falharam } = await fetchCommentsBatch(posts ?? [], tokenDaConta, errors);
       const now = new Date().toISOString();
       const rows = [];
       for (const post of posts ?? []) {
@@ -247,11 +271,12 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
 
       let commentsCount = 0;
       let questionsCount = 0;
+      let gravacaoFalhou = false;
       if (rows.length > 0) {
         const { error: upsertError } = await supabase
           .from("instagram_comments")
           .upsert(rows, { onConflict: "instagram_post_id,external_comment_id" });
-        if (upsertError) errors.push(`comments upsert: ${upsertError.message}`);
+        if (upsertError) { errors.push(`comments upsert: ${upsertError.message}`); gravacaoFalhou = true; }
         else {
           commentsCount = rows.length;
           questionsCount = rows.filter((r) => r.is_question).length;
@@ -261,7 +286,12 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
       // Pelo backfill, não pela lista mesclada: a janela de recentes é sempre
       // a mesma e travaria o cursor no topo para sempre.
       const oldestChecked = antigos && antigos.length > 0 ? antigos[antigos.length - 1].posted_at : null;
-      if (errors.length === 0) {
+      // Um post com erro não trava mais o histórico da conta: o cursor anda e o post fica listado nos erros (ele é
+      // relido na próxima volta completa do histórico). O cursor só fica parado se a gravação falhou ou se TODOS os
+      // posts lidos nesta rodada falharam (sinal de token ou permissão, não de um post isolado).
+      const lidosIds = (posts ?? []).map((p) => p.id);
+      const todosFalharam = lidosIds.length > 0 && lidosIds.every((id) => falharam.has(id));
+      if (!gravacaoFalhou && !todosFalharam) {
         const { error: stateError } = await supabase.from("instagram_comments_sync_state").upsert(
           {
             instagram_account_id: account.id,
@@ -280,6 +310,7 @@ export async function runMetaCommentsSync(env: CommentsSyncEnv): Promise<Comment
         comments: commentsCount,
         questions: questionsCount,
         done: done && errors.length === 0,
+        ...(falharam.size ? { failedPosts: [...falharam] } : {}),
         errors,
       });
     } catch (err) {

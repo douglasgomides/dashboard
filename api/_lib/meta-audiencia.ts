@@ -122,6 +122,23 @@ function mapaDeHorarios(valores: { end_time: string; value: Record<string, numbe
   return soma.map((linha, d) => linha.map((s, h) => (cont[d][h] ? Math.round(s / cont[d][h]) : 0)));
 }
 
+/** Métricas de um story. Métrica ausente fica de fora (não vira 0); falha da chamada devolve objeto vazio. */
+export const METRICAS_STORY = "reach,replies,shares,total_interactions,profile_visits,follows,views";
+export async function insightsDoStory(token: string, storyId: string): Promise<Record<string, number>> {
+  const m: Record<string, number> = {};
+  try {
+    const ins = await g(token, `${storyId}/insights`, { metric: METRICAS_STORY });
+    for (const d of ins?.data ?? []) {
+      const v = Number(d?.values?.[0]?.value);
+      if (d?.name && d?.values?.[0]?.value != null && Number.isFinite(v)) m[d.name] = v;
+    }
+  } catch { /* story fora do ar ou métrica indisponível: quem chama mantém a leitura anterior */ }
+  return m;
+}
+
+/** Teto de stories lidos por conta numa rodada (a Meta pagina de 50 em 50). */
+const MAX_STORIES = 100;
+
 export async function storiesAoVivo(token: string, ig: string): Promise<StoryAoVivo[]> {
   // thumbnail_url na LISTA faz a Meta gerar a miniatura de cada story de vídeo e estourar com "reduce the amount of data"
   // (Marcella, 27/10, com 6 stories no ar). Tenta com a miniatura e, se a Meta recusar, lista sem ela: a imagem
@@ -133,19 +150,23 @@ export async function storiesAoVivo(token: string, ig: string): Promise<StoryAoV
   } catch {
     lista = await g(token, `${ig}/stories`, { fields: base, limit: 50 });
   }
-  const itens: any[] = (lista?.data ?? []).slice(0, 25);
+  // Antes só os 25 primeiros eram lidos e sem paginar: em conta com mais de 25 stories no ar, os mais antigos (os
+  // que estão perto de expirar) paravam de ser atualizados horas antes do fim das 24 h.
+  const itens: any[] = [...(lista?.data ?? [])];
+  let proxima: string | undefined = lista?.paging?.cursors?.after && lista?.paging?.next ? lista.paging.cursors.after : undefined;
+  while (proxima && itens.length < MAX_STORIES) {
+    let pagina: any;
+    try { pagina = await g(token, `${ig}/stories`, { fields: base, limit: 50, after: proxima }); } catch { break; }
+    itens.push(...(pagina?.data ?? []));
+    proxima = pagina?.paging?.next ? pagina?.paging?.cursors?.after : undefined;
+  }
   const saida: StoryAoVivo[] = [];
-  for (let i = 0; i < itens.length; i += 5) {
-    const lote = itens.slice(i, i + 5);
+  const lidosAte = itens.slice(0, MAX_STORIES);
+  for (let i = 0; i < lidosAte.length; i += 5) {
+    const lote = lidosAte.slice(i, i + 5);
     const lidos = await Promise.all(
       lote.map(async (s) => {
-        let m: Record<string, number> = {};
-        try {
-          const ins = await g(token, `${s.id}/insights`, { metric: "reach,replies,shares,total_interactions,profile_visits,follows,views" });
-          for (const d of ins?.data ?? []) m[d.name] = Number(d.values?.[0]?.value ?? 0);
-        } catch {
-          m = {};
-        }
+        const m = await insightsDoStory(token, String(s.id));
         return {
           id: String(s.id),
           postado_em: s.timestamp ?? null,

@@ -30,6 +30,7 @@ function ReferenciaPage() {
         const { data, error } = await supabase
           .from("instagram_posts")
           .select("client_id, format, reach, saved, methodology_stage, tema, shares, comments, likes")
+          .is("removido_em", null)
           .gte("posted_at", desde)
           .order("posted_at", { ascending: false })
           .range(i, i + pagina - 1);
