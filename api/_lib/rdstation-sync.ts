@@ -79,7 +79,8 @@ export function rdOutcome(win: unknown): "open" | "won" | "lost" {
 
 async function rdGet(token: string, path: string, query: Record<string, string | number> = {}): Promise<any> {
   const qs = new URLSearchParams({ token, ...Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)])) });
-  // 120 pedidos/min na doc; 429 vem com Retry-After. O helper espera (com teto) e tenta de novo.
+  // 120 pedidos/min na doc (crm-v1-limite-de-requisicoes-da-api); a doc não diz se o 429 traz Retry-After. O helper
+  // usa o cabeçalho quando vem e, sem ele, espera crescente (com teto) antes de tentar de novo.
   const res = await fetchComRetry(`${RD_BASE}/${path}?${qs.toString()}`, { headers: { Accept: "application/json" } });
   if (!res.ok) {
     // Nunca repetir a URL no erro: ela carrega o token.

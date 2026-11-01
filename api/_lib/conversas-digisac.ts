@@ -26,9 +26,11 @@ const chave = (raw?: string | null): string | null => {
  * Tipos que não são fala de ninguém: aviso automático de abertura/fechamento do atendimento ("ticket"), reação com
  * emoji ("reaction") e registro de ligação ("call_log"). Antes entravam como "Paciente / entrada" (só o isFromMe era
  * olhado): 3.483 avisos "ticket" sem texto na IGM Palmas, primeira mensagem de 1.156 conversas e falsos "paciente sem
- * resposta" (auditoria de 01/11/2026).
+ * resposta" (auditoria de 01/11/2026). "comment" é o comentário interno da equipe: a coleção oficial da API manda
+ * criar com `"type": "comment", // chat or comment` (documenter.getpostman.com/view/24605757/2sA3BhfaDg, "Enviar
+ * comentário", lida em 01/11/2026). Ele nunca chega ao paciente, então não pode contar como resposta da clínica.
  */
-export const TIPOS_SISTEMA_DIGISAC = new Set(["ticket", "reaction", "call_log"]);
+export const TIPOS_SISTEMA_DIGISAC = new Set(["ticket", "reaction", "call_log", "comment"]);
 
 /** Direção de uma mensagem do Digisac (exportada para teste). */
 export function direcaoDigisac(m: { isFromMe?: unknown; fromMe?: unknown; type?: unknown }): "entrada" | "saida" | "sistema" {

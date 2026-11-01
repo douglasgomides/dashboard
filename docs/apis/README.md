@@ -5,19 +5,19 @@ Proposta da seção 6 da auditoria de confiabilidade de 01/11/2026.
 
 ## Fichas
 
-| API | Ficha | Versão em uso | Situação em 01/11/2026 | Contrato |
+| API | Ficha | Versão em uso | Situação depois da leitura da doc (01/11/2026) | Contrato |
 |---|---|---|---|---|
-| Meta Graph (Instagram) | [meta-graph-instagram.md](meta-graph-instagram.md) | v26.0 | errado (fuso na mudança de horário dos EUA) | `test-contrato-meta-graph-instagram.ts` |
-| Meta Marketing (anúncios) | [meta-marketing.md](meta-marketing.md) | v26.0 | risco (status "ok" com falha parcial) | `test-contrato-meta-marketing.ts` |
-| Clint | [clint.md](clint.md) | v1 + v2 (beta) | errado (data da venda) | `test-contrato-clint.ts` |
-| Kommo | [kommo.md](kommo.md) | v4 | risco (429, conta compartilhada) | `test-contrato-kommo.ts` |
-| WTS Chat / FlwChat (Helena) | [wts-flwchat.md](wts-flwchat.md) | /v1 | risco (doc oficial não encontrada) | `test-contrato-wts-flwchat.ts` |
-| Digisac | [digisac.md](digisac.md) | /api/v1 | errado (conta compartilhada, avisos como paciente) | `test-contrato-digisac.ts` |
-| RD Station CRM | [rdstation.md](rdstation.md) | v1 (existe v2) | risco (ignora `closed_at`) | `test-contrato-rdstation.ts` |
-| Windsor.ai | [windsor.md](windsor.md) | sem versão | risco (erro parcial gravado como sucesso) | `test-contrato-windsor.ts` |
-| Hubla | [hubla.md](hubla.md) | webhook v2 | errado (meses sem carga, webhook parado) | `test-contrato-hubla.ts` (só offline) |
-| OpenAI e Anthropic | [openai-anthropic.md](openai-anthropic.md) | chat/completions, messages 2023-06-01 | risco (reserva não entra na falha; modelos com data de saída) | `test-contrato-openai-anthropic.ts` |
-| Short.io | [shortio.md](shortio.md) | sem versão | risco (falha invisível) | `test-contrato-shortio.ts` |
+| Meta Graph (Instagram) | [meta-graph-instagram.md](meta-graph-instagram.md) | v26.0 | risco (fuso já corrigido; sem leitura de limite nem de vencimento do token) | `test-contrato-meta-graph-instagram.ts` |
+| Meta Marketing (anúncios) | [meta-marketing.md](meta-marketing.md) | v26.0 | risco (sem controle de limite de chamadas; alcance somado no PDF) | `test-contrato-meta-marketing.ts` |
+| Clint | [clint.md](clint.md) | v1 + v2 | correto (`limit` dos canais corrigido; limite de taxa não publicado) | `test-contrato-clint.ts` |
+| Kommo | [kommo.md](kommo.md) | v4 | risco (conta compartilhada; `closed_at` sem uso) | `test-contrato-kommo.ts` |
+| WTS Chat / FlwChat (Helena) | [wts-flwchat.md](wts-flwchat.md) | /v1 (doc só tem v2) | risco (rotas v1 fora da doc; ordem das mensagens) | `test-contrato-wts-flwchat.ts` |
+| Digisac | [digisac.md](digisac.md) | /api/v1 | risco (conta compartilhada; doc sem limites nem métricas) | `test-contrato-digisac.ts` |
+| RD Station CRM | [rdstation.md](rdstation.md) | v1 (existe v2) | risco (visibilidade do token pode esconder negócios) | `test-contrato-rdstation.ts` |
+| Windsor.ai | [windsor.md](windsor.md) | sem versão | risco (doc ainda bloqueada; lista vazia sem erro) | `test-contrato-windsor.ts` |
+| Hubla | [hubla.md](hubla.md) | webhook v2 | risco (webhook parado no n8n; `disputed` contado como venda) | `test-contrato-hubla.ts` (só offline) |
+| OpenAI e Anthropic | [openai-anthropic.md](openai-anthropic.md) | chat/completions, messages 2023-06-01 | risco (doc da OpenAI bloqueada; Anthropic ativa e conferida) | `test-contrato-openai-anthropic.ts` |
+| Short.io | [shortio.md](shortio.md) | sem versão | risco (doc ainda bloqueada) | `test-contrato-shortio.ts` |
 | Google Planilhas | [google-planilhas.md](google-planilhas.md) | CSV público | risco (linhas órfãs) | `test-contrato-google-planilhas.ts` |
 
 Proposta do histórico diário da nota: [historico-confiabilidade.md](historico-confiabilidade.md).
@@ -36,9 +36,11 @@ Proposta do histórico diário da nota: [historico-confiabilidade.md](historico-
 nome de paciente, telefone, e-mail, id de conta nem token. As linhas citadas são do commit em que a ficha foi lida: ao corrigir uma
 pegadinha, atualize a linha "O código trata?" e o histórico na mesma mudança.
 
-**Atenção em 01/11/2026:** quase todos os sites de doc oficial estavam bloqueados na rede das sessões de auditoria
-(developers.facebook.com, clint-api.readme.io, developers.kommo.com, helena.readme.io, developers.rdstation.com, hubla.gitbook.io,
-documenter.getpostman.com, windsor.ai, short.io). O que veio de trecho de busca está marcado. Ao liberar, reler e atualizar a data.
+**Leitura da doc oficial em 01/11/2026:** liberados e lidos developers.facebook.com, clint-api.readme.io, developers.kommo.com,
+helena.readme.io, developers.rdstation.com, hubla.gitbook.io, documenter.getpostman.com (coleção Digisac) e a doc da Anthropic
+(`docs.claude.com`/`platform.claude.com`). Seguem bloqueados: windsor.ai, short.io, platform.openai.com e developers.google.com. Cada ficha
+diz o que foi verificado (com link e trecho) e o que continua "não verificado" e por quê. Dica: os sites readme.io e GitBook servem a página em Markdown (com a definição OpenAPI)
+acrescentando `.md` ao endereço, e têm índice em `/llms.txt`.
 
 ## Testes de contrato
 

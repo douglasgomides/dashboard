@@ -73,7 +73,9 @@ export async function ingerirConversasClint(admin: SupabaseClient<any, any, any>
         if ((ls.data?.length ?? 0) < 500) { complete = true; break; }
       }
       if (!complete) throw new Error("Lista de negócios incompleta");
-      const channels = await get(conn.access_token, "/v2/channel-accounts?limit=200", deadline);
+      // A doc oficial limita esta listagem a 100 por página (limit: maximum 100; clint-api.readme.io, lida em 01/11/2026).
+      // Com mais de 100 canais a resposta traz has_next e a linha abaixo para com erro, sem gravar lista cortada.
+      const channels = await get(conn.access_token, "/v2/channel-accounts?limit=100", deadline);
       if (!Array.isArray(channels.data) || channels.has_next) throw new Error("Lista de canais incompleta");
       for (const [channelIndex, channel] of channels.data.entries()) {
         if (channel.status === "DISCONNECTED") result.canais_desconectados.push(channel.name);

@@ -84,15 +84,21 @@ async function demografia(token: string, ig: string, metrica: string, breakdown:
 const FAIXAS = ["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"];
 const ordenarFaixas = (p: Par[]) => [...p].sort((a, b) => FAIXAS.indexOf(a.chave) - FAIXAS.indexOf(b.chave));
 
-// Demografia de quem foi alcançado/engajou: a Meta só aceita `this_month` e `prev_month`. No começo do mês
-// o mês corrente vem vazio ou ralo, então cai para o mês anterior.
-async function demografiaDoMes(token: string, ig: string, metrica: string, breakdown: string): Promise<{ pares: Par[]; mes: string }> {
+// Demografia de quem foi alcançado/engajou. No começo do mês o mês corrente vem vazio ou ralo, então tenta o mês
+// anterior. Cuidado: a doc da Meta se contradiz sobre `prev_month` nestas métricas. O changelog da v20.0 diz "The
+// last_14_days, last_30_days, last_90_days and prev_month timeframes will no longer be supported for the
+// reached_audience_demographics and engaged_audience_demographics metrics", mas a referência da v26.0 ainda lista
+// prev_month e mostra exemplo com last_90_days (developers.facebook.com, lidas em 01/11/2026). Por isso, se o
+// mês anterior for recusado depois de o mês atual ter respondido, o bloco diz "sem dado suficiente" em vez de erro.
+export async function demografiaDoMes(token: string, ig: string, metrica: string, breakdown: string): Promise<{ pares: Par[]; mes: string }> {
+  let mesAtualRespondeu = false;
   for (const mes of ["this_month", "prev_month"]) {
     try {
       const p = await demografia(token, ig, metrica, breakdown, { timeframe: mes });
       if (p.reduce((a, x) => a + x.valor, 0) >= 50) return { pares: p, mes: mes === "this_month" ? "mês atual" : "mês anterior" };
+      if (mes === "this_month") mesAtualRespondeu = true;
     } catch (e) {
-      if (mes === "prev_month") throw e;
+      if (mes === "prev_month" && !mesAtualRespondeu) throw e;
     }
   }
   return { pares: [], mes: "sem dado suficiente" };

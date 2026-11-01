@@ -1,7 +1,8 @@
 # Google Planilhas (planilha de anúncios)
 
-> Ficha de memória da API. Base: auditoria de confiabilidade de 01/11/2026 e leitura do código no commit `c01b2b9`.
-> As linhas citadas são desse commit e mudam com as correções. "Não verificado" = não confirmado na doc oficial nem ao vivo.
+> Ficha de memória da API. Base: auditoria de confiabilidade de 01/11/2026 e código no commit `89ae33c` (`ads-planilha-sync.ts` não mudou
+> desde `c01b2b9`, então as linhas valem; a referência a `client-data.ts` pode ter andado). "Não verificado" = não confirmado na doc
+> oficial nem ao vivo. Revisão de 01/11/2026: não há doc a ler (o domínio `developers.google.com` também segue bloqueado na sessão).
 
 **Resumo.** Para clientes cuja conta de anúncios ainda não está liberada, o Nexo lê a planilha de distribuição de conteúdo da equipe pelo
 **link público de exportação CSV**. Não é uma API: não tem versão, token nem limite documentado. O risco é a planilha **mudar de colunas**
@@ -41,7 +42,7 @@ ou **guardar linhas que já saíram da origem**.
 | Página de login com 200 quando o link não está aberto | Sim | `ads-planilha-sync.ts:261` |
 | Coluna renomeada ou removida | Sim (erro "mudou de formato") | `ads-planilha-sync.ts:158-159` |
 | CSV com aspas e quebra de linha dentro do campo | Sim | `ads-planilha-sync.ts:57-90` |
-| Upsert sem remover o que saiu da origem deixa linhas órfãs | **Não** (ex.: R$ 2.039 numa semana, num cliente) | `ads-planilha-sync.ts:265-268`; `src/lib/client-data.ts:494` |
+| Upsert sem remover o que saiu da origem deixa linhas órfãs | **Não** (ex.: R$ 2.039 numa semana, num cliente) | `ads-planilha-sync.ts:265-268`; `src/lib/client-data.ts:510` |
 | Semana com data no futuro (30/12/2026) | Parcial (mantém a linha, zera o período) | `ads-planilha-sync.ts:174-176` |
 | Semanas com investimento vazio | Não verificado (não comparado com a planilha real) | — |
 | Erro ao gravar o status da planilha é ignorado | **Não** | `ads-planilha-sync.ts:273-282` |
