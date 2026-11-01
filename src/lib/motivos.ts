@@ -2,7 +2,7 @@
 // Hoje "Anúncios até 04/09" parece falha de sincronização; muitas vezes é pagamento, campanha desligada
 // ou acesso revogado do lado do cliente. Este arquivo transforma o que sabemos em uma frase honesta.
 import { atrasoDaFonte, diasDeAtraso, ddmm, type LinhaFonte } from "@/lib/saude-fontes";
-import { statusDaFonte, type StatusFonte } from "@/lib/status-fonte";
+import { statusDaFonte, ERRO_TEMPORARIO_META, type StatusFonte } from "@/lib/status-fonte";
 
 const dataBr = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
@@ -43,6 +43,10 @@ export function motivoDoErro(fonte: string, erro: string): Motivo | null {
   }
   if (/api access blocked|"code":\s*200|"code":\s*190|oauthexception.*(token|session|expired|permission)|access token|session has expired|invalid oauth|error validating/.test(e)) {
     return { texto: `A Meta bloqueou ou venceu o acesso do dashboard ao ${nome} desta conta. O dono da conta precisa autorizar de novo (novo acesso no Business Manager).`, dono: "cliente" };
+  }
+  // Limite de uso da Meta (códigos 4, 17, 32, 613 ou 80000-80014): temporário, a Meta libera em minutos. Não é falha nossa.
+  if (ERRO_TEMPORARIO_META.test(e)) {
+    return { texto: `A Meta pausou a leitura de ${nome} por limite de uso (temporário, em geral alguns minutos). Tentamos de novo na próxima atualização.`, dono: "meta" };
   }
   if (/service temporarily unavailable|unknown error|"code":\s*(1|2)\b|responded 5\d\d|respondeu 5\d\d|\b50[0-4]\b|bad gateway|timed? ?out|timeout/.test(e) && !/conteudo-ia/.test(e)) {
     return { texto: `A Meta está instável e não entregou os dados de ${nome}. Tentamos de novo na próxima atualização.`, dono: "meta" };

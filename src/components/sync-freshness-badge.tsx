@@ -51,10 +51,13 @@ export function SyncFreshnessBadge({ clientId, compacto = false }: { clientId: s
   if (compacto) {
     const pior = linhas.reduce((a, l) => (PESO[tomDaFonte(l)] > PESO[a] ? tomDaFonte(l) : a), "bom" as string);
     const resumo = linhas.map((l) => `${ROTULOS[l.fonte] ?? "Comentários"}${l.data_ate ? ` até ${ddmm(l.data_ate)}` : " (erro)"}`).join(" · ");
+    // Só os comentários com erro (Instagram, CRM etc. em dia): dizer qual fonte, em vez de "Dados parados".
+    const ruins = linhas.filter((l) => tomDaFonte(l) === pior);
+    const frase = pior !== "bom" && ruins.length > 0 && ruins.every((l) => l.fonte === "comentarios") ? "Comentários com erro" : FRASE_TOM[pior];
     return (
       <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap" style={{ color: "var(--text-dim)" }} title={resumo}>
         <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: COR[pior] }} />
-        {FRASE_TOM[pior]}
+        {frase}
         <span className="sr-only">: {resumo}</span>
       </span>
     );

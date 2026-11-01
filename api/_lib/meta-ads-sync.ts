@@ -15,7 +15,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
 import { protegerContraZero } from "./anuncios-protecao.js";
 import { registrarLeiturasContas } from "./anuncios-status.js";
-import { linhasWindsor } from "./windsor-resposta.js";
+import { buscarWindsor, WINDSOR_MAX_ROWS } from "./windsor-resposta.js";
 
 const WINDSOR_BASE = "https://connectors.windsor.ai/facebook";
 
@@ -129,14 +129,10 @@ async function windsorGet(
     date_to: dateTo,
     fields: FIELDS.join(","),
     filter: JSON.stringify([["account_id", "eq", adAccountId]]),
-    _max_rows: "100000",
+    _max_rows: String(WINDSOR_MAX_ROWS),
   });
-  const res = await fetch(`${WINDSOR_BASE}?${params.toString()}`, { signal: AbortSignal.timeout(30_000), redirect: "error" });
-  if (!res.ok) {
-    throw new Error(`Windsor.ai request failed (${res.status}): ${await res.text()}`);
-  }
-  // HTTP 200 com `error` no corpo não vira mais "lista vazia" (windsor-resposta.ts).
-  return linhasWindsor(res);
+  // HTTP 200 com `error` no corpo vira erro; 429 espera e tenta uma vez; resposta no limite de _max_rows é corte.
+  return buscarWindsor(`${WINDSOR_BASE}?${params.toString()}`);
 }
 
 // Conta grande (ex.: Dra. Lana, 113 campanhas e linha por anúncio) estoura os 30 s da Windsor numa janela de 7 dias
