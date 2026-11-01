@@ -9,15 +9,13 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PROMPT_POR_CODIGO } from "./sap-prompts.js";
-import { textoValido } from "./texto-ia.js";
+import { chamarTextoComReserva, custoEstimadoIA, ErroProvedorIA } from "./ia.js";
 
 const MODELO_OPENAI = process.env.SAP_PROMPT_MODELO || process.env.AGENTES_MODELO_FORTE || "gpt-4.1";
 const MODELO_CLAUDE = process.env.SAP_PROMPT_MODELO_CLAUDE || process.env.AGENTES_MODELO_CLAUDE_FORTE || "claude-sonnet-5-5";
 const MAX_TOKENS_SAIDA = 16_000;
 const MAX_POR_ANEXO = 60_000;
 const MAX_TOTAL = 180_000;
-// US$ por milhão de tokens (entrada, saída), tabela pública; modelo fora da tabela registra custo nulo.
-const PRECO: Record<string, [number, number]> = { "gpt-4.1": [2, 8] };
 
 export interface PedidoGerar {
   clientId: string;
@@ -86,55 +84,30 @@ export async function gerarComPrompt(admin: SupabaseClient<any, any, any>, p: Pe
   let modelo = "";
   let tIn: number | null = null;
   let tOut: number | null = null;
-  const custo = () => {
-    const pr = PRECO[modelo];
-    return pr && tIn != null && tOut != null ? (tIn * pr[0] + tOut * pr[1]) / 1_000_000 : null;
-  };
+  // Preço pela tabela única de ia.ts; modelo fora da tabela registra custo nulo.
+  const custo = () => custoEstimadoIA(modelo, tIn, tOut);
   try {
+    // OpenAI primeiro; Anthropic de reserva quando a OpenAI recusa a chave, fica sem crédito, limita, cai ou a rede
+    // falha (mesma regra de ia.ts). Tempo esgotado não troca: a função da Vercel não tem tempo para a segunda.
     let texto = "";
-    const chamarOpenAI = async () => {
-      modelo = MODELO_OPENAI;
-      const r = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-        signal: AbortSignal.timeout(270_000),
-        body: JSON.stringify({
-          model: modelo,
-          max_completion_tokens: MAX_TOKENS_SAIDA,
-          messages: [{ role: "system", content: textoValido(def.sistema) }, { role: "user", content: textoValido(m.entrada) }],
-        }),
+    try {
+      const r = await chamarTextoComReserva({
+        sistema: def.sistema,
+        entrada: m.entrada,
+        maxTokens: MAX_TOKENS_SAIDA,
+        modeloOpenAI: MODELO_OPENAI,
+        modeloClaude: MODELO_CLAUDE,
+        timeoutMs: 270_000,
+        jsonObject: false,
+        reservaNoTempoEsgotado: false,
       });
-      if (!r.ok) return { recusada: r.status, erro: `OpenAI respondeu ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}` };
-      const j = (await r.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
-      tIn = j.usage?.prompt_tokens ?? null;
-      tOut = j.usage?.completion_tokens ?? null;
-      return { texto: j.choices?.[0]?.message?.content ?? "" };
-    };
-    const chamarClaude = async () => {
-      modelo = MODELO_CLAUDE;
-      const r = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY as string, "anthropic-version": "2023-06-01" },
-        signal: AbortSignal.timeout(270_000),
-        body: JSON.stringify({ model: modelo, max_tokens: MAX_TOKENS_SAIDA, system: textoValido(def.sistema), messages: [{ role: "user", content: textoValido(m.entrada) }] }),
-      });
-      if (!r.ok) throw new Error(`Anthropic respondeu ${r.status}`);
-      const j = (await r.json()) as { content?: { text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
-      tIn = j.usage?.input_tokens ?? null;
-      tOut = j.usage?.output_tokens ?? null;
-      return (j.content ?? []).map((b) => b.text ?? "").join("");
-    };
-    if (process.env.OPENAI_API_KEY) {
-      const o = await chamarOpenAI();
-      if ("texto" in o) texto = o.texto ?? "";
-      // Chave recusada (401/403) ou sem crédito (402/429): usa a Anthropic se houver; senão, diz o que trocar.
-      else if ([401, 402, 403, 429].includes(o.recusada) && process.env.ANTHROPIC_API_KEY) texto = await chamarClaude();
-      else if (o.recusada === 401 || o.recusada === 403) throw new Error("A chave de IA do servidor (OPENAI_API_KEY na Vercel do Hub) foi recusada. Troque por uma chave válida e refaça o deploy. " + o.erro.slice(0, 80));
-      else throw new Error(o.erro);
-    } else if (process.env.ANTHROPIC_API_KEY) {
-      texto = await chamarClaude();
-    } else {
-      throw new Error("Servidor sem OPENAI_API_KEY nem ANTHROPIC_API_KEY");
+      ({ texto, modelo, tIn, tOut } = r);
+    } catch (e) {
+      modelo = (e as { modelo?: string })?.modelo ?? modelo;
+      if (e instanceof ErroProvedorIA && e.provedor === "openai" && (e.status === 401 || e.status === 403) && !process.env.ANTHROPIC_API_KEY) {
+        throw new Error("A chave de IA do servidor (OPENAI_API_KEY na Vercel do Hub) foi recusada. Troque por uma chave válida e refaça o deploy. " + e.message.slice(0, 80));
+      }
+      throw e;
     }
     if (!texto.trim()) throw new Error("A IA devolveu resposta vazia");
     const c = custo();

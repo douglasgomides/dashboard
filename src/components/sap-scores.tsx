@@ -25,6 +25,7 @@ import {
   type SemanaSaude,
   type StatusItem,
 } from "@/lib/sap-scores";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const pct = (v: number | null) => (v === null ? "·" : `${Math.round(v * 100)}%`);
 const dm = (iso: string) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
@@ -74,7 +75,7 @@ export function ScoreExecucao({ clientId }: { clientId: string }) {
       qc.invalidateQueries({ queryKey: ["sap-cadastro", clientId] });
       qc.invalidateQueries({ queryKey: ["sap-portfolio"] });
     },
-    onError: (e) => setErro((e as Error).message),
+    onError: (e) => setErro(mensagemDeErroAcao(e)),
   });
 
   if (!clinica) return null;
@@ -258,7 +259,7 @@ export function ScoreSaude({ clientId }: { clientId: string }) {
       qc.invalidateQueries({ queryKey: ["sap-saude"] });
       qc.invalidateQueries({ queryKey: ["sap-portfolio"] });
     },
-    onError: (e) => setErro((e as Error).message),
+    onError: (e) => setErro(mensagemDeErroAcao(e)),
   });
 
   function kpisDoPainel() {

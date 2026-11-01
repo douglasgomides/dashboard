@@ -10,7 +10,7 @@ import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { baseDoLink, fraseSemCodigo, NOME_MAX, POSICOES, sugerirNomeLink, taxa, urlCurta, urlDoLink, validarNomeLink, type Posicao } from "@/lib/rastreio";
 import { getClient, limitesBR } from "@/lib/client-data";
 import { fetchAllRows } from "@/lib/pagination";
-import { mensagemDeErro } from "@/lib/erro-amigavel";
+import { mensagemDeErro, mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 // Links rastreados (src/lib/rastreio.ts): de onde vem cada conversa. A equipe gera um link curto para cada lugar (bio,
 // story, destaque, QR...), o clique é registrado e a conversa que chega é ligada ao link pelo código no fim da mensagem
@@ -86,7 +86,7 @@ function Gerador({ clientId, nomesUsados, aoCriar }: { clientId: string; nomesUs
       const v = validarNomeLink(nome);
       setNovo({ url: r.url, slug: v.ok ? v.slug : r.url.split("/r/")[1] ?? "link", mensagem: r.mensagem ?? null });
       setTitulo(""); setFrase(""); setNomeMexido(false); aoCriar();
-    } catch (e) { setErro(e instanceof Error ? e.message : String(e)); } finally { setSalvando(false); }
+    } catch (e) { setErro(mensagemDeErroAcao(e)); } finally { setSalvando(false); }
   }
   const campo = "min-h-[36px] w-full rounded-md border px-2 text-sm";
   const estilo = { borderColor: "var(--border)", background: "var(--surface)" };

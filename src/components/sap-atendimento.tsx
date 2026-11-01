@@ -11,6 +11,7 @@ import { lerTrackerAuto } from "@/lib/sap-auto";
 import { CATEGORIAS_MOTIVO, indicadoresAtendimento, METAS_ATENDIMENTO, ROTULO_FALHA, preencherComIA, type AuditoriaSemana } from "@/lib/sap-sinais";
 import { somar } from "@/lib/sap-cronograma";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const campo = { borderColor: "var(--border)", background: "var(--surface)" } as const;
 const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%`);
@@ -130,7 +131,7 @@ function AuditoriaForm({ clientId, clinicaId, auds, hoje }: { clientId: string; 
         <label className="min-w-[200px] flex-1 text-xs">O que corrigir no retreino<input value={f.obs} onChange={(x) => setF({ ...f, obs: x.target.value })} className="mt-0.5 block min-h-[34px] w-full rounded-md border px-2 text-sm" style={campo} /></label>
         <button type="button" disabled={salvar.isPending} onClick={() => salvar.mutate()} className="min-h-[34px] rounded-lg px-3 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>Salvar semana</button>
       </div>
-      {salvar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</p>}
+      {salvar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</p>}
       {auds.length > 0 && (
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-sm">

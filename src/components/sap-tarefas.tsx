@@ -16,6 +16,7 @@ import {
 } from "@/lib/sap-tarefas";
 import { REGRA_DIA_UTIL } from "@/lib/sap-cronograma";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const campo = { borderColor: "var(--border)", background: "var(--surface)" } as const;
 export const dm = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : "—");
@@ -202,7 +203,7 @@ function CorpoTarefa({ t, clientId, clinicaId, hoje, podeEditar }: { t: Tarefa; 
                 const f = x.target.files?.[0];
                 if (!f) return;
                 setEnviando(true);
-                try { setEvid(await enviarEvidenciaSap(clinicaId, t.n, f)); } catch (err) { alert((err as Error).message); } finally { setEnviando(false); }
+                try { setEvid(await enviarEvidenciaSap(clinicaId, t.n, f)); } catch (err) { alert(mensagemDeErroAcao(err)); } finally { setEnviando(false); }
               }} />
             </label>
             <label className="text-xs">Data de conclusão<input type="date" value={data} onChange={(x) => setData(x.target.value)} className="mt-0.5 block min-h-[38px] rounded-md border px-2 text-sm" style={campo} /></label>
@@ -230,7 +231,7 @@ function CorpoTarefa({ t, clientId, clinicaId, hoje, podeEditar }: { t: Tarefa; 
           <button type="button" onClick={() => setModo(null)} className="min-h-[38px] px-2 text-sm" style={{ color: "var(--text-dim)" }}>Cancelar</button>
         </div>
       )}
-      {acao.isError && <p className="text-xs" style={{ color: "var(--crit)" }}>{(acao.error as Error).message}</p>}
+      {acao.isError && <p className="text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(acao.error)}</p>}
     </div>
   );
 }
@@ -365,7 +366,7 @@ export function MinhasTarefasClinica({ clientId, filtroInicial = "minhas", grupo
   const [filtro, setFiltro] = useState<Filtro>(isAdmin ? filtroInicial : "minhas");
   const c = lista[0];
   if (isLoading) return <p className="note">Carregando…</p>;
-  if (error) return <p className="note" style={{ color: "var(--crit)" }}>{(error as Error).message}</p>;
+  if (error) return <p className="note" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(error)}</p>;
   if (!c) return <p className="note">Esta clínica ainda não está no Sistema de Aquisição.</p>;
   if (!c.entrada.clinica.d0) return <p className="note">{isAdmin ? "Defina a data de início em Painel da clínica → Editar cadastro para preparar as tarefas do programa." : "A equipe Doctor Creator vai definir a data de início. As tarefas aparecerão aqui quando o programa estiver preparado."}</p>;
   const meus = papeisDoUsuario(c.entrada, user?.id);
@@ -469,7 +470,7 @@ export function QuemEQuem({ clientId }: { clientId: string }) {
             );
           })}
         </ul>
-        {salvar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</p>}
+        {salvar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</p>}
         {isAdmin && <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>Pessoa que não aparece na lista: cadastre em <Link to="/admin/equipe" className="underline">Admin → Equipe</Link>. Não precisa de login; quem tem login com o mesmo e-mail vê as tarefas em Minhas tarefas.</p>}
       </Painel>
     </div>

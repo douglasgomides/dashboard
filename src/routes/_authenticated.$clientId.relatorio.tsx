@@ -29,6 +29,7 @@ import { motivoDaLinha } from "@/lib/motivos";
 import { pendenciasDoCliente, textosComTom, ROTULO_TOM, type Tom } from "@/lib/relatorio-tom";
 import { ROTULO_FORMATO, seteDias } from "@/lib/pauta";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 export const Route = createFileRoute("/_authenticated/$clientId/relatorio")({
   component: RelatorioPage,
@@ -197,7 +198,7 @@ function RelatorioPage() {
       const { gerarEBaixarRelatorioCompleto } = await import("@/lib/relatorio-completo");
       await gerarEBaixarRelatorioCompleto({ clientId, start, end, periodLabel, textoCliente: textoWhats, envio: envio! });
     } catch (e) {
-      setErroPdf(e instanceof Error ? e.message : "Falha ao gerar o PDF.");
+      setErroPdf(mensagemDeErroAcao(e));
     } finally {
       setGerandoPdf(false);
     }

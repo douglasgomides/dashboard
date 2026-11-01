@@ -7,6 +7,7 @@ import { Painel, Kpi, Selo } from "@/components/visual";
 import { Carregando, ErroCarga } from "@/components/sem-fonte";
 import { useClientRole } from "@/hooks/use-client-role";
 import { MATURACAO_DIAS, MINIMO_ATENDIDOS, parcial, ROTULO_ORIGEM, semanaDe, type EstadoPlano, type OrigemPlano } from "@/lib/plano-semana";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 interface ItemPlano {
   id: string; semana: string; ordem: number; origem: OrigemPlano; titulo: string; porque: string; acao: string; onde: string | null;
@@ -60,12 +61,12 @@ export function PlanoSemana({ clientId, base, contexto }: { clientId: string; ba
   async function atualizar() {
     setGerando(true); setAviso(null);
     try { await chamar(clientId, { alvo: "plano_semana" }); await qc.invalidateQueries({ queryKey: chave }); }
-    catch (e) { setAviso(e instanceof Error ? e.message : String(e)); }
+    catch (e) { setAviso(mensagemDeErroAcao(e)); }
     finally { setGerando(false); }
   }
   async function decidir(id: string, estado: EstadoPlano) {
     try { await chamar(clientId, { alvo: "plano_item", id, estado }); await qc.invalidateQueries({ queryKey: chave }); }
-    catch (e) { setAviso(e instanceof Error ? e.message : String(e)); }
+    catch (e) { setAviso(mensagemDeErroAcao(e)); }
   }
   const itens = q.data ?? [];
   const atual = itens.filter((i) => i.semana === semana);

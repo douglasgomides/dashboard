@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { configCrm, operacaoCrm } from "@/lib/crm-operacao-data";
 import { ETAPAS_CRM, nomeEtapa, prazoVencido, dataParaInput, inputParaData, type CardCrm, type ContatoCrm, type DetalheCrm, type EtapaCrm, type ListaCrm, type MembroCrm, type EntradaCrm, type RotinaCrm } from "@/lib/crm-kanban";
 import "@/styles/crm-kanban.css";
-import { mensagemDeErro } from "@/lib/erro-amigavel";
+import { mensagemDeErro, mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 export const Route = createFileRoute("/_authenticated/$clientId/crm-contatos")({ component: KanbanCrm, validateSearch: (search:Record<string,unknown>):{card?:string} => ({card:typeof search.card==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(search.card)?search.card:undefined}) });
 const quando = (iso: string) => new Date(iso).toLocaleString("pt-BR",{ day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",timeZone:"America/Sao_Paulo" });
@@ -151,7 +151,7 @@ function NovoCard({clientId,equipe,selecionado,onClose,onSaved}:{clientId:string
  async function salvar(e:FormEvent) {
   e.preventDefault(); if(salvando)return; setSalvando(true);setErro("");
   try { await operacaoCrm(clientId,"criar",{id,pessoa_id:contato?.id,conversa_id:contato?.conversa_id,titulo,origem,responsavel_id:responsavel||null,proxima_acao:proxima,prazo:prazo?inputParaData(prazo):null});await onSaved(); }
-  catch(e){setErro((e as Error).message);} finally{setSalvando(false);}
+  catch(e){setErro(mensagemDeErroAcao(e));} finally{setSalvando(false);}
  }
  return <BottomSheet aberto onFechar={onClose} titulo="Nova oportunidade"><form onSubmit={salvar} className="crm-form">
   <p>Escolha um contato existente ou cadastre uma oportunidade manual. Nenhum contato é importado para o quadro automaticamente.</p>
@@ -219,7 +219,7 @@ function CardAberto({clientId,equipe,inicial,destino,editar,onClose,onSaved}:{cl
    setAviso(r?.aviso??"Alteração salva.");
    await qc.invalidateQueries({queryKey:["crm-operacao-detalhe",clientId,card.id]});
    await onSaved();
-  }catch(e){setErro((e as Error).message);await qc.invalidateQueries({queryKey:["crm-operacao-detalhe",clientId,card.id]});}
+  }catch(e){setErro(mensagemDeErroAcao(e));await qc.invalidateQueries({queryKey:["crm-operacao-detalhe",clientId,card.id]});}
   finally{setOcupado(false);}
  }
  const sugestoes=q.data?.sugestoes.filter(s=>s.estado==="pendente")??[];

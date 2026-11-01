@@ -20,6 +20,7 @@ import { categoriaDaArea, ROTULO_RESPONSAVEL, type Insight, type Responsavel } f
 import { NextBestActionPanel, PriorityBadge, prioridadeDe } from "@/components/next-best-action";
 import { ListaLimitacoes } from "@/components/insight-card";
 import { History, Info } from "lucide-react";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 export const Route = createFileRoute("/_authenticated/$clientId/oportunidades")({
   component: OportunidadesPage,
@@ -57,7 +58,7 @@ function Execucao({
       onSalvar(mudarStatus(acomp, para, email, nota || undefined));
       setNota("");
     } catch (e) {
-      setErro((e as Error).message);
+      setErro(mensagemDeErroAcao(e));
     }
   };
   const editar = (parcial: Partial<Acompanhamento>) => onSalvar({ ...acomp, ...parcial, atualizadoEm: new Date().toISOString() });
@@ -336,7 +337,7 @@ function OportunidadesPage() {
           }
           clientId={clientId}
           onFechar={() => setAberto(null)}
-          rodape={<>{salvar.isError && <p role="alert" style={{ color: "var(--crit)" }}>A alteração não foi salva. {salvar.error.message}</p>}<Execucao acomp={aberto.acomp} podeEditar={podeEditar} email={user?.email ?? null} onSalvar={(a) => salvar.mutate(a)} salvando={salvar.isPending} /></>}
+          rodape={<>{salvar.isError && <p role="alert" style={{ color: "var(--crit)" }}>A alteração não foi salva. {mensagemDeErroAcao(salvar.error)}</p>}<Execucao acomp={aberto.acomp} podeEditar={podeEditar} email={user?.email ?? null} onSalvar={(a) => salvar.mutate(a)} salvando={salvar.isPending} /></>}
         />
       )}
     </div>

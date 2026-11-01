@@ -16,6 +16,7 @@ import { fmtKpi } from "@/lib/sap-documentos";
 import { SESSOES, lerRascunho, rascunhoEmTexto, trilha, type EstadoTrilha, blocoNoTempo, duracaoPlanejada, linhasParaAcoes, prazosPos, sessaoPorId, type BlocoSessao, type DefSessao } from "@/lib/sap-sessoes";
 import { segundaDe } from "@/lib/sap-tarefas";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const campo = { borderColor: "var(--border)", background: "var(--surface)" } as const;
 const dmh = (iso: string) => new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -108,7 +109,7 @@ function Sessao({ clinica, s, clientId }: { clinica: SapCadastro; s: DefSessao; 
         salvarTexto={(chave, texto) => salvar.mutateAsync({ chave, texto, feito: null })}
         marcar={(chave, feito) => salvar.mutateAsync({ chave, texto: reg.get(chave)?.texto ?? null, feito })} />
       {fim && <Depois clinica={clinica} s={s} reg={reg} fim={fim} clientId={clientId} salvar={(chave, feito) => salvar.mutate({ chave, texto: reg.get(chave)?.texto ?? null, feito })} />}
-      {salvar.isError && <p className="text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</p>}
+      {salvar.isError && <p className="text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</p>}
     </>
   );
 }
@@ -147,7 +148,7 @@ function Cabecalho({ clinica, s, fase }: { clinica: SapCadastro; s: DefSessao; f
             <button type="button" onClick={() => setPasta(null)} className="text-xs">Cancelar</button>
           </>
         )}
-        {salvarPasta.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{(salvarPasta.error as Error).message}</span>}
+        {salvarPasta.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvarPasta.error)}</span>}
       </div>
     </Painel>
   );
@@ -277,7 +278,7 @@ function Durante({ clinica, s, reg, inicio, fim, clientId, salvarTexto, marcar }
           </button>
         )}
         {inicio && <span className="text-xs" style={{ color: "var(--text-dim)" }}>Início {dmh(inicio)}</span>}
-        {encerrar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{(encerrar.error as Error).message}</span>}
+        {encerrar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(encerrar.error)}</span>}
       </div>
       <div className="mt-3 flex gap-1" aria-hidden>
         {s.blocos.map((b) => (
@@ -403,7 +404,7 @@ function RascunhoIASessao({ clinica, s, reg, clientId }: { clinica: SapCadastro;
         <button type="button" disabled={gerar.isPending} onClick={() => gerar.mutate()} className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
           <Sparkles size={15} aria-hidden /> {gerar.isPending ? "Gerando…" : r ? "Gerar de novo" : "Gerar rascunho com IA"}
         </button>
-        {gerar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{(gerar.error as Error).message}</span>}
+        {gerar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(gerar.error)}</span>}
       </div>
       {r && (
         <div className="mt-3 space-y-3 rounded-lg border p-3" style={{ borderColor: "var(--border)" }}>

@@ -4,11 +4,12 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, RefreshCw } from "luci
 import { BotaoCopiar } from "@/components/botao-copiar";
 import { supabase } from "@/integrations/supabase/client";
 import { NOME_EVENTO, NOME_OPERACAO, resumoOperacao, type SaudeOperacao, type TrabalhoRecuperacao } from "@/lib/operacao-recuperacao";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const db = supabase as any;
 const estilo = { background: "var(--surface)", borderColor: "var(--border)" };
 const quando = (iso: string | null) => iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "Sem sincronização confirmada";
-const erroLegivel = (e: unknown) => e instanceof Error ? e.message : "Não foi possível salvar. Tente novamente.";
+const erroLegivel = (e: unknown) => mensagemDeErroAcao(e);
 async function rpc(nome: string, args: Record<string, unknown>) {
   const { data, error } = await db.rpc(nome, args);
   if (error) throw new Error(error.message);

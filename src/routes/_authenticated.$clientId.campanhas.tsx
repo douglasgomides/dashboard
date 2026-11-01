@@ -14,6 +14,7 @@ import { resumirAtendimento } from "@/lib/conversa-leitura";
 import { datasDoMes, gastoPorDia, potencial, sugerirCampanhas, temaForteDosPosts, NOME_MES, type BaseCampanhas, type Campanha } from "@/lib/campanhas";
 import { formatoDe } from "@/lib/pauta";
 import type { Acompanhamento, Status } from "@/lib/oportunidades";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 export const Route = createFileRoute("/_authenticated/$clientId/campanhas")({
   component: CampanhasPage,
@@ -177,7 +178,7 @@ function CampanhasPage() {
       await salvarAcompanhamento(novo);
       await qc.invalidateQueries({ queryKey: ["acompanhamentos", clientId] });
     } catch (e) {
-      setErro(e instanceof Error ? e.message : String(e));
+      setErro(mensagemDeErroAcao(e));
     } finally {
       setSalvando(null);
     }

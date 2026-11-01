@@ -21,6 +21,7 @@ import { BotaoCopiar } from "@/components/botao-copiar";
 import { CentroTrabalhoAgentes } from "@/components/agentes-trabalho";
 import { EstrategiasIA } from "@/components/estrategias-ia";
 import { TRABALHOS_AGENTE } from "@/lib/agentes-trabalho";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const db = supabase as any;
 type Estado = "proposta" | "feita" | "descartada";
@@ -75,7 +76,7 @@ function Cabecalho({ a, clientId, ultima, aoTerminar, mostrarExecutar = true }: 
   async function rodar() {
     setErro(null);
     try { const e = await rodarFluxoAteFim(clientId, { id: a.fluxo, agente: a.agente, objetivo: a.entrega }, setAndando); if (e) setErro(e); }
-    catch (e) { setErro(e instanceof Error ? e.message : String(e)); }
+    catch (e) { setErro(mensagemDeErroAcao(e)); }
     finally { setAndando(null); aoTerminar(); }
   }
   return (

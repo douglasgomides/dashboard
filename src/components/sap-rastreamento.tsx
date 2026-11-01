@@ -12,6 +12,7 @@ import {
   type CategoriaMeta, type StatusConversao, type StatusTeste,
 } from "@/lib/sap-rastreamento";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const campo = { borderColor: "var(--border)", background: "var(--surface)" } as const;
 const dm = (iso: string | null) => (iso ? iso.slice(0, 10).split("-").reverse().slice(0, 2).join("/") : "—");
@@ -117,7 +118,7 @@ function ChecklistRastreio({ clinica }: { clinica: SapCadastro }) {
           </tbody>
         </table>
       </div>
-      {(salvar.isError || conferir.isError) && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{((salvar.error ?? conferir.error) as Error).message}</p>}
+      {(salvar.isError || conferir.isError) && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error ?? conferir.error)}</p>}
     </Painel>
   );
 }
@@ -189,7 +190,7 @@ function ConfigRastreioPainel({ clinica }: { clinica: SapCadastro }) {
             <button type="button" disabled={salvar.isPending} onClick={() => salvar.mutate(ed)} className="min-h-[34px] rounded-lg px-3 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>Salvar</button>
             <button type="button" onClick={() => setEd(null)} className="min-h-[34px] px-2 text-sm" style={{ color: "var(--text-dim)" }}>Cancelar</button>
           </div>
-          {salvar.isError && <span className="text-xs sm:col-span-2" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</span>}
+          {salvar.isError && <span className="text-xs sm:col-span-2" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</span>}
         </div>
       )}
     </Painel>

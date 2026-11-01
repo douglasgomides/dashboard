@@ -43,6 +43,7 @@ import {
 import { AnalysisView } from "./analysis-view";
 import { AdaptationView } from "./adaptation-view";
 import "./workspace.css";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const parentRoute = getRouteApi("/_authenticated/$clientId");
 const RadarView = lazy(() => import("./radar-view").then(m => ({ default: m.RadarView })));
@@ -291,9 +292,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
       </div>
       {(accounts.isError || posts.isError || workspace.isError || progress.isError) && (
         <div role="alert" className="creative-notice">
-          {accounts.error?.message ||
-            posts.error?.message ||
-            workspace.error?.message || progress.error?.message}
+          {mensagemDeErroAcao(accounts.error ?? posts.error ?? workspace.error ?? progress.error, "carregar")}
           <button
             className="btn ml-3"
             onClick={() => {
@@ -333,7 +332,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
       )}
       {action.isError && (
         <p role="alert" className="creative-notice">
-          {action.error.message}
+          {mensagemDeErroAcao(action.error)}
         </p>
       )}
       <nav

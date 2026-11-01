@@ -8,6 +8,7 @@ import { avaliarVerba } from "@/lib/sap-verba";
 import { resumoFidelizacao, type SemanaFidelizacao } from "@/lib/sap-fidelizacao";
 import { dataDoDia, somar } from "@/lib/sap-cronograma";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const campo = { borderColor: "var(--border)", background: "var(--surface)" } as const;
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -65,7 +66,7 @@ export function VerbaSap({ clientId }: { clientId: string }) {
           )}
         </div>
       )}
-      {salvar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</p>}
+      {salvar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</p>}
     </Painel>
   );
 }
@@ -124,7 +125,7 @@ export function FidelizacaoSap({ clientId }: { clientId: string }) {
             ))}
             <button type="button" disabled={salvar.isPending} onClick={() => salvar.mutate()} className="min-h-[34px] rounded-lg px-3 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>Salvar semana</button>
           </div>
-          {salvar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</p>}
+          {salvar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</p>}
         </div>
       )}
     </Painel>

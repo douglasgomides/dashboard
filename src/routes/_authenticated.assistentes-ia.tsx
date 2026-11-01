@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { FERRAMENTAS_MCP, URL_DESCOBERTA_OAUTH, URL_MCP } from "@/lib/mcp";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 // Integrações → Assistentes de IA → Doctor Creator MCP: status, como conectar (Claude, ChatGPT), acessos concedidos
 // com revogação (OAuth grants do Supabase Auth) e histórico de consultas (mcp_chamadas). Só leitura no MVP.
@@ -92,7 +93,7 @@ function AssistentesIa() {
         <h2 className="font-semibold">Acessos concedidos</h2>
         {status.data !== true ? <p className="mt-1" style={dim}>Aparecem aqui depois que o login OAuth for ligado e você autorizar um assistente.</p> :
           grants.isLoading ? <p className="mt-1">Carregando…</p> :
-          grants.error ? <p className="mt-1" style={{ color: "var(--crit)" }}>{(grants.error as Error).message}</p> :
+          grants.error ? <p className="mt-1" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(grants.error)}</p> :
           !grants.data?.length ? <p className="mt-1" style={dim}>Nenhum assistente autorizado.</p> : (
             <ul className="mt-1 space-y-1.5">
               {grants.data.map((g) => (
@@ -103,7 +104,7 @@ function AssistentesIa() {
               ))}
             </ul>
           )}
-        {revogar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{(revogar.error as Error).message}</p>}
+        {revogar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(revogar.error)}</p>}
       </section>
 
       <section className="rounded-xl border p-4 text-sm" style={caixa}>

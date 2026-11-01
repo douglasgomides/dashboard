@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { ROTULO_FALHA } from "@/components/auditoria-comercial";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 // Experimento da semana: a falha comercial mais frequente vira UMA ação para a equipe testar por 7 dias, medida
 // com a mesma leitura por IA das conversas (% de conversas comerciais com a falha), antes x durante.
@@ -102,7 +103,7 @@ export function ExperimentoSemana({ clientId }: { clientId: string }) {
               {e.pode_concluir ? "Concluir e registrar resultado" : `Concluir a partir de ${data(e.fim)}`}
             </button>
             <button type="button" className="text-xs underline" onClick={() => { if (confirm("Descartar este experimento? Ele não terá resultado registrado.")) concluir.mutate({ id: e.id, descartar: true }); }}>Descartar</button>
-            {concluir.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{(concluir.error as Error).message}</span>}
+            {concluir.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(concluir.error)}</span>}
           </div>
         )}
       </div>
@@ -141,7 +142,7 @@ export function ExperimentoSemana({ clientId }: { clientId: string }) {
               <div className="flex flex-wrap items-center gap-2">
                 <button type="submit" disabled={acao.trim().length < 5 || iniciar.isPending} className="min-h-[34px] rounded-lg px-3 text-sm font-medium disabled:opacity-50" style={botao}>Começar experimento</button>
                 <button type="button" className="text-xs underline" onClick={() => setFalha(null)}>Cancelar</button>
-                {iniciar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{(iniciar.error as Error).message}</span>}
+                {iniciar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(iniciar.error)}</span>}
               </div>
               <p className="text-xs" style={{ color: "var(--text-dim)" }}>Sua equipe executa a mudança no atendimento. O Nexo acompanha a frequência do ponto de melhoria antes e durante os 7 dias do teste.</p>
             </form>

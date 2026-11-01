@@ -10,6 +10,7 @@ import { DOC } from "@/lib/sap-docs";
 import { PROMPTS_TELA, type PromptTela } from "@/lib/sap-prompts-tela";
 import { Painel } from "@/components/visual";
 import { LIMITE_ANEXO, apagarAnexo, lerArquivoAnexo, listarAnexos, salvarAnexo } from "@/lib/sap-anexos";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 type Resposta = { texto: string; modelo: string; custoUsd: number | null; faltaram: string[]; usadosSalvos?: string[] };
 
@@ -52,19 +53,19 @@ export function GeradorSap({ clientId, clinicaId, clinica }: { clientId: string;
     if (texto.length > LIMITE_ANEXO) return setMsgAnexo((o) => ({ ...o, [chave]: `Texto grande demais (${texto.length.toLocaleString("pt-BR")} caracteres, limite ${LIMITE_ANEXO.toLocaleString("pt-BR")}).` }));
     setOcupado(chave);
     try { await salvarAnexo(clinicaId, slot, nome, texto); await qc.invalidateQueries({ queryKey: ["sap-anexos", clinicaId] }); setMsgAnexo((o) => ({ ...o, [chave]: "Salvo na clínica." })); }
-    catch (e) { setMsgAnexo((o) => ({ ...o, [chave]: e instanceof Error ? e.message : String(e) })); } finally { setOcupado(null); }
+    catch (e) { setMsgAnexo((o) => ({ ...o, [chave]: mensagemDeErroAcao(e) })); } finally { setOcupado(null); }
   }
   async function enviarArquivo(slot: string, chave: string, arquivo: File | undefined) {
     if (!arquivo) return;
     setOcupado(chave);
     try { const t = await lerArquivoAnexo(arquivo); await guardar(slot, arquivo.name, t, chave); }
-    catch (e) { setMsgAnexo((o) => ({ ...o, [chave]: e instanceof Error ? e.message : String(e) })); setOcupado(null); }
+    catch (e) { setMsgAnexo((o) => ({ ...o, [chave]: mensagemDeErroAcao(e) })); setOcupado(null); }
   }
   async function remover(slot: string, chave: string) {
     if (!clinicaId) return;
     setOcupado(chave);
     try { await apagarAnexo(clinicaId, slot); await qc.invalidateQueries({ queryKey: ["sap-anexos", clinicaId] }); setMsgAnexo((o) => ({ ...o, [chave]: "Removido." })); }
-    catch (e) { setMsgAnexo((o) => ({ ...o, [chave]: e instanceof Error ? e.message : String(e) })); } finally { setOcupado(null); }
+    catch (e) { setMsgAnexo((o) => ({ ...o, [chave]: mensagemDeErroAcao(e) })); } finally { setOcupado(null); }
   }
 
   async function rodar() {
@@ -73,7 +74,7 @@ export function GeradorSap({ clientId, clinicaId, clinica }: { clientId: string;
       const so: Record<string, string> = {};
       for (const e of p.entradas) { const v = anexos[`${codigo}:${e.id}`]; if (v?.trim()) so[e.id] = v; }
       setResp(await gerar(clientId, codigo, so, pedido));
-    } catch (e) { setErro(e instanceof Error ? e.message : String(e)); } finally { setCarregando(false); }
+    } catch (e) { setErro(mensagemDeErroAcao(e)); } finally { setCarregando(false); }
   }
   async function copiar() {
     if (!resp) return;

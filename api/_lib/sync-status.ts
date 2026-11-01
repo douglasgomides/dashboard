@@ -56,14 +56,25 @@ export function expiraDoJwt(token: string | null | undefined): Date | null {
 }
 
 const AVISO_TOKEN = /^O token d[oa] .+ (vence|venceu) /;
+/** Texto do aviso por provedor: artigo ("do Kommo", "da Meta"), o que para e onde se gera o token novo. */
+export interface TextoAvisoToken {
+  artigo?: "o" | "a";
+  /** Ex.: "o CRM não atualiza". */
+  efeito?: string;
+  /** Ex.: "Gere um novo token de longa duração na conta e atualize a conexão". */
+  acao?: string;
+}
 /** Frase de aviso quando faltam até `dias` para vencer (ou já venceu). null quando ainda está longe. */
-export function avisoValidadeToken(provedor: string, expira: Date | null, agora = new Date(), dias = 30): string | null {
+export function avisoValidadeToken(provedor: string, expira: Date | null, agora = new Date(), dias = 30, texto: TextoAvisoToken = {}): string | null {
   if (!expira) return null;
   const faltam = Math.ceil((expira.getTime() - agora.getTime()) / 86_400_000);
   const data = expira.toISOString().slice(0, 10).split("-").reverse().join("/");
-  if (faltam <= 0) return `O token do ${provedor} venceu em ${data}. Gere um novo token de longa duração na conta e atualize a conexão; até lá o CRM não atualiza.`;
+  const de = texto.artigo === "a" ? "da" : "do";
+  const efeito = texto.efeito ?? "o CRM não atualiza";
+  const acao = texto.acao ?? "Gere um novo token de longa duração na conta e atualize a conexão";
+  if (faltam <= 0) return `O token ${de} ${provedor} venceu em ${data}. ${acao}; até lá ${efeito}.`;
   if (faltam > dias) return null;
-  return `O token do ${provedor} vence em ${faltam} ${faltam === 1 ? "dia" : "dias"} (${data}). Gere um novo token de longa duração na conta e atualize a conexão antes disso.`;
+  return `O token ${de} ${provedor} vence em ${faltam} ${faltam === 1 ? "dia" : "dias"} (${data}). ${acao} antes disso.`;
 }
 
 /**
@@ -76,11 +87,12 @@ export async function registrarValidadeToken(
   fonte: FonteSync,
   provedor: string,
   expira: Date | null,
+  texto: TextoAvisoToken = {},
 ): Promise<void> {
   try {
     const { data } = await supabase.from("sync_status").select("motivo").eq("client_id", clientId).eq("fonte", fonte).maybeSingle();
     const atual = (data as { motivo?: string | null } | null)?.motivo ?? null;
-    const aviso = avisoValidadeToken(provedor, expira);
+    const aviso = avisoValidadeToken(provedor, expira, new Date(), 30, texto);
     if (atual && !AVISO_TOKEN.test(atual)) {
       // Motivo de outra origem tem prioridade; só a data é guardada.
     } else if (aviso !== atual) {
@@ -231,6 +243,9 @@ export async function lerDadosAte(
         .select("analise_em")
         .eq("client_id", clientId)
         .lte("analise_em", hoje)
+        // Linha que saiu da planilha e semana sem investimento anotado não são dado novo.
+        .is("removido_em", null)
+        .not("valor_periodo", "is", null)
         .order("analise_em", { ascending: false })
         .limit(1)
         .maybeSingle();

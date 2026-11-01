@@ -4,6 +4,7 @@ import { Bookmark, CalendarPlus, Search } from "lucide-react";
 import { Painel, Selo } from "@/components/visual";
 import { EMPTY_RADAR_FILTERS, LANGUAGES, SPECIALTIES, radarReferences, referenceLanguage, type RadarReference } from "@/lib/creative-intelligence/radar";
 import { listSavedReferences, saveReference, referenceToPlanner } from "./data";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const num = (n: unknown) => typeof n === "number" && Number.isFinite(n) && n >= 0 ? n.toLocaleString("pt-BR") : "—";
 const date = (v: unknown) => typeof v === "string" && Number.isFinite(Date.parse(v)) ? new Date(v).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "não informada";
@@ -64,8 +65,8 @@ export function RadarView({ clientId, accountId, discoveries, capabilities, edit
       <div className="flex flex-wrap items-center gap-4"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={filters.savedOnly} onChange={e => setFilters({ ...filters, savedOnly: e.target.checked })} />Somente referências salvas</label><button type="button" className="btn" onClick={() => setFilters({ ...EMPTY_RADAR_FILTERS })}>Limpar filtros</button></div>
       <p className="text-xs" style={{ color: "var(--muted)" }}>Especialidade e tema são correspondências no texto público. O idioma é estimado pela legenda; textos curtos podem ficar sem identificação. País não confirmado.</p>
     </fieldset>
-    {saved.isError && <div role="alert" className="creative-notice mt-4"><p>{saved.error.message}</p><button type="button" className="btn" onClick={() => void saved.refetch()}>Tentar carregar referências salvas</button></div>}
-    {mutation.isError && <p role="alert" className="creative-notice mt-4">{mutation.error.message}</p>}
+    {saved.isError && <div role="alert" className="creative-notice mt-4"><p>{mensagemDeErroAcao(saved.error)}</p><button type="button" className="btn" onClick={() => void saved.refetch()}>Tentar carregar referências salvas</button></div>}
+    {mutation.isError && <p role="alert" className="creative-notice mt-4">{mensagemDeErroAcao(mutation.error)}</p>}
     {notice && <p role="status" className="creative-notice mt-4">{notice} <a className="underline" href={`/${clientId}/ideias?visao=semana`}>Abrir o planejador</a></p>}
     <p role="status" className="mt-5 text-sm">{rows.length} referência(s) nos filtros · {saved.data?.length ?? 0} salva(s)</p>
     <div className="mt-3 grid gap-3 md:grid-cols-2">{rows.map(d => {

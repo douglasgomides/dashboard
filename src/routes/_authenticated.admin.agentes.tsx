@@ -7,6 +7,7 @@ import {
   NOME_ESTADO, controlarExecucao, decidirAprovacao, excecoes, getCatalogoFluxos, getCentralAgentes, getPassos, iniciarFluxo, rodarAgentes,
   type AprovacaoAgente, type ExecucaoAgente, type FluxoCatalogo,
 } from "@/lib/agentes-data";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 // Central de Agentes: o cockpit de quem orquestra. A primeira coisa na tela é o que precisa de uma pessoa agora
 // (aprovações e falhas); depois as execuções. Cada botão chama uma função real do banco ou o servidor.
@@ -41,7 +42,7 @@ function CentralAgentes() {
   const rodar = useMutation({
     mutationFn: (id?: string) => rodarAgentes(id),
     onSuccess: recarregar,
-    onError: (e: Error) => setErro(e.message),
+    onError: (e: Error) => setErro(mensagemDeErroAcao(e)),
   });
 
   const nomeCliente = useMemo(() => new Map([...(clientes.data ?? []).map((c) => [c.id, c.name] as const), ...(clinicas.data ?? []).map((c) => [c.client_id, c.nome] as const)]), [clinicas.data, clientes.data]);
@@ -104,7 +105,7 @@ function CentralAgentes() {
         {dados && dados.execucoes.length === 0 && <p className="text-sm" style={dim}>Nenhuma execução ainda. Inicie um serviço acima.</p>}
         {[...ativas, ...encerradas].map((e) => (
           <LinhaExecucao key={e.id} e={e} fluxo={fluxoPorId.get(e.fluxo)} cliente={nomeCliente.get(e.client_id) ?? `Clínica ${e.client_id.slice(0, 8)}`} rodando={rodar.isPending && rodar.variables === e.id}
-            aoRodar={() => rodar.mutate(e.id)} aoControlar={async (acao) => { try { await controlarExecucao(e.id, acao); recarregar(); } catch (x) { setErro((x as Error).message); } }} />
+            aoRodar={() => rodar.mutate(e.id)} aoControlar={async (acao) => { try { await controlarExecucao(e.id, acao); recarregar(); } catch (x) { setErro(mensagemDeErroAcao(x)); } }} />
         ))}
       </section>
     </div>
@@ -130,7 +131,7 @@ function CardAprovacao({ a, cliente, aoDecidir, onErro }: { a: AprovacaoAgente; 
     if (d !== "aprovada" && !comentario.trim()) { onErro("Escreva o motivo para rejeitar ou o que corrigir."); return; }
     setEnviando(true);
     try { await decidirAprovacao(a.id, d, comentario); aoDecidir(a.execucao_id); }
-    catch (e) { onErro((e as Error).message); }
+    catch (e) { onErro(mensagemDeErroAcao(e)); }
     finally { setEnviando(false); }
   }
   return (
@@ -186,7 +187,7 @@ function IniciarServico({ catalogo, clinicas, aoIniciar, onErro }: { catalogo: F
           </select>
         </label>
         <button type="button" disabled={!cliente || !f || enviando} className="rounded-lg px-3 py-2 font-semibold text-white disabled:opacity-50" style={{ background: "var(--accent)" }}
-          onClick={async () => { setEnviando(true); try { aoIniciar(await iniciarFluxo(cliente, f!)); } catch (e) { onErro((e as Error).message); } finally { setEnviando(false); } }}>
+          onClick={async () => { setEnviando(true); try { aoIniciar(await iniciarFluxo(cliente, f!)); } catch (e) { onErro(mensagemDeErroAcao(e)); } finally { setEnviando(false); } }}>
           Iniciar
         </button>
       </div>

@@ -24,6 +24,7 @@ import {
   type Pauta,
   type StatusPauta,
 } from "@/lib/pauta";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 // Planejador de conteúdo da tela Ideias: ideia → pauta → plano da semana → produzida → publicada → medida.
 // Grava em pautas_conteudo (RLS: quem pode editar ações do cliente grava; os outros só leem).
@@ -111,7 +112,7 @@ export function AcoesDaIdeia({ ideia, clientId, api, podeEditar }: { ideia: Idei
           </button>
         )}
       </div>
-      {(api.criar.error || api.atualizar.error) && <p className="text-xs" style={{ color: "var(--crit)" }}>{((api.criar.error ?? api.atualizar.error) as Error).message}</p>}
+      {(api.criar.error || api.atualizar.error) && <p className="text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(api.criar.error ?? api.atualizar.error)}</p>}
       {roteiro && (
         <div className="rounded-lg border p-3" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
           <pre className="whitespace-pre-wrap break-words text-[13px] leading-relaxed" style={{ font: "inherit" }}>{texto}</pre>
@@ -273,7 +274,7 @@ export function PlanejadorSemana({ clientId, api, podeEditar }: { clientId: stri
               <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{semana.foraDaSemana.map((p) => <CartaoPauta key={p.id} p={p} dias={dias} api={api} podeEditar={podeEditar} />)}</ul>
             </details>
           )}
-          {(api.atualizar.error || api.apagar.error) && <p className="mt-2 text-xs" style={{ color: "var(--crit)" }}>{((api.atualizar.error ?? api.apagar.error) as Error).message}</p>}
+          {(api.atualizar.error || api.apagar.error) && <p className="mt-2 text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(api.atualizar.error ?? api.apagar.error)}</p>}
           {podeEditar && <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--border)" }}><NovaPautaForm clientId={clientId} api={api} /></div>}
         </>
       )}

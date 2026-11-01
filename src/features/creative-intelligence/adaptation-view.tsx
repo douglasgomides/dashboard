@@ -10,6 +10,7 @@ import type {
 } from "@/lib/creative-intelligence/contracts";
 import { pendingSlides, deliveryCaption, deliveryFiles, preparePostImage } from "@/lib/creative-intelligence/delivery";
 import { PrivateAsset, FactList } from "./analysis-view";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 export function AdaptationView({
   adaptation,
@@ -246,7 +247,7 @@ function ArtesSlides({ clientId, adaptacaoId, doc, editable }: { clientId: strin
       }
       setAviso(`${prontas} arte(s) salvas. Confira as imagens e baixe o post com a legenda.`);
     } catch (e) {
-      setAviso(e instanceof Error ? e.message : String(e));
+      setAviso(mensagemDeErroAcao(e));
     } finally {
       setGerando(null);
       await qc.invalidateQueries({ queryKey: chave });
@@ -254,7 +255,7 @@ function ArtesSlides({ clientId, adaptacaoId, doc, editable }: { clientId: strin
   }
   async function revisar(id: string, status: "aprovada" | "descartada") {
     setRevisando(id); setAviso(null);
-    try { await revisarArte(clientId, id, status); } catch (e) { setAviso(e instanceof Error ? e.message : String(e)); }
+    try { await revisarArte(clientId, id, status); } catch (e) { setAviso(mensagemDeErroAcao(e)); }
     finally { setRevisando(null); await qc.invalidateQueries({ queryKey: chave }); }
   }
   async function copiarLegenda() {
@@ -292,7 +293,7 @@ function ArtesSlides({ clientId, adaptacaoId, doc, editable }: { clientId: strin
         salvar(new Blob([zipSync(entries, { level: 0 }) as BlobPart], { type: "application/zip" }), "post-adaptado.zip");
       }
       setAviso(slide ? "Arte baixada." : "Post baixado: artes em ordem e legenda no arquivo ZIP. Revise antes de publicar.");
-    } catch (e) { setAviso(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { setAviso(mensagemDeErroAcao(e)); }
     finally { setBaixando(false); }
   }
   return (

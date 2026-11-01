@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Download, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { listAllClients } from "@/lib/admin-data";
 import { formatRangeLabel } from "@/lib/date-range";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 export const Route = createFileRoute("/_authenticated/admin/relatorios")({
   component: RelatoriosDaSemana,
@@ -39,7 +40,7 @@ function RelatoriosDaSemana() {
       await gerarEBaixarRelatorioCompleto({ clientId, start: de, end: ate, periodLabel: formatRangeLabel({ start: de, end: ate }) });
       setEstado((e) => ({ ...e, [clientId]: { s: "ok" } }));
     } catch (err) {
-      setEstado((e) => ({ ...e, [clientId]: { s: "erro", msg: err instanceof Error ? err.message : String(err) } }));
+      setEstado((e) => ({ ...e, [clientId]: { s: "erro", msg: mensagemDeErroAcao(err) } }));
     }
   }
 

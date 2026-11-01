@@ -7,6 +7,7 @@ import { getSapPorCliente, getSapPortfolio, novaClinicaSap, portfolioDeExemplo, 
 import { fmtBRL, fmtNum } from "@/lib/format";
 import { Painel, Selo, Ajuda } from "@/components/visual";
 import { corDaSaude } from "@/components/sap-scores";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 // Portfólio do Sistema de Aquisição: todas as clínicas numa tela (início da área do SAP para a equipe),
 // no lugar do 11.05 (painel) e da parte de números do 11.04 (score de saúde).
@@ -34,7 +35,7 @@ export function PortfolioSap() {
   const ordenadas = [...linhas].sort((a, b) => riscoSaude(b) - riscoSaude(a) || PESO[piorFarol(b)] - PESO[piorFarol(a)] || (a.dia ?? 0) - (b.dia ?? 0));
 
   if (isLoading && !exemplo) return <p style={{ color: "var(--text-dim)" }}>Carregando…</p>;
-  if (error && !exemplo) return <p style={{ color: "var(--crit)" }}>Não foi possível carregar as clínicas: {(error as Error).message}</p>;
+  if (error && !exemplo) return <p style={{ color: "var(--crit)" }}>Não foi possível carregar as clínicas: {mensagemDeErroAcao(error)}</p>;
 
   if (!ordenadas.length) {
     return (
@@ -281,7 +282,7 @@ function AbrirClinica() {
               {criar.isPending ? "Cadastrando…" : "Cadastrar e abrir o passo a passo"}
             </button>
             <button type="button" onClick={() => setAberto(false)} className="text-sm" style={{ color: "var(--text-dim)" }}>Cancelar</button>
-            {criar.isError && <span className="text-sm" style={{ color: "var(--crit)" }}>{(criar.error as Error).message}</span>}
+            {criar.isError && <span className="text-sm" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(criar.error)}</span>}
           </div>
         </form>
       )}

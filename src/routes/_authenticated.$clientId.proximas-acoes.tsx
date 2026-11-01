@@ -38,6 +38,7 @@ import {
   type Categoria,
   type Dono,
 } from "@/lib/proximas-acoes";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 export const Route = createFileRoute(
   "/_authenticated/$clientId/proximas-acoes",
@@ -380,7 +381,7 @@ function ProximasAcoesPage() {
       await salvarAcompanhamento(novo);
       await qc.invalidateQueries({ queryKey: ["acompanhamentos", clientId] });
     } catch (e) {
-      setErroSalvar(e instanceof Error ? e.message : String(e));
+      setErroSalvar(mensagemDeErroAcao(e));
     } finally {
       setSalvando(null);
     }
