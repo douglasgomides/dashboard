@@ -280,7 +280,10 @@ function Divisao({ chave, numero, dados }: { chave: ChaveNumero; numero: Numero;
   } else if (chave === "fecharam") {
     const vendas = Number(numero.vendas ?? 0), semValor = Number(numero.sem_valor ?? 0);
     const checkout = vemDoCheckout(numero);
-    partes.push(`${fmt(vendas)} vendas${checkout ? ` pela ${nomeCheckout(numero)}` : ""}`);
+    // Venda conta pessoas (o número grande); os cards ganhos (orçamentos) ficam como informação secundária.
+    if (!checkout && numero.ja_no_crm != null && Number(numero.ja_no_crm) > 0)
+      partes.push(`${fmt(Number(numero.ja_no_crm))} já eram pacientes ou já estavam no CRM antes do período`);
+    partes.push(checkout ? `${fmt(vendas)} vendas pela ${nomeCheckout(numero)}` : `${fmt(vendas)} ${vendas === 1 ? "orçamento ganho" : "orçamentos ganhos"} no CRM (quem fechou mais de um conta uma vez)`);
     // Com metade ou mais das vendas sem valor, a soma engana (HOMS: 100 vendas, só 1 com valor, "total R$ 86").
     if (vendas > 0 && semValor * 2 >= vendas) partes.push(`só ${fmt(vendas - semValor)} com valor ${checkout ? "no checkout" : "no CRM"}, então o total não aparece`);
     else {

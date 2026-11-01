@@ -13,6 +13,7 @@
  * O token fica em crm_connections.access_token, por cliente.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { lerTodasAsLinhas } from "./ler-paginas.js";
 
 const RD_BASE = "https://crm.rdstation.com/api/v1";
 const PAGE_SIZE = 200;
@@ -85,6 +86,24 @@ async function rdGet(token: string, path: string, query: Record<string, string |
   return res.json();
 }
 
+/**
+ * Funil do negócio. O RD só manda a etapa; o funil vem do catálogo /deal_pipelines. Se o catálogo falhou nesta rodada,
+ * usa o catálogo já gravado (crm_pipeline_statuses) e, sem ele, o funil que o negócio já tem no banco. Antes, uma falha
+ * do catálogo gravava pipeline_id='rdstation' em todos os negócios e o gatilho criava um "mudou de etapa" falso para
+ * cada um (e outro no dia seguinte, de volta). Só negócio novo, sem nada salvo, fica com 'rdstation'.
+ */
+export function funilDoNegocio(
+  stageId: string | null,
+  catalogo: Map<string, { id: string }>,
+  catalogoSalvo: Map<string, string>,
+  funilAtual: string | null | undefined,
+): string {
+  if (stageId && catalogo.has(stageId)) return catalogo.get(stageId)!.id;
+  if (stageId && catalogoSalvo.has(stageId)) return catalogoSalvo.get(stageId)!;
+  if (funilAtual) return funilAtual;
+  return "rdstation";
+}
+
 async function fetchPipelines(token: string): Promise<RdPipeline[]> {
   const body = await rdGet(token, "deal_pipelines");
   return Array.isArray(body) ? body : (body?.deal_pipelines ?? []);
@@ -132,9 +151,11 @@ export async function runRdStationSync(env: RdStationSyncEnv): Promise<RdStation
     const stageToPipeline = new Map<string, { id: string; name: string }>();
     const stageRows: Record<string, unknown>[] = [];
     let pipelines: RdPipeline[] = [];
+    let catalogoFalhou = false;
     try {
       pipelines = await fetchPipelines(token);
     } catch (err) {
+      catalogoFalhou = true;
       errors.push(err instanceof Error ? err.message : String(err));
     }
     for (const p of pipelines) {
@@ -164,11 +185,33 @@ export async function runRdStationSync(env: RdStationSyncEnv): Promise<RdStation
       errors.push(err instanceof Error ? err.message : String(err));
     }
 
+    // Etapa fora do catálogo desta rodada (ou catálogo que falhou): não sobrescreve o funil com 'rdstation'.
+    const catalogoSalvo = new Map<string, string>();
+    const funilAtual = new Map<string, string>();
+    const semFunil = deals.some((d) => {
+      const sid = String(d?.deal_stage?._id ?? d?.deal_stage?.id ?? "");
+      return !sid || !stageToPipeline.has(sid);
+    });
+    if (deals.length > 0 && (catalogoFalhou || semFunil)) {
+      try {
+        const etapas = await lerTodasAsLinhas((de, ate) => supabase.from("crm_pipeline_statuses").select("pipeline_id, status_id")
+          .eq("crm_connection_id", conn.id).order("pipeline_id").order("status_id").range(de, ate));
+        for (const e of etapas as { pipeline_id: string; status_id: string }[]) catalogoSalvo.set(String(e.status_id), String(e.pipeline_id));
+        const atuais = await lerTodasAsLinhas((de, ate) => supabase.from("crm_leads").select("external_lead_id, pipeline_id")
+          .eq("crm_connection_id", conn.id).order("external_lead_id").range(de, ate));
+        for (const l of atuais as { external_lead_id: string; pipeline_id: string | null }[])
+          if (l.pipeline_id && l.pipeline_id !== "rdstation") funilAtual.set(String(l.external_lead_id), l.pipeline_id);
+      } catch (err) {
+        // Sem como preservar o funil: não grava nada nesta rodada (melhor que apagar o funil de todos os negócios).
+        errors.push(`funis salvos: ${err instanceof Error ? err.message : String(err)}; negócios não gravados nesta rodada`);
+        deals = [];
+      }
+    }
+
     const leadRows = deals
       .filter((d) => d?._id)
       .map((d) => {
         const stageId = String(d.deal_stage?._id ?? d.deal_stage?.id ?? "") || null;
-        const pipeline = stageId ? stageToPipeline.get(stageId) : undefined;
         const contato = d.contacts?.[0];
         return {
           crm_connection_id: conn.id,
@@ -177,8 +220,9 @@ export async function runRdStationSync(env: RdStationSyncEnv): Promise<RdStation
           external_lead_id: d._id,
           event_type: "sync",
           status_id: stageId,
-          pipeline_id: pipeline?.id ?? "rdstation",
+          pipeline_id: funilDoNegocio(stageId, stageToPipeline, catalogoSalvo, funilAtual.get(d._id)),
           price: typeof d.amount_total === "number" && d.amount_total > 0 ? d.amount_total : null,
+          // Entrada do negócio. A data da venda/perda é closed_at, que segue no raw_payload (crm_data_desfecho no banco).
           occurred_at: d.created_at ?? null,
           outcome: rdOutcome(d.win),
           source: d.deal_source?.name ?? null,
@@ -212,8 +256,14 @@ export async function runRdStationSync(env: RdStationSyncEnv): Promise<RdStation
     // 20% para falha da API não virar exclusão em massa.
     if (errors.length === 0 && leadRows.length > 0) {
       const vivos = new Set(leadRows.map((l) => l.external_lead_id));
-      const { data: locais, error: eLocais } = await supabase.from("crm_leads").select("external_lead_id")
-        .eq("crm_connection_id", conn.id).is("removido_na_origem", null).limit(50_000);
+      let locais: { external_lead_id: unknown }[] | null = null;
+      let eLocais: { message: string } | null = null;
+      try {
+        locais = await lerTodasAsLinhas((de, ate) => supabase.from("crm_leads").select("external_lead_id")
+          .eq("crm_connection_id", conn.id).is("removido_na_origem", null).order("external_lead_id").range(de, ate));
+      } catch (err) {
+        eLocais = { message: err instanceof Error ? err.message : String(err) };
+      }
       if (eLocais) errors.push(`apagados: ${eLocais.message}`);
       else {
         const sumiram = (locais ?? []).map((l) => l.external_lead_id as string).filter((id) => !vivos.has(id));

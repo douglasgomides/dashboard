@@ -613,6 +613,49 @@ try {
       await db.exec("rollback");
     }
   });
+  await check("data real da venda: won_at da Clint, venda por pessoa e ganho de agendamento sem valor", async () => {
+    await db.exec("begin");
+    try {
+      await db.query("delete from crm_leads where client_id=$1", [A]);
+      await db.query("delete from crm_lead_eventos where client_id=$1", [A]);
+      const clint = id(33);
+      await db.query("insert into crm_connections(id,client_id,provider,active) values ($1,$2,'clint',true)", [clint, A]);
+      await db.query("insert into crm_pipeline_statuses(crm_connection_id,pipeline_id,status_id,pipeline_name,status_name) values ($1,'f','ag','Funil','Consulta agendada'),($1,'f','neg','Funil','Negociação')", [clint]);
+      const iso = (dias: number) => `to_char((now() - make_interval(days => ${dias})) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"+00:00"')`;
+      const lead = (ext: string, entrou: number, outcome: string, wonAt: number | null, fone: string, status = "neg", price: number | null = 100) =>
+        db.query(`insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,outcome,occurred_at,contact_phone,pipeline_id,status_id,price)
+          values ($1,$2,'clint',$3,'sync',${wonAt == null ? "'{}'::jsonb" : `jsonb_build_object('won_at', ${iso(wonAt)})`},$4,now() - make_interval(days => $5),$6,'f',$7,$8)`,
+          [A, clint, ext, outcome, entrou, fone, status, price]);
+      // Período: de 10 dias atrás até ontem. c1 entrou há 60 dias e foi ganho há 3 (won_at): venda do período.
+      await lead("c1", 60, "won", 3, "+55 11 99999-0001");
+      // c2 entrou há 5 dias e foi ganho há 40 dias segundo a fonte: data inválida para o período, não conta.
+      await lead("c2", 5, "won", 40, "+55 11 99999-0002");
+      // c3: ganho sem valor em etapa de agendamento. Não é venda.
+      await lead("c3", 4, "won", 2, "+55 11 99999-0003", "ag", null);
+      // c4 e c5: a mesma pessoa fechou dois orçamentos. Uma pessoa, dois cards.
+      await lead("c4", 2, "won", 1, "+55 11 99999-0004");
+      await lead("c5", 2, "won", 1, "+55 11 99999-0004");
+      // c6 estava aberto e foi ganho depois: o evento usa won_at, não a hora da gravação.
+      await lead("c6", 30, "open", null, "+55 11 99999-0006");
+      await db.query(`update crm_leads set outcome='won', raw_payload=jsonb_build_object('won_at', ${iso(7)}) where client_id=$1 and external_lead_id='c6'`, [A]);
+      const ev = await rows<{ ext: string; dias: number }>("select external_lead_id as ext, round(extract(epoch from now() - ocorreu_em) / 86400)::int as dias from crm_lead_eventos where client_id=$1 and tipo='ganhou' order by 1", [A]);
+      assert.deepEqual(ev, [{ ext: "c1", dias: 3 }, { ext: "c2", dias: 40 }, { ext: "c3", dias: 2 }, { ext: "c4", dias: 1 }, { ext: "c5", dias: 1 }, { ext: "c6", dias: 7 }], JSON.stringify(ev));
+      await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ sub: admin, role: "authenticated" })]);
+      await db.exec("set local role authenticated");
+      const v = (await rows<{ v: Record<string, any> }>("select crm_vendas_periodo($1, current_date - 10, current_date - 1) as v", [A]))[0].v;
+      assert.equal(v.vendas_no_periodo, 4, JSON.stringify(v)); // c1, c4, c5, c6
+      assert.equal(v.pessoas_no_periodo, 3, JSON.stringify(v)); // c4 e c5 são a mesma pessoa
+      assert.equal(v.ganhos_agendamento_sem_valor, 1);
+      assert.equal(v.ganhos_total, 5);
+      assert.equal(v.ganhos_com_data_da_fonte, 5);
+      assert.ok(v.pessoas_no_periodo_ja_no_crm >= 2, JSON.stringify(v)); // c1 e c6 entraram antes do período
+      assert.ok(v.vendas_coorte_pessoas_novas <= v.pessoas_novas, "coorte de pessoas novas nunca passa das pessoas novas");
+      await db.exec("reset role");
+      await denied(() => role("authenticated", admin, () => rows("select * from crm_eventos_falhas")));
+    } finally {
+      await db.exec("rollback");
+    }
+  });
   await check("auditoria de alertas médios: tags do FlwChat nos cards antigos e parados sem Digisac nem arquivo", async () => {
     await db.exec("begin");
     try {
