@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowDown, Plug, Workflow } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Painel } from "@/components/visual";
-import { montarFunil, type EtapaFunil, type FunilBanco } from "@/lib/jornada-funil";
+import { AVISO_JORNADA_PESSOAS, montarFunil, type EtapaFunil, type FunilBanco } from "@/lib/jornada-funil";
+import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
 import { formatRangeLabel } from "@/lib/date-range";
 import { useDiagnosticoComercial } from "@/components/comercial-diagnostico";
 import { fmtFracao } from "@/lib/metricas";
@@ -64,6 +65,12 @@ function LinhaEtapa({ e, largura }: { e: EtapaFunil; largura: number }) {
 }
 
 function Passagem({ e }: { e: EtapaFunil }) {
+  if (e.semPassagem)
+    return (
+      <div className="flex items-center gap-1.5 py-1 pl-4 text-xs" style={{ color: "var(--muted)" }}>
+        <ArrowDown size={12} aria-hidden /> {e.semPassagem}
+      </div>
+    );
   if (e.taxa == null && !e.fracao) return <div className="h-3" aria-hidden />;
   return (
     <div className="flex items-center gap-1.5 py-1 pl-4 text-xs" style={{ color: "var(--muted)" }}>
@@ -76,14 +83,19 @@ function Passagem({ e }: { e: EtapaFunil }) {
 export function JornadaFunil({ clientId, start, end }: { clientId: string; start: string; end: string }) {
   const q = useQuery({ queryKey: ["jornada-funil", clientId, start, end], queryFn: () => lerFunil(clientId, start, end), staleTime: 5 * 60_000, retry: false });
   const diagnostico = useDiagnosticoComercial(clientId, start, end);
-  const funil = q.data !== undefined ? montarFunil(q.data, diagnostico.data?.dados.escopo === "periodo" ? diagnostico.data.funil : null) : null;
+  // Pessoas novas e agendados com a regra da tela Pacientes do período (mesma consulta em cache). Se ela falhar, as
+  // etapas mostram os cards do CRM, com esse nome.
+  const pacientes = usePacientesPeriodo(clientId, start, end);
+  const pac = pacientes.isError ? null : pacientes.data;
+  const funil = q.data !== undefined && pac !== undefined ? montarFunil(q.data, diagnostico.data?.dados.escopo === "periodo" ? diagnostico.data.funil : null, pac) : null;
+  const compartilhado = pac?.crm_compartilhado_com ?? [];
   // Barras em escala log: alcance (centenas de milhares) e venda (unidades) no mesmo eixo.
   const maxLog = funil ? Math.max(1, ...funil.etapas.map((e) => (e.valor ? Math.log10(e.valor + 1) : 0))) : 1;
   const semNada = funil && funil.medidas === 0;
 
   return (
     <Painel icone={Workflow} titulo="Funil do período: do alcance à venda" resumo={`7 etapas · ${formatRangeLabel({ start, end })}`}>
-      {q.isLoading && (
+      {(q.isLoading || (pacientes.isLoading && !pacientes.isError)) && (
         <div className="space-y-2" aria-busy="true">
           {[0, 1, 2].map((i) => <div key={i} className="h-14 animate-pulse rounded-lg" style={{ background: "var(--surface-2)" }} />)}
         </div>
@@ -102,7 +114,13 @@ export function JornadaFunil({ clientId, start, end }: { clientId: string; start
             {funil.maiorQueda && ` Maior queda no comercial: de ${NOME[funil.maiorQueda.de]} para ${NOME[funil.maiorQueda.para]} (${pct(funil.maiorQueda.taxa)} passam).`}
             {funil.receita > 0 && ` Receita registrada: ${funil.receita.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}.`}
           </p>
+          {compartilhado.length > 0 && (
+            <p className="mb-3 text-sm font-medium" style={{ color: "var(--warn)" }}>
+              O CRM desta clínica é o mesmo de {compartilhado.join(", ")}. Os números do CRM abaixo são da conta inteira, não só deste médico.
+            </p>
+          )}
           <p className="mb-3 text-xs" style={{ color: "var(--muted)" }}>{AVISO_MUDANCA_FUNIL}</p>
+          {pac && <p className="mb-3 text-xs" style={{ color: "var(--muted)" }}>{AVISO_JORNADA_PESSOAS}</p>}
           <ol className="space-y-0">
             {funil.etapas.map((e) => (
               <div key={e.id}>

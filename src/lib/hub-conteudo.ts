@@ -8,6 +8,7 @@ import { MIN_POSTS_CONCLUSAO, confiancaPorPosts } from "@/lib/metricas";
 import { soPerguntas, classificarComentario } from "@/lib/classificar-comentario";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { chaveTema, normalizarTemas, rotuloDoTema } from "@/lib/classificacao-post";
+import { LIMITES } from "@/lib/limites";
 
 // ---------- datas ----------
 const DAY_MS = 86400000;
@@ -260,8 +261,8 @@ function groupStats(posts: any[], keyOf: (p: any) => string | null, labelOf: (k:
 
 // Mínimo para chamar um formato de melhor/pior: regra única de src/lib/metricas.ts (8 posts).
 export const MIN_POSTS_FORMATO = MIN_POSTS_CONCLUSAO;
-export const MIN_POSTS_REGRAS = 8;
-export const MIN_PERGUNTAS = 3;
+export const MIN_POSTS_REGRAS: number = LIMITES.amostra.conteudo.postsRegras;
+export const MIN_PERGUNTAS: number = LIMITES.amostra.conteudo.perguntas;
 // Tema só entra se a mediana de salvos for pelo menos 25% acima da da conta (evita ruído de 1 ou 2 salvos).
 export const MARGEM_TEMA = 1.25;
 
@@ -1042,7 +1043,7 @@ export function montarPlano7Dias(ideias: Ideia[], horaSugerida?: number | null, 
 
 // ---------------------------------------------------------------- tema que gera identificação
 
-export const MIN_PESSOAS_IDENTIFICACAO = 3;
+export const MIN_PESSOAS_IDENTIFICACAO: number = LIMITES.amostra.conteudo.pessoasIdentificacao;
 
 /**
  * Elogios e relatos pessoais (classificar-comentario.ts) nos posts do mesmo tema viram a ideia

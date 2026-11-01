@@ -79,7 +79,8 @@ export interface RelatorioCompletoData {
   // Comercial SÓ do período do relatório (auditoria de 31/10/2026: a página 7 mostrava o histórico inteiro do CRM,
   // 242 ganhos, ao lado dos 19 do período na página 1). O histórico por etapa fica num bloco com título explícito.
   crm: {
-    resumo: { novos: number; ganhos: number; perdidos: number } | null; // crm_leads_resumo_periodo
+    // crm_leads_resumo_periodo: novos e perdidos em PESSOAS, ganhos em CARDS (orçamentos); o valor (fora daqui) soma só ganhos.
+    resumo: { novos: number; ganhos: number; perdidos: number } | null;
     pessoas: CrmPessoasPeriodo | null; // crm_pessoas_resumo_periodo
     vendas: VendasPeriodoBanco | null; // crm_vendas_periodo (vendas por evento, coorte, origem classificada)
     porDia: { dia: string; pessoas_novas: number }[]; // crm_pessoas_novas_por_dia_periodo

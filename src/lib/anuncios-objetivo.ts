@@ -33,6 +33,7 @@ import { BENCHMARKS } from "@/lib/benchmarks";
 import { confiancaPorAmostra, type Confianca, type Impacto, type Insight, type Limitacao, type Tom } from "@/lib/insight";
 import { fmtFracao } from "@/lib/metricas";
 import { avaliarRastreio, cliqueLevaAoPerfil, type Rastreio } from "@/lib/rastreio-anuncios";
+import { LIMITES } from "@/lib/limites";
 
 export type Grupo = "mensagem" | "lead" | "trafego" | "engajamento" | "alcance" | "venda" | "outro";
 
@@ -338,15 +339,15 @@ function insightRastreio(d: DiagnosticoAds): Insight {
 }
 
 // Limites do diagnóstico original (ads_diagnostico).
-export const MIN_IMPRESSOES = 500;
-export const MIN_GASTO = 30;
-export const MIN_CAMPANHAS_REGUA = 3;
+export const MIN_IMPRESSOES: number = LIMITES.amostra.anuncios.impressoes;
+export const MIN_GASTO: number = LIMITES.amostra.anuncios.gasto;
+export const MIN_CAMPANHAS_REGUA: number = LIMITES.amostra.anuncios.campanhasRegua;
 export const ESCALAR = 0.6; // custo ≤ 60% da campanha típica
 export const CORTAR = 2; // custo ≥ 2x a típica: a mesma régua de fadiga da Meta
 // Fadiga: cada metade do período precisa de 1000+ aparições para comparar.
-export const MIN_IMPRESSOES_METADE = 1000;
+export const MIN_IMPRESSOES_METADE: number = LIMITES.amostra.anuncios.impressoesMetade;
 // Abaixo disso a taxa de cliques da campanha é mostrada, mas com aviso de amostra pequena.
-export const MIN_IMPRESSOES_TAXA = 1000;
+export const MIN_IMPRESSOES_TAXA: number = LIMITES.amostra.anuncios.impressoesTaxa;
 export const QUEDA_CTR = 0.8; // fadiga: cliques por impressão caem 20%+
 export const QUEDA_ATENCAO = 0.9; // atenção caindo: 10%+ (usado com custo 1–2x)
 export const PASSO_ORCAMENTO = 0.2; // a Meta reinicia o aprendizado com mudança > 20%
@@ -842,7 +843,7 @@ const outroPapel = (c: CampanhaDiag) => c.julgadaPor === "conta" && c.grupo !== 
 
 // Quem recebe verba sobe no máximo o próprio gasto do período, somando todas
 // as ações (capacidade). Sem capacidade (< R$ 30), passa para a próxima.
-const MIN_CAPACIDADE = 30;
+const MIN_CAPACIDADE: number = LIMITES.amostra.anuncios.capacidadeReais;
 function melhorReceptora(cs: CampanhaDiag[], grupo: Grupo | null, excluir: Set<string>, capacidade: Map<string, number>, porConversa = false): CampanhaDiag | null {
   const custo = (c: CampanhaDiag) => (porConversa ? c.custoPorConversa : c.custoPorResultado) ?? Infinity;
   const ok = cs.filter(

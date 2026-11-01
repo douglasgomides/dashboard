@@ -48,11 +48,7 @@ select 'migration_manifest_note' as section,
        194 as repository_sql_files,
        190 as repository_distinct_versions,
        array['20261014120000', '20261018120000', '20261018130000']::text[] as historical_duplicate_versions,
-<<<<<<< HEAD
        '20261102100000'::text as latest_repository_version;
-=======
-       '20261102130000'::text as latest_repository_version;
->>>>>>> worktree-agent-a524e4dee9467e58e
 
 -- Paths vazios são seguros nas RPCs recentes, que qualificam seus objetos.
 -- Resumo para triagem. As sete contagens de falhas devem ser zero depois

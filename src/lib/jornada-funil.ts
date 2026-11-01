@@ -4,6 +4,7 @@
 
 import type { Funil as FunilComercial } from "./comercial";
 import { agendadosSaoGanhos, avisoAgendadosSaoGanhos, passagem, type BaseFunil } from "./funil-taxa";
+import type { Numero, PacientesPeriodo } from "./pacientes";
 
 export interface FunilBanco {
   alcance: number;
@@ -47,6 +48,8 @@ export interface EtapaFunil {
   fracao: { n: number; m: number } | null;
   explicacao: string | null; // o que falta / por que é zero / limite da leitura
   falta?: { integracao: string; dado: string; onde: string } | null;
+  /** A etapa anterior conta outra coisa (outra unidade ou outra população): sem % entre as duas, com o porquê. */
+  semPassagem?: string | null;
 }
 
 export interface Funil {
@@ -61,8 +64,20 @@ const NOME_CRM: Record<string, string> = { kommo: "Kommo", clint: "Clint", rdsta
 /** Etapas comerciais que servem de base com mínimo de casos. As de Instagram (alcance, engajamento, comentário) ficam sem mínimo. */
 const BASE_DA_ETAPA: Partial<Record<IdEtapa, BaseFunil>> = { conversa: "leads", lead: "leads", agendamento: "agendamentos" };
 
-export function montarFunil(d: FunilBanco | null | undefined, comercial?: FunilComercial | null): Funil {
+/** Aviso de tela da mudança de 01/11 (docs/notas-de-versao.md). */
+export const AVISO_JORNADA_PESSOAS =
+  "Mudou em 01/11: \"Lead no CRM\" e \"Consulta agendada\" contam pessoas, com a mesma regra da tela Pacientes do período. Antes contavam cards do CRM (Dr. Sergio Maia, outubro: 236 cards contra 19 pessoas novas) e o agendamento pela situação de hoje do card.";
+
+const fmtN = (n: number) => n.toLocaleString("pt-BR");
+
+/**
+ * @param pacientes números de pacientes_periodo (pessoas). Com eles, "Lead no CRM" e "Consulta agendada" usam a mesma
+ *   regra da tela Pacientes do período. null = a leitura falhou: as duas etapas mostram os cards do CRM, com esse nome.
+ *   undefined = não pedido (testes antigos): mesmo comportamento de null.
+ */
+export function montarFunil(d: FunilBanco | null | undefined, comercial?: FunilComercial | null, pacientes?: Pick<PacientesPeriodo, "numeros"> | null): Funil {
   const f = d?.fontes;
+  const pn = pacientes?.numeros ?? null;
   const crm = f?.crm_provider ? NOME_CRM[f.crm_provider] ?? f.crm_provider : "o CRM";
   const e: Omit<EtapaFunil, "taxa" | "fracao">[] = [];
 
@@ -105,19 +120,30 @@ export function montarFunil(d: FunilBanco | null | undefined, comercial?: FunilC
   // 5. Lead no CRM
   if (!f?.tem_crm) {
     e.push({ id: "lead", n: 5, nome: "Lead no CRM", valor: null, unidade: "leads novos", estado: "sem_integracao", explicacao: "Sem CRM ligado, não há como saber quem virou oportunidade.", falta: { integracao: "CRM (Kommo, Clint, RD ou planilha)", dado: "Leads com data de entrada e etapa", onde: "Admin > cliente > CRM" } });
+  } else if (pn?.leads_novos) {
+    const ln: Numero = pn.leads_novos;
+    const cards = d ? ` O ${crm} tem ${fmtN(d.leads)} cards criados no período: a mesma pessoa pode ter vários (orçamentos, retornos), e quem já era paciente não entra aqui.` : "";
+    if (ln.valor == null) e.push({ id: "lead", n: 5, nome: "Lead no CRM", valor: null, unidade: "pessoas novas", estado: "parcial", explicacao: ln.motivo_sem_dado ?? "Sem dado de pessoas novas no período." });
+    else e.push({ id: "lead", n: 5, nome: "Lead no CRM", valor: ln.valor, unidade: "pessoas novas", estado: ln.valor > 0 ? "medido" : "zero", explicacao: `Pessoas que chegaram pela primeira vez à clínica no período (mesma conta de Pacientes do período).${cards}` });
   } else {
-    e.push({ id: "lead", n: 5, nome: "Lead no CRM", valor: d!.leads, unidade: "leads novos", estado: d!.leads > 0 ? "medido" : "zero", explicacao: d!.leads > 0 ? `Leads que entraram no ${crm} no período. Pode passar das conversas: lead de formulário ou de indicação não passa pelo WhatsApp.` : `Nenhum lead novo no ${crm} no período. Confirme com o cliente se os leads estão sendo lançados.` });
+    e.push({ id: "lead", n: 5, nome: "Lead no CRM", valor: d!.leads, unidade: "cards criados no CRM", estado: d!.leads > 0 ? "medido" : "zero", explicacao: d!.leads > 0 ? `Cards criados no ${crm} no período, não pessoas: a mesma pessoa pode ter vários cards, e paciente antigo também abre card. A contagem por pessoa (tela Pacientes do período) não respondeu agora.` : `Nenhum card novo no ${crm} no período. Confirme com o cliente se os leads estão sendo lançados.` });
   }
 
   // 6. Consulta agendada
   if (!f?.tem_crm) {
     e.push({ id: "agendamento", n: 6, nome: "Consulta agendada", valor: null, unidade: "leads com agendamento", estado: "sem_integracao", explicacao: "Depende do CRM.", falta: { integracao: "CRM", dado: "Etapa de agendamento no funil", onde: "Admin > cliente > CRM" } });
+  } else if (pn?.agendaram) {
+    const ag: Numero = pn.agendaram;
+    const fe = pn.fecharam?.valor;
+    const menos = ag.valor != null && fe != null && fe > ag.valor ? ` No período, ${fmtN(fe)} pessoas fecharam e só ${fmtN(ag.valor)} aparecem como agendadas: a venda costuma ser marcada sem o card passar pela etapa de agendamento.` : "";
+    if (ag.valor == null) e.push({ id: "agendamento", n: 6, nome: "Consulta agendada", valor: null, unidade: "pessoas que agendaram", estado: "parcial", explicacao: ag.motivo_sem_dado ?? "Sem dado de agendamento no período." });
+    else e.push({ id: "agendamento", n: 6, nome: "Consulta agendada", valor: ag.valor, unidade: "pessoas que agendaram", estado: ag.valor > 0 ? "medido" : "zero", explicacao: `Mesma regra da tela Pacientes do período: pessoas que entraram na etapa de agendamento do ${crm} no período, ou que disseram na conversa que agendaram. Inclui pacientes antigos.${menos}` });
   } else if (!f.tem_etapa_agendamento) {
     e.push({ id: "agendamento", n: 6, nome: "Consulta agendada", valor: null, unidade: "leads com agendamento", estado: "parcial", explicacao: `O funil do ${crm} não tem etapa com “agendado”, “consulta” ou “confirmado” no nome, então o painel não sabe quem agendou.`, falta: { integracao: `Funil do ${crm}`, dado: "Uma etapa “Consulta agendada” (ou parecida) usada pela equipe", onde: "Comercial > Guia do CRM" } });
   } else if (f.tem_venda_registrada && agendadosSaoGanhos(d!.agendados, d!.vendas)) {
     e.push({ id: "agendamento", n: 6, nome: "Consulta agendada", valor: null, unidade: "leads com agendamento", estado: "parcial", explicacao: avisoAgendadosSaoGanhos(d!.agendados, d!.vendas) });
   } else {
-    e.push({ id: "agendamento", n: 6, nome: "Consulta agendada", valor: d!.agendados, unidade: "leads com agendamento", estado: d!.agendados > 0 ? "medido" : "zero", explicacao: `Leads do período que chegaram à etapa de agendamento (ou compraram), pela situação de hoje no ${crm}.${d!.leads > 0 && d!.leads_com_etapa < d!.leads * 0.5 ? " Mais da metade dos leads está sem etapa reconhecida: o número pode estar baixo." : ""}` });
+    e.push({ id: "agendamento", n: 6, nome: "Consulta agendada", valor: d!.agendados, unidade: "cards com agendamento", estado: d!.agendados > 0 ? "medido" : "zero", explicacao: `Cards criados no período que hoje estão numa etapa de agendamento (ou compraram), pela situação de hoje no ${crm}. Não é a regra da tela Pacientes do período, que não respondeu agora.${d!.leads > 0 && d!.leads_com_etapa < d!.leads * 0.5 ? " Mais da metade dos leads está sem etapa reconhecida: o número pode estar baixo." : ""}` });
   }
 
   // 7. Venda
@@ -126,7 +152,7 @@ export function montarFunil(d: FunilBanco | null | undefined, comercial?: FunilC
   } else if (!f.tem_venda_registrada) {
     e.push({ id: "venda", n: 7, nome: "Venda", valor: null, unidade: "vendas", estado: "parcial", explicacao: `Nenhum lead foi marcado como ganho no ${crm} até hoje. A venda acontece, mas não é registrada.`, falta: { integracao: `Rotina no ${crm}`, dado: "Marcar o lead como ganho (com valor) quando o paciente fecha", onde: "Comercial > Guia do CRM" } });
   } else {
-    e.push({ id: "venda", n: 7, nome: "Venda", valor: d!.vendas, unidade: "vendas", estado: d!.vendas > 0 ? "medido" : "zero", explicacao: d!.vendas > 0 ? "Leads do período marcados como ganho." : "Nenhum lead do período foi marcado como ganho (ainda)." });
+    e.push({ id: "venda", n: 7, nome: "Venda", valor: d!.vendas, unidade: "cards ganhos (criados no período)", estado: d!.vendas > 0 ? "medido" : "zero", explicacao: d!.vendas > 0 ? "Cards criados no período e marcados como ganho. Conta cards, não pessoas: a mesma pessoa pode ter mais de um orçamento ganho." : "Nenhum card do período foi marcado como ganho (ainda)." });
   }
 
   // Mesmos passos e critérios do diagnóstico comercial; sem diagnóstico, não afirmar venda.
@@ -134,18 +160,32 @@ export function montarFunil(d: FunilBanco | null | undefined, comercial?: FunilC
     for (const [id, passoId] of [["agendamento", "agendaram"], ["venda", "compraram"]] as const) {
       const etapa = e.find((x) => x.id === id)!;
       if (!f?.tem_crm) continue;
+      // Com Pacientes do período, o agendamento já segue a regra única (pessoas): o diagnóstico não substitui.
+      if (id === "agendamento" && pn?.agendaram) continue;
       const passo = comercial?.passos.find((x) => x.id === passoId);
       etapa.valor = passo?.valor ?? null;
       etapa.estado = etapa.valor === null || passo?.estimado || !passo?.confiavel ? "parcial" : etapa.valor === 0 ? "zero" : "medido";
       etapa.explicacao = passo?.aviso ?? passo?.explica ?? "Diagnóstico comercial indisponível: não é possível confirmar esta etapa.";
+      if (id === "venda") {
+        etapa.unidade = "cards ganhos (criados no período)";
+        if (etapa.valor != null) etapa.explicacao = `${etapa.explicacao} Conta cards, não pessoas: a mesma pessoa pode ter mais de um orçamento ganho.`;
+      }
     }
+  }
+  // Etapas que contam outra população não viram %: as pessoas que agendaram incluem pacientes antigos (não saem das
+  // pessoas novas), e a venda conta cards criados no período, não as pessoas que agendaram.
+  if (pn?.agendaram) {
+    const ag = e.find((x) => x.id === "agendamento")!;
+    ag.semPassagem = "Agendaram inclui pacientes antigos, então não é uma parte das pessoas novas: sem % entre as duas.";
+    const v = e.find((x) => x.id === "venda")!;
+    v.semPassagem = "A venda conta cards criados no período e o agendamento conta pessoas: sem % entre as duas.";
   }
 
   // Taxas só entre etapas vizinhas medidas (o funil não é uma fila única: lead de formulário pula a conversa).
   // Com a etapa anterior abaixo do mínimo (30 leads, 20 agendamentos), fica "N de M", sem %.
   const etapas: EtapaFunil[] = e.map((x, i) => {
     const ant = i > 0 ? e[i - 1] : null;
-    const ok = ant && ant.valor != null && ant.valor > 0 && x.valor != null && ant.estado !== "sem_integracao" && x.estado !== "sem_integracao";
+    const ok = !x.semPassagem && ant && ant.valor != null && ant.valor > 0 && x.valor != null && ant.estado !== "sem_integracao" && x.estado !== "sem_integracao";
     if (!ok) return { ...x, taxa: null, fracao: null };
     const base = BASE_DA_ETAPA[ant!.id];
     if (!base) return { ...x, taxa: x.valor! / ant!.valor!, fracao: null };

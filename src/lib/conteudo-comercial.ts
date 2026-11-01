@@ -4,6 +4,7 @@
  * Tudo é coincidência no tempo ou no assunto, nunca prova de que um post gerou uma conversa específica.
  */
 import { chaveTema, rotuloDoTema, temaRelacionado } from "./classificacao-post.js";
+import { LIMITES } from "@/lib/limites";
 
 export interface DiaCruzamento { dia: string; posts: number; conversas: number }
 export interface TemaCruzamento { tema: string; posts: number; alcance: number; conversas: number; pessoas?: number; comerciais: number; pediram_preco: number; agendaram: number; pessoas_agendaram?: number }
@@ -18,8 +19,8 @@ export interface DadosCruzamento {
 export type Tom = "bom" | "atencao" | "neutro";
 export interface Conclusao { titulo: string; texto: string; acao?: string; tom: Tom }
 
-export const MIN_DIAS = 5;
-export const MIN_CONVERSAS_TEMA = 5;
+export const MIN_DIAS: number = LIMITES.amostra.conversas.diasCruzamento;
+export const MIN_CONVERSAS_TEMA: number = LIMITES.amostra.conversas.conversasTema;
 /** Máximo de dias que as RPCs da tela aceitam (cláusula p_ate - p_de <= 120). */
 export const MAX_DIAS_PERIODO = 120;
 const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
@@ -237,9 +238,9 @@ export interface DadosProfundos {
 }
 
 export const FAIXA_RESPOSTA: Record<string, string> = { "1_ate_15min": "Até 15 min", "2_15_a_60min": "15 a 60 min", "3_1_a_4h": "1 a 4 horas", "4_mais_de_4h": "Mais de 4 horas", "5_sem_resposta": "Sem resposta humana" };
-export const MIN_GANHOS_TEMA = 5;
+export const MIN_GANHOS_TEMA: number = LIMITES.amostra.conversas.ganhosTema;
 /** Pedidos (preço, horário, contato, palavra-chave) mínimos nos comentários para apontar o post que mais atrai compra. */
-export const MIN_COMENTARIOS_COMPRA = 20;
+export const MIN_COMENTARIOS_COMPRA: number = LIMITES.amostra.conversas.comentariosCompra;
 
 /** Parte dos comentários dos posts do período que o painel guardou, contra o total que o Instagram informa. */
 export function coberturaComentarios(c: DadosProfundos["comentarios"]): number | null {
@@ -247,7 +248,7 @@ export function coberturaComentarios(c: DadosProfundos["comentarios"]): number |
   if (!(ig > 0)) return null;
   return Math.min(1, guardados / ig);
 }
-export const MIN_CONVERSAS_FAIXA = 30;
+export const MIN_CONVERSAS_FAIXA: number = LIMITES.amostra.conversas.conversasFaixa;
 const FORMATO: Record<string, string> = { reels: "Reels", carrossel: "Carrossel", estatico: "Post estático", CAROUSEL_ALBUM: "Carrossel", VIDEO: "Vídeo", IMAGE: "Imagem" };
 export const nomeFormato = (f: string | null) => (f ? FORMATO[f] ?? f : "Formato não informado");
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });

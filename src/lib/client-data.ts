@@ -161,6 +161,7 @@ export async function getCrmLeadsPorDiaPeriodo(clientId: string, from: string, t
 export async function getCrmResumoPeriodo(clientId: string, from: string, to: string) {
   const cliente = supabase as unknown as {
     rpc: (fn: string, args: Record<string, unknown>) => Promise<{
+      // novos e perdidos: pessoas; ganhos: cards ganhos; valor: soma dos cards GANHOS (desde 20261102140000).
       data: { novos: number; ganhos: number; perdidos: number; valor: number }[] | null;
       error: unknown;
     }>;
@@ -169,6 +170,19 @@ export async function getCrmResumoPeriodo(clientId: string, from: string, to: st
   if (error) throw error;
   // Sem linha é "sem dado", não zero: as telas mostram "Sem dado" em vez de 0 (diagnóstico de medição, PR 4).
   return data?.[0] ?? null;
+}
+
+// Outras clínicas que leem a mesma conta de CRM (migração 20261102140000). Banco sem a função: null, sem erro na tela.
+export async function getCrmCompartilhadoCom(clientId: string): Promise<string[] | null> {
+  const cliente = supabase as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { code?: string; message?: string } | null }>;
+  };
+  const { data, error } = await cliente.rpc("crm_compartilhado_com", { p_client: clientId });
+  if (error) {
+    if (error.code === "PGRST202" || /crm_compartilhado_com/.test(error.message ?? "")) return null;
+    throw error;
+  }
+  return Array.isArray(data) ? data.map(String) : [];
 }
 
 // Vendas do período por evento "ganhou" e pela coorte, cards fechados sem resultado, planilha parada e pessoas

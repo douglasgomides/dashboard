@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Ajuda } from "@/components/visual";
 import { Carregando } from "@/components/sem-fonte";
+import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { fmtBRL } from "@/lib/format";
@@ -23,6 +24,9 @@ import {
   legendaDoNumero,
   coberturaDoNumero,
   avisoNaoMedido,
+  avisoTelaHonesta,
+  avisoAgendouMenosQueFechou,
+  textoNaoMedido,
   nomeCheckout,
   oQue,
   textoReembolsos,
@@ -62,15 +66,7 @@ function PacientesDoPeriodo() {
   const [aberta, setAberta] = useState<ChaveNumero | null>(null);
   const listaRef = useRef<HTMLDivElement>(null);
 
-  const q = useQuery({
-    queryKey: ["pacientes-periodo", clientId, start, end],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("pacientes_periodo", { p_client: clientId, p_de: start, p_ate: end });
-      if (error) throw new Error(error.message);
-      return data as PacientesPeriodo;
-    },
-    staleTime: 5 * 60_000,
-  });
+  const q = usePacientesPeriodo(clientId, start, end);
   const historico = useQuery({
     queryKey: ["pacientes-vendas", clientId, hoje],
     queryFn: async () => {
@@ -126,6 +122,9 @@ function PacientesDoPeriodo() {
         {avisoNaoMedido(d) && (
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>{avisoNaoMedido(d)}</p>
         )}
+        {avisoTelaHonesta(d) && (
+          <p className="text-xs" style={{ color: "var(--text-dim)" }}>{avisoTelaHonesta(d)}</p>
+        )}
         {d.cliente_de_teste && (
           <p className="text-xs" style={{ color: "var(--warn, var(--muted))" }}>
             Clínica de teste: estes números não entram nas somas da carteira.
@@ -138,6 +137,12 @@ function PacientesDoPeriodo() {
           <NumeroGrande key={k} chave={k} numero={d.numeros[k]} ativo={aberta === k} onAbrir={() => abrir(k)} />
         ))}
       </ul>
+
+      {avisoAgendouMenosQueFechou(d) && (
+        <p className="rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--warn-border, var(--border))", background: "var(--surface-2)" }}>
+          {avisoAgendouMenosQueFechou(d)}
+        </p>
+      )}
 
       {eng && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
@@ -224,8 +229,9 @@ function NumeroGrande({ chave, numero, ativo, onAbrir }: { chave: ChaveNumero; n
         <span className="text-xs font-semibold" style={{ color: "var(--text-dim)" }}>{t.rotulo}</span>
         {semDado ? (
           <>
-            <span className="text-base font-semibold" style={{ color: "var(--muted)" }}>Sem dado</span>
+            <span className="text-base font-semibold" style={{ color: "var(--muted)" }}>{textoNaoMedido(numero)}</span>
             <span className="text-xs" style={{ color: "var(--text-dim)" }}>{numero?.motivo_sem_dado ?? "A fonte não respondeu."}</span>
+            {typeof numero?.o_que_fazer === "string" && <span className="text-xs" style={{ color: "var(--text-dim)" }}><b>O que fazer:</b> {numero.o_que_fazer}</span>}
             {numero?.responsavel && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{ROTULO_RESPONSAVEL[numero.responsavel]}</span>}
           </>
         ) : (

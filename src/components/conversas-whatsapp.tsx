@@ -19,6 +19,7 @@ import { ehNegocioProprio } from "@/lib/negocio-proprio";
 import { fetchAllRows } from "@/lib/pagination";
 import { resultadoImportacaoConversas } from "@/lib/crm-negocio-proprio";
 import { CITACAO_HBR_RESPOSTA } from "@/lib/benchmarks";
+import { mensagemDeErro } from "@/lib/erro-amigavel";
 
 const COR_SIT: Record<string, string> = { ruim: "var(--crit)", atencao: "var(--warn)", bom: "var(--good)", neutro: "var(--muted)" };
 type Filtro = "todas" | "sem_resposta" | "demorou" | "sem_lead";
@@ -367,7 +368,7 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
         {lista.isLoading && <Carregando texto="Lendo as conversas…" />}
         {lista.data && <p className="mb-2 text-xs">{lista.data.length.toLocaleString("pt-BR")} conversas disponíveis. {leitura.data?.length ? `A análise de atendimento usa as últimas ${leitura.data.length.toLocaleString("pt-BR")}.` : ""}</p>}
         {leitura.isError && <p role="alert">A análise de atendimento não pôde ser carregada. A lista e as mensagens continuam disponíveis.</p>}
-        {lista.error && <p className="text-sm" style={{ color: "var(--danger, #c0392b)" }}>{(lista.error as Error).message}</p>}
+        {lista.error && <p className="text-sm" style={{ color: "var(--danger, #c0392b)" }}>{mensagemDeErro(lista.error, "as conversas")}</p>}
         {lista.data && lista.data.length === 0 && (
           <p className="text-sm" style={{ color: "var(--text-dim)" }}>
             Nenhuma conversa guardada ainda para este cliente. Elas entram a cada sincronização dos canais conectados.
@@ -452,7 +453,7 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
                 <div className="mb-2 text-sm font-semibold">{atual?.pessoa_nome ?? "Conversa"}</div>
                 <LeituraDaConversa l={porId.get(aberta)} conversaId={aberta} clientId={clientId} />
                 {msgs.isLoading && <p className="text-sm">Abrindo…</p>}
-                {msgs.error && <p className="text-sm">{(msgs.error as Error).message}</p>}
+                {msgs.error && <p className="text-sm">{mensagemDeErro(msgs.error, "as mensagens")}</p>}
                 <div className="flex max-h-[62vh] flex-col gap-1.5 overflow-y-auto">
                   {msgs.data?.map((m) => {
                     const paciente = m.direcao === "entrada";

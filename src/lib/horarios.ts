@@ -2,6 +2,7 @@
 // (Meta), fecha a recomendação de quando publicar. Mediana, não média, e só com amostra mínima.
 import { brazilWeekdayAndHour, median } from "@/lib/report-metrics";
 import { DIAS_SEMANA } from "@/lib/audiencia";
+import { LIMITES } from "@/lib/limites";
 
 export interface SlotDePost {
   dia: number;
@@ -10,7 +11,7 @@ export interface SlotDePost {
   mediana: number;
 }
 
-export const MIN_POSTS_POR_HORA = 3;
+export const MIN_POSTS_POR_HORA: number = LIMITES.amostra.conteudo.postsPorHora;
 
 // Melhor hora do dia por mediana de engajamento (qualquer dia da semana), com pelo menos MIN_POSTS_POR_HORA posts.
 export function horasDosPosts(posts: any[]): { hora: number; posts: number; mediana: number }[] {

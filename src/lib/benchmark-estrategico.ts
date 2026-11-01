@@ -1,3 +1,4 @@
+import { LIMITES } from "@/lib/limites";
 // Benchmark estratégico entre clientes (admin): o cliente contra a mediana e o top 25% de um grupo
 // comparável (especialidade, tamanho de conta), por formato e por objetivo do conteúdo.
 //
@@ -31,8 +32,8 @@ export interface ClienteBench {
   seguidores: number | null;
 }
 
-export const MIN_POSTS = 3;
-export const MIN_CLIENTES = 3;
+export const MIN_POSTS: number = LIMITES.amostra.benchmark.posts;
+export const MIN_CLIENTES: number = LIMITES.amostra.benchmark.clientes;
 
 export const ROTULO_FORMATO: Record<Formato, string> = { reels: "Reels", carrossel: "Carrossel", estatico: "Estático", stories: "Stories" };
 export const ROTULO_OBJETIVO: Record<Objetivo, string> = { percepcao: "Percepção", confianca: "Confiança", venda: "Venda", multiplicacao: "Autoridade/multiplicação" };

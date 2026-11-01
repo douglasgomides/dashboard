@@ -92,7 +92,7 @@ export const TEXTO_NUMERO: Record<ChaveNumero, { rotulo: string; legenda: string
   leads_novos: {
     rotulo: "Pessoas novas",
     legenda: "chegaram pela primeira vez à clínica",
-    fonte: "CRM da clínica: pessoas cujo primeiro registro na clínica foi no período. Não conta quem já era paciente nem quem a equipe foi buscar (prospecção ativa, que aparece à parte). A origem vem do CRM; sem ela, da leitura da conversa.",
+    fonte: "CRM da clínica: pessoas cujo primeiro registro na clínica foi no período. Não conta quem já era paciente nem quem a equipe foi buscar (prospecção ativa, que aparece à parte). A origem vem do CRM; sem ela, da leitura da conversa. A mesma pessoa com dois cadastros no CRM que o Nexo já ligou (mesmo telefone ou mesma pessoa) conta uma vez: por isso o número pode ficar um pouco abaixo de \"Novos contatos no CRM\" da tela Resultados, que conta cada cadastro (HOMS, outubro: 1.280 aqui e 1.287 lá).",
   },
   antigos: {
     rotulo: "Pacientes antigos",
@@ -112,7 +112,7 @@ export const TEXTO_NUMERO: Record<ChaveNumero, { rotulo: string; legenda: string
   compareceram: {
     rotulo: "Foram na consulta",
     legenda: "compareceram no período",
-    fonte: "CRM: entraram no período na etapa que marca o comparecimento (consulta realizada, atendido, pós-consulta).",
+    fonte: "CRM: entraram no período na etapa que marca o comparecimento (consulta realizada, atendido, pós-consulta). Quando o CRM não tem essa etapa, ou tem e ninguém passou por ela enquanto houve agendamento ou venda, aparece \"Não medido\" com o que a clínica precisa fazer, em vez de 0.",
   },
   fecharam: {
     rotulo: "Fecharam",
@@ -122,7 +122,7 @@ export const TEXTO_NUMERO: Record<ChaveNumero, { rotulo: string; legenda: string
   abordados: {
     rotulo: "Abordados pela equipe",
     legenda: "a equipe foi buscar (prospecção ativa)",
-    fonte: "CRM: pessoas que entraram no período por um funil de prospecção ativa (como o Social Seller). Mostra quantas responderam, agendaram e fecharam.",
+    fonte: "CRM: pessoas que entraram no período por um funil de prospecção ativa (como o Social Seller). Mostra quantas responderam, agendaram e fecharam. Clínica sem funil de prospecção ativa vê \"Não se aplica\", em vez de 0.",
   },
   engajaram_instagram: {
     rotulo: "Interagiram no Instagram",
@@ -267,6 +267,60 @@ export function avisoNaoMedido(d: Pick<PacientesPeriodo, "numeros">): string | n
   const nums = Object.values(d.numeros ?? {}) as (Numero | undefined)[];
   const atinge = nums.some((n) => n && (n.medido_desde != null || n.cobertura_desde != null || n.comentarios_instagram != null));
   return atinge ? AVISO_NAO_MEDIDO : null;
+}
+
+/** Mudança de 01/11 (docs/notas-de-versao.md): aparece só quando atinge algum número da tela. */
+export const AVISO_TELA_HONESTA =
+  "Mudou em 01/11: \"Abordados pela equipe\" aparece como \"Não se aplica\" quando a clínica não usa funil de prospecção, e \"Foram na consulta\" como \"Não medido\" quando a etapa de comparecimento não existe ou não é usada. Antes os dois apareciam como 0.";
+
+const motivoComparecimentoSemUso = (agendaram: number, fecharam: number) => {
+  const partes = [agendaram > 0 ? `${agendaram} pessoas agendaram` : null, fecharam > 0 ? `${fecharam} fecharam` : null].filter(Boolean);
+  return `Nenhum card passou pela etapa de comparecimento no período, enquanto ${partes.join(" e ")}. A equipe não está usando essa etapa, então o número não é medido.`;
+};
+
+/**
+ * Mesma regra da migração 20261102140000, aplicada também na tela (vale antes de o banco ter a migração e não muda
+ * nada depois): sem funil de prospecção, "Abordados" não se aplica; comparecimento 0 com agendamento ou venda no
+ * período é "não medido". Devolve uma cópia; aplicar duas vezes dá o mesmo resultado.
+ */
+export function ajustarNumeros<T extends Pick<PacientesPeriodo, "numeros"> & Partial<Pick<PacientesPeriodo, "tem_funil_prospeccao">>>(d: T): T {
+  const numeros = { ...d.numeros };
+  const ab = numeros.abordados;
+  if (ab && typeof ab.valor === "number" && d.tem_funil_prospeccao === false)
+    numeros.abordados = { valor: null, fonte: "crm", motivo_sem_dado: "A clínica não usa funil de prospecção ativa no CRM, então este número não se aplica.", responsavel: null, nao_se_aplica: true };
+  const co = numeros.compareceram;
+  const ag = Number(numeros.agendaram?.valor ?? 0) || 0;
+  const fe = Number(numeros.fecharam?.valor ?? 0) || 0;
+  if (co && co.valor === 0 && ag + fe > 0)
+    numeros.compareceram = {
+      valor: null, fonte: "crm", motivo_sem_dado: motivoComparecimentoSemUso(ag, fe), responsavel: "comercial", nao_medido_por: "etapa_sem_uso",
+      o_que_fazer: "Mover o card para a etapa de comparecimento (consulta realizada) quando o paciente for à consulta, antes de marcar como ganho.",
+    };
+  return { ...d, numeros };
+}
+
+/** Rótulo do cartão sem número: "Não se aplica" (não existe na clínica), "Não medido" (existe e não é medido) ou "Sem dado". */
+export function textoNaoMedido(n: Numero | undefined): string {
+  if (n?.nao_se_aplica) return "Não se aplica";
+  if (n?.nao_medido_por || n?.o_que_fazer) return "Não medido";
+  return "Sem dado";
+}
+
+export function avisoTelaHonesta(d: Pick<PacientesPeriodo, "numeros">): string | null {
+  const n = d.numeros ?? ({} as PacientesPeriodo["numeros"]);
+  return n.abordados?.nao_se_aplica || n.compareceram?.nao_medido_por ? AVISO_TELA_HONESTA : null;
+}
+
+/**
+ * Samira, outubro: 36 fecharam e 3 agendaram. As duas regras são diferentes, e a tela precisa dizer isso:
+ * "Fecharam" conta quem foi marcado como ganho no período (inclusive quem agendou antes do período e ganhos marcados
+ * em lote); "Agendaram" conta só quem entrou na etapa de agendamento no período ou disse na conversa que agendou.
+ */
+export function avisoAgendouMenosQueFechou(d: Pick<PacientesPeriodo, "numeros">): string | null {
+  const ag = d.numeros?.agendaram?.valor, fe = d.numeros?.fecharam?.valor;
+  if (ag == null || fe == null || fe <= ag || fe < 5) return null;
+  const f = (x: number) => x.toLocaleString("pt-BR");
+  return `${f(fe)} pessoas fecharam no período, mas só ${f(ag)} aparecem como agendadas. As regras são diferentes: "Fecharam" conta quem foi marcado como ganho no período (inclusive quem agendou antes dele, e ganhos marcados de uma vez só); "Agendaram" conta quem entrou na etapa de agendamento do CRM no período ou disse na conversa que agendou. Quando a venda é marcada sem o card passar pela etapa de agendamento, os agendados ficam abaixo do real.`;
 }
 
 export function oQue(item: ItemPessoa): string | null {

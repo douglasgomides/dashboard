@@ -50,6 +50,7 @@ import { ehNegocioProprio } from "@/lib/negocio-proprio";
 import { CrmNegocioProprio } from "@/components/crm-negocio-proprio";
 import { OrcamentosPorTipo } from "@/components/orcamentos-por-tipo";
 import { FunisPeriodo } from "@/components/funis-periodo";
+import { mensagemDeErro } from "@/lib/erro-amigavel";
 
 // Nome de exibição do CRM — evita chamar tudo de "Kommo" quando o cliente é Clint.
 function nomeCrm(provider: string | null | undefined): string {
@@ -567,7 +568,7 @@ function CrmClinicaPage() {
         )}
         {diag.error && (
           <p className="text-sm" style={{ color: "var(--crit)" }}>
-            Não deu para montar o funil: {(diag.error as Error).message}
+            {mensagemDeErro(diag.error, "o funil")}
           </p>
         )}
         {diag.data && <FunilOndeQuebra funil={diag.data.funil} />}

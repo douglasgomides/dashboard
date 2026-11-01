@@ -10,6 +10,7 @@ import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { baseDoLink, fraseSemCodigo, NOME_MAX, POSICOES, sugerirNomeLink, taxa, urlCurta, urlDoLink, validarNomeLink, type Posicao } from "@/lib/rastreio";
 import { getClient, limitesBR } from "@/lib/client-data";
 import { fetchAllRows } from "@/lib/pagination";
+import { mensagemDeErro } from "@/lib/erro-amigavel";
 
 // Links rastreados (src/lib/rastreio.ts): de onde vem cada conversa. A equipe gera um link curto para cada lugar (bio,
 // story, destaque, QR...), o clique é registrado e a conversa que chega é ligada ao link pelo código no fim da mensagem
@@ -214,7 +215,7 @@ function LinksPage() {
       </div>
       {isAdmin && <Gerador clientId={clientId} nomesUsados={(q.data?.links ?? []).flatMap((l) => (l.slug ? [l.slug] : []))} aoCriar={() => qc.invalidateQueries({ queryKey: ["links-rastreados", clientId] })} />}
       {q.isError && <div role="alert" className="card"><p>Não foi possível carregar os links e suas contagens. Nenhum resultado foi considerado zero.</p><button type="button" className="btn" disabled={q.isFetching} onClick={() => void q.refetch()}>Tentar novamente</button></div>}
-      {alterar.isError && <p role="alert" style={{ color: "var(--crit)" }}>{alterar.error.message}</p>}
+      {alterar.isError && <p role="alert" style={{ color: "var(--crit)" }}>A alteração não foi salva. {mensagemDeErro(alterar.error)}</p>}
       {alterar.isSuccess && <p role="status">Alteração salva.</p>}
       {porTipo.size > 0 && (
         <section aria-labelledby="por-lugar" className="overflow-x-auto rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>

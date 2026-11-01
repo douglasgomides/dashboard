@@ -3,6 +3,7 @@ import { formatLabel } from "@/lib/methodology";
 import { analisarVozDoPaciente } from "@/lib/voz-do-paciente";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { chaveTema } from "@/lib/classificacao-post";
+import { LIMITES } from "@/lib/limites";
 
 const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const PERIODS = [
@@ -222,7 +223,7 @@ export function computeReachByFormat(posts: any[]) {
 // pra entrar na conta. A linha de base é a mediana de TODOS os posts do período
 // (não a dos temas que passaram: com um tema só, ele era comparado com ele mesmo),
 // e só conclui com pelo menos MIN_TEMAS_REPETIR temas com amostra.
-export const MIN_TEMAS_REPETIR = 3;
+export const MIN_TEMAS_REPETIR: number = LIMITES.amostra.conteudo.temasRepetir;
 export function computeRepetirOuRevisar(posts: any[], minPosts = MIN_POSTS_CONCLUSAO) {
   const groups = new Map<string, { tema: string; rates: number[] }>();
   const todas: number[] = [];
@@ -253,7 +254,7 @@ export function computeRepetirOuRevisar(posts: any[], minPosts = MIN_POSTS_CONCL
 // "Próximos ângulos": temas cujo post típico (mediana de salvamentos) fica acima do post típico da conta no
 // período escolhido. Mediana e mínimo de posts para um post viral não decidir sozinho (a RPC antiga usava média
 // com 2 posts e janela fixa de 90 dias: "Suplementos" com 228 de média eram um post com 1 e outro com 455).
-export const MIN_POSTS_ANGULO = 5;
+export const MIN_POSTS_ANGULO: number = LIMITES.amostra.conteudo.postsAngulo;
 export interface AnguloSugerido { tema: string; count: number; medianSaved: number; baseline: number; formato: string | null; formatoCount: number }
 export function computeProximosAngulos(posts: any[], limit = 4, minPosts = MIN_POSTS_ANGULO): { angulos: AnguloSugerido[]; baseline: number; temasComAmostra: number } {
   const groups = new Map<string, { tema: string; saved: number[]; formatos: Map<string, number[]> }>();

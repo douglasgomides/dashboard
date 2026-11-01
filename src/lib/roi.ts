@@ -165,7 +165,7 @@ export function situacaoAnuncios(d: DadosRoi, hoje = new Date().toISOString().sl
   if (!d.tem_anuncios) return "Conta de anúncios não conectada";
   if (d.anuncios_planilha) return "Lançado à mão na planilha";
   if (d.anuncios_compartilhados_com?.length) return `Conta de anúncios compartilhada com ${d.anuncios_compartilhados_com.join(", ")}: o investimento é da conta inteira`;
-  if (d.anuncios_ate && d.anuncios_ate < hoje && (Date.parse(hoje) - Date.parse(d.anuncios_ate)) / 86400_000 > 3) return `Conta parada desde ${dataCurta(d.anuncios_ate)}`;
+  if (d.anuncios_ate && d.anuncios_ate < hoje && (Date.parse(hoje) - Date.parse(d.anuncios_ate)) / 86400_000 > LIMITES.anuncios.diasSemDadoParaParada) return `Conta parada desde ${dataCurta(d.anuncios_ate)}`;
   return "mensagens, leads e conversão";
 }
 
@@ -184,12 +184,22 @@ const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` :
 const pctLimite = (x: number) => `${Math.round(x * 100)}%`;
 
 /** Selo do investimento separado por objetivo: Parcial quando parte dele foi separada por estimativa. */
-export function seloDoInvestimento(d: DadosRoi): Selo {
+export function seloDoInvestimento(d: DadosRoi, hoje = new Date().toISOString().slice(0, 10)): Selo {
   if (!d.tem_anuncios) return { nivel: "ilegivel", motivo: "A conta de anúncios não está ligada." };
   if (d.investido <= 0) {
     // Planilha semanal sem lançamento no período não prova que não houve gasto (Marcelly, auditoria 30/10/2026).
     if (d.anuncios_planilha) return { nivel: "parcial", motivo: "Os anúncios vêm só da planilha semanal da equipe e não há lançamento neste período. O gasto pode estar faltando." };
-    return { nivel: "confiavel", motivo: "Nenhum gasto em anúncios no período." };
+    // Gasto zero só é "Confiável" quando a conta está trazendo dado. Conta parada (pagamento, limite de gastos, acesso)
+    // também dá zero (auditoria 01/11/2026: Dr. Antonione e Dra. Betina).
+    const parada = !d.anuncios_ate || (Date.parse(hoje) - Date.parse(d.anuncios_ate)) / 86400_000 > LIMITES.anuncios.diasSemDadoParaParada;
+    if (parada)
+      return {
+        nivel: "parcial",
+        motivo: d.anuncios_ate
+          ? `Nenhum gasto registrado no período, mas a conta de anúncios não traz dado desde ${dataCurta(d.anuncios_ate)}: pode estar parada (pagamento, limite de gastos ou acesso). O zero não está confirmado.`
+          : "Nenhum gasto registrado, e a conta de anúncios ainda não trouxe nenhum dado. O zero não está confirmado.",
+      };
+    return { nivel: "confiavel", motivo: `Nenhum gasto registrado no período, com a conta de anúncios trazendo dado até ${dataCurta(d.anuncios_ate!)}.` };
   }
   if (d.anuncios_planilha) return { nivel: "parcial", motivo: "Os anúncios vêm só da planilha semanal lançada à mão pela equipe, não da conta da Meta." };
   const fracEstimado = d.investido_estimado / d.investido;
