@@ -94,9 +94,11 @@ export async function finalizarConferenciaMensagens(db: SupabaseClient<any, any,
 }
 
 // Origem de anúncio (clique para WhatsApp): a Meta manda junto da 1ª mensagem um "referral" com o id do anúncio
-// (source_id), ctwa_clid, título e link. Não sabemos em que campo o WTS repassa isso, então procura em qualquer
-// lugar do JSON das 3 primeiras mensagens do paciente, por nome de chave.
-const CHAVE_ANUNCIO = /^(referral|ctwa_?clid|source_?id|sourceid|ad_?id|adid|headline|source_?url|sourceurl|source_?type|campaign_?id)$/i;
+// (source_id), ctwa_clid, título e link. A doc oficial da Helena (helena.readme.io, GET /chat/v1/session/{id}/message,
+// lida em 01/11/2026) mostra onde isso vem: `details.utm` (PublicUtmDTO) com `sourceId, source, clid, medium, campaign,
+// content, headline, term, referralUrl`. Por isso `clid` (o ctwa_clid) e `referralUrl` (o link do anúncio) também contam.
+// A busca continua por nome de chave em qualquer lugar do JSON das 3 primeiras mensagens, para não depender do caminho.
+const CHAVE_ANUNCIO = /^(referral|ctwa_?clid|clid|source_?id|sourceid|ad_?id|adid|headline|source_?url|sourceurl|referral_?url|source_?type|campaign_?id)$/i;
 export function acharOrigemAnuncio(msgs: any[]): { ad_id: string | null; campaign_id: string | null; ctwa_clid: string | null; headline: string | null; source_url: string | null; bruto: Record<string, unknown> } | null {
   const achado: Record<string, unknown> = {};
   const visitar = (v: any, d: number) => {
@@ -117,9 +119,9 @@ export function acharOrigemAnuncio(msgs: any[]): { ad_id: string | null; campaig
   return {
     ad_id: pega(/^(source_?id|sourceid|ad_?id|adid)$/i),
     campaign_id: pega(/^campaign_?id$/i),
-    ctwa_clid: pega(/^ctwa_?clid$/i),
+    ctwa_clid: pega(/^(ctwa_?clid|clid)$/i),
     headline: pega(/^headline$/i),
-    source_url: pega(/^source_?url|sourceurl$/i),
+    source_url: pega(/^(source_?url|sourceurl|referral_?url)$/i),
     bruto: achado,
   };
 }

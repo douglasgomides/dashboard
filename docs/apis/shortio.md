@@ -1,7 +1,9 @@
 # Short.io (links curtos)
 
-> Ficha de memória da API. Base: auditoria de confiabilidade de 01/11/2026 e leitura do código no commit `c01b2b9`.
-> As linhas citadas são desse commit e mudam com as correções. "Não verificado" = não confirmado na doc oficial nem ao vivo.
+> Ficha de memória da API. Base: auditoria de confiabilidade de 01/11/2026 e código no commit `89ae33c` (`shortio-sync.ts` e `shortio.ts`
+> não mudaram desde `c01b2b9`, então as linhas valem). "Não verificado" = não confirmado na doc oficial nem ao vivo.
+> **Doc oficial ainda não lida:** em 01/11/2026 `short.io`, `developers.short.io` e `api.short.io` seguiram bloqueados na rede desta sessão
+> (curl sem resposta). Por isso o sinal do `tzOffset`, o limite de uso e o máximo de `limit` continuam não verificados.
 
 **Resumo.** Links do domínio curto da conta da equipe, com cliques e a qual cliente cada um pertence. Roda no fim do sync diário de anúncios.
 Funciona hoje, mas **a falha do Short.io não aparece em nenhuma tela** (não tem linha em `sync_status`).
@@ -10,8 +12,8 @@ Funciona hoje, mas **a falha do Short.io não aparece em nenhuma tela** (não te
 
 - **Versão:** sem número no caminho. Bases `https://api.short.io` (links) e `https://api-v2.short.io` (estatísticas).
 - **Doc oficial:** <https://developers.short.io/docs/getting-a-list-of-links>,
-  <https://docs.short.io/articles/api-reference/API%20guides/Statistics/link-statistics-1>. **Lidas em 01/11/2026 só por trechos de busca**
-  (domínios bloqueados).
+  <https://docs.short.io/articles/api-reference/API%20guides/Statistics/link-statistics-1>. **Não abertas em 01/11/2026** (domínios
+  bloqueados na rede da sessão; trechos de busca).
 
 | Endpoint | Para quê | Campos lidos | Código |
 |---|---|---|---|
@@ -52,12 +54,12 @@ sobrescrita (`shortio-sync.ts:30-56`).
 |---|---|---|
 | `total` × `last30` são coisas diferentes | Sim (tela diz 30 dias) | `shortio-sync.ts:157`; `src/components/links-shortio.tsx` |
 | `humanClicks` × `totalClicks` (com ou sem robôs) | Sim | `shortio-sync.ts:160-163` |
-| Falha do Short.io não aparece em `sync_status` | **Não** | `api/sync/meta-ads.ts:205, 233` |
+| Falha do Short.io não aparecia em `sync_status` | **Sim** (linha própria `shortio`) | `api/sync/meta-ads.ts:196` |
 | Erro em `/api/domains` vira lista vazia | **Não** (registra e segue) | `shortio-sync.ts:93` |
 | `cliquesDoLink` devolve null sem dizer o motivo | **Não** | `shortio.ts:56` |
 | Atribuição pelo nome: palavra repetida conta duas vezes | **Não** | `shortio-sync.ts:24-26, 41-50` |
 | Token da Meta na URL e falha engolida ao ler a bio | **Não** | `shortio-sync.ts:82-87` |
-| Sinal do `tzOffset` | Não verificado | `shortio-sync.ts:157` |
+| Sinal do `tzOffset` | Não verificado (doc bloqueada) | `shortio-sync.ts:157` |
 
 ## 6. Mudanças anunciadas
 
@@ -68,7 +70,7 @@ As páginas antigas da doc avisam que há uma referência mais nova; **não veri
 | Quando | O que quebrou | Como foi (ou será) resolvido |
 |---|---|---|
 | 15/09/2026 | Início do histórico de cliques por dia | — |
-| 01/11/2026 | Nenhuma falha vista; risco é ela ficar invisível | Pendente: linha própria em `sync_status` |
+| 01/11/2026 | Nenhuma falha vista; risco era ela ficar invisível | Linha própria `shortio` em `sync_status` (`api/sync/meta-ads.ts:196`) |
 
 ## Teste de contrato
 
