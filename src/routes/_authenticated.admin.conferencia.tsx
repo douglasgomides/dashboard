@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, Circle, ClipboardCheck, ListChecks, Loader
 import { supabase } from "@/integrations/supabase/client";
 import { marcarNaoUsa } from "@/lib/saude-fontes";
 import { Painel, Selo } from "@/components/visual";
+import { ConferenciaAoVivoResumo } from "@/components/conferencia-ao-vivo-resumo";
 import {
   ETAPAS,
   ROTULO_GRAVIDADE,
@@ -320,6 +321,10 @@ function ConferenciaPage() {
           <span>{erro}</span>
         </div>
       )}
+
+      <div style={{ marginTop: 16 }}>
+        <ConferenciaAoVivoResumo />
+      </div>
 
       {salva.isLoading && !viva && <div className="mt-4 h-24 animate-pulse rounded-xl" style={{ background: "var(--surface-2)" }} aria-busy="true" />}
 

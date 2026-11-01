@@ -89,6 +89,12 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     await (await import("../_lib/checkout-vendas.js")).default(req, res); return;
   }
 
+  // Conferência ao vivo (Nexo x CRM de origem, só GET na fonte): ?conferencia_ao_vivo=1[&client_id=<uuid>][&fonte=kommo,wts],
+  // GET ou POST, com Bearer SYNC_SECRET. Aqui e não num arquivo novo: o plano da Vercel aceita no máximo 12 funções.
+  if (req.query.conferencia_ao_vivo === "1") {
+    await rodarConferenciaAoVivo(req, res); return;
+  }
+
   // Link rastreado próprio: /r/<slug> (rewrite no vercel.json) registra o clique e leva ao destino. Público, sem token.
   if (req.method === "GET" && typeof req.query.r === "string") {
     const url = process.env.SUPABASE_URL, chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1290,6 +1296,42 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(algumErro ? 207 : 200).json({ alvo, partes });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Conferência ao vivo: só a máquina (n8n ou a equipe com o segredo) chama. Lê os CRMs só com GET; grava o resultado em
+// conferencia_ao_vivo. A resposta traz só o resumo e as linhas numéricas (sem dado pessoal, sem token).
+async function rodarConferenciaAoVivo(req: VercelRequest, res: VercelResponse) {
+  const inicio = Date.now();
+  if (req.method !== "GET" && req.method !== "POST") { res.status(405).json({ error: "Method not allowed" }); return; }
+  const SYNC_SECRET = process.env.SYNC_SECRET;
+  const url = process.env.SUPABASE_URL, chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!SYNC_SECRET || !url || !chave) { res.status(500).json({ error: "Servidor sem SYNC_SECRET/SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY configurados" }); return; }
+  const auth = req.headers.authorization ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!token || !timingSafeEqual(createHash("sha256").update(token).digest(), createHash("sha256").update(SYNC_SECRET).digest())) {
+    res.status(401).json({ error: "Token inválido" }); return;
+  }
+  const clientId = typeof req.query.client_id === "string" && req.query.client_id ? req.query.client_id : undefined;
+  if (clientId && !UUID.test(clientId)) { res.status(400).json({ error: "client_id inválido" }); return; }
+  const lib = await import("../_lib/conferencia-ao-vivo.js");
+  const pedidas = typeof req.query.fonte === "string" && req.query.fonte ? req.query.fonte.split(",").map((s) => s.trim()) : [];
+  const fontes = pedidas.filter((f): f is (typeof lib.FONTES_AO_VIVO)[number] => (lib.FONTES_AO_VIVO as string[]).includes(f));
+  if (pedidas.length && fontes.length !== pedidas.length) { res.status(400).json({ error: `fonte inválida: use ${lib.FONTES_AO_VIVO.join(", ")}` }); return; }
+  try {
+    const db = createClient(url, chave, { auth: { persistSession: false, autoRefreshToken: false } });
+    const r = await lib.runConferenciaAoVivo(lib.leitorSupabase(db), lib.buscarSomenteGet, {
+      onlyClientId: clientId,
+      fontes,
+      tokenKommoPadrao: process.env.KOMMO_API_TOKEN,
+      tokenWtsPadrao: process.env.WTS_API_TOKEN,
+      prazo: inicio + 270_000,
+    });
+    res.status(200).json({ ok: true, resumo: r.resumo, linhas: r.linhas });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: lib.erroLimpo(err) });
   }
 }
 
