@@ -2,7 +2,7 @@ import { withApiObservability } from "../_lib/observability.js";
 import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
-import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
+import { expiraDoJwt, recordSyncStatusPorCliente, registrarValidadeToken } from "../_lib/sync-status.js";
 import { runKommoLeadsSync } from "../_lib/kommo-leads-sync.js";
 import { runKommoReconcile } from "../_lib/kommo-reconcile.js";
 import { enriquecerContatosKommoPorCursor } from "../_lib/kommo-contatos.js";
@@ -155,6 +155,16 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         errors: "errors" in r && r.errors ? r.errors : [],
       })),
     );
+    // Token de longa duração do Kommo vence sem aviso (sem renovação automática): a data sai do próprio JWT e vira
+    // "token vence em N dias" na saúde das fontes, com 30 dias de antecedência. Cliente com mais de uma conexão
+    // fica com o vencimento mais próximo.
+    const vencePorCliente = new Map<string, Date | null>();
+    for (const conn of connections ?? []) {
+      const exp = expiraDoJwt(conn.access_token || KOMMO_API_TOKEN);
+      const atual = vencePorCliente.get(conn.client_id);
+      if (!vencePorCliente.has(conn.client_id) || (exp && (!atual || exp < atual))) vencePorCliente.set(conn.client_id, exp);
+    }
+    for (const [clientId, exp] of vencePorCliente) await registrarValidadeToken(supabase, clientId, "crm", "Kommo", exp);
     const hasErrors = results.some((r) => "errors" in r && r.errors && r.errors.length > 0);
     res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), connections: results });
   } catch (err) {

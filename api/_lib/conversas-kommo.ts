@@ -18,7 +18,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { integrationHost } from "./integration-http.js";
+import { fetchComRetry, integrationHost, ritmoKommo } from "./integration-http.js";
 
 const DIA = 86_400_000;
 
@@ -70,12 +70,9 @@ async function eventosDoDia(dom: string, token: string, tipo: string, de: number
   const todos: EventoKommo[] = [];
   for (let page = 1; page <= 60; page++) {
     const qs = new URLSearchParams({ limit: "100", page: String(page), "filter[type]": tipo, "filter[created_at][from]": String(de), "filter[created_at][to]": String(ate) });
-    let r = await fetch(`https://${dom}/api/v4/events?${qs}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(20_000), redirect: "error" });
-    // O Kommo limita a 7 pedidos por segundo: com 429 ou 5xx, espera e tenta de novo (até 3 vezes) antes de desistir.
-    for (let tentativa = 1; tentativa <= 3 && (r.status === 429 || r.status >= 500); tentativa++) {
-      await new Promise((ok) => setTimeout(ok, 1200 * tentativa));
-      r = await fetch(`https://${dom}/api/v4/events?${qs}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(20_000), redirect: "error" });
-    }
+    // O Kommo limita a 7 pedidos por segundo: o helper espaça os pedidos e, com 429/5xx, espera (Retry-After) e
+    // tenta de novo (até 3 vezes) antes de desistir.
+    const r = await fetchComRetry(`https://${dom}/api/v4/events?${qs}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }, { tentativas: 4, baseMs: 1200, timeoutMs: 20_000, ritmo: ritmoKommo(dom) });
     if (r.status === 204) break;
     if (!r.ok) throw new Error(`events ${tipo} ${r.status}`);
     const j = (await r.json()) as { _embedded?: { events?: EventoKommo[] }; _links?: { next?: unknown } };

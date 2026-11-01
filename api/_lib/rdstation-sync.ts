@@ -14,6 +14,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { lerTodasAsLinhas } from "./ler-paginas.js";
+import { fetchComRetry } from "./integration-http.js";
 
 const RD_BASE = "https://crm.rdstation.com/api/v1";
 const PAGE_SIZE = 200;
@@ -78,7 +79,8 @@ export function rdOutcome(win: unknown): "open" | "won" | "lost" {
 
 async function rdGet(token: string, path: string, query: Record<string, string | number> = {}): Promise<any> {
   const qs = new URLSearchParams({ token, ...Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)])) });
-  const res = await fetch(`${RD_BASE}/${path}?${qs.toString()}`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(30_000), redirect: "error" });
+  // 120 pedidos/min na doc; 429 vem com Retry-After. O helper espera (com teto) e tenta de novo.
+  const res = await fetchComRetry(`${RD_BASE}/${path}?${qs.toString()}`, { headers: { Accept: "application/json" } });
   if (!res.ok) {
     // Nunca repetir a URL no erro: ela carrega o token.
     throw new Error(`RD Station /${path} falhou (${res.status}): ${(await res.text()).slice(0, 160)}`);

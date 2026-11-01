@@ -764,13 +764,30 @@ try {
       await sessao("s1", "'1 day'", "IN_PROGRESS", null);
       await sessao("s2", "'20 days'", "IN_PROGRESS", null);
       await sessao("s3", "'30 days'", "IN_PROGRESS", null);
+      // Paciente escreveu e ninguém assumiu (PENDING, sem atendente): é conversa aberta, não some da fila.
+      await sessao("p1", "'2 days'", "PENDING", null);
       for (let i = 0; i < 6; i++) await sessao(`l${i}`, "'3 days'", "COMPLETED", "'2 days'");
       await sessao("u1", "'3 days'", "COMPLETED", "'1 day'");
       await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: editor })]);
       await db.exec("set local role authenticated");
       const f = (await rows<{ f: Record<string, unknown> }>("select wts_fila_do_cliente($1, current_date - 10, current_date) as f", [A]))[0].f;
-      assert.deepEqual(f, { abertas_7d: 1, abertas_antigas: 2, encerradas: 7, maior_lote: 6, encerradas_em_lote: 6, conta_compartilhada_com: ["Clínica B"] });
+      assert.deepEqual(f, { abertas_7d: 2, abertas_antigas: 2, aguardando_sem_atendente: 1, encerradas: 7, maior_lote: 6, encerradas_em_lote: 6, conta_compartilhada_com: ["Clínica B"] });
+      const resumo = (await rows<{ em_andamento: number }>("select em_andamento from wts_resumo($1, current_date - 10, current_date)", [A]))[0];
+      assert.equal(Number(resumo.em_andamento), 2, "em andamento inclui a sessão aguardando sem atendente");
       await db.exec("reset role");
+      // Cliente desativado: o membro perde o acesso (o vínculo fica guardado); admin continua vendo.
+      await db.query("update clients set active=false where id=$1", [A]);
+      await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: editor })]);
+      await db.exec("set local role authenticated");
+      assert.equal((await rows<{ m: boolean }>("select is_client_member($1) as m", [A]))[0].m, false);
+      assert.equal((await rows<{ p: boolean }>("select pode_editar_acoes($1) as p", [A]))[0].p, false);
+      assert.deepEqual(await rows("select wts_fila_do_cliente($1, current_date - 10, current_date) as f", [A]), [{ f: null }]);
+      await db.exec("reset role");
+      await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: admin })]);
+      await db.exec("set local role authenticated");
+      assert.notDeepEqual(await rows("select wts_fila_do_cliente($1, current_date - 10, current_date) as f", [A]), [{ f: null }]);
+      await db.exec("reset role");
+      await db.query("update clients set active=true where id=$1", [A]);
       await db.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: outsider })]);
       await db.exec("set local role authenticated");
       assert.deepEqual(await rows("select wts_fila_do_cliente($1, current_date - 10, current_date) as f", [A]), [{ f: null }]);

@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from "../../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { Database } from "../../../src/integrations/supabase/types.js";
+import { ocultarSegredos } from "../../_lib/sync-status.js";
 import { readRawBody, parseBracketFormBody, extractLeadEvents, WebhookBodyError } from "../../_lib/kommo-webhook.js";
 
 // Recebe os webhooks nativos da Kommo (lead adicionado/status mudou/
@@ -25,7 +26,11 @@ async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const connectionId = typeof req.query.connection_id === "string" ? req.query.connection_id : null;
-  const secret = typeof req.query.secret === "string" ? req.query.secret : null;
+  // O segredo pode vir no cabeçalho X-Webhook-Secret (preferido: endereço com segredo acaba nos logs de acesso da
+  // hospedagem). A Kommo só sabe chamar uma URL, então ?secret= continua aceito para as contas já cadastradas.
+  const cabecalho = req.headers["x-webhook-secret"];
+  const secretHeader = typeof cabecalho === "string" ? cabecalho : Array.isArray(cabecalho) ? cabecalho[0] : null;
+  const secret = secretHeader || (typeof req.query.secret === "string" ? req.query.secret : null);
   if (!connectionId || !secret) {
     res.status(404).end();
     return;
@@ -160,7 +165,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(error.status).json({ error: error.message });
       return;
     }
-    console.error("[kommo webhook] falha ao persistir entrega:", error instanceof Error ? error.message : "erro de banco");
+    console.error("[kommo webhook] falha ao persistir entrega:", error instanceof Error ? ocultarSegredos(error.message) : "erro de banco");
     res.status(503).json({ error: "Não foi possível persistir a entrega. Tente novamente." });
   }
 }

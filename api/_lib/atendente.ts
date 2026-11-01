@@ -10,6 +10,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { chamarIAJson, iaDisponivel } from "./ia.js";
+import { mascararDadosPessoais } from "./mascarar-pii.js";
 import {
   ehFatoAtendimento, gatilhosRecentes, MENSAGEM_URGENCIA, respostaHumana, riscoDaMensagem, SISTEMA_FATOS, sistemaAtendente, validarFatos, validarRascunho, type Msg,
 } from "../../src/lib/atendente.js";
@@ -17,6 +18,9 @@ import {
 type Admin = SupabaseClient<any, any, any>;
 const H = 3_600_000;
 const corta = (t: unknown, n: number) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+// Tudo que sai daqui para a IA passa por este corte: telefone, e-mail e CPF viram marcadores (LGPD, auditoria de
+// 01/11/2026: o resumo e o tema já mascaravam; o atendente sombra mandava o texto do paciente como estava).
+const paraIA = (t: unknown, n: number) => corta(mascararDadosPessoais(String(t ?? "")), n);
 async function persistir(consulta: PromiseLike<{ error: unknown }>) {
   const { error } = await consulta;
   if (error) throw new Error("Não foi possível persistir o rascunho do atendente");
@@ -49,7 +53,7 @@ export async function proporFatosAtendimento(admin: Admin, clientId: string): Pr
   const vistos = new Set<string>();
   const textos: string[] = [];
   for (const m of (msgs ?? []) as { texto: string | null }[]) {
-    const t = corta(m.texto, 500);
+    const t = paraIA(m.texto, 500);
     if (t.length < 40) continue;
     const k = t.toLowerCase().slice(0, 60);
     if (vistos.has(k)) continue;
@@ -75,7 +79,7 @@ async function exemplosAvaliados(admin: Admin, clientId: string): Promise<string
   if (error) throw new Error("Não foi possível ler as avaliações do atendente");
   const xs = (data ?? []) as { gatilho_texto: string; mensagem: string | null; avaliacao: string; avaliacao_motivo: string | null }[];
   if (!xs.length) return "";
-  return `### Avaliações da equipe sobre respostas anteriores (siga as boas, evite o erro das ruins)\n${xs.map((x) => `- [${x.avaliacao.toUpperCase()}${x.avaliacao_motivo ? `: ${corta(x.avaliacao_motivo, 140)}` : ""}] Paciente: "${corta(x.gatilho_texto, 120)}" → Resposta: "${corta(x.mensagem, 200)}"`).join("\n")}`;
+  return `### Avaliações da equipe sobre respostas anteriores (siga as boas, evite o erro das ruins)\n${xs.map((x) => `- [${x.avaliacao.toUpperCase()}${x.avaliacao_motivo ? `: ${corta(x.avaliacao_motivo, 140)}` : ""}] Paciente: "${paraIA(x.gatilho_texto, 120)}" → Resposta: "${paraIA(x.mensagem, 200)}"`).join("\n")}`;
 }
 
 /** Uma clínica: escreve os rascunhos pendentes e completa a comparação com a resposta humana. */
@@ -127,13 +131,13 @@ export async function atenderClinicaSombra(admin: Admin, clientId: string, fim: 
         continue;
       }
       if (!iaDisponivel()) { out.erros.push("IA não configurada"); return out; }
-      const historico = g.antes.slice(-14).map((m) => `${m.direcao === "entrada" ? "Paciente" : "Clínica"}: ${corta(m.texto || `[${m.tipo}]`, 300)}`).join("\n");
+      const historico = g.antes.slice(-14).map((m) => `${m.direcao === "entrada" ? "Paciente" : "Clínica"}: ${paraIA(m.texto || `[${m.tipo}]`, 300)}`).join("\n");
       const entrada = [
         `### Fatos aprovados da clínica (use só estes)\n${Object.keys(fatos).length ? Object.entries(fatos).map(([k, v]) => `- ${k}: ${v}`).join("\n") : "(nenhum fato aprovado ainda: não informe endereço, horário, valor nem convênio; diga que a equipe confirma)"}`,
         tom && `### Tom da clínica (Brand Brain)\n${tom}`,
         exemplos,
         `### Conversa até agora (mais recente por último)\n${historico}`,
-        `### Responda à(s) última(s) mensagem(ns) do paciente\n${g.texto}`,
+        `### Responda à(s) última(s) mensagem(ns) do paciente\n${mascararDadosPessoais(g.texto)}`,
       ].filter(Boolean).join("\n\n");
       const t0 = Date.now();
       try {
