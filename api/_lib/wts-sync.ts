@@ -185,6 +185,84 @@ function linhaDaSessao(clientId: string, s: WtsSession) {
   };
 }
 
+/** Páginas por situação (IN_PROGRESS, PENDING) na releitura das abertas. */
+export const MAX_PAGINAS_ABERTAS = 50;
+const SITUACOES_ABERTAS = ["IN_PROGRESS", "PENDING"] as const;
+
+/**
+ * Releitura das sessões abertas, a cada rodada. O filtro Status funciona nesta API (ao contrário dos de data).
+ *
+ * As duas passadas (criadas na janela, alteradas depois do corte) só enxergam o que mudou nos últimos dias. Ficavam de
+ * fora (conferência ao vivo de 01/11/2026):
+ *  - sessão aberta no Nexo que fechou quando o sync ainda não relia as alteradas (antes de 30/10) ou numa falha de mais
+ *    de 7 dias: o fechamento já saiu da janela de UpdatedAt.After e ela segue "aberta" para sempre (Dra. Juliana Paola
+ *    56 no Nexo x 23 na WTS; Dra. Mariela Muniz 50 x 5);
+ *  - sessão aberta na WTS criada antes do começo do histórico importado e sem mexida recente: nunca entrou no Nexo
+ *    (Dra. Marcella Brasil 659 x 794).
+ * Aqui a lista inteira de abertas é gravada (com a mesma regra de dono) e a sessão que o Nexo tem como aberta, num cliente
+ * desta conta, e que não está mais na lista passa a COMPLETED (a lista não diz se terminou ou foi oculta; o que importa é
+ * que não está mais aberta; se reabrir, volta na próxima rodada). Lista incompleta (teto, erro) ou vazia com o Nexo
+ * cheio de abertas não fecha nada e fica registrada no status do sync.
+ */
+export async function reconciliarAbertas(
+  supabase: SupabaseClient<Database>,
+  token: string,
+  clientIds: string[],
+  gravarLote: (lote: WtsSession[], onde: string) => Promise<void>,
+  erro: (msg: string) => void,
+  listar: typeof listarSessoesWts = listarSessoesWts,
+): Promise<{ abertas: number; fechadas: number }> {
+  const abertas = new Map<string, WtsSession>();
+  for (const situacao of SITUACOES_ABERTAS) {
+    for (let pag = 1; ; pag++) {
+      if (pag > MAX_PAGINAS_ABERTAS) {
+        erro(`releitura das sessões abertas parou no teto de ${MAX_PAGINAS_ABERTAS} páginas (${situacao}): nenhuma sessão foi dada como fechada nesta rodada`);
+        return { abertas: abertas.size, fechadas: 0 };
+      }
+      const resposta = await listar<{ items: WtsSession[]; hasMorePages: boolean }>(token,
+        `PageSize=${PAGE_SIZE}&PageNumber=${pag}&Status=${situacao}&OrderBy=createdat&OrderDirection=DESCENDING`);
+      if (!Array.isArray(resposta?.items)) throw new Error("WTS devolveu página de sessões abertas inválida");
+      // A API não devolveu a situação em alguns testes antigos: a lista é desta situação.
+      for (const s of resposta.items) if (s?.id) abertas.set(s.id, { ...s, status: s.status ?? situacao });
+      if (!resposta.hasMorePages || resposta.items.length === 0) break;
+    }
+  }
+  await gravarLote([...abertas.values()], "abertas");
+
+  const noNexo: { client_id: string; session_id: string }[] = [];
+  for (let de = 0; ; de += 1000) {
+    const { data, error } = await supabase.from("wts_sessions").select("client_id, session_id")
+      .in("client_id", clientIds).in("status", [...SITUACOES_ABERTAS]).order("client_id").order("session_id").range(de, de + 999);
+    if (error) throw new Error(`sessões abertas no Nexo: ${error.message}`);
+    noNexo.push(...((data ?? []) as { client_id: string; session_id: string }[]));
+    if ((data ?? []).length < 1000) break;
+  }
+  const fechar = sessoesFechadasNaOrigem(noNexo, new Set(abertas.keys()));
+  if (fechar === null) {
+    erro("a lista de sessões abertas veio vazia e o Nexo tem 20 ou mais abertas: nenhuma sessão foi dada como fechada nesta rodada");
+    return { abertas: abertas.size, fechadas: 0 };
+  }
+  const porCliente = new Map<string, string[]>();
+  for (const s of fechar) porCliente.set(s.client_id, [...(porCliente.get(s.client_id) ?? []), s.session_id]);
+  let fechadas = 0;
+  for (const [clientId, ids] of porCliente) {
+    for (let i = 0; i < ids.length; i += 200) {
+      const lote = ids.slice(i, i + 200);
+      const { error } = await supabase.from("wts_sessions").update({ status: "COMPLETED", updated_at: new Date().toISOString() })
+        .eq("client_id", clientId).in("session_id", lote).in("status", [...SITUACOES_ABERTAS]);
+      if (error) { erro(`sessões fechadas na origem: ${error.message}`); continue; }
+      fechadas += lote.length;
+    }
+  }
+  return { abertas: abertas.size, fechadas };
+}
+
+/** Abertas no Nexo que não estão na lista de abertas da WTS. null quando a lista veio vazia e o Nexo tem 20 ou mais. */
+export function sessoesFechadasNaOrigem<T extends { session_id: string }>(abertasNoNexo: T[], abertasNaFonte: Set<string>): T[] | null {
+  if (abertasNaFonte.size === 0 && abertasNoNexo.length >= 20) return null;
+  return abertasNoNexo.filter((s) => !abertasNaFonte.has(s.session_id));
+}
+
 export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
   const supabase = createClient<Database>(env.supabaseUrl, env.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -399,6 +477,9 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
           if (!resposta.hasMorePages || resposta.items.length === 0) break;
         }
       }
+      await reconciliarAbertas(supabase, contaToken, donos.map((c) => c.id), gravarLote, (msg) => {
+        for (const r of res.values()) r.errors.push(msg);
+      });
     } catch (err) {
       for (const r of res.values()) r.errors.push(err instanceof Error ? err.message : String(err));
     }
