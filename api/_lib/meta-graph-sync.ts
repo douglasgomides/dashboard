@@ -21,6 +21,7 @@ import { storiesAoVivo, insightsDoStory, g as graphGet, type StoryAoVivo } from 
 import { graphPageUrl, integrationRequest } from "./integration-http.js";
 import { META_GRAPH_URL } from "./meta-graph-versao.js";
 import { janelaDoDia, laData, laMeiaNoiteMs, somarDias } from "./dia-meta.js";
+import { falharPorLimiteNoLote, fetchMeta, limiteNoLote } from "./meta-limite.js";
 
 const GRAPH_BASE = META_GRAPH_URL;
 const INSIGHTS_METRICS = "reach,likes,comments,shares,saved,views,total_interactions";
@@ -100,7 +101,7 @@ async function fetchMediaPage(
   let pagesLeft = maxPages;
 
   while (url && pagesLeft > 0) {
-    const res = await fetch(graphPageUrl(url), integrationRequest());
+    const res = await fetchMeta(graphPageUrl(url), integrationRequest());
     if (!res.ok) {
       throw new Error(`Meta Graph media fetch failed (${res.status}): ${await res.text()}`);
     }
@@ -136,7 +137,7 @@ async function fetchInsightsBatch(
     const pedirLote = async (ids: string[]): Promise<({ code: number; body: string } | null)[]> => {
       const batchPayload = ids.map((id) => ({ method: "GET", relative_url: `${id}/insights?metric=${metrics}` }));
       try {
-        const res = await fetch(`${GRAPH_BASE}/`, integrationRequest({
+        const res = await fetchMeta(`${GRAPH_BASE}/`, integrationRequest({
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({ access_token: accessToken, batch: JSON.stringify(batchPayload) }),
@@ -155,6 +156,11 @@ async function fetchInsightsBatch(
       }
     };
     const responses = await pedirLote(idsBatch);
+    // Sub-resposta com erro de limite (4/17/32/613): para aqui; os outros lotes só prolongariam o bloqueio.
+    for (const sub of responses) {
+      const codigo = limiteNoLote(sub);
+      if (codigo != null) falharPorLimiteNoLote(`${GRAPH_BASE}/`, { body: new URLSearchParams({ access_token: accessToken }) }, codigo);
+    }
 
     for (let i = 0; i < idsBatch.length; i++) {
       const id = idsBatch[i];
@@ -340,7 +346,7 @@ async function gravarSeguidoresDeHoje(
   token: string,
 ): Promise<string[]> {
   try {
-    const r = await fetch(`${GRAPH_BASE}/${igAccountId}?fields=followers_count&access_token=${token}`, { signal: AbortSignal.timeout(15000) });
+    const r = await fetchMeta(`${GRAPH_BASE}/${igAccountId}?fields=followers_count&access_token=${token}`, { signal: AbortSignal.timeout(15000) });
     if (!r.ok) return [`seguidores: Graph respondeu ${r.status}`];
     const j = (await r.json()) as { followers_count?: number };
     if (typeof j.followers_count !== "number") return [];

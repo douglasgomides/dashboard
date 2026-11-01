@@ -22,7 +22,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
-import { fetchComRetry } from "./integration-http.js";
+import { fetchComRetry, ritmoHelena } from "./integration-http.js";
 
 const WTS_BASE = "https://api.wts.chat";
 const PAGE_SIZE = 100;
@@ -73,17 +73,42 @@ type WtsSession = {
   firstResponseAt?: string | null;
 };
 
+class WtsHttpError extends Error {
+  constructor(message: string, public readonly status: number) { super(message); }
+}
+
 async function wtsGet<T>(token: string, path: string): Promise<T> {
   const res = await fetchComRetry(`${WTS_BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-  });
+  }, { ritmo: ritmoHelena(token) });
   const texto = await res.text();
   if (!res.ok) {
     // Vale repetir: 401 aqui costuma ser rota errada, não token inválido.
-    throw new Error(`WTS ${path} respondeu ${res.status}: ${texto.slice(0, 300)}`);
+    throw new WtsHttpError(`WTS ${path} respondeu ${res.status}: ${texto.slice(0, 300)}`, res.status);
   }
   return JSON.parse(texto) as T;
 }
+
+/**
+ * Lista de sessões. A doc da Helena só publica a v2 (`GET /chat/v2/session`, resposta PublicSessionDTOV2PublicPageListDTO:
+ * `items` com id, createdAt, startAt, endAt, status, departmentId, userId, channelId, contactId, timeWait, timeService,
+ * firstResponseAt, e `hasMorePages`), com os mesmos parâmetros (PageSize, PageNumber, OrderBy, OrderDirection,
+ * UpdatedAt.After). Usa a v2; se a conta responder 404 (rota ainda não disponível nela), volta à v1 e lembra a escolha.
+ */
+const sessoesV1 = new Set<string>();
+export async function listarSessoesWts<T>(token: string, query: string, get: <R>(token: string, path: string) => Promise<R> = wtsGet): Promise<T> {
+  if (!sessoesV1.has(token)) {
+    try {
+      return await get<T>(token, `/chat/v2/session?${query}`);
+    } catch (e) {
+      if (!(e && typeof e === "object" && (e as { status?: number }).status === 404)) throw e;
+      sessoesV1.add(token);
+    }
+  }
+  return get<T>(token, `/chat/v1/session?${query}`);
+}
+/** Só para testes. */
+export function esquecerVersaoSessoesWts(): void { sessoesV1.clear(); }
 
 /** "00:40:45" → 2445. Devolve null para vazio ou formato inesperado. */
 export function duracaoParaSegundos(valor: string | null | undefined): number | null {
@@ -321,10 +346,8 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
       let acabou = false;
 
       while (!acabou && pagina <= MAX_PAGINAS) {
-        const url =
-          `/chat/v1/session?PageSize=${PAGE_SIZE}&PageNumber=${pagina}` +
-          `&OrderBy=createdat&OrderDirection=DESCENDING`;
-        const resposta = await wtsGet<{ items: WtsSession[]; hasMorePages: boolean }>(contaToken, url);
+        const query = `PageSize=${PAGE_SIZE}&PageNumber=${pagina}&OrderBy=createdat&OrderDirection=DESCENDING`;
+        const resposta = await listarSessoesWts<{ items: WtsSession[]; hasMorePages: boolean }>(contaToken, query);
         if (!Array.isArray(resposta?.items)) throw new Error("WTS devolveu página de sessões inválida");
         const itens = resposta.items;
         for (const r of res.values()) r.paginas = pagina;
@@ -368,8 +391,9 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
             }
             break;
           }
-          const resposta = await wtsGet<{ items: WtsSession[]; hasMorePages: boolean }>(contaToken,
-            `/chat/v1/session?PageSize=${PAGE_SIZE}&PageNumber=${pag}&UpdatedAt.After=${encodeURIComponent(corte.toISOString())}`);
+          // Ordem fixa (a mesma da passada principal) para a paginação por número não pular nem repetir sessão.
+          const resposta = await listarSessoesWts<{ items: WtsSession[]; hasMorePages: boolean }>(contaToken,
+            `PageSize=${PAGE_SIZE}&PageNumber=${pag}&UpdatedAt.After=${encodeURIComponent(corte.toISOString())}&OrderBy=createdat&OrderDirection=DESCENDING`);
           if (!Array.isArray(resposta?.items)) throw new Error("WTS devolveu página de sessões alteradas inválida");
           await gravarLote(resposta.items.filter((x) => new Date(x.createdAt) < corte), `alteradas página ${pag}`);
           if (!resposta.hasMorePages || resposta.items.length === 0) break;

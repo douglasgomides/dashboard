@@ -1,13 +1,13 @@
 import { withApiObservability } from "../_lib/observability.js";
 import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
-import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
+import { recordSyncStatusPorCliente, registrarAviso } from "../_lib/sync-status.js";
 import { fetchComRetry, ritmoKommo } from "../_lib/integration-http.js";
 import { runClintSync } from "../_lib/clint-sync.js";
 import { runRdStationSync } from "../_lib/rdstation-sync.js";
 import { runFlwChatSync } from "../_lib/flwchat-sync.js";
 import { runDigisacSync } from "../_lib/digisac-sync.js";
-import { ingerirConversasClint } from "../_lib/conversas-clint.js";
+import { avisoCanaisClint, ingerirConversasClint } from "../_lib/conversas-clint.js";
 import { runConferenciaCrm, type BuscarJson } from "../_lib/conferencia-crm.js";
 import { runClintTags, buscarContatoClint } from "../_lib/clint-tags.js";
 
@@ -89,6 +89,8 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         rows: x.conversas,
         errors: x.erros.length ? x.erros : x.parcial && x.conversas === 0 ? ["Conversas da Clint: a rodada terminou sem ler nenhuma conversa nova"] : [],
       })));
+      // Canal desconectado ou cancelado na Clint: aviso no status (a rodada pode estar "ok" e o número parado).
+      for (const x of r) await registrarAviso(supabase, x.clientId, "atendimento", avisoCanaisClint(x.canais_desconectados, x.canais_cancelados), /^Clint: canai?s? /);
       res.status(r.some((x) => x.erros.length > 0) ? 207 : 200).json({ ok: true, clint_conversas: r });
     } catch (err) {
       res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });

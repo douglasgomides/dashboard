@@ -95,6 +95,32 @@ export async function registrarValidadeToken(
   }
 }
 
+/**
+ * Grava (ou limpa) um aviso em sync_status.motivo sem apagar motivo de outra origem. `marca` reconhece os avisos desta
+ * origem: só eles são trocados ou limpos. Nunca derruba o sync.
+ */
+export async function registrarAviso(
+  supabase: SupabaseClient<any, any, any>,
+  clientId: string,
+  fonte: FonteSync,
+  aviso: string | null,
+  marca: RegExp,
+  dono: "cliente" | "meta" | "nos" = "cliente",
+): Promise<void> {
+  try {
+    const { data } = await supabase.from("sync_status").select("motivo").eq("client_id", clientId).eq("fonte", fonte).maybeSingle();
+    const atual = (data as { motivo?: string | null } | null)?.motivo ?? null;
+    if (atual && !marca.test(atual)) return; // motivo de outra origem tem prioridade
+    if (aviso === atual) return;
+    await supabase.from("sync_status").upsert(
+      { client_id: clientId, fonte, motivo: aviso, motivo_dono: aviso ? dono : null, motivo_em: new Date().toISOString() },
+      { onConflict: "client_id,fonte" },
+    );
+  } catch {
+    /* aviso é extra */
+  }
+}
+
 export async function recordSyncStatus(
   supabase: SupabaseClient<any, any, any>,
   clientId: string,

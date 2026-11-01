@@ -4,10 +4,10 @@ import { createClient } from "@supabase/supabase-js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { Database } from "../../../src/integrations/supabase/types.js";
 import { ocultarSegredos } from "../../_lib/sync-status.js";
-import { readRawBody, parseBracketFormBody, extractLeadEvents, WebhookBodyError } from "../../_lib/kommo-webhook.js";
+import { readRawBody, parseBracketFormBody, extractLeadEvents, eventTypeGravado, unixDoWebhook, WebhookBodyError } from "../../_lib/kommo-webhook.js";
 
-// Recebe os webhooks nativos da Kommo (lead adicionado/status mudou/
-// excluído). A URL é única por conexão (connection_id + secret gerados no
+// Recebe os webhooks nativos da Kommo (lead adicionado/atualizado/status
+// mudou/excluído/restaurado). A URL é única por conexão (connection_id + secret gerados no
 // painel admin) — a Kommo não assina os webhooks, então essa é a única
 // proteção do endpoint. Precisa responder em até 2s com status 100–299 pra
 // não disparar retry (a Kommo tenta de novo até 4x numa janela de 1h).
@@ -91,12 +91,24 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       // O sync pela API guarda em "custom_fields_values" (array); o webhook
       // guarda em "custom_fields" (objeto). Preserva qualquer um dos dois que
       // já existia, já que um evento de mudança de etapa nunca traz nenhum.
-      const mergedRaw = {
+      const mergedRaw: Record<string, unknown> = {
         ...existingRaw,
         ...eventRaw,
         custom_fields: "custom_fields" in eventRaw ? eventRaw.custom_fields : (existingRaw.custom_fields ?? null),
         custom_fields_values: existingRaw.custom_fields_values ?? null,
       };
+      // closed_at é a data do ganho/perda que o banco usa (crm_data_desfecho, 20261102210000). O webhook de etapa não
+      // garante o campo; sem ele, o closed_at antigo do raw_payload (de um fechamento anterior a uma reabertura) dataria
+      // a venda nova errado. Mudou de etapa sem closed_at: fechou agora (updated_at/last_modified do evento, ou a hora da
+      // entrega) ou reabriu (sem data). O sync pela API depois grava o closed_at da própria Kommo.
+      if (event.statusId != null && unixDoWebhook(eventRaw.closed_at) == null) {
+        const fechado = event.statusId === "142" || event.statusId === "143";
+        const mudou = existingRaw.status_id == null || String(existingRaw.status_id) !== event.statusId;
+        if (!fechado) mergedRaw.closed_at = null;
+        else if (mudou || unixDoWebhook(existingRaw.closed_at) == null) {
+          mergedRaw.closed_at = unixDoWebhook(eventRaw.updated_at) ?? unixDoWebhook(eventRaw.last_modified) ?? Math.floor(Date.now() / 1000);
+        }
+      }
 
       // Colunas normalizadas. Só entram no payload quando têm valor: coluna
       // ausente no upsert preserva o que já estava na linha, enquanto mandar
@@ -129,10 +141,13 @@ async function handler(req: VercelRequest, res: VercelResponse) {
           client_id: connection.client_id,
           provider: connection.provider,
           external_lead_id: event.externalLeadId,
-          event_type: event.eventType,
+          event_type: eventTypeGravado(event.eventType),
           raw_payload: mergedRaw as any,
           received_at: new Date().toISOString(),
           ...normalizado,
+          // Lead restaurado da lixeira volta a contar. Outros eventos não mexem: uma entrega atrasada de "status" depois
+          // do "delete" não pode ressuscitar o lead.
+          ...(event.eventType === "restore" ? { removido_na_origem: null } : {}),
         },
         { onConflict: "crm_connection_id,external_lead_id" },
       );

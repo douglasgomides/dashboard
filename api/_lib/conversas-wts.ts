@@ -12,7 +12,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { codigosNaMensagem } from "../../src/lib/rastreio.js";
 import { registrarToqueLink } from "./redirecionar.js";
-import { fetchComRetry } from "./integration-http.js";
+import { fetchComRetry, ritmoHelena } from "./integration-http.js";
 
 const BASE = "https://api.wts.chat";
 let ultimoCarimboMicros = 0;
@@ -24,9 +24,33 @@ function carimboConferencia(): string {
   return new Date(Math.floor(micros / 1000)).toISOString().replace("Z", `${String(micros % 1000).padStart(3, "0")}Z`);
 }
 
+/**
+ * Mensagens em ordem fixa, da mais antiga para a mais nova (doc: `OrderBy` "Nome do campo para ser utilizado como pivô da
+ * ordenação", `OrderDirection` ASCENDING/DESCENDING; a doc não diz a ordem padrão). Com até 8 páginas (800), a conversa
+ * longa fica com o começo, que é onde estão a origem do anúncio e a 1ª resposta da clínica; e a paginação por número não
+ * pula nem repete mensagem quando chega mensagem nova durante a leitura.
+ */
+export const QUERY_MENSAGENS_WTS = "PageSize=100&OrderBy=createdAt&OrderDirection=ASCENDING";
+
+// Se a conta recusar a ordenação (400), lê sem ela, como antes, e lembra para não repetir o pedido recusado.
+let semOrdemMensagens = false;
+async function lerPaginaMensagens(token: string, sid: string, pagina: number, get: (t: string, c: string) => Promise<any> = wtsGet): Promise<any> {
+  const base = `/chat/v1/session/${encodeURIComponent(sid)}/message?`;
+  if (!semOrdemMensagens) {
+    try {
+      return await get(token, `${base}${QUERY_MENSAGENS_WTS}&PageNumber=${pagina}`);
+    } catch (e) {
+      if (!(e instanceof Error && / respondeu 400$/.test(e.message)) || pagina !== 1) throw e;
+      semOrdemMensagens = true;
+    }
+  }
+  return get(token, `${base}PageSize=100&PageNumber=${pagina}`);
+}
+export { lerPaginaMensagens };
+
 async function wtsGet(token: string, caminho: string): Promise<any> {
   // 429/5xx/rede: espera (Retry-After, com teto) e tenta de novo, até 3 vezes.
-  const r = await fetchComRetry(`${BASE}${caminho}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }, { timeoutMs: 25_000, baseMs: 800 });
+  const r = await fetchComRetry(`${BASE}${caminho}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }, { timeoutMs: 25_000, baseMs: 800, ritmo: ritmoHelena(token) });
   if (r.ok) return r.json();
   if (r.status === 429 || r.status >= 500) throw new Error(`WTS ${caminho.split("?")[0]} indisponível`);
   throw new Error(`WTS ${caminho.split("?")[0]} respondeu ${r.status}`);
@@ -242,7 +266,7 @@ export async function ingerirConversasWts(
       try {
         for (let pagina = 1; pagina <= 8; pagina++) {
           if (Date.now() >= fim) break;
-          const j = await wtsGet(tk, `/chat/v1/session/${encodeURIComponent(sid)}/message?PageSize=100&PageNumber=${pagina}`);
+          const j = await lerPaginaMensagens(tk, sid, pagina);
           if (!Array.isArray(j?.items)) throw new Error("Formato de mensagens não confirmado.");
           recebidas.push(...j.items);
           if (j.hasMorePages === false) { todas = true; break; }
