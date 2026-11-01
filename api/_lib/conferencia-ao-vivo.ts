@@ -15,7 +15,8 @@
  *    config.painel_desde) com os cards que o Nexo mostra como não fechados, e os criados no período ainda listados.
  *    Amostra: etapa, painel, valor, criação e se o Nexo não deu o card como fechado.
  *  - WTS (Helena): sessões iniciadas nos últimos 7 dias e abertas agora (IN_PROGRESS + PENDING), com a mesma regra
- *    de dono do sync (card, equipe, curinga) quando a conta serve mais de um cliente.
+ *    de dono do sync (card, equipe, curinga) quando a conta serve mais de um cliente e, quando o cliente tem regra de
+ *    departamento (crm_filtro_cliente), contando dos dois lados o que a tela dele mostra.
  *  - Digisac: contatos que o sync trata como lead (sem grupo, sem o próprio número, com conversa); criados no período;
  *    atendimentos (tickets) dos últimos 7 dias e abertos agora. Digisac não tem ganho/perda.
  *
@@ -229,8 +230,11 @@ export interface LeitorNexo {
   leads(connectionId: string): Promise<RegistroNexo[]>;
   /** sessionId do card do FlwChat -> cliente, como o sync de WTS usa para contas com mais de um cliente. */
   donoPeloCard(clientIds: string[]): Promise<Map<string, string>>;
-  contarSessoes(clientId: string, desdeIso: string, ateIso: string): Promise<number>;
-  contarSessoesAbertas(clientId: string): Promise<number>;
+  /** Regra de departamento das telas (crm_filtro_cliente, tipo departamento/equipe) de cada cliente que tem uma. */
+  regrasDepartamento(clientIds: string[]): Promise<Map<string, RegraDepartamento>>;
+  /** comRegra: conta como as telas, por wts_sessoes_do_cliente (regra do cliente aplicada); sem, a tabela crua. */
+  contarSessoes(clientId: string, desdeIso: string, ateIso: string, comRegra?: boolean): Promise<number>;
+  contarSessoesAbertas(clientId: string, comRegra?: boolean): Promise<number>;
   gravar(linhas: LinhaConferencia[]): Promise<void>;
 }
 
@@ -270,13 +274,31 @@ export function leitorSupabase(db: SupabaseClient): LeitorNexo {
       for (const s of ambiguas) dono.delete(s);
       return dono;
     },
-    async contarSessoes(clientId, desdeIso, ateIso) {
-      const { count, error } = await db.from("wts_sessions").select("session_id", { count: "exact", head: true }).eq("client_id", clientId).gte("started_at", desdeIso).lt("started_at", ateIso);
+    async regrasDepartamento(clientIds) {
+      const out = new Map<string, RegraDepartamento>();
+      if (!clientIds.length) return out;
+      const { data, error } = await db.from("crm_filtro_cliente").select("client_id, valor, modo").in("client_id", clientIds).in("tipo", ["departamento", "equipe"]);
+      if (error) throw new Error(error.message);
+      for (const r of (data ?? []) as { client_id: string; valor: string; modo: string }[]) {
+        const regra = out.get(r.client_id) ?? { incluir: [], excluir: [] };
+        (r.modo === "excluir" ? regra.excluir : regra.incluir).push(r.valor);
+        out.set(r.client_id, regra);
+      }
+      return out;
+    },
+    async contarSessoes(clientId, desdeIso, ateIso, comRegra) {
+      const base = comRegra
+        ? db.rpc("wts_sessoes_do_cliente", { p_client: clientId }, { count: "exact", head: true })
+        : db.from("wts_sessions").select("session_id", { count: "exact", head: true }).eq("client_id", clientId);
+      const { count, error } = await base.gte("started_at", desdeIso).lt("started_at", ateIso);
       if (error) throw new Error(error.message);
       return count ?? 0;
     },
-    async contarSessoesAbertas(clientId) {
-      const { count, error } = await db.from("wts_sessions").select("session_id", { count: "exact", head: true }).eq("client_id", clientId).in("status", ["IN_PROGRESS", "PENDING"]);
+    async contarSessoesAbertas(clientId, comRegra) {
+      const base = comRegra
+        ? db.rpc("wts_sessoes_do_cliente", { p_client: clientId }, { count: "exact", head: true })
+        : db.from("wts_sessions").select("session_id", { count: "exact", head: true }).eq("client_id", clientId);
+      const { count, error } = await base.in("status", ["IN_PROGRESS", "PENDING"]);
       if (error) throw new Error(error.message);
       return count ?? 0;
     },
@@ -464,6 +486,20 @@ async function paginarSessoes(ctx: Ctx, token: string, extra: string, parar?: (s
   return out;
 }
 
+export interface RegraDepartamento { incluir: string[]; excluir: string[] }
+
+/**
+ * A sessão aparece nas telas do cliente? Mesma regra de crm_departamento_no_filtro (migração 20261102160000): com regra
+ * de incluir, só os departamentos incluídos; nunca os excluídos. Sem regra, tudo. Na conta da Dra. Juliana Paola e da
+ * Dra. Mariela Muniz o sync entrega a sessão pelo card e pela equipe, e a tela ainda aplica esta regra por cima: a
+ * conferência comparava a tabela crua com a fonte sem a regra, enquanto a tela mostra outro número.
+ */
+export function passaRegraDepartamento(regra: RegraDepartamento | undefined, dep: string | null | undefined): boolean {
+  if (!regra) return true;
+  if (regra.incluir.length && (!dep || !regra.incluir.includes(dep))) return false;
+  return !dep || !regra.excluir.includes(dep);
+}
+
 /** Mesma regra de dono do sync de WTS (wts-sync.ts): card, depois equipe não ambígua, depois o único curinga. */
 export function roteadorWts(donos: ClienteWts[], peloCard: Map<string, string>): (s: SessaoWts) => string | null {
   const curingas = donos.filter((c) => !c.wts_department_ids || c.wts_department_ids.length === 0);
@@ -528,9 +564,21 @@ export function compararFlwChat(base: Parameters<typeof linha>[0], fonte: Regist
   const listadosNexo = nexoTodos.filter((n) => set.has(String(n.pipeline_id ?? "")) && n.outcome !== "closed" && (!n.removido_na_origem || !!n.substituido_por));
   const porId = new Map(nexoTodos.map((n) => [n.external_lead_id, n]));
   const idsFonte = new Set(fonte.map((r) => r.id));
+  // Para achar a causa sem reler a fonte: o que só o Nexo tem, por motivo e por painel (ids de painel, sem dado pessoal).
+  const soNoNexo = listadosNexo.filter((n) => !idsFonte.has(n.external_lead_id));
+  const motivos: Record<string, number> = {};
+  for (const n of soNoNexo) {
+    const m = n.substituido_por ? "substituido" : n.outcome === "open" ? "aberto" : String(n.outcome);
+    motivos[m] = (motivos[m] ?? 0) + 1;
+  }
+  const porPainel: Record<string, { fonte: number; nexo: number; so_no_nexo: number }> = {};
+  for (const pid of paineis) porPainel[pid] = { fonte: 0, nexo: 0, so_no_nexo: 0 };
+  for (const r of fonte) if (porPainel[String(r.funil)]) porPainel[String(r.funil)].fonte++;
+  for (const n of listadosNexo) porPainel[String(n.pipeline_id)].nexo++;
+  for (const n of soNoNexo) porPainel[String(n.pipeline_id)].so_no_nexo++;
   const am = compararAmostra(sortear(fonte, TAMANHO_AMOSTRA, aleatorio), porId, { exigeNaoFechado: true, campos: ["etapa", "funil", "valor", "criado"] });
   return [
-    linha(base, "abertos_agora", listadosNexo.length, fonte.length, TOL_AO_VIVO, { metodo: "cards listados na API (só abertos)", so_no_nexo: listadosNexo.filter((n) => !idsFonte.has(n.external_lead_id)).length, so_na_fonte: fonte.filter((r) => { const n = porId.get(r.id); return !n || n.outcome === "closed"; }).length }),
+    linha(base, "abertos_agora", listadosNexo.length, fonte.length, TOL_AO_VIVO, { metodo: "cards listados na API (só abertos)", so_no_nexo: soNoNexo.length, so_no_nexo_por_motivo: motivos, por_painel: porPainel, so_na_fonte: fonte.filter((r) => { const n = porId.get(r.id); return !n || n.outcome === "closed"; }).length }),
     linha(base, "criados_30d_listados", listadosNexo.filter((n) => dentro(msDeIso(n.occurred_at), p)).length, fonte.filter((r) => dentro(r.criadoMs, p)).length, TOL_AO_VIVO, { periodo: { de: new Date(p.ini).toISOString(), ate: new Date(p.fim).toISOString() }, metodo: "criados no período e ainda listados" }),
     linha(base, "amostra", am.iguais, am.tamanho, TOL_AMOSTRA, { ausentes: am.ausentes, divergencias: am.divergencias }, am.tamanho),
   ];
@@ -657,6 +705,7 @@ export async function runConferenciaAoVivo(nexo: LeitorNexo, buscar: BuscarJson,
         if (!token) throw new Error("WTS sem token");
         const peloCard = donos.length > 1 ? await nexo.donoPeloCard(donos.map((c) => c.id)) : new Map<string, string>();
         const dono = roteadorWts(donos, peloCard);
+        const regras = await nexo.regrasDepartamento(donos.map((c) => c.id));
         const desde = p.ini7, ate = p.agora;
         const recentes = await paginarSessoes(ctx, token, "&OrderBy=createdat&OrderDirection=DESCENDING", (s) => (msDeIso(s.createdAt) ?? 0) < desde);
         const abertas = [
@@ -664,12 +713,14 @@ export async function runConferenciaAoVivo(nexo: LeitorNexo, buscar: BuscarJson,
           ...(await paginarSessoes(ctx, token, "&Status=PENDING")),
         ];
         const semDono = { recentes: 0, abertas: 0 };
+        const foraDaRegra = { recentes: 0, abertas: 0 };
         const s7 = new Map<string, number>(), ab = new Map<string, number>();
         for (const s of recentes) {
           const ini = msDeIso(s.startAt) ?? msDeIso(s.createdAt);
           if (ini == null || ini < desde || ini >= ate) continue;
           const d = dono(s);
           if (!d) { semDono.recentes++; continue; }
+          if (!passaRegraDepartamento(regras.get(d), s.departmentId)) { foraDaRegra.recentes++; continue; }
           s7.set(d, (s7.get(d) ?? 0) + 1);
         }
         const vistas = new Set<string>();
@@ -678,14 +729,17 @@ export async function runConferenciaAoVivo(nexo: LeitorNexo, buscar: BuscarJson,
           vistas.add(s.id);
           const d = dono(s);
           if (!d) { semDono.abertas++; continue; }
+          if (!passaRegraDepartamento(regras.get(d), s.departmentId)) { foraDaRegra.abertas++; continue; }
           ab.set(d, (ab.get(d) ?? 0) + 1);
         }
         const desdeIso = new Date(desde).toISOString(), ateIso = new Date(ate).toISOString();
         for (const c of alvo) {
           const base = { client_id: c.id, crm_connection_id: null, fonte: "wts" as const, rodado_em };
-          const detalheConta = { clientes_na_conta: donos.length, sessoes_sem_dono: semDono };
-          linhas.push(linha(base, "sessoes_7d", await nexo.contarSessoes(c.id, desdeIso, ateIso), s7.get(c.id) ?? 0, TOL_SESSOES, { janela: { de: desdeIso, ate: ateIso }, ...detalheConta }));
-          linhas.push(linha(base, "sessoes_abertas_agora", await nexo.contarSessoesAbertas(c.id), ab.get(c.id) ?? 0, TOL_AO_VIVO, { metodo: "Status IN_PROGRESS + PENDING", ...detalheConta }));
+          const regra = regras.get(c.id);
+          // Com regra de departamento, os dois lados contam o que a tela do cliente mostra (wts_sessoes_do_cliente).
+          const detalheConta = { clientes_na_conta: donos.length, sessoes_sem_dono: semDono, sessoes_fora_da_regra: foraDaRegra, regra_departamento: regra ? { incluir: regra.incluir.length, excluir: regra.excluir.length } : null };
+          linhas.push(linha(base, "sessoes_7d", await nexo.contarSessoes(c.id, desdeIso, ateIso, !!regra), s7.get(c.id) ?? 0, TOL_SESSOES, { janela: { de: desdeIso, ate: ateIso }, ...detalheConta }));
+          linhas.push(linha(base, "sessoes_abertas_agora", await nexo.contarSessoesAbertas(c.id, !!regra), ab.get(c.id) ?? 0, TOL_AO_VIVO, { metodo: "Status IN_PROGRESS + PENDING", ...detalheConta }));
         }
       } catch (err) {
         for (const c of alvo) falha({ client_id: c.id, crm_connection_id: null, fonte: "wts", rodado_em }, ["sessoes_7d", "sessoes_abertas_agora"], err, [token]);

@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   buscarSomenteGet,
   compararAmostra,
+  compararFlwChat,
   erroLimpo,
+  passaRegraDepartamento,
   periodoFechado,
   roteadorWts,
   runConferenciaAoVivo,
@@ -149,6 +151,7 @@ const leitor: LeitorNexo = {
   clientesWts: async () => wts,
   leads: async (id) => leadsNexo[id] ?? [],
   donoPeloCard: async () => new Map([["s2", C1]]), // o card diz que s2 é do C1, mesmo com a equipe do C2
+  regrasDepartamento: async () => new Map(),
   contarSessoes: async (c) => (c === C1 ? 2 : c === C2 ? 0 : 12),
   contarSessoesAbertas: async (c) => (c === C1 ? 3 : c === C2 ? 0 : 9),
   gravar: async (l) => { gravadas = l; },
@@ -198,6 +201,39 @@ async function main() {
   assert.deepEqual([v(C1, "wts", "sessoes_abertas_agora").nexo, v(C1, "wts", "sessoes_abertas_agora").fonte_valor], [3, 3]);
   assert.equal((v(C1, "wts", "sessoes_7d").detalhe as { sessoes_sem_dono: { recentes: number } }).sessoes_sem_dono.recentes, 1);
   assert.equal(pedidos.filter((p) => p.url.includes("/chat/v1/session") && p.url.includes("createdat")).length, 1, "parou no corte dos 7 dias");
+
+  // Regra de departamento das telas (crm_filtro_cliente): C1 exclui dA (como a Dra. Juliana Paola exclui a equipe da
+  // Dra. Mariela). Fonte: s1 e s3 são do C1 pela equipe dA e saem; s2 fica (card do C1, equipe dB). O Nexo conta pela
+  // função da tela (comRegra).
+  const pedidosComRegra: boolean[] = [];
+  const comRegra: LeitorNexo = {
+    ...leitor,
+    regrasDepartamento: async (ids) => { assert.deepEqual(ids, [C1, C2]); return new Map([[C1, { incluir: [], excluir: ["dA"] }]]); },
+    contarSessoesAbertas: async (c, regra) => { if (c === C1) pedidosComRegra.push(!!regra); return c === C1 ? 1 : 0; },
+    contarSessoes: async (c, _d, _a, regra) => { if (c === C1) pedidosComRegra.push(!!regra); return c === C1 ? 1 : 0; },
+  };
+  const rr = await runConferenciaAoVivo(comRegra, fonte, { fontes: ["wts"], agora: () => AGORA });
+  const w = (m: string) => rr.linhas.find((x) => x.client_id === C1 && x.metrica === m)!;
+  assert.deepEqual([w("sessoes_abertas_agora").nexo, w("sessoes_abertas_agora").fonte_valor, w("sessoes_abertas_agora").ok], [1, 1, true]);
+  assert.deepEqual([w("sessoes_7d").nexo, w("sessoes_7d").fonte_valor], [1, 1]);
+  assert.deepEqual(pedidosComRegra, [true, true], "o Nexo conta como a tela quando o cliente tem regra");
+  assert.deepEqual((w("sessoes_abertas_agora").detalhe as { sessoes_fora_da_regra: { abertas: number } }).sessoes_fora_da_regra.abertas, 2);
+  assert.equal(passaRegraDepartamento({ incluir: ["dM"], excluir: [] }, "dM"), true);
+  assert.equal(passaRegraDepartamento({ incluir: ["dM"], excluir: [] }, "dJ"), false);
+  assert.equal(passaRegraDepartamento({ incluir: ["dM"], excluir: [] }, null), false, "incluir: sem departamento não passa");
+  assert.equal(passaRegraDepartamento({ incluir: [], excluir: ["dM"] }, null), true, "excluir: sem departamento fica com a clínica");
+  assert.equal(passaRegraDepartamento(undefined, "qualquer"), true);
+
+  // FlwChat: o que só o Nexo tem sai por motivo e por painel.
+  const fl = compararFlwChat({ client_id: C2, crm_connection_id: "flw1", fonte: "flwchat", rodado_em: "x" },
+    [{ id: "a", etapa: "e", funil: "p1", resultado: null, valor: null, criadoMs: null, fechadoMs: null }],
+    ["p1", "p2"],
+    [nx("a", { pipeline_id: "p1" }), nx("b", { pipeline_id: "p1" }), nx("c", { pipeline_id: "p2", removido_na_origem: iso(AGORA), substituido_por: "a" }), nx("d", { pipeline_id: "p2", outcome: "closed" })],
+    P, () => 0.5);
+  const ab = fl.find((l) => l.metrica === "abertos_agora")!;
+  assert.deepEqual([ab.nexo, ab.fonte_valor], [3, 1]);
+  assert.deepEqual((ab.detalhe as { so_no_nexo_por_motivo: Record<string, number> }).so_no_nexo_por_motivo, { aberto: 1, substituido: 1 });
+  assert.deepEqual((ab.detalhe as { por_painel: Record<string, unknown> }).por_painel, { p1: { fonte: 1, nexo: 2, so_no_nexo: 1 }, p2: { fonte: 0, nexo: 1, so_no_nexo: 1 } });
 
   // Digisac: grupo e quem nunca conversou ficam fora, como no sync.
   assert.deepEqual([v(C3, "digisac", "abertos_agora").nexo, v(C3, "digisac", "abertos_agora").fonte_valor], [1, 1]);

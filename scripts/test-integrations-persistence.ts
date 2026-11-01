@@ -161,6 +161,7 @@ async function testWtsRouting() {
         apagados.push(`${url.searchParams.get("client_id")}|${url.searchParams.get("session_id")}`);
         return json(null);
       }
+      if (table === "wts_sessions" && (init?.method ?? "GET") === "GET") return json([]); // releitura das abertas: nada aberto no Nexo
       if (table === "wts_sessions") { written.push(...bodyOf(init)); return json(null); }
       if (table === "wts_sync_state") return rejectCheckpoint ? dbError() : json(null);
       throw new Error(`Unexpected table ${table}`);
@@ -168,6 +169,7 @@ async function testWtsRouting() {
     assert.equal(url.hostname, "api.wts.chat");
     assert.ok(init?.signal instanceof AbortSignal);
     if (url.pathname.startsWith("/core/")) return json([]);
+    if (url.searchParams.get("Status")) return json({ items: [], hasMorePages: false });
     return json({ items: [
       { id: "private", createdAt: now, departmentId: "private-department" },
       { id: "unassigned", createdAt: now, departmentId: "general-department" },
