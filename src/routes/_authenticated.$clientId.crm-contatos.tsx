@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { configCrm, operacaoCrm } from "@/lib/crm-operacao-data";
 import { ETAPAS_CRM, nomeEtapa, prazoVencido, dataParaInput, inputParaData, type CardCrm, type ContatoCrm, type DetalheCrm, type EtapaCrm, type ListaCrm, type MembroCrm, type EntradaCrm, type RotinaCrm } from "@/lib/crm-kanban";
 import "@/styles/crm-kanban.css";
+import { mensagemDeErro } from "@/lib/erro-amigavel";
 
 export const Route = createFileRoute("/_authenticated/$clientId/crm-contatos")({ component: KanbanCrm, validateSearch: (search:Record<string,unknown>):{card?:string} => ({card:typeof search.card==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(search.card)?search.card:undefined}) });
 const quando = (iso: string) => new Date(iso).toLocaleString("pt-BR",{ day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",timeZone:"America/Sao_Paulo" });
@@ -247,7 +248,7 @@ function CardAberto({clientId,equipe,inicial,destino,editar,onClose,onSaved}:{cl
    {verConversa&&<>
     <p className="text-xs">Últimas 100 mensagens disponíveis. A abertura fica registrada para auditoria. Confira o contexto antes de aprovar uma mudança.</p>
     {mensagens.isPending&&<p role="status">Abrindo conversa…</p>}
-    {mensagens.isError&&<p role="alert">{mensagens.error.message} <button className="crm-link" onClick={()=>void mensagens.refetch()}>Tentar novamente</button></p>}
+    {mensagens.isError&&<p role="alert">{mensagemDeErro(mensagens.error,"a conversa")} <button className="crm-link" onClick={()=>void mensagens.refetch()}>Tentar novamente</button></p>}
     {mensagens.data?.length===0&&<p>Nenhuma mensagem disponível. Confira a importação com a equipe.</p>}
     <ol className="crm-history max-h-80 overflow-y-auto" aria-label="Últimas mensagens da conversa">{mensagens.data?.slice().reverse().map(m=><li key={m.id}><strong>{m.direcao==="entrada"?"Contato":m.direcao==="saida"?"Clínica":"Sistema"}</strong> · {quando(m.enviada_em)}<p className="whitespace-pre-wrap break-words">{m.texto||`Mensagem sem texto (${m.tipo||"mídia"})`}</p></li>)}</ol>
    </>}

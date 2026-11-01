@@ -12,6 +12,7 @@
 import { fmtFormatKey, median } from "@/lib/report-metrics";
 import { conversaMaisBarata, GRUPOS, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
+import { LIMITES } from "@/lib/limites";
 
 export type Tom = "bom" | "ruim" | "atencao";
 export type RotaAcao = "posts" | "anuncios" | "atendimento" | "ideias" | "conteudo";
@@ -42,9 +43,9 @@ export interface EntradaLeitura {
 }
 
 // ---------- limites ----------
-export const MIN_DIAS_TENDENCIA = 10;
+export const MIN_DIAS_TENDENCIA: number = LIMITES.amostra.periodo.diasTendencia;
 export const VARIACAO_RELEVANTE = 0.25; // ±25%
-export const MIN_POSTS_LEITURA = 5;
+export const MIN_POSTS_LEITURA: number = LIMITES.amostra.conteudo.postsLeitura;
 // Grupo (formato, tema, horário) só vira "melhor"/"pior" com a amostra mínima única (src/lib/metricas.ts).
 export const MIN_POSTS_GRUPO = MIN_POSTS_CONCLUSAO;
 export const CONCENTRACAO_VIRAL = 0.4; // 1 post com 40%+ do alcance dos posts

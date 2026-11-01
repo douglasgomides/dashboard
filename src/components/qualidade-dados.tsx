@@ -5,6 +5,7 @@ import { AlertOctagon, AlertTriangle, ChevronDown, Wrench } from "lucide-react";
 import { getQualidadeDados, getCrmBaseViva, type ProblemaDado } from "@/lib/client-data";
 import { ROTULO_RESPONSAVEL, type Responsavel } from "@/lib/insight";
 import { fmtTaxa } from "@/lib/metricas";
+import { causaHonesta } from "@/lib/qualidade-insights";
 
 // "Dado com erro": o que está entrando errado na origem (CRM, Instagram, anúncios),
 // a causa provável e o que fazer para corrigir. Regras fixas no banco (qualidade_dados).
@@ -36,7 +37,7 @@ function Item({ p, aberto: abertoInicial }: { p: ProblemaDado; aberto?: boolean 
       {aberto && (
         <dl className="mb-3 ml-[30px] space-y-2 text-sm leading-relaxed" style={{ color: "var(--ink-2)" }}>
           <div><dt className="font-semibold" style={{ color: "var(--ink)" }}>O que os dados mostram</dt><dd>{p.evidencia}</dd></div>
-          <div><dt className="font-semibold" style={{ color: "var(--ink)" }}>Causa provável</dt><dd>{p.causa}</dd></div>
+          <div><dt className="font-semibold" style={{ color: "var(--ink)" }}>Causa provável</dt><dd>{causaHonesta(p)} <span style={{ color: "var(--muted)" }}>(hipótese da regra: confirme com a equipe)</span></dd></div>
           <div className="rounded-lg p-3" style={{ background: "var(--surface-2)" }}>
             <dt className="flex items-center gap-1.5 font-semibold" style={{ color: "var(--ink)" }}><Wrench size={14} aria-hidden /> Como corrigir</dt>
             <dd className="mt-0.5">{p.correcao}</dd>
@@ -88,25 +89,8 @@ export function QualidadeDados({ clientId, fonte, titulo = "Dados com erro na or
   );
 }
 
-/** Converte cada problema em recomendação operacional (entra em Oportunidades e no Início). */
-export function problemasParaInsights(ps: ProblemaDado[]) {
-  return ps.map((p) => ({
-    id: `dado-${p.id}`,
-    area: "resumo" as const,
-    tom: (p.severidade === "alta" ? "ruim" : "atencao") as "ruim" | "atencao",
-    titulo: p.titulo,
-    diagnostico: `${p.causa} Até corrigir, fica distorcido: ${p.afeta}`,
-    evidencia: p.evidencia,
-    confianca: "alta" as const,
-    motivoConfianca: "Contagem direta no banco, sem estimativa.",
-    impacto: (p.severidade === "alta" ? "alto" : "medio") as "alto" | "medio",
-    acao: { texto: p.correcao, rota: p.fonte === "crm" ? "/$clientId/crm-painel" : p.fonte === "anuncios" ? "/$clientId/anuncios" : undefined, botao: p.fonte === "crm" ? "Ver o funil do CRM" : p.fonte === "anuncios" ? "Ver anúncios" : undefined },
-    responsavel: (p.responsavel as any) ?? "equipe_hub",
-    regra: "Verificação fixa de qualidade dos dados (função qualidade_dados no banco): leads abertos parados há 90+ dias, CRM sem lead novo enquanto chegam conversas, origem vazia, ganho não registrado, CRM compartilhado, erro de sincronização, Instagram ou anúncio parado.",
-    fonte: "Banco do Nexo (CRM, Instagram, Meta Ads, WhatsApp)",
-    risco: "Recomendação sobre o dado de entrada: não diz se o resultado foi bom ou ruim, diz que a leitura está comprometida.",
-  }));
-}
+/** Converte cada problema em recomendação operacional (entra em Oportunidades e no Início): causa como hipótese. */
+export { problemasParaInsights } from "@/lib/qualidade-insights";
 
 /** Base viva x parada: quantos leads em aberto de fato estão em movimento. */
 export function BaseVivaCrm({ clientId }: { clientId: string }) {

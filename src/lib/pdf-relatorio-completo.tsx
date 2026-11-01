@@ -903,13 +903,13 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
 
           {crm && cm && vendas ? (
             <>
-              <Titulo dica="Só o período do relatório. Contato novo = pessoa que entrou pela primeira vez no CRM no período, em funil de captação (paciente antigo não conta).">{`Comercial${d.crmNome ? `, CRM ${d.crmNome}` : ""}`}</Titulo>
+              <Titulo dica="Só o período do relatório. Contato novo = pessoa que entrou pela primeira vez no CRM no período, em funil de captação (paciente antigo não conta). Contatos novos e perdidos contam pessoas; vendas contam cards (orçamentos ganhos), e a mesma pessoa pode ter mais de um. Orçamento aberto ou perdido não entra em valor nenhum.">{`Comercial${d.crmNome ? `, CRM ${d.crmNome}` : ""}`}</Titulo>
               <Kpis
                 items={[
                   { label: "Contatos novos", value: fmtNum(pessoasNovas), hint: "no período" },
                   { label: vendas.rotulo, value: vendas.numero != null ? fmtNum(vendas.numero) : "não disponível", hint: vendas.base === "coorte" && vendas.numero != null ? "dos contatos que entraram no período" : undefined },
                   ...(crm.vendas && crm.vendas.fechados_sem_resultado > 0 ? [{ label: "Fechados sem resultado", value: fmtNum(crm.vendas.fechados_sem_resultado), hint: "o CRM não diz se viraram venda" }] : []),
-                  ...(num(cm.perdidos) > 0 ? [{ label: "Perdidos", value: fmtNum(num(cm.perdidos)), hint: "contatos do período" }] : []),
+                  ...(num(cm.perdidos) > 0 ? [{ label: "Perdidos", value: fmtNum(num(cm.perdidos)), hint: "pessoas do período, sem as que também fecharam" }] : []),
                   ...(pctOrigem != null ? [{ label: "Contatos novos com origem", value: `${pctOrigem.toFixed(0)}%`, hint: "mesma conta do retorno do investimento" }] : []),
                 ]}
               />

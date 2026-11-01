@@ -5,6 +5,7 @@
  * em crm_procedimento_tipo; a correção passa na frente da regra do banco.
  */
 import { supabase } from "@/integrations/supabase/client";
+import { LIMITES } from "@/lib/limites";
 
 export const TIPOS_PROCEDIMENTO = [
   "Consulta", "Exame", "Medicação", "Terapia injetável", "Implante hormonal", "Kit", "Programa ou clube", "Estética", "Outros",
@@ -48,7 +49,7 @@ export interface OrcamentosPorTipo {
 }
 
 /** Abaixo disso a tela não aparece: sem procedimento nos cards, agrupar por tipo não diz nada. */
-export const MIN_ITENS = 20;
+export const MIN_ITENS: number = LIMITES.amostra.crm.itensOrcamento;
 
 const n = (v: unknown) => (typeof v === "number" ? v : Number(v ?? 0)) || 0;
 

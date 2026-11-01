@@ -4,6 +4,13 @@
 import { atrasoDaFonte, diasDeAtraso, type LinhaFonte } from "@/lib/saude-fontes";
 import { statusDaFonte, type StatusFonte } from "@/lib/status-fonte";
 
+const dataBr = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+
+/** Anúncios lançados à mão na planilha: sem tentativa automática e sem motivo gravado (mesma regra de ehPlanilha). */
+function ehPlanilhaDeAnuncios(l: LinhaFonte): boolean {
+  return l.fonte === "anuncios" && !l.last_attempt_at && !l.motivo && !!l.data_ate;
+}
+
 export type Dono = "cliente" | "meta" | "origem" | "nos" | "manual";
 export type Motivo = { texto: string; dono: Dono };
 
@@ -51,6 +58,9 @@ export function motivoDaLinha(l: LinhaFonte | undefined): Motivo | null {
     return traduzido ?? { texto: `Erro técnico na última atualização: ${l.last_error.replace(/\s+/g, " ").slice(0, 140)}`, dono: "nos" };
   }
   if (l.motivo) return { texto: l.motivo, dono: (l.motivo_dono as Dono) || "cliente" };
+  // Planilha não tem atualização automática: dizer "a atualização roda sem erro" seria falso (auditoria 01/11/2026).
+  if (ehPlanilhaDeAnuncios(l) && atrasoDaFonte(l) > 3)
+    return { texto: `Planilha lançada à mão: último lançamento em ${dataBr(l.data_ate!)}. O dado novo depende de a equipe lançar a planilha.`, dono: "manual" };
   if (l.data_ate && atrasoDaFonte(l) > 3) {
     const rodouOk = !!l.last_success_at && diasDeAtraso(l.last_success_at.slice(0, 10)) <= 1;
     if (rodouOk || !l.last_attempt_at) {

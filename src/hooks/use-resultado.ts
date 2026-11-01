@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getMonthlyMetrics, getPostsForAnalytics, getAdsDiagnosticoPorObjetivo, getAdsPorDia, getWtsResumo, getCrmResumoPeriodo, getCrmVendasPeriodo, getCrmLeadsPorDiaPeriodo, getClientFontes } from "@/lib/client-data";
+import { getMonthlyMetrics, getPostsForAnalytics, getAdsDiagnosticoPorObjetivo, getAdsPorDia, getWtsResumo, getCrmResumoPeriodo, getCrmVendasPeriodo, getCrmLeadsPorDiaPeriodo, getClientFontes, getCrmCompartilhadoCom } from "@/lib/client-data";
 import { getResumoPeriodo } from "@/lib/audiencia";
 import { completeInstagramPeriod } from "@/lib/report-period";
 import { montarResultado } from "@/lib/resultado";
@@ -29,6 +29,7 @@ export function useResultado(clientId: string, start: string, end: string) {
   const vendas = useQuery({ queryKey: ["crm-vendas", clientId, start, fim], queryFn: () => getCrmVendasPeriodo(clientId, start, fim), ...opts });
   const leadsDia = useQuery({ queryKey: ["crm-leads-dia", clientId, start, fim], queryFn: () => getCrmLeadsPorDiaPeriodo(clientId, start, fim), ...opts });
 
+  const compartilhado = useQuery({ queryKey: ["crm-compartilhado", clientId], queryFn: () => getCrmCompartilhadoCom(clientId), ...opts, staleTime: 30 * 60_000 });
   const qualidade = useQualidadeDados(clientId);
 
   const r = useMemo(() => {
@@ -51,8 +52,9 @@ export function useResultado(clientId: string, start: string, end: string) {
       leadsPorDia: leadsDia.data?.length ? leadsDia.data.map((l) => ({ dia: l.dia, total: Number(l.total) })) : fontes.data?.tem_crm ? [] : undefined,
       fontes: fontes.data ?? null,
       problemasDados: problemasParaInsights(qualidade.data ?? []),
+      crmCompartilhadoCom: compartilhado.data ?? null,
     });
-  }, [qualidade.data, metricas.data, anterior.data, posts.data, periodoIg.data, adsDiag.data, adsDia.data, wts.data, crm.data, crm.isPending, vendas.data, leadsDia.data, fontes.data, start, fim, hoje, diasPeriodo]);
+  }, [compartilhado.data, qualidade.data, metricas.data, anterior.data, posts.data, periodoIg.data, adsDiag.data, adsDia.data, wts.data, crm.data, crm.isPending, vendas.data, leadsDia.data, fontes.data, start, fim, hoje, diasPeriodo]);
 
   const leituras = [metricas, anterior, posts, fontes, adsDiag, adsDia, wts, crm, vendas, leadsDia, qualidade];
   return { r, hoje, fim, diasPeriodo, carregando: metricas.isLoading, metricas, anterior, posts, periodoIg, fontes, qualidade,

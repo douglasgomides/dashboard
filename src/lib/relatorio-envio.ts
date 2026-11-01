@@ -28,6 +28,7 @@ import { checarLinguagemCFM, tornarSeguro } from "@/lib/linguagem-cfm";
 import { fmtFormatKey, fmtTaxaPct, median, taxaDoPost } from "@/lib/report-metrics";
 import { saldoSeguidores } from "@/lib/metricas";
 import { lerVendas, type VendasPeriodoBanco } from "@/lib/vendas-periodo";
+import { LIMITES } from "@/lib/limites";
 
 // ---------------------------------------------------------------- tipos
 
@@ -315,14 +316,14 @@ interface Candidata {
   risco?: string;
 }
 
-const MIN_POSTS_FORMATO = 8; // posts no período para comparar formatos
-const MIN_POR_FORMATO = 3;
-const MIN_POSTS_TEMA = 3;
+const MIN_POSTS_FORMATO: number = LIMITES.amostra.conteudo.relatorioPostsFormato; // posts no período para comparar formatos
+const MIN_POR_FORMATO: number = LIMITES.amostra.conteudo.relatorioPorFormato;
+const MIN_POSTS_TEMA: number = LIMITES.amostra.conteudo.relatorioPostsTema;
 const MARGEM = 1.25;
-const MIN_PESSOAS_DUVIDA = 2;
-const MIN_ESPERA_MEDIDA = 10;
+const MIN_PESSOAS_DUVIDA: number = LIMITES.amostra.conteudo.relatorioPessoasDuvida;
+const MIN_ESPERA_MEDIDA: number = LIMITES.amostra.conversas.esperaMedida;
 const ESPERA_ALTA_SEG = 15 * 60;
-const MIN_LEADS_CRM = 30;
+const MIN_LEADS_CRM: number = LIMITES.amostra.crm.leadsRelatorio;
 
 function cobertura(diasComDado: string[], start: string, end: string) {
   const todos = daysBetween(start, end);

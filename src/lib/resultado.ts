@@ -15,6 +15,7 @@ import { ordenarPorScore } from "@/lib/oportunidades";
 import { confiancaPorAmostra, type Insight, type Limitacao, type Responsavel, type Area, type Tom } from "@/lib/insight";
 import { saldoSeguidores } from "@/lib/metricas";
 import { lerVendas, type VendasPeriodoBanco } from "@/lib/vendas-periodo";
+import { LIMITES } from "@/lib/limites";
 
 export interface EntradaResultado {
   /** A tela já mostra a faixa de cobertura no topo: não repetir "Período incompleto" nos alertas. */
@@ -35,6 +36,14 @@ export interface EntradaResultado {
   leadsPorDia?: { dia: string; total: number }[];
   fontes?: { tem_instagram?: boolean; tem_anuncios?: boolean; tem_crm?: boolean; tem_atendimento?: boolean } | null;
   problemasDados?: Insight[]; // dado com erro (qualidade_dados); ids começam com "dado-"
+  /** Outras clínicas que leem a mesma conta do CRM (crm_compartilhado_com): os números do CRM são da conta inteira. */
+  crmCompartilhadoCom?: string[] | null;
+}
+
+/** Aviso de CRM compartilhado, igual ao de Pacientes do período e do ROI. Não separa os números: só avisa. */
+export function avisoCrmCompartilhado(outros: string[] | null | undefined): string | null {
+  if (!outros?.length) return null;
+  return `O CRM desta clínica é o mesmo de ${outros.join(", ")}: os contatos e as vendas abaixo são da conta inteira, não só deste médico. Para separar, a clínica precisa marcar o médico em cada lead (um campo "Médico" no CRM).`;
 }
 
 /** Aviso de mudança de leitura, mostrado junto do número (notas em docs/notas-de-versao.md). */
@@ -175,10 +184,10 @@ function paraInsight(a: Achado, e: EntradaResultado, cob: Cobertura): Insight {
   const nPosts = (e.posts ?? []).length;
   const confianca = deConteudo
     ? a.id === "ritmo"
-      ? confiancaPorAmostra(cob.diasComDado, 10, cobertura)
-      : confiancaPorAmostra(nPosts, 8, cobertura)
+      ? confiancaPorAmostra(cob.diasComDado, LIMITES.amostra.periodo.diasTendencia, cobertura)
+      : confiancaPorAmostra(nPosts, LIMITES.amostra.conteudo.postsConclusao, cobertura)
     : m.area === "anuncios"
-      ? confiancaPorAmostra(e.adsDiag?.campanhas.length ?? 0, 3)
+      ? confiancaPorAmostra(e.adsDiag?.campanhas.length ?? 0, LIMITES.amostra.anuncios.campanhasRegua)
       : "alta";
   const riscos: string[] = [];
   if (deConteudo && cobertura < 0.9 && cob.diasComDado > 0) riscos.push(`O período tem ${cob.diasComDado} de ${cob.diasPeriodo} dias com dado.`);
@@ -345,11 +354,12 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
   if (crmLeitura === "medido") {
     const crm = e.crm!;
     const v = lerVendas(crm.ganhos, crm.vendas ?? null, e.start);
+    const comp = avisoCrmCompartilhado(e.crmCompartilhadoCom);
     out.push({
       id: "leads",
-      rotulo: "Novos contatos no CRM",
+      rotulo: comp ? "Novos contatos no CRM (conta inteira)" : "Novos contatos no CRM",
       valor: int(crm.novos),
-      explicacao: `Pessoas que entraram no CRM da clínica no período.${v.frase ? ` ${v.frase[0].toUpperCase()}${v.frase.slice(1)}.` : ""}${v.indisponivel ? ` ${v.indisponivel}` : ""} Depende de a equipe registrar no CRM. ${AVISO_CRM_ZERO}`,
+      explicacao: `${comp ? `${comp} ` : ""}Pessoas que entraram no CRM da clínica no período.${v.frase ? ` ${v.frase[0].toUpperCase()}${v.frase.slice(1)}.` : ""}${v.indisponivel ? ` ${v.indisponivel}` : ""} Depende de a equipe registrar no CRM. ${AVISO_CRM_ZERO}`,
       status: null,
       rota: "/$clientId/crm-painel",
       botao: "Ver onde o funil perde gente",
@@ -479,7 +489,8 @@ export function montarResultado(e: EntradaResultado): Resultado {
   const crmLeitura = leituraCrm(e);
   if (crmLeitura === "medido" && e.crm!.novos > 0) {
     const v = lerVendas(e.crm!.ganhos, e.crm!.vendas ?? null, e.start);
-    resumo.push(`${int(e.crm!.novos)} novos contatos entraram no CRM${v.frase ? `; ${v.frase}` : ""}.${v.indisponivel ? ` ${v.indisponivel}` : ""}`);
+    const outros = e.crmCompartilhadoCom ?? [];
+    resumo.push(`${int(e.crm!.novos)} novos contatos entraram no CRM${outros.length ? ` (conta inteira do CRM, a mesma de ${outros.join(", ")})` : ""}${v.frase ? `; ${v.frase}` : ""}.${v.indisponivel ? ` ${v.indisponivel}` : ""}`);
   } else if (crmLeitura === "medido") {
     resumo.push("Nenhum contato novo entrou no CRM no período.");
   } else if (crmLeitura === "sem_dado") {

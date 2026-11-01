@@ -1,3 +1,4 @@
+import { LIMITES } from "@/lib/limites";
 /**
  * Plano da semana: regras puras (semana, valor em jogo, ordem, textos). Um motor só para o SAP (entrada) e o Nexo
  * (continuidade): o histórico fica na clínica, não no produto. A geração e a conferência ficam em
@@ -42,7 +43,7 @@ export function ordenar<T extends { valor_brl: number | null; n: number }>(itens
 }
 
 /** Parte da lista que precisa ter recebido resposta para a ação contar como feita pelos dados. */
-export const MINIMO_FEITA = 0.8;
+export const MINIMO_FEITA: number = LIMITES.amostra.plano.fracaoRespondida;
 
 /**
  * Resultado de uma ação de pacientes: quantos responderam, quantos agendaram, valor gerado. Feita só quando a maior
@@ -68,7 +69,7 @@ export function parcial(medicao: Record<string, unknown> | null | undefined): { 
 /** Dias que uma ação precisa ter para entrar no aprendizado (o paciente leva tempo para agendar). */
 export const MATURACAO_DIAS = 14;
 /** Pacientes atendidos necessários para trocar a taxa padrão pela da clínica. */
-export const MINIMO_ATENDIDOS = 20;
+export const MINIMO_ATENDIDOS: number = LIMITES.amostra.crm.atendidosTaxaPropria;
 
 export interface MedicaoHistorico {
   criado_em?: string | null;

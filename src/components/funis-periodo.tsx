@@ -26,7 +26,9 @@ export function FunisPeriodo({ clientId, start, end }: { clientId: string; start
           não somados. Os números contam só os leads que entraram no período escolhido no topo da página. Os grupos são os
           mesmos do CRM (por exemplo, Resgate para a base antiga e Campanhas). Leads criados em lote (15 ou mais no mesmo
           minuto) são planilha importada: aparecem como "importados" e não contam como leads que entraram, mas os ganhos
-          deles contam.
+          deles contam. A coluna de consulta agendada mostra quantos leads do período estão hoje na etapa marcada como
+          consulta agendada; o número de “Agendaram” da tela Pacientes do período usa outra régua (pessoas que entraram
+          numa etapa de agendamento no período, mais a leitura das conversas) e costuma ser maior.
         </>
       }
     >
@@ -43,7 +45,7 @@ export function FunisPeriodo({ clientId, start, end }: { clientId: string; start
                   <tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}>
                     <th className="py-1 pr-2 font-medium">Funil</th>
                     <th className="py-1 pr-2 text-right font-medium">Entraram</th>
-                    <th className="py-1 pr-2 text-right font-medium">Consulta agendada</th>
+                    <th className="py-1 pr-2 text-right font-medium" title="Leads do período que hoje estão numa etapa marcada como consulta agendada. Não é o mesmo que “Agendaram” em Pacientes do período, que conta pessoas que entraram na etapa no período e a leitura das conversas.">Na etapa de consulta agendada (hoje)</th>
                     <th className="py-1 pr-2 text-right font-medium">Ganhos</th>
                     <th className="py-1 pr-2 font-medium">O ganho fica em</th>
                     <th className="py-1 pr-2 text-right font-medium">Valor ganho</th>
