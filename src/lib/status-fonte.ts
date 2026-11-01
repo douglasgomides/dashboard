@@ -5,6 +5,9 @@
 //   verde     0 a 1 dia sem dado novo
 //   amarelo   2 a 3 dias
 //   vermelho  mais de 3 dias, nenhum dado ainda, ou erro na última atualização
+//   cinza "Sem movimento"  mais de 3 dias sem dado novo, mas a atualização rodou sem erro hoje ou ontem e não há
+//             aviso de parada: a origem só não teve atividade (nenhum lead, nenhuma conversa). Não é falha técnica.
+//   amarelo "Atenção"  anúncios em dia, mas uma das contas do cliente tem aviso (ex.: conta parada há 39 dias)
 //   (CRM e WhatsApp só ganham dado em dia de expediente: para eles os dias contados são úteis, sem fim de semana e feriado)
 //   (Instagram: a Meta só fecha o dia 2 dias depois, então o último dia completo é sempre "hoje menos 2"; esses 2 dias não contam como atraso)
 //   cinza     não ligado (ou marcado como "não usa", quando é intencional)
@@ -40,7 +43,7 @@ export interface StatusFonte {
   cor: CorStatus;
   ligado: boolean;
   naoUsa: boolean;
-  rotulo: string; // "Em dia", "Atrasada", "Parada", "Erro", "Sem dado", "Não ligado", "Não usa"
+  rotulo: string; // "Em dia", "Atenção", "Atrasada", "Parada", "Sem movimento", "Erro", "Sem dado", "Não ligado", "Não usa"
   dias: number | null; // dias sem dado novo
   data: string | null; // dd/mm do último dado
   detalhe: string; // frase curta: "até 09/10 · 5 dias sem dado novo"
@@ -105,7 +108,19 @@ export function statusDaFonte(e: EntradaStatus, hoje: string = hojeBrasilia()): 
   const un = contaDiasUteis(e.fonte) ? "útil" : "";
   const quando = `até ${data} · ${dias === 0 ? "hoje" : dias === 1 ? `1 dia${un ? " útil" : ""} sem dado novo` : `${dias} dias${un ? " úteis" : ""} sem dado novo`}`;
   if (erro) return { ...base, cor: "vermelho", rotulo: "Erro", detalhe: quando, peso: 3 };
+  const donoAviso = e.motivo_dono && e.motivo_dono !== "origem" && e.motivo_dono !== "manual" ? e.motivo_dono : null;
+  // Anúncios: o "até" é o da conta mais recente. Se outra conta do cliente tem aviso gravado (parada, pagamento), o
+  // status não pode ficar verde só porque uma conta está em dia (HOMS: uma conta em dia, outra parada há 39 dias).
+  if (dias <= 1 && e.fonte === "anuncios" && motivo && donoAviso) {
+    return { ...base, cor: "amarelo", rotulo: "Atenção", detalhe: `até ${data} · uma conta com aviso`, peso: 2 };
+  }
   if (dias <= 1) return { ...base, cor: "verde", rotulo: "Em dia", detalhe: `até ${data}`, peso: 1 };
+  // Sem movimento: a atualização rodou sem erro hoje ou ontem e não há aviso de parada. A origem só não teve atividade;
+  // pintar de vermelho "Dados parados" acusava falha técnica onde não havia (Mariela/CRM, auditoria 01/11/2026).
+  const rodouAgora = !!e.ultimo_sucesso && diasEntre(hoje, e.ultimo_sucesso.slice(0, 10)) <= 1;
+  if (dias > 3 && rodouAgora && !donoAviso) {
+    return { ...base, cor: "cinza", rotulo: "Sem movimento", detalhe: `até ${data} · sem atividade nova na origem`, peso: 1 };
+  }
   if (dias <= 3) return { ...base, cor: "amarelo", rotulo: "Atrasada", detalhe: quando, peso: 2 };
   return { ...base, cor: "vermelho", rotulo: "Parada", detalhe: quando, peso: 3 };
 }
@@ -119,7 +134,7 @@ export const LEGENDA_STATUS: { cor: CorStatus; texto: string }[] = [
   { cor: "verde", texto: "Em dia (0–1 dia)" },
   { cor: "amarelo", texto: "Atrasada (2–3 dias)" },
   { cor: "vermelho", texto: "Parada (+3 dias) ou erro" },
-  { cor: "cinza", texto: "Não ligado / não usa" },
+  { cor: "cinza", texto: "Não ligado, não usa ou sem movimento (atualização em dia, sem atividade na origem)" },
 ];
 
 /** Variável CSS de cada cor (os tokens do tema). */

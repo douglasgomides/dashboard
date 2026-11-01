@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { statusDoCliente, tomDaFonte, ddmm, diasDeAtraso, type LinhaFonte } from "@/lib/saude-fontes";
+import { statusDoCliente, tomDaFonte, ddmm, atrasoDaFonte, type LinhaFonte } from "@/lib/saude-fontes";
 import { supabase } from "@/integrations/supabase/client";
 import { motivoDaLinha, ROTULO_DONO } from "@/lib/motivos";
 
@@ -93,13 +93,21 @@ function descrever(rotulo: string, l: LinhaFonte | undefined, conectada: boolean
     if (l?.last_error) return { fonte, rotulo, tom: "ruim", texto: "erro", detalhe: tituloDaFonte(l) ?? "A última tentativa de buscar dados falhou." };
     return { fonte, rotulo, tom: "neutro", texto: "sem dado", detalhe: `Nenhum dado de ${rotulo} encontrado ainda.` };
   }
-  const atraso = diasDeAtraso(l.data_ate);
+  // Mesma régua do status (dias úteis para CRM e WhatsApp): antes o texto contava dias corridos e a cor, dias úteis.
+  const atraso = atrasoDaFonte(l);
+  const uteis = l.fonte === "crm" || l.fonte === "atendimento" ? " úteis" : "";
   const tom = tomDaFonte(l);
   const m = motivoDaLinha(l);
-  const texto = tom === "bom" ? `até ${ddmm(l.data_ate)}` : `até ${ddmm(l.data_ate)} · ${atraso} dias sem dado novo`;
+  const ate = `até ${ddmm(l.data_ate)}`;
+  const texto =
+    tom === "bom" ? ate
+      : tom === "neutro" ? `${ate} · sem movimento`
+        : tom === "atencao" && atraso <= 1 ? `${ate} · aviso em uma conta`
+          : `${ate} · ${atraso} dia${atraso === 1 ? "" : "s"}${uteis} sem dado novo`;
   const detalhe = [
     `Último dado disponível: ${l.data_ate.split("-").reverse().join("/")}.`,
     tom === "bom" ? "Em dia (a Meta fecha os números de ontem e hoje ao longo do dia)." : null,
+    tom === "neutro" ? "A atualização rodou sem erro; a origem só não teve atividade nova. Não é falha técnica." : null,
     m ? `${ROTULO_DONO[m.dono]}: ${m.texto}` : l.last_error ? `Erro na última tentativa: ${l.last_error}` : null,
   ]
     .filter(Boolean)

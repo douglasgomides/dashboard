@@ -3,8 +3,10 @@ import { sincronizarShortio } from "../_lib/shortio-sync.js";
 import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
-import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";
-import { runMetaAdsGraphSync } from "../_lib/meta-ads-graph-sync.js";
+import { runMetaAdsSync, leituraDaWindsor } from "../_lib/meta-ads-sync.js";
+import { runMetaAdsGraphSync, leituraDaGraph } from "../_lib/meta-ads-graph-sync.js";
+import { consolidarStatusAnuncios, type LeituraConta } from "../_lib/anuncios-status.js";
+import { registrarStatusGeral } from "../_lib/sync-status.js";
 import { runAdsPlanilhaSync } from "../_lib/ads-planilha-sync.js";
 
 // Gasto de mídia do Meta, por dia e por campanha, via Windsor.
@@ -69,8 +71,9 @@ const PISO_DIAS_ANUNCIOS = 30;
   // (HOMS, Sergio, Antônio, Ana Claudia) só atualizavam no clique do botão.
   const urlSb: string = SUPABASE_URL;
   const chaveSb: string = SUPABASE_SERVICE_ROLE_KEY;
+  const novoSb = () => createClient(urlSb, chaveSb, { auth: { persistSession: false, autoRefreshToken: false } });
   async function rodarGraph() {
-    const contas = await runMetaAdsGraphSync({
+    return runMetaAdsGraphSync({
       accessToken: process.env.META_ADS_TOKEN,
       supabaseUrl: urlSb,
       supabaseServiceRoleKey: chaveSb,
@@ -79,13 +82,18 @@ const PISO_DIAS_ANUNCIOS = 30;
       dateTo,
       clientId,
     });
-    await recordSyncStatusPorCliente(
-      createClient(urlSb, chaveSb, { auth: { persistSession: false, autoRefreshToken: false } }),
-      "anuncios",
-      contas.map((c) => ({ clientId: c.client_id, rows: c.rows, errors: c.errors })),
-      { okSeHouveLinhas: true },
-    );
-    return contas;
+  }
+  // Status de anúncios POR CONTA, juntado por cliente no fim (anuncios-status.ts): "ok" só quando cada conta ativa
+  // do cliente foi lida por inteiro, por qualquer via. Roda depois da planilha para que o resultado das contas valha.
+  async function consolidar(leituras: LeituraConta[]) {
+    const resumo = await consolidarStatusAnuncios(novoSb(), leituras.map((l) => l.clientId), leituras);
+    let precisaReconferir = 0;
+    let clientesComFalha = 0;
+    for (const r of resumo.values()) {
+      precisaReconferir += r.precisaReconferir;
+      if (!r.ok) clientesComFalha++;
+    }
+    return { clientes: resumo.size, clientes_com_falha: clientesComFalha, precisa_reconferir: precisaReconferir };
   }
 
   if (fonte === "graph") {
@@ -114,12 +122,6 @@ const PISO_DIAS_ANUNCIOS = 30;
         dateTo,
         clientId,
       });
-      await recordSyncStatusPorCliente(
-        createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
-        "anuncios",
-        contas.map((c) => ({ clientId: c.client_id, rows: c.rows, errors: c.errors })),
-        { okSeHouveLinhas: true },
-      );
       // Planilha de distribuição também roda aqui: o n8n chama Windsor e Graph separados, e só o caminho "ambas" a lia,
       // então ela ficou sem leitura desde 19/10/2026 (auditoria 30/10).
       let planilha: unknown = undefined;
@@ -138,8 +140,9 @@ const PISO_DIAS_ANUNCIOS = 30;
         planilha = { erro: err instanceof Error ? err.message : String(err) };
         planilhaComErro = true;
       }
-      const temErro = contas.some((c) => c.errors.length > 0) || planilhaComErro;
-      res.status(temErro ? 207 : 200).json({ fonte: "graph", synced_at: new Date().toISOString(), contas, planilha });
+      const status = await consolidar(contas.map(leituraDaGraph));
+      const temErro = contas.some((c) => c.errors.length > 0) || planilhaComErro || status.clientes_com_falha > 0;
+      res.status(temErro ? 207 : 200).json({ fonte: "graph", synced_at: new Date().toISOString(), contas, planilha, status });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -157,40 +160,15 @@ const PISO_DIAS_ANUNCIOS = 30;
       clientId,
     });
 
-    await recordSyncStatusPorCliente(
-      createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
-      "anuncios",
-      // Só o que a Windsor efetivamente entregou: o erro dela sobre contas que
-      // a Graph alimenta é esperado e apagaria o sucesso registrado pela Graph.
-      results.filter((r) => r.rows > 0).map((r) => ({ clientId: r.clientId, rows: r.rows, errors: [] })),
-    );
-    // Conta que nenhuma via enxerga: a Windsor não devolve nada e a Graph não tem a conta (sem token próprio). Antes
-    // ficava em silêncio e o diagnóstico só via "sem gasto" (Dra. Glauce: conta sem ads_read, auditoria 30/10/2026).
-    try {
-      const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-      const vazias = results.filter((r) => r.rows === 0).map((r) => r.clientId);
-      if (vazias.length) {
-        const { data: viaGraph } = await sb.from("client_ad_accounts").select("client_id").in("client_id", vazias).eq("active", true).not("access_token", "is", null);
-        const cobertas = new Set((viaGraph ?? []).map((c) => c.client_id as string));
-        // Conta pausada também volta vazia: só é "invisível" se nunca trouxe dado nos últimos 120 dias.
-        const desde = new Date(Date.now() - 120 * 86400_000).toISOString().slice(0, 10);
-        const { data: comDado } = await sb.from("meta_ads_daily").select("client_id").in("client_id", vazias).gte("date", desde).limit(5000);
-        const jaTrouxe = new Set((comDado ?? []).map((c) => c.client_id as string));
-        const invisiveis = results.filter((r) => r.rows === 0 && !cobertas.has(r.clientId) && !jaTrouxe.has(r.clientId));
-        await recordSyncStatusPorCliente(sb, "anuncios", invisiveis.map((r) => ({
-          clientId: r.clientId,
-          rows: 0,
-          errors: [r.errors[0] ?? "A conta de anúncios cadastrada não devolve nenhum dado: confira se o dono da conta deu acesso de leitura (ads_read)"],
-        })));
-      }
-    } catch {
-      /* o aviso é um extra: não derruba o sync */
-    }
+    // O status não é mais gravado aqui (só contas com linha e sempre "sem erro" escondia a conta que falhou e a conta
+    // que ninguém lê). Cada conta foi registrada pela via; o cliente é consolidado no fim, depois da Graph e da planilha.
+    const leituras: LeituraConta[] = results.map(leituraDaWindsor);
     let graph: unknown = undefined;
     let graphComErro = false;
     if (fonte === "ambas") {
       try {
         const contasGraph = await rodarGraph();
+        leituras.push(...contasGraph.map(leituraDaGraph));
         graph = contasGraph;
         graphComErro = contasGraph.some((c) => c.errors.length > 0);
       } catch (err) {
@@ -200,6 +178,7 @@ const PISO_DIAS_ANUNCIOS = 30;
     }
     // Links do short.gy (todos os da conta, atribuídos ao cliente pela bio, @ ou nome). Nunca derruba o sync.
     let shortio: unknown = undefined;
+    let shortioComErro = false;
     if (process.env.SHORTIO_API_KEY) {
       try {
         shortio = await sincronizarShortio(
@@ -210,6 +189,11 @@ const PISO_DIAS_ANUNCIOS = 30;
       } catch (err) {
         shortio = { erro: err instanceof Error ? err.message : String(err) };
       }
+      // Falha do Short.io agora fica registrada (antes não havia linha de status e a resposta seguia 200).
+      const s = shortio as { erros?: string[]; erro?: string; links?: number };
+      const erroShortio = s?.erro ?? (s?.erros?.length ? s.erros.join("; ") : null);
+      shortioComErro = !!erroShortio;
+      await registrarStatusGeral(novoSb(), "shortio", { ok: !erroShortio, rows: s?.links ?? null, error: erroShortio });
     }
     // Planilha de distribuição de conteúdo da equipe Doctor Creator, para clientes cuja conta de anúncios não conseguimos ler (clients.ads_planilha_url).
     let planilha: unknown = undefined;
@@ -230,10 +214,12 @@ const PISO_DIAS_ANUNCIOS = 30;
         planilhaComErro = true;
       }
     }
-    const hasErrors = results.some((r) => r.errors.length > 0) || graphComErro || planilhaComErro;
+    const status = await consolidar(leituras);
+    const hasErrors = results.some((r) => r.errors.length > 0) || graphComErro || planilhaComErro || shortioComErro || status.clientes_com_falha > 0;
     res.status(hasErrors ? 207 : 200).json({
       synced_at: new Date().toISOString(),
       accounts: results,
+      status,
       ...(graph !== undefined ? { graph } : {}),
       ...(planilha !== undefined ? { planilha } : {}),
       ...(shortio !== undefined ? { shortio } : {}),

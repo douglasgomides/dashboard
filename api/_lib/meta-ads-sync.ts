@@ -13,6 +13,8 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
+import { protegerContraZero } from "./anuncios-protecao.js";
+import { registrarLeiturasContas } from "./anuncios-status.js";
 
 const WINDSOR_BASE = "https://connectors.windsor.ai/facebook";
 
@@ -63,6 +65,8 @@ export interface AdsAccountSyncResult {
   campaigns: number;
   rows: number;
   errors: string[];
+  /** Linhas de dia passado com gasto > 0 que a Windsor devolveu zeradas e NÃO foram regravadas (conferir na origem). */
+  precisaReconferir?: number;
 }
 
 const BATCH_SIZE = 500;
@@ -266,7 +270,10 @@ async function syncAccount(
     frequency: m.reach && m.reach > 0 ? Number(((m.impressions ?? 0) / m.reach).toFixed(4)) : null,
   }));
 
-  for (const batch of chunk(metricas, BATCH_SIZE)) {
+  // Dia passado com gasto gravado não vira zero sem segunda leitura (auditoria 01/11/2026, dia 21/09 zerado).
+  const protegidas = await protegerContraZero(supabase, client.id, client.meta_ad_account_id, metricas);
+  result.precisaReconferir = protegidas.precisaReconferir;
+  for (const batch of chunk(protegidas.gravar, BATCH_SIZE)) {
     const { error } = await supabase
       .from("meta_ads_daily")
       .upsert(batch, { onConflict: "client_id,ad_account_id,date,campaign_id" });
@@ -349,5 +356,13 @@ export async function runMetaAdsSync(env: AdsSyncEnv): Promise<AdsAccountSyncRes
     }
   }
 
+  // Leitura de cada conta para o status por conta (anuncios-status.ts). Antes o status recebia só as contas com linhas
+  // e sempre "sem erro": erro parcial virava sucesso e a falha total de uma conta antiga não ficava registrada.
+  await registrarLeiturasContas(supabase, results.map(leituraDaWindsor));
   return results;
+}
+
+/** Resultado da Windsor no formato da leitura por conta. */
+export function leituraDaWindsor(r: AdsAccountSyncResult) {
+  return { clientId: r.clientId, adAccountId: r.adAccountId, via: "windsor" as const, rows: r.rows, errors: r.errors, precisaReconferir: r.precisaReconferir ?? 0 };
 }

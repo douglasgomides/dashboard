@@ -37,7 +37,8 @@ export async function dadosAte(clientId: string): Promise<LinhaFonte[]> {
     ultima("meta_ads_daily", "date", clientId),
     // Data do lead, não a da sincronização (o Kommo grava received_at = agora a cada rodada).
     ultima("crm_leads", "occurred_at", clientId).then(async (d) => d ?? (await ultima("crm_leads", "received_at", clientId))),
-    ultima("wts_sessions", "started_at", clientId),
+    // WhatsApp: WTS ou qualquer conversa gravada (Kommo, Clint...), a mesma regra de client_sync_status.
+    Promise.all([ultima("wts_sessions", "started_at", clientId), ultima("conversas", "ultima_msg_em", clientId)]).then(([w, c]) => (w && c ? (w > c ? w : c) : (w ?? c))),
   ]);
   // Instagram vale o dado MAIS ANTIGO entre a conta e os posts (caso da Marcelly: posts parados, conta em dia).
   const ig = igDia && igPost ? (igDia < igPost ? igDia : igPost) : (igDia ?? igPost);
@@ -125,9 +126,14 @@ export function atrasoDaFonte(l: { fonte?: string; data_ate: string | null; last
 export type Tom = "bom" | "atencao" | "ruim" | "neutro";
 const TOM_DA_COR: Record<CorStatus, Tom> = { verde: "bom", amarelo: "atencao", vermelho: "ruim", cinza: "neutro" };
 /** Tom da fonte pela regra única (src/lib/status-fonte.ts). Linha sem data nem erro = sem dado para mostrar. */
-export function tomDaFonte(l: Pick<LinhaFonte, "data_ate" | "last_error"> & { fonte?: string; last_success_at?: string | null } | undefined): Tom {
+export function tomDaFonte(
+  l: Pick<LinhaFonte, "data_ate" | "last_error"> & { fonte?: string; last_success_at?: string | null; motivo?: string | null; motivo_dono?: string | null } | undefined,
+): Tom {
   if (!l || (!l.data_ate && !l.last_error)) return "neutro";
-  return TOM_DA_COR[statusDaFonte({ fonte: l.fonte ?? null, ultimo_sucesso: l.last_success_at ?? null, cadastro: true, data_ate: l.data_ate, last_error: l.last_error }).cor];
+  return TOM_DA_COR[statusDaFonte({
+    fonte: l.fonte ?? null, ultimo_sucesso: l.last_success_at ?? null, cadastro: true, data_ate: l.data_ate, last_error: l.last_error,
+    motivo: l.motivo ?? null, motivo_dono: l.motivo_dono ?? null,
+  }).cor];
 }
 
 // ---------------------------------------------------------------- todos os clientes (admin)

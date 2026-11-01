@@ -17,6 +17,8 @@ export function erroCurto(msg: string | null | undefined, max = 300): string | n
   if (!msg) return null;
   return msg
     .replace(/access_token=[^&\s"']+/gi, "access_token=***")
+    // Chave da Windsor também viaja na URL; agora o erro da Windsor é gravado, então ela é escondida aqui.
+    .replace(/api_key=[^&\s"']+/gi, "api_key=***")
     .replace(/(Bearer\s+)[A-Za-z0-9._\-]+/gi, "$1***")
     .replace(/\s+/g, " ")
     .trim()
@@ -166,7 +168,13 @@ export async function lerDadosAte(
     }
     // Data do lead (occurred_at), não a da sincronização: o Kommo grava received_at = agora a cada rodada.
     if (fonte === "crm") return (await topo("crm_leads", "occurred_at")) ?? (await topo("crm_leads", "received_at"));
-    if (fonte === "atendimento") return await topo("wts_sessions", "started_at");
+    // WhatsApp: WTS ou qualquer conversa gravada (Kommo, Clint, FlwChat, Digisac), a mesma regra de fontes_base.
+    // Antes só o WTS contava, e clientes Clint e Kommo ficavam sem "Dados até" com conversas chegando todo dia.
+    if (fonte === "atendimento") {
+      const [w, c] = await Promise.all([topo("wts_sessions", "started_at"), topo("conversas", "ultima_msg_em")]);
+      if (w && c) return w > c ? w : c;
+      return w ?? c;
+    }
     if (fonte === "instagram") {
       const [a, b] = await Promise.all([
         topo("instagram_account_daily_metrics", "date"),
@@ -178,5 +186,32 @@ export async function lerDadosAte(
     return null;
   } catch {
     return null;
+  }
+}
+
+/** Integrações da conta inteira, sem cliente (Short.io). Linha em sync_status_geral. */
+export type FonteGeral = "shortio";
+
+/** Grava a última tentativa de uma integração da conta inteira. Nunca derruba o sync. */
+export async function registrarStatusGeral(
+  supabase: SupabaseClient<any, any, any>,
+  fonte: FonteGeral,
+  r: { ok: boolean; rows?: number | null; error?: string | null },
+): Promise<void> {
+  try {
+    const agora = new Date().toISOString();
+    await supabase.from("sync_status_geral").upsert(
+      {
+        fonte,
+        last_attempt_at: agora,
+        last_error: r.ok ? null : erroCurto(r.error) ?? "erro desconhecido",
+        updated_at: agora,
+        ...(r.ok ? { last_success_at: agora } : {}),
+        ...(r.rows != null ? { last_rows: r.rows } : {}),
+      },
+      { onConflict: "fonte" },
+    );
+  } catch {
+    /* registrar não pode quebrar o sync (a tabela pode ainda não existir) */
   }
 }

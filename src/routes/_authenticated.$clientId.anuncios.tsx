@@ -3,8 +3,8 @@ import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { statusDoCliente, diasDeAtraso, ddmm } from "@/lib/saude-fontes";
-import { motivoDaLinha, COR_DONO } from "@/lib/motivos";
+import { statusDoCliente, diasDeAtraso } from "@/lib/saude-fontes";
+import { motivoDaLinha, COR_DONO, tituloDaFaixa } from "@/lib/motivos";
 import { SeloDono } from "@/components/selo-dono";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { getAdsPorDia, getAdsDiagnosticoPorObjetivo, getClientFontes, getAdsPlanilha } from "@/lib/client-data";
@@ -51,14 +51,15 @@ function MotivoParada({ clientId }: { clientId: string }) {
   });
   const l = data?.find((x) => x.fonte === "anuncios");
   const parada = l?.data_ate ? diasDeAtraso(l.data_ate) > 3 : false;
-  const m = parada || l?.motivo ? motivoDaLinha(l) : null;
+  // Erro gravado (conta não lida, leitura parcial) também aparece, mesmo com outra conta em dia.
+  const m = parada || l?.motivo || l?.last_error ? motivoDaLinha(l) : null;
   if (!l || !m) return null;
   // Fonte alimentada à mão (planilha de distribuição de conteúdo): não é parada nem erro, e o painel da planilha já explica a origem.
   if (m.dono === "manual") return null;
   return (
     <Faixa icone={AlertTriangle} cor={COR_DONO[m.dono]} alerta>
       <div className="flex flex-wrap items-center gap-2">
-        <b>{l.data_ate ? `Sem dado novo desde ${ddmm(l.data_ate)}` : "Sem dado de anúncios"}</b>
+        <b>{tituloDaFaixa(l.data_ate, parada)}</b>
         <SeloDono dono={m.dono} />
       </div>
       <div className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
