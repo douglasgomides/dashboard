@@ -17,6 +17,7 @@ import { QualidadeLeadsCampanha } from "@/components/anuncios/qualidade-leads";
 import { fmtBRL } from "@/lib/format";
 import { GRUPOS, conversaMaisBarata, planoDeAcao, limitacoesDeAnuncios, unidade, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { BENCHMARKS } from "@/lib/benchmarks";
+import { avisoContaAnuncioCompartilhada, type ContaAnuncioCompartilhada } from "@/lib/conta-anuncio-compartilhada";
 import { InsightCard, ListaLimitacoes, OQueE } from "@/components/insight-card";
 import { MetodologiaAnuncios } from "@/components/anuncios/metodologia";
 import { DiagnosticoCampanhas, Faixa } from "@/components/anuncios/diagnostico-campanhas";
@@ -206,7 +207,7 @@ function ContaCompartilhada({ clientId }: { clientId: string }) {
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("contas_anuncio_compartilhadas", { p_client_id: clientId });
       if (error) return [];
-      return (data ?? []) as { ad_account_id: string; outros_clientes: number; nomes: string[] | null }[];
+      return (data ?? []) as ContaAnuncioCompartilhada[];
     },
     staleTime: 10 * 60_000,
     retry: false,
@@ -216,10 +217,7 @@ function ContaCompartilhada({ clientId }: { clientId: string }) {
     <>
       {data.map((c) => (
         <Faixa key={c.ad_account_id} icone={AlertTriangle} cor="var(--warn)" alerta>
-          A conta de anúncios {c.ad_account_id} também está ligada a {c.outros_clientes} outro{c.outros_clientes > 1 ? "s" : ""} cliente
-          {c.outros_clientes > 1 ? "s" : ""}
-          {c.nomes?.length ? ` (${c.nomes.join(", ")})` : ""}: o gasto e os resultados aparecem inteiros em cada um. Não some os clientes. Para
-          separar, cada cliente precisa da própria conta ou de um filtro por campanha no cadastro.
+          {avisoContaAnuncioCompartilhada(c)}
         </Faixa>
       ))}
     </>

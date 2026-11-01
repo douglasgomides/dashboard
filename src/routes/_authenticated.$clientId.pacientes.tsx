@@ -23,10 +23,12 @@ import {
   fonteDoNumero,
   legendaDoNumero,
   coberturaDoNumero,
+  avisoCrmCompartilhado,
   avisoNaoMedido,
   avisoTelaHonesta,
   avisoAgendouMenosQueFechou,
   textoNaoMedido,
+  notaCrmPorMedico,
   nomeCheckout,
   oQue,
   textoReembolsos,
@@ -113,11 +115,11 @@ function PacientesDoPeriodo() {
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
           {formatRangeLabel({ start, end })}. Cada número é de pessoas, não de conversas. Toque num número para ver quem são.
         </p>
-        {(d.crm_compartilhado_com?.length ?? 0) > 0 && (
-          <p className="text-sm font-medium" style={{ color: "var(--warn, var(--text))" }}>
-            O CRM desta clínica é o mesmo de {d.crm_compartilhado_com!.join(", ")}. Os números abaixo são da conta inteira, não só deste médico.
-            Para separar, a clínica precisa marcar o médico em cada lead (um campo "Médico" no CRM).
-          </p>
+        {avisoCrmCompartilhado(d) && (
+          <p className="text-sm font-medium" style={{ color: "var(--warn, var(--text))" }}>{avisoCrmCompartilhado(d)}</p>
+        )}
+        {notaCrmPorMedico(d) && (
+          <p className="text-xs" style={{ color: "var(--text-dim)" }}>{notaCrmPorMedico(d)}</p>
         )}
         {avisoNaoMedido(d) && (
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>{avisoNaoMedido(d)}</p>
