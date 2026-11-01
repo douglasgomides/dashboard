@@ -14,6 +14,7 @@ import { diaAtual, getAuditoriasSap, getClinicaSap, getFidelizacaoSap, getPlanoS
 import { lerTrackerAuto } from "@/lib/sap-auto";
 import { avaliarGarantia, somarDias } from "@/lib/sap-metas";
 import { MAPA_VAZAMENTOS, montarLeitura, type StatusPasso } from "@/lib/sap-leitura";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const dm = (iso: string) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
@@ -65,7 +66,7 @@ export function LeituraDaSemana({ clientId }: { clientId: string }) {
 
   if (atualQ.isLoading || cadQ.isLoading || planoQ.isLoading || antQ.isLoading || sinQ.isLoading || audQ.isLoading || fidQ.isLoading) return <p className="text-sm" style={{ color: "var(--text-dim)" }}>Montando a leitura da semana…</p>;
   const erroLeitura = atualQ.error || cadQ.error || planoQ.error || antQ.error || sinQ.error || audQ.error || fidQ.error;
-  if (erroLeitura) return <p className="text-sm" style={{ color: "var(--crit)" }}>Não foi possível preparar a análise da semana: {(erroLeitura as Error).message}</p>;
+  if (erroLeitura) return <p className="text-sm" style={{ color: "var(--crit)" }}>Não foi possível preparar a análise da semana: {mensagemDeErroAcao(erroLeitura)}</p>;
   if (!leitura) return null;
 
   const p = leitura.principal;

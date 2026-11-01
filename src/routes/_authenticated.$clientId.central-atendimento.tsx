@@ -6,6 +6,7 @@ import { rotuloRelacionamento, type Relacionamento } from "@/lib/relacionamento"
 import { canalApi, central, cancelarPreparado, relacionamentos, horarioCentral, NOME_ESTADO, type ConfigCentral, type ConversaCentral, type DetalheCentral, type EstadoAtendimento, type ListaCentral, type MensagemCentral } from "@/lib/central-atendimento";
 import "@/styles/crm-kanban.css";
 import "@/styles/central-atendimento.css";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 export const Route=createFileRoute("/_authenticated/$clientId/central-atendimento")({component:CentralAtendimento});
 function CentralAtendimento() {
@@ -68,7 +69,7 @@ function Conversa({clientId,inicial,relacionamento,config,texto,onTexto,onChange
  async function agir(acao:string,dados:Record<string,unknown>={}){
   setErro('');setAviso('');setOcupado(true);
   try{await central(clientId,acao,{conversa_id:inicial.id,versao:d?.versao,...dados});await onChanged();}
-  catch(e){setErro((e as Error).message);await q.refetch();}finally{setOcupado(false);}
+  catch(e){setErro(mensagemDeErroAcao(e));await q.refetch();}finally{setOcupado(false);}
  }
  async function enviar(e?:FormEvent,retomar?:{id:string;texto:string}) {
   e?.preventDefault();if(ocupado)return;setOcupado(true);setErro('');setAviso('');
@@ -81,15 +82,15 @@ function Conversa({clientId,inicial,relacionamento,config,texto,onTexto,onChange
    else if(r.estado==='falhou'){pedido.current=null;setAviso('O envio falhou. Confira o motivo abaixo.');}
    else setAviso('Há um envio em processamento. Atualize a conversa para conferir o resultado.');
    await onChanged();
-  }catch(error){setErro((error as Error).message);await q.refetch();}finally{setOcupado(false);}
+  }catch(error){setErro(mensagemDeErroAcao(error));await q.refetch();}finally{setOcupado(false);}
  }
  async function anteriores(){
   const first=mensagens[0];if(!first)return;setOcupado(true);setErro('');
   try{const r=await central<DetalheCentral>(clientId,'mensagens',{conversa_id:inicial.id,antes:first.enviada_em,antes_id:first.id});setAntigas(a=>[...r.mensagens,...a]);setFimAntigas(!r.tem_anteriores);}
-  catch(e){setErro((e as Error).message);}finally{setOcupado(false);}
+  catch(e){setErro(mensagemDeErroAcao(e));}finally{setOcupado(false);}
  }
- async function descartar(id:string){setOcupado(true);setErro('');try{await cancelarPreparado(clientId,id,observacao);setConferencia(null);setObservacao('');setAviso('Resposta preparada descartada. Nenhuma mensagem foi enviada.');await onChanged();}catch(e){setErro((e as Error).message);await q.refetch();}finally{setOcupado(false);}}
- async function vincular(){setOcupado(true);setErro('');try{await central(clientId,'criar_card',{conversa_id:inicial.id});setAviso('Oportunidade vinculada ao CRM.');await onChanged();}catch(e){setErro((e as Error).message);}finally{setOcupado(false);}}
+ async function descartar(id:string){setOcupado(true);setErro('');try{await cancelarPreparado(clientId,id,observacao);setConferencia(null);setObservacao('');setAviso('Resposta preparada descartada. Nenhuma mensagem foi enviada.');await onChanged();}catch(e){setErro(mensagemDeErroAcao(e));await q.refetch();}finally{setOcupado(false);}}
+ async function vincular(){setOcupado(true);setErro('');try{await central(clientId,'criar_card',{conversa_id:inicial.id});setAviso('Oportunidade vinculada ao CRM.');await onChanged();}catch(e){setErro(mensagemDeErroAcao(e));}finally{setOcupado(false);}}
  return <section className="crm-box central-detail" aria-label={`Conversa com ${inicial.pessoa_nome}`} aria-busy={ocupado}>
   <div className="central-heading"><div><h2>{inicial.pessoa_nome}</h2><p className="text-xs">{inicial.canal==='instagram'?'Instagram':'WhatsApp'} {inicial.telefone_final??''}</p><SeloRelacionamento r={relacionamento} detalhe/></div><button className="crm-link central-back" onClick={onClose}><ArrowLeft size={16} aria-hidden/> Voltar à fila</button></div>
   {q.isPending&&<p role="status">Carregando histórico…</p>}
@@ -117,8 +118,8 @@ function SeloRelacionamento({r,detalhe}:{r?:Relacionamento;detalhe?:boolean}) {
 function Canais({clientId,config,onChanged}:{clientId:string;config:ConfigCentral;onChanged:()=>Promise<void>}) {
  const ready=useQuery({queryKey:['central-servidor',clientId],queryFn:()=>canalApi<{configurada:boolean;webhook:string}>(clientId),retry:false});
  const [canal,setCanal]=useState<'whatsapp'|'instagram'>('whatsapp'),[conta,setConta]=useState(''),[waba,setWaba]=useState(''),[token,setToken]=useState(''),[confirmo,setConfirmo]=useState(false),[ocupado,setOcupado]=useState(false),[erro,setErro]=useState(''),[aviso,setAviso]=useState(''),[desligar,setDesligar]=useState<string|null>(null);
- async function conectar(e:FormEvent){e.preventDefault();setOcupado(true);setErro('');setAviso('');try{await canalApi(clientId,{acao:'conectar',canal,conta_externa:conta,...(canal==='whatsapp'?{waba_id:waba}:{}),token});setAviso('Canal configurado. Envie uma mensagem de uma conta de teste autorizada para conferir o recebimento.');setConta('');setWaba('');setConfirmo(false);await onChanged();}catch(e){setErro((e as Error).message);}finally{setToken('');setOcupado(false);}}
- async function desconectar(id:string){setOcupado(true);setErro('');try{await canalApi(clientId,{acao:'desconectar',canal_id:id});setDesligar(null);setAviso('Canal desconectado da central. O histórico foi preservado.');await onChanged();}catch(e){setErro((e as Error).message);}finally{setOcupado(false);}}
+ async function conectar(e:FormEvent){e.preventDefault();setOcupado(true);setErro('');setAviso('');try{await canalApi(clientId,{acao:'conectar',canal,conta_externa:conta,...(canal==='whatsapp'?{waba_id:waba}:{}),token});setAviso('Canal configurado. Envie uma mensagem de uma conta de teste autorizada para conferir o recebimento.');setConta('');setWaba('');setConfirmo(false);await onChanged();}catch(e){setErro(mensagemDeErroAcao(e));}finally{setToken('');setOcupado(false);}}
+ async function desconectar(id:string){setOcupado(true);setErro('');try{await canalApi(clientId,{acao:'desconectar',canal_id:id});setDesligar(null);setAviso('Canal desconectado da central. O histórico foi preservado.');await onChanged();}catch(e){setErro(mensagemDeErroAcao(e));}finally{setOcupado(false);}}
  return <section className="crm-box crm-form" aria-label="Configuração dos canais"><h2>Canais e conexão</h2><p>WhatsApp Business pela API oficial e Direct de conta profissional do Instagram. A integração começa pelas duas clínicas piloto.</p>
   {erro&&<p role="alert">{erro}</p>}{aviso&&<p role="status">{aviso}</p>}
   {config.canais.length===0&&<p>Nenhum canal oficial configurado nesta clínica.</p>}

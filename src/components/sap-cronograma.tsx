@@ -11,6 +11,7 @@ import { FASES, dataDoDia, diaDoPrograma, faseNoDia, resumoPausas, somar, type P
 import { AlertaPapeis, CardTarefa, LinhaContadores, useTarefas } from "@/components/sap-tarefas";
 import { PAPEIS, ehDoPapel, type PapelId, type Tarefa } from "@/lib/sap-tarefas";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const campo = { borderColor: "var(--border)", background: "var(--surface)" } as const;
 const dm = (iso: string | null) => (iso ? iso.split("-").reverse().slice(0, 2).join("/") : "—");
@@ -222,7 +223,7 @@ function ContratoSap({ clinica, podeEditar, d90 }: { clinica: SapCadastro; podeE
             <button type="button" disabled={salvar.isPending} onClick={() => salvar.mutate()} className="min-h-[34px] rounded-lg px-3 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>Salvar</button>
             <button type="button" onClick={() => setEd(null)} className="min-h-[34px] px-2 text-sm" style={{ color: "var(--text-dim)" }}>Cancelar</button>
           </div>
-          {salvar.isError && <span className="text-xs sm:col-span-2" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</span>}
+          {salvar.isError && <span className="text-xs sm:col-span-2" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</span>}
         </div>
       )}
     </Painel>
@@ -286,7 +287,7 @@ function PausasEAtrasos({ clinica, pausas, atrasos, hoje }: { clinica: SapCadast
         <label className="min-w-[160px] flex-1 text-xs">Motivo<input value={np.motivo} onChange={(x) => setNp({ ...np, motivo: x.target.value })} className="mt-0.5 block min-h-[34px] w-full rounded-md border px-2 text-sm" style={campo} /></label>
         <button type="button" disabled={pausa.isPending || !np.inicio || (!!np.fim && np.fim < np.inicio)} onClick={() => pausa.mutate({ p: { tipo: np.tipo, inicio: np.inicio, fim: np.fim || null, motivo: np.motivo } })} className="min-h-[34px] rounded-lg border px-3 text-sm font-semibold disabled:opacity-60" style={{ borderColor: "var(--border)" }}>Registrar pausa</button>
       </div>
-      {(pausa.isError || atraso.isError) && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{((pausa.error ?? atraso.error) as Error).message}</p>}
+      {(pausa.isError || atraso.isError) && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(pausa.error ?? atraso.error)}</p>}
     </Painel>
   );
 }

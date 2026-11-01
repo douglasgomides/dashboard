@@ -15,10 +15,12 @@ import {
   listInstagramAccounts,
   removeClientMember,
   removeCrmConnection,
+  renovarWebhookKommo,
   sendPasswordReset,
   type CreateClientUserInput,
 } from "@/lib/admin-data";
 import type { CrmProvider } from "@/integrations/supabase/types";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const CRM_PROVIDER_LABELS: Record<CrmProvider, string> = {
   kommo: "Kommo",
@@ -90,7 +92,7 @@ function ConnectInstagramForm({ clientId }: { clientId: string }) {
       </button>
       {mutation.isError && (
         <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
-          {(mutation.error as Error).message}
+          {mensagemDeErroAcao(mutation.error)}
         </p>
       )}
     </form>
@@ -198,7 +200,7 @@ function ConnectCrmForm({ clientId }: { clientId: string }) {
       </button>
       {mutation.isError && (
         <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
-          {(mutation.error as Error).message}
+          {mensagemDeErroAcao(mutation.error)}
         </p>
       )}
       {generatedUrl && (
@@ -230,6 +232,15 @@ function CrmConnectionsList({ clientId }: { clientId: string }) {
     mutationFn: (id: string) => removeCrmConnection(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-crm-connections", clientId] }),
   });
+  // A URL do webhook só aparece quando é gerada: o navegador não lê o segredo de volta do banco.
+  const [novaUrl, setNovaUrl] = useState<{ id: string; url: string } | null>(null);
+  const renovarMutation = useMutation({
+    mutationFn: (id: string) => renovarWebhookKommo(id),
+    onSuccess: (c) => {
+      setNovaUrl({ id: c.id, url: kommoWebhookUrl(c.id, c.webhook_secret) });
+      queryClient.invalidateQueries({ queryKey: ["admin-crm-connections", clientId] });
+    },
+  });
 
   if (!connections?.length) return null;
   return (
@@ -251,14 +262,34 @@ function CrmConnectionsList({ clientId }: { clientId: string }) {
               Remover
             </button>
           </div>
-          {c.provider === "kommo" && c.webhook_secret && (
-            <input autoComplete="off"
-              readOnly
-              value={kommoWebhookUrl(c.id, c.webhook_secret)}
-              onFocus={(e) => e.target.select()}
-              className="mt-1 w-full rounded-md border px-2 py-1 text-xs"
-              style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-            />
+          <div className="mt-0.5 text-xs">
+            {c.tem_token == null ? "" : c.tem_token ? "Token salvo" : "Sem token salvo"}
+            {c.provider === "kommo" && c.tem_webhook != null ? ` · ${c.tem_webhook ? "URL de webhook gerada" : "sem URL de webhook"}` : ""}
+            {c.provider === "kommo" && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!c.tem_webhook || window.confirm("Gerar uma URL nova? A atual para de funcionar até você colar a nova nos Webhooks da Kommo.")) renovarMutation.mutate(c.id);
+                }}
+                disabled={renovarMutation.isPending}
+                className="ml-2 text-xs font-semibold"
+                style={{ color: "var(--accent)" }}
+              >
+                {c.tem_webhook ? "Gerar nova URL" : "Gerar URL"}
+              </button>
+            )}
+          </div>
+          {c.provider === "kommo" && novaUrl?.id === c.id && (
+            <>
+              <input autoComplete="off"
+                readOnly
+                value={novaUrl.url}
+                onFocus={(e) => e.target.select()}
+                className="mt-1 w-full rounded-md border px-2 py-1 text-xs"
+                style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+              />
+              <div className="mt-0.5 text-xs">Copie agora: por segurança, a URL não é mostrada de novo.</div>
+            </>
           )}
         </li>
       ))}
@@ -358,7 +389,7 @@ function NewUserForm({ clientId, nomeCliente }: { clientId: string; nomeCliente:
         </button>
         {mutation.isError && (
           <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
-            {(mutation.error as Error).message}
+            {mensagemDeErroAcao(mutation.error)}
           </p>
         )}
       </form>
@@ -441,7 +472,7 @@ function MembersList({ clientId }: { clientId: string }) {
           {resetMutation.isPending ? "Enviando…" : "Enviar link"}
         </button>
         {resetMutation.isSuccess && <span style={{ color: "var(--good)" }}>Link enviado.</span>}
-        {resetMutation.isError && <span style={{ color: "var(--danger)" }}>{(resetMutation.error as Error).message}</span>}
+        {resetMutation.isError && <span style={{ color: "var(--danger)" }}>{mensagemDeErroAcao(resetMutation.error)}</span>}
       </div>
 
       <table className="w-full text-sm">

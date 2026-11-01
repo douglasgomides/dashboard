@@ -9,6 +9,7 @@ import { Carregando, ErroCarga } from "@/components/sem-fonte";
 import { NOME_MEMORIA } from "@/lib/brand-brain";
 import { EXTENSOES_TRANSCRICAO, textoDoArquivo } from "@/lib/reunioes-arquivo";
 import { lerResultado, MAX_NOTAS, MAX_TRANSCRICAO, TIPOS_ENTREGA, type ResultadoReuniao } from "@/lib/reunioes";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 // Reuniões com a clínica: a equipe anota do jeito que quiser; "Processar reunião" vira resumo, entregas da semana e
 // propostas de memória no Brain (aprovadas por uma pessoa em /admin/brain). Só admin, como o Brain.
@@ -137,7 +138,7 @@ function Editor({ clientId, r, aoSalvar }: { clientId: string; r: Reuniao; aoSal
   async function onSalvar() {
     setEstado("salvando"); setAviso(null);
     try { await salvar(); setAviso({ tom: "ok", texto: "Notas salvas." }); }
-    catch (e) { setAviso({ tom: "erro", texto: e instanceof Error ? e.message : String(e) }); }
+    catch (e) { setAviso({ tom: "erro", texto: mensagemDeErroAcao(e) }); }
     finally { setEstado("parado"); }
   }
   async function onProcessar() {
@@ -147,7 +148,7 @@ function Editor({ clientId, r, aoSalvar }: { clientId: string; r: Reuniao; aoSal
       const j = await processar(clientId, r.id);
       await aoSalvar();
       setAviso(j.brain_erro ? { tom: "erro", texto: j.brain_erro } : { tom: "ok", texto: j.memorias_propostas ? `${j.memorias_propostas} memória(s) proposta(s) no Brain para aprovar.` : "Processada. Nenhuma memória nova para o Brain." });
-    } catch (e) { setAviso({ tom: "erro", texto: e instanceof Error ? e.message : String(e) }); }
+    } catch (e) { setAviso({ tom: "erro", texto: mensagemDeErroAcao(e) }); }
     finally { setEstado("parado"); }
   }
   const vazio = !notas.trim() && !transcricao.trim();
@@ -159,7 +160,7 @@ function Editor({ clientId, r, aoSalvar }: { clientId: string; r: Reuniao; aoSal
       const { texto, cortado } = textoDoArquivo(arquivo.name, new Uint8Array(await arquivo.arrayBuffer()));
       setTranscricao(texto); setVerTranscricao(true);
       setAviso({ tom: "ok", texto: `Transcrição carregada de ${arquivo.name}${cortado ? " (cortada no limite de 60 mil caracteres)" : ""}. Salve ou processe a reunião.` });
-    } catch (erro) { setAviso({ tom: "erro", texto: erro instanceof Error ? erro.message : String(erro) }); }
+    } catch (erro) { setAviso({ tom: "erro", texto: mensagemDeErroAcao(erro) }); }
   }
 
   return (

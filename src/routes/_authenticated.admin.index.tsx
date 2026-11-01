@@ -20,8 +20,10 @@ import { useQualidadeDados } from "@/components/qualidade-dados";
 import { LinksSemCliente } from "@/components/links-shortio";
 import { SeloDono } from "@/components/selo-dono";
 import { PainelSaudeFontes } from "@/components/painel-saude-fontes";
+import { SaudeShortio } from "@/components/saude-shortio";
 import { montarProblemasFontes } from "@/lib/saude-problemas";
 import { SemRespostaAgora } from "@/components/sem-resposta-agora";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 
 export const Route = createFileRoute("/_authenticated/admin/")({
@@ -100,7 +102,7 @@ function NewClientForm() {
       </button>
       {mutation.isError && (
         <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
-          {(mutation.error as Error).message}
+          {mensagemDeErroAcao(mutation.error)}
         </p>
       )}
     </form>
@@ -170,7 +172,7 @@ function NewAdminForm() {
       </button>
       {mutation.isError && (
         <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
-          {(mutation.error as Error).message}
+          {mensagemDeErroAcao(mutation.error)}
         </p>
       )}
       {result && (
@@ -432,6 +434,7 @@ function AdminClientsPage() {
           )}
         </div>
       )}
+      <SaudeShortio />
       <PainelSaudeFontes
         problemas={problemas}
         clientes={clients ?? []}

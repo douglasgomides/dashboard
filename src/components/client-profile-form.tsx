@@ -5,6 +5,7 @@ import { Upload, Trash2 } from "lucide-react";
 import { removeClientAvatar, updateClientAvatar, updateClientProfile, uploadClientAvatar, type ClientProfileInput } from "@/lib/admin-data";
 import { ClientAvatar } from "@/components/client-avatar";
 import type { CfmScoreStatus, Tables } from "@/integrations/supabase/types";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const CFM_OPCOES: { value: CfmScoreStatus | ""; label: string }[] = [
   { value: "", label: "Sem avaliação" },
@@ -93,7 +94,7 @@ function ClientProfileEditor({ client }: { client: ClienteDoPerfil }) {
       await queryClient.invalidateQueries({ queryKey: ["client", client.id] });
       await queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
     },
-    onError: (e: unknown) => setErro(e instanceof Error ? e.message : "Não foi possível salvar o perfil. Verifique sua conexão e tente novamente."),
+    onError: (e: unknown) => setErro(mensagemDeErroAcao(e)),
   });
 
   async function escolherFoto(file: File) {
@@ -119,7 +120,7 @@ function ClientProfileEditor({ client }: { client: ClienteDoPerfil }) {
       await queryClient.invalidateQueries({ queryKey: ["client", client.id] });
       await queryClient.invalidateQueries({ queryKey: ["admin-clients"] });
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não foi possível atualizar a foto. Verifique sua conexão e tente novamente.");
+      setErro(mensagemDeErroAcao(e));
     } finally {
       setEnviandoFoto(false);
       if (arquivoRef.current) arquivoRef.current.value = "";

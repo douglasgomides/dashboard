@@ -124,6 +124,9 @@ try {
   assert.equal(direcaoDigisac({ isFromMe: false, type: "reaction" }), "sistema");
   assert.equal(direcaoDigisac({ isFromMe: true, type: "call_log" }), "sistema");
   assert.equal(direcaoDigisac({ isFromMe: false, type: "chat" }), "entrada");
+  // Comentário interno (doc: "type": "comment", // chat or comment) não é fala de ninguém.
+  assert.equal(direcaoDigisac({ isFromMe: true, type: "comment" }), "sistema");
+  assert.equal(direcaoDigisac({ isFromMe: true, type: "chat" }), "saida");
   // 1ª resposta pelas mensagens: aviso e robô não contam; sem marca de quem enviou, não calcula.
   const t = (min: number) => new Date(Date.parse("2026-10-20T12:00:00Z") + min * 60_000).toISOString();
   const conversa = [
@@ -137,6 +140,11 @@ try {
   assert.deepEqual(primeiraRespostaDigisac(conversa), { em: t(13), segundos: 720 });
   assert.equal(primeiraRespostaDigisac(conversa.map(({ userId: _u, ...m }) => m)), null, "sem userId não dá para separar robô de pessoa");
   assert.equal(primeiraRespostaDigisac([{ type: "chat", isFromMe: false, timestamp: t(0) }, { type: "chat", isFromMe: true, userId: null, timestamp: t(1) }]), null);
+  assert.deepEqual(primeiraRespostaDigisac([
+    { type: "chat", isFromMe: false, timestamp: t(0) },
+    { type: "comment", isFromMe: true, userId: "u1", timestamp: t(1) }, // nota interna: o paciente não viu
+    { type: "chat", isFromMe: true, userId: "u1", timestamp: t(5) },
+  ]), { em: t(5), segundos: 300 }, "comentário interno não é 1ª resposta");
   assert.equal(primeiraRespostaDigisac([{ type: "chat", isFromMe: true, userId: "u1", timestamp: t(0) }]), null, "sem mensagem do paciente");
 
   // ---- IA: OpenAI falha (401/429/5xx/rede) e a Anthropic responde, registrando quem serviu ----

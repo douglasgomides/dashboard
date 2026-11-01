@@ -148,14 +148,25 @@ try {
   }
   await check("service_role continua lendo ambos os tenants", async () => { assert.equal((await role("service_role", null, () => rows("select * from meta_ads_daily_v"))).length, 2); });
   await check("membro não lê conexões/tokens CRM", async () => {
-    assert.deepEqual(await role("authenticated", viewer, () => rows("select * from crm_connections")), []);
+    assert.deepEqual(await role("authenticated", viewer, () => rows("select id, provider, subdomain, active from crm_connections")), []);
+    assert.deepEqual(await role("authenticated", viewer, () => rows("select * from crm_conexoes_credenciais($1)", [A])), []);
     await denied(() => role("authenticated", viewer, () => rows("insert into crm_connections(client_id,provider) values ($1,'kommo')", [A])));
   });
   await check("admin conserva gestão de conexões CRM", async () => {
     await role("authenticated", admin, async () => {
-      assert.equal((await rows("select access_token from crm_connections")).length, 2);
+      assert.equal((await rows("select id, provider, subdomain, active, created_at, config from crm_connections")).length, 2);
       assert.equal((await rows("update crm_connections set subdomain='example' where id=$1 returning id", [connectionA])).length, 1);
+      // "Tem token?" sem o valor: o navegador não lê token nem segredo do webhook (20261102190000).
+      assert.deepEqual(await rows("select tem_token, tem_webhook from crm_conexoes_credenciais($1)", [A]), [{ tem_token: true, tem_webhook: true }]);
+      assert.equal((await rows("update crm_connections set webhook_secret='fake-secret-novo' where id=$1", [connectionA])).length, 0);
     });
+  });
+  await check("tokens de CRM e do Instagram não são selecionáveis pelo navegador, nem pelo admin", async () => {
+    for (const user of [viewer, admin]) {
+      for (const column of ["access_token", "webhook_secret"]) await denied(() => role("authenticated", user, () => rows(`select ${column} from crm_connections`)));
+      await denied(() => role("authenticated", user, () => rows("select meta_access_token from instagram_account_secrets")));
+    }
+    assert.deepEqual(await role("service_role", null, () => rows("select access_token from crm_connections where id=$1", [connectionA])), [{ access_token: "fake-token" }]);
   });
   await check("credenciais legadas não são selecionáveis pelo navegador", async () => {
     for (const user of [viewer, admin]) for (const column of ["wts_api_token", "digisac_token", "digisac_url"]) await denied(() => role("authenticated", user, () => rows(`select ${column} from clients`)));
@@ -1012,6 +1023,81 @@ try {
       assert.deepEqual(Object.keys(r[0]).sort(), ["fluxo", "ultima_em", "ultima_ok_em", "ultimo_estado"], "sem erro nem contexto");
       await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ sub: outsider, role: "authenticated" })]);
       assert.deepEqual(await rows("select * from agentes_saude($1)", [A]), []);
+    } finally { await db.exec("rollback"); }
+  });
+  await check("CRM por médico: leitura direta respeita a regra do cliente e as chaves do card seguem o payload", async () => {
+    await db.exec("begin");
+    try {
+      const como = async <T = Record<string, unknown>>(papel: "authenticated" | "service_role", user: string | null, sql: string, args: unknown[] = []) => {
+        await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ role: papel, ...(user ? { sub: user } : {}) })]);
+        await db.exec(`set local role ${papel}`);
+        try { return await rows<T>(sql, args); } finally { await db.exec("reset role"); }
+      };
+      const campo = (enumId: number, nome: string) => ({ custom_fields_values: [{ field_id: 918597, values: [{ value: nome, enum_id: enumId }] }] });
+      const [p1, p2, p3] = (await rows<{ id: string }>("insert into pessoas(client_id,nome) values ($1,'Paciente do médico'),($1,'Paciente de outro médico'),($1,'Pessoa só do Instagram') returning id", [A])).map((r) => r.id);
+      const [l1, l2] = (await rows<{ id: string }>(
+        "insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,pessoa_id,occurred_at) values ($1,$2,'kommo','m-1','add',$3,$4,now()),($1,$2,'kommo','m-2','add',$5,$6,now()) returning id",
+        [A, connectionA, campo(762183, "Antônio Eduardo"), p1, campo(762185, " Ana Claudia "), p2])).map((r) => r.id);
+      await db.query("insert into wts_sessions(client_id,session_id,started_at,department_id) values ($1,'s-medico',now(),'dep-medico'),($1,'s-clinica',now(),'dep-clinica')", [A]);
+      const chaves = await rows<{ id: string; filtro_chaves: string[] }>("select id, filtro_chaves from crm_leads where id = any($1)", [[l1, l2]]);
+      assert.deepEqual(chaves.find((r) => r.id === l1)?.filtro_chaves, ["campo:918597=762183", "campo:918597=antônio eduardo"], "gatilho grava as chaves no insert");
+      await db.query("update crm_leads set raw_payload = $2 where id = $1", [l2, { ...campo(762185, "Ana Claudia"), _embedded: { tags: [{ name: " Retina " }] }, responsible_user_id: 7 }]);
+      assert.deepEqual((await rows<{ filtro_chaves: string[] }>("select filtro_chaves from crm_leads where id=$1", [l2]))[0].filtro_chaves,
+        ["campo:918597=762185", "campo:918597=ana claudia", "resp:7", "tag:retina"], "gatilho regrava as chaves quando o payload muda");
+      // A comparação por chave diz o mesmo que a assinatura antiga (que lê o payload).
+      for (const [tipo, valor, esperado] of [["campo", "918597=762183", true], ["campo", "918597= ANTÔNIO EDUARDO ", true], ["campo", "918597=762185", false], ["campo", "1=762183", false], ["tag", "x", false]] as const)
+        assert.deepEqual(await rows("select crm_filtro_casa_card($1,$2,null,raw_payload) as casa from crm_leads where id=$3", [tipo, valor, l1]), [{ casa: esperado }], `${tipo} ${valor}`);
+      assert.deepEqual(await rows("select crm_filtro_casa_card('pipeline','p1','p1','{}') as a, crm_filtro_casa_card('pipeline','p1',null,'{}') as b, crm_filtro_casa_card('tag','retina',null,'{\"etiquetas\":[\"Retina\"]}') as c"), [{ a: true, b: false, c: true }]);
+
+      const pessoasA = [personA, p1, p2, p3].sort();
+      // Sem regra: o membro lê todas as pessoas e sessões do cliente, como antes; cards, conversas e mensagens seguem só do admin.
+      assert.deepEqual((await como<{ id: string }>("authenticated", viewer, "select id from pessoas where client_id=$1 order by id", [A])).map((r) => r.id), pessoasA);
+      assert.deepEqual((await como<{ session_id: string }>("authenticated", viewer, "select session_id from wts_sessions where client_id=$1 and session_id like 's-%' order by 1", [A])).map((r) => r.session_id), ["s-clinica", "s-medico"]);
+      for (const tabela of ["crm_leads", "conversas", "mensagens"])
+        assert.deepEqual(await como("authenticated", viewer, `select count(*)::int as n from ${tabela} where client_id=$1`, [A]), [{ n: 0 }], `${tabela} sem regra`);
+
+      await db.query("insert into crm_filtro_cliente(client_id,crm_connection_id,tipo,valor,modo) values ($1,$2,'campo','918597=762183','incluir'),($1,null,'departamento','dep-medico','incluir')", [A, connectionA]);
+      // Com regra: o médico só lê o que é dele; pessoa sem card nem conversa (Instagram) continua dele.
+      assert.deepEqual((await como<{ id: string }>("authenticated", viewer, "select id from pessoas where client_id=$1 order by id", [A])).map((r) => r.id), [p1, p3].sort());
+      assert.deepEqual(await como("authenticated", viewer, "select id from pessoas where id=$1", [p2]), [], "pessoa de outro médico some por id");
+      assert.deepEqual((await como<{ session_id: string }>("authenticated", viewer, "select session_id from wts_sessions where client_id=$1 and session_id like 's-%'", [A])).map((r) => r.session_id), ["s-medico"]);
+      for (const tabela of ["crm_leads", "conversas", "mensagens"])
+        assert.deepEqual(await como("authenticated", viewer, `select count(*)::int as n from ${tabela} where client_id=$1`, [A]), [{ n: 0 }], `${tabela} com regra`);
+      // A regra de A não vaza para quem é membro de outro cliente, nem tira nada do admin ou do service_role.
+      assert.deepEqual(await como("authenticated", outsider, "select count(*)::int as n from pessoas where client_id=$1", [A]), [{ n: 0 }]);
+      assert.deepEqual(await como("authenticated", outsider, "select crm_membro_ve_pessoa($1,$2) as v", [A, p1]), [{ v: false }]);
+      assert.deepEqual(await como("authenticated", admin, "select count(*)::int as n from pessoas where client_id=$1", [A]), [{ n: 4 }]);
+      assert.deepEqual(await como("authenticated", admin, "select count(*)::int as n from wts_sessions where client_id=$1 and session_id like 's-%'", [A]), [{ n: 2 }]);
+      assert.deepEqual(await como("service_role", null, "select (select count(*)::int from pessoas where client_id=$1) as p, (select count(*)::int from crm_leads where client_id=$1) as l", [A]), [{ p: 4, l: 3 }]);
+      // As leituras das telas (por crm_leads_do_cliente) dão o mesmo que a regra card a card.
+      assert.deepEqual((await rows<{ id: string }>("select id from crm_leads_do_cliente($1)", [A])).map((r) => r.id), [l1]);
+      assert.deepEqual((await rows<{ id: string }>("select id from crm_leads l where client_id=$1 and crm_lead_no_filtro(client_id,crm_connection_id,pipeline_id,raw_payload)", [A])).map((r) => r.id), [l1]);
+      // Conversas e sessões (leitura em conjunto) decidem igual às funções linha a linha, inclusive no Digisac.
+      await db.query("insert into conversas(client_id,pessoa_id,lead_id,provider,externo_id,iniciada_em,ultima_msg_em) values ($1,$2,$3,'wts','s-medico',now(),now()),($1,$4,$5,'wts','s-clinica',now(),now()),($1,$2,$3,'wts','sem-sessao',now(),now())", [A, p1, l1, p2, l2]);
+      const dig = (await rows<{ id: string }>("insert into crm_connections(client_id,provider,access_token,webhook_secret) values ($1,'digisac','fake','fake') returning id", [A]))[0].id;
+      await db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,pipeline_id,occurred_at) values ($1,$2,'digisac','c-med','add','{}','rafaela',now()),($1,$2,'digisac','c-out','add','{}','outro',now())", [A, dig]);
+      await db.query("insert into wts_sessions(client_id,session_id,started_at,department_id,contact_id) values ($1,'d-med',now(),'dep-medico','c-med'),($1,'d-out',now(),'dep-medico','c-out'),($1,'d-sem',now(),'dep-medico','c-nada')", [A]);
+      const iguais = async (rotulo: string) => {
+        assert.deepEqual(await rows("select id from conversas_do_cliente($1) order by id", [A]), await rows("select id from conversas where client_id=$1 and crm_conversa_no_filtro(client_id,lead_id,externo_id) order by id", [A]), `conversas ${rotulo}`);
+        assert.deepEqual(await rows("select session_id from wts_sessoes_do_cliente($1) order by 1", [A]), await rows("select session_id from wts_sessions where client_id=$1 and crm_sessao_no_filtro(client_id,department_id,contact_id) order by 1", [A]), `sessões ${rotulo}`);
+        assert.deepEqual(await rows("select id from crm_leads_do_cliente($1) order by id", [A]), await rows("select id from crm_leads where client_id=$1 and crm_lead_no_filtro(client_id,crm_connection_id,pipeline_id,raw_payload) order by id", [A]), `cards ${rotulo}`);
+      };
+      await iguais("campo + departamento");
+      assert.deepEqual((await rows<{ externo_id: string }>("select externo_id from conversas_do_cliente($1) order by 1", [A])).map((r) => r.externo_id), ["s-medico"]);
+      await db.query("insert into crm_filtro_cliente(client_id,crm_connection_id,tipo,valor,modo) values ($1,$2,'pipeline','rafaela','incluir')", [A, dig]);
+      await iguais("com Digisac");
+      assert.deepEqual((await rows<{ session_id: string }>("select session_id from wts_sessoes_do_cliente($1) where session_id like 'd-%' order by 1", [A])).map((r) => r.session_id), ["d-med"]);
+      assert.deepEqual((await como<{ session_id: string }>("authenticated", viewer, "select session_id from wts_sessions where client_id=$1 order by 1", [A])).map((r) => r.session_id), ["d-med"], "sessão sem contato do Digisac fica com quem não usa incluir");
+      await db.query("update crm_filtro_cliente set modo='excluir' where client_id=$1", [A]);
+      await iguais("tudo excluir");
+      await db.query("delete from crm_filtro_cliente where client_id=$1", [A]);
+      await iguais("sem regra");
+      await db.query("delete from wts_sessions where session_id like 'd-%'");
+      await db.query("delete from crm_leads where crm_connection_id=$1", [dig]);
+      await db.query("delete from conversas where client_id=$1 and externo_id in ('s-medico','s-clinica','sem-sessao')", [A]);
+      await db.query("insert into crm_filtro_cliente(client_id,crm_connection_id,tipo,valor,modo) values ($1,$2,'campo','918597=762183','excluir'),($1,$2,'campo','918597=ana claudia','excluir')", [A, connectionA]);
+      assert.deepEqual((await rows<{ id: string }>("select id from crm_leads_do_cliente($1)", [A])).map((r) => r.id), [leadA], "excluir: a clínica fica com o card sem médico");
+      assert.deepEqual((await como<{ id: string }>("authenticated", viewer, "select id from pessoas where client_id=$1 order by id", [A])).map((r) => r.id), [personA, p3].sort());
     } finally { await db.exec("rollback"); }
   });
   await check("estado final bloqueia toda função public para anon, incluindo migrações novas", async () => {

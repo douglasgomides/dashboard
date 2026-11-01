@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getAcessosSap, getClinicaSap, type AcaoSap } from "@/lib/sap-data";
 import { situacaoCriticos } from "@/lib/agente-acessos";
 import { Painel } from "@/components/visual";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const db = supabase as any;
 const taskIdPattern = /^[a-zA-Z0-9_-]{3,128}$/;
@@ -130,7 +131,7 @@ function OperacaoAcessos({ clientId }: { clientId: string }) {
         {isAdmin && <div className="space-y-2">
           <button type="button" className="btn" disabled={ocupada || !clinica.d0} onClick={() => conduzir.mutate()}>{conduzir.isPending ? "Conferindo o marco…" : "Conduzir este marco"}</button>
           {conduzir.data && <p role="status" className="text-xs">{conduzir.data}. Acompanhe os passos e as decisões na Central de Agentes.</p>}
-          {conduzir.isError && <p role="alert" className="text-xs" style={{color:"var(--crit)"}}>{conduzir.error.message}</p>}
+          {conduzir.isError && <p role="alert" className="text-xs" style={{color:"var(--crit)"}}>{mensagemDeErroAcao(conduzir.error)}</p>}
         </div>}
         <div className="flex flex-wrap gap-3">
           <Link to="/sap/$clientId/onboarding" params={{ clientId }} className="inline-flex min-h-[40px] items-center font-semibold underline" style={{ color: "var(--accent)" }}>Ficha e acessos</Link>
@@ -143,7 +144,7 @@ function OperacaoAcessos({ clientId }: { clientId: string }) {
           </button>
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>Atualiza as ações de acesso em Ações combinadas e Minhas tarefas. Esta conferência não conclui o marco nem confirma acessos.</p>
           {conferir.isSuccess && <p role="status">Pendências conferidas. {conferir.data.proximo_passo || "Consulte as ações atualizadas abaixo."}</p>}
-          {conferir.isError && <p role="alert" style={{ color: "var(--crit)" }}>{conferir.error.message}</p>}
+          {conferir.isError && <p role="alert" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(conferir.error)}</p>}
         </div>}
 
         <section aria-label="Ações de acesso do SAP" className="space-y-2">
@@ -175,7 +176,7 @@ function OperacaoAcessos({ clientId }: { clientId: string }) {
             {task.trim() && !taskId && <p className="text-xs" style={{ color: "var(--crit)" }}>Use um ID válido ou o endereço https://app.clickup.com/t/ seguido do ID.</p>}
             <button type="submit" disabled={ocupada || !taskId} className="min-h-[40px] rounded-lg border px-3 font-semibold disabled:opacity-60" style={{ borderColor: "var(--border)" }}>{vincular.isPending ? "Salvando vínculo…" : "Salvar vínculo do ClickUp"}</button>
             {vincular.isSuccess && <p role="status">Vínculo salvo. A tarefa ainda precisa ser conferida pelo fluxo antes do fechamento do marco.</p>}
-            {vincular.isError && <p role="alert" style={{ color: "var(--crit)" }}>{vincular.error.message}</p>}
+            {vincular.isError && <p role="alert" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(vincular.error)}</p>}
           </form>}
         </section>
       </div>

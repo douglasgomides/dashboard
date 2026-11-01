@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Brain, Loader2, Send, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Pergunta, RespostaCopiloto, Turno } from "@/lib/copiloto-doc";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 type Resp = RespostaCopiloto & { brain_propostos: number };
 
@@ -31,7 +32,7 @@ export function CopilotoSecao({ clientId, titulo, dica, textoAtual, usar }: { cl
       setTurnos([...novos, { papel: "ia", texto: `${r.rascunho}${r.perguntas.length ? `\n\nPerguntas:\n${r.perguntas.map((p, i) => `${i + 1}. ${p.pergunta}`).join("\n")}` : ""}` }]);
       setResp(r); setRespostas({}); setLivre("");
       setAprendidos((n) => n + r.brain_propostos);
-    } catch (e) { setErro(e instanceof Error ? e.message : String(e)); } finally { setCarregando(false); }
+    } catch (e) { setErro(mensagemDeErroAcao(e)); } finally { setCarregando(false); }
   }
   function responder() {
     const partes = (resp?.perguntas ?? []).map((p, i) => (respostas[i]?.trim() ? `${p.pergunta} → ${respostas[i].trim()}` : null)).filter(Boolean);

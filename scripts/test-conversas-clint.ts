@@ -54,7 +54,7 @@ try {
     assert.equal(init?.redirect, "error");
     assert.ok(init?.signal instanceof AbortSignal);
     providerCalls++;
-    if (u.pathname === "/v2/channel-accounts") return json({ data: [{ id: "channel", name: "Fictional Instagram", type: "INSTAGRAM", status: "DISCONNECTED" }], has_next: false });
+    if (u.pathname === "/v2/channel-accounts") { assert.equal(u.searchParams.get("limit"), "100", "doc: no máximo 100 canais por página"); return json({ data: [{ id: "channel", name: "Fictional Instagram", type: "INSTAGRAM", status: "DISCONNECTED" }], has_next: false }); }
     if (u.pathname === "/v2/chats/channel-account/channel") {
       assert.ok(u.searchParams.get("last_message_at_end"));
       return json({ data: [

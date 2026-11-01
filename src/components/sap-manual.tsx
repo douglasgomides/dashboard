@@ -22,6 +22,7 @@ import {
 import { getSapDados, calcularResumo, dadosDeExemplo, REFERENCIA, type Farol, type SapDados, type SapLead } from "@/lib/sap-data";
 import { fmtBRL, fmtNum } from "@/lib/format";
 import { Kpi, Painel, Selo, BarraFina, Ajuda } from "@/components/visual";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const COR_FAROL: Record<Farol, string> = {
   verde: "var(--good)",
@@ -61,7 +62,7 @@ export function TrackerManual({ clientId, start, end, periodLabel }: { clientId:
   if (error && !exemplo) {
     return (
       <p style={{ color: "var(--crit)" }}>
-        Não consegui ler o Tracker: {(error as Error).message}
+        Não consegui ler o Tracker: {mensagemDeErroAcao(error)}
       </p>
     );
   }

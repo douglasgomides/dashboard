@@ -13,6 +13,7 @@ import {
   type PapelFunil,
 } from "@/lib/client-data";
 import { useAuth } from "@/hooks/use-auth";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 export const Route = createFileRoute("/_authenticated/$clientId/analisar")({
   component: AnalisarPage,
@@ -61,7 +62,7 @@ function ConfirmarEmLote({
       for (const e of pendentes) await confirmar(e);
       setPasso("feito");
     } catch (err) {
-      setFalha(err instanceof Error ? err.message : "erro desconhecido");
+      setFalha(mensagemDeErroAcao(err));
       setPasso("parado");
     }
   }
@@ -150,7 +151,7 @@ function AnalisarPage() {
         {head}
         <div className="card">
           <p className="note">
-            Não consegui ler as etapas: {etapas.error instanceof Error ? etapas.error.message : "erro desconhecido"}. Se a
+            Não consegui ler as etapas: {mensagemDeErroAcao(etapas.error)}. Se a
             mensagem fala de função inexistente, a migration da aba ainda não foi aplicada no banco.
           </p>
         </div>
@@ -318,7 +319,7 @@ function AnalisarPage() {
             </div>
             {salvar.isError && (
               <p className="note">
-                Não consegui salvar: {salvar.error instanceof Error ? salvar.error.message : "erro desconhecido"}.
+                Não consegui salvar: {mensagemDeErroAcao(salvar.error)}.
               </p>
             )}
           </div>
@@ -377,7 +378,7 @@ function SecaoPapelFunil({ clientId, etapas: todas }: { clientId: string; etapas
         card muda de funil). Compra e base não contam como lead.
       </p>
       {papeis.error ? (
-        <p className="note">Não consegui ler o papel dos funis: {papeis.error instanceof Error ? papeis.error.message : "erro desconhecido"}.</p>
+        <p className="note">Não consegui ler o papel dos funis: {mensagemDeErroAcao(papeis.error)}.</p>
       ) : (
         <div style={{ overflowX: "auto", marginTop: 10 }}>
           <table className="t empilha">
@@ -421,7 +422,7 @@ function SecaoPapelFunil({ clientId, etapas: todas }: { clientId: string; etapas
         </div>
       )}
       {salvar.isError && (
-        <p className="note">Não consegui salvar: {salvar.error instanceof Error ? salvar.error.message : "erro desconhecido"}.</p>
+        <p className="note">Não consegui salvar: {mensagemDeErroAcao(salvar.error)}.</p>
       )}
     </div>
   );
@@ -499,7 +500,7 @@ function SecaoKpi({
         </div>
       ))}
       {salvar.isError && (
-        <p className="note">Não consegui salvar: {salvar.error instanceof Error ? salvar.error.message : "erro desconhecido"}.</p>
+        <p className="note">Não consegui salvar: {mensagemDeErroAcao(salvar.error)}.</p>
       )}
     </div>
   );

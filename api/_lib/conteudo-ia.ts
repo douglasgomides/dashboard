@@ -6,8 +6,8 @@
  * caía em "Tema livre". Funil e estágio nunca foram preenchidos automaticamente.
  *
  * Regras:
- * - Só roda quando há chave no servidor: OPENAI_API_KEY (GPT, modelo padrão gpt-4o-mini) ou, se não houver,
- *   ANTHROPIC_API_KEY (Claude Haiku). Sem nenhuma das duas, não faz nada e diz isso.
+ * - Só roda quando há chave no servidor: OPENAI_API_KEY (GPT, modelo padrão gpt-4o-mini), com ANTHROPIC_API_KEY
+ *   (Claude Haiku) de reserva quando a OpenAI falha (ia.ts). Sem nenhuma das duas, não faz nada e diz isso.
  * - Nunca sobrescreve o que a equipe já classificou: só preenche campo vazio.
  * - Posts mais recentes primeiro, com teto por rodada (custo e tempo da função).
  * - Reaproveita os temas que a conta já tem, para o vocabulário não se espalhar em sinônimos.
@@ -15,10 +15,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
 import { z } from "zod";
+import { chamarTextoComReserva } from "./ia.js";
 
 // CLASSIFICADOR_MODELO troca o modelo sem mexer no código.
 const MODELO_OPENAI = process.env.CLASSIFICADOR_MODELO || "gpt-4o-mini";
-const MODELO_CLAUDE = process.env.CLASSIFICADOR_MODELO || "claude-haiku-4-5-20251001";
+// Reserva com variável própria: CLASSIFICADOR_MODELO com id da OpenAI ia para a Anthropic e falhava.
+const MODELO_CLAUDE = process.env.CLASSIFICADOR_MODELO_CLAUDE || "claude-haiku-5-5";
 const FUNIS = new Set(["C0", "C1", "C2", "C3"]);
 const ESTAGIOS = new Set(["percepcao", "confianca", "venda", "multiplicacao"]);
 const LOTE = 20;
@@ -92,36 +94,19 @@ function lerLista(texto: string): Saida[] {
   return validos;
 }
 
-async function chamarOpenAI(chave: string, usuario: string, ms: number): Promise<Saida[]> {
-  const r = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${chave}` },
-    signal: AbortSignal.timeout(ms),
-    body: JSON.stringify({
-      model: MODELO_OPENAI,
-      response_format: { type: "json_object" },
-      max_completion_tokens: 2500,
-      messages: [
-        { role: "system", content: SISTEMA },
-        { role: "user", content: usuario },
-      ],
-    }),
+// OpenAI primeiro; Anthropic de reserva quando a OpenAI recusa a chave, limita (429), cai (5xx) ou a rede falha.
+// Tempo esgotado não troca de provedor: o orçamento da rodada é curto e o lote volta na próxima.
+async function chamarIA(usuario: string, ms: number): Promise<Saida[]> {
+  const r = await chamarTextoComReserva({
+    sistema: SISTEMA,
+    entrada: usuario,
+    maxTokens: 2500,
+    modeloOpenAI: MODELO_OPENAI,
+    modeloClaude: MODELO_CLAUDE,
+    timeoutMs: ms,
+    reservaNoTempoEsgotado: false,
   });
-  if (!r.ok) throw new Error(`OpenAI respondeu ${r.status}: ${(await r.text()).slice(0, 160)}`);
-  const j = (await r.json()) as { choices?: { message?: { content?: string } }[] };
-  return lerLista(j.choices?.[0]?.message?.content ?? "");
-}
-
-async function chamarClaude(chave: string, usuario: string, ms: number): Promise<Saida[]> {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-api-key": chave, "anthropic-version": "2023-06-01" },
-    signal: AbortSignal.timeout(ms),
-    body: JSON.stringify({ model: MODELO_CLAUDE, max_tokens: 2500, system: SISTEMA, messages: [{ role: "user", content: usuario }] }),
-  });
-  if (!r.ok) throw new Error(`Anthropic respondeu ${r.status}: ${(await r.text()).slice(0, 160)}`);
-  const j = (await r.json()) as { content?: { text?: string }[] };
-  return lerLista((j.content ?? []).map((b) => b.text ?? "").join(""));
+  return lerLista(r.texto);
 }
 
 export async function classificarConteudoComIA(
@@ -183,7 +168,7 @@ export async function classificarConteudoComIA(
           lote.map((p) => JSON.stringify({ id: p.id, formato: p.format ?? null, legenda: (p.caption ?? "").replace(/\s+/g, " ").slice(0, 600) })).join("\n");
         try {
           const ms = Math.min(restante - 1000, 30_000);
-          const saida = chaveOpenAI ? await chamarOpenAI(chaveOpenAI, usuario, ms) : await chamarClaude(chaveClaude as string, usuario, ms);
+          const saida = await chamarIA(usuario, ms);
           return { lote, saida };
         } catch (e) {
           if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {

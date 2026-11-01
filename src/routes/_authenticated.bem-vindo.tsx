@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, AlignLeft, Briefcase, CheckCircle2, FileText, KeyRound, Megaphone, Printer } from "lucide-react";
@@ -54,7 +55,7 @@ function BemVindo() {
     setSalvando(true);
     try {
       const { error } = await supabase.auth.updateUser({ password: senha });
-      if (error) return setErro(error.message);
+      if (error) return setErro(mensagemDeErroAcao(error));
       setPasso(2);
     } catch {
       setErro("Não foi possível salvar sua senha. Verifique sua conexão e tente novamente.");
@@ -68,7 +69,7 @@ function BemVindo() {
     setErro(null);
     try {
       const { error } = await supabase.auth.updateUser({ data: { primeiro_acesso: false, onboarding_em: new Date().toISOString() } });
-      if (error) return setErro(error.message);
+      if (error) return setErro(mensagemDeErroAcao(error));
       if (cliente) await navigate({ to: "/$clientId/pacientes", params: { clientId: cliente.id }, search: { preset: "30d" } as never });
       else await navigate({ to: "/" });
     } catch {

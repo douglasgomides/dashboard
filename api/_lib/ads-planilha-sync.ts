@@ -18,9 +18,15 @@
  *  - o mesmo post duas vezes no mesmo dia de análise: vale a primeira linha;
  *  - "seguidores no período" só vale quando Após - Antes bate com ele. Na análise de 10/07 cinco linhas
  *    trazem o TOTAL de seguidores no lugar do ganho (ex.: antes 8.991, após 15.103, "período" 8.991);
- *    nelas o ganho e o custo por seguidor viram nulos, em vez de mostrar um custo de R$ 0,01.
+ *    nelas o ganho e o custo por seguidor viram nulos, em vez de mostrar um custo de R$ 0,01;
+ *  - semana sem "Valor no Período" (a de 30/10/2026, 32 posts em branco) fica com valor nulo: é "sem dado", não R$ 0.
+ *    A tela já separa; o "dados até" só conta semana com investimento anotado;
+ *  - linha que SAIU da planilha (apagada ou reescrita com outra data) é marcada com removido_em e sai das leituras.
+ *    Antes ela continuava somando para sempre (Dra. Marcelly: 39 linhas, R$ 2.039 numa semana). Lançamento à mão
+ *    ("Lançado à mão ...", que nunca esteve na planilha) só sai quando a planilha já tem uma análise na mesma data ou
+ *    depois dela: aí a análise da planilha cobre o mesmo período. Volta a valer se reaparecer na planilha.
  */
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // Data sentinela das linhas sem "Dia da Análise" (bloco do fim da planilha). Sempre no futuro, então fica fora de
 // "dados até" e das semanas de análise; a tela a reconhece e escreve "sem data na planilha".
@@ -224,6 +230,36 @@ export function interpretarPlanilha(csv: string, hojeIso: string): AdsPlanilhaLe
   return { linhas: out, descartadas, negativosAnulados, inconsistentesAnulados };
 }
 
+/** Linha guardada no banco, só o que decide se ela saiu da planilha. */
+export interface LinhaGuardadaPlanilha {
+  analise_em: string;
+  post_url: string;
+  acao: string | null;
+  removido_em: string | null;
+}
+
+const LANCADO_A_MAO = /^lançado à mão/i;
+
+/**
+ * Linhas guardadas que não vieram nesta leitura da planilha e devem ser marcadas como removidas.
+ * Lançamento à mão só sai quando a planilha tem análise (com data) no mesmo dia ou depois.
+ */
+export function linhasQueSairam(guardadas: LinhaGuardadaPlanilha[], lidas: Pick<AdsPlanilhaLinha, "analise_em" | "post_url">[]): LinhaGuardadaPlanilha[] {
+  const vistas = new Set(lidas.map((l) => `${l.analise_em}|${l.post_url}`));
+  const ultimaAnalise = lidas.filter((l) => l.analise_em !== SEM_DATA).reduce((m, l) => (l.analise_em > m ? l.analise_em : m), "");
+  return guardadas.filter((g) => {
+    if (g.removido_em) return false;
+    if (vistas.has(`${g.analise_em}|${g.post_url}`)) return false;
+    if (LANCADO_A_MAO.test((g.acao ?? "").trim())) return !!ultimaAnalise && g.analise_em <= ultimaAnalise;
+    return true;
+  });
+}
+
+/** Trava contra planilha lida pela metade: não marca como removido mais da metade do que vale hoje. */
+export function remocaoPareceSegura(validasAntes: number, sairiam: number): boolean {
+  return sairiam === 0 || validasAntes < 10 || sairiam <= validasAntes / 2;
+}
+
 const MOTIVO_PLANILHA =
   "Anúncios lidos da planilha de distribuição de conteúdo da equipe Doctor Creator, porque a conta de anúncios ainda não está liberada para o dashboard na Meta (a equipe da cliente não liberou o token). Os valores são semanais, anotados a cada análise.";
 
@@ -263,12 +299,14 @@ export async function runAdsPlanilhaSync(env: AdsPlanilhaSyncEnv): Promise<AdsPl
       if (linhas.length === 0) throw new Error("Nenhuma linha válida na planilha");
       const agora = new Date().toISOString();
       for (let i = 0; i < linhas.length; i += 200) {
-        const lote = linhas.slice(i, i + 200).map((l) => ({ ...l, client_id: c.id, atualizado_em: agora }));
+        // removido_em nulo: linha que voltou para a planilha volta a valer.
+        const lote = linhas.slice(i, i + 200).map((l) => ({ ...l, client_id: c.id, atualizado_em: agora, removido_em: null }));
         const { error: eUp } = await sb.from("ads_planilha_semanal").upsert(lote, { onConflict: "client_id,analise_em,post_url" });
         if (eUp) throw new Error(eUp.message);
         res.rows += lote.length;
       }
-      res.ate = linhas.filter((l) => l.analise_em <= hoje).reduce((m, l) => (l.analise_em > m ? l.analise_em : m), "");
+      await marcarRemovidas(sb, c.id, linhas, agora, res);
+      res.ate = linhas.filter((l) => l.analise_em <= hoje && l.valor_periodo != null).reduce((m, l) => (l.analise_em > m ? l.analise_em : m), "");
       // Fonte manual: sem isto o painel lê "sem dado novo na origem" quando a última análise passa de 3 dias.
       await sb.from("sync_status").upsert(
         {
@@ -285,4 +323,51 @@ export async function runAdsPlanilhaSync(env: AdsPlanilhaSyncEnv): Promise<AdsPl
     }
   }
   return resultados;
+}
+
+// Marca o que saiu da planilha. Falha aqui vira aviso no resultado e não derruba a leitura.
+async function marcarRemovidas(
+  sb: SupabaseClient<any, any, any>,
+  clientId: string,
+  lidas: AdsPlanilhaLinha[],
+  agora: string,
+  res: AdsPlanilhaSyncResult,
+): Promise<void> {
+  const guardadas: LinhaGuardadaPlanilha[] = [];
+  for (let de = 0; ; de += 1000) {
+    const { data, error } = await sb
+      .from("ads_planilha_semanal")
+      .select("analise_em, post_url, acao, removido_em")
+      .eq("client_id", clientId)
+      .order("analise_em")
+      .order("post_url")
+      .range(de, de + 999);
+    if (error) {
+      res.errors.push(`linhas que saíram da planilha: ${error.message}`);
+      return;
+    }
+    guardadas.push(...((data ?? []) as LinhaGuardadaPlanilha[]));
+    if (!data || data.length < 1000) break;
+  }
+  const sairam = linhasQueSairam(guardadas, lidas);
+  if (sairam.length === 0) return;
+  const validas = guardadas.filter((g) => !g.removido_em).length;
+  if (!remocaoPareceSegura(validas, sairam.length)) {
+    res.errors.push(`planilha veio com ${sairam.length} de ${validas} linhas a menos; nada foi marcado como removido (conferir a planilha)`);
+    return;
+  }
+  const porDia = new Map<string, string[]>();
+  for (const g of sairam) porDia.set(g.analise_em, [...(porDia.get(g.analise_em) ?? []), g.post_url]);
+  for (const [dia, urls] of porDia) {
+    for (let i = 0; i < urls.length; i += 100) {
+      const { error } = await sb
+        .from("ads_planilha_semanal")
+        .update({ removido_em: agora })
+        .eq("client_id", clientId)
+        .eq("analise_em", dia)
+        .in("post_url", urls.slice(i, i + 100))
+        .is("removido_em", null);
+      if (error) res.errors.push(`linhas que saíram da planilha: ${error.message}`);
+    }
+  }
 }

@@ -10,7 +10,10 @@ import { readRawBody, parseBracketFormBody, extractLeadEvents, WebhookBodyError 
 // excluído). A URL é única por conexão (connection_id + secret gerados no
 // painel admin) — a Kommo não assina os webhooks, então essa é a única
 // proteção do endpoint. Precisa responder em até 2s com status 100–299 pra
-// não disparar retry (a Kommo tenta de novo até 4x numa janela de 1h).
+// não disparar retry. Doc oficial (developers.kommo.com/docs/webhooks-general, lida em 01/11/2026): depois da
+// 1ª tentativa vêm a 2ª em 5 min e a 3ª em 15 min (qualquer falha) e a 4ª em 15 min e a 5ª em 1 h só se a
+// resposta anterior foi 499 ou 5xx; com mais de 100 respostas inválidas em 2 h (e a última também inválida)
+// o webhook é desligado e o administrador recebe aviso na central de notificações.
 
 async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {

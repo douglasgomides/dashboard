@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
 import { runMetaGraphSync, listMetaGraphAccountIds } from "../_lib/meta-graph-sync.js";
+import { registrarValidadeTokensMeta, tokensInstagramDasContas } from "../_lib/meta-token-validade.js";
 
 // Sync direto com a API do Instagram (Meta Graph API) — substitui a Windsor
 // pra puxar posts, porque ela trava em consultas de período histórico.
@@ -80,6 +81,11 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       "instagram",
       results.map((r) => ({ clientId: r.clientId, rows: r.posts, errors: r.errors })),
     );
+    // Vencimento do token da Meta (debug_token): "O token da Meta vence em N dias" com 30 dias de antecedência.
+    if (!soStories && results.length > 0) {
+      const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+      await registrarValidadeTokensMeta(sb, "instagram", await tokensInstagramDasContas(sb, results.map((r) => ({ accountId: r.accountId, clientId: r.clientId })), META_ACCESS_TOKEN));
+    }
     const hasErrors = results.some((r) => r.errors.length > 0);
     res.status(hasErrors ? 207 : 200).json({ synced_at: new Date().toISOString(), accounts: results });
   } catch (err) {

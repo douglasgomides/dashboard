@@ -139,3 +139,23 @@ export const LEGENDA_STATUS: { cor: CorStatus; texto: string }[] = [
 
 /** Variável CSS de cada cor (os tokens do tema). */
 export const VAR_COR: Record<CorStatus, string> = { verde: "var(--good)", amarelo: "var(--warn)", vermelho: "var(--crit)", cinza: "var(--muted)" };
+
+/** Linha de sync_status_geral (integração da conta inteira, sem cliente: hoje só o Short.io). */
+export interface StatusGeral {
+  last_attempt_at: string | null;
+  last_success_at: string | null;
+  last_error: string | null;
+  last_rows?: number | null;
+}
+
+/**
+ * Status do Short.io pela mesma régua das outras fontes (verde 0 a 1 dia, amarelo 2 a 3, vermelho mais de 3 ou erro).
+ * O "dado até" é o dia do último sucesso, porque o Short.io não tem data própria de dado. Sem linha: não ligado.
+ */
+export function statusDoGeral(linha: StatusGeral | null | undefined, hoje: string = hojeBrasilia()): StatusFonte {
+  const sucesso = linha?.last_success_at ? hojeBrasilia(new Date(linha.last_success_at)) : null;
+  return statusDaFonte(
+    { fonte: "shortio", cadastro: !!linha, data_ate: sucesso, last_error: linha?.last_error ?? null, ultimo_sucesso: linha?.last_success_at ?? null },
+    hoje,
+  );
+}

@@ -13,9 +13,11 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { conversationSummarySchema, normalizarResumoConversa } from "./ai-output.js";
+import { chamarTextoComReserva, jsonDoTexto } from "./ia.js";
 
 const MODELO_OPENAI = process.env.RESUMO_MODELO || process.env.CLASSIFICADOR_MODELO || "gpt-4o-mini";
-const MODELO_CLAUDE = process.env.RESUMO_MODELO || "claude-haiku-4-5-20251001";
+// Modelo da reserva separado: RESUMO_MODELO com um id da OpenAI ia para a Anthropic e falhava.
+const MODELO_CLAUDE = process.env.RESUMO_MODELO_CLAUDE || "claude-haiku-5-5";
 const MAX_MSGS = 300;
 /** Tentativas da IA na mesma conversa sem mensagem nova (ver conversas_ia_falhas). */
 const MAX_FALHAS = 3;
@@ -53,43 +55,11 @@ function mascarar(t: string): string {
 const hora = (iso: string) =>
   new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
+// OpenAI primeiro; Anthropic de reserva quando a OpenAI recusa a chave, limita (429), cai (5xx) ou não responde.
 async function chamarIA(transcricao: string): Promise<{ json: unknown; modelo: string }> {
-  const chaveOpenAI = process.env.OPENAI_API_KEY;
-  const chaveClaude = process.env.ANTHROPIC_API_KEY;
-  if (chaveOpenAI) {
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${chaveOpenAI}` },
-      signal: AbortSignal.timeout(50_000),
-      body: JSON.stringify({
-        model: MODELO_OPENAI,
-        response_format: { type: "json_object" },
-        max_completion_tokens: 1200,
-        messages: [
-          { role: "system", content: SISTEMA },
-          { role: "user", content: transcricao },
-        ],
-      }),
-    });
-    if (!r.ok) throw new Error(`OpenAI respondeu ${r.status}`);
-    const j = (await r.json()) as { choices?: { message?: { content?: string } }[] };
-    return { json: JSON.parse(j.choices?.[0]?.message?.content ?? "{}"), modelo: MODELO_OPENAI };
-  }
-  if (chaveClaude) {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": chaveClaude, "anthropic-version": "2023-06-01" },
-      signal: AbortSignal.timeout(50_000),
-      body: JSON.stringify({ model: MODELO_CLAUDE, max_tokens: 1200, system: SISTEMA, messages: [{ role: "user", content: transcricao }] }),
-    });
-    if (!r.ok) throw new Error(`Anthropic respondeu ${r.status}`);
-    const j = (await r.json()) as { content?: { text?: string }[] };
-    const texto = (j.content ?? []).map((b) => b.text ?? "").join("");
-    const ini = texto.indexOf("{");
-    const fim = texto.lastIndexOf("}");
-    return { json: JSON.parse(ini >= 0 && fim > ini ? texto.slice(ini, fim + 1) : "{}"), modelo: MODELO_CLAUDE };
-  }
-  throw new Error("Servidor sem OPENAI_API_KEY nem ANTHROPIC_API_KEY: resumo por IA desligado.");
+  if (!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY) throw new Error("Servidor sem OPENAI_API_KEY nem ANTHROPIC_API_KEY: resumo por IA desligado.");
+  const r = await chamarTextoComReserva({ sistema: SISTEMA, entrada: transcricao, maxTokens: 1200, modeloOpenAI: MODELO_OPENAI, modeloClaude: MODELO_CLAUDE, timeoutMs: 50_000 });
+  return { json: r.provedor === "openai" ? JSON.parse(r.texto || "{}") : jsonDoTexto(r.texto), modelo: r.modelo };
 }
 
 export async function resumirConversa(

@@ -19,7 +19,7 @@ import { ehNegocioProprio } from "@/lib/negocio-proprio";
 import { fetchAllRows } from "@/lib/pagination";
 import { resultadoImportacaoConversas } from "@/lib/crm-negocio-proprio";
 import { CITACAO_HBR_RESPOSTA } from "@/lib/benchmarks";
-import { mensagemDeErro } from "@/lib/erro-amigavel";
+import { mensagemDeErro, mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const COR_SIT: Record<string, string> = { ruim: "var(--crit)", atencao: "var(--warn)", bom: "var(--good)", neutro: "var(--muted)" };
 type Filtro = "todas" | "sem_resposta" | "demorou" | "sem_lead";
@@ -86,7 +86,7 @@ function LeituraDaConversa({ l, conversaId, clientId }: { l: LeituraConversaBanc
       if (!resp.ok) throw new Error(j?.error ?? `Falha (${resp.status})`);
       await qc.invalidateQueries({ queryKey: ["conversa-resumo", conversaId] });
     } catch (e) {
-      setErro((e as Error).message);
+      setErro(mensagemDeErroAcao(e));
     } finally {
       setGerando(false);
     }
@@ -287,7 +287,7 @@ export function ConversasWhatsapp({ clientId, conversaInicial }: { clientId: str
         if (rodada === 10) setStatus(`${total} conversas processadas. A leitura continua parcial; use “Puxar todas” para retomar do ponto salvo.`);
       }
     } catch (e) {
-      setStatus(`Parou: ${(e as Error).message}. ${total} trazidas até aqui.`);
+      setStatus(`Parou: ${mensagemDeErroAcao(e)}. ${total} trazidas até aqui.`);
     } finally {
       setPuxando(null);
     }

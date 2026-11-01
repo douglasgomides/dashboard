@@ -104,6 +104,14 @@ await rodarContrato({
     assert.equal(duracaoParaSegundos("100:00:00"), 360000, "horas acumuladas acima de 24");
     assert.deepEqual(f.mensagens.items.map((m: any) => direcaoDaMensagem(m.direction)), ["entrada", "saida", "entrada"]);
     assert.equal(acharOrigemAnuncio(f.mensagens.items), null, "sem referral na amostra");
+    // Formato da doc oficial (helena.readme.io, PublicMessageDetailsDTO.utm = PublicUtmDTO), valores fictícios.
+    const comUtm = acharOrigemAnuncio([{ id: "wm-9", direction: "FROM_HUB", details: { utm: {
+      sourceId: "ad-ficticio-1", source: "facebook", clid: "clid-ficticio", headline: "Título fictício", referralUrl: "https://exemplo.invalid/anuncio",
+    } } }]);
+    assert.equal(comUtm?.ad_id, "ad-ficticio-1");
+    assert.equal(comUtm?.ctwa_clid, "clid-ficticio", "utm.clid é o ctwa_clid");
+    assert.equal(comUtm?.source_url, "https://exemplo.invalid/anuncio", "utm.referralUrl é o link do anúncio");
+    assert.equal(comUtm?.headline, "Título fictício");
     assert.equal(origemDaDescricao(f.cards.items[0].description), "Instagram");
     const nomes = new Map<string, string>(f.etiquetas.items.map((t: any) => [t.id, t.name]));
     const tags = f.contatos_tags.items[0].tagIds.map((id: string) => nomes.get(id));

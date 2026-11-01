@@ -45,10 +45,10 @@ select 'migration_history' as section,
 -- Uma linha por versão no Supabase não equivale a um
 -- arquivo por versão; não exigir count(*)=133 nem reparar o histórico aqui.
 select 'migration_manifest_note' as section,
-       200 as repository_sql_files,
-       196 as repository_distinct_versions,
+       203 as repository_sql_files,
+       199 as repository_distinct_versions,
        array['20261014120000', '20261018120000', '20261018130000']::text[] as historical_duplicate_versions,
-       '20261102160000'::text as latest_repository_version;
+       '20261102190000'::text as latest_repository_version;
 
 -- Paths vazios são seguros nas RPCs recentes, que qualificam seus objetos.
 -- Resumo para triagem. As sete contagens de falhas devem ser zero depois
@@ -81,7 +81,8 @@ with expected(signature) as (values
   ('public.listar_conversas(uuid,integer,integer)'),
   ('public.ler_mensagens(uuid)'),
   ('public.brain_propor(uuid,jsonb,uuid)'),
-  ('public.agentes_marcar_marco(uuid,uuid,integer,text)')
+  ('public.agentes_marcar_marco(uuid,uuid,integer,text)'),
+  ('public.crm_conexoes_credenciais(uuid)')
 )
 select 'required_function' as section, signature, to_regprocedure(signature) is not null as present
 from expected order by signature;
@@ -142,18 +143,18 @@ select 'sequence_security' as section, c.relname as sequence_name,
 from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'S'
 order by c.relname;
 
--- Mostra somente nomes de colunas, nunca valores. Tokens de conexão são
--- administráveis pelo app_admin e dependem de RLS; os tokens legados abaixo
--- não devem ter SELECT sequer para authenticated.
+-- Mostra somente nomes de colunas, nunca valores. Nenhum token deve ter SELECT
+-- para authenticated: desde 20261102190000 também os de CRM e do Instagram
+-- (o admin grava, não lê; "tem token?" vem de crm_conexoes_credenciais).
 with expected(table_name, column_name, expected_authenticated_select, access_model) as (values
   ('clients', 'wts_api_token', false, 'server_only'),
   ('clients', 'digisac_token', false, 'server_only'),
   ('clients', 'digisac_url', false, 'server_only'),
   ('clients', 'ticket_medio', true, 'client_metadata'),
   ('client_ad_accounts', 'access_token', false, 'server_only'),
-  ('crm_connections', 'access_token', true, 'admin_only_rls'),
-  ('crm_connections', 'webhook_secret', true, 'admin_only_rls'),
-  ('instagram_account_secrets', 'meta_access_token', true, 'admin_only_rls'),
+  ('crm_connections', 'access_token', false, 'server_only'),
+  ('crm_connections', 'webhook_secret', false, 'server_only'),
+  ('instagram_account_secrets', 'meta_access_token', false, 'server_only'),
   ('instagram_posts', 'reach', true, 'metrics_server_write_only'),
   ('instagram_posts', 'client_id', true, 'tenant_identity_server_write_only'),
   ('instagram_posts', 'tema', true, 'editor_classification')

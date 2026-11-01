@@ -5,6 +5,7 @@ import { Pencil, Plus, UserRound } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getPessoasEquipe, salvarPessoaEquipe, type DadosPessoa, type PessoaEquipe } from "@/lib/sap-data";
 import { PAPEIS } from "@/lib/sap-tarefas";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 // Equipe: cadastro de pessoas (time da Doctor Creator e contatos das clínicas) sem exigir login. O "Quem é quem" do SAP
 // escolhe daqui e mostra o nome. Com o mesmo e-mail de um login, a pessoa vê as próprias tarefas em Minhas tarefas.
@@ -66,12 +67,12 @@ function Equipe() {
 
       {editando && (
         <FormPessoa inicial={editando.dados} novo={!editando.id} clientes={clientes.data ?? []} salvando={salvar.isPending}
-          erro={salvar.isError ? (salvar.error as Error).message : null}
+          erro={salvar.isError ? mensagemDeErroAcao(salvar.error) : null}
           onCancelar={() => setEditando(null)} onSalvar={(dados) => salvar.mutate({ id: editando.id, dados })} />
       )}
 
       {pessoas.isLoading ? <p className="note">Carregando…</p> : pessoas.isError ? (
-        <p className="note" style={{ color: "var(--crit)" }}>Não foi possível carregar: {(pessoas.error as Error).message}</p>
+        <p className="note" style={{ color: "var(--crit)" }}>Não foi possível carregar: {mensagemDeErroAcao(pessoas.error)}</p>
       ) : !lista.length ? (
         <p className="note">Nenhuma pessoa neste filtro.</p>
       ) : (

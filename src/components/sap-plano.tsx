@@ -23,6 +23,7 @@ import {
   type LinhaPlano,
   type ResultadoKpi,
 } from "@/lib/sap-metas";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const dm = (iso: string) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
 const unidade = (k: KpiPlano) => KPIS_PLANO.find((x) => x.id === k)!.unidade;
@@ -213,7 +214,7 @@ function TabelaPlano({ clientId, clinica, plano, atual, carregando, hoje }: { cl
       setRascunho(r);
       setJanelaMedida(j);
     } catch (e) {
-      setErro((e as Error).message);
+      setErro(mensagemDeErroAcao(e));
     } finally {
       setMedindo(false);
     }
@@ -248,7 +249,7 @@ function TabelaPlano({ clientId, clinica, plano, atual, carregando, hoje }: { cl
       qc.invalidateQueries({ queryKey: ["sap-plano"] });
       qc.invalidateQueries({ queryKey: ["sap-cadastro", clientId] });
     },
-    onError: (e) => setErro((e as Error).message),
+    onError: (e) => setErro(mensagemDeErroAcao(e)),
   });
 
   const principais = kpisDaGarantia(clinica.consulta_paga !== false);
