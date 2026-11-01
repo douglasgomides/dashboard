@@ -44,4 +44,4 @@ export function avisoAgendadosSaoGanhos(agendados: number, ganhos: number): stri
 
 /** Aviso de tela da mudança de 31/10. */
 export const AVISO_MUDANCA_FUNIL =
-  "Mudou em 31/10: a % entre etapas só aparece com pelo menos 30 leads, 20 agendamentos ou 15 consultas na etapa de base. Abaixo disso mostramos “N de M”. Quando os agendados são os próprios ganhos, a etapa aparece como não medida.";
+  `Mudou em 31/10: a % entre etapas só aparece com pelo menos ${LIMITES.funil.minLeads} leads, ${LIMITES.funil.minAgendamentos} agendamentos ou ${LIMITES.funil.minConsultas} consultas na etapa de base. Abaixo disso mostramos “N de M”. Quando os agendados são os próprios ganhos, a etapa aparece como não medida.`;

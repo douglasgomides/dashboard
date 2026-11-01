@@ -9,6 +9,7 @@
 // Lógica pura, testável com `npx tsx scripts/test-cruzamento.ts`.
 import { median } from "@/lib/report-metrics";
 import { confiancaPorAmostra, type Insight, type Limitacao } from "@/lib/insight";
+import { LIMITES } from "./limites.js";
 
 export interface EntradaCruzamento {
   start: string;
@@ -41,8 +42,8 @@ export interface Cruzamento {
   limitacoes: Limitacao[];
 }
 
-export const MIN_DIAS_CORRELACAO = 21;
-export const MIN_LEADS = 20;
+export const MIN_DIAS_CORRELACAO: number = LIMITES.amostra.periodo.diasCorrelacao;
+export const MIN_LEADS: number = LIMITES.amostra.crm.leadsCruzamento;
 export const PICO = 1.5;
 
 // Regras exibidas em "Como calculamos". A janela tem que bater com o código: janela() soma o dia do

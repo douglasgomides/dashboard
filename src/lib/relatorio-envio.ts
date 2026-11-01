@@ -28,6 +28,7 @@ import { checarLinguagemCFM, tornarSeguro } from "@/lib/linguagem-cfm";
 import { fmtFormatKey, fmtTaxaPct, median, taxaDoPost } from "@/lib/report-metrics";
 import { saldoSeguidores } from "@/lib/metricas";
 import { lerVendas, type VendasPeriodoBanco } from "@/lib/vendas-periodo";
+import { LIMITES } from "./limites.js";
 
 // ---------------------------------------------------------------- tipos
 
@@ -315,14 +316,14 @@ interface Candidata {
   risco?: string;
 }
 
-const MIN_POSTS_FORMATO = 8; // posts no período para comparar formatos
-const MIN_POR_FORMATO = 3;
-const MIN_POSTS_TEMA = 3;
+const MIN_POSTS_FORMATO: number = LIMITES.amostra.conteudo.relatorioPostsFormato; // posts no período para comparar formatos
+const MIN_POR_FORMATO: number = LIMITES.amostra.conteudo.relatorioPorFormato;
+const MIN_POSTS_TEMA: number = LIMITES.amostra.conteudo.relatorioPostsTema;
 const MARGEM = 1.25;
-const MIN_PESSOAS_DUVIDA = 2;
-const MIN_ESPERA_MEDIDA = 10;
+const MIN_PESSOAS_DUVIDA: number = LIMITES.amostra.conteudo.relatorioPessoasDuvida;
+const MIN_ESPERA_MEDIDA: number = LIMITES.amostra.conversas.esperaMedida;
 const ESPERA_ALTA_SEG = 15 * 60;
-const MIN_LEADS_CRM = 30;
+const MIN_LEADS_CRM: number = LIMITES.amostra.crm.leadsRelatorio;
 
 function cobertura(diasComDado: string[], start: string, end: string) {
   const todos = daysBetween(start, end);
@@ -727,9 +728,9 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
       if (v.numero != null && v.numero > 0)
         vitorias.push({
           id: "crm-ganhos",
-          curto: v.base === "evento" ? `${fmtN(v.numero)} ${plural(v.numero, "venda fechada", "vendas fechadas")} no período` : `${fmtN(v.numero)} ${plural(v.numero, "venda", "vendas")} entre os contatos que entraram no período`,
+          curto: v.base === "evento" && !v.porPessoas ? `${fmtN(v.numero)} ${plural(v.numero, "venda fechada", "vendas fechadas")} no período` : v.porPessoas ? `${fmtN(v.numero)} ${plural(v.numero, "pessoa comprou", "pessoas compraram")}${v.base === "evento" ? " no período" : " entre os contatos do período"}` : `${fmtN(v.numero)} ${plural(v.numero, "venda", "vendas")} entre os contatos que entraram no período`,
           texto: `${v.frase[0].toUpperCase()}${v.frase.slice(1)}.`,
-          evidencia: v.base === "evento" ? "Vendas registradas no CRM com data no período." : "Contatos que entraram no período e hoje estão marcados como venda no CRM. O número pode crescer depois, conforme mais contatos do período fecham.",
+          evidencia: `${v.base === "evento" ? "Vendas registradas no CRM com data no período." : "Contatos que entraram no período e hoje estão marcados como venda no CRM. O número pode crescer depois, conforme mais contatos do período fecham."}${v.aviso ? ` ${v.aviso}` : ""}`,
         });
       if (v.indisponivel) {
         // A fonte de vendas não informa o resultado (card fechado na origem) ou a planilha parou: não é a equipe

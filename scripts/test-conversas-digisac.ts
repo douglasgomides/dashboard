@@ -97,6 +97,12 @@ try {
       conversationWrites++;
       return json({ id: "conversation" });
     }
+    if (table === "wts_sessions" && method === "PATCH") {
+      // 1ª resposta calculada pelas mensagens (não pelo waitingTime do ticket).
+      const body = JSON.parse(String(init?.body));
+      assert.deepEqual(Object.keys(body).sort(), ["first_response_at", "wait_seconds"]);
+      return json(null);
+    }
     if (table === "mensagens") {
       if (failMessages) return dbError();
       messageWrites += JSON.parse(String(init?.body)).length;

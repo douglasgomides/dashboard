@@ -394,6 +394,10 @@ async function syncDailyMetrics(
       profile_links_taps: campos.profile_links_taps ?? null,
     };
     if (saidas != null) linha.unfollowers = saidas;
+    // 0 novos sem o total de seguiram+deixaram é "não medido" também em dia fechado: gravar 0 deixava o dia com
+    // "0 seguidores novos" para sempre (Douglas e Lana em 24-25/08, Doctor Creator em 29-30/09). Sem a coluna, o
+    // valor já gravado fica e a releitura pela Graph completa o dia.
+    if (semMedida) delete linha.new_followers;
     // Dia antigo (pedido sem follower_count_1d): sem a coluna, para não apagar o que já foi medido.
     if (date < limite30 && novos == null) delete linha.new_followers;
     return linha;

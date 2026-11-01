@@ -27,6 +27,7 @@ import { BENCHMARKS, CITACAO_HBR_RESPOSTA, avaliar, type Faixa } from "./benchma
 import { fmtFracao } from "@/lib/metricas";
 import { agendadosSaoGanhos, avisoAgendadosSaoGanhos, minimoDaBase, passagem, type BaseFunil } from "./funil-taxa";
 import { confiancaPorAmostra, type Impacto, type Insight, type Limitacao, type Responsavel, type Tom } from "./insight";
+import { LIMITES } from "./limites.js";
 
 // ---------------------------------------------------------------- regras de etapa
 // As mesmas da migração (manter em sincronia).
@@ -127,7 +128,7 @@ function lerWhatsapp(conectado: boolean, wts: WtsResumoMin | null | undefined): 
 }
 
 /** Período com menos leads que isso não sustenta leitura: cai para a base inteira. */
-export const MIN_LEADS_PERIODO = 20;
+export const MIN_LEADS_PERIODO: number = LIMITES.amostra.crm.leadsPeriodo;
 
 /** Lê o JSON da RPC crm_diagnostico_comercial. */
 export function lerDiagnosticoRpc(
@@ -418,7 +419,7 @@ export function montarFunil(d: DadosComerciais): Funil {
     {
       id: "agendaram",
       rotulo: "Agendaram",
-      explica: "Estão numa etapa de consulta agendada, ou já fecharam.",
+      explica: "Leads do período que hoje estão numa etapa de consulta agendada, ou já fecharam (situação de hoje, em cards). Não é o mesmo número de \"Agendaram\" em Pacientes do período, que conta pessoas que entraram na etapa no período, mais a leitura das conversas.",
       valor: agendados,
       estimado: agEstimado,
       confiavel: agendados !== null && !agEstimado,

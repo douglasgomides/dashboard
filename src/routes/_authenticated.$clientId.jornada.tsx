@@ -14,6 +14,7 @@ import { ListaLimitacoes } from "@/components/insight-card";
 
 import { ehNegocioProprio } from "@/lib/negocio-proprio";
 import { CrmNegocioProprio } from "@/components/crm-negocio-proprio";
+import { mensagemDeErro } from "@/lib/erro-amigavel";
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 
@@ -170,7 +171,7 @@ function JornadaPage() {
           comentários e conversas que aconteceram nele.
         </OQueE>
         {resumo.isLoading && <Carregando texto="Ligando post, conversa e venda…" linhas={2} />}
-        {resumo.error && <p className="text-sm">{(resumo.error as Error).message}</p>}
+        {resumo.error && <p className="text-sm" role="alert">{mensagemDeErro(resumo.error, "as pessoas do período")}</p>}
         {r && r.leads_total > 0 && (
           <div
             className="mb-3 rounded-xl border p-3"

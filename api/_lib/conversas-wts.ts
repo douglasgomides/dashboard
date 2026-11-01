@@ -12,6 +12,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { codigosNaMensagem } from "../../src/lib/rastreio.js";
 import { registrarToqueLink } from "./redirecionar.js";
+import { fetchComRetry } from "./integration-http.js";
 
 const BASE = "https://api.wts.chat";
 let ultimoCarimboMicros = 0;
@@ -24,16 +25,11 @@ function carimboConferencia(): string {
 }
 
 async function wtsGet(token: string, caminho: string): Promise<any> {
-  for (let tentativa = 0; tentativa < 3; tentativa++) {
-    const r = await fetch(`${BASE}${caminho}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(25_000), redirect: "error" });
-    if (r.ok) return r.json();
-    if (r.status === 429 || r.status >= 500) {
-      await new Promise((ok) => setTimeout(ok, 800 * (tentativa + 1)));
-      continue;
-    }
-    throw new Error(`WTS ${caminho.split("?")[0]} respondeu ${r.status}`);
-  }
-  throw new Error(`WTS ${caminho.split("?")[0]} indisponível`);
+  // 429/5xx/rede: espera (Retry-After, com teto) e tenta de novo, até 3 vezes.
+  const r = await fetchComRetry(`${BASE}${caminho}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }, { timeoutMs: 25_000, baseMs: 800 });
+  if (r.ok) return r.json();
+  if (r.status === 429 || r.status >= 500) throw new Error(`WTS ${caminho.split("?")[0]} indisponível`);
+  throw new Error(`WTS ${caminho.split("?")[0]} respondeu ${r.status}`);
 }
 
 export function direcaoDaMensagem(d: unknown): "entrada" | "saida" | "sistema" {

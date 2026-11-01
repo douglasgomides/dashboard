@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Ajuda } from "@/components/visual";
 import { Carregando } from "@/components/sem-fonte";
+import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { fmtBRL } from "@/lib/format";
@@ -22,10 +23,17 @@ import {
   fonteDoNumero,
   legendaDoNumero,
   coberturaDoNumero,
+  avisoCrmCompartilhado,
   avisoNaoMedido,
+  avisoTelaHonesta,
+  avisoAgendouMenosQueFechou,
+  textoNaoMedido,
+  notaCrmPorMedico,
   nomeCheckout,
   oQue,
   textoReembolsos,
+  textoRenovacoes,
+  avisoCheckout,
   vemDoCheckout,
   paraChamarAgora,
   recompraDe,
@@ -60,15 +68,7 @@ function PacientesDoPeriodo() {
   const [aberta, setAberta] = useState<ChaveNumero | null>(null);
   const listaRef = useRef<HTMLDivElement>(null);
 
-  const q = useQuery({
-    queryKey: ["pacientes-periodo", clientId, start, end],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("pacientes_periodo", { p_client: clientId, p_de: start, p_ate: end });
-      if (error) throw new Error(error.message);
-      return data as PacientesPeriodo;
-    },
-    staleTime: 5 * 60_000,
-  });
+  const q = usePacientesPeriodo(clientId, start, end);
   const historico = useQuery({
     queryKey: ["pacientes-vendas", clientId, hoje],
     queryFn: async () => {
@@ -115,14 +115,17 @@ function PacientesDoPeriodo() {
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
           {formatRangeLabel({ start, end })}. Cada número é de pessoas, não de conversas. Toque num número para ver quem são.
         </p>
-        {(d.crm_compartilhado_com?.length ?? 0) > 0 && (
-          <p className="text-sm font-medium" style={{ color: "var(--warn, var(--text))" }}>
-            O CRM desta clínica é o mesmo de {d.crm_compartilhado_com!.join(", ")}. Os números abaixo são da conta inteira, não só deste médico.
-            Para separar, a clínica precisa marcar o médico em cada lead (um campo "Médico" no CRM).
-          </p>
+        {avisoCrmCompartilhado(d) && (
+          <p className="text-sm font-medium" style={{ color: "var(--warn, var(--text))" }}>{avisoCrmCompartilhado(d)}</p>
+        )}
+        {notaCrmPorMedico(d) && (
+          <p className="text-xs" style={{ color: "var(--text-dim)" }}>{notaCrmPorMedico(d)}</p>
         )}
         {avisoNaoMedido(d) && (
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>{avisoNaoMedido(d)}</p>
+        )}
+        {avisoTelaHonesta(d) && (
+          <p className="text-xs" style={{ color: "var(--text-dim)" }}>{avisoTelaHonesta(d)}</p>
         )}
         {d.cliente_de_teste && (
           <p className="text-xs" style={{ color: "var(--warn, var(--muted))" }}>
@@ -136,6 +139,12 @@ function PacientesDoPeriodo() {
           <NumeroGrande key={k} chave={k} numero={d.numeros[k]} ativo={aberta === k} onAbrir={() => abrir(k)} />
         ))}
       </ul>
+
+      {avisoAgendouMenosQueFechou(d) && (
+        <p className="rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--warn-border, var(--border))", background: "var(--surface-2)" }}>
+          {avisoAgendouMenosQueFechou(d)}
+        </p>
+      )}
 
       {eng && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
@@ -222,8 +231,9 @@ function NumeroGrande({ chave, numero, ativo, onAbrir }: { chave: ChaveNumero; n
         <span className="text-xs font-semibold" style={{ color: "var(--text-dim)" }}>{t.rotulo}</span>
         {semDado ? (
           <>
-            <span className="text-base font-semibold" style={{ color: "var(--muted)" }}>Sem dado</span>
+            <span className="text-base font-semibold" style={{ color: "var(--muted)" }}>{textoNaoMedido(numero)}</span>
             <span className="text-xs" style={{ color: "var(--text-dim)" }}>{numero?.motivo_sem_dado ?? "A fonte não respondeu."}</span>
+            {typeof numero?.o_que_fazer === "string" && <span className="text-xs" style={{ color: "var(--text-dim)" }}><b>O que fazer:</b> {numero.o_que_fazer}</span>}
             {numero?.responsavel && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{ROTULO_RESPONSAVEL[numero.responsavel]}</span>}
           </>
         ) : (
@@ -231,6 +241,7 @@ function NumeroGrande({ chave, numero, ativo, onAbrir }: { chave: ChaveNumero; n
             <span className="text-3xl font-semibold tabular-nums leading-none">{fmt(numero!.valor)}</span>
             <span className="text-xs" style={{ color: "var(--text-dim)" }}>{legendaDoNumero(chave, numero)}</span>
             {coberturaDoNumero(numero) && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{coberturaDoNumero(numero)}</span>}
+            {chave === "fecharam" && avisoCheckout(numero) && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{avisoCheckout(numero)}</span>}
           </>
         )}
       </button>
@@ -280,7 +291,13 @@ function Divisao({ chave, numero, dados }: { chave: ChaveNumero; numero: Numero;
   } else if (chave === "fecharam") {
     const vendas = Number(numero.vendas ?? 0), semValor = Number(numero.sem_valor ?? 0);
     const checkout = vemDoCheckout(numero);
-    partes.push(`${fmt(vendas)} vendas${checkout ? ` pela ${nomeCheckout(numero)}` : ""}`);
+    // Venda conta pessoas (o número grande); os cards ganhos (orçamentos) ficam como informação secundária.
+    if (!checkout && numero.ja_no_crm != null && Number(numero.ja_no_crm) > 0)
+      partes.push(`${fmt(Number(numero.ja_no_crm))} já eram pacientes ou já estavam no CRM antes do período`);
+    const vendasCrm = Number(numero.vendas_crm ?? 0);
+    if (checkout && vendasCrm > 0) partes.push(`${fmt(vendas - vendasCrm)} vendas pela ${nomeCheckout(numero)} e ${fmt(vendasCrm)} pelo CRM`);
+    else partes.push(checkout ? `${fmt(vendas)} vendas pela ${nomeCheckout(numero)}` : `${fmt(vendas)} ${vendas === 1 ? "orçamento ganho" : "orçamentos ganhos"} no CRM (quem fechou mais de um conta uma vez)`);
+    if (checkout && Number(numero.em_protesto ?? 0) > 0) partes.push(`${fmt(Number(numero.em_protesto))} em protesto (contam como venda, como na ${nomeCheckout(numero)})`);
     // Com metade ou mais das vendas sem valor, a soma engana (HOMS: 100 vendas, só 1 com valor, "total R$ 86").
     if (vendas > 0 && semValor * 2 >= vendas) partes.push(`só ${fmt(vendas - semValor)} com valor ${checkout ? "no checkout" : "no CRM"}, então o total não aparece`);
     else {
@@ -289,6 +306,8 @@ function Divisao({ chave, numero, dados }: { chave: ChaveNumero; numero: Numero;
     }
     const reembolsos = textoReembolsos(numero, fmtBRL);
     if (reembolsos) partes.push(reembolsos);
+    const renovacoes = textoRenovacoes(numero, fmtBRL);
+    if (renovacoes) partes.push(renovacoes);
     if (Number(numero.ganho_prospeccao_sem_valor ?? 0) > 0)
       partes.push(`${fmt(Number(numero.ganho_prospeccao_sem_valor))} "ganhos" sem valor da prospecção contados como resposta, não como venda`);
   } else if (chave === "engajaram_instagram") {

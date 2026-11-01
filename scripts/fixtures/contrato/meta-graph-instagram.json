@@ -1,0 +1,48 @@
+{
+  "_sobre": "Amostra inventada no formato da Meta Graph API v26.0 (Instagram) que o Nexo lê. Sem dado real. Ver docs/apis/meta-graph-instagram.md.",
+  "media": {
+    "data": [
+      { "id": "17900000000000001", "caption": "Legenda de exemplo", "timestamp": "2026-10-20T15:00:00+0000", "media_type": "VIDEO", "media_product_type": "REELS", "permalink": "https://www.instagram.com/reel/EXEMPLO1/", "thumbnail_url": "https://exemplo.com/thumb1.jpg", "media_url": "https://exemplo.com/video1.mp4" },
+      { "id": "17900000000000002", "caption": "Outra legenda", "timestamp": "2026-10-19T12:00:00+0000", "media_type": "CAROUSEL_ALBUM", "media_product_type": "FEED", "permalink": "https://www.instagram.com/p/EXEMPLO2/", "media_url": "https://exemplo.com/foto2.jpg" },
+      { "id": "17900000000000003", "timestamp": "2026-10-18T09:00:00+0000", "media_type": "IMAGE", "media_product_type": "FEED", "permalink": "https://www.instagram.com/p/EXEMPLO3/", "media_url": "https://exemplo.com/foto3.jpg" }
+    ],
+    "paging": { "cursors": { "before": "QVFIUkVYRU1QTE8x", "after": "QVFIUkVYRU1QTE8y" }, "next": "https://graph.facebook.com/v26.0/17840000000000000/media?after=QVFIUkVYRU1QTE8y" }
+  },
+  "insights_lote": [
+    { "code": 200, "body": "{\"data\":[{\"name\":\"reach\",\"period\":\"lifetime\",\"values\":[{\"value\":1200}],\"id\":\"17900000000000001/insights/reach/lifetime\"},{\"name\":\"views\",\"period\":\"lifetime\",\"values\":[{\"value\":3400}],\"id\":\"17900000000000001/insights/views/lifetime\"}]}" },
+    { "code": 400, "body": "{\"error\":{\"message\":\"Media posted before business account conversion\",\"type\":\"OAuthException\",\"code\":10,\"error_subcode\":2108006}}" }
+  ],
+  "insights_post": {
+    "data": [
+      { "name": "reach", "period": "lifetime", "values": [{ "value": 1200 }], "id": "17900000000000001/insights/reach/lifetime" },
+      { "name": "likes", "period": "lifetime", "values": [{ "value": 80 }], "id": "17900000000000001/insights/likes/lifetime" },
+      { "name": "comments", "period": "lifetime", "values": [{ "value": 6 }], "id": "17900000000000001/insights/comments/lifetime" },
+      { "name": "shares", "period": "lifetime", "values": [{ "value": 4 }], "id": "17900000000000001/insights/shares/lifetime" },
+      { "name": "saved", "period": "lifetime", "values": [{ "value": 9 }], "id": "17900000000000001/insights/saved/lifetime" },
+      { "name": "views", "period": "lifetime", "values": [{ "value": 3400 }], "id": "17900000000000001/insights/views/lifetime" },
+      { "name": "total_interactions", "period": "lifetime", "values": [{ "value": 99 }], "id": "17900000000000001/insights/total_interactions/lifetime" }
+    ]
+  },
+  "conta_dia": {
+    "data": [
+      { "name": "reach", "period": "day", "total_value": { "value": 5000 }, "id": "17840000000000000/insights/reach/day" },
+      { "name": "total_interactions", "period": "day", "total_value": { "value": 320 }, "id": "17840000000000000/insights/total_interactions/day" },
+      { "name": "profile_links_taps", "period": "day", "total_value": { "value": 12 }, "id": "17840000000000000/insights/profile_links_taps/day" }
+    ]
+  },
+  "seguidores_dia": {
+    "data": [
+      {
+        "name": "follows_and_unfollows",
+        "period": "day",
+        "total_value": {
+          "breakdowns": [
+            { "dimension_keys": ["follow_type"], "results": [ { "dimension_values": ["FOLLOWER"], "value": 40 }, { "dimension_values": ["NON_FOLLOWER"], "value": 7 } ] }
+          ]
+        },
+        "id": "17840000000000000/insights/follows_and_unfollows/day"
+      }
+    ]
+  },
+  "perfil": { "followers_count": 12000, "id": "17840000000000000" }
+}

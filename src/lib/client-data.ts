@@ -63,6 +63,7 @@ export async function getRankedPosts(clientId: string, monthStart: string, month
     .from("instagram_posts")
     .select("*")
     .eq("client_id", clientId)
+    .is("removido_em", null) // apagado/arquivado no Instagram não conta
     .gte("posted_at", desde)
     .lt("posted_at", antesDe)
     .order("saved", { ascending: false, nullsFirst: false })
@@ -77,6 +78,7 @@ export async function getPostsForAnalytics(clientId: string, sinceDate: string, 
     .from("instagram_posts")
     .select("*")
     .eq("client_id", clientId)
+    .is("removido_em", null) // apagado/arquivado no Instagram não conta
     .gte("posted_at", desde);
   if (untilDate) query = query.lt("posted_at", antesDe);
     return query.order("posted_at", { ascending: false }).order("id").range(from, to);
@@ -161,6 +163,7 @@ export async function getCrmLeadsPorDiaPeriodo(clientId: string, from: string, t
 export async function getCrmResumoPeriodo(clientId: string, from: string, to: string) {
   const cliente = supabase as unknown as {
     rpc: (fn: string, args: Record<string, unknown>) => Promise<{
+      // novos e perdidos: pessoas; ganhos: cards ganhos; valor: soma dos cards GANHOS (desde 20261102140000).
       data: { novos: number; ganhos: number; perdidos: number; valor: number }[] | null;
       error: unknown;
     }>;
@@ -169,6 +172,19 @@ export async function getCrmResumoPeriodo(clientId: string, from: string, to: st
   if (error) throw error;
   // Sem linha é "sem dado", não zero: as telas mostram "Sem dado" em vez de 0 (diagnóstico de medição, PR 4).
   return data?.[0] ?? null;
+}
+
+// Outras clínicas que leem a mesma conta de CRM (migração 20261102140000). Banco sem a função: null, sem erro na tela.
+export async function getCrmCompartilhadoCom(clientId: string): Promise<string[] | null> {
+  const cliente = supabase as unknown as {
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { code?: string; message?: string } | null }>;
+  };
+  const { data, error } = await cliente.rpc("crm_compartilhado_com", { p_client: clientId });
+  if (error) {
+    if (error.code === "PGRST202" || /crm_compartilhado_com/.test(error.message ?? "")) return null;
+    throw error;
+  }
+  return Array.isArray(data) ? data.map(String) : [];
 }
 
 // Vendas do período por evento "ganhou" e pela coorte, cards fechados sem resultado, planilha parada e pessoas
@@ -951,6 +967,7 @@ export async function getPostsParaImpulsionados(clientId: string, desde: string)
       .from("instagram_posts")
       .select("id, caption, posted_at, permalink, thumbnail_url, reach")
       .eq("client_id", clientId)
+      .is("removido_em", null)
       .gte("posted_at", desde)
       .order("posted_at", { ascending: false })
       .order("id")

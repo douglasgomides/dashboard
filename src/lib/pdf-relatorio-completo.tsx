@@ -364,7 +364,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   }
   if (cm && vendas) {
     kpis.push({ label: "Contatos novos no CRM", value: fmtNum(pessoasNovas), hint: d.crmNome ? `CRM ${d.crmNome}, no período` : "no período" });
-    kpis.push({ label: vendas.rotulo, value: vendas.numero != null ? fmtNum(vendas.numero) : "não disponível", hint: vendas.indisponivel ? "a fonte de vendas não informa o resultado" : vendas.base === "coorte" ? "dos contatos que entraram no período" : undefined });
+    kpis.push({ label: vendas.rotulo, value: vendas.numero != null ? fmtNum(vendas.numero) : "não disponível", hint: vendas.indisponivel ? "a fonte de vendas não informa o resultado" : vendas.porPessoas ? "pessoas, não orçamentos" : vendas.base === "coorte" ? "dos contatos que entraram no período" : undefined });
   }
 
   // Blocos do "O que aconteceu" do relatório antigo, restaurados dentro da seção certa da página 1.
@@ -903,13 +903,16 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
 
           {crm && cm && vendas ? (
             <>
-              <Titulo dica="Só o período do relatório. Contato novo = pessoa que entrou pela primeira vez no CRM no período, em funil de captação (paciente antigo não conta).">{`Comercial${d.crmNome ? `, CRM ${d.crmNome}` : ""}`}</Titulo>
+              <Titulo dica="Só o período do relatório. Contato novo = pessoa que entrou pela primeira vez no CRM no período, em funil de captação (paciente antigo não conta). Contatos novos e perdidos contam pessoas; vendas contam cards (orçamentos ganhos), e a mesma pessoa pode ter mais de um. Orçamento aberto ou perdido não entra em valor nenhum.">{`Comercial${d.crmNome ? `, CRM ${d.crmNome}` : ""}`}</Titulo>
               <Kpis
                 items={[
                   { label: "Contatos novos", value: fmtNum(pessoasNovas), hint: "no período" },
-                  { label: vendas.rotulo, value: vendas.numero != null ? fmtNum(vendas.numero) : "não disponível", hint: vendas.base === "coorte" && vendas.numero != null ? "dos contatos que entraram no período" : undefined },
+                  { label: vendas.rotulo, value: vendas.numero != null ? fmtNum(vendas.numero) : "não disponível", hint: vendas.porPessoas && vendas.numero != null ? "pessoas; quem fechou mais de um orçamento conta uma vez" : vendas.base === "coorte" && vendas.numero != null ? "dos contatos que entraram no período" : undefined },
+                  // Venda conta pessoas: quem já era paciente e os orçamentos ganhos vêm à parte, como informação secundária.
+                  ...(vendas.porPessoas && vendas.numero != null && (vendas.jaPacientes ?? 0) > 0 ? [{ label: "Já eram pacientes ou já estavam no CRM", value: fmtNum(vendas.jaPacientes ?? 0), hint: "das pessoas que compraram" }] : []),
+                  ...(vendas.porPessoas && vendas.numero != null && vendas.cardsGanhos != null && vendas.cardsGanhos !== vendas.numero ? [{ label: "Orçamentos ganhos", value: fmtNum(vendas.cardsGanhos), hint: "cards ganhos no CRM" }] : []),
                   ...(crm.vendas && crm.vendas.fechados_sem_resultado > 0 ? [{ label: "Fechados sem resultado", value: fmtNum(crm.vendas.fechados_sem_resultado), hint: "o CRM não diz se viraram venda" }] : []),
-                  ...(num(cm.perdidos) > 0 ? [{ label: "Perdidos", value: fmtNum(num(cm.perdidos)), hint: "contatos do período" }] : []),
+                  ...(num(cm.perdidos) > 0 ? [{ label: "Perdidos", value: fmtNum(num(cm.perdidos)), hint: "pessoas do período, sem as que também fecharam" }] : []),
                   ...(pctOrigem != null ? [{ label: "Contatos novos com origem", value: `${pctOrigem.toFixed(0)}%`, hint: "mesma conta do retorno do investimento" }] : []),
                 ]}
               />

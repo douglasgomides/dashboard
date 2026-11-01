@@ -157,7 +157,7 @@ try {
     rpc: async () => ({ data: true, error: null }),
     from: (table: string) => {
       const q: any = {
-        select: () => q, eq: () => q, not: () => q, order: () => q, limit: () => q, gte: () => q, range: () => q,
+        select: () => q, eq: () => q, is: () => q, not: () => q, order: () => q, limit: () => q, gte: () => q, range: () => q,
         maybeSingle: async () => ({ data: null, error: null }),
         then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => Promise.resolve(table === "crm_raw_events"
           ? failKommo ? { data: null, error: { message: "raw message read failed" } } : { data: [{ raw_payload: { add: {

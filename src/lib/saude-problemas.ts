@@ -5,7 +5,7 @@
 // Não cria regra nova de saúde: o estado vem de saudeDaFonte (tomDaFonte + motivoDaLinha) e os
 // problemas de dado vêm de qualidade_dados (banco). Aqui só se classifica e se ordena.
 import { type Fontes, type LinhaFonte } from "@/lib/saude-fontes";
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 import { motivoDaLinha } from "@/lib/motivos";
 import { statusDaFonte } from "@/lib/status-fonte";
 import type { ProblemaDado } from "@/lib/client-data";
@@ -109,7 +109,10 @@ function velho(l: LinhaFonte, hoje: Date = new Date()): boolean {
     const dias = (hoje.getTime() - new Date(`${l.data_ate}T12:00:00`).getTime()) / 86_400_000;
     return dias > LIMITES.planilha.diasParaParada;
   }
-  return statusDaFonte({ fonte: l.fonte, ultimo_sucesso: l.last_success_at, cadastro: true, data_ate: l.data_ate }).cor === "vermelho";
+  // "Sem movimento" (cinza no painel do cliente: rodou sem erro, a origem não teve atividade) continua na lista da equipe
+  // para confirmar com o cliente se é intencional; só deixou de ser pintado como falha técnica.
+  const st = statusDaFonte({ fonte: l.fonte, ultimo_sucesso: l.last_success_at, cadastro: true, data_ate: l.data_ate });
+  return st.cor === "vermelho" || st.rotulo === "Sem movimento";
 }
 
 /** Problema de uma fonte ligada (sync_status), ou null se está em dia. Mesmas regras de saudeDaFonte. */

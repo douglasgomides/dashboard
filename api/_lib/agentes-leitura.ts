@@ -106,7 +106,7 @@ export async function lerAnuncios(admin: Admin, clientId: string) {
   // Etapa do funil de cada campanha (C1/C2 = visita ao perfil, julgada por seguidor; C3 = conversa). Seguidor por
   // campanha é estimado pelo rateio dos novos seguidores do dia (src/lib/funil-anuncios.ts).
   const [{ data: posts }, { data: segs }] = await Promise.all([
-    admin.from("instagram_posts").select("caption, funnel_stage").eq("client_id", clientId).gte("posted_at", desde(400)).not("funnel_stage", "is", null).limit(2000),
+    admin.from("instagram_posts").select("caption, funnel_stage").eq("client_id", clientId).is("removido_em", null).gte("posted_at", desde(400)).not("funnel_stage", "is", null).limit(2000),
     admin.from("instagram_account_daily_metrics").select("date, new_followers").eq("client_id", clientId).gte("date", desde(15).slice(0, 10)).limit(200),
   ]);
   const etapas = new Map<string, Etapa>();
@@ -133,7 +133,7 @@ export async function lerConteudo(admin: Admin, clientId: string) {
   const [brain, f, posts, comentarios, hist, pautas, licoes] = await Promise.all([
     lerBrain(admin, clientId),
     ficha(admin, clientId),
-    admin.from("instagram_posts").select("tema, format, caption, reach, saved, shares, engagement, transcricao").eq("client_id", clientId).gte("posted_at", desde(120)).order("saved", { ascending: false, nullsFirst: false }).limit(40),
+    admin.from("instagram_posts").select("tema, format, caption, reach, saved, shares, engagement, transcricao").eq("client_id", clientId).is("removido_em", null).gte("posted_at", desde(120)).order("saved", { ascending: false, nullsFirst: false }).limit(40),
     admin.from("instagram_comments").select("text").eq("client_id", clientId).gte("commented_at", desde(90)).order("commented_at", { ascending: false }).limit(800),
     aprendizado(admin, clientId, "conteudo", 90),
     admin.from("pautas_conteudo").select("titulo, status").eq("client_id", clientId).gte("criado_em", desde(60)).limit(60),

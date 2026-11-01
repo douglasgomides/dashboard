@@ -3,8 +3,8 @@ import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { statusDoCliente, diasDeAtraso, ddmm } from "@/lib/saude-fontes";
-import { motivoDaLinha, COR_DONO } from "@/lib/motivos";
+import { statusDoCliente, diasDeAtraso } from "@/lib/saude-fontes";
+import { motivoDaLinha, COR_DONO, tituloDaFaixa } from "@/lib/motivos";
 import { SeloDono } from "@/components/selo-dono";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { getAdsPorDia, getAdsDiagnosticoPorObjetivo, getClientFontes, getAdsPlanilha } from "@/lib/client-data";
@@ -17,6 +17,7 @@ import { QualidadeLeadsCampanha } from "@/components/anuncios/qualidade-leads";
 import { fmtBRL } from "@/lib/format";
 import { GRUPOS, conversaMaisBarata, planoDeAcao, limitacoesDeAnuncios, unidade, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { BENCHMARKS } from "@/lib/benchmarks";
+import { avisoContaAnuncioCompartilhada, type ContaAnuncioCompartilhada } from "@/lib/conta-anuncio-compartilhada";
 import { InsightCard, ListaLimitacoes, OQueE } from "@/components/insight-card";
 import { MetodologiaAnuncios } from "@/components/anuncios/metodologia";
 import { DiagnosticoCampanhas, Faixa } from "@/components/anuncios/diagnostico-campanhas";
@@ -51,14 +52,15 @@ function MotivoParada({ clientId }: { clientId: string }) {
   });
   const l = data?.find((x) => x.fonte === "anuncios");
   const parada = l?.data_ate ? diasDeAtraso(l.data_ate) > 3 : false;
-  const m = parada || l?.motivo ? motivoDaLinha(l) : null;
+  // Erro gravado (conta não lida, leitura parcial) também aparece, mesmo com outra conta em dia.
+  const m = parada || l?.motivo || l?.last_error ? motivoDaLinha(l) : null;
   if (!l || !m) return null;
   // Fonte alimentada à mão (planilha de distribuição de conteúdo): não é parada nem erro, e o painel da planilha já explica a origem.
   if (m.dono === "manual") return null;
   return (
     <Faixa icone={AlertTriangle} cor={COR_DONO[m.dono]} alerta>
       <div className="flex flex-wrap items-center gap-2">
-        <b>{l.data_ate ? `Sem dado novo desde ${ddmm(l.data_ate)}` : "Sem dado de anúncios"}</b>
+        <b>{tituloDaFaixa(l.data_ate, parada)}</b>
         <SeloDono dono={m.dono} />
       </div>
       <div className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
@@ -205,7 +207,7 @@ function ContaCompartilhada({ clientId }: { clientId: string }) {
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("contas_anuncio_compartilhadas", { p_client_id: clientId });
       if (error) return [];
-      return (data ?? []) as { ad_account_id: string; outros_clientes: number; nomes: string[] | null }[];
+      return (data ?? []) as ContaAnuncioCompartilhada[];
     },
     staleTime: 10 * 60_000,
     retry: false,
@@ -215,10 +217,7 @@ function ContaCompartilhada({ clientId }: { clientId: string }) {
     <>
       {data.map((c) => (
         <Faixa key={c.ad_account_id} icone={AlertTriangle} cor="var(--warn)" alerta>
-          A conta de anúncios {c.ad_account_id} também está ligada a {c.outros_clientes} outro{c.outros_clientes > 1 ? "s" : ""} cliente
-          {c.outros_clientes > 1 ? "s" : ""}
-          {c.nomes?.length ? ` (${c.nomes.join(", ")})` : ""}: o gasto e os resultados aparecem inteiros em cada um. Não some os clientes. Para
-          separar, cada cliente precisa da própria conta ou de um filtro por campanha no cadastro.
+          {avisoContaAnuncioCompartilhada(c)}
         </Faixa>
       ))}
     </>

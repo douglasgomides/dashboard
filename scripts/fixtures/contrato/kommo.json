@@ -1,0 +1,78 @@
+{
+  "_sobre": "Amostra inventada no formato da API v4 da Kommo (e do webhook) que o Nexo lê. Sem dado real. Ver docs/apis/kommo.md.",
+  "leads": {
+    "_page": 1,
+    "_links": { "self": { "href": "https://exemplo.kommo.com/api/v4/leads?page=1" }, "next": { "href": "https://exemplo.kommo.com/api/v4/leads?page=2" } },
+    "_embedded": {
+      "leads": [
+        {
+          "id": 9000001,
+          "name": "Lead de exemplo",
+          "price": 1200,
+          "status_id": 142,
+          "pipeline_id": 7000001,
+          "created_at": 1760000000,
+          "updated_at": 1760500000,
+          "source_id": 300001,
+          "custom_fields_values": [ { "field_id": 500001, "field_name": "Fonte do Lead", "values": [ { "value": "Instagram" } ] } ],
+          "_embedded": { "contacts": [ { "id": 8000001, "is_main": true } ] }
+        },
+        {
+          "id": 9000002,
+          "name": "Outro lead",
+          "price": 0,
+          "status_id": 60000001,
+          "pipeline_id": 7000001,
+          "created_at": 1760600000,
+          "updated_at": 1760600000,
+          "custom_fields_values": null,
+          "_embedded": { "contacts": [] }
+        }
+      ]
+    }
+  },
+  "funis": {
+    "_embedded": {
+      "pipelines": [
+        {
+          "id": 7000001,
+          "name": "Funil de exemplo",
+          "is_unsorted_on": true,
+          "_embedded": {
+            "statuses": [
+              { "id": 60000000, "name": "Entrada", "type": 1 },
+              { "id": 60000001, "name": "Contato inicial", "type": 0 },
+              { "id": 142, "name": "Venda ganha", "type": 0 },
+              { "id": 143, "name": "Venda perdida", "type": 0 }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "motivos_perda": { "_embedded": { "loss_reasons": [ { "id": 400001, "name": "Preço" } ] } },
+  "contatos": {
+    "_embedded": {
+      "contacts": [
+        {
+          "id": 8000001,
+          "name": "Paciente Exemplo",
+          "custom_fields_values": [
+            { "field_code": "PHONE", "field_name": "Telefone", "values": [ { "value": "+55 11 90000-0000", "enum_code": "MOB" } ] },
+            { "field_code": "EMAIL", "field_name": "Email", "values": [ { "value": "paciente@exemplo.com", "enum_code": "WORK" } ] }
+          ]
+        }
+      ]
+    }
+  },
+  "eventos": {
+    "_links": { "self": { "href": "https://exemplo.kommo.com/api/v4/events?page=1" } },
+    "_embedded": {
+      "events": [
+        { "id": "ev-exemplo-1", "type": "incoming_chat_message", "entity_id": 9000001, "entity_type": "lead", "created_by": 0, "created_at": 1760000100, "value_after": [ { "message": { "id": "msg-exemplo-1", "origin": "waba", "talk_id": 1001 } } ] },
+        { "id": "ev-exemplo-2", "type": "outgoing_chat_message", "entity_id": 9000001, "entity_type": "lead", "created_by": 6000001, "created_at": 1760000400, "value_after": [ { "message": { "id": "msg-exemplo-2", "origin": "waba", "talk_id": 1001 } } ] }
+      ]
+    }
+  },
+  "webhook_bruto": "leads%5Bstatus%5D%5B0%5D%5Bid%5D=9000001&leads%5Bstatus%5D%5B0%5D%5Bstatus_id%5D=142&leads%5Bstatus%5D%5B0%5D%5Bold_status_id%5D=60000001&leads%5Bstatus%5D%5B0%5D%5Bpipeline_id%5D=7000001&leads%5Bstatus%5D%5B0%5D%5Bprice%5D=1200&leads%5Bdelete%5D%5B0%5D%5Bid%5D=9000002&account%5Bsubdomain%5D=exemplo"
+}

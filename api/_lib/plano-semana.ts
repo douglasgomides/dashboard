@@ -118,7 +118,7 @@ async function medirItem(admin: Admin, it: Item, ticket: number | null, semanaAt
   } else if (it.origem === "conteudo") {
     const tema = String(it.refs.tema ?? "");
     const [{ count: posts, error: e1 }, { count: conv, error: e2 }] = await Promise.all([
-      admin.from("instagram_posts").select("id", { count: "exact", head: true }).eq("client_id", it.client_id).eq("tema", tema).gt("posted_at", it.criado_em),
+      admin.from("instagram_posts").select("id", { count: "exact", head: true }).eq("client_id", it.client_id).is("removido_em", null).eq("tema", tema).gt("posted_at", it.criado_em),
       admin.from("conversas_tema").select("conversa_id", { count: "exact", head: true }).eq("client_id", it.client_id).eq("tema", tema).gt("gerado_em", it.criado_em),
     ]);
     if (e1 || e2) throw new Error("Não foi possível conferir o conteúdo");
@@ -196,7 +196,7 @@ async function candidatos(admin: Admin, clientId: string, semana: string, ticket
   if (eT) throw new Error("Não foi possível ler os temas das conversas");
   const conta = new Map<string, number>();
   for (const t of (temas ?? []) as { tema: string; comercial: boolean | null }[]) if (t.comercial !== false) conta.set(t.tema, (conta.get(t.tema) ?? 0) + 1);
-  const { data: postados, error: eP } = await admin.from("instagram_posts").select("tema").eq("client_id", clientId).not("tema", "is", null).gte("posted_at", iso(agora - 21 * DIA));
+  const { data: postados, error: eP } = await admin.from("instagram_posts").select("tema").eq("client_id", clientId).is("removido_em", null).not("tema", "is", null).gte("posted_at", iso(agora - 21 * DIA));
   if (eP) throw new Error("Não foi possível ler os posts recentes");
   const recentes = new Set(((postados ?? []) as { tema: string }[]).map((p) => p.tema));
   const top = [...conta.entries()].filter(([t, n]) => n >= 3 && !recentes.has(t)).sort((a, b) => b[1] - a[1])[0];

@@ -1,8 +1,15 @@
 // Por que uma fonte está parada, em linguagem de gente, e DE QUEM é a ação.
 // Hoje "Anúncios até 04/09" parece falha de sincronização; muitas vezes é pagamento, campanha desligada
 // ou acesso revogado do lado do cliente. Este arquivo transforma o que sabemos em uma frase honesta.
-import { atrasoDaFonte, diasDeAtraso, type LinhaFonte } from "@/lib/saude-fontes";
+import { atrasoDaFonte, diasDeAtraso, ddmm, type LinhaFonte } from "@/lib/saude-fontes";
 import { statusDaFonte, type StatusFonte } from "@/lib/status-fonte";
+
+const dataBr = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+
+/** Anúncios lançados à mão na planilha: sem tentativa automática e sem motivo gravado (mesma regra de ehPlanilha). */
+function ehPlanilhaDeAnuncios(l: LinhaFonte): boolean {
+  return l.fonte === "anuncios" && !l.last_attempt_at && !l.motivo && !!l.data_ate;
+}
 
 export type Dono = "cliente" | "meta" | "origem" | "nos" | "manual";
 export type Motivo = { texto: string; dono: Dono };
@@ -30,6 +37,10 @@ const NOME_FONTE: Record<string, string> = { instagram: "Instagram", anuncios: "
 export function motivoDoErro(fonte: string, erro: string): Motivo | null {
   const e = erro.toLowerCase();
   const nome = NOME_FONTE[fonte] ?? fonte;
+  // Conta de anúncios que nenhuma via lê (sem token próprio e fora da Windsor): falta o acesso do dono da conta.
+  if (/não lida: não tem token próprio/.test(e)) {
+    return { texto: erro.replace(/\s+/g, " ").trim().slice(0, 400), dono: "cliente" };
+  }
   if (/api access blocked|"code":\s*200|"code":\s*190|oauthexception.*(token|session|expired|permission)|access token|session has expired|invalid oauth|error validating/.test(e)) {
     return { texto: `A Meta bloqueou ou venceu o acesso do dashboard ao ${nome} desta conta. O dono da conta precisa autorizar de novo (novo acesso no Business Manager).`, dono: "cliente" };
   }
@@ -51,6 +62,9 @@ export function motivoDaLinha(l: LinhaFonte | undefined): Motivo | null {
     return traduzido ?? { texto: `Erro técnico na última atualização: ${l.last_error.replace(/\s+/g, " ").slice(0, 140)}`, dono: "nos" };
   }
   if (l.motivo) return { texto: l.motivo, dono: (l.motivo_dono as Dono) || "cliente" };
+  // Planilha não tem atualização automática: dizer "a atualização roda sem erro" seria falso (auditoria 01/11/2026).
+  if (ehPlanilhaDeAnuncios(l) && atrasoDaFonte(l) > 3)
+    return { texto: `Planilha lançada à mão: último lançamento em ${dataBr(l.data_ate!)}. O dado novo depende de a equipe lançar a planilha.`, dono: "manual" };
   if (l.data_ate && atrasoDaFonte(l) > 3) {
     const rodouOk = !!l.last_success_at && diasDeAtraso(l.last_success_at.slice(0, 10)) <= 1;
     if (rodouOk || !l.last_attempt_at) {
@@ -70,4 +84,12 @@ export function motivoDaLinha(l: LinhaFonte | undefined): Motivo | null {
 export function statusDaLinha(l: LinhaFonte | undefined, cadastro: boolean, naoUsa = false): StatusFonte {
   const m = motivoDaLinha(l);
   return statusDaFonte({ fonte: l?.fonte ?? null, ultimo_sucesso: l?.last_success_at ?? null, cadastro, data_ate: l?.data_ate ?? null, last_error: l?.last_error ?? null, motivo: m?.texto ?? null, motivo_dono: l?.motivo_dono ?? null, naoUsa });
+}
+
+// Título da faixa: "Sem dado novo desde" só quando a fonte está mesmo parada. Com dado de hoje e um aviso gravado
+// (ex.: uma das contas do cliente parada), o título dizia "Sem dado novo desde 01/11" no próprio dia 01/11 (HOMS).
+export function tituloDaFaixa(dataAte: string | null | undefined, parada: boolean): string {
+  if (!dataAte) return "Sem dado de anúncios";
+  if (parada) return `Sem dado novo desde ${ddmm(dataAte)}`;
+  return `Dados até ${ddmm(dataAte)}, com aviso`;
 }

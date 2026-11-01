@@ -11,16 +11,88 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type FonteSync = "instagram" | "comentarios" | "anuncios" | "crm" | "atendimento";
 
+// Parâmetros de URL que carregam segredo: Meta (access_token), Windsor (api_key), RD Station v1 (token), webhook do
+// Kommo (secret) e variações comuns. Valem para texto de erro e para qualquer linha de log.
+const PARAMETRO_SECRETO = /([?&;\s"'(]|^)((?:access_|api_|app_|client_|refresh_)?(?:token|key|secret|apikey|signature|sig|password|senha)|secret|api_key|apikey|key)=[^&\s"'<>)]+/gi;
+
+/** Esconde segredos em texto livre (mensagem de erro, URL, linha de log). */
+export function ocultarSegredos(texto: string): string {
+  return texto
+    .replace(PARAMETRO_SECRETO, (_m, antes: string, nome: string) => `${antes}${nome}=***`)
+    .replace(/(Bearer\s+)[A-Za-z0-9._\-~+/=]+/gi, "$1***")
+    .replace(/((?:x-)?api[-_]?(?:key|token)["']?\s*[:=]\s*["']?)[A-Za-z0-9._\-~+/=]{8,}/gi, "$1***")
+    .replace(/\bsk-(?:ant-|proj-)?[A-Za-z0-9_\-*.]{6,}/g, "[chave]");
+}
+
 // Mensagem curta e sem segredo: tokens de acesso viajam em query string
-// (access_token=...) e podem voltar dentro do texto de erro da Meta.
+// (access_token=..., api_key=...) e podem voltar dentro do texto de erro do provedor.
 export function erroCurto(msg: string | null | undefined, max = 300): string | null {
   if (!msg) return null;
-  return msg
+  return ocultarSegredos(msg)
     .replace(/access_token=[^&\s"']+/gi, "access_token=***")
+    // Chave da Windsor também viaja na URL; agora o erro da Windsor é gravado, então ela é escondida aqui.
+    .replace(/api_key=[^&\s"']+/gi, "api_key=***")
     .replace(/(Bearer\s+)[A-Za-z0-9._\-]+/gi, "$1***")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, max);
+}
+
+/**
+ * Validade do token quando ele mesmo informa: o token de longa duração do Kommo é um JWT com "exp" (vale de 1 dia a
+ * 5 anos e não tem renovação automática). Lê só o campo exp do payload; a assinatura não interessa aqui. null quando
+ * o token não é JWT ou não tem exp.
+ */
+export function expiraDoJwt(token: string | null | undefined): Date | null {
+  const partes = String(token ?? "").split(".");
+  if (partes.length !== 3) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(partes[1].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")) as { exp?: unknown };
+    const exp = typeof payload.exp === "number" ? payload.exp : Number(payload.exp);
+    return Number.isFinite(exp) && exp > 0 ? new Date(exp * 1000) : null;
+  } catch {
+    return null;
+  }
+}
+
+const AVISO_TOKEN = /^O token d[oa] .+ (vence|venceu) /;
+/** Frase de aviso quando faltam até `dias` para vencer (ou já venceu). null quando ainda está longe. */
+export function avisoValidadeToken(provedor: string, expira: Date | null, agora = new Date(), dias = 30): string | null {
+  if (!expira) return null;
+  const faltam = Math.ceil((expira.getTime() - agora.getTime()) / 86_400_000);
+  const data = expira.toISOString().slice(0, 10).split("-").reverse().join("/");
+  if (faltam <= 0) return `O token do ${provedor} venceu em ${data}. Gere um novo token de longa duração na conta e atualize a conexão; até lá o CRM não atualiza.`;
+  if (faltam > dias) return null;
+  return `O token do ${provedor} vence em ${faltam} ${faltam === 1 ? "dia" : "dias"} (${data}). Gere um novo token de longa duração na conta e atualize a conexão antes disso.`;
+}
+
+/**
+ * Grava o aviso de validade em sync_status.motivo (dono "cliente": quem gera o token é o dono da conta), sem apagar
+ * motivo de outra origem. A data de vencimento fica em token_expira_em quando a coluna existe. Nunca derruba o sync.
+ */
+export async function registrarValidadeToken(
+  supabase: SupabaseClient<any, any, any>,
+  clientId: string,
+  fonte: FonteSync,
+  provedor: string,
+  expira: Date | null,
+): Promise<void> {
+  try {
+    const { data } = await supabase.from("sync_status").select("motivo").eq("client_id", clientId).eq("fonte", fonte).maybeSingle();
+    const atual = (data as { motivo?: string | null } | null)?.motivo ?? null;
+    const aviso = avisoValidadeToken(provedor, expira);
+    if (atual && !AVISO_TOKEN.test(atual)) {
+      // Motivo de outra origem tem prioridade; só a data é guardada.
+    } else if (aviso !== atual) {
+      await supabase.from("sync_status").upsert(
+        { client_id: clientId, fonte, motivo: aviso, motivo_dono: aviso ? "cliente" : null, motivo_em: new Date().toISOString() },
+        { onConflict: "client_id,fonte" },
+      );
+    }
+    if (expira) await supabase.from("sync_status").update({ token_expira_em: expira.toISOString() }).eq("client_id", clientId).eq("fonte", fonte);
+  } catch {
+    /* aviso é extra */
+  }
 }
 
 export async function recordSyncStatus(
@@ -166,7 +238,13 @@ export async function lerDadosAte(
     }
     // Data do lead (occurred_at), não a da sincronização: o Kommo grava received_at = agora a cada rodada.
     if (fonte === "crm") return (await topo("crm_leads", "occurred_at")) ?? (await topo("crm_leads", "received_at"));
-    if (fonte === "atendimento") return await topo("wts_sessions", "started_at");
+    // WhatsApp: WTS ou qualquer conversa gravada (Kommo, Clint, FlwChat, Digisac), a mesma regra de fontes_base.
+    // Antes só o WTS contava, e clientes Clint e Kommo ficavam sem "Dados até" com conversas chegando todo dia.
+    if (fonte === "atendimento") {
+      const [w, c] = await Promise.all([topo("wts_sessions", "started_at"), topo("conversas", "ultima_msg_em")]);
+      if (w && c) return w > c ? w : c;
+      return w ?? c;
+    }
     if (fonte === "instagram") {
       const [a, b] = await Promise.all([
         topo("instagram_account_daily_metrics", "date"),
@@ -178,5 +256,32 @@ export async function lerDadosAte(
     return null;
   } catch {
     return null;
+  }
+}
+
+/** Integrações da conta inteira, sem cliente (Short.io). Linha em sync_status_geral. */
+export type FonteGeral = "shortio";
+
+/** Grava a última tentativa de uma integração da conta inteira. Nunca derruba o sync. */
+export async function registrarStatusGeral(
+  supabase: SupabaseClient<any, any, any>,
+  fonte: FonteGeral,
+  r: { ok: boolean; rows?: number | null; error?: string | null },
+): Promise<void> {
+  try {
+    const agora = new Date().toISOString();
+    await supabase.from("sync_status_geral").upsert(
+      {
+        fonte,
+        last_attempt_at: agora,
+        last_error: r.ok ? null : erroCurto(r.error) ?? "erro desconhecido",
+        updated_at: agora,
+        ...(r.ok ? { last_success_at: agora } : {}),
+        ...(r.rows != null ? { last_rows: r.rows } : {}),
+      },
+      { onConflict: "fonte" },
+    );
+  } catch {
+    /* registrar não pode quebrar o sync (a tabela pode ainda não existir) */
   }
 }

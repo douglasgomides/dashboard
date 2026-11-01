@@ -27,6 +27,7 @@
  * da data, para não repetir o histórico que já veio de outra fonte (planilha).
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { fetchComRetry } from "./integration-http.js";
 
 const FLW_BASE = "https://api.wts.chat";
 const PAGE_SIZE = 100;
@@ -83,7 +84,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 async function flwGet(token: string, path: string, query: Record<string, string | number> = {}): Promise<any> {
   const qs = new URLSearchParams(Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)])));
   const url = `${FLW_BASE}${path}${qs.size ? `?${qs.toString()}` : ""}`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(30_000), redirect: "error" });
+  const res = await fetchComRetry(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
   if (!res.ok) {
     throw new Error(`FlwChat ${path} falhou (${res.status}): ${(await res.text()).slice(0, 160)}`);
   }
@@ -341,13 +342,19 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
       tags_contato?: boolean;
       cards_por_item?: boolean;
     } & EstadoTags;
-    // Mapeamento confirmado pela equipe (aba "A analisar"). Tabela ausente = sem mapeamento.
+    // Mapeamento confirmado pela equipe (aba "A analisar"). Se a leitura falhar, a conexão para aqui: regravar os
+    // cards sem o mapeamento transformava todos os ganhos em "em aberto" (Dr. Sergio Maia: 1.818 ganhos dependem só
+    // dele) e a rodada ficava registrada como sucesso (auditoria de 01/11/2026).
     const confirmadas = new Map<string, "won" | "lost" | "open">();
     {
-      const { data: maps } = await supabase
+      const { data: maps, error: erroMapa } = await supabase
         .from("crm_etapa_resultado")
         .select("pipeline_id, status_id, outcome")
         .eq("crm_connection_id", conn.id);
+      if (erroMapa) {
+        results.push({ clientId: conn.client_id, connectionId: conn.id, paineis: 0, cards: 0, errors: ["Não foi possível ler o significado das etapas (crm_etapa_resultado); cards não regravados nesta rodada"] });
+        continue;
+      }
       for (const m of maps ?? []) confirmadas.set(`${m.pipeline_id}|${m.status_id}`, m.outcome as "won" | "lost" | "open");
     }
     const resultadoDaEtapa = (nome: string): "won" | "lost" | "open" => {

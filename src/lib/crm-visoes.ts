@@ -1,3 +1,4 @@
+import { LIMITES } from "./limites.js";
 // Visões comerciais do CRM (RPC crm_visoes_comerciais, migração 20261016090000). Lógica pura
 // (teste: scripts/test-crm-visoes.ts).
 //
@@ -9,7 +10,7 @@
 // - Movimentos: mudanças de etapa, agendamentos, ganhos e perdas por semana, do histórico gravado a
 //   partir da migração (não existe histórico anterior).
 
-export const AMOSTRA_MIN_COORTE = 20;
+export const AMOSTRA_MIN_COORTE: number = LIMITES.amostra.crm.coortePeriodo;
 
 export interface CoorteBruta { semana: string; leads: number; atendidos: number; agendados: number; ganhos: number; perdidos: number; abertos: number }
 export interface EtapaEstoque { etapa: string; funil: string | null; entrada: boolean; consulta: boolean; total: number; ate_3: number; de_4_a_7: number; de_8_a_30: number; mais_30: number }

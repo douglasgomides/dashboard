@@ -62,6 +62,8 @@ export interface PacientesPeriodo {
   cliente_de_teste: boolean;
   /** Outras clínicas ligadas à mesma conta do CRM: os números são da conta inteira. */
   crm_compartilhado_com?: string[];
+  /** A regra "CRM por médico" está ligada para este cliente (crm_filtro_cliente): os números já são só deste médico. */
+  crm_filtro_ativo?: boolean;
   tem_crm: boolean;
   tem_conversas: boolean;
   tem_leitura_ia: boolean;
@@ -92,7 +94,7 @@ export const TEXTO_NUMERO: Record<ChaveNumero, { rotulo: string; legenda: string
   leads_novos: {
     rotulo: "Pessoas novas",
     legenda: "chegaram pela primeira vez à clínica",
-    fonte: "CRM da clínica: pessoas cujo primeiro registro na clínica foi no período. Não conta quem já era paciente nem quem a equipe foi buscar (prospecção ativa, que aparece à parte). A origem vem do CRM; sem ela, da leitura da conversa.",
+    fonte: "CRM da clínica: pessoas cujo primeiro registro na clínica foi no período. Não conta quem já era paciente nem quem a equipe foi buscar (prospecção ativa, que aparece à parte). A origem vem do CRM; sem ela, da leitura da conversa. A mesma pessoa com dois cadastros no CRM que o Nexo já ligou (mesmo telefone ou mesma pessoa) conta uma vez: por isso o número pode ficar um pouco abaixo de \"Novos contatos no CRM\" da tela Resultados, que conta cada cadastro (HOMS, outubro: 1.280 aqui e 1.287 lá).",
   },
   antigos: {
     rotulo: "Pacientes antigos",
@@ -112,7 +114,7 @@ export const TEXTO_NUMERO: Record<ChaveNumero, { rotulo: string; legenda: string
   compareceram: {
     rotulo: "Foram na consulta",
     legenda: "compareceram no período",
-    fonte: "CRM: entraram no período na etapa que marca o comparecimento (consulta realizada, atendido, pós-consulta).",
+    fonte: "CRM: entraram no período na etapa que marca o comparecimento (consulta realizada, atendido, pós-consulta). Quando o CRM não tem essa etapa, ou tem e ninguém passou por ela enquanto houve agendamento ou venda, aparece \"Não medido\" com o que a clínica precisa fazer, em vez de 0.",
   },
   fecharam: {
     rotulo: "Fecharam",
@@ -122,7 +124,7 @@ export const TEXTO_NUMERO: Record<ChaveNumero, { rotulo: string; legenda: string
   abordados: {
     rotulo: "Abordados pela equipe",
     legenda: "a equipe foi buscar (prospecção ativa)",
-    fonte: "CRM: pessoas que entraram no período por um funil de prospecção ativa (como o Social Seller). Mostra quantas responderam, agendaram e fecharam.",
+    fonte: "CRM: pessoas que entraram no período por um funil de prospecção ativa (como o Social Seller). Mostra quantas responderam, agendaram e fecharam. Clínica sem funil de prospecção ativa vê \"Não se aplica\", em vez de 0.",
   },
   engajaram_instagram: {
     rotulo: "Interagiram no Instagram",
@@ -190,17 +192,55 @@ export function vemDoCheckout(numero: Numero | undefined): boolean {
   return numero?.fonte === "checkout";
 }
 
-/** Legenda do número: "pela Hubla" quando "Fecharam" vem do checkout. */
+/**
+ * Legenda do número: "pela Hubla" quando "Fecharam" vem do checkout. Quando nenhuma venda do checkout se liga a uma
+ * pessoa (sem telefone), o número conta vendas, e a legenda diz isso (20261102130000).
+ */
 export function legendaDoNumero(chave: ChaveNumero, numero: Numero | undefined): string {
   const base = TEXTO_NUMERO[chave].legenda;
-  return chave === "fecharam" && vemDoCheckout(numero) ? `${base}, pela ${nomeCheckout(numero)}` : base;
+  if (chave !== "fecharam" || !vemDoCheckout(numero)) return base;
+  if (numero?.unidade === "vendas") return `vendas pagas no período, pela ${nomeCheckout(numero)}`;
+  return `${base}, pela ${nomeCheckout(numero)}`;
+}
+
+/**
+ * Aviso curto sobre a cobertura do checkout em "Fecharam": parte do período veio do CRM, o checkout ainda não cobria o
+ * período, parou de mandar venda, ou algumas vendas não se ligam a uma pessoa. null quando não há nada a dizer.
+ */
+export function avisoCheckout(numero: Numero | undefined): string | null {
+  if (!numero || numero.valor == null) return null;
+  const d = (k: string) => (typeof numero[k] === "string" ? dataBr(numero[k] as string) : null);
+  const nome = nomeCheckout(numero);
+  const partes: string[] = [];
+  if (vemDoCheckout(numero)) {
+    if (d("crm_antes_de"))
+      partes.push(Number(numero.vendas_crm ?? 0) > 0
+        ? `Antes de ${d("crm_antes_de")}, conta pelo CRM: as vendas da ${nome} chegam ao Nexo desde essa data.`
+        : `Conta só a partir de ${d("crm_antes_de")}, quando as vendas da ${nome} começam no Nexo; antes disso, o CRM não marca venda.`);
+    if (d("crm_depois_de")) partes.push(`Depois de ${d("crm_depois_de")}, conta pelo CRM: a ${nome} não manda venda ao Nexo desde essa data.`);
+    const semPessoa = Number(numero.sem_pessoa ?? 0);
+    if (numero.unidade !== "vendas" && semPessoa > 0)
+      partes.push(`${semPessoa} ${semPessoa === 1 ? "venda sem telefone conta" : "vendas sem telefone contam"} como uma pessoa cada.`);
+  } else {
+    if (d("checkout_desde")) partes.push(`Conta pelo CRM: as vendas do checkout só chegam ao Nexo desde ${d("checkout_desde")}.`);
+    if (d("checkout_parado_desde")) partes.push(`Conta pelo CRM: o checkout não manda venda ao Nexo desde ${d("checkout_parado_desde")}.`);
+  }
+  return partes.length ? partes.join(" ") : null;
 }
 
 /** Texto de ajuda do número, com a fonte certa quando "Fecharam" vem do checkout. */
 export function fonteDoNumero(chave: ChaveNumero, numero: Numero | undefined): string {
   if (chave === "fecharam" && vemDoCheckout(numero))
-    return `${nomeCheckout(numero)}: vendas pagas no período. Order bump e combo contam como uma venda só, com o valor somado. Reembolso e chargeback não contam como venda e aparecem à parte.`;
+    return `${nomeCheckout(numero)}: vendas pagas (ou em protesto) no período, pelo valor bruto que o comprador pagou. Order bump e combo contam como uma venda só, pelo total da fatura. Renovação de assinatura não é paciente novo e aparece à parte. Reembolso e chargeback não contam como venda e aparecem à parte. Fora do período que o checkout cobre, vale o CRM.`;
   return TEXTO_NUMERO[chave].fonte;
+}
+
+/** "1 renovação de assinatura no período (R$ 97,00), fora de Fecharam", ou null quando não houve. */
+export function textoRenovacoes(numero: Numero | undefined, formatarValor: (v: number) => string): string | null {
+  const r = numero?.renovacoes as { vendas?: number; valor_total?: number } | undefined;
+  const n = Number(r?.vendas ?? 0);
+  if (!r || n <= 0) return null;
+  return `${n} ${n === 1 ? "renovação" : "renovações"} de assinatura no período (${formatarValor(Number(r.valor_total ?? 0))}), fora de Fecharam`;
 }
 
 /** "2 reembolsos ou chargebacks no período (R$ 300,00)", ou null quando não houve. */
@@ -229,6 +269,60 @@ export function avisoNaoMedido(d: Pick<PacientesPeriodo, "numeros">): string | n
   const nums = Object.values(d.numeros ?? {}) as (Numero | undefined)[];
   const atinge = nums.some((n) => n && (n.medido_desde != null || n.cobertura_desde != null || n.comentarios_instagram != null));
   return atinge ? AVISO_NAO_MEDIDO : null;
+}
+
+/** Mudança de 01/11 (docs/notas-de-versao.md): aparece só quando atinge algum número da tela. */
+export const AVISO_TELA_HONESTA =
+  "Mudou em 01/11: \"Abordados pela equipe\" aparece como \"Não se aplica\" quando a clínica não usa funil de prospecção, e \"Foram na consulta\" como \"Não medido\" quando a etapa de comparecimento não existe ou não é usada. Antes os dois apareciam como 0.";
+
+const motivoComparecimentoSemUso = (agendaram: number, fecharam: number) => {
+  const partes = [agendaram > 0 ? `${agendaram} pessoas agendaram` : null, fecharam > 0 ? `${fecharam} fecharam` : null].filter(Boolean);
+  return `Nenhum card passou pela etapa de comparecimento no período, enquanto ${partes.join(" e ")}. A equipe não está usando essa etapa, então o número não é medido.`;
+};
+
+/**
+ * Mesma regra da migração 20261102140000, aplicada também na tela (vale antes de o banco ter a migração e não muda
+ * nada depois): sem funil de prospecção, "Abordados" não se aplica; comparecimento 0 com agendamento ou venda no
+ * período é "não medido". Devolve uma cópia; aplicar duas vezes dá o mesmo resultado.
+ */
+export function ajustarNumeros<T extends Pick<PacientesPeriodo, "numeros"> & Partial<Pick<PacientesPeriodo, "tem_funil_prospeccao">>>(d: T): T {
+  const numeros = { ...d.numeros };
+  const ab = numeros.abordados;
+  if (ab && typeof ab.valor === "number" && d.tem_funil_prospeccao === false)
+    numeros.abordados = { valor: null, fonte: "crm", motivo_sem_dado: "A clínica não usa funil de prospecção ativa no CRM, então este número não se aplica.", responsavel: null, nao_se_aplica: true };
+  const co = numeros.compareceram;
+  const ag = Number(numeros.agendaram?.valor ?? 0) || 0;
+  const fe = Number(numeros.fecharam?.valor ?? 0) || 0;
+  if (co && co.valor === 0 && ag + fe > 0)
+    numeros.compareceram = {
+      valor: null, fonte: "crm", motivo_sem_dado: motivoComparecimentoSemUso(ag, fe), responsavel: "comercial", nao_medido_por: "etapa_sem_uso",
+      o_que_fazer: "Mover o card para a etapa de comparecimento (consulta realizada) quando o paciente for à consulta, antes de marcar como ganho.",
+    };
+  return { ...d, numeros };
+}
+
+/** Rótulo do cartão sem número: "Não se aplica" (não existe na clínica), "Não medido" (existe e não é medido) ou "Sem dado". */
+export function textoNaoMedido(n: Numero | undefined): string {
+  if (n?.nao_se_aplica) return "Não se aplica";
+  if (n?.nao_medido_por || n?.o_que_fazer) return "Não medido";
+  return "Sem dado";
+}
+
+export function avisoTelaHonesta(d: Pick<PacientesPeriodo, "numeros">): string | null {
+  const n = d.numeros ?? ({} as PacientesPeriodo["numeros"]);
+  return n.abordados?.nao_se_aplica || n.compareceram?.nao_medido_por ? AVISO_TELA_HONESTA : null;
+}
+
+/**
+ * Samira, outubro: 36 fecharam e 3 agendaram. As duas regras são diferentes, e a tela precisa dizer isso:
+ * "Fecharam" conta quem foi marcado como ganho no período (inclusive quem agendou antes do período e ganhos marcados
+ * em lote); "Agendaram" conta só quem entrou na etapa de agendamento no período ou disse na conversa que agendou.
+ */
+export function avisoAgendouMenosQueFechou(d: Pick<PacientesPeriodo, "numeros">): string | null {
+  const ag = d.numeros?.agendaram?.valor, fe = d.numeros?.fecharam?.valor;
+  if (ag == null || fe == null || fe <= ag || fe < 5) return null;
+  const f = (x: number) => x.toLocaleString("pt-BR");
+  return `${f(fe)} pessoas fecharam no período, mas só ${f(ag)} aparecem como agendadas. As regras são diferentes: "Fecharam" conta quem foi marcado como ganho no período (inclusive quem agendou antes dele, e ganhos marcados de uma vez só); "Agendaram" conta quem entrou na etapa de agendamento do CRM no período ou disse na conversa que agendou. Quando a venda é marcada sem o card passar pela etapa de agendamento, os agendados ficam abaixo do real.`;
 }
 
 export function oQue(item: ItemPessoa): string | null {
@@ -346,4 +440,20 @@ export function rotuloRecompra(r: Recompra): string {
   return r.regra.diasMax > r.regra.diasMin
     ? `Voltar entre ${dataBr(r.prevista)} e ${dataBr(r.ate)}`
     : `Voltar a partir de ${dataBr(r.prevista)}`;
+}
+
+/** Aviso de CRM compartilhado: só enquanto o cliente não tem a regra de separação por médico. */
+export function avisoCrmCompartilhado(d: Pick<PacientesPeriodo, "crm_compartilhado_com" | "crm_filtro_ativo">): string | null {
+  if (d.crm_filtro_ativo) return null;
+  const outros = d.crm_compartilhado_com ?? [];
+  if (!outros.length) return null;
+  return `O CRM desta clínica é o mesmo de ${outros.join(", ")}. Os números abaixo são da conta inteira, não só deste médico. ` +
+    `Para separar, a clínica precisa marcar o médico em cada lead (um campo "Médico" no CRM).`;
+}
+
+/** Nota quando a regra está ligada: diz de onde vêm os números. */
+export function notaCrmPorMedico(d: Pick<PacientesPeriodo, "crm_filtro_ativo">): string | null {
+  return d.crm_filtro_ativo
+    ? "Números só deste médico: o CRM é dividido com outros médicos, e aqui entram só os cards, conversas e atendimentos dele (regra combinada com a clínica)."
+    : null;
 }

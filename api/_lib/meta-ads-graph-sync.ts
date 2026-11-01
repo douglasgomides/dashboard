@@ -18,6 +18,8 @@ import type { Database } from "../../src/integrations/supabase/types.js";
 import { diagnosticarContaAnuncios } from "./diagnostico-anuncios.js";
 import { graphPageUrl, integrationRequest } from "./integration-http.js";
 import { META_GRAPH_URL } from "./meta-graph-versao.js";
+import { protegerContraZero } from "./anuncios-protecao.js";
+import { registrarLeiturasContas } from "./anuncios-status.js";
 
 const API = META_GRAPH_URL;
 
@@ -42,6 +44,11 @@ export type MetaAdsGraphResult = {
   spend: number;
   conversations: number;
   errors: string[];
+  /** Linhas de dia passado com gasto > 0 que a Meta devolveu zeradas e NÃO foram regravadas (conferir na origem). */
+  precisa_reconferir?: number;
+  /** Diagnóstico da conta parada, por conta (antes ia direto para sync_status e a outra conta apagava). */
+  motivo?: string | null;
+  motivo_dono?: string | null;
 };
 
 type AcaoMeta = { action_type?: string; value?: string | number };
@@ -400,12 +407,16 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
         r.campaigns = linhasCamp.length;
       }
 
-      for (let i = 0; i < diarias.length; i += 300) {
+      // Dia passado com gasto gravado não vira zero sem segunda leitura (auditoria 01/11/2026, dia 21/09 zerado).
+      const protegidas = await protegerContraZero(supabase, conta.client_id, conta.ad_account_id, diarias);
+      r.precisa_reconferir = protegidas.precisaReconferir;
+      const gravar = protegidas.gravar;
+      for (let i = 0; i < gravar.length; i += 300) {
         const { error: e } = await supabase
           .from("meta_ads_daily")
-          .upsert(diarias.slice(i, i + 300), { onConflict: "client_id,ad_account_id,date,campaign_id" });
+          .upsert(gravar.slice(i, i + 300), { onConflict: "client_id,ad_account_id,date,campaign_id" });
         if (e) r.errors.push(`diárias: ${e.message}`);
-        else r.rows += diarias.slice(i, i + 300).length;
+        else r.rows += gravar.slice(i, i + 300).length;
       }
       // Frequência de 7 dias real (alcance da janela inteira). Extra: falha vira aviso, não derruba o sync.
       try {
@@ -449,8 +460,8 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
       r.errors.push(err instanceof Error ? err.message : String(err));
     }
 
-    // Motivo: só quando a conta está sem dado novo há mais de 2 dias (ou deu erro). Conta em dia limpa o motivo.
-    // Gravar o motivo nunca pode derrubar o sync (a coluna pode ainda não existir).
+    // Motivo: só quando a conta está sem dado novo há mais de 2 dias (ou deu erro). Fica NA CONTA (r.motivo): o status
+    // do cliente junta todas as contas depois (anuncios-status.ts), e uma conta em dia não apaga o aviso da outra.
     try {
       const { data: ult } = await supabase
         .from("meta_ads_daily")
@@ -463,12 +474,8 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
       const limite = new Date(hoje.getTime() - 2 * 86400_000).toISOString().slice(0, 10);
       const parada = !ultimo || ultimo < limite;
       const motivo = parada ? await diagnosticarContaAnuncios(conta.ad_account_id, tokenConta, r.errors.find((e) => e.startsWith("Meta insights"))) : null;
-      await (supabase as any)
-        .from("sync_status")
-        .upsert(
-          { client_id: conta.client_id, fonte: "anuncios", motivo: motivo?.texto ?? null, motivo_dono: motivo?.dono ?? null, motivo_em: new Date().toISOString() },
-          { onConflict: "client_id,fonte" },
-        );
+      r.motivo = motivo?.texto ?? null;
+      r.motivo_dono = motivo?.dono ?? null;
     } catch {
       /* diagnóstico é um extra */
     }
@@ -476,5 +483,20 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
     resultados.push(r);
   }
 
+  await registrarLeiturasContas(supabase, resultados.map(leituraDaGraph));
   return resultados;
+}
+
+/** Resultado da Graph no formato da leitura por conta (anuncios-status.ts). */
+export function leituraDaGraph(r: MetaAdsGraphResult) {
+  return {
+    clientId: r.client_id,
+    adAccountId: r.ad_account_id,
+    via: "graph" as const,
+    rows: r.rows,
+    errors: r.errors,
+    precisaReconferir: r.precisa_reconferir ?? 0,
+    motivo: r.motivo ?? null,
+    motivoDono: r.motivo_dono ?? null,
+  };
 }

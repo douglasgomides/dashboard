@@ -1,3 +1,4 @@
+import { LIMITES } from "./limites.js";
 // Definições centrais das métricas que aparecem em mais de uma tela ou relatório.
 // Cada métrica declara: período efetivo, unidade contada, cobertura e denominador.
 // Regra: zero medido (a fonte está ligada e contou zero) ≠ dado indisponível (não há como medir).
@@ -167,7 +168,7 @@ export function saldoSeguidores(dias: DiaSeguidores[], de: string, ate: string):
  * Um formato, horário ou tema só pode ser chamado de "melhor" ou "pior" com pelo menos 8 posts no grupo.
  * Abaixo disso o dado aparece com o rótulo "amostra pequena" e sem conclusão em texto.
  */
-export const MIN_POSTS_CONCLUSAO = 8;
+export const MIN_POSTS_CONCLUSAO: number = LIMITES.amostra.conteudo.postsConclusao;
 export const ROTULO_AMOSTRA_PEQUENA = "amostra pequena";
 
 /** Selo de confiança por número de posts: baixa (até 7), média (8 a 19), alta (20 ou mais). */

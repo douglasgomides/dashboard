@@ -13,7 +13,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
-import { integrationHost, integrationRequest } from "./integration-http.js";
+import { fetchComRetry, integrationHost, ritmoKommo } from "./integration-http.js";
 
 const PAGE_SIZE = 250; // limite máximo da API da Kommo
 const INCREMENTAL_LOOKBACK_DAYS = 3; // margem de segurança sobre o intervalo do job diário
@@ -106,7 +106,7 @@ type BuscarKommo = (url: string, headers: Record<string, string>) => Promise<{ s
 
 /** GET JSON no Kommo pelo mesmo caminho seguro dos outros pedidos (corpo nulo no 204). */
 export const buscarKommo: BuscarKommo = async (url, headers) => {
-  const res = await fetch(url, integrationRequest({ headers }));
+  const res = await fetchComRetry(url, { headers }, { ritmo: ritmoKommo(new URL(url).hostname) });
   return { status: res.status, corpo: res.status === 200 ? await res.json() : null };
 };
 
@@ -173,9 +173,9 @@ async function fetchLeadsPage(
   params: Record<string, string>,
 ): Promise<{ leads: KommoLead[]; hasMore: boolean }> {
   const qs = new URLSearchParams({ limit: String(PAGE_SIZE), ...params });
-  const res = await fetch(`https://${domain}/api/v4/leads?${qs.toString()}`, integrationRequest({
+  const res = await fetchComRetry(`https://${domain}/api/v4/leads?${qs.toString()}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
-  }));
+  }, { ritmo: ritmoKommo(domain) });
   if (res.status === 204) return { leads: [], hasMore: false };
   if (!res.ok) {
     throw new Error(`Kommo leads fetch failed (${res.status}): ${await res.text()}`);
@@ -198,9 +198,9 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
   // Nomes dos motivos de perda: o lead só traz loss_reason_id. Sem o nome, ninguém sabe o que o número
   // significa e o SAP não consegue separar preço, medo, cônjuge... (07.07). Falha aqui não para o sync.
   try {
-    const res = await fetch(`https://${domain}/api/v4/leads/loss_reasons?limit=250`, integrationRequest({
+    const res = await fetchComRetry(`https://${domain}/api/v4/leads/loss_reasons?limit=250`, {
       headers: { Authorization: `Bearer ${env.accessToken}` },
-    }));
+    }, { ritmo: ritmoKommo(domain) });
     if (res.ok && res.status !== 204) {
       const body = (await res.json()) as { _embedded?: { loss_reasons?: { id: number; name: string }[] } };
       const motivos = body._embedded?.loss_reasons ?? [];
@@ -219,9 +219,9 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
   // "consulta agendada" nem na aba "A analisar" (Dra. Lana: 591 leads no funil Cadência em 3 etapas sem nome).
   // Falha aqui não para o sync.
   try {
-    const res = await fetch(`https://${domain}/api/v4/leads/pipelines`, integrationRequest({
+    const res = await fetchComRetry(`https://${domain}/api/v4/leads/pipelines`, {
       headers: { Authorization: `Bearer ${env.accessToken}` },
-    }));
+    }, { ritmo: ritmoKommo(domain) });
     if (res.ok && res.status !== 204) {
       const etapas = etapasDosFunis(await res.json(), env.crmConnectionId);
       if (etapas.length) {

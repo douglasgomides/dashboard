@@ -143,6 +143,7 @@ async function testWtsRouting() {
   let ambiguous = false;
   let rejectCheckpoint = false;
   const written: any[] = [];
+  const apagados: string[] = [];
   const now = new Date().toISOString();
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input));
@@ -154,6 +155,11 @@ async function testWtsRouting() {
           { id: "general", name: "General", wts_company_id: "shared", wts_department_ids: null },
           { id: "doctor", name: "Doctor", wts_company_id: "shared", wts_department_ids: ambiguous ? null : ["private-department"] },
         ]);
+      }
+      if (table === "wts_sessions" && init?.method === "DELETE") {
+        // Sessão que mudou de dono sai dos OUTROS clientes da mesma conta, nunca do dono atual.
+        apagados.push(`${url.searchParams.get("client_id")}|${url.searchParams.get("session_id")}`);
+        return json(null);
       }
       if (table === "wts_sessions") { written.push(...bodyOf(init)); return json(null); }
       if (table === "wts_sync_state") return rejectCheckpoint ? dbError() : json(null);
@@ -171,7 +177,8 @@ async function testWtsRouting() {
   assert.deepEqual(written.map((s) => [s.client_id, s.session_id]), [["general", "unassigned"]]);
   assert.equal(result.length, 1);
   assert.equal(result[0].sessoes, 1);
-  written.length = 0; ambiguous = true;
+  assert.deepEqual(apagados, ['in.(doctor)|in.(unassigned)'], "cópia antiga da sessão sai só do outro cliente da conta");
+  written.length = 0; apagados.length = 0; ambiguous = true;
   result = await runWtsSync({ ...env, wtsToken: "fake-token", clientId: "general" });
   assert.equal(written.length, 0, "ambiguous routing must not copy private sessions into multiple tenants");
   assert.ok(result[0].errors.some((e) => e.includes("vários clientes")));

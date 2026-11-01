@@ -3,8 +3,9 @@ import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { runMetaAdsSync } from "../_lib/meta-ads-sync.js";
-import { runMetaAdsGraphSync } from "../_lib/meta-ads-graph-sync.js";
+import { runMetaAdsSync, leituraDaWindsor } from "../_lib/meta-ads-sync.js";
+import { runMetaAdsGraphSync, leituraDaGraph } from "../_lib/meta-ads-graph-sync.js";
+import { consolidarStatusAnuncios, type LeituraConta } from "../_lib/anuncios-status.js";
 import { runAdsPlanilhaSync } from "../_lib/ads-planilha-sync.js";
 import { runMetaGraphSync } from "../_lib/meta-graph-sync.js";
 import { runInstagramSync } from "../_lib/instagram-sync.js";
@@ -313,6 +314,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       let graphTemConta = false;
       let windsorTemConta = false;
       const erros: string[] = [];
+      const leituras: LeituraConta[] = [];
 
       {
         const g = await runMetaAdsGraphSync({
@@ -324,8 +326,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         });
         if (g.length > 0) temConta = true;
         linhas += g.reduce((a, c) => a + c.rows, 0);
-        // Erro da Graph é sempre real: a conta está cadastrada para ela.
-        erros.push(...g.flatMap((c) => c.errors));
+        leituras.push(...g.map(leituraDaGraph));
         graphTemConta = g.length > 0;
       }
 
@@ -340,10 +341,15 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         if (w.length > 0) temConta = true;
         if (w.length > 0) windsorTemConta = true;
         linhas += w.reduce((a, c) => a + c.rows, 0);
-        // Erro da Windsor só vale quando a Graph não serve este cliente; do
-        // contrário é o ruído esperado de conta que a Windsor não enxerga.
-        if (!graphTemConta) erros.push(...w.flatMap((c) => c.errors));
+        leituras.push(...w.map(leituraDaWindsor));
       }
+
+      // Status por conta (anuncios-status.ts): "ok" só quando cada conta ativa do cliente foi lida por inteiro por alguma
+      // via. Antes o erro da Windsor era descartado sempre que a Graph servia o cliente, e a conta que só a Windsor
+      // leria (e não lê) ficava escondida.
+      const resumo = (await consolidarStatusAnuncios(admin, [client_id as string], leituras)).get(client_id as string);
+      if (resumo && !resumo.ok && resumo.erro) erros.push(resumo.erro);
+      const precisaReconferir = resumo?.precisaReconferir ?? 0;
 
       // Planilha de distribuição de conteúdo (clients.ads_planilha_url): para quem a Meta e a Windsor não enxergam a conta.
       {
@@ -357,7 +363,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         return { nada_a_fazer: "Este cliente não tem conta de anúncio ligada ao cadastro." };
       }
       // Só a planilha alimentou (nem Graph nem Windsor leem conta deste cliente): "dados até" não se aplica.
-      return { linhas, erros, so_planilha: !graphTemConta && !windsorTemConta };
+      return { linhas, erros, so_planilha: !graphTemConta && !windsorTemConta, precisa_reconferir: precisaReconferir };
     }
 
     async function sincronizarAtendimento() {

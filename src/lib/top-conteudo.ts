@@ -3,6 +3,7 @@
 // (15 pontos percentuais ou mais) e o grupo tem tamanho mínimo.
 import { brazilWeekdayAndHour, median } from "@/lib/report-metrics";
 import { DIAS_SEMANA } from "@/lib/audiencia";
+import { LIMITES } from "./limites.js";
 
 export type MetricaTop = "saved" | "reach" | "engagement" | "shares" | "likes" | "comments" | "views" | "taxa_salvamento";
 export const METRICAS: { id: MetricaTop; rotulo: string }[] = [
@@ -16,7 +17,7 @@ export const METRICAS: { id: MetricaTop; rotulo: string }[] = [
   { id: "taxa_salvamento", rotulo: "Salvamentos por alcance" },
 ];
 
-export const MIN_TOP_PARA_PADROES = 8;
+export const MIN_TOP_PARA_PADROES: number = LIMITES.amostra.conteudo.topParaPadroes;
 export const DIFERENCA_MINIMA = 15; // pontos percentuais
 
 export function valorDaMetrica(p: any, m: MetricaTop): number | null {
