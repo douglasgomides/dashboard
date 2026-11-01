@@ -53,6 +53,14 @@ async function handler(req: VercelRequest, res: VercelResponse) {
   const after = typeof req.query.after === "string" ? req.query.after : undefined;
   const maxPagesParam = typeof req.query.max_pages === "string" ? Number(req.query.max_pages) : undefined;
   const maxPages = maxPagesParam && Number.isFinite(maxPagesParam) ? maxPagesParam : undefined;
+  // reler_desde=AAAA-MM-DD: relê à força as métricas diárias desde essa data (dia da Califórnia, até 120 dias,
+  // no máximo 60 dias forçados por chamada). so_stories=1: só atualiza os stories no ar e os das últimas 26 h.
+  const relerDesdeParam = typeof req.query.reler_desde === "string" ? req.query.reler_desde : undefined;
+  if (relerDesdeParam !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(relerDesdeParam)) {
+    res.status(400).json({ error: "reler_desde deve ser AAAA-MM-DD" });
+    return;
+  }
+  const soStories = req.query.so_stories === "1" || req.query.so_stories === "true";
 
   try {
     const results = await runMetaGraphSync({
@@ -62,9 +70,12 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       onlyAccountId: accountId,
       maxPages,
       after,
+      relerDesde: relerDesdeParam,
+      soStories,
     });
 
-    await recordSyncStatusPorCliente(
+    // A leitura só de stories não mexe no status do Instagram (ela não lê posts nem métricas diárias).
+    if (!soStories) await recordSyncStatusPorCliente(
       createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
       "instagram",
       results.map((r) => ({ clientId: r.clientId, rows: r.posts, errors: r.errors })),

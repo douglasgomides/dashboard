@@ -1969,6 +1969,7 @@ export type Database = {
           reel_avg_watch_time_ms: number | null
           reel_skip_rate: number | null
           reel_total_watch_time_ms: number | null
+          removido_em: string | null
           saved: number | null
           shares: number | null
           tema: string | null
@@ -1998,6 +1999,7 @@ export type Database = {
           reel_avg_watch_time_ms?: number | null
           reel_skip_rate?: number | null
           reel_total_watch_time_ms?: number | null
+          removido_em?: string | null
           saved?: number | null
           shares?: number | null
           tema?: string | null
@@ -2027,6 +2029,7 @@ export type Database = {
           reel_avg_watch_time_ms?: number | null
           reel_skip_rate?: number | null
           reel_total_watch_time_ms?: number | null
+          removido_em?: string | null
           saved?: number | null
           shares?: number | null
           tema?: string | null
