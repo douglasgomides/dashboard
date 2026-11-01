@@ -62,6 +62,8 @@ export interface PacientesPeriodo {
   cliente_de_teste: boolean;
   /** Outras clínicas ligadas à mesma conta do CRM: os números são da conta inteira. */
   crm_compartilhado_com?: string[];
+  /** A regra "CRM por médico" está ligada para este cliente (crm_filtro_cliente): os números já são só deste médico. */
+  crm_filtro_ativo?: boolean;
   tem_crm: boolean;
   tem_conversas: boolean;
   tem_leitura_ia: boolean;
@@ -346,4 +348,20 @@ export function rotuloRecompra(r: Recompra): string {
   return r.regra.diasMax > r.regra.diasMin
     ? `Voltar entre ${dataBr(r.prevista)} e ${dataBr(r.ate)}`
     : `Voltar a partir de ${dataBr(r.prevista)}`;
+}
+
+/** Aviso de CRM compartilhado: só enquanto o cliente não tem a regra de separação por médico. */
+export function avisoCrmCompartilhado(d: Pick<PacientesPeriodo, "crm_compartilhado_com" | "crm_filtro_ativo">): string | null {
+  if (d.crm_filtro_ativo) return null;
+  const outros = d.crm_compartilhado_com ?? [];
+  if (!outros.length) return null;
+  return `O CRM desta clínica é o mesmo de ${outros.join(", ")}. Os números abaixo são da conta inteira, não só deste médico. ` +
+    `Para separar, a clínica precisa marcar o médico em cada lead (um campo "Médico" no CRM).`;
+}
+
+/** Nota quando a regra está ligada: diz de onde vêm os números. */
+export function notaCrmPorMedico(d: Pick<PacientesPeriodo, "crm_filtro_ativo">): string | null {
+  return d.crm_filtro_ativo
+    ? "Números só deste médico: o CRM é dividido com outros médicos, e aqui entram só os cards, conversas e atendimentos dele (regra combinada com a clínica)."
+    : null;
 }
