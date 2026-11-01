@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 // De onde vem quem agenda: origem pelo texto da 1ª mensagem (link de bio, anúncio, botão com mensagem pré-preenchida,
 // cadastrado pela equipe) ou, sem texto cadastrado, a origem que a IA leu na conversa. Ver conversao_por_origem.
@@ -96,7 +97,7 @@ function LinhaTexto({ clientId, inicio, conversas, aoSalvar }: { clientId: strin
         {OPCOES.map((o) => <option key={o} value={o}>{ROTULO_ORIGEM_CONV[o]}</option>)}
       </select>
       <button type="button" disabled={!origem || salvar.isPending} onClick={() => salvar.mutate()} className="min-h-[30px] rounded-lg px-2 text-xs font-medium disabled:opacity-50" style={{ background: "var(--accent)", color: "var(--accent-ink)" }}>Salvar</button>
-      {salvar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</span>}
+      {salvar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</span>}
     </li>
   );
 }

@@ -25,6 +25,7 @@ import {
   type RegistroEtapa,
   type Verificado,
 } from "@/lib/conferencia";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 export const Route = createFileRoute("/_authenticated/admin/conferencia")({
   component: ConferenciaPage,
@@ -239,7 +240,7 @@ function ConferenciaPage() {
           novos = r.novos ?? [];
           novosV = r.novos_verificados ?? [];
         } catch (x) {
-          reg = { etapa: e.id, status: "erro", erro: x instanceof Error ? x.message : "falhou" };
+          reg = { etapa: e.id, status: "erro", erro: mensagemDeErroAcao(x) };
         }
         atual = { ...atual, etapas: [...atual.etapas, reg], achados: [...atual.achados, ...novos], verificados: [...atual.verificados, ...novosV] };
         setViva(atual);
@@ -249,7 +250,7 @@ function ConferenciaPage() {
       setViva({ ...atual, concluida_em: new Date().toISOString() });
       qc.invalidateQueries({ queryKey: ["conferencia-ultima"] });
     } catch (x) {
-      setErro(x instanceof Error ? x.message : "Falha ao conferir.");
+      setErro(mensagemDeErroAcao(x));
     } finally {
       setRodando(null);
       setOcupado(false);
@@ -279,7 +280,7 @@ function ConferenciaPage() {
       await qc.invalidateQueries({ queryKey: ["fontes-nao-usadas"] });
       qc.invalidateQueries({ queryKey: ["status-das-fontes"] });
     } catch (x) {
-      setErro(x instanceof Error ? x.message : "Não consegui salvar.");
+      setErro(mensagemDeErroAcao(x));
     } finally {
       setMarcando(null);
     }

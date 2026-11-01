@@ -9,6 +9,7 @@ import {
   ETAPA_INFO, MODELOS, POLITICA_CASA, ROTULO_STATUS, avisosCopy, contagemCriativos, mediana, pecasAprovadas, placarModelos, podeAprovar, seloDaPeca,
   type Etapa, type Formato, type ModeloAnuncio, type Peca, type Semaforo, type StatusPeca,
 } from "@/lib/sap-anuncios";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const campo = { borderColor: "var(--border)", background: "var(--surface)" } as const;
 const COR_SEM: Record<Semaforo, string> = { verde: "var(--good)", amarelo: "var(--warn)", vermelho: "var(--crit)" };
@@ -100,7 +101,7 @@ function ListaModelos({ clinicaId, placar, onUsado }: { clinicaId: string; placa
           </select>
         </label>
       </div>
-      {usar.isError && <p className="text-xs" style={{ color: "var(--crit)" }}>{(usar.error as Error).message}</p>}
+      {usar.isError && <p className="text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(usar.error)}</p>}
       <ul className="grid gap-3 md:grid-cols-2">
         {lista.map((m) => {
           const pl = placar.get(m.codigo);
@@ -225,7 +226,7 @@ function CardPeca({ p, clinicaId, campanhas, numeros, med }: { p: Peca; clinicaI
             <button type="button" disabled={salvar.isPending} onClick={() => salvar.mutate({ ...v, ganchos: v.ganchos.map((g) => g.trim()).filter(Boolean) })} className="min-h-[36px] rounded-lg px-3 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>Salvar</button>
             <button type="button" onClick={() => setEd(null)} className="min-h-[36px] px-2 text-sm" style={{ color: "var(--text-dim)" }}>Cancelar</button>
           </div>
-          {salvar.isError && <p className="text-xs sm:col-span-2" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</p>}
+          {salvar.isError && <p className="text-xs sm:col-span-2" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</p>}
         </div>
       )}
     </li>

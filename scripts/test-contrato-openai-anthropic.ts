@@ -7,7 +7,7 @@ import { chamarIAJson } from "../api/_lib/ia";
 
 // Os mesmos padrões de api/_lib/ia.ts, transcrever-reels.ts e creative-arte.ts (que não exportam as constantes).
 const MODELOS_OPENAI = [process.env.AGENTES_MODELO || "gpt-4o-mini", process.env.AGENTES_MODELO_FORTE || "gpt-4.1", "gpt-4o-mini-transcribe", "gpt-image-1"];
-const MODELOS_CLAUDE = [process.env.AGENTES_MODELO_CLAUDE || "claude-haiku-4-5-20251001", process.env.AGENTES_MODELO_CLAUDE_FORTE || "claude-sonnet-5-5"];
+const MODELOS_CLAUDE = [process.env.AGENTES_MODELO_CLAUDE || "claude-haiku-5-5", process.env.AGENTES_MODELO_CLAUDE_FORTE || "claude-sonnet-5-5"];
 
 const modeloOpenai = (m: string): Endpoint => ({
   nome: "openai_modelo",

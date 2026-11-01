@@ -148,14 +148,25 @@ try {
   }
   await check("service_role continua lendo ambos os tenants", async () => { assert.equal((await role("service_role", null, () => rows("select * from meta_ads_daily_v"))).length, 2); });
   await check("membro não lê conexões/tokens CRM", async () => {
-    assert.deepEqual(await role("authenticated", viewer, () => rows("select * from crm_connections")), []);
+    assert.deepEqual(await role("authenticated", viewer, () => rows("select id, provider, subdomain, active from crm_connections")), []);
+    assert.deepEqual(await role("authenticated", viewer, () => rows("select * from crm_conexoes_credenciais($1)", [A])), []);
     await denied(() => role("authenticated", viewer, () => rows("insert into crm_connections(client_id,provider) values ($1,'kommo')", [A])));
   });
   await check("admin conserva gestão de conexões CRM", async () => {
     await role("authenticated", admin, async () => {
-      assert.equal((await rows("select access_token from crm_connections")).length, 2);
+      assert.equal((await rows("select id, provider, subdomain, active, created_at, config from crm_connections")).length, 2);
       assert.equal((await rows("update crm_connections set subdomain='example' where id=$1 returning id", [connectionA])).length, 1);
+      // "Tem token?" sem o valor: o navegador não lê token nem segredo do webhook (20261102190000).
+      assert.deepEqual(await rows("select tem_token, tem_webhook from crm_conexoes_credenciais($1)", [A]), [{ tem_token: true, tem_webhook: true }]);
+      assert.equal((await rows("update crm_connections set webhook_secret='fake-secret-novo' where id=$1", [connectionA])).length, 0);
     });
+  });
+  await check("tokens de CRM e do Instagram não são selecionáveis pelo navegador, nem pelo admin", async () => {
+    for (const user of [viewer, admin]) {
+      for (const column of ["access_token", "webhook_secret"]) await denied(() => role("authenticated", user, () => rows(`select ${column} from crm_connections`)));
+      await denied(() => role("authenticated", user, () => rows("select meta_access_token from instagram_account_secrets")));
+    }
+    assert.deepEqual(await role("service_role", null, () => rows("select access_token from crm_connections where id=$1", [connectionA])), [{ access_token: "fake-token" }]);
   });
   await check("credenciais legadas não são selecionáveis pelo navegador", async () => {
     for (const user of [viewer, admin]) for (const column of ["wts_api_token", "digisac_token", "digisac_url"]) await denied(() => role("authenticated", user, () => rows(`select ${column} from clients`)));

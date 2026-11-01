@@ -17,6 +17,7 @@ import { resumoFidelizacao } from "@/lib/sap-fidelizacao";
 import { LEGENDA } from "@/components/grafico";
 import { useParams } from "@tanstack/react-router";
 import { CopilotoSecao } from "@/components/copiloto-secao";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const dmy = (iso: string | null | undefined) => (iso ? iso.split("-").reverse().join("/") : "—");
 const dm = (iso: string) => iso.split("-").reverse().slice(0, 2).join("/");
@@ -52,7 +53,7 @@ function TextoLivre({ clinicaId, documento, secao, dica, textos }: { clinicaId: 
         <div className="mt-1 flex gap-2">
           <button type="button" disabled={salvar.isPending} onClick={() => salvar.mutate()} className="min-h-[34px] rounded-lg px-3 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>Salvar</button>
           <button type="button" onClick={() => setEd(null)} className="min-h-[34px] px-2 text-sm" style={{ color: "var(--text-dim)" }}>Cancelar</button>
-          {salvar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</span>}
+          {salvar.isError && <span className="text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</span>}
         </div>
         {clientId && <div className="mt-2"><CopilotoSecao clientId={clientId} titulo={titulo} dica={dica} textoAtual={ed} usar={(t) => setEd(t)} /></div>}
       </div>

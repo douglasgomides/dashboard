@@ -9,6 +9,7 @@ import { Painel, Selo, BarraFina } from "@/components/visual";
 import { fmtBRL, fmtNum } from "@/lib/format";
 import { definirMarcoSap, diaAtual, faseDoDia, getClinicaSap, getEtapasSap, getTrackerAuto, proximoMarco, salvarClinicaSap, type EtapaSap } from "@/lib/sap-data";
 import { lerTrackerAuto, montarKpisSap, MARCOS_SAP, type Farol, type KpiSap } from "@/lib/sap-auto";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const COR: Record<Farol, string> = { verde: "var(--good)", amarelo: "var(--warn)", vermelho: "var(--crit)", cinza: "var(--muted)" };
 const ROTULO: Record<Farol, string> = { verde: "No ritmo", amarelo: "Atenção", vermelho: "Agir agora", cinza: "Acompanhar" };
@@ -27,7 +28,7 @@ export function CadastroSap({ clientId }: { clientId: string }) {
   const [editando, setEditando] = useState(false);
 
   if (isLoading) return <p className="text-sm" style={{ color: "var(--text-dim)" }}>Carregando cadastro…</p>;
-  if (error) return <p className="text-sm" style={{ color: "var(--crit)" }}>Não consegui ler o cadastro do SAP: {(error as Error).message}</p>;
+  if (error) return <p className="text-sm" style={{ color: "var(--crit)" }}>Não consegui ler o cadastro do SAP: {mensagemDeErroAcao(error)}</p>;
 
   if (!clinica || editando) {
     if (!isAdmin) {
@@ -113,7 +114,7 @@ function FormCadastro({ clientId, inicial, onPronto, onCancelar }: { clientId: s
         piloto: v.piloto,
       }),
     onSuccess: onPronto,
-    onError: (e) => setErro((e as Error).message),
+    onError: (e) => setErro(mensagemDeErroAcao(e)),
   });
   function enviar(e: FormEvent) {
     e.preventDefault();
@@ -171,7 +172,7 @@ export function TrackerAutomatico({ clientId, start, end, periodLabel }: { clien
   const leitura = useMemo(() => (bruto ? montarKpisSap(bruto) : null), [bruto]);
 
   if (isLoading) return <p className="text-sm" style={{ color: "var(--text-dim)" }}>Calculando os números do SAP…</p>;
-  if (error) return <p className="text-sm" style={{ color: "var(--crit)" }}>Não consegui calcular o tracker: {(error as Error).message}</p>;
+  if (error) return <p className="text-sm" style={{ color: "var(--crit)" }}>Não consegui calcular o tracker: {mensagemDeErroAcao(error)}</p>;
   if (!bruto || !leitura) return null;
 
   if (!bruto.tem_crm) {
@@ -368,12 +369,12 @@ export function MarcosDoCrm({ clientId, abertoInicial = false }: { clientId: str
       qc.invalidateQueries({ queryKey: ["sap-etapas", clientId] });
       qc.invalidateQueries({ queryKey: ["sap-auto", clientId] });
     },
-    onError: (e) => setErro((e as Error).message),
+    onError: (e) => setErro(mensagemDeErroAcao(e)),
   });
 
   if (!isAdmin) return null;
   if (isLoading) return null;
-  if (error) return <p className="text-sm" style={{ color: "var(--crit)" }}>Não consegui ler as etapas do CRM: {(error as Error).message}</p>;
+  if (error) return <p className="text-sm" style={{ color: "var(--crit)" }}>Não consegui ler as etapas do CRM: {mensagemDeErroAcao(error)}</p>;
   const etapas = data ?? [];
   if (!etapas.length) return null;
 

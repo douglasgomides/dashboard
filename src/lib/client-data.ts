@@ -501,7 +501,9 @@ export async function getAdsPlanilha(clientId: string): Promise<AdsPlanilhaLinha
     from: (t: string) => {
       select: (c: string) => {
         eq: (k: string, v: string) => {
-          order: (c: string, o: { ascending: boolean }) => Promise<{ data: AdsPlanilhaLinha[] | null; error: unknown }>;
+          is: (k: string, v: null) => {
+            order: (c: string, o: { ascending: boolean }) => Promise<{ data: AdsPlanilhaLinha[] | null; error: unknown }>;
+          };
         };
       };
     };
@@ -510,6 +512,8 @@ export async function getAdsPlanilha(clientId: string): Promise<AdsPlanilhaLinha
     .from("ads_planilha_semanal")
     .select("analise_em, post_url, nome, tipo, status, acao, orcamento_dia, valor_total, valor_periodo, seguidores_antes, seguidores_apos, seguidores_periodo, mensagens_antes, mensagens_depois, mensagens_periodo, custo_seguidor, custo_mensagem, atualizado_em")
     .eq("client_id", clientId)
+    // Linha que saiu da planilha de origem não conta (ads_planilha_semanal.removido_em).
+    .is("removido_em", null)
     .order("analise_em", { ascending: false });
   if (error) throw error;
   return data ?? [];

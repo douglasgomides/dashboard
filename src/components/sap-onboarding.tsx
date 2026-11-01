@@ -7,6 +7,7 @@ import { Painel, Selo } from "@/components/visual";
 import { diaAtual, getAcessosSap, getClinicaSap, getMarcosSap, salvarAcessoSap, salvarFichaSap, type SapCadastro } from "@/lib/sap-data";
 import { ITENS_ACESSO, prontoParaSessao1, resumoAcessos, type RegistroAcesso, type StatusAcesso } from "@/lib/sap-acessos";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const campo = { borderColor: "var(--border)", background: "var(--surface)" } as const;
 const dm = (iso: string | null) => (iso ? iso.split("-").reverse().slice(0, 2).join("/") : "—");
@@ -71,7 +72,7 @@ function FichaSap({ clinica }: { clinica: SapCadastro }) {
             <button type="button" disabled={salvar.isPending} onClick={() => salvar.mutate()} className="min-h-[34px] rounded-lg px-3 text-sm font-semibold text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>Salvar</button>
             <button type="button" onClick={() => setEd(null)} className="min-h-[34px] px-2 text-sm" style={{ color: "var(--text-dim)" }}>Cancelar</button>
           </div>
-          {salvar.isError && <span className="text-xs sm:col-span-2" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</span>}
+          {salvar.isError && <span className="text-xs sm:col-span-2" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</span>}
         </div>
       )}
     </Painel>
@@ -159,7 +160,7 @@ function ChecklistAcessos({ clinica }: { clinica: SapCadastro }) {
           </table>
         </div>
       ))}
-      {salvar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</p>}
+      {salvar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</p>}
     </Painel>
   );
 }

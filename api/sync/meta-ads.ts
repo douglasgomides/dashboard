@@ -3,6 +3,7 @@ import { sincronizarShortio } from "../_lib/shortio-sync.js";
 import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
+import { registrarValidadeTokensMeta, tokensAnunciosDosClientes } from "../_lib/meta-token-validade.js";
 import { runMetaAdsSync, leituraDaWindsor } from "../_lib/meta-ads-sync.js";
 import { runMetaAdsGraphSync, leituraDaGraph } from "../_lib/meta-ads-graph-sync.js";
 import { consolidarStatusAnuncios, type LeituraConta } from "../_lib/anuncios-status.js";
@@ -87,6 +88,12 @@ const PISO_DIAS_ANUNCIOS = 30;
   // do cliente foi lida por inteiro, por qualquer via. Roda depois da planilha para que o resultado das contas valha.
   async function consolidar(leituras: LeituraConta[]) {
     const resumo = await consolidarStatusAnuncios(novoSb(), leituras.map((l) => l.clientId), leituras);
+    // Depois do resumo (que regrava o motivo): vencimento do token da Meta das contas lidas pela Graph.
+    const clientesGraph = leituras.filter((l) => l.via === "graph").map((l) => l.clientId);
+    if (clientesGraph.length > 0) {
+      const sb = novoSb();
+      await registrarValidadeTokensMeta(sb, "anuncios", await tokensAnunciosDosClientes(sb, clientesGraph, process.env.META_ADS_TOKEN));
+    }
     let precisaReconferir = 0;
     let clientesComFalha = 0;
     for (const r of resumo.values()) {

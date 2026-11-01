@@ -8,6 +8,7 @@ import {
   conclusoesOrcamentos, corrigirTipo, getOrcamentosPorTipo, MIN_ITENS, TIPOS_PROCEDIMENTO,
   type NomeProcedimento, type TipoProcedimento,
 } from "@/lib/orcamentos-tipo";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const num = (v: number) => v.toLocaleString("pt-BR");
@@ -120,7 +121,7 @@ function RevisarTipos({ clientId, nomes }: { clientId: string; nomes: NomeProced
   const m = useMutation({
     mutationFn: ({ procedimento, tipo }: { procedimento: string; tipo: TipoProcedimento }) => corrigirTipo(clientId, procedimento, tipo),
     onSuccess: () => { setErro(null); void qc.invalidateQueries({ queryKey: ["crm-orcamentos-por-tipo", clientId] }); },
-    onError: (e) => setErro(e instanceof Error ? e.message : String(e)),
+    onError: (e) => setErro(mensagemDeErroAcao(e)),
   });
   if (!isAdmin || nomes.length === 0) return null;
   return (

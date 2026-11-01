@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { rodarFluxoAteFim } from "@/lib/agentes-data";
 import { BotaoCopiar } from "@/components/botao-copiar";
 import { ESTADOS_IDEIA, TIPOS_IDEIA, type EstadoIdeia, type IdeiaCampanha } from "@/lib/campanhas-ia";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const db = supabase as any;
 type Ideia = IdeiaCampanha & { id: string; estado: EstadoIdeia; resultado: string | null; criado_em: string };
@@ -90,7 +91,7 @@ export function EstrategiasIA({ clientId, podeEditar, mostrarExecutar = true }: 
       const e = await gerar(clientId, setAndamento);
       if (e) setErro(e);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : String(e));
+      setErro(mensagemDeErroAcao(e));
     } finally {
       setAndamento(null);
       await qc.invalidateQueries({ queryKey: ["campanhas-ideias", clientId] });
@@ -100,7 +101,7 @@ export function EstrategiasIA({ clientId, podeEditar, mostrarExecutar = true }: 
   async function decidir(id: string, estado: EstadoIdeia, resultado?: string) {
     setErro(null);
     const { error } = await db.rpc("campanha_ideia_decidir", { p_id: id, p_estado: estado, p_resultado: resultado ?? null });
-    if (error) setErro(error.message);
+    if (error) setErro(mensagemDeErroAcao(error));
     await qc.invalidateQueries({ queryKey: ["campanhas-ideias", clientId] });
     await qc.invalidateQueries({ queryKey: ["agentes-trabalho", clientId] });
   }

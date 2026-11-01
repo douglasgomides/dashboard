@@ -4,6 +4,7 @@ import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/
 import { Check, History, Loader2, Pencil, Plus, Sparkles, X } from "lucide-react";
 import { FONTES, MEMORIAS, NOME_MEMORIA, paraChave, textoSemDadoPessoal, type Memoria } from "@/lib/brand-brain";
 import { decidirItem, escreverItem, getClinicasBrain, getItensBrain, getUltimaLeitura, organizar, pedirPropostas, restaurarItem, type ItemBrain } from "@/lib/brain-data";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 // Brand Brain: a memória de marca de cada clínica. O agente lê o que já existe no Hub e PROPÕE; nada vale até alguém
 // aprovar aqui. Cada mudança guarda a versão anterior, que pode ser restaurada. Só aparece clínica com o módulo ativo.
@@ -54,7 +55,7 @@ function BrandBrain() {
       recarregar(id);
     },
     onError: (e: Error, id) => {
-      if (clientAtual.current === id) setAviso({ clientId: id, tipo: "erro", texto: /ja existe|duplicate/.test(e.message) ? "Já existe uma leitura em andamento para esta clínica. Atualize a tela em instantes." : e.message });
+      if (clientAtual.current === id) setAviso({ clientId: id, tipo: "erro", texto: /ja existe|duplicate/.test(e.message) ? "Já existe uma leitura em andamento para esta clínica. Atualize a tela em instantes." : mensagemDeErroAcao(e) });
     },
     onSettled: (_data, _error, id) => { emAndamento.current.delete(id); },
   });
@@ -92,13 +93,13 @@ function BrandBrain() {
       recarregar(id);
     },
     onError: (e: Error, { clientId: id }) => {
-      if (clientAtual.current === id) setAviso({ clientId: id, tipo: "erro", texto: e.message });
+      if (clientAtual.current === id) setAviso({ clientId: id, tipo: "erro", texto: mensagemDeErroAcao(e) });
       recarregar(id);
     },
   });
 
   if (clinicas.isLoading) return <p className="note">Carregando…</p>;
-  if (clinicas.isError) return <p className="note" style={{ color: "var(--crit)" }}>Não foi possível carregar: {(clinicas.error as Error).message}</p>;
+  if (clinicas.isError) return <p className="note" style={{ color: "var(--crit)" }}>Não foi possível carregar: {mensagemDeErroAcao(clinicas.error)}</p>;
   if (!clinicas.data?.length) {
     return (
       <div className="rounded-xl border p-4 text-sm" style={caixa}>
@@ -132,7 +133,7 @@ function BrandBrain() {
       </header>
 
       {itens.isLoading ? <p className="note">Carregando…</p> : itens.isError ? (
-        <p className="note" style={{ color: "var(--crit)" }}>Não foi possível carregar: {(itens.error as Error).message}</p>
+        <p className="note" style={{ color: "var(--crit)" }}>Não foi possível carregar: {mensagemDeErroAcao(itens.error)}</p>
       ) : (
         <>
           <section aria-labelledby="revisar" className="space-y-2">
@@ -238,7 +239,7 @@ function CardProposta({ item, atual, onFeito }: { item: ItemBrain; atual: ItemBr
           <button type="button" className={botao} style={caixa} onClick={() => setModo(null)}>Voltar</button>
         </>}
       </div>
-      {decidir.isError && <p role="alert" className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{(decidir.error as Error).message}</p>}
+      {decidir.isError && <p role="alert" className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(decidir.error)}</p>}
     </li>
   );
 }
@@ -266,7 +267,7 @@ function LinhaItem({ chave, aprovado, historico, onFeito }: { chave: string; apr
               ))}
             </ul>
           )}
-          {restaurar.isError && <p role="alert" className="text-xs" style={{ color: "var(--crit)" }}>{(restaurar.error as Error).message}</p>}
+          {restaurar.isError && <p role="alert" className="text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(restaurar.error)}</p>}
         </div>
       )}
     </li>
@@ -296,7 +297,7 @@ function NovoItem({ clientId, memoria, onFeito }: { clientId: string; memoria: M
         <button type="submit" className={botao} style={principal} disabled={salvar.isPending || chave.length < 3 || texto.trim().length < 3 || pessoal}>Salvar aprovado</button>
         <button type="button" className={botao} style={caixa} onClick={() => setAberto(false)}>Cancelar</button>
       </div>
-      {salvar.isError && <p role="alert" className="text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</p>}
+      {salvar.isError && <p role="alert" className="text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</p>}
     </form>
   );
 }

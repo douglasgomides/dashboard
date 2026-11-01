@@ -43,14 +43,23 @@ export async function listInstagramAccounts(clientId: string) {
   return data;
 }
 
+// Token e segredo do webhook não são lidos pelo navegador (sem SELECT para authenticated desde 20261102190000):
+// a tela só sabe SE existem, por crm_conexoes_credenciais.
 export async function listCrmConnections(clientId: string) {
-  const { data, error } = await supabase
-    .from("crm_connections")
-    .select("id, provider, subdomain, webhook_secret, active, created_at")
-    .eq("client_id", clientId)
-    .order("created_at", { ascending: false });
+  const [{ data, error }, cred] = await Promise.all([
+    supabase
+      .from("crm_connections")
+      .select("id, provider, subdomain, active, created_at")
+      .eq("client_id", clientId)
+      .order("created_at", { ascending: false }),
+    (supabase as unknown as { rpc: (fn: string, a: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> }).rpc(
+      "crm_conexoes_credenciais",
+      { p_client: clientId },
+    ),
+  ]);
   if (error) throw error;
-  return data;
+  const porId = new Map(((cred.data as { id: string; tem_token: boolean; tem_webhook: boolean }[] | null) ?? []).map((c) => [c.id, c]));
+  return (data ?? []).map((c) => ({ ...c, tem_token: porId.get(c.id)?.tem_token ?? null, tem_webhook: porId.get(c.id)?.tem_webhook ?? null }));
 }
 
 export async function createCrmConnection(input: {
@@ -74,14 +83,24 @@ function randomWebhookSecret(): string {
 // Kommo não usa OAuth aqui — webhook nativo (a Kommo empurra o evento pra
 // nossa URL). A URL única por conexão (connection_id + secret) é a única
 // proteção do endpoint, já que a Kommo não assina os webhooks.
+// O segredo é gerado aqui e mostrado só uma vez (o navegador não o lê de volta do banco).
 export async function createKommoWebhookConnection(clientId: string, subdomain?: string) {
+  const webhook_secret = randomWebhookSecret();
   const { data, error } = await supabase
     .from("crm_connections")
-    .insert({ client_id: clientId, provider: "kommo", subdomain, webhook_secret: randomWebhookSecret() })
-    .select("id, webhook_secret")
+    .insert({ client_id: clientId, provider: "kommo", subdomain, webhook_secret })
+    .select("id")
     .single();
   if (error) throw error;
-  return data;
+  return { id: data.id, webhook_secret };
+}
+
+// Gera uma URL nova para uma conexão Kommo (a antiga para de funcionar: colar a nova na Kommo).
+export async function renovarWebhookKommo(connectionId: string) {
+  const webhook_secret = randomWebhookSecret();
+  const { error } = await supabase.from("crm_connections").update({ webhook_secret }).eq("id", connectionId);
+  if (error) throw error;
+  return { id: connectionId, webhook_secret };
 }
 
 export function kommoWebhookUrl(connectionId: string, webhookSecret: string): string {

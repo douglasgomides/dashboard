@@ -10,6 +10,7 @@ import { OrigemConversao } from "@/components/origem-conversao";
 import { ReceitaPorCanal } from "@/components/receita-por-canal";
 import { MotivosComparados } from "@/components/motivos-comparados";
 import { parseTicket, ticketForInput } from "@/lib/ticket";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 // Auditoria comercial do período: o que a IA leu em cada conversa (conversas_resumos), somado.
 // Mesma estrutura das auditorias manuais: funil, objeções x falhas, por atendente, resgate, exemplos.
@@ -264,7 +265,7 @@ function EmJogo({ clientId, de, ate }: { clientId: string; de: string; ate: stri
           <button type="submit" disabled={numero === null || salvar.isPending} className="min-h-[34px] rounded-lg px-3 text-sm font-medium disabled:opacity-50" style={{ background: "var(--accent)", color: "var(--accent-ink)" }}>{salvar.isPending ? "Salvando…" : "Salvar"}</button>
           {d.fonte_ticket === "equipe" && <button type="button" disabled={salvar.isPending} className="text-xs underline disabled:opacity-50" onClick={() => salvar.mutate(null)}>Voltar ao automático</button>}
           <button type="button" disabled={salvar.isPending} className="text-xs underline disabled:opacity-50" onClick={() => setEditando(false)}>Cancelar</button>
-          {salvar.isError && <span role="alert" className="text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</span>}
+          {salvar.isError && <span role="alert" className="text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</span>}
         </form>
       ) : (
         <button type="button" className="mt-1 text-xs underline" style={{ color: "var(--text-dim)" }} onClick={() => { salvar.reset(); setValor(ticketForInput(d.ticket)); setEditando(true); }}>

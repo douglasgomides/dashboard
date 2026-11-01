@@ -6,6 +6,7 @@ import { Painel, Selo } from "@/components/visual";
 import { getAcoesSap, getClinicaSap, salvarAcaoSap, type AcaoSap } from "@/lib/sap-data";
 import { somar } from "@/lib/sap-cronograma";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 const campo = { borderColor: "var(--border)", background: "var(--surface)" } as const;
 const dm = (iso: string | null) => (iso ? iso.split("-").reverse().slice(0, 2).join("/") : "—");
@@ -108,7 +109,7 @@ export function AcoesSap({ clientId, sugestoes = [], origemPadrao = "leitura" }:
           })}
         </ul>
       )}
-      {salvar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{(salvar.error as Error).message}</p>}
+      {salvar.isError && <p className="mt-1 text-xs" style={{ color: "var(--crit)" }}>{mensagemDeErroAcao(salvar.error)}</p>}
     </Painel>
   );
 }
