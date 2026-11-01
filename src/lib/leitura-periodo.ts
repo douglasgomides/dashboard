@@ -12,7 +12,7 @@
 import { fmtFormatKey, median } from "@/lib/report-metrics";
 import { conversaMaisBarata, GRUPOS, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 
 export type Tom = "bom" | "ruim" | "atencao";
 export type RotaAcao = "posts" | "anuncios" | "atendimento" | "ideias" | "conteudo";

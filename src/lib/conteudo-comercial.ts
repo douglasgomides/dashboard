@@ -4,7 +4,7 @@
  * Tudo é coincidência no tempo ou no assunto, nunca prova de que um post gerou uma conversa específica.
  */
 import { chaveTema, rotuloDoTema, temaRelacionado } from "./classificacao-post.js";
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 
 export interface DiaCruzamento { dia: string; posts: number; conversas: number }
 export interface TemaCruzamento { tema: string; posts: number; alcance: number; conversas: number; pessoas?: number; comerciais: number; pediram_preco: number; agendaram: number; pessoas_agendaram?: number }

@@ -11,7 +11,7 @@
 // tela mostra só a frase em R$ ("1 venda de anúncio, R$ 197, para R$ 12.196 investidos").
 // Dados: RPC roi_periodo (supabase/migrations/20261029120000_roi_por_objetivo.sql).
 
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 import { piorSelo, type Selo } from "@/lib/selo";
 
 export interface DadosRoi {

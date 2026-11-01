@@ -15,7 +15,7 @@ import { ordenarPorScore } from "@/lib/oportunidades";
 import { confiancaPorAmostra, type Insight, type Limitacao, type Responsavel, type Area, type Tom } from "@/lib/insight";
 import { saldoSeguidores } from "@/lib/metricas";
 import { lerVendas, type VendasPeriodoBanco } from "@/lib/vendas-periodo";
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 
 export interface EntradaResultado {
   /** A tela já mostra a faixa de cobertura no topo: não repetir "Período incompleto" nos alertas. */

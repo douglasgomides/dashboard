@@ -28,7 +28,7 @@ import { checarLinguagemCFM, tornarSeguro } from "@/lib/linguagem-cfm";
 import { fmtFormatKey, fmtTaxaPct, median, taxaDoPost } from "@/lib/report-metrics";
 import { saldoSeguidores } from "@/lib/metricas";
 import { lerVendas, type VendasPeriodoBanco } from "@/lib/vendas-periodo";
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 
 // ---------------------------------------------------------------- tipos
 

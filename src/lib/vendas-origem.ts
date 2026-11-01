@@ -6,7 +6,7 @@
 //     que ainda não dá para comparar origens;
 //   - "Em andamento" era total menos ganhos menos perdidos e somava os cards fechados na origem sem resultado.
 import { fmtTaxa } from "@/lib/metricas";
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 
 export const NAO_INFORMADO = "Não informado";
 export const MIN_LEADS_RANKING: number = LIMITES.amostra.crm.leadsRanking;

@@ -1,4 +1,4 @@
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 /**
  * Plano da semana: regras puras (semana, valor em jogo, ordem, textos). Um motor só para o SAP (entrada) e o Nexo
  * (continuidade): o histórico fica na clínica, não no produto. A geração e a conferência ficam em

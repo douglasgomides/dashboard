@@ -1,4 +1,4 @@
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 // Leitura de "O anúncio trouxe lead bom ou só volume?" (qualidade_leads_campanha, banco).
 //
 // Auditoria de 30/10/2026: na Dra. Marcella, 14 conversas da Meta eram repartidas entre 680 conversas novas e a tabela

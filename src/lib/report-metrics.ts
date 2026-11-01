@@ -3,7 +3,7 @@ import { formatLabel } from "@/lib/methodology";
 import { analisarVozDoPaciente } from "@/lib/voz-do-paciente";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { chaveTema } from "@/lib/classificacao-post";
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 
 const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const PERIODS = [

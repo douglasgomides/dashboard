@@ -1,4 +1,4 @@
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 // Definições centrais das métricas que aparecem em mais de uma tela ou relatório.
 // Cada métrica declara: período efetivo, unidade contada, cobertura e denominador.
 // Regra: zero medido (a fonte está ligada e contou zero) ≠ dado indisponível (não há como medir).

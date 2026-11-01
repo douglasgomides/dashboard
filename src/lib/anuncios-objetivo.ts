@@ -33,7 +33,7 @@ import { BENCHMARKS } from "@/lib/benchmarks";
 import { confiancaPorAmostra, type Confianca, type Impacto, type Insight, type Limitacao, type Tom } from "@/lib/insight";
 import { fmtFracao } from "@/lib/metricas";
 import { avaliarRastreio, cliqueLevaAoPerfil, type Rastreio } from "@/lib/rastreio-anuncios";
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 
 export type Grupo = "mensagem" | "lead" | "trafego" | "engajamento" | "alcance" | "venda" | "outro";
 

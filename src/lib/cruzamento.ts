@@ -9,7 +9,7 @@
 // Lógica pura, testável com `npx tsx scripts/test-cruzamento.ts`.
 import { median } from "@/lib/report-metrics";
 import { confiancaPorAmostra, type Insight, type Limitacao } from "@/lib/insight";
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 
 export interface EntradaCruzamento {
   start: string;

@@ -8,7 +8,7 @@ import { MIN_POSTS_CONCLUSAO, confiancaPorPosts } from "@/lib/metricas";
 import { soPerguntas, classificarComentario } from "@/lib/classificar-comentario";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { chaveTema, normalizarTemas, rotuloDoTema } from "@/lib/classificacao-post";
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 
 // ---------- datas ----------
 const DAY_MS = 86400000;

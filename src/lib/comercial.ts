@@ -27,7 +27,7 @@ import { BENCHMARKS, CITACAO_HBR_RESPOSTA, avaliar, type Faixa } from "./benchma
 import { fmtFracao } from "@/lib/metricas";
 import { agendadosSaoGanhos, avisoAgendadosSaoGanhos, minimoDaBase, passagem, type BaseFunil } from "./funil-taxa";
 import { confiancaPorAmostra, type Impacto, type Insight, type Limitacao, type Responsavel, type Tom } from "./insight";
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 
 // ---------------------------------------------------------------- regras de etapa
 // As mesmas da migração (manter em sincronia).

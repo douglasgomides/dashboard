@@ -1,4 +1,4 @@
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 // Benchmark estratégico entre clientes (admin): o cliente contra a mediana e o top 25% de um grupo
 // comparável (especialidade, tamanho de conta), por formato e por objetivo do conteúdo.
 //

@@ -5,7 +5,7 @@
  * em crm_procedimento_tipo; a correção passa na frente da regra do banco.
  */
 import { supabase } from "@/integrations/supabase/client";
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 
 export const TIPOS_PROCEDIMENTO = [
   "Consulta", "Exame", "Medicação", "Terapia injetável", "Implante hormonal", "Kit", "Programa ou clube", "Estética", "Outros",

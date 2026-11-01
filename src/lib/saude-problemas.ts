@@ -5,7 +5,7 @@
 // Não cria regra nova de saúde: o estado vem de saudeDaFonte (tomDaFonte + motivoDaLinha) e os
 // problemas de dado vêm de qualidade_dados (banco). Aqui só se classifica e se ordena.
 import { type Fontes, type LinhaFonte } from "@/lib/saude-fontes";
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 import { motivoDaLinha } from "@/lib/motivos";
 import { statusDaFonte } from "@/lib/status-fonte";
 import type { ProblemaDado } from "@/lib/client-data";

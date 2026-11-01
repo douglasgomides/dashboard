@@ -2,7 +2,7 @@
 // (Meta), fecha a recomendação de quando publicar. Mediana, não média, e só com amostra mínima.
 import { brazilWeekdayAndHour, median } from "@/lib/report-metrics";
 import { DIAS_SEMANA } from "@/lib/audiencia";
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 
 export interface SlotDePost {
   dia: number;

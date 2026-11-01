@@ -1,4 +1,4 @@
-import { LIMITES } from "@/lib/limites";
+import { LIMITES } from "./limites.js";
 // Visões comerciais do CRM (RPC crm_visoes_comerciais, migração 20261016090000). Lógica pura
 // (teste: scripts/test-crm-visoes.ts).
 //
