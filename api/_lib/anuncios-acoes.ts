@@ -5,8 +5,9 @@
  * conjunto ativo com orçamento diário. Antes de mudar, guarda o estado anterior para desfazer.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { novoOrcamento, podeAplicar, type TipoAcao } from "../../src/lib/anuncios-acoes.js";
+import { novoOrcamento, podeAplicar, podeTrocarOrcamento, type MudancaOrcamento, type TipoAcao } from "../../src/lib/anuncios-acoes.js";
 import { META_GRAPH_URL } from "./meta-graph-versao.js";
+import { fetchMeta } from "./meta-limite.js";
 
 type Admin = SupabaseClient<any, any, any>;
 const GRAPH = META_GRAPH_URL;
@@ -14,16 +15,25 @@ const token = () => process.env.META_ADS_WRITE_TOKEN || "";
 export const tokenEscritaConfigurado = () => !!token();
 
 async function ler(caminho: string): Promise<any> {
-  const r = await fetch(`${GRAPH}/${caminho}${caminho.includes("?") ? "&" : "?"}access_token=${token()}`, { signal: AbortSignal.timeout(20_000) });
+  const r = await fetchMeta(`${GRAPH}/${caminho}${caminho.includes("?") ? "&" : "?"}access_token=${token()}`, { signal: AbortSignal.timeout(20_000) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`Meta: ${j?.error?.message ?? r.status}`);
   return j;
 }
 async function gravar(id: string, campos: Record<string, string>): Promise<void> {
   const corpo = new URLSearchParams({ ...campos, access_token: token() });
-  const r = await fetch(`${GRAPH}/${id}`, { method: "POST", body: corpo, signal: AbortSignal.timeout(20_000) });
+  const r = await fetchMeta(`${GRAPH}/${id}`, { method: "POST", body: corpo, signal: AbortSignal.timeout(20_000) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j?.success === false) throw new Error(`Meta: ${j?.error?.message ?? r.status}`);
+}
+
+/** Trocas de orçamento desta campanha registradas na última hora (aplicadas ou desfeitas). */
+async function trocasRecentes(admin: Admin, campanhaId: string): Promise<MudancaOrcamento[]> {
+  const desde = new Date(Date.now() - 3_600_000).toISOString();
+  const { data, error } = await admin.from("anuncios_mudancas").select("tipo, estado, antes, depois, aplicado_em, desfeito_em")
+    .eq("campanha_id", campanhaId).eq("tipo", "orcamento").or(`aplicado_em.gte.${desde},desfeito_em.gte.${desde}`);
+  if (error) throw new Error("Não foi possível conferir as trocas de orçamento da última hora.");
+  return (data ?? []) as MudancaOrcamento[];
 }
 
 interface Estado { status?: string; orcamentos: { id: string; nivel: "campanha" | "conjunto"; daily_budget: number }[] }
@@ -53,6 +63,9 @@ export async function aplicarAcao(admin: Admin, p: { clientId: string; campanhaI
     else if (p.tipo === "ativar") { await gravar(p.campanhaId, { status: "ACTIVE" }); depois = { status: "ACTIVE" }; }
     else {
       if (!antes.orcamentos.length) throw new Error("Nenhum orçamento diário ativo encontrado (orçamento vitalício ou conjuntos pausados).");
+      // Limite da Meta: 4 trocas de orçamento por hora em cada conjunto. Recusa sem registrar como falha.
+      const limite = podeTrocarOrcamento(antes.orcamentos.map((o) => o.id), await trocasRecentes(admin, p.campanhaId));
+      if (!limite.ok) return { ok: false, erro: limite.motivo };
       const novos = antes.orcamentos.map((o) => ({ ...o, daily_budget: novoOrcamento(o.daily_budget, p.pct ?? 0) }));
       for (const o of novos) await gravar(o.id, { daily_budget: String(o.daily_budget) });
       depois = { orcamentos: novos };
@@ -72,6 +85,12 @@ export async function desfazerAcao(admin: Admin, p: { clientId: string; id: stri
   const { data: a } = await admin.from("anuncios_mudancas").select("*").eq("id", p.id).eq("client_id", p.clientId).maybeSingle();
   if (!a || a.estado !== "aplicada") return { ok: false, erro: "Ação não encontrada ou já desfeita." };
   const antes = a.antes as Estado;
+  if (a.tipo === "orcamento") {
+    try {
+      const limite = podeTrocarOrcamento((antes.orcamentos ?? []).map((o) => o.id), await trocasRecentes(admin, a.campanha_id));
+      if (!limite.ok) return { ok: false, erro: limite.motivo };
+    } catch (e) { return { ok: false, erro: (e instanceof Error ? e.message : String(e)).slice(0, 300) }; }
+  }
   try {
     if (a.tipo === "pausar" || a.tipo === "ativar") { if (antes.status) await gravar(a.campanha_id, { status: antes.status === "ACTIVE" ? "ACTIVE" : "PAUSED" }); }
     else for (const o of antes.orcamentos ?? []) await gravar(o.id, { daily_budget: String(o.daily_budget) });

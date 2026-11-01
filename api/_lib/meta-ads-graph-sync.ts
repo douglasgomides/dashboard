@@ -20,6 +20,7 @@ import { graphPageUrl, integrationRequest } from "./integration-http.js";
 import { META_GRAPH_URL } from "./meta-graph-versao.js";
 import { protegerContraZero } from "./anuncios-protecao.js";
 import { registrarLeiturasContas } from "./anuncios-status.js";
+import { fetchMeta } from "./meta-limite.js";
 
 const API = META_GRAPH_URL;
 
@@ -149,7 +150,7 @@ async function buscarInsightsUmaJanela(
   // Teto de páginas: uma conta com muitas campanhas em janela longa pagina
   // bastante, e a função da Vercel tem tempo limitado.
   for (let pagina = 0; pagina < 20 && url; pagina++) {
-    const res = await fetch(graphPageUrl(url), integrationRequest());
+    const res = await fetchMeta(graphPageUrl(url), integrationRequest());
     const texto = await res.text();
     if (!res.ok) {
       throw new Error(`Meta insights ${conta} respondeu ${res.status}: ${texto.slice(0, 300)}`);
@@ -181,7 +182,7 @@ export async function buscarAlcanceJanela(contaId: string, token: string): Promi
     `&fields=campaign_id,reach,impressions,frequency&limit=500&access_token=${encodeURIComponent(token)}`;
   const linhas: LinhaAlcance[] = [];
   for (let pagina = 0; pagina < 20 && url; pagina++) {
-    const res = await fetch(graphPageUrl(url), integrationRequest());
+    const res = await fetchMeta(graphPageUrl(url), integrationRequest());
     const texto = await res.text();
     if (!res.ok) throw new Error(`Meta alcance 7 dias ${conta} respondeu ${res.status}: ${texto.slice(0, 300)}`);
     const corpo = JSON.parse(texto) as { data?: LinhaAlcance[]; paging?: { next?: string } };
@@ -203,7 +204,7 @@ export async function buscarConjuntos(contaId: string, token: string): Promise<M
     `&filtering=${encodeURIComponent(filtro)}&access_token=${encodeURIComponent(token)}`;
   const porCampanha = new Map<string, { otimizacoes: string[]; destinos: string[] }>();
   for (let pagina = 0; pagina < 20 && url; pagina++) {
-    const res = await fetch(graphPageUrl(url), integrationRequest());
+    const res = await fetchMeta(graphPageUrl(url), integrationRequest());
     const texto = await res.text();
     if (!res.ok) throw new Error(`Meta adsets ${conta} respondeu ${res.status}: ${texto.slice(0, 300)}`);
     const corpo = JSON.parse(texto) as { data?: { campaign_id?: string; optimization_goal?: string; destination_type?: string }[]; paging?: { next?: string } };
@@ -274,7 +275,7 @@ export function diasAteOLimite(spendCapCentavos: unknown, gastoCentavos: unknown
 
 async function lerLimiteDeGasto(contaId: string, token: string): Promise<{ spend_cap?: string; amount_spent?: string } | null> {
   const conta = contaId.startsWith("act_") ? contaId : `act_${contaId}`;
-  const res = await fetch(graphPageUrl(`${API}/${conta}?fields=spend_cap,amount_spent&access_token=${encodeURIComponent(token)}`), integrationRequest());
+  const res = await fetchMeta(graphPageUrl(`${API}/${conta}?fields=spend_cap,amount_spent&access_token=${encodeURIComponent(token)}`), integrationRequest());
   if (!res.ok) return null;
   return (await res.json()) as { spend_cap?: string; amount_spent?: string };
 }

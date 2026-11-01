@@ -27,7 +27,7 @@
  * da data, para não repetir o histórico que já veio de outra fonte (planilha).
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { fetchComRetry } from "./integration-http.js";
+import { fetchComRetry, ritmoHelena } from "./integration-http.js";
 
 const FLW_BASE = "https://api.wts.chat";
 const PAGE_SIZE = 100;
@@ -84,7 +84,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 async function flwGet(token: string, path: string, query: Record<string, string | number> = {}): Promise<any> {
   const qs = new URLSearchParams(Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)])));
   const url = `${FLW_BASE}${path}${qs.size ? `?${qs.toString()}` : ""}`;
-  const res = await fetchComRetry(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+  const res = await fetchComRetry(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }, { ritmo: ritmoHelena(token) });
   if (!res.ok) {
     throw new Error(`FlwChat ${path} falhou (${res.status}): ${(await res.text()).slice(0, 160)}`);
   }
@@ -99,6 +99,11 @@ export function cardsFechadosNaOrigem(abertosNoNexo: string[], vistos: Set<strin
   return fechados;
 }
 
+// Fica na v1 de propósito. A doc da Helena (01/11/2026) só publica `GET /crm/v2/panel/card` e o formato da resposta é
+// claro (PublicPanelCardDTOV2 com os mesmos campos, mais `status` e `lostReason`), mas ela não diz quais situações
+// (OPEN, WON, LOST, ARCHIVED) a v2 devolve sem o filtro `Statuses`. Se ela devolver menos cards que a v1, os que
+// faltarem seriam fechados por cardsFechadosNaOrigem: dano no dado sem erro. Migrar só depois de comparar a v1 com a
+// v2 (com e sem Statuses) numa conta real.
 async function fetchCards(token: string, panelId: string, deadlineMs?: number): Promise<{ cards: FlwCard[]; parcial: boolean; teto?: boolean }> {
   const all: FlwCard[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {

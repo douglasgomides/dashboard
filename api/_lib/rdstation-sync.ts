@@ -15,6 +15,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { lerTodasAsLinhas } from "./ler-paginas.js";
 import { fetchComRetry } from "./integration-http.js";
+import { registrarAviso } from "./sync-status.js";
 
 const RD_BASE = "https://crm.rdstation.com/api/v1";
 const PAGE_SIZE = 200;
@@ -38,6 +39,8 @@ export interface RdStationSyncResult {
   funis: number;
   negocios: number;
   errors: string[];
+  /** Aviso de visibilidade do token (gravado em sync_status.motivo do CRM). */
+  aviso?: string | null;
 }
 
 interface RdDeal {
@@ -50,6 +53,7 @@ interface RdDeal {
   updated_at?: string | null;
   deal_stage?: { _id?: string; id?: string; name?: string | null } | null;
   deal_source?: { name?: string | null } | null;
+  user?: { _id?: string; id?: string } | null;
   contacts?: {
     name?: string | null;
     emails?: { email?: string | null }[] | null;
@@ -124,6 +128,37 @@ async function fetchDeals(token: string, deadlineMs?: number): Promise<{ deals: 
     page++;
   }
   return { deals: all, parcial: true };
+}
+
+/**
+ * Token com visibilidade menor que Geral. Doc (crm-v1-token, lida em 01/11/2026): com visibilidade "Restrito", "serão
+ * retornadas somente as negociações cujo responsável é o dono do token" (Equipe: as da equipe dele). A API não diz a
+ * visibilidade do token, e lista e `total` contam a mesma parte, então nada falha. Evidência usada, simples: a conta
+ * tem mais de um usuário ativo (GET /users, que não depende da visibilidade) e todas as negociações listadas (pelo
+ * menos 20) têm o mesmo responsável (`user`). Equipe com vários usuários não é detectada. null = sem indício.
+ */
+export function avisoVisibilidadeRd(deals: { user?: { _id?: string; id?: string } | null }[], usuariosAtivos: number | null): string | null {
+  if (usuariosAtivos == null || usuariosAtivos < 2 || deals.length < 20) return null;
+  const donos = new Set<string>();
+  for (const d of deals) {
+    const id = d.user?._id ?? d.user?.id;
+    if (!id) return null; // sem o responsável em algum negócio, não dá para afirmar
+    donos.add(String(id));
+  }
+  if (donos.size !== 1) return null;
+  return `RD Station: as ${deals.length} negociações lidas são todas de um só responsável, mas a conta tem ${usuariosAtivos} usuários ativos. O token pode ser de um usuário com visibilidade Restrito (ou Equipe) em negociações, e aí as dos outros vendedores não chegam ao Nexo. Gere o token com um usuário de visibilidade Geral.`;
+}
+const MARCA_AVISO_RD = /^RD Station: as \d+ negociações lidas são todas de um só responsável/;
+
+async function contarUsuariosAtivos(token: string): Promise<number | null> {
+  try {
+    const body = await rdGet(token, "users", { active: "true" });
+    const users = Array.isArray(body) ? body : body?.users;
+    if (!Array.isArray(users)) return null;
+    return users.filter((u: { active?: boolean; hidden?: boolean }) => u && u.active !== false && u.hidden !== true).length;
+  } catch {
+    return null; // conferência extra: falha aqui não vira erro do sync
+  }
 }
 
 export async function runRdStationSync(env: RdStationSyncEnv): Promise<RdStationSyncResult[]> {
@@ -283,7 +318,14 @@ export async function runRdStationSync(env: RdStationSyncEnv): Promise<RdStation
       }
     }
 
-    results.push({ clientId: conn.client_id, connectionId: conn.id, funis: pipelines.length, negocios: gravados, errors });
+    // Só com a lista completa: lista cortada por tempo ou erro não prova nada sobre a visibilidade do token.
+    let aviso: string | null = null;
+    if (errors.length === 0 && deals.length > 0) {
+      aviso = avisoVisibilidadeRd(deals, await contarUsuariosAtivos(token));
+      await registrarAviso(supabase, conn.client_id, "crm", aviso, MARCA_AVISO_RD);
+    }
+
+    results.push({ clientId: conn.client_id, connectionId: conn.id, funis: pipelines.length, negocios: gravados, errors, aviso });
   }
 
   return results;

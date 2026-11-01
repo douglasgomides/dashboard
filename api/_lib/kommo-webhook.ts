@@ -56,9 +56,31 @@ export function parseBracketFormBody(raw: string): Record<string, unknown> {
   return root;
 }
 
+// Eventos de lead do webhook (doc "Webhook events": add, update, delete, restore, status, responsible). "responsible"
+// (troca de responsável) não muda nada que o Nexo lê. "update" traz o lead inteiro; "restore" é o lead que voltou da
+// lixeira e precisa contar de novo (antes ficava removido até a reconciliação diária).
+export const EVENTOS_LEAD_KOMMO = ["add", "update", "restore", "status", "delete"] as const;
+export type EventoLeadKommo = (typeof EVENTOS_LEAD_KOMMO)[number];
+
+/**
+ * event_type gravado em crm_leads. A coluna só aceita add/status/delete/sync (constraint crm_leads_event_type_check):
+ * restaurado volta como "add" (o lead reaparece) e update como "status" (estado atual do lead).
+ */
+export function eventTypeGravado(evento: EventoLeadKommo): "add" | "status" | "delete" {
+  if (evento === "restore") return "add";
+  if (evento === "update") return "status";
+  return evento;
+}
+
+/** Unix (segundos) válido como texto ou número; senão null. */
+export function unixDoWebhook(v: unknown): number | null {
+  if (v == null || String(v).trim() === "" || !/^\d{9,11}$/.test(String(v).trim())) return null;
+  return Number(String(v).trim());
+}
+
 export interface KommoLeadEvent {
   externalLeadId: string;
-  eventType: "add" | "status" | "delete";
+  eventType: EventoLeadKommo;
   statusId: string | null;
   oldStatusId: string | null;
   pipelineId: string | null;
@@ -71,7 +93,7 @@ export function extractLeadEvents(parsed: Record<string, unknown>): KommoLeadEve
   if (!leads || typeof leads !== "object" || Array.isArray(leads)) return [];
 
   const events: KommoLeadEvent[] = [];
-  for (const eventType of ["add", "status", "delete"] as const) {
+  for (const eventType of EVENTOS_LEAD_KOMMO) {
     const group = leads[eventType] as Record<string, Record<string, unknown>> | undefined;
     if (!group || typeof group !== "object" || Array.isArray(group)) continue;
     for (const entry of Object.values(group)) {

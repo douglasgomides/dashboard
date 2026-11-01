@@ -206,6 +206,32 @@ async function testWebhook() {
   assert.deepEqual((leads.get("123")!.raw_payload as any).custom_fields_values, [{ id: 1 }]);
   assert.equal(await deliver(change + "&leads[status][0][price]=0"), 200);
   assert.equal(leads.get("123")!.price, 0);
+  // Mudou para perdido sem closed_at no evento: o fechamento é datado agora (o closed_at antigo não vale).
+  const perdido = (leads.get("123")!.raw_payload as any).closed_at;
+  assert.ok(Number.isInteger(perdido) && Math.abs(perdido - Date.now() / 1000) < 120, "status fechado sem closed_at data o fechamento");
+  assert.ok(leads.get("123")!.removido_na_origem, "status depois do delete não ressuscita o lead");
+
+  // Lead restaurado da lixeira volta a contar; event_type respeita a constraint (add/status/delete/sync).
+  assert.equal(await deliver("leads[restore][0][id]=123&leads[restore][0][status_id]=142&leads[restore][0][closed_at]=1761000000"), 200);
+  assert.equal(leads.get("123")!.removido_na_origem, null, "restore limpa removido_na_origem");
+  assert.equal(leads.get("123")!.event_type, "add");
+  assert.equal(leads.get("123")!.outcome, "won");
+  assert.equal((leads.get("123")!.raw_payload as any).closed_at, "1761000000", "closed_at do evento é mantido");
+
+  // update traz o lead inteiro: grava como "status" e recalcula o desfecho; reabriu limpa o closed_at.
+  assert.equal(await deliver("leads[update][0][id]=123&leads[update][0][status_id]=777&leads[update][0][price]=900&leads[update][0][name]=Lead"), 200);
+  assert.equal(leads.get("123")!.event_type, "status");
+  assert.equal(leads.get("123")!.outcome, "open");
+  assert.equal(leads.get("123")!.price, 900);
+  assert.equal((leads.get("123")!.raw_payload as any).closed_at, null, "reaberto não carrega data de fechamento antiga");
+  // Ganhou de novo, com updated_at no evento: é a data do ganho.
+  assert.equal(await deliver("leads[status][0][id]=123&leads[status][0][status_id]=142&leads[status][0][updated_at]=1761500000"), 200);
+  assert.equal((leads.get("123")!.raw_payload as any).closed_at, 1761500000);
+  // Edição de um lead ganho que já tem closed_at não troca a data.
+  assert.equal(await deliver("leads[update][0][id]=123&leads[update][0][status_id]=142&leads[update][0][updated_at]=1761900000"), 200);
+  assert.equal((leads.get("123")!.raw_payload as any).closed_at, 1761500000);
+  // Outros eventos do mesmo lead (responsible) seguem ignorados.
+  assert.equal(await deliver("leads[responsible][0][id]=123&leads[responsible][0][responsible_user_id]=9"), 200);
 
   for (const table of ["crm_connections", "crm_leads"]) {
     failRead = table;

@@ -16,6 +16,7 @@ import type { Database } from "../../src/integrations/supabase/types.js";
 import { isQuestion } from "./question-classifier.js";
 import { graphPageUrl, integrationRequest } from "./integration-http.js";
 import { META_GRAPH_URL } from "./meta-graph-versao.js";
+import { ehLimiteMeta, falharPorLimiteNoLote, fetchMeta, limiteNoLote } from "./meta-limite.js";
 
 const GRAPH_BASE = META_GRAPH_URL;
 const COMMENTS_BATCH_SIZE = 50; // limite da API de lote da Meta
@@ -93,15 +94,21 @@ export async function fetchCommentsBatch(
       method: "GET",
       relative_url: `${p.windsor_media_id}/comments?fields=${CAMPOS_COMENTARIO}&limit=50`,
     }));
-    const res = await fetch(`${GRAPH_BASE}/`, integrationRequest({
+    const pedidoLote = integrationRequest({
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ access_token: accessToken, batch: JSON.stringify(batchPayload) }),
-    }));
+    });
+    const res = await fetchMeta(`${GRAPH_BASE}/`, pedidoLote);
     if (!res.ok) {
       throw new Error(`Meta Graph batch comments failed (${res.status}): ${await res.text()}`);
     }
     const responses = (await res.json()) as { code: number; body: string }[];
+    // Sub-resposta com erro de limite (4/17/32/613...): para aqui em vez de seguir pedindo os outros lotes.
+    for (const sub of responses ?? []) {
+      const codigo = limiteNoLote(sub);
+      if (codigo != null) falharPorLimiteNoLote(`${GRAPH_BASE}/`, pedidoLote, codigo);
+    }
     for (let j = 0; j < batch.length; j++) {
       const post = batch[j];
       const sub = responses[j];
@@ -131,7 +138,7 @@ export async function fetchCommentsBatch(
     const item = proximas.shift()!;
     gastas++;
     try {
-      const res = await fetch(graphPageUrl(item.url), integrationRequest());
+      const res = await fetchMeta(graphPageUrl(item.url), integrationRequest());
       if (!res.ok) { errors.push(`comentários ${item.postId}: página respondeu ${res.status}`); falharam.add(item.postId); continue; }
       const parsed = (await res.json()) as { data?: MetaComment[]; paging?: { next?: string } };
       if (!Array.isArray(parsed?.data)) throw new Error("página inválida");
@@ -142,7 +149,10 @@ export async function fetchCommentsBatch(
       result.set(item.postId, atual);
       if (parsed.paging?.next) proximas.push({ postId: item.postId, url: parsed.paging.next, respostas: item.respostas });
       empilharRespostas(item.postId, urlsRespostas);
-    } catch { errors.push(`comentários ${item.postId}: não foi possível ler a página`); falharam.add(item.postId); }
+    } catch (e) {
+      if (ehLimiteMeta(e)) throw e; // limite da Meta: não segue pedindo as outras páginas
+      errors.push(`comentários ${item.postId}: não foi possível ler a página`); falharam.add(item.postId);
+    }
   }
   if (proximas.length) {
     errors.push("Comentários incompletos: limite de páginas extras atingido");
