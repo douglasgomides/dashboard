@@ -5,7 +5,38 @@ import { fetchComRetry } from "./integration-http.js";
 type Message = { id: string; type: string; created_at: string; content?: string | null; content_type?: string; sent?: boolean; source?: string | null; content_action?: { components?: { formatted_text?: string }[] } };
 type Chat = { id: string; contact_id: string; channel_account_id: string; created_at: string; last_message_at: string };
 type Cursor = { from: string; to: string; page: number; index: number };
-type Result = { clientId: string; conversas: number; mensagens: number; ignoradas_sem_negocio: number; parcial: boolean; canais_desconectados: string[]; erros: string[] };
+type Result = { clientId: string; conversas: number; mensagens: number; ignoradas_sem_negocio: number; parcial: boolean; canais_desconectados: string[]; canais_cancelados: string[]; erros: string[] };
+
+/**
+ * Aviso para o status do sync quando um canal da Clint não está conectado (doc: status CONNECTED, DISCONNECTED ou
+ * CANCELLED). Conversa nova desse canal não chega até a clínica reconectar (ou recontratar) o número. null = tudo ok.
+ */
+export function avisoCanaisClint(desconectados: string[], cancelados: string[]): string | null {
+  const partes: string[] = [];
+  const lista = (n: string[]) => n.map((x) => `"${x}"`).join(", ");
+  if (desconectados.length) partes.push(`${desconectados.length === 1 ? "canal desconectado" : "canais desconectados"}: ${lista(desconectados)}`);
+  if (cancelados.length) partes.push(`${cancelados.length === 1 ? "canal cancelado" : "canais cancelados"}: ${lista(cancelados)}`);
+  if (!partes.length) return null;
+  return `Clint: ${partes.join("; ")}. Conversas novas desses números não chegam ao Nexo até a clínica reconectar o canal na Clint.`;
+}
+
+/**
+ * Próxima posição da leitura das conversas. A doc diz que a lista vem "sorted by last_message_at descending" e o filtro
+ * é uma janela fixa [from, to]. Andar por número de página pula conversa: a que recebe mensagem durante a leitura sai da
+ * janela e as de baixo sobem uma posição. Em vez de ir para a página 2, a janela encolhe: o novo fim é a última conversa
+ * lida (+1 ms, para valer com fim inclusivo ou exclusivo) e a leitura volta à página 1. As conversas na fronteira são
+ * relidas (sem custo: a conversa já conferida é pulada). Se a página não vier em ordem decrescente, ou todas tiverem o
+ * mesmo horário (sem progresso), segue por página como antes.
+ */
+export function proximaJanelaClint(cursor: Cursor, chats: { last_message_at?: string | null }[]): Cursor {
+  const tempos = chats.map((c) => Date.parse(String(c.last_message_at ?? "")));
+  const ordenada = tempos.every((t, i) => Number.isFinite(t) && (i === 0 || t <= tempos[i - 1]));
+  if (ordenada && tempos.length) {
+    const novoFim = tempos[tempos.length - 1] + 1;
+    if (novoFim < Date.parse(cursor.to)) return { ...cursor, to: new Date(novoFim).toISOString(), page: 1, index: 0 };
+  }
+  return { ...cursor, page: cursor.page + 1, index: 0 };
+}
 const BASE = "https://api.clint.digital";
 
 export function mensagemClint(m: Message) {
@@ -44,7 +75,7 @@ export async function ingerirConversasClint(admin: SupabaseClient<any, any, any>
     .sort((a, b) => String(a.config?.clint_conversas_conferencia_em ?? "").localeCompare(String(b.config?.clint_conversas_conferencia_em ?? "")));
   const prazoGeral = deadline;
   for (const [pos, conn] of ativas.entries()) {
-    const result: Result = { clientId: conn.client_id, conversas: 0, mensagens: 0, ignoradas_sem_negocio: 0, parcial: false, canais_desconectados: [], erros: [] };
+    const result: Result = { clientId: conn.client_id, conversas: 0, mensagens: 0, ignoradas_sem_negocio: 0, parcial: false, canais_desconectados: [], canais_cancelados: [], erros: [] };
     results.push(result);
     if (Date.now() >= prazoGeral) { result.parcial = true; continue; }
     const deadline = Date.now() + Math.floor((prazoGeral - Date.now()) / (ativas.length - pos));
@@ -79,12 +110,15 @@ export async function ingerirConversasClint(admin: SupabaseClient<any, any, any>
       if (!Array.isArray(channels.data) || channels.has_next) throw new Error("Lista de canais incompleta");
       for (const [channelIndex, channel] of channels.data.entries()) {
         if (channel.status === "DISCONNECTED") result.canais_desconectados.push(channel.name);
+        if (channel.status === "CANCELLED") result.canais_cancelados.push(channel.name);
         const prior = state[channel.id];
         const cursor: Cursor = prior && !prior.complete ? { ...prior } : {
           from: prior?.to ? new Date(Date.parse(prior.to) - 86_400_000).toISOString() : new Date(Date.now() - 120 * 86_400_000).toISOString(),
           to: new Date().toISOString(), page: 1, index: 0,
         };
         state[channel.id] = cursor;
+        // Conversas já vistas nesta rodada (a janela que encolhe relê a fronteira): não conta duas vezes.
+        const vistas = new Set<string>();
         while (Date.now() < deadline - 1_000) {
           const params = new URLSearchParams({ limit: "200", page: String(cursor.page), last_message_at_start: cursor.from, last_message_at_end: cursor.to });
           const page = await get(conn.access_token, `/v2/chats/channel-account/${encodeURIComponent(channel.id)}?${params}`, deadline);
@@ -93,6 +127,8 @@ export async function ingerirConversasClint(admin: SupabaseClient<any, any, any>
           for (; cursor.index < chats.length; cursor.index++) {
             if (Date.now() >= deadline - 1_000) break;
             const chat = chats[cursor.index];
+            if (vistas.has(chat.id)) continue;
+            vistas.add(chat.id);
             const lead = leads.get(chat.contact_id);
             // A mesma conta atende Doctor e Douglas: só o vínculo de CRM decide o cliente.
             if (!lead) { result.ignoradas_sem_negocio++; continue; }
@@ -122,7 +158,7 @@ export async function ingerirConversasClint(admin: SupabaseClient<any, any, any>
           }
           if (cursor.index < chats.length) { result.parcial = true; break; }
           if (!page.has_next) { state[channel.id] = { ...cursor, complete: true }; break; }
-          cursor.page++; cursor.index = 0;
+          Object.assign(cursor, proximaJanelaClint(cursor, chats));
           await checkpoint();
         }
         if (!state[channel.id].complete) result.parcial = true;

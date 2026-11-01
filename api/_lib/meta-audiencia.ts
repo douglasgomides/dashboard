@@ -11,6 +11,7 @@
  * período é 30 dias.
  */
 import { META_GRAPH_URL } from "./meta-graph-versao.js";
+import { fetchMeta } from "./meta-limite.js";
 const GRAPH = META_GRAPH_URL;
 const DIA = 86400;
 
@@ -49,7 +50,7 @@ export interface Audiencia {
 
 export async function g(token: string, path: string, q: Record<string, string | number> = {}): Promise<any> {
   const params = new URLSearchParams({ ...Object.fromEntries(Object.entries(q).map(([k, v]) => [k, String(v)])), access_token: token });
-  const r = await fetch(`${GRAPH}/${path}?${params.toString()}`, { signal: AbortSignal.timeout(25000) });
+  const r = await fetchMeta(`${GRAPH}/${path}?${params.toString()}`, { signal: AbortSignal.timeout(25000) });
   const corpo = await r.json().catch(() => null);
   if (!r.ok) {
     const msg = corpo?.error?.message ?? `Meta respondeu ${r.status}`;

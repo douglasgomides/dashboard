@@ -9,6 +9,7 @@
  * Só leitura (account_status e effective_status das campanhas). Nunca derruba o sync.
  */
 import { META_GRAPH_URL } from "./meta-graph-versao.js";
+import { fetchMeta } from "./meta-limite.js";
 const API = META_GRAPH_URL;
 
 export type DonoMotivo = "cliente" | "meta" | "nos";
@@ -19,7 +20,7 @@ type Resp<T> = { ok: true; corpo: T } | { ok: false; status: number; codigo?: nu
 async function g<T>(caminho: string, token: string, params: Record<string, string>): Promise<Resp<T>> {
   const qs = new URLSearchParams({ ...params, access_token: token });
   try {
-    const r = await fetch(`${API}/${caminho}?${qs}`, { signal: AbortSignal.timeout(15_000) });
+    const r = await fetchMeta(`${API}/${caminho}?${qs}`, { signal: AbortSignal.timeout(15_000) });
     const t = await r.text();
     let j: any = null;
     try {

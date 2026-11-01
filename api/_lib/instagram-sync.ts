@@ -9,6 +9,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
 import { classifyTema } from "./tema-classifier.js";
 import { META_GRAPH_URL } from "./meta-graph-versao.js";
+import { fetchMeta } from "./meta-limite.js";
 
 const WINDSOR_BASE = "https://connectors.windsor.ai/instagram";
 
@@ -281,7 +282,7 @@ async function metaCobreAConta(igId: string, token: string): Promise<boolean> {
   try {
     const agora = Math.floor(Date.now() / 1000);
     const url = `${META_GRAPH_URL}/${igId}/insights?metric=reach&period=day&since=${agora - 4 * 86400}&until=${agora}&access_token=${encodeURIComponent(token)}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    const res = await fetchMeta(url, { signal: AbortSignal.timeout(15000) });
     return res.ok;
   } catch {
     return false;

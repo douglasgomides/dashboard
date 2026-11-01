@@ -30,4 +30,45 @@ export function podeAplicar(campanhaId: string, historico: AcaoAnterior[], agora
   return { ok: true };
 }
 
+/**
+ * Meta: o orçamento de um conjunto de anúncios "only allowed to change 4 times per hour" (doc da Marketing API, lida em
+ * 01/11/2026). A 5ª troca na hora é recusada pela Meta; o Nexo recusa antes, com motivo claro. Conta as trocas feitas
+ * pelo Nexo (aplicar e desfazer) por conjunto/campanha; trocas feitas direto no Gerenciador não aparecem aqui.
+ */
+export const TROCAS_ORCAMENTO_POR_HORA = 4;
+
+export interface MudancaOrcamento {
+  tipo: string;
+  estado: string;
+  antes?: { orcamentos?: { id?: string }[] } | null;
+  depois?: { orcamentos?: { id?: string }[] } | null;
+  aplicado_em?: string | null;
+  desfeito_em?: string | null;
+}
+
+/** Quantas trocas de orçamento cada objeto (conjunto ou campanha) teve na última hora. */
+export function trocasDeOrcamentoNaHora(historico: MudancaOrcamento[], agora = Date.now()): Map<string, number> {
+  const conta = new Map<string, number>();
+  const naHora = (t?: string | null) => !!t && Number.isFinite(Date.parse(t)) && agora - Date.parse(t) < 3_600_000 && Date.parse(t) <= agora + 60_000;
+  const somar = (lista?: { id?: string }[] | null) => { for (const o of lista ?? []) if (o?.id) conta.set(o.id, (conta.get(o.id) ?? 0) + 1); };
+  for (const h of historico) {
+    if (h.tipo !== "orcamento") continue;
+    // Aplicar troca o orçamento dos objetos em "depois"; desfazer volta os de "antes". Uma ação desfeita contou as duas.
+    if ((h.estado === "aplicada" || h.estado === "desfeita") && naHora(h.aplicado_em)) somar(h.depois?.orcamentos);
+    if (h.estado === "desfeita" && naHora(h.desfeito_em)) somar(h.antes?.orcamentos);
+  }
+  return conta;
+}
+
+/** Recusa quando algum dos objetos já teve 4 trocas na última hora. */
+export function podeTrocarOrcamento(ids: string[], historico: MudancaOrcamento[], agora = Date.now()): { ok: boolean; motivo?: string } {
+  const conta = trocasDeOrcamentoNaHora(historico, agora);
+  const cheio = ids.filter((id) => (conta.get(id) ?? 0) >= TROCAS_ORCAMENTO_POR_HORA);
+  if (!cheio.length) return { ok: true };
+  return {
+    ok: false,
+    motivo: `A Meta só aceita ${TROCAS_ORCAMENTO_POR_HORA} trocas de orçamento por hora em cada conjunto de anúncios, e ${cheio.length === 1 ? "um conjunto desta campanha já teve" : `${cheio.length} conjuntos desta campanha já tiveram`} ${TROCAS_ORCAMENTO_POR_HORA} na última hora. Tente de novo daqui a uma hora.`,
+  };
+}
+
 export const brlCentavos = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
