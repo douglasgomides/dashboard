@@ -1,0 +1,59 @@
+{
+  "_sobre": "Amostra inventada no formato da API REST da Windsor.ai (conectores facebook e instagram) que o Nexo lê. Sem dado real. Ver docs/apis/windsor.md.",
+  "anuncios": {
+    "data": [
+      {
+        "date": "2026-10-20",
+        "campaign_id": "120200000000000001",
+        "campaign": "Campanha de exemplo",
+        "objective": "OUTCOME_ENGAGEMENT",
+        "spend": 45.1,
+        "impressions": 3200,
+        "reach": 2100,
+        "clicks": 60,
+        "unique_clicks": 55,
+        "frequency": 1.52,
+        "actions_link_click": 41,
+        "actions_landing_page_view": null,
+        "actions_lead": 2,
+        "actions_onsite_conversion_messaging_conversation_started_7d": 9,
+        "effective_instagram_media_id": "17900000000000009",
+        "effective_instagram_media__permalink": "https://www.instagram.com/p/EXEMPLO9/",
+        "effective_instagram_media__thumbnail_url": "https://exemplo.com/thumb9.jpg",
+        "adset_destination_type": "WHATSAPP"
+      },
+      {
+        "date": "2026-10-20",
+        "campaign_id": "120200000000000001",
+        "campaign": "Campanha de exemplo",
+        "objective": "OUTCOME_ENGAGEMENT",
+        "spend": 5,
+        "impressions": 300,
+        "reach": 250,
+        "clicks": 4,
+        "unique_clicks": 4,
+        "frequency": null,
+        "actions_link_click": null,
+        "actions_landing_page_view": null,
+        "actions_lead": null,
+        "actions_onsite_conversion_messaging_conversation_started_7d": 1,
+        "effective_instagram_media_id": null,
+        "effective_instagram_media__permalink": null,
+        "effective_instagram_media__thumbnail_url": null,
+        "adset_destination_type": "INSTAGRAM_DIRECT"
+      }
+    ]
+  },
+  "instagram_posts": {
+    "data": [
+      { "media_id": "17900000000000010", "media_type": "REELS", "media_product_type": "REELS", "media_permalink": "https://www.instagram.com/reel/EXEMPLO10/", "media_thumbnail_url": "https://exemplo.com/t10.jpg", "media_url": "https://exemplo.com/v10.mp4", "media_caption": "Legenda", "timestamp": "2026-10-19T12:00:00+0000", "media_reach": 1000, "media_saved": 10, "media_like_count": 50, "media_comments_count": 4, "media_shares": 3, "media_engagement": 67, "media_views": 2500, "media_reel_skip_rate": 0.4, "media_reel_avg_watch_time": 6500, "media_reel_total_watch_time": 16250000, "media_profile_visits": null, "media_follows": null },
+      { "media_id": "17900000000000011", "media_type": "CAROUSEL_ALBUM", "media_product_type": "FEED", "media_permalink": "https://www.instagram.com/p/EXEMPLO11/", "media_thumbnail_url": null, "media_url": "https://exemplo.com/f11.jpg", "media_caption": null, "timestamp": "2026-10-18T12:00:00+0000", "media_reach": 800, "media_saved": 20, "media_like_count": 40, "media_comments_count": 2, "media_shares": 1, "media_engagement": 63, "media_views": 1500, "media_reel_skip_rate": null, "media_reel_avg_watch_time": null, "media_reel_total_watch_time": null, "media_profile_visits": 12, "media_follows": 3 }
+    ]
+  },
+  "instagram_dia": {
+    "data": [
+      { "date": "2026-10-20", "followers_count": null, "follower_count_1d": 40, "follows_and_unfollows": 47, "reach_1d": 5000, "likes": 200, "comments": 20, "saves": 30, "shares": 15, "total_interactions": 265, "profile_links_taps": 12 },
+      { "date": "2026-10-20", "followers_count": 12000, "follower_count_1d": null, "follows_and_unfollows": null, "reach_1d": null, "likes": null, "comments": null, "saves": null, "shares": null, "total_interactions": null, "profile_links_taps": null }
+    ]
+  }
+}

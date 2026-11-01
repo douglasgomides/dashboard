@@ -1,0 +1,38 @@
+{
+  "_sobre": "Amostra inventada no formato da API v1 do RD Station CRM que o Nexo lê. Sem dado real. Ver docs/apis/rdstation.md.",
+  "funis": [
+    { "id": "pip-exemplo-1", "name": "Funil de exemplo", "deal_stages": [ { "_id": "stg-exemplo-1", "id": "stg-exemplo-1", "name": "Contato" }, { "_id": "stg-exemplo-2", "id": "stg-exemplo-2", "name": "Fechamento" } ] }
+  ],
+  "deals": {
+    "total": 2,
+    "has_more": false,
+    "deals": [
+      {
+        "_id": "deal-exemplo-1",
+        "name": "Negociação de exemplo",
+        "amount_total": 2500,
+        "win": true,
+        "hold": null,
+        "closed_at": "2026-10-10T15:00:00.000-03:00",
+        "created_at": "2026-09-01T10:00:00.000-03:00",
+        "updated_at": "2026-10-10T15:00:00.000-03:00",
+        "deal_stage": { "_id": "stg-exemplo-2", "id": "stg-exemplo-2", "name": "Fechamento" },
+        "deal_source": { "_id": "src-1", "name": "Instagram" },
+        "contacts": [ { "name": "Paciente Exemplo", "emails": [ { "email": "paciente@exemplo.com" } ], "phones": [ { "phone": "(11) 90000-0000" } ] } ]
+      },
+      {
+        "_id": "deal-exemplo-2",
+        "name": "Outra negociação",
+        "amount_total": 0,
+        "win": null,
+        "hold": null,
+        "closed_at": null,
+        "created_at": "2026-10-20T09:00:00.000-03:00",
+        "updated_at": "2026-10-20T09:00:00.000-03:00",
+        "deal_stage": { "_id": "stg-exemplo-1", "id": "stg-exemplo-1", "name": "Contato" },
+        "deal_source": null,
+        "contacts": []
+      }
+    ]
+  }
+}

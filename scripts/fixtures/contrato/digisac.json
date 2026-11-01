@@ -1,0 +1,34 @@
+{
+  "_sobre": "Amostra inventada no formato da API v1 da Digisac que o Nexo lê. Sem dado real. Ver docs/apis/digisac.md.",
+  "departamentos": { "data": [ { "id": "dep-exemplo-1", "name": "Atendimento" } ], "total": 1, "currentPage": 1, "lastPage": 1 },
+  "atendentes": { "data": [ { "id": "usr-exemplo-1", "name": "Atendente Exemplo", "email": "atendente@exemplo.com", "branch": "Recepção" } ], "total": 1, "currentPage": 1, "lastPage": 1 },
+  "atendimentos": {
+    "data": [
+      { "id": "tkt-exemplo-1", "isOpen": false, "userId": "usr-exemplo-1", "departmentId": "dep-exemplo-1", "contactId": "ctt-exemplo-1", "startedAt": "2026-10-20T12:00:00.000Z", "endedAt": "2026-10-20T15:00:00.000Z", "createdAt": "2026-10-20T12:00:00.000Z", "updatedAt": "2026-10-20T15:00:00.000Z", "metrics": { "waitingTime": 600, "messagingTime": 10800 } },
+      { "id": "tkt-exemplo-2", "isOpen": true, "userId": null, "departmentId": "dep-exemplo-1", "contactId": "ctt-exemplo-2", "startedAt": "2026-10-21T09:00:00.000Z", "endedAt": null, "createdAt": "2026-10-21T09:00:00.000Z", "updatedAt": "2026-10-21T09:00:00.000Z", "metrics": { "waitingTime": null, "messagingTime": null } }
+    ],
+    "total": 2,
+    "currentPage": 1,
+    "lastPage": 1
+  },
+  "contatos": {
+    "data": [
+      { "id": "ctt-exemplo-1", "isGroup": false, "isMe": false, "isBroadcast": false, "hadChat": true, "deletedAt": null, "name": "Paciente Exemplo", "internalName": null, "alternativeName": null, "data": { "number": "5563900000000" }, "createdAt": "2026-10-01T10:00:00.000Z", "updatedAt": "2026-10-20T15:00:00.000Z", "tags": [ { "id": "tg-1", "label": "Dra. Rafaela" }, { "id": "tg-2", "label": "Instagram [Origem]" }, { "id": "tg-3", "label": "Agendado" } ] },
+      { "id": "ctt-exemplo-2", "isGroup": false, "isMe": false, "isBroadcast": false, "hadChat": true, "deletedAt": null, "name": "Outra Pessoa", "data": { "number": "5563900000001" }, "createdAt": "2026-10-21T09:00:00.000Z", "updatedAt": "2026-10-21T09:00:00.000Z", "tags": [] }
+    ],
+    "total": 2,
+    "currentPage": 1,
+    "lastPage": 1
+  },
+  "mensagens": {
+    "data": [
+      { "id": "dm-1", "ticketId": "tkt-exemplo-1", "timestamp": "2026-10-20T12:00:00.000Z", "isFromMe": false, "type": "ticket", "text": null },
+      { "id": "dm-2", "ticketId": "tkt-exemplo-1", "timestamp": "2026-10-20T12:00:30.000Z", "isFromMe": false, "type": "chat", "text": "Oi, quero marcar consulta" },
+      { "id": "dm-3", "ticketId": "tkt-exemplo-1", "timestamp": "2026-10-20T12:10:00.000Z", "isFromMe": true, "type": "chat", "text": "Bom dia!" },
+      { "id": "dm-4", "ticketId": "tkt-exemplo-1", "timestamp": "2026-10-20T12:20:00.000Z", "isFromMe": false, "type": "audio", "text": null, "data": { "transcription": "transcrição de exemplo" } }
+    ],
+    "total": 4,
+    "currentPage": 1,
+    "lastPage": 1
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "_sobre": "Amostra inventada no formato da API do Short.io que o Nexo lê. Sem dado real. Ver docs/apis/shortio.md.",
+  "dominios": [ { "id": 100001, "hostname": "exemplo.short.gy" } ],
+  "links": {
+    "count": 2,
+    "nextPageToken": null,
+    "links": [
+      { "idString": "lnk_EXEMPLO1", "id": "lnk_EXEMPLO1", "path": "drexemplo-bio", "title": "Bio do Dr. Exemplo Teste", "originalURL": "https://wa.me/5511900000000?text=ola", "secureShortURL": "https://exemplo.short.gy/drexemplo-bio", "shortURL": "http://exemplo.short.gy/drexemplo-bio", "tags": ["bio"], "createdAt": "2026-09-15T12:00:00.000Z" },
+      { "idString": "lnk_EXEMPLO2", "id": "lnk_EXEMPLO2", "path": "campanha", "title": "Campanha sem dono", "originalURL": "https://exemplo.com/pagina", "secureShortURL": "https://exemplo.short.gy/campanha", "tags": [], "createdAt": "2026-10-01T12:00:00.000Z" }
+    ]
+  },
+  "estatisticas": {
+    "totalClicks": 120,
+    "humanClicks": 90,
+    "clickStatistics": { "datasets": [ { "data": [ { "x": "2026-10-19T00:00:00.000Z", "y": "4" }, { "x": "2026-10-20T00:00:00.000Z", "y": "7" } ] } ] }
+  }
+}

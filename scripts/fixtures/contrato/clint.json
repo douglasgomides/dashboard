@@ -1,0 +1,52 @@
+{
+  "_sobre": "Amostra inventada no formato da API da Clint (v1 negócios, v2 conversas) que o Nexo lê. Sem dado real. Ver docs/apis/clint.md.",
+  "origins": {
+    "data": [
+      { "id": "orig-exemplo-1", "name": "Funil de exemplo", "group": { "id": "grp-1", "name": "Grupo exemplo" }, "stages": [ { "id": "stg-1", "label": "Lead" }, { "id": "stg-2", "label": "Consulta agendada" } ] }
+    ],
+    "hasNext": false
+  },
+  "deals": {
+    "data": [
+      {
+        "id": "deal-exemplo-1",
+        "origin_id": "orig-exemplo-1",
+        "stage": "Consulta agendada",
+        "stage_id": "stg-2",
+        "status": "WON",
+        "value": "1500.00",
+        "created_at": "2026-09-10T13:00:00.000+00:00",
+        "updated_at": "2026-10-05T18:00:00.000+00:00",
+        "won_at": "2026-10-05T18:00:00.000+00:00",
+        "lost_at": null,
+        "fields": { "fonte": "Instagram | qualificado" },
+        "contact": { "id": "cont-exemplo-1", "name": "Paciente Exemplo", "email": "paciente@exemplo.com", "phone": "11900000000", "ddi": "55" }
+      },
+      {
+        "id": "deal-exemplo-2",
+        "origin_id": "orig-exemplo-1",
+        "stage": "Lead",
+        "stage_id": "stg-1",
+        "status": "OPEN",
+        "value": 0,
+        "created_at": "2026-10-20T10:00:00.000+00:00",
+        "updated_at": "2026-10-20T10:00:00.000+00:00",
+        "fields": {},
+        "contact": { "id": "cont-exemplo-2", "name": "Outra Pessoa Exemplo", "email": null, "phone": null }
+      }
+    ],
+    "hasNext": false,
+    "totalCount": 2
+  },
+  "lost_status": { "data": [ { "id": "lost-1", "name": " Sem interesse " }, { "id": "lost-2", "name": "Preço" } ] },
+  "contato": { "data": { "id": "cont-exemplo-1", "tags": [ { "id": "tag-1", "name": "Instagram" }, { "id": "tag-2", "name": "nexo:interno" } ] } },
+  "canais": { "data": [ { "id": "chan-1", "name": "WhatsApp exemplo", "type": "WHATSAPP", "status": "CONNECTED" } ], "has_next": false },
+  "mensagens": {
+    "data": [
+      { "id": "msg-1", "type": "CUSTOMER", "created_at": "2026-10-20T10:01:00.000Z", "content": "Olá, quero agendar", "content_type": "TEXT", "sent": true, "source": null },
+      { "id": "msg-2", "type": "USER", "created_at": "2026-10-20T10:05:00.000Z", "content": null, "content_type": "TEMPLATE", "sent": true, "source": "CAMPAIGN", "content_action": { "components": [ { "formatted_text": "Mensagem de modelo" } ] } },
+      { "id": "msg-3", "type": "NOTE", "created_at": "2026-10-20T10:06:00.000Z", "content": "nota interna", "content_type": "TEXT" }
+    ],
+    "has_next": false
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "_sobre": "Amostra inventada no formato das respostas da OpenAI (chat/completions, models) e da Anthropic (messages, models) que o Nexo lê. Sem dado real. Ver docs/apis/openai-anthropic.md.",
+  "openai_chat": {
+    "id": "chatcmpl-EXEMPLO",
+    "object": "chat.completion",
+    "created": 1760000000,
+    "model": "gpt-4o-mini-2024-07-18",
+    "choices": [ { "index": 0, "message": { "role": "assistant", "content": "{\"resumo\":\"exemplo\",\"itens\":[1,2]}" }, "finish_reason": "stop" } ],
+    "usage": { "prompt_tokens": 120, "completion_tokens": 30, "total_tokens": 150 }
+  },
+  "anthropic_messages": {
+    "id": "msg_EXEMPLO",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-haiku-4-5-20251001",
+    "content": [ { "type": "text", "text": "Aqui está:\n{\"resumo\":\"exemplo\",\"itens\":[1,2]}" } ],
+    "stop_reason": "end_turn",
+    "usage": { "input_tokens": 110, "output_tokens": 35 }
+  },
+  "openai_modelo": { "id": "gpt-4o-mini", "object": "model", "created": 1721172741, "owned_by": "system" },
+  "anthropic_modelo": { "id": "claude-haiku-4-5-20251001", "type": "model", "display_name": "Claude Haiku 4.5", "created_at": "2025-10-01T00:00:00Z" }
+}
