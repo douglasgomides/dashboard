@@ -99,6 +99,45 @@ export function cardsFechadosNaOrigem(abertosNoNexo: string[], vistos: Set<strin
   return fechados;
 }
 
+/** Tempo mínimo entre duas listagens completas que confirmam a ausência quando a trava de metade dispara. */
+export const CONFIRMA_AUSENCIA_MS = 45 * 60_000;
+
+/**
+ * Decide o que fechar num painel. Sem a trava (lista com pelo menos metade dos abertos), fecha tudo o que faltou, como
+ * antes. Com a trava, nada fecha na primeira vez: o card ausente fica anotado (`pendentes`, id -> quando faltou) e só
+ * fecha se continuar fora de uma listagem completa feita pelo menos CONFIRMA_AUSENCIA_MS depois. Antes a trava valia
+ * para sempre: painel em que a equipe fechou mais da metade dos cards de uma vez nunca mais fechava nada (Dra. Marcella,
+ * 01/11/2026: ~150 cards abertos no Nexo que o FlwChat não lista mais). Lista vazia nunca confirma (resposta ruim ou
+ * token sem acesso ao painel). Card que volta à lista sai dos pendentes.
+ */
+export function decidirFechamento(
+  abertosNoNexo: string[],
+  vistos: Set<string>,
+  pendentesAntes: Record<string, string> | null | undefined,
+  agora: number,
+): { fechar: string[]; pendentes: Record<string, string>; aguardando: number } {
+  const direto = cardsFechadosNaOrigem(abertosNoNexo, vistos);
+  if (direto !== null) return { fechar: direto, pendentes: {}, aguardando: 0 };
+  if (vistos.size === 0) return { fechar: [], pendentes: {}, aguardando: 0 };
+  const antes = pendentesAntes ?? {};
+  const fechar: string[] = [];
+  const pendentes: Record<string, string> = {};
+  for (const id of abertosNoNexo) {
+    if (vistos.has(id)) continue;
+    const desde = Date.parse(antes[id] ?? "");
+    if (Number.isFinite(desde) && agora - desde >= CONFIRMA_AUSENCIA_MS) fechar.push(id);
+    else pendentes[id] = Number.isFinite(desde) ? antes[id] : new Date(agora).toISOString();
+  }
+  return { fechar, pendentes, aguardando: Object.keys(pendentes).length };
+}
+
+/** Linha que entra na conta dos abertos do painel: aberta e não removida, ou o card "substituído" (cards_por_item), que
+ *  continua listado na fonte enquanto existir. O substituído que some da lista também foi fechado na origem: antes ele
+ *  ficava aberto para sempre (Dr. Sergio Maia, 01/11/2026: 10 cards, 5 criados nos últimos 30 dias). */
+export function contaComoAbertoNoPainel(l: { removido_na_origem: string | null; substituido_por: string | null }): boolean {
+  return l.removido_na_origem === null || !!l.substituido_por;
+}
+
 // Fica na v1 de propósito. A doc da Helena (01/11/2026) só publica `GET /crm/v2/panel/card` e o formato da resposta é
 // claro (PublicPanelCardDTOV2 com os mesmos campos, mais `status` e `lostReason`), mas ela não diz quais situações
 // (OPEN, WON, LOST, ARCHIVED) a v2 devolve sem o filtro `Statuses`. Se ela devolver menos cards que a v1, os que
@@ -346,7 +385,11 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
       etapas_perdido?: string[];
       tags_contato?: boolean;
       cards_por_item?: boolean;
+      /** painel -> (card -> quando faltou da lista), à espera da confirmação de decidirFechamento. */
+      ausentes_pendentes?: Record<string, Record<string, string>>;
     } & EstadoTags;
+    // Config como está no banco depois desta rodada (a leitura das tags grava o progresso nela).
+    let configAtual: Record<string, unknown> = { ...((conn.config ?? {}) as Record<string, unknown>) };
     // Mapeamento confirmado pela equipe (aba "A analisar"). Se a leitura falhar, a conexão para aqui: regravar os
     // cards sem o mapeamento transformava todos os ganhos em "em aberto" (Dr. Sergio Maia: 1.818 ganhos dependem só
     // dele) e a rodada ficava registrada como sucesso (auditoria de 01/11/2026).
@@ -418,11 +461,13 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
         });
         // Leitura em andamento não é falha: antes ia para last_error e acendia "sync com erro" (Juliana Paola e Mariela).
         if (leitura.aviso) avisos.push(leitura.aviso);
+        const novaConfig = { ...configAtual, ...leitura.estado };
         const { error: e } = await supabase
           .from("crm_connections")
-          .update({ config: { ...(conn.config ?? {}), ...leitura.estado } })
+          .update({ config: novaConfig })
           .eq("id", conn.id);
         if (e) errors.push(`tags dos contatos: não deu para guardar o progresso (${e.message})`);
+        else configAtual = novaConfig;
       } catch (err) {
         errors.push(`tags dos contatos: ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -517,22 +562,30 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
     // FlwChat (ganho ou perdido, a API não diz). Vira "closed" (fechado, resultado não informado) em vez de seguir
     // aberto para sempre. Se voltar a aparecer, o upsert acima devolve o resultado da etapa.
     if (gravados === linhas.length) {
+      const pendentesAntes = config.ausentes_pendentes ?? {};
+      const pendentesDepois: Record<string, Record<string, string>> = {};
+      // Painel que não foi listado por inteiro nesta rodada guarda o que já estava anotado.
+      for (const [panelId, p] of Object.entries(pendentesAntes)) if (!vistosPorPainel.has(panelId) && panelIds.includes(panelId)) pendentesDepois[panelId] = p;
       for (const [panelId, vistos] of vistosPorPainel) {
         try {
           const abertos: string[] = [];
           for (let de = 0; ; de += 1000) {
-            const { data, error } = await supabase.from("crm_leads").select("external_lead_id")
-              .eq("crm_connection_id", conn.id).eq("pipeline_id", panelId).eq("outcome", "open").is("removido_na_origem", null)
+            const { data, error } = await supabase.from("crm_leads").select("external_lead_id, removido_na_origem, substituido_por:raw_payload->>substituido_por")
+              .eq("crm_connection_id", conn.id).eq("pipeline_id", panelId).eq("outcome", "open")
               .order("external_lead_id").range(de, de + 999);
             if (error) throw new Error(error.message);
-            abertos.push(...(data ?? []).map((r) => String(r.external_lead_id)));
-            if ((data?.length ?? 0) < 1000) break;
+            const pagina = (data ?? []) as unknown as { external_lead_id: string; removido_na_origem: string | null; substituido_por: string | null }[];
+            abertos.push(...pagina.filter(contaComoAbertoNoPainel).map((r) => String(r.external_lead_id)));
+            if (pagina.length < 1000) break;
           }
-          const fechados = cardsFechadosNaOrigem(abertos, vistos);
-          if (fechados === null) {
-            avisos.push(`painel ${panelId}: a lista veio com menos da metade dos cards abertos; nenhum card foi dado como fechado nesta rodada`);
-            continue;
+          const decisao = decidirFechamento(abertos, vistos, pendentesAntes[panelId], Date.now());
+          if (decisao.aguardando > 0) {
+            pendentesDepois[panelId] = decisao.pendentes;
+            avisos.push(`painel ${panelId}: ${decisao.aguardando} card(s) fora da lista, mais da metade dos abertos; ficam fechados se continuarem fora na próxima rodada`);
+          } else if (vistos.size === 0 && abertos.length >= 20) {
+            avisos.push(`painel ${panelId}: a lista veio vazia; nenhum card foi dado como fechado nesta rodada`);
           }
+          const fechados = decisao.fechar;
           for (const lote of chunk(fechados, 300)) {
             const { error } = await supabase.from("crm_leads").update({ outcome: "closed" })
               .eq("crm_connection_id", conn.id).eq("pipeline_id", panelId).eq("outcome", "open").in("external_lead_id", lote);
@@ -540,7 +593,14 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
           }
         } catch (err) {
           errors.push(`cards fechados no painel ${panelId}: ${err instanceof Error ? err.message : String(err)}`);
+          if (pendentesAntes[panelId]) pendentesDepois[panelId] = pendentesAntes[panelId];
         }
+      }
+      if (JSON.stringify(pendentesDepois) !== JSON.stringify(pendentesAntes)) {
+        const novaConfig = { ...configAtual, ausentes_pendentes: pendentesDepois };
+        const { error: e } = await supabase.from("crm_connections").update({ config: novaConfig }).eq("id", conn.id);
+        if (e) errors.push(`cards fora da lista: não deu para guardar a espera da confirmação (${e.message})`);
+        else configAtual = novaConfig;
       }
     }
 

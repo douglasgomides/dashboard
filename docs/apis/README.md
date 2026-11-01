@@ -14,10 +14,10 @@ Proposta da seção 6 da auditoria de confiabilidade de 01/11/2026.
 | WTS Chat / FlwChat (Helena) | [wts-flwchat.md](wts-flwchat.md) | /v1 (doc só tem v2) | risco (rotas v1 fora da doc; ordem das mensagens) | `test-contrato-wts-flwchat.ts` |
 | Digisac | [digisac.md](digisac.md) | /api/v1 | risco (conta compartilhada; doc sem limites nem métricas) | `test-contrato-digisac.ts` |
 | RD Station CRM | [rdstation.md](rdstation.md) | v1 (existe v2) | risco (visibilidade do token pode esconder negócios) | `test-contrato-rdstation.ts` |
-| Windsor.ai | [windsor.md](windsor.md) | sem versão | risco (doc ainda bloqueada; lista vazia sem erro) | `test-contrato-windsor.ts` |
+| Windsor.ai | [windsor.md](windsor.md) | sem versão | risco (doc lida em 01/11/2026; erro no corpo com 200 já tratado; conta fora da Windsor ainda volta lista vazia — `select_accounts` resolve, proposto) | `test-contrato-windsor.ts` |
 | Hubla | [hubla.md](hubla.md) | webhook v2 | risco (webhook parado no n8n; `disputed` contado como venda) | `test-contrato-hubla.ts` (só offline) |
-| OpenAI e Anthropic | [openai-anthropic.md](openai-anthropic.md) | chat/completions, messages 2023-06-01 | risco (doc da OpenAI bloqueada; Anthropic ativa e conferida) | `test-contrato-openai-anthropic.ts` |
-| Short.io | [shortio.md](shortio.md) | sem versão | risco (doc ainda bloqueada) | `test-contrato-shortio.ts` |
+| OpenAI e Anthropic | [openai-anthropic.md](openai-anthropic.md) | chat/completions, messages 2023-06-01 | **risco alto** (doc da OpenAI segue bloqueada: redireciona para `developers.openai.com`; por busca, `gpt-image-1` saiu em 23/10/2026 e `gpt-4o-mini`/`gpt-4.1` saem em 14/01/2027; 404 `model_not_found` já cai na Anthropic) | `test-contrato-openai-anthropic.ts` |
+| Short.io | [shortio.md](shortio.md) | sem versão | risco (só `short.io/pricing` abriu: 50 req/s; estatísticas 60/min por busca; 429 tratado com ritmo 50/min; sinal do `tzOffset` não verificado) | `test-contrato-shortio.ts` |
 | Google Planilhas | [google-planilhas.md](google-planilhas.md) | CSV público | risco (linhas órfãs) | `test-contrato-google-planilhas.ts` |
 
 Proposta do histórico diário da nota: [historico-confiabilidade.md](historico-confiabilidade.md).
@@ -38,7 +38,12 @@ pegadinha, atualize a linha "O código trata?" e o histórico na mesma mudança.
 
 **Leitura da doc oficial em 01/11/2026:** liberados e lidos developers.facebook.com, clint-api.readme.io, developers.kommo.com,
 helena.readme.io, developers.rdstation.com, hubla.gitbook.io, documenter.getpostman.com (coleção Digisac) e a doc da Anthropic
-(`docs.claude.com`/`platform.claude.com`). Seguem bloqueados: windsor.ai, short.io, platform.openai.com e developers.google.com. Cada ficha
+(`docs.claude.com`/`platform.claude.com`). Seguem bloqueados: windsor.ai, short.io, platform.openai.com e developers.google.com.
+
+**Segunda leitura, 01/11/2026:** liberados `windsor.ai` (lidas a doc da API REST e a do cache), `short.io` (só a raiz: preços e
+`llms.txt`) e `platform.openai.com` (que só redireciona para `developers.openai.com`, ainda recusado). Continuam recusados pelo proxy:
+`developers.short.io`, `docs.short.io`, `help.short.io`, `api.short.io`, `connectors.windsor.ai`, `onboard.windsor.ai` e
+`developers.openai.com`. Para fechar a OpenAI e o Short.io, liberar `developers.openai.com`, `docs.short.io` e `help.short.io`. Cada ficha
 diz o que foi verificado (com link e trecho) e o que continua "não verificado" e por quê. Dica: os sites readme.io e GitBook servem a página em Markdown (com a definição OpenAPI)
 acrescentando `.md` ao endereço, e têm índice em `/llms.txt`.
 

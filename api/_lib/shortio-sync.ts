@@ -12,6 +12,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { META_GRAPH_URL } from "./meta-graph-versao.js";
+import { fetchComRetry, RitmoEsgotadoError, type Ritmo } from "./integration-http.js";
 
 const API = "https://api.short.io";
 const STATS = "https://api-v2.short.io";
@@ -49,9 +50,33 @@ export function atribuir(link: { titulo: string; caminho: string; tags: string[]
   return { client_id: pontos[0].c.id, como: "nome", detalhe: `nome no link (${pontos[0].achadas} palavra(s))` };
 }
 
-async function get(url: string, chave: string): Promise<any> {
-  const r = await fetch(url, { headers: { authorization: chave, accept: "application/json" }, signal: AbortSignal.timeout(20_000), redirect: "error" });
-  if (!r.ok) throw new Error(`short.io ${r.status}: ${(await r.text()).slice(0, 150)}`);
+/**
+ * Limites do Short.io. Tabela de preços (https://short.io/pricing, lida em 01/11/2026): "API rate limit: Maximum number of
+ * API requests per second. 50 req/s" em todos os planos. As estatísticas têm limite próprio, menor: o artigo "API limits"
+ * da ajuda (help.short.io / docs.short.io, bloqueados nesta rede; lido só por busca em 01/11/2026) fala em 60 pedidos por
+ * minuto, e versões antigas em 10 por minuto. Em 01/11/2026 o sync recebeu 429 "Rate limit exceeded" ao pedir as
+ * estatísticas de 120 links em sequência. Por isso: no máximo 1 por segundo e 50 por minuto (folga sob os 60), e o
+ * que não couber na rodada fica para a próxima, sem virar erro.
+ */
+export const RITMO_SHORTIO_STATS: Ritmo = { chave: "shortio:stats", porSegundo: 1, janelas: [{ max: 50, ms: 60_000 }] };
+const RITMO_SHORTIO_API: Ritmo = { chave: "shortio:api", porSegundo: 20 };
+/** As estatísticas são de 30 dias e mudam uma vez por dia: link lido há menos disso não é pedido de novo. */
+export const STATS_VALIDADE_MS = 20 * 3600_000;
+
+/** Erro do Short.io com o status, para o laço de estatísticas parar no 429 em vez de insistir link a link. */
+class ErroShortio extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+async function get(url: string, chave: string, opts: { ritmo: Ritmo; prazo: number }): Promise<any> {
+  const r = await fetchComRetry(
+    url,
+    { headers: { authorization: chave, accept: "application/json" } },
+    { tentativas: 3, timeoutMs: 20_000, maxEsperaMs: 10_000, ritmo: opts.ritmo, prazo: opts.prazo },
+  );
+  if (!r.ok) throw new ErroShortio(`short.io ${r.status}: ${(await r.text()).slice(0, 150)}`, r.status);
   return r.json();
 }
 
@@ -59,9 +84,11 @@ export async function sincronizarShortio(
   admin: SupabaseClient<any, any, any>,
   chave: string,
   opts: { orcamentoMs?: number; maxStats?: number } = {},
-): Promise<{ links: number; atribuidos: number; semCliente: number; stats: number; erros: string[] }> {
+): Promise<{ links: number; atribuidos: number; semCliente: number; stats: number; adiados: number; erros: string[] }> {
   const inicio = Date.now();
   const orcamento = opts.orcamentoMs ?? 90_000;
+  const prazo = inicio + orcamento;
+  const api = { ritmo: RITMO_SHORTIO_API, prazo };
   const erros: string[] = [];
 
   // Clientes: nome, @ e o link da bio (website do perfil), lido na Graph com o token de cada conta.
@@ -90,7 +117,7 @@ export async function sincronizarShortio(
   }
 
   // Links de todos os domínios da conta.
-  const dominios: any[] = await get(`${API}/api/domains`, chave).catch((e) => (erros.push(String(e.message ?? e)), []));
+  const dominios: any[] = await get(`${API}/api/domains`, chave, api).catch((e) => (erros.push(String(e.message ?? e)), []));
   const manual = new Set<string>();
   for (let de = 0; ; de += 1000) {
     const { data: manuais, error } = await admin.from("shortio_links").select("id").eq("atribuicao", "manual").order("id").range(de, de + 999);
@@ -105,7 +132,7 @@ export async function sincronizarShortio(
     let pageToken: string | null = null;
     for (let pag = 0; pag < 40; pag++) {
       if (Date.now() - inicio > orcamento) break;
-      const j: any = await get(`${API}/api/links?domain_id=${d.id}&limit=150${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`, chave).catch((e) => (erros.push(String(e.message ?? e)), null));
+      const j: any = await get(`${API}/api/links?domain_id=${d.id}&limit=150${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`, chave, api).catch((e) => (erros.push(String(e.message ?? e)), null));
       if (!j) break;
       const lista: any[] = j.links ?? [];
       const linhas = lista.map((l) => {
@@ -142,19 +169,28 @@ export async function sincronizarShortio(
     }
   }
 
-  // Cliques: os links com cliente, os mais antigos de atualização primeiro (limite por rodada).
+  // Cliques: os links com cliente que não foram lidos nas últimas 20 h, os mais antigos primeiro (limite por rodada).
+  // Antes todo sync de anúncios pedia os 120 mais antigos, mesmo os lidos minutos antes, e batia no 429.
   let stats = 0;
+  let adiados = 0;
+  const lidoAntesDe = new Date(Date.now() - STATS_VALIDADE_MS).toISOString();
   const { data: pend, error: erroPendentes } = await admin
     .from("shortio_links")
     .select("id")
     .not("client_id", "is", null)
+    .or(`stats_em.is.null,stats_em.lt.${lidoAntesDe}`)
     .order("stats_em", { ascending: true, nullsFirst: true })
     .limit(opts.maxStats ?? 120);
   if (erroPendentes) throw new Error(`Não foi possível ler as estatísticas pendentes: ${erroPendentes.message}`);
-  for (const p of (pend ?? []) as { id: string }[]) {
-    if (Date.now() - inicio > orcamento) break;
+  const fila = (pend ?? []) as { id: string }[];
+  for (let i = 0; i < fila.length; i++) {
+    const p = fila[i];
+    if (Date.now() - inicio > orcamento) {
+      adiados += fila.length - i;
+      break;
+    }
     try {
-      const j: any = await get(`${STATS}/statistics/link/${encodeURIComponent(p.id)}?period=last30&tzOffset=-180`, chave);
+      const j: any = await get(`${STATS}/statistics/link/${encodeURIComponent(p.id)}?period=last30&tzOffset=-180`, chave, { ritmo: RITMO_SHORTIO_STATS, prazo });
       const patch: Record<string, unknown> = { stats_em: new Date().toISOString() };
       for (const [origem, destino] of [["totalClicks", "cliques_total"], ["humanClicks", "cliques_humanos"]]) {
         const value = j?.[origem];
@@ -174,9 +210,19 @@ export async function sincronizarShortio(
       }
       stats++;
     } catch (e) {
+      // Teto de 50 por minuto atingido nesta rodada: o resto fica para a próxima (os mais antigos vêm primeiro).
+      if (e instanceof RitmoEsgotadoError) {
+        adiados += fila.length - i;
+        break;
+      }
       erros.push(`stats ${p.id}: ${e instanceof Error ? e.message : String(e)}`);
+      // 429 mesmo depois das novas tentativas: para de pedir nesta rodada em vez de gastar o limite link a link.
+      if (e instanceof ErroShortio && e.status === 429) {
+        adiados += fila.length - i - 1;
+        break;
+      }
       if (erros.length > 10) break;
     }
   }
-  return { links, atribuidos, semCliente, stats, erros: erros.slice(0, 5) };
+  return { links, atribuidos, semCliente, stats, adiados, erros: erros.slice(0, 5) };
 }
