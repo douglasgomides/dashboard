@@ -22,12 +22,52 @@ const chave = (raw?: string | null): string | null => {
   return n.length === 10 || n.length === 11 ? n.slice(0, 2) + n.slice(-8) : null;
 };
 
+/**
+ * Tipos que não são fala de ninguém: aviso automático de abertura/fechamento do atendimento ("ticket"), reação com
+ * emoji ("reaction") e registro de ligação ("call_log"). Antes entravam como "Paciente / entrada" (só o isFromMe era
+ * olhado): 3.483 avisos "ticket" sem texto na IGM Palmas, primeira mensagem de 1.156 conversas e falsos "paciente sem
+ * resposta" (auditoria de 01/11/2026).
+ */
+export const TIPOS_SISTEMA_DIGISAC = new Set(["ticket", "reaction", "call_log"]);
+
 /** Direção de uma mensagem do Digisac (exportada para teste). */
-export function direcaoDigisac(m: { isFromMe?: unknown; fromMe?: unknown }): "entrada" | "saida" | "sistema" {
+export function direcaoDigisac(m: { isFromMe?: unknown; fromMe?: unknown; type?: unknown }): "entrada" | "saida" | "sistema" {
+  if (TIPOS_SISTEMA_DIGISAC.has(String(m.type ?? "").toLowerCase())) return "sistema";
   const v = m.isFromMe ?? m.fromMe;
   if (v === true || v === "true") return "saida";
   if (v === false || v === "false") return "entrada";
   return "sistema";
+}
+
+/**
+ * Mensagem da clínica enviada por automação (robô, campanha, agendamento), não por uma pessoa. Só confia no que a
+ * própria API marca: isFromBot, origin com bot/campanha/automação, ou o campo userId presente e vazio numa mensagem
+ * enviada (sem atendente). Sem nenhuma dessas marcas, não supõe nada.
+ */
+export function automaticaDigisac(m: Record<string, any>): boolean {
+  if (m.isFromBot === true || m.fromBot === true) return true;
+  if (typeof m.origin === "string" && /bot|auto|campaign|campanha|schedule/i.test(m.origin)) return true;
+  return direcaoDigisac(m) === "saida" && Object.prototype.hasOwnProperty.call(m, "userId") && (m.userId == null || m.userId === "");
+}
+
+/**
+ * 1ª resposta pelas mensagens: da 1ª mensagem do paciente até a 1ª mensagem de uma PESSOA da clínica depois dela.
+ * Avisos de sistema e mensagens automáticas não contam. Só calcula quando a API identifica quem enviou (userId) em
+ * alguma mensagem da clínica; sem isso, o robô de boas-vindas viraria "resposta em 5 segundos" e o número sairia
+ * melhor que a realidade. Antes usava metrics.waitingTime do ticket, que bateu com as mensagens em só 30% dos casos.
+ */
+export function primeiraRespostaDigisac(msgs: Record<string, any>[]): { em: string; segundos: number } | null {
+  const quando = (m: Record<string, any>) => Date.parse(m.timestamp ?? m.createdAt);
+  const ordenadas = msgs.filter((m) => Number.isFinite(quando(m))).sort((a, b) => quando(a) - quando(b));
+  const daClinica = ordenadas.filter((m) => direcaoDigisac(m) === "saida");
+  if (!daClinica.some((m) => Object.prototype.hasOwnProperty.call(m, "userId") || m.isFromBot !== undefined)) return null;
+  const paciente = ordenadas.find((m) => direcaoDigisac(m) === "entrada");
+  if (!paciente) return null;
+  const t0 = quando(paciente);
+  const resposta = daClinica.find((m) => quando(m) > t0 && !automaticaDigisac(m));
+  if (!resposta) return null;
+  const t1 = quando(resposta);
+  return { em: new Date(t1).toISOString(), segundos: Math.round((t1 - t0) / 1000) };
 }
 
 /** Texto legível de uma mensagem (texto, legenda ou transcrição), ou null. */
@@ -64,7 +104,7 @@ export async function ingerirConversasDigisac(admin: SupabaseClient<any, any, an
   const comWts = new Set((clientes ?? []).filter((c) => c.wts_company_id).map((c) => c.id));
 
   for (const conn of (conns ?? []) as { id: string; client_id: string; subdomain: string | null; access_token: string | null }[]) {
-    const r: ResultadoDigisac = { atendimentos: 0, mensagens: 0, vazios: 0, restantes: 0, erros: [], valoresVistos: { chaves: {}, direcao: {}, tipo: {} } };
+    const r: ResultadoDigisac = { atendimentos: 0, mensagens: 0, vazios: 0, restantes: 0, erros: [], valoresVistos: { chaves: {}, direcao: {}, tipo: {}, autor: {} } };
     saida[conn.client_id] = r;
     const clientId = conn.client_id;
     if (!clientesConhecidos.has(clientId)) { r.erros.push("Cliente da conexão não foi encontrado; importação bloqueada"); continue; }
@@ -190,9 +230,12 @@ export async function ingerirConversasDigisac(admin: SupabaseClient<any, any, an
         const d = direcaoDigisac(m);
         r.valoresVistos.direcao[`${String(m.isFromMe ?? m.fromMe)}→${d}`] = (r.valoresVistos.direcao[`${String(m.isFromMe ?? m.fromMe)}→${d}`] ?? 0) + 1;
         r.valoresVistos.tipo[String(m.type)] = (r.valoresVistos.tipo[String(m.type)] ?? 0) + 1;
+        const auto = d === "saida" && automaticaDigisac(m);
+        const marca = `userId:${Object.prototype.hasOwnProperty.call(m, "userId") ? (m.userId ? "sim" : "vazio") : "ausente"} origin:${typeof m.origin === "string" ? m.origin.slice(0, 20) : "ausente"}`;
+        r.valoresVistos.autor[marca] = (r.valoresVistos.autor[marca] ?? 0) + 1;
         return {
           conversa_id: conv.id, client_id: clientId, direcao: d,
-          autor: d === "saida" ? "Clínica" : d === "entrada" ? "Paciente" : "Sistema",
+          autor: d === "saida" ? (auto ? "Clínica (automática)" : "Clínica") : d === "entrada" ? "Paciente" : "Sistema",
           texto: textoDigisac(m), tipo: String(m.type ?? "texto").toLowerCase(), enviada_em: quando(m), externo_id: String(m.id),
         };
       });
@@ -201,6 +244,13 @@ export async function ingerirConversasDigisac(admin: SupabaseClient<any, any, an
         const { error: eM } = await admin.from("mensagens").upsert(linhas.slice(i, i + 200), { onConflict: "conversa_id,externo_id" });
         if (eM) { r.erros.push(`mensagens ${tid.slice(0, 8)}: ${eM.message}`); erroPersistencia = true; }
         else r.mensagens += linhas.slice(i, i + 200).length;
+      }
+      // 1ª resposta pelas mensagens (não pelo waitingTime do ticket): só com a conversa inteira lida e gravada.
+      if (completa && !erroPersistencia) {
+        const resp = primeiraRespostaDigisac(msgs);
+        const { error: eS } = await admin.from("wts_sessions").update({ wait_seconds: resp?.segundos ?? null, first_response_at: resp?.em ?? null })
+          .eq("client_id", clientId).eq("session_id", tid);
+        if (eS) r.erros.push(`1ª resposta ${tid.slice(0, 8)}: ${eS.message}`);
       }
       await finalizarConferenciaMensagens(admin, clientId, tentativa, erroPersistencia ? "erro" : completa ? "completa" : "parcial");
       terminada = true;

@@ -16,6 +16,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { tagsDaConexao } from "./flwchat-sync.js";
+import { fetchComRetry } from "./integration-http.js";
 
 const CLINT_BASE = "https://api.clint.digital/v1";
 const PAGE_SIZE = 200;
@@ -106,7 +107,8 @@ function normalizeOutcome(status: unknown): "open" | "won" | "lost" {
 }
 
 async function clintGet(token: string, path: string): Promise<any> {
-  const res = await fetch(`${CLINT_BASE}${path}`, { headers: { "api-token": token }, signal: AbortSignal.timeout(30_000), redirect: "error" });
+  // 429/5xx/rede: espera (Retry-After, com teto) e tenta de novo antes de derrubar o funil na rodada.
+  const res = await fetchComRetry(`${CLINT_BASE}${path}`, { headers: { "api-token": token } });
   if (!res.ok) {
     // O corpo do provedor pode conter contatos ou credenciais. Só o status
     // e o recurso são necessários para identificar a falha no painel.

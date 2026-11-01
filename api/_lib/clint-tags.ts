@@ -15,6 +15,7 @@
  * O sync de negócios também junta as tags guardadas a cada rodada, para elas não sumirem quando o negócio é regravado.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchComRetry } from "./integration-http.js";
 
 const LER_DE_NOVO_DIAS = 14;
 const JANELA_DIAS = 365;
@@ -146,11 +147,9 @@ export async function runClintTags(
 
 /** GET /v1/contacts/{id} da Clint: só as tags. */
 export const buscarContatoClint: BuscarContato = async (token, contatoId) => {
-  const res = await fetch(`https://api.clint.digital/v1/contacts/${encodeURIComponent(contatoId)}`, {
+  const res = await fetchComRetry(`https://api.clint.digital/v1/contacts/${encodeURIComponent(contatoId)}`, {
     headers: { "api-token": token, Accept: "application/json" },
-    signal: AbortSignal.timeout(20_000),
-    redirect: "error",
-  });
+  }, { timeoutMs: 20_000 });
   if (res.status !== 200) return { status: res.status, tags: null };
   const corpo = (await res.json().catch(() => null)) as { data?: { tags?: unknown } } | null;
   const tags = corpo?.data?.tags;

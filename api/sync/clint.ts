@@ -2,6 +2,7 @@ import { withApiObservability } from "../_lib/observability.js";
 import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
+import { fetchComRetry, ritmoKommo } from "../_lib/integration-http.js";
 import { runClintSync } from "../_lib/clint-sync.js";
 import { runRdStationSync } from "../_lib/rdstation-sync.js";
 import { runFlwChatSync } from "../_lib/flwchat-sync.js";
@@ -22,7 +23,8 @@ import { runClintTags, buscarContatoClint } from "../_lib/clint-tags.js";
 
 // Somente leitura: GET com timeout. Resposta que não é JSON vira corpo nulo (a conferência registra o status).
 const buscarJson: BuscarJson = async (url, headers) => {
-  const res = await fetch(url, { headers: { Accept: "application/json", ...headers }, signal: AbortSignal.timeout(30_000), redirect: "error" });
+  const host = new URL(url).hostname;
+  const res = await fetchComRetry(url, { headers: { Accept: "application/json", ...headers } }, { ritmo: /\.(kommo\.com|amocrm\.(com|ru))$/.test(host) ? ritmoKommo(host) : undefined });
   const texto = await res.text();
   let corpo: unknown = null;
   try { corpo = texto ? JSON.parse(texto) : null; } catch { corpo = null; }

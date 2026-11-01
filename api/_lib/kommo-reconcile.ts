@@ -26,7 +26,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
 import { buscarKommo, leadsDaEntradaKommo, linhaDoLead, type KommoLead } from "./kommo-leads-sync.js";
-import { integrationHost, integrationRequest } from "./integration-http.js";
+import { fetchComRetry, integrationHost, ritmoKommo } from "./integration-http.js";
 
 const PAGE_SIZE = 250; // limite da API da Kommo
 const MAX_PAGINAS = 200; // 50 mil leads; acima disso é outra conversa
@@ -81,9 +81,9 @@ async function idsVivos(
   let page = 1;
   while (page <= MAX_PAGINAS) {
     const qs = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(page), with: "source_id,contacts" });
-    const res = await fetch(`https://${domain}/api/v4/leads?${qs.toString()}`, integrationRequest({
+    const res = await fetchComRetry(`https://${domain}/api/v4/leads?${qs.toString()}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
-    }));
+    }, { ritmo: ritmoKommo(domain) });
     if (res.status === 204) return comEntrada(); // fim normal da paginação
     if (!res.ok) {
       return { ids, leads, completo: false, erro: `Kommo respondeu ${res.status}: ${(await res.text()).slice(0, 200)}` };

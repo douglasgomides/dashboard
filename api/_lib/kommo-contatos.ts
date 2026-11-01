@@ -9,7 +9,7 @@
  * Roda no servidor com o token da própria conexão: o token não sai do banco.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { integrationHost, integrationRequest } from "./integration-http.js";
+import { fetchComRetry, integrationHost, ritmoKommo } from "./integration-http.js";
 
 const PAGE = 250;
 const LOTE_CONTATOS = 100;
@@ -33,17 +33,12 @@ export interface ResultadoContatosKommo {
 const dormir = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 
 async function kommoGet(dominio: string, token: string, caminho: string): Promise<any | null> {
-  for (let tentativa = 0; tentativa < 4; tentativa++) {
-    const r = await fetch(`https://${dominio}${caminho}`, integrationRequest({ headers: { Authorization: `Bearer ${token}` } }));
-    if (r.status === 204) return null;
-    if (r.status === 429 || r.status >= 500) {
-      await dormir(1200 * (tentativa + 1));
-      continue;
-    }
-    if (!r.ok) throw new Error(`Kommo ${caminho.split("?")[0]} respondeu ${r.status}`);
-    return r.json();
-  }
-  throw new Error(`Kommo ${caminho.split("?")[0]} indisponível`);
+  // Nova tentativa (429/5xx/rede, Retry-After) e ritmo de 6 pedidos/s ficam no helper compartilhado.
+  const r = await fetchComRetry(`https://${dominio}${caminho}`, { headers: { Authorization: `Bearer ${token}` } }, { tentativas: 4, baseMs: 1200, ritmo: ritmoKommo(dominio) });
+  if (r.status === 204) return null;
+  if (r.status === 429 || r.status >= 500) throw new Error(`Kommo ${caminho.split("?")[0]} indisponível`);
+  if (!r.ok) throw new Error(`Kommo ${caminho.split("?")[0]} respondeu ${r.status}`);
+  return r.json();
 }
 
 function campo(c: Contato, codigo: string): string | null {

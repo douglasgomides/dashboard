@@ -22,6 +22,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
+import { fetchComRetry } from "./integration-http.js";
 
 const WTS_BASE = "https://api.wts.chat";
 const PAGE_SIZE = 100;
@@ -73,10 +74,8 @@ type WtsSession = {
 };
 
 async function wtsGet<T>(token: string, path: string): Promise<T> {
-  const res = await fetch(`${WTS_BASE}${path}`, {
+  const res = await fetchComRetry(`${WTS_BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    signal: AbortSignal.timeout(30_000),
-    redirect: "error",
   });
   const texto = await res.text();
   if (!res.ok) {
@@ -299,6 +298,17 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
           continue;
         }
         r.sessoes += linhas.length;
+        // Sessão que trocou de equipe (de uma médica para a outra da mesma conta) ficava gravada nos dois clientes:
+        // conversa contada duas vezes e visível para quem não atende mais (auditoria de 01/11/2026). O dono atual é
+        // o que acabou de gravar; a cópia nos outros clientes DESTA conta WTS sai. Nunca toca cliente de outra conta.
+        const outrosDonos = donosDaConta.map((c) => c.id).filter((id) => id !== donoId);
+        if (outrosDonos.length) {
+          const ids = linhas.map((l) => l.session_id);
+          for (let i = 0; i < ids.length; i += 200) {
+            const { error: erroCopia } = await supabase.from("wts_sessions").delete().in("client_id", outrosDonos).in("session_id", ids.slice(i, i + 200));
+            if (erroCopia) r.errors.push(`sessões transferidas ${onde}: ${erroCopia.message}`);
+          }
+        }
         const datas = linhas.map((l) => l.started_at).sort();
         r.mais_antiga = r.mais_antiga && r.mais_antiga < datas[0] ? r.mais_antiga : datas[0];
         const ultima = datas[datas.length - 1];
@@ -349,7 +359,15 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
       // passada acima para no corte e nunca a relia, então ~15% das "abertas" já estavam fechadas no WTS. Este
       // filtro (UpdatedAt.After) funciona nesta API, ao contrário dos de criação (auditoria de 30/10/2026).
       if (corte) {
-        for (let pag = 1; pag <= MAX_PAGINAS_MEXIDAS; pag++) {
+        for (let pag = 1; ; pag++) {
+          // Antes parava no teto calado e a rodada ficava "ok": sessões antigas podiam seguir "abertas" no Nexo depois
+          // de fechadas na WTS. Agora o corte fica registrado no status do sync.
+          if (pag > MAX_PAGINAS_MEXIDAS) {
+            for (const r of res.values()) {
+              r.errors.push(`releitura das sessões alteradas parou no teto de ${MAX_PAGINAS_MEXIDAS} páginas (${MAX_PAGINAS_MEXIDAS * PAGE_SIZE} sessões): parte das sessões antigas pode estar com situação desatualizada`);
+            }
+            break;
+          }
           const resposta = await wtsGet<{ items: WtsSession[]; hasMorePages: boolean }>(contaToken,
             `/chat/v1/session?PageSize=${PAGE_SIZE}&PageNumber=${pag}&UpdatedAt.After=${encodeURIComponent(corte.toISOString())}`);
           if (!Array.isArray(resposta?.items)) throw new Error("WTS devolveu página de sessões alteradas inválida");

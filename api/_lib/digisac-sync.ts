@@ -22,7 +22,7 @@
  * atendimentos, crm_connections.config.contatos_ate para contatos).
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { integrationHost, integrationRequest } from "./integration-http.js";
+import { fetchComRetry, integrationHost } from "./integration-http.js";
 
 const PAGE_SIZE = 200;
 const BATCH_SIZE = 500;
@@ -138,21 +138,18 @@ export function baseUrl(subdomain: string): string {
   return `https://${host}/api/v1`;
 }
 
-export async function digGet(base: string, token: string, path: string, query: Record<string, string | number> = {}, tentativa = 0): Promise<any> {
+export async function digGet(base: string, token: string, path: string, query: Record<string, string | number> = {}): Promise<any> {
   const target = new URL(base);
   if (target.protocol !== "https:" || target.username || target.password || target.port || target.pathname !== "/api/v1" || target.search || target.hash || integrationHost(target.hostname, "digisac") !== target.hostname || !/^\/[a-z][a-z0-9/_-]*$/i.test(path)) {
     throw new Error("URL da integração Digisac inválida");
   }
   const qs = new URLSearchParams(Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)])));
   const url = `${base}${path}${qs.toString() ? `?${qs.toString()}` : ""}`;
-  const res = await fetch(url, integrationRequest({
+  // 429/5xx/rede: espera o Retry-After (com teto de 10 s) ou 0,8 s, 1,6 s, e tenta de novo.
+  const res = await fetchComRetry(url, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "User-Agent": "Mozilla/5.0 (DoctorCreatorDashboard)" },
-  }));
+  }, { baseMs: 800 });
   if (!res.ok) {
-    if ((res.status === 429 || res.status >= 500) && tentativa < 2) {
-      await new Promise((r) => setTimeout(r, 800 * (tentativa + 1)));
-      return digGet(base, token, path, query, tentativa + 1);
-    }
     // Nunca repetir o cabeçalho no erro: ele carrega o token.
     throw new Error(`Digisac ${path} falhou (${res.status})`);
   }
@@ -286,7 +283,6 @@ export async function runDigisacSync(env: DigisacSyncEnv): Promise<DigisacSyncRe
         .filter((t) => t?.id)
         .map((t) => {
           marca = maiorData(marca, t.updatedAt ?? t.startedAt ?? null);
-          const espera = typeof t.metrics?.waitingTime === "number" ? Math.round(t.metrics.waitingTime) : null;
           const atend = typeof t.metrics?.messagingTime === "number" ? Math.round(t.metrics.messagingTime) : null;
           const inicio = t.startedAt ?? t.createdAt ?? null;
           return {
@@ -299,9 +295,10 @@ export async function runDigisacSync(env: DigisacSyncEnv): Promise<DigisacSyncRe
             user_id: t.userId ?? null,
             channel_id: null,
             contact_id: t.contactId ?? null,
-            wait_seconds: espera,
+            // wait_seconds e first_response_at NÃO vêm mais de metrics.waitingTime (bateu com as mensagens em só 30%
+            // dos atendimentos e veio vazio em metade): conversas-digisac.ts calcula pela 1ª mensagem do paciente e a
+            // 1ª resposta de uma pessoa da clínica. Fora do upsert, o valor calculado não é sobrescrito a cada rodada.
             service_seconds: atend,
-            first_response_at: inicio && espera != null ? new Date(new Date(inicio).getTime() + espera * 1000).toISOString() : null,
             updated_at: agora,
           };
         })

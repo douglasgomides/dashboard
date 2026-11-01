@@ -1,5 +1,6 @@
 /** Clint v2: mensagens dos negócios já vinculados ao cliente, sem enviar mensagens. */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchComRetry } from "./integration-http.js";
 
 type Message = { id: string; type: string; created_at: string; content?: string | null; content_type?: string; sent?: boolean; source?: string | null; content_action?: { components?: { formatted_text?: string }[] } };
 type Chat = { id: string; contact_id: string; channel_account_id: string; created_at: string; last_message_at: string };
@@ -21,7 +22,8 @@ export function mensagemClint(m: Message) {
 async function get(token: string, path: string, deadline: number): Promise<any> {
   const remaining = deadline - Date.now();
   if (remaining < 500) throw new Error("Prazo da sincronização esgotado");
-  const r = await fetch(`${BASE}${path}`, { headers: { "api-token": token }, redirect: "error", signal: AbortSignal.timeout(Math.min(20_000, remaining)) });
+  // 429/5xx/rede: espera (Retry-After) e tenta de novo dentro do prazo da rodada.
+  const r = await fetchComRetry(`${BASE}${path}`, { headers: { "api-token": token } }, { timeoutMs: 20_000, prazo: deadline });
   if (!r.ok) throw new Error(`Clint v2 HTTP ${r.status}`);
   return r.json();
 }
