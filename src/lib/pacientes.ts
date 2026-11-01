@@ -190,17 +190,55 @@ export function vemDoCheckout(numero: Numero | undefined): boolean {
   return numero?.fonte === "checkout";
 }
 
-/** Legenda do número: "pela Hubla" quando "Fecharam" vem do checkout. */
+/**
+ * Legenda do número: "pela Hubla" quando "Fecharam" vem do checkout. Quando nenhuma venda do checkout se liga a uma
+ * pessoa (sem telefone), o número conta vendas, e a legenda diz isso (20261102130000).
+ */
 export function legendaDoNumero(chave: ChaveNumero, numero: Numero | undefined): string {
   const base = TEXTO_NUMERO[chave].legenda;
-  return chave === "fecharam" && vemDoCheckout(numero) ? `${base}, pela ${nomeCheckout(numero)}` : base;
+  if (chave !== "fecharam" || !vemDoCheckout(numero)) return base;
+  if (numero?.unidade === "vendas") return `vendas pagas no período, pela ${nomeCheckout(numero)}`;
+  return `${base}, pela ${nomeCheckout(numero)}`;
+}
+
+/**
+ * Aviso curto sobre a cobertura do checkout em "Fecharam": parte do período veio do CRM, o checkout ainda não cobria o
+ * período, parou de mandar venda, ou algumas vendas não se ligam a uma pessoa. null quando não há nada a dizer.
+ */
+export function avisoCheckout(numero: Numero | undefined): string | null {
+  if (!numero || numero.valor == null) return null;
+  const d = (k: string) => (typeof numero[k] === "string" ? dataBr(numero[k] as string) : null);
+  const nome = nomeCheckout(numero);
+  const partes: string[] = [];
+  if (vemDoCheckout(numero)) {
+    if (d("crm_antes_de"))
+      partes.push(Number(numero.vendas_crm ?? 0) > 0
+        ? `Antes de ${d("crm_antes_de")}, conta pelo CRM: as vendas da ${nome} chegam ao Nexo desde essa data.`
+        : `Conta só a partir de ${d("crm_antes_de")}, quando as vendas da ${nome} começam no Nexo; antes disso, o CRM não marca venda.`);
+    if (d("crm_depois_de")) partes.push(`Depois de ${d("crm_depois_de")}, conta pelo CRM: a ${nome} não manda venda ao Nexo desde essa data.`);
+    const semPessoa = Number(numero.sem_pessoa ?? 0);
+    if (numero.unidade !== "vendas" && semPessoa > 0)
+      partes.push(`${semPessoa} ${semPessoa === 1 ? "venda sem telefone conta" : "vendas sem telefone contam"} como uma pessoa cada.`);
+  } else {
+    if (d("checkout_desde")) partes.push(`Conta pelo CRM: as vendas do checkout só chegam ao Nexo desde ${d("checkout_desde")}.`);
+    if (d("checkout_parado_desde")) partes.push(`Conta pelo CRM: o checkout não manda venda ao Nexo desde ${d("checkout_parado_desde")}.`);
+  }
+  return partes.length ? partes.join(" ") : null;
 }
 
 /** Texto de ajuda do número, com a fonte certa quando "Fecharam" vem do checkout. */
 export function fonteDoNumero(chave: ChaveNumero, numero: Numero | undefined): string {
   if (chave === "fecharam" && vemDoCheckout(numero))
-    return `${nomeCheckout(numero)}: vendas pagas no período. Order bump e combo contam como uma venda só, com o valor somado. Reembolso e chargeback não contam como venda e aparecem à parte.`;
+    return `${nomeCheckout(numero)}: vendas pagas (ou em protesto) no período, pelo valor bruto que o comprador pagou. Order bump e combo contam como uma venda só, pelo total da fatura. Renovação de assinatura não é paciente novo e aparece à parte. Reembolso e chargeback não contam como venda e aparecem à parte. Fora do período que o checkout cobre, vale o CRM.`;
   return TEXTO_NUMERO[chave].fonte;
+}
+
+/** "1 renovação de assinatura no período (R$ 97,00), fora de Fecharam", ou null quando não houve. */
+export function textoRenovacoes(numero: Numero | undefined, formatarValor: (v: number) => string): string | null {
+  const r = numero?.renovacoes as { vendas?: number; valor_total?: number } | undefined;
+  const n = Number(r?.vendas ?? 0);
+  if (!r || n <= 0) return null;
+  return `${n} ${n === 1 ? "renovação" : "renovações"} de assinatura no período (${formatarValor(Number(r.valor_total ?? 0))}), fora de Fecharam`;
 }
 
 /** "2 reembolsos ou chargebacks no período (R$ 300,00)", ou null quando não houve. */

@@ -11,7 +11,8 @@ import type { VercelRequest, VercelResponse } from "./http-types.js";
 //   a) o webhook da Hubla, como chega no n8n: { type, event: { invoice, product | products, ... } }, ou o próprio
 //      `event`, ou { body: { event } } (nó HTTP do n8n repassando o corpo inteiro);
 //   b) a carga do passado, já normalizada: [{ externo_id, status, tipo, metodo, valor_centavos, pago_em, produto,
-//      oferta_id, telefone?, parent_externo_id?, reembolsado_em?, moeda?, utm? }] ou { vendas: [...] }.
+//      oferta_id, telefone?, parent_externo_id?, reembolsado_em?, moeda?, utm?, origem?, id_tipo?, repasse_em? }] ou
+//      { vendas: [...] }. Quem monta a carga a partir do export da Hubla é scripts/carga-hubla-passado.ts.
 //
 // O que foi assumido do webhook da Hubla (formato tirado do fluxo n8n que já recebe as vendas; o resto, da Hubla v2):
 //   - tipo do evento em `type` (raiz) ou `event.type`: "invoice.payment_succeeded", "invoice.refunded",
@@ -19,8 +20,15 @@ import type { VercelRequest, VercelResponse } from "./http-types.js";
 //   - status: `invoice.status` quando vem (paid, refunded, chargeback, in_protest, unpaid, expired, canceled...);
 //     sem ele, o tipo do evento decide (payment_succeeded = paid, refunded = refunded, chargeback = chargeback).
 //   - id da fatura em `invoice.id`. Order bump e combo: a fatura filha tem "-offer-" no id e `parentInvoiceId`; ela é
-//     gravada com parent_externo_id e não conta como venda à parte (o valor dela soma na pai).
-//   - valor em `invoice.amount.subtotalCents` (preferido) ou `invoice.amount.totalCents`, em centavos.
+//     gravada com parent_externo_id e não conta como venda à parte. A pai já traz o total com todos os itens (a API
+//     devolve uma fatura com items[] e um totalCents só), então o valor da venda é o da pai; as filhas só entram quando
+//     a pai não tem valor ou não chegou (20261102130000). Chegar a filha duas vezes, ou a pai e as filhas, não soma nada.
+//   - VALOR: sempre BRUTO, `invoice.amount.totalCents` (o que o comprador pagou, antes da taxa da Hubla), em centavos.
+//     É a mesma régua da carga do passado (list_sales, "amounts are GROSS") e da conferência com a Hubla. O
+//     subtotalCents só é usado quando a fatura não traz totalCents; os dois ficam no bruto para conferência.
+//   - ORDEM: a Hubla não garante a ordem dos eventos. `invoice.version` (ou, sem ela, `invoice.updatedAt`) é guardada;
+//     evento com versão menor que a gravada é ignorado. Sem versão, um status nunca regride: reembolso e chargeback
+//     não voltam para pago, e pago (ou em protesto) não volta para pendente, expirado, recusado ou cancelado.
 //   - datas em `invoice.paidAt`, `invoice.refundedAt` / `invoice.chargebackAt`. Venda paga sem `paidAt` usa
 //     `invoice.updatedAt` ou a hora do recebimento; reembolso sem data usa a hora do recebimento.
 //   - comprador em `invoice.payer` {firstName, lastName, document, email, phone}: só o telefone é lido, para virar
@@ -31,6 +39,9 @@ import type { VercelRequest, VercelResponse } from "./http-types.js";
 //   - o header `x-hubla-idempotency` não é necessário: o upsert é por cliente + provedor + id da fatura, então o mesmo
 //     evento repetido regrava a mesma linha.
 // Nunca loga o corpo: só contagens e o motivo curto.
+
+const REEMBOLSO = new Set(["refunded", "chargeback"]);
+const VENDIDA = new Set(["paid", "in_protest"]);
 
 export const PROVEDORES = ["hubla", "hotmart", "eduzz", "kiwify"] as const;
 export type Provedor = (typeof PROVEDORES)[number];
@@ -50,6 +61,10 @@ export type VendaNormalizada = {
   oferta_id: string | null;
   utm: Record<string, string> | null;
   telefone_chave: string | null;
+  /** invoice.version da Hubla, quando vem: ordena eventos que chegam fora de ordem. */
+  versao?: number | null;
+  /** invoice.updatedAt: desempate quando não há versão. */
+  atualizado_em?: string | null;
   bruto: unknown;
 };
 
@@ -144,6 +159,11 @@ function utmDe(v: unknown): Record<string, string> | null {
   return Object.keys(out).length ? out : null;
 }
 
+function versaoDe(v: unknown): number | null {
+  const n = typeof v === "string" && v.trim() ? Number(v) : v;
+  return typeof n === "number" && Number.isFinite(n) ? n : null;
+}
+
 const obj = z.record(z.string(), z.unknown());
 const faturaHubla = z.looseObject({
   id: z.union([z.string().min(1).max(200), z.number()]),
@@ -199,7 +219,8 @@ export function normalizarWebhookHubla(corpo: unknown, agora = new Date()): Norm
       status,
       tipo: texto(inv.type, 40),
       metodo: texto(inv.paymentMethod ?? inv.method, 40),
-      valor_centavos: centavos(amount.subtotalCents) ?? centavos(amount.totalCents),
+      // Bruto (totalCents), como a carga do passado e a Hubla; subtotal só na falta dele.
+      valor_centavos: centavos(amount.totalCents) ?? centavos(amount.subtotalCents),
       moeda: (texto(inv.currency ?? amount.currency, 8) ?? "BRL").toUpperCase(),
       pago_em: data(inv.paidAt) ?? (status === "paid" ? data(inv.updatedAt) ?? agora.toISOString() : null),
       reembolsado_em: reembolso ? data(inv.refundedAt ?? inv.chargebackAt ?? inv.updatedAt) ?? agora.toISOString() : null,
@@ -207,7 +228,12 @@ export function normalizarWebhookHubla(corpo: unknown, agora = new Date()): Norm
       oferta_id: texto(oferta?.id ?? inv.offerId),
       utm: utmDe((inv.paymentSession as Record<string, unknown> | null | undefined)?.utm),
       telefone_chave: chaveTelefone(telefoneDe((inv.payer as Record<string, unknown> | null | undefined)?.phone)),
-      bruto: semDadosPessoais({ type: e.tipo || null, version: (corpo as Record<string, unknown>).version ?? null, event: e.evento }),
+      versao: versaoDe(inv.version),
+      atualizado_em: data(inv.updatedAt),
+      bruto: semDadosPessoais({
+        type: e.tipo || null, version: (corpo as Record<string, unknown>).version ?? null,
+        itens: Array.isArray(inv.items) ? (inv.items as unknown[]).length : null, event: e.evento,
+      }),
     }],
   };
 }
@@ -226,6 +252,13 @@ const vendaCarga = z.object({
   oferta_id: z.string().max(200).nullable().optional(),
   telefone: z.string().max(40).nullable().optional(),
   utm: z.record(z.string(), z.unknown()).nullable().optional(),
+  // De onde veio a linha (scripts/carga-hubla-passado.ts): fatura de list_sales ou pedido de reembolso de list_refunds.
+  // O pedido de reembolso não traz o id da fatura: fica numa linha própria (id_tipo = refund_request) e só conta como
+  // reembolso antes de o webhook começar a gravar (pacientes_periodo), para não contar duas vezes.
+  origem: z.enum(["carga_list_sales", "carga_list_refunds"]).optional(),
+  id_tipo: z.enum(["invoice", "refund_request"]).optional(),
+  /** Pedido de reembolso: data do repasse (scheduledFor), só para conferência. */
+  repasse_em: z.string().nullable().optional(),
 }).strict();
 export const cargaSchema = z.array(vendaCarga).min(1).max(1000);
 
@@ -241,7 +274,12 @@ export function normalizarCarga(lista: unknown): Normalizacao {
     const status = normalizarStatus(v.status)!;
     const pago = v.pago_em == null ? null : data(v.pago_em);
     const reemb = v.reembolsado_em == null ? null : data(v.reembolsado_em);
-    if ((v.pago_em && !pago) || (v.reembolsado_em && !reemb)) return { ok: false, motivo: `data inválida na venda ${v.externo_id}` };
+    const repasse = v.repasse_em == null ? null : data(v.repasse_em);
+    if ((v.pago_em && !pago) || (v.reembolsado_em && !reemb) || (v.repasse_em && !repasse)) return { ok: false, motivo: `data inválida na venda ${v.externo_id}` };
+    if (v.id_tipo === "refund_request" && (!REEMBOLSO.has(status) || pago)) return { ok: false, motivo: `pedido de reembolso ${v.externo_id} precisa de status refunded e sem pago_em` };
+    const bruto: Record<string, unknown> = { origem: v.origem ?? "carga" };
+    if (v.id_tipo) bruto.id_tipo = v.id_tipo;
+    if (v.id_tipo === "refund_request") { bruto.criado_em = reemb; if (repasse) bruto.repasse_em = repasse; }
     vendas.push({
       externo_id: v.externo_id,
       parent_externo_id: v.parent_externo_id ?? null,
@@ -256,7 +294,7 @@ export function normalizarCarga(lista: unknown): Normalizacao {
       oferta_id: v.oferta_id ?? null,
       utm: utmDe(v.utm),
       telefone_chave: chaveTelefone(v.telefone),
-      bruto: { origem: "carga" },
+      bruto,
     });
   }
   return { ok: true, vendas };
@@ -274,7 +312,6 @@ export function normalizarCorpo(provider: Provedor, corpo: unknown, agora = new 
   return normalizarWebhookHubla(c, agora);
 }
 
-const REEMBOLSO = new Set(["refunded", "chargeback"]);
 
 /** Grava as vendas (upsert por cliente + provedor + fatura) e liga à pessoa pelo telefone_chave do mesmo cliente. */
 export async function gravarVendas(admin: SupabaseClient, clientId: string, provider: Provedor, vendas: VendaNormalizada[]): Promise<number> {
@@ -296,7 +333,7 @@ export async function gravarVendas(admin: SupabaseClient, clientId: string, prov
   const ids = lista.map((v) => v.externo_id);
   for (let i = 0; i < ids.length; i += 200) {
     const { data: rs, error } = await admin.from("vendas_checkout")
-      .select("externo_id, status, valor_centavos, pago_em, reembolsado_em, produto, oferta_id, telefone_chave")
+      .select("externo_id, parent_externo_id, status, tipo, metodo, valor_centavos, moeda, pago_em, reembolsado_em, produto, oferta_id, utm, telefone_chave, bruto")
       .eq("client_id", clientId).eq("provider", provider).in("externo_id", ids.slice(i, i + 200));
     if (error) throw new Error("falha ao ler vendas gravadas");
     for (const r of rs ?? []) antes.set(r.externo_id, r as Partial<VendaNormalizada>);
@@ -309,7 +346,7 @@ export async function gravarVendas(admin: SupabaseClient, clientId: string, prov
       tipo: v.tipo, metodo: v.metodo, valor_centavos: v.valor_centavos ?? 0, moeda: v.moeda, pago_em: v.pago_em,
       reembolsado_em: v.reembolsado_em, produto: v.produto, oferta_id: v.oferta_id, utm: v.utm,
       telefone_chave: v.telefone_chave, pessoa_id: v.telefone_chave ? pessoa.get(v.telefone_chave) ?? null : null,
-      bruto: v.bruto, recebido_em: new Date().toISOString(),
+      bruto: comOrdem(v), recebido_em: new Date().toISOString(),
     };
   });
   for (let i = 0; i < linhas.length; i += 500) {
@@ -319,20 +356,69 @@ export async function gravarVendas(admin: SupabaseClient, clientId: string, prov
   return linhas.length;
 }
 
-/** O evento novo manda, mas campo que não veio fica como estava e "pago" atrasado não desfaz reembolso. */
+/** Peso do status: um evento sem versão nunca faz o status regredir (reembolso > pago/em protesto > o resto). */
+export function pesoStatus(status: unknown): number {
+  const s = String(status ?? "");
+  return REEMBOLSO.has(s) ? 2 : VENDIDA.has(s) ? 1 : 0;
+}
+
+function ordemDe(v: Partial<VendaNormalizada>): { versao: number | null; atualizado_em: string | null } {
+  const b = (v.bruto && typeof v.bruto === "object" ? v.bruto : {}) as Record<string, unknown>;
+  return { versao: v.versao ?? versaoDe(b.versao_fatura), atualizado_em: v.atualizado_em ?? data(b.atualizado_em) };
+}
+
+/** true: a nova é mais recente; false: é mais velha (evento atrasado); null: não dá para saber. */
+export function novaEhMaisRecente(velha: Partial<VendaNormalizada>, nova: Partial<VendaNormalizada>): boolean | null {
+  const a = ordemDe(velha), b = ordemDe(nova);
+  if (a.versao != null && b.versao != null && a.versao !== b.versao) return b.versao > a.versao;
+  if (a.atualizado_em && b.atualizado_em && a.atualizado_em !== b.atualizado_em) return b.atualizado_em > a.atualizado_em;
+  return null;
+}
+
+/** O bruto gravado leva a versão e a data de atualização da fatura, para ordenar o próximo evento. */
+function comOrdem(v: VendaNormalizada): unknown {
+  const b: Record<string, unknown> = v.bruto && typeof v.bruto === "object" && !Array.isArray(v.bruto) ? { ...(v.bruto as Record<string, unknown>) } : { valor: v.bruto ?? null };
+  if (v.versao != null) b.versao_fatura = v.versao;
+  if (v.atualizado_em) b.atualizado_em = v.atualizado_em;
+  return b;
+}
+
+/**
+ * Junta o que estava gravado com o evento novo, sem deixar evento fora de ordem estragar a linha:
+ *  - evento mais velho (versão ou updatedAt menor) não muda o status nem as datas; só preenche o que faltava;
+ *  - sem ordem conhecida, o status não regride: "pago" atrasado não desfaz reembolso, e "expirado", "pendente" ou
+ *    "cancelado" atrasado não apaga uma venda paga;
+ *  - campo que não veio fica como estava; a primeira data de pagamento e de reembolso gravada fica.
+ */
 export function mesclar(velha: Partial<VendaNormalizada> | undefined, nova: VendaNormalizada): VendaNormalizada {
   if (!velha) return nova;
-  const manterReembolso = REEMBOLSO.has(String(velha.status)) && nova.status === "paid";
+  const ordem = novaEhMaisRecente(velha, nova);
+  const aceita = ordem !== false && pesoStatus(nova.status) >= pesoStatus(velha.status);
+  const status = aceita ? nova.status : String(velha.status ?? nova.status);
+  const reembolso = REEMBOLSO.has(status);
+  // Quem manda nos campos descritivos: o evento aceito; o outro só preenche o que faltar.
+  const [a, b] = (aceita ? [nova, velha] : [velha, nova]) as [Partial<VendaNormalizada>, Partial<VendaNormalizada>];
+  const oa = ordemDe(velha), ob = ordemDe(nova);
+  const maior = <T,>(x: T | null, y: T | null) => (x == null ? y : y == null ? x : x > y ? x : y);
   return {
-    ...nova,
-    status: manterReembolso ? String(velha.status) : nova.status,
-    // A primeira data gravada fica: evento repetido sem data (que cai na hora do recebimento) não a empurra para frente.
-    reembolsado_em: manterReembolso || REEMBOLSO.has(String(velha.status)) ? velha.reembolsado_em ?? nova.reembolsado_em ?? null : nova.reembolsado_em ?? null,
-    valor_centavos: nova.valor_centavos ?? velha.valor_centavos ?? null,
+    externo_id: nova.externo_id,
+    parent_externo_id: a.parent_externo_id ?? b.parent_externo_id ?? null,
+    status,
+    tipo: a.tipo ?? b.tipo ?? null,
+    metodo: a.metodo ?? b.metodo ?? null,
+    valor_centavos: a.valor_centavos ?? b.valor_centavos ?? null,
+    moeda: a.moeda ?? b.moeda ?? "BRL",
     pago_em: velha.pago_em ?? nova.pago_em ?? null,
-    produto: nova.produto ?? velha.produto ?? null,
-    oferta_id: nova.oferta_id ?? velha.oferta_id ?? null,
-    telefone_chave: nova.telefone_chave ?? velha.telefone_chave ?? null,
+    reembolsado_em: !reembolso ? null
+      : REEMBOLSO.has(String(velha.status)) ? velha.reembolsado_em ?? nova.reembolsado_em ?? null
+      : nova.reembolsado_em ?? velha.reembolsado_em ?? null,
+    produto: a.produto ?? b.produto ?? null,
+    oferta_id: a.oferta_id ?? b.oferta_id ?? null,
+    utm: a.utm ?? b.utm ?? null,
+    telefone_chave: a.telefone_chave ?? b.telefone_chave ?? null,
+    versao: maior(oa.versao, ob.versao),
+    atualizado_em: maior(oa.atualizado_em, ob.atualizado_em),
+    bruto: a.bruto ?? b.bruto ?? null,
   };
 }
 

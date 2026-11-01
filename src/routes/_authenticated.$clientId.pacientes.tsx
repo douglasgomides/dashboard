@@ -26,6 +26,8 @@ import {
   nomeCheckout,
   oQue,
   textoReembolsos,
+  textoRenovacoes,
+  avisoCheckout,
   vemDoCheckout,
   paraChamarAgora,
   recompraDe,
@@ -231,6 +233,7 @@ function NumeroGrande({ chave, numero, ativo, onAbrir }: { chave: ChaveNumero; n
             <span className="text-3xl font-semibold tabular-nums leading-none">{fmt(numero!.valor)}</span>
             <span className="text-xs" style={{ color: "var(--text-dim)" }}>{legendaDoNumero(chave, numero)}</span>
             {coberturaDoNumero(numero) && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{coberturaDoNumero(numero)}</span>}
+            {chave === "fecharam" && avisoCheckout(numero) && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{avisoCheckout(numero)}</span>}
           </>
         )}
       </button>
@@ -280,7 +283,10 @@ function Divisao({ chave, numero, dados }: { chave: ChaveNumero; numero: Numero;
   } else if (chave === "fecharam") {
     const vendas = Number(numero.vendas ?? 0), semValor = Number(numero.sem_valor ?? 0);
     const checkout = vemDoCheckout(numero);
-    partes.push(`${fmt(vendas)} vendas${checkout ? ` pela ${nomeCheckout(numero)}` : ""}`);
+    const vendasCrm = Number(numero.vendas_crm ?? 0);
+    if (checkout && vendasCrm > 0) partes.push(`${fmt(vendas - vendasCrm)} vendas pela ${nomeCheckout(numero)} e ${fmt(vendasCrm)} pelo CRM`);
+    else partes.push(`${fmt(vendas)} vendas${checkout ? ` pela ${nomeCheckout(numero)}` : ""}`);
+    if (checkout && Number(numero.em_protesto ?? 0) > 0) partes.push(`${fmt(Number(numero.em_protesto))} em protesto (contam como venda, como na ${nomeCheckout(numero)})`);
     // Com metade ou mais das vendas sem valor, a soma engana (HOMS: 100 vendas, só 1 com valor, "total R$ 86").
     if (vendas > 0 && semValor * 2 >= vendas) partes.push(`só ${fmt(vendas - semValor)} com valor ${checkout ? "no checkout" : "no CRM"}, então o total não aparece`);
     else {
@@ -289,6 +295,8 @@ function Divisao({ chave, numero, dados }: { chave: ChaveNumero; numero: Numero;
     }
     const reembolsos = textoReembolsos(numero, fmtBRL);
     if (reembolsos) partes.push(reembolsos);
+    const renovacoes = textoRenovacoes(numero, fmtBRL);
+    if (renovacoes) partes.push(renovacoes);
     if (Number(numero.ganho_prospeccao_sem_valor ?? 0) > 0)
       partes.push(`${fmt(Number(numero.ganho_prospeccao_sem_valor))} "ganhos" sem valor da prospecção contados como resposta, não como venda`);
   } else if (chave === "engajaram_instagram") {
