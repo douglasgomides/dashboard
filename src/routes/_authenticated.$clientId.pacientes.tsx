@@ -24,6 +24,7 @@ import {
   legendaDoNumero,
   coberturaDoNumero,
   avisoCrmCompartilhado,
+  avisoSemEtiquetaMedico,
   avisoNaoMedido,
   avisoTelaHonesta,
   avisoAgendouMenosQueFechou,
@@ -120,6 +121,9 @@ function PacientesDoPeriodo() {
         )}
         {notaCrmPorMedico(d) && (
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>{notaCrmPorMedico(d)}</p>
+        )}
+        {avisoSemEtiquetaMedico(d) && (
+          <p className="text-sm font-medium" style={{ color: "var(--warn, var(--text))" }}>{avisoSemEtiquetaMedico(d)}</p>
         )}
         {avisoNaoMedido(d) && (
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>{avisoNaoMedido(d)}</p>

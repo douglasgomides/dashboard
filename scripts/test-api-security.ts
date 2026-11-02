@@ -89,6 +89,8 @@ async function testAuthorizationAndCreation() {
     const method = init?.method ?? "GET";
     if (url.pathname === "/auth/v1/user") return invalidToken ? json({ message: "invalid token" }, 401) : json({ id: USER, email: "user@example.test" });
     const table = url.pathname.split("/").at(-1);
+    // Regra por médico: a conversa de outro cliente não está em conversas_do_cliente(cliente) (leitura, não escrita).
+    if (url.pathname.endsWith("/rpc/crm_conversa_na_regra")) return json(false);
     if (method !== "GET") { writes++; throw new Error(`Unexpected write ${table}`); }
     if (table === "app_admins") return failAccessRead ? dbError() : json(admin ? { user_id: USER } : null);
     if (table === "client_members") return json(member ? { user_id: USER, role } : null);
@@ -110,7 +112,7 @@ async function testAuthorizationAndCreation() {
   assert.equal((await invoke(manual, { client_id: CLIENT, alvo: "resumo_conversa", conversa_id: CONV })).status, 403);
   role = "strategist";
   assert.equal((await invoke(manual, { alvo: "agentes" })).status, 403, "client members cannot execute global workflows");
-  assert.equal((await invoke(manual, { client_id: CLIENT, alvo: "resumo_conversa", conversa_id: CONV })).status, 500);
+  assert.equal((await invoke(manual, { client_id: CLIENT, alvo: "resumo_conversa", conversa_id: CONV })).status, 404, "conversa fora da regra do cliente não é resumida");
   assert.equal(writes, 0, "foreign conversations cannot be read, summarized or changed");
   failAccessRead = true;
   assert.equal((await invoke(manual, { client_id: CLIENT, alvo: "posts" })).status, 503);

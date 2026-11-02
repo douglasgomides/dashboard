@@ -182,6 +182,9 @@ function linhaDaSessao(clientId: string, s: WtsSession) {
     service_seconds: duracaoParaSegundos(s.timeService),
     first_response_at: s.firstResponseAt ?? null,
     updated_at: new Date().toISOString(),
+    // Quem grava é o dono atual: a sessão que tinha ido para outra médica e voltou deixa de estar marcada como movida.
+    movida_para_client_id: null,
+    movida_em: null,
   };
 }
 
@@ -403,12 +406,17 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
         r.sessoes += linhas.length;
         // Sessão que trocou de equipe (de uma médica para a outra da mesma conta) ficava gravada nos dois clientes:
         // conversa contada duas vezes e visível para quem não atende mais (auditoria de 01/11/2026). O dono atual é
-        // o que acabou de gravar; a cópia nos outros clientes DESTA conta WTS sai. Nunca toca cliente de outra conta.
+        // o que acabou de gravar (a equipe atual da sessão); a cópia nos outros clientes DESTA conta WTS fica marcada
+        // como movida (movida_para_client_id) e sai das leituras, junto com a conversa dela (gatilho no banco). Nada é
+        // apagado: se a sessão voltar, o upsert acima grava movida_para_client_id = null e ela volta. Nunca toca
+        // cliente de outra conta.
         const outrosDonos = donosDaConta.map((c) => c.id).filter((id) => id !== donoId);
         if (outrosDonos.length) {
           const ids = linhas.map((l) => l.session_id);
           for (let i = 0; i < ids.length; i += 200) {
-            const { error: erroCopia } = await supabase.from("wts_sessions").delete().in("client_id", outrosDonos).in("session_id", ids.slice(i, i + 200));
+            const { error: erroCopia } = await supabase.from("wts_sessions")
+              .update({ movida_para_client_id: donoId, movida_em: new Date().toISOString() })
+              .in("client_id", outrosDonos).in("session_id", ids.slice(i, i + 200)).is("movida_para_client_id", null);
             if (erroCopia) r.errors.push(`sessões transferidas ${onde}: ${erroCopia.message}`);
           }
         }

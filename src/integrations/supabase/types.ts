@@ -909,6 +909,8 @@ export type Database = {
           client_id: string
           codigo_ref: string | null
           externo_id: string
+          movida_em: string | null
+          movida_para_client_id: string | null
           id: string
           iniciada_em: string | null
           lead_id: string | null
@@ -921,6 +923,8 @@ export type Database = {
           client_id: string
           codigo_ref?: string | null
           externo_id: string
+          movida_em?: string | null
+          movida_para_client_id?: string | null
           id?: string
           iniciada_em?: string | null
           lead_id?: string | null
@@ -933,6 +937,8 @@ export type Database = {
           client_id?: string
           codigo_ref?: string | null
           externo_id?: string
+          movida_em?: string | null
+          movida_para_client_id?: string | null
           id?: string
           iniciada_em?: string | null
           lead_id?: string | null
@@ -4535,6 +4541,8 @@ export type Database = {
           department_id: string | null
           ended_at: string | null
           first_response_at: string | null
+          movida_em: string | null
+          movida_para_client_id: string | null
           service_seconds: number | null
           session_id: string
           started_at: string
@@ -4551,6 +4559,8 @@ export type Database = {
           department_id?: string | null
           ended_at?: string | null
           first_response_at?: string | null
+          movida_em?: string | null
+          movida_para_client_id?: string | null
           service_seconds?: number | null
           session_id: string
           started_at: string
@@ -4567,6 +4577,8 @@ export type Database = {
           department_id?: string | null
           ended_at?: string | null
           first_response_at?: string | null
+          movida_em?: string | null
+          movida_para_client_id?: string | null
           service_seconds?: number | null
           session_id?: string
           started_at?: string

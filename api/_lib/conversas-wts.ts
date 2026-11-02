@@ -170,7 +170,8 @@ export async function ingerirConversasWts(
   const desde = opts.dias ? new Date(Date.now() - opts.dias * 86_400_000).toISOString() : null;
   let sessoesCompletas = false;
   for (let de = 0; de < 20_000; de += 1000) {
-    let q = supabase.from("wts_sessions").select("session_id, contact_id, started_at, updated_at").eq("client_id", clientId).not("contact_id", "is", null).order("started_at", { ascending: false }).order("session_id").range(de, de + 999);
+    // Sessão transferida para outra médica da conta (movida_para_client_id) é do outro cliente: a conversa não é relida aqui.
+    let q = supabase.from("wts_sessions").select("session_id, contact_id, started_at, updated_at").eq("client_id", clientId).not("contact_id", "is", null).is("movida_para_client_id", null).order("started_at", { ascending: false }).order("session_id").range(de, de + 999);
     if (desde) q = q.gte("started_at", desde);
     const { data: pag, error } = await q;
     if (error) {

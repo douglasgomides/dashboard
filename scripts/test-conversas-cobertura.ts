@@ -23,6 +23,7 @@ function database(provider: Provider, sessions: Row[] = [{ session_id: "ticket-o
   const matches = (row: Row, url: URL) => [...url.searchParams].every(([key, value]) => {
     if (["select", "order", "offset", "limit", "on_conflict"].includes(key)) return true;
     if (value === "not.is.null") return row[key] != null;
+    if (value === "is.null") return row[key] == null;
     if (value.startsWith("not.in.")) return !value.slice(8, -1).split(",").includes(String(row[key]));
     if (value.startsWith("in.")) return value.slice(4, -1).split(",").map(v => v.replace(/^"|"$/g, "")).includes(String(row[key]));
     if (value.startsWith("eq.")) return String(row[key]) === value.slice(3);
