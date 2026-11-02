@@ -31,7 +31,13 @@ try {
   globalThis.fetch = async (input, init) => {
     const u = new URL(String(input));
     if (u.origin === origin) {
-      const table = u.pathname.split("/").at(-1);
+      const table = u.pathname.split("/").at(-1)!;
+      // Leitura por cliente (regra por médico): rpc/<tabela>_do_cliente, com p_client no corpo (ou na URL, em HEAD).
+      if (u.pathname.includes("/rpc/") && table.endsWith("_do_cliente")) {
+        assert.equal(init?.method === "HEAD" ? u.searchParams.get("p_client") : JSON.parse(String(init?.body)).p_client, cid);
+        if (init?.method === "HEAD") return new Response(null, { status: 200, headers: { "content-range": "*/0" } });
+        return Response.json([]);
+      }
       if (init?.method === "POST") {
         assert.equal(table, "ia_execucoes"); costRows++;
         return Response.json(null);

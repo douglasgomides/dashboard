@@ -22,16 +22,19 @@ try {
  process.env.SYNC_SECRET="fictional-scheduler";
  globalThis.fetch=async(input,init)=>{
   const u=new URL(String(input));assert.equal(u.origin,"https://review.supabase.co");
-  if((init?.method??"GET")!=="GET"){writes++;throw new Error("Read-only endpoint attempted a write");}
+  // Leitura por cliente (regra por médico): POST em rpc/<tabela>_do_cliente é leitura, com o cliente no corpo.
+  const nome=u.pathname.split("/").at(-1)!,porCliente=u.pathname.startsWith("/rest/v1/rpc/")&&nome.endsWith("_do_cliente");
+  if(!porCliente&&(init?.method??"GET")!=="GET"){writes++;throw new Error("Read-only endpoint attempted a write");}
   if(u.pathname==="/auth/v1/user")return json({id:USER});
-  const table=u.pathname.split("/").at(-1);
+  const table=porCliente?nome.slice(0,-"_do_cliente".length):nome;
   if(table==="app_admins")return json(admin?{user_id:USER}:null);
   if(table==="client_members")return json(member&&u.searchParams.get("client_id")==="eq."+CLIENT?{user_id:USER,role:"viewer"}:null);
   reads++;
   const offset=Number(u.searchParams.get("offset")??0);
   if(table==="crm_connections"){assert.equal(u.searchParams.get("client_id"),"eq."+CLIENT);assert.equal(u.searchParams.get("provider"),"eq.clint");assert.equal(u.searchParams.get("select"),"id");return json([{id:"connection"}]);}
   if(table==="crm_pipeline_statuses"){assert.match(u.searchParams.get("crm_connection_id")??"",/connection/);return json(offset?[]:[{pipeline_id:"p",pipeline_name:"Doctor",status_id:"s",status_name:"Qualificação"}]);}
-  assert.equal(u.searchParams.get("client_id"),"eq."+CLIENT);
+  assert.ok(porCliente,"atendimento e CRM são lidos dentro da regra por médico");
+  assert.equal(JSON.parse(String(init?.body)).p_client,CLIENT);
   assert.equal(u.searchParams.get("provider"),"eq.clint");
   if(table==="crm_leads"){
    assert.equal(u.searchParams.get("removido_na_origem"),"is.null");

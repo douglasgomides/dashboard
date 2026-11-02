@@ -154,7 +154,8 @@ try {
 
   let failKommo = true;
   const fakeAdmin: any = {
-    rpc: async () => ({ data: true, error: null }),
+    // Leituras por cliente (regra por médico): rpc("<tabela>_do_cliente") encadeia como a própria tabela.
+    rpc: (fn: string) => fn.endsWith("_do_cliente") ? fakeAdmin.from(fn.slice(0, -"_do_cliente".length)) : Promise.resolve({ data: true, error: null }),
     from: (table: string) => {
       const q: any = {
         select: () => q, eq: () => q, is: () => q, not: () => q, order: () => q, limit: () => q, gte: () => q, range: () => q,
