@@ -9,6 +9,7 @@
 import { MIN_POSTS_CONCLUSAO, saldoSeguidores } from "@/lib/metricas";
 import { lerVendas } from "@/lib/vendas-periodo";
 import { Document, Link, Page, Path, pdf, Svg, Text, View, Line } from "@react-pdf/renderer";
+import { esperaDoAtendimento } from "@/lib/espera-atendimento";
 import {
   computeCasosDestacados,
   computeConceitosVencedores,
@@ -360,7 +361,9 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
   }
   if (wRes) {
     kpis.push({ label: "Atendimentos no WhatsApp", value: fmtNum(num(wRes.atendimentos)), hint: `${fmtNum(num(wRes.contatos_distintos))} contatos diferentes` });
-    kpis.push({ label: "Espera até a 1ª resposta", value: fmtSeg(wRes.espera_mediana_seg), hint: "metade esperou até isso" });
+    // 1ª resposta pelas mensagens só com amostra; sem ela, a fila da WTS com o nome certo (não é a 1ª resposta).
+    const esp = esperaDoAtendimento(wRes);
+    kpis.push({ label: esp.rotulo, value: esp.tipo === "sem" ? (esp.medidos > 0 ? "amostra pequena" : "não medido") : fmtSeg(esp.seg), hint: esp.tipo === "resposta" ? "metade esperou até isso" : esp.tipo === "fila" ? "não é o tempo até a 1ª resposta" : esp.nota });
   }
   if (cm && vendas) {
     kpis.push({ label: "Contatos novos no CRM", value: fmtNum(pessoasNovas), hint: d.crmNome ? `CRM ${d.crmNome}, no período` : "no período" });
@@ -855,7 +858,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
                 items={[
                   { label: "Atendimentos", value: fmtNum(num(wRes.atendimentos)) },
                   { label: "Contatos diferentes", value: fmtNum(num(wRes.contatos_distintos)) },
-                  { label: "Espera até 1ª resposta", value: fmtSeg(wRes.espera_mediana_seg), hint: "mediana" },
+                  (() => { const esp = esperaDoAtendimento(wRes); return { label: esp.rotulo, value: esp.tipo === "sem" ? (esp.medidos > 0 ? "amostra pequena" : "não medido") : fmtSeg(esp.seg), hint: esp.tipo === "fila" ? "mediana; não é a 1ª resposta" : "mediana" }; })(),
                   { label: "Duração do atendimento", value: fmtSeg(wRes.atendimento_mediano_seg), hint: "mediana" },
                   { label: "Concluídos", value: fmtNum(num(wRes.concluidos)) },
                   { label: "Em andamento", value: fmtNum(num(wRes.em_andamento)) },
@@ -871,7 +874,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
                       { h: "Departamento", flex: 4 },
                       { h: "Atend.", flex: 1.2, alinhar: "right" },
                       { h: "Fatia", flex: 1.2, alinhar: "right" },
-                      { h: "Espera", flex: 1.6, alinhar: "right" },
+                      { h: "1ª resposta", flex: 1.6, alinhar: "right" },
                       { h: "Duração", flex: 1.6, alinhar: "right" },
                     ]}
                     linhas={wts.porDepartamento.map((x: any) => [
@@ -892,7 +895,7 @@ export function RelatorioCompletoDocument(d: RelatorioCompletoData) {
                       { h: "Atendente", flex: 4 },
                       { h: "Atend.", flex: 1.2, alinhar: "right" },
                       { h: "Concluídos", flex: 1.6, alinhar: "right" },
-                      { h: "Espera", flex: 1.6, alinhar: "right" },
+                      { h: "1ª resposta", flex: 1.6, alinhar: "right" },
                     ]}
                     linhas={wts.porAgente.slice(0, 10).map((x: any) => [String(x.agente ?? "n/d"), fmtNum(num(x.atendimentos)), fmtNum(num(x.concluidos)), fmtSeg(x.espera_mediana_seg)])}
                   />

@@ -4,6 +4,7 @@ import { getAdsResumo, getAdsDiagnosticoPorObjetivo, getWtsResumo } from "@/lib/
 import { fmtNum, fmtBRL } from "@/lib/format";
 import { Camera, Megaphone, TrendingUp, MessageCircle, AlertTriangle, Sparkles, type LucideIcon } from "lucide-react";
 import { fmtTaxa } from "@/lib/metricas";
+import { primeiraRespostaConfiavel } from "@/lib/espera-atendimento";
 
 /**
  * O que aconteceu no período, em frases, juntando as quatro fontes.
@@ -193,7 +194,8 @@ export function ResumoDoMes({
   // ---- Atendimento --------------------------------------------------------
   const atendimentos = n(wts?.atendimentos);
   if (atendimentos > 0) {
-    const espera = n(wts?.espera_mediana_seg);
+    // Só com amostra mínima de atendimentos medidos pelas mensagens (src/lib/espera-atendimento.ts).
+    const espera = primeiraRespostaConfiavel(wts) ?? 0;
     linhas.push({ icone: MessageCircle, node: (
       <>
         <Forte>{fmtNum(atendimentos)} atendimentos</Forte> no WhatsApp, de{" "}

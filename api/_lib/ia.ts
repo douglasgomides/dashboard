@@ -100,7 +100,7 @@ export function deveUsarReserva(e: unknown): boolean {
 }
 
 // Chave de API nunca vai para o registro, nem mascarada.
-const semChave = (t: string) => t.replace(/\bsk-[A-Za-z0-9_\-*.]{6,}/g, "[chave]").replace(/(Bearer\s+)\S+/gi, "$1***");
+export const semChave = (t: string) => t.replace(/\bsk-[A-Za-z0-9_\-*.]{6,}/g, "[chave]").replace(/(Bearer\s+)\S+/gi, "$1***");
 
 /** Pedido de texto com troca automática de provedor. Usado pelos fluxos que têm modelo próprio (resumo, sessão, posts). */
 export interface PedidoTextoIA {

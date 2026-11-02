@@ -1,3 +1,4 @@
+import { doCliente } from "./leitura-cliente.js";
 /**
  * Copiloto dos documentos do SAP (regras em src/lib/copiloto-doc.ts). Lê tudo o que o sistema sabe da clínica, escreve
  * o rascunho da seção e faz as perguntas que faltam; o que a equipe responde vira fato proposto no Brand Brain
@@ -14,13 +15,13 @@ const corta = (t: unknown, n: number) => String(t ?? "").replace(/\s+/g, " ").tr
 
 async function contextoCliente(admin: Admin, clientId: string): Promise<{ texto: string; chaves: Set<string> }> {
   const desde = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
-  const leads = () => admin.from("crm_leads").select("id", { count: "exact", head: true }).eq("client_id", clientId).is("removido_na_origem", null);
+  const leads = () => doCliente(admin, "crm_leads", clientId, { count: "exact", head: true }).is("removido_na_origem", null);
   const [f, licoes, l90, g90, ganhos] = await Promise.all([
     lerFontesBrain(admin, clientId, { exigirModulo: false }),
     admin.from("agentes_aprendizados").select("texto, sinal").eq("client_id", clientId).eq("estado", "ativo").limit(20),
     leads().gte("occurred_at", desde(90)),
     leads().eq("outcome", "won").gte("occurred_at", desde(90)),
-    admin.from("crm_leads").select("source, price").eq("client_id", clientId).eq("outcome", "won").is("removido_na_origem", null).gte("occurred_at", desde(180)).limit(3000),
+    doCliente(admin, "crm_leads", clientId).select("source, price").eq("outcome", "won").is("removido_na_origem", null).gte("occurred_at", desde(180)).limit(3000),
   ]);
   if (licoes.error || l90.error || g90.error || ganhos.error) throw new Error("Não foi possível conferir o contexto da clínica");
   const blocos: string[] = [];

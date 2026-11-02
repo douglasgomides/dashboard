@@ -12,10 +12,14 @@ try {
   globalThis.fetch = async (input, init) => {
     const u = new URL(String(input));
     assert.equal(u.origin, origin, "nenhum provedor externo é chamado");
-    const path = u.pathname.split("/").at(-1)!;
-    assert.ok((init?.method ?? "GET") === "GET" || path === "operacao_fontes", "nenhuma proposta ou contato é gravado");
+    const nome = u.pathname.split("/").at(-1)!;
+    // Leitura por cliente (regra por médico): rpc/<tabela>_do_cliente com p_client; conta como a própria tabela.
+    const porCliente = u.pathname.includes("/rpc/") && nome.endsWith("_do_cliente");
+    const path = porCliente ? nome.slice(0, -"_do_cliente".length) : nome;
+    assert.ok((init?.method ?? "GET") === "GET" || path === "operacao_fontes" || porCliente, "nenhuma proposta ou contato é gravado");
     if (path === "operacao_fontes") return Response.json({ apto: true });
-    if (path === "conversas") assert.equal(u.searchParams.get("id"), `in.(${conversa})`);
+    if (porCliente) assert.equal(JSON.parse(String(init?.body)).p_client, cid, "lê só o cliente pedido");
+    else if (path === "conversas") assert.equal(u.searchParams.get("id"), `in.(${conversa})`);
     else if (path === "sugestoes_agentes" && u.searchParams.has("conversa_id")) assert.equal(u.searchParams.get("conversa_id"), `in.(${conversa})`);
     else assert.equal(u.searchParams.get(path === "clients" ? "id" : "client_id"), `eq.${cid}`);
     leituras++;

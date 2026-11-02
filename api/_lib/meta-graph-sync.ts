@@ -219,6 +219,11 @@ async function syncAccountPosts(
   const tolerate = () => new Map<string, Record<string, number>>();
   const reelsExtraById = await fetchInsightsBatch(reelIds, accessToken, REELS_EXTRA_METRICS).catch(tolerate);
   const feedExtraById = await fetchInsightsBatch(feedIds, accessToken, FEED_EXTRA_METRICS).catch(tolerate);
+  // Taxa de pulo dos Reels (matéria-prima do hook rate): antes só chegava pela Windsor, e nas contas da Graph os Reels
+  // novos ficavam sem ela desde 05/10/2026 (auditoria 01/11/2026). Pedido à parte: se a Meta recusar a métrica, as
+  // outras não caem. A doc diz "percentage"; o banco guarda de 0 a 1, então valor acima de 1 é dividido por 100.
+  const skipById = await fetchInsightsBatch(reelIds, accessToken, "reels_skip_rate").catch(tolerate);
+  const taxaDePulo = (v: number | undefined) => (v === undefined || !Number.isFinite(v) ? undefined : v > 1 ? v / 100 : v);
 
   const now = new Date().toISOString();
   const rows = media
@@ -239,6 +244,7 @@ async function syncAccountPosts(
         engagement: ins.total_interactions,
         reel_avg_watch_time_ms: reelExtra.ig_reels_avg_watch_time,
         reel_total_watch_time_ms: reelExtra.ig_reels_video_view_total_time,
+        reel_skip_rate: taxaDePulo(skipById.get(m.id)?.reels_skip_rate),
         profile_visits: feedExtra.profile_visits,
         media_follows: feedExtra.follows,
       })) {

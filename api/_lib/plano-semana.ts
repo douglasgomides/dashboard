@@ -1,3 +1,4 @@
+import { doCliente } from "./leitura-cliente.js";
 /**
  * Plano da semana (servidor): confere as ações das últimas semanas e monta a da semana atual, 3 a 5 ações por
  * clínica priorizadas pelo dinheiro em jogo. Regras puras em src/lib/plano-semana.ts.
@@ -49,7 +50,7 @@ async function semMensagemNova(admin: Admin, resumos: Resumo[]): Promise<Resumo[
 async function resumosDesde(admin: Admin, clientId: string, desdeMs: number): Promise<Resumo[]> {
   const todos: Resumo[] = [];
   for (let de = 0; de < 10_000; de += 1000) {
-    const { data, error } = await admin.from("conversas_resumos").select("conversa_id, ate_msg_em, resumo").eq("client_id", clientId)
+    const { data, error } = await doCliente(admin, "conversas_resumos", clientId).select("conversa_id, ate_msg_em, resumo")
       .gte("ate_msg_em", iso(desdeMs)).order("ate_msg_em", { ascending: false }).range(de, de + 999);
     if (error) throw new Error("Não foi possível ler as leituras das conversas");
     todos.push(...((data ?? []) as Resumo[]));
@@ -119,7 +120,7 @@ async function medirItem(admin: Admin, it: Item, ticket: number | null, semanaAt
     const tema = String(it.refs.tema ?? "");
     const [{ count: posts, error: e1 }, { count: conv, error: e2 }] = await Promise.all([
       admin.from("instagram_posts").select("id", { count: "exact", head: true }).eq("client_id", it.client_id).is("removido_em", null).eq("tema", tema).gt("posted_at", it.criado_em),
-      admin.from("conversas_tema").select("conversa_id", { count: "exact", head: true }).eq("client_id", it.client_id).eq("tema", tema).gt("gerado_em", it.criado_em),
+      doCliente(admin, "conversas_tema", it.client_id, { count: "exact", head: true }).eq("tema", tema).gt("gerado_em", it.criado_em),
     ]);
     if (e1 || e2) throw new Error("Não foi possível conferir o conteúdo");
     upd = {
@@ -192,7 +193,7 @@ async function candidatos(admin: Admin, clientId: string, semana: string, ticket
   }
 
   // Conteúdo: tema mais pedido sem post recente.
-  const { data: temas, error: eT } = await admin.from("conversas_tema").select("tema, comercial").eq("client_id", clientId).not("tema", "is", null).gte("gerado_em", iso(agora - 14 * DIA)).limit(5000);
+  const { data: temas, error: eT } = await doCliente(admin, "conversas_tema", clientId).select("tema, comercial").not("tema", "is", null).gte("gerado_em", iso(agora - 14 * DIA)).limit(5000);
   if (eT) throw new Error("Não foi possível ler os temas das conversas");
   const conta = new Map<string, number>();
   for (const t of (temas ?? []) as { tema: string; comercial: boolean | null }[]) if (t.comercial !== false) conta.set(t.tema, (conta.get(t.tema) ?? 0) + 1);

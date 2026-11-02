@@ -11,6 +11,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { META_GRAPH_URL } from "./meta-graph-versao.js";
+import { semChave } from "./ia.js";
 
 type Admin = SupabaseClient<any, any, any>;
 const GRAPH = META_GRAPH_URL;
@@ -70,7 +71,7 @@ async function transcreverUm(admin: Admin, token: string, chave: string, p: { id
   const corpo = await r.text();
   // Custo estimado pela duração (a resposta json não traz a duração; o tamanho médio de um reel de 1 min fica ~8 MB).
   const minutos = Math.max(0.25, buf.byteLength / (8 * 1024 * 1024));
-  const { error: erroCusto } = await admin.from("ia_execucoes").insert({ client_id: p.client_id, finalidade: "transcricao_reels", modelo: MODELO, tokens_entrada: 0, tokens_saida: 0, custo_usd: Number((minutos * USD_POR_MIN).toFixed(5)), ok: r.ok, erro: r.ok ? null : corpo.slice(0, 300), ms: Date.now() - t0 });
+  const { error: erroCusto } = await admin.from("ia_execucoes").insert({ client_id: p.client_id, finalidade: "transcricao_reels", modelo: MODELO, tokens_entrada: 0, tokens_saida: 0, custo_usd: Number((minutos * USD_POR_MIN).toFixed(5)), ok: r.ok, erro: r.ok ? null : semChave(corpo).slice(0, 300), ms: Date.now() - t0 });
   if (erroCusto) throw new Error("Não foi possível registrar o custo da transcrição");
   if (!r.ok) throw new Error(`transcrição respondeu ${r.status}`);
   const resposta: unknown = JSON.parse(corpo);

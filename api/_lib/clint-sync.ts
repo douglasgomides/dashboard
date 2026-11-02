@@ -238,7 +238,8 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
       const anterior = JSON.stringify((conn.config as any)?.funis_fora_da_config ?? []);
       if (JSON.stringify(fora) !== anterior) {
         const { data: atualCfg } = await supabase.from("crm_connections").select("config").eq("id", conn.id).single();
-        await supabase.from("crm_connections").update({ config: { ...((atualCfg?.config as Record<string, unknown>) ?? {}), funis_fora_da_config: fora } }).eq("id", conn.id);
+        const { error: erroFunis } = await supabase.from("crm_connections").update({ config: { ...((atualCfg?.config as Record<string, unknown>) ?? {}), funis_fora_da_config: fora } }).eq("id", conn.id);
+        if (erroFunis) errors.push(`funis_fora_da_config: ${erroFunis.message}`);
       }
     }
 
