@@ -156,9 +156,11 @@ async function testWtsRouting() {
           { id: "doctor", name: "Doctor", wts_company_id: "shared", wts_department_ids: ambiguous ? null : ["private-department"] },
         ]);
       }
-      if (table === "wts_sessions" && init?.method === "DELETE") {
-        // Sessão que mudou de dono sai dos OUTROS clientes da mesma conta, nunca do dono atual.
-        apagados.push(`${url.searchParams.get("client_id")}|${url.searchParams.get("session_id")}`);
+      assert.notEqual(init?.method, "DELETE", "sessão transferida é marcada, nunca apagada");
+      if (table === "wts_sessions" && init?.method === "PATCH") {
+        // Sessão que mudou de dono fica marcada como movida nos OUTROS clientes da mesma conta, nunca no dono atual.
+        const corpo = JSON.parse(String(init.body ?? "{}"));
+        apagados.push(`${url.searchParams.get("client_id")}|${url.searchParams.get("session_id")}|${corpo.movida_para_client_id}|${url.searchParams.get("movida_para_client_id")}`);
         return json(null);
       }
       if (table === "wts_sessions" && (init?.method ?? "GET") === "GET") return json([]); // releitura das abertas: nada aberto no Nexo
@@ -179,7 +181,8 @@ async function testWtsRouting() {
   assert.deepEqual(written.map((s) => [s.client_id, s.session_id]), [["general", "unassigned"]]);
   assert.equal(result.length, 1);
   assert.equal(result[0].sessoes, 1);
-  assert.deepEqual(apagados, ['in.(doctor)|in.(unassigned)'], "cópia antiga da sessão sai só do outro cliente da conta");
+  assert.deepEqual(apagados, ['in.(doctor)|in.(unassigned)|general|is.null'], "cópia antiga da sessão fica marcada como movida para o dono atual, só no outro cliente da conta");
+  assert.deepEqual(written.map((s) => s.movida_para_client_id), [null], "o dono atual grava a sessão desmarcada");
   written.length = 0; apagados.length = 0; ambiguous = true;
   result = await runWtsSync({ ...env, wtsToken: "fake-token", clientId: "general" });
   assert.equal(written.length, 0, "ambiguous routing must not copy private sessions into multiple tenants");

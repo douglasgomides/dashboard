@@ -64,6 +64,9 @@ export interface PacientesPeriodo {
   crm_compartilhado_com?: string[];
   /** A regra "CRM por médico" está ligada para este cliente (crm_filtro_cliente): os números já são só deste médico. */
   crm_filtro_ativo?: boolean;
+  /** Digisac com regra 'excluir' (a clínica fica com quem não tem etiqueta de médico): quantos contatos entram aqui
+   * sem etiqueta. Nulo quando a regra não se aplica. */
+  crm_sem_medico?: { total: number; periodo: number } | null;
   tem_crm: boolean;
   tem_conversas: boolean;
   tem_leitura_ia: boolean;
@@ -456,4 +459,12 @@ export function notaCrmPorMedico(d: Pick<PacientesPeriodo, "crm_filtro_ativo">):
   return d.crm_filtro_ativo
     ? "Números só deste médico: o CRM é dividido com outros médicos, e aqui entram só os cards, conversas e atendimentos dele (regra combinada com a clínica)."
     : null;
+}
+
+/** Contatos sem etiqueta de médico que, pela regra combinada, ficam com a clínica (Digisac da IGM Palmas). */
+export function avisoSemEtiquetaMedico(d: Pick<PacientesPeriodo, "crm_sem_medico">): string | null {
+  const s = d.crm_sem_medico;
+  if (!s || !(s.total > 0)) return null;
+  const n = (v: number) => v.toLocaleString("pt-BR");
+  return `Inclui contatos sem etiqueta de médico (${n(s.periodo)} no período, ${n(s.total)} no total): a clínica ainda não marcou o médico deles e, pela regra combinada, eles ficam neste painel.`;
 }

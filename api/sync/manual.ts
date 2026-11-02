@@ -777,6 +777,15 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         res.status(400).json({ error: "Informe conversa_id" });
         return;
       }
+      // Conta dividida entre médicos: quem não é da equipe só resume conversa que a regra do cliente deixa ver.
+      if (!ehAdmin) {
+        const { data: naRegra, error: erroRegra } = await admin.rpc("crm_conversa_na_regra", { p_client: client_id, p_conversa: conversaId });
+        if (erroRegra) throw new Error("Não foi possível conferir a regra do cliente para esta conversa");
+        if (naRegra !== true) {
+          res.status(404).json({ error: "Conversa não encontrada para este cliente" });
+          return;
+        }
+      }
       const r = await resumirConversa(admin, client_id, conversaId, quem.user.id);
       res.status(200).json({ alvo, ok: true, ...r });
       return;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
-import { avisoCrmCompartilhado, notaCrmPorMedico } from "../src/lib/pacientes";
+import { avisoCrmCompartilhado, avisoSemEtiquetaMedico, notaCrmPorMedico } from "../src/lib/pacientes";
 import { avisoContaAnuncioCompartilhada } from "../src/lib/conta-anuncio-compartilhada";
 
 // Telas: o aviso de CRM compartilhado só aparece enquanto não há regra; a conta de anúncios avisa com o nome.
@@ -10,6 +10,10 @@ assert.equal(avisoCrmCompartilhado({ crm_compartilhado_com: ["Clínica X"], crm_
 assert.equal(avisoCrmCompartilhado({ crm_compartilhado_com: [] }), null);
 assert.equal(notaCrmPorMedico({ crm_filtro_ativo: false }), null);
 assert.match(notaCrmPorMedico({ crm_filtro_ativo: true }) ?? "", /só deste médico/);
+// Digisac: contatos sem etiqueta de médico que ficam com a clínica são ditos na tela, com o número.
+assert.equal(avisoSemEtiquetaMedico({ crm_sem_medico: null }), null);
+assert.equal(avisoSemEtiquetaMedico({ crm_sem_medico: { total: 0, periodo: 0 } }), null);
+assert.match(avisoSemEtiquetaMedico({ crm_sem_medico: { total: 1969, periodo: 207 } }) ?? "", /^Inclui contatos sem etiqueta de médico \(207 no período, 1\.969 no total\)/);
 assert.match(avisoContaAnuncioCompartilhada({ ad_account_id: "act-1", outros_clientes: 1, nomes: ["Clínica X"] }), /^Conta de anúncios compartilhada com Clínica X /);
 assert.match(avisoContaAnuncioCompartilhada({ ad_account_id: "act-1", outros_clientes: 2, nomes: null }), /compartilhada com 2 outros clientes/);
 
