@@ -1,3 +1,4 @@
+import { doCliente } from "./leitura-cliente.js";
 /**
  * Leitura de contexto dos agentes Recuperação de pacientes, Gestor de anúncios e Roteirista de conteúdo
  * (src/lib/agentes-catalogo.ts). Tudo puxado do banco, sem preenchimento manual. Lê direto as tabelas com a chave de
@@ -57,7 +58,7 @@ export async function lerRecuperacao(admin: Admin, clientId: string) {
   if (!saude?.apto) return { casos: [], brain: { texto: "", chaves: [] as string[], n: 0 }, ficha: "", aprendizado: "", bloqueio: "Atualizar a coleta de mensagens e o CRM antes de preparar novos contatos." };
   const resumos: { conversa_id: string; resumo: any; ate_msg_em: string | null }[] = [];
   for (let de = 0; de < 4000; de += 1000) {
-    const { data, error } = await admin.from("conversas_resumos").select("conversa_id, resumo, ate_msg_em").eq("client_id", clientId).gte("gerado_em", desde(25)).order("gerado_em", { ascending: false }).range(de, de + 999);
+    const { data, error } = await doCliente(admin, "conversas_resumos", clientId).select("conversa_id, resumo, ate_msg_em").gte("gerado_em", desde(25)).order("gerado_em", { ascending: false }).range(de, de + 999);
     if (error) throw new Error("Não foi possível ler as conversas para recuperação");
     resumos.push(...((data ?? []) as any[]));
     if ((data ?? []).length < 1000) break;
@@ -157,7 +158,7 @@ export async function lerConteudo(admin: Admin, clientId: string) {
   if (perguntas.length) blocos.push(`### Perguntas reais nos comentários (90 dias, já sem elogio, emoji e marcação)\n${perguntas.slice(0, 35).map((t) => `- ${t}`).join("\n")}`);
   if (relatos.length) blocos.push(`### Relatos do público nos comentários (o que as pessoas vivem; bom para identificação)\n${relatos.slice(0, 12).map((t) => `- ${t}`).join("\n")}`);
   const brutos: any[] = [];
-  const { data: rs, error: erroResumos } = await admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", desde(45)).limit(1500);
+  const { data: rs, error: erroResumos } = await doCliente(admin, "conversas_resumos", clientId).select("resumo").gte("gerado_em", desde(45)).limit(1500);
   if (erroResumos) throw new Error("Não foi possível ler as conversas para conteúdo");
   brutos.push(...((rs ?? []) as { resumo: any }[]).map((r) => r.resumo));
   const fr = filtrarConversas(brutos);
