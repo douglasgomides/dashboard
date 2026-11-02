@@ -104,6 +104,13 @@ declare
         'evidencia', format('%s ganhos fechados nos últimos 90 dias (pela data de fechamento no CRM); só %s têm valor preenchido.', r.g, r.gv),$n$;
 begin
   if position('crm_ganhos_fechados' in d) > 0 then return; end if;
+  -- Depois da 20261102230000 (regra por médico), as leituras de crm_leads passam pela função do cliente.
+  if position(a2 in d) = 0 then
+    a2 := replace(a2, E'from crm_leads\n', E'from public.crm_leads_do_cliente(p_client_id) crm_leads\n');
+  end if;
+  if position(a3 in d) = 0 then
+    a3 := replace(a3, 'from crm_leads l', 'from public.crm_leads_do_cliente(p_client_id) l');
+  end if;
   if position(a1 in d) = 0 or position(a2 in d) = 0 or position(a3 in d) = 0 or position(a4 in d) = 0 or position(a5 in d) = 0 then
     raise exception 'qualidade_dados: trechos de ganhos (30/90 dias) não encontrados; a função mudou e esta migração precisa ser revista';
   end if;
