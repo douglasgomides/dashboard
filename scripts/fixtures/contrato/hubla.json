@@ -1,37 +1,51 @@
 {
-  "_sobre": "Amostra inventada no formato do webhook v2 da Hubla (como chega pelo n8n) e da carga normalizada. Sem dado real. Ver docs/apis/hubla.md.",
+  "_sobre": "Formato copiado dos exemplos oficiais do webhook v2 da Hubla (hubla.gitbook.io/docs/webhooks/eventos/fatura.md, lida em 01/11/2026): datas em statusAt[] (when + status) e modifiedAt, sem paidAt/refundedAt/updatedAt; total diferente do subtotal (cupom e juros do parcelamento). Ids, valores e comprador inventados, sem dado real. Ver docs/apis/hubla.md.",
   "webhook_pago": {
-    "type": "invoice.payment_succeeded",
+    "type": "invoice.status_updated",
     "version": "2.0.0",
     "event": {
       "product": { "id": "prd-exemplo-1", "name": "Produto de exemplo" },
-      "products": [ { "id": "prd-exemplo-1", "name": "Produto de exemplo", "offers": [ { "id": "ofr-exemplo-1" } ] } ],
+      "products": [ { "id": "prd-exemplo-1", "name": "Produto de exemplo", "offers": [ { "id": "ofr-exemplo-1", "name": "Principal" } ] } ],
       "invoice": {
         "id": "inv-exemplo-0001",
+        "parentInvoiceId": null,
         "status": "paid",
         "type": "sell",
+        "statusAt": [
+          { "when": "2026-10-20T12:59:40.000Z", "status": "unpaid" },
+          { "when": "2026-10-20T13:00:00.000Z", "status": "paid" }
+        ],
         "version": 3,
-        "paymentMethod": "pix",
+        "installments": 12,
+        "paymentMethod": "credit_card",
         "currency": "BRL",
-        "amount": { "subtotalCents": 49700, "totalCents": 49700 },
-        "paidAt": "2026-10-20T13:00:00.000Z",
-        "updatedAt": "2026-10-20T13:00:05.000Z",
+        "amount": { "subtotalCents": 120000, "discountCents": 24000, "installmentFeeCents": 16320, "totalCents": 112320 },
         "payer": { "firstName": "Paciente", "lastName": "Exemplo", "email": "comprador@exemplo.com", "document": "00000000000", "phone": "+5511900000000" },
-        "paymentSession": { "utm": { "source": "instagram", "medium": "bio", "campaign": "exemplo" } }
+        "paymentSession": { "utm": { "source": "instagram", "medium": "bio", "campaign": "exemplo" } },
+        "saleDate": "2026-10-20T12:59:40.000Z",
+        "createdAt": "2026-10-20T12:59:40.000Z",
+        "modifiedAt": "2026-10-20T13:00:00.000Z"
       }
     }
   },
   "webhook_reembolso": {
-    "type": "invoice.refunded",
+    "type": "invoice.status_updated",
     "version": "2.0.0",
     "event": {
       "invoice": {
         "id": "inv-exemplo-0001",
         "status": "refunded",
         "type": "sell",
-        "amount": { "subtotalCents": 49700, "totalCents": 49700 },
-        "paidAt": "2026-10-20T13:00:00.000Z",
-        "refundedAt": "2026-10-25T10:00:00.000Z"
+        "statusAt": [
+          { "when": "2026-10-20T12:59:40.000Z", "status": "unpaid" },
+          { "when": "2026-10-20T13:00:00.000Z", "status": "paid" },
+          { "when": "2026-10-25T10:00:00.000Z", "status": "refunded" }
+        ],
+        "version": 9,
+        "amount": { "subtotalCents": 120000, "discountCents": 24000, "installmentFeeCents": 16320, "totalCents": 112320 },
+        "saleDate": "2026-10-20T12:59:40.000Z",
+        "createdAt": "2026-10-20T12:59:40.000Z",
+        "modifiedAt": "2026-10-25T10:00:00.000Z"
       }
     }
   },

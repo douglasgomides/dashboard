@@ -4534,8 +4534,13 @@ export type Database = {
           created_at: string
           department_id: string | null
           ended_at: string | null
+          fila_segundos: number | null
           first_response_at: string | null
+          primeira_resposta_conferida_em: string | null
           service_seconds: number | null
+          sessao_origem: string | null
+          sessao_tipo: string | null
+          sessao_utm: Json | null
           session_id: string
           started_at: string
           status: string | null
@@ -4550,8 +4555,13 @@ export type Database = {
           created_at?: string
           department_id?: string | null
           ended_at?: string | null
+          fila_segundos?: number | null
           first_response_at?: string | null
+          primeira_resposta_conferida_em?: string | null
           service_seconds?: number | null
+          sessao_origem?: string | null
+          sessao_tipo?: string | null
+          sessao_utm?: Json | null
           session_id: string
           started_at: string
           status?: string | null
@@ -4566,8 +4576,13 @@ export type Database = {
           created_at?: string
           department_id?: string | null
           ended_at?: string | null
+          fila_segundos?: number | null
           first_response_at?: string | null
+          primeira_resposta_conferida_em?: string | null
           service_seconds?: number | null
+          sessao_origem?: string | null
+          sessao_tipo?: string | null
+          sessao_utm?: Json | null
           session_id?: string
           started_at?: string
           status?: string | null
@@ -5651,6 +5666,8 @@ export type Database = {
           em_andamento: number
           espera_cobertura: number
           espera_mediana_seg: number
+          fila_cobertura: number
+          fila_mediana_seg: number
           sem_roteamento: number
         }[]
       }

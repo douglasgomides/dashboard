@@ -83,7 +83,7 @@ export function motivoDaLinha(l: LinhaFonte | undefined): Motivo | null {
 /** Status da fonte (regra única de status-fonte.ts) com o motivo em linguagem de gente. */
 export function statusDaLinha(l: LinhaFonte | undefined, cadastro: boolean, naoUsa = false): StatusFonte {
   const m = motivoDaLinha(l);
-  return statusDaFonte({ fonte: l?.fonte ?? null, ultimo_sucesso: l?.last_success_at ?? null, cadastro, data_ate: l?.data_ate ?? null, last_error: l?.last_error ?? null, motivo: m?.texto ?? null, motivo_dono: l?.motivo_dono ?? null, naoUsa });
+  return statusDaFonte({ fonte: l?.fonte ?? null, ultimo_sucesso: l?.last_success_at ?? null, cadastro, data_ate: l?.data_ate ?? null, last_error: l?.last_error ?? null, motivo: m?.texto ?? null, motivo_dono: l?.motivo_dono ?? null, naoUsa, divergencia: l?.divergencia ?? null });
 }
 
 // Título da faixa: "Sem dado novo desde" só quando a fonte está mesmo parada. Com dado de hoje e um aviso gravado

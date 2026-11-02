@@ -199,6 +199,7 @@ async function testMessagesPersistence() {
   let writes = 0;
   let messagesWritten = 0;
   let externalRequests = 0;
+  let firstResponseWrites = 0;
   const recent = new Date().toISOString();
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input));
@@ -233,6 +234,14 @@ async function testMessagesPersistence() {
       messagesWritten += bodyOf(init).length;
       return json(null);
     }
+    if (table === "wts_sessions") {
+      // 1ª resposta pelas mensagens: só a mensagem do paciente, sem origem da clínica, então não mede (nulo) e marca a conferência.
+      const body = bodyOf(init);
+      assert.equal(body.wait_seconds, null);
+      assert.ok(body.primeira_resposta_conferida_em);
+      firstResponseWrites++;
+      return json(null);
+    }
     throw new Error(`Unexpected write ${table}`);
   };
   let result = await ingerirConversasWts(database(), "token", "client", { limite: 1 });
@@ -255,6 +264,7 @@ async function testMessagesPersistence() {
   assert.equal(coverage, "completa");
   assert.ok(successStamp);
   assert.ok(writes > 0);
+  assert.equal(firstResponseWrites, 1, "a 1ª resposta só é gravada com a conversa inteira lida e gravada");
 }
 
 async function testContactsCursor() {
