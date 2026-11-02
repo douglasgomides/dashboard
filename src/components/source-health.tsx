@@ -64,7 +64,7 @@ export function saudeDaFonte(cadastro: boolean, l: LinhaFonte | undefined, naoUs
     cor,
     status: st,
     data: st.data,
-    causa: m?.texto ?? (st.cor === "amarelo" ? "Sem causa identificada ainda." : "Sem dado novo e sem causa registrada."),
+    causa: m?.texto ?? (l?.divergencia ? st.motivo : null) ?? (st.cor === "amarelo" ? "Sem causa identificada ainda." : "Sem dado novo e sem causa registrada."),
     proxima: m ? PROXIMA[m.dono] ?? PROXIMA.origem : st.cor === "amarelo" ? "Aguardar a próxima atualização; se passar de 3 dias, vira vermelho." : PROXIMA.nos,
     peso,
   };

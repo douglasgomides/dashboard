@@ -55,6 +55,8 @@ export type WtsSyncResult = {
   agentes: number;
   mais_antiga?: string;
   mais_recente?: string;
+  /** Releitura das abertas desta rodada (conta inteira): abertas na WTS, fechadas no Nexo e quantas saíram do cliente. */
+  reconciliacao?: ResultadoReconciliacao;
   errors: string[];
 };
 
@@ -71,6 +73,11 @@ type WtsSession = {
   timeWait?: string | null;
   timeService?: string | null;
   firstResponseAt?: string | null;
+  /** v2: INDIVIDUAL ou GROUP. */
+  type?: string | null;
+  /** v2: origem da conversa e UTM (PublicUtmDTO: sourceId, source, clid, medium, campaign, content, headline, term, referralUrl). */
+  origin?: string | null;
+  utm?: Record<string, unknown> | null;
 };
 
 class WtsHttpError extends Error {
@@ -178,14 +185,34 @@ function linhaDaSessao(clientId: string, s: WtsSession) {
     user_id: s.userId ?? null,
     channel_id: s.channelId ?? null,
     contact_id: s.contactId ?? null,
-    wait_seconds: duracaoParaSegundos(s.timeWait),
+    // timeWait NÃO é o tempo até a 1ª resposta: a doc da Helena não define o campo, e medido nas mesmas sessões ele dá
+    // cerca de metade do tempo real (Dra. Juliana Paola, 30 dias: 5.014 s contra 10.955 s; auditoria de 01/11/2026).
+    // Fica em fila_segundos, com o rótulo do que é ("tempo na fila, medido pela WTS"). wait_seconds é a 1ª resposta
+    // calculada pelas mensagens (conversas-wts.ts, primeiraRespostaWts) e não é escrito aqui, para o upsert não apagar.
+    fila_segundos: duracaoParaSegundos(s.timeWait),
     service_seconds: duracaoParaSegundos(s.timeService),
     first_response_at: s.firstResponseAt ?? null,
+    sessao_tipo: textoCurto(s.type, 20),
+    sessao_origem: textoCurto(s.origin, 60),
+    sessao_utm: utmDaSessao(s.utm),
     updated_at: new Date().toISOString(),
     // Quem grava é o dono atual: a sessão que tinha ido para outra médica e voltou deixa de estar marcada como movida.
     movida_para_client_id: null,
     movida_em: null,
   };
+}
+
+const textoCurto = (v: unknown, max: number): string | null => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
+
+/** UTM da sessão v2 (origem do anúncio de clique para WhatsApp), só com os campos da doc e sem valor vazio. */
+export function utmDaSessao(v: unknown): Record<string, string> | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const out: Record<string, string> = {};
+  for (const k of ["sourceId", "source", "clid", "medium", "campaign", "content", "headline", "term", "referralUrl"]) {
+    const t = textoCurto((v as Record<string, unknown>)[k], 500);
+    if (t) out[k] = t;
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 /** Páginas por situação (IN_PROGRESS, PENDING) na releitura das abertas. */
@@ -214,13 +241,14 @@ export async function reconciliarAbertas(
   gravarLote: (lote: WtsSession[], onde: string) => Promise<void>,
   erro: (msg: string) => void,
   listar: typeof listarSessoesWts = listarSessoesWts,
-): Promise<{ abertas: number; fechadas: number }> {
+  donoDe?: (s: WtsSession) => string | null,
+): Promise<ResultadoReconciliacao> {
   const abertas = new Map<string, WtsSession>();
   for (const situacao of SITUACOES_ABERTAS) {
     for (let pag = 1; ; pag++) {
       if (pag > MAX_PAGINAS_ABERTAS) {
         erro(`releitura das sessões abertas parou no teto de ${MAX_PAGINAS_ABERTAS} páginas (${situacao}): nenhuma sessão foi dada como fechada nesta rodada`);
-        return { abertas: abertas.size, fechadas: 0 };
+        return { abertas: abertas.size, fechadas: 0, foraDoCliente: 0 };
       }
       const resposta = await listar<{ items: WtsSession[]; hasMorePages: boolean }>(token,
         `PageSize=${PAGE_SIZE}&PageNumber=${pag}&Status=${situacao}&OrderBy=createdat&OrderDirection=DESCENDING`);
@@ -240,11 +268,17 @@ export async function reconciliarAbertas(
     noNexo.push(...((data ?? []) as { client_id: string; session_id: string }[]));
     if ((data ?? []).length < 1000) break;
   }
-  const fechar = sessoesFechadasNaOrigem(noNexo, new Set(abertas.keys()));
-  if (fechar === null) {
+  const fechadasNaOrigem = sessoesFechadasNaOrigem(noNexo, new Set(abertas.keys()));
+  if (fechadasNaOrigem === null) {
     erro("a lista de sessões abertas veio vazia e o Nexo tem 20 ou mais abertas: nenhuma sessão foi dada como fechada nesta rodada");
-    return { abertas: abertas.size, fechadas: 0 };
+    return { abertas: abertas.size, fechadas: 0, foraDoCliente: 0 };
   }
+  // Aberta na WTS, mas não é mais deste cliente: mudou para uma equipe sem dono no Nexo (ou ambígua). A passada acima não
+  // a regrava (não tem dono) e a cópia antiga seguia "aberta" para sempre no cliente de antes (Dra. Mariela Muniz,
+  // 01/11/2026: 8 abertas no Nexo contra 5 na WTS depois de um sync sem erro). Sai da fila aberta do cliente antigo.
+  // Quando há outro dono, a cópia já foi apagada por gravarLote; aqui sobra só o caso sem dono.
+  const foraDoCliente = donoDe ? sessoesQueSairamDoCliente(noNexo, abertas, donoDe) : [];
+  const fechar = [...fechadasNaOrigem, ...foraDoCliente];
   const porCliente = new Map<string, string[]>();
   for (const s of fechar) porCliente.set(s.client_id, [...(porCliente.get(s.client_id) ?? []), s.session_id]);
   let fechadas = 0;
@@ -257,7 +291,21 @@ export async function reconciliarAbertas(
       fechadas += lote.length;
     }
   }
-  return { abertas: abertas.size, fechadas };
+  return { abertas: abertas.size, fechadas, foraDoCliente: foraDoCliente.length };
+}
+
+export type ResultadoReconciliacao = { abertas: number; fechadas: number; foraDoCliente: number };
+
+/** Abertas no Nexo cuja sessão segue aberta na WTS mas cujo dono atual (pela regra do sync) não é mais esse cliente. */
+export function sessoesQueSairamDoCliente<T extends { client_id: string; session_id: string }>(
+  abertasNoNexo: T[],
+  abertasNaFonte: Map<string, WtsSession>,
+  donoDe: (s: WtsSession) => string | null,
+): T[] {
+  return abertasNoNexo.filter((r) => {
+    const s = abertasNaFonte.get(r.session_id);
+    return !!s && donoDe(s) !== r.client_id;
+  });
 }
 
 /** Abertas no Nexo que não estão na lista de abertas da WTS. null quando a lista veio vazia e o Nexo tem 20 ou mais. */
@@ -381,12 +429,16 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
     }
 
     // Agrupa por dono antes de gravar: um upsert por cliente, não por linha.
+    // Dono da sessão: card, depois equipe não ambígua, depois o único curinga. null = sem dono no Nexo.
+    const donoDe = (s: WtsSession): string | null => {
+      const peloCard = donoPeloCard.get(s.id);
+      if (!peloCard && s.departmentId && equipesAmbiguas.has(s.departmentId)) return null;
+      return peloCard ?? (s.departmentId ? porEquipe.get(s.departmentId) : undefined) ?? curinga?.id ?? null;
+    };
     const gravarLote = async (lote: WtsSession[], onde: string) => {
       const porDono = new Map<string, ReturnType<typeof linhaDaSessao>[]>();
       for (const s of lote) {
-        const peloCard = donoPeloCard.get(s.id);
-        if (!peloCard && s.departmentId && equipesAmbiguas.has(s.departmentId)) continue;
-        const donoId = peloCard ?? (s.departmentId ? porEquipe.get(s.departmentId) : undefined) ?? curinga?.id;
+        const donoId = donoDe(s);
         // Sem equipe reivindicada e sem curinga, a conversa não tem dono.
         // Descartar em silêncio esconderia volume, então ela simplesmente
         // não é gravada e isso aparece na diferença entre total e somatório.
@@ -485,11 +537,18 @@ export async function runWtsSync(env: WtsSyncEnv): Promise<WtsSyncResult[]> {
           if (!resposta.hasMorePages || resposta.items.length === 0) break;
         }
       }
-      await reconciliarAbertas(supabase, contaToken, donos.map((c) => c.id), gravarLote, (msg) => {
-        for (const r of res.values()) r.errors.push(msg);
-      });
     } catch (err) {
       for (const r of res.values()) r.errors.push(err instanceof Error ? err.message : String(err));
+    }
+    // A releitura das abertas roda mesmo quando uma passada acima falhou: ela lê a lista inteira de abertas por conta
+    // própria. Antes ficava no mesmo try, e uma falha na leitura das recentes deixava as fechadas abertas no Nexo.
+    try {
+      const rec = await reconciliarAbertas(supabase, contaToken, donos.map((c) => c.id), gravarLote, (msg) => {
+        for (const r of res.values()) r.errors.push(msg);
+      }, listarSessoesWts, donoDe);
+      for (const r of res.values()) r.reconciliacao = rec;
+    } catch (err) {
+      for (const r of res.values()) r.errors.push(`releitura das abertas: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     for (const r of res.values()) {

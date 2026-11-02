@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { statusDoCliente, tomDaFonte, ddmm, atrasoDaFonte, type LinhaFonte } from "@/lib/saude-fontes";
 import { supabase } from "@/integrations/supabase/client";
 import { motivoDaLinha, ROTULO_DONO } from "@/lib/motivos";
+import { textoDivergencia } from "@/lib/status-fonte";
 
 // Selo de frescura: "Dados: Instagram até 30/09 · Anúncios até 30/09 · CRM até
 // 01/10". A data vem do DADO (RPC client_sync_status, ou a leitura direta das tabelas
@@ -50,7 +51,7 @@ export function SyncFreshnessBadge({ clientId, compacto = false }: { clientId: s
 
   if (compacto) {
     const pior = linhas.reduce((a, l) => (PESO[tomDaFonte(l)] > PESO[a] ? tomDaFonte(l) : a), "bom" as string);
-    const resumo = linhas.map((l) => `${ROTULOS[l.fonte] ?? "Comentários"}${l.data_ate ? ` até ${ddmm(l.data_ate)}` : " (erro)"}`).join(" · ");
+    const resumo = linhas.map((l) => `${ROTULOS[l.fonte] ?? "Comentários"}${l.data_ate ? ` até ${ddmm(l.data_ate)}` : " (erro)"}${l.divergencia ? ` (${textoDivergencia(l.divergencia)})` : ""}`).join(" · ");
     return (
       <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap" style={{ color: "var(--text-dim)" }} title={resumo}>
         <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: COR[pior] }} />
@@ -73,7 +74,7 @@ export function SyncFreshnessBadge({ clientId, compacto = false }: { clientId: s
           {ROTULOS[l.fonte] ?? "Comentários"}
           {/* Fonte alimentada à mão (planilha): a data de análise não é "atualizado até", então não aparece. */}
           {l.motivo_dono === "manual" ? " (planilha)" : l.data_ate ? ` até ${ddmm(l.data_ate)}` : ""}
-          {tomDaFonte(l) === "ruim" ? (motivoDaLinha(l)?.dono === "nos" || !motivoDaLinha(l) ? " (erro)" : " (ver motivo)") : ""}
+          {l.divergencia ? ` (${textoDivergencia(l.divergencia)})` : tomDaFonte(l) === "ruim" ? (motivoDaLinha(l)?.dono === "nos" || !motivoDaLinha(l) ? " (erro)" : " (ver motivo)") : ""}
         </span>
       ))}
     </span>
@@ -99,7 +100,7 @@ function descrever(rotulo: string, l: LinhaFonte | undefined, conectada: boolean
   const tom = tomDaFonte(l);
   const m = motivoDaLinha(l);
   const ate = `até ${ddmm(l.data_ate)}`;
-  const texto =
+  const texto = l.divergencia ? `${ate} · ${textoDivergencia(l.divergencia)}` :
     tom === "bom" ? ate
       : tom === "neutro" ? `${ate} · sem movimento`
         : tom === "atencao" && atraso <= 1 ? `${ate} · aviso em uma conta`
@@ -109,6 +110,7 @@ function descrever(rotulo: string, l: LinhaFonte | undefined, conectada: boolean
     tom === "bom" ? "Em dia (a Meta fecha os números de ontem e hoje ao longo do dia)." : null,
     tom === "neutro" ? "A atualização rodou sem erro; a origem só não teve atividade nova. Não é falha técnica." : null,
     m ? `${ROTULO_DONO[m.dono]}: ${m.texto}` : l.last_error ? `Erro na última tentativa: ${l.last_error}` : null,
+    l.divergencia ? `A última conferência ao vivo achou ${l.divergencia.n.toLocaleString("pt-BR")} de diferença entre o Nexo e a fonte. O aviso some quando a próxima conferência bater.` : null,
   ]
     .filter(Boolean)
     .join(" ");

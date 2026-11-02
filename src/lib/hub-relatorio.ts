@@ -4,6 +4,7 @@
 // Seção sem fonte é omitida do texto e listada em `omitidos`.
 import { analyzeFollowers, buildIdeias, type Ideia } from "@/lib/hub-conteudo";
 import { fmtFormatKey } from "@/lib/report-metrics";
+import { primeiraRespostaConfiavel } from "./espera-atendimento.js";
 
 export interface RelatorioInput {
   clientName: string;
@@ -127,8 +128,11 @@ export function buildRelatorio(inp: RelatorioInput): RelatorioResult {
     omitidos.push("atendimento (conectado, mas sem atendimentos no período)");
   } else {
     let t = `Atendimento: ${fmtN(num(inp.wts.atendimentos))} atendimentos no WhatsApp, com ${fmtN(num(inp.wts.contatos_distintos))} contatos diferentes`;
-    if (inp.wts.espera_mediana_seg != null && num(inp.wts.espera_cobertura) > 0) {
-      t += `. A mediana do tempo até a primeira resposta foi de ${duracao(num(inp.wts.espera_mediana_seg))}`;
+    const resposta = primeiraRespostaConfiavel(inp.wts);
+    if (resposta != null) {
+      t += `. A mediana do tempo até a primeira resposta foi de ${duracao(resposta)}`;
+    } else if (num(inp.wts.espera_cobertura) > 0) {
+      t += `. O tempo até a primeira resposta ainda tem amostra pequena (${fmtN(num(inp.wts.espera_cobertura))} atendimentos medidos)`;
     }
     bloco("atendimento", "Atendimento", t + ".");
   }

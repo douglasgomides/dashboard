@@ -672,7 +672,9 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
       const esp = r.espera_mediana_seg != null ? num(r.espera_mediana_seg) : null;
       // Espera dentro do aceitável: o relatório antigo mostrava sempre que medida; continua no resumo.
       // Acima de 15 min ela vira ponto de atenção (abaixo), como já era.
-      const esperaBoa = esp != null && medidos > 0 && esp <= ESPERA_ALTA_SEG;
+      // Com menos de MIN_ESPERA_MEDIDA atendimentos medidos, nem a frase boa sai: 1 caso em 50 virava "metade dos
+      // pacientes" (Dra. Rafaela, auditoria 2 de 01/11/2026).
+      const esperaBoa = esp != null && medidos >= MIN_ESPERA_MEDIDA && esp <= ESPERA_ALTA_SEG;
       resumo.push({
         id: "wts",
         curto: `${fmtN(at)} atendimentos no WhatsApp${esperaBoa ? `; metade respondida em até ${fmtDuracao(esp!)}` : ""}`,
@@ -680,6 +682,7 @@ export function buildRelatorioEnvio(inp: EnvioInput): RelatorioEnvio {
         evidencia: esperaBoa ? `${medidos} atendimentos com tempo de espera medido, de ${fmtN(at)}.` : undefined,
       });
       if (esp == null || medidos <= 0) omitidos.push("tempo até a primeira resposta no WhatsApp (nenhum atendimento com espera medida)");
+      else if (medidos < MIN_ESPERA_MEDIDA) omitidos.push(`tempo até a primeira resposta no WhatsApp (amostra pequena: ${fmtN(medidos)} atendimento${medidos === 1 ? "" : "s"} medido${medidos === 1 ? "" : "s"}, mínimo ${MIN_ESPERA_MEDIDA})`);
       if (cov.fracao < 0.5) {
         dadoOk = false;
         limitar({ id: "wts-dias", area: "comercial", texto: `Houve atendimento registrado em só ${cov.com} de ${cov.total} dias. Se a clínica atende todo dia útil, parte das conversas pode não estar chegando ao painel.`, resolve: "equipe_hub", comoResolver: "Conferir se todos os números e departamentos estão ligados." }, `WhatsApp com registro em ${cov.com} de ${cov.total} dias`);

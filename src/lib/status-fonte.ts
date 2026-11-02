@@ -11,6 +11,7 @@
 //   (CRM e WhatsApp só ganham dado em dia de expediente: para eles os dias contados são úteis, sem fim de semana e feriado)
 //   (Instagram: a Meta só fecha o dia 2 dias depois, então o último dia completo é sempre "hoje menos 2"; esses 2 dias não contam como atraso)
 //   cinza     não ligado (ou marcado como "não usa", quando é intencional)
+//   amarelo/vermelho "Diverge da fonte"  a última conferência ao vivo da fonte deu diferença (vermelho com 10% e 20 ou mais)
 //
 // "Ligado" também é uma regra só: há cadastro da fonte OU já existe dado gravado OU a fonte é lida
 // por planilha manual. Se a tabela mostra dado, a fonte está ligada em qualquer tela.
@@ -37,6 +38,39 @@ export interface EntradaStatus {
   motivo_dono?: string | null;
   /** A equipe marcou que o cliente não usa esta fonte de propósito. */
   naoUsa?: boolean;
+  /**
+   * Última conferência ao vivo desta fonte (conferencia_ao_vivo) com alguma métrica fora da tolerância: maior diferença
+   * entre o Nexo e a fonte e a fração dela sobre o número da fonte. Sem rodada com falha: null.
+   */
+  divergencia?: Divergencia | null;
+}
+
+export interface Divergencia {
+  /** Maior diferença absoluta (Nexo menos fonte) entre as métricas que falharam na última rodada. */
+  n: number;
+  /** n dividido pelo número da fonte, quando ele é maior que zero. */
+  fracao: number | null;
+  /** Quando foi a rodada (ISO). */
+  em: string;
+}
+
+/** A partir desta fração da fonte E desta diferença absoluta, a divergência pinta a fonte de vermelho (abaixo, amarelo). */
+export const DIVERGENCIA_GRAVE = { fracao: 0.1, minimo: 20 };
+
+export function textoDivergencia(d: Divergencia): string {
+  return `diverge da fonte: ${d.n.toLocaleString("pt-BR")}`;
+}
+
+// Conferência ao vivo com falha: a fonte não fica verde nem "sem movimento" enquanto a próxima rodada não bater
+// (Dra. Marcella Brasil, 01/11/2026: 824 leads abertos no Nexo contra 673 no FlwChat e selo verde o dia inteiro).
+function comDivergencia(st: StatusFonte, d: Divergencia | null | undefined): StatusFonte {
+  if (!d || d.n <= 0 || !st.ligado || st.naoUsa) return st;
+  const grave = d.fracao != null && d.fracao >= DIVERGENCIA_GRAVE.fracao && d.n >= DIVERGENCIA_GRAVE.minimo;
+  const detalhe = `${st.detalhe} · ${textoDivergencia(d)}`;
+  const motivo = st.motivo ?? `A última conferência ao vivo achou diferença com a fonte (${d.n.toLocaleString("pt-BR")}${d.fracao != null ? `, ${Math.round(d.fracao * 100)}%` : ""}). Some quando a próxima rodada bater.`;
+  if (st.cor === "vermelho") return { ...st, detalhe, motivo };
+  if (grave) return { ...st, cor: "vermelho", rotulo: "Diverge da fonte", detalhe, motivo, peso: 3 };
+  return { ...st, cor: "amarelo", rotulo: st.cor === "amarelo" ? st.rotulo : "Diverge da fonte", detalhe, motivo, peso: Math.max(st.peso, 2) };
 }
 
 export interface StatusFonte {
@@ -89,6 +123,10 @@ export function fonteLigada(e: Pick<EntradaStatus, "cadastro" | "data_ate" | "mo
 }
 
 export function statusDaFonte(e: EntradaStatus, hoje: string = hojeBrasilia()): StatusFonte {
+  return comDivergencia(statusSemConferencia(e, hoje), e.divergencia);
+}
+
+function statusSemConferencia(e: EntradaStatus, hoje: string): StatusFonte {
   const ligado = fonteLigada(e);
   const motivo = e.motivo?.trim() || null;
   if (!ligado) {
@@ -113,6 +151,10 @@ export function statusDaFonte(e: EntradaStatus, hoje: string = hojeBrasilia()): 
   // status não pode ficar verde só porque uma conta está em dia (HOMS: uma conta em dia, outra parada há 39 dias).
   if (dias <= 1 && e.fonte === "anuncios" && motivo && donoAviso) {
     return { ...base, cor: "amarelo", rotulo: "Atenção", detalhe: `até ${data} · uma conta com aviso`, peso: 2 };
+  }
+  // WhatsApp com aviso nosso (ex.: parte das mensagens não foi lida na última rodada): não fica verde.
+  if (dias <= 1 && e.fonte === "atendimento" && motivo && e.motivo_dono === "nos") {
+    return { ...base, cor: "amarelo", rotulo: "Atenção", detalhe: `até ${data} · aviso na importação`, peso: 2 };
   }
   if (dias <= 1) return { ...base, cor: "verde", rotulo: "Em dia", detalhe: `até ${data}`, peso: 1 };
   // Sem movimento: a atualização rodou sem erro hoje ou ontem e não há aviso de parada. A origem só não teve atividade;

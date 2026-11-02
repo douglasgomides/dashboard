@@ -29,7 +29,7 @@ do modo de compatibilidade (`-offer-` + `parentInvoiceId`) sem somar em dobro. A
 
 | Corpo | Campos lidos | Código |
 |---|---|---|
-| webhook (`{type, event}`, ou só `event`, ou `{body:{event}}`) | `type` ou `event.type`; `event.invoice.id, status, type (sell/renewal/upgrade), parentInvoiceId` (ou `-offer-` no id), `amount.totalCents` (e `subtotalCents` só na falta), `version`, `paidAt, refundedAt, chargebackAt, updatedAt, paymentMethod, currency, payer.phone` (só vira chave), `paymentSession.utm`; `event.product` ou `products[0]` | `checkout-vendas.ts:194-264` |
+| webhook (`{type, event}`, ou só `event`, ou `{body:{event}}`) | `type` ou `event.type`; `event.invoice.id, status, type (sell/renewal/upgrade), parentInvoiceId` (ou `-offer-` no id), `amount.totalCents` (e `subtotalCents` só na falta), `version`, `statusAt[]` (`when` + `status`: data do pagamento = 1º `paid`, do reembolso = último `refunded`/`chargeback`), `modifiedAt` (última alteração; desempate da ordem), `paidAt, refundedAt, chargebackAt, updatedAt` só como reserva (não existem no webhook v2 oficial), `paymentMethod, currency, payer.phone` (só vira chave), `paymentSession.utm`; `event.product` ou `products[0]` | `checkout-vendas.ts:194-264` |
 | carga (`[...]` ou `{vendas:[...]}`) | `externo_id, status, tipo, metodo, valor_centavos, moeda, pago_em, reembolsado_em, produto, oferta_id, telefone, parent_externo_id, utm` | `checkout-vendas.ts:266-302` |
 
 ## 2. Significado de cada número
@@ -81,7 +81,7 @@ do modo de compatibilidade (`-offer-` + `parentInvoiceId`) sem somar em dobro. A
 | Status `disputed` (doc) tratado como `in_protest` e contado como venda | Decisão pendente | `checkout-vendas.ts:44, 85` |
 | Reembolso de `list_refunds` sem id da fatura, em reais | Parcial (conversão certa; ligação pendente) | `scripts/carga-hubla-passado.ts` |
 | Renovação de assinatura não é paciente novo | **Não** (regra de negócio) | `supabase/migrations/20261102130000_hubla_cobertura.sql` |
-| Webhook sem `paidAt` usa `updatedAt` ou a hora do recebimento | Parcial | `checkout-vendas.ts:225` |
+| Datas do webhook v2 em `statusAt[]`/`modifiedAt`, não em `paidAt`/`updatedAt` | Sim (desde 02/11/2026; hora do recebimento só sem nenhuma data) | `checkout-vendas.ts` (`quandoStatusHubla`), `scripts/test-contrato-hubla.ts` com amostra no formato oficial |
 | Mesma fatura chegando mais de uma vez | Sim (upsert) | `checkout-vendas.ts:353` |
 | Dado pessoal do comprador | Sim (removido) | `checkout-vendas.ts:112` |
 | Hubla parada mostra zero em vez de "não medido" | Sim desde `20261102130000` (Hubla só a partir da primeira venda gravada) | `supabase/migrations/20261102130000_hubla_cobertura.sql` |

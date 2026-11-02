@@ -19,6 +19,7 @@ import { ConversasWhatsapp } from "@/components/conversas-whatsapp";
 import { useAuth } from "@/hooks/use-auth";
 import { useClientRole } from "@/hooks/use-client-role";
 import { RecuperarHoje } from "@/components/agentes-ia";
+import { esperaDoAtendimento } from "@/lib/espera-atendimento";
 
 // Atendimento no WhatsApp: uma tela só com duas abas. "Números" (volume, espera, equipe) e, para a equipe,
 // "Conversas e auditoria" (cada conversa com a leitura e a auditoria comercial), que antes era /conversas.
@@ -157,7 +158,8 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
 
   const semRoteamento = n(resumo?.sem_roteamento);
   const fatiaSemRoteamento = atendimentos > 0 ? (semRoteamento / atendimentos) * 100 : 0;
-  const coberturaEspera = n(resumo?.espera_cobertura);
+  // 1ª resposta pelas mensagens com amostra mínima; sem ela, a fila da WTS com o rótulo certo; sem nada, "não medido".
+  const espera = esperaDoAtendimento(resumo);
 
   const serie = (volumeDiario ?? []).map((r) => ({
     dia: String(r.dia).slice(5),
@@ -175,12 +177,14 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
       </div>
 
       <ResumoExecutivo
-        tom={(nOrNull(resumo?.espera_mediana_seg) ?? 0) > 3600 || fatiaSemRoteamento > 40 ? "atencao" : "bom"}
+        tom={(espera.tipo === "resposta" && espera.seg > 3600) || fatiaSemRoteamento > 40 ? "atencao" : "bom"}
         frases={[
           `${fmtNum(atendimentos)} atendimentos de ${fmtNum(n(resumo?.contatos_distintos))} pessoas no período.`,
-          nOrNull(resumo?.espera_mediana_seg) == null
-            ? "Sem dado de espera até a 1ª resposta neste período."
-            : `Na metade dos atendimentos, a 1ª resposta veio em até ${dur(nOrNull(resumo?.espera_mediana_seg))}${(nOrNull(resumo?.espera_mediana_seg) ?? 0) > 3600 ? ": acima de 1 hora. Resposta demorada pode fazer o paciente procurar outra clínica." : "."}`,
+          espera.tipo === "resposta"
+            ? `Na metade dos atendimentos medidos, a 1ª resposta de uma pessoa veio em até ${dur(espera.seg)}${espera.seg > 3600 ? ": acima de 1 hora. Resposta demorada pode fazer o paciente procurar outra clínica." : "."}`
+            : espera.tipo === "fila"
+              ? `Tempo até a 1ª resposta ainda sem amostra (${espera.respostaMedidos > 0 ? `${fmtNum(espera.respostaMedidos)} medidos` : "não medido"}). A WTS informa ${dur(espera.seg)} de tempo na fila (mediana), que não é a mesma coisa.`
+              : `Tempo até a 1ª resposta: ${espera.nota} neste período.`,
           fatiaSemRoteamento > 40 ? `${fatiaSemRoteamento.toFixed(0)}% das conversas não foram para nenhuma equipe: organizar o roteamento é o primeiro ajuste.` : "",
         ]}
       />
@@ -205,9 +209,9 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Atendimentos" value={fmtNum(atendimentos)} hint={`${fmtNum(n(resumo?.contatos_distintos))} pessoas diferentes`} />
         <KpiCard
-          label="Espera até a 1ª resposta"
-          value={dur(nOrNull(resumo?.espera_mediana_seg))}
-          hint={`mediana de ${fmtNum(coberturaEspera)} atendimentos com o dado`}
+          label={espera.rotulo}
+          value={espera.tipo === "sem" ? (espera.medidos > 0 ? "amostra pequena" : "não medido") : dur(espera.seg)}
+          hint={espera.nota}
         />
         <KpiCard
           label="Tempo até fechar"
@@ -255,11 +259,13 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
         abrir e encerrar a conversa, não o tempo de conversa.{" "}
         {fila && avisoLote(fila) ? `${avisoLote(fila)} Por isso o número descreve o hábito de arrumar a fila, não o atendimento. ` : ""}
         A métrica que vale olhar aqui é a{" "}
-        <strong style={{ color: "var(--text)" }}>espera até a 1ª resposta</strong>.
+        <strong style={{ color: "var(--text)" }}>espera até a 1ª resposta</strong>, calculada pelas mensagens (da 1ª
+        mensagem do paciente até a 1ª mensagem de uma pessoa da clínica, sem contar robô e mensagem automática). O
+        “tempo na fila” que a WTS informa é outra medida e aparece só quando a 1ª resposta ainda não tem amostra.
       </div>
 
       <div className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <div className="mb-3 text-sm font-semibold">Volume por dia e espera até a 1ª resposta</div>
+        <div className="mb-3 text-sm font-semibold">Volume por dia e espera até a 1ª resposta (pelas mensagens)</div>
         <div className="grafico-caixa" style={{ height: 280 }}>
           <ResponsiveContainer>
             <ComposedChart data={serie}>
@@ -292,7 +298,7 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
                 <th className="py-2 text-left font-medium">Equipe</th>
                 <th className="py-2 text-right font-medium">Atendimentos</th>
                 <th className="py-2 text-right font-medium">Fatia</th>
-                <th className="py-2 text-right font-medium">Espera</th>
+                <th className="py-2 text-right font-medium">1ª resposta</th>
                 <th className="py-2 text-right font-medium">Até fechar</th>
               </tr>
             </thead>
@@ -302,7 +308,7 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
                   <td data-label="Equipe" className="py-2">{r.departamento}</td>
                   <td data-label="Atendimentos" className="py-2 text-right">{fmtNum(n(r.atendimentos))}</td>
                   <td data-label="Fatia" className="py-2 text-right">{nOrNull(r.fatia) === null ? "—" : `${n(r.fatia).toFixed(1)}%`}</td>
-                  <td data-label="Espera" className="py-2 text-right">{dur(nOrNull(r.espera_mediana_seg))}</td>
+                  <td data-label="1ª resposta" className="py-2 text-right">{dur(nOrNull(r.espera_mediana_seg))}</td>
                   <td data-label="Até fechar" className="py-2 text-right">{dur(nOrNull(r.atendimento_mediano_seg))}</td>
                 </tr>
               ))}
@@ -320,7 +326,7 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
                 <th className="py-2 text-left font-medium">Atendente</th>
                 <th className="py-2 text-right font-medium">Atendimentos</th>
                 <th className="py-2 text-right font-medium">Concluídos</th>
-                <th className="py-2 text-right font-medium">Espera</th>
+                <th className="py-2 text-right font-medium">1ª resposta</th>
                 <th className="py-2 text-right font-medium">Até fechar</th>
               </tr>
             </thead>
@@ -330,7 +336,7 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
                   <td data-label="Atendente" className="py-2">{r.agente}</td>
                   <td data-label="Atendimentos" className="py-2 text-right">{fmtNum(n(r.atendimentos))}</td>
                   <td data-label="Concluídos" className="py-2 text-right">{fmtNum(n(r.concluidos))}</td>
-                  <td data-label="Espera" className="py-2 text-right">{dur(nOrNull(r.espera_mediana_seg))}</td>
+                  <td data-label="1ª resposta" className="py-2 text-right">{dur(nOrNull(r.espera_mediana_seg))}</td>
                   <td data-label="Até fechar" className="py-2 text-right">{dur(nOrNull(r.atendimento_mediano_seg))}</td>
                 </tr>
               ))}
