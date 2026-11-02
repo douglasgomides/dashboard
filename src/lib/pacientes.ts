@@ -71,6 +71,8 @@ export interface PacientesPeriodo {
   tem_conversas: boolean;
   tem_leitura_ia: boolean;
   tem_funil_prospeccao: boolean;
+  /** false quando o CRM do cliente nunca registrou um ganho (Digisac): "Fecharam" não é medido (20261102250000). */
+  crm_registra_venda?: boolean;
   numeros: Record<ChaveNumero, Numero>;
   listas: Record<ChaveNumero, Lista>;
 }
@@ -97,7 +99,7 @@ export const TEXTO_NUMERO: Record<ChaveNumero, { rotulo: string; legenda: string
   leads_novos: {
     rotulo: "Pessoas novas",
     legenda: "chegaram pela primeira vez à clínica",
-    fonte: "CRM da clínica: pessoas cujo primeiro registro na clínica foi no período. Não conta quem já era paciente nem quem a equipe foi buscar (prospecção ativa, que aparece à parte). A origem vem do CRM; sem ela, da leitura da conversa. A mesma pessoa com dois cadastros no CRM que o Nexo já ligou (mesmo telefone ou mesma pessoa) conta uma vez: por isso o número pode ficar um pouco abaixo de \"Novos contatos no CRM\" da tela Resultados, que conta cada cadastro (HOMS, outubro: 1.280 aqui e 1.287 lá).",
+    fonte: "CRM da clínica: pessoas cujo primeiro registro na clínica foi no período. Não conta quem já era paciente nem quem a equipe foi buscar (prospecção ativa, que aparece à parte). No Kommo, o contato que ainda está na caixa de entrada (Incoming leads, não aceito pela equipe) também não conta até ser aceito; ele aparece à parte como \"aguardando aceite\". A origem vem do CRM; sem ela, da leitura da conversa. A mesma pessoa com dois cadastros no CRM que o Nexo já ligou (mesmo telefone ou mesma pessoa) conta uma vez: por isso o número pode ficar um pouco abaixo de \"Novos contatos no CRM\" da tela Resultados, que conta cada cadastro (HOMS, outubro: 1.280 aqui e 1.287 lá).",
   },
   antigos: {
     rotulo: "Pacientes antigos",
@@ -280,7 +282,7 @@ export const AVISO_TELA_HONESTA =
 
 const motivoComparecimentoSemUso = (agendaram: number, fecharam: number) => {
   const partes = [agendaram > 0 ? `${agendaram} pessoas agendaram` : null, fecharam > 0 ? `${fecharam} fecharam` : null].filter(Boolean);
-  return `Nenhum card passou pela etapa de comparecimento no período, enquanto ${partes.join(" e ")}. A equipe não está usando essa etapa, então o número não é medido.`;
+  return `Nenhum card passou pela etapa de comparecimento no período, enquanto ${partes.join(" e ")}. O mais comum é a etapa não estar sendo usada; por isso o número não é medido.`;
 };
 
 /**
@@ -288,7 +290,7 @@ const motivoComparecimentoSemUso = (agendaram: number, fecharam: number) => {
  * nada depois): sem funil de prospecção, "Abordados" não se aplica; comparecimento 0 com agendamento ou venda no
  * período é "não medido". Devolve uma cópia; aplicar duas vezes dá o mesmo resultado.
  */
-export function ajustarNumeros<T extends Pick<PacientesPeriodo, "numeros"> & Partial<Pick<PacientesPeriodo, "tem_funil_prospeccao">>>(d: T): T {
+export function ajustarNumeros<T extends Pick<PacientesPeriodo, "numeros"> & Partial<Pick<PacientesPeriodo, "tem_funil_prospeccao" | "crm_registra_venda">>>(d: T): T {
   const numeros = { ...d.numeros };
   const ab = numeros.abordados;
   if (ab && typeof ab.valor === "number" && d.tem_funil_prospeccao === false)
@@ -301,7 +303,33 @@ export function ajustarNumeros<T extends Pick<PacientesPeriodo, "numeros"> & Par
       valor: null, fonte: "crm", motivo_sem_dado: motivoComparecimentoSemUso(ag, fe), responsavel: "comercial", nao_medido_por: "etapa_sem_uso",
       o_que_fazer: "Mover o card para a etapa de comparecimento (consulta realizada) quando o paciente for à consulta, antes de marcar como ganho.",
     };
+  // CRM que nunca registra ganho (Digisac): 0 em "Fecharam" não é medido (mesma regra da migração 20261102250000).
+  const fc = numeros.fecharam;
+  if (fc && fc.fonte === "crm" && fc.valor === 0 && d.crm_registra_venda === false)
+    numeros.fecharam = {
+      valor: null, fonte: "crm", motivo_sem_dado: "O CRM da clínica não registra venda (nenhum card ganho), então não dá para contar quem fechou.",
+      responsavel: "equipe_hub", nao_medido_por: "crm_sem_venda",
+    };
   return { ...d, numeros };
+}
+
+/** Mudança de 02/11 (docs/notas-de-versao.md): aparece só quando atinge algum número da tela. */
+export const AVISO_DEFINICOES_0211 =
+  "Mudou em 02/11: contato parado na caixa de entrada do Kommo (Incoming leads, ainda não aceito pela equipe) não conta como pessoa nova até ser aceito e aparece à parte como \"aguardando aceite\"; \"Fecharam\" aparece como \"Não medido\" quando o CRM nunca registra venda; e \"Interagiram no Instagram\" aparece como \"Não medido\" quando os comentários pararam de chegar pelas conversas.";
+
+/** "1.196 aguardando aceite na caixa de entrada do Kommo (fora da conta)", ou null. */
+export function textoAguardandoAceite(numero: Numero | undefined): string | null {
+  const n = Number(numero?.aguardando_aceite ?? 0);
+  if (!numero || numero.valor == null || !(n > 0)) return null;
+  return `aguardando aceite: ${n.toLocaleString("pt-BR")} na caixa de entrada do Kommo (contam quando a equipe aceitar)`;
+}
+
+export function avisoDefinicoes0211(d: Pick<PacientesPeriodo, "numeros">): string | null {
+  const n = d.numeros ?? ({} as PacientesPeriodo["numeros"]);
+  const atinge = Number(n.leads_novos?.aguardando_aceite ?? 0) > 0
+    || n.fecharam?.nao_medido_por === "crm_sem_venda"
+    || n.engajaram_instagram?.nao_medido_por === "fonte_parou";
+  return atinge ? AVISO_DEFINICOES_0211 : null;
 }
 
 /** Rótulo do cartão sem número: "Não se aplica" (não existe na clínica), "Não medido" (existe e não é medido) ou "Sem dado". */

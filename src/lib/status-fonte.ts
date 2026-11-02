@@ -122,6 +122,9 @@ export function fonteLigada(e: Pick<EntradaStatus, "cadastro" | "data_ate" | "mo
   return e.cadastro || !!e.data_ate || e.motivo_dono === "manual";
 }
 
+/** Limite de uso da Meta: códigos 4, 17, 32, 613 e 80000-80014, ou o texto que o sync grava. */
+export const ERRO_TEMPORARIO_META = /limite de uso|rate limit|too many calls|request limit|"code":\s*(4|17|32|613|800\d\d)\b|c[oó]digo (4|17|32|613|800\d\d)\b/i;
+
 export function statusDaFonte(e: EntradaStatus, hoje: string = hojeBrasilia()): StatusFonte {
   return comDivergencia(statusSemConferencia(e, hoje), e.divergencia);
 }
@@ -145,6 +148,11 @@ function statusSemConferencia(e: EntradaStatus, hoje: string): StatusFonte {
   if (dias == null) return { ...base, cor: "vermelho", rotulo: erro ? "Erro" : "Sem dado", detalhe: "Nenhum dado gravado ainda", peso: 3 };
   const un = contaDiasUteis(e.fonte) ? "útil" : "";
   const quando = `até ${data} · ${dias === 0 ? "hoje" : dias === 1 ? `1 dia${un ? " útil" : ""} sem dado novo` : `${dias} dias${un ? " úteis" : ""} sem dado novo`}`;
+  // Limite de uso da Meta (temporário, libera em minutos) com dado em dia: amarelo, não "Erro" vermelho. Só fica
+  // vermelho se o dado parar (auditoria 01/11/2026: Douglas Gomides, anúncios até hoje e "Erro técnico").
+  if (erro && dias <= 1 && ERRO_TEMPORARIO_META.test(erro)) {
+    return { ...base, cor: "amarelo", rotulo: "Atenção", detalhe: `até ${data} · a Meta limitou a leitura por alguns minutos`, peso: 2 };
+  }
   if (erro) return { ...base, cor: "vermelho", rotulo: "Erro", detalhe: quando, peso: 3 };
   const donoAviso = e.motivo_dono && e.motivo_dono !== "origem" && e.motivo_dono !== "manual" ? e.motivo_dono : null;
   // Anúncios: o "até" é o da conta mais recente. Se outra conta do cliente tem aviso gravado (parada, pagamento), o

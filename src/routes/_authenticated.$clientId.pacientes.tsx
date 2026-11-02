@@ -27,6 +27,8 @@ import {
   avisoSemEtiquetaMedico,
   avisoNaoMedido,
   avisoTelaHonesta,
+  avisoDefinicoes0211,
+  textoAguardandoAceite,
   avisoAgendouMenosQueFechou,
   textoNaoMedido,
   notaCrmPorMedico,
@@ -131,6 +133,9 @@ function PacientesDoPeriodo() {
         {avisoTelaHonesta(d) && (
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>{avisoTelaHonesta(d)}</p>
         )}
+        {avisoDefinicoes0211(d) && (
+          <p className="text-xs" style={{ color: "var(--text-dim)" }}>{avisoDefinicoes0211(d)}</p>
+        )}
         {d.cliente_de_teste && (
           <p className="text-xs" style={{ color: "var(--warn, var(--muted))" }}>
             Clínica de teste: estes números não entram nas somas da carteira.
@@ -154,7 +159,7 @@ function PacientesDoPeriodo() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
           <span className="font-medium">{TEXTO_NUMERO.engajaram_instagram.rotulo}:</span>
           {eng.valor == null ? (
-            <span style={{ color: "var(--text-dim)" }}>sem dado. {eng.motivo_sem_dado}</span>
+            <span style={{ color: "var(--text-dim)" }}>{textoNaoMedido(eng).toLowerCase()}. {eng.motivo_sem_dado}</span>
           ) : (
             <>
               <button type="button" className="font-semibold underline" onClick={() => abrir("engajaram_instagram")} aria-expanded={aberta === "engajaram_instagram"}>
@@ -245,6 +250,7 @@ function NumeroGrande({ chave, numero, ativo, onAbrir }: { chave: ChaveNumero; n
             <span className="text-3xl font-semibold tabular-nums leading-none">{fmt(numero!.valor)}</span>
             <span className="text-xs" style={{ color: "var(--text-dim)" }}>{legendaDoNumero(chave, numero)}</span>
             {coberturaDoNumero(numero) && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{coberturaDoNumero(numero)}</span>}
+            {chave === "leads_novos" && textoAguardandoAceite(numero) && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{textoAguardandoAceite(numero)}</span>}
             {chave === "fecharam" && avisoCheckout(numero) && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{avisoCheckout(numero)}</span>}
           </>
         )}
@@ -281,6 +287,7 @@ function Divisao({ chave, numero, dados }: { chave: ChaveNumero; numero: Numero;
     const o = obj("por_origem");
     for (const [k, rot] of Object.entries(ROTULO_ORIGEM)) if (o[k]) partes.push(`${rot}: ${fmt(o[k])}`);
     if (Number(numero.origem_pela_conversa ?? 0) > 0) partes.push(`${fmt(Number(numero.origem_pela_conversa))} com a origem lida na conversa`);
+    if (textoAguardandoAceite(numero)) partes.push(textoAguardandoAceite(numero)!);
   } else if (chave === "abordados") {
     if (!dados.tem_funil_prospeccao) partes.push("A clínica não usa funil de prospecção ativa no CRM");
     else partes.push(`responderam: ${fmt(Number(numero.responderam ?? 0))}`, `agendaram: ${fmt(Number(numero.agendaram ?? 0))}`, `fecharam: ${fmt(Number(numero.fecharam ?? 0))}`);

@@ -71,7 +71,15 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
       const r = await runClintTags(supabase, buscarContatoClint, { onlyClientId: clientId, deadlineMs: startedAt + 240_000 });
-      res.status(r.some((x) => x.errors.length) ? 207 : 200).json({ ok: true, tags: r });
+      // Falha nas etiquetas não pode sair como ok:true (a origem por etiqueta some e o painel ficava verde): o n8n
+      // recebe ok:false e o status do CRM do cliente ganha o aviso (some na rodada seguinte que der certo).
+      const porCliente = new Map<string, string[]>();
+      for (const x of r) porCliente.set(x.clientId, [...(porCliente.get(x.clientId) ?? []), ...x.errors]);
+      for (const [cid, errs] of porCliente) {
+        await registrarAviso(supabase, cid, "crm", errs.length ? `Clint: a leitura das etiquetas dos contatos falhou (${errs[0].replace(/\s+/g, " ").slice(0, 160)}). A origem que vem da etiqueta pode ficar desatualizada.` : null, /^Clint: a leitura das etiquetas/, "nos");
+      }
+      const comErro = r.some((x) => x.errors.length);
+      res.status(comErro ? 207 : 200).json({ ok: !comErro, tags: r });
     } catch (err) {
       res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
     }

@@ -56,7 +56,7 @@ corpo de erro com HTTP 200 passou a virar erro (`windsor-resposta.ts`).
   estão na doc). 429 também ao limpar o cache mais de uma vez a cada 2 h (página do cache). O Nexo faz poucas dezenas de pedidos, em
   sequência, prazo de 30 s cada: muito abaixo do teto. **Sem tratamento de 429** (aceitável pelo volume; registrado como erro da conta).
 - **Paginação:** não há. Tudo vem numa resposta limitada por `_max_rows` (a doc só dá `100` como exemplo; o corte em 100 sem o parâmetro
-  foi visto no Nexo, não está escrito). O Nexo manda 100000. O código não confere se veio exatamente `_max_rows` linhas (sinal de corte).
+  foi visto no Nexo, não está escrito). O Nexo manda 100000 e, desde 02/11/2026, trata resposta com `_max_rows` linhas como corte (erro) e espera e tenta uma vez no 429 (`windsor-resposta.ts`, `buscarWindsor`).
 - **Tempo:** nos anúncios, em timeout refaz em janelas de 2 dias (`meta-ads-sync.ts:143-164`).
 
 ## 4. Token
@@ -79,7 +79,8 @@ corpo de erro com HTTP 200 passou a virar erro (`windsor-resposta.ts`).
 | `followers_count` só para hoje | Sim (não grava nulo por cima) | `instagram-sync.ts:406-417` |
 | Várias linhas por data (tabelas diferentes) | Sim (junta por data) | `instagram-sync.ts:345-367` |
 | Período de um dia só (`date_from = date_to`) não pede nada no Instagram | **Não** | `instagram-sync.ts:120-128` |
-| Pedaços de 30 dias se sobrepõem no dia da emenda | Não verificado (é comportamento do código, não da doc: falta teste) | `instagram-sync.ts:124-127` |
+| Pedaços de 30 dias se sobrepõem no dia da emenda | Corrigido em 02/11/2026: janelas que não se tocam (`janelasWindsor`) e repetidos fora antes do upsert (`semRepetidos`); teste em `scripts/test-definicoes-restantes.ts`. A sobreposição derrubava o lote de posts (Dra. Samira: 41 de 309) | `windsor-resposta.ts`, `instagram-sync.ts` |
+| Filtro de data dos posts em UTC | Contornado em 02/11/2026: os posts pedem um dia a mais em cada ponta | `instagram-sync.ts` (syncPosts) |
 | Erro parcial gravado como sucesso; falha total em conta antiga não é gravada | **Sim** (leitura por conta) | `meta-ads-sync.ts:359-368`; `api/sync/meta-ads.ts:165` |
 | HTTP 200 com corpo de erro vira lista vazia | **Sim** (`linhasWindsor`: `error` em texto ou `{code, message}`, `data` que não é lista ou corpo que não é JSON viram erro). A doc diz que o erro vem "with an appropriate HTTP status code", mas mostra também a forma curta `{"error":"Not authorized"}` sem dizer o status: por isso o corpo é conferido mesmo com 200 | `windsor-resposta.ts`; `meta-ads-sync.ts:139`; `instagram-sync.ts:103` |
 | Chave na URL e fora do filtro de segredos | Parcial (ainda na URL, **e a doc confirma que não há outro jeito**: "api_key query parameter only"; o filtro já esconde `api_key`) | `meta-ads-sync.ts:127`; `instagram-sync.ts:91`; `sync-status.ts:14-25` |
