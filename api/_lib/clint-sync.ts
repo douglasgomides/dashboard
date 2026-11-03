@@ -233,7 +233,13 @@ export async function runClintSync(env: ClintSyncEnv): Promise<ClintSyncResult[]
     // Douglas), então vale a soma dos funis de todas as conexões com este token. Vira alerta em qualidade_dados.
     if (originNames.size > 0) {
       const { data: irmas } = await supabase.from("crm_connections").select("config").eq("provider", "clint").eq("active", true).eq("access_token", token);
-      const lidos = new Set<string>((irmas ?? []).flatMap((c) => (Array.isArray((c.config as any)?.origins) ? (c.config as any).origins.map(String) : [])));
+      // config.funis_ignorados: IDs de funis que a equipe decidiu de propósito não ler (ex.: base antiga importada, que inflaria os leads).
+      const lidos = new Set<string>(
+        (irmas ?? []).flatMap((c) => [
+          ...(Array.isArray((c.config as any)?.origins) ? (c.config as any).origins.map(String) : []),
+          ...(Array.isArray((c.config as any)?.funis_ignorados) ? (c.config as any).funis_ignorados.map(String) : []),
+        ]),
+      );
       const fora = [...originNames.entries()].filter(([id]) => !lidos.has(id)).map(([, o]) => o.name ?? "").filter(Boolean).sort();
       const anterior = JSON.stringify((conn.config as any)?.funis_fora_da_config ?? []);
       if (JSON.stringify(fora) !== anterior) {
