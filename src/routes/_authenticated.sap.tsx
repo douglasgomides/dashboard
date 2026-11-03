@@ -40,7 +40,7 @@ export const Route = createFileRoute("/_authenticated/sap")({
   component: SapLayout,
 });
 
-const TITULOS: Record<string, string> = { "/sap/guia": "Como operamos", "/sap/docs": "Documentos do SAP", "/sap/comece": "Comece aqui" };
+const TITULOS: Record<string, string> = { "/sap/guia": "Como operamos", "/sap/docs": "Documentos do SAP", "/sap/comece": "Comece aqui", "/sap/venda": "Diagnósticos de venda" };
 
 function SapLayout() {
   const { isAdmin } = useAuth();
