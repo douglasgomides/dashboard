@@ -118,6 +118,11 @@ export function statusDaFonte(e: EntradaStatus, hoje: string = hojeBrasilia()): 
   // Sem movimento: a atualização rodou sem erro hoje ou ontem e não há aviso de parada. A origem só não teve atividade;
   // pintar de vermelho "Dados parados" acusava falha técnica onde não havia (Mariela/CRM, auditoria 01/11/2026).
   const rodouAgora = !!e.ultimo_sucesso && diasEntre(hoje, e.ultimo_sucesso.slice(0, 10)) <= 1;
+  // Parada por causa do cliente (ex.: limite de gastos da conta de anúncios atingido): a atualização roda sem erro e o motivo
+  // está gravado. Não é falha nossa, então não pesa como "Parada"; o motivo continua visível para a equipe cobrar o cliente.
+  if (dias > 1 && rodouAgora && donoAviso === "cliente" && motivo) {
+    return { ...base, cor: "cinza", rotulo: "Parada pelo cliente", detalhe: `até ${data} · ${motivo}`, peso: 1 };
+  }
   if (dias > 3 && rodouAgora && !donoAviso) {
     return { ...base, cor: "cinza", rotulo: "Sem movimento", detalhe: `até ${data} · sem atividade nova na origem`, peso: 1 };
   }

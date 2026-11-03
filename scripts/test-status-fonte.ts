@@ -56,3 +56,15 @@ assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-17", fonte: "ins
 assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-17", fonte: "instagram", ultimo_sucesso: "2026-10-17T09:30:00Z" }, "2026-10-19").cor, "amarelo");
 assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-14", fonte: "instagram", ultimo_sucesso: "2026-10-14T09:30:00Z" }, "2026-10-19").cor, "vermelho");
 console.log("status-fonte: ok");
+
+// Parada por causa do cliente (limite de gastos da conta atingido): atualização roda sem erro, motivo gravado, dono "cliente".
+// Não é falha nossa: cinza neutro, com o motivo visível. Sem sucesso recente, ou dono "nos", continua vermelho.
+const motivoCliente = "Conta atingiu o limite de gastos definido nela";
+const pausadaCliente = s({ fonte: "anuncios", cadastro: true, data_ate: "2026-10-03", ultimo_sucesso: "2026-10-14T16:00:00Z", motivo: motivoCliente, motivo_dono: "cliente" });
+assert.equal(pausadaCliente.cor, "cinza");
+assert.equal(pausadaCliente.rotulo, "Parada pelo cliente");
+assert.equal(pausadaCliente.peso, 1);
+assert.equal(pausadaCliente.motivo, motivoCliente);
+assert.equal(s({ fonte: "anuncios", cadastro: true, data_ate: "2026-10-03", ultimo_sucesso: "2026-10-01T16:00:00Z", motivo: motivoCliente, motivo_dono: "cliente" }).cor, "vermelho", "sync parado é falha nossa");
+assert.equal(s({ fonte: "anuncios", cadastro: true, data_ate: "2026-10-03", ultimo_sucesso: "2026-10-14T16:00:00Z", motivo: "falha nossa", motivo_dono: "nos" }).cor, "vermelho");
+assert.equal(s({ fonte: "anuncios", cadastro: true, data_ate: "2026-10-03", ultimo_sucesso: "2026-10-14T16:00:00Z", last_error: "timeout", motivo: motivoCliente, motivo_dono: "cliente" }).cor, "vermelho", "erro continua vermelho");
