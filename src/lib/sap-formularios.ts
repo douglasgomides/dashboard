@@ -6,68 +6,13 @@
 // formulários curtos montados a partir do "Como fazer" de cada item do cronograma: guardam datas, resultado e o arquivo
 // da entrega dentro do SAP, em vez de um link solto.
 
-export type TipoCampo = "texto" | "paragrafo" | "numero" | "data" | "link" | "escolha" | "multipla" | "nota" | "arquivo" | "tabela";
-
-export interface Coluna { id: string; rotulo: string; opcoes?: string[] }
-
-export interface Campo {
-  id: string;
-  rotulo: string;
-  ajuda?: string;
-  tipo: TipoCampo;
-  opcoes?: string[];
-  /** Padrão: obrigatório. */
-  opcional?: boolean;
-  /** nota: pesos do scorecard (nota x peso). Sem peso, conta 1. */
-  peso?: number;
-  /** multipla: todas as opções precisam estar marcadas (consentimentos). */
-  todas?: boolean;
-  /** tabela: colunas; linhas fixas (rótulo de cada linha) ou livres (adiciona e remove). */
-  colunas?: Coluna[];
-  linhas?: string[];
-  minLinhas?: number;
-  /** arquivo: quantos no máximo (padrão 6). */
-  maxArquivos?: number;
-}
-
-export interface Secao {
-  id: string;
-  titulo: string;
-  intro?: string;
-  campos: Campo[];
-  /** A seção só é exigida (e só aparece) quando outro campo tem este valor. */
-  quando?: { campo: string; igual: string };
-  /** Soma das notas da seção, mostrada no fim (ex.: 0 a 12). */
-  total?: "notas" | "scorecard";
-}
-
-export interface Formulario {
-  codigo: string; // "03.01" ou "reg-10"
-  nome: string;
-  /** Item do cronograma que este formulário conclui. */
-  marco: number | null;
-  /** "semana": uma resposta por semana (rotinas); "interessado": pré-venda, sem clínica; padrão: uma por clínica. */
-  ref?: "semana" | "interessado";
-  serve: string;
-  /** Quem preenche e quando (texto do documento). */
-  quem?: string;
-  secoes: Secao[];
-  /** Código do documento no dicionário (para o link do Drive de consulta). */
-  doc?: string;
-}
-
-export type Valor = string | string[] | Record<string, string>[];
-export type Dados = Record<string, Valor>;
-
-const sim = ["Sim", "Não"];
-const nota012 = ["0", "1", "2"];
-const t = (id: string, rotulo: string, extra: Partial<Campo> = {}): Campo => ({ id, rotulo, tipo: "texto", ...extra });
-const p = (id: string, rotulo: string, extra: Partial<Campo> = {}): Campo => ({ id, rotulo, tipo: "paragrafo", ...extra });
-const esc = (id: string, rotulo: string, opcoes: string[], extra: Partial<Campo> = {}): Campo => ({ id, rotulo, tipo: "escolha", opcoes, ...extra });
-const nt = (id: string, rotulo: string, ajuda: string, extra: Partial<Campo> = {}): Campo => ({ id, rotulo, tipo: "nota", opcoes: nota012, ajuda, ...extra });
-const ar = (id: string, rotulo: string, extra: Partial<Campo> = {}): Campo => ({ id, rotulo, tipo: "arquivo", ...extra });
-const dt = (id: string, rotulo: string, extra: Partial<Campo> = {}): Campo => ({ id, rotulo, tipo: "data", ...extra });
-const tb = (id: string, rotulo: string, colunas: Coluna[], extra: Partial<Campo> = {}): Campo => ({ id, rotulo, tipo: "tabela", colunas, ...extra });
+export * from "./sap-formularios-base";
+import { FORMS_G1 } from "./sap-formularios-g1";
+import { FORMS_G2 } from "./sap-formularios-g2";
+import { FORMS_G3 } from "./sap-formularios-g3";
+import { FORMS_G4 } from "./sap-formularios-g4";
+import { FORMS_G5 } from "./sap-formularios-g5";
+import { ar, dt, esc, nt, p, sim, t, tb, reg, type Campo, type Dados, type Formulario, type Secao, type Valor } from "./sap-formularios-base";
 
 // ---------------------------------------------------------------- 03.01 · Análise Pré-Reunião e Lead Oculto
 
@@ -409,10 +354,6 @@ const F_0105: Formulario = {
 
 // ---------------------------------------------------------------- registros da entrega (itens sem formulário próprio)
 
-const reg = (codigo: string, marco: number, nome: string, serve: string, campos: Campo[], extra: Partial<Formulario> = {}): Formulario => ({
-  codigo, marco, nome, serve, secoes: [{ id: "reg", titulo: "Registro da entrega", campos }], ...extra,
-});
-
 const F_REG: Formulario[] = [
   reg("reg-10", 10, "Entrega do relatório de diagnóstico", "Registra o relatório pós-Sessão 1 que foi enviado à clínica (prazo de 48 h).", [
     dt("enviado_em", "Data do envio à clínica"), esc("canal", "Canal do envio", ["WhatsApp", "E-mail", "Reunião"]),
@@ -463,7 +404,11 @@ const F_REG: Formulario[] = [
   ]),
 ];
 
-export const FORMULARIOS: Record<string, Formulario> = Object.fromEntries([F_0301, F_0204, F_0903, F_0105, ...F_REG].map((f) => [f.codigo, f]));
+// Documentos lidos no Drive, pergunta a pergunta. Os registros de entrega (reg-*) dos itens que eles concluem saem.
+const DOCS_LIDOS: Formulario[] = [...FORMS_G1, ...FORMS_G2, ...FORMS_G3, ...FORMS_G4, ...FORMS_G5];
+const COBERTOS = new Set(DOCS_LIDOS.map((f) => f.marco).filter((m): m is number => m !== null));
+
+export const FORMULARIOS: Record<string, Formulario> = Object.fromEntries([F_0301, F_0204, F_0903, F_0105, ...DOCS_LIDOS, ...F_REG.filter((f) => !COBERTOS.has(f.marco as number))].map((f) => [f.codigo, f]));
 
 /** Formulário que conclui o item do cronograma (n), se houver. */
 export const FORMULARIO_DO_ITEM: Record<number, string> = Object.fromEntries(Object.values(FORMULARIOS).filter((f) => f.marco !== null).map((f) => [f.marco as number, f.codigo]));
