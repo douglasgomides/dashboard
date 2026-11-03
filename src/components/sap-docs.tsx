@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import { FORMULARIOS } from "@/lib/sap-formularios";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { DOC, DOCS, dividirCodigos, type DocSap } from "@/lib/sap-docs";
@@ -18,7 +19,13 @@ export function DocLink({ d, secao, soCodigo = false }: { d: DocSap; secao?: str
   const clientId = clientIdDaUrl(pathname);
   const rotulo = soCodigo ? <span className="tabular-nums">{d.codigo}{secao ? ` ${secao}` : ""}</span> : <>{d.nome}{secao ? ` ${secao}` : ""}</>;
   const estilo = { color: "inherit", textDecorationColor: "color-mix(in srgb, var(--accent) 60%, transparent)" } as const;
-  const conteudo = d.url ? (
+  // Documento que agora é preenchido dentro do SAP: o nome leva ao formulário, não ao Drive.
+  const form = FORMULARIOS[d.codigo];
+  const conteudo = form && form.ref === "interessado" ? (
+    <Link to={"/sap/venda" as never} className="underline decoration-dotted underline-offset-2" style={estilo} title={d.serve}>{rotulo}</Link>
+  ) : form && clientId ? (
+    <Link to={"/sap/$clientId/formulario" as never} params={{ clientId } as never} search={{ d: form.codigo } as never} className="underline decoration-dotted underline-offset-2" style={estilo} title={d.serve}>{rotulo}</Link>
+  ) : d.url ? (
     <a href={d.url} target="_blank" rel="noreferrer" className="underline decoration-dotted underline-offset-2" style={estilo} title={d.serve}>
       {rotulo}<ExternalLink size={11} aria-label="abre no Drive" className="ml-0.5 inline align-baseline" />
     </a>

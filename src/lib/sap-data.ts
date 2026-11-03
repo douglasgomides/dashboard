@@ -1278,3 +1278,31 @@ export async function getCampanhasNumerosSap(clientId: string): Promise<Campanha
     ultimos7_gasto: Number(r.ultimos7_gasto) || 0, ultimos7_conversas: Number(r.ultimos7_conversas) || 0, anteriores7_gasto: Number(r.anteriores7_gasto) || 0, anteriores7_conversas: Number(r.anteriores7_conversas) || 0,
   }));
 }
+
+// ---------------------------------------------------------------- formulários dos documentos (respostas)
+
+export interface RespostaDocSap { id: string; clinica_id: string | null; documento: string; ref: string; dados: import("@/lib/sap-formularios").Dados; concluido_em: string | null; atualizado_em: string }
+
+/** Respostas dos formulários de uma clínica; sem clínica (null), as de pré-venda (01.05). */
+export async function getRespostasDocSap(clinicaId: string | null): Promise<RespostaDocSap[]> {
+  let q = db.from("sap_documento_resposta").select("id, clinica_id, documento, ref, dados, concluido_em, atualizado_em").order("atualizado_em", { ascending: false });
+  q = clinicaId ? q.eq("clinica_id", clinicaId) : q.is("clinica_id", null);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as RespostaDocSap[];
+}
+
+/** Guarda as respostas (rascunho) ou conclui o documento. Só a equipe grava (a regra está no banco). */
+export async function salvarRespostaDocSap(clinicaId: string | null, documento: string, ref: string, dados: import("@/lib/sap-formularios").Dados, concluir: boolean) {
+  const { error } = await db.rpc("sap_salvar_documento_resposta", { p_clinica_id: clinicaId, p_documento: documento, p_ref: ref, p_dados: dados, p_concluir: concluir });
+  if (error) throw new Error(/sem permissao/.test(error.message) ? "Só a equipe da Doctor Creator preenche os documentos." : error.message);
+}
+
+/** Sobe um arquivo de um campo do documento. Reaproveita o bucket e a regra de caminho das evidências (<clínica>/<item>/...). */
+export async function enviarArquivoDocSap(clinicaId: string | null, pasta: number | string, arquivo: File): Promise<string> {
+  const ext = (arquivo.name.split(".").pop() ?? "png").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+  const caminho = `${clinicaId ?? "venda"}/${pasta}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`;
+  const { error } = await supabase.storage.from("sap-evidencias").upload(caminho, arquivo, { upsert: false, contentType: arquivo.type || undefined });
+  if (error) throw error;
+  return `arquivo:${caminho}`;
+}

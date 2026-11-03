@@ -8,13 +8,15 @@ import { useAuth } from "@/hooks/use-auth";
 import { Painel, Selo } from "@/components/visual";
 import { TextoComCodigos } from "@/components/sap-docs";
 import {
-  enviarEvidenciaSap, getEntradasTarefas, getPessoasEquipe, linkEvidenciaSap, marcarTarefaSap, registrarDeteccaoSap, salvarPapelPessoa,
+  enviarEvidenciaSap, getEntradasTarefas, salvarRespostaDocSap, getPessoasEquipe, linkEvidenciaSap, marcarTarefaSap, registrarDeteccaoSap, salvarPapelPessoa,
 } from "@/lib/sap-data";
 import {
   NOME_PAPEL, PAPEIS, SEM_EVIDENCIA, alertasFundador, contarTarefas, deteccoes, ehDoPapel, montarTarefas, papeisSemPessoa, porUrgencia, rotuloPrazo,
   type AlertaFundador, type EntradaTarefas, type PapelId, type Situacao, type Tarefa,
 } from "@/lib/sap-tarefas";
 import { REGRA_DIA_UTIL } from "@/lib/sap-cronograma";
+import { codigoDaEvidencia, formularioDoItem, progresso } from "@/lib/sap-formularios";
+import { respostaDe, useRespostasDoc } from "@/components/sap-formulario";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
@@ -134,9 +136,19 @@ function CorpoTarefa({ t, clientId, clinicaId, hoje, podeEditar }: { t: Tarefa; 
   const [modo, setModo] = useState<null | "desfazer" | "nao_se_aplica">(null);
   const [enviando, setEnviando] = useState(false);
   const semEvid = SEM_EVIDENCIA.has(t.n) || !!t.manual.semEvidencia;
+  // Item com documento no SAP: o documento é a evidência; concluir o documento conclui a tarefa.
+  const form = formularioDoItem(t.n);
+  const resp = useRespostasDoc(clinicaId, !!form);
+  const refDoc = form?.ref === "semana" ? t.semana ?? "" : "";
+  const doc = form ? respostaDe(resp.data, form.codigo, refDoc) : null;
+  const pr = form ? progresso(form, doc?.dados ?? {}) : null;
   const acao = useMutation({
-    mutationFn: (a: "feito" | "nao_se_aplica" | "desfazer") => marcarTarefaSap(clinicaId, t.n, a, { data, evidencia: evid, motivo, semana: t.recorrente ? t.semana : null }),
-    onSuccess: () => { setModo(null); setMotivo(""); setEvid(""); invalidarTarefas(qc); },
+    mutationFn: async (a: "feito" | "nao_se_aplica" | "desfazer") => {
+      await marcarTarefaSap(clinicaId, t.n, a, { data, evidencia: evid, motivo, semana: t.recorrente ? t.semana : null });
+      // Ao desfazer, o documento volta a rascunho para poder ser concluído de novo.
+      if (a === "desfazer" && form && doc?.concluido_em) await salvarRespostaDocSap(clinicaId, form.codigo, refDoc, doc.dados, false);
+    },
+    onSuccess: () => { setModo(null); setMotivo(""); setEvid(""); invalidarTarefas(qc); qc.invalidateQueries({ queryKey: ["sap-doc-resp", clinicaId] }); },
   });
   const subsAbertas = t.subtarefas.filter((s) => !s.feito);
   return (
@@ -183,7 +195,7 @@ function CorpoTarefa({ t, clientId, clinicaId, hoje, podeEditar }: { t: Tarefa; 
         <div className="text-xs" style={{ color: t.status === "manual" ? "var(--good)" : "var(--text-dim)" }}>
           <UserRoundCheck size={14} aria-hidden className="mr-1 inline" />
           {t.status === "manual" ? "Marcado como feito" : "Marcado como não se aplica"} {t.recorrente ? "nesta semana " : ""}em {dm(t.feitoEm)}{t.feitoPor ? ` por ${t.feitoPor}` : ""}
-          {t.evidencia ? <> · evidência: <LinkEvidencia valor={t.evidencia} /></> : t.status === "manual" ? " · sem evidência" : ""}
+          {codigoDaEvidencia(t.evidencia) && form ? <> · documento preenchido no SAP: <Link to={"/sap/$clientId/formulario" as never} params={{ clientId } as never} search={{ d: form.codigo, ref: refDoc || undefined } as never} className="underline">abrir</Link></> : t.evidencia ? <> · evidência: <LinkEvidencia valor={t.evidencia} /></> : t.status === "manual" ? " · sem evidência" : ""}
           {t.observacao ? ` · ${t.observacao}` : ""}
         </div>
       )}
@@ -191,7 +203,17 @@ function CorpoTarefa({ t, clientId, clinicaId, hoje, podeEditar }: { t: Tarefa; 
         <div className="text-xs" style={{ color: "var(--warn)" }}>Desfeito em {dm(t.desfeito.em)}{t.desfeito.motivo ? `: ${t.desfeito.motivo}` : ""}.</div>
       )}
 
-      {podeEditar && t.status === "a_fazer" && modo === null && (
+      {podeEditar && t.status === "a_fazer" && modo === null && form && pr && (
+        <div className="space-y-2 rounded-lg border p-2" style={{ borderColor: "var(--border)" }}>
+          <div className="text-sm">
+            <strong>{form.doc ? `Documento ${form.doc} · ${form.nome}` : form.nome}</strong>
+            <span style={{ color: "var(--text-dim)" }}> · {doc?.concluido_em ? "concluído" : doc ? `${pr.preenchidos} de ${pr.obrigatorios} campos obrigatórios preenchidos` : "ainda não começou"}</span>
+          </div>
+          <p className="text-xs" style={{ color: "var(--text-dim)" }}>O documento é preenchido aqui dentro, com os prints anexados nele. Ao concluir o documento, a tarefa é marcada como feita.</p>
+          {!t.recorrente && <button type="button" onClick={() => setModo("nao_se_aplica")} className="min-h-[38px] rounded-lg border px-3 text-sm" style={{ borderColor: "var(--border)" }}>Não se aplica</button>}
+        </div>
+      )}
+      {podeEditar && t.status === "a_fazer" && modo === null && !form && (
         <div className="space-y-2 rounded-lg border p-2" style={{ borderColor: "var(--border)" }}>
           <div className="flex flex-wrap items-end gap-2">
             <label className="min-w-[200px] flex-1 text-xs">Evidência {semEvid ? "(opcional neste item)" : "(link, imagem ou PDF)"}
