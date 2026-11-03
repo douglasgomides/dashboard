@@ -1,21 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Circle, CircleSlash, Cpu, ExternalLink, Paperclip, UserRoundCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Circle, CircleSlash, Cpu, ExternalLink, UserRoundCheck } from "lucide-react";
 import { SapWeekOverview } from "@/components/sap-week-overview";
 import { diaAtual } from "@/lib/sap-data";
 import { useAuth } from "@/hooks/use-auth";
 import { Painel, Selo } from "@/components/visual";
 import { TextoComCodigos } from "@/components/sap-docs";
 import {
-  enviarEvidenciaSap, getEntradasTarefas, salvarRespostaDocSap, getPessoasEquipe, linkEvidenciaSap, marcarTarefaSap, registrarDeteccaoSap, salvarPapelPessoa,
+  getEntradasTarefas, salvarRespostaDocSap, getPessoasEquipe, linkEvidenciaSap, marcarTarefaSap, registrarDeteccaoSap, salvarPapelPessoa,
 } from "@/lib/sap-data";
 import {
-  NOME_PAPEL, PAPEIS, SEM_EVIDENCIA, alertasFundador, contarTarefas, deteccoes, ehDoPapel, montarTarefas, papeisSemPessoa, porUrgencia, rotuloPrazo,
+  NOME_PAPEL, PAPEIS, alertasFundador, contarTarefas, deteccoes, ehDoPapel, montarTarefas, papeisSemPessoa, porUrgencia, rotuloPrazo,
   type AlertaFundador, type EntradaTarefas, type PapelId, type Situacao, type Tarefa,
 } from "@/lib/sap-tarefas";
 import { REGRA_DIA_UTIL } from "@/lib/sap-cronograma";
-import { codigoDaEvidencia, formularioDoItem, progresso } from "@/lib/sap-formularios";
+import { EVIDENCIA_REGISTRO, codigoDaEvidencia, formularioDoItem, progresso } from "@/lib/sap-formularios";
 import { respostaDe, useRespostasDoc } from "@/components/sap-formulario";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
@@ -134,8 +134,6 @@ function CorpoTarefa({ t, clientId, clinicaId, hoje, podeEditar }: { t: Tarefa; 
   const [data, setData] = useState(hoje);
   const [motivo, setMotivo] = useState("");
   const [modo, setModo] = useState<null | "desfazer" | "nao_se_aplica">(null);
-  const [enviando, setEnviando] = useState(false);
-  const semEvid = SEM_EVIDENCIA.has(t.n) || !!t.manual.semEvidencia;
   // Item com documento no SAP: o documento é a evidência; concluir o documento conclui a tarefa.
   const form = formularioDoItem(t.n);
   const resp = useRespostasDoc(clinicaId, !!form);
@@ -144,7 +142,7 @@ function CorpoTarefa({ t, clientId, clinicaId, hoje, podeEditar }: { t: Tarefa; 
   const pr = form ? progresso(form, doc?.dados ?? {}) : null;
   const acao = useMutation({
     mutationFn: async (a: "feito" | "nao_se_aplica" | "desfazer") => {
-      await marcarTarefaSap(clinicaId, t.n, a, { data, evidencia: evid, motivo, semana: t.recorrente ? t.semana : null });
+      await marcarTarefaSap(clinicaId, t.n, a, { data, evidencia: evid || (a === "feito" ? EVIDENCIA_REGISTRO : ""), motivo, semana: t.recorrente ? t.semana : null });
       // Ao desfazer, o documento volta a rascunho para poder ser concluído de novo.
       if (a === "desfazer" && form && doc?.concluido_em) await salvarRespostaDocSap(clinicaId, form.codigo, refDoc, doc.dados, false);
     },
@@ -195,7 +193,7 @@ function CorpoTarefa({ t, clientId, clinicaId, hoje, podeEditar }: { t: Tarefa; 
         <div className="text-xs" style={{ color: t.status === "manual" ? "var(--good)" : "var(--text-dim)" }}>
           <UserRoundCheck size={14} aria-hidden className="mr-1 inline" />
           {t.status === "manual" ? "Marcado como feito" : "Marcado como não se aplica"} {t.recorrente ? "nesta semana " : ""}em {dm(t.feitoEm)}{t.feitoPor ? ` por ${t.feitoPor}` : ""}
-          {codigoDaEvidencia(t.evidencia) && form ? <> · documento preenchido no SAP: <Link to={"/sap/$clientId/formulario" as never} params={{ clientId } as never} search={{ d: form.codigo, ref: refDoc || undefined } as never} className="underline">abrir</Link></> : t.evidencia ? <> · evidência: <LinkEvidencia valor={t.evidencia} /></> : t.status === "manual" ? " · sem evidência" : ""}
+          {codigoDaEvidencia(t.evidencia) && form ? <> · documento preenchido no SAP: <Link to={"/sap/$clientId/formulario" as never} params={{ clientId } as never} search={{ d: form.codigo, ref: refDoc || undefined } as never} className="underline">abrir</Link></> : t.evidencia && t.evidencia !== EVIDENCIA_REGISTRO ? <> · evidência: <LinkEvidencia valor={t.evidencia} /></> : t.status === "manual" && !t.evidencia ? " · sem evidência" : ""}
           {t.observacao ? ` · ${t.observacao}` : ""}
         </div>
       )}
@@ -215,30 +213,20 @@ function CorpoTarefa({ t, clientId, clinicaId, hoje, podeEditar }: { t: Tarefa; 
       )}
       {podeEditar && t.status === "a_fazer" && modo === null && !form && (
         <div className="space-y-2 rounded-lg border p-2" style={{ borderColor: "var(--border)" }}>
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="min-w-[200px] flex-1 text-xs">Evidência {semEvid ? "(opcional neste item)" : "(link, imagem ou PDF)"}
-              <input value={evid} onChange={(x) => setEvid(x.target.value)} placeholder="Link do documento, material ou registro da entrega" className="mt-0.5 block min-h-[38px] w-full rounded-md border px-2 text-sm" style={campo} />
-            </label>
-            <label className="inline-flex min-h-[38px] cursor-pointer items-center gap-1 rounded-lg border px-3 text-sm" style={{ borderColor: "var(--border)" }}>
-              <Paperclip size={14} aria-hidden /> {enviando ? "Anexando…" : "Anexar evidência"}
-              <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" className="sr-only" disabled={enviando} onChange={async (x) => {
-                const f = x.target.files?.[0];
-                if (!f) return;
-                setEnviando(true);
-                try { setEvid(await enviarEvidenciaSap(clinicaId, t.n, f)); } catch (err) { alert(mensagemDeErroAcao(err)); } finally { setEnviando(false); }
-              }} />
-            </label>
-            <label className="text-xs">Data de conclusão<input type="date" value={data} onChange={(x) => setData(x.target.value)} className="mt-0.5 block min-h-[38px] rounded-md border px-2 text-sm" style={campo} /></label>
-          </div>
-          {evid.startsWith("arquivo:") && <div className="text-xs" style={{ color: "var(--good)" }}>Evidência anexada. Confirme abaixo para concluir a tarefa.</div>}
-          <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={acao.isPending || (!semEvid && !evid.trim())} onClick={() => acao.mutate("feito")}
-              className="ws-action ws-action--primary disabled:opacity-50"
-              title={!semEvid && !evid.trim() ? "Adicione um link ou anexe uma evidência para concluir esta tarefa" : undefined}>
-              Marcar como feito{t.recorrente ? " nesta semana" : ""}
-            </button>
-            {!t.recorrente && <button type="button" onClick={() => setModo("nao_se_aplica")} className="min-h-[38px] rounded-lg border px-3 text-sm" style={{ borderColor: "var(--border)" }}>Não se aplica</button>}
-          </div>
+          {t.detectavel ? (
+            <p className="text-sm" style={{ color: "var(--text-dim)" }}>Esta tarefa conclui sozinha quando as subtarefas acima estiverem feitas. Não precisa anexar nada.</p>
+          ) : (
+            <>
+              <p className="text-xs" style={{ color: "var(--text-dim)" }}>O registro desta entrega fica no próprio SAP (tela indicada em "Onde fazer"). Não precisa anexar documento.</p>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="text-xs">Data de conclusão<input type="date" value={data} onChange={(x) => setData(x.target.value)} className="mt-0.5 block min-h-[38px] rounded-md border px-2 text-sm" style={campo} /></label>
+                <button type="button" disabled={acao.isPending} onClick={() => acao.mutate("feito")} className="ws-action ws-action--primary disabled:opacity-50">
+                  Marcar como feito{t.recorrente ? " nesta semana" : ""}
+                </button>
+              </div>
+            </>
+          )}
+          {!t.recorrente && <button type="button" onClick={() => setModo("nao_se_aplica")} className="min-h-[38px] rounded-lg border px-3 text-sm" style={{ borderColor: "var(--border)" }}>Não se aplica</button>}
         </div>
       )}
       {podeEditar && (t.status === "manual" || t.status === "nao_se_aplica") && modo === null && (

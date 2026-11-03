@@ -413,6 +413,8 @@ export const FORMULARIOS: Record<string, Formulario> = Object.fromEntries([F_030
 /** Formulário que conclui o item do cronograma (n), se houver. */
 export const FORMULARIO_DO_ITEM: Record<number, string> = Object.fromEntries(Object.values(FORMULARIOS).filter((f) => f.marco !== null).map((f) => [f.marco as number, f.codigo]));
 export const formularioDoItem = (n: number): Formulario | null => FORMULARIOS[FORMULARIO_DO_ITEM[n]] ?? null;
+/** Evidência de itens sem documento: o registro da entrega fica no próprio SAP (sessão, tela ou subtarefas), sem anexo. */
+export const EVIDENCIA_REGISTRO = "registro:sap";
 export const EVIDENCIA_DOC = (codigo: string) => `doc:${codigo}`;
 export const codigoDaEvidencia = (ev: string | null | undefined): string | null => (ev && ev.startsWith("doc:") ? ev.slice(4) : null);
 
