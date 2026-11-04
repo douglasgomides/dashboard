@@ -701,7 +701,8 @@ AS $function$
   select jsonb_build_object(
     'dias', coalesce((select jsonb_agg(to_jsonb(d) order by d.dia) from por_dia d), '[]'),
     'efeito_post', (select to_jsonb(e) from efeito e),
-    'grade', coalesce((select jsonb_agg(to_jsonb(g)) from grade g), '[]'),
+    -- [perfil-da-clinica] ordem fixa (antes dependia do plano da consulta).
+    'grade', coalesce((select jsonb_agg(to_jsonb(g) order by g.dow, g.hora) from grade g), '[]'),
     'temas', coalesce((select jsonb_agg(to_jsonb(t) order by t.conversas desc, t.posts desc) from temas t), '[]'),
     'semanas', coalesce((select jsonb_agg(to_jsonb(s) order by s.semana) from semanas s), '[]'),
     'objecoes', coalesce((select jsonb_agg(to_jsonb(o) order by o.n desc) from objecoes o), '[]'),
