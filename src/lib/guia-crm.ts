@@ -31,6 +31,24 @@ export function papelDaEtapa(nome: string): Papel {
   return "desconhecida";
 }
 
+// Perfil da clínica (crm_perfil_etapa, migração 20261104100000): quando a equipe definiu o papel da etapa,
+// ele vale no lugar do nome. 'ignorar' tira a etapa do guia; sem papel ('') volta para a regra pelo nome.
+const PAPEL_DO_PERFIL: Record<string, Papel> = {
+  novo: "entrada",
+  em_atendimento: "atendimento",
+  agendado: "agendada",
+  compareceu: "realizada",
+  venda: "ganho",
+  perdido: "perdido",
+  reativacao: "reativacao",
+  posvenda: "pos",
+};
+
+export function papelDaEtapaComPerfil(e: Pick<EtapaCrm, "status_name" | "papel_perfil">): Papel | null {
+  if (e.papel_perfil === "ignorar") return null;
+  return (e.papel_perfil && PAPEL_DO_PERFIL[e.papel_perfil]) || papelDaEtapa(e.status_name);
+}
+
 export const ROTULO_PAPEL: Record<Papel, string> = {
   entrada: "Novo lead",
   atendimento: "Em atendimento",
@@ -47,6 +65,7 @@ export interface EtapaCrm {
   pipeline_name: string;
   status_name: string;
   total: number;
+  papel_perfil?: string | null; // só vem quando a conexão tem perfil da clínica
 }
 
 export interface CamposCrm {
@@ -121,7 +140,10 @@ const ONDE_PADRAO = {
 };
 
 export function montarGuiaCrm(etapasBrutas: EtapaCrm[], c: CamposCrm): GuiaCrm {
-  const etapas = etapasBrutas.map((e) => ({ ...e, papel: papelDaEtapa(e.status_name) }));
+  const etapas = etapasBrutas.flatMap((e) => {
+    const papel = papelDaEtapaComPerfil(e);
+    return papel ? [{ ...e, papel }] : [];
+  });
   const tem = new Set(etapas.map((e) => e.papel));
   const faltam = PADRAO.map((p) => p.papel).filter((p) => !tem.has(p));
   const desconhecidas = etapas.filter((e) => e.papel === "desconhecida").sort((a, b) => b.total - a.total);
