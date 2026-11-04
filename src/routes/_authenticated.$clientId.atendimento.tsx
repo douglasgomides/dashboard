@@ -19,6 +19,7 @@ import { ConversasWhatsapp } from "@/components/conversas-whatsapp";
 import { useAuth } from "@/hooks/use-auth";
 import { useClientRole } from "@/hooks/use-client-role";
 import { RecuperarHoje } from "@/components/agentes-ia";
+import { AtendimentoConversas } from "@/components/atendimento-conversas";
 
 // Atendimento no WhatsApp: uma tela só com duas abas. "Números" (volume, espera, equipe) e, para a equipe,
 // "Conversas e auditoria" (cada conversa com a leitura e a auditoria comercial), que antes era /conversas.
@@ -143,15 +144,24 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
   if (resumoQ.isError) return <div role="alert" className="space-y-3 rounded-xl border p-5" style={{ borderColor: "var(--border)" }}><h2 className="font-semibold">Não foi possível carregar os números do atendimento</h2><p className="text-sm">A fonte está indisponível. Isso não significa que não houve atendimentos.</p><button type="button" className="ws-action ws-action--secondary" disabled={resumoQ.isFetching} onClick={() => void resumoQ.refetch()}>Tentar novamente</button></div>;
 
   if (!resumo || atendimentos === 0) {
+    // Sem WTS (ex.: Kommo): mede pelas conversas que já chegam ao Nexo. Sem conversas, o aviso de antes.
     return (
-      <div className="space-y-4">
-        <div className="flex justify-end">
-          <SyncButton clientId={clientId} alvo="atendimento" />
-        </div>
-        <p style={{ color: "var(--text-dim)" }}>
-          Nenhum atendimento no período ({periodLabel}). Se a conta da WTS acabou de ser ligada, use o botão acima.
-        </p>
-      </div>
+      <AtendimentoConversas
+        clientId={clientId}
+        start={start}
+        end={end}
+        periodLabel={periodLabel}
+        vazio={
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <SyncButton clientId={clientId} alvo="atendimento" />
+            </div>
+            <p style={{ color: "var(--text-dim)" }}>
+              Nenhum atendimento no período ({periodLabel}). Se a conta da WTS acabou de ser ligada, use o botão acima.
+            </p>
+          </div>
+        }
+      />
     );
   }
 
