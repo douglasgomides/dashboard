@@ -94,10 +94,10 @@ begin
   end if;
 
   insert into public.crm_perfil_etapa (crm_connection_id, pipeline_id, status_id, papel, nota, definido_por)
-  select v_conn, p.pipeline_id, p.status_id, p.papel, p.nota, null from perfil_lana p
+  select v_conn, p.pipeline_id, p.status_id, p.papel, p.nota, null::uuid from perfil_lana p
   union all
   -- Funis inteiros fora da conta: Elite Academy e Leads Excluídos.
-  select v_conn, f.pipeline_id, '*', 'ignorar', f.nota, null
+  select v_conn, f.pipeline_id, '*', 'ignorar', f.nota, null::uuid
     from (values ('14542263', 'Elite Academy'), ('13365383', 'Leads Excluídos')) f(pipeline_id, nota)
   on conflict (crm_connection_id, pipeline_id, status_id)
   do update set papel = excluded.papel, nota = excluded.nota, atualizado_em = now();

@@ -29,6 +29,13 @@
 -- crm_funis_periodo: produção ainda está sem a coluna "importados" (a 20261028150000 foi editada depois de aplicada);
 -- aqui ela é recriada na versão do repositório (com "importados"), por isso o drop antes do create.
 --
+-- Desempenho (04/11/2026): a 1ª versão chamava crm_perfil_conta por card e deixou as telas de todos os clientes 9 a 80
+-- vezes mais lentas em produção (revertida no mesmo dia). Agora o papel é calculado uma vez por etapa
+-- (crm_perfil_etapas) e juntado; crm_perfil_etapas/crm_perfil_vendas saem na hora quando o cliente não tem perfil.
+-- Medido em produção (Lana, 13 mil cards, com perfil): métricas 0,17 s, vendas 1,1 s, pacientes 3,6 s (antes 3,2 s).
+-- Em produção foi aplicada em partes (perfil_da_clinica_auxiliares*, perfil_da_clinica_telas,
+-- perfil_da_clinica_pacientes_indice), com trava que media antes e depois e desfazia se ficasse mais lento.
+--
 -- Reversão: apagar as linhas de crm_perfil_etapa da conexão (volta ao comportamento anterior na hora). Para tirar o
 -- mecanismo: recriar as funções pela definição anterior (crm_metricas_essenciais, crm_visoes_comerciais,
 -- crm_diagnostico_comercial, crm_funis_periodo, crm_vendas_periodo, pacientes_cards, crm_guia_dados,
@@ -105,21 +112,79 @@ as $$
   from (select public.crm_perfil_papel(p_conn, p_pipeline, p_status) as papel) x
 $$;
 
+-- Papel já encontrado → conta para o conceito? Expressão pura, sem tabela: o Postgres a incorpora na consulta.
+-- null = conexão sem perfil (quem chama usa a regra antiga). Mesma tabela de conceitos de crm_perfil_conta.
+create or replace function public.crm_papel_conta(p_papel text, p_conceito text)
+returns boolean
+language sql immutable
+as $$
+  select case when p_papel is null then null else p_papel = any (case p_conceito
+      when 'agendou' then array['agendado', 'compareceu', 'venda', 'posvenda']
+      when 'consulta_agendada' then array['agendado']
+      when 'compareceu' then array['compareceu', 'venda', 'posvenda']
+      when 'em_atendimento' then array['em_atendimento']
+      when 'ganho' then array['venda']
+      when 'perdido' then array['perdido']
+      when 'ignorar' then array['ignorar']
+      when 'novo' then array['novo']
+      else array[]::text[] end) end
+$$;
+
+-- Papel de cada etapa das conexões COM perfil do cliente: uma linha por (conexão, funil, etapa) que aparece nas
+-- etapas, nos cards ou nos eventos ('' = sem papel). Conexão sem perfil não aparece: quem junta recebe null.
+-- Desempenho: as telas juntam com esta lista (poucas centenas de linhas) em vez de chamar crm_perfil_conta por card
+-- (chamada por linha deixou crm_metricas_essenciais 9 a 80 vezes mais lenta em produção, 04/11/2026).
+create or replace function public.crm_perfil_etapas_sql(p_client uuid)
+returns table(crm_connection_id uuid, pipeline_id text, status_id text, papel text)
+language sql stable set search_path = public, pg_temp
+as $$
+  with cx as (
+    select c.id from public.crm_connections c
+     where c.client_id = p_client and exists (select 1 from public.crm_perfil_etapa x where x.crm_connection_id = c.id)
+  ),
+  et as (
+    select s.crm_connection_id, s.pipeline_id, s.status_id from public.crm_pipeline_statuses s
+     where s.crm_connection_id in (select id from cx)
+    union
+    select l.crm_connection_id, l.pipeline_id, l.status_id from public.crm_leads l
+     where l.crm_connection_id in (select id from cx) and l.pipeline_id is not null and l.status_id is not null
+    union
+    select e.crm_connection_id, e.pipeline_para, e.status_para from public.crm_lead_eventos e
+     where e.client_id = p_client and e.crm_connection_id in (select id from cx)
+       and e.pipeline_para is not null and e.status_para is not null
+  )
+  select et.crm_connection_id, et.pipeline_id, et.status_id, coalesce(pe.papel, pf.papel, '')
+    from et
+    left join public.crm_perfil_etapa pe on pe.crm_connection_id = et.crm_connection_id and pe.pipeline_id = et.pipeline_id and pe.status_id = et.status_id
+    left join public.crm_perfil_etapa pf on pf.crm_connection_id = et.crm_connection_id and pf.pipeline_id = et.pipeline_id and pf.status_id = '*'
+$$;
+
+-- Saída na hora (sem montar a consulta grande) quando o cliente não tem perfil: 2 ms, contra 18 a 30 ms da versão sql.
+create or replace function public.crm_perfil_etapas(p_client uuid)
+returns table(crm_connection_id uuid, pipeline_id text, status_id text, papel text)
+language plpgsql stable set search_path = public, pg_temp
+as $$
+begin
+  if not exists (select 1 from public.crm_perfil_etapa x join public.crm_connections c on c.id = x.crm_connection_id
+                  where c.client_id = p_client) then
+    return;
+  end if;
+  return query select * from public.crm_perfil_etapas_sql(p_client);
+end
+$$;
+
 -- Cards de venda das conexões com perfil (uma linha por card). quando = primeira entrada numa etapa 'venda' (evento);
 -- sem evento, a data do ganho (fonte ou evento "ganhou") ou a criação. copia = outro card de venda da mesma pessoa
 -- nos 3 dias anteriores (robô do Kommo que copia o lead ganho para o funil de atendimento).
-create or replace function public.crm_perfil_vendas(p_client uuid)
+create or replace function public.crm_perfil_vendas_sql(p_client uuid)
 returns table(lead_id uuid, crm_connection_id uuid, external_lead_id text, pessoa text, quando timestamptz,
               por_etapa boolean, copia boolean, price numeric)
 language sql stable set search_path = public, pg_temp
 as $$
   with cx as (select c.id from public.crm_connections c where c.client_id = p_client and public.crm_perfil_ativo(c.id)),
+  pe as materialized (select * from public.crm_perfil_etapas(p_client)),
   dest as (
-    select d.cx, d.pp, d.sp
-      from (select distinct e.crm_connection_id as cx, e.pipeline_para as pp, e.status_para as sp
-              from public.crm_lead_eventos e join cx on cx.id = e.crm_connection_id
-             where e.client_id = p_client and e.tipo in ('entrou', 'mudou_etapa')) d
-     where coalesce(public.crm_perfil_conta(d.cx, d.pp, d.sp, 'ganho'), false)
+    select pe.crm_connection_id as cx, pe.pipeline_id as pp, pe.status_id as sp from pe where pe.papel = 'venda'
   ),
   ent as (
     select e.crm_connection_id as cx, e.external_lead_id as ext, min(e.ocorreu_em) as em
@@ -136,22 +201,36 @@ as $$
   v as (
     select cl.id, cl.crm_connection_id, cl.external_lead_id, cl.price,
            coalesce('p:' || cl.pessoa_id::text, 'l:' || cl.id::text) as pessoa,
-           ent.em is not null or coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'ganho'), false) as por_etapa,
+           ent.em is not null or coalesce(pl.papel = 'venda', false) as por_etapa,
            coalesce(ent.em,
                     case when cl.outcome = 'won' then coalesce(public.crm_data_desfecho(cl.provider, cl.raw_payload, 'won'), gan.em) end,
                     cl.occurred_at) as quando
       from public.crm_leads_do_cliente(p_client) cl
-      join cx on cx.id = cl.crm_connection_id
+      left join pe pl on pl.crm_connection_id = cl.crm_connection_id and pl.pipeline_id = cl.pipeline_id and pl.status_id = cl.status_id
       left join ent on ent.cx = cl.crm_connection_id and ent.ext = cl.external_lead_id
       left join gan on gan.cx = cl.crm_connection_id and gan.ext = cl.external_lead_id
-     where cl.client_id = p_client and cl.removido_na_origem is null and cl.occurred_at is not null
-       and not coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'ignorar'), false)
-       and (ent.em is not null or cl.outcome = 'won'
-            or coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'ganho'), false))
+     where cl.crm_connection_id in (select id from cx)
+       and cl.client_id = p_client and cl.removido_na_origem is null and cl.occurred_at is not null
+       and coalesce(pl.papel, '') <> 'ignorar'
+       and (ent.em is not null or cl.outcome = 'won' or coalesce(pl.papel = 'venda', false))
   )
   select v.id, v.crm_connection_id, v.external_lead_id, v.pessoa, v.quando, v.por_etapa,
          coalesce(v.quando - lag(v.quando) over w <= interval '3 days', false) as copia, v.price
     from v window w as (partition by v.pessoa order by v.quando, v.id)
+$$;
+
+create or replace function public.crm_perfil_vendas(p_client uuid)
+returns table(lead_id uuid, crm_connection_id uuid, external_lead_id text, pessoa text, quando timestamptz,
+              por_etapa boolean, copia boolean, price numeric)
+language plpgsql stable set search_path = public, pg_temp
+as $$
+begin
+  if not exists (select 1 from public.crm_perfil_etapa x join public.crm_connections c on c.id = x.crm_connection_id
+                  where c.client_id = p_client) then
+    return;
+  end if;
+  return query select * from public.crm_perfil_vendas_sql(p_client);
+end
 $$;
 
 revoke all on function public.crm_perfil_ativo(uuid) from public, anon;
@@ -162,6 +241,14 @@ grant execute on function public.crm_perfil_ativo(uuid) to authenticated, servic
 grant execute on function public.crm_perfil_papel(uuid, text, text) to authenticated, service_role;
 grant execute on function public.crm_perfil_conta(uuid, text, text, text) to authenticated, service_role;
 grant execute on function public.crm_perfil_vendas(uuid) to service_role;
+revoke all on function public.crm_papel_conta(text, text) from public, anon;
+revoke all on function public.crm_perfil_etapas(uuid) from public, anon, authenticated;
+revoke all on function public.crm_perfil_etapas_sql(uuid) from public, anon, authenticated;
+revoke all on function public.crm_perfil_vendas_sql(uuid) from public, anon, authenticated;
+grant execute on function public.crm_papel_conta(text, text) to authenticated, service_role;
+grant execute on function public.crm_perfil_etapas(uuid) to service_role;
+grant execute on function public.crm_perfil_etapas_sql(uuid) to service_role;
+grant execute on function public.crm_perfil_vendas_sql(uuid) to service_role;
 
 -- RPC de admin: grava o papel da etapa (p_papel null apaga a linha). p_status '*' = funil inteiro.
 create or replace function public.crm_definir_perfil_etapa(p_connection uuid, p_pipeline text, p_status text, p_papel text, p_nota text default null)
@@ -239,6 +326,7 @@ CREATE OR REPLACE FUNCTION public.crm_metricas_essenciais(p_client_id uuid)
 AS $function$
   -- [perfil-da-clinica] cópia de venda (robô) sai da conta.
   with copias as (select v.lead_id from public.crm_perfil_vendas(p_client_id) v where v.copia),
+  pe as materialized (select * from public.crm_perfil_etapas(p_client_id)),
   base as (
     select cl.id, cl.price, cl.outcome, cl.occurred_at, cl.source,
       cps.status_name, cps.pipeline_name,
@@ -248,18 +336,19 @@ AS $function$
       exists (select 1 from crm_etapa_kpi k where k.crm_connection_id = cl.crm_connection_id
         and k.pipeline_id = cl.pipeline_id and k.status_id = cl.status_id
         and k.kpi = 'em_atendimento') as marcada_atendimento,
-      public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'consulta_agendada') as p_consulta,
-      public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'em_atendimento') as p_atendimento,
-      public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'ganho') as p_ganho,
-      public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'perdido') as p_perdido
+      public.crm_papel_conta(pe.papel, 'consulta_agendada') as p_consulta,
+      public.crm_papel_conta(pe.papel, 'em_atendimento') as p_atendimento,
+      public.crm_papel_conta(pe.papel, 'ganho') as p_ganho,
+      public.crm_papel_conta(pe.papel, 'perdido') as p_perdido
     from (select * from public.crm_leads_do_cliente(p_client_id) crm_leads where removido_na_origem is null) cl
     join crm_pipeline_statuses cps
       on cps.crm_connection_id = cl.crm_connection_id
       and cps.pipeline_id = cl.pipeline_id
       and cps.status_id = cl.status_id
+    left join pe on pe.crm_connection_id = cl.crm_connection_id and pe.pipeline_id = cl.pipeline_id and pe.status_id = cl.status_id
     where cl.client_id = p_client_id
       and (public.is_app_admin() or public.is_client_member(p_client_id))
-      and not coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'ignorar'), false)
+      and coalesce(pe.papel, '') <> 'ignorar'
       and not exists (select 1 from copias c where c.lead_id = cl.id)
   )
   select
@@ -311,27 +400,29 @@ AS $function$
   ),
   -- [perfil-da-clinica] cópia de venda (robô) sai da conta.
   copias as (select v.lead_id from public.crm_perfil_vendas(p_client_id) v where v.copia),
+  pe as materialized (select * from public.crm_perfil_etapas(p_client_id)),
   l as (
     select cl.crm_connection_id, cl.pipeline_id, cl.status_id, cl.outcome, cl.price,
       coalesce(s.pipeline_name, cl.pipeline_id) as funil, s.status_name,
       nullif(btrim(cc.config->'grupos_funil'->>cl.pipeline_id), '') as grupo,
-      coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'consulta_agendada'),
+      coalesce(public.crm_papel_conta(pe.papel, 'consulta_agendada'),
        (exists (select 1 from crm_etapa_kpi k where k.crm_connection_id = cl.crm_connection_id and k.pipeline_id = cl.pipeline_id
                  and k.status_id = cl.status_id and k.kpi = 'consulta_agendada')
         or coalesce(s.status_name, '') ilike '%consulta agendada%')) as em_consulta,
-      coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'ganho'), cl.outcome = 'won') as ganho,
-      coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'perdido'), cl.outcome = 'lost') as perdido,
+      coalesce(public.crm_papel_conta(pe.papel, 'ganho'), cl.outcome = 'won') as ganho,
+      coalesce(public.crm_papel_conta(pe.papel, 'perdido'), cl.outcome = 'lost') as perdido,
       coalesce(lote.n, 0) >= 15 as importado
     from public.crm_leads_do_cliente(p_client_id) cl
     join crm_connections cc on cc.id = cl.crm_connection_id
     left join crm_pipeline_statuses s on s.crm_connection_id = cl.crm_connection_id and s.pipeline_id = cl.pipeline_id and s.status_id = cl.status_id
     left join lote on lote.crm_connection_id = cl.crm_connection_id and lote.minuto = date_trunc('minute', cl.occurred_at)
+    left join pe on pe.crm_connection_id = cl.crm_connection_id and pe.pipeline_id = cl.pipeline_id and pe.status_id = cl.status_id
     where cl.client_id = p_client_id
       and cl.removido_na_origem is null
       and cl.occurred_at is not null
       and (cl.occurred_at at time zone 'America/Sao_Paulo')::date between p_from and p_to
       and (public.is_app_admin() or public.is_client_member(p_client_id))
-      and not coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'ignorar'), false)
+      and coalesce(pe.papel, '') <> 'ignorar'
       and not exists (select 1 from copias c where c.lead_id = cl.id)
   )
   select grupo, funil, count(*) filter (where not importado), count(*) filter (where importado), count(*) filter (where em_consulta),
@@ -377,6 +468,7 @@ AS $function$
     from crm_pipeline_statuses cps join conns on conns.id = cps.crm_connection_id
   ),
   copias as (select v.lead_id from public.crm_perfil_vendas(p_client_id) v where v.copia),
+  pe as materialized (select * from public.crm_perfil_etapas(p_client_id)),
   dias as (
     select cl.crm_connection_id, (cl.occurred_at at time zone 'America/Sao_Paulo')::date as dia, count(*) as n
     from public.crm_leads_do_cliente(p_client_id) cl join conns on conns.id = cl.crm_connection_id
@@ -400,11 +492,12 @@ AS $function$
     from public.crm_leads_do_cliente(p_client_id) cl
     join conns on conns.id = cl.crm_connection_id
     left join etapas e on e.crm_connection_id = cl.crm_connection_id and e.pipeline_id = cl.pipeline_id and e.status_id = cl.status_id
+    left join pe on pe.crm_connection_id = cl.crm_connection_id and pe.pipeline_id = cl.pipeline_id and pe.status_id = cl.status_id
     where cl.client_id = p_client_id and cl.removido_na_origem is null and cl.occurred_at is not null
       and not coalesce(e.lista, false)
       and not exists (select 1 from importacao i where i.crm_connection_id = cl.crm_connection_id
         and i.dia = (cl.occurred_at at time zone 'America/Sao_Paulo')::date)
-      and not coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'ignorar'), false)
+      and coalesce(pe.papel, '') <> 'ignorar'
       and not exists (select 1 from copias c where c.lead_id = cl.id)
   ),
   coortes as (
@@ -489,6 +582,7 @@ AS $function$
     from crm_pipeline_statuses cps join conns on conns.id = cps.crm_connection_id
   ),
   copias as (select v.lead_id from public.crm_perfil_vendas(p_client_id) v where v.copia),
+  pe as materialized (select * from public.crm_perfil_etapas(p_client_id)),
   ja as (
     select distinct ce.crm_connection_id, ce.external_lead_id
     from crm_lead_eventos ce
@@ -535,8 +629,9 @@ AS $function$
     left join etapas e on e.crm_connection_id = cl.crm_connection_id and e.pipeline_id = cl.pipeline_id and e.status_id = cl.status_id
     left join ja on ja.crm_connection_id = cl.crm_connection_id and ja.external_lead_id = cl.external_lead_id
     left join pessoas p on p.id = cl.pessoa_id
+    left join pe on pe.crm_connection_id = cl.crm_connection_id and pe.pipeline_id = cl.pipeline_id and pe.status_id = cl.status_id
     where cl.client_id = p_client_id and cl.removido_na_origem is null
-      and not coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'ignorar'), false)
+      and coalesce(pe.papel, '') <> 'ignorar'
       and not exists (select 1 from copias c where c.lead_id = cl.id)
   ),
   agg as (
@@ -612,6 +707,7 @@ AS $function$
   ),
   -- [perfil-da-clinica] Cards de venda pelo perfil (só conexões com perfil). Cópia do robô fica de fora.
   pv as (select v.* from public.crm_perfil_vendas(p_client_id) v where (select pode from ok)),
+  pe as materialized (select * from public.crm_perfil_etapas(p_client_id)),
   cards as (
     select cl.crm_connection_id, cl.external_lead_id, cl.outcome, cl.provider,
            coalesce(cl.chave_pessoa, public.crm_chave_pessoa(cl.provider, cl.raw_payload, cl.contact_phone, cl.external_lead_id, cl.crm_connection_id)) as pk,
@@ -628,20 +724,22 @@ AS $function$
                   or coalesce(public.crm_origem_classifica(cl.source), '') = 'Prospecção ativa') as ganho_prospeccao,
            case when cl.outcome = 'won' then (public.crm_data_desfecho(cl.provider, cl.raw_payload, 'won') at time zone 'America/Sao_Paulo')::date end as dg,
            -- Com perfil: a pessoa (pessoa_id; sem pessoa, o card), se é card de venda, por onde e quando.
-           public.crm_perfil_ativo(cl.crm_connection_id) as perfil,
+           (pa.id is not null) as perfil,
            pv.lead_id is not null as venda_perfil, coalesce(pv.por_etapa, false) as por_etapa, pv.quando as quando_perfil,
-           case when public.crm_perfil_ativo(cl.crm_connection_id) then coalesce(pv.pessoa, 'p:' || cl.pessoa_id::text, 'l:' || cl.id::text)
+           case when pa.id is not null then coalesce(pv.pessoa, 'p:' || cl.pessoa_id::text, 'l:' || cl.id::text)
                 else coalesce(cl.chave_pessoa, public.crm_chave_pessoa(cl.provider, cl.raw_payload, cl.contact_phone, cl.external_lead_id, cl.crm_connection_id)) end as chave,
-           coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'perdido'), cl.outcome = 'lost') as perdido
+           coalesce(public.crm_papel_conta(pe.papel, 'perdido'), cl.outcome = 'lost') as perdido
       from public.crm_leads_do_cliente(p_client_id) cl
       join crm_connections cc on cc.id = cl.crm_connection_id
       left join funis f on f.crm_connection_id = cl.crm_connection_id and f.pipeline_id = cl.pipeline_id
       left join crm_funil_papel fp on fp.crm_connection_id = cl.crm_connection_id and fp.pipeline_id = cl.pipeline_id
       left join etapas e on e.crm_connection_id = cl.crm_connection_id and e.pipeline_id = cl.pipeline_id and e.status_id = cl.status_id
       left join pv on pv.lead_id = cl.id
+      left join pe on pe.crm_connection_id = cl.crm_connection_id and pe.pipeline_id = cl.pipeline_id and pe.status_id = cl.status_id
+      left join (select distinct pe.crm_connection_id as id from pe) pa on pa.id = cl.crm_connection_id
      where cl.client_id = p_client_id and cl.removido_na_origem is null and cl.occurred_at is not null
        and (select pode from ok)
-       and not coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'ignorar'), false)
+       and coalesce(pe.papel, '') <> 'ignorar'
        and not coalesce(pv.copia, false)
   ),
   -- Com perfil: card de venda (etapa 'venda', ou ganho que não é agendamento nem prospecção sem valor).
@@ -747,6 +845,7 @@ AS $function$
      where c.client_id = p_client
   ),
   copias as (select v.lead_id from public.crm_perfil_vendas(p_client) v where v.copia),
+  pe as materialized (select * from public.crm_perfil_etapas(p_client)),
   base as (
     select cl.id, cl.crm_connection_id as cx, cl.external_lead_id as ext, cl.pessoa_id,
            coalesce(cl.chave_pessoa, public.crm_chave_pessoa(cl.provider, cl.raw_payload, cl.contact_phone, cl.external_lead_id, cl.crm_connection_id)) as pk,
@@ -765,8 +864,9 @@ AS $function$
       left join funis f on f.crm_connection_id = cl.crm_connection_id and f.pipeline_id = cl.pipeline_id
       left join etapas e on e.crm_connection_id = cl.crm_connection_id and e.pipeline_id = cl.pipeline_id and e.status_id = cl.status_id
       left join crm_funil_papel fp on fp.crm_connection_id = cl.crm_connection_id and fp.pipeline_id = cl.pipeline_id
+      left join pe on pe.crm_connection_id = cl.crm_connection_id and pe.pipeline_id = cl.pipeline_id and pe.status_id = cl.status_id
      where cl.client_id = p_client and cl.removido_na_origem is null and cl.occurred_at is not null
-       and not coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'ignorar'), false)
+       and coalesce(pe.papel, '') <> 'ignorar'
        and not exists (select 1 from copias x where x.lead_id = cl.id)
   ),
   pessoa_da_chave as (
@@ -792,14 +892,16 @@ AS $function$
   ),
   -- [perfil-da-clinica] etapa ignorada e cópia de venda saem; ganho/perdido seguem o perfil.
   copias as (select v.lead_id from public.crm_perfil_vendas(p_client_id) v where v.copia),
+  pe as materialized (select * from public.crm_perfil_etapas(p_client_id)),
   leads as (
     select cl.*, cps.pipeline_name as funil, cps.status_name as etapa,
-      coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'ganho'), cl.outcome = 'won') as ganho,
-      coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'perdido'), cl.outcome = 'lost') as perdido
+      coalesce(public.crm_papel_conta(pe.papel, 'ganho'), cl.outcome = 'won') as ganho,
+      coalesce(public.crm_papel_conta(pe.papel, 'perdido'), cl.outcome = 'lost') as perdido
     from crm_leads cl join conns on conns.id = cl.crm_connection_id
+    left join pe on pe.crm_connection_id = cl.crm_connection_id and pe.pipeline_id = cl.pipeline_id and pe.status_id = cl.status_id
     left join crm_pipeline_statuses cps on cps.crm_connection_id = cl.crm_connection_id and cps.pipeline_id = cl.pipeline_id and cps.status_id = cl.status_id
     where cl.client_id = p_client_id and cl.removido_na_origem is null
-      and not coalesce(public.crm_perfil_conta(cl.crm_connection_id, cl.pipeline_id, cl.status_id, 'ignorar'), false)
+      and coalesce(pe.papel, '') <> 'ignorar'
       and not exists (select 1 from copias c where c.lead_id = cl.id)
   ),
   l90 as (select * from leads where occurred_at >= now() - interval '90 days')
@@ -880,11 +982,14 @@ declare
     array['select e.crm_connection_id as cx, e.external_lead_id as ext, e.ocorreu_em,',
           'select e.crm_connection_id as cx, e.external_lead_id as ext, e.ocorreu_em, e.pipeline_para as pp, e.status_para as sp,'],
     array['  mexeu as (' || chr(10), $t$  -- [perfil-da-clinica] com perfil, agendamento = etapa 'agendado'; comparecimento = 'compareceu', 'venda', 'posvenda'.
+  -- Papel das etapas (só conexões com perfil), calculado uma vez e juntado (sem função por linha).
+  pe_pp as materialized (select * from public.crm_perfil_etapas(p_client)),
   ev_etapa as (
     select a.cx, a.ext, a.ocorreu_em,
-           coalesce(public.crm_perfil_conta(a.cx, a.pp, a.sp, 'consulta_agendada'), a.agendamento) as agendamento,
-           coalesce(public.crm_perfil_conta(a.cx, a.pp, a.sp, 'compareceu'), a.comparecimento) as comparecimento
+           coalesce(public.crm_papel_conta(x.papel, 'consulta_agendada'), a.agendamento) as agendamento,
+           coalesce(public.crm_papel_conta(x.papel, 'compareceu'), a.comparecimento) as comparecimento
       from ev_etapa_antigo a
+      left join pe_pp x on x.crm_connection_id = a.cx and x.pipeline_id = a.pp and x.status_id = a.sp
   ),
   mexeu as ($t$ || chr(10)],
     -- Vendas: conexão sem perfil segue a regra antiga; com perfil, uma venda por pessoa no período.
@@ -898,7 +1003,7 @@ declare
   ),
   vend as (
     select a.* from vend_antigo a
-     where not exists (select 1 from cards c where c.id = a.id and public.crm_perfil_ativo(c.cx))
+     where not exists (select 1 from cards c where c.id = a.id and c.cx in (select x.crm_connection_id from pe_pp x))
     union all
     select p.* from (
       select distinct on (c.u) c.id, c.u, v.quando, v.preco as price, c.funil, c.procedimento,
@@ -910,8 +1015,9 @@ declare
   ck_cob as materialized ($t$],
     -- Em negociação: com perfil, card aberto em etapa 'em_atendimento'.
     array['     where c.outcome = ''open'' and not c.em_agendamento and not c.em_comparecimento' || chr(10),
-          $t$      left join lateral (select public.crm_perfil_conta(pl.crm_connection_id, pl.pipeline_id, pl.status_id, 'em_atendimento') as ea
-                           from crm_leads pl where pl.id = c.id) pf on true
+          $t$      left join lateral (select public.crm_papel_conta(x.papel, 'em_atendimento') as ea from crm_leads pl
+                           join pe_pp x on x.crm_connection_id = pl.crm_connection_id and x.pipeline_id = pl.pipeline_id and x.status_id = pl.status_id
+                          where pl.id = c.id) pf on true
      where c.outcome = 'open' and coalesce(pf.ea, not c.em_agendamento and not c.em_comparecimento)$t$ || chr(10)],
     array['       and c.papel in (''captacao'', ''venda'')' || chr(10), '       and coalesce(pf.ea, c.papel in (''captacao'', ''venda''))' || chr(10)],
     array['       and coalesce(c.etapa, '''') !~* ''(caixa de leads', '       and coalesce(pf.ea, coalesce(c.etapa, '''') !~* ''(caixa de leads'],
