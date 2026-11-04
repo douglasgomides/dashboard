@@ -62,6 +62,25 @@ export async function lerRecuperacao(admin: Admin, clientId: string) {
     resumos.push(...((data ?? []) as any[]));
     if ((data ?? []).length < 1000) break;
   }
+  // Sem leitura da IA (Kommo não entrega o texto da clínica): escolhe por regra quem escreveu no WhatsApp e ficou sem
+  // resposta da equipe há 1 a 21 dias (RPC recuperacao_sem_resposta). Só as mensagens da paciente vão para a IA.
+  if (!resumos.length) {
+    const { data: sr, error: erroSr } = await admin.rpc("recuperacao_sem_resposta", { p_client_id: clientId });
+    if (erroSr) throw new Error(`Não foi possível escolher quem recuperar: ${erroSr.message}`);
+    for (const x of (sr ?? []) as { conversa_id: string; espera_desde: string; textos: string | null }[]) {
+      resumos.push({
+        conversa_id: x.conversa_id,
+        ate_msg_em: x.espera_desde,
+        resumo: {
+          comercial: true, situacao: "aguardando_clinica", recuperavel: true,
+          motivo: "A paciente escreveu no WhatsApp e a equipe não respondeu",
+          resumo: x.textos ? `Últimas mensagens da paciente, sem resposta da clínica: ${x.textos}` : "A paciente escreveu e ficou sem resposta.",
+          sem_leitura_ia: true,
+        },
+        ultima_regra: x.espera_desde,
+      } as any);
+    }
+  }
   const pre = resumos.filter((r) => r.resumo && r.resumo.comercial !== false && (r.resumo.recuperavel === true || r.resumo.situacao === "aguardando_clinica") && r.resumo.etapa !== "agendou" && r.resumo.situacao !== "agendou");
   const ids = pre.map((r) => r.conversa_id).slice(0, 400);
   const ult = new Map<string, string | null>();
@@ -76,7 +95,8 @@ export async function lerRecuperacao(admin: Admin, clientId: string) {
     for (const c of (cs ?? []) as { id: string; ultima_msg_em: string | null }[]) ult.set(c.id, c.ultima_msg_em);
     for (const s of (ss ?? []) as { conversa_id: string }[]) ja.add(s.conversa_id);
   }
-  const candidatos = escolherRecuperaveis(pre.map((r) => ({ conversa_id: r.conversa_id, ultima_msg_em: ult.get(r.conversa_id) ?? null, ate_msg_em: r.ate_msg_em, resumo: r.resumo })), ja);
+  // Na escolha por regra, a "última mensagem" é a da paciente sem resposta (o robô pode ter escrito depois).
+  const candidatos = escolherRecuperaveis(pre.map((r) => ({ conversa_id: r.conversa_id, ultima_msg_em: (r as any).ultima_regra ?? ult.get(r.conversa_id) ?? null, ate_msg_em: r.ate_msg_em, resumo: r.resumo })), ja);
   const porId = new Map(pre.map((r) => [r.conversa_id, r.resumo]));
   const casos = candidatos.map((c: Candidato) => {
     const r = porId.get(c.conversa_id) ?? {};

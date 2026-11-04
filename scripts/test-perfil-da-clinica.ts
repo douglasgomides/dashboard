@@ -304,6 +304,97 @@ try {
     else assert.deepEqual((volta as R)[k], A[k], `sem perfil de novo, ${k} igual ao original`);
   }
 
+  // ---------- d) Migração 20261105140000 (telas restantes): sem perfil, igual a antes; com perfil, venda pelo perfil.
+  const TELAS = "20261105140000_perfil_da_clinica_telas_restantes.sql";
+  assert.ok(arquivos.includes(TELAS));
+  for (const f of arquivos.filter((f) => f > MIGRACAO && f < TELAS)) await db.exec(await readFile(new URL(f, pasta), "utf8"));
+  const sqlTelas = await readFile(new URL(TELAS, pasta), "utf8");
+  const pessoasDe = (c: string) => Object.entries(pessoaDe).filter(([k]) => k.startsWith(`${c}:`)).map(([, v]) => v).sort();
+  const telas = async (c: string) => {
+    await como(ADMIN);
+    const r1 = async (t: string, p: unknown[] = [c]) => (await q(t, p)).rows[0].r;
+    const rs = async (t: string, p: unknown[] = [c]) => (await q(t, p)).rows;
+    const out = {
+      qualidade: await r1(`select public.qualidade_leads_campanha($1,'${DE}','${ATE}') r`),
+      campanhas: await r1("select public.campanhas_base($1) r"),
+      relacionamento: await rs("select * from public.relacionamento_pessoas($1,$2::uuid[]) order by pessoa_id", [c, pessoasDe(c)]),
+      porCampo: await rs("select * from public.crm_funil_por_campo($1,'%origem%') order by chave"),
+      porCampoPeriodo: await rs(`select * from public.crm_funil_por_campo_periodo($1,'%origem%','${DE}','${ATE}') order by chave`),
+      jornadaFunil: await r1(`select public.jornada_funil($1,'${DE}','${ATE}') r`),
+      jornadaResumo: await r1(`select public.jornada_resumo($1,'${DE}'::date,'${ATE}'::date) r`),
+      jornadaResumoTudo: await r1("select public.jornada_resumo($1) r"),
+      conteudo: await r1(`select public.conteudo_comercial($1,'${DE}','${ATE}') r`),
+      conteudoProfundo: await r1(`select public.conteudo_comercial_profundo($1,'${DE}','${ATE}') r`),
+      links: await rs(`select * from public.links_funil($1,'${DE}T00:00:00-03'::timestamptz,'2026-11-01T00:00:00-03'::timestamptz) order by link_id`),
+      emJogo: await r1(`select public.receita_em_jogo($1,'${DE}','${ATE}') r`),
+      porCanal: await r1(`select public.receita_por_canal($1,'${DE}','${ATE}') r`),
+      sap: await r1(`select public.sap_tracker_auto($1,'${DE}','${ATE}') r`),
+    };
+    await como(null);
+    return out;
+  };
+  // jornada_resumo(uuid): no repositório era a versão que chama a de período (20261022140000, nunca aplicada em
+  // produção); a migração recria a de produção. Sem perfil, as contas de venda e de leads são as mesmas.
+  const igual = (k: string, x: R) => (k === "jornadaResumoTudo"
+    ? { ganhos: x.ganhos, receita: x.receita, viraram_lead: x.viraram_lead, leads_total: x.leads_total, por_origem: x.por_origem } : x);
+  const antesTelas = new Map<string, R>();
+  for (const c of [LANA, OUTRA]) antesTelas.set(c, await telas(c));
+  await db.exec(sqlTelas);
+  await db.exec(sqlTelas); // rodar de novo não muda nada
+  for (const c of [LANA, OUTRA]) {
+    const depois = await telas(c);
+    for (const k of Object.keys(depois)) assert.deepEqual(igual(k, (depois as R)[k]), igual(k, antesTelas.get(c)![k]), `sem perfil, ${k} igual ao de antes da migração das telas`);
+  }
+  const AT = antesTelas.get(LANA)!;
+  assert.equal(AT.jornadaFunil.vendas, 1, "regra antiga: só o ganho marcado");
+  assert.equal(AT.porCanal.vendas, 1);
+
+  await como(ADMIN);
+  for (const [p, s, papel] of PERFIL) await q("select public.crm_definir_perfil_etapa($1,$2,$3,$4,'piloto')", [CX[LANA], p, s, papel]);
+  await como(null);
+  const T = await telas(LANA);
+  // Vendas do período: Caio (ganho no C2; a cópia do robô não soma) e Davi (movido para o Atendimento).
+  assert.equal(T.jornadaFunil.vendas, 2);
+  assert.equal(Number(T.jornadaFunil.receita), 6200, "R$ 5.000 do Caio (sem somar a cópia) + R$ 1.200 do Davi");
+  assert.equal(T.jornadaFunil.agendados, 4, "Bia, Gil (C2 'Consulta Agendada'), Caio e Davi (venda); nem depósito nem passagem");
+  assert.equal(T.jornadaFunil.leads, 7, "sem a cópia e sem o funil ignorado");
+  assert.equal(AT.jornadaFunil.agendados, 5, "regra antiga: depósito e passagem pelo nome");
+  assert.equal(T.jornadaFunil.fontes.tem_venda_registrada, true);
+  for (const j of [T.jornadaResumo, T.jornadaResumoTudo]) {
+    assert.equal(j.ganhos, 2, "jornada: Caio e Davi");
+    assert.equal(Number(j.receita), 6200);
+  }
+  assert.equal(AT.jornadaResumo.ganhos, 1);
+  assert.equal(T.porCanal.vendas, 2);
+  assert.equal(Number(T.porCanal.receita), 6200);
+  if (AT.emJogo.vendas_crm > 0) assert.equal(T.emJogo.vendas_crm, 2, "ticket mediano pelas vendas do perfil (uma por pessoa)");
+  const soma = (rows: R[], k: string) => rows.reduce((s, r) => s + Number(r[k] ?? 0), 0);
+  for (const rows of [T.porCampo, T.porCampoPeriodo]) {
+    assert.equal(soma(rows, "ganhos"), 2, "funil por campo: card de venda pelo perfil");
+    assert.equal(soma(rows, "perdidos"), 1);
+    assert.equal(soma(rows, "total"), 7);
+  }
+  assert.equal(soma(T.porCampo, "abertos"), 4, "Ana, Bia, Gil e Hugo; o Davi (venda no Atendimento) não está aberto");
+  assert.equal(soma(AT.porCampo, "ganhos"), 1);
+  assert.equal(T.campanhas.abertos, 4, "card de venda e funil ignorado não contam como aberto");
+  assert.equal(AT.campanhas.abertos, 7);
+  const davi = (rows: R[]) => rows.find((r) => r.pessoa_id === pessoaDe[`${LANA}:Davi`])!;
+  assert.equal(davi(T.relacionamento).compras, 1, "Davi comprou (entrou no Atendimento)");
+  assert.equal(davi(T.relacionamento).ja_paciente, true);
+  assert.equal(davi(AT.relacionamento).compras, 0, "regra antiga: sem ganho marcado");
+  assert.equal(T.relacionamento.find((r: R) => r.pessoa_id === pessoaDe[`${LANA}:Caio`]).compras, 1, "a cópia do robô não é segunda compra");
+  assert.equal(T.sap.fechados, 2);
+  assert.equal(Number(T.sap.receita), 6200);
+  assert.equal(T.sap.agendados, 4, "SAP: estágio pelo papel da etapa, não pelo nome");
+  assert.equal(T.sap.leads, 7);
+  assert.equal(AT.sap.fechados, 1);
+  // A outra clínica (sem perfil) não muda; apagar o perfil volta ao original.
+  const OT = await telas(OUTRA);
+  for (const k of Object.keys(OT)) assert.deepEqual(igual(k, (OT as R)[k]), igual(k, antesTelas.get(OUTRA)![k]), `perfil de uma conexão não mexe em outra (${k})`);
+  await q("delete from crm_perfil_etapa");
+  const voltaTelas = await telas(LANA);
+  for (const k of Object.keys(voltaTelas)) assert.deepEqual(igual(k, (voltaTelas as R)[k]), igual(k, AT[k]), `sem perfil de novo, ${k} igual ao original`);
+
   console.log("perfil da clínica: ok");
 } finally {
   await db.close();
