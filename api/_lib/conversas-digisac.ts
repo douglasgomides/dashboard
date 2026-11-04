@@ -116,11 +116,11 @@ export async function ingerirConversasDigisac(admin: SupabaseClient<any, any, an
     if (comWts.has(clientId) || porCliente.get(clientId)! > 1) { r.erros.push("Origem dos atendimentos ambígua: vincule cada sessão ao provedor/conexão antes de importar"); continue; }
     try {
       const base = baseUrl(conn.subdomain);
-      const sessoes: { session_id: string; contact_id: string | null; started_at: string; updated_at: string | null }[] = [];
+      const sessoes: { session_id: string; contact_id: string | null; started_at: string; updated_at: string | null; primeira_resposta_conferida_em?: string | null }[] = [];
       let terminou = false;
       for (let de = 0; de < 20_000; de += 1000) {
         if (Date.now() >= fim) throw new Error("Tempo esgotado ao listar atendimentos; importação não iniciada");
-        const { data: pagina, error } = await admin.from("wts_sessions").select("session_id, contact_id, started_at, updated_at")
+        const { data: pagina, error } = await admin.from("wts_sessions").select("session_id, contact_id, started_at, updated_at, primeira_resposta_conferida_em")
           .eq("client_id", clientId).gte("started_at", desde).order("started_at", { ascending: false }).order("session_id").range(de, de + 999);
         if (error) throw new Error("Não foi possível listar os atendimentos");
         sessoes.push(...(pagina ?? []));
@@ -145,7 +145,10 @@ export async function ingerirConversasDigisac(admin: SupabaseClient<any, any, an
       const nuncaLidas = sessoes.filter(s => !ja.has(s.session_id) || cobertura.get(s.session_id) !== "completa" || !ja.get(s.session_id));
       const mudaram = sessoes.filter(s => ja.has(s.session_id) && cobertura.get(s.session_id) === "completa" && !!ja.get(s.session_id) && !!s.updated_at
         && Date.parse(s.updated_at) > Date.parse(conferida.get(s.session_id) ?? ja.get(s.session_id)!));
-      const pendentes = [...new Map([...prioritarias, ...nuncaLidas, ...mudaram].map(s => [s.session_id, s])).values()];
+      // Lidas antes de a 1ª resposta sair das mensagens nunca eram relidas: 1 de 757 atendimentos tinha o tempo medido
+      // (Dra. Rafaela, auditoria de 01/11/2026). Entram por último, até cada uma ser conferida uma vez.
+      const semPrimeira = sessoes.filter(s => ja.has(s.session_id) && cobertura.get(s.session_id) === "completa" && !s.primeira_resposta_conferida_em);
+      const pendentes = [...new Map([...prioritarias, ...nuncaLidas, ...mudaram, ...semPrimeira].map(s => [s.session_id, s])).values()];
       r.restantes = pendentes.length;
       const contatos = [...new Set(pendentes.slice(0, limite).map((s) => s.contact_id).filter(Boolean))] as string[];
       const leadDe = new Map<string, { id: string; phone: string | null; nome: string | null; pessoa_id: string | null }>();
@@ -250,7 +253,7 @@ export async function ingerirConversasDigisac(admin: SupabaseClient<any, any, an
       // 1ª resposta pelas mensagens (não pelo waitingTime do ticket): só com a conversa inteira lida e gravada.
       if (completa && !erroPersistencia) {
         const resp = primeiraRespostaDigisac(msgs);
-        const { error: eS } = await admin.from("wts_sessions").update({ wait_seconds: resp?.segundos ?? null, first_response_at: resp?.em ?? null })
+        const { error: eS } = await admin.from("wts_sessions").update({ wait_seconds: resp?.segundos ?? null, first_response_at: resp?.em ?? null, primeira_resposta_conferida_em: new Date().toISOString() })
           .eq("client_id", clientId).eq("session_id", tid);
         if (eS) r.erros.push(`1ª resposta ${tid.slice(0, 8)}: ${eS.message}`);
       }

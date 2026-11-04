@@ -159,6 +159,26 @@ function utmDe(v: unknown): Record<string, string> | null {
   return Object.keys(out).length ? out : null;
 }
 
+/**
+ * Data de uma transição da fatura pelo histórico oficial `statusAt[]` ({ when, status }) do webhook v2 (doc
+ * hubla.gitbook.io/docs/webhooks/eventos/fatura.md, lida em 01/11/2026: "Leia event.invoice.status (estado atual) e
+ * event.invoice.statusAt[] (histórico com timestamps)"). O webhook v2 NÃO traz paidAt, refundedAt, chargebackAt nem
+ * updatedAt: a data da última mudança é modifiedAt. `qual` escolhe a primeira (pagamento) ou a última (reembolso)
+ * transição para um dos status pedidos.
+ */
+export function quandoStatusHubla(statusAt: unknown, status: string[], qual: "primeira" | "ultima" = "primeira"): string | null {
+  if (!Array.isArray(statusAt)) return null;
+  const alvo = new Set(status);
+  const datas = statusAt
+    .map((x) => (x && typeof x === "object" ? (x as Record<string, unknown>) : null))
+    .filter((x): x is Record<string, unknown> => !!x && alvo.has(String(x.status ?? "").trim().toLowerCase()))
+    .map((x) => data(x.when))
+    .filter((d): d is string => !!d)
+    .sort();
+  if (!datas.length) return null;
+  return qual === "primeira" ? datas[0] : datas[datas.length - 1];
+}
+
 function versaoDe(v: unknown): number | null {
   const n = typeof v === "string" && v.trim() ? Number(v) : v;
   return typeof n === "number" && Number.isFinite(n) ? n : null;
@@ -210,6 +230,15 @@ export function normalizarWebhookHubla(corpo: unknown, agora = new Date()): Norm
   const oferta = (e.evento.offer && typeof e.evento.offer === "object" ? e.evento.offer : ofertas[0]) as Record<string, unknown> | undefined;
   const amount = (inv.amount ?? {}) as Record<string, unknown>;
   const reembolso = status === "refunded" || status === "chargeback";
+  // Datas do webhook v2: statusAt[] (when de cada transição) e modifiedAt (última alteração). paidAt/refundedAt/
+  // updatedAt ficam como reserva (formato antigo e carga), e a hora do recebimento só quando a fonte não diz nada:
+  // antes um aviso reprocessado dias depois gravava a venda no dia do reprocessamento (auditoria de 01/11/2026).
+  const modificado = data(inv.modifiedAt) ?? data(inv.updatedAt);
+  const pagoEm = data(inv.paidAt) ?? quandoStatusHubla(inv.statusAt, ["paid"], "primeira")
+    ?? (status === "paid" ? modificado ?? agora.toISOString() : null);
+  const reembolsadoEm = reembolso
+    ? data(inv.refundedAt ?? inv.chargebackAt) ?? quandoStatusHubla(inv.statusAt, ["refunded", "chargeback"], "ultima") ?? modificado ?? agora.toISOString()
+    : null;
 
   return {
     ok: true,
@@ -222,14 +251,14 @@ export function normalizarWebhookHubla(corpo: unknown, agora = new Date()): Norm
       // Bruto (totalCents), como a carga do passado e a Hubla; subtotal só na falta dele.
       valor_centavos: centavos(amount.totalCents) ?? centavos(amount.subtotalCents),
       moeda: (texto(inv.currency ?? amount.currency, 8) ?? "BRL").toUpperCase(),
-      pago_em: data(inv.paidAt) ?? (status === "paid" ? data(inv.updatedAt) ?? agora.toISOString() : null),
-      reembolsado_em: reembolso ? data(inv.refundedAt ?? inv.chargebackAt ?? inv.updatedAt) ?? agora.toISOString() : null,
+      pago_em: pagoEm,
+      reembolsado_em: reembolsadoEm,
       produto: texto(produto?.name),
       oferta_id: texto(oferta?.id ?? inv.offerId),
       utm: utmDe((inv.paymentSession as Record<string, unknown> | null | undefined)?.utm),
       telefone_chave: chaveTelefone(telefoneDe((inv.payer as Record<string, unknown> | null | undefined)?.phone)),
       versao: versaoDe(inv.version),
-      atualizado_em: data(inv.updatedAt),
+      atualizado_em: modificado,
       bruto: semDadosPessoais({
         type: e.tipo || null, version: (corpo as Record<string, unknown>).version ?? null,
         itens: Array.isArray(inv.items) ? (inv.items as unknown[]).length : null, event: e.evento,

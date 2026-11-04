@@ -16,6 +16,7 @@ import { confiancaPorAmostra, type Insight, type Limitacao, type Responsavel, ty
 import { saldoSeguidores } from "@/lib/metricas";
 import { lerVendas, type VendasPeriodoBanco } from "@/lib/vendas-periodo";
 import { LIMITES } from "./limites.js";
+import { primeiraRespostaConfiavel } from "./espera-atendimento.js";
 
 export interface EntradaResultado {
   /** A tela já mostra a faixa de cobertura no topo: não repetir "Período incompleto" nos alertas. */
@@ -377,7 +378,8 @@ function montarMetricas(e: EntradaResultado, cob: Cobertura): Metrica[] {
   }
 
   // WhatsApp.
-  const espera = n(e.wts?.espera_mediana_seg);
+  // Só com amostra mínima de atendimentos medidos: 1 caso em 50 aparecia como "Rápido" (Dra. Rafaela, 01/11/2026).
+  const espera = primeiraRespostaConfiavel(e.wts) ?? 0;
   if (n(e.wts?.atendimentos) > 0 && espera > 0) {
     const f = avaliar(BENCHMARKS.primeiraResposta, espera);
     out.push({
@@ -496,7 +498,8 @@ export function montarResultado(e: EntradaResultado): Resultado {
   } else if (crmLeitura === "sem_dado") {
     resumo.push("O CRM não devolveu os números do período: sem dado de contatos novos.");
   }
-  if (n(e.wts?.atendimentos) > 0) resumo.push(`${int(n(e.wts?.atendimentos))} atendimentos no WhatsApp${n(e.wts?.espera_mediana_seg) > 0 ? `, com ${dur(n(e.wts?.espera_mediana_seg))} de espera típica pela primeira resposta` : ""}.`);
+  const esperaResumo = primeiraRespostaConfiavel(e.wts);
+  if (n(e.wts?.atendimentos) > 0) resumo.push(`${int(n(e.wts?.atendimentos))} atendimentos no WhatsApp${esperaResumo != null && esperaResumo > 0 ? `, com ${dur(esperaResumo)} de espera típica pela primeira resposta` : ""}.`);
   const melhor = confiaveis.find((i) => i.tom === "bom");
   const pior = confiaveis.find((i) => i.tom !== "bom");
   if (melhor) resumo.push(`Destaque: ${melhor.titulo}`);

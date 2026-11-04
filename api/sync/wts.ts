@@ -3,9 +3,9 @@ import type { VercelRequest, VercelResponse } from "../_lib/http-types.js";
 import { createClient } from "@supabase/supabase-js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { recordSyncStatusPorCliente } from "../_lib/sync-status.js";
+import { recordSyncStatusPorCliente, registrarAviso } from "../_lib/sync-status.js";
 import { runWtsSync } from "../_lib/wts-sync.js";
-import { ingerirConversasWts } from "../_lib/conversas-wts.js";
+import { avisoFalhaMensagens, ingerirConversasWts, MARCA_AVISO_MENSAGENS } from "../_lib/conversas-wts.js";
 import { analisarConversasPendentes } from "../_lib/resumo-conversa.js";
 import { rodarAtendenteSombra } from "../_lib/atendente.js";
 import { atribuirLinks } from "../_lib/redirecionar.js";
@@ -122,13 +122,9 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       clientId,
     });
 
-    await recordSyncStatusPorCliente(
-      createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } }),
-      "atendimento",
-      results.map((r) => ({ clientId: r.client_id, rows: r.sessoes, errors: r.errors })),
-    );
     // Conversas: depois do sync das sessões, traz as mensagens das novas (até ~100s). Nunca derruba o sync.
     const conversas: Record<string, unknown> = {};
+    const errosConversas = new Map<string, { total: number; lidas: number; erros: string[] }>();
     try {
       const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
       const clientes = [...new Set(results.map((r) => r.client_id))];
@@ -141,10 +137,29 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         const carga = !!query.dias && !!clientId;
         const c = await ingerirConversasWts(admin, WTS_API_TOKEN, id, { tokensExtras: extras, limite: carga ? 300 : 80, orcamentoMs: carga ? 150_000 : Math.floor(100_000 / Math.max(1, clientes.length)), dias: query.dias ?? 7 });
         conversas[id] = { sessoes: c.sessoes, mensagens: c.mensagens, com_anuncio: c.comAnuncio ?? 0, campos_primeira_msg: c.valoresVistos.chaves, erros: c.erros.slice(0, 3) };
+        errosConversas.set(id, { total: c.erros.length, lidas: c.sessoes, erros: c.erros });
       }
     } catch (e) {
       conversas.erro = e instanceof Error ? e.message : String(e);
     }
+    // Status do atendimento com as mensagens junto: antes só os erros das sessões chegavam ao painel, e a importação das
+    // mensagens podia parar com "WhatsApp em dia" (auditoria de 01/11/2026). Falha geral (nenhuma conversa lida e erro, ou
+    // a etapa caiu) vira erro da fonte; falha parcial vira aviso nosso, que some na rodada sem erro.
+    const avisoMensagens = new Map<string, string | null>();
+    const itensStatus = results.map((r) => {
+      const c = errosConversas.get(r.client_id);
+      const extra: string[] = [];
+      if (typeof conversas.erro === "string") extra.push(`mensagens do WhatsApp: ${conversas.erro}`);
+      else if (c) {
+        const reais = c.erros.filter((e) => !/nenhuma mensagem visível/.test(e));
+        if (reais.length && c.lidas === 0) extra.push(`mensagens do WhatsApp: nenhuma conversa lida nesta rodada (${reais[0]})`);
+        avisoMensagens.set(r.client_id, reais.length && c.lidas > 0 ? avisoFalhaMensagens(reais.length, c.lidas) : null);
+      }
+      return { clientId: r.client_id, rows: r.sessoes, errors: [...r.errors, ...extra] };
+    });
+    const adminStatus = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+    await recordSyncStatusPorCliente(adminStatus, "atendimento", itensStatus);
+    for (const [id, aviso] of avisoMensagens) await registrarAviso(adminStatus, id, "atendimento", aviso, MARCA_AVISO_MENSAGENS, "nos");
     // Leitura por IA das conversas novas, com o tempo que sobrar da função (até ~270s no total).
     const analise: Record<string, unknown> = {};
     try {

@@ -25,8 +25,12 @@ try {
   let failRead = "conversas_resumos", writes = 0, rejectExpiry = false;
   globalThis.fetch = async (input, init) => {
     const u = new URL(String(input)); assert.equal(u.origin, origin);
-    const table = u.pathname.split("/").at(-1);
-    if ((init?.method ?? "GET") !== "GET") { writes++; return rejectExpiry ? dbError() : json(null); }
+    const nome = u.pathname.split("/").at(-1)!;
+    // Leitura por cliente (regra por médico): POST em rpc/<tabela>_do_cliente é leitura da própria tabela.
+    const porCliente = u.pathname.includes("/rpc/") && nome.endsWith("_do_cliente");
+    const table = porCliente ? nome.slice(0, -"_do_cliente".length) : nome;
+    if (porCliente) assert.equal(JSON.parse(String(init?.body)).p_client, CID);
+    else if ((init?.method ?? "GET") !== "GET") { writes++; return rejectExpiry ? dbError() : json(null); }
     if (table === failRead) return dbError();
     return json(table === "agentes_aprendizados" ? [{ id: "lesson", chave: "old", estado: "ativo" }] : []);
   };
@@ -99,8 +103,16 @@ try {
   let urgent = false, rejectDraft = true, auditCalls = 0;
   globalThis.fetch = async (input, init) => {
     const u = new URL(String(input)); assert.equal(u.origin, origin, "failed shadow audit must stop before contacting AI");
-    const table = u.pathname.split("/").at(-1);
-    const method = init?.method ?? "GET";
+    const nome = u.pathname.split("/").at(-1)!;
+    const porCliente = u.pathname.includes("/rpc/") && nome.endsWith("_do_cliente");
+    const table = porCliente ? nome.slice(0, -"_do_cliente".length) : nome;
+    const method = porCliente ? "GET" : init?.method ?? "GET";
+    if (porCliente) {
+      // Leitura por cliente (regra por médico): o cliente vai no corpo, não em client_id.
+      assert.equal(JSON.parse(String(init?.body)).p_client, CID);
+      if (table === "conversas") return json([{ id: "conversation", ultima_msg_em: new Date().toISOString() }]);
+      return json([]);
+    }
     if (method !== "GET") {
       if (table === "acessos_conversas") { auditCalls++; return dbError(); }
       assert.equal(table, "atendente_rascunhos");

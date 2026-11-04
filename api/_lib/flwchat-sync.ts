@@ -91,6 +91,16 @@ async function flwGet(token: string, path: string, query: Record<string, string 
   return res.json();
 }
 
+/**
+ * Resultado oficial do card pela doc da Helena (GET /crm/v2/panel/card, PublicPanelCardDTOV2.status: OPEN, WON, LOST,
+ * ARCHIVED). A listagem v1 usada hoje não traz o campo; quando vier (v2 ou mudança na v1), ele manda: WON = ganho,
+ * LOST = perdido, ARCHIVED = fechado sem resultado. OPEN ou ausente: segue a regra da etapa.
+ */
+export function resultadoOficialDoCard(status: unknown): "won" | "lost" | "closed" | null {
+  const s = String(status ?? "").trim().toUpperCase();
+  return s === "WON" ? "won" : s === "LOST" ? "lost" : s === "ARCHIVED" ? "closed" : null;
+}
+
 /** Abertos no Nexo que não vieram na lista completa do painel. null quando a lista parece incompleta (menos da
  *  metade dos abertos): melhor não fechar nada do que fechar o painel inteiro por uma resposta ruim da API. */
 export function cardsFechadosNaOrigem(abertosNoNexo: string[], vistos: Set<string>): string[] | null {
@@ -529,7 +539,8 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
             pipeline_id: panelId,
             price: typeof c.monetaryAmount === "number" && c.monetaryAmount > 0 ? c.monetaryAmount : null,
             occurred_at: c.createdAt ?? null,
-            outcome: confirmadas.get(`${panelId}|${c.stepId ?? ""}`) ?? resultadoDaEtapa(stepNames.get(c.stepId ?? "") ?? ""),
+            // Resultado oficial do card (v2: status WON/LOST/ARCHIVED) vale antes do nome da etapa e do mapeamento.
+            outcome: resultadoOficialDoCard((c as { status?: unknown }).status) ?? confirmadas.get(`${panelId}|${c.stepId ?? ""}`) ?? resultadoDaEtapa(stepNames.get(c.stepId ?? "") ?? ""),
             source: origemTag
               ?? (typeof origem === "string" && origem.trim()
                 ? origem.trim()

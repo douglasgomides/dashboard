@@ -10,7 +10,7 @@ import type { Database } from "../../src/integrations/supabase/types.js";
 import { classifyTema } from "./tema-classifier.js";
 import { META_GRAPH_URL } from "./meta-graph-versao.js";
 import { fetchMeta } from "./meta-limite.js";
-import { linhasWindsor } from "./windsor-resposta.js";
+import { buscarWindsor, janelasWindsor, semRepetidos, WINDSOR_MAX_ROWS } from "./windsor-resposta.js";
 
 const WINDSOR_BASE = "https://connectors.windsor.ai/instagram";
 
@@ -93,14 +93,10 @@ async function windsorGetRange(
     date_to: dateTo,
     fields: fields.join(","),
     filter: JSON.stringify([["account_id", "eq", windsorAccountId]]),
-    _max_rows: "100000",
+    _max_rows: String(WINDSOR_MAX_ROWS),
   });
-  const res = await fetch(`${WINDSOR_BASE}?${params.toString()}`, { signal: AbortSignal.timeout(30_000), redirect: "error" });
-  if (!res.ok) {
-    throw new Error(`Windsor.ai request failed (${res.status}): ${await res.text()}`);
-  }
-  // HTTP 200 com `error` no corpo não vira mais "lista vazia" (windsor-resposta.ts).
-  return linhasWindsor(res);
+  // HTTP 200 com `error` no corpo vira erro; 429 espera e tenta uma vez; resposta no limite de _max_rows é corte.
+  return buscarWindsor(`${WINDSOR_BASE}?${params.toString()}`);
 }
 
 const WINDSOR_CHUNK_DAYS = 30;
@@ -118,16 +114,8 @@ async function windsorGet(
   fields: string[],
   windsorAccountId: string,
 ): Promise<Record<string, unknown>[]> {
-  const chunks: { from: string; to: string }[] = [];
-  let cursor = new Date(range.to + "T00:00:00Z");
-  const start = new Date(range.from + "T00:00:00Z");
-  while (cursor > start) {
-    const chunkStart = new Date(cursor);
-    chunkStart.setUTCDate(chunkStart.getUTCDate() - WINDSOR_CHUNK_DAYS);
-    const from = chunkStart < start ? range.from : chunkStart.toISOString().slice(0, 10);
-    chunks.push({ from, to: cursor.toISOString().slice(0, 10) });
-    cursor = chunkStart;
-  }
+  // Janelas que não se tocam (a emenda repetia o post do dia e o banco recusava o lote inteiro).
+  const chunks = janelasWindsor(range.from, range.to, WINDSOR_CHUNK_DAYS);
 
   const all: Record<string, unknown>[] = [];
   for (const c of chunks) {
@@ -145,9 +133,16 @@ async function syncPosts(
   windsorAccountId: string,
   clientId: string,
 ): Promise<{ count: number; errors: string[] }> {
+  // A Windsor filtra o post pela data em UTC (post das 23h de Brasília cai no dia seguinte): pede um dia a mais em
+  // cada ponta para não perder o post da noite do primeiro dia. O post a mais é real e só é gravado de novo.
+  const umDia = (d: string, n: number) => {
+    const x = new Date(`${d}T00:00:00Z`);
+    x.setUTCDate(x.getUTCDate() + n);
+    return x.toISOString().slice(0, 10);
+  };
   const rows = await windsorGet(
     windsorApiKey,
-    range,
+    { from: umDia(range.from, -1), to: umDia(range.to, 1) },
     [
       "account_id",
       "media_id",
@@ -183,8 +178,8 @@ async function syncPosts(
   );
 
   const now = new Date().toISOString();
-  const postRows = rows
-    .filter((r) => r.media_id)
+  // A mesma mídia duas vezes no mesmo upsert derruba o lote ("cannot affect row a second time").
+  const postRows = semRepetidos(rows.filter((r) => r.media_id), (r) => String(r.media_id))
     .map((r) => ({
       instagram_account_id: accountId,
       client_id: clientId,

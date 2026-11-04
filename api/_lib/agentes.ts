@@ -1,3 +1,4 @@
+import { doCliente, temRegraMedico } from "./leitura-cliente.js";
 /**
  * Agentic Core · motor de execução, registro de ferramentas e fluxos (docs/sap/arquitetura-hub-sap.md, seção 3).
  * Chamado por api/sync/manual.ts (alvo "agentes", só admin): o plano da Vercel aceita no máximo 12 funções.
@@ -487,15 +488,17 @@ export async function lerFontesBrain(admin: Admin, clientId: string, opcoes: { e
     .eq("client_id", clientId).order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (erroClinica) throw new Error(`Não foi possível ler a ficha da clínica: ${erroClinica.message}`);
   const desde = new Date(Date.now() - 120 * 86_400_000).toISOString();
+  // Mensagens cruas do webhook não têm leitura por cliente: com regra por médico (conta dividida) ficam de fora.
+  const regraMedico = await temRegraMedico(admin, clientId);
   const [sessoes, resumos, posts, duvidas, pecas, aprovados, kommo] = await Promise.all([
     cli ? admin.from("sap_sessao_registro").select("sessao, chave, texto").eq("clinica_id", cli.id).not("texto", "is", null).limit(60) : Promise.resolve({ data: [] }),
-    admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", desde).order("gerado_em", { ascending: false }).limit(40),
+    doCliente(admin, "conversas_resumos", clientId).select("resumo").gte("gerado_em", desde).order("gerado_em", { ascending: false }).limit(40),
     admin.from("instagram_posts").select("tema, format, caption, reach, saved, engagement").eq("client_id", clientId).is("removido_em", null).gte("posted_at", desde).order("engagement", { ascending: false, nullsFirst: false }).limit(15),
     admin.from("instagram_comments").select("text").eq("client_id", clientId).eq("is_question", true).gte("commented_at", desde).order("commented_at", { ascending: false }).limit(50),
     cli ? admin.from("sap_pecas").select("titulo, etapa, formato, ganchos, semaforo, status").eq("clinica_id", cli.id).limit(30) : Promise.resolve({ data: [] }),
     admin.from("brain_itens").select("memoria, chave, valor").eq("client_id", clientId).eq("estado", "aprovado"),
     // O webhook contém mensagens do CRM; a direção nem sempre está confirmada.
-    admin.from("crm_raw_events").select("raw_payload").eq("client_id", clientId).eq("event_key", "message").gte("received_at", desde).order("received_at", { ascending: false }).limit(200),
+    regraMedico ? Promise.resolve({ data: [] }) : admin.from("crm_raw_events").select("raw_payload").eq("client_id", clientId).eq("event_key", "message").gte("received_at", desde).order("received_at", { ascending: false }).limit(200),
   ]);
   for (const result of [sessoes, resumos, posts, duvidas, pecas, aprovados, kommo]) {
     if ("error" in result && result.error) throw new Error(`Não foi possível ler uma fonte do Brand Brain: ${result.error.message}`);
@@ -529,7 +532,7 @@ export async function lerFontesBrain(admin: Admin, clientId: string, opcoes: { e
   const corte30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
   const todos: unknown[] = [];
   for (let de = 0; de < 5000; de += 1000) {
-    const { data, error } = await admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", corte30).order("gerado_em").range(de, de + 999);
+    const { data, error } = await doCliente(admin, "conversas_resumos", clientId).select("resumo").gte("gerado_em", corte30).order("gerado_em").range(de, de + 999);
     if (error) throw new Error("Não foi possível ler a auditoria comercial do Brand Brain");
     todos.push(...((data ?? []) as { resumo: unknown }[]).map((r) => r.resumo));
     if ((data ?? []).length < 1000) break;
@@ -608,7 +611,7 @@ async function lerContextoGrowth(admin: Admin, clientId: string) {
     .eq("client_id", clientId).order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (erroCliente || erroClinica) throw new Error("Não foi possível ler a ficha para estratégia");
   const conta = (q: any) => q.then((r: { count: number | null; error?: { message: string } | null }) => { if (r.error) throw new Error("Não foi possível ler os totais do CRM"); return r.count ?? 0; });
-  const leads = () => admin.from("crm_leads").select("id", { count: "exact", head: true }).eq("client_id", clientId).is("removido_na_origem", null);
+  const leads = () => doCliente(admin, "crm_leads", clientId, { count: "exact", head: true }).is("removido_na_origem", null);
   const [brain, posts, duvidas, ads, anteriores, leads90, ganhos90, perdidos180, abertosAntigos, ganhosFonte] = await Promise.all([
     admin.from("brain_itens").select("memoria, chave, valor").eq("client_id", clientId).eq("estado", "aprovado"),
     admin.from("instagram_posts").select("tema, format, caption, reach, saved, engagement").eq("client_id", clientId).is("removido_em", null).gte("posted_at", desde(90)).order("engagement", { ascending: false, nullsFirst: false }).limit(8),
@@ -619,7 +622,7 @@ async function lerContextoGrowth(admin: Admin, clientId: string) {
     conta(leads().eq("outcome", "won").gte("occurred_at", desde(90))),
     conta(leads().eq("outcome", "lost").gte("occurred_at", desde(180))),
     conta(leads().or("outcome.is.null,outcome.eq.open").lt("occurred_at", desde(90))),
-    admin.from("crm_leads").select("source, price").eq("client_id", clientId).eq("outcome", "won").is("removido_na_origem", null).gte("occurred_at", desde(180)).limit(3000),
+    doCliente(admin, "crm_leads", clientId).select("source, price").eq("outcome", "won").is("removido_na_origem", null).gte("occurred_at", desde(180)).limit(3000),
   ]);
   if ([brain, posts, duvidas, ads, anteriores, ganhosFonte].some(r => r.error)) throw new Error("Não foi possível ler as fontes para estratégia");
   const blocos: string[] = [];
@@ -637,7 +640,7 @@ async function lerContextoGrowth(admin: Admin, clientId: string) {
 
   const resumos: Record<string, any>[] = [];
   for (let de = 0; de < 6000; de += 1000) {
-    const { data, error } = await admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", desde(60)).order("gerado_em").range(de, de + 999);
+    const { data, error } = await doCliente(admin, "conversas_resumos", clientId).select("resumo").gte("gerado_em", desde(60)).order("gerado_em").range(de, de + 999);
     if (error) throw new Error("Não foi possível ler as conversas para estratégia");
     resumos.push(...((data ?? []) as { resumo: any }[]).map((r) => r.resumo).filter((r) => r && typeof r === "object"));
     if ((data ?? []).length < 1000) break;

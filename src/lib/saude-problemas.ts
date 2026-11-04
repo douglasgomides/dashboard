@@ -169,7 +169,8 @@ function problemaBruto(c: Pick<EntradaCliente, "id" | "nome">, l: LinhaFonte): P
   return { ...base, id: `${c.id}:${l.fonte}:origem`, tipo: "sem_dado_origem", gravidade: "baixa", quem: "ninguem", titulo: `${nome} sem dado novo na origem`, detalhe: `${quando}. ${m.texto}`, acao };
 }
 
-// Problemas de dado (qualidade_dados) que não repetem o sync: "sync-erro-*" já vem pela linha da fonte.
+// Problemas de dado (qualidade_dados) que não repetem o sync: "sync-erro-*" já vem pela linha da fonte (menos o dos
+// comentários, que não tem linha de fonte na lista e sumia da Saúde das fontes).
 const TIPO_QUALIDADE: Record<string, TipoProblema> = {
   "crm-compartilhado": "config_incompleta",
   "ads-sem-objetivo": "config_incompleta",
@@ -181,7 +182,8 @@ const TIPO_QUALIDADE: Record<string, TipoProblema> = {
 };
 
 export function problemaDeQualidade(c: Pick<EntradaCliente, "id" | "nome">, p: ProblemaDado): ProblemaFonte | null {
-  if (p.id.startsWith("sync-erro-")) return null;
+  // Comentários não têm linha de fonte na lista (não têm flag nem data de dado): o erro só chega por aqui.
+  if (p.id.startsWith("sync-erro-") && p.id !== "sync-erro-comentarios") return null;
   const tipo: TipoProblema = TIPO_QUALIDADE[p.id] ?? (p.responsavel === "equipe_hub" ? "falha_tecnica" : "cliente");
   const quem: QuemResolve = tipo === "sem_dado_origem" ? "ninguem" : p.responsavel === "equipe_hub" ? "equipe" : "cliente";
   // "baixa" do banco continua baixa (ex.: CRM compartilhado de propósito); antes virava média aqui.

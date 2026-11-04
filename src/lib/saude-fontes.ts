@@ -2,7 +2,8 @@
 // Usa a RPC client_sync_status quando ela existe; se a migração ainda não foi aplicada, lê as
 // tabelas com as mesmas regras (RLS vale igual), para o selo e a Visão geral não sumirem.
 import { supabase } from "@/integrations/supabase/client";
-import { statusDaFonte, diasEntre, hojeBrasilia, FOLGA_META_INSTAGRAM, FONTES, type FonteId, type CorStatus } from "@/lib/status-fonte";
+import { statusDaFonte, diasEntre, hojeBrasilia, FOLGA_META_INSTAGRAM, FONTES, type FonteId, type CorStatus, type Divergencia } from "@/lib/status-fonte";
+import { divergenciasAoVivo, type LinhaAoVivoNumeros } from "@/lib/conferencia-ao-vivo";
 
 export type LinhaFonte = {
   fonte: string;
@@ -14,7 +15,33 @@ export type LinhaFonte = {
   // Por que está parada, descoberto pelo sync na origem (ex.: erro de pagamento na Meta) e de quem é a ação.
   motivo?: string | null;
   motivo_dono?: string | null;
+  /** Última conferência ao vivo desta fonte com diferença (null quando bateu ou não houve rodada). */
+  divergencia?: Divergencia | null;
 };
+
+/**
+ * Divergências da última conferência ao vivo (tabela conferencia_ao_vivo; o admin lê tudo, o membro só o próprio
+ * cliente pela RLS). Janela de 14 dias, como o resumo da tela de Conferência. Falha na leitura não derruba o selo:
+ * fica sem a informação.
+ */
+export async function lerDivergencias(clientId?: string): Promise<Map<string, Map<string, Divergencia>>> {
+  try {
+    const desde = new Date(Date.now() - 14 * 86_400_000).toISOString();
+    let q = (supabase as any).from("conferencia_ao_vivo").select("client_id, crm_connection_id, fonte, metrica, ok, nexo, fonte_valor, rodado_em")
+      .gte("rodado_em", desde).order("rodado_em", { ascending: false }).limit(5000);
+    if (clientId) q = q.eq("client_id", clientId);
+    const { data, error } = await q;
+    if (error) return new Map();
+    return divergenciasAoVivo((data ?? []) as LinhaAoVivoNumeros[]) as Map<string, Map<string, Divergencia>>;
+  } catch {
+    return new Map();
+  }
+}
+
+function comDivergencias(linhas: LinhaFonte[], porFonte: Map<string, Divergencia> | undefined): LinhaFonte[] {
+  if (!porFonte?.size) return linhas;
+  return linhas.map((l) => (porFonte.has(l.fonte) ? { ...l, divergencia: porFonte.get(l.fonte) ?? null } : l));
+}
 
 export type Fontes = { tem_instagram: boolean; tem_anuncios: boolean; tem_crm: boolean; tem_atendimento: boolean } | null;
 
@@ -69,6 +96,11 @@ const funcaoAusente = (erro: unknown): boolean => {
 };
 
 export async function statusDoCliente(clientId: string): Promise<LinhaFonte[]> {
+  const [linhas, divergencias] = await Promise.all([statusSemConferencia(clientId), lerDivergencias(clientId)]);
+  return comDivergencias(linhas, divergencias.get(clientId));
+}
+
+async function statusSemConferencia(clientId: string): Promise<LinhaFonte[]> {
   if (rpcIndisponivel && !lerTrava()) { rpcIndisponivel = false; }
   if (rpcIndisponivel) return dadosAte(clientId);
   const cliente = supabase as unknown as {
@@ -127,12 +159,12 @@ export type Tom = "bom" | "atencao" | "ruim" | "neutro";
 const TOM_DA_COR: Record<CorStatus, Tom> = { verde: "bom", amarelo: "atencao", vermelho: "ruim", cinza: "neutro" };
 /** Tom da fonte pela regra única (src/lib/status-fonte.ts). Linha sem data nem erro = sem dado para mostrar. */
 export function tomDaFonte(
-  l: Pick<LinhaFonte, "data_ate" | "last_error"> & { fonte?: string; last_success_at?: string | null; motivo?: string | null; motivo_dono?: string | null } | undefined,
+  l: Pick<LinhaFonte, "data_ate" | "last_error"> & { fonte?: string; last_success_at?: string | null; motivo?: string | null; motivo_dono?: string | null; divergencia?: Divergencia | null } | undefined,
 ): Tom {
   if (!l || (!l.data_ate && !l.last_error)) return "neutro";
   return TOM_DA_COR[statusDaFonte({
     fonte: l.fonte ?? null, ultimo_sucesso: l.last_success_at ?? null, cadastro: true, data_ate: l.data_ate, last_error: l.last_error,
-    motivo: l.motivo ?? null, motivo_dono: l.motivo_dono ?? null,
+    motivo: l.motivo ?? null, motivo_dono: l.motivo_dono ?? null, divergencia: l.divergencia ?? null,
   }).cor];
 }
 
@@ -149,7 +181,7 @@ const FLAG: Record<FonteId, keyof NonNullable<Fontes>> = { instagram: "tem_insta
 
 /** Uma leitura para todos os clientes (RPC status_das_fontes, só admin). */
 export async function lerStatusDasFontes(): Promise<Map<string, FontesDoCliente>> {
-  const { data, error } = await (supabase as any).rpc("status_das_fontes");
+  const [{ data, error }, divergencias] = await Promise.all([(supabase as any).rpc("status_das_fontes"), lerDivergencias()]);
   if (error) throw error;
   const out = new Map<string, FontesDoCliente>();
   for (const r of (data ?? []) as any[]) {
@@ -164,7 +196,7 @@ export async function lerStatusDasFontes(): Promise<Map<string, FontesDoCliente>
     const data_ate = r.data_ate ? String(r.data_ate).slice(0, 10) : null;
     c.cadastro[FLAG[fonte]] = !!r.cadastro;
     c.fontes[FLAG[fonte]] = !!r.cadastro || !!data_ate || r.motivo_dono === "manual";
-    c.linhas.push({ fonte, last_attempt_at: r.last_attempt_at, last_success_at: r.last_success_at, last_error: r.last_error, last_rows: null, data_ate, motivo: r.motivo, motivo_dono: r.motivo_dono });
+    c.linhas.push({ fonte, last_attempt_at: r.last_attempt_at, last_success_at: r.last_success_at, last_error: r.last_error, last_rows: null, data_ate, motivo: r.motivo, motivo_dono: r.motivo_dono, divergencia: divergencias.get(r.client_id)?.get(fonte) ?? null });
     if (r.nao_usa) c.naoUsa.push(fonte);
     out.set(r.client_id, c);
   }

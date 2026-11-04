@@ -38,9 +38,17 @@ a ordem das mensagens não é fixada, sessão que troca de equipe fica em duas m
 
 ## 2. Significado de cada número
 
-- **"Espera até a 1ª resposta":** mediana de `timeWait`. **Significado oficial não verificado**: o schema `PublicSessionDTOV2` lista
-  `timeService`, `timeWait`, `firstResponseAt`, `startAt` só como `string`, sem descrição. Medido no banco: `timeWait` é sempre ≤
-  (`firstResponseAt` − `startAt`).
+- **"Espera até a 1ª resposta" (desde 02/11/2026):** mediana de `wts_sessions.wait_seconds`, calculado pelas MENSAGENS em
+  `conversas-wts.ts` (`primeiraRespostaWts`): 1ª mensagem do paciente (`FROM_HUB`) até a 1ª mensagem `TO_HUB` de uma pessoa
+  (`origin` DEFAULT; fora `BOT, CAMPAIGN, OFFICE_HOURS, API, PAYMENT, GATEWAY`; fora `type` `TRANSITION, TRACK, NOTE`; fora
+  `status` `FAILED, DELETED`). Sem `origin` nas mensagens da clínica, não mede. Mínimo de 10 atendimentos medidos para virar número.
+- **"Tempo na fila (medido pela WTS)":** mediana de `timeWait`, gravado em `wts_sessions.fila_segundos`. **Significado oficial não
+  verificado**: o schema `PublicSessionDTOV2` lista `timeService`, `timeWait`, `firstResponseAt`, `startAt` só como `string`, sem
+  descrição. Medido no banco: `timeWait` é sempre ≤ (`firstResponseAt` − `startAt`) e na Dra. Juliana Paola dava metade. NÃO é a 1ª
+  resposta; aparece só quando a 1ª resposta não tem amostra.
+- **Origem do anúncio:** `details.utm` das 3 primeiras mensagens do paciente, depois mensagens `TRACK`, depois `utm` da sessão v2
+  (`wts_sessions.sessao_utm`, com `sourceId` ou `clid`). `type` (INDIVIDUAL/GROUP) e `origin` da sessão ficam em `sessao_tipo` e
+  `sessao_origem` (grupo ainda não é filtrado).
 - **"Tempo até fechar":** mediana de `timeService` (mesma ressalva).
 - **Status (verificado só a lista):** `UNDEFINED, STARTED, PENDING, IN_PROGRESS, COMPLETED, HIDDEN` (filtro `Status` de `/v2/session`). A doc
   **não descreve** `PENDING` nem `HIDDEN`; o guia de webhooks mostra o "ciclo de vida de uma conversa" só em imagem. Abertas = só

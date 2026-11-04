@@ -12,7 +12,8 @@ import { META_GRAPH_URL } from "./meta-graph-versao.js";
 import { fetchMeta } from "./meta-limite.js";
 const API = META_GRAPH_URL;
 
-export type DonoMotivo = "cliente" | "meta" | "nos";
+// "origem": a conta está como o cliente quis (campanhas pausadas de propósito); a tela pinta de cinza, não de vermelho.
+export type DonoMotivo = "cliente" | "meta" | "nos" | "origem";
 export type MotivoAnuncios = { texto: string; dono: DonoMotivo };
 
 type Resp<T> = { ok: true; corpo: T } | { ok: false; status: number; codigo?: number; msg: string };
@@ -165,5 +166,5 @@ export async function diagnosticarContaAnuncios(contaId: string, token: string, 
   if (st.some((s) => s === "DISAPPROVED" || s === "WITH_ISSUES")) {
     return { texto: "Anúncios reprovados ou com problema no Gerenciador de Anúncios, e nenhuma campanha ativa.", dono: "cliente" };
   }
-  return { texto: "Todas as campanhas estão pausadas ou desativadas no Gerenciador de Anúncios. Não é falha de sincronização.", dono: "cliente" };
+  return { texto: "Todas as campanhas estão pausadas ou desativadas no Gerenciador de Anúncios. Não é falha de sincronização.", dono: "origem" };
 }

@@ -80,3 +80,51 @@ export function resumirAoVivo(linhas: LinhaAoVivo[]): ResumoAoVivo[] {
     .map((r) => ({ ...r, pctOk: r.conferidas ? Math.round((r.ok / r.conferidas) * 100) : null }))
     .sort((a, b) => a.clientId.localeCompare(b.clientId) || a.fonte.localeCompare(b.fonte));
 }
+
+/** Linha da conferência com os números, para ligar a falha ao selo da fonte. */
+export interface LinhaAoVivoNumeros extends LinhaAoVivo {
+  crm_connection_id?: string | null;
+  nexo: number | null;
+  fonte_valor: number | null;
+}
+
+export type SeloAoVivo = "crm" | "atendimento";
+export interface DivergenciaAoVivo { n: number; fracao: number | null; em: string }
+
+/**
+ * Em qual selo do painel cada métrica da conferência pesa: as do WTS e os atendimentos do Digisac são do WhatsApp
+ * ("atendimento"); cards, contatos e leads (Kommo, FlwChat, Digisac, RD Station) são do CRM.
+ */
+export function seloDaMetrica(fonte: string, metrica: string): SeloAoVivo {
+  if (fonte === "wts") return "atendimento";
+  if (fonte === "digisac" && /^atendimentos?_/.test(metrica)) return "atendimento";
+  return "crm";
+}
+
+/**
+ * Divergência da última rodada de cada cliente x selo (crm, atendimento): a maior diferença entre o Nexo e a fonte nas
+ * métricas que falharam (ok=false) e a fração dela sobre o número da fonte. Cada conexão vale pela própria última
+ * rodada (as linhas de uma rodada saem com milissegundos diferentes por conexão). Métrica não lida (ok nulo) não conta.
+ * Selo cuja última rodada bateu fica de fora: a divergência some assim que a conferência seguinte bate.
+ */
+export function divergenciasAoVivo(linhas: LinhaAoVivoNumeros[]): Map<string, Map<SeloAoVivo, DivergenciaAoVivo>> {
+  const chave = (l: LinhaAoVivoNumeros) => `${l.client_id}|${l.fonte}|${l.crm_connection_id ?? ""}`;
+  const ultima = new Map<string, string>();
+  for (const l of linhas) {
+    const k = chave(l);
+    if (!ultima.has(k) || l.rodado_em > ultima.get(k)!) ultima.set(k, l.rodado_em);
+  }
+  const out = new Map<string, Map<SeloAoVivo, DivergenciaAoVivo>>();
+  for (const l of linhas) {
+    if (l.ok !== false || l.rodado_em !== ultima.get(chave(l))) continue;
+    if (l.nexo == null || l.fonte_valor == null) continue;
+    const n = Math.abs(l.nexo - l.fonte_valor);
+    if (n <= 0) continue;
+    const selo = seloDaMetrica(l.fonte, l.metrica);
+    const porSelo = out.get(l.client_id) ?? new Map<SeloAoVivo, DivergenciaAoVivo>();
+    const atual = porSelo.get(selo);
+    if (!atual || n > atual.n) porSelo.set(selo, { n, fracao: l.fonte_valor > 0 ? n / l.fonte_valor : null, em: l.rodado_em });
+    out.set(l.client_id, porSelo);
+  }
+  return out;
+}

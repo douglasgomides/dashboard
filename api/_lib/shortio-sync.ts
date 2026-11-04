@@ -84,7 +84,7 @@ export async function sincronizarShortio(
   admin: SupabaseClient<any, any, any>,
   chave: string,
   opts: { orcamentoMs?: number; maxStats?: number } = {},
-): Promise<{ links: number; atribuidos: number; semCliente: number; stats: number; adiados: number; erros: string[] }> {
+): Promise<{ links: number; atribuidos: number; semCliente: number; stats: number; adiados: number; erros: string[]; biosSemLeitura: number }> {
   const inicio = Date.now();
   const orcamento = opts.orcamentoMs ?? 90_000;
   const prazo = inicio + orcamento;
@@ -92,25 +92,29 @@ export async function sincronizarShortio(
   const erros: string[] = [];
 
   // Clientes: nome, @ e o link da bio (website do perfil), lido na Graph com o token de cada conta.
-  const { data: cls, error: erroClientes } = await admin.from("clients").select("id, name, instagram_handle, active");
+  const { data: cls, error: erroClientes } = await admin.from("clients").select("id, name, instagram_handle, active, eh_teste");
   const { data: igs, error: erroContas } = await admin.from("instagram_accounts").select("id, client_id, ig_username, windsor_account_id, active");
   const { data: segs, error: erroSegredos } = await admin.from("instagram_account_secrets").select("instagram_account_id, meta_access_token");
   if (erroClientes || erroContas || erroSegredos) throw new Error("Não foi possível carregar os dados para atribuir os links com segurança");
   const tokenDe = new Map((segs ?? []).map((s: any) => [s.instagram_account_id, s.meta_access_token]));
   const clientes: Cliente[] = [];
+  let biosComFalha = 0;
   for (const c of (cls ?? []) as any[]) {
-    if (c.active === false) continue;
+    // Cliente de teste não entra na atribuição pelo nome (1 link real tinha ido parar na "CLÍNICA TESTE SAP V2").
+    if (c.active === false || c.eh_teste === true) continue;
     const contas = ((igs ?? []) as any[]).filter((i) => i.client_id === c.id && i.active !== false);
     let bio: string | null = null;
     for (const conta of contas) {
       const tk = tokenDe.get(conta.id) ?? process.env.META_ACCESS_TOKEN;
       if (!tk || !conta.windsor_account_id || bio) continue;
       try {
-        const r = await fetch(`${GRAPH}/${conta.windsor_account_id}?fields=website&access_token=${encodeURIComponent(tk)}`, { signal: AbortSignal.timeout(10_000) });
+        // Token no cabeçalho, não na URL (a URL vai para logs de erro e de proxy).
+        const r = await fetch(`${GRAPH}/${conta.windsor_account_id}?fields=website`, { headers: { authorization: `Bearer ${tk}` }, signal: AbortSignal.timeout(10_000) });
         const j: any = await r.json();
         if (r.ok && typeof j.website === "string") bio = j.website;
+        else if (!r.ok) biosComFalha++;
       } catch {
-        /* sem bio: segue pelo nome */
+        biosComFalha++; // sem bio: segue pelo nome, mas a falha é contada
       }
     }
     clientes.push({ id: c.id, name: c.name, handles: [c.instagram_handle, ...contas.map((x) => x.ig_username)].filter(Boolean), bio });
@@ -224,5 +228,6 @@ export async function sincronizarShortio(
       if (erros.length > 10) break;
     }
   }
-  return { links, atribuidos, semCliente, stats, adiados, erros: erros.slice(0, 5) };
+  // Conta cuja bio não foi lida na Graph: a atribuição dela segue só pelo nome e pelo @ (antes a falha era calada).
+  return { links, atribuidos, semCliente, stats, adiados, erros: erros.slice(0, 5), biosSemLeitura: biosComFalha };
 }

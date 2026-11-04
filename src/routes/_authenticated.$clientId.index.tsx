@@ -478,9 +478,9 @@ function InsightDeFormato({
           <strong>{fmtFormatLabel(best.format)}</strong> com{" "}
           {fmtTaxaPct(best.median)} ({best.count} posts) e{" "}
           <strong>{fmtFormatLabel(worst.format)}</strong> com{" "}
-          {fmtTaxaPct(worst.median)} ({worst.count} posts). Se um formato
-          parece engajar mais, é porque alcançou mais gente, não porque o
-          conteúdo prende mais.
+          {fmtTaxaPct(worst.median)} ({worst.count} posts). Pela taxa, nenhum
+          formato prende mais que o outro; se um parece engajar mais em
+          números absolutos, o mais provável é que tenha alcançado mais gente.
         </span>
       ) : (
         <span>

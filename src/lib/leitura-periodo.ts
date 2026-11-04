@@ -13,6 +13,7 @@ import { fmtFormatKey, median } from "@/lib/report-metrics";
 import { conversaMaisBarata, GRUPOS, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { LIMITES } from "./limites.js";
+import { primeiraRespostaConfiavel } from "./espera-atendimento.js";
 
 export type Tom = "bom" | "ruim" | "atencao";
 export type RotaAcao = "posts" | "anuncios" | "atendimento" | "ideias" | "conteudo";
@@ -39,7 +40,7 @@ export interface EntradaLeitura {
   diarioAnterior?: { date: string; reach?: number | null; new_followers?: number | null }[];
   posts: any[];
   adsDiag?: DiagnosticoAds | null;
-  wts?: { atendimentos?: number | null; espera_mediana_seg?: number | null; sem_roteamento?: number | null } | null;
+  wts?: { atendimentos?: number | null; espera_mediana_seg?: number | null; espera_cobertura?: number | null; sem_roteamento?: number | null } | null;
 }
 
 // ---------- limites ----------
@@ -380,9 +381,11 @@ function regraAnuncios(e: EntradaLeitura, out: Achado[]) {
 function regraAtendimento(e: EntradaLeitura, out: Achado[]) {
   const at = n(e.wts?.atendimentos);
   if (at <= 0) return;
-  const espera = n(e.wts?.espera_mediana_seg);
+  // Só com amostra mínima de atendimentos medidos pelas mensagens (src/lib/espera-atendimento.ts).
+  const espera = primeiraRespostaConfiavel(e.wts) ?? 0;
   const semRota = n(e.wts?.sem_roteamento) / at;
-  const base = `${int(at)} atendimentos; espera mediana até a 1ª resposta ${espera > 0 ? dur(espera) : "não medida"}; ${pct(semRota)} sem equipe`;
+  const medidos = n(e.wts?.espera_cobertura);
+  const base = `${int(at)} atendimentos; espera mediana até a 1ª resposta ${espera > 0 ? dur(espera) : medidos > 0 ? `com amostra pequena (${int(medidos)} medidos)` : "não medida"}; ${pct(semRota)} sem equipe`;
   if (espera >= ESPERA_RUIM_SEG) {
     out.push({
       id: "atendimento",

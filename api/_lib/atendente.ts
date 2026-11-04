@@ -1,3 +1,4 @@
+import { doCliente } from "./leitura-cliente.js";
 /**
  * Atendente de IA, piloto em modo sombra (regras em src/lib/atendente.ts). Roda junto da leitura das conversas
  * (api/sync/wts.ts, ?so_analisar=1, a cada 20 min pelo n8n). Para cada clínica com atendente_config.modo = 'sombra':
@@ -47,7 +48,7 @@ export async function proporFatosAtendimento(admin: Admin, clientId: string): Pr
   const xs = (ja ?? []) as { chave: string; estado: string; criado_em: string }[];
   if (xs.some((x) => x.estado === "aprovado") && xs.length >= 4) return { propostos: 0, motivo: "fatos já aprovados" };
   if (xs.some((x) => Date.now() - Date.parse(x.criado_em) < 14 * 24 * H)) return { propostos: 0, motivo: "proposta recente esperando aprovação" };
-  const { data: msgs, error: erroMensagens } = await admin.from("mensagens").select("texto").eq("client_id", clientId).eq("direcao", "saida").gte("enviada_em", new Date(Date.now() - 60 * 24 * H).toISOString())
+  const { data: msgs, error: erroMensagens } = await doCliente(admin, "mensagens", clientId).select("texto").eq("direcao", "saida").gte("enviada_em", new Date(Date.now() - 60 * 24 * H).toISOString())
     .order("enviada_em", { ascending: false }).limit(2500);
   if (erroMensagens) throw new Error("Não foi possível ler as respostas para propor fatos");
   const vistos = new Set<string>();
@@ -104,7 +105,7 @@ export async function atenderClinicaSombra(admin: Admin, clientId: string, fim: 
   if (erroCliente) throw new Error("Não foi possível ler a clínica do atendente");
   const { fatos, tom } = await fatosAprovados(admin, clientId);
   const exemplos = await exemplosAvaliados(admin, clientId);
-  const { data: convs, error: erroConversas } = await admin.from("conversas").select("id, ultima_msg_em").eq("client_id", clientId).gte("ultima_msg_em", new Date(Date.now() - 3 * H).toISOString())
+  const { data: convs, error: erroConversas } = await doCliente(admin, "conversas", clientId).select("id, ultima_msg_em").gte("ultima_msg_em", new Date(Date.now() - 3 * H).toISOString())
     .order("ultima_msg_em", { ascending: false }).limit(40);
   if (erroConversas) throw new Error("Não foi possível ler as conversas do atendente");
   let feitos = 0;

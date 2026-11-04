@@ -1,3 +1,4 @@
+import { doCliente } from "./leitura-cliente.js";
 /**
  * Aprendizado contínuo dos agentes (regras em src/lib/aprendizado.ts). Roda no agendamento (enfileirarAgendados),
  * antes de pôr os agentes na fila, para que cada rodada já use o que foi aprendido:
@@ -42,7 +43,7 @@ async function postsDaClinica(admin: Admin, clientId: string, dias: number) {
 export async function calcularLicoes(admin: Admin, clientId: string): Promise<Licao[]> {
   const resumos: ResumoConversa[] = [];
   for (let de = 0; de < 4000; de += 1000) {
-    const { data, error } = await admin.from("conversas_resumos").select("resumo").eq("client_id", clientId).gte("gerado_em", desde(120)).order("gerado_em").range(de, de + 999);
+    const { data, error } = await doCliente(admin, "conversas_resumos", clientId).select("resumo").gte("gerado_em", desde(120)).order("gerado_em").range(de, de + 999);
     if (error) throw new Error("Não foi possível ler as conversas para aprendizado");
     resumos.push(...((data ?? []) as { resumo: ResumoConversa }[]).map((r) => r.resumo));
     if ((data ?? []).length < 1000) break;

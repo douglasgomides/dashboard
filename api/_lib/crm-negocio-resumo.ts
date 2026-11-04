@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { doCliente } from "./leitura-cliente.js";
 import { fetchAllRows } from "../../src/lib/pagination.js";
 import { ehNegocioProprio } from "../../src/lib/negocio-proprio.js";
 import { resumirNegocio, type RegistroNegocio, type EtapaNegocio, type LeituraCrmNegocio } from "../../src/lib/crm-negocio-proprio.js";
@@ -13,15 +14,15 @@ export async function lerResumoCrmNegocio(admin: SupabaseClient, clientId: strin
     if (connections.error || !connections.data?.length) throw new Error("Conexão indisponível");
     const ids = connections.data.map(c=>String(c.id));
     const [registros, etapas, conversas] = await Promise.all([
-      fetchAllRows<RegistroNegocio>((from,to)=>admin.from("crm_leads")
+      fetchAllRows<RegistroNegocio>((from,to)=>doCliente(admin,"crm_leads",clientId)
         .select("id,pipeline_id,status_id,outcome,source,occurred_at,responsavel:raw_payload->user->>id,motivo_perda:raw_payload->>lost_status_id")
-        .eq("client_id",clientId).eq("provider","clint").in("crm_connection_id",ids).is("removido_na_origem",null)
+        .eq("provider","clint").in("crm_connection_id",ids).is("removido_na_origem",null)
         .order("id").range(from,to).overrideTypes<RegistroNegocio[],{merge:false}>()),
       fetchAllRows<EtapaNegocio>((from,to)=>admin.from("crm_pipeline_statuses")
         .select("pipeline_id,pipeline_name,status_id,status_name").in("crm_connection_id",ids)
         .order("crm_connection_id").order("pipeline_id").order("status_id").range(from,to).overrideTypes<EtapaNegocio[],{merge:false}>()),
-      fetchAllRows<Conversa>((from,to)=>admin.from("conversas").select("id,mensagens_cobertura,mensagens_conferidas_em")
-        .eq("client_id",clientId).eq("provider","clint").order("id").range(from,to).overrideTypes<Conversa[],{merge:false}>()),
+      fetchAllRows<Conversa>((from,to)=>doCliente(admin,"conversas",clientId).select("id,mensagens_cobertura,mensagens_conferidas_em")
+        .eq("provider","clint").order("id").range(from,to).overrideTypes<Conversa[],{merge:false}>()),
     ]);
     const desde=de+"T00:00:00-03:00";
     const antesDe=new Date(Date.parse(ate+"T00:00:00-03:00")+86_400_000).toISOString();

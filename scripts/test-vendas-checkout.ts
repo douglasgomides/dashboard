@@ -54,6 +54,44 @@ function webhook(tipo: string, invoice: R, extra: R = {}): R {
   assert.equal(normalizarStatus("APPROVED"), "paid");
   assert.equal(normalizarStatus("charged-back"), "chargeback");
 
+  // Datas do webhook v2 oficial: statusAt[] (when + status) e modifiedAt; o aviso chega muito depois (reprocessado).
+  {
+    const chegou = new Date("2030-01-01T00:00:00Z");
+    const hist = (...xs: [string, string][]) => xs.map(([status, when]) => ({ status, when }));
+    const pago = normalizarWebhookHubla(webhook("invoice.status_updated", {
+      id: "inv-v2", status: "paid", version: 2, statusAt: hist(["unpaid", "2026-10-05T12:59:00Z"], ["paid", "2026-10-05T13:00:00Z"]),
+      saleDate: "2026-10-05T12:59:00Z", modifiedAt: "2026-10-05T13:00:00Z",
+    }), chegou);
+    assert.ok(pago.ok);
+    assert.equal(pago.vendas[0].pago_em, "2026-10-05T13:00:00.000Z", "pago_em = when do paid, não a hora do aviso");
+    assert.equal(pago.vendas[0].atualizado_em, "2026-10-05T13:00:00.000Z", "atualizado_em = modifiedAt");
+    const estorno = normalizarWebhookHubla(webhook("invoice.status_updated", {
+      id: "inv-v2", status: "chargeback", version: 5,
+      statusAt: hist(["unpaid", "2026-10-05T12:59:00Z"], ["paid", "2026-10-05T13:00:00Z"], ["disputed", "2026-10-07T09:00:00Z"], ["chargeback", "2026-10-20T15:00:00Z"]),
+      modifiedAt: "2026-10-20T15:00:01Z",
+    }), chegou);
+    assert.ok(estorno.ok);
+    assert.equal(estorno.vendas[0].status, "chargeback");
+    assert.equal(estorno.vendas[0].reembolsado_em, "2026-10-20T15:00:00.000Z", "reembolsado_em = when do chargeback");
+    assert.equal(estorno.vendas[0].pago_em, "2026-10-05T13:00:00.000Z");
+    const protesto = normalizarWebhookHubla(webhook("invoice.status_updated", {
+      id: "inv-v3", status: "disputed", statusAt: hist(["paid", "2026-10-06T10:00:00Z"], ["disputed", "2026-10-08T10:00:00Z"]), modifiedAt: "2026-10-08T10:00:00Z",
+    }), chegou);
+    assert.ok(protesto.ok && protesto.vendas[0].status === "in_protest" && protesto.vendas[0].pago_em === "2026-10-06T10:00:00.000Z");
+    // Sem histórico: a última alteração (modifiedAt) vale antes da hora do aviso; sem nada, a hora do aviso.
+    const semHist = normalizarWebhookHubla(webhook("invoice.payment_succeeded", { id: "inv-v4", modifiedAt: "2026-10-09T10:00:00Z" }), chegou);
+    assert.ok(semHist.ok && semHist.vendas[0].pago_em === "2026-10-09T10:00:00.000Z");
+    const nada = normalizarWebhookHubla(webhook("invoice.payment_succeeded", { id: "inv-v5" }), chegou);
+    assert.ok(nada.ok && nada.vendas[0].pago_em === chegou.toISOString());
+    const pendente = normalizarWebhookHubla(webhook("invoice.status_updated", { id: "inv-v6", status: "unpaid", statusAt: hist(["unpaid", "2026-10-09T10:00:00Z"]) }), chegou);
+    assert.ok(pendente.ok && pendente.vendas[0].pago_em === null, "fatura não paga não ganha data de pagamento");
+    // Ordem dos eventos por modifiedAt quando a versão falta.
+    const velho = normalizarWebhookHubla(webhook("invoice.status_updated", { id: "inv-v7", status: "paid", modifiedAt: "2026-10-01T10:00:00Z" }), chegou);
+    const novo = normalizarWebhookHubla(webhook("invoice.status_updated", { id: "inv-v7", status: "refunded", modifiedAt: "2026-10-03T10:00:00Z" }), chegou);
+    assert.ok(velho.ok && novo.ok);
+    assert.equal(novaEhMaisRecente(velho.vendas[0], novo.vendas[0]), true, "modifiedAt desempata");
+  }
+
   const n = normalizarWebhookHubla(webhook("invoice.payment_succeeded", { id: "inv-1", paidAt: "2026-10-05T13:00:00.000Z" }));
   assert.ok(n.ok);
   const v = n.vendas[0];

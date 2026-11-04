@@ -28,6 +28,7 @@ import { fmtFracao } from "@/lib/metricas";
 import { agendadosSaoGanhos, avisoAgendadosSaoGanhos, minimoDaBase, passagem, type BaseFunil } from "./funil-taxa";
 import { confiancaPorAmostra, type Impacto, type Insight, type Limitacao, type Responsavel, type Tom } from "./insight";
 import { LIMITES } from "./limites.js";
+import { AMOSTRA_ESPERA } from "./espera-atendimento.js";
 
 // ---------------------------------------------------------------- regras de etapa
 // As mesmas da migração (manter em sincronia).
@@ -787,7 +788,7 @@ export function insightsComerciais(d: DadosComerciais): Insight[] {
 
   // --- operação: tempo até a 1ª resposta no WhatsApp
   const w = d.whatsapp;
-  if (w.conectado && w.esperaMedianaSeg !== null && (w.respondidas ?? 0) >= 10) {
+  if (w.conectado && w.esperaMedianaSeg !== null && (w.respondidas ?? 0) >= AMOSTRA_ESPERA) {
     const faixa = avaliar(BENCHMARKS.primeiraResposta, w.esperaMedianaSeg);
     if (faixa) {
       out.push({

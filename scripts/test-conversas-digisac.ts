@@ -40,7 +40,7 @@ let conversationWrites = 0;
 let messageWrites = 0;
 let pagesRead = 0;
 let needPerson = false;
-const sessions = Array.from({ length: 1001 }, (_, i) => ({ session_id: i === 1000 ? "target" : `old-${i}`, contact_id: "contact", started_at: now, updated_at: now }));
+const sessions = Array.from({ length: 1001 }, (_, i) => ({ session_id: i === 1000 ? "target" : `old-${i}`, contact_id: "contact", started_at: now, updated_at: now, primeira_resposta_conferida_em: now }));
 const makeDb = () => createClient(origin, "fake-key", { auth: { persistSession: false, autoRefreshToken: false } });
 try {
   assert.equal(baseUrl("clinic"), "https://clinic.digisac.io/api/v1");
@@ -100,7 +100,7 @@ try {
     if (table === "wts_sessions" && method === "PATCH") {
       // 1ª resposta calculada pelas mensagens (não pelo waitingTime do ticket).
       const body = JSON.parse(String(init?.body));
-      assert.deepEqual(Object.keys(body).sort(), ["first_response_at", "wait_seconds"]);
+      assert.deepEqual(Object.keys(body).sort(), ["first_response_at", "primeira_resposta_conferida_em", "wait_seconds"]);
       return json(null);
     }
     if (table === "mensagens") {

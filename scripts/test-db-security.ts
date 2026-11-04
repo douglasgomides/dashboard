@@ -1100,6 +1100,80 @@ try {
       assert.deepEqual((await como<{ id: string }>("authenticated", viewer, "select id from pessoas where client_id=$1 order by id", [A])).map((r) => r.id), [personA, p3].sort());
     } finally { await db.exec("rollback"); }
   });
+  await check("CRM por médico: membro não lê resumos, temas, eventos, toques, mensagens nem a busca de pacientes de outro médico", async () => {
+    // O replay das migrações da PR169 (acima) recria ler_mensagens e jornada_pessoa pela versão antiga; a migração
+    // da regra completa é reaplicável e volta a fechá-las.
+    await apply("20261102230000_regra_medico_completa.sql");
+    await db.exec("begin");
+    try {
+      const como = async <T = Record<string, unknown>>(user: string, sql: string, args: unknown[] = []) => {
+        await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ role: "authenticated", sub: user })]);
+        await db.exec("set local role authenticated");
+        try { return await rows<T>(sql, args); } finally { await db.exec("reset role"); }
+      };
+      const campo = (enumId: number) => ({ custom_fields_values: [{ field_id: 918597, values: [{ enum_id: enumId }] }] });
+      const [pMeu, pOutro] = (await rows<{ id: string }>("insert into pessoas(client_id,nome) values ($1,'Paciente Meu'),($1,'Paciente Outro') returning id", [A])).map((r) => r.id);
+      const [lMeu, lOutro] = (await rows<{ id: string }>(
+        "insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,pessoa_id,occurred_at) values ($1,$2,'kommo','r-meu','add',$3,$4,now()),($1,$2,'kommo','r-outro','add',$5,$6,now()) returning id",
+        [A, connectionA, campo(762183), pMeu, campo(762185), pOutro])).map((r) => r.id);
+      const [cMeu, cOutro] = (await rows<{ id: string }>(
+        "insert into conversas(client_id,pessoa_id,lead_id,provider,externo_id,iniciada_em,ultima_msg_em) values ($1,$2,$3,'wts','r-meu',now(),now()),($1,$4,$5,'wts','r-outro',now(),now()) returning id",
+        [A, pMeu, lMeu, pOutro, lOutro])).map((r) => r.id);
+      const conversas = [cMeu, cOutro];
+      for (const [c, p, ext] of [[cMeu, pMeu, "r-meu"], [cOutro, pOutro, "r-outro"]]) {
+        await db.query("insert into mensagens(conversa_id,client_id,direcao,texto,enviada_em,externo_id) values ($1,$2,'entrada','Quero agendar',now(),$3)", [c, A, ext]);
+        await db.query("insert into conversas_resumos(conversa_id,client_id,resumo,ate_msg_em,gerado_em) values ($1,$2,'{\"etapa\":\"agendou\"}',now(),now())", [c, A]);
+        await db.query("insert into conversas_tema(conversa_id,client_id,sem_texto,tema,ate_msg_em,gerado_em) values ($1,$2,false,'retina',now(),now())", [c, A]);
+        await db.query("insert into conversas_origem_anuncio(conversa_id,client_id,ad_id) values ($1,$2,'ad-1')", [c, A]);
+        await db.query("insert into crm_lead_eventos(client_id,crm_connection_id,external_lead_id,tipo,ocorreu_em) values ($1,$2,$3,'ganhou',now())", [A, connectionA, ext]);
+        await db.query("insert into toques(client_id,pessoa_id,tipo,ocorreu_em,fonte,externo_id) values ($1,$2,'mensagem_whatsapp',now(),'teste',$3)", [A, p, ext]);
+      }
+      const visto = async (user: string) => ({
+        resumos: (await como<{ c: string }>(user, "select conversa_id as c from conversas_resumos where conversa_id = any($1) order by 1", [conversas])).map((r) => r.c),
+        temas: (await como<{ c: string }>(user, "select conversa_id as c from conversas_tema where conversa_id = any($1) order by 1", [conversas])).map((r) => r.c),
+        origem: (await como<{ c: string }>(user, "select conversa_id as c from conversas_origem_anuncio where conversa_id = any($1) order by 1", [conversas])).map((r) => r.c),
+        eventos: (await como<{ e: string }>(user, "select external_lead_id as e from crm_lead_eventos where external_lead_id like 'r-%' and tipo='ganhou' order by 1")).map((r) => r.e),
+        toques: (await como<{ e: string }>(user, "select externo_id as e from toques where fonte='teste' order by 1")).map((r) => r.e),
+      });
+      const tudo = { resumos: [...conversas].sort(), temas: [...conversas].sort(), origem: [...conversas].sort(), eventos: ["r-meu", "r-outro"], toques: ["r-meu", "r-outro"] };
+      // Sem regra: o membro lê tudo do cliente, como antes.
+      assert.deepEqual(await visto(viewer), tudo, "sem regra");
+      await db.query("insert into crm_filtro_cliente(client_id,crm_connection_id,tipo,valor,modo) values ($1,$2,'campo','918597=762183','incluir')", [A, connectionA]);
+      // Com regra: só o que é do médico, na leitura direta (policies).
+      assert.deepEqual(await visto(viewer), { resumos: [cMeu], temas: [cMeu], origem: [cMeu], eventos: ["r-meu"], toques: ["r-meu"] }, "com regra");
+      assert.deepEqual(await visto(admin), tudo, "admin vê tudo");
+      assert.deepEqual(await visto(outsider), { resumos: [], temas: [], origem: [], eventos: [], toques: [] }, "outro cliente não vê nada");
+      // RPCs: mensagens, busca de pacientes e jornada da pessoa.
+      assert.deepEqual((await como<{ texto: string }>(viewer, "select texto from ler_mensagens($1)", [cOutro])), [], "ler_mensagens de outro médico");
+      assert.deepEqual((await como<{ texto: string }>(viewer, "select texto from ler_mensagens($1)", [cMeu])).map((r) => r.texto), ["Quero agendar"]);
+      assert.deepEqual((await como<{ nome: string }>(viewer, "select nome from buscar_pessoas($1,'Paciente') order by 1", [A])).map((r) => r.nome), ["Paciente Meu"], "busca de pacientes");
+      assert.deepEqual(await como(viewer, "select jornada_pessoa($1) is null as vazia", [pOutro]), [{ vazia: true }], "jornada de paciente de outro médico");
+      assert.deepEqual(await como(viewer, "select jornada_pessoa($1) is null as vazia", [pMeu]), [{ vazia: false }]);
+      // Leituras das RPCs (definer) seguem a mesma regra.
+      assert.deepEqual((await rows<{ c: string }>("select conversa_id as c from conversas_resumos_do_cliente($1) where conversa_id = any($2)", [A, conversas])).map((r) => r.c), [cMeu]);
+      assert.deepEqual((await rows<{ c: string }>("select conversa_id as c from mensagens_do_cliente($1) where conversa_id = any($2)", [A, conversas])).map((r) => r.c), [cMeu]);
+      assert.deepEqual((await rows<{ e: string }>("select external_lead_id as e from crm_lead_eventos_do_cliente($1) where external_lead_id like 'r-%' and tipo='ganhou'", [A])).map((r) => r.e), ["r-meu"]);
+      assert.deepEqual((await rows<{ id: string }>("select id from pessoas_do_cliente($1) where id = any($2)", [A, [pMeu, pOutro]])).map((r) => r.id), [pMeu]);
+
+      // Sessão transferida para outro cliente da conta: a cópia antiga fica marcada (a conversa junto) e sai das leituras.
+      await db.query("delete from crm_filtro_cliente where client_id=$1", [A]);
+      await db.query("insert into wts_sessions(client_id,session_id,started_at,department_id) values ($1,'r-meu',now(),'dep-a'),($2,'r-meu',now(),'dep-b')", [A, B]);
+      assert.deepEqual((await rows<{ id: string }>("select id from conversas_do_cliente($1) where id = $2", [A, cMeu])).length, 1);
+      await db.query("update wts_sessions set movida_para_client_id=$2, movida_em=now() where client_id=$1 and session_id='r-meu'", [A, B]);
+      assert.deepEqual(await rows("select movida_para_client_id as m from conversas where id=$1", [cMeu]), [{ m: B }], "gatilho marca a conversa da cópia");
+      assert.deepEqual(await rows("select id from conversas_do_cliente($1) where id = $2", [A, cMeu]), [], "conversa movida sai da leitura");
+      assert.deepEqual(await rows("select session_id from wts_sessoes_do_cliente($1) where session_id='r-meu'", [A]), [], "sessão movida sai da leitura");
+      assert.deepEqual((await rows("select session_id from wts_sessoes_do_cliente($1) where session_id='r-meu'", [B])).length, 1, "o dono atual continua vendo");
+      await db.query("update wts_sessions set movida_para_client_id=null, movida_em=null where client_id=$1 and session_id='r-meu'", [A]);
+      assert.deepEqual(await rows("select movida_para_client_id as m from conversas where id=$1", [cMeu]), [{ m: null }], "sessão que volta desmarca a conversa");
+      // Digisac: contato sem etiqueta de médico que fica com a clínica aparece contado.
+      const dig = (await rows<{ id: string }>("insert into crm_connections(client_id,provider,access_token,webhook_secret) values ($1,'digisac','fake','fake') returning id", [A]))[0].id;
+      await db.query("insert into crm_leads(client_id,crm_connection_id,provider,external_lead_id,event_type,raw_payload,pipeline_id,occurred_at) values ($1,$2,'digisac','s-1','add','{}','sem-medico',now()),($1,$2,'digisac','s-2','add','{}','antonione',now()),($1,$2,'digisac','s-3','add','{}','rafaela',now())", [A, dig]);
+      assert.deepEqual(await rows("select crm_sem_medico($1,current_date,current_date) as n", [A]), [{ n: null }], "sem regra 'excluir', sem aviso");
+      await db.query("insert into crm_filtro_cliente(client_id,crm_connection_id,tipo,valor,modo) values ($1,$2,'pipeline','rafaela','excluir')", [A, dig]);
+      assert.deepEqual(await rows("select crm_sem_medico($1,current_date,current_date) as n", [A]), [{ n: { total: 1, periodo: 1 } }]);
+    } finally { await db.exec("rollback"); }
+  });
   await check("estado final bloqueia toda função public para anon, incluindo migrações novas", async () => {
     assert.deepEqual(await rows("select oid::regprocedure::text as signature from pg_proc where pronamespace='public'::regnamespace and prokind='f' and has_function_privilege('anon',oid,'EXECUTE')"), []);
   });

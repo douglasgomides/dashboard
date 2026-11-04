@@ -66,6 +66,59 @@ export function direcaoDaMensagem(d: unknown): "entrada" | "saida" | "sistema" {
   return "sistema";
 }
 
+// Tipos e origens da mensagem pela doc da Helena (GET /chat/v1/session/{id}/message, PublicMessageDTO, lida em
+// 01/11/2026): type TRANSITION, TRACK e NOTE são registro do sistema (troca de equipe, rastreio, nota interna), não fala;
+// origin DEFAULT é o atendente na plataforma; CAMPAIGN, OFFICE_HOURS, BOT, API, PAYMENT e GATEWAY são envio
+// automático (API também: integração não é uma pessoa respondendo, e contar como resposta deixaria o número melhor).
+const TIPOS_SISTEMA_WTS = new Set(["TRANSITION", "TRACK", "NOTE"]);
+const ORIGENS_AUTOMATICAS_WTS = new Set(["CAMPAIGN", "OFFICE_HOURS", "BOT", "API", "PAYMENT", "GATEWAY"]);
+const STATUS_NAO_ENTREGUE_WTS = new Set(["FAILED", "DELETED"]);
+
+/** Direção e autor de uma mensagem da WTS: registro do sistema não é fala; envio automático não é resposta de pessoa. */
+export function classificarMensagemWts(m: any): { direcao: "entrada" | "saida" | "sistema"; automatica: boolean } {
+  const tipo = String(m?.type ?? "").toUpperCase();
+  const direcao = TIPOS_SISTEMA_WTS.has(tipo) ? "sistema" : direcaoDaMensagem(m?.direction);
+  const origem = String(m?.origin ?? "").toUpperCase();
+  return { direcao, automatica: direcao === "saida" && ORIGENS_AUTOMATICAS_WTS.has(origem) };
+}
+
+/**
+ * 1ª resposta pelas mensagens: da 1ª mensagem do paciente até a 1ª mensagem de uma PESSOA da clínica depois dela (sem
+ * robô, campanha, horário de atendimento, integração, registro do sistema nem mensagem que falhou ou foi apagada). Só
+ * calcula quando a API diz a origem (campo origin) das mensagens da clínica: sem isso o robô de boas-vindas viraria
+ * "resposta em 4 segundos" (Dra. Juliana Paola e Dra. Mariela Muniz têm robô: mediana de 4 s contando ele). null quando
+ * não dá para medir (paciente não escreveu, ninguém respondeu, ou não se sabe quem enviou).
+ */
+export function primeiraRespostaWts(msgs: any[]): { em: string; segundos: number } | null {
+  const quando = (m: any) => Date.parse(m?.timestamp ?? m?.createdAt);
+  const ordenadas = msgs.filter((m) => m && Number.isFinite(quando(m))).sort((a, b) => quando(a) - quando(b));
+  const classe = ordenadas.map((m) => ({ m, ...classificarMensagemWts(m) }));
+  const daClinica = classe.filter((x) => x.direcao === "saida");
+  if (!daClinica.some((x) => typeof x.m.origin === "string" && x.m.origin.trim())) return null;
+  const paciente = classe.find((x) => x.direcao === "entrada");
+  if (!paciente) return null;
+  const t0 = quando(paciente.m);
+  const resposta = daClinica.find((x) => quando(x.m) > t0 && !x.automatica && !STATUS_NAO_ENTREGUE_WTS.has(String(x.m.status ?? "").toUpperCase()));
+  if (!resposta) return null;
+  const t1 = quando(resposta.m);
+  return { em: new Date(t1).toISOString(), segundos: Math.round((t1 - t0) / 1000) };
+}
+
+/** Origem de anúncio pela UTM da sessão v2 (utm.sourceId é o id do anúncio, utm.clid o ctwa_clid), quando a mensagem não traz. */
+export function origemDaUtmDaSessao(utm: unknown): ReturnType<typeof acharOrigemAnuncio> {
+  if (!utm || typeof utm !== "object" || Array.isArray(utm)) return null;
+  const u = utm as Record<string, unknown>;
+  const t = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  if (!t(u.sourceId) && !t(u.clid)) return null;
+  return { ad_id: t(u.sourceId), campaign_id: null, ctwa_clid: t(u.clid), headline: t(u.headline), source_url: t(u.referralUrl), bruto: { ...u, _de: "sessao.utm" } };
+}
+
+/** Aviso da importação de mensagens com falha parcial (dono "nos"): reconhecido pela marca para ser trocado ou limpo. */
+export const MARCA_AVISO_MENSAGENS = /^Mensagens do WhatsApp: /;
+export function avisoFalhaMensagens(falhas: number, lidas: number): string {
+  return `Mensagens do WhatsApp: ${falhas} conversa${falhas === 1 ? "" : "s"} não ${falhas === 1 ? "foi lida" : "foram lidas"} na última rodada (${lidas} lida${lidas === 1 ? "" : "s"} sem erro). Elas voltam na próxima.`;
+}
+
 type Contato = { phone: string | null; nome: string | null; email: string | null; instagram: string | null };
 
 export type ResultadoConversas = {
@@ -170,7 +223,8 @@ export async function ingerirConversasWts(
   const desde = opts.dias ? new Date(Date.now() - opts.dias * 86_400_000).toISOString() : null;
   let sessoesCompletas = false;
   for (let de = 0; de < 20_000; de += 1000) {
-    let q = supabase.from("wts_sessions").select("session_id, contact_id, started_at, updated_at").eq("client_id", clientId).not("contact_id", "is", null).order("started_at", { ascending: false }).order("session_id").range(de, de + 999);
+    // Sessão transferida para outra médica da conta (movida_para_client_id) é do outro cliente: a conversa não é relida aqui.
+    let q = supabase.from("wts_sessions").select("session_id, contact_id, started_at, updated_at, sessao_utm, primeira_resposta_conferida_em").eq("client_id", clientId).not("contact_id", "is", null).is("movida_para_client_id", null).order("started_at", { ascending: false }).order("session_id").range(de, de + 999);
     if (desde) q = q.gte("started_at", desde);
     const { data: pag, error } = await q;
     if (error) {
@@ -206,7 +260,10 @@ export async function ingerirConversasWts(
   catch { r.erros.push("Não foi possível priorizar as conversas dos casos ativos."); return r; }
   const porSessao = new Map(sessoes.map((s: any) => [String(s.session_id), s]));
   const prioritarias = ativas.map((c) => porSessao.get(c.externo_id) ?? { session_id: c.externo_id, contact_id: null, started_at: c.iniciada_em, updated_at: c.ultima_msg_em });
-  const pendentes = [...new Map([...prioritarias, ...novas, ...mudaram].map((s: any) => [String(s.session_id), s])).values()];
+  // Sem a 1ª resposta calculada pelas mensagens (lidas antes da regra nova, ou de antes de origin ser gravado): relê,
+  // depois das demais, para o tempo de resposta deixar de depender do timeWait (auditoria de 01/11/2026).
+  const semPrimeira = sessoes.filter((s: any) => existentes.has(String(s.session_id)) && cobertura.get(String(s.session_id)) === "completa" && !s.primeira_resposta_conferida_em);
+  const pendentes = [...new Map([...prioritarias, ...novas, ...mudaram, ...semPrimeira].map((s: any) => [String(s.session_id), s])).values()];
 
   // Códigos dos links rastreados deste cliente (casam com a primeira mensagem do paciente).
   const { data: links, error: erroLinks } = await supabase.from("links_rastreados").select("id, codigo_ref, tipo, instagram_post_id, ad_campaign_id").eq("client_id", clientId);
@@ -303,7 +360,7 @@ export async function ingerirConversasWts(
     // código do link na primeira mensagem de entrada (até 3 primeiras)
     let link: any = null;
     let codigoAchado: string | null = null;
-    for (const m of msgs.filter((x) => direcaoDaMensagem(x.direction) === "entrada").slice(0, 3)) {
+    for (const m of msgs.filter((x) => classificarMensagemWts(x).direcao === "entrada").slice(0, 3)) {
       for (const cod of codigosNaMensagem(m.text)) {
         if (porCodigo.has(cod)) {
           link = porCodigo.get(cod);
@@ -336,8 +393,9 @@ export async function ingerirConversasWts(
     if (!conv) { terminada = true; return; } // A newer request owns this conversation now.
 
     // Veio de anúncio? Guarda o que a Meta mandou (id do anúncio etc.) para cruzar anúncio → conversa → lead.
-    const entradas = msgs.filter((x) => direcaoDaMensagem(x.direction) === "entrada");
-    const origem = acharOrigemAnuncio(entradas);
+    const entradas = msgs.filter((x) => classificarMensagemWts(x).direcao === "entrada");
+    // Rastreio (type TRACK) traz details.track.pageUtm; a sessão v2 traz utm própria. A mensagem vale primeiro.
+    const origem = acharOrigemAnuncio(entradas) ?? acharOrigemAnuncio(msgs.filter((x) => String(x?.type ?? "").toUpperCase() === "TRACK")) ?? origemDaUtmDaSessao(s.sessao_utm);
     if (origem) {
       const { error: eO } = await supabase.from("conversas_origem_anuncio").upsert({ conversa_id: conv.id, client_id: clientId, ...origem }, { onConflict: "conversa_id" });
       if (eO) { r.erros.push(`origem anúncio ${sid.slice(0, 8)}: ${eO.message}`); falhou = true; }
@@ -351,7 +409,7 @@ export async function ingerirConversasWts(
     }
 
     const linhas = msgs.map((m) => {
-      const d = direcaoDaMensagem(m.direction);
+      const { direcao: d, automatica } = classificarMensagemWts(m);
       r.valoresVistos.direcao[`${String(m.direction)}→${d}`] = (r.valoresVistos.direcao[`${String(m.direction)}→${d}`] ?? 0) + 1;
       r.valoresVistos.tipo[String(m.type)] = (r.valoresVistos.tipo[String(m.type)] ?? 0) + 1;
       r.valoresVistos.origem[String(m.origin)] = (r.valoresVistos.origem[String(m.origin)] ?? 0) + 1;
@@ -359,7 +417,7 @@ export async function ingerirConversasWts(
         conversa_id: conv.id,
         client_id: clientId,
         direcao: d,
-        autor: d === "saida" ? "Clínica" : d === "entrada" ? "Paciente" : "Sistema",
+        autor: d === "saida" ? (automatica ? "Clínica (automática)" : "Clínica") : d === "entrada" ? "Paciente" : "Sistema",
         texto: (typeof m.text === "string" && m.text) || (typeof m.details?.transcription === "string" && m.details.transcription) || null,
         tipo: String(m.type ?? "texto").toLowerCase(),
         enviada_em: m.timestamp ?? m.createdAt,
@@ -371,8 +429,16 @@ export async function ingerirConversasWts(
       if (eM) { r.erros.push(`mensagens ${sid.slice(0, 8)}: ${eM.message}`); completa = false; falhou = true; }
       else r.mensagens += linhas.slice(i, i + 200).length;
     }
+    // 1ª resposta pelas mensagens, só com a conversa inteira lida e gravada. Grava a tentativa (conferida_em) mesmo
+    // quando não dá para medir, para a sessão não voltar à fila de releitura a cada rodada.
+    if (completa && !falhou) {
+      const resp = primeiraRespostaWts(msgs);
+      const { error: eS } = await supabase.from("wts_sessions").update({ wait_seconds: resp?.segundos ?? null, primeira_resposta_conferida_em: new Date().toISOString() })
+        .eq("client_id", clientId).eq("session_id", sid);
+      if (eS) { r.erros.push(`1ª resposta ${sid.slice(0, 8)}: ${eS.message}`); falhou = true; }
+    }
     if (pessoaId) {
-      const primeiraEntrada = msgs.find((x) => direcaoDaMensagem(x.direction) === "entrada") ?? primeira;
+      const primeiraEntrada = msgs.find((x) => classificarMensagemWts(x).direcao === "entrada") ?? primeira;
       const { error: eToque } = await supabase.from("toques").upsert(
         {
           client_id: clientId, pessoa_id: pessoaId, tipo: "mensagem_whatsapp", origem_tipo: link?.tipo ?? null, link_id: link?.id ?? null,
