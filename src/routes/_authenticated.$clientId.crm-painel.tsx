@@ -521,7 +521,7 @@ function CrmClinicaPage() {
         <Kpi icone={Users} rotulo="Leads na base" valor={fmtN(m.total_leads)} cor="var(--s1)" dica="todo o histórico, sem os removidos no CRM e só leads com etapa conhecida (não segue o período)" />
         <Kpi
           icone={CalendarCheck}
-          rotulo="Consultas agendadas"
+          rotulo="Em consulta agendada hoje"
           valor={consultaSemEtapa ? "sem dado" : fmtN(m.consultas_agendadas)}
           dica={consultaSemEtapa ? MOTIVO_CONSULTA : "todo o histórico, não segue o período. O número do período está em \"Por funil, no período\"."}
           cor="var(--accent)"
@@ -636,7 +636,7 @@ function CrmClinicaPage() {
             />
             <EtapaFunil
               icone={CalendarCheck}
-              rotulo="Consultas agendadas"
+              rotulo="Em consulta agendada hoje"
               valor={consultaSemEtapa ? null : m.consultas_agendadas}
               base={base}
               cor="var(--accent)"
