@@ -48,6 +48,8 @@ import {
 import "@/styles/databoard.css";
 import { LeituraDoPeriodo, MetasDoMes } from "@/components/databoard-inteligencia";
 import { leituraDoPeriodo } from "@/lib/inteligencia-resultados";
+import { EvolucaoDiaria, Minigrafico } from "@/components/databoard-evolucao";
+import { useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 
@@ -92,6 +94,7 @@ function PacientesDoPeriodo() {
   const q = usePacientesPeriodo(clientId, start, end);
   const ant = periodoAnterior(start, end);
   const anterior = usePacientesPeriodo(clientId, ant.start, ant.end);
+  const diario = useResultadosDiarios(clientId, start, end);
   const historico = useQuery({
     queryKey: ["pacientes-vendas", clientId, hoje],
     queryFn: async () => {
@@ -169,10 +172,12 @@ function PacientesDoPeriodo() {
 
       <ul className="dbx-grid dbx-cards" aria-label="Números do período">
         {METRICAS.filter((k) => d.numeros[k]).map((k) => (
-          <MetricaCard key={k} chave={k} numero={d.numeros[k]} periodo={rotuloPeriodo} ativo={aberta === k} onAbrir={() => abrir(k)}
+          <MetricaCard key={k} chave={k} numero={d.numeros[k]} periodo={rotuloPeriodo} ativo={aberta === k} onAbrir={() => abrir(k)} serie={(diario.data ?? []).map((l) => l[k as CampoDiario] ?? null)}
             variacao={variacao(d.numeros[k]?.valor, anterior.data?.numeros[k]?.valor)} />
         ))}
       </ul>
+
+      <EvolucaoDiaria linhas={diario.data ?? []} periodo={rotuloPeriodo} />
 
       <div className="dbx-grid dbx-split">
         {etapas.length > 1 && (
@@ -310,7 +315,7 @@ function PacientesDoPeriodo() {
   );
 }
 
-function MetricaCard({ chave, numero, periodo, ativo, onAbrir, variacao: dv }: { chave: ChaveNumero; numero: Numero | undefined; periodo: string; ativo: boolean; onAbrir: () => void; variacao?: { txt: string; tom: "up" | "down" | "flat" } | null }) {
+function MetricaCard({ chave, numero, periodo, ativo, onAbrir, serie, variacao: dv }: { chave: ChaveNumero; numero: Numero | undefined; periodo: string; ativo: boolean; onAbrir: () => void; serie?: (number | null)[]; variacao?: { txt: string; tom: "up" | "down" | "flat" } | null }) {
   const t = TEXTO_NUMERO[chave];
   const semDado = !numero || numero.valor == null;
   return (
@@ -335,6 +340,7 @@ function MetricaCard({ chave, numero, periodo, ativo, onAbrir, variacao: dv }: {
             ) : (
               <span className="dbx-delta dbx-flat">{legendaDoNumero(chave, numero)}</span>
             )}
+            {serie && <Minigrafico pontos={serie} />}
             {coberturaDoNumero(numero) && <span className="dbx-note block">{coberturaDoNumero(numero)}</span>}
             {chave === "fecharam" && avisoCheckout(numero) && <span className="dbx-note block">{avisoCheckout(numero)}</span>}
           </>
