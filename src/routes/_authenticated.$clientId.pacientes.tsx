@@ -49,7 +49,7 @@ import "@/styles/databoard.css";
 import { LeituraDoPeriodo, MetasDoMes } from "@/components/databoard-inteligencia";
 import { leituraDoPeriodo } from "@/lib/inteligencia-resultados";
 import { EvolucaoDiaria, Minigrafico } from "@/components/databoard-evolucao";
-import { useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
+import { CAMPOS_DIARIOS, useResultadosDiarios, type CampoDiario, type LinhaDiaria } from "@/hooks/use-resultados-diarios";
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 
@@ -77,6 +77,20 @@ function variacao(atual: number | null | undefined, antes: number | null | undef
   return { txt: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}%`, curto: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}%`, tom: pct > 0 ? "up" : "down" };
 }
 
+function diasEntre(a: string, b: string) {
+  return Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000) + 1;
+}
+
+/** Soma dia a dia de cada número. null = o histórico não cobre pelo menos 80% dos dias (não dá para comparar). */
+function somaDiaria(linhas: LinhaDiaria[], dias: number): Record<CampoDiario, number | null> {
+  const out = {} as Record<CampoDiario, number | null>;
+  for (const k of CAMPOS_DIARIOS) {
+    const med = linhas.filter((l) => l[k] != null);
+    out[k] = med.length >= Math.ceil(dias * 0.8) ? med.reduce((s, l) => s + Number(l[k]), 0) : null;
+  }
+  return out;
+}
+
 function somaDias(iso: string, dias: number) {
   const d = new Date(`${iso}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + dias);
@@ -92,10 +106,16 @@ function PacientesDoPeriodo() {
   const listaRef = useRef<HTMLDivElement>(null);
 
   const q = usePacientesPeriodo(clientId, start, end);
-  const ant = periodoAnterior(start, end);
-  // O período anterior só entra depois que o atual carregou: duas contas pesadas ao mesmo tempo estouravam o limite do banco.
-  const anterior = usePacientesPeriodo(clientId, ant.start, ant.end, !!q.data);
+  // O dia de hoje ainda não está fechado no histórico: compara só dias fechados, com o mesmo número de dias nos dois lados.
+  const fimFechado = end >= hoje ? somaDias(hoje, -1) : end;
+  const ant = periodoAnterior(start, fimFechado);
+  // A comparação com o período anterior vem do histórico diário (instantâneo e igual nos dois lados). A conta pesada
+  // de pessoas únicas do período anterior estourava o limite de 8 s do banco nas clínicas grandes.
   const diario = useResultadosDiarios(clientId, start, end);
+  const diarioAnterior = useResultadosDiarios(clientId, ant.start, ant.end);
+  const dias = diasEntre(start, fimFechado);
+  const somaAtual = somaDiaria((diario.data ?? []).filter((l) => l.dia <= fimFechado), dias);
+  const somaAntes = somaDiaria(diarioAnterior.data ?? [], dias);
   const historico = useQuery({
     queryKey: ["pacientes-vendas", clientId, hoje],
     queryFn: async () => {
@@ -143,9 +163,10 @@ function PacientesDoPeriodo() {
   ].filter((e) => d.numeros[e.chave]?.valor != null);
   const rotuloPeriodo = formatRangeLabel({ start, end });
   const leitura = leituraDoPeriodo(
-    { mandaram_mensagem: d.numeros.mandaram_mensagem?.valor, agendaram: d.numeros.agendaram?.valor, fecharam: d.numeros.fecharam?.valor },
-    anterior.data ? { mandaram_mensagem: anterior.data.numeros.mandaram_mensagem?.valor, agendaram: anterior.data.numeros.agendaram?.valor, fecharam: anterior.data.numeros.fecharam?.valor } : null,
+    { mandaram_mensagem: somaAtual.mandaram_mensagem, agendaram: somaAtual.agendaram, fecharam: somaAtual.fecharam },
+    { mandaram_mensagem: somaAntes.mandaram_mensagem, agendaram: somaAntes.agendaram, fecharam: somaAntes.fecharam },
   );
+
   const novas = d.numeros.leads_novos?.valor, antigos = d.numeros.antigos?.valor;
   const rosca = novas != null && antigos != null && novas + antigos > 0
     ? { novas, antigos, pctNovas: Math.round((novas / (novas + antigos)) * 100) } : null;
@@ -174,7 +195,7 @@ function PacientesDoPeriodo() {
       <ul className="dbx-grid dbx-cards" aria-label="Números do período">
         {METRICAS.filter((k) => d.numeros[k]).map((k) => (
           <MetricaCard key={k} chave={k} numero={d.numeros[k]} periodo={rotuloPeriodo} ativo={aberta === k} onAbrir={() => abrir(k)} serie={(diario.data ?? []).map((l) => l[k as CampoDiario] ?? null)}
-            variacao={variacao(d.numeros[k]?.valor, anterior.data?.numeros[k]?.valor)} />
+            variacao={variacao(somaAtual[k as CampoDiario], somaAntes[k as CampoDiario])} />
         ))}
       </ul>
 
@@ -188,7 +209,7 @@ function PacientesDoPeriodo() {
             <ul className="dbx-rows">
               {etapas.map((e) => {
                 const v = Number(d.numeros[e.chave]?.valor ?? 0);
-                const dv = variacao(d.numeros[e.chave]?.valor, anterior.data?.numeros[e.chave]?.valor);
+                const dv = variacao(somaAtual[e.chave as CampoDiario], somaAntes[e.chave as CampoDiario]);
                 return (
                   <li key={e.chave}>
                     <button type="button" className="dbx-row" onClick={() => abrir(e.chave)} aria-expanded={aberta === e.chave}>
@@ -241,29 +262,36 @@ function PacientesDoPeriodo() {
         </details>
       )}
 
+      {(avisoAgendouMenosQueFechou(d) || eng) && (
+        <details className="dbx-avisos">
+          <summary>Avisos sobre a leitura dos números ({[avisoAgendouMenosQueFechou(d), eng].filter(Boolean).length})</summary>
+          <div className="space-y-3 pt-3">
       {avisoAgendouMenosQueFechou(d) && (
-        <p className="rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--warn-border, var(--border))", background: "var(--surface-2)" }}>
-          {avisoAgendouMenosQueFechou(d)}
-        </p>
-      )}
+              <p className="rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--warn-border, var(--border))", background: "var(--surface-2)" }}>
+                {avisoAgendouMenosQueFechou(d)}
+              </p>
+            )}
 
-      {eng && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
-          <span className="font-medium">{TEXTO_NUMERO.engajaram_instagram.rotulo}:</span>
-          {eng.valor == null ? (
-            <span style={{ color: "var(--text-dim)" }}>sem dado. {eng.motivo_sem_dado}</span>
-          ) : (
-            <>
-              <button type="button" className="font-semibold underline" onClick={() => abrir("engajaram_instagram")} aria-expanded={aberta === "engajaram_instagram"}>
-                {pessoas(eng.valor)}
-              </button>
-              <span style={{ color: "var(--text-dim)" }}>
-                {fmt(Number(eng.so_comentaram ?? 0))} só comentaram em post, {fmt(Number(eng.so_story ?? 0))} só reagiram ou responderam story. Não contam como contato.
-              </span>
-            </>
-          )}
-          <Ajuda>{TEXTO_NUMERO.engajaram_instagram.fonte}</Ajuda>
-        </div>
+            {eng && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
+                <span className="font-medium">{TEXTO_NUMERO.engajaram_instagram.rotulo}:</span>
+                {eng.valor == null ? (
+                  <span style={{ color: "var(--text-dim)" }}>sem dado. {eng.motivo_sem_dado}</span>
+                ) : (
+                  <>
+                    <button type="button" className="font-semibold underline" onClick={() => abrir("engajaram_instagram")} aria-expanded={aberta === "engajaram_instagram"}>
+                      {pessoas(eng.valor)}
+                    </button>
+                    <span style={{ color: "var(--text-dim)" }}>
+                      {fmt(Number(eng.so_comentaram ?? 0))} só comentaram em post, {fmt(Number(eng.so_story ?? 0))} só reagiram ou responderam story. Não contam como contato.
+                    </span>
+                  </>
+                )}
+                <Ajuda>{TEXTO_NUMERO.engajaram_instagram.fonte}</Ajuda>
+              </div>
+            )}
+          </div>
+        </details>
       )}
 
       <div ref={listaRef} className="scroll-mt-4">
