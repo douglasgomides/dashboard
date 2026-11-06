@@ -795,15 +795,6 @@ function MonthlyOverview() {
     }
   }
 
-  function abrirAnalises() {
-    setAnalisesAbertas(true);
-    requestAnimationFrame(() =>
-      document
-        .getElementById("todas-analises")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-    );
-  }
-
   const explicacao = {
     seguidores:
       "Fonte: Instagram (total de seguidores de cada dia; sem ele, seguidores ganhos e perdidos de cada dia). É o mesmo número do relatório em PDF e do texto do WhatsApp. Limitação: a Meta leva cerca de 2 dias para fechar o dia, então os últimos dias ainda podem mudar.",
@@ -831,7 +822,7 @@ function MonthlyOverview() {
           <div>
             <h2>Resultados do Instagram</h2>
             <p>
-              {periodLabel} · Fonte: Instagram. Consulte a definição de cada indicador no ícone de informação.
+              {periodLabel} · Instagram
             </p>
           </div>
         </header>
@@ -858,13 +849,6 @@ function MonthlyOverview() {
               cor="var(--s3)"
               rotulo="Seguidores: saldo no período"
               valor={saldo.saldo != null ? sinal(saldo.saldo) : "sem dado"}
-              dica={
-                saldo.regua === "total"
-                  ? "variação do total de seguidores no período"
-                  : saldo.regua === "ganhos_saidas"
-                    ? "quem começou a seguir menos quem deixou de seguir"
-                    : "sem o total de seguidores no começo e no fim do período"
-              }
               info={`${saldo.detalhe} ${explicacao.seguidores}`}
             />
             {meta?.alcance_unico != null ? (
@@ -873,7 +857,6 @@ function MonthlyOverview() {
                 cor="var(--s1)"
                 rotulo="Alcance (contas únicas)"
                 valor={meta.alcance_unico.toLocaleString("pt-BR")}
-                dica={`igual ao “Contas alcançadas” do Instagram, ${dd(meta.de)} a ${dd(meta.ate)}`}
                 info={explicacao.alcance}
               />
             ) : (
@@ -883,7 +866,6 @@ function MonthlyOverview() {
                 rotulo="Alcance (soma dos dias)"
                 valor={reach.toLocaleString("pt-BR")}
                 tendencia={vsAlcance}
-                dica="a mesma pessoa conta em cada dia em que viu o perfil"
                 info={explicacao.alcance}
               />
             )}
@@ -892,11 +874,6 @@ function MonthlyOverview() {
               cor="var(--s2)"
               rotulo="Taxa de interação"
               valor={taxaUnica ?? engagementRate}
-              dica={
-                taxaUnica
-                  ? "interações ÷ alcance único"
-                  : "interações ÷ soma dos alcances diários"
-              }
               info={explicacao.engajamento}
             />
             <Kpi
@@ -905,20 +882,11 @@ function MonthlyOverview() {
               rotulo="Salvamentos"
               valor={(meta?.salvamentos ?? saves).toLocaleString("pt-BR")}
               tendencia={meta?.salvamentos != null ? undefined : vsSalvos}
-              dica={
-                meta?.salvamentos != null
-                  ? `por data da ação, igual ao Instagram (${dd(meta.de)} a ${dd(meta.ate)})`
-                  : "soma dos salvamentos de cada dia"
-              }
               info={explicacao.salvamentos}
             />
           </div>
         )}
 
-        <WorkspaceButton variant="secondary" onClick={abrirAnalises}>
-          Ver todas as análises do período{" "}
-          <ChevronRight size={16} aria-hidden />
-        </WorkspaceButton>
       </section>
 
       <AcompanhamentoServico clientId={clientId} produto="hub" />
