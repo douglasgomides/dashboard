@@ -51,6 +51,9 @@ export const Route = createFileRoute("/_authenticated/$clientId/pacientes")({
   component: PacientesDoPeriodo,
 });
 
+const ENTRADA = ["mandaram_mensagem", "leads_novos", "antigos", "abordados"] as const;
+const CAMINHO = ["agendaram", "negociacao", "compareceram", "fecharam"] as const;
+
 const fmt = (n: number | null | undefined) => (n == null ? "" : Number(n).toLocaleString("pt-BR"));
 const pessoas = (n: number) => `${fmt(n)} ${n === 1 ? "pessoa" : "pessoas"}`;
 
@@ -107,25 +110,19 @@ function PacientesDoPeriodo() {
 
   const d = q.data;
   const eng = d.numeros.engajaram_instagram;
+  const indisponiveis = CHAVES_NUMEROS.filter((k) => d.numeros[k] && d.numeros[k]!.valor == null);
 
   return (
     <div className="space-y-5">
       <header className="space-y-1">
-        <h2 className="text-lg font-semibold">Pacientes do período</h2>
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          {formatRangeLabel({ start, end })}. Cada número é de pessoas, não de conversas. Toque num número para ver quem são.
+          {formatRangeLabel({ start, end })} · cada número é de pessoas. Toque num número para ver quem são.
         </p>
         {avisoCrmCompartilhado(d) && (
           <p className="text-sm font-medium" style={{ color: "var(--warn, var(--text))" }}>{avisoCrmCompartilhado(d)}</p>
         )}
         {notaCrmPorMedico(d) && (
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>{notaCrmPorMedico(d)}</p>
-        )}
-        {avisoNaoMedido(d) && (
-          <p className="text-xs" style={{ color: "var(--text-dim)" }}>{avisoNaoMedido(d)}</p>
-        )}
-        {avisoTelaHonesta(d) && (
-          <p className="text-xs" style={{ color: "var(--text-dim)" }}>{avisoTelaHonesta(d)}</p>
         )}
         {d.cliente_de_teste && (
           <p className="text-xs" style={{ color: "var(--warn, var(--muted))" }}>
@@ -134,11 +131,35 @@ function PacientesDoPeriodo() {
         )}
       </header>
 
-      <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-8" aria-label="Números do período">
-        {CHAVES_NUMEROS.map((k) => (
-          <NumeroGrande key={k} chave={k} numero={d.numeros[k]} ativo={aberta === k} onAbrir={() => abrir(k)} />
-        ))}
-      </ul>
+      {[{ titulo: "Quem chamou a clínica", chaves: ENTRADA }, { titulo: "Do agendamento à venda", chaves: CAMINHO }].map((g) => {
+        const visiveis = g.chaves.filter((k) => d.numeros[k]?.valor != null);
+        if (!visiveis.length) return null;
+        return (
+          <section key={g.titulo} className="space-y-2" aria-label={g.titulo}>
+            <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-dim)" }}>{g.titulo}</h2>
+            <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {visiveis.map((k) => (
+                <NumeroGrande key={k} chave={k} numero={d.numeros[k]} ativo={aberta === k} onAbrir={() => abrir(k)} />
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+
+      {indisponiveis.length > 0 && (
+        <details className="text-sm" style={{ color: "var(--text-dim)" }}>
+          <summary className="cursor-pointer">Números que não aparecem aqui ({indisponiveis.length})</summary>
+          <ul className="mt-2 space-y-2">
+            {indisponiveis.map((k) => (
+              <li key={k}>
+                <b>{TEXTO_NUMERO[k].rotulo}</b>: {textoNaoMedido(d.numeros[k]).toLowerCase()}. {d.numeros[k]?.motivo_sem_dado ?? "A fonte não respondeu."}
+                {typeof d.numeros[k]?.o_que_fazer === "string" && <> <b>O que fazer:</b> {d.numeros[k]?.o_que_fazer}</>}
+              </li>
+            ))}
+            {avisoNaoMedido(d) && <li className="text-xs">{avisoNaoMedido(d)}</li>}
+          </ul>
+        </details>
+      )}
 
       {avisoAgendouMenosQueFechou(d) && (
         <p className="rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--warn-border, var(--border))", background: "var(--surface-2)" }}>
@@ -225,20 +246,15 @@ function NumeroGrande({ chave, numero, ativo, onAbrir }: { chave: ChaveNumero; n
         onClick={onAbrir}
         disabled={semDado}
         aria-expanded={ativo}
-        className="flex h-full w-full flex-col items-start gap-1 rounded-xl border p-3 pr-9 text-left disabled:cursor-default"
+        className="flex h-full w-full flex-col items-start gap-1.5 rounded-xl border p-4 pr-9 text-left disabled:cursor-default"
         style={{ background: ativo ? "var(--accent-soft)" : "var(--surface)", borderColor: ativo ? "var(--accent)" : "var(--border)" }}
       >
         <span className="text-xs font-semibold" style={{ color: "var(--text-dim)" }}>{t.rotulo}</span>
         {semDado ? (
-          <>
-            <span className="text-base font-semibold" style={{ color: "var(--muted)" }}>{textoNaoMedido(numero)}</span>
-            <span className="text-xs" style={{ color: "var(--text-dim)" }}>{numero?.motivo_sem_dado ?? "A fonte não respondeu."}</span>
-            {typeof numero?.o_que_fazer === "string" && <span className="text-xs" style={{ color: "var(--text-dim)" }}><b>O que fazer:</b> {numero.o_que_fazer}</span>}
-            {numero?.responsavel && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{ROTULO_RESPONSAVEL[numero.responsavel]}</span>}
-          </>
+          <span className="text-base font-semibold" style={{ color: "var(--muted)" }}>{textoNaoMedido(numero)}</span>
         ) : (
           <>
-            <span className="text-3xl font-semibold tabular-nums leading-none">{fmt(numero!.valor)}</span>
+            <span className="text-4xl font-semibold tabular-nums leading-none">{fmt(numero!.valor)}</span>
             <span className="text-xs" style={{ color: "var(--text-dim)" }}>{legendaDoNumero(chave, numero)}</span>
             {coberturaDoNumero(numero) && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{coberturaDoNumero(numero)}</span>}
             {chave === "fecharam" && avisoCheckout(numero) && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{avisoCheckout(numero)}</span>}
