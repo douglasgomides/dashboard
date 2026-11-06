@@ -115,14 +115,6 @@ export const AREAS: NavArea[] = [
     Icone: Megaphone,
     tabs: [
       {
-        path: "/marketing",
-        label: "Visão geral de Marketing",
-        equipe: true,
-        Icone: LayoutDashboard,
-        descricao: "Escolha entre produzir conteúdo, planejar campanhas e analisar resultados.",
-        termos: "marketing aquisicao visao geral",
-      },
-      {
         path: "/conteudo",
         label: "Analisar desempenho",
         Icone: AlignLeft,
