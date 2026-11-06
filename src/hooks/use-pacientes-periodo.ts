@@ -16,5 +16,8 @@ export function usePacientesPeriodo(clientId: string, start: string, end: string
     queryFn: () => lerPacientesPeriodo(clientId, start, end),
     staleTime: 5 * 60_000,
     enabled,
+    // Conta pesada: o banco corta consulta de usuário em 8 s. Repetir 3 vezes só faz a tela travar por 40 s.
+    retry: 1,
+    retryDelay: 1500,
   });
 }
