@@ -93,7 +93,8 @@ function PacientesDoPeriodo() {
 
   const q = usePacientesPeriodo(clientId, start, end);
   const ant = periodoAnterior(start, end);
-  const anterior = usePacientesPeriodo(clientId, ant.start, ant.end);
+  // O período anterior só entra depois que o atual carregou: duas contas pesadas ao mesmo tempo estouravam o limite do banco.
+  const anterior = usePacientesPeriodo(clientId, ant.start, ant.end, !!q.data);
   const diario = useResultadosDiarios(clientId, start, end);
   const historico = useQuery({
     queryKey: ["pacientes-vendas", clientId, hoje],
