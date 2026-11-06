@@ -1,0 +1,35 @@
+/* Casca do Nexo no visual do Databox (tema claro): menu claro, fundo lavanda, cabeçalho enxuto.
+   Só tokens e acabamento; o tema escuro continua como estava. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .product-workspace.workspace-guided {
+    --page: #eef0f9; --surface: #ffffff; --surface-2: #f2f3fb; --ink: #1d2140; --ink-2: #464c6c; --muted: #7a809c;
+    --border: #dfe2f0; --grid: #e6e8f3; --control-border: #b9bed6;
+    --accent: #4f46e5; --accent-hover: #4038c9; --action-bg: #4f46e5; --action-hover: #4038c9; --focus: #4f46e5;
+    --side: #ffffff; --side-hover: #f2f3fb; --side-active: #e9e7fd; --side-ink: #1d2140; --side-ink-2: #464c6c; --side-muted: #8a90aa; --side-border: #e6e8f3;
+    --shadow: 0 1px 2px rgba(20,30,60,.04), 0 8px 24px rgba(20,30,60,.06);
+  }
+}
+:root[data-theme="light"] .product-workspace.workspace-guided {
+  --page: #eef0f9; --surface: #ffffff; --surface-2: #f2f3fb; --ink: #1d2140; --ink-2: #464c6c; --muted: #7a809c;
+  --border: #dfe2f0; --grid: #e6e8f3; --control-border: #b9bed6;
+  --accent: #4f46e5; --accent-hover: #4038c9; --action-bg: #4f46e5; --action-hover: #4038c9; --focus: #4f46e5;
+  --side: #ffffff; --side-hover: #f2f3fb; --side-active: #e9e7fd; --side-ink: #1d2140; --side-ink-2: #464c6c; --side-muted: #8a90aa; --side-border: #e6e8f3;
+  --shadow: 0 1px 2px rgba(20,30,60,.04), 0 8px 24px rgba(20,30,60,.06);
+}
+/* Item ativo do menu: pílula lavanda, sem a barra dourada nem texto branco. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .product-workspace.workspace-guided nav.side a[data-on],
+  :root:not([data-theme="dark"]) .product-workspace.workspace-guided aside .workspace-pages a[data-on] {
+    background: var(--side-active); color: #3730a3; box-shadow: none; font-weight: 600; border-radius: 10px;
+  }
+}
+:root[data-theme="light"] .product-workspace.workspace-guided nav.side a[data-on],
+:root[data-theme="light"] .product-workspace.workspace-guided aside .workspace-pages a[data-on] {
+  background: var(--side-active); color: #3730a3; box-shadow: none; font-weight: 600; border-radius: 10px;
+}
+/* Cabeçalho: só o título, como na barra do databoard. */
+.workspace-guided .workspace-eyebrow,
+.workspace-guided .workspace-heading p:not(.workspace-eyebrow) { display: none; }
+.workspace-guided .workspace-heading { padding: 18px 0 10px; }
+.workspace-guided .workspace-heading h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+.workspace-guided .workspace-data-status { margin-bottom: 14px; }
