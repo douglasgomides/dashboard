@@ -416,6 +416,7 @@ function AdminClientsPage() {
     staleTime: 10 * 60_000,
     retry: false,
   });
+  const [aba, setAba] = useState<"alertas" | "problemas" | "resposta" | "clinica">("alertas");
   const nClinicas = (clients ?? []).length;
   const nAtencao = (clients ?? []).filter((c) => piorPeso(c.id) >= 2).length;
   const rotuloCor: Record<string, string> = { verde: "Em dia", amarelo: "Atenção", vermelho: "Problema", cinza: "Sem fontes" };
@@ -537,7 +538,15 @@ function AdminClientsPage() {
           <span className="dbx-sub" style={{ marginLeft: 8 }}>{totalVermelhas ? `${totalVermelhas} em vermelho` : "nenhuma em vermelho"} · só equipe técnica</span>
         </summary>
         <div className="pt-4">
-      <SemRespostaAgora />
+          <div className="dbx-abas" role="tablist" aria-label="Diagnóstico das fontes">
+          <button type="button" role="tab" aria-selected={aba === "alertas"} className="dbx-aba" onClick={() => setAba("alertas")}>Alertas <span className="dbx-aba-n">{totalVermelhas}</span></button>
+          <button type="button" role="tab" aria-selected={aba === "problemas"} className="dbx-aba" onClick={() => setAba("problemas")}>Problemas <span className="dbx-aba-n">{problemas.length}</span></button>
+          <button type="button" role="tab" aria-selected={aba === "resposta"} className="dbx-aba" onClick={() => setAba("resposta")}>Sem resposta</button>
+          <button type="button" role="tab" aria-selected={aba === "clinica"} className="dbx-aba" onClick={() => setAba("clinica")}>Por clínica <span className="dbx-aba-n">{nClinicas}</span></button>
+          </div>
+          <div className="pt-4">
+            {aba === "alertas" && (
+              <>
       {statusQ.isError && (
         <p className="mb-3 text-sm" style={{ color: "var(--crit)" }}>
           Não consegui ler o status das fontes agora. Tente de novo em instantes.
@@ -576,6 +585,10 @@ function AdminClientsPage() {
         </div>
       )}
       <SaudeShortio />
+              </>
+            )}
+            {aba === "problemas" && (
+              <>
       <PainelSaudeFontes
         problemas={problemas}
         clientes={clients ?? []}
@@ -584,6 +597,15 @@ function AdminClientsPage() {
         total={(clients ?? []).length}
         falhas={statusQ.isError ? (clients ?? []).length : 0}
       />
+              </>
+            )}
+            {aba === "resposta" && (
+              <>
+      <SemRespostaAgora />
+              </>
+            )}
+            {aba === "clinica" && (
+              <>
       <div className="mb-2 flex flex-wrap items-center gap-2" aria-label="Legenda das cores">
         {LEGENDA_STATUS.map((l) => (
           <span key={l.cor} className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs" style={{ borderColor: "var(--border)", color: "var(--ink-2)" }}>
@@ -689,6 +711,9 @@ function AdminClientsPage() {
           </table>
         </div>
       )}
+              </>
+            )}
+          </div>
         </div>
       </details>
 
@@ -705,8 +730,16 @@ function AdminClientsPage() {
         <summary className="cursor-pointer select-none py-1 text-sm font-medium">Cadastrar admin ou cliente só do Nexo (exceção)</summary>
         <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>Clínica nova entra pelo Sistema de Aquisição. Use o cadastro abaixo só para cliente que não vai passar pelo programa.</p>
         <div className="mt-3">
-          <NewAdminForm />
-          <NewClientForm />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <p className="dbx-title" style={{ marginBottom: 8 }}>Novo admin da equipe</p>
+              <NewAdminForm />
+            </div>
+            <div>
+              <p className="dbx-title" style={{ marginBottom: 8 }}>Novo cliente só do Nexo</p>
+              <NewClientForm />
+            </div>
+          </div>
         </div>
       </details>
 

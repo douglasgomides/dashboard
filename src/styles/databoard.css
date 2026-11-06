@@ -75,3 +75,7 @@ button.dbx-card[aria-expanded="true"] { border-color: var(--accent); box-shadow:
 .dbx-avisos summary { cursor: pointer; color: var(--muted); }
 .dbx-det { border: 1px solid color-mix(in srgb, var(--border) 60%, transparent); border-radius: 14px; background: var(--surface); padding: 12px 18px; }
 .dbx-det > summary { cursor: pointer; font-weight: 600; font-size: 14.5px; list-style-position: inside; }
+.dbx-abas { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.dbx-aba { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; font: inherit; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; margin-bottom: -1px; }
+.dbx-aba[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.dbx-aba-n { display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: 99px; background: var(--surface-2); font-size: 12px; font-variant-numeric: tabular-nums; }

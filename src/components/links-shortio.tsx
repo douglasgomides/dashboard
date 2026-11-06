@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -81,6 +82,7 @@ export function LinksShortio({ clientId }: { clientId: string }) {
 /** Admin: links sem cliente, para atribuir à mão. */
 export function LinksSemCliente({ clientes }: { clientes: { id: string; name: string }[] }) {
   const qc = useQueryClient();
+  const [todos, setTodos] = useState(false);
   const { data } = useQuery({
     queryKey: ["shortio-sem-cliente"],
     queryFn: async () => {
@@ -100,7 +102,7 @@ export function LinksSemCliente({ clientes }: { clientes: { id: string; name: st
       <h2 className="text-[15px] font-semibold">Links do short.gy sem cliente ({data.length})</h2>
       <p className="text-xs" style={{ color: "var(--text-dim)" }}>Não deu para saber de quem é pela bio, @ ou nome. Escolha o cliente; a escolha não é refeita pelo sync.</p>
       <ul className="mt-2 max-h-96 divide-y overflow-y-auto" style={{ borderColor: "var(--border)" }}>
-        {data.map((l) => (
+        {data.slice(0, todos ? data.length : 5).map((l) => (
           <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
             <div className="min-w-0">
               <div className="font-medium">{(l.short_url ?? "").replace(/^https?:\/\//, "")}{l.titulo ? ` · ${l.titulo}` : ""}</div>
@@ -113,6 +115,11 @@ export function LinksSemCliente({ clientes }: { clientes: { id: string; name: st
           </li>
         ))}
       </ul>
+      {data.length > 5 && (
+        <button type="button" className="dbx-link mt-3" onClick={() => setTodos(!todos)}>
+          {todos ? "Mostrar só os 5 primeiros" : `Ver todos (${data.length})`}
+        </button>
+      )}
     </section>
   );
 }
