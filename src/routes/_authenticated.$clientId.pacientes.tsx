@@ -45,13 +45,15 @@ import {
   type VendaHistorico,
 } from "@/lib/pacientes";
 
+import "@/styles/databoard.css";
+
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 
 export const Route = createFileRoute("/_authenticated/$clientId/pacientes")({
   component: PacientesDoPeriodo,
 });
 
-const ENTRADA = ["leads_novos", "antigos", "abordados"] as const;
+const METRICAS = ["mandaram_mensagem", "agendaram", "fecharam", "compareceram"] as const;
 
 const fmt = (n: number | null | undefined) => (n == null ? "" : Number(n).toLocaleString("pt-BR"));
 const pessoas = (n: number) => `${fmt(n)} ${n === 1 ? "pessoa" : "pessoas"}`;
@@ -64,29 +66,17 @@ function periodoAnterior(start: string, end: string) {
 }
 
 /** Variação contra o período anterior: só quando os dois lados foram medidos e o anterior não é zero. */
-function variacao(atual: number | null | undefined, antes: number | null | undefined): { txt: string; tom: "up" | "down" | "flat" } | null {
+function variacao(atual: number | null | undefined, antes: number | null | undefined): { txt: string; curto: string; tom: "up" | "down" | "flat" } | null {
   if (atual == null || antes == null || antes <= 0) return null;
   const pct = Math.round(((atual - antes) / antes) * 100);
-  if (pct === 0) return { txt: "= igual ao período anterior", tom: "flat" };
-  return { txt: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}% vs. período anterior`, tom: pct > 0 ? "up" : "down" };
+  if (pct === 0) return { txt: "igual", curto: "=", tom: "flat" };
+  return { txt: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}%`, curto: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}%`, tom: pct > 0 ? "up" : "down" };
 }
 
 function somaDias(iso: string, dias: number) {
   const d = new Date(`${iso}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + dias);
   return d.toISOString().slice(0, 10);
-}
-
-function fraseDoPeriodo(d: PacientesPeriodo): string {
-  const v = (k: ChaveNumero) => d.numeros[k]?.valor;
-  const n = (x: number, um: string, varios: string) => `${fmt(x)} ${x === 1 ? um : varios}`;
-  const partes: string[] = [];
-  const msg = v("mandaram_mensagem"), ag = v("agendaram"), fe = v("fecharam");
-  if (msg != null) partes.push(`${n(msg, "pessoa chamou", "pessoas chamaram")} a clínica`);
-  if (ag != null) partes.push(`${n(ag, "agendou", "agendaram")}`);
-  if (fe != null) partes.push(`${n(fe, "fechou", "fecharam")}`);
-  if (!partes.length) return "Ainda não há números suficientes neste período.";
-  return partes.length === 1 ? `${partes[0]}.` : `${partes.slice(0, -1).join(", ")} e ${partes[partes.length - 1]}.`;
 }
 
 function PacientesDoPeriodo() {
@@ -145,12 +135,15 @@ function PacientesDoPeriodo() {
     { chave: "compareceram" as const, rotulo: "Foram na consulta" },
     { chave: "fecharam" as const, rotulo: "Fecharam" },
   ].filter((e) => d.numeros[e.chave]?.valor != null);
-  const topo = Number(d.numeros.mandaram_mensagem?.valor ?? 0);
+  const rotuloPeriodo = formatRangeLabel({ start, end });
+  const novas = d.numeros.leads_novos?.valor, antigos = d.numeros.antigos?.valor;
+  const rosca = novas != null && antigos != null && novas + antigos > 0
+    ? { novas, antigos, pctNovas: Math.round((novas / (novas + antigos)) * 100) } : null;
   const maior = Math.max(1, ...etapas.map((e) => Number(d.numeros[e.chave]?.valor ?? 0)));
   const indisponiveis = CHAVES_NUMEROS.filter((k) => d.numeros[k] && d.numeros[k]!.valor == null);
 
   return (
-    <div className="space-y-5">
+    <div className="dbx space-y-4">
       <header className="space-y-1">
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>
           {formatRangeLabel({ start, end })} · cada número é de pessoas. Toque num número para ver quem são.
@@ -168,48 +161,53 @@ function PacientesDoPeriodo() {
         )}
       </header>
 
-      <div className="rounded-xl border p-4 sm:p-5" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <p className="text-xl font-semibold leading-snug">{fraseDoPeriodo(d)}</p>
+      <ul className="dbx-grid dbx-cards" aria-label="Números do período">
+        {METRICAS.filter((k) => d.numeros[k]).map((k) => (
+          <MetricaCard key={k} chave={k} numero={d.numeros[k]} periodo={rotuloPeriodo} ativo={aberta === k} onAbrir={() => abrir(k)}
+            variacao={variacao(d.numeros[k]?.valor, anterior.data?.numeros[k]?.valor)} />
+        ))}
+      </ul>
+
+      <div className="dbx-grid dbx-split">
+        {etapas.length > 1 && (
+          <section className="dbx-card" aria-labelledby="funil-t">
+            <h2 id="funil-t" className="dbx-title">Do primeiro contato à venda</h2>
+            <p className="dbx-sub">{rotuloPeriodo} · toque numa linha para ver quem são</p>
+            <ul className="dbx-rows">
+              {etapas.map((e) => {
+                const v = Number(d.numeros[e.chave]?.valor ?? 0);
+                const dv = variacao(d.numeros[e.chave]?.valor, anterior.data?.numeros[e.chave]?.valor);
+                return (
+                  <li key={e.chave}>
+                    <button type="button" className="dbx-row" onClick={() => abrir(e.chave)} aria-expanded={aberta === e.chave}>
+                      <span className="lab">{e.rotulo}</span>
+                      <span className="dbx-bar" aria-hidden><i style={{ width: `${Math.max(v > 0 ? 2 : 0, Math.min(100, (v / maior) * 100))}%` }} /></span>
+                      <span className="val">{fmt(v)}</span>
+                      <span className={`dl ${dv?.tom ?? "flat"}`}>{dv ? dv.curto : ""}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+        {rosca && (
+          <section className="dbx-card" aria-labelledby="rosca-t">
+            <h2 id="rosca-t" className="dbx-title">Quem chamou</h2>
+            <p className="dbx-sub">{rotuloPeriodo}</p>
+            <div className="dbx-donut-wrap">
+              <div className="dbx-donut" role="img" aria-label={`${fmt(rosca.novas)} pessoas novas e ${fmt(rosca.antigos)} pacientes antigos`}
+                style={{ background: `conic-gradient(var(--dbx-a) 0 ${rosca.pctNovas}%, var(--dbx-b) ${rosca.pctNovas}% 100%)` }}>
+                <span>{fmt(rosca.novas + rosca.antigos)}</span>
+              </div>
+              <ul className="dbx-legend">
+                <li><i style={{ background: "var(--dbx-a)" }} />Pessoas novas<b>{fmt(rosca.novas)}</b></li>
+                <li><i style={{ background: "var(--dbx-b)" }} />Pacientes antigos<b>{fmt(rosca.antigos)}</b></li>
+              </ul>
+            </div>
+          </section>
+        )}
       </div>
-
-      <section className="space-y-2" aria-label="Quem são os que chamaram">
-        <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-dim)" }}>Quem são os que chamaram</h2>
-        <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {ENTRADA.filter((k) => d.numeros[k]?.valor != null).map((k) => (
-            <NumeroGrande key={k} chave={k} numero={d.numeros[k]} ativo={aberta === k} onAbrir={() => abrir(k)}
-              variacao={variacao(d.numeros[k]?.valor, anterior.data?.numeros[k]?.valor)} />
-          ))}
-        </ul>
-      </section>
-
-      {etapas.length > 1 && (
-        <section className="space-y-2" aria-label="Do primeiro contato à venda">
-          <h2 className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-dim)" }}>Do primeiro contato à venda</h2>
-          <ul className="space-y-2 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-            {etapas.map((e) => {
-              const v = Number(d.numeros[e.chave]?.valor ?? 0);
-              const pct = topo > 0 ? Math.round((v / topo) * 100) : 0;
-              const dv = variacao(d.numeros[e.chave]?.valor, anterior.data?.numeros[e.chave]?.valor);
-              return (
-                <li key={e.chave} className="flex items-center gap-2">
-                  <button type="button" onClick={() => abrir(e.chave)} aria-expanded={aberta === e.chave}
-                    className="grid min-w-0 flex-1 grid-cols-[110px_minmax(0,1fr)_auto] items-center gap-3 text-left sm:grid-cols-[150px_minmax(0,1fr)_auto]">
-                    <span className="text-sm font-medium">{e.rotulo}</span>
-                    <span className="h-6 overflow-hidden rounded-md" style={{ background: "var(--surface-2, var(--border))" }}>
-                      <span className="block h-full rounded-md" style={{ width: `${Math.max(v > 0 ? 2 : 0, Math.min(100, (v / maior) * 100))}%`, background: aberta === e.chave ? "var(--accent)" : "var(--accent-soft, var(--accent))", borderLeft: "0" }} />
-                    </span>
-                    <span className="text-right tabular-nums"><b className="text-lg">{fmt(v)}</b>
-                      <span className="block text-[11px]" style={{ color: "var(--text-dim)" }}>{e.chave === "mandaram_mensagem" ? "100%" : `${pct}% de quem chamou`}</span>
-                      {dv && <span className="block text-[11px] font-semibold" style={{ color: dv.tom === "up" ? "var(--ok, #16915a)" : dv.tom === "down" ? "var(--danger, #c53030)" : "var(--text-dim)" }}>{dv.txt}</span>}
-                    </span>
-                  </button>
-                  <Ajuda>{fonteDoNumero(e.chave, d.numeros[e.chave])}</Ajuda>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
 
       {indisponiveis.length > 0 && (
         <details className="text-sm" style={{ color: "var(--text-dim)" }}>
@@ -255,7 +253,7 @@ function PacientesDoPeriodo() {
         {aberta && <ListaDePessoas chave={aberta} dados={d} clientId={clientId} isAdmin={isAdmin} hoje={hoje} onFechar={() => setAberta(null)} />}
       </div>
 
-      <section aria-labelledby="chamar-agora" className="space-y-3 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+      <section aria-labelledby="chamar-agora" className="dbx-card space-y-3">
         <header className="flex items-start gap-2">
           <PhoneCall size={18} aria-hidden style={{ color: "var(--accent)" }} className="mt-0.5 shrink-0" />
           <div className="min-w-0 flex-1">
@@ -301,33 +299,37 @@ function PacientesDoPeriodo() {
   );
 }
 
-function NumeroGrande({ chave, numero, ativo, onAbrir, variacao: dv }: { chave: ChaveNumero; numero: Numero | undefined; ativo: boolean; onAbrir: () => void; variacao?: { txt: string; tom: "up" | "down" | "flat" } | null }) {
+function MetricaCard({ chave, numero, periodo, ativo, onAbrir, variacao: dv }: { chave: ChaveNumero; numero: Numero | undefined; periodo: string; ativo: boolean; onAbrir: () => void; variacao?: { txt: string; tom: "up" | "down" | "flat" } | null }) {
   const t = TEXTO_NUMERO[chave];
   const semDado = !numero || numero.valor == null;
   return (
     <li className="relative">
-      <button
-        type="button"
-        onClick={onAbrir}
-        disabled={semDado}
-        aria-expanded={ativo}
-        className="flex h-full w-full flex-col items-start gap-1.5 rounded-xl border p-4 pr-9 text-left disabled:cursor-default"
-        style={{ background: ativo ? "var(--accent-soft)" : "var(--surface)", borderColor: ativo ? "var(--accent)" : "var(--border)" }}
-      >
-        <span className="text-xs font-semibold" style={{ color: "var(--text-dim)" }}>{t.rotulo}</span>
+      <button type="button" className="dbx-card" onClick={onAbrir} disabled={semDado} aria-expanded={ativo}>
+        <span className="dbx-head">
+          <span>
+            <span className="dbx-title block">{t.rotulo}</span>
+            <span className="dbx-sub block">{periodo}</span>
+          </span>
+        </span>
         {semDado ? (
-          <span className="text-base font-semibold" style={{ color: "var(--muted)" }}>{textoNaoMedido(numero)}</span>
+          <>
+            <span className="dbx-big mute block">{textoNaoMedido(numero)}</span>
+            <span className="dbx-note block">{numero?.motivo_sem_dado ?? "A fonte não respondeu."}</span>
+          </>
         ) : (
           <>
-            <span className="text-4xl font-semibold tabular-nums leading-none">{fmt(numero!.valor)}</span>
-            {dv && <span className="text-xs font-semibold" style={{ color: dv.tom === "up" ? "var(--ok, #16915a)" : dv.tom === "down" ? "var(--danger, #c53030)" : "var(--text-dim)" }}>{dv.txt}</span>}
-            <span className="text-xs" style={{ color: "var(--text-dim)" }}>{legendaDoNumero(chave, numero)}</span>
-            {coberturaDoNumero(numero) && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{coberturaDoNumero(numero)}</span>}
-            {chave === "fecharam" && avisoCheckout(numero) && <span className="text-[11px] font-medium" style={{ color: "var(--text-dim)" }}>{avisoCheckout(numero)}</span>}
+            <span className="dbx-big block">{fmt(numero!.valor)}</span>
+            {dv ? (
+              <span className={`dbx-delta dbx-${dv.tom}`}><b>{dv.txt}</b> vs período anterior</span>
+            ) : (
+              <span className="dbx-delta dbx-flat">{legendaDoNumero(chave, numero)}</span>
+            )}
+            {coberturaDoNumero(numero) && <span className="dbx-note block">{coberturaDoNumero(numero)}</span>}
+            {chave === "fecharam" && avisoCheckout(numero) && <span className="dbx-note block">{avisoCheckout(numero)}</span>}
           </>
         )}
       </button>
-      <span className="absolute right-1.5 top-1.5">
+      <span className="absolute right-3 top-3">
         <Ajuda>{fonteDoNumero(chave, numero)}</Ajuda>
       </span>
     </li>
@@ -406,7 +408,7 @@ function ListaDePessoas({
   const numero = dados.numeros[chave];
   const t = TEXTO_NUMERO[chave];
   return (
-    <section aria-labelledby="lista-aberta" className="space-y-3 rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--accent)" }}>
+    <section aria-labelledby="lista-aberta" className="dbx-card space-y-3" style={{ borderColor: "var(--accent)" }}>
       <header className="flex items-start gap-2">
         <Users size={18} aria-hidden style={{ color: "var(--accent)" }} className="mt-0.5 shrink-0" />
         <div className="min-w-0 flex-1">

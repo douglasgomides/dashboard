@@ -1,0 +1,53 @@
+/* Visual de "databoard": cartões brancos arredondados, número grande e leve, variação em verde/vermelho.
+   Referência: telas de produto do Databox. Só estrutura e cor; usa os tokens do Nexo. */
+.dbx { --dbx-ok: #138a52; --dbx-ok-bg: #e2f5ea; --dbx-bad: #c2362f; --dbx-bad-bg: #fde8e6; --dbx-a: #7a5cf0; --dbx-b: #3b82f6; --dbx-c: #f59e0b; }
+:root[data-theme="dark"] .dbx { --dbx-ok: #4cc790; --dbx-ok-bg: #123a2a; --dbx-bad: #f08a84; --dbx-bad-bg: #40201e; --dbx-a: #a791ff; --dbx-b: #7db3ff; --dbx-c: #f5bd5a; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dbx { --dbx-ok: #4cc790; --dbx-ok-bg: #123a2a; --dbx-bad: #f08a84; --dbx-bad-bg: #40201e; --dbx-a: #a791ff; --dbx-b: #7db3ff; --dbx-c: #f5bd5a; }
+}
+.dbx-grid { display: grid; gap: 16px; }
+.dbx-cards { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.dbx-split { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+@media (max-width: 900px) { .dbx-split { grid-template-columns: minmax(0, 1fr); } }
+.dbx-card {
+  position: relative; min-width: 0; padding: 20px 22px; border-radius: 16px;
+  background: var(--surface); border: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  box-shadow: 0 1px 2px rgba(20, 30, 60, .04), 0 8px 24px rgba(20, 30, 60, .06);
+}
+button.dbx-card { text-align: left; width: 100%; cursor: pointer; font: inherit; color: inherit; }
+button.dbx-card:hover { border-color: var(--accent); }
+button.dbx-card[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+.dbx-card[disabled] { cursor: default; opacity: .75; }
+.dbx-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.dbx-title { font-size: 15px; font-weight: 600; color: var(--ink); margin: 0; }
+.dbx-sub { font-size: 12.5px; color: var(--muted); margin: 2px 0 0; }
+.dbx-big { font-size: 44px; line-height: 1.05; font-weight: 500; letter-spacing: -.02em; margin: 14px 0 8px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.dbx-big.mute { font-size: 22px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+.dbx-delta { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.dbx-delta b { font-weight: 700; }
+.dbx-up b { color: var(--dbx-ok); } .dbx-down b { color: var(--dbx-bad); } .dbx-flat b { color: var(--muted); }
+.dbx-pill { display: inline-block; padding: 1px 8px; border-radius: 6px; font-weight: 700; font-size: 12.5px; }
+.dbx-up .dbx-pill { background: var(--dbx-ok-bg); color: var(--dbx-ok); }
+.dbx-down .dbx-pill { background: var(--dbx-bad-bg); color: var(--dbx-bad); }
+.dbx-flat .dbx-pill { background: var(--surface-2); color: var(--muted); }
+.dbx-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.dbx-rows { list-style: none; margin: 12px 0 0; padding: 0; }
+.dbx-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) 56px 120px; gap: 12px; align-items: center; width: 100%; padding: 13px 4px; border-top: 1px solid color-mix(in srgb, var(--border) 45%, transparent); background: none; border-left: 0; border-right: 0; border-bottom: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.dbx-rows li:first-child .dbx-row { border-top: 0; }
+.dbx-row:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.dbx-row[aria-expanded="true"] { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.dbx-row .lab { font-size: 14px; }
+.dbx-row .val { font-size: 16px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.dbx-row .dl { font-size: 13px; font-weight: 700; text-align: right; }
+.dbx-row .dl.up { color: var(--dbx-ok); } .dbx-row .dl.down { color: var(--dbx-bad); } .dbx-row .dl.flat { color: var(--muted); }
+.dbx-bar { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.dbx-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--dbx-a), var(--dbx-b)); }
+@media (max-width: 560px) { .dbx-row { grid-template-columns: minmax(0, 1fr) auto; } .dbx-row .dbx-bar, .dbx-row .dl { display: none; } }
+.dbx-donut-wrap { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; margin-top: 14px; }
+.dbx-donut { position: relative; width: 132px; height: 132px; border-radius: 50%; flex: none; }
+.dbx-donut::after { content: ""; position: absolute; inset: 24px; border-radius: 50%; background: var(--surface); }
+.dbx-donut span { position: absolute; inset: 0; display: grid; place-items: center; z-index: 1; font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.dbx-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 13.5px; min-width: 0; }
+.dbx-legend li { display: flex; align-items: center; gap: 8px; }
+.dbx-legend i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.dbx-legend b { margin-left: auto; padding-left: 8px; font-variant-numeric: tabular-nums; }
