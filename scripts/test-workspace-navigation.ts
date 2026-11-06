@@ -75,7 +75,8 @@ for (const papel of ["owner", "viewer", "strategist"] as const) {
 assert.equal(buscarTelas(base, "criar roteiro")[0]?.tab.path, "/ideias");
 assert.equal(buscarTelas(base, "calendário")[0]?.tab.path, "/ideias");
 assert.equal(buscarTelas(base, "funil")[0]?.tab.path, "/crm-painel");
-assert.equal(buscarTelas(base, "agentes")[0]?.tab.path, "/agentes");
+assert.equal(buscarTelas(base, "agentes").length, 0);
+assert.equal(buscarTelas({ ...base, papel: "strategist" }, "agentes")[0]?.tab.path, "/agentes");
 assert.equal(buscarTelas(base, "vídeo").length, 0);
 assert.equal(buscarTelas({ ...base, isAdmin: true }, "vídeo")[0]?.tab.path, "/inteligencia-criativa");
 const semFontes = {
@@ -94,10 +95,10 @@ assert.equal(
   paths({ ...base, semAudiencia: true }).includes("/audiencia"),
   false,
 );
-assert.deepEqual(paths({ ...base, soCrm: true }), ["/crm-painel", "/crm-guia"]);
+assert.deepEqual(paths({ ...base, soCrm: true }), ["/crm-painel"]);
 const clinica = navegacaoClinica(areasVisiveis(base), false);
 assert.deepEqual(clinica.principais.map(a => a.id), ["resumo", "acoes", "relatorio"]);
-assert.equal(clinica.principais[1].visiveis[0].path, "/agentes");
+assert.equal(clinica.principais[1].visiveis[0].path, "/plano");
 assert.deepEqual(clinica.detalhes.map(a => a.id), ["marketing", "comercial"]);
 const operadora=navegacaoClinica(areasVisiveis({...base,papel:"owner"}),false);
 assert.deepEqual(operadora.principais.map(a=>a.id),["resumo","comercial","acoes","relatorio"]);

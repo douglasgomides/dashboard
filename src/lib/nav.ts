@@ -117,6 +117,7 @@ export const AREAS: NavArea[] = [
       {
         path: "/marketing",
         label: "Visão geral de Marketing",
+        equipe: true,
         Icone: LayoutDashboard,
         descricao: "Escolha entre produzir conteúdo, planejar campanhas e analisar resultados.",
         termos: "marketing aquisicao visao geral",
@@ -141,6 +142,7 @@ export const AREAS: NavArea[] = [
       {
         path: "/conteudo-comercial",
         label: "Conteúdo × Comercial",
+        equipe: true,
         Icone: GitCompare,
         fonte: "instagram",
         descricao: "Cruze os posts com as conversas e os agendamentos por dia, horário e tema.",
@@ -150,6 +152,7 @@ export const AREAS: NavArea[] = [
       {
         path: "/audiencia",
         label: "Público do Instagram",
+        equipe: true,
         Icone: Users,
         fonte: "instagram",
         descricao: "Entenda quem acompanha o perfil.",
@@ -159,6 +162,7 @@ export const AREAS: NavArea[] = [
       {
         path: "/top",
         label: "Encontrar destaques",
+        equipe: true,
         Icone: Trophy,
         fonte: "instagram",
         descricao: "Identifique as publicações que mais se destacaram.",
@@ -168,6 +172,7 @@ export const AREAS: NavArea[] = [
       {
         path: "/posts",
         label: "Consultar publicações",
+        equipe: true,
         Icone: LayoutGrid,
         fonte: "instagram",
         descricao: "Consulte os posts publicados e seus indicadores.",
@@ -216,6 +221,7 @@ export const AREAS: NavArea[] = [
       {
         path: "/inspiracao",
         label: "Referências salvas",
+        equipe: true,
         Icone: Star,
         descricao: "Encontre inspirações guardadas para novos conteúdos.",
         termos: "inspiracao modelos templates referencias",
@@ -224,6 +230,7 @@ export const AREAS: NavArea[] = [
       {
         path: "/duvidas",
         label: "Dúvidas do público",
+        equipe: true,
         Icone: HelpCircle,
         fonte: "instagram",
         termos: "perguntas comentarios duvidas",
@@ -232,6 +239,7 @@ export const AREAS: NavArea[] = [
       {
         path: "/campanhas",
         label: "Estratégias e campanhas",
+        equipe: true,
         Icone: Megaphone,
         descricao: "Planeje as campanhas e os canais de aquisição.",
         termos: "campanhas do mes estrategia online offline marketing",
@@ -240,6 +248,7 @@ export const AREAS: NavArea[] = [
       {
         path: "/links",
         label: "Links rastreados",
+        equipe: true,
         Icone: Link2,
         grupo: "Campanhas e anúncios",
       },
@@ -255,6 +264,7 @@ export const AREAS: NavArea[] = [
       {
         path: "/atendimento",
         label: "Qualidade do atendimento",
+        equipe: true,
         Icone: MessageCircle,
         fonte: "atendimento",
         descricao: "Analise as conversas e os pontos de atenção do WhatsApp.",
@@ -274,6 +284,7 @@ export const AREAS: NavArea[] = [
       {
         path: "/crm-guia",
         label: "Guia de organização do CRM",
+        equipe: true,
         termos: "organizar crm manual guia preenchimento",
         descricao: "Veja o que ajustar no CRM externo e como organizar os dados.",
         Icone: ClipboardList,
@@ -325,6 +336,7 @@ export const AREAS: NavArea[] = [
       {
         path: "/proximas-acoes",
         label: "Prioridades da equipe",
+        equipe: true,
         Icone: ListTodo,
         descricao: "Veja o que precisa de atenção, quem cuida e o andamento.",
         termos: "tarefas fazer pendencias proximas acoes responsavel",
@@ -332,6 +344,7 @@ export const AREAS: NavArea[] = [
       {
         path: "/agentes",
         label: "Agentes e entregas",
+        equipe: true,
         Icone: Bot,
         descricao:
           "Acompanhe os agentes, revise entregas e aprove o que depende de você.",
@@ -340,6 +353,7 @@ export const AREAS: NavArea[] = [
       {
         path: "/oportunidades",
         label: "Oportunidades de melhoria",
+        equipe: true,
         Icone: Target,
         descricao: "Investigue os sinais encontrados nos dados antes de agir.",
         termos: "score diagnostico gargalos oportunidades",

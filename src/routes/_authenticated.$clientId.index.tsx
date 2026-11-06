@@ -968,36 +968,9 @@ function MonthlyOverview() {
               Confira as fontes e consulte as prioridades identificadas para a
               equipe.
             </p>
-            <Link
-              to="/$clientId/proximas-acoes"
-              params={{ clientId }}
-              search={dateRangeState}
-              className="ws-action ws-action--primary"
-            >
-              Ver prioridades da equipe <ChevronRight size={18} aria-hidden />
-            </Link>
           </div>
         )}
 
-        <div className="ws-workflow-foot">
-          {principal && (
-            <Link
-              to="/$clientId/proximas-acoes"
-              params={{ clientId }}
-              search={dateRangeState}
-            >
-              Ver prioridades da equipe <ChevronRight size={16} aria-hidden />
-            </Link>
-          )}
-          <Link
-            to="/$clientId/ideias"
-            params={{ clientId }}
-            search={dateRangeState}
-          >
-            Preparar os próximos conteúdos{" "}
-            <ChevronRight size={16} aria-hidden />
-          </Link>
-        </div>
       </section>
 
       {/* ===== CAMADAS 2 e 3: todas as análises (nada removido; só recolhido) ===== */}
@@ -1057,16 +1030,6 @@ function MonthlyOverview() {
                     />
                   ))}
                 </div>
-                <Link
-                  to="/$clientId/oportunidades"
-                  params={{ clientId }}
-                  className="inline-flex min-h-[44px] items-center gap-1 text-sm font-semibold"
-                  style={{ color: "var(--accent)" }}
-                >
-                  Ver todas as oportunidades (
-                  {r.insights.filter((i) => i.acao).length}){" "}
-                  <ChevronRight size={16} aria-hidden />
-                </Link>
               </section>
             )}
 
@@ -1106,34 +1069,6 @@ function MonthlyOverview() {
                     ))}
                   </ul>
                 )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <BotaoAcao
-                  texto="Analisar conteúdo e audiência"
-                  rota="/$clientId/conteudo"
-                  clientId={clientId}
-                  variante="secundario"
-                />
-                <BotaoAcao
-                  texto={
-                    fontes.data?.tem_crm
-                      ? "Analisar o funil comercial"
-                      : "Ver anúncios"
-                  }
-                  rota={
-                    fontes.data?.tem_crm
-                      ? "/$clientId/crm-painel"
-                      : "/$clientId/anuncios"
-                  }
-                  clientId={clientId}
-                  variante="secundario"
-                />
-                <BotaoAcao
-                  texto="Preparar relatório"
-                  rota="/$clientId/relatorio"
-                  clientId={clientId}
-                  variante="secundario"
-                />
               </div>
             </section>
 
