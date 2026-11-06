@@ -426,10 +426,12 @@ function AdminClientsPage() {
     return worst ? worst.cor : "cinza";
   };
   const deltaTxt = (a?: number, b?: number) => {
-    if (a == null || b == null || b < 10) return null;
+    // Base pequena no período anterior vira percentual absurdo (clínica nova, dado que começou no meio do mês).
+    if (a == null || b == null || b < 30) return null;
     const pct = Math.round(((a - b) / b) * 100);
     if (pct === 0) return { t: "=", c: "flat" };
-    return { t: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}%`, c: pct > 0 ? "up" : "down" };
+    const abs = Math.abs(pct);
+    return { t: `${pct > 0 ? "▲" : "▼"} ${abs > 300 ? "mais de 300" : abs}%`, c: pct > 0 ? "up" : "down" };
   };
 
   return (
