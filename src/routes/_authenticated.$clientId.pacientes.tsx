@@ -46,6 +46,8 @@ import {
 } from "@/lib/pacientes";
 
 import "@/styles/databoard.css";
+import { LeituraDoPeriodo, MetasDoMes } from "@/components/databoard-inteligencia";
+import { leituraDoPeriodo } from "@/lib/inteligencia-resultados";
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 
@@ -136,6 +138,10 @@ function PacientesDoPeriodo() {
     { chave: "fecharam" as const, rotulo: "Fecharam" },
   ].filter((e) => d.numeros[e.chave]?.valor != null);
   const rotuloPeriodo = formatRangeLabel({ start, end });
+  const leitura = leituraDoPeriodo(
+    { mandaram_mensagem: d.numeros.mandaram_mensagem?.valor, agendaram: d.numeros.agendaram?.valor, fecharam: d.numeros.fecharam?.valor },
+    anterior.data ? { mandaram_mensagem: anterior.data.numeros.mandaram_mensagem?.valor, agendaram: anterior.data.numeros.agendaram?.valor, fecharam: anterior.data.numeros.fecharam?.valor } : null,
+  );
   const novas = d.numeros.leads_novos?.valor, antigos = d.numeros.antigos?.valor;
   const rosca = novas != null && antigos != null && novas + antigos > 0
     ? { novas, antigos, pctNovas: Math.round((novas / (novas + antigos)) * 100) } : null;
@@ -207,6 +213,11 @@ function PacientesDoPeriodo() {
             </div>
           </section>
         )}
+      </div>
+
+      <div className="dbx-grid dbx-split">
+        <LeituraDoPeriodo itens={leitura} periodo={rotuloPeriodo} />
+        <MetasDoMes clientId={clientId} isAdmin={isAdmin} hoje={hoje} />
       </div>
 
       {indisponiveis.length > 0 && (
