@@ -1,9 +1,9 @@
 /* Visual de "databoard": cartões brancos arredondados, número grande e leve, variação em verde/vermelho.
    Referência: telas de produto do Databox. Só estrutura e cor; usa os tokens do Nexo. */
-.dbx { --dbx-ok: #138a52; --dbx-ok-bg: #e2f5ea; --dbx-bad: #c2362f; --dbx-bad-bg: #fde8e6; --dbx-a: #7a5cf0; --dbx-b: #3b82f6; --dbx-c: #f59e0b; }
-:root[data-theme="dark"] .dbx { --dbx-ok: #4cc790; --dbx-ok-bg: #123a2a; --dbx-bad: #f08a84; --dbx-bad-bg: #40201e; --dbx-a: #a791ff; --dbx-b: #7db3ff; --dbx-c: #f5bd5a; }
+.dbx { --dbx-ok: #138a52; --dbx-ok-bg: #e2f5ea; --dbx-bad: #c2362f; --dbx-bad-bg: #fde8e6; --dbx-a: var(--accent); --dbx-b: #6fa8c9; --dbx-c: #c98a1b; }
+:root[data-theme="dark"] .dbx { --dbx-ok: #4cc790; --dbx-ok-bg: #123a2a; --dbx-bad: #f08a84; --dbx-bad-bg: #40201e; --dbx-a: var(--accent); --dbx-b: #6fa8c9; --dbx-c: #f5bd5a; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .dbx { --dbx-ok: #4cc790; --dbx-ok-bg: #123a2a; --dbx-bad: #f08a84; --dbx-bad-bg: #40201e; --dbx-a: #a791ff; --dbx-b: #7db3ff; --dbx-c: #f5bd5a; }
+  :root:not([data-theme="light"]) .dbx { --dbx-ok: #4cc790; --dbx-ok-bg: #123a2a; --dbx-bad: #f08a84; --dbx-bad-bg: #40201e; --dbx-a: var(--accent); --dbx-b: #6fa8c9; --dbx-c: #f5bd5a; }
 }
 .dbx-grid { display: grid; gap: 16px; }
 .dbx-cards { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
@@ -51,3 +51,22 @@ button.dbx-card[aria-expanded="true"] { border-color: var(--accent); box-shadow:
 .dbx-legend li { display: flex; align-items: center; gap: 8px; }
 .dbx-legend i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .dbx-legend b { margin-left: auto; padding-left: 8px; font-variant-numeric: tabular-nums; }
+.dbx-prog { height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; margin: 12px 0 8px; }
+.dbx-prog i { display: block; height: 100%; border-radius: 99px; background: var(--dbx-ok); }
+.dbx-prog.risco i { background: var(--dbx-c); } .dbx-prog.fora i { background: var(--dbx-bad); } .dbx-prog.cedo i { background: var(--dbx-b); }
+.dbx-badge { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 99px; background: var(--dbx-ok-bg); color: var(--dbx-ok); white-space: nowrap; }
+.dbx-badge.risco { background: color-mix(in srgb, var(--dbx-c) 18%, var(--surface)); color: var(--dbx-c); }
+.dbx-badge.fora { background: var(--dbx-bad-bg); color: var(--dbx-bad); }
+.dbx-badge.cedo { background: var(--surface-2); color: var(--muted); }
+.dbx-metas { display: grid; gap: 18px; margin-top: 14px; }
+.dbx-meta-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.dbx-meta-top b { font-size: 15px; font-weight: 600; }
+.dbx-meta-top span.n { font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 14px; }
+.dbx-leitura { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+.dbx-leitura li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.45; }
+.dbx-leitura .ic { font-weight: 800; }
+.dbx-leitura .up { color: var(--dbx-ok); } .dbx-leitura .down { color: var(--dbx-bad); } .dbx-leitura .info { color: var(--muted); }
+.dbx-form { display: grid; gap: 10px; margin-top: 12px; }
+.dbx-form label { display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: 10px; align-items: center; font-size: 14px; }
+.dbx-form input { min-height: 38px; border-radius: 8px; border: 1px solid var(--control-border, var(--border)); background: var(--surface); color: var(--ink); padding: 4px 10px; font: inherit; width: 100%; }
+.dbx-link { background: none; border: 0; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; text-decoration: underline; }
