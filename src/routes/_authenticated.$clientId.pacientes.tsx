@@ -103,6 +103,7 @@ function PacientesDoPeriodo() {
   const { isAdmin } = useAuth();
   const hoje = hojeBrasilia();
   const [aberta, setAberta] = useState<ChaveNumero | null>(null);
+  const [chamarTodos, setChamarTodos] = useState(false);
   const listaRef = useRef<HTMLDivElement>(null);
 
   const q = usePacientesPeriodo(clientId, start, end);
@@ -324,7 +325,7 @@ function PacientesDoPeriodo() {
           </p>
         ) : (
           <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
-            {chamar.slice(0, 100).map((c) => (
+            {chamar.slice(0, chamarTodos ? 100 : 8).map((c) => (
               <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{c.nome ?? "Sem nome no cadastro"}</p>
@@ -338,7 +339,11 @@ function PacientesDoPeriodo() {
             ))}
           </ul>
         )}
-        {chamar.length > 100 && <p className="text-xs" style={{ color: "var(--text-dim)" }}>Mostrando 100 de {fmt(chamar.length)}.</p>}
+        {chamar.length > 8 && (
+          <button type="button" className="dbx-link" onClick={() => setChamarTodos(!chamarTodos)}>
+            {chamarTodos ? "Mostrar só os 8 primeiros" : `Ver todos (${fmt(Math.min(chamar.length, 100))}${chamar.length > 100 ? " de " + fmt(chamar.length) : ""})`}
+          </button>
+        )}
       </section>
     </div>
   );
