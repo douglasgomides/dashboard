@@ -24,6 +24,8 @@ import { SaudeShortio } from "@/components/saude-shortio";
 import { montarProblemasFontes } from "@/lib/saude-problemas";
 import { SemRespostaAgora } from "@/components/sem-resposta-agora";
 import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
+import { CAMPOS_DIARIOS, type CampoDiario } from "@/hooks/use-resultados-diarios";
+import "@/styles/databoard.css";
 
 
 export const Route = createFileRoute("/_authenticated/admin/")({
@@ -386,16 +388,153 @@ function AdminClientsPage() {
     </button>
   );
 
+  // Números dos últimos 30 dias de cada clínica e dos 30 anteriores, pelo histórico diário (uma leitura só, instantânea).
+  const hojeIso = resolveDateRange({ preset: "30d" }).end;
+  const fimFechado = new Date(Date.parse(`${hojeIso}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  const iniAtual = new Date(Date.parse(`${fimFechado}T12:00:00Z`) - 29 * 86_400_000).toISOString().slice(0, 10);
+  const fimAntes = new Date(Date.parse(`${iniAtual}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+  const iniAntes = new Date(Date.parse(`${fimAntes}T12:00:00Z`) - 29 * 86_400_000).toISOString().slice(0, 10);
+  const numerosQ = useQuery({
+    queryKey: ["admin-numeros-30d", iniAntes, fimFechado],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("resultados_diarios")
+        .select(["client_id", "dia", ...CAMPOS_DIARIOS].join(","))
+        .gte("dia", iniAntes)
+        .lte("dia", fimFechado)
+        .limit(5000);
+      if (error) return new Map<string, { atual: Partial<Record<CampoDiario, number>>; antes: Partial<Record<CampoDiario, number>> }>();
+      const m = new Map<string, { atual: Partial<Record<CampoDiario, number>>; antes: Partial<Record<CampoDiario, number>> }>();
+      for (const r of (data ?? []) as Array<{ client_id: string; dia: string } & Record<CampoDiario, number | null>>) {
+        const e = m.get(r.client_id) ?? { atual: {}, antes: {} };
+        const lado = r.dia >= iniAtual ? e.atual : e.antes;
+        for (const k of CAMPOS_DIARIOS) if (r[k] != null) lado[k] = (lado[k] ?? 0) + Number(r[k]);
+        m.set(r.client_id, e);
+      }
+      return m;
+    },
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+  const nClinicas = (clients ?? []).length;
+  const nAtencao = (clients ?? []).filter((c) => piorPeso(c.id) >= 2).length;
+  const rotuloCor: Record<string, string> = { verde: "Em dia", amarelo: "Atenção", vermelho: "Problema", cinza: "Sem fontes" };
+  const piorCor = (id: string) => {
+    const sd = saudePorCliente.get(id);
+    if (!sd) return "cinza";
+    const worst = [...FONTES].map((f) => sd[f].status).sort((a, b) => b.peso - a.peso)[0];
+    return worst ? worst.cor : "cinza";
+  };
+  const deltaTxt = (a?: number, b?: number) => {
+    if (a == null || b == null || b < 10) return null;
+    const pct = Math.round(((a - b) / b) * 100);
+    if (pct === 0) return { t: "=", c: "flat" };
+    return { t: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}%`, c: pct > 0 ? "up" : "down" };
+  };
+
   return (
-    <div>
-      {/* Dois produtos: clínica nova entra pelo Sistema de Aquisição; o Hub é o acompanhamento contínuo. */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 text-sm" style={{ borderColor: "color-mix(in srgb, #C49A5C 45%, var(--border))", background: "color-mix(in srgb, #C49A5C 6%, var(--surface))" }}>
-        <span>
-          <strong>Clínica nova entra pelo Sistema de Aquisição.</strong>{" "}
-          <span style={{ color: "var(--text-dim)" }}>Aqui ficam os clientes em acompanhamento: quem já estava com a Doctor Creator e quem terminou os 90 dias.{sapPorCliente?.size ? ` ${sapPorCliente.size} cliente(s) também no SAP, com o selo dourado.` : ""}</span>
-        </span>
-        <Link to="/sap" className="inline-flex min-h-[38px] items-center rounded-lg px-3 font-semibold text-white" style={{ background: "#C49A5C" }}>Cadastrar clínica nova no SAP →</Link>
+    <div className="dbx">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm" style={{ color: "var(--muted)" }}>
+          <b style={{ color: "var(--ink)" }}>{nClinicas} clínicas</b>
+          {nAtencao > 0 ? <> · <span style={{ color: "var(--warn)" }}>{nAtencao} pedem atenção</span></> : " · tudo em dia"}
+          {" "}· números dos últimos 30 dias contra os 30 anteriores
+        </p>
+        <Link to="/sap" className="inline-flex min-h-[38px] items-center rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--accent)" }}>
+          Cadastrar clínica nova (SAP) <ArrowRight size={14} aria-hidden className="ml-1" />
+        </Link>
       </div>
+
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <input
+          autoComplete="off"
+          type="search"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar cliente por nome, especialidade ou @"
+          aria-label="Buscar cliente"
+          className="min-h-[40px] w-full max-w-sm rounded-lg border px-3 text-sm"
+          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+        />
+        {chipFiltro("todos", "Todos", (clients ?? []).length)}
+        {chipFiltro("problema", "Com problema", (clients ?? []).filter((c) => piorPeso(c.id) >= 2).length)}
+        {chipFiltro("sem_roi", "Sem ROI", rois.every((q) => !q.isLoading) ? (clients ?? []).filter((c) => semRoi(c.id)).length : undefined)}
+        {chipFiltro("sem_login", "Sem login", logins ? (clients ?? []).filter((c) => semLogin(c.id)).length : undefined)}
+        <label className="ml-auto inline-flex min-h-[40px] items-center gap-2 text-sm" style={{ color: "var(--ink-2)" }}>
+          Ordenar por
+          <select value={ordem} onChange={(e) => setOrdem(e.target.value as typeof ordem)} className="min-h-[36px] rounded-lg border px-2 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+            <option value="pior">Pior status</option>
+            <option value="nota">Nota das fontes (menor primeiro)</option>
+            <option value="nome">Nome</option>
+          </select>
+        </label>
+      </div>
+
+      {isLoading ? (
+        <Carregando texto="Lendo os clientes…" />
+      ) : (
+        <ul className="dbx-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+          {linhasTabela.map((c) => {
+            const handle = c.instagram_handle || contasIg?.get(c.id) || null;
+            const n = numerosQ.data?.get(c.id);
+            const cor = piorCor(c.id);
+            return (
+              <li key={c.id} className="dbx-card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div className="flex items-start gap-3">
+                  <ClientAvatar nome={c.name} url={c.avatar_url} tamanho={40} />
+                  <div className="min-w-0 flex-1">
+                    <p className="dbx-title" style={{ margin: 0 }}>{c.name}</p>
+                    <p className="dbx-sub" style={{ marginTop: 2 }}>{[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}</p>
+                  </div>
+                  <span className="dbx-badge" style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <span aria-hidden style={{ width: 8, height: 8, borderRadius: 99, background: VAR_COR[cor as keyof typeof VAR_COR] ?? "var(--muted)" }} />
+                    {rotuloCor[cor] ?? "Sem fontes"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  {([["mandaram_mensagem", "Chamaram"], ["agendaram", "Agendaram"], ["fecharam", "Fecharam"]] as const).map(([k, rot]) => {
+                    const v = n?.atual[k];
+                    const dl = deltaTxt(n?.atual[k], n?.antes[k]);
+                    return (
+                      <div key={k}>
+                        <div style={{ fontSize: 24, fontWeight: 500, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>{v == null ? "–" : v.toLocaleString("pt-BR")}</div>
+                        <div className="dbx-sub" style={{ margin: "2px 0 0" }}>{rot}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, minHeight: 16, color: dl?.c === "up" ? "var(--dbx-ok)" : dl?.c === "down" ? "var(--dbx-bad)" : "var(--muted)" }}>{dl?.t ?? ""}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {semLogin(c.id) && (
+                  <Link to="/admin/$clientId" params={{ clientId: c.id }} hash="acesso" className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--warn)" }}>
+                    <UserX size={13} aria-hidden /> Médico sem login · dar acesso
+                  </Link>
+                )}
+                <div className="mt-auto flex gap-2">
+                  <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} className="inline-flex min-h-[38px] flex-1 items-center justify-center gap-1 rounded-lg px-3 text-sm font-semibold" style={{ background: "var(--action-bg, var(--accent))", color: "var(--action-ink, #fff)" }}>
+                    Abrir resultados <ArrowRight size={14} aria-hidden />
+                  </Link>
+                  <Link to="/admin/$clientId" params={{ clientId: c.id }} className="inline-flex min-h-[38px] items-center rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--accent)" }} title="Fontes, acesso e configuração">
+                    Gerenciar
+                  </Link>
+                </div>
+              </li>
+            );
+          })}
+          {nClinicas > 0 && linhasTabela.length === 0 && (
+            <li className="dbx-card" style={{ gridColumn: "1 / -1", textAlign: "center", color: "var(--muted)" }}>
+              Nenhum cliente com esse filtro.{" "}
+              <button type="button" className="dbx-link" onClick={() => { setBusca(""); setFiltro("todos"); }}>Limpar</button>
+            </li>
+          )}
+        </ul>
+      )}
+
+      <details className="dbx-det mt-8">
+        <summary>
+          Diagnóstico das fontes
+          <span className="dbx-sub" style={{ marginLeft: 8 }}>{totalVermelhas ? `${totalVermelhas} em vermelho` : "nenhuma em vermelho"} · só equipe técnica</span>
+        </summary>
+        <div className="pt-4">
       <SemRespostaAgora />
       {statusQ.isError && (
         <p className="mb-3 text-sm" style={{ color: "var(--crit)" }}>
@@ -449,30 +588,6 @@ function AdminClientsPage() {
             <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: VAR_COR[l.cor] }} /> {l.texto}
           </span>
         ))}
-      </div>
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <input
-          autoComplete="off"
-          type="search"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar cliente por nome, especialidade ou @"
-          aria-label="Buscar cliente"
-          className="min-h-[40px] w-full max-w-sm rounded-lg border px-3 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-        />
-        {chipFiltro("todos", "Todos", (clients ?? []).length)}
-        {chipFiltro("problema", "Com problema", (clients ?? []).filter((c) => piorPeso(c.id) >= 2).length)}
-        {chipFiltro("sem_roi", "Sem ROI", rois.every((q) => !q.isLoading) ? (clients ?? []).filter((c) => semRoi(c.id)).length : undefined)}
-        {chipFiltro("sem_login", "Sem login", logins ? (clients ?? []).filter((c) => semLogin(c.id)).length : undefined)}
-        <label className="ml-auto inline-flex min-h-[40px] items-center gap-2 text-sm" style={{ color: "var(--ink-2)" }}>
-          Ordenar por
-          <select value={ordem} onChange={(e) => setOrdem(e.target.value as typeof ordem)} className="min-h-[36px] rounded-lg border px-2 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-            <option value="pior">Pior status</option>
-            <option value="nota">Nota das fontes (menor primeiro)</option>
-            <option value="nome">Nome</option>
-          </select>
-        </label>
       </div>
       {isLoading ? (
         <Carregando texto="Lendo os clientes…" />
@@ -572,10 +687,19 @@ function AdminClientsPage() {
           </table>
         </div>
       )}
-      <div className="mt-6">
+        </div>
+      </details>
+
+      <details className="dbx-det mt-4">
+        <summary>Links curtos sem cliente</summary>
+        <div className="pt-4">
+      <div>
         <LinksSemCliente clientes={[...(clients ?? [])].filter((c: any) => c.active !== false).sort((x: any, y: any) => x.name.localeCompare(y.name))} />
       </div>
-      <details className="mt-6">
+        </div>
+      </details>
+
+      <details className="dbx-det mt-4">
         <summary className="cursor-pointer select-none py-1 text-sm font-medium">Cadastrar admin ou cliente só do Nexo (exceção)</summary>
         <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>Clínica nova entra pelo Sistema de Aquisição. Use o cadastro abaixo só para cliente que não vai passar pelo programa.</p>
         <div className="mt-3">
@@ -583,6 +707,7 @@ function AdminClientsPage() {
           <NewClientForm />
         </div>
       </details>
+
     </div>
   );
 }
