@@ -35,6 +35,7 @@ import {
   type Visibilidade,
 } from "@/lib/nav";
 import "@/styles/workspace-navigation.css";
+import "@/styles/databoard-shell.css";
 
 export interface ShellClient {
   name: string;
