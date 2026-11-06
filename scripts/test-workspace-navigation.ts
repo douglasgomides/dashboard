@@ -41,7 +41,6 @@ const esperados = [
   "/audiencia",
   "/conteudo-comercial",
   "/ideias",
-  "/marketing",
   "/vendas-kommo",
   "/inteligencia-criativa",
   "/inspiracao",
@@ -128,7 +127,7 @@ for (const papel of ["owner", "viewer", "strategist", "admin"] as const) assert.
 
 const allTabs = AREAS.flatMap((a) => a.tabs);
 assert.equal(new Set(allTabs.map(navTabKey)).size, allTabs.length);
-assert.equal(AREAS.find((a) => a.id === "marketing")?.tabs[0]?.path, "/marketing");
+assert.equal(AREAS.find((a) => a.id === "marketing")?.tabs[0]?.path, "/conteudo");
 assert.equal(areaDoCaminho("/vendas-kommo"), "comercial");
 assert.equal(AVANCADO.some((t) => t.path === "/vendas-kommo"), false);
 for (const papel of ["owner", "viewer", "strategist"] as const) assert.equal(paths({ ...base, papel }).includes("/vendas-kommo"), false);
