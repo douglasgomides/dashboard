@@ -6,7 +6,7 @@ COPY . .
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_PUBLISHABLE_KEY
 ARG VITE_LINK_BASE_URL
-RUN test -n "$VITE_SUPABASE_URL" && test -n "$VITE_SUPABASE_PUBLISHABLE_KEY" && npm run build:vps
+RUN test -n "$VITE_SUPABASE_URL" && test -n "$VITE_SUPABASE_PUBLISHABLE_KEY" && npm run test:vps && npm run build:vps
 RUN npm prune --omit=dev --no-audit --no-fund
 
 FROM node:22-bookworm-slim
