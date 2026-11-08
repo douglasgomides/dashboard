@@ -8,7 +8,7 @@
     "build": "vite build",
     "build:vps": "vite build && node scripts/build-vps.mjs",
     "start:vps": "node build/vps.mjs",
-    "test:vps": "tsx scripts/test-vps-server.ts",
+    "test:vps": "tsx scripts/test-vps-server.ts && tsx scripts/test-meta-account-credentials.ts",
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "npm run routes:generate && tsc --noEmit",

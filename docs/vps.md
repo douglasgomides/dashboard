@@ -13,6 +13,11 @@ original. Nenhuma migração de banco é necessária para trocar a hospedagem.
 4. As variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` são públicas
    e precisam apontar ao mesmo projeto das credenciais de servidor.
 5. Preservar `NEXO_CHANNELS_ENCRYPTION_KEY`: gerar outra chave não recupera tokens já cifrados.
+6. A Graph e os comentários usam os tokens de `instagram_account_secrets` por conta;
+   `META_ACCESS_TOKEN` é apenas uma reserva opcional. O preenchimento de miniaturas
+   também separa as chamadas por conta, sem copiar um token de uma clínica para outra.
+7. Credenciais globais legadas só podem ser recuperadas de uma fonte comprovadamente
+   vinculada à mesma conta. Validar essa associação antes de configurar o fallback.
 
 ## Imagem e execução
 

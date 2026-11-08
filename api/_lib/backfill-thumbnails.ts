@@ -33,42 +33,67 @@ export async function runBackfillThumbnails(env: BackfillThumbnailsEnv): Promise
   const limit = env.limit ?? 200;
   const { data: posts, error } = await supabase
     .from("instagram_posts")
-    .select("id, windsor_media_id")
+    .select("id, windsor_media_id, instagram_account_id")
     .is("thumbnail_url", null)
     .limit(limit);
   if (error) throw error;
 
   const errors: string[] = [];
   let updated = 0;
+  const accountIds = [...new Set((posts ?? []).map((p) => p.instagram_account_id).filter((id): id is string => !!id))];
+  const tokens = new Map<string, string>();
+  if (accountIds.length) {
+    const { data: secrets, error: secretsError } = await supabase
+      .from("instagram_account_secrets")
+      .select("instagram_account_id, meta_access_token")
+      .in("instagram_account_id", accountIds);
+    if (secretsError) throw secretsError;
+    for (const secret of secrets ?? []) {
+      if (secret.meta_access_token) tokens.set(secret.instagram_account_id, secret.meta_access_token);
+    }
+  }
+  const byAccount = new Map<string | null, NonNullable<typeof posts>>();
+  for (const post of posts ?? []) {
+    const accountPosts = byAccount.get(post.instagram_account_id) ?? [];
+    accountPosts.push(post);
+    byAccount.set(post.instagram_account_id, accountPosts);
+  }
 
-  for (let i = 0; i < (posts?.length ?? 0); i += BATCH_SIZE) {
-    const batch = (posts ?? []).slice(i, i + BATCH_SIZE);
-    const batchPayload = batch.map((p) => ({
-      method: "GET",
-      relative_url: `${p.windsor_media_id}?fields=thumbnail_url,media_url`,
-    }));
-    const res = await fetch(`${GRAPH_BASE}/`, {
-      signal: AbortSignal.timeout(30_000),
-      redirect: "error",
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ access_token: env.accessToken, batch: JSON.stringify(batchPayload) }),
-    });
-    if (!res.ok) {
-      errors.push(`batch fetch failed (${res.status}): ${await res.text()}`);
+  for (const [accountId, accountPosts] of byAccount) {
+    const accessToken = (accountId ? tokens.get(accountId) : undefined) || env.accessToken;
+    if (!accessToken) {
+      errors.push("Conta do Instagram sem credencial para preencher miniaturas");
       continue;
     }
-    const responses = (await res.json()) as { code: number; body: string }[];
-    for (let j = 0; j < batch.length; j++) {
-      const post = batch[j];
-      const sub = responses[j];
-      if (!sub || sub.code !== 200) continue;
-      const parsed = JSON.parse(sub.body) as { thumbnail_url?: string; media_url?: string };
-      const url = parsed.thumbnail_url ?? parsed.media_url ?? null;
-      if (!url) continue;
-      const { error: updateError } = await supabase.from("instagram_posts").update({ thumbnail_url: url }).eq("id", post.id);
-      if (updateError) errors.push(`update ${post.id}: ${updateError.message}`);
-      else updated++;
+    for (let i = 0; i < accountPosts.length; i += BATCH_SIZE) {
+      const batch = accountPosts.slice(i, i + BATCH_SIZE);
+      const batchPayload = batch.map((p) => ({
+        method: "GET",
+        relative_url: `${p.windsor_media_id}?fields=thumbnail_url,media_url`,
+      }));
+      const res = await fetch(`${GRAPH_BASE}/`, {
+        signal: AbortSignal.timeout(30_000),
+        redirect: "error",
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ access_token: accessToken, batch: JSON.stringify(batchPayload) }),
+      });
+      if (!res.ok) {
+        errors.push(`batch fetch failed (${res.status}): ${await res.text()}`);
+        continue;
+      }
+      const responses = (await res.json()) as { code: number; body: string }[];
+      for (let j = 0; j < batch.length; j++) {
+        const post = batch[j];
+        const sub = responses[j];
+        if (!sub || sub.code !== 200) continue;
+        const parsed = JSON.parse(sub.body) as { thumbnail_url?: string; media_url?: string };
+        const url = parsed.thumbnail_url ?? parsed.media_url ?? null;
+        if (!url) continue;
+        const { error: updateError } = await supabase.from("instagram_posts").update({ thumbnail_url: url }).eq("id", post.id);
+        if (updateError) errors.push(`update ${post.id}: ${updateError.message}`);
+        else updated++;
+      }
     }
   }
 
