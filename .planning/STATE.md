@@ -5,16 +5,16 @@ milestone_name: Nexo v5 — Fase 0 + degrau v1
 current_phase: 2
 current_phase_name: Log por rota
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-11-09T20:21:16.381Z"
+stopped_at: Phase 3 UI-SPEC approved
+last_updated: "2026-11-09T22:55:29.749Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 2 execution started
-state_head: e641f03ed8adb4d037cabe020ebcae984c3079e0
+state_head: 222e1313790ed6ae4edb960ef2f02e28ae725579
 progress:
   total_phases: 14
   completed_phases: 0
   total_plans: 4
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -88,6 +88,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-09T18:09:57.512Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-log-por-rota/02-CONTEXT.md
+Last session: 2026-11-09T22:55:29.685Z
+Stopped at: Phase 3 UI-SPEC approved
+Resume file: .planning/phases/03-menu-da-equipe-esconder-com-o-log-gravando/03-UI-SPEC.md
