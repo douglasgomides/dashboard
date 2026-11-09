@@ -1100,6 +1100,68 @@ try {
       assert.deepEqual((await como<{ id: string }>("authenticated", viewer, "select id from pessoas where client_id=$1 order by id", [A])).map((r) => r.id), [personA, p3].sort());
     } finally { await db.exec("rollback"); }
   });
+  // Log por rota (Phase 2): o lado do banco do que o navegador manda (client_id, rota, origem, sessao).
+  const rotaIndice = "/_authenticated/$clientId/";
+  const inserirRota = "insert into rota_acessos(client_id,rota,origem,sessao) values ($1,$2,'direto','sessao-abc123')";
+  await check("rota_acessos: gatilho sobrescreve user_id, eh_equipe e papel forjados por viewer", async () => {
+    await role("authenticated", viewer, async () => {
+      await db.query("insert into rota_acessos(client_id,rota,origem,sessao,user_id,eh_equipe,papel) values ($1,$2,'direto','sessao-abc123',$3,true,'admin')", [A, rotaIndice, admin]);
+      await db.exec("reset role");
+      assert.deepEqual(await rows("select user_id,eh_equipe,papel,client_id,rota,origem from rota_acessos"), [{ user_id: viewer, eh_equipe: false, papel: "viewer", client_id: A, rota: rotaIndice, origem: "direto" }]);
+    });
+  });
+  await check("rota_acessos: admin sem client_members grava na clínica com eh_equipe e papel admin", async () => {
+    await role("authenticated", admin, async () => {
+      await db.query(inserirRota, [A, rotaIndice]);
+      await db.exec("reset role");
+      assert.deepEqual(await rows("select user_id,eh_equipe,papel,client_id from rota_acessos"), [{ user_id: admin, eh_equipe: true, papel: "admin", client_id: A }]);
+    });
+  });
+  await check("rota_acessos: viewer não grava com client_id de clínica da qual não é membro", async () => {
+    await denied(() => role("authenticated", viewer, () => db.query(inserirRota, [B, rotaIndice])));
+  });
+  await check("rota_acessos: outsider grava /sem-acesso sem clínica e o papel fica nulo", async () => {
+    await role("authenticated", outsider, async () => {
+      await db.query(inserirRota, [null, "/sem-acesso"]);
+      await db.exec("reset role");
+      assert.deepEqual(await rows("select user_id,eh_equipe,papel,client_id from rota_acessos"), [{ user_id: outsider, eh_equipe: false, papel: null, client_id: null }]);
+    });
+  });
+  await check("rota_acessos: CHECK recusa query string, hash, URL, UUID na rota e origem fora da lista (23514)", async () => {
+    for (const rota of ["/x?y", "/x#y", "https://x", `/_authenticated/${id(1)}/pacientes`, "", `/${"a".repeat(200)}`])
+      await denied(() => role("authenticated", viewer, () => db.query(inserirRota, [A, rota])), "23514");
+    await denied(() => role("authenticated", viewer, () => db.query("insert into rota_acessos(client_id,rota,origem,sessao) values ($1,$2,'outra','sessao-abc123')", [A, rotaIndice])), "23514");
+    await denied(() => role("authenticated", viewer, () => db.query("insert into rota_acessos(client_id,rota,origem,sessao) values ($1,$2,'direto','curta')", [A, rotaIndice])), "23514");
+    await role("authenticated", viewer, async () => { await db.query(inserirRota, [A, `/${"a".repeat(199)}`]); });
+  });
+  await check("rota_acessos: só admin lê; viewer, editor e outsider leem 0 linhas", async () => {
+    await db.exec("begin");
+    try {
+      const como = async (user: string, sql: string, args: unknown[] = []) => {
+        await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ role: "authenticated", sub: user })]);
+        await db.exec("set local role authenticated");
+        try { return await rows<{ n: number }>(sql, args); } finally { await db.exec("reset role"); }
+      };
+      // Semeia como dono com as claims de cada usuário, para o gatilho derivar os campos.
+      for (const [user, client] of [[viewer, A], [editor, B], [outsider, null], [admin, A]] as const) {
+        await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ role: "authenticated", sub: user })]);
+        await db.query(inserirRota, [client, client ? rotaIndice : "/sem-acesso"]);
+      }
+      for (const user of [viewer, editor, outsider]) assert.deepEqual(await como(user, "select count(*)::int as n from rota_acessos"), [{ n: 0 }], `${user} lê 0`);
+      assert.deepEqual(await como(admin, "select count(*)::int as n from rota_acessos"), [{ n: 4 }]);
+    } finally { await db.exec("rollback"); }
+  });
+  await check("rota_acessos: authenticated só tem SELECT e INSERT; anon não grava", async () => {
+    assert.deepEqual(await rows(`select has_table_privilege('authenticated','public.rota_acessos','UPDATE') as u, has_table_privilege('authenticated','public.rota_acessos','DELETE') as d,
+      has_table_privilege('authenticated','public.rota_acessos','TRUNCATE') as t, has_table_privilege('authenticated','public.rota_acessos','INSERT') as i,
+      has_table_privilege('authenticated','public.rota_acessos','SELECT') as s`), [{ u: false, d: false, t: false, i: true, s: true }]);
+    await denied(() => role("anon", null, () => db.query(inserirRota, [A, rotaIndice])));
+    assert.deepEqual(await rows("select has_function_privilege('anon','public.rota_acessos_preencher()','EXECUTE') as a, has_function_privilege('authenticated','public.rota_acessos_preencher()','EXECUTE') as b"), [{ a: false, b: false }]);
+  });
+  await check("rota_acessos: a migration roda duas vezes sem erro", async () => {
+    await apply("20261109120000_rota_acessos.sql");
+    await apply("20261109120000_rota_acessos.sql");
+  });
   await check("estado final bloqueia toda função public para anon, incluindo migrações novas", async () => {
     assert.deepEqual(await rows("select oid::regprocedure::text as signature from pg_proc where pronamespace='public'::regnamespace and prokind='f' and has_function_privilege('anon',oid,'EXECUTE')"), []);
   });
