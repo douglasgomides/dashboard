@@ -130,6 +130,10 @@ O v5 substitui o v4. O Nexo traz muito dado e pouca inteligência, está confuso
 | Selo gravado em `metricas_selo`, nunca calculado na tela | Confiança auditável por clínica × métrica × versão da definição | — Pending |
 | As 4 definições da Fase 0 ficam abertas até o João decidir com a tabela de conferência | O v4 tinha assumido as três; o v5 devolve a decisão ao João | — Pending |
 | Planejamento na branch `gsd/nexo-v5` | Separa do v4 | ✓ Good |
+| Extras da pesquisa na v1: job grava as 2 contagens, validação das 20 linhas no app, botão Buscar no celular, selo cai se o perfil mudar | Delegado ao Claude pelo João em 09/11/2026; revisável | — Pending |
+| Ordem: menu da equipe escondido só após log gravando; template Meta cedo (após decisão 7); metas antes da Hoje; portão de desenho antes do Quem chamar | Delegado ao Claude em 09/11/2026; revisável | — Pending |
+| Job semanal do Kommo por Vercel Cron (`CRON_SECRET`), alerta de 8 dias, n8n como reserva | Versionado no PR; delegado ao Claude em 09/11/2026; revisável | — Pending |
+| Hoje mostra Agendaram/Fecharam da última semana fechada (seg–dom); meta no mês até ontem | Mesma janela da conferência, então o selo vale para o número exibido; delegado ao Claude em 09/11/2026; revisável | — Pending |
 
 ## Evolution
 
