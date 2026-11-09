@@ -530,7 +530,7 @@ Língua: português do Brasil, tom direto, verbos no infinitivo ou no imperativo
 
 > Estados da interface por elemento. Os textos de vazio e erro estão em Copywriting Contract e não se repetem aqui.
 
-Applicable state considerations resolved: 12 covered, 4 backstop, 3 unresolved
+Applicable state considerations resolved: 14 covered, 4 backstop, 1 unresolved
 
 Probe (`ui-consideration-probe.cjs`, 09/11/2026) rodado sobre 7 elementos (menu, botão Buscar tela, diálogo de busca, chips, folha Menu, avatar gerado, redirects): as categorias levantadas (empty, loading, error, populated, partial, overflow, zero-one-many, long-text) estão cobertas pelas linhas abaixo; os 3 itens ⚠ continuam como suposições para o planner.
 
@@ -548,8 +548,8 @@ Probe (`ui-consideration-probe.cjs`, 09/11/2026) rodado sobre 7 elementos (menu,
 | partial | Resultados cuja fonte a clínica não tem | ✅ covered | Aparecem com a linha "Sem {fonte} nesta clínica" e continuam abrindo; nunca somem por filtro |
 | error | Registro de telas | ✅ covered | Mensagem do Copywriting Contract no lugar da lista; o menu de 3 itens não depende dele |
 | error | Rota tirada sem destino | ✅ covered | O teste do registro falha se algum `destino` não existir; nenhum 404 chega ao usuário |
-| partial | Item "Clínica" a partir da casca `/admin` sem clínica lembrada | ⚠ unresolved | Contrato diz: ir a `/admin` com linha de ajuda. O planner decide onde guardar a "última clínica" (hoje não há chave de armazenamento) e confirma que o fluxo cabe |
-| partial | Papel `strategist` sem ser admin do app | ⚠ unresolved | Hoje as telas "equipe" aparecem para `papel` diferente de owner e viewer (`nav.ts:451`). O contrato fala em `isAdmin`. O planner confirma se o estrategista não admin recebe o menu de 3 itens ou o de hoje |
+| partial | Item "Clínica" a partir da casca `/admin` sem clínica lembrada | ✅ covered (João, 09/11/2026) | Lembrar a última clínica aberta naquele navegador (armazenamento local, só o id da clínica) e ir direto para ela; se nunca abriu nenhuma, ficar na Carteira com a dica "Escolha uma clínica". Texto anterior: | Contrato diz: ir a `/admin` com linha de ajuda. O planner decide onde guardar a "última clínica" (hoje não há chave de armazenamento) e confirma que o fluxo cabe |
+| partial | Papel `strategist` sem ser admin do app | ✅ covered (João, 09/11/2026) | O estrategista não admin vê o menu novo da equipe (Carteira, Clínica, Conferência e fontes) e as escondidas pela busca. Texto anterior: | Hoje as telas "equipe" aparecem para `papel` diferente de owner e viewer (`nav.ts:451`). O contrato fala em `isAdmin`. O planner confirma se o estrategista não admin recebe o menu de 3 itens ou o de hoje |
 | partial | Preferência de tema escuro e de cor de destaque já salva no navegador (`dc:tema`, `dc:accent`) | ⚠ unresolved | Contrato: o Nexo ignora as duas (sempre claro, Cobalto fixo) e o controle "Aparência" sai das cascas do Nexo. O planner decide se remove o uso do hook `use-theme` na casca do Nexo ou só neutraliza no CSS, e confirma que o SAP continua funcionando com ele |
 | motion | Animações de entrada | ✅ covered | Só dentro de `prefers-reduced-motion: no-preference`; estado final é o CSS base; E2E e axe rodam com `reducedMotion: 'reduce'` |
 | contrast | Texto branco sobre o degradê de marca | ✅ covered | Fim do degradê em 140% garante 4,75:1 no pior ponto (medido); verificação V11 |
