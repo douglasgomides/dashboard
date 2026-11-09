@@ -136,11 +136,72 @@ Fonte: `~/Downloads/Nexo-Modelo/BRIEF-GSD-Nexo-v5.md`, `.planning/research/SUMMA
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| CONF-01 | Phase 1 | Pending |
+| CONF-02 | Phase 1 | Pending |
+| CONF-03 | Phase 1 | Pending |
+| CONF-04 | Phase 1 | Pending |
+| CONF-05 | Phase 1 | Pending |
+| CONF-06 | Phase 1 | Pending |
+| CONF-07 | Phase 1 | Pending |
+| LOG-01 | Phase 2 | Pending |
+| LOG-02 | Phase 2 | Pending |
+| LOG-03 | Phase 2 | Pending |
+| LOG-04 | Phase 2 | Pending |
+| MENU-01 | Phase 3 | Pending |
+| MENU-02 | Phase 3 | Pending |
+| MENU-03 | Phase 3 | Pending |
+| MENU-04 | Phase 3 | Pending |
+| MENU-05 | Phase 9 | Pending |
+| MENU-06 | Phase 9 | Pending |
+| MENU-07 | Phase 3 | Pending |
+| VERI-01 | Phase 5 | Pending |
+| VERI-02 | Phase 5 | Pending |
+| VERI-03 | Phase 5 | Pending |
+| VERI-04 | Phase 5 | Pending |
+| SELO-01 | Phase 6 | Pending |
+| SELO-02 | Phase 6 | Pending |
+| SELO-03 | Phase 6 | Pending |
+| SELO-04 | Phase 6 | Pending |
+| SELO-05 | Phase 6 | Pending |
+| SELO-06 | Phase 6 | Pending |
+| SELO-07 | Phase 6 | Pending |
+| HOJE-01 | Phase 8 | Pending |
+| HOJE-02 | Phase 8 | Pending |
+| HOJE-03 | Phase 8 | Pending |
+| HOJE-04 | Phase 9 | Pending |
+| HOJE-05 | Phase 9 | Pending |
+| HOJE-06 | Phase 9 | Pending |
+| HOJE-07 | Phase 9 | Pending |
+| HOJE-08 | Phase 9 | Pending |
+| HOJE-09 | Phase 9 | Pending |
+| HOJE-10 | Phase 9 | Pending |
+| HOJE-11 | Phase 9 | Pending |
+| HOJE-12 | Phase 9 | Pending |
+| KOMM-01 | Phase 10 | Pending |
+| KOMM-02 | Phase 10 | Pending |
+| KOMM-03 | Phase 10 | Pending |
+| KOMM-04 | Phase 10 | Pending |
+| KOMM-05 | Phase 10 | Pending |
+| CHAM-01 | Phase 11 | Pending |
+| CHAM-02 | Phase 12 | Pending |
+| CHAM-03 | Phase 12 | Pending |
+| CHAM-04 | Phase 12 | Pending |
+| CHAM-05 | Phase 12 | Pending |
+| CHAM-06 | Phase 12 | Pending |
+| CHAM-07 | Phase 12 | Pending |
+| RESU-01 | Phase 13 | Pending |
+| RESU-02 | Phase 13 | Pending |
+| RESU-03 | Phase 13 | Pending |
+| TMPL-01 | Phase 4 | Pending |
+| GOAL-01 | Phase 7 | Pending |
+| GOAL-02 | Phase 7 | Pending |
+| REL-01 | Phase 14 | Pending |
 
 **Coverage:**
 - v1 requirements: 60 total
-- Mapped to phases: 0 (preenchido pelo roadmap)
+- Mapped to phases: 60
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-11-09*
-*Last updated: 2026-11-09 after initial definition*
+*Last updated: 2026-11-09 after roadmap creation (traceability filled)*
