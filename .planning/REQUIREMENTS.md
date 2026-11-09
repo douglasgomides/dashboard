@@ -27,6 +27,7 @@ Fonte: `~/Downloads/Nexo-Modelo/BRIEF-GSD-Nexo-v5.md`, `.planning/research/SUMMA
 ### Menu (MENU)
 
 - [ ] **MENU-01**: Um registro único classifica as 90 rotas em vivas (14), escondidas (73) e tiradas (3), conferido por teste
+  - Nota de 09/11/2026: o teste confere o conjunto de rotas medido em `src/routeTree.gen.ts` (81 telas nessa data: 80 folhas `/_authenticated` + `/sem-acesso`; 90 é a contagem de arquivos em `src/routes`); a divisão 14/73/3 do brief é recontada contra esse conjunto na Phase 3.
 - [ ] **MENU-02**: A equipe vê 3 itens no menu: Carteira, Clínica, Conferência e fontes
 - [ ] **MENU-03**: A equipe abre qualquer tela escondida pela busca (Cmd+K no computador, botão Buscar visível no celular) e a abertura fica registrada
 - [ ] **MENU-04**: As 3 rotas tiradas redirecionam para a tela certa, sem 404

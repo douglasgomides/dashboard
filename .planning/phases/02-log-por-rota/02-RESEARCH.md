@@ -413,18 +413,20 @@ Fase aditiva (tabela nova, nada renomeado). **Omitida** por não ser rename/refa
 | A7 | `strategist` sem `is_app_admin` conta como clínica (`eh_equipe=false`) | Pattern 3 | se a equipe usa `strategist`, "uso da clínica" mistura equipe |
 | A8 | Edição do `20261106130000_resultados_diarios.sql` (guarda do cron) é segura em produção | Pitfall 1 | confirmado por `aplicar.sh` (rastreio por nome), mas o João deve ciente de que o arquivo mudou |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Voltar/avançar (D-10 não nomeia).**
+Todas as perguntas abaixo estão resolvidas (09/11/2026): Q4 e Q6 pelo João (CONTEXT D-04 e D-07); as demais pela delegação "segue recomendação", registradas como CD-xx em `02-01-PLAN.md`.
+
+1. **Voltar/avançar (D-10 não nomeia).** — **RESOLVED → CD-02** (dentro de D-10): `BACK`/`FORWARD`/`GO` contam como abertura com origem `link`.
    - Sabe-se: o histórico entrega `BACK`/`FORWARD`/`GO`.
    - Falta: se contam como abertura e com qual origem.
    - Recomendação: contar, origem `link`; registrar a escolha no PLAN. Se o João preferir ignorar, é um `if` em `origemDaNavegacao`.
-2. **`eh_equipe` para `strategist`/`owner`.** Recomendação: `eh_equipe = is_app_admin()` apenas (A7).
-3. **`papel` nulo para não-admin em rota sem clínica (`/bem-vindo`, `/assistentes-ia`, `/sap` índice).** Recomendação: aceitar `null` (coluna anulável com CHECK); a visão agregada usa `eh_equipe`, não `papel`.
-4. **Host de produção.** Confirmar com o João se existe algum host além dos três (A2).
-5. **Linhas das rotas só-redirect de origem.** Recomendação: **não** gravar a rota de origem do redirect (D-10 define `redirecionamento` como origem do destino) e rotular as 12 como "só redireciona" na aba. Alternativa mais cara: gravar também a origem abandonada; exige deduzir a rota a partir de `onBeforeNavigate` + `getMatchedRoutes`.
-6. **Chave do dedupe com `client_id`** (refina D-07; Pattern 5).
-7. **`client_id` com `on delete set null` vs `cascade`.** Recomendo `set null` para o log de decisão não encolher quando uma clínica for apagada.
+2. **`eh_equipe` para `strategist`/`owner`.** Recomendação: `eh_equipe = is_app_admin()` apenas (A7). — **RESOLVED → CD-03**: `eh_equipe = is_app_admin()` apenas; `strategist` sem admin conta como clínica.
+3. **`papel` nulo para não-admin em rota sem clínica (`/bem-vindo`, `/assistentes-ia`, `/sap` índice).** Recomendação: aceitar `null` (coluna anulável com CHECK); a visão agregada usa `eh_equipe`, não `papel`. — **RESOLVED → CD-03**: `papel` anulável; nulo em rota sem clínica para quem não é admin.
+4. **Host de produção.** Confirmar com o João se existe algum host além dos três (A2). — **RESOLVED → CONTEXT D-04** (confirmado pelo João em 09/11/2026): exatamente `dash.`, `nexo.` e `sap.doctorcreator.com.br`, nenhum `*.vercel.app` de produção. O plano usa a lista fechada dos três hosts (CD-01 fica só com a chave `localStorage` do e2e), não o sufixo `.doctorcreator.com.br` do Pattern 4.
+5. **Linhas das rotas só-redirect de origem.** Recomendação: **não** gravar a rota de origem do redirect (D-10 define `redirecionamento` como origem do destino) e rotular as 12 como "só redireciona" na aba. Alternativa mais cara: gravar também a origem abandonada; exige deduzir a rota a partir de `onBeforeNavigate` + `getMatchedRoutes`. — **RESOLVED → CD-04** (dentro de D-10): a rota abandonada não é gravada; as 12 aparecem com o rótulo "só redireciona". Pitfall 4 (URL digitada não canônica corrigida pelo replace do Transitioner) virou exceção aceita pelo João em **CONTEXT D-10**: grava `redirecionamento`; URL digitada canônica continua `direto`.
+6. **Chave do dedupe com `client_id`** (refina D-07; Pattern 5). — **RESOLVED → CONTEXT D-07** (ratificado pelo João em 09/11/2026): chave = rota + `client_id` + sessão, janela de 2 s. CD-05 deixa de ser desvio e passa a ser a própria D-07.
+7. **`client_id` com `on delete set null` vs `cascade`.** Recomendo `set null` para o log de decisão não encolher quando uma clínica for apagada. — **RESOLVED → CD-06**: `on delete set null`; a forma da tabela passa pelo checkpoint de decisão da Task 1 de `02-01-PLAN.md` antes de virar migration.
 
 ## Environment Availability
 

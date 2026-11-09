@@ -47,6 +47,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Fase 0 — Confiança nos números (conferência)
+
 **Goal**: A equipe e o João têm a evidência para fechar as definições: a conferência de 1 semana fechada em 3 clínicas de CRMs diferentes, contra o CRM ao vivo, com cada diferença explicada e cada causa corrigida.
 **Depends on**: Nothing (first phase)
 **Requirements**: CONF-01, CONF-02, CONF-03, CONF-04, CONF-05, CONF-06, CONF-07
@@ -57,23 +58,40 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A regra de "cópia do robô do Kommo" é uma só, por card, com a evidência da conferência, e dá o mesmo resultado no Nexo e na conferência para os mesmos cards; o spike registra até onde vai o histórico de eventos de etapa do Kommo (retenção e cobertura)
   4. Nenhum arquivo commitado traz nome ou telefone de paciente: a conferência usa contagens e ids internos (conferido no diff do PR)
   5. As 4 definições e a resposta sobre "Incoming leads" ficam registradas pelo João; até esse registro, nenhum documento, tela ou selo trata uma definição como fechada
+
 **Plans**: TBD
 **Nota**: roda em paralelo à trilha de código desde o início. A primeira entrega de código é o log (Phase 2): o PR desta fase, com as migrations de correção e a regra do robô, só abre depois do PR do log. As Phases 5, 10 e 11 usam a saída CONF-05 (regra do robô) assim que ela existir, sem esperar a fase inteira fechar.
 
 ### Phase 2: Log por rota
+
 **Goal**: Cada abertura de tela fica gravada, inclusive das telas escondidas e da equipe admin, para que esconder, cortar e decidir o SAP se apoiem em dado de uso.
 **Depends on**: Nothing (primeira entrega de código)
 **Requirements**: LOG-01, LOG-02, LOG-03, LOG-04
 **Bloqueado por decisões abertas**: nenhuma. O critério de "log ligado" da liberação da v1.5 é fixado pelo João e medido na Phase 14; não bloqueia esta.
 **Success Criteria** (what must be TRUE):
-  1. Abrir qualquer tela (pelo menu, pela busca, por link direto, por redirecionamento ou bloqueada) grava uma linha com rota padrão, clínica, papel, sessão, horário e origem; em produção aparecem linhas de admin e de viewer nas primeiras 24 h
+  1. Toda tela que abre de fato (pelo menu, pela busca, por link direto ou por redirecionamento) grava uma linha com rota padrão, clínica, papel, sessão, horário e origem; uma tela negada por guarda grava `bloqueada` (e o destino grava `redirecionamento`); as 12 rotas que só redirecionam pela configuração não ganham linha própria e aparecem como "só redireciona" na aba (ratificado pelo João em 09/11/2026); em produção aparecem linhas de admin e de viewer nas primeiras 24 h
   2. Nenhuma linha gravada contém query string, id de paciente ou URL completa (conferido por consulta de leitura nas linhas de produção)
   3. A equipe admin abre uma visão agregada de aberturas por rota e período; quem não é admin não lê o log
   4. A navegação não fica perceptivelmente mais lenta (medida em produção antes e depois) e uma falha ao gravar não trava a tela
   5. A tabela do log chega como migration em arquivo que o João roda; print do site no ar conferido com a visão agregada mostrando aberturas reais
-**Plans**: TBD
+
+**Plans:** 4 plans
+
+Plans:
+**Wave 1**
+- [ ] 02-01-PLAN.md — Fatia traçadora: abertura grava em rota_acessos (migration, RLS, gatilho) + Wave 0 do cron
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 02-02-PLAN.md — Origem completa (menu, busca, link, direto, redirecionamento, bloqueada), dedupe de 2 s, retenção de 180 dias
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 02-03-PLAN.md — Leitura agregada (RPC rota_acessos_resumo) e aba "Uso das telas" em /admin/conferencia
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 02-04-PLAN.md — Suíte do CI verde, PR na base claude/doctor-creator-hub-nixvw6 e verificação no site no ar com o João (migration, 24 h, privacidade, velocidade, print)
 
 ### Phase 3: Menu da equipe (esconder com o log gravando)
+
 **Goal**: A equipe trabalha com 3 itens de menu e acha qualquer tela escondida pela busca, sem perder acesso a nada e com cada abertura gravada.
 **Depends on**: Phase 2 (o log precisa estar gravando e conferido em produção há 7 dias corridos, com linhas de admin e de viewer, antes de esconder qualquer tela: é a linha de base; D-14 de 02-CONTEXT.md)
 **Requirements**: MENU-01, MENU-02, MENU-03, MENU-04, MENU-07
@@ -83,11 +101,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. A equipe abre qualquer uma das 73 telas escondidas por Cmd+K no computador e pelo botão Buscar visível no celular, e a abertura aparece no log com a origem da busca
   3. As 3 rotas tiradas levam à tela certa, sem 404; login, redefinir senha, primeiro acesso, OAuth, sem acesso e `/r/` abrem exatamente como antes; nenhuma tabela `sap_*` muda
   4. Um teste no CI confere o registro único: 90 rotas = 14 vivas + 73 escondidas + 3 tiradas
+     (Nota de 09/11/2026: o teste confere o conjunto de rotas medido em `src/routeTree.gen.ts`, 81 telas nessa data (80 folhas `/_authenticated` + `/sem-acesso`; 90 é a contagem de arquivos em `src/routes`); a divisão 14/73/3 do brief é recontada contra esse conjunto na Phase 3.)
   5. Print do site no ar conferido: menu da equipe no computador e no celular, e uma tela escondida aberta pela busca
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 4: Pacote do template do WhatsApp à Meta
+
 **Goal**: O João tem o pacote pronto para pedir o template à Meta cedo no calendário, para que a aprovação externa não segure a v1.5.
 **Depends on**: Nothing (não é código; começa quando a decisão 7 for autorizada)
 **Requirements**: TMPL-01
@@ -96,10 +117,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. O João recebe o texto do template em português, no passado, sem adjetivo, promessa ou previsão, com uma amostra preenchida sem dado real de paciente e a categoria proposta com o motivo
   2. O pacote traz a checagem do WABA e do número (conta, número na API oficial, verificação), dizendo o que foi conferido e o que ainda falta
   3. O pacote fica registrado no repositório (nome, versão, categoria); o pedido à Meta é feito pelo João, e o agente não envia nada à Meta
+
 **Plans**: TBD
 **Nota**: paralela à trilha de código; não segura as fases seguintes.
 
 ### Phase 5: Consultas de verificação
+
 **Goal**: A equipe vê, por clínica e por fonte, se o dado da origem permite conferir (cobertura de `post_id`/`ad_id`, hora do último dado, cards removidos e cópias do robô), tudo no fuso de São Paulo.
 **Depends on**: Phase 2 (ordem do brief: verificação depois do log)
 **Requirements**: VERI-01, VERI-02, VERI-03, VERI-04
@@ -110,10 +133,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A equipe vê, por clínica, a contagem de cards removidos na origem e de cópias do robô, com a mesma regra da conferência
   4. Os testes de borda passam em `America/Sao_Paulo`: domingo à noite, virada de mês e segunda 00:00 caem no dia e na semana certos
   5. As consultas só leem (nenhuma escrita no banco; função ou view nova chega como migration em arquivo que o João roda); print do site no ar conferido com o resultado na área da equipe
+
 **Plans**: TBD
 **Nota**: a contagem de cópias do robô usa a regra da Fase 0 (CONF-05) assim que ela existir. Pode andar ao lado da Phase 3 enquanto ela espera os 7 dias de linha de base do log.
 
 ### Phase 6: Selo de confiança (`metricas_selo`)
+
 **Goal**: Cada número passa a ter um selo gravado por clínica × métrica × versão da definição, em 4 estados e com texto curto, e nenhuma tela inventa selo.
 **Depends on**: Phase 5 (evidência e fuso testados antes do selo)
 **Requirements**: SELO-01, SELO-02, SELO-03, SELO-04, SELO-05, SELO-06, SELO-07
@@ -124,10 +149,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Testes confirmam que um verde volta a neutro em 30 dias e sempre que muda a versão da definição ou o perfil de etapas da clínica
   4. Antes de o João rodar o SQL, o site no ar mostra neutro/"não medido" sem erro; depois, mostra o selo gravado (print do site no ar conferido nos dois momentos)
   5. As migrations (tabelas do selo e versão da definição no histórico diário) chegam em arquivo que o João roda; depois disso, cada linha nova de `resultados_diarios` diz a versão da definição usada
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 7: Metas por SQL
+
 **Goal**: A Lana tem metas cadastradas, ligadas à métrica e à versão da definição, antes da tela Hoje, e todo texto de meta passa a dizer fato, sem previsão.
 **Depends on**: Phase 6 (a meta se liga à versão da definição gravada pelo selo)
 **Requirements**: GOAL-01, GOAL-02
@@ -136,9 +163,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. O João recebe o arquivo SQL das metas da Lana, com cada meta ligada a uma métrica e a uma versão da definição; o agente não roda o SQL
   2. Depois que o João roda, uma consulta de leitura mostra as metas da Lana cadastradas para as métricas certas
   3. A tela e o alerta diário deixam de dizer "meta em risco" ou qualquer previsão e passam a dizer o fato (quanto foi feito e quanto falta, até ontem); print do site no ar conferido e um alerta de teste conferido
+
 **Plans**: TBD
 
 ### Phase 8: Endpoint `hoje`
+
 **Goal**: A tela Hoje tem de onde ler: um bloco por métrica com status, selo e hora do dado, sem recalcular conta pesada e sem entregar ao médico número sem selo.
 **Depends on**: Phase 6, Phase 7 (o bloco de meta lê as metas cadastradas)
 **Requirements**: HOJE-01, HOJE-02, HOJE-03
@@ -148,9 +177,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Chamado como médico, um bloco sem selo chega sem número; chamado pela equipe, chega com o número e o aviso "sem selo"; quem não tem acesso à clínica é recusado
   3. Abrir a Hoje não recalcula conta pesada: o tempo de resposta do `hoje` e das telas pesadas é medido em produção antes e depois do PR, e as telas pesadas não ficam mais lentas
   4. O deploy continua com 12 funções (a rota entra pelo dispatcher) e o SQL novo chega em migration que o João roda; print do site no ar conferido: resposta do `hoje` em produção, chamada como médico e como equipe, anexada ao PR
+
 **Plans**: TBD
 
 ### Phase 9: Tela Hoje
+
 **Goal**: O médico da Lana abre a Hoje no celular ou no computador e lê, numa coluna, Agendaram, Fecharam, Chamaram e Foram com selo, fonte, funil e meta; o menu dele passa a ter só Hoje e Ajuda e fontes.
 **Depends on**: Phase 3 (registro único de rotas), Phase 8
 **Requirements**: HOJE-04, HOJE-05, HOJE-06, HOJE-07, HOJE-08, HOJE-09, HOJE-10, HOJE-11, HOJE-12, MENU-05, MENU-06
@@ -161,10 +192,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Com meta cadastrada, o médico vê "12 de 20, faltam 8 em 9 dias", sem projeção; carregando (após 3 s, "Calculando, clínica grande leva até 30 s"), vazio (com a condição que falta) e erro aparecem dentro do bloco, sem derrubar a tela
   4. O menu do médico tem só Hoje e Ajuda e fontes, onde ele vê de onde vem cada número e quando foi calculado; as telas com número sem selo saem do médico e ficam para a equipe com o aviso "sem selo"
   5. Um teste no CI barra palavras proibidas no texto para o médico ("em risco", "vai", "deve", adjetivos, promessa); print do site no ar conferido no celular e no computador com a Lana
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 10: Job de conferência semanal do Kommo
+
 **Goal**: Toda semana a Lana é conferida sozinha contra o Kommo e o resultado vira selo (verde quando bate, âmbar com os dois números quando difere), sem estourar o limite do Kommo.
 **Depends on**: Phase 5 (consultas e fuso), Phase 6 (selo)
 **Requirements**: KOMM-01, KOMM-02, KOMM-03, KOMM-04, KOMM-05
@@ -175,10 +208,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Em teste com respostas simuladas, o job roda uma clínica por chamada, respeita o limite do Kommo para o domínio inteiro e para no 429/403
   4. A equipe recebe alerta quando a conferência passa de 8 dias sem rodar; o disparo é o Vercel Cron semanal com `CRON_SECRET` próprio, e o caminho reserva pelo n8n está documentado
   5. As migrations chegam em arquivo que o João roda; print do site no ar conferido com o selo gravado pelo job na Lana
+
 **Plans**: TBD
 **Nota**: usa a regra de cópia do robô da Fase 0 (CONF-05).
 
 ### Phase 11: Quem chamar hoje — portão de desenho
+
 **Goal**: Antes de qualquer código da lista, o João aprova um documento de desenho que diz como a lista protege o paciente e a clínica.
 **Depends on**: Phase 5 (consulta de hora do último dado e de tempo parado)
 **Requirements**: CHAM-01
@@ -188,10 +223,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. O documento diz como medir os ≥18 de 20 dentro do app, sem nome gravado, e como cada uma das 4 condições fica gravada antes de a lista aparecer ao médico
   3. O João aprova o documento por escrito, com data; até lá nenhum código da lista entra em PR
   4. O documento não traz nome nem telefone de paciente; os exemplos usam dado sintético ou agregado
+
 **Plans**: TBD
 **Nota**: precisa da regra do robô da Fase 0 (CONF-05), não da fase inteira. Pode ser escrito durante as Phases 6 a 10; a Phase 12 só começa com ele aprovado.
 
 ### Phase 12: Quem chamar hoje — construção
+
 **Goal**: A equipe vê até 5 pessoas para chamar hoje, com motivo mecânico, máscara feita no servidor e registro de cada abertura; o médico só vê a lista quando as 4 condições estão gravadas como cumpridas.
 **Depends on**: Phase 9 (botão na Hoje), Phase 10 (cards removidos e conferência em dia), Phase 11 (documento aprovado)
 **Requirements**: CHAM-02, CHAM-03, CHAM-04, CHAM-05, CHAM-06, CHAM-07
@@ -202,10 +239,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Cada abertura da lista grava um registro na mesma requisição; com o registro forçado a falhar, a lista não abre
   4. A secretária da Lana marca 20 linhas como certas ou erradas, com motivo, dentro do app, sem nome gravado; a lista só aparece ao médico quando as 4 condições estão gravadas como cumpridas (incluindo ≥18 de 20)
   5. O botão abre o WhatsApp oficial com confirmação e nunca envia sozinho; as migrations chegam em arquivo que o João roda; print do site no ar conferido (lista da equipe e Hoje do médico com a lista ainda bloqueada)
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 13: Resumo semanal em sombra
+
 **Goal**: Toda semana a equipe lê o resumo que o médico receberia, sem que nada seja enviado ao médico, para medir se o resumo da v1.5 pode sair.
 **Depends on**: Phase 9 (mesmas regras de texto e números da Hoje), Phase 10 (selo gravado pelo job)
 **Requirements**: RESU-01, RESU-02, RESU-03
@@ -215,9 +254,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Com selo não verde, grupo menor que 5, fonte com mais de 1 dia ou etapa fora de ordem, a equipe vê "resumo suspenso: [motivo]"
   3. Não existe caminho de envio ao médico (nenhum botão, rota ou job envia); o SQL de opt-in é entregue em arquivo e não é usado
   4. As migrations chegam em arquivo que o João roda; print do site no ar conferido com o resumo de uma semana, ou o "resumo suspenso" com o motivo, na área da equipe
+
 **Plans**: TBD
 
 ### Phase 14: Check de liberação do degrau 1.5
+
 **Goal**: A equipe vê, medido, se a v1.5 pode ser liberada (as 4 condições, cada uma com estado e fonte), e o milestone termina quando esse check é medido.
 **Depends on**: Phase 2 (log), Phase 10 (verde pelo job), Phase 12 (validação das 20 linhas), Phase 13 (última fase do milestone)
 **Requirements**: REL-01
@@ -227,6 +268,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. "Log ligado" é medido pelo critério que o João fixou; antes disso, a condição aparece como "critério não fixado", nunca como cumprida
   3. Nenhuma condição aparece cumprida sem dado gravado, e o check não tem botão para marcar condição como cumprida
   4. Print do site no ar conferido com o check medido na Lana
+
 **Plans**: TBD
 
 ## Decisões abertas × fases
@@ -258,7 +300,7 @@ Nenhuma decisão é assumida. A tabela diz onde cada uma segura o trabalho.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Fase 0 — Confiança nos números (conferência) | 0/TBD | Not started | - |
-| 2. Log por rota | 0/TBD | Not started | - |
+| 2. Log por rota | 0/4 | Planned | - |
 | 3. Menu da equipe (esconder com o log gravando) | 0/TBD | Not started | - |
 | 4. Pacote do template do WhatsApp à Meta | 0/TBD | Not started | - |
 | 5. Consultas de verificação | 0/TBD | Not started | - |
