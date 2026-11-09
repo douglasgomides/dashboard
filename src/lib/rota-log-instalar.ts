@@ -132,11 +132,16 @@ export function instalarRotaLog(router: AnyRouter): void {
     logLigado = true;
 
     // Quem recebe o REPLACE de forma síncrona (dentro do navigate do app) decide o destino da linha pendente.
+    let ultimoPathname: string = router.history.location?.pathname ?? location.pathname;
     try {
       router.history.subscribe(({ location: destino, action }: { location: { pathname: string }; action: { type: string } }) => {
         try {
           const tipo = action.type as AcaoHistorico;
-          acoes.push(tipo);
+          // Um REPLACE que só muda a query string (o app acrescenta ?preset=30d na primeira carga, a troca de período)
+          // não é redirecionamento: a tela é a mesma. Só o REPLACE que troca o pathname conta como tal.
+          const mesmoPathname = destino.pathname === ultimoPathname;
+          ultimoPathname = destino.pathname;
+          if (!(tipo === "REPLACE" && mesmoPathname)) acoes.push(tipo);
           if (!pendente) return;
           const decisao = decidirPendente(tipo, pendente.pathname, destino.pathname);
           if (decisao === "descartar") descartarPendente();
