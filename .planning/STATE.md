@@ -2,9 +2,14 @@
 gsd_state_version: "1.0"
 milestone: v5.0
 milestone_name: Nexo v5 — Fase 0 + degrau v1
+current_phase: 1
+current_phase_name: Fase 0 — Confiança nos números (conferência
 status: planning
-last_updated: "2026-11-09T18:01:19.000Z"
+stopped_at: Phase 2 context gathered
+last_updated: "2026-11-09T18:09:57.541Z"
 last_activity: 2026-11-09
+last_activity_desc: Roadmap do milestone v5.0 criado (14 fases, 60/60 requisitos mapeados)
+state_head: 3992363699ec15998acbdd7ee2e684fede7c6d80
 progress:
   total_phases: 14
   completed_phases: 0
@@ -69,7 +74,7 @@ None yet.
 ### Blockers/Concerns
 
 - 12 decisões abertas do João (PROJECT.md), nenhuma assumida; mapa decisão × fase em ROADMAP.md
-- Fora das 12, a responder antes da fase indicada: nome da tabela do log (`uso_rota` ou `rota_acessos`) antes da Phase 2; `statement_timeout` de produção (8 s ou 30 s) antes da Phase 8; fluxo do botão de WhatsApp (`wa.me` ou API com template) antes das Phases 4 e 11; critério de "log ligado" (o João fixa) antes da Phase 14
+- Fora das 12, a responder antes da fase indicada: `statement_timeout` de produção (8 s ou 30 s) antes da Phase 8; fluxo do botão de WhatsApp (`wa.me` ou API com template) antes das Phases 4 e 11; critério de "log ligado" (o João fixa) antes da Phase 14
 - Zod local 3.25.76 vs 4.6.7 no lockfile: rodar `npm ci` antes de mexer em schemas
 - Vercel Hobby em 12/12 funções: nada novo em `api/`; juntar mudanças e subir uma vez por PR
 
@@ -83,6 +88,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-09 18:01
-Stopped at: Roadmap do v5.0 criado; aguardando aprovação do dono
-Resume file: None
+Last session: 2026-11-09T18:09:57.512Z
+Stopped at: Phase 2 context gathered
+Resume file: .planning/phases/02-log-por-rota/02-CONTEXT.md
