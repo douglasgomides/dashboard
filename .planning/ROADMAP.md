@@ -75,7 +75,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. A navegação não fica perceptivelmente mais lenta (medida em produção antes e depois) e uma falha ao gravar não trava a tela
   5. A tabela do log chega como migration em arquivo que o João roda; print do site no ar conferido com a visão agregada mostrando aberturas reais
 
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -85,7 +85,7 @@ Plans:
 - [x] 02-02-PLAN.md — Origem completa (menu, busca, link, direto, redirecionamento, bloqueada), dedupe de 2 s, retenção de 180 dias
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 02-03-PLAN.md — Leitura agregada (RPC rota_acessos_resumo) e aba "Uso das telas" em /admin/conferencia
+- [x] 02-03-PLAN.md — Leitura agregada (RPC rota_acessos_resumo) e aba "Uso das telas" em /admin/conferencia
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 02-04-PLAN.md — Suíte do CI verde, PR na base claude/doctor-creator-hub-nixvw6 e verificação no site no ar com o João (migration, 24 h, privacidade, velocidade, print)
@@ -300,7 +300,7 @@ Nenhuma decisão é assumida. A tabela diz onde cada uma segura o trabalho.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Fase 0 — Confiança nos números (conferência) | 0/TBD | Not started | - |
-| 2. Log por rota | 2/4 | In Progress | - |
+| 2. Log por rota | 3/4 | In Progress | - |
 | 3. Menu da equipe (esconder com o log gravando) | 0/TBD | Not started | - |
 | 4. Pacote do template do WhatsApp à Meta | 0/TBD | Not started | - |
 | 5. Consultas de verificação | 0/TBD | Not started | - |
