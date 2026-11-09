@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Fase 0 — Confiança nos números (conferência)** - Conferência à mão de 1 semana fechada em 3 clínicas, contra o CRM ao vivo; tabela de diferenças e causas; correções; o João fecha as definições (paralela)
 - [ ] **Phase 2: Log por rota** - Cada abertura de tela gravada, inclusive escondidas e equipe admin (primeira entrega de código)
-- [ ] **Phase 3: Menu da equipe (esconder com o log gravando)** - Equipe com 3 itens; 73 telas escondidas abertas pela busca; 3 tiradas com redirecionamento
+- [ ] **Phase 3: Menu da equipe (esconder com o log gravando)** - Equipe com 3 itens; 70 telas escondidas (60 abertas pela busca); 3 tiradas com redirecionamento
 - [ ] **Phase 4: Pacote do template do WhatsApp à Meta** - Pacote pronto para o João pedir o template, cedo no calendário (sem código, paralela, após a decisão 7)
 - [ ] **Phase 5: Consultas de verificação** - Cobertura de `post_id`/`ad_id`, hora do último dado por fonte, cards removidos e cópias do robô, no fuso de São Paulo
 - [ ] **Phase 6: Selo de confiança (`metricas_selo`)** - Selo gravado por clínica × métrica × versão, em 4 estados, com texto curto e "o que este número conta"
@@ -98,9 +98,9 @@ Plans:
 **Bloqueado por decisões abertas**: 3 (quais telas saem de vez além das 3 do brief: a lista final espera o João; esta fase esconde sem apagar), 5 (algum cliente foi vendido com SAP? muda como o SAP fica escondido por cliente; até a resposta, o SAP segue escondido e congelado, sem remover rota), 11 (card sorting com a equipe sobre os 3 itens: os rótulos finais esperam).
 **Success Criteria** (what must be TRUE):
   1. A equipe vê só Carteira, Clínica e Conferência e fontes no menu; o menu do médico não muda nesta fase (muda junto com a Tela Hoje, na Phase 9)
-  2. A equipe abre qualquer uma das 73 telas escondidas por Cmd+K no computador e pelo botão Buscar visível no celular, e a abertura aparece no log com a origem da busca
+  2. A equipe abre qualquer uma das 60 telas escondidas que abrem (as outras 10 escondidas só redirecionam) por Cmd+K no computador e pelo botão Buscar visível no celular, e a abertura aparece no log com a origem da busca
   3. As 3 rotas tiradas levam à tela certa, sem 404; login, redefinir senha, primeiro acesso, OAuth, sem acesso e `/r/` abrem exatamente como antes; nenhuma tabela `sap_*` muda
-  4. Um teste no CI confere o registro único: 90 rotas = 14 vivas + 73 escondidas + 3 tiradas
+  4. Um teste no CI confere o registro único: 87 linhas = 14 vivas + 70 escondidas + 3 tiradas (medido em `src/routeTree.gen.ts`, aceito pelo João em 09/11/2026)
      (Nota de 09/11/2026: o teste confere o conjunto de rotas medido em `src/routeTree.gen.ts`, 81 telas nessa data (80 folhas `/_authenticated` + `/sem-acesso`; 90 é a contagem de arquivos em `src/routes`); a divisão 14/73/3 do brief é recontada contra esse conjunto na Phase 3.)
   5. Print do site no ar conferido: menu da equipe no computador e no celular, e uma tela escondida aberta pela busca
 
