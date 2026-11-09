@@ -7,7 +7,7 @@
 -- Reversão:
 --   select cron.unschedule('rota-acessos-limpeza');                      -- só onde existe pg_cron
 --   drop function if exists public.rota_acessos_limpar();
---   drop function if exists public.rota_acessos_resumo(integer, boolean, boolean);  -- entra no plano 02-03
+--   drop function if exists public.rota_acessos_resumo(integer, boolean, boolean);
 --   drop table if exists public.rota_acessos;
 --   drop function if exists public.rota_acessos_preencher();
 
@@ -106,3 +106,37 @@ exception when others then
   raise notice 'pg_cron indisponível: %', sqlerrm;
 end
 $cron$;
+
+-- Leitura agregada (plano 02-03): aberturas por tela e origem, para a aba Uso das telas de /admin/conferencia.
+-- security invoker: a policy "rota_acessos: so admin le" decide quem recebe linhas; quem não é admin recebe zero. Sem exceção aqui.
+-- Nunca devolve user_id, e-mail ou nome: só contagens e a data da última abertura.
+-- Período limitado a 1..90 dias (CD-09; nulo vale 7). Equipe e clínica nunca se misturam (D-08).
+-- Clínicas de teste ficam fora por padrão (D-09); linha sem clínica (ex.: /sem-acesso) entra.
+create or replace function public.rota_acessos_resumo(p_dias integer, p_equipe boolean, p_incluir_teste boolean default false)
+returns table (rota text, aberturas integer, pessoas integer, ultima timestamptz, menu integer, busca integer, link integer, direto integer, redirecionamento integer, bloqueada integer)
+language sql
+stable
+security invoker
+set search_path = public, pg_temp
+as $$
+  select
+    a.rota,
+    count(*)::integer as aberturas,
+    count(distinct a.user_id)::integer as pessoas,
+    max(a.criado_em) as ultima,
+    (count(*) filter (where a.origem = 'menu'))::integer as menu,
+    (count(*) filter (where a.origem = 'busca'))::integer as busca,
+    (count(*) filter (where a.origem = 'link'))::integer as link,
+    (count(*) filter (where a.origem = 'direto'))::integer as direto,
+    (count(*) filter (where a.origem = 'redirecionamento'))::integer as redirecionamento,
+    (count(*) filter (where a.origem = 'bloqueada'))::integer as bloqueada
+  from public.rota_acessos a
+  left join public.clients c on c.id = a.client_id
+  where a.criado_em >= now() - make_interval(days => least(greatest(coalesce(p_dias, 7), 1), 90))
+    and a.eh_equipe = coalesce(p_equipe, false)
+    and (coalesce(p_incluir_teste, false) or c.eh_teste is not true)
+  group by a.rota
+  order by count(*) desc, a.rota
+$$;
+revoke all on function public.rota_acessos_resumo(integer, boolean, boolean) from public, anon;
+grant execute on function public.rota_acessos_resumo(integer, boolean, boolean) to authenticated;
