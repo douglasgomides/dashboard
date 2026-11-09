@@ -1,21 +1,31 @@
-# Nexo v4: do dado à decisão
+# Nexo v5: refazer do dado à decisão
 
 ## What This Is
 
 O Nexo é o painel da Doctor Creator para clínicas e médicos: junta Instagram, anúncios do Meta, CRMs (Kommo, Clint, FlwChat, Digisac, RD Station), WhatsApp (WTS, Digisac) e checkout (Hubla) e mostra o caminho do paciente, de quem chamou até quem fechou. O mesmo código e banco servem o SAP (Sistema de Aquisição de Pacientes, no endereço `sap.`).
 
-Esta etapa (v4) transforma o Nexo de "muito dado via API" em algo que o médico **queira usar**: primeiro números em que a equipe confia, depois um caminho de leitura guiado que responde "como estou?" e "o que eu faço?".
+O v5 substitui o v4. O Nexo traz muito dado e pouca inteligência, está confuso e cheio de enfeite, e a equipe diz que "está tudo errado nos dados". O v5 refaz a plataforma: visual clean, uma tela por decisão do médico, nenhum número sem selo de confiança, nada apagado sem dado de uso, e IA que só descreve número verde.
 
 ## Core Value
 
-**O médico e a equipe confiam no número que estão vendo.** Todo número de Resultados diz o que conta, de onde vem e se está conferido. Sem isso, nenhuma tela nova ou resumo de IA serve, porque vai explicar com confiança um número errado.
+**O médico e a equipe confiam no número que estão vendo.** Todo número diz o que conta, de onde vem e se está conferido (selo gravado em `metricas_selo`). Sem confiança, nenhuma inteligência: nenhuma tela mostra ao médico número sem selo, e a IA se cala quando o selo não é verde.
 
 ## Business Context
 
 - **Customer**: clínicas e médicos atendidos pela Doctor Creator, e a própria equipe Doctor Creator (estrategistas)
 - **Revenue model**: serviço de consultoria/marketing médico; o Nexo é a entrega visível do resultado
-- **Success metric**: a equipe para de dizer "está tudo errado nos dados"; o médico abre o Nexo e sabe o que fazer na semana
-- **Strategy notes**: `~/Downloads/Nexo-Modelo/BRIEF-GSD-Nexo-v4.md`, `FASE0-Lana-27out-02nov.md`, `auditoria-databox-x-nexo.html`
+- **Success metric**: a equipe para de dizer "está tudo errado nos dados"; o médico abre a tela Hoje e sabe o que fazer na semana
+- **Strategy notes**: `~/Downloads/Nexo-Modelo/BRIEF-GSD-Nexo-v5.md` (substitui o v4), `FASE0-Lana-27out-02nov.md`, `REFERENCIA-Behance-NEXO-UI.md`, decisões do conselho em `~/dev/nexo-arquitetos/saidas/`, inventário em `~/dev/nexo-arquitetos/contexto/inventario-nexo.md`
+
+## Current Milestone: v5.0 Nexo v5 — Fase 0 + degrau v1
+
+**Goal:** a equipe e o médico da clínica-piloto (Lana) confiam no número que veem, com selo e definição, e o milestone termina quando a condição de liberação da v1.5 é medida.
+
+**Target features:**
+- Fase 0: conferência à mão em 3 clínicas de CRMs diferentes contra o CRM ao vivo, com tabela "número × origem × diferença × causa × correção"
+- v1 (um PR por item, nesta ordem): log por rota; consultas de verificação; `metricas_selo`; endpoint `hoje`; tela Hoje; job de conferência semanal do Kommo; "Quem chamar hoje" atrás das 4 condições; resumo semanal em sombra para a equipe; pedido do template do WhatsApp à Meta; metas por SQL
+- Menu enxuto: 14 rotas vivas, 73 escondidas (abrem por Cmd+K e cada abertura é gravada), 3 tiradas; SAP escondido e congelado
+- **Libera a v1.5 quando:** o João fecha as 4 definições; Agendaram e Fecharam em verde na Lana; a secretária acerta ≥18 de 20 na lista; o log por rota está ligado
 
 ## Requirements
 
@@ -41,68 +51,85 @@ Esta etapa (v4) transforma o Nexo de "muito dado via API" em algo que o médico 
 ### Active
 
 **Fase 0 — Confiança nos números**
-- [ ] Conferência à mão de 1 semana fechada em 3 clínicas de CRMs diferentes: Lana (Kommo, já feita contra o banco do Nexo), Marcella (FlwChat), Antonione (Digisac), também contra o CRM ao vivo
-- [ ] Tabela "número × origem × diferença × causa × correção" para chamaram, novas/antigas, agendaram, foram na consulta, fecharam, faturamento
-- [ ] Correções das causas encontradas (perfil de etapas, cópia do robô do Kommo, período/fuso, fonte desligada)
-- [ ] "Agendaram" mostra os dois números lado a lado: quem entrou na etapa e quem chegou até ela ou além
-- [ ] "Foram na consulta" conta só a etapa de comparecimento; quando o CRM não usa a etapa, mostra "não medido"
-- [ ] Venda sem valor conta como venda, mas o total em R$ diz "X de Y vendas com valor"
-- [ ] Selo de confiança e definição ("o que este número conta") em cada cartão de Resultados: verde conferido, amarelo regra diferente do CRM, vermelho não medido
+- [ ] Conferência à mão de 1 semana fechada em Lana (Kommo), Marcella (FlwChat) e Antonione (Digisac), contra o CRM ao vivo
+- [ ] Tabela "número × origem × diferença × causa × correção" (chamaram, novas/antigas, agendaram, foram, fecharam, faturamento)
+- [ ] Correção das causas encontradas (perfil de etapas, cópia do robô do Kommo, período/fuso, fonte desligada)
+- [ ] O João fecha as 4 definições (Agendaram, Foram, venda sem valor, par lado a lado) — decisão aberta, não assumida
 
-**Fase 1 — Descoberta rápida**
-- [ ] Uso real levantado do banco/logs: quem entra, com que frequência, quais telas abre
-- [ ] Respostas do João/equipe em checklist curto: 3 decisões semanais do médico, o que a equipe pergunta toda semana, reclamações sobre os números
-
-**Fase 2 — Mapa decisão → dado → regra → saída**
-- [ ] Para as 5 decisões do médico e a visão da equipe: qual dado, qual regra de cruzamento, qual saída na tela
-
-**Fase 3 — Fluxo de leitura guiado (protótipo)**
-- [ ] Tela "Hoje" e tela "Semana" para o médico, com dado real das 3 clínicas, nos 5 passos do brief (como foi o período; onde perco paciente; quem chamar hoje; o que trouxe paciente que fechou; o que fazer esta semana)
-- [ ] Visão da equipe: quais clínicas precisam de atenção hoje e por quê, uma linha cada
-- [ ] Cada passo abre o detalhe só se a pessoa quiser; telas técnicas continuam para a equipe
+**v1 — clínica-piloto Lana (equipe + 1 médico, rótulo "em conferência")**
+- [ ] Log por rota (cada abertura de tela, inclusive as escondidas via Cmd+K)
+- [ ] Consultas de verificação (inclui `post_id`/`ad_id` e timestamp por fonte)
+- [ ] `metricas_selo` com 4 estados (verde, neutro, âmbar, não medido) e texto curto
+- [ ] Endpoint `hoje` no dispatcher, com status por bloco
+- [ ] Tela Hoje em coluna única (Agendaram, Fecharam, Chamaram, Foram, funil, meta)
+- [ ] Job de conferência semanal do Kommo
+- [ ] "Quem chamar hoje" atrás das 4 condições, com máscara por perfil e log de quem abriu
+- [ ] Resumo semanal em sombra só para a equipe
+- [ ] Pedido do template do WhatsApp à Meta
+- [ ] Metas por SQL
+- [ ] Menu: médico com Hoje + Ajuda e fontes; equipe com Carteira, Clínica, Conferência e fontes; telas sem selo só para a equipe com aviso "sem selo"
 
 ### Out of Scope
 
-- IA que explica o "por quê" (resumo diário, "pergunte ao Nexo") — próximo milestone; só faz sentido depois que os números forem confiáveis
-- Refazer as ~30 telas existentes — o protótipo de 2 telas vem antes de tocar no resto
-- E-mails e DNS — regra de trabalho do João
-- Qualquer menção a Life'n Tech — regra de trabalho
+- v1.5 (resumo no WhatsApp ao médico), v2 (FlwChat/Digisac por clínica, "Esta semana", fusões, origem por post) e v3 ("Pergunte ao Nexo") — próximos milestones, cada um liberado por condição medida, nunca por data
+- Fusões de telas — só na v2 e só se o log mostrar as telas abertas na mesma sessão
+- Apagar telas sem dado de uso — sem dado, esconde; tirar é decisão do João (decisão aberta 3)
+- Mexer no schema `sap_*` ou nos 9 workflows n8n desligados do SAP — congelado até 90 dias de log
+- Pizza, rosca, gauge, eixo duplo, 3D, funil em cone, eixo truncado, projeção, score sem fórmula, R$ solto — proibidos pelo sistema visual
+- Chat livre de IA, três modelos de atribuição, pedido de avaliação no Google, rastrear quem não escreveu — anti-padrões das referências
+- E-mails e DNS; qualquer menção a Life'n Tech — regras de trabalho
 
 ## Context
 
 - Brownfield: SPA React 19 + TanStack Router/Query (Vite, sem SSR), API em funções Vercel (`api/`), Supabase como sistema de registro com RLS por clínica. Mapa completo em `.planning/codebase/`.
-- O problema, nas palavras do João (06/11/2026): o Nexo traz muito dado mas não traz inteligência; parece um labirinto, é genérico, ninguém olha e sabe o que fazer.
-- Os médicos abrem o Nexo, mas não se sabe o que olham primeiro.
-- A equipe diz "está tudo errado nos dados" — problema número 1.
-- Conferência da Lana (27/10–02/11): os números estão certos para uma definição que a tela não explica. Agendaram 11 vs 7 entradas na etapa (regra acumulada); Foram na consulta 14 vs 0 (vem das vendas); 10 de 13 vendas sem valor; 107 pessoas sem classificação novas/antigas; 39% dos cards removidos na origem; 98% sem valor; movimentos de etapa só desde 14/10/2025; "Incoming leads" do funil "Atendimento Clínico" marcado como venda (confirmar com a equipe da clínica).
-- Causas já conhecidas: perfil de etapas do CRM por clínica mal aplicado (Marcelly), robô do Kommo copia o lead ao ganhar desde 01/11, "Fecharam" conta quem foi marcado ganho no período (pode passar de "Agendaram"), comparecimento não medido quando o CRM não usa a etapa, vendas sem valor.
-- Comparativo Databox: faltam alertas, relatório automático, AI Analyst, minigráficos e linhas. O Nexo já é melhor em funil por pessoa, fonte de cada número e CRMs/WhatsApp do Brasil.
-- Preocupações do mapa (`CONCERNS.md`): funções `security definer` sem `search_path`, CI apontando para `claude/doctor-creator-hub-nixvw6`, `api/sync/manual.ts` com 1338 linhas, ~490 `any`, sem medida de cobertura de testes.
-- Lição registrada: função por linha deixou o Nexo lento (perfil da clínica revertido em 04/11) — medir velocidade em produção antes de mudar contas pesadas.
+- 90 rotas hoje: ~28 telas no menu da clínica (5 áreas), 11 de admin, ~30 do SAP. Não há dado de uso.
+- Já existem: histórico diário `resultados_diarios` (03:30), metas `clinica_metas` (vazia), alertas por e-mail (n8n), cache de 20 min (`resultado_pronto`), corte de 30 s nas consultas, componentes `dbx-*`.
+- Conferência da Lana (27/10–02/11), feita contra o banco do Nexo e ainda não contra o Kommo ao vivo: os números batem com uma definição que a tela não explica. Agendaram mostra 11, mas só 7 entraram na etapa (o número é acumulado). Foram mostra 14 e 0 passaram pela etapa (o número vem das vendas). 10 de 13 vendas estão sem valor e 107 pessoas sem classificação nova/antiga. 39% dos cards foram removidos na origem e 98% estão sem valor. Há movimento de etapa só desde 14/10/2025. "Incoming leads" do funil "Atendimento Clínico" está marcado como venda.
+- O v4 nunca teve roadmap. O PROJECT.md do v4 registrava como decididas três definições que o v5 deixa abertas; elas voltaram a pendentes.
+- Referência visual do Behance: aproveitar layout e componentes (botão com 5 estados, ícones 16/20/24, cartão de contato para "Quem chamar"). Não usar pizza/rosca, menu de 13 itens nem fundo lavanda. Paleta: decisão aberta 4.
+- Preocupações do mapa (`CONCERNS.md`): funções `security definer` sem `search_path`, CI apontando para `claude/doctor-creator-hub-nixvw6`, `api/sync/manual.ts` com 1338 linhas, ~490 `any`, sem cobertura de testes medida.
+- Lição registrada: função por linha deixou o Nexo lento (perfil da clínica revertido em 04/11). Medir a velocidade em produção antes de mudar contas pesadas.
+
+## Decisões abertas do João (o GSD não assume nenhuma)
+
+1. As 4 definições da Fase 0: (a) Agendaram conta quem **entrou** na etapa (7) ou quem **chegou ao menos até ela** (11)? (b) Foram conta só quem passou pela etapa de comparecimento (0) ou também quem vendeu (14)? (c) Venda sem valor entra como venda? (d) Mostrar os dois números lado a lado? (O conselho assumiu o par como padrão, mas quem decide é o João.)
+2. Confirmar com a equipe da Lana se "Incoming leads" do funil "Atendimento Clínico" é venda.
+3. Cortar mais fundo: quais telas são lixo de verdade e saem em vez de ficar escondidas.
+4. Paleta: manter o azul `#2563EB` com barra escura ou trocar para lilás/roxo (Behance)? Sem resposta, fica a identidade atual.
+5. Algum cliente foi vendido com SAP?
+6. Rodar o SQL de `metricas_selo` (com texto curto), das metas e do opt-in do resumo.
+7. Autorizar o job de conferência do Kommo (depois FlwChat e Digisac) e pedir o template à Meta.
+8. Piso de cobertura de `post_id` e limite de casamento conversa→card.
+9. Lista fechada de verbos e templates de texto.
+10. Base contratual do acesso nominal da equipe à lista (LGPD).
+11. Autorizar o protótipo estático de 400px com dados da Lana e o teste de 10 segundos com 3 médicos; card sorting com a equipe sobre os 3 itens de menu.
+12. Confirmar a chave de IA antes da v3.
 
 ## Constraints
 
-- **Banco**: Supabase `cvdnzoqduliopscfsrkc`; consulta de usuário corta em 30 s; contas pesadas (~10 s em clínica grande) usam cache de 20 min (`resultado_pronto`) — não pode ficar mais lento
-- **Vercel Hobby**: 12 funções (limite atingido), 100 deploys/dia — rotas novas entram pelo dispatcher `api/sync/manual.ts`
-- **IA no servidor**: `api/_lib/ia.ts` (OpenAI com reserva Anthropic, registro de custo) — confirmar a chave antes de depender dela
-- **Mudança de banco em produção**: só o João roda o SQL; o agente entrega o arquivo de migração
-- **Fluxo de trabalho**: uma fase, um PR; PR aberto pelo Chrome com base `claude/doctor-creator-hub-nixvw6`; merge no dashboard autorizado; nunca modo bypass
-- **Verificação**: cada fase termina com print do site no ar conferido, não só build verde
-- **Texto**: claro para o médico, sem jargão de fonte ("sync", "connection")
+- **Banco**: Supabase `cvdnzoqduliopscfsrkc`. A consulta de usuário corta em 30 s. As contas pesadas (~10 s em clínica grande) usam cache de 20 min (`resultado_pronto`) e não podem ficar mais lentas.
+- **Mudança de banco em produção** (migrations, SQL de escrita): só o João roda. O agente entrega o arquivo de migração e o sistema de permissão barra a escrita.
+- **Vercel Hobby**: 12 funções (limite atingido) e 100 deploys/dia. Rotas novas entram pelo dispatcher `api/sync/manual.ts`; juntar mudanças e subir uma vez.
+- **Fluxo de trabalho**: uma fase, um PR. Merge no `douglasgomides/dashboard` autorizado; nunca modo bypass.
+- **Verificação**: cada fase termina com print do site no ar conferido, não só com build verde.
+- **Liberação por condição**: a construção não espera a Fase 0, mas a liberação espera. Cada degrau só abre por condição medida, nunca por data.
+- **IA**: nunca calcula, só descreve dado verde, cita a fonte e o n. Fica calada quando o selo não é verde, o grupo é menor que 5, a fonte tem mais de 1 dia ou a etapa está fora de ordem.
+- **Texto para médico**: português claro, sem jargão ("sync", "connection", "token"). Regras do CFM: sem promessa nem previsão, sempre no passado e sem adjetivo.
+- **WhatsApp**: conversa 1:1 só pela API oficial; grupos só via Evolution.
+- **Sistema visual**: Inter com números tabulares; escala 12/16 a 32/36; texto com sentido ≥14px; alvo de toque ≥44px; reutilizar `dbx-*` antes de criar componente; roxo só em IA (enquanto a decisão 4 estiver aberta).
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Fase 0 é confiança nos números, antes de qualquer tela nova | "Está tudo errado nos dados" é o problema nº 1; IA sobre número errado engana | — Pending |
-| Milestone vai das Fases 0 a 3; IA fica para o próximo | Inteligência só depois de números confiáveis e do fluxo de leitura validado | — Pending |
-| "Agendaram" mostra os dois números lado a lado (entraram na etapa · chegaram até ela ou além) | Quem confere no CRM acha um número, o Nexo mostra outro; os dois juntos explicam a diferença | — Pending |
-| "Foram na consulta" conta só a etapa de comparecimento; sem etapa = "não medido" | Hoje vem das vendas e passa de "Agendaram", o que soa como erro | — Pending |
-| Venda sem valor conta como venda; R$ mostra "X de Y vendas com valor" | 98% dos cards sem valor; o total sozinho engana | — Pending |
-| Conferência em Lana (Kommo), Marcella (FlwChat), Antonione (Digisac) | Cobre 3 CRMs diferentes | — Pending |
-| Descoberta = uso real do banco/logs + checklist respondido pelo João | Rápido, sem depender de entrevistas | — Pending |
-| Protótipo inclui a visão da equipe (clínicas que precisam de atenção, uma linha cada) | A equipe também precisa de "o que fazer hoje" | — Pending |
-| Uma tela, uma decisão; cruzamento vale mais que fonte | Princípios do brief para sair do "labirinto" | — Pending |
+| v5 substitui o v4; o milestone v5.0 cobre a Fase 0 e o degrau v1 inteiro | Escolha do João em 09/11/2026; termina na condição de liberação da v1.5 | — Pending |
+| Milestone nomeado v5.0; os degraus do brief (v1, v1.5, v2, v3) ficam como etapas do produto | Evita confundir a versão do GSD com os degraus | ✓ Good |
+| Primeira entrega de código: log por rota | Destrava as decisões de cortar e fundir com dado de uso | — Pending |
+| Uma tela, uma decisão (D1–D5); médico com 2 itens de menu, equipe com 3 | Decisão do conselho para sair do "labirinto" | — Pending |
+| Esconder em vez de apagar (73 rotas); tirar só 3 | Nada é apagado sem dado de uso | — Pending |
+| Selo gravado em `metricas_selo`, nunca calculado na tela | Confiança auditável por clínica × métrica × versão da definição | — Pending |
+| As 4 definições da Fase 0 ficam abertas até o João decidir com a tabela de conferência | O v4 tinha assumido as três; o v5 devolve a decisão ao João | — Pending |
+| Planejamento na branch `gsd/nexo-v5` | Separa do v4 | ✓ Good |
 
 ## Evolution
 
@@ -122,4 +149,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-06 after initialization*
+*Last updated: 2026-11-09 after starting milestone v5.0*
