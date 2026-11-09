@@ -1158,6 +1158,22 @@ try {
     await denied(() => role("anon", null, () => db.query(inserirRota, [A, rotaIndice])));
     assert.deepEqual(await rows("select has_function_privilege('anon','public.rota_acessos_preencher()','EXECUTE') as a, has_function_privilege('authenticated','public.rota_acessos_preencher()','EXECUTE') as b"), [{ a: false, b: false }]);
   });
+  await check("rota_acessos: a limpeza apaga o que passou de 180 dias e guarda o resto (service_role)", async () => {
+    await db.exec("begin");
+    try {
+      // Semeia como dono, com user_id explícito (sem claims não há auth.uid()) e criado_em fora do default.
+      await db.query("insert into rota_acessos(user_id,client_id,rota,origem,sessao,criado_em) values ($1,$2,$3,'link','sessao-velha1', now() - interval '181 days'), ($1,$2,$3,'link','sessao-nova01', now() - interval '179 days')", [viewer, A, rotaIndice]);
+      await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ role: "service_role" })]);
+      await db.exec("set local role service_role");
+      try { assert.deepEqual(await rows("select public.rota_acessos_limpar() as n"), [{ n: 1 }]); } finally { await db.exec("reset role"); }
+      assert.deepEqual(await rows("select sessao from rota_acessos"), [{ sessao: "sessao-nova01" }], "só a de 179 dias sobra");
+    } finally { await db.exec("rollback"); }
+  });
+  await check("rota_acessos: ninguém além do service_role dispara a limpeza (42501)", async () => {
+    await denied(() => role("authenticated", admin, () => rows("select public.rota_acessos_limpar()")));
+    await denied(() => role("authenticated", viewer, () => rows("select public.rota_acessos_limpar()")));
+    await denied(() => role("anon", null, () => rows("select public.rota_acessos_limpar()")));
+  });
   await check("rota_acessos: a migration roda duas vezes sem erro", async () => {
     await apply("20261109120000_rota_acessos.sql");
     await apply("20261109120000_rota_acessos.sql");

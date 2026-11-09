@@ -5,8 +5,8 @@
 -- o agente nunca aplica. Todo comando é idempotente (pode rodar duas vezes: à mão e depois pelo aplicar.sh).
 -- Os planos 02-02 (limpeza de 180 dias) e 02-03 (resumo por rota) acrescentam blocos neste mesmo arquivo.
 -- Reversão:
---   select cron.unschedule('rota-acessos-limpeza');                      -- entra no plano 02-02
---   drop function if exists public.rota_acessos_limpar();                -- entra no plano 02-02
+--   select cron.unschedule('rota-acessos-limpeza');                      -- só onde existe pg_cron
+--   drop function if exists public.rota_acessos_limpar();
 --   drop function if exists public.rota_acessos_resumo(integer, boolean, boolean);  -- entra no plano 02-03
 --   drop table if exists public.rota_acessos;
 --   drop function if exists public.rota_acessos_preencher();
@@ -71,3 +71,38 @@ revoke all on function public.rota_acessos_preencher() from public, anon, authen
 drop trigger if exists rota_acessos_preencher on public.rota_acessos;
 create trigger rota_acessos_preencher before insert on public.rota_acessos
   for each row execute function public.rota_acessos_preencher();
+
+-- Retenção (D-05): linhas com mais de 180 dias saem sozinhas, uma vez por dia. user_id é dado pessoal e não fica guardado
+-- para sempre. Só service_role executa (o cron roda como dono); nenhum usuário logado consegue disparar a limpeza.
+create or replace function public.rota_acessos_limpar()
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  apagadas integer;
+begin
+  delete from public.rota_acessos where criado_em < now() - interval '180 days';
+  get diagnostics apagadas = row_count;
+  return apagadas;
+end
+$$;
+revoke all on function public.rota_acessos_limpar() from public, anon, authenticated;
+grant execute on function public.rota_acessos_limpar() to service_role;
+
+-- O agendamento só existe onde há pg_cron (produção). No teste local a extensão não existe e o passo é pulado.
+-- 06:40 UTC (03:40 em São Paulo), depois do resultados-diarios das 06:30 (CD-10).
+-- Atenção: o exception engole qualquer falha aqui, inclusive em produção. Depois de aplicar, conferir com
+-- select jobname, schedule from cron.job where jobname = 'rota-acessos-limpeza';
+do $cron$
+begin
+  if exists (select 1 from pg_available_extensions where name = 'pg_cron') then
+    create extension if not exists pg_cron;
+    perform cron.unschedule(jobid) from cron.job where jobname = 'rota-acessos-limpeza';
+    perform cron.schedule('rota-acessos-limpeza', '40 6 * * *', 'select public.rota_acessos_limpar()');
+  end if;
+exception when others then
+  raise notice 'pg_cron indisponível: %', sqlerrm;
+end
+$cron$;
