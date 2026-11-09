@@ -86,7 +86,7 @@ O v5 substitui o v4. O Nexo traz muito dado e pouca inteligência, está confuso
 - Já existem: histórico diário `resultados_diarios` (03:30), metas `clinica_metas` (vazia), alertas por e-mail (n8n), cache de 20 min (`resultado_pronto`), corte de 30 s nas consultas, componentes `dbx-*`.
 - Conferência da Lana (27/10–02/11), feita contra o banco do Nexo e ainda não contra o Kommo ao vivo: os números batem com uma definição que a tela não explica. Agendaram mostra 11, mas só 7 entraram na etapa (o número é acumulado). Foram mostra 14 e 0 passaram pela etapa (o número vem das vendas). 10 de 13 vendas estão sem valor e 107 pessoas sem classificação nova/antiga. 39% dos cards foram removidos na origem e 98% estão sem valor. Há movimento de etapa só desde 14/10/2025. "Incoming leads" do funil "Atendimento Clínico" está marcado como venda.
 - O v4 nunca teve roadmap. O PROJECT.md do v4 registrava como decididas três definições que o v5 deixa abertas; elas voltaram a pendentes.
-- Referência visual do Behance: aproveitar layout e componentes (botão com 5 estados, ícones 16/20/24, cartão de contato para "Quem chamar"). Não usar pizza/rosca, menu de 13 itens nem fundo lavanda. Paleta: decisão aberta 4.
+- Referência visual do Behance: aproveitar layout e componentes (botão com 5 estados, ícones 16/20/24, cartão de contato para "Quem chamar"). Não usar pizza/rosca, menu de 13 itens nem fundo lavanda. Paleta: decisão 4 com direção dada pelo João (azul mais moderno, telas mais clean; sem lilás).
 - Preocupações do mapa (`CONCERNS.md`): funções `security definer` sem `search_path`, CI apontando para `claude/doctor-creator-hub-nixvw6`, `api/sync/manual.ts` com 1338 linhas, ~490 `any`, sem cobertura de testes medida.
 - Lição registrada: função por linha deixou o Nexo lento (perfil da clínica revertido em 04/11). Medir a velocidade em produção antes de mudar contas pesadas.
 
@@ -95,7 +95,7 @@ O v5 substitui o v4. O Nexo traz muito dado e pouca inteligência, está confuso
 1. As 4 definições da Fase 0: (a) Agendaram conta quem **entrou** na etapa (7) ou quem **chegou ao menos até ela** (11)? (b) Foram conta só quem passou pela etapa de comparecimento (0) ou também quem vendeu (14)? (c) Venda sem valor entra como venda? (d) Mostrar os dois números lado a lado? (O conselho assumiu o par como padrão, mas quem decide é o João.)
 2. Confirmar com a equipe da Lana se "Incoming leads" do funil "Atendimento Clínico" é venda.
 3. Cortar mais fundo: quais telas são lixo de verdade e saem em vez de ficar escondidas.
-4. Paleta: manter o azul `#2563EB` com barra escura ou trocar para lilás/roxo (Behance)? Sem resposta, fica a identidade atual.
+4. ~~Paleta~~ **Direção decidida pelo João em 09/11/2026:** nem o azul atual `#2563EB` nem o lilás do Behance; trocar por um **azul mais moderno**, com **telas mais clean**. O tom exato (hex, claro/escuro, contraste 4,5:1) e se a barra lateral continua escura ficam para o contrato visual (`/gsd-ui-phase`) da Phase 3, que apresenta 2 a 3 opções para o João escolher. Até lá, o código não muda de cor.
 5. Algum cliente foi vendido com SAP?
 6. Rodar o SQL de `metricas_selo` (com texto curto), das metas e do opt-in do resumo.
 7. Autorizar o job de conferência do Kommo (depois FlwChat e Digisac) e pedir o template à Meta.
@@ -116,7 +116,7 @@ O v5 substitui o v4. O Nexo traz muito dado e pouca inteligência, está confuso
 - **IA**: nunca calcula, só descreve dado verde, cita a fonte e o n. Fica calada quando o selo não é verde, o grupo é menor que 5, a fonte tem mais de 1 dia ou a etapa está fora de ordem.
 - **Texto para médico**: português claro, sem jargão ("sync", "connection", "token"). Regras do CFM: sem promessa nem previsão, sempre no passado e sem adjetivo.
 - **WhatsApp**: conversa 1:1 só pela API oficial; grupos só via Evolution.
-- **Sistema visual**: Inter com números tabulares; escala 12/16 a 32/36; texto com sentido ≥14px; alvo de toque ≥44px; reutilizar `dbx-*` antes de criar componente; roxo só em IA (enquanto a decisão 4 estiver aberta).
+- **Sistema visual**: Inter com números tabulares; escala 12/16 a 32/36; texto com sentido ≥14px; alvo de toque ≥44px; reutilizar `dbx-*` antes de criar componente; roxo só em IA; azul de marca novo (mais moderno) definido no contrato visual da Phase 3.
 
 ## Key Decisions
 
@@ -130,6 +130,7 @@ O v5 substitui o v4. O Nexo traz muito dado e pouca inteligência, está confuso
 | Selo gravado em `metricas_selo`, nunca calculado na tela | Confiança auditável por clínica × métrica × versão da definição | — Pending |
 | As 4 definições da Fase 0 ficam abertas até o João decidir com a tabela de conferência | O v4 tinha assumido as três; o v5 devolve a decisão ao João | — Pending |
 | Planejamento na branch `gsd/nexo-v5` | Separa do v4 | ✓ Good |
+| Paleta: azul mais moderno e telas mais clean; sem lilás; tom exato escolhido pelo João entre 2–3 opções no contrato visual da Phase 3 | Resposta do João à decisão 4 em 09/11/2026 (já tinha rejeitado o roxo em 06/11) | — Pending |
 | Extras da pesquisa na v1: job grava as 2 contagens, validação das 20 linhas no app, botão Buscar no celular, selo cai se o perfil mudar | Delegado ao Claude pelo João em 09/11/2026; revisável | — Pending |
 | Ordem: menu da equipe escondido só após log gravando; template Meta cedo (após decisão 7); metas antes da Hoje; portão de desenho antes do Quem chamar | Delegado ao Claude em 09/11/2026; revisável | — Pending |
 | Job semanal do Kommo por Vercel Cron (`CRON_SECRET`), alerta de 8 dias, n8n como reserva | Versionado no PR; delegado ao Claude em 09/11/2026; revisável | — Pending |
