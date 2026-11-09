@@ -75,11 +75,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. A navegação não fica perceptivelmente mais lenta (medida em produção antes e depois) e uma falha ao gravar não trava a tela
   5. A tabela do log chega como migration em arquivo que o João roda; print do site no ar conferido com a visão agregada mostrando aberturas reais
 
-**Plans:** 4 plans
+**Plans:** 1/4 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 02-01-PLAN.md — Fatia traçadora: abertura grava em rota_acessos (migration, RLS, gatilho) + Wave 0 do cron
+- [x] 02-01-PLAN.md — Fatia traçadora: abertura grava em rota_acessos (migration, RLS, gatilho) + Wave 0 do cron
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 02-02-PLAN.md — Origem completa (menu, busca, link, direto, redirecionamento, bloqueada), dedupe de 2 s, retenção de 180 dias
@@ -300,7 +300,7 @@ Nenhuma decisão é assumida. A tabela diz onde cada uma segura o trabalho.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Fase 0 — Confiança nos números (conferência) | 0/TBD | Not started | - |
-| 2. Log por rota | 0/4 | Planned | - |
+| 2. Log por rota | 1/4 | In Progress | - |
 | 3. Menu da equipe (esconder com o log gravando) | 0/TBD | Not started | - |
 | 4. Pacote do template do WhatsApp à Meta | 0/TBD | Not started | - |
 | 5. Consultas de verificação | 0/TBD | Not started | - |
