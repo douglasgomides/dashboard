@@ -1174,6 +1174,62 @@ try {
     await denied(() => role("authenticated", viewer, () => rows("select public.rota_acessos_limpar()")));
     await denied(() => role("anon", null, () => rows("select public.rota_acessos_limpar()")));
   });
+  await check("rota_acessos: rota_acessos_resumo agrega por rota e período, separa equipe, esconde teste e só o admin lê (sem user_id)", async () => {
+    await db.exec("begin");
+    try {
+      // Os checks acima reaplicam o delta de segurança hospedada, que reseta os grants de colunas de clients; em produção o grant
+      // de eh_teste (20261030200000_clientes_de_teste) segue valendo, então o repomos aqui para ler como produção lê.
+      await db.exec("grant select (eh_teste) on public.clients to authenticated");
+      await db.query("update clients set eh_teste = true where id = $1", [B]);
+      // Semeia como dono, com as claims de cada usuário, para o gatilho derivar eh_equipe e papel.
+      const semear = async (user: string, client: string | null, rota: string, origem: string, atras = "0 days") => {
+        await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ role: "authenticated", sub: user })]);
+        await db.query("insert into rota_acessos(client_id,rota,origem,sessao,criado_em) values ($1,$2,$3,'sessao-abc123', now() - $4::interval)", [client, rota, origem, atras]);
+      };
+      const pacientes = "/_authenticated/$clientId/pacientes", leads = "/_authenticated/$clientId/leads";
+      await semear(viewer, A, rotaIndice, "menu");
+      await semear(viewer, A, rotaIndice, "direto");
+      await semear(editor, A, rotaIndice, "busca");
+      await semear(admin, A, rotaIndice, "link");
+      await semear(editor, B, rotaIndice, "menu");
+      await semear(viewer, A, pacientes, "link", "100 days");
+      await semear(viewer, A, leads, "redirecionamento", "89 days");
+      const como = async (user: string | null, sql: string, args: unknown[] = []) => {
+        await db.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ role: user ? "authenticated" : "anon", ...(user ? { sub: user } : {}) })]);
+        await db.exec(`set local role ${user ? "authenticated" : "anon"}`);
+        try { return await db.query<Record<string, unknown>>(sql, args); } finally { await db.exec("reset role"); }
+      };
+      const resumo = async (user: string, ...args: unknown[]) => (await como(user, "select * from rota_acessos_resumo($1,$2,$3)", [args[0], args[1], args[2] ?? false])).rows;
+      // Clínica (eh_equipe = false), 30 dias, teste fora: só A; aberturas = soma das 6 origens; 2 pessoas distintas.
+      const clinica = await resumo(admin, 30, false);
+      assert.equal(clinica.length, 1);
+      assert.deepEqual(clinica[0], { rota: rotaIndice, aberturas: 3, pessoas: 2, ultima: clinica[0].ultima, menu: 1, busca: 1, link: 0, direto: 1, redirecionamento: 0, bloqueada: 0 });
+      const soma = (r: Record<string, unknown>) => ["menu", "busca", "link", "direto", "redirecionamento", "bloqueada"].reduce((s, k) => s + Number(r[k]), 0);
+      assert.equal(soma(clinica[0]), clinica[0].aberturas, "aberturas = soma das 6 origens");
+      assert.ok(clinica[0].ultima instanceof Date, "ultima é a data da última abertura");
+      // Clínica de teste só entra com p_incluir_teste.
+      assert.equal(Number((await resumo(admin, 30, false, true))[0].aberturas), 4, "com teste: B entra");
+      // Equipe separada da clínica.
+      const equipe = await resumo(admin, 30, true);
+      assert.equal(equipe.length, 1);
+      assert.deepEqual([equipe[0].rota, equipe[0].aberturas, equipe[0].pessoas, equipe[0].link], [rotaIndice, 1, 1, 1]);
+      // Período: 100 dias fica fora mesmo pedindo 365 (limite de 90); 89 dias entra com 90; nulo vale 7.
+      assert.deepEqual((await resumo(admin, 365, false)).map((r) => r.rota).sort(), [leads, rotaIndice].sort());
+      assert.deepEqual((await resumo(admin, 90, false)).map((r) => r.rota).sort(), [leads, rotaIndice].sort());
+      assert.deepEqual((await resumo(admin, 30, false)).map((r) => r.rota), [rotaIndice], "89 dias fica fora de 30");
+      assert.deepEqual((await como(admin, "select * from rota_acessos_resumo(null,false)")).rows.map((r) => r.rota), [rotaIndice], "nulo vale 7 dias");
+      assert.equal((await como(admin, "select * from rota_acessos_resumo(0,false)")).rows.length, 1, "0 vale 1 dia (hoje)");
+      // Nunca traz quem abriu.
+      const cols = (await como(admin, "select * from rota_acessos_resumo(30,false)")).fields.map((f) => f.name);
+      assert.deepEqual(cols, ["rota", "aberturas", "pessoas", "ultima", "menu", "busca", "link", "direto", "redirecionamento", "bloqueada"]);
+      // Quem não é admin recebe 0 linhas; anon é negado.
+      for (const user of [viewer, editor, outsider]) assert.deepEqual(await resumo(user, 30, false), [], `${user} recebe 0 linhas`);
+    } finally { await db.exec("rollback"); }
+    await denied(() => role("anon", null, () => rows("select * from rota_acessos_resumo(30,false)")));
+  });
+  await check("rota_acessos: rota_acessos_resumo é security invoker e anon não tem execute", async () => {
+    assert.deepEqual(await rows("select prosecdef as definer, has_function_privilege('anon','public.rota_acessos_resumo(integer,boolean,boolean)','EXECUTE') as a, has_function_privilege('authenticated','public.rota_acessos_resumo(integer,boolean,boolean)','EXECUTE') as b from pg_proc where proname='rota_acessos_resumo'"), [{ definer: false, a: false, b: true }]);
+  });
   await check("rota_acessos: a migration roda duas vezes sem erro", async () => {
     await apply("20261109120000_rota_acessos.sql");
     await apply("20261109120000_rota_acessos.sql");
