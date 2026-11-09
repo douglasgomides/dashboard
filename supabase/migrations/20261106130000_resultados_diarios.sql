@@ -85,5 +85,17 @@ revoke all on function public.resultados_preencher(date, date) from public, anon
 grant execute on function public.resultados_preencher(date, date) to service_role;
 
 -- Todo dia às 06:30 UTC (03:30 em Brasília) grava o dia anterior.
-select cron.unschedule(jobid) from cron.job where jobname = 'resultados-diarios';
-select cron.schedule('resultados-diarios', '30 6 * * *', $$select public.resultados_gravar_dia((now() at time zone 'America/Sao_Paulo')::date - 1)$$);
+-- O agendamento só existe onde há pg_cron (produção); no banco de teste local a extensão não existe e o passo é pulado.
+-- Este arquivo já foi aplicado em produção: scripts/banco/aplicar.sh rastreia por nome em public._migracoes_repo e não o
+-- roda de novo; em produção o pg_cron existe, então o efeito é o mesmo. Ninguém deve rodar este arquivo de novo em produção.
+do $cron$
+begin
+  if exists (select 1 from pg_available_extensions where name = 'pg_cron') then
+    create extension if not exists pg_cron;
+    perform cron.unschedule(jobid) from cron.job where jobname = 'resultados-diarios';
+    perform cron.schedule('resultados-diarios', '30 6 * * *', $q$select public.resultados_gravar_dia((now() at time zone 'America/Sao_Paulo')::date - 1)$q$);
+  end if;
+exception when others then
+  raise notice 'pg_cron indisponível: %', sqlerrm;
+end
+$cron$;
