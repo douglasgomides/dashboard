@@ -75,7 +75,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### Phase 3: Menu da equipe (esconder com o log gravando)
 **Goal**: A equipe trabalha com 3 itens de menu e acha qualquer tela escondida pela busca, sem perder acesso a nada e com cada abertura gravada.
-**Depends on**: Phase 2 (o log precisa estar gravando e conferido em produção, com linhas de admin e de viewer, antes de esconder qualquer tela: é a linha de base)
+**Depends on**: Phase 2 (o log precisa estar gravando e conferido em produção há 7 dias corridos, com linhas de admin e de viewer, antes de esconder qualquer tela: é a linha de base; D-14 de 02-CONTEXT.md)
 **Requirements**: MENU-01, MENU-02, MENU-03, MENU-04, MENU-07
 **Bloqueado por decisões abertas**: 3 (quais telas saem de vez além das 3 do brief: a lista final espera o João; esta fase esconde sem apagar), 5 (algum cliente foi vendido com SAP? muda como o SAP fica escondido por cliente; até a resposta, o SAP segue escondido e congelado, sem remover rota), 11 (card sorting com a equipe sobre os 3 itens: os rótulos finais esperam).
 **Success Criteria** (what must be TRUE):
@@ -111,7 +111,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Os testes de borda passam em `America/Sao_Paulo`: domingo à noite, virada de mês e segunda 00:00 caem no dia e na semana certos
   5. As consultas só leem (nenhuma escrita no banco; função ou view nova chega como migration em arquivo que o João roda); print do site no ar conferido com o resultado na área da equipe
 **Plans**: TBD
-**Nota**: a contagem de cópias do robô usa a regra da Fase 0 (CONF-05) assim que ela existir. Pode andar ao lado da Phase 3 enquanto ela espera as 24 h de log.
+**Nota**: a contagem de cópias do robô usa a regra da Fase 0 (CONF-05) assim que ela existir. Pode andar ao lado da Phase 3 enquanto ela espera os 7 dias de linha de base do log.
 
 ### Phase 6: Selo de confiança (`metricas_selo`)
 **Goal**: Cada número passa a ter um selo gravado por clínica × métrica × versão da definição, em 4 estados e com texto curto, e nenhuma tela inventa selo.
@@ -251,7 +251,7 @@ Nenhuma decisão é assumida. A tabela diz onde cada uma segura o trabalho.
 ## Progress
 
 **Execution Order:**
-- Trilha de código, um PR por fase: 2 → 3 → 5 → 6 → 7 → 8 → 9 → 10 → 12 → 13 → 14. A Phase 5 pode andar enquanto a Phase 3 espera as 24 h de log.
+- Trilha de código, um PR por fase: 2 → 3 → 5 → 6 → 7 → 8 → 9 → 10 → 12 → 13 → 14. A Phase 5 pode andar enquanto a Phase 3 espera os 7 dias de linha de base do log.
 - Em paralelo, sem segurar a trilha de código: Phase 1 (começa já; o PR abre depois do PR do log; fecha quando o João registra as definições), Phase 4 (começa quando a decisão 7 for autorizada) e Phase 11 (documento escrito durante as Phases 6 a 10; a Phase 12 só começa com ele aprovado).
 - A liberação espera a Fase 0: nenhum selo verde antes de o João registrar as 4 definições.
 
