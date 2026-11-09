@@ -7,11 +7,16 @@ import { LogoutButton } from "@/components/logout-button";
 import { TrocaProduto } from "@/components/troca-produto";
 import { getClient } from "@/lib/client-data";
 import { useAuth } from "@/hooks/use-auth";
+import { registrarBloqueada } from "@/lib/rota-log-instalar";
 
 export const Route = createFileRoute("/_authenticated/admin")({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     const { data: isAdmin } = await supabase.rpc("is_app_admin");
-    if (!isAdmin) throw redirect({ to: "/" });
+    if (!isAdmin) {
+      // D-16: a tela negada ganha uma linha bloqueada (síncrona, nunca lança); o destino grava redirecionamento.
+      registrarBloqueada(location.pathname);
+      throw redirect({ to: "/" });
+    }
   },
   component: AdminLayout,
 });
@@ -68,7 +73,7 @@ function AdminContent() {
 
   return (
     <div className="app product-workspace workspace-admin">
-      <aside aria-label="Menu do admin">
+      <aside aria-label="Menu do admin" data-origem="menu">
         <div className="brand">
           <ProductBrand product="nexo" dark />
         </div>
@@ -92,7 +97,7 @@ function AdminContent() {
             </div>
           </div>
         </div>
-        <details className="ws-admin-menu" key={pathname}>
+        <details className="ws-admin-menu" key={pathname} data-origem="menu">
           <summary>Áreas da administração <span aria-hidden>⌄</span></summary>
           <TrocaProduto atual="hub" clientId={null} />
           <nav aria-label="Menu do admin">{GRUPOS.map((g) => <div key={g.label}><h2>{g.label}</h2>{itens(g.paths)}</div>)}</nav>

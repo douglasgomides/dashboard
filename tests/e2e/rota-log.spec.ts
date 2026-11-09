@@ -121,3 +121,178 @@ test("tabela inexistente (PGRST205) liga o disjuntor: a segunda tela não gera o
   expect(posts).toHaveLength(1);
   expect(erros).toEqual([]);
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Plano 02-02: origem da abertura (D-10), dedupe (D-07), guardas (D-16) e POST pendurado (LOG-04).
+
+// Clínicas de src/lib/nav.ts: CLIENTES_SEM_AUDIENCIA (633e6ee6...) e CLIENTES_SO_CRM (8770500e...). O mock responde a
+// qualquer client_id, então estes ids só escolhem o ramo do redirect do app. Se alguém tirar a clínica do Set, os testes
+// de redirect do app quebram e avisam.
+const CLINICA_SEM_AUDIENCIA = "633e6ee6-cb55-4796-8ffe-ce9c6e34cc12";
+const CLINICA_SO_CRM = "8770500e-ab5d-4ae8-9489-c49c9991303c";
+
+test("clicar num item do menu lateral grava menu", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await ligarLog(context);
+  const posts = capturarPosts(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/${CID}`);
+  await expect(page.getByRole("heading", { name: "Resultados da clínica", exact: true })).toBeVisible();
+  await expect.poll(() => posts.length).toBe(1);
+  await irParaOutraTelaPeloMenu(page);
+  await expect.poll(() => posts.length).toBe(2);
+  expect(posts[1].corpo.origem).toBe("menu");
+});
+
+test("escolher um resultado do Cmd+K grava busca", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await ligarLog(context);
+  const posts = capturarPosts(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/${CID}`);
+  await expect(page.getByRole("heading", { name: "Resultados da clínica", exact: true })).toBeVisible();
+  await expect.poll(() => posts.length).toBe(1);
+  await page.keyboard.press("Control+k");
+  const dialog = page.getByRole("dialog", { name: "O que você quer fazer?" });
+  await dialog.getByRole("searchbox").fill("calendário");
+  const resultados = dialog.getByRole("link");
+  await expect(resultados.first()).toBeVisible();
+  const atual = new URL(page.url()).pathname;
+  const hrefs = await resultados.evaluateAll((as) => as.map((a) => (a as HTMLAnchorElement).getAttribute("href") ?? ""));
+  const indice = hrefs.findIndex((href) => new URL(href, "http://x").pathname !== atual);
+  expect(indice, "algum resultado precisa levar a outro pathname").toBeGreaterThanOrEqual(0);
+  await resultados.nth(indice).click();
+  await expect.poll(() => posts.length).toBe(2);
+  expect(posts[1].corpo.origem).toBe("busca");
+});
+
+test("viewer abre /admin/conferencia: grava bloqueada para a tela negada e redirecionamento para o destino", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await ligarLog(context);
+  const posts = capturarPosts(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/admin/conferencia");
+  await expect.poll(() => posts.length).toBeGreaterThanOrEqual(2);
+  await page.waitForTimeout(1500);
+  const bloqueadas = posts.filter((p) => p.corpo.origem === "bloqueada");
+  expect(bloqueadas).toHaveLength(1);
+  expect(bloqueadas[0].corpo.rota).toBe("/_authenticated/admin/conferencia");
+  expect(bloqueadas[0].corpo.client_id).toBeNull();
+  const destino = posts.filter((p) => p.corpo.origem === "redirecionamento");
+  expect(destino).toHaveLength(1);
+  expect(destino[0].corpo.rota).toBe("/_authenticated/$clientId/pacientes");
+  expect(destino[0].corpo.client_id).toBe(CID);
+  // A rota índice por onde o guarda passa é uma das 12 que só redirecionam pela configuração: nunca ganha linha.
+  expect(posts.filter((p) => p.corpo.rota === "/_authenticated/")).toHaveLength(0);
+  expect(new URL(page.url()).pathname).not.toBe("/admin/conferencia");
+});
+
+test("voltar do navegador grava a tela de volta com origem link", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await ligarLog(context);
+  const posts = capturarPosts(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/${CID}`);
+  await expect(page.getByRole("heading", { name: "Resultados da clínica", exact: true })).toBeVisible();
+  await expect.poll(() => posts.length).toBe(1);
+  // Sai da janela do dedupe (2 s) para a volta contar de novo.
+  await page.waitForTimeout(2100);
+  await irParaOutraTelaPeloMenu(page);
+  await expect.poll(() => posts.length).toBe(2);
+  await page.goBack();
+  await expect.poll(() => posts.length).toBe(3);
+  expect(posts[2].corpo.rota).toBe("/_authenticated/$clientId/");
+  expect(posts[2].corpo.origem).toBe("link");
+});
+
+test("POST que nunca responde não atrasa a próxima navegação", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await ligarLog(context);
+  // Nunca cumpre, nunca continua, nunca aborta: o POST fica pendurado.
+  await context.route(ROTA_ACESSOS, () => new Promise<void>(() => {}));
+  const erros: string[] = [];
+  page.on("pageerror", (erro) => erros.push(erro.message));
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/${CID}`);
+  await expect(page.getByRole("heading", { name: "Resultados da clínica", exact: true })).toBeVisible();
+  const atual = new URL(page.url()).pathname;
+  const links = page.locator('aside[aria-label="Menu principal"] a[href^="/"]');
+  const destinos = await links.evaluateAll((as) => as.map((a) => (a as HTMLAnchorElement).getAttribute("href") ?? ""));
+  const indice = destinos.findIndex((href) => new URL(href, "http://x").pathname !== atual);
+  expect(indice).toBeGreaterThanOrEqual(0);
+  const inicio = Date.now();
+  await links.nth(indice).click();
+  await expect(page.locator(".workspace-heading h1").first()).toBeVisible({ timeout: 5000 });
+  expect(new URL(page.url()).pathname).not.toBe(atual);
+  expect(Date.now() - inicio).toBeLessThan(5000);
+  expect(erros).toEqual([]);
+});
+
+test("viewer sem clínica no SAP abre /sap: bloqueada para /sap e redirecionamento para o destino", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await ligarLog(context);
+  const posts = capturarPosts(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/sap");
+  await expect.poll(() => posts.length).toBeGreaterThanOrEqual(2);
+  await page.waitForTimeout(1500);
+  expect(posts).toHaveLength(2);
+  expect(posts[0].corpo.origem).toBe("bloqueada");
+  expect(posts[0].corpo.rota).toBe("/_authenticated/sap/");
+  expect(posts[1].corpo.origem).toBe("redirecionamento");
+  expect(posts[1].corpo.rota).toBe("/_authenticated/$clientId/pacientes");
+  expect(posts[1].corpo.client_id).toBe(CID);
+  expect(new URL(page.url()).pathname).not.toBe("/sap");
+});
+
+test("em 375 px, tocar num item da barra Áreas grava menu", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await ligarLog(context);
+  const posts = capturarPosts(page);
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto(`/${CID}`);
+  await expect(page.getByRole("heading", { name: "Resultados da clínica", exact: true })).toBeVisible();
+  await expect.poll(() => posts.length).toBe(1);
+  const atual = new URL(page.url()).pathname;
+  const links = page.locator('nav.bottomnav[aria-label="Áreas"] a[href^="/"]');
+  await expect(links.first()).toBeVisible();
+  const destinos = await links.evaluateAll((as) => as.map((a) => (a as HTMLAnchorElement).getAttribute("href") ?? ""));
+  const indice = destinos.findIndex((href) => new URL(href, "http://x").pathname !== atual);
+  expect(indice, "a barra Áreas precisa ter um link para outra tela").toBeGreaterThanOrEqual(0);
+  await links.nth(indice).click();
+  await expect.poll(() => posts.length).toBe(2);
+  expect(posts[1].corpo.origem).toBe("menu");
+});
+
+test("clínica sem audiência abre /audiencia: o app troca a tela e só o destino grava (redirecionamento)", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await ligarLog(context);
+  const posts = capturarPosts(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/${CLINICA_SEM_AUDIENCIA}/audiencia`);
+  await expect.poll(() => new URL(page.url()).pathname.endsWith("/audiencia")).toBe(false);
+  await expect.poll(() => posts.length).toBeGreaterThanOrEqual(1);
+  // O dobro de ESPERA_ASSENTAR_MS: dá tempo de uma linha indevida da tela abandonada aparecer.
+  await page.waitForTimeout(1000);
+  expect(posts).toHaveLength(1);
+  expect(posts[0].corpo.origem).toBe("redirecionamento");
+  expect(posts[0].corpo.rota).toBe("/_authenticated/$clientId/");
+  expect(posts[0].corpo.client_id).toBe(CLINICA_SEM_AUDIENCIA);
+  expect(posts.filter((p) => p.corpo.rota === "/_authenticated/$clientId/audiencia")).toHaveLength(0);
+});
+
+test("clínica só-CRM abre /pacientes: o app troca a tela e só o destino grava (redirecionamento)", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await ligarLog(context);
+  const posts = capturarPosts(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/${CLINICA_SO_CRM}/pacientes`);
+  await expect.poll(() => new URL(page.url()).pathname.endsWith("/crm-painel")).toBe(true);
+  await expect.poll(() => posts.length).toBeGreaterThanOrEqual(1);
+  await page.waitForTimeout(1000);
+  expect(posts).toHaveLength(1);
+  expect(posts[0].corpo.origem).toBe("redirecionamento");
+  expect(posts[0].corpo.rota).toBe("/_authenticated/$clientId/crm-painel");
+  expect(posts[0].corpo.client_id).toBe(CLINICA_SO_CRM);
+  expect(posts.filter((p) => p.corpo.rota === "/_authenticated/$clientId/pacientes")).toHaveLength(0);
+});
