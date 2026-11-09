@@ -23,6 +23,10 @@ Requisitos: MENU-01, MENU-02, MENU-03, MENU-04, MENU-07.
 - **D-07:** Esconder não é bloquear e não apaga nada: telas escondidas continuam abrindo por link e pela busca; nenhuma guarda nova; decisão 3 (o que sai de vez) segue com o João.
 - **D-08:** Manter os marcadores `data-origem="menu"` e `"busca"` da Phase 2 nos contêineres novos.
 
+- **D-09:** Em produção a busca indexa 59 telas escondidas (a `/qa/layout` só existe em desenvolvimento; em desenvolvimento são 60). (João, 09/11/2026)
+- **D-10:** Menu do médico: itens e áreas não mudam nesta fase, mas o "sempre claro" vale para ele também — some o botão Claro/Escuro e a marca/cor passam ao "N" Cobalto. (João, 09/11/2026)
+- **D-11:** Decisões abertas 3, 5 e 11 seguem provisórias nesta fase: nada sai de vez; SAP escondido e congelado para todos; rótulos "Carteira", "Clínica", "Conferência e fontes". Registrado como provisório; muda depois sem refazer a fase. (João, 09/11/2026)
+
 ### Claude's Discretion
 - Ícones: seguir a recomendação da pesquisa (SVG inline no traço Tabler, ou fixar versão estável do pacote com checkpoint antes de instalar); semente do AvatarGerado do rodapé pelo e-mail; carregar Urbanist 400/500/600/700 (mesmo arquivo variável).
 </decisions>
