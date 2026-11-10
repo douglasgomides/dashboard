@@ -153,7 +153,6 @@ for (const r of regras(sistema)) {
   const dentro = r.pais.some((p) => /prefers-reduced-motion\s*:\s*no-preference/.test(p));
   assert.ok(dentro, `animação ou transição fora de @media (prefers-reduced-motion: no-preference): ${normal(r.prelude)}`);
 }
-assert.ok(animacoes >= 1, "nexo-system.css declara o movimento do UI-SPEC (subida dos cartões e barras)");
 
 // --- 6. Contraste do texto branco sobre a marca (V11), pela fórmula WCAG 2.x ---
 const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));

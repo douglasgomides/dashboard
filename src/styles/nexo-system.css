@@ -2,18 +2,20 @@
  * Sistema visual do Nexo (Phase 3, D-01, paleta Cobalto do 03-UI-SPEC.md §Color).
  * Carregado em src/main.tsx logo depois de product-workspace.css.
  *
- * Nesta etapa (03-01) só entram os nomes NOVOS de token: nada do CSS existente lê estes nomes ainda, então nenhuma tela muda
- * de cor. Os aliases dos nomes antigos (--accent, --action-bg etc.), o "sempre claro" e a limpeza entram no 03-03.
+ * 03-01: bloco de tokens com os nomes novos. 03-03: aliases dos nomes antigos (--accent, --action-bg, --side-* etc.),
+ * "sempre claro" (o tema escuro salvo em dc:tema não atinge o Nexo; os blocos escuros das folhas antigas ficaram só no
+ * SAP), moldura, limpeza visual e movimento.
  *
  * Seletor .app.product-workspace:not(.sap-workspace): o SAP fica congelado (nada do SAP muda) e a especificidade 0,3,0
- * vence os CSS de rota carregados depois. Como são nomes que só o Nexo declara, o tema escuro salvo (dc:tema=dark) não os
- * troca: a casca lê --b1 = #1F4FD8 nos dois temas.
+ * vence os CSS de rota carregados depois (workspace-navigation.css, databoard.css). Hex só entre os marcadores
+ * "tokens: inicio" e "tokens: fim"; fora deles, só var() (V9).
  */
 
 /* tokens: inicio */
 :root {
-  /* Só a rampa, para o ::backdrop do diálogo e janelas fora da casca. */
+  /* Só a rampa e o branco, para o ::backdrop do diálogo e o fundo da página (html) fora da casca. */
   --b1:#1F4FD8; --b2:#4675F0; --b3:#7D9EF6; --b4:#B6C9FB; --b5:#DCE6FD; --b6:#EFF4FF;
+  --white:#FFFFFF;
 }
 
 .app.product-workspace:not(.sap-workspace) {
@@ -28,5 +30,200 @@
   --dn:#EF4B5A; --dn-bg:#FDEBED; --dn-ink:#B4233A;
   --or:#F59E0B; --or-bg:#FEF3E2; --or-ink:#8A5100;
   --font:"Urbanist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  /* Sombras e véu do diálogo (da prancha). */
+  --sombra-cartao:0 1px 2px rgba(18,18,18,.04);
+  --sombra-cartao-hover:0 10px 24px rgba(31,79,216,.07);
+  --sombra-moldura:0 40px 90px rgba(31,79,216,.13),0 2px 8px rgba(18,18,18,.04);
+  --sombra-dialogo:0 24px 60px rgba(31,79,216,.14);
+  --veu-cinza:rgba(140,144,153,.35);
+  /* Valores claros de hoje dos nomes que só os blocos escuros de :root (styles.css e nexo.css) trocam e que os aliases
+     não cobrem. O --ai fica com o mesmo valor claro de hoje: não muda de cor, só deixa de virar escuro (revisão na Phase 9). */
+  --axis:#CBD5E1; --s1:#2563EB; --s2:#EA580C; --s3:#0D9488; --s7:#7C3AED;
+  --serious:#C2410C; --brand-gold-ink:#84612d; --ai:#85632f;
 }
 /* tokens: fim */
+
+/* --- Aliases: os nomes que o CSS existente já usa passam a apontar para os tokens Cobalto (evita editar 80 telas) --- */
+.app.product-workspace:not(.sap-workspace) {
+  color-scheme: light;
+  --page: var(--white);
+  --surface: var(--white);
+  --surface-2: var(--field);
+  --ink: var(--text);
+  --ink-2: var(--text-2);
+  --muted: var(--muted-ink);
+  --border: var(--line);
+  --grid: var(--line);
+  --accent: var(--b1);
+  --accent-hover: var(--b1);
+  --accent-pressed: color-mix(in srgb, var(--b1) 88%, var(--text));
+  --accent-tint: var(--b6);
+  --accent-ink: var(--white);
+  --action-bg: var(--grad-brand);
+  --action-hover: var(--b1);
+  --action-ink: var(--white);
+  --focus: var(--b1);
+  --good: var(--up-ink);
+  --good-text: var(--up-ink);
+  --warn: var(--or-ink);
+  --crit: var(--dn-ink);
+  --shadow: var(--sombra-cartao);
+  /* Barra lateral sobre a moldura: sem fundo próprio. */
+  --side: transparent;
+  --side-hover: color-mix(in srgb, var(--white) 60%, transparent);
+  --side-active: var(--grad-brand);
+  --side-ink: var(--text);
+  --side-ink-2: var(--text-2);
+  --side-muted: var(--muted-ink);
+  --side-border: var(--line-2);
+  /* Nomes legados que styles.css calcula em :root (com o tema de :root, que pode ser o escuro salvo): recalculados aqui. */
+  --bg: var(--page);
+  --text-dim: var(--ink-2);
+  --text-faint: var(--muted);
+  --danger: var(--crit);
+  --accent-soft: var(--surface-2);
+  --good-bg: color-mix(in srgb, var(--good) 14%, var(--surface));
+  --good-border: color-mix(in srgb, var(--good) 32%, var(--surface));
+  --warn-bg: color-mix(in srgb, var(--warn) 16%, var(--surface));
+  --warn-border: color-mix(in srgb, var(--warn) 38%, var(--surface));
+  --danger-bg: color-mix(in srgb, var(--crit) 12%, var(--surface));
+  --danger-border: color-mix(in srgb, var(--crit) 32%, var(--surface));
+}
+/* databoard.css: variáveis do .dbx em valores do sistema novo (o escuro delas ficou só no SAP). */
+.app.product-workspace:not(.sap-workspace) .dbx {
+  --dbx-ok: var(--up-ink);
+  --dbx-ok-bg: var(--up-bg);
+  --dbx-bad: var(--dn-ink);
+  --dbx-bad-bg: var(--dn-bg);
+  --dbx-a: var(--b1);
+  --dbx-b: var(--b3);
+  --dbx-c: var(--or-ink);
+}
+
+/* --- Borda dos botões de ação: --action-bg virou degradê, que não vale como cor de borda --- */
+.app.product-workspace:not(.sap-workspace) .btn.pri,
+.app.product-workspace:not(.sap-workspace) .ws-action--primary,
+.app.product-workspace:not(.sap-workspace) .sap-context-tabs a[aria-current="page"],
+.app.product-workspace:not(.sap-workspace) .creative-tabs button[aria-current="page"] {
+  border-color: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .workspace-content-views button[aria-pressed="true"] {
+  border-bottom-color: var(--b1);
+}
+
+/* --- Sempre claro também fora da casca: o fundo da página atrás da moldura (html e body) --- */
+html:has(.app.product-workspace:not(.sap-workspace)) {
+  color-scheme: light;
+  background-color: var(--white);
+  background-image:
+    radial-gradient(1200px 600px at 90% 0%, color-mix(in srgb, var(--b5) 80%, transparent), transparent 70%),
+    radial-gradient(1000px 700px at 0% 100%, var(--b6), transparent 70%),
+    linear-gradient(180deg, var(--white), var(--b6));
+  background-attachment: fixed;
+}
+body:has(.app.product-workspace:not(.sap-workspace)) {
+  color-scheme: light;
+  background: transparent;
+}
+
+/* --- Fundo atrás do diálogo e da folha: nunca preto --- */
+.app.product-workspace:not(.sap-workspace) .workspace-dialog::backdrop {
+  background: color-mix(in srgb, var(--b6) 55%, var(--veu-cinza));
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+/* --- Item atual: pílula --grad-brand com texto e ícone brancos (no lugar do marcador dourado) --- */
+.app.product-workspace:not(.sap-workspace) nav.side a[data-on],
+.app.product-workspace:not(.sap-workspace) nav.side button[data-on],
+.app.product-workspace:not(.sap-workspace) nav.side a[aria-current="page"],
+.app.product-workspace:not(.sap-workspace) nav.side button[aria-current="page"],
+.app.product-workspace:not(.sap-workspace) nav.side .sub-itens a[aria-current="page"],
+.app.product-workspace:not(.sap-workspace) aside .workspace-pages a[data-on] {
+  background: var(--grad-brand);
+  color: var(--white);
+  box-shadow: none;
+  border-radius: 12px;
+}
+.app.product-workspace:not(.sap-workspace) nav.side .grupo-toggle:hover {
+  background: var(--side-hover);
+  color: var(--side-ink);
+}
+.app.product-workspace:not(.sap-workspace) .themes button[aria-pressed="true"] {
+  background: var(--grad-brand);
+  color: var(--white);
+}
+
+/* --- Campo de busca da barra --- */
+.app.product-workspace:not(.sap-workspace) .kbar {
+  background: var(--field);
+  border-color: var(--control-border);
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .kbar:hover {
+  background: var(--b6);
+}
+.app.product-workspace:not(.sap-workspace) .kbar kbd {
+  color: var(--muted-ink);
+  border-color: var(--line-2);
+}
+
+/* --- Marca escura de hoje sobre a moldura clara (a marca "N" entra no 03-02 e no 03-04) --- */
+.app.product-workspace:not(.sap-workspace) .product-brand--dark {
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .product-brand--dark .product-brand__symbol {
+  color: var(--b1);
+  border-color: var(--b4);
+}
+.app.product-workspace:not(.sap-workspace) .product-brand--dark .product-brand__copy > span {
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .logo,
+.app.product-workspace:not(.sap-workspace) .avatar {
+  background: var(--grad-brand);
+}
+.app.product-workspace:not(.sap-workspace) .logo i {
+  background: var(--white);
+}
+
+/* --- Painel de destaque: --grad-brand com texto branco, sem dourado nem petróleo --- */
+.app.product-workspace:not(.sap-workspace) .ws-priority {
+  --surface: color-mix(in srgb, var(--white) 12%, transparent);
+  --surface-2: color-mix(in srgb, var(--white) 20%, transparent);
+  --ink: var(--white);
+  --ink-2: var(--white);
+  --muted: var(--white);
+  --accent: var(--white);
+  --accent-ink: var(--b1);
+  --border: color-mix(in srgb, var(--white) 45%, transparent);
+  --action-bg: var(--white);
+  --action-hover: var(--b6);
+  --action-ink: var(--b1);
+  background: var(--grad-brand);
+  border-color: transparent;
+  color: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .ws-priority .ws-action--primary {
+  border-color: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .ws-priority .ws-priority-label,
+.app.product-workspace:not(.sap-workspace) .ws-priority-empty .ws-priority-symbol {
+  color: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .ws-priority-empty .ws-priority-symbol {
+  border-color: color-mix(in srgb, var(--white) 60%, transparent);
+}
+
+/* --- Barra inferior do celular: a barra lateral não tem mais fundo próprio, então a de baixo ganha o branco --- */
+.app.product-workspace:not(.sap-workspace) .bottomnav {
+  background: var(--white);
+  border-top-color: var(--line);
+}
+.app.product-workspace:not(.sap-workspace) .bottomnav [data-on] {
+  background: var(--grad-brand);
+  color: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .bottomnav [data-on] svg {
+  color: var(--white);
+}
