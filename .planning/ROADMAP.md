@@ -126,6 +126,56 @@ Plans:
 
 **UI hint**: yes
 
+### Phase 03.1: Redesenho das telas com inteligência (INSERTED)
+
+**Goal:** Toda tela do Nexo (clínica e equipe) e todo card usam o desenho da prancha, e cada página diz em linguagem simples o que aconteceu, por que aconteceu e o que fazer, em vez de só mostrar números. Pedido do João em 10/11/2026: "vc n refez todas as telas e nem todos os cards. a informação em cada página ainda continua confusa e sem inteligência".
+**Requirements**: TELA-01, TELA-02, TELA-03, TELA-04, TELA-05, LEIT-01, LEIT-02, LEIT-03, LEIT-04, LEIT-05, LEIT-06, LEIT-07
+**Escopo (João, 10/11/2026):** a leitura sai só de regras fixas, calculada na hora no navegador; sem IA, sem tabela nova, sem migration e sem job agendado ("sem isso de IA porque fica muito caro pra manter a plataforma").
+**Depends on:** Phase 3
+**Success Criteria** (what must be TRUE):
+  1. Nenhuma tela viva da clínica ou da equipe fica com card ou bloco no desenho antigo; há uma lista de telas e cards conferida tela por tela
+  2. Cada tela abre com a leitura do período: o que aconteceu, o porquê (com o número que sustenta) e o próximo passo, com quem resolve
+  3. A leitura só afirma o que o dado sustenta: dado faltando ou não confiável aparece como tal, nunca vira conclusão
+  4. O João olha cada tela e diz que entende sem explicação
+
+**Plans:** 2/17 plans executed em 9 ondas (um PR só para a fase; no máximo 2 planos e uma publicação na VPS por onda; cada plano na própria worktree)
+
+Plans:
+**Wave 1**
+- [x] 03.1-01-PLAN.md — Tracer: Resultados com a leitura por regra no molde (PaginaNexo, LeituraDaTela, fatos, portão, texto) + peças de bloco nx + receita de publicação na VPS
+- [x] 03.1-02-PLAN.md — Inventário das 43 telas e dos cartões de cada uma, com teste no CI, e o contrato do molde
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 03.1-03-PLAN.md — Resultados: resumo da clínica em 3 linhas (D-07), Pacientes e as telas em construção; publica; o João olha
+- [ ] 03.1-04-PLAN.md — Peças antigas compartilhadas que o SAP não usa no desenho nx; porta do Playwright configurável
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 03.1-05-PLAN.md — Marketing / Instagram (5 telas); publica; o João olha
+- [ ] 03.1-06-PLAN.md — Versões nx dos painéis de agente, do planejador e das estratégias (o SAP fica igual)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 03.1-07-PLAN.md — Marketing / Anúncios, campanhas e links (rastreio suspeito vira "sem leitura"); publica; o João olha
+- [ ] 03.1-08-PLAN.md — Comercial / Funil, Jornada e Resultados por origem
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 03.1-09-PLAN.md — Marketing / Conteúdo (Ideias, Referências, Dúvidas, Inteligência Criativa, D-11); publica com o CRM do 08; o João olha
+- [ ] 03.1-10-PLAN.md — Comercial / Guia, Papel de cada funil, Etapas do CRM e Contatos
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 03.1-11-PLAN.md — Plano de ação e Relatório do período; publica com o CRM do 10; o João olha
+- [ ] 03.1-12-PLAN.md — Comercial / Qualidade do atendimento e Central
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 03.1-13-PLAN.md — Equipe / Carteira e Integrações; publica com o Atendimento do 12; o João olha
+- [ ] 03.1-14-PLAN.md — Equipe / Conferência de dados e Configurar este cliente
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 03.1-15-PLAN.md — Equipe / telas abertas pela busca (7 telas)
+- [ ] 03.1-16-PLAN.md — Limpeza das peças duplicadas e dos componentes antigos sem uso
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [ ] 03.1-17-PLAN.md — Inventário estrito (43 de 43), specs cruzados verdes, publicação final, PR único e o olhar final do João (critério 4)
+
 ### Phase 4: Pacote do template do WhatsApp à Meta
 
 **Goal**: O João tem o pacote pronto para pedir o template à Meta cedo no calendário, para que a aprovação externa não segure a v1.5.

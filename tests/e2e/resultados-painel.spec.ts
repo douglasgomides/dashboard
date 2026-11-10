@@ -1,7 +1,15 @@
-import { test, expect, type BrowserContext } from "@playwright/test";
+import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 
-// Resultados da clínica no desenho do painel da prancha: cartões de número, gráficos em SVG e nenhuma rolagem lateral.
+// Seção Resultados no molde novo (Phase 3.1, plano 03): Resultados da clínica abre com o resumo da clínica em 3 linhas
+// (a única leitura), até 4 cartões e um gráfico; tudo o mais fica no detalhe recolhido. Pacientes do período e as duas
+// telas em construção (O que virou paciente, O que virou venda) abrem com leitura, ou com "Sem leitura:" e quem resolve.
+
+const dia = (i: number) => new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+const num = (valor: number | null, extra: Record<string, unknown> = {}) => ({ valor, fonte: "crm", motivo_sem_dado: valor == null ? "Sem dado no CRM." : null, responsavel: "comercial", ...extra });
+const pessoa = (i: number) => ({ id: `p${i}`, pessoa: `pp${i}`, nome: `Pessoa fictícia ${i}`, canal: "whatsapp", conversa_id: null, data: dia(i + 1), fonte: "crm", crm: null, leitura: null });
+const lista = (n: number) => ({ total: n, itens: Array.from({ length: Math.min(n, 3) }, (_, i) => pessoa(i)) });
+const CHAVES = ["mandaram_mensagem", "leads_novos", "antigos", "agendaram", "negociacao", "compareceram", "fecharam", "abordados", "engajaram_instagram"];
 
 async function instagram(context: BrowserContext) {
   const pagina = (url: string, linhas: unknown[]) => {
@@ -48,35 +56,124 @@ async function instagram(context: BrowserContext) {
   });
 }
 
-const semRolagemLateral = (page: import("@playwright/test").Page) =>
-  page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
+/** Pessoas, histórico diário e vendas: os mesmos dados de Pacientes do período, que também alimentam os cartões de Resultados. */
+async function pessoas(context: BrowserContext) {
+  const rpc = (nome: string, json: unknown) => context.route(`**/rest/v1/rpc/${nome}`, (r) => r.fulfill({ json }));
+  await rpc("pacientes_periodo", {
+    periodo: { de: dia(30), ate: dia(0) }, cliente_de_teste: false, tem_crm: true, tem_conversas: true, tem_leitura_ia: false, tem_funil_prospeccao: false,
+    numeros: {
+      mandaram_mensagem: num(120), leads_novos: num(80), antigos: num(40), agendaram: num(30), negociacao: num(12), compareceram: num(null),
+      fecharam: num(9, { vendas: 9, sem_valor: 0, valor_total: 18000 }), abordados: num(null), engajaram_instagram: num(15),
+    },
+    listas: Object.fromEntries(CHAVES.map((k) => [k, lista(k === "agendaram" ? 30 : 5)])),
+  });
+  await rpc("pacientes_vendas", { total: 0, itens: [] });
+  await context.route("**/rest/v1/resultados_diarios**", (r) => {
+    const p = new URL(r.request().url()).searchParams;
+    const datas = p.getAll("dia");
+    const de = datas.find((d) => d.startsWith("gte."))?.slice(4) ?? "0000";
+    const ate = datas.find((d) => d.startsWith("lte."))?.slice(4) ?? "9999";
+    const linhas = Array.from({ length: 70 }, (_, i) => ({
+      dia: dia(i), mandaram_mensagem: 20 + (i % 5), leads_novos: 12, antigos: 8, agendaram: 3 + (i % 3), negociacao: 2, compareceram: null, fecharam: 1,
+    }))
+      .filter((l) => l.dia >= de && l.dia <= ate)
+      .sort((a, b) => a.dia.localeCompare(b.dia));
+    return r.fulfill({ json: linhas });
+  });
+}
+
+const semRolagemLateral = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 
 for (const width of [375, 1440]) {
-  test(`Resultados: cartões e gráficos do painel aparecem sem rolagem lateral em ${width}px`, async ({ page, context }) => {
+  test(`Resultados: resumo da clínica em 3 linhas, até 4 cartões e o resto no detalhe, sem rolagem lateral em ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "admin");
     await instagram(context);
+    await pessoas(context);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}?preset=30d`);
 
+    // O resumo é a leitura da tela: uma só, com as 3 linhas e o número ao lado.
+    const resumo = page.getByRole("region", { name: "Resumo da clínica", exact: true });
+    await expect(resumo).toBeVisible();
+    await expect(resumo.getByText("O que aconteceu", { exact: true })).toBeVisible();
+    await expect(resumo.getByText("O que mais preocupa", { exact: true })).toBeVisible();
+    await expect(resumo.getByText("Ação da semana", { exact: true })).toBeVisible();
+    await expect(resumo.getByText(/Quem resolve:/).first()).toBeVisible();
+    await expect(resumo.locator(".nx-leitura__num").first()).toBeVisible();
+    await expect(page.getByRole("region", { name: "Leitura do período", exact: true })).toHaveCount(0);
+
+    // Até 4 cartões de número (chamaram, agendaram, fecharam e o dinheiro) e os números do topo existem.
+    const cartoes = page.locator(".nx-pagina__cartoes > *");
+    expect(await cartoes.count()).toBeLessThanOrEqual(4);
+    await expect(page.locator(".nx-pagina__cartoes .nx-kpi .ws-metric-value").first()).toHaveText("120");
+    // Um gráfico principal: contatos e agendamentos por dia.
+    await expect(page.locator(".nx-pagina__principal .nx-linha__svg")).toHaveCount(1);
+    // O que brigava pelo topo saiu dele: prioridade recomendada e as 8 respostas só no detalhe.
+    await expect(page.getByText("Prioridade recomendada")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Diagnóstico estratégico" })).toHaveCount(0);
+    expect(await semRolagemLateral(page)).toBe(true);
+    await page.screenshot({ path: `test-results/redesenho/resultados-${width}.png`, fullPage: true });
+
+    // Detalhe recolhido: um toque abre cada parte.
+    await page.locator(".nx-pagina__detalhe > details > summary").click();
+    await page.locator("#instagram > summary").click();
     const instagramRegiao = page.getByRole("region", { name: "Resultados do Instagram", exact: true });
     await expect(instagramRegiao.locator(".nx-kpi")).toHaveCount(4);
     await expect(instagramRegiao.locator(".nx-kpi .ws-metric-value").first()).toBeVisible();
-    expect(await semRolagemLateral(page)).toBe(true);
-
-    await page.getByRole("button", { name: /^Todas as análises do período/ }).click();
-    const analises = page.locator("#todas-analises");
-    await expect(analises.locator(".nx-linha__svg")).toHaveCount(2);
-    await expect(analises.locator(".nx-colunas")).toBeVisible();
-    await expect(analises.locator(".nx-pizza svg")).toBeVisible();
-    await expect(analises.locator(".nx-medidor svg")).toBeVisible();
+    const instagramBloco = page.locator("#instagram");
+    await expect(instagramBloco.locator(".nx-linha__svg")).toHaveCount(2);
+    await expect(instagramBloco.locator(".nx-colunas")).toBeVisible();
+    await expect(instagramBloco.locator(".nx-pizza svg")).toBeVisible();
+    await expect(instagramBloco.locator(".nx-medidor svg")).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
 
     // O gráfico de linha continua levando aos posts do dia, também pelo teclado.
-    const grafico = analises.getByRole("slider", { name: /^Alcance e interações por dia/ });
+    const grafico = instagramBloco.getByRole("slider", { name: /^Alcance e interações por dia/ });
     await grafico.focus();
     await page.keyboard.press("ArrowLeft");
     await page.keyboard.press("Enter");
-    await expect(analises.getByRole("heading", { name: /^O que aconteceu em/ })).toBeVisible();
+    await expect(instagramBloco.getByRole("heading", { name: /^O que aconteceu em/ })).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
+
+    // As análises de hoje, agora dentro do detalhe: cada uma com evidência e quem resolve.
+    await page.locator("#todas-analises > summary").click();
+    const analises = page.locator("#todas-analises");
+    await expect(analises.getByRole("heading", { name: "Resumo do período" })).toBeVisible();
+    await expect(analises.getByRole("heading", { name: "O que fazer nesta semana" })).toBeVisible();
+    await expect(analises.getByText(/Quem resolve:/).first()).toBeVisible();
+    expect(await semRolagemLateral(page)).toBe(true);
+    await page.screenshot({ path: `test-results/redesenho/resultados-detalhe-${width}.png`, fullPage: true });
+  });
+
+  test(`Pacientes do período e as telas em construção abrem com leitura ou "Sem leitura:" e quem resolve em ${width}px`, async ({ page, context }) => {
+    await mockAccount(context, "admin");
+    await instagram(context);
+    await pessoas(context);
+    await page.setViewportSize({ width, height: 900 });
+
+    // Pacientes: a leitura com número ao lado, antes dos cartões.
+    await page.goto(`/${CID}/pacientes?preset=30d`);
+    const leitura = page.getByRole("region", { name: "Leitura do período", exact: true });
+    await expect(leitura.getByText("O que aconteceu", { exact: true })).toBeVisible();
+    await expect(leitura.locator(".nx-leitura__num").first()).toBeVisible();
+    await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
+    expect(await semRolagemLateral(page)).toBe(true);
+    await page.screenshot({ path: `test-results/redesenho/pacientes-leitura-${width}.png`, fullPage: true });
+
+    // As duas telas em construção: dizem o que falta e quem resolve, sem número inventado.
+    for (const [rota, titulo, falta] of [
+      ["consultas", "O que virou paciente", "a fonte que mostra quem virou consulta"],
+      ["vendas", "O que virou venda", "a fonte que mostra quem virou venda"],
+    ] as const) {
+      await page.goto(`/${CID}/${rota}?preset=30d`);
+      await expect(page.locator(`.nx-pagina[data-tela="${rota}"]`)).toBeVisible();
+      await expect(page.getByText("Sem leitura: a tela ainda não tem a fonte ligada")).toBeVisible();
+      await expect(page.getByText(`O que falta: ${falta}`)).toBeVisible();
+      await expect(page.getByText("Quem resolve: Equipe Doctor Creator").first()).toBeVisible();
+      await expect(page.getByText("Em construção")).toBeVisible();
+      await expect(page.getByText(titulo, { exact: true }).first()).toBeVisible();
+      expect(await semRolagemLateral(page)).toBe(true);
+      await page.screenshot({ path: `test-results/redesenho/${rota}-${width}.png`, fullPage: true });
+    }
   });
 }

@@ -104,6 +104,23 @@ Fonte: `~/Downloads/Nexo-Modelo/BRIEF-GSD-Nexo-v5.md`, `.planning/research/SUMMA
 
 - [ ] **REL-01**: A equipe vê um check medido da liberação da v1.5: definições fechadas, Agendaram e Fecharam verdes na Lana, secretária ≥18/20, log ligado (o critério de "log ligado" é o João quem fixa)
 
+### Redesenho das telas com inteligência (TELA, LEIT) — Phase 03.1
+
+Escopo de 10/11/2026 (João): a leitura sai só de regras fixas, calculada na hora no navegador; sem IA, sem tabela nova, sem job agendado.
+
+- [ ] **TELA-01**: Existe uma lista versionada de toda tela viva da clínica e da equipe (as rotas do registro fora do SAP, das rotas de acesso, das tiradas e das que só redirecionam) e dos cartões de cada uma, dizendo o que está no desenho novo; um teste falha quando uma tela do registro não tem linha ou quando uma tela marcada como nova ainda tem bloco antigo
+- [ ] **TELA-02**: Toda tela viva usa o molde fixo (pergunta, leitura, de 3 a 4 cartões, gráfico principal, detalhe recolhido) montado por um componente de página único (`PaginaNexo`)
+- [ ] **TELA-03**: Nenhuma tela viva renderiza bloco no desenho antigo (`ws-panel`, `ws-metric`, `dbx-*`, cartão Tailwind `rounded-xl border`, Recharts, tabela crua)
+- [ ] **TELA-04**: As peças duplicadas por área (cabeçalho, leitura, método, aviso, recolhido, chip, barras, vazio) viram uma peça só em `src/components/nx/`, e o CSS comum sai das folhas por área
+- [ ] **TELA-05**: As telas em construção (O que virou paciente, O que virou venda, Automações) seguem no menu, no molde, dizendo o que falta e quem resolve; nenhuma tela sai do menu nesta fase
+- [ ] **LEIT-01**: Cada tela tem um módulo puro de fatos por regra (tipado e testado em tsx), construído sobre as regras que a tela já usa
+- [ ] **LEIT-02**: Cada tela abre com a leitura do período, montada na hora por texto em modelo a partir dos fatos: o que aconteceu, o porquê com o número ao lado de cada afirmação e o próximo passo com quem resolve
+- [ ] **LEIT-03**: Com dado faltando, não confiável, fonte parada ou amostra pequena, a leitura mostra "sem leitura: [motivo]", o passo para consertar e quem resolve, sem tirar conclusão
+- [ ] **LEIT-04**: Cada tela traz um só próximo passo, com verbo da lista provisória (ligar para, responder, revisar, pausar, reforçar, corrigir, publicar, conferir), motivo e responsável; os outros ficam em "ver mais"
+- [ ] **LEIT-05**: A leitura segue o período escolhido na tela e compara só com o período anterior de mesmo tamanho; não guarda nem cita recomendações passadas
+- [ ] **LEIT-06**: O topo de Resultados da clínica traz o resumo da clínica em 3 linhas (o que aconteceu, o que mais preocupa, a ação da semana), montado por regra a partir dos fatos das áreas
+- [ ] **LEIT-07**: O texto da leitura é leigo, curto e no passado: sem jargão (CTR, CPC, CPM, lead), sem projeção, previsão ou promessa, passa no filtro do CFM e não traz dado pessoal; "trouxe X% dos contatos" só aparece com a origem por post medida e a cobertura visível
+
 ## Future Requirements
 
 ### v1.5
@@ -197,12 +214,24 @@ Fonte: `~/Downloads/Nexo-Modelo/BRIEF-GSD-Nexo-v5.md`, `.planning/research/SUMMA
 | GOAL-01 | Phase 7 | Pending |
 | GOAL-02 | Phase 7 | Pending |
 | REL-01 | Phase 14 | Pending |
+| TELA-01 | Phase 03.1 | Pending |
+| TELA-02 | Phase 03.1 | Pending |
+| TELA-03 | Phase 03.1 | Pending |
+| TELA-04 | Phase 03.1 | Pending |
+| TELA-05 | Phase 03.1 | Pending |
+| LEIT-01 | Phase 03.1 | Pending |
+| LEIT-02 | Phase 03.1 | Pending |
+| LEIT-03 | Phase 03.1 | Pending |
+| LEIT-04 | Phase 03.1 | Pending |
+| LEIT-05 | Phase 03.1 | Pending |
+| LEIT-06 | Phase 03.1 | Pending |
+| LEIT-07 | Phase 03.1 | Pending |
 
 **Coverage:**
-- v1 requirements: 60 total
-- Mapped to phases: 60
+- v1 requirements: 72 total
+- Mapped to phases: 72
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-11-09*
-*Last updated: 2026-11-09 after roadmap creation (traceability filled)*
+*Last updated: 2026-11-10 — TELA-01..05 e LEIT-01..07 da Phase 03.1 (leitura só por regras, escopo do João em 10/11)*

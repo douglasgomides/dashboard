@@ -122,6 +122,11 @@ export const LIMITES = {
       fracaoRespondida: 0.8,
     },
   },
+  /** Leitura por regra no topo das telas (Phase 3.1). */
+  leitura: {
+    /** Grupo menor que 5 não vira conclusão (brief, princípio 5): a leitura diz "sem leitura: a amostra é pequena". */
+    grupoMinimo: 5,
+  },
   /** Conferência diária: contagem do Nexo contra a contagem do CRM ao vivo. */
   conferenciaCrm: {
     /** Acima desta fatia de diferença entre Nexo e CRM, vira alerta. */
