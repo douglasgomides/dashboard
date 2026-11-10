@@ -2,7 +2,12 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export function LogoutButton({ className = "text-sm", dark = false }: { className?: string; dark?: boolean }) {
+// rotulo: texto do botão. O padrão "Sair" mantém o SAP e o /admin como estão; as cascas da equipe passam "Sair da conta".
+export function LogoutButton({
+  className = "text-sm",
+  dark = false,
+  rotulo = "Sair",
+}: { className?: string; dark?: boolean; rotulo?: string }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -30,7 +35,7 @@ export function LogoutButton({ className = "text-sm", dark = false }: { classNam
       className={className}
       style={{ color: dark ? "var(--side-ink-2)" : "var(--text-dim)" }}
     >
-      {loading ? "Saindo…" : "Sair"}
+      {loading ? "Saindo…" : rotulo}
     </button>
     {error && <span role="alert" className="text-xs" style={{ color: "var(--danger)" }}>Não foi possível sair. Tente novamente.</span>}
     </>

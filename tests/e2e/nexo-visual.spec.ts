@@ -203,8 +203,8 @@ test("fundo do diálogo: nunca preto", async ({ page, context }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}`);
   await expect(page.getByRole("heading", { name: "Resultados da clínica", exact: true })).toBeVisible();
-  // O atalho da equipe só liga depois que o papel chega (o seletor de produto é só do admin).
-  await expect(page.getByRole("navigation", { name: "Produto" }).first()).toBeAttached();
+  // O atalho da equipe só liga depois que o papel chega: espera pelo Menu da equipe (o 03-04 tirou o seletor de produto).
+  await expect(page.getByRole("navigation", { name: "Menu da equipe" })).toBeVisible();
   await page.keyboard.press("Control+k");
   const dialogo = page.getByRole("dialog", { name: "Buscar tela" });
   await expect(dialogo).toBeVisible();

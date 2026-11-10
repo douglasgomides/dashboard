@@ -78,7 +78,8 @@ test("médico (viewer) com Ctrl+K ainda abre O que você quer fazer?", async ({ 
 
 const ROTULOS = [ROTULOS_MENU_EQUIPE.carteira, ROTULOS_MENU_EQUIPE.clinica, ROTULOS_MENU_EQUIPE.conferencia];
 const aside = (page: Page) => page.locator('aside[aria-label="Menu principal"]');
-const itensDoMenu = (page: Page) => page.locator('nav[aria-label="Menu da equipe"] > ul > li > a');
+// Escopo na aside: a folha Menu do celular (03-04) também tem um nav "Menu da equipe", dentro do dialog fechado.
+const itensDoMenu = (page: Page) => aside(page).locator('nav[aria-label="Menu da equipe"] > ul > li > a');
 const itemDoMenu = (page: Page, rotulo: string) => itensDoMenu(page).filter({ hasText: rotulo });
 
 test("admin a 1440 vê os 3 itens do Menu da equipe, Clínica atual com as 4 subtelas e nada de Aparência ou Produto", async ({ page, context }) => {
