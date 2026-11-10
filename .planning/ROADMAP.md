@@ -176,6 +176,16 @@ Plans:
 **Wave 9** *(blocked on Wave 8 completion)*
 - [ ] 03.1-17-PLAN.md — Inventário estrito (43 de 43), specs cruzados verdes, publicação final, PR único e o olhar final do João (critério 4)
 
+### Phase 03.1.1: Tela O que fazer hoje para o médico (INSERTED)
+
+**Goal:** O médico abre o Nexo e cai numa porta de entrada "O que fazer hoje" com 3 a 5 ações da semana (o que aconteceu, o que fazer, quem resolve), tiradas das leituras por regra da fase 03.1, sem IA. Nenhuma tela sai do menu; as 43 telas continuam para a equipe. Pedido do João em 10/11/2026 ("sua recomendação é boa"). Antes de planejar: teste de 5 minutos do Resultados com um médico real (ex.: Lana) — "o que aconteceu?" e "o que faria esta semana?".
+**Requirements**: TBD
+**Depends on:** Phase 03.1
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 03.1.1 to break down)
+
 ### Phase 4: Pacote do template do WhatsApp à Meta
 
 **Goal**: O João tem o pacote pronto para pedir o template à Meta cedo no calendário, para que a aprovação externa não segure a v1.5.
