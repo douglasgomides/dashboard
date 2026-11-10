@@ -1,14 +1,19 @@
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import type { CSSProperties } from "react";
+import { useMemo, type CSSProperties, type ReactNode } from "react";
 import { CalendarDays, Clock, MessageCircle, Tag, Layers, ShieldAlert, Search, Sparkles, ShoppingBag, BadgeDollarSign, Timer } from "lucide-react";
-import { conclusoes, conclusoesProfundas, nomeFormato, temaValido, recortarPeriodo, efeitoPorDiaDaSemana, efeitoDiaSeguinte, efeitoComparavel, juntarTemas, temasSemPost, temasSemConversa, quem, quemAgendou, coberturaComentarios, FAIXA_RESPOSTA, MIN_CONVERSAS_FAIXA, MIN_DIAS, MAX_DIAS_PERIODO, type DadosProfundos, type EfeitoPareado } from "@/lib/conteudo-comercial";
+import { efeitoPorDiaDaSemana, efeitoDiaSeguinte, efeitoComparavel, juntarTemas, temasSemPost, temasSemConversa, nomeFormato, temaValido, recortarPeriodo, quem, quemAgendou, coberturaComentarios, FAIXA_RESPOSTA, MIN_CONVERSAS_FAIXA, MIN_DIAS, MAX_DIAS_PERIODO, type DadosProfundos, type EfeitoPareado } from "@/lib/conteudo-comercial";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
+import { ROTULO_RESPONSAVEL } from "@/lib/insight";
+import { fatosConteudoComercial, SEM_LEITURA_ORIGEM_POR_POST } from "@/lib/leitura/fatos-instagram";
+import { hojeBrasilia } from "@/lib/status-fonte";
 import { InfoDica, Miniatura } from "@/components/visual";
 import { NxCard, NxKpi, NxTag, NxListRow, NxLinhaTempo } from "@/components/nx";
-import { IgCabecalho, IgLeitura, IgNota, IgNotas, IgMetodo, IgBarras } from "@/components/nx/instagram";
-import { Carregando, ErroCarga } from "@/components/sem-fonte";
+import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { NxAviso, NxCarregando, NxErro, NxTabela } from "@/components/nx/blocos";
+import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
+import { IgBarras } from "@/components/nx/instagram";
 
 export const Route = createFileRoute("/_authenticated/$clientId/conteudo-comercial")({
   component: ConteudoComercialPage,
@@ -17,7 +22,7 @@ export const Route = createFileRoute("/_authenticated/$clientId/conteudo-comerci
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 const db = supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }> };
 const fmtN = (n: number | null | undefined) => Math.round(Number(n ?? 0)).toLocaleString("pt-BR");
-const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "—");
+const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "Sem dado");
 const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const OBJ: Record<string, string> = { preco: "Preço", convenio: "Convênio", distancia: "Distância", adiamento: "Vai deixar para depois", agenda: "Agenda/horário", medo: "Medo", desconfianca: "Desconfiança", outro: "Outra" };
 
@@ -41,7 +46,7 @@ const INFO_PAR = "Cada dia com post é comparado com os dias sem post do mesmo d
 const faltaPar = (e: EfeitoPareado) => `poucos dias equivalentes (${e.diasCom} com post e ${e.diasSem} sem; mínimo ${MIN_DIAS})`;
 function avisoCobertura(pr: DadosProfundos) {
   const cob = coberturaComentarios(pr.comentarios);
-  return cob != null && cob < 0.8 ? ` O painel guardou ${Math.round(cob * 100)}% dos comentários que o Instagram mostra nos posts do período.` : "";
+  return cob != null && cob < 0.8 ? `O painel guardou ${Math.round(cob * 100)}% dos comentários que o Instagram mostra nos posts do período.` : "";
 }
 
 function profundoValido(data: unknown): DadosProfundos | null {
@@ -73,12 +78,16 @@ function normalizar(data: unknown): Dados | null {
   };
 }
 
+const como = (titulo: string, texto: string) => <NxComoCalcula titulo={`Como ler: ${titulo}`}>{texto}</NxComoCalcula>;
+const info = (rotulo: string, texto: string) => <InfoDica texto={texto} rotulo={`Sobre ${rotulo}`} />;
+
 function ConteudoComercialPage() {
   const { clientId } = Route.useParams();
   const pedido = resolveDateRange(clientLayoutRoute.useSearch());
   // As leituras desta tela aceitam até 120 dias: período maior (6 meses, 1 ano) mostra os últimos 120 dias, com aviso.
   const { start, end, cortado } = recortarPeriodo(pedido.start, pedido.end);
   const periodLabel = formatRangeLabel({ start, end });
+  const hoje = hojeBrasilia();
   const q = useQuery({
     queryKey: ["conteudo-comercial", clientId, start, end],
     queryFn: async () => {
@@ -98,22 +107,38 @@ function ConteudoComercialPage() {
   });
   const pr = qp.data ?? null;
 
-  const head = (
-    <IgCabecalho
-      titulo="O conteúdo está trazendo conversa e agendamento?"
-      pergunta="Cruza os posts do Instagram com as conversas que chegaram no WhatsApp, por dia, horário, tema e etapa do funil."
-      periodo={
-        <>
-          <CalendarDays size={15} aria-hidden /> {periodLabel}
-        </>
-      }
-      metodo="Cruza o que foi postado no Instagram com as conversas que chegaram no WhatsApp: por dia, por dia da semana e hora, por tema e por etapa do funil. O tema da conversa vem da leitura por IA só das mensagens do paciente, com o mesmo vocabulário de temas dos posts. Mostra coincidência no tempo, não prova que um post gerou uma conversa específica."
-    />
+  // A leitura é do cruzamento que a tela já carrega: só regra. A origem por post não é medida e a leitura diz isso.
+  const fatos = useMemo(() => {
+    if (!q.data || qp.isPending) return null;
+    return fatosConteudoComercial({ de: start, ate: end, hoje, dados: q.data, profundos: pr });
+  }, [q.data, qp.isPending, pr, start, end, hoje]);
+
+  const cabecalho = {
+    tela: "conteudo-comercial" as const,
+    titulo: "Conteúdo × Comercial",
+    pergunta: "O conteúdo está trazendo conversa e agendamento?",
+    decisao: "D3" as const,
+    meta: <span>{periodLabel}</span>,
+  };
+  const pagina = (corpo: ReactNode, leitura: ReactNode) => (
+    <div className="nexo-ig">
+      <PaginaNexo {...cabecalho} leitura={leitura} corpo={corpo} />
+    </div>
   );
-  if (q.isLoading) return <div className="nexo-ig">{head}<Carregando texto="Cruzando conteúdo e conversas…" /></div>;
-  if (q.error) return <div className="nexo-ig">{head}<ErroCarga texto="Não consegui cruzar conteúdo e conversas agora. Atualize a página." /></div>;
+  if (q.isLoading) return pagina(<NxCarregando texto="Cruzando conteúdo e conversas…" linhas={4} />, <LeituraDaTela fatos={null} carregando semSelo />);
+  if (q.error) {
+    return pagina(
+      <NxErro texto="Não consegui cruzar conteúdo e conversas agora. Atualize a página." onTentar={() => void q.refetch()} />,
+      <LeituraDaTela fatos={null} carregando={false} erro="O cruzamento não respondeu." semSelo />,
+    );
+  }
   const d = q.data;
-  if (!d) return <div className="nexo-ig">{head}<ErroCarga texto="Não consegui ler este período para este cliente. Confira se você tem acesso a ele." /></div>;
+  if (!d) {
+    return pagina(
+      <NxErro texto="Não consegui ler este período para este cliente. Confira se você tem acesso a ele." onTentar={() => void q.refetch()} />,
+      <LeituraDaTela fatos={null} carregando={false} erro="Não foi possível ler este período." semSelo />,
+    );
+  }
 
   const c = d.cobertura;
   // Leitura pela IA: conversa lida (com texto) ou marcada sem texto. As duas somadas são as que a IA já passou.
@@ -127,94 +152,85 @@ function ConteudoComercialPage() {
   const maxGrade = Math.max(1, ...d.grade.map((g) => g.conversas));
   const grade = new Map(d.grade.map((g) => [`${g.dow}-${g.hora}`, g]));
   const horas = Array.from({ length: 18 }, (_, i) => i + 6);
-  const info = (rotulo: string, texto: string) => <InfoDica texto={texto} rotulo={`Sobre ${rotulo}`} />;
-  const como = (titulo: string, texto: string) => <IgMetodo rotulo={`Como ler: ${titulo}`}>{texto}</IgMetodo>;
-  const leitura = [...conclusoes(d), ...(pr ? conclusoesProfundas(pr) : [])];
+  const posProfundo = pr ? pr.resposta_tema.filter((t) => temaValido(t.tema) && t.rapidas >= 10 && t.lentas >= 10) : [];
 
-  return (
-    <div className="nexo-ig">
-      {head}
-      {(cortado || (c.conversas > 0 && (lidasPct < 90 || temaPct < 50))) && (
-        <IgNotas>
-          {cortado && (
-            <IgNota detalhe={`Esta tela mostra no máximo ${MAX_DIAS_PERIODO} dias. Para o período escolhido, aparecem os últimos ${MAX_DIAS_PERIODO} dias (${periodLabel}).`}>
-              Mostrando só os últimos {MAX_DIAS_PERIODO} dias
-            </IgNota>
-          )}
-          {c.conversas > 0 && lidasPct >= 90 && temaPct < 50 && (
-            <IgNota
-              tom="aviso"
-              detalhe={`Só ${temaPct}% das ${fmtN(c.conversas)} conversas do período (${fmtN(c.com_tema)}) têm um tema identificado. As outras não falaram de um assunto do conteúdo ou não tinham texto. Os números por tema valem só para essa parte.`}
-            >
-              Só {temaPct}% das conversas têm tema identificado
-            </IgNota>
-          )}
-          {c.conversas > 0 && lidasPct < 90 && (
-            <IgNota
-              tom="aviso"
-              detalhe={`A IA já leu ${lidasPct}% das ${fmtN(c.conversas)} conversas do período. A leitura roda sozinha a cada 20 minutos; os números por tema, objeção e assunto ficam completos quando chegar perto de 100%.`}
-            >
-              A IA leu {lidasPct}% das conversas: números por tema ainda incompletos
-            </IgNota>
-          )}
-        </IgNotas>
-      )}
+  const cartoes = [
+    c.pessoas != null ? (
+      <NxKpi key="p" icone={ic(MessageCircle)} rotulo="Pessoas que chamaram" valor={fmtN(c.pessoas)} nota={`${fmtN(c.conversas)} conversas novas · ${fmtN(c.posts)} posts no período`} info={info("Pessoas que chamaram", "Quem abriu mais de uma conversa no período conta uma vez só.")} />
+    ) : (
+      <NxKpi key="p" icone={ic(MessageCircle)} rotulo="Conversas novas" valor={fmtN(c.conversas)} nota={`${fmtN(c.posts)} posts no período`} />
+    ),
+    <NxKpi key="c" icone={ic(CalendarDays)} rotulo="Conversas em dia com post" valor={efeitoComparavel(efeito) ? media(efeito.mediaCom) : "Sem dado"} nota={efeitoComparavel(efeito) ? `média por dia · ${efeito.diasCom} dias` : faltaPar(efeito)} info={info("Conversas em dia com post", INFO_PAR)} />,
+    <NxKpi key="s" icone={ic(CalendarDays)} rotulo="Mesmo dia da semana sem post" valor={efeitoComparavel(efeito) ? media(efeito.mediaSem) : "Sem dado"} nota={efeitoComparavel(efeito) ? `média por dia · ${efeito.diasSem} dias` : faltaPar(efeito)} info={info("Mesmo dia da semana sem post", INFO_PAR)} />,
+    <NxKpi
+      key="d"
+      icone={ic(Clock)}
+      rotulo="Dia seguinte ao post"
+      valor={efeitoComparavel(seguinte) ? media(seguinte.mediaCom) : "Sem dado"}
+      nota={efeitoComparavel(seguinte) ? `sem post na véspera: ${media(seguinte.mediaSem)}` : faltaPar(seguinte)}
+      info={info("Dia seguinte ao post", "Conversas novas no dia seguinte a um dia com post, comparadas com o dia seguinte a um dia sem post, sempre no mesmo dia da semana. Anúncios e feriados também mexem nesse número.")}
+    />,
+  ] as unknown as [ReactNode, ReactNode?, ReactNode?, ReactNode?];
 
-      <section className="nx-grade nx-grade--4 ig-kpis" aria-label="Números do cruzamento">
-        {c.pessoas != null ? (
-          <NxKpi i={0} icone={ic(MessageCircle)} rotulo="Pessoas que chamaram" valor={fmtN(c.pessoas)} nota={`${fmtN(c.conversas)} conversas novas · ${fmtN(c.posts)} posts no período`} info={info("Pessoas que chamaram", "Quem abriu mais de uma conversa no período conta uma vez só.")} />
-        ) : (
-          <NxKpi i={0} icone={ic(MessageCircle)} rotulo="Conversas novas" valor={fmtN(c.conversas)} nota={`${fmtN(c.posts)} posts no período`} />
-        )}
-        <NxKpi i={1} icone={ic(CalendarDays)} rotulo="Conversas em dia com post" valor={efeitoComparavel(efeito) ? media(efeito.mediaCom) : "—"} nota={efeitoComparavel(efeito) ? `média por dia · ${efeito.diasCom} dias` : faltaPar(efeito)} info={info("Conversas em dia com post", INFO_PAR)} />
-        <NxKpi i={2} icone={ic(CalendarDays)} rotulo="Mesmo dia da semana sem post" valor={efeitoComparavel(efeito) ? media(efeito.mediaSem) : "—"} nota={efeitoComparavel(efeito) ? `média por dia · ${efeito.diasSem} dias` : faltaPar(efeito)} info={info("Mesmo dia da semana sem post", INFO_PAR)} />
-        <NxKpi
-          i={3}
-          icone={ic(Clock)}
-          rotulo="Dia seguinte ao post"
-          valor={efeitoComparavel(seguinte) ? media(seguinte.mediaCom) : "—"}
-          nota={efeitoComparavel(seguinte) ? `sem post na véspera: ${media(seguinte.mediaSem)}` : faltaPar(seguinte)}
-          info={info("Dia seguinte ao post", "Conversas novas no dia seguinte a um dia com post, comparadas com o dia seguinte a um dia sem post, sempre no mesmo dia da semana. Anúncios e feriados também mexem nesse número.")}
+  const principal = (
+    <NxCard nivel={2} icone={ic(CalendarDays)} titulo="Posts e conversas por dia" subtitulo="Se as conversas sobem nos dias com post, pode haver relação; é coincidência no tempo, não prova">
+      {como("Posts e conversas por dia", "As linhas azul e verde são as conversas novas e quantas agendaram (eixo da esquerda); a linha clara é a quantidade de posts do dia (eixo da direita). Setas do teclado escolhem o dia.")}
+      {d.dias.length === 0 ? (
+        <NxAviso tom="info" titulo="Nenhum dia do período tem posts ou conversas." />
+      ) : (
+        <NxLinhaTempo
+          datas={d.dias.map((x) => x.dia)}
+          series={[
+            { rotulo: "Conversas", valores: d.dias.map((x) => Number(x.conversas) || 0), cor: "var(--b2)", area: true },
+            { rotulo: "Agendaram", valores: d.dias.map((x) => Number(x.agendaram) || 0), cor: "var(--up)" },
+            { rotulo: "Posts", valores: d.dias.map((x) => Number(x.posts) || 0), cor: "var(--b4)", eixo: "dir" },
+          ]}
+          formatarData={(x) => `${x.slice(8, 10)}/${x.slice(5, 7)}`}
+          formatarValor={fmtN}
+          rotulo="Posts, conversas e agendamentos por dia"
         />
-      </section>
+      )}
+    </NxCard>
+  );
 
-      <NxCard
-        i={4}
-        icone={ic(CalendarDays)}
-        titulo="Posts e conversas por dia"
-        subtitulo="Se as conversas sobem nos dias com post, o conteúdo está puxando conversa"
-        acao={como("Posts e conversas por dia", "As linhas azul e verde são as conversas novas e quantas agendaram (eixo da esquerda); a linha clara é a quantidade de posts do dia (eixo da direita). Setas do teclado escolhem o dia.")}
+  // Avisos de dado e a atribuição por post: fixos, no corpo, antes dos detalhes.
+  const corpo = (
+    <>
+      <NxAviso
+        tom="info"
+        titulo={`${SEM_LEITURA_ORIGEM_POR_POST}.`}
+        detalhe="Hoje nenhuma fonte diz de qual post veio cada conversa. A tela mostra coincidência no tempo e no assunto, nunca qual post gerou uma conversa específica. Para medir, é preciso registrar a origem de cada contato por post."
       >
-        {d.dias.length === 0 ? (
-          <IgNota>Nenhum dia do período tem posts ou conversas.</IgNota>
-        ) : (
-          <NxLinhaTempo
-            datas={d.dias.map((x) => x.dia)}
-            series={[
-              { rotulo: "Conversas", valores: d.dias.map((x) => Number(x.conversas) || 0), cor: "var(--b2)", area: true },
-              { rotulo: "Agendaram", valores: d.dias.map((x) => Number(x.agendaram) || 0), cor: "var(--up)" },
-              { rotulo: "Posts", valores: d.dias.map((x) => Number(x.posts) || 0), cor: "var(--b4)", eixo: "dir" },
-            ]}
-            formatarData={(x) => `${x.slice(8, 10)}/${x.slice(5, 7)}`}
-            formatarValor={fmtN}
-            rotulo="Posts, conversas e agendamentos por dia"
-          />
-        )}
-      </NxCard>
+        {`Quem resolve: ${ROTULO_RESPONSAVEL.equipe_hub}.`}
+      </NxAviso>
+      {cortado && (
+        <NxAviso tom="info" titulo={`Mostrando só os últimos ${MAX_DIAS_PERIODO} dias.`} detalhe={`Esta tela mostra no máximo ${MAX_DIAS_PERIODO} dias. Para o período escolhido, aparecem os últimos ${MAX_DIAS_PERIODO} dias (${periodLabel}).`} />
+      )}
+      {c.conversas > 0 && lidasPct >= 90 && temaPct < 50 && (
+        <NxAviso
+          tom="atencao"
+          titulo={`Só ${temaPct}% das conversas têm tema identificado.`}
+          detalhe={`Só ${temaPct}% das ${fmtN(c.conversas)} conversas do período (${fmtN(c.com_tema)}) têm um tema identificado. As outras não falaram de um assunto do conteúdo ou não tinham texto. Os números por tema valem só para essa parte.`}
+        />
+      )}
+      {c.conversas > 0 && lidasPct < 90 && (
+        <NxAviso
+          tom="atencao"
+          titulo={`A IA leu ${lidasPct}% das conversas: números por tema ainda incompletos.`}
+          detalhe={`A IA já leu ${lidasPct}% das ${fmtN(c.conversas)} conversas do período. A leitura roda sozinha a cada 20 minutos; os números por tema, objeção e assunto ficam completos quando chegar perto de 100%.`}
+        />
+      )}
+    </>
+  );
 
-      <IgLeitura
-        i={5}
-        titulo="O que os números dizem"
-        subtitulo="Leitura automática do período. Coincidência no tempo e no assunto, não prova de que um post gerou uma conversa."
-        itens={leitura.map((x) => ({ chave: x.titulo, titulo: x.titulo, texto: x.texto, acao: x.acao, tom: x.tom }))}
-      />
-
+  const detalhe = (
+    <div style={{ display: "grid", gap: 18 }}>
       <NxCard
         icone={ic(Tag)}
         titulo="Tema do post × assunto da conversa"
         subtitulo="O que foi postado e quantas pessoas chegaram falando de cada tema"
-        acao={como("Tema do post e assunto da conversa", "Cada linha é um tema (o mesmo tema escrito com ou sem acento conta uma vez só). À esquerda, o que foi postado; à direita, quantas pessoas chegaram falando desse assunto e quantas agendaram. Tema com muita procura e nenhum post, nem de tema parecido, é pauta pronta.")}
       >
+        {como("Tema do post e assunto da conversa", "Cada linha é um tema (o mesmo tema escrito com ou sem acento conta uma vez só). À esquerda, o que foi postado; à direita, quantas pessoas chegaram falando desse assunto e quantas agendaram. Tema com muita procura e nenhum post, nem de tema parecido, é pauta pronta.")}
         {(semConteudo.length > 0 || semDemanda.length > 0) && (
           <div className="nx-grade nx-grade--2">
             {semConteudo.length > 0 && (
@@ -245,61 +261,70 @@ function ConteudoComercialPage() {
             )}
           </div>
         )}
-        {temas.length === 0 ? (
-          <IgNota>Ainda sem temas lidos neste período.</IgNota>
-        ) : (
-          <div className="ig-tabela">
-            <table className="w-full text-sm tabular-nums">
-              <thead><tr className="text-left"><th className="py-1 pr-3">Tema</th><th className="pr-3 text-right">Posts</th><th className="pr-3 text-right">Alcance</th><th className="pr-3 text-right">{c.pessoas != null ? "Pessoas" : "Conversas"}</th><th className="pr-3 text-right">Pediram preço</th><th className="text-right">Agendaram (taxa)</th></tr></thead>
-              <tbody>
-                {temas.slice(0, 20).map((t) => (
-                  <tr key={t.tema}>
-                    <td className="py-1.5 pr-3">{nomeTema(t.tema)}</td>
-                    <td className="pr-3 text-right">{fmtN(t.posts)}</td>
-                    <td className="pr-3 text-right">{fmtN(t.alcance)}</td>
-                    <td className="pr-3 text-right" title={`${fmtN(t.conversas)} conversas`}>{fmtN(quem(t))}</td>
-                    <td className="pr-3 text-right">{fmtN(t.pediram_preco)}</td>
-                    <td className="text-right">{fmtN(quemAgendou(t))} <span className="ig-taxa">{pct(quemAgendou(t), quem(t))}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <NxTabela
+          rotulo="Temas dos posts e assuntos das conversas"
+          colunas={[
+            { chave: "tema", titulo: "Tema" },
+            { chave: "posts", titulo: "Posts", numerica: true },
+            { chave: "alcance", titulo: "Alcance", numerica: true },
+            { chave: "quem", titulo: c.pessoas != null ? "Pessoas" : "Conversas", numerica: true },
+            { chave: "preco", titulo: "Pediram preço", numerica: true },
+            { chave: "agendaram", titulo: "Agendaram (taxa)", numerica: true },
+          ]}
+          chaveDaLinha={(_, k) => temas[k].tema}
+          linhas={temas.slice(0, 20).map((t) => ({
+            tema: nomeTema(t.tema),
+            posts: fmtN(t.posts),
+            alcance: fmtN(t.alcance),
+            quem: <span title={`${fmtN(t.conversas)} conversas`}>{fmtN(quem(t))}</span>,
+            preco: fmtN(t.pediram_preco),
+            agendaram: <>{fmtN(quemAgendou(t))} <span className="ig-taxa">{pct(quemAgendou(t), quem(t))}</span></>,
+          }))}
+          vazio={<NxAviso tom="info" titulo="Ainda sem temas lidos neste período." />}
+        />
       </NxCard>
 
-      <NxCard icone={ic(Clock)} titulo="Dia da semana e hora" subtitulo="Mais escuro, mais conversas começaram ali. O número é quantos posts saíram" acao={como("Dia da semana e hora", "Quanto mais escura a célula, mais conversas começaram naquele dia e hora. O número dentro é quantos posts saíram ali. O ideal é ter posts perto das células escuras.")}>
-        <div className="ig-tabela">
-          <table className="ig-calor">
-            <thead><tr><th />{horas.map((h) => <th key={h}>{h}h</th>)}</tr></thead>
-            <tbody>
-              {DIAS.map((nome, dow) => (
-                <tr key={nome}>
-                  <td className="ig-calor__dia">{nome}</td>
-                  {horas.map((h) => {
-                    const g = grade.get(`${dow}-${h}`);
-                    const forca = g ? g.conversas / maxGrade : 0;
-                    return <td key={h} title={`${nome} ${h}h: ${g?.conversas ?? 0} conversas, ${g?.agendaram ?? 0} agendaram, ${g?.posts ?? 0} posts`} className="ig-calor__c" style={{ background: `color-mix(in srgb, var(--b1) ${Math.round(forca * 90)}%, var(--b6))`, color: forca > 0.5 ? "var(--white)" : "var(--text)" }}>{g?.posts ? g.posts : ""}</td>;
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <NxCard icone={ic(Clock)} titulo="Dia da semana e hora" subtitulo="Mais escuro, mais conversas começaram ali. O número é quantos posts saíram">
+        {como("Dia da semana e hora", "Quanto mais escura a célula, mais conversas começaram naquele dia e hora. O número dentro é quantos posts saíram ali. O ideal é ter posts perto das células escuras.")}
+        <NxTabela
+          rotulo="Conversas por dia da semana e hora, com os posts que saíram"
+          colunas={[{ chave: "dia", titulo: "Dia" }, ...horas.map((h) => ({ chave: `h${h}`, titulo: `${h}h`, numerica: true }))]}
+          chaveDaLinha={(_, k) => DIAS[k]}
+          linhas={DIAS.map((nome, dow) => ({
+            dia: nome,
+            ...Object.fromEntries(
+              horas.map((h) => {
+                const g = grade.get(`${dow}-${h}`);
+                const forca = g ? g.conversas / maxGrade : 0;
+                return [
+                  `h${h}`,
+                  <span
+                    key={h}
+                    className="ig-celula-calor"
+                    title={`${nome} ${h}h: ${g?.conversas ?? 0} conversas, ${g?.agendaram ?? 0} agendaram, ${g?.posts ?? 0} posts`}
+                    style={{ background: `color-mix(in srgb, var(--b1) ${Math.round(forca * 90)}%, var(--b6))`, color: forca > 0.5 ? "var(--white)" : "var(--text)" }}
+                  >
+                    {g?.posts ? g.posts : ""}
+                  </span>,
+                ];
+              }),
+            ),
+          }))}
+        />
       </NxCard>
 
       <NxCard
         icone={ic(ShoppingBag)}
         titulo="Posts que atraem quem quer comprar"
         subtitulo="Comentários que pedem preço, horário, convênio, endereço ou contato, no próprio post"
-        acao={como("Posts que atraem quem quer comprar", "Comentários que pedem preço, horário, convênio, endereço ou contato, ou que são a palavra-chave pedida na legenda (como 'comente PROMPT'), contados no próprio post. Aqui a ligação é direta: o comentário está naquele post. Directs do Instagram não entram.")}
       >
-        {qp.isLoading ? <IgNota>Lendo os comentários…</IgNota> : qp.error || !pr ? <IgNota tom="aviso">Não consegui ler os comentários agora. Atualize a página.</IgNota> : pr.posts_compra.length === 0 ? (
-          <IgNota>Nenhum comentário com intenção de compra no período ({fmtN(pr.comentarios.total)} comentários lidos).{avisoCobertura(pr)}</IgNota>
+        {como("Posts que atraem quem quer comprar", "Comentários que pedem preço, horário, convênio, endereço ou contato, ou que são a palavra-chave pedida na legenda (como 'comente PROMPT'), contados no próprio post. Aqui a ligação é direta: o comentário está naquele post. Directs do Instagram não entram.")}
+        {qp.isLoading ? <NxCarregando texto="Lendo os comentários…" linhas={2} /> : qp.error || !pr ? <NxAviso tom="atencao" titulo="Não consegui ler os comentários agora. Atualize a página." /> : pr.posts_compra.length === 0 ? (
+          <NxAviso tom="info" titulo={`Nenhum comentário com intenção de compra no período (${fmtN(pr.comentarios.total)} comentários lidos).`}>{avisoCobertura(pr)}</NxAviso>
         ) : (
           <>
             <p className="ig-resumo">{fmtN(pr.comentarios.compra)} de {fmtN(pr.comentarios.total)} comentários ({pct(pr.comentarios.compra, pr.comentarios.total)}) em {fmtN(pr.comentarios.posts_com_compra)} posts{pr.comentarios.palavra ? `, ${fmtN(pr.comentarios.palavra)} deles com a palavra-chave da legenda` : ""}.</p>
-            {avisoCobertura(pr) && <IgNota tom="aviso">{avisoCobertura(pr).trim()}</IgNota>}
+            {avisoCobertura(pr) && <NxAviso tom="atencao" titulo={avisoCobertura(pr)} />}
             <ul className="nx-lista ig-ranking">
               {pr.posts_compra.slice(0, 8).map((p) => (
                 <li key={p.post_id}>
@@ -329,30 +354,32 @@ function ConteudoComercialPage() {
       </NxCard>
 
       <div className="nx-grade nx-grade--2">
-        <NxCard icone={ic(Layers)} titulo="Etapa do funil por semana" subtitulo="C0 e C1 atraem gente nova; C2 e C3 chamam para consulta" acao={como("Etapa do funil por semana", "C0 e C1 atraem gente nova; C2 e C3 chamam para consulta. Semanas com mais C2/C3 deveriam ter mais conversas e agendamentos.")}>
-          <div className="ig-tabela">
-            <table className="w-full text-sm tabular-nums">
-              <thead><tr className="text-left"><th className="py-1 pr-3">Semana</th><th className="pr-3 text-right">C0</th><th className="pr-3 text-right">C1</th><th className="pr-3 text-right">C2</th><th className="pr-3 text-right">C3</th><th className="pr-3 text-right">Conversas</th><th className="text-right">Agendaram</th></tr></thead>
-              <tbody>
-                {d.semanas.map((s) => (
-                  <tr key={s.semana}>
-                    <td className="py-1.5 pr-3">{s.semana.slice(8, 10)}/{s.semana.slice(5, 7)}</td>
-                    <td className="pr-3 text-right">{s.c0}</td><td className="pr-3 text-right">{s.c1}</td><td className="pr-3 text-right">{s.c2}</td><td className="pr-3 text-right">{s.c3}</td>
-                    <td className="pr-3 text-right">{fmtN(s.conversas)}</td><td className="text-right">{fmtN(s.agendaram)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <NxCard icone={ic(Layers)} titulo="Etapa do funil por semana" subtitulo="C0 e C1 atraem gente nova; C2 e C3 chamam para consulta">
+          {como("Etapa do funil por semana", "C0 e C1 atraem gente nova; C2 e C3 chamam para consulta. Semanas com mais C2/C3 deveriam ter mais conversas e agendamentos.")}
+          <NxTabela
+            rotulo="Etapa do funil por semana"
+            colunas={[
+              { chave: "semana", titulo: "Semana" },
+              { chave: "c0", titulo: "C0", numerica: true },
+              { chave: "c1", titulo: "C1", numerica: true },
+              { chave: "c2", titulo: "C2", numerica: true },
+              { chave: "c3", titulo: "C3", numerica: true },
+              { chave: "conversas", titulo: "Conversas", numerica: true },
+              { chave: "agendaram", titulo: "Agendaram", numerica: true },
+            ]}
+            chaveDaLinha={(_, k) => d.semanas[k].semana}
+            linhas={d.semanas.map((s) => ({ semana: `${s.semana.slice(8, 10)}/${s.semana.slice(5, 7)}`, c0: s.c0, c1: s.c1, c2: s.c2, c3: s.c3, conversas: fmtN(s.conversas), agendaram: fmtN(s.agendaram) }))}
+            vazio={<NxAviso tom="info" titulo="Nenhuma semana com etapa do funil no período." />}
+          />
         </NxCard>
         <NxCard
           icone={ic(Timer)}
           titulo="Tempo da primeira resposta × agendamento"
           subtitulo="Quanto o paciente esperou e quantos agendaram, em horário comercial"
-          acao={como("Tempo da primeira resposta", "Quanto tempo o paciente esperou pela primeira resposta de uma pessoa (robô não conta) e quantos agendaram. Só conversas que começaram em horário comercial (seg a sex 8h–18h, sáb 8h–12h). É correlação, não prova.")}
         >
-          {qp.isLoading ? <IgNota>Medindo as respostas…</IgNota> : !pr || pr.cobertura.horario_comercial < MIN_CONVERSAS_FAIXA ? (
-            <IgNota>Poucas conversas em horário comercial no período para comparar (mínimo de {MIN_CONVERSAS_FAIXA}).</IgNota>
+          {como("Tempo da primeira resposta", "Quanto tempo o paciente esperou pela primeira resposta de uma pessoa (robô não conta) e quantos agendaram. Só conversas que começaram em horário comercial (seg a sex 8h–18h, sáb 8h–12h). É correlação, não prova.")}
+          {qp.isLoading ? <NxCarregando texto="Medindo as respostas…" linhas={2} /> : !pr || pr.cobertura.horario_comercial < MIN_CONVERSAS_FAIXA ? (
+            <NxAviso tom="info" titulo={`Poucas conversas em horário comercial no período para comparar (mínimo de ${MIN_CONVERSAS_FAIXA}).`} />
           ) : (
             <>
               <ul className="ig-barras">
@@ -374,53 +401,63 @@ function ConteudoComercialPage() {
                   );
                 })}
               </ul>
-              {pr.resposta_tema.filter((t) => temaValido(t.tema) && t.rapidas >= 10 && t.lentas >= 10).length > 0 && (
-                <div className="ig-tabela">
-                  <table className="w-full text-sm tabular-nums">
-                    <thead><tr className="text-left"><th className="py-1 pr-3">Tema</th><th className="pr-3 text-right">Respondidas em até 1 h</th><th className="text-right">Depois de 1 h ou sem resposta</th></tr></thead>
-                    <tbody>{pr.resposta_tema.filter((t) => temaValido(t.tema) && t.rapidas >= 10 && t.lentas >= 10).map((t) => (
-                      <tr key={t.tema}><td className="py-1.5 pr-3">{t.tema}</td><td className="pr-3 text-right">{pct(t.rapidas_agendaram, t.rapidas)} agendaram</td><td className="text-right">{pct(t.lentas_agendaram, t.lentas)} agendaram</td></tr>
-                    ))}</tbody>
-                  </table>
-                </div>
+              {posProfundo.length > 0 && (
+                <NxTabela
+                  rotulo="Tempo de resposta por tema"
+                  colunas={[
+                    { chave: "tema", titulo: "Tema" },
+                    { chave: "rapidas", titulo: "Respondidas em até 1 h", numerica: true },
+                    { chave: "lentas", titulo: "Depois de 1 h ou sem resposta", numerica: true },
+                  ]}
+                  chaveDaLinha={(_, k) => posProfundo[k].tema}
+                  linhas={posProfundo.map((t) => ({ tema: t.tema, rapidas: `${pct(t.rapidas_agendaram, t.rapidas)} agendaram`, lentas: `${pct(t.lentas_agendaram, t.lentas)} agendaram` }))}
+                />
               )}
             </>
           )}
         </NxCard>
       </div>
 
-        <NxCard
-          icone={ic(BadgeDollarSign)}
-          titulo="Tema da conversa × venda fechada no CRM"
-          subtitulo="Quantas conversas de cada tema viraram venda e quanto faturaram"
-          acao={como("Tema da conversa e venda fechada", "Cada conversa tem o tema lido pela IA e está ligada ao lead do CRM. Mostra quantas viraram venda e quanto faturaram. Depende de a equipe marcar o lead como ganho e preencher o valor.")}
-        >
-          {qp.isLoading ? <IgNota>Cruzando com o CRM…</IgNota> : !pr ? <IgNota tom="aviso">Não consegui cruzar com o CRM agora.</IgNota> : pr.temas_valor.filter((t) => temaValido(t.tema)).length === 0 ? (
-            <IgNota>Ainda sem conversas com tema lido no período ({fmtN(pr.cobertura.com_tema)} de {fmtN(pr.cobertura.conversas)}).</IgNota>
-          ) : (
-            <>
-              <div className="ig-tabela">
-                <table className="w-full text-sm tabular-nums">
-                  <thead><tr className="text-left"><th className="py-1 pr-3">Tema</th><th className="pr-3 text-right">Conversas</th><th className="pr-3 text-right">Com lead</th><th className="pr-3 text-right">Vendas</th><th className="pr-3 text-right">Fechamento</th><th className="pr-3 text-right">Faturado</th><th className="text-right">Ticket médio</th></tr></thead>
-                  <tbody>
-                    {pr.temas_valor.filter((t) => temaValido(t.tema)).slice(0, 15).map((t) => (
-                      <tr key={t.tema}>
-                        <td className="py-1.5 pr-3">{t.tema}</td><td className="pr-3 text-right">{fmtN(t.conversas)}</td><td className="pr-3 text-right">{fmtN(t.com_lead)}</td>
-                        <td className="pr-3 text-right">{fmtN(t.ganhos)}</td><td className="pr-3 text-right">{pct(t.ganhos, t.com_lead)}</td>
-                        <td className="pr-3 text-right">{t.receita > 0 ? brl(t.receita) : "—"}</td><td className="text-right">{t.ganhos_com_valor > 0 ? brl(t.receita / t.ganhos_com_valor) : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <IgNota>{fmtN(pr.cobertura.com_tema)} de {fmtN(pr.cobertura.conversas)} conversas do período já têm tema lido; {fmtN(pr.cobertura.com_lead)} estão ligadas a um lead.</IgNota>
-            </>
-          )}
-        </NxCard>
+      <NxCard
+        icone={ic(BadgeDollarSign)}
+        titulo="Tema da conversa × venda fechada no CRM"
+        subtitulo="Quantas conversas de cada tema viraram venda e quanto faturaram"
+      >
+        {como("Tema da conversa e venda fechada", "Cada conversa tem o tema lido pela IA e está ligada ao lead do CRM. Mostra quantas viraram venda e quanto faturaram. Depende de a equipe marcar o lead como ganho e preencher o valor.")}
+        {qp.isLoading ? <NxCarregando texto="Cruzando com o CRM…" linhas={2} /> : !pr ? <NxAviso tom="atencao" titulo="Não consegui cruzar com o CRM agora." /> : pr.temas_valor.filter((t) => temaValido(t.tema)).length === 0 ? (
+          <NxAviso tom="info" titulo={`Ainda sem conversas com tema lido no período (${fmtN(pr.cobertura.com_tema)} de ${fmtN(pr.cobertura.conversas)}).`} />
+        ) : (
+          <>
+            <NxTabela
+              rotulo="Tema da conversa e venda fechada no CRM"
+              colunas={[
+                { chave: "tema", titulo: "Tema" },
+                { chave: "conversas", titulo: "Conversas", numerica: true },
+                { chave: "lead", titulo: "Com lead", numerica: true },
+                { chave: "vendas", titulo: "Vendas", numerica: true },
+                { chave: "fechamento", titulo: "Fechamento", numerica: true },
+                { chave: "faturado", titulo: "Faturado", numerica: true },
+                { chave: "ticket", titulo: "Ticket médio", numerica: true },
+              ]}
+              chaveDaLinha={(_, k) => pr.temas_valor.filter((t) => temaValido(t.tema))[k].tema}
+              linhas={pr.temas_valor.filter((t) => temaValido(t.tema)).slice(0, 15).map((t) => ({
+                tema: t.tema,
+                conversas: fmtN(t.conversas),
+                lead: fmtN(t.com_lead),
+                vendas: fmtN(t.ganhos),
+                fechamento: pct(t.ganhos, t.com_lead),
+                faturado: t.receita > 0 ? brl(t.receita) : "Sem dado",
+                ticket: t.ganhos_com_valor > 0 ? brl(t.receita / t.ganhos_com_valor) : "Sem dado",
+              }))}
+            />
+            <NxAviso tom="info" titulo={`${fmtN(pr.cobertura.com_tema)} de ${fmtN(pr.cobertura.conversas)} conversas do período já têm tema lido;`}>{fmtN(pr.cobertura.com_lead)} estão ligadas a um lead.</NxAviso>
+          </>
+        )}
+      </NxCard>
 
       <div className="nx-grade nx-grade--2">
         <NxCard icone={ic(ShieldAlert)} titulo="Objeções que aparecem nas conversas" subtitulo="Cada objeção frequente é um post que responde antes da conversa">
-          {d.objecoes.length === 0 ? <IgNota>Nenhuma objeção lida ainda.</IgNota> : (
+          {d.objecoes.length === 0 ? <NxAviso tom="info" titulo="Nenhuma objeção lida ainda." /> : (
             <IgBarras
               semPercentual
               itens={d.objecoes.map((o) => ({
@@ -434,11 +471,28 @@ function ConteudoComercialPage() {
           )}
         </NxCard>
         <NxCard icone={ic(Search)} titulo="O que mais pedem nas conversas" subtitulo="Assunto da conversa nas palavras da IA, sem dado pessoal. Contado por conversa">
-          {d.assuntos.length === 0 ? <IgNota>Nenhum assunto lido ainda.</IgNota> : (
+          {d.assuntos.length === 0 ? <NxAviso tom="info" titulo="Nenhum assunto lido ainda." /> : (
             <IgBarras semPercentual itens={d.assuntos.map((a) => ({ chave: a.assunto, rotulo: a.assunto, valor: a.n }))} formato={(v) => `${fmtN(v)} conversas`} />
           )}
         </NxCard>
       </div>
+
+      <NxComoCalcula titulo="Como ler esta tela">
+        Cruza o que foi postado no Instagram com as conversas que chegaram no WhatsApp: por dia, por dia da semana e hora, por tema e por etapa do funil. O tema da conversa vem da leitura por IA só das mensagens do paciente, com o mesmo vocabulário de temas dos posts. Mostra coincidência no tempo, não prova que um post gerou uma conversa específica.
+      </NxComoCalcula>
+    </div>
+  );
+
+  return (
+    <div className="nexo-ig">
+      <PaginaNexo
+        {...cabecalho}
+        leitura={<LeituraDaTela fatos={fatos} carregando={fatos == null} semSelo />}
+        cartoes={cartoes}
+        principal={principal}
+        corpo={corpo}
+        detalhe={detalhe}
+      />
     </div>
   );
 }

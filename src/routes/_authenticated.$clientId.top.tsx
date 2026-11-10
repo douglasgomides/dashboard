@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,11 +7,16 @@ import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { getAudiencia, fmtN, fmtPct } from "@/lib/audiencia";
 import { METRICAS, topN, padroesDoTop, ehReel, ehPostDeFeed, valorDaMetrica, type MetricaTop } from "@/lib/top-conteudo";
 import { brazilWeekdayAndHour } from "@/lib/report-metrics";
+import { lerPeriodo } from "@/lib/leitura-periodo";
+import { fatosDoInstagram, fatosSemInstagram } from "@/lib/leitura/fatos-instagram";
+import { hojeBrasilia } from "@/lib/status-fonte";
 import { Miniatura, IconeFormato } from "@/components/visual";
 import { Trophy, Eye, Target, Bookmark, Share2, Heart, MessageCircle, FastForward, Timer, Clock, UserPlus, Reply, Users, Radio, Film, Image as ImageIcon, CircleDot, BarChart3, Layers, ArrowDownToLine } from "lucide-react";
-import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 import { NxCard, NxKpi, NxTag, NxListRow, NxColunas } from "@/components/nx";
-import { IgCabecalho, IgLeitura, IgNota, IgNotas, IgAbas, IgVitrine, IgMetodo } from "@/components/nx/instagram";
+import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxVazio } from "@/components/nx/blocos";
+import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
+import { IgAbas, IgVitrine } from "@/components/nx/instagram";
 
 export const Route = createFileRoute("/_authenticated/$clientId/top")({
   component: TopPage,
@@ -114,11 +119,39 @@ const METRICAS_STORY = [
   { id: "profile_visits", rotulo: "Visitas ao perfil" },
   { id: "follows", rotulo: "Novos seguidores" },
 ] as const;
+type MetricaStory = (typeof METRICAS_STORY)[number]["id"];
 
-function Stories({ clientId, start, end }: { clientId: string; start: string; end: string }) {
-  const [metrica, setMetrica] = useState<(typeof METRICAS_STORY)[number]["id"]>("reach");
+const numerosStory = (s: any): [typeof Eye, string, string][] =>
+  [
+    s.reach != null && [Target, fmtN(s.reach), "Alcance"],
+    s.views != null && [Eye, fmtN(s.views), "Visualizações"],
+    s.replies != null && [Reply, fmtN(s.replies), "Respostas"],
+    s.shares != null && [Share2, fmtN(s.shares), "Compartilhamentos"],
+    s.profile_visits != null && [Users, fmtN(s.profile_visits), "Visitas ao perfil"],
+    s.follows != null && [UserPlus, fmtN(s.follows), "Novos seguidores"],
+  ].filter(Boolean) as [typeof Eye, string, string][];
+
+function TopPage() {
+  const { clientId } = Route.useParams();
+  const dateRangeState = clientLayoutRoute.useSearch();
+  const { start, end } = resolveDateRange(dateRangeState);
+  const periodLabel = formatRangeLabel({ start, end });
+  const hoje = hojeBrasilia();
+  const [aba, setAba] = useState<Aba>("posts");
+  const [metrica, setMetrica] = useState<MetricaTop>("saved");
+  const [metricaStory, setMetricaStory] = useState<MetricaStory>("reach");
+
+  const fontes = useQuery({ queryKey: ["fontes", clientId], queryFn: () => getClientFontes(clientId) });
+  const temIg = fontes.data?.tem_instagram === true;
+  const posts = useQuery({
+    queryKey: ["top-posts", clientId, start, end],
+    queryFn: () => getPostsForAnalytics(clientId, start, end + "T23:59:59"),
+    enabled: temIg,
+  });
+  // Stories: guardados no período e no ar agora. Só buscados quando a aba de stories está aberta.
   const guardados = useQuery({
     queryKey: ["stories-guardados", clientId, start, end],
+    enabled: temIg && aba === "stories",
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("instagram_stories")
@@ -135,59 +168,115 @@ function Stories({ clientId, start, end }: { clientId: string; start: string; en
     },
     retry: false,
   });
-  const aoVivo = useQuery({ queryKey: ["audiencia", clientId], queryFn: () => getAudiencia(clientId), staleTime: 20 * 60_000, retry: false });
+  const aoVivo = useQuery({ queryKey: ["audiencia", clientId], queryFn: () => getAudiencia(clientId), staleTime: 20 * 60_000, retry: false, enabled: temIg && aba === "stories" });
 
-  const top = useMemo(
+  const todosDoTipo = useMemo(() => (posts.data ?? []).filter((p) => (aba === "reels" ? ehReel(p) : ehPostDeFeed(p))), [posts.data, aba]);
+  const top = useMemo(() => (aba === "stories" ? [] : topN(posts.data ?? [], aba === "reels" ? "reel" : "post", metrica, 20)), [posts.data, aba, metrica]);
+  const padroes = useMemo(() => padroesDoTop(top.map((x) => x.p), todosDoTipo), [top, todosDoTipo]);
+  const topStories = useMemo(
     () =>
       (guardados.data?.linhas ?? [])
-        .filter((s) => s[metrica] != null)
-        .sort((a, b) => Number(b[metrica]) - Number(a[metrica]))
+        .filter((s) => s[metricaStory] != null)
+        .sort((a, b) => Number(b[metricaStory]) - Number(a[metricaStory]))
         .slice(0, 20),
-    [guardados.data, metrica],
+    [guardados.data, metricaStory],
   );
-  const vivos = aoVivo.data?.dados?.stories_ao_vivo;
-  const rotuloMetrica = METRICAS_STORY.find((m) => m.id === metrica)?.rotulo ?? "";
 
-  const numerosStory = (s: any): [typeof Eye, string, string][] =>
-    [
-      s.reach != null && [Target, fmtN(s.reach), "Alcance"],
-      s.views != null && [Eye, fmtN(s.views), "Visualizações"],
-      s.replies != null && [Reply, fmtN(s.replies), "Respostas"],
-      s.shares != null && [Share2, fmtN(s.shares), "Compartilhamentos"],
-      s.profile_visits != null && [Users, fmtN(s.profile_visits), "Visitas ao perfil"],
-      s.follows != null && [UserPlus, fmtN(s.follows), "Novos seguidores"],
-    ].filter(Boolean) as [typeof Eye, string, string][];
+  // A leitura é dos posts do período (alcance, formato, dependência de um post). Só regra, sem consulta nova.
+  const fatos = useMemo(() => {
+    if (!temIg) return fatosSemInstagram("top", { de: start, ate: end }, hoje);
+    if (!posts.data) return null;
+    return fatosDoInstagram(lerPeriodo({ diario: [], posts: posts.data }), { de: start, ate: end, hoje, posts: posts.data }, "top");
+  }, [temIg, posts.data, start, end, hoje]);
 
-  return (
-    <>
-      {guardados.data?.indisponivel && (
-        <IgNota
-          tom="aviso"
-          detalhe={
-            <>
-              Stories saem do ar em 24 horas e a Meta não guarda o histórico. O Nexo passa a guardar cada story todo dia, mas a tabela <code>instagram_stories</code> ainda não existe neste banco: falta aplicar a migração{" "}
-              <code>20261007120000_instagram_stories.sql</code>. Depois disso o ranking se forma a partir do primeiro dia.
-            </>
-          }
-        >
-          Ranking de stories em breve: migração pendente
-        </IgNota>
-      )}
-      {guardados.data && !guardados.data.indisponivel && (
-        <>
-          <section className="nx-grade nx-grade--3 ig-kpis" aria-label="Números dos stories">
-            <NxKpi i={0} icone={ic(CircleDot)} rotulo="Stories guardados" valor={fmtN(guardados.data.linhas.length)} nota="no período" />
-            <NxKpi i={1} icone={ic(Trophy)} rotulo="1º lugar" valor={top[0] ? fmtN(Number(top[0][metrica])) : "sem dado"} nota={rotuloMetrica.toLowerCase()} />
-            <NxKpi i={2} icone={ic(Radio)} rotulo="No ar agora" valor={vivos?.ok ? fmtN(vivos.dados.length) : "sem dado"} nota="lidos ao vivo da Meta" />
-          </section>
+  const rotuloMetrica = METRICAS.find((m) => m.id === metrica)?.rotulo ?? "";
+  const rotuloStory = METRICAS_STORY.find((m) => m.id === metricaStory)?.rotulo ?? "";
+  const fmtV = (v: number) => (metrica === "taxa_salvamento" ? fmtPct(v, 2) : fmtN(v));
+  const nomeTipo = aba === "reels" ? "Reels" : "posts";
+  const colunas = useMemo(() => top.slice(0, 10).map((x, i) => ({ rotulo: `${i + 1}º`, valor: x.v, texto: metrica === "taxa_salvamento" ? fmtPct(x.v, 2) : fmtN(x.v) })), [top, metrica]);
+
+  const abas = (
+    <IgAbas
+      rotulo="Tipo de publicação"
+      ativa={aba}
+      onTrocar={setAba}
+      abas={[
+        { id: "posts", rotulo: "Top 20 posts", icone: ia(ImageIcon) },
+        { id: "reels", rotulo: "Top 20 Reels", icone: ia(Film) },
+        { id: "stories", rotulo: "Top 20 stories", icone: ia(CircleDot) },
+      ]}
+    />
+  );
+  const cabecalho = {
+    tela: "top" as const,
+    titulo: "Encontrar destaques",
+    pergunta: "Quais publicações mais se destacaram e por quê?",
+    decisao: "D3" as const,
+    meta: (
+      <>
+        <span>{periodLabel}</span>
+        {temIg && abas}
+      </>
+    ),
+  };
+  const pagina = (corpo: ReactNode, leitura: ReactNode) => (
+    <div className="nexo-ig">
+      <PaginaNexo {...cabecalho} leitura={leitura} corpo={corpo} />
+    </div>
+  );
+
+  if (fontes.isLoading) return pagina(<NxCarregando linhas={4} />, <LeituraDaTela fatos={null} carregando semSelo />);
+  if (fontes.error) {
+    return pagina(
+      <NxErro texto="Não consegui verificar as fontes deste cliente. Atualize a página." onTentar={() => void fontes.refetch()} />,
+      <LeituraDaTela fatos={null} carregando={false} erro="As fontes não responderam." semSelo />,
+    );
+  }
+  if (!temIg) {
+    return pagina(
+      <NxVazio titulo="Instagram não conectado" falta="uma conta de Instagram ligada ao Nexo. Sem ela não há posts nem alcance para ranquear" quem="equipe_hub" passo="ligar a conta de Instagram do médico à Business Manager do cliente" />,
+      <LeituraDaTela fatos={fatos} carregando={false} semSelo />,
+    );
+  }
+  if (posts.error) {
+    return pagina(
+      <NxErro texto="Falha ao ler os posts do período." onTentar={() => void posts.refetch()} />,
+      <LeituraDaTela fatos={null} carregando={false} erro="Os posts não carregaram." semSelo />,
+    );
+  }
+  const leitura = <LeituraDaTela fatos={fatos} carregando={posts.isLoading || fatos == null} semSelo />;
+
+  // ----- Stories -----
+  if (aba === "stories") {
+    const vivos = aoVivo.data?.dados?.stories_ao_vivo;
+    const storiesOk = guardados.data && !guardados.data.indisponivel;
+    const cartoesStories = storiesOk
+      ? ([
+          <NxKpi key="g" icone={ic(CircleDot)} rotulo="Stories guardados" valor={fmtN(guardados.data!.linhas.length)} nota="no período" />,
+          <NxKpi key="p" icone={ic(Trophy)} rotulo="1º lugar" valor={topStories[0] ? fmtN(Number(topStories[0][metricaStory])) : "Sem dado"} nota={rotuloStory.toLowerCase()} />,
+          <NxKpi key="v" icone={ic(Radio)} rotulo="No ar agora" valor={vivos?.ok ? fmtN(vivos.dados.length) : "Sem dado"} nota="lidos ao vivo da Meta" />,
+        ] as unknown as [ReactNode, ReactNode?, ReactNode?, ReactNode?])
+      : undefined;
+    const corpoStories = (
+      <>
+        {guardados.isLoading && <NxCarregando texto="Lendo os stories…" />}
+        {guardados.error && <NxErro texto="Falha ao ler os stories guardados." onTentar={() => void guardados.refetch()} />}
+        {guardados.data?.indisponivel && (
+          <NxAviso
+            tom="atencao"
+            titulo="Ranking de stories em breve: ainda não há stories guardados."
+            detalhe="Stories saem do ar em 24 horas e a Meta não guarda o histórico. O Nexo passa a guardar cada story todo dia, mas essa guarda ainda não está ligada neste banco. Depois disso o ranking se forma a partir do primeiro dia."
+          />
+        )}
+        {storiesOk && (
           <NxCard
             icone={ic(CircleDot)}
-            titulo={`Top ${top.length || 20} stories`}
-            subtitulo={`${guardados.data.linhas.length} stories guardados no período`}
+            titulo={`Top ${topStories.length || 20} stories`}
+            subtitulo={`${guardados.data!.linhas.length} stories guardados no período`}
             acao={
               <div className="ig-filtros">
                 <label htmlFor="metrica-story">Ordenar por</label>
-                <select id="metrica-story" className="ig-select" value={metrica} onChange={(e) => setMetrica(e.target.value as typeof metrica)}>
+                <select id="metrica-story" className="ig-select" value={metricaStory} onChange={(e) => setMetricaStory(e.target.value as MetricaStory)}>
                   {METRICAS_STORY.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.rotulo}
@@ -197,11 +286,11 @@ function Stories({ clientId, start, end }: { clientId: string; start: string; en
               </div>
             }
           >
-            {top.length === 0 ? (
-              <IgNota>Nenhum story guardado neste período ainda. O Nexo guarda os que estão no ar a cada atualização do Instagram.</IgNota>
+            {topStories.length === 0 ? (
+              <NxAviso tom="info" titulo="Nenhum story guardado neste período ainda.">O Nexo guarda os que estão no ar a cada atualização do Instagram.</NxAviso>
             ) : (
               <ol className="nx-lista ig-ranking">
-                {top.map((s, i) => (
+                {topStories.map((s, i) => (
                   <li key={s.id}>
                     <NxListRow
                       href={s.permalink ?? undefined}
@@ -217,8 +306,8 @@ function Stories({ clientId, start, end }: { clientId: string; start: string; en
                       sub={<Numeros itens={numerosStory(s)} />}
                       fim={
                         <span className="ig-num-fim">
-                          <b>{fmtN(Number(s[metrica]))}</b>
-                          <small>{rotuloMetrica.toLowerCase()}</small>
+                          <b>{fmtN(Number(s[metricaStory]))}</b>
+                          <small>{rotuloStory.toLowerCase()}</small>
                         </span>
                       }
                     />
@@ -226,20 +315,21 @@ function Stories({ clientId, start, end }: { clientId: string; start: string; en
                 ))}
               </ol>
             )}
-            <IgNota>As métricas de um story são lidas enquanto ele está no ar; stories postados há poucas horas podem ter números ainda parciais.</IgNota>
+            <NxAviso tom="info" titulo="Números ainda parciais:">as métricas de um story são lidas enquanto ele está no ar; stories postados há poucas horas podem ter números ainda incompletos.</NxAviso>
           </NxCard>
-        </>
-      )}
-
+        )}
+      </>
+    );
+    const detalheStories = (
       <NxCard icone={ic(Radio)} titulo="Stories no ar agora" subtitulo="Ao vivo da Meta, com os números de agora">
         {aoVivo.isLoading ? (
-          <Carregando texto="Lendo da Meta…" />
+          <NxCarregando texto="Lendo da Meta…" />
         ) : !vivos ? (
-          <IgNota tom="aviso">{aoVivo.data?.nada_a_fazer ?? aoVivo.data?.erro ?? "Não foi possível ler os stories agora."}</IgNota>
+          <NxAviso tom="atencao" titulo="Não foi possível ler os stories agora.">{aoVivo.data?.nada_a_fazer ?? aoVivo.data?.erro ?? ""}</NxAviso>
         ) : !vivos.ok ? (
-          <IgNota tom="aviso">A Meta não devolveu os stories: {vivos.erro}</IgNota>
+          <NxAviso tom="atencao" titulo="A Meta não devolveu os stories:">{vivos.erro}</NxAviso>
         ) : vivos.dados.length === 0 ? (
-          <IgNota>Nenhum story no ar neste momento.</IgNota>
+          <NxAviso tom="info" titulo="Nenhum story no ar neste momento." />
         ) : (
           <ul className="nx-lista">
             {vivos.dados.map((s) => (
@@ -264,65 +354,48 @@ function Stories({ clientId, start, end }: { clientId: string; start: string; en
           </ul>
         )}
       </NxCard>
-    </>
+    );
+    return (
+      <div className="nexo-ig">
+        <PaginaNexo {...cabecalho} leitura={leitura} cartoes={cartoesStories} corpo={corpoStories} detalhe={detalheStories} />
+      </div>
+    );
+  }
+
+  // ----- Posts e Reels -----
+  if (posts.isLoading) return pagina(<NxCarregando texto="Lendo os posts…" linhas={4} />, leitura);
+  if (top.length === 0) {
+    return pagina(
+      <NxVazio titulo={`Sem ${nomeTipo} com essa métrica`} falta={`${aba === "reels" ? "Reels" : "posts"} do período com a métrica escolhida`} quem="equipe_hub" passo="trocar o período no topo ou a métrica" />,
+      leitura,
+    );
+  }
+
+  const cartoes = [
+    <NxKpi key="n" icone={ic(Layers)} rotulo={`${aba === "reels" ? "Reels" : "Posts"} no período`} valor={fmtN(todosDoTipo.length)} nota={`o ranking mostra os ${top.length} melhores`} />,
+    <NxKpi key="1" icone={ic(Trophy)} rotulo="1º lugar" valor={fmtV(top[0].v)} nota={rotuloMetrica.toLowerCase()} />,
+    <NxKpi key="u" icone={ic(ArrowDownToLine)} rotulo={`Para entrar no top ${top.length}`} valor={fmtV(top[top.length - 1].v)} nota={`${rotuloMetrica.toLowerCase()} do ${top.length}º lugar`} />,
+  ] as unknown as [ReactNode, ReactNode?, ReactNode?, ReactNode?];
+
+  const principal = (
+    <NxCard
+      nivel={2}
+      icone={ic(BarChart3)}
+      titulo="Distância entre os primeiros"
+      subtitulo={`${rotuloMetrica} do 1º ao ${colunas.length}º lugar`}
+    >
+      <NxComoCalcula titulo="Como ler: distância entre os primeiros">
+        Se o 1º lugar fica muito acima dos outros, foi um post fora da curva; se as colunas são parecidas, o bom resultado se repete e vale olhar o que eles têm em comum.
+      </NxComoCalcula>
+      <NxColunas dados={colunas} destaque={0} formatarEixo={(n) => (metrica === "taxa_salvamento" ? fmtPct(n, 1) : fmtN(n))} rotulo={`${rotuloMetrica} dos ${colunas.length} primeiros`} />
+    </NxCard>
   );
-}
 
-function TopPage() {
-  const { clientId } = Route.useParams();
-  const dateRangeState = clientLayoutRoute.useSearch();
-  const { start, end } = resolveDateRange(dateRangeState);
-  const periodLabel = formatRangeLabel({ start, end });
-  const [aba, setAba] = useState<Aba>("posts");
-  const [metrica, setMetrica] = useState<MetricaTop>("saved");
-
-  const fontes = useQuery({ queryKey: ["fontes", clientId], queryFn: () => getClientFontes(clientId) });
-  const temIg = fontes.data?.tem_instagram === true;
-  const posts = useQuery({
-    queryKey: ["top-posts", clientId, start, end],
-    queryFn: () => getPostsForAnalytics(clientId, start, end + "T23:59:59"),
-    enabled: temIg,
-  });
-
-  const todosDoTipo = useMemo(() => (posts.data ?? []).filter((p) => (aba === "reels" ? ehReel(p) : ehPostDeFeed(p))), [posts.data, aba]);
-  const top = useMemo(() => (aba === "stories" ? [] : topN(posts.data ?? [], aba === "reels" ? "reel" : "post", metrica, 20)), [posts.data, aba, metrica]);
-  const padroes = useMemo(() => padroesDoTop(top.map((x) => x.p), todosDoTipo), [top, todosDoTipo]);
-
-  const rotuloMetrica = METRICAS.find((m) => m.id === metrica)?.rotulo ?? "";
-  const fmtV = (v: number) => (metrica === "taxa_salvamento" ? fmtPct(v, 2) : fmtN(v));
-  const nomeTipo = aba === "reels" ? "Reels" : "posts";
-  const colunas = useMemo(() => top.slice(0, 10).map((x, i) => ({ rotulo: `${i + 1}º`, valor: x.v, texto: metrica === "taxa_salvamento" ? fmtPct(x.v, 2) : fmtN(x.v) })), [top, metrica]);
-
-  const head = (
-    <IgCabecalho
-      titulo="Quais publicações mais se destacaram, e por quê?"
-      pergunta="Os 20 melhores do período na métrica que você escolher, e o que eles têm em comum."
-      metodo={
-        <>
-          Os 20 melhores posts, Reels e stories do período ({periodLabel}), na métrica que você escolher, e o que eles têm em comum. Curtidas, comentários, visualizações e alcance de cada post são só do alcance orgânico: o Instagram mostra no post o total com impulsionamento, então um post turbinado aparece com número maior lá do que aqui.
-        </>
-      }
-    />
-  );
-  if (fontes.isLoading) return <div className="nexo-ig">{head}<Carregando /></div>;
-  if (fontes.error) return <div className="nexo-ig">{head}<ErroCarga texto="Não consegui verificar as fontes deste cliente. Atualize a página." /></div>;
-  if (!temIg) return <div className="nexo-ig">{head}<SemFonte {...SEM_INSTAGRAM} /></div>;
-
-  return (
-    <div className="nexo-ig">
-      {head}
+  const corpo = (
+    <>
       <div className="ig-barra-acoes">
-        <IgAbas
-          rotulo="Tipo de publicação"
-          ativa={aba}
-          onTrocar={setAba}
-          abas={[
-            { id: "posts", rotulo: "Top 20 posts", icone: ia(ImageIcon) },
-            { id: "reels", rotulo: "Top 20 Reels", icone: ia(Film) },
-            { id: "stories", rotulo: "Top 20 stories", icone: ia(CircleDot) },
-          ]}
-        />
-        {aba !== "stories" && posts.data && (
+        <NxAviso tom="info" titulo="Números só do alcance orgânico." detalhe="O Instagram mostra no post o total com impulsionamento; aqui entram só os números orgânicos, então um post turbinado aparece com número maior lá do que aqui." />
+        {posts.data && (
           <div className="ig-filtros">
             <label htmlFor="metrica-top">Ordenar por</label>
             <select id="metrica-top" className="ig-select" value={metrica} onChange={(e) => setMetrica(e.target.value as MetricaTop)}>
@@ -335,73 +408,56 @@ function TopPage() {
           </div>
         )}
       </div>
-      <IgNotas>
-        <IgNota detalhe="O Instagram mostra no post o total com impulsionamento; aqui entram só os números orgânicos, então um post turbinado aparece com número maior lá do que aqui." rotuloDetalhe="O que muda?">
-          Números só do alcance orgânico
-        </IgNota>
-      </IgNotas>
-      <div role="tabpanel" className="nexo-ig">
-        {aba === "stories" ? (
-          <Stories clientId={clientId} start={start} end={end} />
-        ) : posts.isLoading ? (
-          <Carregando texto="Lendo os posts…" />
-        ) : posts.error ? (
-          <ErroCarga texto="Falha ao ler os posts do período." />
-        ) : top.length === 0 ? (
-          <SemFonte titulo={`Sem ${nomeTipo} com essa métrica`} texto={`Nenhum ${aba === "reels" ? "Reel" : "post"} do período tem a métrica escolhida. Troque o período no topo ou a métrica.`} />
+      <NxCard icone={ic(Trophy)} titulo="Pódio" subtitulo={`Os 3 ${nomeTipo} com mais ${rotuloMetrica.toLowerCase()} no período`}>
+        <IgVitrine
+          itens={top.slice(0, 3).map(({ p, v }) => ({
+            id: p.id,
+            href: p.permalink,
+            imagem: <Miniatura url={p.thumbnail_url} formato={p.format} className="w-full" />,
+            titulo: gancho(p.caption) || "(sem legenda)",
+            valor: fmtV(v),
+            rotulo: rotuloMetrica.toLowerCase(),
+            extra: (
+              <>
+                {p.format && <NxTag tom="g">{aba === "reels" ? "Reels" : nomeFormato(p.format)}</NxTag>}
+                {p.tema && <NxTag tom="b">{p.tema}</NxTag>}
+                <NxTag tom="g">{quando(p.posted_at)}</NxTag>
+              </>
+            ),
+          }))}
+        />
+      </NxCard>
+    </>
+  );
+
+  const detalhe = (
+    <div style={{ display: "grid", gap: 18 }}>
+      <NxCard icone={ic(Target)} titulo="O que os melhores têm em comum" subtitulo="Um padrão para testar, não uma regra">
+        {padroes.frases.length > 0 ? (
+          <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 8, fontSize: 15, lineHeight: "22px", fontWeight: 500 }}>
+            {padroes.frases.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
         ) : (
-          <>
-            <section className="nx-grade nx-grade--3 ig-kpis" aria-label="Números do ranking">
-              <NxKpi i={0} icone={ic(Layers)} rotulo={`${aba === "reels" ? "Reels" : "Posts"} no período`} valor={fmtN(todosDoTipo.length)} nota={`o ranking mostra os ${top.length} melhores`} />
-              <NxKpi i={1} icone={ic(Trophy)} rotulo="1º lugar" valor={fmtV(top[0].v)} nota={rotuloMetrica.toLowerCase()} />
-              <NxKpi i={2} icone={ic(ArrowDownToLine)} rotulo={`Para entrar no top ${top.length}`} valor={fmtV(top[top.length - 1].v)} nota={`${rotuloMetrica.toLowerCase()} do ${top.length}º lugar`} />
-            </section>
-
-            <NxCard icone={ic(Trophy)} titulo="Pódio" subtitulo={`Os 3 ${nomeTipo} com mais ${rotuloMetrica.toLowerCase()} no período`}>
-              <IgVitrine
-                itens={top.slice(0, 3).map(({ p, v }) => ({
-                  id: p.id,
-                  href: p.permalink,
-                  imagem: <Miniatura url={p.thumbnail_url} formato={p.format} className="w-full" />,
-                  titulo: gancho(p.caption) || "(sem legenda)",
-                  valor: fmtV(v),
-                  rotulo: rotuloMetrica.toLowerCase(),
-                  extra: (
-                    <>
-                      {p.format && <NxTag tom="g">{aba === "reels" ? "Reels" : nomeFormato(p.format)}</NxTag>}
-                      {p.tema && <NxTag tom="b">{p.tema}</NxTag>}
-                      <NxTag tom="g">{quando(p.posted_at)}</NxTag>
-                    </>
-                  ),
-                }))}
-              />
-            </NxCard>
-
-            <div className="nx-grade nx-grade--2">
-              <NxCard
-                icone={ic(BarChart3)}
-                titulo="Distância entre os primeiros"
-                subtitulo={`${rotuloMetrica} do 1º ao ${colunas.length}º lugar`}
-                acao={<IgMetodo rotulo="Como ler: distância entre os primeiros">Se o 1º lugar fica muito acima dos outros, foi um post fora da curva; se as colunas são parecidas, o bom resultado se repete e vale olhar o que eles têm em comum.</IgMetodo>}
-              >
-                <NxColunas dados={colunas} destaque={0} formatarEixo={(n) => (metrica === "taxa_salvamento" ? fmtPct(n, 1) : fmtN(n))} rotulo={`${rotuloMetrica} dos ${colunas.length} primeiros`} />
-              </NxCard>
-              <IgLeitura
-                titulo="O que os melhores têm em comum"
-                metodo="Só entra o que difere 15 pontos percentuais ou mais do conjunto de todos os posts do período. É um padrão para testar, não uma regra."
-                itens={padroes.frases.map((f) => ({ texto: f, chave: f }))}
-                vazio={padroes.motivoVazio}
-              />
-            </div>
-
-            {top.length > 3 && (
-              <NxCard icone={ic(Trophy)} titulo={`Do 4º ao ${top.length}º lugar`} subtitulo={`${todosDoTipo.length} ${nomeTipo} no período, por ${rotuloMetrica.toLowerCase()}`}>
-                <ListaDePosts itens={top.slice(3)} inicio={3} metrica={metrica} reels={aba === "reels"} />
-              </NxCard>
-            )}
-          </>
+          <NxAviso tom="info" titulo="Sem padrão claro:">{padroes.motivoVazio}</NxAviso>
         )}
-      </div>
+        <NxComoCalcula titulo="Como ler: o que os melhores têm em comum">Só entra o que difere 15 pontos percentuais ou mais do conjunto de todos os posts do período.</NxComoCalcula>
+      </NxCard>
+      {top.length > 3 && (
+        <NxRecolhido titulo={`Do 4º ao ${top.length}º lugar`} resumo={`${todosDoTipo.length} ${nomeTipo} no período, por ${rotuloMetrica.toLowerCase()}`}>
+          <ListaDePosts itens={top.slice(3)} inicio={3} metrica={metrica} reels={aba === "reels"} />
+        </NxRecolhido>
+      )}
+      <NxComoCalcula titulo="Como ler esta tela">
+        Os 20 melhores posts, Reels e stories do período ({periodLabel}), na métrica que você escolher, e o que eles têm em comum. Curtidas, comentários, visualizações e alcance de cada post são só do alcance orgânico: o Instagram mostra no post o total com impulsionamento.
+      </NxComoCalcula>
+    </div>
+  );
+
+  return (
+    <div className="nexo-ig">
+      <PaginaNexo {...cabecalho} leitura={leitura} cartoes={cartoes} principal={principal} corpo={corpo} detalhe={detalhe} />
     </div>
   );
 }
