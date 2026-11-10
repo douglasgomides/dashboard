@@ -10,6 +10,7 @@ import { TrocaProduto } from "@/components/troca-produto";
 import { BotaoAjuda, PrimeiroAcesso } from "@/components/sap-ajuda";
 import { getClient } from "@/lib/client-data";
 import { supabase } from "@/integrations/supabase/client";
+import { registrarBloqueada } from "@/lib/rota-log-instalar";
 import "@/sap-workspace.css";
 import { diaAtual, faseDoDia, getClinicaSap } from "@/lib/sap-data";
 import { SapReadGuard } from "@/components/sap-read-guard";
@@ -34,7 +35,12 @@ export const Route = createFileRoute("/_authenticated/sap")({
     const comSap = await Promise.all(alvo.map(async (id) => !!(await getClinicaSap(id))));
     if (comSap.some(Boolean)) return;
     const destino = idNaRota ?? ids[0];
-    if (destino) throw redirect({ to: "/$clientId/pacientes", params: { clientId: destino } });
+    // D-16: a tela negada ganha uma linha bloqueada (síncrona, nunca lança); o destino grava redirecionamento.
+    if (destino) {
+      registrarBloqueada(location.pathname);
+      throw redirect({ to: "/$clientId/pacientes", params: { clientId: destino } });
+    }
+    registrarBloqueada(location.pathname);
     throw redirect({ to: "/sem-acesso" });
   },
   component: SapLayout,
@@ -119,7 +125,7 @@ function SapConteudo({ isAdmin }: { isAdmin: boolean }) {
     <div className="app product-workspace sap-workspace">
       <a className="nx-skip" href="#sap-main">Ir para o conteúdo</a>
       {gaveta && <div className="sap-fundo-gaveta" aria-hidden onClick={() => setGaveta(false)} />}
-      <aside ref={menuRef} role={gaveta ? "dialog" : undefined} aria-modal={gaveta ? true : undefined} aria-label="Menu do Sistema de Aquisição" className={gaveta ? "gaveta" : undefined}>
+      <aside ref={menuRef} role={gaveta ? "dialog" : undefined} aria-modal={gaveta ? true : undefined} aria-label="Menu do Sistema de Aquisição" data-origem="menu" className={gaveta ? "gaveta" : undefined}>
         {gaveta && (
           <button type="button" aria-label="Fechar o menu" onClick={() => setGaveta(false)} className="sap-fechar-gaveta self-end rounded-md p-1"><X size={20} /></button>
         )}
@@ -149,7 +155,7 @@ function SapConteudo({ isAdmin }: { isAdmin: boolean }) {
             <BotaoAjuda isAdmin={isAdmin} />
           </div>
         </header>
-        {clientId && areaAtual && areaAtual.itens.length > 1 && <nav className="sap-context-tabs" aria-label={`Telas de ${areaAtual.label}`}>{areaAtual.itens.map(it => <Link key={it.sub} to={`/sap/$clientId${it.sub}` as never} params={{ clientId } as never} aria-current={sub === it.sub ? "page" : undefined}>{it.label}</Link>)}</nav>}
+        {clientId && areaAtual && areaAtual.itens.length > 1 && <nav className="sap-context-tabs" data-origem="menu" aria-label={`Telas de ${areaAtual.label}`}>{areaAtual.itens.map(it => <Link key={it.sub} to={`/sap/$clientId${it.sub}` as never} params={{ clientId } as never} aria-current={sub === it.sub ? "page" : undefined}>{it.label}</Link>)}</nav>}
         <PrimeiroAcesso isAdmin={isAdmin} clientId={clientId} />
         <main className="sap-workspace-content" id="sap-main" tabIndex={-1}>{["/painel", "/leitura", "/agentes"].includes(sub ?? "") ? <Outlet /> : <SapReadGuard><Outlet /></SapReadGuard>}</main>
       </div>
