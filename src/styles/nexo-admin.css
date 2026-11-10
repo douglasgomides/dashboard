@@ -38,7 +38,7 @@
 .adm-cont--atencao .adm-cont__ic { background: var(--or-bg); color: var(--or-ink); }
 .adm-cont--critico .adm-cont__ic { background: var(--dn-bg); color: var(--dn-ink); }
 .adm-cont--neutro .adm-cont__ic { background: var(--field); color: var(--text-2); }
-.adm-cont__rotulo { font-size: 15px; line-height: 20px; font-weight: 600; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.adm-cont__rotulo { font-size: 15px; line-height: 20px; font-weight: 600; color: var(--text); min-width: 0; overflow-wrap: break-word; hyphens: auto; }
 .adm-cont__valor { font-size: 30px; line-height: 34px; font-weight: 700; letter-spacing: -.015em; font-variant-numeric: tabular-nums; color: var(--text); }
 .adm-cont--atencao .adm-cont__valor { color: var(--or-ink); }
 .adm-cont--critico .adm-cont__valor { color: var(--dn-ink); }
@@ -46,7 +46,7 @@
 @media (max-width: 560px) {
   .adm .adm-cont { padding: 12px; gap: 8px; }
   .adm-cont__valor { font-size: 26px; line-height: 30px; }
-  .adm-cont__rotulo { font-size: 14px; line-height: 18px; }
+  .adm-cont__rotulo { font-size: 13px; line-height: 18px; }
   .adm-cont__ic { width: 26px; height: 26px; }
 }
 
@@ -342,3 +342,13 @@ textarea.adm-entrada { padding: 10px 12px; min-height: 0; }
 @media (max-width: 560px) { .adm-filtros--plano { padding: 10px 14px; } }
 /* Conferência ao vivo (componente compartilhado): título na régua da prancha. */
 .adm section[aria-label="Conferência ao vivo com os CRMs"] h3 { font-size: 18px; line-height: 24px; font-weight: 700; }
+/* Formulário do perfil (componente compartilhado, só usado aqui): rótulo em frase, campo e botão da régua. */
+.adm-perfil label.uppercase { text-transform: none; letter-spacing: 0; font-size: 14px; line-height: 18px; font-weight: 600; color: var(--text-2); }
+.adm-perfil label.uppercase + input, .adm-perfil label.uppercase + select { margin-top: 6px; }
+.adm-perfil p { font-weight: 500; }
+.app.product-workspace main .adm .adm-perfil button[type="submit"] { min-height: 44px; border-radius: 10px; padding: 0 18px; background: var(--grad-brand); font-weight: 600; }
+.adm-ligado code { color: var(--text-2); }
+@media (max-width: 560px) {
+  .adm-perfil .flex.flex-wrap > .min-w-0.flex-1 { flex: 1 1 100%; }
+  .adm .adm-btn { white-space: normal; text-align: center; }
+}

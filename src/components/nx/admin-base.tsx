@@ -101,6 +101,7 @@ export function AdmSecao({
   sub,
   acao,
   children,
+  toda,
 }: {
   id?: string;
   icone: ReactNode;
@@ -108,9 +109,11 @@ export function AdmSecao({
   sub?: ReactNode;
   acao?: ReactNode;
   children: ReactNode;
+  /** Ocupa a linha toda na grade de seções. */
+  toda?: boolean;
 }) {
   return (
-    <section className="adm-secao" aria-labelledby={id ? `${id}-titulo` : undefined} aria-label={id ? undefined : titulo}>
+    <section id={id} className={`adm-secao${toda ? " adm-secao--toda" : ""}`} aria-labelledby={id ? `${id}-titulo` : undefined} aria-label={id ? undefined : titulo}>
       <header className="adm-secao__head">
         <span className="nx-tile" aria-hidden>
           {icone}
