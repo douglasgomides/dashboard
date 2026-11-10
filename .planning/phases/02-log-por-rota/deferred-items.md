@@ -12,3 +12,14 @@
 - `navigation-architecture.spec.ts:8` (Marketing, 375 e 1440 px)
 - `routes.spec.ts:12` (`/pacientes` em 375 px: "Essa página não carregou")
 - `workspace-navigation.spec.ts:8`, `:48`, `:137` e `:263` (375 e 1440 px)
+
+## e2e que falham igual antes da fase (conferido no plano 02-04, suíte inteira)
+
+Rodados no worktree da fase e em 8f719b4 (anterior à fase): mesmas 11 falhas nos 4 arquivos abaixo, 37 passes.
+
+- `agents-workspace.spec.ts:99` e `:109`
+- `audit-reliability.spec.ts:4`
+- `auth-profile.spec.ts:4` (login cai em `/pacientes?preset=30d`, o teste espera `/<clínica>`) e `:31`
+- `numbers-first.spec.ts:7` (375 e 1440 px), `:60`, `:90`, `:265`, `:274`
+
+Suíte inteira na branch: 308 passam, 20 falham (estas 11 mais as 9 da seção acima). `npm run test:e2e` não sai com 0 por causa delas.
