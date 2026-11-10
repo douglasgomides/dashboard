@@ -448,6 +448,8 @@
 .app.product-workspace:not(.sap-workspace) > aside.nx-barra {
   overflow-y: auto;
   scrollbar-width: thin;
+}
+
 /* --- 03-06: casca /admin (div.app.product-workspace.workspace-admin) --- */
 /* Dica da Carteira quando Clínica é escolhida sem clínica lembrada (D-02, UI-SPEC: 14/20, --muted-ink). */
 .app.product-workspace:not(.sap-workspace) .nx-dica-clinica {
