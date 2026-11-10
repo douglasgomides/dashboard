@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
-import { CalendarRange, Rocket } from "lucide-react";
-import { Painel } from "@/components/visual";
-import { LEGENDA } from "@/components/grafico";
+import { NxCard } from "@/components/nx/base";
+import { NxColunas } from "@/components/nx/graficos";
+import { NxBarrasLinha } from "@/components/nx/anuncios-graficos";
+import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxTabela } from "@/components/nx/blocos";
 import { getAdsCampanhasPeriodo, getMonthlyMetrics, getPostsParaImpulsionados } from "@/lib/client-data";
 import { ehImpulsionamento, postsImpulsionados, seguidoresPorSemana, type DiaSeguidores } from "@/lib/seguidores-semana";
 import { somarDias } from "@/lib/sap-metas";
@@ -11,7 +11,8 @@ import { fmtBRL } from "@/lib/format";
 
 const fmtN = (n: number) => Math.round(n).toLocaleString("pt-BR");
 const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
-const dim = { color: "var(--text-dim)" } as const;
+const fmtGasto = (n: number) => fmtBRL(n);
+const TITULO_GRAFICO = { margin: "0 0 6px", fontSize: 14, lineHeight: "20px", fontWeight: 600, color: "var(--text-2)" } as const;
 
 /** Seguidores por semana (novos, deixaram de seguir, saldo) com o gasto em impulsionamento da mesma semana. */
 export function SeguidoresSemana({ clientId, start, end }: { clientId: string; start: string; end: string }) {
@@ -37,73 +38,76 @@ export function SeguidoresSemana({ clientId, start, end }: { clientId: string; s
     </>
   );
 
+  // Semana sem dado (a Meta não informa) não vira zero no gráfico: fica só na tabela.
+  const comNovos = (semanas ?? []).filter((s) => s.novos !== null);
+  const comSaidas = (semanas ?? []).filter((s) => s.perderam !== null);
+  const linhas = (semanas ?? []).map((s) => ({
+    semana: (
+      <>
+        {ddmm(s.semana)} a {ddmm(somarDias(s.semana, 6))}
+        {!s.completa && <span style={{ marginLeft: 4, fontSize: 13, color: "var(--muted-ink)" }}>({s.dias} dia{s.dias === 1 ? "" : "s"})</span>}
+      </>
+    ),
+    novos: s.novos === null ? <SemDado /> : fmtN(s.novos),
+    perderam: s.perderam === null ? <SemDado /> : fmtN(s.perderam),
+    saldo: s.saldo === null ? <SemDado /> : <span style={{ color: s.saldo < 0 ? "var(--dn-ink)" : "var(--up-ink)" }}>{`${s.saldo > 0 ? "+" : ""}${fmtN(s.saldo)}`}</span>,
+    gasto: s.gastoImpulsionamento > 0 ? fmtBRL(s.gastoImpulsionamento) : "—",
+  }));
+  const colunas = [
+    { chave: "semana", titulo: "Semana" },
+    { chave: "novos", titulo: "Novos", numerica: true },
+    { chave: "perderam", titulo: "Deixaram de seguir", numerica: true },
+    { chave: "saldo", titulo: "Saldo", numerica: true },
+    ...(temGasto ? [{ chave: "gasto", titulo: "Gasto em impulsionamento", numerica: true }] : []),
+  ];
+
   return (
-    <Painel icone={CalendarRange} titulo="Seguidores por semana" resumo={temGasto ? "Com o gasto em post impulsionado da mesma semana" : "Novos, saídas e saldo"} ajuda={ajuda}>
+    <NxCard rotulo="Seguidores por semana" titulo="Seguidores por semana" subtitulo={temGasto ? "Com o gasto em post impulsionado da mesma semana" : "Novos, saídas e saldo"}>
+      <NxRecolhido titulo="Como ler este quadro">
+        <p style={{ margin: 0, fontSize: 14, lineHeight: "20px" }}>{ajuda}</p>
+      </NxRecolhido>
       {metricas.isLoading ? (
-        <p className="note" style={{ margin: 0 }}>Carregando…</p>
+        <NxCarregando linhas={2} />
       ) : metricas.isError ? (
-        <p className="note" style={{ margin: 0 }}>Não foi possível carregar os seguidores agora.</p>
+        <NxErro texto="Não foi possível carregar os seguidores agora." />
       ) : !semanas?.length ? (
-        <p className="note" style={{ margin: 0 }}>Nenhum dia do período tem dado de seguidores.</p>
+        <NxAviso tom="info" titulo="Nenhum dia do período tem dado de seguidores." />
       ) : (
         <>
-          {semanas.length >= 2 && (
-            <div className="grafico-caixa" style={{ height: 230, marginTop: 10 }}>
-              <ResponsiveContainer>
-                <ComposedChart data={semanas.map((s) => ({ semana: ddmm(s.semana), Novos: s.novos, "Deixaram de seguir": s.perderam, Impulsionamento: temGasto ? s.gastoImpulsionamento : undefined }))} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid stroke="var(--grid)" vertical={false} />
-                  <XAxis dataKey="semana" tick={{ fontSize: 11, fill: "var(--muted)" }} />
-                  <YAxis yAxisId="s" tick={{ fontSize: 11, fill: "var(--muted)" }} width={44} tickFormatter={(v) => fmtN(Number(v))} />
-                  {temGasto && <YAxis yAxisId="g" orientation="right" tick={{ fontSize: 11, fill: "var(--muted)" }} width={56} tickFormatter={(v) => fmtBRL(Number(v))} />}
-                  <Tooltip
-                    formatter={(v, nome) => (v === null || v === undefined ? "sem dado" : nome === "Impulsionamento" ? fmtBRL(Number(v)) : fmtN(Number(v)))}
-                    contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
-                  />
-                  <Legend {...LEGENDA} />
-                  <Bar yAxisId="s" dataKey="Novos" fill="var(--accent)" radius={[3, 3, 0, 0]} />
-                  <Bar yAxisId="s" dataKey="Deixaram de seguir" fill="var(--crit)" radius={[3, 3, 0, 0]} />
-                  {temGasto && <Line yAxisId="g" dataKey="Impulsionamento" stroke="var(--warn)" strokeWidth={2} dot />}
-                </ComposedChart>
-              </ResponsiveContainer>
+          {semanas.length >= 2 && comNovos.length >= 2 && (
+            <div>
+              <p style={TITULO_GRAFICO}>{temGasto ? "Seguidores novos e gasto em impulsionamento por semana" : "Seguidores novos por semana"}</p>
+              {temGasto ? (
+                <NxBarrasLinha
+                  dados={comNovos.map((s) => ({ dia: s.semana, barra: s.novos ?? 0, linha: s.gastoImpulsionamento }))}
+                  rotulo="Seguidores novos e gasto em impulsionamento por semana"
+                  nomeBarra="Novos"
+                  nomeLinha="Impulsionamento"
+                  formatarBarra={fmtN}
+                  formatarLinha={fmtGasto}
+                  formatarData={ddmm}
+                  altura={200}
+                />
+              ) : (
+                <NxColunas dados={comNovos.map((s) => ({ rotulo: ddmm(s.semana), valor: s.novos ?? 0, texto: fmtN(s.novos ?? 0) }))} formatarEixo={fmtN} rotulo="Seguidores novos por semana" />
+              )}
             </div>
           )}
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs" style={dim}>
-                  <th className="py-1 pr-3 font-medium">Semana</th>
-                  <th className="py-1 pr-3 text-right font-medium">Novos</th>
-                  <th className="py-1 pr-3 text-right font-medium">Deixaram de seguir</th>
-                  <th className="py-1 pr-3 text-right font-medium">Saldo</th>
-                  {temGasto && <th className="py-1 text-right font-medium">Gasto em impulsionamento</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {semanas.map((s) => (
-                  <tr key={s.semana} className="border-t" style={{ borderColor: "var(--border)" }}>
-                    <td className="py-1.5 pr-3">
-                      {ddmm(s.semana)} a {ddmm(somarDias(s.semana, 6))}
-                      {!s.completa && <span className="ml-1 text-xs" style={{ color: "var(--muted)" }}>({s.dias} dia{s.dias === 1 ? "" : "s"})</span>}
-                    </td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums">{s.novos === null ? <SemDado /> : fmtN(s.novos)}</td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums">{s.perderam === null ? <SemDado /> : fmtN(s.perderam)}</td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums" style={{ color: s.saldo === null ? undefined : s.saldo < 0 ? "var(--crit)" : "var(--good)" }}>
-                      {s.saldo === null ? <SemDado /> : `${s.saldo > 0 ? "+" : ""}${fmtN(s.saldo)}`}
-                    </td>
-                    {temGasto && <td className="py-1.5 text-right tabular-nums">{s.gastoImpulsionamento > 0 ? fmtBRL(s.gastoImpulsionamento) : "—"}</td>}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {comSaidas.length >= 2 && (
+            <div>
+              <p style={TITULO_GRAFICO}>Quem deixou de seguir por semana</p>
+              <NxColunas dados={comSaidas.map((s) => ({ rotulo: ddmm(s.semana), valor: s.perderam ?? 0, texto: fmtN(s.perderam ?? 0) }))} formatarEixo={fmtN} rotulo="Quem deixou de seguir por semana" />
+            </div>
+          )}
+          <NxTabela rotulo="Tabela de seguidores por semana" colunas={colunas} linhas={linhas} chaveDaLinha={(_, k) => semanas[k].semana} />
         </>
       )}
-    </Painel>
+    </NxCard>
   );
 }
 
 function SemDado() {
-  return <span style={{ color: "var(--muted)" }}>sem dado</span>;
+  return <span style={{ color: "var(--muted-ink)" }}>sem dado</span>;
 }
 
 /** Posts impulsionados: o alcance orgânico do post ao lado do que o impulsionamento comprou. */
@@ -128,61 +132,59 @@ export function PostsImpulsionados({ clientId, start, end }: { clientId: string;
       por isso não aparece aqui.
     </>
   );
-  return (
-    <Painel icone={Rocket} titulo="Posts impulsionados" resumo="Orgânico do post × o que o impulsionamento comprou" ajuda={ajuda}>
-      {posts.isLoading ? (
-        <p className="note" style={{ margin: 0 }}>Carregando…</p>
-      ) : posts.isError ? (
-        <p className="note" style={{ margin: 0 }}>Não foi possível carregar os posts agora.</p>
-      ) : (
-        <div className="mt-2 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs" style={dim}>
-                <th className="py-1 pr-3 font-medium">Post</th>
-                <th className="py-1 pr-3 text-right font-medium">Alcance do post</th>
-                <th className="py-1 pr-3 text-right font-medium">Gasto</th>
-                <th className="py-1 pr-3 text-right font-medium">Impressões pagas</th>
-                <th className="py-1 pr-3 text-right font-medium">Cliques</th>
-                <th className="py-1 text-right font-medium">Custo por mil</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lista.map((i) => (
-                <tr key={i.campaign_id} className="border-t align-top" style={{ borderColor: "var(--border)" }}>
-                  <td className="py-2 pr-3" style={{ maxWidth: 340 }}>
-                    <div className="flex gap-2">
-                      {i.post?.thumbnail_url && <img src={i.post.thumbnail_url} alt="" width={36} height={36} className="shrink-0 rounded object-cover" style={{ width: 36, height: 36 }} loading="lazy" />}
-                      <div className="min-w-0">
-                        {i.post ? (
-                          i.post.permalink ? (
-                            <a href={i.post.permalink} target="_blank" rel="noreferrer" className="line-clamp-2 underline" style={{ color: "var(--text)" }}>
-                              {i.post.caption}
-                            </a>
-                          ) : (
-                            <span className="line-clamp-2">{i.post.caption}</span>
-                          )
-                        ) : (
-                          <span className="line-clamp-2">{i.campanha}</span>
-                        )}
-                        <div className="text-xs" style={{ color: "var(--muted)" }}>
-                          {i.post ? `Publicado em ${ddmm(i.post.posted_at.slice(0, 10))}` : "Post não encontrado nos posts sincronizados"}
-                          {i.primeiroDia && ` · impulsionado ${ddmm(i.primeiroDia)}${i.ultimoDia && i.ultimoDia !== i.primeiroDia ? ` a ${ddmm(i.ultimoDia)}` : ""}`}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-2 pr-3 text-right tabular-nums">{i.alcanceOrganico === null ? <SemDado /> : fmtN(i.alcanceOrganico)}</td>
-                  <td className="py-2 pr-3 text-right tabular-nums">{fmtBRL(i.gasto)}</td>
-                  <td className="py-2 pr-3 text-right tabular-nums">{fmtN(i.impressoes)}</td>
-                  <td className="py-2 pr-3 text-right tabular-nums">{fmtN(i.cliques)}</td>
-                  <td className="py-2 text-right tabular-nums">{i.custoPorMilImpressoes === null ? "—" : fmtBRL(i.custoPorMilImpressoes)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+  const linhasPosts = lista.map((i) => ({
+    post: (
+      <div style={{ display: "flex", gap: 8, maxWidth: 340 }}>
+        {i.post?.thumbnail_url && <img src={i.post.thumbnail_url} alt="" width={36} height={36} style={{ width: 36, height: 36, flex: "none", borderRadius: 6, objectFit: "cover" }} loading="lazy" />}
+        <div style={{ minWidth: 0 }}>
+          {i.post ? (
+            i.post.permalink ? (
+              <a href={i.post.permalink} target="_blank" rel="noreferrer" style={{ color: "var(--text)", textDecoration: "underline" }}>
+                {i.post.caption}
+              </a>
+            ) : (
+              <span>{i.post.caption}</span>
+            )
+          ) : (
+            <span>{i.campanha}</span>
+          )}
+          <div style={{ fontSize: 13, color: "var(--muted-ink)" }}>
+            {i.post ? `Publicado em ${ddmm(i.post.posted_at.slice(0, 10))}` : "Post não encontrado nos posts sincronizados"}
+            {i.primeiroDia && ` · impulsionado ${ddmm(i.primeiroDia)}${i.ultimoDia && i.ultimoDia !== i.primeiroDia ? ` a ${ddmm(i.ultimoDia)}` : ""}`}
+          </div>
         </div>
+      </div>
+    ),
+    alcance: i.alcanceOrganico === null ? <SemDado /> : fmtN(i.alcanceOrganico),
+    gasto: fmtBRL(i.gasto),
+    impressoes: fmtN(i.impressoes),
+    cliques: fmtN(i.cliques),
+    custo: i.custoPorMilImpressoes === null ? "—" : fmtBRL(i.custoPorMilImpressoes),
+  }));
+  return (
+    <NxCard rotulo="Posts impulsionados" titulo="Posts impulsionados" subtitulo="Orgânico do post × o que o impulsionamento comprou">
+      <NxRecolhido titulo="Como ler este quadro">
+        <p style={{ margin: 0, fontSize: 14, lineHeight: "20px" }}>{ajuda}</p>
+      </NxRecolhido>
+      {posts.isLoading ? (
+        <NxCarregando linhas={2} />
+      ) : posts.isError ? (
+        <NxErro texto="Não foi possível carregar os posts agora." />
+      ) : (
+        <NxTabela
+          rotulo="Tabela de posts impulsionados"
+          colunas={[
+            { chave: "post", titulo: "Post" },
+            { chave: "alcance", titulo: "Alcance do post", numerica: true },
+            { chave: "gasto", titulo: "Gasto", numerica: true },
+            { chave: "impressoes", titulo: "Impressões pagas", numerica: true },
+            { chave: "cliques", titulo: "Cliques", numerica: true },
+            { chave: "custo", titulo: "Custo por mil", numerica: true },
+          ]}
+          linhas={linhasPosts}
+          chaveDaLinha={(_, k) => lista[k].campaign_id}
+        />
       )}
-    </Painel>
+    </NxCard>
   );
 }

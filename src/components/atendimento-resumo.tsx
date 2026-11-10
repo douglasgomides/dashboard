@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { MessagesSquare, ChevronRight } from "lucide-react";
+import { MessagesSquare, Clock, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { resumirAtendimento, duracao, type LeituraConversaBanco } from "@/lib/conversa-leitura";
-
+import { NxCard, NxKpi } from "@/components/nx/base";
+import { NxAviso, NxErro } from "@/components/nx/blocos";
 import { ehNegocioProprio } from "@/lib/negocio-proprio";
 
 // Atendimento no WhatsApp em uma linha, na tela Comercial: quantos pacientes estão sem resposta e
@@ -23,34 +24,39 @@ export function useLeituraConversas(clientId: string) {
   });
 }
 
+const GRADE = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 } as const;
+
 export function AtendimentoResumo({ clientId }: { clientId: string }) {
   const { isAdmin } = useAuth();
   const proprio = ehNegocioProprio(clientId);
   const { data, isError } = useLeituraConversas(clientId);
-  if (isError) return <p role="alert" className="text-sm">Não foi possível conferir o atendimento agora. Nenhum resultado foi substituído por zero.</p>;
+  if (isError) return <NxErro texto="Não foi possível conferir o atendimento agora. Nenhum resultado foi substituído por zero." />;
   if (!data?.length) return null;
   const g = resumirAtendimento(data);
   if (!g.comPaciente) return null;
   const ruim = g.semResposta > 0 || (g.medianaPrimeiraResposta ?? 0) > 3600;
+  const quem = proprio ? (g.semResposta === 1 ? "contato está" : "contatos estão") : g.semResposta === 1 ? "paciente está" : "pacientes estão";
+  const nome = proprio ? "Atendimento na Clint" : "Atendimento no WhatsApp";
   return (
-    <section className="rounded-xl border p-4 sm:p-5" style={{ background: "var(--surface)", borderColor: ruim ? "var(--warn-border, var(--border))" : "var(--border)" }} aria-label={proprio ? "Atendimento na Clint" : "Atendimento no WhatsApp"}>
-      <div className="flex items-start gap-3">
-        <MessagesSquare size={18} aria-hidden className="mt-0.5 shrink-0" style={{ color: "var(--accent)" }} />
-        <div className="min-w-0 flex-1">
-          <h2 className="text-[15px] font-semibold">{proprio ? "Atendimento na Clint" : "Atendimento no WhatsApp"} (últimas {g.conversas} conversas)</h2>
-          <p className="mt-1 text-sm" style={{ color: "var(--ink-2)" }}>
-            <b>{g.semResposta}</b> {proprio ? (g.semResposta === 1 ? "contato está" : "contatos estão") : (g.semResposta === 1 ? "paciente está" : "pacientes estão")} sem resposta
-            {g.soRobo ? ` (${g.soRobo} só receberam mensagem automática)` : ""}. A primeira resposta de uma pessoa leva <b>{duracao(g.medianaPrimeiraResposta)}</b> (mediana)
-            {g.medianaComercial != null ? <>; em horário comercial, <b>{duracao(g.medianaComercial)}</b></> : null}.
-            {g.semLead ? ` ${g.semLead} conversas não têm lead no CRM.` : ""}
-          </p>
-          {isAdmin && (
-          <Link to="/$clientId/conversas" params={{ clientId }} className="mt-2 inline-flex min-h-[40px] items-center gap-1 text-sm font-semibold" style={{ color: "var(--accent)" }}>
+    <NxCard rotulo={nome} titulo={`${nome} (últimas ${g.conversas} conversas)`}>
+      <div style={GRADE}>
+        <NxKpi icone={<MessagesSquare size={18} />} rotulo={proprio ? "Contatos sem resposta" : "Pacientes sem resposta"} valor={g.semResposta} nota={g.soRobo ? `${g.soRobo} só receberam mensagem automática` : undefined} />
+        <NxKpi icone={<Clock size={18} />} rotulo="Primeira resposta (mediana)" valor={duracao(g.medianaPrimeiraResposta)} nota={g.medianaComercial != null ? `Em horário comercial: ${duracao(g.medianaComercial)}` : undefined} />
+      </div>
+      <p style={{ margin: 0, fontSize: 14, lineHeight: "20px", color: "var(--text-2)" }}>
+        <b>{g.semResposta}</b> {quem} sem resposta
+        {g.soRobo ? ` (${g.soRobo} só receberam mensagem automática)` : ""}. A primeira resposta de uma pessoa leva <b>{duracao(g.medianaPrimeiraResposta)}</b> (mediana)
+        {g.medianaComercial != null ? <>; em horário comercial, <b>{duracao(g.medianaComercial)}</b></> : null}.
+      </p>
+      {ruim && <NxAviso tom="atencao" titulo="Atenção ao atendimento.">Há pacientes sem resposta ou a primeira resposta passa de 1 hora.</NxAviso>}
+      {g.semLead ? <NxAviso tom="info" titulo={`${g.semLead} conversas não têm lead no CRM.`} /> : null}
+      {isAdmin && (
+        <div>
+          <Link to="/$clientId/conversas" params={{ clientId }} className="nx-botao">
             Ver cada conversa e o resumo <ChevronRight size={16} aria-hidden />
           </Link>
-          )}
         </div>
-      </div>
-    </section>
+      )}
+    </NxCard>
   );
 }
