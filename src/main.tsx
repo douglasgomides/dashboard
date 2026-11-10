@@ -8,6 +8,7 @@ import "./nexo.css";
 import "./styles/product-workspace.css";
 import { ehEnderecoSap } from "./lib/marca";
 import { createDeployRecovery } from "./lib/deploy-recovery";
+import { instalarRotaLog } from "./lib/rota-log-instalar";
 
 document.title = ehEnderecoSap() ? "SAP · Doctor Creator" : "Nexo · Doctor Creator";
 
@@ -50,6 +51,8 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   );
 } else {
   const router = getRouter();
+  // Log por rota: fora do React, antes do primeiro render, para capturar a primeira tela aberta.
+  instalarRotaLog(router);
   createRoot(rootEl).render(
     <StrictMode>
       <RouterProvider router={router} />

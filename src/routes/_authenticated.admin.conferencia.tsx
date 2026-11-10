@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { marcarNaoUsa } from "@/lib/saude-fontes";
 import { Painel, Selo } from "@/components/visual";
 import { ConferenciaAoVivoResumo } from "@/components/conferencia-ao-vivo-resumo";
+import { UsoDasTelas } from "@/components/uso-das-telas";
 import {
   ETAPAS,
   ROTULO_GRAVIDADE,
@@ -208,7 +209,21 @@ function ListaVerificados({ itens }: { itens: Verificado[] }) {
   );
 }
 
+// Abas (Phase 2): a conferência dos dados continua sendo a aba aberta por padrão; "Uso das telas" mostra o log por rota.
 function ConferenciaPage() {
+  const [aba, setAba] = useState<"dados" | "uso">("dados");
+  return (
+    <div>
+      <div className="seg" role="tablist" aria-label="Conferência" style={{ marginBottom: 14 }}>
+        <button type="button" role="tab" aria-selected={aba === "dados"} aria-pressed={aba === "dados"} onClick={() => setAba("dados")}>Conferência dos dados</button>
+        <button type="button" role="tab" aria-selected={aba === "uso"} aria-pressed={aba === "uso"} onClick={() => setAba("uso")}>Uso das telas</button>
+      </div>
+      <div role="tabpanel">{aba === "dados" ? <ConferenciaDados /> : <UsoDasTelas />}</div>
+    </div>
+  );
+}
+
+function ConferenciaDados() {
   const qc = useQueryClient();
   const salva = useQuery({ queryKey: ["conferencia-ultima"], queryFn: ultimaConferencia, staleTime: 60_000 });
   // Rodada em andamento nesta tela (vai sendo preenchida etapa a etapa).
