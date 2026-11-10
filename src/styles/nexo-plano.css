@@ -356,3 +356,36 @@
   .nexo-plano .nx-grade--4 .nx-kpi__topo { font-size: 13px; line-height: 17px; }
   .nexo-plano .nx-grade--4 .nx-kpi .ws-info-button { width: 24px; height: 24px; }
 }
+
+/* ---------- Agentes e entregas (componente compartilhado com o SAP: só o escopo .nexo-agentes muda) ---------- */
+.nexo-agentes .agent-workspace { color: var(--text); gap: 18px; }
+.nexo-agentes .agent-intro h2 { font-weight: 600; letter-spacing: -.01em; }
+.nexo-agentes .agent-intro > p:last-of-type, .nexo-agentes .agent-cycle span, .nexo-agentes .agent-review-queue p,
+.nexo-agentes .agent-assignment-grid p, .nexo-agentes .agent-live-status p, .nexo-agentes .agent-schedule p,
+.nexo-agentes .agent-delivery-heading p, .nexo-agentes .agent-instructions dd { color: var(--text-2); font-weight: 500; }
+.nexo-agentes .agent-eyebrow { color: var(--b1); font-weight: 700; }
+.nexo-agentes .agent-cycle { border-color: var(--line); }
+.nexo-agentes .agent-cycle li { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--white); }
+.nexo-agentes .agent-cycle { border: 0; padding: 0; gap: 12px; }
+.nexo-agentes .agent-review-queue { border: 1px solid var(--line); border-left: 4px solid var(--b1); border-radius: 14px; background: var(--b6); }
+.nexo-agentes .agent-review-queue h3 { font-weight: 600; }
+.nexo-agentes .agent-choices > button { border: 1px solid var(--line); border-radius: 14px; background: var(--white); min-height: 80px; }
+.nexo-agentes .agent-choices > button:hover { border-color: var(--b4); }
+.nexo-agentes .agent-choices > button[aria-pressed="true"] { border-color: var(--b1); box-shadow: inset 4px 0 var(--b1); background: var(--b6); }
+.nexo-agentes .agent-choices > button > svg { color: var(--b1); }
+.nexo-agentes .agent-choices b { font-weight: 600; font-size: 15px; }
+.nexo-agentes .agent-choices span span { font-size: 13px; font-weight: 500; color: var(--text-2); }
+.nexo-agentes .agent-choices .agent-choice-count { font-size: 12px; font-weight: 600; color: var(--text-2); background: var(--field); border-radius: 6px; padding: 1px 8px; }
+.nexo-agentes .agent-assignment { border: 1px solid var(--line); border-radius: 18px; background: var(--white); padding: 20px; }
+.nexo-agentes .agent-assignment h2 { font-weight: 600; letter-spacing: -.01em; }
+.nexo-agentes .agent-assignment h3, .nexo-agentes .agent-instructions dt { font-weight: 600; }
+.nexo-agentes .agent-live-status { border: 1px solid var(--line); border-radius: 14px; background: var(--field); }
+.nexo-agentes .agent-live-status[data-tone="atencao"] { border-left: 4px solid var(--or-ink); background: var(--or-bg); }
+.nexo-agentes .agent-queue-limit { border-left-color: var(--b1); background: var(--b6); border-radius: 0 12px 12px 0; }
+.nexo-agentes .agent-secondary-link { color: var(--b1); font-weight: 600; }
+.nexo-agentes .agent-delivery-heading h2 { font-weight: 600; }
+.nexo-agentes .agent-secondary-panel { border: 1px solid var(--line); border-radius: 18px; background: var(--white); }
+.nexo-agentes .agent-instructions summary, .nexo-agentes .agent-secondary-panel summary { font-weight: 600; }
+.nexo-agentes .rounded-xl.border { border-color: var(--line); border-radius: 14px; }
+.nexo-agentes .text-\[11px\] { font-size: 12px; }
+@media (max-width: 740px) { .nexo-agentes .agent-assignment { padding: 16px 14px; } }
