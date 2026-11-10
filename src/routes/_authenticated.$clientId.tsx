@@ -25,6 +25,7 @@ import {
 } from "@/lib/nav";
 import { parseDateRangeSearch, resolveDateRange } from "@/lib/date-range";
 import { CoberturaPeriodo } from "@/components/cobertura-periodo";
+import { gravarUltimaClinica } from "@/lib/ultima-clinica";
 
 export const Route = createFileRoute("/_authenticated/$clientId")({
   component: ClientLayout,
@@ -42,6 +43,10 @@ function ClientLayout() {
   });
   const { isAdmin } = useAuth();
   const { papel } = useClientRole(clientId);
+  // D-02: a clínica aberta fica lembrada naquele navegador; "Clínica" na casca /admin volta para ela.
+  useEffect(() => {
+    gravarUltimaClinica(clientId);
+  }, [clientId]);
 
   const { data: client } = useQuery({
     queryKey: ["client", clientId],
