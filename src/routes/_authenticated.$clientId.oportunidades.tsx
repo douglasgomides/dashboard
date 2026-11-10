@@ -19,7 +19,10 @@ import {
 import { categoriaDaArea, ROTULO_RESPONSAVEL, type Insight, type Responsavel } from "@/lib/insight";
 import { NextBestActionPanel, PriorityBadge, prioridadeDe } from "@/components/next-best-action";
 import { ListaLimitacoes } from "@/components/insight-card";
-import { History, Info } from "lucide-react";
+import { History } from "lucide-react";
+import { IconeTabler } from "@/components/icons/tabler";
+import { NxCard } from "@/components/nx";
+import { PlanoAviso, PlanoCabecalho, PlanoChip, PlanoComo, PlanoContadores, PlanoLinha, PlanoVazio } from "@/components/nx/plano-pecas";
 import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 
 export const Route = createFileRoute("/_authenticated/$clientId/oportunidades")({
@@ -229,96 +232,113 @@ function OportunidadesPage() {
   }
   if (salvos.isError) return <div className="card" role="alert"><h1>O acompanhamento não carregou</h1><p>Não foi possível conferir o histórico. Tente novamente antes de alterar uma ação.</p><button className="btn" type="button" disabled={salvos.isFetching} onClick={() => void salvos.refetch()}>Tentar novamente</button></div>;
 
+  const contar = (id: string) => lista.filter((x) => ABAS.find((a) => a.id === id)!.filtro(x.acomp.status)).length;
+  const altasAbertas = lista.filter((x) => x.insight && ABERTOS.includes(x.acomp.status) && prioridadeDe(x.insight) === "alta").length;
+  const TOM_PRIO = { alta: "dn", media: "or", baixa: "b" } as const;
+
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
-      <header>
-        <h1 className="text-[28px] font-semibold leading-tight">Oportunidades de melhoria</h1>
-        <p className="mt-1 text-[15px]" style={{ color: "var(--ink-2)" }}>
-          Recomendações do período ({periodLabel}), em ordem de prioridade, e o acompanhamento do que foi feito com cada uma.
-        </p>
-      </header>
+    <div className="nexo-plano">
+      <PlanoCabecalho
+        titulo="O que melhorar primeiro"
+        pergunta="As recomendações do período em ordem de prioridade, e o que já foi feito com cada uma."
+        periodo={periodLabel}
+      />
+
+      <PlanoContadores
+        rotulo="Oportunidades por andamento"
+        itens={[
+          { rotulo: "Para fazer", valor: contar("abertas"), tom: "b" },
+          { rotulo: "Alta prioridade", valor: altasAbertas, tom: "dn", nota: "abertas" },
+          { rotulo: "Em andamento", valor: contar("andamento"), tom: "or" },
+          { rotulo: "No histórico", valor: contar("historico"), tom: "up", nota: "feitas, avaliadas ou expiradas" },
+        ]}
+      />
 
       {salvos.data?.local && (
-        <p className="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm" style={{ background: "var(--warn-bg)", borderColor: "var(--warn-border)", color: "var(--ink)" }}>
-          <Info size={16} className="mt-0.5 shrink-0" aria-hidden />
-          O acompanhamento está sendo guardado só neste navegador: a tabela de acompanhamento ainda não foi criada no banco. Outras pessoas da equipe não veem estas mudanças.
-        </p>
+        <PlanoAviso titulo="Acompanhamento guardado só neste navegador">
+          A tabela de acompanhamento ainda não foi criada no banco. Outras pessoas da equipe não veem estas mudanças.
+        </PlanoAviso>
       )}
 
-      <div className="seg" role="tablist" aria-label="Filtrar oportunidades">
-        {ABAS.map((a) => {
-          const n = lista.filter((x) => a.filtro(x.acomp.status)).length;
-          return (
-            <button key={a.id} type="button" role="tab" aria-selected={aba === a.id} aria-pressed={aba === a.id} onClick={() => setAba(a.id)} className="min-h-[40px]">
-              {a.rotulo} ({n})
+      <NxCard
+        nivel={2}
+        id="op-lista"
+        icone={<IconeTabler nome="bulb" tamanho={17} traco={1.7} />}
+        titulo={ABAS.find((a) => a.id === aba)!.rotulo}
+        subtitulo="Cada recomendação vem de uma regra fixa sobre os dados do período."
+      >
+        <div className="pl-abas" role="tablist" aria-label="Filtrar oportunidades">
+          {ABAS.map((a) => (
+            <button key={a.id} type="button" role="tab" aria-selected={aba === a.id} aria-pressed={aba === a.id} onClick={() => setAba(a.id)} className="pl-aba">
+              {a.rotulo} <b>({contar(a.id)})</b>
             </button>
-          );
-        })}
-      </div>
-
-      {visiveis.length === 0 ? (
-        <div className="rounded-xl border p-6 text-center text-sm" style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--ink-2)" }}>
-          {aba === "abertas"
-            ? "Nenhuma recomendação com evidência suficiente neste período. Quando os dados mostrarem algo para agir, ela aparece aqui."
-            : aba === "andamento"
-              ? "Nenhuma ação em andamento. Abra uma oportunidade e toque em “Iniciar ação”."
-              : "Nada no histórico ainda."}
+          ))}
         </div>
-      ) : (
-        <div className="overflow-hidden rounded-xl border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-          <table className="w-full text-sm empilha">
-            <thead>
-              <tr style={{ background: "var(--surface-2)", color: "var(--ink-2)" }}>
-                <th className="px-4 py-3 text-left font-semibold">Oportunidade</th>
-                <th className="px-3 py-3 text-left font-semibold">Prioridade</th>
-                <th className="px-3 py-3 text-left font-semibold">Responsável</th>
-                <th className="px-3 py-3 text-left font-semibold">Status</th>
-                <th className="px-3 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {visiveis.map(({ insight, acomp }) => (
-                <tr key={acomp.insightId} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="px-4 py-3" data-label="Oportunidade">
-                    <span className="block text-xs" style={{ color: "var(--muted)" }}>{insight ? categoriaDaArea(insight.area) : "Regra não disparou mais neste período"}</span>
-                    <span className="font-medium" style={{ color: "var(--ink)" }}>{acomp.titulo}</span>
-                  </td>
-                  <td className="px-3 py-3" data-label="Prioridade">
-                    {insight ? (
-                      <span className="inline-flex flex-wrap items-center gap-2">
-                        <PriorityBadge p={prioridadeDe(insight)} />
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-3 py-3" data-label="Responsável">{ROTULO_RESPONSAVEL[acomp.responsavel]}</td>
-                  <td className="px-3 py-3" data-label="Status">{ROTULO_STATUS[acomp.status]}{acomp.prazo ? ` · até ${acomp.prazo.split("-").reverse().join("/")}` : ""}</td>
-                  <td className="px-3 py-3 text-right" data-label="">
-                    <button type="button" onClick={() => setAberto({ insight, acomp })} className="min-h-[44px] rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--accent)" }}>
+
+        {visiveis.length === 0 ? (
+          <PlanoVazio titulo={aba === "abertas" ? "Nada para fazer agora" : aba === "andamento" ? "Nada em andamento" : "Histórico vazio"}>
+            {aba === "abertas"
+              ? "Nenhuma recomendação com evidência suficiente neste período. Quando os dados mostrarem algo para agir, ela aparece aqui."
+              : aba === "andamento"
+                ? "Nenhuma ação em andamento. Abra uma oportunidade e toque em “Iniciar ação”."
+                : "Nada no histórico ainda."}
+          </PlanoVazio>
+        ) : (
+          <ol className="pl-lista">
+            {visiveis.map(({ insight, acomp }, k) => {
+              const p = insight ? prioridadeDe(insight) : null;
+              return (
+                <PlanoLinha
+                  key={acomp.insightId}
+                  posicao={k + 1}
+                  tom={p ? TOM_PRIO[p] : "g"}
+                  apagada={!ABERTOS.includes(acomp.status)}
+                  titulo={acomp.titulo}
+                  apoio={insight ? categoriaDaArea(insight.area) : "Regra não disparou mais neste período"}
+                  chips={
+                    <>
+                      {p && <PriorityBadge p={p} />}
+                      <PlanoChip rotulo="Responsável" icone="users">{ROTULO_RESPONSAVEL[acomp.responsavel] ?? "Responsável a definir"}</PlanoChip>
+                      <PlanoChip rotulo="Status" tom={acomp.status === "em_execucao" ? "b" : acomp.status === "concluida" || acomp.status === "resultado_avaliado" ? "up" : "g"}>
+                        {ROTULO_STATUS[acomp.status]}
+                      </PlanoChip>
+                      {acomp.prazo && (
+                        <PlanoChip rotulo="Prazo" icone="calendar">
+                          até {acomp.prazo.split("-").reverse().join("/")}
+                        </PlanoChip>
+                      )}
+                    </>
+                  }
+                  acao={
+                    <button type="button" onClick={() => setAberto({ insight, acomp })} className="pl-botao">
                       Entender e agir
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  }
+                />
+              );
+            })}
+          </ol>
+        )}
+      </NxCard>
+
+      <PlanoComo titulo="Como a prioridade é calculada">
+        <p>
+          Cada recomendação vem de uma regra fixa sobre os dados (nunca de texto gerado por IA). A prioridade vai de 0 a 100 e soma cinco notas de 0 a 5:
+          impacto ({PESOS_PADRAO.impacto * 100}%), urgência ({PESOS_PADRAO.urgencia * 100}%), confiança dos dados ({PESOS_PADRAO.confianca * 100}%), facilidade de execução ({PESOS_PADRAO.facilidade * 100}%) e alinhamento estratégico ({PESOS_PADRAO.alinhamento * 100}%).
+        </p>
+        <p>Urgência: ruim = 5, atenção = 3, bom = 1. Impacto e confiança: alto = 5, médio = 3, baixo = 1. Facilidade: mexer em verba ou postar = 4; atendimento e comercial = 3; conectar fonte = 2. Alinhamento: 3 para todas as áreas até a equipe definir prioridades por cliente.</p>
+        <p>“Concluída” quer dizer que a ação foi feita; “Resultado avaliado” quer dizer que alguém conferiu o efeito no indicador. Uma recomendação aberta cuja regra deixou de disparar vira “Expirada”, e o histórico fica.</p>
+      </PlanoComo>
+
+      {r.limitacoes.length > 0 && (
+        <PlanoAviso
+          tom="b"
+          titulo={`O que o painel ainda não consegue dizer (${r.limitacoes.length})`}
+          detalhe={<ListaLimitacoes itens={r.limitacoes} />}
+        >
+          {r.limitacoes.length === 1 ? "Um ponto do período" : `${r.limitacoes.length} pontos do período`} sem dado suficiente para afirmar. Abra a lista antes de concluir.
+        </PlanoAviso>
       )}
-
-      <details className="rounded-xl border p-4 text-sm" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <summary className="min-h-[44px] cursor-pointer font-semibold">Como a prioridade é calculada</summary>
-        <div className="mt-2 space-y-2 leading-relaxed" style={{ color: "var(--ink-2)" }}>
-          <p>
-            Cada recomendação vem de uma regra fixa sobre os dados (nunca de texto gerado por IA). A prioridade vai de 0 a 100 e soma cinco notas de 0 a 5:
-            impacto ({PESOS_PADRAO.impacto * 100}%), urgência ({PESOS_PADRAO.urgencia * 100}%), confiança dos dados ({PESOS_PADRAO.confianca * 100}%), facilidade de execução ({PESOS_PADRAO.facilidade * 100}%) e alinhamento estratégico ({PESOS_PADRAO.alinhamento * 100}%).
-          </p>
-          <p>Urgência: ruim = 5, atenção = 3, bom = 1. Impacto e confiança: alto = 5, médio = 3, baixo = 1. Facilidade: mexer em verba ou postar = 4; atendimento e comercial = 3; conectar fonte = 2. Alinhamento: 3 para todas as áreas até a equipe definir prioridades por cliente.</p>
-          <p>“Concluída” quer dizer que a ação foi feita; “Resultado avaliado” quer dizer que alguém conferiu o efeito no indicador. Uma recomendação aberta cuja regra deixou de disparar vira “Expirada”, e o histórico fica.</p>
-        </div>
-      </details>
-
-      <ListaLimitacoes itens={r.limitacoes} />
 
       {aberto && (
         <NextBestActionPanel
