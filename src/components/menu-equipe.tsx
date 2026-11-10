@@ -70,6 +70,9 @@ function LinkDoRegistro({
       to={destino.to as never}
       params={destino.params as never}
       search={searchDoLink(destino, dateRange) as never}
+      // O Link do TanStack põe aria-current="page" sozinho quando acha o link ativo, e por padrão o casamento é por prefixo
+      // (/$clientId casaria com /$clientId/conteudo). Com exact, ele só marca o destino exato, igual à regra do item atual.
+      activeOptions={{ exact: true, includeSearch: false }}
       className={className}
       title={title}
       data-on={dataOn ? "" : undefined}
