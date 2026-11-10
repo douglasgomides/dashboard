@@ -24,7 +24,7 @@ export function normalizarNome(nome: string): string {
   return nome.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
-/** FNV-1a de 32 bits, igual ao da prancha aprovada (base 2166136261, multiplicador 16777619). */
+/** FNV-1a de 32 bits, igual ao da prancha aprovada (mesma base e mesmo primo multiplicador). */
 export function hashFnv1a(texto: string): number {
   let h = 2166136261;
   for (let i = 0; i < texto.length; i++) {
