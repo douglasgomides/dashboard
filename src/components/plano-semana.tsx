@@ -8,6 +8,7 @@ import { Carregando, ErroCarga } from "@/components/sem-fonte";
 import { useClientRole } from "@/hooks/use-client-role";
 import { MATURACAO_DIAS, MINIMO_ATENDIDOS, parcial, ROTULO_ORIGEM, semanaDe, type EstadoPlano, type OrigemPlano } from "@/lib/plano-semana";
 import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
+import { PlanoSemanaPainel } from "@/components/nx/plano-semana-painel";
 
 interface ItemPlano {
   id: string; semana: string; ordem: number; origem: OrigemPlano; titulo: string; porque: string; acao: string; onde: string | null;
@@ -87,6 +88,27 @@ export function PlanoSemana({ clientId, base, contexto }: { clientId: string; ba
   // Receita estimada (agendamentos × ticket) e gasto evitado em anúncio são coisas diferentes: não somam.
   const gerado = historico.filter((i) => i.origem !== "anuncio").reduce((s, i) => s + Number(i.resultado_brl ?? 0), 0);
   const evitado = historico.filter((i) => i.origem === "anuncio").reduce((s, i) => s + Number(i.resultado_brl ?? 0), 0);
+
+  // No Nexo, o mesmo plano no desenho do painel (o SAP continua com o layout de sempre).
+  if (contexto === "nexo")
+    return (
+      <PlanoSemanaPainel
+        semanaRotulo={dataBR(semana)}
+        ultimaRotulo={ultimaSemana ? dataBR(ultimaSemana) : undefined}
+        atual={atual}
+        passada={passada}
+        seloEstado={(i) => seloEstado(i as ItemPlano)}
+        temParcial={(i) => !!parcial((i as ItemPlano).medicao)}
+        brl={brl}
+        numeros={{ emJogo, feitas, historico: historico.length, gerado, evitado }}
+        base={base}
+        podeEditar={podeEditar}
+        gerando={gerando}
+        aviso={aviso}
+        onAtualizar={atualizar}
+        onDecidir={decidir}
+      />
+    );
 
   return (
     <div className="grid gap-4">
