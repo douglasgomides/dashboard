@@ -6,6 +6,7 @@ import {
   itemAtualDoMenu,
   itensMenuEquipe,
   linkDaTela,
+  telasPorArea,
   type LinkDaTela,
   type PerfilEquipe,
   type TelaDoRegistro,
@@ -18,7 +19,7 @@ import "@/styles/nexo-casca.css";
 
 export interface MenuEquipeProps {
   perfil: PerfilEquipe;
-  /** Clínica atual da casca. null na casca /admin sem clínica lembrada (o 03-06 trata Clínica nesse caso). */
+  /** Clínica atual da casca. null na casca /admin sem clínica lembrada (Clínica chama onSemClinica). */
   clientId: string | null;
   pathname: string;
   /** Período atual: vira search nas rotas com $clientId, como no menu do médico. */
@@ -28,6 +29,8 @@ export interface MenuEquipeProps {
   variante: "barra" | "folha";
   /** Chamado no clique de qualquer link (a folha fecha). */
   onEscolher?: () => void;
+  /** Casca /admin sem clínica lembrada: Clínica leva a /admin e chama esta função, que mostra a dica (D-02). */
+  onSemClinica?: () => void;
 }
 
 const semBarraFinal = (p: string) => p.replace(/\/+$/, "") || "/";
@@ -50,6 +53,7 @@ function LinkDoRegistro({
   dataOn,
   atual,
   onClick,
+  onSemClinica,
   children,
 }: {
   tela: TelaDoRegistro;
@@ -60,11 +64,19 @@ function LinkDoRegistro({
   dataOn?: boolean;
   atual?: boolean;
   onClick?: () => void;
+  onSemClinica?: () => void;
   children: ReactNode;
 }) {
   const link = linkDaTela(tela, clientId);
-  // Sem clínica a tela com $clientId não tem endereço; fica na Carteira (D-02; a dica "Escolha uma clínica" é do 03-06).
+  // Sem clínica a tela com $clientId não tem endereço: fica na Carteira e avisa quem montou o menu, que mostra a dica
+  // "Escolha uma clínica para abrir os resultados dela." (D-02). O link continua dentro do contêiner de origem menu.
   const destino: LinkDaTela = link ?? { to: "/admin" };
+  const aoClicar = link
+    ? onClick
+    : () => {
+        onSemClinica?.();
+        onClick?.();
+      };
   return (
     <Link
       to={destino.to as never}
@@ -77,14 +89,23 @@ function LinkDoRegistro({
       title={title}
       data-on={dataOn ? "" : undefined}
       aria-current={atual ? "page" : undefined}
-      onClick={onClick}
+      onClick={aoClicar}
     >
       {children}
     </Link>
   );
 }
 
-export function MenuEquipe({ perfil, clientId, pathname, dateRange, recolhida = false, variante, onEscolher }: MenuEquipeProps) {
+export function MenuEquipe({
+  perfil,
+  clientId,
+  pathname,
+  dateRange,
+  recolhida = false,
+  variante,
+  onEscolher,
+  onSemClinica,
+}: MenuEquipeProps) {
   const itens = itensMenuEquipe(perfil);
   if (!itens.length) return null;
   const atual = itemAtualDoMenu(pathname);
@@ -109,12 +130,16 @@ export function MenuEquipe({ perfil, clientId, pathname, dateRange, recolhida = 
                 dataOn={on}
                 atual={exato}
                 onClick={onEscolher}
+                onSemClinica={onSemClinica}
               >
                 <IconeTabler nome={item.icone} tamanho={20} />
                 <span className={mostraRotulo ? "nx-menu-rotulo" : "sr-only"}>{item.rotulo}</span>
                 {folha && <IconeTabler nome="chevron-right" tamanho={16} className="nx-menu-seta" />}
               </LinkDoRegistro>
-              {on && mostraRotulo && item.subtelas.length > 0 && (
+              {on && mostraRotulo && item.chave === "clinica" && clientId && (
+                <TodasAsTelasDaClinica rotulo={item.rotulo} perfil={perfil} clientId={clientId} aqui={aqui} dateRange={dateRange} onEscolher={onEscolher} />
+              )}
+              {on && mostraRotulo && item.chave !== "clinica" && item.subtelas.length > 0 && (
                 <nav aria-label={`Telas de ${item.rotulo}`} className="nx-subtelas">
                   <ul>
                     {item.subtelas.map((sub) => {
@@ -129,6 +154,7 @@ export function MenuEquipe({ perfil, clientId, pathname, dateRange, recolhida = 
                             className="nx-subtela"
                             atual={subAtual}
                             onClick={onEscolher}
+                            onSemClinica={onSemClinica}
                           >
                             {sub.rotulo}
                           </LinkDoRegistro>
@@ -142,6 +168,52 @@ export function MenuEquipe({ perfil, clientId, pathname, dateRange, recolhida = 
           );
         })}
       </ul>
+    </nav>
+  );
+}
+
+// 09/11/2026 (João): "tu tirou tudo que dava inteligência". Todas as telas da clínica voltam ao menu da equipe, agrupadas
+// pelas áreas de antes (Resultados, Marketing/Instagram, Comercial/anúncios...). Nada fica só na busca.
+const NA_CLINICA_ROTA = "/_authenticated/$clientId";
+
+function TodasAsTelasDaClinica({
+  rotulo,
+  perfil,
+  clientId,
+  aqui,
+  dateRange,
+  onEscolher,
+}: {
+  rotulo: string;
+  perfil: PerfilEquipe;
+  clientId: string;
+  aqui: string;
+  dateRange?: DateRangeState;
+  onEscolher?: () => void;
+}) {
+  const grupos = telasPorArea(perfil, { desenvolvimento: import.meta.env.DEV })
+    .map((g) => ({ area: g.area, telas: g.telas.filter((t) => t.rota.startsWith(NA_CLINICA_ROTA)) }))
+    .filter((g) => g.telas.length > 0);
+  return (
+    <nav aria-label={`Telas de ${rotulo}`} className="nx-subtelas">
+      {grupos.map((g) => (
+        <div key={g.area} className="nx-subgrupo">
+          <p className="nx-subgrupo-titulo">{g.area}</p>
+          <ul>
+            {g.telas.map((sub) => {
+              const link = linkDaTela(sub, clientId);
+              const subAtual = !!link && caminhoDoLink(link) === aqui;
+              return (
+                <li key={sub.rota + (sub.busca?.visao ?? "")}>
+                  <LinkDoRegistro tela={sub} clientId={clientId} dateRange={dateRange} className="nx-subtela" atual={subAtual} onClick={onEscolher}>
+                    {sub.rotulo}
+                  </LinkDoRegistro>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
     </nav>
   );
 }
