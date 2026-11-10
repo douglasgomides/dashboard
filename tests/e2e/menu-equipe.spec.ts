@@ -2,7 +2,7 @@ import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { CID, mockAccount } from "./fixtures";
 import { LINKS_DO_MEDICO } from "./links-do-medico";
-import { ROTULOS_MENU_EQUIPE } from "../../src/lib/registro-de-telas";
+import { ROTULOS_MENU_EQUIPE, secoesDaClinica } from "../../src/lib/registro-de-telas";
 
 // Animações fora (UI-SPEC §Movimento): posição e cor medidas no estado final.
 test.use({ reducedMotion: "reduce" });
@@ -86,7 +86,7 @@ const aside = (page: Page) => page.locator('aside[aria-label="Menu principal"]')
 const itensDoMenu = (page: Page) => aside(page).locator('nav[aria-label="Menu da equipe"] > ul > li > a');
 const itemDoMenu = (page: Page, rotulo: string) => itensDoMenu(page).filter({ hasText: rotulo });
 
-test("admin a 1440 vê os 3 itens do Menu da equipe, Clínica atual com as 4 subtelas e nada de Aparência ou Produto", async ({ page, context }) => {
+test("admin a 1440 vê os 3 itens do Menu da equipe, Clínica atual com as seções e nada de Aparência ou Produto", async ({ page, context }) => {
   await mockAccount(context, "admin");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}`);
@@ -97,7 +97,8 @@ test("admin a 1440 vê os 3 itens do Menu da equipe, Clínica atual com as 4 sub
   await expect(clinica).toHaveAttribute("data-on", "");
   for (const rotulo of [ROTULOS_MENU_EQUIPE.carteira, ROTULOS_MENU_EQUIPE.conferencia])
     await expect(itemDoMenu(page, rotulo)).not.toHaveAttribute("aria-current", /.*/);
-  await expect(page.getByRole("navigation", { name: `Telas de ${ROTULOS_MENU_EQUIPE.clinica}` }).locator(`a[href*="/conteudo"]`).first()).toBeVisible();
+  // 10/11/2026: sob Clínica ficam só as seções; as telas da seção são abas na página (secoes-da-clinica.spec.ts).
+  await expect(aside(page).getByRole("navigation", { name: `Seções de ${ROTULOS_MENU_EQUIPE.clinica}` }).getByRole("link", { name: "Marketing", exact: true })).toBeVisible();
   // A pílula do item atual é o degradê de marca (D-01), com texto branco.
   const fundo = await clinica.evaluate((el) => getComputedStyle(el).backgroundImage);
   expect(fundo).toContain("linear-gradient");
@@ -122,9 +123,13 @@ test("admin numa tela escondida da clínica: Clínica fica em pílula sem aria-c
   const clinica = itemDoMenu(page, ROTULOS_MENU_EQUIPE.clinica);
   await expect(clinica).toHaveAttribute("data-on", "");
   await expect(clinica).not.toHaveAttribute("aria-current", /.*/);
-  const subtelas = page.getByRole("navigation", { name: `Telas de ${ROTULOS_MENU_EQUIPE.clinica}` });
-  expect(await subtelas.getByRole("link").count()).toBeGreaterThan(20);
-  await expect(subtelas.locator('[aria-current="page"]')).toHaveCount(1);
+  // A seção Marketing fica marcada na barra e as telas dela (todas as da sanfona antiga) viram abas com 1 atual.
+  const secoes = aside(page).getByRole("navigation", { name: `Seções de ${ROTULOS_MENU_EQUIPE.clinica}` });
+  await expect(secoes.getByRole("link")).toHaveCount(secoesDaClinica({ isAdmin: true }).length);
+  await expect(secoes.getByRole("link", { name: "Marketing", exact: true })).toHaveAttribute("data-on", "");
+  const abas = page.getByRole("navigation", { name: "Telas de Marketing", exact: true });
+  await expect(abas.getByRole("link")).toHaveCount(secoesDaClinica({ isAdmin: true }).find((s) => s.area === "Marketing")!.telas.length);
+  await expect(abas.locator('[aria-current="page"]')).toHaveCount(1);
 });
 
 test("admin clica no item de conferência do Menu da equipe e o log grava origem menu", async ({ page, context }) => {
@@ -156,13 +161,15 @@ test("o campo Buscar tela da barra da equipe abre o diálogo Buscar tela", async
   await expect(dialog.getByRole("searchbox")).toBeFocused();
 });
 
-test("estrategista não admin vê só Clínica com as 2 subtelas que abre e nenhum link para /admin", async ({ page, context }) => {
+test("estrategista não admin vê só Clínica com as seções que abre e nenhum link para /admin", async ({ page, context }) => {
   await mockAccount(context, "strategist");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}`);
   await expect(page.getByRole("navigation", { name: "Menu da equipe" })).toBeVisible();
   await expect(itensDoMenu(page)).toHaveText([ROTULOS_MENU_EQUIPE.clinica]);
-  await expect(page.getByRole("navigation", { name: `Telas de ${ROTULOS_MENU_EQUIPE.clinica}` }).getByRole("link").first()).toBeVisible();
+  await expect(aside(page).getByRole("navigation", { name: `Seções de ${ROTULOS_MENU_EQUIPE.clinica}` }).getByRole("link")).toHaveText(
+    secoesDaClinica({ isAdmin: false, papel: "strategist" }).map((s) => s.area),
+  );
   await expect(aside(page).locator('a[href^="/admin"]')).toHaveCount(0);
 });
 
