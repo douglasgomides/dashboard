@@ -30,6 +30,14 @@ import { pendenciasDoCliente, textosComTom, ROTULO_TOM, type Tom } from "@/lib/r
 import { ROTULO_FORMATO, seteDias } from "@/lib/pauta";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
+import { useResultado } from "@/hooks/use-resultado";
+import { fmtNum } from "@/lib/format";
+import { InfoDica } from "@/components/visual";
+import { IconeTabler } from "@/components/icons/tabler";
+import type { NomeIcone } from "@/lib/registro-de-telas";
+import type { ItemEnvio, SecaoId } from "@/lib/relatorio-envio";
+import { NxCard, NxKpi, NxLinhaTempo, NxSectionHeader, NxTag, type NxSerie, type NxTom } from "@/components/nx";
+import { PlanoAviso, PlanoCabecalho, PlanoComo, PlanoVazio, TileTabler } from "@/components/nx/plano-pecas";
 
 export const Route = createFileRoute("/_authenticated/$clientId/relatorio")({
   component: RelatorioPage,
@@ -164,17 +172,18 @@ function RelatorioPage() {
   }, [gerados]);
 
   const head = (
-    <div className="hpagehead">
-      <h2>Relatório</h2>
-      <p>Texto pronto para enviar ao cliente, em 3 versões do mesmo conteúdo conferido. Período: {periodLabel}.</p>
-    </div>
+    <PlanoCabecalho
+      titulo="Como foi o período"
+      pergunta="Os números, o que aconteceu, o que fazer e o texto pronto para enviar ao cliente."
+      periodo={periodLabel}
+    />
   );
 
-  if (loading) return <div>{head}<Carregando texto="Conferindo os dados e montando o relatório…" /></div>;
-  if (erro || !envio) return <div>{head}<ErroCarga texto="Falha ao ler os dados do período. Os números não foram substituídos por zeros." /><button type="button" className="btn mt-3" onClick={() => { queries.filter(q => q.isError).forEach(q => void q.refetch()); }}>Tentar novamente</button></div>;
+  if (loading) return <div className="nexo-plano">{head}<Carregando texto="Conferindo os dados e montando o relatório…" /></div>;
+  if (erro || !envio) return <div className="nexo-plano">{head}<ErroCarga texto="Falha ao ler os dados do período. Os números não foram substituídos por zeros." /><div><button type="button" className="pl-botao" onClick={() => { queries.filter(q => q.isError).forEach(q => void q.refetch()); }}>Tentar novamente</button></div></div>;
   if (!temIg && !temAds && !temWts && !temCrm) {
     return (
-      <div>
+      <div className="nexo-plano">
         {head}
         <SemFonte {...SEM_INSTAGRAM} texto="Este cliente não tem nenhuma fonte ligada (Instagram, anúncios, WhatsApp ou CRM), então não há o que relatar. O relatório não é gerado vazio." />
       </div>
@@ -206,61 +215,37 @@ function RelatorioPage() {
 
   const semDado = SECOES.every((s) => envio.conteudoCompleto[s.id].length === 0 || s.id === "limitacoes");
   const tudoDesmarcado = !semDado && SECOES.every((s) => envio.conteudo[s.id].length === 0);
-  const btn = "btn inline-flex min-h-[44px] items-center justify-center gap-1.5 px-4 text-sm";
+  const btn = "pl-botao";
   const alternarManter = (original: string) => setManterCfm((cur) => (cur.includes(original) ? cur.filter((x) => x !== original) : [...cur, original]));
 
   return (
-    <div className="space-y-4">
+    <div className="nexo-plano">
       {head}
 
+      {/* 1. Os números do período, com variação, e o gráfico principal. */}
+      <NumerosDoPeriodo clientId={clientId} start={start} end={end} temIg={temIg} diario={(metrics.data as any[]) ?? []} posts={(posts.data as any[]) ?? []} />
+
+      {/* 2. A leitura: o que aconteceu e o que fazer (o mesmo conteúdo conferido que vai no texto). */}
+      <LeituraDoPeriodo envio={envio} />
+
+      {/* Dado incompleto: curto e sempre visível. */}
       {envio.omitidos.length > 0 && <NaoIncluido omitidos={envio.omitidos} />}
 
-      {envio.blocos.length > 0 && <OQueEntra envio={envio} excluidos={excluidos} setExcluidos={setExcluidos} />}
-
-      <Checagem envio={envio} alternarManter={alternarManter} />
-
-      <section className="card" aria-labelledby="rel-tom">
-        <h2 id="rel-tom">Tom e blocos do texto</h2>
-        <p className="sub">Mesmo conteúdo conferido, dito de outro jeito. Trocar refaz o texto (a edição manual é perdida).</p>
-        <div role="radiogroup" aria-label="Tom do texto" className="mt-2 grid gap-2 sm:grid-cols-4">
-          {([["padrao", { nome: "Padrão", descricao: "O texto de sempre, sem ajuste de tom." }], ...(Object.entries(ROTULO_TOM) as [Tom, { nome: string; descricao: string }][])] as [Tom | "padrao", { nome: string; descricao: string }][]).map(([id, r]) => (
-            <button key={id} type="button" role="radio" aria-checked={tom === id} onClick={() => setTom(id)} className="rounded-lg border p-2.5 text-left" style={{ borderColor: tom === id ? "var(--accent)" : "var(--border)", background: tom === id ? "color-mix(in srgb, var(--accent) 8%, var(--surface))" : "var(--surface)" }}>
-              <span className="block text-sm font-semibold" style={{ color: "var(--ink)" }}>{r.nome}</span>
-              <span className="block text-xs" style={{ color: "var(--text-dim)" }}>{r.descricao}</span>
-            </button>
-          ))}
-        </div>
-        <div className="mt-3 flex flex-col gap-1.5 text-sm">
-          <label className="inline-flex min-h-[32px] items-center gap-2">
-            <input type="checkbox" checked={explicar} onChange={(e) => setExplicar(e.target.checked)} />
-            Explicar termos técnicos (CTR, CPM, lead…) na primeira vez que aparecem
-          </label>
-          <label className="inline-flex min-h-[32px] items-center gap-2">
-            <input type="checkbox" checked={comPendencias} onChange={(e) => setComPendencias(e.target.checked)} disabled={pendencias.length === 0} />
-            Pendências do cliente {pendencias.length ? `(${pendencias.length})` : "(nenhuma encontrada)"}
-          </label>
-          <label className="inline-flex min-h-[32px] items-center gap-2">
-            <input type="checkbox" checked={comSemana} onChange={(e) => setComSemana(e.target.checked)} disabled={proximaSemana.length === 0} />
-            Plano da próxima semana {proximaSemana.length ? `(${proximaSemana.length} pauta${proximaSemana.length === 1 ? "" : "s"} do planejador)` : "(nenhuma pauta com dia no planejador de Ideias)"}
-          </label>
-        </div>
-        {comPendencias && pendencias.length > 0 && (
-          <details className="mt-2 text-xs" style={{ color: "var(--text-dim)" }}>
-            <summary className="cursor-pointer font-medium">Ver as pendências que entram</summary>
-            <ul className="mt-1 list-disc space-y-1 pl-5">{pendencias.map((p) => <li key={p}>{p}</li>)}</ul>
-          </details>
-        )}
-      </section>
-
+      {/* 3. O texto para enviar. */}
       {semDado ? (
         <SemFonte titulo="Sem dado para montar o texto" texto="Nenhuma seção tem dado neste período, então o relatório ficaria vazio. Troque o período no cabeçalho." />
       ) : tudoDesmarcado ? (
         <SemFonte titulo="Nada marcado para enviar" texto="Todas as seções foram desmarcadas em “O que entra no texto”. Marque ao menos uma para montar as versões." />
       ) : (
-        <section className="card" aria-labelledby="rel-versoes">
-          <h2 id="rel-versoes">Versões para enviar</h2>
-          <p className="sub">Mesmo conteúdo nas três: resumo, vitórias, pontos de atenção, ações, próximos testes e dados incompletos.</p>
-          <div role="tablist" aria-label="Versão do relatório" className="mt-3 grid grid-cols-3 gap-1 rounded-lg p-1" style={{ background: "var(--surface-2)" }}>
+        <NxCard
+          id="rel-versoes"
+          nivel={2}
+          icone={<IconeTabler nome="message-circle" tamanho={17} traco={1.7} />}
+          titulo="Versões para enviar"
+          subtitulo="O mesmo conteúdo conferido em três formatos. Edite, confira e copie."
+        >
+          <Checagem envio={envio} alternarManter={alternarManter} />
+          <div role="tablist" aria-label="Versão do relatório" className="pl-trilho">
             {(
               [
                 ["whatsapp", "WhatsApp"],
@@ -268,15 +253,7 @@ function RelatorioPage() {
                 ["pdf", "PDF"],
               ] as [Versao, string][]
             ).map(([id, rot]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={versao === id}
-                onClick={() => setVersao(id)}
-                className="min-h-[44px] rounded-md text-sm font-semibold"
-                style={versao === id ? { background: "var(--surface)", color: "var(--ink)", boxShadow: "0 1px 2px rgba(0,0,0,.08)" } : { color: "var(--text-dim)" }}
-              >
+              <button key={id} type="button" role="tab" aria-selected={versao === id} onClick={() => setVersao(id)}>
                 {rot}
               </button>
             ))}
@@ -293,7 +270,7 @@ function RelatorioPage() {
               linhas={16}
               previa="whatsapp"
             >
-              <button type="button" className={`${btn} pri`} onClick={() => copiar(textoWhats, "whatsapp")} disabled={!textoWhats.trim()}>
+              <button type="button" className={`${btn} pl-botao--pri`} onClick={() => copiar(textoWhats, "whatsapp")} disabled={!textoWhats.trim()}>
                 <Copy size={15} aria-hidden /> {copiado === "whatsapp" ? "Copiado" : "Copiar para WhatsApp"}
               </button>
             </EditorVersao>
@@ -301,53 +278,109 @@ function RelatorioPage() {
 
           {versao === "executiva" && (
             <EditorVersao id="rel-exec" rotulo="Versão executiva para reunião: pontos principais e 3 decisões" texto={textoExec} setTexto={setTextoExec} gerado={gerados?.executiva ?? envio.executiva} linhas={18} previa="doc">
-              <button type="button" className={`${btn} pri`} onClick={() => copiar(textoExec, "executiva")} disabled={!textoExec.trim()}>
+              <button type="button" className={`${btn} pl-botao--pri`} onClick={() => copiar(textoExec, "executiva")} disabled={!textoExec.trim()}>
                 <Copy size={15} aria-hidden /> {copiado === "executiva" ? "Copiado" : "Copiar versão executiva"}
               </button>
             </EditorVersao>
           )}
 
           {versao === "pdf" && (
-            <div className="mt-3">
-              <p className="sub">
-                A primeira página traz o achado do período, os números principais e as 6 seções com a evidência de cada ponto; depois vem o detalhamento de Instagram, anúncios, WhatsApp e CRM. A mensagem de WhatsApp, como estiver editada, vai no fim. O que foi desmarcado em “O que entra no texto” fica fora do PDF e é registrado na página de metodologia.
+            <div className="grid gap-3">
+              <p className="text-sm" style={{ color: "var(--text-2)" }}>
+                Primeira página: o achado do período, os números principais e as 6 seções com a evidência de cada ponto. Depois, o detalhe de Instagram, anúncios, WhatsApp e CRM, e a mensagem de WhatsApp como estiver editada.
               </p>
-              <ol className="mt-2 space-y-1 text-sm" style={{ color: "var(--text)" }}>
+              <ul className="pl-checagem" aria-label="Seções do PDF">
                 {SECOES.map((s) => {
                   const n = envio.conteudo[s.id].length;
                   const fora = envio.conteudoCompleto[s.id].length - n;
                   return (
                     <li key={s.id}>
-                      <b>{s.titulo}</b>{" "}
-                      <span style={{ color: "var(--text-dim)" }}>
-                        ({n} {n === 1 ? "item" : "itens"}
-                        {fora > 0 ? `; ${fora} desmarcado${fora === 1 ? "" : "s"}` : ""})
-                      </span>
+                      <NxTag tom={n ? "b" : "g"}>
+                        {s.titulo}: {n} {n === 1 ? "item" : "itens"}
+                        {fora > 0 ? ` (${fora} desmarcado${fora === 1 ? "" : "s"})` : ""}
+                      </NxTag>
                     </li>
                   );
                 })}
-              </ol>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" className={`${btn} pri`} onClick={baixarPdf} disabled={gerandoPdf}>
+              </ul>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className={`${btn} pl-botao--pri`} onClick={baixarPdf} disabled={gerandoPdf}>
                   <FileDown size={15} aria-hidden /> {gerandoPdf ? "Gerando o PDF…" : "Baixar PDF detalhado"}
                 </button>
               </div>
+              <PlanoComo titulo="O que o PDF registra">
+                <p>O que foi desmarcado em “O que entra no texto” fica fora do PDF e é registrado na página de metodologia.</p>
+              </PlanoComo>
               {erroPdf && (
-                <p className="mt-2 text-sm" style={{ color: "var(--crit)" }}>
+                <p className="text-sm" style={{ color: "var(--crit)" }}>
                   {erroPdf}
                 </p>
               )}
             </div>
           )}
-          <p className="note">O envio direto pelo WhatsApp é fase 2. Hoje: copie e cole na conversa do cliente.</p>
-        </section>
+          <p className="text-xs" style={{ color: "var(--muted-ink)" }}>O envio direto pelo WhatsApp é fase 2. Hoje: copie e cole na conversa do cliente.</p>
+        </NxCard>
       )}
 
+      {/* 4. Ajustes do texto, recolhidos: o que entra e o tom. */}
+      <details className="pl-recolhe">
+        <summary>
+          <TileTabler nome="settings" />
+          <span className="min-w-0 flex-1">
+            <span className="pl-recolhe__titulo">Ajustar o texto</span>
+            <span className="pl-recolhe__sub">
+              O que entra ({SECOES.filter((s) => envio.conteudoCompleto[s.id].length > 0 && !excluidos.includes(`secao:${s.id}`)).length} seções
+              {excluidos.length ? `, ${excluidos.length} desmarcado(s)` : ""}) · tom {tom === "padrao" ? "padrão" : ROTULO_TOM[tom].nome.toLowerCase()}
+            </span>
+          </span>
+          <span className="nx-sq" aria-hidden>
+            <IconeTabler nome="chevron-down" tamanho={20} />
+          </span>
+        </summary>
+        <div className="pl-recolhe__corpo">
+          {envio.blocos.length > 0 && <OQueEntra envio={envio} excluidos={excluidos} setExcluidos={setExcluidos} />}
+
+          <section aria-labelledby="rel-tom" className="grid gap-2">
+            <h3 id="rel-tom" className="text-[16px] font-semibold" style={{ color: "var(--text)" }}>Tom e blocos do texto</h3>
+            <p className="text-sm" style={{ color: "var(--text-2)" }}>Mesmo conteúdo conferido, dito de outro jeito. Trocar refaz o texto (a edição manual é perdida).</p>
+            <div role="radiogroup" aria-label="Tom do texto" className="grid gap-2 sm:grid-cols-4">
+              {([["padrao", { nome: "Padrão", descricao: "O texto de sempre, sem ajuste de tom." }], ...(Object.entries(ROTULO_TOM) as [Tom, { nome: string; descricao: string }][])] as [Tom | "padrao", { nome: string; descricao: string }][]).map(([id, r]) => (
+                <button key={id} type="button" role="radio" aria-checked={tom === id} onClick={() => setTom(id)} className="rounded-xl border p-3 text-left" style={{ borderColor: tom === id ? "var(--b1)" : "var(--line-2)", background: tom === id ? "var(--b6)" : "var(--white)" }}>
+                  <span className="block text-sm font-semibold" style={{ color: "var(--text)" }}>{r.nome}</span>
+                  <span className="block text-xs font-medium" style={{ color: "var(--text-2)" }}>{r.descricao}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-col gap-1.5 text-sm">
+              <label className="inline-flex min-h-[32px] items-center gap-2">
+                <input type="checkbox" checked={explicar} onChange={(e) => setExplicar(e.target.checked)} />
+                Explicar termos técnicos (CTR, CPM, lead…) na primeira vez que aparecem
+              </label>
+              <label className="inline-flex min-h-[32px] items-center gap-2">
+                <input type="checkbox" checked={comPendencias} onChange={(e) => setComPendencias(e.target.checked)} disabled={pendencias.length === 0} />
+                Pendências do cliente {pendencias.length ? `(${pendencias.length})` : "(nenhuma encontrada)"}
+              </label>
+              <label className="inline-flex min-h-[32px] items-center gap-2">
+                <input type="checkbox" checked={comSemana} onChange={(e) => setComSemana(e.target.checked)} disabled={proximaSemana.length === 0} />
+                Plano da próxima semana {proximaSemana.length ? `(${proximaSemana.length} pauta${proximaSemana.length === 1 ? "" : "s"} do planejador)` : "(nenhuma pauta com dia no planejador de Ideias)"}
+              </label>
+            </div>
+            {comPendencias && pendencias.length > 0 && (
+              <details className="pl-detalhe">
+                <summary>
+                  <IconeTabler nome="chevron-down" tamanho={16} />
+                  Ver as pendências que entram
+                </summary>
+                <ul className="pl-detalhe__corpo list-disc pl-8">{pendencias.map((p) => <li key={p}>{p}</li>)}</ul>
+              </details>
+            )}
+          </section>
+        </div>
+      </details>
+
       {envio.insights.length > 0 && (
-        <section aria-labelledby="rel-recs">
-          <h2 id="rel-recs" className="mb-2 text-sm font-semibold">
-            Recomendações que passaram na checagem
-          </h2>
+        <section aria-labelledby="rel-recs" className="grid gap-3">
+          <NxSectionHeader id="rel-recs" titulo="Recomendações que passaram na checagem" subtitulo="Cada uma tem evidência e amostra mínima no período." />
           <div className="grid gap-3 md:grid-cols-2">
             {envio.insights.map((i) => (
               <InsightCard key={i.id} insight={i} clientId={clientId} compacto />
@@ -358,6 +391,7 @@ function RelatorioPage() {
     </div>
   );
 }
+
 
 function EditorVersao({
   id,
@@ -495,26 +529,237 @@ function Marcado({ frase, trechos }: { frase: string; trechos: string[] }) {
   );
 }
 
-// Baseline (hub-relatorio.ts `omitidos`): o que ficou fora por falta de dado, agora com os casos novos.
-function NaoIncluido({ omitidos }: { omitidos: string[] }) {
-  const [todos, setTodos] = useState(false);
-  const LIMITE = 6;
-  const lista = todos ? omitidos : omitidos.slice(0, LIMITE);
+
+/* ---------------- Números do período ---------------- */
+
+const ICONE_METRICA: Record<string, NomeIcone> = {
+  alcance: "users",
+  interacao: "message-circle",
+  seguidores: "users",
+  frequencia: "calendar",
+  verba: "speakerphone",
+  "custo-conversa": "speakerphone",
+  leads: "target",
+  resposta: "inbox",
+};
+
+/** "▲ 12% vs. período anterior" (texto pronto de resultado.ts) vira o chip de variação; outro texto fica como nota. */
+function variacaoDe(comparacao?: string): { sobe: boolean; percentual: string; contexto: string } | null {
+  const m = comparacao?.match(/^([▲▼])\s*(\S+)\s+(.*)$/);
+  return m ? { sobe: m[1] === "▲", percentual: m[2], contexto: m[3] } : null;
+}
+
+const diaCurto = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+
+// Os mesmos números da tela Resultados (useResultado, React Query reaproveita a leitura), com a variação contra o
+// período anterior quando ela é comparável. O gráfico é o alcance e as interações de cada dia já lidos pelo relatório.
+function NumerosDoPeriodo({ clientId, start, end, temIg, diario, posts }: { clientId: string; start: string; end: string; temIg: boolean; diario: any[]; posts: any[] }) {
+  const { r, carregando, fontesComFalha } = useResultado(clientId, start, end);
+  const metricas = (r?.metricas ?? []).filter((m) => m.id !== "conectar-fontes");
+  const dias = useMemo(() => diario.filter((d) => d.date >= start && d.date <= end && d.reach != null).sort((a, b) => (a.date < b.date ? -1 : 1)), [diario, start, end]);
+  const series: NxSerie[] = useMemo(
+    () => [
+      { rotulo: "Alcance", valores: dias.map((d) => Number(d.reach ?? 0)), cor: "var(--b1)", area: true },
+      { rotulo: "Interações", valores: dias.map((d) => Number(d.total_interactions ?? 0)), cor: "var(--b4)", eixo: "dir" },
+    ],
+    [dias],
+  );
+  const [dia, setDia] = useState<string | null>(null);
+  const linhaDia = dia ? dias.find((d) => d.date === dia) : null;
+  const postsDoDia = dia ? posts.filter((p) => String(p.posted_at ?? "").slice(0, 10) === dia) : [];
+
   return (
-    <section className="card" aria-labelledby="rel-omitidos" style={{ borderColor: "var(--warn)" }}>
-      <h2 id="rel-omitidos">Não incluído por falta de dado</h2>
-      <p className="sub">Estes pontos ficaram fora das 3 versões porque não há dado suficiente no período. Não é erro do texto.</p>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm" style={{ color: "var(--text)" }}>
-        {lista.map((o, i) => (
-          <li key={i}>{o}</li>
-        ))}
-      </ul>
-      {omitidos.length > LIMITE && (
-        <button type="button" className="btn ghost mt-2 inline-flex min-h-[40px] items-center gap-1 px-3 text-sm" onClick={() => setTodos(!todos)} aria-expanded={todos}>
-          <ChevronDown size={14} aria-hidden style={{ transform: todos ? "rotate(180deg)" : undefined }} />
-          {todos ? "Mostrar menos" : `Ver todos (${omitidos.length})`}
-        </button>
+    <>
+      <NxCard
+        id="rel-numeros"
+        nivel={2}
+        icone={<IconeTabler nome="chart-bar" tamanho={17} traco={1.7} />}
+        titulo="Números do período"
+        subtitulo="Comparados com o período anterior do mesmo tamanho, quando há dado nos dois."
+      >
+        {carregando && !r ? (
+          <div className="nx-grade nx-grade--4" aria-busy="true">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="h-[112px] animate-pulse rounded-[14px]" style={{ background: "var(--field)" }} />
+            ))}
+          </div>
+        ) : metricas.length === 0 ? (
+          <PlanoVazio titulo="Sem número para mostrar">
+            {fontesComFalha ? "Uma fonte de resultados não respondeu. Os números não foram trocados por zero." : "As fontes ligadas não têm dado neste período."}
+          </PlanoVazio>
+        ) : (
+          <div className="nx-grade nx-grade--4">
+            {metricas.map((m, i) => {
+              const v = variacaoDe(m.comparacao);
+              return (
+                <NxKpi
+                  key={`${m.id}-${i}`}
+                  i={i}
+                  icone={<IconeTabler nome={ICONE_METRICA[m.id] ?? "chart-bar"} tamanho={17} traco={1.7} />}
+                  rotulo={m.rotulo}
+                  valor={m.valor}
+                  variacao={v}
+                  nota={m.statusTexto ?? (v ? undefined : m.comparacao) ?? m.fonte}
+                  info={<InfoDica rotulo={`Sobre ${m.rotulo}`} texto={[m.explicacao, m.fonte ? `Fonte: ${m.fonte}.` : ""].filter(Boolean).join(" ")} />}
+                />
+              );
+            })}
+          </div>
+        )}
+        {fontesComFalha && metricas.length > 0 && (
+          <PlanoAviso titulo="Uma fonte de resultados não respondeu">Os números dela não aparecem acima; nada foi trocado por zero.</PlanoAviso>
+        )}
+      </NxCard>
+
+      {temIg && dias.length >= 2 && (
+        <NxCard
+          nivel={2}
+          icone={<IconeTabler nome="brand-instagram" tamanho={17} traco={1.7} />}
+          titulo="Alcance e interações por dia"
+          subtitulo="Toque num dia (ou use as setas e Enter) para ver os números e o que foi publicado."
+        >
+          <NxLinhaTempo
+            datas={dias.map((d) => d.date)}
+            series={series}
+            selecionado={dia}
+            onSelecionar={(d) => setDia(d === dia ? null : d)}
+            formatarData={diaCurto}
+            formatarValor={fmtNum}
+            rotulo="Alcance e interações por dia"
+            altura={200}
+          />
+          {linhaDia && (
+            <div className="nx-abre" aria-live="polite">
+              <p className="pl-dia">
+                <b>{diaCurto(linhaDia.date)}</b>: alcance <b>{fmtNum(Number(linhaDia.reach ?? 0))}</b> · interações <b>{fmtNum(Number(linhaDia.total_interactions ?? 0))}</b> ·{" "}
+                {postsDoDia.length ? `${postsDoDia.length} ${postsDoDia.length === 1 ? "publicação" : "publicações"}` : "nenhuma publicação neste dia"}
+              </p>
+              {postsDoDia.length > 0 && (
+                <ul className="mt-1 list-disc pl-5 text-sm" style={{ color: "var(--text-2)" }}>
+                  {postsDoDia.slice(0, 5).map((p) => (
+                    <li key={p.id}>{String(p.caption ?? "Sem legenda").split("\n")[0].slice(0, 90)}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </NxCard>
       )}
+    </>
+  );
+}
+
+/* ---------------- Leitura do período ---------------- */
+
+const MARCA_SECAO: Record<SecaoId, { tom: NxTom; texto: string; seta?: "cima" | "baixo" }> = {
+  resumo: { tom: "b", texto: "Resumo" },
+  vitorias: { tom: "up", texto: "Vitória", seta: "cima" },
+  atencao: { tom: "dn", texto: "Atenção", seta: "baixo" },
+  acoes: { tom: "b", texto: "Ação" },
+  testes: { tom: "g", texto: "Teste" },
+  limitacoes: { tom: "or", texto: "Limitação" },
+};
+
+function ItemLeitura({ item, secao }: { item: ItemEnvio; secao: SecaoId }) {
+  const m = MARCA_SECAO[secao];
+  const temMais = !!item.texto && item.texto !== item.curto;
+  const titulo = item.curto.charAt(0).toUpperCase() + item.curto.slice(1);
+  const marca = (
+    <span className="pl-item__marca">
+      <NxTag tom={m.tom} seta={m.seta}>{m.texto}</NxTag>
+    </span>
+  );
+  if (!temMais && !item.evidencia)
+    return (
+      <li className="pl-item">
+        {marca}
+        <p className="pl-item__titulo">{titulo}</p>
+      </li>
+    );
+  // A linha inteira abre a frase completa e a evidência (Enter ou clique).
+  return (
+    <li>
+      <details className="pl-item pl-item--abre">
+        <summary>
+          {marca}
+          <span className="pl-item__titulo">{titulo}</span>
+          <IconeTabler nome="chevron-down" tamanho={16} className="pl-item__seta" />
+        </summary>
+        <div className="pl-item__mais">
+          {temMais && <p>{item.texto}</p>}
+          {item.evidencia && <p style={{ color: "var(--muted-ink)" }}>{item.evidencia}</p>}
+        </div>
+      </details>
+    </li>
+  );
+}
+
+function Grupo({ envio, ids }: { envio: RelatorioEnvio; ids: SecaoId[] }) {
+  const comItem = ids.filter((id) => envio.conteudoCompleto[id].length > 0);
+  if (comItem.length === 0) return <PlanoVazio titulo="Nada com evidência suficiente">Sem dado bastante neste período para afirmar algo aqui.</PlanoVazio>;
+  return (
+    <div>
+      {comItem.map((id) => (
+        <div key={id}>
+          <h4 className="pl-grupo">{SECOES.find((s) => s.id === id)!.titulo}</h4>
+          <ul className="pl-itens">
+            {envio.conteudoCompleto[id].map((it) => (
+              <ItemLeitura key={it.id} item={it} secao={id} />
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// O mesmo conteúdo conferido que vai nas 3 versões (antes das escolhas de "O que entra"), lido em dois blocos.
+function LeituraDoPeriodo({ envio }: { envio: RelatorioEnvio }) {
+  const lim = envio.conteudoCompleto.limitacoes;
+  return (
+    <section aria-label="Leitura do período" className="grid gap-3">
+      <div className="pl-leitura">
+        <NxCard nivel={2} icone={<IconeTabler nome="file-text" tamanho={17} traco={1.7} />} titulo="O que aconteceu" subtitulo="Resumo, o que deu certo e o que pede atenção.">
+          <Grupo envio={envio} ids={["resumo", "vitorias", "atencao"]} />
+        </NxCard>
+        <NxCard nivel={2} icone={<IconeTabler nome="checklist" tamanho={17} traco={1.7} />} titulo="O que fazer" subtitulo="Ações recomendadas e os próximos testes.">
+          <Grupo envio={envio} ids={["acoes", "testes"]} />
+        </NxCard>
+      </div>
+      {lim.length > 0 && (
+        <PlanoAviso
+          titulo={`Dados incompletos: ${lim.length} ${lim.length === 1 ? "ponto" : "pontos"} para ler com cuidado`}
+          detalhe={
+            <ul>
+              {lim.map((l) => (
+                <li key={l.id}>{l.texto}</li>
+              ))}
+            </ul>
+          }
+        >
+          {lim.map((l) => l.curto).join(" · ")}
+        </PlanoAviso>
+      )}
+    </section>
+  );
+}
+
+// Baseline (hub-relatorio.ts `omitidos`): o que ficou fora por falta de dado. Curto, com a lista recolhida.
+function NaoIncluido({ omitidos }: { omitidos: string[] }) {
+  return (
+    <section aria-labelledby="rel-omitidos">
+      <PlanoAviso
+        titulo={<span id="rel-omitidos">Não incluído por falta de dado ({omitidos.length})</span>}
+        detalhe={
+          <ul>
+            {omitidos.map((o, i) => (
+              <li key={i}>{o}</li>
+            ))}
+          </ul>
+        }
+      >
+        Ficaram fora das 3 versões porque não há dado suficiente no período. Não é erro do texto.
+      </PlanoAviso>
     </section>
   );
 }
@@ -526,28 +771,30 @@ function OQueEntra({ envio, excluidos, setExcluidos }: { envio: RelatorioEnvio; 
   const alternar = (chave: string, incluir: boolean) => setExcluidos((cur) => (incluir ? cur.filter((x) => x !== chave) : cur.includes(chave) ? cur : [...cur, chave]));
   const secoes = SECOES.filter((s) => envio.conteudoCompleto[s.id].length > 0);
   return (
-    <section className="card" aria-labelledby="rel-entra">
-      <h2 id="rel-entra">O que entra no texto</h2>
-      <p className="sub">Desmarque o que não faz sentido enviar a este cliente. Vale para as 3 versões (WhatsApp, reunião e PDF). Trocar a seleção refaz o texto (a edição manual é perdida).</p>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+    <section aria-labelledby="rel-entra" className="grid gap-2">
+      <h3 id="rel-entra" className="text-[16px] font-semibold" style={{ color: "var(--text)" }}>O que entra no texto</h3>
+      <p className="text-sm" style={{ color: "var(--text-2)" }}>Desmarque o que não faz sentido enviar a este cliente. Vale para as 3 versões (WhatsApp, reunião e PDF). Trocar a seleção refaz o texto (a edição manual é perdida).</p>
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
         {secoes.map((s) => (
           <label key={s.id} className="inline-flex min-h-[36px] items-center gap-2 text-sm">
             <input type="checkbox" checked={!excluidos.includes(`secao:${s.id}`)} onChange={(ev) => alternar(`secao:${s.id}`, ev.target.checked)} />
-            {s.titulo} <span style={{ color: "var(--text-faint)" }}>({envio.conteudoCompleto[s.id].length})</span>
+            {s.titulo} <span style={{ color: "var(--muted-ink)" }}>({envio.conteudoCompleto[s.id].length})</span>
           </label>
         ))}
       </div>
-      <button type="button" className="btn ghost mt-2 inline-flex min-h-[40px] items-center gap-1 px-3 text-sm" onClick={() => setDetalhe(!detalhe)} aria-expanded={detalhe}>
-        <ChevronDown size={14} aria-hidden style={{ transform: detalhe ? "rotate(180deg)" : undefined }} />
-        {detalhe ? "Esconder os blocos" : "Escolher bloco a bloco"}
-      </button>
+      <div>
+        <button type="button" className="pl-botao pl-botao--leve" onClick={() => setDetalhe(!detalhe)} aria-expanded={detalhe}>
+          <ChevronDown size={14} aria-hidden style={{ transform: detalhe ? "rotate(180deg)" : undefined }} />
+          {detalhe ? "Esconder os blocos" : "Escolher bloco a bloco"}
+        </button>
+      </div>
       {detalhe && (
-        <div className="mt-2 space-y-3">
+        <div className="space-y-3">
           {secoes.map((s) => {
             const secaoFora = excluidos.includes(`secao:${s.id}`);
             return (
               <fieldset key={s.id} disabled={secaoFora} style={{ opacity: secaoFora ? 0.55 : 1 }}>
-                <legend className="text-xs font-semibold" style={{ color: "var(--text-dim)" }}>
+                <legend className="text-xs font-semibold" style={{ color: "var(--text-2)" }}>
                   {s.titulo}
                   {secaoFora ? " (seção desmarcada)" : ""}
                 </legend>
@@ -565,7 +812,7 @@ function OQueEntra({ envio, excluidos, setExcluidos }: { envio: RelatorioEnvio; 
             );
           })}
           {excluidos.length > 0 && (
-            <button type="button" className="btn ghost inline-flex min-h-[40px] items-center gap-1.5 px-3 text-sm" onClick={() => setExcluidos(() => [])}>
+            <button type="button" className="pl-botao pl-botao--leve" onClick={() => setExcluidos(() => [])}>
               <RotateCcw size={14} aria-hidden /> Incluir tudo de novo
             </button>
           )}
@@ -575,23 +822,42 @@ function OQueEntra({ envio, excluidos, setExcluidos }: { envio: RelatorioEnvio; 
   );
 }
 
+// Checagem antes de enviar: chips com o resultado de cada item; a lista abre sozinha quando algo pede atenção.
 function Checagem({ envio, alternarManter }: { envio: RelatorioEnvio; alternarManter: (original: string) => void }) {
   const ok = envio.checagem.filter((c) => c.status === "ok").length;
+  const atencao = ok < envio.checagem.length;
   return (
-    <section className="card" aria-labelledby="rel-checagem">
-      <h2 id="rel-checagem" className="flex items-center gap-2">
-        <ShieldCheck size={18} aria-hidden /> Checagem antes de enviar
-      </h2>
-      <p className="sub">
-        {ok} de {envio.checagem.length} itens sem ressalva. O que está em atenção já foi tratado no texto (reescrito com sugestão segura ou escrito como limitação; nada é apagado); confira antes de mandar.
-      </p>
-      <ul className="mt-3 space-y-2">
+    <section aria-labelledby="rel-checagem" className="grid gap-2">
+      <h3 id="rel-checagem" className="flex items-center gap-2 text-[15px] font-semibold" style={{ color: "var(--text)" }}>
+        <ShieldCheck size={17} aria-hidden /> Checagem antes de enviar: {ok} de {envio.checagem.length} sem ressalva
+      </h3>
+      <ul className="pl-checagem">
         {envio.checagem.map((c) => (
-          <ItemChecagem key={c.id} c={c}>
-            {c.id === "linguagem" && envio.alteracoes.length > 0 ? <AlteracoesCFM alteracoes={envio.alteracoes} alternarManter={alternarManter} /> : null}
-          </ItemChecagem>
+          <li key={c.id}>
+            <NxTag tom={c.status === "ok" ? "up" : "or"} icone={c.status === "ok" ? <CheckCircle2 size={13} aria-hidden className="nx-tag__ic" /> : <AlertTriangle size={13} aria-hidden className="nx-tag__ic" />}>
+              {c.titulo}: {c.status === "ok" ? "passou" : "atenção"}
+            </NxTag>
+          </li>
         ))}
       </ul>
+      <details className="pl-detalhe" open={atencao}>
+        <summary>
+          <IconeTabler nome="chevron-down" tamanho={16} />
+          {atencao ? "O que pede atenção" : "Ver o detalhe da checagem"}
+        </summary>
+        <div className="grid gap-2">
+          <p className="text-sm" style={{ color: "var(--text-2)" }}>
+            O que está em atenção já foi tratado no texto (reescrito com sugestão segura ou escrito como limitação; nada é apagado). Confira antes de mandar.
+          </p>
+          <ul className="space-y-2">
+            {envio.checagem.map((c) => (
+              <ItemChecagem key={c.id} c={c}>
+                {c.id === "linguagem" && envio.alteracoes.length > 0 ? <AlteracoesCFM alteracoes={envio.alteracoes} alternarManter={alternarManter} /> : null}
+              </ItemChecagem>
+            ))}
+          </ul>
+        </div>
+      </details>
     </section>
   );
 }

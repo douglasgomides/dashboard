@@ -2,8 +2,6 @@ import { useMemo, useState } from "react";
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  CheckCircle2,
-  CircleAlert,
   Loader2,
   ExternalLink,
   RefreshCw,
@@ -39,6 +37,9 @@ import {
   type Dono,
 } from "@/lib/proximas-acoes";
 import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
+import { IconeTabler } from "@/components/icons/tabler";
+import { NxCard, type NxTom } from "@/components/nx";
+import { PlanoCabecalho, PlanoChip, PlanoComo, PlanoContadores, PlanoLinha, PlanoAviso, PlanoVazio } from "@/components/nx/plano-pecas";
 
 export const Route = createFileRoute(
   "/_authenticated/$clientId/proximas-acoes",
@@ -47,11 +48,6 @@ export const Route = createFileRoute(
 });
 
 const layout = getRouteApi("/_authenticated/$clientId");
-const COR_SEV: Record<Severidade, string> = {
-  alta: "var(--crit)",
-  media: "var(--warn)",
-  baixa: "var(--accent)",
-};
 const DONO_PARA_RESP: Record<Dono, Responsavel> = {
   doctor_creator: "equipe_hub",
   cliente: "medico",
@@ -63,31 +59,19 @@ const PREFIXO = "pa:"; // id na tabela acoes_acompanhamento (a mesma das Oportun
 
 type FiltroStatus = "abertas" | StatusAcao | "todas";
 
-function Chip({
+const TOM_SEV: Record<Severidade, NxTom> = { alta: "dn", media: "or", baixa: "b" };
+
+function Filtro({
   ativo,
   onClick,
   children,
-  cor,
 }: {
   ativo: boolean;
   onClick: () => void;
   children: React.ReactNode;
-  cor?: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={ativo}
-      className="min-h-[36px] rounded-full border px-3 text-sm"
-      style={{
-        borderColor: ativo ? (cor ?? "var(--accent)") : "var(--border)",
-        background: ativo
-          ? `color-mix(in srgb, ${cor ?? "var(--accent)"} 12%, var(--surface))`
-          : "var(--surface)",
-        fontWeight: ativo ? 600 : 400,
-      }}
-    >
+    <button type="button" onClick={onClick} aria-pressed={ativo} className="pl-aba">
       {children}
     </button>
   );
@@ -95,6 +79,7 @@ function Chip({
 
 function CartaoAcao({
   a,
+  posicao,
   status,
   podeEditar,
   salvando,
@@ -102,6 +87,7 @@ function CartaoAcao({
   clientId,
 }: {
   a: ProximaAcao;
+  posicao: number;
   status: StatusAcao;
   podeEditar: boolean;
   salvando: boolean;
@@ -109,51 +95,37 @@ function CartaoAcao({
   clientId: string;
 }) {
   const externo = a.rota?.startsWith("http");
+  const fechada = status === "resolvido" || status === "ignorado";
   return (
-    <li
-      className="rounded-xl border p-3"
-      style={{
-        background: "var(--surface)",
-        borderColor: "var(--border)",
-        borderLeft: `4px solid ${COR_SEV[a.severidade]}`,
-        opacity: status === "resolvido" || status === "ignorado" ? 0.7 : 1,
-      }}
-    >
-      <div className="flex flex-wrap items-center gap-1.5 text-xs">
-        <span
-          className="rounded-full px-2 py-0.5 font-semibold"
-          style={{
-            background: `color-mix(in srgb, ${COR_SEV[a.severidade]} 15%, transparent)`,
-            color: COR_SEV[a.severidade],
-          }}
-        >
-          {ROTULO_SEVERIDADE[a.severidade]}
-        </span>
-        <span
-          className="rounded-full px-2 py-0.5"
-          style={{ background: "var(--surface-2)", color: "var(--ink-2)" }}
-        >
-          {ROTULO_CATEGORIA[a.categoria]}
-        </span>
-        <span style={{ color: "var(--text-dim)" }}>
-          · {ROTULO_DONO[a.responsavel]}
-        </span>
-        <span className="ml-auto">
-          {podeEditar ? (
-            <label className="inline-flex items-center gap-1">
+    <PlanoLinha
+      posicao={posicao}
+      tom={TOM_SEV[a.severidade]}
+      apagada={fechada}
+      titulo={a.recomendacao}
+      apoio={a.porque}
+      chips={
+        <>
+          <PlanoChip rotulo="Prioridade" tom={TOM_SEV[a.severidade]}>
+            {ROTULO_SEVERIDADE[a.severidade]}
+          </PlanoChip>
+          <PlanoChip rotulo="Responsável" icone="users">
+            {ROTULO_DONO[a.responsavel]}
+          </PlanoChip>
+          <PlanoChip rotulo="Categoria">{ROTULO_CATEGORIA[a.categoria]}</PlanoChip>
+          {!podeEditar && (
+            <PlanoChip rotulo="Status" tom={status === "em_andamento" ? "b" : status === "resolvido" ? "up" : "g"}>
+              {ROTULO_STATUS_ACAO[status]}
+            </PlanoChip>
+          )}
+        </>
+      }
+      acao={
+        <>
+          {podeEditar && (
+            <label className="inline-flex items-center gap-1.5">
               <span className="sr-only">Status</span>
-              {salvando && (
-                <Loader2 size={12} className="animate-spin" aria-hidden />
-              )}
-              <select
-                value={status}
-                onChange={(e) => onStatus(e.target.value as StatusAcao)}
-                className="rounded-md border px-1.5 py-0.5 text-xs"
-                style={{
-                  borderColor: "var(--border)",
-                  background: "var(--surface)",
-                }}
-              >
+              {salvando && <Loader2 size={14} className="animate-spin" aria-hidden />}
+              <select value={status} onChange={(e) => onStatus(e.target.value as StatusAcao)} className="pl-select">
                 {(Object.keys(ROTULO_STATUS_ACAO) as StatusAcao[]).map((s) => (
                   <option key={s} value={s}>
                     {ROTULO_STATUS_ACAO[s]}
@@ -161,79 +133,33 @@ function CartaoAcao({
                 ))}
               </select>
             </label>
-          ) : (
-            <span
-              className="rounded-full px-2 py-0.5"
-              style={{ background: "var(--surface-2)" }}
-            >
-              {ROTULO_STATUS_ACAO[status]}
-            </span>
           )}
-        </span>
-      </div>
-      <p
-        className="mt-1.5 text-[15px] font-semibold leading-snug"
-        style={{ color: "var(--ink)" }}
-      >
-        {a.recomendacao}
-      </p>
-      <details className="mt-2 text-sm">
-        <summary
-          className="cursor-pointer min-h-[36px]"
-          style={{ color: "var(--ink-2)" }}
-        >
-          Por que esta ação foi sugerida
-        </summary>
-        <dl
-          className="mt-1.5 space-y-1 text-sm"
-          style={{ color: "var(--ink-2)" }}
-        >
-          <div>
-            <dt className="inline font-medium" style={{ color: "var(--ink)" }}>
-              Por que importa:{" "}
-            </dt>
-            <dd className="inline">{a.porque}</dd>
-          </div>
-          <div>
-            <dt className="inline font-medium" style={{ color: "var(--ink)" }}>
-              Impacto esperado:{" "}
-            </dt>
-            <dd className="inline">{a.impacto}</dd>
-          </div>
-        </dl>
-        <p className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
-          {a.evidencia}
-        </p>
-      </details>
-      <div
-        className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-xs"
-        style={{ color: "var(--text-dim)" }}
-      >
-        {a.rota &&
-          (externo ? (
-            <a
-              href={a.rota}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 font-semibold"
-              style={{ color: "var(--accent)" }}
-            >
-              Abrir <ExternalLink size={12} aria-hidden />
-            </a>
-          ) : (
-            <Link
-              to={a.rota as any}
-              params={{ clientId } as any}
-              className="font-semibold"
-              style={{ color: "var(--accent)" }}
-            >
-              Ver dados →
-            </Link>
-          ))}
-      </div>
-    </li>
+          {a.rota &&
+            (externo ? (
+              <a href={a.rota} target="_blank" rel="noreferrer" className="pl-botao">
+                Abrir <ExternalLink size={14} aria-hidden />
+              </a>
+            ) : (
+              <Link to={a.rota as any} params={{ clientId } as any} className="pl-botao">
+                Ver dados →
+              </Link>
+            ))}
+        </>
+      }
+      rotuloDetalhe="Por que esta ação foi sugerida"
+      detalhe={
+        <>
+          <p>
+            <b>Impacto esperado: </b>
+            {a.impacto}
+          </p>
+          <p style={{ color: "var(--muted-ink)" }}>{a.evidencia}</p>
+        </>
+      }
+    />
   );
 }
+
 
 // Central de Próximas Ações: tudo o que o painel encontrou, virado em tarefa priorizada.
 function ProximasAcoesPage() {
@@ -404,87 +330,43 @@ function ProximasAcoesPage() {
     abertas.filter((a) => a.severidade === sev).length;
   const categorias = [...new Set(acoes.map((a) => a.categoria))];
 
-  return (
-    <div className="mx-auto w-full max-w-4xl space-y-4">
-      <header>
-        <h2 className="font-semibold mb-2">O próximo passo da equipe</h2>
-        <p className="text-sm" style={{ color: "var(--ink-2)" }}>
-          Comece pelas prioridades altas. Confira a evidência, alinhe o
-          responsável indicado e atualize o status conforme a equipe avança. As
-          sugestões desta lista não executam ações externas.
-        </p>
-      </header>
+  const esperando = carregando.length > 0 && !acoes.length;
+  const filtrosAtivos = fSev !== "todas" || fStatus !== "abertas" || fCat !== "todas";
 
-      {/* Resumo no topo */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {[
-          { r: "Abertas", v: abertas.length, cor: "var(--ink)" },
-          { r: "Alta", v: conta("alta"), cor: COR_SEV.alta },
-          { r: "Média", v: conta("media"), cor: COR_SEV.media },
-          { r: "Baixa", v: conta("baixa"), cor: COR_SEV.baixa },
-        ].map((k) => (
-          <div
-            key={k.r}
-            className="rounded-lg border p-3"
-            style={{
-              borderColor: "var(--border)",
-              background: "var(--surface)",
-            }}
-          >
-            <div className="text-xs" style={{ color: "var(--text-dim)" }}>
-              {k.r}
-            </div>
-            <div
-              className="text-2xl font-semibold tabular-nums"
-              style={{ color: k.cor }}
-            >
-              {carregando.length && !acoes.length ? "…" : k.v}
-            </div>
-          </div>
-        ))}
-      </div>
+  return (
+    <div className="nexo-plano">
+      <PlanoCabecalho
+        titulo="O próximo passo da equipe"
+        pergunta="O que fazer agora, das prioridades altas para as baixas. As sugestões não executam nada fora do Nexo: a equipe executa e atualiza o status."
+      />
+
+      <PlanoContadores
+        rotulo="Ações abertas por prioridade"
+        itens={[
+          { rotulo: "Abertas", valor: esperando ? "…" : abertas.length, tom: "b", nota: "pendentes ou em andamento" },
+          { rotulo: "Alta", valor: esperando ? "…" : conta("alta"), tom: "dn", nota: "fazer primeiro" },
+          { rotulo: "Média", valor: esperando ? "…" : conta("media"), tom: "or" },
+          { rotulo: "Baixa", valor: esperando ? "…" : conta("baixa"), tom: "g" },
+        ]}
+      />
 
       {/* Leitura das fontes: mostra o progresso em vez de parecer tela travada */}
       {carregando.length > 0 && (
-        <p
-          className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
-          role="status"
-          style={{
-            borderColor: "var(--border)",
-            background: "var(--surface)",
-            color: "var(--ink-2)",
-          }}
-        >
+        <p className="flex items-center gap-2 text-sm" role="status" style={{ color: "var(--text-2)" }}>
           <Loader2 size={14} className="animate-spin" aria-hidden />
           Lendo {fontes.length - carregando.length} de {fontes.length} fontes…
           faltam: {carregando.map((f) => f.rotulo).join(", ")}.
         </p>
       )}
       {comErro.length > 0 && (
-        <p
-          className="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm"
-          role="alert"
-          style={{ borderColor: "var(--warn)", background: "var(--surface)" }}
-        >
-          <CircleAlert
-            size={16}
-            className="mt-0.5 shrink-0"
-            style={{ color: "var(--warn)" }}
-            aria-hidden
-          />
-          <span>
-            Não deu para ler: <b>{comErro.map((f) => f.rotulo).join(", ")}</b>.
+        <div role="alert">
+          <PlanoAviso titulo={<>Não deu para ler: {comErro.map((f) => f.rotulo).join(", ")}</>}>
             As ações abaixo vêm das outras fontes.{" "}
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 font-semibold"
-              style={{ color: "var(--accent)" }}
-              onClick={() => comErro.forEach((f) => f.q.refetch())}
-            >
+            <button type="button" className="inline-flex items-center gap-1 font-semibold" style={{ color: "var(--b1)" }} onClick={() => comErro.forEach((f) => f.q.refetch())}>
               <RefreshCw size={12} aria-hidden /> Tentar de novo
             </button>
-          </span>
-        </p>
+          </PlanoAviso>
+        </div>
       )}
       {erroSalvar && (
         <p className="text-sm" role="alert" style={{ color: "var(--crit)" }}>
@@ -492,167 +374,104 @@ function ProximasAcoesPage() {
         </p>
       )}
       {acomp.data?.local && (
-        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          Status guardado só neste navegador (a tabela de acompanhamento ainda
-          não está disponível).
-        </p>
+        <PlanoAviso titulo="Status guardado só neste navegador">A tabela de acompanhamento ainda não está disponível.</PlanoAviso>
       )}
 
-      {/* Filtros */}
-      {acoes.length > 0 && (
-        <details
-          className="rounded-lg border p-3"
-          style={{ borderColor: "var(--border)" }}
-        >
-          <summary className="cursor-pointer text-sm font-medium">
-            Filtrar prioridades e andamento
-            {fSev !== "todas" || fStatus !== "abertas" || fCat !== "todas"
-              ? " · filtros ativos"
-              : " · ações abertas"}
-          </summary>
-          <div
-            className="mt-3 flex flex-wrap gap-1.5"
-            role="group"
-            aria-label="Prioridade"
-          >
-            <Chip ativo={fSev === "todas"} onClick={() => setFSev("todas")}>
-              Todas as prioridades
-            </Chip>
-            {(["alta", "media", "baixa"] as Severidade[]).map((s) => (
-              <Chip
-                key={s}
-                ativo={fSev === s}
-                onClick={() => setFSev(s)}
-                cor={COR_SEV[s]}
-              >
-                {ROTULO_SEVERIDADE[s]}
-              </Chip>
-            ))}
-          </div>
-          <div
-            className="flex flex-wrap items-center gap-1.5"
-            role="group"
-            aria-label="Status"
-          >
-            {(
-              [
-                "abertas",
-                "pendente",
-                "em_andamento",
-                "resolvido",
-                "ignorado",
-                "todas",
-              ] as FiltroStatus[]
-            ).map((s) => (
-              <Chip key={s} ativo={fStatus === s} onClick={() => setFStatus(s)}>
-                {s === "abertas"
-                  ? "Abertas"
-                  : s === "todas"
-                    ? "Todos os status"
-                    : ROTULO_STATUS_ACAO[s]}
-              </Chip>
-            ))}
-            {categorias.length > 1 && (
-              <select
-                value={fCat}
-                onChange={(e) => setFCat(e.target.value as any)}
-                aria-label="Categoria"
-                className="ml-auto min-h-[36px] rounded-lg border px-2 text-sm"
-                style={{
-                  borderColor: "var(--border)",
-                  background: "var(--surface)",
-                }}
-              >
-                <option value="todas">Todas as categorias</option>
-                {categorias.map((c) => (
-                  <option key={c} value={c}>
-                    {ROTULO_CATEGORIA[c]}
-                  </option>
+      <NxCard
+        nivel={2}
+        id="pa-lista"
+        icone={<IconeTabler nome="checklist" tamanho={17} traco={1.7} />}
+        titulo="O que fazer agora"
+        subtitulo={filtrosAtivos ? `${visiveis.length} de ${acoes.length} ações com os filtros escolhidos` : `${visiveis.length} ${visiveis.length === 1 ? "ação aberta" : "ações abertas"}, em ordem de prioridade`}
+      >
+        {/* Filtros */}
+        {acoes.length > 0 && (
+          <div className="grid gap-2">
+            <div className="pl-abas" role="group" aria-label="Status">
+              {(["abertas", "pendente", "em_andamento", "resolvido", "ignorado", "todas"] as FiltroStatus[]).map((s) => (
+                <Filtro key={s} ativo={fStatus === s} onClick={() => setFStatus(s)}>
+                  {s === "abertas" ? "Abertas" : s === "todas" ? "Todos os status" : ROTULO_STATUS_ACAO[s]}
+                </Filtro>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="pl-abas" role="group" aria-label="Prioridade">
+                <Filtro ativo={fSev === "todas"} onClick={() => setFSev("todas")}>
+                  Todas as prioridades
+                </Filtro>
+                {(["alta", "media", "baixa"] as Severidade[]).map((s) => (
+                  <Filtro key={s} ativo={fSev === s} onClick={() => setFSev(s)}>
+                    {ROTULO_SEVERIDADE[s]}
+                  </Filtro>
                 ))}
-              </select>
-            )}
+              </div>
+              {categorias.length > 1 && (
+                <select value={fCat} onChange={(e) => setFCat(e.target.value as any)} aria-label="Categoria" className="pl-select">
+                  <option value="todas">Todas as categorias</option>
+                  {categorias.map((c) => (
+                    <option key={c} value={c}>
+                      {ROTULO_CATEGORIA[c]}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
-        </details>
-      )}
+        )}
 
-      {/* Lista */}
-      {!carregando.length && acoes.length === 0 && (
-        <div
-          className="rounded-xl border p-6 text-center"
-          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-        >
-          {!comErro.length && (
-            <CheckCircle2
-              size={28}
-              className="mx-auto"
-              style={{ color: "var(--good)" }}
-              aria-hidden
-            />
-          )}
-          <p className="mt-2 font-semibold">
-            {comErro.length
-              ? "A leitura das prioridades está incompleta"
-              : "Nenhuma ação identificada neste período"}
-          </p>
-          <p className="mt-1 text-sm" style={{ color: "var(--ink-2)" }}>
+        {/* Lista */}
+        {!carregando.length && acoes.length === 0 && (
+          <PlanoVazio titulo={comErro.length ? "A leitura das prioridades está incompleta" : "Nenhuma ação identificada neste período"}>
             {comErro.length
               ? "Algumas fontes não puderam ser consultadas. Tente carregá-las novamente antes de concluir que não há pendências."
               : "As fontes consultadas não geraram sugestões pelas regras atuais. Isso não garante ausência de problemas: confira a cobertura dos dados e as fontes conectadas."}
-          </p>
-        </div>
-      )}
-      {acoes.length > 0 && visiveis.length === 0 && (
-        <p
-          className="rounded-lg border p-4 text-sm"
-          style={{
-            borderColor: "var(--border)",
-            background: "var(--surface)",
-            color: "var(--ink-2)",
-          }}
-        >
-          Nenhuma ação com esses filtros.{" "}
-          <button
-            type="button"
-            className="font-semibold"
-            style={{ color: "var(--accent)" }}
-            onClick={() => {
-              setFSev("todas");
-              setFStatus("todas");
-              setFCat("todas");
-            }}
-          >
-            Limpar filtros
-          </button>
-        </p>
-      )}
-      {carregando.length > 0 && acoes.length === 0 && (
-        <ul className="space-y-2" aria-hidden>
-          {[0, 1, 2].map((i) => (
-            <li
-              key={i}
-              className="h-28 animate-pulse rounded-xl"
-              style={{ background: "var(--surface-2)" }}
-            />
-          ))}
-        </ul>
-      )}
-      <ul className="space-y-2">
-        {visiveis.map((a) => (
-          <CartaoAcao
-            key={a.id}
-            a={a}
-            status={statusDe(a.id)}
-            podeEditar={podeEditar}
-            salvando={salvando === a.id}
-            onStatus={(s) => mudarStatus(a, s)}
-            clientId={clientId}
-          />
-        ))}
-      </ul>
-      <details className="text-xs" style={{ color: "var(--text-dim)" }}>
-        <summary className="cursor-pointer min-h-[36px]">
-          Como as prioridades são escolhidas
-        </summary>
+          </PlanoVazio>
+        )}
+        {acoes.length > 0 && visiveis.length === 0 && (
+          <div className="pl-vazio">
+            <p className="pl-vazio__texto">
+              Nenhuma ação com esses filtros.{" "}
+              <button
+                type="button"
+                className="font-semibold"
+                style={{ color: "var(--b1)" }}
+                onClick={() => {
+                  setFSev("todas");
+                  setFStatus("todas");
+                  setFCat("todas");
+                }}
+              >
+                Limpar filtros
+              </button>
+            </p>
+          </div>
+        )}
+        {esperando && (
+          <ul className="pl-lista" aria-hidden>
+            {[0, 1, 2].map((i) => (
+              <li key={i} className="h-24 animate-pulse rounded-[14px]" style={{ background: "var(--field)" }} />
+            ))}
+          </ul>
+        )}
+        {visiveis.length > 0 && (
+          <ol className="pl-lista">
+            {visiveis.map((a, k) => (
+              <CartaoAcao
+                key={a.id}
+                a={a}
+                posicao={k + 1}
+                status={statusDe(a.id)}
+                podeEditar={podeEditar}
+                salvando={salvando === a.id}
+                onStatus={(s) => mudarStatus(a, s)}
+                clientId={clientId}
+              />
+            ))}
+          </ol>
+        )}
+      </NxCard>
+
+      <PlanoComo titulo="Como as prioridades são escolhidas">
         <p>
           Como as ações são escolhidas: dado com erro e fonte parada
           (verificação de qualidade), campanha com veredito “Cortar” ou “Atrai
@@ -663,7 +482,7 @@ function ProximasAcoesPage() {
           fechado no CRM), 1ª resposta acima de 1 hora e preço pedido sem
           resposta, contado em cada conversa.
         </p>
-      </details>
+      </PlanoComo>
     </div>
   );
 }
