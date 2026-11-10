@@ -377,3 +377,29 @@
   .nexo-comercial .nx-grade--4 .dbx-spark { display: none; }
   .nexo-comercial .cm-topo__pergunta { font-size: 17px; line-height: 24px; }
 }
+
+/* Cinco números da base geral. */
+.cm-grade-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1280px) { .cm-grade-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .cm-grade-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+.cm-grade-5 .nx-kpi__topo { font-size: 15px; line-height: 19px; }
+@media (max-width: 560px) {
+  .cm-grade-5 .nx-kpi { padding: 12px; gap: 10px; }
+  .cm-grade-5 .nx-kpi__topo { font-size: 14px; line-height: 18px; gap: 8px; align-items: flex-start; }
+  .app.product-workspace .nexo-comercial .cm-grade-5 .nx-kpi .nx-kpi__valor { font-size: 24px; line-height: 28px; }
+}
+/* Cartão "O que está travando" com o fundo da leitura. */
+.nexo-comercial .nx-card.cm-leitura .ws-panel, .nexo-comercial .nx-card.cm-leitura > div { min-width: 0; }
+@media (min-width: 1281px) {
+  .cm-grade-5 .nx-kpi__topo .nx-tile { display: none; }
+  .cm-grade-5 .nx-kpi__topo { font-size: 14px; line-height: 18px; }
+}
+/* Meia-lua sozinha no cartão: ocupa a largura, legenda embaixo. */
+.nexo-comercial .cm-medidor-cheio .nx-medidor { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+.nexo-comercial .cm-medidor-cheio .nx-medidor svg { max-width: 360px; }
+.nexo-comercial .cm-medidor-cheio .nx-legenda--coluna { display: flex; justify-content: center; }
+@media (max-width: 560px) {
+  .nexo-comercial .nx-card, .nexo-comercial .ws-panel { padding: 14px 12px; }
+  .nexo-comercial .nx-grade--4 .nx-kpi__topo .nx-tile, .nexo-comercial .cm-grade-5 .nx-kpi__topo .nx-tile { display: none; }
+  .nexo-comercial .nx-kpi__rotulo { overflow-wrap: normal; hyphens: auto; }
+}
