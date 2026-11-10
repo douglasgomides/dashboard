@@ -18,7 +18,7 @@ import "@/styles/nexo-casca.css";
 
 export interface MenuEquipeProps {
   perfil: PerfilEquipe;
-  /** Clínica atual da casca. null na casca /admin sem clínica lembrada (o 03-06 trata Clínica nesse caso). */
+  /** Clínica atual da casca. null na casca /admin sem clínica lembrada (Clínica chama onSemClinica). */
   clientId: string | null;
   pathname: string;
   /** Período atual: vira search nas rotas com $clientId, como no menu do médico. */
@@ -28,6 +28,8 @@ export interface MenuEquipeProps {
   variante: "barra" | "folha";
   /** Chamado no clique de qualquer link (a folha fecha). */
   onEscolher?: () => void;
+  /** Casca /admin sem clínica lembrada: Clínica leva a /admin e chama esta função, que mostra a dica (D-02). */
+  onSemClinica?: () => void;
 }
 
 const semBarraFinal = (p: string) => p.replace(/\/+$/, "") || "/";
@@ -50,6 +52,7 @@ function LinkDoRegistro({
   dataOn,
   atual,
   onClick,
+  onSemClinica,
   children,
 }: {
   tela: TelaDoRegistro;
@@ -60,11 +63,19 @@ function LinkDoRegistro({
   dataOn?: boolean;
   atual?: boolean;
   onClick?: () => void;
+  onSemClinica?: () => void;
   children: ReactNode;
 }) {
   const link = linkDaTela(tela, clientId);
-  // Sem clínica a tela com $clientId não tem endereço; fica na Carteira (D-02; a dica "Escolha uma clínica" é do 03-06).
+  // Sem clínica a tela com $clientId não tem endereço: fica na Carteira e avisa quem montou o menu, que mostra a dica
+  // "Escolha uma clínica para abrir os resultados dela." (D-02). O link continua dentro do contêiner de origem menu.
   const destino: LinkDaTela = link ?? { to: "/admin" };
+  const aoClicar = link
+    ? onClick
+    : () => {
+        onSemClinica?.();
+        onClick?.();
+      };
   return (
     <Link
       to={destino.to as never}
@@ -77,14 +88,23 @@ function LinkDoRegistro({
       title={title}
       data-on={dataOn ? "" : undefined}
       aria-current={atual ? "page" : undefined}
-      onClick={onClick}
+      onClick={aoClicar}
     >
       {children}
     </Link>
   );
 }
 
-export function MenuEquipe({ perfil, clientId, pathname, dateRange, recolhida = false, variante, onEscolher }: MenuEquipeProps) {
+export function MenuEquipe({
+  perfil,
+  clientId,
+  pathname,
+  dateRange,
+  recolhida = false,
+  variante,
+  onEscolher,
+  onSemClinica,
+}: MenuEquipeProps) {
   const itens = itensMenuEquipe(perfil);
   if (!itens.length) return null;
   const atual = itemAtualDoMenu(pathname);
@@ -109,6 +129,7 @@ export function MenuEquipe({ perfil, clientId, pathname, dateRange, recolhida = 
                 dataOn={on}
                 atual={exato}
                 onClick={onEscolher}
+                onSemClinica={onSemClinica}
               >
                 <IconeTabler nome={item.icone} tamanho={20} />
                 <span className={mostraRotulo ? "nx-menu-rotulo" : "sr-only"}>{item.rotulo}</span>
@@ -129,6 +150,7 @@ export function MenuEquipe({ perfil, clientId, pathname, dateRange, recolhida = 
                             className="nx-subtela"
                             atual={subAtual}
                             onClick={onEscolher}
+                            onSemClinica={onSemClinica}
                           >
                             {sub.rotulo}
                           </LinkDoRegistro>

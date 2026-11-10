@@ -319,3 +319,150 @@ test("médico (viewer, D-10): marca N, sem Aparência na barra nem na folha Nave
   await expect(folha.getByRole("group", { name: "Aparência" })).toHaveCount(0);
   await expect(folha.getByRole("navigation", { name: "Produto" })).toHaveCount(0);
 });
+
+// --- 03-06: a casca /admin com o mesmo menu, a mesma busca e a última clínica lembrada (MENU-02, MENU-03, D-02, D-08) ---
+
+const asideAdmin = (page: Page) => page.locator('aside[aria-label="Menu do admin"]');
+const itensDoAdmin = (page: Page) => asideAdmin(page).locator('nav[aria-label="Menu da equipe"] > ul > li > a');
+const itemDoAdmin = (page: Page, rotulo: string) => itensDoAdmin(page).filter({ hasText: rotulo });
+const DICA_CARTEIRA = "Escolha uma clínica para abrir os resultados dela.";
+
+async function lembrarClinica(context: BrowserContext, id: string) {
+  await context.addInitScript((valor) => localStorage.setItem("nexo:ultima-clinica", valor), id);
+}
+
+async function abrirAdmin(page: Page, caminho = "/admin") {
+  await page.goto(caminho);
+  await expect(page.getByRole("navigation", { name: "Menu da equipe" }).first()).toBeVisible();
+}
+
+async function buscarNoAdmin(page: Page, termo: string) {
+  await asideAdmin(page).getByRole("button", { name: "Buscar tela" }).click();
+  const dialog = page.getByRole("dialog", { name: "Buscar tela" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("searchbox").fill(termo);
+  return dialog;
+}
+
+test("admin a 1440 em /admin: o mesmo Menu da equipe, Ctrl+K abre Buscar tela e o rodapé mostra o e-mail", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await abrirAdmin(page);
+  await expect(asideAdmin(page)).toHaveAttribute("data-origem", "menu");
+  await expect(itensDoAdmin(page)).toHaveText(ROTULOS);
+  await expect(itemDoAdmin(page, ROTULOS_MENU_EQUIPE.carteira)).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("navigation", { name: "Ferramentas administrativas" })).toHaveCount(0);
+  await expect(page.locator("details.ws-admin-menu")).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Produto" })).toHaveCount(0);
+  await expect(asideAdmin(page).locator(".nx-usuario")).toContainText("qa@example.test");
+  await expect(asideAdmin(page).locator(".nx-usuario svg")).toHaveCount(1);
+  await expect(asideAdmin(page).locator("img")).toHaveCount(0);
+
+  const dialog = page.getByRole("dialog", { name: "Buscar tela" });
+  await expect(async () => {
+    if (!(await dialog.isVisible())) await page.keyboard.press("Control+k");
+    await expect(dialog).toBeVisible({ timeout: 1000 });
+  }).toPass();
+  await expect(dialog.getByRole("searchbox")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await asideAdmin(page).getByRole("button", { name: "Buscar tela" }).click();
+  await expect(dialog).toBeVisible();
+});
+
+test("Clínica na casca /admin: sem clínica lembrada fica na Carteira com a dica; depois de abrir uma, volta para ela", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await abrirAdmin(page);
+  await expect(page.getByText(DICA_CARTEIRA)).toHaveCount(0);
+  await itemDoAdmin(page, ROTULOS_MENU_EQUIPE.clinica).click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/admin");
+  await expect(page.getByRole("status").filter({ hasText: DICA_CARTEIRA })).toBeVisible();
+
+  await page.goto(`/${CID}`);
+  await expect(page.getByRole("heading", { name: "Resultados da clínica", exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("nexo:ultima-clinica"))).toBe(CID);
+  await abrirAdmin(page);
+  await expect(page.getByText(DICA_CARTEIRA)).toHaveCount(0);
+  await itemDoAdmin(page, ROTULOS_MENU_EQUIPE.clinica).click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}`);
+});
+
+test("a busca na casca /admin usa a clínica lembrada nos links que precisam de clínica", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await lembrarClinica(context, CID);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await abrirAdmin(page);
+  const dialog = await buscarNoAdmin(page, "Pacientes");
+  const resultado = dialog.getByRole("navigation", { name: "Resultados da busca" }).getByRole("link", { name: /Pacientes do período/ });
+  await expect(resultado).toHaveAttribute("href", new RegExp(`^/${CID}/pacientes(\\?|$)`));
+  await expect(resultado).not.toContainText("Escolha uma clínica primeiro");
+});
+
+test("sem clínica lembrada a busca na casca /admin diz Escolha uma clínica primeiro e leva à Carteira com a dica", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await abrirAdmin(page, "/admin/agentes");
+  const dialog = await buscarNoAdmin(page, "Pacientes");
+  const resultado = dialog.getByRole("navigation", { name: "Resultados da busca" }).getByRole("link", { name: /Pacientes do período/ });
+  await expect(resultado).toContainText("Escolha uma clínica primeiro");
+  await resultado.click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/admin");
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: DICA_CARTEIRA })).toBeVisible();
+});
+
+test("/admin/conferencia: Conferência e fontes atual com as 2 subtelas, e Integrações grava origem menu", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await ligarLog(context);
+  const posts = capturarPosts(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await abrirAdmin(page, "/admin/conferencia");
+  await expect(itemDoAdmin(page, ROTULOS_MENU_EQUIPE.conferencia)).toHaveAttribute("aria-current", "page");
+  const subtelas = asideAdmin(page).getByRole("navigation", { name: `Telas de ${ROTULOS_MENU_EQUIPE.conferencia}` });
+  await expect(subtelas.getByRole("link")).toHaveCount(2);
+  await expect.poll(() => posts.length).toBeGreaterThanOrEqual(1);
+  const antes = posts.length;
+  await subtelas.getByRole("link", { name: /Integrações/ }).click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/admin/integracoes");
+  await expect.poll(() => posts.length).toBeGreaterThan(antes);
+  const ultimo = posts[posts.length - 1];
+  expect(ultimo.corpo.origem).toBe("menu");
+  expect(ultimo.corpo.rota).toBe("/_authenticated/admin/integracoes");
+});
+
+test("/admin/<clínica>: Clínica fica em pílula e a clínica fica lembrada", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await abrirAdmin(page, `/admin/${CID}`);
+  const clinica = itemDoAdmin(page, ROTULOS_MENU_EQUIPE.clinica);
+  await expect(clinica).toHaveAttribute("data-on", "");
+  await expect(clinica).not.toHaveAttribute("aria-current", /.*/);
+  await expect(clinica).toHaveAttribute("href", `/${CID}`);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("nexo:ultima-clinica"))).toBe(CID);
+});
+
+test("admin a 375 em /admin: Buscar tela com texto no cabeçalho e a folha Menu com os 3 itens", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/admin");
+  const buscar = cabecalho(page).getByRole("button", { name: "Buscar tela", exact: true });
+  await expect(buscar).toBeVisible();
+  await expect(buscar).toHaveText("Buscar tela");
+  const caixa = await buscar.boundingBox();
+  expect(caixa?.width ?? 0).toBeGreaterThanOrEqual(44);
+  expect(caixa?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await expect(page.locator("details.ws-admin-menu")).toHaveCount(0);
+  await buscar.click();
+  const busca = page.getByRole("dialog", { name: "Buscar tela" });
+  await expect(busca).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(busca).not.toBeVisible();
+
+  await cabecalho(page).getByRole("button", { name: "Abrir menu", exact: true }).click();
+  const folha = page.getByRole("dialog", { name: "Menu", exact: true });
+  await expect(folha).toBeVisible();
+  await expect(folha).toHaveAttribute("data-origem", "menu");
+  await expect(itensDaFolha(folha)).toHaveText(ROTULOS);
+  await expect(folha.getByRole("button", { name: "Sair da conta", exact: true })).toBeVisible();
+});

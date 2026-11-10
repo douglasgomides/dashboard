@@ -423,3 +423,12 @@
   font-size: 16px;
   line-height: 24px;
 }
+
+/* --- 03-06: casca /admin (div.app.product-workspace.workspace-admin) --- */
+/* Dica da Carteira quando Clínica é escolhida sem clínica lembrada (D-02, UI-SPEC: 14/20, --muted-ink). */
+.app.product-workspace:not(.sap-workspace) .nx-dica-clinica {
+  margin: 16px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted-ink);
+}
