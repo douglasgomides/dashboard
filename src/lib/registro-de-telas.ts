@@ -253,6 +253,31 @@ export function indiceDaBusca(perfil: PerfilEquipe, opcoes: OpcoesDoIndice = {})
   );
 }
 
+/** Ordem das áreas antigas em "Ver todas as telas" (UI-SPEC §Busca de telas, item 5). */
+export const ORDEM_DAS_AREAS: readonly AreaAntiga[] = [
+  "Resultados",
+  "Marketing",
+  "Comercial",
+  "Plano de ação",
+  "Relatórios",
+  "Administração",
+  "SAP",
+];
+
+export interface GrupoDeTelas {
+  area: AreaAntiga;
+  telas: TelaDoRegistro[];
+}
+
+/**
+ * Índice da busca agrupado por área antiga, na ordem do UI-SPEC, para o details "Ver todas as telas". Área sem tela some.
+ * A soma dos grupos é sempre o tamanho de indiceDaBusca com as mesmas opções.
+ */
+export function telasPorArea(perfil: PerfilEquipe, opcoes: OpcoesDoIndice = {}): GrupoDeTelas[] {
+  const indice = indiceDaBusca(perfil, opcoes);
+  return ORDEM_DAS_AREAS.map((area) => ({ area, telas: indice.filter((t) => t.area === area) })).filter((g) => g.telas.length > 0);
+}
+
 const normalizar = (s: string) =>
   s
     .normalize("NFD")
