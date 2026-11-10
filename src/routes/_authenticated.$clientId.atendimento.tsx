@@ -19,7 +19,7 @@ import { CustoWhatsapp } from "@/components/custo-whatsapp";
 import { ConversasWhatsapp } from "@/components/conversas-whatsapp";
 import { useAuth } from "@/hooks/use-auth";
 import { useClientRole } from "@/hooks/use-client-role";
-import { RecuperarHoje } from "@/components/agentes-ia";
+import { NxRecuperarHoje } from "@/components/nx/agentes-paineis";
 import { AtendimentoConversas } from "@/components/atendimento-conversas";
 
 // Atendimento no WhatsApp: uma tela só com duas abas. "Números" (volume, espera, equipe) e, para a equipe,
@@ -68,7 +68,7 @@ function AtendimentoPage() {
   return (
     <div className="space-y-4">
       {/* Na aba de números, a pergunta da tela vem primeiro; a lista do dia para recuperar pacientes fica logo depois. */}
-      {atual === "conversas" && <RecuperarHoje clientId={clientId} podeEditar={podeEditar} />}
+      {atual === "conversas" && <NxRecuperarHoje clientId={clientId} podeEditar={podeEditar} />}
       {isAdmin && (
         <div className="flex max-w-full flex-wrap gap-1 rounded-xl border p-1 text-sm" role="tablist" aria-label="Atendimento no WhatsApp" style={{ borderColor: "var(--line)", width: "fit-content", background: "var(--white)" }}>
           {([["numeros", "Números do atendimento"], ["conversas", "Conversas e auditoria"]] as const).map(([id, rot]) => (
@@ -87,7 +87,7 @@ function AtendimentoPage() {
         </div>
       )}
       {atual === "conversas" ? <ConversasWhatsapp clientId={clientId} conversaInicial={conversa} /> : <NumerosWhatsapp clientId={clientId} />}
-      {atual === "numeros" && <RecuperarHoje clientId={clientId} podeEditar={podeEditar} />}
+      {atual === "numeros" && <NxRecuperarHoje clientId={clientId} podeEditar={podeEditar} />}
     </div>
   );
 }

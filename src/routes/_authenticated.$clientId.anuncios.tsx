@@ -24,7 +24,7 @@ import { Wallet, MessageCircle, Coins, Eye, MousePointerClick, Layers, Zap, Mega
 import { Painel, BarraFina, InfoDica } from "@/components/visual";
 import { fmtFracao } from "@/lib/metricas";
 import { nomeObjetivo, objetivoNaoContaConversa } from "@/lib/rastreio-anuncios";
-import { GestorAnunciosIA } from "@/components/agentes-ia";
+import { NxGestorAnuncios } from "@/components/nx/agentes-paineis";
 import { useClientRole } from "@/hooks/use-client-role";
 import { NxCard, NxKpi, NxTag, NxHBar, NxSectionHeader } from "@/components/nx";
 import { NxBarrasLinha, NxFunil, NxAlertaCurto, NxNota, NxComoCalcula, NxTopo } from "@/components/nx/anuncios-graficos";
@@ -629,7 +629,7 @@ function AnunciosPage() {
 
       <details ref={recomendacoes} id="recomendacoes-anuncios" className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
         <summary className="min-h-[44px] cursor-pointer py-3 font-semibold">Ver recomendações e ações para os anúncios</summary>
-        <div className="mt-3 space-y-4"><GestorAnunciosIA clientId={clientId} podeEditar={podeEditar} /><AgirHoje d={diag} clientId={clientId} /></div>
+        <div className="mt-3 space-y-4"><NxGestorAnuncios clientId={clientId} podeEditar={podeEditar} /><AgirHoje d={diag} clientId={clientId} /></div>
       </details>
 
       <NxSectionHeader titulo="Detalhes" subtitulo="Comparação com o período anterior, qualidade dos leads, campanha por campanha e por objetivo." />

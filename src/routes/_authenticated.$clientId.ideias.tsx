@@ -69,7 +69,7 @@ import {
 } from "@/components/planejador-conteudo";
 import { useClientRole } from "@/hooks/use-client-role";
 import { parseContentViewSearch } from "@/lib/nav";
-import { RoteirosProntos } from "@/components/agentes-ia";
+import { NxRoteirosProntos } from "@/components/nx/agentes-paineis";
 
 export const Route = createFileRoute("/_authenticated/$clientId/ideias")({
   component: IdeiasPage,
@@ -763,7 +763,7 @@ function IdeiasPage() {
       </nav>
       {visao === "roteiros" && (
         <>
-          <RoteirosProntos clientId={clientId} podeEditar={podeEditar} />
+          <NxRoteirosProntos clientId={clientId} podeEditar={podeEditar} />
         </>
       )}
       {visao === "semana" && (
