@@ -105,19 +105,23 @@ test("Marketing sidebar reveals a group's tools on demand and opens the current 
   await expect(nav.getByRole("link", { name: "Planejar a semana", exact: true })).toBeVisible();
 });
 
-test("mobile product switch remains available to the team even after collapsing the desktop sidebar", async ({ page, context }) => {
+// 03-04 (UI-SPEC D8): o seletor Nexo/SAP saiu das cascas do Nexo; a equipe acha o SAP pela busca, inclusive no celular.
+test("a equipe acha o Sistema de Aquisição pela busca no celular, mesmo com a barra recolhida", async ({ page, context }) => {
   await mockAccount(context, "admin");
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`/${CID}`);
+  await expect(page.getByRole("navigation", { name: "Menu da equipe" })).toBeVisible();
   await page.getByRole("button", { name: "Recolher menu lateral", exact: true }).click();
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.getByRole("navigation", { name: "Áreas", exact: true }).getByRole("button", { name: "Menu", exact: true }).click();
-  const menu = page.getByRole("dialog", { name: "Navegar no Nexo", exact: true });
-  const link = menu.getByRole("navigation", { name: "Produto", exact: true }).getByRole("link", { name: "Sistema de Aquisição", exact: true });
+  await page.locator("header.mhead").getByRole("button", { name: "Buscar tela", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Buscar tela", exact: true });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("searchbox").fill("Todas as clínicas");
+  const link = dialog.getByRole("navigation", { name: "Resultados da busca" }).locator('a[href="/sap"]');
   await expect(link).toBeVisible();
-  await expect(link).toHaveAttribute("href", `/sap/${CID}/painel`);
   await link.click();
-  await expect(page).toHaveURL(new RegExp(`/sap/${CID}/painel`));
-  await expect(menu).not.toBeVisible();
+  await expect(page).toHaveURL(/\/sap$/);
+  await expect(dialog).not.toBeVisible();
 });
 
 for (const measured of [false, true]) {

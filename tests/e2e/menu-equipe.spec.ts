@@ -200,3 +200,122 @@ test("trava do médico: os links da barra, da barra inferior e da folha Navegar 
   if (process.env.IMPRIMIR_LINKS_DO_MEDICO) console.log(JSON.stringify(coletados, null, 2).replaceAll(CID, "${CID}"));
   expect(coletados).toEqual(LINKS_DO_MEDICO);
 });
+
+// --- 03-04: celular da equipe, avatar do rodapé e o médico sempre claro (MENU-02, MENU-03, D-01, D-08, D-10) ---
+
+const cabecalho = (page: Page) => page.locator("header.mhead");
+const itensDaFolha = (folha: ReturnType<Page["getByRole"]>) => folha.locator('nav[aria-label="Menu da equipe"] > ul > li > a');
+
+test("admin a 375: Buscar tela com texto no cabeçalho, sem barra inferior, e a folha Menu com os 3 itens", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/${CID}`);
+  const buscar = cabecalho(page).getByRole("button", { name: "Buscar tela", exact: true });
+  await expect(buscar).toBeVisible();
+  await expect(buscar).toHaveText("Buscar tela");
+  const caixa = await buscar.boundingBox();
+  expect(caixa?.width ?? 0).toBeGreaterThanOrEqual(44);
+  expect(caixa?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await expect(page.getByRole("navigation", { name: "Áreas", exact: true })).toHaveCount(0);
+
+  await buscar.click();
+  const busca = page.getByRole("dialog", { name: "Buscar tela" });
+  await expect(busca).toBeVisible();
+  await expect(busca.getByRole("searchbox")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(busca).not.toBeVisible();
+
+  const abrir = cabecalho(page).getByRole("button", { name: "Abrir menu", exact: true });
+  await expect(abrir).toHaveAttribute("aria-haspopup", "dialog");
+  await abrir.click();
+  const folha = page.getByRole("dialog", { name: "Menu", exact: true });
+  await expect(folha).toBeVisible();
+  await expect(folha).toHaveAttribute("data-origem", "menu");
+  await expect(itensDaFolha(folha)).toHaveText(ROTULOS);
+  await expect(folha.getByRole("button", { name: "Trocar de clínica", exact: true })).toBeVisible();
+  await expect(folha.getByRole("button", { name: "Sair da conta", exact: true })).toBeVisible();
+  await expect(folha.getByRole("group", { name: "Aparência" })).toHaveCount(0);
+  await expect(folha.getByRole("navigation", { name: "Produto" })).toHaveCount(0);
+});
+
+test("admin toca um item da folha Menu e o log grava origem menu", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await ligarLog(context);
+  const posts = capturarPosts(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/${CID}`);
+  await expect.poll(() => posts.length).toBeGreaterThanOrEqual(1);
+  await cabecalho(page).getByRole("button", { name: "Abrir menu", exact: true }).click();
+  const folha = page.getByRole("dialog", { name: "Menu", exact: true });
+  await expect(folha).toBeVisible();
+  const antes = posts.length;
+  await itensDaFolha(folha).filter({ hasText: ROTULOS_MENU_EQUIPE.conferencia }).click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe("/admin/conferencia");
+  await expect(folha).not.toBeVisible();
+  await expect.poll(() => posts.length).toBeGreaterThan(antes);
+  const ultimo = posts[posts.length - 1];
+  expect(ultimo.corpo.origem).toBe("menu");
+  expect(ultimo.corpo.rota).toBe("/_authenticated/admin/conferencia");
+});
+
+test("admin a 320: Buscar tela mantém o texto, sem rolagem lateral, e o rótulo longo cabe em 1 linha na folha", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto(`/${CID}`);
+  const buscar = cabecalho(page).getByRole("button", { name: "Buscar tela", exact: true });
+  await expect(buscar).toHaveText("Buscar tela");
+  const caixa = await buscar.boundingBox();
+  expect(caixa?.width ?? 0).toBeGreaterThanOrEqual(44);
+  expect(caixa?.height ?? 0).toBeGreaterThanOrEqual(44);
+  const rolagem = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
+  expect(rolagem.sw).toBeLessThanOrEqual(rolagem.iw + 1);
+  // O nome da clínica trunca antes dos botões perderem o texto.
+  const nome = cabecalho(page).locator(".nx-mhead-nome");
+  expect(await nome.evaluate((el) => getComputedStyle(el).textOverflow)).toBe("ellipsis");
+
+  await cabecalho(page).getByRole("button", { name: "Abrir menu", exact: true }).click();
+  const folha = page.getByRole("dialog", { name: "Menu", exact: true });
+  await expect(folha).toBeVisible();
+  const rotulo = itensDaFolha(folha).filter({ hasText: ROTULOS_MENU_EQUIPE.conferencia }).locator(".nx-menu-rotulo");
+  const linha = await rotulo.evaluate((el) => ({ h: el.getBoundingClientRect().height, sw: el.scrollWidth, cw: el.clientWidth }));
+  expect(linha.h).toBeLessThanOrEqual(30);
+  expect(linha.sw).toBeLessThanOrEqual(linha.cw);
+});
+
+test("admin a 1440: o rodapé mostra o avatar gerado do e-mail, igual em duas telas, e nenhuma foto", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const usuario = aside(page).locator(".nx-usuario");
+  const svgDoAvatar = async () => {
+    await expect(usuario).toContainText("qa@example.test");
+    const svg = usuario.locator('svg[aria-hidden="true"]');
+    await expect(svg).toHaveCount(1);
+    await expect(usuario.locator("img")).toHaveCount(0);
+    return svg.evaluate((el) => el.outerHTML);
+  };
+  await page.goto(`/${CID}`);
+  const naClinica = await svgDoAvatar();
+  await page.goto(`/${CID}/relatorio`);
+  const noRelatorio = await svgDoAvatar();
+  expect(noRelatorio).toBe(naClinica);
+  await expect(aside(page).getByRole("button", { name: "Sair da conta", exact: true })).toBeVisible();
+});
+
+test("médico (viewer, D-10): marca N, sem Aparência na barra nem na folha Navegar no Nexo", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}`);
+  await expect(aside(page).getByRole("navigation", { name: "Áreas do Nexo" })).toBeVisible();
+  await expect(aside(page).locator(".nx-marca-n")).toBeVisible();
+  await expect(aside(page).locator(".nx-marca")).toContainText("Nexo");
+  await expect(aside(page).getByRole("group", { name: "Aparência" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Menu da equipe" })).toHaveCount(0);
+  await page.setViewportSize({ width: 375, height: 812 });
+  const areas = page.getByRole("navigation", { name: "Áreas", exact: true });
+  await expect(areas).toBeVisible();
+  await areas.getByRole("button", { name: "Menu", exact: true }).click();
+  const folha = page.getByRole("dialog", { name: "Navegar no Nexo", exact: true });
+  await expect(folha).toBeVisible();
+  await expect(folha.getByRole("group", { name: "Aparência" })).toHaveCount(0);
+  await expect(folha.getByRole("navigation", { name: "Produto" })).toHaveCount(0);
+});
