@@ -80,6 +80,15 @@ function ordenarPassos(lista: PassoComPeso[]): { principal: PassoFato | null; ou
   return { principal: unicos[0] ?? null, outros: unicos.slice(1) };
 }
 
+/** Quando a leitura conclui e nenhuma regra pede correção: conferir de novo no próximo período. */
+const PASSO_SEM_CORRECAO: PassoFato = {
+  verbo: "conferir",
+  texto: "de novo no próximo período se o resultado se mantém",
+  quem: "social_media",
+  motivo: "Nada pede correção agora.",
+  fatoId: "sem-correcao",
+};
+
 function montar(args: {
   tela: TelaId;
   de: string;
@@ -91,7 +100,12 @@ function montar(args: {
   fim?: string;
   extraFinal?: PassoFato[];
 }): FatosDaTela {
-  const { principal, outros } = ordenarPassos(args.passos);
+  const passos = [...args.passos];
+  // Toda leitura que conclui algo traz um próximo passo (LEIT-02). Quando nada pede correção, o passo é conferir de novo.
+  if (!passos.length && args.portao.ok && args.fatos.some((x) => x.tom !== "neutro" && !x.ressalva)) {
+    passos.push({ passo: PASSO_SEM_CORRECAO, tom: "bom", peso: 0 });
+  }
+  const { principal, outros } = ordenarPassos(passos);
   return {
     tela: args.tela,
     versaoRegras: VERSAO_REGRAS_INSTAGRAM,

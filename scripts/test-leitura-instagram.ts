@@ -51,6 +51,19 @@ const limpa = (f: FatosDaTela) => {
   return t;
 };
 
+// ---------- toda leitura que conclui traz um próximo passo; sem correção, o passo é conferir de novo ----------
+{
+  const so = fatosDoPublico({ de: "2026-09-13", ate: "2026-10-12", hoje: HOJE, dias: 30, faixas: null, alcance: null, saldo: { seguiram: 540, deixaram_de_seguir: 120, saldo: 420 }, janelaOnline: null });
+  assert.equal(so.proximoPasso?.verbo, "conferir", "saldo bom e nada mais: o passo é conferir de novo");
+  assert.equal(so.proximoPasso?.quem, "social_media");
+  const t = limpa(so);
+  assert.equal(t.tipo, "leitura");
+  if (t.tipo === "leitura") assert.ok(t.proximoPasso && /próximo período/.test(t.proximoPasso.frase) && t.semPassoMotivo == null);
+  // Portão negado não ganha passo de conferir: a leitura já diz "Sem leitura:" e quem resolve.
+  const negado = fatosDoPublico({ de: "2026-09-13", ate: "2026-10-12", hoje: HOJE, dias: 30, faixas: null, alcance: null, saldo: null, janelaOnline: null });
+  assert.equal(negado.proximoPasso, null);
+}
+
 // ---------- Analisar desempenho: poucos posts nega com o número no motivo ----------
 {
   const poucos = postsDaLana.slice(0, 3);
