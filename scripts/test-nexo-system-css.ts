@@ -153,6 +153,15 @@ for (const r of regras(sistema)) {
   const dentro = r.pais.some((p) => /prefers-reduced-motion\s*:\s*no-preference/.test(p));
   assert.ok(dentro, `animação ou transição fora de @media (prefers-reduced-motion: no-preference): ${normal(r.prelude)}`);
 }
+assert.ok(animacoes >= 3, "nexo-system.css declara o movimento do UI-SPEC (subida dos cartões, barras e abertura do diálogo)");
+
+// --- 7. SAP congelado: a casca do SAP mantém a Inter 15 px com os recursos da Inter (MENU-07) ---
+const sap = regras(sistema).find((r) => r.pais.length === 0 && normal(r.prelude) === ".product-workspace.sap-workspace");
+assert.ok(sap, "nexo-system.css fixa a tipografia do SAP em .product-workspace.sap-workspace");
+const dSap = declaracoes(sap.corpo);
+assert.match(dSap.get("font-family") ?? "", /^"Inter"/, "SAP em Inter");
+assert.equal(dSap.get("font-size"), "15px", "SAP em 15 px");
+assert.equal(dSap.get("font-feature-settings")?.replace(/\s+/g, ""), '"cv11","ss01"', "SAP com cv11/ss01");
 
 // --- 6. Contraste do texto branco sobre a marca (V11), pela fórmula WCAG 2.x ---
 const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
