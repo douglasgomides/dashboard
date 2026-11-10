@@ -11,6 +11,8 @@ import {
   itensMenuEquipe,
   linkDaTela,
   ROTULOS_MENU_EQUIPE,
+  ORDEM_DAS_AREAS,
+  telasPorArea,
   type TelaDoRegistro,
 } from "../src/lib/registro-de-telas";
 import { AREAS, AVANCADO } from "../src/lib/nav";
@@ -301,5 +303,27 @@ assert.equal(atual(`/sap/${CID}/painel`), null);
 assert.equal(atual("/bem-vindo"), null);
 assert.equal(atual("/"), null);
 assert.equal(atual("/admin/nao-e-uuid-mas-tem-36-caracteres-x"), null, "id de clínica validado por regex");
+
+// --- Ver todas as telas (03-05): grupos por área antiga, na ordem do UI-SPEC ---
+assert.deepEqual(
+  [...ORDEM_DAS_AREAS],
+  ["Resultados", "Marketing", "Comercial", "Plano de ação", "Relatórios", "Administração", "SAP"],
+  "ordem das áreas de Ver todas as telas (UI-SPEC)",
+);
+for (const [nome, perfil] of [["admin", { isAdmin: true }], ["estrategista", { isAdmin: false, papel: "strategist" as const }]] as const) {
+  for (const desenvolvimento of [false, true]) {
+    const grupos = telasPorArea(perfil, { desenvolvimento });
+    const soma = grupos.reduce((n, g) => n + g.telas.length, 0);
+    assert.equal(soma, indiceDaBusca(perfil, { desenvolvimento }).length, `${nome} (dev ${desenvolvimento}): soma dos grupos = tamanho do índice`);
+    const ordem = grupos.map((g) => ORDEM_DAS_AREAS.indexOf(g.area));
+    assert.deepEqual(ordem, [...ordem].sort((a, b) => a - b), `${nome}: áreas na ordem do UI-SPEC`);
+    for (const g of grupos) {
+      assert.ok(g.telas.length > 0, `${nome}: área ${g.area} sem tela não aparece`);
+      for (const t of g.telas) assert.equal(t.area, g.area, `${t.rota} no grupo errado`);
+    }
+  }
+}
+assert.equal(telasPorArea({ isAdmin: true }).reduce((n, g) => n + g.telas.length, 0), 66, "Ver todas as telas do admin em produção: 66 (D-09)");
+assert.ok(!telasPorArea({ isAdmin: false, papel: "strategist" }).some((g) => g.area === "SAP"), "estrategista sem grupo SAP");
 
 console.log("test-registro-de-telas: ok");
