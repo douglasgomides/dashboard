@@ -35,9 +35,9 @@ function FragmentoLinha({ dia, linha, max, min }: { dia: number; linha: number[]
           title={`${DIAS_CURTOS[dia]} ${h}h: ${v.toLocaleString("pt-BR")} seguidores online em média`}
           style={{
             height: 22,
-            borderRadius: 3,
+            borderRadius: 5,
             // Escala do menor ao maior valor da semana, para a diferença entre horários aparecer.
-            background: `color-mix(in srgb, var(--accent) ${Math.round(((v - min) / Math.max(1, max - min)) * 100)}%, var(--surface-2))`,
+            background: `color-mix(in srgb, var(--b1) ${Math.round(((v - min) / Math.max(1, max - min)) * 100)}%, var(--b6))`,
           }}
         />
       ))}

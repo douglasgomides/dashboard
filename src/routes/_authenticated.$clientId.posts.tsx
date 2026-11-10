@@ -27,6 +27,7 @@ import {
   Rows3,
   Repeat2 as Repeat2Icon,
   Tags,
+  CalendarDays,
 } from "lucide-react";
 import { classifyPost, getRankedPosts } from "@/lib/client-data";
 import {
@@ -44,7 +45,9 @@ import { SyncButton } from "@/components/sync-button";
 import { useClientRole } from "@/hooks/use-client-role";
 import { ErroCarga } from "@/components/sem-fonte";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
-import { Painel, Selo, Miniatura, BarraFina, Numero, Kpi, IconeFormato, COR_FORMATO } from "@/components/visual";
+import { Painel, Selo, Miniatura, BarraFina, Numero, Kpi, IconeFormato, COR_FORMATO, InfoDica } from "@/components/visual";
+import { NxCard, NxKpi, NxTag } from "@/components/nx";
+import { IgCabecalho, IgLeitura, IgMetodo, IgVitrine, IgMaisAnalises } from "@/components/nx/instagram";
 import {
   computeConceitosVencedores,
   computeConversionByTag,
@@ -75,6 +78,8 @@ const COR_FUNIL: Record<string, string> = {
   C2: "var(--warn)",
   C3: "var(--good-text)",
 };
+
+const ic = (Icon: typeof Trophy) => <Icon size={17} strokeWidth={1.7} aria-hidden />;
 
 function firstLine(caption: string | null): string | null {
   if (!caption) return null;
@@ -151,8 +156,8 @@ function PostCard({ post, posicao, maxSalvos, clientId }: { post: Post; posicao:
           <span
             className="absolute -left-1.5 -top-1.5 flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[11px] font-bold tabular-nums"
             style={{
-              background: posicao <= 3 ? "var(--warn)" : "var(--surface-2)",
-              color: posicao <= 3 ? "#1a1a19" : "var(--text-dim)",
+              background: posicao <= 3 ? "var(--b1)" : "var(--field)",
+              color: posicao <= 3 ? "var(--white)" : "var(--text-2)",
               border: "2px solid var(--surface)",
             }}
           >
@@ -248,69 +253,62 @@ function ResumoPosts({ posts }: { posts: Post[] }) {
   const pct = total > 0 ? Math.round((classificados / total) * 100) : 0;
   if (total === 0) return null;
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      <Kpi icone={Layers} rotulo="Posts no período" valor={fmtNum(total)} />
-      <Kpi icone={Bookmark} rotulo="Salvamentos acumulados dos posts" valor={fmtNum(salvos)} cor="var(--s1)" dica="soma dos posts publicados no período, desde a publicação até hoje (não é o mesmo que os salvamentos do período na Visão geral)" />
-      <Kpi icone={Heart} rotulo="Engajamento acumulado dos posts" valor={fmtNum(engaj)} cor="var(--s2)" dica="desde a publicação até hoje" />
-      <div className="rounded-xl border p-3.5" style={{ background: "var(--surface)", borderColor: "var(--border)" }} title="Posts com tema preenchido. Sem tema, os painéis por assunto ficam vazios.">
-        <div className="flex items-center gap-2">
-          <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-md" style={{ background: "color-mix(in srgb, var(--ai) 16%, transparent)", color: "var(--ai)" }}>
-            <Tags size={15} />
-          </span>
-          <span className="text-xs font-medium" style={{ color: "var(--text-dim)" }}>
-            Com tema
-          </span>
-        </div>
-        <div className="mt-2 text-2xl font-semibold tabular-nums leading-none">
-          {pct}% <span className="text-xs font-normal" style={{ color: "var(--muted)" }}>({classificados}/{total})</span>
-        </div>
-        <div className="mt-2">
-          <BarraFina valor={classificados} max={total} cor="var(--ai)" />
-        </div>
-      </div>
-    </div>
+    <section className="nx-grade nx-grade--4 ig-kpis" aria-label="Números das publicações">
+      <NxKpi i={0} icone={ic(Layers)} rotulo="Posts no período" valor={fmtNum(total)} nota="publicados no período escolhido" />
+      <NxKpi
+        i={1}
+        icone={ic(Bookmark)}
+        rotulo="Salvamentos acumulados"
+        valor={fmtNum(salvos)}
+        nota="soma dos posts do período, desde a publicação até hoje"
+        info={<InfoDica rotulo="Sobre Salvamentos acumulados" texto="Soma dos posts publicados no período, desde a publicação até hoje (não é o mesmo que os salvamentos do período na Visão geral)." />}
+      />
+      <NxKpi i={2} icone={ic(Heart)} rotulo="Engajamento acumulado" valor={fmtNum(engaj)} nota="desde a publicação até hoje" />
+      <NxKpi
+        i={3}
+        icone={ic(Tags)}
+        rotulo="Posts com tema"
+        valor={`${pct}%`}
+        nota={`${classificados} de ${total}. Sem tema, as análises por assunto ficam vazias`}
+        extra={
+          <div className="nx-trk" aria-hidden>
+            <i style={{ width: `${Math.max(3, pct)}%` }} />
+            <u />
+          </div>
+        }
+      />
+    </section>
   );
 }
 
 function TopDoMes({ posts }: { posts: Post[] }) {
   const top5 = posts.slice(0, 5);
   if (top5.length === 0) return null;
-
   return (
-    <Painel
-      icone={Trophy}
-      cor="var(--warn)"
+    <NxCard
+      i={4}
+      icone={ic(Trophy)}
       titulo="Top 5 do período"
-      resumo="Os que mais salvaram. Bons candidatos para repetir."
-      ajuda="Os posts que mais salvaram no período selecionado. Classifique-os abaixo (tema, funil e estágio) para virarem sugestão de “próximos ângulos” automaticamente."
+      subtitulo="Os que mais salvaram. Bons candidatos para repetir."
+      acao={<IgMetodo rotulo="Como ler: Top 5 do período">Os posts que mais salvaram no período selecionado. Classifique-os abaixo (tema, funil e estágio) para virarem sugestão de “próximos ângulos” automaticamente.</IgMetodo>}
     >
-      <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-5 sm:overflow-visible sm:px-0">
-        {top5.map((post, i) => (
-          <a
-            key={post.id}
-            href={post.permalink ?? "#"}
-            target="_blank"
-            rel="noreferrer"
-            className="relative w-40 shrink-0 snap-start overflow-hidden rounded-xl border text-xs sm:w-auto sm:min-w-0"
-            style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text)" }}
-          >
-            <div className="relative">
-              <Miniatura url={post.thumbnail_url} formato={post.format} className="aspect-square w-full rounded-none" />
-              <span
-                className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
-                style={{ background: i === 0 ? "var(--warn)" : "rgba(0,0,0,.65)", color: i === 0 ? "#1a1a19" : "#fff" }}
-              >
-                {i === 0 ? <Crown size={14} /> : i + 1}
-              </span>
-              <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: "rgba(0,0,0,.7)", color: "#fff" }}>
-                <Bookmark size={11} /> {fmtNum(post.saved)}
-              </span>
-            </div>
-            <div className="p-2"><div className="line-clamp-2 leading-snug" title={String(firstLine(post.caption) ?? post.windsor_media_id ?? "")}>{firstLine(post.caption) ?? post.windsor_media_id}</div></div>
-          </a>
-        ))}
-      </div>
-    </Painel>
+      <IgVitrine
+        itens={top5.map((post) => ({
+          id: post.id,
+          href: post.permalink,
+          imagem: <Miniatura url={post.thumbnail_url} formato={post.format} className="w-full" />,
+          titulo: firstLine(post.caption) ?? post.windsor_media_id,
+          valor: fmtNum(post.saved),
+          rotulo: "salvamentos",
+          extra: (
+            <>
+              {post.format && <NxTag tom="g">{formatLabel(post.format)}</NxTag>}
+              {post.tema && <NxTag tom="b">{post.tema}</NxTag>}
+            </>
+          ),
+        }))}
+      />
+    </NxCard>
   );
 }
 
@@ -872,42 +870,35 @@ function NextAngles({ posts, periodLabel }: { posts: Post[]; periodLabel: string
   const fmtSalvos = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
   return (
-    <Painel
-      icone={Lightbulb}
-      cor="var(--warn)"
-      destaque
+    <IgLeitura
       titulo="Próximos ângulos"
-      resumo="Direções para testar"
-      ajuda={`Temas com ${MIN_POSTS_ANGULO} posts ou mais no período (${periodLabel}) cujo post típico (mediana) foi mais salvo que o post típico da conta. Sugestão de direção, nunca conteúdo pronto.`}
-    >
-      {angulos.length === 0 && (
-        <p className="text-xs" style={{ color: "var(--text-dim)" }}>
-          {temasComAmostra === 0
-            ? `Poucos dados: nenhum tema tem ${MIN_POSTS_ANGULO} posts ou mais neste período. Aumente o período no topo da tela.`
-            : `Poucos dados: nenhum dos ${temasComAmostra} temas com ${MIN_POSTS_ANGULO} posts ou mais ficou acima do post típico da conta (${fmtSalvos(baseline)} salvamentos).`}
-        </p>
-      )}
-      <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-        {angulos.map((a) => (
-          <li key={a.tema} className="rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Selo cor="var(--ai)">
-                <Sparkles size={11} /> {a.tema}
-              </Selo>
-              {a.formato && (
-                <Selo cor={COR_FORMATO[a.formato]}>
-                  <IconeFormato formato={a.formato} size={11} /> {formatLabel(a.formato as Post["format"])}
-                </Selo>
-              )}
-            </div>
-            <p className="mt-2 text-xs leading-relaxed" style={{ color: "var(--text-dim)" }}>
-              {nPosts(a.count)} no período. O post típico do tema teve {fmtSalvos(a.medianSaved)} salvamentos, contra {fmtSalvos(a.baseline)} do post típico da conta.
-              {a.formato ? ` Dentro do tema, ${formatLabel(a.formato as Post["format"]).toLowerCase()} foi o formato mais salvo (${nPosts(a.formatoCount)}).` : ""} Teste outro ângulo, caso ou pergunta do mesmo tema.
-            </p>
-          </li>
-        ))}
-      </ul>
-    </Painel>
+      subtitulo="Temas que salvam mais que o post típico da conta: direções para testar"
+      metodo={`Temas com ${MIN_POSTS_ANGULO} posts ou mais no período (${periodLabel}) cujo post típico (mediana) foi mais salvo que o post típico da conta. Sugestão de direção, nunca conteúdo pronto.`}
+      vazio={
+        temasComAmostra === 0
+          ? `Poucos dados: nenhum tema tem ${MIN_POSTS_ANGULO} posts ou mais neste período. Aumente o período no topo da tela.`
+          : `Poucos dados: nenhum dos ${temasComAmostra} temas com ${MIN_POSTS_ANGULO} posts ou mais ficou acima do post típico da conta (${fmtSalvos(baseline)} salvamentos).`
+      }
+      itens={angulos.map((a) => ({
+        chave: a.tema,
+        tom: "bom" as const,
+        titulo: (
+          <>
+            {a.tema}
+            {a.formato && (
+              <>
+                {" "}
+                <NxTag tom="b" icone={<IconeFormato formato={a.formato} size={12} />}>
+                  {formatLabel(a.formato as Post["format"])}
+                </NxTag>
+              </>
+            )}
+          </>
+        ),
+        texto: `${nPosts(a.count)} no período. O post típico do tema teve ${fmtSalvos(a.medianSaved)} salvamentos, contra ${fmtSalvos(a.baseline)} do post típico da conta.${a.formato ? ` Dentro do tema, ${formatLabel(a.formato as Post["format"]).toLowerCase()} foi o formato mais salvo (${nPosts(a.formatoCount)}).` : ""}`,
+        acao: "teste outro ângulo, caso ou pergunta do mesmo tema.",
+      }))}
+    />
   );
 }
 
@@ -922,7 +913,7 @@ function ExploradorDePosts({ posts, periodLabel }: { posts: Post[]; periodLabel:
   const [sortKey, setSortKey] = useState<SortKey>("reach");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [modo, setModo] = useState<"galeria" | "tabela">("galeria");
-  const [limite, setLimite] = useState(24);
+  const [limite, setLimite] = useState(12);
 
   const temas = useMemo(() => {
     const set = new Set<string>();
@@ -1040,7 +1031,7 @@ function ExploradorDePosts({ posts, periodLabel }: { posts: Post[]; periodLabel:
             ))}
           </ul>
           {filtered.length > limite && (
-            <button type="button" onClick={() => setLimite((n) => n + 24)} className="mt-3 inline-flex items-center gap-1 text-xs font-medium" style={{ color: "var(--accent)" }}>
+            <button type="button" onClick={() => setLimite((n) => n + 12)} className="mt-3 inline-flex items-center gap-1 text-xs font-medium" style={{ color: "var(--accent)" }}>
               <ChevronDown size={14} /> Ver mais ({filtered.length - limite} restantes)
             </button>
           )}
@@ -1092,30 +1083,45 @@ function PostsRankingPage() {
     queryFn: () => getRankedPosts(clientId, start, end),
   });
 
-  if (isLoading) return <p style={{ color: "var(--text-dim)" }}>Carregando posts…</p>;
-  if (error) return <ErroCarga texto="Não foi possível ler os posts deste período. Tente novamente em instantes." />;
+  const head = (
+    <IgCabecalho
+      titulo="O que foi publicado, e como cada post foi?"
+      pergunta="Todos os posts do período com salvamentos, engajamento e alcance, o que repetir e onde classificar tema e funil."
+      periodo={
+        <>
+          <CalendarDays size={15} aria-hidden /> {periodLabel}
+        </>
+      }
+      acao={<SyncButton clientId={clientId} alvo="posts" />}
+    />
+  );
+  if (isLoading) return <div className="nexo-ig">{head}<p style={{ color: "var(--text-dim)" }}>Carregando posts…</p></div>;
+  if (error) return <div className="nexo-ig">{head}<ErroCarga texto="Não foi possível ler os posts deste período. Tente novamente em instantes." /></div>;
 
   const rows = posts ?? [];
 
   return (
-    <div className="space-y-5">
-      <div className="flex justify-end">
-        <SyncButton clientId={clientId} alvo="posts" />
-      </div>
-
+    <div className="nexo-ig">
+      {head}
       <ResumoPosts posts={rows} />
       <TopDoMes posts={rows} />
-      <RankingDePosts rows={rows} clientId={clientId} periodLabel={periodLabel} />
-      <RepetirOuRevisar posts={rows} periodLabel={periodLabel} />
-      <ConceitosVencedores posts={rows} />
-      <TopPorTaxa posts={rows} />
-      <ConversionByTag posts={rows} />
-      <DesempenhoEstrutural posts={rows} />
-      <FormatoPorTema posts={rows} />
-      <MelhoresGanchos posts={rows} />
-      <RetencaoDeReels posts={rows} />
       <NextAngles posts={rows} periodLabel={periodLabel} />
+      <RepetirOuRevisar posts={rows} periodLabel={periodLabel} />
+      <RankingDePosts rows={rows} clientId={clientId} periodLabel={periodLabel} />
       <ExploradorDePosts posts={rows} periodLabel={periodLabel} />
+      {rows.length > 0 && (
+        <IgMaisAnalises id="mais-analises-posts" titulo="Mais análises dos posts" resumo="Conceitos vencedores, quem mais salva e circula, tema × formato, ganchos e retenção dos Reels">
+          <ConceitosVencedores posts={rows} />
+          <TopPorTaxa posts={rows} />
+          <div className="nx-grade nx-grade--2">
+            <ConversionByTag posts={rows} />
+            <MelhoresGanchos posts={rows} />
+          </div>
+          <DesempenhoEstrutural posts={rows} />
+          <FormatoPorTema posts={rows} />
+          <RetencaoDeReels posts={rows} />
+        </IgMaisAnalises>
+      )}
     </div>
   );
 }

@@ -1,0 +1,418 @@
+/*
+ * Telas de Marketing/Instagram (Analisar desempenho, Público do Instagram, Encontrar destaques, Consultar publicações,
+ * Conteúdo × Comercial) no desenho do painel da prancha. Escopo .nexo-ig (só existe nessas rotas) e as peças ig-*
+ * de src/components/nx/instagram.tsx. Só tokens via var().
+ */
+
+.nexo-ig {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  width: 100%;
+}
+.nexo-ig > * { min-width: 0; }
+
+/* ---------- Cabeçalho da tela ---------- */
+.ig-cab {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+}
+.ig-cab__texto { min-width: 0; flex: 1 1 320px; }
+.app.product-workspace .ig-cab h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -.01em;
+}
+.ig-cab p { margin: 4px 0 0; font-size: 15px; line-height: 22px; font-weight: 500; color: var(--muted-ink); max-width: 70ch; }
+.ig-cab__acoes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ig-periodo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: var(--white);
+}
+.ig-periodo svg { color: var(--b1); }
+
+/* ---------- Método ("i") ---------- */
+.ig-metodo { position: relative; display: inline-block; }
+.ig-metodo > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 9px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--white);
+  color: var(--muted-ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+.ig-metodo > summary::-webkit-details-marker { display: none; }
+.ig-metodo > summary:hover { color: var(--b1); border-color: var(--b4); }
+.ig-metodo > summary:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; }
+.ig-metodo[open] > summary { color: var(--b1); border-color: var(--b4); background: var(--b6); }
+.ig-metodo__corpo {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  width: min(340px, calc(100vw - 40px));
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+  box-shadow: var(--sombra-dialogo);
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--text-2);
+  text-align: left;
+}
+.ig-metodo__corpo p + p { margin-top: 6px; }
+@media (max-width: 560px) {
+  .ig-metodo__corpo { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; }
+}
+
+/* ---------- Avisos de dado ---------- */
+.ig-notas { display: flex; flex-wrap: wrap; gap: 8px; }
+.ig-nota {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--field);
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 19px;
+  font-weight: 500;
+}
+.ig-nota__ic { flex: none; margin-top: 2px; color: var(--muted-ink); }
+.ig-nota--aviso { background: var(--or-bg); color: var(--or-ink); }
+.ig-nota--aviso .ig-nota__ic { color: var(--or-ink); }
+.ig-nota--critico { background: var(--dn-bg); color: var(--dn-ink); border: 1px solid var(--dn); }
+.ig-nota--critico .ig-nota__ic { color: var(--dn-ink); }
+.ig-nota__texto { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.ig-nota__mais > summary { cursor: pointer; text-decoration: underline; text-underline-offset: 2px; font-weight: 600; list-style: none; }
+.ig-nota__mais > summary::-webkit-details-marker { display: none; }
+.ig-nota__mais > summary:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; border-radius: 4px; }
+.ig-nota__mais[open] { flex-basis: 100%; }
+.ig-nota__mais > div { margin-top: 4px; font-weight: 500; }
+
+/* ---------- Leitura ---------- */
+.ig-leitura {
+  border: 1px solid var(--b5);
+  background: var(--b6);
+  border-radius: 18px;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.ig-leitura__cab { display: flex; align-items: center; gap: 10px; }
+.app.product-workspace .ig-leitura__cab h3 { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; color: var(--text); }
+.ig-leitura__cab p { margin: 2px 0 0; font-size: 14px; line-height: 20px; font-weight: 500; color: var(--muted-ink); }
+.ig-leitura__lista { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
+.ig-leitura__item {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--b3);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  min-width: 0;
+}
+.ig-leitura__item.ig-tom--bom { border-left-color: var(--up); }
+.ig-leitura__item.ig-tom--atencao { border-left-color: var(--or); }
+.ig-leitura__item.ig-tom--neutro { border-left-color: var(--line-2); }
+.ig-leitura__titulo { margin: 0; font-size: 15.5px; line-height: 22px; font-weight: 600; color: var(--text); }
+.ig-leitura__texto { margin: 0; font-size: 14px; line-height: 21px; font-weight: 500; color: var(--text-2); }
+.ig-leitura__acao { margin: 4px 0 0; display: flex; gap: 6px; align-items: flex-start; font-size: 14px; line-height: 21px; font-weight: 500; color: var(--b1); }
+.ig-leitura__acao svg { flex: none; margin-top: 3px; }
+.ig-leitura__acao b { font-weight: 700; }
+.ig-leitura__vazio { margin: 0; font-size: 14px; line-height: 21px; font-weight: 500; color: var(--text-2); }
+
+/* ---------- Abas ---------- */
+.ig-abas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ig-aba {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--white);
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: 500;
+}
+.ig-aba:hover { border-color: var(--b4); color: var(--b1); }
+.ig-aba[aria-selected="true"] { background: var(--grad-brand); border-color: transparent; color: var(--white); }
+.ig-aba:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; }
+.ig-aba svg { width: 16px; height: 16px; }
+
+/* ---------- Barras ---------- */
+.ig-barras { margin: 0; padding: 0; list-style: none; display: grid; gap: 16px; }
+.ig-barras__rotulo { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+
+/* ---------- Barra dividida ---------- */
+.ig-dividida { display: grid; gap: 14px; }
+.ig-dividida__barra { display: flex; gap: 4px; height: 16px; }
+.ig-dividida__barra span { display: block; height: 100%; border-radius: 6px; min-width: 4px; }
+.ig-dividida__partes { display: flex; flex-wrap: wrap; gap: 12px 28px; }
+.ig-dividida__partes > span { display: inline-flex; gap: 10px; align-items: flex-start; }
+.ig-dividida__partes i { width: 12px; height: 12px; border-radius: 4px; margin-top: 4px; flex: none; }
+.ig-dividida__partes > span > span { display: grid; }
+.ig-dividida__partes small { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--muted-ink); }
+.ig-dividida__partes b { font-size: 26px; line-height: 30px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.ig-dividida__partes em { font-style: normal; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+/* ---------- Linha de seguidores ---------- */
+.ig-tracejado { background: repeating-linear-gradient(90deg, var(--b3) 0 5px, transparent 5px 8px) !important; }
+.nx-linha__x.ig-eixo-x { position: relative; display: block; height: 22px; }
+.nx-linha__x.ig-eixo-x span { position: absolute; bottom: 0; transform: translateX(-50%); white-space: nowrap; }
+.nx-linha__x.ig-eixo-x span:first-child { transform: none; }
+.nx-linha__x.ig-eixo-x span:last-child { transform: translateX(-100%); }
+
+/* ---------- Colunas de saldo ---------- */
+.ig-saldo { display: grid; gap: 10px; min-width: 0; }
+.ig-saldo__area { display: grid; grid-template-columns: 34px minmax(0, 1fr); grid-template-rows: 200px 22px; gap: 0 8px; }
+.ig-saldo__y { display: flex; flex-direction: column; justify-content: space-between; font-size: 11px; line-height: 12px; color: var(--muted-ink); text-align: right; font-variant-numeric: tabular-nums; }
+.ig-saldo__plot {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  background: linear-gradient(var(--line-2), var(--line-2)) center / 100% 1px no-repeat;
+}
+.ig-saldo__dia { display: grid; grid-template-rows: 1fr 1fr; min-width: 0; }
+.ig-saldo__cima, .ig-saldo__baixo { display: flex; justify-content: center; min-width: 0; }
+.ig-saldo__cima { align-items: flex-end; padding-bottom: 1px; }
+.ig-saldo__baixo { align-items: flex-start; padding-top: 1px; }
+.ig-saldo__cima i, .ig-saldo__baixo i { display: block; width: min(14px, 80%); min-height: 2px; }
+.ig-saldo__cima i { background: var(--b2); border-radius: 5px 5px 2px 2px; transform-origin: bottom; }
+.ig-saldo__baixo i { background: var(--dn); border-radius: 2px 2px 5px 5px; transform-origin: top; opacity: .85; }
+.ig-saldo__dia--aberto .ig-saldo__cima i, .ig-saldo__dia--aberto .ig-saldo__baixo i { background: var(--b5); }
+
+/* ---------- Vitrine ---------- */
+.ig-vitrine { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
+.ig-vitrine__item {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--white);
+  color: var(--text);
+  text-decoration: none;
+}
+a.ig-vitrine__item:hover { border-color: var(--b4); box-shadow: var(--sombra-cartao-hover); }
+a.ig-vitrine__item:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; }
+.ig-vitrine__img { position: relative; display: block; min-height: 120px; }
+.ig-vitrine__img > :first-child { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; }
+.ig-vitrine__pos { position: absolute; left: 8px; top: 8px; width: 28px; height: 28px; font-size: 13px; box-shadow: 0 1px 4px rgba(18, 18, 18, .12); }
+.ig-vitrine__pos:not(.nx-rank--1) { background: var(--white); color: var(--text); }
+.ig-vitrine__corpo { display: grid; gap: 8px; padding: 12px 14px; align-content: start; min-width: 0; }
+.ig-vitrine__titulo { font-size: 14.5px; line-height: 20px; font-weight: 500; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ig-vitrine__num { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.ig-vitrine__num b { font-size: 26px; line-height: 30px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+.ig-vitrine__num small { font-size: 13px; font-weight: 500; color: var(--muted-ink); }
+.ig-vitrine__extra { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (max-width: 560px) {
+  .ig-vitrine__item { grid-template-columns: 96px minmax(0, 1fr); }
+  .ig-vitrine__img { min-height: 96px; }
+}
+
+/* ---------- Mais análises ---------- */
+.ig-mais { border: 1px solid var(--line); border-radius: 18px; background: var(--white); min-width: 0; }
+.ig-mais__botao {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 72px;
+  padding: 16px 18px;
+  text-align: left;
+  background: transparent;
+  border-radius: 18px;
+  color: var(--text);
+}
+.ig-mais__botao b { display: block; font-size: 18px; line-height: 24px; font-weight: 600; }
+.ig-mais__botao small { display: block; font-size: 14px; line-height: 20px; font-weight: 500; color: var(--muted-ink); }
+.ig-mais__botao:hover .nx-sq { border-color: var(--b4); color: var(--b1); }
+.ig-mais__botao:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; }
+.ig-mais__corpo { display: grid; gap: 18px; border-top: 1px solid var(--line); padding: 18px; min-width: 0; }
+@media (max-width: 560px) {
+  .ig-mais__corpo { padding: 14px 12px; }
+  .ig-mais__botao { padding: 14px 12px; }
+}
+
+/* ---------- Números (KPI) das telas: valor em 700 ---------- */
+.app.product-workspace .nexo-ig .nx-kpi .nx-kpi__valor { font-weight: 700; font-size: 30px; line-height: 34px; }
+.nexo-ig .nx-kpi__topo { font-weight: 600; }
+.nexo-ig .nx-kpi__nota { font-weight: 500; font-size: 13px; line-height: 18px; }
+@media (min-width: 821px) {
+  .app.product-workspace .nexo-ig .nx-kpi .ws-info-button { width: 28px; height: 28px; }
+}
+.app.product-workspace .nexo-ig .nx-kpi .ws-info { align-self: flex-start; }
+
+/* ---------- Painéis antigos (Painel, Kpi) dentro destas telas: cartão da prancha ---------- */
+.app.product-workspace .nexo-ig .ws-panel {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: none;
+  padding: 18px;
+  background: var(--white) !important;
+  min-width: 0;
+}
+.app.product-workspace .nexo-ig .ws-panel > header > span[aria-hidden] {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--grad-tile) !important;
+  color: var(--white) !important;
+}
+.app.product-workspace .nexo-ig .ws-panel > header > span[aria-hidden] svg { width: 17px; height: 17px; stroke-width: 1.7; }
+.app.product-workspace .nexo-ig .ws-panel h2 { font-size: 18px; line-height: 24px; font-weight: 600; color: var(--text); }
+.app.product-workspace .nexo-ig .ws-panel > header p { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--muted-ink); }
+.app.product-workspace .nexo-ig .ws-metric {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: none;
+  background: var(--white);
+}
+.app.product-workspace .nexo-ig .ws-metric-value { font-weight: 700; letter-spacing: -.01em; }
+.nexo-ig .note { font-weight: 500; color: var(--text-2); }
+
+/* Tabelas: cabeçalho claro, números alinhados, peso 500. */
+.app.product-workspace .nexo-ig table { font-weight: 500; }
+.app.product-workspace .nexo-ig table th { background: var(--field); color: var(--muted-ink); font-weight: 600; font-size: 13px; padding-inline: 8px; }
+.app.product-workspace .nexo-ig table td { padding-inline: 8px; color: var(--text-2); }
+.app.product-workspace .nexo-ig table :is(th, td) { border-bottom-color: var(--line); padding-block: 10px; }
+.ig-tabela { overflow-x: auto; max-width: 100%; }
+
+/* Seletor (ordenar por). */
+.ig-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ig-filtros label { font-size: 14px; font-weight: 500; color: var(--muted-ink); }
+.ig-select {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--white);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+}
+.ig-select:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; }
+.ig-contagem { font-size: 14px; font-weight: 500; color: var(--muted-ink); }
+
+/* Lista de posts (linha com miniatura). */
+.nexo-ig .nx-row__titulo { font-weight: 500; }
+.nexo-ig .nx-row__sub { font-weight: 500; }
+.ig-num-fim { display: grid; justify-items: end; }
+.ig-num-fim b { font-size: 20px; line-height: 24px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.ig-num-fim small { font-size: 12px; font-weight: 500; color: var(--muted-ink); }
+
+/* Mapa de calor do comercial. */
+.ig-calor { border-collapse: separate !important; border-spacing: 3px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.app.product-workspace .nexo-ig .ig-calor :is(th, td) { border: 0; padding: 0; background: none; }
+.app.product-workspace .nexo-ig .ig-calor th { font-weight: 500; color: var(--muted-ink); font-size: 11px; padding: 0 2px; }
+.app.product-workspace .nexo-ig .ig-calor td.ig-calor__c { width: 28px; height: 26px; border-radius: 6px; text-align: center; font-weight: 600; }
+.app.product-workspace .nexo-ig .ig-calor td.ig-calor__dia { padding-right: 6px; color: var(--muted-ink); font-weight: 500; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .ig-saldo__cima i { animation: nx-crescer-y 900ms cubic-bezier(.2, .8, .2, 1) backwards; animation-delay: calc(120ms + var(--i, 0) * 18ms); }
+  .ig-saldo__baixo i { animation: nx-crescer-y 900ms cubic-bezier(.2, .8, .2, 1) backwards; animation-delay: calc(220ms + var(--i, 0) * 18ms); }
+}
+
+/* Linha de apoio embaixo da barra (média, salvos). */
+.ig-grupo__extra { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--muted-ink); font-variant-numeric: tabular-nums; }
+
+/* Números do topo: duas colunas no celular, para os quatro caberem na primeira tela. */
+@media (max-width: 560px) {
+  .nexo-ig .nx-grade--4.ig-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .nexo-ig .ig-kpis .nx-kpi { padding: 12px; gap: 10px; }
+  .nexo-ig .ig-kpis .nx-kpi__topo { font-size: 14px; line-height: 18px; gap: 8px; }
+  .app.product-workspace .nexo-ig .ig-kpis .nx-kpi .nx-kpi__valor { font-size: 22px; line-height: 26px; }
+  .nexo-ig .ig-kpis .nx-kpi__nota { font-size: 12px; line-height: 16px; }
+  .nx-linha__x.ig-eixo-x span:nth-child(2),
+  .nx-linha__x.ig-eixo-x span:nth-child(4) { display: none; }
+  .ig-cab__acoes { width: 100%; }
+}
+
+/* Subtítulo dentro de cartão. */
+.app.product-workspace .nexo-ig .ig-sub { margin: 0 0 10px; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--text-2); }
+
+/* Duas colunas 1 : 2 (resumo ao lado do gráfico). */
+.ig-duas-uma { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); min-width: 0; }
+@media (max-width: 900px) { .ig-duas-uma { grid-template-columns: minmax(0, 1fr); } }
+
+/* Origem das visualizações: um quadro por tipo de conteúdo. */
+.ig-origem { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
+.ig-origem__item { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 8px; }
+.ig-origem__item > b { font-size: 15px; font-weight: 600; }
+.ig-origem__item dl { margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.ig-origem__item dt { font-size: 12px; font-weight: 500; color: var(--muted-ink); }
+.ig-origem__item dd { margin: 0; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+
+/* Ranking: posição + miniatura no início da linha. */
+.ig-ranking__inicio { display: inline-flex; align-items: center; gap: 10px; flex: none; }
+.ig-ranking .nx-row { border-bottom: 1px solid var(--line); border-radius: 0; }
+.ig-ranking li:last-child .nx-row { border-bottom: 0; }
+.ig-tema { color: var(--b1); font-weight: 600; }
+.ig-barra-acoes { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; }
+@media (max-width: 560px) {
+  .nexo-ig .nx-grade--3.ig-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .nexo-ig .nx-grade--3.ig-kpis > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .ig-ranking .nx-row { align-items: flex-start; flex-wrap: wrap; }
+  .ig-ranking .nx-row__corpo { flex-basis: calc(100% - 120px); }
+  .ig-ranking .nx-row__fim { margin-left: 108px; justify-items: start; }
+  .ig-ranking .ig-num-fim { justify-items: start; grid-auto-flow: column; gap: 6px; align-items: baseline; }
+}
+
+/* Conteúdo × Comercial. */
+.ig-pauta { border-radius: 12px; background: var(--field); padding: 10px 12px; display: grid; gap: 8px; }
+.ig-pauta--bom { background: var(--up-bg); }
+.ig-pauta > p { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--text); }
+.ig-taxa { font-size: 12px; color: var(--muted-ink); }
+.ig-resumo { margin: 0; font-size: 14px; line-height: 21px; font-weight: 500; color: var(--text-2); }
+.ig-trk--lento i { background: linear-gradient(90deg, var(--or), var(--or-bg)); }
+
+/* Barras: no celular o valor desce para a linha de baixo quando o rótulo é longo. */
+@media (max-width: 560px) {
+  .nexo-ig .nx-hb__linha { flex-wrap: wrap; row-gap: 2px; }
+  .nexo-ig .nx-hb__linha em { white-space: normal; margin-left: auto; text-align: right; }
+}
+
+/* Celular: sem o ladrilho do ícone nos números do topo, para o rótulo não quebrar letra a letra ao lado do "i". */
+@media (max-width: 560px) {
+  .nexo-ig .ig-kpis .nx-kpi__topo > .nx-tile { display: none; }
+  .nexo-ig .ig-kpis .nx-kpi__rotulo { overflow-wrap: normal; hyphens: auto; }
+}

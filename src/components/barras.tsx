@@ -76,8 +76,8 @@ export function BarrasPareadas({
   return (
     <div>
       <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--ink-2)", marginBottom: 8 }}>
-        <span><i style={{ width: 10, height: 10, borderRadius: 3, background: "var(--accent)", display: "inline-block", marginRight: 6 }} />{nomeA}</span>
-        <span><i style={{ width: 10, height: 10, borderRadius: 3, background: "var(--ai, #8b7cf6)", display: "inline-block", marginRight: 6 }} />{nomeB}</span>
+        <span><i style={{ width: 10, height: 10, borderRadius: 3, background: "var(--b1)", display: "inline-block", marginRight: 6 }} />{nomeA}</span>
+        <span><i style={{ width: 10, height: 10, borderRadius: 3, background: "var(--b3)", display: "inline-block", marginRight: 6 }} />{nomeB}</span>
       </div>
       <div style={{ display: "grid", gap: 10 }}>
         {categorias.map((c, i) => (
@@ -85,8 +85,8 @@ export function BarrasPareadas({
             <span style={{ color: "var(--ink-2)" }}>{c}</span>
             <span style={{ display: "grid", gap: 3 }}>
               {[
-                { v: a[i], cor: "var(--accent)" },
-                { v: b[i], cor: "var(--ai, #8b7cf6)" },
+                { v: a[i], cor: "var(--b1)" },
+                { v: b[i], cor: "var(--b3)" },
               ].map((s, k) => (
                 <span key={k} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span aria-hidden style={{ display: "block", height: 8, borderRadius: 4, background: s.cor, width: `${Math.max(1, (s.v / max) * 100)}%`, maxWidth: "calc(100% - 52px)" }} />
