@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link2, Loader2, Plus, QrCode } from "lucide-react";
+import { CalendarCheck, CalendarDays, Filter, Link2, Loader2, MessageCircle, MousePointerClick, Plus, QrCode, Trophy } from "lucide-react";
+import { NxCard, NxKpi, NxTag, NxHBar } from "@/components/nx";
+import { NxTopo, NxFunil, NxComoCalcula, NxNota } from "@/components/nx/anuncios-graficos";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { BotaoCopiar } from "@/components/botao-copiar";
@@ -204,32 +206,72 @@ function LinksPage() {
     const x = f(l.id), t = porTipo.get(l.tipo) ?? { link_id: l.tipo, cliques: 0, conversas: 0, provaveis: 0, agendou: 0, vendas: 0, receita: 0 };
     porTipo.set(l.tipo, { ...t, cliques: t.cliques + Number(x.cliques), conversas: t.conversas + Number(x.conversas), provaveis: t.provaveis + Number(x.provaveis), agendou: t.agendou + Number(x.agendou), vendas: t.vendas + Number(x.vendas), receita: t.receita + Number(x.receita) });
   }
+  const lugares = [...porTipo.entries()].sort((a, b) => b[1].conversas - a[1].conversas);
+  const maxConv = lugares[0]?.[1].conversas ?? 0;
+  const tot = lugares.reduce((a, [, x]) => ({ cliques: a.cliques + x.cliques, conversas: a.conversas + x.conversas, provaveis: a.provaveis + x.provaveis, agendou: a.agendou + x.agendou, vendas: a.vendas + x.vendas, receita: a.receita + x.receita }), { cliques: 0, conversas: 0, provaveis: 0, agendou: 0, vendas: 0, receita: 0 });
+  const ic = (Icon: typeof Link2) => <Icon size={17} strokeWidth={1.7} aria-hidden />;
   const th = "px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide";
   const td = "px-2 py-1.5 text-sm tabular-nums";
   return (
-    <div className="space-y-4">
-      <div className="hpagehead">
-        <h2>Links rastreados</h2>
-        <p>Um link curto para cada lugar (bio, cada story, destaques, QR code no consultório, parceiros), como {urlCurta("juliana-bio", BASE)}. O sistema conta os cliques, reconhece a conversa que chega no WhatsApp pelo código no fim da mensagem e mostra quantas viraram agendamento e venda. Período: {formatRangeLabel({ start, end })}.</p>
-        <p className="mt-2 text-xs">Cliques e início das conversas respeitam o período. Agendamento reflete o resumo atual dessas conversas. Vendas exigem evento de ganho registrado até a data final; o valor é o cadastrado no CRM e não comprova pagamento. Um mesmo lead pode aparecer em mais de um link.</p>
-      </div>
-      {isAdmin && <Gerador clientId={clientId} nomesUsados={(q.data?.links ?? []).flatMap((l) => (l.slug ? [l.slug] : []))} aoCriar={() => qc.invalidateQueries({ queryKey: ["links-rastreados", clientId] })} />}
+    <div className="nexo-mkt nexo-links">
+      <NxTopo
+        pergunta="De onde vêm as conversas: cada link curto conta os cliques, as conversas que chegaram no WhatsApp e quantas viraram agendamento e venda."
+        meta={<NxTag tom="g" icone={<CalendarDays className="nx-tag__ic" aria-hidden />}>{formatRangeLabel({ start, end })}</NxTag>}
+      />
       {q.isError && <div role="alert" className="card"><p>Não foi possível carregar os links e suas contagens. Nenhum resultado foi considerado zero.</p><button type="button" className="btn" disabled={q.isFetching} onClick={() => void q.refetch()}>Tentar novamente</button></div>}
       {alterar.isError && <p role="alert" style={{ color: "var(--crit)" }}>A alteração não foi salva. {mensagemDeErro(alterar.error)}</p>}
       {alterar.isSuccess && <p role="status">Alteração salva.</p>}
       {porTipo.size > 0 && (
+        <>
+          <section aria-label="Resultados dos links" className="nx-grade nx-grade--4">
+            <NxKpi i={0} icone={ic(MousePointerClick)} rotulo="Cliques" valor={tot.cliques.toLocaleString("pt-BR")} nota={`Em ${q.data?.links.length ?? 0} links`} />
+            <NxKpi i={1} icone={ic(MessageCircle)} rotulo="Conversas" valor={tot.conversas.toLocaleString("pt-BR")} nota={tot.provaveis ? `${tot.provaveis} reconhecidas pelo horário do clique` : `${taxa(tot.conversas, tot.cliques)} dos cliques`} />
+            <NxKpi i={2} icone={ic(CalendarCheck)} rotulo="Agendaram" valor={tot.agendou.toLocaleString("pt-BR")} nota={`${taxa(tot.agendou, tot.conversas)} das conversas`} />
+            <NxKpi i={3} icone={ic(Trophy)} rotulo="Vendas" valor={tot.vendas.toLocaleString("pt-BR")} nota={tot.receita ? `${brl(tot.receita)} cadastrados no CRM` : "Sem valor cadastrado no CRM"} />
+          </section>
+          <div className="nx-grade nx-grade--2">
+            <NxCard icone={ic(Link2)} titulo="De onde vêm as conversas" subtitulo="Conversas por lugar do link, do que mais traz para o que menos traz" rotulo="De onde vêm as conversas">
+              <ul className="nx-hbars" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                {lugares.map(([t, x], i) => (
+                  <li key={t}>
+                    <NxHBar i={i} rotulo={POSICOES[t as Posicao]?.rotulo ?? t} valor={<>{x.conversas} conversas <small>· {x.cliques} cliques</small></>} pct={maxConv > 0 ? (x.conversas / maxConv) * 100 : 0} />
+                  </li>
+                ))}
+              </ul>
+            </NxCard>
+            <NxCard icone={ic(Filter)} titulo="Do clique à venda" subtitulo="Todos os links somados" rotulo="Do clique à venda">
+              <NxFunil
+                rotulo="Do clique à venda"
+                etapas={[
+                  { rotulo: "Cliques", valor: tot.cliques, texto: tot.cliques.toLocaleString("pt-BR") },
+                  { rotulo: "Conversas", valor: tot.conversas, texto: tot.conversas.toLocaleString("pt-BR"), passagem: `${taxa(tot.conversas, tot.cliques)} dos cliques viraram conversa` },
+                  { rotulo: "Agendaram", valor: tot.agendou, texto: tot.agendou.toLocaleString("pt-BR"), passagem: `${taxa(tot.agendou, tot.conversas)} das conversas agendaram` },
+                  { rotulo: "Vendas", valor: tot.vendas, texto: tot.vendas.toLocaleString("pt-BR"), passagem: `${taxa(tot.vendas, tot.agendou)} dos agendamentos viraram venda` },
+                ]}
+              />
+              <NxNota>Um mesmo lead pode aparecer em mais de um link.</NxNota>
+            </NxCard>
+          </div>
+        </>
+      )}
+      <NxComoCalcula titulo="Como os links contam">
+        <p>Um link curto para cada lugar (bio, cada story, destaques, QR code no consultório, parceiros), como {urlCurta("juliana-bio", BASE)}. O sistema conta os cliques, reconhece a conversa que chega no WhatsApp pelo código no fim da mensagem e mostra quantas viraram agendamento e venda. Período: {formatRangeLabel({ start, end })}.</p>
+        <p>Cliques e início das conversas respeitam o período. Agendamento reflete o resumo atual dessas conversas. Vendas exigem evento de ganho registrado até a data final; o valor é o cadastrado no CRM e não comprova pagamento. Um mesmo lead pode aparecer em mais de um link.</p>
+      </NxComoCalcula>
+      {isAdmin && <Gerador clientId={clientId} nomesUsados={(q.data?.links ?? []).flatMap((l) => (l.slug ? [l.slug] : []))} aoCriar={() => qc.invalidateQueries({ queryKey: ["links-rastreados", clientId] })} />}
+      {porTipo.size > 0 && (
         <section aria-labelledby="por-lugar" className="overflow-x-auto rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-          <h3 id="por-lugar" className="px-4 pt-3 text-sm font-semibold">De onde vêm as conversas</h3>
+          <h3 id="por-lugar" className="px-4 pt-3 text-sm font-semibold">Por lugar, em números</h3>
           <table className="mt-2 w-full min-w-[560px]">
             <thead style={{ color: "var(--muted)" }}><tr><th className={th}>Lugar</th><th className={th}>Cliques</th><th className={th}>Conversas</th><th className={th}>Agendou</th><th className={th}>Vendas</th><th className={th}>Clique → conversa</th><th className={th}>Conversa → agendou</th></tr></thead>
-            <tbody>{[...porTipo.entries()].sort((a, b) => b[1].conversas - a[1].conversas).map(([t, x]) => (
+            <tbody>{lugares.map(([t, x]) => (
               <tr key={t} className="border-t" style={{ borderColor: "var(--border)" }}><td className={td}>{POSICOES[t as Posicao]?.rotulo ?? t}</td><td className={td}>{x.cliques}</td><td className={td}>{x.conversas}</td><td className={td}>{x.agendou}</td><td className={td}>{x.vendas}{x.receita ? ` (${brl(x.receita)})` : ""}</td><td className={td}>{taxa(x.conversas, x.cliques)}</td><td className={td}>{taxa(x.agendou, x.conversas)}</td></tr>
             ))}</tbody>
           </table>
         </section>
       )}
       <section aria-labelledby="todos" className="space-y-2">
-        <div className="flex items-center justify-between gap-2"><h3 id="todos" className="text-sm font-semibold">Todos os links</h3>
+        <div className="flex items-center justify-between gap-2"><h3 id="todos" className="text-lg font-semibold">Todos os links</h3>
           <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={verInativos} onChange={(e) => setVerInativos(e.target.checked)} /> Mostrar desativados</label></div>
         {q.isLoading ? <p role="status">Carregando links e resultados…</p> : q.isError && !q.data ? null : links.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--ink-2)" }}>{isAdmin ? "Nenhum link ainda. Crie o primeiro (comece pelo link da bio) e troque no Instagram." : "A equipe Doctor Creator ainda não criou links rastreados para esta clínica."}</p>
@@ -239,19 +281,22 @@ function LinksPage() {
               const x = f(l.id), url = urlDo(l);
               return (
                 <article key={l.id} className="rounded-xl border p-3" style={{ background: "var(--surface)", borderColor: "var(--border)", opacity: l.ativo ? 1 : 0.55 }}>
-                  <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--accent)" }}>
+                  <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-semibold" style={{ color: "var(--b1)" }}>
                     <span>{POSICOES[l.tipo as Posicao]?.rotulo ?? l.tipo}{l.destino_tipo === "site" ? " · site" : ""}</span>
                     <span style={{ color: "var(--muted)" }}>{new Date(l.criado_em).toLocaleDateString("pt-BR")}</span>
                   </div>
-                  <h4 className="mt-0.5 text-[15px] font-semibold">{l.titulo ?? "Link"}</h4>
+                  <h4 className="mt-0.5 text-[17px] font-bold">{l.titulo ?? "Link"}</h4>
                   <p className="mt-1 flex flex-wrap items-center gap-2 text-xs"><code className="break-all rounded px-1 text-sm" style={{ background: "var(--surface-2)" }}>{url}</code> <BotaoCopiar texto={url} rotulo="Copiar link" />
                     {l.slug && <button type="button" className="inline-flex min-h-[44px] items-center gap-1 font-semibold" style={{ color: "var(--accent)" }} aria-expanded={qrAberto === l.id} onClick={() => setQrAberto(qrAberto === l.id ? null : l.id)}><QrCode size={13} aria-hidden /> {qrAberto === l.id ? "Esconder QR code" : "QR code"}</button>}</p>
                   {l.slug && qrAberto === l.id && <QrLink url={url} nome={l.slug} />}
                   {!l.ativo && <p className="mt-1 text-xs font-semibold" style={{ color: "var(--crit)" }}>Desativado: quem abrir vê a página "Este link foi desativado", com o WhatsApp da clínica, e o clique não conta.</p>}
                   {l.destino_tipo === "whatsapp" && l.mensagem_modelo && <p className="mt-1 text-xs" style={{ color: "var(--ink-2)" }}>Mensagem: "{l.mensagem_modelo}"</p>}
-                  <p className="mt-2 text-xs tabular-nums" style={{ color: "var(--ink-2)" }}>
-                    <b>{x.cliques}</b> cliques · <b>{x.conversas}</b> conversas{x.provaveis ? ` (${x.provaveis} pelo horário)` : ""} · <b>{x.agendou}</b> agendaram · <b>{x.vendas}</b> vendas{x.receita ? ` (${brl(Number(x.receita))})` : ""}
-                  </p>
+                  <dl className="nx-link__nums">
+                    <div><dt>Cliques</dt><dd>{x.cliques}</dd></div>
+                    <div><dt>Conversas</dt><dd>{x.conversas}</dd>{x.provaveis ? <small>{x.provaveis} pelo horário</small> : null}</div>
+                    <div><dt>Agendaram</dt><dd>{x.agendou}</dd></div>
+                    <div><dt>Vendas</dt><dd>{x.vendas}</dd>{x.receita ? <small>{brl(Number(x.receita))}</small> : null}</div>
+                  </dl>
                   {isAdmin && l.slug && (
                     <div className="mt-1 flex flex-wrap gap-3 text-xs">
                       <button type="button" disabled={alterar.isPending} style={{ color: "var(--accent)" }} onClick={() => { alterar.reset(); setEdicao({ id: l.id, campo: "nome" }); }}>Editar nome do link</button>

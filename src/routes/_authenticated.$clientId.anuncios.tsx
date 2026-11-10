@@ -1,13 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { statusDoCliente, diasDeAtraso } from "@/lib/saude-fontes";
-import { motivoDaLinha, COR_DONO, tituloDaFaixa } from "@/lib/motivos";
+import { motivoDaLinha, tituloDaFaixa } from "@/lib/motivos";
 import { SeloDono } from "@/components/selo-dono";
-import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
-import { getAdsPorDia, getAdsDiagnosticoPorObjetivo, getClientFontes, getAdsPlanilha } from "@/lib/client-data";
+import { getAdsPorDia, getAdsDiagnosticoPorObjetivo, getClientFontes, getAdsPlanilha, getAdsResumo } from "@/lib/client-data";
 import { AdsPlanilhaPainel } from "@/components/ads-planilha";
 import { PostsImpulsionados } from "@/components/seguidores-impulsionados";
 import { SyncButton } from "@/components/sync-button";
@@ -18,15 +17,17 @@ import { fmtBRL } from "@/lib/format";
 import { GRUPOS, conversaMaisBarata, planoDeAcao, limitacoesDeAnuncios, unidade, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { BENCHMARKS } from "@/lib/benchmarks";
 import { avisoContaAnuncioCompartilhada, type ContaAnuncioCompartilhada } from "@/lib/conta-anuncio-compartilhada";
-import { InsightCard, ListaLimitacoes, OQueE } from "@/components/insight-card";
+import { InsightCard, ListaLimitacoes } from "@/components/insight-card";
 import { MetodologiaAnuncios } from "@/components/anuncios/metodologia";
-import { DiagnosticoCampanhas, Faixa } from "@/components/anuncios/diagnostico-campanhas";
-import { Wallet, MessageCircle, Coins, Eye, MousePointerClick, Percent, PauseCircle, AlertTriangle, Info, CalendarDays, Layers, Zap, Megaphone } from "lucide-react";
-import { Painel, Kpi, BarraFina } from "@/components/visual";
+import { DiagnosticoCampanhas } from "@/components/anuncios/diagnostico-campanhas";
+import { Wallet, MessageCircle, Coins, Eye, MousePointerClick, Layers, Zap, Megaphone, CalendarDays, Lightbulb, ChevronRight, Filter } from "lucide-react";
+import { Painel, BarraFina, InfoDica } from "@/components/visual";
 import { fmtFracao } from "@/lib/metricas";
 import { nomeObjetivo, objetivoNaoContaConversa } from "@/lib/rastreio-anuncios";
 import { GestorAnunciosIA } from "@/components/agentes-ia";
 import { useClientRole } from "@/hooks/use-client-role";
+import { NxCard, NxKpi, NxTag, NxHBar, NxSectionHeader } from "@/components/nx";
+import { NxBarrasLinha, NxFunil, NxAlertaCurto, NxNota, NxComoCalcula, NxTopo } from "@/components/nx/anuncios-graficos";
 
 export const Route = createFileRoute("/_authenticated/$clientId/anuncios")({
   component: AnunciosPage,
@@ -40,7 +41,19 @@ function n(v: unknown): number {
 }
 const int = (v: number) => Math.round(v).toLocaleString("pt-BR");
 const porCem = (v: number | null) => (v == null ? "—" : (v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 }));
+// Ícones no tamanho do ladrilho da prancha (17 px, traço 1,7).
+const ic = (Icon: typeof Eye) => <Icon size={17} strokeWidth={1.7} aria-hidden />;
+const ddmm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+const brlCurto = (v: number) => (v >= 1000 ? `R$ ${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil` : `R$ ${Math.round(v).toLocaleString("pt-BR")}`);
 
+/** Variação contra o período anterior, já pronta para o cartão. Abaixo de 5% é "estável", sem cor (igual ao comparativo). */
+function variacaoDe(atual: unknown, anterior: unknown) {
+  const a = atual == null ? null : Number(atual);
+  const b = anterior == null ? null : Number(anterior);
+  if (a == null || b == null || !Number.isFinite(a) || !Number.isFinite(b) || b === 0) return null;
+  const v = a / b - 1;
+  return { v, pct: `${Math.abs(Math.round(v * 100))}%` };
+}
 
 // Quando a fonte está parada, diz POR QUÊ e de quem é a ação (pagamento, campanhas desligadas, acesso vencido...).
 function MotivoParada({ clientId }: { clientId: string }) {
@@ -58,18 +71,11 @@ function MotivoParada({ clientId }: { clientId: string }) {
   // Fonte alimentada à mão (planilha de distribuição de conteúdo): não é parada nem erro, e o painel da planilha já explica a origem.
   if (m.dono === "manual") return null;
   return (
-    <Faixa icone={AlertTriangle} cor={COR_DONO[m.dono]} alerta>
-      <div className="flex flex-wrap items-center gap-2">
-        <b>{tituloDaFaixa(l.data_ate, parada)}</b>
-        <SeloDono dono={m.dono} />
-      </div>
-      <div className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
-        {m.texto}
-      </div>
-    </Faixa>
+    <NxAlertaCurto tom={parada ? "critico" : "atencao"} titulo={tituloDaFaixa(l.data_ate, parada)} acao={<SeloDono dono={m.dono} />}>
+      {m.texto}
+    </NxAlertaCurto>
   );
 }
-
 
 // ---------- bloco: Se eu tivesse que agir hoje ----------
 function AgirHoje({ d, clientId }: { d: DiagnosticoAds; clientId: string }) {
@@ -129,12 +135,12 @@ function PorObjetivo({ d }: { d: DiagnosticoAds }) {
     >
       {cmp && (
         <div className="mb-4">
-          <Faixa icone={AlertTriangle} cor="var(--crit)" alerta>
+          <NxAlertaCurto tom="atencao" titulo={`A conversa saiu mais cara nas campanhas de ${GRUPOS[cmp.caro.grupo].curto}`}>
             Uma conversa vinda de campanha de <b>{GRUPOS[cmp.caro.grupo].curto}</b> custou{" "}
             <b>{cmp.caro.custoPorConversa != null ? fmtBRL(cmp.caro.custoPorConversa) : "—"}</b>
             {cmp.vezes != null ? ` (${cmp.vezes.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}x mais)` : ""}; de campanha de{" "}
             <b>{GRUPOS[cmp.barato.grupo].curto}</b>, <b>{fmtBRL(cmp.barato.custoPorConversa)}</b>.
-          </Faixa>
+          </NxAlertaCurto>
         </div>
       )}
       <ul className="space-y-4">
@@ -145,25 +151,25 @@ function PorObjetivo({ d }: { d: DiagnosticoAds }) {
             <li key={g.grupo}>
               <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
                 <span className="min-w-0">
-                  <span className="font-medium">{G.nome}</span>
+                  <span className="font-semibold">{G.nome}</span>
                   <span className="ml-1.5 font-mono text-[10px]" style={{ color: "var(--text-faint)" }} title="Objetivo como vem da Meta">
                     {g.objetivosBrutos.join(" · ")}
                   </span>
                 </span>
                 <span className="tabular-nums">
-                  <b className="font-semibold">{fmtBRL(g.gasto)}</b>
-                  <span className="ml-1.5 text-xs" style={{ color: "var(--text-dim)" }}>
+                  <b className="font-bold">{fmtBRL(g.gasto)}</b>
+                  <span className="ml-1.5 text-xs font-medium" style={{ color: "var(--text-dim)" }}>
                     {fmtFracao(fatia)} da verba
                   </span>
                 </span>
               </div>
               <div className="mt-1">
-                <BarraFina valor={g.gasto} max={d.gasto} cor="var(--s7)" />
+                <BarraFina valor={g.gasto} max={d.gasto} cor="var(--b2)" />
               </div>
               <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
                 {G.paraQue}
               </p>
-              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs font-medium" style={{ color: "var(--text-dim)" }}>
                 <span>
                   {g.campanhas} {g.campanhas === 1 ? "campanha" : "campanhas"}
                 </span>
@@ -216,9 +222,9 @@ function ContaCompartilhada({ clientId }: { clientId: string }) {
   return (
     <>
       {data.map((c) => (
-        <Faixa key={c.ad_account_id} icone={AlertTriangle} cor="var(--warn)" alerta>
+        <NxAlertaCurto key={c.ad_account_id} tom="atencao" titulo="Conta de anúncio compartilhada com outro cliente">
           {avisoContaAnuncioCompartilhada(c)}
-        </Faixa>
+        </NxAlertaCurto>
       ))}
     </>
   );
@@ -264,12 +270,89 @@ function ObjetivosDasCampanhas({ d }: { d: DiagnosticoAds }) {
   );
 }
 
+// ---------- abertura: onde a verba foi gasta, campanha a campanha ----------
+const MAX_CAMPANHAS_TOPO = 6;
+function OndeFoiAVerba({ d }: { d: DiagnosticoAds }) {
+  const cs = useMemo(() => [...d.campanhas].sort((a, b) => b.gasto - a.gasto), [d]);
+  const max = cs[0]?.gasto ?? 0;
+  const resto = cs.length - MAX_CAMPANHAS_TOPO;
+  return (
+    <NxCard
+      icone={ic(Wallet)}
+      titulo="Onde a verba foi gasta"
+      subtitulo="Campanhas que mais gastaram e as conversas que cada uma trouxe"
+      rotulo="Onde a verba foi gasta"
+    >
+      <ul className="nx-hbars" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+        {cs.slice(0, MAX_CAMPANHAS_TOPO).map((c, i) => (
+          <li key={c.campaign_id} title={c.campanha}>
+            <NxHBar
+              i={i}
+              rotulo={c.campanha}
+              valor={
+                <>
+                  {fmtBRL(c.gasto)} <small>· {int(c.conversas)} {c.conversas === 1 ? "conversa" : "conversas"}</small>
+                </>
+              }
+              pct={max > 0 ? (c.gasto / max) * 100 : 0}
+            />
+          </li>
+        ))}
+      </ul>
+      {resto > 0 && <NxNota>Mais {resto} {resto === 1 ? "campanha" : "campanhas"} no diagnóstico, logo abaixo.</NxNota>}
+    </NxCard>
+  );
+}
+
+// ---------- abertura: a leitura do que fazer, em frases ----------
+function OQueFazer({ d, aoVerPlano }: { d: DiagnosticoAds; aoVerPlano: () => void }) {
+  const plano = useMemo(() => planoDeAcao(d), [d]);
+  const suspeito = !!d.rastreio?.suspeito;
+  const itens = suspeito ? [] : plano.slice(0, 3);
+  return (
+    <NxCard icone={ic(Lightbulb)} titulo="O que fazer agora" subtitulo="A leitura do período em linguagem simples" rotulo="O que fazer agora">
+      {suspeito ? (
+        <ol className="nx-leitura">
+          <li>
+            <span className="nx-leitura__n" aria-hidden>1</span>
+            <span className="nx-leitura__corpo">
+              <b>Corrigir o rastreio das conversas antes de mexer na verba</b>
+              <span>Enquanto o rastreio estiver suspeito, nenhuma campanha é julgada pelo custo por conversa. Veja o aviso no topo.</span>
+            </span>
+          </li>
+        </ol>
+      ) : itens.length === 0 ? (
+        <p className="nx-vazio text-sm font-medium" style={{ margin: 0 }}>
+          Nenhuma mudança de verba urgente neste período: nenhuma campanha com verba relevante está marcada "Cortar" ou "Sem tração" e nenhuma
+          marcada "Escalar" está pronta para receber mais.
+        </p>
+      ) : (
+        <ol className="nx-leitura">
+          {itens.map((it, k) => (
+            <li key={it.id}>
+              <span className="nx-leitura__n" aria-hidden>{k + 1}</span>
+              <span className="nx-leitura__corpo">
+                <b>{it.titulo}</b>
+                <span>{it.impactoTexto ?? it.acao?.texto ?? it.diagnostico}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+      <button type="button" className="nx-botao" onClick={aoVerPlano} style={{ justifySelf: "start" }}>
+        Ver o plano completo e as recomendações <ChevronRight size={16} aria-hidden />
+      </button>
+    </NxCard>
+  );
+}
+
 function AnunciosPage() {
   const { clientId } = Route.useParams();
   const { podeEditar } = useClientRole(clientId);
   const dateRangeState = clientLayoutRoute.useSearch();
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
+  const recomendacoes = useRef<HTMLDetailsElement>(null);
 
   const diagnosticoQ = useQuery({
     queryKey: ["ads-diag-objetivo", clientId, start, end],
@@ -281,13 +364,22 @@ function AnunciosPage() {
     queryFn: () => getAdsPorDia(clientId, start, end),
     retry: false,
   });
+  // Período anterior do mesmo tamanho: a mesma leitura (e a mesma chave de cache) do comparativo da conta, mais abaixo.
+  const dias = Math.round((new Date(end.slice(0, 10) + "T12:00:00Z").getTime() - new Date(start + "T12:00:00Z").getTime()) / 86400000) + 1;
+  const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
+  const antFim = iso(new Date(start + "T12:00:00Z").getTime() - 86400000);
+  const antIni = iso(new Date(start + "T12:00:00Z").getTime() - dias * 86400000);
+  const resumoAtual = useQuery({ queryKey: ["ads-resumo", clientId, start, end], queryFn: () => getAdsResumo(clientId, start, end.slice(0, 10)), staleTime: 5 * 60_000 });
+  const resumoAnt = useQuery({ queryKey: ["ads-resumo", clientId, antIni, antFim], queryFn: () => getAdsResumo(clientId, antIni, antFim), staleTime: 5 * 60_000 });
+
   const { data: diag, isLoading: loadingDiag } = diagnosticoQ;
   const { data: porDia, isLoading: loadingDia } = diasQ;
   const isLoading = loadingDiag || loadingDia;
   const gasto = diag?.gasto ?? 0;
 
-  const serie = (porDia ?? []).map((r) => ({ dia: r.dia, gasto: n(r.gasto), conversas: n(r.conversas) }));
+  const serie = useMemo(() => (porDia ?? []).map((r) => ({ dia: r.dia, barra: n(r.gasto), linha: n(r.conversas) })), [porDia]);
   const limitacoes = useMemo(() => limitacoesDeAnuncios(diag), [diag]);
+  const plano = useMemo(() => (diag ? planoDeAcao(diag) : []), [diag]);
 
   // Sem gasto no período: descobrir se a conta está pausada (já teve gasto antes),
   // se está ligada mas nunca gastou, ou se nem está ligada. O texto muda para cada caso.
@@ -329,20 +421,18 @@ function AnunciosPage() {
         ? `A conta de anúncios está ligada, mas ainda não tem nenhum gasto registrado.`
         : `Sem investimento registrado em ${periodLabel}. Se a clínica anuncia, falta ligar a conta de anúncio a este cliente no cadastro.`;
     return (
-      <div className="space-y-4">
-        <div className="flex justify-end">
-          <SyncButton clientId={clientId} alvo="anuncios" />
-        </div>
+      <div className="nexo-mkt nexo-anuncios">
+        <NxTopo pergunta="Investimento em anúncios do Meta (Facebook e Instagram), por dia e por campanha." acao={<SyncButton clientId={clientId} alvo="anuncios" />} />
         <MotivoParada clientId={clientId} />
         {temPlanilha ? (
           <AdsPlanilhaPainel linhas={planilha ?? []} start={start} end={end} />
         ) : (
-          <>
-            <Faixa icone={Info}>Investimento em anúncios do Meta (Facebook e Instagram), por dia e por campanha.</Faixa>
-            <Faixa icone={ultimoGasto || fontes?.tem_anuncios ? PauseCircle : AlertTriangle} cor="var(--warn)" alerta>
-              {mensagemVazia}
-            </Faixa>
-          </>
+          <NxAlertaCurto
+            tom="atencao"
+            titulo={ultimoGasto ? "Anúncios pausados" : fontes?.tem_anuncios ? "Conta ligada, sem gasto ainda" : "Sem investimento no período"}
+          >
+            {mensagemVazia}
+          </NxAlertaCurto>
         )}
       </div>
     );
@@ -355,92 +445,194 @@ function AnunciosPage() {
   const soConversa = diag.leads === 0 && diag.visitasPagina === 0;
   // Rastreio de conversas suspeito (rastreio-anuncios.ts): sem custo por conversa e sem diagnóstico de campanha.
   const suspeito = !!diag.rastreio?.suspeito;
+  const rastreio = suspeito ? plano.find((p) => p.id === "anuncios-rastreio-suspeito") : undefined;
+  // A mensagem do rastreio termina com o que verificar; o próximo passo já diz isso (e um pouco mais), então sai do texto.
+  const textoRastreio = (diag.rastreio?.mensagem ?? "").replace(/\s*Verifique se .*$/, "") || diag.rastreio?.mensagem;
+
+  // Variação contra o período anterior (ads_resumo dos dois lados, a mesma fonte do comparativo da conta).
+  const ra = resumoAtual.data as any;
+  const rb = resumoAnt.data as any;
+  const varGasto = variacaoDe(ra?.gasto, rb?.gasto);
+  const varConv = variacaoDe(ra?.conversas, rb?.conversas);
+  const varClique = variacaoDe(ra?.cliques_link, rb?.cliques_link);
+  const anteriorTxt = `vs. ${ddmm(antIni)} a ${ddmm(antFim)}`;
+  // Sobe = bom (conversas, cliques): chip verde/vermelho. Abaixo de 5%, só texto.
+  const chip = (x: ReturnType<typeof variacaoDe>) => (x && Math.abs(x.v) >= 0.05 ? { sobe: x.v > 0, percentual: x.pct, contexto: anteriorTxt } : null);
+  const textoVar = (x: ReturnType<typeof variacaoDe>) =>
+    x ? (Math.abs(x.v) < 0.05 ? `Estável (${x.v >= 0 ? "+" : "−"}${x.pct}) ${anteriorTxt}` : `${x.v > 0 ? "+" : "−"}${x.pct} ${anteriorTxt}`) : null;
+  const info = (rotulo: string, texto: string) => <InfoDica texto={texto} rotulo={`Sobre ${rotulo}`} />;
+
+  const abrirPlano = () => {
+    const el = recomendacoes.current;
+    if (!el) return;
+    el.open = true;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.querySelector("summary")?.focus();
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <SyncButton clientId={clientId} alvo="anuncios" />
-      </div>
+    <div className="nexo-mkt nexo-anuncios">
+      <NxTopo
+        pergunta="Quanto foi investido nos anúncios e quantas conversas eles trouxeram."
+        meta={
+          <>
+            <NxTag tom="b">Meta Ads</NxTag>
+            <NxTag tom="g" icone={<CalendarDays className="nx-tag__ic" aria-hidden />}>
+              {periodLabel}
+            </NxTag>
+            <NxTag tom="g">
+              {diag.campanhas.length} {diag.campanhas.length === 1 ? "campanha" : "campanhas"} com atividade
+            </NxTag>
+          </>
+        }
+        acao={<SyncButton clientId={clientId} alvo="anuncios" />}
+      />
 
+      {/* Avisos que mudam a leitura dos números vêm antes deles, curtos e com o próximo passo. */}
       <MotivoParada clientId={clientId} />
       <ContaCompartilhada clientId={clientId} />
       {suspeito && (
-        <Faixa icone={AlertTriangle} cor="var(--crit)" alerta>
-          {diag.rastreio?.mensagem}
-        </Faixa>
-      )}
-      <Faixa
-        icone={CalendarDays}
-        ajuda={
-          <>
-            Investimento em anúncios do Meta em {periodLabel}, direto da conta de anúncio — não é estimativa. Cada campanha é julgada pelo
-            resultado do objetivo dela (conversa, cadastro, clique ou aparições) e comparada só com campanhas do mesmo objetivo; com poucas
-            campanhas no objetivo, com a conta toda, pela conversa.{" "}
-            {soConversa && (
-              <>
-                <strong>Conversa iniciada</strong> (Direct ou WhatsApp) é o resultado que dá para medir aqui: esta conta não tem pixel nem
-                formulário instalado, então "leads" e "visitas à página" chegam zerados e ficam de fora.{" "}
-              </>
-            )}
-            O sync roda automaticamente todo dia.
-          </>
-        }
-      >
-        Meta Ads · {periodLabel} · {diag.campanhas.length} campanhas com atividade · dados reais da conta
-      </Faixa>
-
-      {soConversa && (
-        <Faixa icone={Info} cor="var(--warn)" alerta>
-          <span className="text-xs">
-            <b>Só conversas são medidas nesta conta:</b> "leads" e "visitas à página" chegaram zerados em {periodLabel} (sem pixel nem formulário
-            instalado). Conversa iniciada (Direct ou WhatsApp) é o resultado que dá para medir aqui; campanhas de cadastro ou vendas ficam sem o
-            resultado próprio.
-          </span>
-        </Faixa>
+        <NxAlertaCurto
+          titulo="As conversas dos anúncios não estão sendo contadas direito"
+          passo={rastreio?.acao?.texto ?? "Conferir o objetivo de cada campanha e o código de rastreio do link do WhatsApp."}
+          quem="Gestor de tráfego"
+        >
+          {textoRastreio}
+        </NxAlertaCurto>
       )}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3" role="region" aria-label="Indicadores dos anúncios">
-        <Kpi icone={Wallet} rotulo="Investido" valor={fmtBRL(gasto)} dica={`${diag.campanhas.length} campanhas com atividade`} cor="var(--s1)" />
-        <Kpi icone={MessageCircle} rotulo="Conversas iniciadas" valor={int(diag.conversas)} dica="WhatsApp e Direct, de todas as campanhas" cor="var(--good)" />
-        <Kpi
-          icone={Coins}
+      <section aria-label="Indicadores dos anúncios" className="nx-grade nx-grade--4">
+        <NxKpi
+          i={0}
+          icone={ic(Wallet)}
+          rotulo="Investido"
+          valor={fmtBRL(gasto)}
+          nota={textoVar(varGasto) ?? `${diag.campanhas.length} campanhas com atividade`}
+          info={info("Investido", `Tudo o que foi gasto em anúncios do Meta em ${periodLabel}, direto da conta de anúncio (não é estimativa), de ${diag.campanhas.length} campanhas com atividade.`)}
+        />
+        <NxKpi
+          i={1}
+          icone={ic(MessageCircle)}
+          rotulo="Conversas iniciadas"
+          valor={int(diag.conversas)}
+          variacao={chip(varConv)}
+          nota={textoVar(varConv) ?? "WhatsApp e Direct, de todas as campanhas"}
+          info={info("Conversas iniciadas", `WhatsApp e Direct, de todas as campanhas.${suspeito ? " Rastreio suspeito: o número real pode ser maior." : ""}`)}
+        />
+        <NxKpi
+          i={2}
+          icone={ic(Coins)}
           rotulo="Custo por conversa"
           valor={suspeito ? "Não confiável" : msg?.custoPorConversa != null ? fmtBRL(msg.custoPorConversa) : "—"}
-          dica={suspeito ? "Rastreio de conversas suspeito: veja o aviso acima" : msg ? `Só campanhas de mensagem: ${fmtBRL(msg.gasto)} ÷ ${int(msg.conversas)} conversas` : "Sem campanha de mensagem no período"}
-          cor="var(--accent)"
+          nota={suspeito ? "Rastreio suspeito: veja o aviso acima" : msg ? `Só campanhas de mensagem: ${fmtBRL(msg.gasto)} ÷ ${int(msg.conversas)} conversas` : "Sem campanha de mensagem no período"}
+          info={info(
+            "Custo por conversa",
+            `Conta só as campanhas de mensagem${msg ? ` (${fmtBRL(msg.gasto)} ÷ ${int(msg.conversas)})` : ""}: dividir a verba de todos os objetivos pelas conversas deixaria o número inflado. Referência de mercado, sem estudo independente e por isso sem cor: ${BENCHMARKS.custoPorConversa.referencia}.`,
+          )}
         />
-        <Kpi icone={Eye} rotulo="Aparições do anúncio" valor={int(diag.impressoes)} dica={custoMil != null ? `${fmtBRL(custoMil)} a cada mil aparições` : undefined} cor="var(--s2)" />
-        <Kpi
-          icone={MousePointerClick}
+        <NxKpi
+          i={3}
+          icone={ic(MousePointerClick)}
           rotulo="Cliques no link"
           valor={int(diag.cliquesLink)}
-          dica={
+          variacao={chip(varClique)}
+          nota={textoVar(varClique) ?? `${porCem(ctrConta)} a cada 100 aparições`}
+          info={info(
+            "Cliques no link",
             diag.cliquesPerfil > 0
-              ? `${int(diag.cliquesPerfil)} foram visitas ao perfil do Instagram e ${int(diag.cliquesLink - diag.cliquesPerfil)} foram para WhatsApp ou site`
-              : diag.cliquesLink > 0
-                ? `${fmtBRL(diag.gasto / diag.cliquesLink)} por clique`
-                : undefined
-          }
-          cor="var(--s3)"
+              ? `${int(diag.cliquesPerfil)} foram visitas ao perfil do Instagram e ${int(diag.cliquesLink - diag.cliquesPerfil)} foram para WhatsApp ou site. Clique no link pode levar ao perfil, ao WhatsApp ou ao site, conforme o destino da campanha: visita ao perfil faz o médico ser conhecido, mas não é pedido de atendimento.`
+              : `Só clique no link, não curtida nem clique na foto${diag.cliquesLink > 0 ? `: ${fmtBRL(diag.gasto / diag.cliquesLink)} por clique` : ""}. Pode levar ao perfil do Instagram, ao WhatsApp ou ao site, conforme o destino da campanha.`,
+          )}
         />
-        <Kpi icone={Percent} rotulo="Cliques a cada 100 aparições" valor={porCem(ctrConta)} dica="Cliques no link ÷ aparições × 100" cor="var(--s7)" />
-      </div>
-      <div className="rounded-xl border p-3" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <OQueE>
-          <b>Custo por conversa</b> conta só as campanhas de mensagem ({msg ? `${fmtBRL(msg.gasto)} ÷ ${int(msg.conversas)}` : "nenhuma no período"}):
-          dividir a verba de todos os objetivos pelas conversas deixaria o número inflado. Referência de mercado, sem estudo
-          independente e por isso sem cor: {BENCHMARKS.custoPorConversa.referencia}. <b>Aparições</b> são as vezes que o anúncio
-          apareceu na tela (a mesma pessoa pode ver mais de uma vez). <b>Cliques a cada 100 aparições</b> conta só clique no link, não
-          curtida nem clique na foto. <b>Clique no link</b> pode levar ao perfil do Instagram, ao WhatsApp ou ao site, conforme o destino da
-          campanha: visita ao perfil faz o médico ser conhecido, mas não é pedido de atendimento.
-        </OQueE>
+      </section>
+
+      {soConversa && (
+        <NxNota>
+          <b>Só conversas são medidas nesta conta:</b> "leads" e "visitas à página" chegaram zerados em {periodLabel} (sem pixel nem formulário
+          instalado). Campanhas de cadastro ou vendas ficam sem o resultado próprio.
+        </NxNota>
+      )}
+
+      <div className="nx-mkt-dupla">
+        <NxCard
+          icone={ic(CalendarDays)}
+          titulo="Investimento e conversas por dia"
+          subtitulo="Barras = investido no dia · linha = conversas iniciadas"
+          rotulo="Investimento e conversas por dia"
+        >
+          <NxBarrasLinha
+            dados={serie}
+            rotulo="Investimento e conversas por dia"
+            nomeBarra="Investido"
+            nomeLinha="Conversas"
+            formatarBarra={brlCurto}
+            formatarLinha={int}
+            formatarData={ddmm}
+          />
+          <NxNota>Dias em que a linha não acompanha a barra são os que merecem olhada.</NxNota>
+        </NxCard>
+        <NxCard icone={ic(Filter)} titulo="Do anúncio à conversa" subtitulo="Quantas pessoas passaram de cada etapa" rotulo="Do anúncio à conversa">
+          <NxFunil
+            rotulo="Do anúncio à conversa"
+            etapas={[
+              { rotulo: "Aparições", valor: diag.impressoes, texto: int(diag.impressoes), icone: <Eye size={16} strokeWidth={1.7} aria-hidden /> },
+              {
+                rotulo: "Cliques no link",
+                valor: diag.cliquesLink,
+                texto: int(diag.cliquesLink),
+                passagem: ctrConta != null ? `${porCem(ctrConta)} cliques a cada 100 aparições` : null,
+                icone: <MousePointerClick size={16} strokeWidth={1.7} aria-hidden />,
+              },
+              {
+                rotulo: "Conversas iniciadas",
+                valor: diag.conversas,
+                texto: int(diag.conversas),
+                passagem: diag.cliquesLink > 0 ? `${porCem(diag.conversas / diag.cliquesLink)} conversas a cada 100 cliques${suspeito ? " (rastreio suspeito)" : ""}` : null,
+                icone: <MessageCircle size={16} strokeWidth={1.7} aria-hidden />,
+              },
+            ]}
+          />
+          {custoMil != null && <NxNota>{fmtBRL(custoMil)} a cada mil aparições. A mesma pessoa pode ver o anúncio mais de uma vez.</NxNota>}
+        </NxCard>
       </div>
 
-      <details className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+      <div className="nx-grade nx-grade--2">
+        <OndeFoiAVerba d={diag} />
+        <OQueFazer d={diag} aoVerPlano={abrirPlano} />
+      </div>
+
+      <NxComoCalcula titulo="Como estes números são calculados">
+        <p>
+          Investimento em anúncios do Meta em {periodLabel}, direto da conta de anúncio: não é estimativa. Cada campanha é julgada pelo resultado
+          do objetivo dela (conversa, cadastro, clique ou aparições) e comparada só com campanhas do mesmo objetivo; com poucas campanhas no
+          objetivo, com a conta toda, pela conversa. O sync roda automaticamente todo dia.
+        </p>
+        {soConversa && (
+          <p>
+            <strong>Conversa iniciada</strong> (Direct ou WhatsApp) é o resultado que dá para medir aqui: esta conta não tem pixel nem formulário
+            instalado, então "leads" e "visitas à página" chegam zerados e ficam de fora.
+          </p>
+        )}
+        <p>
+          <b>Custo por conversa</b> conta só as campanhas de mensagem ({msg ? `${fmtBRL(msg.gasto)} ÷ ${int(msg.conversas)}` : "nenhuma no período"}):
+          dividir a verba de todos os objetivos pelas conversas deixaria o número inflado. Referência de mercado, sem estudo independente e por isso
+          sem cor: {BENCHMARKS.custoPorConversa.referencia}. <b>Aparições</b> são as vezes que o anúncio apareceu na tela (a mesma pessoa pode ver
+          mais de uma vez). <b>Cliques a cada 100 aparições</b> conta só clique no link, não curtida nem clique na foto. <b>Clique no link</b> pode
+          levar ao perfil do Instagram, ao WhatsApp ou ao site, conforme o destino da campanha: visita ao perfil faz o médico ser conhecido, mas não
+          é pedido de atendimento.
+        </p>
+        <p>
+          A variação dos cartões compara com {ddmm(antIni)} a {ddmm(antFim)} ({dias} dias), somando todas as campanhas, ativas ou não. Abaixo de 5% o
+          número aparece como estável.
+        </p>
+      </NxComoCalcula>
+
+      <details ref={recomendacoes} id="recomendacoes-anuncios" className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
         <summary className="min-h-[44px] cursor-pointer py-3 font-semibold">Ver recomendações e ações para os anúncios</summary>
         <div className="mt-3 space-y-4"><GestorAnunciosIA clientId={clientId} podeEditar={podeEditar} /><AgirHoje d={diag} clientId={clientId} /></div>
       </details>
 
+      <NxSectionHeader titulo="Detalhes" subtitulo="Comparação com o período anterior, qualidade dos leads, campanha por campanha e por objetivo." />
 
       <ComparativoConta clientId={clientId} start={start} end={end} />
 
@@ -451,37 +643,11 @@ function AnunciosPage() {
 
       <PorObjetivo d={diag} />
 
-      <Painel
-        icone={CalendarDays}
-        titulo="Investimento e conversas por dia"
-        resumo="Barra = gasto do dia · linha = conversas"
-        cor="var(--s2)"
-        ajuda={<>As barras são o gasto do dia; a linha, as conversas iniciadas. Dias em que a linha não acompanha a barra são os que merecem olhada.</>}
-      >
-        <div style={{ height: 260 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={serie}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="dia" tickFormatter={(d: string) => d.slice(5)} tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="esq" tick={{ fontSize: 11 }} width={36} />
-              <YAxis yAxisId="dir" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} width={28} />
-              <Tooltip
-                formatter={(value: number | string, name: string) => (name === "Gasto" ? fmtBRL(n(value)) : int(n(value)))}
-                labelFormatter={(d: string) => new Date(d + "T12:00:00").toLocaleDateString("pt-BR")}
-              />
-              <Legend />
-              <Bar yAxisId="esq" dataKey="gasto" name="Gasto" fill="var(--accent)" />
-              <Line yAxisId="dir" type="monotone" dataKey="conversas" name="Conversas" stroke="var(--good)" dot={false} strokeWidth={2} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </Painel>
-
       <ListaLimitacoes itens={limitacoes} />
 
       <MetodologiaAnuncios d={diag} />
 
-      <p className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--muted)" }}>
+      <p className="flex items-center gap-1.5 text-xs font-medium" style={{ color: "var(--muted)" }}>
         <Megaphone size={12} aria-hidden /> Referências de mercado só pintam de cor quando a fonte tem metodologia publicada.
       </p>
     </div>

@@ -15,6 +15,8 @@ import {
   Trophy,
 } from "lucide-react";
 import { Painel, Selo } from "@/components/visual";
+import { NxKpi } from "@/components/nx";
+import "@/styles/nexo-anuncios.css";
 import { useClientRole } from "@/hooks/use-client-role";
 import { getPostsForAnalytics } from "@/lib/client-data";
 import { resolveDateRange } from "@/lib/date-range";
@@ -247,7 +249,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
     setPartial(false);
   }
   return (
-    <div className="creative-workspace space-y-6">
+    <div className="creative-workspace nexo-mkt">
       <header className="creative-heading">
         <div>
           <span className="creative-eyebrow">
@@ -334,6 +336,20 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
         <p role="alert" className="creative-notice">
           {mensagemDeErroAcao(action.error)}
         </p>
+      )}
+      {!!w && (
+        <section aria-label="Resumo da Inteligência Criativa" className="nx-grade nx-grade--4">
+          <NxKpi i={0} icone={<Trophy size={17} strokeWidth={1.7} aria-hidden />} rotulo="Publicações no ranking" valor={rankings.length.toLocaleString("pt-BR")} nota="Carrosséis e Reels do período" />
+          <NxKpi i={1} icone={<Layers size={17} strokeWidth={1.7} aria-hidden />} rotulo="Análises concluídas" valor={w.analyses.length.toLocaleString("pt-BR")} nota="Evidência por slide e cena" />
+          <NxKpi
+            i={2}
+            icone={<Activity size={17} strokeWidth={1.7} aria-hidden />}
+            rotulo="Na fila agora"
+            valor={w.jobs.filter((j) => ["queued", "running", "retry"].includes(j.status)).length.toLocaleString("pt-BR")}
+            nota={healthy ? "Processador ativo" : "Processador sem sinal recente"}
+          />
+          <NxKpi i={3} icone={<ShieldCheck size={17} strokeWidth={1.7} aria-hidden />} rotulo="Estruturas salvas" valor={w.structures.length.toLocaleString("pt-BR")} nota="Biblioteca privada da clínica" />
+        </section>
       )}
       <nav
         className="creative-tabs"
