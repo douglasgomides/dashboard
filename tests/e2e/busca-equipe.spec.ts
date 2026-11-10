@@ -4,6 +4,7 @@ import {
   REGISTRO_DE_TELAS,
   buscarTelasEquipe,
   indiceDaBusca,
+  linkDaTela,
 } from "../../src/lib/registro-de-telas";
 
 // E2e da busca da equipe (Phase 3, 03-05). O webServer do Playwright roda npm run build antes: tudo aqui é o build de
@@ -266,4 +267,108 @@ test.describe("admin: busca da equipe", () => {
     expect(lado).toBe(false);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   });
+});
+
+// D-03, propriedade abrindo cada tela: o estrategista que não é admin abre de fato tudo o que a busca dele mostra.
+// Se uma tela falhar aqui, o defeito é de classificação: a linha ganha somenteAdmin no registro, nunca uma guarda nova (D-07).
+test.describe("estrategista: só acha o que abre", () => {
+  const ESTRATEGISTA = { isAdmin: false, papel: "strategist" as const };
+  // /pacientes quebra com o Supabase falso (lista "agendaram" ausente na resposta vazia; linha de base do 03-01, routes
+  // /pacientes 1280). Ali a página de erro é do fixture, não do acesso: o pathname e a ausência de "bloqueada" continuam
+  // conferidos.
+  const QUEBRA_COM_O_SUPABASE_FALSO = new Set(["/_authenticated/$clientId/pacientes"]);
+
+  test("toda tela do índice do estrategista abre na própria rota, sem bloqueio", async ({ page, context }) => {
+    test.setTimeout(240_000);
+    await mockAccount(context, "strategist");
+    await ligarLog(context);
+    const posts = capturarPosts(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const indice = indiceDaBusca(ESTRATEGISTA);
+    expect(indice.length).toBeGreaterThan(0);
+    for (const linha of indice) {
+      const link = linkDaTela(linha, CID);
+      expect(link, `${linha.rota}: sem link`).not.toBeNull();
+      const caminho = link!.to.replace("$clientId", CID);
+      const url = caminho + (link!.search ? `?visao=${link!.search.visao}` : "");
+      await page.goto(url);
+      await page.waitForLoadState("load");
+      await page.waitForTimeout(800);
+      expect(new URL(page.url()).pathname.replace(/\/$/, "") || "/", `a rota ${url} levou a outra tela`).toBe(caminho);
+      if (!QUEBRA_COM_O_SUPABASE_FALSO.has(linha.rota))
+        await expect(page.getByText("Essa página não carregou"), `a rota ${url} mostrou a página de erro`).toHaveCount(0);
+      const bloqueadas = posts.filter((p) => p.corpo.origem === "bloqueada").map((p) => String(p.corpo.rota));
+      expect(bloqueadas, `a rota ${url} gravou origem bloqueada`).toEqual([]);
+    }
+
+    // Na mesma conta: a busca não acha /admin nem o SAP, e acha Pacientes.
+    await page.goto(`/${CID}`);
+    await expect(page.getByRole("heading", { name: "Resultados da clínica", exact: true })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Menu da equipe" })).toBeVisible();
+    const dialog = page.getByRole("dialog", { name: "Buscar tela" });
+    await expect
+      .poll(async () => {
+        if (await dialog.isVisible()) return true;
+        await page.keyboard.press("Control+k");
+        await page.waitForTimeout(250);
+        return dialog.isVisible();
+      })
+      .toBe(true);
+    const campo = dialog.getByRole("searchbox");
+    for (const termo of ["Caixa de entrada", "Todas as clínicas"]) {
+      await campo.fill(termo);
+      await expect(dialog.getByRole("status")).toBeVisible();
+      await expect(resultadosDe(dialog).locator(".nx-resultado-titulo").filter({ hasText: new RegExp(`^${termo}`) })).toHaveCount(0);
+      await expect(resultadosDe(dialog).locator('a[href^="/admin"], a[href^="/sap"]')).toHaveCount(0);
+    }
+    await campo.fill("Pacientes");
+    await expect(resultadosDe(dialog).getByRole("link", { name: /^Pacientes do período/ })).toBeVisible();
+    // Ver todas as telas do estrategista: nenhum link de /admin nem do SAP.
+    await campo.fill("");
+    await dialog.locator("details.nx-busca-todas summary").click();
+    await expect(dialog.locator("details.nx-busca-todas").getByRole("link")).toHaveCount(indice.length);
+    await expect(dialog.locator('details.nx-busca-todas a[href^="/admin"], details.nx-busca-todas a[href^="/sap"]')).toHaveCount(0);
+  });
+});
+
+// MENU-04 / D-05: as tiradas levam à tela certa, com o período.
+for (const perfil of ["viewer", "admin"] as const) {
+  test(`${perfil}: /marketing leva a /conteudo com o período e os atalhos de /ideias abrem a visão certa`, async ({ page, context }) => {
+    await mockAccount(context, perfil);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/${CID}/marketing?preset=7d`);
+    await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/conteudo`);
+    expect(new URL(page.url()).searchParams.get("preset")).toBe("7d");
+    await expect(page.getByText("Essa página não carregou")).toHaveCount(0);
+
+    await page.goto(`/${CID}/ideias?visao=semana`);
+    await expect(page.getByRole("region", { name: "Planejador da semana", exact: true })).toBeVisible();
+    await page.goto(`/${CID}/ideias?visao=ideias`);
+    await expect(page.getByRole("heading", { level: 1, name: "Encontrar ideias", exact: true })).toBeVisible();
+    await expect(page.getByText("Essa página não carregou")).toHaveCount(0);
+  });
+}
+
+// MENU-07: as rotas de acesso abrem como antes.
+test("anônimo abre login, redefinir senha e conhecer na própria rota", async ({ page, context }) => {
+  await mockAccount(context, "anonymous");
+  for (const caminho of ["/login", "/reset-password", "/conhecer"]) {
+    await page.goto(caminho);
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(500);
+    expect(new URL(page.url()).pathname, caminho).toBe(caminho);
+    await expect(page.getByText("Essa página não carregou")).toHaveCount(0);
+    await expect(page.locator("body")).toContainText(/\S{3}/);
+  }
+});
+
+test("admin abre primeiro acesso, sem acesso e autorizar aplicativo sem guarda nova", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  for (const caminho of ["/bem-vindo", "/sem-acesso", "/oauth/consent"]) {
+    await page.goto(caminho);
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(800);
+    expect(new URL(page.url()).pathname, `${caminho} levou a outra tela`).toBe(caminho);
+    await expect(page.getByText("Essa página não carregou")).toHaveCount(0);
+  }
 });
