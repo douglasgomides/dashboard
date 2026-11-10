@@ -248,16 +248,17 @@ test("SAP: overview links to the same tasks and programme, including the restore
   await expect(page).toHaveURL(new RegExp(`/sap/${CID}/agentes`));
 });
 
-test("theme preference stays synchronized between the desktop controls and mobile menu", async ({
-  page,
-  context,
-}) => {
+// 03-04 (UI-SPEC D8, D-10): o Nexo é sempre claro e não oferece mais o controle Aparência, nem ao médico. O hook de tema
+// continua aplicando o valor salvo no html porque o SAP usa o data-theme global. O sempre claro com tema escuro salvo é
+// conferido em nexo-visual.spec.ts (03-03).
+test("a casca do Nexo não oferece mais o controle Aparência", async ({ page, context }) => {
   await mockAccount(context, "viewer");
+  await context.addInitScript(() => localStorage.setItem("dc:tema", "dark"));
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`/${CID}/ideias`);
-  await page
-    .getByRole("group", { name: "Aparência" })
-    .getByRole("button", { name: "Escuro", exact: true })
-    .click();
+  const barra = page.locator('aside[aria-label="Menu principal"]');
+  await expect(barra.getByRole("navigation", { name: "Áreas do Nexo" })).toBeVisible();
+  await expect(barra.getByRole("group", { name: "Aparência" })).toHaveCount(0);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.setViewportSize({ width: 375, height: 900 });
   await page
@@ -265,18 +266,9 @@ test("theme preference stays synchronized between the desktop controls and mobil
     .getByRole("button", { name: "Menu", exact: true })
     .click();
   const menu = page.getByRole("dialog", { name: "Navegar no Nexo" });
-  await expect(
-    menu.getByRole("button", { name: "Escuro", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
-  await menu.getByRole("button", { name: "Claro", exact: true }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await page.keyboard.press("Escape");
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await expect(
-    page
-      .getByRole("group", { name: "Aparência" })
-      .getByRole("button", { name: "Claro", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("group", { name: "Aparência" })).toHaveCount(0);
+  await expect(menu.getByRole("button", { name: "Escuro", exact: true })).toHaveCount(0);
 });
 
 test("admin mobile: grouped navigation retains all tools and closes after choosing a destination", async ({

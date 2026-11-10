@@ -1,0 +1,175 @@
+/* Diálogo "Buscar tela" da equipe (Phase 3, 03-05; UI-SPEC §Busca de telas e §Chips).
+   Todo seletor começa por .app.product-workspace:not(.sap-workspace) (Pitfall 5: nada vaza para o SAP) e só usa var()
+   (V9: nenhum hex; scripts/test-nexo-system-css.ts varre os nexo-*.css). Nada anima ao digitar nem ao abrir um resultado. */
+
+/* O diálogo rola por dentro (altura máxima 85 dvh) e nunca de lado. */
+.app.product-workspace:not(.sap-workspace) .workspace-dialog:has(.nx-busca) {
+  max-height: 85dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.app.product-workspace:not(.sap-workspace) .nx-busca {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-busca .workspace-search {
+  font-size: 16px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-busca-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  /* Respiro de 32 px entre o campo e o primeiro resultado (8 do gap + 24 aqui). */
+  margin-top: 24px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-busca-status,
+.app.product-workspace:not(.sap-workspace) .nx-busca-nota,
+.app.product-workspace:not(.sap-workspace) .nx-busca-erro {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-busca-erro {
+  color: var(--text-2);
+}
+
+/* Linhas de resultado: 56 px no mínimo, padding 12, raio 12, hover --b6, foco com anel 2 px --b1. */
+.app.product-workspace:not(.sap-workspace) .nx-busca-resultados {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-busca-resultados:empty {
+  display: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-resultado {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 12px;
+  color: var(--text);
+  text-decoration: none;
+  background: transparent;
+}
+.app.product-workspace:not(.sap-workspace) .nx-resultado:hover {
+  background: var(--b6);
+}
+.app.product-workspace:not(.sap-workspace) .nx-resultado:focus-visible {
+  background: var(--b6);
+  outline: 2px solid var(--b1);
+  outline-offset: -2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-resultado-icone {
+  flex: none;
+  color: var(--text-2);
+}
+.app.product-workspace:not(.sap-workspace) .nx-resultado-texto {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-resultado-titulo {
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-resultado-apoio {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted-ink);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-resultado-chips {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-resultado-seta {
+  flex: none;
+  color: var(--muted-ink);
+}
+
+/* Chips: 14/20 500, altura 28, padding 4 8, raio 6, fundo --field, texto --text-2, borda tracejada --muted-soft. */
+.app.product-workspace:not(.sap-workspace) .nx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 4px 8px;
+  border: 1px dashed var(--muted-soft);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  color: var(--text-2);
+  background: var(--field);
+}
+.app.product-workspace:not(.sap-workspace) .nx-chip svg {
+  flex: none;
+}
+
+/* Ver todas as telas: details fechado, um h3 por área antiga. */
+.app.product-workspace:not(.sap-workspace) .nx-busca-todas {
+  min-width: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-busca-todas > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: var(--b1);
+  cursor: pointer;
+}
+.app.product-workspace:not(.sap-workspace) .nx-busca-todas > summary:hover {
+  background: var(--b6);
+}
+.app.product-workspace:not(.sap-workspace) .nx-busca-todas > summary:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: -2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-busca-grupo {
+  margin-top: 16px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-busca-grupo > h3 {
+  margin: 0 0 4px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--muted-ink);
+}
+
+/* Estado vazio: o bloco ws-empty já existe; aqui só a cor do ícone e o texto sem quebrar de lado. */
+.app.product-workspace:not(.sap-workspace) .nx-busca-vazia {
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-busca-vazia .ws-empty-icon {
+  color: var(--b1);
+}

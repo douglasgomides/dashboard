@@ -1,9 +1,9 @@
 /* Visual de "databoard": cartões brancos arredondados, número grande e leve, variação em verde/vermelho.
    Referência: telas de produto do Databox. Só estrutura e cor; usa os tokens do Nexo. */
 .dbx { --dbx-ok: #138a52; --dbx-ok-bg: #e2f5ea; --dbx-bad: #c2362f; --dbx-bad-bg: #fde8e6; --dbx-a: var(--accent); --dbx-b: #6fa8c9; --dbx-c: #c98a1b; }
-:root[data-theme="dark"] .dbx { --dbx-ok: #4cc790; --dbx-ok-bg: #123a2a; --dbx-bad: #f08a84; --dbx-bad-bg: #40201e; --dbx-a: var(--accent); --dbx-b: #6fa8c9; --dbx-c: #f5bd5a; }
+:root[data-theme="dark"] .sap-workspace .dbx { --dbx-ok: #4cc790; --dbx-ok-bg: #123a2a; --dbx-bad: #f08a84; --dbx-bad-bg: #40201e; --dbx-a: var(--accent); --dbx-b: #6fa8c9; --dbx-c: #f5bd5a; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .dbx { --dbx-ok: #4cc790; --dbx-ok-bg: #123a2a; --dbx-bad: #f08a84; --dbx-bad-bg: #40201e; --dbx-a: var(--accent); --dbx-b: #6fa8c9; --dbx-c: #f5bd5a; }
+  :root:not([data-theme="light"]) .sap-workspace .dbx { --dbx-ok: #4cc790; --dbx-ok-bg: #123a2a; --dbx-bad: #f08a84; --dbx-bad-bg: #40201e; --dbx-a: var(--accent); --dbx-b: #6fa8c9; --dbx-c: #f5bd5a; }
 }
 .dbx-grid { display: grid; gap: 16px; }
 .dbx-cards { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }

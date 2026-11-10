@@ -1,0 +1,425 @@
+/*
+ * Casca da equipe no Nexo (Phase 3, D-01; 03-UI-SPEC §Layout e interação, §Estados dos controles).
+ * 03-02: só a barra lateral da equipe no computador (marca N, campo Buscar tela, Menu da equipe, subtelas, rodapé).
+ * O 03-04 acrescenta aqui o cabeçalho do celular, a folha Menu e o bloco do usuário.
+ *
+ * Regras deste arquivo:
+ * - só var(): nenhum valor de cor solto (V9); os tokens moram em nexo-system.css;
+ * - todo seletor começa por .app.product-workspace:not(.sap-workspace): vence o CSS de rota carregado depois por chunk
+ *   (Pitfall 5) e não toca no SAP;
+ * - nenhum texto abaixo de 14 px; nada anima aqui (troca de item do menu não anima).
+ * Moldura, largura da coluna e posição da barra são do 03-03 (nexo-system.css).
+ */
+
+/* Barra: sem fundo próprio (fica sobre a moldura); o espaçamento entre blocos é das margens abaixo. */
+.app.product-workspace:not(.sap-workspace) > aside.nx-barra {
+  background: transparent;
+  color: var(--text);
+  gap: 0;
+  font-size: 16px;
+}
+
+/* Topo: marca N + Nexo e o botão de recolher (44 x 44). */
+.app.product-workspace:not(.sap-workspace) .nx-barra-topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 22px 10px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-marca {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-marca-n {
+  flex: none;
+  width: 28px;
+  height: 32px;
+  background: linear-gradient(180deg, var(--b1), var(--b2));
+  clip-path: polygon(0 0, 36% 0, 36% 42%, 74% 0, 100% 0, 100% 100%, 64% 100%, 36% 60%, 36% 100%, 0 100%);
+}
+.app.product-workspace:not(.sap-workspace) .nx-marca-nome {
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 36px;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-recolher {
+  margin-left: auto;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-ink);
+  cursor: pointer;
+}
+.app.product-workspace:not(.sap-workspace) .nx-recolher:hover {
+  background: color-mix(in srgb, var(--white) 60%, transparent);
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-recolher:active {
+  background: var(--b5);
+}
+.app.product-workspace:not(.sap-workspace) .nx-recolher:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: -2px;
+}
+
+/* Campo "Buscar tela": abre o diálogo da BuscaDeTelas (03-01). */
+.app.product-workspace:not(.sap-workspace) .nx-buscar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0 0 12px;
+  padding: 0 12px;
+  border: 1px solid var(--control-border);
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--muted-ink);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  text-align: left;
+  cursor: pointer;
+}
+.app.product-workspace:not(.sap-workspace) .nx-buscar svg {
+  flex: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-buscar-texto {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app.product-workspace:not(.sap-workspace) .nx-buscar kbd {
+  flex: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted-ink);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-buscar:hover {
+  background: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .nx-buscar:active {
+  background: var(--b5);
+}
+.app.product-workspace:not(.sap-workspace) .nx-buscar:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: 3px;
+}
+
+/* Menu da equipe: itens de 46 px, gap 2 (da prancha), item atual em pílula degradê com texto e ícone brancos. */
+.app.product-workspace:not(.sap-workspace) .nx-menu ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  text-decoration: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-menu-item svg {
+  flex: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-menu-rotulo {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app.product-workspace:not(.sap-workspace) .nx-menu-item:not([data-on]):hover {
+  background: color-mix(in srgb, var(--white) 60%, transparent);
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-menu-item:not([data-on]):active {
+  background: var(--b5);
+}
+.app.product-workspace:not(.sap-workspace) .nx-menu-item[data-on] {
+  background: var(--grad-brand);
+  color: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .nx-menu-item:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: -2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-menu-seta {
+  margin-left: auto;
+}
+
+/* Subtelas do item atual: recuo que alinha o texto com o do item (14 + 20 + 12 = 46) e traço de 1 px à esquerda. */
+.app.product-workspace:not(.sap-workspace) .nx-subtelas ul {
+  margin: 2px 0 6px 24px;
+  padding-left: 9px;
+  border-left: 1px solid var(--line-2);
+}
+.app.product-workspace:not(.sap-workspace) .nx-subtela {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  color: var(--text-2);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  text-decoration: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-menu--folha .nx-subtela {
+  min-height: 48px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-subtela:hover {
+  background: color-mix(in srgb, var(--white) 60%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-subtela:active {
+  background: var(--b5);
+}
+.app.product-workspace:not(.sap-workspace) .nx-subtela[aria-current="page"] {
+  color: var(--b1);
+  font-weight: 500;
+}
+.app.product-workspace:not(.sap-workspace) .nx-subtela:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: -2px;
+}
+
+/* Separador e rodapé da barra. */
+.app.product-workspace:not(.sap-workspace) .nx-sep {
+  margin: 12px 8px;
+  border: 0;
+  border-top: 1px solid var(--line-2);
+}
+.app.product-workspace:not(.sap-workspace) .nx-rodape {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: auto;
+  color: var(--muted-ink);
+  font-size: 14px;
+  line-height: 20px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-rodape > a,
+.app.product-workspace:not(.sap-workspace) .nx-rodape > button {
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 24px;
+  text-align: left;
+  text-decoration: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-rodape > a:hover,
+.app.product-workspace:not(.sap-workspace) .nx-rodape > button:hover {
+  background: color-mix(in srgb, var(--white) 60%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-rodape > a:focus-visible,
+.app.product-workspace:not(.sap-workspace) .nx-rodape > button:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: -2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-rodape > span {
+  padding: 4px 14px 0;
+}
+
+/* Barra recolhida: só ícones centralizados de 48 x 48, com o rótulo em sr-only e title no link. */
+.app.product-workspace:not(.sap-workspace).recolhida .nx-barra-topo {
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 0 16px;
+}
+.app.product-workspace:not(.sap-workspace).recolhida .nx-recolher {
+  margin-left: 0;
+}
+/* Mesmo comportamento do .so-aberta de hoje (a regra daqui tem especificidade maior e o esconderia de volta). */
+.app.product-workspace:not(.sap-workspace).recolhida .nx-sep,
+.app.product-workspace:not(.sap-workspace).recolhida .nx-rodape {
+  display: none;
+}
+.app.product-workspace:not(.sap-workspace).recolhida .nx-buscar {
+  justify-content: center;
+  width: 48px;
+  min-height: 48px;
+  margin: 0 auto 12px;
+  padding: 0;
+}
+.app.product-workspace:not(.sap-workspace).recolhida .nx-menu-item {
+  justify-content: center;
+  width: 48px;
+  min-height: 48px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+/* --- 03-04: bloco do usuário no rodapé da barra (UI-SPEC §Avatares, §Computador item 5) --- */
+.app.product-workspace:not(.sap-workspace) .nx-usuario {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding: 12px 10px 4px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-avatar {
+  display: block;
+  flex: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-usuario-texto {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-usuario-texto b {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-usuario-texto span {
+  color: var(--muted-ink);
+  font-size: 14px;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- 03-04: cabeçalho do celular da equipe (só os filhos do .mhead; fundo, borda e sem desfoque são do 03-03) --- */
+/* A linha tem 56 px: a margem negativa anula o padding de cima do .mhead de styles.css. */
+.app.product-workspace:not(.sap-workspace) .mhead-linha.nx-mhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 56px;
+  min-height: 56px;
+  margin-top: -8px;
+  padding: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-tile {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--grad-tile);
+  color: var(--white);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+}
+/* O nome encolhe e trunca antes de Buscar tela e Menu perderem o texto. */
+.app.product-workspace:not(.sap-workspace) .nx-mhead-nome {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mhead-buscar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--b4);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--b1);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mhead-buscar:hover {
+  background: var(--b6);
+}
+.app.product-workspace:not(.sap-workspace) .nx-mhead-buscar:active {
+  background: var(--b5);
+}
+.app.product-workspace:not(.sap-workspace) .nx-mhead-buscar:focus-visible,
+.app.product-workspace:not(.sap-workspace) .nx-mhead-menu:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: 2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mhead-menu {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-mhead-menu:hover {
+  background: var(--field);
+}
+/* Período e frescor seguem abaixo do cabeçalho, nas telas que usam. */
+.app.product-workspace:not(.sap-workspace) .nx-mhead-periodo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 0 8px;
+}
+
+/* --- 03-04: folha Menu da equipe (UI-SPEC §Celular) --- */
+.app.product-workspace:not(.sap-workspace) .nx-menu--folha .nx-menu-item {
+  min-height: 56px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-menu--folha .nx-menu-rotulo {
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-menu--folha .nx-subtelas ul {
+  margin-left: 24px;
+}
+.app.product-workspace:not(.sap-workspace) .workspace-dialog .nx-sep {
+  margin: 8px 0;
+}
+.app.product-workspace:not(.sap-workspace) .workspace-dialog .mais-item {
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 24px;
+}
