@@ -80,7 +80,7 @@ test("clicar Marketing abre a primeira tela da seção com o período e mostra a
   await expect.poll(() => posts.length).toBeGreaterThan(antes);
   const ultimo = posts[posts.length - 1];
   expect(ultimo.origem).toBe("menu");
-  expect(ultimo.rota).toBe("/_authenticated/$clientId/conteudo");
+  expect(ultimo.rota).toBe(marketing.primeira.rota);
 });
 
 for (const [nome, perfil, conta] of [["admin", ADMIN, "admin"], ["estrategista", ESTRATEGISTA, "strategist"]] as const) {
