@@ -1,17 +1,17 @@
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { LEGENDA } from "@/components/grafico";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Bar, ReferenceLine, Legend } from "recharts";
 import { getClientFontes, getMonthlyMetrics, getPostsForAnalytics } from "@/lib/client-data";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { analyzeFollowers, analyzeGrowth, analyzeFormatsAndTemas, fmtDiaBR, type GroupStat } from "@/lib/hub-conteudo";
-import { Painel, Kpi, Selo, BarraFina, Ajuda, IconeFormato, COR_FORMATO } from "@/components/visual";
-import { Users, UserPlus, UserMinus, Scale, TrendingUp, Target, CalendarCheck, LineChart as LineIcon, Trophy, Layers, Tag, Bookmark, FileText, AlertTriangle, Info } from "lucide-react";
+import { IconeFormato } from "@/components/visual";
+import { Users, UserPlus, UserMinus, Scale, TrendingUp, Target, Trophy, Layers, Tag, CalendarDays, LineChart as LineIcon } from "lucide-react";
 import { Carregando, ErroCarga, SemFonte, SEM_INSTAGRAM } from "@/components/sem-fonte";
 import { SyncButton } from "@/components/sync-button";
 import { fmtFracao, MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { SeguidoresSemana } from "@/components/seguidores-impulsionados";
+import { NxCard, NxKpi, NxTag } from "@/components/nx";
+import { IgCabecalho, IgLeitura, IgNota, IgNotas, IgMetodo, IgLinhaSeguidores, IgColunasSaldo, type IgItemLeitura } from "@/components/nx/instagram";
 
 export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
   component: ConteudoPage,
@@ -19,45 +19,66 @@ export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 const fmtN = (n: number) => Math.round(n).toLocaleString("pt-BR");
+const ic = (Icon: typeof Users) => <Icon size={17} strokeWidth={1.7} aria-hidden />;
+const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
-function TabelaGrupo({ titulo, sub, rows: todas, col, icone }: { titulo: string; sub: string; rows: GroupStat[]; col: string; icone: typeof Layers }) {
-  // Só disputa o "1º" quem tem a amostra mínima do painel (8 posts): um post isolado, talvez impulsionado,
-  // não vira o melhor pilar. Os grupos menores vêm depois, marcados como amostra pequena.
-  const comAmostra = (r: GroupStat) => r.count >= MIN_POSTS_CONCLUSAO && r.key !== "não classificado";
+// Só disputa o "1º" quem tem a amostra mínima do painel (8 posts): um post isolado, talvez impulsionado,
+// não vira o melhor pilar. Os grupos menores vêm depois, marcados como amostra pequena.
+const comAmostra = (r: GroupStat) => r.count >= MIN_POSTS_CONCLUSAO && r.key !== "não classificado";
+function ordenarGrupos(todas: GroupStat[]) {
   const rows = [...todas.filter(comAmostra), ...todas.filter((r) => !comAmostra(r))];
+  return { rows, melhor: rows.find(comAmostra) ?? null };
+}
+
+function TabelaGrupo({ titulo, sub, rows: todas, col, icone, formato }: { titulo: string; sub: string; rows: GroupStat[]; col: string; icone: typeof Layers; formato?: boolean }) {
+  const { rows, melhor } = ordenarGrupos(todas);
   const max = Math.max(1, ...rows.map((r) => r.reachMedian));
-  const melhor = rows.find(comAmostra)?.key ?? null;
   return (
-    <Painel icone={icone} titulo={titulo} resumo={sub}>
+    <NxCard
+      icone={ic(icone)}
+      titulo={titulo}
+      subtitulo={sub}
+      acao={<IgMetodo rotulo={`Como ler: ${titulo}`}>A barra é o alcance mediano por post (a mediana não deixa um post viral puxar o número). Só disputa o 1º lugar o grupo com {MIN_POSTS_CONCLUSAO} posts ou mais; os menores aparecem depois, marcados como amostra pequena.</IgMetodo>}
+    >
       {rows.length === 0 ? (
-        <div className="flex items-start gap-2 text-xs" style={{ color: "var(--text-dim)" }}>
-          <span>Sem {col.toLowerCase()} informado neste período.</span>
-          <Ajuda>Nenhum post do período tem {col.toLowerCase()} informado. A equipe pode classificar na aba Posts; quando a classificação por IA estiver ligada no servidor, ela preenche isso nas próximas atualizações.</Ajuda>
-        </div>
+        <IgNota detalhe={<>Nenhum post do período tem {col.toLowerCase()} informado. A equipe pode classificar na aba Posts; quando a classificação por IA estiver ligada no servidor, ela preenche isso nas próximas atualizações.</>}>
+          Sem {col.toLowerCase()} informado neste período.
+        </IgNota>
       ) : (
-        <div className="grid gap-3">
-          {rows.slice(0, 12).map((r) => (
-            <div key={r.key}>
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
-                  {titulo.includes("formato") && <IconeFormato formato={r.key} />}
+        <ul className="ig-barras">
+          {rows.slice(0, 12).map((r, i) => (
+            <li key={r.key} className="nx-hb">
+              <div className="nx-hb__linha">
+                <span className="ig-barras__rotulo">
+                  {formato && <IconeFormato formato={r.key} />}
                   <span className="truncate" title={String(r.label ?? "")}>{r.label}</span>
-                  {r.key === melhor && <Selo cor="var(--good-text)" titulo={`Maior alcance mediano entre os grupos com ${MIN_POSTS_CONCLUSAO} posts ou mais`}><Trophy size={11} aria-hidden /> 1º</Selo>}
-                  {!comAmostra(r) && r.key !== "não classificado" && <Selo titulo={`Menos de ${MIN_POSTS_CONCLUSAO} posts: um post fora da curva decide sozinho`}>amostra pequena</Selo>}
+                  {r.key === melhor?.key && (
+                    <NxTag tom="up" titulo={`Maior alcance mediano entre os grupos com ${MIN_POSTS_CONCLUSAO} posts ou mais`} icone={<Trophy size={11} aria-hidden />}>
+                      1º
+                    </NxTag>
+                  )}
+                  {!comAmostra(r) && r.key !== "não classificado" && (
+                    <NxTag tom="g" titulo={`Menos de ${MIN_POSTS_CONCLUSAO} posts: um post fora da curva decide sozinho`}>
+                      amostra pequena
+                    </NxTag>
+                  )}
                 </span>
-                <span className="shrink-0 text-sm font-semibold tabular-nums" title="Alcance mediano">{fmtN(r.reachMedian)}</span>
+                <em title="Alcance mediano">
+                  {fmtN(r.reachMedian)} <small>· {plural(r.count, "post", "posts")}</small>
+                </em>
               </div>
-              <BarraFina valor={r.reachMedian} max={max} cor={titulo.includes("formato") ? COR_FORMATO[r.key] ?? "var(--accent)" : "var(--accent)"} />
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                <Selo titulo="Posts no período"><FileText size={11} aria-hidden /> {r.count} posts</Selo>
-                <Selo titulo="Alcance médio"><Target size={11} aria-hidden /> média {fmtN(r.reachMean)}</Selo>
-                <Selo titulo="Salvos médios por post" cor="var(--s7)"><Bookmark size={11} aria-hidden /> {r.savedMean.toLocaleString("pt-BR")} salvos</Selo>
+              <div className="nx-trk" aria-hidden>
+                <i style={{ width: `${Math.max(3, (r.reachMedian / max) * 100)}%`, ["--i" as string]: i } as CSSProperties} />
+                <u />
               </div>
-            </div>
+              <div className="ig-grupo__extra">
+                média {fmtN(r.reachMean)} · {r.savedMean.toLocaleString("pt-BR")} salvos por post
+              </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
-    </Painel>
+    </NxCard>
   );
 }
 
@@ -83,188 +104,185 @@ function ConteudoPage() {
   const seg = useMemo(() => (metrics.data ? analyzeFollowers(metrics.data, start, end) : null), [metrics.data, start, end]);
   const cresc = useMemo(() => (metrics.data ? analyzeGrowth(metrics.data, start, end) : null), [metrics.data, start, end]);
   const fm = useMemo(() => (posts.data ? analyzeFormatsAndTemas(posts.data) : null), [posts.data]);
+  const serie = useMemo(() => (seg ? { datas: seg.points.map((p) => p.date), valores: seg.points.map((p) => p.followers) } : null), [seg]);
 
   const head = (
-    <div className="hpagehead">
-      <h2>Conteúdo</h2>
-      <div className="flex items-center gap-2">
-        <Users size={14} aria-hidden style={{ color: "var(--accent)" }} />
-        <span>{periodLabel}</span>
-        <Ajuda>Seguidores, projeção de 30 dias e o que o conteúdo do período entregou. Período: {periodLabel}.</Ajuda>
-      </div>
-      {temIg && (
-        <div className="flex justify-end" style={{ marginTop: 8 }}>
-          <SyncButton clientId={clientId} alvo="posts" />
-        </div>
-      )}
-    </div>
+    <IgCabecalho
+      titulo="O perfil está crescendo, e o que alcança mais gente?"
+      pergunta="Seguidores do período, a tendência dos próximos 30 dias e o formato e o tema que mais alcançam."
+      periodo={
+        <>
+          <CalendarDays size={15} aria-hidden /> {periodLabel}
+        </>
+      }
+      metodo={<>Seguidores, projeção de 30 dias e o que o conteúdo do período entregou. Período: {periodLabel}.</>}
+      acao={temIg ? <SyncButton clientId={clientId} alvo="posts" /> : undefined}
+    />
   );
 
-  if (fontes.isLoading) return <div>{head}<Carregando /></div>;
-  if (fontes.error) return <div>{head}<ErroCarga texto="Não consegui verificar as fontes deste cliente. Atualize a página." /></div>;
-  if (!temIg) {
-    return (
-      <div>
-        {head}
-        <SemFonte {...SEM_INSTAGRAM} />
-      </div>
-    );
-  }
-  if (metrics.isLoading || posts.isLoading) return <div>{head}<Carregando texto="Carregando conteúdo do período…" /></div>;
-  if (metrics.error || posts.error) return <div>{head}<ErroCarga texto="Falha ao ler as métricas do Instagram. Tente novamente em instantes." /></div>;
+  if (fontes.isLoading) return <div className="nexo-ig">{head}<Carregando /></div>;
+  if (fontes.error) return <div className="nexo-ig">{head}<ErroCarga texto="Não consegui verificar as fontes deste cliente. Atualize a página." /></div>;
+  if (!temIg) return <div className="nexo-ig">{head}<SemFonte {...SEM_INSTAGRAM} /></div>;
+  if (metrics.isLoading || posts.isLoading) return <div className="nexo-ig">{head}<Carregando texto="Carregando conteúdo do período…" /></div>;
+  if (metrics.error || posts.error) return <div className="nexo-ig">{head}<ErroCarga texto="Falha ao ler as métricas do Instagram. Tente novamente em instantes." /></div>;
 
-  const chartData: { date: string; Seguidores?: number; Projeção?: number }[] = [];
-  if (seg) {
-    for (const p of seg.points) chartData.push({ date: p.date, Seguidores: p.followers });
-    if (seg.projection.ok) {
-      chartData[chartData.length - 1].Projeção = chartData[chartData.length - 1].Seguidores;
-      chartData.push({ date: seg.projection.line[1].date, Projeção: seg.projection.line[1].followers });
-    }
+  const melhorTema = fm ? ordenarGrupos(fm.porTema).melhor : null;
+  const leitura: IgItemLeitura[] = [];
+  if (cresc && cresc.diasMedidos) {
+    leitura.push({
+      tom: cresc.liquido < 0 ? "atencao" : "bom",
+      titulo: `Saldo de ${cresc.liquido >= 0 ? "+" : "−"}${fmtN(Math.abs(cresc.liquido))} seguidores no período`,
+      texto: `Entraram ${fmtN(cresc.novos)} e saíram ${fmtN(cresc.saidas)}${cresc.taxaSaida != null ? ` (${fmtFracao(cresc.taxaSaida)} de quem entrou)` : ""}, em ${plural(cresc.diasMedidos, "dia medido", "dias medidos")}.`,
+    });
   }
+  if (fm?.melhorFormato) {
+    leitura.push({
+      tom: "bom",
+      titulo: `${fm.melhorFormato.label} alcança mais por post`,
+      texto: `${fmtN(fm.melhorFormato.reachMedian)} contas por post (mediana), em ${plural(fm.melhorFormato.count, "post", "posts")} de ${fm.melhorFormato.label} no período, com ${fm.melhorFormato.savedMean.toLocaleString("pt-BR")} salvamentos por post em média.`,
+      acao: `dê prioridade a ${fm.melhorFormato.label} na produção e confira de novo no próximo período.`,
+    });
+  }
+  if (melhorTema) {
+    leitura.push({
+      tom: "bom",
+      titulo: `“${melhorTema.label}” é o tema que mais alcança`,
+      texto: `${fmtN(melhorTema.reachMedian)} contas por post (mediana), em ${plural(melhorTema.count, "post", "posts")} do tema.`,
+    });
+  }
+  if (seg?.projection.ok) {
+    leitura.push({
+      tom: "neutro",
+      titulo: `No ritmo atual, cerca de ${fmtN(seg.projection.projected)} seguidores em ${fmtDiaBR(seg.projection.target)}`,
+      texto: `${seg.projection.slopePerDay >= 0 ? "+" : ""}${seg.projection.slopePerDay.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} por dia. É uma estimativa linear, não uma promessa.`,
+    });
+  }
+
+  const ultimo = seg && seg.points.length ? seg.points[seg.points.length - 1].followers : null;
 
   return (
-    <div>
+    <div className="nexo-ig">
       {head}
 
-      <div className="hgrid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-        <Kpi
-          icone={Users}
+      <section className="nx-grade nx-grade--4 ig-kpis" aria-label="Números do período">
+        <NxKpi
+          i={0}
+          icone={ic(Users)}
           rotulo="Seguidores hoje"
-          valor={seg && seg.points.length ? fmtN(seg.points[seg.points.length - 1].followers) : "sem dado"}
-          dica={seg?.lastDate ? `última coleta em ${fmtDiaBR(seg.lastDate)}` : "nenhuma coleta no período"}
+          valor={ultimo != null ? fmtN(ultimo) : "sem dado"}
+          nota={seg?.lastDate ? `última coleta em ${fmtDiaBR(seg.lastDate)}` : "nenhuma coleta no período"}
         />
-        <Kpi
-          icone={TrendingUp}
+        <NxKpi
+          i={1}
+          icone={ic(TrendingUp)}
           rotulo="Variação no período"
-          cor={seg?.delta != null && seg.delta < 0 ? "var(--crit)" : "var(--good-text)"}
-          valor={seg?.delta == null ? "sem dado" : `${seg.delta >= 0 ? "+" : "-"}${fmtN(Math.abs(seg.delta))}`}
-          dica={seg?.delta == null ? "precisa de 2 dias com contagem" : `entre ${fmtDiaBR(seg.firstDate!)} e ${fmtDiaBR(seg.lastDate!)}`}
+          valor={seg?.delta == null ? "sem dado" : `${seg.delta >= 0 ? "+" : "−"}${fmtN(Math.abs(seg.delta))}`}
+          nota={seg?.delta == null ? "precisa de 2 dias com contagem" : `entre ${fmtDiaBR(seg.firstDate!)} e ${fmtDiaBR(seg.lastDate!)}`}
         />
-        <Kpi
-          icone={Target}
+        <NxKpi
+          i={2}
+          icone={ic(Target)}
           rotulo="Projeção em 30 dias"
-          cor="var(--ai)"
           valor={seg?.projection.ok ? fmtN(seg.projection.projected) : "não projetada"}
-          dica={
+          nota={
             seg?.projection.ok
               ? `${seg.projection.slopePerDay >= 0 ? "+" : ""}${seg.projection.slopePerDay.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} por dia, até ${fmtDiaBR(seg.projection.target)}`
-              : "veja o motivo abaixo"
+              : "veja o motivo no gráfico"
           }
         />
-        <Kpi
-          icone={CalendarCheck}
-          rotulo="Dias com contagem"
-          cor="var(--s2)"
-          valor={seg ? `${seg.daysWithData} de ${seg.expectedDays}` : "-"}
-          dica={seg ? `${Math.round(seg.coverage * 100)}% do período (mínimo 60%)` : undefined}
+        <NxKpi
+          i={3}
+          icone={ic(Trophy)}
+          rotulo="Formato que mais alcança"
+          valor={fm?.melhorFormato ? fm.melhorFormato.label : "sem resposta"}
+          nota={fm?.melhorFormato ? `${fmtN(fm.melhorFormato.reachMedian)} contas por post (mediana)` : (fm?.melhorFormatoMotivo ?? "sem posts no período")}
         />
-      </div>
+      </section>
 
-      {cresc && cresc.days.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <Painel
-            icone={Scale}
-            titulo="Crescimento: bruto x líquido"
-            resumo="Novos − saíram = o que mudou no total"
-            ajuda={<>Bruto é o número que o Instagram mostra em "Seguidores" (novos no período). Líquido desconta quem deixou de seguir ou saiu do Instagram, e é o que de fato mudou no total. A Meta leva cerca de 2 dias para fechar um dia, então os 2 últimos dias ficam de fora das somas e aparecem no gráfico como "em fechamento".</>}
-          >
-            <div className="hgrid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", marginTop: 4 }}>
-              <Kpi
-                icone={UserPlus}
-                cor="var(--s3)"
-                rotulo="Novos seguidores (bruto)"
-                valor={cresc.diasMedidos ? `+${fmtN(cresc.novos)}` : "sem dado"}
-                dica="igual ao “Seguidores” do Instagram"
-              />
-              <Kpi
-                icone={UserMinus}
-                cor="var(--crit)"
-                rotulo="Deixaram de seguir"
-                valor={cresc.diasMedidos ? `-${fmtN(cresc.saidas)}` : "sem dado"}
-                dica={cresc.taxaSaida != null ? `${fmtFracao(cresc.taxaSaida)} de quem entrou` : "sem saídas medidas no período"}
-              />
-              <Kpi
-                icone={Scale}
-                cor={cresc.liquido < 0 ? "var(--crit)" : "var(--good-text)"}
-                rotulo="Líquido"
-                valor={cresc.diasMedidos ? `${cresc.liquido >= 0 ? "+" : "-"}${fmtN(Math.abs(cresc.liquido))}` : "sem dado"}
-                dica={cresc.diasMedidos ? `${cresc.diasMedidos} dia${cresc.diasMedidos === 1 ? "" : "s"} medido${cresc.diasMedidos === 1 ? "" : "s"}` : undefined}
-              />
-            </div>
-            <div className="grafico-caixa" style={{ height: 240, marginTop: 12 }}>
-              <ResponsiveContainer>
-                <ComposedChart data={cresc.days.map((d) => ({ date: d.date, Novos: d.novos, Saíram: d.saidas == null ? undefined : -d.saidas, Líquido: d.liquido ?? undefined, aberto: d.aberto }))} margin={{ top: 8, right: 12, bottom: 0, left: 0 }} stackOffset="sign">
-                  <CartesianGrid stroke="var(--grid)" vertical={false} />
-                  <XAxis dataKey="date" tickFormatter={fmtDiaBR} tick={{ fontSize: 11, fill: "var(--muted)" }} minTickGap={24} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 11, fill: "var(--muted)" }} width={44} tickFormatter={(v) => fmtN(v)} />
-                  <ReferenceLine y={0} stroke="var(--border)" />
-                  <Tooltip
-                    labelFormatter={(l, itens) => `${fmtDiaBR(String(l))}${itens?.[0]?.payload?.aberto ? " (em fechamento)" : ""}`}
-                    formatter={(v, nome) => [fmtN(Math.abs(Number(v))), nome]}
-                    contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
-                  />
-                  <Legend {...LEGENDA} />
-                  <Bar dataKey="Novos" stackId="a" fill="var(--s3)" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="Saíram" stackId="a" fill="var(--crit)" radius={[0, 0, 3, 3]} />
-                  <Line type="monotone" dataKey="Líquido" stroke="var(--accent)" strokeWidth={2} dot={cresc.days.length < 20} connectNulls />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {cresc.diasAbertos > 0 && (
-                <Selo cor="var(--warn)" titulo="A Meta ainda não fechou estes dias"><AlertTriangle size={11} aria-hidden /> {cresc.diasAbertos} dia{cresc.diasAbertos === 1 ? "" : "s"} em fechamento, fora das somas</Selo>
-              )}
-              {cresc.diasSemSaida > 0 && (
-                <Selo titulo="Dias com novos seguidores, mas sem a saída gravada"><Info size={11} aria-hidden /> {cresc.diasSemSaida} dia{cresc.diasSemSaida === 1 ? "" : "s"} sem saída medida, fora das somas</Selo>
-              )}
-              {cresc.diasSemGanhos > 0 && (
-                <Selo titulo="Dias sem o número de novos seguidores gravado"><Info size={11} aria-hidden /> {cresc.diasSemGanhos} dia{cresc.diasSemGanhos === 1 ? "" : "s"} sem ganhos medidos, fora das somas</Selo>
-              )}
-            </div>
-          </Painel>
-        </div>
-      )}
-
-      <div style={{ marginBottom: 16 }}>
-      <Painel icone={LineIcon} titulo="Evolução de seguidores" resumo="Linha cheia: medido. Tracejada: estimativa" ajuda={<>Linha contínua é o medido; tracejada é uma estimativa linear, não uma promessa.</>}>
-        {seg && seg.points.length >= 2 ? (
-          <div className="grafico-caixa" style={{ height: 260, marginTop: 10 }}>
-            <ResponsiveContainer>
-              <LineChart data={chartData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-                <CartesianGrid stroke="var(--grid)" vertical={false} />
-                <XAxis dataKey="date" tickFormatter={fmtDiaBR} tick={{ fontSize: 11, fill: "var(--muted)" }} minTickGap={24} interval="preserveStartEnd" />
-                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 11, fill: "var(--muted)" }} width={48} tickFormatter={(v) => fmtN(v)} />
-                <Tooltip
-                  labelFormatter={(l) => fmtDiaBR(String(l))}
-                  formatter={(v) => fmtN(Number(v))}
-                  contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
-                />
-                <Line type="monotone" dataKey="Seguidores" stroke="var(--accent)" strokeWidth={2} dot={seg.points.length < 15} connectNulls />
-                <Line type="linear" dataKey="Projeção" stroke="var(--accent)" strokeWidth={2} strokeDasharray="6 5" dot={false} connectNulls />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+      <NxCard
+        i={4}
+        id="evolucao-seguidores"
+        icone={ic(LineIcon)}
+        titulo="Evolução de seguidores"
+        subtitulo="Linha cheia: medido. Tracejada: estimativa"
+        acao={<IgMetodo rotulo="Como ler: Evolução de seguidores">Linha contínua é o medido; tracejada é uma estimativa linear, não uma promessa. O eixo começa perto do menor valor do período para a variação aparecer.</IgMetodo>}
+      >
+        {seg && serie && seg.points.length >= 2 ? (
+          <IgLinhaSeguidores
+            datas={serie.datas}
+            valores={serie.valores}
+            projecao={seg.projection.ok ? { data: seg.projection.line[1].date, valor: seg.projection.line[1].followers } : null}
+            formatarData={fmtDiaBR}
+            formatarValor={fmtN}
+            rotulo="Seguidores por dia"
+          />
         ) : (
           <p className="note" style={{ margin: 0 }}>
             Sem gráfico: {seg?.points.length ? "só 1 dia tem contagem de seguidores no período." : "nenhum dia do período tem contagem de seguidores."}
           </p>
         )}
-        {seg && !seg.projection.ok && (
-          <div className="mt-2 flex items-start gap-2 text-xs" style={{ color: "var(--text-dim)" }}>
-            <AlertTriangle size={14} aria-hidden className="mt-0.5 shrink-0" style={{ color: "var(--warn)" }} />
-            <span className="flex-1">{seg.projection.reason}</span>
-            <Ajuda>{seg.projection.reason} O total de seguidores é gravado todo dia. Os últimos 28 dias foram reconstruídos com o que a Meta informa de quem seguiu e deixou de seguir; o que for mais antigo que {seg.firstDate ? `${seg.firstDate.slice(8, 10)}/${seg.firstDate.slice(5, 7)}` : "a primeira coleta"} não existe, porque a Meta não guarda o total dos dias passados.</Ajuda>
-          </div>
+        {seg && (
+          <IgNotas>
+            <IgNota tom={seg.coverage < 0.6 ? "aviso" : "info"}>
+              {seg.daysWithData} de {seg.expectedDays} dias com contagem ({Math.round(seg.coverage * 100)}% do período, mínimo 60%)
+            </IgNota>
+            {!seg.projection.ok && (
+              <IgNota
+                tom="aviso"
+                detalhe={
+                  <>
+                    {seg.projection.reason} O total de seguidores é gravado todo dia. Os últimos 28 dias foram reconstruídos com o que a Meta informa de quem seguiu e deixou de seguir; o que for mais antigo que{" "}
+                    {seg.firstDate ? `${seg.firstDate.slice(8, 10)}/${seg.firstDate.slice(5, 7)}` : "a primeira coleta"} não existe, porque a Meta não guarda o total dos dias passados.
+                  </>
+                }
+              >
+                Projeção não calculada
+              </IgNota>
+            )}
+            {seg.projection.ok && seg.gaps.length > 0 && <IgNota tom="aviso">Há dias sem coleta no período: a estimativa usa só os dias com dado</IgNota>}
+          </IgNotas>
         )}
-        {seg && seg.projection.ok && seg.gaps.length > 0 && (
-          <div className="mt-2"><Selo cor="var(--warn)" titulo="A estimativa usa só os dias com dado"><AlertTriangle size={11} aria-hidden /> Há dias sem coleta no período</Selo></div>
-        )}
-      </Painel>
-      </div>
+      </NxCard>
 
-      <div style={{ marginBottom: 16 }}>
-        <SeguidoresSemana clientId={clientId} start={start} end={end} />
-      </div>
+      <IgLeitura i={5} itens={leitura} vazio="Ainda não há dado suficiente no período para uma leitura. Troque o período no cabeçalho ou confira a coleta." />
+
+      {cresc && cresc.days.length > 0 && (
+        <NxCard
+          icone={ic(Scale)}
+          titulo="Crescimento: bruto × líquido"
+          subtitulo="Novos − saíram = o que mudou no total"
+          acao={
+            <IgMetodo rotulo="Como ler: Crescimento bruto e líquido">
+              Bruto é o número que o Instagram mostra em "Seguidores" (novos no período). Líquido desconta quem deixou de seguir ou saiu do Instagram, e é o que de fato mudou no total. A Meta leva cerca de 2 dias para fechar um dia, então os 2 últimos dias ficam de fora das somas e aparecem no gráfico como "em fechamento".
+            </IgMetodo>
+          }
+        >
+          <div className="nx-grade nx-grade--3">
+            <NxKpi icone={ic(UserPlus)} rotulo="Novos seguidores (bruto)" valor={cresc.diasMedidos ? `+${fmtN(cresc.novos)}` : "sem dado"} nota="igual ao “Seguidores” do Instagram" />
+            <NxKpi icone={ic(UserMinus)} rotulo="Deixaram de seguir" valor={cresc.diasMedidos ? `−${fmtN(cresc.saidas)}` : "sem dado"} nota={cresc.taxaSaida != null ? `${fmtFracao(cresc.taxaSaida)} de quem entrou` : "sem saídas medidas no período"} />
+            <NxKpi
+              icone={ic(Scale)}
+              rotulo="Líquido"
+              valor={cresc.diasMedidos ? `${cresc.liquido >= 0 ? "+" : "−"}${fmtN(Math.abs(cresc.liquido))}` : "sem dado"}
+              nota={cresc.diasMedidos ? `${plural(cresc.diasMedidos, "dia medido", "dias medidos")}` : undefined}
+            />
+          </div>
+          <IgColunasSaldo
+            dias={cresc.days.map((d) => ({ data: d.date, cima: d.novos, baixo: d.saidas, aberto: d.aberto }))}
+            formatarData={fmtDiaBR}
+            rotulo="Novos seguidores e saídas por dia"
+          />
+          {(cresc.diasAbertos > 0 || cresc.diasSemSaida > 0 || cresc.diasSemGanhos > 0) && (
+            <IgNotas>
+              {cresc.diasAbertos > 0 && <IgNota tom="aviso">{plural(cresc.diasAbertos, "dia", "dias")} em fechamento, fora das somas</IgNota>}
+              {cresc.diasSemSaida > 0 && <IgNota>{plural(cresc.diasSemSaida, "dia", "dias")} sem saída medida, fora das somas</IgNota>}
+              {cresc.diasSemGanhos > 0 && <IgNota>{plural(cresc.diasSemGanhos, "dia", "dias")} sem ganhos medidos, fora das somas</IgNota>}
+            </IgNotas>
+          )}
+        </NxCard>
+      )}
+
+      <SeguidoresSemana clientId={clientId} start={start} end={end} />
 
       {fm && fm.total === 0 ? (
         <SemFonte
@@ -275,38 +293,9 @@ function ConteudoPage() {
       ) : (
         fm && (
           <>
-            <div style={{ marginBottom: 16 }}>
-              {fm.melhorFormato ? (
-                <Painel
-                  icone={Trophy}
-                  cor="var(--good-text)"
-                  destaque
-                  titulo={`${fm.melhorFormato.label} alcança mais por post`}
-                  resumo="Melhor formato por alcance"
-                  ajuda={<>Base: {fm.melhorFormato.count} posts de {fm.melhorFormato.label} no período, com média de {fm.melhorFormato.savedMean.toLocaleString("pt-BR")} salvamentos por post. Usamos a mediana para um post viral não puxar o número.</>}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <IconeFormato formato={fm.melhorFormato.key} size={20} />
-                    <span className="text-2xl font-semibold tabular-nums">{fmtN(fm.melhorFormato.reachMedian)}</span>
-                    <span className="text-xs" style={{ color: "var(--text-dim)" }}>contas, mediana por post</span>
-                    <Selo titulo="Posts na base"><FileText size={11} aria-hidden /> {fm.melhorFormato.count} posts</Selo>
-                    <Selo cor="var(--s7)" titulo="Salvamentos médios por post"><Bookmark size={11} aria-hidden /> {fm.melhorFormato.savedMean.toLocaleString("pt-BR")} salvos</Selo>
-                  </div>
-                </Painel>
-              ) : (
-                <Painel icone={Info} cor="var(--muted)" titulo="Melhor formato: ainda sem resposta" resumo="Melhor formato por alcance" ajuda={<>{fm.melhorFormatoMotivo}</>}>
-                  <p className="note" style={{ margin: 0 }}>{fm.melhorFormatoMotivo}</p>
-                </Painel>
-              )}
-            </div>
-            <div className="hgrid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(min(340px,100%),1fr))" }}>
-              <TabelaGrupo
-                titulo="Posts por formato"
-                sub={`${fm.total} posts no período`}
-                rows={fm.porFormato}
-                col="Formato"
-                icone={Layers}
-              />
+            {!fm.melhorFormato && <IgNota detalhe={fm.melhorFormatoMotivo}>Melhor formato: ainda sem resposta</IgNota>}
+            <div className="nx-grade nx-grade--2">
+              <TabelaGrupo titulo="Posts por formato" sub={`${fm.total} posts no período · alcance mediano por post`} rows={fm.porFormato} col="Formato" icone={Layers} formato />
               <TabelaGrupo
                 titulo="Posts por pilar / tema"
                 sub={`${fm.comTema} de ${fm.total} posts têm tema classificado${fm.comTema < fm.total ? " (classifique os demais na aba Posts)" : ""}`}

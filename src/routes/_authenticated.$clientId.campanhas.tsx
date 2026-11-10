@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, CalendarPlus, ChevronDown, Megaphone, ShieldAlert, Sparkles } from "lucide-react";
+import { BarChart3, CalendarCheck, CalendarDays, CalendarPlus, ChevronDown, Megaphone, MessageCircle, ShieldAlert, Sparkles, Wallet } from "lucide-react";
+import { NxCard, NxKpi, NxTag, NxHBar, NxListRow, NxSectionHeader } from "@/components/nx";
+import { NxTopo, NxNota, NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { supabase } from "@/integrations/supabase/client";
 import { getAcompanhamentos, getAdsDiagnosticoPorObjetivo, getClient, getPostsForAnalytics, salvarAcompanhamento } from "@/lib/client-data";
 import { useLeituraConversas } from "@/components/atendimento-resumo";
@@ -9,7 +11,7 @@ import { usePautas } from "@/components/planejador-conteudo";
 import { useClientRole } from "@/hooks/use-client-role";
 import { BotaoCopiar } from "@/components/botao-copiar";
 import { EstrategiasIA } from "@/components/estrategias-ia";
-import { Carregando, ResumoExecutivo } from "@/components/sem-fonte";
+import { Carregando } from "@/components/sem-fonte";
 import { resumirAtendimento } from "@/lib/conversa-leitura";
 import { datasDoMes, gastoPorDia, potencial, sugerirCampanhas, temaForteDosPosts, NOME_MES, type BaseCampanhas, type Campanha } from "@/lib/campanhas";
 import { formatoDe } from "@/lib/pauta";
@@ -45,9 +47,9 @@ function CartaoCampanha({ c, status, podeEditar, onStatus, onPauta, salvando, pa
   const [aberto, setAberto] = useState(false);
   const p = c.projecao;
   return (
-    <article className="flex flex-col rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)", borderLeft: `3px solid ${COR_TIPO[c.tipo]}`, opacity: status === "dispensada" ? 0.6 : 1 }}>
+    <article className="nx-camp flex flex-col rounded-xl border p-4" style={{ borderLeft: `4px solid ${COR_TIPO[c.tipo]}`, opacity: status === "dispensada" ? 0.6 : 1 }}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: COR_TIPO[c.tipo] }}>{ROTULO_TIPO[c.tipo]}</span>
+        <NxTag tom={c.tipo === "atendimento" ? "dn" : c.tipo === "ativacao" || c.tipo === "reativacao" ? "or" : "b"}>{ROTULO_TIPO[c.tipo]}</NxTag>
         {podeEditar ? (
           <select aria-label="Status da campanha" value={status} disabled={salvando} onChange={(e) => onStatus(e.target.value as StatusCamp)} autoComplete="off" className="min-h-[32px] rounded-md border px-1.5 text-xs" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
             {(Object.keys(ROTULO_STATUS) as StatusCamp[]).map((s) => <option key={s} value={s}>{ROTULO_STATUS[s]}</option>)}
@@ -56,8 +58,8 @@ function CartaoCampanha({ c, status, podeEditar, onStatus, onPauta, salvando, pa
           <span className="text-xs" style={{ color: "var(--muted)" }}>{ROTULO_STATUS[status]}</span>
         )}
       </div>
-      <h3 className="mt-1 text-[15px] font-semibold leading-snug" style={{ color: "var(--ink)" }}>{c.titulo}</h3>
-      <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--ink-2)" }}>{c.porque}</p>
+      <h3 className="mt-2 text-[17px] font-bold leading-snug" style={{ color: "var(--text)" }}>{c.titulo}</h3>
+      <p className="mt-1 text-sm font-medium leading-relaxed" style={{ color: "var(--text-2)" }}>{c.porque}</p>
 
       {c.faltaDado ? (
         <p className="mt-2 rounded-md p-2 text-xs" style={{ background: "var(--surface-2)", color: "var(--ink-2)" }}><b>Falta dado:</b> {c.faltaDado}</p>
@@ -69,9 +71,9 @@ function CartaoCampanha({ c, status, podeEditar, onStatus, onPauta, salvando, pa
             ["Consultas (estimativa)", p.consultas != null ? n(p.consultas) : "—"],
             ["Investimento", p.custo != null ? brl(p.custo) : "sem custo de mídia"],
           ].map(([r, v]) => (
-            <div key={r} className="rounded-md p-2" style={{ background: "var(--surface-2)" }}>
-              <div className="text-sm font-semibold tabular-nums" style={{ color: "var(--ink)" }}>{v}</div>
-              <div className="text-[11px]" style={{ color: "var(--muted)" }}>{r}</div>
+            <div key={r} className="nx-camp__num">
+              <div className="nx-camp__valor">{v}</div>
+              <div className="nx-camp__rotulo">{r}</div>
             </div>
           ))}
         </div>
@@ -209,57 +211,110 @@ function CampanhasPage() {
   const pot = potencial(campanhas.filter((c) => statusDe(c.id) !== "dispensada"));
   const pautasIds = new Set((pautas.q.data?.pautas ?? []).map((p) => p.ideia_id));
 
+  const sugeridas = campanhas.filter((c) => !c.faltaDado);
+  const comConsulta = sugeridas.filter((c) => statusDe(c.id) !== "dispensada" && (c.projecao.consultas ?? 0) > 0).sort((a, b) => (b.projecao.consultas ?? 0) - (a.projecao.consultas ?? 0));
+  const maxConsultas = comConsulta[0]?.projecao.consultas ?? 0;
+  const ic = (Icon: typeof Sparkles) => <Icon size={17} strokeWidth={1.7} aria-hidden />;
+  const notaCrm = base.data?.tem_crm
+    ? base.data.parados_90d > 0
+      ? `O CRM tem ${n(base.data.parados_90d)} pessoas paradas há mais de 90 dias: é a base mais barata para trabalhar.`
+      : ""
+    : "Sem CRM ligado: as campanhas de reativação e retorno precisam dele.";
+
   return (
-    <div className="space-y-4">
-      <div className="hpagehead">
-        <h2>Campanhas de {NOME_MES[mes - 1]}</h2>
-        <p>Estratégias da IA cruzando o Brand Brain com os dados da clínica, mais as campanhas de base do mês a partir dos dados do cliente (CRM, WhatsApp, Instagram e anúncios) e das datas da especialidade. O painel sugere e monta o texto; quem envia é a equipe.</p>
-        <div role="tablist" aria-label="Mês" className="mt-2 inline-grid grid-cols-2 gap-1 rounded-lg p-1" style={{ background: "var(--surface-2)" }}>
-          {([0, 1] as const).map((o) => {
-            const m = ((agora.getUTCMonth() + o) % 12) + 1;
-            return (
-              <button key={o} type="button" role="tab" aria-selected={offset === o} onClick={() => setOffset(o)} className="min-h-[38px] rounded-md px-4 text-sm font-semibold" style={offset === o ? { background: "var(--surface)", color: "var(--ink)" } : { color: "var(--text-dim)" }}>
-                {o === 0 ? `Este mês (${NOME_MES[m - 1]})` : `Próximo (${NOME_MES[m - 1]})`}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+    <div className="nexo-mkt nexo-campanhas">
+      <NxTopo
+        titulo={`Campanhas de ${NOME_MES[mes - 1]}`}
+        pergunta="Quais campanhas fazer neste mês e quanto cada uma pode trazer. O painel sugere e monta o texto; quem envia é a equipe."
+        acao={
+          <div role="tablist" aria-label="Mês" className="nx-pilulas">
+            {([0, 1] as const).map((o) => {
+              const m = ((agora.getUTCMonth() + o) % 12) + 1;
+              return (
+                <button key={o} type="button" role="tab" aria-selected={offset === o} onClick={() => setOffset(o)} className="nx-pilula">
+                  {o === 0 ? `Este mês (${NOME_MES[m - 1]})` : `Próximo (${NOME_MES[m - 1]})`}
+                </button>
+              );
+            })}
+          </div>
+        }
+      />
 
       {carregando ? (
         <Carregando texto="Montando as campanhas do mês…" />
       ) : (
         <>
-          <ResumoExecutivo
-            frases={[
-              `${campanhas.filter((c) => !c.faltaDado).length} campanhas sugeridas para ${NOME_MES[mes - 1]}${datas.length ? `, com ${datas.length} data${datas.length === 1 ? "" : "s"} da especialidade` : ""}.`,
-              pot.respostas > 0 ? `Potencial estimado: ${n(pot.respostas)} respostas ou conversas e cerca de ${n(pot.consultas)} consultas${pot.custo ? `, com ${brl(pot.custo)} em anúncio` : ""}.` : "",
-              base.data?.tem_crm ? (base.data.parados_90d > 0 ? `O CRM tem ${n(base.data.parados_90d)} pessoas paradas há mais de 90 dias: é a base mais barata para trabalhar.` : "") : "Sem CRM ligado: as campanhas de reativação e retorno precisam dele.",
-            ]}
-          />
-
-          <EstrategiasIA clientId={clientId} podeEditar={podeEditar} />
-
-          <section aria-labelledby="camp-datas" className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-            <h3 id="camp-datas" className="flex items-center gap-1.5 text-sm font-semibold"><CalendarDays size={16} aria-hidden /> Datas de {NOME_MES[mes - 1]} para esta especialidade</h3>
-            {datas.length === 0 ? (
-              <p className="mt-1 text-sm" style={{ color: "var(--ink-2)" }}>Nenhuma data marcante para a especialidade neste mês. Bom mês para as campanhas de base (reativação, retorno) e conteúdo de autoridade.</p>
-            ) : (
-              <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {datas.map((d) => (
-                  <li key={d.id} className="rounded-lg p-2.5 text-sm" style={{ background: "var(--surface-2)" }}>
-                    <div className="font-semibold" style={{ color: "var(--ink)" }}>{d.dia ? `${String(d.dia).padStart(2, "0")}/${String(d.mes).padStart(2, "0")} · ` : ""}{d.nome}</div>
-                    <div className="text-xs" style={{ color: "var(--ink-2)" }}>{d.angulo}</div>
-                    {d.cuidado && <div className="mt-1 text-xs" style={{ color: "var(--warn-text, var(--muted))" }}>⚠ {d.cuidado}</div>}
-                  </li>
-                ))}
-              </ul>
-            )}
+          <section aria-label="Resumo" className="nx-grade nx-grade--4">
+            <NxKpi
+              i={0}
+              icone={ic(Sparkles)}
+              rotulo="Campanhas sugeridas"
+              valor={n(sugeridas.length)}
+              nota={datas.length ? `${datas.length} data${datas.length === 1 ? "" : "s"} da especialidade no mês` : "Sem data marcante da especialidade no mês"}
+            />
+            <NxKpi i={1} icone={ic(MessageCircle)} rotulo="Respostas ou conversas" valor={pot.respostas > 0 ? n(pot.respostas) : "—"} nota="Estimativa, somando as campanhas não dispensadas" />
+            <NxKpi i={2} icone={ic(CalendarCheck)} rotulo="Consultas possíveis" valor={pot.consultas > 0 ? `≈ ${n(pot.consultas)}` : "—"} nota="Estimativa: não é promessa de resultado" />
+            <NxKpi i={3} icone={ic(Wallet)} rotulo="Verba de anúncio sugerida" valor={pot.custo ? brl(pot.custo) : "—"} nota={pot.custo ? "No mês, pelo custo atual por conversa" : "As campanhas de base não têm custo de mídia"} />
           </section>
+          {notaCrm && <NxNota>{notaCrm}</NxNota>}
 
-          {erro && <p className="text-sm" style={{ color: "var(--crit)" }}>{erro}</p>}
+          <div className="nx-grade nx-grade--2">
+            <NxCard icone={ic(BarChart3)} titulo="Onde está o potencial" subtitulo="Consultas possíveis por campanha (estimativa)" rotulo="Onde está o potencial">
+              {comConsulta.length === 0 ? (
+                <p className="nx-vazio text-sm font-medium" style={{ margin: 0 }}>Nenhuma campanha com projeção de consultas neste mês.</p>
+              ) : (
+                <ul className="nx-hbars" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                  {comConsulta.map((c, i) => (
+                    <li key={c.id}>
+                      <NxHBar
+                        i={i}
+                        rotulo={c.titulo}
+                        valor={
+                          <>
+                            ≈ {n(c.projecao.consultas ?? 0)} <small>consultas · {c.projecao.custo != null ? brl(c.projecao.custo) : "sem custo de mídia"}</small>
+                          </>
+                        }
+                        pct={maxConsultas > 0 ? ((c.projecao.consultas ?? 0) / maxConsultas) * 100 : 0}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </NxCard>
+            <NxCard icone={ic(CalendarDays)} titulo={`Datas de ${NOME_MES[mes - 1]}`} subtitulo="Datas marcantes desta especialidade" id="camp-datas">
+              {datas.length === 0 ? (
+                <p className="nx-vazio text-sm font-medium" style={{ margin: 0 }}>
+                  Nenhuma data marcante para a especialidade neste mês. Bom mês para as campanhas de base (reativação, retorno) e conteúdo de autoridade.
+                </p>
+              ) : (
+                <ul className="nx-lista">
+                  {datas.map((d) => (
+                    <li key={d.id}>
+                      <NxListRow
+                        inicio={<span className="nx-data">{d.dia ? `${String(d.dia).padStart(2, "0")}/${String(d.mes).padStart(2, "0")}` : "mês"}</span>}
+                        titulo={d.nome}
+                        sub={
+                          <>
+                            <span>{d.angulo}</span>
+                            {d.cuidado && (
+                              <span style={{ color: "var(--or-ink)" }}>
+                                <ShieldAlert size={13} aria-hidden /> {d.cuidado}
+                              </span>
+                            )}
+                          </>
+                        }
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </NxCard>
+          </div>
+
+          {erro && <p role="alert" className="text-sm" style={{ color: "var(--crit)" }}>{erro}</p>}
+          <NxSectionHeader titulo="As campanhas do mês" subtitulo="Cada cartão diz por que fazer, quanto pode trazer e como fazer. Mude o status quando a equipe aprovar ou executar." />
           {campanhas.length === 0 ? (
-            <div className="hempty"><h2>Nenhuma campanha com base nos dados</h2><p>Sem CRM, WhatsApp e posts suficientes, o painel não inventa campanha. Ligue as fontes em Admin.</p></div>
+            <div className="nx-vazio"><h2 className="text-base font-semibold">Nenhuma campanha com base nos dados</h2><p className="text-sm font-medium">Sem CRM, WhatsApp e posts suficientes, o painel não inventa campanha. Ligue as fontes em Admin.</p></div>
           ) : (
             <div className="grid gap-3 lg:grid-cols-2">
               {campanhas.map((c) => (
@@ -277,15 +332,16 @@ function CampanhasPage() {
             </div>
           )}
 
-          <section className="rounded-xl border p-4 text-xs" style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-dim)" }}>
-            <h3 className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: "var(--text)" }}><Sparkles size={15} aria-hidden /> Como as campanhas são montadas</h3>
-            <ul className="mt-1 list-disc space-y-1 pl-5">
+          <EstrategiasIA clientId={clientId} podeEditar={podeEditar} />
+
+          <NxComoCalcula titulo="Como as campanhas são montadas">
+            <ul className="list-disc space-y-1 pl-5">
               <li>Reativação: leads em aberto sem movimento há 90+ dias no CRM, em lotes de até 300 por mês. Ativação: leads dos últimos 45 dias parados há 14+ dias. Retorno: pacientes ganhos há 11 a 13 meses.</li>
               <li>Projeção: taxa de resposta de referência (conservadora) × taxa de agendamento do próprio cliente nos últimos 90 dias quando há base; senão, referência. Sempre é estimativa.</li>
               <li>Anúncio: orçamento do mês com base no gasto atual ÷ custo por conversa atual. Conteúdo: 3 posts × alcance típico do formato que mais é salvo.</li>
-              <li className="flex items-start gap-1"><Megaphone size={12} aria-hidden className="mt-0.5 shrink-0" /> Nenhuma mensagem é enviada pelo painel. Textos sem preço, desconto ou promessa de resultado (CFM).</li>
+              <li className="flex items-start gap-1"><Megaphone size={12} aria-hidden className="mt-1 shrink-0" /> Nenhuma mensagem é enviada pelo painel. Textos sem preço, desconto ou promessa de resultado (CFM).</li>
             </ul>
-          </section>
+          </NxComoCalcula>
         </>
       )}
     </div>

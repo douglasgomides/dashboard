@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, MessageCircle, ShieldAlert, Users, Megaphone, Briefcase, ExternalLink } from "lucide-react";
+import { ChevronDown, MessageCircle, ShieldAlert, Users, Megaphone, Briefcase, ExternalLink, MessageCircleQuestion, Repeat, Filter } from "lucide-react";
+import { NxCard, NxKpi, NxHBar } from "@/components/nx";
+import { NxTopo, NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { getComentariosVozDoPaciente, getPerguntasDeteccaoOriginal } from "@/lib/client-data";
 import { computeDuvidasFrequentes } from "@/lib/report-metrics";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
@@ -18,7 +20,7 @@ import {
   type ResultadoVoz,
 } from "@/lib/voz-do-paciente";
 import type { Limitacao } from "@/lib/insight";
-import { InsightCard, ListaLimitacoes, OQueE, SeloStatus } from "@/components/insight-card";
+import { InsightCard, ListaLimitacoes, SeloStatus } from "@/components/insight-card";
 import { BotaoCopiar } from "@/components/botao-copiar";
 import { SyncButton } from "@/components/sync-button";
 import { Carregando, ErroCarga } from "@/components/sem-fonte";
@@ -533,13 +535,14 @@ function DuvidasPage() {
   const termoBusca = busca.trim().toLowerCase();
 
   const head = (
-    <div className="hpagehead">
-      <h2>Voz do paciente</h2>
-      <p>O que os pacientes perguntam nos comentários, já sem ruído, agrupado por assunto e com resposta pronta. Período: {periodLabel}.</p>
-    </div>
+    <NxTopo
+      titulo="Voz do paciente"
+      pergunta={`O que os pacientes perguntam nos comentários, já sem ruído, agrupado por assunto e com resposta pronta. Período: ${periodLabel}.`}
+      acao={q.isLoading || q.error ? undefined : <SyncButton clientId={clientId} alvo="comentarios" />}
+    />
   );
 
-  if (q.isLoading) return <div>{head}<Carregando texto="Lendo os comentários…" /></div>;
+  if (q.isLoading) return <div className="nexo-mkt">{head}<Carregando texto="Lendo os comentários…" /></div>;
   const camada3 = (
     <TodasAsPerguntas
       periodLabel={periodLabel}
@@ -553,7 +556,7 @@ function DuvidasPage() {
   );
   if (q.error || !voz)
     return (
-      <div className="space-y-4">
+      <div className="nexo-mkt">
         {head}
         <ErroCarga texto="Não consegui ler os comentários do período. Atualize a página." />
         {camada3}
@@ -567,53 +570,54 @@ function DuvidasPage() {
     ? voz.avulsas.filter((m) => [m.textoLimpo, m.comentario.text, m.assunto?.rotulo ?? ""].join(" ").toLowerCase().includes(termoBusca))
     : voz.avulsas;
 
-  return (
-    <div className="space-y-4">
-      {head}
-      <div className="flex justify-end">
-        <SyncButton clientId={clientId} alvo="comentarios" />
-      </div>
+  const topoGrupos = [...voz.grupos].sort((x, y) => y.pessoas - x.pessoas).slice(0, 6);
+  const maxPessoas = topoGrupos[0]?.pessoas ?? 0;
+  const ic = (Icon: typeof Users) => <Icon size={17} strokeWidth={1.7} aria-hidden />;
 
-      <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div>
-            <div className="text-2xl font-semibold tabular-nums">{voz.total}</div>
-            <div className="text-xs" style={{ color: "var(--text-dim)" }}>
-              comentários com pergunta, preço ou agendamento{q.data?.totalPeriodo != null ? ` (de ${q.data.totalPeriodo.toLocaleString("pt-BR")} no período)` : ""}
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-semibold tabular-nums">{voz.mantidos.length}</div>
-            <div className="text-xs" style={{ color: "var(--text-dim)" }}>perguntas reais, de {pessoas} pessoas</div>
-          </div>
-          <div>
-            <div className="text-2xl font-semibold tabular-nums">{voz.excluidos.length}</div>
-            <div className="text-xs" style={{ color: "var(--text-dim)" }}>ficaram de fora (piada, spam, desabafo…)</div>
-          </div>
-        </div>
-        <OQueE>
+  return (
+    <div className="nexo-mkt nexo-duvidas">
+      {head}
+
+      <section aria-label="Resumo das dúvidas" className="nx-grade nx-grade--4">
+        <NxKpi i={0} icone={ic(MessageCircleQuestion)} rotulo="Perguntas reais" valor={voz.mantidos.length.toLocaleString("pt-BR")} nota={`De ${pessoas} pessoas`} />
+        <NxKpi i={1} icone={ic(Repeat)} rotulo="Dúvidas que se repetem" valor={voz.grupos.length.toLocaleString("pt-BR")} nota="Assunto perguntado por 2 pessoas ou mais" />
+        <NxKpi
+          i={2}
+          icone={ic(MessageCircle)}
+          rotulo="Comentários lidos"
+          valor={voz.total.toLocaleString("pt-BR")}
+          nota={`Com pergunta, preço ou agendamento${q.data?.totalPeriodo != null ? ` (de ${q.data.totalPeriodo.toLocaleString("pt-BR")} no período)` : ""}`}
+        />
+        <NxKpi i={3} icone={ic(Filter)} rotulo="Ficaram de fora" valor={voz.excluidos.length.toLocaleString("pt-BR")} nota="Piada, spam, desabafo…" />
+      </section>
+
+      {topoGrupos.length > 0 && (
+        <NxCard icone={ic(Users)} titulo="Assuntos mais perguntados" subtitulo="Pessoas diferentes que perguntaram sobre cada assunto" rotulo="Assuntos mais perguntados">
+          <ul className="nx-hbars" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {topoGrupos.map((g, i) => (
+              <li key={g.id}>
+                <NxHBar i={i} rotulo={g.rotulo} valor={<>{g.pessoas} pessoas <small>· {g.comentarios} comentários</small></>} pct={maxPessoas ? (g.pessoas / maxPessoas) * 100 : 0} />
+              </li>
+            ))}
+          </ul>
+        </NxCard>
+      )}
+
+      <NxComoCalcula titulo="Como as perguntas são lidas">
+        <p>
           O painel lê os comentários marcados como pergunta e os que falam de preço ou de agendamento. Depois tira o que não é paciente perguntando (resposta do próprio
           perfil, outros profissionais de saúde, spam, piada, conversa entre seguidores) e junta as perguntas sobre o mesmo assunto. "Pessoas" conta cada @ uma vez só.
-        </OQueE>
-        <div className="mt-3 rounded-lg p-3 text-xs leading-relaxed" style={{ background: "var(--surface-2)", color: "var(--text-dim)" }}>
-          <p className="font-semibold" style={{ color: "var(--text)" }}>
-            Duas regras nesta tela
-          </p>
-          <p className="mt-1">
-            <b style={{ color: "var(--text)" }}>Triagem nova</b> (Voz do paciente, aqui em cima): remove spam, piada, profissionais de saúde, conversa entre seguidores e
-            repetidos. <b style={{ color: "var(--text)" }}>{voz.mantidos.length}</b> perguntas reais entre {voz.total} comentários com pergunta, preço ou agendamento no período.
-          </p>
-          <p className="mt-1">
-            <b style={{ color: "var(--text)" }}>Detecção original</b> (Todas as perguntas detectadas, no fim da página): todos os comentários marcados como pergunta, menos
-            sorteio, convite e resposta do próprio perfil.{" "}
-            <b style={{ color: "var(--text)" }}>{original.data ? original.data.perguntas.length : "…"}</b> perguntas
-            {semPeriodo ? " (últimas 200, de qualquer data)" : " no período"}.
-          </p>
-          <button type="button" onClick={abrirTodas} className="mt-1 inline-flex min-h-[44px] items-center gap-1 text-sm font-medium" style={{ color: "var(--accent)" }}>
-            Ver todas as perguntas detectadas <ChevronDown size={14} aria-hidden />
-          </button>
-        </div>
-      </section>
+        </p>
+        <p>
+          <b>Duas regras nesta tela.</b> <b>Triagem nova</b> (Voz do paciente, aqui em cima): remove spam, piada, profissionais de saúde, conversa entre seguidores e
+          repetidos. <b>{voz.mantidos.length}</b> perguntas reais entre {voz.total} comentários com pergunta, preço ou agendamento no período.{" "}
+          <b>Detecção original</b> (Todas as perguntas detectadas, no fim da página): todos os comentários marcados como pergunta, menos sorteio, convite e resposta do
+          próprio perfil. <b>{original.data ? original.data.perguntas.length : "…"}</b> perguntas{semPeriodo ? " (últimas 200, de qualquer data)" : " no período"}.
+        </p>
+      </NxComoCalcula>
+      <button type="button" onClick={abrirTodas} className="nx-botao" style={{ justifySelf: "start" }}>
+        Ver todas as perguntas detectadas <ChevronDown size={14} aria-hidden />
+      </button>
 
       {insights.length > 0 && (
         <section className="space-y-3">
@@ -635,7 +639,7 @@ function DuvidasPage() {
       )}
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Dúvidas que mais se repetem ({grupos.length})</h2>
+        <h2 className="text-lg font-semibold">Dúvidas que mais se repetem ({grupos.length})</h2>
         {grupos.length === 0 ? (
           <p className="rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-dim)" }}>
             {voz.total === 0
@@ -651,7 +655,7 @@ function DuvidasPage() {
 
       {cuidado.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold">Pedem dose ou remédio: responder com cuidado ({cuidado.length})</h2>
+          <h2 className="text-lg font-semibold">Pedem dose ou remédio: responder com cuidado ({cuidado.length})</h2>
           <p className="text-xs" style={{ color: "var(--text-dim)" }}>
             Estas perguntas não viram post: responder com dose, marca ou nome de remédio é prescrever sem consulta. Use a resposta de segurança.
           </p>

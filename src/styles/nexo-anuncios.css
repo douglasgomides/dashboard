@@ -1,0 +1,178 @@
+/*
+ * Telas de Marketing da clínica (anúncios, campanhas, links, ideias, referências, dúvidas, inteligência criativa) no
+ * desenho do painel da prancha. Só tokens via var(). As peças novas (.nx-bl, .nx-funil, .nx-alerta-curto, .nx-nota,
+ * .nx-metodo, .nx-topo) têm nome próprio; os componentes antigos que essas telas mostram ganham o cartão da prancha
+ * só dentro de .nexo-mkt, sem mudar nas outras telas. Texto com peso 500 ou mais; número grande 700.
+ */
+
+.nexo-mkt { --nx-raio: 18px; display: grid; gap: 18px; min-width: 0; }
+.nexo-mkt > * { min-width: 0; }
+
+/* ---------- Topo da tela ---------- */
+.nx-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px 16px; flex-wrap: wrap; }
+.nx-topo__texto { min-width: 0; flex: 1 1 320px; display: grid; gap: 4px; }
+.nx-topo h2 { margin: 0; font-size: 22px; line-height: 28px; font-weight: 600; color: var(--text); }
+.nx-topo p { margin: 0; font-size: 15px; line-height: 22px; font-weight: 500; color: var(--muted-ink); max-width: 78ch; }
+.nx-topo__meta { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 4px; }
+.nx-topo__acao { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; flex: none; max-width: 100%; }
+
+/* ---------- Números: peso 700 nesta família de telas ---------- */
+.app.product-workspace .nexo-mkt .nx-kpi .nx-kpi__valor { font-weight: 700; letter-spacing: -.015em; margin-top: 0; }
+.app.product-workspace .nexo-mkt .nx-kpi__topo { font-weight: 600; }
+.app.product-workspace .nexo-mkt .nx-kpi__nota { font-size: 13px; line-height: 18px; font-weight: 500; }
+.app.product-workspace .nexo-mkt .nx-kpi__meta small { font-weight: 500; }
+.app.product-workspace .nexo-mkt .nx-card__head h2,
+.app.product-workspace .nexo-mkt .nx-card__head h3 { font-weight: 600; }
+.app.product-workspace .nexo-mkt .nx-card__head p { font-weight: 500; }
+.app.product-workspace .nexo-mkt .nx-kpi .ws-info { align-self: flex-start; margin-left: auto; }
+@media (min-width: 821px) {
+  .app.product-workspace .nexo-mkt .nx-kpi .ws-info-button { width: 28px; height: 28px; }
+}
+.nexo-mkt .nx-kpi--alerta { border-color: var(--or); background: var(--or-bg); }
+.app.product-workspace .nexo-mkt .nx-kpi--alerta .nx-kpi__valor { color: var(--or-ink); font-size: 22px; line-height: 28px; }
+
+/* ---------- Componentes antigos destas telas: cartão da prancha ---------- */
+.app.product-workspace .nexo-mkt .ws-panel,
+.app.product-workspace .nexo-mkt section.rounded-xl.border,
+.app.product-workspace .nexo-mkt details.rounded-xl.border,
+.app.product-workspace .nexo-mkt article.rounded-xl.border {
+  border: 1px solid var(--line);
+  border-radius: var(--nx-raio);
+  box-shadow: none;
+  background: var(--white);
+}
+.app.product-workspace .nexo-mkt .ws-panel { padding: 18px; }
+.app.product-workspace .nexo-mkt .ws-panel > header { border-bottom-color: var(--line); }
+.app.product-workspace .nexo-mkt .ws-panel h2,
+.app.product-workspace .nexo-mkt section.rounded-xl > h2,
+.app.product-workspace .nexo-mkt section.rounded-xl > h3 { font-size: 17px; line-height: 24px; font-weight: 600; color: var(--text); }
+.app.product-workspace .nexo-mkt .ws-panel p,
+.app.product-workspace .nexo-mkt section.rounded-xl p,
+.app.product-workspace .nexo-mkt section.rounded-xl li,
+.app.product-workspace .nexo-mkt section.rounded-xl td,
+.app.product-workspace .nexo-mkt article p { font-weight: 500; }
+.app.product-workspace .nexo-mkt .rounded-xl .rounded-xl,
+.app.product-workspace .nexo-mkt .nx-card .rounded-xl,
+.app.product-workspace .nexo-mkt .rounded-lg { border-radius: 14px; }
+.app.product-workspace .nexo-mkt table th { font-weight: 600; color: var(--muted-ink); }
+.app.product-workspace .nexo-mkt table td { font-weight: 500; }
+
+/* ---------- Grade de abertura: gráfico principal + funil ---------- */
+.nx-mkt-dupla { display: grid; gap: 14px; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); min-width: 0; }
+@media (max-width: 1100px) { .nx-mkt-dupla { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Barras do dia + linha ---------- */
+.nx-bl { display: grid; gap: 10px; min-width: 0; }
+.nx-bl__leg-barra { background: linear-gradient(180deg, var(--b3), var(--b2)); }
+.nx-bl__svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.nx-bl__barra { fill: var(--b4); }
+.nx-bl__barra--on { fill: var(--b2); }
+.nx-linha__alvo:hover .nx-bl__barra:not(.nx-bl__barra--on) { fill: var(--b5); }
+.nx-bl .nx-linha__legenda { font-weight: 500; }
+
+/* ---------- Funil ---------- */
+.nx-funil__lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.nx-funil__etapa { display: grid; gap: 6px; }
+.nx-funil__passagem {
+  display: inline-flex; align-items: center; gap: 6px; justify-self: start;
+  font-size: 13px; line-height: 18px; font-weight: 500; color: var(--b1);
+  background: var(--b6); border-radius: 8px; padding: 2px 8px; margin: 2px 0 4px;
+}
+.nx-funil__linha { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.nx-funil__rotulo { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; line-height: 20px; font-weight: 600; color: var(--text); min-width: 0; }
+.nx-funil__linha b { font-size: 22px; line-height: 26px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nx-funil__trilho { height: 14px; border-radius: 7px; background: var(--field); overflow: hidden; }
+.nx-funil__trilho i { display: block; height: 100%; border-radius: 7px; background: var(--grad-bar); transform-origin: left center; }
+
+/* ---------- Alerta curto ---------- */
+.nx-alerta-curto {
+  display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap;
+  border: 1px solid var(--line); border-left: 4px solid var(--dn); border-radius: 14px;
+  background: var(--white); padding: 12px 14px;
+}
+.nx-alerta-curto--atencao { border-left-color: var(--or); }
+.nx-alerta-curto__ic { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; flex: none; background: var(--dn-bg); color: var(--dn-ink); }
+.nx-alerta-curto--atencao .nx-alerta-curto__ic { background: var(--or-bg); color: var(--or-ink); }
+.nx-alerta-curto__corpo { flex: 1 1 260px; min-width: 0; display: grid; gap: 3px; }
+.nx-alerta-curto p { margin: 0; }
+.nx-alerta-curto__titulo { font-size: 15px; line-height: 21px; font-weight: 700; color: var(--text); }
+.nx-alerta-curto__texto { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text-2); }
+.nx-alerta-curto__passo { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text-2); display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.nx-alerta-curto__passo b { font-weight: 700; color: var(--text); }
+.nx-alerta-curto__quem { color: var(--muted-ink); }
+.nx-alerta-curto__acao { flex: none; display: flex; align-items: center; gap: 8px; }
+
+/* ---------- Nota secundária ---------- */
+.nx-nota { margin: 0; display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 19px; font-weight: 500; color: var(--muted-ink); }
+.nx-nota > span:first-child { display: inline-flex; padding-top: 2px; color: var(--muted-ink); flex: none; }
+.nx-nota b { color: var(--text-2); font-weight: 700; }
+
+/* ---------- Como é calculado (recolhido) ---------- */
+.nx-metodo { border-radius: 12px; }
+.nx-metodo > summary {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 4px; cursor: pointer;
+  font-size: 14px; font-weight: 600; color: var(--b1); list-style: none; border-radius: 10px;
+}
+.nx-metodo > summary::-webkit-details-marker { display: none; }
+.nx-metodo > summary:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; }
+.nx-metodo__corpo { margin-top: 4px; border-radius: 12px; background: var(--field); padding: 12px 14px; font-size: 14px; line-height: 21px; font-weight: 500; color: var(--text-2); display: grid; gap: 8px; }
+.nx-metodo__corpo p { margin: 0; }
+.nx-metodo__corpo b, .nx-metodo__corpo strong { color: var(--text); font-weight: 700; }
+@media (min-width: 821px) { .nx-metodo > summary { min-height: 36px; } }
+
+/* ---------- Leitura "o que fazer" ---------- */
+.nx-leitura { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.nx-leitura li { display: flex; gap: 12px; align-items: flex-start; border-radius: 14px; background: var(--field); padding: 12px 14px; min-width: 0; }
+.nx-leitura__n { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; flex: none; font-size: 13px; font-weight: 700; color: var(--white); background: var(--grad-tile); }
+.nx-leitura__corpo { min-width: 0; display: grid; gap: 2px; }
+.nx-leitura__corpo b { font-size: 15px; line-height: 21px; font-weight: 700; color: var(--text); }
+.nx-leitura__corpo span { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text-2); overflow-wrap: anywhere; }
+
+/* Linha de "para onde foi a verba": nome e números sem cortar no celular. */
+.nexo-mkt .nx-hb__linha { flex-wrap: wrap; row-gap: 2px; }
+.nexo-mkt .nx-hb__linha > span:first-child { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.nexo-mkt .nx-hb__linha em { font-weight: 500; white-space: normal; margin-left: auto; text-align: right; }
+
+/* Botões de ação do topo (sync) alinhados com o cartão. */
+.nexo-mkt .nx-detalhes-titulo { margin-top: 6px; }
+
+/* Abas e listas das telas de criação: pílulas da prancha. */
+.nexo-mkt .nx-pilulas { display: flex; flex-wrap: wrap; gap: 8px; }
+.nexo-mkt .nx-pilula {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid var(--line-2); background: var(--white); color: var(--text); font-size: 14px; font-weight: 600; text-decoration: none;
+}
+.nexo-mkt .nx-pilula small { font-size: 13px; font-weight: 500; color: var(--muted-ink); }
+.nexo-mkt .nx-pilula:hover { border-color: var(--b4); background: var(--b6); }
+.nexo-mkt .nx-pilula:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; }
+.nexo-mkt .nx-pilula[aria-selected="true"], .nexo-mkt .nx-pilula[aria-pressed="true"] { background: var(--b1); border-color: var(--b1); color: var(--white); }
+.nexo-mkt .nx-pilula[aria-selected="true"] small, .nexo-mkt .nx-pilula[aria-pressed="true"] small { color: var(--white); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .nx-bl__barra { transform-box: fill-box; transform-origin: bottom center; animation: nx-crescer-y 900ms cubic-bezier(.2, .8, .2, 1) backwards; animation-delay: calc(120ms + var(--i, 0) * 18ms); }
+  .nx-bl__linha { animation: nx-aparecer 500ms ease 700ms backwards; }
+  .nx-funil__trilho i { animation: nx-crescer-x 1s cubic-bezier(.2, .8, .2, 1) backwards; animation-delay: calc(150ms + var(--i, 0) * 120ms); }
+}
+
+/* ---------- Campanhas ---------- */
+.nexo-mkt .nx-camp__num { border-radius: 12px; background: var(--field); padding: 10px 12px; min-width: 0; }
+.nexo-mkt .nx-camp__valor { font-size: 18px; line-height: 24px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.nexo-mkt .nx-camp__rotulo { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted-ink); }
+.nexo-mkt .nx-data { flex: none; min-width: 52px; height: 40px; padding: 0 8px; border-radius: 12px; display: grid; place-items: center; background: var(--b6); color: var(--b1); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.nexo-mkt .nx-row__sub > span { font-weight: 500; }
+.nexo-mkt .nx-lista .nx-row__titulo { font-weight: 600; white-space: normal; }
+
+/* ---------- Links ---------- */
+.nexo-mkt .nx-link__nums { margin: 10px 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.nexo-mkt .nx-link__nums > div { border-radius: 12px; background: var(--field); padding: 8px 10px; min-width: 0; }
+.nexo-mkt .nx-link__nums dt { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted-ink); }
+.nexo-mkt .nx-link__nums dd { margin: 0; font-size: 20px; line-height: 26px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.nexo-mkt .nx-link__nums small { display: block; font-size: 11px; line-height: 14px; font-weight: 500; color: var(--muted-ink); overflow-wrap: anywhere; }
+@media (max-width: 420px) { .nexo-mkt .nx-link__nums { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ---------- Ideias ---------- */
+.app.product-workspace .nexo-mkt section.nx-etapa { background: var(--white); }
+.nexo-mkt .nx-etapa h2 { font-size: 20px; line-height: 26px; font-weight: 700; }
+.nexo-mkt .nx-etapa h3 { font-weight: 700; letter-spacing: .02em; }
+.nexo-mkt .nx-nota.flex > span { font-weight: 500; }
+.nexo-mkt .nx-hbars a.nx-row .nx-hb__linha > span:first-child { white-space: normal; }
