@@ -2,10 +2,9 @@ import { useState, type ReactNode } from "react";
 import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Filter, Route as RouteIcon, ScanSearch, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Painel, Selo } from "@/components/visual";
-import { OQueE } from "@/components/insight-card";
+import { NxCard, NxTag } from "@/components/nx";
+import { CmAviso, CmBarras, CmKpi, CmMetodo, CmRecolhido, CmTopo, icT } from "@/components/nx/comercial-base";
 import { ChecklistDados, FunilOndeQuebra, useDiagnosticoComercial } from "@/components/comercial-diagnostico";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { JornadaFunil } from "@/components/jornada-funil";
@@ -42,26 +41,12 @@ const ROTULO: Record<string, string> = {
   clique_link: "Clicou num link",
 };
 
-function Etapa({ n, rotulo, base }: { n: number | null; rotulo: string; base: number }) {
-  return (
-    <div className="rounded-lg border p-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-      <div className="text-2xl font-semibold tabular-nums">{n === null ? "—" : n.toLocaleString("pt-BR")}</div>
-      <div className="text-xs" style={{ color: "var(--text-dim)" }}>
-        {rotulo}
-      </div>
-      <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-faint)" }}>
-        {n === null ? "Sem venda confirmada para medir" : `${pct(n, base)} das pessoas`}
-      </div>
-    </div>
-  );
-}
-
 function Tabela({ cab, linhas }: { cab: string[]; linhas: (string | number | ReactNode)[][] }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <div className="cm-tabela">
+      <table>
         <thead>
-          <tr style={{ color: "var(--text-faint)" }} className="text-left text-xs uppercase">
+          <tr className="text-left">
             {cab.map((c) => (
               <th key={c} className="py-1 pr-3 font-medium">
                 {c}
@@ -135,219 +120,206 @@ function JornadaPage() {
   const compraConfiavel = diag.data?.dados.escopo === "periodo" && compra?.valor != null && compra.confiavel;
   const d = diag.data;
   const tabelas = r && ((r.por_origem?.length ?? 0) > 0 || (r.posts?.length ?? 0) > 0 || (r.links?.length ?? 0) > 0);
+  const rotuloPeriodo = formatRangeLabel({ start, end });
+  const fracSolto = r && r.leads_total > 0 ? r.leads_sem_pessoa / r.leads_total : 0;
   return (
-    <div className="space-y-4">
-      {proprio ? <CrmNegocioProprio clientId={clientId} start={start} end={end} /> : <>
-      <JornadaFunil clientId={clientId} start={start} end={end} />
+    <div className="nexo-comercial">
+      <CmTopo pergunta="Do post à venda: quem vira lead e onde a jornada quebra?" detalhe={`${rotuloPeriodo} · cada pessoa ligada por telefone, @ do Instagram ou identificador do atendimento`} />
 
-      <Painel icone={Filter} titulo="Onde a jornada quebra" resumo={`Do lead à venda · ${formatRangeLabel({ start, end })}`}>
-        {diag.isLoading && <Carregando texto="Calculando onde a jornada quebra…" linhas={2} />}
-        {diag.error && <div role="alert"><p>Não foi possível conferir o diagnóstico comercial. Os resultados não foram considerados zero.</p><button type="button" className="btn" disabled={diag.isFetching} onClick={() => void diag.refetch()}>Tentar novamente</button></div>}
-        {d && <FunilOndeQuebra funil={d.funil} />}
-        {d && (d.limitacoes?.length ?? 0) > 0 && <ListaLimitacoes itens={d.limitacoes} titulo="O que limita esta leitura" />}
-      </Painel>
-
-      {d && (
-        <Painel
-          icone={ScanSearch}
-          titulo="O que falta para ligar post, conversa e venda"
-          resumo="Checklist de rastreamento: cada item que falta deixa um pedaço da jornada no escuro"
-          cor="var(--s7)"
-        >
-          <ChecklistDados itens={d.checklist} clientId={clientId} compacto />
-        </Painel>
+      {!proprio && r && (
+        <section className="nx-grade nx-grade--4" aria-label="Números da jornada">
+          <CmKpi i={0} icone="users" rotulo="Pessoas identificadas" valor={r.pessoas.toLocaleString("pt-BR")} nota="reconhecidas em mais de um lugar" />
+          <CmKpi i={1} icone="message-circle" rotulo="Conversaram no WhatsApp" valor={r.conversaram.toLocaleString("pt-BR")} nota={`${pct(r.conversaram, r.pessoas)} das pessoas`} />
+          <CmKpi i={2} icone="filter" rotulo="Viraram lead no CRM" valor={r.viraram_lead.toLocaleString("pt-BR")} nota={`${pct(r.viraram_lead, r.pessoas)} das pessoas`} />
+          <CmKpi
+            i={3}
+            icone="checklist"
+            rotulo="Compras confirmadas"
+            valor={compraConfiavel ? r.ganhos.toLocaleString("pt-BR") : "Não medido"}
+            apagado={!compraConfiavel}
+            nota={compraConfiavel ? `${pct(r.ganhos, r.pessoas)} das pessoas${r.receita > 0 ? ` · ${brl(r.receita)}` : ""}` : "Sem venda confirmada para medir"}
+          />
+        </section>
       )}
 
-      </>}
+      {r && r.leads_total > 0 && (
+        <CmAviso
+          tom={fracSolto >= 0.5 ? "critico" : "atencao"}
+          titulo={`${pct(r.leads_sem_pessoa, r.leads_total)} dos leads criados no período não estão ligados a nenhuma pessoa`}
+          detalhe={
+            <>
+              {r.escopo && (
+                <p style={{ margin: "0 0 6px" }}>
+                  Escopo: {r.leads_total.toLocaleString("pt-BR")} leads criados de {rotuloPeriodo}. A base inteira tem {Number(r.escopo.leads_base_toda).toLocaleString("pt-BR")} leads
+                  ativos
+                  {Number(r.escopo.leads_removidos_na_origem) > 0 ? ` e ${Number(r.escopo.leads_removidos_na_origem).toLocaleString("pt-BR")} removidos no CRM (não entram)` : ""}. O Comercial
+                  mostra a base inteira e só os leads com etapa conhecida, por isso o número lá é diferente.
+                </p>
+              )}
+              <p style={{ margin: 0 }}>
+                Sem telefone, @ ou conversa guardada não dá para ligar. O painel só liga quando o telefone, o @ ou o identificador da conversa (sessionId do WTS)
+                batem exatamente, nunca por nome parecido. Quanto mais conversas puxadas, mais ligam.
+              </p>
+            </>
+          }
+        >
+          ({r.leads_sem_pessoa.toLocaleString("pt-BR")} de {r.leads_total.toLocaleString("pt-BR")}): a jornada deles fica no escuro.
+        </CmAviso>
+      )}
 
-      <Painel
-        icone={RouteIcon}
-        titulo="Jornada: do post à venda"
-        resumo="Cada pessoa ligada por telefone, @ do Instagram ou identificador do atendimento. O que cruzou e o que ainda está solto."
-      >
-        <OQueE>
-          Uma “pessoa” é alguém que o painel reconheceu em mais de um lugar pelo mesmo telefone ou @. Comentou num post, chamou no WhatsApp
-          e virou lead no CRM: aparece uma vez só. Os números são do período escolhido: leads criados no período (sem os removidos no CRM),
-          comentários e conversas que aconteceram nele.
-        </OQueE>
+      {proprio ? (
+        <CrmNegocioProprio clientId={clientId} start={start} end={end} />
+      ) : (
+        <>
+          <JornadaFunil clientId={clientId} start={start} end={end} />
+
+          <NxCard id="onde-quebra" nivel={2} icone={icT("target")} titulo="Onde a jornada quebra" subtitulo={`Do lead à venda · ${rotuloPeriodo}`}>
+            {diag.isLoading && <Carregando texto="Calculando onde a jornada quebra…" linhas={2} />}
+            {diag.error && (
+              <div role="alert">
+                <p>Não foi possível conferir o diagnóstico comercial. Os resultados não foram considerados zero.</p>
+                <button type="button" className="btn" disabled={diag.isFetching} onClick={() => void diag.refetch()}>
+                  Tentar novamente
+                </button>
+              </div>
+            )}
+            {d && <FunilOndeQuebra funil={d.funil} />}
+            {d && (d.limitacoes?.length ?? 0) > 0 && <ListaLimitacoes itens={d.limitacoes} titulo="O que limita esta leitura" />}
+          </NxCard>
+        </>
+      )}
+
+      <NxCard id="jornada-pessoas" nivel={2} icone={icT("users")} titulo="Jornada: do post à venda" subtitulo="O que cruzou e o que ainda está solto, no período escolhido.">
         {resumo.isLoading && <Carregando texto="Ligando post, conversa e venda…" linhas={2} />}
         {resumo.error && <p className="text-sm" role="alert">{mensagemDeErro(resumo.error, "as pessoas do período")}</p>}
-        {r && r.leads_total > 0 && (
-          <div
-            className="mb-3 rounded-xl border p-3"
-            style={{
-              borderColor: r.leads_sem_pessoa / r.leads_total >= 0.5 ? "var(--danger-border)" : "var(--warn-border)",
-              background: r.leads_sem_pessoa / r.leads_total >= 0.5 ? "var(--danger-bg)" : "var(--warn-bg)",
-            }}
-          >
-            <div className="text-3xl font-semibold tabular-nums">{pct(r.leads_sem_pessoa, r.leads_total)}</div>
-            <p className="text-sm" style={{ color: "var(--text)" }}>
-              dos leads criados no período <b>não estão ligados</b> a nenhuma pessoa ({r.leads_sem_pessoa.toLocaleString("pt-BR")} de{" "}
-              {r.leads_total.toLocaleString("pt-BR")}).
-            </p>
-            {r.escopo && (
-              <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
-                Escopo: {r.leads_total.toLocaleString("pt-BR")} leads criados de {formatRangeLabel({ start, end })}. A base inteira tem{" "}
-                {Number(r.escopo.leads_base_toda).toLocaleString("pt-BR")} leads ativos
-                {Number(r.escopo.leads_removidos_na_origem) > 0 ? ` e ${Number(r.escopo.leads_removidos_na_origem).toLocaleString("pt-BR")} removidos no CRM (não entram)` : ""}. O Comercial mostra a base
-                inteira e só os leads com etapa conhecida, por isso o número lá é diferente.
-              </p>
-            )}
-            <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
-              Sem telefone, @ ou conversa guardada não dá para ligar. O painel só liga quando o telefone, o @ ou o identificador da conversa
-              (sessionId do WTS) batem exatamente — nunca por nome parecido. Quanto mais conversas puxadas, mais ligam.
-            </p>
-          </div>
-        )}
         {r && (
-          <>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-              <Etapa n={r.pessoas} rotulo="pessoas identificadas" base={r.pessoas} />
-              <Etapa n={r.comentaram} rotulo="comentaram em posts" base={r.pessoas} />
-              <Etapa n={r.conversaram} rotulo="têm conversa no WhatsApp" base={r.pessoas} />
-              <Etapa n={r.viraram_lead} rotulo="viraram lead no CRM" base={r.pessoas} />
-              <Etapa n={compraConfiavel ? r.ganhos : null} rotulo={`compras confirmadas${compraConfiavel && r.receita > 0 ? ` · ${brl(r.receita)}` : ""}`} base={r.pessoas} />
+          <div className="cm-par cm-par--igual">
+            <CmBarras
+              rotulo="Pessoas em cada ponto da jornada"
+              max={Math.max(1, r.pessoas)}
+              itens={[
+                { chave: "pessoas", rotulo: "Pessoas identificadas", valor: r.pessoas, texto: r.pessoas.toLocaleString("pt-BR"), apoio: pct(r.pessoas, r.pessoas) },
+                { chave: "comentaram", rotulo: "Comentaram em posts", valor: r.comentaram, texto: r.comentaram.toLocaleString("pt-BR"), apoio: pct(r.comentaram, r.pessoas) },
+                { chave: "conversaram", rotulo: "Têm conversa no WhatsApp", valor: r.conversaram, texto: r.conversaram.toLocaleString("pt-BR"), apoio: pct(r.conversaram, r.pessoas) },
+                { chave: "lead", rotulo: "Viraram lead no CRM", valor: r.viraram_lead, texto: r.viraram_lead.toLocaleString("pt-BR"), apoio: pct(r.viraram_lead, r.pessoas) },
+                compraConfiavel
+                  ? { chave: "compra", rotulo: `Compras confirmadas${r.receita > 0 ? ` · ${brl(r.receita)}` : ""}`, valor: r.ganhos, texto: r.ganhos.toLocaleString("pt-BR"), apoio: pct(r.ganhos, r.pessoas), tom: "up" as const }
+                  : { chave: "compra", rotulo: "Compras confirmadas", valor: null, texto: "Não medido", nota: "Sem venda confirmada para medir" },
+              ]}
+            />
+            <div className="grid content-start gap-2">
+              <h3 className="text-[15px] font-semibold" style={{ margin: 0 }}>Onde as pessoas se cruzam</h3>
+              <ul className="cm-lista">
+                <li><span className="cm-lista__corpo"><span className="cm-lista__sub">Comentaram <b>e</b> viraram lead</span></span><b className="cm-lista__fim text-[17px]">{r.comentaram_e_lead}</b></li>
+                <li><span className="cm-lista__corpo"><span className="cm-lista__sub">Conversaram <b>e</b> viraram lead</span></span><b className="cm-lista__fim text-[17px]">{r.conversaram_e_lead}</b></li>
+                <li><span className="cm-lista__corpo"><span className="cm-lista__sub">Comentaram <b>e</b> conversaram</span></span><b className="cm-lista__fim text-[17px]">{r.comentaram_e_conversaram}</b></li>
+              </ul>
             </div>
-            <div className="mt-3 grid gap-2 text-sm md:grid-cols-3">
-              <div>
-                Comentaram <b>e</b> viraram lead: <b>{r.comentaram_e_lead}</b>
-              </div>
-              <div>
-                Conversaram <b>e</b> viraram lead: <b>{r.conversaram_e_lead}</b>
-              </div>
-              <div>
-                Comentaram <b>e</b> conversaram: <b>{r.comentaram_e_conversaram}</b>
-              </div>
-            </div>
-          </>
-        )}
-      </Painel>
-
-      {tabelas && (
-        <details className="group rounded-xl border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-          <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-2 px-4 text-sm font-semibold">
-            Ver dados detalhados (origem, posts e links)
-            <ChevronDown size={16} aria-hidden className="transition-transform group-open:rotate-180" />
-          </summary>
-          <div className="space-y-4 p-3 pt-0 sm:p-4 sm:pt-0">
-            {r && (r.por_origem?.length ?? 0) > 0 && (
-              <Painel icone={RouteIcon} titulo="Resultado por origem do lead" resumo="Origem registrada no CRM. Ganhos e receita só são exibidos como venda quando o diagnóstico comercial confirma o significado da etapa.">
-                <Tabela
-                  cab={["Origem", "Leads", "Vendas", "Conversão", "Receita"]}
-                  linhas={r.por_origem.map((o: any) => [
-                    o.o,
-                    o.leads,
-                    compraConfiavel ? o.ganhos : "—",
-                    compraConfiavel ? pct(o.ganhos, o.leads) : "—",
-                    compraConfiavel && o.receita > 0 ? brl(o.receita) : "—",
-                  ])}
-                />
-              </Painel>
-            )}
-
-            {r && (r.posts?.length ?? 0) > 0 && (
-              <Painel
-                icone={RouteIcon}
-                titulo="Posts que geraram gente de verdade"
-                resumo="Quem comentou no post e depois virou lead ou comprou."
-              >
-                <Tabela
-                  cab={["Post", "Comentaristas", "Viraram lead", "Compraram", "Receita"]}
-                  linhas={r.posts.map((p: any) => [
-                    <a key={p.id} href={p.permalink ?? "#"} target="_blank" rel="noreferrer" className="underline">
-                      {(p.legenda || "(sem legenda)").slice(0, 70)}
-                    </a>,
-                    p.comentaristas,
-                    p.viraram_lead,
-                    compraConfiavel ? p.ganhos : "—",
-                    compraConfiavel && p.receita > 0 ? brl(p.receita) : "—",
-                  ])}
-                />
-              </Painel>
-            )}
-
-            {r && (r.links?.length ?? 0) > 0 && (
-              <Painel
-                icone={RouteIcon}
-                titulo="Links rastreados"
-                resumo="Clique → conversa → lead → venda, pelo código que vai na mensagem."
-              >
-                <Tabela
-                  cab={["Link", "Tipo", "Cliques", "Conversas", "Leads", "Vendas"]}
-                  linhas={r.links.map((l: any) => [
-                    l.titulo ?? l.short_url,
-                    l.tipo,
-                    l.cliques_total ?? 0,
-                    l.conversas,
-                    l.viraram_lead,
-                    compraConfiavel ? l.ganhos : "—",
-                  ])}
-                />
-              </Painel>
-            )}
           </div>
-        </details>
+        )}
+        <CmMetodo titulo="O que é uma pessoa aqui">
+          <p>
+            Uma “pessoa” é alguém que o painel reconheceu em mais de um lugar pelo mesmo telefone ou @. Comentou num post, chamou no WhatsApp e virou lead no CRM:
+            aparece uma vez só. Os números são do período escolhido: leads criados no período (sem os removidos no CRM), comentários e conversas que aconteceram
+            nele.
+          </p>
+        </CmMetodo>
+      </NxCard>
+
+      {!proprio && d && (
+        <CmRecolhido titulo="O que falta para ligar post, conversa e venda" subtitulo="Checklist de rastreamento: cada item que falta deixa um pedaço da jornada no escuro">
+          <ChecklistDados itens={d.checklist} clientId={clientId} compacto />
+        </CmRecolhido>
       )}
 
-      <Painel
-        icone={Search}
-        titulo="Linha do tempo de uma pessoa"
-        resumo="Busque por nome, @ do Instagram ou os 4+ últimos dígitos do telefone."
-      >
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Nome, @ ou telefone"
-          className="mb-2 min-h-[44px] w-full rounded-lg border px-3 py-2 text-base sm:text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-        />
-        <div className="flex flex-wrap gap-1.5">
-          {busca.data?.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setPessoa(p.id)}
-              className="min-h-[44px] max-w-full truncate rounded-lg border px-3 py-1 text-left text-xs"
-              style={{
-                borderColor: p.id === pessoa ? "var(--accent)" : "var(--border)",
-              }}
-            >
-              {p.nome ?? p.ig_username ?? "Sem nome"} {p.telefone_final ? `· ${p.telefone_final}` : ""}{" "}
-              {p.ig_username ? `· @${p.ig_username}` : ""}
-            </button>
-          ))}
-        </div>
+      {tabelas && (
+        <CmRecolhido titulo="Ver dados detalhados" subtitulo="Resultado por origem, posts que geraram gente e links rastreados">
+          {r && (r.por_origem?.length ?? 0) > 0 && (
+            <NxCard icone={icT("speakerphone")} titulo="Resultado por origem do lead" subtitulo="Origem registrada no CRM. Ganhos e receita só são exibidos como venda quando o diagnóstico comercial confirma o significado da etapa.">
+              <Tabela
+                cab={["Origem", "Leads", "Vendas", "Conversão", "Receita"]}
+                linhas={r.por_origem.map((o: any) => [
+                  o.o,
+                  o.leads,
+                  compraConfiavel ? o.ganhos : "—",
+                  compraConfiavel ? pct(o.ganhos, o.leads) : "—",
+                  compraConfiavel && o.receita > 0 ? brl(o.receita) : "—",
+                ])}
+              />
+            </NxCard>
+          )}
+          {r && (r.posts?.length ?? 0) > 0 && (
+            <NxCard icone={icT("brand-instagram")} titulo="Posts que geraram gente de verdade" subtitulo="Quem comentou no post e depois virou lead ou comprou.">
+              <Tabela
+                cab={["Post", "Comentaristas", "Viraram lead", "Compraram", "Receita"]}
+                linhas={r.posts.map((p: any) => [
+                  <a key={p.id} href={p.permalink ?? "#"} target="_blank" rel="noreferrer" className="underline">
+                    {(p.legenda || "(sem legenda)").slice(0, 70)}
+                  </a>,
+                  p.comentaristas,
+                  p.viraram_lead,
+                  compraConfiavel ? p.ganhos : "—",
+                  compraConfiavel && p.receita > 0 ? brl(p.receita) : "—",
+                ])}
+              />
+            </NxCard>
+          )}
+          {r && (r.links?.length ?? 0) > 0 && (
+            <NxCard icone={icT("link")} titulo="Links rastreados" subtitulo="Clique → conversa → lead → venda, pelo código que vai na mensagem.">
+              <Tabela
+                cab={["Link", "Tipo", "Cliques", "Conversas", "Leads", "Vendas"]}
+                linhas={r.links.map((l: any) => [l.titulo ?? l.short_url, l.tipo, l.cliques_total ?? 0, l.conversas, l.viraram_lead, compraConfiavel ? l.ganhos : "—"])}
+              />
+            </NxCard>
+          )}
+        </CmRecolhido>
+      )}
+
+      <NxCard id="linha-tempo" nivel={2} icone={icT("search")} titulo="Linha do tempo de uma pessoa" subtitulo="Busque por nome, @ do Instagram ou os 4+ últimos dígitos do telefone.">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nome, @ ou telefone" aria-label="Buscar pessoa por nome, @ ou telefone" className="cm-busca" />
+        {(busca.data?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {busca.data?.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPessoa(p.id)}
+                aria-pressed={p.id === pessoa}
+                className="min-h-[44px] max-w-full truncate rounded-xl border px-3 py-1 text-left text-sm font-medium"
+                style={{ borderColor: p.id === pessoa ? "var(--b2)" : "var(--line-2)", background: p.id === pessoa ? "var(--b6)" : "var(--white)" }}
+              >
+                {p.nome ?? p.ig_username ?? "Sem nome"} {p.telefone_final ? `· ${p.telefone_final}` : ""} {p.ig_username ? `· @${p.ig_username}` : ""}
+              </button>
+            ))}
+          </div>
+        )}
         {detalhe.data && (
-          <div className="mt-3 space-y-2">
-            <div className="text-sm font-semibold">{detalhe.data.pessoa?.nome ?? "Sem nome"}</div>
-            <ol className="space-y-1.5 border-l pl-3" style={{ borderColor: "var(--border)" }}>
+          <div className="nx-abre space-y-2">
+            <div className="text-[15px] font-semibold">{detalhe.data.pessoa?.nome ?? "Sem nome"}</div>
+            <ol className="space-y-1.5 border-l-2 pl-3" style={{ borderColor: "var(--b4)" }}>
               {detalhe.data.linha.map((e: any, i: number) => (
                 <li key={i} className="text-sm">
-                  <span className="text-xs" style={{ color: "var(--text-faint)" }}>
+                  <span className="text-xs font-semibold" style={{ color: "var(--muted-ink)" }}>
                     {quando(e.quando)}{" "}
                   </span>
                   {ROTULO[e.tipo] ?? e.tipo}
-                  {e.legenda ? (
-                    <span style={{ color: "var(--text-dim)" }}> — “{e.legenda}”</span>
-                  ) : e.detalhe ? (
-                    <span style={{ color: "var(--text-dim)" }}> — {e.detalhe}</span>
-                  ) : null}
+                  {e.legenda ? <span style={{ color: "var(--muted-ink)" }}> — “{e.legenda}”</span> : e.detalhe ? <span style={{ color: "var(--muted-ink)" }}> — {e.detalhe}</span> : null}
                 </li>
               ))}
             </ol>
             <div className="flex flex-wrap gap-1.5">
               {detalhe.data.leads.map((l: any, i: number) => (
-                <Selo key={i} cor={l.resultado === "won" ? "var(--accent)" : "var(--muted)"}>
+                <NxTag key={i} tom={l.resultado === "won" ? "up" : l.resultado === "lost" ? "dn" : "g"}>
                   {l.resultado === "won" ? "Comprou" : l.resultado === "lost" ? "Perdido" : l.resultado === "closed" ? "Encerrado sem resultado" : "Em aberto"}
                   {l.valor > 0 ? ` · ${brl(Number(l.valor))}` : ""}
                   {l.origem ? ` · ${l.origem}` : ""}
-                </Selo>
+                </NxTag>
               ))}
-              {(detalhe.data.conversas?.length ?? 0) > 0 && <Selo>{detalhe.data.conversas.length} conversa(s) no WhatsApp</Selo>}
+              {(detalhe.data.conversas?.length ?? 0) > 0 && <NxTag tom="b">{detalhe.data.conversas.length} conversa(s) no WhatsApp</NxTag>}
             </div>
           </div>
         )}
-      </Painel>
+      </NxCard>
     </div>
   );
 }
