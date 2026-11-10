@@ -1,10 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Circle, ClipboardCheck, ListChecks, Loader2, RefreshCw, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Circle, Clock, ListChecks, Loader2, RefreshCw, Unplug, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { marcarNaoUsa } from "@/lib/saude-fontes";
-import { Painel, Selo } from "@/components/visual";
 import { ConferenciaAoVivoResumo } from "@/components/conferencia-ao-vivo-resumo";
 import { UsoDasTelas } from "@/components/uso-das-telas";
 import {
@@ -27,12 +26,14 @@ import {
   type Verificado,
 } from "@/lib/conferencia";
 import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
+import { NxAlertaCurto, NxComoCalcula, NxNota, NxTopo } from "@/components/nx/anuncios-graficos";
+import { AdmChip, AdmContador, AdmContadores, type AdmTom } from "@/components/nx/admin-base";
 
 export const Route = createFileRoute("/_authenticated/admin/conferencia")({
   component: ConferenciaPage,
 });
 
-const COR: Record<Gravidade, string> = { alta: "var(--crit)", media: "var(--warn)", baixa: "var(--text-dim)" };
+const TOM: Record<Gravidade, AdmTom> = { alta: "critico", media: "atencao", baixa: "neutro" };
 
 async function chamar(corpo: Record<string, unknown>): Promise<any> {
   const { data } = await supabase.auth.getSession();
@@ -58,27 +59,36 @@ async function ultimaConferencia(): Promise<Conferencia | null> {
 const quando = (iso: string) => new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 function IconeEtapa({ estado }: { estado: ReturnType<typeof estadoDaEtapa> }) {
-  if (estado === "rodando") return <Loader2 size={16} className="animate-spin" aria-hidden style={{ color: "var(--accent)" }} />;
-  if (estado === "ok") return <CheckCircle2 size={16} aria-hidden style={{ color: "var(--good)" }} />;
-  if (estado === "erro") return <XCircle size={16} aria-hidden style={{ color: "var(--crit)" }} />;
-  return <Circle size={16} aria-hidden style={{ color: "var(--muted)" }} />;
+  if (estado === "rodando") return <Loader2 className="animate-spin" aria-hidden style={{ color: "var(--b1)" }} />;
+  if (estado === "ok") return <CheckCircle2 aria-hidden style={{ color: "var(--good)" }} />;
+  if (estado === "erro") return <XCircle aria-hidden style={{ color: "var(--crit)" }} />;
+  return <Circle aria-hidden style={{ color: "var(--muted)" }} />;
 }
 
 function Etapas({ registros, rodando }: { registros: RegistroEtapa[]; rodando: EtapaId | null }) {
   return (
-    <ol className="grid gap-2 sm:grid-cols-5" aria-label="Etapas da conferência">
+    <ol className="adm-etapas" aria-label="Etapas da conferência">
       {ETAPAS.map((e, i) => {
         const estado = estadoDaEtapa(e.id, registros, rodando);
         const r = registros.find((x) => x.etapa === e.id);
         return (
-          <li key={e.id} className="rounded-lg border p-2.5 text-xs" style={{ borderColor: estado === "rodando" ? "var(--accent)" : "var(--border)", background: "var(--surface)" }}>
-            <div className="flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: "var(--ink)" }}>
+          <li key={e.id} className={`adm-etapa${estado === "rodando" ? " adm-etapa--rodando" : ""}`} title={e.oQue}>
+            <span className="adm-etapa__nome">
               <IconeEtapa estado={estado} /> {i + 1}. {e.nome}
-            </div>
-            <div className="mt-1 leading-snug" style={{ color: "var(--ink-2)" }}>{e.oQue}</div>
-            <div className="mt-1" style={{ color: "var(--muted)" }}>
-              {estado === "rodando" ? "Conferindo…" : estado === "pendente" ? "Na fila" : estado === "erro" ? `Falhou: ${r?.erro ?? "erro"}` : `${r?.verificados ?? 0} conferidos · ${r?.achados ?? 0} ${r?.achados === 1 ? "ponto" : "pontos"}`}
-            </div>
+            </span>
+            <span className="adm-etapa__nums">
+              {estado === "rodando" ? (
+                "Conferindo…"
+              ) : estado === "pendente" ? (
+                "Na fila"
+              ) : estado === "erro" ? (
+                <span style={{ color: "var(--crit)" }}>Falhou: {r?.erro ?? "erro"}</span>
+              ) : (
+                <>
+                  <b>{r?.verificados ?? 0}</b> conferidos · <b>{r?.achados ?? 0}</b> {r?.achados === 1 ? "ponto" : "pontos"}
+                </>
+              )}
+            </span>
           </li>
         );
       })}
@@ -86,22 +96,38 @@ function Etapas({ registros, rodando }: { registros: RegistroEtapa[]; rodando: E
   );
 }
 
-function CartaoAchado({ a }: { a: Achado }) {
+function CartaoAchado({ a, i }: { a: Achado; i: number }) {
   const etapa = ETAPAS.find((e) => e.id === a.etapa);
   return (
-    <div style={{ borderLeft: `3px solid ${COR[a.gravidade]}`, paddingLeft: 12 }}>
-      <div className="flex flex-wrap items-center gap-2">
-        <Selo cor={COR[a.gravidade]} titulo={`Gravidade ${ROTULO_GRAVIDADE[a.gravidade].toLowerCase()}`}>{ROTULO_GRAVIDADE[a.gravidade]}</Selo>
-        {etapa && <span className="text-xs" style={{ color: "var(--muted)" }}>{etapa.nome}</span>}
-        {a.cliente && <span className="text-xs" style={{ color: "var(--text-dim)" }}>· {a.cliente}</span>}
+    <li className={`adm-item${a.gravidade === "alta" ? " adm-item--critico" : a.gravidade === "media" ? " adm-item--atencao" : ""}`} style={{ "--i": Math.min(i, 12) } as CSSProperties}>
+      <div className="adm-item__corpo">
+        <div className="adm-chips">
+          <AdmChip tom={TOM[a.gravidade]} titulo={`Gravidade ${ROTULO_GRAVIDADE[a.gravidade].toLowerCase()}`}>{ROTULO_GRAVIDADE[a.gravidade]}</AdmChip>
+          {etapa && <AdmChip tom="neutro" semIcone>{etapa.nome}</AdmChip>}
+          {a.cliente && <AdmChip tom="marca" semIcone>{a.cliente}</AdmChip>}
+        </div>
+        <p className="adm-item__titulo">{a.titulo}</p>
+        <dl className="grid gap-1" style={{ margin: 0 }}>
+          <div className="adm-item__sub">
+            <dt className="sr-only">O que aconteceu: </dt>
+            <dd style={{ margin: 0 }}>{a.detalhe}</dd>
+          </div>
+          <div className="adm-item__passo">
+            <ArrowRight aria-hidden />
+            <span>
+              <dt style={{ display: "inline" }}><b>O que fazer: </b></dt>
+              <dd style={{ display: "inline", margin: 0 }}>{a.acao}</dd>
+            </span>
+          </div>
+          {a.risco && (
+            <div className="adm-item__mais">
+              <dt style={{ display: "inline" }}><b>Risco: </b></dt>
+              <dd style={{ display: "inline", margin: 0 }}>{a.risco}</dd>
+            </div>
+          )}
+        </dl>
       </div>
-      <div className="text-sm font-medium" style={{ marginTop: 4 }}>{a.titulo}</div>
-      <dl className="mt-1 grid gap-1 text-xs leading-relaxed" style={{ color: "var(--ink-2)" }}>
-        <div><dt className="inline font-semibold" style={{ color: "var(--ink)" }}>O que aconteceu: </dt><dd className="inline">{a.detalhe}</dd></div>
-        {a.risco && <div><dt className="inline font-semibold" style={{ color: "var(--ink)" }}>Risco: </dt><dd className="inline">{a.risco}</dd></div>}
-        <div><dt className="inline font-semibold" style={{ color: "var(--ink)" }}>O que fazer: </dt><dd className="inline">{a.acao}</dd></div>
-      </dl>
-    </div>
+    </li>
   );
 }
 
@@ -109,55 +135,45 @@ function CartaoAchado({ a }: { a: Achado }) {
 function TabelaSemFonte({ linhas, onMarcar, marcando }: { linhas: LinhaSemFonte[]; onMarcar: (clientId: string, f: FonteObrigatoria) => void; marcando: string | null }) {
   const fontes: FonteObrigatoria[] = ["instagram", "anuncios", "crm"];
   return (
-    <div className="rounded-lg border" style={{ borderColor: "var(--border)" }}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 px-3 py-2" style={{ background: "var(--surface-2)" }}>
-        <strong className="text-sm" style={{ color: "var(--ink)" }}>
-          Fonte não ligada · {linhas.length} cliente{linhas.length === 1 ? "" : "s"}
-        </strong>
-        <span className="text-xs" style={{ color: "var(--ink-2)" }}>
-          Pode ser intencional (cliente que não anuncia, CRM que não temos acesso). Marque e o ponto some daqui; no admin a fonte vira “não usa”.
-        </span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+    <div>
+      <p className="adm-grupo-titulo">
+        Fonte não ligada · {linhas.length} cliente{linhas.length === 1 ? "" : "s"}
+        <small>Pode ser intencional (cliente que não anuncia, CRM que não temos acesso). Marque e o ponto some daqui; no admin a fonte vira “não usa”.</small>
+      </p>
+      <div className="adm-rolagem">
+        <table className="adm-tabela">
           <thead>
-            <tr className="text-left text-xs" style={{ color: "var(--ink-2)" }}>
-              <th className="px-3 py-2">Cliente</th>
+            <tr>
+              <th>Cliente</th>
               {fontes.map((f) => (
-                <th key={f} className="px-3 py-2">{NOME_FONTE_OBRIG[f]}</th>
+                <th key={f}>{NOME_FONTE_OBRIG[f]}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {linhas.map((l) => (
-              <tr key={l.achado.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                <td className="px-3 py-2 align-top font-medium" style={{ color: "var(--ink)" }}>
-                  {l.cliente}
+              <tr key={l.achado.id}>
+                <td>
+                  <b style={{ fontWeight: 700 }}>{l.cliente}</b>
                   {l.achado.gravidade !== "baixa" && (
-                    <div className="text-xs font-semibold" style={{ color: COR[l.achado.gravidade] }}>
-                      Prioridade {ROTULO_GRAVIDADE[l.achado.gravidade].toLowerCase()}
+                    <div className="mt-1">
+                      <AdmChip tom={TOM[l.achado.gravidade]}>Prioridade {ROTULO_GRAVIDADE[l.achado.gravidade].toLowerCase()}</AdmChip>
                     </div>
                   )}
                 </td>
                 {fontes.map((f) => (
-                  <td key={f} className="px-3 py-2 align-top">
+                  <td key={f}>
                     {l.faltando.includes(f) ? (
-                      <div className="space-y-1">
-                        <span className="text-xs font-semibold" style={{ color: f === "instagram" ? "var(--crit)" : "var(--warn)" }}>Falta</span>
+                      <div className="grid justify-items-start gap-1">
+                        <AdmChip tom={f === "instagram" ? "critico" : "atencao"}>Falta</AdmChip>
                         {l.clientId && (
-                          <button
-                            type="button"
-                            className="block whitespace-nowrap text-xs font-semibold underline-offset-2 hover:underline disabled:opacity-50"
-                            style={{ color: "var(--accent)" }}
-                            disabled={marcando === `${l.clientId}:${f}`}
-                            onClick={() => onMarcar(l.clientId!, f)}
-                          >
+                          <button type="button" className="adm-btn adm-btn--mini" disabled={marcando === `${l.clientId}:${f}`} onClick={() => onMarcar(l.clientId!, f)}>
                             É intencional, não mostrar mais
                           </button>
                         )}
                       </div>
                     ) : (
-                      <span className="text-xs" style={{ color: "var(--muted)" }}>ok</span>
+                      <AdmChip tom="ok">ok</AdmChip>
                     )}
                   </td>
                 ))}
@@ -174,36 +190,41 @@ function ListaVerificados({ itens }: { itens: Verificado[] }) {
   const [soProblema, setSoProblema] = useState(false);
   const vis = itens.filter((v) => !soProblema || !v.ok).sort((a, b) => Number(a.ok) - Number(b.ok));
   return (
-    <details className="mt-4">
-      <summary className="cursor-pointer select-none py-1 text-sm font-medium">
+    <details className="adm-det">
+      <summary>
         O que foi conferido ({itens.length}, {itens.filter((v) => !v.ok).length} com problema)
       </summary>
-      <label className="mt-2 flex items-center gap-2 text-xs" style={{ color: "var(--ink-2)" }}>
-        <input type="checkbox" checked={soProblema} onChange={(e) => setSoProblema(e.target.checked)} /> Mostrar só o que tem problema
-      </label>
-      <div className="mt-2 overflow-x-auto rounded-lg border" style={{ borderColor: "var(--border)" }}>
-        <table className="w-full text-sm empilha">
-          <thead>
-            <tr className="text-left text-xs" style={{ color: "var(--ink-2)", background: "var(--surface-2)" }}>
-              <th className="px-3 py-2">Situação</th>
-              <th className="px-3 py-2">O quê</th>
-              <th className="px-3 py-2">Cliente</th>
-              <th className="px-3 py-2">Etapa</th>
-              <th className="px-3 py-2">Nota</th>
-            </tr>
-          </thead>
-          <tbody>
-            {vis.map((v, i) => (
-              <tr key={`${v.etapa}:${v.nome}:${i}`} className="border-t" style={{ borderColor: "var(--border)" }}>
-                <td className="px-3 py-2" data-label="Situação">{v.ok ? <Selo cor="var(--good)">OK</Selo> : <Selo cor="var(--warn)">Olhar</Selo>}</td>
-                <td className="px-3 py-2" data-label="O quê"><span className="text-xs" style={{ color: "var(--muted)" }}>{ROTULO_VERIFICADO[v.tipo]}</span><div>{v.nome}</div></td>
-                <td className="px-3 py-2 text-xs" data-label="Cliente">{v.cliente ?? "—"}</td>
-                <td className="px-3 py-2 text-xs" data-label="Etapa">{ETAPAS.find((e) => e.id === v.etapa)?.nome}</td>
-                <td className="px-3 py-2 text-xs" data-label="Nota" style={{ color: "var(--ink-2)" }}>{v.nota}</td>
+      <div className="adm-det__corpo">
+        <label className="flex items-center gap-2 text-sm" style={{ color: "var(--ink-2)", fontWeight: 600 }}>
+          <input type="checkbox" checked={soProblema} onChange={(e) => setSoProblema(e.target.checked)} /> Mostrar só o que tem problema
+        </label>
+        <div className="adm-rolagem">
+          <table className="adm-tabela empilha">
+            <thead>
+              <tr>
+                <th>Situação</th>
+                <th>O quê</th>
+                <th>Cliente</th>
+                <th>Etapa</th>
+                <th>Nota</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {vis.map((v, i) => (
+                <tr key={`${v.etapa}:${v.nome}:${i}`}>
+                  <td data-label="Situação">{v.ok ? <AdmChip tom="ok">OK</AdmChip> : <AdmChip tom="atencao">Olhar</AdmChip>}</td>
+                  <td data-label="O quê">
+                    <span className="text-xs" style={{ color: "var(--muted)" }}>{ROTULO_VERIFICADO[v.tipo]}</span>
+                    <div>{v.nome}</div>
+                  </td>
+                  <td data-label="Cliente">{v.cliente ?? "—"}</td>
+                  <td data-label="Etapa">{ETAPAS.find((e) => e.id === v.etapa)?.nome}</td>
+                  <td data-label="Nota" style={{ color: "var(--ink-2)" }}>{v.nota}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </details>
   );
@@ -213,12 +234,12 @@ function ListaVerificados({ itens }: { itens: Verificado[] }) {
 function ConferenciaPage() {
   const [aba, setAba] = useState<"dados" | "uso">("dados");
   return (
-    <div>
-      <div className="seg" role="tablist" aria-label="Conferência" style={{ marginBottom: 14 }}>
-        <button type="button" role="tab" aria-selected={aba === "dados"} aria-pressed={aba === "dados"} onClick={() => setAba("dados")}>Conferência dos dados</button>
-        <button type="button" role="tab" aria-selected={aba === "uso"} aria-pressed={aba === "uso"} onClick={() => setAba("uso")}>Uso das telas</button>
+    <div className="adm adm-conferencia">
+      <div className="adm-abas" role="tablist" aria-label="Conferência">
+        <button type="button" role="tab" className="adm-pilula" aria-selected={aba === "dados"} aria-pressed={aba === "dados"} onClick={() => setAba("dados")}>Conferência dos dados</button>
+        <button type="button" role="tab" className="adm-pilula" aria-selected={aba === "uso"} aria-pressed={aba === "uso"} onClick={() => setAba("uso")}>Uso das telas</button>
       </div>
-      <div role="tabpanel">{aba === "dados" ? <ConferenciaDados /> : <UsoDasTelas />}</div>
+      <div role="tabpanel" className="adm">{aba === "dados" ? <ConferenciaDados /> : <UsoDasTelas />}</div>
     </div>
   );
 }
@@ -308,134 +329,146 @@ function ConferenciaDados() {
   const clientes = [...new Set(achados.map((a) => a.cliente).filter(Boolean) as string[])].sort();
   const incompleta = c && !c.concluida_em && !ocupado;
 
+  const parados = achados.filter((a) => a.etapa === "parados").length;
+  const okConferidos = r ? r.verificados - r.comProblema : 0;
+  const filtroGrav = (g: Gravidade) => setFGrav(fGrav === g ? "todas" : g);
+
   return (
-    <div>
-      <div className="hpagehead">
-        <h2>Conferência de dados</h2>
-        <p className="note" style={{ margin: 0 }}>
-          Auditoria da operação: procura o que a Meta mostra e o dashboard não (conta de anúncios com gasto e sem cliente), a mesma conta em dois
-          clientes, gasto do painel que não bate com a Meta, sync que diz "sucesso" com o dado parado e cliente sem fonte obrigatória ligada. Só
-          leitura: não muda nada nas contas.
-        </p>
-        <div className="flex flex-wrap items-center gap-3" style={{ marginTop: 10 }}>
-          <button type="button" className="btn inline-flex items-center gap-1.5" onClick={rodar} disabled={ocupado}>
-            {ocupado ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <RefreshCw size={14} aria-hidden />}{c ? "Conferir de novo" : "Rodar conferência"}
-          </button>
-          {ocupado && <span className="note">Rodando etapa por etapa. Leva de alguns segundos a um minuto.</span>}
-          {!ocupado && c && (
-            <span className="note">
+    <>
+      <NxTopo
+        pergunta="Os números do painel batem com a origem? O que está ok, o que tem problema e o que está parado."
+        meta={
+          ocupado ? (
+            <AdmChip tom="marca" semIcone>Rodando etapa por etapa. Leva de alguns segundos a um minuto.</AdmChip>
+          ) : c ? (
+            <AdmChip tom={incompleta ? "atencao" : "neutro"} semIcone={!incompleta}>
               {viva ? "Conferência de agora" : "Última conferência salva"}: {quando(c.iniciada_em)}
               {incompleta ? " (interrompida antes do fim)" : ""}
-            </span>
-          )}
-        </div>
-      </div>
+            </AdmChip>
+          ) : null
+        }
+        acao={
+          <button type="button" className="adm-btn adm-btn--pri" onClick={rodar} disabled={ocupado}>
+            {ocupado ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
+            {c ? "Conferir de novo" : "Rodar conferência"}
+          </button>
+        }
+      />
+      <NxComoCalcula titulo="Como a conferência funciona">
+        <p>
+          Auditoria da operação: procura o que a Meta mostra e o dashboard não (conta de anúncios com gasto e sem cliente), a mesma conta em dois
+          clientes, gasto do painel que não bate com a Meta, sync que diz "sucesso" com o dado parado e cliente sem fonte obrigatória ligada.
+        </p>
+        <p>
+          <b>Só leitura:</b> não muda nada nas contas.
+        </p>
+        <ul className="grid gap-1" style={{ margin: 0, paddingLeft: 18 }}>
+          {ETAPAS.map((e) => (
+            <li key={e.id}>
+              <b>{e.nome}:</b> {e.oQue}
+            </li>
+          ))}
+        </ul>
+      </NxComoCalcula>
 
-      {erro && (
-        <div className="mt-3 flex items-start gap-2 text-sm" style={{ color: "var(--crit)" }}>
-          <AlertTriangle size={16} aria-hidden className="mt-0.5 shrink-0" />
-          <span>{erro}</span>
-        </div>
-      )}
+      {erro && <NxAlertaCurto titulo={erro} />}
 
-      <div style={{ marginTop: 16 }}>
-        <ConferenciaAoVivoResumo />
-      </div>
+      {salva.isLoading && !viva && <div className="h-24 animate-pulse rounded-xl" style={{ background: "var(--surface-2)" }} aria-busy="true" />}
 
-      {salva.isLoading && !viva && <div className="mt-4 h-24 animate-pulse rounded-xl" style={{ background: "var(--surface-2)" }} aria-busy="true" />}
+      {!salva.isLoading && !c && !ocupado && <p className="adm-vazio adm-lista-card">Nenhuma conferência salva ainda. Rode a primeira para ver o retrato da operação.</p>}
 
-      {!salva.isLoading && !c && !ocupado && (
-        <p className="note" style={{ marginTop: 16 }}>Nenhuma conferência salva ainda. Rode a primeira para ver o retrato da operação.</p>
+      {c && r && (
+        <AdmContadores rotulo="Resumo da conferência">
+          <AdmContador i={0} icone={<ListChecks />} rotulo="Conferidos e ok" valor={okConferidos} nota={`de ${r.verificados} itens · ${r.comProblema} com problema`} tom={r.verificados ? "ok" : "neutro"} />
+          <AdmContador i={1} icone={<AlertTriangle />} rotulo="Gravidade alta" valor={r.porGravidade.alta} nota="Resolver primeiro" tom={r.porGravidade.alta ? "critico" : "ok"} onClick={() => filtroGrav("alta")} ativo={fGrav === "alta"} />
+          <AdmContador i={2} icone={<AlertTriangle />} rotulo="Gravidade média" valor={r.porGravidade.media} nota="Olhar nesta semana" tom={r.porGravidade.media ? "atencao" : "ok"} onClick={() => filtroGrav("media")} ativo={fGrav === "media"} />
+          <AdmContador i={3} icone={<Circle />} rotulo="Gravidade baixa" valor={r.porGravidade.baixa} nota="Quando der" tom="neutro" onClick={() => filtroGrav("baixa")} ativo={fGrav === "baixa"} />
+          <AdmContador i={4} icone={<Clock />} rotulo="Dado parado" valor={parados} nota="Sync diz sucesso, mas sem dado novo" tom={parados ? "atencao" : "ok"} />
+          <AdmContador i={5} icone={<Unplug />} rotulo="Etapas que falharam" valor={r.etapasComErro.length} nota={r.etapasComErro.length ? "Rode de novo" : "Todas rodaram"} tom={r.etapasComErro.length ? "critico" : "ok"} />
+        </AdmContadores>
       )}
 
       {c && (
-        <div style={{ marginTop: 16 }} className="grid gap-4">
+        <>
           <Etapas registros={c.etapas ?? []} rodando={rodando} />
+          {r && r.etapasComErro.length > 0 && (
+            <NxNota icone={<AlertTriangle size={14} />}>
+              {r.etapasComErro.length === 1 ? "Uma etapa falhou" : `${r.etapasComErro.length} etapas falharam`} ({r.etapasComErro.map((id) => ETAPAS.find((e) => e.id === id)?.nome).join(", ")}): o que ela confere não está nesta lista. Rode de novo.
+            </NxNota>
+          )}
 
-          <Painel
-            icone={ClipboardCheck}
-            titulo={ocupado ? `Conferindo… ${achados.length} ponto${achados.length === 1 ? "" : "s"} até agora` : achados.length ? `${achados.length} ponto${achados.length === 1 ? "" : "s"} para olhar` : "Nada encontrado"}
-            resumo={`Conferido em ${quando(c.iniciada_em)}${c.contas_vistas_na_meta != null ? ` · ${c.contas_vistas_na_meta} contas de anúncios vistas na Meta` : ""}${r ? ` · ${r.verificados} itens conferidos` : ""}`}
-          >
-            {r && (
-              <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {(["alta", "media", "baixa"] as Gravidade[]).map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    aria-pressed={fGrav === g}
-                    onClick={() => setFGrav(fGrav === g ? "todas" : g)}
-                    className="rounded-lg border px-3 py-2 text-left"
-                    style={{ borderColor: fGrav === g ? COR[g] : "var(--border)", background: "var(--surface)" }}
-                  >
-                    <div className="text-xl font-bold tabular-nums" style={{ color: r.porGravidade[g] ? COR[g] : "var(--muted)" }}>{r.porGravidade[g]}</div>
-                    <div className="text-xs" style={{ color: "var(--ink-2)" }}>Gravidade {ROTULO_GRAVIDADE[g].toLowerCase()}</div>
+          <section className="adm-lista-card" aria-labelledby="conf-pontos">
+            <header className="adm-secao__head" style={{ paddingBottom: 12 }}>
+              <span className="nx-tile" aria-hidden>
+                <ListChecks />
+              </span>
+              <div className="adm-secao__texto">
+                <h2 id="conf-pontos">
+                  {ocupado ? `Conferindo… ${achados.length} ponto${achados.length === 1 ? "" : "s"} até agora` : achados.length ? `${achados.length} ponto${achados.length === 1 ? "" : "s"} para olhar` : "Nada encontrado"}
+                </h2>
+                <p>{`Conferido em ${quando(c.iniciada_em)}${c.contas_vistas_na_meta != null ? ` · ${c.contas_vistas_na_meta} contas de anúncios vistas na Meta` : ""}${r ? ` · ${r.verificados} itens conferidos` : ""}`}</p>
+              </div>
+            </header>
+            <div className="adm-filtros adm-filtros--plano">
+              <div className="adm-pilulas" role="group" aria-label="Gravidade">
+                {(["todas", "alta", "media", "baixa"] as const).map((g) => (
+                  <button key={g} type="button" onClick={() => setFGrav(g)} className="adm-pilula" aria-pressed={fGrav === g}>
+                    {g === "todas" ? "Todas" : ROTULO_GRAVIDADE[g]} <small>{g === "todas" ? achados.length : (r?.porGravidade[g] ?? 0)}</small>
                   </button>
                 ))}
-                <div className="rounded-lg border px-3 py-2" style={{ borderColor: "var(--border)" }}>
-                  <div className="flex items-center gap-1.5 text-xl font-bold tabular-nums" style={{ color: "var(--ink)" }}>
-                    <ListChecks size={18} aria-hidden /> {r.verificados}
-                  </div>
-                  <div className="text-xs" style={{ color: "var(--ink-2)" }}>conferidos · {r.comProblema} com problema</div>
-                </div>
               </div>
-            )}
-            {r && r.etapasComErro.length > 0 && (
-              <p className="mb-3 text-xs" style={{ color: "var(--crit)" }}>
-                {r.etapasComErro.length === 1 ? "Uma etapa falhou" : `${r.etapasComErro.length} etapas falharam`} ({r.etapasComErro.map((id) => ETAPAS.find((e) => e.id === id)?.nome).join(", ")}): o que ela confere não está nesta lista. Rode de novo.
-              </p>
-            )}
-
-            <div className="flex flex-wrap gap-2" style={{ marginBottom: 12 }}>
-              {(["todas", "alta", "media", "baixa"] as const).map((g) => (
-                <button key={g} type="button" onClick={() => setFGrav(g)} className="btn" aria-pressed={fGrav === g} style={{ opacity: fGrav === g ? 1 : 0.6, fontWeight: fGrav === g ? 600 : 400 }}>
-                  {g === "todas" ? `Todas (${achados.length})` : `${ROTULO_GRAVIDADE[g]} (${r?.porGravidade[g] ?? 0})`}
-                </button>
-              ))}
-              <select value={fEtapa} onChange={(e) => setFEtapa(e.target.value as EtapaId | "")} aria-label="Etapa" autoComplete="off" className="min-h-[36px] rounded-lg border px-2 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+              <select value={fEtapa} onChange={(e) => setFEtapa(e.target.value as EtapaId | "")} aria-label="Etapa" autoComplete="off" className="adm-select">
                 <option value="">Todas as etapas</option>
                 {ETAPAS.map((e) => (
-                  <option key={e.id} value={e.id}>{e.nome}</option>
+                  <option key={e.id} value={e.id}>
+                    {e.nome}
+                  </option>
                 ))}
               </select>
               {clientes.length > 0 && (
-                <select value={fCliente} onChange={(e) => setFCliente(e.target.value)} aria-label="Cliente" autoComplete="off" className="min-h-[36px] rounded-lg border px-2 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+                <select value={fCliente} onChange={(e) => setFCliente(e.target.value)} aria-label="Cliente" autoComplete="off" className="adm-select">
                   <option value="">Todos os clientes</option>
                   {clientes.map((n) => (
-                    <option key={n} value={n}>{n}</option>
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
                   ))}
                 </select>
               )}
             </div>
             {visiveis.length === 0 ? (
-              <p className="note" style={{ margin: 0 }}>{achados.length ? "Nenhum ponto nesse filtro." : ocupado ? "Nada encontrado até agora." : "Nada encontrado: tudo o que foi conferido bate."}</p>
+              <p className="adm-vazio adm-borda-topo">{achados.length ? "Nenhum ponto nesse filtro." : ocupado ? "Nada encontrado até agora." : "Nada encontrado: tudo o que foi conferido bate."}</p>
             ) : (
-              <div className="grid gap-4">
+              <div className="adm-borda-topo">
                 {grupos.destaque.length > 0 && (
-                  <div className="grid gap-3 rounded-xl border p-3" style={{ borderColor: "var(--crit)", background: "color-mix(in srgb, var(--crit) 5%, var(--surface))" }}>
-                    <strong className="text-sm" style={{ color: "var(--crit)" }}>
-                      Prioridade alta e média · {grupos.destaque.length}
-                    </strong>
-                    {grupos.destaque.map((a) => (
-                      <CartaoAchado key={a.id} a={a} />
-                    ))}
-                  </div>
+                  <>
+                    <p className="adm-grupo-titulo">Prioridade alta e média · {grupos.destaque.length}</p>
+                    <ul className="adm-itens">
+                      {grupos.destaque.map((a, i) => (
+                        <CartaoAchado key={a.id} a={a} i={i} />
+                      ))}
+                    </ul>
+                  </>
                 )}
                 {grupos.semFonte.length > 0 && <TabelaSemFonte linhas={grupos.semFonte} onMarcar={marcar} marcando={marcando} />}
                 {grupos.demais.length > 0 && (
-                  <div className="grid gap-3">
-                    <strong className="text-sm" style={{ color: "var(--ink-2)" }}>Prioridade baixa · {grupos.demais.length}</strong>
-                    {grupos.demais.map((a) => (
-                      <CartaoAchado key={a.id} a={a} />
-                    ))}
-                  </div>
+                  <>
+                    <p className="adm-grupo-titulo">Prioridade baixa · {grupos.demais.length}</p>
+                    <ul className="adm-itens">
+                      {grupos.demais.map((a, i) => (
+                        <CartaoAchado key={a.id} a={a} i={i} />
+                      ))}
+                    </ul>
+                  </>
                 )}
               </div>
             )}
-            {(c.verificados ?? []).length > 0 && <ListaVerificados itens={c.verificados} />}
-          </Painel>
-        </div>
+          </section>
+          {(c.verificados ?? []).length > 0 && <ListaVerificados itens={c.verificados} />}
+        </>
       )}
-    </div>
+
+      <ConferenciaAoVivoResumo />
+    </>
   );
 }

@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, ArrowRight, AtSign, ClipboardList, Database, KeyRound, UserCog, Users } from "lucide-react";
 import { getClient } from "@/lib/client-data";
 import { ClientProfileForm } from "@/components/client-profile-form";
 import { ClientAvatar } from "@/components/client-avatar";
@@ -21,6 +22,7 @@ import {
 } from "@/lib/admin-data";
 import type { CrmProvider } from "@/integrations/supabase/types";
 import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
+import { AdmCampo, AdmChip, AdmSecao } from "@/components/nx/admin-base";
 
 const CRM_PROVIDER_LABELS: Record<CrmProvider, string> = {
   kommo: "Kommo",
@@ -38,6 +40,7 @@ export const Route = createFileRoute("/_authenticated/admin/$clientId")({
 
 function ConnectInstagramForm({ clientId }: { clientId: string }) {
   const queryClient = useQueryClient();
+  const uid = useId();
   const [windsorAccountId, setWindsorAccountId] = useState("");
   const [igUsername, setIgUsername] = useState("");
 
@@ -57,50 +60,24 @@ function ConnectInstagramForm({ clientId }: { clientId: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-      <div>
-        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          ID da conta Instagram
-        </label>
-        <input autoComplete="off"
-          value={windsorAccountId}
-          onChange={(e) => setWindsorAccountId(e.target.value)}
-          required
-          placeholder="Ex.: 1234567890"
-          className="mt-1 w-56 rounded-md border px-2 py-1.5 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          @Instagram (opcional)
-        </label>
-        <input autoComplete="off"
-          value={igUsername}
-          onChange={(e) => setIgUsername(e.target.value)}
-          className="mt-1 rounded-md border px-2 py-1.5 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-        />
-      </div>
-      <button
-        type="submit"
-        disabled={mutation.isPending}
-        className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-        style={{ background: "var(--accent)" }}
-      >
+    <form onSubmit={handleSubmit} className="adm-form">
+      <AdmCampo id={`${uid}-id`} rotulo="ID da conta Instagram">
+        <input id={`${uid}-id`} autoComplete="off" value={windsorAccountId} onChange={(e) => setWindsorAccountId(e.target.value)} required placeholder="Ex.: 1234567890" className="adm-entrada" />
+      </AdmCampo>
+      <AdmCampo id={`${uid}-user`} rotulo="@Instagram (opcional)">
+        <input id={`${uid}-user`} autoComplete="off" value={igUsername} onChange={(e) => setIgUsername(e.target.value)} className="adm-entrada" />
+      </AdmCampo>
+      <button type="submit" disabled={mutation.isPending} className="adm-btn adm-btn--pri">
         {mutation.isPending ? "Conectando…" : "Conectar conta"}
       </button>
-      {mutation.isError && (
-        <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
-          {mensagemDeErroAcao(mutation.error)}
-        </p>
-      )}
+      {mutation.isError && <p className="adm-erro">{mensagemDeErroAcao(mutation.error)}</p>}
     </form>
   );
 }
 
 function ConnectCrmForm({ clientId }: { clientId: string }) {
   const queryClient = useQueryClient();
+  const uid = useId();
   const [provider, setProvider] = useState<CrmProvider>("kommo");
   const [subdomain, setSubdomain] = useState("");
   const [accessToken, setAccessToken] = useState("");
@@ -143,19 +120,16 @@ function ConnectCrmForm({ clientId }: { clientId: string }) {
   const mutation = provider === "kommo" ? kommoMutation : tokenMutation;
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-      <div>
-        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          CRM
-        </label>
+    <form onSubmit={handleSubmit} className="adm-form">
+      <AdmCampo id={`${uid}-crm`} rotulo="CRM">
         <select
+          id={`${uid}-crm`}
           value={provider}
           onChange={(e) => {
             setProvider(e.target.value as CrmProvider);
             setGeneratedUrl(null);
           }}
-          className="mt-1 rounded-md border px-2 py-1.5 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+          className="adm-entrada"
         >
           {(Object.entries(CRM_PROVIDER_LABELS) as [CrmProvider, string][]).map(([value, label]) => (
             <option key={value} value={value}>
@@ -163,59 +137,23 @@ function ConnectCrmForm({ clientId }: { clientId: string }) {
             </option>
           ))}
         </select>
-      </div>
-      <div>
-        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          Subdomínio {provider === "kommo" && "(opcional, só referência)"}
-        </label>
-        <input autoComplete="off"
-          value={subdomain}
-          onChange={(e) => setSubdomain(e.target.value)}
-          placeholder="Ex.: suaclinica"
-          className="mt-1 w-44 rounded-md border px-2 py-1.5 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-        />
-      </div>
+      </AdmCampo>
+      <AdmCampo id={`${uid}-sub`} rotulo={`Subdomínio${provider === "kommo" ? " (opcional, só referência)" : ""}`}>
+        <input id={`${uid}-sub`} autoComplete="off" value={subdomain} onChange={(e) => setSubdomain(e.target.value)} placeholder="Ex.: suaclinica" className="adm-entrada" />
+      </AdmCampo>
       {provider !== "kommo" && (
-        <div>
-          <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-            Token de acesso
-          </label>
-          <input autoComplete="new-password"
-            type="password"
-            value={accessToken}
-            onChange={(e) => setAccessToken(e.target.value)}
-            className="mt-1 w-64 rounded-md border px-2 py-1.5 text-sm"
-            style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-          />
-        </div>
+        <AdmCampo id={`${uid}-token`} rotulo="Token de acesso">
+          <input id={`${uid}-token`} autoComplete="new-password" type="password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)} className="adm-entrada" />
+        </AdmCampo>
       )}
-      <button
-        type="submit"
-        disabled={mutation.isPending}
-        className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-        style={{ background: "var(--accent)" }}
-      >
+      <button type="submit" disabled={mutation.isPending} className="adm-btn adm-btn--pri">
         {mutation.isPending ? "Conectando…" : provider === "kommo" ? "Gerar URL de webhook" : "Conectar CRM"}
       </button>
-      {mutation.isError && (
-        <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
-          {mensagemDeErroAcao(mutation.error)}
-        </p>
-      )}
+      {mutation.isError && <p className="adm-erro">{mensagemDeErroAcao(mutation.error)}</p>}
       {generatedUrl && (
-        <div className="w-full">
-          <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-            Cole essa URL em Kommo → Configurações → Webhooks (evento "Lead adicionado" e "Estágio alterado")
-          </label>
-          <input autoComplete="off"
-            readOnly
-            value={generatedUrl}
-            onFocus={(e) => e.target.select()}
-            className="mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
-            style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-          />
-        </div>
+        <AdmCampo id={`${uid}-url`} rotulo={'Cole essa URL em Kommo → Configurações → Webhooks (evento "Lead adicionado" e "Estágio alterado")'} largo>
+          <input id={`${uid}-url`} autoComplete="off" readOnly value={generatedUrl} onFocus={(e) => e.target.select()} className="adm-entrada" />
+        </AdmCampo>
       )}
     </form>
   );
@@ -242,29 +180,20 @@ function CrmConnectionsList({ clientId }: { clientId: string }) {
     },
   });
 
-  if (!connections?.length) return null;
+  if (!connections?.length) return <p className="adm-item__mais">Nenhum CRM ligado ainda.</p>;
   return (
-    <ul className="mt-3 space-y-2 text-sm">
-      {connections.map((c) => (
-        <li key={c.id} style={{ color: "var(--text-dim)" }}>
-          <div className="flex items-center gap-2">
-            <span className="font-medium" style={{ color: "var(--text)" }}>
+    <div className="grid gap-2">
+      <p className="adm-titulo-lista">Ligados neste cliente</p>
+      <ul className="adm-ligados">
+        {connections.map((c) => (
+          <li key={c.id} className="adm-ligado">
+            <span className="adm-ligado__nome">
               {CRM_PROVIDER_LABELS[c.provider]}
+              {c.subdomain ? <small> · {c.subdomain}</small> : null}
             </span>
-            {c.subdomain ? ` · ${c.subdomain}` : ""}
-            {!c.active && " · inativo"}
-            <button
-              type="button"
-              onClick={() => removeMutation.mutate(c.id)}
-              className="text-xs"
-              style={{ color: "var(--danger)" }}
-            >
-              Remover
-            </button>
-          </div>
-          <div className="mt-0.5 text-xs">
-            {c.tem_token == null ? "" : c.tem_token ? "Token salvo" : "Sem token salvo"}
-            {c.provider === "kommo" && c.tem_webhook != null ? ` · ${c.tem_webhook ? "URL de webhook gerada" : "sem URL de webhook"}` : ""}
+            {!c.active && <AdmChip tom="neutro">inativo</AdmChip>}
+            {c.tem_token != null && <AdmChip tom={c.tem_token ? "ok" : "atencao"}>{c.tem_token ? "Token salvo" : "Sem token salvo"}</AdmChip>}
+            {c.provider === "kommo" && c.tem_webhook != null && <AdmChip tom={c.tem_webhook ? "ok" : "atencao"}>{c.tem_webhook ? "URL de webhook gerada" : "sem URL de webhook"}</AdmChip>}
             {c.provider === "kommo" && (
               <button
                 type="button"
@@ -272,28 +201,24 @@ function CrmConnectionsList({ clientId }: { clientId: string }) {
                   if (!c.tem_webhook || window.confirm("Gerar uma URL nova? A atual para de funcionar até você colar a nova nos Webhooks da Kommo.")) renovarMutation.mutate(c.id);
                 }}
                 disabled={renovarMutation.isPending}
-                className="ml-2 text-xs font-semibold"
-                style={{ color: "var(--accent)" }}
+                className="adm-btn adm-btn--mini"
               >
                 {c.tem_webhook ? "Gerar nova URL" : "Gerar URL"}
               </button>
             )}
-          </div>
-          {c.provider === "kommo" && novaUrl?.id === c.id && (
-            <>
-              <input autoComplete="off"
-                readOnly
-                value={novaUrl.url}
-                onFocus={(e) => e.target.select()}
-                className="mt-1 w-full rounded-md border px-2 py-1 text-xs"
-                style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-              />
-              <div className="mt-0.5 text-xs">Copie agora: por segurança, a URL não é mostrada de novo.</div>
-            </>
-          )}
-        </li>
-      ))}
-    </ul>
+            <button type="button" onClick={() => removeMutation.mutate(c.id)} className="adm-btn adm-btn--mini adm-btn--perigo">
+              Remover
+            </button>
+            {c.provider === "kommo" && novaUrl?.id === c.id && (
+              <>
+                <input autoComplete="off" readOnly value={novaUrl.url} onFocus={(e) => e.target.select()} className="adm-entrada" aria-label="Nova URL de webhook" />
+                <span className="adm-ligado__nota">Copie agora: por segurança, a URL não é mostrada de novo.</span>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -317,6 +242,7 @@ function mensagemDeAcesso(o: { nomeCliente: string; email: string; senha: string
 
 function NewUserForm({ clientId, nomeCliente }: { clientId: string; nomeCliente: string }) {
   const queryClient = useQueryClient();
+  const uid = useId();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<CreateClientUserInput["role"]>("owner");
   const [result, setResult] = useState<{ user_id: string; temporary_password: string | null; ja_existia?: boolean; email: string } | null>(null);
@@ -343,69 +269,48 @@ function NewUserForm({ clientId, nomeCliente }: { clientId: string; nomeCliente:
   const msg = result ? mensagemDeAcesso({ nomeCliente, email: result.email, senha: result.temporary_password }) : "";
 
   return (
-    <div className="space-y-3">
-      <ol className="list-decimal space-y-0.5 pl-5 text-sm" style={{ color: "var(--ink-2)" }}>
-        <li>Digite o e-mail do médico (ou de quem vai acompanhar) e escolha o papel.</li>
-        <li>Clique em <b>Criar acesso</b>: o Nexo gera uma senha temporária.</li>
-        <li>Envie a mensagem pronta por WhatsApp ou e-mail. No primeiro acesso, a pessoa cria a própria senha e vê um tour.</li>
+    <>
+      <ol className="adm-passos">
+        <li>
+          <span>Digite o e-mail do médico (ou de quem vai acompanhar) e escolha o papel.</span>
+        </li>
+        <li>
+          <span>
+            Clique em <b>Criar acesso</b>: o Nexo gera uma senha temporária.
+          </span>
+        </li>
+        <li>
+          <span>Envie a mensagem pronta por WhatsApp ou e-mail. No primeiro acesso, a pessoa cria a própria senha e vê um tour.</span>
+        </li>
       </ol>
-      <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-            E-mail
-          </label>
-          <input autoComplete="off"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            placeholder="Ex.: medico@clinica.com.br"
-            className="mt-1 w-64 rounded-md border px-2 py-1.5 text-sm"
-            style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-            Papel
-          </label>
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as CreateClientUserInput["role"])}
-            className="mt-1 rounded-md border px-2 py-1.5 text-sm"
-            style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-          >
+      <form onSubmit={handleSubmit} className="adm-form">
+        <AdmCampo id={`${uid}-email`} rotulo="E-mail">
+          <input id={`${uid}-email`} autoComplete="off" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="Ex.: medico@clinica.com.br" className="adm-entrada" />
+        </AdmCampo>
+        <AdmCampo id={`${uid}-papel`} rotulo="Papel">
+          <select id={`${uid}-papel`} value={role} onChange={(e) => setRole(e.target.value as CreateClientUserInput["role"])} className="adm-entrada">
             <option value="owner">Owner (o médico)</option>
             <option value="strategist">Strategist</option>
             <option value="viewer">Viewer</option>
           </select>
-        </div>
-        <button
-          type="submit"
-          disabled={mutation.isPending}
-          className="min-h-[40px] rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          style={{ background: "var(--accent)" }}
-        >
+        </AdmCampo>
+        <button type="submit" disabled={mutation.isPending} className="adm-btn adm-btn--pri">
           {mutation.isPending ? "Criando…" : "Criar acesso"}
         </button>
-        {mutation.isError && (
-          <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
-            {mensagemDeErroAcao(mutation.error)}
-          </p>
-        )}
+        {mutation.isError && <p className="adm-erro">{mensagemDeErroAcao(mutation.error)}</p>}
       </form>
       {result && (
-        <div className="space-y-2 rounded-lg border p-3 text-sm" style={{ background: "var(--good-bg)", borderColor: "var(--good-border)" }}>
-          <p className="font-semibold">
+        <div className="adm-resultado">
+          <p>
             {result.ja_existia
               ? "Esse e-mail já tinha conta no painel: ele foi vinculado a este cliente, com a senha que já usa."
               : "Acesso criado. A senha temporária aparece só aqui e na mensagem abaixo."}
           </p>
-          <textarea readOnly value={msg} rows={9} className="w-full rounded-md border p-2 font-mono text-xs" style={{ borderColor: "var(--border)", background: "var(--surface)" }} aria-label="Mensagem para enviar" />
+          <textarea readOnly value={msg} rows={9} className="adm-entrada font-mono" aria-label="Mensagem para enviar" />
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="min-h-[40px] rounded-lg px-3 text-sm font-semibold text-white"
-              style={{ background: "var(--accent)" }}
+              className="adm-btn adm-btn--pri"
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(msg);
@@ -417,21 +322,22 @@ function NewUserForm({ clientId, nomeCliente }: { clientId: string; nomeCliente:
             >
               {copiado ? "Copiado!" : "Copiar mensagem"}
             </button>
-            <a className="inline-flex min-h-[40px] items-center rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: "var(--border)", background: "var(--surface)" }} href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer">
+            <a className="adm-btn" href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer">
               Enviar pelo WhatsApp
             </a>
-            <a className="inline-flex min-h-[40px] items-center rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: "var(--border)", background: "var(--surface)" }} href={`mailto:${result.email}?subject=${encodeURIComponent("Seu acesso ao painel Doctor Creator")}&body=${encodeURIComponent(msg)}`}>
+            <a className="adm-btn" href={`mailto:${result.email}?subject=${encodeURIComponent("Seu acesso ao painel Doctor Creator")}&body=${encodeURIComponent(msg)}`}>
               Enviar por e-mail
             </a>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
 function MembersList({ clientId }: { clientId: string }) {
   const queryClient = useQueryClient();
+  const uid = useId();
   const { data: members } = useQuery({
     queryKey: ["admin-members", clientId],
     queryFn: () => listClientMembers(clientId),
@@ -448,68 +354,35 @@ function MembersList({ clientId }: { clientId: string }) {
   });
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-2 rounded-lg border p-3" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
-        <div className="flex-1">
-          <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-            Enviar redefinição de senha (e-mail do usuário)
-          </label>
-          <input autoComplete="off"
-            type="email"
-            value={resetEmail}
-            onChange={(e) => setResetEmail(e.target.value)}
-            className="mt-1 w-64 rounded-md border px-2 py-1.5 text-sm"
-            style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-          />
-        </div>
-        <button
-          type="button"
-          disabled={!resetEmail.trim() || resetMutation.isPending}
-          onClick={() => resetMutation.mutate(resetEmail)}
-          className="rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-60"
-          style={{ borderColor: "var(--border)" }}
-        >
+    <>
+      <div className="grid gap-2">
+        <p className="adm-titulo-lista">Quem entra no painel deste cliente</p>
+        <ul className="adm-ligados">
+          {(members ?? []).map((m) => (
+            <li key={m.id} className="adm-ligado">
+              <span className="adm-ligado__nome">
+                <code>{m.user_id}</code>
+              </span>
+              <AdmChip tom="marca" semIcone>{m.role}</AdmChip>
+              <button type="button" onClick={() => removeMutation.mutate(m.id)} className="adm-btn adm-btn--mini adm-btn--perigo">
+                Remover
+              </button>
+            </li>
+          ))}
+          {(members ?? []).length === 0 && <li className="adm-item__mais">Nenhum usuário vinculado ainda.</li>}
+        </ul>
+      </div>
+      <div className="adm-caixa adm-form">
+        <AdmCampo id={`${uid}-reset`} rotulo="Enviar redefinição de senha (e-mail do usuário)">
+          <input id={`${uid}-reset`} autoComplete="off" type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} className="adm-entrada" />
+        </AdmCampo>
+        <button type="button" disabled={!resetEmail.trim() || resetMutation.isPending} onClick={() => resetMutation.mutate(resetEmail)} className="adm-btn">
           {resetMutation.isPending ? "Enviando…" : "Enviar link"}
         </button>
-        {resetMutation.isSuccess && <span style={{ color: "var(--good)" }}>Link enviado.</span>}
-        {resetMutation.isError && <span style={{ color: "var(--danger)" }}>{mensagemDeErroAcao(resetMutation.error)}</span>}
+        {resetMutation.isSuccess && <p className="adm-ok">Link enviado.</p>}
+        {resetMutation.isError && <p className="adm-erro">{mensagemDeErroAcao(resetMutation.error)}</p>}
       </div>
-
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-left text-xs" style={{ color: "var(--text-faint)" }}>
-            <th className="pb-2">User ID</th>
-            <th className="pb-2">Papel</th>
-            <th className="pb-2"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {(members ?? []).map((m) => (
-            <tr key={m.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-              <td className="py-2 font-mono text-xs">{m.user_id}</td>
-              <td className="py-2">{m.role}</td>
-              <td className="py-2 text-right">
-                <button
-                  type="button"
-                  onClick={() => removeMutation.mutate(m.id)}
-                  className="text-xs"
-                  style={{ color: "var(--danger)" }}
-                >
-                  Remover
-                </button>
-              </td>
-            </tr>
-          ))}
-          {(members ?? []).length === 0 && (
-            <tr>
-              <td colSpan={3} className="py-4 text-center" style={{ color: "var(--text-dim)" }}>
-                Nenhum usuário vinculado ainda.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+    </>
   );
 }
 
@@ -519,79 +392,102 @@ function InstagramAccountsList({ clientId }: { clientId: string }) {
     queryFn: () => listInstagramAccounts(clientId),
   });
 
-  if (!accounts?.length) return null;
+  if (!accounts?.length) return <p className="adm-item__mais">Nenhuma conta ligada ainda.</p>;
   return (
-    <ul className="mt-3 space-y-1 text-sm">
-      {accounts.map((a) => (
-        <li key={a.id} style={{ color: "var(--text-dim)" }}>
-          <code className="font-mono">{a.windsor_account_id}</code>
-          {a.ig_username ? ` · @${a.ig_username}` : ""}
-        </li>
-      ))}
-    </ul>
+    <div className="grid gap-2">
+      <p className="adm-titulo-lista">Ligadas neste cliente</p>
+      <ul className="adm-ligados">
+        {accounts.map((a) => (
+          <li key={a.id} className="adm-ligado">
+            <span className="adm-ligado__nome">{a.ig_username ? `@${a.ig_username}` : "Conta sem @"}</span>
+            <code>{a.windsor_account_id}</code>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
+
+const INDICE = [
+  { id: "perfil", rotulo: "Perfil", icone: <UserCog aria-hidden /> },
+  { id: "instagram", rotulo: "Instagram", icone: <AtSign aria-hidden /> },
+  { id: "crm", rotulo: "CRM", icone: <Database aria-hidden /> },
+  { id: "acesso", rotulo: "Dar acesso", icone: <KeyRound aria-hidden /> },
+  { id: "usuarios", rotulo: "Usuários", icone: <Users aria-hidden /> },
+];
 
 function AdminClientDetailPage() {
   const { clientId } = Route.useParams();
   const { data: client } = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId) });
 
   return (
-    <div className="space-y-8">
-      <div>
-        <Link to="/admin" className="text-sm" style={{ color: "var(--accent)" }}>
-          ← Todos os clientes
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={44} />
-          <Link to="/$clientId/pacientes" params={{ clientId }} className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
-            Ver o painel deste cliente →
+    <div className="adm adm-cliente">
+      <div className="adm-cabeca">
+        <div className="adm-cabeca__quem">
+          <ClientAvatar nome={client?.name ?? "?"} url={client?.avatar_url} tamanho={52} />
+          <div className="min-w-0">
+            <b>{client?.name ?? "Carregando…"}</b>
+            <small>{[client?.specialty, client?.instagram_handle ? `@${client.instagram_handle}` : null].filter(Boolean).join(" · ") || "Configurar este cliente"}</small>
+          </div>
+        </div>
+        <div className="adm-cabeca__acoes">
+          <Link to="/admin" className="adm-btn">
+            <ArrowLeft aria-hidden /> Todos os clientes
+          </Link>
+          <Link to="/$clientId/pacientes" params={{ clientId }} className="adm-btn adm-btn--pri">
+            Ver o painel deste cliente <ArrowRight aria-hidden />
           </Link>
         </div>
       </div>
 
-      {/* Tarefas da equipe que saíram do menu do cliente. */}
-      <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h3 className="mb-1 text-sm font-semibold">Tarefas da equipe neste cliente</h3>
-        <p className="mb-3 text-sm" style={{ color: "var(--ink-2)" }}>Classificar o CRM é trabalho da equipe, por isso fica aqui e não no menu do cliente.</p>
-        <div className="flex flex-wrap gap-2">
-          <Link to="/$clientId/analisar" params={{ clientId }} className="inline-flex min-h-[40px] items-center rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--accent)" }}>
-            A analisar: etapas, ganho e perda do CRM →
-          </Link>
-          <Link to="/$clientId/crm-estrutura" params={{ clientId }} className="inline-flex min-h-[40px] items-center rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--accent)" }}>
-            Estrutura do CRM →
-          </Link>
-        </div>
-      </section>
+      <nav className="adm-indice" aria-label="Seções desta tela">
+        {INDICE.map((s) => (
+          <a key={s.id} href={`#${s.id}`}>
+            {s.icone}
+            {s.rotulo}
+          </a>
+        ))}
+      </nav>
 
-      {client && (
-        <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-          <h3 className="mb-3 text-sm font-semibold">Perfil do cliente</h3>
-          <ClientProfileForm client={client} />
-        </section>
-      )}
+      <div className="adm-secoes">
+        {/* Tarefas da equipe que saíram do menu do cliente. */}
+        <AdmSecao toda icone={<ClipboardList />} titulo="Tarefas da equipe neste cliente" sub="Classificar o CRM é trabalho da equipe, por isso fica aqui e não no menu do cliente.">
+          <div className="flex flex-wrap gap-2">
+            <Link to="/$clientId/analisar" params={{ clientId }} className="adm-btn">
+              A analisar: etapas, ganho e perda do CRM <ArrowRight aria-hidden />
+            </Link>
+            <Link to="/$clientId/crm-estrutura" params={{ clientId }} className="adm-btn">
+              Estrutura do CRM <ArrowRight aria-hidden />
+            </Link>
+          </div>
+        </AdmSecao>
 
-      <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h3 className="mb-3 text-sm font-semibold">Conta Instagram</h3>
-        <ConnectInstagramForm clientId={clientId} />
-        <InstagramAccountsList clientId={clientId} />
-      </section>
+        {client && (
+          <AdmSecao toda id="perfil" icone={<UserCog />} titulo="Perfil do cliente" sub="Nome, foto, Instagram, contas e o que aparece no Resultado.">
+            <div className="adm-perfil">
+              <ClientProfileForm client={client} />
+            </div>
+          </AdmSecao>
+        )}
 
-      <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h3 className="mb-3 text-sm font-semibold">CRM</h3>
-        <ConnectCrmForm clientId={clientId} />
-        <CrmConnectionsList clientId={clientId} />
-      </section>
+        <AdmSecao id="instagram" icone={<AtSign />} titulo="Conta Instagram" sub="Ligue a conta pelo ID para os posts e métricas chegarem.">
+          <ConnectInstagramForm clientId={clientId} />
+          <InstagramAccountsList clientId={clientId} />
+        </AdmSecao>
 
-      <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h3 id="acesso" className="mb-3 scroll-mt-4 text-sm font-semibold">Dar acesso ao médico</h3>
-        <NewUserForm clientId={clientId} nomeCliente={client?.name ?? "O cliente"} />
-      </section>
+        <AdmSecao id="crm" icone={<Database />} titulo="CRM" sub="Kommo gera uma URL de webhook; os outros usam token.">
+          <ConnectCrmForm clientId={clientId} />
+          <CrmConnectionsList clientId={clientId} />
+        </AdmSecao>
 
-      <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h3 className="mb-3 text-sm font-semibold">Usuários vinculados</h3>
-        <MembersList clientId={clientId} />
-      </section>
+        <AdmSecao id="acesso" icone={<KeyRound />} titulo="Dar acesso ao médico" sub="Cria o login e a mensagem pronta para enviar.">
+          <NewUserForm clientId={clientId} nomeCliente={client?.name ?? "O cliente"} />
+        </AdmSecao>
+
+        <AdmSecao id="usuarios" icone={<Users />} titulo="Usuários vinculados" sub="Quem já entra no painel, e o link de nova senha.">
+          <MembersList clientId={clientId} />
+        </AdmSecao>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { ehNegocioProprio } from "@/lib/negocio-proprio";
-import { useState, type FormEvent } from "react";
+import { useId, useState, type CSSProperties, type FormEvent } from "react";
 import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,7 +14,7 @@ import { getSapPorCliente } from "@/lib/sap-data";
 import { lerStatusDasFontes, type FontesDoCliente } from "@/lib/saude-fontes";
 import { notaDasFontes, ROTULO_FAIXA, type NotaFontes } from "@/lib/nota-fontes";
 import { FONTES, NOME_FONTE, LEGENDA_STATUS, VAR_COR, type FonteId } from "@/lib/status-fonte";
-import { ArrowRight, UserX } from "lucide-react";
+import { AlertTriangle, ArrowRight, Building2, Calculator, Clock, Search, ShieldCheck, Unplug, UserPlus, UserX } from "lucide-react";
 import { saudeDaFonte, CelulaSaude, SeloStatus, type SaudeFonte } from "@/components/source-health";
 import { useQualidadeDados } from "@/components/qualidade-dados";
 import { LinksSemCliente } from "@/components/links-shortio";
@@ -25,6 +25,8 @@ import { montarProblemasFontes } from "@/lib/saude-problemas";
 import { SemRespostaAgora } from "@/components/sem-resposta-agora";
 import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 import { CAMPOS_DIARIOS, type CampoDiario } from "@/hooks/use-resultados-diarios";
+import { NxAlertaCurto, NxNota, NxTopo } from "@/components/nx/anuncios-graficos";
+import { AdmCampo, AdmChip, AdmContador, AdmContadores, AdmSecao, tomDaCor } from "@/components/nx/admin-base";
 import "@/styles/databoard.css";
 
 
@@ -54,59 +56,22 @@ function NewClientForm() {
     mutation.mutate();
   }
 
+  const uid = useId();
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border p-4"
-      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-    >
-      <div>
-        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          Nome do médico(a)
-        </label>
-        <input autoComplete="off"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          className="mt-1 rounded-md border px-2 py-1.5 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          Especialidade
-        </label>
-        <input autoComplete="off"
-          value={specialty}
-          onChange={(e) => setSpecialty(e.target.value)}
-          className="mt-1 rounded-md border px-2 py-1.5 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          @Instagram
-        </label>
-        <input autoComplete="off"
-          value={handle}
-          onChange={(e) => setHandle(e.target.value)}
-          className="mt-1 rounded-md border px-2 py-1.5 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-        />
-      </div>
-      <button
-        type="submit"
-        disabled={mutation.isPending}
-        className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-        style={{ background: "var(--accent)" }}
-      >
+    <form onSubmit={handleSubmit} className="adm-form">
+      <AdmCampo id={`${uid}-nome`} rotulo="Nome do médico(a)">
+        <input id={`${uid}-nome`} autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} required className="adm-entrada" />
+      </AdmCampo>
+      <AdmCampo id={`${uid}-esp`} rotulo="Especialidade">
+        <input id={`${uid}-esp`} autoComplete="off" value={specialty} onChange={(e) => setSpecialty(e.target.value)} className="adm-entrada" />
+      </AdmCampo>
+      <AdmCampo id={`${uid}-ig`} rotulo="@Instagram">
+        <input id={`${uid}-ig`} autoComplete="off" value={handle} onChange={(e) => setHandle(e.target.value)} className="adm-entrada" />
+      </AdmCampo>
+      <button type="submit" disabled={mutation.isPending} className="adm-btn adm-btn--pri">
         {mutation.isPending ? "Criando…" : "Novo cliente"}
       </button>
-      {mutation.isError && (
-        <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
-          {mensagemDeErroAcao(mutation.error)}
-        </p>
-      )}
+      {mutation.isError && <p className="adm-erro">{mensagemDeErroAcao(mutation.error)}</p>}
     </form>
   );
 }
@@ -132,53 +97,21 @@ function NewAdminForm() {
     mutation.mutate();
   }
 
+  const uid = useId();
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border p-4"
-      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-    >
-      <div>
-        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          E-mail do novo admin
-        </label>
-        <input autoComplete="off"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className="mt-1 rounded-md border px-2 py-1.5 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-          Senha (opcional — em branco gera uma)
-        </label>
-        <input autoComplete="off"
-          type="text"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          minLength={8}
-          className="mt-1 rounded-md border px-2 py-1.5 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-        />
-      </div>
-      <button
-        type="submit"
-        disabled={mutation.isPending}
-        className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-        style={{ background: "var(--accent)" }}
-      >
+    <form onSubmit={handleSubmit} className="adm-form">
+      <AdmCampo id={`${uid}-email`} rotulo="E-mail do novo admin">
+        <input id={`${uid}-email`} autoComplete="off" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="adm-entrada" />
+      </AdmCampo>
+      <AdmCampo id={`${uid}-senha`} rotulo="Senha (opcional — em branco gera uma)">
+        <input id={`${uid}-senha`} autoComplete="off" type="text" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} className="adm-entrada" />
+      </AdmCampo>
+      <button type="submit" disabled={mutation.isPending} className="adm-btn adm-btn--pri">
         {mutation.isPending ? "Criando…" : "Novo admin"}
       </button>
-      {mutation.isError && (
-        <p className="w-full text-sm" style={{ color: "var(--danger)" }}>
-          {mensagemDeErroAcao(mutation.error)}
-        </p>
-      )}
+      {mutation.isError && <p className="adm-erro">{mensagemDeErroAcao(mutation.error)}</p>}
       {result && (
-        <p className="w-full text-sm" style={{ color: "var(--good)" }}>
+        <p className="adm-ok" style={{ flexBasis: "100%" }}>
           Admin {result.email} criado.
           {result.temporary_password
             ? ` Senha temporária (anote agora, não vai aparecer de novo): ${result.temporary_password}`
@@ -253,6 +186,19 @@ function ChipQualidade({ clientId }: { clientId: string }) {
     <div className="mt-1 text-xs font-semibold" style={{ color: altas ? "var(--crit)" : "var(--warn)" }} title={data.map((p) => p.titulo).join("\n")}>
       {data.length} {data.length === 1 ? "dado com erro" : "dados com erro"}{altas ? ` · ${altas} afeta${altas === 1 ? "" : "m"} a leitura` : ""}
     </div>
+  );
+}
+
+// A mesma contagem do ChipQualidade, no formato de chip da linha da carteira.
+function ChipQualidadeCurto({ clientId }: { clientId: string }) {
+  const { data } = useQualidadeDados(clientId);
+  if (!data?.length) return null;
+  const altas = data.filter((p) => p.severidade === "alta").length;
+  return (
+    <AdmChip tom={altas ? "critico" : "atencao"} titulo={data.map((p) => p.titulo).join("\n")}>
+      {data.length} {data.length === 1 ? "dado com erro" : "dados com erro"}
+      {altas ? ` · ${altas} afeta${altas === 1 ? "" : "m"} a leitura` : ""}
+    </AdmChip>
   );
 }
 
@@ -376,15 +322,9 @@ function AdminClientsPage() {
           : piorPeso(y.id) - piorPeso(x.id) || x.name.localeCompare(y.name, "pt-BR"),
     );
   const chipFiltro = (id: typeof filtro, rot: string, n?: number) => (
-    <button
-      type="button"
-      onClick={() => setFiltro(id)}
-      aria-pressed={filtro === id}
-      className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3 text-sm font-medium"
-      style={{ borderColor: filtro === id ? "var(--accent)" : "var(--border)", background: filtro === id ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "var(--surface)", color: filtro === id ? "var(--accent)" : "var(--ink-2)" }}
-    >
+    <button type="button" onClick={() => setFiltro(id)} aria-pressed={filtro === id} className="adm-pilula">
       {rot}
-      {n != null && <span className="tabular-nums" style={{ color: "var(--muted)" }}>{n}</span>}
+      {n != null && <small>{n}</small>}
     </button>
   );
 
@@ -435,37 +375,64 @@ function AdminClientsPage() {
     return { t: `${pct > 0 ? "▲" : "▼"} ${abs > 300 ? "mais de 300" : abs}%`, c: pct > 0 ? "up" : "down" };
   };
 
-  return (
-    <div className="dbx">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm" style={{ color: "var(--muted)" }}>
-          <b style={{ color: "var(--ink)" }}>{nClinicas} clínicas</b>
-          {nAtencao > 0 ? <> · <span style={{ color: "var(--warn)" }}>{nAtencao} pedem atenção</span></> : " · tudo em dia"}
-          {" "}· números dos últimos 30 dias contra os 30 anteriores
-        </p>
-        <Link to="/sap" className="inline-flex min-h-[38px] items-center rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--accent)" }}>
-          Cadastrar clínica nova (SAP) <ArrowRight size={14} aria-hidden className="ml-1" />
-        </Link>
-      </div>
+  // Contagens dos cartões do topo: só leem o status que a tela já calculou (regra única de status-fonte.ts).
+  const fontesAmarelas = (clients ?? []).map((c) => {
+    const sd = saudePorCliente.get(c.id);
+    return sd ? FONTES.filter((f) => sd[f].status.cor === "amarelo").length : 0;
+  });
+  const totalAmarelas = fontesAmarelas.reduce((n, x) => n + x, 0);
+  const clinicasAmarelas = fontesAmarelas.filter((x) => x > 0).length;
+  const roisProntos = rois.every((q) => !q.isLoading);
+  const nSemRoi = roisProntos ? (clients ?? []).filter((c) => semRoi(c.id)).length : null;
+  const nSemLogin = logins ? (clients ?? []).filter((c) => semLogin(c.id)).length : null;
+  const lendo = (v: number | null | undefined) => (v == null || carregandoSaude ? "…" : v.toLocaleString("pt-BR"));
+  const tomDe = (n: number | null, tom: "atencao" | "critico") => (n == null ? "neutro" : n > 0 ? tom : "ok");
 
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <input
-          autoComplete="off"
-          type="search"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar cliente por nome, especialidade ou @"
-          aria-label="Buscar cliente"
-          className="min-h-[40px] w-full max-w-sm rounded-lg border px-3 text-sm"
-          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-        />
-        {chipFiltro("todos", "Todos", (clients ?? []).length)}
-        {chipFiltro("problema", "Com problema", (clients ?? []).filter((c) => piorPeso(c.id) >= 2).length)}
-        {chipFiltro("sem_roi", "Sem ROI", rois.every((q) => !q.isLoading) ? (clients ?? []).filter((c) => semRoi(c.id)).length : undefined)}
-        {chipFiltro("sem_login", "Sem login", logins ? (clients ?? []).filter((c) => semLogin(c.id)).length : undefined)}
-        <label className="ml-auto inline-flex min-h-[40px] items-center gap-2 text-sm" style={{ color: "var(--ink-2)" }}>
+  return (
+    <div className="dbx adm adm-carteira">
+      <NxTopo
+        pergunta="Quais clínicas precisam de você hoje? As que pedem atenção vêm primeiro na lista."
+        meta={<AdmChip tom="marca" semIcone>Números dos últimos 30 dias contra os 30 anteriores</AdmChip>}
+        acao={
+          <Link to="/sap" className="adm-btn">
+            Cadastrar clínica nova (SAP) <ArrowRight aria-hidden />
+          </Link>
+        }
+      />
+
+      <AdmContadores rotulo="Resumo da carteira">
+        <AdmContador className="dbx-card" i={0} icone={<Building2 />} rotulo="Clínicas na carteira" valor={isLoading ? "…" : nClinicas} nota="Ver todas" tom="marca" onClick={() => setFiltro("todos")} ativo={filtro === "todos"} />
+        <AdmContador className="dbx-card" i={1} icone={<AlertTriangle />} rotulo="Precisam de atenção" valor={lendo(nAtencao)} nota="Fonte atrasada, parada ou com erro" tom={carregandoSaude ? "neutro" : tomDe(nAtencao, "atencao")} onClick={() => setFiltro("problema")} ativo={filtro === "problema"} />
+        <AdmContador className="dbx-card" i={2} icone={<Unplug />} rotulo="Fonte parada ou com erro" valor={lendo(totalVermelhas)} nota={carregandoSaude ? "Lendo as fontes…" : totalVermelhas ? `Em ${vermelhas.length} ${vermelhas.length === 1 ? "clínica" : "clínicas"} · mais de 3 dias` : "Nenhuma"} tom={carregandoSaude ? "neutro" : tomDe(totalVermelhas, "critico")} />
+        <AdmContador className="dbx-card" i={3} icone={<Clock />} rotulo="Fonte atrasada" valor={lendo(totalAmarelas)} nota={carregandoSaude ? "Lendo as fontes…" : totalAmarelas ? `Em ${clinicasAmarelas} ${clinicasAmarelas === 1 ? "clínica" : "clínicas"} · 2 a 3 dias` : "Nenhuma"} tom={carregandoSaude ? "neutro" : tomDe(totalAmarelas, "atencao")} />
+        <AdmContador className="dbx-card" i={4} icone={<UserX />} rotulo="Médico sem login" valor={nSemLogin == null ? "…" : nSemLogin} nota="Ninguém da clínica entra no painel" tom={tomDe(nSemLogin, "atencao")} onClick={() => setFiltro("sem_login")} ativo={filtro === "sem_login"} />
+        <AdmContador className="dbx-card" i={5} icone={<Calculator />} rotulo="Sem ROI calculável" valor={nSemRoi == null ? "…" : nSemRoi} nota="Falta dado para o retorno de 30 dias" tom={tomDe(nSemRoi, "atencao")} onClick={() => setFiltro("sem_roi")} ativo={filtro === "sem_roi"} />
+      </AdmContadores>
+      {statusQ.isError && (
+        <NxAlertaCurto titulo="Não consegui ler o status das fontes agora." passo="Tente de novo em instantes. Os números abaixo podem estar incompletos." />
+      )}
+
+      <div className="adm-filtros">
+        <div className="adm-busca">
+          <Search aria-hidden />
+          <input
+            autoComplete="off"
+            type="search"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar cliente por nome, especialidade ou @"
+            aria-label="Buscar cliente"
+          />
+        </div>
+        <div className="adm-pilulas" role="group" aria-label="Filtrar clínicas">
+          {chipFiltro("todos", "Todos", (clients ?? []).length)}
+          {chipFiltro("problema", "Com problema", nAtencao)}
+          {chipFiltro("sem_roi", "Sem ROI", nSemRoi ?? undefined)}
+          {chipFiltro("sem_login", "Sem login", nSemLogin ?? undefined)}
+        </div>
+        <label className="adm-ordem">
           Ordenar por
-          <select value={ordem} onChange={(e) => setOrdem(e.target.value as typeof ordem)} className="min-h-[36px] rounded-lg border px-2 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+          <select value={ordem} onChange={(e) => setOrdem(e.target.value as typeof ordem)}>
             <option value="pior">Pior status</option>
             <option value="nota">Nota das fontes (menor primeiro)</option>
             <option value="nome">Nome</option>
@@ -476,273 +443,271 @@ function AdminClientsPage() {
       {isLoading ? (
         <Carregando texto="Lendo os clientes…" />
       ) : (
-        <ul className="dbx-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
-          {linhasTabela.map((c) => {
-            const handle = c.instagram_handle || contasIg?.get(c.id) || null;
-            const n = numerosQ.data?.get(c.id);
-            const cor = piorCor(c.id);
-            return (
-              <li key={c.id} className="dbx-card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div className="flex items-start gap-3">
-                  <ClientAvatar nome={c.name} url={c.avatar_url} tamanho={40} />
-                  <div className="min-w-0 flex-1">
-                    <p className="dbx-title" style={{ margin: 0 }}>{c.name}</p>
-                    <p className="dbx-sub" style={{ marginTop: 2 }}>{[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}</p>
+        <section className="adm-lista-card" aria-label="Clínicas da carteira">
+          <div className="adm-lista-head" aria-hidden>
+            <span>Clínica</span>
+            <span>Saúde dos dados e alertas</span>
+            <span>Últimos 30 dias</span>
+            <span />
+          </div>
+          <ul className="adm-lista">
+            {linhasTabela.map((c, idx) => {
+              const handle = c.instagram_handle || contasIg?.get(c.id) || null;
+              const n = numerosQ.data?.get(c.id);
+              const cor = piorCor(c.id);
+              const sd = saudePorCliente.get(c.id);
+              const nota = notaPorCliente.get(c.id) ?? null;
+              const sp = sapPorCliente?.get(c.id);
+              const r = roiDe(c.id);
+              const ruins = sd ? FONTES.filter((f) => sd[f].status.cor === "vermelho" || sd[f].status.cor === "amarelo") : [];
+              return (
+                <li key={c.id} className={`adm-linha${cor === "vermelho" ? " adm-linha--alerta" : cor === "amarelo" ? " adm-linha--atencao" : ""}`} style={{ "--i": Math.min(idx, 12) } as CSSProperties}>
+                  <div className="adm-quem">
+                    <span className="adm-quem__av"><ClientAvatar nome={c.name} url={c.avatar_url} tamanho={44} /></span>
+                    <div className="adm-quem__texto">
+                      <span className="adm-quem__nome">{c.name}</span>
+                      <span className="adm-quem__sub">{[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}</span>
+                    </div>
                   </div>
-                  <span className="dbx-badge" style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <span aria-hidden style={{ width: 8, height: 8, borderRadius: 99, background: VAR_COR[cor as keyof typeof VAR_COR] ?? "var(--muted)" }} />
-                    {rotuloCor[cor] ?? "Sem fontes"}
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  {([["mandaram_mensagem", "Chamaram"], ["agendaram", "Agendaram"], ["fecharam", "Fecharam"]] as const).map(([k, rot]) => {
-                    const v = n?.atual[k];
-                    const dl = deltaTxt(n?.atual[k], n?.antes[k]);
-                    return (
-                      <div key={k}>
-                        <div style={{ fontSize: 24, fontWeight: 500, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>{v == null ? "–" : v.toLocaleString("pt-BR")}</div>
-                        <div className="dbx-sub" style={{ margin: "2px 0 0" }}>{rot}</div>
-                        <div style={{ fontSize: 12, fontWeight: 700, minHeight: 16, color: dl?.c === "up" ? "var(--dbx-ok)" : dl?.c === "down" ? "var(--dbx-bad)" : "var(--muted)" }}>{dl?.t ?? ""}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {semLogin(c.id) && (
-                  <Link to="/admin/$clientId" params={{ clientId: c.id }} hash="acesso" className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--warn)" }}>
-                    <UserX size={13} aria-hidden /> Médico sem login · dar acesso
-                  </Link>
-                )}
-                <div className="mt-auto flex gap-2">
-                  <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} className="inline-flex min-h-[38px] flex-1 items-center justify-center gap-1 rounded-lg px-3 text-sm font-semibold" style={{ background: "var(--action-bg, var(--accent))", color: "var(--action-ink, #fff)" }}>
-                    Abrir resultados <ArrowRight size={14} aria-hidden />
-                  </Link>
-                  <Link to="/admin/$clientId" params={{ clientId: c.id }} className="inline-flex min-h-[38px] items-center rounded-lg border px-3 text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--accent)" }} title="Fontes, acesso e configuração">
-                    Gerenciar
-                  </Link>
-                </div>
-              </li>
-            );
-          })}
+                  <div className="adm-chips">
+                    <AdmChip tom={sd ? tomDaCor(cor) : "neutro"}>{sd ? rotuloCor[cor] ?? "Sem fontes" : "Lendo as fontes…"}</AdmChip>
+                    {sd && ruins.map((f) => (
+                      <AdmChip key={f} tom={tomDaCor(sd[f].status.cor)} titulo={`${sd[f].status.data ? sd[f].status.detalhe : "sem dado gravado"}${sd[f].causa ? ` · ${sd[f].causa}` : ""}`}>
+                        {NOME_FONTE[f]}: {sd[f].status.rotulo.toLowerCase()}
+                      </AdmChip>
+                    ))}
+                    {nota && nota.nota !== null && (
+                      <AdmChip tom={tomDaCor(nota.cor)} semIcone titulo={nota.motivos.length ? `Por que não é 100:\n${nota.motivos.join("\n")}` : "Todas as fontes em dia, sem problema de dado"}>
+                        Nota {nota.nota} · {ROTULO_FAIXA[nota.faixa!]}
+                      </AdmChip>
+                    )}
+                    <ChipQualidadeCurto clientId={c.id} />
+                    {sp && (
+                      <Link to="/sap/$clientId/painel" params={{ clientId: c.id }} className="adm-chip-link" title="Abrir no Sistema de Aquisição">
+                        <AdmChip tom="marca" semIcone>{sp.dia === null ? "SAP · sem D0" : sp.dia > 90 ? "Terminou o SAP" : sp.dia < 0 ? `SAP · começa em ${-sp.dia} dia(s)` : `SAP · D${sp.dia} de 90`}</AdmChip>
+                      </Link>
+                    )}
+                    {semLogin(c.id) && (
+                      <Link to="/admin/$clientId" params={{ clientId: c.id }} hash="acesso" className="adm-chip-link" title="Nenhum usuário do cliente tem acesso ao painel (só a equipe). Clique para dar acesso.">
+                        <AdmChip tom="atencao">Médico sem login · dar acesso</AdmChip>
+                      </Link>
+                    )}
+                  </div>
+                  <div className="adm-nums">
+                    {([["mandaram_mensagem", "Chamaram"], ["agendaram", "Agendaram"], ["fecharam", "Fecharam"]] as const).map(([k, rot]) => {
+                      const v = n?.atual[k];
+                      const dl = deltaTxt(n?.atual[k], n?.antes[k]);
+                      return (
+                        <div key={k} className="adm-num">
+                          <b>{v == null ? "–" : v.toLocaleString("pt-BR")}</b>
+                          <small>{rot}</small>
+                          <i className={dl?.c ?? ""} aria-label={dl ? `${dl.t.replace("▲", "subiu").replace("▼", "caiu")} contra os 30 dias anteriores` : undefined}>{dl?.t ?? ""}</i>
+                        </div>
+                      );
+                    })}
+                    <div className="adm-num adm-num--roi">
+                      {r ? (
+                        <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} style={{ color: r.calculavel ? (r.roi! >= 0 ? "var(--good)" : "var(--crit)") : "var(--warn)" }} title={r.motivoSemCalculo ?? "Ver o retorno no Resultado"}>
+                          {resumoRoi(r)}
+                        </Link>
+                      ) : (
+                        <b>…</b>
+                      )}
+                      <small>Retorno (ROI)</small>
+                    </div>
+                  </div>
+                  <div className="adm-acoes">
+                    <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} className="adm-btn adm-btn--pri">
+                      Abrir resultados <ArrowRight aria-hidden />
+                    </Link>
+                    <Link to="/admin/$clientId" params={{ clientId: c.id }} className="adm-btn" title="Fontes, acesso e configuração">
+                      Gerenciar
+                    </Link>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
           {nClinicas > 0 && linhasTabela.length === 0 && (
-            <li className="dbx-card" style={{ gridColumn: "1 / -1", textAlign: "center", color: "var(--muted)" }}>
+            <p className="adm-vazio">
               Nenhum cliente com esse filtro.{" "}
-              <button type="button" className="dbx-link" onClick={() => { setBusca(""); setFiltro("todos"); }}>Limpar</button>
-            </li>
+              <button type="button" className="adm-link" onClick={() => { setBusca(""); setFiltro("todos"); }}>Limpar</button>
+            </p>
           )}
-        </ul>
+          {nClinicas === 0 && <p className="adm-vazio">Nenhum cliente cadastrado ainda.</p>}
+        </section>
       )}
+      <NxNota>
+        Retorno (ROI) e nota das fontes só aparecem quando há dado para calcular. Variação só com pelo menos 30 no período anterior: base pequena daria um percentual enganoso.
+      </NxNota>
 
-      <details className="dbx-det mt-8">
+      <details className="adm-det">
         <summary>
           Diagnóstico das fontes
-          <span className="dbx-sub" style={{ marginLeft: 8 }}>{totalVermelhas ? `${totalVermelhas} em vermelho` : "nenhuma em vermelho"} · só equipe técnica</span>
+          <small>{totalVermelhas ? `${totalVermelhas} em vermelho` : "nenhuma em vermelho"} · só equipe técnica</small>
         </summary>
-        <div className="pt-4">
-          <div className="dbx-abas" role="tablist" aria-label="Diagnóstico das fontes">
-          <button type="button" role="tab" aria-selected={aba === "alertas"} className="dbx-aba" onClick={() => setAba("alertas")}>Alertas <span className="dbx-aba-n">{totalVermelhas}</span></button>
-          <button type="button" role="tab" aria-selected={aba === "problemas"} className="dbx-aba" onClick={() => setAba("problemas")}>Problemas <span className="dbx-aba-n">{problemas.length}</span></button>
-          <button type="button" role="tab" aria-selected={aba === "resposta"} className="dbx-aba" onClick={() => setAba("resposta")}>Sem resposta</button>
-          <button type="button" role="tab" aria-selected={aba === "clinica"} className="dbx-aba" onClick={() => setAba("clinica")}>Por clínica <span className="dbx-aba-n">{nClinicas}</span></button>
+        <div className="adm-det__corpo">
+          <div className="adm-abas" role="tablist" aria-label="Diagnóstico das fontes">
+            <button type="button" role="tab" aria-selected={aba === "alertas"} className="adm-pilula" onClick={() => setAba("alertas")}>Alertas <small>{totalVermelhas}</small></button>
+            <button type="button" role="tab" aria-selected={aba === "problemas"} className="adm-pilula" onClick={() => setAba("problemas")}>Problemas <small>{problemas.length}</small></button>
+            <button type="button" role="tab" aria-selected={aba === "resposta"} className="adm-pilula" onClick={() => setAba("resposta")}>Sem resposta</button>
+            <button type="button" role="tab" aria-selected={aba === "clinica"} className="adm-pilula" onClick={() => setAba("clinica")}>Por clínica <small>{nClinicas}</small></button>
           </div>
-          <div className="pt-4">
+          <div>
             {aba === "alertas" && (
-              <>
-      {statusQ.isError && (
-        <p className="mb-3 text-sm" style={{ color: "var(--crit)" }}>
-          Não consegui ler o status das fontes agora. Tente de novo em instantes.
-        </p>
-      )}
-      {!carregandoSaude && statusQ.data && (
-        <div className="mb-3 rounded-xl border p-3 text-sm" style={{ borderColor: totalVermelhas ? "var(--crit)" : "var(--border)", background: "var(--surface)" }}>
-          {totalVermelhas === 0 ? (
-            <span className="inline-flex items-center gap-1.5 font-semibold" style={{ color: "var(--good)" }}>
-              Nenhuma fonte vermelha: tudo ligado tem dado de até 3 dias atrás e nenhuma atualização deu erro.
-            </span>
-          ) : (
-            <>
-              <strong style={{ color: "var(--crit)" }}>
-                {totalVermelhas} fonte{totalVermelhas === 1 ? "" : "s"} em vermelho (mais de 3 dias sem dado ou erro) em {vermelhas.length} cliente{vermelhas.length === 1 ? "" : "s"}
-              </strong>
-              <ul className="mt-2 space-y-2 pl-0" style={{ listStyle: "none" }}>
-                {vermelhas.map(({ c, itens }) => (
-                  <li key={c.id}>
-                    <Link to="/admin/$clientId" params={{ clientId: c.id }} className="font-semibold" style={{ color: "var(--ink)" }}>
-                      {c.name}
-                    </Link>
-                    <ul className="mt-0.5 space-y-0.5 pl-4" style={{ listStyle: "none" }}>
-                      {itens.map(({ fonte, s }) => (
-                        <li key={fonte} className="text-[13px]" style={{ color: "var(--ink-2)" }}>
-                          <SeloStatus st={s.status} texto={`${NOME_FONTE[fonte]}: ${s.status.rotulo.toLowerCase()}`} /> · {s.status.data ? s.status.detalhe : "sem dado gravado"}
-                          {s.causa && <div className="text-xs" style={{ color: "var(--muted)" }}>{s.causa}</div>}
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      )}
-      <SaudeShortio />
-              </>
+              <div className="grid gap-3">
+                {statusQ.isError && (
+                  <p className="text-sm" style={{ color: "var(--crit)" }}>
+                    Não consegui ler o status das fontes agora. Tente de novo em instantes.
+                  </p>
+                )}
+                {!carregandoSaude && statusQ.data && (
+                  totalVermelhas === 0 ? (
+                    <p className="adm-ok">Nenhuma fonte vermelha: tudo ligado tem dado de até 3 dias atrás e nenhuma atualização deu erro.</p>
+                  ) : (
+                    <div className="adm-lista-card">
+                      <p className="adm-grupo-titulo">
+                        {totalVermelhas} fonte{totalVermelhas === 1 ? "" : "s"} em vermelho em {vermelhas.length} cliente{vermelhas.length === 1 ? "" : "s"}
+                        <small>mais de 3 dias sem dado ou erro</small>
+                      </p>
+                      <ul className="adm-itens">
+                        {vermelhas.map(({ c, itens }) => (
+                          <li key={c.id} className="adm-item adm-item--critico">
+                            <div className="adm-item__corpo">
+                              <p className="adm-item__titulo">{c.name}</p>
+                              {itens.map(({ fonte, s }) => (
+                                <div key={fonte} className="grid gap-1">
+                                  <div className="adm-chips">
+                                    <SeloStatus st={s.status} texto={`${NOME_FONTE[fonte]}: ${s.status.rotulo.toLowerCase()}`} />
+                                    <span className="adm-item__mais">{s.status.data ? s.status.detalhe : "sem dado gravado"}</span>
+                                  </div>
+                                  {s.causa && <p className="adm-item__mais">{s.causa}</p>}
+                                </div>
+                              ))}
+                            </div>
+                            <div className="adm-item__fim">
+                              <Link to="/admin/$clientId" params={{ clientId: c.id }} className="adm-btn adm-btn--mini">Gerenciar <ArrowRight aria-hidden /></Link>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                )}
+                <SaudeShortio />
+              </div>
             )}
             {aba === "problemas" && (
-              <>
-      <PainelSaudeFontes
-        problemas={problemas}
-        clientes={clients ?? []}
-        carregando={isLoading || carregandoSaude || qualidades.some((q) => q.isLoading)}
-        lidos={statusQ.data ? (clients ?? []).length : 0}
-        total={(clients ?? []).length}
-        falhas={statusQ.isError ? (clients ?? []).length : 0}
-      />
-              </>
+              <PainelSaudeFontes
+                problemas={problemas}
+                clientes={clients ?? []}
+                carregando={isLoading || carregandoSaude || qualidades.some((q) => q.isLoading)}
+                lidos={statusQ.data ? (clients ?? []).length : 0}
+                total={(clients ?? []).length}
+                falhas={statusQ.isError ? (clients ?? []).length : 0}
+              />
             )}
-            {aba === "resposta" && (
-              <>
-      <SemRespostaAgora />
-              </>
-            )}
+            {aba === "resposta" && <SemRespostaAgora />}
             {aba === "clinica" && (
               <>
-      <div className="mb-2 flex flex-wrap items-center gap-2" aria-label="Legenda das cores">
-        {LEGENDA_STATUS.map((l) => (
-          <span key={l.cor} className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs" style={{ borderColor: "var(--border)", color: "var(--ink-2)" }}>
-            <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: VAR_COR[l.cor] }} /> {l.texto}
-          </span>
-        ))}
-      </div>
-      {isLoading ? (
-        <Carregando texto="Lendo os clientes…" />
-      ) : (
-        <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "var(--border)" }}>
-          <table className="w-full text-sm empilha">
-            <thead>
-              <tr className="text-left text-xs" style={{ color: "var(--ink-2)", background: "var(--surface-2)" }}>
-                <th className="px-4 py-2">Nome</th>
-                <th className="px-4 py-2" title="0 a 100: fontes em dia, fontes por ligar e problemas de dado">Nota</th>
-                <th className="px-4 py-2">Instagram</th>
-                <th className="px-4 py-2">Anúncios</th>
-                <th className="px-4 py-2">CRM</th>
-                <th className="px-4 py-2">WhatsApp</th>
-                <th className="px-4 py-2" title="Retorno do investimento dos últimos 30 dias">ROI (30 dias)</th>
-                <th className="px-4 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {linhasTabela.map((c) => {
-                const handle = c.instagram_handle || contasIg?.get(c.id) || null;
-                return (
-                  <tr key={c.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                    <td className="px-4 py-3 align-top font-medium" data-label="Cliente">
-                      <div className="flex items-center gap-3">
-                        <ClientAvatar nome={c.name} url={c.avatar_url} tamanho={36} />
-                        <div>
-                          <div>{c.name}</div>
-                          <div className="text-xs font-normal" style={{ color: "var(--text-dim)" }}>
-                            {[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}
-                          </div>
-                          {sapPorCliente?.get(c.id) && (() => {
-                            const sp = sapPorCliente.get(c.id)!;
-                            const txt = sp.dia === null ? "SAP · sem D0" : sp.dia > 90 ? "Terminou o SAP · acompanhamento" : sp.dia < 0 ? `SAP · começa em ${-sp.dia} dia(s)` : `SAP · D${sp.dia} de 90`;
-                            return (
-                              <Link to="/sap/$clientId/painel" params={{ clientId: c.id }} className="mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: "color-mix(in srgb, #C49A5C 18%, transparent)", color: "#8a6a35" }} title="Abrir no Sistema de Aquisição">
-                                {txt}
-                              </Link>
-                            );
-                          })()}
-                          {semLogin(c.id) && (
-                            <Link to="/admin/$clientId" params={{ clientId: c.id }} hash="acesso" className="mt-1 inline-flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--warn)" }} title="Nenhum usuário do cliente tem acesso ao painel (só a equipe). Clique para dar acesso.">
-                              <UserX size={13} aria-hidden /> Médico sem login · dar acesso
-                            </Link>
-                          )}
-                          <ChipQualidade clientId={c.id} />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 align-top" data-label="Nota das fontes"><CelulaNota n={notaPorCliente.get(c.id) ?? null} /></td>
-                    <LinhaSaude clientId={c.id} saude={saudePorCliente.get(c.id) ?? null} />
-                    <td className="px-4 py-3 align-top" data-label="ROI (30 dias)">
-                      {(() => {
-                        const r = roiDe(c.id);
-                        if (!r) return <span className="text-xs" style={{ color: "var(--muted)" }}>…</span>;
-                        const cor = r.calculavel ? (r.roi! >= 0 ? "var(--good)" : "var(--crit)") : "var(--warn)";
-                        return (
-                          <span className="inline-flex flex-col items-start gap-1">
-                            <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} className="whitespace-nowrap text-sm font-semibold" style={{ color: cor }} title={r.motivoSemCalculo ?? "Ver o retorno no Resultado"}>
-                              {resumoRoi(r)}
-                            </Link>
-                            <SeloConfianca selo={r.selo} />
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-4 py-3 text-right align-top" data-label="">
-                      <Link
-                        to="/admin/$clientId"
-                        params={{ clientId: c.id }}
-                        className="inline-flex min-h-[36px] items-center gap-1 whitespace-nowrap rounded-lg border px-3 text-sm font-semibold"
-                        style={{ color: "var(--accent)", borderColor: "var(--border)" }}
-                        title="Gerenciar fontes e acesso"
-                      >
-                        Gerenciar <ArrowRight size={14} aria-hidden />
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-              {(clients ?? []).length > 0 && linhasTabela.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-6 text-center" style={{ color: "var(--text-dim)" }}>
-                    Nenhum cliente com esse filtro.{" "}
-                    <button type="button" className="font-semibold" style={{ color: "var(--accent)" }} onClick={() => { setBusca(""); setFiltro("todos"); }}>Limpar</button>
-                  </td>
-                </tr>
-              )}
-              {(clients ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-6 text-center" style={{ color: "var(--text-dim)" }}>
-                    Nenhum cliente cadastrado ainda.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+                <div className="adm-chips mb-3" aria-label="Legenda das cores">
+                  {LEGENDA_STATUS.map((l) => (
+                    <AdmChip key={l.cor} tom={tomDaCor(l.cor)}>{l.texto}</AdmChip>
+                  ))}
+                </div>
+                {isLoading ? (
+                  <Carregando texto="Lendo os clientes…" />
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "var(--border)" }}>
+                    <table className="w-full text-sm empilha">
+                      <thead>
+                        <tr className="text-left text-xs" style={{ color: "var(--ink-2)", background: "var(--surface-2)" }}>
+                          <th className="px-4 py-2">Nome</th>
+                          <th className="px-4 py-2" title="0 a 100: fontes em dia, fontes por ligar e problemas de dado">Nota</th>
+                          <th className="px-4 py-2">Instagram</th>
+                          <th className="px-4 py-2">Anúncios</th>
+                          <th className="px-4 py-2">CRM</th>
+                          <th className="px-4 py-2">WhatsApp</th>
+                          <th className="px-4 py-2" title="Retorno do investimento dos últimos 30 dias">ROI (30 dias)</th>
+                          <th className="px-4 py-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {linhasTabela.map((c) => {
+                          const handle = c.instagram_handle || contasIg?.get(c.id) || null;
+                          return (
+                            <tr key={c.id} className="border-t" style={{ borderColor: "var(--border)" }}>
+                              <td className="px-4 py-3 align-top font-medium" data-label="Cliente">
+                                <div className="flex items-center gap-3">
+                                  <ClientAvatar nome={c.name} url={c.avatar_url} tamanho={36} />
+                                  <div>
+                                    <div className="font-semibold">{c.name}</div>
+                                    <div className="text-xs" style={{ color: "var(--text-dim)" }}>
+                                      {[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}
+                                    </div>
+                                    <ChipQualidade clientId={c.id} />
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 align-top" data-label="Nota das fontes"><CelulaNota n={notaPorCliente.get(c.id) ?? null} /></td>
+                              <LinhaSaude clientId={c.id} saude={saudePorCliente.get(c.id) ?? null} />
+                              <td className="px-4 py-3 align-top" data-label="ROI (30 dias)">
+                                {(() => {
+                                  const r = roiDe(c.id);
+                                  if (!r) return <span className="text-xs" style={{ color: "var(--muted)" }}>…</span>;
+                                  const cor = r.calculavel ? (r.roi! >= 0 ? "var(--good)" : "var(--crit)") : "var(--warn)";
+                                  return (
+                                    <span className="inline-flex flex-col items-start gap-1">
+                                      <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} className="whitespace-nowrap text-sm font-bold" style={{ color: cor }} title={r.motivoSemCalculo ?? "Ver o retorno no Resultado"}>
+                                        {resumoRoi(r)}
+                                      </Link>
+                                      <SeloConfianca selo={r.selo} />
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                              <td className="px-4 py-3 text-right align-top" data-label="">
+                                <Link to="/admin/$clientId" params={{ clientId: c.id }} className="adm-btn adm-btn--mini" title="Gerenciar fontes e acesso">
+                                  Gerenciar <ArrowRight aria-hidden />
+                                </Link>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </>
             )}
           </div>
         </div>
       </details>
 
-      <details className="dbx-det mt-4">
+      <details className="adm-det">
         <summary>Links curtos sem cliente</summary>
-        <div className="pt-4">
-      <div>
-        <LinksSemCliente clientes={[...(clients ?? [])].filter((c: any) => c.active !== false).sort((x: any, y: any) => x.name.localeCompare(y.name))} />
-      </div>
+        <div className="adm-det__corpo">
+          <LinksSemCliente clientes={[...(clients ?? [])].filter((c: any) => c.active !== false).sort((x: any, y: any) => x.name.localeCompare(y.name))} />
         </div>
       </details>
 
-      <details className="dbx-det mt-4">
-        <summary className="cursor-pointer select-none py-1 text-sm font-medium">Cadastrar admin ou cliente só do Nexo (exceção)</summary>
-        <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>Clínica nova entra pelo Sistema de Aquisição. Use o cadastro abaixo só para cliente que não vai passar pelo programa.</p>
-        <div className="mt-3">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <p className="dbx-title" style={{ marginBottom: 8 }}>Novo admin da equipe</p>
+      <details className="adm-det">
+        <summary>
+          Cadastrar admin ou cliente só do Nexo (exceção)
+          <small>clínica nova entra pelo SAP</small>
+        </summary>
+        <div className="adm-det__corpo">
+          <NxNota>Clínica nova entra pelo Sistema de Aquisição. Use o cadastro abaixo só para cliente que não vai passar pelo programa.</NxNota>
+          <div className="adm-secoes">
+            <AdmSecao icone={<ShieldCheck />} titulo="Novo admin da equipe" sub="Entra com acesso a todas as clínicas.">
               <NewAdminForm />
-            </div>
-            <div>
-              <p className="dbx-title" style={{ marginBottom: 8 }}>Novo cliente só do Nexo</p>
+            </AdmSecao>
+            <AdmSecao icone={<UserPlus />} titulo="Novo cliente só do Nexo" sub="Sem passar pelo programa de aquisição.">
               <NewClientForm />
-            </div>
+            </AdmSecao>
           </div>
         </div>
       </details>
-
     </div>
   );
 }
