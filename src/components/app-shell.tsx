@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
 import { LogoutButton } from "@/components/logout-button";
+import { BuscaDeTelas } from "@/components/busca-de-telas";
+import { ehEquipe } from "@/lib/registro-de-telas";
 import { ClientAvatar } from "@/components/client-avatar";
 import { DateRangePicker, rotuloPeriodo } from "@/components/date-range-picker";
 import type { DateRangeState } from "@/lib/date-range";
@@ -254,6 +256,9 @@ export function AppShell({
   const ativa = areaDoCaminho(sub);
   const todasAreas = areasVisiveis(vis);
   const { principais, detalhes } = navegacaoClinica(todasAreas, vis.isAdmin);
+  // Equipe (admin do app ou estrategista, D-03) usa a busca nova "Buscar tela"; o médico (owner/viewer) segue igual.
+  const perfilEquipe = { isAdmin: vis.isAdmin, papel: vis.papel };
+  const equipe = ehEquipe(perfilEquipe);
   const areas = [...principais, ...detalhes];
   const avancado = avancadoVisivel(vis);
   const area = areas.find((a) => a.id === ativa);
@@ -281,7 +286,7 @@ export function AppShell({
   ]
     .filter(Boolean)
     .join(" · ");
-  const encontrados = busca ? buscarTelas(vis, consulta) : [];
+  const encontrados = busca && !equipe ? buscarTelas(vis, consulta) : [];
   const atalhosMobile = vis.isAdmin ? areas.filter(a => ["resumo", "marketing", "comercial", "acoes"].includes(a.id)) : principais;
 
   useEffect(() => {
@@ -293,6 +298,8 @@ export function AppShell({
     if (ativa === "mais") setAvancadoAberto(true);
   }, [ativa]);
   useEffect(() => {
+    // Para a equipe o atalho mora na BuscaDeTelas: ligar os dois abriria e fecharia na mesma tecla.
+    if (equipe) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
@@ -304,7 +311,7 @@ export function AppShell({
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [equipe]);
 
   function alternarRecolhida() {
     setRecolhida((v) => {
@@ -633,6 +640,17 @@ export function AppShell({
         <TemaBotoes />
         <LogoutButton className="mais-item mais-sair" />
       </BottomSheet>
+      {equipe ? (
+        <BuscaDeTelas
+          aberto={busca}
+          onAbrir={abrirBusca}
+          onFechar={() => setBusca(false)}
+          perfil={perfilEquipe}
+          clientId={clientId}
+          dateRange={dateRange}
+          fontes={vis.fontes}
+        />
+      ) : (
       <BottomSheet
         aberto={busca}
         onFechar={() => setBusca(false)}
@@ -689,6 +707,7 @@ export function AppShell({
           </p>
         )}
       </BottomSheet>
+      )}
     </div>
   );
 }

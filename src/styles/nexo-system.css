@@ -1,0 +1,32 @@
+/*
+ * Sistema visual do Nexo (Phase 3, D-01, paleta Cobalto do 03-UI-SPEC.md §Color).
+ * Carregado em src/main.tsx logo depois de product-workspace.css.
+ *
+ * Nesta etapa (03-01) só entram os nomes NOVOS de token: nada do CSS existente lê estes nomes ainda, então nenhuma tela muda
+ * de cor. Os aliases dos nomes antigos (--accent, --action-bg etc.), o "sempre claro" e a limpeza entram no 03-03.
+ *
+ * Seletor .app.product-workspace:not(.sap-workspace): o SAP fica congelado (nada do SAP muda) e a especificidade 0,3,0
+ * vence os CSS de rota carregados depois. Como são nomes que só o Nexo declara, o tema escuro salvo (dc:tema=dark) não os
+ * troca: a casca lê --b1 = #1F4FD8 nos dois temas.
+ */
+
+/* tokens: inicio */
+:root {
+  /* Só a rampa, para o ::backdrop do diálogo e janelas fora da casca. */
+  --b1:#1F4FD8; --b2:#4675F0; --b3:#7D9EF6; --b4:#B6C9FB; --b5:#DCE6FD; --b6:#EFF4FF;
+}
+
+.app.product-workspace:not(.sap-workspace) {
+  --b1:#1F4FD8; --b2:#4675F0; --b3:#7D9EF6; --b4:#B6C9FB; --b5:#DCE6FD; --b6:#EFF4FF;
+  --grad-brand:linear-gradient(135deg,var(--b1) 0%,var(--b2) 140%);
+  --grad-tile:linear-gradient(135deg,var(--b2),var(--b3));
+  --grad-bar:linear-gradient(90deg,var(--b2),var(--b3));
+  --white:#FFFFFF; --frame:#F0F2F4; --field:#F5F6F8; --line:#E8EBEF; --line-2:#DDE1E7;
+  --text:#121212; --text-2:#2B2B2D; --muted-ink:#5F6570; --muted-soft:#8C9099; --muted-2:#B4B8BF;
+  --control-border:#7C808A;
+  --up:#22B07D; --up-bg:#E7F7EF; --up-ink:#0B6B4A;
+  --dn:#EF4B5A; --dn-bg:#FDEBED; --dn-ink:#B4233A;
+  --or:#F59E0B; --or-bg:#FEF3E2; --or-ink:#8A5100;
+  --font:"Urbanist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+/* tokens: fim */

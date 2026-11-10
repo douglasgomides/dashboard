@@ -6,6 +6,7 @@ import { aplicarTemaSalvo } from "./hooks/use-theme";
 import "./styles.css";
 import "./nexo.css";
 import "./styles/product-workspace.css";
+import "./styles/nexo-system.css";
 import { ehEnderecoSap } from "./lib/marca";
 import { createDeployRecovery } from "./lib/deploy-recovery";
 import { instalarRotaLog } from "./lib/rota-log-instalar";
