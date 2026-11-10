@@ -84,9 +84,13 @@ for (const profile of ["admin", "viewer"] as const) {
     await page.goto(`/${CID}/crm-painel`);
     await papelCarregado;
     if (profile === "admin") {
-      // A equipe não tem mais as abas de Comercial na barra (Phase 3, MENU-02): a tela restrita abre pela busca, na área Comercial.
+      // A equipe não tem as abas de Comercial na barra (Phase 3, MENU-02); desde 10/11/2026 elas são abas na página, e a
+      // tela restrita aparece lá e na busca, sempre na área Comercial.
       await expect(page.getByRole("navigation", { name: "Menu da equipe" }).first()).toBeVisible();
-      await expect(page.getByRole("navigation", { name: "Telas de Comercial", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("complementary", { name: "Menu principal" }).getByRole("navigation", { name: "Telas de Comercial", exact: true })).toHaveCount(0);
+      const abas = page.getByRole("navigation", { name: "Telas de Comercial", exact: true });
+      await expect(abas.getByRole("link", { name: "Resultados por origem do CRM", exact: true })).toHaveCount(1);
+      await expect(abas.getByRole("link", { name: "Funil comercial", exact: true })).toHaveAttribute("aria-current", "page");
       await page.getByRole("complementary", { name: "Menu principal" }).getByRole("button", { name: "Buscar tela" }).click();
       const busca = page.getByRole("dialog", { name: "Buscar tela" });
       await busca.getByRole("searchbox").fill("origem do CRM");

@@ -278,6 +278,61 @@ export function telasPorArea(perfil: PerfilEquipe, opcoes: OpcoesDoIndice = {}):
   return ORDEM_DAS_AREAS.map((area) => ({ area, telas: indice.filter((t) => t.area === area) })).filter((g) => g.telas.length > 0);
 }
 
+// --- Seções da clínica (10/11/2026, pedido do João: "entrar em uma seção, como marketing, e ir navegando por dentro") ---
+// A barra lateral mostra só as seções (áreas antigas com tela da clínica para o perfil); as telas da seção viram abas no
+// topo da página. São as mesmas telas que a sanfona de 09/11 listava: nenhuma some, só muda de lugar.
+
+const ROTA_DA_CLINICA = "/_authenticated/$clientId";
+
+/** Ícone Tabler de cada seção na barra lateral. */
+export const ICONE_DA_AREA: Readonly<Record<AreaAntiga, NomeIcone>> = {
+  Resultados: "chart-bar",
+  Marketing: "speakerphone",
+  Comercial: "filter",
+  "Plano de ação": "checklist",
+  Relatórios: "file-text",
+  Administração: "settings",
+  SAP: "snowflake",
+};
+
+export interface SecaoDaClinica extends GrupoDeTelas {
+  icone: NomeIcone;
+  /** Primeira tela da seção: destino do link da seção na barra. */
+  primeira: TelaDoRegistro;
+}
+
+/**
+ * Seções da clínica para o perfil: telasPorArea só com as telas /$clientId/*, na ordem do registro. Área sem tela da clínica
+ * some. A soma das telas das seções é exatamente o que a sanfona "todas as telas da clínica" mostrava.
+ */
+export function secoesDaClinica(perfil: PerfilEquipe, opcoes: OpcoesDoIndice = {}): SecaoDaClinica[] {
+  return telasPorArea(perfil, opcoes)
+    .map((g) => ({ area: g.area, telas: g.telas.filter((t) => t.rota.startsWith(`${ROTA_DA_CLINICA}/`)) }))
+    .filter((g) => g.telas.length > 0)
+    .map((g) => ({ ...g, icone: ICONE_DA_AREA[g.area], primeira: g.telas[0] }));
+}
+
+/** Caminho da tela depois de /<clínica>: "" para o índice, "/conteudo" etc. */
+function subDaTela(tela: TelaDoRegistro): string {
+  return tela.rota.slice(ROTA_DA_CLINICA.length).replace(/\/+$/, "");
+}
+
+/**
+ * Seção e tela da clínica de um endereço (/<id>/conteudo -> Marketing, Analisar desempenho). Fora de uma tela da clínica
+ * (Carteira, Conferência, /admin/<id>) ou numa tela fora das seções do perfil, devolve null: a página não mostra abas.
+ */
+export function secaoDoCaminho(secoes: readonly SecaoDaClinica[], pathname: string): { secao: SecaoDaClinica; tela: TelaDoRegistro } | null {
+  const p = pathname.replace(/\/+$/, "") || "/";
+  const m = /^\/[0-9a-f-]{36}(\/.*)?$/.exec(p);
+  if (!m) return null;
+  const sub = m[1] ?? "";
+  for (const secao of secoes) {
+    const tela = secao.telas.find((t) => subDaTela(t) === sub);
+    if (tela) return { secao, tela };
+  }
+  return null;
+}
+
 const normalizar = (s: string) =>
   s
     .normalize("NFD")

@@ -24,12 +24,15 @@
   --grad-tile:linear-gradient(135deg,var(--b2),var(--b3));
   --grad-bar:linear-gradient(90deg,var(--b2),var(--b3));
   --white:#FFFFFF; --frame:#F0F2F4; --field:#F5F6F8; --line:#E8EBEF; --line-2:#DDE1E7;
-  --text:#121212; --text-2:#2B2B2D; --muted-ink:#5F6570; --muted-soft:#8C9099; --muted-2:#B4B8BF;
+  --text:#121212; --text-2:#2B2B2D; --muted-ink:#5F6570; --muted-soft:#686E79; --muted-2:#B4B8BF;
   --control-border:#7C808A;
   --up:#22B07D; --up-bg:#E7F7EF; --up-ink:#0B6B4A;
   --dn:#EF4B5A; --dn-bg:#FDEBED; --dn-ink:#B4233A;
   --or:#F59E0B; --or-bg:#FEF3E2; --or-ink:#8A5100;
   --font:"Urbanist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  /* Pesos da Urbanist (10/11/2026, João: "a letra está muito fininha"). O index.html não carrega mais o 400: qualquer
+     font-weight 400 que sobrou no CSS das telas cai no 500 pela regra de escolha de fonte do navegador. */
+  --peso-corpo:500; --peso-rotulo:500; --peso-rotulo-forte:600; --peso-titulo:700; --peso-numero:700;
   /* Sombras e véu do diálogo (da prancha). */
   --sombra-cartao:0 1px 2px rgba(18,18,18,.04);
   --sombra-cartao-hover:0 10px 24px rgba(31,79,216,.07);
@@ -231,6 +234,18 @@ body:has(.app.product-workspace:not(.sap-workspace)) {
 /* --- Tipografia: o corpo é Urbanist 16 px (styles.css); o SAP fica com a Inter 15 px de antes (MENU-07, congelado) --- */
 .app.product-workspace:not(.sap-workspace) {
   font-family: var(--font);
+  font-weight: var(--peso-corpo);
+  /* antialiased afina a letra no macOS (tira o reforço do traço); a casca volta ao padrão do sistema. O SAP não muda. */
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+}
+/* Títulos e números grandes em 700 (o h1 da tela vinha em 600 do databoard-shell.css; os números do painel em 500). */
+.app.product-workspace:not(.sap-workspace) :is(h1, h2),
+.app.product-workspace:not(.sap-workspace) .workspace-heading h1,
+.app.product-workspace:not(.sap-workspace) .nx-kpi .nx-kpi__valor,
+.app.product-workspace:not(.sap-workspace) .nx-medidor__valor,
+.app.product-workspace:not(.sap-workspace) .nx-destaque b {
+  font-weight: var(--peso-titulo);
 }
 .product-workspace.sap-workspace {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;

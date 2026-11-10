@@ -13,6 +13,8 @@ import {
   ROTULOS_MENU_EQUIPE,
   ORDEM_DAS_AREAS,
   telasPorArea,
+  secoesDaClinica,
+  secaoDoCaminho,
   type TelaDoRegistro,
 } from "../src/lib/registro-de-telas";
 import { AREAS, AVANCADO } from "../src/lib/nav";
@@ -325,5 +327,30 @@ for (const [nome, perfil] of [["admin", { isAdmin: true }], ["estrategista", { i
 }
 assert.equal(telasPorArea({ isAdmin: true }).reduce((n, g) => n + g.telas.length, 0), 66, "Ver todas as telas do admin em produção: 66 (D-09)");
 assert.ok(!telasPorArea({ isAdmin: false, papel: "strategist" }).some((g) => g.area === "SAP"), "estrategista sem grupo SAP");
+
+// Seções da clínica (10/11/2026): mesmas telas da sanfona antiga (telasPorArea só com /$clientId/*), nenhuma a menos.
+for (const perfil of [{ isAdmin: true }, { isAdmin: false, papel: "strategist" as const }]) {
+  for (const desenvolvimento of [false, true]) {
+    const sanfona = telasPorArea(perfil, { desenvolvimento }).flatMap((g) => g.telas).filter((t) => t.rota.startsWith("/_authenticated/$clientId/"));
+    const secoes = secoesDaClinica(perfil, { desenvolvimento });
+    assert.deepEqual(secoes.flatMap((s) => s.telas), sanfona, "seções da clínica = telas da sanfona antiga");
+    for (const s of secoes) {
+      assert.equal(s.primeira, s.telas[0], `${s.area}: o link da seção leva à primeira tela`);
+      for (const t of s.telas) {
+        const sub = t.rota.slice("/_authenticated/$clientId".length).replace(/\/+$/, "");
+        const achada = secaoDoCaminho(secoes, `/11111111-1111-4111-8111-111111111111${sub}/`);
+        assert.equal(achada?.secao.area, s.area, `${t.rota} cai na seção ${s.area}`);
+        assert.equal(achada?.tela, t, `${t.rota} é a aba atual`);
+      }
+    }
+    for (const fora of ["/admin", "/admin/conferencia", "/admin/11111111-1111-4111-8111-111111111111", "/sap/11111111-1111-4111-8111-111111111111"])
+      assert.equal(secaoDoCaminho(secoes, fora), null, `${fora} não tem abas`);
+  }
+}
+assert.deepEqual(
+  secoesDaClinica({ isAdmin: true }).map((s) => s.area).slice(0, 5),
+  ["Resultados", "Marketing", "Comercial", "Plano de ação", "Relatórios"],
+  "seções na ordem das áreas",
+);
 
 console.log("test-registro-de-telas: ok");

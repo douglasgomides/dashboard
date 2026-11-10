@@ -17,7 +17,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { BuscaDeTelas } from "@/components/busca-de-telas";
 import { ehEquipe } from "@/lib/registro-de-telas";
-import { MarcaNexo, MenuEquipe } from "@/components/menu-equipe";
+import { AbasDaSecao, MarcaNexo, MenuEquipe } from "@/components/menu-equipe";
 import { IconeTabler } from "@/components/icons/tabler";
 import { AvatarGerado } from "@/components/avatar-gerado";
 import { ClientAvatar } from "@/components/client-avatar";
@@ -595,6 +595,8 @@ export function AppShell({
             />}
           </div>
         </div>
+        {/* Equipe: as telas da seção atual em abas, entre o cabeçalho da clínica e o conteúdo (10/11/2026, pedido do João). */}
+        {equipe && <AbasDaSecao perfil={perfilEquipe} clientId={clientId} pathname={pathname} dateRange={dateRange} />}
         <header className="workspace-heading">
           <div>
             <p className="workspace-eyebrow">
@@ -603,7 +605,7 @@ export function AppShell({
             <h1>{titulo}</h1>
             {descricao && <p>{descricao}</p>}
           </div>
-          {area && area.visiveis.length > 1 && (
+          {!equipe && area && area.visiveis.length > 1 && (
             <button
               type="button"
               className="workspace-area-switch"

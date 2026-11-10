@@ -42,7 +42,7 @@
 }
 .app.product-workspace:not(.sap-workspace) .nx-marca-nome {
   font-size: 30px;
-  font-weight: 400;
+  font-weight: var(--peso-titulo);
   line-height: 36px;
   letter-spacing: -0.02em;
   white-space: nowrap;
@@ -86,7 +86,7 @@
   background: var(--field);
   color: var(--muted-ink);
   font-size: 16px;
-  font-weight: 400;
+  font-weight: var(--peso-rotulo);
   line-height: 24px;
   text-align: left;
   cursor: pointer;
@@ -142,7 +142,7 @@
   border-radius: 12px;
   color: var(--text);
   font-size: 16px;
-  font-weight: 400;
+  font-weight: var(--peso-rotulo);
   line-height: 24px;
   text-decoration: none;
 }
@@ -166,6 +166,7 @@
 .app.product-workspace:not(.sap-workspace) .nx-menu-item[data-on] {
   background: var(--grad-brand);
   color: var(--white);
+  font-weight: var(--peso-rotulo-forte);
 }
 .app.product-workspace:not(.sap-workspace) .nx-menu-item:focus-visible {
   outline: 2px solid var(--b1);
@@ -189,7 +190,7 @@
   border-radius: 12px;
   color: var(--text-2);
   font-size: 16px;
-  font-weight: 400;
+  font-weight: var(--peso-rotulo);
   line-height: 24px;
   text-decoration: none;
 }
@@ -204,7 +205,7 @@
 }
 .app.product-workspace:not(.sap-workspace) .nx-subtela[aria-current="page"] {
   color: var(--b1);
-  font-weight: 500;
+  font-weight: var(--peso-rotulo-forte);
 }
 .app.product-workspace:not(.sap-workspace) .nx-subtela:focus-visible {
   outline: 2px solid var(--b1);
@@ -424,26 +425,137 @@
   line-height: 24px;
 }
 
-/* Todas as telas da clínica no menu da equipe (09/11/2026, pedido do João): títulos das áreas e itens compactos. */
-.app.product-workspace:not(.sap-workspace) .nx-subgrupo-titulo {
-  margin: 10px 0 2px 33px;
-  color: var(--text-3, var(--text-2));
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+/* Seções da clínica sob Clínica na barra (10/11/2026, pedido do João): uma linha por seção, com ícone, no recuo das
+   subtelas. A seção da tela atual fica em Cobalto com fundo --b6; as telas da seção viram as abas .nx-abas da página. */
+.app.product-workspace:not(.sap-workspace) .nx-secoes ul {
+  margin: 2px 0 6px 24px;
+  padding-left: 9px;
+  border-left: 1px solid var(--line-2);
 }
-.app.product-workspace:not(.sap-workspace) .nx-subgrupo .nx-subtela {
-  min-height: 34px;
-  font-size: 14px;
-  line-height: 20px;
-}
-.app.product-workspace:not(.sap-workspace) .nx-menu--folha .nx-subgrupo .nx-subtela {
+.app.product-workspace:not(.sap-workspace) .nx-secao {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  color: var(--text-2);
   font-size: 16px;
+  font-weight: var(--peso-rotulo);
+  line-height: 24px;
+  text-decoration: none;
 }
-.app.product-workspace:not(.sap-workspace) .nx-subgrupo ul {
-  margin-top: 0;
+.app.product-workspace:not(.sap-workspace) .nx-secao svg {
+  flex: none;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-secao-rotulo {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app.product-workspace:not(.sap-workspace) .nx-secao:hover {
+  background: color-mix(in srgb, var(--white) 60%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-secao:active {
+  background: var(--b5);
+}
+.app.product-workspace:not(.sap-workspace) .nx-secao[data-on] {
+  background: var(--b6);
+  color: var(--b1);
+  font-weight: var(--peso-rotulo-forte);
+}
+.app.product-workspace:not(.sap-workspace) .nx-secao[data-on] svg {
+  color: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-secao:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: -2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-menu--folha .nx-secao {
+  min-height: 48px;
+}
+/* Barra recolhida: as seções ficam só com o ícone (48 x 48, title no link), sem o traço do recuo. */
+.app.product-workspace:not(.sap-workspace).recolhida .nx-barra .nx-secoes ul {
+  margin: 4px 0;
+  padding-left: 0;
+  border-left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.app.product-workspace:not(.sap-workspace).recolhida .nx-barra .nx-secao {
+  justify-content: center;
+  width: 48px;
+  min-height: 48px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+/* Abas da seção na página: faixa horizontal entre o cabeçalho da clínica e o título da tela. Sublinhado Cobalto na aba
+   atual (a ideia do .areatabs do médico). No celular a faixa rola sozinha na horizontal; a página não. */
+.app.product-workspace:not(.sap-workspace) .nx-abas {
+  min-width: 0;
+  max-width: 100%;
+  margin: 12px 0 0;
+  border-bottom: 1px solid var(--line-2);
+}
+.app.product-workspace:not(.sap-workspace) .nx-abas ul {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0 2px;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.app.product-workspace:not(.sap-workspace) .nx-abas li {
+  flex: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aba {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 10px 10px 0 0;
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: var(--peso-rotulo);
+  line-height: 20px;
+  white-space: nowrap;
+  text-decoration: none;
+  box-shadow: inset 0 -3px 0 transparent;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aba:hover {
+  background: var(--field);
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aba:active {
+  background: var(--b5);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aba[aria-current="page"] {
+  color: var(--b1);
+  font-weight: var(--peso-rotulo-forte);
+  box-shadow: inset 0 -3px 0 var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aba:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: -2px;
+}
+@media (max-width: 820px) {
+  .app.product-workspace:not(.sap-workspace) .nx-abas {
+    margin: 8px 0 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-abas ul {
+    scrollbar-width: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-abas ul::-webkit-scrollbar {
+    display: none;
+  }
 }
 .app.product-workspace:not(.sap-workspace) > aside.nx-barra {
   overflow-y: auto;
