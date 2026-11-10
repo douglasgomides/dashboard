@@ -1,17 +1,7 @@
-import { useState } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
-import {
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
-  ChevronDown,
-  ArrowRight,
-  User,
-  Gauge,
-  Target,
-  ShieldAlert,
-  Info,
-} from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, ArrowRight, Gauge, Info } from "lucide-react";
+import { NxCard, NxTag, type NxTom } from "@/components/nx/base";
+import { NxAviso, NxRecolhido } from "@/components/nx/blocos";
 import {
   ROTULO_CONFIANCA,
   ROTULO_IMPACTO,
@@ -47,38 +37,14 @@ export const COR_TOM: Record<
 };
 const ICONE_TOM = { bom: CheckCircle2, atencao: AlertTriangle, ruim: XCircle };
 
+const TOM_NX: Record<Tom, NxTom> = { bom: "up", atencao: "or", ruim: "dn" };
+
 export function SeloStatus({ tom, texto }: { tom: Tom; texto?: string }) {
   const Icon = ICONE_TOM[tom];
-  const c = COR_TOM[tom];
   return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
-      style={{ background: c.fundo, borderColor: c.borda, color: c.cor }}
-    >
-      <Icon
-        size={12}
-        aria-hidden
-        style={{ color: tom === "atencao" ? "var(--warn)" : c.cor }}
-      />
+    <NxTag tom={TOM_NX[tom]} icone={<Icon size={12} aria-hidden />}>
       {texto ?? ROTULO_TOM[tom]}
-    </span>
-  );
-}
-
-function Chip({
-  icone: Icon,
-  children,
-}: {
-  icone: typeof User;
-  children: React.ReactNode;
-}) {
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px]"
-      style={{ background: "var(--surface-2)", color: "var(--text-dim)" }}
-    >
-      <Icon size={11} aria-hidden /> {children}
-    </span>
+    </NxTag>
   );
 }
 
@@ -96,25 +62,28 @@ export function BotaoAcao({
 }) {
   const local = useLocation();
   const periodo = Object.fromEntries(Object.entries(local.search).filter(([k]) => ["preset", "from", "to"].includes(k)));
-  const cls = `ws-action ws-action--${variante === "primario" ? "primary" : "secondary"}`;
   if (!rota) return null;
   return (
     <Link
       search={periodo as any}
       to={rota as any}
       params={clientId ? ({ clientId } as any) : undefined}
-      className={cls}
+      className="nx-botao"
+      style={variante === "primario" ? { background: "var(--b1)", borderColor: "var(--b1)", color: "var(--white)" } : undefined}
     >
       {texto} <ArrowRight size={15} aria-hidden />
     </Link>
   );
 }
 
-/** Card de um insight: título + status sempre visíveis; o resto em camadas. */
+const LINHA = { margin: 0, fontSize: 14, lineHeight: "20px", color: "var(--text-2)" } as const;
+const APOIO = { margin: 0, fontSize: 13, lineHeight: "19px", color: "var(--muted-ink)" } as const;
+
+/** Card de um insight: título, evidência e quem resolve sempre visíveis; regra, risco, fonte e etapas recolhidos. */
 export function InsightCard({
   insight: i,
   clientId,
-  aberto: abertoInicial = false,
+  aberto = false,
   compacto = false,
 }: {
   insight: Insight;
@@ -122,128 +91,93 @@ export function InsightCard({
   aberto?: boolean;
   compacto?: boolean;
 }) {
-  const [aberto, setAberto] = useState(abertoInicial);
-  const c = COR_TOM[i.tom];
+  const temDetalhe = !!(i.motivoConfianca || i.risco || i.regra || i.fonte || i.etapas?.length || (compacto && i.diagnostico));
   return (
-    <article
-      className="min-w-0 rounded-xl border p-4"
-      style={{
-        background: "var(--surface)",
-        borderColor: "var(--border)",
-        borderLeft: `4px solid ${c.borda}`,
-      }}
-    >
-      <div className="flex flex-wrap items-center gap-1.5">
-        <SeloStatus tom={i.tom} />
-        <Chip icone={Gauge}>{ROTULO_CONFIANCA[i.confianca]}</Chip>
-        <Chip icone={Target}>{ROTULO_IMPACTO[i.impacto]}</Chip>
-        <Chip icone={User}>{ROTULO_RESPONSAVEL[i.responsavel]}</Chip>
-      </div>
-      <h3
-        className="mt-2 text-[15px] font-semibold leading-snug"
-        style={{ color: "var(--text)" }}
+    <div data-peca="insight" style={{ minWidth: 0 }}>
+      <NxCard
+        titulo={i.titulo}
+        acao={
+          <>
+            <SeloStatus tom={i.tom} />
+            <NxTag tom="b" icone={<Gauge size={12} aria-hidden />}>
+              {ROTULO_CONFIANCA[i.confianca]}
+            </NxTag>
+            <NxTag tom="g">{ROTULO_IMPACTO[i.impacto]}</NxTag>
+          </>
+        }
       >
-        {i.titulo}
-      </h3>
-      {!compacto && (
-        <p
-          className="mt-1 text-sm leading-relaxed"
-          style={{ color: "var(--text-dim)" }}
-        >
-          {i.diagnostico}
-        </p>
-      )}
-      {i.acao && (
-        <div
-          className="mt-3 rounded-lg p-3 text-sm"
-          style={{ background: "var(--accent-soft)" }}
-        >
-          <div
-            className="text-[11px] font-semibold uppercase tracking-wide"
-            style={{ color: "var(--text-faint)" }}
-          >
-            O que fazer
-          </div>
-          <p
-            className="mt-0.5 font-medium leading-snug"
-            style={{ color: "var(--text)" }}
-          >
-            {i.acao.texto}
-          </p>
-          {i.impactoTexto && (
-            <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
-              Resultado esperado: {i.impactoTexto}
-            </p>
-          )}
-          {i.acao.rota && (
-            <div className="mt-2">
-              <BotaoAcao
-                texto={i.acao.botao ?? "Abrir"}
-                rota={i.acao.rota}
-                clientId={clientId}
-                variante="secundario"
-              />
-            </div>
-          )}
+        {!compacto && <p style={LINHA}>{i.diagnostico}</p>}
+        <div style={{ ...LINHA, background: "var(--field)", borderRadius: 12, padding: "10px 12px" }}>
+          <b style={{ color: "var(--text)" }}>Evidência: </b>
+          <span className="tabular-nums">{i.evidencia}</span>
         </div>
-      )}
-      <button
-        type="button"
-        onClick={() => setAberto(!aberto)}
-        aria-expanded={aberto}
-        className="mt-2 inline-flex min-h-[44px] items-center gap-1 text-[13px] font-medium min-[821px]:min-h-[36px] min-[821px]:text-xs"
-        style={{ color: "var(--text-faint)" }}
-      >
-        <ChevronDown
-          size={14}
-          style={{ transform: aberto ? "rotate(180deg)" : undefined }}
-        />{" "}
-        {aberto ? "Esconder" : "Ver"} evidência e limitações
-      </button>
-      {aberto && (
-        <dl
-          className="mt-1 space-y-2 text-[13px] leading-relaxed sm:text-xs"
-          style={{ color: "var(--text-dim)" }}
-        >
-          {compacto && (
-            <div>
-              <dt className="font-semibold" style={{ color: "var(--text)" }}>
-                Por que aconteceu
-              </dt>
-              <dd>{i.diagnostico}</dd>
-            </div>
-          )}
-          <div>
-            <dt className="font-semibold" style={{ color: "var(--text)" }}>
-              Evidência
-            </dt>
-            <dd className="tabular-nums">{i.evidencia}</dd>
+        <p style={APOIO}>
+          Quem resolve: <b>{ROTULO_RESPONSAVEL[i.responsavel]}</b>
+        </p>
+        {i.acao && (
+          <div style={{ display: "grid", gap: 6 }}>
+            <p style={{ ...LINHA, color: "var(--text)", fontWeight: 600 }}>
+              <span style={{ ...APOIO, display: "block", textTransform: "uppercase", letterSpacing: ".04em" }}>O que fazer</span>
+              {i.acao.texto}
+            </p>
+            {i.impactoTexto && <p style={APOIO}>Resultado esperado: {i.impactoTexto}</p>}
+            {i.acao.rota && (
+              <div>
+                <BotaoAcao texto={i.acao.botao ?? "Abrir"} rota={i.acao.rota} clientId={clientId} variante="secundario" />
+              </div>
+            )}
           </div>
-          {i.motivoConfianca && (
-            <div>
-              <dt className="font-semibold" style={{ color: "var(--text)" }}>
-                Por que essa confiança
-              </dt>
-              <dd>{i.motivoConfianca}</dd>
-            </div>
-          )}
-          {i.risco && (
-            <div className="flex gap-1.5">
-              <ShieldAlert
-                size={13}
-                className="mt-0.5 shrink-0"
-                style={{ color: "var(--warn)" }}
-                aria-hidden
-              />
-              <dd>
-                <b style={{ color: "var(--text)" }}>Limitação: </b>
-                {i.risco}
-              </dd>
-            </div>
-          )}
-        </dl>
-      )}
-    </article>
+        )}
+        {temDetalhe && (
+          <NxRecolhido titulo="Regra, limitações e fonte" aberto={aberto}>
+            <dl style={{ ...LINHA, display: "grid", gap: 8, margin: 0 }}>
+              {compacto && (
+                <div>
+                  <dt><b>Por que aconteceu</b></dt>
+                  <dd style={{ margin: 0 }}>{i.diagnostico}</dd>
+                </div>
+              )}
+              {i.motivoConfianca && (
+                <div>
+                  <dt><b>Por que essa confiança</b></dt>
+                  <dd style={{ margin: 0 }}>{i.motivoConfianca}</dd>
+                </div>
+              )}
+              {i.risco && (
+                <div>
+                  <dt><b>Limitação</b></dt>
+                  <dd style={{ margin: 0 }}>{i.risco}</dd>
+                </div>
+              )}
+              {i.regra && (
+                <div>
+                  <dt><b>Regra</b></dt>
+                  <dd style={{ margin: 0 }}>{i.regra}</dd>
+                </div>
+              )}
+              {i.fonte && (
+                <div>
+                  <dt><b>Fonte</b></dt>
+                  <dd style={{ margin: 0 }}>{i.fonte}</dd>
+                </div>
+              )}
+              {!!i.etapas?.length && (
+                <div>
+                  <dt><b>Etapas</b></dt>
+                  <dd style={{ margin: 0 }}>
+                    <ol style={{ margin: 0, paddingLeft: 18 }}>
+                      {i.etapas.map((e, k) => (
+                        <li key={k}>{e}</li>
+                      ))}
+                    </ol>
+                  </dd>
+                </div>
+              )}
+            </dl>
+          </NxRecolhido>
+        )}
+      </NxCard>
+    </div>
   );
 }
 
@@ -257,43 +191,28 @@ export function ListaLimitacoes({
 }) {
   if (itens.length === 0) return null;
   return (
-    <section
-      className="rounded-xl border p-4"
-      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-    >
-      <h2 className="flex items-center gap-2 text-sm font-semibold">
-        <Info size={16} aria-hidden style={{ color: "var(--warn)" }} /> {titulo}
-      </h2>
-      <ul className="mt-2 space-y-2">
+    <NxCard rotulo={titulo} titulo={titulo}>
+      <ul className="nx-lista">
         {itens.map((l) => (
-          <li
-            key={l.id}
-            className="rounded-lg p-3 text-sm"
-            style={{ background: "var(--surface-2)" }}
-          >
-            <p style={{ color: "var(--text)" }}>{l.texto}</p>
-            <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
-              Quem resolve: <b>{ROTULO_RESPONSAVEL[l.resolve]}</b>
-              {l.comoResolver ? ` · ${l.comoResolver}` : ""}
-            </p>
+          <li key={l.id}>
+            <NxAviso tom="atencao" titulo={l.texto}>
+              {`Quem resolve: ${ROTULO_RESPONSAVEL[l.resolve]}${l.comoResolver ? ` · ${l.comoResolver}` : ""}`}
+            </NxAviso>
           </li>
         ))}
       </ul>
-    </section>
+    </NxCard>
   );
 }
 
 /** Explicação de uma métrica em linguagem simples, abre no toque. */
 export function OQueE({ children }: { children: React.ReactNode }) {
   return (
-    <details className="text-xs" style={{ color: "var(--text-dim)" }}>
-      <summary
-        className="inline-flex min-h-[44px] cursor-pointer list-none items-center gap-1 min-[821px]:min-h-[32px]"
-        style={{ color: "var(--text-faint)" }}
-      >
+    <details style={{ fontSize: 13, color: "var(--muted-ink)" }}>
+      <summary style={{ display: "inline-flex", minHeight: 44, cursor: "pointer", listStyle: "none", alignItems: "center", gap: 4, color: "var(--muted-ink)" }}>
         <Info size={12} aria-hidden /> O que é isso?
       </summary>
-      <p className="mt-1 leading-relaxed">{children}</p>
+      <p style={{ margin: "4px 0 0", lineHeight: "19px" }}>{children}</p>
     </details>
   );
 }
