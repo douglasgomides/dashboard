@@ -292,6 +292,79 @@ export function buscarTelasEquipe(perfil: PerfilEquipe, consulta: string, opcoes
     .map(({ tela }) => tela);
 }
 
+// --- Menu da equipe (03-02, MENU-02) ---
+
+export type ChaveMenuEquipe = keyof typeof ROTULOS_MENU_EQUIPE;
+
+export interface ItemMenuEquipe {
+  chave: ChaveMenuEquipe;
+  /** Sempre o valor de ROTULOS_MENU_EQUIPE (D-11: provisório). */
+  rotulo: string;
+  icone: NomeIcone;
+  /** routeId do destino do item. */
+  rota: string;
+  /** Linha do registro do destino (para linkDaTela). */
+  tela: TelaDoRegistro;
+  /** Telas vivas que aparecem embaixo do item quando ele é o atual. Sempre linhas do registro. */
+  subtelas: TelaDoRegistro[];
+}
+
+function telaViva(rota: string): TelaDoRegistro {
+  const tela = REGISTRO_DE_TELAS.find((t) => t.rota === rota && t.situacao === "viva" && !t.busca);
+  if (!tela) throw new Error(`registro-de-telas: o menu da equipe aponta para ${rota}, que não é linha viva do registro`);
+  return tela;
+}
+
+const MENU_EQUIPE: readonly { chave: ChaveMenuEquipe; icone: NomeIcone; rota: string; subtelas: readonly string[] }[] = [
+  { chave: "carteira", icone: "briefcase", rota: `${A}/`, subtelas: [] },
+  { chave: "clinica", icone: "stethoscope", rota: `${C}/`, subtelas: [`${C}/`, `${C}/relatorio`, `${C}/crm-estrutura`, `${A}/$clientId`] },
+  { chave: "conferencia", icone: "shield-check", rota: `${A}/conferencia`, subtelas: [`${A}/conferencia`, `${A}/integracoes`] },
+];
+
+/**
+ * Itens do menu da equipe por papel. Admin do app: os 3 itens. Estrategista que não é admin (D-03): só o que ele abre, ou
+ * seja, Clínica com as subtelas sem somenteAdmin (Carteira e Conferência ficam atrás do guarda de /admin). Médico: [].
+ * Nenhuma permissão muda: este filtro só evita mostrar link que daria em redirect.
+ */
+export function itensMenuEquipe(perfil: PerfilEquipe): ItemMenuEquipe[] {
+  if (!ehEquipe(perfil)) return [];
+  const abre = (t: TelaDoRegistro) => perfil.isAdmin || !t.somenteAdmin;
+  return MENU_EQUIPE.map((item) => ({
+    chave: item.chave,
+    rotulo: ROTULOS_MENU_EQUIPE[item.chave],
+    icone: item.icone,
+    rota: item.rota,
+    tela: telaViva(item.rota),
+    subtelas: item.subtelas.map(telaViva).filter(abre),
+  })).filter((item) => abre(item.tela));
+}
+
+export interface ItemAtual {
+  chave: ChaveMenuEquipe;
+  /** true: o endereço é o destino do item (aria-current="page"). false: só o grupo do item (pílula sem aria-current). */
+  exato: boolean;
+}
+
+// Mesma forma do id de clínica de _authenticated.admin.tsx.
+const ID_CLINICA = "[0-9a-f-]{36}";
+const NA_CLINICA = new RegExp(`^/${ID_CLINICA}(/.*)?$`);
+const ADMIN_DA_CLINICA = new RegExp(`^/admin/${ID_CLINICA}$`);
+
+/**
+ * Qual item do menu da equipe fica em pílula para um endereço. Qualquer tela /$clientId/* (viva ou escondida) e
+ * /admin/$clientId deixam Clínica em pílula; tela escondida fora dos 3 grupos (/admin/brain, SAP) não destaca nenhum.
+ */
+export function itemAtualDoMenu(pathname: string): ItemAtual | null {
+  const p = pathname.replace(/\/+$/, "") || "/";
+  if (p === "/admin") return { chave: "carteira", exato: true };
+  if (p === "/admin/conferencia") return { chave: "conferencia", exato: true };
+  if (p === "/admin/integracoes" || p.startsWith("/admin/conferencia/")) return { chave: "conferencia", exato: false };
+  if (ADMIN_DA_CLINICA.test(p)) return { chave: "clinica", exato: false };
+  const naClinica = NA_CLINICA.exec(p);
+  if (naClinica) return { chave: "clinica", exato: !naClinica[1] };
+  return null;
+}
+
 export interface LinkDaTela {
   to: string;
   params?: { clientId: string };

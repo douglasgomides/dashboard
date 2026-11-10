@@ -7,7 +7,10 @@ import {
   buscarTelasEquipe,
   ehEquipe,
   indiceDaBusca,
+  itemAtualDoMenu,
+  itensMenuEquipe,
   linkDaTela,
+  ROTULOS_MENU_EQUIPE,
   type TelaDoRegistro,
 } from "../src/lib/registro-de-telas";
 import { AREAS, AVANCADO } from "../src/lib/nav";
@@ -231,5 +234,72 @@ assert.equal(linkDaTela(R.find((t) => t.rota === "/_authenticated/$clientId/")!,
 assert.equal(linkDaTela(carteira, null)!.to, "/admin");
 assert.equal(linkDaTela(R.find((t) => t.rota === "/_authenticated/sap/")!, null)!.to, "/sap");
 assert.deepEqual(linkDaTela(atalhos[0], CID)!.search, atalhos[0].busca);
+
+// --- Menu da equipe (03-02, MENU-02, D-03, D-11) ---
+const menuAdmin = itensMenuEquipe(admin);
+assert.deepEqual(menuAdmin.map((i) => i.chave), ["carteira", "clinica", "conferencia"], "ordem dos 3 itens do admin");
+assert.deepEqual(
+  menuAdmin.map((i) => i.rotulo),
+  [ROTULOS_MENU_EQUIPE.carteira, ROTULOS_MENU_EQUIPE.clinica, ROTULOS_MENU_EQUIPE.conferencia],
+  "rótulos do menu vêm de ROTULOS_MENU_EQUIPE (D-11)",
+);
+for (const item of menuAdmin) assert.equal(item.rotulo, ROTULOS_MENU_EQUIPE[item.chave], `${item.chave}: rótulo fora da constante`);
+assert.deepEqual(menuAdmin.map((i) => i.icone), ["briefcase", "stethoscope", "shield-check"], "ícones do menu");
+const [mCarteira, mClinica, mConferencia] = menuAdmin;
+assert.equal(mCarteira.rota, "/_authenticated/admin/");
+assert.deepEqual(mCarteira.subtelas, [], "Carteira não tem subtelas");
+assert.equal(mClinica.rota, "/_authenticated/$clientId/");
+assert.deepEqual(
+  mClinica.subtelas.map((t) => t.rotulo),
+  ["Resultados da clínica", "Relatório do período", "Etapas do CRM", "Configurar este cliente"],
+  "subtelas de Clínica (admin)",
+);
+assert.equal(mConferencia.rota, "/_authenticated/admin/conferencia");
+assert.deepEqual(mConferencia.subtelas.map((t) => t.rotulo), ["Conferência de dados", "Integrações"], "subtelas de Conferência");
+for (const item of menuAdmin) {
+  assert.equal(item.tela.rota, item.rota, `${item.chave}: a linha do item é a da rota`);
+  assert.ok(R.includes(item.tela), `${item.chave}: a linha do item precisa ser do registro`);
+  for (const sub of item.subtelas) {
+    assert.ok(R.includes(sub), `${item.chave}: a subtela ${sub.rota} não é linha do registro`);
+    assert.equal(sub.situacao, "viva", `${item.chave}: a subtela ${sub.rota} não é viva`);
+  }
+}
+const rotasDoMenu = new Set(menuAdmin.flatMap((i) => [i.rota, ...i.subtelas.map((t) => t.rota)]));
+const vivasSemAcesso = new Set(R.filter((t) => t.situacao === "viva" && !t.acesso).map((t) => t.rota));
+assert.equal(vivasSemAcesso.size, 7, "7 vivas que não são acesso");
+assert.deepEqual([...rotasDoMenu].sort(), [...vivasSemAcesso].sort(), "o menu cobre exatamente as 7 vivas que não são acesso");
+
+const menuEstrategista = itensMenuEquipe(estrategista);
+assert.deepEqual(menuEstrategista.map((i) => i.chave), ["clinica"], "estrategista vê só Clínica (D-03)");
+assert.deepEqual(
+  menuEstrategista[0].subtelas.map((t) => t.rotulo),
+  ["Resultados da clínica", "Relatório do período"],
+  "subtelas do estrategista: só as que ele abre",
+);
+for (const item of menuEstrategista) {
+  assert.ok(!item.tela.somenteAdmin, `${item.chave}: item somenteAdmin no menu do estrategista`);
+  for (const sub of item.subtelas) assert.ok(!sub.somenteAdmin, `${sub.rota} (somenteAdmin) no menu do estrategista`);
+}
+assert.deepEqual(itensMenuEquipe({ isAdmin: false, papel: "owner" }), [], "owner não tem menu da equipe");
+assert.deepEqual(itensMenuEquipe({ isAdmin: false, papel: "viewer" }), [], "viewer não tem menu da equipe");
+assert.deepEqual(itensMenuEquipe({ isAdmin: false, papel: null }), [], "sem papel não tem menu da equipe");
+
+// --- Item atual do menu ---
+const atual = (p: string) => itemAtualDoMenu(p);
+assert.deepEqual(atual("/admin"), { chave: "carteira", exato: true });
+assert.deepEqual(atual("/admin/"), { chave: "carteira", exato: true });
+assert.deepEqual(atual("/admin/conferencia"), { chave: "conferencia", exato: true });
+assert.deepEqual(atual("/admin/integracoes"), { chave: "conferencia", exato: false });
+assert.deepEqual(atual(`/admin/${CID}`), { chave: "clinica", exato: false });
+assert.deepEqual(atual(`/${CID}`), { chave: "clinica", exato: true });
+assert.deepEqual(atual(`/${CID}/`), { chave: "clinica", exato: true });
+assert.deepEqual(atual(`/${CID}/pacientes`), { chave: "clinica", exato: false });
+assert.deepEqual(atual(`/${CID}/relatorio`), { chave: "clinica", exato: false });
+assert.equal(atual("/admin/brain"), null);
+assert.equal(atual("/admin/caixa"), null);
+assert.equal(atual(`/sap/${CID}/painel`), null);
+assert.equal(atual("/bem-vindo"), null);
+assert.equal(atual("/"), null);
+assert.equal(atual("/admin/nao-e-uuid-mas-tem-36-caracteres-x"), null, "id de clínica validado por regex");
 
 console.log("test-registro-de-telas: ok");
