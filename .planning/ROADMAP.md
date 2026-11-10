@@ -126,6 +126,21 @@ Plans:
 
 **UI hint**: yes
 
+### Phase 03.1: Redesenho das telas com inteligência (INSERTED)
+
+**Goal:** Toda tela do Nexo (clínica e equipe) e todo card usam o desenho da prancha, e cada página diz em linguagem simples o que aconteceu, por que aconteceu e o que fazer, em vez de só mostrar números. Pedido do João em 10/11/2026: "vc n refez todas as telas e nem todos os cards. a informação em cada página ainda continua confusa e sem inteligência".
+**Requirements**: TBD (sai do discuss-phase)
+**Depends on:** Phase 3
+**Success Criteria** (what must be TRUE):
+  1. Nenhuma tela viva da clínica ou da equipe fica com card ou bloco no desenho antigo; há uma lista de telas e cards conferida tela por tela
+  2. Cada tela abre com a leitura do período: o que aconteceu, o porquê (com o número que sustenta) e o próximo passo, com quem resolve
+  3. A leitura só afirma o que o dado sustenta: dado faltando ou não confiável aparece como tal, nunca vira conclusão
+  4. O João olha cada tela e diz que entende sem explicação
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 03.1 to break down)
+
 ### Phase 4: Pacote do template do WhatsApp à Meta
 
 **Goal**: O João tem o pacote pronto para pedir o template à Meta cedo no calendário, para que a aprovação externa não segure a v1.5.
