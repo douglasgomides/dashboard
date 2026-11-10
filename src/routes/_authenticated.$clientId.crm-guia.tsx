@@ -3,7 +3,9 @@ import { Carregando } from "@/components/sem-fonte";
 import { MANUAL_CRM } from "@/lib/manual-crm";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Circle, Copy, Printer, ClipboardList } from "lucide-react";
+import { CheckCircle2, Copy, Printer } from "lucide-react";
+import { NxCard, NxTag } from "@/components/nx";
+import { CmKpi, CmRecolhido, CmTopo, icT } from "@/components/nx/comercial-base";
 import { supabase } from "@/integrations/supabase/client";
 import { getClient } from "@/lib/client-data";
 import { montarGuiaCrm, ROTULO_PAPEL, PADRAO, type EtapaCrm, type Papel } from "@/lib/guia-crm";
@@ -37,7 +39,7 @@ function GuiaCrmPage() {
   const [copiado, setCopiado] = useState(false);
 
   if (isLoading) return <Carregando texto="Lendo o CRM…" />;
-  if (!data || !data.provider) return <p className="py-8 text-center text-sm" style={{ color: "var(--text-dim)" }}>Este cliente não tem CRM conectado.</p>;
+  if (!data || !data.provider) return <div className="nexo-comercial"><p className="nx-vazio text-center text-sm">Este cliente não tem CRM conectado.</p></div>;
 
   const num = (v: unknown) => (v == null ? null : Number(v));
   const g = montarGuiaCrm((data.etapas ?? []) as EtapaCrm[], {
@@ -67,102 +69,105 @@ function GuiaCrmPage() {
     }
   }
 
+  const fmt = (v: unknown) => Number(v ?? 0).toLocaleString("pt-BR");
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6 guia-crm">
-      <header className="space-y-2">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-dim)" }}>
-          <ClipboardList size={14} aria-hidden /> Guia para organizar o CRM · {data.provider}
-        </div>
-        <h1 className="text-xl font-semibold">{client?.name ? `${client.name}: ` : ""}o que ajustar no CRM para o painel ler certo</h1>
-        <p className="text-sm" style={{ color: "var(--ink-2)" }}>
-          <b>{feitos} de {g.passos.length}</b> passos prontos. Cada passo que falta deixa uma pergunta sem resposta (quantos agendaram, de onde vieram, por que perdemos).
-          Números dos últimos 90 dias: {Number(data.leads).toLocaleString("pt-BR")} leads, {Number(data.ganhos).toLocaleString("pt-BR")} ganhos, {Number(data.perdidos).toLocaleString("pt-BR")} perdidos.
-        </p>
-        <div className="flex flex-wrap gap-2 print:hidden">
-          <button type="button" onClick={copiar} className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg px-3 text-sm font-semibold" style={{ background: "var(--accent)", color: "var(--accent-fg, #fff)" }}>
-            <Copy size={14} aria-hidden /> {copiado ? "Copiado!" : "Copiar mensagem para o cliente"}
-          </button>
-          <button type="button" onClick={() => window.print()} className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border px-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-            <Printer size={14} aria-hidden /> Imprimir / salvar PDF
-          </button>
-          <button
-            type="button"
-            onClick={async () => (await import("@/lib/pdf-manual-crm")).baixarManualCrm(client?.name)}
-            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold"
-            style={{ borderColor: "var(--accent)", color: "var(--accent)", background: "var(--surface)" }}
-          >
-            <Printer size={14} aria-hidden /> Baixar o manual do CRM (PDF)
-          </button>
-        </div>
-      </header>
+    <div className="nexo-comercial guia-crm">
+      <CmTopo
+        pergunta={`${client?.name ? `${client.name}: ` : ""}o que ajustar no CRM para o painel ler certo?`}
+        detalhe={`Guia para organizar o CRM · ${data.provider} · números dos últimos 90 dias`}
+        acoes={
+          <span className="flex flex-wrap gap-2 print:hidden">
+            <button type="button" onClick={copiar} className="ws-action ws-action--primary inline-flex min-h-[40px] items-center gap-1.5">
+              <Copy size={15} aria-hidden /> {copiado ? "Copiado!" : "Copiar mensagem para o cliente"}
+            </button>
+            <button type="button" onClick={() => window.print()} className="nx-botao" style={{ minHeight: 40 }}>
+              <Printer size={15} aria-hidden /> Imprimir / salvar PDF
+            </button>
+            <button type="button" onClick={async () => (await import("@/lib/pdf-manual-crm")).baixarManualCrm(client?.name)} className="nx-botao" style={{ minHeight: 40 }}>
+              <Printer size={15} aria-hidden /> Baixar o manual do CRM (PDF)
+            </button>
+          </span>
+        }
+      />
 
-      <section className="space-y-3" aria-label="Passo a passo">
-        <h2 className="text-[15px] font-semibold">Passo a passo</h2>
-        <ol className="space-y-3">
+      <section className="nx-grade nx-grade--4" aria-label="Situação do CRM">
+        <CmKpi
+          i={0}
+          icone="checklist"
+          rotulo="Passos prontos"
+          valor={`${feitos} de ${g.passos.length}`}
+          extra={
+            <span className="cm-progresso" role="progressbar" aria-label="Passos prontos" aria-valuemin={0} aria-valuemax={g.passos.length} aria-valuenow={feitos}>
+              <i style={{ width: `${g.passos.length ? Math.max(2, (feitos / g.passos.length) * 100) : 0}%` }} />
+            </span>
+          }
+        />
+        <CmKpi i={1} icone="users" rotulo="Leads" valor={fmt(data.leads)} nota="últimos 90 dias" />
+        <CmKpi i={2} icone="checklist" rotulo="Ganhos" valor={fmt(data.ganhos)} nota="últimos 90 dias" />
+        <CmKpi i={3} icone="x" rotulo="Perdidos" valor={fmt(data.perdidos)} nota="últimos 90 dias" />
+      </section>
+
+      <NxCard id="passos" nivel={2} icone={icT("checklist")} titulo="Passo a passo" subtitulo="Cada passo que falta deixa uma pergunta sem resposta (quantos agendaram, de onde vieram, por que perdemos).">
+        <ol className="cm-passos" aria-label="Passo a passo">
           {g.passos.map((p, i) => (
-            <li key={p.id} className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-              <div className="flex items-start gap-2.5">
-                {p.feito ? <CheckCircle2 size={20} aria-hidden className="mt-0.5 shrink-0" style={{ color: "var(--good)" }} /> : <Circle size={20} aria-hidden className="mt-0.5 shrink-0" style={{ color: "var(--warn)" }} />}
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold">{i + 1}. {p.titulo} {p.feito && <span className="text-xs font-normal" style={{ color: "var(--good)" }}>· pronto</span>}</div>
-                  <p className="mt-1 text-sm" style={{ color: "var(--ink-2)" }}>{p.porque}</p>
-                  {!p.feito && (
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm" style={{ color: "var(--ink)" }}>
-                      {p.como.map((c, j) => <li key={j}>{c}</li>)}
-                    </ul>
-                  )}
-                </div>
+            <li key={p.id} className={`cm-passo${p.feito ? " cm-passo--feito" : ""}`}>
+              <span className="cm-passo__n" aria-hidden>
+                {p.feito ? <CheckCircle2 size={17} /> : i + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3>
+                  {i + 1}. {p.titulo} <NxTag tom={p.feito ? "up" : "or"}>{p.feito ? "pronto" : "falta"}</NxTag>
+                </h3>
+                <p>{p.porque}</p>
+                {!p.feito && (
+                  <ul>
+                    {p.como.map((c, j) => <li key={j}>{c}</li>)}
+                  </ul>
+                )}
               </div>
             </li>
           ))}
         </ol>
-      </section>
+      </NxCard>
 
-      <section className="space-y-3" aria-label="Etapas padrão">
-        <h2 className="text-[15px] font-semibold">Como o funil principal deve ficar</h2>
-        <ol className="grid gap-2 sm:grid-cols-2">
-          {PADRAO.map((p) => (
-            <li key={p.papel} className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-              <b>{p.nome}</b>
-              <div style={{ color: "var(--ink-2)" }}>{p.o_que_e}</div>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section className="space-y-3" aria-label="Etapas de hoje">
-        <h2 className="text-[15px] font-semibold">As etapas de hoje e o que cada uma vira</h2>
-        <p className="text-sm" style={{ color: "var(--ink-2)" }}>
-          Leitura automática pelo nome da etapa. Em vermelho, as que não dá para saber o que significam: são as primeiras a perguntar para a equipe da clínica.
-        </p>
+      <NxCard id="etapas-hoje" nivel={2} icone={icT("filter")} titulo="As etapas de hoje e o que cada uma vira" subtitulo="Leitura automática pelo nome da etapa. Em vermelho, as que não dá para saber o que significam: são as primeiras a perguntar para a equipe da clínica.">
         {funis.map(([funil, es]) => (
-          <div key={funil} className="overflow-x-auto rounded-xl border" style={{ borderColor: "var(--border)" }}>
-            <table className="w-full text-sm">
-              <caption className="px-3 py-2 text-left font-semibold" style={{ background: "var(--surface-2, var(--surface))" }}>
+          <div key={funil} className="cm-tabela">
+            <table>
+              <caption className="px-3 py-2 text-left" style={{ background: "var(--field)" }}>
                 Funil “{funil}” · {es.reduce((s, e) => s + e.total, 0).toLocaleString("pt-BR")} leads
               </caption>
               <thead>
-                <tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}>
-                  <th className="px-3 py-1.5 font-medium">Etapa hoje</th>
-                  <th className="px-3 py-1.5 font-medium">Leads</th>
-                  <th className="px-3 py-1.5 font-medium">Vira no padrão</th>
+                <tr className="text-left">
+                  <th>Etapa hoje</th>
+                  <th className="text-right">Leads</th>
+                  <th>Vira no padrão</th>
                 </tr>
               </thead>
               <tbody>
                 {es.sort((a, b) => b.total - a.total).map((e) => (
-                  <tr key={e.status_name} className="border-t" style={{ borderColor: "var(--border)" }}>
-                    <td className="px-3 py-1.5">{e.status_name}</td>
-                    <td className="px-3 py-1.5 tabular-nums">{e.total.toLocaleString("pt-BR")}</td>
-                    <td className="px-3 py-1.5" style={{ color: COR_PAPEL[e.papel] ?? "var(--ink)", fontWeight: e.papel === "desconhecida" ? 600 : undefined }}>
-                      {ROTULO_PAPEL[e.papel]}
-                    </td>
+                  <tr key={e.status_name}>
+                    <td style={{ fontWeight: 600 }}>{e.status_name}</td>
+                    <td className="cm-num">{e.total.toLocaleString("pt-BR")}</td>
+                    <td style={{ color: COR_PAPEL[e.papel] ?? "var(--text)", fontWeight: e.papel === "desconhecida" ? 700 : 500 }}>{ROTULO_PAPEL[e.papel]}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ))}
-      </section>
+      </NxCard>
+
+      <CmRecolhido titulo="Como o funil principal deve ficar" subtitulo="As etapas do padrão e o que cada uma quer dizer">
+        <ol className="grid gap-2 sm:grid-cols-2" aria-label="Etapas padrão">
+          {PADRAO.map((p) => (
+            <li key={p.papel} className="rounded-xl p-3 text-sm" style={{ background: "var(--field)" }}>
+              <b>{p.nome}</b>
+              <div style={{ color: "var(--text-2)" }}>{p.o_que_e}</div>
+            </li>
+          ))}
+        </ol>
+      </CmRecolhido>
       <ManualCrm />
     </div>
   );
@@ -171,8 +176,7 @@ function GuiaCrmPage() {
 // Manual completo (mesmo texto do PDF e do onboarding): o padrão que o painel precisa ler.
 function ManualCrm() {
   return (
-    <section className="space-y-3 rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }} aria-label="Manual de organização do CRM">
-      <h2 className="text-[15px] font-semibold">Manual de organização do CRM</h2>
+    <CmRecolhido titulo="Manual de organização do CRM" subtitulo="O mesmo texto do PDF e do onboarding: o padrão que o painel precisa ler">
       {MANUAL_CRM.map((s) => (
         <div key={s.titulo}>
           <h3 className="text-sm font-semibold" style={{ color: "var(--ink)" }}>{s.titulo}</h3>
@@ -184,6 +188,6 @@ function ManualCrm() {
           </ul>
         </div>
       ))}
-    </section>
+    </CmRecolhido>
   );
 }

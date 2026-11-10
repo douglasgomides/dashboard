@@ -14,6 +14,7 @@ import {
 } from "@/lib/client-data";
 import { useAuth } from "@/hooks/use-auth";
 import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
+import { CmAviso, CmKpi, CmTopo } from "@/components/nx/comercial-base";
 
 export const Route = createFileRoute("/_authenticated/$clientId/analisar")({
   component: AnalisarPage,
@@ -127,27 +128,24 @@ function AnalisarPage() {
   });
 
   const head = (
-    <div className="hpagehead">
-      <h2>A analisar</h2>
-      <p>
-        Onde o dashboard não tem certeza do que o CRM do cliente quer dizer. Aqui a equipe confirma, e a confirmação vale
-        para os números de agora e para as próximas sincronizações.
-      </p>
-    </div>
+    <CmTopo
+      pergunta="O que cada funil e cada etapa do CRM contam hoje?"
+      detalhe="Onde o dashboard não tem certeza do que o CRM do cliente quer dizer. Aqui a equipe confirma, e a confirmação vale para os números de agora e para as próximas sincronizações."
+    />
   );
 
   if (!isAdmin) {
     return (
-      <div>
+      <div className="nexo-comercial">
         {head}
         <p className="note">Esta aba é só da equipe Doctor Creator.</p>
       </div>
     );
   }
-  if (etapas.isLoading) return <div>{head}<p className="note">Carregando as etapas…</p></div>;
+  if (etapas.isLoading) return <div className="nexo-comercial">{head}<p className="note">Carregando as etapas…</p></div>;
   if (etapas.error) {
     return (
-      <div>
+      <div className="nexo-comercial">
         {head}
         <div className="card">
           <p className="note">
@@ -163,7 +161,7 @@ function AnalisarPage() {
   const kpis = etapasKpi.data ?? [];
   if (linhas.length === 0 && kpis.length === 0) {
     return (
-      <div>
+      <div className="nexo-comercial">
         {head}
         <div className="card">
           <p className="note">
@@ -201,24 +199,33 @@ function AnalisarPage() {
     }
   }
 
+  const comCards = linhas.filter((l) => l.total > 0);
+  const aConfirmarTotal = comCards.filter((l) => !l.confirmado).length;
+  const fechadosTotal = linhas.reduce((a, l) => a + l.fechados, 0);
+  const nFunis = new Set([...linhas, ...kpis].map((e) => `${e.connection_id}|${e.pipeline_id}`)).size;
+
   return (
-    <div>
+    <div className="nexo-comercial">
       {head}
 
+      <section className="nx-grade nx-grade--4" aria-label="Resumo das etapas">
+        <CmKpi i={0} icone="filter" rotulo="Funis" valor={fmtN(nFunis)} />
+        <CmKpi i={1} icone="checklist" rotulo="Etapas com cards" valor={fmtN(comCards.length)} />
+        <CmKpi i={2} icone="target" rotulo="Etapas a confirmar" valor={fmtN(aConfirmarTotal)} nota={aConfirmarTotal > 0 ? "hoje é palpite pelo nome" : "todas confirmadas"} />
+        <CmKpi i={3} icone="x" rotulo="Fechados sem resultado" valor={fmtN(fechadosTotal)} nota="o CRM não diz se ganhou ou perdeu" />
+      </section>
+
       {alertas.length > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <h2>Pontos de atenção</h2>
-          <ul style={{ margin: "8px 0 0", paddingLeft: 18, display: "grid", gap: 6, fontSize: 13 }}>
-            {alertas.map((a, i) => (
-              <li key={i}>{a}</li>
-            ))}
-          </ul>
-        </div>
+        <section className="cm-avisos" aria-label="Pontos de atenção">
+          {alertas.map((a, i) => (
+            <CmAviso key={i} tom="atencao">{a}</CmAviso>
+          ))}
+        </section>
       )}
 
       <SecaoPapelFunil clientId={clientId} etapas={[...linhas, ...kpis]} />
       {linhas.length === 0 && kpis.length > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card" >
           <p className="note txt">
             Neste CRM o ganho e o perdido vêm do próprio CRM, então não há etapa para confirmar aqui. O papel de cada funil e as
             etapas de consulta agendada e em atendimento continuam valendo.
@@ -230,7 +237,7 @@ function AnalisarPage() {
         const painelNome = (id: string) => grupo.find((g) => g.pipeline_id === id)?.pipeline_name ?? id;
         const paineis = [...new Set(grupo.map((g) => g.pipeline_id))];
         return (
-          <div key={conexao} className="card" style={{ marginBottom: 16 }}>
+          <div key={conexao} className="card" >
             <h2>{paineis.map(painelNome).join(" · ")}</h2>
             <p className="sub">
               Para cada etapa, diga o que significa. Ao mudar, os cards abertos, ganhos e perdidos da etapa são atualizados na hora. Os
@@ -327,7 +334,7 @@ function AnalisarPage() {
       })}
 
       {etapasKpi.error ? (
-        <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card" >
           <h2>Cards do Comercial</h2>
           <p className="note txt">
             A marcação de quais etapas contam como consulta agendada e em atendimento ainda não está disponível neste banco:
@@ -371,7 +378,7 @@ function SecaoPapelFunil({ clientId, etapas: todas }: { clientId: string; etapas
   });
   if (funis.length === 0) return null;
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card" >
       <h2>Papel de cada funil</h2>
       <p className="sub">
         Decide o que conta como lead novo. Captação, venda e operacional contam a pessoa uma vez só (no Kommo e na Clint o
@@ -439,7 +446,7 @@ function SecaoKpi({
   for (const e of etapas) porConexao.set(e.connection_id, [...(porConexao.get(e.connection_id) ?? []), e]);
   const nenhumaMarcada = etapas.every((e) => !e.consulta_agendada);
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card" >
       <h2>Cards do Comercial</h2>
       <p className="sub">
         Marque quais etapas contam como <b>consulta agendada</b> e como <b>em atendimento</b>. O nome da etapa sozinho engana
