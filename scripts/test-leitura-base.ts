@@ -128,7 +128,7 @@ const fatoRuim: Fato = { id: "agendamentos", tom: "ruim", peso: 3, frase: "Os ag
 const fatoAtencao: Fato = { id: "espera", tom: "atencao", peso: 2, frase: "A primeira resposta no WhatsApp leva 47 minutos.", numeros: [{ chave: "espera", exibicao: "47 min" }] };
 const fatoBom: Fato = { id: "alcance", tom: "bom", peso: 3, frase: "O alcance subiu 12% (de 10.000 para 11.200).", numeros: [{ chave: "alcance", exibicao: "11.200 pessoas" }] };
 const passoA: PassoFato = { verbo: "responder", texto: "as conversas paradas há mais de 1 dia", quem: "atendimento", motivo: "A espera pela primeira resposta passou de 30 minutos.", fatoId: "espera" };
-const passoB: PassoFato = { verbo: "reforçar", texto: "o Reels de botox", quem: "social_media" };
+const passoB: PassoFato = { verbo: "reforçar", texto: "o Reels de pele mais visto", quem: "social_media" };
 const passoC: PassoFato = { verbo: "conferir", texto: "o cadastro dos contatos", quem: "comercial" };
 const fatosOk: FatosDaTela = { tela: "resultados", versaoRegras: 1, tipoPeriodo: "periodo", periodo, portao: { ok: true }, fatos: [fatoBom, fatoAtencao, fatoRuim], proximoPasso: passoA, outrosPassos: [passoB, passoC] };
 const t1 = montarTexto(fatosOk);
@@ -177,6 +177,17 @@ if (t4.tipo === "leitura") assert.equal(t4.aconteceu.fatoId, "agendamentos", "o 
 const t5 = montarTexto({ ...fatosOk, fatos: [fatoRisco], proximoPasso: null, outrosPassos: [] });
 assert.equal(t5.tipo, "sem_leitura");
 assert.deepEqual(problemasDoTexto(t5), []);
+// Ressalva do dado (ex.: período incompleto) não toma o lugar de uma conclusão, nem vira "por quê".
+const fatoRessalva: Fato = { id: "cobertura-0", tom: "atencao", peso: 1, ressalva: true, frase: "Período incompleto: 20 de 30 dias têm dado.", numeros: [{ chave: "dias", exibicao: "20 de 30 dias" }] };
+const fatoBomLeve: Fato = { id: "seguidores", tom: "bom", peso: 1, frase: "Os seguidores subiram 4%.", numeros: [{ chave: "seg", exibicao: "+120" }] };
+const t6 = montarTexto({ ...fatosOk, fatos: [fatoRessalva, fatoBomLeve], proximoPasso: null, outrosPassos: [] });
+assert.equal(t6.tipo, "leitura");
+if (t6.tipo === "leitura") {
+  assert.equal(t6.aconteceu.fatoId, "seguidores", "a conclusão vem antes da ressalva");
+  assert.equal(t6.porque, null, "ressalva não é o porquê");
+}
+const t7 = montarTexto({ ...fatosOk, fatos: [fatoRessalva], proximoPasso: null, outrosPassos: [] });
+assert.equal(t7.tipo === "leitura" && t7.aconteceu.fatoId, "cobertura-0", "sem conclusão, a ressalva aparece (honesta) em vez de nada");
 
 // ---------- filtro de linguagem (D-04, LEIT-07) ----------
 const reprovar = (texto: string, trecho: RegExp) => {
@@ -196,7 +207,7 @@ reprovar("Resultado garantido em 30 dias.", /CFM|previsão/);
 reprovar("Uma frase. Outra frase. Uma terceira frase.", /frases/);
 reprovar(`${"palavra ".repeat(40)}fim.`, /caracteres/);
 assert.deepEqual(checarTextoDaLeitura("Os agendamentos caíram 18% (de 34 para 28)."), [], "frase com fato e número passa");
-assert.deepEqual(checarTextoDaLeitura("O Reels de botox pode ter ajudado: foi o post com mais contatos."), [], "causa com ressalva passa");
+assert.deepEqual(checarTextoDaLeitura("O Reels de pele pode ter ajudado: foi o post com mais contatos."), [], "causa com ressalva passa");
 assert.deepEqual(checarTextoDaLeitura("Conferir a conexão do Instagram."), []);
 
 // ---------- adaptadores ----------

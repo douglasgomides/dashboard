@@ -45,6 +45,8 @@ export interface Fato {
   peso: 1 | 2 | 3;
   frase: string;
   numeros: Numeral[];
+  /** Ressalva sobre o dado (ex.: período incompleto), não uma conclusão: só vira leitura se não houver conclusão melhor. */
+  ressalva?: boolean;
   /** Tamanho da amostra que sustenta o fato (para o portão e para o texto). */
   n?: number;
 }
