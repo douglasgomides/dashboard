@@ -249,7 +249,7 @@ const montar = (hoje: string, extra: Partial<Parameters<typeof montarResultado>[
 
 const lana = fatosDeResultados({ resultado: montar("2026-10-14"), de: START, ate: END, hoje: "2026-10-14" });
 assert.equal(lana.tela, "resultados");
-assert.equal(lana.versaoRegras, 1);
+assert.equal(lana.versaoRegras, 2, "regras completas de Resultados (03.1-03)");
 assert.deepEqual(lana.periodo.anterior, periodoAnterior(START, END), "o anterior vem da mesma conta");
 assert.deepEqual(lana.portao, { ok: true }, "Lana, período fechado: o portão libera");
 assert.ok(lana.fatos.length >= 1, "a Lana tem fatos");

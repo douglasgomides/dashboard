@@ -32,17 +32,26 @@ async function dados(context: BrowserContext) {
 const semRolagemLateral = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 
 for (const width of [375, 1440]) {
-  test(`Pacientes: números em cartões, funil em barras e lista pelo teclado, sem rolagem lateral em ${width}px`, async ({ page, context }) => {
+  test(`Pacientes: leitura, números em cartões, funil em barras e lista pelo teclado, sem rolagem lateral em ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "admin");
     await dados(context);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/pacientes?preset=30d`);
-    const numeros = page.getByRole("region", { name: "Números do período" });
+    // A leitura vem primeiro (molde novo): o que aconteceu com número ao lado, só por regra, sem nome de paciente.
+    const leitura = page.getByRole("region", { name: "Leitura do período", exact: true });
+    await expect(leitura.getByText("O que aconteceu", { exact: true })).toBeVisible();
+    await expect(leitura.locator(".nx-leitura__num").first()).toBeVisible();
+    await expect(leitura.getByText("Pessoa fictícia")).toHaveCount(0);
+    const numeros = page.locator(".nx-pagina__cartoes");
     await expect(numeros.locator(".nx-kpi")).toHaveCount(4);
     await expect(numeros.locator(".ws-metric-value").first()).toHaveText("120");
-    await expect(numeros.locator(".ws-metric-value").first()).toBeInViewport();
+    await expect(numeros.locator(".ws-metric-value").first()).toBeVisible();
     // Sem dado aparece como texto, nunca como zero.
     await expect(numeros.getByText("Sem dado", { exact: true })).toBeVisible();
+    expect(await semRolagemLateral(page)).toBe(true);
+
+    // O funil e a pizza ficam no detalhe recolhido: um toque abre.
+    await page.locator(".nx-pagina__detalhe > details > summary").click();
     await expect(page.getByRole("list", { name: "Pessoas em cada etapa" })).toBeVisible();
     await expect(page.locator(".nx-pizza svg[role=img]")).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
@@ -54,6 +63,7 @@ for (const width of [375, 1440]) {
     await expect(page.getByRole("heading", { name: /^Agendaram: 30 pessoas/ })).toBeVisible();
     await expect(abrir).toHaveAttribute("aria-expanded", "true");
     expect(await semRolagemLateral(page)).toBe(true);
+    await page.screenshot({ path: `test-results/redesenho/pacientes-${width}.png`, fullPage: true });
   });
 
   test(`Funil comercial: período em cartões antes do funil, taxa em meia-lua, método recolhido em ${width}px`, async ({ page, context }) => {
