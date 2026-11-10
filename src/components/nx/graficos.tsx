@@ -10,11 +10,11 @@ export const NX_CORES = ["var(--b1)", "var(--b3)", "var(--b4)", "var(--b5)", "va
 
 const v = (o: Record<string, string | number>) => o as CSSProperties;
 
-/** Teto "redondo" para o eixo (1, 2, 2,5 ou 5 vezes uma potência de 10). */
+/** Teto "redondo" para o eixo (1, 2, 4, 6 ou 8 vezes uma potência de 10): o quarto dele também é redondo. */
 export function tetoRedondo(max: number): number {
   if (!(max > 0)) return 1;
   const p = Math.pow(10, Math.floor(Math.log10(max)));
-  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= max) return m * p;
+  for (const m of [1, 2, 4, 6, 8, 10]) if (m * p >= max) return m * p;
   return 10 * p;
 }
 

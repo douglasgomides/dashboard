@@ -28,6 +28,7 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
+  flex: 1 1 200px;
 }
 .nx-card__head h2,
 .nx-card__head h3 {
@@ -43,7 +44,7 @@
   line-height: 20px;
   color: var(--muted-ink);
 }
-.nx-card__acao { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.nx-card__acao { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; flex: none; max-width: 100%; }
 
 /* Cabeçalho de seção solto (fora de cartão). */
 .nx-sec {
@@ -92,7 +93,6 @@
 }
 @media (max-width: 560px) {
   .nx-grade--4 { grid-template-columns: minmax(0, 1fr); }
-  .nx-grade--4.nx-grade--celular-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ---------- Número (KPI) ---------- */
@@ -169,7 +169,7 @@
 .nx-tag--or { background: var(--or-bg); color: var(--or-ink); }
 .nx-tag--b { background: var(--b6); color: var(--b1); }
 .nx-tag--g { background: var(--field); color: var(--text-2); }
-.nx-tag--gl { border: 1px solid var(--line-2); color: var(--muted-ink); padding: 3px 10px; border-radius: 10px; font-size: 13px; }
+.nx-tag--gl { white-space: normal; border: 1px solid var(--line-2); color: var(--muted-ink); padding: 3px 10px; border-radius: 10px; font-size: 13px; }
 
 /* ---------- Barra horizontal ---------- */
 .nx-hbars { display: grid; gap: 18px; }
@@ -359,6 +359,72 @@ a.nx-row:focus-visible, button.nx-row:focus-visible { outline: 2px solid var(--b
 .nx-destaque { display: flex; align-items: center; gap: 12px; }
 .nx-destaque b { font-size: 30px; line-height: 34px; font-weight: 400; color: var(--b2); font-variant-numeric: tabular-nums; }
 .nx-destaque small { color: var(--muted-ink); font-size: 13px; line-height: 16px; max-width: 22ch; }
+
+
+/* ---------- Peças pequenas de apoio ---------- */
+/* Botão quadrado de ícone (prancha .sq). */
+.nx-sq {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  background: var(--white);
+  flex: none;
+}
+/* Botão contornado (prancha .cta.out). */
+.nx-botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1px solid var(--b4);
+  background: var(--white);
+  color: var(--b1);
+  font-size: 15px;
+  font-weight: 500;
+}
+.nx-botao:hover { background: var(--b6); }
+.nx-botao:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; }
+/* Bloco que abre embaixo de uma linha ou de um gráfico. */
+.nx-abre { margin-top: 8px; border-radius: 14px; background: var(--field); padding: 12px; }
+.nx-abre .nx-row { background: var(--white); }
+.nx-abre .nx-lista { gap: 6px; }
+/* Faixa de destaque com ícone (texto corrido). */
+.nx-aviso {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border: 1px solid var(--b5);
+  background: var(--b6);
+  border-radius: 14px;
+  padding: 14px 16px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text-2);
+}
+.nx-aviso strong { color: var(--text); font-weight: 600; }
+.nx-vazio { border-radius: 14px; background: var(--field); padding: 16px; }
+.nx-alerta { border: 1px solid; border-radius: 12px; padding: 10px 14px; margin: 0; }
+/* Posição numa lista ordenada. */
+.nx-rank {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--field);
+  color: var(--text-2);
+  flex: none;
+}
+.nx-rank--1 { background: var(--grad-tile); color: var(--white); }
 
 /* ---------- Movimento ---------- */
 @media (prefers-reduced-motion: no-preference) {
