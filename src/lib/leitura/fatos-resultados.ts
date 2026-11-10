@@ -4,6 +4,9 @@
 import type { Resultado } from "@/lib/resultado";
 import type { Rastreio } from "@/lib/rastreio-anuncios";
 import type { Selo } from "@/lib/selo";
+import type { DadosRoi } from "@/lib/roi";
+import type { NumerosLeitura } from "@/lib/inteligencia-resultados";
+import type { Area, Responsavel } from "@/lib/insight";
 import { deInsight } from "./adaptadores";
 import { portaoDoPeriodo } from "./portao";
 import { periodoAnterior, type Fato, type FatosDaTela, type PassoFato } from "./tipos";
@@ -21,6 +24,20 @@ export interface EntradaFatosResultados {
   /** Opcionais: o 03.1-03 liga quando a tela passar a carregar essas fontes. */
   rastreio?: Rastreio | null;
   selo?: Selo | null;
+  funil?: FunilDoPeriodo | null;
+  roi?: DadosRoi | null;
+}
+
+/** Esboço do RED (o tipo completo vem no GREEN). */
+export interface FunilDoPeriodo {
+  atual: NumerosLeitura;
+  anterior?: NumerosLeitura | null;
+  semMedida?: { chave: string; rotulo: string; motivo: string; quem: Responsavel }[];
+}
+
+/** Esboço do RED: ainda não separa os fatos por área. */
+export function fatosDeResultadosComAreas(e: EntradaFatosResultados): { fatos: FatosDaTela; porArea: Record<Area, Fato[]> } {
+  return { fatos: fatosDeResultados(e), porArea: { resumo: [], conteudo: [], anuncios: [], comercial: [], ideias: [] } };
 }
 
 const DIA = 86_400_000;
