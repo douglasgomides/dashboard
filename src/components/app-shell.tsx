@@ -19,6 +19,8 @@ import { useTheme } from "@/hooks/use-theme";
 import { LogoutButton } from "@/components/logout-button";
 import { BuscaDeTelas } from "@/components/busca-de-telas";
 import { ehEquipe } from "@/lib/registro-de-telas";
+import { MarcaNexo, MenuEquipe } from "@/components/menu-equipe";
+import { IconeTabler } from "@/components/icons/tabler";
 import { ClientAvatar } from "@/components/client-avatar";
 import { DateRangePicker, rotuloPeriodo } from "@/components/date-range-picker";
 import type { DateRangeState } from "@/lib/date-range";
@@ -63,6 +65,10 @@ export interface AppShellProps {
   semPeriodo?: boolean;
   children: ReactNode;
 }
+
+// Dica do atalho no campo Buscar tela (decorativa, aria-hidden): ⌘ K no Mac, Ctrl K nos outros.
+const ATALHO_BUSCA =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘ K" : "Ctrl K";
 
 function TabLink({
   tab,
@@ -357,7 +363,50 @@ export function AppShell({
       <a className="workspace-skip" href="#workspace-content">
         Ir para o conteúdo
       </a>
-      <aside aria-label="Menu principal" data-origem="menu">
+      <aside aria-label="Menu principal" data-origem="menu" className={equipe ? "nx-barra" : undefined}>
+        {equipe ? (
+          // Barra da equipe (03-02, MENU-02/03, D-01): marca N, campo Buscar tela e o Menu da equipe. Sem Aparência e sem
+          // seletor de produto (UI-SPEC D8). O celular (cabeçalho, barra inferior e folha) fica como está até o 03-04.
+          <>
+            <div className="nx-barra-topo">
+              <MarcaNexo recolhida={recolhida} />
+              <button
+                type="button"
+                className="nx-recolher"
+                onClick={alternarRecolhida}
+                aria-label={recolhida ? "Abrir menu lateral" : "Recolher menu lateral"}
+              >
+                <IconeTabler nome={recolhida ? "chevron-right" : "chevron-left"} tamanho={20} />
+              </button>
+            </div>
+            <button
+              type="button"
+              className="nx-buscar"
+              onClick={abrirBusca}
+              aria-keyshortcuts="Control+K Meta+K"
+              title={recolhida ? "Buscar tela" : undefined}
+            >
+              <IconeTabler nome="search" tamanho={recolhida ? 20 : 16} />
+              <span className={recolhida ? "sr-only" : "nx-buscar-texto"}>Buscar tela</span>
+              {!recolhida && <kbd aria-hidden="true">{ATALHO_BUSCA}</kbd>}
+            </button>
+            <MenuEquipe
+              variante="barra"
+              perfil={perfilEquipe}
+              clientId={clientId}
+              pathname={pathname}
+              dateRange={dateRange}
+              recolhida={recolhida}
+            />
+            <hr className="nx-sep so-aberta" />
+            <div className="nx-rodape so-aberta">
+              <Link to="/bem-vindo">Conheça o Nexo</Link>
+              <LogoutButton />
+              <span>Nexo · Marketing e vendas</span>
+            </div>
+          </>
+        ) : (
+        <>
         <div className="brand">
           <ProductBrand product="nexo" dark />
           <button
@@ -448,6 +497,8 @@ export function AppShell({
           <LogoutButton dark className="text-sm text-left min-h-[36px]" />
           <span>Nexo · Marketing e vendas</span>
         </div>
+        </>
+        )}
       </aside>
       <div className="mainwrap">
         <header className="mhead">

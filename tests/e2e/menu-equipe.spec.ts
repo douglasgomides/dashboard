@@ -30,8 +30,9 @@ test("tracer: equipe abre Pacientes do período pela busca e o log grava busca",
   await page.goto(`/${CID}`);
   await expect(page.getByRole("heading", { name: "Resultados da clínica", exact: true })).toBeVisible();
   await expect.poll(() => posts.length).toBeGreaterThanOrEqual(1);
-  // O seletor de produto só aparece para o admin: espera o papel chegar antes do atalho.
-  await expect(page.getByRole("navigation", { name: "Produto" }).first()).toBeAttached();
+  // O Menu da equipe só aparece depois que o papel chega: espera por ele antes do atalho (03-02: a barra da equipe não tem
+  // mais o seletor de produto, que era a espera do 03-01).
+  await expect(page.getByRole("navigation", { name: "Menu da equipe" })).toBeVisible();
 
   const b1 = await page
     .locator(".app.product-workspace")

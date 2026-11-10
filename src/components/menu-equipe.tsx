@@ -1,0 +1,154 @@
+import type { ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
+import { IconeTabler } from "@/components/icons/tabler";
+import type { DateRangeState } from "@/lib/date-range";
+import {
+  itemAtualDoMenu,
+  itensMenuEquipe,
+  linkDaTela,
+  type LinkDaTela,
+  type PerfilEquipe,
+  type TelaDoRegistro,
+} from "@/lib/registro-de-telas";
+import "@/styles/nexo-casca.css";
+
+// Menu da equipe (Phase 3, MENU-02, D-01): 3 itens (ou só Clínica para o estrategista, D-03) e as subtelas vivas do item
+// atual. Os itens e os rótulos vêm do registro único (itensMenuEquipe); nada de texto solto aqui (D-11).
+// data-origem="menu" fica no contêiner de quem monta (a aside da barra; a folha do 03-04), nunca nos links (D-08).
+
+export interface MenuEquipeProps {
+  perfil: PerfilEquipe;
+  /** Clínica atual da casca. null na casca /admin sem clínica lembrada (o 03-06 trata Clínica nesse caso). */
+  clientId: string | null;
+  pathname: string;
+  /** Período atual: vira search nas rotas com $clientId, como no menu do médico. */
+  dateRange?: DateRangeState;
+  /** Barra recolhida: só ícones, rótulo em sr-only e title no link; sem subtelas. */
+  recolhida?: boolean;
+  variante: "barra" | "folha";
+  /** Chamado no clique de qualquer link (a folha fecha). */
+  onEscolher?: () => void;
+}
+
+const semBarraFinal = (p: string) => p.replace(/\/+$/, "") || "/";
+
+/** Endereço concreto de um link do registro, para comparar com o pathname. */
+function caminhoDoLink(link: LinkDaTela): string {
+  return link.params ? link.to.replace("$clientId", link.params.clientId) : link.to;
+}
+
+function searchDoLink(link: LinkDaTela, dateRange?: DateRangeState) {
+  return link.params ? { ...(dateRange ?? {}), ...(link.search ?? {}) } : link.search;
+}
+
+function LinkDoRegistro({
+  tela,
+  clientId,
+  dateRange,
+  className,
+  title,
+  dataOn,
+  atual,
+  onClick,
+  children,
+}: {
+  tela: TelaDoRegistro;
+  clientId: string | null;
+  dateRange?: DateRangeState;
+  className?: string;
+  title?: string;
+  dataOn?: boolean;
+  atual?: boolean;
+  onClick?: () => void;
+  children: ReactNode;
+}) {
+  const link = linkDaTela(tela, clientId);
+  // Sem clínica a tela com $clientId não tem endereço; fica na Carteira (D-02; a dica "Escolha uma clínica" é do 03-06).
+  const destino: LinkDaTela = link ?? { to: "/admin" };
+  return (
+    <Link
+      to={destino.to as never}
+      params={destino.params as never}
+      search={searchDoLink(destino, dateRange) as never}
+      className={className}
+      title={title}
+      data-on={dataOn ? "" : undefined}
+      aria-current={atual ? "page" : undefined}
+      onClick={onClick}
+    >
+      {children}
+    </Link>
+  );
+}
+
+export function MenuEquipe({ perfil, clientId, pathname, dateRange, recolhida = false, variante, onEscolher }: MenuEquipeProps) {
+  const itens = itensMenuEquipe(perfil);
+  if (!itens.length) return null;
+  const atual = itemAtualDoMenu(pathname);
+  const aqui = semBarraFinal(pathname);
+  const folha = variante === "folha";
+  const mostraRotulo = folha || !recolhida;
+
+  return (
+    <nav aria-label="Menu da equipe" className={`nx-menu ${folha ? "nx-menu--folha" : "nx-menu--barra"}`}>
+      <ul>
+        {itens.map((item) => {
+          const on = atual?.chave === item.chave;
+          const exato = on && atual.exato;
+          return (
+            <li key={item.chave}>
+              <LinkDoRegistro
+                tela={item.tela}
+                clientId={clientId}
+                dateRange={dateRange}
+                className="nx-menu-item"
+                title={mostraRotulo ? undefined : item.rotulo}
+                dataOn={on}
+                atual={exato}
+                onClick={onEscolher}
+              >
+                <IconeTabler nome={item.icone} tamanho={20} />
+                <span className={mostraRotulo ? "nx-menu-rotulo" : "sr-only"}>{item.rotulo}</span>
+                {folha && <IconeTabler nome="chevron-right" tamanho={16} className="nx-menu-seta" />}
+              </LinkDoRegistro>
+              {on && mostraRotulo && item.subtelas.length > 0 && (
+                <nav aria-label={`Telas de ${item.rotulo}`} className="nx-subtelas">
+                  <ul>
+                    {item.subtelas.map((sub) => {
+                      const link = linkDaTela(sub, clientId);
+                      const subAtual = !!link && caminhoDoLink(link) === aqui;
+                      return (
+                        <li key={sub.rota}>
+                          <LinkDoRegistro
+                            tela={sub}
+                            clientId={clientId}
+                            dateRange={dateRange}
+                            className="nx-subtela"
+                            atual={subAtual}
+                            onClick={onEscolher}
+                          >
+                            {sub.rotulo}
+                          </LinkDoRegistro>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </nav>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+/** Marca do Nexo na casca logada: o "N" Cobalto da prancha e a palavra Nexo (some na barra recolhida, fica em sr-only). */
+export function MarcaNexo({ recolhida = false }: { recolhida?: boolean }) {
+  return (
+    <span className="nx-marca">
+      <span className="nx-marca-n" aria-hidden="true" />
+      <span className={recolhida ? "sr-only" : "nx-marca-nome"}>Nexo</span>
+    </span>
+  );
+}
