@@ -224,7 +224,7 @@
 .adm-etapa__nums { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--muted-ink); font-variant-numeric: tabular-nums; }
 .adm-etapa__nums b { font-weight: 700; color: var(--text); }
 @media (max-width: 1100px) { .adm-etapas { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .adm-etapas { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .adm-etapas { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .adm-etapa { padding: 10px; } }
 
 /* Abas da conferência. */
 .adm-abas { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -337,3 +337,8 @@ textarea.adm-entrada { padding: 10px 12px; min-height: 0; }
   min-height: 40px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--white); padding: 0 10px; font-size: 14px; font-weight: 500;
 }
 .adm-chips .nx-tag { white-space: normal; }
+.adm-filtros--plano { border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 10px 18px; }
+.adm-borda-topo { border-top: 1px solid var(--line); }
+@media (max-width: 560px) { .adm-filtros--plano { padding: 10px 14px; } }
+/* Conferência ao vivo (componente compartilhado): título na régua da prancha. */
+.adm section[aria-label="Conferência ao vivo com os CRMs"] h3 { font-size: 18px; line-height: 24px; font-weight: 700; }
