@@ -6,5 +6,6 @@
 work
 outputs
 dist
+build
 playwright-report
 test-results
