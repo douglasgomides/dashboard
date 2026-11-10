@@ -31,7 +31,8 @@
   background: var(--page);
   color: var(--ink);
 }
-:root[data-theme="dark"] .product-workspace {
+/* Escuro: só o SAP (Phase 3, D-01: o Nexo é sempre claro, ver src/styles/nexo-system.css). */
+:root[data-theme="dark"] .product-workspace.sap-workspace {
   --page: #0b1420;
   --surface: #17283b;
   --surface-2: #20364b;
@@ -55,7 +56,7 @@
   --shadow: 0 3px 16px #0002;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .product-workspace {
+  :root:not([data-theme="light"]) .product-workspace.sap-workspace {
     --page: #0b1420;
     --surface: #17283b;
     --surface-2: #20364b;
