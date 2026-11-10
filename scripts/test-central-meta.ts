@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { Readable } from "node:stream";
 import { assinaturaValida, criptografarToken, descriptografarToken, ErroMeta, MetaOficial, normalizarEventos } from "../api/_lib/central-meta";
 import { criarHandlerCanais, centralConfigurada } from "../api/_lib/central-canais";
@@ -74,6 +74,10 @@ try {
  assert.equal((await invoke(webhook,{method:'GET',query:{'hub.mode':'subscribe','hub.verify_token':'wrong','hub.challenge':'123'}})).status,403);
  assert.equal((await invoke(webhook,{method:'GET',query:{'hub.mode':'subscribe','hub.verify_token':process.env.NEXO_META_VERIFY_TOKEN!,'hub.challenge':'123'}})).result,'123');
  assert.equal((await invoke(webhook,{raw,headers:{'x-hub-signature-256':signature}})).status,200);assert.equal(received,3);
+ const igSecret=randomBytes(16).toString('hex'),assinar=(s:string)=>"sha256="+createHmac("sha256",s).update(raw).digest("hex");
+ assert.equal((await invoke(webhook,{raw,headers:{'x-hub-signature-256':assinar(igSecret)}})).status,401,"Instagram secret only counts when configured");
+ process.env.NEXO_INSTAGRAM_APP_SECRET=igSecret;assert.equal((await invoke(webhook,{raw,headers:{'x-hub-signature-256':assinar(igSecret)}})).status,200);assert.equal(received,6);
+ assert.equal((await invoke(webhook,{raw,headers:{'x-hub-signature-256':assinar(randomBytes(16).toString('hex'))}})).status,401);
  failDb=true;assert.equal((await invoke(webhook,{raw,headers:{'x-hub-signature-256':signature}})).status,503,"failed persistence must cause Meta to redeliver");
  console.log('central-meta ok: encryption with tenant AAD, raw HMAC, event routing, attachments, token ownership, fixed provider hosts, no POST retries, authentication, idempotent send and durable webhook acknowledgement');
 } finally {globalThis.fetch=fetchBefore;for(const k of Object.keys(process.env))if(!(k in before))delete process.env[k];Object.assign(process.env,before);}
