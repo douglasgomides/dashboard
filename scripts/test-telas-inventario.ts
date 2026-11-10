@@ -258,7 +258,7 @@ function blocosAntigosDa(arquivoRota: string, excecao: string): BlocoAntigo[] {
     for (const arquivo of fila) {
       const fonte = fonteDe(arquivo);
       const ehRota = arquivo === arquivoRota;
-      if (!ehRota && !semBusca(arquivo) && !CONGELADOS.has(arquivo)) {
+      if (!semBusca(arquivo) && !CONGELADOS.has(arquivo)) {
         for (const marca of marcasDe(fonte)) achados.push({ arquivo, marca });
       }
       if (CONGELADOS.has(arquivo) && !ehRota) continue; // não desce nos congelados do SAP
@@ -272,7 +272,7 @@ function blocosAntigosDa(arquivoRota: string, excecao: string): BlocoAntigo[] {
         if (!alvo) continue;
         if (CONGELADOS.has(alvo)) {
           for (const nome of imp.nomes) {
-            if (/^[A-Z]/.test(nome) && !ATOMOS.has(nome)) achados.push({ arquivo, marca: `bloco antigo ${nome} (${alvo.split("/").pop()})` });
+            if (/^[A-Z]/.test(nome) && !/^[A-Z0-9_]+$/.test(nome) && !ATOMOS.has(nome)) achados.push({ arquivo, marca: `bloco antigo ${nome} (${alvo.split("/").pop()})` });
           }
           continue;
         }
