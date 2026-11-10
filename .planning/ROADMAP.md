@@ -138,7 +138,7 @@ Plans:
   3. A leitura só afirma o que o dado sustenta: dado faltando ou não confiável aparece como tal, nunca vira conclusão
   4. O João olha cada tela e diz que entende sem explicação
 
-**Plans:** 2/17 plans executed em 9 ondas (um PR só para a fase; no máximo 2 planos e uma publicação na VPS por onda; cada plano na própria worktree)
+**Plans:** 4/17 plans executed em 9 ondas (um PR só para a fase; no máximo 2 planos e uma publicação na VPS por onda; cada plano na própria worktree)
 
 Plans:
 **Wave 1**
@@ -146,8 +146,8 @@ Plans:
 - [x] 03.1-02-PLAN.md — Inventário das 43 telas e dos cartões de cada uma, com teste no CI, e o contrato do molde
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 03.1-03-PLAN.md — Resultados: resumo da clínica em 3 linhas (D-07), Pacientes e as telas em construção; publica; o João olha
-- [ ] 03.1-04-PLAN.md — Peças antigas compartilhadas que o SAP não usa no desenho nx; porta do Playwright configurável
+- [x] 03.1-03-PLAN.md — Resultados: resumo da clínica em 3 linhas (D-07), Pacientes e as telas em construção; publica; o João olha
+- [x] 03.1-04-PLAN.md — Peças antigas compartilhadas que o SAP não usa no desenho nx; porta do Playwright configurável
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 03.1-05-PLAN.md — Marketing / Instagram (5 telas); publica; o João olha
@@ -175,6 +175,16 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 - [ ] 03.1-17-PLAN.md — Inventário estrito (43 de 43), specs cruzados verdes, publicação final, PR único e o olhar final do João (critério 4)
+
+### Phase 03.1.1: Tela O que fazer hoje para o médico (INSERTED)
+
+**Goal:** O médico abre o Nexo e cai numa porta de entrada "O que fazer hoje" com 3 a 5 ações da semana (o que aconteceu, o que fazer, quem resolve), tiradas das leituras por regra da fase 03.1, sem IA. Nenhuma tela sai do menu; as 43 telas continuam para a equipe. Pedido do João em 10/11/2026 ("sua recomendação é boa"). Antes de planejar: teste de 5 minutos do Resultados com um médico real (ex.: Lana) — "o que aconteceu?" e "o que faria esta semana?".
+**Requirements**: TBD
+**Depends on:** Phase 03.1
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 03.1.1 to break down)
 
 ### Phase 4: Pacote do template do WhatsApp à Meta
 
