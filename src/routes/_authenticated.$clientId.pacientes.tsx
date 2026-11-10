@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { MessageCircle, PhoneCall, Users } from "lucide-react";
+import { MessageCircle, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Ajuda } from "@/components/visual";
@@ -46,9 +46,12 @@ import {
 } from "@/lib/pacientes";
 
 import "@/styles/databoard.css";
-import { LeituraDoPeriodo, MetasDoMes } from "@/components/databoard-inteligencia";
+import { MetasDoMes } from "@/components/databoard-inteligencia";
+import { NxCard, NxLinhaTempo, NxPizza, NxTag } from "@/components/nx";
+import { CmAviso, CmBarras, CmKpi, CmLeitura, CmMetodo, CmRecolhido, CmTopo, icT, type CmVariacao } from "@/components/nx/comercial-base";
+import type { NomeIcone } from "@/lib/registro-de-telas";
 import { leituraDoPeriodo } from "@/lib/inteligencia-resultados";
-import { EvolucaoDiaria, Minigrafico } from "@/components/databoard-evolucao";
+import { Minigrafico } from "@/components/databoard-evolucao";
 import { CAMPOS_DIARIOS, useResultadosDiarios, type CampoDiario, type LinhaDiaria } from "@/hooks/use-resultados-diarios";
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
@@ -70,12 +73,21 @@ function periodoAnterior(start: string, end: string) {
 }
 
 /** Variação contra o período anterior: só quando os dois lados foram medidos e o anterior não é zero. */
-function variacao(atual: number | null | undefined, antes: number | null | undefined): { txt: string; curto: string; tom: "up" | "down" | "flat" } | null {
+type Variacao = { pct: number; tom: "up" | "down" | "flat" };
+function variacao(atual: number | null | undefined, antes: number | null | undefined): Variacao | null {
   if (atual == null || antes == null || antes <= 0) return null;
   const pct = Math.round(((atual - antes) / antes) * 100);
-  if (pct === 0) return { txt: "igual", curto: "=", tom: "flat" };
-  return { txt: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}%`, curto: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}%`, tom: pct > 0 ? "up" : "down" };
+  return { pct, tom: pct === 0 ? "flat" : pct > 0 ? "up" : "down" };
 }
+
+/** A mesma variação no formato da etiqueta do painel (seta na forma, não só na cor). */
+function paraCm(v: Variacao | null | undefined): CmVariacao | null {
+  if (!v) return null;
+  if (v.tom === "flat") return { direcao: "igual", texto: "igual", contexto: "vs. período anterior" };
+  return { direcao: v.tom === "up" ? "cima" : "baixo", texto: `${v.pct > 0 ? "+" : "−"}${Math.abs(v.pct)}%`, contexto: "vs. período anterior", bom: v.tom === "up" };
+}
+
+const dataCurta = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 
 function diasEntre(a: string, b: string) {
   return Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000) + 1;
@@ -174,226 +186,232 @@ function PacientesDoPeriodo() {
   const maior = Math.max(1, ...etapas.map((e) => Number(d.numeros[e.chave]?.valor ?? 0)));
   const indisponiveis = CHAVES_NUMEROS.filter((k) => d.numeros[k] && d.numeros[k]!.valor == null);
 
+  const ICONE: Partial<Record<ChaveNumero, NomeIcone>> = { mandaram_mensagem: "message-circle", agendaram: "calendar", fecharam: "checklist", compareceram: "stethoscope" };
+  const linhasDia = (diario.data ?? []).filter((l) => l.mandaram_mensagem != null || l.agendaram != null);
+  const avisosLeitura = [avisoAgendouMenosQueFechou(d), eng].filter(Boolean).length;
+
   return (
-    <div className="dbx space-y-4">
-      <header className="space-y-1">
-        <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-          {formatRangeLabel({ start, end })} · cada número é de pessoas. Toque num número para ver quem são.
-        </p>
-        {avisoCrmCompartilhado(d) && (
-          <p className="text-sm font-medium" style={{ color: "var(--warn, var(--text))" }}>{avisoCrmCompartilhado(d)}</p>
-        )}
-        {notaCrmPorMedico(d) && (
-          <p className="text-xs" style={{ color: "var(--text-dim)" }}>{notaCrmPorMedico(d)}</p>
-        )}
-        {d.cliente_de_teste && (
-          <p className="text-xs" style={{ color: "var(--warn, var(--muted))" }}>
-            Clínica de teste: estes números não entram nas somas da carteira.
-          </p>
-        )}
-      </header>
+    <div className="nexo-comercial">
+      <CmTopo
+        pergunta="Quantas pessoas chamaram, agendaram e fecharam?"
+        detalhe={`${rotuloPeriodo} · cada número é de pessoas. Toque num número para ver quem são.`}
+      />
 
-      <ul className="dbx-grid dbx-cards" aria-label="Números do período">
-        {METRICAS.filter((k) => d.numeros[k]).map((k) => (
-          <MetricaCard key={k} chave={k} numero={d.numeros[k]} periodo={rotuloPeriodo} ativo={aberta === k} onAbrir={() => abrir(k)} serie={(diario.data ?? []).map((l) => l[k as CampoDiario] ?? null)}
-            variacao={variacao(somaAtual[k as CampoDiario], somaAntes[k as CampoDiario])} />
+      {(avisoCrmCompartilhado(d) || d.cliente_de_teste || notaCrmPorMedico(d)) && (
+        <div className="cm-avisos">
+          {avisoCrmCompartilhado(d) && <CmAviso tom="critico">{avisoCrmCompartilhado(d)}</CmAviso>}
+          {d.cliente_de_teste && <CmAviso tom="atencao">Clínica de teste: estes números não entram nas somas da carteira.</CmAviso>}
+          {notaCrmPorMedico(d) && <CmAviso>{notaCrmPorMedico(d)}</CmAviso>}
+        </div>
+      )}
+
+      <section className="nx-grade nx-grade--4" aria-label="Números do período">
+        {METRICAS.filter((k) => d.numeros[k]).map((k, i) => (
+          <MetricaCard
+            key={k}
+            i={i}
+            chave={k}
+            icone={ICONE[k] ?? "users"}
+            numero={d.numeros[k]}
+            ativo={aberta === k}
+            onAbrir={() => abrir(k)}
+            serie={(diario.data ?? []).map((l) => l[k as CampoDiario] ?? null)}
+            variacao={variacao(somaAtual[k as CampoDiario], somaAntes[k as CampoDiario])}
+          />
         ))}
-      </ul>
+      </section>
 
-      <EvolucaoDiaria linhas={diario.data ?? []} periodo={rotuloPeriodo} />
-
-      <div className="dbx-grid dbx-split">
-        {etapas.length > 1 && (
-          <section className="dbx-card" aria-labelledby="funil-t">
-            <h2 id="funil-t" className="dbx-title">Do primeiro contato à venda</h2>
-            <p className="dbx-sub">{rotuloPeriodo} · toque numa linha para ver quem são</p>
-            <ul className="dbx-rows">
-              {etapas.map((e) => {
-                const v = Number(d.numeros[e.chave]?.valor ?? 0);
-                const dv = variacao(somaAtual[e.chave as CampoDiario], somaAntes[e.chave as CampoDiario]);
-                return (
-                  <li key={e.chave}>
-                    <button type="button" className="dbx-row" onClick={() => abrir(e.chave)} aria-expanded={aberta === e.chave}>
-                      <span className="lab">{e.rotulo}</span>
-                      <span className="dbx-bar" aria-hidden><i style={{ width: `${Math.max(v > 0 ? 2 : 0, Math.min(100, (v / maior) * 100))}%` }} /></span>
-                      <span className="val">{fmt(v)}</span>
-                      <span className={`dl ${dv?.tom ?? "flat"}`}>{dv ? dv.curto : ""}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
-        {rosca && (
-          <section className="dbx-card" aria-labelledby="rosca-t">
-            <h2 id="rosca-t" className="dbx-title">Quem chamou</h2>
-            <p className="dbx-sub">{rotuloPeriodo}</p>
-            <div className="dbx-donut-wrap">
-              <div className="dbx-donut" role="img" aria-label={`${fmt(rosca.novas)} pessoas novas e ${fmt(rosca.antigos)} pacientes antigos`}
-                style={{ background: `conic-gradient(var(--dbx-a) 0 ${rosca.pctNovas}%, var(--dbx-b) ${rosca.pctNovas}% 100%)` }}>
-                <span>{fmt(rosca.novas + rosca.antigos)}</span>
-              </div>
-              <ul className="dbx-legend">
-                <li><i style={{ background: "var(--dbx-a)" }} />Pessoas novas<b>{fmt(rosca.novas)}</b></li>
-                <li><i style={{ background: "var(--dbx-b)" }} />Pacientes antigos<b>{fmt(rosca.antigos)}</b></li>
-              </ul>
-            </div>
-          </section>
-        )}
-      </div>
-
-      <div className="dbx-grid dbx-split">
-        <LeituraDoPeriodo itens={leitura} periodo={rotuloPeriodo} />
-        <MetasDoMes clientId={clientId} isAdmin={isAdmin} hoje={hoje} />
-      </div>
-
-      {indisponiveis.length > 0 && (
-        <details className="text-sm" style={{ color: "var(--text-dim)" }}>
-          <summary className="cursor-pointer">Números que não aparecem aqui ({indisponiveis.length})</summary>
-          <ul className="mt-2 space-y-2">
-            {indisponiveis.map((k) => (
-              <li key={k}>
-                <b>{TEXTO_NUMERO[k].rotulo}</b>: {textoNaoMedido(d.numeros[k]).toLowerCase()}. {d.numeros[k]?.motivo_sem_dado ?? "A fonte não respondeu."}
-                {typeof d.numeros[k]?.o_que_fazer === "string" && <> <b>O que fazer:</b> {d.numeros[k]?.o_que_fazer}</>}
-              </li>
-            ))}
-            {avisoNaoMedido(d) && <li className="text-xs">{avisoNaoMedido(d)}</li>}
-          </ul>
-        </details>
-      )}
-
-      {(avisoAgendouMenosQueFechou(d) || eng) && (
-        <details className="dbx-avisos">
-          <summary>Avisos sobre a leitura dos números ({[avisoAgendouMenosQueFechou(d), eng].filter(Boolean).length})</summary>
-          <div className="space-y-3 pt-3">
-      {avisoAgendouMenosQueFechou(d) && (
-              <p className="rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--warn-border, var(--border))", background: "var(--surface-2)" }}>
-                {avisoAgendouMenosQueFechou(d)}
-              </p>
-            )}
-
-            {eng && (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
-                <span className="font-medium">{TEXTO_NUMERO.engajaram_instagram.rotulo}:</span>
-                {eng.valor == null ? (
-                  <span style={{ color: "var(--text-dim)" }}>sem dado. {eng.motivo_sem_dado}</span>
-                ) : (
-                  <>
-                    <button type="button" className="font-semibold underline" onClick={() => abrir("engajaram_instagram")} aria-expanded={aberta === "engajaram_instagram"}>
-                      {pessoas(eng.valor)}
-                    </button>
-                    <span style={{ color: "var(--text-dim)" }}>
-                      {fmt(Number(eng.so_comentaram ?? 0))} só comentaram em post, {fmt(Number(eng.so_story ?? 0))} só reagiram ou responderam story. Não contam como contato.
-                    </span>
-                  </>
-                )}
-                <Ajuda>{TEXTO_NUMERO.engajaram_instagram.fonte}</Ajuda>
-              </div>
-            )}
-          </div>
-        </details>
-      )}
-
-      <div ref={listaRef} className="scroll-mt-4">
+      <div ref={listaRef} className="scroll-mt-4" hidden={!aberta}>
         {aberta && <ListaDePessoas chave={aberta} dados={d} clientId={clientId} isAdmin={isAdmin} hoje={hoje} onFechar={() => setAberta(null)} />}
       </div>
 
-      <section aria-labelledby="chamar-agora" className="dbx-card space-y-3">
-        <header className="flex items-start gap-2">
-          <PhoneCall size={18} aria-hidden style={{ color: "var(--accent)" }} className="mt-0.5 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <h2 id="chamar-agora" className="font-semibold">Para chamar agora</h2>
-            <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-              Quem já pode voltar pelo procedimento que fez (vence em até {FOLLOW_UP.diasAntesDaRecompra} dias ou já venceu) e quem agendou e, depois de {FOLLOW_UP.diasAgendouSemRetorno} dias, não aparece que foi na consulta nem que fechou.
-            </p>
-          </div>
+      {(etapas.length > 1 || rosca) && (
+        <div className={etapas.length > 1 && rosca ? "cm-par" : ""}>
+          {etapas.length > 1 && (
+            <NxCard id="funil" nivel={2} icone={icT("filter")} titulo="Do primeiro contato à venda" subtitulo={`${rotuloPeriodo} · toque numa linha para ver quem são`}>
+              <CmBarras
+                rotulo="Pessoas em cada etapa"
+                aberta={aberta}
+                onAbrir={(k) => abrir(k as ChaveNumero)}
+                max={maior}
+                itens={etapas.map((e) => {
+                  const v = Number(d.numeros[e.chave]?.valor ?? 0);
+                  return { chave: e.chave, rotulo: e.rotulo, valor: v, texto: fmt(v), variacao: paraCm(variacao(somaAtual[e.chave as CampoDiario], somaAntes[e.chave as CampoDiario])) };
+                })}
+              />
+            </NxCard>
+          )}
+          {rosca && (
+            <NxCard id="rosca" nivel={2} icone={icT("users")} titulo="Quem chamou" subtitulo={`${rotuloPeriodo} · ${fmt(rosca.novas + rosca.antigos)} pessoas`}>
+              <NxPizza
+                rotulo="Quem chamou"
+                fatias={[
+                  { rotulo: `Pessoas novas · ${fmt(rosca.novas)}`, valor: rosca.novas, cor: "var(--b1)" },
+                  { rotulo: `Pacientes antigos · ${fmt(rosca.antigos)}`, valor: rosca.antigos, cor: "var(--b4)" },
+                ]}
+              />
+            </NxCard>
+          )}
+        </div>
+      )}
+
+      {(leitura.length > 0 || isAdmin) && (
+        <div className={leitura.length > 0 ? "cm-par cm-par--igual" : ""}>
+          <CmLeitura id="leitura" titulo="O que mudou" subtitulo={`${rotuloPeriodo}, comparado ao período anterior`} itens={leitura.map((l) => ({ texto: l.texto, tom: l.tom === "info" ? "flat" : l.tom }))} />
+          <MetasDoMes clientId={clientId} isAdmin={isAdmin} hoje={hoje} />
+        </div>
+      )}
+      {leitura.length === 0 && !isAdmin && <MetasDoMes clientId={clientId} isAdmin={isAdmin} hoje={hoje} />}
+
+      {linhasDia.length >= 3 && (
+        <NxCard id="evolucao" nivel={2} icone={icT("chart-bar")} titulo="Evolução por dia" subtitulo={`${rotuloPeriodo} · pessoas que chamaram (eixo da esquerda) e agendamentos (eixo da direita)`}>
+          <NxLinhaTempo
+            rotulo="Pessoas que chamaram e agendamentos por dia"
+            datas={linhasDia.map((l) => l.dia)}
+            series={[
+              { rotulo: "Chamaram", valores: linhasDia.map((l) => l.mandaram_mensagem ?? 0), cor: "var(--b1)", area: true },
+              { rotulo: "Agendaram", valores: linhasDia.map((l) => l.agendaram ?? 0), cor: "var(--or)", eixo: "dir" },
+            ]}
+            formatarData={dataCurta}
+            formatarValor={(n) => fmt(Math.round(n))}
+          />
+          <CmMetodo>
+            <p>Cada ponto conta as pessoas daquele dia. A soma dos dias pode ser maior que o número do cartão, porque quem chamou em dois dias conta uma vez só no período.</p>
+          </CmMetodo>
+        </NxCard>
+      )}
+
+      <NxCard
+        id="chamar-agora"
+        nivel={2}
+        icone={icT("message-circle")}
+        titulo="Para chamar agora"
+        subtitulo={`Quem já pode voltar pelo procedimento que fez e quem agendou e sumiu${chamar.length ? ` · ${fmt(chamar.length)} ${chamar.length === 1 ? "pessoa" : "pessoas"}` : ""}`}
+        acao={
           <Ajuda>
             O prazo de volta de cada procedimento está na configuração do Nexo (toxina de 120 a 180 dias, preenchimento de 270 a 365, bioestimulador 365, laser e tecnologias 30, consulta 30, implante hormonal 180). Procedimento sem prazo aparece como "definir prazo" na lista de quem fechou. Olha as vendas dos últimos {DIAS_HISTORICO_RECOMPRA} dias.
           </Ajuda>
-        </header>
+        }
+      >
+        <p className="cm-topo__detalhe" style={{ margin: 0 }}>
+          Vence em até {FOLLOW_UP.diasAntesDaRecompra} dias (ou já venceu) o prazo de voltar, ou agendou e, depois de {FOLLOW_UP.diasAgendouSemRetorno} dias, não aparece que foi na consulta nem que fechou.
+        </p>
         {historico.isLoading ? (
           <Carregando texto="Procurando quem já pode voltar…" linhas={2} />
         ) : historico.isError ? (
           <p className="text-sm" role="alert">Não deu para ler as vendas anteriores agora. A lista de quem agendou e sumiu continua abaixo.</p>
         ) : null}
         {chamar.length === 0 && !historico.isLoading ? (
-          <p className="text-sm" style={{ color: "var(--text-dim)" }}>
+          <p className="nx-vazio text-sm">
             {d.numeros.fecharam.valor == null && d.numeros.fecharam.motivo_sem_dado
               ? `Sem as vendas, não dá para saber quem volta. ${d.numeros.fecharam.motivo_sem_dado}`
               : "Ninguém para chamar agora."}
           </p>
         ) : (
-          <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
+          <ul className="cm-lista">
             {chamar.slice(0, chamarTodos ? 100 : 8).map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">{c.nome ?? "Sem nome no cadastro"}</p>
-                  <p className="text-sm" style={{ color: "var(--text-dim)" }}>{c.motivo}.</p>
-                </div>
-                <span className="text-xs font-medium" style={{ color: c.faltam < 0 ? "var(--danger, var(--accent))" : "var(--text-dim)" }}>
-                  {c.tipo === "recompra" ? (c.faltam < 0 ? `atrasado ${-c.faltam} dias` : c.faltam === 0 ? "hoje" : `em ${c.faltam} dias`) : "fazer follow-up"}
+              <li key={c.id}>
+                <span className="cm-lista__corpo">
+                  <span className="cm-lista__titulo">{c.nome ?? "Sem nome no cadastro"}</span>
+                  <span className="cm-lista__sub">{c.motivo}.</span>
                 </span>
-                {isAdmin && c.conversa_id && <BotaoConversa clientId={clientId} conversaId={c.conversa_id} />}
+                <span className="cm-lista__fim">
+                  <NxTag tom={c.tipo === "recompra" ? (c.faltam < 0 ? "dn" : "or") : "b"}>
+                    {c.tipo === "recompra" ? (c.faltam < 0 ? `atrasado ${-c.faltam} dias` : c.faltam === 0 ? "hoje" : `em ${c.faltam} dias`) : "fazer follow-up"}
+                  </NxTag>
+                  {isAdmin && c.conversa_id && <BotaoConversa clientId={clientId} conversaId={c.conversa_id} />}
+                </span>
               </li>
             ))}
           </ul>
         )}
         {chamar.length > 8 && (
-          <button type="button" className="dbx-link" onClick={() => setChamarTodos(!chamarTodos)}>
+          <button type="button" className="nx-botao" style={{ justifySelf: "start" }} onClick={() => setChamarTodos(!chamarTodos)}>
             {chamarTodos ? "Mostrar só os 8 primeiros" : `Ver todos (${fmt(Math.min(chamar.length, 100))}${chamar.length > 100 ? " de " + fmt(chamar.length) : ""})`}
           </button>
         )}
-      </section>
+      </NxCard>
+
+      {indisponiveis.length > 0 && (
+        <CmRecolhido titulo={`Números que não aparecem aqui (${indisponiveis.length})`} subtitulo="O que não é medido nesta clínica, por quê e o que fazer">
+          <ul className="cm-lista">
+            {indisponiveis.map((k) => (
+              <li key={k}>
+                <span className="cm-lista__corpo">
+                  <span className="cm-lista__titulo">{TEXTO_NUMERO[k].rotulo}: {textoNaoMedido(d.numeros[k]).toLowerCase()}</span>
+                  <span className="cm-lista__sub">
+                    {d.numeros[k]?.motivo_sem_dado ?? "A fonte não respondeu."}
+                    {typeof d.numeros[k]?.o_que_fazer === "string" && <> <b>O que fazer:</b> {d.numeros[k]?.o_que_fazer}</>}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {avisoNaoMedido(d) && <p className="text-xs">{avisoNaoMedido(d)}</p>}
+        </CmRecolhido>
+      )}
+
+      {avisosLeitura > 0 && (
+        <CmRecolhido titulo={`Avisos sobre a leitura dos números (${avisosLeitura})`} subtitulo="Regras diferentes entre os números e o que não conta como contato">
+          {avisoAgendouMenosQueFechou(d) && <CmAviso tom="atencao">{avisoAgendouMenosQueFechou(d)}</CmAviso>}
+          {eng && (
+            <div className="cm-aviso">
+              <span className="cm-aviso__ic" aria-hidden>i</span>
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+                <b>{TEXTO_NUMERO.engajaram_instagram.rotulo}:</b>
+                {eng.valor == null ? (
+                  <span>sem dado. {eng.motivo_sem_dado}</span>
+                ) : (
+                  <>
+                    <button type="button" className="font-semibold underline" onClick={() => abrir("engajaram_instagram")} aria-expanded={aberta === "engajaram_instagram"}>
+                      {pessoas(eng.valor)}
+                    </button>
+                    <span>
+                      {fmt(Number(eng.so_comentaram ?? 0))} só comentaram em post, {fmt(Number(eng.so_story ?? 0))} só reagiram ou responderam story. Não contam como contato.
+                    </span>
+                  </>
+                )}
+                <Ajuda>{TEXTO_NUMERO.engajaram_instagram.fonte}</Ajuda>
+              </div>
+            </div>
+          )}
+        </CmRecolhido>
+      )}
     </div>
   );
 }
 
-function MetricaCard({ chave, numero, periodo, ativo, onAbrir, serie, variacao: dv }: { chave: ChaveNumero; numero: Numero | undefined; periodo: string; ativo: boolean; onAbrir: () => void; serie?: (number | null)[]; variacao?: { txt: string; tom: "up" | "down" | "flat" } | null }) {
+function MetricaCard({ chave, numero, icone, ativo, onAbrir, serie, variacao: dv, i }: { chave: ChaveNumero; numero: Numero | undefined; icone: NomeIcone; ativo: boolean; onAbrir: () => void; serie?: (number | null)[]; variacao?: Variacao | null; i: number }) {
   const t = TEXTO_NUMERO[chave];
   const semDado = !numero || numero.valor == null;
+  const notas = semDado
+    ? [numero?.motivo_sem_dado ?? "A fonte não respondeu."]
+    : [dv ? null : legendaDoNumero(chave, numero), coberturaDoNumero(numero), chave === "fecharam" ? avisoCheckout(numero) : null].filter(Boolean);
   return (
-    <li className="relative">
-      <button type="button" className="dbx-card" onClick={onAbrir} disabled={semDado} aria-expanded={ativo}>
-        <span className="dbx-head">
-          <span>
-            <span className="dbx-title block">{t.rotulo}</span>
-            <span className="dbx-sub block">{periodo}</span>
-          </span>
-        </span>
-        {semDado ? (
-          <>
-            <span className="dbx-big mute block">{textoNaoMedido(numero)}</span>
-            <span className="dbx-note block">{numero?.motivo_sem_dado ?? "A fonte não respondeu."}</span>
-          </>
-        ) : (
-          <>
-            <span className="dbx-big block">{fmt(numero!.valor)}</span>
-            {dv ? (
-              <span className={`dbx-delta dbx-${dv.tom}`}><b>{dv.txt}</b> vs período anterior</span>
-            ) : (
-              <span className="dbx-delta dbx-flat">{legendaDoNumero(chave, numero)}</span>
-            )}
-            {serie && <Minigrafico pontos={serie} />}
-            {coberturaDoNumero(numero) && <span className="dbx-note block">{coberturaDoNumero(numero)}</span>}
-            {chave === "fecharam" && avisoCheckout(numero) && <span className="dbx-note block">{avisoCheckout(numero)}</span>}
-          </>
-        )}
-      </button>
-      <span className="absolute right-3 top-3">
-        <Ajuda>{fonteDoNumero(chave, numero)}</Ajuda>
-      </span>
-    </li>
+    <CmKpi
+      i={i}
+      icone={icone}
+      rotulo={t.rotulo}
+      valor={semDado ? textoNaoMedido(numero) : fmt(numero!.valor)}
+      apagado={semDado}
+      variacao={semDado ? null : paraCm(dv)}
+      nota={notas.length ? notas.join(" · ") : undefined}
+      info={<Ajuda>{fonteDoNumero(chave, numero)}</Ajuda>}
+      onAbrir={semDado ? undefined : onAbrir}
+      aberto={ativo}
+      rotuloAbrir={`${t.rotulo}: ${fmt(numero?.valor)}. Ver quem são`}
+      extra={!semDado && serie ? <Minigrafico pontos={serie} /> : undefined}
+    />
   );
 }
-
 function BotaoConversa({ clientId, conversaId }: { clientId: string; conversaId: string }) {
   return (
     <Link
       to="/$clientId/atendimento"
       params={{ clientId }}
       search={{ aba: "conversas", conversa: conversaId } as never}
-      className="ws-action ws-action--secondary inline-flex items-center gap-1 text-xs"
+      className="nx-botao"
+      style={{ minHeight: 36, padding: "0 12px", fontSize: 13 }}
     >
       <MessageCircle size={14} aria-hidden /> Abrir conversa
     </Link>
@@ -449,7 +467,7 @@ function Divisao({ chave, numero, dados }: { chave: ChaveNumero; numero: Numero;
     partes.push(`só comentaram: ${fmt(Number(numero.so_comentaram ?? 0))}`, `só reagiram ou responderam story: ${fmt(Number(numero.so_story ?? 0))}`);
   }
   if (!partes.length) return null;
-  return <p className="text-sm" style={{ color: "var(--text-dim)" }}>{partes.join(" · ")}</p>;
+  return <p className="text-sm" style={{ color: "var(--muted-ink)", margin: "2px 0 0" }}>{partes.join(" · ")}</p>;
 }
 
 function ListaDePessoas({
@@ -459,28 +477,28 @@ function ListaDePessoas({
   const numero = dados.numeros[chave];
   const t = TEXTO_NUMERO[chave];
   return (
-    <section aria-labelledby="lista-aberta" className="dbx-card space-y-3" style={{ borderColor: "var(--accent)" }}>
-      <header className="flex items-start gap-2">
-        <Users size={18} aria-hidden style={{ color: "var(--accent)" }} className="mt-0.5 shrink-0" />
+    <section aria-labelledby="lista-aberta" className="nx-card nx-sobe cm-lista-aberta">
+      <header className="flex items-start gap-3">
+        <span className="nx-tile" aria-hidden><Users size={17} strokeWidth={1.7} /></span>
         <div className="min-w-0 flex-1">
-          <h2 id="lista-aberta" className="font-semibold">
+          <h2 id="lista-aberta" className="text-[18px] font-semibold leading-6">
             {t.rotulo}: {chave === "fecharam" ? pessoas(Number(numero.valor ?? 0)) : pessoas(lista.total)}
           </h2>
           <Divisao chave={chave} numero={numero} dados={dados} />
         </div>
-        <button type="button" className="ws-action ws-action--secondary text-xs" onClick={onFechar}>Fechar</button>
+        <button type="button" className="nx-botao" style={{ minHeight: 40 }} onClick={onFechar}>Fechar</button>
       </header>
       {lista.itens.length === 0 ? (
-        <p className="text-sm" style={{ color: "var(--text-dim)" }}>Ninguém neste período.</p>
+        <p className="nx-vazio text-sm">Ninguém neste período.</p>
       ) : (
-        <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
+        <ul className="cm-lista">
           {lista.itens.map((i, idx) => (
             <LinhaPessoa key={`${i.id}:${idx}`} chave={chave} item={i} clientId={clientId} isAdmin={isAdmin} hoje={hoje} />
           ))}
         </ul>
       )}
       {lista.total > lista.itens.length && (
-        <p className="text-xs" style={{ color: "var(--text-dim)" }}>Mostrando as {fmt(lista.itens.length)} mais recentes de {fmt(lista.total)}.</p>
+        <p className="text-xs" style={{ color: "var(--muted-ink)", margin: 0 }}>Mostrando as {fmt(lista.itens.length)} mais recentes de {fmt(lista.total)}.</p>
       )}
     </section>
   );
@@ -511,16 +529,16 @@ function LinhaPessoa({ chave, item, clientId, isAdmin, hoje }: { chave: ChaveNum
     detalhes.push(dataBr(item.data));
   }
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-      <div className="min-w-0 flex-1">
-        <p className="font-medium">
+    <li>
+      <div className="cm-lista__corpo">
+        <p className="cm-lista__titulo" style={{ margin: 0 }}>
           {item.nome ?? "Sem nome no cadastro"}
-          {que && <span className="font-normal" style={{ color: "var(--text-dim)" }}>{chave === "fecharam" ? ": fechou " : ": "}{que}</span>}
+          {que && <span style={{ color: "var(--muted-ink)", fontWeight: 500 }}>{chave === "fecharam" ? ": fechou " : ": "}{que}</span>}
         </p>
-        <p className="text-sm" style={{ color: "var(--text-dim)" }}>
+        <p className="cm-lista__sub" style={{ margin: 0 }}>
           {[pe && chave !== "fecharam" ? pe : null, ...detalhes].filter(Boolean).join(" · ")}
         </p>
-        {recompra && <p className="text-xs font-medium" style={{ color: "var(--accent)" }}>{recompra}</p>}
+        {recompra && <p className="text-xs font-semibold" style={{ color: "var(--b1)", margin: 0 }}>{recompra}</p>}
       </div>
       {isAdmin && item.conversa_id && <BotaoConversa clientId={clientId} conversaId={item.conversa_id} />}
     </li>
