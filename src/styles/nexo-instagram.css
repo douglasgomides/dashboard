@@ -416,3 +416,28 @@ a.ig-vitrine__item:focus-visible { outline: 2px solid var(--b1); outline-offset:
   .nexo-ig .ig-kpis .nx-kpi__topo > .nx-tile { display: none; }
   .nexo-ig .ig-kpis .nx-kpi__rotulo { overflow-wrap: normal; hyphens: auto; }
 }
+
+/* ---------- Plano 03.1-05: peças do Público no desenho do Nexo (sem Recharts, só tokens) ---------- */
+
+/* Barras pareadas: seguidores × alcançados por faixa etária. */
+.ig-pareadas { display: grid; gap: 12px; min-width: 0; }
+.ig-pareadas__leg { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text-2); }
+.ig-pareadas__leg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+.ig-pareadas__linhas { display: grid; gap: 10px; }
+.ig-pareadas__linha { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; align-items: center; font-size: 14px; }
+.ig-pareadas__faixa { color: var(--text-2); font-weight: 500; }
+.ig-pareadas__pares { display: grid; gap: 4px; min-width: 0; }
+.ig-pareadas__par { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.ig-pareadas__par i { display: block; height: 8px; border-radius: 4px; flex: 0 1 auto; max-width: calc(100% - 56px); }
+.ig-pareadas__par > span { flex: none; font-variant-numeric: tabular-nums; color: var(--muted-ink); font-size: 14px; font-weight: 500; }
+.ig-pareadas__a { background: var(--b1); }
+.ig-pareadas__b { background: var(--b3); }
+
+/* Mapa de calor de seguidores online (dia da semana × hora). */
+.ig-mapa-calor__aviso { display: none; margin: 0 0 6px; font-size: 14px; line-height: 20px; color: var(--muted-ink); }
+@media (max-width: 639px) { .ig-mapa-calor__aviso { display: block; } }
+.ig-mapa-calor__rola { overflow-x: auto; max-width: 100%; }
+.ig-mapa-calor__grade { min-width: 560px; display: grid; grid-template-columns: 44px repeat(24, minmax(0, 1fr)); gap: 2px; font-size: 12px; color: var(--muted-ink); }
+.ig-mapa-calor__hora { text-align: center; }
+.ig-mapa-calor__dia { align-self: center; font-size: 14px; }
+.ig-mapa-calor__celula { display: block; height: 22px; border-radius: 5px; }
