@@ -8,6 +8,8 @@ import type { Fato } from "../src/lib/leitura/tipos";
 import { montarTexto, problemasDoTexto } from "../src/lib/leitura/texto";
 import { fatosDeResultados, fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria, variacaoPct, VERSAO_REGRAS_RESULTADOS } from "../src/lib/leitura/fatos-resultados";
 import { resumirClinica } from "../src/lib/leitura/resumo-clinica";
+import { fatosDePacientes, fatosEmConstrucao, VERSAO_REGRAS_PACIENTES } from "../src/lib/leitura/fatos-pacientes";
+import { paraChamarAgora, type PacientesPeriodo, type VendaHistorico } from "../src/lib/pacientes";
 import { avaliarRastreio } from "../src/lib/rastreio-anuncios";
 import { montarResultado } from "../src/lib/resultado";
 import { diagnosticarAds } from "../src/lib/anuncios-objetivo";
@@ -166,8 +168,103 @@ assert.equal(funilBanco!.pessoas?.agendaram, null, "agendaram sem medida continu
 assert.deepEqual(funilBanco!.semMedida?.map((s) => [s.chave, s.quem, s.motivo]), [["agendaram", "equipe_hub", "As conversas ainda não chegavam ao Nexo."]]);
 assert.equal(funilDosNumeros({ dados: null }), null, "a consulta de pessoas não respondeu: sem funil");
 
+// ---------- Pacientes do período ----------
+const nump = (valor: number | null, extra: Record<string, unknown> = {}) => ({ valor, fonte: "crm", motivo_sem_dado: valor == null ? "Sem dado no CRM." : null, responsavel: "comercial", ...extra });
+const NOMES_DA_LISTA = ["Maria Fictícia Souza", "Joana Inventada Lima"];
+const hojeP = "2026-11-10";
+const dadosPacientes = (numeros: Record<string, unknown> = {}): PacientesPeriodo =>
+  ({
+    periodo: { de: "2026-10-11", ate: "2026-11-09" }, cliente_de_teste: false, tem_crm: true, tem_conversas: true, tem_leitura_ia: false, tem_funil_prospeccao: false,
+    numeros: {
+      mandaram_mensagem: nump(120), leads_novos: nump(80), antigos: nump(40), agendaram: nump(30), negociacao: nump(12),
+      compareceram: nump(null, { nao_medido_por: "etapa_sem_uso", motivo_sem_dado: "A equipe não usa a etapa de comparecimento." }),
+      fecharam: nump(9, { vendas: 9, sem_valor: 0, valor_total: 18000 }), abordados: nump(null, { nao_se_aplica: true }), engajaram_instagram: nump(15),
+      ...numeros,
+    },
+    listas: {
+      agendaram: { total: 2, itens: [
+        { id: "a1", pessoa: "pp1", nome: NOMES_DA_LISTA[0], canal: "whatsapp", conversa_id: null, data: "2026-10-20", fonte: "crm", crm: null, leitura: null, agendou_em: "2026-10-20" },
+        { id: "a2", pessoa: "pp2", nome: NOMES_DA_LISTA[1], canal: "whatsapp", conversa_id: null, data: "2026-10-21", fonte: "crm", crm: null, leitura: null, agendou_em: "2026-10-21" },
+      ] },
+    },
+  }) as unknown as PacientesPeriodo;
+const pacientes = (dados: PacientesPeriodo, extra: Partial<Parameters<typeof fatosDePacientes>[0]> = {}) =>
+  fatosDePacientes({ dados, de: "2026-10-11", ate: "2026-11-09", hoje: hojeP, ...extra });
+
+assert.equal(VERSAO_REGRAS_PACIENTES, 1);
+const pOk = pacientes(dadosPacientes(), { somaAtual: { mandaram_mensagem: 130, agendaram: 32, fecharam: 9 }, somaAntes: { mandaram_mensagem: 100, agendaram: 40, fecharam: 12 } });
+assert.equal(pOk.tela, "pacientes");
+assert.deepEqual(pOk.portao, { ok: true }, "Pacientes com os números medidos: o portão libera");
+assert.deepEqual(pOk.periodo.anterior, { de: "2026-09-11", ate: "2026-10-10" });
+// D1: a etapa de maior perda, com número ao lado.
+const perda = pOk.fatos.find((f) => f.id === "maior-perda");
+assert.ok(perda && perda.numeros.length >= 1 && /Chamaram|Agendaram|Fecharam/.test(perda.frase), "a etapa de maior perda é um fato com número");
+// Variação com o período anterior (base mínima de leituraDoPeriodo).
+assert.ok(pOk.fatos.some((f) => f.id.startsWith("mudou-") && /Mais pessoas chamaram a clínica 30% \(de 100 para 130\)/.test(f.frase)), "variação de quem chamou contra o período anterior");
+assert.ok(pOk.proximoPasso && (VERBOS_PROVISORIOS as readonly string[]).includes(pOk.proximoPasso.verbo), "um próximo passo, com verbo da lista");
+const textoPac = montarTexto(pOk);
+assert.equal(textoPac.tipo, "leitura");
+assert.deepEqual(problemasDoTexto(textoPac), [], "a leitura de Pacientes passa no filtro de linguagem");
+if (textoPac.tipo === "leitura") console.log("  Pacientes:", textoPac.aconteceu.frase, textoPac.aconteceu.numeros.map((n) => n.exibicao).join(" | "), "→", textoPac.proximoPasso?.frase);
+
+// Número principal sem medida: sem leitura, com o motivo e o responsável do próprio número; sem fato de agendaram.
+const pSemAg = pacientes(dadosPacientes({ agendaram: nump(null, { motivo_sem_dado: "As conversas ainda não chegavam ao Nexo.", responsavel: "equipe_hub" }) }));
+assert.ok(!pSemAg.portao.ok, "agendaram sem medida nega");
+if (!pSemAg.portao.ok) {
+  assert.equal(pSemAg.portao.motivo, "As conversas ainda não chegavam ao Nexo");
+  assert.equal(pSemAg.portao.passo.quem, "equipe_hub", "quem resolve é o responsável do número");
+}
+assert.ok(!pSemAg.fatos.some((f) => /Agendaram|agendamentos/i.test(f.frase) && f.tom !== "atencao" ), "sem fato de agendaram");
+assert.equal(montarTexto(pSemAg).tipo, "sem_leitura");
+assert.deepEqual(problemasDoTexto(montarTexto(pSemAg)), []);
+// Número secundário sem medida (comparecimento) não nega: vira ressalva "Sem dado".
+const ressalvaComparecimento = pOk.fatos.find((f) => f.id === "sem-medida-compareceram");
+assert.ok(ressalvaComparecimento?.ressalva && ressalvaComparecimento.numeros[0]?.exibicao === "Sem dado", "comparecimento não medido é ressalva, nunca 0");
+
+// Funil fora de ordem: agendou menos do que fechou.
+const pFora = pacientes(dadosPacientes({ agendaram: nump(3), fecharam: nump(36, { vendas: 36, sem_valor: 0, valor_total: 0 }) }));
+assert.ok(!pFora.portao.ok && pFora.portao.codigo === "funil_fora_de_ordem");
+if (!pFora.portao.ok) assert.equal(pFora.portao.passo.quem, "comercial");
+// Amostra pequena.
+const pPouco = pacientes(dadosPacientes({ mandaram_mensagem: nump(4), agendaram: nump(1), fecharam: nump(0, { vendas: 0, sem_valor: 0, valor_total: 0 }) }));
+assert.ok(!pPouco.portao.ok && pPouco.portao.codigo === "amostra_pequena", "4 pessoas: amostra pequena");
+
+// LGPD: a lista de pessoas para chamar nunca entra em fato nem na leitura.
+const historico: VendaHistorico[] = [{ id: "v1", venda: "x1", nome: NOMES_DA_LISTA[0], data: "2026-06-01", valor: 900, funil: null, procedimento: "toxina botulínica", interesse: null, conversa_id: null }];
+const dadosLgpd = dadosPacientes();
+const chamar = paraChamarAgora(historico, dadosLgpd.listas.agendaram.itens, hojeP);
+assert.ok(chamar.length >= 2 && chamar.every((c) => c.nome != null), "a fixture tem gente para chamar, com nome");
+const tudoDePacientes = JSON.stringify([pOk, textoPac, montarTexto(pSemAg), montarTexto(pFora)]);
+for (const c of chamar) assert.ok(!tudoDePacientes.includes(c.nome!), `nome da lista de chamar não pode aparecer na leitura: ${c.nome}`);
+for (const nome of NOMES_DA_LISTA) assert.ok(!tudoDePacientes.includes(nome), `nome ${nome} vazou para a leitura`);
+
+// Meta como fato: "N de M, faltam K", sem a palavra risco nem projeção.
+const pMeta = pacientes(dadosPacientes(), { metas: { mandaram_mensagem: { meta: 40, atual: 28 }, agendaram: { meta: 10, atual: 12 }, fecharam: { meta: 5, atual: null } } });
+const metaChamaram = pMeta.fatos.find((f) => f.id === "meta-mandaram_mensagem");
+assert.ok(metaChamaram && /28 de 40, faltam 12/.test(metaChamaram.frase) && metaChamaram.numeros[0]?.exibicao === "28 de 40", "meta cadastrada vira fato 'N de M, faltam K'");
+assert.ok(!/risco|projeç|projec|previs/i.test(JSON.stringify(pMeta.fatos)), "meta dita como fato: sem risco nem projeção");
+assert.equal(pMeta.fatos.find((f) => f.id === "meta-agendaram")?.tom, "bom", "meta batida é fato bom");
+assert.ok(/não foi medido/.test(pMeta.fatos.find((f) => f.id === "meta-fecharam")?.frase ?? ""), "meta sem medida do mês: sem acompanhamento, nunca 0 de 5");
+assert.deepEqual(problemasDoTexto(montarTexto(pMeta)), []);
+
+// Telas em construção: sem leitura, com o que falta e quem resolve.
+for (const tela of ["consultas", "vendas"] as const) {
+  const c = fatosEmConstrucao(tela);
+  assert.equal(c.tela, tela);
+  assert.ok(!c.portao.ok, `${tela}: sem leitura`);
+  if (!c.portao.ok) {
+    assert.equal(c.portao.motivo, "a tela ainda não tem a fonte ligada");
+    assert.equal(c.portao.passo.verbo, "conferir");
+    assert.equal(c.portao.passo.quem, "equipe_hub");
+  }
+  const t = montarTexto(c);
+  assert.equal(t.tipo, "sem_leitura");
+  assert.deepEqual(problemasDoTexto(t), []);
+  assert.ok(!("aconteceu" in t));
+}
+
 // ---------- módulos puros (LEIT-02) ----------
-for (const nome of ["fatos-resultados.ts", "resumo-clinica.ts"]) {
+for (const nome of ["fatos-resultados.ts", "resumo-clinica.ts", "fatos-pacientes.ts"]) {
   const fonte = readFileSync(new URL(`../src/lib/leitura/${nome}`, import.meta.url), "utf8");
   assert.ok(!/supabase|useQuery|chamarIA|fetch\(|from "react"/.test(fonte), `${nome}: módulo puro`);
 }
