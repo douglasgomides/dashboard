@@ -1,7 +1,8 @@
 /*
  * Molde único de página (PaginaNexo) e leitura da tela (LeituraDaTela). Só tokens do nexo-system.css via var():
  * nenhuma cor escrita aqui. Texto com peso 500 (letra fina cansa), números em 700, nada abaixo de 14 px e alvo
- * tocável de 44 px. O movimento (esqueleto pulsando) só entra em prefers-reduced-motion: no-preference, no fim.
+ * tocável de 44 px. Sem movimento próprio: o do esqueleto e o da seta ficam em nexo-blocos.css, sob
+ * prefers-reduced-motion: no-preference.
  */
 
 /* ---------- Página: ordem fixa, cabeçalho, leitura, cartões, principal, corpo, detalhe ---------- */
@@ -28,27 +29,8 @@
 .nx-pagina__cartoes { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); min-width: 0; }
 .nx-pagina__principal, .nx-pagina__corpo { min-width: 0; display: grid; gap: 18px; }
 
-/* Detalhe: bloco recolhido no fim da página. */
-.nx-pagina__detalhe { border: 1px solid var(--line); border-radius: 18px; background: var(--white); min-width: 0; }
-.nx-pagina__detalhe > summary {
-  list-style: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 56px;
-  padding: 12px 18px;
-  cursor: pointer;
-  border-radius: 18px;
-  font-size: 16px;
-  line-height: 22px;
-  font-weight: 600;
-}
-.nx-pagina__detalhe > summary::-webkit-details-marker { display: none; }
-.nx-pagina__detalhe > summary:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; }
-.nx-pagina__detalhe[open] .nx-pagina__seta { transform: rotate(180deg); }
-.nx-pagina__seta { display: inline-flex; }
-.nx-pagina__detalhe-corpo { border-top: 1px solid var(--line); padding: 18px; display: grid; gap: 16px; min-width: 0; }
+/* Detalhe: o bloco recolhido (NxRecolhido, em blocos.tsx) no fim da página. */
+.nx-pagina__detalhe { min-width: 0; }
 
 /* ---------- Leitura da tela ---------- */
 .nx-leitura {
@@ -121,23 +103,9 @@
 .nx-leitura__outros { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 8px; font-size: 15px; line-height: 22px; }
 .nx-leitura__outros li { overflow-wrap: anywhere; }
 
-/* Esperando o cálculo e erro. */
-.nx-leitura__espera, .nx-leitura__erro { display: grid; gap: 8px; }
-.nx-leitura__esqueleto { display: grid; gap: 10px; }
-.nx-leitura__esqueleto i { display: block; height: 16px; border-radius: 8px; background: var(--b5); }
-.nx-leitura__esqueleto i:nth-child(1) { width: 78%; }
-.nx-leitura__esqueleto i:nth-child(2) { width: 60%; }
-.nx-leitura__esqueleto i:nth-child(3) { width: 70%; }
+/* Carregando e erro da leitura usam as peças NxCarregando e NxErro (blocos.tsx). */
 
 @media (max-width: 560px) {
-  .nx-pagina__detalhe > summary { padding: 12px; }
-  .nx-pagina__detalhe-corpo { padding: 12px; }
   .nx-leitura { padding: 14px 12px; }
   .nx-pagina__pergunta { font-size: 22px; line-height: 30px; }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  @keyframes nx-leitura-pulsa { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
-  .nx-leitura__esqueleto i { animation: nx-leitura-pulsa 1.4s ease-in-out infinite; }
-  .nx-pagina__seta { transition: transform 200ms ease; }
 }

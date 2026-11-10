@@ -1,10 +1,11 @@
-import { Fragment, memo, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, memo, useMemo, type ReactNode } from "react";
 import { IconeTabler } from "@/components/icons/tabler";
 import { NxChip } from "@/components/nx-chip";
 import { ROTULO_RESPONSAVEL } from "@/lib/insight";
 import { montarTexto, rotuloPeriodo } from "@/lib/leitura/texto";
 import { ROTULO_DECISAO, type DecisaoMedico, type FatosDaTela, type LinhaTexto, type PassoTexto, type TelaId, type TextoDoResumo, type TomFato } from "@/lib/leitura/tipos";
 import { NxTag } from "./base";
+import { NxCarregando, NxErro, NxRecolhido } from "./blocos";
 import "@/styles/nexo-pagina.css";
 
 // Molde único de página do Nexo (Phase 3.1). Toda tela, da clínica e da equipe, abre assim, nesta ordem fixa:
@@ -62,15 +63,9 @@ export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitur
       {principal && <div className="nx-pagina__principal">{principal}</div>}
       {corpo && <div className="nx-pagina__corpo">{corpo}</div>}
       {detalhe && (
-        <details className="nx-pagina__detalhe">
-          <summary>
-            <span>Detalhes</span>
-            <span className="nx-pagina__seta" aria-hidden>
-              <IconeTabler nome="chevron-down" tamanho={18} />
-            </span>
-          </summary>
-          <div className="nx-pagina__detalhe-corpo">{detalhe}</div>
-        </details>
+        <div className="nx-pagina__detalhe">
+          <NxRecolhido titulo="Detalhes">{detalhe}</NxRecolhido>
+        </div>
       )}
     </div>
   );
@@ -92,8 +87,6 @@ export interface LeituraDaTelaProps {
 }
 
 const SINAL: Record<TomFato, string> = { bom: "▲", ruim: "▼", atencao: "!", neutro: "●" };
-/** Quanto a leitura espera antes de avisar que uma clínica grande leva mais tempo. */
-const ESPERA_AVISO_MS = 3000;
 
 function Linha({ rotulo, tom = "neutro", children }: { rotulo?: string; tom?: TomFato; children: ReactNode }) {
   return (
@@ -164,30 +157,15 @@ function SemLeitura({ motivo, passo }: { motivo: string; passo: PassoTexto }) {
   );
 }
 
-/** Avisa, depois de 3 s esperando, que clínica grande leva mais tempo. */
-function useDemora(ativo: boolean): boolean {
-  const [demorou, setDemorou] = useState(false);
-  useEffect(() => {
-    if (!ativo) {
-      setDemorou(false);
-      return;
-    }
-    const t = setTimeout(() => setDemorou(true), ESPERA_AVISO_MS);
-    return () => clearTimeout(t);
-  }, [ativo]);
-  return demorou;
-}
-
 export const LeituraDaTela = memo(function LeituraDaTela({ fatos, carregando, erro, semSelo, resumo, id = "leitura" }: LeituraDaTelaProps) {
   const texto = useMemo(() => (fatos ? montarTexto(fatos) : null), [fatos]);
-  const demorou = useDemora(carregando);
   const modoResumo = !!resumo && !carregando && !erro;
   const titulo = modoResumo ? "Resumo da clínica" : fatos?.tipoPeriodo === "hoje" ? "Situação de hoje" : "Leitura do período";
   const subtitulo = !carregando && !erro && fatos ? rotuloPeriodo(fatos.periodo) : null;
   const modo = carregando ? "carregando" : erro ? "erro" : modoResumo ? "resumo" : !texto ? "vazio" : texto.tipo === "sem_leitura" ? "sem-leitura" : "leitura";
 
   return (
-    <section className="nx-leitura" aria-labelledby={`${id}-t`} aria-busy={carregando || undefined} data-peca="leitura" data-modo={modo}>
+    <section className="nx-leitura" aria-labelledby={`${id}-t`} data-peca="leitura" data-modo={modo}>
       <header className="nx-leitura__topo">
         <span className="nx-leitura__tile" aria-hidden>
           <IconeTabler nome="bulb" tamanho={17} traco={1.7} />
@@ -200,19 +178,9 @@ export const LeituraDaTela = memo(function LeituraDaTela({ fatos, carregando, er
       </header>
 
       {carregando ? (
-        <div className="nx-leitura__espera">
-          <div className="nx-leitura__esqueleto" aria-hidden>
-            <i />
-            <i />
-            <i />
-          </div>
-          {demorou && <p className="nx-leitura__apoio">Calculando, clínica grande leva até 30 s</p>}
-        </div>
+        <NxCarregando />
       ) : erro ? (
-        <div className="nx-leitura__erro" role="note">
-          <p className="nx-leitura__frase">Não deu para montar a leitura agora.</p>
-          <p className="nx-leitura__apoio">Isso não quer dizer que o número é zero.</p>
-        </div>
+        <NxErro texto="Não deu para montar a leitura agora." />
       ) : modoResumo && resumo ? (
         resumo.tipo === "sem_leitura" ? (
           <SemLeitura motivo={resumo.motivo} passo={resumo.passo} />
