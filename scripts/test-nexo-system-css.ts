@@ -71,7 +71,7 @@ const tokens = declaracoes(casca.corpo);
 const ESPERADO: Record<string, string> = {
   "--b1": "#1F4FD8", "--b2": "#4675F0", "--b3": "#7D9EF6", "--b4": "#B6C9FB", "--b5": "#DCE6FD", "--b6": "#EFF4FF",
   "--white": "#FFFFFF", "--frame": "#F0F2F4", "--field": "#F5F6F8", "--line": "#E8EBEF", "--line-2": "#DDE1E7",
-  "--text": "#121212", "--text-2": "#2B2B2D", "--muted-ink": "#5F6570", "--muted-soft": "#8C9099", "--muted-2": "#B4B8BF",
+  "--text": "#121212", "--text-2": "#2B2B2D", "--muted-ink": "#5F6570", "--muted-soft": "#686E79", "--muted-2": "#B4B8BF",
   "--control-border": "#7C808A",
   "--up": "#22B07D", "--up-bg": "#E7F7EF", "--up-ink": "#0B6B4A",
   "--dn": "#EF4B5A", "--dn-bg": "#FDEBED", "--dn-ink": "#B4233A",
