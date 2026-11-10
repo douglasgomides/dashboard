@@ -3,6 +3,8 @@ import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import "@/styles/nexo-resultados.css";
 import { type Metrica } from "@/lib/resultado";
 import { useResultado } from "@/hooks/use-resultado";
+import { PaginaNexo, LeituraDaTela, type PaginaNexoProps } from "@/components/nx/pagina";
+import { fatosDeResultados } from "@/lib/leitura/fatos-resultados";
 import { ROTULO_CONFIANCA } from "@/lib/insight";
 import { DiagnosticoEstrategico } from "@/components/diagnostico-estrategico";
 import {
@@ -552,49 +554,69 @@ function MonthlyOverview() {
   const { start, end } = resolveDateRange(dateRangeState);
   const resultado = useResultado(clientId, start, end);
   const { r, metricas } = resultado;
+  // Leitura do período: calculada na hora, no navegador, só do que useResultado já carregou (sem consulta nova).
+  const fatos = useMemo(() => (r ? fatosDeResultados({ resultado: r, de: start, ate: end, hoje: resultado.hoje }) : null), [r, start, end, resultado.hoje]);
+  const cabecalho = {
+    tela: "resultados" as const,
+    titulo: "Resultados da clínica",
+    pergunta: "Como a clínica foi no período?",
+    meta: <span>{formatRangeLabel({ start, end })}</span>,
+  };
 
   if (metricas.isError) {
     return (
-      <div
-        role="alert"
-        className="nx-card space-y-3"
-      >
-        <h2 className="font-semibold">Não foi possível carregar o resumo</h2>
-        <p className="text-sm">
-          Os indicadores estão indisponíveis no momento. Você pode tentar
-          novamente ou continuar pelas outras ferramentas do menu.
-        </p>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => void metricas.refetch()}
-          disabled={metricas.isFetching}
-        >
-          Tentar novamente
-        </button>
-      </div>
+      <PaginaNexo
+        {...cabecalho}
+        leitura={<LeituraDaTela fatos={null} carregando={false} erro="Os indicadores estão indisponíveis." semSelo />}
+        corpo={
+          <div
+            role="alert"
+            className="nx-card space-y-3"
+          >
+            <h2 className="font-semibold">Não foi possível carregar o resumo</h2>
+            <p className="text-sm">
+              Os indicadores estão indisponíveis no momento. Você pode tentar
+              novamente ou continuar pelas outras ferramentas do menu.
+            </p>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => void metricas.refetch()}
+              disabled={metricas.isFetching}
+            >
+              Tentar novamente
+            </button>
+          </div>
+        }
+      />
     );
   }
 
   if (metricas.isLoading || !r) {
     return (
-      <div
-        className="w-full space-y-4"
-        aria-busy="true"
-        aria-label="Carregando"
-      >
-        {[120, 96, 220].map((h, i) => (
+      <PaginaNexo
+        {...cabecalho}
+        leitura={<LeituraDaTela fatos={null} carregando semSelo />}
+        corpo={
           <div
-            key={i}
-            className="animate-pulse rounded-[18px]"
-            style={{ height: h, background: "var(--surface-2)" }}
-          />
-        ))}
-      </div>
+            className="w-full space-y-4"
+            aria-busy="true"
+            aria-label="Carregando"
+          >
+            {[120, 96, 220].map((h, i) => (
+              <div
+                key={i}
+                className="animate-pulse rounded-[18px]"
+                style={{ height: h, background: "var(--surface-2)" }}
+              />
+            ))}
+          </div>
+        }
+      />
     );
   }
 
-  return <Resultados clientId={clientId} start={start} end={end} resultado={resultado} />;
+  return <Resultados clientId={clientId} start={start} end={end} resultado={resultado} fatos={fatos} cabecalho={cabecalho} />;
 }
 
 function Resultados({
@@ -602,11 +624,15 @@ function Resultados({
   start,
   end,
   resultado,
+  fatos,
+  cabecalho,
 }: {
   clientId: string;
   start: string;
   end: string;
   resultado: ReturnType<typeof useResultado>;
+  fatos: ReturnType<typeof fatosDeResultados> | null;
+  cabecalho: Pick<PaginaNexoProps, "tela" | "titulo" | "pergunta" | "meta">;
 }) {
   const { isAdmin } = useAuth();
   const periodLabel = formatRangeLabel({ start, end });
@@ -749,7 +775,7 @@ function Resultados({
     `${fmtTaxaPct(f.median)} de taxa de interação (mediana) · ${f.count} posts · ${ROTULO_CONFIANCA[confiancaPorPosts(f.count)].toLowerCase()}`;
   const pctCobertura = diasPeriodo > 0 ? Math.round((datasDados.length / diasPeriodo) * 100) : 0;
 
-  return (
+  const conteudo = (
     <div className="nexo-results-overview w-full space-y-[18px]">
       {/* Dado com erro na origem: muda a leitura de tudo abaixo, por isso vem antes. */}
       <QualidadeDados clientId={clientId} compacto />
@@ -1128,6 +1154,8 @@ function Resultados({
       />
     </div>
   );
+
+  return <PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={fatos} carregando={false} semSelo />} corpo={conteudo} />;
 }
 
 function dd(iso: string) {
