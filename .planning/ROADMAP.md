@@ -138,7 +138,7 @@ Plans:
   3. A leitura só afirma o que o dado sustenta: dado faltando ou não confiável aparece como tal, nunca vira conclusão
   4. O João olha cada tela e diz que entende sem explicação
 
-**Plans:** 2/17 plans executed em 9 ondas (um PR só para a fase; no máximo 2 planos e uma publicação na VPS por onda; cada plano na própria worktree)
+**Plans:** 3/17 plans executed em 9 ondas (um PR só para a fase; no máximo 2 planos e uma publicação na VPS por onda; cada plano na própria worktree)
 
 Plans:
 **Wave 1**
@@ -146,7 +146,7 @@ Plans:
 - [x] 03.1-02-PLAN.md — Inventário das 43 telas e dos cartões de cada uma, com teste no CI, e o contrato do molde
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 03.1-03-PLAN.md — Resultados: resumo da clínica em 3 linhas (D-07), Pacientes e as telas em construção; publica; o João olha
+- [x] 03.1-03-PLAN.md — Resultados: resumo da clínica em 3 linhas (D-07), Pacientes e as telas em construção; publica; o João olha
 - [ ] 03.1-04-PLAN.md — Peças antigas compartilhadas que o SAP não usa no desenho nx; porta do Playwright configurável
 
 **Wave 3** *(blocked on Wave 2 completion)*
