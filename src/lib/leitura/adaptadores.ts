@@ -10,7 +10,8 @@ import type { Fato, Numeral, PassoFato, VerboPasso } from "./tipos";
 export const SINONIMOS_DE_VERBO: Record<VerboPasso, readonly string[]> = {
   "ligar para": ["ligar", "ligue", "chamar", "chame"],
   responder: ["responder", "responda"],
-  revisar: ["revisar", "revise", "rever", "reveja", "analisar", "analise"],
+  // 03.1-03: "definir", "testar" e "priorizar" abrem ações reais do resultado; sem eles a frase saía "Revisar a ação: defina...".
+  revisar: ["revisar", "revise", "rever", "reveja", "analisar", "analise", "definir", "defina", "testar", "teste", "priorizar", "priorize"],
   pausar: ["pausar", "pause", "cortar", "corte", "desligar", "desligue"],
   reforçar: ["reforçar", "reforce", "impulsionar", "impulsione", "aumentar", "aumente", "ampliar", "amplie", "escalar", "escale"],
   corrigir: ["corrigir", "corrija", "ajustar", "ajuste", "marcar", "marque", "preencher", "preencha"],
