@@ -611,35 +611,46 @@ export function gravarUltimaClinica(id: string) {
 | A12 | `@tabler/icons-react` não tem caminho de importação por ícone documentado | Ícones | Se houver, o argumento contra o barril enfraquece |
 | A13 | "Etapas do CRM" e "Relatório do período" ficam como subtelas de Clínica (UI-SPEC) | Registro | Ajuste só de menu |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **A decisão 3 (telas removidas de vez) segue com o João; esta fase esconde.**
+Resolvidas pelo João em 09/11/2026 (03-CONTEXT.md D-02..D-11) ou pelo Claude's Discretion do CONTEXT. O que continua em aberto está dito em cada item e não bloqueia a fase.
+
+1. **A decisão 3 (telas removidas de vez) segue com o João; esta fase esconde.** — RESOLVED (provisório): D-07 + D-11 + D-04.
    - What we know: o quadro lista só 1 rota tirada de verdade (`marketing`) e 2 rótulos. Há candidatas óbvias (`automacoes`, `consultas`, `vendas` são `PhasePlaceholder`).
    - What's unclear: se "tirada" deve passar a significar mais do que isso.
    - Recommendation: manter 1 rota + 2 atalhos; não tirar nada além; registrar no SUMMARY as candidatas.
+   - Resolução: D-11 aceita a decisão 3 como provisória (nada sai de vez nesta fase); D-07 (esconder não bloqueia nem apaga); D-04 fixa as 3 tiradas (1 rota + 2 atalhos de `/ideias`). Continua aberto com o João: a lista final do que sai de vez (Deferred no CONTEXT); muda depois sem refazer a fase.
 
-2. **Estrategista não admin e as telas `/admin`.**
+2. **Estrategista não admin e as telas `/admin`.** — RESOLVED: D-03.
    - What we know: `/admin` e `/admin/conferencia` exigem `is_app_admin` (`_authenticated.admin.tsx:12-15`); o João disse que o estrategista não admin vê o menu novo.
    - What's unclear: se ele deve abrir Carteira/Conferência (isso muda autorização) ou ver só "Clínica".
    - Recommendation: mostrar só o que ele abre e perguntar ao João; não mexer em `is_app_admin`.
+   - Resolução: D-03 — vê o menu novo só com "Clínica" e a busca das telas que ele abre; Carteira e Conferência ficam só para admin; nenhuma permissão muda. Nada em aberto.
 
-3. **Busca na casca `/admin` para telas que precisam de clínica.**
+3. **Busca na casca `/admin` para telas que precisam de clínica.** — RESOLVED: D-02.
    - What we know: ~60 das telas abertas pela busca têm `$clientId`; a casca `/admin` não tem clínica atual.
    - What's unclear: abrir na última clínica, abrir o seletor de clínica, ou desabilitar.
    - Recommendation: última clínica; sem ela, "Escolha uma clínica primeiro" levando a `/admin`.
+   - Resolução: D-02 — última clínica aberta naquele navegador (só o id no armazenamento local); sem ela, fica na Carteira com a dica "Escolha uma clínica". Nada em aberto.
 
-4. **Nome da pessoa para o `AvatarGerado` do rodapé.**
+4. **Nome da pessoa para o `AvatarGerado` do rodapé.** — RESOLVED: Claude's Discretion do CONTEXT.
    - What we know: a casca só tem `user.email`; nenhum nome é lido.
    - Recommendation: semente = e-mail em minúsculas; rótulo = e-mail.
+   - Resolução: CONTEXT (Claude's Discretion) fixa a semente pelo e-mail; os planos exibem a parte local do e-mail como nome e o e-mail completo abaixo (FA-11 no 03-01). Nada em aberto.
 
-5. **Janela de publicação.**
+5. **Janela de publicação.** — RESOLVED: D-06.
    - What we know: D-14 exige 7 dias de log; "um PR por fase".
    - What's unclear: se o João aceita um PR separado só do visual antes do marco (quebra a regra de um PR por fase) ou prefere ordenar o merge do PR único.
    - Recommendation: um PR; plano de visual primeiro nas ondas; merge só depois do marco. Se quiser o visual antes, abrir um segundo PR e atualizar a regra.
+   - Resolução: D-06 — um PR só para a fase (visual + menu), merge só depois dos 7 dias corridos de log em produção; o código pode ser escrito antes. Nada em aberto.
 
-6. **ROADMAP diz 14/73/3 e "73 abrem".** A recontagem dá 14/70/3 e 60 openáveis por busca (+ as redirecionadas contam como "abrem" no destino). Pedir aprovação da recontagem e atualizar ROADMAP/REQUIREMENTS (MENU-01).
+6. **ROADMAP diz 14/73/3 e "73 abrem".** A recontagem dá 14/70/3 e 60 openáveis por busca (+ as redirecionadas contam como "abrem" no destino). Pedir aprovação da recontagem e atualizar ROADMAP/REQUIREMENTS (MENU-01). — RESOLVED: D-04 + D-09.
+   - Resolução: D-04 — o João aceitou 14/70/3 (87 linhas); das 70 escondidas, 60 abrem pela busca e 10 só redirecionam; ROADMAP e MENU-01 já atualizados. D-09 — no build de produção o índice tem 59 escondidas (a `/qa/layout` só existe em desenvolvimento, onde são 60). Nada em aberto.
 
-7. **Pesos da Urbanist (400/500 vs 400–700).** Ver A7.
+7. **Pesos da Urbanist (400/500 vs 400–700).** Ver A7. — RESOLVED: Claude's Discretion do CONTEXT.
+   - Resolução: CONTEXT (Claude's Discretion) — carregar Urbanist 400/500/600/700 (mesmo arquivo variável); FA-07 no 03-01. Nada em aberto.
+
+Ainda provisório, sem bloquear a fase (D-11): decisões 5 (SAP escondido e congelado para todos) e 11 (rótulos "Carteira", "Clínica", "Conferência e fontes"), além da 3 acima; mudam depois sem refazer a fase. Menu do médico: itens e áreas iguais nesta fase, mas sempre claro e marca "N" Cobalto também para ele (D-10).
 
 ## Sources
 

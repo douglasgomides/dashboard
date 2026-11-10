@@ -104,7 +104,26 @@ Plans:
      (Nota de 09/11/2026: o teste confere o conjunto de rotas medido em `src/routeTree.gen.ts`, 81 telas nessa data (80 folhas `/_authenticated` + `/sem-acesso`; 90 é a contagem de arquivos em `src/routes`); a divisão 14/73/3 do brief é recontada contra esse conjunto na Phase 3.)
   5. Print do site no ar conferido: menu da equipe no computador e no celular, e uma tela escondida aberta pela busca
 
-**Plans**: TBD
+**Plans:** 7 plans (um PR só para a fase)
+
+Plans:
+**Wave 1** *(só depois do merge da Phase 2 em claude/doctor-creator-hub-nixvw6 e do pull em gsd/nexo-v5)*
+- [ ] 03-01-PLAN.md — Checkpoint de entrada (Phase 2 no ar) + fatia traçadora (registro → busca nova → casca da clínica → log com origem busca) + teste do registro 87 = 14/70/3 (59 escondidas no índice de produção; estrategista só acha telas sem guarda)
+
+**Wave 2** *(blocked on Wave 1 completion; os dois planos rodam em paralelo, sem arquivo em comum)*
+- [ ] 03-02-PLAN.md — Menu da equipe de 3 itens no computador (casca da clínica), estrategista, ícones Tabler inline, trava dos links do médico
+- [ ] 03-03-PLAN.md — Sistema visual: tokens Cobalto, sempre claro (equipe e médico), Urbanist 16 px, moldura, limpeza e movimento; SAP intacto
+
+**Wave 3** *(blocked on Wave 2 completion; os dois planos rodam em paralelo, sem arquivo em comum)*
+- [ ] 03-04-PLAN.md — Celular da equipe (Buscar tela e folha Menu), rodapé com AvatarGerado; médico sem o controle Aparência e com a marca N, mesmos itens
+- [ ] 03-05-PLAN.md — Busca completa (chips, Ver todas, teclado, estados) + e2e da busca por área, do estrategista abrindo cada tela, das tiradas e das rotas de acesso
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 03-06-PLAN.md — Casca /admin com o mesmo menu, a mesma busca e a última clínica + axe + specs antigos do menu
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 03-07-PLAN.md — Suíte do CI e regras da fase; [BLOCKING] merge só após 7 dias de log, com velocidade de antes e rotas de acesso anotadas; [BLOCKING] site no ar conferido (prints, velocidade de depois, rotas de acesso)
+
 **UI hint**: yes
 
 ### Phase 4: Pacote do template do WhatsApp à Meta
