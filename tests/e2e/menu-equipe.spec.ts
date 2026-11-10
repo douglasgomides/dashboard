@@ -69,8 +69,11 @@ test("médico (viewer) com Ctrl+K ainda abre O que você quer fazer?", async ({ 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`/${CID}`);
   await expect(page.getByRole("heading", { name: "Resultados da clínica", exact: true })).toBeVisible();
-  await page.keyboard.press("Control+k");
-  await expect(page.getByRole("dialog", { name: "O que você quer fazer?" })).toBeVisible();
+  // O atalho pode sair antes de a casca ligar o ouvinte: repete até o diálogo abrir (mesmo padrão do 03-05).
+  await expect(async () => {
+    await page.keyboard.press("Control+k");
+    await expect(page.getByRole("dialog", { name: "O que você quer fazer?" })).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 10000 });
   await expect(page.getByRole("dialog", { name: "Buscar tela" })).toHaveCount(0);
 });
 
