@@ -1,32 +1,23 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { mkdir } from "node:fs/promises";
 import { CID, mockAccount } from "./fixtures";
 
-const outputs = new URL("../../../../outputs/", import.meta.url).pathname;
 for (const width of [375, 1440]) {
-  test(`Marketing opens an orientation page and the weekly planner survives refresh and history at ${width}px`, async ({ page, context }) => {
+  test(`Marketing antigo leva a Analisar desempenho com o período e o planejador da semana sobrevive a refresh e histórico at ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "viewer");
     await page.setViewportSize({ width, height: 1000 });
+    // /marketing só redireciona desde 06/11 (D-05): o endereço antigo cai em /conteudo com o mesmo período.
+    await page.goto(`/${CID}/marketing?preset=7d`);
+    await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/conteudo`);
+    expect(new URL(page.url()).searchParams.get("preset")).toBe("7d");
+    await expect(page.locator(".workspace-heading h1")).toHaveText("Analisar desempenho");
     await page.goto(`/${CID}/ideias?preset=7d`);
-    if (width === 375) {
-      await page.getByRole("navigation", { name: "Áreas", exact: true }).getByRole("button", { name: "Menu", exact: true }).click();
-      await page.getByRole("dialog", { name: "Navegar no Nexo" }).getByRole("link", { name: "Visão geral de Marketing", exact: true }).click();
-    } else {
-      await page.getByRole("navigation", { name: "Análises detalhadas", exact: true }).getByRole("link", { name: "Marketing", exact: true }).click();
-    }
-    await expect(page).toHaveURL(new RegExp(`/${CID}/marketing\\?preset=7d`));
-    await expect(page.getByRole("heading", { name: "Visão geral de Marketing", exact: true })).toBeVisible();
     const main = page.getByRole("main");
-    for (const name of ["Analisar os números", "Produzir e planejar conteúdo", "Planejar campanhas e aquisição"])
-      await expect(main.getByRole("heading", { name, exact: true })).toBeVisible();
-    await expect(main.getByRole("link", { name: /^Inteligência Criativa/ })).toHaveCount(0);
+    await expect(page.locator(".workspace-heading h1")).toHaveText("Revisar roteiros");
     const audit = await new AxeBuilder({ page }).include(".mainwrap").withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(audit.violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
-    await mkdir(outputs, { recursive: true });
-    await page.screenshot({ path: `${outputs}marketing-visao-geral-${width}.png` });
-    await main.getByRole("link", { name: /^Planejar a semana/ }).click();
+    await main.getByRole("button", { name: /^Planejar a semana/ }).click();
     await expect(page.getByRole("region", { name: "Planejador da semana", exact: true })).toBeVisible();
     await expect(page.locator(".workspace-heading h1")).toHaveText("Planejar a semana");
     expect(new URL(page.url()).searchParams.get("visao")).toBe("semana");
@@ -68,8 +59,12 @@ test("task search leads straight to the weekly planner and closes for a differen
   await mockAccount(context, "viewer");
   await page.goto(`/${CID}/ideias?preset=7d`);
   await expect(page.getByRole("button", { name: /^Encontrar uma ferramenta/ }).filter({visible:true})).toBeVisible();
-  await page.keyboard.press("Control+k");
   const dialog = page.getByRole("dialog", { name: "O que você quer fazer?" });
+  // O papel do viewer chega depois da primeira pintura; repete o atalho só enquanto o diálogo do médico não abriu.
+  await expect(async () => {
+    if (!(await dialog.isVisible())) await page.keyboard.press("Control+k");
+    await expect(dialog).toBeVisible({ timeout: 1000 });
+  }).toPass();
   await dialog.getByRole("searchbox").fill("calendário");
   await expect(dialog.getByRole("link")).toHaveCount(1);
   await dialog.getByRole("link", { name: /Planejar a semana/ }).click();
@@ -88,15 +83,25 @@ for (const profile of ["admin", "viewer"] as const) {
       : Promise.resolve();
     await page.goto(`/${CID}/crm-painel`);
     await papelCarregado;
+    if (profile === "admin") {
+      // A equipe não tem mais as abas de Comercial na barra (Phase 3, MENU-02): a tela restrita abre pela busca, na área Comercial.
+      await expect(page.getByRole("navigation", { name: "Menu da equipe" }).first()).toBeVisible();
+      await expect(page.getByRole("navigation", { name: "Telas de Comercial", exact: true })).toHaveCount(0);
+      await page.getByRole("complementary", { name: "Menu principal" }).getByRole("button", { name: "Buscar tela" }).click();
+      const busca = page.getByRole("dialog", { name: "Buscar tela" });
+      await busca.getByRole("searchbox").fill("origem do CRM");
+      const resultados = busca.getByRole("navigation", { name: "Resultados da busca" });
+      const result = resultados.getByRole("link", { name: /Resultados por origem do CRM/ });
+      await expect(result).toHaveCount(1);
+      await expect(result.locator(".nx-resultado-apoio")).toContainText("Comercial");
+      await busca.getByRole("searchbox").fill("Guia de organização do CRM");
+      await expect(resultados.getByRole("link", { name: /Guia de organização do CRM/ })).toHaveCount(1);
+      return;
+    }
     const commercial = page.getByRole("navigation", { name: "Telas de Comercial", exact: true });
     const result = commercial.getByRole("link", { name: "Resultados por origem do CRM", exact: true });
-    await expect(result).toHaveCount(profile === "admin" ? 1 : 0);
-    if (profile === "admin") {
-      await expect(result).toBeVisible();
-      await page.getByRole("button", { name: "Equipe e configuração", exact: true }).click();
-      await expect(page.getByRole("navigation", { name: "Equipe", exact: true }).getByRole("link", { name: "Resultados por origem do CRM", exact: true })).toHaveCount(0);
-    }
-    // Estado final: o guia é tela de equipe (src/lib/nav.ts), então o admin o vê e o viewer, com o papel já carregado, não.
-    await expect(commercial.getByRole("link", { name: "Guia de organização do CRM", exact: true })).toHaveCount(profile === "admin" ? 1 : 0);
+    await expect(result).toHaveCount(0);
+    // Estado final: o guia é tela de equipe (src/lib/nav.ts); o viewer, com o papel já carregado, não o vê.
+    await expect(commercial.getByRole("link", { name: "Guia de organização do CRM", exact: true })).toHaveCount(0);
   });
 }

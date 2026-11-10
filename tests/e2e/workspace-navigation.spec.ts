@@ -20,17 +20,11 @@ test("desktop: task search leads to existing tools and preserves clinic and peri
       .getByRole("navigation", { name: "Áreas do Nexo" })
       .getByRole("link"),
   ).toHaveCount(3);
-  await expect(
-    sidebar
-      .getByRole("navigation", { name: "Telas de Marketing" })
-      .getByRole("link", { includeHidden: true }),
-  ).toHaveCount(14);
-  await expect(
-    sidebar.getByText("Conteúdo", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    sidebar.getByText("Campanhas e anúncios", { exact: true }),
-  ).toBeVisible();
+  // Menu do médico de hoje (D-10, trava em links-do-medico.ts): Marketing com 5 telas em 2 grupos, Resultados e Conteúdo.
+  const marketing = sidebar.getByRole("navigation", { name: "Telas de Marketing" });
+  await expect(marketing.getByRole("link", { includeHidden: true })).toHaveCount(5);
+  await expect(marketing.getByText("Conteúdo", { exact: true })).toBeVisible();
+  await expect(marketing.getByText("Resultados", { exact: true })).toBeVisible();
   await expect(page.locator(".areatabs")).toHaveCount(0);
   await page.keyboard.press("Control+k");
   const dialog = page.getByRole("dialog", { name: "O que você quer fazer?" });
@@ -58,7 +52,7 @@ test("mobile: every area is reachable through the menu, without horizontal overf
   const menu = page.getByRole("dialog", { name: "Navegar no Nexo" });
   await expect(menu).toBeVisible();
   await expect(
-    menu.getByRole("link", { name: "Referências salvas", exact: true }),
+    menu.getByRole("link", { name: "Planejar a semana", exact: true }),
   ).toBeVisible();
   await expect(
     menu.getByRole("link", { name: "Relatório do período", exact: true, includeHidden: true }),
@@ -269,19 +263,21 @@ for (const width of [375, 1440]) {
     if (width === 1440) {
       const secondary = page.getByRole("navigation", { name: "Análises detalhadas", exact: true });
       await expect(secondary.getByRole("link")).toHaveText(["Marketing", "Comercial"]);
+      // Comercial do médico tem uma tela só (Funil comercial): o link da área já leva a ela, sem lista de telas.
       await secondary.getByRole("link", { name: "Comercial", exact: true }).click();
-      await page.getByRole("navigation", { name: "Telas de Comercial", exact: true }).getByRole("link", { name: "Qualidade do atendimento", exact: true }).click();
     } else {
       await primary.getByRole("button", { name: "Menu", exact: true }).click();
       const menu = page.getByRole("dialog", { name: "Navegar no Nexo" });
       await expect(menu.locator("summary > span")).toHaveText(["Resultados", "Entregas e aprovações", "Relatórios", "Marketing", "Comercial"]);
       await menu.locator("summary").filter({ hasText: "Comercial" }).click();
-      await menu.getByRole("link", { name: "Qualidade do atendimento", exact: true }).click();
+      await menu.getByRole("link", { name: "Funil comercial", exact: true }).click();
     }
-    await expect(page).toHaveURL(new RegExp(`/${CID}/atendimento`));
+    // Comercial do médico hoje tem só o Funil comercial (D-10, links-do-medico.ts).
+    await expect(page).toHaveURL(new RegExp(`/${CID}/crm-painel`));
     expect(new URL(page.url()).searchParams.get("preset")).toBe("7d");
     await primary.getByRole("link", { name: width === 1440 ? "Entregas e aprovações" : "Entregas", exact: true }).click();
-    await expect(page).toHaveURL(/agentes/);
+    // Entregas do médico leva ao Plano da semana (links-do-medico.ts).
+    await expect(page).toHaveURL(new RegExp(`/${CID}/plano`));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   });
 }

@@ -7,6 +7,7 @@ import {
 import AxeBuilder from "@axe-core/playwright";
 import { mkdir } from "node:fs/promises";
 import { CID, SID, mockAccount } from "./fixtures";
+import { ROTULOS_MENU_EQUIPE } from "../../src/lib/registro-de-telas";
 
 const outputs = new URL("../../../../outputs/", import.meta.url).pathname;
 async function examples(context: BrowserContext, product: "nexo" | "sap") {
@@ -271,28 +272,40 @@ test("a casca do Nexo não oferece mais o controle Aparência", async ({ page, c
   await expect(menu.getByRole("button", { name: "Escuro", exact: true })).toHaveCount(0);
 });
 
-test("admin mobile: grouped navigation retains all tools and closes after choosing a destination", async ({
+test("admin no celular: o menu da equipe e a busca levam às ferramentas e fecham depois da escolha", async ({
   page,
   context,
 }) => {
   await mockAccount(context, "admin");
   await page.setViewportSize({ width: 375, height: 900 });
   await page.goto("/admin");
-  const menu = page.locator(".ws-admin-menu");
-  await menu.locator("summary").click();
-  const nav = menu.getByRole("navigation", {
-    name: "Menu do admin",
-    exact: true,
-  });
-  await expect(nav.getByRole("link")).toHaveCount(9);
-  await nav
-    .getByRole("link", { name: "Central de Agentes", exact: true })
+  const cabecalho = page.locator("header.mhead");
+  await cabecalho.getByRole("button", { name: "Abrir menu", exact: true }).click();
+  const folha = page.getByRole("dialog", { name: "Menu", exact: true });
+  await expect(folha).toBeVisible();
+  await expect(
+    folha.locator('nav[aria-label="Menu da equipe"] > ul > li > a'),
+  ).toHaveText([
+    ROTULOS_MENU_EQUIPE.carteira,
+    ROTULOS_MENU_EQUIPE.clinica,
+    ROTULOS_MENU_EQUIPE.conferencia,
+  ]);
+  await page.keyboard.press("Escape");
+  await expect(folha).not.toBeVisible();
+  await cabecalho.getByRole("button", { name: "Buscar tela", exact: true }).click();
+  const busca = page.getByRole("dialog", { name: "Buscar tela" });
+  await expect(busca).toBeVisible();
+  await busca.getByRole("searchbox").fill("Central de Agentes");
+  await busca
+    .getByRole("navigation", { name: "Resultados da busca" })
+    .getByRole("link", { name: /Central de Agentes/ })
+    .first()
     .click();
   await expect(page).toHaveURL(/\/admin\/agentes$/);
-  await expect(menu).not.toHaveAttribute("open", "");
   await expect(
     page
       .getByRole("heading", { name: "Central de Agentes", exact: true })
       .first(),
   ).toBeVisible();
+  await expect(busca).not.toBeVisible();
 });
