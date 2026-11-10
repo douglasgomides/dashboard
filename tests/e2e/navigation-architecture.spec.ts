@@ -81,7 +81,13 @@ test("task search leads straight to the weekly planner and closes for a differen
 for (const profile of ["admin", "viewer"] as const) {
   test(`commercial results remain restricted and are categorized under Comercial for ${profile}`, async ({ page, context }) => {
     await mockAccount(context, profile);
+    // O papel do viewer chega por uma leitura própria de client_members (client_id e user_id). Enquanto ela não volta, o menu ainda
+    // mostra as telas de equipe; só depois dela o menu chega ao estado final. O teste espera esse estado antes de afirmar.
+    const papelCarregado = profile === "viewer"
+      ? page.waitForResponse((r) => new URL(r.url()).pathname === "/rest/v1/client_members" && r.url().includes("client_id=eq.") && r.url().includes("user_id=eq."))
+      : Promise.resolve();
     await page.goto(`/${CID}/crm-painel`);
+    await papelCarregado;
     const commercial = page.getByRole("navigation", { name: "Telas de Comercial", exact: true });
     const result = commercial.getByRole("link", { name: "Resultados por origem do CRM", exact: true });
     await expect(result).toHaveCount(profile === "admin" ? 1 : 0);
@@ -90,6 +96,7 @@ for (const profile of ["admin", "viewer"] as const) {
       await page.getByRole("button", { name: "Equipe e configuração", exact: true }).click();
       await expect(page.getByRole("navigation", { name: "Equipe", exact: true }).getByRole("link", { name: "Resultados por origem do CRM", exact: true })).toHaveCount(0);
     }
-    await expect(commercial.getByRole("link", { name: "Guia de organização do CRM", exact: true })).toBeVisible();
+    // Estado final: o guia é tela de equipe (src/lib/nav.ts), então o admin o vê e o viewer, com o papel já carregado, não.
+    await expect(commercial.getByRole("link", { name: "Guia de organização do CRM", exact: true })).toHaveCount(profile === "admin" ? 1 : 0);
   });
 }

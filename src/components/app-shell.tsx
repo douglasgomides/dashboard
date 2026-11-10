@@ -115,11 +115,14 @@ export function BottomSheet({
   aberto,
   onFechar,
   titulo,
+  origem,
   children,
 }: {
   aberto: boolean;
   onFechar: () => void;
   titulo: string;
+  /** Origem declarada para o log por rota (data-origem): links dentro da folha gravam menu ou busca. */
+  origem?: "menu" | "busca";
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -140,6 +143,7 @@ export function BottomSheet({
       ref={ref}
       className="workspace-dialog"
       aria-label={titulo}
+      data-origem={origem}
       onCancel={(e) => {
         e.preventDefault();
         onFechar();
@@ -346,7 +350,7 @@ export function AppShell({
       <a className="workspace-skip" href="#workspace-content">
         Ir para o conteúdo
       </a>
-      <aside aria-label="Menu principal">
+      <aside aria-label="Menu principal" data-origem="menu">
         <div className="brand">
           <ProductBrand product="nexo" dark />
           <button
@@ -527,7 +531,7 @@ export function AppShell({
           {children}
         </main>
       </div>
-      <nav className="bottomnav" aria-label="Áreas">
+      <nav className="bottomnav" aria-label="Áreas" data-origem="menu">
         {atalhosMobile.map((a) => (
           <TabLink
             key={a.id}
@@ -570,6 +574,7 @@ export function AppShell({
         aberto={mais}
         onFechar={() => setMais(false)}
         titulo="Navegar no Nexo"
+        origem="menu"
       >
         <p className="workspace-menu-help">
           Escolha o que você precisa fazer em {nome}.
@@ -656,6 +661,7 @@ export function AppShell({
         <nav
           className="workspace-search-results"
           aria-label="Resultados da busca"
+          data-origem="busca"
         >
           {encontrados.map(({ tab, area: grupo }) => (
             <TabLink
