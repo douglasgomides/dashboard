@@ -62,3 +62,8 @@ Ver 03-RESEARCH.md (registro novo `src/lib/registro-de-telas.ts`; `nav.ts` e men
 ---
 *Phase: 03-menu-da-equipe-esconder-com-o-log-gravando*
 *Context gathered: 2026-11-09*
+
+## Atualização 09/11/2026 (João)
+
+- **D-06 revisada:** João liberou publicar a Fase 3 no mesmo dia em que ficar pronta ("eu libero ir hoje"), sem esperar os 7 dias de registro. O log começou em 2026-11-10 00:43 UTC; os números de uso das telas escondidas continuam sendo lidos depois, para revisar o que ficou escondido (esconder ≠ apagar, D-07).
+- Publicação: VPS (serviço docker `doctor-creator-hub`), autorizada pelo João para toda fase aprovada.
