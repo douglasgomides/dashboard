@@ -1,4 +1,5 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { CID, mockAccount } from "./fixtures";
 import { LINKS_DO_MEDICO } from "./links-do-medico";
 import { ROTULOS_MENU_EQUIPE } from "../../src/lib/registro-de-telas";
@@ -466,3 +467,47 @@ test("admin a 375 em /admin: Buscar tela com texto no cabeçalho e a folha Menu 
   await expect(itensDaFolha(folha)).toHaveText(ROTULOS);
   await expect(folha.getByRole("button", { name: "Sair da conta", exact: true })).toBeVisible();
 });
+
+// --- 03-06, V7: o menu, o cabeçalho, a folha e a busca passam no axe (wcag2a e wcag2aa), com reducedMotion reduce ---
+
+async function semViolacoes(page: Page, seletor: string) {
+  const audit = await new AxeBuilder({ page }).include(seletor).withTags(["wcag2a", "wcag2aa"]).analyze();
+  expect(audit.violations).toEqual([]);
+}
+
+test("axe a 1440: o menu da barra na casca da clínica e na casca /admin", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}`);
+  await expect(aside(page).getByRole("navigation", { name: "Menu da equipe" })).toBeVisible();
+  await semViolacoes(page, 'aside[aria-label="Menu principal"]');
+  await abrirAdmin(page);
+  await expect(asideAdmin(page).getByRole("navigation", { name: "Menu da equipe" })).toBeVisible();
+  await semViolacoes(page, 'aside[aria-label="Menu do admin"]');
+});
+
+for (const caminho of [`/${CID}`, "/admin"]) {
+  test(`axe a 375 em ${caminho === "/admin" ? "/admin" : "/<clínica>"}: cabeçalho do celular, folha Menu e Buscar tela com funil`, async ({ page, context }) => {
+    await mockAccount(context, "admin");
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto(caminho);
+    const abrir = cabecalho(page).getByRole("button", { name: "Abrir menu", exact: true });
+    await expect(abrir).toBeVisible();
+    await semViolacoes(page, "header.mhead");
+
+    await abrir.click();
+    const folha = page.getByRole("dialog", { name: "Menu", exact: true });
+    await expect(folha).toBeVisible();
+    await expect(itensDaFolha(folha)).toHaveText(ROTULOS);
+    await semViolacoes(page, "dialog[open]");
+    await page.keyboard.press("Escape");
+    await expect(folha).not.toBeVisible();
+
+    await cabecalho(page).getByRole("button", { name: "Buscar tela", exact: true }).click();
+    const busca = page.getByRole("dialog", { name: "Buscar tela" });
+    await expect(busca).toBeVisible();
+    await busca.getByRole("searchbox").fill("funil");
+    await expect(busca.getByRole("navigation", { name: "Resultados da busca" }).getByRole("link").first()).toBeVisible();
+    await semViolacoes(page, "dialog[open]");
+  });
+}
