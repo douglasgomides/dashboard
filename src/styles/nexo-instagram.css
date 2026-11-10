@@ -441,3 +441,24 @@ a.ig-vitrine__item:focus-visible { outline: 2px solid var(--b1); outline-offset:
 .ig-mapa-calor__hora { text-align: center; }
 .ig-mapa-calor__dia { align-self: center; font-size: 14px; }
 .ig-mapa-calor__celula { display: block; height: 22px; border-radius: 5px; }
+
+/* Consultar publicações: célula do post na tabela, matriz tema × formato, próximos ângulos e galeria do explorador. */
+.ig-post-celula { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.ig-post-celula__texto { display: grid; min-width: 0; max-width: 340px; }
+.ig-post-celula__texto a, .ig-post-celula__texto > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: var(--text); }
+.ig-post-celula__texto small { font-size: 13px; color: var(--muted-ink); }
+.ig-celula { display: inline-grid; justify-items: end; min-width: 84px; padding: 6px 8px; border-radius: 8px; background: var(--field); color: var(--muted-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ig-celula small { font-size: 12px; font-weight: 500; }
+.ig-angulo { display: grid; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--field); font-size: 14px; line-height: 21px; font-weight: 500; color: var(--text-2); }
+.ig-angulo > b { font-size: 15.5px; color: var(--text); }
+.ig-galeria { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.ig-galeria__item { display: grid; gap: 6px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--white); color: var(--text); text-decoration: none; }
+.ig-galeria__img { position: relative; display: block; }
+.ig-galeria__nums { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; gap: 6px; padding: 14px 8px 6px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--white); background: linear-gradient(transparent, var(--text)); }
+.ig-galeria__nums > span { display: inline-flex; align-items: center; gap: 3px; }
+.ig-galeria__texto { padding: 0 10px; font-size: 14px; line-height: 20px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ig-galeria__rodape { display: flex; justify-content: space-between; gap: 6px; padding: 0 10px 10px; font-size: 13px; color: var(--muted-ink); }
+.nexo-ig .ig-sub { display: flex; align-items: center; gap: 6px; }
+
+/* Conteúdo × Comercial: célula do mapa de dia da semana e hora dentro da tabela. */
+.ig-celula-calor { display: inline-grid; place-items: center; min-width: 28px; height: 26px; border-radius: 6px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }

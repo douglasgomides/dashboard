@@ -2,52 +2,99 @@ import { test, expect, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 import { mockInstagram } from "./instagram-dados";
 
-// Telas de Marketing/Instagram no desenho do painel: abrem com os números em cartões, sem rolagem lateral, e o
-// "como é calculado" e as partes recolhidas abrem pelo teclado.
+// Telas de Marketing/Instagram no molde novo (Phase 3.1, plano 05): cada uma abre com o cabeçalho, a leitura do período no
+// topo (o que aconteceu com o número ao lado, ou "Sem leitura:" com quem resolve), até 4 cartões, um gráfico e o resto em
+// Detalhes. Sem Recharts, sem tabela fora de NxTabela e sem rolagem lateral, em 375 e 1440 px.
 
 const semRolagemLateral = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 
-const TELAS: { rota: string; numeros: string; kpis: number; pergunta: RegExp }[] = [
-  { rota: "conteudo", numeros: "Números do período", kpis: 4, pergunta: /^O perfil está crescendo/ },
-  { rota: "audiencia", numeros: "Números do público", kpis: 4, pergunta: /^Quem acompanha o perfil/ },
-  { rota: "top", numeros: "Números do ranking", kpis: 3, pergunta: /^Quais publicações mais se destacaram/ },
-  { rota: "posts", numeros: "Números das publicações", kpis: 4, pergunta: /^O que foi publicado/ },
-  { rota: "conteudo-comercial", numeros: "Números do cruzamento", kpis: 4, pergunta: /^O conteúdo está trazendo conversa/ },
+const TELAS: { rota: string; cartoes: number; pergunta: RegExp }[] = [
+  { rota: "conteudo", cartoes: 4, pergunta: /^O perfil está crescendo/ },
+  { rota: "audiencia", cartoes: 4, pergunta: /^Quem acompanha o perfil/ },
+  { rota: "top", cartoes: 3, pergunta: /^Quais publicações mais se destacaram/ },
+  { rota: "posts", cartoes: 4, pergunta: /^O que foi publicado/ },
+  { rota: "conteudo-comercial", cartoes: 4, pergunta: /^O conteúdo está trazendo conversa/ },
 ];
 
 for (const width of [375, 1440]) {
   for (const t of TELAS) {
-    test(`/${t.rota}: cartões de número no topo, sem rolagem lateral e método pelo teclado em ${width}px`, async ({ page, context }) => {
+    test(`/${t.rota}: leitura no topo, até 4 cartões, sem Recharts nem tabela crua e sem rolagem lateral em ${width}px`, async ({ page, context }) => {
       await mockAccount(context, "admin");
       await mockInstagram(context);
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/${CID}/${t.rota}?preset=30d`);
 
-      await expect(page.getByRole("heading", { level: 2, name: t.pergunta })).toBeVisible();
-      const numeros = page.getByRole("region", { name: t.numeros, exact: true });
-      await expect(numeros.locator(".nx-kpi")).toHaveCount(t.kpis);
-      await expect(numeros.locator(".nx-kpi .ws-metric-value").first()).toBeVisible();
-      // Os números vêm antes de qualquer gráfico ou tabela.
-      const topoNumeros = (await numeros.boundingBox())!.y;
-      const primeiroCartao = page.locator("main .nx-card").first();
-      expect(topoNumeros).toBeLessThan((await primeiroCartao.boundingBox())!.y);
+      await expect(page.getByRole("heading", { level: 1, name: t.pergunta })).toBeVisible();
+
+      // A leitura do período é a primeira coisa depois do cabeçalho: "O que aconteceu" com o número ao lado,
+      // ou "Sem leitura:" com o motivo e quem resolve.
+      const leitura = page.getByRole("region", { name: "Leitura do período", exact: true });
+      await expect(leitura).toBeVisible();
+      await expect(leitura.getByText("O que aconteceu", { exact: true }).or(leitura.getByText(/^Sem leitura:/))).toBeVisible();
+      await expect(leitura.locator(".nx-leitura__num").first().or(leitura.getByText(/^Sem leitura:/))).toBeVisible();
+      await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
+
+      // Cartões: até 4, depois da leitura.
+      const cartoes = page.locator(".nx-pagina__cartoes > *");
+      expect(await cartoes.count()).toBeGreaterThan(0);
+      expect(await cartoes.count()).toBeLessThanOrEqual(4);
+      await expect(page.locator(".nx-pagina__cartoes .nx-kpi")).toHaveCount(t.cartoes);
+      await expect(page.locator(".nx-pagina__cartoes .nx-kpi .ws-metric-value").first()).toBeVisible();
+      expect((await leitura.boundingBox())!.y).toBeLessThan((await cartoes.first().boundingBox())!.y);
+
+      // Nenhum gráfico do Recharts e nenhuma tabela fora da peça NxTabela.
+      await expect(page.locator(".recharts-wrapper")).toHaveCount(0);
+      expect(await page.locator("table").evaluateAll((ts) => ts.filter((x) => !x.closest('[data-peca="tabela"]')).length)).toBe(0);
       expect(await semRolagemLateral(page)).toBe(true);
 
-      // "Como ler" recolhido: abre com Enter e mostra o texto.
-      const metodo = page.locator("main details.ig-metodo").first();
-      await metodo.locator("summary").focus();
-      await page.keyboard.press("Enter");
-      await expect(metodo).toHaveAttribute("open", "");
-      await expect(metodo.locator(".ig-metodo__corpo")).toBeVisible();
-      expect(await semRolagemLateral(page)).toBe(true);
+      await page.screenshot({ path: `test-results/redesenho/instagram-${t.rota}-${width}.png`, fullPage: true });
+
+      // Detalhes abre pelo teclado.
+      const detalhes = page.locator(".nx-pagina__detalhe > details").first();
+      if (await detalhes.count()) {
+        await detalhes.locator("summary").first().focus();
+        await page.keyboard.press("Enter");
+        await expect(detalhes).toHaveAttribute("open", "");
+        expect(await semRolagemLateral(page)).toBe(true);
+      }
     });
   }
+
+  test(`Analisar desempenho: sem projeção nos cartões nem na leitura em ${width}px`, async ({ page, context }) => {
+    await mockAccount(context, "admin");
+    await mockInstagram(context);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/${CID}/conteudo?preset=30d`);
+    await expect(page.getByRole("region", { name: "Leitura do período", exact: true })).toBeVisible();
+    await expect(page.locator(".nx-pagina__cartoes").getByText("Projeção em 30 dias")).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Leitura do período", exact: true }).getByText(/projeção|ritmo atual|previsão/i)).toHaveCount(0);
+  });
+
+  test(`Conteúdo × Comercial: a origem por post é "não medida" e nenhum post "trouxe" contatos em ${width}px`, async ({ page, context }) => {
+    await mockAccount(context, "admin");
+    await mockInstagram(context);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/${CID}/conteudo-comercial?preset=30d`);
+    // Aviso fixo na página, com quem resolve.
+    const aviso = page.locator('[data-peca="aviso"]').filter({ hasText: "Sem leitura: origem por post não medida" });
+    await expect(aviso).toBeVisible();
+    await expect(aviso.getByText(/Quem resolve: Equipe Doctor Creator/)).toBeVisible();
+    // E o último item de "Ver mais" da leitura, também com a equipe da Doctor Creator.
+    const leitura = page.getByRole("region", { name: "Leitura do período", exact: true });
+    await leitura.locator("summary", { hasText: /^Ver mais/ }).click();
+    await expect(leitura.getByText(/origem por post não medida/)).toBeVisible();
+    await expect(leitura.getByText(/Quem resolve: Equipe Doctor Creator/).last()).toBeVisible();
+    const texto = await page.locator("main").innerText();
+    expect(texto).not.toMatch(/trouxe\s+\d+\s*%/i);
+    expect(await semRolagemLateral(page)).toBe(true);
+  });
 
   test(`Público do Instagram: abas trocam pelas setas do teclado em ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "admin");
     await mockInstagram(context);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/audiencia?preset=30d`);
+    await page.locator(".nx-pagina__detalhe > details > summary").click();
     const abas = page.getByRole("tablist", { name: "Partes do público" });
     await abas.getByRole("tab", { name: "Quem segue" }).focus();
     await page.keyboard.press("ArrowRight");
@@ -57,7 +104,7 @@ for (const width of [375, 1440]) {
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("ArrowRight");
     await expect(page.getByRole("heading", { name: "Seguidores online" })).toBeVisible();
-    await expect(page.locator(".nx-colunas")).toBeVisible();
+    await expect(page.locator(".nx-colunas").first()).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
   });
 
@@ -66,10 +113,11 @@ for (const width of [375, 1440]) {
     await mockInstagram(context);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/posts?preset=30d`);
-    const botao = page.getByRole("button", { name: /^Mais análises dos posts/ });
-    await botao.focus();
+    await page.locator(".nx-pagina__detalhe > details > summary").click();
+    const resumo = page.locator("summary", { hasText: /^Mais análises dos posts/ });
+    await resumo.focus();
     await page.keyboard.press("Enter");
-    await expect(botao).toHaveAttribute("aria-expanded", "true");
+    await expect(resumo.locator("..")).toHaveAttribute("open", "");
     await expect(page.getByRole("heading", { name: "Alcance por tema e por formato" })).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
   });
