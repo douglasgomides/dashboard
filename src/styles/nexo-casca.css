@@ -423,3 +423,29 @@
   font-size: 16px;
   line-height: 24px;
 }
+
+/* Todas as telas da clínica no menu da equipe (09/11/2026, pedido do João): títulos das áreas e itens compactos. */
+.app.product-workspace:not(.sap-workspace) .nx-subgrupo-titulo {
+  margin: 10px 0 2px 33px;
+  color: var(--text-3, var(--text-2));
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.app.product-workspace:not(.sap-workspace) .nx-subgrupo .nx-subtela {
+  min-height: 34px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-menu--folha .nx-subgrupo .nx-subtela {
+  min-height: 44px;
+  font-size: 16px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-subgrupo ul {
+  margin-top: 0;
+}
+.app.product-workspace:not(.sap-workspace) > aside.nx-barra {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}

@@ -6,6 +6,7 @@ import {
   itemAtualDoMenu,
   itensMenuEquipe,
   linkDaTela,
+  telasPorArea,
   type LinkDaTela,
   type PerfilEquipe,
   type TelaDoRegistro,
@@ -114,7 +115,10 @@ export function MenuEquipe({ perfil, clientId, pathname, dateRange, recolhida = 
                 <span className={mostraRotulo ? "nx-menu-rotulo" : "sr-only"}>{item.rotulo}</span>
                 {folha && <IconeTabler nome="chevron-right" tamanho={16} className="nx-menu-seta" />}
               </LinkDoRegistro>
-              {on && mostraRotulo && item.subtelas.length > 0 && (
+              {on && mostraRotulo && item.chave === "clinica" && clientId && (
+                <TodasAsTelasDaClinica rotulo={item.rotulo} perfil={perfil} clientId={clientId} aqui={aqui} dateRange={dateRange} onEscolher={onEscolher} />
+              )}
+              {on && mostraRotulo && item.chave !== "clinica" && item.subtelas.length > 0 && (
                 <nav aria-label={`Telas de ${item.rotulo}`} className="nx-subtelas">
                   <ul>
                     {item.subtelas.map((sub) => {
@@ -142,6 +146,52 @@ export function MenuEquipe({ perfil, clientId, pathname, dateRange, recolhida = 
           );
         })}
       </ul>
+    </nav>
+  );
+}
+
+// 09/11/2026 (João): "tu tirou tudo que dava inteligência". Todas as telas da clínica voltam ao menu da equipe, agrupadas
+// pelas áreas de antes (Resultados, Marketing/Instagram, Comercial/anúncios...). Nada fica só na busca.
+const NA_CLINICA_ROTA = "/_authenticated/$clientId";
+
+function TodasAsTelasDaClinica({
+  rotulo,
+  perfil,
+  clientId,
+  aqui,
+  dateRange,
+  onEscolher,
+}: {
+  rotulo: string;
+  perfil: PerfilEquipe;
+  clientId: string;
+  aqui: string;
+  dateRange?: DateRangeState;
+  onEscolher?: () => void;
+}) {
+  const grupos = telasPorArea(perfil, { desenvolvimento: import.meta.env.DEV })
+    .map((g) => ({ area: g.area, telas: g.telas.filter((t) => t.rota.startsWith(NA_CLINICA_ROTA)) }))
+    .filter((g) => g.telas.length > 0);
+  return (
+    <nav aria-label={`Telas de ${rotulo}`} className="nx-subtelas">
+      {grupos.map((g) => (
+        <div key={g.area} className="nx-subgrupo">
+          <p className="nx-subgrupo-titulo">{g.area}</p>
+          <ul>
+            {g.telas.map((sub) => {
+              const link = linkDaTela(sub, clientId);
+              const subAtual = !!link && caminhoDoLink(link) === aqui;
+              return (
+                <li key={sub.rota + (sub.busca?.visao ?? "")}>
+                  <LinkDoRegistro tela={sub} clientId={clientId} dateRange={dateRange} className="nx-subtela" atual={subAtual} onClick={onEscolher}>
+                    {sub.rotulo}
+                  </LinkDoRegistro>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
     </nav>
   );
 }
