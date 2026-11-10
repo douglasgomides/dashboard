@@ -17,7 +17,10 @@ export const VERSAO_REGRAS_RESULTADOS = 2;
 
 /** Números de pessoas do período (os mesmos de Pacientes do período). null em um número = a fonte não mediu. */
 export interface FunilDoPeriodo {
+  /** Soma dos dias do período (histórico diário), a mesma base do anterior: é daqui que sai a variação. */
   atual: NumerosLeitura;
+  /** Os números dos cartões (pessoas diferentes no período). Decidem se há dado e se o funil está fora de ordem. */
+  pessoas?: NumerosLeitura;
   /** Período anterior de mesmo tamanho. null = sem comparação medida. */
   anterior?: NumerosLeitura | null;
   /** Números que vieram sem medida, com o motivo da fonte: viram ressalva, nunca zero. */
@@ -90,7 +93,8 @@ export function fatosDeResultadosComAreas(e: EntradaFatosResultados): { fatos: F
   const ateFechado = iso(ms(fim) - cob.diasAbertos * DIA);
   const problemasAltos = r.insights.filter((i) => i.id.startsWith("dado-") && i.tom === "ruim").length;
   const funil = e.funil ?? null;
-  const temFunil = !!funil && Object.values(funil.atual).some((v) => v != null);
+  const pessoas = funil ? (funil.pessoas ?? funil.atual) : null;
+  const temFunil = !!pessoas && Object.values(pessoas).some((v) => v != null);
   const igVazio = cob.diasComDado === 0;
   const semMedida = funil?.semMedida ?? [];
   const portao = portaoDoPeriodo({
@@ -103,7 +107,7 @@ export function fatosDeResultadosComAreas(e: EntradaFatosResultados): { fatos: F
     fontes: [{ nome: "Instagram", status: null, ultimoDado: cob.ultimoDado }],
     rastreio: e.rastreio ?? null,
     selo: e.selo ?? null,
-    funilInconsistente: funil ? funilForaDeOrdem(funil.atual) : false,
+    funilInconsistente: pessoas ? funilForaDeOrdem(pessoas) : false,
     problemasAltos,
     // Sem Instagram, mas com números de pessoas, a amostra do Instagram não manda na conclusão.
     n: igVazio && temFunil ? undefined : cob.diasComDado,
@@ -192,4 +196,79 @@ export function fatosDeResultadosComAreas(e: EntradaFatosResultados): { fatos: F
 
 export function fatosDeResultados(e: EntradaFatosResultados): FatosDaTela {
   return fatosDeResultadosComAreas(e).fatos;
+}
+
+// ---------- comparação com o período anterior (compartilhada com Pacientes do período) ----------
+
+const CAMPOS_DO_FUNIL = ["mandaram_mensagem", "agendaram", "fecharam"] as const;
+const ROTULO_DO_FUNIL: Record<(typeof CAMPOS_DO_FUNIL)[number], string> = { mandaram_mensagem: "Chamaram", agendaram: "Agendaram", fecharam: "Fecharam" };
+
+const somaDias = (d: string, n: number) => iso(ms(d) + n * DIA);
+const diasEntre = (a: string, b: string) => Math.round((ms(b) - ms(a)) / DIA) + 1;
+
+/**
+ * O dia de hoje ainda não está fechado no histórico: a comparação usa só dias fechados, com o mesmo número de dias nos
+ * dois lados. Mesma conta que Pacientes do período já fazia.
+ */
+export function periodosDeComparacao(start: string, end: string, hoje: string): { fimFechado: string; dias: number; anterior: { start: string; end: string } } {
+  const fimFechado = end >= hoje ? somaDias(hoje, -1) : end;
+  const ant = periodoAnterior(start, fimFechado);
+  return { fimFechado, dias: diasEntre(start, fimFechado), anterior: { start: ant.de, end: ant.ate } };
+}
+
+/** Soma dia a dia de cada número. null = o histórico não cobre pelo menos 80% dos dias (não dá para comparar). */
+export function somaDiaria(linhas: ({ dia: string } & Record<string, unknown>)[], dias: number, campos: readonly string[]): Record<string, number | null> {
+  const out: Record<string, number | null> = {};
+  // Sem nenhum dia fechado no período (ex.: só hoje), não há o que somar: nunca zero.
+  if (dias < 1) {
+    for (const k of campos) out[k] = null;
+    return out;
+  }
+  for (const k of campos) {
+    const medidas = linhas.filter((l) => l[k] != null);
+    out[k] = medidas.length >= Math.ceil(dias * 0.8) ? medidas.reduce((s, l) => s + Number(l[k]), 0) : null;
+  }
+  return out;
+}
+
+/** Variação contra o período anterior: só quando os dois lados foram medidos e o anterior não é zero. */
+export type VariacaoPct = { pct: number; tom: "up" | "down" | "flat" };
+export function variacaoPct(atual: number | null | undefined, antes: number | null | undefined): VariacaoPct | null {
+  if (atual == null || antes == null || antes <= 0) return null;
+  const pct = Math.round(((atual - antes) / antes) * 100);
+  return { pct, tom: pct === 0 ? "flat" : pct > 0 ? "up" : "down" };
+}
+
+/** O que a tela de pessoas devolve de cada número (o que a leitura precisa dele). */
+interface NumeroDoBanco {
+  valor: number | null;
+  motivo_sem_dado?: string | null;
+  responsavel?: "comercial" | "equipe_hub" | null;
+}
+
+/**
+ * Junta os números de Pacientes do período (cartões) com a soma diária dos dois períodos (variação) no formato da
+ * leitura. null = a consulta de pessoas não respondeu. Número sem medida (valor nulo) vira ressalva com o motivo da
+ * própria fonte e nunca entra na conta como zero.
+ */
+export function funilDosNumeros(e: {
+  dados: { numeros?: Partial<Record<string, NumeroDoBanco>> } | null | undefined;
+  somaAtual?: Record<string, number | null> | null;
+  somaAntes?: Record<string, number | null> | null;
+}): FunilDoPeriodo | null {
+  if (!e.dados) return null;
+  const numeros = e.dados.numeros ?? {};
+  const pessoas: NumerosLeitura = {};
+  const atual: NumerosLeitura = {};
+  const anterior: NumerosLeitura = {};
+  const semMedida: NonNullable<FunilDoPeriodo["semMedida"]> = [];
+  for (const k of CAMPOS_DO_FUNIL) {
+    const n = numeros[k];
+    pessoas[k] = n?.valor ?? null;
+    atual[k] = e.somaAtual?.[k] ?? null;
+    anterior[k] = e.somaAntes?.[k] ?? null;
+    if (n && n.valor == null) semMedida.push({ chave: k, rotulo: ROTULO_DO_FUNIL[k], motivo: n.motivo_sem_dado?.trim() || "A fonte não respondeu.", quem: n.responsavel ?? "equipe_hub" });
+  }
+  const temAnterior = CAMPOS_DO_FUNIL.some((k) => anterior[k] != null);
+  return { atual, pessoas, anterior: temAnterior ? anterior : null, semMedida };
 }

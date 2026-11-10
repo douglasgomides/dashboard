@@ -1,125 +1,89 @@
 /*
- * Tela "Resultados da clínica" no desenho da prancha "painel". Só esta tela (escopo .nexo-results-overview, que só
- * existe na rota /$clientId/), só tokens via var(). Os componentes compartilhados que a tela mostra (retorno do
- * investimento, acompanhamento, diagnóstico, recomendação) ganham aqui o cartão de borda fina e raio 18 da prancha,
- * sem mudar nas outras telas.
+ * Resultados da clínica no molde novo (Phase 3.1, plano 03). Só esta tela (escopo .nexo-results-overview, que só existe
+ * na rota /$clientId/), só tokens via var(). O topo (resumo da clínica, cartões, gráfico) é do molde (nexo-pagina.css);
+ * aqui fica o que mora dentro do detalhe recolhido: blocos de análise, textos de apoio e as linhas das listas.
  */
 
-.app.product-workspace .nexo-results-overview {
-  --nx-raio: 18px;
-}
-
-/* Número da prancha: peso 500, sem a margem e o espaçamento apertado do .ws-metric-value antigo. */
-.app.product-workspace .nexo-results-overview .nx-kpi .nx-kpi__valor {
-  margin-top: 0;
-  font-weight: 500;
-  letter-spacing: -.01em;
-}
-
-/* Cartões dos componentes compartilhados: borda fina, raio 18, sem sombra. */
-.app.product-workspace .nexo-results-overview .ws-panel,
-.app.product-workspace .nexo-results-overview .service-followup,
-.app.product-workspace .nexo-results-overview .rounded-xl.border {
-  border: 1px solid var(--line);
-  border-radius: var(--nx-raio);
-  box-shadow: none;
-}
-.app.product-workspace .nexo-results-overview .ws-panel {
-  padding: 18px;
-}
-.app.product-workspace .nexo-results-overview .ws-panel > header {
-  border-bottom-color: var(--line);
-}
-.app.product-workspace .nexo-results-overview .ws-panel h2,
-.app.product-workspace .nexo-results-overview .service-followup h2 {
-  font-size: 18px;
-  line-height: 24px;
-  font-weight: 500;
-}
-/* Números do retorno do investimento no cartão de número da prancha. */
-.app.product-workspace .nexo-results-overview .ws-panel .ws-metric {
-  border: 1px solid var(--line);
-  border-top: 1px solid var(--line);
-  border-radius: 14px;
-  box-shadow: none;
-  padding: 14px 16px 16px;
-}
-.app.product-workspace .nexo-results-overview .ws-panel .ws-metric:hover {
-  border-color: var(--b5);
-  box-shadow: var(--sombra-cartao-hover);
-}
-.app.product-workspace .nexo-results-overview .ws-panel .ws-metric-value {
-  font-weight: 500;
-  letter-spacing: -.01em;
-}
-/* Cartões dentro de cartão: raio menor. */
-.app.product-workspace .nexo-results-overview .rounded-xl .rounded-xl,
-.app.product-workspace .nexo-results-overview .nx-card .rounded-xl {
-  border-radius: 14px;
-}
-/* Recomendação em destaque: raio da prancha e o degradê da marca. O cartão traz background: var(--surface) inline, e
-   dentro de .ws-priority o --surface é branco translúcido: sem isto o texto branco some sobre o painel branco
-   (defeito de antes desta tela, que só aparece quando há recomendação). */
-.app.product-workspace .nexo-results-overview .ws-priority {
-  border-radius: var(--nx-raio);
-  background: var(--grad-brand) !important;
-}
-
-/* ---------- Todas as análises ---------- */
-.app.product-workspace .nexo-results-overview #todas-analises {
-  border: 1px solid var(--line);
-  border-radius: var(--nx-raio);
-  box-shadow: none;
-  gap: 0;
-  background: var(--white);
-}
-.app.product-workspace .nexo-results-overview #todas-analises > .nx-analises__botao {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  min-height: 76px;
-  padding: 16px 18px;
-  text-align: left;
-  background: var(--white);
-  border-radius: var(--nx-raio);
-  color: var(--text);
-}
-.app.product-workspace .nexo-results-overview #todas-analises > .nx-analises__botao:hover .nx-sq {
-  border-color: var(--b4);
-  color: var(--b1);
-}
-.app.product-workspace .nexo-results-overview #todas-analises > .nx-analises__botao:focus-visible {
-  outline: 2px solid var(--b1);
-  outline-offset: 2px;
-}
-.nexo-results-overview .nx-analises__corpo {
+.nexo-results-overview {
   display: grid;
-  gap: 18px;
-  border-top: 1px solid var(--line);
-  padding: 18px;
+  gap: 14px;
   min-width: 0;
 }
-@media (max-width: 560px) {
-  .nexo-results-overview .nx-analises__corpo { padding: 14px 12px; }
-  .app.product-workspace .nexo-results-overview #todas-analises > .nx-analises__botao { padding: 14px 12px; gap: 10px; }
+
+/* Blocos dentro de cada recolhido: uma coluna, com respiro entre os cartões. */
+.nexo-results-overview .nxr-bloco {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
 }
 
-/* Veredito do período: filete à esquerda na cor do tom. */
-.nexo-results-overview .nx-veredito {
-  border-left: 4px solid var(--line-2);
-  padding: 2px 0 2px 14px;
+.nexo-results-overview .nxr-avisos {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
 }
 
-/* Indicadores com referência: cartão de número com o valor no tamanho da prancha. */
-.nexo-results-overview .nx-metrica { align-content: start; }
-.nexo-results-overview .nx-metrica__valor {
-  font-size: 28px;
-  line-height: 32px;
-  font-weight: 500;
-  letter-spacing: -.01em;
-  font-variant-numeric: tabular-nums;
+/* Texto de apoio e frase de leitura dentro dos cartões. */
+.nexo-results-overview .nxr-texto {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
   color: var(--text);
+  overflow-wrap: anywhere;
+}
+.nexo-results-overview .nxr-apoio {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+.nexo-results-overview .nxr-lista {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text);
+}
+.nexo-results-overview .nxr-vazio {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text);
+}
+.nexo-results-overview .nxr-vazio p { margin: 0; }
+
+/* Selos do retorno e botões de ação lado a lado, quebrando linha no celular. */
+.nexo-results-overview .nxr-selos,
+.nexo-results-overview .nxr-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+/* Linha de análise: apoio em várias linhas curtas, uma abaixo da outra. */
+.nexo-results-overview .nx-row__sub {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nexo-results-overview .nx-row__fim {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+@media (max-width: 560px) {
+  .nexo-results-overview .nx-row { flex-wrap: wrap; }
+  .nexo-results-overview .nx-row__fim { justify-content: flex-start; }
 }
 
 /* Linha de horário: o botão inteiro é a linha da barra. */

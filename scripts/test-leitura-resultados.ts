@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { VERBOS_PROVISORIOS } from "../src/lib/leitura/tipos";
 import type { Fato } from "../src/lib/leitura/tipos";
 import { montarTexto, problemasDoTexto } from "../src/lib/leitura/texto";
-import { fatosDeResultados, fatosDeResultadosComAreas, VERSAO_REGRAS_RESULTADOS } from "../src/lib/leitura/fatos-resultados";
+import { fatosDeResultados, fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria, variacaoPct, VERSAO_REGRAS_RESULTADOS } from "../src/lib/leitura/fatos-resultados";
 import { resumirClinica } from "../src/lib/leitura/resumo-clinica";
 import { avaliarRastreio } from "../src/lib/rastreio-anuncios";
 import { montarResultado } from "../src/lib/resultado";
@@ -147,6 +147,24 @@ assert.equal(vazio.tipo, "sem_leitura", "sem fato, sem leitura");
 const todosOsTextos = JSON.stringify([montarTexto(completo.fatos), resumo]);
 assert.ok(!/em risco|projeção|projecao|previsão/i.test(todosOsTextos), "sem 'em risco', projeção nem previsão");
 assert.deepEqual(problemasDoTexto(montarTexto(completo.fatos)), []);
+
+// ---------- comparação com o período anterior (compartilhada com Pacientes) ----------
+assert.deepEqual(periodosDeComparacao("2026-10-11", "2026-11-10", "2026-11-10"), { fimFechado: "2026-11-09", dias: 30, anterior: { start: "2026-09-11", end: "2026-10-10" } }, "hoje fica de fora: 30 dias fechados, anterior de 30 dias");
+assert.deepEqual(periodosDeComparacao("2026-10-01", "2026-10-31", "2026-11-10").anterior, { start: "2026-08-31", end: "2026-09-30" }, "mês fechado: anterior de 31 dias");
+const diasLinhas = Array.from({ length: 10 }, (_, i) => ({ dia: `2026-10-${String(i + 1).padStart(2, "0")}`, mandaram_mensagem: 10, agendaram: i < 5 ? 2 : null }));
+assert.deepEqual(somaDiaria(diasLinhas, 10, ["mandaram_mensagem", "agendaram"]), { mandaram_mensagem: 100, agendaram: null }, "menos de 80% dos dias medidos: sem soma, nunca zero");
+assert.deepEqual(variacaoPct(120, 100), { pct: 20, tom: "up" });
+assert.deepEqual(variacaoPct(80, 100), { pct: -20, tom: "down" });
+assert.equal(variacaoPct(5, 0), null, "base zero não vira variação");
+assert.equal(variacaoPct(null, 10), null, "sem medida não vira variação");
+const funilBanco = funilDosNumeros({
+  dados: { numeros: { mandaram_mensagem: { valor: 900 }, agendaram: { valor: null, motivo_sem_dado: "As conversas ainda não chegavam ao Nexo.", responsavel: "equipe_hub" }, fecharam: { valor: 9 } } },
+  somaAtual: { mandaram_mensagem: 950, agendaram: null, fecharam: 9 }, somaAntes: { mandaram_mensagem: 800, agendaram: null, fecharam: 12 },
+});
+assert.ok(funilBanco);
+assert.equal(funilBanco!.pessoas?.agendaram, null, "agendaram sem medida continua nulo, não vira 0");
+assert.deepEqual(funilBanco!.semMedida?.map((s) => [s.chave, s.quem, s.motivo]), [["agendaram", "equipe_hub", "As conversas ainda não chegavam ao Nexo."]]);
+assert.equal(funilDosNumeros({ dados: null }), null, "a consulta de pessoas não respondeu: sem funil");
 
 // ---------- módulos puros (LEIT-02) ----------
 for (const nome of ["fatos-resultados.ts", "resumo-clinica.ts"]) {
