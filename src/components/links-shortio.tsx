@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { NxCard, NxKpi, NxListRow } from "@/components/nx/base";
+import { NxTabela } from "@/components/nx/blocos";
 
 // Links do short.gy do cliente (bio, stories, anúncios): cliques e para onde levam.
 // Atribuição automática pela bio do Instagram, @ ou nome; o que ficou sem dono aparece no Admin.
@@ -37,45 +39,36 @@ export function LinksShortio({ clientId }: { clientId: string }) {
   });
   if (!data?.length) return null;
   const total = data.reduce((s, l) => s + (Number(l.cliques_humanos ?? l.cliques_total) || 0), 0);
+  const linhas = data.map((l) => ({
+    link: (
+      <>
+        <a href={l.short_url} target="_blank" rel="noreferrer" style={{ color: "var(--b1)", textDecoration: "underline", textUnderlineOffset: 2 }}>
+          {(l.short_url ?? "").replace(/^https?:\/\//, "")}
+        </a>
+        {l.titulo && <div style={{ fontSize: 13, color: "var(--muted-ink)" }}>{l.titulo}</div>}
+      </>
+    ),
+    destino: DESTINO(l.original_url),
+    cliques: l.stats_em ? Number(l.cliques_humanos ?? l.cliques_total ?? 0).toLocaleString("pt-BR") : "—",
+    como: COMO[l.atribuicao] ?? "—",
+  }));
   return (
-    <section className="rounded-xl border p-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }} aria-label="Links rastreados">
-      <div className="flex items-start gap-3">
-        <Link2 size={18} aria-hidden className="mt-0.5 shrink-0" style={{ color: "var(--accent)" }} />
-        <div className="min-w-0 flex-1">
-          <h2 className="text-[15px] font-semibold">Links do short.gy ({data.length})</h2>
-          <p className="mt-0.5 text-xs" style={{ color: "var(--text-dim)" }}>
-            {total.toLocaleString("pt-BR")} cliques de pessoas nos últimos 30 dias (robôs fora). Cada link foi ligado a este cliente pela bio do Instagram, pelo @ ou pelo nome no link.
-          </p>
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs" style={{ color: "var(--text-dim)" }}>
-                  <th className="py-1 pr-3 font-medium">Link</th>
-                  <th className="py-1 pr-3 font-medium">Leva para</th>
-                  <th className="py-1 pr-3 text-right font-medium">Cliques (30 dias)</th>
-                  <th className="py-1 font-medium">Como foi ligado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((l) => (
-                  <tr key={l.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                    <td className="py-1.5 pr-3">
-                      <a href={l.short_url} target="_blank" rel="noreferrer" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
-                        {(l.short_url ?? "").replace(/^https?:\/\//, "")}
-                      </a>
-                      {l.titulo && <div className="text-xs" style={{ color: "var(--text-dim)" }}>{l.titulo}</div>}
-                    </td>
-                    <td className="py-1.5 pr-3">{DESTINO(l.original_url)}</td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums font-medium">{l.stats_em ? Number(l.cliques_humanos ?? l.cliques_total ?? 0).toLocaleString("pt-BR") : "—"}</td>
-                    <td className="py-1.5 text-xs" style={{ color: "var(--text-dim)" }}>{COMO[l.atribuicao] ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+    <NxCard rotulo="Links rastreados" titulo={`Links do short.gy (${data.length})`} subtitulo="Cada link foi ligado a este cliente pela bio do Instagram, pelo @ ou pelo nome no link.">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+        <NxKpi icone={<Link2 size={18} />} rotulo="Cliques de pessoas (30 dias)" valor={total.toLocaleString("pt-BR")} nota="Robôs fora" />
       </div>
-    </section>
+      <NxTabela
+        rotulo="Links do short.gy deste cliente"
+        colunas={[
+          { chave: "link", titulo: "Link" },
+          { chave: "destino", titulo: "Leva para" },
+          { chave: "cliques", titulo: "Cliques (30 dias)", numerica: true },
+          { chave: "como", titulo: "Como foi ligado" },
+        ]}
+        linhas={linhas}
+        chaveDaLinha={(_, k) => data[k].id}
+      />
+    </NxCard>
   );
 }
 
@@ -98,28 +91,30 @@ export function LinksSemCliente({ clientes }: { clientes: { id: string; name: st
     qc.invalidateQueries({ queryKey: ["shortio-sem-cliente"] });
   }
   return (
-    <section className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-      <h2 className="text-[15px] font-semibold">Links do short.gy sem cliente ({data.length})</h2>
-      <p className="text-xs" style={{ color: "var(--text-dim)" }}>Não deu para saber de quem é pela bio, @ ou nome. Escolha o cliente; a escolha não é refeita pelo sync.</p>
-      <ul className="mt-2 max-h-96 divide-y overflow-y-auto" style={{ borderColor: "var(--border)" }}>
+    <NxCard rotulo="Links do short.gy sem cliente" titulo={`Links do short.gy sem cliente (${data.length})`} subtitulo="Não deu para saber de quem é pela bio, @ ou nome. Escolha o cliente; a escolha não é refeita pelo sync.">
+      <ul className="nx-lista" style={{ maxHeight: 384, overflowY: "auto" }}>
         {data.slice(0, todos ? data.length : 5).map((l) => (
-          <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
-            <div className="min-w-0">
-              <div className="font-medium">{(l.short_url ?? "").replace(/^https?:\/\//, "")}{l.titulo ? ` · ${l.titulo}` : ""}</div>
-              <div className="truncate text-xs" style={{ color: "var(--text-dim)" }} title={String(l.original_url ?? "")}>{l.original_url}</div>
-            </div>
-            <select defaultValue="" onChange={(e) => atribuir(l.id, e.target.value)} className="rounded border px-2 py-1 text-sm" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-              <option value="">Escolher cliente…</option>
-              {clientes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+          <li key={l.id}>
+            <NxListRow
+              titulo={`${(l.short_url ?? "").replace(/^https?:\/\//, "")}${l.titulo ? ` · ${l.titulo}` : ""}`}
+              sub={<span title={String(l.original_url ?? "")}>{l.original_url}</span>}
+              fim={
+                <select defaultValue="" aria-label="Escolher cliente" onChange={(e) => atribuir(l.id, e.target.value)} style={{ minHeight: 44, borderRadius: 10, border: "1px solid var(--line-2)", padding: "0 10px", fontSize: 14, background: "var(--white)", color: "var(--text)" }}>
+                  <option value="">Escolher cliente…</option>
+                  {clientes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              }
+            />
           </li>
         ))}
       </ul>
       {data.length > 5 && (
-        <button type="button" className="dbx-link mt-3" onClick={() => setTodos(!todos)}>
-          {todos ? "Mostrar só os 5 primeiros" : `Ver todos (${data.length})`}
-        </button>
+        <div>
+          <button type="button" className="nx-botao" onClick={() => setTodos(!todos)}>
+            {todos ? "Mostrar só os 5 primeiros" : `Ver todos (${data.length})`}
+          </button>
+        </div>
       )}
-    </section>
+    </NxCard>
   );
 }

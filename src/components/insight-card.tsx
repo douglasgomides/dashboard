@@ -94,18 +94,14 @@ export function InsightCard({
   const temDetalhe = !!(i.motivoConfianca || i.risco || i.regra || i.fonte || i.etapas?.length || (compacto && i.diagnostico));
   return (
     <div data-peca="insight" style={{ minWidth: 0 }}>
-      <NxCard
-        titulo={i.titulo}
-        acao={
-          <>
-            <SeloStatus tom={i.tom} />
-            <NxTag tom="b" icone={<Gauge size={12} aria-hidden />}>
-              {ROTULO_CONFIANCA[i.confianca]}
-            </NxTag>
-            <NxTag tom="g">{ROTULO_IMPACTO[i.impacto]}</NxTag>
-          </>
-        }
-      >
+      <NxCard titulo={i.titulo}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <SeloStatus tom={i.tom} />
+          <NxTag tom="b" icone={<Gauge size={12} aria-hidden />}>
+            {ROTULO_CONFIANCA[i.confianca]}
+          </NxTag>
+          <NxTag tom="g">{ROTULO_IMPACTO[i.impacto]}</NxTag>
+        </div>
         {!compacto && <p style={LINHA}>{i.diagnostico}</p>}
         <div style={{ ...LINHA, background: "var(--field)", borderRadius: 12, padding: "10px 12px" }}>
           <b style={{ color: "var(--text)" }}>Evidência: </b>
