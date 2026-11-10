@@ -9,7 +9,7 @@ import { deLeituraResultados } from "./adaptadores";
 import { periodosDeComparacao } from "./fatos-resultados";
 import { portaoDoPeriodo } from "./portao";
 import { LIMITES } from "@/lib/limites";
-import type { Fato, type FatosDaTela, type PassoFato, type TelaId } from "./tipos";
+import type { Fato, FatosDaTela, PassoFato, TelaId } from "./tipos";
 
 /** Muda quando uma regra de fato de Pacientes muda. */
 export const VERSAO_REGRAS_PACIENTES = 1;

@@ -98,3 +98,45 @@
   .app.product-workspace .nexo-results-overview .nx-kpi .ws-info-button { width: 28px; height: 28px; }
 }
 .app.product-workspace .nexo-results-overview .nx-kpi .ws-info { align-self: flex-start; }
+
+/* Pacientes do período: botão "Ver quem são" dentro do cartão de número, link dentro de aviso e formulário de metas. */
+.nexo-results-overview .nxr-link,
+.nx-kpi .nxr-ver {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--b1);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.nexo-results-overview .nxr-link:focus-visible,
+.nx-kpi .nxr-ver:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; }
+.nexo-results-overview .nxr-form {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+}
+.nexo-results-overview .nxr-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text);
+}
+.nexo-results-overview .nxr-form input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--white);
+  color: var(--text);
+  font: inherit;
+}
+.nexo-results-overview .nxr-form input:focus-visible { outline: 2px solid var(--b1); outline-offset: 1px; }

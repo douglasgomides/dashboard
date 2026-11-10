@@ -62,7 +62,8 @@ function ddmm(menosDias: number): string {
   return `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 }
 
-const regiao = (page: Page) => page.getByRole("region", { name: "Leitura do período", exact: true });
+// Resultados da clínica lê no modo resumo (D-07): "Resumo da clínica" é a leitura da tela, com o mesmo molde.
+const regiao = (page: Page) => page.getByRole("region", { name: "Resumo da clínica", exact: true });
 
 for (const width of [375, 1440]) {
   test.describe(`leitura de Resultados a ${width}px`, () => {
@@ -70,7 +71,7 @@ for (const width of [375, 1440]) {
       await page.setViewportSize({ width, height: 900 });
     });
 
-    test("(a) com dado em dia: o que aconteceu, um número ao lado, próximo passo e quem resolve", async ({ page, context }) => {
+    test("(a) com dado em dia, no modo resumo: o que aconteceu, um número ao lado, a ação da semana e quem resolve", async ({ page, context }) => {
       await mockAccount(context, "admin");
       await instagram(context);
       await page.goto(`/${CID}?preset=30d`);
@@ -79,7 +80,7 @@ for (const width of [375, 1440]) {
       await expect(leitura).toBeVisible();
       await expect(leitura.getByText("O que aconteceu", { exact: true })).toBeVisible();
       await expect(leitura.locator(".nx-leitura__num").first()).toBeVisible();
-      await expect(leitura.getByText("Próximo passo", { exact: true })).toBeVisible();
+      await expect(leitura.getByText("Ação da semana", { exact: true })).toBeVisible();
       await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
       await expect(leitura.getByText(/Sem leitura:/)).toHaveCount(0);
       // A leitura fica dentro do molde novo, abaixo da pergunta da tela, antes do conteúdo antigo.
