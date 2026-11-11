@@ -153,6 +153,16 @@ assert.equal(destinos.get("g1"), `${C}/posts`, "o fato de publicações vai para
 const proximoExcluido = acoesDaHoje(sintetica([fato("agendaram", "ruim", 3), fato("x", "atencao", 2), fato("y", "ruim", 2)], [passo("agendaram"), passo("x"), passo("y")]));
 assert.deepEqual(ids(proximoExcluido), ["y", "x"], "sem a excluída, o primeiro válido (por peso e tom) vira o Próximo");
 
+// O Próximo é a Ação da semana mesmo quando outra fonte traz o mesmo fato com peso maior (id repetido entre Resultados e Desempenho).
+const repetidoEntreFontes = acoesDaHoje({
+  ...sintetica([fato("topo", "ruim", 3), fato("fm", "bom", 1)], [passo("topo"), passo("fm", { texto: "o formato de Resultados" })]),
+  extras: [{ tela: "conteudo", rota: `${C}/conteudo`, fatos: tela([fato("fm", "bom", 3)], [passo("fm", { texto: "o formato do Desempenho" })], { tela: "conteudo" }) }],
+});
+assert.deepEqual(ids(repetidoEntreFontes), ["topo", "fm"], "o mesmo fato em duas fontes vira uma ação só");
+// Quando a Ação da semana é a segunda do resumo (a primeira não entra), ela ainda é o Próximo.
+const daSemanaNaoPrimeira = acoesDaHoje(sintetica([fato("agendaram", "ruim", 3), fato("sem", "bom", 1), fato("alto", "ruim", 3)], [passo("agendaram"), passo("sem"), passo("alto")]));
+assert.deepEqual(ids(daSemanaNaoPrimeira), ["alto", "sem"], "sem a primeira (excluída) a Hoje parte do melhor colocado");
+
 // ---------- destino de cada ação ----------
 const insight = (id: string, rota: string | undefined, area: Insight["area"] = "conteudo"): Insight => ({
   id, area, tom: "ruim", titulo: `O alcance do grupo ${id} mudou no período.`, diagnostico: "Mudou.", evidencia: `alcance de ${id}: 1.200`,
@@ -221,6 +231,11 @@ const semFatoId = acoesDaHoje(sintetica([fato("ok", "atencao", 1)], [{ verbo: "r
 assert.deepEqual(ids(semFatoId), ["ok"], "passo sem fatoId não entra");
 const neutro = acoesDaHoje(sintetica([fato("n", "neutro", 3), fato("ok", "atencao", 1)], [passo("n"), passo("ok")]));
 assert.deepEqual(ids(neutro), ["ok"], "fato neutro não é conclusão e não vira ação");
+
+// Insight com evidência longa demais para virar um número só (mais de 220 caracteres): sem número, a ação não entra.
+const evidenciaLonga = `Reels: alcance mediano 1.340, salvamento 0,5% (10 posts) · ${"Carrossel: alcance mediano 1.380, salvamento 0,5% (10 posts) · ".repeat(4)}`;
+const comEvidenciaLonga = acoesDaHoje({ fatos: tela([], []), porArea: semAreas([]), insights: [{ ...insight("ev", "/$clientId/posts"), evidencia: evidenciaLonga }] });
+assert.deepEqual(ids(comEvidenciaLonga), [], "evidência longa demais não vira número: a Hoje não inventa um trecho dela");
 
 // ---------- repetidas viram uma ----------
 const mesmaFrase = acoesDaHoje(sintetica([fato("m1", "ruim", 3), fato("m2", "atencao", 2)], [passo("m1", { texto: "os posts do mesmo grupo" }), passo("m2", { texto: "os posts do mesmo grupo" })]));

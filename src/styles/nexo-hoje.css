@@ -1,0 +1,163 @@
+/* O que fazer hoje (Phase 3.1.1, plano 05, D-07): saudação grande, chips de estado com bolinha, o cartão de destaque "Próximo" em
+   degradê suave e o cartão de cada ação. Só tokens de nexo-system.css, peso de letra nunca abaixo de 500, alvo de toque de
+   44 px (o da pílula vem de nexo-cartoes.css), movimento só sem reduced-motion. Escopo: só a casca do Nexo fora do SAP. */
+
+/* ---------- Página ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-hoje {
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje .nx-hoje__nome {
+  color: var(--muted-ink);
+  font-weight: 500;
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje__leitura {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje__aviso {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Chips de contexto e de estado (a data e as fontes, com a hora do dado ao lado) ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-chip-contexto,
+.app.product-workspace:not(.sap-workspace) .nx-chip-estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+}
+.app.product-workspace:not(.sap-workspace) .nx-chip-estado__bolinha {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted-2);
+}
+.app.product-workspace:not(.sap-workspace) .nx-chip-estado[data-tom="bom"] .nx-chip-estado__bolinha {
+  background: var(--up);
+}
+.app.product-workspace:not(.sap-workspace) .nx-chip-estado[data-tom="atencao"] .nx-chip-estado__bolinha {
+  background: var(--or);
+}
+.app.product-workspace:not(.sap-workspace) .nx-chip-estado[data-tom="ruim"] .nx-chip-estado__bolinha {
+  background: var(--dn);
+}
+.app.product-workspace:not(.sap-workspace) .nx-chip-estado__hora {
+  color: var(--muted-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Próximo: cartão de destaque, degradê suave e botão escuro ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-proximo {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--b5);
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--b6) 0%, var(--white) 100%);
+  color: var(--text);
+  font-weight: 500;
+}
+.app.product-workspace:not(.sap-workspace) .nx-proximo__rotulo {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-proximo__numero {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-proximo__valor {
+  font-size: 32px;
+  line-height: 38px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-proximo__legenda {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-proximo__valor--texto {
+  font-size: 20px;
+  line-height: 28px;
+  letter-spacing: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-proximo__quem {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--muted-ink);
+}
+
+/* ---------- Cartão de cada ação (NxCartaoNumero + ação em pílula) ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-cartao-acao {
+  display: grid;
+  min-width: 0;
+  /* O texto só para leitor de tela (.sr-only) dos botões é absoluto: sem este ponto de referência ele ficaria fora da fileira
+     de cartões do celular, que rola, e criaria rolagem lateral na página. */
+  position: relative;
+}
+.app.product-workspace:not(.sap-workspace) .nx-cartao-acao > .nx-cartao {
+  height: 100%;
+  align-content: space-between;
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje__valor {
+  font-weight: 500;
+}
+/* Número longo (texto do número inteiro): tamanho de leitura, não de destaque. */
+.app.product-workspace:not(.sap-workspace) .nx-hoje__valor--texto {
+  display: block;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* ---------- Celular: número menor e cartões compactos (a Hoje cabe em 1,5 tela) ---------- */
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-proximo {
+    gap: 8px;
+    padding: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-proximo__valor {
+    font-size: 28px;
+    line-height: 34px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-proximo__valor--texto {
+    font-size: 18px;
+    line-height: 26px;
+  }
+}
+
+/* ---------- Movimento só para quem não pediu menos movimento ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .app.product-workspace:not(.sap-workspace) .nx-cartao-acao > .nx-cartao {
+    transition: box-shadow .18s ease;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-cartao-acao > .nx-cartao:hover {
+    box-shadow: var(--sombra-cartao-hover);
+  }
+}

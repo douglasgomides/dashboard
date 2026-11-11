@@ -178,6 +178,7 @@ function candidatasDeResultados(e: EntradaHoje): Candidata[] {
     const chave = `${fato.id}|${frasePasso(passo)}`;
     if (vistos.has(chave)) return;
     vistos.add(chave);
+    const insight = e.insights.find((i) => i.id === fato.id);
     const area = areaDoFato(e.porArea, fato.id, e.insights, limitacoes);
     lista.push({
       fato,
@@ -188,7 +189,7 @@ function candidatasDeResultados(e: EntradaHoje): Candidata[] {
       tela: "resultados",
       rotaPadrao: ROTA_DA_AREA[area ?? "resumo"],
       area,
-      rotaDoInsight: e.insights.find((i) => i.id === fato.id)?.acao?.rota,
+      rotaDoInsight: insight?.acao?.rota,
     });
   };
   for (const passo of passos) {
@@ -270,24 +271,25 @@ export function acoesDaHoje(e: EntradaHoje): HojeDaClinica {
     .filter((x): x is { c: Candidata; acao: AcaoDaHoje } => x.acao != null)
     .sort((a, b) => b.c.fato.peso - a.c.fato.peso || ORDEM_TOM[a.c.fato.tom] - ORDEM_TOM[b.c.fato.tom] || a.c.fonte - b.c.fonte || a.c.ordem - b.c.ordem);
 
+  // O Próximo: a "Ação da semana" de Resultados da clínica, quando ela está entre as válidas. Ela vem primeiro mesmo que outra
+  // fonte traga o mesmo fato com peso maior (o Próximo da Hoje tem de ser a mesma frase do resumo de Resultados).
+  const passosDeResultados = [e.fatos.proximoPasso, ...e.fatos.outrosPassos].filter((p): p is PassoFato => p != null);
+  const resumo = resumirClinica({ fatos: e.fatos, porArea: e.porArea, passos: passosDeResultados });
+  const fraseDaSemana = resumo.tipo === "resumo" ? resumo.acao?.frase : undefined;
+  const daSemana = fraseDaSemana ? ordenadas.find(({ c, acao }) => c.fonte === 0 && acao.frase === fraseDaSemana) : undefined;
+  const emOrdem = daSemana ? [daSemana, ...ordenadas.filter((x) => x !== daSemana)] : ordenadas;
+
   // Mesma frase ou mesmo fato viram uma só (fica a melhor colocada).
   const frases = new Set<string>();
   const ids = new Set<string>();
-  const unicas = ordenadas.filter(({ acao }) => {
+  const unicas = emOrdem.filter(({ acao }) => {
     if (frases.has(acao.frase) || ids.has(acao.id)) return false;
     frases.add(acao.frase);
     ids.add(acao.id);
     return true;
   });
 
-  // O Próximo: a "Ação da semana" de Resultados da clínica, quando ela está entre as válidas.
-  const passosDeResultados = [e.fatos.proximoPasso, ...e.fatos.outrosPassos].filter((p): p is PassoFato => p != null);
-  const resumo = resumirClinica({ fatos: e.fatos, porArea: e.porArea, passos: passosDeResultados });
-  const fraseDaSemana = resumo.tipo === "resumo" ? resumo.acao?.frase : undefined;
-  const daSemana = fraseDaSemana ? unicas.find(({ c, acao }) => c.fonte === 0 && acao.frase === fraseDaSemana) : undefined;
-  const primeira = daSemana ?? unicas[0];
-
-  const escolhidas = primeira ? [primeira, ...unicas.filter((x) => x !== primeira)].slice(0, MAXIMO_DE_ACOES) : [];
+  const escolhidas = unicas.slice(0, MAXIMO_DE_ACOES);
   const [proxima, ...outras] = escolhidas.map((x) => x.acao);
 
   const aviso = avisoDePoucasAcoes(escolhidas.length, {

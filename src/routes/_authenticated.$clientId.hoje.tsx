@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useResultado } from "@/hooks/use-resultado";
@@ -6,10 +6,10 @@ import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
 import { useResultadosDiarios } from "@/hooks/use-resultados-diarios";
 import { NxChip } from "@/components/nx-chip";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
-import { NxAcaoPilula } from "@/components/nx/cartoes";
+import { NxCartaoDaAcao, NxChipEstado, NxProximo, SaudacaoHoje } from "@/components/nx/hoje";
 import { NxCarregando, NxErro } from "@/components/nx/blocos";
-import { getRoiPeriodo } from "@/lib/client-data";
-import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
+import { getClient, getRoiPeriodo } from "@/lib/client-data";
+import { resolveDateRange } from "@/lib/date-range";
 import { variacoes } from "@/lib/diagnostico-estrategico";
 import { analyzeGrowth } from "@/lib/hub-conteudo";
 import { lerPeriodo } from "@/lib/leitura-periodo";
@@ -18,8 +18,7 @@ import { fatosDePacientes } from "@/lib/leitura/fatos-pacientes";
 import { fatosDePublicacoes, fatosDoInstagram } from "@/lib/leitura/fatos-instagram";
 import { acoesDaHoje, type EntradaHoje, type FonteDoDado } from "@/lib/leitura/fatos-hoje";
 import type { FatosDaTela, TelaId } from "@/lib/leitura/tipos";
-import { REGISTRO_DE_TELAS } from "@/lib/registro-de-telas";
-import { statusDoCliente, tomDaFonte, type LinhaFonte } from "@/lib/saude-fontes";
+import { ddmm, statusDoCliente, tomDaFonte, type LinhaFonte } from "@/lib/saude-fontes";
 
 // O que fazer hoje (Phase 3.1.1, plano 05): a primeira versão da tela Hoje da Phase 9 (D-06), na mesma rota que a Phase 9
 // evolui. De 3 a 5 ações da semana por regra fixa (fatos-hoje.ts), com o número, quem resolve e o link para a aba de onde saíram.
@@ -36,14 +35,19 @@ const C = "/_authenticated/$clientId";
 const ROTULO_DA_FONTE: Record<string, string> = { instagram: "Instagram", anuncios: "Anúncios", crm: "CRM", atendimento: "WhatsApp" };
 const ORDEM_DAS_FONTES = ["instagram", "anuncios", "crm", "atendimento"];
 
-/** Fontes com dado, na ordem do selo de frescura da casca, com o tom pela regra única (âmbar com mais de 1 dia). */
-function fontesDoCliente(linhas: LinhaFonte[] | undefined): FonteDoDado[] {
-  return ORDEM_DAS_FONTES.map((f) => (linhas ?? []).find((l) => l.fonte === f))
-    .filter((l): l is LinhaFonte => !!l && !!l.data_ate)
-    .map((l) => ({ fonte: ROTULO_DA_FONTE[l.fonte] ?? l.fonte, tom: tomDaFonte(l), ate: l.data_ate }));
+/** A hora (de São Paulo) da última leitura bem-sucedida da fonte, "03:30", quando o banco a traz. */
+function horaDaFonte(l: LinhaFonte): string | null {
+  if (!l.last_success_at) return null;
+  const t = new Date(l.last_success_at);
+  return Number.isNaN(t.getTime()) ? null : new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(t);
 }
 
-const linhaDaRota = (rota: string) => REGISTRO_DE_TELAS.find((t) => t.rota === rota && !t.busca);
+/** Fontes com dado, na ordem do selo de frescura da casca, com o tom pela regra única (âmbar com mais de 1 dia). */
+function fontesDoCliente(linhas: LinhaFonte[] | undefined): (FonteDoDado & { hora: string | null })[] {
+  return ORDEM_DAS_FONTES.map((f) => (linhas ?? []).find((l) => l.fonte === f))
+    .filter((l): l is LinhaFonte => !!l && !!l.data_ate)
+    .map((l) => ({ fonte: ROTULO_DA_FONTE[l.fonte] ?? l.fonte, tom: tomDaFonte(l), ate: l.data_ate, hora: horaDaFonte(l) }));
+}
 
 function HojePage() {
   const { clientId } = Route.useParams();
@@ -58,6 +62,7 @@ function HojePage() {
   const diario = useResultadosDiarios(clientId, start, end);
   const diarioAnterior = useResultadosDiarios(clientId, comparacao.anterior.start, comparacao.anterior.end);
   const roi = useQuery({ queryKey: ["roi-periodo", clientId, start, fim], queryFn: () => getRoiPeriodo(clientId, start, fim), staleTime: 5 * 60_000, retry: false });
+  const cliente = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId), staleTime: 5 * 60_000, retry: false });
   const estadoDasFontes = useQuery({ queryKey: ["client-sync-status", clientId], queryFn: () => statusDoCliente(clientId), staleTime: 60_000, retry: false });
   // Lista estável: a Hoje só aparece quando as consultas terminaram (nenhuma ação some ou muda de lugar depois de mostrada).
   const carregandoFontes = resultado.carregandoFontes || pessoas.isPending || diario.isPending || diarioAnterior.isPending || roi.isPending || anterior.isPending || estadoDasFontes.isPending;
@@ -107,66 +112,62 @@ function HojePage() {
     return { entrada, hoje: acoesDaHoje(entrada) };
   }, [r, start, end, hoje, funil, roi.data, pessoas.data, posts.data, metricas.data, anterior.data, temIg, fontes]);
 
+  // Topo (D-07): saudação grande, chips de contexto (clínica e dado até) e chips de estado das fontes com bolinha.
   const cabecalho = {
     tela: "hoje" as const,
     titulo: "O que fazer hoje",
     pergunta: "O que fazer esta semana?",
     decisao: "D5" as const,
+    saudacao: <SaudacaoHoje nome={cliente.data?.name} />,
     meta: (
       <>
-        <span>{formatRangeLabel({ start, end })}</span>
+        {cliente.data?.name && <span className="nx-chip-contexto">{cliente.data.name}</span>}
+        <span className="nx-chip-contexto">{`dado até ${ddmm(fim)}`}</span>
+        {fontes.map((f) => (
+          <NxChipEstado key={f.fonte} tom={f.tom} texto={f.ate ? `${f.fonte} até ${ddmm(f.ate)}` : f.fonte} hora={f.hora} />
+        ))}
         <NxChip tipo="sem-selo" />
       </>
     ),
   };
+  // O contêiner data-origem="menu" faz o log por rota contar o clique de qualquer botão da Hoje como menu (nada é gravado além disso).
+  const na = (pagina: ReactNode) => (
+    <div className="nx-hoje" data-origem="menu">
+      {pagina}
+    </div>
+  );
 
   if (metricas.isError) {
-    return (
+    return na(
       <PaginaNexo
         {...cabecalho}
         leitura={<LeituraDaTela fatos={null} carregando={false} erro="Os indicadores estão indisponíveis." semSelo />}
         corpo={<NxErro texto="Não foi possível carregar as leituras. Os indicadores estão indisponíveis no momento." onTentar={() => void metricas.refetch()} />}
-      />
+      />,
     );
   }
   if (metricas.isLoading || !r || !leitura || carregandoFontes) {
-    return <PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={null} carregando semSelo />} corpo={<NxCarregando linhas={3} />} />;
+    return na(<PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={null} carregando semSelo />} corpo={<NxCarregando linhas={3} />} />);
   }
 
   const { entrada, hoje: lista } = leitura;
   if (lista.tipo === "sem_leitura") {
     // Dado ruim: o mesmo "Sem leitura: motivo" de Resultados da clínica, com o passo para consertar e quem resolve.
-    return <PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={{ ...entrada.fatos, tela: "hoje" }} carregando={false} semSelo />} />;
+    return na(<PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={{ ...entrada.fatos, tela: "hoje" }} carregando={false} semSelo />} />);
   }
 
-  const acoes = [...(lista.proxima ? [lista.proxima] : []), ...lista.outras];
-  return (
+  // Até 4 cartões (o tipo de PaginaNexo já limita); o Próximo é o cartão de destaque da leitura, junto do aviso de poucas ações.
+  const [c1, c2, c3, c4] = lista.outras.slice(0, 4).map((a) => <NxCartaoDaAcao key={a.id} acao={a} clientId={clientId} dateRange={dateRangeState} />);
+  return na(
     <PaginaNexo
       {...cabecalho}
       leitura={
-        <section className="nx-leitura" data-peca="leitura" data-modo="leitura" aria-label="Ações da semana">
-          <ul className="nx-leitura__linhas">
-            {acoes.map((a, k) => {
-              const linha = linhaDaRota(a.rota);
-              return (
-                <li key={a.id} className="nx-leitura__linha" data-acao-hoje={a.id}>
-                  <div className="nx-leitura__corpo">
-                    <p className="nx-leitura__rotulo">{k === 0 ? "Próximo" : "Ação da semana"}</p>
-                    <NxAcaoPilula
-                      frase={a.frase}
-                      numero={a.numero.exibicao}
-                      rotuloDaSeta="Abrir a aba de origem"
-                      para={linha ? { tela: linha, clientId, dateRange: dateRangeState } : undefined}
-                    />
-                    <p className="nx-leitura__apoio">{`Quem resolve: ${a.rotuloQuem}`}</p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          {lista.aviso && <p className="nx-leitura__apoio">{lista.aviso}</p>}
+        <section className="nx-hoje__leitura" data-peca="leitura" data-modo="leitura" aria-label="Próximo e aviso">
+          {lista.proxima && <NxProximo acao={lista.proxima} clientId={clientId} dateRange={dateRangeState} />}
+          {lista.aviso && <p className="nx-hoje__aviso">{lista.aviso}</p>}
         </section>
       }
-    />
+      cartoes={lista.outras.length ? [c1, c2, c3, c4] : undefined}
+    />,
   );
 }
