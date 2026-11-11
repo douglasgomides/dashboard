@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 import { SECOES_JUNTADAS } from "../../src/lib/registro-de-telas";
-import { TELAS_DE_MEDIDA, alturaDaAbaAberta, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
+import { TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAudiencia, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 
 // Telas juntadas do médico (Phase 3.1.1, plano 01): a pasta com abas em pasta, cada aba é o caminho da tela antiga (D-04,
 // emenda de 10/11), o log grava o routeId da aba (D-06) e a pasta não busca dado. Aqui: Instagram de ponta a ponta, as outras
@@ -256,3 +256,46 @@ test("a 375 a pasta não cria rolagem lateral na página (a faixa das abas rola 
     expect(await page.locator("[data-juntada] .nx-pasta__abas ul").evaluate((ul) => getComputedStyle(ul).position)).toBe("relative");
   }
 });
+
+// D-07 (plano 02): o próximo passo da leitura é a pílula de ação com a seta escura; a seta só abre os Detalhes da própria página.
+const ABAS_DO_INSTAGRAM = [
+  ["Desempenho", "conteudo"],
+  ["Destaques", "top"],
+  ["Posts", "posts"],
+  ["Público", "audiencia"],
+] as const;
+
+for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
+  test(`D-07: ${rotulo} tem a pílula de ação na leitura e a seta abre os Detalhes sem gravar nada`, async ({ page, context }) => {
+    await mockAccount(context, "viewer");
+    await mockInstagram(context);
+    await mockAudiencia(context);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    // Só conta o que acontece depois do clique: as leituras da página (rpc por POST) já aconteceram ao abrir.
+    const escritas: string[] = [];
+    let aposOClique = false;
+    page.on("request", (r) => {
+      const { pathname } = new URL(r.url());
+      if (aposOClique && ["POST", "PATCH", "DELETE"].includes(r.method()) && pathname.startsWith("/rest/v1/") && pathname !== "/rest/v1/rota_acessos") escritas.push(`${r.method()} ${pathname}`);
+    });
+    await page.goto(`/${CID}/${sub}?preset=30d`);
+    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+    await expect(leitura).toBeVisible();
+    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+    const pilula = leitura.locator(".nx-acao-pilula").first();
+    await expect(pilula).toBeVisible();
+    await page.screenshot({ path: `test-results/redesenho/pilula-${sub}.png` });
+    const detalhes = page.locator(`[data-juntada] details#detalhes-${sub}`);
+    await expect(detalhes).toHaveCount(1);
+    await expect(detalhes).not.toHaveAttribute("open", /.*/);
+    const seta = pilula.locator(".nx-acao-pilula__seta");
+    await expect(seta).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    aposOClique = true;
+    await seta.click();
+    await expect(detalhes).toHaveAttribute("open", /.*/);
+    await expect(detalhes.locator(":scope > summary")).toBeFocused();
+    await page.waitForTimeout(300);
+    expect(escritas, `${rotulo}: a seta da pílula não grava nada`).toEqual([]);
+  });
+}

@@ -105,6 +105,10 @@
 
 /* Carregando e erro da leitura usam as peças NxCarregando e NxErro (blocos.tsx). */
 
+/* ---------- D-07 (03.1.1): a pílula de ação mora dentro da linha da leitura ---------- */
+.nx-leitura__ancora { display: block; min-width: 0; max-width: 100%; }
+.nx-leitura__ancora > .nx-acao-pilula { max-width: 100%; }
+
 @media (max-width: 560px) {
   .nx-leitura { padding: 14px 12px; }
   .nx-pagina__pergunta { font-size: 22px; line-height: 30px; }

@@ -81,6 +81,55 @@ export async function mockInstagram(context: BrowserContext) {
   });
 }
 
+/**
+ * Audiência lida ao vivo da Meta (POST /api/sync/manual, alvo "audiencia"): sem este mock a aba Público abre em erro e a medida
+ * de altura mediria a tela vazia. Dados fictícios, só leitura.
+ */
+export async function mockAudiencia(context: BrowserContext) {
+  const par = (chave: string, valor: number) => ({ chave, valor });
+  const dados = {
+    gerado_em: new Date().toISOString(),
+    periodo: { dias: 30, de: dia(30), ate: dia(0) },
+    seguidores: {
+      ok: true,
+      dados: {
+        faixa_etaria: [par("13-17", 40), par("18-24", 300), par("25-34", 900), par("35-44", 700), par("45-54", 300), par("55-64", 90), par("65+", 30)],
+        genero: [par("F", 1800), par("M", 500), par("U", 60)],
+        cidades: [par("São Paulo, São Paulo", 700), par("Campinas, São Paulo", 200), par("Santos, São Paulo", 120)],
+        paises: [par("BR", 2300), par("PT", 40)],
+      },
+    },
+    alcancados_no_mes: {
+      ok: true,
+      dados: {
+        mes: "2026-10",
+        faixa_etaria: [par("18-24", 800), par("25-34", 2000), par("35-44", 1500), par("45-54", 600), par("55-64", 200)],
+        genero: [par("F", 4000), par("M", 1000)],
+        cidades: [par("São Paulo, São Paulo", 1500), par("Campinas, São Paulo", 500)],
+      },
+    },
+    engajados_no_mes: {
+      ok: true,
+      dados: { mes: "2026-10", faixa_etaria: [par("18-24", 80), par("25-34", 200), par("35-44", 150), par("45-54", 60), par("55-64", 20)] },
+    },
+    alcance_por_tipo_de_seguidor: { ok: true, dados: { total: 9000, seguidores: 3500, nao_seguidores: 5500 } },
+    visualizacoes_por_tipo_de_seguidor: { ok: true, dados: { total: 20000, seguidores: 8000, nao_seguidores: 12000 } },
+    origem: {
+      ok: true,
+      dados: [
+        { conteudo: "REEL", alcance: 5000, visualizacoes: 12000, interacoes: 600 },
+        { conteudo: "POST", alcance: 3000, visualizacoes: 6000, interacoes: 400 },
+        { conteudo: "STORY", alcance: 1000, visualizacoes: 2000, interacoes: 100 },
+      ],
+    },
+    interacoes: { ok: true, dados: { curtidas: 900, comentarios: 120, salvamentos: 300, compartilhamentos: 80 } },
+    seguiram_e_deixaram: { ok: true, dados: { seguiram: 200, deixaram_de_seguir: 90, saldo: 110 } },
+    horarios: { ok: true, dados: { dias: 30, fuso: "America/Sao_Paulo", mapa: Array.from({ length: 7 }, (_, d) => Array.from({ length: 24 }, (_, h) => 50 + ((d * 31 + h * 17) % 90))) } },
+    stories_ao_vivo: { ok: true, dados: [] },
+  };
+  await context.route("**/api/sync/manual", (r) => r.fulfill({ json: { ok: true, dados } }));
+}
+
 /** Pessoas, histórico diário e vendas: os mesmos dados de Pacientes do período, que também alimentam os cartões de Resultados. */
 export async function mockPessoas(context: BrowserContext) {
   const rpc = (nome: string, json: unknown) => context.route(`**/rest/v1/rpc/${nome}`, (r) => r.fulfill({ json }));
