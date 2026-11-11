@@ -46,6 +46,8 @@ export interface Fato {
   /** 3 pesa mais. Decide qual fato vira "O que aconteceu". */
   peso: 1 | 2 | 3;
   frase: string;
+  /** Manchete curta e leiga escrita pela regra (até 40 caracteres), para a Hoje. Só existe quando a regra a escreveu. */
+  manchete?: string;
   numeros: Numeral[];
   /** Ressalva sobre o dado (ex.: período incompleto), não uma conclusão: só vira leitura se não houver conclusão melhor. */
   ressalva?: boolean;
