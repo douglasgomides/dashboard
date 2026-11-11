@@ -63,13 +63,12 @@ import {
 } from "@/components/insight-card";
 import { BotaoCopiar } from "@/components/botao-copiar";
 import {
-  AcoesDaIdeia,
-  PlanejadorSemana,
   usePautas,
 } from "@/components/planejador-conteudo";
 import { useClientRole } from "@/hooks/use-client-role";
 import { parseContentViewSearch } from "@/lib/nav";
-import { RoteirosProntos } from "@/components/agentes-ia";
+import { NxRoteirosProntos } from "@/components/nx/agentes-paineis";
+import { NxAcoesDaIdeia, NxPlanejadorSemana } from "@/components/nx/planejamento";
 
 export const Route = createFileRoute("/_authenticated/$clientId/ideias")({
   component: IdeiasPage,
@@ -387,7 +386,7 @@ function IdeiaCard({
       )}
 
       {planner && (
-        <AcoesDaIdeia
+        <NxAcoesDaIdeia
           ideia={i}
           clientId={clientId}
           api={planner.api}
@@ -763,11 +762,11 @@ function IdeiasPage() {
       </nav>
       {visao === "roteiros" && (
         <>
-          <RoteirosProntos clientId={clientId} podeEditar={podeEditar} />
+          <NxRoteirosProntos clientId={clientId} podeEditar={podeEditar} />
         </>
       )}
       {visao === "semana" && (
-        <PlanejadorSemana
+        <NxPlanejadorSemana
           clientId={clientId}
           api={pautasApi}
           podeEditar={podeEditar}
