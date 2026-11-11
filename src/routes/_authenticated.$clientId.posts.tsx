@@ -38,6 +38,7 @@ import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxTabela, NxVazio } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { IgAbas, IgVitrine } from "@/components/nx/instagram";
+import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import {
   computeConceitosVencedores,
   computeConversionByTag,
@@ -800,6 +801,9 @@ function PostsRankingPage() {
 
   // A leitura é dos posts que a tela já carregou: só regra, sem consulta nova.
   const fatos = useMemo(() => (posts ? fatosDePublicacoes({ de: start, ate: end, hoje, posts }) : null), [posts, start, end, hoje]);
+
+  // Contagem em cinza da aba Posts na pasta do Instagram (D-07): o total que a tela já carregou, sem consulta nova.
+  usePublicarContagem({ clientId, de: start, ate: end, rota: "/_authenticated/$clientId/posts", valor: error ? null : posts ? posts.length || null : undefined });
 
   const cabecalho = {
     tela: "posts" as const,

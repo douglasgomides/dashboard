@@ -17,6 +17,7 @@ import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxVazio } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { IgAbas, IgVitrine } from "@/components/nx/instagram";
+import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 
 export const Route = createFileRoute("/_authenticated/$clientId/top")({
   component: TopPage,
@@ -188,6 +189,16 @@ function TopPage() {
     if (!posts.data) return null;
     return fatosDoInstagram(lerPeriodo({ diario: [], posts: posts.data }), { de: start, ate: end, hoje, posts: posts.data }, "top");
   }, [temIg, posts.data, start, end, hoje]);
+
+  // Contagem em cinza da aba Destaques na pasta do Instagram (D-07): posts e reels em destaque da lista que a tela já carregou
+  // (as duas listas, independente da aba escolhida), sem consulta nova. null quando a tela diz que não há dado.
+  usePublicarContagem({
+    clientId,
+    de: start,
+    ate: end,
+    rota: "/_authenticated/$clientId/top",
+    valor: fontes.isLoading ? undefined : !temIg || posts.error ? null : posts.data ? topN(posts.data, "post", metrica, 20).length + topN(posts.data, "reel", metrica, 20).length || null : undefined,
+  });
 
   const rotuloMetrica = METRICAS.find((m) => m.id === metrica)?.rotulo ?? "";
   const rotuloStory = METRICAS_STORY.find((m) => m.id === metricaStory)?.rotulo ?? "";

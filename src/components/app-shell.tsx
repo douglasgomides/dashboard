@@ -16,9 +16,10 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { BuscaDeTelas } from "@/components/busca-de-telas";
-import { ehEquipe } from "@/lib/registro-de-telas";
+import { abasVisiveis, ehEquipe, juntadaDoCaminho, telaDoCaminho } from "@/lib/registro-de-telas";
 import { AbasDaSecao, MarcaNexo, MenuEquipe } from "@/components/menu-equipe";
 import { IconeTabler } from "@/components/icons/tabler";
+import { TelaJuntada } from "@/components/nx/abas-em-pasta";
 import { AvatarGerado } from "@/components/avatar-gerado";
 import { ClientAvatar } from "@/components/client-avatar";
 import { DateRangePicker, rotuloPeriodo } from "@/components/date-range-picker";
@@ -279,8 +280,12 @@ export function AppShell({
   const [busca, setBusca] = useState(false);
   const [consulta, setConsulta] = useState("");
   const [avancadoAberto, setAvancadoAberto] = useState(ativa === "mais");
-  const titulo = tela?.label ?? area?.label ?? "Análise da clínica";
-  const descricao = tela?.descricao ?? area?.descricao;
+  // Tela juntada (03.1.1, D-01): o título é o da tela juntada e as abas em pasta moram dentro do conteúdo. Sem aba visível
+  // para esta clínica (por exemplo, sem Instagram ligado) não há pasta e a casca fica como era.
+  const achadaJuntada = juntadaDoCaminho(pathname);
+  const juntada = achadaJuntada && abasVisiveis(achadaJuntada.secao, vis).length > 0 ? achadaJuntada : null;
+  const titulo = juntada?.secao.rotulo ?? tela?.label ?? telaDoCaminho(pathname)?.rotulo ?? area?.label ?? "Análise da clínica";
+  const descricao = juntada ? undefined : (tela?.descricao ?? area?.descricao);
   const nome = client?.name ?? "Carregando…";
   const linhaInfo = [
     client?.specialty,
@@ -596,7 +601,18 @@ export function AppShell({
           </div>
         </div>
         {/* Equipe: as telas da seção atual em abas, entre o cabeçalho da clínica e o conteúdo (10/11/2026, pedido do João). */}
-        {equipe && <AbasDaSecao perfil={perfilEquipe} clientId={clientId} pathname={pathname} dateRange={dateRange} />}
+        {equipe && !juntada && <AbasDaSecao perfil={perfilEquipe} clientId={clientId} pathname={pathname} dateRange={dateRange} />}
+        {/* Na tela juntada a equipe vê a pasta; a faixa antiga fica só com as telas da seção que a pasta não repete, para que
+            nenhuma tela saia do menu até os grupos da equipe (plano 07). */}
+        {equipe && juntada && (
+          <AbasDaSecao
+            perfil={perfilEquipe}
+            clientId={clientId}
+            pathname={pathname}
+            dateRange={dateRange}
+            ocultas={new Set(juntada.secao.abas.flatMap((a) => a.partes.map((p) => p.rota)))}
+          />
+        )}
         <header className="workspace-heading">
           <div>
             <p className="workspace-eyebrow">
@@ -629,7 +645,9 @@ export function AppShell({
           )}
         </div>
         <main id="workspace-content" tabIndex={-1}>
-          {children}
+          <TelaJuntada clientId={clientId} pathname={pathname} dateRange={dateRange} vis={vis}>
+            {children}
+          </TelaJuntada>
         </main>
       </div>
       {!equipe && (
