@@ -154,7 +154,8 @@ test("escolher um resultado do Cmd+K grava busca", async ({ page, context }) => 
   await expect.poll(() => posts.length).toBe(1);
   await page.keyboard.press("Control+k");
   const dialog = page.getByRole("dialog", { name: "O que você quer fazer?" });
-  await dialog.getByRole("searchbox").fill("calendário");
+  // A busca do médico só acha as 6 telas e as abas delas (D-01, MEDV-03): "funil" leva às abas de Onde os pacientes travam.
+  await dialog.getByRole("searchbox").fill("funil");
   const resultados = dialog.getByRole("link");
   await expect(resultados.first()).toBeVisible();
   const atual = new URL(page.url()).pathname;
@@ -180,7 +181,7 @@ test("viewer abre /admin/conferencia: grava bloqueada para a tela negada e redir
   expect(bloqueadas[0].corpo.client_id).toBeNull();
   const destino = posts.filter((p) => p.corpo.origem === "redirecionamento");
   expect(destino).toHaveLength(1);
-  expect(destino[0].corpo.rota).toBe("/_authenticated/$clientId/pacientes");
+  expect(destino[0].corpo.rota).toBe("/_authenticated/$clientId/hoje"); // a entrada termina na Hoje (03.1.1, D-06)
   expect(destino[0].corpo.client_id).toBe(CID);
   // A rota índice por onde o guarda passa é uma das 12 que só redirecionam pela configuração: nunca ganha linha.
   expect(posts.filter((p) => p.corpo.rota === "/_authenticated/")).toHaveLength(0);
@@ -222,7 +223,8 @@ test("POST que nunca responde não atrasa a próxima navegação", async ({ page
   expect(indice).toBeGreaterThanOrEqual(0);
   const inicio = Date.now();
   await links.nth(indice).click();
-  await expect(page.locator(".workspace-heading h1").first()).toBeVisible({ timeout: 5000 });
+  // O primeiro link do menu do médico é a Hoje, que não tem o título da casca (o topo dela é a saudação).
+  await expect(page.locator('[data-tela="hoje"], .workspace-heading h1').first()).toBeVisible({ timeout: 5000 });
   expect(new URL(page.url()).pathname).not.toBe(atual);
   expect(Date.now() - inicio).toBeLessThan(5000);
   expect(erros).toEqual([]);
@@ -240,6 +242,7 @@ test("viewer sem clínica no SAP abre /sap: bloqueada para /sap e redirecionamen
   expect(posts[0].corpo.origem).toBe("bloqueada");
   expect(posts[0].corpo.rota).toBe("/_authenticated/sap/");
   expect(posts[1].corpo.origem).toBe("redirecionamento");
+  // O guarda de /sap leva direto à Pacientes (rota do SAP, congelada nesta fase); só a rota de entrada termina na Hoje.
   expect(posts[1].corpo.rota).toBe("/_authenticated/$clientId/pacientes");
   expect(posts[1].corpo.client_id).toBe(CID);
   expect(new URL(page.url()).pathname).not.toBe("/sap");
