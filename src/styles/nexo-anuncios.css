@@ -182,4 +182,6 @@
 @media (max-width: 820px) {
   .nx-pagina[data-tela="anuncios"] .nx-bl { gap: 6px; }
   .nx-pagina[data-tela="anuncios"] .nx-linha__legenda { gap: 0 14px; font-size: 12px; line-height: 17px; }
+  /* Conteúdo × Comercial (aba Instagram de De onde vêm os pacientes): a mesma legenda mais junta. */
+  .nx-pagina[data-tela="conteudo-comercial"] .nx-linha__legenda { gap: 0 14px; font-size: 12px; line-height: 17px; }
 }

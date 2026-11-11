@@ -243,3 +243,33 @@ export async function mockAnuncios(context: BrowserContext, variante: "bom" | "s
     return r.fulfill({ json: [...por.values()].sort((a, b) => a.dia.localeCompare(b.dia)) });
   });
 }
+
+/**
+ * Links rastreados: 4 links (bio, story, QR code e destaque) com cliques e conversas por link, sem dado pessoal. A tela lê a
+ * tabela links_rastreados e a rpc links_funil em páginas (fetchAllRows para quando vem página vazia), então o mock pagina.
+ * "vazio" devolve nenhum link criado. Dados fictícios, só leitura.
+ */
+export async function mockLinks(context: BrowserContext, variante: "com-links" | "vazio" = "com-links") {
+  const pagina = (url: string, linhas: unknown[]) => {
+    const p = new URL(url).searchParams;
+    const off = Number(p.get("offset") ?? 0);
+    return linhas.slice(off, off + Number(p.get("limit") ?? 1000));
+  };
+  const link = (id: string, slug: string, tipo: string, titulo: string, codigo: string) => ({
+    id, slug, short_url: null, tipo, titulo, campanha: null, destino_tipo: "whatsapp", ativo: true, criado_em: "2026-09-01T12:00:00Z", codigo_ref: codigo, mensagem_modelo: `Olá! Vim pelo link (${codigo})`,
+  });
+  const links = variante === "vazio" ? [] : [
+    link("l1", "clinica-bio", "bio", "Bio principal", "R27"),
+    link("l2", "clinica-story", "story", "Story de outubro", "R28"),
+    link("l3", "clinica-qr", "qr", "QR do consultório", "R29"),
+    link("l4", "clinica-destaque", "destaque", "Destaque de preços", "R30"),
+  ];
+  const funil = variante === "vazio" ? [] : [
+    { link_id: "l1", cliques: 300, conversas: 40, provaveis: 2, agendou: 10, vendas: 2, receita: 4000 },
+    { link_id: "l2", cliques: 100, conversas: 12, provaveis: 0, agendou: 3, vendas: 0, receita: 0 },
+    { link_id: "l3", cliques: 20, conversas: 3, provaveis: 0, agendou: 1, vendas: 0, receita: 0 },
+    { link_id: "l4", cliques: 50, conversas: 6, provaveis: 0, agendou: 2, vendas: 1, receita: 1500 },
+  ];
+  await context.route("**/rest/v1/links_rastreados**", (r) => r.fulfill({ json: pagina(r.request().url(), links) }));
+  await context.route("**/rest/v1/rpc/links_funil**", (r) => r.fulfill({ json: pagina(r.request().url(), funil) }));
+}
