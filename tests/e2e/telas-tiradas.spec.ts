@@ -36,6 +36,16 @@ function capturarPosts(page: Page) {
   return posts;
 }
 
+test("as 7 telas tiradas da clínica levam à Hoje e as 2 do admin à Carteira", () => {
+  const rotas = TIRADAS.filter((t) => !t.busca);
+  const daClinica = rotas.filter((t) => t.rota.includes("$clientId"));
+  expect(daClinica).toHaveLength(7);
+  for (const t of daClinica) expect(t.destino, t.rotulo).toBe(HOJE);
+  const doAdmin = rotas.filter((t) => !t.rota.includes("$clientId"));
+  expect(doAdmin).toHaveLength(2);
+  for (const t of doAdmin) expect(t.destino, t.rotulo).toBe("/_authenticated/admin/");
+});
+
 test("Plano da semana: o log grava só a Hoje, com origem redirecionamento", async ({ page, context }) => {
   await mockAccount(context, "admin");
   await context.addInitScript(() => localStorage.setItem("nexo:rota-log", "1"));
@@ -63,12 +73,14 @@ test("Revisar roteiros abre Encontrar ideias, sem o botão antigo", async ({ pag
   await expect(page.locator("main").getByRole("button", { name: /^Revisar roteiros/ })).toHaveCount(0);
 });
 
-test("o viewer vê Resultados da clínica ao abrir Agentes e entregas", async ({ page, context }) => {
+test("o viewer cai na Hoje ao abrir Agentes e entregas, com o período", async ({ page, context }) => {
   await mockAccount(context, "viewer");
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`/${CID}/agentes?preset=7d`);
-  await expect.poll(() => new URL(page.url()).pathname.replace(/\/+$/, "")).toBe(`/${CID}`);
-  await expect(page.getByRole("heading", { name: "Resultados da clínica", exact: true })).toBeVisible();
+  await page.goto(`/${CID}/agentes?preset=7d&agente=qualquer`);
+  await expect.poll(() => new URL(page.url()).pathname.replace(/\/+$/, "")).toBe(`/${CID}/hoje`);
+  expect(new URL(page.url()).searchParams.get("preset")).toBe("7d");
+  expect(new URL(page.url()).searchParams.has("agente")).toBe(false);
+  await expect(page.getByText("Página não encontrada.")).toHaveCount(0);
 });
 
 test("o viewer não entra no /admin pelos endereços tirados", async ({ page, context }) => {
