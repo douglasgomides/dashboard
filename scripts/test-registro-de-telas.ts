@@ -20,7 +20,7 @@ import {
 import { AREAS, AVANCADO } from "../src/lib/nav";
 
 // Teste do registro único de telas (Phase 3, MENU-01). Confere o registro contra a árvore real do roteador:
-// uma linha por folha, contagem 14/61/12 (D-04, mudada pelo João em 11/11/2026), acesso intacto (MENU-07), tiradas com destino (MENU-04), índice da busca
+// uma linha por folha, contagem 15/61/12 (D-04, mudada pelo João em 11/11/2026; a Hoje é a 15ª viva, tela nova de 03.1.1), acesso intacto (MENU-07), tiradas com destino (MENU-04), índice da busca
 // por papel (D-03, D-09) e a propriedade de que o estrategista só acha telas sem guarda.
 
 // --- Árvore: lida por texto de src/routeTree.gen.ts (não se importa: puxa componentes React) ---
@@ -37,13 +37,13 @@ const ids = chavesDa("FileRoutesById");
 const tos = new Set(chavesDa("FileRoutesByTo"));
 const idsDaArvore = new Set(ids);
 
-// Folhas: as 81 do log (Phase 2) mais as 4 que o log não registra.
+// Folhas: as 82 do log (Phase 2, mais a Hoje de 03.1.1) mais as 4 que o log não registra.
 const folhas = [...folhasDaArvore(ids), "/login", "/reset-password", "/conhecer", "/qa/layout"];
 for (const extra of ["/login", "/reset-password", "/conhecer", "/qa/layout"]) assert.ok(idsDaArvore.has(extra), `${extra} sumiu da árvore`);
 assert.equal(
   folhas.length,
-  85,
-  `a árvore tem ${folhas.length} folhas, não 85: a contagem do João (D-04) mudou e a classificação volta para ele`,
+  86,
+  `a árvore tem ${folhas.length} folhas, não 86: só a Hoje (03.1.1, D-01 e D-06, tela nova aprovada pelo João em 10/11/2026) entrou depois da contagem do D-04; outra tela nova precisa da aprovação dele`,
 );
 
 const R = REGISTRO_DE_TELAS;
@@ -59,10 +59,10 @@ assert.equal(new Set(R.map(chave)).size, R.length, "rota + busca.visao repetida 
 
 // --- Contagem (D-04) ---
 const conta = (s: TelaDoRegistro["situacao"]) => R.filter((t) => t.situacao === s).length;
-assert.equal(conta("viva"), 14, "vivas");
+assert.equal(conta("viva"), 15, "vivas (14 de D-04 mais a Hoje, tela nova aprovada pelo João em 10/11/2026)");
 assert.equal(conta("escondida"), 61, "escondidas");
 assert.equal(conta("tirada"), 12, "tiradas (decisão do João, 11/11/2026: 1 rota de antes + 9 rotas + 2 atalhos)");
-assert.equal(R.length, 87, "total do registro");
+assert.equal(R.length, 88, "total do registro");
 
 // --- SAP congelado (MENU-07) ---
 const ehSap = (rota: string) => rota.startsWith("/_authenticated/sap/") || rota.startsWith("/_authenticated/$clientId/sap/");
@@ -118,7 +118,7 @@ assert.equal(ideias.situacao, "escondida");
 assert.equal(ideias.rotulo, "Encontrar ideias");
 
 // --- Sem selo ---
-const SEM_SELO = ["", "/pacientes", "/anuncios", "/crm-painel", "/relatorio", "/vendas-kommo"].map((s) => `/_authenticated/$clientId${s || "/"}`);
+const SEM_SELO = ["", "/hoje", "/pacientes", "/anuncios", "/crm-painel", "/relatorio", "/vendas-kommo"].map((s) => `/_authenticated/$clientId${s || "/"}`);
 assert.deepEqual(R.filter((t) => t.semSelo).map((t) => t.rota).sort(), [...SEM_SELO].sort(), "semSelo");
 
 // --- Rótulos fixos ---
@@ -150,12 +150,12 @@ const producao = indiceDaBusca(admin);
 const desenvolvimento = indiceDaBusca(admin, { desenvolvimento: true });
 const escondidas = (lista: TelaDoRegistro[]) => lista.filter((t) => t.situacao === "escondida").length;
 const vivas = (lista: TelaDoRegistro[]) => lista.filter((t) => t.situacao === "viva").length;
-assert.equal(vivas(producao), 7, "vivas no índice de produção");
+assert.equal(vivas(producao), 8, "vivas no índice de produção");
 assert.equal(escondidas(producao), 50, "escondidas no índice de produção (D-09, menos as 9 tiradas em 11/11/2026)");
-assert.equal(producao.length, 57);
-assert.equal(vivas(desenvolvimento), 7, "vivas no índice de desenvolvimento");
+assert.equal(producao.length, 58);
+assert.equal(vivas(desenvolvimento), 8, "vivas no índice de desenvolvimento");
 assert.equal(escondidas(desenvolvimento), 51, "escondidas no índice de desenvolvimento (D-09)");
-assert.equal(desenvolvimento.length, 58);
+assert.equal(desenvolvimento.length, 59);
 assert.deepEqual(desenvolvimento.filter((t) => !producao.includes(t)).map((t) => t.rota), ["/qa/layout"]);
 for (const t of desenvolvimento) {
   assert.notEqual(t.situacao, "tirada", `${chave(t)} (tirada) no índice`);
@@ -256,8 +256,8 @@ assert.deepEqual(mCarteira.subtelas, [], "Carteira não tem subtelas");
 assert.equal(mClinica.rota, "/_authenticated/$clientId/");
 assert.deepEqual(
   mClinica.subtelas.map((t) => t.rotulo),
-  ["Resultados da clínica", "Relatório do período", "Etapas do CRM", "Configurar este cliente"],
-  "subtelas de Clínica (admin)",
+  ["O que fazer hoje", "Resultados da clínica", "Relatório do período", "Etapas do CRM", "Configurar este cliente"],
+  "subtelas de Clínica (admin): a Hoje vem primeiro (03.1.1, D-06)",
 );
 assert.equal(mConferencia.rota, "/_authenticated/admin/conferencia");
 assert.deepEqual(mConferencia.subtelas.map((t) => t.rotulo), ["Conferência de dados", "Integrações"], "subtelas de Conferência");
@@ -271,15 +271,15 @@ for (const item of menuAdmin) {
 }
 const rotasDoMenu = new Set(menuAdmin.flatMap((i) => [i.rota, ...i.subtelas.map((t) => t.rota)]));
 const vivasSemAcesso = new Set(R.filter((t) => t.situacao === "viva" && !t.acesso).map((t) => t.rota));
-assert.equal(vivasSemAcesso.size, 7, "7 vivas que não são acesso");
-assert.deepEqual([...rotasDoMenu].sort(), [...vivasSemAcesso].sort(), "o menu cobre exatamente as 7 vivas que não são acesso");
+assert.equal(vivasSemAcesso.size, 8, "8 vivas que não são acesso (as 7 de antes e a Hoje)");
+assert.deepEqual([...rotasDoMenu].sort(), [...vivasSemAcesso].sort(), "o menu cobre exatamente as 8 vivas que não são acesso");
 
 const menuEstrategista = itensMenuEquipe(estrategista);
 assert.deepEqual(menuEstrategista.map((i) => i.chave), ["clinica"], "estrategista vê só Clínica (D-03)");
 assert.deepEqual(
   menuEstrategista[0].subtelas.map((t) => t.rotulo),
-  ["Resultados da clínica", "Relatório do período"],
-  "subtelas do estrategista: só as que ele abre",
+  ["O que fazer hoje", "Resultados da clínica", "Relatório do período"],
+  "subtelas do estrategista: só as que ele abre (a Hoje não tem guarda)",
 );
 for (const item of menuEstrategista) {
   assert.ok(!item.tela.somenteAdmin, `${item.chave}: item somenteAdmin no menu do estrategista`);
@@ -326,7 +326,7 @@ for (const [nome, perfil] of [["admin", { isAdmin: true }], ["estrategista", { i
     }
   }
 }
-assert.equal(telasPorArea({ isAdmin: true }).reduce((n, g) => n + g.telas.length, 0), 57, "Ver todas as telas do admin em produção: 57 (D-09, menos as 9 tiradas em 11/11/2026)");
+assert.equal(telasPorArea({ isAdmin: true }).reduce((n, g) => n + g.telas.length, 0), 58, "Ver todas as telas do admin em produção: 58 (D-09, menos as 9 tiradas em 11/11/2026, mais a Hoje)");
 assert.ok(!telasPorArea({ isAdmin: false, papel: "strategist" }).some((g) => g.area === "SAP"), "estrategista sem grupo SAP");
 
 // Seções da clínica (10/11/2026): mesmas telas da sanfona antiga (telasPorArea só com /$clientId/*), nenhuma a menos.
@@ -361,16 +361,21 @@ assert.equal(tiradas1111.filter((t) => !t.busca).length, 9, "rotas tiradas em 11
 assert.deepEqual(tiradas1111.filter((t) => t.busca).map((t) => t.rotulo), ["Revisar roteiros"], "atalho tirado em 11/11");
 assert.deepEqual(tiradas1111.map((t) => t.rotulo).sort(), [...ROTULOS_TIRADOS_1111].sort(), "rótulos tirados em 11/11");
 const DESTINO_1111: Record<string, string> = {
-  "/_authenticated/$clientId/agentes": "/_authenticated/$clientId/",
-  "/_authenticated/$clientId/plano": "/_authenticated/$clientId/",
-  "/_authenticated/$clientId/reunioes": "/_authenticated/$clientId/",
-  "/_authenticated/$clientId/proximas-acoes": "/_authenticated/$clientId/",
-  "/_authenticated/$clientId/oportunidades": "/_authenticated/$clientId/",
-  "/_authenticated/$clientId/automacoes": "/_authenticated/$clientId/",
-  "/_authenticated/$clientId/campanhas": "/_authenticated/$clientId/",
+  "/_authenticated/$clientId/agentes": "/_authenticated/$clientId/hoje",
+  "/_authenticated/$clientId/plano": "/_authenticated/$clientId/hoje",
+  "/_authenticated/$clientId/reunioes": "/_authenticated/$clientId/hoje",
+  "/_authenticated/$clientId/proximas-acoes": "/_authenticated/$clientId/hoje",
+  "/_authenticated/$clientId/oportunidades": "/_authenticated/$clientId/hoje",
+  "/_authenticated/$clientId/automacoes": "/_authenticated/$clientId/hoje",
+  "/_authenticated/$clientId/campanhas": "/_authenticated/$clientId/hoje",
   "/_authenticated/admin/agentes": "/_authenticated/admin/",
   "/_authenticated/admin/brain": "/_authenticated/admin/",
 };
+// As 7 da clínica apontam para a mesma Hoje (D-06); nenhuma volta para Resultados da clínica.
+const daClinica1111 = tiradas1111.filter((t) => !t.busca && t.rota.startsWith("/_authenticated/$clientId/"));
+assert.equal(daClinica1111.length, 7, "tiradas da clínica em 11/11");
+assert.ok(daClinica1111.every((t) => t.destino !== "/_authenticated/$clientId/"), "nenhuma tirada da clínica leva a Resultados");
+assert.deepEqual([...new Set(daClinica1111.map((t) => t.destino))], ["/_authenticated/$clientId/hoje"], "as 7 levam à mesma Hoje");
 for (const t of tiradas1111) {
   assert.equal(t.situacao, "tirada", `${chave(t)}: tiradaEm sem situação tirada`);
   if (t.busca) {
@@ -385,7 +390,8 @@ for (const t of tiradas1111) {
   const texto = await readFile(new URL(arquivo, pastaRotas), "utf8").catch(() => assert.fail(`arquivo da rota ${arquivo} não existe`));
   assert.ok(/throw redirect\(/.test(texto), `${arquivo}: sem throw redirect`);
   assert.ok(!/component:/.test(texto), `${arquivo}: a rota tirada não pode ter component`);
-  const to = t.rota.startsWith("/_authenticated/admin/") ? '"/admin"' : '"/$clientId"';
+  // O "to" esperado sai do destino da própria linha, para o registro e o arquivo da rota nunca se separarem.
+  const to = `"${t.destino!.replace("/_authenticated", "").replace(/(.)\/$/, "$1")}"`;
   assert.ok(texto.includes(`to: ${to}`), `${arquivo}: o redirect devia ir para ${to}`);
 }
 for (const t of tiradas1111) {

@@ -8,7 +8,7 @@
 // guardaOrigemPorPost não libera e a leitura diz "Sem leitura: origem por post não medida".
 import { LIMITES } from "@/lib/limites";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
-import { MIN_POSTS_LEITURA, type Achado, type Leitura } from "@/lib/leitura-periodo";
+import { MIN_POSTS_LEITURA, nomeLeigoDoFormato, type Achado, type Leitura } from "@/lib/leitura-periodo";
 import type { Responsavel } from "@/lib/insight";
 import { FOLGA_META_INSTAGRAM, type StatusFonte } from "@/lib/status-fonte";
 import {
@@ -346,6 +346,7 @@ export function fatosDePublicacoes(e: EntradaFatosPublicacoes): FatosDaTela {
       id: "formato-melhor-taxa",
       tom: "bom",
       peso: 2,
+      manchete: `${nomeLeigoDoFormato(a.formato)} foi mais salvo`,
       frase: `${nomeFormato(a.formato)} foi o formato com mais salvamentos por pessoa alcançada, à frente de ${nomeFormato(b.formato)}.`,
       numeros: [{ chave: "taxa", exibicao: `${pct1(a.taxa)} contra ${pct1(b.taxa)} (${a.n} e ${b.n} posts)`, valor: a.taxa }],
       n: a.n,
@@ -401,7 +402,7 @@ export function fatosDePublicacoes(e: EntradaFatosPublicacoes): FatosDaTela {
     };
     fatos.push(fato);
     passos.push({
-      passo: { verbo: "corrigir", texto: "o tema dos posts que estão sem classificação", quem: "social_media", motivo: "Sem tema, não dá para comparar os assuntos.", fatoId: fato.id },
+      passo: { verbo: "corrigir", texto: "o tema dos posts que estão sem classificação", quem: "social_media", motivo: "Sem tema, não dá para comparar os assuntos.", fatoId: fato.id, soEquipe: true },
       tom: "atencao",
       peso: 1,
     });
@@ -552,6 +553,7 @@ export function guardaOrigemPorPost(entrada?: EntradaOrigemPorPost | null): Guar
       quem: "equipe_hub",
       motivo: "Sem isso, a tela não diz qual post originou cada conversa.",
       fatoId: "origem-por-post",
+      soEquipe: true,
     },
   };
 }

@@ -22,6 +22,7 @@ export interface Achado {
   tom: Tom;
   peso: number; // 1..3 — ordena e decide o veredito
   titulo: string; // a conclusão em uma frase
+  manchete?: string; // manchete curta e leiga (até 40 caracteres) para a tela Hoje; só a regra de formatos escreve
   porque: string; // o que isso significa / de onde vem
   acao?: { texto: string; rota?: RotaAcao };
   base: string; // números usados, para conferir
@@ -168,6 +169,10 @@ function regraConcentracao(posts: any[], out: Achado[], falta: string[]) {
   });
 }
 
+/** Nome do formato para a pessoa leiga (a Hoje): o estático é "Post de foto". */
+export const NOME_LEIGO_DO_FORMATO: Record<string, string> = { reels: "Reels", carrossel: "Carrossel", estatico: "Post de foto", stories: "Stories" };
+export const nomeLeigoDoFormato = (chave: string): string => NOME_LEIGO_DO_FORMATO[chave] ?? fmtFormatKey(chave);
+
 // 3. Alcance x profundidade por formato: quem leva longe e quem faz guardar.
 function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
   const g = new Map<string, { reach: number[]; taxaSalvo: number[] }>();
@@ -204,6 +209,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
       tom: "bom",
       peso: 2,
       titulo: `${A.nome} é o formato que mais leva o perfil a gente nova.`,
+      manchete: `${nomeLeigoDoFormato(A.f)} alcançou mais`,
       porque: `Alcance mediano de ${int(A.alcance)} contas, ${vezes.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}x o de ${segundo.nome}. Na taxa de salvamento os formatos ficaram parecidos, então a diferença está em quantas pessoas cada um alcança.`,
       acao: { texto: `Use ${A.nome} para os assuntos que você quer que mais gente conheça.`, rota: "conteudo" },
       base,
@@ -219,6 +225,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
       tom: "bom",
       peso: 2,
       titulo: `${A.nome} ganha nas duas frentes: é o que mais alcança e o que mais é salvo.`,
+      manchete: `${nomeLeigoDoFormato(A.f)} alcançou e foi mais salvo`,
       porque: `Alcança ${vezes >= 1.2 ? `${vezes.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}x mais que ${segundo.nome}` : "mais que os outros formatos"} e quem vê guarda para depois (${pct(A.salvo, 1)} salvam). É o formato em que a audiência deste perfil mais confia.`,
       acao: { texto: `Priorize ${A.nome} na grade das próximas semanas.`, rota: "conteudo" },
       base,
@@ -230,6 +237,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
     tom: "bom",
     peso: 2,
     titulo: `${A.nome} leva longe, ${S.nome} faz guardar.`,
+    manchete: `${nomeLeigoDoFormato(A.f)} alcançou mais`,
     porque: `${A.nome} tem o maior alcance mediano (${int(A.alcance)} contas): é o que apresenta o perfil a gente nova. ${S.nome} tem a maior taxa de salvamento (${pct(S.salvo, 1)} contra ${pct(A.salvo, 1)}): é o que gera confiança em quem já chegou. Os dois têm papéis diferentes no caminho até a consulta.`,
     acao: { texto: `Use ${A.nome} para atrair e ${S.nome} para aprofundar o mesmo assunto.`, rota: "conteudo" },
     base,

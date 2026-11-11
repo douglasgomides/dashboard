@@ -188,7 +188,7 @@ Plans:
 
 **Requirements**: MEDV-01, MEDV-02, MEDV-03, MEDV-04, MEDV-05
 **Depends on:** Phase 03.1, etapas 1 a 3 (o resto da 03.1 vem depois desta)
-**Plans:** 3/7 plans executed (um PR só para a fase; um executor por vez, cada um commita o próprio trabalho; o orquestrador publica depois do 04 e do 07)
+**Plans:** 6/8 plans executed (um PR só para a fase; um executor por vez, cada um commita o próprio trabalho; o orquestrador publica depois do 04 e do 08)
 
 Plans:
 **Wave 1**
@@ -204,13 +204,16 @@ Plans:
 - [ ] 03.1.1-04-PLAN.md — Anúncios, Links e Conteúdo × Comercial no molde e em 1,5 tela (26 medidas no médico); publica; o João olha as 3 telas juntadas
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 03.1.1-05-PLAN.md — O que fazer hoje: primeira versão da tela Hoje da Phase 9 (3 a 5 ações por regra, aviso de poucas ações, sem leitura, sem selo, D-07, 1,5 tela)
+- [x] 03.1.1-05-PLAN.md — O que fazer hoje: primeira versão da tela Hoje da Phase 9 (3 a 5 ações por regra, aviso de poucas ações, sem leitura, sem selo, D-07, 1,5 tela)
 
 **Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 03.1.1-06-PLAN.md — Menu do médico com 6 itens, entrada na Hoje e busca do médico; specs do menu antigo atualizados
+- [x] 03.1.1-06-PLAN.md — Os endereços das 7 telas da clínica tiradas em 11/11 (quick 261111-f5b) levam à Hoje
 
 **Wave 7** *(blocked on Wave 6 completion)*
-- [ ] 03.1.1-07-PLAN.md — Equipe agrupada (Plano, Agentes com a Central, Conteúdo, Atendimento, Configurar CRM), busca com "Seção › Aba", alturas da equipe registradas; publica; o João olha a visão do médico e a da equipe (critério 5)
+- [x] 03.1.1-07-PLAN.md — Menu do médico com 6 itens, entrada na Hoje e busca do médico; specs do menu antigo atualizados
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 03.1.1-08-PLAN.md — Equipe agrupada em 9 seções (Conteúdo, Atendimento, Configurar CRM), busca com "Seção › Aba", alturas das 10 abas da equipe registradas; publica; o João olha a visão do médico e a da equipe (critério 5)
 
 ### Phase 4: Pacote do template do WhatsApp à Meta
 
