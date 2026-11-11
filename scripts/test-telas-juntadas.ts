@@ -7,6 +7,7 @@ import {
   juntadaDoCaminho,
   telaDoCaminho,
 } from "../src/lib/registro-de-telas";
+import { assinarContagens, chaveDoPeriodo, contagensDe, limparContagens, publicarContagem } from "../src/lib/contagens-das-abas";
 import type { Visibilidade } from "../src/lib/nav";
 
 // Teste das telas juntadas do médico (Phase 3.1.1, plano 01, D-01 e D-04): registro, aba pelo caminho da tela antiga e
@@ -114,5 +115,46 @@ assert.equal(telaDoCaminho(`/${CID}/nao-existe`), null);
 // --- 6. D-03: a busca da equipe ainda acha a aba pelo nome antigo ---
 const admin = { isAdmin: true, papel: "admin" as const };
 assert.equal(buscarTelasEquipe(admin, "Funil comercial")[0]?.rota, `${C}/crm-painel`);
+
+// --- 7. Contagem das abas (D-07): guarda em memória, publicada pela própria aba, sem rede ---
+limparContagens();
+const k1 = chaveDoPeriodo(CID, "2026-10-01", "2026-10-31");
+assert.equal(k1, chaveDoPeriodo(CID, "2026-10-01", "2026-10-31"), "mesma chave para os mesmos 3 valores");
+assert.notEqual(k1, chaveDoPeriodo(CID, "2026-10-01", "2026-10-30"), "muda o fim");
+assert.notEqual(k1, chaveDoPeriodo(CID, "2026-09-30", "2026-10-31"), "muda o início");
+assert.notEqual(k1, chaveDoPeriodo("22222222-2222-4222-8222-222222222222", "2026-10-01", "2026-10-31"), "muda a clínica");
+const POSTS = `${C}/posts`;
+assert.equal(contagensDe(k1).get(POSTS), undefined, "nada publicado ainda");
+publicarContagem(k1, POSTS, 24);
+assert.equal(contagensDe(k1).get(POSTS), 24);
+assert.equal(contagensDe(chaveDoPeriodo(CID, "2026-10-01", "2026-10-30")).get(POSTS), undefined, "outra chave não vê o número");
+publicarContagem(k1, `${C}/top`, null);
+assert.equal(contagensDe(k1).has(`${C}/top`), true, "null é guardado: a aba abriu e não tem número");
+assert.equal(contagensDe(k1).get(`${C}/top`), null);
+publicarContagem(k1, `${C}/vendas`, undefined);
+assert.equal(contagensDe(k1).has(`${C}/vendas`), false, "undefined (ainda carregando) não grava nada: a aba não vira \"—\"");
+// assinarContagens avisa quando o valor muda, não avisa quando é igual, e o retorno desassina.
+let avisos = 0;
+const parar = assinarContagens(() => {
+  avisos++;
+});
+publicarContagem(k1, POSTS, 25);
+assert.equal(avisos, 1, "valor novo avisa");
+publicarContagem(k1, POSTS, 25);
+assert.equal(avisos, 1, "valor igual não avisa");
+publicarContagem(k1, `${C}/vendas`, undefined);
+assert.equal(avisos, 1, "undefined não avisa");
+publicarContagem(k1, `${C}/consultas`, 0);
+assert.equal(avisos, 2, "zero medido é valor e avisa");
+parar();
+publicarContagem(k1, POSTS, 26);
+assert.equal(avisos, 2, "depois de desassinar não avisa mais");
+// O mesmo mapa lido duas vezes entre mudanças é o mesmo objeto (useSyncExternalStore pede snapshot estável).
+assert.equal(contagensDe(k1), contagensDe(k1), "snapshot estável entre mudanças");
+const antes = contagensDe(k1);
+publicarContagem(k1, POSTS, 27);
+assert.notEqual(contagensDe(k1), antes, "snapshot novo depois de uma mudança");
+limparContagens();
+assert.equal(contagensDe(k1).size, 0, "limparContagens zera tudo");
 
 console.log("test-telas-juntadas: ok");
