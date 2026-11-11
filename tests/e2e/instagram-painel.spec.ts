@@ -38,8 +38,9 @@ for (const width of [375, 1440]) {
       const cartoes = page.locator(".nx-pagina__cartoes > *");
       expect(await cartoes.count()).toBeGreaterThan(0);
       expect(await cartoes.count()).toBeLessThanOrEqual(4);
-      await expect(page.locator(".nx-pagina__cartoes .nx-kpi")).toHaveCount(t.cartoes);
-      await expect(page.locator(".nx-pagina__cartoes .nx-kpi .ws-metric-value").first()).toBeVisible();
+      // As 4 telas do Instagram desenham NxCartaoNumero (03.1.1, D-07); Conteúdo × Comercial segue com NxKpi.
+      await expect(page.locator(".nx-pagina__cartoes :is(.nx-kpi, .nx-cartao)")).toHaveCount(t.cartoes);
+      await expect(page.locator(".nx-pagina__cartoes :is(.nx-kpi .ws-metric-value, .nx-cartao .nx-numero__valor)").first()).toBeVisible();
       expect((await leitura.boundingBox())!.y).toBeLessThan((await cartoes.first().boundingBox())!.y);
 
       // Nenhum gráfico do Recharts e nenhuma tabela fora da peça NxTabela.
@@ -75,7 +76,8 @@ for (const width of [375, 1440]) {
     await mockInstagram(context);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/conteudo-comercial?preset=30d`);
-    // Aviso fixo na página, com quem resolve.
+    // Aviso fixo, com quem resolve: primeira coisa dos Detalhes (03.1.1-04, régua de 1,5 tela); a leitura do topo repete em "Ver mais".
+    await page.locator(".nx-pagina__detalhe > details > summary").click();
     const aviso = page.locator('[data-peca="aviso"]').filter({ hasText: "Sem leitura: origem por post não medida" });
     await expect(aviso).toBeVisible();
     await expect(aviso.getByText(/Quem resolve: Equipe Doctor Creator/)).toBeVisible();

@@ -17,7 +17,9 @@ export type TelaId =
   | "crm-contatos" | "crm-painel" | "crm-guia" | "vendas-kommo" | "jornada" | "analisar" | "crm-estrutura"
   | "plano" | "reunioes" | "proximas-acoes" | "agentes" | "oportunidades" | "automacoes"
   | "carteira" | "conferencia" | "integracoes" | "configurar-cliente"
-  | "caixa" | "referencia" | "relatorios-semana" | "central-agentes" | "brand-brain" | "equipe" | "assistentes-ia";
+  | "caixa" | "referencia" | "relatorios-semana" | "central-agentes" | "brand-brain" | "equipe" | "assistentes-ia"
+  // A tela de entrada da 03.1.1: a mesma rota que a Phase 9 evolui (D-06).
+  | "hoje";
 
 /** As 5 decisões do médico (brief do Nexo v5). D2 não é usada nesta fase. */
 export type DecisaoMedico = "D1" | "D2" | "D3" | "D4" | "D5";

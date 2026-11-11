@@ -29,6 +29,7 @@ import { ufDaCidade } from "@/lib/geo-br";
 import { ESTADOS_BR } from "@/lib/mapas";
 import { Users, Target, Heart, Clock, MapPin, Globe, UserPlus, UserMinus, Scale, Eye, Layers, CalendarClock, Trophy, FileText, BarChart3, VenetianMask, Cake, RefreshCw } from "lucide-react";
 import { NxCard, NxKpi, NxPizza, NxColunas, NxLinhaTempo, NxLegenda } from "@/components/nx";
+import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxAviso, NxCarregando, NxErro, NxVazio } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
@@ -410,37 +411,41 @@ function AudienciaPage() {
   const sd = a.seguiram_e_deixaram.ok ? a.seguiram_e_deixaram.dados : null;
 
   const cartoes = [
-    <NxKpi
+    <NxCartaoNumero
       key="idade"
+      semMedida={!kpis.topo}
       icone={ic(Cake)}
-      rotulo="Faixa que mais segue"
+      titulo="Faixa que mais segue"
       valor={kpis.topo ? `${kpis.topo.chave} anos` : "Sem dado"}
-      nota={
+      legenda={
         kpis.topo
           ? `${fmtPct(pctDe(kpis.topo.valor, kpis.totalFaixas))} dos seguidores${kpis.gen ? ` · ${fmtPct(pctDe(kpis.gen.valor, kpis.totalG))} ${(ROTULO_GENERO[kpis.gen.chave] ?? kpis.gen.chave).toLowerCase()}` : ""}`
           : "a Meta não devolveu a idade"
       }
     />,
-    <NxKpi
+    <NxCartaoNumero
       key="fora"
+      semMedida={!(alc && alc.seguidores + alc.nao_seguidores > 0)}
       icone={ic(Eye)}
-      rotulo="Alcance fora da base"
+      titulo="Alcance fora da base"
       valor={alc && alc.seguidores + alc.nao_seguidores > 0 ? fmtPct(pctDe(alc.nao_seguidores, alc.seguidores + alc.nao_seguidores)) : "Sem dado"}
-      nota={alc ? `não seguidores entre ${fmtN(alc.seguidores + alc.nao_seguidores)} contas alcançadas em ${a.periodo.dias} dias` : "a Meta não devolveu o alcance"}
+      legenda={alc ? `não seguidores entre ${fmtN(alc.seguidores + alc.nao_seguidores)} contas alcançadas em ${a.periodo.dias} dias` : "a Meta não devolveu o alcance"}
     />,
-    <NxKpi
+    <NxCartaoNumero
       key="saldo"
+      semMedida={!sd}
       icone={ic(Scale)}
-      rotulo={`Saldo de seguidores (${a.periodo.dias} dias)`}
+      titulo={`Saldo de seguidores (${a.periodo.dias} dias)`}
       valor={sd ? `${sd.saldo >= 0 ? "+" : ""}${fmtN(sd.saldo)}` : "Sem dado"}
-      nota={sd ? `seguiram ${fmtN(sd.seguiram)} · deixaram ${fmtN(sd.deixaram_de_seguir)}` : "a Meta não devolveu o saldo"}
+      legenda={sd ? `seguiram ${fmtN(sd.seguiram)} · deixaram ${fmtN(sd.deixaram_de_seguir)}` : "a Meta não devolveu o saldo"}
     />,
-    <NxKpi
+    <NxCartaoNumero
       key="online"
+      semMedida={!kpis.janela}
       icone={ic(Clock)}
-      rotulo="Mais gente online"
+      titulo="Mais gente online"
       valor={kpis.janela ? `${DIAS_SEMANA[kpis.janela.dia]}, ${kpis.janela.hora}h` : "Sem dado"}
-      nota={kpis.janela ? `${fmtN(kpis.janela.online)} seguidores online em média (Brasília)` : "a Meta não devolveu os horários"}
+      legenda={kpis.janela ? `${fmtN(kpis.janela.online)} seguidores online em média (Brasília)` : "a Meta não devolveu os horários"}
     />,
   ] as unknown as [ReactNode, ReactNode?, ReactNode?, ReactNode?];
 

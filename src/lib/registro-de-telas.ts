@@ -10,7 +10,16 @@
 //
 // Módulo sem componente React: roda em tsx no npm test. Rótulos e descrições vêm de nav.ts e sap-navigation.ts (que não
 // mudam nesta fase) para que o médico e a equipe leiam o mesmo nome da mesma tela.
-import { AREAS, AVANCADO, type ContentView, type Fonte, type NavTab } from "./nav";
+import {
+  AREAS,
+  AVANCADO,
+  ROTAS_DO_CRM,
+  fonteOk,
+  type ContentView,
+  type Fonte,
+  type NavTab,
+  type Visibilidade,
+} from "./nav";
 import { ITENS as ITENS_SAP } from "./sap-navigation";
 
 export type Situacao = "viva" | "escondida" | "tirada";
@@ -331,6 +340,151 @@ export function secaoDoCaminho(secoes: readonly SecaoDaClinica[], pathname: stri
     if (tela) return { secao, tela };
   }
   return null;
+}
+
+// --- Telas juntadas do médico (03.1.1-01, D-01) ---
+// O João aprovou a lista em 10/11/2026 ("Aprovo a lista"): 3 telas juntadas, cada uma com abas em pasta. Cada aba é o caminho
+// da tela antiga (D-04, emenda de 10/11): o arquivo da rota antiga continua sendo a tela, o endereço antigo é a aba (D-03) e o
+// log por rota grava o routeId da aba sem migration (D-06). Nada aqui apaga ou redireciona tela: é só o desenho da pasta.
+
+/** Ids das telas juntadas. Os planos 05 a 07 acrescentam ids (Hoje, grupos da equipe). */
+export type IdDaSecao = "travam" | "origem" | "instagram";
+
+export interface ParteDaAba {
+  /** routeId da tela antiga que a parte mostra. */
+  rota: string;
+  rotulo: string;
+  /** Fonte da parte; quando vem, vale no lugar da fonte da linha do registro. */
+  fonte?: Fonte;
+}
+
+export interface AbaDaSecao {
+  id: string;
+  rotulo: string;
+  /** A primeira parte é o destino do link da aba; mais de uma parte vira o filtro segmentado (3º nível, D-07). */
+  partes: readonly ParteDaAba[];
+  /** O que a contagem em cinza conta, em português; null quando a aba não tem coisa contável (nenhum número é mostrado). */
+  contagem: string | null;
+}
+
+export interface SecaoJuntada {
+  id: IdDaSecao;
+  rotulo: string;
+  icone: NomeIcone;
+  publico: "medico" | "equipe";
+  abas: readonly AbaDaSecao[];
+}
+
+export const SECOES_JUNTADAS: readonly SecaoJuntada[] = [
+  {
+    id: "travam",
+    rotulo: "Onde os pacientes travam",
+    icone: "filter",
+    publico: "medico",
+    abas: [
+      {
+        id: "funil",
+        rotulo: "Funil",
+        partes: [
+          { rota: `${C}/pacientes`, rotulo: "Do contato à venda" },
+          { rota: `${C}/crm-painel`, rotulo: "No CRM" },
+        ],
+        contagem: null,
+      },
+      { id: "consultas", rotulo: "Consultas", partes: [{ rota: `${C}/consultas`, rotulo: "Consultas" }], contagem: "consultas no período" },
+      { id: "vendas", rotulo: "Vendas", partes: [{ rota: `${C}/vendas`, rotulo: "Vendas" }], contagem: "vendas no período" },
+      { id: "jornada", rotulo: "Jornada", partes: [{ rota: `${C}/jornada`, rotulo: "Jornada" }], contagem: null },
+    ],
+  },
+  {
+    id: "origem",
+    rotulo: "De onde vêm os pacientes",
+    icone: "chart-bar",
+    publico: "medico",
+    abas: [
+      { id: "por-origem", rotulo: "Por origem", partes: [{ rota: `${C}/vendas-kommo`, rotulo: "Por origem" }], contagem: "origens com venda no período" },
+      { id: "instagram", rotulo: "Instagram", partes: [{ rota: `${C}/conteudo-comercial`, rotulo: "Instagram" }], contagem: null },
+      { id: "anuncios", rotulo: "Anúncios", partes: [{ rota: `${C}/anuncios`, rotulo: "Anúncios" }], contagem: "campanhas no período" },
+      { id: "links", rotulo: "Links", partes: [{ rota: `${C}/links`, rotulo: "Links" }], contagem: "links rastreados" },
+    ],
+  },
+  {
+    id: "instagram",
+    rotulo: "Instagram",
+    icone: "brand-instagram",
+    publico: "medico",
+    abas: [
+      // A linha de /conteudo não traz fonte (daNav("/conteudo") não tem): por isso a parte declara "instagram" aqui.
+      { id: "desempenho", rotulo: "Desempenho", partes: [{ rota: `${C}/conteudo`, rotulo: "Desempenho", fonte: "instagram" }], contagem: null },
+      { id: "destaques", rotulo: "Destaques", partes: [{ rota: `${C}/top`, rotulo: "Destaques" }], contagem: "publicações em destaque" },
+      { id: "posts", rotulo: "Posts", partes: [{ rota: `${C}/posts`, rotulo: "Posts" }], contagem: "publicações no período" },
+      { id: "publico", rotulo: "Público", partes: [{ rota: `${C}/audiencia`, rotulo: "Público" }], contagem: null },
+    ],
+  },
+];
+
+function linhaDaParte(rota: string): TelaDoRegistro | undefined {
+  return REGISTRO_DE_TELAS.find((t) => t.rota === rota && !t.busca && t.situacao !== "tirada");
+}
+
+/** Parte da clínica de um endereço: "" para o índice, "/conteudo" etc.; null fora de um endereço de clínica. */
+function subDoEndereco(pathname: string): string | null {
+  const p = pathname.replace(/\/+$/, "") || "/";
+  const m = /^\/[0-9a-f-]{36}(\/.*)?$/.exec(p);
+  return m ? (m[1] ?? "") : null;
+}
+
+/**
+ * Tela juntada, aba e parte de um endereço (/<id>/top -> Instagram, Destaques). A barra final é ignorada, como em
+ * secaoDoCaminho. Fora de tela juntada (ou fora de uma tela da clínica) devolve null.
+ */
+export function juntadaDoCaminho(pathname: string): { secao: SecaoJuntada; aba: AbaDaSecao; parte: ParteDaAba } | null {
+  const sub = subDoEndereco(pathname);
+  if (sub === null) return null;
+  for (const secao of SECOES_JUNTADAS) {
+    for (const aba of secao.abas) {
+      for (const parte of aba.partes) {
+        const linha = linhaDaParte(parte.rota);
+        if (linha && subDaTela(linha) === sub) return { secao, aba, parte };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Abas que a clínica tem. Tira de cada aba as partes que a clínica não vê: fonte da parte (ou da linha do registro) não ligada,
+ * clínica só com CRM fora das rotas do CRM, clínica sem Audiência no Público, rota de admin para quem não é admin. Aba sem
+ * parte visível sai. Para as telas do médico NÃO valem as marcas equipe/admin de nav.ts: o D-01 aprovou que o médico veja
+ * Destaques, Posts, Público, Conteúdo × Comercial, Links, Por origem e Jornada (o dado continua decidido pelo RLS).
+ */
+export function abasVisiveis(secao: SecaoJuntada, vis: Visibilidade): AbaDaSecao[] {
+  return secao.abas
+    .map((aba) => ({
+      ...aba,
+      partes: aba.partes.filter((parte) => {
+        const linha = linhaDaParte(parte.rota);
+        if (!linha) return false;
+        const sub = subDaTela(linha);
+        if (!fonteOk(parte.fonte ?? linha.fonte, vis.fontes)) return false;
+        if (vis.soCrm && !ROTAS_DO_CRM.includes(sub)) return false;
+        if (vis.semAudiencia && sub.endsWith("/audiencia")) return false;
+        if (parte.rota.startsWith(`${A}/`) && !vis.isAdmin) return false;
+        return true;
+      }),
+    }))
+    .filter((aba) => aba.partes.length > 0);
+}
+
+/** Linha do registro (sem busca) de um endereço da clínica, para o título da casca quando nav.ts não tem a tela. */
+export function telaDoCaminho(pathname: string): TelaDoRegistro | null {
+  const sub = subDoEndereco(pathname);
+  if (sub === null) return null;
+  return (
+    REGISTRO_DE_TELAS.find(
+      (t) => t.rota.startsWith(`${ROTA_DA_CLINICA}/`) && !t.busca && t.situacao !== "tirada" && subDaTela(t) === sub,
+    ) ?? null
+  );
 }
 
 const normalizar = (s: string) =>

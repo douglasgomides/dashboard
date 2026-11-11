@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v5.0
 milestone_name: Nexo v5 — Fase 0 + degrau v1
-current_phase: "03.1"
+current_phase: 03.1.1
 current_phase_name: Redesenho das telas com inteligência
 status: executing
 stopped_at: Phase 3 UI-SPEC approved
-last_updated: "2026-11-10T19:22:38.123Z"
+last_updated: "2026-11-11T10:42:18.001Z"
 last_activity: 2026-11-10
 last_activity_desc: Phase 03.1 execution started
-state_head: 4181c71181f593d1b02a611628d60de78bb6f0b3
+state_head: 7e96a09bbd61611e8e97e8da464b9f65bb9bddd0
 progress:
-  total_phases: 15
+  total_phases: 16
   completed_phases: 0
-  total_plans: 28
+  total_plans: 35
   completed_plans: 12
   percent: 0
 ---
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 
 ## Current Position
 
-Phase: 03.1 (Redesenho das telas com inteligência) — EXECUTING
+Phase: 03.1.1 — READY TO EXECUTE
 Plan: 2 of 17
 Status: Ready to execute
 Last activity: 2026-11-10 — Phase 03.1 execution started

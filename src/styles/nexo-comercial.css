@@ -410,3 +410,39 @@
 .cm-etapa--sem { border-style: dashed; background: var(--field); }
 .cm-passagem { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 0 6px 16px; font-size: 13px; line-height: 18px; color: var(--muted-ink); font-weight: 500; }
 .cm-passagem--vazia { padding: 4px 0; }
+
+/* ---------- D-07 e régua de 1,5 tela (03.1.1, plano 03): funil do CRM em degraus compactos ----------
+   O funil (NxFunil) é peça do 03.1-07 e as outras telas dele não mudam: a compactação vale só dentro das telas do CRM no
+   molde. A passagem (a pílula azul-clara) vai para a linha de cada etapa, ao lado do nome e do número, em vez de ocupar uma
+   linha só dela. Nada sai: o texto da passagem e o número de cada etapa continuam inteiros. */
+.nx-pagina:is([data-tela="crm-painel"], [data-tela="jornada"]) .nx-funil__etapa {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "linha passagem" "trilho trilho";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+}
+.nx-pagina:is([data-tela="crm-painel"], [data-tela="jornada"]) .nx-funil__linha { grid-area: linha; justify-content: flex-start; gap: 12px; }
+.nx-pagina:is([data-tela="crm-painel"], [data-tela="jornada"]) .nx-funil__passagem { grid-area: passagem; justify-self: end; margin: 0; }
+.nx-pagina:is([data-tela="crm-painel"], [data-tela="jornada"]) .nx-funil__trilho { grid-area: trilho; }
+
+/* ---------- Régua de 1,5 tela no celular (03.1.1, plano 03): gráfico baixo e sem moldura dupla nas telas juntadas do CRM ----------
+   A altura do gráfico é inline na peça (graficos.tsx, congelada para o SAP): só o CSS a alcança, e só aqui, nas telas do plano. O
+   cartão do gráfico já está dentro da pasta, então no celular perde a moldura própria para não gastar duas bordas. Nada sai. */
+@media (max-width: 560px) {
+  .nx-pagina:is([data-tela="pacientes"], [data-tela="crm-painel"], [data-tela="jornada"], [data-tela="vendas-kommo"]) .nx-linha__alvo { --altura: 140px !important; }
+  .nx-pagina:is([data-tela="pacientes"], [data-tela="crm-painel"], [data-tela="jornada"], [data-tela="vendas-kommo"]) .nx-linha__y { height: 162px !important; }
+  .nx-pasta .nx-pagina:is([data-tela="pacientes"], [data-tela="crm-painel"], [data-tela="jornada"], [data-tela="vendas-kommo"]) .nx-pagina__principal > .nx-card {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+  }
+}
+/* O funil das telas do CRM no celular: nome, número e passagem na mesma linha, sem quebrar o nome da etapa em duas. */
+@media (max-width: 560px) {
+  .nx-pagina:is([data-tela="crm-painel"], [data-tela="jornada"]) .nx-funil__linha { gap: 8px; }
+  .nx-pagina:is([data-tela="crm-painel"], [data-tela="jornada"]) .nx-funil__rotulo { font-size: 14px; line-height: 18px; }
+  .nx-pagina:is([data-tela="crm-painel"], [data-tela="jornada"]) .nx-funil__linha b { font-size: 20px; line-height: 24px; }
+  .nx-pagina:is([data-tela="crm-painel"], [data-tela="jornada"]) .nx-funil__passagem { font-size: 12px; line-height: 16px; padding: 2px 6px; gap: 4px; }
+  .nx-pagina:is([data-tela="crm-painel"], [data-tela="jornada"]) .nx-funil__passagem svg { width: 11px; height: 11px; }
+}

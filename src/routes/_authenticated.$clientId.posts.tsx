@@ -34,10 +34,12 @@ import { useClientRole } from "@/hooks/use-client-role";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { Miniatura, IconeFormato, InfoDica } from "@/components/visual";
 import { NxCard, NxKpi, NxTag, NxHBar, NxListRow } from "@/components/nx";
+import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxTabela, NxVazio } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { IgAbas, IgVitrine } from "@/components/nx/instagram";
+import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import {
   computeConceitosVencedores,
   computeConversionByTag,
@@ -132,22 +134,22 @@ function cartoesDoResumo(posts: Post[]) {
   const classificados = posts.filter((p) => !!p.tema).length;
   const pct = total > 0 ? Math.round((classificados / total) * 100) : 0;
   return [
-    <NxKpi key="n" icone={ic(Layers)} rotulo="Posts no período" valor={fmtNum(total)} nota="publicados no período escolhido" />,
-    <NxKpi
+    <NxCartaoNumero key="n" icone={ic(Layers)} titulo="Posts no período" valor={fmtNum(total)} legenda="publicados no período escolhido" />,
+    <NxCartaoNumero
       key="s"
       icone={ic(Bookmark)}
-      rotulo="Salvamentos acumulados"
+      titulo="Salvamentos acumulados"
       valor={fmtNum(salvos)}
-      nota="soma dos posts do período, desde a publicação até hoje"
+      legenda="soma dos posts do período, desde a publicação até hoje"
       info={<InfoDica rotulo="Sobre Salvamentos acumulados" texto="Soma dos posts publicados no período, desde a publicação até hoje (não é o mesmo que os salvamentos do período na Visão geral)." />}
     />,
-    <NxKpi key="e" icone={ic(Heart)} rotulo="Engajamento acumulado" valor={fmtNum(engaj)} nota="desde a publicação até hoje" />,
-    <NxKpi
+    <NxCartaoNumero key="e" icone={ic(Heart)} titulo="Engajamento acumulado" valor={fmtNum(engaj)} legenda="desde a publicação até hoje" />,
+    <NxCartaoNumero
       key="t"
       icone={ic(Tags)}
-      rotulo="Posts com tema"
+      titulo="Posts com tema"
       valor={`${pct}%`}
-      nota={`${classificados} de ${total}. Sem tema, as análises por assunto ficam vazias`}
+      legenda={`${classificados} de ${total}. Sem tema, as análises por assunto ficam vazias`}
       extra={
         <div className="nx-trk" aria-hidden>
           <i style={{ width: `${Math.max(3, pct)}%` }} />
@@ -801,6 +803,9 @@ function PostsRankingPage() {
   // A leitura é dos posts que a tela já carregou: só regra, sem consulta nova.
   const fatos = useMemo(() => (posts ? fatosDePublicacoes({ de: start, ate: end, hoje, posts }) : null), [posts, start, end, hoje]);
 
+  // Contagem em cinza da aba Posts na pasta do Instagram (D-07): o total que a tela já carregou, sem consulta nova.
+  usePublicarContagem({ clientId, de: start, ate: end, rota: "/_authenticated/$clientId/posts", valor: error ? null : posts ? posts.length || null : undefined });
+
   const cabecalho = {
     tela: "posts" as const,
     titulo: "Consultar publicações",
@@ -835,7 +840,6 @@ function PostsRankingPage() {
           rows.length > 0 ? (
             <>
               <TopDoMes posts={rows} />
-              <RankingDePosts rows={rows} clientId={clientId} periodLabel={periodLabel} />
             </>
           ) : (
             <NxVazio titulo="Sem posts neste período" falta="posts do Instagram sincronizados nesse intervalo" quem="equipe_hub" passo="clicar em Atualizar posts ou escolher outro intervalo de datas" />
@@ -844,6 +848,9 @@ function PostsRankingPage() {
         detalhe={
           rows.length > 0 ? (
             <div style={{ display: "grid", gap: 18 }}>
+              <NxRecolhido titulo="Ranking de posts" resumo="Todos os posts do período por salvamentos, com filtro por formato e a classificação de tema, funil e estágio">
+                <RankingDePosts rows={rows} clientId={clientId} periodLabel={periodLabel} />
+              </NxRecolhido>
               <NxRecolhido titulo="Mais análises dos posts" resumo="Próximos ângulos, o que repetir, conceitos vencedores, quem mais salva e circula, tema × formato, ganchos e retenção dos Reels">
                 <div style={{ display: "grid", gap: 18 }}>
                   <NextAngles posts={rows} periodLabel={periodLabel} />

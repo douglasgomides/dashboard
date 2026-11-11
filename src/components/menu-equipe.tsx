@@ -45,7 +45,7 @@ function searchDoLink(link: LinkDaTela, dateRange?: DateRangeState) {
   return link.params ? { ...(dateRange ?? {}), ...(link.search ?? {}) } : link.search;
 }
 
-function LinkDoRegistro({
+export function LinkDoRegistro({
   tela,
   clientId,
   dateRange,
@@ -245,11 +245,14 @@ export function AbasDaSecao({
   clientId,
   pathname,
   dateRange,
+  ocultas,
 }: {
   perfil: PerfilEquipe;
   clientId: string;
   pathname: string;
   dateRange?: DateRangeState;
+  /** routeIds que a faixa não repete (as telas que a pasta da tela juntada já mostra). Sem a lista, mostra a seção inteira. */
+  ocultas?: ReadonlySet<string>;
 }) {
   const secoes = secoesDaClinica(perfil, { desenvolvimento: import.meta.env.DEV });
   const atual = secaoDoCaminho(secoes, pathname);
@@ -264,10 +267,12 @@ export function AbasDaSecao({
       ul.scrollLeft = Math.max(0, esquerda - 16);
   }, [pathname, atual?.secao.area]);
   if (!atual) return null;
+  const telas = ocultas ? atual.secao.telas.filter((t) => !ocultas.has(t.rota)) : atual.secao.telas;
+  if (!telas.length) return null;
   return (
     <nav aria-label={`Telas de ${atual.secao.area}`} className="nx-abas" data-origem="menu">
       <ul ref={trilho}>
-        {atual.secao.telas.map((t) => (
+        {telas.map((t) => (
           <li key={t.rota}>
             <LinkDoRegistro tela={t} clientId={clientId} dateRange={dateRange} className="nx-aba" atual={t === atual.tela}>
               {t.rotulo}

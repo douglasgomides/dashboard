@@ -138,7 +138,7 @@ Plans:
   3. A leitura só afirma o que o dado sustenta: dado faltando ou não confiável aparece como tal, nunca vira conclusão
   4. O João olha cada tela e diz que entende sem explicação
 
-**Plans:** 4/17 plans executed em 9 ondas (um PR só para a fase; no máximo 2 planos e uma publicação na VPS por onda; cada plano na própria worktree)
+**Plans:** 6/17 plans executed em 9 ondas (um PR só para a fase; no máximo 2 planos e uma publicação na VPS por onda; cada plano na própria worktree)
 
 Plans:
 **Wave 1**
@@ -150,8 +150,8 @@ Plans:
 - [x] 03.1-04-PLAN.md — Peças antigas compartilhadas que o SAP não usa no desenho nx; porta do Playwright configurável
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 03.1-05-PLAN.md — Marketing / Instagram (5 telas); publica; o João olha
-- [ ] 03.1-06-PLAN.md — Versões nx dos painéis de agente, do planejador e das estratégias (o SAP fica igual)
+- [x] 03.1-05-PLAN.md — Marketing / Instagram (5 telas); publica; o João olha
+- [x] 03.1-06-PLAN.md — Versões nx dos painéis de agente, do planejador e das estratégias (o SAP fica igual)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 03.1-07-PLAN.md — Marketing / Anúncios, campanhas e links (rastreio suspeito vira "sem leitura"); publica; o João olha
@@ -178,13 +178,39 @@ Plans:
 
 ### Phase 03.1.1: Tela O que fazer hoje para o médico (INSERTED)
 
-**Goal:** O médico abre o Nexo e cai numa porta de entrada "O que fazer hoje" com 3 a 5 ações da semana (o que aconteceu, o que fazer, quem resolve), tiradas das leituras por regra da fase 03.1, sem IA. Nenhuma tela sai do menu; as 43 telas continuam para a equipe. Pedido do João em 10/11/2026 ("sua recomendação é boa"). Antes de planejar: teste de 5 minutos do Resultados com um médico real (ex.: Lana) — "o que aconteceu?" e "o que faria esta semana?".
-**Requirements**: TBD
-**Depends on:** Phase 03.1
-**Plans:** 0 plans
+**Goal:** Visão do médico com 6 telas (Hoje, Resultados da clínica, Onde os pacientes travam, De onde vêm os pacientes, Instagram, Relatório do período) e as telas repetidas juntadas em abas, sem apagar nenhuma, mais a primeira versão da tela Hoje (a mesma da Phase 9, que depois ganha os números com selo) com 3 a 5 ações tiradas das leituras por regra (sem IA). A equipe continua vendo tudo, agrupado. Cada aba cabe em no máximo uma tela e meia de altura, com o detalhe fechado: nada de página gigante de rolagem. Os endereços antigos levam à aba certa. Lista aprovada pelo João em 10/11/2026 (ver 03.1.1-CONTEXT.md). A fase 03.1 pausa depois da etapa 3 e continua em cima das telas juntadas.
+**Success criteria:**
+1. O médico vê no menu só: O que fazer hoje, Resultados da clínica, Onde os pacientes travam, De onde vêm os pacientes, Instagram e Relatório do período.
+2. Toda tela antiga continua abrindo, como aba de uma tela juntada ou pelo endereço antigo, que leva à aba certa; nenhuma informação some.
+3. Em 375 e 1440 px, a aba aberta de cada tela juntada do médico e a Hoje têm no máximo 1,5 altura de tela com o detalhe fechado (teste automático); as abas da equipe ficam medidas e viram teste quando a 03.1 as puser no molde.
+4. A Hoje mostra de 3 a 5 ações, cada uma com o número que a sustenta e quem resolve; com dado ruim diz "sem leitura: motivo".
+5. O João entende a visão do médico sem explicação.
+
+**Requirements**: MEDV-01, MEDV-02, MEDV-03, MEDV-04, MEDV-05
+**Depends on:** Phase 03.1, etapas 1 a 3 (o resto da 03.1 vem depois desta)
+**Plans:** 3/7 plans executed (um PR só para a fase; um executor por vez, cada um commita o próprio trabalho; o orquestrador publica depois do 04 e do 07)
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 03.1.1 to break down)
+**Wave 1**
+- [x] 03.1.1-01-PLAN.md — Tracer: abas em pasta de ponta a ponta na tela juntada Instagram (aba = caminho da tela antiga, log aba por aba pelo routeId sem migration, contagem sem consulta nova, medida de altura)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 03.1.1-02-PLAN.md — D-07 nas peças compartilhadas do molde (pílula de ação na leitura, cartão com ícone no círculo, número com legenda, variação em pílula, laranja/listrado/tracejado); Instagram em 1,5 tela; contrato em molde-da-pagina.md
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [x] 03.1.1-03-PLAN.md — Onde os pacientes travam (Funil com 2 partes, Consultas, Vendas, Jornada) e Por origem no molde, no D-07 e em 1,5 tela
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 03.1.1-04-PLAN.md — Anúncios, Links e Conteúdo × Comercial no molde e em 1,5 tela (26 medidas no médico); publica; o João olha as 3 telas juntadas
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 03.1.1-05-PLAN.md — O que fazer hoje: primeira versão da tela Hoje da Phase 9 (3 a 5 ações por regra, aviso de poucas ações, sem leitura, sem selo, D-07, 1,5 tela)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 03.1.1-06-PLAN.md — Menu do médico com 6 itens, entrada na Hoje e busca do médico; specs do menu antigo atualizados
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 03.1.1-07-PLAN.md — Equipe agrupada (Plano, Agentes com a Central, Conteúdo, Atendimento, Configurar CRM), busca com "Seção › Aba", alturas da equipe registradas; publica; o João olha a visão do médico e a da equipe (critério 5)
 
 ### Phase 4: Pacote do template do WhatsApp à Meta
 
@@ -271,6 +297,8 @@ Plans:
   3. Com meta cadastrada, o médico vê "12 de 20, faltam 8 em 9 dias", sem projeção; carregando (após 3 s, "Calculando, clínica grande leva até 30 s"), vazio (com a condição que falta) e erro aparecem dentro do bloco, sem derrubar a tela
   4. O menu do médico tem só Hoje e Ajuda e fontes, onde ele vê de onde vem cada número e quando foi calculado; as telas com número sem selo saem do médico e ficam para a equipe com o aviso "sem selo"
   5. Um teste no CI barra palavras proibidas no texto para o médico ("em risco", "vai", "deve", adjetivos, promessa); print do site no ar conferido no celular e no computador com a Lana
+
+**Nota de 10/11/2026 (João)**: a primeira versão da Hoje nasce na Phase 03.1.1 (ações por regra, aviso "sem selo"); esta fase evolui a mesma tela, sem criar outra. O médico vê 6 itens desde a 03.1.1; aqui o João decide se o menu dele encolhe para Hoje e Ajuda e fontes (MENU-06) ou fica com 6.
 
 **Plans**: TBD
 **UI hint**: yes

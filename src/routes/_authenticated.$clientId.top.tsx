@@ -12,11 +12,13 @@ import { fatosDoInstagram, fatosSemInstagram } from "@/lib/leitura/fatos-instagr
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { Miniatura, IconeFormato } from "@/components/visual";
 import { Trophy, Eye, Target, Bookmark, Share2, Heart, MessageCircle, FastForward, Timer, Clock, UserPlus, Reply, Users, Radio, Film, Image as ImageIcon, CircleDot, BarChart3, Layers, ArrowDownToLine } from "lucide-react";
-import { NxCard, NxKpi, NxTag, NxListRow, NxColunas } from "@/components/nx";
+import { NxCard, NxTag, NxListRow, NxColunas } from "@/components/nx";
+import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxVazio } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { IgAbas, IgVitrine } from "@/components/nx/instagram";
+import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 
 export const Route = createFileRoute("/_authenticated/$clientId/top")({
   component: TopPage,
@@ -189,6 +191,16 @@ function TopPage() {
     return fatosDoInstagram(lerPeriodo({ diario: [], posts: posts.data }), { de: start, ate: end, hoje, posts: posts.data }, "top");
   }, [temIg, posts.data, start, end, hoje]);
 
+  // Contagem em cinza da aba Destaques na pasta do Instagram (D-07): posts e reels em destaque da lista que a tela já carregou
+  // (as duas listas, independente da aba escolhida), sem consulta nova. null quando a tela diz que não há dado.
+  usePublicarContagem({
+    clientId,
+    de: start,
+    ate: end,
+    rota: "/_authenticated/$clientId/top",
+    valor: fontes.isLoading ? undefined : !temIg || posts.error ? null : posts.data ? topN(posts.data, "post", metrica, 20).length + topN(posts.data, "reel", metrica, 20).length || null : undefined,
+  });
+
   const rotuloMetrica = METRICAS.find((m) => m.id === metrica)?.rotulo ?? "";
   const rotuloStory = METRICAS_STORY.find((m) => m.id === metricaStory)?.rotulo ?? "";
   const fmtV = (v: number) => (metrica === "taxa_salvamento" ? fmtPct(v, 2) : fmtN(v));
@@ -252,9 +264,9 @@ function TopPage() {
     const storiesOk = guardados.data && !guardados.data.indisponivel;
     const cartoesStories = storiesOk
       ? ([
-          <NxKpi key="g" icone={ic(CircleDot)} rotulo="Stories guardados" valor={fmtN(guardados.data!.linhas.length)} nota="no período" />,
-          <NxKpi key="p" icone={ic(Trophy)} rotulo="1º lugar" valor={topStories[0] ? fmtN(Number(topStories[0][metricaStory])) : "Sem dado"} nota={rotuloStory.toLowerCase()} />,
-          <NxKpi key="v" icone={ic(Radio)} rotulo="No ar agora" valor={vivos?.ok ? fmtN(vivos.dados.length) : "Sem dado"} nota="lidos ao vivo da Meta" />,
+          <NxCartaoNumero key="g" icone={ic(CircleDot)} titulo="Stories guardados" valor={fmtN(guardados.data!.linhas.length)} legenda="no período" />,
+          <NxCartaoNumero key="p" semMedida={!topStories[0]} icone={ic(Trophy)} titulo="1º lugar" valor={topStories[0] ? fmtN(Number(topStories[0][metricaStory])) : "Sem dado"} legenda={rotuloStory.toLowerCase()} />,
+          <NxCartaoNumero key="v" semMedida={!vivos?.ok} icone={ic(Radio)} titulo="No ar agora" valor={vivos?.ok ? fmtN(vivos.dados.length) : "Sem dado"} legenda="lidos ao vivo da Meta" />,
         ] as unknown as [ReactNode, ReactNode?, ReactNode?, ReactNode?])
       : undefined;
     const corpoStories = (
@@ -372,9 +384,9 @@ function TopPage() {
   }
 
   const cartoes = [
-    <NxKpi key="n" icone={ic(Layers)} rotulo={`${aba === "reels" ? "Reels" : "Posts"} no período`} valor={fmtN(todosDoTipo.length)} nota={`o ranking mostra os ${top.length} melhores`} />,
-    <NxKpi key="1" icone={ic(Trophy)} rotulo="1º lugar" valor={fmtV(top[0].v)} nota={rotuloMetrica.toLowerCase()} />,
-    <NxKpi key="u" icone={ic(ArrowDownToLine)} rotulo={`Para entrar no top ${top.length}`} valor={fmtV(top[top.length - 1].v)} nota={`${rotuloMetrica.toLowerCase()} do ${top.length}º lugar`} />,
+    <NxCartaoNumero key="n" icone={ic(Layers)} titulo={`${aba === "reels" ? "Reels" : "Posts"} no período`} valor={fmtN(todosDoTipo.length)} legenda={`o ranking mostra os ${top.length} melhores`} />,
+    <NxCartaoNumero key="1" icone={ic(Trophy)} titulo="1º lugar" valor={fmtV(top[0].v)} legenda={rotuloMetrica.toLowerCase()} />,
+    <NxCartaoNumero key="u" icone={ic(ArrowDownToLine)} titulo={`Para entrar no top ${top.length}`} valor={fmtV(top[top.length - 1].v)} legenda={`${rotuloMetrica.toLowerCase()} do ${top.length}º lugar`} />,
   ] as unknown as [ReactNode, ReactNode?, ReactNode?, ReactNode?];
 
   const principal = (
@@ -391,11 +403,15 @@ function TopPage() {
     </NxCard>
   );
 
+  // Régua de 1,5 tela (MEDV-04): o pódio é o trabalho da aba e fica à vista, com o "Ordenar por" no cabeçalho do cartão e a
+  // frase "só alcance orgânico" no subtítulo dele; o aviso completo e o gráfico da distância entre os primeiros passam para os Detalhes.
   const corpo = (
-    <>
-      <div className="ig-barra-acoes">
-        <NxAviso tom="info" titulo="Números só do alcance orgânico." detalhe="O Instagram mostra no post o total com impulsionamento; aqui entram só os números orgânicos, então um post turbinado aparece com número maior lá do que aqui." />
-        {posts.data && (
+    <NxCard
+      icone={ic(Trophy)}
+      titulo="Pódio"
+      subtitulo={`Os 3 ${nomeTipo} com mais ${rotuloMetrica.toLowerCase()} no período. Números só do alcance orgânico.`}
+      acao={
+        posts.data ? (
           <div className="ig-filtros">
             <label htmlFor="metrica-top">Ordenar por</label>
             <select id="metrica-top" className="ig-select" value={metrica} onChange={(e) => setMetrica(e.target.value as MetricaTop)}>
@@ -406,32 +422,33 @@ function TopPage() {
               ))}
             </select>
           </div>
-        )}
-      </div>
-      <NxCard icone={ic(Trophy)} titulo="Pódio" subtitulo={`Os 3 ${nomeTipo} com mais ${rotuloMetrica.toLowerCase()} no período`}>
-        <IgVitrine
-          itens={top.slice(0, 3).map(({ p, v }) => ({
-            id: p.id,
-            href: p.permalink,
-            imagem: <Miniatura url={p.thumbnail_url} formato={p.format} className="w-full" />,
-            titulo: gancho(p.caption) || "(sem legenda)",
-            valor: fmtV(v),
-            rotulo: rotuloMetrica.toLowerCase(),
-            extra: (
-              <>
-                {p.format && <NxTag tom="g">{aba === "reels" ? "Reels" : nomeFormato(p.format)}</NxTag>}
-                {p.tema && <NxTag tom="b">{p.tema}</NxTag>}
-                <NxTag tom="g">{quando(p.posted_at)}</NxTag>
-              </>
-            ),
-          }))}
-        />
-      </NxCard>
-    </>
+        ) : undefined
+      }
+    >
+      <IgVitrine
+        itens={top.slice(0, 3).map(({ p, v }) => ({
+          id: p.id,
+          href: p.permalink,
+          imagem: <Miniatura url={p.thumbnail_url} formato={p.format} className="w-full" />,
+          titulo: gancho(p.caption) || "(sem legenda)",
+          valor: fmtV(v),
+          rotulo: rotuloMetrica.toLowerCase(),
+          extra: (
+            <>
+              {p.format && <NxTag tom="g">{aba === "reels" ? "Reels" : nomeFormato(p.format)}</NxTag>}
+              {p.tema && <NxTag tom="b">{p.tema}</NxTag>}
+              <NxTag tom="g">{quando(p.posted_at)}</NxTag>
+            </>
+          ),
+        }))}
+      />
+    </NxCard>
   );
 
   const detalhe = (
     <div style={{ display: "grid", gap: 18 }}>
+      <NxAviso tom="info" titulo="Números só do alcance orgânico." detalhe="O Instagram mostra no post o total com impulsionamento; aqui entram só os números orgânicos, então um post turbinado aparece com número maior lá do que aqui." />
+      {principal}
       <NxCard icone={ic(Target)} titulo="O que os melhores têm em comum" subtitulo="Um padrão para testar, não uma regra">
         {padroes.frases.length > 0 ? (
           <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 8, fontSize: 15, lineHeight: "22px", fontWeight: 500 }}>
@@ -457,7 +474,7 @@ function TopPage() {
 
   return (
     <div className="nexo-ig">
-      <PaginaNexo {...cabecalho} leitura={leitura} cartoes={cartoes} principal={principal} corpo={corpo} detalhe={detalhe} />
+      <PaginaNexo {...cabecalho} leitura={leitura} cartoes={cartoes} corpo={corpo} detalhe={detalhe} />
     </div>
   );
 }

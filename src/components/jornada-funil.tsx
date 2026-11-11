@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowDown, Plug } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -85,14 +85,26 @@ function Passagem({ e }: { e: EtapaFunil }) {
   );
 }
 
-export function JornadaFunil({ clientId, start, end }: { clientId: string; start: string; end: string }) {
-  const q = useQuery({ queryKey: ["jornada-funil", clientId, start, end], queryFn: () => lerFunil(clientId, start, end), staleTime: 5 * 60_000, retry: false });
-  const diagnostico = useDiagnosticoComercial(clientId, start, end);
+/**
+ * O funil de 7 etapas do período, montado com o que a tela já carrega. Quem mostra o funil (este componente) e quem lê o funil
+ * (a leitura da Jornada, 03.1.1) usam esta mesma conta e as mesmas chaves do React Query: nenhuma consulta nova.
+ */
+export function useFunilDaJornada(clientId: string, start: string, end: string, enabled = true) {
+  const q = useQuery({ queryKey: ["jornada-funil", clientId, start, end], queryFn: () => lerFunil(clientId, start, end), staleTime: 5 * 60_000, retry: false, enabled });
+  const diagnostico = useDiagnosticoComercial(clientId, start, end, enabled);
   // Pessoas novas e agendados com a regra da tela Pacientes do período (mesma consulta em cache). Se ela falhar, as
   // etapas mostram os cards do CRM, com esse nome.
-  const pacientes = usePacientesPeriodo(clientId, start, end);
+  const pacientes = usePacientesPeriodo(clientId, start, end, enabled);
   const pac = pacientes.isError ? null : pacientes.data;
-  const funil = q.data !== undefined && pac !== undefined ? montarFunil(q.data, diagnostico.data?.dados.escopo === "periodo" ? diagnostico.data.funil : null, pac) : null;
+  const funil = useMemo(
+    () => (q.data !== undefined && pac !== undefined ? montarFunil(q.data, diagnostico.data?.dados.escopo === "periodo" ? diagnostico.data.funil : null, pac) : null),
+    [q.data, pac, diagnostico.data],
+  );
+  return { q, pacientes, pac, funil };
+}
+
+export function JornadaFunil({ clientId, start, end }: { clientId: string; start: string; end: string }) {
+  const { q, pacientes, pac, funil } = useFunilDaJornada(clientId, start, end);
   const compartilhado = pac?.crm_compartilhado_com ?? [];
   // Barras em escala log: alcance (centenas de milhares) e venda (unidades) no mesmo eixo.
   const maxLog = funil ? Math.max(1, ...funil.etapas.map((e) => (e.valor ? Math.log10(e.valor + 1) : 0))) : 1;

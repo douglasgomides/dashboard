@@ -1,0 +1,177 @@
+/* Abas em pasta das telas juntadas (Phase 3.1.1, D-07, referência aprovada pelo João em 10/11/2026).
+   Três níveis, três desenhos: seção (menu), aba em pasta (.nx-pasta) e filtro segmentado (.nx-segmentado, pílula preta).
+   A aba atual é branca e encaixa no corpo da pasta, com a mesma cor e sem borda entre os dois; as outras abas são pílulas
+   translúcidas. A contagem fica em cinza ao lado do rótulo ("—" quando ainda não há número, nunca "0").
+   Só tokens de nexo-system.css, peso de letra nunca abaixo de 500, alvo de toque de 44 px, movimento só sem reduced-motion. */
+
+.app.product-workspace:not(.sap-workspace) .nx-pasta {
+  display: grid;
+  /* minmax(0, 1fr): sem isso a coluna cresce até a largura das abas e a página rola na horizontal (a faixa rola sozinha). */
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Faixa das abas: rola na horizontal só dentro dela (a página não rola). */
+.app.product-workspace:not(.sap-workspace) .nx-pasta__abas {
+  min-width: 0;
+  max-width: 100%;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pasta__abas ul {
+  /* position: relative prende o texto sr-only ("sem número") dentro da faixa que rola; sem isso ele vira rolagem da página. */
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  margin: 0;
+  padding: 0 2px;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pasta__abas ul::-webkit-scrollbar {
+  display: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pasta__abas li {
+  flex: none;
+}
+
+/* Aba: pílula translúcida de topo arredondado. */
+.app.product-workspace:not(.sap-workspace) .nx-pasta__aba {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: color-mix(in srgb, var(--field) 70%, transparent);
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: var(--peso-rotulo);
+  line-height: 20px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pasta__aba:hover {
+  background: var(--field);
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-pasta__aba:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: -2px;
+}
+/* Aba atual: mesma cor do corpo, sem borda embaixo, encaixada no corpo (margem negativa de 1 px cobre a borda do corpo). */
+.app.product-workspace:not(.sap-workspace) .nx-pasta__aba[aria-current] {
+  position: relative;
+  margin-bottom: -1px;
+  border-color: var(--line);
+  background: var(--white);
+  color: var(--text);
+  font-weight: var(--peso-rotulo-forte);
+}
+
+/* Contagem em cinza ao lado do rótulo. */
+.app.product-workspace:not(.sap-workspace) .nx-pasta__contagem {
+  color: var(--text-faint);
+  font-size: 14px;
+  font-weight: var(--peso-rotulo);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Corpo: o cartão grande onde mora a tela da aba aberta. */
+.app.product-workspace:not(.sap-workspace) .nx-pasta__corpo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+  padding: 16px 24px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--white);
+}
+
+/* Terceiro nível: filtro segmentado, pílula preta no escolhido. */
+.app.product-workspace:not(.sap-workspace) .nx-segmentado {
+  min-width: 0;
+  max-width: 100%;
+}
+.app.product-workspace:not(.sap-workspace) .nx-segmentado ul {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+  gap: 2px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border-radius: 999px;
+  background: var(--field);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-segmentado ul::-webkit-scrollbar {
+  display: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-segmentado li {
+  flex: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-segmentado__opcao {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: var(--peso-rotulo);
+  line-height: 20px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-segmentado__opcao:hover {
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-segmentado__opcao:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: -2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-segmentado__opcao[aria-current="page"] {
+  background: var(--ink);
+  color: var(--white);
+  font-weight: var(--peso-rotulo-forte);
+}
+.app.product-workspace:not(.sap-workspace) .nx-segmentado__contagem {
+  color: var(--text-faint);
+  font-size: 14px;
+  font-weight: var(--peso-rotulo);
+  font-variant-numeric: tabular-nums;
+}
+.app.product-workspace:not(.sap-workspace) .nx-segmentado__opcao[aria-current="page"] .nx-segmentado__contagem {
+  color: var(--white);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .app.product-workspace:not(.sap-workspace) .nx-pasta__aba,
+  .app.product-workspace:not(.sap-workspace) .nx-segmentado__opcao {
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+}
+
+@media (max-width: 820px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pasta__corpo {
+    padding: 16px;
+    border-radius: 12px;
+  }
+}
+
+/* Régua de 1,5 tela (MEDV-04): no celular a pasta gasta menos espaço em volta da tela. */
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pasta__corpo {
+    gap: 12px;
+    padding: 12px;
+  }
+}

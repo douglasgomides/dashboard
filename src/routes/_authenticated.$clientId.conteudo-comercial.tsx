@@ -173,8 +173,7 @@ function ConteudoComercialPage() {
   ] as unknown as [ReactNode, ReactNode?, ReactNode?, ReactNode?];
 
   const principal = (
-    <NxCard nivel={2} icone={ic(CalendarDays)} titulo="Posts e conversas por dia" subtitulo="Se as conversas sobem nos dias com post, pode haver relação; é coincidência no tempo, não prova">
-      {como("Posts e conversas por dia", "As linhas azul e verde são as conversas novas e quantas agendaram (eixo da esquerda); a linha clara é a quantidade de posts do dia (eixo da direita). Setas do teclado escolhem o dia.")}
+    <NxCard nivel={2} icone={ic(CalendarDays)} titulo="Posts e conversas por dia" subtitulo="Coincidência no tempo, não é prova">
       {d.dias.length === 0 ? (
         <NxAviso tom="info" titulo="Nenhum dia do período tem posts ou conversas." />
       ) : (
@@ -188,13 +187,15 @@ function ConteudoComercialPage() {
           formatarData={(x) => `${x.slice(8, 10)}/${x.slice(5, 7)}`}
           formatarValor={fmtN}
           rotulo="Posts, conversas e agendamentos por dia"
+          altura={120}
         />
       )}
     </NxCard>
   );
 
-  // Avisos de dado e a atribuição por post: fixos, no corpo, antes dos detalhes.
-  const corpo = (
+  // Avisos de dado e a atribuição por post (03.1.1-04, régua de 1,5 tela): são a primeira coisa dos Detalhes, e a leitura do topo
+  // continua dizendo "origem por post não medida" em "Ver mais", com quem resolve. Nada saiu da tela.
+  const avisos = (
     <>
       <NxAviso
         tom="info"
@@ -225,6 +226,8 @@ function ConteudoComercialPage() {
 
   const detalhe = (
     <div style={{ display: "grid", gap: 18 }}>
+      {avisos}
+      {como("Posts e conversas por dia", "Se as conversas sobem nos dias com post, pode haver relação; é coincidência no tempo, não prova. As linhas azul e verde são as conversas novas e quantas agendaram (eixo da esquerda); a linha clara é a quantidade de posts do dia (eixo da direita). Setas do teclado escolhem o dia.")}
       <NxCard
         icone={ic(Tag)}
         titulo="Tema do post × assunto da conversa"
@@ -490,7 +493,6 @@ function ConteudoComercialPage() {
         leitura={<LeituraDaTela fatos={fatos} carregando={fatos == null} semSelo />}
         cartoes={cartoes}
         principal={principal}
-        corpo={corpo}
         detalhe={detalhe}
       />
     </div>

@@ -15,6 +15,7 @@ import { SyncButton } from "@/components/sync-button";
 import { fmtFracao, MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { SeguidoresSemana } from "@/components/seguidores-impulsionados";
 import { NxCard, NxKpi, NxTag } from "@/components/nx";
+import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxTabela, NxVazio } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
@@ -174,33 +175,36 @@ function ConteudoPage() {
   const melhorFormato = fm?.melhorFormato ?? null;
 
   const cartoes = [
-    <NxKpi
+    <NxCartaoNumero
       key="seg"
       icone={ic(Users)}
-      rotulo="Seguidores hoje"
+      titulo="Seguidores hoje"
+      semMedida={ultimo == null}
       valor={ultimo != null ? fmtN(ultimo) : "Sem dado"}
-      nota={seg?.lastDate ? `última coleta em ${fmtDiaBR(seg.lastDate)}` : "nenhuma coleta no período"}
+      legenda={seg?.lastDate ? `última coleta em ${fmtDiaBR(seg.lastDate)}` : "nenhuma coleta no período"}
     />,
-    <NxKpi
+    <NxCartaoNumero
       key="var"
       icone={ic(TrendingUp)}
-      rotulo="Variação no período"
+      titulo="Variação no período"
+      semMedida={seg?.delta == null}
       valor={seg?.delta == null ? "Sem dado" : `${seg.delta >= 0 ? "+" : "−"}${fmtN(Math.abs(seg.delta))}`}
-      nota={seg?.delta == null ? "precisa de 2 dias com contagem" : `entre ${fmtDiaBR(seg.firstDate!)} e ${fmtDiaBR(seg.lastDate!)}`}
+      legenda={seg?.delta == null ? "precisa de 2 dias com contagem" : `entre ${fmtDiaBR(seg.firstDate!)} e ${fmtDiaBR(seg.lastDate!)}`}
     />,
-    <NxKpi
+    <NxCartaoNumero
       key="saldo"
       icone={ic(Scale)}
-      rotulo="Saldo do período"
+      titulo="Saldo do período"
+      semMedida={!(cresc && cresc.diasMedidos)}
       valor={cresc && cresc.diasMedidos ? `${cresc.liquido >= 0 ? "+" : "−"}${fmtN(Math.abs(cresc.liquido))}` : "Sem dado"}
-      nota={cresc && cresc.diasMedidos ? `entraram ${fmtN(cresc.novos)} e saíram ${fmtN(cresc.saidas)}` : "sem dias medidos no período"}
+      legenda={cresc && cresc.diasMedidos ? `entraram ${fmtN(cresc.novos)} e saíram ${fmtN(cresc.saidas)}` : "sem dias medidos no período"}
     />,
-    <NxKpi
+    <NxCartaoNumero
       key="formato"
       icone={ic(Trophy)}
-      rotulo="Formato que mais alcança"
+      titulo="Formato que mais alcança"
       valor={melhorFormato ? melhorFormato.label : "Sem resposta"}
-      nota={melhorFormato ? `${fmtN(melhorFormato.reachMedian)} contas por post (mediana)` : (fm?.melhorFormatoMotivo ?? "sem posts no período")}
+      legenda={melhorFormato ? `${fmtN(melhorFormato.reachMedian)} contas por post (mediana)` : (fm?.melhorFormatoMotivo ?? "sem posts no período")}
     />,
   ] as const;
 
@@ -226,11 +230,14 @@ function ConteudoPage() {
           {seg?.points.length ? "só 1 dia tem contagem de seguidores no período." : "nenhum dia do período tem contagem de seguidores."}
         </NxAviso>
       )}
-      {seg && (
+      {/* Só o que pede atenção fica à vista; a cobertura em ordem fica nos Detalhes (régua de 1,5 tela, MEDV-04). */}
+      {seg && (seg.coverage < 0.6 || !seg.projection.ok || (seg.projection.ok && seg.gaps.length > 0)) && (
         <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
-          <NxAviso tom={seg.coverage < 0.6 ? "atencao" : "info"} titulo={`${seg.daysWithData} de ${seg.expectedDays} dias com contagem`}>
-            ({Math.round(seg.coverage * 100)}% do período, mínimo 60%)
-          </NxAviso>
+          {seg.coverage < 0.6 && (
+            <NxAviso tom="atencao" titulo={`${seg.daysWithData} de ${seg.expectedDays} dias com contagem`}>
+              ({Math.round(seg.coverage * 100)}% do período, mínimo 60%)
+            </NxAviso>
+          )}
           {!seg.projection.ok && (
             <NxAviso
               tom="atencao"
@@ -251,6 +258,13 @@ function ConteudoPage() {
 
   const detalhe = (
     <div style={{ display: "grid", gap: 18 }}>
+      {seg && seg.coverage >= 0.6 && (
+        <NxCard icone={ic(LineIcon)} titulo="Cobertura da contagem de seguidores" subtitulo="Quantos dias do período têm contagem">
+          <NxAviso tom="info" titulo={`${seg.daysWithData} de ${seg.expectedDays} dias com contagem`}>
+            ({Math.round(seg.coverage * 100)}% do período, mínimo 60%)
+          </NxAviso>
+        </NxCard>
+      )}
       {cresc && cresc.days.length > 0 && (
         <NxCard icone={ic(Scale)} titulo="Crescimento: bruto × líquido" subtitulo="Novos − saíram = o que mudou no total">
           <NxComoCalcula titulo="Como ler: crescimento bruto e líquido">
