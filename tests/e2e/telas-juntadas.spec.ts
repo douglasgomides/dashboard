@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 import { SECOES_JUNTADAS } from "../../src/lib/registro-de-telas";
-import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAudiencia, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
+import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAudiencia, mockCrm, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 
 // Telas juntadas do médico (Phase 3.1.1, plano 01): a pasta com abas em pasta, cada aba é o caminho da tela antiga (D-04,
 // emenda de 10/11), o log grava o routeId da aba (D-06) e a pasta não busca dado. Aqui: Instagram de ponta a ponta, as outras
@@ -352,4 +352,63 @@ for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
       expect(proibidas.has(cores.fundo), `${rotulo}: variação ${i + 1} com a cor de bom ou ruim (fundo)`).toBe(false);
     }
   });
+}
+
+// ===================================================================================================================
+// Plano 03: Onde os pacientes travam (4 abas, Funil com 2 partes) e De onde vêm os pacientes > Por origem, no molde, no desenho
+// do D-07 e dentro de 1,5 tela. Dados fictícios (mockPessoas e mockCrm).
+// ===================================================================================================================
+type ParteMedida = { pasta: string; aba: string; parte?: string; sub: string; slug: string };
+const PARTES_DO_CRM: ParteMedida[] = [
+  { pasta: "Onde os pacientes travam", aba: "Funil", parte: "No CRM", sub: "crm-painel", slug: "no-crm" },
+];
+
+async function abrirParte(page: Page, context: BrowserContext, perfil: "viewer" | "admin", sub: string, largura: { width: number; height: number }) {
+  await mockAccount(context, perfil);
+  await mockPessoas(context);
+  await mockCrm(context);
+  await page.setViewportSize(largura);
+  await page.goto(`/${CID}/${sub}?preset=30d`);
+}
+
+for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug } of PARTES_DO_CRM) {
+  for (const perfil of ["viewer", "admin"] as const) {
+    test(`${perfil}: ${nomeDaAba}${parte ? ` > ${parte}` : ""} abre no molde com leitura, pílula de ação e cartões com ícone redondo`, async ({ page, context }) => {
+      await abrirParte(page, context, perfil, sub, { width: 1440, height: 900 });
+      const nav = pasta(page, nomeDaPasta);
+      await expect(nav).toBeVisible();
+      await expect(aba(nav, nomeDaAba)).toHaveAttribute("aria-current", parte && sub !== "pacientes" ? "true" : "page");
+      if (parte) {
+        const partes = page.getByRole("navigation", { name: `Partes de ${nomeDaAba}`, exact: true });
+        await expect(partes.getByRole("link", { name: parte })).toHaveAttribute("aria-current", "page");
+      }
+      const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+      await expect(leitura).toBeVisible();
+      await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+      await expect(leitura.getByText(/O que aconteceu|Sem leitura:/).first()).toBeVisible();
+      await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
+      await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
+      const cartoes = page.locator("[data-juntada] .nx-pagina__cartoes > *");
+      await expect(cartoes.first()).toBeVisible();
+      const total = await cartoes.count();
+      expect(total).toBeGreaterThanOrEqual(1);
+      expect(total).toBeLessThanOrEqual(4);
+      for (let i = 0; i < total; i++) {
+        const icone = cartoes.nth(i).locator(".nx-tile, .nx-cartao__icone");
+        await expect(icone, `${slug}: cartão ${i + 1} sem ícone`).toHaveCount(1);
+        expect(await icone.evaluate((el) => getComputedStyle(el).borderRadius), `${slug}: ícone do cartão ${i + 1} não é redondo`).toBe("50%");
+      }
+    });
+  }
+
+  for (const largura of TELAS_DE_MEDIDA) {
+    test(`MEDV-04: ${nomeDaAba}${parte ? ` > ${parte}` : ""} no máximo 1,5 tela em ${largura.width}x${largura.height} com o detalhe fechado`, async ({ page, context }) => {
+      await abrirParte(page, context, "admin", sub, largura);
+      const { altura, janela } = await alturaDaAbaAberta(page);
+      console.log(`altura-travam parte=${slug} largura=${largura.width} altura=${Math.round(altura)} janela=${janela} razao=${(altura / janela).toFixed(2)}`);
+      await page.screenshot({ path: `test-results/redesenho/juntada-travam-${slug}-${largura.width}.png`, fullPage: true });
+      expect(altura, `${slug} a ${largura.width}px: ${Math.round(altura)} px de ${janela} px (${(altura / janela).toFixed(2)}x)`).toBeLessThanOrEqual(LIMITE_DE_ALTURA * janela);
+      expect(await semRolagemLateral(page)).toBe(true);
+    });
+  }
 }

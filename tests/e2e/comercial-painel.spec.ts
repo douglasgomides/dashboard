@@ -71,6 +71,12 @@ for (const width of [375, 1440]) {
     await dados(context);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/crm-painel?preset=7d`);
+    // No molde (03.1.1): os 4 números do topo são cartões, o funil vem logo abaixo da leitura e o resto fica nos Detalhes.
+    const topo = page.locator(".nx-pagina__cartoes");
+    await expect(topo.locator(".nx-cartao")).toHaveCount(4);
+    await expect(topo.locator(".nx-numero__valor").first()).toHaveText("68");
+    await expect(page.getByRole("figure", { name: "Funil comercial do período" })).toBeVisible();
+    await page.locator(".nx-pagina__detalhe > details > summary").click();
     const periodo = page.getByRole("region", { name: "No período selecionado" });
     await expect(periodo.locator(".nx-kpi")).toHaveCount(4);
     await expect(periodo.locator(".ws-metric-value").first()).toHaveText("68");
