@@ -176,3 +176,10 @@
 .nexo-mkt .nx-etapa h3 { font-weight: 700; letter-spacing: .02em; }
 .nexo-mkt .nx-nota.flex > span { font-weight: 500; }
 .nexo-mkt .nx-hbars a.nx-row .nx-hb__linha > span:first-child { white-space: normal; }
+
+/* ---------- Resultados dos anúncios no molde (03.1.1-04): régua de 1,5 tela no celular ---------- */
+/* O gráfico do dia ocupa menos espaço entre a legenda e as barras; só espaço e tamanho, nenhuma informação sai. */
+@media (max-width: 820px) {
+  .nx-pagina[data-tela="anuncios"] .nx-bl { gap: 6px; }
+  .nx-pagina[data-tela="anuncios"] .nx-linha__legenda { gap: 0 14px; font-size: 12px; line-height: 17px; }
+}
