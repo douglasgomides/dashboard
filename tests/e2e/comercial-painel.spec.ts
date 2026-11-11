@@ -96,9 +96,10 @@ for (const width of [375, 1440]) {
     await page.setViewportSize({ width, height: 900 });
 
     await page.goto(`/${CID}/vendas-kommo`);
-    const base = page.getByRole("region", { name: "Números da base" });
-    await expect(base.locator(".ws-metric-value")).toHaveText(["400", "50", "70", "280"]);
+    // No molde (03.1.1): os 4 números são cartões, o gráfico por origem vem logo abaixo e a pizza fica nos Detalhes.
+    await expect(page.locator(".nx-pagina__cartoes .nx-numero__valor")).toHaveText(["400", "50", "70", "280"]);
     await expect(page.getByRole("list", { name: "Leads por origem" })).toBeVisible();
+    await page.locator(".nx-pagina__detalhe > details > summary").click();
     await expect(page.locator(".nx-pizza svg[role=img]")).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
 

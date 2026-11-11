@@ -367,6 +367,8 @@ const PARTES_DO_CRM: ParteMedida[] = [
   { pasta: TRAVAM, aba: "Consultas", sub: "consultas", slug: "consultas", semCartoes: true },
   { pasta: TRAVAM, aba: "Vendas", sub: "vendas", slug: "vendas", semCartoes: true },
   { pasta: TRAVAM, aba: "Jornada", sub: "jornada", slug: "jornada" },
+  // De onde vêm os pacientes > Por origem (Resultados por origem do CRM).
+  { pasta: "De onde vêm os pacientes", aba: "Por origem", sub: "vendas-kommo", slug: "por-origem" },
 ];
 
 async function abrirParte(page: Page, context: BrowserContext, perfil: "viewer" | "admin", sub: string, largura: { width: number; height: number }) {
@@ -466,4 +468,15 @@ test("Jornada: a leitura diz que a maioria dos contatos está sem pessoa ligada 
   const detalhes = page.locator("[data-juntada] details#detalhes-jornada");
   await detalhes.locator(":scope > summary").click();
   await expect(detalhes.locator(".cm-aviso--critico").getByText(/% dos leads criados no período não estão ligados/)).toBeVisible();
+});
+
+test("De onde vêm os pacientes: a aba Por origem mostra em cinza o número de origens com venda que a própria aba carregou", async ({ page, context }) => {
+  await abrirParte(page, context, "viewer", "vendas-kommo", { width: 1440, height: 900 });
+  const nav = pasta(page, "De onde vêm os pacientes");
+  await expect(aba(nav, "Por origem")).toHaveAttribute("aria-current", "page");
+  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first()).not.toHaveAttribute("data-modo", "carregando");
+  // mockCrm: Instagram e Indicação têm ganho; "Não informado" não é uma origem e não entra na conta.
+  await expect(aba(nav, "Por origem").locator(".nx-pasta__contagem")).toHaveText("2");
+  // A leitura afirma a origem líder só com a base de leadsRanking (Instagram tem 300 contatos).
+  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first().getByText(/A origem com mais ganhos registrados é "Instagram"/)).toBeVisible();
 });
