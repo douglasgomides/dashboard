@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 import { SECOES_JUNTADAS } from "../../src/lib/registro-de-telas";
-import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAudiencia, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
+import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAudiencia, mockCrm, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 
 // Telas juntadas do médico (Phase 3.1.1, plano 01): a pasta com abas em pasta, cada aba é o caminho da tela antiga (D-04,
 // emenda de 10/11), o log grava o routeId da aba (D-06) e a pasta não busca dado. Aqui: Instagram de ponta a ponta, as outras
@@ -353,3 +353,130 @@ for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
     }
   });
 }
+
+// ===================================================================================================================
+// Plano 03: Onde os pacientes travam (4 abas, Funil com 2 partes) e De onde vêm os pacientes > Por origem, no molde, no desenho
+// do D-07 e dentro de 1,5 tela. Dados fictícios (mockPessoas e mockCrm).
+// ===================================================================================================================
+type ParteMedida = { pasta: string; aba: string; parte?: string; sub: string; slug: string; semCartoes?: boolean };
+const TRAVAM = "Onde os pacientes travam";
+const PARTES_DO_CRM: ParteMedida[] = [
+  { pasta: TRAVAM, aba: "Funil", parte: "Do contato à venda", sub: "pacientes", slug: "do-contato-a-venda" },
+  { pasta: TRAVAM, aba: "Funil", parte: "No CRM", sub: "crm-painel", slug: "no-crm" },
+  // Consultas e Vendas são telas em construção: leitura "Sem leitura:", sem cartões.
+  { pasta: TRAVAM, aba: "Consultas", sub: "consultas", slug: "consultas", semCartoes: true },
+  { pasta: TRAVAM, aba: "Vendas", sub: "vendas", slug: "vendas", semCartoes: true },
+  { pasta: TRAVAM, aba: "Jornada", sub: "jornada", slug: "jornada" },
+  // De onde vêm os pacientes > Por origem (Resultados por origem do CRM).
+  { pasta: "De onde vêm os pacientes", aba: "Por origem", sub: "vendas-kommo", slug: "por-origem" },
+];
+
+async function abrirParte(page: Page, context: BrowserContext, perfil: "viewer" | "admin", sub: string, largura: { width: number; height: number }) {
+  await mockAccount(context, perfil);
+  await mockPessoas(context);
+  await mockCrm(context);
+  await page.setViewportSize(largura);
+  await page.goto(`/${CID}/${sub}?preset=30d`);
+}
+
+for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes } of PARTES_DO_CRM) {
+  for (const perfil of ["viewer", "admin"] as const) {
+    test(`${perfil}: ${nomeDaAba}${parte ? ` > ${parte}` : ""} abre no molde com leitura, pílula de ação e cartões com ícone redondo`, async ({ page, context }) => {
+      await abrirParte(page, context, perfil, sub, { width: 1440, height: 900 });
+      const nav = pasta(page, nomeDaPasta);
+      await expect(nav).toBeVisible();
+      await expect(aba(nav, nomeDaAba)).toHaveAttribute("aria-current", parte && sub !== "pacientes" ? "true" : "page");
+      if (parte) {
+        const partes = page.getByRole("navigation", { name: `Partes de ${nomeDaAba}`, exact: true });
+        await expect(partes.getByRole("link", { name: parte })).toHaveAttribute("aria-current", "page");
+      }
+      const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+      await expect(leitura).toBeVisible();
+      await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+      await expect(leitura.getByText(/O que aconteceu|Sem leitura:/).first()).toBeVisible();
+      await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
+      await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
+      const cartoes = page.locator("[data-juntada] .nx-pagina__cartoes > *");
+      if (semCartoes) {
+        await expect(cartoes).toHaveCount(0);
+        return;
+      }
+      await expect(cartoes.first()).toBeVisible();
+      const total = await cartoes.count();
+      expect(total).toBeGreaterThanOrEqual(1);
+      expect(total).toBeLessThanOrEqual(4);
+      for (let i = 0; i < total; i++) {
+        const icone = cartoes.nth(i).locator(".nx-tile, .nx-cartao__icone");
+        await expect(icone, `${slug}: cartão ${i + 1} sem ícone`).toHaveCount(1);
+        expect(await icone.evaluate((el) => getComputedStyle(el).borderRadius), `${slug}: ícone do cartão ${i + 1} não é redondo`).toBe("50%");
+      }
+    });
+  }
+
+  for (const largura of TELAS_DE_MEDIDA) {
+    test(`MEDV-04: ${nomeDaAba}${parte ? ` > ${parte}` : ""} no máximo 1,5 tela em ${largura.width}x${largura.height} com o detalhe fechado`, async ({ page, context }) => {
+      await abrirParte(page, context, "admin", sub, largura);
+      const { altura, janela } = await alturaDaAbaAberta(page);
+      console.log(`altura-travam parte=${slug} largura=${largura.width} altura=${Math.round(altura)} janela=${janela} razao=${(altura / janela).toFixed(2)}`);
+      await page.screenshot({ path: `test-results/redesenho/juntada-travam-${slug}-${largura.width}.png`, fullPage: true });
+      expect(altura, `${slug} a ${largura.width}px: ${Math.round(altura)} px de ${janela} px (${(altura / janela).toFixed(2)}x)`).toBeLessThanOrEqual(LIMITE_DE_ALTURA * janela);
+      expect(await semRolagemLateral(page)).toBe(true);
+    });
+  }
+}
+
+test("Onde os pacientes travam: Consultas e Vendas abrem com \"Sem leitura:\" e a contagem das abas continua \"—\"", async ({ page, context }) => {
+  for (const [rotulo, sub] of [["Consultas", "consultas"], ["Vendas", "vendas"]] as const) {
+    await abrirParte(page, context, "viewer", sub, { width: 1440, height: 900 });
+    const nav = pasta(page, TRAVAM);
+    await expect(aba(nav, rotulo)).toHaveAttribute("aria-current", "page");
+    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+    await expect(leitura.getByText(/^Sem leitura: a tela ainda não tem a fonte ligada/)).toBeVisible();
+    await expect(leitura.getByText(/Quem resolve:/)).toBeVisible();
+    await expect(leitura.locator(".nx-acao-pilula")).toBeVisible();
+    for (const r of ["Consultas", "Vendas"]) {
+      const contagem = aba(nav, r).locator(".nx-pasta__contagem");
+      await expect(contagem).toContainText("—");
+      await expect(contagem).not.toHaveText(/^0/);
+    }
+  }
+});
+
+test("Onde os pacientes travam: clicar em No CRM leva ao funil comercial com o período e o log grava origem menu", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await mockPessoas(context);
+  await mockCrm(context);
+  await ligarLog(context);
+  const posts = capturarPosts(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/pacientes?preset=30d`);
+  const partes = page.getByRole("navigation", { name: "Partes de Funil", exact: true });
+  await expect(partes.getByRole("link", { name: "Do contato à venda" })).toHaveAttribute("aria-current", "page");
+  await partes.getByRole("link", { name: "No CRM" }).click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/crm-painel`);
+  expect(new URL(page.url()).searchParams.get("preset")).toBe("30d");
+  await expect(partes.getByRole("link", { name: "No CRM" })).toHaveAttribute("aria-current", "page");
+  await expect.poll(() => posts.find((p) => p.rota === "/_authenticated/$clientId/crm-painel")?.origem).toBe("menu");
+});
+
+test("Jornada: a leitura diz que a maioria dos contatos está sem pessoa ligada e o aviso completo fica nos Detalhes", async ({ page, context }) => {
+  await abrirParte(page, context, "viewer", "jornada", { width: 1440, height: 900 });
+  const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+  await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+  await expect(leitura.getByText(/não está ligada a nenhuma pessoa/)).toBeVisible();
+  await expect(leitura.locator(".nx-leitura__num", { hasText: "50 de 80" })).toBeVisible();
+  const detalhes = page.locator("[data-juntada] details#detalhes-jornada");
+  await detalhes.locator(":scope > summary").click();
+  await expect(detalhes.locator(".cm-aviso--critico").getByText(/% dos leads criados no período não estão ligados/)).toBeVisible();
+});
+
+test("De onde vêm os pacientes: a aba Por origem mostra em cinza o número de origens com venda que a própria aba carregou", async ({ page, context }) => {
+  await abrirParte(page, context, "viewer", "vendas-kommo", { width: 1440, height: 900 });
+  const nav = pasta(page, "De onde vêm os pacientes");
+  await expect(aba(nav, "Por origem")).toHaveAttribute("aria-current", "page");
+  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first()).not.toHaveAttribute("data-modo", "carregando");
+  // mockCrm: Instagram e Indicação têm ganho; "Não informado" não é uma origem e não entra na conta.
+  await expect(aba(nav, "Por origem").locator(".nx-pasta__contagem")).toHaveText("2");
+  // A leitura afirma a origem líder só com a base de leadsRanking (Instagram tem 300 contatos).
+  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first().getByText(/A origem com mais ganhos registrados é "Instagram"/)).toBeVisible();
+});

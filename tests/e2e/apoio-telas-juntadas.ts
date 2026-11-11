@@ -155,3 +155,35 @@ export async function mockPessoas(context: BrowserContext) {
     return r.fulfill({ json: linhas });
   });
 }
+
+/**
+ * Dados do CRM (Funil comercial, Jornada comercial e Resultados por origem): os mesmos mocks que comercial-painel.spec.ts usa
+ * (copiados de propósito), com etapas que passam da base mínima de LIMITES.funil. Dados fictícios, só leitura.
+ */
+export async function mockCrm(context: BrowserContext) {
+  const rpc = (nome: string, json: unknown) => context.route(`**/rest/v1/rpc/${nome}`, (r) => r.fulfill({ json }));
+  const contagem = { leads: 200, atendidos: 150, na_entrada: 50, na_entrada_3d: 10, agendados: 60, em_consulta: 60, agendados_provaveis: 60, ganhos_em_etapa_agenda: 2, parece_consulta: 0, ganhos: 25, perdidos: 10, com_origem: 150, origem_eh_funil: 0, com_contato: 180, abertos: 165 };
+  await rpc("crm_diagnostico_comercial", { provider: "kommo", periodo: contagem, base: { ...contagem, leads: 500 }, etapas_total: 10, etapas_consulta: 2, etapas_parece_consulta: 0 });
+  await rpc("crm_metricas_essenciais", [{ total_leads: 500, ganhos: 40, perdidos: 30, consultas_agendadas: 40, em_atendimento: 100, em_atendimento_valor: 20000, novos_7d: 15, fonte_preenchida_pct: 80 }]);
+  await rpc("crm_leads_resumo_periodo", [{ novos: 68, ganhos: 4, perdidos: 3, valor: 12000 }]);
+  await rpc("crm_funil_por_campo", [
+    { chave: "Instagram", total: 300, ganhos: 30, perdidos: 60, abertos: 210 },
+    { chave: "Indicação", total: 100, ganhos: 20, perdidos: 10, abertos: 70 },
+    { chave: "Não informado", total: 20, ganhos: 2, perdidos: 0, abertos: 18 },
+  ]);
+  await rpc("crm_leads_por_etapa", [
+    { pipeline: "Funil de pacientes", etapa: "Entrada", total: 120 },
+    { pipeline: "Funil de pacientes", etapa: "Consulta agendada", total: 60 },
+    { pipeline: "Funil de pacientes", etapa: "Ganho", total: 40 },
+  ]);
+  await rpc("jornada_funil", {
+    alcance: 50000, dias_alcance: 30, interacoes: 2000, dias_interacoes: 30, comentarios: 300, comentaristas: 200, conversas: 120, leads: 100, leads_com_etapa: 90,
+    agendados: 30, vendas: 6, receita: 0, dias_periodo: 30,
+    fontes: { tem_instagram: true, tem_comentarios: true, tem_whatsapp: true, tem_conversas: true, tem_crm: true, tem_etapa_agendamento: true, tem_venda_registrada: true, crm_provider: "kommo" },
+  });
+  await rpc("jornada_resumo", {
+    leads_total: 80, leads_sem_pessoa: 50, pessoas: 200, comentaram: 60, conversaram: 120, viraram_lead: 70, ganhos: 9, receita: 0,
+    comentaram_e_lead: 10, conversaram_e_lead: 50, comentaram_e_conversaram: 20, por_origem: [], posts: [], links: [],
+  });
+  await rpc("wts_resumo", [{ atendimentos: 200, contatos_distintos: 150, espera_mediana_seg: 900, espera_cobertura: 180, atendimento_mediano_seg: 40000, em_andamento: 10, concluidos: 190, sem_roteamento: 20 }]);
+}

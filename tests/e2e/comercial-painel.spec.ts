@@ -71,6 +71,12 @@ for (const width of [375, 1440]) {
     await dados(context);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/crm-painel?preset=7d`);
+    // No molde (03.1.1): os 4 números do topo são cartões, o funil vem logo abaixo da leitura e o resto fica nos Detalhes.
+    const topo = page.locator(".nx-pagina__cartoes");
+    await expect(topo.locator(".nx-cartao")).toHaveCount(4);
+    await expect(topo.locator(".nx-numero__valor").first()).toHaveText("68");
+    await expect(page.getByRole("figure", { name: "Funil comercial do período" })).toBeVisible();
+    await page.locator(".nx-pagina__detalhe > details > summary").click();
     const periodo = page.getByRole("region", { name: "No período selecionado" });
     await expect(periodo.locator(".nx-kpi")).toHaveCount(4);
     await expect(periodo.locator(".ws-metric-value").first()).toHaveText("68");
@@ -90,15 +96,19 @@ for (const width of [375, 1440]) {
     await page.setViewportSize({ width, height: 900 });
 
     await page.goto(`/${CID}/vendas-kommo`);
-    const base = page.getByRole("region", { name: "Números da base" });
-    await expect(base.locator(".ws-metric-value")).toHaveText(["400", "50", "70", "280"]);
+    // No molde (03.1.1): os 4 números são cartões, o gráfico por origem vem logo abaixo e a pizza fica nos Detalhes.
+    await expect(page.locator(".nx-pagina__cartoes .nx-numero__valor")).toHaveText(["400", "50", "70", "280"]);
     await expect(page.getByRole("list", { name: "Leads por origem" })).toBeVisible();
+    await page.locator(".nx-pagina__detalhe > details > summary").click();
     await expect(page.locator(".nx-pizza svg[role=img]")).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
 
     await page.goto(`/${CID}/jornada?preset=30d`);
-    await expect(page.getByRole("region", { name: "Números da jornada" }).locator(".ws-metric-value").first()).toHaveText("200");
-    // Mais da metade dos leads soltos: aviso crítico curto, sempre visível.
+    // No molde (03.1.1): os números são cartões e o funil vem logo abaixo da leitura.
+    await expect(page.locator(".nx-pagina__cartoes .nx-numero__valor").first()).toHaveText("200");
+    await expect(page.getByRole("figure", { name: "Funil da jornada do período" })).toBeVisible();
+    // Mais da metade dos leads soltos: aviso crítico curto, à vista quando a leitura não diz o mesmo (aqui o CRM não tem funil de
+    // jornada nos dados de teste, então a leitura nega e o aviso fica no corpo).
     await expect(page.locator(".cm-aviso--critico").getByText(/% dos leads criados no período não estão ligados/)).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
 
