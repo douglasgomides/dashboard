@@ -6,6 +6,8 @@
 
 .app.product-workspace:not(.sap-workspace) .nx-pasta {
   display: grid;
+  /* minmax(0, 1fr): sem isso a coluna cresce até a largura das abas e a página rola na horizontal (a faixa rola sozinha). */
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   max-width: 100%;
 }
@@ -16,6 +18,8 @@
   max-width: 100%;
 }
 .app.product-workspace:not(.sap-workspace) .nx-pasta__abas ul {
+  /* position: relative prende o texto sr-only ("sem número") dentro da faixa que rola; sem isso ele vira rolagem da página. */
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 4px;
@@ -81,6 +85,7 @@
 /* Corpo: o cartão grande onde mora a tela da aba aberta. */
 .app.product-workspace:not(.sap-workspace) .nx-pasta__corpo {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   min-width: 0;
   padding: 16px 24px;
@@ -95,6 +100,7 @@
   max-width: 100%;
 }
 .app.product-workspace:not(.sap-workspace) .nx-segmentado ul {
+  position: relative;
   display: inline-flex;
   max-width: 100%;
   gap: 2px;

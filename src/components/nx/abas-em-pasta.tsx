@@ -1,14 +1,15 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { LinkDoRegistro } from "@/components/menu-equipe";
-import type { DateRangeState } from "@/lib/date-range";
+import { assinarContagens, chaveDoPeriodo, contagensDe, publicarContagem } from "@/lib/contagens-das-abas";
+import { resolveDateRange, type DateRangeState } from "@/lib/date-range";
 import type { Visibilidade } from "@/lib/nav";
-import { REGISTRO_DE_TELAS, abasVisiveis, juntadaDoCaminho, type TelaDoRegistro } from "@/lib/registro-de-telas";
+import { REGISTRO_DE_TELAS, abasVisiveis, juntadaDoCaminho, type AbaDaSecao, type TelaDoRegistro } from "@/lib/registro-de-telas";
 import "@/styles/nexo-abas.css";
 
 // Abas em pasta das telas juntadas (Phase 3.1.1, D-01, D-04, D-07). Cada aba é o caminho da tela antiga: o endereço antigo
 // já é a aba, o arquivo da rota antiga continua sendo a tela e o log por rota grava o routeId da aba (as abas moram num
 // contêiner data-origem="menu"; endereço digitado vira "direto"). A peça não busca dado, não chama banco e não calcula
-// número: só lê o registro e (na Task 2) a guarda de contagens.
+// número: só lê o registro e a guarda de contagens (D-07), que cada aba alimenta com o que ela já carregou.
 
 export interface AbaDaPasta {
   id: string;
@@ -128,8 +129,53 @@ export function NxSegmentado({
   );
 }
 
+/** Contagens publicadas para a clínica e o período abertos (routeId da tela da aba -> número ou null). Só lê da guarda. */
+export function useContagensDasAbas(clientId: string, de: string, ate: string): ReadonlyMap<string, number | null> {
+  const chave = chaveDoPeriodo(clientId, de, ate);
+  return useSyncExternalStore(
+    assinarContagens,
+    () => contagensDe(chave),
+    () => contagensDe(chave),
+  );
+}
+
+/**
+ * A própria aba declara o número que já carregou (D-07, nenhuma consulta nova). undefined enquanto a aba carrega (não vira "—");
+ * null quando a tela diz que não há dado; número quando há. rota é o routeId da tela da aba.
+ */
+export function usePublicarContagem({
+  clientId,
+  de,
+  ate,
+  rota,
+  valor,
+}: {
+  clientId: string;
+  de: string;
+  ate: string;
+  rota: string;
+  valor: number | null | undefined;
+}): void {
+  useEffect(() => {
+    publicarContagem(chaveDoPeriodo(clientId, de, ate), rota, valor);
+  }, [clientId, de, ate, rota, valor]);
+}
+
 const linhaDaRota = (rota: string): TelaDoRegistro | undefined =>
   REGISTRO_DE_TELAS.find((t) => t.rota === rota && !t.busca && t.situacao !== "tirada");
+
+/**
+ * Contagem de uma aba: undefined quando a aba não tem coisa contável; senão o número publicado da primeira parte que tem
+ * número, ou null ("—") quando nenhuma parte publicou ainda (aba não aberta neste período, ou sem fonte ligada).
+ */
+function contagemDaAba(aba: AbaDaSecao, contagens: ReadonlyMap<string, number | null>): number | null | undefined {
+  if (aba.contagem === null) return undefined;
+  for (const parte of aba.partes) {
+    const n = contagens.get(parte.rota);
+    if (typeof n === "number") return n;
+  }
+  return null;
+}
 
 /**
  * Invólucro da tela juntada: o conteúdo da casca (children) entra dentro da pasta da aba atual. Fora de tela juntada, ou
@@ -144,10 +190,13 @@ export function TelaJuntada({
 }: {
   clientId: string;
   pathname: string;
-  dateRange?: DateRangeState;
+  dateRange: DateRangeState;
   vis: Visibilidade;
   children: ReactNode;
 }) {
+  // O hook vem antes de qualquer retorno antecipado: ler a guarda não custa nada e não busca dado.
+  const { start, end } = resolveDateRange(dateRange);
+  const contagens = useContagensDasAbas(clientId, start, end);
   const achada = juntadaDoCaminho(pathname);
   if (!achada) return <>{children}</>;
   const { secao, aba: abaAtual, parte: parteAtual } = achada;
@@ -164,7 +213,7 @@ export function TelaJuntada({
       rotulo: a.rotulo,
       tela,
       atual: ehAtual ? (a.partes[0].rota === parteAtual.rota ? "page" : "true") : null,
-      contagem: undefined,
+      contagem: contagemDaAba(a, contagens),
     });
   }
 

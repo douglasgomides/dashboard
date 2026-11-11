@@ -195,3 +195,64 @@ test("abas pelo teclado: Tab passa de aba em aba e Enter abre a tela", async ({ 
   await expect.poll(() => new URL(page.url()).pathname).toBe(new URL(destino!, "http://x").pathname);
   await expect(links.nth(1)).toHaveAttribute("aria-current", "page");
 });
+
+test("contagem em cinza: a aba mostra o número que ela mesma carregou e \"—\" antes de abrir, nunca \"0\"", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await mockInstagram(context);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/posts?preset=30d`);
+  const nav = pasta(page, "Instagram");
+  await expect(aba(nav, "Posts")).toHaveAttribute("aria-current", "page");
+  // O total que a tela mostra no cartão "Posts no período".
+  const total = (await page.locator(".nx-kpi", { hasText: "Posts no período" }).locator(".ws-metric-value").first().innerText()).trim();
+  expect(total).toMatch(/^\d/);
+  await expect(aba(nav, "Posts").locator(".nx-pasta__contagem")).toHaveText(total);
+  // Destaques ainda não abriu neste período: "—" (com aviso só para leitor de tela).
+  await expect(aba(nav, "Destaques").locator(".nx-pasta__contagem")).toContainText("—");
+  await expect(aba(nav, "Destaques").locator(".nx-pasta__contagem .sr-only")).toHaveText("sem número");
+  // Desempenho e Público não têm coisa contável: nenhuma contagem desenhada.
+  await expect(aba(nav, "Desempenho").locator(".nx-pasta__contagem")).toHaveCount(0);
+  await expect(aba(nav, "Público").locator(".nx-pasta__contagem")).toHaveCount(0);
+
+  // Depois de abrir Destaques e voltar, Destaques mostra o número que a própria aba carregou.
+  await aba(nav, "Destaques").click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/top`);
+  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first()).toBeVisible();
+  await expect(aba(nav, "Destaques").locator(".nx-pasta__contagem")).toHaveText(/^\d+$/);
+  await aba(nav, "Posts").click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/posts`);
+  await expect(aba(nav, "Destaques").locator(".nx-pasta__contagem")).toHaveText(/^\d+$/);
+  await expect(aba(nav, "Posts").locator(".nx-pasta__contagem")).toHaveText(total);
+});
+
+test("contagem em cinza: Consultas e Vendas sem número publicado mostram \"—\" e nunca \"0\"", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/consultas?preset=30d`);
+  const nav = pasta(page, "Onde os pacientes travam");
+  await expect(aba(nav, "Consultas")).toHaveAttribute("aria-current", "page");
+  for (const rotulo of ["Consultas", "Vendas"]) {
+    const contagem = aba(nav, rotulo).locator(".nx-pasta__contagem");
+    await expect(contagem).toContainText("—");
+    await expect(contagem).not.toHaveText(/^0/);
+  }
+  // Funil e Jornada não têm coisa contável.
+  await expect(aba(nav, "Funil").locator(".nx-pasta__contagem")).toHaveCount(0);
+  await expect(aba(nav, "Jornada").locator(".nx-pasta__contagem")).toHaveCount(0);
+});
+
+test("a 375 a pasta não cria rolagem lateral na página (a faixa das abas rola sozinha) nas 3 telas juntadas", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await mockInstagram(context);
+  await mockPessoas(context);
+  await page.setViewportSize({ width: 375, height: 812 });
+  for (const sub of ["posts", "pacientes", "conteudo-comercial", "links", "consultas"]) {
+    await page.goto(`/${CID}/${sub}?preset=30d`);
+    await expect(page.locator("[data-juntada] .nx-pasta__abas").first()).toBeVisible();
+    await expect(page.locator("[data-juntada] .nx-pasta__corpo > *").first()).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    expect(await semRolagemLateral(page), `/${sub} rola na lateral`).toBe(true);
+    // O texto só para leitor de tela da contagem não pode escapar da faixa.
+    expect(await page.locator("[data-juntada] .nx-pasta__abas ul").evaluate((ul) => getComputedStyle(ul).position)).toBe("relative");
+  }
+});
