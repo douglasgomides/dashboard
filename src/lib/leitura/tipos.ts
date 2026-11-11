@@ -46,6 +46,8 @@ export interface Fato {
   /** 3 pesa mais. Decide qual fato vira "O que aconteceu". */
   peso: 1 | 2 | 3;
   frase: string;
+  /** Manchete curta e leiga escrita pela regra (até 40 caracteres), para a Hoje. Só existe quando a regra a escreveu. */
+  manchete?: string;
   numeros: Numeral[];
   /** Ressalva sobre o dado (ex.: período incompleto), não uma conclusão: só vira leitura se não houver conclusão melhor. */
   ressalva?: boolean;
@@ -69,6 +71,8 @@ export interface PassoFato {
   motivo?: string;
   /** Fato que sustenta o passo. */
   fatoId?: string;
+  /** Arrumação interna do dado, feita pela equipe: a tela Hoje não mostra para o médico (só numa linha "Para a equipe"). */
+  soEquipe?: boolean;
 }
 
 export type CodigoNegacao = "sem_dado" | "fonte_parada" | "rastreio_suspeito" | "selo_ilegivel" | "funil_fora_de_ordem" | "erro_de_dado" | "amostra_pequena";

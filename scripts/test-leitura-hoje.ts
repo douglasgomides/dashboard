@@ -10,29 +10,36 @@ import { avaliarRastreio } from "../src/lib/rastreio-anuncios";
 import { REGISTRO_DE_TELAS } from "../src/lib/registro-de-telas";
 import type { Insight } from "../src/lib/insight";
 import { fatosDeResultadosComAreas } from "../src/lib/leitura/fatos-resultados";
+import { fatosDePublicacoes } from "../src/lib/leitura/fatos-instagram";
 import { resumirClinica } from "../src/lib/leitura/resumo-clinica";
 import { checarTextoDaLeitura, montarTexto, problemasDoTexto } from "../src/lib/leitura/texto";
 import type { Fato, FatosDaTela, PassoFato, TomFato } from "../src/lib/leitura/tipos";
 import {
   CHAVES_EXCLUIDAS_DA_HOJE,
   EXCLUIDOS_DA_HOJE,
+  FAMILIA_DO_FATO,
   GUARDA_DE_NUMERO_DA_HOJE,
   GUARDA_DE_TEXTO_DA_HOJE,
+  JARGAO_DA_HOJE,
+  MAXIMO_POR_AREA,
+  MAX_CARACTERES_DA_MANCHETE,
   PREFIXOS_EXCLUIDOS_DA_HOJE,
   ROTA_DA_AREA,
   VERSAO_REGRAS_HOJE,
   acoesDaHoje,
   avisoDePoucasAcoes,
+  checarTextoDaHoje,
   nomeDaSaudacao,
   saudacaoDaHora,
   type AcaoDaHoje,
+  type AreaDaHoje,
   type EntradaHoje,
   type HojeDaClinica,
 } from "../src/lib/leitura/fatos-hoje";
 import { leads, ig, ads, posts, adsCampanhas } from "./fixtures/lana-2026-10";
 
 const C = "/_authenticated/$clientId";
-assert.equal(VERSAO_REGRAS_HOJE, 1);
+assert.equal(VERSAO_REGRAS_HOJE, 2);
 
 // ---------- fixture da Lana (a mesma de test-leitura-resultados.ts) ----------
 const START = "2026-09-13", END = "2026-10-12", HOJE = "2026-10-14";
@@ -69,6 +76,14 @@ const tela = (fatos: Fato[], passos: PassoFato[], extra: Partial<FatosDaTela> = 
   ...base, portao: { ok: true }, fatos, proximoPasso: passos[0] ?? null, outrosPassos: passos.slice(1), ...extra,
 });
 const semAreas = (fatos: Fato[]) => ({ resumo: fatos, conteudo: [], anuncios: [], comercial: [], ideias: [] });
+/** Espalha os fatos pelas áreas do resultado (resumo, conteudo, anuncios, comercial): a Hoje lê a área pela aba de destino. */
+const emAreas = (mapa: Record<string, "resumo" | "conteudo" | "anuncios" | "comercial">, fatos: Fato[]) => ({
+  resumo: fatos.filter((f) => mapa[f.id] === "resumo"),
+  conteudo: fatos.filter((f) => mapa[f.id] === "conteudo"),
+  anuncios: fatos.filter((f) => mapa[f.id] === "anuncios"),
+  comercial: fatos.filter((f) => mapa[f.id] === "comercial"),
+  ideias: [],
+});
 const sintetica = (fatos: Fato[], passos: PassoFato[], extra: Partial<EntradaHoje> = {}): EntradaHoje => ({
   fatos: tela(fatos, passos), porArea: semAreas(fatos), insights: [], ...extra,
 });
@@ -99,13 +114,20 @@ if (hNegado.tipo === "sem_leitura" && textoNegado.tipo === "sem_leitura") {
 const hLana = acoesDaHoje(entradaDaLana());
 const listaLana = acoes(hLana);
 assert.ok(listaLana.length >= 3 && listaLana.length <= 5, `a Lana tem de 3 a 5 ações (tem ${listaLana.length})`);
+for (const area of ["instagram", "anuncios", "comercial", "resultados"] as AreaDaHoje[])
+  assert.ok(listaLana.filter((a) => a.areaHoje === area).length <= MAXIMO_POR_AREA, `a Lana tem mais de ${MAXIMO_POR_AREA} ações em ${area}`);
 for (const a of listaLana) {
   assert.ok(a.numero.exibicao.length > 0, `${a.id}: sem número ao lado`);
   assert.ok(a.rotuloQuem.length > 0 && a.quem, `${a.id}: sem quem resolve`);
   assert.deepEqual(checarTextoDaLeitura(a.frase), [], `${a.id}: frase reprovada pelo filtro de linguagem`);
-  assert.deepEqual(checarTextoDaLeitura(a.legenda), [], `${a.id}: legenda reprovada`);
-  assert.ok(!GUARDA_DE_TEXTO_DA_HOJE.test(`${a.frase} ${a.legenda} ${a.numero.exibicao}`), `${a.id}: texto dos 4 números da Phase 9`);
-  assert.ok(!GUARDA_DE_NUMERO_DA_HOJE.test(`${a.legenda} ${a.numero.exibicao}`), `${a.id}: número de destaque de agendamento, venda, consulta ou contato`);
+  assert.deepEqual(checarTextoDaLeitura(a.legenda ?? ""), [], `${a.id}: legenda reprovada`);
+  assert.ok(!GUARDA_DE_TEXTO_DA_HOJE.test(`${a.frase} ${a.legenda ?? ""} ${a.numero.exibicao}`), `${a.id}: texto dos 4 números da Phase 9`);
+  assert.ok(!GUARDA_DE_NUMERO_DA_HOJE.test(`${a.legenda ?? ""} ${a.numero.exibicao}`), `${a.id}: número de destaque de agendamento, venda, consulta ou contato`);
+  // Manchete: até 40 caracteres, leiga, sem jargão em nenhum texto que o médico lê; o técnico fica em numerosTecnicos.
+  assert.ok(a.destaque.length <= MAX_CARACTERES_DA_MANCHETE, `${a.id}: manchete com mais de 40 caracteres (${a.destaque})`);
+  assert.deepEqual(checarTextoDaHoje(a.destaque, MAX_CARACTERES_DA_MANCHETE), [], `${a.id}: manchete reprovada`);
+  for (const texto of [a.destaque, a.frase, a.legenda ?? "", a.contexto, a.outroNumero?.exibicao ?? ""]) assert.ok(!JARGAO_DA_HOJE.test(texto), `${a.id}: jargão em "${texto}"`);
+  assert.match(a.contexto, /^\d+ dias?( · .+)?$/, `${a.id}: contexto "N dias"`);
   const linha = rotaDoRegistro(a.rota);
   assert.ok(linha, `${a.id}: a rota ${a.rota} não é linha do registro`);
   assert.notEqual(linha!.situacao, "tirada", `${a.id}: aponta para tela tirada em 11/11/2026`);
@@ -127,7 +149,9 @@ const seis = [
   fato("a", "ruim", 1), fato("b", "bom", 3), fato("c", "atencao", 2),
   fato("d", "ruim", 2), fato("e", "bom", 1), fato("f", "atencao", 3),
 ];
-const hSeis = acoesDaHoje(sintetica(seis, seis.map((f) => passo(f.id))));
+// Com o limite de 2 por área, os 6 fatos se espalham por Resultados, Instagram, Anúncios e Comercial: a ordem por peso e tom é a mesma.
+const areasDosSeis = { a: "resumo", b: "conteudo", c: "anuncios", d: "comercial", e: "resumo", f: "conteudo" } as const;
+const hSeis = acoesDaHoje({ ...sintetica(seis, seis.map((f) => passo(f.id))), porArea: emAreas(areasDosSeis, seis) });
 assert.equal(hSeis.tipo, "acoes");
 if (hSeis.tipo === "acoes") {
   assert.equal(hSeis.proxima?.id, "a", "o Próximo é a Ação da semana (o primeiro passo), mesmo com peso menor");
@@ -135,6 +159,12 @@ if (hSeis.tipo === "acoes") {
   assert.deepEqual(hSeis.outras.map((a) => a.id), ["f", "b", "d", "c"], "peso decrescente, depois ruim, atenção, bom; a de peso 1 fica de fora");
   assert.equal(hSeis.aviso, null, "com 3 ou mais ações não há aviso");
 }
+// Os 6 fatos na mesma área: só 2 entram (o Próximo conta), as outras vagas ficam vazias e o aviso fala de poucas ações.
+const hMesmaArea = acoesDaHoje(sintetica(seis, seis.map((f) => passo(f.id))));
+assert.deepEqual(ids(hMesmaArea), ["a", "f"], "no máximo 2 por área: a Ação da semana e a de maior peso");
+assert.ok(acoes(hMesmaArea).every((a) => a.areaHoje === "resultados"));
+if (hMesmaArea.tipo === "acoes") assert.equal(hMesmaArea.aviso, "Poucas ações nesta semana: as leituras deste período pediram só 2 ações.");
+
 // Empate de peso e tom: vale a ordem das fontes (Resultados antes de Pacientes, publicações e Desempenho) e a ordem dentro de cada uma.
 const empate = acoesDaHoje({
   ...sintetica([fato("r1", "ruim", 2), fato("r2", "ruim", 2)], [passo("r1"), passo("r2")]),
@@ -283,6 +313,140 @@ const extraNegado = acoesDaHoje({
 });
 assert.deepEqual(ids(extraNegado), ["a"], "extra com o portão negado não gera ação");
 
+// ---------- manchete: curta, leiga, e o número técnico inteiro fica em numerosTecnicos ----------
+const TECNICO = "Reels: alcance mediano 1.340, salvamento 0,5% (10 posts) · Carrossel: alcance mediano 1.380, salvamento 0,5% (10 posts) · Estático: alcance mediano 1.100, salvamento 0,4% (10 posts)";
+const unica = (f: Fato, p: Partial<PassoFato> = {}): AcaoDaHoje | undefined => acoes(acoesDaHoje(sintetica([f], [passo(f.id, p)])))[0];
+
+// (b) o número é técnico e longo: vale a manchete que a regra escreveu.
+const comManchete = unica(fato("fmt", "bom", 2, { manchete: "Post de foto alcançou mais", frase: "Estático é o formato que mais leva o perfil a gente nova.", numeros: [{ chave: "evidencia", exibicao: TECNICO }] }));
+assert.ok(comManchete, "o fato com manchete e número técnico vira ação");
+assert.equal(comManchete!.destaque, "Post de foto alcançou mais");
+assert.equal(comManchete!.destaqueEhNumero, false);
+assert.deepEqual(comManchete!.numerosTecnicos, [TECNICO], "a string técnica inteira vai para o Ver números");
+assert.equal(comManchete!.legenda, "Estático é o formato que mais leva o perfil a gente nova.");
+assert.equal(comManchete!.contexto, "30 dias", "sem número leigo sobrando, o contexto é só os dias");
+for (const texto of [comManchete!.destaque, comManchete!.frase, comManchete!.legenda ?? "", comManchete!.contexto]) assert.ok(!/mediano|salvamento \d/i.test(texto), `jargão em "${texto}"`);
+
+// (a) um número curto e leigo ganha da manchete.
+const numeroCurto = unica(fato("curto", "ruim", 2, { manchete: "Uma manchete que não deve valer", numeros: [{ chave: "posts", exibicao: "30 de 30 posts" }, { chave: "evidencia", exibicao: TECNICO }] }));
+assert.equal(numeroCurto!.destaque, "30 de 30 posts");
+assert.equal(numeroCurto!.destaqueEhNumero, true);
+assert.deepEqual(numeroCurto!.numerosTecnicos, [TECNICO]);
+// O número curto mas com jargão ("alcance mediano 1.340") não vira destaque: vai para numerosTecnicos e vale a primeira oração da frase.
+const curtoComJargao = unica(fato("jg", "ruim", 2, { frase: "Estático leva longe, Carrossel faz guardar.", numeros: [{ chave: "evidencia", exibicao: "alcance mediano 1.340" }] }));
+assert.equal(curtoComJargao!.destaque, "Estático leva longe", "(c) a primeira oração da frase do fato");
+assert.equal(curtoComJargao!.destaqueEhNumero, false);
+assert.equal(curtoComJargao!.legenda, "Estático leva longe, Carrossel faz guardar.", "a legenda é a frase inteira");
+assert.deepEqual(curtoComJargao!.numerosTecnicos, ["alcance mediano 1.340"]);
+// (c) sem separador na frase e curta: a própria frase vira a manchete e não há legenda.
+const fraseCurta = unica(fato("fc", "ruim", 2, { frase: "O Instagram parou de postar.", numeros: [{ chave: "evidencia", exibicao: TECNICO }] }));
+assert.equal(fraseCurta!.destaque, "O Instagram parou de postar");
+assert.equal(fraseCurta!.legenda, null);
+// (d) número longo, sem manchete e frase longa sem separador: não vira ação (a regra nunca corta no meio de uma palavra).
+assert.equal(unica(fato("longa", "ruim", 3, { frase: "Quem chama no WhatsApp espera muito tempo pela primeira resposta da equipe.", numeros: [{ chave: "evidencia", exibicao: TECNICO }] })), undefined);
+assert.equal(unica(fato("longa2", "ruim", 3, { manchete: "Uma manchete bem comprida que passa de quarenta caracteres", frase: "Quem chama no WhatsApp espera muito tempo pela primeira resposta da equipe.", numeros: [{ chave: "evidencia", exibicao: TECNICO }] })), undefined, "manchete com mais de 40 caracteres não vale");
+assert.equal(unica(fato("jm", "ruim", 3, { manchete: "Reels: alcance mediano alto", numeros: [{ chave: "evidencia", exibicao: TECNICO }], frase: "Quem chama no WhatsApp espera muito tempo pela primeira resposta da equipe." })), undefined, "manchete com jargão não vale");
+// (a2) último recurso: nem número curto, nem manchete, nem oração curta; um trecho inteiro do número que começa por algarismo vale.
+// É o que mantém a Ação da semana de Resultados na Hoje ("640 atendimentos; espera mediana …"). O número inteiro vai para o Ver números.
+const comTrecho = unica(fato("tr", "ruim", 3, { frase: "Quem chama no WhatsApp espera muito tempo pela primeira resposta da equipe.", numeros: [{ chave: "evidencia", exibicao: "640 atendimentos; espera mediana até a 1ª resposta 47 min; 3% sem equipe" }] }));
+assert.equal(comTrecho!.destaque, "640 atendimentos");
+assert.equal(comTrecho!.destaqueEhNumero, true);
+assert.deepEqual(comTrecho!.numerosTecnicos, ["640 atendimentos; espera mediana até a 1ª resposta 47 min; 3% sem equipe"]);
+assert.equal(unica(fato("tr2", "ruim", 3, { frase: "Quem chama no WhatsApp espera muito tempo pela primeira resposta da equipe.", numeros: [{ chave: "evidencia", exibicao: "LINK_CLICKS …0169: R$ 365,00 · outra campanha parecida" }] })), undefined, "trecho que não começa por algarismo não vale");
+// Jargão e siglas na frase da ação ou do fato: a ação não entra.
+for (const texto of ["o salvamento 0,5% dos posts", "o CPC das campanhas", "a CTR do anúncio", "o CPM do anúncio", "o alcance mediano dos posts"])
+  assert.equal(unica(fato("j1", "ruim", 3), { texto }), undefined, `frase da ação com jargão: ${texto}`);
+assert.equal(unica(fato("j2", "ruim", 3, { frase: "O alcance mediano caiu no período." })), undefined, "frase do fato com jargão");
+assert.ok(JARGAO_DA_HOJE.test("alcance mediano 1.340") && JARGAO_DA_HOJE.test("Medianas") && JARGAO_DA_HOJE.test("salvamento 0,5%") && JARGAO_DA_HOJE.test("taxa de salvamento") && JARGAO_DA_HOJE.test("o CTR"));
+assert.ok(!JARGAO_DA_HOJE.test("Post de foto alcançou mais") && !JARGAO_DA_HOJE.test("salvamentos por pessoa") && !JARGAO_DA_HOJE.test("immediato"), "o jargão é palavra inteira");
+assert.deepEqual(checarTextoDaHoje("Post de foto alcançou mais", MAX_CARACTERES_DA_MANCHETE), []);
+assert.ok(checarTextoDaHoje("Uma manchete bem comprida que passa de quarenta caracteres", MAX_CARACTERES_DA_MANCHETE).some((p) => p.includes("40")));
+assert.ok(checarTextoDaHoje("30 agendamentos").length > 0 && checarTextoDaHoje("Quem fecharam").length > 0 && checarTextoDaHoje("mediano").length > 0, "as 2 guardas da Phase 9 e o jargão entram na checagem");
+
+// Contexto: "{N} dias" e, se sobra um número leigo e curto, "30 dias · 10 posts"; o terceiro número vira o outroNumero.
+const comContexto = unica(fato("ctx", "ruim", 2, { numeros: [{ chave: "a", exibicao: "30 de 30 posts" }, { chave: "b", exibicao: "10 posts" }, { chave: "c", exibicao: "R$ 1.000 investidos" }] }));
+assert.equal(comContexto!.contexto, "30 dias · 10 posts");
+assert.equal(comContexto!.outroNumero?.exibicao, "R$ 1.000 investidos");
+assert.deepEqual(comContexto!.numerosTecnicos, []);
+// Os 4 números da Phase 9 não voltam por um caminho novo: número que bate na guarda nunca entra em destaque, contexto ou Ver números.
+const comGuarda = unica(fato("g9", "ruim", 2, { numeros: [{ chave: "a", exibicao: "30 de 30 posts" }, { chave: "b", exibicao: "12 agendamentos" }, { chave: "c", exibicao: "9 vendas" }] }));
+assert.equal(comGuarda!.contexto, "30 dias");
+assert.equal(comGuarda!.outroNumero, undefined);
+assert.deepEqual(comGuarda!.numerosTecnicos, []);
+
+// ---------- área: pela aba final da ação ----------
+const ABAS_POR_AREA: [string, AreaDaHoje][] = [
+  ["conteudo", "instagram"], ["top", "instagram"], ["posts", "instagram"], ["audiencia", "instagram"], ["ideias", "instagram"], ["conteudo-comercial", "instagram"],
+  ["anuncios", "anuncios"], ["campanhas", "anuncios"], ["links", "anuncios"],
+  ["pacientes", "comercial"], ["consultas", "comercial"], ["vendas", "comercial"], ["crm-painel", "comercial"], ["jornada", "comercial"],
+  ["vendas-kommo", "comercial"], ["atendimento", "comercial"], ["central-atendimento", "comercial"], ["crm-contatos", "comercial"],
+];
+for (const [aba, esperada] of ABAS_POR_AREA) {
+  const f = fato("ab", "ruim", 3);
+  const h = acoesDaHoje({ fatos: tela([f], [passo("ab")]), porArea: semAreas([f]), insights: [insight("ab", `/$clientId/${aba}`, "conteudo")] });
+  const a = acoes(h)[0];
+  // A aba só vale quando é linha viva do registro; as outras caem na aba da área (e a área sai da Area do fato).
+  if (a && a.rota === `${C}/${aba}`) assert.equal(a.areaHoje, esperada, `a aba ${aba} é da área ${esperada}`);
+}
+const emResultados = acoes(acoesDaHoje({ fatos: tela([fato("rz", "ruim", 3)], [passo("rz")]), porArea: semAreas([fato("rz", "ruim", 3)]), insights: [] }))[0];
+assert.equal(emResultados.areaHoje, "resultados", "o subcaminho vazio é Resultados");
+const porAreaDoFato = (area: "conteudo" | "ideias" | "anuncios" | "comercial") => {
+  const f = fato("pa", "ruim", 3);
+  const h = acoesDaHoje({ fatos: tela([f], [passo("pa")]), porArea: { ...semAreas([]), [area]: [f] }, insights: [insight("pa", "/$clientId/agentes", area)] });
+  return acoes(h)[0].areaHoje; // destino que saiu do registro: vale a aba da área do fato
+};
+assert.equal(porAreaDoFato("conteudo"), "instagram");
+assert.equal(porAreaDoFato("ideias"), "instagram");
+assert.equal(porAreaDoFato("anuncios"), "anuncios");
+assert.equal(porAreaDoFato("comercial"), "comercial");
+
+// Preenchimento: 4 de Instagram com peso 3, 1 de Anúncios e 1 de Resultados com peso 1 dão 2 de Instagram, depois Anúncios e Resultados.
+const doInsta = ["i1", "i2", "i3", "i4"].map((id) => fato(id, "ruim", 3));
+const outros = [fato("an", "atencao", 1), fato("rs", "atencao", 1)];
+const preenche = acoesDaHoje({
+  ...sintetica([...doInsta, ...outros], [...doInsta, ...outros].map((f) => passo(f.id))),
+  porArea: emAreas({ i1: "conteudo", i2: "conteudo", i3: "conteudo", i4: "conteudo", an: "anuncios", rs: "resumo" }, [...doInsta, ...outros]),
+});
+assert.deepEqual(ids(preenche), ["i1", "i2", "an", "rs"], "2 de Instagram; as vagas que sobram vão para Anúncios e Resultados");
+assert.deepEqual(acoes(preenche).map((a) => a.areaHoje), ["instagram", "instagram", "anuncios", "resultados"]);
+
+// ---------- família: o mesmo achado com ids diferentes é uma ação só ----------
+assert.deepEqual([FAMILIA_DO_FATO.formato, FAMILIA_DO_FATO["formato-melhor-taxa"], FAMILIA_DO_FATO["formato-sem-comparacao"]], ["formato", "formato", "formato"]);
+const fmt = fato("formato", "bom", 2, { manchete: "Post de foto alcançou mais", numeros: [{ chave: "evidencia", exibicao: TECNICO }] });
+const fmtTaxa = fato("formato-melhor-taxa", "bom", 3, { manchete: "Post de foto foi mais salvo", numeros: [{ chave: "taxa", exibicao: "5,8% contra 5,1% (10 e 10 posts)" }] });
+const daFamilia = acoesDaHoje({
+  ...sintetica([fmt], [passo("formato", { texto: "os posts de foto" })]),
+  porArea: emAreas({ formato: "conteudo" }, [fmt]),
+  extras: [{ tela: "posts", rota: `${C}/posts`, fatos: tela([fmtTaxa], [passo("formato-melhor-taxa", { texto: "o formato Imagem nos próximos posts" })], { tela: "posts" }) }],
+});
+assert.deepEqual(ids(daFamilia), ["formato"], "formato e formato-melhor-taxa são uma família só, e fica o Próximo (a Ação da semana)");
+assert.equal(acoes(daFamilia)[0].familia, "formato");
+
+// ---------- o caso do print: Instagram repetido e tarefa da equipe ----------
+const print = [
+  fato("formato", "bom", 3, { manchete: "Post de foto alcançou mais", numeros: [{ chave: "evidencia", exibicao: TECNICO }] }),
+  fato("ig2", "ruim", 3), fato("ig3", "ruim", 3), fato("ig4", "atencao", 3), fato("anun", "atencao", 2), fato("resu", "atencao", 1),
+];
+const extraPrint = [
+  fato("formato-melhor-taxa", "bom", 3, { manchete: "Post de foto foi mais salvo", numeros: [{ chave: "taxa", exibicao: "5,8% contra 5,1% (10 e 10 posts)" }] }),
+  fato("posts-sem-tema", "atencao", 3),
+];
+const doPrint = acoesDaHoje({
+  ...sintetica(print, print.map((f) => passo(f.id))),
+  porArea: emAreas({ formato: "conteudo", ig2: "conteudo", ig3: "conteudo", ig4: "conteudo", anun: "anuncios", resu: "resumo" }, print),
+  extras: [{ tela: "posts", rota: `${C}/posts`, fatos: tela(extraPrint, [passo("formato-melhor-taxa"), passo("posts-sem-tema", { soEquipe: true })], { tela: "posts" }) }],
+});
+assert.equal(doPrint.tipo, "acoes");
+if (doPrint.tipo === "acoes") {
+  assert.equal(doPrint.proxima?.id, "formato", "o Próximo é o formato de Instagram");
+  assert.equal(acoes(doPrint).filter((a) => a.areaHoje === "instagram").length, MAXIMO_POR_AREA, "2 de Instagram ao todo, contando o Próximo");
+  assert.ok(acoes(doPrint).some((a) => a.areaHoje === "anuncios") && acoes(doPrint).some((a) => a.areaHoje === "resultados"), "as vagas que sobram vão para Anúncios e Resultados");
+  assert.ok(!ids(doPrint).includes("formato-melhor-taxa"), "nenhum cartão da família formato");
+  assert.ok(!ids(doPrint).includes("posts-sem-tema"));
+  assert.deepEqual(doPrint.paraEquipe.map((a) => a.id), ["posts-sem-tema"], "posts-sem-tema só em paraEquipe");
+  assert.equal(new Set(acoes(doPrint).map((a) => a.familia)).size, acoes(doPrint).length, "nenhuma família repetida");
+}
+
 // ---------- determinismo ----------
 assert.deepEqual(acoesDaHoje(entradaDaLana()), acoesDaHoje(entradaDaLana()), "mesma entrada, mesma saída");
 assert.deepEqual(acoesDaHoje(sintetica(seis, seis.map((f) => passo(f.id)))), acoesDaHoje(sintetica(seis, seis.map((f) => passo(f.id)))));
@@ -294,13 +458,66 @@ if (hLana.tipo === "acoes") {
 // ---------- saudação ----------
 for (const [hora, esperado] of [[0, "Boa noite"], [4, "Boa noite"], [5, "Bom dia"], [11, "Bom dia"], [12, "Boa tarde"], [17, "Boa tarde"], [18, "Boa noite"], [23, "Boa noite"]] as const)
   assert.equal(saudacaoDaHora(hora), esperado, `${hora} h`);
+// O nome só aparece quando clients.name já começa por título de médico (palavra inteira); nome de clínica nunca é usado nem cortado.
 assert.equal(nomeDaSaudacao("Dra. Lana Ribeiro"), "Dra. Lana");
-assert.equal(nomeDaSaudacao("Lana"), "Lana");
-assert.equal(nomeDaSaudacao("  Clínica   Boa Vida  Ltda "), "Clínica Boa");
-assert.equal(nomeDaSaudacao(""), null);
-assert.equal(nomeDaSaudacao("   "), null);
-assert.equal(nomeDaSaudacao(null), null);
-assert.equal(nomeDaSaudacao(undefined), null);
+assert.equal(nomeDaSaudacao("Dr. João Pedro Alves"), "Dr. João");
+assert.equal(nomeDaSaudacao("dra Lana"), "dra Lana", "título como foi escrito, sem diferença de maiúscula");
+assert.equal(nomeDaSaudacao("  Doutora   Ana Maria "), "Doutora Ana");
+assert.equal(nomeDaSaudacao("Doutor Pedro"), "Doutor Pedro");
+for (const nome of ["Clínica de teste", "Clínica de Dermatologia Avançada e Estética Integrada Ltda", "  Clínica   Boa Vida  Ltda ", "Lana", "Drauzio Varella", "Dra.", "Dr", "Dra.Lana", "", "   ", null, undefined])
+  assert.equal(nomeDaSaudacao(nome), null, `nomeDaSaudacao(${JSON.stringify(nome)}) tem de ser null`);
+
+// ---------- "Para a equipe": o passo soEquipe nunca chega ao médico ----------
+const comEquipe = acoesDaHoje(sintetica(
+  [fato("a", "ruim", 3), fato("eq", "atencao", 3), fato("b", "bom", 2)],
+  [passo("a"), passo("eq", { texto: "o tema dos posts sem classificação", soEquipe: true }), passo("b")],
+));
+assert.equal(comEquipe.tipo, "acoes");
+if (comEquipe.tipo === "acoes") {
+  assert.ok(!ids(comEquipe).includes("eq"), "a ação da equipe não está em proxima nem em outras");
+  assert.deepEqual(comEquipe.paraEquipe.map((a) => a.id), ["eq"]);
+  assert.ok(comEquipe.paraEquipe.every((a) => a.soEquipe === true));
+  assert.ok(acoes(comEquipe).every((a) => a.soEquipe === false));
+  assert.equal(comEquipe.aviso, "Poucas ações nesta semana: as leituras deste período pediram só 2 ações.", "o aviso conta só as ações do médico");
+}
+// Quando a Ação da semana é de arrumação da equipe, o Próximo é a primeira ação do médico (não fica vazio, não usa a da equipe).
+const semanaDaEquipe = acoesDaHoje(sintetica(
+  [fato("eq", "ruim", 3), fato("x", "atencao", 2), fato("y", "ruim", 2)],
+  [passo("eq", { soEquipe: true }), passo("x"), passo("y")],
+));
+if (semanaDaEquipe.tipo === "acoes") {
+  assert.equal(semanaDaEquipe.proxima?.id, "y", "o Próximo é a primeira ação do médico");
+  assert.deepEqual(semanaDaEquipe.paraEquipe.map((a) => a.id), ["eq"]);
+}
+// Só arrumação da equipe: o Próximo fica vazio e o aviso diz que não houve ação.
+const soDaEquipe = acoesDaHoje(sintetica([fato("eq", "ruim", 3)], [passo("eq", { soEquipe: true })]));
+if (soDaEquipe.tipo === "acoes") {
+  assert.equal(soDaEquipe.proxima, null);
+  assert.deepEqual(soDaEquipe.outras, []);
+  assert.equal(soDaEquipe.paraEquipe.length, 1);
+  assert.equal(soDaEquipe.aviso, "Poucas ações nesta semana: as leituras deste período não pediram nenhuma ação.");
+}
+// paraEquipe: no máximo 3, sem repetir id nem frase; houveExcluidas não vem de passo da equipe.
+const muitasDaEquipe = acoesDaHoje(sintetica(
+  ["e1", "e2", "e3", "e4", "e5"].map((id) => fato(id, "atencao", 1)),
+  [passo("e1", { texto: "a mesma frase", soEquipe: true }), passo("e2", { texto: "a mesma frase", soEquipe: true }), passo("e3", { soEquipe: true }), passo("e4", { soEquipe: true }), passo("e5", { soEquipe: true })],
+));
+if (muitasDaEquipe.tipo === "acoes") {
+  assert.deepEqual(muitasDaEquipe.paraEquipe.map((a) => a.id), ["e1", "e3", "e4"], "no máximo 3, sem frase repetida");
+  assert.ok(!muitasDaEquipe.aviso?.includes("selo"), "passo da equipe não liga o motivo dos números sem selo");
+}
+// A fixture da Lana com 30 posts sem tema (como nos mocks do e2e): posts-sem-tema fica em paraEquipe e fora da lista.
+const FORMATOS = ["reels", "carrossel", "estatico"];
+const postsSemTema = Array.from({ length: 30 }, (_, i) => ({
+  format: FORMATOS[i % 3], posted_at: `2026-10-${String(2 + (i % 10)).padStart(2, "0")}T15:00:00Z`, reach: 800 + i * 40, saved: 5 + (i % 6), tema: null,
+}));
+const comPosts = acoesDaHoje(entradaDaLana({ extras: [{ tela: "posts", rota: `${C}/posts`, fatos: fatosDePublicacoes({ de: START, ate: END, hoje: HOJE, posts: postsSemTema }) }] }));
+assert.equal(comPosts.tipo, "acoes");
+if (comPosts.tipo === "acoes") {
+  assert.ok(!ids(comPosts).includes("posts-sem-tema"), "posts-sem-tema fora da lista do médico");
+  assert.ok(comPosts.paraEquipe.some((a) => a.id === "posts-sem-tema"), "posts-sem-tema em paraEquipe");
+  assert.ok(comPosts.paraEquipe.length <= 3);
+}
 
 // ---------- o módulo é puro: sem banco, sem consulta e sem IA (D-05) ----------
 const fonte = readFileSync(new URL("../src/lib/leitura/fatos-hoje.ts", import.meta.url), "utf8");

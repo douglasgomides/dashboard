@@ -66,6 +66,7 @@ export function deInsight(i: Insight): { fato: Fato; passo: PassoFato | null } {
     tom: i.tom,
     peso: pesoDaPrioridade(prioridade(i)),
     frase: i.titulo,
+    ...(i.manchete ? { manchete: i.manchete } : {}),
     numeros: numeroDaEvidencia(i.evidencia, "evidencia"),
   };
   return { fato, passo: passoDe(i.acao?.texto, i.responsavel, i.diagnostico, i.id) };
@@ -91,7 +92,7 @@ const QUEM_DA_ROTA: Record<RotaAcao, Responsavel> = {
 
 export function deAchado(a: Achado): { fato: Fato; passo: PassoFato | null } {
   const peso = Math.min(3, Math.max(1, Math.round(a.peso))) as 1 | 2 | 3;
-  const fato: Fato = { id: a.id, tom: a.tom, peso, frase: a.titulo, numeros: numeroDaEvidencia(a.base, "base") };
+  const fato: Fato = { id: a.id, tom: a.tom, peso, frase: a.titulo, ...(a.manchete ? { manchete: a.manchete } : {}), numeros: numeroDaEvidencia(a.base, "base") };
   const quem = a.acao?.rota ? QUEM_DA_ROTA[a.acao.rota] : "equipe_hub";
   return { fato, passo: passoDe(a.acao?.texto, quem, a.porque, a.id) };
 }

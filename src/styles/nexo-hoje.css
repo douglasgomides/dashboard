@@ -23,6 +23,21 @@
   color: var(--text-2);
   overflow-wrap: anywhere;
 }
+/* Linha pequena só da equipe (admin e estrategista): arrumação interna do dado, nunca vista pelo médico. */
+.app.product-workspace:not(.sap-workspace) .nx-hoje__equipe {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje__equipe-link {
+  color: var(--text-2);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 /* ---------- Chips de contexto e de estado (a data e as fontes, com a hora do dado ao lado) ---------- */
 .app.product-workspace:not(.sap-workspace) .nx-chip-contexto,
@@ -110,6 +125,45 @@
   line-height: 20px;
   font-weight: 500;
   color: var(--muted-ink);
+}
+
+/* ---------- "Quem resolve" junto da pílula e "Ver números" fechado (Próximo e cartões) ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-hoje__quem {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-proximo__quem {
+  margin-top: -4px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje__numeros {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje__numeros > summary {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  cursor: pointer;
+  color: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje__numeros > p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+@media (pointer: coarse) {
+  .app.product-workspace:not(.sap-workspace) .nx-hoje__numeros > summary {
+    min-height: 44px;
+  }
 }
 
 /* ---------- Cartão de cada ação (NxCartaoNumero + ação em pílula) ---------- */

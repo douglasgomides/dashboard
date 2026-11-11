@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
-import { CID, mockAccount } from "./fixtures";
+import { CID, client, mockAccount } from "./fixtures";
 import { REGISTRO_DE_TELAS, SECOES_JUNTADAS } from "../../src/lib/registro-de-telas";
-import { GUARDA_DE_NUMERO_DA_HOJE, GUARDA_DE_TEXTO_DA_HOJE } from "../../src/lib/leitura/fatos-hoje";
+import { GUARDA_DE_NUMERO_DA_HOJE, GUARDA_DE_TEXTO_DA_HOJE, JARGAO_DA_HOJE, MAXIMO_POR_AREA, MAX_CARACTERES_DA_MANCHETE } from "../../src/lib/leitura/fatos-hoje";
 import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, mockCrm, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 
 // O que fazer hoje (Phase 3.1.1, plano 05): a primeira versão da tela Hoje da Phase 9. De 3 a 5 ações da semana por regra fixa
@@ -272,18 +272,55 @@ test("(h) o ↗ leva à primeira aba da tela juntada e a seta da pílula leva à
   await expect.poll(() => new URL(page.url()).pathname).toBe(hrefSeta.pathname);
 });
 
-test("(i) a saudação é Bom dia, Boa tarde ou Boa noite, com o nome da clínica em cinza mais claro", async ({ page, context }) => {
+/** Troca só o nome do cliente (clients.name) devolvido pela leitura de clients, como a fixture faz. */
+async function comNomeDaClinica(context: BrowserContext, name: string) {
+  await context.route("http://localhost:9/rest/v1/clients**", (r) => {
+    const unico = (r.request().headers()["accept"] ?? "").includes("vnd.pgrst.object");
+    const c = { ...client, name };
+    return r.fulfill({ json: unico ? c : [c] });
+  });
+}
+
+const SAUDACAO = /^(Bom dia|Boa tarde|Boa noite)$/;
+
+test("(i) a saudação é só Bom dia, Boa tarde ou Boa noite: nunca usa o nome da clínica", async ({ page, context }) => {
   await mockAccount(context, "viewer");
   await dadosRealistas(context);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}/hoje?preset=30d`);
   const saudacao = page.locator('[data-tela="hoje"] h1.nx-pagina__saudacao');
   await expect(saudacao).toBeVisible();
-  await expect(saudacao).toHaveText(/^(Bom dia|Boa tarde|Boa noite)(, .+)?$/);
-  await expect(saudacao.locator(".nx-hoje__nome")).toHaveText("Clínica de");
-  const cor = await saudacao.evaluate((el) => ({ h1: getComputedStyle(el).color, nome: getComputedStyle(el.querySelector(".nx-hoje__nome")!).color, peso: Number(getComputedStyle(el).fontWeight) }));
+  await expect(saudacao).toHaveText(SAUDACAO);
+  await expect(saudacao.locator(".nx-hoje__nome")).toHaveCount(0);
+  const peso = await saudacao.evaluate((el) => Number(getComputedStyle(el).fontWeight));
+  expect(peso).toBeGreaterThanOrEqual(500);
+});
+
+test("(i2) saudação com nome longo de clínica e sem nome de médico: só a saudação, sem cortar o nome", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await dadosRealistas(context);
+  await comNomeDaClinica(context, "Clínica de Dermatologia Avançada e Estética Integrada Ltda");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/hoje?preset=30d`);
+  const saudacao = page.locator('[data-tela="hoje"] h1.nx-pagina__saudacao');
+  await expect(saudacao).toBeVisible();
+  await expect(saudacao).toHaveText(SAUDACAO);
+  await expect(saudacao).not.toContainText("Clínica");
+  await expect(saudacao.locator(".nx-hoje__nome")).toHaveCount(0);
+});
+
+test("(i3) saudação com nome de médico: o título e o primeiro nome inteiros, em cinza mais claro", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await dadosRealistas(context);
+  await comNomeDaClinica(context, "Dra. Lana Ribeiro");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/hoje?preset=30d`);
+  const saudacao = page.locator('[data-tela="hoje"] h1.nx-pagina__saudacao');
+  await expect(saudacao).toBeVisible();
+  await expect(saudacao).toHaveText(/^(Bom dia|Boa tarde|Boa noite), Dra\. Lana$/);
+  await expect(saudacao.locator(".nx-hoje__nome")).toHaveText("Dra. Lana");
+  const cor = await saudacao.evaluate((el) => ({ h1: getComputedStyle(el).color, nome: getComputedStyle(el.querySelector(".nx-hoje__nome")!).color }));
   expect(cor.nome, "o nome é mais claro que a saudação").not.toBe(cor.h1);
-  expect(cor.peso).toBeGreaterThanOrEqual(500);
 });
 
 test("(j) todo cartão de ação tem o ícone num círculo e os chips de contexto aparecem", async ({ page, context }) => {
@@ -301,7 +338,9 @@ test("(j) todo cartão de ação tem o ícone num círculo e os chips de context
     expect(await icone.evaluate((el) => getComputedStyle(el).borderRadius)).toMatch(/^(50%|\d+(\.\d+)?px)$/);
     const caixa = await icone.evaluate((el) => ({ w: el.getBoundingClientRect().width, h: el.getBoundingClientRect().height }));
     expect(caixa.w).toBeCloseTo(caixa.h, 0);
-    await expect(cartoes.nth(k).locator(".nx-cartao__sub")).toHaveText(/^Quem resolve: /);
+    // D-07: o subtítulo traz o número de contexto; "Quem resolve" fica junto da pílula da ação.
+    await expect(cartoes.nth(k).locator(".nx-cartao__sub")).toHaveText(/^\d+ dias?( · .+)?$/);
+    await expect(cartoes.nth(k).locator(".nx-hoje__quem")).toHaveText(/^Quem resolve: /);
     await expect(cartoes.nth(k).locator("a.nx-acao-pilula__seta")).toHaveCount(1);
   }
   // O Próximo vem antes dos cartões e o total não passa de 5 ações.
@@ -333,4 +372,105 @@ test("a Hoje mostra o estado das fontes com bolinha: âmbar com mais de 1 dia", 
   await expect(crm).toHaveAttribute("data-tom", /^(atencao|ruim)$/);
   await expect(crm).toHaveAttribute("aria-label", /^CRM até \d{2}\/\d{2}, às \d{2}:\d{2}$/);
   expect(await crm.locator(".nx-chip-estado__bolinha").evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe(await ig.locator(".nx-chip-estado__bolinha").evaluate((el) => getComputedStyle(el).backgroundColor));
+});
+
+// ---------- Para a equipe: a arrumação interna do dado só aparece para admin e estrategista ----------
+
+for (const perfil of ["viewer", "strategist", "admin"] as const) {
+  test(`(n) Para a equipe: ${perfil} ${perfil === "viewer" ? "não vê a tarefa interna" : "vê a tarefa interna só na linha pequena"}`, async ({ page, context }) => {
+    await mockAccount(context, perfil);
+    await dadosRealistas(context);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/${CID}/hoje?preset=30d`);
+    await expect(acoes(page).first()).toBeVisible();
+    const tela = page.locator('[data-tela="hoje"]');
+
+    // Nos 3 perfis a tarefa interna nunca é uma ação da lista do médico.
+    await expect(page.locator('[data-acao-hoje="posts-sem-tema"]')).toHaveCount(0);
+    if (perfil === "viewer") {
+      await expect(page.locator('[data-peca="para-equipe"]')).toHaveCount(0);
+      await expect(page.locator("[data-acao-equipe]")).toHaveCount(0);
+      const texto = await tela.innerText();
+      expect(texto).not.toContain("Para a equipe");
+      expect(texto).not.toContain("sem classificação");
+    } else {
+      await expect(page.locator('[data-peca="para-equipe"]')).toBeVisible();
+      const item = page.locator('[data-acao-equipe="posts-sem-tema"]');
+      await expect(item).toHaveCount(1);
+      const href = (await item.locator("a").getAttribute("href"))!;
+      const url = new URL(href, "http://x");
+      expect(url.pathname).toBe(`/${CID}/posts`);
+      expect(url.searchParams.get("preset")).toBe("30d");
+    }
+  });
+}
+
+// ---------- manchete leiga, no máximo 2 por área e o Próximo sem repetir o achado ----------
+
+for (const janela of TELAS_DE_MEDIDA) {
+  test(`(l) manchete curta e leiga, com os números técnicos fechados (${janela.width}x${janela.height})`, async ({ page, context }) => {
+    await mockAccount(context, "viewer");
+    await dadosRealistas(context);
+    await page.setViewportSize(janela);
+    await page.goto(`/${CID}/hoje?preset=30d`);
+    await expect(acoes(page).first()).toBeVisible();
+
+    const n = await acoes(page).count();
+    expect(n).toBeGreaterThan(0);
+    for (let k = 0; k < n; k++) {
+      const acao = acoes(page).nth(k);
+      const manchete = norm(await acao.locator("[data-manchete]").innerText());
+      expect(manchete.length, `manchete "${manchete}" com mais de ${MAX_CARACTERES_DA_MANCHETE} caracteres`).toBeLessThanOrEqual(MAX_CARACTERES_DA_MANCHETE);
+      const textos = [manchete, norm(await acao.locator(".nx-acao-pilula__texto").innerText())];
+      const legenda = acao.locator(".nx-proximo__legenda, .nx-numero__legenda");
+      if (await legenda.count()) textos.push(norm(await legenda.first().innerText()));
+      const sub = acao.locator(".nx-cartao__sub");
+      if (await sub.count()) textos.push(norm(await sub.first().innerText()));
+      for (const t of textos) expect(t, `jargão em "${t}"`).not.toMatch(JARGAO_DA_HOJE);
+    }
+    // O número técnico inteiro fica num "Ver números" fechado.
+    const detalhes = page.locator('[data-tela="hoje"] details[data-ver-numeros]');
+    const total = await detalhes.count();
+    for (let k = 0; k < total; k++) {
+      expect(await detalhes.nth(k).evaluate((el) => (el as HTMLDetailsElement).open), "Ver números começa fechado").toBe(false);
+      await expect(detalhes.nth(k).locator("summary")).toHaveText("Ver números");
+    }
+    console.log(`  Hoje (${janela.width}x${janela.height}): ${n} ações, ${total} com Ver números`);
+    // Com tudo fechado, o texto da tela inteira também não traz jargão.
+    expect(await page.locator('[data-tela="hoje"]').innerText(), "jargão no texto da Hoje").not.toMatch(JARGAO_DA_HOJE);
+    expect(await semRolagemLateral(page)).toBe(true);
+  });
+}
+
+test("(l2) abrir o Ver números mostra o número técnico inteiro", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await dadosRealistas(context);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/hoje?preset=30d`);
+  await expect(acoes(page).first()).toBeVisible();
+  const detalhes = page.locator('[data-tela="hoje"] details[data-ver-numeros]');
+  if ((await detalhes.count()) === 0) return;
+  await detalhes.first().locator("summary").click();
+  await expect(detalhes.first().locator("p")).toBeVisible();
+  expect(norm(await detalhes.first().locator("p").innerText()).length).toBeGreaterThan(0);
+});
+
+test("(m) no máximo 2 ações por área e o Próximo não se repete nos cartões", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await dadosRealistas(context);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/hoje?preset=30d`);
+  await expect(acoes(page).first()).toBeVisible();
+
+  const dados = await page.locator('[data-tela="hoje"] [data-acao-hoje]').evaluateAll((els) =>
+    els.map((el) => ({ id: el.getAttribute("data-acao-hoje"), area: el.getAttribute("data-area-hoje"), familia: el.getAttribute("data-familia-hoje"), proximo: el.getAttribute("data-peca") === "proximo" })),
+  );
+  console.log(`  Hoje (1440x900): ${dados.length} ações: ${dados.map((d) => `${d.id} [${d.area}/${d.familia}]`).join(" | ")}`);
+  const porArea = new Map<string | null, number>();
+  for (const d of dados) porArea.set(d.area, (porArea.get(d.area) ?? 0) + 1);
+  for (const [area, quantas] of porArea) expect(quantas, `a área ${area} tem ${quantas} ações`).toBeLessThanOrEqual(MAXIMO_POR_AREA);
+  expect(new Set(dados.map((d) => d.familia)).size, "todas as famílias são diferentes").toBe(dados.length);
+  const proximo = dados.find((d) => d.proximo);
+  expect(proximo, "há um Próximo").toBeTruthy();
+  expect(dados.filter((d) => !d.proximo && d.familia === proximo!.familia), "nenhum cartão tem a família do Próximo").toEqual([]);
 });

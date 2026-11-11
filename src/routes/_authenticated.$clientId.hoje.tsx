@@ -1,12 +1,14 @@
 import { useMemo, type ReactNode } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
+import { useClientRole } from "@/hooks/use-client-role";
 import { useResultado } from "@/hooks/use-resultado";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
 import { useResultadosDiarios } from "@/hooks/use-resultados-diarios";
 import { NxChip } from "@/components/nx-chip";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
-import { NxCartaoDaAcao, NxChipEstado, NxProximo, SaudacaoHoje } from "@/components/nx/hoje";
+import { NxCartaoDaAcao, NxChipEstado, NxParaEquipe, NxProximo, SaudacaoHoje } from "@/components/nx/hoje";
 import { NxCarregando, NxErro } from "@/components/nx/blocos";
 import { getClient, getRoiPeriodo } from "@/lib/client-data";
 import { resolveDateRange } from "@/lib/date-range";
@@ -18,6 +20,7 @@ import { fatosDePacientes } from "@/lib/leitura/fatos-pacientes";
 import { fatosDePublicacoes, fatosDoInstagram } from "@/lib/leitura/fatos-instagram";
 import { acoesDaHoje, type EntradaHoje, type FonteDoDado } from "@/lib/leitura/fatos-hoje";
 import type { FatosDaTela, TelaId } from "@/lib/leitura/tipos";
+import { ehEquipe } from "@/lib/registro-de-telas";
 import { ddmm, statusDoCliente, tomDaFonte, type LinhaFonte } from "@/lib/saude-fontes";
 
 // O que fazer hoje (Phase 3.1.1, plano 05): a primeira versão da tela Hoje da Phase 9 (D-06), na mesma rota que a Phase 9
@@ -53,6 +56,11 @@ function HojePage() {
   const { clientId } = Route.useParams();
   const dateRangeState = clientLayoutRoute.useSearch();
   const { start, end } = resolveDateRange(dateRangeState);
+  // Mesma regra de papel e mesma chave de cache da casca (app-shell): nenhuma consulta nova. Quem ainda está carregando ou não
+  // tem papel conta como médico (falha fechada): a linha "Para a equipe" só é montada para admin e estrategista.
+  const { isAdmin } = useAuth();
+  const papel = useClientRole(clientId);
+  const equipe = !papel.carregando && ehEquipe({ isAdmin, papel: papel.papel });
 
   // Os mesmos dados (e as mesmas chaves de cache) de MonthlyOverview em Resultados da clínica: o custo da Hoje é o de Resultados.
   const resultado = useResultado(clientId, start, end);
@@ -165,6 +173,7 @@ function HojePage() {
         <section className="nx-hoje__leitura" data-peca="leitura" data-modo="leitura" aria-label="Próximo e aviso">
           {lista.proxima && <NxProximo acao={lista.proxima} clientId={clientId} dateRange={dateRangeState} />}
           {lista.aviso && <p className="nx-hoje__aviso">{lista.aviso}</p>}
+          {equipe && lista.paraEquipe.length > 0 && <NxParaEquipe acoes={lista.paraEquipe} clientId={clientId} dateRange={dateRangeState} />}
         </section>
       }
       cartoes={lista.outras.length ? [c1, c2, c3, c4] : undefined}

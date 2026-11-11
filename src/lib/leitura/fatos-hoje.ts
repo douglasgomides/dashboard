@@ -17,10 +17,13 @@ import { checarTextoDaLeitura, frasePasso, montarTexto } from "./texto";
 import type { Fato, FatosDaTela, Numeral, PassoFato, PassoTexto, TelaId, TomFato, VerboPasso } from "./tipos";
 
 /** Muda quando uma regra da Hoje muda. */
-export const VERSAO_REGRAS_HOJE = 1;
+export const VERSAO_REGRAS_HOJE = 2;
 
 /** Quantas ações a Hoje mostra, no máximo (D-01: de 3 a 5). */
 const MAXIMO_DE_ACOES = 5;
+
+/** Quantas ações da equipe a linha "Para a equipe" mostra, no máximo. */
+const MAXIMO_PARA_EQUIPE = 3;
 
 const C = "/_authenticated/$clientId";
 
@@ -75,6 +78,37 @@ export const GUARDA_DE_TEXTO_DA_HOJE = /\b(agendaram|fecharam|chamaram|comparece
 /** Guarda de número: só os números de destaque (número, legenda e número do Próximo). Nada de agendamento, venda ou contato novo. */
 export const GUARDA_DE_NUMERO_DA_HOJE = /\b(agendamentos?|vendas?|consultas?|comparecimentos?|contatos novos|novos contatos|leads?)\b/i;
 
+/** Quantos caracteres a manchete do Próximo e dos cartões pode ter (D-07: frase curta que o médico lê de relance). */
+export const MAX_CARACTERES_DA_MANCHETE = 40;
+
+/** Quantos caracteres tem o número de contexto do subtítulo do cartão ("10 posts"). */
+const MAX_CARACTERES_DO_CONTEXTO = 24;
+
+/** Quantas ações de uma mesma área cabem na Hoje, contando o Próximo (as vagas que sobram vão para a próxima área). */
+export const MAXIMO_POR_AREA = 2;
+
+/**
+ * Jargão que o médico leigo não lê: mediana (mediano, medianos, medianas), siglas de tráfego (CTR, CPC, CPM, CPL, ROAS), "salvamento"
+ * seguido de porcentagem ("salvamento 0,5%") e "taxa de salvamento". O número técnico inteiro vai para o "Ver números" fechado.
+ */
+export const JARGAO_DA_HOJE = /(?<!\p{L})(median[oa]s?|CTR|CPC|CPM|CPL|ROAS)(?!\p{L})|(?<!\p{L})salvamentos?\s+\d[\d.,]*\s*%|taxa de salvamento/iu;
+
+/**
+ * Problemas de um texto que vai para a Hoje (vazio = pode ir): os do filtro de linguagem de toda a leitura (checarTextoDaLeitura),
+ * o jargão da Hoje, as 2 guardas da Phase 9 e, quando `max` vem, o tamanho. A regra nunca encurta um texto no meio de uma palavra:
+ * o que reprova é descartado.
+ */
+export function checarTextoDaHoje(texto: string, max?: number): string[] {
+  const t = texto.replace(/\s+/g, " ").trim();
+  const problemas = [...checarTextoDaLeitura(t)];
+  const jargao = JARGAO_DA_HOJE.exec(t);
+  if (jargao) problemas.push(`jargão da Hoje: "${jargao[0]}"`);
+  if (GUARDA_DE_TEXTO_DA_HOJE.test(t)) problemas.push("texto dos 4 números da Phase 9");
+  if (GUARDA_DE_NUMERO_DA_HOJE.test(t)) problemas.push("número de agendamento, venda, consulta ou contato");
+  if (max != null && t.length > max) problemas.push(`mais de ${max} caracteres`);
+  return problemas;
+}
+
 function excluido(f: Fato): boolean {
   if (EXCLUIDOS_DA_HOJE.includes(f.id)) return true;
   if (PREFIXOS_EXCLUIDOS_DA_HOJE.some((p) => f.id.startsWith(p))) return true;
@@ -105,6 +139,19 @@ export interface EntradaHoje {
   fontes?: readonly FonteDoDado[];
 }
 
+/** As 4 áreas da Hoje; no máximo MAXIMO_POR_AREA ações de cada. */
+export type AreaDaHoje = "instagram" | "anuncios" | "comercial" | "resultados";
+
+/**
+ * Ids de fato que dizem o mesmo achado e por isso formam uma família só (a Hoje mostra uma ação por família). O id que não está
+ * aqui é a própria família. Cada linha diz de onde vem o id.
+ */
+export const FAMILIA_DO_FATO: Readonly<Record<string, string>> = {
+  formato: "formato", // src/lib/leitura-periodo.ts:203 (regra de formatos: id "formato", vira insight de Resultados)
+  "formato-melhor-taxa": "formato", // src/lib/leitura/fatos-instagram.ts:346 (publicações: formato com mais salvamentos por pessoa)
+  "formato-sem-comparacao": "formato", // src/lib/leitura/fatos-instagram.ts:361 (publicações: só um formato com amostra)
+};
+
 export interface AcaoDaHoje {
   /** Id do fato de origem. */
   id: string;
@@ -113,22 +160,36 @@ export interface AcaoDaHoje {
   verbo: VerboPasso;
   quem: Responsavel;
   rotuloQuem: string;
-  /** O primeiro número do fato de origem, que sustenta a ação. */
+  /** O primeiro número do fato de origem, que sustenta a ação (a origem do destaque; pode ser técnico e ficar no "Ver números"). */
   numero: Numeral;
-  /** A frase do fato de origem (o que aconteceu), que fica embaixo do número. */
-  legenda: string;
-  /** O segundo número do fato, quando existe e passa nas duas guardas (vai na pílula de variação do cartão). */
+  /** A manchete: até 40 caracteres, leiga. Um número do fato, a manchete que a regra escreveu ou a primeira oração da frase do fato. */
+  destaque: string;
+  /** true quando o destaque é um número do fato (o desenho o mostra grande); false quando é texto. */
+  destaqueEhNumero: boolean;
+  /** A frase do fato de origem (o que aconteceu), que fica embaixo do destaque. null quando o destaque já é a frase inteira. */
+  legenda: string | null;
+  /** Subtítulo do cartão: "30 dias" ou "30 dias · 10 posts" (D-07: o número de contexto). */
+  contexto: string;
+  /** Outro número leigo do fato (até 40 caracteres), que vai na pílula de variação do cartão. */
   outroNumero?: Numeral;
+  /** Texto inteiro dos números que não couberam na manchete por serem longos ou técnicos: vão num "Ver números" fechado. */
+  numerosTecnicos: string[];
+  /** A área da Hoje da ação (Instagram, Anúncios, Comercial ou Resultados), pela aba para onde ela aponta. */
+  areaHoje: AreaDaHoje;
+  /** O achado de origem, para o Próximo e os cartões nunca repetirem a mesma coisa (FAMILIA_DO_FATO). */
+  familia: string;
   tom: TomFato;
   /** routeId de uma linha do registro (a aba de onde a ação saiu). */
   rota: string;
   area?: Area;
   tela: TelaId;
+  /** Arrumação interna da equipe (PassoFato.soEquipe): nunca vai para o médico; só para a linha "Para a equipe". */
+  soEquipe: boolean;
 }
 
 export type HojeDaClinica =
   | { tipo: "sem_leitura"; motivo: string; passo: PassoTexto }
-  | { tipo: "acoes"; proxima: AcaoDaHoje | null; outras: AcaoDaHoje[]; aviso: string | null };
+  | { tipo: "acoes"; proxima: AcaoDaHoje | null; outras: AcaoDaHoje[]; paraEquipe: AcaoDaHoje[]; aviso: string | null };
 
 // ---------- destino de cada ação ----------
 
@@ -226,6 +287,33 @@ function candidatasDoExtra(x: NonNullable<EntradaHoje["extras"]>[number], fonte:
   return lista;
 }
 
+const AREA_PELA_ABA: Record<string, AreaDaHoje> = {
+  conteudo: "instagram", top: "instagram", posts: "instagram", audiencia: "instagram", ideias: "instagram", "conteudo-comercial": "instagram",
+  anuncios: "anuncios", campanhas: "anuncios", links: "anuncios",
+  pacientes: "comercial", consultas: "comercial", vendas: "comercial", "crm-painel": "comercial", jornada: "comercial",
+  "vendas-kommo": "comercial", atendimento: "comercial", "central-atendimento": "comercial", "crm-contatos": "comercial",
+};
+const AREA_PELA_AREA: Record<Area, AreaDaHoje> = { conteudo: "instagram", ideias: "instagram", anuncios: "anuncios", comercial: "comercial", resumo: "resultados" };
+
+/** A área da Hoje pela aba final da ação (subcaminho da rota). Aba fora do mapa: vale a Area do fato; sem ela, Resultados. */
+function areaDaHoje(rota: string, area: Area | undefined): AreaDaHoje {
+  const sub = rota.startsWith(`${C}/`) ? rota.slice(C.length + 1).replace(/\/+$/, "") : rota === C ? "" : rota;
+  if (sub === "") return "resultados";
+  return AREA_PELA_ABA[sub] ?? (area ? AREA_PELA_AREA[area] : "resultados");
+}
+
+const diasDoPeriodo = (de: string, ate: string) => Math.max(1, Math.round((Date.parse(`${ate.slice(0, 10)}T12:00:00Z`) - Date.parse(`${de.slice(0, 10)}T12:00:00Z`)) / 86_400_000) + 1);
+
+/** Onde um número longo se parte em trechos inteiros: "640 atendimentos; espera mediana até a 1ª resposta 47 min". */
+const TRECHOS_DO_NUMERO = /;\s| · |,\s/;
+
+/** "Estático leva longe, Carrossel faz guardar." vira "Estático leva longe" (trecho antes do primeiro separador); sem separador, a frase inteira. */
+function primeiraOracao(frase: string): { oracao: string; inteira: boolean } {
+  const t = frase.replace(/\s+/g, " ").trim().replace(/[.!?]+$/, "");
+  const corte = /, |: | · | — |; /.exec(t);
+  return corte ? { oracao: t.slice(0, corte.index).trim(), inteira: false } : { oracao: t, inteira: true };
+}
+
 /** A ação pronta, ou null quando a candidata não passa nas exclusões, nas guardas ou no filtro de linguagem. */
 function acaoDaCandidata(c: Candidata): AcaoDaHoje | null {
   if (excluido(c.fato)) return null;
@@ -235,10 +323,59 @@ function acaoDaCandidata(c: Candidata): AcaoDaHoje | null {
   const numero = t.aconteceu.numeros[0];
   if (!numero) return null;
   const frase = t.proximoPasso.frase;
-  const legenda = t.aconteceu.frase;
-  for (const texto of [frase, legenda, numero.exibicao]) if (GUARDA_DE_TEXTO_DA_HOJE.test(texto)) return null;
-  for (const texto of [legenda, numero.exibicao]) if (GUARDA_DE_NUMERO_DA_HOJE.test(texto)) return null;
-  const outroNumero = t.aconteceu.numeros.slice(1).find((n) => !GUARDA_DE_TEXTO_DA_HOJE.test(n.exibicao) && !GUARDA_DE_NUMERO_DA_HOJE.test(n.exibicao));
+  const fraseDoFato = t.aconteceu.frase;
+  // Guardas da Phase 9 (como no plano 05) e jargão da Hoje: a frase da ação pode falar de consulta, mas nunca dos 4 números.
+  for (const texto of [frase, fraseDoFato, numero.exibicao]) if (GUARDA_DE_TEXTO_DA_HOJE.test(texto)) return null;
+  for (const texto of [fraseDoFato, numero.exibicao]) if (GUARDA_DE_NUMERO_DA_HOJE.test(texto)) return null;
+  for (const texto of [frase, fraseDoFato]) if (JARGAO_DA_HOJE.test(texto)) return null;
+
+  // Números do fato que passam nas 2 guardas da Phase 9 (os outros nunca aparecem).
+  const liberados = t.aconteceu.numeros.filter((n) => !GUARDA_DE_TEXTO_DA_HOJE.test(n.exibicao) && !GUARDA_DE_NUMERO_DA_HOJE.test(n.exibicao));
+  const leigo = (n: Numeral, max: number) => checarTextoDaHoje(n.exibicao, max).length === 0;
+
+  // A manchete, nesta ordem: (a) um número curto e leigo; (b) a manchete escrita pela regra; (c) a primeira oração da frase do fato.
+  let destaque: string | null = null;
+  let destaqueEhNumero = false;
+  let legenda: string | null = fraseDoFato;
+  let numeroDoDestaque: Numeral | undefined;
+  const numeroCurto = liberados.find((n) => leigo(n, MAX_CARACTERES_DA_MANCHETE));
+  if (numeroCurto) {
+    destaque = numeroCurto.exibicao.trim();
+    destaqueEhNumero = true;
+    numeroDoDestaque = numeroCurto;
+  } else if (c.fato.manchete && checarTextoDaHoje(c.fato.manchete, MAX_CARACTERES_DA_MANCHETE).length === 0) {
+    destaque = c.fato.manchete.trim();
+  } else {
+    const { oracao, inteira } = primeiraOracao(fraseDoFato);
+    if (oracao && checarTextoDaHoje(oracao, MAX_CARACTERES_DA_MANCHETE).length === 0) {
+      destaque = oracao;
+      if (inteira) legenda = null;
+    } else {
+      // (a2) Último recurso, para a Ação da semana de Resultados não ficar de fora da Hoje: um trecho inteiro do número (entre
+      // "; ", " · " ou ", ") que começa por algarismo ou R$, curto e leigo ("640 atendimentos; espera mediana …" dá "640 atendimentos").
+      // O número técnico inteiro continua em numerosTecnicos. Nunca corta no meio de uma palavra.
+      for (const n of liberados) {
+        const trecho = n.exibicao.split(TRECHOS_DO_NUMERO).map((x) => x.trim()).find((x) => /^(R\$\s?)?\d/.test(x) && checarTextoDaHoje(x, MAX_CARACTERES_DA_MANCHETE).length === 0);
+        if (trecho) {
+          destaque = trecho;
+          destaqueEhNumero = true;
+          numeroDoDestaque = n;
+          break;
+        }
+      }
+    }
+  }
+  // Nenhuma passou: a candidata não vira ação (a regra nunca encurta no meio de uma palavra).
+  if (destaque == null) return null;
+
+  // Contexto do subtítulo: "30 dias" e, quando sobra um número leigo e curto, "30 dias · 10 posts".
+  const dias = diasDoPeriodo(c.base.periodo.de, c.base.periodo.ate);
+  const doContexto = liberados.find((n) => n !== numeroDoDestaque && leigo(n, MAX_CARACTERES_DO_CONTEXTO));
+  const contexto = `${dias} ${dias === 1 ? "dia" : "dias"}${doContexto ? ` · ${doContexto.exibicao.trim()}` : ""}`;
+  const outroNumero = liberados.find((n) => n !== numeroDoDestaque && n !== doContexto && leigo(n, MAX_CARACTERES_DA_MANCHETE));
+  const numerosTecnicos = liberados.filter((n) => !leigo(n, MAX_CARACTERES_DA_MANCHETE)).map((n) => n.exibicao.trim());
+
+  const rota = rotaDoRegistro(c.rotaDoInsight) ?? c.rotaPadrao;
   return {
     id: c.fato.id,
     frase,
@@ -246,12 +383,19 @@ function acaoDaCandidata(c: Candidata): AcaoDaHoje | null {
     quem: t.proximoPasso.quem,
     rotuloQuem: t.proximoPasso.rotuloQuem,
     numero,
-    ...(outroNumero ? { outroNumero } : {}),
+    destaque,
+    destaqueEhNumero,
     legenda,
+    contexto,
+    ...(outroNumero ? { outroNumero } : {}),
+    numerosTecnicos,
+    areaHoje: areaDaHoje(rota, c.area),
+    familia: FAMILIA_DO_FATO[c.fato.id] ?? c.fato.id,
     tom: c.fato.tom,
-    rota: rotaDoRegistro(c.rotaDoInsight) ?? c.rotaPadrao,
+    rota,
     area: c.area,
     tela: c.tela,
+    soEquipe: c.passo.soEquipe === true,
   };
 }
 
@@ -260,8 +404,10 @@ function acaoDaCandidata(c: Candidata): AcaoDaHoje | null {
 /**
  * Sem leitura quando o portão de Resultados nega (mesmo motivo, passo e responsável do resumo da clínica). Com o portão ok:
  * o Próximo é a "Ação da semana" do resumo da clínica quando ela entra (senão, a primeira da lista); as outras vêm por peso,
- * depois tom (ruim, atenção, bom, neutro), depois a ordem das fontes e a ordem dentro de cada uma. No máximo 5. Ação sem
- * número ao lado, repetida (mesma frase ou mesmo fato) ou excluída não entra, e a regra nunca inventa uma para completar 3.
+ * depois tom (ruim, atenção, bom, neutro), depois a ordem das fontes e a ordem dentro de cada uma. Ação sem manchete leiga,
+ * sem número ao lado, repetida (mesma frase, mesmo fato ou mesma família de achado) ou excluída não entra, e a regra nunca
+ * inventa uma para completar 3. No máximo MAXIMO_POR_AREA por área (o Próximo conta) e 5 no total: o que sobra de vaga vai para
+ * a próxima área por peso. Ação soEquipe nunca entra na lista do médico: vai para paraEquipe (até 3).
  */
 export function acoesDaHoje(e: EntradaHoje): HojeDaClinica {
   if (!e.fatos.portao.ok) {
@@ -283,24 +429,41 @@ export function acoesDaHoje(e: EntradaHoje): HojeDaClinica {
   const daSemana = fraseDaSemana ? ordenadas.find(({ c, acao }) => c.fonte === 0 && acao.frase === fraseDaSemana) : undefined;
   const emOrdem = daSemana ? [daSemana, ...ordenadas.filter((x) => x !== daSemana)] : ordenadas;
 
-  // Mesma frase ou mesmo fato viram uma só (fica a melhor colocada).
-  const frases = new Set<string>();
-  const ids = new Set<string>();
-  const unicas = emOrdem.filter(({ acao }) => {
-    if (frases.has(acao.frase) || ids.has(acao.id)) return false;
-    frases.add(acao.frase);
-    ids.add(acao.id);
+  // As ações da equipe (arrumação interna do dado) saem da lista do médico: a Ação da semana e o Próximo só vêm das do médico.
+  const doMedico = emOrdem.filter(({ acao }) => !acao.soEquipe);
+  const daEquipe = emOrdem.filter(({ acao }) => acao.soEquipe);
+
+  // Mesma frase, mesmo fato ou mesma família (o mesmo achado dito de outro jeito) viram uma só em cada lista: fica a melhor colocada.
+  const semRepeticao = (lista: typeof emOrdem) => {
+    const frases = new Set<string>();
+    const ids = new Set<string>();
+    const familias = new Set<string>();
+    return lista.filter(({ acao }) => {
+      if (frases.has(acao.frase) || ids.has(acao.id) || familias.has(acao.familia)) return false;
+      frases.add(acao.frase);
+      ids.add(acao.id);
+      familias.add(acao.familia);
+      return true;
+    });
+  };
+
+  // Na mesma ordem, cada ação entra se a área dela ainda tem menos de MAXIMO_POR_AREA (o Próximo conta para a área dele), até 5:
+  // as vagas que sobram vão para a próxima área por peso. A lista da equipe não passa por este limite.
+  const porArea = new Map<AreaDaHoje, number>();
+  const escolhidas = semRepeticao(doMedico).filter(({ acao }) => {
+    if ((porArea.get(acao.areaHoje) ?? 0) >= MAXIMO_POR_AREA) return false;
+    porArea.set(acao.areaHoje, (porArea.get(acao.areaHoje) ?? 0) + 1);
     return true;
-  });
-
-  const escolhidas = unicas.slice(0, MAXIMO_DE_ACOES);
+  }).slice(0, MAXIMO_DE_ACOES);
   const [proxima, ...outras] = escolhidas.map((x) => x.acao);
+  const paraEquipe = semRepeticao(daEquipe).slice(0, MAXIMO_PARA_EQUIPE).map((x) => x.acao);
 
+  // houveExcluidas vem só de excluido(): passo da equipe não liga o motivo "dependem de números que ainda não têm selo".
   const aviso = avisoDePoucasAcoes(escolhidas.length, {
     fontes: e.fontes,
     houveExcluidas: candidatas.some((c) => excluido(c.fato)),
   });
-  return { tipo: "acoes", proxima: proxima ?? null, outras, aviso };
+  return { tipo: "acoes", proxima: proxima ?? null, outras, paraEquipe, aviso };
 }
 
 // ---------- aviso de poucas ações ----------
@@ -338,10 +501,15 @@ export function saudacaoDaHora(hora: number): "Bom dia" | "Boa tarde" | "Boa noi
   return hora >= 5 && hora < 12 ? "Bom dia" : hora >= 12 && hora < 18 ? "Boa tarde" : "Boa noite";
 }
 
-/** Até as 2 primeiras palavras do nome cadastrado ("Dra. Lana Ribeiro" vira "Dra. Lana"); sem nome, null. */
+/**
+ * O nome que a saudação usa. clients.name é o nome da CLÍNICA e o app não guarda o nome do médico sem consulta nova, então a
+ * saudação só diz um nome quando o texto já começa por título de médico (Dr, Dr., Dra, Dra., Doutor, Doutora, palavra inteira):
+ * devolve o título como foi escrito mais o primeiro nome inteiro ("Dra. Lana Ribeiro" vira "Dra. Lana"). Em qualquer outro
+ * caso (nome de clínica, só um nome, só o título, vazio), null: a saudação fica só em "Bom dia". Nunca corta no meio do nome.
+ */
 export function nomeDaSaudacao(nome: string | null | undefined): string | null {
-  const palavras = (nome ?? "").trim().split(/\s+/).filter(Boolean);
-  return palavras.length ? palavras.slice(0, 2).join(" ") : null;
+  const m = /^(Dra?\.?|Doutora?)\s+(\p{L}[\p{L}'’-]*)/iu.exec((nome ?? "").trim().replace(/\s+/g, " "));
+  return m ? `${m[1]} ${m[2]}` : null;
 }
 
 /** Hora cheia (0 a 23) em São Paulo. */
