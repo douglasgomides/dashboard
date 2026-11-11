@@ -52,29 +52,47 @@ export function NxChipEstado({ tom, texto, hora }: { tom: TomFato; texto: string
 
 // ---------- número em destaque ----------
 
-/** Até aqui o número cabe grande ("30 de 30 posts"); acima disso o texto do número vai inteiro, em tamanho de leitura. */
+/** Até aqui o número cabe grande ("30 de 30 posts"); acima disso a manchete vai inteira, em tamanho de leitura. */
 const CURTO = 24;
-const valorDoNumero = (exibicao: string) => ({ texto: exibicao.trim(), curto: exibicao.trim().length <= CURTO });
+/** A manchete (até 40 caracteres): estilo de número grande só quando é um número do fato e curto; senão, estilo de texto. */
+const valorDoDestaque = (acao: AcaoDaHoje) => ({ texto: acao.destaque.trim(), curto: acao.destaqueEhNumero && acao.destaque.trim().length <= CURTO });
+
+/** Os números técnicos (o texto inteiro, com mediana e taxa) ficam fechados: quem quer conferir abre. Sem número técnico, nada. */
+function VerNumeros({ acao }: { acao: AcaoDaHoje }) {
+  if (acao.numerosTecnicos.length === 0) return null;
+  return (
+    <details className="nx-hoje__numeros" data-ver-numeros>
+      <summary>Ver números</summary>
+      <p>{acao.numerosTecnicos.join(" · ")}</p>
+    </details>
+  );
+}
 
 // ---------- Próximo ----------
 
-/** Cartão de destaque "Próximo": a Ação da semana de Resultados, em degradê suave, com a seta escura para a aba de origem. */
+/**
+ * Cartão de destaque "Próximo": a Ação da semana de Resultados, em degradê suave, com a seta escura para a aba de origem. A manchete
+ * é curta e leiga; "Quem resolve" fica logo depois da pílula e o número técnico inteiro fica num "Ver números" fechado.
+ */
 export function NxProximo({ acao, clientId, dateRange }: { acao: AcaoDaHoje } & Destino) {
   const linha = linhaDaRota(acao.rota);
-  const valor = valorDoNumero(acao.numero.exibicao);
+  const valor = valorDoDestaque(acao);
   return (
-    <section className="nx-proximo" data-acao-hoje={acao.id} data-peca="proximo" aria-label="Próximo">
+    <section className="nx-proximo" data-acao-hoje={acao.id} data-peca="proximo" data-area-hoje={acao.areaHoje} data-familia-hoje={acao.familia} aria-label="Próximo">
       <p className="nx-proximo__rotulo">Próximo</p>
       <NxAcaoPilula frase={acao.frase} rotuloDaSeta="Abrir a aba de origem" para={linha ? { tela: linha, clientId, dateRange } : undefined} />
+      <p className="nx-proximo__quem">{`Quem resolve: ${acao.rotuloQuem}`}</p>
       <p className="nx-proximo__numero">
-        <strong className={valor.curto ? "nx-proximo__valor" : "nx-proximo__valor nx-proximo__valor--texto"} data-numero-de-destaque>
+        <strong className={valor.curto ? "nx-proximo__valor" : "nx-proximo__valor nx-proximo__valor--texto"} data-numero-de-destaque data-manchete>
           {valor.texto}
         </strong>
-        <span className="nx-proximo__legenda" data-numero-de-destaque>
-          {acao.legenda}
-        </span>
+        {acao.legenda && (
+          <span className="nx-proximo__legenda" data-numero-de-destaque>
+            {acao.legenda}
+          </span>
+        )}
       </p>
-      <p className="nx-proximo__quem">{`Quem resolve: ${acao.rotuloQuem}`}</p>
+      <VerNumeros acao={acao} />
     </section>
   );
 }
@@ -88,31 +106,37 @@ function juntadaDaRota(rota: string) {
 }
 
 /**
- * Cartão de uma ação (NxCartaoNumero): ícone da seção de origem no círculo, "{seção} · {aba}", subtítulo com quem resolve, o ↗ para a
- * primeira aba da tela juntada (só quando a ação é de tela juntada), o número grande com a legenda e a ação em pílula com a seta
- * para a aba de origem.
+ * Cartão de uma ação (NxCartaoNumero): ícone da seção de origem no círculo, "{seção} · {aba}", subtítulo com o número de contexto
+ * ("30 dias · 10 posts"), o ↗ para a primeira aba da tela juntada (só quando a ação é de tela juntada), a manchete leiga com a
+ * legenda e o "Ver números" fechado, e a ação em pílula com a seta para a aba de origem, seguida de "Quem resolve".
  */
 export function NxCartaoDaAcao({ acao, clientId, dateRange }: { acao: AcaoDaHoje } & Destino) {
   const linha = linhaDaRota(acao.rota);
   const juntada = juntadaDaRota(acao.rota);
   const primeira = juntada ? linhaDaRota(juntada.secao.abas[0].partes[0].rota) : undefined;
-  const valor = valorDoNumero(acao.numero.exibicao);
+  const valor = valorDoDestaque(acao);
   const titulo = juntada ? `${juntada.secao.rotulo} · ${juntada.aba.rotulo}` : (linha?.rotulo ?? "Resultados da clínica");
   return (
-    <div className="nx-cartao-acao" data-acao-hoje={acao.id}>
+    <div className="nx-cartao-acao" data-acao-hoje={acao.id} data-area-hoje={acao.areaHoje} data-familia-hoje={acao.familia}>
       <NxCartaoNumero
         icone={juntada ? juntada.secao.icone : (linha?.icone ?? "layout-dashboard")}
         titulo={titulo}
-        subtitulo={`Quem resolve: ${acao.rotuloQuem}`}
+        subtitulo={acao.contexto}
         valor={
-          <strong className={valor.curto ? "nx-hoje__valor" : "nx-hoje__valor nx-hoje__valor--texto"} data-numero-de-destaque>
+          <strong className={valor.curto ? "nx-hoje__valor" : "nx-hoje__valor nx-hoje__valor--texto"} data-numero-de-destaque data-manchete>
             {valor.texto}
           </strong>
         }
-        legenda={<span data-numero-de-destaque>{acao.legenda}</span>}
+        legenda={acao.legenda ? <span data-numero-de-destaque>{acao.legenda}</span> : undefined}
         variacao={acao.outroNumero ? { texto: acao.outroNumero.exibicao } : null}
         abrir={juntada && primeira ? { tela: primeira, clientId, dateRange, rotulo: juntada.secao.rotulo } : undefined}
-        acao={<NxAcaoPilula frase={acao.frase} rotuloDaSeta="Abrir a aba de origem" para={linha ? { tela: linha, clientId, dateRange } : undefined} />}
+        extra={<VerNumeros acao={acao} />}
+        acao={
+          <>
+            <NxAcaoPilula frase={acao.frase} rotuloDaSeta="Abrir a aba de origem" para={linha ? { tela: linha, clientId, dateRange } : undefined} />
+            <p className="nx-hoje__quem">{`Quem resolve: ${acao.rotuloQuem}`}</p>
+          </>
+        }
       />
     </div>
   );

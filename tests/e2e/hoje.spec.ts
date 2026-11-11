@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, client, mockAccount } from "./fixtures";
 import { REGISTRO_DE_TELAS, SECOES_JUNTADAS } from "../../src/lib/registro-de-telas";
-import { GUARDA_DE_NUMERO_DA_HOJE, GUARDA_DE_TEXTO_DA_HOJE } from "../../src/lib/leitura/fatos-hoje";
+import { GUARDA_DE_NUMERO_DA_HOJE, GUARDA_DE_TEXTO_DA_HOJE, JARGAO_DA_HOJE, MAXIMO_POR_AREA, MAX_CARACTERES_DA_MANCHETE } from "../../src/lib/leitura/fatos-hoje";
 import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, mockCrm, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 
 // O que fazer hoje (Phase 3.1.1, plano 05): a primeira versão da tela Hoje da Phase 9. De 3 a 5 ações da semana por regra fixa
@@ -338,7 +338,9 @@ test("(j) todo cartão de ação tem o ícone num círculo e os chips de context
     expect(await icone.evaluate((el) => getComputedStyle(el).borderRadius)).toMatch(/^(50%|\d+(\.\d+)?px)$/);
     const caixa = await icone.evaluate((el) => ({ w: el.getBoundingClientRect().width, h: el.getBoundingClientRect().height }));
     expect(caixa.w).toBeCloseTo(caixa.h, 0);
-    await expect(cartoes.nth(k).locator(".nx-cartao__sub")).toHaveText(/^Quem resolve: /);
+    // D-07: o subtítulo traz o número de contexto; "Quem resolve" fica junto da pílula da ação.
+    await expect(cartoes.nth(k).locator(".nx-cartao__sub")).toHaveText(/^\d+ dias?( · .+)?$/);
+    await expect(cartoes.nth(k).locator(".nx-hoje__quem")).toHaveText(/^Quem resolve: /);
     await expect(cartoes.nth(k).locator("a.nx-acao-pilula__seta")).toHaveCount(1);
   }
   // O Próximo vem antes dos cartões e o total não passa de 5 ações.
@@ -402,3 +404,73 @@ for (const perfil of ["viewer", "strategist", "admin"] as const) {
     }
   });
 }
+
+// ---------- manchete leiga, no máximo 2 por área e o Próximo sem repetir o achado ----------
+
+for (const janela of TELAS_DE_MEDIDA) {
+  test(`(l) manchete curta e leiga, com os números técnicos fechados (${janela.width}x${janela.height})`, async ({ page, context }) => {
+    await mockAccount(context, "viewer");
+    await dadosRealistas(context);
+    await page.setViewportSize(janela);
+    await page.goto(`/${CID}/hoje?preset=30d`);
+    await expect(acoes(page).first()).toBeVisible();
+
+    const n = await acoes(page).count();
+    expect(n).toBeGreaterThan(0);
+    for (let k = 0; k < n; k++) {
+      const acao = acoes(page).nth(k);
+      const manchete = norm(await acao.locator("[data-manchete]").innerText());
+      expect(manchete.length, `manchete "${manchete}" com mais de ${MAX_CARACTERES_DA_MANCHETE} caracteres`).toBeLessThanOrEqual(MAX_CARACTERES_DA_MANCHETE);
+      const textos = [manchete, norm(await acao.locator(".nx-acao-pilula__texto").innerText())];
+      const legenda = acao.locator(".nx-proximo__legenda, .nx-numero__legenda");
+      if (await legenda.count()) textos.push(norm(await legenda.first().innerText()));
+      const sub = acao.locator(".nx-cartao__sub");
+      if (await sub.count()) textos.push(norm(await sub.first().innerText()));
+      for (const t of textos) expect(t, `jargão em "${t}"`).not.toMatch(JARGAO_DA_HOJE);
+    }
+    // O número técnico inteiro fica num "Ver números" fechado.
+    const detalhes = page.locator('[data-tela="hoje"] details[data-ver-numeros]');
+    const total = await detalhes.count();
+    for (let k = 0; k < total; k++) {
+      expect(await detalhes.nth(k).evaluate((el) => (el as HTMLDetailsElement).open), "Ver números começa fechado").toBe(false);
+      await expect(detalhes.nth(k).locator("summary")).toHaveText("Ver números");
+    }
+    console.log(`  Hoje (${janela.width}x${janela.height}): ${n} ações, ${total} com Ver números`);
+    // Com tudo fechado, o texto da tela inteira também não traz jargão.
+    expect(await page.locator('[data-tela="hoje"]').innerText(), "jargão no texto da Hoje").not.toMatch(JARGAO_DA_HOJE);
+    expect(await semRolagemLateral(page)).toBe(true);
+  });
+}
+
+test("(l2) abrir o Ver números mostra o número técnico inteiro", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await dadosRealistas(context);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/hoje?preset=30d`);
+  await expect(acoes(page).first()).toBeVisible();
+  const detalhes = page.locator('[data-tela="hoje"] details[data-ver-numeros]');
+  if ((await detalhes.count()) === 0) return;
+  await detalhes.first().locator("summary").click();
+  await expect(detalhes.first().locator("p")).toBeVisible();
+  expect(norm(await detalhes.first().locator("p").innerText()).length).toBeGreaterThan(0);
+});
+
+test("(m) no máximo 2 ações por área e o Próximo não se repete nos cartões", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await dadosRealistas(context);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/hoje?preset=30d`);
+  await expect(acoes(page).first()).toBeVisible();
+
+  const dados = await page.locator('[data-tela="hoje"] [data-acao-hoje]').evaluateAll((els) =>
+    els.map((el) => ({ id: el.getAttribute("data-acao-hoje"), area: el.getAttribute("data-area-hoje"), familia: el.getAttribute("data-familia-hoje"), proximo: el.getAttribute("data-peca") === "proximo" })),
+  );
+  console.log(`  Hoje (1440x900): ${dados.length} ações: ${dados.map((d) => `${d.id} [${d.area}/${d.familia}]`).join(" | ")}`);
+  const porArea = new Map<string | null, number>();
+  for (const d of dados) porArea.set(d.area, (porArea.get(d.area) ?? 0) + 1);
+  for (const [area, quantas] of porArea) expect(quantas, `a área ${area} tem ${quantas} ações`).toBeLessThanOrEqual(MAXIMO_POR_AREA);
+  expect(new Set(dados.map((d) => d.familia)).size, "todas as famílias são diferentes").toBe(dados.length);
+  const proximo = dados.find((d) => d.proximo);
+  expect(proximo, "há um Próximo").toBeTruthy();
+  expect(dados.filter((d) => !d.proximo && d.familia === proximo!.familia), "nenhum cartão tem a família do Próximo").toEqual([]);
+});
