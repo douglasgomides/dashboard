@@ -54,6 +54,16 @@ for (const width of [375, 1440]) {
     await expect(linhas).toHaveCount(2);
     await page.getByRole("button", { name: /^Todos/ }).click();
 
+    // Sem ROI calculável: separa cliente (CRM), equipe (fonte ou etapa) e "não se aplica" (0 vendas). Só os dois primeiros contam.
+    const semRoi = resumo.locator(".adm-cont", { hasText: "Sem ROI calculável" });
+    await expect(semRoi.locator(".adm-cont__valor")).toHaveText("4");
+    await expect(semRoi).toContainText("1 cliente (CRM)");
+    await expect(semRoi).toContainText("3 equipe");
+    await expect(semRoi).toContainText("1 não se aplica");
+    await resumo.getByRole("button", { name: /^Sem ROI calculável/ }).click();
+    await expect(linhas).toHaveCount(4);
+    await page.getByRole("button", { name: /^Todos/ }).click();
+
     // Busca visível e ligada à lista.
     await page.getByRole("button", { name: /^Todos/ }).click();
     await page.getByRole("searchbox", { name: "Buscar cliente" }).fill("sorriso");
