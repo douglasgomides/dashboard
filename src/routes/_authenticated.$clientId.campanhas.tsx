@@ -10,7 +10,7 @@ import { useLeituraConversas } from "@/components/atendimento-resumo";
 import { usePautas } from "@/components/planejador-conteudo";
 import { useClientRole } from "@/hooks/use-client-role";
 import { BotaoCopiar } from "@/components/botao-copiar";
-import { EstrategiasIA } from "@/components/estrategias-ia";
+import { NxEstrategias } from "@/components/nx/planejamento";
 import { Carregando } from "@/components/sem-fonte";
 import { resumirAtendimento } from "@/lib/conversa-leitura";
 import { datasDoMes, gastoPorDia, potencial, sugerirCampanhas, temaForteDosPosts, NOME_MES, type BaseCampanhas, type Campanha } from "@/lib/campanhas";
@@ -332,7 +332,7 @@ function CampanhasPage() {
             </div>
           )}
 
-          <EstrategiasIA clientId={clientId} podeEditar={podeEditar} />
+          <NxEstrategias clientId={clientId} podeEditar={podeEditar} />
 
           <NxComoCalcula titulo="Como as campanhas são montadas">
             <ul className="list-disc space-y-1 pl-5">

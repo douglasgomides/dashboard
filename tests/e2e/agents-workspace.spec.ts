@@ -4,6 +4,9 @@ import { mkdir } from "node:fs/promises";
 import { CID, mockAccount } from "./fixtures";
 import type { PecaConteudo } from "../../src/lib/agentes-sugestoes";
 
+// O desenho nx sobe os cartões ao entrar (nx-sobe); o axe mede o contraste com a animação parada, como nos outros specs do Nexo.
+test.use({ reducedMotion: "reduce" });
+
 const ID = "44444444-4444-4444-8444-444444444444";
 const NOW = new Date().toISOString();
 const peca = { formato: "reels", titulo: "Como se preparar para uma consulta", objetivo: "salvamento", gancho: "O que levar na primeira consulta?", cenas: [{ fala: "Leve sua lista de dúvidas para conversar com o médico.", visual: "Médico em consultório", tela: "Prepare suas dúvidas" }], slides: [], legenda: "Prepare as perguntas antes da consulta.", cta: "Salve para consultar depois.", hashtags: [], evidencias: ["Dúvida recorrente nos comentários da clínica de teste."], brain: [], por_que: "Responder a uma dúvida do público." } satisfies PecaConteudo;
@@ -54,6 +57,7 @@ for (const width of [375, 1440]) test(`agent workspace explains the cycle and gi
   await page.setViewportSize({ width, height: 1000 });
   await page.goto(`/${CID}/agentes?preset=7d`);
   await expect(page.getByRole("heading", { name: "Qual problema precisa avançar agora?" })).toBeVisible();
+  await page.locator("#agent-intro").getByText("Como funciona", { exact: true }).click();
   await expect(page.getByRole("list", { name: "Como o trabalho dos agentes funciona" })).toBeVisible();
   const choices = page.getByRole("group", { name: "Escolher o problema da clínica" });
   await expect(choices.getByRole("button")).toHaveCount(4);
@@ -61,7 +65,7 @@ for (const width of [375, 1440]) test(`agent workspace explains the cycle and gi
   await expect(page.getByRole("button", { name: "Preparar roteiros agora", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Levar ao planejador", exact: true })).toHaveCount(0);
   const delivery = page.getByRole("region", { name: "Área de revisão das entregas" });
-  await delivery.getByRole("button", { name: "Ver roteiro e legenda", exact: true }).click();
+  await delivery.getByText("Ver roteiro e legenda", { exact: true }).click();
   await expect(delivery.getByText(peca.cenas[0].fala, { exact: true })).toBeVisible();
   await choices.getByRole("button", { name: /Retomar contatos/ }).click();
   await expect(page).toHaveURL(/agente=recuperacao/);
@@ -73,7 +77,7 @@ for (const width of [375, 1440]) test(`agent workspace explains the cycle and gi
   expect(api.leituras.some((r) => /\/(agente_execucoes|brain_itens)\?/.test(r))).toBe(false);
   expect(api.leituras.some((r) => r.includes("operacao=is.null"))).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
-  const audit = await new AxeBuilder({ page }).include(".agent-workspace").withTags(["wcag2a", "wcag2aa"]).analyze();
+  const audit = await new AxeBuilder({ page }).include('[data-peca="agentes"]').withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(audit.violations).toEqual([]);
   const out = new URL("../../../../outputs/", import.meta.url).pathname;
   await mkdir(out, { recursive: true }); await page.screenshot({ path: `${out}agentes-trabalho-${width}.png`, fullPage: true });
@@ -114,7 +118,7 @@ test("one failed source stays unknown while another agent still works and retrie
   await expect(page.getByRole("alert")).toContainText("Estado indisponível");
   await expect(page.getByRole("button", { name: "Analisar anúncios agora", exact: true })).toBeDisabled();
   options.failedCount = false;
-  await page.locator(".agent-live-status").getByRole("button", { name: "Tentar novamente", exact: true }).click();
+  await page.locator(".nxa-estado--vivo").getByRole("button", { name: "Tentar de novo", exact: true }).click();
   await expect(page.getByRole("button", { name: "Analisar anúncios agora", exact: true })).toBeEnabled();
   await page.getByRole("group", { name: "Escolher o problema da clínica" }).getByRole("button", { name: /Saber o que produzir/ }).click();
   await expect(page.getByRole("heading", { name: peca.titulo, exact: true })).toBeVisible();
