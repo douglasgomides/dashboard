@@ -187,26 +187,29 @@ Plans:
 5. O João entende a visão do médico sem explicação.
 **Requirements**: MEDV-01, MEDV-02, MEDV-03, MEDV-04, MEDV-05
 **Depends on:** Phase 03.1, etapas 1 a 3 (o resto da 03.1 vem depois desta)
-**Plans:** 6 plans (um PR só para a fase; um executor por vez; publicação pelo orquestrador depois do 03 e do 06)
+**Plans:** 7 plans (um PR só para a fase; um executor por vez, cada um commita o próprio trabalho; o orquestrador publica depois do 04 e do 07)
 
 Plans:
 **Wave 1**
-- [ ] 03.1.1-01-PLAN.md — Tracer: abas em pasta de ponta a ponta na tela juntada Instagram (aba = rota que já existe, log da aba sem migration, contagem sem consulta nova, teste de 1,5 tela)
+- [ ] 03.1.1-01-PLAN.md — Tracer: abas em pasta de ponta a ponta na tela juntada Instagram (aba = caminho da tela antiga, log aba por aba pelo routeId sem migration, contagem sem consulta nova, medida de altura)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 03.1.1-02-PLAN.md — Onde os pacientes travam (Funil com 2 partes, Consultas, Vendas, Jornada) no molde e em 1,5 tela; contrato do D-07 em molde-da-pagina.md
+- [ ] 03.1.1-02-PLAN.md — D-07 nas peças compartilhadas do molde (pílula de ação na leitura, cartão com ícone no círculo, número com legenda, variação em pílula, laranja/listrado/tracejado); Instagram em 1,5 tela; contrato em molde-da-pagina.md
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 03.1.1-03-PLAN.md — De onde vêm os pacientes (Por origem, Instagram, Anúncios, Links) no molde e em 1,5 tela; publica; o João olha as 3 telas juntadas
+- [ ] 03.1.1-03-PLAN.md — Onde os pacientes travam (Funil com 2 partes, Consultas, Vendas, Jornada) e Por origem no molde, no D-07 e em 1,5 tela
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 03.1.1-04-PLAN.md — O que fazer hoje: primeira versão da tela Hoje da Phase 9 (3 a 5 ações por regra, sem leitura, sem selo, desenho do D-07)
+- [ ] 03.1.1-04-PLAN.md — Anúncios, Links e Conteúdo × Comercial no molde e em 1,5 tela (26 medidas no médico); publica; o João olha as 3 telas juntadas
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 03.1.1-05-PLAN.md — Menu do médico com 6 itens, entrada na Hoje e busca do médico; specs do menu antigo atualizados
+- [ ] 03.1.1-05-PLAN.md — O que fazer hoje: primeira versão da tela Hoje da Phase 9 (3 a 5 ações por regra, aviso de poucas ações, sem leitura, sem selo, D-07, 1,5 tela)
 
 **Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 03.1.1-06-PLAN.md — Equipe agrupada (Plano, Agentes, Conteúdo, Atendimento, Configurar CRM), busca com "Seção › Aba"; publica; o João olha a visão do médico e a da equipe (critério 5)
+- [ ] 03.1.1-06-PLAN.md — Menu do médico com 6 itens, entrada na Hoje e busca do médico; specs do menu antigo atualizados
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 03.1.1-07-PLAN.md — Equipe agrupada (Plano, Agentes com a Central, Conteúdo, Atendimento, Configurar CRM), busca com "Seção › Aba", alturas da equipe registradas; publica; o João olha a visão do médico e a da equipe (critério 5)
 
 ### Phase 4: Pacote do template do WhatsApp à Meta
 
