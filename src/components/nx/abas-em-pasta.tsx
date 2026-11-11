@@ -3,7 +3,7 @@ import { LinkDoRegistro } from "@/components/menu-equipe";
 import { assinarContagens, chaveDoPeriodo, contagensDe, publicarContagem } from "@/lib/contagens-das-abas";
 import { resolveDateRange, type DateRangeState } from "@/lib/date-range";
 import type { Visibilidade } from "@/lib/nav";
-import { REGISTRO_DE_TELAS, abasVisiveis, juntadaDoCaminho, type AbaDaSecao, type TelaDoRegistro } from "@/lib/registro-de-telas";
+import { REGISTRO_DE_TELAS, abasVisiveis, juntadaDoCaminho, type AbaDaSecao, type PerfilEquipe, type TelaDoRegistro } from "@/lib/registro-de-telas";
 import "@/styles/nexo-abas.css";
 
 // Abas em pasta das telas juntadas (Phase 3.1.1, D-01, D-04, D-07). Cada aba é o caminho da tela antiga: o endereço antigo
@@ -179,19 +179,23 @@ function contagemDaAba(aba: AbaDaSecao, contagens: ReadonlyMap<string, number | 
 
 /**
  * Invólucro da tela juntada: o conteúdo da casca (children) entra dentro da pasta da aba atual. Fora de tela juntada, ou
- * numa tela juntada sem nenhuma aba visível para esta clínica, devolve só children (sem pasta).
+ * numa tela juntada sem nenhuma aba visível para esta clínica ou para este perfil, devolve só children (sem pasta). Os grupos
+ * da equipe (03.1.1-08) só têm pasta para a equipe: o médico que abre /duvidas por link vê a tela sem a pasta.
  */
 export function TelaJuntada({
   clientId,
   pathname,
   dateRange,
   vis,
+  perfil,
   children,
 }: {
   clientId: string;
   pathname: string;
   dateRange: DateRangeState;
   vis: Visibilidade;
+  /** Papel de quem olha: decide os grupos da equipe e a parte só de admin. */
+  perfil: PerfilEquipe;
   children: ReactNode;
 }) {
   // O hook vem antes de qualquer retorno antecipado: ler a guarda não custa nada e não busca dado.
@@ -200,7 +204,7 @@ export function TelaJuntada({
   const achada = juntadaDoCaminho(pathname);
   if (!achada) return <>{children}</>;
   const { secao, aba: abaAtual, parte: parteAtual } = achada;
-  const visiveis = abasVisiveis(secao, vis);
+  const visiveis = abasVisiveis(secao, vis, perfil);
   if (!visiveis.length) return <>{children}</>;
 
   const abas: AbaDaPasta[] = [];

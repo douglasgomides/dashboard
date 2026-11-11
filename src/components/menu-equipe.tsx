@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { IconeTabler } from "@/components/icons/tabler";
 import type { DateRangeState } from "@/lib/date-range";
@@ -184,9 +184,9 @@ export function MenuEquipe({
   );
 }
 
-// 10/11/2026 (João): "invés de ficar muitas abas em sanfona ao lado, eu entrar em uma seção, como marketing, e ir navegando
-// por dentro". Sob Clínica a barra mostra só as seções (Resultados, Marketing, Comercial...); as telas da seção viram abas no
-// topo da página (AbasDaSecao). As telas são as mesmas da sanfona de 09/11: nenhuma some do menu, só mudam de lugar.
+// 10/11/2026 (João): "invés de ficar muitas abas em sanfona ao lado, eu entrar em uma seção e ir navegando por dentro". Sob
+// Clínica a barra mostra as 9 seções da equipe (as 6 telas do médico e Conteúdo, Atendimento e Configurar CRM, D-02); as telas
+// da seção com mais de uma aba são abas em pasta dentro da página (abas-em-pasta.tsx). Nenhuma tela some, só muda de lugar.
 function SecoesDaClinica({
   rotulo,
   perfil,
@@ -210,75 +210,26 @@ function SecoesDaClinica({
     <nav aria-label={`Seções de ${rotulo}`} className="nx-secoes">
       <ul>
         {secoes.map((s) => {
-          const on = atual?.secao.area === s.area;
+          const on = atual?.secao.id === s.id;
           return (
-            <li key={s.area}>
+            <li key={s.id}>
               <LinkDoRegistro
                 tela={s.primeira}
                 clientId={clientId}
                 dateRange={dateRange}
                 className="nx-secao"
-                title={mostraRotulo ? undefined : s.area}
+                title={mostraRotulo ? undefined : s.rotulo}
                 dataOn={on}
                 // Na primeira tela da seção o Link já marca "page"; nas outras telas a seção é o lugar atual ("true").
                 ariaCurrent={on ? (atual?.tela === s.primeira ? "page" : "true") : undefined}
                 onClick={onEscolher}
               >
                 <IconeTabler nome={s.icone} tamanho={mostraRotulo ? 18 : 20} />
-                <span className={mostraRotulo ? "nx-secao-rotulo" : "sr-only"}>{s.area}</span>
+                <span className={mostraRotulo ? "nx-secao-rotulo" : "sr-only"}>{s.rotulo}</span>
               </LinkDoRegistro>
             </li>
           );
         })}
-      </ul>
-    </nav>
-  );
-}
-
-/**
- * Abas da seção atual, logo abaixo do cabeçalho da clínica (clínica, Trocar de clínica, Período) e antes do conteúdo.
- * Todas as telas da seção, aba atual com aria-current="page". Os links levam o período (search) como os do menu e moram
- * num contêiner data-origem="menu": o log por rota grava a abertura como menu. Fora de uma tela da clínica: nada.
- */
-export function AbasDaSecao({
-  perfil,
-  clientId,
-  pathname,
-  dateRange,
-  ocultas,
-}: {
-  perfil: PerfilEquipe;
-  clientId: string;
-  pathname: string;
-  dateRange?: DateRangeState;
-  /** routeIds que a faixa não repete (as telas que a pasta da tela juntada já mostra). Sem a lista, mostra a seção inteira. */
-  ocultas?: ReadonlySet<string>;
-}) {
-  const secoes = secoesDaClinica(perfil, { desenvolvimento: import.meta.env.DEV });
-  const atual = secaoDoCaminho(secoes, pathname);
-  const trilho = useRef<HTMLUListElement>(null);
-  // No celular a aba atual pode nascer fora da faixa: rola só a faixa (nunca a página) até ela.
-  useEffect(() => {
-    const ul = trilho.current;
-    const aba = ul?.querySelector<HTMLElement>('[aria-current="page"]');
-    if (!ul || !aba || ul.scrollWidth <= ul.clientWidth) return;
-    const esquerda = aba.offsetLeft - ul.offsetLeft;
-    if (esquerda < ul.scrollLeft || esquerda + aba.offsetWidth > ul.scrollLeft + ul.clientWidth)
-      ul.scrollLeft = Math.max(0, esquerda - 16);
-  }, [pathname, atual?.secao.area]);
-  if (!atual) return null;
-  const telas = ocultas ? atual.secao.telas.filter((t) => !ocultas.has(t.rota)) : atual.secao.telas;
-  if (!telas.length) return null;
-  return (
-    <nav aria-label={`Telas de ${atual.secao.area}`} className="nx-abas" data-origem="menu">
-      <ul ref={trilho}>
-        {telas.map((t) => (
-          <li key={t.rota}>
-            <LinkDoRegistro tela={t} clientId={clientId} dateRange={dateRange} className="nx-aba" atual={t === atual.tela}>
-              {t.rotulo}
-            </LinkDoRegistro>
-          </li>
-        ))}
       </ul>
     </nav>
   );
