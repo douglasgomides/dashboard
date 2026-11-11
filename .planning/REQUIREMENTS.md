@@ -27,6 +27,7 @@ Fonte: `~/Downloads/Nexo-Modelo/BRIEF-GSD-Nexo-v5.md`, `.planning/research/SUMMA
 ### Menu (MENU)
 
 - [ ] **MENU-01**: Um registro único classifica as rotas em vivas (14), escondidas (70) e tiradas (3), 87 linhas medidas no código em 09/11/2026 (60 escondidas abrem pela busca; 10 só redirecionam), conferido por teste
+  - Nota de 11/11/2026: o João tirou 12 telas que ninguém usava (Agentes, Central de Agentes, Automações, Plano de ação inteiro, Revisar roteiros, Estratégias e campanhas, Brand Brain; quick 261111-f5b). O registro agora tem 87 linhas = 14 vivas + 61 escondidas + 12 tiradas.
   - Nota de 09/11/2026: o teste confere o conjunto de rotas medido em `src/routeTree.gen.ts` (81 telas nessa data: 80 folhas `/_authenticated` + `/sem-acesso`; 90 é a contagem de arquivos em `src/routes`); a divisão 14/73/3 do brief é recontada contra esse conjunto na Phase 3.
 - [ ] **MENU-02**: A equipe vê 3 itens no menu: Carteira, Clínica, Conferência e fontes
 - [ ] **MENU-03**: A equipe abre qualquer tela escondida pela busca (Cmd+K no computador, botão Buscar visível no celular) e a abertura fica registrada
@@ -123,7 +124,7 @@ Escopo de 10/11/2026 (João): a leitura sai só de regras fixas, calculada na ho
 
 ### Visão do médico e telas juntadas (MEDV) — Phase 03.1.1
 
-- [ ] **MEDV-01**: O médico vê 6 itens no menu: Hoje, Resultados da clínica, Onde os pacientes travam, De onde vêm os pacientes, Instagram e Relatório do período; a equipe vê tudo, agrupado (Plano, Agentes, Conteúdo, Atendimento, Configurar CRM e as telas da equipe). A escolha final entre 2 e 6 itens (MENU-06) fica para a Phase 9
+- [ ] **MEDV-01**: O médico vê 6 itens no menu: Hoje, Resultados da clínica, Onde os pacientes travam, De onde vêm os pacientes, Instagram e Relatório do período; a equipe vê tudo, agrupado (Conteúdo, Atendimento, Configurar CRM e as telas da equipe; Plano e Agentes saíram por decisão do João em 11/11/2026, quick 261111-f5b). A escolha final entre 2 e 6 itens (MENU-06) fica para a Phase 9
 - [ ] **MEDV-02**: As telas que respondem à mesma pergunta viram abas de uma tela juntada, com o mesmo conteúdo e os mesmos números; nenhuma tela é apagada
 - [ ] **MEDV-03**: O endereço antigo de cada tela leva à aba certa (a aba fica no endereço), a busca da equipe acha cada aba pelo nome antigo e o log por rota continua registrando a abertura
 - [ ] **MEDV-04**: Com o detalhe fechado, a aba aberta de cada tela juntada do médico e a Hoje têm no máximo 1,5 altura de tela em 375 e 1440 px, conferido por teste automático; as abas da equipe ficam medidas e registradas, e viram teste quando a 03.1 as puser no molde
