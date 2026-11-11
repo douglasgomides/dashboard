@@ -8,7 +8,9 @@ import {
   itemAtualDoMedico,
   itensMenuDoMedico,
   juntadaDoCaminho,
+  secaoDaTela,
   telaDoCaminho,
+  type PerfilEquipe,
 } from "../src/lib/registro-de-telas";
 import { assinarContagens, chaveDoPeriodo, contagensDe, limparContagens, publicarContagem } from "../src/lib/contagens-das-abas";
 import type { Visibilidade } from "../src/lib/nav";
@@ -21,31 +23,51 @@ const C = "/_authenticated/$clientId";
 const FONTES = { tem_instagram: true, tem_anuncios: true, tem_crm: true, tem_atendimento: true };
 const vis = (extra: Partial<Visibilidade> = {}): Visibilidade => ({ isAdmin: false, fontes: FONTES, soCrm: false, papel: "viewer", ...extra });
 
-// --- 1. Rótulos e ordem (D-01, aprovados pelo João em 10/11/2026) ---
+// --- 1. Rótulos e ordem (D-01, aprovados pelo João em 10/11/2026; mais os 3 grupos da equipe de D-02 com a emenda de 11/11/2026) ---
 assert.deepEqual(
-  SECOES_JUNTADAS.map((s) => [s.id, s.rotulo, s.icone]),
+  SECOES_JUNTADAS.map((s) => [s.id, s.rotulo, s.icone, s.publico]),
   [
-    ["travam", "Onde os pacientes travam", "filter"],
-    ["origem", "De onde vêm os pacientes", "chart-bar"],
-    ["instagram", "Instagram", "brand-instagram"],
+    ["travam", "Onde os pacientes travam", "filter", "medico"],
+    ["origem", "De onde vêm os pacientes", "chart-bar", "medico"],
+    ["instagram", "Instagram", "brand-instagram", "medico"],
+    ["conteudo", "Conteúdo", "bulb", "equipe"],
+    ["atendimento", "Atendimento", "message-circle", "equipe"],
+    ["configurar-crm", "Configurar CRM", "settings", "equipe"],
   ],
 );
-assert.ok(SECOES_JUNTADAS.every((s) => s.publico === "medico"));
+const DO_MEDICO = SECOES_JUNTADAS.filter((s) => s.publico === "medico");
+const DA_EQUIPE = SECOES_JUNTADAS.filter((s) => s.publico === "equipe");
 assert.deepEqual(
-  SECOES_JUNTADAS.map((s) => s.abas.map((a) => a.rotulo)),
+  DO_MEDICO.map((s) => s.abas.map((a) => a.rotulo)),
   [
     ["Funil", "Consultas", "Vendas", "Jornada"],
     ["Por origem", "Instagram", "Anúncios", "Links"],
     ["Desempenho", "Destaques", "Posts", "Público"],
   ],
 );
+assert.deepEqual(
+  DA_EQUIPE.map((s) => s.abas.map((a) => a.rotulo)),
+  [
+    ["Criativa", "Referências", "Dúvidas", "Ideias"],
+    ["Qualidade", "Central", "Contatos"],
+    ["Guia", "Papel do funil", "Etapas"],
+  ],
+  "os 3 grupos da equipe, com os rótulos exatos de D-02",
+);
+assert.deepEqual(
+  DA_EQUIPE.flatMap((s) => s.abas.map((a) => a.partes[0].rota.slice(C.length))),
+  ["/inteligencia-criativa", "/inspiracao", "/duvidas", "/ideias", "/atendimento", "/central-atendimento", "/crm-contatos", "/crm-guia", "/analisar", "/crm-estrutura"],
+  "cada aba da equipe é o caminho da tela antiga",
+);
+assert.ok(DA_EQUIPE.every((s) => s.abas.every((a) => a.contagem === null && a.partes.length === 1)), "grupos da equipe: sem contagem até o plano 03.1 dela");
 const funil = SECOES_JUNTADAS[0].abas[0];
 assert.deepEqual(funil.partes.map((p) => [p.rota, p.rotulo]), [[`${C}/pacientes`, "Do contato à venda"], [`${C}/crm-painel`, "No CRM"]]);
 assert.deepEqual(
-  SECOES_JUNTADAS.flatMap((s) => s.abas.map((a) => a.contagem)),
+  DO_MEDICO.flatMap((s) => s.abas.map((a) => a.contagem)),
   [null, "consultas no período", "vendas no período", null, "origens com venda no período", null, "campanhas no período", "links rastreados", null, "publicações em destaque", "publicações no período", null],
 );
-assert.equal(SECOES_JUNTADAS.flatMap((s) => s.abas).length, 12);
+assert.equal(DO_MEDICO.flatMap((s) => s.abas).length, 12);
+assert.equal(DA_EQUIPE.flatMap((s) => s.abas).length, 10, "10 abas da equipe");
 
 // --- 2. Toda parte aponta para uma linha do registro que não é tirada nem só redireciona; nenhuma rota em duas abas ---
 const vistas = new Set<string>();
@@ -61,7 +83,9 @@ for (const secao of SECOES_JUNTADAS) {
     }
   }
 }
-assert.equal(vistas.size, 13, "13 telas antigas viram partes das 12 abas (5 + 4 + 4)");
+assert.equal(vistas.size, 23, "13 telas antigas do médico (5 + 4 + 4) e 10 da equipe viram partes das 22 abas");
+// Nenhuma parte aponta para uma rota tirada em 11/11/2026.
+for (const rota of vistas) assert.ok(!REGISTRO_DE_TELAS.some((t) => t.rota === rota && t.tiradaEm && !t.busca), `${rota} foi tirada em 11/11/2026 e é parte de uma seção`);
 
 // --- 3. juntadaDoCaminho: cada parte, com e sem barra final; fora de tela juntada devolve null ---
 for (const secao of SECOES_JUNTADAS) {
@@ -108,6 +132,41 @@ assert.deepEqual(ids(abasVisiveis(origem, vis({ fontes: { ...FONTES, tem_anuncio
 // Sem fontes carregadas (null): nada é tirado por fonte.
 assert.deepEqual(ids(abasVisiveis(instagram, vis({ fontes: null }))), ["desempenho", "destaques", "posts", "publico"]);
 
+// Grupos da equipe (03.1.1-08): só a equipe tem a pasta; a parte somenteAdmin (Criativa, Etapas) só para admin; sem filtro de fonte.
+const [conteudo, atendimento, configurarCrm] = SECOES_JUNTADAS.slice(3);
+const admin = { isAdmin: true, papel: "admin" as const };
+const estrategista = { isAdmin: false, papel: "strategist" as const };
+const doAdmin = vis({ isAdmin: true, papel: "admin" });
+const doEstrategista = vis({ papel: "strategist" });
+assert.deepEqual(ids(abasVisiveis(conteudo, doAdmin, admin)), ["criativa", "referencias", "duvidas", "ideias"]);
+assert.deepEqual(ids(abasVisiveis(atendimento, doAdmin, admin)), ["qualidade", "central", "contatos"]);
+assert.deepEqual(ids(abasVisiveis(configurarCrm, doAdmin, admin)), ["guia", "papel-do-funil", "etapas"]);
+assert.deepEqual(ids(abasVisiveis(conteudo, doEstrategista, estrategista)), ["referencias", "duvidas", "ideias"], "o estrategista não tem Criativa (somenteAdmin)");
+assert.deepEqual(ids(abasVisiveis(configurarCrm, doEstrategista, estrategista)), ["guia", "papel-do-funil"], "o estrategista não tem Etapas (somenteAdmin)");
+assert.deepEqual(ids(abasVisiveis(atendimento, doEstrategista, estrategista)), ["qualidade", "central", "contatos"]);
+// Sem perfil, ele sai de vis: o mesmo resultado.
+assert.deepEqual(ids(abasVisiveis(conteudo, doEstrategista)), ["referencias", "duvidas", "ideias"]);
+// A equipe abre toda tela em qualquer clínica: sem Instagram, sem CRM e só-CRM não tiram abas dos grupos da equipe.
+assert.deepEqual(ids(abasVisiveis(conteudo, vis({ isAdmin: true, papel: "admin", fontes: { ...FONTES, tem_instagram: false } }), admin)), ["criativa", "referencias", "duvidas", "ideias"]);
+assert.deepEqual(ids(abasVisiveis(atendimento, vis({ isAdmin: true, papel: "admin", soCrm: true }), admin)), ["qualidade", "central", "contatos"]);
+// O médico (owner e viewer) não tem pasta de grupo da equipe: abrir /duvidas por link mostra a tela sem a pasta.
+for (const papel of ["viewer", "owner"] as const) {
+  for (const secao of [conteudo, atendimento, configurarCrm]) assert.deepEqual(abasVisiveis(secao, vis({ papel }), { isAdmin: false, papel }), [], `${papel} sem ${secao.id}`);
+}
+assert.ok(juntadaDoCaminho(`/${CID}/duvidas`), "o endereço /duvidas é do grupo Conteúdo (a casca decide se mostra a pasta)");
+// Nenhuma seção da equipe vira item do menu do médico, nem item atual dele.
+assert.equal(itemAtualDoMedico(`/${CID}/atendimento`), null);
+assert.equal(itemAtualDoMedico(`/${CID}/crm-guia`), null);
+assert.ok(!menu0().some((i) => ["conteudo", "atendimento", "configurar-crm"].includes(i.id)));
+function menu0() {
+  return itensMenuDoMedico(vis());
+}
+// Nenhuma parte aponta para linha tirada (cada parte tem linha viva ou escondida) e as abas da equipe têm linha no registro.
+for (const secao of DA_EQUIPE)
+  for (const aba of secao.abas)
+    for (const parte of aba.partes)
+      assert.ok(REGISTRO_DE_TELAS.some((t) => t.rota === parte.rota && !t.busca && t.situacao !== "tirada"), `${parte.rota}: sem linha que abre`);
+
 // --- 5. telaDoCaminho ---
 assert.equal(telaDoCaminho(`/${CID}/top`)?.rotulo, REGISTRO_DE_TELAS.find((t) => t.rota === `${C}/top`)?.rotulo);
 assert.equal(telaDoCaminho(`/${CID}/top/`)?.rota, `${C}/top`);
@@ -116,8 +175,32 @@ assert.equal(telaDoCaminho("/admin"), null);
 assert.equal(telaDoCaminho(`/${CID}/nao-existe`), null);
 
 // --- 6. D-03: a busca da equipe ainda acha a aba pelo nome antigo ---
-const admin = { isAdmin: true, papel: "admin" as const };
 assert.equal(buscarTelasEquipe(admin, "Funil comercial")[0]?.rota, `${C}/crm-painel`);
+assert.equal(buscarTelasEquipe(admin, "funil")[0]?.rota, `${C}/crm-painel`, "o nome antigo continua em primeiro, mesmo com a aba Funil casando as 2 partes");
+assert.equal(buscarTelasEquipe(admin, "Dúvidas do público")[0]?.rota, `${C}/duvidas`);
+// Conteúdo, Atendimento e Configurar CRM: a busca casa também o rótulo da seção e o da aba onde a tela mora hoje (03.1.1-08, D-03).
+const rotasDe = (q: string, perfil: PerfilEquipe = admin) => buscarTelasEquipe(perfil, q).map((t) => t.rota);
+for (const rota of ["atendimento", "central-atendimento", "crm-contatos"]) assert.ok(rotasDe("atendimento").includes(`${C}/${rota}`), `"atendimento" acha /${rota}`);
+assert.ok(rotasDe("travam").includes(`${C}/crm-painel`) && rotasDe("travam").includes(`${C}/jornada`), "travam acha as abas de Onde os pacientes travam");
+assert.ok(rotasDe("configurar crm").includes(`${C}/crm-estrutura`) && rotasDe("configurar crm").includes(`${C}/analisar`), "Configurar CRM acha Etapas e Papel do funil");
+assert.ok(!rotasDe("configurar crm", estrategista).includes(`${C}/crm-estrutura`), "o estrategista não acha Etapas (índice dele)");
+assert.ok(!rotasDe("criativa", estrategista).includes(`${C}/inteligencia-criativa`), "o estrategista não acha a aba Criativa");
+assert.ok(rotasDe("criativa").includes(`${C}/inteligencia-criativa`), "o admin acha a aba Criativa");
+assert.equal(buscarTelasEquipe(admin, "encontrar ideias")[0]?.rota, `${C}/ideias`);
+assert.equal(secaoDaTela(buscarTelasEquipe(admin, "encontrar ideias")[0])?.secao.id, "conteudo", "Encontrar ideias mora em Conteúdo");
+// secaoDaTela: seção e aba onde a tela mora hoje; null para quem não é aba de tela juntada.
+const lugarDe = (rota: string) => {
+  const t = REGISTRO_DE_TELAS.find((x) => x.rota === rota && !x.busca)!;
+  const l = secaoDaTela(t);
+  return l ? `${l.secao.rotulo} › ${l.aba.rotulo}` : null;
+};
+assert.equal(lugarDe(`${C}/crm-painel`), "Onde os pacientes travam › Funil");
+assert.equal(lugarDe(`${C}/crm-contatos`), "Atendimento › Contatos");
+assert.equal(lugarDe(`${C}/ideias`), "Conteúdo › Ideias");
+assert.equal(lugarDe(`${C}/crm-estrutura`), "Configurar CRM › Etapas");
+assert.equal(lugarDe(`${C}/`), null);
+assert.equal(lugarDe(`${C}/hoje`), null);
+assert.equal(lugarDe("/_authenticated/admin/integracoes"), null);
 
 // --- 7. Contagem das abas (D-07): guarda em memória, publicada pela própria aba, sem rede ---
 limparContagens();

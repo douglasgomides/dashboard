@@ -17,7 +17,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { BuscaDeTelas } from "@/components/busca-de-telas";
 import { abasVisiveis, buscarTelasDoMedico, ehEquipe, itemAtualDoMedico, itensMenuDoMedico, juntadaDaRota, juntadaDoCaminho, telaDoCaminho } from "@/lib/registro-de-telas";
-import { AbasDaSecao, LinkDoRegistro, MarcaNexo, MenuEquipe } from "@/components/menu-equipe";
+import { LinkDoRegistro, MarcaNexo, MenuEquipe } from "@/components/menu-equipe";
 import { MenuDoMedico } from "@/components/menu-medico";
 import { IconeTabler } from "@/components/icons/tabler";
 import { TelaJuntada } from "@/components/nx/abas-em-pasta";
@@ -283,11 +283,14 @@ export function AppShell({
   // Tela juntada (03.1.1, D-01): o título é o da tela juntada e as abas em pasta moram dentro do conteúdo. Sem aba visível
   // para esta clínica (por exemplo, sem Instagram ligado) não há pasta e a casca fica como era.
   const achadaJuntada = juntadaDoCaminho(pathname);
-  const juntada = achadaJuntada && abasVisiveis(achadaJuntada.secao, vis).length > 0 ? achadaJuntada : null;
-  const titulo = juntada?.secao.rotulo ?? tela?.label ?? telaDoCaminho(pathname)?.rotulo ?? area?.label ?? "Análise da clínica";
+  const juntada = achadaJuntada && abasVisiveis(achadaJuntada.secao, vis, perfilEquipe).length > 0 ? achadaJuntada : null;
+  // Os grupos da equipe (03.1.1-08) guardam a tela antiga como ela é hoje: o título e a descrição continuam os da tela, e a pasta
+  // diz em que grupo ela mora. Só as 3 telas juntadas do médico trocam o título pelo da tela juntada.
+  const juntadaDoMedico = juntada?.secao.publico === "medico" ? juntada : null;
+  const titulo = juntadaDoMedico?.secao.rotulo ?? tela?.label ?? telaDoCaminho(pathname)?.rotulo ?? area?.label ?? "Análise da clínica";
   // Na Hoje a casca não repete o título: o topo da tela é a saudação (D-07), para o médico e para a equipe.
   const naHoje = telaDoCaminho(pathname)?.rota === "/_authenticated/$clientId/hoje";
-  const descricao = juntada ? undefined : (tela?.descricao ?? area?.descricao);
+  const descricao = juntadaDoMedico ? undefined : (tela?.descricao ?? area?.descricao);
   const nome = client?.name ?? "Carregando…";
   const linhaInfo = [
     client?.specialty,
@@ -582,19 +585,6 @@ export function AppShell({
             />}
           </div>
         </div>
-        {/* Equipe: as telas da seção atual em abas, entre o cabeçalho da clínica e o conteúdo (10/11/2026, pedido do João). */}
-        {equipe && !juntada && <AbasDaSecao perfil={perfilEquipe} clientId={clientId} pathname={pathname} dateRange={dateRange} />}
-        {/* Na tela juntada a equipe vê a pasta; a faixa antiga fica só com as telas da seção que a pasta não repete, para que
-            nenhuma tela saia do menu até os grupos da equipe (plano 07). */}
-        {equipe && juntada && (
-          <AbasDaSecao
-            perfil={perfilEquipe}
-            clientId={clientId}
-            pathname={pathname}
-            dateRange={dateRange}
-            ocultas={new Set(juntada.secao.abas.flatMap((a) => a.partes.map((p) => p.rota)))}
-          />
-        )}
         {!naHoje && (
           <header className="workspace-heading">
             <div>
@@ -619,7 +609,7 @@ export function AppShell({
           )}
         </div>
         <main id="workspace-content" tabIndex={-1}>
-          <TelaJuntada clientId={clientId} pathname={pathname} dateRange={dateRange} vis={vis}>
+          <TelaJuntada clientId={clientId} pathname={pathname} dateRange={dateRange} vis={vis} perfil={perfilEquipe}>
             {children}
           </TelaJuntada>
         </main>

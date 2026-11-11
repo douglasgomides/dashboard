@@ -97,8 +97,8 @@ test("admin a 1440 vê os 3 itens do Menu da equipe, Clínica atual com as seç�
   await expect(clinica).toHaveAttribute("data-on", "");
   for (const rotulo of [ROTULOS_MENU_EQUIPE.carteira, ROTULOS_MENU_EQUIPE.conferencia])
     await expect(itemDoMenu(page, rotulo)).not.toHaveAttribute("aria-current", /.*/);
-  // 10/11/2026: sob Clínica ficam só as seções; as telas da seção são abas na página (secoes-da-clinica.spec.ts).
-  await expect(aside(page).getByRole("navigation", { name: `Seções de ${ROTULOS_MENU_EQUIPE.clinica}` }).getByRole("link", { name: "Marketing", exact: true })).toBeVisible();
+  // 10/11/2026: sob Clínica ficam só as seções; as telas da seção são abas na página (secoes-da-clinica.spec.ts). 03.1.1-08: são 9.
+  await expect(aside(page).getByRole("navigation", { name: `Seções de ${ROTULOS_MENU_EQUIPE.clinica}` }).getByRole("link", { name: "Instagram", exact: true })).toBeVisible();
   // A pílula do item atual é o degradê de marca (D-01), com texto branco.
   const fundo = await clinica.evaluate((el) => getComputedStyle(el).backgroundImage);
   expect(fundo).toContain("linear-gradient");
@@ -123,13 +123,16 @@ test("admin numa tela escondida da clínica: Clínica fica em pílula sem aria-c
   const clinica = itemDoMenu(page, ROTULOS_MENU_EQUIPE.clinica);
   await expect(clinica).toHaveAttribute("data-on", "");
   await expect(clinica).not.toHaveAttribute("aria-current", /.*/);
-  // A seção Marketing fica marcada na barra e as telas dela (todas as da sanfona antiga) viram abas com 1 atual.
+  // 03.1.1-08: /conteudo é a aba Desempenho da seção Instagram. A seção fica marcada na barra (as 9 seções da equipe, D-02) e a
+  // pasta "Abas de Instagram" tem as 4 abas com 1 atual; a faixa antiga "Telas de Marketing" saiu.
   const secoes = aside(page).getByRole("navigation", { name: `Seções de ${ROTULOS_MENU_EQUIPE.clinica}` });
   await expect(secoes.getByRole("link")).toHaveCount(secoesDaClinica({ isAdmin: true }).length);
-  await expect(secoes.getByRole("link", { name: "Marketing", exact: true })).toHaveAttribute("data-on", "");
-  const abas = page.getByRole("navigation", { name: "Telas de Marketing", exact: true });
-  await expect(abas.getByRole("link")).toHaveCount(secoesDaClinica({ isAdmin: true }).find((s) => s.area === "Marketing")!.telas.length);
+  await expect(secoes.getByRole("link")).toHaveCount(9);
+  await expect(secoes.getByRole("link", { name: "Instagram", exact: true })).toHaveAttribute("data-on", "");
+  const abas = page.getByRole("navigation", { name: "Abas de Instagram", exact: true });
+  await expect(abas.getByRole("link")).toHaveCount(secoesDaClinica({ isAdmin: true }).find((s) => s.id === "instagram")!.abas.length);
   await expect(abas.locator('[aria-current="page"]')).toHaveCount(1);
+  await expect(page.getByRole("navigation", { name: "Telas de Marketing", exact: true })).toHaveCount(0);
 });
 
 test("admin clica no item de conferência do Menu da equipe e o log grava origem menu", async ({ page, context }) => {
@@ -168,7 +171,7 @@ test("estrategista não admin vê só Clínica com as seções que abre e nenhum
   await expect(page.getByRole("navigation", { name: "Menu da equipe" })).toBeVisible();
   await expect(itensDoMenu(page)).toHaveText([ROTULOS_MENU_EQUIPE.clinica]);
   await expect(aside(page).getByRole("navigation", { name: `Seções de ${ROTULOS_MENU_EQUIPE.clinica}` }).getByRole("link")).toHaveText(
-    secoesDaClinica({ isAdmin: false, papel: "strategist" }).map((s) => s.area),
+    secoesDaClinica({ isAdmin: false, papel: "strategist" }).map((s) => s.rotulo),
   );
   await expect(aside(page).locator('a[href^="/admin"]')).toHaveCount(0);
 });

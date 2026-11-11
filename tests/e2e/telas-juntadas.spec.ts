@@ -152,18 +152,65 @@ test("clínica sem Instagram ligado não mostra a pasta do Instagram nem a aba I
   await expect(rotulosDasAbas(nav)).toHaveText(["Por origem", "Anúncios", "Links"]);
 });
 
-test("a equipe vê a pasta na tela juntada e a faixa antiga só com as telas que a pasta não repete", async ({ page, context }) => {
+test("a equipe vê a pasta na tela juntada e nenhuma faixa antiga de telas por cima dela", async ({ page, context }) => {
   await mockAccount(context, "admin");
   await mockInstagram(context);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}/top?preset=30d`);
   await expect(rotulosDasAbas(pasta(page, "Instagram"))).toHaveText(["Desempenho", "Destaques", "Posts", "Público"]);
-  const faixa = page.getByRole("navigation", { name: "Telas de Marketing", exact: true });
-  await expect(faixa).toBeVisible();
-  const hrefs = await faixa.getByRole("link").evaluateAll((as) => as.map((a) => new URL((a as HTMLAnchorElement).href).pathname));
-  for (const sub of ["conteudo", "top", "posts", "audiencia"]) expect(hrefs).not.toContain(`/${CID}/${sub}`);
-  expect(hrefs).toContain(`/${CID}/ideias`);
-  expect(hrefs).toContain(`/${CID}/anuncios`);
+  // 03.1.1-08: a faixa antiga de abas da seção saiu; as seções com várias telas são pastas (a barra lateral leva a cada seção).
+  await expect(page.locator(".nx-abas")).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: /^Telas de / })).toHaveCount(0);
+});
+
+// --- 03.1.1-08: grupos da equipe (D-02 com a emenda de 11/11/2026). Cada aba é a tela antiga como está hoje, só para a equipe. ---
+const rotaDaLinha = (rota: string) => rota.slice("/_authenticated/$clientId".length);
+const DA_EQUIPE = SECOES_JUNTADAS.filter((s) => s.publico === "equipe");
+const secaoDaEquipe = (id: string) => DA_EQUIPE.find((s) => s.id === id)!;
+
+for (const [conta, perfil] of [["admin", "admin"], ["strategist", "estrategista"]] as const) {
+  test(`${perfil}: Atendimento abre em pasta com as 3 abas, cada parte abre a aba certa e o log grava a rota da aba`, async ({ page, context }) => {
+    await mockAccount(context, conta);
+    await ligarLog(context);
+    const posts = capturarPosts(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const atendimento = secaoDaEquipe("atendimento");
+    for (const aba_ of atendimento.abas) {
+      await page.goto(`/${CID}${rotaDaLinha(aba_.partes[0].rota)}?preset=30d`);
+      const nav = pasta(page, "Atendimento");
+      await expect(nav).toBeVisible();
+      await expect(nav).toHaveAttribute("data-origem", "menu");
+      await expect(rotulosDasAbas(nav)).toHaveText(["Qualidade", "Central", "Contatos"]);
+      await expect(nav.locator('a[aria-current="page"]')).toHaveCount(1);
+      await expect(aba(nav, aba_.rotulo)).toHaveAttribute("aria-current", "page");
+      // A pasta guarda a tela antiga: uma pasta só, com o corpo da aba aberta; o título da casca continua o da tela.
+      await expect(page.locator("[data-juntada]")).toHaveCount(1);
+      await expect(page.locator("[data-juntada]")).toHaveAttribute("data-juntada", "atendimento");
+      await expect(page.locator("[data-juntada] .nx-pasta__corpo")).toHaveAttribute("data-juntada-aba", aba_.id);
+      await expect(page.getByRole("region", { name: `Atendimento: ${aba_.rotulo}`, exact: true })).toBeVisible();
+      await expect(page.getByText("Essa página não carregou")).toHaveCount(0);
+    }
+    // Clicar numa aba vai ao caminho da tela antiga, com o período, e o log grava menu com o routeId dela.
+    await page.goto(`/${CID}/atendimento?preset=7d`);
+    const nav = pasta(page, "Atendimento");
+    await expect(nav).toBeVisible();
+    const antes = posts.length;
+    await aba(nav, "Contatos").click();
+    await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/crm-contatos`);
+    expect(new URL(page.url()).searchParams.get("preset")).toBe("7d");
+    await expect(aba(nav, "Contatos")).toHaveAttribute("aria-current", "page");
+    await expect.poll(() => posts.slice(antes).find((p) => p.rota === "/_authenticated/$clientId/crm-contatos")?.origem).toBe("menu");
+  });
+}
+
+test("viewer: /atendimento por link abre a tela sem a pasta do grupo da equipe", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/atendimento?preset=30d`);
+  await expect(page.locator("main#workspace-content")).toBeVisible();
+  await expect(page.locator(".workspace-heading h1")).toBeVisible();
+  await expect(pasta(page, "Atendimento")).toHaveCount(0);
+  await expect(page.locator("[data-juntada]")).toHaveCount(0);
 });
 
 // MEDV-04 / D-04 (plano 02): com o detalhe fechado, cada aba do Instagram mede no máximo 1,5 vez a altura da janela, em 375x812 e
@@ -696,7 +743,7 @@ test("contagem em cinza: a aba Links mostra \"—\" antes de abrir e o número d
 });
 
 // As abas e partes medidas: a lista vem do registro e a conta fecha com as medidas que cada plano escreveu.
-const PARTES_DAS_3_TELAS = SECOES_JUNTADAS.flatMap((s) => s.abas.flatMap((a) => a.partes.map((p) => p.rota.split("/").pop()!)));
+const PARTES_DAS_3_TELAS = SECOES_JUNTADAS.filter((s) => s.publico === "medico").flatMap((s) => s.abas.flatMap((a) => a.partes.map((p) => p.rota.split("/").pop()!)));
 const SUBS_COM_MEDIDA = [...ABAS_MEDIDAS.map((a) => a.caminho), ...PARTES_DO_CRM.map((p) => p.sub), "anuncios", "conteudo-comercial", "links"];
 
 test("as 13 abas e partes das 3 telas juntadas do médico têm medida de altura, 26 medidas com asserção", () => {

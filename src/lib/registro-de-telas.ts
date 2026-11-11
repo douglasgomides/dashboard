@@ -303,38 +303,72 @@ export function telasPorArea(perfil: PerfilEquipe, opcoes: OpcoesDoIndice = {}):
   return ORDEM_DAS_AREAS.map((area) => ({ area, telas: indice.filter((t) => t.area === area) })).filter((g) => g.telas.length > 0);
 }
 
-// --- Seções da clínica (10/11/2026, pedido do João: "entrar em uma seção, como marketing, e ir navegando por dentro") ---
-// A barra lateral mostra só as seções (áreas antigas com tela da clínica para o perfil); as telas da seção viram abas no
-// topo da página. São as mesmas telas que a sanfona de 09/11 listava: nenhuma some, só muda de lugar.
+// --- Seções da clínica da equipe (10/11/2026, pedido do João: "entrar em uma seção e ir navegando por dentro"; D-02 de 03.1.1) ---
+// Sob Clínica a barra mostra 9 seções: as 6 telas do médico (3 telas únicas e 3 telas juntadas) e os grupos da equipe (Conteúdo,
+// Atendimento e Configurar CRM). As telas de cada seção com mais de uma aba são as abas da pasta (abas-em-pasta.tsx); nenhuma
+// tela some, só muda de lugar. A conta de nada some mora em scripts/test-registro-de-telas.ts.
 
 const ROTA_DA_CLINICA = "/_authenticated/$clientId";
 
-/** Ícone Tabler de cada seção na barra lateral. */
-export const ICONE_DA_AREA: Readonly<Record<AreaAntiga, NomeIcone>> = {
-  Resultados: "chart-bar",
-  Marketing: "speakerphone",
-  Comercial: "filter",
-  "Plano de ação": "checklist",
-  Relatórios: "file-text",
-  Administração: "settings",
-  SAP: "snowflake",
-};
-
-export interface SecaoDaClinica extends GrupoDeTelas {
+export interface SecaoDaClinica {
+  /** Id da seção: o de uma tela juntada (SECOES_JUNTADAS) ou de uma tela única ("hoje", "resultados", "relatorio"). */
+  id: string;
+  /** Texto da seção na barra: rótulo da tela juntada ou o rótulo da linha da tela única. */
+  rotulo: string;
   icone: NomeIcone;
+  /** Telas da seção para o perfil, na ordem das abas. */
+  telas: TelaDoRegistro[];
+  /** Abas em pasta que o perfil tem; [] numa seção de tela única. Aqui não há filtro de fonte (a pasta aplica o dela). */
+  abas: AbaDaSecao[];
   /** Primeira tela da seção: destino do link da seção na barra. */
   primeira: TelaDoRegistro;
 }
 
+// Ordem das 9 seções da equipe (D-02 com a emenda de 11/11/2026): tela única tem rota, tela juntada tem só o id.
+const ORDEM_DA_CLINICA: readonly ({ id: string; rota: string } | { id: IdDaSecao })[] = [
+  { id: "hoje", rota: `${C}/hoje` },
+  { id: "resultados", rota: `${C}/` },
+  { id: "travam" },
+  { id: "origem" },
+  { id: "instagram" },
+  { id: "relatorio", rota: `${C}/relatorio` },
+  { id: "conteudo" },
+  { id: "atendimento" },
+  { id: "configurar-crm" },
+];
+
 /**
- * Seções da clínica para o perfil: telasPorArea só com as telas /$clientId/*, na ordem do registro. Área sem tela da clínica
- * some. A soma das telas das seções é exatamente o que a sanfona "todas as telas da clínica" mostrava.
+ * Seções da clínica para o perfil, na ordem de ORDEM_DA_CLINICA. Seção sem tela para o perfil some (o estrategista não tem a
+ * parte somenteAdmin de um grupo da equipe). Seção do médico: a equipe vê todas as partes (a equipe vê pelo menos o que o médico
+ * vê, D-02). Seção da equipe: só as partes que o índice da busca do perfil tem. Toda tela /$clientId/* do índice do perfil está
+ * em exatamente uma seção (o teste confere para admin e estrategista, em produção e em desenvolvimento).
  */
 export function secoesDaClinica(perfil: PerfilEquipe, opcoes: OpcoesDoIndice = {}): SecaoDaClinica[] {
-  return telasPorArea(perfil, opcoes)
-    .map((g) => ({ area: g.area, telas: g.telas.filter((t) => t.rota.startsWith(`${ROTA_DA_CLINICA}/`)) }))
-    .filter((g) => g.telas.length > 0)
-    .map((g) => ({ ...g, icone: ICONE_DA_AREA[g.area], primeira: g.telas[0] }));
+  const indice = indiceDaBusca(perfil, opcoes);
+  const secoes: SecaoDaClinica[] = [];
+  for (const def of ORDEM_DA_CLINICA) {
+    if ("rota" in def) {
+      const tela = indice.find((t) => t.rota === def.rota && !t.busca);
+      if (tela) secoes.push({ id: def.id, rotulo: tela.rotulo, icone: tela.icone, telas: [tela], abas: [], primeira: tela });
+      continue;
+    }
+    const secao = SECOES_JUNTADAS.find((s) => s.id === def.id);
+    if (!secao) throw new Error(`registro-de-telas: ORDEM_DA_CLINICA aponta para a seção ${def.id}, que não existe`);
+    if (secao.publico === "equipe" && !ehEquipe(perfil)) continue;
+    const abas = secao.abas
+      .map((aba) => ({
+        ...aba,
+        partes: aba.partes.filter((parte) => {
+          const linha = linhaDaParte(parte.rota);
+          if (!linha) return false;
+          return secao.publico === "medico" || perfil.isAdmin || !linha.somenteAdmin;
+        }),
+      }))
+      .filter((aba) => aba.partes.length > 0);
+    const telas = abas.flatMap((aba) => aba.partes.flatMap((parte) => linhaDaParte(parte.rota) ?? []));
+    if (telas.length) secoes.push({ id: secao.id, rotulo: secao.rotulo, icone: secao.icone, telas, abas, primeira: telas[0] });
+  }
+  return secoes;
 }
 
 /** Caminho da tela depois de /<clínica>: "" para o índice, "/conteudo" etc. */
@@ -343,8 +377,8 @@ function subDaTela(tela: TelaDoRegistro): string {
 }
 
 /**
- * Seção e tela da clínica de um endereço (/<id>/conteudo -> Marketing, Analisar desempenho). Fora de uma tela da clínica
- * (Carteira, Conferência, /admin/<id>) ou numa tela fora das seções do perfil, devolve null: a página não mostra abas.
+ * Seção e tela da clínica de um endereço (/<id>/conteudo -> Instagram, Desempenho). Fora de uma tela da clínica
+ * (Carteira, Conferência, /admin/<id>) ou numa tela fora das seções do perfil, devolve null.
  */
 export function secaoDoCaminho(secoes: readonly SecaoDaClinica[], pathname: string): { secao: SecaoDaClinica; tela: TelaDoRegistro } | null {
   const p = pathname.replace(/\/+$/, "") || "/";
@@ -363,8 +397,10 @@ export function secaoDoCaminho(secoes: readonly SecaoDaClinica[], pathname: stri
 // da tela antiga (D-04, emenda de 10/11): o arquivo da rota antiga continua sendo a tela, o endereço antigo é a aba (D-03) e o
 // log por rota grava o routeId da aba sem migration (D-06). Nada aqui apaga ou redireciona tela: é só o desenho da pasta.
 
-/** Ids das telas juntadas. Os planos 05 a 07 acrescentam ids (Hoje, grupos da equipe). */
-export type IdDaSecao = "travam" | "origem" | "instagram";
+/** Ids das 3 telas juntadas do médico (D-01). */
+export type IdDaSecaoDoMedico = "travam" | "origem" | "instagram";
+/** Mais os 3 grupos da equipe (D-02 com a emenda de 11/11/2026). */
+export type IdDaSecao = IdDaSecaoDoMedico | "conteudo" | "atendimento" | "configurar-crm";
 
 export interface ParteDaAba {
   /** routeId da tela antiga que a parte mostra. */
@@ -437,6 +473,45 @@ export const SECOES_JUNTADAS: readonly SecaoJuntada[] = [
       { id: "publico", rotulo: "Público", partes: [{ rota: `${C}/audiencia`, rotulo: "Público" }], contagem: null },
     ],
   },
+  // Grupos da equipe (03.1.1-08, D-02 com a emenda de 11/11/2026): o João tirou do Nexo os grupos Plano e Agentes e a aba
+  // Campanhas (quick 261111-f5b); sobram Conteúdo, Atendimento e Configurar CRM, só para a equipe. Cada aba é a tela antiga como
+  // está hoje, sem contagem até o plano 03.1 dela pôr a tela no molde. /ideias (Encontrar ideias, e Planejar a semana em
+  // ?visao=semana) continua tela depois de 11/11 e precisava de um lugar: entra como a aba Ideias de Conteúdo, no lugar de
+  // Campanhas, que saiu. O João confirma no checkpoint do plano 08.
+  {
+    id: "conteudo",
+    rotulo: "Conteúdo",
+    icone: "bulb",
+    publico: "equipe",
+    abas: [
+      { id: "criativa", rotulo: "Criativa", partes: [{ rota: `${C}/inteligencia-criativa`, rotulo: "Criativa" }], contagem: null },
+      { id: "referencias", rotulo: "Referências", partes: [{ rota: `${C}/inspiracao`, rotulo: "Referências" }], contagem: null },
+      { id: "duvidas", rotulo: "Dúvidas", partes: [{ rota: `${C}/duvidas`, rotulo: "Dúvidas" }], contagem: null },
+      { id: "ideias", rotulo: "Ideias", partes: [{ rota: `${C}/ideias`, rotulo: "Ideias" }], contagem: null },
+    ],
+  },
+  {
+    id: "atendimento",
+    rotulo: "Atendimento",
+    icone: "message-circle",
+    publico: "equipe",
+    abas: [
+      { id: "qualidade", rotulo: "Qualidade", partes: [{ rota: `${C}/atendimento`, rotulo: "Qualidade" }], contagem: null },
+      { id: "central", rotulo: "Central", partes: [{ rota: `${C}/central-atendimento`, rotulo: "Central" }], contagem: null },
+      { id: "contatos", rotulo: "Contatos", partes: [{ rota: `${C}/crm-contatos`, rotulo: "Contatos" }], contagem: null },
+    ],
+  },
+  {
+    id: "configurar-crm",
+    rotulo: "Configurar CRM",
+    icone: "settings",
+    publico: "equipe",
+    abas: [
+      { id: "guia", rotulo: "Guia", partes: [{ rota: `${C}/crm-guia`, rotulo: "Guia" }], contagem: null },
+      { id: "papel-do-funil", rotulo: "Papel do funil", partes: [{ rota: `${C}/analisar`, rotulo: "Papel do funil" }], contagem: null },
+      { id: "etapas", rotulo: "Etapas", partes: [{ rota: `${C}/crm-estrutura`, rotulo: "Etapas" }], contagem: null },
+    ],
+  },
 ];
 
 function linhaDaParte(rota: string): TelaDoRegistro | undefined {
@@ -473,14 +548,21 @@ export function juntadaDoCaminho(pathname: string): { secao: SecaoJuntada; aba: 
  * clínica só com CRM fora das rotas do CRM, clínica sem Audiência no Público, rota de admin para quem não é admin. Aba sem
  * parte visível sai. Para as telas do médico NÃO valem as marcas equipe/admin de nav.ts: o D-01 aprovou que o médico veja
  * Destaques, Posts, Público, Conteúdo × Comercial, Links, Por origem e Jornada (o dado continua decidido pelo RLS).
+ *
+ * Grupo da equipe (publico "equipe", 03.1.1-08): some inteiro para quem não é equipe (o médico que abre /duvidas por link vê a
+ * tela sem pasta); para a equipe valem as partes do índice da busca do perfil, sem filtro de fonte (a equipe abre toda tela em
+ * qualquer clínica): a parte somenteAdmin (Criativa, Etapas) só para admin. Sem perfil, ele sai de vis.
  */
-export function abasVisiveis(secao: SecaoJuntada, vis: Visibilidade): AbaDaSecao[] {
+export function abasVisiveis(secao: SecaoJuntada, vis: Visibilidade, perfil: PerfilEquipe = { isAdmin: vis.isAdmin, papel: vis.papel }): AbaDaSecao[] {
+  const daEquipe = secao.publico === "equipe";
+  if (daEquipe && !ehEquipe(perfil)) return [];
   return secao.abas
     .map((aba) => ({
       ...aba,
       partes: aba.partes.filter((parte) => {
         const linha = linhaDaParte(parte.rota);
         if (!linha) return false;
+        if (daEquipe) return perfil.isAdmin || !linha.somenteAdmin;
         const sub = subDaTela(linha);
         if (!fonteOk(parte.fonte ?? linha.fonte, vis.fontes)) return false;
         if (vis.soCrm && !ROTAS_DO_CRM.includes(sub)) return false;
@@ -521,7 +603,9 @@ export function buscarTelasEquipe(perfil: PerfilEquipe, consulta: string, opcoes
   const achadas = indiceDaBusca(perfil, opcoes)
     .map((tela, ordem) => ({ tela, ordem }))
     .filter(({ tela }) => {
-      const termos = normalizar([tela.area, tela.rotulo, tela.descricao, tela.termos].filter(Boolean).join(" "))
+      // Casa também o rótulo da seção e o da aba onde a tela mora hoje (03.1.1-08, D-03): "travam" e "atendimento" acham as abas.
+      const lugar = juntadaDaRota(tela.rota);
+      const termos = normalizar([tela.area, lugar?.secao.rotulo, lugar?.aba.rotulo, tela.rotulo, tela.descricao, tela.termos].filter(Boolean).join(" "))
         .split(/[^a-z0-9]+/)
         .filter(Boolean);
       return palavras.every((p) => termos.some((termo) => termo.startsWith(p)));
@@ -643,7 +727,7 @@ export function linkDaTela(tela: TelaDoRegistro, clientId: string | null): LinkD
 // Hoje e Ajuda e fontes) não é cumprido nem descartado aqui: fica em aberto para a Phase 9. Tirar uma tela do menu não é
 // bloquear: Dúvidas do público, Planejar a semana e as outras continuam abrindo pelo endereço, sem guarda nova.
 
-export type IdDoItemDoMedico = "hoje" | "resultados" | IdDaSecao | "relatorio";
+export type IdDoItemDoMedico = "hoje" | "resultados" | IdDaSecaoDoMedico | "relatorio";
 
 export interface ItemMenuDoMedico {
   id: IdDoItemDoMedico;
@@ -660,7 +744,7 @@ export interface ItemMenuDoMedico {
 
 type DefDoItemDoMedico =
   | { id: "hoje" | "resultados" | "relatorio"; rotulo: string; curto: string; icone: NomeIcone; rota: string }
-  | { id: IdDaSecao; curto: string };
+  | { id: IdDaSecaoDoMedico; curto: string };
 
 export const MENU_DO_MEDICO: readonly DefDoItemDoMedico[] = [
   { id: "hoje", rotulo: "O que fazer hoje", curto: "Hoje", icone: "checklist", rota: `${C}/hoje` },
@@ -704,7 +788,9 @@ export function itemAtualDoMedico(pathname: string): IdDoItemDoMedico | null {
   if (sub === "/hoje") return "hoje";
   if (sub === "") return "resultados";
   if (sub === "/relatorio") return "relatorio";
-  return juntadaDoCaminho(pathname)?.secao.id ?? null;
+  // Os grupos da equipe (publico "equipe") não são itens do menu do médico: o médico que abre /duvidas por link não tem item atual.
+  const juntada = juntadaDoCaminho(pathname);
+  return juntada && juntada.secao.publico === "medico" ? (juntada.secao.id as IdDaSecaoDoMedico) : null;
 }
 
 /** Seção, aba e parte da tela juntada de uma rota (para o resultado da busca mostrar "Seção / Aba"). Fora delas, null. */
@@ -713,6 +799,15 @@ export function juntadaDaRota(rota: string): { secao: SecaoJuntada; aba: AbaDaSe
     for (const aba of secao.abas)
       for (const parte of aba.partes) if (parte.rota === rota) return { secao, aba, parte };
   return null;
+}
+
+/**
+ * Seção e aba onde uma tela mora hoje (o apoio do resultado da busca da equipe escreve "Seção › Aba"). null para a tela que não
+ * é aba de nenhuma tela juntada (Carteira, Integrações e as telas únicas).
+ */
+export function secaoDaTela(tela: TelaDoRegistro): { secao: SecaoJuntada; aba: AbaDaSecao } | null {
+  const j = juntadaDaRota(tela.rota);
+  return j ? { secao: j.secao, aba: j.aba } : null;
 }
 
 /**
