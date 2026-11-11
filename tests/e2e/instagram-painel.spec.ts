@@ -38,8 +38,9 @@ for (const width of [375, 1440]) {
       const cartoes = page.locator(".nx-pagina__cartoes > *");
       expect(await cartoes.count()).toBeGreaterThan(0);
       expect(await cartoes.count()).toBeLessThanOrEqual(4);
-      await expect(page.locator(".nx-pagina__cartoes .nx-kpi")).toHaveCount(t.cartoes);
-      await expect(page.locator(".nx-pagina__cartoes .nx-kpi .ws-metric-value").first()).toBeVisible();
+      // As 4 telas do Instagram desenham NxCartaoNumero (03.1.1, D-07); Conteúdo × Comercial segue com NxKpi.
+      await expect(page.locator(".nx-pagina__cartoes :is(.nx-kpi, .nx-cartao)")).toHaveCount(t.cartoes);
+      await expect(page.locator(".nx-pagina__cartoes :is(.nx-kpi .ws-metric-value, .nx-cartao .nx-numero__valor)").first()).toBeVisible();
       expect((await leitura.boundingBox())!.y).toBeLessThan((await cartoes.first().boundingBox())!.y);
 
       // Nenhum gráfico do Recharts e nenhuma tabela fora da peça NxTabela.
