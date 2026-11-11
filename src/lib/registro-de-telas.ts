@@ -637,3 +637,120 @@ export function linkDaTela(tela: TelaDoRegistro, clientId: string | null): LinkD
     ...(tela.busca ? { search: tela.busca } : {}),
   };
 }
+
+// --- Menu do médico (03.1.1-07, MEDV-01, D-01 e D-06) ---
+// O João aprovou a lista de 6 telas em 10/11/2026 ("Aprovo a lista") e decidiu "6 agora, decido na fase 9". O MENU-06 (só
+// Hoje e Ajuda e fontes) não é cumprido nem descartado aqui: fica em aberto para a Phase 9. Tirar uma tela do menu não é
+// bloquear: Dúvidas do público, Planejar a semana e as outras continuam abrindo pelo endereço, sem guarda nova.
+
+export type IdDoItemDoMedico = "hoje" | "resultados" | IdDaSecao | "relatorio";
+
+export interface ItemMenuDoMedico {
+  id: IdDoItemDoMedico;
+  /** Texto do menu (D-01): rótulo da seção juntada ou da tela única. */
+  rotulo: string;
+  /** Texto curto da barra de baixo do celular. */
+  curto: string;
+  icone: NomeIcone;
+  /** Linha do registro do destino (primeira parte da primeira aba visível, nas telas juntadas). */
+  tela: TelaDoRegistro;
+  /** Todas as rotas que deixam o item como o atual para esta clínica. */
+  rotas: readonly string[];
+}
+
+type DefDoItemDoMedico =
+  | { id: "hoje" | "resultados" | "relatorio"; rotulo: string; curto: string; icone: NomeIcone; rota: string }
+  | { id: IdDaSecao; curto: string };
+
+export const MENU_DO_MEDICO: readonly DefDoItemDoMedico[] = [
+  { id: "hoje", rotulo: "O que fazer hoje", curto: "Hoje", icone: "checklist", rota: `${C}/hoje` },
+  { id: "resultados", rotulo: "Resultados da clínica", curto: "Resultados", icone: "layout-dashboard", rota: `${C}/` },
+  { id: "travam", curto: "Onde travam" },
+  { id: "origem", curto: "De onde vêm" },
+  { id: "instagram", curto: "Instagram" },
+  { id: "relatorio", rotulo: "Relatório do período", curto: "Relatório", icone: "file-text", rota: `${C}/relatorio` },
+];
+
+/**
+ * Itens do menu do médico para a clínica, na ordem de MENU_DO_MEDICO. Item de seção juntada leva à primeira parte da primeira
+ * aba visível (abasVisiveis) e some sem destino visível (sem Instagram ligado, some o item Instagram). Item de tela única
+ * segue a fonte da linha e a regra do só-CRM (o caminho precisa estar em ROTAS_DO_CRM).
+ */
+export function itensMenuDoMedico(vis: Visibilidade): ItemMenuDoMedico[] {
+  const itens: ItemMenuDoMedico[] = [];
+  for (const def of MENU_DO_MEDICO) {
+    if ("rota" in def) {
+      const tela = telaViva(def.rota);
+      if (!fonteOk(tela.fonte, vis.fontes)) continue;
+      if (vis.soCrm && !ROTAS_DO_CRM.includes(subDaTela(tela))) continue;
+      itens.push({ id: def.id, rotulo: def.rotulo, curto: def.curto, icone: def.icone, tela, rotas: [def.rota] });
+      continue;
+    }
+    const secao = SECOES_JUNTADAS.find((s) => s.id === def.id);
+    if (!secao) throw new Error(`registro-de-telas: MENU_DO_MEDICO aponta para a seção ${def.id}, que não existe`);
+    const rotas = abasVisiveis(secao, vis).flatMap((a) => a.partes.map((p) => p.rota));
+    if (!rotas.length) continue;
+    const tela = linhaDaParte(rotas[0]);
+    if (!tela) continue;
+    itens.push({ id: def.id, rotulo: secao.rotulo, curto: def.curto, icone: secao.icone, tela, rotas });
+  }
+  return itens;
+}
+
+/** Item do menu do médico que fica atual num endereço: tela única pelo caminho exato, tela juntada pela pasta. null fora dos 6. */
+export function itemAtualDoMedico(pathname: string): IdDoItemDoMedico | null {
+  const sub = subDoEndereco(pathname);
+  if (sub === null) return null;
+  if (sub === "/hoje") return "hoje";
+  if (sub === "") return "resultados";
+  if (sub === "/relatorio") return "relatorio";
+  return juntadaDoCaminho(pathname)?.secao.id ?? null;
+}
+
+/** Seção, aba e parte da tela juntada de uma rota (para o resultado da busca mostrar "Seção / Aba"). Fora delas, null. */
+export function juntadaDaRota(rota: string): { secao: SecaoJuntada; aba: AbaDaSecao; parte: ParteDaAba } | null {
+  for (const secao of SECOES_JUNTADAS)
+    for (const aba of secao.abas)
+      for (const parte of aba.partes) if (parte.rota === rota) return { secao, aba, parte };
+  return null;
+}
+
+/**
+ * Busca do médico (MEDV-03): só entre as telas que os itens do menu alcançam (as telas únicas e todas as partes visíveis das
+ * telas juntadas). Mesma normalização e casamento por prefixo de palavra de buscarTelasEquipe, sobre rótulo da seção, da aba
+ * e da parte, rótulo da linha, descrição e termos: "funil comercial" acha a aba Funil, parte No CRM. As outras telas abrem pelo
+ * endereço, mas não aparecem aqui. Ordem: título começa com o termo, depois contém, depois o resto; empate na ordem do menu.
+ * Consulta vazia devolve todos os destinos da clínica, na ordem do menu.
+ */
+export function buscarTelasDoMedico(vis: Visibilidade, consulta: string): TelaDoRegistro[] {
+  const alvo = normalizar(consulta).trim();
+  const palavras = alvo.split(/\s+/).filter(Boolean);
+  const alcancaveis: TelaDoRegistro[] = [];
+  for (const item of itensMenuDoMedico(vis)) {
+    for (const rota of item.rotas) {
+      const tela = linhaDaParte(rota);
+      if (tela && !alcancaveis.includes(tela)) alcancaveis.push(tela);
+    }
+  }
+  // Consulta vazia: todos os destinos da clínica, na ordem do menu (como a busca do médico sempre fez); a lista nunca fica
+  // sem nenhum link para quem navega por teclado.
+  if (!palavras.length) return alcancaveis;
+  const achadas = alcancaveis
+    .map((tela, ordem) => ({ tela, ordem }))
+    .filter(({ tela }) => {
+      const j = juntadaDaRota(tela.rota);
+      const termos = normalizar(
+        [j?.secao.rotulo, j?.aba.rotulo, j?.parte.rotulo, tela.rotulo, tela.descricao, tela.termos].filter(Boolean).join(" "),
+      )
+        .split(/[^a-z0-9]+/)
+        .filter(Boolean);
+      return palavras.every((p) => termos.some((termo) => termo.startsWith(p)));
+    });
+  const nivel = (tela: TelaDoRegistro) => {
+    const titulo = normalizar(tela.rotulo);
+    if (titulo.startsWith(alvo)) return 0;
+    if (titulo.includes(alvo)) return 1;
+    return 2;
+  };
+  return achadas.sort((a, b) => nivel(a.tela) - nivel(b.tela) || a.ordem - b.ordem).map(({ tela }) => tela);
+}
