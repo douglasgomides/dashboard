@@ -926,13 +926,26 @@ async function abertasPorClinica(admin: Admin, id: string): Promise<Map<string, 
 
 /** Agendamento: para cada agente do catálogo (src/lib/agentes-catalogo.ts), põe na fila a rodada de cada clínica com o
  *  módulo do agente quando a última rodada é mais velha que o intervalo e não há uma em andamento. Antes, mede sozinho o
- *  resultado das sugestões de recuperação (sugestoes_medir). Os agentes só preparam; quem aprova é uma pessoa. */
-export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas: number; puladas: number; por_agente: Record<string, number>; medidas: number; cheias: number; expiradas: number; aprendizado: Awaited<ReturnType<typeof aprenderTodas>>; plano: Awaited<ReturnType<typeof atualizarPlanos>> | { erro: string } }> {
-  const { data: medidas, error: erroMedir } = await admin.rpc("sugestoes_medir");
-  if (erroMedir) throw new Error(`Medição de sugestões indisponível: ${erroMedir.message}`);
-  const { error: erroVerificar } = await admin.rpc("operacao_verificar", { p_client_id: null });
-  if (erroVerificar) throw new Error(`Acompanhamento de casos indisponível: ${erroVerificar.message}`);
-  const aprendizado = await aprenderTodas(admin, 120_000);
+ *  resultado das sugestões de recuperação (sugestoes_medir). Os agentes só preparam; quem aprova é uma pessoa.
+ *
+ *  Decisão do João, 11/11/2026 ("tira isso aí, ninguém usa"): com `agentes: false` nenhum agente é medido, aprendido nem
+ *  enfileirado (sem sugestoes_medir, operacao_verificar, aprenderTodas, laço dos FLUXOS e operations/acessos_criticos).
+ *  Roda só o que não é agente e o SAP congelado ainda pode usar: atualizarPlanos (plano da semana, sem IA), a expiração
+ *  das propostas antigas e operacao_sap_conferir. Sem a opção, `agentes` vale true e tudo roda como antes. */
+export async function enfileirarAgendados(admin: Admin, opcoes: { agentes?: boolean } = {}): Promise<{ enfileiradas: number; puladas: number; por_agente: Record<string, number>; medidas: number; cheias: number; expiradas: number; aprendizado: Awaited<ReturnType<typeof aprenderTodas>> | null; plano: Awaited<ReturnType<typeof atualizarPlanos>> | { erro: string }; desligado?: true }> {
+  const agentes = opcoes.agentes ?? true;
+  let medidas: unknown = 0;
+  let aprendizado: Awaited<ReturnType<typeof aprenderTodas>> | null = null;
+  if (agentes) {
+    const { data, error: erroMedir } = await admin.rpc("sugestoes_medir");
+    if (erroMedir) throw new Error(`Medição de sugestões indisponível: ${erroMedir.message}`);
+    medidas = data;
+    // operacao_verificar só reconfere linhas de operacao_recuperacao, que só nascem de proposta do agente de recuperação:
+    // é do agente, não do SAP (por isso fica fora do modo desligado).
+    const { error: erroVerificar } = await admin.rpc("operacao_verificar", { p_client_id: null });
+    if (erroVerificar) throw new Error(`Acompanhamento de casos indisponível: ${erroVerificar.message}`);
+    aprendizado = await aprenderTodas(admin, 120_000);
+  }
   // Plano da semana de cada clínica: confere a semana anterior e monta a atual (uma vez por semana).
   const plano = await atualizarPlanos(admin, 60_000).catch((e: unknown) => ({ erro: (e instanceof Error ? e.message : String(e)).slice(0, 160) }));
   // O que ninguém revisou some sozinho: o agente propõe de novo com dado novo se ainda fizer sentido.
@@ -948,7 +961,7 @@ export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas:
   if (error) throw new Error(error.message);
   let enfileiradas = 0, puladas = 0;
   const por_agente: Record<string, number> = {};
-  for (const ag of AGENTES) {
+  for (const ag of agentes ? AGENTES : []) {
     const fluxo = FLUXOS[ag.fluxo];
     if (!fluxo) continue;
     const clientes = [...new Set(((mods ?? []) as { client_id: string; modulo: string }[]).filter((m) => m.modulo === ag.modulo).map((m) => m.client_id))];
@@ -976,6 +989,8 @@ export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas:
     if (!cli || ["pausada", "encerrada"].includes(cli.status)) continue;
     const { data: operacaoSap, error: erroOperacao } = await admin.rpc("operacao_sap_conferir", { p_clinica_id: cli.id });
     if (erroOperacao) throw new Error(erroOperacao.message);
+    // Agentes desligados: a conferência do SAP já rodou; não lê a última execução nem enfileira operations/acessos_criticos.
+    if (!agentes) continue;
     if (!cli.d0) continue;
     const { data: ultimo, error: erroUltimo } = await admin.from("agente_execucoes").select("estado,criado_em").eq("client_id",client_id).eq("fluxo","acessos_criticos").order("criado_em", { ascending:false }).limit(1).maybeSingle();
     if (erroUltimo) throw new Error(erroUltimo.message);
@@ -985,7 +1000,7 @@ export async function enfileirarAgendados(admin: Admin): Promise<{ enfileiradas:
     if (erroInserir && erroInserir.code !== "23505") throw new Error(erroInserir.message);
     if (!erroInserir) { enfileiradas++; por_agente.operations=(por_agente.operations ?? 0)+1; }
   }
-  return { enfileiradas, puladas, por_agente, medidas: Number(medidas ?? 0), cheias, expiradas, aprendizado, plano };
+  return { enfileiradas, puladas, por_agente, medidas: Number(medidas ?? 0), cheias, expiradas, aprendizado, plano, ...(agentes ? {} : { desligado: true as const }) };
 }
 /** Nome antigo, usado pelo agendamento do n8n ("brain_enfileirar"): agora enfileira todos os agentes. */
 export const enfileirarBrain = enfileirarAgendados;
