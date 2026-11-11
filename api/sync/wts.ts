@@ -8,6 +8,7 @@ import { runWtsSync } from "../_lib/wts-sync.js";
 import { ingerirConversasWts } from "../_lib/conversas-wts.js";
 import { analisarConversasPendentes } from "../_lib/resumo-conversa.js";
 import { rodarAtendenteSombra } from "../_lib/atendente.js";
+import { AGENTES_DESLIGADOS } from "../../src/lib/agentes-catalogo.js";
 import { atribuirLinks } from "../_lib/redirecionar.js";
 import { transcreverReels } from "../_lib/transcrever-reels.js";
 import { classificarTemasConversas } from "../_lib/tema-conversa.js";
@@ -101,7 +102,9 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       };
       const [_, atendente, links, reels, temas] = await Promise.all([
         Promise.all(Array.from({ length: Math.min(3, clientes.length) }, () => trabalhador())),
-        extra(() => rodarAtendenteSombra(admin, Math.max(1, Math.min(150_000, fim - Date.now())), clientId)),
+        // Decisão do João, 11/11/2026 ("tira isso aí, ninguém usa"): o atendente sombra (atendente_sombra e
+        // atendente_fatos) está desligado com os agentes. Reels, tema da conversa e links seguem rodando.
+        AGENTES_DESLIGADOS ? Promise.resolve({ desligado: true }) : extra(() => rodarAtendenteSombra(admin, Math.max(1, Math.min(150_000, fim - Date.now())), clientId)),
         extra(() => atribuirLinks(admin, clientId)),
         extra(() => transcreverReels(admin, Math.max(1, Math.min(150_000, fim - Date.now())), 8, clientId)),
         extra(() => classificarTemasConversas(admin, clientes, Math.max(1, Math.min(180_000, fim - Date.now())))),

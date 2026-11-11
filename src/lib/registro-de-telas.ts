@@ -1,5 +1,7 @@
 // Registro único das telas do Nexo (Phase 3, MENU-01). Uma linha por folha do roteador (85, lidas de src/routeTree.gen.ts)
-// mais 2 atalhos de rótulo de /ideias = 87 linhas: 14 vivas + 70 escondidas + 3 tiradas (contagem aceita pelo João, D-04).
+// mais 2 atalhos de rótulo de /ideias = 87 linhas: 14 vivas + 61 escondidas + 12 tiradas. A contagem aceita pelo João em D-04 era
+// 14 + 70 + 3; em 11/11/2026 ele decidiu tirar os agentes e as telas que ninguém usa ("tira isso aí, ninguém usa"), e 9 rotas
+// escondidas viraram tiradas, mais o atalho Revisar roteiros.
 //
 // Por que um registro só: o menu da equipe, a busca "Buscar tela" e o teste do CI (scripts/test-registro-de-telas.ts) leem
 // daqui. Assim uma tela nova sem linha faz o teste falhar, em vez de sumir do menu e da busca sem ninguém perceber.
@@ -60,6 +62,8 @@ export interface TelaDoRegistro {
   acesso?: true;
   /** Só nas tiradas: routeId para onde a pessoa vai (o teste confere que existe na árvore). */
   destino?: string;
+  /** Só nas linhas tiradas pelo João em 11/11/2026 ("tira isso aí, ninguém usa"). */
+  tiradaEm?: "2026-11-11";
   /** Só aparece na busca de quem é admin do app (guarda existente em /admin e /sap, ou NavTab admin). */
   somenteAdmin?: true;
   /** Só existe no build de desenvolvimento (/qa/layout). */
@@ -158,26 +162,19 @@ export const REGISTRO_DE_TELAS: readonly TelaDoRegistro[] = [
   linha(`${C}/audiencia`, "escondida", "users", daNav("/audiencia")),
   linha(`${C}/top`, "escondida", "brand-instagram", daNav("/top")),
   linha(`${C}/posts`, "escondida", "brand-instagram", daNav("/posts")),
-  // A rota /ideias fica com o rótulo da visão padrão; os outros 2 rótulos são tirados (linhas no fim).
-  linha(`${C}/ideias`, "escondida", "file-text", daNav("/ideias", "roteiros")),
+  // A rota /ideias fica com o rótulo da visão padrão (Encontrar ideias); Planejar a semana e Revisar roteiros são atalhos (linhas no fim).
+  linha(`${C}/ideias`, "escondida", "bulb", daNav("/ideias", "ideias")),
   linha(`${C}/inteligencia-criativa`, "escondida", "bulb", daNav("/inteligencia-criativa")),
   linha(`${C}/inspiracao`, "escondida", "bulb", daNav("/inspiracao")),
   linha(`${C}/duvidas`, "escondida", "message-circle", daNav("/duvidas")),
-  linha(`${C}/campanhas`, "escondida", "target", daNav("/campanhas")),
   linha(`${C}/links`, "escondida", "link", daNav("/links")),
   linha(`${C}/central-atendimento`, "escondida", "inbox", daNav("/central-atendimento")),
   linha(`${C}/atendimento`, "escondida", "message-circle", daNav("/atendimento")),
   linha(`${C}/crm-contatos`, "escondida", "users", daNav("/crm-contatos")),
   linha(`${C}/crm-guia`, "escondida", "file-text", daNav("/crm-guia")),
   linha(`${C}/jornada`, "escondida", "filter", daNav("/jornada")),
-  linha(`${C}/plano`, "escondida", "calendar", daNav("/plano")),
-  linha(`${C}/reunioes`, "escondida", "calendar", daNav("/reunioes")),
-  linha(`${C}/proximas-acoes`, "escondida", "checklist", daNav("/proximas-acoes")),
-  linha(`${C}/agentes`, "escondida", "robot", daNav("/agentes")),
-  linha(`${C}/oportunidades`, "escondida", "bulb", daNav("/oportunidades")),
   // Telas sem aba no menu do médico: rótulo e descrição novos, em português claro.
   linha(`${C}/analisar`, "escondida", "filter", { rotulo: "Papel de cada funil", descricao: "O que cada etapa do CRM conta hoje e o que ela significa.", termos: "funil etapas crm analisar cards significado", area: "Comercial" }),
-  linha(`${C}/automacoes`, "escondida", "robot", { rotulo: "Automações", descricao: "Tarefas que o Nexo faz sozinho. Tela ainda em construção.", termos: "automacoes automatico robo", area: "Plano de ação" }),
   linha(`${C}/consultas`, "escondida", "users", { rotulo: "O que virou paciente", descricao: "Contatos que viraram consulta. Tela ainda em construção.", termos: "consultas pacientes agendamentos", area: "Resultados" }),
   linha(`${C}/vendas`, "escondida", "chart-bar", { rotulo: "O que virou venda", descricao: "Contatos que viraram venda. Tela ainda em construção.", termos: "vendas faturamento fechamentos", area: "Resultados" }),
   linha(`${C}/aquisicao`, "escondida", "snowflake", { rotulo: "Aquisição (leva ao SAP)", area: "SAP", soRedireciona: true }),
@@ -188,8 +185,6 @@ export const REGISTRO_DE_TELAS: readonly TelaDoRegistro[] = [
   linha(`${A}/caixa`, "escondida", "inbox", { rotulo: "Caixa de entrada", ...ADMIN }),
   linha(`${A}/referencia`, "escondida", "chart-bar", { rotulo: "Referência entre clientes", ...ADMIN }),
   linha(`${A}/relatorios`, "escondida", "file-text", { rotulo: "Relatórios da semana", ...ADMIN }),
-  linha(`${A}/agentes`, "escondida", "robot", { rotulo: "Central de Agentes", ...ADMIN }),
-  linha(`${A}/brain`, "escondida", "bulb", { rotulo: "Brand Brain", ...ADMIN }),
   linha(`${A}/equipe`, "escondida", "users", { rotulo: "Equipe", ...ADMIN }),
   linha(`${A}/aquisicao`, "escondida", "snowflake", { rotulo: "Aquisição (leva ao SAP)", ...ADMIN, soRedireciona: true }),
 
@@ -228,12 +223,23 @@ export const REGISTRO_DE_TELAS: readonly TelaDoRegistro[] = [
   // Escondida só em desenvolvimento (D-09: conta entre as 60 que abrem em DEV; o build de produção devolve notFound).
   linha("/qa/layout", "escondida", "layout-dashboard", { rotulo: "Layout de QA", descricao: "Página de conferência visual (só em desenvolvimento).", area: "Administração", soDesenvolvimento: true }),
 
-  // Tiradas (3): saem do menu e da busca da equipe, mas o endereço continua abrindo (MENU-04, sem 404).
+  // Tiradas (12): saem do menu e da busca da equipe, mas o endereço continua abrindo (MENU-04, sem 404).
   // /marketing já redireciona para /conteudo no beforeLoad do arquivo da rota (D-05); o arquivo não muda.
   linha(`${C}/marketing`, "tirada", "speakerphone", { rotulo: "Visão geral de Marketing", area: "Marketing", soRedireciona: true, destino: `${C}/conteudo` }),
-  // Atalhos de rótulo: a tela /ideias fica (com "Revisar roteiros"); só estes 2 rótulos saem para a equipe.
+  // Decisão do João, 11/11/2026 ("tira isso aí, ninguém usa"): 9 rotas viram só redirecionamento. As 7 da clínica levam a
+  // Resultados da clínica (${C}/); o plano 03.1.1-05 troca o destino delas para C/hoje. As 2 do admin levam à Carteira.
+  linha(`${C}/agentes`, "tirada", "robot", { rotulo: "Agentes e entregas", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/` }),
+  linha(`${C}/plano`, "tirada", "calendar", { rotulo: "Plano da semana", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/` }),
+  linha(`${C}/reunioes`, "tirada", "calendar", { rotulo: "Reuniões", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/` }),
+  linha(`${C}/proximas-acoes`, "tirada", "checklist", { rotulo: "Prioridades da equipe", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/` }),
+  linha(`${C}/oportunidades`, "tirada", "bulb", { rotulo: "Oportunidades de melhoria", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/` }),
+  linha(`${C}/automacoes`, "tirada", "robot", { rotulo: "Automações", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/` }),
+  linha(`${C}/campanhas`, "tirada", "target", { rotulo: "Estratégias e campanhas", area: "Marketing", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/` }),
+  linha(`${A}/agentes`, "tirada", "robot", { rotulo: "Central de Agentes", ...ADMIN, soRedireciona: true, tiradaEm: "2026-11-11", destino: `${A}/` }),
+  linha(`${A}/brain`, "tirada", "bulb", { rotulo: "Brand Brain", ...ADMIN, soRedireciona: true, tiradaEm: "2026-11-11", destino: `${A}/` }),
+  // Atalhos de rótulo: a tela /ideias fica (abre em Encontrar ideias); só estes 2 rótulos saem para a equipe.
   linha(`${C}/ideias`, "tirada", "calendar", { ...daNav("/ideias", "semana"), busca: { visao: "semana" }, destino: `${C}/ideias` }),
-  linha(`${C}/ideias`, "tirada", "bulb", { ...daNav("/ideias", "ideias"), busca: { visao: "ideias" }, destino: `${C}/ideias` }),
+  linha(`${C}/ideias`, "tirada", "file-text", { rotulo: "Revisar roteiros", area: "Marketing", busca: { visao: "roteiros" }, tiradaEm: "2026-11-11", destino: `${C}/ideias` }),
 ];
 
 /** Equipe = admin do app ou estrategista da clínica (D-03). Owner e viewer são o médico. */

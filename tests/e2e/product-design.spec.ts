@@ -86,7 +86,7 @@ for (const width of [375, 1440])
         const primary =
           product === "nexo"
             ? main.getByRole("button", {
-                name: /^Revisar roteiros/,
+                name: /^Encontrar ideias/,
               })
             : main.getByRole("link", {
                 name: /Abrir orientações da tarefa|Consultar minhas tarefas/,
@@ -95,7 +95,7 @@ for (const width of [375, 1440])
         await readableControl(primary);
         if (product === "nexo") {
           const selected = main.getByRole("button", {
-            name: /^Revisar roteiros/,
+            name: /^Encontrar ideias/,
           });
           await readableControl(selected);
           await expect(selected).toHaveAttribute("aria-pressed", "true");
@@ -295,16 +295,16 @@ test("admin no celular: o menu da equipe e a busca levam às ferramentas e fecha
   await cabecalho.getByRole("button", { name: "Buscar tela", exact: true }).click();
   const busca = page.getByRole("dialog", { name: "Buscar tela" });
   await expect(busca).toBeVisible();
-  await busca.getByRole("searchbox").fill("Central de Agentes");
+  await busca.getByRole("searchbox").fill("Caixa de entrada");
   await busca
     .getByRole("navigation", { name: "Resultados da busca" })
-    .getByRole("link", { name: /Central de Agentes/ })
+    .getByRole("link", { name: /Caixa de entrada/ })
     .first()
     .click();
-  await expect(page).toHaveURL(/\/admin\/agentes$/);
+  await expect(page).toHaveURL(/\/admin\/caixa$/);
   await expect(
     page
-      .getByRole("heading", { name: "Central de Agentes", exact: true })
+      .getByRole("heading", { name: "Caixa de entrada", exact: true })
       .first(),
   ).toBeVisible();
   await expect(busca).not.toBeVisible();

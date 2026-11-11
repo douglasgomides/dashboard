@@ -335,4 +335,33 @@ if (LISTAR) {
   }
 }
 
+// --- Tiradas pelo João em 11/11/2026 ("tira isso aí, ninguém usa") -------------------------------------------------------
+// Cada arquivo tem a seção "## Tiradas (João 11/11)" com 4 colunas: Rota | Tela ou bloco | Situação | Vai para.
+
+interface LinhaTirada {
+  rota: string;
+  tela: string;
+  situacao: string;
+  vaiPara: string;
+  arquivo: string;
+}
+const linhasTiradas: LinhaTirada[] = [];
+for (const arquivo of arquivosMd) {
+  const texto = readFileSync(join(PASTA_INVENTARIO, arquivo), "utf8");
+  for (const c of linhasDaSecao(texto, "Tiradas (João 11/11)")) {
+    assert.equal(c.length, 4, `${arquivo}: linha de Tiradas com ${c.length} colunas (esperado 4: Rota | Tela ou bloco | Situação | Vai para): ${c.join(" | ")}`);
+    linhasTiradas.push({ rota: c[0], tela: c[1], situacao: c[2], vaiPara: c[3], arquivo });
+  }
+}
+for (const l of linhasTiradas) assert.equal(l.situacao, "tirada (João 11/11)", `${l.arquivo}: a Situação de "${l.tela}" (${l.rota}) deve ser "tirada (João 11/11)"`);
+for (const t of REGISTRO_DE_TELAS.filter((x) => x.tiradaEm)) {
+  const achada = linhasTiradas.find((l) => l.rota === t.rota && l.tela === t.rotulo);
+  assert.ok(achada, `a tirada "${t.rotulo}" (${t.rota}) do registro está sem linha na seção Tiradas do inventário`);
+  assert.equal(achada!.vaiPara, t.destino, `${t.rota} (${t.rotulo}): "Vai para" difere do destino do registro`);
+}
+// Bloco tirado de uma tela que fica ("Vai para" —): a rota tem de ser tela da fase.
+for (const l of linhasTiradas.filter((x) => x.vaiPara === "—")) {
+  assert.ok(rotasDaFase.has(l.rota), `${l.arquivo}: o bloco tirado "${l.tela}" aponta para ${l.rota}, que não é tela da fase`);
+}
+
 console.log(`test-telas-inventario: ok (${TELAS.length} telas: ${novas} novas, ${pendentes} pendentes; ${linhasCartao.length} cartões)`);

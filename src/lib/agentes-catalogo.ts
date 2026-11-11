@@ -3,6 +3,20 @@
 // Regra de todos: o agente lê, pensa e prepara; uma pessoa aprova e executa. Nenhum agente envia mensagem a paciente,
 // publica conteúdo, mexe em anúncio ou orçamento, nem toma decisão clínica.
 
+// DECISÃO DO JOÃO, 11/11/2026 (decisão aberta 3 do brief): "tira isso aí, ninguém usa".
+// Os números que ele viu: em 60 dias, cerca de 1.200 sugestões dos agentes e 0 decididas por uma pessoa;
+// operacao_recuperacao vazia; cerca de 920 rodadas, quase todas automáticas.
+//
+// Com esta constante em true ficam DESLIGADOS no servidor: recuperacao, anuncios, conteudo, growth/campanhas,
+// brand/brain, operations/acessos_criticos e o atendente sombra (atendente_sombra e atendente_fatos).
+// Continuam rodando: transcricao_reels, tema_conversa e arte_criativa (alimentam Instagram, comercial e Inteligência
+// Criativa) e, no agendamento, atualizarPlanos, a expiração das propostas antigas e operacao_sap_conferir, que são do
+// SAP e não são agente.
+//
+// Como religar: trocar para false. O motor e os agentes continuam em api/_lib/agentes.ts. As telas tiradas estão no
+// registro (src/lib/registro-de-telas.ts) com tiradaEm.
+export const AGENTES_DESLIGADOS: boolean = true;
+
 export type IdAgente = "brain" | "recuperacao" | "anuncios" | "conteudo" | "campanhas";
 
 export interface AgenteCatalogo {

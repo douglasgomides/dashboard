@@ -23,6 +23,7 @@ let authCalls = 0;
 let failConnections = false;
 let failConversationRead = false;
 let analyseMode = false;
+let leiturasAtendente = 0;
 const db = () => createClient(origin, "fake-key", { auth: { persistSession: false, autoRefreshToken: false } });
 
 async function invoke(query: Record<string, string>, token = "session-token") {
@@ -60,7 +61,8 @@ try {
         if (url.searchParams.get("select") !== "client_id") return json([]);
         return json(Number(url.searchParams.get("offset") ?? 0) === 0 ? Array.from({ length: 1000 }, () => ({ client_id: CLIENT })) : [{ client_id: OTHER }]);
       }
-      if (table === "atendente_config" || table === "links_rastreados") return json([]);
+      if (table === "atendente_config") { leiturasAtendente++; return json([]); }
+      if (table === "links_rastreados") return json([]);
       throw new Error(`Unexpected database call ${table}`);
     }
     providerCalls++;
@@ -132,6 +134,10 @@ try {
   const analysed = await invoke({ so_analisar: "1" }, "machine-secret");
   assert.equal(analysed.status, 207, "unconfigured auxiliary transcription is reported without hiding completed analysis");
   assert.deepEqual(Object.keys(analysed.body.analise).sort(), [CLIENT, OTHER].sort(), "pending-client discovery must read beyond the first 1000 rows");
+  // Decisão do João, 11/11/2026: o atendente sombra está desligado; reels, temas e links seguem na resposta.
+  assert.deepEqual(analysed.body.atendente, { desligado: true });
+  assert.equal(leiturasAtendente, 0, "o atendente sombra não lê atendente_config");
+  for (const chave of ["reels", "temas", "links"]) assert.ok(chave in analysed.body, `${chave} continua na resposta do so_analisar`);
 
   const probeFetch = globalThis.fetch;
   process.env.WTS_API_TOKEN = "fake-wts-token";

@@ -1,10 +1,9 @@
 import { test, expect, type BrowserContext } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { mkdir } from "node:fs/promises";
 import { CID, mockAccount } from "./fixtures";
 import type { PecaConteudo } from "../../src/lib/agentes-sugestoes";
 
-// O desenho nx sobe os cartões ao entrar (nx-sobe); o axe mede o contraste com a animação parada, como nos outros specs do Nexo.
+// Os testes do Hub (/agentes) saíram em 11/11/2026, quando o João tirou os agentes do Nexo (decisão do João: "tira isso aí,
+// ninguém usa"). Fica só a prova de que o SAP não mostra a recuperação nem o piloto sombra.
 test.use({ reducedMotion: "reduce" });
 
 const ID = "44444444-4444-4444-8444-444444444444";
@@ -51,121 +50,6 @@ async function center(context: BrowserContext, profile: "admin" | "viewer", opti
   });
   return { escritas, pautas, leituras };
 }
-
-for (const width of [375, 1440]) test(`agent workspace explains the cycle and gives a real script to a viewer at ${width}px`, async ({ page, context }) => {
-  const api = await center(context, "viewer");
-  await page.setViewportSize({ width, height: 1000 });
-  await page.goto(`/${CID}/agentes?preset=7d`);
-  await expect(page.getByRole("heading", { name: "Qual problema precisa avançar agora?" })).toBeVisible();
-  await page.locator("#agent-intro").getByText("Como funciona", { exact: true }).click();
-  await expect(page.getByRole("list", { name: "Como o trabalho dos agentes funciona" })).toBeVisible();
-  const choices = page.getByRole("group", { name: "Escolher o problema da clínica" });
-  await expect(choices.getByRole("button")).toHaveCount(4);
-  await expect(choices.getByRole("button", { name: /Saber o que produzir/ })).toContainText("1 para revisar");
-  await expect(page.getByRole("button", { name: "Preparar roteiros agora", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Levar ao planejador", exact: true })).toHaveCount(0);
-  const delivery = page.getByRole("region", { name: "Área de revisão das entregas" });
-  await delivery.getByText("Ver roteiro e legenda", { exact: true }).click();
-  await expect(delivery.getByText(peca.cenas[0].fala, { exact: true })).toBeVisible();
-  await choices.getByRole("button", { name: /Retomar contatos/ }).click();
-  await expect(page).toHaveURL(/agente=recuperacao/);
-  await page.reload();
-  await expect(choices.getByRole("button", { name: /Retomar contatos/ })).toHaveAttribute("aria-pressed", "true");
-  await page.goBack();
-  await expect(choices.getByRole("button", { name: /Saber o que produzir/ })).toHaveAttribute("aria-pressed", "true");
-  expect(api.escritas).toEqual([]);
-  expect(api.leituras.some((r) => /\/(agente_execucoes|brain_itens)\?/.test(r))).toBe(false);
-  expect(api.leituras.some((r) => r.includes("operacao=is.null"))).toBe(true);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
-  const audit = await new AxeBuilder({ page }).include('[data-peca="agentes"]').withTags(["wcag2a", "wcag2aa"]).analyze();
-  expect(audit.violations).toEqual([]);
-  const out = new URL("../../../../outputs/", import.meta.url).pathname;
-  await mkdir(out, { recursive: true }); await page.screenshot({ path: `${out}agentes-trabalho-${width}.png`, fullPage: true });
-});
-
-test("admin can use an existing script in the planner exactly once, and the review queue updates", async ({ page, context }) => {
-  const api = await center(context, "admin");
-  await page.goto(`/${CID}/agentes?agente=conteudo`);
-  await expect(page.getByText("Rodada concluída sem novas entregas", { exact: true })).toBeVisible();
-  await expect(page.getByText("Pouco dado ainda (Brain, Instagram ou conversas).", { exact: true })).toBeVisible();
-  const transfer = page.getByRole("button", { name: "Levar ao planejador", exact: true });
-  await transfer.dblclick();
-  await expect.poll(() => api.pautas.length).toBe(1);
-  await expect(page.getByRole("status").filter({ hasText: "Roteiro salvo no planejador." })).toBeVisible();
-  await expect(page.getByRole("group", { name: "Escolher o problema da clínica" }).getByRole("button", { name: /Saber o que produzir/ })).toContainText("0 para revisar");
-  expect(api.pautas[0]).toMatchObject({ client_id: CID, ideia_id: `agente:${ID}`, titulo: peca.titulo, status: "escolhida" });
-  expect(api.escritas.filter((r) => r.path.endsWith("sugestao_decidir"))).toHaveLength(1);
-  await page.getByRole("link", { name: "Abrir o planejador da semana" }).click();
-  await expect(page).toHaveURL(/visao=semana/);
-  await expect(page.getByRole("region", { name: "Planejador da semana", exact: true })).toContainText(peca.titulo);
-});
-
-test("planner failure preserves the proposal and does not mark it as done", async ({ page, context }) => {
-  const api = await center(context, "admin", { failedPlanner: true });
-  await page.goto(`/${CID}/agentes`);
-  await page.getByRole("button", { name: "Levar ao planejador", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("Não foi possível salvar o roteiro no planejador");
-  expect(api.pautas).toHaveLength(0);
-  expect(api.escritas.some((r) => r.path.endsWith("sugestao_decidir"))).toBe(false);
-  await expect(page.getByRole("heading", { name: peca.titulo, exact: true })).toBeVisible();
-});
-
-test("one failed source stays unknown while another agent still works and retries explicitly", async ({ page, context }) => {
-  const options = { failedCount: true };
-  await center(context, "admin", options);
-  await page.goto(`/${CID}/agentes?agente=anuncios`);
-  await expect(page.getByRole("group", { name: "Escolher o problema da clínica" }).getByRole("button", { name: /Decidir o que revisar/ })).toContainText("Não conferido");
-  await expect(page.getByRole("alert")).toContainText("Estado indisponível");
-  await expect(page.getByRole("button", { name: "Analisar anúncios agora", exact: true })).toBeDisabled();
-  options.failedCount = false;
-  await page.locator(".nxa-estado--vivo").getByRole("button", { name: "Tentar de novo", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Analisar anúncios agora", exact: true })).toBeEnabled();
-  await page.getByRole("group", { name: "Escolher o problema da clínica" }).getByRole("button", { name: /Saber o que produzir/ }).click();
-  await expect(page.getByRole("heading", { name: peca.titulo, exact: true })).toBeVisible();
-});
-
-test("a paused module keeps its previous deliveries visible and blocks a new preparation", async ({ page, context }) => {
-  const api = await center(context, "admin");
-  await context.route("**/rest/v1/cliente_modulos*", (r) => r.fulfill({ json: [{ modulo: "hub", status: "pausado" }] }));
-  await page.goto(`/${CID}/agentes`);
-  await expect(page.getByText("Módulo pausado ou encerrado", { exact: false })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Preparar roteiros agora", exact: true })).toBeDisabled();
-  await expect(page.getByRole("heading", { name: peca.titulo, exact: true })).toBeVisible();
-  expect(api.escritas).toEqual([]);
-});
-
-test("a full review queue explains why preparation waits and does not create more work", async ({ page, context }) => {
-  const api = await center(context, "admin", { pendingCount: 8 });
-  await page.goto(`/${CID}/agentes`);
-  await expect(page.getByText("Revise a fila antes de pedir novos materiais.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Preparar roteiros agora", exact: true })).toBeDisabled();
-  await expect(page.getByRole("heading", { name: peca.titulo, exact: true })).toBeVisible();
-  expect(api.escritas).toEqual([]);
-});
-
-test("the review queue opens the selected delivery rather than leaving the user in the catalogue", async ({ page, context }) => {
-  await center(context, "viewer");
-  await page.goto(`/${CID}/agentes?agente=anuncios`);
-  await page.getByRole("region", { name: "Entregas para revisar", exact: true }).getByRole("button", { name: /Roteirista/ }).click();
-  await expect.poll(() => new URL(page.url()).searchParams.get("agente")).toBe("conteudo");
-  expect(new URL(page.url()).hash).toBe("#agent-review-workspace");
-  await expect(page.getByRole("region", { name: "Área de revisão das entregas" })).toContainText(peca.titulo);
-});
-
-test("preparation is explicit, scoped to the clinic, and an existing run prevents another request", async ({ page, context }) => {
-  const api = await center(context, "admin", { empty: true });
-  await page.goto(`/${CID}/agentes?agente=conteudo`);
-  const prepare = page.getByRole("button", { name: "Preparar roteiros agora", exact: true });
-  await expect(prepare).toBeEnabled(); expect(api.escritas).toEqual([]);
-  await prepare.click();
-  await expect.poll(() => api.escritas.filter((r) => r.path === "/api/sync/manual").length).toBe(1);
-  expect(api.escritas.find((r) => r.path.endsWith("agentes_iniciar"))?.body).toMatchObject({ p_client_id: CID, p_fluxo: "conteudo_semana" });
-  await expect(page.getByText("1 entrega registrada nesta rodada. Revise o material antes de executar.", { exact: true })).toBeVisible();
-  await context.route("**/rest/v1/agente_execucoes*", (r) => r.fulfill({ json: { id: ID, estado: "rodando", criado_em: NOW, atualizado_em: NOW, resultado: null } }));
-  await page.reload();
-  await expect(prepare).toBeDisabled();
-  await expect(page.getByRole("heading", { name: "Preparando a entrega", exact: true })).toBeVisible();
-});
 
 test("SAP never shows recovery work or the Nexo shadow pilot even with a forged selection", async ({ page, context }) => {
   const api = await center(context, "admin");

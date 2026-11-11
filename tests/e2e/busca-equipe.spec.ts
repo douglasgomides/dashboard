@@ -8,7 +8,7 @@ import {
 } from "../../src/lib/registro-de-telas";
 
 // E2e da busca da equipe (Phase 3, 03-05). O webServer do Playwright roda npm run build antes: tudo aqui é o build de
-// produção (D-09: 59 escondidas no índice do admin, sem /qa/layout). Números e rótulos vêm do registro, nunca à mão.
+// produção (D-09, menos as 9 telas tiradas em 11/11/2026: 50 escondidas no índice do admin, sem /qa/layout). Números e rótulos vêm do registro, nunca à mão.
 
 // Animações fora (UI-SPEC §Movimento): posição e cor medidas no estado final.
 test.use({ reducedMotion: "reduce" });
@@ -68,8 +68,7 @@ test.describe("admin: busca da equipe", () => {
   const ESCONDIDAS: { termo: string; rotulo: string; caminho: string; rota: string }[] = [
     { termo: "Consultar publicações", rotulo: "Consultar publicações", caminho: `/${CID}/posts`, rota: "/_authenticated/$clientId/posts" },
     { termo: "Funil comercial", rotulo: "Funil comercial", caminho: `/${CID}/crm-painel`, rota: "/_authenticated/$clientId/crm-painel" },
-    { termo: "Plano da semana", rotulo: "Plano da semana", caminho: `/${CID}/plano`, rota: "/_authenticated/$clientId/plano" },
-    { termo: "Brand Brain", rotulo: "Brand Brain", caminho: "/admin/brain", rota: "/_authenticated/admin/brain" },
+    { termo: "Caixa de entrada", rotulo: "Caixa de entrada", caminho: "/admin/caixa", rota: "/_authenticated/admin/caixa" },
     { termo: "Todas as clínicas", rotulo: "Todas as clínicas", caminho: "/sap", rota: "/_authenticated/sap/" },
   ];
   for (const alvo of ESCONDIDAS) {
@@ -80,7 +79,7 @@ test.describe("admin: busca da equipe", () => {
       const dialog = await abrirBusca(page);
       await dialog.getByRole("searchbox").fill(alvo.termo);
       const antes = posts.length;
-      // O primeiro com o rótulo: em "Plano da semana" a tela da clínica vem antes da do SAP (ordem do registro).
+      // O primeiro com o rótulo: quando há duas telas com o mesmo começo, vale a primeira (ordem do registro).
       await resultadosDe(dialog).getByRole("link", { name: comeca(alvo.rotulo) }).first().click();
       await expect.poll(() => new URL(page.url()).pathname.replace(/\/$/, "")).toBe(alvo.caminho);
       await expect(page.getByText("Essa página não carregou")).toHaveCount(0);
@@ -150,8 +149,8 @@ test.describe("admin: busca da equipe", () => {
   test("sem resultado: estado vazio e Ver todas as telas com a contagem do build de produção", async ({ page }) => {
     const indice = indiceDaBusca(ADMIN);
     const N = indice.length;
-    expect(N).toBe(66);
-    expect(N - indice.filter((t) => t.situacao === "viva").length, "escondidas no índice de produção (D-09)").toBe(59);
+    expect(N).toBe(57);
+    expect(N - indice.filter((t) => t.situacao === "viva").length, "escondidas no índice de produção (D-09)").toBe(50);
 
     const dialog = await abrirBusca(page);
     // Sem texto: a frase de ajuda e o details fechado.
@@ -200,9 +199,15 @@ test.describe("admin: busca da equipe", () => {
   // MENU-04 / D-05: nenhuma tirada aparece como título de resultado.
   test("as tiradas não aparecem na busca", async ({ page }) => {
     const tiradas = REGISTRO_DE_TELAS.filter((t) => t.situacao === "tirada").map((t) => t.rotulo);
-    expect(tiradas.sort()).toEqual(["Encontrar ideias", "Planejar a semana", "Visão geral de Marketing"]);
+    // 12 tiradas: /marketing, os 2 atalhos de /ideias e as 9 telas que o João tirou em 11/11/2026 ("tira isso aí, ninguém usa").
+    expect(tiradas.sort()).toEqual([
+      "Agentes e entregas", "Automações", "Brand Brain", "Central de Agentes", "Estratégias e campanhas", "Oportunidades de melhoria",
+      "Planejar a semana", "Plano da semana", "Prioridades da equipe", "Reuniões", "Revisar roteiros", "Visão geral de Marketing",
+    ]);
     const dialog = await abrirBusca(page);
-    for (const rotulo of tiradas) {
+    // "Plano da semana" também é o nome de uma tela viva do SAP congelado: esse título pode aparecer, e não é a tirada.
+    const comHomonimaViva = new Set(REGISTRO_DE_TELAS.filter((t) => t.situacao !== "tirada").map((t) => t.rotulo));
+    for (const rotulo of tiradas.filter((r) => !comHomonimaViva.has(r))) {
       await dialog.getByRole("searchbox").fill(rotulo);
       await expect(dialog.getByRole("status")).toBeVisible();
       await expect(resultadosDe(dialog).locator(".nx-resultado-titulo").filter({ hasText: new RegExp(`^${rotulo}$`) })).toHaveCount(0);
@@ -226,8 +231,9 @@ test.describe("admin: busca da equipe", () => {
   test("contagem no singular e no plural", async ({ page }) => {
     const dialog = await abrirBusca(page);
     const campo = dialog.getByRole("searchbox");
-    expect(buscarTelasEquipe(ADMIN, "Brand Brain")).toHaveLength(1);
-    await campo.fill("Brand Brain");
+    // Brand Brain saiu em 11/11/2026 (decisão do João); "Referência entre clientes" acha uma tela só.
+    expect(buscarTelasEquipe(ADMIN, "Referência entre clientes")).toHaveLength(1);
+    await campo.fill("Referência entre clientes");
     await expect(dialog.getByRole("status")).toHaveText("1 tela encontrada");
     const n = buscarTelasEquipe(ADMIN, "funil").length;
     expect(n).toBeGreaterThan(1);

@@ -36,6 +36,7 @@ import { PROMPT_POR_CODIGO } from "../_lib/sap-prompts.js";
 import { aplicarAcao, desfazerAcao, tokenEscritaConfigurado } from "../_lib/anuncios-acoes.js";
 import { baseDoLink, candidatosCodigo, destinoSite, destinoWhatsApp, numeroDoDestino, novoSlug, POSICOES, mensagemComRef, urlDoLink, validarNomeLink, type Posicao } from "../../src/lib/rastreio.js";
 import { rodarAgentes, catalogoFluxos, enfileirarBrain } from "../_lib/agentes.js";
+import { AGENTES_DESLIGADOS } from "../../src/lib/agentes-catalogo.js";
 import { resumoEquipe } from "../_lib/resumo-equipe.js";
 import { manualRequestSchema } from "../_lib/request-validation.js";
 import { lerResumoCrmNegocio } from "../_lib/crm-negocio-resumo.js";
@@ -152,12 +153,12 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // Agendamento do n8n (SYNC_SECRET), restrito às ações explícitas que só GERAM SUGESTÕES para revisão humana:
-  // - "brain_enfileirar" (ou "agendar"): mede o resultado das sugestões e põe na fila a rodada de cada agente do catálogo
-  //   (Brain, Recuperação, Anúncios, Conteúdo, Campanhas) das clínicas cuja última rodada passou do intervalo;
-  // - "rodar": roda a fila de agentes (aprovações continuam esperando uma pessoa; nada é enviado a clínica ou paciente);
-  // - "resumo_equipe": devolve o e-mail diário do que os agentes deixaram para a equipe e os e-mails dos admins
-  //   (quem envia é o n8n; só números e nomes de clínica).
+  // Agendamento do n8n (SYNC_SECRET), restrito às ações explícitas da fila de agentes.
+  // Desde 11/11/2026 (decisão do João: "tira isso aí, ninguém usa", AGENTES_DESLIGADOS em src/lib/agentes-catalogo.ts):
+  // - "rodar" e "resumo_equipe" não fazem nada: respondem 200 desligado, sem banco, sem fila e sem IA;
+  // - "brain_enfileirar" (ou "agendar") só roda o que não é agente: plano da semana automático, expiração das propostas
+  //   antigas e a conferência do SAP (operacao_sap_conferir). Nenhum agente é medido, aprendido nem enfileirado.
+  // Os ramos antigos continuam abaixo, para religar só trocando a constante.
   const SYNC_SECRET = process.env.SYNC_SECRET;
   if (SYNC_SECRET && timingSafeEqual(createHash("sha256").update(token).digest(), createHash("sha256").update(SYNC_SECRET).digest())) {
     const entrada = agendamentoSchema.safeParse(corpoOriginal);
@@ -165,14 +166,16 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     const corpo = entrada.data;
     try {
       if (corpo.acao === "resumo_equipe") {
+        if (AGENTES_DESLIGADOS) { res.status(200).json({ alvo: "agentes", ok: true, desligado: true }); return; }
         res.status(200).json({ alvo: "agentes", ok: true, ...(await resumoEquipe(admin)) });
         return;
       }
       if (corpo.acao === "brain_enfileirar" || corpo.acao === "agendar") {
-        const r = await enfileirarBrain(admin);
+        const r = await enfileirarBrain(admin, { agentes: !AGENTES_DESLIGADOS });
         res.status(200).json({ alvo: "agentes", ok: true, agendado: true, ...r });
         return;
       }
+      if (AGENTES_DESLIGADOS) { res.status(200).json({ alvo: "agentes", ok: true, agendado: true, desligado: true }); return; }
       // Agendado: até 3 min de passos novos por chamada (um passo de IA pode levar mais 1,5 min; a função aceita 5), para a fila do dia andar em poucas chamadas.
       const r = await rodarAgentes(admin, { execucaoId: null, maxPassos: 8, prazoMs: 180_000 });
       res.status(200).json({ alvo: "agentes", ok: true, agendado: true, ...r });
@@ -239,6 +242,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       if (acao && !["catalogo", "rodar"].includes(acao)) { res.status(400).json({ error: "Ação de agentes inválida" }); return; }
       if (acao === "catalogo") { res.status(200).json({ alvo, ok: true, fluxos: catalogoFluxos() }); return; }
       if (execucao_id && !/^[0-9a-f-]{36}$/.test(execucao_id)) { res.status(400).json({ error: "execucao_id inválido" }); return; }
+      if (AGENTES_DESLIGADOS) { res.status(200).json({ alvo, ok: true, desligado: true }); return; }
       const r = await rodarAgentes(admin, { execucaoId: execucao_id ?? null, maxPassos: 8, prazoMs: 45_000 });
       res.status(200).json({ alvo, ok: true, ...r });
       return;
