@@ -187,3 +187,89 @@ export async function mockCrm(context: BrowserContext) {
   });
   await rpc("wts_resumo", [{ atendimentos: 200, contatos_distintos: 150, espera_mediana_seg: 900, espera_cobertura: 180, atendimento_mediano_seg: 40000, em_andamento: 10, concluidos: 190, sem_roteamento: 20 }]);
 }
+
+/**
+ * Anúncios (Resultados dos anúncios): os mesmos mocks de anuncios-painel.spec.ts (copiados de propósito) com duas variantes.
+ * "bom": 3 campanhas com rastreio confiável e conversas 20% acima do período anterior. "suspeito": o caso Doctor Creator,
+ * 7.391 cliques no link e 29 conversas atribuídas (a leitura tem que dizer "Sem leitura" e mandar para o gestor de tráfego).
+ * Dados fictícios, só leitura.
+ */
+export async function mockAnuncios(context: BrowserContext, variante: "bom" | "suspeito" = "bom") {
+  const dia1 = (i: number) => new Date(Date.now() - (i + 1) * 86400_000).toISOString().slice(0, 10);
+  const campanhas = [
+    { campaign_id: "c1", name: "Primeira consulta fictícia", objective: "MESSAGES", spend: 60, conv: 3, imp: 5000, clk: 70 },
+    { campaign_id: "c2", name: "Tráfego fictício", objective: "OUTCOME_TRAFFIC", spend: 30, conv: 0, imp: 6000, clk: 120 },
+    { campaign_id: "c3", name: "Alcance fictício", objective: "OUTCOME_AWARENESS", spend: 20, conv: 0, imp: 9000, clk: 15 },
+  ];
+  const suspeito = variante === "suspeito";
+  const linhas = (de: string, ate: string) => {
+    const out: Record<string, unknown>[] = [];
+    if (suspeito) {
+      // Uma linha só, com os números do caso: o diagnóstico soma 7.391 cliques no link e 29 conversas.
+      const d = dia1(5);
+      if (d >= de && d <= ate) out.push({ date: d, campaign_id: "c2", spend: 3000, impressions: 400000, link_clicks: 7391, conversations: 29, leads: 0, landing_page_views: 0, reach: 280000, clicks: 9000 });
+      return out;
+    }
+    for (let i = 59; i >= 0; i--) {
+      const d = dia1(i);
+      if (d < de || d > ate) continue;
+      for (const c of campanhas) out.push({ date: d, campaign_id: c.campaign_id, spend: c.spend, impressions: c.imp, link_clicks: c.clk, conversations: c.conv, leads: 0, landing_page_views: 0, reach: c.imp * 0.7, clicks: c.clk });
+    }
+    return out;
+  };
+  await context.route("**/rest/v1/meta_ads_daily?**", (r) => {
+    const p = new URL(r.request().url()).searchParams;
+    const datas = p.getAll("date");
+    const de = datas.find((d) => d.startsWith("gte."))?.slice(4) ?? "0000";
+    const ate = datas.find((d) => d.startsWith("lte."))?.slice(4) ?? "9999";
+    return r.fulfill({ json: Number(p.get("offset") ?? 0) ? [] : linhas(de, ate) });
+  });
+  await context.route("**/rest/v1/meta_ads_campaigns?**", (r) => r.fulfill({ json: campanhas.map((c) => ({ campaign_id: c.campaign_id, name: c.name, objective: c.objective })) }));
+  // Período anterior com 20% menos conversas e o mesmo gasto: a variação de conversas aparece no cartão e na leitura.
+  await context.route("**/rest/v1/rpc/ads_resumo", (r) => {
+    const b = r.request().postDataJSON() ?? {};
+    const anterior = b.p_end < dia1(25);
+    return r.fulfill({ json: [{ gasto: 3000, conversas: suspeito ? (anterior ? 25 : 29) : anterior ? 75 : 90, impressoes: 600000, cliques_link: suspeito ? 7391 : 6000, campanhas: 3, ctr: 1, cpc: 0.5, cpm: 5, custo_por_conversa: 30 }] });
+  });
+  await context.route("**/rest/v1/rpc/ads_por_dia", (r) => {
+    const b = r.request().postDataJSON() ?? {};
+    const por = new Map<string, { dia: string; gasto: number; conversas: number }>();
+    for (const l of linhas(b.p_start, b.p_end) as { date: string; spend: number; conversations: number }[]) {
+      const x = por.get(l.date) ?? { dia: l.date, gasto: 0, conversas: 0 };
+      x.gasto += l.spend;
+      x.conversas += l.conversations;
+      por.set(l.date, x);
+    }
+    return r.fulfill({ json: [...por.values()].sort((a, b) => a.dia.localeCompare(b.dia)) });
+  });
+}
+
+/**
+ * Links rastreados: 4 links (bio, story, QR code e destaque) com cliques e conversas por link, sem dado pessoal. A tela lê a
+ * tabela links_rastreados e a rpc links_funil em páginas (fetchAllRows para quando vem página vazia), então o mock pagina.
+ * "vazio" devolve nenhum link criado. Dados fictícios, só leitura.
+ */
+export async function mockLinks(context: BrowserContext, variante: "com-links" | "vazio" = "com-links") {
+  const pagina = (url: string, linhas: unknown[]) => {
+    const p = new URL(url).searchParams;
+    const off = Number(p.get("offset") ?? 0);
+    return linhas.slice(off, off + Number(p.get("limit") ?? 1000));
+  };
+  const link = (id: string, slug: string, tipo: string, titulo: string, codigo: string) => ({
+    id, slug, short_url: null, tipo, titulo, campanha: null, destino_tipo: "whatsapp", ativo: true, criado_em: "2026-09-01T12:00:00Z", codigo_ref: codigo, mensagem_modelo: `Olá! Vim pelo link (${codigo})`,
+  });
+  const links = variante === "vazio" ? [] : [
+    link("l1", "clinica-bio", "bio", "Bio principal", "R27"),
+    link("l2", "clinica-story", "story", "Story de outubro", "R28"),
+    link("l3", "clinica-qr", "qr", "QR do consultório", "R29"),
+    link("l4", "clinica-destaque", "destaque", "Destaque de preços", "R30"),
+  ];
+  const funil = variante === "vazio" ? [] : [
+    { link_id: "l1", cliques: 300, conversas: 40, provaveis: 2, agendou: 10, vendas: 2, receita: 4000 },
+    { link_id: "l2", cliques: 100, conversas: 12, provaveis: 0, agendou: 3, vendas: 0, receita: 0 },
+    { link_id: "l3", cliques: 20, conversas: 3, provaveis: 0, agendou: 1, vendas: 0, receita: 0 },
+    { link_id: "l4", cliques: 50, conversas: 6, provaveis: 0, agendou: 2, vendas: 1, receita: 1500 },
+  ];
+  await context.route("**/rest/v1/links_rastreados**", (r) => r.fulfill({ json: pagina(r.request().url(), links) }));
+  await context.route("**/rest/v1/rpc/links_funil**", (r) => r.fulfill({ json: pagina(r.request().url(), funil) }));
+}

@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 
-// Resultados dos anúncios no desenho do painel: 4 números primeiro, gráfico do dia, funil, alerta curto de rastreio e o
+// Resultados dos anúncios no molde (03.1.1-04): leitura por regra, 4 números, gráfico do dia, e nos Detalhes o funil, o aviso de rastreio e o
 // método recolhido. Nada de rolagem lateral em 375 e 1440.
 
 const dia = (i: number) => new Date(Date.now() - (i + 1) * 86400_000).toISOString().slice(0, 10);
@@ -54,24 +54,33 @@ async function anuncios(context: BrowserContext, suspeito: boolean) {
 const semRolagemLateral = (page: import("@playwright/test").Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 
 for (const width of [375, 1440]) {
-  test(`Anúncios: números, gráfico do dia e funil aparecem sem rolagem lateral em ${width}px`, async ({ page, context }) => {
+  test(`Anúncios: números, gráfico do dia e leitura aparecem sem rolagem lateral em ${width}px; o resto está nos Detalhes`, async ({ page, context }) => {
     await mockAccount(context, "viewer");
     await anuncios(context, false);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/anuncios?preset=30d`);
 
-    const numeros = page.getByRole("region", { name: "Indicadores dos anúncios", exact: true });
-    await expect(numeros.locator(".nx-kpi")).toHaveCount(4);
-    await expect(numeros.locator(".ws-metric-value").first()).toHaveText(/R\$/);
-    await expect(numeros.locator(".ws-metric-value").first()).toBeInViewport();
-    // Conversas subiram 20% contra o período anterior: chip verde com a seta, não só a cor.
-    await expect(numeros.locator(".nx-kpi").nth(1).locator(".nx-tag--up")).toContainText("+20%");
+    // Molde (03.1.1-04): leitura, 4 cartões com ícone redondo, o gráfico do dia e os Detalhes fechados.
+    const leitura = page.locator('[data-peca="leitura"]').first();
+    await expect(leitura).toBeVisible();
+    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+    await expect(leitura.getByText("O que aconteceu")).toBeVisible();
+    const cartoes = page.locator(".nx-pagina__cartoes > .nx-cartao");
+    await expect(cartoes).toHaveCount(4);
+    await expect(cartoes.first().locator(".nx-numero__valor")).toHaveText(/R\$/);
+    // Conversas subiram 20% contra o período anterior: pílula azul-clara com o texto (sem cor de bom ou ruim).
+    await expect(cartoes.nth(1).locator(".nx-pilula-variacao")).toContainText("+20%");
 
     const grafico = page.getByRole("slider", { name: /^Investimento e conversas por dia/ });
     await expect(grafico).toBeVisible();
     await grafico.focus();
     await page.keyboard.press("Home");
     await expect(grafico).toHaveAttribute("aria-valuetext", /Investido .*Conversas/);
+
+    // O funil, o "o que fazer" e o método ficam nos Detalhes, fechados.
+    const detalhes = page.locator("details#detalhes-anuncios");
+    await expect(detalhes).not.toHaveAttribute("open", "");
+    await detalhes.locator(":scope > summary").click();
     await expect(page.getByRole("figure", { name: "Do anúncio à conversa" })).toBeVisible();
     await expect(page.getByRole("region", { name: "O que fazer agora" })).toBeVisible();
 
@@ -92,18 +101,24 @@ for (const width of [375, 1440]) {
   });
 }
 
-test("Anúncios com rastreio suspeito: alerta curto com o próximo passo e custo por conversa marcado como não confiável", async ({ page, context }) => {
+test("Anúncios com rastreio suspeito: a leitura diz \"Sem leitura\" com o próximo passo e o custo por conversa fica marcado como não confiável", async ({ page, context }) => {
   await mockAccount(context, "viewer");
   await anuncios(context, true);
   await page.setViewportSize({ width: 375, height: 900 });
   await page.goto(`/${CID}/anuncios?preset=30d`);
-  const alerta = page.getByRole("alert").filter({ hasText: "As conversas dos anúncios não estão sendo contadas direito" });
+  const leitura = page.locator('[data-peca="leitura"]').first();
+  await expect(leitura.getByText(/^Sem leitura: o rastreio das conversas dos anúncios está suspeito/)).toBeVisible();
+  await expect(leitura.getByText("Quem resolve: Gestor de tráfego")).toBeVisible();
+  const cartoes = page.locator(".nx-pagina__cartoes > .nx-cartao");
+  await expect(cartoes.nth(2).locator(".nx-numero__valor")).toHaveText("Não confiável");
+  // O aviso longo do rastreio continua inteiro, nos Detalhes.
+  const detalhes = page.locator("details#detalhes-anuncios");
+  await detalhes.locator(":scope > summary").click();
+  const alerta = detalhes.getByRole("alert").filter({ hasText: "As conversas dos anúncios não estão sendo contadas direito" });
   await expect(alerta).toBeVisible();
   await expect(alerta).toContainText("Próximo passo:");
   await expect(alerta).toContainText("Quem resolve: Gestor de tráfego");
-  const numeros = page.getByRole("region", { name: "Indicadores dos anúncios", exact: true });
-  await expect(numeros.locator(".ws-metric-value").nth(2)).toHaveText("Não confiável");
-  // O alerta vem antes dos números.
-  expect(await alerta.evaluate((el) => !!(el.compareDocumentPosition(document.querySelector('[aria-label="Indicadores dos anúncios"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  // A leitura vem antes dos cartões.
+  expect(await leitura.evaluate((el) => !!(el.compareDocumentPosition(document.querySelector(".nx-pagina__cartoes")!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
   expect(await semRolagemLateral(page)).toBe(true);
 });

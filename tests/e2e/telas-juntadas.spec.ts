@@ -1,7 +1,8 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 import { SECOES_JUNTADAS } from "../../src/lib/registro-de-telas";
-import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAudiencia, mockCrm, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
+import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, mockAudiencia, mockCrm, mockInstagram, mockLinks, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
+import { mockInstagram as mockInstagramCompleto } from "./instagram-dados";
 
 // Telas juntadas do médico (Phase 3.1.1, plano 01): a pasta com abas em pasta, cada aba é o caminho da tela antiga (D-04,
 // emenda de 10/11), o log grava o routeId da aba (D-06) e a pasta não busca dado. Aqui: Instagram de ponta a ponta, as outras
@@ -480,3 +481,316 @@ test("De onde vêm os pacientes: a aba Por origem mostra em cinza o número de o
   // A leitura afirma a origem líder só com a base de leadsRanking (Instagram tem 300 contatos).
   await expect(page.locator('[data-juntada] [data-peca="leitura"]').first().getByText(/A origem com mais ganhos registrados é "Instagram"/)).toBeVisible();
 });
+
+// ===================================================================================================================
+// Plano 04: De onde vêm os pacientes > Anúncios no molde, com a leitura por regra e o portão do rastreio suspeito (caso Doctor
+// Creator: 7.391 cliques no link e 29 conversas). Dados fictícios (mockAnuncios).
+// ===================================================================================================================
+const ORIGEM = "De onde vêm os pacientes";
+
+async function abrirAnuncios(page: Page, context: BrowserContext, perfil: "viewer" | "admin", variante: "bom" | "suspeito", largura = { width: 1440, height: 900 }) {
+  await mockAccount(context, perfil);
+  await mockAnuncios(context, variante);
+  await page.setViewportSize(largura);
+  await page.goto(`/${CID}/anuncios?preset=30d`);
+}
+
+async function confereIconesDosCartoes(page: Page, slug: string) {
+  const cartoes = page.locator("[data-juntada] .nx-pagina__cartoes > *");
+  await expect(cartoes.first()).toBeVisible();
+  const total = await cartoes.count();
+  expect(total, `${slug}: de 1 a 4 cartões`).toBeGreaterThanOrEqual(1);
+  expect(total).toBeLessThanOrEqual(4);
+  for (let i = 0; i < total; i++) {
+    const icone = cartoes.nth(i).locator(".nx-tile, .nx-cartao__icone");
+    await expect(icone, `${slug}: cartão ${i + 1} sem ícone`).toHaveCount(1);
+    expect(await icone.evaluate((el) => getComputedStyle(el).borderRadius), `${slug}: ícone do cartão ${i + 1} não é redondo`).toBe("50%");
+  }
+}
+
+for (const perfil of ["viewer", "admin"] as const) {
+  test(`${perfil}: Anúncios com rastreio bom abre na pasta, com "O que aconteceu", pílula de ação e cartões com ícone redondo`, async ({ page, context }) => {
+    await abrirAnuncios(page, context, perfil, "bom");
+    const nav = pasta(page, ORIGEM);
+    await expect(rotulosDasAbas(nav)).toHaveText(["Por origem", "Instagram", "Anúncios", "Links"]);
+    await expect(aba(nav, "Anúncios")).toHaveAttribute("aria-current", "page");
+    await expect(page.locator(".workspace-heading h1")).toHaveText(ORIGEM);
+    await expect(page.locator("[data-juntada] .nx-pagina")).toHaveCount(1);
+    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+    await expect(leitura).toBeVisible();
+    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+    await expect(leitura.getByText("O que aconteceu")).toBeVisible();
+    await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
+    await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
+    // As conversas abrem a leitura, com o número e a variação (20% acima do período anterior) ao lado.
+    await expect(leitura.getByText(/As conversas iniciadas pelos anúncios subiram/)).toBeVisible();
+    await expect(leitura.locator(".nx-leitura__num", { hasText: "+20%" })).toBeVisible();
+    await confereIconesDosCartoes(page, "anuncios");
+    // Os 4 números e o gráfico do dia seguem à vista; o resto está nos Detalhes, fechado.
+    await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao")).toHaveCount(4);
+    await expect(page.getByRole("slider", { name: /^Investimento e conversas por dia/ })).toBeVisible();
+    await expect(page.locator("[data-juntada] details#detalhes-anuncios")).not.toHaveAttribute("open", /.*/);
+    expect(await semRolagemLateral(page)).toBe(true);
+  });
+
+  test(`${perfil}: Anúncios com rastreio suspeito diz "Sem leitura:", manda para o Gestor de tráfego e nunca culpa a campanha`, async ({ page, context }) => {
+    await abrirAnuncios(page, context, perfil, "suspeito");
+    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+    await expect(leitura).toBeVisible();
+    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+    await expect(leitura.getByText(/^Sem leitura: o rastreio das conversas dos anúncios está suspeito/)).toBeVisible();
+    // O caso real: os dois números do rastreio aparecem no motivo.
+    await expect(leitura).toContainText("7.391 cliques no link");
+    await expect(leitura).toContainText("29 conversas");
+    await expect(leitura.getByText("Para consertar:")).toBeVisible();
+    await expect(leitura.getByText("Quem resolve: Gestor de tráfego")).toBeVisible();
+    await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
+    await expect(leitura).not.toContainText("O que aconteceu");
+    expect(await leitura.innerText()).not.toMatch(/não convert|não rende|campanhas? ruins?|não funciona/i);
+    // O custo por conversa não aparece como verdade.
+    await expect(page.locator("[data-juntada] .nx-cartao", { hasText: "Custo por conversa" }).locator(".nx-numero__valor")).toHaveText("Não confiável");
+    // O aviso longo do rastreio está nos Detalhes, sem perder nada.
+    const detalhes = page.locator("[data-juntada] details#detalhes-anuncios");
+    await detalhes.locator(":scope > summary").click();
+    await expect(detalhes.getByRole("alert").filter({ hasText: "As conversas dos anúncios não estão sendo contadas direito" })).toContainText("Quem resolve: Gestor de tráfego");
+    expect(await semRolagemLateral(page)).toBe(true);
+  });
+}
+
+test("a seta da pílula de Anúncios abre os Detalhes da própria página e não grava nada", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await mockAnuncios(context, "suspeito");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const escritas: string[] = [];
+  let aposOClique = false;
+  page.on("request", (r) => {
+    const { pathname } = new URL(r.url());
+    if (aposOClique && ["POST", "PATCH", "DELETE"].includes(r.method()) && pathname.startsWith("/rest/v1/") && pathname !== "/rest/v1/rota_acessos") escritas.push(`${r.method()} ${pathname}`);
+  });
+  await page.goto(`/${CID}/anuncios?preset=30d`);
+  const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+  await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
+  await page.screenshot({ path: "test-results/redesenho/pilula-anuncios.png" });
+  const detalhes = page.locator("[data-juntada] details#detalhes-anuncios");
+  await expect(detalhes).not.toHaveAttribute("open", /.*/);
+  await page.waitForLoadState("networkidle");
+  aposOClique = true;
+  await leitura.locator(".nx-acao-pilula__seta").first().click();
+  await expect(detalhes).toHaveAttribute("open", /.*/);
+  await expect(detalhes.locator(":scope > summary")).toBeFocused();
+  await page.waitForTimeout(300);
+  expect(escritas, "a seta da pílula não grava nada").toEqual([]);
+});
+
+test("contagem em cinza: a aba Anúncios mostra o número de campanhas que a própria aba carregou e \"—\" antes de abrir", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await mockAnuncios(context, "bom");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/vendas-kommo?preset=30d`);
+  const nav = pasta(page, ORIGEM);
+  await expect(aba(nav, "Por origem")).toHaveAttribute("aria-current", "page");
+  await expect(aba(nav, "Anúncios").locator(".nx-pasta__contagem")).toContainText("—");
+  await expect(aba(nav, "Anúncios").locator(".nx-pasta__contagem")).not.toHaveText(/^0/);
+  await aba(nav, "Anúncios").click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/anuncios`);
+  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first()).not.toHaveAttribute("data-modo", "carregando");
+  // O mock tem 3 campanhas com atividade; o cartão "Investido" diz o mesmo número.
+  await expect(page.locator("[data-juntada] .nx-cartao", { hasText: "Investido" }).locator(".nx-cartao__sub")).toContainText("3 campanhas");
+  await expect(aba(nav, "Anúncios").locator(".nx-pasta__contagem")).toHaveText("3");
+});
+
+for (const variante of ["bom", "suspeito"] as const) {
+  for (const largura of TELAS_DE_MEDIDA) {
+    test(`MEDV-04: Anúncios (rastreio ${variante}) no máximo 1,5 tela em ${largura.width}x${largura.height} com o detalhe fechado`, async ({ page, context }) => {
+      await abrirAnuncios(page, context, "admin", variante, largura);
+      const { altura, janela } = await alturaDaAbaAberta(page);
+      console.log(`altura-origem aba=anuncios-${variante} largura=${largura.width} altura=${Math.round(altura)} janela=${janela} razao=${(altura / janela).toFixed(2)}`);
+      await page.screenshot({ path: `test-results/redesenho/juntada-origem-anuncios${variante === "bom" ? "" : "-rastreio-suspeito"}-${largura.width}.png`, fullPage: true });
+      expect(altura, `anuncios ${variante} a ${largura.width}px: ${Math.round(altura)} px de ${janela} px (${(altura / janela).toFixed(2)}x)`).toBeLessThanOrEqual(LIMITE_DE_ALTURA * janela);
+      expect(await semRolagemLateral(page)).toBe(true);
+    });
+  }
+}
+
+// ===================================================================================================================
+// Plano 04, tarefa 2: Links e Instagram (Conteúdo × Comercial) dentro de 1,5 tela; as 13 abas e partes das 3 telas juntadas
+// do médico, com medida de altura (26 medidas), pílula de ação, ícone redondo e o endereço antigo abrindo a aba certa.
+// ===================================================================================================================
+async function abrirLinks(page: Page, context: BrowserContext, perfil: "viewer" | "admin", variante: "com-links" | "vazio" = "com-links", largura = { width: 1440, height: 900 }) {
+  await mockAccount(context, perfil);
+  await mockLinks(context, variante);
+  await page.setViewportSize(largura);
+  await page.goto(`/${CID}/links?preset=30d`);
+}
+
+for (const perfil of ["viewer", "admin"] as const) {
+  test(`${perfil}: Links abre na pasta com a leitura do link que mais teve conversa, pílula de ação e cartões com ícone redondo`, async ({ page, context }) => {
+    await abrirLinks(page, context, perfil);
+    const nav = pasta(page, ORIGEM);
+    await expect(aba(nav, "Links")).toHaveAttribute("aria-current", "page");
+    await expect(page.locator("[data-juntada] .nx-pagina")).toHaveCount(1);
+    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+    await expect(leitura).toBeVisible();
+    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+    await expect(leitura.getByText("O que aconteceu")).toBeVisible();
+    // mockLinks: 61 conversas nos 4 links, 40 delas no link "Bio principal" (acima da base mínima de 5 conversas).
+    await expect(leitura.getByText(/O link com mais conversas é “Bio principal”/)).toBeVisible();
+    await expect(leitura.locator(".nx-leitura__num", { hasText: "40 de 61 conversas" })).toBeVisible();
+    await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
+    await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
+    await confereIconesDosCartoes(page, "links");
+    await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao")).toHaveCount(4);
+    // A tabela crua virou NxTabela, dentro dos Detalhes.
+    expect(await page.locator("[data-juntada] table").evaluateAll((ts) => ts.filter((x) => !x.closest('[data-peca="tabela"]')).length)).toBe(0);
+    expect(await semRolagemLateral(page)).toBe(true);
+  });
+}
+
+test("Links sem nenhum link criado: \"Sem leitura:\" para a equipe Doctor Creator, e só a equipe vê o Gerador à vista", async ({ page, context }) => {
+  await abrirLinks(page, context, "viewer", "vazio");
+  const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+  await expect(leitura.getByText(/^Sem leitura: ainda não há link rastreado para esta clínica/)).toBeVisible();
+  await expect(leitura.getByText("Quem resolve: Equipe Doctor Creator")).toBeVisible();
+  await expect(page.getByText("A equipe Doctor Creator ainda não criou links rastreados para esta clínica.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Criar link curto" })).toHaveCount(0);
+  await expect(aba(pasta(page, ORIGEM), "Links").locator(".nx-pasta__contagem")).toContainText("—");
+
+  await abrirLinks(page, context, "admin", "vazio");
+  await expect(page.getByRole("heading", { name: "Criar link curto" })).toBeVisible();
+});
+
+test("Links: o médico não vê o botão de criar link nem as edições, e o admin vê o Gerador nos Detalhes", async ({ page, context }) => {
+  await abrirLinks(page, context, "viewer");
+  const detalhes = page.locator("[data-juntada] details#detalhes-links");
+  await detalhes.locator(":scope > summary").click();
+  await expect(detalhes.getByRole("heading", { name: "Todos os links" })).toBeVisible();
+  await expect(detalhes.getByText("Bio principal").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Criar link curto" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Criar link" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Editar nome do link|Editar mensagem|Desativar link/ })).toHaveCount(0);
+});
+
+test("Links: o admin abre os Detalhes e vê o Gerador e as edições", async ({ page, context }) => {
+  await abrirLinks(page, context, "admin");
+  const detalhes = page.locator("[data-juntada] details#detalhes-links");
+  await detalhes.locator(":scope > summary").click();
+  await expect(detalhes.getByRole("heading", { name: "Criar link curto" })).toBeVisible();
+  await expect(detalhes.getByRole("button", { name: "Criar link" })).toBeVisible();
+  await expect(detalhes.getByRole("button", { name: "Editar nome do link" }).first()).toBeVisible();
+});
+
+test("contagem em cinza: a aba Links mostra \"—\" antes de abrir e o número de links que a própria aba lista depois", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await mockLinks(context);
+  await mockCrm(context);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/vendas-kommo?preset=30d`);
+  const nav = pasta(page, ORIGEM);
+  await expect(aba(nav, "Por origem")).toHaveAttribute("aria-current", "page");
+  await expect(aba(nav, "Links").locator(".nx-pasta__contagem")).toContainText("—");
+  await expect(aba(nav, "Links").locator(".nx-pasta__contagem")).not.toHaveText(/^0/);
+  await aba(nav, "Links").click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/links`);
+  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first()).not.toHaveAttribute("data-modo", "carregando");
+  await expect(aba(nav, "Links").locator(".nx-pasta__contagem")).toHaveText("4");
+});
+
+// As abas e partes medidas: a lista vem do registro e a conta fecha com as medidas que cada plano escreveu.
+const PARTES_DAS_3_TELAS = SECOES_JUNTADAS.flatMap((s) => s.abas.flatMap((a) => a.partes.map((p) => p.rota.split("/").pop()!)));
+const SUBS_COM_MEDIDA = [...ABAS_MEDIDAS.map((a) => a.caminho), ...PARTES_DO_CRM.map((p) => p.sub), "anuncios", "conteudo-comercial", "links"];
+
+test("as 13 abas e partes das 3 telas juntadas do médico têm medida de altura, 26 medidas com asserção", () => {
+  expect(PARTES_DAS_3_TELAS).toHaveLength(13);
+  expect([...new Set(SUBS_COM_MEDIDA)].sort()).toEqual([...PARTES_DAS_3_TELAS].sort());
+  expect(SUBS_COM_MEDIDA.length * TELAS_DE_MEDIDA.length).toBe(26);
+});
+
+// Links e Instagram (Conteúdo × Comercial) dentro de 1,5 tela, com o detalhe fechado, nas 2 janelas.
+const MEDIDAS_DO_PLANO_04 = [
+  { rotulo: "Links", sub: "links", slug: "links" },
+  { rotulo: "Instagram (Conteúdo × Comercial)", sub: "conteudo-comercial", slug: "instagram" },
+] as const;
+
+for (const { rotulo, sub, slug } of MEDIDAS_DO_PLANO_04) {
+  for (const largura of TELAS_DE_MEDIDA) {
+    test(`MEDV-04: ${rotulo} no máximo 1,5 tela em ${largura.width}x${largura.height} com o detalhe fechado`, async ({ page, context }) => {
+      await mockAccount(context, "admin");
+      await mockLinks(context);
+      await mockInstagramCompleto(context);
+      await mockCrm(context);
+      await page.setViewportSize(largura);
+      await page.goto(`/${CID}/${sub}?preset=30d`);
+      const { altura, janela } = await alturaDaAbaAberta(page);
+      console.log(`altura-origem aba=${slug} largura=${largura.width} altura=${Math.round(altura)} janela=${janela} razao=${(altura / janela).toFixed(2)}`);
+      await page.screenshot({ path: `test-results/redesenho/juntada-origem-${slug}-${largura.width}.png`, fullPage: true });
+      expect(altura, `${slug} a ${largura.width}px: ${Math.round(altura)} px de ${janela} px (${(altura / janela).toFixed(2)}x)`).toBeLessThanOrEqual(LIMITE_DE_ALTURA * janela);
+      expect(await semRolagemLateral(page)).toBe(true);
+    });
+  }
+}
+
+// Todas as 13 abas e partes: leitura com a pílula de ação e todo cartão com o ícone no círculo (D-07), num laço só.
+for (const sub of PARTES_DAS_3_TELAS) {
+  test(`D-07: /${sub} (aba ou parte das telas juntadas) tem a pílula de ação na leitura e ícone redondo em todo cartão`, async ({ page, context }) => {
+    await mockAccount(context, "viewer");
+    await mockInstagramCompleto(context);
+    await mockAudiencia(context);
+    await mockPessoas(context);
+    await mockCrm(context);
+    await mockAnuncios(context, "bom");
+    await mockLinks(context);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/${CID}/${sub}?preset=30d`);
+    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+    await expect(leitura).toBeVisible();
+    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+    await expect(leitura.locator(".nx-acao-pilula").first(), `/${sub}: sem pílula de ação na leitura`).toBeVisible();
+    const cartoes = page.locator("[data-juntada] .nx-pagina__cartoes > *");
+    const total = await cartoes.count();
+    expect(total).toBeLessThanOrEqual(4);
+    // Consultas e Vendas são telas em construção (sem cartões); todas as outras têm de 1 a 4.
+    if (sub !== "consultas" && sub !== "vendas") expect(total, `/${sub}: sem cartões`).toBeGreaterThanOrEqual(1);
+    for (let i = 0; i < total; i++) {
+      const icone = cartoes.nth(i).locator(".nx-tile, .nx-cartao__icone");
+      await expect(icone, `/${sub}: cartão ${i + 1} sem ícone`).toHaveCount(1);
+      expect(await icone.evaluate((el) => getComputedStyle(el).borderRadius), `/${sub}: ícone do cartão ${i + 1} não é redondo`).toBe("50%");
+    }
+  });
+}
+
+// D-03: o endereço antigo de cada aba de De onde vêm os pacientes abre a pasta com a aba certa e o log grava a rota da aba.
+const ABAS_DE_ORIGEM = [
+  ["Por origem", "vendas-kommo"],
+  ["Instagram", "conteudo-comercial"],
+  ["Anúncios", "anuncios"],
+  ["Links", "links"],
+] as const;
+
+for (const [rotulo, sub] of ABAS_DE_ORIGEM) {
+  test(`D-03: o endereço antigo /${sub} abre De onde vêm os pacientes com a aba ${rotulo} marcada, sem redirecionar, e o log grava a rota da aba`, async ({ page, context }) => {
+    await mockAccount(context, "viewer");
+    await mockInstagramCompleto(context);
+    await mockCrm(context);
+    await mockAnuncios(context, "bom");
+    await mockLinks(context);
+    await ligarLog(context);
+    const posts = capturarPosts(page);
+    const caminhos: string[] = [];
+    page.on("framenavigated", (f) => {
+      if (f === page.mainFrame()) caminhos.push(new URL(f.url()).pathname);
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/${CID}/${sub}?preset=30d`);
+    await expect(aba(pasta(page, ORIGEM), rotulo)).toHaveAttribute("aria-current", "page");
+    await expect(pasta(page, ORIGEM).locator('a[aria-current="page"]')).toHaveCount(1);
+    await expect(page.locator("[data-juntada]")).toHaveAttribute("data-juntada", "origem");
+    await expect.poll(() => posts.find((p) => p.rota === `/_authenticated/$clientId/${sub}`)?.origem).toBe("direto");
+    // Sem redirecionar: o endereço continua o mesmo e nenhum outro caminho foi aberto.
+    expect(new URL(page.url()).pathname).toBe(`/${CID}/${sub}`);
+    expect([...new Set(caminhos)].every((c) => c === `/${CID}/${sub}`)).toBe(true);
+    for (const corpo of posts) {
+      expect(String(corpo.rota)).not.toMatch(/[?#]/);
+      expect(ROTAS_DAS_ABAS.has(String(corpo.rota))).toBe(true);
+    }
+  });
+}

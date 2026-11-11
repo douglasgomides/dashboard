@@ -76,7 +76,8 @@ for (const width of [375, 1440]) {
     await mockInstagram(context);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/conteudo-comercial?preset=30d`);
-    // Aviso fixo na página, com quem resolve.
+    // Aviso fixo, com quem resolve: primeira coisa dos Detalhes (03.1.1-04, régua de 1,5 tela); a leitura do topo repete em "Ver mais".
+    await page.locator(".nx-pagina__detalhe > details > summary").click();
     const aviso = page.locator('[data-peca="aviso"]').filter({ hasText: "Sem leitura: origem por post não medida" });
     await expect(aviso).toBeVisible();
     await expect(aviso.getByText(/Quem resolve: Equipe Doctor Creator/)).toBeVisible();
