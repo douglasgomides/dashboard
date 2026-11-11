@@ -1,15 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { PhasePlaceholder } from "@/components/PhasePlaceholder";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+// Tirada em 11/11/2026 por decisão do João ("tira isso aí, ninguém usa"): o endereço antigo leva a Resultados da clínica com o mesmo período, sem 404. O plano 03.1.1-05 troca o destino pela Hoje.
 export const Route = createFileRoute("/_authenticated/$clientId/automacoes")({
-  component: () => (
-    <PhasePlaceholder
-      phase="Fase 3 — Motor de regras"
-      title="Automações"
-      description={
-        'Construtor de regras SE [métrica/etapa do funil C0–C3] ENTÃO [pausar campanha / realocar orçamento / alertar via WhatsApp]. ' +
-        "Toda ação automática fica registrada em log com o motivo — nunca uma caixa-preta. As ações reais de pausa/orçamento já existem na integração com Meta Ads; esta tela vira o construtor de condições por cima delas."
-      }
-    />
-  ),
+  beforeLoad: ({ params, search }) => {
+    throw redirect({ to: "/$clientId", params: { clientId: params.clientId }, search: search as never });
+  },
 });

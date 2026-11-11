@@ -67,7 +67,6 @@ import {
 } from "@/components/planejador-conteudo";
 import { useClientRole } from "@/hooks/use-client-role";
 import { parseContentViewSearch } from "@/lib/nav";
-import { NxRoteirosProntos } from "@/components/nx/agentes-paineis";
 import { NxAcoesDaIdeia, NxPlanejadorSemana } from "@/components/nx/planejamento";
 
 export const Route = createFileRoute("/_authenticated/$clientId/ideias")({
@@ -733,11 +732,6 @@ function IdeiasPage() {
         {(
           [
             [
-              "roteiros",
-              "Revisar roteiros",
-              "Entregas prontas para a sua revisão",
-            ],
-            [
               "semana",
               "Planejar a semana",
               "Pautas, datas e andamento da produção",
@@ -760,11 +754,6 @@ function IdeiasPage() {
           </button>
         ))}
       </nav>
-      {visao === "roteiros" && (
-        <>
-          <NxRoteirosProntos clientId={clientId} podeEditar={podeEditar} />
-        </>
-      )}
       {visao === "semana" && (
         <NxPlanejadorSemana
           clientId={clientId}
@@ -782,7 +771,8 @@ function IdeiasPage() {
     </div>
   );
 
-  // Roteiros e planejador não dependem da disponibilidade das métricas do Instagram.
+  // O planejador da semana não depende da disponibilidade das métricas do Instagram. A visão Revisar roteiros foi tirada
+  // em 11/11/2026 (decisão do João): ?visao=roteiros e /ideias sem visão abrem Encontrar ideias.
   if (visao !== "ideias") return head;
 
   if (fontes.isLoading)

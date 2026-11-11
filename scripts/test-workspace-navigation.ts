@@ -29,12 +29,6 @@ const paths = (v: Visibilidade) =>
 const esperados = [
   "",
   "/pacientes",
-  "/agentes",
-  "/proximas-acoes",
-  "/plano",
-  "/reunioes",
-  "/campanhas",
-  "/oportunidades",
   "/conteudo",
   "/posts",
   "/top",
@@ -62,7 +56,7 @@ assert.deepEqual(
 assert.equal(new Set(esperados).size, esperados.length);
 assert.deepEqual(
   areasVisiveis(base).map((a) => a.id),
-  ["resumo", "marketing", "comercial", "acoes", "relatorio"],
+  ["resumo", "marketing", "comercial", "relatorio"],
 );
 for (const papel of ["owner", "viewer", "strategist"] as const) {
   const v = { ...base, papel };
@@ -71,11 +65,12 @@ for (const papel of ["owner", "viewer", "strategist"] as const) {
   assert.equal(buscarTelas(v, "configurar").length, 0);
   assert.equal(buscarTelas(v, "SAP").length, 0);
 }
-assert.equal(buscarTelas(base, "criar roteiro")[0]?.tab.path, "/ideias");
+assert.equal(buscarTelas(base, "encontrar ideias")[0]?.tab.path, "/ideias");
 assert.equal(buscarTelas(base, "calendário")[0]?.tab.path, "/ideias");
 assert.equal(buscarTelas(base, "funil")[0]?.tab.path, "/crm-painel");
+// Os agentes e as telas de Plano de ação foram tirados em 11/11/2026 (decisão do João): nem o estrategista acha.
 assert.equal(buscarTelas(base, "agentes").length, 0);
-assert.equal(buscarTelas({ ...base, papel: "strategist" }, "agentes")[0]?.tab.path, "/agentes");
+assert.equal(buscarTelas({ ...base, papel: "strategist" }, "agentes").length, 0);
 assert.equal(buscarTelas(base, "vídeo").length, 0);
 assert.equal(buscarTelas({ ...base, isAdmin: true }, "vídeo")[0]?.tab.path, "/inteligencia-criativa");
 const semFontes = {
@@ -96,11 +91,10 @@ assert.equal(
 );
 assert.deepEqual(paths({ ...base, soCrm: true }), ["/crm-painel"]);
 const clinica = navegacaoClinica(areasVisiveis(base), false);
-assert.deepEqual(clinica.principais.map(a => a.id), ["resumo", "acoes", "relatorio"]);
-assert.equal(clinica.principais[1].visiveis[0].path, "/plano");
+assert.deepEqual(clinica.principais.map(a => a.id), ["resumo", "relatorio"]);
 assert.deepEqual(clinica.detalhes.map(a => a.id), ["marketing", "comercial"]);
 const operadora=navegacaoClinica(areasVisiveis({...base,papel:"owner"}),false);
-assert.deepEqual(operadora.principais.map(a=>a.id),["resumo","comercial","acoes","relatorio"]);
+assert.deepEqual(operadora.principais.map(a=>a.id),["resumo","comercial","relatorio"]);
 assert.equal(operadora.principais[1].label,"Atendimento e CRM");
 assert.equal(paths(base).includes("/central-atendimento"),false,"viewer cannot see patient inbox navigation");
 assert.equal(paths({...semFontes,papel:"owner"}).includes("/central-atendimento"),true,"operator can configure a first channel without an existing feed");
@@ -121,9 +115,9 @@ console.log(
 );
 
 // Marketing reúne conteúdo e aquisição; Comercial reúne CRM e atendimento.
-for (const path of ["/ideias", "/inteligencia-criativa", "/inspiracao", "/conteudo", "/posts", "/top", "/campanhas", "/anuncios", "/links", "/audiencia", "/duvidas"]) assert.equal(areaDoCaminho(path), "marketing", path);
+for (const path of ["/ideias", "/inteligencia-criativa", "/inspiracao", "/conteudo", "/posts", "/top", "/anuncios", "/links", "/audiencia", "/duvidas"]) assert.equal(areaDoCaminho(path), "marketing", path);
 for (const path of ["/crm-painel", "/crm-guia", "/atendimento", "/jornada"]) assert.equal(areaDoCaminho(path), "comercial", path);
-for (const papel of ["owner", "viewer", "strategist", "admin"] as const) assert.deepEqual(areasVisiveis({ ...base, papel, isAdmin: papel === "admin" }).map((a) => a.id), ["resumo", "marketing", "comercial", "acoes", "relatorio"]);
+for (const papel of ["owner", "viewer", "strategist", "admin"] as const) assert.deepEqual(areasVisiveis({ ...base, papel, isAdmin: papel === "admin" }).map((a) => a.id), ["resumo", "marketing", "comercial", "relatorio"]);
 
 const allTabs = AREAS.flatMap((a) => a.tabs);
 assert.equal(new Set(allTabs.map(navTabKey)).size, allTabs.length);
@@ -133,10 +127,14 @@ assert.equal(AVANCADO.some((t) => t.path === "/vendas-kommo"), false);
 for (const papel of ["owner", "viewer", "strategist"] as const) assert.equal(paths({ ...base, papel }).includes("/vendas-kommo"), false);
 assert.equal(paths(admin).includes("/vendas-kommo"), true);
 for (const papel of ["owner", "viewer"] as const) assert.equal(paths({ ...admin, papel }).includes("/vendas-kommo"), false);
-assert.deepEqual(parseContentViewSearch({ visao: "invalida" }), { visao: "roteiros" });
+// Revisar roteiros foi tirada em 11/11/2026: qualquer visão que não seja "semana" abre Encontrar ideias.
+assert.deepEqual(parseContentViewSearch({}), { visao: "ideias" });
+assert.deepEqual(parseContentViewSearch({ visao: "roteiros" }), { visao: "ideias" });
+assert.deepEqual(parseContentViewSearch({ visao: "invalida" }), { visao: "ideias" });
+assert.deepEqual(parseContentViewSearch({ visao: "semana" }), { visao: "semana" });
 assert.equal(buscarTelas(base, "calendário")[0]?.tab.search?.visao, "semana");
 assert.equal(buscarTelas(base, "encontrar ideias")[0]?.tab.search?.visao, "ideias");
-for (const visao of ["roteiros", "semana", "ideias"] as const) {
+for (const visao of ["semana", "ideias"] as const) {
  const tabs = allTabs.filter((t) => t.path === "/ideias");
  assert.equal(tabs.filter((t) => tabAtiva(t, "/ideias", { visao })).length, 1);
  assert.deepEqual(navSearch(tabs.find((t) => t.search?.visao === visao)!, { preset: "7d" }), { preset: "7d", visao });

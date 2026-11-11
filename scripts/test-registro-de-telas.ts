@@ -20,7 +20,7 @@ import {
 import { AREAS, AVANCADO } from "../src/lib/nav";
 
 // Teste do registro único de telas (Phase 3, MENU-01). Confere o registro contra a árvore real do roteador:
-// uma linha por folha, contagem 14/70/3 (D-04), acesso intacto (MENU-07), tiradas com destino (MENU-04), índice da busca
+// uma linha por folha, contagem 14/61/12 (D-04, mudada pelo João em 11/11/2026), acesso intacto (MENU-07), tiradas com destino (MENU-04), índice da busca
 // por papel (D-03, D-09) e a propriedade de que o estrategista só acha telas sem guarda.
 
 // --- Árvore: lida por texto de src/routeTree.gen.ts (não se importa: puxa componentes React) ---
@@ -60,8 +60,8 @@ assert.equal(new Set(R.map(chave)).size, R.length, "rota + busca.visao repetida 
 // --- Contagem (D-04) ---
 const conta = (s: TelaDoRegistro["situacao"]) => R.filter((t) => t.situacao === s).length;
 assert.equal(conta("viva"), 14, "vivas");
-assert.equal(conta("escondida"), 70, "escondidas");
-assert.equal(conta("tirada"), 3, "tiradas (1 rota + 2 atalhos)");
+assert.equal(conta("escondida"), 61, "escondidas");
+assert.equal(conta("tirada"), 12, "tiradas (decisão do João, 11/11/2026: 1 rota de antes + 9 rotas + 2 atalhos)");
 assert.equal(R.length, 87, "total do registro");
 
 // --- SAP congelado (MENU-07) ---
@@ -110,12 +110,12 @@ const arquivoMarketing = await readFile(new URL("../src/routes/_authenticated.$c
 assert.ok(arquivoMarketing.includes('to: "/$clientId/conteudo"'), "o beforeLoad de /marketing não leva mais a /$clientId/conteudo");
 const atalhos = R.filter((t) => t.busca);
 assert.deepEqual(atalhos.map((t) => [t.rotulo, t.busca!.visao, t.situacao, t.destino]).sort(), [
-  ["Encontrar ideias", "ideias", "tirada", "/_authenticated/$clientId/ideias"],
   ["Planejar a semana", "semana", "tirada", "/_authenticated/$clientId/ideias"],
+  ["Revisar roteiros", "roteiros", "tirada", "/_authenticated/$clientId/ideias"],
 ]);
 const ideias = R.find((t) => t.rota === "/_authenticated/$clientId/ideias" && !t.busca)!;
 assert.equal(ideias.situacao, "escondida");
-assert.equal(ideias.rotulo, "Revisar roteiros");
+assert.equal(ideias.rotulo, "Encontrar ideias");
 
 // --- Sem selo ---
 const SEM_SELO = ["", "/pacientes", "/anuncios", "/crm-painel", "/relatorio", "/vendas-kommo"].map((s) => `/_authenticated/$clientId${s || "/"}`);
@@ -132,7 +132,7 @@ const tabs = [...AREAS.flatMap((a) => a.tabs).filter((t) => !t.absoluto), ...AVA
 for (const t of R) {
   if (t.rota.startsWith("/_authenticated/admin/") || ehSap(t.rota) || !t.rota.startsWith("/_authenticated/$clientId/")) continue;
   const sufixo = t.rota.slice("/_authenticated/$clientId".length).replace(/^\/$/, "");
-  const tab = tabs.find((x) => x.path === sufixo && (t.busca ? x.search?.visao === t.busca.visao : !x.search || x.search.visao === "roteiros"));
+  const tab = tabs.find((x) => x.path === sufixo && (t.busca ? x.search?.visao === t.busca.visao : !x.search || x.search.visao === "ideias"));
   if (!tab) continue;
   assert.equal(!!t.somenteAdmin, !!tab.admin, `${chave(t)}: somenteAdmin difere do admin da aba de nav.ts`);
 }
@@ -151,11 +151,11 @@ const desenvolvimento = indiceDaBusca(admin, { desenvolvimento: true });
 const escondidas = (lista: TelaDoRegistro[]) => lista.filter((t) => t.situacao === "escondida").length;
 const vivas = (lista: TelaDoRegistro[]) => lista.filter((t) => t.situacao === "viva").length;
 assert.equal(vivas(producao), 7, "vivas no índice de produção");
-assert.equal(escondidas(producao), 59, "escondidas no índice de produção (D-09)");
-assert.equal(producao.length, 66);
+assert.equal(escondidas(producao), 50, "escondidas no índice de produção (D-09, menos as 9 tiradas em 11/11/2026)");
+assert.equal(producao.length, 57);
 assert.equal(vivas(desenvolvimento), 7, "vivas no índice de desenvolvimento");
-assert.equal(escondidas(desenvolvimento), 60, "escondidas no índice de desenvolvimento (D-09)");
-assert.equal(desenvolvimento.length, 67);
+assert.equal(escondidas(desenvolvimento), 51, "escondidas no índice de desenvolvimento (D-09)");
+assert.equal(desenvolvimento.length, 58);
 assert.deepEqual(desenvolvimento.filter((t) => !producao.includes(t)).map((t) => t.rota), ["/qa/layout"]);
 for (const t of desenvolvimento) {
   assert.notEqual(t.situacao, "tirada", `${chave(t)} (tirada) no índice`);
@@ -214,7 +214,8 @@ assert.deepEqual(buscarTelasEquipe(admin, "   "), []);
 const pacientes = buscarTelasEquipe(admin, "pacientes");
 assert.ok(pacientes.length > 0 && pacientes[0].rotulo.startsWith("Pacientes"), `"pacientes" devolveu primeiro ${pacientes[0]?.rotulo}`);
 assert.equal(buscarTelasEquipe(admin, "PACIÊNTES")[0]?.rotulo, pacientes[0].rotulo, "normalização de acento e caixa");
-for (const consulta of ["planejar a semana", "encontrar ideias", "visão geral de marketing"]) {
+const ROTULOS_TIRADOS_1111 = ["Agentes e entregas", "Plano da semana", "Reuniões", "Prioridades da equipe", "Oportunidades de melhoria", "Automações", "Estratégias e campanhas", "Central de Agentes", "Brand Brain", "Revisar roteiros"];
+for (const consulta of ["planejar a semana", "encontrar ideias", "visão geral de marketing", ...ROTULOS_TIRADOS_1111]) {
   for (const t of buscarTelasEquipe(admin, consulta, { desenvolvimento: true }))
     assert.notEqual(t.situacao, "tirada", `"${consulta}" devolveu a tirada ${chave(t)}`);
 }
@@ -325,7 +326,7 @@ for (const [nome, perfil] of [["admin", { isAdmin: true }], ["estrategista", { i
     }
   }
 }
-assert.equal(telasPorArea({ isAdmin: true }).reduce((n, g) => n + g.telas.length, 0), 66, "Ver todas as telas do admin em produção: 66 (D-09)");
+assert.equal(telasPorArea({ isAdmin: true }).reduce((n, g) => n + g.telas.length, 0), 57, "Ver todas as telas do admin em produção: 57 (D-09, menos as 9 tiradas em 11/11/2026)");
 assert.ok(!telasPorArea({ isAdmin: false, papel: "strategist" }).some((g) => g.area === "SAP"), "estrategista sem grupo SAP");
 
 // Seções da clínica (10/11/2026): mesmas telas da sanfona antiga (telasPorArea só com /$clientId/*), nenhuma a menos.
@@ -349,8 +350,51 @@ for (const perfil of [{ isAdmin: true }, { isAdmin: false, papel: "strategist" a
 }
 assert.deepEqual(
   secoesDaClinica({ isAdmin: true }).map((s) => s.area).slice(0, 5),
-  ["Resultados", "Marketing", "Comercial", "Plano de ação", "Relatórios"],
-  "seções na ordem das áreas",
+  ["Resultados", "Marketing", "Comercial", "Relatórios", "Administração"],
+  "seções na ordem das áreas (sem Plano de ação desde 11/11/2026)",
 );
+
+// --- Tiradas pelo João em 11/11/2026 ("tira isso aí, ninguém usa"): 9 rotas viram só redirecionamento + o atalho Revisar roteiros ---
+const tiradas1111 = R.filter((t) => t.tiradaEm);
+assert.equal(tiradas1111.length, 10, "linhas com tiradaEm");
+assert.equal(tiradas1111.filter((t) => !t.busca).length, 9, "rotas tiradas em 11/11");
+assert.deepEqual(tiradas1111.filter((t) => t.busca).map((t) => t.rotulo), ["Revisar roteiros"], "atalho tirado em 11/11");
+assert.deepEqual(tiradas1111.map((t) => t.rotulo).sort(), [...ROTULOS_TIRADOS_1111].sort(), "rótulos tirados em 11/11");
+const DESTINO_1111: Record<string, string> = {
+  "/_authenticated/$clientId/agentes": "/_authenticated/$clientId/",
+  "/_authenticated/$clientId/plano": "/_authenticated/$clientId/",
+  "/_authenticated/$clientId/reunioes": "/_authenticated/$clientId/",
+  "/_authenticated/$clientId/proximas-acoes": "/_authenticated/$clientId/",
+  "/_authenticated/$clientId/oportunidades": "/_authenticated/$clientId/",
+  "/_authenticated/$clientId/automacoes": "/_authenticated/$clientId/",
+  "/_authenticated/$clientId/campanhas": "/_authenticated/$clientId/",
+  "/_authenticated/admin/agentes": "/_authenticated/admin/",
+  "/_authenticated/admin/brain": "/_authenticated/admin/",
+};
+for (const t of tiradas1111) {
+  assert.equal(t.situacao, "tirada", `${chave(t)}: tiradaEm sem situação tirada`);
+  if (t.busca) {
+    assert.equal(t.destino, "/_authenticated/$clientId/ideias", "Revisar roteiros abre Encontrar ideias");
+    assert.ok(!t.soRedireciona, "o atalho Revisar roteiros não é rota que só redireciona");
+    continue;
+  }
+  assert.equal(t.destino, DESTINO_1111[t.rota], `${t.rota}: destino da tirada de 11/11`);
+  assert.equal(t.soRedireciona, true, `${t.rota}: tirada de 11/11 só redireciona`);
+  // O arquivo da rota só redireciona: throw redirect com o destino certo e nenhum component.
+  const arquivo = t.rota.replace(/^\//, "").replace(/\//g, ".") + ".tsx";
+  const texto = await readFile(new URL(arquivo, pastaRotas), "utf8").catch(() => assert.fail(`arquivo da rota ${arquivo} não existe`));
+  assert.ok(/throw redirect\(/.test(texto), `${arquivo}: sem throw redirect`);
+  assert.ok(!/component:/.test(texto), `${arquivo}: a rota tirada não pode ter component`);
+  const to = t.rota.startsWith("/_authenticated/admin/") ? '"/admin"' : '"/$clientId"';
+  assert.ok(texto.includes(`to: ${to}`), `${arquivo}: o redirect devia ir para ${to}`);
+}
+for (const t of tiradas1111) {
+  for (const [nome, perfil] of [["admin", admin], ["estrategista", estrategista]] as const) {
+    for (const desenvolvimento of [false, true]) {
+      const achadas = buscarTelasEquipe(perfil, t.rotulo, { desenvolvimento }).filter((x) => x.tiradaEm);
+      assert.equal(achadas.length, 0, `${nome} (dev ${desenvolvimento}) achou a tirada "${t.rotulo}" na busca`);
+    }
+  }
+}
 
 console.log("test-registro-de-telas: ok");

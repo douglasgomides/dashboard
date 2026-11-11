@@ -20,7 +20,6 @@ Seção Resultados (03.1-03): as 4 telas estão no molde novo e conferidas em 10
 | /_authenticated/$clientId/ | Avisos de qualidade dos dados | QualidadeDados compacto · cartão Tailwind | NxAviso no detalhe, a partir dos problemas de dado de resultado.r; dado grave também nega a leitura | 03.1-03 |
 | /_authenticated/$clientId/ | Retorno do investimento | RetornoInvestimento · ws-panel e ws-metric | NxCard com NxKpi e NxTag de selo, no detalhe Anúncios e retorno; ROI vira fato só com selo confiável | 03.1-03 |
 | /_authenticated/$clientId/ | Resultados do Instagram | NxCard com 4 NxKpi (seguidores, taxa de interação, salvamentos) | NxCard com 4 NxKpi, no detalhe recolhido | 03.1-03 |
-| /_authenticated/$clientId/ | Acompanhamento do serviço | AcompanhamentoServico · peça congelada do SAP | NxListRow por frente de trabalho, no detalhe | 03.1-03 |
 | /_authenticated/$clientId/ | Prioridade recomendada | NextBestActionPanel · painel azul | saiu: repetia o resumo da clínica (a ação da semana está no resumo) | 03.1-03 |
 | /_authenticated/$clientId/ | O que merece atenção nos resultados | NextBestActionCard · cartão Tailwind | saiu: repetia o resumo; as ações estão em O que fazer nesta semana, no detalhe | 03.1-03 |
 | /_authenticated/$clientId/ | As 8 respostas do diagnóstico | DiagnosticoEstrategico · cartão Tailwind | NxCard por resposta, no detalhe Todas as análises, com evidência e quem resolve | 03.1-03 |
@@ -48,3 +47,11 @@ Seção Resultados (03.1-03): as 4 telas estão no molde novo e conferidas em 10
 | /_authenticated/$clientId/pacientes | Avisos sobre a leitura dos números | CmRecolhido com CmMetodo | NxRecolhido com NxAviso, no detalhe | 03.1-03 |
 | /_authenticated/$clientId/consultas | O que falta para medir as consultas | PhasePlaceholder · cartão Tailwind | NxVazio em construção, com o que falta e quem resolve | 03.1-03 |
 | /_authenticated/$clientId/vendas | O que falta para medir as vendas | PhasePlaceholder · cartão Tailwind | NxVazio em construção, com o que falta e quem resolve | 03.1-03 |
+
+## Tiradas (João 11/11)
+
+Decisão do João em 11/11/2026 ("tira isso aí, ninguém usa"): estas telas e blocos saíram do Nexo, e o endereço antigo redireciona, sem 404. Vai para "—" quer dizer que só o bloco saiu e a tela continua.
+
+| Rota | Tela ou bloco | Situação | Vai para |
+|---|---|---|---|
+| /_authenticated/$clientId/ | Acompanhamento do serviço | tirada (João 11/11) | — |
