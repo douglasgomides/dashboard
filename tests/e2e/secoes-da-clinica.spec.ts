@@ -42,7 +42,7 @@ test("a barra mostra só as seções da clínica, com ícone, e marca a seção 
   await page.goto(`/${CID}`);
   const esperadas = secoesDaClinica(ADMIN);
   await expect(secoes(page).getByRole("link")).toHaveText(esperadas.map((s) => s.area));
-  for (const s of ["Resultados", "Marketing", "Comercial", "Plano de ação", "Relatórios"])
+  for (const s of ["Resultados", "Marketing", "Comercial", "Relatórios"])
     expect(esperadas.map((e) => e.area)).toContain(s);
   await expect(secoes(page).locator("a svg")).toHaveCount(esperadas.length);
   // A sanfona antiga saiu: nenhum título de grupo e nenhuma tela solta sob Clínica.

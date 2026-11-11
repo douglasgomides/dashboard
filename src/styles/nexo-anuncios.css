@@ -132,6 +132,8 @@
 .nexo-mkt .nx-hb__linha { flex-wrap: wrap; row-gap: 2px; }
 .nexo-mkt .nx-hb__linha > span:first-child { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 .nexo-mkt .nx-hb__linha em { font-weight: 500; white-space: normal; margin-left: auto; text-align: right; }
+/* "· 0 anúncios" ao lado do número: o azul da barra dava 4,14:1 sobre branco; texto de apoio usa a cor de apoio (AA). */
+.nexo-mkt .nx-hb__linha em small { color: var(--muted-ink); }
 
 /* Botões de ação do topo (sync) alinhados com o cartão. */
 .nexo-mkt .nx-detalhes-titulo { margin-top: 6px; }
