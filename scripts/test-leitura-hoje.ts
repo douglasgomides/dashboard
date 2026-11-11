@@ -10,6 +10,7 @@ import { avaliarRastreio } from "../src/lib/rastreio-anuncios";
 import { REGISTRO_DE_TELAS } from "../src/lib/registro-de-telas";
 import type { Insight } from "../src/lib/insight";
 import { fatosDeResultadosComAreas } from "../src/lib/leitura/fatos-resultados";
+import { fatosDePublicacoes } from "../src/lib/leitura/fatos-instagram";
 import { resumirClinica } from "../src/lib/leitura/resumo-clinica";
 import { checarTextoDaLeitura, montarTexto, problemasDoTexto } from "../src/lib/leitura/texto";
 import type { Fato, FatosDaTela, PassoFato, TomFato } from "../src/lib/leitura/tipos";
@@ -32,7 +33,7 @@ import {
 import { leads, ig, ads, posts, adsCampanhas } from "./fixtures/lana-2026-10";
 
 const C = "/_authenticated/$clientId";
-assert.equal(VERSAO_REGRAS_HOJE, 1);
+assert.equal(VERSAO_REGRAS_HOJE, 2);
 
 // ---------- fixture da Lana (a mesma de test-leitura-resultados.ts) ----------
 const START = "2026-09-13", END = "2026-10-12", HOJE = "2026-10-14";
@@ -294,13 +295,66 @@ if (hLana.tipo === "acoes") {
 // ---------- saudação ----------
 for (const [hora, esperado] of [[0, "Boa noite"], [4, "Boa noite"], [5, "Bom dia"], [11, "Bom dia"], [12, "Boa tarde"], [17, "Boa tarde"], [18, "Boa noite"], [23, "Boa noite"]] as const)
   assert.equal(saudacaoDaHora(hora), esperado, `${hora} h`);
+// O nome só aparece quando clients.name já começa por título de médico (palavra inteira); nome de clínica nunca é usado nem cortado.
 assert.equal(nomeDaSaudacao("Dra. Lana Ribeiro"), "Dra. Lana");
-assert.equal(nomeDaSaudacao("Lana"), "Lana");
-assert.equal(nomeDaSaudacao("  Clínica   Boa Vida  Ltda "), "Clínica Boa");
-assert.equal(nomeDaSaudacao(""), null);
-assert.equal(nomeDaSaudacao("   "), null);
-assert.equal(nomeDaSaudacao(null), null);
-assert.equal(nomeDaSaudacao(undefined), null);
+assert.equal(nomeDaSaudacao("Dr. João Pedro Alves"), "Dr. João");
+assert.equal(nomeDaSaudacao("dra Lana"), "dra Lana", "título como foi escrito, sem diferença de maiúscula");
+assert.equal(nomeDaSaudacao("  Doutora   Ana Maria "), "Doutora Ana");
+assert.equal(nomeDaSaudacao("Doutor Pedro"), "Doutor Pedro");
+for (const nome of ["Clínica de teste", "Clínica de Dermatologia Avançada e Estética Integrada Ltda", "  Clínica   Boa Vida  Ltda ", "Lana", "Drauzio Varella", "Dra.", "Dr", "Dra.Lana", "", "   ", null, undefined])
+  assert.equal(nomeDaSaudacao(nome), null, `nomeDaSaudacao(${JSON.stringify(nome)}) tem de ser null`);
+
+// ---------- "Para a equipe": o passo soEquipe nunca chega ao médico ----------
+const comEquipe = acoesDaHoje(sintetica(
+  [fato("a", "ruim", 3), fato("eq", "atencao", 3), fato("b", "bom", 2)],
+  [passo("a"), passo("eq", { texto: "o tema dos posts sem classificação", soEquipe: true }), passo("b")],
+));
+assert.equal(comEquipe.tipo, "acoes");
+if (comEquipe.tipo === "acoes") {
+  assert.ok(!ids(comEquipe).includes("eq"), "a ação da equipe não está em proxima nem em outras");
+  assert.deepEqual(comEquipe.paraEquipe.map((a) => a.id), ["eq"]);
+  assert.ok(comEquipe.paraEquipe.every((a) => a.soEquipe === true));
+  assert.ok(acoes(comEquipe).every((a) => a.soEquipe === false));
+  assert.equal(comEquipe.aviso, "Poucas ações nesta semana: as leituras deste período pediram só 2 ações.", "o aviso conta só as ações do médico");
+}
+// Quando a Ação da semana é de arrumação da equipe, o Próximo é a primeira ação do médico (não fica vazio, não usa a da equipe).
+const semanaDaEquipe = acoesDaHoje(sintetica(
+  [fato("eq", "ruim", 3), fato("x", "atencao", 2), fato("y", "ruim", 2)],
+  [passo("eq", { soEquipe: true }), passo("x"), passo("y")],
+));
+if (semanaDaEquipe.tipo === "acoes") {
+  assert.equal(semanaDaEquipe.proxima?.id, "y", "o Próximo é a primeira ação do médico");
+  assert.deepEqual(semanaDaEquipe.paraEquipe.map((a) => a.id), ["eq"]);
+}
+// Só arrumação da equipe: o Próximo fica vazio e o aviso diz que não houve ação.
+const soDaEquipe = acoesDaHoje(sintetica([fato("eq", "ruim", 3)], [passo("eq", { soEquipe: true })]));
+if (soDaEquipe.tipo === "acoes") {
+  assert.equal(soDaEquipe.proxima, null);
+  assert.deepEqual(soDaEquipe.outras, []);
+  assert.equal(soDaEquipe.paraEquipe.length, 1);
+  assert.equal(soDaEquipe.aviso, "Poucas ações nesta semana: as leituras deste período não pediram nenhuma ação.");
+}
+// paraEquipe: no máximo 3, sem repetir id nem frase; houveExcluidas não vem de passo da equipe.
+const muitasDaEquipe = acoesDaHoje(sintetica(
+  ["e1", "e2", "e3", "e4", "e5"].map((id) => fato(id, "atencao", 1)),
+  [passo("e1", { texto: "a mesma frase", soEquipe: true }), passo("e2", { texto: "a mesma frase", soEquipe: true }), passo("e3", { soEquipe: true }), passo("e4", { soEquipe: true }), passo("e5", { soEquipe: true })],
+));
+if (muitasDaEquipe.tipo === "acoes") {
+  assert.deepEqual(muitasDaEquipe.paraEquipe.map((a) => a.id), ["e1", "e3", "e4"], "no máximo 3, sem frase repetida");
+  assert.ok(!muitasDaEquipe.aviso?.includes("selo"), "passo da equipe não liga o motivo dos números sem selo");
+}
+// A fixture da Lana com 30 posts sem tema (como nos mocks do e2e): posts-sem-tema fica em paraEquipe e fora da lista.
+const FORMATOS = ["reels", "carrossel", "estatico"];
+const postsSemTema = Array.from({ length: 30 }, (_, i) => ({
+  format: FORMATOS[i % 3], posted_at: `2026-10-${String(2 + (i % 10)).padStart(2, "0")}T15:00:00Z`, reach: 800 + i * 40, saved: 5 + (i % 6), tema: null,
+}));
+const comPosts = acoesDaHoje(entradaDaLana({ extras: [{ tela: "posts", rota: `${C}/posts`, fatos: fatosDePublicacoes({ de: START, ate: END, hoje: HOJE, posts: postsSemTema }) }] }));
+assert.equal(comPosts.tipo, "acoes");
+if (comPosts.tipo === "acoes") {
+  assert.ok(!ids(comPosts).includes("posts-sem-tema"), "posts-sem-tema fora da lista do médico");
+  assert.ok(comPosts.paraEquipe.some((a) => a.id === "posts-sem-tema"), "posts-sem-tema em paraEquipe");
+  assert.ok(comPosts.paraEquipe.length <= 3);
+}
 
 // ---------- o módulo é puro: sem banco, sem consulta e sem IA (D-05) ----------
 const fonte = readFileSync(new URL("../src/lib/leitura/fatos-hoje.ts", import.meta.url), "utf8");

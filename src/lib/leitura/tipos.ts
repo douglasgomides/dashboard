@@ -69,6 +69,8 @@ export interface PassoFato {
   motivo?: string;
   /** Fato que sustenta o passo. */
   fatoId?: string;
+  /** Arrumação interna do dado, feita pela equipe: a tela Hoje não mostra para o médico (só numa linha "Para a equipe"). */
+  soEquipe?: boolean;
 }
 
 export type CodigoNegacao = "sem_dado" | "fonte_parada" | "rastreio_suspeito" | "selo_ilegivel" | "funil_fora_de_ordem" | "erro_de_dado" | "amostra_pequena";

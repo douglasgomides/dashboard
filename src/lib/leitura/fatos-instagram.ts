@@ -401,7 +401,7 @@ export function fatosDePublicacoes(e: EntradaFatosPublicacoes): FatosDaTela {
     };
     fatos.push(fato);
     passos.push({
-      passo: { verbo: "corrigir", texto: "o tema dos posts que estão sem classificação", quem: "social_media", motivo: "Sem tema, não dá para comparar os assuntos.", fatoId: fato.id },
+      passo: { verbo: "corrigir", texto: "o tema dos posts que estão sem classificação", quem: "social_media", motivo: "Sem tema, não dá para comparar os assuntos.", fatoId: fato.id, soEquipe: true },
       tom: "atencao",
       peso: 1,
     });
@@ -552,6 +552,7 @@ export function guardaOrigemPorPost(entrada?: EntradaOrigemPorPost | null): Guar
       quem: "equipe_hub",
       motivo: "Sem isso, a tela não diz qual post originou cada conversa.",
       fatoId: "origem-por-post",
+      soEquipe: true,
     },
   };
 }

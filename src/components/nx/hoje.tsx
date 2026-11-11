@@ -1,6 +1,7 @@
 import type { DateRangeState } from "@/lib/date-range";
 import { horaEmSaoPaulo, nomeDaSaudacao, saudacaoDaHora, type AcaoDaHoje } from "@/lib/leitura/fatos-hoje";
 import type { TomFato } from "@/lib/leitura/tipos";
+import { LinkDoRegistro } from "@/components/menu-equipe";
 import { REGISTRO_DE_TELAS, juntadaDoCaminho, type TelaDoRegistro } from "@/lib/registro-de-telas";
 import { NxAcaoPilula, NxCartaoNumero } from "./cartoes";
 import "@/styles/nexo-hoje.css";
@@ -114,5 +115,36 @@ export function NxCartaoDaAcao({ acao, clientId, dateRange }: { acao: AcaoDaHoje
         acao={<NxAcaoPilula frase={acao.frase} rotuloDaSeta="Abrir a aba de origem" para={linha ? { tela: linha, clientId, dateRange } : undefined} />}
       />
     </div>
+  );
+}
+
+// ---------- Para a equipe ----------
+
+/**
+ * Linha pequena só para a equipe (admin e estrategista): arrumação interna do dado, que o médico não precisa ver. Quem monta a
+ * peça é a rota, e só para a equipe: para o médico o componente nem é montado. Cada item é um link para a aba de origem (nada grava).
+ */
+export function NxParaEquipe({ acoes, clientId, dateRange }: { acoes: AcaoDaHoje[] } & Destino) {
+  return (
+    <p className="nx-hoje__equipe" data-peca="para-equipe">
+      <span>Para a equipe:</span>{" "}
+      {acoes.map((a, k) => {
+        const linha = linhaDaRota(a.rota);
+        return (
+          <span key={a.id}>
+            {k > 0 && " · "}
+            <span data-acao-equipe={a.id}>
+              {linha ? (
+                <LinkDoRegistro tela={linha} clientId={clientId} dateRange={dateRange} className="nx-hoje__equipe-link">
+                  {a.frase}
+                </LinkDoRegistro>
+              ) : (
+                a.frase
+              )}
+            </span>
+          </span>
+        );
+      })}
+    </p>
   );
 }

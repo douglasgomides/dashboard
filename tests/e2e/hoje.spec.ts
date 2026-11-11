@@ -1,5 +1,5 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
-import { CID, mockAccount } from "./fixtures";
+import { CID, client, mockAccount } from "./fixtures";
 import { REGISTRO_DE_TELAS, SECOES_JUNTADAS } from "../../src/lib/registro-de-telas";
 import { GUARDA_DE_NUMERO_DA_HOJE, GUARDA_DE_TEXTO_DA_HOJE } from "../../src/lib/leitura/fatos-hoje";
 import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, mockCrm, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
@@ -272,18 +272,55 @@ test("(h) o ↗ leva à primeira aba da tela juntada e a seta da pílula leva à
   await expect.poll(() => new URL(page.url()).pathname).toBe(hrefSeta.pathname);
 });
 
-test("(i) a saudação é Bom dia, Boa tarde ou Boa noite, com o nome da clínica em cinza mais claro", async ({ page, context }) => {
+/** Troca só o nome do cliente (clients.name) devolvido pela leitura de clients, como a fixture faz. */
+async function comNomeDaClinica(context: BrowserContext, name: string) {
+  await context.route("http://localhost:9/rest/v1/clients**", (r) => {
+    const unico = (r.request().headers()["accept"] ?? "").includes("vnd.pgrst.object");
+    const c = { ...client, name };
+    return r.fulfill({ json: unico ? c : [c] });
+  });
+}
+
+const SAUDACAO = /^(Bom dia|Boa tarde|Boa noite)$/;
+
+test("(i) a saudação é só Bom dia, Boa tarde ou Boa noite: nunca usa o nome da clínica", async ({ page, context }) => {
   await mockAccount(context, "viewer");
   await dadosRealistas(context);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}/hoje?preset=30d`);
   const saudacao = page.locator('[data-tela="hoje"] h1.nx-pagina__saudacao');
   await expect(saudacao).toBeVisible();
-  await expect(saudacao).toHaveText(/^(Bom dia|Boa tarde|Boa noite)(, .+)?$/);
-  await expect(saudacao.locator(".nx-hoje__nome")).toHaveText("Clínica de");
-  const cor = await saudacao.evaluate((el) => ({ h1: getComputedStyle(el).color, nome: getComputedStyle(el.querySelector(".nx-hoje__nome")!).color, peso: Number(getComputedStyle(el).fontWeight) }));
+  await expect(saudacao).toHaveText(SAUDACAO);
+  await expect(saudacao.locator(".nx-hoje__nome")).toHaveCount(0);
+  const peso = await saudacao.evaluate((el) => Number(getComputedStyle(el).fontWeight));
+  expect(peso).toBeGreaterThanOrEqual(500);
+});
+
+test("(i2) saudação com nome longo de clínica e sem nome de médico: só a saudação, sem cortar o nome", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await dadosRealistas(context);
+  await comNomeDaClinica(context, "Clínica de Dermatologia Avançada e Estética Integrada Ltda");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/hoje?preset=30d`);
+  const saudacao = page.locator('[data-tela="hoje"] h1.nx-pagina__saudacao');
+  await expect(saudacao).toBeVisible();
+  await expect(saudacao).toHaveText(SAUDACAO);
+  await expect(saudacao).not.toContainText("Clínica");
+  await expect(saudacao.locator(".nx-hoje__nome")).toHaveCount(0);
+});
+
+test("(i3) saudação com nome de médico: o título e o primeiro nome inteiros, em cinza mais claro", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await dadosRealistas(context);
+  await comNomeDaClinica(context, "Dra. Lana Ribeiro");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/hoje?preset=30d`);
+  const saudacao = page.locator('[data-tela="hoje"] h1.nx-pagina__saudacao');
+  await expect(saudacao).toBeVisible();
+  await expect(saudacao).toHaveText(/^(Bom dia|Boa tarde|Boa noite), Dra\. Lana$/);
+  await expect(saudacao.locator(".nx-hoje__nome")).toHaveText("Dra. Lana");
+  const cor = await saudacao.evaluate((el) => ({ h1: getComputedStyle(el).color, nome: getComputedStyle(el.querySelector(".nx-hoje__nome")!).color }));
   expect(cor.nome, "o nome é mais claro que a saudação").not.toBe(cor.h1);
-  expect(cor.peso).toBeGreaterThanOrEqual(500);
 });
 
 test("(j) todo cartão de ação tem o ícone num círculo e os chips de contexto aparecem", async ({ page, context }) => {
@@ -334,3 +371,34 @@ test("a Hoje mostra o estado das fontes com bolinha: âmbar com mais de 1 dia", 
   await expect(crm).toHaveAttribute("aria-label", /^CRM até \d{2}\/\d{2}, às \d{2}:\d{2}$/);
   expect(await crm.locator(".nx-chip-estado__bolinha").evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe(await ig.locator(".nx-chip-estado__bolinha").evaluate((el) => getComputedStyle(el).backgroundColor));
 });
+
+// ---------- Para a equipe: a arrumação interna do dado só aparece para admin e estrategista ----------
+
+for (const perfil of ["viewer", "strategist", "admin"] as const) {
+  test(`(n) Para a equipe: ${perfil} ${perfil === "viewer" ? "não vê a tarefa interna" : "vê a tarefa interna só na linha pequena"}`, async ({ page, context }) => {
+    await mockAccount(context, perfil);
+    await dadosRealistas(context);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/${CID}/hoje?preset=30d`);
+    await expect(acoes(page).first()).toBeVisible();
+    const tela = page.locator('[data-tela="hoje"]');
+
+    // Nos 3 perfis a tarefa interna nunca é uma ação da lista do médico.
+    await expect(page.locator('[data-acao-hoje="posts-sem-tema"]')).toHaveCount(0);
+    if (perfil === "viewer") {
+      await expect(page.locator('[data-peca="para-equipe"]')).toHaveCount(0);
+      await expect(page.locator("[data-acao-equipe]")).toHaveCount(0);
+      const texto = await tela.innerText();
+      expect(texto).not.toContain("Para a equipe");
+      expect(texto).not.toContain("sem classificação");
+    } else {
+      await expect(page.locator('[data-peca="para-equipe"]')).toBeVisible();
+      const item = page.locator('[data-acao-equipe="posts-sem-tema"]');
+      await expect(item).toHaveCount(1);
+      const href = (await item.locator("a").getAttribute("href"))!;
+      const url = new URL(href, "http://x");
+      expect(url.pathname).toBe(`/${CID}/posts`);
+      expect(url.searchParams.get("preset")).toBe("30d");
+    }
+  });
+}

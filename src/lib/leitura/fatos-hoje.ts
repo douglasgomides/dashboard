@@ -17,10 +17,13 @@ import { checarTextoDaLeitura, frasePasso, montarTexto } from "./texto";
 import type { Fato, FatosDaTela, Numeral, PassoFato, PassoTexto, TelaId, TomFato, VerboPasso } from "./tipos";
 
 /** Muda quando uma regra da Hoje muda. */
-export const VERSAO_REGRAS_HOJE = 1;
+export const VERSAO_REGRAS_HOJE = 2;
 
 /** Quantas ações a Hoje mostra, no máximo (D-01: de 3 a 5). */
 const MAXIMO_DE_ACOES = 5;
+
+/** Quantas ações da equipe a linha "Para a equipe" mostra, no máximo. */
+const MAXIMO_PARA_EQUIPE = 3;
 
 const C = "/_authenticated/$clientId";
 
@@ -124,11 +127,13 @@ export interface AcaoDaHoje {
   rota: string;
   area?: Area;
   tela: TelaId;
+  /** Arrumação interna da equipe (PassoFato.soEquipe): nunca vai para o médico; só para a linha "Para a equipe". */
+  soEquipe: boolean;
 }
 
 export type HojeDaClinica =
   | { tipo: "sem_leitura"; motivo: string; passo: PassoTexto }
-  | { tipo: "acoes"; proxima: AcaoDaHoje | null; outras: AcaoDaHoje[]; aviso: string | null };
+  | { tipo: "acoes"; proxima: AcaoDaHoje | null; outras: AcaoDaHoje[]; paraEquipe: AcaoDaHoje[]; aviso: string | null };
 
 // ---------- destino de cada ação ----------
 
@@ -252,6 +257,7 @@ function acaoDaCandidata(c: Candidata): AcaoDaHoje | null {
     rota: rotaDoRegistro(c.rotaDoInsight) ?? c.rotaPadrao,
     area: c.area,
     tela: c.tela,
+    soEquipe: c.passo.soEquipe === true,
   };
 }
 
@@ -283,24 +289,32 @@ export function acoesDaHoje(e: EntradaHoje): HojeDaClinica {
   const daSemana = fraseDaSemana ? ordenadas.find(({ c, acao }) => c.fonte === 0 && acao.frase === fraseDaSemana) : undefined;
   const emOrdem = daSemana ? [daSemana, ...ordenadas.filter((x) => x !== daSemana)] : ordenadas;
 
-  // Mesma frase ou mesmo fato viram uma só (fica a melhor colocada).
-  const frases = new Set<string>();
-  const ids = new Set<string>();
-  const unicas = emOrdem.filter(({ acao }) => {
-    if (frases.has(acao.frase) || ids.has(acao.id)) return false;
-    frases.add(acao.frase);
-    ids.add(acao.id);
-    return true;
-  });
+  // As ações da equipe (arrumação interna do dado) saem da lista do médico: a Ação da semana e o Próximo só vêm das do médico.
+  const doMedico = emOrdem.filter(({ acao }) => !acao.soEquipe);
+  const daEquipe = emOrdem.filter(({ acao }) => acao.soEquipe);
 
-  const escolhidas = unicas.slice(0, MAXIMO_DE_ACOES);
+  // Mesma frase ou mesmo fato viram uma só em cada lista (fica a melhor colocada).
+  const semRepeticao = (lista: typeof emOrdem) => {
+    const frases = new Set<string>();
+    const ids = new Set<string>();
+    return lista.filter(({ acao }) => {
+      if (frases.has(acao.frase) || ids.has(acao.id)) return false;
+      frases.add(acao.frase);
+      ids.add(acao.id);
+      return true;
+    });
+  };
+
+  const escolhidas = semRepeticao(doMedico).slice(0, MAXIMO_DE_ACOES);
   const [proxima, ...outras] = escolhidas.map((x) => x.acao);
+  const paraEquipe = semRepeticao(daEquipe).slice(0, MAXIMO_PARA_EQUIPE).map((x) => x.acao);
 
+  // houveExcluidas vem só de excluido(): passo da equipe não liga o motivo "dependem de números que ainda não têm selo".
   const aviso = avisoDePoucasAcoes(escolhidas.length, {
     fontes: e.fontes,
     houveExcluidas: candidatas.some((c) => excluido(c.fato)),
   });
-  return { tipo: "acoes", proxima: proxima ?? null, outras, aviso };
+  return { tipo: "acoes", proxima: proxima ?? null, outras, paraEquipe, aviso };
 }
 
 // ---------- aviso de poucas ações ----------
@@ -338,10 +352,15 @@ export function saudacaoDaHora(hora: number): "Bom dia" | "Boa tarde" | "Boa noi
   return hora >= 5 && hora < 12 ? "Bom dia" : hora >= 12 && hora < 18 ? "Boa tarde" : "Boa noite";
 }
 
-/** Até as 2 primeiras palavras do nome cadastrado ("Dra. Lana Ribeiro" vira "Dra. Lana"); sem nome, null. */
+/**
+ * O nome que a saudação usa. clients.name é o nome da CLÍNICA e o app não guarda o nome do médico sem consulta nova, então a
+ * saudação só diz um nome quando o texto já começa por título de médico (Dr, Dr., Dra, Dra., Doutor, Doutora, palavra inteira):
+ * devolve o título como foi escrito mais o primeiro nome inteiro ("Dra. Lana Ribeiro" vira "Dra. Lana"). Em qualquer outro
+ * caso (nome de clínica, só um nome, só o título, vazio), null: a saudação fica só em "Bom dia". Nunca corta no meio do nome.
+ */
 export function nomeDaSaudacao(nome: string | null | undefined): string | null {
-  const palavras = (nome ?? "").trim().split(/\s+/).filter(Boolean);
-  return palavras.length ? palavras.slice(0, 2).join(" ") : null;
+  const m = /^(Dra?\.?|Doutora?)\s+(\p{L}[\p{L}'’-]*)/iu.exec((nome ?? "").trim().replace(/\s+/g, " "));
+  return m ? `${m[1]} ${m[2]}` : null;
 }
 
 /** Hora cheia (0 a 23) em São Paulo. */
