@@ -8,6 +8,7 @@ import { fonteOk, type Fonte, type Fontes } from "@/lib/nav";
 import {
   buscarTelasEquipe,
   linkDaTela,
+  secaoDaTela,
   telasPorArea,
   type GrupoDeTelas,
   type PerfilEquipe,
@@ -105,11 +106,15 @@ export function BuscaDeTelas({ aberto, onAbrir, onFechar, perfil, clientId, date
     const link = linkDaTela(tela, clientId);
     const semClinica = !link;
     const faltaFonte = !!fontes && !fonteOk(tela.fonte, fontes);
+    // 03.1.1-08 (D-03): a tela que mora numa pasta diz onde ela mora hoje ("Onde os pacientes travam › Funil"); as telas sem pasta
+    // (Carteira, Integrações, as telas únicas) continuam com a área antiga. O texto é só rótulo público do registro.
+    const lugar = secaoDaTela(tela);
+    const ondeMora = lugar && lugar.secao.abas.length > 1 ? `${lugar.secao.rotulo} › ${lugar.aba.rotulo}` : tela.area;
     const apoio = semClinica
       ? "Escolha uma clínica primeiro"
       : faltaFonte && tela.fonte
         ? `Sem ${NOME_DA_FONTE[tela.fonte]} nesta clínica`
-        : [tela.area, tela.descricao].filter(Boolean).join(" · ");
+        : [ondeMora, tela.descricao].filter(Boolean).join(" · ");
     const search = link?.params ? { ...(dateRange ?? {}), ...(link.search ?? {}) } : link?.search;
     return (
       <Link

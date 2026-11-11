@@ -329,30 +329,69 @@ for (const [nome, perfil] of [["admin", { isAdmin: true }], ["estrategista", { i
 assert.equal(telasPorArea({ isAdmin: true }).reduce((n, g) => n + g.telas.length, 0), 58, "Ver todas as telas do admin em produção: 58 (D-09, menos as 9 tiradas em 11/11/2026, mais a Hoje)");
 assert.ok(!telasPorArea({ isAdmin: false, papel: "strategist" }).some((g) => g.area === "SAP"), "estrategista sem grupo SAP");
 
-// Seções da clínica (10/11/2026): mesmas telas da sanfona antiga (telasPorArea só com /$clientId/*), nenhuma a menos.
-for (const perfil of [{ isAdmin: true }, { isAdmin: false, papel: "strategist" as const }]) {
+// Seções da clínica da equipe (03.1.1-08, D-02 com a emenda de 11/11/2026): 9 seções na ordem aprovada, nenhuma tela a menos.
+const ROTULOS_DAS_SECOES = [
+  "O que fazer hoje", "Resultados da clínica", "Onde os pacientes travam", "De onde vêm os pacientes", "Instagram",
+  "Relatório do período", "Conteúdo", "Atendimento", "Configurar CRM",
+];
+const CLINICA_DE_TESTE = "11111111-1111-4111-8111-111111111111";
+const SUB = (t: TelaDoRegistro) => t.rota.slice("/_authenticated/$clientId".length).replace(/\/+$/, "");
+for (const [nome, perfil] of [["admin", { isAdmin: true }], ["estrategista", { isAdmin: false, papel: "strategist" as const }]] as const) {
   for (const desenvolvimento of [false, true]) {
-    const sanfona = telasPorArea(perfil, { desenvolvimento }).flatMap((g) => g.telas).filter((t) => t.rota.startsWith("/_authenticated/$clientId/"));
+    const rotulo = `${nome} (dev ${desenvolvimento})`;
     const secoes = secoesDaClinica(perfil, { desenvolvimento });
-    assert.deepEqual(secoes.flatMap((s) => s.telas), sanfona, "seções da clínica = telas da sanfona antiga");
+    const daClinica = indiceDaBusca(perfil, { desenvolvimento }).filter((t) => t.rota.startsWith("/_authenticated/$clientId/"));
+    // Nada some: toda tela /$clientId/* do índice da busca está em exatamente UMA seção (MEDV-01, T-03.1.1-20).
+    for (const t of daClinica) {
+      const donas = secoes.filter((s) => s.telas.includes(t));
+      assert.equal(donas.length, 1, `${rotulo}: ${t.rota} devia estar em exatamente uma seção, está em ${donas.length}`);
+    }
+    // Toda tela de seção é linha do registro que não é tirada, e nenhuma tirada de 11/11 entra em seção.
     for (const s of secoes) {
-      assert.equal(s.primeira, s.telas[0], `${s.area}: o link da seção leva à primeira tela`);
       for (const t of s.telas) {
-        const sub = t.rota.slice("/_authenticated/$clientId".length).replace(/\/+$/, "");
-        const achada = secaoDoCaminho(secoes, `/11111111-1111-4111-8111-111111111111${sub}/`);
-        assert.equal(achada?.secao.area, s.area, `${t.rota} cai na seção ${s.area}`);
-        assert.equal(achada?.tela, t, `${t.rota} é a aba atual`);
+        assert.ok(R.includes(t), `${rotulo}: ${s.id}: tela fora do registro`);
+        assert.notEqual(t.situacao, "tirada", `${rotulo}: ${t.rota} é tirada e está na seção ${s.id}`);
+        assert.ok(!t.tiradaEm, `${rotulo}: tirada de 11/11 na seção ${s.id}`);
+      }
+      assert.equal(s.primeira, s.telas[0], `${rotulo}: ${s.id}: o link da seção leva à primeira tela`);
+      assert.equal(new Set(s.telas).size, s.telas.length, `${rotulo}: ${s.id}: tela repetida na seção`);
+      // Tela única não tem pasta; seção com pasta tem abas e as telas são as partes das abas.
+      if (s.abas.length === 0) assert.equal(s.telas.length, 1, `${rotulo}: ${s.id}: seção sem abas é tela única`);
+      else assert.deepEqual(s.telas.map((t) => t.rota), s.abas.flatMap((a) => a.partes.map((p) => p.rota)), `${rotulo}: ${s.id}: telas = partes das abas`);
+      for (const t of s.telas) {
+        const achada = secaoDoCaminho(secoes, `/${CLINICA_DE_TESTE}${SUB(t)}/`);
+        assert.equal(achada?.secao.id, s.id, `${rotulo}: ${t.rota} cai na seção ${s.id}`);
+        assert.equal(achada?.tela, t, `${rotulo}: ${t.rota} é a aba atual`);
       }
     }
-    for (const fora of ["/admin", "/admin/conferencia", "/admin/11111111-1111-4111-8111-111111111111", "/sap/11111111-1111-4111-8111-111111111111"])
-      assert.equal(secaoDoCaminho(secoes, fora), null, `${fora} não tem abas`);
+    for (const fora of ["/admin", "/admin/conferencia", `/admin/${CLINICA_DE_TESTE}`, `/sap/${CLINICA_DE_TESTE}`])
+      assert.equal(secaoDoCaminho(secoes, fora), null, `${fora} não tem seção`);
   }
 }
-assert.deepEqual(
-  secoesDaClinica({ isAdmin: true }).map((s) => s.area).slice(0, 5),
-  ["Resultados", "Marketing", "Comercial", "Relatórios", "Administração"],
-  "seções na ordem das áreas (sem Plano de ação desde 11/11/2026)",
-);
+// O admin vê as 9 na ordem aprovada, com 26 telas /$clientId/* depois da Hoje (1 + 1 + 5 + 4 + 4 + 1 + 4 + 3 + 3).
+{
+  const admin9 = secoesDaClinica({ isAdmin: true });
+  assert.deepEqual(admin9.map((s) => s.rotulo), ROTULOS_DAS_SECOES, "as 9 seções do admin na ordem aprovada");
+  assert.deepEqual(admin9.map((s) => s.telas.length), [1, 1, 5, 4, 4, 1, 4, 3, 3], "telas por seção do admin");
+  assert.equal(admin9.reduce((n, s) => n + s.telas.length, 0), 26, "26 telas da clínica nas seções do admin");
+  assert.deepEqual(admin9.map((s) => s.abas.length), [0, 0, 4, 4, 4, 0, 4, 3, 3], "abas por seção do admin");
+  assert.deepEqual(admin9.find((s) => s.id === "conteudo")!.abas.map((a) => a.rotulo), ["Criativa", "Referências", "Dúvidas", "Ideias"]);
+  assert.deepEqual(admin9.find((s) => s.id === "atendimento")!.abas.map((a) => a.rotulo), ["Qualidade", "Central", "Contatos"]);
+  assert.deepEqual(admin9.find((s) => s.id === "configurar-crm")!.abas.map((a) => a.rotulo), ["Guia", "Papel do funil", "Etapas"]);
+  assert.equal(admin9[0].primeira.rota, "/_authenticated/$clientId/hoje", "a primeira seção é a Hoje");
+  assert.equal(admin9[1].primeira.rota, "/_authenticated/$clientId/", "o item Clínica continua com Resultados da clínica logo depois da Hoje");
+  // O estrategista não tem a parte somenteAdmin dos grupos da equipe (Criativa, Etapas); Jornada e Por origem continuam, porque
+  // vêm das telas do médico (D-01) e a equipe vê pelo menos o que o médico vê.
+  const estrategista9 = secoesDaClinica({ isAdmin: false, papel: "strategist" });
+  assert.deepEqual(estrategista9.map((s) => s.rotulo), ROTULOS_DAS_SECOES, "o estrategista também vê as 9 seções");
+  assert.deepEqual(estrategista9.find((s) => s.id === "conteudo")!.abas.map((a) => a.rotulo), ["Referências", "Dúvidas", "Ideias"], "estrategista sem Criativa");
+  assert.deepEqual(estrategista9.find((s) => s.id === "configurar-crm")!.abas.map((a) => a.rotulo), ["Guia", "Papel do funil"], "estrategista sem Etapas");
+  assert.equal(estrategista9.find((s) => s.id === "travam")!.abas.length, 4, "a equipe vê pelo menos o que o médico vê (Jornada fica)");
+  assert.equal(estrategista9.find((s) => s.id === "origem")!.abas.length, 4, "a equipe vê pelo menos o que o médico vê (Por origem fica)");
+  // O médico não tem seção da equipe: o menu dele é outro e nada aqui o alcança.
+  const medico9 = secoesDaClinica({ isAdmin: false, papel: "viewer" });
+  assert.deepEqual(medico9.filter((s) => ["conteudo", "atendimento", "configurar-crm"].includes(s.id)), [], "médico sem seção da equipe");
+}
 
 // --- Tiradas pelo João em 11/11/2026 ("tira isso aí, ninguém usa"): 9 rotas viram só redirecionamento + o atalho Revisar roteiros ---
 const tiradas1111 = R.filter((t) => t.tiradaEm);
