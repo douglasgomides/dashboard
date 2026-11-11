@@ -182,7 +182,7 @@ Plans:
 **Success criteria:**
 1. O médico vê no menu só: O que fazer hoje, Resultados da clínica, Onde os pacientes travam, De onde vêm os pacientes, Instagram e Relatório do período.
 2. Toda tela antiga continua abrindo, como aba de uma tela juntada ou pelo endereço antigo, que leva à aba certa; nenhuma informação some.
-3. Em 375 e 1440 px, a aba aberta de cada tela juntada tem no máximo 1,5 altura de tela com o detalhe fechado (teste automático).
+3. Em 375 e 1440 px, a aba aberta de cada tela juntada do médico e a Hoje têm no máximo 1,5 altura de tela com o detalhe fechado (teste automático); as abas da equipe ficam medidas e viram teste quando a 03.1 as puser no molde.
 4. A Hoje mostra de 3 a 5 ações, cada uma com o número que a sustenta e quem resolve; com dado ruim diz "sem leitura: motivo".
 5. O João entende a visão do médico sem explicação.
 **Requirements**: MEDV-01, MEDV-02, MEDV-03, MEDV-04, MEDV-05

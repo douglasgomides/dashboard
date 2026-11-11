@@ -1,0 +1,83 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": "v5.0 — Nexo v5 — Fase 0 + degrau v1",
+  "phases": [
+    {
+      "number": "1",
+      "name": "Fase 0 — Confiança nos números (conferência)",
+      "status": "pending"
+    },
+    {
+      "number": "2",
+      "name": "Log por rota",
+      "status": "in_progress"
+    },
+    {
+      "number": "3",
+      "name": "Menu da equipe (esconder com o log gravando)",
+      "status": "pending"
+    },
+    {
+      "number": "4",
+      "name": "Pacote do template do WhatsApp à Meta",
+      "status": "pending"
+    },
+    {
+      "number": "5",
+      "name": "Consultas de verificação",
+      "status": "pending"
+    },
+    {
+      "number": "6",
+      "name": "Selo de confiança (`metricas_selo`)",
+      "status": "pending"
+    },
+    {
+      "number": "7",
+      "name": "Metas por SQL",
+      "status": "pending"
+    },
+    {
+      "number": "8",
+      "name": "Endpoint `hoje`",
+      "status": "pending"
+    },
+    {
+      "number": "9",
+      "name": "Tela Hoje",
+      "status": "pending"
+    },
+    {
+      "number": "10",
+      "name": "Job de conferência semanal do Kommo",
+      "status": "pending"
+    },
+    {
+      "number": "11",
+      "name": "Quem chamar hoje — portão de desenho",
+      "status": "pending"
+    },
+    {
+      "number": "12",
+      "name": "Quem chamar hoje — construção",
+      "status": "pending"
+    },
+    {
+      "number": "13",
+      "name": "Resumo semanal em sombra",
+      "status": "pending"
+    },
+    {
+      "number": "14",
+      "name": "Check de liberação do degrau 1.5",
+      "status": "pending"
+    }
+  ],
+  "next": {
+    "command": "/gsd-progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 4 of 16 · 0% · executing"
+  },
+  "updated_at": "2026-11-10T22:31:02.562Z"
+}

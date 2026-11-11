@@ -126,7 +126,7 @@ Escopo de 10/11/2026 (João): a leitura sai só de regras fixas, calculada na ho
 - [ ] **MEDV-01**: O médico vê 6 itens no menu: Hoje, Resultados da clínica, Onde os pacientes travam, De onde vêm os pacientes, Instagram e Relatório do período; a equipe vê tudo, agrupado (Plano, Agentes, Conteúdo, Atendimento, Configurar CRM e as telas da equipe). A escolha final entre 2 e 6 itens (MENU-06) fica para a Phase 9
 - [ ] **MEDV-02**: As telas que respondem à mesma pergunta viram abas de uma tela juntada, com o mesmo conteúdo e os mesmos números; nenhuma tela é apagada
 - [ ] **MEDV-03**: O endereço antigo de cada tela leva à aba certa (a aba fica no endereço), a busca da equipe acha cada aba pelo nome antigo e o log por rota continua registrando a abertura
-- [ ] **MEDV-04**: Com o detalhe fechado, a aba aberta de cada tela juntada tem no máximo 1,5 altura de tela em 375 e 1440 px, conferido por teste automático
+- [ ] **MEDV-04**: Com o detalhe fechado, a aba aberta de cada tela juntada do médico e a Hoje têm no máximo 1,5 altura de tela em 375 e 1440 px, conferido por teste automático; as abas da equipe ficam medidas e registradas, e viram teste quando a 03.1 as puser no molde
 - [ ] **MEDV-05**: A primeira versão da tela Hoje mostra de 3 a 5 ações tiradas por regra dos fatos das telas (sem IA, sem tabela nova), cada uma com o número que a sustenta, quem resolve e o link para a aba de origem; com dado ruim diz "sem leitura: motivo"; leva o aviso "sem selo" até a Phase 6/9
 
 ## Future Requirements

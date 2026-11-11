@@ -1,0 +1,29 @@
+{
+  "phase": "1",
+  "phase_name": "Fase 0 — Confiança nos números (conferência)",
+  "timestamp": "2026-11-09T20:45:00Z",
+  "areas_completed": ["Semana", "Lado Nexo", "Incoming leads"],
+  "areas_remaining": ["Como ler o lado do CRM (contagem manual pela equipe vs. API/ferramenta existente)", "Onde chegam os números contados (chat vs. tela no Nexo)"],
+  "decisions": {
+    "Semana": [
+      {"question": "Qual semana fechada conferimos nas 3 clínicas?", "answer": "03/11 a 09/11 (a mesma nas 3; atravessa a virada do robô do Kommo de 01/11; Lana reconferida contra o CRM)", "options_presented": ["03/11 a 09/11", "27/10 a 02/11"]}
+    ],
+    "Lado Nexo": [
+      {"question": "Quem roda as consultas de leitura no banco de produção?", "answer": "Claude, só SELECT de leitura pelo conector do Supabase, trazendo só contagens e ids internos; escrita continua só com o João", "options_presented": ["Eu, só leitura", "Você roda"]}
+    ],
+    "Incoming leads": [
+      {"question": "Quem pergunta à equipe da Lana se 'Incoming leads' do funil 'Atendimento Clínico' é venda?", "answer": "O João pergunta à Lana e registra a resposta; a correção espera", "options_presented": ["Eu pergunto à Lana", "A equipe pergunta na contagem"]}
+    ],
+    "Lado CRM (em aberto)": [
+      {"question": "Como lemos o lado do CRM ao vivo?", "answer": "Primeira resposta: equipe conta no CRM; quem conta: equipe Doctor Creator. O João questionou a necessidade de planilha/trabalho manual ('pra que isso?') e pediu para voltar ao tema com calma. NÃO tratar como decidido. Alternativa apresentada: Claude faz tudo pela API/conferência ao vivo existente + banco, sem trabalho manual (menos independente).", "options_presented": ["Equipe conta no CRM", "Ferramenta existente", "Os dois"]}
+    ]
+  },
+  "deferred_ideas": [],
+  "canonical_refs": [
+    "~/Downloads/Nexo-Modelo/FASE0-Lana-27out-02nov.md",
+    "~/Downloads/Nexo-Modelo/BRIEF-GSD-Nexo-v5.md",
+    ".planning/research/SUMMARY.md (Fase 0)",
+    "api/_lib/conferencia-ao-vivo.ts",
+    "src/routes/_authenticated.admin.conferencia.tsx"
+  ]
+}
