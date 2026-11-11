@@ -8,6 +8,7 @@ import { Ajuda } from "@/components/visual";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
 import { CAMPOS_DIARIOS, useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido } from "@/components/nx/blocos";
 import { fatosDePacientes } from "@/lib/leitura/fatos-pacientes";
 import { periodosDeComparacao, somaDiaria, variacaoPct, type VariacaoPct } from "@/lib/leitura/fatos-resultados";
@@ -52,6 +53,7 @@ import {
 import "@/styles/nexo-resultados.css";
 import { NxCard, NxKpi, NxLinhaTempo, NxListRow, NxPizza, NxTag } from "@/components/nx";
 import { CmBarras, icT, type CmVariacao } from "@/components/nx/comercial-base";
+import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import type { NomeIcone } from "@/lib/registro-de-telas";
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
@@ -246,7 +248,7 @@ function PacientesDoPeriodo() {
       cartoes={cartoes.length ? ([cartoes[0], cartoes[1], cartoes[2], cartoes[3]] as [ReactNode, ReactNode?, ReactNode?, ReactNode?]) : undefined}
       principal={
         linhasDia.length >= 3 ? (
-          <NxCard id="evolucao" nivel={2} icone={icT("chart-bar")} titulo="Evolução por dia" subtitulo={`${rotuloPeriodo} · pessoas que chamaram (eixo da esquerda) e agendamentos (eixo da direita)`}>
+          <NxCard id="evolucao" nivel={2} icone={icT("chart-bar")} titulo="Evolução por dia" subtitulo={rotuloPeriodo}>
             <NxLinhaTempo
               rotulo="Pessoas que chamaram e agendamentos por dia"
               datas={linhasDia.map((l) => l.dia)}
@@ -256,8 +258,11 @@ function PacientesDoPeriodo() {
               ]}
               formatarData={dataCurta}
               formatarValor={(n) => fmt(Math.round(n))}
+              altura={180}
             />
-            <p className="nxr-apoio">Cada ponto conta as pessoas daquele dia. A soma dos dias pode ser maior que o número do cartão, porque quem chamou em dois dias conta uma vez só no período.</p>
+            <NxComoCalcula titulo="Como ler este gráfico">
+              <p className="nxr-apoio">Pessoas que chamaram (eixo da esquerda) e agendamentos (eixo da direita). Cada ponto conta as pessoas daquele dia. A soma dos dias pode ser maior que o número do cartão, porque quem chamou em dois dias conta uma vez só no período.</p>
+            </NxComoCalcula>
           </NxCard>
         ) : undefined
       }
@@ -268,7 +273,10 @@ function PacientesDoPeriodo() {
           <div ref={listaRef} className="scroll-mt-4" hidden={!aberta}>
             {aberta && <ListaDePessoas chave={aberta} dados={d} clientId={clientId} isAdmin={isAdmin} hoje={hoje} onFechar={() => setAberta(null)} />}
           </div>
-
+        </div>
+      }
+      detalhe={
+        <div className="nexo-results-overview">
           <NxCard
             id="chamar-agora"
             nivel={2}
@@ -321,10 +329,7 @@ function PacientesDoPeriodo() {
               </button>
             )}
           </NxCard>
-        </div>
-      }
-      detalhe={
-        <div className="nexo-results-overview">
+
           {etapas.length > 1 && (
             <NxCard id="funil" nivel={2} icone={icT("filter")} titulo="Do primeiro contato à venda" subtitulo={`${rotuloPeriodo} · toque numa linha para ver quem são`}>
               <CmBarras
@@ -509,10 +514,21 @@ function MetasDoMesNx({ clientId, isAdmin, metas }: { clientId: string; isAdmin:
             if (mes.isLoading) return <p key={k} className="nxr-apoio">Calculando {ROTULO_META[k].toLowerCase()}…</p>;
             const atual = mes.data?.numeros?.[k]?.valor;
             if (atual == null)
-              return <NxKpi key={k} i={i} icone={icT("checklist")} rotulo={ROTULO_META[k]} valor="Sem dado" nota="Não medido neste mês, então a meta não pode ser acompanhada." />;
+              return <NxCartaoNumero key={k} icone="checklist" titulo={ROTULO_META[k]} valor={null} semMedida legenda="Não medido neste mês, então a meta não pode ser acompanhada." />;
             const meta = dados[k]!;
             const faltam = Math.max(meta - Number(atual), 0);
-            return <NxKpi key={k} i={i} icone={icT("checklist")} rotulo={ROTULO_META[k]} valor={`${fmt(Number(atual))} de ${fmt(meta)}`} nota={faltam > 0 ? `Faltam ${fmt(faltam)} neste mês.` : "Meta batida neste mês."} />;
+            // D-07: abaixo da meta cadastrada vira laranja, com o texto dito (nunca só a cor). Sem ritmo nem projeção: só o número contra a meta.
+            return (
+              <NxCartaoNumero
+                key={k}
+                icone="checklist"
+                titulo={ROTULO_META[k]}
+                valor={`${fmt(Number(atual))} de ${fmt(meta)}`}
+                legenda={faltam > 0 ? `Faltam ${fmt(faltam)} neste mês.` : "Meta batida neste mês."}
+                abaixoDaMeta={faltam > 0 ? "abaixo da meta" : undefined}
+                meta={{ rotulo: "da meta do mês", fracao: Number(atual) / meta }}
+              />
+            );
           })}
         </div>
       )}

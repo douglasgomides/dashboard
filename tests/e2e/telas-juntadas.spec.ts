@@ -358,9 +358,15 @@ for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
 // Plano 03: Onde os pacientes travam (4 abas, Funil com 2 partes) e De onde vêm os pacientes > Por origem, no molde, no desenho
 // do D-07 e dentro de 1,5 tela. Dados fictícios (mockPessoas e mockCrm).
 // ===================================================================================================================
-type ParteMedida = { pasta: string; aba: string; parte?: string; sub: string; slug: string };
+type ParteMedida = { pasta: string; aba: string; parte?: string; sub: string; slug: string; semCartoes?: boolean };
+const TRAVAM = "Onde os pacientes travam";
 const PARTES_DO_CRM: ParteMedida[] = [
-  { pasta: "Onde os pacientes travam", aba: "Funil", parte: "No CRM", sub: "crm-painel", slug: "no-crm" },
+  { pasta: TRAVAM, aba: "Funil", parte: "Do contato à venda", sub: "pacientes", slug: "do-contato-a-venda" },
+  { pasta: TRAVAM, aba: "Funil", parte: "No CRM", sub: "crm-painel", slug: "no-crm" },
+  // Consultas e Vendas são telas em construção: leitura "Sem leitura:", sem cartões.
+  { pasta: TRAVAM, aba: "Consultas", sub: "consultas", slug: "consultas", semCartoes: true },
+  { pasta: TRAVAM, aba: "Vendas", sub: "vendas", slug: "vendas", semCartoes: true },
+  { pasta: TRAVAM, aba: "Jornada", sub: "jornada", slug: "jornada" },
 ];
 
 async function abrirParte(page: Page, context: BrowserContext, perfil: "viewer" | "admin", sub: string, largura: { width: number; height: number }) {
@@ -371,7 +377,7 @@ async function abrirParte(page: Page, context: BrowserContext, perfil: "viewer" 
   await page.goto(`/${CID}/${sub}?preset=30d`);
 }
 
-for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug } of PARTES_DO_CRM) {
+for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes } of PARTES_DO_CRM) {
   for (const perfil of ["viewer", "admin"] as const) {
     test(`${perfil}: ${nomeDaAba}${parte ? ` > ${parte}` : ""} abre no molde com leitura, pílula de ação e cartões com ícone redondo`, async ({ page, context }) => {
       await abrirParte(page, context, perfil, sub, { width: 1440, height: 900 });
@@ -389,6 +395,10 @@ for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug } of PARTES_DO
       await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
       await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
       const cartoes = page.locator("[data-juntada] .nx-pagina__cartoes > *");
+      if (semCartoes) {
+        await expect(cartoes).toHaveCount(0);
+        return;
+      }
       await expect(cartoes.first()).toBeVisible();
       const total = await cartoes.count();
       expect(total).toBeGreaterThanOrEqual(1);
@@ -412,3 +422,48 @@ for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug } of PARTES_DO
     });
   }
 }
+
+test("Onde os pacientes travam: Consultas e Vendas abrem com \"Sem leitura:\" e a contagem das abas continua \"—\"", async ({ page, context }) => {
+  for (const [rotulo, sub] of [["Consultas", "consultas"], ["Vendas", "vendas"]] as const) {
+    await abrirParte(page, context, "viewer", sub, { width: 1440, height: 900 });
+    const nav = pasta(page, TRAVAM);
+    await expect(aba(nav, rotulo)).toHaveAttribute("aria-current", "page");
+    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+    await expect(leitura.getByText(/^Sem leitura: a tela ainda não tem a fonte ligada/)).toBeVisible();
+    await expect(leitura.getByText(/Quem resolve:/)).toBeVisible();
+    await expect(leitura.locator(".nx-acao-pilula")).toBeVisible();
+    for (const r of ["Consultas", "Vendas"]) {
+      const contagem = aba(nav, r).locator(".nx-pasta__contagem");
+      await expect(contagem).toContainText("—");
+      await expect(contagem).not.toHaveText(/^0/);
+    }
+  }
+});
+
+test("Onde os pacientes travam: clicar em No CRM leva ao funil comercial com o período e o log grava origem menu", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await mockPessoas(context);
+  await mockCrm(context);
+  await ligarLog(context);
+  const posts = capturarPosts(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/pacientes?preset=30d`);
+  const partes = page.getByRole("navigation", { name: "Partes de Funil", exact: true });
+  await expect(partes.getByRole("link", { name: "Do contato à venda" })).toHaveAttribute("aria-current", "page");
+  await partes.getByRole("link", { name: "No CRM" }).click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/crm-painel`);
+  expect(new URL(page.url()).searchParams.get("preset")).toBe("30d");
+  await expect(partes.getByRole("link", { name: "No CRM" })).toHaveAttribute("aria-current", "page");
+  await expect.poll(() => posts.find((p) => p.rota === "/_authenticated/$clientId/crm-painel")?.origem).toBe("menu");
+});
+
+test("Jornada: a leitura diz que a maioria dos contatos está sem pessoa ligada e o aviso completo fica nos Detalhes", async ({ page, context }) => {
+  await abrirParte(page, context, "viewer", "jornada", { width: 1440, height: 900 });
+  const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+  await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+  await expect(leitura.getByText(/não está ligada a nenhuma pessoa/)).toBeVisible();
+  await expect(leitura.locator(".nx-leitura__num", { hasText: "50 de 80" })).toBeVisible();
+  const detalhes = page.locator("[data-juntada] details#detalhes-jornada");
+  await detalhes.locator(":scope > summary").click();
+  await expect(detalhes.locator(".cm-aviso--critico").getByText(/% dos leads criados no período não estão ligados/)).toBeVisible();
+});

@@ -103,8 +103,11 @@ for (const width of [375, 1440]) {
     expect(await semRolagemLateral(page)).toBe(true);
 
     await page.goto(`/${CID}/jornada?preset=30d`);
-    await expect(page.getByRole("region", { name: "Números da jornada" }).locator(".ws-metric-value").first()).toHaveText("200");
-    // Mais da metade dos leads soltos: aviso crítico curto, sempre visível.
+    // No molde (03.1.1): os números são cartões e o funil vem logo abaixo da leitura.
+    await expect(page.locator(".nx-pagina__cartoes .nx-numero__valor").first()).toHaveText("200");
+    await expect(page.getByRole("figure", { name: "Funil da jornada do período" })).toBeVisible();
+    // Mais da metade dos leads soltos: aviso crítico curto, à vista quando a leitura não diz o mesmo (aqui o CRM não tem funil de
+    // jornada nos dados de teste, então a leitura nega e o aviso fica no corpo).
     await expect(page.locator(".cm-aviso--critico").getByText(/% dos leads criados no período não estão ligados/)).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
 

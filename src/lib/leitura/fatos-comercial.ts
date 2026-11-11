@@ -201,9 +201,9 @@ const NOME_DA_ETAPA: Record<IdEtapa, string> = {
 
 function passoDaPerdaDaJornada(para: IdEtapa): PassoFato {
   const base = { quem: "comercial" as const, fatoId: "maior-perda" };
-  if (para === "lead") return { ...base, verbo: "responder", texto: "as conversas que ainda não viraram cadastro no CRM", motivo: "A maior perda está entre a conversa e o cadastro no CRM." };
-  if (para === "agendamento") return { ...base, verbo: "ligar para", texto: "quem já está no CRM e ainda não agendou", motivo: "A maior perda está entre o cadastro no CRM e a consulta agendada." };
-  return { ...base, verbo: "ligar para", texto: "quem agendou e ainda não fechou", motivo: "A maior perda está entre a consulta agendada e a venda." };
+  if (para === "lead") return { ...base, verbo: "responder", texto: "as conversas sem cadastro no CRM" };
+  if (para === "agendamento") return { ...base, verbo: "ligar para", texto: "quem já está no CRM e ainda não agendou" };
+  return { ...base, verbo: "ligar para", texto: "quem agendou e ainda não fechou" };
 }
 
 const semDadoDaJornada = (etapas: EtapaDaJornada[]) => !etapas.some((x) => ETAPAS_DO_COMERCIAL.includes(x.id) && x.valor != null);
