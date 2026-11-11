@@ -34,6 +34,7 @@ a ordem das mensagens não é fixada, sessão que troca de equipe fica em duas m
 | `GET /core/v1/contact/{id}` | telefone e nome | `phoneNumber, name/nameWhatsapp, email, instagram` | sim | `conversas-wts.ts:194-199` |
 | `GET /crm/v1/panel/{id}?includeDetails=Steps` | painel e etapas | `title, steps[].id/title` | sim | `flwchat-sync.ts:440` |
 | `GET /crm/v1/panel/card?panelId&pageSize=100&pageNumber` | cards de venda | `id, title, stepId, monetaryAmount, createdAt, updatedAt, customFields, description, contactIds, sessionId, number`; `{items, hasMorePages}` | a doc lista a **v2** (`/crm/v2/panel/card`) | `flwchat-sync.ts:101-110` |
+| `GET /crm/v2/panel/card?panelId&Statuses=WON` e `...&Statuses=LOST` (um valor por chamada, só dos cards que o Nexo marcou `closed`, a cada 6 h por conexão, fora `cards_por_item`) | resultado dos cards fechados | `id, status` (o status tem de ser igual ao pedido); `{items, hasMorePages}` | é a v2 | `flwchat-sync.ts` (`fetchIdsV2`, `idsComSituacao`, `reclassificarFechados`). **Falta a conferência ao vivo** (`CONTRATO_AO_VIVO=1 CONTRATO_WTS_TOKEN=... CONTRATO_FLW_PAINEL=<id>`) |
 | `GET /core/v1/tag` e `GET /core/v1/contact?IncludeDetails=Tags&orderBy&orderDirection` | etiquetas dos contatos | `items[].id/name`; `items[].id, tagIds, updatedAt`, `totalPages` | sim | `flwchat-sync.ts:240-249, 394-404` |
 
 ## 2. Significado de cada número
@@ -51,7 +52,9 @@ a ordem das mensagens não é fixada, sessão que troca de equipe fica em duas m
 - **Cards (verificado):** a v2 tem `status` e o filtro `Statuses` = `OPEN, WON, LOST, ARCHIVED`, mais `stepPhase` e `lostReason`. Ou seja,
   **existe forma oficial de listar cards arquivados e de saber se o card foi ganho ou perdido** (`/crm/v2/panel/card?Statuses=ARCHIVED`,
   `IncludeDetails=StepPhase,LostReason`). O Nexo usa a v1 e marca o card que some como `closed` (resultado desconhecido,
-  `flwchat-sync.ts:510-533`).
+  `flwchat-sync.ts:510-533`). Desde 11/11/2026 o Nexo confere os `closed` na v2 (`Statuses=WON` e `Statuses=LOST`, a cada 6 h por
+  conexão, fora `cards_por_item`): `closed` confirmado vira `won` ou `lost`; sem confirmação, segue `closed`. O filtro `Statuses` foi
+  confirmado só pela doc: **falta a conferência ao vivo** antes de confiar nas vendas que voltarem.
 
 ## 3. Limites
 
@@ -89,7 +92,7 @@ a ordem das mensagens não é fixada, sessão que troca de equipe fica em duas m
 | Ordem das mensagens não fixada (o código não manda `OrderBy`): acima de 800 não se sabe quais ficam | **Não** | `conversas-wts.ts:248` |
 | Sessão que muda de equipe muda de dono; a cópia antiga fica no outro cliente | **Não** | `wts-sync.ts:294-296` |
 | `PENDING` (sem atendente) não é `IN_PROGRESS` | **Não** (somem das abertas) | funções `wts_fila_do_cliente`, `wts_resumo` |
-| Card arquivado perde o resultado (a v2 tem `Statuses=ARCHIVED` e `status`) | Parcial (vira `closed`) | `flwchat-sync.ts:510-533` |
+| Card arquivado perde o resultado (a v2 tem `Statuses=ARCHIVED` e `status`) | Parcial (vira `closed`; os `closed` ganhos ou perdidos são reclassificados pela v2 a cada 6 h, pendente da conferência ao vivo) | `flwchat-sync.ts:510-533` |
 | `stepTitle` vem nulo sem `includeDetails=Steps` | Sim (nome vem do painel) | `flwchat-sync.ts:440` |
 | Falha ao ler `crm_etapa_resultado` | **Sim** (pula a conexão com erro, não regrava cards) | `flwchat-sync.ts:351-356` |
 | Teto de páginas nas sessões alteradas | **Sim** (erro registrado) | `wts-sync.ts:363-369` |

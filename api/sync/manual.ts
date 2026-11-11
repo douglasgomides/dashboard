@@ -453,14 +453,25 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (perfisGraph.length > 0) {
-      if (!META_ACCESS_TOKEN) {
-        throw new Error("Perfil servido pela Meta Graph API, mas META_ACCESS_TOKEN não está configurado no servidor");
-      }
+      // O token do perfil (instagram_account_secrets) vale primeiro e a variável global é só reserva
+      // (meta-graph-sync.ts:757), como na rotina agendada. Antes o botão exigia a reserva, que a VPS não tem, e
+      // gravava erro falso no Instagram da clínica. A coluna do token nunca é selecionada: só o id de quem tem.
+      const { data: comToken } = await admin
+        .from("instagram_account_secrets")
+        .select("instagram_account_id")
+        .in("instagram_account_id", perfisGraph.map((p) => p.id))
+        .not("meta_access_token", "is", null)
+        .neq("meta_access_token", "");
+      const perfisComToken = new Set((comToken ?? []).map((r) => r.instagram_account_id as string));
       // Uma chamada por perfil: runMetaGraphSync filtra por conta, não por
       // cliente, e um cliente pode ter mais de um perfil.
       for (const perfil of perfisGraph) {
+        if (!perfisComToken.has(perfil.id) && !META_ACCESS_TOKEN) {
+          contas.push({ accountId: perfil.id, posts: 0, errors: ["Perfil do Instagram sem token próprio da Meta, e o servidor não tem a reserva META_ACCESS_TOKEN"] });
+          continue;
+        }
         const parcial = await runMetaGraphSync({
-          accessToken: META_ACCESS_TOKEN,
+          accessToken: META_ACCESS_TOKEN ?? "",
           supabaseUrl: urlSupabase,
           supabaseServiceRoleKey: chaveServico,
           onlyAccountId: perfil.id,
@@ -475,7 +486,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Comentários usam o token guardado por conta em instagram_account_secrets,
     // com o do ambiente como reserva — por isso não exigem META_ACCESS_TOKEN
-    // aqui, ao contrário do sync de posts pela Graph API.
+    // aqui, e o sync de posts pela Graph API agora também não (token do perfil primeiro).
     async function sincronizarComentarios() {
       // runMetaCommentsSync filtra por conta, não por cliente — mesmo padrão
       // do sync de posts pela Graph API.
