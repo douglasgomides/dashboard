@@ -248,6 +248,35 @@ a.ig-vitrine__item:focus-visible { outline: 2px solid var(--b1); outline-offset:
   .ig-vitrine__item { grid-template-columns: 96px minmax(0, 1fr); }
   .ig-vitrine__img { min-height: 96px; }
 }
+/* Régua de 1,5 tela (03.1.1, MEDV-04): no celular a vitrine vira uma fileira que rola sozinha, com a imagem em cima. */
+@media (max-width: 560px) {
+  .nx-pagina .ig-vitrine {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .nx-pagina .ig-vitrine::-webkit-scrollbar { display: none; }
+  .nx-pagina .ig-vitrine > li { flex: 0 0 min(64%, 210px); scroll-snap-align: start; }
+  .nx-pagina .ig-vitrine__item { grid-template-columns: minmax(0, 1fr); }
+  .nx-pagina .ig-vitrine__img { min-height: 64px; height: 64px; }
+  .nx-pagina .ig-vitrine__corpo { padding: 8px 10px; gap: 4px; }
+  .nx-pagina .ig-vitrine__num b { font-size: 20px; line-height: 24px; }
+  /* Gráficos do molde mais baixos no celular (a altura é inline na peça congelada; só o CSS a alcança). */
+  .nx-pagina .nx-linha__alvo { --altura: 140px !important; }
+  .nx-pagina .nx-linha__y { height: 162px !important; }
+  .nx-pagina .nx-colunas { height: 160px; }
+  /* Abas do Instagram (Posts, Reels, Stories e os formatos): uma linha que rola sozinha. */
+  .nx-pagina .ig-abas { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; max-width: 100%; }
+  .nx-pagina .ig-abas::-webkit-scrollbar { display: none; }
+  .nx-pagina .ig-aba { flex: none; white-space: nowrap; }
+  .nx-pagina .ig-barra-acoes { gap: 8px; }
+  /* O cartão do corpo e do gráfico já está dentro da pasta: no celular perde a moldura própria para não gastar duas bordas. */
+  .nx-pasta .nx-pagina__principal > .nx-card, .nx-pasta .nx-pagina__corpo > .nx-card { padding: 0; border: 0; border-radius: 0; }
+}
 
 /* ---------- Mais análises ---------- */
 .ig-mais { border: 1px solid var(--line); border-radius: 18px; background: var(--white); min-width: 0; }

@@ -1,4 +1,4 @@
-import { Fragment, memo, useMemo, type ReactNode } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { IconeTabler } from "@/components/icons/tabler";
 import { NxChip } from "@/components/nx-chip";
 import { ROTULO_RESPONSAVEL } from "@/lib/insight";
@@ -6,6 +6,7 @@ import { montarTexto, rotuloPeriodo } from "@/lib/leitura/texto";
 import { ROTULO_DECISAO, type DecisaoMedico, type FatosDaTela, type LinhaTexto, type PassoTexto, type TelaId, type TextoDoResumo, type TomFato } from "@/lib/leitura/tipos";
 import { NxTag } from "./base";
 import { NxCarregando, NxErro, NxRecolhido } from "./blocos";
+import { NxAcaoPilula } from "./cartoes";
 import "@/styles/nexo-pagina.css";
 
 // Molde único de página do Nexo (Phase 3.1). Toda tela, da clínica e da equipe, abre assim, nesta ordem fixa:
@@ -33,16 +34,25 @@ export interface PaginaNexoProps {
   corpo?: ReactNode;
   /** Vai dentro do bloco recolhido "Detalhes", fechado. */
   detalhe?: ReactNode;
+  /** Só a Hoje (03.1.1, D-07): saudação grande no topo; a pergunta vira o parágrafo logo abaixo. Sem ela o HTML é o de sempre. */
+  saudacao?: ReactNode;
 }
 
-export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitura, cartoes, principal, corpo, detalhe }: PaginaNexoProps) {
+export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitura, cartoes, principal, corpo, detalhe, saudacao }: PaginaNexoProps) {
   const cartoesVisiveis = (cartoes ?? []).filter((c) => c != null && c !== false);
   return (
     <div className="nx-pagina" data-tela={tela}>
       <header className="nx-pagina__topo">
         <div className="nx-pagina__titulos">
           <p className="nx-pagina__rotulo">{titulo}</p>
-          <h1 className="nx-pagina__pergunta">{pergunta}</h1>
+          {saudacao ? (
+            <>
+              <h1 className="nx-pagina__saudacao">{saudacao}</h1>
+              <p className="nx-pagina__pergunta">{pergunta}</p>
+            </>
+          ) : (
+            <h1 className="nx-pagina__pergunta">{pergunta}</h1>
+          )}
           {(decisao || meta) && (
             <div className="nx-pagina__meta">
               {decisao && <NxTag tom="b">{ROTULO_DECISAO[decisao]}</NxTag>}
@@ -64,7 +74,7 @@ export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitur
       {corpo && <div className="nx-pagina__corpo">{corpo}</div>}
       {detalhe && (
         <div className="nx-pagina__detalhe">
-          <NxRecolhido titulo="Detalhes">{detalhe}</NxRecolhido>
+          <NxRecolhido titulo="Detalhes" id={`detalhes-${tela}`}>{detalhe}</NxRecolhido>
         </div>
       )}
     </div>
@@ -117,10 +127,41 @@ function FraseComNumero({ linha }: { linha: LinhaTexto }) {
   );
 }
 
-function BlocoPasso({ passo, rotulo }: { passo: PassoTexto; rotulo: string }) {
+/**
+ * Abre os Detalhes da própria página (aba): é o único lugar a que o próximo passo leva dentro de uma tela, porque é onde está
+ * o número que o sustenta. Só aparece quando a página tem o bloco `detalhes-{tela}`; só abre e leva o foco, nunca envia nada (CHAM-07).
+ */
+function useAbrirDetalhes(tela: TelaId | undefined) {
+  const ancora = useRef<HTMLSpanElement>(null);
+  const [tem, setTem] = useState(false);
+  const id = tela ? `detalhes-${tela}` : null;
+  useEffect(() => {
+    if (!id) return;
+    const pagina = ancora.current?.closest(".nx-pagina");
+    if (!pagina) return;
+    const confere = () => setTem(!!pagina.querySelector(`[id="${id}"]`));
+    confere();
+    const olho = new MutationObserver(confere);
+    olho.observe(pagina, { childList: true, subtree: true });
+    return () => olho.disconnect();
+  }, [id]);
+  const abrir = useCallback(() => {
+    const el = id ? ancora.current?.closest(".nx-pagina")?.querySelector<HTMLDetailsElement>(`[id="${id}"]`) : null;
+    if (!el) return;
+    el.open = true;
+    el.querySelector("summary")?.focus();
+    el.scrollIntoView({ block: "nearest" });
+  }, [id]);
+  return { ancora, aoAbrir: tem ? abrir : undefined };
+}
+
+function BlocoPasso({ passo, rotulo, tela }: { passo: PassoTexto; rotulo: string; tela?: TelaId }) {
+  const { ancora, aoAbrir } = useAbrirDetalhes(tela);
   return (
     <Linha rotulo={rotulo}>
-      <p className="nx-leitura__frase">{passo.frase}</p>
+      <span ref={ancora} className="nx-leitura__ancora">
+        <NxAcaoPilula frase={passo.frase} rotuloDaSeta="Ver os detalhes" aoAbrir={aoAbrir} />
+      </span>
       {passo.motivo && <p className="nx-leitura__apoio">Motivo: {passo.motivo}</p>}
       <p className="nx-leitura__apoio">{`Quem resolve: ${ROTULO_RESPONSAVEL[passo.quem]}`}</p>
     </Linha>
@@ -143,14 +184,18 @@ function VerMais({ passos }: { passos: PassoTexto[] }) {
   );
 }
 
-function SemLeitura({ motivo, passo }: { motivo: string; passo: PassoTexto }) {
+function SemLeitura({ motivo, passo, tela }: { motivo: string; passo: PassoTexto; tela?: TelaId }) {
+  const { ancora, aoAbrir } = useAbrirDetalhes(tela);
   return (
     <ul className="nx-leitura__linhas">
       <Linha tom="atencao">
         <p className="nx-leitura__frase">{`Sem leitura: ${motivo}`}</p>
       </Linha>
       <Linha>
-        <p className="nx-leitura__frase">{`Para consertar: ${passo.frase}`}</p>
+        <p className="nx-leitura__frase">Para consertar:</p>
+        <span ref={ancora} className="nx-leitura__ancora">
+          <NxAcaoPilula frase={passo.frase} rotuloDaSeta="Ver os detalhes" aoAbrir={aoAbrir} />
+        </span>
         <p className="nx-leitura__apoio">{`Quem resolve: ${ROTULO_RESPONSAVEL[passo.quem]}`}</p>
       </Linha>
     </ul>
@@ -183,7 +228,7 @@ export const LeituraDaTela = memo(function LeituraDaTela({ fatos, carregando, er
         <NxErro texto="Não deu para montar a leitura agora." />
       ) : modoResumo && resumo ? (
         resumo.tipo === "sem_leitura" ? (
-          <SemLeitura motivo={resumo.motivo} passo={resumo.passo} />
+          <SemLeitura motivo={resumo.motivo} passo={resumo.passo} tela={fatos?.tela} />
         ) : (
           <ul className="nx-leitura__linhas">
             {resumo.aconteceu && (
@@ -197,7 +242,7 @@ export const LeituraDaTela = memo(function LeituraDaTela({ fatos, carregando, er
               </Linha>
             )}
             {resumo.acao ? (
-              <BlocoPasso passo={resumo.acao} rotulo="Ação da semana" />
+              <BlocoPasso passo={resumo.acao} rotulo="Ação da semana" tela={fatos?.tela} />
             ) : (
               resumo.semAcaoMotivo && (
                 <Linha rotulo="Ação da semana">
@@ -211,9 +256,10 @@ export const LeituraDaTela = memo(function LeituraDaTela({ fatos, carregando, er
         <SemLeitura
           motivo="não há dado neste período."
           passo={{ frase: "Conferir a conexão das fontes.", verbo: "conferir", quem: "equipe_hub", rotuloQuem: ROTULO_RESPONSAVEL.equipe_hub }}
+          tela={fatos?.tela}
         />
       ) : texto.tipo === "sem_leitura" ? (
-        <SemLeitura motivo={texto.motivo} passo={texto.passo} />
+        <SemLeitura motivo={texto.motivo} passo={texto.passo} tela={fatos?.tela} />
       ) : (
         <>
           <ul className="nx-leitura__linhas">
@@ -226,7 +272,7 @@ export const LeituraDaTela = memo(function LeituraDaTela({ fatos, carregando, er
               </Linha>
             )}
             {texto.proximoPasso ? (
-              <BlocoPasso passo={texto.proximoPasso} rotulo="Próximo passo" />
+              <BlocoPasso passo={texto.proximoPasso} rotulo="Próximo passo" tela={fatos?.tela} />
             ) : (
               texto.semPassoMotivo && (
                 <Linha rotulo="Próximo passo">

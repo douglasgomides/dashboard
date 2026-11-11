@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 import { SECOES_JUNTADAS } from "../../src/lib/registro-de-telas";
-import { TELAS_DE_MEDIDA, alturaDaAbaAberta, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
+import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAudiencia, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 
 // Telas juntadas do médico (Phase 3.1.1, plano 01): a pasta com abas em pasta, cada aba é o caminho da tela antiga (D-04,
 // emenda de 10/11), o log grava o routeId da aba (D-06) e a pasta não busca dado. Aqui: Instagram de ponta a ponta, as outras
@@ -165,20 +165,31 @@ test("a equipe vê a pasta na tela juntada e a faixa antiga só com as telas que
   expect(hrefs).toContain(`/${CID}/anuncios`);
 });
 
-test("as alturas das 4 abas do Instagram são medidas e anotadas (a asserção de 1,5 tela entra no plano 02)", async ({ page, context }) => {
-  await mockAccount(context, "admin");
-  await mockInstagram(context);
-  for (const { width, height } of TELAS_DE_MEDIDA) {
-    await page.setViewportSize({ width, height });
-    for (const [rotulo, sub] of [["Desempenho", "conteudo"], ["Destaques", "top"], ["Posts", "posts"], ["Público", "audiencia"]]) {
-      await page.goto(`/${CID}/${sub}?preset=30d`);
+// MEDV-04 / D-04 (plano 02): com o detalhe fechado, cada aba do Instagram mede no máximo 1,5 vez a altura da janela, em 375x812 e
+// 1440x900, já com o desenho do D-07 aplicado. A lista de abas vem do registro (SECOES_JUNTADAS), não de uma cópia.
+const ABAS_MEDIDAS = SECOES_JUNTADAS.find((s) => s.id === "instagram")!.abas.map((a) => ({ rotulo: a.rotulo, caminho: a.partes[0].rota.split("/").pop()! }));
+
+test("as 4 abas do Instagram vêm do registro e a medida cobre todas", () => {
+  expect(ABAS_MEDIDAS.map((a) => a.rotulo)).toEqual(["Desempenho", "Destaques", "Posts", "Público"]);
+  expect(ABAS_MEDIDAS.map((a) => a.caminho)).toEqual(["conteudo", "top", "posts", "audiencia"]);
+});
+
+for (const { width, height } of TELAS_DE_MEDIDA) {
+  for (const { rotulo, caminho } of ABAS_MEDIDAS) {
+    test(`MEDV-04: Instagram, aba ${rotulo}, no máximo 1,5 tela em ${width}x${height} com o detalhe fechado`, async ({ page, context }) => {
+      await mockAccount(context, "admin");
+      await mockInstagram(context);
+      await mockAudiencia(context);
+      await page.setViewportSize({ width, height });
+      await page.goto(`/${CID}/${caminho}?preset=30d`);
       const { altura, janela } = await alturaDaAbaAberta(page);
       console.log(`altura-instagram aba=${rotulo} largura=${width} altura=${Math.round(altura)} janela=${janela} razao=${(altura / janela).toFixed(2)}`);
-      expect(altura).toBeGreaterThan(0);
+      expect(altura, `${rotulo} a ${width}px: ${Math.round(altura)} px de ${janela} px (${(altura / janela).toFixed(2)}x)`).toBeLessThanOrEqual(LIMITE_DE_ALTURA * janela);
       expect(await semRolagemLateral(page)).toBe(true);
-    }
+      await page.screenshot({ path: `test-results/redesenho/juntada-instagram-${caminho}-${width}.png`, fullPage: true });
+    });
   }
-});
+}
 
 test("abas pelo teclado: Tab passa de aba em aba e Enter abre a tela", async ({ page, context }) => {
   await mockAccount(context, "viewer");
@@ -204,7 +215,7 @@ test("contagem em cinza: a aba mostra o número que ela mesma carregou e \"—\"
   const nav = pasta(page, "Instagram");
   await expect(aba(nav, "Posts")).toHaveAttribute("aria-current", "page");
   // O total que a tela mostra no cartão "Posts no período".
-  const total = (await page.locator(".nx-kpi", { hasText: "Posts no período" }).locator(".ws-metric-value").first().innerText()).trim();
+  const total = (await page.locator(".nx-cartao", { hasText: "Posts no período" }).locator(".nx-numero__valor").first().innerText()).trim();
   expect(total).toMatch(/^\d/);
   await expect(aba(nav, "Posts").locator(".nx-pasta__contagem")).toHaveText(total);
   // Destaques ainda não abriu neste período: "—" (com aviso só para leitor de tela).
@@ -256,3 +267,89 @@ test("a 375 a pasta não cria rolagem lateral na página (a faixa das abas rola 
     expect(await page.locator("[data-juntada] .nx-pasta__abas ul").evaluate((ul) => getComputedStyle(ul).position)).toBe("relative");
   }
 });
+
+// D-07 (plano 02): o próximo passo da leitura é a pílula de ação com a seta escura; a seta só abre os Detalhes da própria página.
+const ABAS_DO_INSTAGRAM = [
+  ["Desempenho", "conteudo"],
+  ["Destaques", "top"],
+  ["Posts", "posts"],
+  ["Público", "audiencia"],
+] as const;
+
+for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
+  test(`D-07: ${rotulo} tem a pílula de ação na leitura e a seta abre os Detalhes sem gravar nada`, async ({ page, context }) => {
+    await mockAccount(context, "viewer");
+    await mockInstagram(context);
+    await mockAudiencia(context);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    // Só conta o que acontece depois do clique: as leituras da página (rpc por POST) já aconteceram ao abrir.
+    const escritas: string[] = [];
+    let aposOClique = false;
+    page.on("request", (r) => {
+      const { pathname } = new URL(r.url());
+      if (aposOClique && ["POST", "PATCH", "DELETE"].includes(r.method()) && pathname.startsWith("/rest/v1/") && pathname !== "/rest/v1/rota_acessos") escritas.push(`${r.method()} ${pathname}`);
+    });
+    await page.goto(`/${CID}/${sub}?preset=30d`);
+    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+    await expect(leitura).toBeVisible();
+    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+    const pilula = leitura.locator(".nx-acao-pilula").first();
+    await expect(pilula).toBeVisible();
+    await page.screenshot({ path: `test-results/redesenho/pilula-${sub}.png` });
+    const detalhes = page.locator(`[data-juntada] details#detalhes-${sub}`);
+    await expect(detalhes).toHaveCount(1);
+    await expect(detalhes).not.toHaveAttribute("open", /.*/);
+    const seta = pilula.locator(".nx-acao-pilula__seta");
+    await expect(seta).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    aposOClique = true;
+    await seta.click();
+    await expect(detalhes).toHaveAttribute("open", /.*/);
+    await expect(detalhes.locator(":scope > summary")).toBeFocused();
+    await page.waitForTimeout(300);
+    expect(escritas, `${rotulo}: a seta da pílula não grava nada`).toEqual([]);
+  });
+}
+
+// D-07 (plano 02): todo cartão tem o ícone num círculo e a variação é pílula azul-clara, sem a cor de "bom" ou de "ruim".
+for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
+  test(`D-07: ${rotulo} tem ícone redondo em todo cartão e variação sem cor de bom ou ruim`, async ({ page, context }) => {
+    await mockAccount(context, "viewer");
+    await mockInstagram(context);
+    await mockAudiencia(context);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/${CID}/${sub}?preset=30d`);
+    const cartoes = page.locator("[data-juntada] .nx-pagina__cartoes > *");
+    await expect(cartoes.first()).toBeVisible();
+    const total = await cartoes.count();
+    expect(total, `${rotulo}: de 1 a 4 cartões`).toBeGreaterThanOrEqual(1);
+    expect(total).toBeLessThanOrEqual(4);
+    for (let i = 0; i < total; i++) {
+      const icone = cartoes.nth(i).locator(".nx-tile, .nx-cartao__icone");
+      await expect(icone, `${rotulo}: cartão ${i + 1} sem ícone`).toHaveCount(1);
+      expect(await icone.evaluate((el) => getComputedStyle(el).borderRadius), `${rotulo}: ícone do cartão ${i + 1} não é redondo`).toBe("50%");
+    }
+    // As cores de bom e de ruim, lidas dos tokens na própria página.
+    const referencia = await page.evaluate(() => {
+      const ler = (token: string) => {
+        const el = document.createElement("span");
+        el.style.color = `var(${token})`;
+        el.style.backgroundColor = `var(${token})`;
+        document.querySelector(".nx-pagina")!.appendChild(el);
+        const cs = getComputedStyle(el);
+        const par = { cor: cs.color, fundo: cs.backgroundColor };
+        el.remove();
+        return par;
+      };
+      return { bom: ler("--good"), ruim: ler("--danger"), bomFundo: ler("--up-bg"), ruimFundo: ler("--dn-bg") };
+    });
+    const proibidas = new Set([referencia.bom.cor, referencia.ruim.cor, referencia.bomFundo.fundo, referencia.ruimFundo.fundo]);
+    const pilulas = page.locator("[data-juntada] .nx-pagina__cartoes :is(.nx-kpi__meta .nx-tag, .nx-pilula-variacao)");
+    const quantas = await pilulas.count();
+    for (let i = 0; i < quantas; i++) {
+      const cores = await pilulas.nth(i).evaluate((el) => ({ cor: getComputedStyle(el).color, fundo: getComputedStyle(el).backgroundColor }));
+      expect(proibidas.has(cores.cor), `${rotulo}: variação ${i + 1} com a cor de bom ou ruim (texto)`).toBe(false);
+      expect(proibidas.has(cores.fundo), `${rotulo}: variação ${i + 1} com a cor de bom ou ruim (fundo)`).toBe(false);
+    }
+  });
+}

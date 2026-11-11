@@ -167,3 +167,11 @@
     border-radius: 12px;
   }
 }
+
+/* Régua de 1,5 tela (MEDV-04): no celular a pasta gasta menos espaço em volta da tela. */
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pasta__corpo {
+    gap: 12px;
+    padding: 12px;
+  }
+}
