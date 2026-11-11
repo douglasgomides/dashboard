@@ -90,6 +90,25 @@ export async function mockCarteira(context: BrowserContext) {
     if (single || select !== "client_id,user_id,role") return route.fallback();
     return route.fulfill({ json: CLINICAS.slice(1, 5).map((c, i) => ({ client_id: c.id, user_id: `medico-${i}`, role: "owner" })) });
   });
+  // Último acesso por clínica e reservas que faltam (alvo carteira_avisos). Só ele é respondido; o resto segue para o próximo mock.
+  // A clínica 4 (Dra. Ana) tem acesso e não entra há 37 dias; CID e a clínica 8 não têm acesso criado.
+  await context.route("**/api/sync/manual", (route) => {
+    const corpo = route.request().postDataJSON() as { alvo?: string } | null;
+    if (corpo?.alvo !== "carteira_avisos") return route.fallback();
+    return route.fulfill({
+      json: {
+        alvo: "carteira_avisos",
+        ok: true,
+        acessos: [
+          { client_id: id(4), usuarios: 1, ultimo_acesso: quando(37), criado_em: quando(90) },
+          { client_id: id(5), usuarios: 1, ultimo_acesso: quando(2), criado_em: quando(90) },
+          { client_id: id(6), usuarios: 1, ultimo_acesso: quando(1), criado_em: quando(90) },
+          { client_id: id(7), usuarios: 1, ultimo_acesso: quando(3), criado_em: quando(90) },
+        ],
+        reservas: [{ variavel: "KOMMO_API_TOKEN", conexoes: 1, texto: "1 conexão Kommo ativa sem token próprio depende da reserva KOMMO_API_TOKEN, que o servidor não tem. Grave o token na própria conexão." }],
+      },
+    });
+  });
   await context.route("**/rest/v1/rpc/qualidade_dados**", (route) => {
     const corpo = route.request().postDataJSON() as { p_client_id?: string } | null;
     if (corpo?.p_client_id !== id(7)) return route.fulfill({ json: [] });
@@ -99,6 +118,11 @@ export async function mockCarteira(context: BrowserContext) {
   });
   await context.route("**/rest/v1/rpc/roi_periodo**", (route) => {
     const corpo = route.request().postDataJSON() as { p_client_id?: string } | null;
+    // Clínica 6: 0 vendas no período (não se aplica). Clínica 7: valor em 2 de 10 vendas (falta dado do cliente).
+    // Clínica 8: calculável. As outras (CID, 4 e 5) seguem sem dado e caem em equipe.
+    const semVenda = { tem_anuncios: true, tem_crm: true, ganho_identificavel: true, investido: 1500, investido_aquisicao: 1500, investido_estimado: 0, leads: 40, leads_com_origem: 36, ganhos: 0, ganhos_com_valor: 0, ganhos_com_canal: 0, receita: 0, ganhos_anuncio: 0, ganhos_anuncio_com_valor: 0, receita_anuncio: 0 };
+    if (corpo?.p_client_id === id(6)) return route.fulfill({ json: semVenda });
+    if (corpo?.p_client_id === id(7)) return route.fulfill({ json: { ...semVenda, ganhos: 10, ganhos_com_valor: 2, ganhos_com_canal: 9, receita: 4000, ganhos_anuncio: 6, ganhos_anuncio_com_valor: 2, receita_anuncio: 3000 } });
     if (corpo?.p_client_id !== id(8)) return route.fulfill({ json: [] });
     return route.fulfill({
       json: { tem_anuncios: true, tem_crm: true, investido: 3000, investido_aquisicao: 3000, investido_estimado: 0, leads: 80, leads_com_origem: 80, ganhos: 6, ganhos_com_valor: 6, receita: 24000, ganhos_anuncio: 6, ganhos_anuncio_com_valor: 6, receita_anuncio: 24000, ganhos_com_canal: 6, ganho_identificavel: true },

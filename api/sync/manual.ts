@@ -38,6 +38,7 @@ import { baseDoLink, candidatosCodigo, destinoSite, destinoWhatsApp, numeroDoDes
 import { rodarAgentes, catalogoFluxos, enfileirarBrain } from "../_lib/agentes.js";
 import { AGENTES_DESLIGADOS } from "../../src/lib/agentes-catalogo.js";
 import { resumoEquipe } from "../_lib/resumo-equipe.js";
+import { lerAvisosDaCarteira } from "../_lib/avisos-da-carteira.js";
 import { manualRequestSchema } from "../_lib/request-validation.js";
 import { lerResumoCrmNegocio } from "../_lib/crm-negocio-resumo.js";
 import { ehNegocioProprio } from "../../src/lib/negocio-proprio.js";
@@ -194,7 +195,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
   const { client_id, alvo } = (req.body ?? {}) as { client_id?: string; alvo?: string };
   // "conferencia" e "agentes" olham todos os clientes de uma vez (só admin), por isso não exigem client_id.
   // O alvo já passou pelo enum de manualRequestSchema; uma segunda lista fica desatualizada e bloqueia novas funções.
-  const alvoGlobal = alvo === "conferencia" || alvo === "agentes";
+  const alvoGlobal = alvo === "conferencia" || alvo === "agentes" || alvo === "carteira_avisos";
   if ((!client_id && !alvoGlobal) || !alvo) {
     res.status(400).json({ error: "Informe client_id e alvo ('tudo', 'posts', 'anuncios', 'atendimento', 'comentarios' ou 'crm')" });
     return;
@@ -245,6 +246,12 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       if (AGENTES_DESLIGADOS) { res.status(200).json({ alvo, ok: true, desligado: true }); return; }
       const r = await rodarAgentes(admin, { execucaoId: execucao_id ?? null, maxPassos: 8, prazoMs: 45_000 });
       res.status(200).json({ alvo, ok: true, ...r });
+      return;
+    }
+    // Carteira: último acesso por clínica (agregado) e reservas do servidor que faltam. Só admin (alvoGlobal, 403 acima).
+    // Fica ANTES do ramo da conferência: depois dele, o alvo cairia na conferência inteira.
+    if (alvo === "carteira_avisos") {
+      res.status(200).json({ alvo, ok: true, ...(await lerAvisosDaCarteira(admin)) });
       return;
     }
     if (alvoGlobal) {
@@ -446,14 +453,25 @@ async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (perfisGraph.length > 0) {
-      if (!META_ACCESS_TOKEN) {
-        throw new Error("Perfil servido pela Meta Graph API, mas META_ACCESS_TOKEN não está configurado no servidor");
-      }
+      // O token do perfil (instagram_account_secrets) vale primeiro e a variável global é só reserva
+      // (meta-graph-sync.ts:757), como na rotina agendada. Antes o botão exigia a reserva, que a VPS não tem, e
+      // gravava erro falso no Instagram da clínica. A coluna do token nunca é selecionada: só o id de quem tem.
+      const { data: comToken } = await admin
+        .from("instagram_account_secrets")
+        .select("instagram_account_id")
+        .in("instagram_account_id", perfisGraph.map((p) => p.id))
+        .not("meta_access_token", "is", null)
+        .neq("meta_access_token", "");
+      const perfisComToken = new Set((comToken ?? []).map((r) => r.instagram_account_id as string));
       // Uma chamada por perfil: runMetaGraphSync filtra por conta, não por
       // cliente, e um cliente pode ter mais de um perfil.
       for (const perfil of perfisGraph) {
+        if (!perfisComToken.has(perfil.id) && !META_ACCESS_TOKEN) {
+          contas.push({ accountId: perfil.id, posts: 0, errors: ["Perfil do Instagram sem token próprio da Meta, e o servidor não tem a reserva META_ACCESS_TOKEN"] });
+          continue;
+        }
         const parcial = await runMetaGraphSync({
-          accessToken: META_ACCESS_TOKEN,
+          accessToken: META_ACCESS_TOKEN ?? "",
           supabaseUrl: urlSupabase,
           supabaseServiceRoleKey: chaveServico,
           onlyAccountId: perfil.id,
@@ -468,7 +486,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Comentários usam o token guardado por conta em instagram_account_secrets,
     // com o do ambiente como reserva — por isso não exigem META_ACCESS_TOKEN
-    // aqui, ao contrário do sync de posts pela Graph API.
+    // aqui, e o sync de posts pela Graph API agora também não (token do perfil primeiro).
     async function sincronizarComentarios() {
       // runMetaCommentsSync filtra por conta, não por cliente — mesmo padrão
       // do sync de posts pela Graph API.
