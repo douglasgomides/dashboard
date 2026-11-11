@@ -188,14 +188,14 @@ Plans:
 
 **Requirements**: MEDV-01, MEDV-02, MEDV-03, MEDV-04, MEDV-05
 **Depends on:** Phase 03.1, etapas 1 a 3 (o resto da 03.1 vem depois desta)
-**Plans:** 1/7 plans executed (um PR só para a fase; um executor por vez, cada um commita o próprio trabalho; o orquestrador publica depois do 04 e do 07)
+**Plans:** 2/7 plans executed (um PR só para a fase; um executor por vez, cada um commita o próprio trabalho; o orquestrador publica depois do 04 e do 07)
 
 Plans:
 **Wave 1**
 - [x] 03.1.1-01-PLAN.md — Tracer: abas em pasta de ponta a ponta na tela juntada Instagram (aba = caminho da tela antiga, log aba por aba pelo routeId sem migration, contagem sem consulta nova, medida de altura)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 03.1.1-02-PLAN.md — D-07 nas peças compartilhadas do molde (pílula de ação na leitura, cartão com ícone no círculo, número com legenda, variação em pílula, laranja/listrado/tracejado); Instagram em 1,5 tela; contrato em molde-da-pagina.md
+- [x] 03.1.1-02-PLAN.md — D-07 nas peças compartilhadas do molde (pílula de ação na leitura, cartão com ícone no círculo, número com legenda, variação em pílula, laranja/listrado/tracejado); Instagram em 1,5 tela; contrato em molde-da-pagina.md
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 03.1.1-03-PLAN.md — Onde os pacientes travam (Funil com 2 partes, Consultas, Vendas, Jornada) e Por origem no molde, no D-07 e em 1,5 tela
