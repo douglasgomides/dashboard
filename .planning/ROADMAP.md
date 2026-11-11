@@ -178,14 +178,14 @@ Plans:
 
 ### Phase 03.1.1: Tela O que fazer hoje para o médico (INSERTED)
 
-**Goal:** Visão do médico com 6 telas e as telas repetidas juntadas em abas, sem apagar nenhuma, mais a porta de entrada "O que fazer hoje" com 3 a 5 ações tiradas das leituras por regra (sem IA). A equipe continua vendo tudo, agrupado. Cada aba cabe em no máximo uma tela e meia de altura, com o detalhe fechado: nada de página gigante de rolagem. Os endereços antigos levam à aba certa. Lista aprovada pelo João em 10/11/2026 (ver 03.1.1-CONTEXT.md). A fase 03.1 pausa depois da etapa 3 e continua em cima das telas juntadas.
+**Goal:** Visão do médico com 6 telas (Hoje, Resultados da clínica, Onde os pacientes travam, De onde vêm os pacientes, Instagram, Relatório do período) e as telas repetidas juntadas em abas, sem apagar nenhuma, mais a primeira versão da tela Hoje (a mesma da Phase 9, que depois ganha os números com selo) com 3 a 5 ações tiradas das leituras por regra (sem IA). A equipe continua vendo tudo, agrupado. Cada aba cabe em no máximo uma tela e meia de altura, com o detalhe fechado: nada de página gigante de rolagem. Os endereços antigos levam à aba certa. Lista aprovada pelo João em 10/11/2026 (ver 03.1.1-CONTEXT.md). A fase 03.1 pausa depois da etapa 3 e continua em cima das telas juntadas.
 **Success criteria:**
 1. O médico vê no menu só: O que fazer hoje, Resultados da clínica, Onde os pacientes travam, De onde vêm os pacientes, Instagram e Relatório do período.
 2. Toda tela antiga continua abrindo, como aba de uma tela juntada ou pelo endereço antigo, que leva à aba certa; nenhuma informação some.
 3. Em 375 e 1440 px, a aba aberta de cada tela juntada tem no máximo 1,5 altura de tela com o detalhe fechado (teste automático).
-4. "O que fazer hoje" mostra de 3 a 5 ações, cada uma com o número que a sustenta e quem resolve; com dado ruim diz "sem leitura: motivo".
+4. A Hoje mostra de 3 a 5 ações, cada uma com o número que a sustenta e quem resolve; com dado ruim diz "sem leitura: motivo".
 5. O João entende a visão do médico sem explicação.
-**Requirements**: TBD
+**Requirements**: MEDV-01, MEDV-02, MEDV-03, MEDV-04, MEDV-05
 **Depends on:** Phase 03.1, etapas 1 a 3 (o resto da 03.1 vem depois desta)
 **Plans:** 0 plans
 
@@ -277,6 +277,8 @@ Plans:
   3. Com meta cadastrada, o médico vê "12 de 20, faltam 8 em 9 dias", sem projeção; carregando (após 3 s, "Calculando, clínica grande leva até 30 s"), vazio (com a condição que falta) e erro aparecem dentro do bloco, sem derrubar a tela
   4. O menu do médico tem só Hoje e Ajuda e fontes, onde ele vê de onde vem cada número e quando foi calculado; as telas com número sem selo saem do médico e ficam para a equipe com o aviso "sem selo"
   5. Um teste no CI barra palavras proibidas no texto para o médico ("em risco", "vai", "deve", adjetivos, promessa); print do site no ar conferido no celular e no computador com a Lana
+
+**Nota de 10/11/2026 (João)**: a primeira versão da Hoje nasce na Phase 03.1.1 (ações por regra, aviso "sem selo"); esta fase evolui a mesma tela, sem criar outra. O médico vê 6 itens desde a 03.1.1; aqui o João decide se o menu dele encolhe para Hoje e Ajuda e fontes (MENU-06) ou fica com 6.
 
 **Plans**: TBD
 **UI hint**: yes
