@@ -6,10 +6,10 @@ current_phase: 03.1.1
 current_phase_name: Redesenho das telas com inteligência
 status: executing
 stopped_at: Phase 3 UI-SPEC approved
-last_updated: "2026-11-11T10:42:18.001Z"
+last_updated: "2026-11-11T15:18:07.832Z"
 last_activity: 2026-11-10
 last_activity_desc: Phase 03.1 execution started
-state_head: 7e96a09bbd61611e8e97e8da464b9f65bb9bddd0
+state_head: a7f4392370c360a675a1e0786607d90086b59b9a
 progress:
   total_phases: 16
   completed_phases: 0
@@ -77,6 +77,12 @@ None yet.
 - Fora das 12, a responder antes da fase indicada: `statement_timeout` de produção (8 s ou 30 s) antes da Phase 8; fluxo do botão de WhatsApp (`wa.me` ou API com template) antes das Phases 4 e 11; critério de "log ligado" (o João fixa) antes da Phase 14
 - Zod local 3.25.76 vs 4.6.7 no lockfile: rodar `npm ci` antes de mexer em schemas
 - Vercel Hobby em 12/12 funções: nada novo em `api/`; juntar mudanças e subir uma vez por PR
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 261111-f5b | Tirar do Nexo os agentes e as telas que ninguém usa | 2026-11-11 | a7f4392 | [261111-f5b-tirar-do-nexo-os-agentes-e-as-telas-que-](./quick/261111-f5b-tirar-do-nexo-os-agentes-e-as-telas-que-/) |
 
 ### Roadmap Evolution
 
