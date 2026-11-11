@@ -13,7 +13,7 @@ for (const width of [375, 1440]) {
     await expect(page.locator(".workspace-heading h1")).toHaveText("Analisar desempenho");
     await page.goto(`/${CID}/ideias?preset=7d`);
     const main = page.getByRole("main");
-    await expect(page.locator(".workspace-heading h1")).toHaveText("Revisar roteiros");
+    await expect(page.locator(".workspace-heading h1")).toHaveText("Encontrar ideias");
     const audit = await new AxeBuilder({ page }).include(".mainwrap").withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(audit.violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
@@ -44,14 +44,14 @@ for (const width of [375, 1440]) {
   });
 }
 
-test("legacy and invalid content links open scripts and only their own menu item is current", async ({ page, context }) => {
+test("legacy and invalid content links open Encontrar ideias and only their own menu item is current", async ({ page, context }) => {
   await mockAccount(context, "viewer");
   for (const suffix of ["", "?visao=invalida"]) {
     await page.goto(`/${CID}/ideias${suffix}`);
-    await expect(page.locator(".workspace-heading h1")).toHaveText("Revisar roteiros");
+    await expect(page.locator(".workspace-heading h1")).toHaveText("Encontrar ideias");
     const nav = page.getByRole("navigation", { name: "Telas de Marketing", exact: true });
     await expect(nav.locator('a[aria-current="page"]')).toHaveCount(1);
-    await expect(nav.getByRole("link", { name: "Revisar roteiros", exact: true })).toHaveAttribute("data-on", "");
+    await expect(nav.getByRole("link", { name: "Encontrar ideias", exact: true })).toHaveAttribute("data-on", "");
   }
 });
 

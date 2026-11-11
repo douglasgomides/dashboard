@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { FLUXOS, FERRAMENTAS, rodarAgentes, enfileirarBrain } from "../api/_lib/agentes";
+import { FLUXOS, FERRAMENTAS, rodarAgentes, enfileirarBrain, enfileirarAgendados } from "../api/_lib/agentes";
 
 const FLOW = "review_persistence";
 const EXTERNAL_FLOW = "review_external_persistence";
@@ -96,8 +96,9 @@ async function testBrainScheduling() {
   let previous: { estado: string; criado_em: unknown } | null = null;
   let insertError: { code: string; message: string } | null = null;
   let inserts = 0;
+  const rpcs: string[] = [];
   const admin: any = {
-    rpc: async () => ({ data: 0, error: null }),
+    rpc: async (nome: string) => { rpcs.push(nome); return { data: 0, error: null }; },
     from: (table: string) => {
       const q: any = {
         select: () => q, eq: () => q, in: () => q, order: () => q, limit: () => q, gte: () => q, is: () => q, not: () => q, lt: () => q, update: () => q,
@@ -140,6 +141,17 @@ async function testBrainScheduling() {
   insertError = { code: "XX000", message: "duplicate connection failure" };
   await assert.rejects(() => enfileirarBrain(admin), /duplicate connection failure/);
   assert.equal(inserts, 2, "unexpected insert failures cannot be treated as a harmless duplicate");
+  // Decisão do João, 11/11/2026: com agentes false nada é enfileirado nem medido; o modo ligado acima não muda.
+  insertError = null; previous = null;
+  const insertsAntes = inserts;
+  const rpcsAntes = rpcs.length;
+  const desligado = await enfileirarAgendados(admin, { agentes: false });
+  assert.equal(inserts, insertsAntes, "com agentes desligados nenhuma execução é inserida");
+  const chamadas = rpcs.slice(rpcsAntes);
+  assert.ok(!chamadas.includes("sugestoes_medir") && !chamadas.includes("operacao_verificar"), "sem medição nem acompanhamento de agente");
+  assert.equal(desligado.desligado, true);
+  assert.equal(desligado.enfileiradas, 0);
+  assert.equal(desligado.aprendizado, null);
 }
 
 try {

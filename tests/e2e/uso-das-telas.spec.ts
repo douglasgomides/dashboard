@@ -45,7 +45,7 @@ test("a aba lista as 81 telas, inclusive as com zero, e o início do registro", 
   await expect(painel.locator("tbody tr")).toHaveCount(81);
   const indice = painel.getByRole("row").filter({ has: page.getByRole("cell", { name: "/[clínica]/", exact: true }) });
   await expect(indice.getByRole("cell").nth(1)).toHaveText("12");
-  await expect(painel.getByText("só redireciona", { exact: true })).toHaveCount(12);
+  await expect(painel.getByText("só redireciona", { exact: true })).toHaveCount(21);
   await expect(painel.getByText("Registro ligado desde 08/11/2026")).toBeVisible();
   await expect(painel.locator("caption")).toHaveText("Últimos 7 dias · uso das clínicas");
   expect(corpos[0]).toEqual({ p_dias: 7, p_equipe: false, p_incluir_teste: false });

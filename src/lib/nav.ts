@@ -5,13 +5,10 @@ import {
   FileText,
   HelpCircle,
   LayoutDashboard,
-  Target,
   Route,
   LayoutGrid,
   Lightbulb,
   CalendarDays,
-  CalendarCheck,
-  NotebookPen,
   GitCompare,
   Megaphone,
   MessageCircle,
@@ -23,8 +20,6 @@ import {
   Users,
   type LucideIcon,
   ClipboardList,
-  ListTodo,
-  Bot,
   Link2,
 } from "lucide-react";
 
@@ -40,9 +35,11 @@ export type Fontes =
   | null
   | undefined;
 
+// "roteiros" continua no tipo só porque o atalho tirado do registro (Revisar roteiros, 11/11/2026) ainda o usa;
+// a tela só tem 2 visões: qualquer valor que não seja "semana" abre Encontrar ideias.
 export type ContentView = "roteiros" | "semana" | "ideias";
 export function parseContentView(value: unknown): ContentView {
-  return value === "semana" || value === "ideias" ? value : "roteiros";
+  return value === "semana" ? "semana" : "ideias";
 }
 export function parseContentViewSearch(search: Record<string, unknown>): { visao: ContentView } {
   return { visao: parseContentView(search.visao) };
@@ -69,7 +66,7 @@ export interface NavTab {
 }
 
 export interface NavArea {
-  id: "resumo" | "marketing" | "comercial" | "acoes" | "relatorio";
+  id: "resumo" | "marketing" | "comercial" | "relatorio";
   label: string;
   /** Rótulo da barra inferior do celular (cabe na barra inferior). */
   curto?: string;
@@ -81,7 +78,7 @@ export interface NavArea {
 // Mesma ordem e mesmos nomes na página de Marketing e no menu lateral.
 export const MARKETING_GROUPS = [
   { id: "Resultados", title: "Analisar os números", description: "Compare o desempenho do conteúdo, os anúncios e os sinais de demanda." },
-  { id: "Conteúdo", title: "Produzir e planejar conteúdo", description: "Revise roteiros, organize a semana e use os resultados para escolher os próximos temas." },
+  { id: "Conteúdo", title: "Produzir e planejar conteúdo", description: "Organize a semana e use os resultados para escolher os próximos temas." },
   { id: "Campanhas e anúncios", title: "Planejar campanhas e aquisição", description: "Organize campanhas e links para acompanhar a origem dos contatos." },
 ] as const;
 
@@ -173,15 +170,6 @@ export const AREAS: NavArea[] = [
       },
       {
         path: "/ideias",
-        search: { visao: "roteiros" },
-        label: "Revisar roteiros",
-        Icone: Lightbulb,
-        descricao: "Leia os roteiros prontos e revise o que será produzido.",
-        termos: "roteiro criar reels carrossel legenda",
-        grupo: "Conteúdo",
-      },
-      {
-        path: "/ideias",
         search: { visao: "semana" },
         label: "Planejar a semana",
         Icone: CalendarDays,
@@ -227,15 +215,6 @@ export const AREAS: NavArea[] = [
         fonte: "instagram",
         termos: "perguntas comentarios duvidas",
         grupo: "Conteúdo",
-      },
-      {
-        path: "/campanhas",
-        label: "Estratégias e campanhas",
-        equipe: true,
-        Icone: Megaphone,
-        descricao: "Planeje as campanhas e os canais de aquisição.",
-        termos: "campanhas do mes estrategia online offline marketing",
-        grupo: "Campanhas e anúncios",
       },
       {
         path: "/links",
@@ -300,55 +279,6 @@ export const AREAS: NavArea[] = [
         admin: true,
         termos: "atribuicao receita aquisicao comparecimento",
         grupo: "Jornada comercial",
-      },
-    ],
-  },
-  {
-    id: "acoes",
-    label: "Plano de ação",
-    curto: "Ações",
-    descricao: "Prioridades, entregas dos agentes e execução da equipe",
-    Icone: ListTodo,
-    tabs: [
-      {
-        path: "/plano",
-        label: "Plano da semana",
-        Icone: CalendarCheck,
-        descricao: "As 3 a 5 ações que mais trazem resultado nesta semana, com o valor em jogo e o que mudou na semana passada.",
-        termos: "plano semana prioridade fazer valor dinheiro resultado inteligencia recomendacao",
-      },
-      {
-        path: "/reunioes",
-        label: "Reuniões",
-        admin: true,
-        Icone: NotebookPen,
-        descricao: "Anote o que foi falado com a clínica e transforme em resumo, entregas da semana e memória no Brain.",
-        termos: "reuniao reunioes notas ata meet transcricao combinados brain memoria pos reuniao",
-      },
-      {
-        path: "/proximas-acoes",
-        label: "Prioridades da equipe",
-        equipe: true,
-        Icone: ListTodo,
-        descricao: "Veja o que precisa de atenção, quem cuida e o andamento.",
-        termos: "tarefas fazer pendencias proximas acoes responsavel",
-      },
-      {
-        path: "/agentes",
-        label: "Agentes e entregas",
-        equipe: true,
-        Icone: Bot,
-        descricao:
-          "Acompanhe os agentes, revise entregas e aprove o que depende de você.",
-        termos: "agentes inteligencia artificial ia automacao aprovacoes trabalhos execucoes entregas",
-      },
-      {
-        path: "/oportunidades",
-        label: "Oportunidades de melhoria",
-        equipe: true,
-        Icone: Target,
-        descricao: "Investigue os sinais encontrados nos dados antes de agir.",
-        termos: "score diagnostico gargalos oportunidades",
       },
     ],
   },
@@ -469,13 +399,8 @@ export function areasVisiveis(v: Visibilidade): AreaVisivel[] {
 /** A clínica acompanha o serviço; análises detalhadas continuam acessíveis por expansão e busca. */
 export function navegacaoClinica(areas: AreaVisivel[], equipe: boolean) {
   if (equipe) return { principais: areas, detalhes: [] as AreaVisivel[] };
-  const entregas = areas.find(a => a.id === "acoes");
   const atendimento = areas.find(a => a.id === "comercial" && a.visiveis.some(t => t.atendimentoOperacional));
-  const principais = [areas.find(a => a.id === "resumo"), atendimento && {...atendimento,label:"Atendimento e CRM",curto:"Atendimento"}, entregas && {
-    ...entregas, label: "Entregas e aprovações", curto: "Entregas",
-    descricao: "Materiais preparados, revisões e próximos passos",
-    visiveis: [...entregas.visiveis].sort((a, b) => Number(b.path === "/agentes") - Number(a.path === "/agentes")).map(t => t.path === "/agentes" ? { ...t, label: "Entregas e aprovações", descricao: "Veja os materiais preparados e o que precisa de revisão." } : t),
-  }, areas.find(a => a.id === "relatorio")].filter((a): a is AreaVisivel => !!a);
+  const principais = [areas.find(a => a.id === "resumo"), atendimento && {...atendimento,label:"Atendimento e CRM",curto:"Atendimento"}, areas.find(a => a.id === "relatorio")].filter((a): a is AreaVisivel => !!a);
   if (!principais.length) return { principais: areas, detalhes: [] as AreaVisivel[] };
   return { principais, detalhes: areas.filter(a => !principais.some(p => p.id === a.id)) };
 }

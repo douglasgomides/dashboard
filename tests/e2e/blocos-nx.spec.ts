@@ -81,21 +81,6 @@ async function dadosFicticios(context: BrowserContext) {
 }
 
 for (const width of [375, 1440]) {
-  test(`Automações: tela em construção diz o que falta e quem resolve em ${width}px`, async ({ page, context }) => {
-    await mockAccount(context, "admin");
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto(`/${CID}/automacoes`);
-    const vazio = page.locator('[data-peca="vazio"]');
-    await expect(vazio).toBeVisible();
-    await expect(vazio).toContainText("Em construção");
-    await expect(vazio).toContainText("O que falta:");
-    await expect(vazio).toContainText("Quem resolve: Equipe Doctor Creator");
-    // O texto técnico de fase não aparece mais; fica só como atributo.
-    await expect(page.getByText("Fase 3")).toHaveCount(0);
-    await expect(page.locator("[data-fase]")).toHaveCount(1);
-    expect(await semRolagemLateral(page)).toBe(true);
-  });
-
   test(`Dados com erro na origem aparecem como avisos nx, crítico e atenção, em ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "admin");
     await context.route("**/rest/v1/rpc/qualidade_dados", (r) =>

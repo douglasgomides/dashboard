@@ -413,7 +413,7 @@ test("a busca na casca /admin usa a clínica lembrada nos links que precisam de 
 test("sem clínica lembrada a busca na casca /admin diz Escolha uma clínica primeiro e leva à Carteira com a dica", async ({ page, context }) => {
   await mockAccount(context, "admin");
   await page.setViewportSize({ width: 1440, height: 900 });
-  await abrirAdmin(page, "/admin/agentes");
+  await abrirAdmin(page, "/admin/equipe");
   const dialog = await buscarNoAdmin(page, "Pacientes");
   const resultado = dialog.getByRole("navigation", { name: "Resultados da busca" }).getByRole("link", { name: /Pacientes do período/ });
   await expect(resultado).toContainText("Escolha uma clínica primeiro");

@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, getRouteApi, Link, useLocation } from "@tanstack/react-router";
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import "@/styles/nexo-resultados.css";
 import { useResultado } from "@/hooks/use-resultado";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
@@ -20,9 +20,6 @@ import { textoNaoMedido, avisoNaoMedido, avisoAgendouMenosQueFechou, coberturaDo
 import { getRoiPeriodo, getAdsDiagnosticoPorObjetivo } from "@/lib/client-data";
 import { usePautas } from "@/components/planejador-conteudo";
 import { ROTULO_FORMATO } from "@/lib/pauta";
-import { AGENTES, type IdAgente } from "@/lib/agentes-catalogo";
-import { lerTrabalhoAgente } from "@/lib/agentes-trabalho-data";
-import { TRABALHOS_AGENTE } from "@/lib/agentes-trabalho";
 import { fmtFormatKey } from "@/lib/report-metrics";
 import { completeInstagramPeriod } from "@/lib/report-period";
 import { SyncButton } from "@/components/sync-button";
@@ -881,10 +878,6 @@ function Resultados({
         </div>
       </NxRecolhido>
 
-      <NxRecolhido id="acompanhamento" titulo="Acompanhamento Doctor Creator" resumo="Materiais preparados e próximos passos, com datas próprias (não mudam com o período)">
-        <EntregasDoServico clientId={clientId} />
-      </NxRecolhido>
-
       <NxRecolhido id="metodo" titulo="Como lemos estes números" resumo="O que ainda não dá para dizer e as regras de leitura">
         <MetodoDosNumeros limitacoes={r.limitacoes} pessoas={pessoas} />
       </NxRecolhido>
@@ -1255,61 +1248,6 @@ function RetornoNoDetalhe({ clientId, start, end, dados, isAdmin }: { clientId: 
           </ul>
         </NxRecolhido>
       )}
-    </NxCard>
-  );
-}
-
-const FRENTES: Record<string, { titulo: string; responsavel: string }> = {
-  conteudo: { titulo: "Roteiros e conteúdos", responsavel: "Clínica e equipe de conteúdo" },
-  campanhas: { titulo: "Propostas de campanha", responsavel: "Clínica e estrategista" },
-  anuncios: { titulo: "Revisão dos anúncios", responsavel: "Gestor de tráfego Doctor Creator" },
-  recuperacao: { titulo: "Retomada de contatos", responsavel: "Atendimento da clínica" },
-};
-const FRENTES_ORDEM: IdAgente[] = ["conteudo", "campanhas", "anuncios", "recuperacao"];
-
-/** O que o antigo "Acompanhamento do serviço" mostrava, uma linha por frente de trabalho. Só leitura, não inicia agente. */
-function EntregasDoServico({ clientId }: { clientId: string }) {
-  const agentes = FRENTES_ORDEM.map((id) => AGENTES.find((a) => a.id === id)!);
-  const resultados = useQueries({
-    queries: agentes.map((a) => ({ queryKey: ["agentes-trabalho", clientId, false, a.id], queryFn: () => lerTrabalhoAgente(clientId, a, false), retry: false, staleTime: 30_000 })),
-  });
-  const carregando = resultados.some((q) => q.isPending);
-  if (carregando) return <NxCarregando linhas={2} />;
-  return (
-    <NxCard nivel={3} icone={ic(ClipboardCheck)} titulo="O que estamos entregando para a clínica" subtitulo="Material preparado não significa conteúdo publicado nem mudança aplicada em anúncio.">
-      {resultados.some((q) => q.isError) && <p className="nxr-apoio">Não foi possível conferir todas as entregas: a fila pode estar incompleta.</p>}
-      <ul className="nx-lista">
-        {agentes.map((a, k) => {
-          const q = resultados[k];
-          const dados = q.isSuccess ? q.data : null;
-          const janela = TRABALHOS_AGENTE[a.id].janelaDias;
-          return (
-            <li key={a.id}>
-              <NxListRow
-                titulo={FRENTES[a.id].titulo}
-                sub={
-                  <>
-                    <span>
-                      {dados
-                        ? dados.pendentes > 0
-                          ? `${dados.pendentes} ${dados.pendentes === 1 ? "material para revisar" : "materiais para revisar"}${janela ? ` nos últimos ${janela} dias` : ""}`
-                          : "Nada pendente de revisão"
-                        : "Não confirmado"}
-                    </span>
-                    <span>{`Responsável pelo próximo passo: ${FRENTES[a.id].responsavel}`}</span>
-                    {dados?.ultimaEntrega && <span>{`Último registro: ${new Date(dados.ultimaEntrega).toLocaleDateString("pt-BR", { timeZone: "America/Fortaleza" })}`}</span>}
-                  </>
-                }
-                fim={
-                  <Link to="/$clientId/agentes" params={{ clientId }} search={{ agente: a.id } as any} hash="agent-review-workspace" className="nx-botao">
-                    Ver entrega
-                  </Link>
-                }
-              />
-            </li>
-          );
-        })}
-      </ul>
     </NxCard>
   );
 }

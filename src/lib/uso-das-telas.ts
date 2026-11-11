@@ -23,6 +23,16 @@ export const ROTAS_SO_REDIRECIONAM: ReadonlySet<string> = new Set([
   "/_authenticated/admin/aquisicao",
   "/_authenticated/sap/$clientId/semana",
   "/_authenticated/sap/$clientId/passo-a-passo",
+  // Tiradas em 11/11/2026 por decisão do João ("tira isso aí, ninguém usa"): só redirecionam.
+  "/_authenticated/$clientId/agentes",
+  "/_authenticated/$clientId/plano",
+  "/_authenticated/$clientId/reunioes",
+  "/_authenticated/$clientId/proximas-acoes",
+  "/_authenticated/$clientId/oportunidades",
+  "/_authenticated/$clientId/automacoes",
+  "/_authenticated/$clientId/campanhas",
+  "/_authenticated/admin/agentes",
+  "/_authenticated/admin/brain",
 ]);
 
 // Períodos da aba, em dias (D-12). O banco limita a 90 (CD-09).

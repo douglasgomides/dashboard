@@ -16,7 +16,6 @@ A Central de atendimento é uma fila de trabalho: ganha o cabeçalho do molde e 
 
 | Rota | Card ou bloco | Antes | Depois | Plano |
 |---|---|---|---|---|
-| /_authenticated/$clientId/atendimento | Fila esquecida | RecuperarHoje · operacao-recuperacao congelado | | 03.1-12 |
 | /_authenticated/$clientId/atendimento | Atendimentos, espera até a 1ª resposta e sem roteamento | CmKpi | | 03.1-12 |
 | /_authenticated/$clientId/atendimento | Volume por dia e espera até a 1ª resposta | NxCard com NxLinhaTempo | | 03.1-12 |
 | /_authenticated/$clientId/atendimento | Por equipe | NxCard com CmBarras | | 03.1-12 |
@@ -38,3 +37,11 @@ A Central de atendimento é uma fila de trabalho: ganha o cabeçalho do molde e 
 | /_authenticated/$clientId/central-atendimento | Canais e conexão | Canais e ConfigCentral · crm-box | | 03.1-12 |
 | /_authenticated/$clientId/central-atendimento | Acesso de consulta | CentralDaClinica · crm-box | | 03.1-12 |
 | /_authenticated/$clientId/central-atendimento | Ativação oficial pendente | SeloRelacionamento · crm-box | | 03.1-12 |
+
+## Tiradas (João 11/11)
+
+Decisão do João em 11/11/2026 ("tira isso aí, ninguém usa"): estas telas e blocos saíram do Nexo, e o endereço antigo redireciona, sem 404. Vai para "—" quer dizer que só o bloco saiu e a tela continua.
+
+| Rota | Tela ou bloco | Situação | Vai para |
+|---|---|---|---|
+| /_authenticated/$clientId/atendimento | Fila esquecida | tirada (João 11/11) | — |

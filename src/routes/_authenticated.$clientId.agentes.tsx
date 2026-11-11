@@ -1,16 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { NxPainelAgentes } from "@/components/nx/agentes-paineis";
-import "@/styles/nexo-plano.css";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-// Sistema agêntico do Hub: o que cada agente faz para esta clínica, quando roda e o que espera a equipe.
+// Tirada em 11/11/2026 por decisão do João ("tira isso aí, ninguém usa"): o endereço antigo leva a Resultados da clínica com o mesmo período, sem 404. O plano 03.1.1-05 troca o destino pela Hoje.
+// O validateSearch fica porque peças congeladas do SAP fazem Link tipado para esta rota com search { agente }.
 export const Route = createFileRoute("/_authenticated/$clientId/agentes")({
-  component: AgentesHub,
   validateSearch: (s: Record<string, unknown>) => ({ agente: typeof s.agente === "string" ? s.agente : undefined }),
+  beforeLoad: ({ params, search }) => {
+    const { agente: _agente, ...periodo } = search;
+    throw redirect({ to: "/$clientId", params: { clientId: params.clientId }, search: periodo as never });
+  },
 });
-
-function AgentesHub() {
-  const { clientId } = Route.useParams();
-  const { agente } = Route.useSearch();
-  const navigate = Route.useNavigate();
-  return <div className="nexo-plano nexo-agentes"><NxPainelAgentes key={clientId} clientId={clientId} produto="hub" selecionado={agente} onSelecionar={(id, irParaEntregas) => void navigate({ hash: irParaEntregas ? "agent-review-workspace" : "", search: (prev: Record<string, unknown>) => ({ ...prev, agente: id }) as never, resetScroll: false })} /></div>;
-}

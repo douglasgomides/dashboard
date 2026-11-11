@@ -12,17 +12,18 @@ test("desktop: task search leads to existing tools and preserves clinic and peri
   await mockAccount(context, "viewer");
   await page.goto(`/${CID}/ideias?preset=7d`);
   await expect(page.locator(".workspace-heading h1")).toHaveText(
-    "Revisar roteiros",
+    "Encontrar ideias",
   );
   const sidebar = page.getByRole("complementary", { name: "Menu principal" });
   await expect(
     sidebar
       .getByRole("navigation", { name: "Áreas do Nexo" })
       .getByRole("link"),
-  ).toHaveCount(3);
-  // Menu do médico de hoje (D-10, trava em links-do-medico.ts): Marketing com 5 telas em 2 grupos, Resultados e Conteúdo.
+  ).toHaveCount(2);
+  // Menu do médico de hoje (D-10, trava em links-do-medico.ts): Marketing com 4 telas em 2 grupos, Resultados e Conteúdo
+  // (sem Revisar roteiros, tirada em 11/11/2026 por decisão do João).
   const marketing = sidebar.getByRole("navigation", { name: "Telas de Marketing" });
-  await expect(marketing.getByRole("link", { includeHidden: true })).toHaveCount(5);
+  await expect(marketing.getByRole("link", { includeHidden: true })).toHaveCount(4);
   await expect(marketing.getByText("Conteúdo", { exact: true })).toBeVisible();
   await expect(marketing.getByText("Resultados", { exact: true })).toBeVisible();
   await expect(page.locator(".areatabs")).toHaveCount(0);
@@ -259,7 +260,7 @@ for (const width of [375, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`/${CID}/ideias?preset=7d`);
     const primary = page.getByRole("navigation", { name: width === 1440 ? "Áreas do Nexo" : "Áreas", exact: true });
-    await expect(primary.getByRole("link")).toHaveText(width === 1440 ? ["Resultados", "Entregas e aprovações", "Relatórios"] : ["Resultados", "Entregas", "Relatórios"]);
+    await expect(primary.getByRole("link")).toHaveText(["Resultados", "Relatórios"]);
     if (width === 1440) {
       const secondary = page.getByRole("navigation", { name: "Análises detalhadas", exact: true });
       await expect(secondary.getByRole("link")).toHaveText(["Marketing", "Comercial"]);
@@ -268,16 +269,13 @@ for (const width of [375, 1440]) {
     } else {
       await primary.getByRole("button", { name: "Menu", exact: true }).click();
       const menu = page.getByRole("dialog", { name: "Navegar no Nexo" });
-      await expect(menu.locator("summary > span")).toHaveText(["Resultados", "Entregas e aprovações", "Relatórios", "Marketing", "Comercial"]);
+      await expect(menu.locator("summary > span")).toHaveText(["Resultados", "Relatórios", "Marketing", "Comercial"]);
       await menu.locator("summary").filter({ hasText: "Comercial" }).click();
       await menu.getByRole("link", { name: "Funil comercial", exact: true }).click();
     }
     // Comercial do médico hoje tem só o Funil comercial (D-10, links-do-medico.ts).
     await expect(page).toHaveURL(new RegExp(`/${CID}/crm-painel`));
     expect(new URL(page.url()).searchParams.get("preset")).toBe("7d");
-    await primary.getByRole("link", { name: width === 1440 ? "Entregas e aprovações" : "Entregas", exact: true }).click();
-    // Entregas do médico leva ao Plano da semana (links-do-medico.ts).
-    await expect(page).toHaveURL(new RegExp(`/${CID}/plano`));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   });
 }

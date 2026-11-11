@@ -23,8 +23,6 @@ import { Wallet, MessageCircle, Coins, Eye, MousePointerClick, Layers, Zap, Mega
 import { Painel, BarraFina, InfoDica } from "@/components/visual";
 import { fmtFracao } from "@/lib/metricas";
 import { nomeObjetivo, objetivoNaoContaConversa } from "@/lib/rastreio-anuncios";
-import { NxGestorAnuncios } from "@/components/nx/agentes-paineis";
-import { useClientRole } from "@/hooks/use-client-role";
 import { NxCard, NxTag, NxHBar } from "@/components/nx";
 import { NxBarrasLinha, NxFunil, NxAlertaCurto, NxNota, NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
@@ -358,7 +356,6 @@ function resumoEmNumeros(r: unknown): ResumoDeAnuncios | null {
 
 function AnunciosPage() {
   const { clientId } = Route.useParams();
-  const { podeEditar } = useClientRole(clientId);
   const dateRangeState = clientLayoutRoute.useSearch();
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
@@ -701,7 +698,7 @@ function AnunciosPage() {
 
           <details ref={recomendacoes} id="recomendacoes-anuncios" className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
             <summary className="min-h-[44px] cursor-pointer py-3 font-semibold">Ver recomendações e ações para os anúncios</summary>
-            <div className="mt-3 space-y-4"><NxGestorAnuncios clientId={clientId} podeEditar={podeEditar} /><AgirHoje d={diag} clientId={clientId} /></div>
+            <div className="mt-3 space-y-4"><AgirHoje d={diag} clientId={clientId} /></div>
           </details>
 
           <ComparativoConta clientId={clientId} start={start} end={end} />

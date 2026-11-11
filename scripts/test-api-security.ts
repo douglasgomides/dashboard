@@ -6,6 +6,7 @@ import { integrationHost, graphPageUrl } from "../api/_lib/integration-http";
 import { manualRequestSchema, createUserSchema, createAdminSchema } from "../api/_lib/request-validation";
 import { conversationSummarySchema, sessionDraftSchema } from "../api/_lib/ai-output";
 import manual from "../api/sync/manual";
+import { AGENTES_DESLIGADOS } from "../src/lib/agentes-catalogo";
 import createUser from "../api/admin/create-user";
 import createAdmin from "../api/admin/create-admin";
 import { resumirConversa } from "../api/_lib/resumo-conversa";
@@ -199,13 +200,22 @@ async function testSummaryAuditAndOutput() {
 }
 
 async function testSchedulerAuthorization() {
+  // Decisão do João, 11/11/2026 ("tira isso aí, ninguém usa"): os agentes estão desligados no servidor.
+  // As asserções do agendamento ligado (fila, medição, aprendizado) estão no histórico (commit f43e30d).
+  assert.equal(AGENTES_DESLIGADOS, true, "os agentes seguem desligados; para religar, reative as asserções do commit f43e30d");
   const secret = "offline-scheduler-secret";
   process.env.SYNC_SECRET = secret;
   let authCalls = 0;
   let queueRuns = 0;
   let enqueues = 0;
+  let dbCalls = 0;
+  let medicoes = 0;
+  let aprendizado = 0;
+  let sapConferidas = 0;
+  let leiturasPlano = 0;
   let appAdmin = false;
   let failPreviousRead = false;
+  const zerar = () => { queueRuns = 0; enqueues = 0; dbCalls = 0; medicoes = 0; aprendizado = 0; sapConferidas = 0; leiturasPlano = 0; };
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input));
     assert.equal(url.origin, origin, "scheduler tests must never call a real provider");
@@ -214,15 +224,22 @@ async function testSchedulerAuthorization() {
       return new Headers(init?.headers).get("authorization") === "Bearer session-token"
         ? json({ id: USER, email: "admin@example.test" }) : json({ message: "invalid token" }, 401);
     }
+    dbCalls++;
     const table = url.pathname.split("/").at(-1);
     if (table === "agentes_reservar") {
       queueRuns++;
       assert.equal(JSON.parse(String(init?.body)).p_execucao, null, "the scheduler may process the queue but cannot select an execution");
       return json([]);
     }
-    if (table === "sugestoes_medir" || table === "operacao_verificar") return json(0);
+    if (table === "sugestoes_medir" || table === "operacao_verificar") { medicoes++; return json(0); }
     if (table === "sugestoes_agentes" || table === "campanhas_ideias" || table === "brain_itens") return json([]);
-    if (table === "cliente_modulos") return json(url.searchParams.get("modulo") ? [] : [{ client_id: CLIENT, modulo: "brand_brain" }]);
+    if (table === "cliente_modulos") {
+      if (url.searchParams.get("modulo") === "eq.hub") { aprendizado++; return json([]); }
+      return json(url.searchParams.get("modulo") ? [] : [{ client_id: CLIENT, modulo: "brand_brain" }, { client_id: OTHER, modulo: "sap" }]);
+    }
+    if (table === "sap_clinicas") return json({ id: CONV, status: "rodando", d0: new Date().toISOString().slice(0, 10) });
+    if (table === "operacao_sap_conferir") { sapConferidas++; return json({ pendentes: 0 }); }
+    if (table === "clients") { leiturasPlano++; return json([]); }
     if (table === "agente_execucoes") {
       if (init?.method === "POST") { enqueues++; return json(null); }
       return failPreviousRead ? dbError() : json(null);
@@ -230,15 +247,35 @@ async function testSchedulerAuthorization() {
     if (table === "app_admins") return json(appAdmin ? { user_id: USER } : null);
     throw new Error(`Unexpected scheduler query ${table}`);
   };
-  let response = await invoke(manual, { alvo: "agentes", acao: "rodar" }, `Bearer ${secret}`);
-  assert.equal(response.status, 200);
-  assert.equal(response.result.agendado, true);
+  // rodar e resumo_equipe: 200 desligado, sem banco, sem fila e sem IA.
+  for (const acao of ["rodar", "resumo_equipe"]) {
+    zerar();
+    const response = await invoke(manual, { alvo: "agentes", acao }, `Bearer ${secret}`);
+    assert.equal(response.status, 200, JSON.stringify(response.result));
+    assert.equal(response.result.ok, true);
+    assert.equal(response.result.desligado, true);
+    assert.equal(dbCalls, 0, `${acao} não pode tocar no banco com os agentes desligados`);
+    assert.equal(queueRuns, 0);
+  }
   assert.equal(authCalls, 0, "the machine secret must not be sent to the user-auth provider");
-  assert.equal(queueRuns, 1);
-  response = await invoke(manual, { alvo: "agentes", acao: "brain_enfileirar" }, `Bearer ${secret}`);
-  assert.equal(response.status, 200, JSON.stringify(response.result));
-  assert.equal(response.result.enfileiradas, 1);
-  assert.equal(enqueues, 1);
+  // brain_enfileirar e agendar: nenhum agente enfileirado; o SAP (plano, conferência e expiração) continua.
+  for (const acao of ["brain_enfileirar", "agendar"]) {
+    zerar();
+    const response = await invoke(manual, { alvo: "agentes", acao }, `Bearer ${secret}`);
+    assert.equal(response.status, 200, JSON.stringify(response.result));
+    assert.equal(response.result.ok, true);
+    assert.equal(response.result.agendado, true);
+    assert.equal(response.result.desligado, true);
+    assert.equal(response.result.enfileiradas, 0);
+    assert.equal(enqueues, 0, "nenhum agente é enfileirado");
+    assert.equal(queueRuns, 0);
+    assert.equal(medicoes, 0, "sugestoes_medir e operacao_verificar não rodam");
+    assert.equal(aprendizado, 0, "aprenderTodas não roda");
+    assert.equal(sapConferidas, 1, "operacao_sap_conferir roda 1 vez por clínica SAP rodando");
+    assert.ok(leiturasPlano >= 1, "atualizarPlanos (plano da semana) continua");
+    assert.equal(response.result.plano?.erro, undefined, JSON.stringify(response.result.plano));
+  }
+  zerar();
   for (const body of [
     { alvo: "agentes", acao: "catalogo" }, { alvo: "agentes" }, { alvo: "agentes", acao: "unknown" },
     { alvo: "posts", client_id: CLIENT, acao: "rodar" },
@@ -247,13 +284,14 @@ async function testSchedulerAuthorization() {
     { alvo: "agentes", acao: "rodar", maxPassos: 1000 },
     { alvo: "agentes", acao: "brain_enfileirar", execucao_id: CONV },
   ]) assert.equal((await invoke(manual, body, `Bearer ${secret}`)).status, 403);
-  assert.equal(queueRuns, 1);
-  assert.equal(enqueues, 1, "the scheduler secret cannot authorize other operations or hidden parameters");
+  assert.equal(queueRuns, 0);
+  assert.equal(enqueues, 0, "the scheduler secret cannot authorize other operations or hidden parameters");
+  assert.equal(dbCalls, 0);
   assert.equal(authCalls, 0);
   assert.equal((await invoke(manual, { alvo: "agentes", acao: [] }, `Bearer ${secret}`)).status, 400);
   assert.equal((await invoke(manual, { alvo: "agentes", acao: "rodar" }, `Bearer ${secret}x`)).status, 401);
   assert.equal((await invoke(manual, { alvo: "agentes", acao: "rodar" }, "Bearer offline-scheduler")).status, 401);
-  assert.equal(queueRuns, 1, "near matches must never authenticate a scheduler");
+  assert.equal(queueRuns, 0, "near matches must never authenticate a scheduler");
   for (const acao of ["rodar", "brain_enfileirar"]) {
     assert.equal((await invoke(manual, { alvo: "agentes", acao }, "Bearer session-token")).status, 403, "members cannot schedule global agent work");
   }
@@ -261,12 +299,25 @@ async function testSchedulerAuthorization() {
   assert.equal((await invoke(manual, { alvo: "agentes", acao: "catalogo" }, "Bearer session-token")).status, 200);
   assert.equal((await invoke(manual, { alvo: "agentes", acao: "unknown" }, "Bearer session-token")).status, 400);
   assert.equal((await invoke(manual, { alvo: "agentes", acao: "brain_enfileirar" }, "Bearer session-token")).status, 400, "a scheduler-only action must not silently execute a different operation for a user");
+  // Admin na tela: rodar responde 200 desligado, com e sem execucao_id válido; execucao_id inválido segue 400.
+  let pedido = await invoke(manual, { alvo: "agentes", acao: "rodar" }, "Bearer session-token");
+  assert.equal(pedido.status, 200, JSON.stringify(pedido.result));
+  assert.equal(pedido.result.desligado, true);
+  pedido = await invoke(manual, { alvo: "agentes", acao: "rodar", execucao_id: CONV }, "Bearer session-token");
+  assert.equal(pedido.status, 200, JSON.stringify(pedido.result));
+  assert.equal(pedido.result.desligado, true);
+  assert.equal((await invoke(manual, { alvo: "agentes", acao: "rodar", execucao_id: "nao-e-uuid" }, "Bearer session-token")).status, 400);
+  assert.equal(queueRuns, 0, "a fila nunca anda com os agentes desligados");
+  // A leitura da última execução nem acontece: brain_enfileirar não falha e não enfileira.
   failPreviousRead = true;
-  assert.equal((await invoke(manual, { alvo: "agentes", acao: "brain_enfileirar" }, `Bearer ${secret}`)).status, 500);
-  assert.equal(enqueues, 1, "an unreadable previous run cannot schedule another run");
+  zerar();
+  const semFila = await invoke(manual, { alvo: "agentes", acao: "brain_enfileirar" }, `Bearer ${secret}`);
+  assert.equal(semFila.status, 200, JSON.stringify(semFila.result));
+  assert.equal(semFila.result.desligado, true);
+  assert.equal(enqueues, 0, "an unreadable previous run cannot schedule another run");
   process.env.SYNC_SECRET = "";
   assert.equal((await invoke(manual, { alvo: "agentes", acao: "rodar" }, `Bearer ${secret}`)).status, 401);
-  assert.equal(queueRuns, 1);
+  assert.equal(queueRuns, 0);
 }
 
 try {

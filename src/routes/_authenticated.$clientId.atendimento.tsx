@@ -18,8 +18,6 @@ import { fmtNum } from "@/lib/format";
 import { CustoWhatsapp } from "@/components/custo-whatsapp";
 import { ConversasWhatsapp } from "@/components/conversas-whatsapp";
 import { useAuth } from "@/hooks/use-auth";
-import { useClientRole } from "@/hooks/use-client-role";
-import { NxRecuperarHoje } from "@/components/nx/agentes-paineis";
 import { AtendimentoConversas } from "@/components/atendimento-conversas";
 
 // Atendimento no WhatsApp: uma tela só com duas abas. "Números" (volume, espera, equipe) e, para a equipe,
@@ -61,14 +59,12 @@ function AtendimentoPage() {
   const { clientId } = Route.useParams();
   const { aba, conversa } = Route.useSearch();
   const { isAdmin } = useAuth();
-  const { podeEditar } = useClientRole(clientId);
   const navigate = Route.useNavigate();
   const atual = aba === "conversas" && isAdmin ? "conversas" : "numeros";
   const ir = (a: "numeros" | "conversas") => navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, aba: a === "conversas" ? "conversas" : undefined, conversa: undefined }) as never });
   return (
     <div className="space-y-4">
-      {/* Na aba de números, a pergunta da tela vem primeiro; a lista do dia para recuperar pacientes fica logo depois. */}
-      {atual === "conversas" && <NxRecuperarHoje clientId={clientId} podeEditar={podeEditar} />}
+      {/* A lista "Recuperar hoje" (agente de recuperação) saiu em 11/11/2026 por decisão do João. */}
       {isAdmin && (
         <div className="flex max-w-full flex-wrap gap-1 rounded-xl border p-1 text-sm" role="tablist" aria-label="Atendimento no WhatsApp" style={{ borderColor: "var(--line)", width: "fit-content", background: "var(--white)" }}>
           {([["numeros", "Números do atendimento"], ["conversas", "Conversas e auditoria"]] as const).map(([id, rot]) => (
@@ -87,7 +83,6 @@ function AtendimentoPage() {
         </div>
       )}
       {atual === "conversas" ? <ConversasWhatsapp clientId={clientId} conversaInicial={conversa} /> : <NumerosWhatsapp clientId={clientId} />}
-      {atual === "numeros" && <NxRecuperarHoje clientId={clientId} podeEditar={podeEditar} />}
     </div>
   );
 }
