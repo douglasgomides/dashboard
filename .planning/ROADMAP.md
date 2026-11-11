@@ -187,10 +187,26 @@ Plans:
 5. O João entende a visão do médico sem explicação.
 **Requirements**: MEDV-01, MEDV-02, MEDV-03, MEDV-04, MEDV-05
 **Depends on:** Phase 03.1, etapas 1 a 3 (o resto da 03.1 vem depois desta)
-**Plans:** 0 plans
+**Plans:** 6 plans (um PR só para a fase; um executor por vez; publicação pelo orquestrador depois do 03 e do 06)
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 03.1.1 to break down)
+**Wave 1**
+- [ ] 03.1.1-01-PLAN.md — Tracer: abas em pasta de ponta a ponta na tela juntada Instagram (aba = rota que já existe, log da aba sem migration, contagem sem consulta nova, teste de 1,5 tela)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 03.1.1-02-PLAN.md — Onde os pacientes travam (Funil com 2 partes, Consultas, Vendas, Jornada) no molde e em 1,5 tela; contrato do D-07 em molde-da-pagina.md
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 03.1.1-03-PLAN.md — De onde vêm os pacientes (Por origem, Instagram, Anúncios, Links) no molde e em 1,5 tela; publica; o João olha as 3 telas juntadas
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 03.1.1-04-PLAN.md — O que fazer hoje: primeira versão da tela Hoje da Phase 9 (3 a 5 ações por regra, sem leitura, sem selo, desenho do D-07)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 03.1.1-05-PLAN.md — Menu do médico com 6 itens, entrada na Hoje e busca do médico; specs do menu antigo atualizados
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 03.1.1-06-PLAN.md — Equipe agrupada (Plano, Agentes, Conteúdo, Atendimento, Configurar CRM), busca com "Seção › Aba"; publica; o João olha a visão do médico e a da equipe (critério 5)
 
 ### Phase 4: Pacote do template do WhatsApp à Meta
 
