@@ -798,7 +798,7 @@ export function AppShell({
         </nav>
         {!encontrados.length && (
           <p>
-            Nenhuma ferramenta encontrada. Tente “conteúdo”, “atendimento” ou
+            Nenhuma ferramenta encontrada. Tente “funil”, “instagram” ou
             “relatório”.
           </p>
         )}

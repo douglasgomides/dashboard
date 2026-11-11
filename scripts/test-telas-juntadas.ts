@@ -216,7 +216,10 @@ assert.deepEqual(
 );
 assert.deepEqual(busca(vis(), "dúvidas do público"), [], "a tela existe, mas não é das 6");
 assert.deepEqual(busca(vis(), "planejar a semana"), [], "Planejar a semana não é das 6");
-assert.deepEqual(busca(vis(), "   "), []);
+// Consulta vazia: todos os destinos da clínica na ordem do menu (as 3 telas únicas e as 13 partes das telas juntadas).
+assert.equal(busca(vis(), "   ").length, 3 + 13);
+assert.equal(busca(vis(), "")[0], `${C}/hoje`);
+assert.deepEqual(busca(soCrm, ""), [`${C}/hoje`, `${C}/crm-painel`, `${C}/vendas-kommo`]);
 assert.ok(busca(vis(), "hoje").includes(`${C}/hoje`), "a Hoje é achada pelo nome");
 assert.ok(busca(vis(), "relatorio").includes(`${C}/relatorio`), "sem acento também acha");
 assert.ok(!busca(soCrm, "publicações").includes(`${C}/posts`) && !busca(soCrm, "instagram").includes(`${C}/conteudo`), "só-CRM não acha Instagram");

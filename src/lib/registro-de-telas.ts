@@ -720,11 +720,11 @@ export function juntadaDaRota(rota: string): { secao: SecaoJuntada; aba: AbaDaSe
  * telas juntadas). Mesma normalização e casamento por prefixo de palavra de buscarTelasEquipe, sobre rótulo da seção, da aba
  * e da parte, rótulo da linha, descrição e termos: "funil comercial" acha a aba Funil, parte No CRM. As outras telas abrem pelo
  * endereço, mas não aparecem aqui. Ordem: título começa com o termo, depois contém, depois o resto; empate na ordem do menu.
+ * Consulta vazia devolve todos os destinos da clínica, na ordem do menu.
  */
 export function buscarTelasDoMedico(vis: Visibilidade, consulta: string): TelaDoRegistro[] {
   const alvo = normalizar(consulta).trim();
   const palavras = alvo.split(/\s+/).filter(Boolean);
-  if (!palavras.length) return [];
   const alcancaveis: TelaDoRegistro[] = [];
   for (const item of itensMenuDoMedico(vis)) {
     for (const rota of item.rotas) {
@@ -732,6 +732,9 @@ export function buscarTelasDoMedico(vis: Visibilidade, consulta: string): TelaDo
       if (tela && !alcancaveis.includes(tela)) alcancaveis.push(tela);
     }
   }
+  // Consulta vazia: todos os destinos da clínica, na ordem do menu (como a busca do médico sempre fez); a lista nunca fica
+  // sem nenhum link para quem navega por teclado.
+  if (!palavras.length) return alcancaveis;
   const achadas = alcancaveis
     .map((tela, ordem) => ({ tela, ordem }))
     .filter(({ tela }) => {
