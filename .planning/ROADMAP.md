@@ -178,9 +178,15 @@ Plans:
 
 ### Phase 03.1.1: Tela O que fazer hoje para o médico (INSERTED)
 
-**Goal:** O médico abre o Nexo e cai numa porta de entrada "O que fazer hoje" com 3 a 5 ações da semana (o que aconteceu, o que fazer, quem resolve), tiradas das leituras por regra da fase 03.1, sem IA. Nenhuma tela sai do menu; as 43 telas continuam para a equipe. Pedido do João em 10/11/2026 ("sua recomendação é boa"). Antes de planejar: teste de 5 minutos do Resultados com um médico real (ex.: Lana) — "o que aconteceu?" e "o que faria esta semana?".
+**Goal:** Visão do médico com 6 telas e as telas repetidas juntadas em abas, sem apagar nenhuma, mais a porta de entrada "O que fazer hoje" com 3 a 5 ações tiradas das leituras por regra (sem IA). A equipe continua vendo tudo, agrupado. Cada aba cabe em no máximo uma tela e meia de altura, com o detalhe fechado: nada de página gigante de rolagem. Os endereços antigos levam à aba certa. Lista aprovada pelo João em 10/11/2026 (ver 03.1.1-CONTEXT.md). A fase 03.1 pausa depois da etapa 3 e continua em cima das telas juntadas.
+**Success criteria:**
+1. O médico vê no menu só: O que fazer hoje, Resultados da clínica, Onde os pacientes travam, De onde vêm os pacientes, Instagram e Relatório do período.
+2. Toda tela antiga continua abrindo, como aba de uma tela juntada ou pelo endereço antigo, que leva à aba certa; nenhuma informação some.
+3. Em 375 e 1440 px, a aba aberta de cada tela juntada tem no máximo 1,5 altura de tela com o detalhe fechado (teste automático).
+4. "O que fazer hoje" mostra de 3 a 5 ações, cada uma com o número que a sustenta e quem resolve; com dado ruim diz "sem leitura: motivo".
+5. O João entende a visão do médico sem explicação.
 **Requirements**: TBD
-**Depends on:** Phase 03.1
+**Depends on:** Phase 03.1, etapas 1 a 3 (o resto da 03.1 vem depois desta)
 **Plans:** 0 plans
 
 Plans:
