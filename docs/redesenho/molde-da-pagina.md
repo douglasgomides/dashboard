@@ -275,6 +275,59 @@ emendada). Os planos 03.1-07 a 03.1-17, ao serem revistos, herdam tudo isto. Nad
 - Nada abaixo de peso 500 (os números grandes ficam em 500 ou mais).
 - Nada disto pode estourar a régua de 1,5 tela.
 
-### i) Grupos da equipe
+### Grupos da equipe
 
-- A subseção dos grupos da equipe (Plano, Agentes, Conteúdo, Atendimento, Configurar CRM) entra no plano 03.1.1-07.
+Plano 03.1.1-08 (D-02 com a emenda de 11/11/2026, quando o João tirou do Nexo os grupos Plano e Agentes, Estratégias e campanhas,
+Automações e Brand Brain). Sob Clínica a equipe vê 9 seções, nesta ordem: O que fazer hoje, Resultados da clínica, Onde os
+pacientes travam, De onde vêm os pacientes, Instagram, Relatório do período, Conteúdo, Atendimento e Configurar CRM. As 6
+primeiras são as telas do médico (3 telas únicas e 3 telas juntadas); as 3 últimas são os grupos da equipe e moram em
+`SECOES_JUNTADAS` com `publico: "equipe"`.
+
+- **Conteúdo:** Criativa (`/inteligencia-criativa`), Referências (`/inspiracao`), Dúvidas (`/duvidas`), Ideias (`/ideias`).
+- **Atendimento:** Qualidade (`/atendimento`), Central (`/central-atendimento`), Contatos (`/crm-contatos`).
+- **Configurar CRM:** Guia (`/crm-guia`), Papel do funil (`/analisar`), Etapas (`/crm-estrutura`).
+- **Por que Ideias está em Conteúdo:** `/ideias` (Encontrar ideias e, em `?visao=semana`, Planejar a semana) continua tela depois de
+  11/11 e precisava de um lugar (nada some). Entrou como a aba Ideias, no lugar de Campanhas, que saiu. O João confirma no
+  checkpoint do 08.
+- **Continuam onde estão** (itens Carteira e Conferência e fontes, mais a busca): Carteira, Integrações, Conferência de dados,
+  Configurar este cliente, Caixa de entrada, Referência entre clientes, Relatórios da semana, Equipe e Assistentes de IA.
+- **Saíram em 11/11/2026** e não aparecem em nenhuma seção (só redirecionam): Plano da semana, Prioridades da equipe, Oportunidades
+  de melhoria, Reuniões, Agentes e entregas, Estratégias e campanhas, Automações, Central de Agentes e Brand Brain.
+- **Quem vê o quê:** a seção do médico a equipe vê inteira (a equipe vê pelo menos o que o médico vê), só com o filtro de fonte que a
+  pasta já aplica a todos. O grupo da equipe só existe para admin e estrategista, sem filtro de fonte (a equipe abre toda tela em
+  qualquer clínica), e a parte `somenteAdmin` (Criativa, Etapas) só para admin. O médico que abre `/duvidas` por link vê a tela sem a
+  pasta; nenhum grupo da equipe é item do menu do médico.
+- **Título da tela:** nos grupos da equipe a casca mantém o título e a descrição da tela antiga ("Qualidade do atendimento"), e a
+  pasta diz o grupo ("Abas de Atendimento"). Só as 3 telas juntadas do médico trocam o título pelo da tela juntada.
+- **Busca da equipe:** acha a aba pelo nome antigo e também pelo nome da seção e da aba, e o apoio do resultado diz onde ela mora
+  ("Onde os pacientes travam › Funil", "Atendimento › Contatos"). "Ver todas as telas" continua agrupado pelas áreas antigas.
+
+#### Quem põe cada aba da equipe no molde
+
+Cada aba abre hoje a tela antiga como ela é, sem contagem. A altura de cada uma está medida e registrada em
+`test-results/alturas-equipe-03.1.1.json` (aba, rota, largura, altura, janela, razão), nas 2 janelas de `TELAS_DE_MEDIDA`; o arquivo é
+gerado por `tests/e2e/telas-juntadas.spec.ts` e não é versionado. A medida não tem limite. Quem pôr a tela no molde, no plano 03.1
+indicado (revisto antes de rodar), troca a anotação da aba por asserção de no máximo 1,5 tela com o detalhe fechado em
+`tests/e2e/telas-juntadas.spec.ts` (com `alturaDaAbaAberta`, o mock do dado da tela e a leitura carregada) e passa a publicar a contagem da
+aba (`usePublicarContagem`, `contagem` no registro).
+
+| Aba da equipe | Tela antiga | Plano 03.1 (revisto) | Obrigação do plano |
+| --- | --- | --- | --- |
+| Conteúdo › Criativa | Inteligência Criativa (`/inteligencia-criativa`) | 03.1-09 | molde, contagem e asserção de altura da aba |
+| Conteúdo › Referências | Referências salvas (`/inspiracao`) | 03.1-09 | molde, contagem e asserção de altura da aba |
+| Conteúdo › Dúvidas | Dúvidas do público (`/duvidas`) | 03.1-09 | molde, contagem e asserção de altura da aba |
+| Conteúdo › Ideias | Encontrar ideias e Planejar a semana (`/ideias`) | 03.1-09 | molde nas 2 visões, contagem e asserção de altura da aba |
+| Atendimento › Qualidade | Qualidade do atendimento (`/atendimento`) | 03.1-12 | molde, contagem e asserção de altura da aba |
+| Atendimento › Central | Central de atendimento (`/central-atendimento`) | 03.1-12 | molde, contagem e asserção de altura da aba |
+| Atendimento › Contatos | Contatos e oportunidades (`/crm-contatos`) | 03.1-10 | molde, contagem e asserção de altura da aba |
+| Configurar CRM › Guia | Guia de organização do CRM (`/crm-guia`) | 03.1-10 | molde, contagem e asserção de altura da aba |
+| Configurar CRM › Papel do funil | Papel de cada funil (`/analisar`) | 03.1-10 | molde, contagem e asserção de altura da aba |
+| Configurar CRM › Etapas | Etapas do CRM (`/crm-estrutura`) | 03.1-10 | molde, contagem e asserção de altura da aba |
+
+Efeito do agrupamento nos planos pausados, para rever antes de rodar: 03.1-07 (Estratégias e campanhas saiu; fica o desenho nx dos
+componentes de anúncio), 03.1-09 (Criativa, Referências, Dúvidas e Ideias no grupo Conteúdo; Revisar roteiros saiu), 03.1-10 (Guia,
+Papel do funil e Etapas no grupo Configurar CRM; Contatos no grupo Atendimento), 03.1-11 (sobra só o Relatório, que continua tela
+única), 03.1-12 (Qualidade e Central de atendimento no grupo Atendimento), 03.1-13 e 03.1-14 (sem mudança), 03.1-15 (Central de
+Agentes e Brand Brain saíram; as outras telas da busca sem mudança), 03.1-16 (a faixa antiga de abas da seção e o CSS `.nx-abas`
+ficam sem uso e podem sair) e 03.1-17 (inventário estrito com a Hoje, specs cruzados e asserção de altura das abas da equipe que já
+estiverem no molde).

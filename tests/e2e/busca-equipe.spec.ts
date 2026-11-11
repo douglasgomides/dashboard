@@ -1,14 +1,16 @@
 import { test, expect, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
+import { mockAnuncios, mockAudiencia, mockCrm, mockInstagram, mockLinks, mockPessoas } from "./apoio-telas-juntadas";
 import {
   REGISTRO_DE_TELAS,
+  SECOES_JUNTADAS,
   buscarTelasEquipe,
   indiceDaBusca,
   linkDaTela,
 } from "../../src/lib/registro-de-telas";
 
 // E2e da busca da equipe (Phase 3, 03-05). O webServer do Playwright roda npm run build antes: tudo aqui é o build de
-// produção (D-09, menos as 9 telas tiradas em 11/11/2026: 50 escondidas no índice do admin, sem /qa/layout). Números e rótulos vêm do registro, nunca à mão.
+// produção (D-09, menos as 9 telas tiradas em 11/11/2026: 50 escondidas no índice do admin, sem /qa/layout, mais a Hoje). Números e rótulos vêm do registro, nunca à mão.
 
 // Animações fora (UI-SPEC §Movimento): posição e cor medidas no estado final.
 test.use({ reducedMotion: "reduce" });
@@ -115,7 +117,7 @@ test.describe("admin: busca da equipe", () => {
 
     // O chip sem selo só nas telas do registro com semSelo.
     const semSelo = REGISTRO_DE_TELAS.filter((t) => t.semSelo).length;
-    expect(semSelo).toBe(6);
+    expect(semSelo).toBe(7); // 6 até a Hoje (03.1.1-05), que também não tem selo
   });
 
   // UI-SPEC §Busca: ↓ no campo vai ao primeiro resultado; ↑/↓ percorrem; Enter no campo abre o primeiro.
@@ -149,7 +151,7 @@ test.describe("admin: busca da equipe", () => {
   test("sem resultado: estado vazio e Ver todas as telas com a contagem do build de produção", async ({ page }) => {
     const indice = indiceDaBusca(ADMIN);
     const N = indice.length;
-    expect(N).toBe(57);
+    expect(N).toBe(58); // 57 até a Hoje (03.1.1-05) entrar como a 15ª tela viva
     expect(N - indice.filter((t) => t.situacao === "viva").length, "escondidas no índice de produção (D-09)").toBe(50);
 
     const dialog = await abrirBusca(page);
@@ -275,6 +277,78 @@ test.describe("admin: busca da equipe", () => {
   });
 });
 
+// 03.1.1-08 (D-03, MEDV-03): a busca da equipe acha cada aba pelo nome antigo e diz onde ela mora hoje ("Seção › Aba"); abrir leva à
+// aba marcada na pasta. Cobre as 3 telas juntadas do médico e os 3 grupos da equipe; os rótulos e os lugares vêm do registro.
+test.describe("admin: nome antigo acha a aba e diz onde ela mora", () => {
+  test.beforeEach(async ({ context }) => {
+    await mockAccount(context, "admin");
+    // As telas antigas caem na página de erro com o Supabase falso sem dado: os mesmos mocks das telas juntadas.
+    await mockPessoas(context);
+    await mockCrm(context);
+    await mockInstagram(context);
+    await mockAudiencia(context);
+    await mockAnuncios(context, "bom");
+    await mockLinks(context);
+  });
+
+  async function reabrir(page: Page, dialog: Locator) {
+    await expect
+      .poll(
+        async () => {
+          if (await dialog.isVisible()) return true;
+          await page.keyboard.press("Control+k");
+          await page.waitForTimeout(250);
+          return dialog.isVisible();
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(true);
+  }
+
+  for (const secao of SECOES_JUNTADAS) {
+    test(`${secao.rotulo}: cada aba é achada pelo nome antigo, mostra "${secao.rotulo} › aba" e abre com a aba marcada`, async ({ page }) => {
+      test.setTimeout(180_000);
+      const dialog = await abrirBusca(page);
+      for (const aba of secao.abas) {
+        for (const parte of aba.partes) {
+          const tela = REGISTRO_DE_TELAS.find((t) => t.rota === parte.rota && !t.busca && t.situacao !== "tirada")!;
+          const link = linkDaTela(tela, CID)!;
+          const caminho = link.to.replace("$clientId", CID);
+          // O primeiro da lista com o rótulo antigo é a própria tela (o rótulo antigo começa o título). O "×" de "Conteúdo × Comercial"
+          // não é palavra para a busca (ela parte o texto em letras e números): o termo digitado não leva o sinal.
+          const termo = tela.rotulo.replace(/\s*×\s*/g, " ");
+          expect(buscarTelasEquipe(ADMIN, termo)[0].rota, `${tela.rotulo} é o primeiro resultado do próprio nome`).toBe(tela.rota);
+          await reabrir(page, dialog);
+          await dialog.getByRole("searchbox").fill(termo);
+          const resultado = resultadosDe(dialog).getByRole("link", { name: comeca(tela.rotulo) }).first();
+          await expect(resultado).toBeVisible();
+          await expect(resultado.locator(".nx-resultado-apoio")).toContainText(`${secao.rotulo} › ${aba.rotulo}`);
+          await resultado.click();
+          await expect.poll(() => new URL(page.url()).pathname.replace(/\/$/, "")).toBe(caminho);
+          const pasta = page.getByRole("navigation", { name: `Abas de ${secao.rotulo}`, exact: true });
+          await expect(pasta).toBeVisible();
+          await expect(pasta.getByRole("link", { name: new RegExp(`^${aba.rotulo}`) })).toHaveAttribute("aria-current", /^(page|true)$/);
+        }
+      }
+    });
+  }
+
+  test("telas sem pasta (Carteira, Integrações, Resultados) continuam com a área antiga no apoio", async ({ page }) => {
+    const dialog = await abrirBusca(page);
+    await dialog.getByRole("searchbox").fill("Integrações");
+    const integracoes = resultadosDe(dialog).getByRole("link", { name: /^Integrações/ }).first();
+    await expect(integracoes.locator(".nx-resultado-apoio")).toContainText("Administração");
+    await expect(integracoes.locator(".nx-resultado-apoio")).not.toContainText("›");
+  });
+
+  test("a busca casa o nome da seção e o da aba: \"atendimento\" acha as 3 abas de Atendimento", async ({ page }) => {
+    const dialog = await abrirBusca(page);
+    await dialog.getByRole("searchbox").fill("atendimento");
+    for (const aba of ["Qualidade", "Central", "Contatos"])
+      await expect(resultadosDe(dialog).locator(".nx-resultado-apoio").filter({ hasText: `Atendimento › ${aba}` })).toHaveCount(1);
+  });
+});
+
 // D-03, propriedade abrindo cada tela: o estrategista que não é admin abre de fato tudo o que a busca dele mostra.
 // Se uma tela falhar aqui, o defeito é de classificação: a linha ganha somenteAdmin no registro, nunca uma guarda nova (D-07).
 test.describe("estrategista: só acha o que abre", () => {
@@ -329,6 +403,12 @@ test.describe("estrategista: só acha o que abre", () => {
     }
     await campo.fill("Pacientes");
     await expect(resultadosDe(dialog).getByRole("link", { name: /^Pacientes do período/ })).toBeVisible();
+    // 03.1.1-08: as partes só de admin dos grupos da equipe (aba Criativa, Etapas) não aparecem para o estrategista.
+    for (const termo of ["Inteligência Criativa", "Etapas do CRM"]) {
+      await campo.fill(termo);
+      await expect(dialog.getByRole("status")).toBeVisible();
+      await expect(resultadosDe(dialog).locator(".nx-resultado-titulo").filter({ hasText: new RegExp(`^${termo}`) })).toHaveCount(0);
+    }
     // Ver todas as telas do estrategista: nenhum link de /admin nem do SAP.
     await campo.fill("");
     await dialog.locator("details.nx-busca-todas summary").click();
