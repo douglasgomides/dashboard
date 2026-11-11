@@ -191,7 +191,7 @@ for (const [area, rota] of Object.entries(ROTA_DA_AREA)) {
 }
 
 // ---------- exclusões da Phase 9: ids, prefixos e chaves ----------
-for (const id of [...EXCLUIDOS_DA_HOJE, "mudou-0", "mudou-7", "sem-medida-agendaram", "sem-medida-compareceram"]) {
+for (const id of [...EXCLUIDOS_DA_HOJE, "mudou-0", "mudou-7", "sem-medida-agendaram", "sem-medida-compareceram", "comercial:performance:agendamento", "comercial:operacao:parados"]) {
   const h = acoesDaHoje(sintetica([fato(id, "ruim", 3), fato("ok", "atencao", 1)], [passo(id), passo("ok")]));
   assert.deepEqual(ids(h), ["ok"], `o fato ${id} nunca vira ação`);
 }

@@ -58,6 +58,10 @@ export const EXCLUIDOS_DA_HOJE: readonly string[] = [
 export const PREFIXOS_EXCLUIDOS_DA_HOJE: readonly string[] = [
   "mudou-", // src/lib/leitura/adaptadores.ts:112 (variação de quem chamou, agendou e fechou)
   "sem-medida-", // src/lib/leitura/fatos-resultados.ts:51 e fatos-pacientes.ts:87 ("sem-medida-{chave}" de etapa do funil)
+  // Achados pelo grep em src/lib/comercial.ts (insightsComerciais, ids "comercial:{tipo}:{nome}"): contam quem chamou, agendou,
+  // foi e fechou ("N agendaram de M leads", maior perda entre etapas, leads parados). Só as telas comerciais os leem; ficam
+  // fora por garantia, caso um dia entrem em Resultado.insights.
+  "comercial:", // comercial.ts:678 (performance:agendamento), :726 (maior-perda-*), :753 (parados), :773 (sem-dono), :794, :822, :850, :871, :896 a :922
 ];
 
 /** Chaves de Numeral (Numeral.chave) que nunca viram o número de uma ação: são as 4 etapas da Phase 9 e as contagens de contato. */
