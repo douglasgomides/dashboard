@@ -3,6 +3,7 @@ import {
   REGISTRO_DE_TELAS,
   SECOES_JUNTADAS,
   abasVisiveis,
+  buscarTelasDoMedico,
   buscarTelasEquipe,
   itemAtualDoMedico,
   itensMenuDoMedico,
@@ -203,5 +204,26 @@ assert.equal(itemAtualDoMedico(`/${CID}/hoje`), "hoje");
 assert.equal(itemAtualDoMedico(`/${CID}/relatorio`), "relatorio");
 assert.equal(itemAtualDoMedico(`/${CID}/duvidas`), null);
 assert.equal(itemAtualDoMedico("/admin"), null);
+
+// --- 9. Busca do médico (MEDV-03, D-03): só as telas dos 6 itens, aba pelo nome antigo ---
+const busca = (v: Visibilidade, q: string) => buscarTelasDoMedico(v, q).map((t) => t.rota);
+assert.equal(busca(vis(), "funil comercial")[0], `${C}/crm-painel`, "funil comercial leva primeiro à parte No CRM");
+assert.equal(busca(vis(), "publicações")[0], `${C}/posts`);
+assert.deepEqual(
+  [...busca(vis(), "travam")].sort(),
+  [`${C}/pacientes`, `${C}/crm-painel`, `${C}/consultas`, `${C}/vendas`, `${C}/jornada`].sort(),
+  "travam devolve as partes de Onde os pacientes travam",
+);
+assert.deepEqual(busca(vis(), "dúvidas do público"), [], "a tela existe, mas não é das 6");
+assert.deepEqual(busca(vis(), "planejar a semana"), [], "Planejar a semana não é das 6");
+assert.deepEqual(busca(vis(), "   "), []);
+assert.ok(busca(vis(), "hoje").includes(`${C}/hoje`), "a Hoje é achada pelo nome");
+assert.ok(busca(vis(), "relatorio").includes(`${C}/relatorio`), "sem acento também acha");
+assert.ok(!busca(soCrm, "publicações").includes(`${C}/posts`) && !busca(soCrm, "instagram").includes(`${C}/conteudo`), "só-CRM não acha Instagram");
+assert.ok(busca(soCrm, "funil").includes(`${C}/crm-painel`), "só-CRM acha o Funil No CRM");
+assert.ok(!busca(semInstagram, "publicações").includes(`${C}/posts`), "sem Instagram ligado, Posts não aparece");
+// Toda tela achada é alcançável por um item do menu da clínica.
+const alcancaveis = new Set(menu(vis()).flatMap((i) => i.rotas));
+for (const t of buscarTelasDoMedico(vis(), "a")) assert.ok(alcancaveis.has(t.rota) , `${t.rota} fora dos 6`);
 
 console.log("test-telas-juntadas: ok");

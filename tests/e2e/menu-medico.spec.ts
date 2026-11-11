@@ -114,3 +114,136 @@ test("telas que saíram do menu do médico continuam abrindo pelo endereço, sem
     await expect(barra(page).locator("[data-on]")).toHaveCount(0);
   }
 });
+
+// --- Celular, folha Menu, busca e clínicas com menos telas (Task 2) ---
+
+const SO_CRM = "8770500e-ab5d-4ae8-9489-c49c9991303c";
+const semRolagemLateral = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
+
+test("médico a 375: a barra de baixo tem 4 atalhos e o Menu, e a folha tem os 6 itens", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/${CID}?preset=30d`);
+  const baixo = page.locator('nav.bottomnav[aria-label="Áreas"]');
+  await expect(baixo).toBeVisible();
+  await expect(baixo).toHaveAttribute("data-origem", "menu");
+  await expect(baixo.getByRole("link")).toHaveText(["Hoje", "Resultados", "Onde travam", "De onde vêm"]);
+  const menu = baixo.getByRole("button", { name: "Menu", exact: true });
+  await expect(menu).toBeVisible();
+  // Alvo de toque de 44 px em cada atalho.
+  for (const alvo of await baixo.locator("a, button").all()) {
+    const caixa = await alvo.boundingBox();
+    expect(caixa?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(caixa?.width ?? 0).toBeGreaterThanOrEqual(44);
+  }
+  expect(await semRolagemLateral(page)).toBe(true);
+  // Resultados é o item atual e o botão Menu não fica marcado.
+  await expect(baixo.getByRole("link", { name: "Resultados", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(menu).not.toHaveAttribute("data-on", /.*/);
+
+  await menu.click();
+  const folha = page.getByRole("dialog", { name: "Navegar no Nexo", exact: true });
+  await expect(folha).toBeVisible();
+  await expect(folha).toHaveAttribute("data-origem", "menu");
+  await expect(folha.getByRole("link")).toHaveText(ROTULOS);
+  await expect(folha.getByRole("button", { name: "Encontrar uma ferramenta" })).toBeVisible();
+  expect(await semRolagemLateral(page)).toBe(true);
+});
+
+test("Relatório (fora da barra de baixo) deixa o botão Menu marcado", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/${CID}/relatorio?preset=30d`);
+  const baixo = page.locator('nav.bottomnav[aria-label="Áreas"]');
+  await expect(baixo).toBeVisible();
+  await expect(baixo.getByRole("button", { name: "Menu", exact: true })).toHaveAttribute("data-on", "");
+});
+
+for (const janela of [{ width: 1440, height: 900 }, { width: 375, height: 812 }]) {
+  test(`busca do médico a ${janela.width}: funil comercial leva à aba Funil, parte No CRM, e o log grava busca`, async ({ page, context }) => {
+    await mockAccount(context, "viewer");
+    await ligarLog(context);
+    const posts = capturarPosts(page);
+    await page.setViewportSize(janela);
+    await page.goto(`/${CID}?preset=30d`);
+    await expect.poll(() => posts.length).toBeGreaterThanOrEqual(1);
+    const abrir =
+      janela.width >= 1000
+        ? page.locator("aside").getByRole("button", { name: /Encontrar uma ferramenta/ })
+        : page.locator("header.mhead").getByRole("button", { name: "Encontrar uma ferramenta", exact: true });
+    await abrir.click();
+    const dialogo = page.getByRole("dialog", { name: "O que você quer fazer?", exact: true });
+    await expect(dialogo).toBeVisible();
+    await dialogo.getByRole("searchbox").fill("funil comercial");
+    const resultados = dialogo.getByRole("navigation", { name: "Resultados da busca" });
+    await expect(resultados).toHaveAttribute("data-origem", "busca");
+    const primeiro = resultados.getByRole("link").first();
+    await expect(primeiro).toContainText("Funil comercial");
+    await expect(primeiro).toContainText("Onde os pacientes travam / Funil");
+    // Só as 6 telas: uma tela que existe fora delas não aparece na busca do médico.
+    await dialogo.getByRole("searchbox").fill("dúvidas do público");
+    await expect(resultados.getByRole("link")).toHaveCount(0);
+    await dialogo.getByRole("searchbox").fill("funil comercial");
+    const antes = posts.length;
+    await resultados.getByRole("link").first().click();
+    await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/crm-painel`);
+    await expect(dialogo).not.toBeVisible();
+    await expect(page.locator("[data-juntada]")).toHaveAttribute("data-juntada", "travam");
+    await expect(page.getByRole("navigation", { name: "Partes de Funil" }).getByRole("link", { name: /No CRM/ })).toHaveAttribute("aria-current", "page");
+    await expect.poll(() => posts.length).toBeGreaterThan(antes);
+    expect(posts[posts.length - 1].origem).toBe("busca");
+    expect(posts[posts.length - 1].rota).toBe("/_authenticated/$clientId/crm-painel");
+  });
+}
+
+test("clínica só-CRM vê Hoje, Onde os pacientes travam e De onde vêm os pacientes, e a Hoje abre", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${SO_CRM}/hoje?preset=30d`);
+  await expect(barra(page)).toBeVisible();
+  await expect(barra(page).getByRole("link")).toHaveText(["O que fazer hoje", "Onde os pacientes travam", "De onde vêm os pacientes"]);
+  const hrefs = await barra(page).getByRole("link").evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+  expect(hrefs).toEqual([`/${SO_CRM}/hoje?preset=30d`, `/${SO_CRM}/crm-painel?preset=30d`, `/${SO_CRM}/vendas-kommo?preset=30d`]);
+  // A Hoje abre sem ser levada ao funil.
+  await page.waitForTimeout(800);
+  expect(new URL(page.url()).pathname).toBe(`/${SO_CRM}/hoje`);
+});
+
+test("clínica sem Instagram ligado não vê o item Instagram", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await context.route("**/rest/v1/rpc/client_fontes", (r) =>
+    r.fulfill({ json: [{ tem_instagram: false, tem_anuncios: true, tem_crm: true, tem_atendimento: true }] }),
+  );
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}?preset=30d`);
+  await expect(barra(page)).toBeVisible();
+  await expect(barra(page).getByRole("link")).toHaveText(ROTULOS.filter((r) => r !== "Instagram"));
+});
+
+test("barra recolhida: os 6 itens ficam só com ícone, o rótulo em sr-only e no title", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await context.addInitScript(() => localStorage.setItem("hub-sidebar-recolhida", "1"));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}?preset=30d`);
+  await expect(barra(page)).toBeVisible();
+  const links = barra(page).getByRole("link");
+  await expect(links).toHaveCount(6);
+  for (const [i, rotulo] of ROTULOS.entries()) {
+    await expect(links.nth(i)).toHaveAttribute("title", rotulo);
+    await expect(links.nth(i).locator(".sr-only")).toHaveText(rotulo);
+    await expect(links.nth(i).locator("svg")).toBeVisible();
+  }
+  await expect(links.first().locator(".so-aberta")).toBeHidden();
+});
+
+test("na Hoje a casca não repete o título", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/hoje?preset=30d`);
+  await expect(barra(page)).toBeVisible();
+  await expect(page.locator('[data-tela="hoje"]')).toBeVisible();
+  await expect(page.locator("header.workspace-heading")).toHaveCount(0);
+  // Nas outras telas a casca continua com o título.
+  await page.goto(`/${CID}/relatorio?preset=30d`);
+  await expect(page.locator("header.workspace-heading h1")).toHaveText("Relatório do período");
+});

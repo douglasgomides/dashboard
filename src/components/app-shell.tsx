@@ -16,8 +16,8 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { LogoutButton } from "@/components/logout-button";
 import { BuscaDeTelas } from "@/components/busca-de-telas";
-import { abasVisiveis, ehEquipe, juntadaDoCaminho, telaDoCaminho } from "@/lib/registro-de-telas";
-import { AbasDaSecao, MarcaNexo, MenuEquipe } from "@/components/menu-equipe";
+import { abasVisiveis, buscarTelasDoMedico, ehEquipe, itemAtualDoMedico, itensMenuDoMedico, juntadaDaRota, juntadaDoCaminho, telaDoCaminho } from "@/lib/registro-de-telas";
+import { AbasDaSecao, LinkDoRegistro, MarcaNexo, MenuEquipe } from "@/components/menu-equipe";
 import { MenuDoMedico } from "@/components/menu-medico";
 import { IconeTabler } from "@/components/icons/tabler";
 import { TelaJuntada } from "@/components/nx/abas-em-pasta";
@@ -33,7 +33,6 @@ import {
   areasVisiveis,
   navegacaoClinica,
   avancadoVisivel,
-  buscarTelas,
   subcaminho,
   type AreaVisivel,
   type NavTab,
@@ -286,6 +285,8 @@ export function AppShell({
   const achadaJuntada = juntadaDoCaminho(pathname);
   const juntada = achadaJuntada && abasVisiveis(achadaJuntada.secao, vis).length > 0 ? achadaJuntada : null;
   const titulo = juntada?.secao.rotulo ?? tela?.label ?? telaDoCaminho(pathname)?.rotulo ?? area?.label ?? "Análise da clínica";
+  // Na Hoje a casca não repete o título: o topo da tela é a saudação (D-07), para o médico e para a equipe.
+  const naHoje = telaDoCaminho(pathname)?.rota === "/_authenticated/$clientId/hoje";
   const descricao = juntada ? undefined : (tela?.descricao ?? area?.descricao);
   const nome = client?.name ?? "Carregando…";
   const linhaInfo = [
@@ -294,8 +295,9 @@ export function AppShell({
   ]
     .filter(Boolean)
     .join(" · ");
-  const encontrados = busca && !equipe ? buscarTelas(vis, consulta) : [];
-  const atalhosMobile = vis.isAdmin ? areas.filter(a => ["resumo", "marketing", "comercial", "acoes"].includes(a.id)) : principais;
+  const encontrados = busca && !equipe ? buscarTelasDoMedico(vis, consulta) : [];
+  // O botão Menu fica marcado quando o item atual não está entre os 4 da barra de baixo (Instagram, Relatório ou fora dos 6).
+  const itemAtualNaBarraInferior = itensMenuDoMedico(vis).slice(0, 4).some((i) => i.id === itemAtualDoMedico(pathname));
 
   useEffect(() => {
     setMais(false);
@@ -593,15 +595,17 @@ export function AppShell({
             ocultas={new Set(juntada.secao.abas.flatMap((a) => a.partes.map((p) => p.rota)))}
           />
         )}
-        <header className="workspace-heading">
-          <div>
-            <p className="workspace-eyebrow">
-              Nexo{area && area.label !== titulo ? ` / ${area.label}` : ""}
-            </p>
-            <h1>{titulo}</h1>
-            {descricao && <p>{descricao}</p>}
-          </div>
-        </header>
+        {!naHoje && (
+          <header className="workspace-heading">
+            <div>
+              <p className="workspace-eyebrow">
+                Nexo{area && area.label !== titulo ? ` / ${area.label}` : ""}
+              </p>
+              <h1>{titulo}</h1>
+              {descricao && <p>{descricao}</p>}
+            </div>
+          </header>
+        )}
         <div className="workspace-data-status">
           {frescorCompacto ?? frescor}
           {(fontesLinha || cfm) && (
@@ -622,22 +626,13 @@ export function AppShell({
       </div>
       {!equipe && (
       <nav className="bottomnav" aria-label="Áreas" data-origem="menu">
-        {atalhosMobile.map((a) => (
-          <TabLink
-            key={a.id}
-            tab={a.visiveis[0]}
-            clientId={clientId}
-            dateRange={dateRange}
-            ativo={a.id === ativa}
-          >
-            <a.Icone aria-hidden />
-            <span>{a.curto ?? a.label}</span>
-          </TabLink>
-        ))}
+        {/* Os 4 primeiros itens do menu do médico (Hoje, Resultados, Onde travam, De onde vêm) mais Menu, para caber em 375 px
+            com alvo de 44 px. Instagram e Relatório ficam na folha Menu. */}
+        <MenuDoMedico variante="inferior" vis={vis} clientId={clientId} pathname={pathname} dateRange={dateRange} />
         <button
           type="button"
           onClick={() => setMais(true)}
-          data-on={!atalhosMobile.some((a) => a.id === ativa) ? "" : undefined}
+          data-on={!itemAtualNaBarraInferior ? "" : undefined}
           aria-haspopup="dialog"
         >
           <Menu aria-hidden />
@@ -698,31 +693,18 @@ export function AppShell({
         <p className="workspace-menu-help">
           Escolha o que você precisa fazer em {nome}.
         </p>
+        <MenuDoMedico
+          variante="folha"
+          vis={vis}
+          clientId={clientId}
+          pathname={pathname}
+          dateRange={dateRange}
+          onEscolher={() => setMais(false)}
+        />
         <button type="button" className="mais-item" onClick={abrirBusca}>
           <Search aria-hidden />
           Encontrar uma ferramenta
         </button>
-        {areas.map((a) => (
-            <details
-              className="workspace-menu-group"
-              key={a.id}
-              open={a.id === ativa}
-            >
-              <summary>
-                <a.Icone size={18} aria-hidden />
-                <span>{a.label}</span>
-                <ChevronDown size={16} aria-hidden />
-              </summary>
-              <TelasDaArea
-                area={a}
-                currentSearch={currentSearch}
-                sub={sub}
-                clientId={clientId}
-                dateRange={dateRange}
-                onEscolher={() => setMais(false)}
-              />
-            </details>
-          ))}
         {onBuscarCliente && (
           <button
             type="button"
@@ -792,24 +774,27 @@ export function AppShell({
           aria-label="Resultados da busca"
           data-origem="busca"
         >
-          {encontrados.map(({ tab, area: grupo }) => (
-            <TabLink
-              key={navTabKey(tab)}
-              tab={tab}
-              clientId={clientId}
-              dateRange={dateRange}
-              ativo={tabAtiva(tab, sub, currentSearch)}
-              onClick={() => setBusca(false)}
-            >
-              <tab.Icone size={19} aria-hidden />
-              <span>
-                <small>{grupo}</small>
-                <b>{tab.label}</b>
-                {tab.descricao && <span>{tab.descricao}</span>}
-              </span>
-              <ArrowRight size={16} aria-hidden />
-            </TabLink>
-          ))}
+          {encontrados.map((t) => {
+            const j = juntadaDaRota(t.rota);
+            return (
+              <LinkDoRegistro
+                key={t.rota}
+                tela={t}
+                clientId={clientId}
+                dateRange={dateRange}
+                atual={itemAtualDoMedico(pathname) !== null && juntadaDoCaminho(pathname)?.parte.rota === t.rota}
+                onClick={() => setBusca(false)}
+              >
+                <IconeTabler nome={t.icone} tamanho={19} />
+                <span>
+                  {j && <small>{j.secao.rotulo} / {j.aba.rotulo}</small>}
+                  <b>{t.rotulo}</b>
+                  {t.descricao && <span>{t.descricao}</span>}
+                </span>
+                <ArrowRight size={16} aria-hidden />
+              </LinkDoRegistro>
+            );
+          })}
         </nav>
         {!encontrados.length && (
           <p>

@@ -22,18 +22,19 @@ export const LINKS_DO_MEDICO: { barra: [string, string][]; barraInferior: [strin
     ["Relatório do período", `/${CID}/relatorio?preset=30d`],
     ["Conheça o Nexo", "/bem-vindo"],
   ],
+  // No celular a barra de baixo tem os 4 primeiros itens mais o botão Menu (que não é link); Instagram e Relatório ficam na folha.
   barraInferior: [
-    ["Resultados", `/${CID}/pacientes?preset=30d`],
-    ["Relatórios", `/${CID}/relatorio?preset=30d`],
+    ["Hoje", `/${CID}/hoje?preset=30d`],
+    ["Resultados", `/${CID}?preset=30d`],
+    ["Onde travam", `/${CID}/pacientes?preset=30d`],
+    ["De onde vêm", `/${CID}/vendas-kommo?preset=30d`],
   ],
   folha: [
-    ["Pacientes do período", `/${CID}/pacientes?preset=30d`],
+    ["O que fazer hoje", `/${CID}/hoje?preset=30d`],
     ["Resultados da clínica", `/${CID}?preset=30d`],
+    ["Onde os pacientes travam", `/${CID}/pacientes?preset=30d`],
+    ["De onde vêm os pacientes", `/${CID}/vendas-kommo?preset=30d`],
+    ["Instagram", `/${CID}/conteudo?preset=30d`],
     ["Relatório do período", `/${CID}/relatorio?preset=30d`],
-    ["Analisar desempenho", `/${CID}/conteudo?preset=30d`],
-    ["Resultados dos anúncios", `/${CID}/anuncios?preset=30d`],
-    ["Planejar a semana", `/${CID}/ideias?preset=30d&visao=semana`],
-    ["Encontrar ideias", `/${CID}/ideias?preset=30d&visao=ideias`],
-    ["Funil comercial", `/${CID}/crm-painel?preset=30d`],
   ],
 };
