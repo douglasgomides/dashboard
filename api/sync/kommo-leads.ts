@@ -96,7 +96,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
           continue;
         }
         if (!conn.access_token && !KOMMO_API_TOKEN) {
-          resultados.push({ connectionId: conn.id, errors: ["Conexão sem token Kommo"] });
+          resultados.push({ connectionId: conn.id, errors: ["Conexão sem token Kommo próprio, e o servidor não tem a reserva KOMMO_API_TOKEN"] });
           continue;
         }
         const r = await runKommoReconcile({
@@ -132,7 +132,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         continue;
       }
       if (!conn.access_token && !KOMMO_API_TOKEN) {
-        results.push({ connectionId: conn.id, errors: ["Conexão sem token Kommo"] });
+        results.push({ connectionId: conn.id, errors: ["Conexão sem token Kommo próprio, e o servidor não tem a reserva KOMMO_API_TOKEN"] });
         continue;
       }
       const result = await runKommoLeadsSync({

@@ -64,6 +64,8 @@ export interface ItemRoi {
   link: { to: "/admin/$clientId" | "/$clientId/analisar" | "/$clientId/crm-guia"; rotulo: string; soAdmin?: boolean };
 }
 
+export type MotivoFinalRoi = "item" | "so_crescimento" | "sem_investimento" | "sem_venda" | "sem_separacao" | "sem_venda_anuncio" | "poucas_vendas_anuncio";
+
 export interface Roi {
   calculavel: boolean;
   /** Investimento em aquisição: a base do ROI e do custo. */
@@ -86,6 +88,8 @@ export interface Roi {
   itens: ItemRoi[];
   pendentes: number; // itens não feitos (para "faltam N itens")
   motivoSemCalculo: string | null; // frase "Não dá pra calcular o retorno porque..." quando não aparece
+  /** O motivo em código, para a equipe agrupar: "item" (falta algo que alguém arruma) ou um caso que não é falta de dado. */
+  motivoFinal: MotivoFinalRoi | null;
   /** Fato em R$ quando o percentual não sai mas houve venda de anúncio e investimento em aquisição
    * (ex.: "1 venda de anúncio, R$ 197, para R$ 12.196 investidos em aquisição."). null quando o ROI aparece em %. */
   fraseVendasAnuncio: string | null;
@@ -269,10 +273,11 @@ export function montarRoi(d: DadosRoi): Roi {
         id: "valor",
         preciso: "Preencher o valor da venda no card do CRM ao fechar",
         paraMostrar: "a receita",
-        feito: d.ganhos > 0 && fracValor >= LIMITES.roi.valorMinimo,
+        // 0/0 não é falta de dado: sem venda ganha não há valor a conferir (o motivo vira "nenhuma venda foi ganha").
+        feito: d.ganhos <= 0 || fracValor >= LIMITES.roi.valorMinimo,
         detalhe: d.ganhos > 0
           ? `${d.ganhos_com_valor} de ${d.ganhos} vendas ganhas no período têm valor (${pct(d.ganhos_com_valor, d.ganhos)}). O mínimo para ler é ${pctLimite(LIMITES.roi.valorMinimo)}.`
-          : "Nenhuma venda ganha no período para conferir o valor.",
+          : "Nenhuma venda ganha no período: não há valor a conferir.",
         bloqueia: true,
         passos: passosValor(d.crm_provider),
         link: { to: "/$clientId/crm-guia", rotulo: "Ver como organizar o CRM" },
@@ -281,10 +286,10 @@ export function montarRoi(d: DadosRoi): Roi {
         id: "origem",
         preciso: "Preencher a origem do lead (anúncio, Instagram, indicação)",
         paraMostrar: "quanto do retorno veio dos anúncios",
-        feito: d.leads > 0 && fracOrigem >= LIMITES.roi.origemMinima,
+        feito: d.leads <= 0 || fracOrigem >= LIMITES.roi.origemMinima,
         detalhe: d.leads > 0
           ? `Hoje ${pct(d.leads_com_origem, d.leads)} dos leads do período têm origem (${d.leads_com_origem} de ${d.leads}). O mínimo para ler é ${pctLimite(LIMITES.roi.origemMinima)}.`
-          : "Nenhum lead no período.",
+          : "Nenhum lead no período: não há origem a conferir.",
         bloqueia: true,
         passos: passosOrigem(d.crm_provider),
         link: { to: "/$clientId/crm-guia", rotulo: "Ver como organizar o CRM" },
@@ -293,9 +298,9 @@ export function montarRoi(d: DadosRoi): Roi {
         id: "origem_vendas",
         preciso: "Registrar a origem de quem comprou (o canal da venda)",
         paraMostrar: "se o retorno dos anúncios está completo",
-        feito: d.ganhos > 0 && ganhosComCanal != null && fracCanal >= LIMITES.roi.ganhosComCanalMinimo,
+        feito: d.ganhos <= 0 || (ganhosComCanal != null && fracCanal >= LIMITES.roi.ganhosComCanalMinimo),
         detalhe: d.ganhos <= 0
-          ? "Nenhuma venda ganha no período para conferir a origem."
+          ? "Nenhuma venda ganha no período: não há canal a conferir."
           : ganhosComCanal == null
             ? "O banco ainda não separa as vendas por canal conhecido."
             : `Hoje ${pct(ganhosComCanal, d.ganhos)} das vendas do período têm canal conhecido (${ganhosComCanal} de ${d.ganhos}). O mínimo para ler é ${pctLimite(LIMITES.roi.ganhosComCanalMinimo)}. Sem o canal, uma venda de anúncio pode estar contada como "sem origem".`,
@@ -332,6 +337,20 @@ export function montarRoi(d: DadosRoi): Roi {
               ? `Ainda não dá pra ler o retorno em percentual: ${ganhosAnuncio} ${ganhosAnuncio === 1 ? "venda veio" : "vendas vieram"} de anúncio no período, e o mínimo é ${LIMITES.roi.vendasAnuncioMinimas}. Com tão poucas vendas, uma venda a mais ou a menos muda o resultado inteiro.`
               : null;
   const calculavel = motivoSemCalculo === null;
+  // Mesma cascata do motivoSemCalculo, em código: a Carteira separa o que alguém arruma do que não se aplica.
+  const motivoFinal: MotivoFinalRoi | null = bloqueios.length
+    ? "item"
+    : semAquisicao
+      ? d.investido > 0 ? "so_crescimento" : "sem_investimento"
+      : d.ganhos <= 0
+        ? "sem_venda"
+        : d.ganhos_anuncio == null
+          ? "sem_separacao"
+          : ganhosAnuncio <= 0
+            ? "sem_venda_anuncio"
+            : ganhosAnuncio < LIMITES.roi.vendasAnuncioMinimas
+              ? "poucas_vendas_anuncio"
+              : null;
   const fraseVendasAnuncio = !calculavel && ganhosAnuncio > 0 && d.investido_aquisicao > 0
     ? `${ganhosAnuncio} ${ganhosAnuncio === 1 ? "venda de anúncio" : "vendas de anúncio"}, ${receitaAnuncio > 0 ? brl0(receitaAnuncio) : "sem valor"}, para ${brl0(d.investido_aquisicao)} investidos em aquisição.`
     : null;
@@ -366,6 +385,7 @@ export function montarRoi(d: DadosRoi): Roi {
     itens,
     pendentes,
     motivoSemCalculo,
+    motivoFinal,
     fraseVendasAnuncio,
     selo,
     seloInvestimento,
@@ -379,4 +399,29 @@ export function resumoRoi(r: Roi): string {
   if (r.fraseVendasAnuncio && r.pendentes === 0) return `${r.ganhos} ${r.ganhos === 1 ? "venda" : "vendas"} de anúncio, ${r.receita > 0 ? brl0(r.receita) : "sem valor"}`;
   if (r.pendentes > 0) return `faltam ${r.pendentes} ${r.pendentes === 1 ? "item" : "itens"}`;
   return "não dá pra ler";
+}
+
+export type GrupoSemRoi = "cliente" | "equipe" | "nao_se_aplica";
+
+/** Itens que a equipe Doctor Creator arruma: ligar a fonte, separar o CRM compartilhado, marcar a etapa de venda. */
+export const ITENS_DA_EQUIPE: readonly IdItemRoi[] = ["anuncios", "crm", "compartilhado", "etapas"];
+/** Itens que o cliente arruma no CRM: valor da venda, origem do lead e canal da venda. */
+export const ITENS_DO_CLIENTE: readonly IdItemRoi[] = ["valor", "origem", "origem_vendas"];
+
+export const ROTULO_GRUPO_SEM_ROI: Record<GrupoSemRoi, string> = {
+  cliente: "Falta dado no CRM (cliente)",
+  equipe: "Falta ligar fonte ou mapear etapa (equipe)",
+  nao_se_aplica: "Não se aplica: sem venda, sem investimento ou amostra pequena",
+};
+
+/**
+ * De quem é a vez quando o retorno não sai. null quando calcula. A equipe vem antes do cliente: sem fonte ou etapa, o dado
+ * do cliente nem pode ser lido. Sem item travando (0 vendas, sem investimento, menos de 5 vendas de anúncio), não se aplica.
+ */
+export function grupoSemRoi(r: Roi): GrupoSemRoi | null {
+  if (r.calculavel) return null;
+  const travando = r.itens.filter((i) => i.bloqueia && !i.feito).map((i) => i.id);
+  if (travando.some((id) => ITENS_DA_EQUIPE.includes(id)) || r.motivoFinal === "sem_separacao") return "equipe";
+  if (travando.some((id) => ITENS_DO_CLIENTE.includes(id))) return "cliente";
+  return "nao_se_aplica";
 }

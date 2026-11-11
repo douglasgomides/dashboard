@@ -1,13 +1,13 @@
-import { ehNegocioProprio } from "@/lib/negocio-proprio";
+import { DIAS_SEM_ENTRAR, entraNaCarteira, fatoDeAcesso, type AcessoClinica } from "@/lib/carteira-alertas";
 import { useId, useState, type CSSProperties, type FormEvent } from "react";
 import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createAdminUser, createClient, listAllClients } from "@/lib/admin-data";
+import { createAdminUser, createClient, getAvisosDaCarteira, listAllClients } from "@/lib/admin-data";
 import { ClientAvatar } from "@/components/client-avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { getQualidadeDados, getRoiPeriodo } from "@/lib/client-data";
-import { montarRoi, resumoRoi, type Roi } from "@/lib/roi";
+import { grupoSemRoi, montarRoi, resumoRoi, ROTULO_GRUPO_SEM_ROI, type GrupoSemRoi, type Roi } from "@/lib/roi";
 import { SeloConfianca } from "@/components/selo-confianca";
 import { resolveDateRange } from "@/lib/date-range";
 import { getSapPorCliente } from "@/lib/sap-data";
@@ -232,7 +232,8 @@ function AdminClientsPage() {
     .filter((x) => x.itens.length > 0);
   const totalVermelhas = vermelhas.reduce((n, x) => n + x.itens.length, 0);
 
-  // Médico sem login: nenhum usuário do cliente além da equipe (admins).
+  // Acesso do médico: quantos usuários do cliente existem (além da equipe) vem do banco; o último acesso vem do servidor,
+  // pelo alvo global carteira_avisos (só admin, só agregado por clínica).
   const { data: logins } = useQuery({
     queryKey: ["admin-logins-por-cliente"],
     queryFn: async () => {
@@ -248,7 +249,15 @@ function AdminClientsPage() {
     staleTime: 5 * 60_000,
     retry: false,
   });
-  const semLogin = (id: string) => !!logins && !logins.get(id) && !ehNegocioProprio(id);
+  const avisosQ = useQuery({ queryKey: ["admin-avisos-carteira"], queryFn: getAvisosDaCarteira, staleTime: 5 * 60_000, retry: false });
+  const acessoPorClinica = new Map<string, AcessoClinica>((avisosQ.data?.acessos ?? []).map((a) => [a.client_id, a]));
+  const hoje = Date.now();
+  const acessoDe = (c: { id: string; active?: boolean | null }) =>
+    fatoDeAcesso({ clinica: c, membrosCliente: logins ? (logins.get(c.id) ?? 0) : undefined, acesso: acessoPorClinica.get(c.id), lido: !!avisosQ.data, hoje });
+  // Sem acesso criado só precisa da contagem de membros; o "não entra" precisa também da leitura do servidor.
+  const semAcesso = (c: { id: string; active?: boolean | null }) =>
+    fatoDeAcesso({ clinica: c, membrosCliente: logins ? (logins.get(c.id) ?? 0) : undefined, acesso: undefined, lido: true, hoje }).fato === "sem_acesso";
+  const naoEntra = (c: { id: string; active?: boolean | null }) => acessoDe(c).fato === "nao_entra";
 
   // ROI dos últimos 30 dias por cliente (mesma regra do bloco "Retorno do investimento" do Resultado).
   const ult30 = resolveDateRange({ preset: "30d" });
@@ -265,26 +274,34 @@ function AdminClientsPage() {
     const d = i >= 0 ? rois[i]?.data : null;
     return d ? montarRoi(d) : null;
   };
-  const semRoi = (id: string) => {
-    const r = roiDe(id);
-    return !!r && !r.calculavel;
+  // Só clínica que a Carteira cobra (ativa e fora do negócio próprio) entra na conta. O grupo diz de quem é a vez:
+  // cliente (CRM), equipe (fonte ou etapa) ou "não se aplica" (sem venda, sem investimento, amostra pequena).
+  const grupoDe = (c: { id: string; active?: boolean | null }): GrupoSemRoi | null => {
+    if (!entraNaCarteira(c)) return null;
+    const r = roiDe(c.id);
+    return r ? grupoSemRoi(r) : null;
+  };
+  const semRoi = (c: { id: string; active?: boolean | null }) => {
+    const g = grupoDe(c);
+    return g === "cliente" || g === "equipe";
   };
 
   // Filtros e ordenação da tabela.
   const [busca, setBusca] = useState("");
-  const [filtro, setFiltro] = useState<"todos" | "problema" | "sem_roi" | "sem_login">("todos");
+  const [filtro, setFiltro] = useState<"todos" | "problema" | "sem_roi" | "nao_entra" | "sem_acesso">("todos");
   const [ordem, setOrdem] = useState<"pior" | "nota" | "nome">("pior");
   const piorPeso = (id: string) => {
     const sd = saudePorCliente.get(id);
     return sd ? Math.max(...FONTES.map((f) => sd[f].status.peso)) : 0;
   };
-  const casaFiltro = (c: { id: string; name: string; specialty?: string | null; instagram_handle?: string | null }) => {
+  const casaFiltro = (c: { id: string; name: string; active?: boolean | null; specialty?: string | null; instagram_handle?: string | null }) => {
     const t = busca.trim().toLowerCase();
     const texto = !t || [c.name, c.specialty, c.instagram_handle, contasIg?.get(c.id)].some((x) => (x ?? "").toLowerCase().includes(t));
     if (!texto) return false;
     if (filtro === "problema") return piorPeso(c.id) >= 2; // amarelo ou vermelho
-    if (filtro === "sem_login") return semLogin(c.id);
-    if (filtro === "sem_roi") return semRoi(c.id);
+    if (filtro === "nao_entra") return naoEntra(c);
+    if (filtro === "sem_acesso") return semAcesso(c);
+    if (filtro === "sem_roi") return semRoi(c);
     return true;
   };
   // Problemas de dado (qualidade_dados) por cliente: mesma chave do ChipQualidade, então a leitura é compartilhada.
@@ -383,8 +400,14 @@ function AdminClientsPage() {
   const totalAmarelas = fontesAmarelas.reduce((n, x) => n + x, 0);
   const clinicasAmarelas = fontesAmarelas.filter((x) => x > 0).length;
   const roisProntos = rois.every((q) => !q.isLoading);
-  const nSemRoi = roisProntos ? (clients ?? []).filter((c) => semRoi(c.id)).length : null;
-  const nSemLogin = logins ? (clients ?? []).filter((c) => semLogin(c.id)).length : null;
+  const gruposRoi = (clients ?? []).map(grupoDe);
+  const nCliente = gruposRoi.filter((g) => g === "cliente").length;
+  const nEquipe = gruposRoi.filter((g) => g === "equipe").length;
+  const nNaoSeAplica = gruposRoi.filter((g) => g === "nao_se_aplica").length;
+  const nSemRoi = roisProntos ? nCliente + nEquipe : null;
+  const nSemAcesso = logins ? (clients ?? []).filter(semAcesso).length : null;
+  const nNaoEntra = logins && avisosQ.data ? (clients ?? []).filter(naoEntra).length : null;
+  const notaAcesso = `${nSemAcesso ?? "…"} sem acesso criado (a equipe cria)`;
   const lendo = (v: number | null | undefined) => (v == null || carregandoSaude ? "…" : v.toLocaleString("pt-BR"));
   const tomDe = (n: number | null, tom: "atencao" | "critico") => (n == null ? "neutro" : n > 0 ? tom : "ok");
 
@@ -405,11 +428,18 @@ function AdminClientsPage() {
         <AdmContador className="dbx-card" i={1} icone={<AlertTriangle />} rotulo="Precisam de atenção" valor={lendo(nAtencao)} nota="Fonte atrasada, parada ou com erro" tom={carregandoSaude ? "neutro" : tomDe(nAtencao, "atencao")} onClick={() => setFiltro("problema")} ativo={filtro === "problema"} />
         <AdmContador className="dbx-card" i={2} icone={<Unplug />} rotulo="Fonte parada ou com erro" valor={lendo(totalVermelhas)} nota={carregandoSaude ? "Lendo as fontes…" : totalVermelhas ? `Em ${vermelhas.length} ${vermelhas.length === 1 ? "clínica" : "clínicas"} · mais de 3 dias` : "Nenhuma"} tom={carregandoSaude ? "neutro" : tomDe(totalVermelhas, "critico")} />
         <AdmContador className="dbx-card" i={3} icone={<Clock />} rotulo="Fonte atrasada" valor={lendo(totalAmarelas)} nota={carregandoSaude ? "Lendo as fontes…" : totalAmarelas ? `Em ${clinicasAmarelas} ${clinicasAmarelas === 1 ? "clínica" : "clínicas"} · 2 a 3 dias` : "Nenhuma"} tom={carregandoSaude ? "neutro" : tomDe(totalAmarelas, "atencao")} />
-        <AdmContador className="dbx-card" i={4} icone={<UserX />} rotulo="Médico sem login" valor={nSemLogin == null ? "…" : nSemLogin} nota="Ninguém da clínica entra no painel" tom={tomDe(nSemLogin, "atencao")} onClick={() => setFiltro("sem_login")} ativo={filtro === "sem_login"} />
-        <AdmContador className="dbx-card" i={5} icone={<Calculator />} rotulo="Sem ROI calculável" valor={nSemRoi == null ? "…" : nSemRoi} nota="Falta dado para o retorno de 30 dias" tom={tomDe(nSemRoi, "atencao")} onClick={() => setFiltro("sem_roi")} ativo={filtro === "sem_roi"} />
+        <AdmContador className="dbx-card" i={4} icone={<UserX />} rotulo="Médico não entra" valor={avisosQ.isError ? "–" : nNaoEntra == null ? "…" : nNaoEntra} nota={avisosQ.isError ? `Não consegui ler o último acesso · ${notaAcesso}` : `Há mais de ${DIAS_SEM_ENTRAR} dias · ${notaAcesso}`} tom={avisosQ.isError ? "neutro" : tomDe(nNaoEntra, "atencao")} onClick={() => setFiltro("nao_entra")} ativo={filtro === "nao_entra"} />
+        <AdmContador className="dbx-card" i={5} icone={<Calculator />} rotulo="Sem ROI calculável" valor={nSemRoi == null ? "…" : nSemRoi} nota={nSemRoi == null ? "Lendo o retorno de 30 dias…" : `${nCliente} cliente (CRM) · ${nEquipe} equipe (fonte ou etapa) · ${nNaoSeAplica} não se aplica`} titulo={`${ROTULO_GRUPO_SEM_ROI.cliente}\n${ROTULO_GRUPO_SEM_ROI.equipe}\n${ROTULO_GRUPO_SEM_ROI.nao_se_aplica}`} tom={tomDe(nSemRoi, "atencao")} onClick={() => setFiltro("sem_roi")} ativo={filtro === "sem_roi"} />
       </AdmContadores>
       {statusQ.isError && (
         <NxAlertaCurto titulo="Não consegui ler o status das fontes agora." passo="Tente de novo em instantes. Os números abaixo podem estar incompletos." />
+      )}
+      {(avisosQ.data?.reservas.length ?? 0) > 0 && (
+        <NxAlertaCurto tom="atencao" titulo="O servidor não tem uma reserva que uma conexão ativa usa">
+          {avisosQ.data!.reservas.map((a) => (
+            <span key={a.variavel} style={{ display: "block" }}>{a.texto}</span>
+          ))}
+        </NxAlertaCurto>
       )}
 
       <div className="adm-filtros">
@@ -428,7 +458,8 @@ function AdminClientsPage() {
           {chipFiltro("todos", "Todos", (clients ?? []).length)}
           {chipFiltro("problema", "Com problema", nAtencao)}
           {chipFiltro("sem_roi", "Sem ROI", nSemRoi ?? undefined)}
-          {chipFiltro("sem_login", "Sem login", nSemLogin ?? undefined)}
+          {chipFiltro("nao_entra", "Não entra", nNaoEntra ?? undefined)}
+          {chipFiltro("sem_acesso", "Sem acesso criado", nSemAcesso ?? undefined)}
         </div>
         <label className="adm-ordem">
           Ordenar por
@@ -459,6 +490,10 @@ function AdminClientsPage() {
               const nota = notaPorCliente.get(c.id) ?? null;
               const sp = sapPorCliente?.get(c.id);
               const r = roiDe(c.id);
+              const grupoLinha = r && entraNaCarteira(c) ? grupoSemRoi(r) : null;
+              const fatoClinica = acessoDe(c);
+              const ultimoAcessoIso = acessoPorClinica.get(c.id)?.ultimo_acesso;
+              const ultimoAcesso = ultimoAcessoIso ? new Date(ultimoAcessoIso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" }) : null;
               const ruins = sd ? FONTES.filter((f) => sd[f].status.cor === "vermelho" || sd[f].status.cor === "amarelo") : [];
               return (
                 <li key={c.id} className={`adm-linha${cor === "vermelho" ? " adm-linha--alerta" : cor === "amarelo" ? " adm-linha--atencao" : ""}`} style={{ "--i": Math.min(idx, 12) } as CSSProperties}>
@@ -487,9 +522,14 @@ function AdminClientsPage() {
                         <AdmChip tom="marca" semIcone>{sp.dia === null ? "SAP · sem D0" : sp.dia > 90 ? "Terminou o SAP" : sp.dia < 0 ? `SAP · começa em ${-sp.dia} dia(s)` : `SAP · D${sp.dia} de 90`}</AdmChip>
                       </Link>
                     )}
-                    {semLogin(c.id) && (
-                      <Link to="/admin/$clientId" params={{ clientId: c.id }} hash="acesso" className="adm-chip-link" title="Nenhum usuário do cliente tem acesso ao painel (só a equipe). Clique para dar acesso.">
-                        <AdmChip tom="atencao">Médico sem login · dar acesso</AdmChip>
+                    {fatoClinica.fato === "sem_acesso" && (
+                      <Link to="/admin/$clientId" params={{ clientId: c.id }} hash="acesso" className="adm-chip-link" title="A equipe ainda não criou o acesso de ninguém da clínica.">
+                        <AdmChip tom="neutro">Sem acesso criado · dar acesso</AdmChip>
+                      </Link>
+                    )}
+                    {fatoClinica.fato === "nao_entra" && (
+                      <Link to="/admin/$clientId" params={{ clientId: c.id }} hash="acesso" className="adm-chip-link" title={ultimoAcesso ? `Último acesso de alguém da clínica: ${ultimoAcesso}` : "Acesso criado e nunca usado"}>
+                        <AdmChip tom="atencao">Não entra há {fatoClinica.dias} dias</AdmChip>
                       </Link>
                     )}
                   </div>
@@ -507,7 +547,7 @@ function AdminClientsPage() {
                     })}
                     <div className="adm-num adm-num--roi">
                       {r ? (
-                        <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} style={{ color: r.calculavel ? (r.roi! >= 0 ? "var(--good)" : "var(--crit)") : "var(--warn)" }} title={r.motivoSemCalculo ?? "Ver o retorno no Resultado"}>
+                        <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} style={{ color: r.calculavel ? (r.roi! >= 0 ? "var(--good)" : "var(--crit)") : "var(--warn)" }} title={grupoLinha ? `${ROTULO_GRUPO_SEM_ROI[grupoLinha]}: ${r.motivoSemCalculo}` : (r.motivoSemCalculo ?? "Ver o retorno no Resultado")}>
                           {resumoRoi(r)}
                         </Link>
                       ) : (

@@ -10,8 +10,10 @@
  *    empresa (scope COMPANY). Por isso os painéis lidos ficam explícitos em
  *    crm_connections.config.panel_ids, e painel interno (Enfermagem, Administrativo) fica de fora.
  *  - As etapas só vêm com `?includeDetails=Steps`; sem isso o card traz stepTitle nulo.
- *  - A listagem devolve só os cards ABERTOS: ganho/perdido fechado não aparece.
- *    Painéis sem etapa final (Marcella) só mostram o que está aberto.
+ *  - A listagem v1 devolve só os cards ABERTOS: ganho/perdido fechado não aparece.
+ *    Painéis sem etapa final (Marcella) só mostram o que está aberto. O que sumiu da lista vira "closed"
+ *    (fechado, resultado não informado) e, a cada 6 h, a v2 (`/crm/v2/panel/card` com `Statuses` = WON ou LOST)
+ *    diz se foi ganho ou perdido: só closed vira won ou lost (fora cards_por_item).
  *
  * Modelagem, igual ao que Kommo, Clint e RD Station já gravam:
  *  - o painel vira "pipeline" e a etapa vira "status" (crm_pipeline_statuses);
@@ -138,7 +140,65 @@ export function contaComoAbertoNoPainel(l: { removido_na_origem: string | null; 
   return l.removido_na_origem === null || !!l.substituido_por;
 }
 
-// Fica na v1 de propósito. A doc da Helena (01/11/2026) só publica `GET /crm/v2/panel/card` e o formato da resposta é
+/**
+ * Ids dos cards cuja situação (`status`) é a pedida, na resposta da v2. Aceita o array direto ou `body.items`. O status
+ * tem de ser igual ao pedido (sem diferenciar maiúscula); item sem status ou sem id fica fora. Assim, se a API ignorar o
+ * filtro `Statuses` e devolver card aberto, ele nunca é reclassificado.
+ */
+export function idsComSituacao(itens: unknown, situacao: "WON" | "LOST"): Set<string> {
+  const lista = Array.isArray(itens) ? itens : Array.isArray((itens as { items?: unknown } | null)?.items) ? (itens as { items: unknown[] }).items : [];
+  const out = new Set<string>();
+  for (const it of lista) {
+    const c = it as { id?: unknown; status?: unknown } | null;
+    if (typeof c?.status !== "string" || c.status.trim().toUpperCase() !== situacao) continue;
+    if (typeof c.id !== "string" || !c.id) continue;
+    out.add(c.id);
+  }
+  return out;
+}
+
+/** O que dos fechados no Nexo a v2 confirmou como ganho ou perdido. Card nos dois conjuntos (contradição) ou em nenhum
+ *  fica closed. Só entra quem veio em `fechados`: a v2 nunca reclassifica card que o Nexo não marcou como fechado. */
+export function reclassificarFechados(fechados: string[], ganhos: Set<string>, perdidos: Set<string>): { won: string[]; lost: string[] } {
+  const won: string[] = [];
+  const lost: string[] = [];
+  for (const id of fechados) {
+    const g = ganhos.has(id), p = perdidos.has(id);
+    if (g && !p) won.push(id);
+    else if (p && !g) lost.push(id);
+  }
+  return { won, lost };
+}
+
+/** Uma conferência dos fechados na v2 a cada 6 h por conexão (o limite da Helena é 1.000 chamadas por 5 min). */
+export const FECHADOS_V2_INTERVALO_MS = 6 * 3_600_000;
+const MAX_PAGES_V2 = 30;
+
+/** cards_por_item (Support Clinic, Dr. Sergio Maia) fica fora: a contagem dele é "venda por pessoa x card", outra pendência. */
+export function deveConferirFechadosV2(config: { cards_por_item?: boolean; fechados_v2_em?: string }, agora: number): boolean {
+  if (config.cards_por_item) return false;
+  const ultima = Date.parse(config.fechados_v2_em ?? "");
+  if (!Number.isFinite(ultima)) return true;
+  return agora - ultima >= FECHADOS_V2_INTERVALO_MS;
+}
+
+// v2 com Statuses: confirmado só pela doc (docs/apis/wts-flwchat.md:51-54); conferir ao vivo com o teste de contrato
+// antes de confiar no número.
+// Um valor por chamada (WON numa, LOST noutra), para não depender de como a API codifica array. Para quando acaba a
+// paginação, quando todos os procurados foram achados, no teto de páginas ou no prazo da rodada.
+async function fetchIdsV2(token: string, panelId: string, situacao: "WON" | "LOST", procurados: Set<string>, deadlineMs?: number): Promise<Set<string>> {
+  const achados = new Set<string>();
+  for (let page = 1; page <= MAX_PAGES_V2; page++) {
+    const body = await flwGet(token, "/crm/v2/panel/card", { panelId, Statuses: situacao, pageSize: PAGE_SIZE, pageNumber: page });
+    for (const id of idsComSituacao(body, situacao)) if (procurados.has(id)) achados.add(id);
+    if (!body?.hasMorePages || achados.size >= procurados.size) break;
+    if (deadlineMs && Date.now() > deadlineMs) break;
+  }
+  return achados;
+}
+
+// A v1 decide o que está aberto e o que fechou (fica como está): a v2 só confere o resultado dos que a v1 deixou de listar.
+// A v1 fica na listagem dos abertos de propósito. A doc da Helena (01/11/2026) só publica `GET /crm/v2/panel/card` e o formato da resposta é
 // claro (PublicPanelCardDTOV2 com os mesmos campos, mais `status` e `lostReason`), mas ela não diz quais situações
 // (OPEN, WON, LOST, ARCHIVED) a v2 devolve sem o filtro `Statuses`. Se ela devolver menos cards que a v1, os que
 // faltarem seriam fechados por cardsFechadosNaOrigem: dano no dado sem erro. Migrar só depois de comparar a v1 com a
@@ -385,6 +445,8 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
       etapas_perdido?: string[];
       tags_contato?: boolean;
       cards_por_item?: boolean;
+      /** Quando os fechados foram conferidos na v2 pela última vez (no máximo a cada 6 h). */
+      fechados_v2_em?: string;
       /** painel -> (card -> quando faltou da lista), à espera da confirmação de decidirFechamento. */
       ausentes_pendentes?: Record<string, Record<string, string>>;
     } & EstadoTags;
@@ -562,6 +624,8 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
     // FlwChat (ganho ou perdido, a API não diz). Vira "closed" (fechado, resultado não informado) em vez de seguir
     // aberto para sempre. Se voltar a aparecer, o upsert acima devolve o resultado da etapa.
     if (gravados === linhas.length) {
+      const conferirV2 = deveConferirFechadosV2(config, Date.now());
+      let tentouV2 = false;
       const pendentesAntes = config.ausentes_pendentes ?? {};
       const pendentesDepois: Record<string, Record<string, string>> = {};
       // Painel que não foi listado por inteiro nesta rodada guarda o que já estava anotado.
@@ -595,9 +659,44 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
           errors.push(`cards fechados no painel ${panelId}: ${err instanceof Error ? err.message : String(err)}`);
           if (pendentesAntes[panelId]) pendentesDepois[panelId] = pendentesAntes[panelId];
         }
+        // Os fechados do painel (os de agora e os de rodadas anteriores) ganham o resultado que a v2 confirmar.
+        // Falha da v2 vira aviso, não erro: o card segue closed e a fonte não fica vermelha por causa da tentativa.
+        if (conferirV2) {
+          tentouV2 = true;
+          try {
+            const fechadosNoNexo: string[] = [];
+            for (let de = 0; ; de += 1000) {
+              const { data, error } = await supabase.from("crm_leads").select("external_lead_id")
+                .eq("crm_connection_id", conn.id).eq("pipeline_id", panelId).eq("outcome", "closed")
+                .order("external_lead_id").range(de, de + 999);
+              if (error) throw new Error(error.message);
+              const pagina = (data ?? []) as { external_lead_id: string }[];
+              fechadosNoNexo.push(...pagina.map((r) => String(r.external_lead_id)));
+              if (pagina.length < 1000) break;
+            }
+            if (fechadosNoNexo.length > 0) {
+              const procurados = new Set(fechadosNoNexo);
+              const ganhos = await fetchIdsV2(token, panelId, "WON", procurados, env.deadlineMs);
+              const perdidos = await fetchIdsV2(token, panelId, "LOST", procurados, env.deadlineMs);
+              const { won, lost } = reclassificarFechados(fechadosNoNexo, ganhos, perdidos);
+              for (const [outcome, ids] of [["won", won], ["lost", lost]] as const) {
+                for (const lote of chunk(ids, 300)) {
+                  // Só closed muda: open e resultado confirmado nunca são tocados.
+                  const { error } = await supabase.from("crm_leads").update({ outcome })
+                    .eq("crm_connection_id", conn.id).eq("pipeline_id", panelId).eq("outcome", "closed").in("external_lead_id", lote);
+                  if (error) throw new Error(error.message);
+                }
+              }
+            }
+          } catch {
+            avisos.push(`painel ${panelId}: a v2 não confirmou ganho/perda dos fechados; seguem como fechados`);
+          }
+        }
       }
-      if (JSON.stringify(pendentesDepois) !== JSON.stringify(pendentesAntes)) {
-        const novaConfig = { ...configAtual, ausentes_pendentes: pendentesDepois };
+      // Uma conferência a cada 6 h por conexão, também quando a v2 falhou: erro persistente não pode martelar a API.
+      const gravarV2 = tentouV2;
+      if (gravarV2 || JSON.stringify(pendentesDepois) !== JSON.stringify(pendentesAntes)) {
+        const novaConfig = { ...configAtual, ausentes_pendentes: pendentesDepois, ...(gravarV2 ? { fechados_v2_em: new Date().toISOString() } : {}) };
         const { error: e } = await supabase.from("crm_connections").update({ config: novaConfig }).eq("id", conn.id);
         if (e) errors.push(`cards fora da lista: não deu para guardar a espera da confirmação (${e.message})`);
         else configAtual = novaConfig;
