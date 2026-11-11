@@ -138,7 +138,7 @@ Plans:
   3. A leitura só afirma o que o dado sustenta: dado faltando ou não confiável aparece como tal, nunca vira conclusão
   4. O João olha cada tela e diz que entende sem explicação
 
-**Plans:** 4/17 plans executed em 9 ondas (um PR só para a fase; no máximo 2 planos e uma publicação na VPS por onda; cada plano na própria worktree)
+**Plans:** 5/17 plans executed em 9 ondas (um PR só para a fase; no máximo 2 planos e uma publicação na VPS por onda; cada plano na própria worktree)
 
 Plans:
 **Wave 1**
@@ -151,7 +151,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 03.1-05-PLAN.md — Marketing / Instagram (5 telas); publica; o João olha
-- [ ] 03.1-06-PLAN.md — Versões nx dos painéis de agente, do planejador e das estratégias (o SAP fica igual)
+- [x] 03.1-06-PLAN.md — Versões nx dos painéis de agente, do planejador e das estratégias (o SAP fica igual)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 03.1-07-PLAN.md — Marketing / Anúncios, campanhas e links (rastreio suspeito vira "sem leitura"); publica; o João olha
