@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { CfmScoreStatus, CrmProvider } from "@/integrations/supabase/types";
 import { avatarExtension } from "@/lib/avatar";
+import type { AvisosDaCarteira } from "@/lib/carteira-alertas";
 
 /** Clínicas de teste (dados fictícios) ficam fora por padrão: não contam como cliente nem como problema. */
 async function lerClientes(incluirTeste: boolean) {
@@ -17,6 +18,24 @@ async function lerClientes(incluirTeste: boolean) {
 export const listAllClients = () => lerClientes(false);
 /** Para o SAP e o seletor de cliente, que precisam enxergar a clínica de teste. */
 export const listAllClientsComTeste = () => lerClientes(true);
+
+/**
+ * Último acesso por clínica e reservas do servidor que faltam, pelo alvo global carteira_avisos (só admin).
+ * O servidor devolve só agregado: sem e-mail, sem id de usuário e sem valor de variável.
+ */
+export async function getAvisosDaCarteira(): Promise<AvisosDaCarteira> {
+  const { data: sessao } = await supabase.auth.getSession();
+  const token = sessao.session?.access_token;
+  if (!token) throw new Error("Sessão expirada. Entre de novo.");
+  const r = await fetch("/api/sync/manual", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ alvo: "carteira_avisos" }),
+  });
+  const corpo = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(corpo?.error ?? `A leitura do acesso falhou (${r.status}).`);
+  return { acessos: corpo?.acessos ?? [], reservas: corpo?.reservas ?? [] };
+}
 
 export async function createClient(input: { name: string; specialty?: string; instagram_handle?: string }) {
   const { data, error } = await supabase.from("clients").insert(input).select("id").single();

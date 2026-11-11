@@ -90,6 +90,25 @@ export async function mockCarteira(context: BrowserContext) {
     if (single || select !== "client_id,user_id,role") return route.fallback();
     return route.fulfill({ json: CLINICAS.slice(1, 5).map((c, i) => ({ client_id: c.id, user_id: `medico-${i}`, role: "owner" })) });
   });
+  // Último acesso por clínica e reservas que faltam (alvo carteira_avisos). Só ele é respondido; o resto segue para o próximo mock.
+  // A clínica 4 (Dra. Ana) tem acesso e não entra há 37 dias; CID e a clínica 8 não têm acesso criado.
+  await context.route("**/api/sync/manual", (route) => {
+    const corpo = route.request().postDataJSON() as { alvo?: string } | null;
+    if (corpo?.alvo !== "carteira_avisos") return route.fallback();
+    return route.fulfill({
+      json: {
+        alvo: "carteira_avisos",
+        ok: true,
+        acessos: [
+          { client_id: id(4), usuarios: 1, ultimo_acesso: quando(37), criado_em: quando(90) },
+          { client_id: id(5), usuarios: 1, ultimo_acesso: quando(2), criado_em: quando(90) },
+          { client_id: id(6), usuarios: 1, ultimo_acesso: quando(1), criado_em: quando(90) },
+          { client_id: id(7), usuarios: 1, ultimo_acesso: quando(3), criado_em: quando(90) },
+        ],
+        reservas: [{ variavel: "KOMMO_API_TOKEN", conexoes: 1, texto: "1 conexão Kommo ativa sem token próprio depende da reserva KOMMO_API_TOKEN, que o servidor não tem. Grave o token na própria conexão." }],
+      },
+    });
+  });
   await context.route("**/rest/v1/rpc/qualidade_dados**", (route) => {
     const corpo = route.request().postDataJSON() as { p_client_id?: string } | null;
     if (corpo?.p_client_id !== id(7)) return route.fulfill({ json: [] });

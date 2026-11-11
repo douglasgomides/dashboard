@@ -38,6 +38,22 @@ for (const width of [375, 1440]) {
     await expect(linhas).toHaveCount(3);
     await expect(page.getByRole("button", { name: /^Com problema/ })).toHaveAttribute("aria-pressed", "true");
 
+    // Acesso do médico: o alerta real (não entra há mais de 14 dias) e, ao lado, o fato neutro da equipe (sem acesso criado).
+    await page.getByRole("button", { name: /^Todos/ }).click();
+    const naoEntra = resumo.locator(".adm-cont", { hasText: "Médico não entra" });
+    await expect(naoEntra.locator(".adm-cont__valor")).toHaveText("1");
+    await expect(naoEntra).toContainText("2 sem acesso criado");
+    await expect(page.getByText(/KOMMO_API_TOKEN/).first()).toBeVisible();
+    const cartaoNaoEntra = resumo.getByRole("button", { name: /^Médico não entra/ });
+    await cartaoNaoEntra.click();
+    await expect(cartaoNaoEntra).toHaveAttribute("aria-pressed", "true");
+    await expect(linhas).toHaveCount(1);
+    await expect(linhas.first()).toContainText("Dra. Ana Souza");
+    await expect(linhas.first()).toContainText("Não entra há 37 dias");
+    await page.getByRole("button", { name: /^Sem acesso criado/ }).click();
+    await expect(linhas).toHaveCount(2);
+    await page.getByRole("button", { name: /^Todos/ }).click();
+
     // Busca visível e ligada à lista.
     await page.getByRole("button", { name: /^Todos/ }).click();
     await page.getByRole("searchbox", { name: "Buscar cliente" }).fill("sorriso");
