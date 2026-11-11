@@ -1,7 +1,8 @@
-// Registro único das telas do Nexo (Phase 3, MENU-01). Uma linha por folha do roteador (85, lidas de src/routeTree.gen.ts)
-// mais 2 atalhos de rótulo de /ideias = 87 linhas: 14 vivas + 61 escondidas + 12 tiradas. A contagem aceita pelo João em D-04 era
+// Registro único das telas do Nexo (Phase 3, MENU-01). Uma linha por folha do roteador (86, lidas de src/routeTree.gen.ts)
+// mais 2 atalhos de rótulo de /ideias = 88 linhas: 15 vivas + 61 escondidas + 12 tiradas. A contagem aceita pelo João em D-04 era
 // 14 + 70 + 3; em 11/11/2026 ele decidiu tirar os agentes e as telas que ninguém usa ("tira isso aí, ninguém usa"), e 9 rotas
-// escondidas viraram tiradas, mais o atalho Revisar roteiros.
+// escondidas viraram tiradas, mais o atalho Revisar roteiros. A tela nova O que fazer hoje (/hoje, D-01 e D-06 de 03.1.1,
+// aprovada pelo João em 10/11/2026) é a 15ª viva: é tela nova, não reclassificação.
 //
 // Por que um registro só: o menu da equipe, a busca "Buscar tela" e o teste do CI (scripts/test-registro-de-telas.ts) leem
 // daqui. Assim uma tela nova sem linha faz o teste falhar, em vez de sumir do menu e da busca sem ninguém perceber.
@@ -143,9 +144,18 @@ export const REGISTRO_DE_TELAS: readonly TelaDoRegistro[] = [
   acesso("/sem-acesso", "Sem acesso"),
   acesso("/_authenticated/", "Entrada do Nexo", { soRedireciona: true }),
 
-  // Vivas: telas da equipe (7)
+  // Vivas: telas da equipe (8)
   linha(`${A}/`, "viva", "briefcase", { rotulo: ROTULOS_MENU_EQUIPE.carteira, descricao: "Clientes do Nexo", termos: "clientes todos carteira portfolio", ...ADMIN }),
   linha(`${C}/`, "viva", "layout-dashboard", { ...daNav(""), semSelo: true }),
+  // A primeira versão da tela Hoje da Phase 9 (03.1.1, D-06): a mesma rota que a Phase 9 evolui. Sem selo até lá.
+  // Fica depois de Resultados para o link da seção Resultados continuar levando a Resultados.
+  linha(`${C}/hoje`, "viva", "checklist", {
+    rotulo: "O que fazer hoje",
+    descricao: "De 3 a 5 ações da semana tiradas das leituras, com o número e quem resolve.",
+    termos: "hoje acoes semana fazer prioridades inicio entrada",
+    area: "Resultados",
+    semSelo: true,
+  }),
   linha(`${C}/relatorio`, "viva", "file-text", { ...daNav("/relatorio"), semSelo: true }),
   linha(`${C}/crm-estrutura`, "viva", "settings", daNav("/crm-estrutura")),
   linha(`${A}/$clientId`, "viva", "settings", daNav("/admin/$clientId")),
@@ -557,7 +567,7 @@ function telaViva(rota: string): TelaDoRegistro {
 
 const MENU_EQUIPE: readonly { chave: ChaveMenuEquipe; icone: NomeIcone; rota: string; subtelas: readonly string[] }[] = [
   { chave: "carteira", icone: "briefcase", rota: `${A}/`, subtelas: [] },
-  { chave: "clinica", icone: "stethoscope", rota: `${C}/`, subtelas: [`${C}/`, `${C}/relatorio`, `${C}/crm-estrutura`, `${A}/$clientId`] },
+  { chave: "clinica", icone: "stethoscope", rota: `${C}/`, subtelas: [`${C}/hoje`, `${C}/`, `${C}/relatorio`, `${C}/crm-estrutura`, `${A}/$clientId`] },
   { chave: "conferencia", icone: "shield-check", rota: `${A}/conferencia`, subtelas: [`${A}/conferencia`, `${A}/integracoes`] },
 ];
 

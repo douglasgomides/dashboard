@@ -13,9 +13,9 @@ const bloco = gerado.slice(inicio, gerado.indexOf("\n}", inicio));
 const ids = [...bloco.matchAll(/^\s*(?:'([^']+)'|(__root__)):/gm)].map((m) => m[1] ?? m[2]);
 assert.ok(ids.includes("__root__") && ids.includes("/login") && ids.includes("/sem-acesso"), "ids da árvore lidos");
 
-// Folhas: 81 telas (80 folhas /_authenticated + /sem-acesso). Os 90 arquivos de src/routes incluem layouts e rotas fora do log.
+// Folhas: 82 telas (81 folhas /_authenticated + /sem-acesso; a Hoje de 03.1.1 é a 82ª). Os 90 arquivos de src/routes incluem layouts e rotas fora do log.
 const folhas = folhasDaArvore(ids);
-assert.equal(folhas.length, 81);
+assert.equal(folhas.length, 82);
 assert.ok(folhas.includes("/sem-acesso"));
 assert.ok(folhas.includes("/_authenticated/$clientId/"));
 for (const layout of ["/_authenticated", "/_authenticated/$clientId", "/_authenticated/admin", "/_authenticated/sap", "/login", "__root__"])
@@ -38,7 +38,7 @@ assert.equal(rotaLegivel("/sem-acesso"), "/sem-acesso");
 // Resumo nulo ou indefinido: uma linha por folha, tudo zero.
 for (const vazio of [null, undefined]) {
   const tabela = montarTabela(folhas, vazio);
-  assert.equal(tabela.length, 81);
+  assert.equal(tabela.length, 82);
   for (const linha of tabela) {
     assert.equal(linha.aberturas, 0);
     assert.equal(linha.ultima, null);
@@ -59,7 +59,7 @@ const resumo = [
   linha("/_authenticated/rota-antiga", 2),
 ];
 const tabela = montarTabela(folhas, resumo);
-assert.equal(tabela.length, 82);
+assert.equal(tabela.length, 83);
 const indice = tabela.find((l) => l.rota === "/_authenticated/$clientId/")!;
 assert.equal(indice.aberturas, 12);
 assert.equal(indice.link, 7);
