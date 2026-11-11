@@ -99,7 +99,7 @@ for (const l of linhasTela) {
   assert.ok(!vistas.has(l.rota), `${l.arquivo}: a rota ${l.rota} tem mais de uma linha na tabela Telas`);
   vistas.add(l.rota);
   assert.ok(l.estado === "pendente" || l.estado === "novo", `${l.rota}: Estado "${l.estado}" (use pendente ou novo)`);
-  assert.match(l.plano, /^03\.1-\d{2}$/, `${l.rota}: Plano "${l.plano}" fora do formato 03.1-NN`);
+  assert.match(l.plano, /^03\.1(\.1)?-\d{2}$/, `${l.rota}: Plano "${l.plano}" fora do formato 03.1-NN ou 03.1.1-NN`);
   if (l.excecao) assert.match(l.excecao, /^\S+\.tsx — .{20,}$/, `${l.rota}: Exceção "${l.excecao}" deve ser "arquivo.tsx — motivo" com 20 caracteres ou mais de motivo`);
 }
 for (const t of TELAS) assert.ok(vistas.has(t.rota), `a tela ${t.rota} (${t.rotulo}) do registro está sem linha no inventário`);
