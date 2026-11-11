@@ -236,15 +236,15 @@ export const REGISTRO_DE_TELAS: readonly TelaDoRegistro[] = [
   // Tiradas (12): saem do menu e da busca da equipe, mas o endereço continua abrindo (MENU-04, sem 404).
   // /marketing já redireciona para /conteudo no beforeLoad do arquivo da rota (D-05); o arquivo não muda.
   linha(`${C}/marketing`, "tirada", "speakerphone", { rotulo: "Visão geral de Marketing", area: "Marketing", soRedireciona: true, destino: `${C}/conteudo` }),
-  // Decisão do João, 11/11/2026 ("tira isso aí, ninguém usa"): 9 rotas viram só redirecionamento. As 7 da clínica levam a
-  // Resultados da clínica (${C}/); o plano 03.1.1-05 troca o destino delas para C/hoje. As 2 do admin levam à Carteira.
-  linha(`${C}/agentes`, "tirada", "robot", { rotulo: "Agentes e entregas", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/` }),
-  linha(`${C}/plano`, "tirada", "calendar", { rotulo: "Plano da semana", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/` }),
-  linha(`${C}/reunioes`, "tirada", "calendar", { rotulo: "Reuniões", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/` }),
-  linha(`${C}/proximas-acoes`, "tirada", "checklist", { rotulo: "Prioridades da equipe", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/` }),
-  linha(`${C}/oportunidades`, "tirada", "bulb", { rotulo: "Oportunidades de melhoria", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/` }),
-  linha(`${C}/automacoes`, "tirada", "robot", { rotulo: "Automações", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/` }),
-  linha(`${C}/campanhas`, "tirada", "target", { rotulo: "Estratégias e campanhas", area: "Marketing", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/` }),
+  // Decisão do João, 11/11/2026 ("tira isso aí, ninguém usa"): 9 rotas viram só redirecionamento. As 7 da clínica levam à
+  // Hoje (${C}/hoje), a entrada única (D-06), desde o 03.1.1-06. As 2 do admin levam à Carteira.
+  linha(`${C}/agentes`, "tirada", "robot", { rotulo: "Agentes e entregas", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/hoje` }),
+  linha(`${C}/plano`, "tirada", "calendar", { rotulo: "Plano da semana", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/hoje` }),
+  linha(`${C}/reunioes`, "tirada", "calendar", { rotulo: "Reuniões", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/hoje` }),
+  linha(`${C}/proximas-acoes`, "tirada", "checklist", { rotulo: "Prioridades da equipe", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/hoje` }),
+  linha(`${C}/oportunidades`, "tirada", "bulb", { rotulo: "Oportunidades de melhoria", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/hoje` }),
+  linha(`${C}/automacoes`, "tirada", "robot", { rotulo: "Automações", area: "Plano de ação", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/hoje` }),
+  linha(`${C}/campanhas`, "tirada", "target", { rotulo: "Estratégias e campanhas", area: "Marketing", soRedireciona: true, tiradaEm: "2026-11-11", destino: `${C}/hoje` }),
   linha(`${A}/agentes`, "tirada", "robot", { rotulo: "Central de Agentes", ...ADMIN, soRedireciona: true, tiradaEm: "2026-11-11", destino: `${A}/` }),
   linha(`${A}/brain`, "tirada", "bulb", { rotulo: "Brand Brain", ...ADMIN, soRedireciona: true, tiradaEm: "2026-11-11", destino: `${A}/` }),
   // Atalhos de rótulo: a tela /ideias fica (abre em Encontrar ideias); só estes 2 rótulos saem para a equipe.

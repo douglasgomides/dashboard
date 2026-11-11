@@ -361,16 +361,21 @@ assert.equal(tiradas1111.filter((t) => !t.busca).length, 9, "rotas tiradas em 11
 assert.deepEqual(tiradas1111.filter((t) => t.busca).map((t) => t.rotulo), ["Revisar roteiros"], "atalho tirado em 11/11");
 assert.deepEqual(tiradas1111.map((t) => t.rotulo).sort(), [...ROTULOS_TIRADOS_1111].sort(), "rótulos tirados em 11/11");
 const DESTINO_1111: Record<string, string> = {
-  "/_authenticated/$clientId/agentes": "/_authenticated/$clientId/",
-  "/_authenticated/$clientId/plano": "/_authenticated/$clientId/",
-  "/_authenticated/$clientId/reunioes": "/_authenticated/$clientId/",
-  "/_authenticated/$clientId/proximas-acoes": "/_authenticated/$clientId/",
-  "/_authenticated/$clientId/oportunidades": "/_authenticated/$clientId/",
-  "/_authenticated/$clientId/automacoes": "/_authenticated/$clientId/",
-  "/_authenticated/$clientId/campanhas": "/_authenticated/$clientId/",
+  "/_authenticated/$clientId/agentes": "/_authenticated/$clientId/hoje",
+  "/_authenticated/$clientId/plano": "/_authenticated/$clientId/hoje",
+  "/_authenticated/$clientId/reunioes": "/_authenticated/$clientId/hoje",
+  "/_authenticated/$clientId/proximas-acoes": "/_authenticated/$clientId/hoje",
+  "/_authenticated/$clientId/oportunidades": "/_authenticated/$clientId/hoje",
+  "/_authenticated/$clientId/automacoes": "/_authenticated/$clientId/hoje",
+  "/_authenticated/$clientId/campanhas": "/_authenticated/$clientId/hoje",
   "/_authenticated/admin/agentes": "/_authenticated/admin/",
   "/_authenticated/admin/brain": "/_authenticated/admin/",
 };
+// As 7 da clínica apontam para a mesma Hoje (D-06); nenhuma volta para Resultados da clínica.
+const daClinica1111 = tiradas1111.filter((t) => !t.busca && t.rota.startsWith("/_authenticated/$clientId/"));
+assert.equal(daClinica1111.length, 7, "tiradas da clínica em 11/11");
+assert.ok(daClinica1111.every((t) => t.destino !== "/_authenticated/$clientId/"), "nenhuma tirada da clínica leva a Resultados");
+assert.deepEqual([...new Set(daClinica1111.map((t) => t.destino))], ["/_authenticated/$clientId/hoje"], "as 7 levam à mesma Hoje");
 for (const t of tiradas1111) {
   assert.equal(t.situacao, "tirada", `${chave(t)}: tiradaEm sem situação tirada`);
   if (t.busca) {
@@ -385,7 +390,8 @@ for (const t of tiradas1111) {
   const texto = await readFile(new URL(arquivo, pastaRotas), "utf8").catch(() => assert.fail(`arquivo da rota ${arquivo} não existe`));
   assert.ok(/throw redirect\(/.test(texto), `${arquivo}: sem throw redirect`);
   assert.ok(!/component:/.test(texto), `${arquivo}: a rota tirada não pode ter component`);
-  const to = t.rota.startsWith("/_authenticated/admin/") ? '"/admin"' : '"/$clientId"';
+  // O "to" esperado sai do destino da própria linha, para o registro e o arquivo da rota nunca se separarem.
+  const to = `"${t.destino!.replace("/_authenticated", "").replace(/(.)\/$/, "$1")}"`;
   assert.ok(texto.includes(`to: ${to}`), `${arquivo}: o redirect devia ir para ${to}`);
 }
 for (const t of tiradas1111) {

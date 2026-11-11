@@ -43,5 +43,5 @@ Decisão do João em 11/11/2026 ("tira isso aí, ninguém usa"): estas telas e b
 
 | Rota | Tela ou bloco | Situação | Vai para |
 |---|---|---|---|
-| /_authenticated/$clientId/campanhas | Estratégias e campanhas | tirada (João 11/11) | /_authenticated/$clientId/ |
+| /_authenticated/$clientId/campanhas | Estratégias e campanhas | tirada (João 11/11) | /_authenticated/$clientId/hoje |
 | /_authenticated/$clientId/anuncios | Gestor de anúncios | tirada (João 11/11) | — |
