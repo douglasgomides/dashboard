@@ -362,7 +362,7 @@ assert.deepEqual(tiradas1111.filter((t) => t.busca).map((t) => t.rotulo), ["Revi
 assert.deepEqual(tiradas1111.map((t) => t.rotulo).sort(), [...ROTULOS_TIRADOS_1111].sort(), "rótulos tirados em 11/11");
 const DESTINO_1111: Record<string, string> = {
   "/_authenticated/$clientId/agentes": "/_authenticated/$clientId/",
-  "/_authenticated/$clientId/plano": "/_authenticated/$clientId/",
+  "/_authenticated/$clientId/plano": "/_authenticated/$clientId/hoje",
   "/_authenticated/$clientId/reunioes": "/_authenticated/$clientId/",
   "/_authenticated/$clientId/proximas-acoes": "/_authenticated/$clientId/",
   "/_authenticated/$clientId/oportunidades": "/_authenticated/$clientId/",
@@ -385,7 +385,8 @@ for (const t of tiradas1111) {
   const texto = await readFile(new URL(arquivo, pastaRotas), "utf8").catch(() => assert.fail(`arquivo da rota ${arquivo} não existe`));
   assert.ok(/throw redirect\(/.test(texto), `${arquivo}: sem throw redirect`);
   assert.ok(!/component:/.test(texto), `${arquivo}: a rota tirada não pode ter component`);
-  const to = t.rota.startsWith("/_authenticated/admin/") ? '"/admin"' : '"/$clientId"';
+  // O "to" esperado sai do destino da própria linha, para o registro e o arquivo da rota nunca se separarem.
+  const to = `"${t.destino!.replace("/_authenticated", "").replace(/(.)\/$/, "$1")}"`;
   assert.ok(texto.includes(`to: ${to}`), `${arquivo}: o redirect devia ir para ${to}`);
 }
 for (const t of tiradas1111) {

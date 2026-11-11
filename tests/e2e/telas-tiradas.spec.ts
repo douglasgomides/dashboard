@@ -1,13 +1,14 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 import { REGISTRO_DE_TELAS } from "../../src/lib/registro-de-telas";
 
 // Telas e agentes tirados pelo João em 11/11/2026 ("tira isso aí, ninguém usa"): cada endereço antigo redireciona, sem 404.
-// O destino vem do registro (o plano 03.1.1-05 troca o das 7 telas da clínica pela Hoje, e este teste acompanha).
+// O destino vem do registro: as 7 telas da clínica levam à Hoje (03.1.1-06), as 2 do admin à Carteira.
 
 test.use({ reducedMotion: "reduce" });
 
 const TIRADAS = REGISTRO_DE_TELAS.filter((t) => t.tiradaEm === "2026-11-11");
+const HOJE = "/_authenticated/$clientId/hoje";
 const caminho = (rota: string) => rota.replace("/_authenticated", "").replace("$clientId", CID).replace(/\/+$/, "");
 
 test("as 10 telas tiradas em 11/11 estão no registro", () => {
@@ -26,6 +27,32 @@ for (const tirada of TIRADAS.filter((t) => !t.busca)) {
     await expect(page.locator("main")).toContainText(/\S{3}/);
   });
 }
+
+function capturarPosts(page: Page) {
+  const posts: Record<string, unknown>[] = [];
+  page.on("request", (r) => {
+    if (r.method() === "POST" && new URL(r.url()).pathname === "/rest/v1/rota_acessos") posts.push(r.postDataJSON());
+  });
+  return posts;
+}
+
+test("Plano da semana: o log grava só a Hoje, com origem redirecionamento", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await context.addInitScript(() => localStorage.setItem("nexo:rota-log", "1"));
+  const posts = capturarPosts(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/${CID}/plano?preset=7d`);
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/hoje`);
+  expect(new URL(page.url()).searchParams.get("preset")).toBe("7d");
+  await expect.poll(() => posts.length).toBeGreaterThanOrEqual(1);
+  // Dá tempo de uma linha indevida da rota tirada aparecer.
+  await page.waitForTimeout(1500);
+  expect(posts.filter((p) => p.rota === "/_authenticated/$clientId/plano")).toHaveLength(0);
+  expect(posts).toHaveLength(1);
+  expect(posts[0].rota).toBe(HOJE);
+  expect(posts[0].origem).toBe("redirecionamento");
+  expect(posts[0].client_id).toBe(CID);
+});
 
 test("Revisar roteiros abre Encontrar ideias, sem o botão antigo", async ({ page, context }) => {
   await mockAccount(context, "viewer");
