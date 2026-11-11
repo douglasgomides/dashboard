@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cardsFechadosNaOrigem, CONFIRMA_AUSENCIA_MS, contaComoAbertoNoPainel, decidirFechamento } from "../api/_lib/flwchat-sync";
+import { cardsFechadosNaOrigem, CONFIRMA_AUSENCIA_MS, contaComoAbertoNoPainel, decidirFechamento, deveConferirFechadosV2, FECHADOS_V2_INTERVALO_MS, idsComSituacao, reclassificarFechados } from "../api/_lib/flwchat-sync";
 
 // Aberto no Nexo que não veio na lista completa do painel foi fechado no FlwChat.
 assert.deepEqual(cardsFechadosNaOrigem(["a", "b", "c"], new Set(["a", "c", "novo"])), ["b"]);
@@ -39,4 +39,30 @@ assert.deepEqual(decidirFechamento(["a", "b"], new Set(["a"]), { b: new Date(T0)
 assert.equal(contaComoAbertoNoPainel({ removido_na_origem: null, substituido_por: null }), true);
 assert.equal(contaComoAbertoNoPainel({ removido_na_origem: "2026-10-27T21:58:26Z", substituido_por: "123" }), true);
 assert.equal(contaComoAbertoNoPainel({ removido_na_origem: "2026-10-27T21:58:26Z", substituido_por: null }), false, "apagado na origem por outro motivo fica como está");
+// ---- Fechados conferidos na v2 (Statuses=WON / Statuses=LOST): o card fechado vira won ou lost ----
+// O status tem de ser igual ao pedido, sem diferenciar maiúscula. Item sem status ou sem id fica fora: se a API ignorar o
+// filtro e devolver card aberto, ele não é reclassificado.
+assert.deepEqual(
+  idsComSituacao([{ id: "a", status: "WON" }, { id: "b", status: "OPEN" }, { id: "c" }, { status: "WON" }, { id: "d", status: "won" }], "WON"),
+  new Set(["a", "d"]),
+);
+assert.deepEqual(idsComSituacao([{ id: "a", status: "LOST" }, { id: "b", status: "WON" }], "LOST"), new Set(["a"]));
+// Aceita o array direto ou body.items; o resto dá conjunto vazio.
+assert.deepEqual(idsComSituacao({ items: [{ id: "x", status: "LOST" }] }, "LOST"), new Set(["x"]));
+for (const ruim of [null, undefined, {}, "x", 7, { items: "x" }]) assert.equal(idsComSituacao(ruim, "LOST").size, 0);
+// Só entra o que foi pedido e confirmado; contradição (nos dois conjuntos) e card sem confirmação ficam closed.
+assert.deepEqual(reclassificarFechados(["a", "b", "c", "d"], new Set(["a", "d"]), new Set(["b", "d"])), { won: ["a"], lost: ["b"] });
+assert.deepEqual(reclassificarFechados([], new Set(["a"]), new Set(["b"])), { won: [], lost: [] });
+// A v2 não pode reclassificar card que o Nexo não marcou como closed.
+assert.deepEqual(reclassificarFechados(["a"], new Set(["z"]), new Set(["y"])), { won: [], lost: [] });
+
+// A conferência na v2 acontece a cada 6 h por conexão, e não vale para cards_por_item (Dr. Sergio Maia).
+const AGORA = Date.parse("2026-11-11T12:00:00.000Z");
+assert.equal(FECHADOS_V2_INTERVALO_MS, 6 * 3_600_000);
+assert.equal(deveConferirFechadosV2({ cards_por_item: true }, AGORA), false);
+assert.equal(deveConferirFechadosV2({ cards_por_item: true, fechados_v2_em: new Date(AGORA - 7 * 3_600_000).toISOString() }, AGORA), false);
+assert.equal(deveConferirFechadosV2({ fechados_v2_em: new Date(AGORA - 3_600_000).toISOString() }, AGORA), false);
+assert.equal(deveConferirFechadosV2({ fechados_v2_em: new Date(AGORA - 7 * 3_600_000).toISOString() }, AGORA), true);
+assert.equal(deveConferirFechadosV2({}, AGORA), true);
+assert.equal(deveConferirFechadosV2({ fechados_v2_em: "ontem de manhã" }, AGORA), true);
 console.log("test-flwchat-fechados: ok");
