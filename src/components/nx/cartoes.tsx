@@ -106,9 +106,11 @@ export interface NxCartaoNumeroProps {
   /** No máximo uma ação por cartão. */
   acao?: ReactNode;
   info?: ReactNode;
+  /** Peça própria da tela logo abaixo do número (por exemplo a barrinha de progresso). */
+  extra?: ReactNode;
 }
 
-export const NxCartaoNumero = memo(function NxCartaoNumero({ icone, titulo, subtitulo, valor, legenda, variacao, abrir, abaixoDaMeta, semMedida, meta, acao, info }: NxCartaoNumeroProps) {
+export const NxCartaoNumero = memo(function NxCartaoNumero({ icone, titulo, subtitulo, valor, legenda, variacao, abrir, abaixoDaMeta, semMedida, meta, acao, info, extra }: NxCartaoNumeroProps) {
   const classe = ["nx-cartao", abaixoDaMeta ? "nx-abaixo-da-meta" : "", semMedida ? "nx-faltou" : ""].filter(Boolean).join(" ");
   const fracao = meta ? Math.max(0, Math.min(1, meta.fracao)) : 0;
   return (
@@ -128,6 +130,7 @@ export const NxCartaoNumero = memo(function NxCartaoNumero({ icone, titulo, subt
         <span className="nx-numero__valor">{semMedida ? "Sem dado" : valor}</span>
         {legenda && <span className="nx-numero__legenda">{legenda}</span>}
       </p>
+      {extra}
       {abaixoDaMeta && <p className="nx-cartao__aviso">{abaixoDaMeta}</p>}
       {variacao && <NxPilulaVariacao texto={variacao.texto} sobe={variacao.sobe} />}
       {meta && (

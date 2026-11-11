@@ -127,3 +127,74 @@
   .nx-leitura { padding: 14px 12px; }
   .nx-pagina__pergunta { font-size: 22px; line-height: 30px; }
 }
+
+/* ---------- D-07 e régua de 1,5 tela (03.1.1, MEDV-04): o celular ganha um molde mais compacto ----------
+   Nada sai da página: o texto da leitura continua inteiro, os 4 cartões continuam existindo (viram uma fileira que rola
+   sozinha na horizontal, sem criar rolagem na página) e só os espaços e os tamanhos encolhem, sempre em 8, 12 e 16. */
+@media (max-width: 560px) {
+  .nx-pagina { gap: 8px; }
+  /* Cabeçalho: o botão da tela fica na linha do rótulo, a pergunta e a meta usam a largura toda. */
+  .nx-pagina__topo { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; align-items: center; }
+  .nx-pagina__titulos { display: contents; }
+  .nx-pagina__rotulo { grid-column: 1; grid-row: 1; font-size: 13px; line-height: 18px; }
+  .nx-pagina__acao { grid-column: 2; grid-row: 1; }
+  .nx-pagina__pergunta { grid-column: 1 / -1; grid-row: 2; font-size: 19px; line-height: 25px; }
+  .nx-pagina__meta { grid-column: 1 / -1; grid-row: 3; gap: 4px 8px; font-size: 13px; line-height: 18px; }
+  .nx-pagina__principal, .nx-pagina__corpo { gap: 12px; }
+
+  .nx-leitura { padding: 12px; gap: 8px; border-radius: 16px; }
+  .nx-leitura__topo { gap: 8px; flex-wrap: nowrap; }
+  .nx-leitura__titulos { flex: 1 1 0; }
+  .nx-leitura__titulos h2 { font-size: 16px; line-height: 22px; }
+  .nx-leitura__periodo { font-size: 13px; line-height: 18px; }
+  .nx-leitura__linhas { gap: 8px; }
+  /* nexo-anuncios.css tem a regra solta ".nx-leitura li" (faixa cinza com 12 14 de espaço), que também alcança estas linhas. */
+  .nx-pagina .nx-leitura .nx-leitura__linha { padding: 6px 8px; }
+  .nx-leitura__frase { font-size: 14px; line-height: 20px; }
+  .nx-leitura__apoio { font-size: 13px; line-height: 18px; }
+  /* O sinal (▲ ▼ ! ●) fica ao lado do rótulo e o texto usa a largura toda. */
+  .nx-leitura__linha:has(> .nx-leitura__corpo > .nx-leitura__rotulo) {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    column-gap: 8px;
+    row-gap: 2px;
+    align-items: center;
+  }
+  .nx-leitura__linha:has(> .nx-leitura__corpo > .nx-leitura__rotulo) > .nx-leitura__corpo { display: contents; }
+  .nx-leitura__linha:has(> .nx-leitura__corpo > .nx-leitura__rotulo) .nx-leitura__rotulo { grid-column: 2; line-height: 18px; }
+  .nx-leitura__linha:has(> .nx-leitura__corpo > .nx-leitura__rotulo) .nx-leitura__corpo > :not(.nx-leitura__rotulo) { grid-column: 1 / -1; }
+  .nx-leitura__linha:has(> .nx-leitura__corpo > .nx-leitura__rotulo) .nx-leitura__sinal { grid-column: 1; margin-top: 0; }
+  .nx-leitura__mais > summary { min-height: 44px; }
+
+  /* Cartões: uma fileira que rola sozinha (cada um com a largura de um cartão de celular). */
+  .nx-pagina__cartoes {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .nx-pagina__cartoes::-webkit-scrollbar { display: none; }
+  .nx-pagina__cartoes > * { flex: 0 0 min(80%, 260px); scroll-snap-align: start; }
+  .nx-pagina .nx-kpi { padding: 10px 12px; gap: 6px; }
+  .nx-pagina .nx-kpi__topo { font-size: 14px; line-height: 18px; }
+  .app.product-workspace .nx-pagina .nx-kpi .nx-kpi__valor { font-size: 24px; line-height: 28px; }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina .nx-cartao { padding: 10px 12px; gap: 4px; }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina .nx-numero__valor { font-size: 24px; line-height: 28px; }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina .nx-numero__legenda { font-size: 13px; line-height: 17px; }
+
+  /* Avisos: o "Entender" fica ao lado da frase quando cabe. */
+  .nx-pagina .nxb-aviso { padding: 8px 10px; }
+  .nx-pagina .nxb-aviso__corpo { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; }
+  .nx-pagina .nxb-aviso__mais { flex: 0 0 auto; }
+  .nx-pagina .nxb-aviso__mais[open] { flex-basis: 100%; }
+  .nx-pagina .nxb-recolhido > summary { min-height: 52px; padding: 8px 14px; }
+  .nx-pagina .ig-filtros, .nx-pagina .ig-filtros .ig-select { min-width: 0; }
+  .nx-pagina .ig-filtros { flex-wrap: nowrap; }
+
+  .nx-pagina .nx-card { padding: 12px; gap: 8px; border-radius: 16px; }
+  .nx-pagina .nx-card__head h2, .nx-pagina .nx-card__head h3 { font-size: 16px; line-height: 22px; }
+  .nx-pagina .nx-card__head p { font-size: 13px; line-height: 18px; margin: 0; }
+}

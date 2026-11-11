@@ -215,7 +215,13 @@ emendada). Os planos 03.1-07 a 03.1-17, ao serem revistos, herdam tudo isto. Nad
   corpo da aba) e só vale com a leitura carregada e todo `details` fechado. A medida não passa à toa com a tela vazia: tela que
   depende de leitura ao vivo (o Público do Instagram) precisa do mock do dado (`mockAudiencia`).
 - Para encurtar sem apagar nada: o que não é o trabalho da tela vai para o detalhe recolhido ou para o filtro segmentado, nunca
-  se apaga informação.
+  se apaga informação. Nas 4 abas do Instagram foi assim: o gráfico da distância entre os primeiros (Destaques), o ranking de
+  posts (Posts) e a cobertura em ordem da contagem de seguidores (Desempenho) foram para os Detalhes; o que pede atenção
+  (cobertura abaixo de 60%, estimativa não calculada) continua à vista.
+- No celular (até 560 px) o molde fica mais compacto sem tirar nada: o botão da tela sobe para a linha do rótulo; o sinal da
+  leitura (▲ ▼ ! ●) fica ao lado do rótulo; os cartões viram uma fileira que rola sozinha (a página não rola na horizontal);
+  a vitrine de posts também; os gráficos ficam mais baixos; o cartão do corpo perde a moldura própria dentro da pasta. Espaços
+  só em 8, 12 e 16. Tela nova no molde ganha isto de graça; quem montar peça nova precisa deixá-la caber nessa fileira.
 
 ### c) Abas e níveis (D-07)
 
