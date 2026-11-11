@@ -109,6 +109,20 @@
 .nx-leitura__ancora { display: block; min-width: 0; max-width: 100%; }
 .nx-leitura__ancora > .nx-acao-pilula { max-width: 100%; }
 
+/* ---------- D-07 (03.1.1): toda tela no molde herda o desenho dos cartões ----------
+   NxKpi (base.tsx) é peça congelada, o SAP usa; por isso a herança entra só por CSS e só dentro de .nx-pagina, que nenhuma
+   tela do SAP usa. Ícone num círculo, a legenda (nota) embaixo do número e a variação numa pílula azul-clara, sem verde nem
+   vermelho: a seta do NxTag continua mostrando a direção, a cor não diz "bom" ou "ruim" que a regra não sustenta. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina .nx-kpi .nx-tile { border-radius: 50%; }
+.app.product-workspace:not(.sap-workspace) .nx-pagina .nx-kpi .nx-kpi__nota { display: block; color: var(--text-faint); font-weight: 500; }
+.app.product-workspace:not(.sap-workspace) .nx-pagina .nx-kpi__meta .nx-tag--up,
+.app.product-workspace:not(.sap-workspace) .nx-pagina .nx-kpi__meta .nx-tag--dn { background: var(--b6); color: var(--b1); border-radius: 999px; padding: 1px 10px; font-weight: 500; }
+
+/* ---------- D-07 (03.1.1): saudação da Hoje (a pergunta vira o parágrafo logo abaixo) ---------- */
+.nx-pagina__saudacao { margin: 0; font-size: 28px; line-height: 36px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.nx-pagina__saudacao :where(span, em) { color: var(--muted-ink); font-style: normal; font-weight: 500; }
+.nx-pagina p.nx-pagina__pergunta { font-size: 16px; line-height: 24px; color: var(--muted-ink); }
+
 @media (max-width: 560px) {
   .nx-leitura { padding: 14px 12px; }
   .nx-pagina__pergunta { font-size: 22px; line-height: 30px; }

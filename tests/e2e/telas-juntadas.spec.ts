@@ -299,3 +299,46 @@ for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
     expect(escritas, `${rotulo}: a seta da pílula não grava nada`).toEqual([]);
   });
 }
+
+// D-07 (plano 02): todo cartão tem o ícone num círculo e a variação é pílula azul-clara, sem a cor de "bom" ou de "ruim".
+for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
+  test(`D-07: ${rotulo} tem ícone redondo em todo cartão e variação sem cor de bom ou ruim`, async ({ page, context }) => {
+    await mockAccount(context, "viewer");
+    await mockInstagram(context);
+    await mockAudiencia(context);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/${CID}/${sub}?preset=30d`);
+    const cartoes = page.locator("[data-juntada] .nx-pagina__cartoes > *");
+    await expect(cartoes.first()).toBeVisible();
+    const total = await cartoes.count();
+    expect(total, `${rotulo}: de 1 a 4 cartões`).toBeGreaterThanOrEqual(1);
+    expect(total).toBeLessThanOrEqual(4);
+    for (let i = 0; i < total; i++) {
+      const icone = cartoes.nth(i).locator(".nx-tile, .nx-cartao__icone");
+      await expect(icone, `${rotulo}: cartão ${i + 1} sem ícone`).toHaveCount(1);
+      expect(await icone.evaluate((el) => getComputedStyle(el).borderRadius), `${rotulo}: ícone do cartão ${i + 1} não é redondo`).toBe("50%");
+    }
+    // As cores de bom e de ruim, lidas dos tokens na própria página.
+    const referencia = await page.evaluate(() => {
+      const ler = (token: string) => {
+        const el = document.createElement("span");
+        el.style.color = `var(${token})`;
+        el.style.backgroundColor = `var(${token})`;
+        document.querySelector(".nx-pagina")!.appendChild(el);
+        const cs = getComputedStyle(el);
+        const par = { cor: cs.color, fundo: cs.backgroundColor };
+        el.remove();
+        return par;
+      };
+      return { bom: ler("--good"), ruim: ler("--danger"), bomFundo: ler("--up-bg"), ruimFundo: ler("--dn-bg") };
+    });
+    const proibidas = new Set([referencia.bom.cor, referencia.ruim.cor, referencia.bomFundo.fundo, referencia.ruimFundo.fundo]);
+    const pilulas = page.locator("[data-juntada] .nx-pagina__cartoes :is(.nx-kpi__meta .nx-tag, .nx-pilula-variacao)");
+    const quantas = await pilulas.count();
+    for (let i = 0; i < quantas; i++) {
+      const cores = await pilulas.nth(i).evaluate((el) => ({ cor: getComputedStyle(el).color, fundo: getComputedStyle(el).backgroundColor }));
+      expect(proibidas.has(cores.cor), `${rotulo}: variação ${i + 1} com a cor de bom ou ruim (texto)`).toBe(false);
+      expect(proibidas.has(cores.fundo), `${rotulo}: variação ${i + 1} com a cor de bom ou ruim (fundo)`).toBe(false);
+    }
+  });
+}

@@ -190,3 +190,85 @@ Toda tela tem pelo menos uma linha de cartão. Na rota `/ideias`, cada cartão l
 tela sem linha de cartão; tela `novo` cuja rota não usa `PaginaNexo` e `LeituraDaTela`, que ainda alcança bloco antigo
 pelo fecho de imports ou que tem cartão sem "Depois". A constante `EXIGIR_TODAS_NOVAS` começa `false`; o 03.1-17 troca para
 `true` (nenhuma linha pendente).
+
+## Telas juntadas, abas e a Hoje (03.1.1)
+
+Regras da fase 03.1.1 (referência visual aprovada pelo João em 10/11/2026, D-07, mais o mecanismo de abas e a régua de altura
+emendada). Os planos 03.1-07 a 03.1-17, ao serem revistos, herdam tudo isto. Nada acima foi apagado.
+
+### a) Como a tela juntada funciona (D-04 emendado)
+
+- Tela juntada é uma lista de abas no registro (`SECOES_JUNTADAS`, em `src/lib/registro-de-telas.ts`). Cada aba é o caminho da
+  tela antiga: o endereço antigo já é a aba, sem redirecionar, e a aba escolhida fica no endereço.
+- O log por rota guarda só o `routeId` da tela aberta (o que vem depois do `?` nunca chega a ele). Como a aba é o caminho antigo,
+  o log grava aba por aba sem migration. Um `?aba=` não chegaria ao log.
+- A pasta é desenhada pela casca (`TelaJuntada`, em `src/components/nx/abas-em-pasta.tsx`), nunca pela tela. Juntar nunca empilha
+  duas telas: cada aba abre uma tela só, no molde.
+
+### b) Régua de altura (D-04 e MEDV-04 emendados)
+
+- Com o detalhe fechado, a aba aberta mede no máximo 1,5 vez a altura da janela em 375x812 e em 1440x900.
+- É teste para as abas das 3 telas juntadas do médico (Instagram, Onde os pacientes travam, De onde vêm os pacientes) e para a
+  Hoje. As abas da equipe ficam medidas e registradas e viram teste quando o plano 03.1 de cada uma a puser no molde: quem fizer
+  isso acrescenta a aba à asserção de `tests/e2e/telas-juntadas.spec.ts`.
+- Como medir: `alturaDaAbaAberta`, em `tests/e2e/apoio-telas-juntadas.ts`, mede o elemento `[data-juntada]` (faixa de abas mais o
+  corpo da aba) e só vale com a leitura carregada e todo `details` fechado. A medida não passa à toa com a tela vazia: tela que
+  depende de leitura ao vivo (o Público do Instagram) precisa do mock do dado (`mockAudiencia`).
+- Para encurtar sem apagar nada: o que não é o trabalho da tela vai para o detalhe recolhido ou para o filtro segmentado, nunca
+  se apaga informação.
+
+### c) Abas e níveis (D-07)
+
+- Aba ativa branca, encaixada no corpo da pasta, sem borda entre os dois; as outras abas são pílulas translúcidas.
+- Contagem em cinza ao lado do rótulo, publicada pela própria aba, sem consulta nova. Aba contável sem número mostra "—", nunca
+  "0", porque zero medido é diferente de não medido.
+- Três níveis, três desenhos: seção (menu), aba em pasta (tela juntada) e filtro segmentado dentro do cartão (pílula preta no
+  escolhido, com a contagem em cinza). Dois níveis nunca usam o mesmo desenho.
+
+### d) Cartões (D-07)
+
+- Cabeçalho: ícone num círculo, título e subtítulo curto com o número de contexto ("Semana · 28 de 34 agendamentos").
+- Botão redondo ↗ no canto só quando o cartão abre outro lugar (é isso que mantém a Hoje curta: o cartão resume e o ↗ leva ao
+  detalhe).
+- Número grande com a legenda embaixo. A variação vai numa pílula azul-clara ("−18% vs período anterior"), sem cor de "bom" ou
+  "ruim" que a regra não sustente; a seta mostra só a direção.
+- No máximo uma ação por cartão, em pílula com a seta escura.
+- Tela que monta cartão novo usa `NxCartaoNumero` (`src/components/nx/cartoes.tsx`). Os `NxKpi` já existentes dentro de
+  `.nx-pagina` herdam o ícone redondo e a pílula azul-clara pelo CSS de `src/styles/nexo-pagina.css`, porque `base.tsx` é
+  congelado (o SAP usa) e a herança só vale dentro de `.nx-pagina`, que nenhuma tela do SAP usa.
+
+### e) Leitura (D-07)
+
+- O próximo passo, a "Ação da semana" do resumo e o "Para consertar" da leitura sem dado são a pílula de ação: pílula azul-clara
+  com o verbo e o número, mais o botão redondo escuro com a seta (`NxAcaoPilula`).
+- Os textos "Próximo passo", "Ação da semana", "Para consertar:", "Motivo:" e "Quem resolve:" continuam iguais.
+- Dentro de uma aba a seta abre os Detalhes da própria página (`id="detalhes-{tela}"`), onde está o número que sustenta o passo.
+  Na Hoje ela leva à aba de onde a ação saiu.
+- A seta nunca envia nem grava nada (CHAM-07: o botão só abre ou navega).
+
+### f) Topo da Hoje (plano 05)
+
+- Saudação grande ("Boa tarde, Dra. Lana") com o nome em cinza mais claro: `PaginaNexo` aceita a prop opcional `saudacao`; a
+  pergunta vira o parágrafo logo abaixo. Sem a prop o HTML é o de sempre.
+- Chips de contexto (clínica, data e hora do dado) e chips de estado das fontes com bolinha (âmbar quando o dado tem mais de
+  1 dia). O período continua no seletor da casca.
+- Cartão "Próximo" com degradê suave de tokens e botão escuro, com a ação de maior impacto da semana.
+
+### g) Detalhes pequenos (D-07)
+
+- Laranja (`var(--or)`) para abaixo da meta ou não confirmado; o texto diz "abaixo da meta" ou "não confirmado", a cor só reforça.
+- Listrado para o que faltou, com o texto "Sem dado" (nunca 0).
+- Linha tracejada para a meta, numa barra de 8 px, com o rótulo da meta.
+- Contagem em cinza ao lado de cada rótulo e hora do dado ao lado do estado.
+- Só entram onde o dado sustenta: nenhum lugar ganha cor que a regra não sustenta (`.nx-abaixo-da-meta`, `.nx-faltou` e
+  `.nx-meta-tracejada` em `src/styles/nexo-cartoes.css`).
+
+### h) Limites
+
+- Só tokens nx. A paleta é a decisão aberta 4 do João e não muda aqui.
+- Nada abaixo de peso 500 (os números grandes ficam em 500 ou mais).
+- Nada disto pode estourar a régua de 1,5 tela.
+
+### i) Grupos da equipe
+
+- A subseção dos grupos da equipe (Plano, Agentes, Conteúdo, Atendimento, Configurar CRM) entra no plano 03.1.1-07.
