@@ -6,7 +6,7 @@ import { diaAtual, pausasValidas } from "@/lib/sap-data";
 // Página inicial de quem está logado: decide para onde ir (as regras de acesso continuam as mesmas).
 // - Endereço sap.*: o Sistema de Aquisição (/sap), produto separado do Hub.
 // - Admin: painel de administração do Hub.
-// - Cliente: o primeiro cliente a que tem acesso (no SAP enquanto está no programa; no Hub depois do D90).
+// - Cliente: o primeiro cliente a que tem acesso (no SAP enquanto está no programa; no Hub, a Hoje, depois do D90).
 export const Route = createFileRoute("/_authenticated/")({
   beforeLoad: async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -40,6 +40,7 @@ export const Route = createFileRoute("/_authenticated/")({
       const dia = diaAtual(sap.d0, pausasValidas(sap.sap_pausas));
       if (dia === null || dia <= 90) throw redirect({ to: "/sap/$clientId/painel", params: { clientId: membership.client_id } });
     }
-    throw redirect({ to: "/$clientId/pacientes", params: { clientId: membership.client_id } });
+    // D-06 (03.1.1): uma tela de entrada só, a Hoje.
+    throw redirect({ to: "/$clientId/hoje", params: { clientId: membership.client_id } });
   },
 });

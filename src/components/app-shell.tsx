@@ -18,6 +18,7 @@ import { LogoutButton } from "@/components/logout-button";
 import { BuscaDeTelas } from "@/components/busca-de-telas";
 import { abasVisiveis, ehEquipe, juntadaDoCaminho, telaDoCaminho } from "@/lib/registro-de-telas";
 import { AbasDaSecao, MarcaNexo, MenuEquipe } from "@/components/menu-equipe";
+import { MenuDoMedico } from "@/components/menu-medico";
 import { IconeTabler } from "@/components/icons/tabler";
 import { TelaJuntada } from "@/components/nx/abas-em-pasta";
 import { AvatarGerado } from "@/components/avatar-gerado";
@@ -445,38 +446,17 @@ export function AppShell({
           <span>Encontrar uma ferramenta</span>
           <kbd aria-hidden>Ctrl K</kbd>
         </button>
+        {/* Menu do médico (03.1.1-07, MEDV-01, D-01): as 6 telas aprovadas, no lugar das áreas antigas. */}
         <nav className="side areas" aria-label="Áreas do Nexo">
-          {principais.map((a) => (
-            <TabLink
-              key={a.id}
-              tab={a.visiveis[0]}
-              clientId={clientId}
-              dateRange={dateRange}
-              ativo={a.id === ativa}
-            >
-              <a.Icone aria-hidden />
-              <span className="so-aberta">{a.label}</span>
-              {recolhida && <span className="sr-only">{a.label}</span>}
-            </TabLink>
-          ))}
+          <MenuDoMedico
+            variante="barra"
+            vis={vis}
+            clientId={clientId}
+            pathname={pathname}
+            dateRange={dateRange}
+            recolhida={recolhida}
+          />
         </nav>
-        {detalhes.length > 0 && <details className="workspace-section so-aberta" open={detalhes.some(a => a.id === ativa)}>
-          <summary className="workspace-nav-label">Explorar análises e ferramentas</summary>
-          <nav className="side areas" aria-label="Análises detalhadas">{detalhes.map(a => <TabLink key={a.id} tab={a.visiveis[0]} clientId={clientId} dateRange={dateRange} ativo={a.id === ativa}><a.Icone aria-hidden /><span>{a.label}</span></TabLink>)}</nav>
-        </details>}
-        {area && area.visiveis.length > 1 && (
-          <div className="workspace-section so-aberta">
-            <p className="workspace-nav-label">Em {area.label}</p>
-            <TelasDaArea
-              compacto
-              area={area}
-              currentSearch={currentSearch}
-              sub={sub}
-              clientId={clientId}
-              dateRange={dateRange}
-            />
-          </div>
-        )}
         {avancado.length > 0 && (
           <div className="avancado so-aberta">
             <button
@@ -621,16 +601,6 @@ export function AppShell({
             <h1>{titulo}</h1>
             {descricao && <p>{descricao}</p>}
           </div>
-          {!equipe && area && area.visiveis.length > 1 && (
-            <button
-              type="button"
-              className="workspace-area-switch"
-              onClick={() => setMais(true)}
-            >
-              Telas de {area.label}
-              <ChevronDown size={16} aria-hidden />
-            </button>
-          )}
         </header>
         <div className="workspace-data-status">
           {frescorCompacto ?? frescor}

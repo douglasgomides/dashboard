@@ -4,6 +4,8 @@ import {
   SECOES_JUNTADAS,
   abasVisiveis,
   buscarTelasEquipe,
+  itemAtualDoMedico,
+  itensMenuDoMedico,
   juntadaDoCaminho,
   telaDoCaminho,
 } from "../src/lib/registro-de-telas";
@@ -156,5 +158,50 @@ publicarContagem(k1, POSTS, 27);
 assert.notEqual(contagensDe(k1), antes, "snapshot novo depois de uma mudança");
 limparContagens();
 assert.equal(contagensDe(k1).size, 0, "limparContagens zera tudo");
+
+// --- 8. Menu do médico (03.1.1-07, D-01 e D-06): 6 itens, destino, só-CRM, sem Instagram, sem audiência, item atual ---
+const menu = (v: Visibilidade) => itensMenuDoMedico(v);
+assert.deepEqual(
+  menu(vis()).map((i) => [i.id, i.rotulo, i.curto]),
+  [
+    ["hoje", "O que fazer hoje", "Hoje"],
+    ["resultados", "Resultados da clínica", "Resultados"],
+    ["travam", "Onde os pacientes travam", "Onde travam"],
+    ["origem", "De onde vêm os pacientes", "De onde vêm"],
+    ["instagram", "Instagram", "Instagram"],
+    ["relatorio", "Relatório do período", "Relatório"],
+  ],
+);
+assert.deepEqual(
+  menu(vis()).map((i) => [i.icone, i.tela.rota]),
+  [
+    ["checklist", `${C}/hoje`],
+    ["layout-dashboard", `${C}/`],
+    ["filter", `${C}/pacientes`],
+    ["chart-bar", `${C}/vendas-kommo`],
+    ["brand-instagram", `${C}/conteudo`],
+    ["file-text", `${C}/relatorio`],
+  ],
+);
+// Médico e admin veem os mesmos 6 itens.
+assert.deepEqual(menu(vis({ isAdmin: true, papel: "admin" })).map((i) => i.id), menu(vis()).map((i) => i.id));
+// Só CRM: Hoje, Onde os pacientes travam (só No CRM) e De onde vêm os pacientes (só Por origem).
+assert.deepEqual(menu(soCrm).map((i) => i.id), ["hoje", "travam", "origem"]);
+assert.deepEqual(menu(soCrm).map((i) => i.tela.rota), [`${C}/hoje`, `${C}/crm-painel`, `${C}/vendas-kommo`]);
+// Sem Instagram ligado: o item Instagram some (a seção fica sem aba visível); o resto fica.
+assert.deepEqual(menu(semInstagram).map((i) => i.id), ["hoje", "resultados", "travam", "origem", "relatorio"]);
+// Sem audiência: o item Instagram fica, com destino em /conteudo.
+const semAud = menu(vis({ semAudiencia: true }));
+assert.ok(semAud.some((i) => i.id === "instagram"));
+assert.equal(semAud.find((i) => i.id === "instagram")?.tela.rota, `${C}/conteudo`);
+// Item atual: tela juntada pela pasta, tela única pelo caminho exato, o resto null.
+assert.equal(itemAtualDoMedico(`/${CID}/top`), "instagram");
+assert.equal(itemAtualDoMedico(`/${CID}/crm-painel`), "travam");
+assert.equal(itemAtualDoMedico(`/${CID}/vendas-kommo/`), "origem");
+assert.equal(itemAtualDoMedico(`/${CID}`), "resultados");
+assert.equal(itemAtualDoMedico(`/${CID}/hoje`), "hoje");
+assert.equal(itemAtualDoMedico(`/${CID}/relatorio`), "relatorio");
+assert.equal(itemAtualDoMedico(`/${CID}/duvidas`), null);
+assert.equal(itemAtualDoMedico("/admin"), null);
 
 console.log("test-telas-juntadas: ok");

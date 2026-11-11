@@ -336,6 +336,7 @@ export const CLIENTES_SO_CRM = new Set([
   "8770500e-ab5d-4ae8-9489-c49c9991303c",
 ]);
 export const ROTAS_DO_CRM = [
+  "/hoje",
   "/central-atendimento",
   "/crm-contatos",
   "/crm-painel",
