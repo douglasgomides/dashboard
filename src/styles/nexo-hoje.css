@@ -349,7 +349,7 @@
 .app.product-workspace:not(.sap-workspace) .nx-nota__anel {
   position: relative;
   display: block;
-  width: clamp(136px, 14vw, 168px);
+  width: clamp(120px, 10vw, 144px);
   aspect-ratio: 1;
   padding: 0;
   border: 0;
@@ -589,9 +589,9 @@
 /* ---------- Prova: cada etapa contra o período anterior (03.1.1.1, CINCO-01) ---------- */
 .app.product-workspace:not(.sap-workspace) .nx-etapas {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
-  padding: 20px;
+  padding: 16px 20px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--white);
@@ -633,8 +633,8 @@
   align-items: center;
   width: 100%;
   min-width: 0;
-  min-height: 40px;
-  padding: 6px;
+  min-height: 32px;
+  padding: 4px 6px;
   border: 0;
   border-radius: 12px;
   background: transparent;
@@ -662,7 +662,7 @@
 }
 .app.product-workspace:not(.sap-workspace) .nx-etapas__trilho {
   position: relative;
-  height: 28px;
+  height: 22px;
   min-width: 0;
 }
 .app.product-workspace:not(.sap-workspace) .nx-etapas__trilho::before {
@@ -791,7 +791,7 @@
 }
 @media (pointer: coarse) {
   .app.product-workspace:not(.sap-workspace) .nx-etapas__linha {
-    min-height: 44px;
+    min-height: 40px;
   }
 }
 
@@ -825,14 +825,36 @@
     font-size: 14px;
     line-height: 18px;
   }
+  /* Prova compacta (degrau c da escada de altura: linhas de 22 px, título menor, eixo mais baixo). */
   .app.product-workspace:not(.sap-workspace) .nx-etapas {
-    gap: 8px;
-    padding: 12px;
+    gap: 2px;
+    padding: 6px 10px;
     border-radius: 16px;
   }
   .app.product-workspace:not(.sap-workspace) .nx-etapas__titulo {
+    font-size: 14px;
+    line-height: 18px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-hoje .nx-veredito {
+    padding: 8px 12px;
+  }
+  /* Veredito ao lado do anel de 96 px: frase de 18 px (cabe em 3 linhas mesmo com 90 caracteres) e selo colado nela. */
+  .app.product-workspace:not(.sap-workspace) .nx-hoje .nx-veredito__texto {
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-hoje .nx-veredito__frase {
     font-size: 18px;
-    line-height: 24px;
+    line-height: 22px;
+  }
+  /* A linha "Cada etapa contra o período anterior" repete o título no celular: fica só para leitor de tela. */
+  .app.product-workspace:not(.sap-workspace) .nx-etapas__sub {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .app.product-workspace:not(.sap-workspace) .nx-etapas__linha,
   .app.product-workspace:not(.sap-workspace) .nx-etapas__virada,
@@ -841,29 +863,66 @@
     gap: 8px;
   }
   .app.product-workspace:not(.sap-workspace) .nx-etapas__linha {
-    min-height: 32px;
-    padding: 4px 2px;
+    min-height: 22px;
+    padding: 0 2px;
   }
   .app.product-workspace:not(.sap-workspace) .nx-etapas__nome {
-    font-size: 13px;
+    font-size: 12px;
     line-height: 16px;
   }
   .app.product-workspace:not(.sap-workspace) .nx-etapas__trilho {
-    height: 20px;
+    height: 14px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-etapas__trilho::before {
+    top: -4px;
+    bottom: -4px;
   }
   .app.product-workspace:not(.sap-workspace) .nx-etapas__valor {
-    font-size: 15px;
-    line-height: 20px;
+    font-size: 14px;
+    line-height: 16px;
   }
   .app.product-workspace:not(.sap-workspace) .nx-etapas__toco {
     width: 88%;
+    font-size: 11px;
+    line-height: 14px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-etapas__virada {
+    margin: 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-etapas__virada > span {
     font-size: 12px;
-    line-height: 16px;
+    line-height: 14px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-etapas__eixo {
+    margin: 0;
+    font-size: 11px;
+    line-height: 14px;
   }
 }
 @media (pointer: coarse) and (max-width: 560px) {
   .app.product-workspace:not(.sap-workspace) .nx-etapas__linha {
-    min-height: 40px;
+    min-height: 28px;
+  }
+}
+
+/* ---------- Descobertas da Hoje no cartão largo: a ação e o "Por quê?" ficam na mesma linha do texto (régua de 1,5 tela, D-08) ---------- */
+/* Só na Hoje (escopo .nx-hoje): o cartão de 3 descobertas passa de ~150 px para ~95 px cada, sem esconder nada nem subir o limite. */
+@container nx-descoberta (min-width: 641px) {
+  .app.product-workspace:not(.sap-workspace) .nx-hoje .nx-descoberta {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-hoje .nx-descoberta__acoes {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-hoje .nx-descoberta__acoes > .nx-acao-pilula {
+    flex: 0 1 340px;
+    min-width: 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-hoje .nx-descoberta__porque-botao {
+    flex: none;
   }
 }
 
