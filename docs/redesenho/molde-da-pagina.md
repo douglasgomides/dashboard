@@ -247,17 +247,21 @@ emendada). Os planos 03.1-07 a 03.1-17, ao serem revistos, herdam tudo isto. Nad
 
 - O próximo passo, a "Ação da semana" do resumo e o "Para consertar" da leitura sem dado são a pílula de ação: pílula azul-clara
   com o verbo e o número, mais o botão redondo escuro com a seta (`NxAcaoPilula`).
-- Os textos "Próximo passo", "Ação da semana", "Para consertar:", "Motivo:" e "Quem resolve:" continuam iguais.
+- Os textos "Próximo passo", "Falta dado:", "Próximo passo para resolver:", "Motivo:" e "Quem resolve:" valem (12/11/2026: "Ação da
+  semana" virou "Próximo passo", "Sem leitura:" virou "Falta dado:" e "Para consertar:" virou "Próximo passo para resolver:"; veja
+  "Menos texto" abaixo).
 - Dentro de uma aba a seta abre os Detalhes da própria página (`id="detalhes-{tela}"`), onde está o número que sustenta o passo.
   Na Hoje ela leva à aba de onde a ação saiu.
 - A seta nunca envia nem grava nada (CHAM-07: o botão só abre ou navega).
 
 ### f) Topo da Hoje (plano 05)
 
-- Saudação grande ("Boa tarde, Dra. Lana") com o nome em cinza mais claro: `PaginaNexo` aceita a prop opcional `saudacao`; a
-  pergunta vira o parágrafo logo abaixo. Sem a prop o HTML é o de sempre.
-- Chips de contexto (clínica, data e hora do dado) e chips de estado das fontes com bolinha (âmbar quando o dado tem mais de
-  1 dia). O período continua no seletor da casca.
+- Saudação grande ("Boa tarde, Dra. Lana") com o nome em cinza mais claro: `PaginaNexo` aceita a prop opcional `saudacao`; com ela o
+  topo tem um título só (sem o rótulo da tela e sem a etiqueta da decisão) e a pergunta fica só para leitor de tela. Sem a prop o
+  HTML é o de sempre. Logo abaixo, o número grande "N ações esta semana" (`destaqueDoTopo`).
+- Chips de contexto (data e hora do dado, sem o nome da clínica, que já está na casca) e chips de estado das fontes com bolinha
+  (âmbar quando o dado tem mais de 1 dia). O "sem selo" é uma bolinha cinza que abre a frase (`NxChip ponto`). O período continua
+  no seletor da casca.
 - Cartão "Próximo" com degradê suave de tokens e botão escuro, com a ação de maior impacto da semana.
 
 ### g) Detalhes pequenos (D-07)
@@ -274,6 +278,27 @@ emendada). Os planos 03.1-07 a 03.1-17, ao serem revistos, herdam tudo isto. Nad
 - Só tokens nx. A paleta é a decisão aberta 4 do João e não muda aqui.
 - Nada abaixo de peso 500 (os números grandes ficam em 500 ou mais).
 - Nada disto pode estourar a régua de 1,5 tela.
+
+### i) Menos texto (12/11/2026)
+
+Pedido do João: "acho ela hoje pouco visual ainda, muito texto; as informações devem entrar facilmente no cérebro". Regras para os
+planos da 03.1 herdarem:
+
+- **Topo de título único na Hoje:** a saudação grande e o número "N ações esta semana"; nada de rótulo, pergunta visível, etiqueta da
+  decisão ou chip da clínica.
+- **Número antes do texto:** em todo cartão e no Próximo passo a ordem é o número (manchete), a legenda, as barras, o "Ver números" e
+  só então a ação.
+- **Legenda de uma frase e até 90 caracteres** (`MAX_CARACTERES_DA_LEGENDA`): o que passa disso vai inteiro para o "Ver números"; a
+  regra nunca corta no meio de palavra.
+- **Barras de comparação (`NxBarras`):** a regra calcula a proporção (`Fato.comparacao`, `fracao` de 0 a 1) e a peça só desenha. Cada
+  linha tem nome acessível próprio ("Post de foto: 1.230 pessoas"), nunca "% atingido"; o que faltou é listrado. Na leitura, com
+  barras, o número técnico longo sai da linha (fica nos Detalhes).
+- **Marca de tom com sinal:** cada ação da Hoje mostra o tom que a regra já calcula (▲ bom, ! atenção, ▼ ruim, ● neutro), com cor e
+  com o nome do tom para leitor de tela (`MarcaDoTom`). Nunca só a cor.
+- **Quem resolve em chip** com o nome ("Social media"); o rótulo "Quem resolve:" fica só para leitor de tela.
+- **Um nome por coisa:** "Próximo passo" (resumo, leituras e Hoje), "Post de foto", "Falta dado: motivo" e "Próximo passo para
+  resolver:". Nada de "mediano", "taxa de salvamento" nem "÷" no texto do médico.
+- **Bolinhas no carrossel do celular:** uma por cartão, a do cartão à vista marcada (`nx-pagina__pontos`, só no celular).
 
 ### Grupos da equipe
 

@@ -10,6 +10,69 @@
   color: var(--muted-ink);
   font-weight: 500;
 }
+/* Topo de título único: o total da semana em número grande logo abaixo da saudação. */
+.app.product-workspace:not(.sap-workspace) .nx-hoje__total {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje__total-numero {
+  font-size: 32px;
+  line-height: 38px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje__total-texto {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--muted-ink);
+}
+
+/* Selo "sem selo" em bolinha cinza: abre a frase ao tocar. Área de toque de pelo menos 24 x 24 px. */
+.app.product-workspace:not(.sap-workspace) .nx-selo-ponto {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-selo-ponto__resumo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  list-style: none;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.app.product-workspace:not(.sap-workspace) .nx-selo-ponto__resumo::-webkit-details-marker {
+  display: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-selo-ponto__resumo:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: 2px;
+}
+/* --muted-ink: contraste de elemento gráfico de 3:1 (--muted-2 não passa). */
+.app.product-workspace:not(.sap-workspace) .nx-selo-ponto__bolinha {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-selo-ponto__texto {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--muted-ink);
+}
+
 .app.product-workspace:not(.sap-workspace) .nx-hoje__leitura {
   display: grid;
   gap: 8px;
@@ -119,24 +182,58 @@
   line-height: 28px;
   letter-spacing: 0;
 }
-.app.product-workspace:not(.sap-workspace) .nx-proximo__quem {
-  margin: 0;
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 500;
-  color: var(--muted-ink);
-}
-
 /* ---------- "Quem resolve" junto da pílula e "Ver números" fechado (Próximo e cartões) ---------- */
+/* Chip pequeno com o nome de quem resolve; o rótulo "Quem resolve:" fica só para leitor de tela. */
 .app.product-workspace:not(.sap-workspace) .nx-hoje__quem {
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
   margin: 8px 0 0;
-  font-size: 14px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--field);
+  font-size: 13px;
   line-height: 20px;
   font-weight: 500;
   color: var(--muted-ink);
+  overflow-wrap: anywhere;
+  /* Prende o texto sr-only ("Quem resolve: ") dentro do chip (a fileira de cartões do celular rola de lado). */
+  position: relative;
 }
-.app.product-workspace:not(.sap-workspace) .nx-proximo__quem {
-  margin-top: -4px;
+.app.product-workspace:not(.sap-workspace) .nx-proximo .nx-hoje__quem {
+  margin-top: 0;
+}
+/* Marca do tom (sinal e cor, círculo de 18 px): as mesmas cores da leitura. Nunca só a cor: o glifo diz o tom. */
+.app.product-workspace:not(.sap-workspace) .nx-hoje__tom {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--b1);
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 700;
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje__tom[data-tom="bom"] {
+  background: var(--up-bg);
+  color: var(--up-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje__tom[data-tom="ruim"] {
+  background: var(--dn-bg);
+  color: var(--dn-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje__tom[data-tom="atencao"] {
+  background: var(--or-bg);
+  color: var(--or-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-proximo__topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .app.product-workspace:not(.sap-workspace) .nx-hoje__numeros {
   margin: 0;
@@ -192,6 +289,10 @@
 
 /* ---------- Celular: número menor e cartões compactos (a Hoje cabe em 1,5 tela) ---------- */
 @media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-hoje__total-numero {
+    font-size: 24px;
+    line-height: 30px;
+  }
   .app.product-workspace:not(.sap-workspace) .nx-proximo {
     gap: 8px;
     padding: 16px;

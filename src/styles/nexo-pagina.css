@@ -27,6 +27,9 @@
 .nx-pagina__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; line-height: 20px; color: var(--muted-ink); }
 .nx-pagina__acao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .nx-pagina__cartoes { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); min-width: 0; }
+.nx-pagina__cartoes-bloco { min-width: 0; }
+/* Bolinhas do carrossel de cartões: só no celular (a fileira rola de lado). Fora dele não existem na tela. */
+.nx-pagina__pontos { display: none; }
 .nx-pagina__principal, .nx-pagina__corpo { min-width: 0; display: grid; gap: 18px; }
 
 /* Detalhe: o bloco recolhido (NxRecolhido, em blocos.tsx) no fim da página. */
@@ -119,9 +122,12 @@
 .app.product-workspace:not(.sap-workspace) .nx-pagina .nx-kpi__meta .nx-tag--dn { background: var(--b6); color: var(--b1); border-radius: 999px; padding: 1px 10px; font-weight: 500; }
 
 /* ---------- D-07 (03.1.1): saudação da Hoje (a pergunta vira o parágrafo logo abaixo) ---------- */
-.nx-pagina__saudacao { margin: 0; font-size: 28px; line-height: 36px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.nx-pagina__titulos { position: relative; }
+.nx-pagina__saudacao { margin: 0; font-size: 22px; line-height: 28px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
 .nx-pagina__saudacao :where(span, em) { color: var(--muted-ink); font-style: normal; font-weight: 500; }
 .nx-pagina p.nx-pagina__pergunta { font-size: 16px; line-height: 24px; color: var(--muted-ink); }
+/* Só a Hoje: com saudação a pergunta fica só para leitor de tela (o título visível é um só). */
+.nx-pagina p.nx-pagina__pergunta.sr-only { grid-column: auto; grid-row: auto; }
 
 @media (max-width: 560px) {
   .nx-leitura { padding: 14px 12px; }
@@ -138,6 +144,8 @@
   .nx-pagina__titulos { display: contents; }
   .nx-pagina__rotulo { grid-column: 1; grid-row: 1; font-size: 13px; line-height: 18px; }
   .nx-pagina__acao { grid-column: 2; grid-row: 1; }
+  /* Hoje (título único): a saudação e o total da semana usam a largura toda. */
+  .nx-pagina__saudacao, .nx-pagina__titulos > [data-peca="total-da-semana"] { grid-column: 1 / -1; }
   .nx-pagina__pergunta { grid-column: 1 / -1; grid-row: 2; font-size: 19px; line-height: 25px; }
   .nx-pagina__meta { grid-column: 1 / -1; grid-row: 3; gap: 4px 8px; font-size: 13px; line-height: 18px; }
   .nx-pagina__principal, .nx-pagina__corpo { gap: 12px; }
@@ -178,6 +186,10 @@
   }
   .nx-pagina__cartoes::-webkit-scrollbar { display: none; }
   .nx-pagina__cartoes > * { flex: 0 0 min(80%, 260px); scroll-snap-align: start; }
+  /* Uma bolinha por cartão, a do cartão à vista marcada: 6 px com 6 px de espaço, só tokens. */
+  .nx-pagina__pontos { display: flex; justify-content: center; gap: 6px; margin-top: 6px; }
+  .nx-pagina__ponto { width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); }
+  .nx-pagina__ponto[data-atual] { background: var(--muted-ink); }
   .nx-pagina .nx-kpi { padding: 10px 12px; gap: 6px; }
   .nx-pagina .nx-kpi__topo { font-size: 14px; line-height: 18px; }
   .app.product-workspace .nx-pagina .nx-kpi .nx-kpi__valor { font-size: 24px; line-height: 28px; }
@@ -198,3 +210,6 @@
   .nx-pagina .nx-card__head h2, .nx-pagina .nx-card__head h3 { font-size: 16px; line-height: 22px; }
   .nx-pagina .nx-card__head p { font-size: 13px; line-height: 18px; margin: 0; }
 }
+
+/* Barras de comparação dentro da linha da leitura (NxBarras): um respiro entre a frase e as barras. */
+.nx-leitura__corpo .nx-barras { margin-top: 4px; }

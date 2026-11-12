@@ -3,7 +3,7 @@ import { CID, mockAccount } from "./fixtures";
 
 // Seção Resultados no molde novo (Phase 3.1, plano 03): Resultados da clínica abre com o resumo da clínica em 3 linhas
 // (a única leitura), até 4 cartões e um gráfico; tudo o mais fica no detalhe recolhido. Pacientes do período e as duas
-// telas em construção (O que virou paciente, O que virou venda) abrem com leitura, ou com "Sem leitura:" e quem resolve.
+// telas em construção (O que virou paciente, O que virou venda) abrem com leitura, ou com "Falta dado:" e quem resolve.
 
 const dia = (i: number) => new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
 const num = (valor: number | null, extra: Record<string, unknown> = {}) => ({ valor, fonte: "crm", motivo_sem_dado: valor == null ? "Sem dado no CRM." : null, responsavel: "comercial", ...extra });
@@ -97,7 +97,7 @@ for (const width of [375, 1440]) {
     await expect(resumo).toBeVisible();
     await expect(resumo.getByText("O que aconteceu", { exact: true })).toBeVisible();
     await expect(resumo.getByText("O que mais preocupa", { exact: true })).toBeVisible();
-    await expect(resumo.getByText("Ação da semana", { exact: true })).toBeVisible();
+    await expect(resumo.getByText("Próximo passo", { exact: true })).toBeVisible();
     await expect(resumo.getByText(/Quem resolve:/).first()).toBeVisible();
     await expect(resumo.locator(".nx-leitura__num").first()).toBeVisible();
     await expect(page.getByRole("region", { name: "Leitura do período", exact: true })).toHaveCount(0);
@@ -145,7 +145,7 @@ for (const width of [375, 1440]) {
     await page.screenshot({ path: `test-results/redesenho/resultados-detalhe-${width}.png`, fullPage: true });
   });
 
-  test(`Pacientes do período e as telas em construção abrem com leitura ou "Sem leitura:" e quem resolve em ${width}px`, async ({ page, context }) => {
+  test(`Pacientes do período e as telas em construção abrem com leitura ou "Falta dado:" e quem resolve em ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "admin");
     await instagram(context);
     await pessoas(context);
@@ -167,7 +167,7 @@ for (const width of [375, 1440]) {
     ] as const) {
       await page.goto(`/${CID}/${rota}?preset=30d`);
       await expect(page.locator(`.nx-pagina[data-tela="${rota}"]`)).toBeVisible();
-      await expect(page.getByText("Sem leitura: a tela ainda não tem a fonte ligada")).toBeVisible();
+      await expect(page.getByText("Falta dado: a tela ainda não tem a fonte ligada")).toBeVisible();
       await expect(page.getByText(`O que falta: ${falta}`)).toBeVisible();
       await expect(page.getByText("Quem resolve: Equipe Doctor Creator").first()).toBeVisible();
       await expect(page.getByText("Em construção")).toBeVisible();

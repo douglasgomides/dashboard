@@ -22,6 +22,7 @@ import {
   GUARDA_DE_TEXTO_DA_HOJE,
   JARGAO_DA_HOJE,
   MAXIMO_POR_AREA,
+  MAX_CARACTERES_DA_LEGENDA,
   MAX_CARACTERES_DA_MANCHETE,
   PREFIXOS_EXCLUIDOS_DA_HOJE,
   ROTA_DA_AREA,
@@ -39,7 +40,7 @@ import {
 import { leads, ig, ads, posts, adsCampanhas } from "./fixtures/lana-2026-10";
 
 const C = "/_authenticated/$clientId";
-assert.equal(VERSAO_REGRAS_HOJE, 2);
+assert.equal(VERSAO_REGRAS_HOJE, 3);
 
 // ---------- fixture da Lana (a mesma de test-leitura-resultados.ts) ----------
 const START = "2026-09-13", END = "2026-10-12", HOJE = "2026-10-14";
@@ -163,7 +164,7 @@ if (hSeis.tipo === "acoes") {
 const hMesmaArea = acoesDaHoje(sintetica(seis, seis.map((f) => passo(f.id))));
 assert.deepEqual(ids(hMesmaArea), ["a", "f"], "no máximo 2 por área: a Ação da semana e a de maior peso");
 assert.ok(acoes(hMesmaArea).every((a) => a.areaHoje === "resultados"));
-if (hMesmaArea.tipo === "acoes") assert.equal(hMesmaArea.aviso, "Poucas ações nesta semana: as leituras deste período pediram só 2 ações.");
+if (hMesmaArea.tipo === "acoes") assert.equal(hMesmaArea.aviso, "Os números deste período não pediram mais ações.");
 
 // Empate de peso e tom: vale a ordem das fontes (Resultados antes de Pacientes, publicações e Desempenho) e a ordem dentro de cada uma.
 const empate = acoesDaHoje({
@@ -280,32 +281,32 @@ assert.equal(hDuas.tipo, "acoes");
 if (hDuas.tipo === "acoes") {
   assert.equal(hDuas.proxima?.id, "a");
   assert.equal(hDuas.outras.length, 1);
-  assert.equal(hDuas.aviso, "Poucas ações nesta semana: as leituras deste período pediram só 2 ações.");
+  assert.equal(hDuas.aviso, "Os números deste período não pediram mais ações.");
   assert.deepEqual(checarTextoDaLeitura(hDuas.aviso ?? ""), []);
 }
 const fontes = [{ fonte: "Instagram", tom: "atencao" as const, ate: "2026-10-01" }, { fonte: "CRM", tom: "bom" as const, ate: "2026-10-13" }];
 const comFonteAtrasada = acoesDaHoje(sintetica(duas, duas.map((f) => passo(f.id)), { fontes }));
-if (comFonteAtrasada.tipo === "acoes") assert.equal(comFonteAtrasada.aviso, "Poucas ações nesta semana: o Instagram está sem dado novo desde 01/10.");
+if (comFonteAtrasada.tipo === "acoes") assert.equal(comFonteAtrasada.aviso, "O Instagram está sem dado novo desde 01/10.");
 const pior = acoesDaHoje(sintetica(duas, duas.map((f) => passo(f.id)), { fontes: [{ fonte: "CRM", tom: "atencao", ate: "2026-10-05" }, { fonte: "WhatsApp", tom: "ruim", ate: "2026-10-02" }] }));
-if (pior.tipo === "acoes") assert.equal(pior.aviso, "Poucas ações nesta semana: o WhatsApp está sem dado novo desde 02/10.", "a pior fonte (ruim antes de atenção)");
+if (pior.tipo === "acoes") assert.equal(pior.aviso, "O WhatsApp está sem dado novo desde 02/10.", "a pior fonte (ruim antes de atenção)");
 const comExcluida = acoesDaHoje(sintetica([fato("a", "ruim", 3), fato("leads", "ruim", 3)], [passo("a"), passo("leads")]));
 if (comExcluida.tipo === "acoes") {
   assert.deepEqual(ids(comExcluida), ["a"]);
-  assert.equal(comExcluida.aviso, "Poucas ações nesta semana: as outras ações dependem de números que ainda não têm selo.");
+  assert.equal(comExcluida.aviso, "As outras ações dependem de números que ainda não têm selo.");
 }
 const uma = acoesDaHoje(sintetica([fato("a", "ruim", 3)], [passo("a")]));
-if (uma.tipo === "acoes") assert.equal(uma.aviso, "Poucas ações nesta semana: as leituras deste período pediram só 1 ação.");
+if (uma.tipo === "acoes") assert.equal(uma.aviso, "Os números deste período não pediram mais ações.");
 const nenhuma = acoesDaHoje(sintetica([], []));
 assert.equal(nenhuma.tipo, "acoes");
 if (nenhuma.tipo === "acoes") {
   assert.equal(nenhuma.proxima, null);
   assert.deepEqual(nenhuma.outras, []);
-  assert.equal(nenhuma.aviso, "Poucas ações nesta semana: as leituras deste período não pediram nenhuma ação.");
+  assert.equal(nenhuma.aviso, "Os números deste período não pediram nenhuma ação.");
 }
 assert.equal(avisoDePoucasAcoes(3), null);
 assert.equal(avisoDePoucasAcoes(5), null);
-assert.ok(avisoDePoucasAcoes(2)?.startsWith("Poucas ações nesta semana:"));
-assert.match(avisoDePoucasAcoes(0, { fontes: [{ fonte: "anúncios", tom: "ruim", ate: null }] }) ?? "", /os anúncios está sem dado novo\.$/);
+assert.ok(!/^Poucas ações|leituras/.test(avisoDePoucasAcoes(2) ?? ""), "o aviso é só o motivo: o total já está no topo, e não diz \"leituras\"");
+assert.match(avisoDePoucasAcoes(0, { fontes: [{ fonte: "anúncios", tom: "ruim", ate: null }] }) ?? "", /^Os anúncios estão sem dado novo\.$/);
 // Fonte com portão negado nos extras não gera ação.
 const extraNegado = acoesDaHoje({
   ...sintetica([fato("a", "ruim", 3)], [passo("a")]),
@@ -478,7 +479,7 @@ if (comEquipe.tipo === "acoes") {
   assert.deepEqual(comEquipe.paraEquipe.map((a) => a.id), ["eq"]);
   assert.ok(comEquipe.paraEquipe.every((a) => a.soEquipe === true));
   assert.ok(acoes(comEquipe).every((a) => a.soEquipe === false));
-  assert.equal(comEquipe.aviso, "Poucas ações nesta semana: as leituras deste período pediram só 2 ações.", "o aviso conta só as ações do médico");
+  assert.equal(comEquipe.aviso, "Os números deste período não pediram mais ações.", "o aviso conta só as ações do médico");
 }
 // Quando a Ação da semana é de arrumação da equipe, o Próximo é a primeira ação do médico (não fica vazio, não usa a da equipe).
 const semanaDaEquipe = acoesDaHoje(sintetica(
@@ -495,7 +496,7 @@ if (soDaEquipe.tipo === "acoes") {
   assert.equal(soDaEquipe.proxima, null);
   assert.deepEqual(soDaEquipe.outras, []);
   assert.equal(soDaEquipe.paraEquipe.length, 1);
-  assert.equal(soDaEquipe.aviso, "Poucas ações nesta semana: as leituras deste período não pediram nenhuma ação.");
+  assert.equal(soDaEquipe.aviso, "Os números deste período não pediram nenhuma ação.");
 }
 // paraEquipe: no máximo 3, sem repetir id nem frase; houveExcluidas não vem de passo da equipe.
 const muitasDaEquipe = acoesDaHoje(sintetica(
@@ -518,6 +519,69 @@ if (comPosts.tipo === "acoes") {
   assert.ok(comPosts.paraEquipe.some((a) => a.id === "posts-sem-tema"), "posts-sem-tema em paraEquipe");
   assert.ok(comPosts.paraEquipe.length <= 3);
 }
+
+// ---------- legenda de 1 frase e até 90 caracteres; comparação com barras (quick 261112-e8e) ----------
+assert.equal(MAX_CARACTERES_DA_LEGENDA, 90);
+// Frase do fato com mais de 90 caracteres: legenda null, a frase inteira vai para o começo de numerosTecnicos (nunca corta no meio de palavra).
+const FRASE_LONGA = "Quem chama no WhatsApp espera muito tempo pela primeira resposta da equipe do consultório em todos os dias.";
+assert.ok(FRASE_LONGA.length > 90 && !/[.!?]\s/.test(FRASE_LONGA));
+const legendaLonga = unica(fato("lg", "ruim", 3, { manchete: "Espera longa no WhatsApp", frase: FRASE_LONGA, numeros: [{ chave: "evidencia", exibicao: "47 min" }] }));
+assert.ok(legendaLonga, "o fato de frase longa vira ação");
+assert.equal(legendaLonga!.legenda, null, "frase de mais de 90 caracteres não vira legenda");
+assert.equal(legendaLonga!.numerosTecnicos[0], FRASE_LONGA, "a frase inteira vai para o Ver números");
+// Frase do fato com 2 frases (mesmo curtas): também vai para o Ver números.
+const duasFrases = unica(fato("d2", "ruim", 3, { manchete: "Espera longa no WhatsApp", frase: "A espera subiu. A equipe demora a responder.", numeros: [{ chave: "evidencia", exibicao: "47 min" }] }));
+assert.ok(duasFrases);
+assert.equal(duasFrases!.legenda, null, "duas frases não viram legenda");
+assert.equal(duasFrases!.numerosTecnicos[0], "A espera subiu. A equipe demora a responder.");
+// Frase de 1 linha e até 90 caracteres continua legenda.
+const legendaCurta = unica(fato("lc", "ruim", 3, { manchete: "Espera longa no WhatsApp", frase: "A espera pela primeira resposta subiu neste período.", numeros: [{ chave: "evidencia", exibicao: "47 min" }] }));
+assert.equal(legendaCurta!.legenda, "A espera pela primeira resposta subiu neste período.");
+assert.equal(legendaCurta!.barras, undefined, "sem comparação, sem barras (e sem a chave)");
+assert.ok(!("barras" in legendaCurta!));
+// Comparação válida vira legenda e barras.
+const comComparacao = unica(fato("cmp", "bom", 2, {
+  manchete: "Post de foto alcançou mais",
+  frase: "Estático é o formato que mais leva o perfil a gente nova.",
+  numeros: [{ chave: "evidencia", exibicao: TECNICO }],
+  comparacao: { frase: "Post de foto alcança 2,4x mais que Carrossel.", barras: [{ rotulo: "Post de foto", exibicao: "2.400 pessoas", fracao: 1 }, { rotulo: "Carrossel", exibicao: "1.000 pessoas", fracao: 0.42 }] },
+}));
+assert.equal(comComparacao!.legenda, "Post de foto alcança 2,4x mais que Carrossel.", "a frase da comparação é a legenda");
+assert.equal(comComparacao!.barras?.length, 2);
+assert.ok(comComparacao!.barras!.every((b) => b.fracao >= 0 && b.fracao <= 1));
+assert.deepEqual(comComparacao!.numerosTecnicos, [TECNICO], "a frase do fato que ficou de fora não é duplicada quando a comparação vale");
+// Comparação com rótulo dos 4 números da Phase 9: não vira barra (D-06); a legenda volta para a frase do fato.
+const comGuardaNaBarra = unica(fato("cmp2", "bom", 2, {
+  manchete: "Post de foto alcançou mais",
+  frase: "Estático é o formato que mais leva o perfil a gente nova.",
+  numeros: [{ chave: "evidencia", exibicao: TECNICO }],
+  comparacao: { frase: "Mais gente chegou até a clínica.", barras: [{ rotulo: "Quem agendaram", exibicao: "10 pessoas", fracao: 1 }] },
+}));
+assert.equal(comGuardaNaBarra!.barras, undefined, "barra com 'agendaram' não é desenhada");
+assert.equal(comGuardaNaBarra!.legenda, "Estático é o formato que mais leva o perfil a gente nova.");
+// Comparação com frase de mais de 90 caracteres não vale.
+const comFraseLongaNaComparacao = unica(fato("cmp3", "bom", 2, {
+  manchete: "Post de foto alcançou mais",
+  frase: "Estático é o formato que mais leva o perfil a gente nova.",
+  numeros: [{ chave: "evidencia", exibicao: TECNICO }],
+  comparacao: { frase: FRASE_LONGA, barras: [{ rotulo: "Post de foto", exibicao: "2.400 pessoas", fracao: 1 }] },
+}));
+assert.equal(comFraseLongaNaComparacao!.barras, undefined);
+
+// ---------- "÷" sai da Hoje; a manchete com R$ ou algarismo é número (quick 261112-e8e) ----------
+assert.ok(JARGAO_DA_HOJE.test("R$ 20,00 ÷ 100 conversas"), "o sinal ÷ é jargão da Hoje");
+const comDivisao = unica(fato("custo", "bom", 2, { manchete: "R$ 20,00 por conversa", frase: "Cada conversa das campanhas de mensagem custou R$ 20,00.", numeros: [{ chave: "evidencia", exibicao: "R$ 2.000,00 ÷ 100 conversas." }] }));
+assert.ok(comDivisao, "o custo por conversa vira ação");
+assert.equal(comDivisao!.destaque, "R$ 20,00 por conversa");
+assert.equal(comDivisao!.destaqueEhNumero, true, "manchete que começa por R$ é desenhada como número grande");
+assert.deepEqual(comDivisao!.numerosTecnicos, ["R$ 2.000,00 ÷ 100 conversas."], "o número com ÷ vai para o Ver números");
+for (const t of [comDivisao!.destaque, comDivisao!.legenda ?? "", comDivisao!.contexto, comDivisao!.outroNumero?.exibicao ?? ""]) assert.ok(!/÷/.test(t), `÷ em "${t}"`);
+const mancheteTexto = unica(fato("txt", "bom", 2, { manchete: "Post de foto alcançou mais", frase: "Estático é o formato que mais leva o perfil a gente nova.", numeros: [{ chave: "evidencia", exibicao: TECNICO }] }));
+assert.equal(mancheteTexto!.destaqueEhNumero, false, "manchete em texto continua em tamanho de leitura");
+// O aviso de poucas ações é só o motivo, sem "leituras" e sem repetir o total do topo.
+assert.equal(avisoDePoucasAcoes(1), "Os números deste período não pediram mais ações.");
+assert.equal(avisoDePoucasAcoes(0), "Os números deste período não pediram nenhuma ação.");
+assert.equal(avisoDePoucasAcoes(3), null);
 
 // ---------- o módulo é puro: sem banco, sem consulta e sem IA (D-05) ----------
 const fonte = readFileSync(new URL("../src/lib/leitura/fatos-hoje.ts", import.meta.url), "utf8");

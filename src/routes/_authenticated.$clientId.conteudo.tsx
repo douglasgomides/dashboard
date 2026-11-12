@@ -16,6 +16,7 @@ import { fmtFracao, MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { SeguidoresSemana } from "@/components/seguidores-impulsionados";
 import { NxCard, NxKpi, NxTag } from "@/components/nx";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
+import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxTabela, NxVazio } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
@@ -117,6 +118,16 @@ function ConteudoPage() {
   const cresc = useMemo(() => (metrics.data ? analyzeGrowth(metrics.data, start, end) : null), [metrics.data, start, end]);
   const fm = useMemo(() => (posts.data ? analyzeFormatsAndTemas(posts.data) : null), [posts.data]);
   const serie = useMemo(() => (seg ? { datas: seg.points.map((p) => p.date), valores: seg.points.map((p) => p.followers) } : null), [seg]);
+
+  // Contagem em cinza da aba Desempenho na pasta do Instagram (D-07): dias do período com alcance medido, da lista que a tela já
+  // carregou (nenhuma consulta nova). Erro ou sem Instagram: null ("—"); carregando: undefined; zero: null (nunca "0").
+  usePublicarContagem({
+    clientId,
+    de: start,
+    ate: end,
+    rota: "/_authenticated/$clientId/conteudo",
+    valor: fontes.isLoading ? undefined : !temIg || metrics.error ? null : metrics.data ? metrics.data.filter((d: { reach?: number | null }) => d.reach != null).length || null : undefined,
+  });
 
   const fatos = useMemo(() => {
     if (!temIg) return fatosSemInstagram("conteudo", { de: start, ate: end }, hoje);

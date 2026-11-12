@@ -12,6 +12,7 @@
 import { fmtFormatKey, median } from "@/lib/report-metrics";
 import { conversaMaisBarata, GRUPOS, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
+import type { ComparacaoDoFato } from "@/lib/leitura/tipos";
 import { LIMITES } from "./limites.js";
 
 export type Tom = "bom" | "ruim" | "atencao";
@@ -23,6 +24,7 @@ export interface Achado {
   peso: number; // 1..3 — ordena e decide o veredito
   titulo: string; // a conclusão em uma frase
   manchete?: string; // manchete curta e leiga (até 40 caracteres) para a tela Hoje; só a regra de formatos escreve
+  comparacao?: ComparacaoDoFato; // frase curta (até 90 caracteres) e barras de comparação; só a regra de formatos escreve
   porque: string; // o que isso significa / de onde vem
   acao?: { texto: string; rota?: RotaAcao };
   base: string; // números usados, para conferir
@@ -89,7 +91,7 @@ function regraRitmo(e: EntradaLeitura, out: Achado[], falta: string[]) {
     antes = median(ant.map((d) => n(d.reach)));
     depois = median(dias.map((d) => n(d.reach)));
     rotulo = "em relação ao período anterior";
-    base = `alcance diário mediano ${int(depois)} contra ${int(antes)} no período anterior (${dias.length} e ${ant.length} dias)`;
+    base = `alcance diário típico ${int(depois)} contra ${int(antes)} no período anterior (${dias.length} e ${ant.length} dias)`;
   } else {
     if (dias.length < MIN_DIAS_TENDENCIA) {
       falta.push(`Se o alcance está subindo ou caindo: precisa de pelo menos ${MIN_DIAS_TENDENCIA} dias com dado do Instagram (este período tem ${dias.length}).`);
@@ -99,7 +101,7 @@ function regraRitmo(e: EntradaLeitura, out: Achado[], falta: string[]) {
     antes = median(dias.slice(0, meio).map((d) => n(d.reach)));
     depois = median(dias.slice(dias.length - meio).map((d) => n(d.reach)));
     rotulo = "da primeira para a segunda metade do período";
-    base = `alcance diário mediano ${int(antes)} na 1ª metade e ${int(depois)} na 2ª (${dias.length} dias com dado)`;
+    base = `alcance diário típico ${int(antes)} na 1ª metade e ${int(depois)} na 2ª (${dias.length} dias com dado)`;
   }
   if (antes <= 0) return;
   const v = (depois - antes) / antes;
@@ -163,15 +165,49 @@ function regraConcentracao(posts: any[], out: Achado[], falta: string[]) {
     tom: "atencao",
     peso: 2,
     titulo: `${pct(fatia)} do alcance dos posts veio de um único post.`,
-    porque: `${resumoLegenda(top)} alcançou ${int(n(top.reach))} contas; sem ele, o post típico alcança ${int(tipico)}. O resultado do período depende de um acerto, não de um padrão, e tende a cair quando esse post parar de circular.`,
+    porque: `${resumoLegenda(top)} alcançou ${int(n(top.reach))} pessoas; sem ele, o post típico alcança ${int(tipico)}. O resultado do período depende de um acerto, não de um padrão, e tende a cair quando esse post parar de circular.`,
     acao: { texto: `Transforme ${resumoLegenda(top)} em série: mesmo tema em 2 ou 3 formatos diferentes.`, rota: "ideias" },
-    base: `${int(n(top.reach))} de ${int(total)} contas somadas em ${comAlcance.length} posts`,
+    base: `${int(n(top.reach))} de ${int(total)} pessoas somadas em ${comAlcance.length} posts`,
   });
 }
 
 /** Nome do formato para a pessoa leiga (a Hoje): o estático é "Post de foto". */
 export const NOME_LEIGO_DO_FORMATO: Record<string, string> = { reels: "Reels", carrossel: "Carrossel", estatico: "Post de foto", stories: "Stories" };
 export const nomeLeigoDoFormato = (chave: string): string => NOME_LEIGO_DO_FORMATO[chave] ?? fmtFormatKey(chave);
+
+/** Proporção de `x` em relação a `maior` (0 a 1); 0 quando não há maior. A regra calcula, a tela só desenha. */
+const relativo = (x: number, maior: number) => (maior > 0 ? Math.min(1, Math.max(0, x / maior)) : 0);
+interface GrupoDeFormato { f: string; alcance: number; salvo: number }
+
+/** Duas barras de alcance ("Post de foto alcança 2,4x mais que Carrossel."). Abaixo de 1,2x diz só que alcança mais. */
+function comparacaoDeAlcance(A: GrupoDeFormato, segundo: GrupoDeFormato, vezes: number): ComparacaoDoFato {
+  const a = nomeLeigoDoFormato(A.f);
+  const s = nomeLeigoDoFormato(segundo.f);
+  const x = vezes.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+  const frase = vezes >= 1.2 ? `${a} alcança ${x}x mais que ${s}.` : `${a} alcança mais que os outros formatos.`;
+  return {
+    frase,
+    barras: [
+      { rotulo: a, exibicao: `${int(A.alcance)} pessoas`, fracao: 1 },
+      { rotulo: s, exibicao: `${int(segundo.alcance)} pessoas`, fracao: relativo(segundo.alcance, A.alcance) },
+    ],
+  };
+}
+
+/** Quatro barras em dois pares: quem alcança mais e quem é mais salvo, cada medida com o próprio nome. */
+function comparacaoDeAlcanceESalvo(A: GrupoDeFormato, S: GrupoDeFormato): ComparacaoDoFato {
+  const a = nomeLeigoDoFormato(A.f);
+  const s = nomeLeigoDoFormato(S.f);
+  return {
+    frase: `${a} alcança mais, ${s} é mais salvo.`,
+    barras: [
+      { rotulo: `Alcance · ${a}`, exibicao: `${int(A.alcance)} pessoas`, fracao: 1 },
+      { rotulo: `Alcance · ${s}`, exibicao: `${int(S.alcance)} pessoas`, fracao: relativo(S.alcance, A.alcance) },
+      { rotulo: `Salvos · ${s}`, exibicao: `${pct(S.salvo, 1)} salvam`, fracao: 1 },
+      { rotulo: `Salvos · ${a}`, exibicao: `${pct(A.salvo, 1)} salvam`, fracao: relativo(A.salvo, S.salvo) },
+    ],
+  };
+}
 
 // 3. Alcance x profundidade por formato: quem leva longe e quem faz guardar.
 function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
@@ -185,7 +221,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
   }
   const grupos = Array.from(g.entries())
     .filter(([, e]) => e.reach.length >= MIN_POSTS_GRUPO)
-    .map(([f, e]) => ({ f, nome: fmtFormatKey(f), count: e.reach.length, alcance: median(e.reach), salvo: median(e.taxaSalvo) }));
+    .map(([f, e]) => ({ f, nome: nomeLeigoDoFormato(f), count: e.reach.length, alcance: median(e.reach), salvo: median(e.taxaSalvo) }));
   if (grupos.length < 2) {
     falta.push(`Qual formato funciona melhor (Reels, carrossel, foto): precisa de pelo menos ${MIN_POSTS_GRUPO} posts de 2 formatos diferentes no período.`);
     return;
@@ -194,7 +230,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
   const porSalvo = [...grupos].sort((a, b) => b.salvo - a.salvo);
   const A = porAlcance[0];
   const S = porSalvo[0];
-  const base = grupos.map((x) => `${x.nome}: alcance mediano ${int(x.alcance)}, salvamento ${pct(x.salvo, 1)} (${x.count} posts)`).join(" · ");
+  const base = grupos.map((x) => `${x.nome}: alcance típico ${int(x.alcance)}, ${pct(x.salvo, 1)} salvam (${x.count} posts)`).join(" · ");
 
   // Diferença pequena de taxa de salvamento é ruído: só afirma "faz guardar" com folga de 30%.
   if (A.f !== S.f && S.salvo < A.salvo * DIFERENCA_SALVO) {
@@ -210,7 +246,8 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
       peso: 2,
       titulo: `${A.nome} é o formato que mais leva o perfil a gente nova.`,
       manchete: `${nomeLeigoDoFormato(A.f)} alcançou mais`,
-      porque: `Alcance mediano de ${int(A.alcance)} contas, ${vezes.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}x o de ${segundo.nome}. Na taxa de salvamento os formatos ficaram parecidos, então a diferença está em quantas pessoas cada um alcança.`,
+      comparacao: comparacaoDeAlcance(A, segundo, vezes),
+      porque: comparacaoDeAlcance(A, segundo, vezes).frase,
       acao: { texto: `Use ${A.nome} para os assuntos que você quer que mais gente conheça.`, rota: "conteudo" },
       base,
     });
@@ -224,9 +261,10 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
       id: "formato",
       tom: "bom",
       peso: 2,
-      titulo: `${A.nome} ganha nas duas frentes: é o que mais alcança e o que mais é salvo.`,
+      titulo: `${A.nome} alcança mais e é o mais salvo.`,
       manchete: `${nomeLeigoDoFormato(A.f)} alcançou e foi mais salvo`,
-      porque: `Alcança ${vezes >= 1.2 ? `${vezes.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}x mais que ${segundo.nome}` : "mais que os outros formatos"} e quem vê guarda para depois (${pct(A.salvo, 1)} salvam). É o formato em que a audiência deste perfil mais confia.`,
+      comparacao: comparacaoDeAlcance(A, segundo, vezes),
+      porque: `${comparacaoDeAlcance(A, segundo, vezes).frase.replace(/\.$/, "")}; ${pct(A.salvo, 1)} salvam.`,
       acao: { texto: `Priorize ${A.nome} na grade das próximas semanas.`, rota: "conteudo" },
       base,
     });
@@ -238,7 +276,8 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
     peso: 2,
     titulo: `${A.nome} leva longe, ${S.nome} faz guardar.`,
     manchete: `${nomeLeigoDoFormato(A.f)} alcançou mais`,
-    porque: `${A.nome} tem o maior alcance mediano (${int(A.alcance)} contas): é o que apresenta o perfil a gente nova. ${S.nome} tem a maior taxa de salvamento (${pct(S.salvo, 1)} contra ${pct(A.salvo, 1)}): é o que gera confiança em quem já chegou. Os dois têm papéis diferentes no caminho até a consulta.`,
+    comparacao: comparacaoDeAlcanceESalvo(A, S),
+    porque: "Um alcança mais, o outro é mais salvo.",
     acao: { texto: `Use ${A.nome} para atrair e ${S.nome} para aprofundar o mesmo assunto.`, rota: "conteudo" },
     base,
   });
@@ -257,7 +296,7 @@ function regraSeguir(posts: any[], out: Achado[], falta: string[]) {
   const tipica = median(com.map(taxa));
   if (taxa(melhorSeguir) <= 0 || n(melhorSeguir.media_follows) < 3) return;
   const vezes = tipica > 0 ? taxa(melhorSeguir) / tipica : 0;
-  const base = `${int(n(melhorSeguir.media_follows))} seguidores em ${int(n(melhorSeguir.reach))} contas (${pct(taxa(melhorSeguir), 2)}); mediana dos posts ${pct(tipica, 2)}`;
+  const base = `${int(n(melhorSeguir.media_follows))} seguidores em ${int(n(melhorSeguir.reach))} pessoas (${pct(taxa(melhorSeguir), 2)}); post típico ${pct(tipica, 2)}`;
   if (melhorSeguir !== maiorAlcance) {
     out.push({
       id: "seguir",
@@ -390,7 +429,7 @@ function regraAtendimento(e: EntradaLeitura, out: Achado[]) {
   if (at <= 0) return;
   const espera = n(e.wts?.espera_mediana_seg);
   const semRota = n(e.wts?.sem_roteamento) / at;
-  const base = `${int(at)} atendimentos; espera mediana até a 1ª resposta ${espera > 0 ? dur(espera) : "não medida"}; ${pct(semRota)} sem equipe`;
+  const base = `${int(at)} atendimentos; espera típica até a 1ª resposta ${espera > 0 ? dur(espera) : "não medida"}; ${pct(semRota)} sem equipe`;
   if (espera >= ESPERA_RUIM_SEG) {
     out.push({
       id: "atendimento",
@@ -406,7 +445,7 @@ function regraAtendimento(e: EntradaLeitura, out: Achado[]) {
       id: "atendimento",
       tom: "bom",
       peso: 1,
-      titulo: `O WhatsApp responde rápido: ${dur(espera)} de espera mediana.`,
+      titulo: `O WhatsApp responde rápido: ${dur(espera)} de espera típica.`,
       porque: "O paciente que chega não esfria esperando. Essa parte do caminho não é gargalo.",
       base,
     });

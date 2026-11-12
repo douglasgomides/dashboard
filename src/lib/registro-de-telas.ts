@@ -441,10 +441,13 @@ export const SECOES_JUNTADAS: readonly SecaoJuntada[] = [
           { rota: `${C}/pacientes`, rotulo: "Do contato à venda" },
           { rota: `${C}/crm-painel`, rotulo: "No CRM" },
         ],
+        // Sem contagem: o que o Funil conta são os contatos nas etapas da Phase 9 (chamaram, agendaram, fecharam), cujo rótulo é a
+        // decisão aberta 1 do João (D-06). Até ela, a aba mostra "—" com o motivo escrito.
         contagem: null,
       },
       { id: "consultas", rotulo: "Consultas", partes: [{ rota: `${C}/consultas`, rotulo: "Consultas" }], contagem: "consultas no período" },
       { id: "vendas", rotulo: "Vendas", partes: [{ rota: `${C}/vendas`, rotulo: "Vendas" }], contagem: "vendas no período" },
+      // Sem contagem pelo mesmo motivo do Funil: a Jornada conta as etapas da Phase 9 (decisão aberta 1 do João, D-06).
       { id: "jornada", rotulo: "Jornada", partes: [{ rota: `${C}/jornada`, rotulo: "Jornada" }], contagem: null },
     ],
   },
@@ -455,7 +458,7 @@ export const SECOES_JUNTADAS: readonly SecaoJuntada[] = [
     publico: "medico",
     abas: [
       { id: "por-origem", rotulo: "Por origem", partes: [{ rota: `${C}/vendas-kommo`, rotulo: "Por origem" }], contagem: "origens com venda no período" },
-      { id: "instagram", rotulo: "Instagram", partes: [{ rota: `${C}/conteudo-comercial`, rotulo: "Instagram" }], contagem: null },
+      { id: "instagram", rotulo: "Instagram", partes: [{ rota: `${C}/conteudo-comercial`, rotulo: "Instagram" }], contagem: "posts no período" },
       { id: "anuncios", rotulo: "Anúncios", partes: [{ rota: `${C}/anuncios`, rotulo: "Anúncios" }], contagem: "campanhas no período" },
       { id: "links", rotulo: "Links", partes: [{ rota: `${C}/links`, rotulo: "Links" }], contagem: "links rastreados" },
     ],
@@ -467,9 +470,11 @@ export const SECOES_JUNTADAS: readonly SecaoJuntada[] = [
     publico: "medico",
     abas: [
       // A linha de /conteudo não traz fonte (daNav("/conteudo") não tem): por isso a parte declara "instagram" aqui.
-      { id: "desempenho", rotulo: "Desempenho", partes: [{ rota: `${C}/conteudo`, rotulo: "Desempenho", fonte: "instagram" }], contagem: null },
+      { id: "desempenho", rotulo: "Desempenho", partes: [{ rota: `${C}/conteudo`, rotulo: "Desempenho", fonte: "instagram" }], contagem: "dias com dado" },
       { id: "destaques", rotulo: "Destaques", partes: [{ rota: `${C}/top`, rotulo: "Destaques" }], contagem: "publicações em destaque" },
       { id: "posts", rotulo: "Posts", partes: [{ rota: `${C}/posts`, rotulo: "Posts" }], contagem: "publicações no período" },
+      // Sem contagem: Público é a leitura ao vivo da Meta (janela fixa de 30 dias, sem lista de dias ou itens em memória); contar
+      // "dias com dado" aqui exigiria uma consulta nova, e esta tarefa não cria nenhuma.
       { id: "publico", rotulo: "Público", partes: [{ rota: `${C}/audiencia`, rotulo: "Público" }], contagem: null },
     ],
   },

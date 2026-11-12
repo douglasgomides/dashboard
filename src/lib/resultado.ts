@@ -201,6 +201,7 @@ function paraInsight(a: Achado, e: EntradaResultado, cob: Cobertura): Insight {
     titulo: a.titulo,
     // Condicional: nunca grava `manchete: undefined` (o deepStrictEqual dos testes trata chave com undefined como diferente de chave ausente).
     ...(a.manchete ? { manchete: a.manchete } : {}),
+    ...(a.comparacao ? { comparacao: a.comparacao } : {}),
     diagnostico: a.porque,
     evidencia: a.base,
     confianca,
