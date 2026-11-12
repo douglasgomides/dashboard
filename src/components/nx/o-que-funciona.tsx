@@ -69,7 +69,7 @@ export function NxOQueFunciona({ formatos, temas, mapa, melhor, fraseFormato, ab
 // ---------- Formato ----------
 
 /** Uma barra: rótulo, a barra proporcional à maior da coluna e o número. A barra nunca é a única forma do número. */
-function Barra({ rotulo, valor, maximo, texto, destaque, nota }: { rotulo: string; valor: number; maximo: number; texto: string; destaque?: boolean; nota?: string }) {
+function Barra({ rotulo, valor, maximo, texto, destaque, nota, soEstreito }: { rotulo: string; valor: number; maximo: number; texto: string; destaque?: boolean; nota?: string; soEstreito?: string }) {
   return (
     <li className="nx-funciona__barra" data-destaque={destaque ? "" : undefined}>
       <span className="nx-funciona__rotulo" title={rotulo}>
@@ -80,7 +80,9 @@ function Barra({ rotulo, valor, maximo, texto, destaque, nota }: { rotulo: strin
       </span>
       <span className="nx-funciona__valor">
         {texto}
-        {nota && <small>{nota}</small>}
+        {nota && <small className="nx-funciona__so-largo">{nota}</small>}
+        {/* Celular: a coluna "Quantos você postou" some e a contagem vem aqui, junto do número de salvos (nada deixa de aparecer). */}
+        {soEstreito && <small className="nx-funciona__so-estreito">{soEstreito}</small>}
       </span>
     </li>
   );
@@ -102,11 +104,11 @@ function PainelDeFormato({ formatos, frase }: { formatos: readonly GroupStat[]; 
           <h3 className="nx-funciona__coluna">Salvos por post</h3>
           <ul className="nx-funciona__barras">
             {lista.map((f) => (
-              <Barra key={f.key} rotulo={f.label} valor={f.savedMean} maximo={maxSalvos} texto={`${fmt(f.savedMean)} salvos`} destaque={f.key === lider} nota={f.count < MIN_POSTS_DO_FORMATO ? "poucos posts" : undefined} />
+              <Barra key={f.key} rotulo={f.label} valor={f.savedMean} maximo={maxSalvos} texto={`${fmt(f.savedMean)} salvos`} destaque={f.key === lider} nota={f.count < MIN_POSTS_DO_FORMATO ? "poucos posts" : undefined} soEstreito={`${fmt(f.count)} ${f.count === 1 ? "post" : "posts"}${f.count < MIN_POSTS_DO_FORMATO ? " · poucos posts" : ""}`} />
             ))}
           </ul>
         </section>
-        <section aria-label="Quantos você postou">
+        <section aria-label="Quantos você postou" className="nx-funciona__coluna-postou">
           <h3 className="nx-funciona__coluna">Quantos você postou</h3>
           <ul className="nx-funciona__barras" data-tom="postou">
             {lista.map((f) => (
@@ -235,6 +237,8 @@ function PainelDeTema({ temas }: { temas: readonly GroupStat[] }) {
         })}
       </ul>
       <p className="nx-cinco-falta">Número da direita: salvos por post, em média.</p>
+      {/* Celular: só os 3 primeiros temas ficam à vista (a régua de 1,5 tela); todos os outros estão na tabela do "Ver tudo". */}
+      {visiveis.length > 3 && <p className="nx-cinco-falta nx-funciona__so-estreito">{`Mais ${visiveis.length - 3} ${visiveis.length - 3 === 1 ? "tema" : "temas"} na tabela do "Ver tudo".`}</p>}
     </>
   );
 }

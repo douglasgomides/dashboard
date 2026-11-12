@@ -367,15 +367,22 @@ for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
       if (aposOClique && ["POST", "PATCH", "DELETE"].includes(r.method()) && pathname.startsWith("/rest/v1/") && pathname !== "/rest/v1/rota_acessos") escritas.push(`${r.method()} ${pathname}`);
     });
     await page.goto(`/${CID}/${sub}?preset=30d`);
+    // Formato 5 segundos (03.1.1.1, plano 07): Desempenho abre com o veredito e a leitura (com a pílula) mora no "Ver tudo", que começa fechado.
+    const detalhes = page.locator(`[data-juntada] details#detalhes-${sub}`);
+    if (sub === "conteudo") {
+      await expect(page.locator('[data-juntada] [data-peca="veredito"]:not([data-modo="carregando"])')).toBeVisible();
+      await expect(detalhes).toHaveCount(1);
+      await expect(detalhes).not.toHaveAttribute("open", /.*/);
+      await detalhes.locator(":scope > summary").click();
+    }
     const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
     await expect(leitura).toBeVisible();
     await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
     const pilula = leitura.locator(".nx-acao-pilula").first();
     await expect(pilula).toBeVisible();
     await page.screenshot({ path: `test-results/redesenho/pilula-${sub}.png` });
-    const detalhes = page.locator(`[data-juntada] details#detalhes-${sub}`);
     await expect(detalhes).toHaveCount(1);
-    await expect(detalhes).not.toHaveAttribute("open", /.*/);
+    if (sub !== "conteudo") await expect(detalhes).not.toHaveAttribute("open", /.*/);
     const seta = pilula.locator(".nx-acao-pilula__seta");
     await expect(seta).toBeVisible();
     await page.waitForLoadState("networkidle");
@@ -827,7 +834,7 @@ for (const sub of PARTES_DAS_3_TELAS) {
     await mockLinks(context);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${CID}/${sub}?preset=30d`);
-    if (sub === "pacientes") {
+    if (sub === "pacientes" || sub === "conteudo") {
       // Formato 5 segundos (03.1.1.1, plano 05): o veredito abre a tela, a leitura (e a pílula dela) mora no "Ver tudo" e os números são no máximo 3.
       const veredito = page.locator('[data-juntada] [data-peca="veredito"]').first();
       await expect(veredito).toBeVisible();
@@ -840,7 +847,7 @@ for (const sub of PARTES_DAS_3_TELAS) {
     }
     const cartoes = page.locator("[data-juntada] .nx-pagina__cartoes > *");
     const total = await cartoes.count();
-    expect(total).toBeLessThanOrEqual(sub === "pacientes" ? 3 : 4);
+    expect(total).toBeLessThanOrEqual(sub === "pacientes" || sub === "conteudo" ? 3 : 4);
     // Consultas e Vendas são telas em construção (sem cartões); todas as outras têm de 1 a 4.
     if (sub !== "consultas" && sub !== "vendas") expect(total, `/${sub}: sem cartões`).toBeGreaterThanOrEqual(1);
     for (let i = 0; i < total; i++) {

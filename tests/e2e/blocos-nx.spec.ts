@@ -113,6 +113,8 @@ for (const width of [375, 1440]) {
     await page.setViewportSize({ width, height: 900 });
 
     await page.goto(`/${CID}/conteudo?preset=30d`);
+    // Formato 5 segundos (03.1.1.1, plano 07): os seguidores por semana moram no "Ver tudo" de Desempenho, que começa fechado.
+    await page.locator('details:has(> summary b:text-is("Ver tudo")) > summary').first().click();
     const semanas = page.locator('section.nx-card[aria-label="Seguidores por semana"]');
     await expect(semanas).toBeVisible();
     await expect(page.locator(".recharts-wrapper")).toHaveCount(0);

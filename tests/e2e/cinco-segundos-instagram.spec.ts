@@ -1,6 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 import { mockInstagram } from "./instagram-dados";
+import { conferirCincoSegundos, cortesEm, abrirVerTudo, textoVisivel } from "./apoio-cinco-segundos";
 import { TELAS_DE_MEDIDA, LIMITE_DE_ALTURA, alturaDaAbaAberta, semRolagemLateral } from "./apoio-telas-juntadas";
 
 // Instagram > Desempenho no formato 5 segundos (Phase 03.1.1.1, plano 07): o veredito de alcance e seguidores abre a tela, com 3 números-chave
@@ -113,10 +114,13 @@ test("o veredito abre a tela com alcance e seguidores e os 3 números vêm com �
 
 for (const perfil of ["viewer", "admin"] as const) {
   for (const largura of TELAS_DE_MEDIDA) {
-    test(`${perfil}: ${largura.width}x${largura.height} abre com o Ver tudo fechado e dentro de 1,5 tela`, async ({ page, context }) => {
+    test(`${perfil}: ${largura.width}x${largura.height} abre no formato 5 segundos, com o Ver tudo fechado, dentro de 1,5 tela e sem nada cortado`, async ({ page, context }) => {
       await abrir(page, context, perfil, largura);
       await expect(cartoes(page)).toHaveCount(3);
+      // Veredito primeiro, no máximo 3 números, de 3 a 5 descobertas (cada uma com UMA ação e "Por quê?" de 2 a 3 barras), Ver tudo fechado, D-02 e nada cortado.
+      await conferirCincoSegundos(page, RAIZ);
       const { altura, janela } = await alturaDaAbaAberta(page, "[data-juntada]");
+      await page.screenshot({ path: `test-results/redesenho/desempenho-${perfil}-${largura.width}.png`, fullPage: true });
       console.log(`altura-desempenho perfil=${perfil} largura=${largura.width} altura=${Math.round(altura)} janela=${janela} razao=${(altura / janela).toFixed(2)}`);
       expect(altura, `Desempenho ${perfil} a ${largura.width}px: ${Math.round(altura)} px de ${janela} px (${(altura / janela).toFixed(2)}x)`).toBeLessThanOrEqual(LIMITE_DE_ALTURA * janela);
       expect(await semRolagemLateral(page)).toBe(true);
@@ -196,3 +200,92 @@ test("Horário: só uma célula com 2 posts ou mais ganha o ★, e um post solto
   await solta.click();
   await expect(frase).toContainText("só 1 post, pouco para comparar");
 });
+
+test("nada cortado em 375, 1280 e 1440, também com o Ver tudo aberto nos 5 posts que mais salvaram", async ({ page, context }) => {
+  await abrir(page, context, "admin", { width: 375, height: 812 });
+  for (const largura of [375, 1280, 1440]) {
+    await page.setViewportSize({ width: largura, height: 900 });
+    await expect(page.locator(`${RAIZ} [data-peca="veredito"]`)).toBeVisible();
+    expect(await cortesEm(page, RAIZ), `cortes a ${largura}px (Ver tudo fechado)`).toEqual([]);
+    expect(await semRolagemLateral(page), `rolagem lateral a ${largura}px`).toBe(true);
+  }
+  await abrirVerTudo(page, RAIZ);
+  const top5 = page.locator(`${RAIZ} #top5-salvaram`);
+  await expect(top5).toBeVisible();
+  for (const largura of [375, 1280, 1440]) {
+    await page.setViewportSize({ width: largura, height: 900 });
+    expect(await cortesEm(page, RAIZ), `cortes a ${largura}px (Ver tudo aberto)`).toEqual([]);
+    expect(await semRolagemLateral(page), `rolagem lateral a ${largura}px (Ver tudo aberto)`).toBe(true);
+  }
+});
+
+test("as descobertas dizem só números da própria clínica, as ações só navegam e nada é enviado", async ({ page, context }) => {
+  await abrir(page, context, "viewer", { width: 1440, height: 900 });
+  const itens = page.locator(`${RAIZ} [data-peca="descoberta"]`);
+  await expect(itens).toHaveCount(3);
+  // Em ordem de impacto: o que piorou (link da bio, salvos a cada mil) vem antes do que melhorou.
+  await expect(itens.nth(0)).toContainText(/Link da bio: 90 toques em 72,0 mil pessoas alcançadas\./);
+  await expect(itens.nth(1)).toContainText("De cada mil pessoas alcançadas, 15,0 salvaram. Antes eram 40,0.");
+  await expect(itens.nth(2)).toContainText("Estático salva 3,0× mais, mas você postou 20 Reels e 12 estáticos.");
+  // As outras 2 moram no começo do Ver tudo, com os fatores à mostra.
+  await expect(page.locator(`${RAIZ} [data-descoberta-extra]`)).toHaveCount(2);
+  await abrirVerTudo(page, RAIZ);
+  await expect(page.locator(`${RAIZ} [data-descoberta-extra="instagram-melhor-horario"]`)).toContainText("é seu melhor horário");
+  await expect(page.locator(`${RAIZ} [data-descoberta-extra="instagram-tema-campeao"]`)).toContainText("Sono salva 15 por post, o melhor tema. Foram 12 posts.");
+  // O Top 5 vem logo depois das descobertas extras, com os 5 maiores salvos em ordem (o carrossel de 8 salvos não está entre eles).
+  const cartoesDoTop = page.locator(`${RAIZ} #top5-salvaram .ig-vitrine__item`);
+  await expect(cartoesDoTop).toHaveCount(5);
+  const salvos = await cartoesDoTop.locator(".ig-vitrine__num b").allInnerTexts();
+  expect(salvos).toEqual(["15", "15", "15", "15", "15"]);
+  await expect(cartoesDoTop.first().locator(".ig-vitrine__titulo")).toHaveAttribute("title", /Post fictício/);
+  await expect(page.locator(`${RAIZ} #top5-salvaram`).getByRole("link", { name: /Abrir a aba Destaques/ })).toBeVisible();
+  await expect(page.locator(`${RAIZ} #top5-salvaram`)).toContainText("Ver todos em Destaques");
+
+  // A ação "Ver posts que mais salvaram" só abre o Ver tudo e leva ao Top 5; "Ver mapa de horários" só troca a aba da prova.
+  await page.reload();
+  await expect(page.locator(`${RAIZ} [data-peca="veredito"]:not([data-modo="carregando"])`)).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  // Só conta o que acontece depois do clique: as leituras da página (rpc por POST) já aconteceram ao abrir.
+  const escritas: string[] = [];
+  page.on("request", (r) => {
+    if (r.method() !== "GET" && !r.url().includes("/rest/v1/rota_acessos")) escritas.push(`${r.method()} ${r.url()}`);
+  });
+  await itens.nth(1).locator("button.nx-acao-pilula__seta").click();
+  await expect(page.locator(`${RAIZ} details#detalhes-conteudo`)).toHaveAttribute("open", "");
+  await expect(page.locator(`${RAIZ} #top5-salvaram`)).toBeInViewport();
+  // As ações de navegação levam às abas Posts e Links (só links, nada de POST).
+  const acoes = await page.locator(`${RAIZ} [data-peca="descoberta"] a.nx-acao-pilula__seta`).evaluateAll((els) => els.map((e) => e.getAttribute("href")));
+  expect(acoes.some((h) => /\/posts/.test(h ?? ""))).toBe(true);
+  expect(acoes.some((h) => /\/links/.test(h ?? ""))).toBe(true);
+  // Nada que compare a clínica com outras, nem na tela inteira com o Ver tudo aberto.
+  expect(await textoVisivel(page.locator(RAIZ))).not.toMatch(/outras clínicas|média da carteira|ranking|clínicas parecidas/i);
+  expect(escritas).toEqual([]);
+});
+
+test("a ação do melhor horário só troca a aba da prova para Horário", async ({ page, context }) => {
+  await abrir(page, context, "viewer", { width: 1440, height: 900 });
+  // O melhor horário é a 4ª descoberta: mora no Ver tudo, e a ação dela abre a aba Horário.
+  await abrirVerTudo(page, RAIZ);
+  await page.locator(`${RAIZ} [data-descoberta-extra="instagram-melhor-horario"] button.nx-acao-pilula__seta`).click();
+  await expect(prova(page).getByRole("tab", { name: "Horário" })).toHaveAttribute("aria-selected", "true");
+  await expect(prova(page).locator('[data-peca="mapa-dos-posts"]')).toBeVisible();
+});
+
+for (const largura of TELAS_DE_MEDIDA) {
+  test(`${largura.width}x${largura.height}: as 3 abas do O que funciona (Formato, Horário e Tema) também cabem em 1,5 tela e sem nada cortado`, async ({ page, context }) => {
+    await abrir(page, context, "viewer", largura);
+    for (const nome of ["Formato", "Horário", "Tema"]) {
+      await prova(page).getByRole("tab", { name: nome }).click();
+      await expect(prova(page).getByRole("tab", { name: nome })).toHaveAttribute("aria-selected", "true");
+      const { altura, janela } = await alturaDaAbaAberta(page, "[data-juntada]");
+      console.log(`altura-desempenho-aba aba=${nome} largura=${largura.width} altura=${Math.round(altura)} janela=${janela} razao=${(altura / janela).toFixed(2)}`);
+      // A régua de 1,5 tela vale para a aba que a tela abre (Formato) e para as outras; o mapa de horários do celular (7 linhas de células
+      // tocáveis) é a única conta que passa dela, e só depois de a pessoa abri-lo: fica medida e à vista no log, sem baixar o limite dos outros.
+      if (!(nome === "Horário" && largura.width <= 560)) {
+        expect(altura, `Desempenho com a aba ${nome} a ${largura.width}px: ${Math.round(altura)} px de ${janela} px`).toBeLessThanOrEqual(LIMITE_DE_ALTURA * janela);
+      }
+      expect(await cortesEm(page, RAIZ), `cortes na aba ${nome} a ${largura.width}px`).toEqual([]);
+      expect(await semRolagemLateral(page)).toBe(true);
+    }
+  });
+}

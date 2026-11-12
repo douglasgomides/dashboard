@@ -3,11 +3,12 @@
 // pilotos entra aqui.
 // node --import ./scripts/test-network-guard.mjs --import tsx scripts/test-cinco-instagram.ts
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { fatosSemInstagram } from "../src/lib/leitura/fatos-instagram";
-import { checarFraseCinco, textoDaFrase } from "../src/lib/leitura/cinco-segundos";
+import { GUARDA_SEM_COMPARAR_CLINICAS, checarDescoberta, checarFraseCinco, textoDaFrase } from "../src/lib/leitura/cinco-segundos";
 import type { FatosDaTela } from "../src/lib/leitura/tipos";
 import type { GroupStat } from "../src/lib/hub-conteudo";
-import { MIN_POSTS_DO_FORMATO, fraseDoFormato, numerosDoInstagram, vereditoDoInstagram, type DiaDoInstagram } from "../src/lib/leitura/cinco-instagram";
+import { MIN_POSTS_DO_FORMATO, descobertasDoInstagram, fraseDoFormato, numerosDoInstagram, vereditoDoInstagram, type DiaDoInstagram, type PostDoInstagram } from "../src/lib/leitura/cinco-instagram";
 import { FRASE_SEM_MELHOR_HORARIO, MIN_POSTS_NO_HORARIO, fraseDaCelula, horasDoMapa, mapaDosPosts, melhorHorario } from "../src/lib/mapa-dos-posts";
 
 // O real brasileiro sai com espaço sem quebra (U+00A0): nos testes comparamos com espaço comum.
@@ -216,6 +217,101 @@ const fatosOk = (): FatosDaTela => ({
   // Empate de quantidade não é descompasso.
   const empate = fraseDoFormato({ porFormato: [grupo("reels", "Reels", 20, 100), grupo("estatico", "Estático", 20, 300)] });
   assert.equal(empate.tipo, "alinhado");
+}
+
+// ---------------------------------------------------------------- descobertas
+{
+  const grupo = (key: string, label: string, count: number, savedMean: number): GroupStat => ({ key, label, count, reachMedian: 1000, reachMean: 1100, savedMean, savedMedian: savedMean });
+  // 12 posts de reels às 12h (5 salvos), 12 estáticos às 18h (15 salvos), 3 carrosséis; 3 temas, um deles com poucos posts.
+  const dia28 = (d: number, h: number) => new Date(Date.UTC(2026, 9, 28 - d, h + 3)).toISOString();
+  const posts: PostDoInstagram[] = [
+    ...Array.from({ length: 12 }, (_, i) => ({ posted_at: dia28(i, 12), reach: 1000, saved: 5, format: "reels", tema: i < 6 ? "Menopausa" : "Canetas emagrecedoras" })),
+    ...Array.from({ length: 12 }, (_, i) => ({ posted_at: dia28(i, 18), reach: 1500, saved: 15, format: "estatico", tema: "Sono" })),
+    ...Array.from({ length: 3 }, (_, i) => ({ posted_at: dia28(i, 7), reach: 700, saved: 4, format: "carrossel", tema: "Tireoide" })),
+  ];
+  const formatos = {
+    total: 27,
+    porFormato: [grupo("estatico", "Estático", 12, 15), grupo("reels", "Reels", 12, 5)],
+    porTema: [grupo("Sono", "Sono", 12, 15), grupo("Menopausa", "Menopausa", 8, 5), grupo("Canetas emagrecedoras", "Canetas emagrecedoras", 6, 5), grupo("Tireoide", "Tireoide", 3, 4)],
+    melhorFormato: null,
+  };
+  // Reels 20 contra estático 12 para o descompasso.
+  formatos.porFormato = [grupo("estatico", "Estático", 12, 15), grupo("reels", "Reels", 20, 5)];
+  const agora = dias(30, { reach: 2400, saves: 15 * 2.4, seguidores: 5600, passo: 20, taps: 3 });
+  const antes = dias(30, { fim: 30, reach: 1000, saves: 40, taps: 5 });
+  const entrada = { diario: agora, diarioAnterior: antes, posts, crescimento: null, formatos };
+  const { itens, aviso } = descobertasDoInstagram(entrada, fatosOk());
+  assert.equal(aviso, null, "com 3 ou mais descobertas não há aviso");
+  assert.ok(itens.length >= 3 && itens.length <= 5);
+  const ids = itens.map((d) => d.id);
+  for (const id of ["instagram-formato", "instagram-link-da-bio", "instagram-melhor-horario", "instagram-salvos-por-mil", "instagram-tema-campeao"]) assert.ok(ids.includes(id), `descoberta ${id}`);
+  for (const d of itens) {
+    assert.deepEqual(checarDescoberta(d), [], `${d.id}: ${checarDescoberta(d).join("; ")}`);
+    assert.ok(d.porque.barras.length >= 2 && d.porque.barras.length <= 3, `${d.id} tem 2 a 3 fatores`);
+    assert.ok(d.acao.rota || d.acao.local, `${d.id} tem uma ação`);
+    assert.ok(!(d.acao.rota && d.acao.local), `${d.id} tem UMA ação só`);
+    assert.doesNotMatch(`${d.frase} ${d.impacto ?? ""} ${d.porque.obs ?? ""}`, GUARDA_SEM_COMPARAR_CLINICAS, `${d.id} não compara com outras clínicas`);
+  }
+  const por = (id: string) => itens.find((d) => d.id === id)!;
+  assert.equal(sp(por("instagram-formato").frase), "Estático salva 3,0× mais, mas você postou 20 Reels e 12 estáticos.");
+  assert.equal(por("instagram-formato").acao.rota, "/_authenticated/$clientId/posts");
+  assert.equal(por("instagram-formato").acao.rotulo, "Pedir mais estáticos à equipe");
+  // Link da bio: toques e alcance medidos; menos toques por mil que antes (1,3 contra 5,0).
+  assert.equal(sp(por("instagram-link-da-bio").frase), "Link da bio: 90 toques em 72,0 mil pessoas alcançadas.");
+  assert.equal(por("instagram-link-da-bio").tom, "ruim");
+  assert.equal(por("instagram-link-da-bio").acao.rota, "/_authenticated/$clientId/links");
+  assert.equal(por("instagram-link-da-bio").porque.barras.length, 3);
+  // Melhor horário: estático às 18h de quarta (2 posts ou mais), ação local que abre o mapa.
+  assert.match(por("instagram-melhor-horario").frase, /^\w+ 18h é seu melhor horário: 1,5 mil pessoas por post\.$/u);
+  assert.equal(por("instagram-melhor-horario").acao.local, "abrir-horario");
+  // Salvos a cada mil: 15,0 contra 40,0 (queda): atenção, ação local que abre o Top 5, e "N de M dias".
+  assert.equal(sp(por("instagram-salvos-por-mil").frase), "De cada mil pessoas alcançadas, 15,0 salvaram. Antes eram 40,0.");
+  assert.equal(por("instagram-salvos-por-mil").tom, "atencao");
+  assert.equal(por("instagram-salvos-por-mil").acao.local, "abrir-top5");
+  assert.equal(por("instagram-salvos-por-mil").porque.obs, "0 de 30 dias chegaram ao nível de antes.");
+  // Tema campeão: só entre temas com 8 posts ou mais (Sono e Menopausa), com a ação para os posts.
+  assert.equal(por("instagram-tema-campeao").frase, "Sono salva 15 por post, o melhor tema. Foram 12 posts.");
+  assert.equal(por("instagram-tema-campeao").acao.rotulo, "Pedir mais posts de Sono");
+  // Ordem de impacto: o que piorou vem antes do que melhorou.
+  const ordem = itens.map((d) => d.tom);
+  assert.ok(ordem.indexOf("ruim") < ordem.indexOf("bom"));
+  assert.ok(ordem.indexOf("atencao") < ordem.indexOf("bom"));
+
+  // O link da bio só existe com toques medidos em pelo menos 5 dias: dia sem medida não vira "0 toques".
+  const semToques = descobertasDoInstagram({ ...entrada, diario: dias(30, { reach: 2400, saves: 36, taps: null }) }, fatosOk()).itens.map((d) => d.id);
+  assert.ok(!semToques.includes("instagram-link-da-bio"));
+  const poucosToques = descobertasDoInstagram({ ...entrada, diario: agora.map((d, k) => (k < 4 ? d : { ...d, profile_links_taps: null })) }, fatosOk()).itens.map((d) => d.id);
+  assert.ok(!poucosToques.includes("instagram-link-da-bio"), "4 dias medidos não bastam");
+  // Sem o período anterior: a descoberta de salvos some (nada de comparar com nada) e o link da bio diz Falta dado.
+  const semAntes = descobertasDoInstagram({ ...entrada, diarioAnterior: dias(30, { fim: 30, reach: null, saves: null, taps: null }) }, fatosOk());
+  assert.ok(!semAntes.itens.some((d) => d.id === "instagram-salvos-por-mil"));
+  assert.match(semAntes.itens.find((d) => d.id === "instagram-link-da-bio")?.porque.obs ?? "", /^Falta dado/);
+  // Salvos iguais aos de antes não são descoberta.
+  const iguais = descobertasDoInstagram({ ...entrada, diario: dias(30, { reach: 2400, saves: 96, taps: 3 }), diarioAnterior: dias(30, { fim: 30, reach: 1000, saves: 40, taps: 5 }) }, fatosOk());
+  assert.ok(!iguais.itens.some((d) => d.id === "instagram-salvos-por-mil"));
+
+  // Tema: com 1 só tema com amostra não há campeão; formato com 7 posts não é "o que mais salva".
+  const umTema = descobertasDoInstagram({ ...entrada, formatos: { ...formatos, porTema: [grupo("Sono", "Sono", 12, 15), grupo("Menopausa", "Menopausa", 7, 5)] } }, fatosOk());
+  assert.ok(!umTema.itens.some((d) => d.id === "instagram-tema-campeao"));
+  const formatoPequeno = descobertasDoInstagram({ ...entrada, formatos: { ...formatos, porFormato: [grupo("estatico", "Estático", 7, 15), grupo("reels", "Reels", 20, 5)] } }, fatosOk());
+  assert.ok(!formatoPequeno.itens.some((d) => d.id === "instagram-formato"));
+
+  // Horário: só células de 1 post, nenhuma descoberta de "melhor horário".
+  const soltos = descobertasDoInstagram({ ...entrada, posts: [posts[0], posts[13], posts[26]] }, fatosOk());
+  assert.ok(!soltos.itens.some((d) => d.id === "instagram-melhor-horario"));
+
+  // Poucas descobertas: o aviso diz o motivo, nunca inventa para chegar em 3.
+  const quase = descobertasDoInstagram({ diario: [], diarioAnterior: null, posts: [], crescimento: null, formatos: null }, fatosOk());
+  assert.equal(quase.itens.length, 0);
+  assert.match(quase.aviso ?? "", /^Poucas descobertas neste período: /);
+  // Portão negado (sem Instagram): nenhuma descoberta e nenhum aviso (a tela diz Falta dado).
+  const semIg = descobertasDoInstagram(entrada, fatosSemInstagram("conteudo", { de: dia(29), ate: dia(0) }, dia(0)));
+  assert.deepEqual(semIg, { itens: [], aviso: null });
+
+  // A regra não lê legenda nem nome: só contagens, formato, tema e data (T-03.1.1.1-24).
+  const fonte = await readFile(new URL("../src/lib/leitura/cinco-instagram.ts", import.meta.url), "utf8");
+  assert.ok(!/caption|permalink|\.nome\b/.test(fonte), "a regra não lê legenda, link nem nome");
+  assert.match(fonte, /profile_links_taps/);
 }
 
 console.log("test-cinco-instagram: ok");

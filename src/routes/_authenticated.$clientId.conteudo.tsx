@@ -2,30 +2,34 @@ import { useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getClientFontes, getMonthlyMetrics, getPostsForAnalytics } from "@/lib/client-data";
-import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
+import { resolveDateRange, formatRangeLabel, type DateRangeState } from "@/lib/date-range";
 import { analyzeFollowers, analyzeGrowth, analyzeFormatsAndTemas, fmtDiaBR, type GroupStat } from "@/lib/hub-conteudo";
 import { variacoes } from "@/lib/diagnostico-estrategico";
 import { lerPeriodo } from "@/lib/leitura-periodo";
 import { fatosDoInstagram, fatosSemInstagram } from "@/lib/leitura/fatos-instagram";
 import { periodoAnterior } from "@/lib/leitura/tipos";
 import { hojeBrasilia } from "@/lib/status-fonte";
-import { IconeFormato } from "@/components/visual";
+import { IconeFormato, Miniatura } from "@/components/visual";
 import { Users, UserPlus, UserMinus, Scale, TrendingUp, Trophy, Layers, Tag, Eye, Bookmark, LineChart as LineIcon } from "lucide-react";
 import { SyncButton } from "@/components/sync-button";
 import { fmtFracao, MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { SeguidoresSemana } from "@/components/seguidores-impulsionados";
 import { NxCard, NxKpi, NxTag } from "@/components/nx";
-import { NxCartaoNumero } from "@/components/nx/cartoes";
+import { NxAcaoPilula, NxBarras, NxCartaoNumero, NxPilulaVariacao } from "@/components/nx/cartoes";
+import { linhaDaRota } from "@/components/nx/hoje";
 import { serieContinua } from "@/lib/linha-30-dias";
 import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxTabela, NxVazio } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
-import { IgLinhaSeguidores, IgColunasSaldo } from "@/components/nx/instagram";
-import { NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { IgLinhaSeguidores, IgColunasSaldo, IgVitrine } from "@/components/nx/instagram";
+import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
 import { NxOQueFunciona, type AbaDaProva } from "@/components/nx/o-que-funciona";
-import { fraseDoFormato, numerosDoInstagram, vereditoDoInstagram, type EntradaCincoInstagram, type NumeroDoInstagram } from "@/lib/leitura/cinco-instagram";
+import { ACOES_DE_INSTAGRAM, descobertasDoInstagram, fraseDoFormato, numerosDoInstagram, vereditoDoInstagram, type EntradaCincoInstagram, type NumeroDoInstagram } from "@/lib/leitura/cinco-instagram";
+import { visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
 import { mapaDosPosts, melhorHorario } from "@/lib/mapa-dos-posts";
+import { numeroCurto, temaParaExibir } from "@/lib/texto-que-cabe";
+import "@/styles/nexo-o-que-funciona.css";
 
 export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
   component: ConteudoPage,
@@ -373,6 +377,26 @@ function ConteudoPage() {
   const ICONE_DO_NUMERO = { seguidores: ic(Users), alcance: ic(Eye), salvos: ic(Bookmark) } as const;
   const cartoesCinco = numerosDoInstagram(entradaCinco).map((n) => <CartaoDeNumeroIg key={n.id} n={n} icone={ICONE_DO_NUMERO[n.id]} />);
 
+  // Descobertas (de 0 a 5, só com a própria clínica): as 3 primeiras à vista, as outras no começo do "Ver tudo". Sem leitura, nenhuma.
+  const descobertas = carregandoFatos ? { itens: [], aviso: null } : descobertasDoInstagram(entradaCinco, fatos);
+  const { visiveis, resto } = visiveisEResto(descobertas.itens);
+  // Os 5 posts do período com mais salvos (todos os formatos), da lista que a tela já carregou. Ficam no "Ver tudo" (régua de 1,5 tela).
+  const top5 = [...(posts.data ?? [])]
+    .filter((p: PostDaLista) => p.saved != null)
+    .sort((a: PostDaLista, b: PostDaLista) => Number(b.saved) - Number(a.saved) || Number(b.reach ?? 0) - Number(a.reach ?? 0))
+    .slice(0, 5) as PostDaLista[];
+  // A ação local de uma descoberta só abre um lugar desta tela (CHAM-07: nada é enviado nem gravado).
+  function agirNaDescoberta(local: string) {
+    if (local === ACOES_DE_INSTAGRAM.horario) {
+      setAbaDaProva("horario");
+      requestAnimationFrame(() => document.getElementById("o-que-funciona")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    } else if (local === ACOES_DE_INSTAGRAM.top5) {
+      const verTudo = document.getElementById("detalhes-conteudo");
+      if (verTudo instanceof HTMLDetailsElement) verTudo.open = true;
+      requestAnimationFrame(() => document.getElementById("top5-salvaram")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+  }
+
   return (
     <div className="nexo-ig">
       <PaginaNexo
@@ -381,9 +405,23 @@ function ConteudoPage() {
         leitura={<LeituraDaTela fatos={fatos} carregando={carregandoFatos} semSelo />}
         cartoes={cartoesCinco as unknown as [ReactNode, ReactNode?, ReactNode?]}
         principal={prova}
+        descobertas={
+          carregandoFatos || veredito?.tipo !== "veredito" ? undefined : (
+            <NxDescobertas
+              titulo="O que descobrimos"
+              apoio={<p className={descobertas.aviso ? "nx-cinco-falta" : "nx-cinco-falta nx-instagram-ordem"}>{descobertas.aviso ?? "Em ordem de impacto"}</p>}
+              itens={visiveis}
+              clientId={clientId}
+              dateRange={dateRangeState}
+              aoAgir={agirNaDescoberta}
+            />
+          )
+        }
         resumoDoVerTudo="temas, horários, formatos e a contagem de seguidores"
         detalhe={
           <div style={{ display: "grid", gap: 18 }}>
+            {resto.length > 0 && <MaisDescobertasDoInstagram itens={resto} clientId={clientId} dateRange={dateRangeState} aoAgir={agirNaDescoberta} />}
+            {top5.length > 0 && <Top5DosSalvos posts={top5} clientId={clientId} dateRange={dateRangeState} />}
             <div className="nx-grade nx-grade--4">{cartoes}</div>
             {evolucao}
             {detalhe}
@@ -391,6 +429,80 @@ function ConteudoPage() {
         }
       />
     </div>
+  );
+}
+
+/** O post da lista da tela: só os campos que o Top 5 mostra. */
+type PostDaLista = { id: string; caption?: string | null; format?: string | null; tema?: string | null; reach?: number | null; saved?: number | null; permalink?: string | null; thumbnail_url?: string | null };
+
+const primeiraLinha = (legenda: string | null | undefined) => (legenda ?? "").split("\n").find((l) => l.trim().length > 0)?.trim() ?? "";
+const nomeDoFormato = (f: string) => (f === "carrossel" ? "Carrossel" : f === "estatico" ? "Imagem" : f === "reels" ? "Reels" : f);
+
+/** Chip de uma linha: o texto corta com reticências dentro do cartão e o texto inteiro vai no title. */
+function ChipIg({ tom = "g", texto }: { tom?: "g" | "b"; texto: string }) {
+  return (
+    <NxTag tom={tom} titulo={texto}>
+      <span className="ig-chip__texto">{texto}</span>
+    </NxTag>
+  );
+}
+
+/**
+ * "Seus 5 posts que mais salvaram": os cartões da vitrine (miniatura, legenda em 2 linhas com o texto inteiro no title, salvos como o número
+ * grande, alcance e tema em forma curta), no "Ver tudo" para respeitar a régua de 1,5 tela. O link leva à aba Destaques com o mesmo período.
+ */
+function Top5DosSalvos({ posts, clientId, dateRange }: { posts: PostDaLista[]; clientId: string; dateRange: DateRangeState }) {
+  const destaques = linhaDaRota("/_authenticated/$clientId/top");
+  return (
+    <section id="top5-salvaram" className="nx-top5" data-peca="top5-salvaram" aria-label="Seus 5 posts que mais salvaram">
+      <h3 className="nx-top5__titulo">Seus 5 posts que mais salvaram</h3>
+      <IgVitrine
+        itens={posts.map((p) => ({
+          id: p.id,
+          href: p.permalink,
+          imagem: <Miniatura url={p.thumbnail_url} formato={p.format} className="w-full" />,
+          titulo: primeiraLinha(p.caption) || "(sem legenda)",
+          dica: (p.caption ?? "").trim() || "(sem legenda)",
+          valor: fmtN(Number(p.saved)),
+          rotulo: p.reach != null ? `salvos · ${numeroCurto(Number(p.reach))} alcance` : "salvos",
+          extra: (
+            <>
+              {p.format && <ChipIg texto={nomeDoFormato(p.format)} />}
+              {p.tema && <ChipIg tom="b" texto={temaParaExibir(p.tema) ?? p.tema} />}
+            </>
+          ),
+        }))}
+      />
+      {destaques && <NxAcaoPilula frase="Ver todos em Destaques" rotuloDaSeta="Abrir a aba Destaques" para={{ tela: destaques, clientId, dateRange }} />}
+    </section>
+  );
+}
+
+/** As descobertas que passam das 3 à vista (4 e 5) moram no "Ver tudo", já com os fatores do "Por quê?" abertos (nada some). */
+function MaisDescobertasDoInstagram({ itens, clientId, dateRange, aoAgir }: { itens: readonly Descoberta[]; clientId: string; dateRange: DateRangeState; aoAgir: (local: string) => void }) {
+  return (
+    <section className="nx-cinco-resto" aria-label="Mais descobertas do período" data-peca="mais-descobertas">
+      <h3 className="nx-cinco-resto__titulo">Mais descobertas do período</h3>
+      <div className="nx-cinco-resto__grade">
+        {itens.map((d) => {
+          const linha = d.acao.rota ? linhaDaRota(d.acao.rota) : undefined;
+          const local = d.acao.local;
+          return (
+            <article key={d.id} className="nx-cinco-resto__item" data-descoberta-extra={d.id}>
+              <NxSelo tom={d.tom} texto={d.selo} />
+              <p className="nx-cinco-resto__frase">{d.frase}</p>
+              <NxBarras barras={d.porque.barras} rotulo={d.porque.titulo} />
+              {d.porque.obs && <p className="nx-cinco-falta">{d.porque.obs}</p>}
+              {linha ? (
+                <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir a aba de origem" para={{ tela: linha, clientId, dateRange }} />
+              ) : local ? (
+                <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={() => aoAgir(local)} />
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -407,13 +519,16 @@ function CartaoDeNumeroIg({ n, icone }: { n: NumeroDoInstagram; icone: ReactNode
       valor={n.valorTexto}
       legenda={semMedida ? undefined : n.legenda}
       semMedida={semMedida}
-      variacao={n.textoDaVariacao ? { texto: n.textoDaVariacao } : null}
       extra={
         semMedida ? (
           <p className="nx-cinco-falta" data-falta-dado>{`Falta dado: ${n.motivo ?? "sem medida neste período"}`}</p>
-        ) : n.selo ? (
-          <NxSelo tom={n.selo.tom} texto={n.selo.texto} />
-        ) : null
+        ) : (
+          // O selo com a palavra e a pílula com o sinal ▲▼ na mesma linha (cartão mais baixo): nunca só a cor.
+          <div className="nx-ig-sinais">
+            {n.selo && <NxSelo tom={n.selo.tom} texto={n.selo.texto} />}
+            {n.textoDaVariacao && <NxPilulaVariacao texto={n.textoDaVariacao} />}
+          </div>
+        )
       }
       serie={n.serie ?? undefined}
     />
