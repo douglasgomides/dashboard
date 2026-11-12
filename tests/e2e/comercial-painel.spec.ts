@@ -1,8 +1,10 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
+import { abrirVerTudo } from "./apoio-cinco-segundos";
 
 // Telas Comercial e pacientes no desenho do painel: números em cartões no topo, gráfico principal em SVG, método
 // recolhido e nenhuma rolagem lateral. Dados fictícios.
+// 03.1.1.1 (plano 05): Pacientes passou ao formato 5 segundos; o funil desenhado continua o gráfico principal e os cartões antigos moram no "Ver tudo".
 
 const dia = (i: number) => new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
 const num = (valor: number | null, extra: Record<string, unknown> = {}) => ({ valor, fonte: "crm", motivo_sem_dado: valor == null ? "Sem dado no CRM." : null, responsavel: "comercial", ...extra });
@@ -37,16 +39,24 @@ for (const width of [375, 1440]) {
     await dados(context);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/pacientes?preset=30d`);
-    // A leitura vem primeiro (molde novo): o que aconteceu com número ao lado, só por regra, sem nome de paciente.
+    // 03.1.1.1 (plano 05): o veredito abre a tela e o primeiro número é Pessoas na mesa; os 4 cartões de pessoas, a leitura e a pizza moram no "Ver tudo".
+    const raiz = '[data-tela="pacientes"]';
+    await expect(page.locator(`${raiz} [data-peca="veredito"]:not([data-modo="carregando"])`)).toBeVisible();
+    const topo = page.locator(".nx-pagina__cartoes");
+    await expect(topo.locator('[data-peca="cartao-numero"]')).toHaveCount(3);
+    await expect(topo.locator('[data-peca="cartao-numero"]').first()).toContainText("Pessoas na mesa");
+    // Sem dado aparece como texto, nunca como zero (aqui Atendido não vem inteiro).
+    await expect(topo.getByText("Sem dado", { exact: true }).first()).toBeVisible();
+    expect(await semRolagemLateral(page)).toBe(true);
+    await abrirVerTudo(page, raiz);
     const leitura = page.getByRole("region", { name: "Leitura do período", exact: true });
     await expect(leitura.getByText("O que aconteceu", { exact: true })).toBeVisible();
     await expect(leitura.locator(".nx-leitura__num").first()).toBeVisible();
     await expect(leitura.getByText("Pessoa fictícia")).toHaveCount(0);
-    const numeros = page.locator(".nx-pagina__cartoes");
+    const numeros = page.locator(".nx-pagina__detalhe");
     await expect(numeros.locator(".nx-kpi")).toHaveCount(4);
     await expect(numeros.locator(".ws-metric-value").first()).toHaveText("120");
     await expect(numeros.locator(".ws-metric-value").first()).toBeVisible();
-    // Sem dado aparece como texto, nunca como zero.
     await expect(numeros.getByText("Sem dado", { exact: true })).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
 
@@ -68,12 +78,11 @@ for (const width of [375, 1440]) {
     await gaveta.getByRole("button", { name: "Ver quem são" }).click();
     await expect(page.getByRole("heading", { name: /^Fecharam: 9 pessoa/ })).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
-    // A pizza fica no detalhe recolhido: um toque abre.
-    await page.locator(".nx-pagina__detalhe > details > summary").click();
+    // A pizza fica no "Ver tudo", já aberto acima.
     await expect(page.locator(".nx-pizza svg[role=img]")).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
 
-    // O cartão abre a lista de quem são, também pelo teclado.
+    // O cartão (agora no "Ver tudo") abre a lista de quem são, também pelo teclado.
     const abrir = numeros.getByRole("button", { name: /^Agendaram: 30\. Ver quem são/ });
     await abrir.focus();
     await page.keyboard.press("Enter");

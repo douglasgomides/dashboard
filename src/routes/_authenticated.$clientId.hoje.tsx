@@ -17,21 +17,18 @@ import { NxNotaDoDia } from "@/components/nx/nota-do-dia";
 import type { SerieDiaria } from "@/components/nx/linha-de-30-dias";
 import { getAdsResumo, getClient, getRoiPeriodo } from "@/lib/client-data";
 import { resolveDateRange } from "@/lib/date-range";
-import { variacoes } from "@/lib/diagnostico-estrategico";
 import { dePacientesDoPeriodo, rotuloDoAnterior } from "@/lib/funil-desenhado";
 import { analyzeGrowth } from "@/lib/hub-conteudo";
 import { serieContinua } from "@/lib/linha-30-dias";
-import { lerPeriodo } from "@/lib/leitura-periodo";
 import { fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria } from "@/lib/leitura/fatos-resultados";
-import { fatosDePacientes } from "@/lib/leitura/fatos-pacientes";
-import { MIN_DIAS_SALDO, fatosDePublicacoes, fatosDoInstagram } from "@/lib/leitura/fatos-instagram";
-import { GUARDA_DE_TEXTO_DA_TELA_HOJE, acoesDaHoje, type AcaoDaHoje, type EntradaHoje, type FonteDoDado } from "@/lib/leitura/fatos-hoje";
-import { barrasDoPorque, checarDescoberta, checarFraseCinco, variacaoPropria, vereditoDosFatos, visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
+import { MIN_DIAS_SALDO } from "@/lib/leitura/fatos-instagram";
+import { descobertaDaAcao, fontesDoCliente, montarEntradaDaHoje } from "@/lib/leitura/entrada-da-hoje";
+import { GUARDA_DE_TEXTO_DA_TELA_HOJE, acoesDaHoje } from "@/lib/leitura/fatos-hoje";
+import { variacaoPropria, vereditoDosFatos, visiveisEResto } from "@/lib/leitura/cinco-segundos";
 import { custoPorConversa, etapasContraAntes, fatoresDaHoje, tituloDaVirada, vereditoDaHoje, type AdsDoPeriodo, type CrescimentoDoPeriodo, type EntradaCincoHoje } from "@/lib/leitura/cinco-hoje";
 import { notaDoDia } from "@/lib/leitura/nota-do-dia";
-import type { FatosDaTela, TelaId, TomFato } from "@/lib/leitura/tipos";
 import { ehEquipe } from "@/lib/registro-de-telas";
-import { ddmm, statusDoCliente, tomDaFonte, type LinhaFonte } from "@/lib/saude-fontes";
+import { ddmm, statusDoCliente } from "@/lib/saude-fontes";
 
 // O que fazer hoje (Phase 3.1.1, plano 05): a primeira versão da tela Hoje da Phase 9 (D-06), na mesma rota que a Phase 9
 // evolui. De 3 a 5 ações da semana por regra fixa (fatos-hoje.ts), com o número, quem resolve e o link para a aba de onde saíram.
@@ -45,24 +42,6 @@ const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 const CAMPOS_FUNIL = ["mandaram_mensagem", "agendaram", "fecharam"] as const;
 /** Os números diários que a nota e a prova da Hoje comparam com o período anterior (leads_novos é a etapa Virou lead). */
 const CAMPOS_DA_NOTA = ["mandaram_mensagem", "leads_novos", "agendaram", "fecharam"] as const;
-const C = "/_authenticated/$clientId";
-
-const ROTULO_DA_FONTE: Record<string, string> = { instagram: "Instagram", anuncios: "Anúncios", crm: "CRM", atendimento: "WhatsApp" };
-const ORDEM_DAS_FONTES = ["instagram", "anuncios", "crm", "atendimento"];
-
-/** A hora (de São Paulo) da última leitura bem-sucedida da fonte, "03:30", quando o banco a traz. */
-function horaDaFonte(l: LinhaFonte): string | null {
-  if (!l.last_success_at) return null;
-  const t = new Date(l.last_success_at);
-  return Number.isNaN(t.getTime()) ? null : new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(t);
-}
-
-/** Fontes com dado, na ordem do selo de frescura da casca, com o tom pela regra única (âmbar com mais de 1 dia). */
-function fontesDoCliente(linhas: LinhaFonte[] | undefined): (FonteDoDado & { hora: string | null })[] {
-  return ORDEM_DAS_FONTES.map((f) => (linhas ?? []).find((l) => l.fonte === f))
-    .filter((l): l is LinhaFonte => !!l && !!l.data_ate)
-    .map((l) => ({ fonte: ROTULO_DA_FONTE[l.fonte] ?? l.fonte, tom: tomDaFonte(l), ate: l.data_ate, hora: horaDaFonte(l) }));
-}
 
 /** O número grande do topo, logo abaixo da saudação: "4 ações esta semana" ("1 ação esta semana"; "Nenhuma ação esta semana"). */
 export function TotalDaSemana({ total }: { total: number }) {
@@ -188,37 +167,6 @@ function linhasDoVerTudo(e: EntradaCincoHoje, alcance: { atual: number | null; a
   return linhas;
 }
 
-/** O selo de cada tom da ação: sempre com o sinal (▲ ▼ ! ●) ao lado, nunca só a cor. */
-const SELO_DO_TOM: Record<TomFato, string> = { bom: "Bom sinal", atencao: "Atenção", ruim: "Para resolver", neutro: "Para conferir" };
-
-/**
- * Uma ação da Hoje vira uma descoberta (D-01): a frase é a legenda da regra (uma frase de até 90 caracteres, ou a manchete quando não há
- * legenda), o número em jogo vai no chip (só quando é um número medido e curto) e o "Por quê?" abre as barras da regra, completadas com
- * barras listradas "Falta dado" até 2 (nunca zero). A ação só navega para a aba de origem. null quando a frase não passa nas guardas.
- */
-function descobertaDaAcao(a: AcaoDaHoje): Descoberta | null {
-  const legenda = a.legenda?.trim();
-  const manchete = a.destaque.trim();
-  const frase = legenda && checarFraseCinco(legenda).length === 0 ? legenda : checarFraseCinco(manchete).length === 0 ? manchete : null;
-  if (!frase) return null;
-  const impacto = a.destaqueEhNumero && frase !== manchete && checarFraseCinco(manchete, 40).length === 0 ? manchete : undefined;
-  const d: Descoberta = {
-    id: a.id,
-    tom: a.tom,
-    selo: SELO_DO_TOM[a.tom],
-    frase,
-    quem: a.rotuloQuem,
-    ...(impacto ? { impacto } : {}),
-    acao: { rotulo: a.frase.replace(/\.$/, ""), rota: a.rota },
-    porque: {
-      titulo: "O que explica",
-      barras: barrasDoPorque(a.barras, a.destaqueEhNumero ? { rotulo: "Medido no período", exibicao: manchete } : null),
-      obs: `Só dados desta clínica · ${a.contexto}`,
-    },
-  };
-  return checarDescoberta(d).length === 0 ? d : null;
-}
-
 function HojePage() {
   const { clientId } = Route.useParams();
   const dateRangeState = clientLayoutRoute.useSearch();
@@ -298,36 +246,8 @@ function HojePage() {
 
   const leitura = useMemo(() => {
     if (!r) return null;
-    const feitos = fatosDeResultadosComAreas({ resultado: r, de: start, ate: end, hoje, funil: funil.funil, roi: roi.data ?? null });
-    // Fontes extras, só de dados que os hooks acima já trazem: Pacientes do período, publicações e Desempenho do Instagram.
-    const extras: { tela: TelaId; rota: string; fatos: FatosDaTela }[] = [];
-    if (pessoas.data) {
-      extras.push({ tela: "pacientes", rota: `${C}/pacientes`, fatos: fatosDePacientes({ dados: pessoas.data, de: start, ate: end, hoje, somaAtual: funil.atual, somaAntes: funil.antes }) });
-    }
-    if (temIg && posts.data) {
-      extras.push({ tela: "posts", rota: `${C}/posts`, fatos: fatosDePublicacoes({ de: start, ate: end, hoje, posts: posts.data }) });
-      if (metricas.data) {
-        // Desempenho: a mesma leitura de conteudo.tsx (função pura sobre os dias e os posts que useResultado já trouxe).
-        const dias = anterior.data ?? [];
-        const comp = variacoes(metricas.data, dias);
-        const cresc = analyzeGrowth(metricas.data, start, end);
-        extras.push({
-          tela: "conteudo",
-          rota: `${C}/conteudo`,
-          fatos: fatosDoInstagram(lerPeriodo({ diario: metricas.data, diarioAnterior: dias, posts: posts.data }), {
-            de: start,
-            ate: end,
-            hoje,
-            posts: posts.data,
-            diario: metricas.data,
-            anteriorMedido: dias.some((d: { reach?: number | null }) => d.reach != null),
-            variacaoLimitada: comp.limitada && comp.motivo ? { motivo: comp.motivo } : null,
-            crescimento: cresc ? { novos: cresc.novos, saidas: cresc.saidas, liquido: cresc.liquido, diasMedidos: cresc.diasMedidos } : null,
-          }),
-        });
-      }
-    }
-    const entrada: EntradaHoje = { fatos: feitos.fatos, porArea: feitos.porArea, insights: r.insights, limitacoes: r.limitacoes, extras, fontes };
+    // A EntradaHoje sai de entrada-da-hoje.ts, a mesma regra que o Fechamento do mês usa para as "3 apostas".
+    const entrada = montarEntradaDaHoje({ resultado: r, start, end, hoje, funil, roi: roi.data, pessoas: pessoas.data, posts: posts.data, metricas: metricas.data, anterior: anterior.data, temIg, fontes });
     return { entrada, hoje: acoesDaHoje(entrada) };
   }, [r, start, end, hoje, funil, roi.data, pessoas.data, posts.data, metricas.data, anterior.data, temIg, fontes]);
   // O veredito do topo (D-01, D-03): a nota do dia com a palavra da faixa e UMA frase. Quando o portão de Resultados nega, a página

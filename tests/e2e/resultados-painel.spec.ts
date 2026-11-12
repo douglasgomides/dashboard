@@ -158,8 +158,10 @@ for (const width of [375, 1440]) {
     await pessoas(context);
     await page.setViewportSize({ width, height: 900 });
 
-    // Pacientes: a leitura com número ao lado, antes dos cartões.
+    // Pacientes (03.1.1.1, plano 05): o veredito abre a tela e a leitura com número ao lado mora no "Ver tudo", que se abre depois de carregar.
     await page.goto(`/${CID}/pacientes?preset=30d`);
+    await expect(page.locator('[data-tela="pacientes"] [data-peca="veredito"]:not([data-modo="carregando"])')).toBeVisible();
+    await abrirVerTudo(page, '[data-tela="pacientes"]');
     const leitura = page.getByRole("region", { name: "Leitura do período", exact: true });
     await expect(leitura.getByText("O que aconteceu", { exact: true })).toBeVisible();
     await expect(leitura.locator(".nx-leitura__num").first()).toBeVisible();
