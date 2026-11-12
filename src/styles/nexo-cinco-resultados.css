@@ -71,7 +71,7 @@
 .app.product-workspace:not(.sap-workspace) .nx-aneis__roda {
   position: relative;
   display: block;
-  width: clamp(96px, 14vw, 168px);
+  width: clamp(96px, 9vw, 120px);
   max-width: 100%;
   aspect-ratio: 1;
 }
@@ -153,7 +153,7 @@
   gap: 4px;
   min-width: 0;
   /* Alinha a seta com o meio da roda (o resto da coluna é nome, antes e selo). */
-  padding-top: calc(clamp(96px, 14vw, 168px) / 2 + 12px - 14px);
+  padding-top: calc(clamp(96px, 9vw, 120px) / 2 + 12px - 14px);
   color: var(--muted-ink);
 }
 .app.product-workspace:not(.sap-workspace) .nx-aneis__seta {
@@ -248,6 +248,40 @@
     font-size: 11px;
     padding: 0 8px;
   }
+}
+
+/* ---------- Descobertas 4 e 5, dentro do "Ver tudo" ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-cinco-resto__titulo {
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-cinco-resto__item {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .nx-cinco-resto__item > * {
+  max-width: 100%;
+}
+.app.product-workspace:not(.sap-workspace) .nx-cinco-resto__item .nx-barras {
+  justify-self: stretch;
+}
+.app.product-workspace:not(.sap-workspace) .nx-cinco-resto__frase {
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 /* ---------- Você agora contra você antes ---------- */
@@ -429,12 +463,15 @@
   }
   .app.product-workspace:not(.sap-workspace) .nx-agora-antes__titulo {
     font-size: 18px;
-    line-height: 24px;
+    line-height: 22px;
   }
   .app.product-workspace:not(.sap-workspace) .nx-agora-antes__linha {
     grid-template-columns: minmax(0, 1fr) 104px;
-    gap: 4px 12px;
-    padding: 8px 0;
+    gap: 2px 12px;
+    padding: 4px 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__nota {
+    display: none;
   }
   .app.product-workspace:not(.sap-workspace) .nx-agora-antes__legenda-longa {
     display: none;
@@ -456,7 +493,7 @@
     display: block;
     margin: 0;
     font-size: 12px;
-    line-height: 16px;
+    line-height: 14px;
     font-weight: 500;
     color: var(--muted-ink);
     overflow-wrap: anywhere;
@@ -475,16 +512,123 @@
   }
 }
 
-/* Celular: o que Resultados dá ao veredito e aos cartões de dinheiro cabe na régua de 1,5 tela. */
+/* Descobertas de Resultados (régua de 1,5 tela, D-08): a ação e o "Por quê?" lado a lado, não um sobre o outro. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descoberta__acoes {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+/* Computador (régua de 1,5 tela, D-08): as medidas contra o passado em duas colunas. */
+@container nx-agora-antes (min-width: 760px) {
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__lista {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 32px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__linha {
+    grid-template-columns: minmax(0, 1fr) minmax(120px, 0.9fr);
+    gap: 8px 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__linha:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+}
+
+/* Computador: o texto do veredito à esquerda e os 3 anéis ao lado, para a primeira dobra caber na régua de 1,5 tela. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito {
+  container-type: inline-size;
+  container-name: nx-veredito-resultados;
+}
+@container nx-veredito-resultados (min-width: 880px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito__corpo[data-tem-lado] {
+    grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+    align-items: center;
+    gap: 24px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito__lado {
+    order: 2;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito__frase {
+    font-size: 26px;
+    line-height: 32px;
+  }
+}
+
+/* Celular: o que Resultados dá ao veredito, aos cartões de dinheiro e às descobertas cabe na régua de 1,5 tela. */
 @media (max-width: 560px) {
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito__apoio {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-pagina__rotulo {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-pagina__pontos {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] {
+    gap: 6px;
+  }
+  /* Cartão sem medida: o "Falta dado: motivo" já diz tudo, então o "Sem dado" grande sai da vista no celular (continua para leitor de tela; nunca vira 0). */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-pagina__cartoes .nx-cartao.nx-faltou {
+    position: relative;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-pagina__cartoes .nx-cartao.nx-faltou .nx-numero {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito {
+    padding: 8px 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-aneis__anel {
+    padding: 4px 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-aneis__legenda {
+    display: none;
+  }
+
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descobertas__lista {
+    gap: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descobertas {
+    gap: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-resultados-ordem {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descobertas__titulo {
+    font-size: 18px;
+    line-height: 20px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descoberta {
+    padding: 8px 12px;
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descoberta__frase {
+    font-size: 15px;
+    line-height: 20px;
+  }
+  /* Selo, ação e "Por quê?" um pouco mais baixos no celular (40 px de toque), para as 3 descobertas caberem na régua. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descoberta .nx-selo {
+    font-size: 12px;
+    line-height: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descoberta .nx-acao-pilula {
+    min-height: 40px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descoberta .nx-acao-pilula__seta {
+    width: 36px;
+    height: 36px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descoberta__porque-botao {
+    min-height: 40px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito__texto > .nx-veredito__apoio {
     display: none;
   }
   .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-aneis__antes {
     display: none;
   }
   .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-pagina__cartoes .nx-cartao__icone,
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-pagina__cartoes .nx-cartao-selo,
   .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-pagina__cartoes .nx-linha30 {
     display: none;
   }

@@ -1,5 +1,22 @@
 import { test, expect } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
+import { abrirVerTudo } from "./apoio-cinco-segundos";
+
+// 03.1.1.1 (plano 03): Resultados da clínica passou ao formato 5 segundos. Os números de pessoas e o retorno do investimento moram no "Ver tudo"
+// (bloco "Anúncios e retorno do investimento"), por isso os testes de Resultados abrem os dois antes de ler. Nenhuma checagem de honestidade
+// foi afrouxada: números que faltam seguem sem virar zero, a falha da fonte financeira segue com "Tentar novamente", e o rótulo do custo, o selo
+// de confiança e a nota de defasagem seguem na tela.
+const RESULTADOS = '[data-tela="resultados"]';
+/** O cartão "Retorno do investimento" (um section do molde novo, sem nome de região): achado pelo título. */
+const retorno = (page: import("@playwright/test").Page) => page.locator("section.nx-card").filter({ has: page.getByRole("heading", { name: "Retorno do investimento", exact: true }) }).first();
+/** Abre o "Ver tudo" e, dentro dele, o bloco do retorno do investimento (os dois começam fechados). */
+async function abrirRetorno(page: import("@playwright/test").Page) {
+  // Só abre depois de a tela sair de "carregando": antes disso o "Ver tudo" ainda não existe e abrirVerTudo não faria nada.
+  await expect(page.locator(`${RESULTADOS} [data-peca="veredito"]:not([data-modo="carregando"])`)).toBeVisible();
+  await abrirVerTudo(page, RESULTADOS);
+  const bloco = page.locator(`${RESULTADOS} #anuncios-e-retorno`);
+  if (!(await bloco.evaluate((el) => (el as HTMLDetailsElement).open))) await bloco.locator("> summary").click();
+}
 
 const roi = { tem_anuncios: true, tem_crm: true, crm_provider: "kommo", rotulo_custo: "venda", investido: 6000, investido_aquisicao: 4500, investido_crescimento: 1500, investido_estimado: 0, leads: 240, leads_com_origem: 240, ganhos: 30, ganhos_com_valor: 0, receita: 0, ganho_identificavel: true, crm_compartilhado: false };
 
@@ -9,14 +26,20 @@ for (const width of [375, 1440]) {
     await context.route("**/rest/v1/rpc/roi_periodo", r => r.fulfill({ json: roi }));
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}?preset=7d`);
-    const results = page.getByRole("region", { name: "Retorno do investimento", exact: true });
+    // Os números vêm antes das recomendações: o veredito abre a tela, depois os cartões de dinheiro, depois (se houver) as descobertas.
+    await expect(page.locator(`${RESULTADOS} [data-peca="veredito"]`)).toBeVisible();
+    const emOrdem = await page.evaluate(() => {
+      const antes = (a: Element | null, b: Element | null) => !a || !b || !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+      const q = (s: string) => document.querySelector(s);
+      return antes(q('[data-peca="veredito"]'), q(".nx-pagina__cartoes")) && antes(q(".nx-pagina__cartoes"), q('[data-peca="descobertas"]'));
+    });
+    expect(emOrdem).toBe(true);
+    await abrirRetorno(page);
+    const results = retorno(page);
     await expect(results.locator(".ws-metric-value")).toHaveText([/4.500,00/, /1.500,00/, "240", "30"]);
-    await expect(results.locator(".ws-metric-value").first()).toBeInViewport();
     await expect(results.getByText(/Não dá pra calcular o retorno porque falta: preencher o valor da venda/)).toBeVisible();
-    await expect(results.getByRole("button", { name: /^Não dá pra ler:/ })).toBeVisible();
-    const next = page.getByRole("region", { name: "Por onde começar", exact: true });
-    expect(await results.evaluate(el => !!(el.compareDocumentPosition(document.querySelector('[aria-label="Por onde começar"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
-    await expect(next).toBeVisible();
+    // O selo do retorno virou uma etiqueta (NxTag) com o motivo no title, não mais um botão.
+    await expect(results.getByText("Retorno: Não dá pra ler", { exact: true })).toBeVisible();
     await expect(results.getByRole("list")).toHaveCount(0);
     await results.locator("summary").click();
     await expect(results.getByRole("list", { name: "O que falta para o retorno do investimento" }).locator(":scope > li")).toHaveCount(1);
@@ -36,12 +59,14 @@ test("missing sources do not become zero and a shared CRM shows its numbers with
   let shared = false;
   await context.route("**/rest/v1/rpc/roi_periodo", r => r.fulfill({ json: shared ? { ...roi, crm_compartilhado: true } : { ...roi, tem_anuncios: false, tem_crm: false } }));
   await page.goto(`/${CID}`);
-  const values = page.getByRole("region", { name: "Retorno do investimento", exact: true }).locator(".ws-metric-value");
+  await abrirRetorno(page);
+  const values = retorno(page).locator(".ws-metric-value");
   await expect(values).toHaveText(["sem dado", "sem dado", "sem dado", "sem dado"]);
   shared = true;
   await page.reload();
+  await abrirRetorno(page);
   await expect(values).toHaveText([/4.500,00/, /1.500,00/, "240", "30"]);
-  await expect(page.getByRole("region", { name: "Retorno do investimento", exact: true }).getByText(/CRM compartilhado com outro cliente: mesmos números/).first()).toBeVisible();
+  await expect(retorno(page).getByText(/CRM compartilhado com outro cliente: mesmos números/).first()).toBeVisible();
 });
 
 test("a failed financial source offers a working retry instead of a blank result or a fabricated zero", async ({ page, context }) => {
@@ -49,7 +74,8 @@ test("a failed financial source offers a working retry instead of a blank result
   let fail = true;
   await context.route("**/rest/v1/rpc/roi_periodo", r => fail ? r.fulfill({ status: 503, json: { message: "fictional failure" } }) : r.fulfill({ json: roi }));
   await page.goto(`/${CID}`);
-  const results = page.getByRole("region", { name: "Retorno do investimento", exact: true });
+  await abrirRetorno(page);
+  const results = retorno(page);
   await expect(results.getByRole("alert")).toBeVisible();
   await expect(results.locator(".ws-metric-value")).toHaveCount(0);
   fail = false;
@@ -61,7 +87,8 @@ test("ROI uses only acquisition spend, shows the chosen cost label, the confiden
   await mockAccount(context, "viewer");
   await context.route("**/rest/v1/rpc/roi_periodo", r => r.fulfill({ json: { ...roi, rotulo_custo: "paciente", leads_com_origem: 200, ganhos: 10, ganhos_com_valor: 10, receita: 9000, investido_estimado: 600 } }));
   await page.goto(`/${CID}`);
-  const results = page.getByRole("region", { name: "Retorno do investimento", exact: true });
+  await abrirRetorno(page);
+  const results = retorno(page);
   // (9.000 − 4.500) ÷ 4.500 = +100%. O crescimento (1.500) não entra. Custo = 4.500 ÷ 10.
   await expect(results.locator(".ws-metric-value")).toHaveText([/4.500,00/, /1.500,00/, /9.000,00/, "+100%", /450,00/]);
   await expect(results.getByText("Custo por paciente", { exact: true })).toBeVisible();

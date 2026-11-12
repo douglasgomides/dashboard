@@ -81,7 +81,7 @@ export function NxAneis({ aneis, series, rotuloDoAnterior }: NxAneisProps) {
       : [];
 
   return (
-    <section className="nx-aneis" data-peca="aneis" aria-label="Conversas, agendaram e fecharam contra o período anterior">
+    <section className="nx-aneis" data-peca="aneis" aria-label="Conversas, agendaram e fecharam contra o período anterior" title="marca = igual a antes · volta = passou de antes">
       <div className="nx-aneis__fila">
         {aneis.map((a, k) => {
           const aria = `${a.rotulo}: ${a.valor != null ? inteiro(a.valor) : "falta dado"}. ${a.variacao ? a.variacao.texto.replace("▲", "subiu").replace("▼", "caiu").replace("= igual", "igual") + " contra o período anterior" : "Sem período anterior para comparar"}.`;

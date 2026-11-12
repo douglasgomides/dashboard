@@ -8,6 +8,7 @@ import type { FatosDaTela } from "../src/lib/leitura/tipos";
 import {
   aneisDeResultados,
   cartoesDeDinheiro,
+  descobertasDeResultados,
   linhasAgoraContraAntes,
   medidasDoInstagram,
   retornoDaEntrada,
@@ -287,6 +288,84 @@ const entrada = (parte: Partial<EntradaCincoResultados> = {}): EntradaCincoResul
   assert.equal(retornoDaEntrada({ calculavel: false, retornoPorReal: null, motivoFinal: "sem_investimento", itens: [] })?.motivo, "sem anúncio de aquisição no período");
   assert.equal(retornoDaEntrada({ calculavel: false, retornoPorReal: null, motivoFinal: "item", itens: [item("crm", false)] })?.equipeInformaValor, false);
   assert.equal(retornoDaEntrada(null), null);
+}
+// ---------------------------------------------------------------- descobertas
+{
+  const completa = entrada({
+    // Conversas 150 contra 100 (sobe), agendaram 60 contra 80, fecharam 18 contra 36 (cai); anúncio: gasto 900 contra 1000 com 100 conversas.
+    atual: { mandaram_mensagem: 150, agendaram: 60, fecharam: 18 },
+    antes: { mandaram_mensagem: 100, agendaram: 80, fecharam: 36 },
+    diario: [
+      { dia: "2026-10-03", mandaram_mensagem: 4 },
+      { dia: "2026-10-09", mandaram_mensagem: 11 },
+      { dia: "2026-10-10", mandaram_mensagem: null },
+    ],
+    ads: {
+      atual: { gasto: 900, conversas: 150 },
+      anterior: { gasto: 1000, conversas: 100 },
+      porDia: [
+        { dia: "2026-10-03", gasto: 30, conversas: 3 },
+        { dia: "2026-10-09", gasto: 24, conversas: 4 },
+        { dia: "2026-10-10", gasto: 20, conversas: 0 },
+      ],
+    },
+  });
+  const { itens, aviso } = descobertasDeResultados(completa, { equipe: false });
+  assert.equal(aviso, null);
+  assert.equal(itens.length, 4);
+  // Em ordem de impacto: o que piorou primeiro (anúncio por paciente +80%, fechados -50%), depois o que melhorou (conversas +50%, custo -40%).
+  assert.deepEqual(itens.map((d) => d.id), ["resultados-anuncio-por-paciente", "resultados-fecharam", "resultados-conversas", "resultados-custo-por-conversa"]);
+  assert.deepEqual(itens.map((d) => d.tom), ["ruim", "ruim", "bom", "bom"]);
+  for (const d of itens) {
+    assert.deepEqual(checarDescoberta(d), [], d.id);
+    assert.ok(!d.frase.includes("÷"), d.frase);
+    assert.ok(!(d.porque.obs ?? "").includes("÷"), d.porque.obs);
+    assert.equal(d.porque.barras.length >= 2 && d.porque.barras.length <= 3, true, d.id);
+    assert.ok(d.acao.rota, "só navega");
+    assert.deepEqual(checarFraseCinco(d.frase), []);
+    assert.doesNotMatch(`${d.frase} ${d.porque.obs ?? ""}`, /outras cl[ií]nicas|m[ée]dia da carteira|ranking/i);
+  }
+  const [pac, fe, con, cus] = itens;
+  assert.equal(fe.frase, "Fechados caíram de 36 para 18. A perda está depois da conversa.");
+  assert.equal(fe.selo, "Em queda");
+  assert.equal(fe.acao.rota, "/_authenticated/$clientId/pacientes");
+  // Por quê: conversas que agendam (60/150 contra 80/100) e agendados que fecham (18/60 contra 36/80), de cada 100.
+  assert.deepEqual(fe.porque.barras.map((b) => [b.rotulo, b.exibicao]), [["Conversas que agendam", "80 → 40"], ["Agendados que fecham", "45 → 30"]]);
+  assert.equal(sp(pac.frase), "Cada paciente fechado custou R$ 50 em anúncio. Antes, R$ 28.");
+  assert.deepEqual(pac.porque.barras.map((b) => b.rotulo), ["Gasto em anúncios", "Pacientes fechados"]);
+  assert.equal(pac.acao.rota, "/_authenticated/$clientId/anuncios");
+  assert.equal(pac.porque.obs, "Conta: gasto em anúncio dividido pelos fechados de todas as origens.");
+  assert.equal(sp(cus.frase), "Conversa a R$ 6,00: 40% mais barata que nos 30 dias antes (R$ 10,00).");
+  assert.deepEqual(cus.porque.barras.map((b) => b.rotulo), ["30 dias antes", "Agora", "Melhor dia (09/10)"]);
+  assert.equal(con.frase, "150 conversas: 50% a mais que nos 30 dias antes (100).");
+  assert.equal(con.porque.obs, "Dia mais forte da clínica: 09/10, com 11 conversas.");
+  assert.equal(con.acao.rota, "/_authenticated/$clientId/pacientes");
+  // Para a equipe, a ação de conversas leva a Atendimento.
+  assert.equal(descobertasDeResultados(completa, { equipe: true }).itens.find((d) => d.id === "resultados-conversas")?.acao.rota, "/_authenticated/$clientId/atendimento");
+}
+{
+  // Base pequena: a taxa que não tem base nos dois períodos vira barra listrada "Falta dado" (nunca zero).
+  const pequena = entrada({ atual: { mandaram_mensagem: 20, agendaram: 10, fecharam: 4 }, antes: { mandaram_mensagem: 40, agendaram: 30, fecharam: 12 } });
+  const fe = descobertasDeResultados(pequena, { equipe: false }).itens.find((d) => d.id === "resultados-fecharam")!;
+  assert.ok(fe, "fechados caíram: continua descoberta");
+  assert.equal(fe.porque.barras[0].faltou, true, "20 conversas está abaixo da base do funil");
+  assert.equal(fe.porque.barras[0].exibicao, "Falta dado");
+  assert.deepEqual(checarDescoberta(fe), []);
+}
+{
+  // Poucas descobertas: mostra o que existe e o motivo, nunca inventa. Sem anúncios nem comparação de fechados, só sobra conversas.
+  const pouco = entrada({ antes: { mandaram_mensagem: 100, agendaram: null, fecharam: null } });
+  const r = descobertasDeResultados(pouco, { equipe: false });
+  assert.deepEqual(r.itens.map((d) => d.id), ["resultados-conversas"]);
+  assert.equal(r.aviso, "Poucas descobertas neste período: faltam os fechados do período anterior.");
+  assert.ok(r.aviso!.length <= 90);
+  // Tudo igual a antes: nada para dizer, com o motivo honesto.
+  const igual = descobertasDeResultados(entrada({ atual: { mandaram_mensagem: 100, agendaram: 80, fecharam: 36 }, antes: { mandaram_mensagem: 100, agendaram: 80, fecharam: 36 } }), { equipe: false });
+  assert.deepEqual(igual.itens, []);
+  assert.match(igual.aviso ?? "", /^Poucas descobertas neste período: /);
+  // Portão negado: nenhuma descoberta e nenhum aviso (a tela diz "Falta dado: motivo").
+  assert.deepEqual(descobertasDeResultados(entrada({ fatos: fatos(false) }), { equipe: false }), { itens: [], aviso: null });
+  assert.deepEqual(descobertasDeResultados(entrada({ fatos: null }), { equipe: false }), { itens: [], aviso: null });
 }
 void checarDescoberta;
 

@@ -6,15 +6,18 @@ import { useResultado } from "@/hooks/use-resultado";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
 import { useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
-import { NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
 import { NxAneis } from "@/components/nx/aneis";
 import { NxAgoraContraAntes } from "@/components/nx/agora-contra-antes";
-import { NxCartaoNumero } from "@/components/nx/cartoes";
+import { NxAcaoPilula, NxBarras, NxCartaoNumero } from "@/components/nx/cartoes";
+import { linhaDaRota } from "@/components/nx/hoje";
+import type { DateRangeState } from "@/lib/date-range";
 import { useClientRole } from "@/hooks/use-client-role";
 import { ehEquipe } from "@/lib/registro-de-telas";
 import type { SerieDiaria } from "@/components/nx/linha-de-30-dias";
 import { serieContinua } from "@/lib/linha-30-dias";
-import { aneisDeResultados, cartoesDeDinheiro, linhasAgoraContraAntes, medidasDoInstagram, retornoDaEntrada, vereditoDeResultados, type CartaoDeDinheiro, type ChaveDoFunil, type EntradaCincoResultados, type LinhaDoInstagram } from "@/lib/leitura/cinco-resultados";
+import { visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
+import { aneisDeResultados, cartoesDeDinheiro, descobertasDeResultados, linhasAgoraContraAntes, medidasDoInstagram, retornoDaEntrada, vereditoDeResultados, type CartaoDeDinheiro, type ChaveDoFunil, type EntradaCincoResultados, type LinhaDoInstagram } from "@/lib/leitura/cinco-resultados";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido } from "@/components/nx/blocos";
 import { fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria, variacaoPct } from "@/lib/leitura/fatos-resultados";
 import { resumirClinica } from "@/lib/leitura/resumo-clinica";
@@ -766,6 +769,12 @@ function Resultados({
   const aneis = useMemo(() => aneisDeResultados(entrada), [entrada]);
   const linhasAgora = useMemo(() => linhasAgoraContraAntes(entrada), [entrada]);
   const dinheiro = useMemo(() => cartoesDeDinheiro(entrada), [entrada]);
+  // Descobertas (3 a 5, só com a própria clínica): as 3 primeiras à vista, as outras no começo do "Ver tudo". A ação de conversas muda com o papel.
+  const papel = useClientRole(clientId);
+  const equipe = !papel.carregando && ehEquipe({ isAdmin, papel: papel.papel });
+  const dateRange = clientLayoutRoute.useSearch();
+  const descobertas = useMemo(() => descobertasDeResultados(entrada, { equipe }), [entrada, equipe]);
+  const { visiveis, resto } = visiveisEResto(descobertas.itens);
   // A linha de 30 dias de cada anel: só os dias fechados, com buraco (nunca zero) onde o dia não veio.
   const series = useMemo(() => {
     const linhas = linhasDia.filter((l) => l.dia <= comparacao.fimFechado);
@@ -778,6 +787,7 @@ function Resultados({
 
   const detalhe = (
     <div className="nexo-results-overview">
+      {resto.length > 0 && <MaisDescobertas itens={resto} clientId={clientId} dateRange={dateRange} />}
       <div className="nx-grade nx-grade--4">{cartoesAntigos.map((c, k) => <Fragment key={k}>{c}</Fragment>)}</div>
       {principalAntigo.length >= 3 && (
         <NxCard nivel={2} icone={ic(MessageCircle)} titulo="Contatos e agendamentos por dia" subtitulo={`${periodLabel} · pessoas que chamaram (eixo da esquerda) e agendamentos (eixo da direita)`}>
@@ -976,10 +986,47 @@ function Resultados({
       }
       cartoes={carregandoFontes ? undefined : [<CartaoDeDinheiroNx key="r" c={dinheiro[0]} clientId={clientId} />, <CartaoDeDinheiroNx key="g" c={dinheiro[1]} clientId={clientId} />, <CartaoDeDinheiroNx key="p" c={dinheiro[2]} clientId={clientId} />]}
       principal={carregandoFontes ? undefined : <NxAgoraContraAntes linhas={linhasAgora} />}
+      descobertas={
+        carregandoFontes || veredito?.tipo !== "veredito" ? undefined : (
+          <NxDescobertas
+            titulo="O que os números dizem"
+            apoio={<p className={descobertas.aviso ? "nx-cinco-falta" : "nx-cinco-falta nx-resultados-ordem"}>{descobertas.aviso ?? "Em ordem de impacto"}</p>}
+            itens={visiveis}
+            clientId={clientId}
+            dateRange={dateRange}
+          />
+        )
+      }
       leitura={<LeituraDaTela fatos={leitura.fatos} resumo={leitura.resumo} carregando={carregandoFontes} semSelo />}
-      resumoDoVerTudo="Tudo o que esta tela mostrava, com a tabela e os relatórios"
+      resumoDoVerTudo="Tudo o que esta tela mostrava"
       detalhe={detalhe}
     />
+  );
+}
+
+/**
+ * As descobertas que passam das 3 à vista (4 e 5) moram no "Ver tudo", já com os fatores do "Por quê?" abertos (nada some, e nada disputa a
+ * primeira dobra). Só navegam: a ação é o mesmo link da descoberta à vista.
+ */
+function MaisDescobertas({ itens, clientId, dateRange }: { itens: readonly Descoberta[]; clientId: string; dateRange?: DateRangeState }) {
+  return (
+    <section className="nx-cinco-resto" aria-label="Mais descobertas do período" data-peca="mais-descobertas">
+      <h3 className="nx-cinco-resto__titulo">Mais descobertas do período</h3>
+      <div className="nx-cinco-resto__grade">
+        {itens.map((d) => {
+          const linha = d.acao.rota ? linhaDaRota(d.acao.rota) : undefined;
+          return (
+            <article key={d.id} className="nx-cinco-resto__item" data-descoberta-extra={d.id}>
+              <NxSelo tom={d.tom} texto={d.selo} />
+              <p className="nx-cinco-resto__frase">{d.frase}</p>
+              <NxBarras barras={d.porque.barras} rotulo={d.porque.titulo} />
+              {d.porque.obs && <p className="nx-cinco-falta">{d.porque.obs}</p>}
+              {linha && <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir a aba de origem" para={{ tela: linha, clientId, dateRange }} />}
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -1030,9 +1077,6 @@ function CartaoDeDinheiroNx({ c, clientId }: { c: CartaoDeDinheiro; clientId: st
         ) : c.selo && !c.variacao ? (
           // Valor medido, mas sem período anterior para comparar: a falta é dita em cinza (nunca um 0% de mentira).
           <p className="nx-cinco-falta" data-falta-dado>{`${c.selo.texto}`}</p>
-        ) : c.selo ? (
-          // No celular o selo repete a pílula de variação (sinal e palavra) e sai para a tela caber na régua de 1,5 tela.
-          <span className="nx-cartao-selo"><NxSelo tom={c.selo.tom} texto={c.selo.texto} /></span>
         ) : undefined
       }
     />

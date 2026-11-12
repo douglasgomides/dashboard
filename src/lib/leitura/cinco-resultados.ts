@@ -5,8 +5,8 @@
 import { LIMITES } from "@/lib/limites";
 import { serieContinua } from "@/lib/linha-30-dias";
 import type { Roi } from "@/lib/roi";
-import { variacaoPropria, vereditoDosFatos, checarFraseCinco, textoDaFrase, type ParteDaFrase, type VariacaoPropria, type Veredito } from "./cinco-segundos";
-import type { FatosDaTela, TomFato } from "./tipos";
+import { variacaoPropria, vereditoDosFatos, checarDescoberta, checarFraseCinco, textoDaFrase, type Descoberta, type ParteDaFrase, type VariacaoPropria, type Veredito } from "./cinco-segundos";
+import type { BarraDoFato, FatosDaTela, TomFato } from "./tipos";
 
 /** Muda quando uma regra de Resultados no formato 5 segundos muda. */
 export const VERSAO_REGRAS_CINCO_RESULTADOS = 1;
@@ -439,6 +439,175 @@ function cartaoDeCusto(o: {
     equipeInformaValor: false,
     serie: o.serie ?? null,
   };
+}
+
+// ---------- descobertas ----------
+
+const ROTA_FUNIL = "/_authenticated/$clientId/pacientes";
+const ROTA_ANUNCIOS = "/_authenticated/$clientId/anuncios";
+const ROTA_ATENDIMENTO = "/_authenticated/$clientId/atendimento";
+/** Quantas descobertas Resultados mostra, no máximo (as 3 primeiras à vista, o resto em "Ver tudo"). */
+const MAXIMO_DE_DESCOBERTAS = 5;
+
+export interface DescobertasDeResultados {
+  /** Em ordem de impacto: o que piorou primeiro, depois pela maior mudança. Até 5. */
+  itens: Descoberta[];
+  /** "Poucas descobertas neste período: {motivo}." quando há menos de 3 (nunca inventa). null quando há 3 ou mais. */
+  aviso: string | null;
+}
+
+const barra = (rotulo: string, exibicao: string, fracao: number): BarraDoFato => ({ rotulo, exibicao, fracao: Math.max(0, Math.min(1, fracao)) });
+const barraQueFalta = (rotulo: string): BarraDoFato => ({ rotulo, exibicao: "Falta dado", fracao: 0, faltou: true });
+
+/** Taxa de passagem em % (de cada 100), só com a base mínima da etapa de partida nos dois períodos. */
+function taxaDaPassagem(de: number | null | undefined, para: number | null | undefined, base: number): number | null {
+  return de != null && para != null && de >= base && de > 0 && para <= de ? (para / de) * 100 : null;
+}
+
+/** Duas barras "antes → agora" de uma taxa. A que não tem base nos dois períodos é barra listrada "Falta dado" (nunca zero). */
+function barraDeTaxa(rotulo: string, antes: number | null, agora: number | null): BarraDoFato {
+  if (antes == null || agora == null) return barraQueFalta(rotulo);
+  return barra(rotulo, `${taxaTxt(antes)} → ${taxaTxt(agora)}`, agora / 100);
+}
+
+/**
+ * De 3 a 5 descobertas de Resultados, só com números da própria clínica: Fecharam, anúncio por paciente fechado, custo por conversa e
+ * conversas. Cada uma só entra com dado acima da base mínima nos dois períodos; "igual a antes" não é descoberta. Cada uma tem UMA ação que
+ * só navega e um "Por quê?" de 2 a 3 fatores em barra. Portão negado: nenhuma descoberta (a tela diz "Falta dado: motivo"). Toda frase passa
+ * em checarDescoberta; a que não passar sai (nunca vai para a tela).
+ */
+export function descobertasDeResultados(e: EntradaCincoResultados, opcoes: { equipe: boolean }): DescobertasDeResultados {
+  if (!e.fatos || !e.fatos.portao.ok) return { itens: [], aviso: null };
+  const [conversas, , fecharam] = aneisDeResultados(e);
+  const linhas = linhasAgoraContraAntes(e);
+  const [, , paciente] = cartoesDeDinheiro(e);
+  const gasto = cartoesDeDinheiro(e)[1];
+  const rotuloAntes = diasAntes(e.dias);
+  const candidatas: { d: Descoberta; impacto: number; ruim: boolean }[] = [];
+  const motivos: string[] = [];
+  const poe = (d: Descoberta, pctAbs: number) => {
+    if (checarDescoberta(d).length > 0) return;
+    candidatas.push({ d, impacto: pctAbs, ruim: d.tom === "ruim" });
+  };
+
+  // (a) Fecharam subiu ou caiu.
+  const vf = fecharam.variacao;
+  if (!vf) motivos.push("faltam os fechados do período anterior");
+  else if (vf.melhor !== null && fecharam.somaAtual != null && fecharam.somaAntes != null) {
+    const caiu = vf.melhor === false;
+    const conversasCaiu = conversas.variacao?.melhor === false;
+    const depoisDaConversa = caiu && conversas.variacao && !conversasCaiu ? " A perda está depois da conversa." : "";
+    const taxaAg = (k: "antes" | "agora") => taxaDaPassagem(k === "antes" ? e.antes.mandaram_mensagem : e.atual.mandaram_mensagem, k === "antes" ? e.antes.agendaram : e.atual.agendaram, BASE_DA_PASSAGEM.agendaram);
+    const taxaFe = (k: "antes" | "agora") => taxaDaPassagem(k === "antes" ? e.antes.agendaram : e.atual.agendaram, k === "antes" ? e.antes.fecharam : e.atual.fecharam, BASE_DA_PASSAGEM.fecharam);
+    const [a0, a1, f0, f1] = [taxaAg("antes"), taxaAg("agora"), taxaFe("antes"), taxaFe("agora")];
+    poe(
+      {
+        id: "resultados-fecharam",
+        tom: caiu ? "ruim" : "bom",
+        selo: caiu ? "Em queda" : "Em alta",
+        frase: `Fechados ${caiu ? "caíram" : "subiram"} de ${inteiro(fecharam.somaAntes)} para ${inteiro(fecharam.somaAtual)}.${depoisDaConversa}`,
+        impacto: `${inteiro(fecharam.somaAntes)} → ${inteiro(fecharam.somaAtual)} fechados`,
+        acao: { rotulo: "Ver o funil", rota: ROTA_FUNIL },
+        porque: {
+          titulo: "Quantos seguem, de cada 100",
+          barras: [barraDeTaxa("Conversas que agendam", a0 != null && a1 != null ? a0 : null, a0 != null && a1 != null ? a1 : null), barraDeTaxa("Agendados que fecham", f0 != null && f1 != null ? f0 : null, f0 != null && f1 != null ? f1 : null)],
+          obs: "Só números desta clínica, contra o período anterior.",
+        },
+      },
+      Math.abs(vf.pct),
+    );
+  }
+
+  // (b) Anúncio por paciente fechado ficou mais caro ou mais barato.
+  const vp = paciente.variacao;
+  if (!vp) motivos.push("falta o custo por paciente fechado de antes");
+  else if (vp.melhor !== null && paciente.valor != null && paciente.antes != null) {
+    const caro = vp.melhor === false;
+    const vg = gasto.variacao;
+    const vFechados = fecharam.variacao;
+    poe(
+      {
+        id: "resultados-anuncio-por-paciente",
+        tom: caro ? "ruim" : "bom",
+        selo: caro ? "Mais caro" : "Mais barato",
+        frase: `Cada paciente fechado custou ${reais(paciente.valor)} em anúncio. Antes, ${reais(paciente.antes)}.`,
+        acao: { rotulo: "Ver anúncios", rota: ROTA_ANUNCIOS },
+        porque: {
+          titulo: caro ? "De onde vem a alta" : "De onde vem a queda",
+          barras: [
+            gasto.valor != null && gasto.antes != null && vg ? barra("Gasto em anúncios", vg.texto, gasto.valor / gasto.antes) : barraQueFalta("Gasto em anúncios"),
+            fecharam.somaAtual != null && fecharam.somaAntes != null && vFechados ? barra("Pacientes fechados", vFechados.texto, fecharam.somaAtual / fecharam.somaAntes) : barraQueFalta("Pacientes fechados"),
+          ],
+          obs: "Conta: gasto em anúncio dividido pelos fechados de todas as origens.",
+        },
+      },
+      Math.abs(vp.pct),
+    );
+  }
+
+  // (c) Custo por conversa ficou mais barato ou mais caro, com o melhor dia da própria clínica.
+  const custo = linhas[1];
+  if (custo.faltaDado || custo.agora == null || custo.antes == null) motivos.push("faltam o gasto e as conversas dos anúncios");
+  else if (custo.melhor !== null) {
+    const barato = custo.melhor === true;
+    const vc = variacaoPropria(custo.agora, custo.antes, { menorEhMelhor: true })!;
+    const melhorDia = (e.ads?.porDia ?? [])
+      .filter((d) => d.gasto != null && d.conversas != null && d.conversas > 0)
+      .map((d) => ({ dia: d.dia, custo: (d.gasto as number) / (d.conversas as number) }))
+      .sort((a, b) => a.custo - b.custo)[0];
+    const topo = Math.max(custo.agora, custo.antes, melhorDia?.custo ?? 0);
+    poe(
+      {
+        id: "resultados-custo-por-conversa",
+        tom: barato ? "bom" : "ruim",
+        selo: barato ? "Mais barato" : "Mais caro",
+        frase: `Conversa a ${reais(custo.agora, 2)}: ${Math.abs(vc.pct)}% ${barato ? "mais barata" : "mais cara"} que nos ${rotuloAntes} (${reais(custo.antes, 2)}).`,
+        acao: { rotulo: "Ver anúncios", rota: ROTA_ANUNCIOS },
+        porque: {
+          titulo: "Custo por conversa",
+          barras: [
+            barra(rotuloAntes[0].toUpperCase() + rotuloAntes.slice(1), reais(custo.antes, 2), custo.antes / topo),
+            barra("Agora", reais(custo.agora, 2), custo.agora / topo),
+            ...(melhorDia ? [barra(`Melhor dia (${ddmm(melhorDia.dia)})`, reais(melhorDia.custo, 2), melhorDia.custo / topo)] : []),
+          ],
+        },
+      },
+      Math.abs(vc.pct),
+    );
+  }
+
+  // (d) Conversas subiram ou caíram, com o dia mais forte da própria clínica.
+  const vv = conversas.variacao;
+  if (!vv) motivos.push("faltam as conversas do período anterior");
+  else if (vv.melhor !== null && conversas.somaAtual != null && conversas.somaAntes != null) {
+    const subiu = vv.melhor === true;
+    const forte = e.diario.filter((d) => d.mandaram_mensagem != null).sort((a, b) => (b.mandaram_mensagem as number) - (a.mandaram_mensagem as number))[0];
+    const maior = Math.max(conversas.somaAtual, conversas.somaAntes);
+    poe(
+      {
+        id: "resultados-conversas",
+        tom: subiu ? "bom" : "ruim",
+        selo: subiu ? "Em alta" : "Em queda",
+        frase: `${inteiro(conversas.somaAtual)} conversas: ${Math.abs(vv.pct)}% ${subiu ? "a mais" : "a menos"} que nos ${rotuloAntes} (${inteiro(conversas.somaAntes)}).`,
+        acao: opcoes.equipe ? { rotulo: "Ver atendimento", rota: ROTA_ATENDIMENTO } : { rotulo: "Ver o funil", rota: ROTA_FUNIL },
+        porque: {
+          titulo: "Conversas",
+          barras: [barra("Agora", inteiro(conversas.somaAtual), conversas.somaAtual / maior), barra(rotuloAntes[0].toUpperCase() + rotuloAntes.slice(1), inteiro(conversas.somaAntes), conversas.somaAntes / maior)],
+          ...(forte ? { obs: `Dia mais forte da clínica: ${ddmm(forte.dia)}, com ${inteiro(forte.mandaram_mensagem as number)} conversas.` } : {}),
+        },
+      },
+      Math.abs(vv.pct),
+    );
+  }
+
+  // Em ordem de impacto: o que piorou primeiro, depois pela maior mudança (empate: a ordem em que foram achadas).
+  const itens = candidatas
+    .map((c, k) => ({ ...c, k }))
+    .sort((a, b) => Number(b.ruim) - Number(a.ruim) || b.impacto - a.impacto || a.k - b.k)
+    .slice(0, MAXIMO_DE_DESCOBERTAS)
+    .map((c) => c.d);
+  const aviso = itens.length >= 3 ? null : `Poucas descobertas neste período: ${motivos[0] ?? "os números ficaram iguais aos de antes"}.`;
+  return { itens, aviso };
 }
 
 /** O que falta para o retorno, em poucas palavras, pelo primeiro item que bloqueia (a mesma ordem do passo a passo de montarRoi). */

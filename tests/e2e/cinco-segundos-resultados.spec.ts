@@ -1,6 +1,6 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
-import { abrirVerTudo, cortesEm } from "./apoio-cinco-segundos";
+import { abrirVerTudo, conferirCincoSegundos, cortesEm } from "./apoio-cinco-segundos";
 import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, mockCrm, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 
 // Resultados da clínica no formato 5 segundos (Phase 03.1.1.1, plano 03): o veredito abre a tela com os 3 anéis (Conversas, Agendaram,
@@ -177,3 +177,50 @@ for (const perfil of ["viewer", "admin"] as const) {
     });
   }
 }
+
+// O formato 5 segundos (03.1.1.1, D-01, D-02, D-08): a mesma conferência de toda tela convertida, para o médico e para a equipe, no celular e no computador.
+for (const perfil of ["viewer", "admin"] as const) {
+  for (const janela of TELAS_DE_MEDIDA) {
+    test(`${perfil} a ${janela.width}x${janela.height}: veredito, até 3 números, de 3 a 5 descobertas, Ver tudo fechado, sem comparar clínicas e nada cortado`, async ({ page, context }) => {
+      await mockAccount(context, perfil);
+      await dadosDoSpec(context);
+      await page.setViewportSize(janela);
+      await page.goto(`/${CID}?preset=30d`);
+      await expect(aneis(page)).toHaveCount(3);
+      await expect(page.locator(`${RAIZ} [data-peca="descoberta"]`).first()).toBeVisible();
+
+      await conferirCincoSegundos(page, RAIZ);
+      expect(await semRolagemLateral(page)).toBe(true);
+      // A ação de conversas muda com o papel: a equipe vai para Atendimento, o médico para o funil. As duas só navegam.
+      const acoes = await page.locator(`${RAIZ} [data-peca="descoberta"] a.nx-acao-pilula__seta`).evaluateAll((els) => els.map((el) => new URL((el as HTMLAnchorElement).href).pathname));
+      expect(acoes).toContain(`/${CID}/anuncios`);
+      expect(acoes).toContain(`/${CID}/pacientes`);
+      expect(acoes.includes(`/${CID}/atendimento`)).toBe(perfil === "admin");
+    });
+  }
+}
+
+test("Resultados: nenhuma descoberta manda nada (só navega) e o Ver tudo guarda todo o conteúdo de antes", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await dadosDoSpec(context);
+  const escritas: string[] = [];
+  page.on("request", (req) => {
+    if (["GET", "HEAD", "OPTIONS"].includes(req.method())) return;
+    // A regra é sobre ESCREVER pelo botão: POST, PATCH ou DELETE em tabela de /rest/v1 (rpc é leitura; o log por rota não conta; /api/sync/manual
+    // é leitura de fontes que a própria tela já faz ao abrir, antes de qualquer clique).
+    const url = new URL(req.url());
+    if (url.pathname.startsWith("/rest/v1/") && !url.pathname.startsWith("/rest/v1/rpc/") && url.pathname !== "/rest/v1/rota_acessos") escritas.push(`${req.method()} ${url.pathname}`);
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}?preset=30d`);
+  await expect(page.locator(`${RAIZ} [data-peca="descoberta"]`).first()).toBeVisible();
+  for (const botao of await page.locator(`${RAIZ} button.nx-descoberta__porque-botao`).all()) await botao.click();
+  for (const anel of await aneis(page).all()) await anel.click();
+
+  // Ver tudo: a leitura, as análises, o Instagram, os anúncios e retorno, o método e o botão do relatório, todos com os mesmos ids de antes.
+  await abrirVerTudo(page, RAIZ);
+  for (const id of ["todas-analises", "instagram", "anuncios-e-retorno", "explicar", "metodo"]) await expect(page.locator(`${RAIZ} .nx-pagina__detalhe #${id}`), `#${id} continua na tela`).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /Baixar relatório PDF/ })).toHaveCount(1);
+  await expect(page.getByRole("region", { name: "Resumo da clínica", exact: true })).toBeVisible();
+  expect(escritas, "nada é gravado nem enviado").toEqual([]);
+});
