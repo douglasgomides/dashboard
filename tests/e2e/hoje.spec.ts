@@ -169,8 +169,17 @@ test("(c) com o Instagram parado há 10 dias: Sem leitura, para consertar e quem
   expect(await semRolagemLateral(page)).toBe(true);
   // O mesmo motivo que Resultados da clínica dá para os mesmos dados.
   await page.goto(`/${CID}?preset=30d`);
+  await abrirResumoDeResultados(page);
   await expect(page.getByRole("region", { name: "Resumo da clínica", exact: true }).getByText(/o Instagram está sem dado novo desde \d{2}\/\d{2}/)).toBeVisible();
 });
+
+/** Resultados (03.1.1.1-03): o resumo fica no "Ver tudo"; espera o veredito sair de "carregando" antes de abrir. */
+async function abrirResumoDeResultados(page: import("@playwright/test").Page) {
+  const v = page.locator('[data-tela="resultados"] [data-peca="veredito"]');
+  await expect(v).toBeVisible();
+  await expect(v).not.toHaveAttribute("data-modo", "carregando");
+  await abrirVerTudo(page, '[data-tela="resultados"]');
+}
 
 /** Poucos posts, todos do mesmo formato (menos que a amostra mínima de comparação): só rendem fatos de uma ação ou duas. */
 const POUCOS_POSTS = Array.from({ length: 6 }, (_, i) => ({
@@ -256,8 +265,8 @@ test("(f) a primeira descoberta da Hoje é a mesma frase do Próximo passo de Re
   await dadosRealistas(context);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}?preset=30d`);
-  // O Próximo passo de Resultados pode estar à vista ou dentro do "Ver tudo" (quando Resultados passar ao formato 5 segundos): abre se existir.
-  await abrirVerTudo(page, '[data-tela="resultados"]');
+  // O Próximo passo de Resultados fica dentro do "Ver tudo" (03.1.1.1-03).
+  await abrirResumoDeResultados(page);
   const resumo = page.getByRole("region", { name: "Resumo da clínica", exact: true });
   const daSemana = resumo.locator(".nx-leitura__linha", { has: page.getByText("Próximo passo", { exact: true }) }).locator(".nx-acao-pilula__texto");
   await expect(daSemana).toBeVisible();
