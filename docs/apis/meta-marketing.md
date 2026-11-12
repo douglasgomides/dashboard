@@ -57,9 +57,12 @@ Contas sem token próprio são lidas pela Windsor (`meta-ads-sync.ts`). Ver [win
 - **Cabeçalhos (verificado):** `X-Business-Use-Case` (`call_count`, `total_cputime`, `total_time`, `estimated_time_to_regain_access`),
   `X-FB-Ads-Insights-Throttle` (`app_id_util_pct`, `acc_id_util_pct`, `ads_api_access_tier`) e `X-Ad-Account-Usage`. A doc pede
   "Add a back-off mechanism to slow down or pause your /insights queries when you come close to hitting 100%".
-- **O código não lê nenhum desses cabeçalhos.** Erro de carga (`code` 1/2, 5xx, tempo) refaz em janelas de 2 dias
-  (`meta-ads-graph-sync.ts:223-262`); erro de limite (4/17/613/80000) **não** entra nessa regra e sobe direto: não multiplica chamadas,
-  mas também não espera o tempo pedido.
+- **Cabeçalhos e códigos de limite (`api/_lib/meta-limite.ts`):** uso acima de 90% ou código de limite pausa as chamadas daquele token (ou do
+  aplicativo, no código 4) pelo tempo que a Meta indica (10 min sem indicação) e a rodada seguinte tenta de novo; a pausa é da memória do
+  processo. Erro de carga (`code` 1/2, 5xx, tempo) refaz em janelas de 2 dias (`meta-ads-graph-sync.ts`, `buscarInsights`).
+- **A pausa não é erro de leitura (`src/lib/pausa-meta.ts`):** com o dado da fonte em dia (anúncios até ontem; Instagram dentro da folga de
+  2 dias) a pausa vai para `sync_status.motivo` com dono "meta" ("Atualizado até ontem · a Meta pediu uma pausa; a próxima rodada tenta de
+  novo.") e **não** para `last_error`, que o banco lê como "a sincronização está falhando". Com o dado velho, continua erro.
 - **Dado demais por chamada (verificado):** "error_code = 100, CodeException (error subcode: 1487534)"; a doc manda reduzir período ou
   campos. O código trata "reduce the amount of data" como erro de carga.
 - **Paginação:** segue `paging.next` com trava de host; teto de 20 páginas dá erro em vez de cortar. Diagnóstico (`limit=100`,
@@ -85,11 +88,11 @@ Contas sem token próprio são lidas pela Windsor (`meta-ads-sync.ts`). Ver [win
 | Janela de atribuição deve bater com o Gerenciador | Sim (não passa janela; a Meta ignora `use_unified_attribution_setting` desde 10/06/2025) | `meta-ads-graph-sync.ts:126-146` |
 | Números revisados até 28 dias | Sim (relê 30 dias) | `api/sync/meta-ads.ts` |
 | Fuso da conta × UTC em `since/until` | Parcial (só a borda de hoje) | `meta-ads-graph-sync.ts:299-301` |
-| Limite de chamadas (4/17/613/80000) e cabeçalhos de uso | **Não** | `meta-ads-graph-sync.ts:150-155, 223` |
+| Limite de chamadas (4/17/613/80000) e cabeçalhos de uso | **Sim** (pausa por token; pausa com dado em dia vira aviso, não erro) | `meta-limite.ts`; `pausa-meta.ts`; `anuncios-status.ts`; `sync-status.ts` |
 | Status "ok" quando uma conta ou parte do período falhou | **Sim** (status por conta, junta por cliente) | `anuncios-status.ts` |
 | Gasto de dia passado trocado por zero | **Sim** (pula e conta em "precisa_reconferir") | `anuncios-protecao.ts`; `meta-ads-graph-sync.ts:410` |
 | Motivo de conta parada sobrescrito pela outra conta | **Sim** (motivo fica na conta) | `meta-ads-graph-sync.ts:463-478`; `anuncios-status.ts` |
-| Mesma conta de anúncios ligada a dois clientes | **Não** (sem filtro por campanha; decisão de negócio) | `client_ad_accounts` |
+| Mesma conta de anúncios ligada a dois clientes | **Parcial** (a Meta é lida uma vez por rodada para a mesma conta e o mesmo token; o gasto continua inteiro em cada cliente, sem filtro por campanha: decisão de negócio) | `meta-ads-graph-sync.ts` (`leitorUmaVezPorConta`); `client_ad_accounts` |
 | Orçamento: no máximo 4 trocas por hora por conjunto | **Não** (erro 613 volta para a tela) | `anuncios-acoes.ts` |
 | Token vencido descoberto tarde | **Não** (sem `debug_token`) | `diagnostico-anuncios.ts` |
 
@@ -109,6 +112,7 @@ Contas sem token próprio são lidas pela Windsor (`meta-ads-sync.ts`). Ver [win
 | 30/10/2026 | Ninguém lia o limite de gastos; conta parava sem aviso | `diasAteOLimite` |
 | 21/10/2026 | Sync regravou o dia 21/09 com gasto zero em 4 clientes e registrou "ok" | `anuncios-protecao.ts` |
 | 09–11/2026 | Uma conta parada há 39 dias e outra desde 01/2026 com status "ok" | `anuncios-status.ts` (status por conta) |
+| 12/11/2026 | Conta de anúncios em 202% do limite da Meta: a pausa de 29 min foi gravada como erro e a Carteira mostrou "Anúncios: erro" e nota 55, com o dado completo até 11/11 | `pausa-meta.ts`: pausa com dado em dia vira aviso (dono "meta"); `leitorUmaVezPorConta` corta a leitura repetida da mesma conta |
 
 ## Teste de contrato
 

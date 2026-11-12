@@ -13,6 +13,7 @@
  * As contas vêm de client_ad_accounts, não de clients.meta_ad_account_id: um
  * cliente pode ter mais de uma conta — a Dra. Juliana Paola tem duas.
  */
+import { createHash } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../src/integrations/supabase/types.js";
 import { diagnosticarContaAnuncios } from "./diagnostico-anuncios.js";
@@ -34,6 +35,8 @@ export type MetaAdsGraphEnv = {
   dateFrom?: string;
   dateTo?: string;
   clientId?: string;
+  /** Só para testes: cliente do banco já pronto (sem ele, o sync cria o seu a partir de supabaseUrl e da chave de serviço). */
+  supabase?: SupabaseClient<Database>;
 };
 
 export type MetaAdsGraphResult = {
@@ -280,10 +283,34 @@ async function lerLimiteDeGasto(contaId: string, token: string): Promise<{ spend
   return (await res.json()) as { spend_cap?: string; amount_spent?: string };
 }
 
+/**
+ * Lê uma vez por rodada o que depende só da conta de anúncios e do token, não do cliente. client_ad_accounts tem uma
+ * linha por cliente x conta: a mesma conta com o mesmo token em dois clientes (a conta própria da Doctor Creator e a
+ * de um médico, por exemplo) repetia a leitura inteira (insights de 30 dias, conjuntos, alcance de 7 dias, limite de
+ * gastos e diagnóstico) para cada linha, e cada repetição conta no limite de uso daquela conta na Meta. A resposta é a
+ * mesma; só o client_id das linhas gravadas muda, e isso continua por cliente.
+ */
+export function leitorUmaVezPorConta() {
+  const lidas = new Map<string, Promise<unknown>>();
+  return function umaVez<T>(tipo: string, contaId: string, token: string, extra: string, ler: () => Promise<T>): Promise<T> {
+    const conta = contaId.replace(/^act_/, "");
+    const chave = [tipo, conta, createHash("sha256").update(token).digest("hex").slice(0, 16), extra].join("|");
+    let p = lidas.get(chave) as Promise<T> | undefined;
+    if (!p) {
+      p = ler();
+      lidas.set(chave, p);
+    }
+    return p;
+  };
+}
+
 export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAdsGraphResult[]> {
-  const supabase: SupabaseClient<Database> = createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const supabase: SupabaseClient<Database> =
+    env.supabase ??
+    createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  const umaVez = leitorUmaVezPorConta();
 
   let consulta = supabase
     .from("client_ad_accounts")
@@ -335,8 +362,11 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
     }
 
     try {
-      const avisos: string[] = [];
-      const linhas = await buscarInsights(conta.ad_account_id, tokenConta, since, until, avisos);
+      const { linhas, avisos } = await umaVez("insights", conta.ad_account_id, tokenConta, `${since}|${until}`, async () => {
+        const avisosLidos: string[] = [];
+        const linhasLidas = await buscarInsights(conta.ad_account_id, tokenConta, since, until, avisosLidos);
+        return { linhas: linhasLidas, avisos: avisosLidos };
+      });
       for (const a of avisos) r.errors.push(a);
 
       // A Meta devolve uma linha por campanha por dia. Campanha repete em
@@ -379,7 +409,7 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
       let conjuntos = new Map<string, { otimizacoes: string[]; destinos: string[] }>();
       if (campanhas.size > 0) {
         try {
-          conjuntos = await buscarConjuntos(conta.ad_account_id, tokenConta);
+          conjuntos = await umaVez("conjuntos", conta.ad_account_id, tokenConta, "", () => buscarConjuntos(conta.ad_account_id, tokenConta));
         } catch (e) {
           r.errors.push(`conjuntos de anúncios (meta de otimização): ${e instanceof Error ? e.message : String(e)}`);
         }
@@ -422,7 +452,7 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
       // Frequência de 7 dias real (alcance da janela inteira). Extra: falha vira aviso, não derruba o sync.
       try {
         const padrao = janelaSeteDias();
-        const janela = (await buscarAlcanceJanela(conta.ad_account_id, tokenConta))
+        const janela = (await umaVez("alcance7d", conta.ad_account_id, tokenConta, "", () => buscarAlcanceJanela(conta.ad_account_id, tokenConta)))
           .filter((l) => l.campaign_id)
           .map((l) => ({
             client_id: conta.client_id,
@@ -447,7 +477,7 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
 
       // Limite de gastos da conta: dias que faltam pelo gasto médio dos últimos 7 dias (alerta em qualidade_dados).
       try {
-        const lim = await lerLimiteDeGasto(conta.ad_account_id, tokenConta);
+        const lim = await umaVez("limite", conta.ad_account_id, tokenConta, "", () => lerLimiteDeGasto(conta.ad_account_id, tokenConta));
         const desde7 = new Date(hoje.getTime() - 7 * 86400_000).toISOString().slice(0, 10);
         const gasto7 = diarias.filter((d) => d.date >= desde7).reduce((t, d) => t + Number(d.spend ?? 0), 0);
         const dias = lim ? diasAteOLimite(lim.spend_cap, lim.amount_spent, gasto7 / 7) : null;
@@ -474,7 +504,10 @@ export async function runMetaAdsGraphSync(env: MetaAdsGraphEnv): Promise<MetaAds
       const ultimo = ult?.[0]?.date ?? null;
       const limite = new Date(hoje.getTime() - 2 * 86400_000).toISOString().slice(0, 10);
       const parada = !ultimo || ultimo < limite;
-      const motivo = parada ? await diagnosticarContaAnuncios(conta.ad_account_id, tokenConta, r.errors.find((e) => e.startsWith("Meta insights"))) : null;
+      const erroInsights = r.errors.find((e) => e.startsWith("Meta insights"));
+      const motivo = parada
+        ? await umaVez("diagnostico", conta.ad_account_id, tokenConta, erroInsights ?? "", () => diagnosticarContaAnuncios(conta.ad_account_id, tokenConta, erroInsights))
+        : null;
       r.motivo = motivo?.texto ?? null;
       r.motivo_dono = motivo?.dono ?? null;
     } catch {
