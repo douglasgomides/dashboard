@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+- 12/11/2026 (João): nomes das etapas do funil comercial = Conversou · Virou lead · Atendido · Agendou · Fechou (decisão aberta 1 / D-06, só os nomes; o resto da Phase 9 segue aberto). Funil desenhado = sketch 001 variante A2; cartão = sketch 002 variante A (linha de 30 dias).
 
 - Roadmap: uma fase = um PR; 14 fases apesar de `granularity: coarse` (a regra do dono prevalece)
 - Roadmap: a primeira entrega de código é o log (Phase 2); o PR da Fase 0 abre depois do PR do log
