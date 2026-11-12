@@ -1,0 +1,229 @@
+/* Barras por dia com a faixa do normal (Phase 03.1.1.1, plano 06): uma barra por dia, a faixa cinza do normal e ▲/▼ escritos sobre os dias
+   fora dela. Só tokens de nexo-system.css (nenhum hex), peso de letra nunca abaixo de 500, nada cortado (molde k), o movimento só sem
+   reduced-motion. Escopo: a casca do Nexo fora do SAP. Cor nunca vai sozinha: a marca ▲/▼ é texto e a legenda diz o mesmo. */
+
+.app.product-workspace:not(.sap-workspace) .nx-dias {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__area {
+  position: relative;
+  height: 220px;
+  /* Espaço para o ▲/▼ sobre a barra mais alta. */
+  margin-top: 16px;
+  border-bottom: 1px solid var(--line-2);
+  cursor: pointer;
+  /* A página continua rolando na vertical enquanto o dedo anda na horizontal. */
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__area:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias[data-compacto] .nx-dias__area {
+  height: 96px;
+  margin-top: 12px;
+}
+
+/* Faixa do normal: retângulo cinza com borda tracejada. */
+.app.product-workspace:not(.sap-workspace) .nx-dias__faixa {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  min-height: 2px;
+  background: var(--line);
+  border-top: 1.5px dashed var(--muted-2);
+  border-bottom: 1.5px dashed var(--muted-2);
+  pointer-events: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__faixa-rotulo {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  z-index: 3;
+  max-width: calc(100% - 8px);
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--muted-ink);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Barras. */
+.app.product-workspace:not(.sap-workspace) .nx-dias__barras {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(2px, 0.5vw, 6px);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra i {
+  display: block;
+  width: 100%;
+  border-radius: 5px 5px 2px 2px;
+  background: var(--b4);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra[data-marca="acima"] i {
+  background: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra[data-marca="abaixo"] i {
+  background: var(--or);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra[data-destaque] i {
+  background: repeating-linear-gradient(135deg, var(--dn) 0 3px, var(--dn-bg) 3px 6px);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra[data-sel] i {
+  box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__marca {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  line-height: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra[data-marca="acima"] .nx-dias__marca {
+  color: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra[data-marca="abaixo"] .nx-dias__marca {
+  color: var(--or-ink);
+}
+
+/* Dica "dia 14/10: 685". Nas pontas não sai do cartão. */
+.app.product-workspace:not(.sap-workspace) .nx-dias__dica {
+  position: absolute;
+  z-index: 4;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--white);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  transform: translateX(-50%);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__dica[data-lado="esquerda"] {
+  transform: translateX(-12px);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__dica[data-lado="direita"] {
+  transform: translateX(calc(-100% + 12px));
+}
+@media (prefers-reduced-motion: no-preference) {
+  .app.product-workspace:not(.sap-workspace) .nx-dias__dica {
+    animation: nx-dias-entra 0.1s ease-out;
+  }
+  @keyframes nx-dias-entra {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+/* Eixo: datas dd/mm a cada poucos dias. */
+.app.product-workspace:not(.sap-workspace) .nx-dias__eixo {
+  display: flex;
+  gap: clamp(2px, 0.5vw, 6px);
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__eixo span {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--muted-ink);
+  white-space: nowrap;
+  overflow: visible;
+  font-variant-numeric: tabular-nums;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__falta {
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--muted-ink);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+/* Legenda: o que cada marca quer dizer, escrito (a cor nunca vai sozinha). */
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda i {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda i[data-tipo="faixa"] {
+  background: var(--line);
+  border: 1.5px dashed var(--muted-2);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda i[data-tipo="acima"] {
+  background: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda i[data-tipo="abaixo"] {
+  background: var(--or);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda i[data-tipo="normal"] {
+  background: var(--b4);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda i[data-tipo="destaque"] {
+  background: repeating-linear-gradient(135deg, var(--dn) 0 3px, var(--dn-bg) 3px 6px);
+}
+
+/* Celular: o gráfico é mais baixo (régua de 1,5 tela, D-08). */
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-dias__area {
+    height: 160px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dias[data-compacto] .nx-dias__area {
+    height: 80px;
+  }
+}
