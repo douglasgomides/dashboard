@@ -27,11 +27,14 @@ import { NxCard, NxTag, NxHBar } from "@/components/nx";
 import { NxBarrasLinha, NxFunil, NxAlertaCurto, NxNota, NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
+import { NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxReguaDosDias } from "@/components/nx/regua-dos-dias";
 import { serieContinua } from "@/lib/linha-30-dias";
 import { NxCarregando, NxErro, NxTabela } from "@/components/nx/blocos";
 import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { fatosDosAnuncios, type ResumoDeAnuncios } from "@/lib/leitura/fatos-anuncios";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import { compararCusto, custoDoTotal, custoPorDia, reais, vereditoDosAnuncios } from "@/lib/leitura/cinco-anuncios";
 
 export const Route = createFileRoute("/_authenticated/$clientId/anuncios")({
   component: AnunciosPage,
@@ -48,6 +51,8 @@ const porCem = (v: number | null) => (v == null ? "—" : (v * 100).toLocaleStri
 // Ícones no tamanho do ladrilho da prancha (17 px, traço 1,7).
 const ic = (Icon: typeof Eye) => <Icon size={17} strokeWidth={1.7} aria-hidden />;
 const ddmm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+/** Dias com conversa que a régua precisa para valer (com menos, "Falta dado"). */
+const MIN_DIAS_DA_REGUA = 5;
 const brlCurto = (v: number) => (v >= 1000 ? `R$ ${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil` : `R$ ${Math.round(v).toLocaleString("pt-BR")}`);
 
 /** Variação contra o período anterior, já pronta para o cartão. Abaixo de 5% é "estável", sem cor (igual ao comparativo). */
@@ -392,6 +397,8 @@ function AnunciosPage() {
   const serieConversas = useMemo(() => ({ rotulo: "conversas iniciadas", ...serieContinua((porDia ?? []).map((r) => ({ dia: String(r.dia), valor: n(r.conversas) }))) }), [porDia]);
   const limitacoes = useMemo(() => limitacoesDeAnuncios(diag), [diag]);
   const plano = useMemo(() => (diag ? planoDeAcao(diag) : []), [diag]);
+  // Formato 5 segundos (03.1.1.1, plano 09): os dias em números, para a régua, o custo por dia e o veredito. Só o que a tela já carregou.
+  const diasDeAnuncio = useMemo(() => (porDia ?? []).map((r) => ({ dia: String(r.dia).slice(0, 10), gasto: n(r.gasto), conversas: n(r.conversas) })), [porDia]);
 
   // Leitura por regra (sem consulta nova, sem IA): o diagnóstico, o plano e os dois totais que a tela já carregou.
   const comparacaoCarregando = resumoAtual.isLoading || resumoAnt.isLoading;
@@ -410,6 +417,12 @@ function AnunciosPage() {
             anterior: resumoEmNumeros(resumoAnt.data),
           }),
     [isLoading, diagnosticoQ.isError, comparacaoCarregando, start, end, hoje, diag, plano, resumoAtual.data, resumoAnt.data],
+  );
+
+  // O veredito do custo por conversa contra o período anterior da própria clínica (portão do rastreio incluído). null enquanto a leitura carrega.
+  const veredito = useMemo(
+    () => (fatos ? vereditoDosAnuncios({ fatos, atual: resumoEmNumeros(resumoAtual.data), anterior: resumoEmNumeros(resumoAnt.data) }) : null),
+    [fatos, resumoAtual.data, resumoAnt.data],
   );
 
   // Contagem em cinza da aba Anúncios na pasta (D-07): as campanhas do período que o diagnóstico já devolve; null quando a tela diz que
@@ -458,15 +471,17 @@ function AnunciosPage() {
     acao: <SyncButton clientId={clientId} alvo="anuncios" />,
   };
 
+  // Formato 5 segundos (03.1.1.1, plano 09): o veredito abre a tela; a leitura de antes mora no "Ver tudo" fechado.
   if (isLoading) {
-    return <PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={null} carregando semSelo />} corpo={<NxCarregando texto="Lendo os anúncios…" linhas={3} />} />;
+    return <PaginaNexo {...cabecalho} veredito={<NxVeredito veredito={null} carregando tela="anuncios" />} leitura={null} corpo={<NxCarregando texto="Lendo os anúncios…" linhas={3} />} />;
   }
 
   if (diagnosticoQ.isError || diasQ.isError)
     return (
       <PaginaNexo
         {...cabecalho}
-        leitura={<LeituraDaTela fatos={null} carregando={false} erro="A consulta falhou." semSelo />}
+        veredito={<NxVeredito veredito={null} carregando={false} erro="A consulta falhou." tela="anuncios" />}
+        leitura={null}
         corpo={
           <NxErro
             texto="Não foi possível carregar os números dos anúncios. A fonte está indisponível. Isso não significa que o investimento ou os resultados foram zero."
@@ -489,7 +504,9 @@ function AnunciosPage() {
     return (
       <PaginaNexo
         {...cabecalho}
+        veredito={<NxVeredito veredito={veredito} carregando={fatos == null} tela="anuncios" />}
         leitura={<LeituraDaTela fatos={fatos} carregando={comparacaoCarregando} semSelo />}
+        resumoDoVerTudo="a leitura do período"
         corpo={
           <div className="nexo-mkt nexo-anuncios">
             <MotivoParada clientId={clientId} />
@@ -538,6 +555,9 @@ function AnunciosPage() {
   const abrirPlano = () => {
     const el = recomendacoes.current;
     if (!el) return;
+    // O plano mora no "Ver tudo": abre o bloco de fora antes do de dentro.
+    const verTudo = document.getElementById("detalhes-anuncios");
+    if (verTudo instanceof HTMLDetailsElement) verTudo.open = true;
     el.open = true;
     el.scrollIntoView({ behavior: "smooth", block: "start" });
     el.querySelector("summary")?.focus();
@@ -596,20 +616,48 @@ function AnunciosPage() {
     />,
   ];
 
+  // A régua dos próprios dias: o custo por conversa de cada dia contra o custo de antes da própria clínica. Com o rastreio suspeito o custo não é
+  // confiável (D-05), então a régua não aparece. Poucos dias com conversa: "Falta dado", nunca uma régua de 2 pontos.
+  const totalDeAgora = resumoEmNumeros(resumoAtual.data) ?? { gasto: diag.gasto, conversas: diag.conversas };
+  const comparacaoDeCusto = compararCusto(totalDeAgora, resumoEmNumeros(resumoAnt.data));
+  const diasComCusto = custoPorDia(diasDeAnuncio);
+  const principal = suspeito ? undefined : diasComCusto.length >= MIN_DIAS_DA_REGUA ? (
+    <NxReguaDosDias dias={diasComCusto} custoAntes={comparacaoDeCusto?.antes ?? null} custoAgora={custoDoTotal(totalDeAgora)} formatar={reais} />
+  ) : (
+    <NxCard icone={ic(CalendarDays)} titulo="Seus dias, um a um" rotulo="Seus dias, um a um">
+      <p className="nx-cinco-falta" data-falta-dado>Falta dado: poucos dias com conversa para comparar um dia com o outro.</p>
+    </NxCard>
+  );
+
   return (
     <PaginaNexo
       {...cabecalho}
-      leitura={
+      veredito={
         <>
-          <LeituraDaTela fatos={fatos} carregando={comparacaoCarregando} semSelo />
-          {/* Avisos que mudam a leitura dos números ficam junto dela, curtos. */}
+          <NxVeredito veredito={veredito} carregando={fatos == null} tela="anuncios" />
+          {/* Avisos que mudam a leitura dos números ficam à vista, curtos, logo abaixo do veredito (honestidade antes de tudo). */}
           <MotivoParada clientId={clientId} />
           <ContaCompartilhada clientId={clientId} />
         </>
       }
-      cartoes={cartoes}
+      leitura={<LeituraDaTela fatos={fatos} carregando={comparacaoCarregando} semSelo />}
+      principal={principal}
+      corpo={
+        suspeito ? (
+          <NxAlertaCurto
+            titulo="As conversas dos anúncios não estão sendo contadas direito"
+            passo={rastreio?.acao?.texto ?? "Conferir o objetivo de cada campanha e o código de rastreio do link do WhatsApp."}
+            quem="Gestor de tráfego"
+          >
+            {textoRastreio}
+          </NxAlertaCurto>
+        ) : undefined
+      }
+      resumoDoVerTudo="números, gráfico por dia, campanhas, plano e comparativo"
       detalhe={
         <div className="nexo-mkt nexo-anuncios">
+          {/* Formato 5 segundos (MEDV-02): os 4 números de antes (com o "Cliques no link") moram aqui, no "Ver tudo", como sempre foram. */}
+          <div className="nx-grade nx-grade--4">{cartoes}</div>
           {/* Os cartões de Investido e Conversas já mostram a linha de 30 dias: o gráfico diário completo (barras e linha) vem para cá (nada some, D-03). */}
           <NxCard
             icone={ic(CalendarDays)}
@@ -628,16 +676,6 @@ function AnunciosPage() {
             />
           </NxCard>
           <NxNota>Gráfico por dia: barras = investido no dia, linha = conversas iniciadas. Dias em que a linha não acompanha a barra são os que merecem olhada.</NxNota>
-
-          {suspeito && (
-            <NxAlertaCurto
-              titulo="As conversas dos anúncios não estão sendo contadas direito"
-              passo={rastreio?.acao?.texto ?? "Conferir o objetivo de cada campanha e o código de rastreio do link do WhatsApp."}
-              quem="Gestor de tráfego"
-            >
-              {textoRastreio}
-            </NxAlertaCurto>
-          )}
 
           {soConversa && (
             <NxNota>
