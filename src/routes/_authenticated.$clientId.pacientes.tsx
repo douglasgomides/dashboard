@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useMediaQuery } from "@/hooks/use-is-mobile";
 import { Ajuda } from "@/components/visual";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
 import { CAMPOS_DIARIOS, useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
@@ -13,10 +14,11 @@ import { NxFunilDesenhado } from "@/components/nx/funil-desenhado";
 import { NxLinhaDe30Dias, type SerieDiaria } from "@/components/nx/linha-de-30-dias";
 import { serieContinua } from "@/lib/linha-30-dias";
 import { dePacientesDoPeriodo, rotuloDoAnterior, type VariacaoDaEtapa } from "@/lib/funil-desenhado";
-import { NxCartaoNumero } from "@/components/nx/cartoes";
-import { NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxAcaoPilula, NxBarras, NxCartaoNumero } from "@/components/nx/cartoes";
+import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
 import { NxPessoasNaMesa } from "@/components/nx/pessoas-na-mesa";
-import { pessoasNaMesa, vereditoDePacientes } from "@/lib/leitura/cinco-pacientes";
+import { ACOES_DE_PACIENTES, descobertasDePacientes, numerosDePacientes, pessoasNaMesa, vereditoDePacientes, type EntradaCincoPacientes, type NumeroDePacientes } from "@/lib/leitura/cinco-pacientes";
+import { visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido } from "@/components/nx/blocos";
 import { fatosDePacientes } from "@/lib/leitura/fatos-pacientes";
 import { periodosDeComparacao, somaDiaria, variacaoPct, type VariacaoPct } from "@/lib/leitura/fatos-resultados";
@@ -59,6 +61,7 @@ import {
 } from "@/lib/pacientes";
 
 import "@/styles/nexo-resultados.css";
+import "@/styles/nexo-cinco-resultados.css";
 import { NxCard, NxKpi, NxLinhaTempo, NxListRow, NxPizza, NxTag } from "@/components/nx";
 import { icT } from "@/components/nx/comercial-base";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
@@ -126,7 +129,10 @@ function useMetasDoMes(clientId: string, hoje: string) {
 
 function PacientesDoPeriodo() {
   const { clientId } = Route.useParams();
-  const { start, end } = resolveDateRange(clientLayoutRoute.useSearch());
+  // Celular: a grade de pessoas na mesa usa no máximo 40 pontos (a escala sobe um degrau), para o cartão caber na régua de 1,5 tela.
+  const estreito = useMediaQuery("(max-width: 560px)");
+  const dateRangeState = clientLayoutRoute.useSearch();
+  const { start, end } = resolveDateRange(dateRangeState);
   const { isAdmin } = useAuth();
   const hoje = hojeBrasilia();
   const [aberta, setAberta] = useState<ChaveNumero | null>(null);
@@ -285,39 +291,68 @@ function PacientesDoPeriodo() {
   // aparece uma vez só na página visível. A leitura de antes e tudo o que a tela mostrava moram no "Ver tudo", fechado.
   const carregandoFontes = diario.isPending || diarioAnterior.isPending || metas.carregando;
   const veredito = funilDesenhado ? vereditoDePacientes({ funil: funilDesenhado, fatos }) : null;
-  const mesa = funilDesenhado ? pessoasNaMesa(funilDesenhado) : { faltaDado: "O funil do período não veio." };
+  const entradaCinco: EntradaCincoPacientes | null = funilDesenhado
+    ? {
+        funil: funilDesenhado,
+        somas,
+        numeros: Object.fromEntries(CHAVES_NUMEROS.map((k) => [k, d.numeros[k]?.valor ?? null])),
+        fatos,
+        dias: comparacao.dias,
+      }
+    : null;
+  const [numeroMesa, numeroAgenda, numeroFecharam] = entradaCinco ? numerosDePacientes(entradaCinco) : [];
+  const mesa = funilDesenhado ? pessoasNaMesa(funilDesenhado, { maximoDePontos: estreito ? 40 : 100 }) : { faltaDado: "O funil do período não veio." };
   // "Ver quem está esperando" só abre uma lista que a tela já tem (D-04: nada é enviado): a dos leads, ou a de quem foi atendido.
   const listaDaMesa: ChaveNumero | null = d.listas?.leads_novos ? "leads_novos" : d.listas?.negociacao ? "negociacao" : null;
-  const cartaoDaMesa = (
-    <NxCartaoNumero
-      key="mesa"
-      icone="users"
-      titulo="Pessoas na mesa"
-      valor={mesa.faltaDado == null ? fmt(mesa.esperando) : null}
-      legenda={mesa.faltaDado == null ? "pessoas ficaram na mesa: viraram lead e ninguém atendeu ainda" : undefined}
-      semMedida={mesa.faltaDado != null}
-      extra={
-        <>
-          {mesa.faltaDado == null && <NxSelo tom="neutro" texto="Falta dado · sem período anterior" />}
-          <NxPessoasNaMesa mesa={mesa} />
-        </>
-      }
-      acao={
-        mesa.faltaDado == null && listaDaMesa ? (
-          <button type="button" className="nx-botao" onClick={() => mostrar(listaDaMesa)}>
-            Ver quem está esperando
-          </button>
-        ) : undefined
-      }
-    />
-  );
+  const cartoesCinco = [
+    numeroMesa && (
+      <CartaoDeNumeroCinco
+        key="mesa"
+        n={numeroMesa}
+        icone="users"
+        desenho={mesa.faltaDado == null ? <NxPessoasNaMesa mesa={mesa} /> : undefined}
+        acao={
+          mesa.faltaDado == null && listaDaMesa ? (
+            <button type="button" className="nx-botao" onClick={() => mostrar(listaDaMesa)}>
+              Ver quem está esperando
+            </button>
+          ) : undefined
+        }
+      />
+    ),
+    numeroAgenda && <CartaoDeNumeroCinco key="agendam" n={numeroAgenda} icone="calendar" />,
+    numeroFecharam && <CartaoDeNumeroCinco key="fecharam" n={numeroFecharam} icone="checklist" serie={seriesDosCartoes.fecharam} />,
+  ].filter(Boolean) as ReactNode[];
+
+  // Descobertas (de 0 a 5, só com a própria clínica): as 3 primeiras à vista, as outras no começo do "Ver tudo". Sem leitura, nenhuma.
+  const descobertas = entradaCinco ? descobertasDePacientes(entradaCinco) : { itens: [], aviso: null };
+  const { visiveis, resto } = visiveisEResto(descobertas.itens);
+  // A ação de uma descoberta só abre uma lista que a tela já tem ou leva ao funil desenhado (CHAM-07: nada é enviado nem gravado).
+  function agirNaDescoberta(local: string) {
+    const lista: Record<string, ChaveNumero> = { [ACOES_DE_PACIENTES.leads]: "leads_novos", [ACOES_DE_PACIENTES.agendaram]: "agendaram", [ACOES_DE_PACIENTES.fecharam]: "fecharam" };
+    const chave = lista[local];
+    if (chave && d.listas?.[chave]) mostrar(chave);
+    else if (local === ACOES_DE_PACIENTES.funil) document.getElementById("funil")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <PaginaNexo
       {...cabecalho}
       veredito={<NxVeredito veredito={veredito} carregando={carregandoFontes} tela="pacientes" />}
       leitura={<LeituraDaTela fatos={fatos} carregando={carregandoFontes} semSelo />}
-      cartoes={[cartaoDaMesa]}
+      cartoes={cartoesCinco.length ? (cartoesCinco as [ReactNode, ReactNode?, ReactNode?]) : undefined}
+      descobertas={
+        carregandoFontes || veredito?.tipo !== "veredito" ? undefined : (
+          <NxDescobertas
+            titulo="O que fazer com isso"
+            apoio={<p className={descobertas.aviso ? "nx-cinco-falta" : "nx-cinco-falta nx-pacientes-ordem"}>{descobertas.aviso ?? "Em ordem de impacto"}</p>}
+            itens={visiveis}
+            clientId={clientId}
+            dateRange={dateRangeState}
+            aoAgir={agirNaDescoberta}
+          />
+        )
+      }
       resumoDoVerTudo="etapa por etapa, listas e evolução por dia"
       principal={
         funilDesenhado ? (
@@ -357,6 +392,7 @@ function PacientesDoPeriodo() {
       }
       detalhe={
         <div className="nexo-results-overview">
+          {resto.length > 0 && <MaisDescobertasDoFunil itens={resto} aoAgir={agirNaDescoberta} />}
           {cartoes.length > 0 && <div className="nx-grade nx-grade--4">{cartoes}</div>}
           {linhasDia.length >= 3 && (
             <NxCard id="evolucao" nivel={2} icone={icT("chart-bar")} titulo="Evolução por dia" subtitulo={rotuloPeriodo}>
@@ -488,6 +524,56 @@ function PacientesDoPeriodo() {
         </div>
       }
     />
+  );
+}
+
+/**
+ * Um dos 3 números-chave no formato 5 segundos: o número, a legenda, a variação contra a PRÓPRIA clínica (sinal e palavra na pílula) e, sem
+ * comparação, o selo "Falta dado · sem período anterior" em cinza. Sem medida, "Falta dado: motivo" (nunca 0). Só apresentação.
+ */
+function CartaoDeNumeroCinco({ n, icone, serie, desenho, acao }: { n: NumeroDePacientes; icone: NomeIcone; serie?: SerieDiaria; desenho?: ReactNode; acao?: ReactNode }) {
+  const semMedida = n.valor == null && n.valorTexto == null;
+  return (
+    <NxCartaoNumero
+      icone={icone}
+      titulo={n.titulo}
+      valor={n.valorTexto ?? (n.valor != null ? fmt(n.valor) : null)}
+      legenda={semMedida ? undefined : n.legenda}
+      semMedida={semMedida}
+      variacao={n.textoDaVariacao ? { texto: n.textoDaVariacao } : null}
+      extra={
+        <>
+          {semMedida ? (
+            <p className="nx-cinco-falta" data-falta-dado>{`Falta dado: ${n.motivo ?? "sem medida neste período"}`}</p>
+          ) : !n.textoDaVariacao && n.selo ? (
+            <NxSelo tom={n.selo.tom} texto={n.selo.texto} />
+          ) : null}
+          {desenho}
+        </>
+      }
+      serie={serie}
+      acao={acao}
+    />
+  );
+}
+
+/** As descobertas que passam das 3 à vista (4 e 5) moram no "Ver tudo", já com os fatores do "Por quê?" abertos (nada some). Só abrem uma lista da tela. */
+function MaisDescobertasDoFunil({ itens, aoAgir }: { itens: readonly Descoberta[]; aoAgir: (local: string) => void }) {
+  return (
+    <section className="nx-cinco-resto" aria-label="Mais descobertas do período" data-peca="mais-descobertas">
+      <h3 className="nx-cinco-resto__titulo">Mais descobertas do período</h3>
+      <div className="nx-cinco-resto__grade">
+        {itens.map((d) => (
+          <article key={d.id} className="nx-cinco-resto__item" data-descoberta-extra={d.id}>
+            <NxSelo tom={d.tom} texto={d.selo} />
+            <p className="nx-cinco-resto__frase">{d.frase}</p>
+            <NxBarras barras={d.porque.barras} rotulo={d.porque.titulo} />
+            {d.porque.obs && <p className="nx-cinco-falta">{d.porque.obs}</p>}
+            {d.acao.local && <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={() => aoAgir(d.acao.local as string)} />}
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
