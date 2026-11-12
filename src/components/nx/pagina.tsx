@@ -104,7 +104,7 @@ export interface LeituraDaTelaProps {
   id?: string;
 }
 
-const SINAL: Record<TomFato, string> = { bom: "▲", ruim: "▼", atencao: "!", neutro: "●" };
+export const SINAL: Record<TomFato, string> = { bom: "▲", ruim: "▼", atencao: "!", neutro: "●" };
 
 function Linha({ rotulo, tom = "neutro", children }: { rotulo?: string; tom?: TomFato; children: ReactNode }) {
   return (

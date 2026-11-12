@@ -4,6 +4,7 @@ import type { TomFato } from "@/lib/leitura/tipos";
 import { LinkDoRegistro } from "@/components/menu-equipe";
 import { REGISTRO_DE_TELAS, juntadaDoCaminho, type TelaDoRegistro } from "@/lib/registro-de-telas";
 import { NxAcaoPilula, NxBarras, NxCartaoNumero } from "./cartoes";
+import { SINAL } from "./pagina";
 import "@/styles/nexo-hoje.css";
 
 // Peças da tela O que fazer hoje (Phase 3.1.1, plano 05, D-07), feitas sobre as peças de cartoes.tsx: saudação grande, chip de
@@ -50,6 +51,32 @@ export function NxChipEstado({ tom, texto, hora }: { tom: TomFato; texto: string
   );
 }
 
+// ---------- tom da ação e quem resolve ----------
+
+const NOME_DO_TOM: Record<TomFato, string> = { bom: "bom", atencao: "atenção", ruim: "ruim", neutro: "neutro" };
+
+/**
+ * O tom que a regra já calcula (bom, atenção, ruim, neutro), com sinal (▲ ! ▼ ●) e cor: nunca só a cor (D-07). O nome do tom é
+ * para leitor de tela ("Sinal: atenção"). Os sinais são os da leitura (SINAL de pagina.tsx).
+ */
+export function MarcaDoTom({ tom }: { tom: TomFato }) {
+  return (
+    <span className="nx-hoje__tom" data-tom={tom} role="img" aria-label={`Sinal: ${NOME_DO_TOM[tom]}`}>
+      <span aria-hidden>{SINAL[tom]}</span>
+    </span>
+  );
+}
+
+/** "Quem resolve" em chip pequeno com o nome ("Social media"); o rótulo fica só para leitor de tela (o textContent o mantém). */
+function QuemResolve({ nome }: { nome: string }) {
+  return (
+    <span className="nx-hoje__quem">
+      <span className="sr-only">Quem resolve: </span>
+      {nome}
+    </span>
+  );
+}
+
 // ---------- número em destaque ----------
 
 /** Até aqui o número cabe grande ("30 de 30 posts"); acima disso a manchete vai inteira, em tamanho de leitura. */
@@ -80,7 +107,10 @@ export function NxProximo({ acao, clientId, dateRange }: { acao: AcaoDaHoje } & 
   const valor = valorDoDestaque(acao);
   return (
     <section className="nx-proximo" data-acao-hoje={acao.id} data-peca="proximo" data-area-hoje={acao.areaHoje} data-familia-hoje={acao.familia} aria-label="Próximo">
-      <p className="nx-proximo__rotulo">Próximo</p>
+      <div className="nx-proximo__topo">
+        <p className="nx-proximo__rotulo">Próximo</p>
+        <MarcaDoTom tom={acao.tom} />
+      </div>
       <p className="nx-proximo__numero">
         <strong className={valor.curto ? "nx-proximo__valor" : "nx-proximo__valor nx-proximo__valor--texto"} data-numero-de-destaque data-manchete>
           {valor.texto}
@@ -94,7 +124,7 @@ export function NxProximo({ acao, clientId, dateRange }: { acao: AcaoDaHoje } & 
       {acao.barras && <NxBarras barras={acao.barras} />}
       <VerNumeros acao={acao} />
       <NxAcaoPilula frase={acao.frase} rotuloDaSeta="Abrir a aba de origem" para={linha ? { tela: linha, clientId, dateRange } : undefined} />
-      <p className="nx-proximo__quem">{`Quem resolve: ${acao.rotuloQuem}`}</p>
+      <QuemResolve nome={acao.rotuloQuem} />
     </section>
   );
 }
@@ -132,6 +162,7 @@ export function NxCartaoDaAcao({ acao, clientId, dateRange }: { acao: AcaoDaHoje
         legenda={acao.legenda ? <span data-numero-de-destaque>{acao.legenda}</span> : undefined}
         variacao={acao.outroNumero ? { texto: acao.outroNumero.exibicao } : null}
         abrir={juntada && primeira ? { tela: primeira, clientId, dateRange, rotulo: juntada.secao.rotulo } : undefined}
+        info={<MarcaDoTom tom={acao.tom} />}
         extra={
           <>
             {acao.barras && <NxBarras barras={acao.barras} />}
@@ -141,7 +172,7 @@ export function NxCartaoDaAcao({ acao, clientId, dateRange }: { acao: AcaoDaHoje
         acao={
           <>
             <NxAcaoPilula frase={acao.frase} rotuloDaSeta="Abrir a aba de origem" para={linha ? { tela: linha, clientId, dateRange } : undefined} />
-            <p className="nx-hoje__quem">{`Quem resolve: ${acao.rotuloQuem}`}</p>
+            <QuemResolve nome={acao.rotuloQuem} />
           </>
         }
       />

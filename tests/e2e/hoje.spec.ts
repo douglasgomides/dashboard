@@ -83,7 +83,23 @@ for (const perfil of ["viewer", "admin"] as const) {
       for (let k = 0; k < n; k++) {
         const acao = acoes(page).nth(k);
         await expect(acao.locator("strong").first(), `a ação ${k + 1} tem o número em strong`).toBeVisible();
-        await expect(acao.getByText(/Quem resolve:/).first()).toBeVisible();
+        // Tom da ação: sinal e cor (nunca só a cor), com o nome do tom para leitor de tela.
+        const marca = acao.locator(".nx-hoje__tom");
+        await expect(marca, `a ação ${k + 1} tem a marca do tom`).toHaveCount(1);
+        expect(["bom", "atencao", "ruim", "neutro"]).toContain(await marca.getAttribute("data-tom"));
+        expect((await marca.getAttribute("aria-label")) ?? "").toMatch(/^Sinal: /);
+        expect((await marca.innerText()).trim().length, "o sinal (glifo) não é vazio").toBeGreaterThan(0);
+        // "Quem resolve" em chip: o olho vê só o nome, o leitor de tela ouve "Quem resolve: nome".
+        const quem = acao.locator(".nx-hoje__quem");
+        await expect(quem).toBeVisible();
+        const visivel = await quem.evaluate((el) => {
+          const copia = el.cloneNode(true) as HTMLElement;
+          copia.querySelectorAll(".sr-only").forEach((x) => x.remove());
+          return (copia.textContent ?? "").trim();
+        });
+        expect(visivel.length, "o chip mostra o nome").toBeGreaterThan(0);
+        expect(visivel, "o texto visível do chip não repete o rótulo").not.toMatch(/Quem resolve/);
+        expect((await quem.textContent()) ?? "").toMatch(/^Quem resolve: \S/);
         const seta = acao.locator("a.nx-acao-pilula__seta");
         await expect(seta).toHaveCount(1);
         const href = (await seta.getAttribute("href"))!;
