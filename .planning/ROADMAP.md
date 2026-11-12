@@ -229,10 +229,26 @@ Plans:
 4. Fechamento do mês abre como história em cartões (sem envio real).
 5. Nada cortado, sem frase > 90 caracteres, respeitando as alturas já medidas; só regras (sem IA); sem SQL nem migration.
 **Depends on:** Phase 03.1.1
-**Plans:** 0 plans
+**Plans:** 8 plans (um PR só para a fase; no máximo 2 executores em paralelo, com arquivos disjuntos)
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 03.1.1.1 to break down)
+**Wave 1**
+- [ ] 03.1.1.1-01-PLAN.md — Tracer: peças compartilhadas dos 5 segundos (veredito, descobertas com "Por quê?", "Ver tudo" no PaginaNexo, conferidor de e2e) + Hoje com a nota do dia (D-03), 3 números, etapas contra antes e as 3 coisas da semana
+
+**Wave 2** *(blocked on Wave 1 completion; 02 e 03 em paralelo)*
+- [ ] 03.1.1.1-02-PLAN.md — Resultados da clínica: veredito com os 3 anéis, cartões de dinheiro, "Você agora contra você antes", descobertas, tudo o que existia em "Ver tudo"
+- [ ] 03.1.1.1-03-PLAN.md — Carteira por urgência: "N clínicas precisam de você hoje", ordem por problemas abertos, filtro por cor, painel lateral com a nota explicada e quem resolve, Modo TV
+
+**Wave 3** *(blocked on Wave 2 completion; 04 e 05 em paralelo)*
+- [ ] 03.1.1.1-04-PLAN.md — Do contato à venda: "Aqui você perde mais", "N pessoas ficaram na mesa" com pontos, funil A2 como prova, descobertas
+- [ ] 03.1.1.1-05-PLAN.md — Fechamento do mês: história em cartões em tela cheia aberta de Resultados (sem rota nova, sem envio)
+
+**Wave 4** *(blocked on Wave 3 completion; 06 e 07 em paralelo)*
+- [ ] 03.1.1.1-06-PLAN.md — Atendimento › Qualidade no molde: faixa do normal da própria clínica, dia fora marcado, dia cruzado com Instagram e anúncio, descobertas
+- [ ] 03.1.1.1-07-PLAN.md — Instagram › Desempenho: veredito, 3 números, "O que funciona" (formato, horário dos próprios posts, tema), descobertas
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 03.1.1.1-08-PLAN.md — Anúncios: custo por conversa com sinal honesto, régua dos próprios dias, dias de verba baixa; seção l) do molde; varredura final das 8 telas
 
 ### Phase 4: Pacote do template do WhatsApp à Meta
 
