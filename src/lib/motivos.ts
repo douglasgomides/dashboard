@@ -3,6 +3,7 @@
 // ou acesso revogado do lado do cliente. Este arquivo transforma o que sabemos em uma frase honesta.
 import { atrasoDaFonte, diasDeAtraso, ddmm, type LinhaFonte } from "@/lib/saude-fontes";
 import { statusDaFonte, type StatusFonte } from "@/lib/status-fonte";
+import { avisoDePausaMeta, ehSoPausaMeta } from "@/lib/pausa-meta";
 
 const dataBr = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
@@ -37,6 +38,9 @@ const NOME_FONTE: Record<string, string> = { instagram: "Instagram", anuncios: "
 export function motivoDoErro(fonte: string, erro: string): Motivo | null {
   const e = erro.toLowerCase();
   const nome = NOME_FONTE[fonte] ?? fonte;
+  // Pausa por limite de uso da Meta (sem outro erro junto): o dono é a Meta, não é falha nossa. Com o dado em dia o sync nem
+  // grava isso como erro (pausa-meta.ts); chega aqui quando a pausa já passou de 1 dia sem dado novo.
+  if (ehSoPausaMeta(erro)) return { texto: avisoDePausaMeta(null, ""), dono: "meta" };
   // Conta de anúncios que nenhuma via lê (sem token próprio e fora da Windsor): falta o acesso do dono da conta.
   if (/não lida: não tem token próprio/.test(e)) {
     return { texto: erro.replace(/\s+/g, " ").trim().slice(0, 400), dono: "cliente" };

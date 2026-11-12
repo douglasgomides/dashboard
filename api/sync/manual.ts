@@ -23,6 +23,7 @@ import { ingerirConversasClint } from "../_lib/conversas-clint.js";
 import { enriquecerContatosKommo } from "../_lib/kommo-contatos.js";
 import { cliquesDoLink } from "../_lib/shortio.js";
 import { recordSyncStatus, erroCurto, lerDadosAte, type FonteSync } from "../_lib/sync-status.js";
+import { primeiroErroReal } from "../../src/lib/pausa-meta.js";
 import { rodarConferencia, rodarEtapa, ETAPAS, type EtapaId, type Achado, type Verificado } from "../_lib/conferencia.js";
 import { resumirConversa } from "../_lib/resumo-conversa.js";
 import { rascunharSessao } from "../_lib/sessao-ia.js";
@@ -684,7 +685,8 @@ async function handler(req: VercelRequest, res: VercelResponse) {
         ...(r?.erros ?? []),
         ...(r?.contas ?? []).flatMap((c: { errors?: string[] }) => c.errors ?? []),
       ];
-      const erro = erroCurto(errosLista[0]);
+      // O primeiro erro que não é pausa da Meta (pausa junto com erro de verdade não esconde o de verdade).
+      const erro = erroCurto(primeiroErroReal(errosLista));
       const linhas: number = r?.linhas ?? r?.posts ?? r?.comentarios ?? r?.sessoes ?? 0;
       if (r?.nada_a_fazer) {
         return { ...r, ok: true, linhas: 0, erro: null, dados_ate: await lerDadosAte(admin, client_id as string, fonte) };
