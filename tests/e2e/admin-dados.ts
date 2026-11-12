@@ -11,7 +11,7 @@ export const CLINICAS = [
   { ...client, id: id(4), name: "Dra. Ana Souza", specialty: "Ginecologia", instagram_handle: "draanasouza" },
   { ...client, id: id(5), name: "Dr. Bruno Lima", specialty: "Ortopedia", instagram_handle: "drbrunolima" },
   { ...client, id: id(6), name: "Clínica Sorriso", specialty: "Odontologia", instagram_handle: null },
-  { ...client, id: id(7), name: "Dra. Carla Mendes", specialty: "Dermatologia", instagram_handle: "dracarla" },
+  { ...client, id: id(7), name: "Dra. Carla Mendes", specialty: "Dermatologia", instagram_handle: "dracarlamendesdermatologia" },
   { ...client, id: id(8), name: "Dr. Diego Rocha", specialty: "Cardiologia", instagram_handle: "drdiegorocha" },
 ];
 
