@@ -5,8 +5,9 @@ import { InfoDica } from "@/components/visual";
 import { NxCard, NxLinhaTempo } from "@/components/nx";
 import { CmAviso, CmBarras, CmKpi, CmLeitura, CmMetodo, CmRecolhido, icT } from "@/components/nx/comercial-base";
 import { PaginaNexo } from "@/components/nx/pagina";
-import { NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
-import { NxCartaoNumero } from "@/components/nx/cartoes";
+import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxAcaoPilula, NxBarras, NxCartaoNumero } from "@/components/nx/cartoes";
+import { linhaDaRota } from "@/components/nx/hoje";
 import type { NomeIcone } from "@/lib/registro-de-telas";
 import { NxCarregando } from "@/components/nx/blocos";
 import { NxDiasComFaixa } from "@/components/nx/dias-com-faixa";
@@ -26,13 +27,14 @@ import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { faixaDoNormal, foraDaFaixa } from "@/lib/faixa-do-normal";
 import { serieContinua } from "@/lib/linha-30-dias";
 import { periodosDeComparacao, somaDiaria } from "@/lib/leitura/fatos-resultados";
-import { diaCruzado, diaInicialDoCruzamento, numerosDoAtendimento, valoresNoEixo, vereditoDoAtendimento, type DiaCruzado, type EntradaCincoAtendimento, type NumeroDeAtendimento } from "@/lib/leitura/cinco-atendimento";
-import type { Veredito } from "@/lib/leitura/cinco-segundos";
+import { ACOES_DE_ATENDIMENTO, descobertasDoAtendimento, diaCruzado, diaInicialDoCruzamento, numerosDoAtendimento, valoresNoEixo, vereditoDoAtendimento, type DiaCruzado, type EntradaCincoAtendimento, type NumeroDeAtendimento } from "@/lib/leitura/cinco-atendimento";
+import { visiveisEResto, type Descoberta, type Veredito } from "@/lib/leitura/cinco-segundos";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { fmtNum } from "@/lib/format";
 import { CustoWhatsapp } from "@/components/custo-whatsapp";
 import { ConversasWhatsapp } from "@/components/conversas-whatsapp";
 import { useAuth } from "@/hooks/use-auth";
+import { useMediaQuery } from "@/hooks/use-is-mobile";
 import { AtendimentoConversas } from "@/components/atendimento-conversas";
 
 // Atendimento no WhatsApp: uma tela só com duas abas. "Números" (volume, espera, equipe) e, para a equipe,
@@ -78,7 +80,7 @@ function AtendimentoPage() {
   const atual = aba === "conversas" && isAdmin ? "conversas" : "numeros";
   const ir = (a: "numeros" | "conversas") => navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, aba: a === "conversas" ? "conversas" : undefined, conversa: undefined }) as never });
   return (
-    <div className="space-y-4">
+    <div className="nx-atend-pagina space-y-4">
       {/* A lista "Recuperar hoje" (agente de recuperação) saiu em 11/11/2026 por decisão do João. */}
       {isAdmin && (
         <div className="nx-atend-abas flex max-w-full flex-wrap gap-1 rounded-xl border p-1 text-sm" role="tablist" aria-label="Atendimento no WhatsApp" style={{ borderColor: "var(--line)", background: "var(--white)" }}>
@@ -104,6 +106,9 @@ function AtendimentoPage() {
 
 function NumerosWhatsapp({ clientId }: { clientId: string }) {
   const { isAdmin } = useAuth();
+  const navigate = Route.useNavigate();
+  // Celular: o dia cruzado só abre quando a pessoa toca num dia (o painel não cabe na régua de 1,5 tela com as descobertas).
+  const estreito = useMediaQuery("(max-width: 560px)");
   const dateRangeState = clientLayoutRoute.useSearch();
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
@@ -165,7 +170,6 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
           .filter((r) => String(r.dia).slice(0, 10) <= comparacao.fimFechado)
           .map((r) => ({ dia: String(r.dia).slice(0, 10), valor: nOrNull(r.atendimentos) })),
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [volumeDiario, comparacao.fimFechado],
   );
 
@@ -174,7 +178,12 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
     titulo: "Qualidade do atendimento",
     pergunta: "O atendimento deu conta das conversas?",
     meta: <span>{periodLabel}</span>,
-    acao: <SyncButton clientId={clientId} alvo="atendimento" />,
+    // A sincronização é da equipe: no computador fica no cabeçalho; no celular desce para o "Ver tudo" (a pergunta fica sozinha no topo).
+    acao: (
+      <div className="nx-atend-sync nx-atend-sync--topo">
+        <SyncButton clientId={clientId} alvo="atendimento" />
+      </div>
+    ),
   };
 
   if (isLoading) {
@@ -275,8 +284,13 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
           leads: valoresNoEixo(conversasDoPeriodo.datas, linhasDiario.map((l) => ({ dia: l.dia, valor: l.leads_novos }))) ?? [],
         }
       : null,
-    alcance: metricasIg.data ? metricasIg.data.map((r: { date: string; reach?: unknown }) => ({ dia: String(r.date).slice(0, 10), valor: nOrNull(r.reach) })) : null,
-    anuncios: anunciosDia.data ? anunciosDia.data.map((r: { dia: string; conversas?: unknown }) => ({ dia: String(r.dia).slice(0, 10), valor: nOrNull(r.conversas) })) : null,
+    // Só dias fechados: o dia de hoje pela metade viraria "o anúncio quase parou" ou um alcance abaixo do comum.
+    alcance: metricasIg.data
+      ? metricasIg.data.map((r: { date: string; reach?: unknown }) => ({ dia: String(r.date).slice(0, 10), valor: nOrNull(r.reach) })).filter((d: { dia: string }) => d.dia <= comparacao.fimFechado)
+      : null,
+    anuncios: anunciosDia.data
+      ? anunciosDia.data.map((r: { dia: string; conversas?: unknown }) => ({ dia: String(r.dia).slice(0, 10), valor: nOrNull(r.conversas) })).filter((d: { dia: string }) => d.dia <= comparacao.fimFechado)
+      : null,
     equipe: isAdmin,
   };
   const veredito = vereditoDoAtendimento(entrada);
@@ -287,9 +301,23 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
     <CartaoDeNumeroCinco key="pessoas" n={numeroPessoas} icone="users" />,
   ];
   // Dia cruzado: abre no dia fora do normal de maior alcance no Instagram da clínica; tocar de novo no mesmo dia fecha.
-  const inicial = diaInicialDoCruzamento(entrada);
+  const inicial = estreito ? null : diaInicialDoCruzamento(entrada);
   const selecionado = escolhido !== undefined ? escolhido : inicial;
   const dia = selecionado != null ? diaCruzado(selecionado, entrada) : null;
+
+  // Descobertas (de 0 a 5, só com a própria clínica): as 3 primeiras à vista, as outras no começo do "Ver tudo". Sem veredito, nenhuma.
+  const descobertas = descobertasDoAtendimento(entrada);
+  const { visiveis, resto } = visiveisEResto(descobertas.itens);
+  // A ação de uma descoberta só leva a um lugar (CHAM-07: nada é enviado nem gravado): abre o "Ver tudo" na equipe ou a aba de conversas da equipe.
+  function agirNaDescoberta(local: string) {
+    if (local === ACOES_DE_ATENDIMENTO.porEquipe) {
+      const detalhes = document.getElementById("detalhes-atendimento") as HTMLDetailsElement | null;
+      if (detalhes) detalhes.open = true;
+      requestAnimationFrame(() => document.getElementById("por-equipe")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    } else if (local === ACOES_DE_ATENDIMENTO.conversas && isAdmin) {
+      void navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, aba: "conversas", conversa: undefined }) as never });
+    }
+  }
 
   return (
     <PaginaNexo
@@ -297,19 +325,34 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
       veredito={<NxVeredito veredito={veredito} carregando={false} tela="atendimento" />}
       leitura={null}
       cartoes={cartoes as [ReactNode, ReactNode?, ReactNode?]}
+      descobertas={
+        veredito.tipo === "veredito" ? (
+          <NxDescobertas
+            titulo="O que os números dizem"
+            apoio={<p className={descobertas.aviso ? "nx-cinco-falta" : "nx-cinco-falta nx-atendimento-ordem"}>{descobertas.aviso ?? "Em ordem de impacto"}</p>}
+            itens={visiveis}
+            clientId={clientId}
+            dateRange={dateRangeState}
+            aoAgir={agirNaDescoberta}
+          />
+        ) : undefined
+      }
       principal={
         conversasDoPeriodo.datas.length > 0 ? (
           <NxCard id="conversas-por-dia" nivel={2} icone={icT("chart-bar")} titulo="Conversas por dia, com a faixa do normal" subtitulo={`${periodLabel} · só dias fechados`}>
-            <NxDiasComFaixa
-              rotulo="conversas"
-              datas={conversasDoPeriodo.datas}
-              valores={conversasDoPeriodo.valores}
-              faixa={faixa}
-              marcas={marcas}
-              selecionado={selecionado}
-              aoSelecionar={(i) => setEscolhido(i === selecionado ? null : i)}
-            />
-            {dia ? <DiaDoGrafico dia={dia} /> : <p className="nx-cinco-falta nx-dia-cruzado__dica">Toque num dia para ver o que aconteceu</p>}
+            {/* No computador o dia cruzado fica ao lado do gráfico (não custa altura); no celular, embaixo. */}
+            <div className="nx-atend-grafico">
+              <NxDiasComFaixa
+                rotulo="conversas"
+                datas={conversasDoPeriodo.datas}
+                valores={conversasDoPeriodo.valores}
+                faixa={faixa}
+                marcas={marcas}
+                selecionado={selecionado}
+                aoSelecionar={(i) => setEscolhido(i === selecionado ? null : i)}
+              />
+              {dia ? <DiaDoGrafico dia={dia} /> : <p className="nx-cinco-falta nx-dia-cruzado__dica">Toque num dia para ver o que aconteceu</p>}
+            </div>
           </NxCard>
         ) : undefined
       }
@@ -325,6 +368,10 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
       resumoDoVerTudo="dia a dia, equipes, espera e custo"
       detalhe={
         <div className="nexo-comercial" style={{ gap: 18 }}>
+          <div className="nx-atend-sync nx-atend-sync--ver-tudo">
+            <SyncButton clientId={clientId} alvo="atendimento" />
+          </div>
+          {resto.length > 0 && <MaisDescobertasDoAtendimento itens={resto} clientId={clientId} dateRange={dateRangeState} aoAgir={agirNaDescoberta} />}
           <section className="nx-grade nx-grade--4" aria-label="Números do atendimento">
             <CmKpi i={0} icone="message-circle" rotulo="Atendimentos" valor={fmtNum(atendimentos)} nota={`${fmtNum(n(resumo?.contatos_distintos))} pessoas diferentes`} />
             <CmKpi
@@ -553,5 +600,32 @@ function DiaDoGrafico({ dia }: { dia: DiaCruzado }) {
       </dl>
       <p className="nx-dia-cruzado__causa" data-causa={dia.causaVinda ?? undefined}>{dia.causa}</p>
     </div>
+  );
+}
+
+/** As descobertas que passam das 3 à vista (4 e 5) moram no "Ver tudo", já com os fatores do "Por quê?" abertos (nada some). Só navegam. */
+function MaisDescobertasDoAtendimento({ itens, clientId, dateRange, aoAgir }: { itens: readonly Descoberta[]; clientId: string; dateRange: ReturnType<typeof clientLayoutRoute.useSearch>; aoAgir: (local: string) => void }) {
+  return (
+    <section className="nx-cinco-resto" aria-label="Mais descobertas do período" data-peca="mais-descobertas">
+      <h3 className="nx-cinco-resto__titulo">Mais descobertas do período</h3>
+      <div className="nx-cinco-resto__grade">
+        {itens.map((d) => {
+          const linha = d.acao.rota ? linhaDaRota(d.acao.rota) : undefined;
+          return (
+            <article key={d.id} className="nx-cinco-resto__item" data-descoberta-extra={d.id}>
+              <NxSelo tom={d.tom} texto={d.selo} />
+              <p className="nx-cinco-resto__frase">{d.frase}</p>
+              <NxBarras barras={d.porque.barras} rotulo={d.porque.titulo} />
+              {d.porque.obs && <p className="nx-cinco-falta">{d.porque.obs}</p>}
+              {linha ? (
+                <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir a aba de origem" para={{ tela: linha, clientId, dateRange }} />
+              ) : d.acao.local ? (
+                <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={() => aoAgir(d.acao.local as string)} />
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }

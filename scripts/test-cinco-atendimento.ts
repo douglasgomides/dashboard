@@ -5,14 +5,16 @@
 import assert from "node:assert/strict";
 import { foraDaFaixa } from "../src/lib/faixa-do-normal";
 import { nomeDoDia } from "../src/lib/linha-30-dias";
-import { checarFraseCinco, textoDaFrase } from "../src/lib/leitura/cinco-segundos";
+import { checarDescoberta, checarFraseCinco, textoDaFrase } from "../src/lib/leitura/cinco-segundos";
 import {
   MOTIVO_SEM_VOLUME,
   diaComum,
   diaCruzado,
+  descobertasDoAtendimento,
   diaInicialDoCruzamento,
   faixaDasConversas,
   numerosDoAtendimento,
+  padraoDaSemana,
   valoresNoEixo,
   vereditoDoAtendimento,
   type DiaSolto,
@@ -328,6 +330,120 @@ const entrada = (resto: Partial<EntradaCincoAtendimento> = {}): EntradaCincoAten
   assert.equal(diaInicialDoCruzamento(entrada()), 11);
   assert.equal(diaInicialDoCruzamento(entrada({ alcance: null })), null);
   assert.equal(diaInicialDoCruzamento(entrada({ conversas: serie([10, 12, 11, 13, 12]) })), null);
+}
+
+
+// ---------------------------------------------------------------- padrão da semana
+const diaDaSemana = (i: number) => new Date(`${dataDoDia(i)}T12:00:00Z`).getUTCDay();
+{
+  // Quarta e quinta cheias (30), os outros dias 12 e o domingo 6: 30 dias, então cada dia da semana tem 4 ou 5 dias medidos.
+  const porSemana: Record<number, number> = { 0: 6, 1: 12, 2: 12, 3: 30, 4: 30, 5: 12, 6: 12 };
+  const valores = Array.from({ length: 30 }, (_, i) => porSemana[diaDaSemana(i)]);
+  const semana = padraoDaSemana(serie(valores));
+  assert.deepEqual(semana.map((s) => s.nome), ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]);
+  assert.deepEqual(semana.map((s) => s.media), [12, 12, 30, 30, 12, 12, 6]);
+  assert.ok(semana.every((s) => s.dias >= 4));
+  // Um dia da semana com um dia medido só não tem média (nunca zero); buraco não conta.
+  const curta = padraoDaSemana(serie([5, 6, null, 7, 8, 9, 10, 11]));
+  assert.ok(curta.some((s) => s.media == null));
+  assert.equal(curta.reduce((t, s) => t + s.dias, 0), 7);
+}
+
+// ---------------------------------------------------------------- descobertas
+/** Uma entrada que tem as 4 descobertas: dias cheios na semana (quarta e quinta), pico do Instagram, anúncio parado por 4 dias e a taxa em queda. */
+function entradaCompleta(resto: Partial<EntradaCincoAtendimento> = {}): EntradaCincoAtendimento {
+  const porSemana: Record<number, number> = { 0: 6, 1: 12, 2: 12, 3: 30, 4: 30, 5: 12, 6: 12 };
+  const valores = Array.from({ length: 30 }, (_, i) => (i === 13 ? 90 : porSemana[diaDaSemana(i)]));
+  const parado: Record<number, number> = { 18: 1, 19: 0, 20: 2, 21: 1 };
+  return entrada({
+    conversas: serie(valores),
+    // O pico de conversas (dia 13, uma quarta) é o mesmo do pico de alcance do Instagram.
+    alcance: alcanceDe(30, 13),
+    anuncios: Array.from({ length: 30 }, (_, i) => ({ dia: dataDoDia(i), valor: parado[i] ?? 12 + (i % 3) })),
+    ...resto,
+  });
+}
+{
+  const { itens, aviso } = descobertasDoAtendimento(entradaCompleta());
+  assert.equal(aviso, null, "com 3 ou mais descobertas não há aviso");
+  assert.deepEqual(itens.map((d) => d.id).sort(), ["atendimento-anuncio-parou", "atendimento-padrao-da-semana", "atendimento-pico-do-instagram", "atendimento-viram-lead"]);
+  assert.ok(itens.length >= 3 && itens.length <= 5);
+  // O que piorou vem primeiro.
+  assert.equal(itens[0].tom, "ruim");
+  assert.equal(itens[1].tom, "ruim");
+  assert.notEqual(itens[2].tom, "ruim");
+  for (const d of itens) {
+    assert.deepEqual(checarDescoberta(d), [], d.frase);
+    assert.ok(d.porque.barras.length >= 2 && d.porque.barras.length <= 3, `${d.id}: de 2 a 3 fatores`);
+    assert.ok(d.frase.length <= 90, d.frase);
+    assert.ok(d.quem && d.quem.length > 0);
+    assert.ok(d.acao.rota != null || d.acao.local != null, "toda descoberta tem UMA ação");
+    assert.ok(!(d.acao.rota != null && d.acao.local != null), "a ação é só uma");
+    assert.ok(!/EXEMPLO|primeira resposta|esperando resposta/i.test(`${d.frase} ${d.porque.titulo} ${d.porque.obs ?? ""}`), "dado que não é medido não vira descoberta (D-05)");
+  }
+  const por = (id: string) => itens.find((d) => d.id === id)!;
+
+  const semana = por("atendimento-padrao-da-semana");
+  assert.match(sp(semana.frase), /^Quarta e quinta recebem [\d,]+(×| vezes) mais conversas que domingo\.$/);
+  assert.equal(semana.acao.local, "ver-por-equipe");
+  assert.equal(semana.quem, "Atendimento/secretária");
+  assert.equal(semana.porque.barras[0].rotulo, "Quarta");
+  assert.equal(semana.porque.barras[2].rotulo, "Domingo");
+
+  const pico = por("atendimento-pico-do-instagram");
+  assert.match(sp(pico.frase), /^O pico veio do Instagram: \d{2}\/\d{2} teve .+ de alcance e 90 conversas\.$/);
+  assert.equal(pico.acao.rota, "/_authenticated/$clientId/conteudo");
+  assert.equal(pico.acao.rotulo, "Ver Instagram");
+  assert.equal(pico.quem, "Social media");
+  assert.equal(pico.tom, "bom");
+
+  const parou = por("atendimento-anuncio-parou");
+  assert.match(sp(parou.frase), /^De \d{2}\/\d{2} a \d{2}\/\d{2} o anúncio quase parou: só 4 conversas pagas em 4 dias\.$/);
+  assert.equal(parou.acao.rota, "/_authenticated/$clientId/anuncios");
+  assert.equal(parou.quem, "Gestor de tráfego");
+  assert.equal(parou.tom, "ruim");
+  assert.equal(parou.porque.barras.length, 3);
+
+  const lead = por("atendimento-viram-lead");
+  assert.equal(sp(lead.frase), "De cada 100 conversas, 30 viram lead. Antes eram 40.");
+  assert.equal(lead.tom, "ruim");
+  assert.equal(lead.selo, "Em queda");
+  // A equipe abre as conversas; o médico vai ao funil (T-03.1.1.1-21).
+  assert.deepEqual(lead.acao, { rotulo: "Ver conversas", local: "ver-conversas" });
+  const doMedico = descobertasDoAtendimento(entradaCompleta({ equipe: false })).itens.find((d) => d.id === "atendimento-viram-lead")!;
+  assert.deepEqual(doMedico.acao, { rotulo: "Ver o funil", rota: "/_authenticated/$clientId/pacientes" });
+}
+{
+  // Sem Instagram e sem anúncio: só o que a clínica mede, e o aviso diz por quê (nunca inventa).
+  const { itens, aviso } = descobertasDoAtendimento(entradaCompleta({ alcance: null, anuncios: null }));
+  assert.deepEqual(itens.map((d) => d.id).sort(), ["atendimento-padrao-da-semana", "atendimento-viram-lead"]);
+  assert.match(aviso ?? "", /^Poucas descobertas neste período: .+\.$/);
+  assert.deepEqual(checarFraseCinco(aviso ?? ""), []);
+}
+{
+  // Poucos dias de Instagram e de anúncio: sem dia comum, sem descoberta. Sem o período anterior: a taxa não vira descoberta.
+  const { itens, aviso } = descobertasDoAtendimento(entradaCompleta({ alcance: alcanceDe(5), anuncios: anuncioDe(5), somas: { atual: { mandaram_mensagem: 500, leads_novos: 150 }, antes: null } }));
+  assert.deepEqual(itens.map((d) => d.id), ["atendimento-padrao-da-semana"]);
+  assert.match(aviso ?? "", /^Poucas descobertas neste período: /);
+}
+{
+  // Uma série comum, sem dia da semana mais cheio (razão abaixo de 1,5) e sem taxa em mudança: nada inventado.
+  const e = entrada({ conversas: serie(Array.from({ length: 30 }, (_, i) => PADRAO[i % 7])), somas: { atual: { mandaram_mensagem: 500, leads_novos: 150 }, antes: { mandaram_mensagem: 500, leads_novos: 151 } }, alcance: alcanceDe(30, -1), anuncios: anuncioDe(30).map((d) => ({ ...d, valor: 13 })) });
+  const { itens, aviso } = descobertasDoAtendimento(e);
+  assert.deepEqual(itens, []);
+  assert.match(aviso ?? "", /^Poucas descobertas neste período: /);
+}
+{
+  // Dois dias seguidos de anúncio parado já valem; um dia isolado não é um trecho (o dia cruzado já o explica).
+  const comRun = (idx: number[]) => anuncioDe(30).map((d, i) => ({ ...d, valor: idx.includes(i) ? 1 : 13 }));
+  const dois = descobertasDoAtendimento(entradaCompleta({ anuncios: comRun([5, 6]) })).itens.find((d) => d.id === "atendimento-anuncio-parou");
+  assert.ok(dois);
+  assert.match(sp(dois.frase), /só 2 conversas pagas em 2 dias\.$/);
+  const solto = descobertasDoAtendimento(entradaCompleta({ anuncios: comRun([5, 8]) })).itens.find((d) => d.id === "atendimento-anuncio-parou");
+  assert.equal(solto, undefined);
+  // Dia comum baixo demais (menos de 3 conversas): um terço dele não distingue nada.
+  const baixo = descobertasDoAtendimento(entradaCompleta({ anuncios: anuncioDe(30).map((d) => ({ ...d, valor: 2 })) })).itens.find((d) => d.id === "atendimento-anuncio-parou");
+  assert.equal(baixo, undefined);
 }
 
 console.log("test-cinco-atendimento: ok");

@@ -8,8 +8,8 @@ import { MIN_DIAS_DA_FAIXA, faixaDoNormal, foraDaFaixa, medianaDaSerie, type Fai
 import { ROTULO_RESPONSAVEL } from "@/lib/insight";
 import { LIMITES } from "@/lib/limites";
 import { nomeDoDia } from "@/lib/linha-30-dias";
-import { variacaoPropria, type ParteDaFrase, type Veredito } from "./cinco-segundos";
-import type { PassoTexto, TomFato } from "./tipos";
+import { checarDescoberta, checarFraseCinco, variacaoPropria, type Descoberta, type ParteDaFrase, type Veredito } from "./cinco-segundos";
+import type { BarraDoFato, PassoTexto, TomFato } from "./tipos";
 
 /** Muda quando uma regra de Atendimento no formato 5 segundos muda. */
 export const VERSAO_REGRAS_CINCO_ATENDIMENTO = 1;
@@ -383,4 +383,253 @@ export function diaInicialDoCruzamento(e: EntradaCincoAtendimento): number | nul
     if ((marcas[i] === "acima" || marcas[i] === "abaixo") && comValor(v) && (melhor == null || v > (alcance[melhor] as number))) melhor = i;
   });
   return melhor;
+}
+
+// ---------- padrão da semana ----------
+
+const NOMES_DA_SEMANA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"] as const;
+/** De segunda a domingo (o domingo do JavaScript é 0). */
+const ORDEM_DA_SEMANA = [1, 2, 3, 4, 5, 6, 0] as const;
+
+export interface DiaDaSemana {
+  /** 0 = domingo ... 6 = sábado. */
+  dia: number;
+  nome: string;
+  /** A média de conversas por dia desse dia da semana, só com 2 dias medidos ou mais; senão null. */
+  media: number | null;
+  /** Quantos dias medidos entraram. */
+  dias: number;
+}
+
+/** A média própria de cada dia da semana no período, de segunda a domingo. Dia da semana com menos de 2 dias medidos não tem média. */
+export function padraoDaSemana(conversas: SerieNoEixo): DiaDaSemana[] {
+  const soma = new Array<number>(7).fill(0);
+  const contagem = new Array<number>(7).fill(0);
+  conversas.datas.forEach((d, i) => {
+    const v = conversas.valores[i];
+    if (!comValor(v)) return;
+    const w = new Date(`${d}T12:00:00Z`).getUTCDay();
+    soma[w] += v;
+    contagem[w] += 1;
+  });
+  return ORDEM_DA_SEMANA.map((w) => ({ dia: w, nome: NOMES_DA_SEMANA[w], media: contagem[w] >= 2 ? soma[w] / contagem[w] : null, dias: contagem[w] }));
+}
+
+// ---------- descobertas ----------
+
+const ROTA_INSTAGRAM = "/_authenticated/$clientId/conteudo";
+const ROTA_ANUNCIOS = "/_authenticated/$clientId/anuncios";
+const ROTA_FUNIL = "/_authenticated/$clientId/pacientes";
+
+/** Chaves de ação que a tela trata (nada é enviado: abrem o "Ver tudo" na equipe ou a aba de conversas, só para a equipe). */
+export const ACOES_DE_ATENDIMENTO = { porEquipe: "ver-por-equipe", conversas: "ver-conversas" } as const;
+/** Quantas descobertas esta tela mostra, no máximo (as 3 primeiras à vista, o resto em "Ver tudo"). */
+const MAXIMO_DE_DESCOBERTAS = 5;
+/** A diferença mínima entre os dias cheios e o dia fraco para virar descoberta (abaixo disso é ruído). */
+const RAZAO_MINIMA_DA_SEMANA = 1.5;
+
+export interface DescobertasDeAtendimento {
+  /** Em ordem de impacto: o que piorou primeiro, depois pela maior mudança. De 0 a 5 (nunca inventa). */
+  itens: Descoberta[];
+  /** "Poucas descobertas neste período: {motivo}." quando há menos de 3. null quando há 3 ou mais. */
+  aviso: string | null;
+}
+
+const barra = (rotulo: string, exibicao: string, fracao: number): BarraDoFato => ({ rotulo, exibicao, fracao: Math.max(0, Math.min(1, fracao)) });
+const barraDeContagem = (rotulo: string, antes: number, agora: number): BarraDoFato => barra(rotulo, `${ptBr(antes)} → ${ptBr(agora)}`, Math.max(antes, agora) > 0 ? agora / Math.max(antes, agora) : 0);
+const ddmm = (data: string) => `${data.slice(8, 10)}/${data.slice(5, 7)}`;
+const minusculo = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
+const ehODiaSeguinte = (a: string, b: string) => new Date(`${b}T12:00:00Z`).getTime() - new Date(`${a}T12:00:00Z`).getTime() === 86_400_000;
+
+/** "5 mil" a partir de 1.000; abaixo disso o número inteiro. */
+function alcanceEmTexto(v: number): string {
+  return v >= 1000 ? `${ptBr(Math.round(v / 100) / 10, 1)} mil` : ptBr(Math.round(v));
+}
+
+/** O maior trecho de dias seguidos com as conversas do anúncio abaixo de um terço do dia comum (2 dias ou mais; empate fica com o mais recente). */
+function trechoDoAnuncioParado(anuncios: readonly DiaSolto[], comum: number): DiaSolto[] | null {
+  const dias = anuncios.filter((d) => comValor(d.valor)).sort((a, b) => a.dia.localeCompare(b.dia));
+  const limite = comum * FRACAO_DO_ANUNCIO_QUE_PAROU;
+  let melhor: DiaSolto[] | null = null;
+  let atual: DiaSolto[] = [];
+  const fecha = () => {
+    if (atual.length >= 2 && (melhor == null || atual.length >= melhor.length)) melhor = atual;
+    atual = [];
+  };
+  for (const d of dias) {
+    if ((d.valor as number) >= limite) {
+      fecha();
+      continue;
+    }
+    if (atual.length && !ehODiaSeguinte(atual[atual.length - 1].dia, d.dia)) fecha();
+    atual.push(d);
+  }
+  fecha();
+  return melhor;
+}
+
+/**
+ * De 0 a 5 descobertas de Atendimento, só com números da própria clínica (D-02), cada uma com UMA ação que só navega, quem resolve e um
+ * "Por quê?" de 2 a 3 fatores em barra: o padrão da semana (dias cheios contra o dia fraco), o pico que veio do Instagram, os dias em que o
+ * anúncio quase parou e quantos viram lead de cada 100 contra antes. Cada uma só existe com a base mínima do seu dado; o que falta vira o
+ * motivo do aviso. "Ver conversas" só para a equipe (T-03.1.1.1-21): o médico vai ao funil. O que não é medido (tempo até a primeira
+ * resposta, pessoas esperando) NÃO é descoberta (D-05).
+ */
+export function descobertasDoAtendimento(e: EntradaCincoAtendimento): DescobertasDeAtendimento {
+  const candidatas: { d: Descoberta; impacto: number; ruim: boolean }[] = [];
+  const motivos: string[] = [];
+  const poe = (d: Descoberta, impacto: number) => {
+    if (checarDescoberta(d).length > 0) return;
+    candidatas.push({ d, impacto, ruim: d.tom === "ruim" });
+  };
+  const faixa = faixaDasConversas(e.conversas);
+
+  // 1. Padrão da semana: os 2 dias mais cheios contra o mais fraco (média própria de cada dia da semana).
+  const semana = padraoDaSemana(e.conversas).filter((s): s is DiaDaSemana & { media: number } => s.media != null);
+  if (semana.length >= 4) {
+    const porMedia = [...semana].sort((a, b) => b.media - a.media);
+    const [cheio1, cheio2] = porMedia;
+    const fraco = porMedia[porMedia.length - 1];
+    const razao = fraco.media > 0 ? (cheio1.media + cheio2.media) / 2 / fraco.media : 0;
+    if (razao >= RAZAO_MINIMA_DA_SEMANA) {
+      const r = ptBr(Math.round(razao * 10) / 10, 1);
+      const mediaDosCheios = (cheio1.media + cheio2.media) / 2;
+      let frase = `${cheio1.nome} e ${minusculo(cheio2.nome)} recebem ${r}× mais conversas que ${minusculo(fraco.nome)}.`;
+      // O sinal × cai no filtro de linguagem: a mesma frase com a palavra "vezes".
+      if (checarFraseCinco(frase).length > 0) frase = `${cheio1.nome} e ${minusculo(cheio2.nome)} recebem ${r} vezes mais conversas que ${minusculo(fraco.nome)}.`;
+      poe(
+        {
+          id: "atendimento-padrao-da-semana",
+          tom: "neutro",
+          selo: "Padrão da semana",
+          frase,
+          quem: ROTULO_RESPONSAVEL.atendimento,
+          impacto: `${ptBr(Math.round(mediaDosCheios))} contra ${ptBr(Math.round(fraco.media))} por dia`,
+          acao: { rotulo: "Ver por equipe", local: ACOES_DE_ATENDIMENTO.porEquipe },
+          porque: {
+            titulo: "Média de conversas por dia da semana",
+            barras: [
+              barra(cheio1.nome, `${ptBr(Math.round(cheio1.media))} por dia`, 1),
+              barra(cheio2.nome, `${ptBr(Math.round(cheio2.media))} por dia`, cheio2.media / cheio1.media),
+              barra(fraco.nome, `${ptBr(Math.round(fraco.media))} por dia`, fraco.media / cheio1.media),
+            ],
+            obs: "Os dois dias mais cheios e o mais fraco, em média por dia.",
+          },
+        },
+        razao * 10,
+      );
+    }
+  } else {
+    motivos.push("faltam dias medidos para ver o padrão da semana");
+  }
+
+  // 2. O pico que veio do Instagram: o dia acima do normal, de maior alcance, que a regra do dia cruzado atribui ao Instagram.
+  const comumAlcance = diaComum(e.alcance);
+  if (e.alcance == null) motivos.push("o Instagram não respondeu");
+  else if (comumAlcance == null) motivos.push("há poucos dias de Instagram para saber o dia comum");
+  else if (faixa) {
+    let pico: DiaCruzado | null = null;
+    for (let i = 0; i < e.conversas.datas.length; i++) {
+      const d = diaCruzado(i, e);
+      if (d && d.causaVinda === "instagram" && d.marca === "acima" && d.conversas != null && d.alcance.valor != null && (pico == null || d.alcance.valor > (pico.alcance.valor as number))) pico = d;
+    }
+    if (pico && pico.alcance.valor != null && pico.conversas != null && faixa.mediana > 0) {
+      const razaoAlcance = pico.alcance.valor / comumAlcance;
+      const razaoConversas = pico.conversas / faixa.mediana;
+      const maior = Math.max(razaoAlcance, razaoConversas);
+      poe(
+        {
+          id: "atendimento-pico-do-instagram",
+          tom: "bom",
+          selo: "Fora do normal",
+          frase: `O pico veio do Instagram: ${ddmm(pico.dia)} teve ${alcanceEmTexto(pico.alcance.valor)} de alcance e ${ptBr(pico.conversas)} conversas.`,
+          quem: ROTULO_RESPONSAVEL.social_media,
+          impacto: `alcance ${ptBr(Math.round(razaoAlcance * 10) / 10, 1)}× o comum`,
+          acao: { rotulo: "Ver Instagram", rota: ROTA_INSTAGRAM },
+          porque: {
+            titulo: `${ddmm(pico.dia)} comparado com um dia comum`,
+            barras: [
+              barra("Alcance no Instagram", `${ptBr(Math.round(razaoAlcance * 10) / 10, 1)}× o comum`, razaoAlcance / maior),
+              barra("Conversas no WhatsApp", `${ptBr(Math.round(razaoConversas * 10) / 10, 1)}× o comum`, razaoConversas / maior),
+            ],
+          },
+        },
+        razaoAlcance * 10,
+      );
+    }
+  }
+
+  // 3. Dias seguidos em que o anúncio quase parou (abaixo de um terço do dia comum, 2 dias ou mais).
+  const comumAnuncio = diaComum(e.anuncios);
+  if (e.anuncios == null) motivos.push("o anúncio não respondeu");
+  else if (comumAnuncio == null) motivos.push("há poucos dias de anúncio para saber o dia comum");
+  else if (comumAnuncio >= 3) {
+    const trecho = trechoDoAnuncioParado(e.anuncios, comumAnuncio);
+    if (trecho) {
+      const valores = trecho.map((d) => d.valor as number);
+      const total = valores.reduce((a, b) => a + b, 0);
+      const pior = trecho.reduce((a, b) => ((b.valor as number) < (a.valor as number) ? b : a));
+      poe(
+        {
+          id: "atendimento-anuncio-parou",
+          tom: "ruim",
+          selo: "Abaixo do normal",
+          frase: `De ${ddmm(trecho[0].dia)} a ${ddmm(trecho[trecho.length - 1].dia)} o anúncio quase parou: só ${ptBr(total)} conversas pagas em ${trecho.length} dias.`,
+          quem: ROTULO_RESPONSAVEL.gestor_trafego,
+          impacto: `${ptBr(total)} conversas em ${trecho.length} dias`,
+          acao: { rotulo: "Ver anúncios", rota: ROTA_ANUNCIOS },
+          porque: {
+            titulo: "Conversas pelo anúncio por dia",
+            barras: [
+              barra("Dia comum", ptBr(Math.round(comumAnuncio)), 1),
+              barra("Nesses dias, por dia", ptBr(Math.round((total / trecho.length) * 10) / 10, 1), total / trecho.length / comumAnuncio),
+              barra(`Pior dia (${ddmm(pior.dia)})`, ptBr(pior.valor as number), (pior.valor as number) / comumAnuncio),
+            ],
+          },
+        },
+        trecho.length * 5,
+      );
+    }
+  }
+
+  // 4. Viram lead de cada 100, agora contra antes (só com a base mínima nos dois períodos).
+  const taxa = numerosDoAtendimento(e)[1];
+  if (taxa.valor != null && taxa.antes != null && taxa.melhor !== null) {
+    const agora = taxa.valor;
+    const antes = taxa.antes;
+    const chamaramAgora = e.somas.atual?.mandaram_mensagem ?? null;
+    const leadsAgora = e.somas.atual?.leads_novos ?? null;
+    const chamaramAntes = e.somas.antes?.mandaram_mensagem ?? null;
+    const leadsAntes = e.somas.antes?.leads_novos ?? null;
+    if (comValor(chamaramAgora) && comValor(leadsAgora) && comValor(chamaramAntes) && comValor(leadsAntes)) {
+      poe(
+        {
+          id: "atendimento-viram-lead",
+          tom: taxa.melhor ? "bom" : "ruim",
+          selo: taxa.melhor ? "Em alta" : "Em queda",
+          frase: `De cada 100 conversas, ${agora} viram lead. Antes eram ${antes}.`,
+          quem: ROTULO_RESPONSAVEL.atendimento,
+          impacto: `${antes} → ${agora} de cada 100`,
+          // O médico não abre a auditoria de conversas (só a equipe): ele vai ao funil.
+          acao: e.equipe ? { rotulo: "Ver conversas", local: ACOES_DE_ATENDIMENTO.conversas } : { rotulo: "Ver o funil", rota: ROTA_FUNIL },
+          porque: {
+            titulo: "Quantos viram lead, de cada 100",
+            barras: [barra(TITULO_DA_TAXA, `${antes} → ${agora}`, agora / 100), barraDeContagem("Conversas", chamaramAntes, chamaramAgora), barraDeContagem("Viraram lead", leadsAntes, leadsAgora)],
+            obs: "Conversas incluem pacientes antigos: é uma proporção, não uma passagem.",
+          },
+        },
+        Math.abs(agora - antes) * 2,
+      );
+    }
+  } else if (taxa.motivo == null && taxa.antes == null) {
+    motivos.push("faltam as conversas e os leads do período anterior");
+  }
+
+  const itens = candidatas
+    .map((c, k) => ({ ...c, k }))
+    .sort((a, b) => Number(b.ruim) - Number(a.ruim) || b.impacto - a.impacto || a.k - b.k)
+    .slice(0, MAXIMO_DE_DESCOBERTAS)
+    .map((c) => c.d);
+  const aviso = itens.length >= 3 ? null : `Poucas descobertas neste período: ${motivos[0] ?? "nada fora do normal nos outros dados"}.`;
+  return { itens, aviso };
 }

@@ -35,7 +35,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  z-index: 0;
+  /* Sem z-index próprio: o rótulo (z-index 3) fica acima das barras (z-index 1) e a faixa em si, abaixo delas. */
   min-height: 2px;
   background: var(--line);
   border-top: 1.5px dashed var(--muted-2);
@@ -385,5 +385,266 @@
   }
   .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor--falta {
     font-size: 14px;
+  }
+}
+
+/* ---------- Descobertas 4 e 5, dentro do "Ver tudo" (a mesma aparência de Resultados, só nesta tela) ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-cinco-resto__titulo {
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-cinco-resto__item {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-cinco-resto__item > * {
+  max-width: 100%;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-cinco-resto__item .nx-barras {
+  justify-self: stretch;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-cinco-resto__frase {
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Atendimento: cartões, descobertas e o gráfico dentro da régua (nada é escondido: o que sai da vista mora no "Ver tudo") ---------- */
+/* Cartões de número: o número e a legenda lado a lado em qualquer largura, para o cartão ficar baixo. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__cartoes .nx-numero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__cartoes .nx-numero__legenda {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+/* A ação e o "Por quê?" lado a lado, não um sobre o outro. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__acoes {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+/* A sincronização da equipe: no cabeçalho no computador; no celular ela desce para o "Ver tudo" (o cabeçalho fica só com a pergunta). */
+.app.product-workspace:not(.sap-workspace) .nx-atend-sync--ver-tudo {
+  display: none;
+}
+
+/* Computador: as descobertas lado a lado (cada uma empilha chips, frase e botões no próprio cartão). */
+@media (min-width: 1100px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descobertas__lista {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-atend-sync--topo {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-atend-sync--ver-tudo {
+    display: block;
+    margin-bottom: 12px;
+  }
+  /* Cartões de número: sem o ícone e sem a linha de 30 dias (a série inteira está no gráfico logo abaixo). */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__cartoes .nx-cartao__icone,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__cartoes .nx-linha30 {
+    display: none;
+  }
+  /* O cartão do gráfico: título numa linha ou duas, sem o ícone e sem o subtítulo (o período já está na casca). */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] #conversas-por-dia .nx-tile,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] #conversas-por-dia .nx-card__titulo p {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-dias__legenda {
+    gap: 2px 12px;
+    font-size: 12px;
+    line-height: 16px;
+  }
+  /* Descobertas. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-atendimento-ordem {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descobertas,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descobertas__lista {
+    gap: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descobertas__titulo {
+    font-size: 18px;
+    line-height: 20px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta {
+    padding: 8px;
+    gap: 2px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__corpo {
+    display: block;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__topo {
+    display: inline-flex;
+    max-width: 100%;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  /* O número em jogo fica no "Por quê?" (as barras dizem o mesmo número). */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__impacto {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__frase {
+    display: inline;
+    font-size: 15px;
+    line-height: 20px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta .nx-selo {
+    font-size: 12px;
+    line-height: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__acoes {
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta .nx-acao-pilula {
+    min-height: 36px;
+    padding: 2px 2px 2px 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta .nx-acao-pilula__texto {
+    padding: 0;
+  }
+  /* Um estilo global de botão dá 44 px de altura mínima: a seta redonda de 32 px precisa soltá-la. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta .nx-acao-pilula__seta {
+    width: 32px;
+    height: 32px;
+    min-height: 0;
+    min-width: 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__porque-botao {
+    min-height: 36px;
+  }
+}
+
+/* ---------- Atendimento: o gráfico e o dia cruzado lado a lado no computador (o painel não custa altura) ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-atend-grafico {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+@media (min-width: 1100px) {
+  .app.product-workspace:not(.sap-workspace) .nx-atend-grafico {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 16px;
+    align-items: start;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-atend-grafico .nx-dia-cruzado__dica {
+    align-self: center;
+  }
+  /* No lado, o dia cruzado é uma lista de uma linha por fonte (o nome à esquerda, o número e a comparação à direita). */
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__grade {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item dt {
+    flex: 1 1 auto;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item dd {
+    flex: 0 0 auto;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor {
+    font-size: 18px;
+    line-height: 24px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor--falta {
+    font-size: 14px;
+    line-height: 20px;
+  }
+}
+
+@media (max-width: 560px) {
+  /* A faixa de abas da equipe numa linha só e o espaço entre ela e a página menor. */
+  .app.product-workspace:not(.sap-workspace) .nx-atend-abas button {
+    min-height: 32px;
+    padding: 0 4px;
+    font-size: 13px;
+    line-height: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__pergunta {
+    font-size: 18px;
+    line-height: 22px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-dias__area {
+    height: 140px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nxb-recolhido small {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  /* Equipe: a faixa de abas fica mais perto da página, e a página mais junta (régua de 1,5 tela dentro da pasta). */
+  .app.product-workspace:not(.sap-workspace) .nx-atend-pagina > * + * {
+    margin-top: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] {
+    gap: 6px;
+  }
+  /* O título "O que os números dizem" continua para leitor de tela: a lista de descobertas se explica sozinha. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descobertas__titulo {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descobertas {
+    position: relative;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__cartoes .nx-cartao {
+    padding: 8px 12px;
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] #conversas-por-dia {
+    padding: 12px;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 560px) {
+  /* Última folga da régua de 1,5 tela dentro da pasta da equipe: gráfico, descobertas e "Ver tudo" um pouco mais baixos. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-dias__area {
+    height: 124px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta {
+    padding: 6px 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nxb-recolhido > summary {
+    padding-top: 11px;
+    padding-bottom: 11px;
+  }
+}
+
+/* Descoberta estreita (3 lado a lado no computador): o número em jogo sai do cabeçalho do cartão (as barras do "Por quê?" dizem o mesmo número) e "quem resolve" cabe inteiro. */
+@container nx-descoberta (max-width: 440px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__impacto {
+    display: none;
   }
 }
