@@ -506,7 +506,7 @@ export const IgColunasSaldo = memo(function IgColunasSaldo({
 export function IgVitrine({
   itens,
 }: {
-  itens: { id: string; href?: string | null; imagem: ReactNode; titulo: ReactNode; valor: ReactNode; rotulo: ReactNode; extra?: ReactNode }[];
+  itens: { id: string; href?: string | null; imagem: ReactNode; titulo: ReactNode; /** Texto inteiro do título, para o title quando a legenda é cortada. */ dica?: string; valor: ReactNode; rotulo: ReactNode; extra?: ReactNode }[];
 }) {
   return (
     <ol className="ig-vitrine">
@@ -520,7 +520,7 @@ export function IgVitrine({
               </span>
             </span>
             <span className="ig-vitrine__corpo">
-              <span className="ig-vitrine__titulo">{x.titulo}</span>
+              <span className="ig-vitrine__titulo" title={x.dica}>{x.titulo}</span>
               <span className="ig-vitrine__num">
                 <b>{x.valor}</b>
                 <small>{x.rotulo}</small>
