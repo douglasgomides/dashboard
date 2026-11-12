@@ -75,7 +75,7 @@ function passoDaPerdaDoFunil(para: IdPasso): PassoFato {
 const medidosEConfiaveis = (passos: PassoFunil[]) => passos.filter((p) => p.valor != null && p.confiavel && !p.estimado);
 
 /** Uma etapa maior que a anterior medida: o funil está fora de ordem (o CRM marca as etapas de um jeito que não fecha a conta). */
-function foraDeOrdem(passos: PassoFunil[]): boolean {
+export function foraDeOrdem(passos: PassoFunil[]): boolean {
   const ok = medidosEConfiaveis(passos);
   for (let i = 1; i < ok.length; i++) if (ok[i].valor! > ok[i - 1].valor!) return true;
   return false;

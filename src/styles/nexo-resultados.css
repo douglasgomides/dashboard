@@ -118,6 +118,12 @@
 }
 .nexo-results-overview .nxr-link:focus-visible,
 .nx-kpi .nxr-ver:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; }
+/* Cartão de pessoas com a linha de 30 dias: o botão "Ver quem são" e a linha dividem a mesma linha (44 px), para os 4 cartões não
+   passarem da régua de 1,5 tela (MEDV-04). Na ordem do teclado a linha vem antes do botão; na tela o botão fica à esquerda. */
+.nx-kpi .nxr-extra { display: flex; flex-direction: row-reverse; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; }
+.nx-kpi .nxr-extra .nx-linha30 { flex: 1 1 0; min-width: 0; }
+.app.product-workspace:not(.sap-workspace) .nx-kpi .nxr-extra .nx-linha30__area { height: 44px; }
+.nx-kpi .nxr-extra .nxr-ver { flex: none; white-space: nowrap; }
 .nexo-results-overview .nxr-form {
   display: grid;
   gap: 12px;

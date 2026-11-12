@@ -300,6 +300,37 @@ planos da 03.1 herdarem:
   resolver:". Nada de "mediano", "taxa de salvamento" nem "÷" no texto do médico.
 - **Bolinhas no carrossel do celular:** uma por cartão, a do cartão à vista marcada (`nx-pagina__pontos`, só no celular).
 
+### j) Funil desenhado e linha de 30 dias (12/11/2026)
+
+O João aprovou os sketches 001 (variante A2) e 002 (variante A). Regras para os planos da 03.1 herdarem:
+
+- **Nomes do João (D-06, só os nomes):** Conversou · Virou lead · Atendido · Agendou · Fechou (`NOMES_DO_FUNIL`). Valem no funil
+  desenhado; a leitura mantém os nomes dela porque o filtro de jargão (`texto.ts`) proíbe "lead" no texto da leitura.
+- **Largura:** escala de raiz com mínimo de 8% (`larguraDaEtapa`); valor 0 e sem valor dão o mínimo. O número escrito é sempre o real.
+- **Ligação em trapézio** entre as faixas, com "N% passam"; abaixo do mínimo de base (`LIMITES.funil`) a pílula diz "N de M", nunca %.
+  Etapas que contam populações diferentes (pessoas contra cards do CRM, pacientes antigos contra pessoas novas) não ganham %: a ligação
+  é uma faixa reta e neutra, sem pílula, e a explicação vai para a gaveta.
+- **Maior perda** em vermelho com ▼ (pílula "▼ Maior perda: X → Y (N% passam) ↗" que abre a etapa de chegada) só quando a regra aponta
+  e o funil não está fora de ordem. Qualquer ligação com taxa acima de 1 liga o aviso de fora de ordem e apaga a maior perda.
+- **Contorno tracejado e ▲/▼** só com o período anterior já em memória (em Do contato à venda, pelo diário). Nenhuma consulta nova:
+  o período anterior de pessoas únicas continua proibido (estoura 8 s). Sem período anterior, sem contorno.
+- **Falta dado:** etapa sem medida vira o toco cinza listrado "Falta dado" com "—" no número, nunca barra nem 0; as ligações vizinhas
+  ficam neutras e a gaveta diz o motivo.
+- **Gaveta** em `<dialog>` nativo (`showModal`): folha presa embaixo no celular, centrada no desktop; Esc e clique no fundo fecham e o
+  foco volta para a etapa. Mostra só contagens (nenhum nome, telefone ou e-mail) e aceita uma ação da tela ("Ver quem são").
+- **Jornada:** as faixas começam em Conversou; Alcance, Engajamento e Comentário ou direct ficam na faixa "Antes da conversa" (chips de
+  uma linha), porque o alcance achataria as 5 etapas do comercial no mínimo mesmo na escala de raiz. A lista de 7 etapas com o que
+  falta medir continua nos Detalhes.
+- **Contagem das abas Funil e Jornada:** pessoas que viraram lead no período, lida de `pacientes_periodo` sem consulta nova; zero e
+  erro mostram "—".
+- **Linha de 30 dias** (`NxLinhaDe30Dias`, prop opcional `serie` de `NxCartaoNumero`): só em cartão cuja série diária já está em
+  memória. Dia sem dado é buraco (a linha quebra, nunca desce a zero) e a média ignora o buraco; média tracejada; dica "dia: valor" ao
+  passar o dedo ou o mouse; o toque fixa "dia: valor · ▲/▼ N% vs média do mês". O gráfico é um slider de teclado (setas, Home, End,
+  Enter) e o conjunto tem resumo para leitor de tela. Menos de 2 dias com valor: não desenha.
+- **"média do mês"** com 28 a 31 dias; senão "média do período".
+- **Régua de 1,5 tela:** continua valendo (1218 px a 375x812, 1350 px a 1440x900). Para caber, a faixa é de 38 px e a ligação de 18 px
+  no desktop (22 px e 8 px até 560 px) e a legenda do contorno fica na linha da pílula da maior perda.
+
 ### Grupos da equipe
 
 Plano 03.1.1-08 (D-02 com a emenda de 11/11/2026, quando o João tirou do Nexo os grupos Plano e Agentes, Estratégias e campanhas,
