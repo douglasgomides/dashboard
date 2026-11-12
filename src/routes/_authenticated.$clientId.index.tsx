@@ -1,11 +1,23 @@
-import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
+import { Fragment, memo, useCallback, useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, getRouteApi, Link, useLocation } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import "@/styles/nexo-resultados.css";
 import { useResultado } from "@/hooks/use-resultado";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
-import { useResultadosDiarios } from "@/hooks/use-resultados-diarios";
+import { useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxAneis } from "@/components/nx/aneis";
+import { NxAgoraContraAntes } from "@/components/nx/agora-contra-antes";
+import { NxAcaoPilula, NxBarras, NxCartaoNumero } from "@/components/nx/cartoes";
+import { linhaDaRota } from "@/components/nx/hoje";
+import type { DateRangeState } from "@/lib/date-range";
+import { useClientRole } from "@/hooks/use-client-role";
+import { ehEquipe } from "@/lib/registro-de-telas";
+import type { SerieDiaria } from "@/components/nx/linha-de-30-dias";
+import { serieContinua } from "@/lib/linha-30-dias";
+import { visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
+import { aneisDeResultados, cartoesDeDinheiro, descobertasDeResultados, linhasAgoraContraAntes, medidasDoInstagram, retornoDaEntrada, vereditoDeResultados, type CartaoDeDinheiro, type ChaveDoFunil, type EntradaCincoResultados, type LinhaDoInstagram } from "@/lib/leitura/cinco-resultados";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido } from "@/components/nx/blocos";
 import { fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria, variacaoPct } from "@/lib/leitura/fatos-resultados";
 import { resumirClinica } from "@/lib/leitura/resumo-clinica";
@@ -17,7 +29,7 @@ import { montarRoi, numerosDisponiveisRoi, situacaoAnuncios, situacaoCrm, NOTA_D
 import { ROTULO_SELO, type Selo } from "@/lib/selo";
 import { AVISO_CRM_ZERO } from "@/lib/resultado";
 import { textoNaoMedido, avisoNaoMedido, avisoAgendouMenosQueFechou, coberturaDoNumero, avisoCrmCompartilhado as avisoCrmDePessoas, type Numero, type PacientesPeriodo } from "@/lib/pacientes";
-import { getRoiPeriodo, getAdsDiagnosticoPorObjetivo } from "@/lib/client-data";
+import { getRoiPeriodo, getAdsDiagnosticoPorObjetivo, getAdsPorDia, getAdsResumo } from "@/lib/client-data";
 import { usePautas } from "@/components/planejador-conteudo";
 import { ROTULO_FORMATO } from "@/lib/pauta";
 import { fmtFormatKey } from "@/lib/report-metrics";
@@ -527,7 +539,12 @@ function MonthlyOverview() {
   const diario = useResultadosDiarios(clientId, start, end);
   const diarioAnterior = useResultadosDiarios(clientId, comparacao.anterior.start, comparacao.anterior.end);
   const roi = useQuery({ queryKey: ["roi-periodo", clientId, start, fim], queryFn: () => getRoiPeriodo(clientId, start, fim), staleTime: 5 * 60_000, retry: false });
-  const carregandoFontes = pessoas.isPending || diario.isPending || diarioAnterior.isPending || roi.isPending;
+  // Gasto e custo: a mesma leitura de uma linha (rpc ads_resumo) que a Hoje faz, com as mesmas chaves de cache (consulta compartilhada),
+  // e os anúncios por dia com a chave idêntica à de useResultado (nenhuma consulta a mais).
+  const adsAtual = useQuery({ queryKey: ["ads-resumo", clientId, start, comparacao.fimFechado], queryFn: () => getAdsResumo(clientId, start, comparacao.fimFechado), staleTime: 5 * 60_000, retry: false });
+  const adsAnterior = useQuery({ queryKey: ["ads-resumo", clientId, comparacao.anterior.start, comparacao.anterior.end], queryFn: () => getAdsResumo(clientId, comparacao.anterior.start, comparacao.anterior.end), staleTime: 5 * 60_000, retry: false });
+  const adsDia = useQuery({ queryKey: ["ads-dia", clientId, start, fim], queryFn: () => getAdsPorDia(clientId, start, fim), staleTime: 5 * 60_000, retry: false });
+  const carregandoFontes = pessoas.isPending || diario.isPending || diarioAnterior.isPending || roi.isPending || adsAtual.isPending || adsAnterior.isPending || adsDia.isPending;
 
   const funil = useMemo(() => {
     const atual = somaDiaria((diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado), comparacao.dias, CAMPOS_FUNIL);
@@ -556,14 +573,15 @@ function MonthlyOverview() {
     return (
       <PaginaNexo
         {...cabecalho}
-        leitura={<LeituraDaTela fatos={null} carregando={false} erro="Os indicadores estão indisponíveis." semSelo />}
+        veredito={<NxVeredito veredito={null} carregando={false} erro="Os indicadores estão indisponíveis." tela="resultados" />}
+        leitura={null}
         corpo={<NxErro texto="Não foi possível carregar o resumo. Os indicadores estão indisponíveis no momento." onTentar={() => void metricas.refetch()} />}
       />
     );
   }
 
   if (metricas.isLoading || !r || !leitura) {
-    return <PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={null} carregando semSelo />} corpo={<NxCarregando linhas={4} />} />;
+    return <PaginaNexo {...cabecalho} veredito={<NxVeredito veredito={null} carregando tela="resultados" />} leitura={null} corpo={<NxCarregando linhas={4} />} />;
   }
 
   return (
@@ -579,6 +597,8 @@ function MonthlyOverview() {
       roi={roi.data ?? null}
       linhasDia={diario.data ?? []}
       variacoes={{ atual: funil.atual, antes: funil.antes }}
+      comparacao={{ dias: comparacao.dias, fimFechado: comparacao.fimFechado }}
+      ads={{ atual: adsAtual.data ?? null, anterior: adsAnterior.data ?? null, porDia: adsDia.data ?? null }}
     />
   );
 }
@@ -597,6 +617,8 @@ function Resultados({
   roi,
   linhasDia,
   variacoes,
+  comparacao,
+  ads,
 }: {
   clientId: string;
   start: string;
@@ -607,8 +629,11 @@ function Resultados({
   carregandoFontes: boolean;
   pessoas: PacientesPeriodo | null;
   roi: DadosRoi | null;
-  linhasDia: { dia: string; mandaram_mensagem: number | null; agendaram: number | null }[];
+  linhasDia: ({ dia: string } & Record<CampoDiario, number | null>)[];
   variacoes: { atual: Record<string, number | null>; antes: Record<string, number | null> };
+  comparacao: { dias: number; fimFechado: string };
+  /** As linhas cruas do banco (ads_resumo e ads_por_dia): os números chegam como texto ou número, e o que falta chega null. */
+  ads: { atual: unknown; anterior: unknown; porDia: unknown };
 }) {
   const { isAdmin } = useAuth();
   const periodLabel = formatRangeLabel({ start, end });
@@ -714,14 +739,70 @@ function Resultados({
     `${fmtTaxaPct(f.median)} de taxa de interação (mediana) · ${f.count} posts · ${ROTULO_CONFIANCA[confiancaPorPosts(f.count)].toLowerCase()}`;
   const pctCobertura = diasPeriodo > 0 ? Math.round((datasDados.length / diasPeriodo) * 100) : 0;
 
-  // ---------- topo: 4 cartões e 1 gráfico ----------
-  const cartoes: [ReactNode, ReactNode?, ReactNode?, ReactNode?] = carregandoFontes
-    ? [<NxCarregando key="c" linhas={2} />]
-    : cartoesDePessoas({ pessoas, roi, variacoes });
-  const principal = linhasDia.filter((l) => l.mandaram_mensagem != null || l.agendaram != null);
+  // ---------- formato 5 segundos (03.1.1.1, D-01): veredito com os 3 anéis ao lado; o topo antigo (4 cartões e o gráfico de contatos) vai para "Ver tudo" ----------
+  const cartoesAntigos: ReactNode[] = carregandoFontes ? [<NxCarregando key="c" linhas={2} />] : cartoesDePessoas({ pessoas, roi, variacoes }).filter((c) => c != null);
+  const principalAntigo = linhasDia.filter((l) => l.mandaram_mensagem != null || l.agendaram != null);
+
+  // Seguidores novos e salvos a cada mil: dias fechados do Instagram, em janelas do mesmo tamanho (sem consulta nova).
+  const instagram = useMemo(
+    () => medidasDoInstagram({ metricas: data as LinhaDoInstagram[], anterior: ant as LinhaDoInstagram[], start, end: fim, hoje: resultado.hoje }),
+    [data, ant, start, fim, resultado.hoje],
+  );
+  const numeroDoCartao = (k: ChaveDoFunil) => pessoas?.numeros?.[k]?.valor ?? null;
+  const entrada: EntradaCincoResultados = useMemo(
+    () => ({
+      fatos: leitura.fatos,
+      dias: comparacao.dias,
+      valores: { mandaram_mensagem: numeroDoCartao("mandaram_mensagem"), agendaram: numeroDoCartao("agendaram"), fecharam: numeroDoCartao("fecharam") },
+      atual: variacoes.atual,
+      antes: variacoes.antes,
+      diario: linhasDia,
+      ads: ladoDeAnuncios(ads),
+      seguidores: instagram.seguidores,
+      salvos: instagram.salvos,
+      retorno: retornoDaEntrada(roi ? montarRoi(roi) : null),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [leitura.fatos, comparacao.dias, pessoas, variacoes, linhasDia, ads, instagram, roi],
+  );
+  const veredito = useMemo(() => vereditoDeResultados(entrada), [entrada]);
+  const aneis = useMemo(() => aneisDeResultados(entrada), [entrada]);
+  const linhasAgora = useMemo(() => linhasAgoraContraAntes(entrada), [entrada]);
+  const dinheiro = useMemo(() => cartoesDeDinheiro(entrada), [entrada]);
+  // Descobertas (3 a 5, só com a própria clínica): as 3 primeiras à vista, as outras no começo do "Ver tudo". A ação de conversas muda com o papel.
+  const papel = useClientRole(clientId);
+  const equipe = !papel.carregando && ehEquipe({ isAdmin, papel: papel.papel });
+  const dateRange = clientLayoutRoute.useSearch();
+  const descobertas = useMemo(() => descobertasDeResultados(entrada, { equipe }), [entrada, equipe]);
+  const { visiveis, resto } = visiveisEResto(descobertas.itens);
+  // A linha de 30 dias de cada anel: só os dias fechados, com buraco (nunca zero) onde o dia não veio.
+  const series = useMemo(() => {
+    const linhas = linhasDia.filter((l) => l.dia <= comparacao.fimFechado);
+    const de = (campo: CampoDiario, rotulo: string): SerieDiaria | undefined => {
+      const { datas, valores } = serieContinua(linhas.map((l) => ({ dia: l.dia, valor: l[campo] ?? null })));
+      return datas.length >= 2 ? { rotulo, datas, valores } : undefined;
+    };
+    return { mandaram_mensagem: de("mandaram_mensagem", "conversas iniciadas"), agendaram: de("agendaram", "agendaram"), fecharam: de("fecharam", "fecharam") };
+  }, [linhasDia, comparacao.fimFechado]);
 
   const detalhe = (
     <div className="nexo-results-overview">
+      {resto.length > 0 && <MaisDescobertas itens={resto} clientId={clientId} dateRange={dateRange} />}
+      <div className="nx-grade nx-grade--4">{cartoesAntigos.map((c, k) => <Fragment key={k}>{c}</Fragment>)}</div>
+      {principalAntigo.length >= 3 && (
+        <NxCard nivel={2} icone={ic(MessageCircle)} titulo="Contatos e agendamentos por dia" subtitulo={`${periodLabel} · pessoas que chamaram (eixo da esquerda) e agendamentos (eixo da direita)`}>
+          <NxLinhaTempo
+            rotulo="Pessoas que chamaram e agendamentos por dia"
+            datas={principalAntigo.map((l) => l.dia)}
+            series={[
+              { rotulo: "Chamaram", valores: principalAntigo.map((l) => l.mandaram_mensagem ?? 0), cor: "var(--b1)", area: true },
+              { rotulo: "Agendaram", valores: principalAntigo.map((l) => l.agendaram ?? 0), cor: "var(--or)", eixo: "dir" },
+            ]}
+            formatarData={tickDate}
+            formatarValor={(n) => fmt(Math.round(n))}
+          />
+        </NxCard>
+      )}
       <AvisosDeDado insights={r.insights} />
 
       <NxRecolhido id="todas-analises" titulo="Todas as análises do período" resumo="O que melhorou e piorou, o que fazer nesta semana, o resumo do período e o que ainda não dá para dizer">
@@ -895,25 +976,109 @@ function Resultados({
   return (
     <PaginaNexo
       {...cabecalho}
+      veredito={
+        <NxVeredito
+          veredito={veredito}
+          carregando={carregandoFontes}
+          tela="resultados"
+          lado={veredito?.tipo === "veredito" ? <NxAneis aneis={aneis} series={series} rotuloDoAnterior={`${comparacao.dias} dias antes`} /> : undefined}
+        />
+      }
+      cartoes={carregandoFontes ? undefined : [<CartaoDeDinheiroNx key="r" c={dinheiro[0]} clientId={clientId} />, <CartaoDeDinheiroNx key="g" c={dinheiro[1]} clientId={clientId} />, <CartaoDeDinheiroNx key="p" c={dinheiro[2]} clientId={clientId} />]}
+      principal={carregandoFontes ? undefined : <NxAgoraContraAntes linhas={linhasAgora} />}
+      descobertas={
+        carregandoFontes || veredito?.tipo !== "veredito" ? undefined : (
+          <NxDescobertas
+            titulo="O que os números dizem"
+            apoio={<p className={descobertas.aviso ? "nx-cinco-falta" : "nx-cinco-falta nx-resultados-ordem"}>{descobertas.aviso ?? "Em ordem de impacto"}</p>}
+            itens={visiveis}
+            clientId={clientId}
+            dateRange={dateRange}
+          />
+        )
+      }
       leitura={<LeituraDaTela fatos={leitura.fatos} resumo={leitura.resumo} carregando={carregandoFontes} semSelo />}
-      cartoes={cartoes}
-      principal={
-        principal.length >= 3 ? (
-          <NxCard nivel={2} icone={ic(MessageCircle)} titulo="Contatos e agendamentos por dia" subtitulo={`${periodLabel} · pessoas que chamaram (eixo da esquerda) e agendamentos (eixo da direita)`}>
-            <NxLinhaTempo
-              rotulo="Pessoas que chamaram e agendamentos por dia"
-              datas={principal.map((l) => l.dia)}
-              series={[
-                { rotulo: "Chamaram", valores: principal.map((l) => l.mandaram_mensagem ?? 0), cor: "var(--b1)", area: true },
-                { rotulo: "Agendaram", valores: principal.map((l) => l.agendaram ?? 0), cor: "var(--or)", eixo: "dir" },
-              ]}
-              formatarData={tickDate}
-              formatarValor={(n) => fmt(Math.round(n))}
-            />
-          </NxCard>
+      resumoDoVerTudo="Tudo o que esta tela mostrava"
+      detalhe={detalhe}
+    />
+  );
+}
+
+/**
+ * As descobertas que passam das 3 à vista (4 e 5) moram no "Ver tudo", já com os fatores do "Por quê?" abertos (nada some, e nada disputa a
+ * primeira dobra). Só navegam: a ação é o mesmo link da descoberta à vista.
+ */
+function MaisDescobertas({ itens, clientId, dateRange }: { itens: readonly Descoberta[]; clientId: string; dateRange?: DateRangeState }) {
+  return (
+    <section className="nx-cinco-resto" aria-label="Mais descobertas do período" data-peca="mais-descobertas">
+      <h3 className="nx-cinco-resto__titulo">Mais descobertas do período</h3>
+      <div className="nx-cinco-resto__grade">
+        {itens.map((d) => {
+          const linha = d.acao.rota ? linhaDaRota(d.acao.rota) : undefined;
+          return (
+            <article key={d.id} className="nx-cinco-resto__item" data-descoberta-extra={d.id}>
+              <NxSelo tom={d.tom} texto={d.selo} />
+              <p className="nx-cinco-resto__frase">{d.frase}</p>
+              <NxBarras barras={d.porque.barras} rotulo={d.porque.titulo} />
+              {d.porque.obs && <p className="nx-cinco-falta">{d.porque.obs}</p>}
+              {linha && <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir a aba de origem" para={{ tela: linha, clientId, dateRange }} />}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// ---------- dinheiro e comparação no formato 5 segundos (03.1.1.1) ----------
+
+const numero = (v: unknown): number | null => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+
+/** As linhas cruas de ads_resumo e ads_por_dia viram os lados que a regra espera (texto vazio e ausente viram null, nunca 0). */
+function ladoDeAnuncios(ads: { atual: unknown; anterior: unknown; porDia: unknown }): EntradaCincoResultados["ads"] {
+  const lado = (l: unknown) => (l && typeof l === "object" ? { gasto: numero((l as Record<string, unknown>).gasto), conversas: numero((l as Record<string, unknown>).conversas) } : null);
+  const dias = Array.isArray(ads.porDia) ? (ads.porDia as Record<string, unknown>[]).map((d) => ({ dia: String(d.dia), gasto: numero(d.gasto), conversas: numero(d.conversas) })) : [];
+  const atual = lado(ads.atual);
+  const anterior = lado(ads.anterior);
+  return atual || anterior || dias.length ? { atual, anterior, porDia: dias } : null;
+}
+
+/** "Informar valor": leva a equipe ao lugar onde o valor médio da consulta já é editado (link só, sem formulário novo). */
+function LinkInformarValor({ clientId }: { clientId: string }) {
+  const local = useLocation();
+  const periodo = Object.fromEntries(Object.entries(local.search).filter(([k]) => ["preset", "from", "to"].includes(k)));
+  return (
+    <Link search={{ ...periodo, aba: "conversas" } as any} to="/$clientId/atendimento" params={{ clientId } as any} className="nx-botao">
+      Informar valor
+    </Link>
+  );
+}
+
+/** Um dos 3 cartões de dinheiro. Sem medida: "Falta dado" com o motivo; só a equipe vê "Informar valor", o médico vê quem resolve. */
+function CartaoDeDinheiroNx({ c, clientId }: { c: CartaoDeDinheiro; clientId: string }) {
+  const { isAdmin } = useAuth();
+  const papel = useClientRole(clientId);
+  const equipe = !papel.carregando && ehEquipe({ isAdmin, papel: papel.papel });
+  return (
+    <NxCartaoNumero
+      icone={ic(c.id === "retorno" ? Wallet : Coins)}
+      titulo={c.titulo}
+      valor={c.valorTexto}
+      legenda={c.legenda}
+      semMedida={c.semMedida}
+      variacao={c.textoDaVariacao ? { texto: c.textoDaVariacao } : null}
+      serie={c.serie ? { ...c.serie, formatar: (n) => fmtBRL(n) } : undefined}
+      extra={
+        c.semMedida ? (
+          <>
+            <p className="nx-cinco-falta" data-falta-dado>{`Falta dado: ${c.motivo ?? "sem medida neste período"}`}</p>
+            {c.id === "retorno" && (equipe ? c.equipeInformaValor && <LinkInformarValor clientId={clientId} /> : <p className="nx-cinco-falta">{`Quem resolve: ${ROTULO_RESPONSAVEL.equipe_hub}`}</p>)}
+          </>
+        ) : c.selo && !c.variacao ? (
+          // Valor medido, mas sem período anterior para comparar: a falta é dita em cinza (nunca um 0% de mentira).
+          <p className="nx-cinco-falta" data-falta-dado>{`${c.selo.texto}`}</p>
         ) : undefined
       }
-      detalhe={detalhe}
     />
   );
 }

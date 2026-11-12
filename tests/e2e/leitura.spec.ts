@@ -1,9 +1,11 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
+import { abrirVerTudo } from "./apoio-cinco-segundos";
 
 // Leitura do período no topo de Resultados da clínica (Phase 3.1, tracer): calculada na hora, no navegador, só do que a
 // tela já carrega. Três casos, a 1440 e a 375 px: (a) dado em dia, (b) dado do Instagram parado há 10 dias,
 // (c) a leitura segue o período escolhido (subtítulo com o período e o anterior de mesmo tamanho).
+// 03.1.1.1 (plano 03): Resultados abre com o veredito; o "Resumo da clínica" (a leitura) mora dentro do "Ver tudo", que o teste abre antes de ler.
 
 /** Instagram simulado como em resultados-painel.spec.ts. `diasDeAtraso` apaga os últimos dias (dado parado). */
 async function instagram(context: BrowserContext, diasDeAtraso = 0) {
@@ -64,6 +66,14 @@ function ddmm(menosDias: number): string {
 
 // Resultados da clínica lê no modo resumo (D-07): "Resumo da clínica" é a leitura da tela, com o mesmo molde.
 const regiao = (page: Page) => page.getByRole("region", { name: "Resumo da clínica", exact: true });
+const RAIZ = '[data-tela="resultados"]';
+const veredito = (page: Page) => page.locator(`${RAIZ} [data-peca="veredito"]`);
+/** O "Ver tudo" só existe com a tela fora de "carregando": espera o veredito e então abre (abrirVerTudo não espera). */
+async function abrirDepoisDeCarregar(page: Page) {
+  await expect(veredito(page)).toBeVisible();
+  await expect(veredito(page)).not.toHaveAttribute("data-modo", "carregando");
+  await abrirVerTudo(page, RAIZ);
+}
 
 for (const width of [375, 1440]) {
   test.describe(`leitura de Resultados a ${width}px`, () => {
@@ -76,6 +86,12 @@ for (const width of [375, 1440]) {
       await instagram(context);
       await page.goto(`/${CID}?preset=30d`);
 
+      // O veredito abre a tela, sem "Falta dado"; a leitura inteira está no "Ver tudo".
+      await expect(veredito(page)).toBeVisible();
+      await expect(veredito(page)).not.toHaveAttribute("data-modo", "carregando");
+      await expect(veredito(page)).not.toHaveAttribute("data-modo", "sem-leitura");
+      await expect(veredito(page).getByText(/Falta dado:/)).toHaveCount(0);
+      await abrirDepoisDeCarregar(page);
       const leitura = regiao(page);
       await expect(leitura).toBeVisible();
       await expect(leitura.getByText("O que aconteceu", { exact: true })).toBeVisible();
@@ -84,7 +100,7 @@ for (const width of [375, 1440]) {
       await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
       await expect(leitura.getByText(/Falta dado:/)).toHaveCount(0);
       // A leitura fica dentro do molde novo, abaixo da pergunta da tela, antes do conteúdo antigo.
-      await expect(page.locator('.nx-pagina[data-tela="resultados"] > .nx-leitura')).toHaveCount(1);
+      await expect(page.locator('.nx-pagina[data-tela="resultados"] .nx-pagina__detalhe .nx-leitura')).toHaveCount(1);
       await expect(page.getByRole("heading", { level: 1, name: "Como a clínica foi no período?", exact: true })).toBeVisible();
       expect(await semRolagemLateral(page)).toBe(true);
     });
@@ -94,6 +110,15 @@ for (const width of [375, 1440]) {
       await instagram(context, 10);
       await page.goto(`/${CID}?preset=30d`);
 
+      // O veredito diz o mesmo "Falta dado" da leitura, com o passo e quem resolve, e nenhuma descoberta aparece (D-05).
+      await expect(veredito(page)).toHaveAttribute("data-modo", "sem-leitura");
+      await expect(veredito(page).getByText(/Falta dado: .*o Instagram está sem dado novo desde \d{2}\/\d{2}/)).toBeVisible();
+      await expect(veredito(page).getByText(/Próximo passo para resolver:/)).toBeVisible();
+      await expect(veredito(page).getByText("Quem resolve: Equipe Doctor Creator")).toBeVisible();
+      await expect(page.locator(`${RAIZ} [data-peca="descoberta"]`)).toHaveCount(0);
+      await expect(page.locator(`${RAIZ} [data-peca="aneis"]`)).toHaveCount(0);
+
+      await abrirDepoisDeCarregar(page);
       const leitura = regiao(page);
       await expect(leitura.getByText(/Falta dado:/)).toBeVisible();
       await expect(leitura.getByText(/o Instagram está sem dado novo desde \d{2}\/\d{2}/)).toBeVisible();
@@ -108,10 +133,12 @@ for (const width of [375, 1440]) {
       await instagram(context);
 
       await page.goto(`/${CID}?preset=30d`);
+      await abrirDepoisDeCarregar(page);
       const subtitulo = regiao(page).locator(".nx-leitura__periodo");
       await expect(subtitulo).toHaveText(`${ddmm(29)} a ${ddmm(0)}, comparado com ${ddmm(59)} a ${ddmm(30)}`);
 
       await page.goto(`/${CID}?preset=7d`);
+      await abrirDepoisDeCarregar(page);
       await expect(subtitulo).toHaveText(`${ddmm(6)} a ${ddmm(0)}, comparado com ${ddmm(13)} a ${ddmm(7)}`);
       await expect(regiao(page).getByText("O que aconteceu", { exact: true })).toBeVisible();
       expect(await semRolagemLateral(page)).toBe(true);

@@ -1,9 +1,12 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
+import { abrirVerTudo } from "./apoio-cinco-segundos";
 
 // Seção Resultados no molde novo (Phase 3.1, plano 03): Resultados da clínica abre com o resumo da clínica em 3 linhas
 // (a única leitura), até 4 cartões e um gráfico; tudo o mais fica no detalhe recolhido. Pacientes do período e as duas
 // telas em construção (O que virou paciente, O que virou venda) abrem com leitura, ou com "Falta dado:" e quem resolve.
+// 03.1.1.1 (plano 03): Resultados passou ao formato 5 segundos. O veredito, os anéis, os 3 cartões de dinheiro e as descobertas abrem a tela;
+// o resumo da clínica, os 4 cartões de pessoas, o gráfico de contatos e todo o detalhe moram no "Ver tudo", que estes testes abrem antes de ler.
 
 const dia = (i: number) => new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
 const num = (valor: number | null, extra: Record<string, unknown> = {}) => ({ valor, fonte: "crm", motivo_sem_dado: valor == null ? "Sem dado no CRM." : null, responsavel: "comercial", ...extra });
@@ -92,7 +95,13 @@ for (const width of [375, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}?preset=30d`);
 
-    // O resumo é a leitura da tela: uma só, com as 3 linhas e o número ao lado.
+    // O formato 5 segundos abre a tela: o veredito primeiro, os 3 cartões de dinheiro e o gráfico "você agora contra você antes".
+    await expect(page.locator('[data-tela="resultados"] [data-peca="veredito"]')).toBeVisible();
+    expect(await page.locator(".nx-pagina__cartoes [data-peca=\"cartao-numero\"]").count()).toBeLessThanOrEqual(3);
+    await expect(page.locator(".nx-pagina__principal [data-peca=\"agora-contra-antes\"]")).toBeVisible();
+
+    // O resumo é a leitura da tela, agora dentro do "Ver tudo": uma só, com as 3 linhas e o número ao lado.
+    await abrirVerTudo(page, '[data-tela="resultados"]');
     const resumo = page.getByRole("region", { name: "Resumo da clínica", exact: true });
     await expect(resumo).toBeVisible();
     await expect(resumo.getByText("O que aconteceu", { exact: true })).toBeVisible();
@@ -102,20 +111,18 @@ for (const width of [375, 1440]) {
     await expect(resumo.locator(".nx-leitura__num").first()).toBeVisible();
     await expect(page.getByRole("region", { name: "Leitura do período", exact: true })).toHaveCount(0);
 
-    // Até 4 cartões de número (chamaram, agendaram, fecharam e o dinheiro) e os números do topo existem.
-    const cartoes = page.locator(".nx-pagina__cartoes > *");
+    // Os 4 cartões de pessoas (chamaram, agendaram, fecharam e o dinheiro) e o gráfico de contatos, no começo do "Ver tudo".
+    const cartoes = page.locator(".nx-pagina__detalhe .nexo-results-overview > .nx-grade > *");
     expect(await cartoes.count()).toBeLessThanOrEqual(4);
-    await expect(page.locator(".nx-pagina__cartoes .nx-kpi .ws-metric-value").first()).toHaveText("120");
-    // Um gráfico principal: contatos e agendamentos por dia.
-    await expect(page.locator(".nx-pagina__principal .nx-linha__svg")).toHaveCount(1);
+    await expect(page.locator(".nx-pagina__detalhe .nx-kpi .ws-metric-value").first()).toHaveText("120");
+    await expect(page.getByRole("heading", { name: "Contatos e agendamentos por dia" })).toBeVisible();
     // O que brigava pelo topo saiu dele: prioridade recomendada e as 8 respostas só no detalhe.
     await expect(page.getByText("Prioridade recomendada")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Diagnóstico estratégico" })).toHaveCount(0);
     expect(await semRolagemLateral(page)).toBe(true);
     await page.screenshot({ path: `test-results/redesenho/resultados-${width}.png`, fullPage: true });
 
-    // Detalhe recolhido: um toque abre cada parte.
-    await page.locator(".nx-pagina__detalhe > details > summary").click();
+    // Detalhe recolhido: o "Ver tudo" já está aberto, e um toque abre cada parte.
     await page.locator("#instagram > summary").click();
     const instagramRegiao = page.getByRole("region", { name: "Resultados do Instagram", exact: true });
     await expect(instagramRegiao.locator(".nx-kpi")).toHaveCount(4);
