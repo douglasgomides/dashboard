@@ -7,7 +7,7 @@ import { MIN_DIAS_SALDO } from "../src/lib/leitura/fatos-instagram";
 import { GUARDA_DE_TEXTO_DA_TELA_HOJE } from "../src/lib/leitura/fatos-hoje";
 import { checarFraseCinco, textoDaFrase } from "../src/lib/leitura/cinco-segundos";
 import { notaDoDia, type NotaDoDia } from "../src/lib/leitura/nota-do-dia";
-import { fatoresDaHoje, vereditoDaHoje, type EntradaCincoHoje } from "../src/lib/leitura/cinco-hoje";
+import { etapasContraAntes, fatoresDaHoje, sentidoDaEtapa, tituloDaVirada, vereditoDaHoje, type EntradaCincoHoje } from "../src/lib/leitura/cinco-hoje";
 
 const pessoas = (virou: number | null, atendido: number | null): EntradaCincoHoje["pessoas"] => ({
   etapas: [
@@ -151,5 +151,68 @@ for (const a of ids) for (const b of ids) {
     assert.ok(!GUARDA_DE_TEXTO_DA_TELA_HOJE.test(t), t);
   }
 }
+
+// ---------------------------------------------------------------- as etapas contra o período anterior
+const virada = (): EntradaCincoHoje => ({
+  ...base(),
+  atual: { mandaram_mensagem: 162, leads_novos: 144, agendaram: 40, fecharam: 5 },
+  antes: { mandaram_mensagem: 100, leads_novos: 100, agendaram: 50, fecharam: 10 },
+});
+const etapas = etapasContraAntes(virada());
+assert.deepEqual(etapas.map((x) => x.rotulo), ["Conversou", "Virou lead", "Atendido", "Agendou", "Fechou"]);
+assert.deepEqual(etapas.map((x) => x.pct), [62, 44, null, -20, -50]);
+assert.deepEqual(etapas.map((x) => x.atual), [162, 144, 60, 40, 5], "Atendido agora vem do funil de pessoas");
+assert.equal(etapas[2].antes, null);
+assert.equal(etapas[2].motivo, "o período anterior de pessoas não é medido");
+assert.equal(etapas[0].antes, 100);
+assert.equal(etapas[0].motivo, undefined);
+const titulo = tituloDaVirada(etapas);
+assert.deepEqual(titulo, { indice: 3, titulo: "Até Virou lead, tudo cresce. Depois, cai." }, "pula a etapa sem dado");
+
+// Etapa com anterior abaixo da base fixada: pct null com "base pequena: N de M"
+const pequenaBase = etapasContraAntes({ ...virada(), antes: { mandaram_mensagem: 100, leads_novos: 100, agendaram: 12, fecharam: 4 } });
+assert.equal(pequenaBase[3].pct, null);
+assert.equal(pequenaBase[3].motivo, `base pequena: 12 de ${LIMITES.funil.minAgendamentos}`);
+assert.equal(pequenaBase[4].pct, null);
+assert.equal(pequenaBase[4].motivo, `base pequena: 4 de ${LIMITES.leitura.grupoMinimo}`);
+const baseConversas = etapasContraAntes({ ...virada(), antes: { mandaram_mensagem: 20, leads_novos: 29, agendaram: 50, fecharam: 10 } });
+assert.equal(baseConversas[0].motivo, `base pequena: 20 de ${LIMITES.funil.minLeads}`);
+assert.equal(baseConversas[1].motivo, `base pequena: 29 de ${LIMITES.funil.minLeads}`);
+
+// Sem soma diária (histórico não cobre o período): nunca 0
+const semHistorico = etapasContraAntes({ ...virada(), atual: { mandaram_mensagem: null, leads_novos: null, agendaram: null, fecharam: null }, antes: { mandaram_mensagem: null, leads_novos: null, agendaram: null, fecharam: null } });
+for (const k of [0, 1, 3, 4]) {
+  assert.equal(semHistorico[k].pct, null);
+  assert.equal(semHistorico[k].atual, null);
+  assert.ok((semHistorico[k].motivo ?? "").length > 0);
+}
+// Sem funil de pessoas: Atendido sem número, com motivo
+const semPessoas = etapasContraAntes({ ...virada(), pessoas: null });
+assert.equal(semPessoas[2].atual, null);
+assert.equal(semPessoas[2].pct, null);
+assert.ok((semPessoas[2].motivo ?? "").length > 0);
+
+// Sem o padrão cresce-depois-cai: título neutro e sem linha de virada
+const todasCrescem = tituloDaVirada(etapasContraAntes({ ...virada(), atual: { mandaram_mensagem: 162, leads_novos: 144, agendaram: 70, fecharam: 14 } }));
+assert.deepEqual(todasCrescem, { indice: null, titulo: "Cada etapa comparada com o período anterior" });
+const todasCaem = tituloDaVirada(etapasContraAntes({ ...virada(), atual: { mandaram_mensagem: 60, leads_novos: 60, agendaram: 30, fecharam: 5 } }));
+assert.equal(todasCaem.indice, null);
+const caiESobe = tituloDaVirada(etapasContraAntes({ ...virada(), atual: { mandaram_mensagem: 162, leads_novos: 60, agendaram: 80, fecharam: 5 } }));
+assert.equal(caiESobe.indice, null, "cresce, cai e volta a crescer: não é 'depois, cai'");
+const nenhuma = tituloDaVirada(etapasContraAntes({ ...virada(), atual: { mandaram_mensagem: null, leads_novos: null, agendaram: null, fecharam: null }, pessoas: null }));
+assert.equal(nenhuma.indice, null);
+// Menos de 3% é "igual" (a mesma folga dos números do topo): não conta como crescer nem como cair
+assert.equal(sentidoDaEtapa(null), "falta");
+assert.equal(sentidoDaEtapa(2), "igual");
+assert.equal(sentidoDaEtapa(-2), "igual");
+assert.equal(sentidoDaEtapa(3), "sobe");
+assert.equal(sentidoDaEtapa(-3), "cai");
+const comIgual = tituloDaVirada(etapasContraAntes({ ...virada(), atual: { mandaram_mensagem: 162, leads_novos: 101, agendaram: 40, fecharam: 5 } }));
+assert.deepEqual(comIgual, { indice: 3, titulo: "Até Conversou, tudo cresce. Depois, cai." }, "Virou lead +1% é igual e fica de fora");
+const soIgual = tituloDaVirada(etapasContraAntes({ ...virada(), atual: { mandaram_mensagem: 101, leads_novos: 100, agendaram: 51, fecharam: 10 } }));
+assert.equal(soIgual.indice, null);
+// A virada na segunda etapa
+const cedo = tituloDaVirada(etapasContraAntes({ ...virada(), atual: { mandaram_mensagem: 162, leads_novos: 60, agendaram: 30, fecharam: 5 } }));
+assert.deepEqual(cedo, { indice: 1, titulo: "Até Conversou, tudo cresce. Depois, cai." });
 
 console.log("test-cinco-hoje: ok");

@@ -1,6 +1,7 @@
 // As regras da Hoje no formato 5 segundos (Phase 03.1.1.1, plano 02): os 5 sinais da nota do dia (D-03) montados só com o que a Hoje já
 // carrega, a frase do veredito e (mais abaixo) as etapas do funil contra o período anterior. Tudo compara a clínica com ELA MESMA (D-02).
 // Módulo puro: sem React, sem banco, sem rede e sem IA. Um sinal sem dado confiável vai para "Falta dado" com o motivo (nunca vira 0).
+import { NOMES_DO_FUNIL } from "@/lib/funil-desenhado";
 import { LIMITES } from "@/lib/limites";
 import { MIN_DIAS_SALDO } from "./fatos-instagram";
 import { checarFraseCinco, type ParteDaFrase, type VereditoDaTela } from "./cinco-segundos";
@@ -33,7 +34,8 @@ const inteiro = (n: number) => Math.round(n).toLocaleString("pt-BR");
 const reais = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const medido = (n: number | null | undefined): number | null => (n != null && Number.isFinite(n) ? n : null);
-const custoPorConversa = (a: AdsDoPeriodo | null | undefined): number | null => {
+/** Custo por conversa do período (gasto ÷ conversas pelo anúncio); null sem gasto ou sem conversa medidos. */
+export const custoPorConversa = (a: AdsDoPeriodo | null | undefined): number | null => {
   const gasto = medido(a?.gasto);
   const conversas = medido(a?.conversas);
   return gasto != null && conversas != null && gasto > 0 && conversas > 0 ? gasto / conversas : null;
@@ -190,4 +192,73 @@ export function vereditoDaHoje(nota: NotaDoDia): VereditoDaTela {
   // A primeira que cabe nas guardas (90 caracteres, jargão, outras clínicas, promessa).
   const frase = candidatas.find((c) => checarFraseCinco(juntar(c)).length === 0) ?? candidatas[candidatas.length - 1];
   return { tipo: "veredito", palavra, tom, frase };
+}
+
+// ---------------------------------------------------------------- a prova: cada etapa do funil contra o período anterior (CINCO-01)
+
+/** Uma etapa do funil contra o período anterior da MESMA clínica. */
+export interface EtapaContraAntes {
+  /** O nome do João para a etapa (Conversou, Virou lead, Atendido, Agendou, Fechou). */
+  rotulo: string;
+  atual: number | null;
+  antes: number | null;
+  /** Variação em %, com sinal (+62 cresceu, −50 caiu). null = Falta dado (o motivo diz por quê). */
+  pct: number | null;
+  /** Por que não há variação ("base pequena: 4 de 5", "o período anterior de pessoas não é medido"). */
+  motivo?: string;
+}
+
+/** Abaixo disto a etapa é "igual" (a mesma folga de 3% dos números do topo, variacaoPropria). */
+export const IGUAL_ATE = 3;
+
+/** O sentido de uma variação: subiu, caiu, igual (menos de 3%) ou falta dado (null). */
+export function sentidoDaEtapa(pct: number | null): "sobe" | "cai" | "igual" | "falta" {
+  if (pct == null) return "falta";
+  if (Math.abs(pct) < IGUAL_ATE) return "igual";
+  return pct > 0 ? "sobe" : "cai";
+}
+
+const MOTIVO_ATENDIDO = "o período anterior de pessoas não é medido";
+const TITULO_PADRAO = "Cada etapa comparada com o período anterior";
+
+function etapaDaSoma(rotulo: string, atual: number | null | undefined, antes: number | null | undefined, baseMinima: number): EtapaContraAntes {
+  const a = medido(atual);
+  const b = medido(antes);
+  const sem = (motivo: string): EtapaContraAntes => ({ rotulo, atual: a, antes: b, pct: null, motivo });
+  if (a == null) return sem("o histórico diário não cobre este período");
+  if (b == null) return sem("o histórico diário não cobre o período anterior");
+  if (b <= 0) return sem("o período anterior foi zero, sem base para comparar");
+  if (b < baseMinima) return sem(`base pequena: ${Math.round(b)} de ${baseMinima}`);
+  return { rotulo, atual: a, antes: b, pct: Math.round(((a - b) / b) * 100) || 0 };
+}
+
+/**
+ * As 5 etapas na ordem do funil, cada uma contra o período anterior da própria clínica. Conversou e Virou lead valem a partir de
+ * LIMITES.funil.minLeads no período anterior, Agendou de LIMITES.funil.minAgendamentos e Fechou de LIMITES.leitura.grupoMinimo; abaixo
+ * disso a etapa é "Falta dado" com "base pequena: N de M". Atendido mostra o número de agora (o funil de pessoas) e NUNCA variação: o
+ * período anterior de pessoas não é medido (D-05).
+ */
+export function etapasContraAntes(e: EntradaCincoHoje): EtapaContraAntes[] {
+  const atendidoAgora = medido(e.pessoas?.etapas[2]?.valor);
+  return [
+    etapaDaSoma(NOMES_DO_FUNIL[0], e.atual.mandaram_mensagem, e.antes.mandaram_mensagem, LIMITES.funil.minLeads),
+    etapaDaSoma(NOMES_DO_FUNIL[1], e.atual.leads_novos, e.antes.leads_novos, LIMITES.funil.minLeads),
+    { rotulo: NOMES_DO_FUNIL[2], atual: atendidoAgora, antes: null, pct: null, motivo: MOTIVO_ATENDIDO },
+    etapaDaSoma(NOMES_DO_FUNIL[3], e.atual.agendaram, e.antes.agendaram, LIMITES.funil.minAgendamentos),
+    etapaDaSoma(NOMES_DO_FUNIL[4], e.atual.fecharam, e.antes.fecharam, LIMITES.leitura.grupoMinimo),
+  ];
+}
+
+/**
+ * O título da prova e onde o funil vira. Só há virada quando as etapas medidas crescem e, a partir de uma delas, todas as seguintes caem:
+ * então o título é "Até {última que cresce}, tudo cresce. Depois, cai." e `indice` é a primeira etapa que cai (a linha tracejada "aqui
+ * virou" vem logo antes). A etapa sem variação é pulada. Sem esse padrão: título neutro e `indice` null.
+ */
+export function tituloDaVirada(etapas: readonly EtapaContraAntes[]): { indice: number | null; titulo: string } {
+  // Só contam as etapas que de fato subiram ou caíram: sem variação e "igual" (até 3%) ficam de fora, como nos 3 números do topo.
+  const medidas = etapas.map((x, i) => ({ x, i, s: sentidoDaEtapa(x.pct) })).filter((m) => m.s === "sobe" || m.s === "cai");
+  const primeiraQueCai = medidas.findIndex((m) => m.s === "cai");
+  const padrao = primeiraQueCai >= 1 && medidas.slice(0, primeiraQueCai).every((m) => m.s === "sobe") && medidas.slice(primeiraQueCai).every((m) => m.s === "cai");
+  if (!padrao) return { indice: null, titulo: TITULO_PADRAO };
+  return { indice: medidas[primeiraQueCai].i, titulo: `Até ${medidas[primeiraQueCai - 1].x.rotulo}, tudo cresce. Depois, cai.` };
 }
