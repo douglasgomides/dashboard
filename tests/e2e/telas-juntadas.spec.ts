@@ -435,10 +435,11 @@ for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
 // Plano 03: Onde os pacientes travam (4 abas, Funil com 2 partes) e De onde vêm os pacientes > Por origem, no molde, no desenho
 // do D-07 e dentro de 1,5 tela. Dados fictícios (mockPessoas e mockCrm).
 // ===================================================================================================================
-type ParteMedida = { pasta: string; aba: string; parte?: string; sub: string; slug: string; semCartoes?: boolean };
+type ParteMedida = { pasta: string; aba: string; parte?: string; sub: string; slug: string; semCartoes?: boolean; cinco?: boolean };
 const TRAVAM = "Onde os pacientes travam";
 const PARTES_DO_CRM: ParteMedida[] = [
-  { pasta: TRAVAM, aba: "Funil", parte: "Do contato à venda", sub: "pacientes", slug: "do-contato-a-venda" },
+  // Formato 5 segundos (03.1.1.1, plano 05): abre com o veredito (a leitura mora no "Ver tudo").
+  { pasta: TRAVAM, aba: "Funil", parte: "Do contato à venda", sub: "pacientes", slug: "do-contato-a-venda", cinco: true },
   { pasta: TRAVAM, aba: "Funil", parte: "No CRM", sub: "crm-painel", slug: "no-crm" },
   // Consultas e Vendas são telas em construção: leitura "Falta dado:", sem cartões.
   { pasta: TRAVAM, aba: "Consultas", sub: "consultas", slug: "consultas", semCartoes: true },
@@ -456,7 +457,7 @@ async function abrirParte(page: Page, context: BrowserContext, perfil: "viewer" 
   await page.goto(`/${CID}/${sub}?preset=30d`);
 }
 
-for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes } of PARTES_DO_CRM) {
+for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes, cinco } of PARTES_DO_CRM) {
   for (const perfil of ["viewer", "admin"] as const) {
     test(`${perfil}: ${nomeDaAba}${parte ? ` > ${parte}` : ""} abre no molde com leitura, pílula de ação e cartões com ícone redondo`, async ({ page, context }) => {
       await abrirParte(page, context, perfil, sub, { width: 1440, height: 900 });
@@ -467,12 +468,21 @@ for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes } 
         const partes = page.getByRole("navigation", { name: `Partes de ${nomeDaAba}`, exact: true });
         await expect(partes.getByRole("link", { name: parte })).toHaveAttribute("aria-current", "page");
       }
-      const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-      await expect(leitura).toBeVisible();
-      await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
-      await expect(leitura.getByText(/O que aconteceu|Falta dado:/).first()).toBeVisible();
-      await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
-      await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
+      if (cinco) {
+        // O veredito (palavra e frase) abre a tela, antes dos cartões; sem a leitura à vista.
+        const veredito = page.locator('[data-juntada] [data-peca="veredito"]').first();
+        await expect(veredito).toBeVisible();
+        await expect(veredito).not.toHaveAttribute("data-modo", "carregando");
+        await expect(veredito.getByText(/Aqui você perde mais|Funil fora de ordem|Falta dado:/).first()).toBeVisible();
+        await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toBeHidden();
+      } else {
+        const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+        await expect(leitura).toBeVisible();
+        await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+        await expect(leitura.getByText(/O que aconteceu|Falta dado:/).first()).toBeVisible();
+        await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
+        await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
+      }
       const cartoes = page.locator("[data-juntada] .nx-pagina__cartoes > *");
       if (semCartoes) {
         await expect(cartoes).toHaveCount(0);
@@ -817,13 +827,20 @@ for (const sub of PARTES_DAS_3_TELAS) {
     await mockLinks(context);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${CID}/${sub}?preset=30d`);
-    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-    await expect(leitura).toBeVisible();
-    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
-    await expect(leitura.locator(".nx-acao-pilula").first(), `/${sub}: sem pílula de ação na leitura`).toBeVisible();
+    if (sub === "pacientes") {
+      // Formato 5 segundos (03.1.1.1, plano 05): o veredito abre a tela, a leitura (e a pílula dela) mora no "Ver tudo" e os números são no máximo 3.
+      const veredito = page.locator('[data-juntada] [data-peca="veredito"]').first();
+      await expect(veredito).toBeVisible();
+      await expect(veredito).not.toHaveAttribute("data-modo", "carregando");
+    } else {
+      const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+      await expect(leitura).toBeVisible();
+      await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+      await expect(leitura.locator(".nx-acao-pilula").first(), `/${sub}: sem pílula de ação na leitura`).toBeVisible();
+    }
     const cartoes = page.locator("[data-juntada] .nx-pagina__cartoes > *");
     const total = await cartoes.count();
-    expect(total).toBeLessThanOrEqual(4);
+    expect(total).toBeLessThanOrEqual(sub === "pacientes" ? 3 : 4);
     // Consultas e Vendas são telas em construção (sem cartões); todas as outras têm de 1 a 4.
     if (sub !== "consultas" && sub !== "vendas") expect(total, `/${sub}: sem cartões`).toBeGreaterThanOrEqual(1);
     for (let i = 0; i < total; i++) {
