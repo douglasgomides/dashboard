@@ -608,26 +608,25 @@ function AnunciosPage() {
         </>
       }
       cartoes={cartoes}
-      principal={
-        <NxCard
-          icone={ic(CalendarDays)}
-          titulo="Investimento e conversas por dia"
-          rotulo="Investimento e conversas por dia"
-        >
-          <NxBarrasLinha
-            altura={130}
-            dados={serie}
-            rotulo="Investimento e conversas por dia"
-            nomeBarra="Investido"
-            nomeLinha="Conversas"
-            formatarBarra={brlCurto}
-            formatarLinha={int}
-            formatarData={ddmm}
-          />
-        </NxCard>
-      }
       detalhe={
         <div className="nexo-mkt nexo-anuncios">
+          {/* Os cartões de Investido e Conversas já mostram a linha de 30 dias: o gráfico diário completo (barras e linha) vem para cá (nada some, D-03). */}
+          <NxCard
+            icone={ic(CalendarDays)}
+            titulo="Investimento e conversas por dia"
+            rotulo="Investimento e conversas por dia"
+          >
+            <NxBarrasLinha
+              altura={130}
+              dados={serie}
+              rotulo="Investimento e conversas por dia"
+              nomeBarra="Investido"
+              nomeLinha="Conversas"
+              formatarBarra={brlCurto}
+              formatarLinha={int}
+              formatarData={ddmm}
+            />
+          </NxCard>
           <NxNota>Gráfico por dia: barras = investido no dia, linha = conversas iniciadas. Dias em que a linha não acompanha a barra são os que merecem olhada.</NxNota>
 
           {suspeito && (

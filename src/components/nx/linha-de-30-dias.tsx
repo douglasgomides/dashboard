@@ -76,6 +76,7 @@ export const NxLinhaDe30Dias = memo(function NxLinhaDe30Dias({ rotulo, datas, va
         ref={caixa}
         className="nx-linha30__area"
         role="slider"
+        aria-label={`${rotulo} por dia`}
         tabIndex={0}
         aria-orientation="horizontal"
         aria-valuemin={1}

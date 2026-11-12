@@ -579,9 +579,9 @@ for (const perfil of ["viewer", "admin"] as const) {
     await expect(leitura.getByText(/As conversas iniciadas pelos anúncios subiram/)).toBeVisible();
     await expect(leitura.locator(".nx-leitura__num", { hasText: "+20%" })).toBeVisible();
     await confereIconesDosCartoes(page, "anuncios");
-    // Os 4 números e o gráfico do dia seguem à vista; o resto está nos Detalhes, fechado.
+    // Os 4 números seguem à vista (Investido e Conversas com a linha de 30 dias); o gráfico do dia e o resto estão nos Detalhes, fechado.
     await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao")).toHaveCount(4);
-    await expect(page.getByRole("slider", { name: /^Investimento e conversas por dia/ })).toBeVisible();
+    await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-linha30")).toHaveCount(2);
     await expect(page.locator("[data-juntada] details#detalhes-anuncios")).not.toHaveAttribute("open", /.*/);
     expect(await semRolagemLateral(page)).toBe(true);
   });
