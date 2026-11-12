@@ -6,10 +6,10 @@ current_phase: 03.1.1
 current_phase_name: Redesenho das telas com inteligência
 status: executing
 stopped_at: Phase 3 UI-SPEC approved
-last_updated: "2026-11-12T14:24:42.075Z"
-last_activity: 2026-11-10
+last_updated: "2026-11-12T16:38:25.586Z"
+last_activity: 2026-11-12
 last_activity_desc: Phase 03.1 execution started
-state_head: bc19e53734183c00278345f8b062b37a50a8735f
+state_head: ea362410a39bca163dc73a8143ca1351860ab5d1
 progress:
   total_phases: 16
   completed_phases: 0
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 Phase: 03.1.1 — READY TO EXECUTE
 Plan: 2 of 17
 Status: Ready to execute
-Last activity: 2026-11-12 - Completed quick task 261112-e8e: Menos texto, mais visual no Nexo
+Last activity: 2026-11-12 - Completed quick task 261112-glf: Funil desenhado e linha de 30 dias nos cartões
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
+- 12/11/2026 (João): nomes das etapas do funil comercial = Conversou · Virou lead · Atendido · Agendou · Fechou (decisão aberta 1 / D-06, só os nomes; o resto da Phase 9 segue aberto). Funil desenhado = sketch 001 variante A2; cartão = sketch 002 variante A (linha de 30 dias).
 
 - Roadmap: uma fase = um PR; 14 fases apesar de `granularity: coarse` (a regra do dono prevalece)
 - Roadmap: a primeira entrega de código é o log (Phase 2); o PR da Fase 0 abre depois do PR do log
@@ -86,6 +87,7 @@ None yet.
 | 261111-jb8 | Hoje clara para o médico | 2026-11-11 | 40624e3 | [261111-jb8-hoje-clara-para-o-m-dico](./quick/261111-jb8-hoje-clara-para-o-m-dico/) |
 | 261111-ofr | Carteira com alertas honestos e leituras corrigidas | 2026-11-11 | 5703336 | [261111-ofr-carteira-com-alertas-honestos-e-leituras](./quick/261111-ofr-carteira-com-alertas-honestos-e-leituras/) |
 | 261112-e8e | Menos texto, mais visual no Nexo (Top 5 do UI review) | 2026-11-12 | bc19e53 | [261112-e8e-menos-texto-mais-visual-no-nexo](./quick/261112-e8e-menos-texto-mais-visual-no-nexo/) |
+| 261112-glf | Funil desenhado (A2) e linha de 30 dias nos cartões | 2026-11-12 | ea36241 | [261112-glf-funil-desenhado-e-linha-de-30-dias-nos-c](./quick/261112-glf-funil-desenhado-e-linha-de-30-dias-nos-c/) |
 
 ### Roadmap Evolution
 

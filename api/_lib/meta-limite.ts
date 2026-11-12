@@ -15,6 +15,7 @@
  * O bloqueio vale para a função em execução (memória do processo): na próxima rodada, a Meta é consultada de novo.
  */
 import { createHash } from "node:crypto";
+import { fraseDePausaMeta } from "../../src/lib/pausa-meta.js";
 
 export const USO_MAXIMO_META = 90;
 const ESPERA_PADRAO_MIN = 10;
@@ -144,7 +145,7 @@ function bloquear(chave: string, minutos: number, motivo: string, codigo: number
 
 function mensagem(motivo: string, ate: number, agora: number): string {
   const min = Math.max(1, Math.ceil((ate - agora) / 60_000));
-  return `Meta: ${motivo}. Chamadas pausadas por cerca de ${min} min para não prolongar o bloqueio; a próxima rodada tenta de novo.`;
+  return `Meta: ${motivo}. ${fraseDePausaMeta(min)}`;
 }
 
 /** Lança MetaLimiteError se o escopo desta chamada estiver pausado. */

@@ -4,6 +4,7 @@ import { LinkDoRegistro } from "@/components/menu-equipe";
 import type { NomeIcone, TelaDoRegistro } from "@/lib/registro-de-telas";
 import type { DateRangeState } from "@/lib/date-range";
 import type { BarraDoFato } from "@/lib/leitura/tipos";
+import { NxLinhaDe30Dias, type SerieDiaria } from "@/components/nx/linha-de-30-dias";
 import "@/styles/nexo-cartoes.css";
 
 // Peças do D-07 (Phase 3.1.1, referência visual aprovada pelo João em 10/11/2026) para cartões e ações. Toda tela no molde
@@ -140,9 +141,14 @@ export interface NxCartaoNumeroProps {
   info?: ReactNode;
   /** Peça própria da tela logo abaixo do número (por exemplo a barrinha de progresso). */
   extra?: ReactNode;
+  /**
+   * Série diária que a tela já tem em memória: desenha a linha de 30 dias (sketch 002, A) logo depois da pílula de variação.
+   * Dia sem dado vai como null (buraco, nunca 0). Não desenha com `semMedida` nem com menos de 2 dias com valor.
+   */
+  serie?: SerieDiaria;
 }
 
-export const NxCartaoNumero = memo(function NxCartaoNumero({ icone, titulo, subtitulo, valor, legenda, variacao, abrir, abaixoDaMeta, semMedida, meta, acao, info, extra }: NxCartaoNumeroProps) {
+export const NxCartaoNumero = memo(function NxCartaoNumero({ icone, titulo, subtitulo, valor, legenda, variacao, abrir, abaixoDaMeta, semMedida, meta, acao, info, extra, serie }: NxCartaoNumeroProps) {
   const classe = ["nx-cartao", abaixoDaMeta ? "nx-abaixo-da-meta" : "", semMedida ? "nx-faltou" : ""].filter(Boolean).join(" ");
   const fracao = meta ? Math.max(0, Math.min(1, meta.fracao)) : 0;
   return (
@@ -165,6 +171,7 @@ export const NxCartaoNumero = memo(function NxCartaoNumero({ icone, titulo, subt
       {extra}
       {abaixoDaMeta && <p className="nx-cartao__aviso">{abaixoDaMeta}</p>}
       {variacao && <NxPilulaVariacao texto={variacao.texto} sobe={variacao.sobe} />}
+      {serie && !semMedida && <NxLinhaDe30Dias {...serie} />}
       {meta && (
         <div className="nx-meta-tracejada" role="img" aria-label={`${meta.rotulo}: ${Math.round(fracao * 100)}% atingido`}>
           <span className="nx-meta-tracejada__barra">

@@ -8,11 +8,11 @@ import { CmAviso, CmBarras, CmMetodo, CmRecolhido, icT } from "@/components/nx/c
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { NxTabela } from "@/components/nx/blocos";
-import { NxFunil, type NxEtapaFunil } from "@/components/nx/anuncios-graficos";
+import { NxFunilDesenhado } from "@/components/nx/funil-desenhado";
+import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { fatosDaJornada } from "@/lib/leitura/fatos-comercial";
 import { hojeBrasilia } from "@/lib/status-fonte";
-import { fmtNdeM } from "@/lib/funil-taxa";
-import { fmtFracao } from "@/lib/metricas";
+import { daJornada, type EtapaAntes } from "@/lib/funil-desenhado";
 import { ChecklistDados, FunilOndeQuebra, useDiagnosticoComercial } from "@/components/comercial-diagnostico";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { JornadaFunil, useFunilDaJornada } from "@/components/jornada-funil";
@@ -54,6 +54,27 @@ function Tabela({ rotulo, cab, linhas, textoAte = 1 }: { rotulo: string; cab: st
   const colunas = cab.map((titulo, j) => ({ chave: `c${j}`, titulo, numerica: j >= textoAte }));
   const registros = linhas.map((l) => Object.fromEntries(l.map((c, j) => [`c${j}`, c])) as Record<string, ReactNode>);
   return <NxTabela rotulo={rotulo} colunas={colunas} linhas={registros} />;
+}
+
+/**
+ * A faixa "Antes da conversa": as 3 etapas do Instagram (alcance, engajamento, comentário ou direct) com o nome de hoje e o número, ou
+ * "Falta dado" listrado. Ficam fora das faixas porque o alcance (centenas de milhares) achataria as 5 etapas do comercial no mínimo
+ * mesmo na escala de raiz. A lista completa de 7 etapas, com o que falta para medir, continua nos Detalhes.
+ */
+function AntesDaConversa({ etapas }: { etapas: EtapaAntes[] }) {
+  return (
+    <div className="nx-funil-d__antes">
+      <p className="nx-funil-d__antes-titulo">Antes da conversa</p>
+      <ul className="nx-funil-d__antes-lista" aria-label="Antes da conversa" tabIndex={0}>
+        {etapas.map((e) => (
+          <li key={e.id} className="nx-funil-d__chip" data-falta={e.valor == null ? "" : undefined} title={e.motivo ?? undefined}>
+            <span>{e.nome}</span>
+            <b>{e.texto}</b>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function JornadaPage() {
@@ -128,6 +149,21 @@ function JornadaPage() {
         : null,
     [proprio, funilDaJornada, start, end, hoje, r, d?.limitacoes],
   );
+  // O funil desenhado (Conversou · Virou lead · Atendido · Agendou · Fechou) e a faixa "Antes da conversa": a mesma conta do funil de
+  // 7 etapas, com o diagnóstico que a tela já carrega (mesma chave de React Query, nenhuma consulta nova).
+  const desenho = useMemo(() => (funilDaJornada ? daJornada({ funil: funilDaJornada, comercial: d ?? null }) : null), [funilDaJornada, d]);
+
+  // Contagem em cinza das abas Funil e Jornada (D-07): as pessoas que viraram lead no período. Só vale quando a etapa conta pessoas
+  // (pacientes_periodo respondeu); com cards do CRM, ou sem dado, a aba mostra "—". Carregando: undefined; zero vira null (nunca "0").
+  const leadDoFunil = funilDaJornada?.etapas.find((e) => e.id === "lead")?.valor ?? null;
+  usePublicarContagem({
+    clientId,
+    de: start,
+    ate: end,
+    rota: "/_authenticated/$clientId/jornada",
+    valor: proprio ? null : doFunil.q.isLoading || (doFunil.pacientes.isLoading && !doFunil.pacientes.isError) ? undefined : doFunil.pac && leadDoFunil ? leadDoFunil : null,
+  });
+
   const leituraComErro = !proprio && doFunil.q.isError;
   const carregandoLeitura = !proprio && !leituraComErro && (funilDaJornada == null || resumo.isLoading || diag.isLoading);
   const leitura = <LeituraDaTela fatos={fatos} carregando={carregandoLeitura} erro={leituraComErro ? "A leitura da jornada falhou." : null} />;
@@ -158,16 +194,6 @@ function JornadaPage() {
           />,
         ]
       : undefined;
-
-  // O funil do período em degraus. Etapa sem medida aparece como "Sem dado": o que falta para medir está no funil completo, nos Detalhes.
-  const etapas: NxEtapaFunil[] | null = funilDaJornada
-    ? funilDaJornada.etapas.map((e) => ({
-        rotulo: e.nome,
-        valor: e.valor ?? 0,
-        texto: e.valor == null ? "Sem dado" : e.valor.toLocaleString("pt-BR"),
-        passagem: e.taxa != null ? `${fmtFracao(e.taxa)} passam` : e.fracao ? fmtNdeM(e.fracao) : null,
-      }))
-    : null;
 
   // A leitura já diz que os contatos sem pessoa deixam a jornada no escuro (fato "sem-pessoa"): o aviso completo, com o escopo e o
   // porquê, vai para os Detalhes. Sem esse fato na leitura (poucos contatos ou leitura negada), o aviso continua à vista no corpo.
@@ -206,9 +232,9 @@ function JornadaPage() {
       leitura={leitura}
       cartoes={cartoes}
       principal={
-        !proprio && etapas ? (
-          <NxCard id="funil-da-jornada" nivel={2} icone={icT("filter")} titulo="Do alcance à venda" subtitulo={`${funilDaJornada!.medidas} de 7 etapas`}>
-            <NxFunil rotulo="Funil da jornada do período" etapas={etapas} />
+        !proprio && desenho ? (
+          <NxCard id="funil-da-jornada" nivel={2} icone={icT("filter")} titulo="Do alcance à venda" subtitulo={`${funilDaJornada!.medidas} de 7 etapas · toque numa etapa`}>
+            <NxFunilDesenhado titulo="Funil da jornada do período" funil={desenho.funil} antes={<AntesDaConversa etapas={desenho.antes} />} />
           </NxCard>
         ) : undefined
       }

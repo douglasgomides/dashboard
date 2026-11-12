@@ -64,7 +64,7 @@ const funil = SECOES_JUNTADAS[0].abas[0];
 assert.deepEqual(funil.partes.map((p) => [p.rota, p.rotulo]), [[`${C}/pacientes`, "Do contato à venda"], [`${C}/crm-painel`, "No CRM"]]);
 assert.deepEqual(
   DO_MEDICO.flatMap((s) => s.abas.map((a) => a.contagem)),
-  [null, "consultas no período", "vendas no período", null, "origens com venda no período", "posts no período", "campanhas no período", "links rastreados", "dias com dado", "publicações em destaque", "publicações no período", null],
+  ["pessoas que viraram lead no período", "consultas no período", "vendas no período", "pessoas que viraram lead no período", "origens com venda no período", "posts no período", "campanhas no período", "links rastreados", "dias com dado", "publicações em destaque", "publicações no período", null],
 );
 assert.equal(DO_MEDICO.flatMap((s) => s.abas).length, 12);
 assert.equal(DA_EQUIPE.flatMap((s) => s.abas).length, 10, "10 abas da equipe");

@@ -27,6 +27,7 @@ import { NxCard, NxTag, NxHBar } from "@/components/nx";
 import { NxBarrasLinha, NxFunil, NxAlertaCurto, NxNota, NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
+import { serieContinua } from "@/lib/linha-30-dias";
 import { NxCarregando, NxErro, NxTabela } from "@/components/nx/blocos";
 import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { fatosDosAnuncios, type ResumoDeAnuncios } from "@/lib/leitura/fatos-anuncios";
@@ -386,6 +387,9 @@ function AnunciosPage() {
   const gasto = diag?.gasto ?? 0;
 
   const serie = useMemo(() => (porDia ?? []).map((r) => ({ dia: r.dia, barra: n(r.gasto), linha: n(r.conversas) })), [porDia]);
+  // Linhas de 30 dias dos cartões (sketch 002): as mesmas linhas diárias de cima, sem consulta nova. Dia sem linha é buraco, nunca 0.
+  const serieGasto = useMemo(() => ({ rotulo: "investido", formatar: fmtBRL, ...serieContinua((porDia ?? []).map((r) => ({ dia: String(r.dia), valor: n(r.gasto) }))) }), [porDia]);
+  const serieConversas = useMemo(() => ({ rotulo: "conversas iniciadas", ...serieContinua((porDia ?? []).map((r) => ({ dia: String(r.dia), valor: n(r.conversas) }))) }), [porDia]);
   const limitacoes = useMemo(() => limitacoesDeAnuncios(diag), [diag]);
   const plano = useMemo(() => (diag ? planoDeAcao(diag) : []), [diag]);
 
@@ -548,6 +552,7 @@ function AnunciosPage() {
       valor={fmtBRL(gasto)}
       legenda="no período"
       variacao={pilula(varGasto)}
+      serie={serieGasto}
       info={info("Investido", `Tudo o que foi gasto em anúncios do Meta em ${periodLabel}, direto da conta de anúncio (não é estimativa), de ${diag.campanhas.length} campanhas com atividade.`)}
     />,
     <NxCartaoNumero
@@ -558,6 +563,7 @@ function AnunciosPage() {
       valor={int(diag.conversas)}
       legenda="de todas as campanhas"
       variacao={pilula(varConv)}
+      serie={serieConversas}
       info={info("Conversas iniciadas", `WhatsApp e Direct, de todas as campanhas.${suspeito ? " Rastreio suspeito: o número real pode ser maior." : ""}`)}
     />,
     <NxCartaoNumero
@@ -602,26 +608,25 @@ function AnunciosPage() {
         </>
       }
       cartoes={cartoes}
-      principal={
-        <NxCard
-          icone={ic(CalendarDays)}
-          titulo="Investimento e conversas por dia"
-          rotulo="Investimento e conversas por dia"
-        >
-          <NxBarrasLinha
-            altura={130}
-            dados={serie}
-            rotulo="Investimento e conversas por dia"
-            nomeBarra="Investido"
-            nomeLinha="Conversas"
-            formatarBarra={brlCurto}
-            formatarLinha={int}
-            formatarData={ddmm}
-          />
-        </NxCard>
-      }
       detalhe={
         <div className="nexo-mkt nexo-anuncios">
+          {/* Os cartões de Investido e Conversas já mostram a linha de 30 dias: o gráfico diário completo (barras e linha) vem para cá (nada some, D-03). */}
+          <NxCard
+            icone={ic(CalendarDays)}
+            titulo="Investimento e conversas por dia"
+            rotulo="Investimento e conversas por dia"
+          >
+            <NxBarrasLinha
+              altura={130}
+              dados={serie}
+              rotulo="Investimento e conversas por dia"
+              nomeBarra="Investido"
+              nomeLinha="Conversas"
+              formatarBarra={brlCurto}
+              formatarLinha={int}
+              formatarData={ddmm}
+            />
+          </NxCard>
           <NxNota>Gráfico por dia: barras = investido no dia, linha = conversas iniciadas. Dias em que a linha não acompanha a barra são os que merecem olhada.</NxNota>
 
           {suspeito && (

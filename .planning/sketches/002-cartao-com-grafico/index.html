@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cartão com gráfico</title>
+<link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:var(--frame);font-family:var(--font);color:var(--text);padding:64px 16px 60px}
+#variant-nav{position:fixed;top:0;left:0;right:0;z-index:50;background:var(--white);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap}
+.variant-tab{font:600 14px var(--font);border:1px solid var(--line-2);background:var(--white);border-radius:999px;padding:7px 14px;cursor:pointer;transition:all .15s}
+.variant-tab:hover{border-color:var(--b3)}.variant-tab.active{background:var(--b1);color:#fff;border-color:var(--b1)}
+.variant{display:none}.variant.active{display:block}
+.wrap{max-width:var(--vw,960px);margin:0 auto;transition:max-width .2s}
+.grade{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.card{background:var(--white);border-radius:var(--r-lg);box-shadow:var(--sombra);padding:18px 18px 14px;position:relative;transition:box-shadow .15s}
+.card:hover{box-shadow:var(--sombra-hover)}
+.rot{font-size:13px;font-weight:600;color:var(--muted);display:flex;justify-content:space-between}
+.abrir{width:30px;height:30px;border-radius:999px;background:var(--field);display:grid;place-items:center;font-size:14px;cursor:pointer;margin-top:-6px}
+.num{font-size:34px;font-weight:800;margin:4px 0 2px;letter-spacing:-.5px}
+.var{display:inline-flex;gap:4px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px}
+.up{background:var(--up-bg);color:var(--up-ink)}.dn{background:var(--dn-bg);color:var(--dn-ink)}
+.comp{font-size:12px;color:var(--muted);margin-left:6px}
+svg{display:block;width:100%;overflow:visible}
+.dica{position:absolute;pointer-events:none;background:var(--text);color:#fff;font-size:12px;font-weight:600;padding:5px 9px;border-radius:8px;white-space:nowrap;transform:translate(-50%,-120%);opacity:0;transition:opacity .1s}
+.dica.on{opacity:1}
+.dia-sel{margin-top:10px;font-size:13px;background:var(--b6);border-radius:10px;padding:8px 10px;display:none}
+.dia-sel.on{display:block}
+.barras{display:flex;align-items:flex-end;gap:2px;height:64px;margin-top:10px}
+.barras i{flex:1;background:var(--b4);border-radius:3px 3px 0 0;cursor:pointer;transition:background .1s}
+.barras i:hover,.barras i.sel{background:var(--b1)}
+.barras i.fds{background:var(--line-2)}
+.cmp{margin-top:12px;display:grid;gap:6px}
+.cmp-l{display:grid;grid-template-columns:70px 1fr 54px;gap:8px;align-items:center;font-size:12px;color:var(--muted)}
+.cmp-l .t{height:10px;background:var(--line);border-radius:8px;overflow:hidden}.cmp-l .t i{display:block;height:100%;border-radius:8px}
+.cmp-l b{color:var(--text);text-align:right}
+.nota{font-size:12px;color:var(--muted);margin-top:16px}
+#sketch-tools{position:fixed;bottom:12px;right:12px;z-index:9999;font:12px system-ui;background:rgba(0,0,0,.7);color:#fff;padding:8px 12px;border-radius:8px;opacity:.4;display:flex;gap:6px}
+#sketch-tools:hover{opacity:1}#sketch-tools button{font:12px system-ui;background:#333;color:#fff;border:0;border-radius:4px;padding:3px 7px;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="variant-nav">
+  <button class="variant-tab active" data-v="a">A: Número + linha de 30 dias ★</button>
+  <button class="variant-tab" data-v="b">B: Número + barras por dia</button>
+  <button class="variant-tab" data-v="c">C: Número + este mês vs anterior</button>
+</div>
+<div class="wrap">
+  <div id="variant-a" class="variant active"><div class="grade" id="ga"></div></div>
+  <div id="variant-b" class="variant"><div class="grade" id="gb"></div></div>
+  <div id="variant-c" class="variant"><div class="grade" id="gc"></div></div>
+  <p class="nota">Números reais da Lana, 13/10–11/11. Passe o dedo/mouse no gráfico para ver o dia; toque para fixar. Barras cinza = fim de semana.</p>
+</div>
+<div id="sketch-tools"><button data-w="375">📱 375</button><button data-w="768">768</button><button data-w="960">🖥 cheio</button></div>
+<script>
+const CONV=[167,685,549,172,81,58,156,199,151,264,420,116,127,111,146,253,357,120,66,54,78,173,234,208,209,97,79,131,171,179];
+const LEADS=[58,90,246,63,35,29,46,60,41,96,167,51,55,45,55,97,144,58,40,42,53,60,137,108,109,62,52,60,70,61];
+const D0=new Date(2026,9,13);
+const dia=i=>{const d=new Date(D0);d.setDate(d.getDate()+i);return d};
+const nomeDia=i=>dia(i).toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"2-digit"});
+const fds=i=>[0,6].includes(dia(i).getDay());
+const fmt=n=>n.toLocaleString("pt-BR");
+const CARDS=[
+  {rot:"Conversas no WhatsApp",serie:CONV,total:5808,antes:3593},
+  {rot:"Leads novos no CRM",serie:LEADS,total:2283,antes:1589},
+  {rot:"Fechados",serie:null,total:18,antes:36}
+];
+function variacao(c){const d=Math.round((c.total-c.antes)/c.antes*100);return `<span class="var ${d>=0?'up':'dn'}">${d>=0?'▲':'▼'} ${Math.abs(d)}%</span><span class="comp">vs 30 dias antes</span>`}
+function topo(c){return `<div class="rot">${c.rot}<span class="abrir">↗</span></div><div class="num">${fmt(c.total)}</div>${variacao(c)}`}
+function linha(s,id){
+  const W=300,H=70,m=Math.max(...s),pts=s.map((v,i)=>[i/(s.length-1)*W,H-v/m*H*.92]);
+  const d="M"+pts.map(p=>p.join(",")).join(" L");
+  const media=s.reduce((a,b)=>a+b)/s.length, ym=H-media/m*H*.92;
+  return `<div style="position:relative;margin-top:12px"><svg viewBox="0 0 ${W} ${H}" height="70" preserveAspectRatio="none" data-s="${id}">
+  <defs><linearGradient id="g${id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#4675F0" stop-opacity=".25"/><stop offset="1" stop-color="#4675F0" stop-opacity="0"/></linearGradient></defs>
+  <line x1="0" x2="${W}" y1="${ym}" y2="${ym}" stroke="#B4B8BF" stroke-dasharray="3 3" stroke-width="1" vector-effect="non-scaling-stroke"/>
+  <path d="${d} L${W},${H} L0,${H}Z" fill="url(#g${id})"/><path d="${d}" fill="none" stroke="#1F4FD8" stroke-width="2" vector-effect="non-scaling-stroke"/>
+  <circle r="4" fill="#1F4FD8" stroke="#fff" stroke-width="2" style="display:none"/><rect width="${W}" height="${H}" fill="transparent"/></svg><div class="dica"></div></div>
+  <div class="dia-sel"></div>`;
+}
+function barras(s){return `<div class="barras">${s.map((v,i)=>`<i class="${fds(i)?'fds':''}" style="height:${v/Math.max(...s)*100}%" data-i="${i}" title="${nomeDia(i)}: ${fmt(v)}"></i>`).join("")}</div><div class="dia-sel"></div>`}
+function comparar(c){const m=Math.max(c.total,c.antes);return `<div class="cmp"><div class="cmp-l">Este mês<div class="t"><i style="width:${c.total/m*100}%;background:var(--b1)"></i></div><b>${fmt(c.total)}</b></div><div class="cmp-l">Mês antes<div class="t"><i style="width:${c.antes/m*100}%;background:var(--muted-2)"></i></div><b>${fmt(c.antes)}</b></div></div>`}
+document.getElementById("ga").innerHTML=CARDS.map((c,k)=>`<div class="card">${topo(c)}${c.serie?linha(c.serie,k):comparar(c)}</div>`).join("");
+document.getElementById("gb").innerHTML=CARDS.map(c=>`<div class="card">${topo(c)}${c.serie?barras(c.serie):comparar(c)}</div>`).join("");
+document.getElementById("gc").innerHTML=CARDS.map(c=>`<div class="card">${topo(c)}${comparar(c)}</div>`).join("");
+// interação da linha
+document.querySelectorAll("svg[data-s]").forEach(svg=>{
+  const s=CARDS[+svg.dataset.s].serie,m=Math.max(...s),box=svg.parentElement,dica=box.querySelector(".dica"),dot=svg.querySelector("circle"),fixo=box.parentElement.querySelector(".dia-sel");
+  const at=e=>{const r=svg.getBoundingClientRect(),x=(e.touches?e.touches[0].clientX:e.clientX)-r.left,i=Math.max(0,Math.min(s.length-1,Math.round(x/r.width*(s.length-1))));
+    const px=i/(s.length-1)*300,py=70-s[i]/m*70*.92;dot.setAttribute("cx",px);dot.setAttribute("cy",py);dot.style.display="";
+    dica.style.left=(i/(s.length-1)*r.width)+"px";dica.style.top=(py/70*r.height)+"px";dica.textContent=`${nomeDia(i)}: ${fmt(s[i])}`;dica.classList.add("on");return i};
+  svg.addEventListener("mousemove",at);svg.addEventListener("touchmove",at,{passive:true});
+  svg.addEventListener("mouseleave",()=>{dica.classList.remove("on");dot.style.display="none"});
+  svg.addEventListener("click",e=>{const i=at(e);const media=Math.round(s.reduce((a,b)=>a+b)/s.length);const d=Math.round((s[i]-media)/media*100);fixo.innerHTML=`<b>${nomeDia(i)}</b>: ${fmt(s[i])} · <span class="var ${d>=0?'up':'dn'}">${d>=0?'▲':'▼'} ${Math.abs(d)}%</span> vs média do mês`;fixo.classList.add("on")});
+});
+document.querySelectorAll(".barras").forEach(b=>b.querySelectorAll("i").forEach(el=>el.onclick=()=>{
+  b.querySelectorAll("i").forEach(x=>x.classList.remove("sel"));el.classList.add("sel");
+  const s=[...b.children].map(x=>+x.title.split(": ")[1].replace(/\./g,""));const i=+el.dataset.i,media=Math.round(s.reduce((a,c)=>a+c)/s.length),d=Math.round((s[i]-media)/media*100);
+  const f=b.nextElementSibling;f.innerHTML=`<b>${nomeDia(i)}</b>: ${fmt(s[i])} · <span class="var ${d>=0?'up':'dn'}">${d>=0?'▲':'▼'} ${Math.abs(d)}%</span> vs média do mês`;f.classList.add("on")}));
+document.querySelectorAll(".abrir").forEach(a=>a.onclick=()=>{a.textContent="…";setTimeout(()=>a.textContent="↗",700)});
+document.querySelectorAll(".variant-tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".variant,.variant-tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");document.getElementById("variant-"+t.dataset.v).classList.add("active")});
+document.querySelectorAll("#sketch-tools button").forEach(b=>b.onclick=()=>document.documentElement.style.setProperty("--vw",b.dataset.w+"px"));
+</script>
+</body>
+</html>
