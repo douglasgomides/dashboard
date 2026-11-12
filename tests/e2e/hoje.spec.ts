@@ -3,6 +3,7 @@ import { CID, client, mockAccount } from "./fixtures";
 import { REGISTRO_DE_TELAS, SECOES_JUNTADAS } from "../../src/lib/registro-de-telas";
 import { GUARDA_DE_NUMERO_DA_HOJE, GUARDA_DE_TEXTO_DA_TELA_HOJE, JARGAO_DA_HOJE, MAXIMO_POR_AREA } from "../../src/lib/leitura/fatos-hoje";
 import { checarFraseCinco } from "../../src/lib/leitura/cinco-segundos";
+import { abrirVerTudo, conferirCincoSegundos } from "./apoio-cinco-segundos";
 import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, mockCrm, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 
 // O que fazer hoje (Phase 3.1.1, plano 05, e 03.1.1.1, plano 01): a tela Hoje no formato 5 segundos. O veredito abre a tela, depois vêm
@@ -15,11 +16,6 @@ test.use({ reducedMotion: "reduce" });
 const acoes = (page: Page) => page.locator('[data-tela="hoje"] [data-acao-hoje]');
 /** As descobertas à vista (as ações que ficaram no "Ver tudo" são cartões e não entram aqui). */
 const descobertas = (page: Page) => page.locator('[data-tela="hoje"] [data-peca="descoberta"]');
-/** Abre o "Ver tudo" da página quando ele existe (não faz nada quando a tela ainda não tem). */
-async function abrirVerTudoSeHouver(page: Page, tela: string) {
-  const resumo = page.locator(`[data-tela="${tela}"] details:has(> summary b:text-is("Ver tudo")) > summary`);
-  if ((await resumo.count()) > 0 && !(await resumo.evaluate((el) => (el.parentElement as HTMLDetailsElement).open))) await resumo.click();
-}
 const ROTAS_DAS_ABAS = new Set(SECOES_JUNTADAS.flatMap((s) => s.abas.flatMap((a) => a.partes.map((p) => p.rota))));
 
 /** Os mesmos dados realistas que alimentam Resultados da clínica: Instagram, pessoas, anúncios e CRM. */
@@ -236,19 +232,38 @@ for (const perfil of ["viewer", "admin"] as const) {
   }
 }
 
+// O formato 5 segundos (03.1.1.1, D-01, D-02, D-08): a mesma conferência de toda tela convertida, para o médico e para a equipe, no celular e no computador.
+for (const perfil of ["viewer", "admin"] as const) {
+  for (const janela of TELAS_DE_MEDIDA) {
+    test(`(p) ${perfil} a ${janela.width}x${janela.height}: veredito, até 3 números, de 3 a 5 descobertas, Ver tudo fechado, sem comparar clínicas e nada cortado`, async ({ page, context }) => {
+      await mockAccount(context, perfil);
+      await dadosRealistas(context);
+      await page.setViewportSize(janela);
+      await page.goto(`/${CID}/hoje?preset=30d`);
+      await expect(descobertas(page).first()).toBeVisible();
+
+      await conferirCincoSegundos(page, '[data-tela="hoje"]');
+      expect(await semRolagemLateral(page)).toBe(true);
+      // As alturas da régua de 1,5 tela (D-08): 1218 px no celular e 1350 px no computador, com o Ver tudo fechado.
+      const { altura, janela: altJanela } = await alturaDaAbaAberta(page, '[data-tela="hoje"]');
+      expect(altura, `a Hoje mede ${Math.round(altura)} px`).toBeLessThanOrEqual(LIMITE_DE_ALTURA * altJanela);
+    });
+  }
+}
+
 test("(f) a primeira descoberta da Hoje é a mesma frase do Próximo passo de Resultados da clínica", async ({ page, context }) => {
   await mockAccount(context, "admin");
   await dadosRealistas(context);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}?preset=30d`);
   // O Próximo passo de Resultados pode estar à vista ou dentro do "Ver tudo" (quando Resultados passar ao formato 5 segundos): abre se existir.
-  await abrirVerTudoSeHouver(page, "resultados");
+  await abrirVerTudo(page, '[data-tela="resultados"]');
   const resumo = page.getByRole("region", { name: "Resumo da clínica", exact: true });
   const daSemana = resumo.locator(".nx-leitura__linha", { has: page.getByText("Próximo passo", { exact: true }) }).locator(".nx-acao-pilula__texto");
   await expect(daSemana).toBeVisible();
   // Resultados mostra o resumo assim que chega o Instagram e refaz com pessoas, anúncios e CRM: espera as consultas terminarem.
   await page.waitForLoadState("networkidle");
-  await abrirVerTudoSeHouver(page, "resultados");
+  await abrirVerTudo(page, '[data-tela="resultados"]');
   await expect(daSemana).toBeVisible();
   const fraseDaSemana = norm(await daSemana.innerText());
 
@@ -444,7 +459,7 @@ for (const perfil of ["viewer", "strategist", "admin"] as const) {
     } else {
       // A linha pequena da equipe mora no "Ver tudo", fechado: abre para ver.
       await expect(page.locator('[data-peca="para-equipe"]')).toBeHidden();
-      await abrirVerTudoSeHouver(page, "hoje");
+      await abrirVerTudo(page, '[data-tela="hoje"]');
       await expect(page.locator('[data-peca="para-equipe"]')).toBeVisible();
       const item = page.locator('[data-acao-equipe="posts-sem-tema"]');
       await expect(item).toHaveCount(1);
