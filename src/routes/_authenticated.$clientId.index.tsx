@@ -1,5 +1,5 @@
-import { Fragment, memo, useCallback, useMemo, useState, type ReactNode } from "react";
-import { createFileRoute, getRouteApi, Link, useLocation } from "@tanstack/react-router";
+import { Fragment, memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createFileRoute, getRouteApi, Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import "@/styles/nexo-resultados.css";
 import { useResultado } from "@/hooks/use-resultado";
@@ -9,6 +9,8 @@ import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
 import { NxAneis } from "@/components/nx/aneis";
 import { NxAgoraContraAntes } from "@/components/nx/agora-contra-antes";
+import { BotaoFechamentoDoMes, NxHistoriaDoMes } from "@/components/nx/historia-do-mes";
+import { cartoesDoMes, periodoServeParaFechamento } from "@/lib/fechamento-do-mes";
 import { NxAcaoPilula, NxBarras, NxCartaoNumero } from "@/components/nx/cartoes";
 import { linhaDaRota } from "@/components/nx/hoje";
 import type { DateRangeState } from "@/lib/date-range";
@@ -29,7 +31,7 @@ import { montarRoi, numerosDisponiveisRoi, situacaoAnuncios, situacaoCrm, NOTA_D
 import { ROTULO_SELO, type Selo } from "@/lib/selo";
 import { AVISO_CRM_ZERO } from "@/lib/resultado";
 import { textoNaoMedido, avisoNaoMedido, avisoAgendouMenosQueFechou, coberturaDoNumero, avisoCrmCompartilhado as avisoCrmDePessoas, type Numero, type PacientesPeriodo } from "@/lib/pacientes";
-import { getRoiPeriodo, getAdsDiagnosticoPorObjetivo, getAdsPorDia, getAdsResumo } from "@/lib/client-data";
+import { getClient, getRoiPeriodo, getAdsDiagnosticoPorObjetivo, getAdsPorDia, getAdsResumo } from "@/lib/client-data";
 import { usePautas } from "@/components/planejador-conteudo";
 import { ROTULO_FORMATO } from "@/lib/pauta";
 import { fmtFormatKey } from "@/lib/report-metrics";
@@ -545,6 +547,8 @@ function MonthlyOverview() {
   const adsAnterior = useQuery({ queryKey: ["ads-resumo", clientId, comparacao.anterior.start, comparacao.anterior.end], queryFn: () => getAdsResumo(clientId, comparacao.anterior.start, comparacao.anterior.end), staleTime: 5 * 60_000, retry: false });
   const adsDia = useQuery({ queryKey: ["ads-dia", clientId, start, fim], queryFn: () => getAdsPorDia(clientId, start, fim), staleTime: 5 * 60_000, retry: false });
   const carregandoFontes = pessoas.isPending || diario.isPending || diarioAnterior.isPending || roi.isPending || adsAtual.isPending || adsAnterior.isPending || adsDia.isPending;
+  // O nome da clínica só abre o cartão de abertura do Fechamento do mês: a mesma chave de cache da Hoje e da casca (consulta compartilhada).
+  const cliente = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId), staleTime: 5 * 60_000, retry: false });
 
   const funil = useMemo(() => {
     const atual = somaDiaria((diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado), comparacao.dias, CAMPOS_FUNIL);
@@ -560,6 +564,25 @@ function MonthlyOverview() {
     const passos = [feitos.fatos.proximoPasso, ...feitos.fatos.outrosPassos].filter((p) => p != null);
     return { fatos: feitos.fatos, resumo: resumirClinica({ fatos: feitos.fatos, porArea: feitos.porArea, passos }) };
   }, [r, start, end, hoje, funil.funil, roi.data]);
+
+  // Fechamento do mês (D-06): uma história em tela cheia sobre esta mesma tela, sem rota nova. Fica aqui (e não em Resultados) porque, quando o
+  // período escolhido não é um mês, o botão leva ao preset de 30 dias e a tela recarrega: o pedido precisa sobreviver a essa troca.
+  const navegar = useNavigate();
+  const [historia, setHistoria] = useState<"fechada" | "pedida" | "aberta">("fechada");
+  const serveParaFechamento = periodoServeParaFechamento(start, end);
+  const pronta = !!r && !!leitura && !metricas.isLoading && !carregandoFontes;
+  useEffect(() => {
+    if (historia === "pedida" && serveParaFechamento && pronta) setHistoria("aberta");
+  }, [historia, serveParaFechamento, pronta]);
+  const pedirFechamento = useCallback(() => {
+    if (serveParaFechamento) {
+      setHistoria("aberta");
+      return;
+    }
+    setHistoria("pedida");
+    void navegar({ to: "/$clientId", params: { clientId }, search: { preset: "30d" } });
+  }, [serveParaFechamento, navegar, clientId]);
+  const fecharFechamento = useCallback(() => setHistoria("fechada"), []);
 
   const cabecalho = {
     tela: "resultados" as const,
@@ -597,8 +620,9 @@ function MonthlyOverview() {
       roi={roi.data ?? null}
       linhasDia={diario.data ?? []}
       variacoes={{ atual: funil.atual, antes: funil.antes }}
-      comparacao={{ dias: comparacao.dias, fimFechado: comparacao.fimFechado }}
+      comparacao={{ dias: comparacao.dias, fimFechado: comparacao.fimFechado, anterior: comparacao.anterior }}
       ads={{ atual: adsAtual.data ?? null, anterior: adsAnterior.data ?? null, porDia: adsDia.data ?? null }}
+      fechamento={{ aberto: historia === "aberta", serve: serveParaFechamento, pedir: pedirFechamento, fechar: fecharFechamento, nome: cliente.data?.name ?? null }}
     />
   );
 }
@@ -619,6 +643,7 @@ function Resultados({
   variacoes,
   comparacao,
   ads,
+  fechamento,
 }: {
   clientId: string;
   start: string;
@@ -631,9 +656,11 @@ function Resultados({
   roi: DadosRoi | null;
   linhasDia: ({ dia: string } & Record<CampoDiario, number | null>)[];
   variacoes: { atual: Record<string, number | null>; antes: Record<string, number | null> };
-  comparacao: { dias: number; fimFechado: string };
+  comparacao: { dias: number; fimFechado: string; anterior: { start: string; end: string } };
   /** As linhas cruas do banco (ads_resumo e ads_por_dia): os números chegam como texto ou número, e o que falta chega null. */
   ads: { atual: unknown; anterior: unknown; porDia: unknown };
+  /** O Fechamento do mês: se a história está aberta, se o período escolhido já serve, e como pedir e fechar. */
+  fechamento: { aberto: boolean; serve: boolean; pedir: () => void; fechar: () => void; nome: string | null };
 }) {
   const { isAdmin } = useAuth();
   const periodLabel = formatRangeLabel({ start, end });
@@ -784,6 +811,22 @@ function Resultados({
     };
     return { mandaram_mensagem: de("mandaram_mensagem", "conversas iniciadas"), agendaram: de("agendaram", "agendaram"), fecharam: de("fecharam", "fecharam") };
   }, [linhasDia, comparacao.fimFechado]);
+
+  // Os cartões do Fechamento do mês: só são montados com a história aberta (Resultados fechada não paga nada a mais).
+  const cartoesDaHistoria = useMemo(
+    () =>
+      !fechamento.aberto
+        ? []
+        : cartoesDoMes({
+            nome: fechamento.nome,
+            inicio: start,
+            fim: comparacao.fimFechado,
+            dias: comparacao.dias,
+            anterior: { inicio: comparacao.anterior.start, fim: comparacao.anterior.end },
+            conversas: { atual: variacoes.atual.mandaram_mensagem ?? null, antes: variacoes.antes.mandaram_mensagem ?? null, porDia: series.mandaram_mensagem?.valores ?? [] },
+          }),
+    [fechamento.aberto, fechamento.nome, start, comparacao, variacoes, series],
+  );
 
   const detalhe = (
     <div className="nexo-results-overview">
@@ -974,6 +1017,7 @@ function Resultados({
   );
 
   return (
+    <>
     <PaginaNexo
       {...cabecalho}
       veredito={
@@ -982,6 +1026,7 @@ function Resultados({
           carregando={carregandoFontes}
           tela="resultados"
           lado={veredito?.tipo === "veredito" ? <NxAneis aneis={aneis} series={series} rotuloDoAnterior={`${comparacao.dias} dias antes`} /> : undefined}
+          acao={veredito?.tipo === "veredito" ? <BotaoFechamentoDoMes aoAbrir={fechamento.pedir} titulo={fechamento.serve ? undefined : "O fechamento usa os últimos 30 dias"} /> : undefined}
         />
       }
       cartoes={carregandoFontes ? undefined : [<CartaoDeDinheiroNx key="r" c={dinheiro[0]} clientId={clientId} />, <CartaoDeDinheiroNx key="g" c={dinheiro[1]} clientId={clientId} />, <CartaoDeDinheiroNx key="p" c={dinheiro[2]} clientId={clientId} />]}
@@ -1001,6 +1046,8 @@ function Resultados({
       resumoDoVerTudo="Tudo o que esta tela mostrava"
       detalhe={detalhe}
     />
+    <NxHistoriaDoMes cartoes={cartoesDaHistoria} aberto={fechamento.aberto} aoFechar={fechamento.fechar} />
+    </>
   );
 }
 
