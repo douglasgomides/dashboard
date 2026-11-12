@@ -200,10 +200,10 @@ function SemLeitura({ motivo, passo, tela }: { motivo: string; passo: PassoTexto
   return (
     <ul className="nx-leitura__linhas">
       <Linha tom="atencao">
-        <p className="nx-leitura__frase">{`Sem leitura: ${motivo}`}</p>
+        <p className="nx-leitura__frase">{`Falta dado: ${motivo}`}</p>
       </Linha>
       <Linha>
-        <p className="nx-leitura__frase">Para consertar:</p>
+        <p className="nx-leitura__frase">Próximo passo para resolver:</p>
         <span ref={ancora} className="nx-leitura__ancora">
           <NxAcaoPilula frase={passo.frase} rotuloDaSeta="Ver os detalhes" aoAbrir={aoAbrir} />
         </span>
@@ -253,10 +253,10 @@ export const LeituraDaTela = memo(function LeituraDaTela({ fatos, carregando, er
               </Linha>
             )}
             {resumo.acao ? (
-              <BlocoPasso passo={resumo.acao} rotulo="Ação da semana" tela={fatos?.tela} />
+              <BlocoPasso passo={resumo.acao} rotulo="Próximo passo" tela={fatos?.tela} />
             ) : (
               resumo.semAcaoMotivo && (
-                <Linha rotulo="Ação da semana">
+                <Linha rotulo="Próximo passo">
                   <p className="nx-leitura__frase">{resumo.semAcaoMotivo}</p>
                 </Linha>
               )

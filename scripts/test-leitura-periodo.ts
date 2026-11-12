@@ -75,8 +75,10 @@ for (const [nome, a] of [["duas frentes", duasFrentes], ["leva longe", levaLonge
 assert.equal(duasFrentes!.manchete, "Post de foto alcançou e foi mais salvo");
 assert.equal(levaLonge!.manchete, "Post de foto alcançou mais");
 assert.equal(soAlcance!.manchete, "Post de foto alcançou mais");
-// Título, porque, ação e base não mudam: as outras telas seguem iguais.
-assert.ok(duasFrentes!.base.includes("alcance mediano"), "a base técnica continua inteira no achado");
+// A base continua inteira no achado, agora sem "mediano" nem "taxa" (um nome por coisa, quick 261112-e8e).
+assert.ok(duasFrentes!.base.includes("alcance típico"), "a base técnica continua inteira no achado");
+assert.ok(duasFrentes!.base.includes("salvam") && duasFrentes!.base.includes("Post de foto"), "a base diz 'salvam' e 'Post de foto'");
+for (const a of [duasFrentes, levaLonge, soAlcance]) assert.ok(!/mediano|taxa de salvamento|contas|Imagem/.test(`${a!.titulo} ${a!.porque} ${a!.base} ${a!.acao?.texto ?? ""}`), "sem mediano, taxa, contas nem Imagem");
 console.log("test-leitura-periodo: manchete ok");
 
 // ---------- comparação em barras (quick 261112-e8e): frase curta e 2 ou 4 barras, com o nome leigo do formato ----------

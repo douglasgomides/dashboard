@@ -5,7 +5,7 @@
 //
 // Privacidade (LEIT-01): o fato leva só contagens, formato e data. Legenda, comentário e nome de seguidor nunca entram.
 // Atribuição (LEIT-07): "trouxe X% dos contatos" nunca sai daqui. Sem origem por post medida, com a cobertura visível,
-// guardaOrigemPorPost não libera e a leitura diz "Sem leitura: origem por post não medida".
+// guardaOrigemPorPost não libera e a leitura diz "Falta dado: origem por post não medida".
 import { LIMITES } from "@/lib/limites";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { MIN_POSTS_LEITURA, nomeLeigoDoFormato, type Achado, type Leitura } from "@/lib/leitura-periodo";
@@ -59,8 +59,9 @@ export interface PostLeitura {
   tema?: string | null;
 }
 
-const NOME_FORMATO: Record<string, string> = { reels: "Reels", carrossel: "Carrossel", estatico: "Imagem" };
-const UM_FORMATO: Record<string, string> = { reels: "um Reels", carrossel: "um carrossel", estatico: "uma imagem" };
+// Um nome por coisa: o estático é "Post de foto" em toda leitura (o mesmo de NOME_LEIGO_DO_FORMATO).
+const NOME_FORMATO: Record<string, string> = { reels: "Reels", carrossel: "Carrossel", estatico: nomeLeigoDoFormato("estatico") };
+const UM_FORMATO: Record<string, string> = { reels: "um Reels", carrossel: "um carrossel", estatico: `um ${nomeLeigoDoFormato("estatico")}` };
 const nomeFormato = (fm?: string | null) => (fm ? NOME_FORMATO[fm] ?? fm : "Formato não informado");
 const umFormato = (fm?: string | null) => (fm ? UM_FORMATO[fm] ?? "um post" : "um post");
 const diaDoPost = (p: PostLeitura) => (p.posted_at ? new Date(Date.parse(p.posted_at) - 3 * 3600_000).toISOString().slice(0, 10) : null);
@@ -133,7 +134,7 @@ function portaoDePosts(nPosts: number): Portao {
   return { ok: true };
 }
 
-/** Tela do Instagram quando o cliente não tem o Instagram ligado: "Sem leitura:", o motivo e quem resolve. */
+/** Tela do Instagram quando o cliente não tem o Instagram ligado: "Falta dado:", o motivo e quem resolve. */
 export function fatosSemInstagram(tela: TelaId, periodo: { de: string; ate: string }, hoje: string): FatosDaTela {
   return montar({
     tela,
@@ -549,7 +550,7 @@ export function guardaOrigemPorPost(entrada?: EntradaOrigemPorPost | null): Guar
     motivo: "origem por post não medida",
     passo: {
       verbo: "conferir",
-      texto: "como medir a origem de cada contato por post (sem leitura: origem por post não medida)",
+      texto: "como medir a origem de cada contato por post (falta dado: origem por post não medida)",
       quem: "equipe_hub",
       motivo: "Sem isso, a tela não diz qual post originou cada conversa.",
       fatoId: "origem-por-post",
@@ -559,7 +560,7 @@ export function guardaOrigemPorPost(entrada?: EntradaOrigemPorPost | null): Guar
 }
 
 /** O texto que a tela mostra no aviso fixo da atribuição por post. */
-export const SEM_LEITURA_ORIGEM_POR_POST = "Sem leitura: origem por post não medida";
+export const SEM_LEITURA_ORIGEM_POR_POST = "Falta dado: origem por post não medida";
 
 export interface EntradaFatosConteudoComercial {
   de: string;
@@ -762,7 +763,7 @@ export function fatosConteudoComercial(e: EntradaFatosConteudoComercial): FatosD
     });
   }
 
-  // Origem por post: a guarda decide. Hoje nenhuma fonte mede, então fica como "Sem leitura: origem por post não medida"
+  // Origem por post: a guarda decide. Hoje nenhuma fonte mede, então fica como "Falta dado: origem por post não medida"
   // no fim de "Ver mais", com quem resolve. Nunca vira "trouxe X% dos contatos".
   const guarda = guardaOrigemPorPost(e.origemPorPost);
   const extraFinal: PassoFato[] = guarda.liberado ? [] : [guarda.passo];

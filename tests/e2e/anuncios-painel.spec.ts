@@ -107,7 +107,7 @@ test("Anúncios com rastreio suspeito: a leitura diz \"Sem leitura\" com o próx
   await page.setViewportSize({ width: 375, height: 900 });
   await page.goto(`/${CID}/anuncios?preset=30d`);
   const leitura = page.locator('[data-peca="leitura"]').first();
-  await expect(leitura.getByText(/^Sem leitura: o rastreio das conversas dos anúncios está suspeito/)).toBeVisible();
+  await expect(leitura.getByText(/^Falta dado: o rastreio das conversas dos anúncios está suspeito/)).toBeVisible();
   await expect(leitura.getByText("Quem resolve: Gestor de tráfego")).toBeVisible();
   const cartoes = page.locator(".nx-pagina__cartoes > .nx-cartao");
   await expect(cartoes.nth(2).locator(".nx-numero__valor")).toHaveText("Não confiável");

@@ -149,9 +149,9 @@ test("(c) com o Instagram parado há 10 dias: Sem leitura, para consertar e quem
   await page.goto(`/${CID}/hoje?preset=30d`);
 
   const leitura = page.locator('[data-tela="hoje"] [data-peca="leitura"]');
-  await expect(leitura.getByText(/Sem leitura:/)).toBeVisible();
+  await expect(leitura.getByText(/Falta dado:/)).toBeVisible();
   await expect(leitura.getByText(/o Instagram está sem dado novo desde \d{2}\/\d{2}/)).toBeVisible();
-  await expect(leitura.getByText(/Para consertar:/)).toBeVisible();
+  await expect(leitura.getByText(/Próximo passo para resolver:/)).toBeVisible();
   await expect(leitura.getByText("Quem resolve: Equipe Doctor Creator")).toBeVisible();
   await expect(acoes(page)).toHaveCount(0);
   expect(await semRolagemLateral(page)).toBe(true);
@@ -175,13 +175,14 @@ for (const janela of TELAS_DE_MEDIDA) {
     await page.goto(`/${CID}/hoje?preset=30d`);
 
     await expect(page.locator('[data-tela="hoje"] [data-peca="leitura"][data-modo="carregando"]')).toHaveCount(0);
-    const aviso = page.locator('[data-tela="hoje"]').getByText(/^Poucas ações nesta semana:/);
+    const aviso = page.locator('[data-tela="hoje"] .nx-hoje__aviso');
     await expect(aviso).toBeVisible();
     const n = await acoes(page).count();
     expect(n, "com poucos dados a Hoje mostra de 0 a 2 ações, nunca completa até 3").toBeLessThanOrEqual(2);
     console.log(`  Hoje com poucos dados (${janela.width}x${janela.height}): ${n} ação(ões); aviso: ${await aviso.innerText()}`);
-    // O aviso diz o motivo, curto, sem prometer nada.
-    expect(await aviso.innerText()).toMatch(/^Poucas ações nesta semana: .{10,}\.$/);
+    // O aviso é só o motivo, curto, sem prometer nada, sem a palavra "leituras" e sem repetir o total do topo.
+    expect(await aviso.innerText()).toMatch(/^\p{Lu}.{10,}\.$/u);
+    expect(await aviso.innerText()).not.toMatch(/Poucas ações|leituras/);
     for (let k = 0; k < n; k++) await expect(acoes(page).nth(k).locator("strong").first()).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
     await page.screenshot({ path: `test-results/redesenho/hoje-poucas-${janela.width}.png`, fullPage: true });
@@ -193,7 +194,7 @@ test("(d) sem nenhuma ação: o aviso diz o motivo e a tela não inventa ação"
   await instagramParado(context, 0, []);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}/hoje?preset=30d`);
-  await expect(page.locator('[data-tela="hoje"]').getByText(/^Poucas ações nesta semana:/)).toBeVisible();
+  await expect(page.locator('[data-tela="hoje"] .nx-hoje__aviso')).toHaveText("Os números deste período não pediram nenhuma ação.");
   await expect(acoes(page)).toHaveCount(0);
 });
 
@@ -225,7 +226,7 @@ test("(f) o Próximo da Hoje é a mesma frase da Ação da semana de Resultados 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}?preset=30d`);
   const resumo = page.getByRole("region", { name: "Resumo da clínica", exact: true });
-  const daSemana = resumo.locator(".nx-leitura__linha", { has: page.getByText("Ação da semana", { exact: true }) }).locator(".nx-acao-pilula__texto");
+  const daSemana = resumo.locator(".nx-leitura__linha", { has: page.getByText("Próximo passo", { exact: true }) }).locator(".nx-acao-pilula__texto");
   await expect(daSemana).toBeVisible();
   // Resultados mostra o resumo assim que chega o Instagram e refaz com pessoas, anúncios e CRM: espera as consultas terminarem.
   await page.waitForLoadState("networkidle");
@@ -486,6 +487,8 @@ for (const janela of TELAS_DE_MEDIDA) {
     console.log(`  Hoje (${janela.width}x${janela.height}): ${n} ações, ${total} com Ver números`);
     // Com tudo fechado, o texto da tela inteira também não traz jargão.
     expect(await page.locator('[data-tela="hoje"]').innerText(), "jargão no texto da Hoje").not.toMatch(JARGAO_DA_HOJE);
+    expect(await page.locator('[data-tela="hoje"]').innerText(), "o ÷ fica no Ver números, nunca à vista").not.toContain("÷");
+    await expect(page.locator('[data-tela="hoje"] .nx-proximo__rotulo')).toHaveText("Próximo passo");
     expect(await semRolagemLateral(page)).toBe(true);
   });
 }

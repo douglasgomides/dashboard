@@ -91,7 +91,7 @@ function regraRitmo(e: EntradaLeitura, out: Achado[], falta: string[]) {
     antes = median(ant.map((d) => n(d.reach)));
     depois = median(dias.map((d) => n(d.reach)));
     rotulo = "em relação ao período anterior";
-    base = `alcance diário mediano ${int(depois)} contra ${int(antes)} no período anterior (${dias.length} e ${ant.length} dias)`;
+    base = `alcance diário típico ${int(depois)} contra ${int(antes)} no período anterior (${dias.length} e ${ant.length} dias)`;
   } else {
     if (dias.length < MIN_DIAS_TENDENCIA) {
       falta.push(`Se o alcance está subindo ou caindo: precisa de pelo menos ${MIN_DIAS_TENDENCIA} dias com dado do Instagram (este período tem ${dias.length}).`);
@@ -101,7 +101,7 @@ function regraRitmo(e: EntradaLeitura, out: Achado[], falta: string[]) {
     antes = median(dias.slice(0, meio).map((d) => n(d.reach)));
     depois = median(dias.slice(dias.length - meio).map((d) => n(d.reach)));
     rotulo = "da primeira para a segunda metade do período";
-    base = `alcance diário mediano ${int(antes)} na 1ª metade e ${int(depois)} na 2ª (${dias.length} dias com dado)`;
+    base = `alcance diário típico ${int(antes)} na 1ª metade e ${int(depois)} na 2ª (${dias.length} dias com dado)`;
   }
   if (antes <= 0) return;
   const v = (depois - antes) / antes;
@@ -165,9 +165,9 @@ function regraConcentracao(posts: any[], out: Achado[], falta: string[]) {
     tom: "atencao",
     peso: 2,
     titulo: `${pct(fatia)} do alcance dos posts veio de um único post.`,
-    porque: `${resumoLegenda(top)} alcançou ${int(n(top.reach))} contas; sem ele, o post típico alcança ${int(tipico)}. O resultado do período depende de um acerto, não de um padrão, e tende a cair quando esse post parar de circular.`,
+    porque: `${resumoLegenda(top)} alcançou ${int(n(top.reach))} pessoas; sem ele, o post típico alcança ${int(tipico)}. O resultado do período depende de um acerto, não de um padrão, e tende a cair quando esse post parar de circular.`,
     acao: { texto: `Transforme ${resumoLegenda(top)} em série: mesmo tema em 2 ou 3 formatos diferentes.`, rota: "ideias" },
-    base: `${int(n(top.reach))} de ${int(total)} contas somadas em ${comAlcance.length} posts`,
+    base: `${int(n(top.reach))} de ${int(total)} pessoas somadas em ${comAlcance.length} posts`,
   });
 }
 
@@ -221,7 +221,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
   }
   const grupos = Array.from(g.entries())
     .filter(([, e]) => e.reach.length >= MIN_POSTS_GRUPO)
-    .map(([f, e]) => ({ f, nome: fmtFormatKey(f), count: e.reach.length, alcance: median(e.reach), salvo: median(e.taxaSalvo) }));
+    .map(([f, e]) => ({ f, nome: nomeLeigoDoFormato(f), count: e.reach.length, alcance: median(e.reach), salvo: median(e.taxaSalvo) }));
   if (grupos.length < 2) {
     falta.push(`Qual formato funciona melhor (Reels, carrossel, foto): precisa de pelo menos ${MIN_POSTS_GRUPO} posts de 2 formatos diferentes no período.`);
     return;
@@ -230,7 +230,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
   const porSalvo = [...grupos].sort((a, b) => b.salvo - a.salvo);
   const A = porAlcance[0];
   const S = porSalvo[0];
-  const base = grupos.map((x) => `${x.nome}: alcance mediano ${int(x.alcance)}, salvamento ${pct(x.salvo, 1)} (${x.count} posts)`).join(" · ");
+  const base = grupos.map((x) => `${x.nome}: alcance típico ${int(x.alcance)}, ${pct(x.salvo, 1)} salvam (${x.count} posts)`).join(" · ");
 
   // Diferença pequena de taxa de salvamento é ruído: só afirma "faz guardar" com folga de 30%.
   if (A.f !== S.f && S.salvo < A.salvo * DIFERENCA_SALVO) {
@@ -296,7 +296,7 @@ function regraSeguir(posts: any[], out: Achado[], falta: string[]) {
   const tipica = median(com.map(taxa));
   if (taxa(melhorSeguir) <= 0 || n(melhorSeguir.media_follows) < 3) return;
   const vezes = tipica > 0 ? taxa(melhorSeguir) / tipica : 0;
-  const base = `${int(n(melhorSeguir.media_follows))} seguidores em ${int(n(melhorSeguir.reach))} contas (${pct(taxa(melhorSeguir), 2)}); mediana dos posts ${pct(tipica, 2)}`;
+  const base = `${int(n(melhorSeguir.media_follows))} seguidores em ${int(n(melhorSeguir.reach))} pessoas (${pct(taxa(melhorSeguir), 2)}); post típico ${pct(tipica, 2)}`;
   if (melhorSeguir !== maiorAlcance) {
     out.push({
       id: "seguir",
@@ -429,7 +429,7 @@ function regraAtendimento(e: EntradaLeitura, out: Achado[]) {
   if (at <= 0) return;
   const espera = n(e.wts?.espera_mediana_seg);
   const semRota = n(e.wts?.sem_roteamento) / at;
-  const base = `${int(at)} atendimentos; espera mediana até a 1ª resposta ${espera > 0 ? dur(espera) : "não medida"}; ${pct(semRota)} sem equipe`;
+  const base = `${int(at)} atendimentos; espera típica até a 1ª resposta ${espera > 0 ? dur(espera) : "não medida"}; ${pct(semRota)} sem equipe`;
   if (espera >= ESPERA_RUIM_SEG) {
     out.push({
       id: "atendimento",
@@ -445,7 +445,7 @@ function regraAtendimento(e: EntradaLeitura, out: Achado[]) {
       id: "atendimento",
       tom: "bom",
       peso: 1,
-      titulo: `O WhatsApp responde rápido: ${dur(espera)} de espera mediana.`,
+      titulo: `O WhatsApp responde rápido: ${dur(espera)} de espera típica.`,
       porque: "O paciente que chega não esfria esperando. Essa parte do caminho não é gargalo.",
       base,
     });

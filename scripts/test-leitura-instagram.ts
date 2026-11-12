@@ -158,7 +158,7 @@ const limpa = (f: FatosDaTela) => {
   assert.ok(topo, "o post de maior alcance vira fato");
   const maior = Math.max(...postsDaLana.map((p) => p.reach));
   assert.equal(topo.numeros[0].valor, maior, "o número é o alcance do post de maior alcance");
-  assert.match(topo.frase, /^O post que mais alcançou foi (um Reels|um carrossel|uma imagem|um post)/);
+  assert.match(topo.frase, /^O post que mais alcançou foi (um Reels|um carrossel|um Post de foto|um post)/);
   assert.ok(!/porque|por causa|trouxe|gerou|causou/i.test(topo.frase), "sem afirmar causa");
   assert.ok(!f.fatos.some((x) => x.id === "saldo-seguidores" || x.id === "ritmo"), "o ritmo e o saldo são de Analisar desempenho");
   const t = limpa(f);
@@ -283,7 +283,7 @@ const limpa = (f: FatosDaTela) => {
     assert.ok(ultimo && /origem por post não medida/.test(ultimo.frase) && ultimo.quem === "equipe_hub");
     assert.ok(t.proximoPasso && !/origem por post/.test(t.proximoPasso.frase), "o próximo passo é de verdade, não a origem por post");
   }
-  assert.equal(SEM_LEITURA_ORIGEM_POR_POST, "Sem leitura: origem por post não medida");
+  assert.equal(SEM_LEITURA_ORIGEM_POR_POST, "Falta dado: origem por post não medida");
 
   // Sem base (nenhuma conversa): nega, e a leitura diz o motivo.
   const semBase = fatosConteudoComercial({ de: "2026-09-01", ate: "2026-10-26", hoje: "2026-10-27", dados: { ...dados, dias: [], grade: [], temas: [], cobertura: { conversas: 0, lidas: 0, sem_texto: 0, com_tema: 0, posts: 28 } } });

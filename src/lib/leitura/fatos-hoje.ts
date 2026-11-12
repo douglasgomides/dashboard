@@ -92,9 +92,10 @@ export const MAXIMO_POR_AREA = 2;
 
 /**
  * Jargão que o médico leigo não lê: mediana (mediano, medianos, medianas), siglas de tráfego (CTR, CPC, CPM, CPL, ROAS), "salvamento"
- * seguido de porcentagem ("salvamento 0,5%") e "taxa de salvamento". O número técnico inteiro vai para o "Ver números" fechado.
+ * seguido de porcentagem ("salvamento 0,5%"), "taxa de salvamento" e o sinal de divisão "÷" (conta de dentro do app). O número
+ * técnico inteiro vai para o "Ver números" fechado.
  */
-export const JARGAO_DA_HOJE = /(?<!\p{L})(median[oa]s?|CTR|CPC|CPM|CPL|ROAS)(?!\p{L})|(?<!\p{L})salvamentos?\s+\d[\d.,]*\s*%|taxa de salvamento/iu;
+export const JARGAO_DA_HOJE = /(?<!\p{L})(median[oa]s?|CTR|CPC|CPM|CPL|ROAS)(?!\p{L})|(?<!\p{L})salvamentos?\s+\d[\d.,]*\s*%|taxa de salvamento|÷/iu;
 
 /**
  * Problemas de um texto que vai para a Hoje (vazio = pode ir): os do filtro de linguagem de toda a leitura (checarTextoDaLeitura),
@@ -357,6 +358,8 @@ function acaoDaCandidata(c: Candidata): AcaoDaHoje | null {
     numeroDoDestaque = numeroCurto;
   } else if (c.fato.manchete && checarTextoDaHoje(c.fato.manchete, MAX_CARACTERES_DA_MANCHETE).length === 0) {
     destaque = c.fato.manchete.trim();
+    // Manchete que começa por algarismo ou R$ ("R$ 20,00 por conversa") é um número: o desenho a mostra grande.
+    destaqueEhNumero = /^(R\$\s?)?\d/.test(destaque);
   } else {
     const { oracao, inteira } = primeiraOracao(fraseDoFato);
     if (oracao && checarTextoDaHoje(oracao, MAX_CARACTERES_DA_MANCHETE).length === 0) {
@@ -500,25 +503,29 @@ const PIOR_TOM: Partial<Record<TomFato, number>> = { atencao: 1, ruim: 2 };
 const ddmm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 
 /** Palavra com artigo, do jeito que a frase pede ("o Instagram", "o CRM", "o WhatsApp", "os anúncios"). */
+const cap = (t: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+
 function comArtigo(fonte: string): string {
   return /^an[uú]ncios$/i.test(fonte) ? "os anúncios" : `o ${fonte}`;
 }
 
 /**
- * null com 3 ou mais ações. Com 0 a 2: "Poucas ações nesta semana: {motivo}". O motivo, nesta ordem: (1) a pior fonte que não
- * está em dia ("o Instagram está sem dado novo desde dd/mm"); (2) houve candidata tirada pelas exclusões; (3) o que as leituras
- * deste período pediram. Passa no filtro de linguagem; se não passar, a frase genérica do item 3.
+ * null com 3 ou mais ações. Com 0 a 2, só o motivo (o total "N ações esta semana" do topo já diz quantas são), com inicial
+ * maiúscula e ponto. O motivo, nesta ordem: (1) a pior fonte que não está em dia ("O Instagram está sem dado novo desde dd/mm.");
+ * (2) houve candidata tirada pelas exclusões ("As outras ações dependem de números que ainda não têm selo."); (3) os números do
+ * período não pediram mais ações. Passa no filtro de linguagem; se não passar, a frase genérica do item 3. Nunca diz "não tem
+ * dado" quando o dado existe e a regra só não pediu ação.
  */
 export function avisoDePoucasAcoes(n: number, contexto: { fontes?: readonly FonteDoDado[]; houveExcluidas?: boolean } = {}): string | null {
   if (n >= 3) return null;
   const atrasadas = (contexto.fontes ?? []).filter((f) => (PIOR_TOM[f.tom] ?? 0) > 0);
   const pior = atrasadas.reduce<FonteDoDado | null>((a, f) => (a == null || (PIOR_TOM[f.tom] ?? 0) > (PIOR_TOM[a.tom] ?? 0) ? f : a), null);
   const motivos = [
-    pior ? `${comArtigo(pior.fonte)} está sem dado novo${pior.ate ? ` desde ${ddmm(pior.ate)}` : ""}` : null,
-    contexto.houveExcluidas ? "as outras ações dependem de números que ainda não têm selo" : null,
-    n === 0 ? "as leituras deste período não pediram nenhuma ação" : `as leituras deste período pediram só ${n} ${n === 1 ? "ação" : "ações"}`,
+    pior ? `${cap(comArtigo(pior.fonte))} ${/^an[uú]ncios$/i.test(pior.fonte) ? "estão" : "está"} sem dado novo${pior.ate ? ` desde ${ddmm(pior.ate)}` : ""}` : null,
+    contexto.houveExcluidas ? "As outras ações dependem de números que ainda não têm selo" : null,
+    n === 0 ? "Os números deste período não pediram nenhuma ação" : "Os números deste período não pediram mais ações",
   ].filter((m): m is string => m != null);
-  const frases = motivos.map((m) => `Poucas ações nesta semana: ${m}.`);
+  const frases = motivos.map((m) => `${m}.`);
   return frases.find((f) => checarTextoDaLeitura(f).length === 0) ?? frases[frases.length - 1];
 }
 

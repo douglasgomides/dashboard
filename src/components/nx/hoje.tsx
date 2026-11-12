@@ -106,9 +106,9 @@ export function NxProximo({ acao, clientId, dateRange }: { acao: AcaoDaHoje } & 
   const linha = linhaDaRota(acao.rota);
   const valor = valorDoDestaque(acao);
   return (
-    <section className="nx-proximo" data-acao-hoje={acao.id} data-peca="proximo" data-area-hoje={acao.areaHoje} data-familia-hoje={acao.familia} aria-label="Próximo">
+    <section className="nx-proximo" data-acao-hoje={acao.id} data-peca="proximo" data-area-hoje={acao.areaHoje} data-familia-hoje={acao.familia} aria-label="Próximo passo">
       <div className="nx-proximo__topo">
-        <p className="nx-proximo__rotulo">Próximo</p>
+        <p className="nx-proximo__rotulo">Próximo passo</p>
         <MarcaDoTom tom={acao.tom} />
       </div>
       <p className="nx-proximo__numero">

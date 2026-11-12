@@ -164,7 +164,7 @@ if (hSeis.tipo === "acoes") {
 const hMesmaArea = acoesDaHoje(sintetica(seis, seis.map((f) => passo(f.id))));
 assert.deepEqual(ids(hMesmaArea), ["a", "f"], "no máximo 2 por área: a Ação da semana e a de maior peso");
 assert.ok(acoes(hMesmaArea).every((a) => a.areaHoje === "resultados"));
-if (hMesmaArea.tipo === "acoes") assert.equal(hMesmaArea.aviso, "Poucas ações nesta semana: as leituras deste período pediram só 2 ações.");
+if (hMesmaArea.tipo === "acoes") assert.equal(hMesmaArea.aviso, "Os números deste período não pediram mais ações.");
 
 // Empate de peso e tom: vale a ordem das fontes (Resultados antes de Pacientes, publicações e Desempenho) e a ordem dentro de cada uma.
 const empate = acoesDaHoje({
@@ -281,32 +281,32 @@ assert.equal(hDuas.tipo, "acoes");
 if (hDuas.tipo === "acoes") {
   assert.equal(hDuas.proxima?.id, "a");
   assert.equal(hDuas.outras.length, 1);
-  assert.equal(hDuas.aviso, "Poucas ações nesta semana: as leituras deste período pediram só 2 ações.");
+  assert.equal(hDuas.aviso, "Os números deste período não pediram mais ações.");
   assert.deepEqual(checarTextoDaLeitura(hDuas.aviso ?? ""), []);
 }
 const fontes = [{ fonte: "Instagram", tom: "atencao" as const, ate: "2026-10-01" }, { fonte: "CRM", tom: "bom" as const, ate: "2026-10-13" }];
 const comFonteAtrasada = acoesDaHoje(sintetica(duas, duas.map((f) => passo(f.id)), { fontes }));
-if (comFonteAtrasada.tipo === "acoes") assert.equal(comFonteAtrasada.aviso, "Poucas ações nesta semana: o Instagram está sem dado novo desde 01/10.");
+if (comFonteAtrasada.tipo === "acoes") assert.equal(comFonteAtrasada.aviso, "O Instagram está sem dado novo desde 01/10.");
 const pior = acoesDaHoje(sintetica(duas, duas.map((f) => passo(f.id)), { fontes: [{ fonte: "CRM", tom: "atencao", ate: "2026-10-05" }, { fonte: "WhatsApp", tom: "ruim", ate: "2026-10-02" }] }));
-if (pior.tipo === "acoes") assert.equal(pior.aviso, "Poucas ações nesta semana: o WhatsApp está sem dado novo desde 02/10.", "a pior fonte (ruim antes de atenção)");
+if (pior.tipo === "acoes") assert.equal(pior.aviso, "O WhatsApp está sem dado novo desde 02/10.", "a pior fonte (ruim antes de atenção)");
 const comExcluida = acoesDaHoje(sintetica([fato("a", "ruim", 3), fato("leads", "ruim", 3)], [passo("a"), passo("leads")]));
 if (comExcluida.tipo === "acoes") {
   assert.deepEqual(ids(comExcluida), ["a"]);
-  assert.equal(comExcluida.aviso, "Poucas ações nesta semana: as outras ações dependem de números que ainda não têm selo.");
+  assert.equal(comExcluida.aviso, "As outras ações dependem de números que ainda não têm selo.");
 }
 const uma = acoesDaHoje(sintetica([fato("a", "ruim", 3)], [passo("a")]));
-if (uma.tipo === "acoes") assert.equal(uma.aviso, "Poucas ações nesta semana: as leituras deste período pediram só 1 ação.");
+if (uma.tipo === "acoes") assert.equal(uma.aviso, "Os números deste período não pediram mais ações.");
 const nenhuma = acoesDaHoje(sintetica([], []));
 assert.equal(nenhuma.tipo, "acoes");
 if (nenhuma.tipo === "acoes") {
   assert.equal(nenhuma.proxima, null);
   assert.deepEqual(nenhuma.outras, []);
-  assert.equal(nenhuma.aviso, "Poucas ações nesta semana: as leituras deste período não pediram nenhuma ação.");
+  assert.equal(nenhuma.aviso, "Os números deste período não pediram nenhuma ação.");
 }
 assert.equal(avisoDePoucasAcoes(3), null);
 assert.equal(avisoDePoucasAcoes(5), null);
-assert.ok(avisoDePoucasAcoes(2)?.startsWith("Poucas ações nesta semana:"));
-assert.match(avisoDePoucasAcoes(0, { fontes: [{ fonte: "anúncios", tom: "ruim", ate: null }] }) ?? "", /os anúncios está sem dado novo\.$/);
+assert.ok(!/^Poucas ações|leituras/.test(avisoDePoucasAcoes(2) ?? ""), "o aviso é só o motivo: o total já está no topo, e não diz \"leituras\"");
+assert.match(avisoDePoucasAcoes(0, { fontes: [{ fonte: "anúncios", tom: "ruim", ate: null }] }) ?? "", /^Os anúncios estão sem dado novo\.$/);
 // Fonte com portão negado nos extras não gera ação.
 const extraNegado = acoesDaHoje({
   ...sintetica([fato("a", "ruim", 3)], [passo("a")]),
@@ -479,7 +479,7 @@ if (comEquipe.tipo === "acoes") {
   assert.deepEqual(comEquipe.paraEquipe.map((a) => a.id), ["eq"]);
   assert.ok(comEquipe.paraEquipe.every((a) => a.soEquipe === true));
   assert.ok(acoes(comEquipe).every((a) => a.soEquipe === false));
-  assert.equal(comEquipe.aviso, "Poucas ações nesta semana: as leituras deste período pediram só 2 ações.", "o aviso conta só as ações do médico");
+  assert.equal(comEquipe.aviso, "Os números deste período não pediram mais ações.", "o aviso conta só as ações do médico");
 }
 // Quando a Ação da semana é de arrumação da equipe, o Próximo é a primeira ação do médico (não fica vazio, não usa a da equipe).
 const semanaDaEquipe = acoesDaHoje(sintetica(
@@ -496,7 +496,7 @@ if (soDaEquipe.tipo === "acoes") {
   assert.equal(soDaEquipe.proxima, null);
   assert.deepEqual(soDaEquipe.outras, []);
   assert.equal(soDaEquipe.paraEquipe.length, 1);
-  assert.equal(soDaEquipe.aviso, "Poucas ações nesta semana: as leituras deste período não pediram nenhuma ação.");
+  assert.equal(soDaEquipe.aviso, "Os números deste período não pediram nenhuma ação.");
 }
 // paraEquipe: no máximo 3, sem repetir id nem frase; houveExcluidas não vem de passo da equipe.
 const muitasDaEquipe = acoesDaHoje(sintetica(
@@ -567,6 +567,21 @@ const comFraseLongaNaComparacao = unica(fato("cmp3", "bom", 2, {
   comparacao: { frase: FRASE_LONGA, barras: [{ rotulo: "Post de foto", exibicao: "2.400 pessoas", fracao: 1 }] },
 }));
 assert.equal(comFraseLongaNaComparacao!.barras, undefined);
+
+// ---------- "÷" sai da Hoje; a manchete com R$ ou algarismo é número (quick 261112-e8e) ----------
+assert.ok(JARGAO_DA_HOJE.test("R$ 20,00 ÷ 100 conversas"), "o sinal ÷ é jargão da Hoje");
+const comDivisao = unica(fato("custo", "bom", 2, { manchete: "R$ 20,00 por conversa", frase: "Cada conversa das campanhas de mensagem custou R$ 20,00.", numeros: [{ chave: "evidencia", exibicao: "R$ 2.000,00 ÷ 100 conversas." }] }));
+assert.ok(comDivisao, "o custo por conversa vira ação");
+assert.equal(comDivisao!.destaque, "R$ 20,00 por conversa");
+assert.equal(comDivisao!.destaqueEhNumero, true, "manchete que começa por R$ é desenhada como número grande");
+assert.deepEqual(comDivisao!.numerosTecnicos, ["R$ 2.000,00 ÷ 100 conversas."], "o número com ÷ vai para o Ver números");
+for (const t of [comDivisao!.destaque, comDivisao!.legenda ?? "", comDivisao!.contexto, comDivisao!.outroNumero?.exibicao ?? ""]) assert.ok(!/÷/.test(t), `÷ em "${t}"`);
+const mancheteTexto = unica(fato("txt", "bom", 2, { manchete: "Post de foto alcançou mais", frase: "Estático é o formato que mais leva o perfil a gente nova.", numeros: [{ chave: "evidencia", exibicao: TECNICO }] }));
+assert.equal(mancheteTexto!.destaqueEhNumero, false, "manchete em texto continua em tamanho de leitura");
+// O aviso de poucas ações é só o motivo, sem "leituras" e sem repetir o total do topo.
+assert.equal(avisoDePoucasAcoes(1), "Os números deste período não pediram mais ações.");
+assert.equal(avisoDePoucasAcoes(0), "Os números deste período não pediram nenhuma ação.");
+assert.equal(avisoDePoucasAcoes(3), null);
 
 // ---------- o módulo é puro: sem banco, sem consulta e sem IA (D-05) ----------
 const fonte = readFileSync(new URL("../src/lib/leitura/fatos-hoje.ts", import.meta.url), "utf8");

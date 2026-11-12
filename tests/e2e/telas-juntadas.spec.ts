@@ -412,7 +412,7 @@ const TRAVAM = "Onde os pacientes travam";
 const PARTES_DO_CRM: ParteMedida[] = [
   { pasta: TRAVAM, aba: "Funil", parte: "Do contato à venda", sub: "pacientes", slug: "do-contato-a-venda" },
   { pasta: TRAVAM, aba: "Funil", parte: "No CRM", sub: "crm-painel", slug: "no-crm" },
-  // Consultas e Vendas são telas em construção: leitura "Sem leitura:", sem cartões.
+  // Consultas e Vendas são telas em construção: leitura "Falta dado:", sem cartões.
   { pasta: TRAVAM, aba: "Consultas", sub: "consultas", slug: "consultas", semCartoes: true },
   { pasta: TRAVAM, aba: "Vendas", sub: "vendas", slug: "vendas", semCartoes: true },
   { pasta: TRAVAM, aba: "Jornada", sub: "jornada", slug: "jornada" },
@@ -442,7 +442,7 @@ for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes } 
       const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
       await expect(leitura).toBeVisible();
       await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
-      await expect(leitura.getByText(/O que aconteceu|Sem leitura:/).first()).toBeVisible();
+      await expect(leitura.getByText(/O que aconteceu|Falta dado:/).first()).toBeVisible();
       await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
       await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
       const cartoes = page.locator("[data-juntada] .nx-pagina__cartoes > *");
@@ -474,13 +474,13 @@ for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes } 
   }
 }
 
-test("Onde os pacientes travam: Consultas e Vendas abrem com \"Sem leitura:\" e a contagem das abas continua \"—\"", async ({ page, context }) => {
+test("Onde os pacientes travam: Consultas e Vendas abrem com \"Falta dado:\" e a contagem das abas continua \"—\"", async ({ page, context }) => {
   for (const [rotulo, sub] of [["Consultas", "consultas"], ["Vendas", "vendas"]] as const) {
     await abrirParte(page, context, "viewer", sub, { width: 1440, height: 900 });
     const nav = pasta(page, TRAVAM);
     await expect(aba(nav, rotulo)).toHaveAttribute("aria-current", "page");
     const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-    await expect(leitura.getByText(/^Sem leitura: a tela ainda não tem a fonte ligada/)).toBeVisible();
+    await expect(leitura.getByText(/^Falta dado: a tela ainda não tem a fonte ligada/)).toBeVisible();
     await expect(leitura.getByText(/Quem resolve:/)).toBeVisible();
     await expect(leitura.locator(".nx-acao-pilula")).toBeVisible();
     for (const r of ["Consultas", "Vendas"]) {
@@ -581,16 +581,16 @@ for (const perfil of ["viewer", "admin"] as const) {
     expect(await semRolagemLateral(page)).toBe(true);
   });
 
-  test(`${perfil}: Anúncios com rastreio suspeito diz "Sem leitura:", manda para o Gestor de tráfego e nunca culpa a campanha`, async ({ page, context }) => {
+  test(`${perfil}: Anúncios com rastreio suspeito diz "Falta dado:", manda para o Gestor de tráfego e nunca culpa a campanha`, async ({ page, context }) => {
     await abrirAnuncios(page, context, perfil, "suspeito");
     const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
     await expect(leitura).toBeVisible();
     await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
-    await expect(leitura.getByText(/^Sem leitura: o rastreio das conversas dos anúncios está suspeito/)).toBeVisible();
+    await expect(leitura.getByText(/^Falta dado: o rastreio das conversas dos anúncios está suspeito/)).toBeVisible();
     // O caso real: os dois números do rastreio aparecem no motivo.
     await expect(leitura).toContainText("7.391 cliques no link");
     await expect(leitura).toContainText("29 conversas");
-    await expect(leitura.getByText("Para consertar:")).toBeVisible();
+    await expect(leitura.getByText("Próximo passo para resolver:")).toBeVisible();
     await expect(leitura.getByText("Quem resolve: Gestor de tráfego")).toBeVisible();
     await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
     await expect(leitura).not.toContainText("O que aconteceu");
@@ -694,10 +694,10 @@ for (const perfil of ["viewer", "admin"] as const) {
   });
 }
 
-test("Links sem nenhum link criado: \"Sem leitura:\" para a equipe Doctor Creator, e só a equipe vê o Gerador à vista", async ({ page, context }) => {
+test("Links sem nenhum link criado: \"Falta dado:\" para a equipe Doctor Creator, e só a equipe vê o Gerador à vista", async ({ page, context }) => {
   await abrirLinks(page, context, "viewer", "vazio");
   const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-  await expect(leitura.getByText(/^Sem leitura: ainda não há link rastreado para esta clínica/)).toBeVisible();
+  await expect(leitura.getByText(/^Falta dado: ainda não há link rastreado para esta clínica/)).toBeVisible();
   await expect(leitura.getByText("Quem resolve: Equipe Doctor Creator")).toBeVisible();
   await expect(page.getByText("A equipe Doctor Creator ainda não criou links rastreados para esta clínica.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Criar link curto" })).toHaveCount(0);

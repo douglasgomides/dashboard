@@ -1087,6 +1087,7 @@ export function insightsDeAnuncios(d: DiagnosticoAds | null | undefined): Insigh
       area: "anuncios",
       tom,
       titulo: `Cada conversa vinda das campanhas de mensagem custou ${brl(msg.custoPorConversa)}.`,
+      manchete: `${brl(msg.custoPorConversa)} por conversa`,
       diagnostico: `${int(msg.conversas)} conversas com ${brl0(msg.gasto)} investidos em ${msg.campanhas} ${msg.campanhas === 1 ? "campanha" : "campanhas"} de mensagem. Conta só campanhas de mensagem: dividir a verba de todos os objetivos pelas conversas deixaria o custo inflado.`,
       evidencia: `${brl(msg.gasto)} ÷ ${int(msg.conversas)} conversas. Referência de mercado (sem estudo independente, não usada para julgar): ${BENCHMARKS.custoPorConversa.referencia}.`,
       confianca: confiancaPorAmostra(msg.conversas, 10),

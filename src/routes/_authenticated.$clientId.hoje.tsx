@@ -177,7 +177,7 @@ function HojePage() {
 
   const { entrada, hoje: lista } = leitura;
   if (lista.tipo === "sem_leitura") {
-    // Dado ruim: o mesmo "Sem leitura: motivo" de Resultados da clínica, com o passo para consertar e quem resolve.
+    // Dado ruim: o mesmo "Falta dado: motivo" de Resultados da clínica, com o passo para consertar e quem resolve.
     return na(<PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={{ ...entrada.fatos, tela: "hoje" }} carregando={false} semSelo />} />);
   }
 
