@@ -32,7 +32,7 @@ async function dados(context: BrowserContext) {
 const semRolagemLateral = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 
 for (const width of [375, 1440]) {
-  test(`Pacientes: leitura, números em cartões, funil em barras e lista pelo teclado, sem rolagem lateral em ${width}px`, async ({ page, context }) => {
+  test(`Pacientes: leitura, números em cartões, funil desenhado com gaveta e lista pelo teclado, sem rolagem lateral em ${width}px`, async ({ page, context }) => {
     await mockAccount(context, "admin");
     await dados(context);
     await page.setViewportSize({ width, height: 900 });
@@ -50,9 +50,26 @@ for (const width of [375, 1440]) {
     await expect(numeros.getByText("Sem dado", { exact: true })).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
 
-    // O funil e a pizza ficam no detalhe recolhido: um toque abre.
+    // O funil desenhado é o gráfico principal, fora dos Detalhes: a etapa abre a gaveta, o Esc fecha e devolve o foco.
+    const funil = page.getByRole("figure", { name: /Do contato à venda/ });
+    await expect(funil).toBeVisible();
+    await expect(funil.getByRole("button", { name: /^Conversou: 120/ })).toBeVisible();
+    // Atendido sem as listas inteiras (o mock traz só 3 pessoas por lista) é "Falta dado", nunca barra nem zero.
+    await expect(funil.getByRole("button", { name: /^Atendido: Falta dado/ })).toBeVisible();
+    const fechou = funil.getByRole("button", { name: /^Fechou: 9/ });
+    await fechou.click();
+    const gaveta = page.getByRole("dialog", { name: /Fechou: 9/ });
+    await expect(gaveta).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(gaveta).toBeHidden();
+    await expect(fechou).toBeFocused();
+    // "Ver quem são" na gaveta leva à lista de quem são (a mesma de antes).
+    await fechou.click();
+    await gaveta.getByRole("button", { name: "Ver quem são" }).click();
+    await expect(page.getByRole("heading", { name: /^Fecharam: 9 pessoa/ })).toBeVisible();
+    expect(await semRolagemLateral(page)).toBe(true);
+    // A pizza fica no detalhe recolhido: um toque abre.
     await page.locator(".nx-pagina__detalhe > details > summary").click();
-    await expect(page.getByRole("list", { name: "Pessoas em cada etapa" })).toBeVisible();
     await expect(page.locator(".nx-pizza svg[role=img]")).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
 

@@ -8,6 +8,9 @@ import { Ajuda } from "@/components/visual";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
 import { CAMPOS_DIARIOS, useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
+import { NxFunilDesenhado } from "@/components/nx/funil-desenhado";
+import { dePacientesDoPeriodo, rotuloDoAnterior, type VariacaoDaEtapa } from "@/lib/funil-desenhado";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido } from "@/components/nx/blocos";
 import { fatosDePacientes } from "@/lib/leitura/fatos-pacientes";
@@ -52,7 +55,7 @@ import {
 
 import "@/styles/nexo-resultados.css";
 import { NxCard, NxKpi, NxLinhaTempo, NxListRow, NxPizza, NxTag } from "@/components/nx";
-import { CmBarras, icT, type CmVariacao } from "@/components/nx/comercial-base";
+import { icT } from "@/components/nx/comercial-base";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import type { NomeIcone } from "@/lib/registro-de-telas";
 
@@ -71,11 +74,9 @@ const pessoas = (n: number) => `${fmt(n)} ${n === 1 ? "pessoa" : "pessoas"}`;
 function paraCartao(v: VariacaoPct | null | undefined) {
   return v && v.tom !== "flat" ? { sobe: v.tom === "up", percentual: `${Math.abs(v.pct)}%`, contexto: "vs. período anterior" } : null;
 }
-function paraBarra(v: VariacaoPct | null | undefined): CmVariacao | null {
-  if (!v) return null;
-  if (v.tom === "flat") return { direcao: "igual", texto: "igual", contexto: "vs. período anterior" };
-  return { direcao: v.tom === "up" ? "cima" : "baixo", texto: `${v.pct > 0 ? "+" : "−"}${Math.abs(v.pct)}%`, contexto: "vs. período anterior", bom: v.tom === "up" };
-}
+
+/** A etapa do funil desenhado para a lista de pessoas que a tela já abre ("Ver quem são"). */
+const CHAVE_DA_ETAPA: Record<string, ChaveNumero> = { conversou: "mandaram_mensagem", "virou-lead": "leads_novos", atendido: "negociacao", agendou: "agendaram", fechou: "fecharam" };
 
 const dataCurta = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 
@@ -166,8 +167,34 @@ function PacientesDoPeriodo() {
     [q.data, start, end, hoje, somas, metas.paraFatos],
   );
 
+  // Contagem em cinza das abas Funil e Jornada (D-07): as pessoas que viraram lead no período, que esta tela já carregou (nenhuma
+  // consulta nova). Carregando: undefined (não vira "—"); erro ou sem dado: null; zero: null (a aba mostra "—", nunca "0").
+  usePublicarContagem({
+    clientId,
+    de: start,
+    ate: end,
+    rota: "/_authenticated/$clientId/pacientes",
+    valor: q.isLoading ? undefined : q.isError || !q.data ? null : q.data.numeros.leads_novos?.valor || null,
+  });
+
+  // O funil desenhado: a mesma conta dos números da tela, só desenhada. A variação vem do diário (período anterior em memória),
+  // convertida só quando o tom não é "flat"; a conta pesada de pessoas do período anterior continua proibida (estoura 8 s).
+  const funilDesenhado = useMemo(() => {
+    if (!q.data) return null;
+    const variacao = (chave: string): VariacaoDaEtapa | null => {
+      const v = variacaoPct(somas.atual[chave], somas.antes[chave]);
+      return v && v.tom !== "flat" ? { pct: v.pct, sobe: v.tom === "up" } : null;
+    };
+    return dePacientesDoPeriodo({ dados: q.data, variacao });
+  }, [q.data, somas]);
+
   function abrir(k: ChaveNumero) {
     setAberta((atual) => (atual === k ? null : k));
+    requestAnimationFrame(() => listaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+  // "Ver quem são" da gaveta do funil: sempre mostra a lista (não alterna, para não fechar a que já estava aberta).
+  function mostrar(k: ChaveNumero) {
+    setAberta(k);
     requestAnimationFrame(() => listaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
@@ -192,18 +219,10 @@ function PacientesDoPeriodo() {
 
   const d = q.data;
   const eng = d.numeros.engajaram_instagram;
-  const etapas = [
-    { chave: "mandaram_mensagem" as const, rotulo: "Chamaram" },
-    { chave: "negociacao" as const, rotulo: "Em negociação" },
-    { chave: "agendaram" as const, rotulo: "Agendaram" },
-    { chave: "compareceram" as const, rotulo: "Foram na consulta" },
-    { chave: "fecharam" as const, rotulo: "Fecharam" },
-  ].filter((e) => d.numeros[e.chave]?.valor != null);
   const vc = (k: string) => variacaoPct(somas.atual[k], somas.antes[k]);
 
   const novas = d.numeros.leads_novos?.valor, antigos = d.numeros.antigos?.valor;
   const rosca = novas != null && antigos != null && novas + antigos > 0 ? { novas, antigos } : null;
-  const maior = Math.max(1, ...etapas.map((e) => Number(d.numeros[e.chave]?.valor ?? 0)));
   const indisponiveis = CHAVES_NUMEROS.filter((k) => d.numeros[k] && d.numeros[k]!.valor == null);
 
   const ICONE: Partial<Record<ChaveNumero, NomeIcone>> = { mandaram_mensagem: "message-circle", agendaram: "calendar", fecharam: "checklist", compareceram: "stethoscope" };
@@ -247,22 +266,29 @@ function PacientesDoPeriodo() {
       leitura={<LeituraDaTela fatos={fatos} carregando={diario.isPending || diarioAnterior.isPending || metas.carregando} semSelo />}
       cartoes={cartoes.length ? ([cartoes[0], cartoes[1], cartoes[2], cartoes[3]] as [ReactNode, ReactNode?, ReactNode?, ReactNode?]) : undefined}
       principal={
-        linhasDia.length >= 3 ? (
-          <NxCard id="evolucao" nivel={2} icone={icT("chart-bar")} titulo="Evolução por dia" subtitulo={rotuloPeriodo}>
-            <NxLinhaTempo
-              rotulo="Pessoas que chamaram e agendamentos por dia"
-              datas={linhasDia.map((l) => l.dia)}
-              series={[
-                { rotulo: "Chamaram", valores: linhasDia.map((l) => l.mandaram_mensagem ?? 0), cor: "var(--b1)", area: true },
-                { rotulo: "Agendaram", valores: linhasDia.map((l) => l.agendaram ?? 0), cor: "var(--or)", eixo: "dir" },
-              ]}
-              formatarData={dataCurta}
-              formatarValor={(n) => fmt(Math.round(n))}
-              altura={180}
+        funilDesenhado ? (
+          <NxCard id="funil" nivel={2} icone={icT("filter")} titulo="Do contato à venda" subtitulo={`${rotuloPeriodo} · toque numa etapa`}>
+            <NxFunilDesenhado
+              titulo="Do contato à venda"
+              funil={funilDesenhado}
+              rotuloDoAnterior={rotuloDoAnterior(comparacao.dias)}
+              acaoDaEtapa={(etapa, fechar) => {
+                const chave = CHAVE_DA_ETAPA[etapa.id];
+                if (!chave || etapa.valor == null) return null;
+                return (
+                  <button
+                    type="button"
+                    className="nxr-ver"
+                    onClick={() => {
+                      fechar();
+                      mostrar(chave);
+                    }}
+                  >
+                    Ver quem são
+                  </button>
+                );
+              }}
             />
-            <NxComoCalcula titulo="Como ler este gráfico">
-              <p className="nxr-apoio">Pessoas que chamaram (eixo da esquerda) e agendamentos (eixo da direita). Cada ponto conta as pessoas daquele dia. A soma dos dias pode ser maior que o número do cartão, porque quem chamou em dois dias conta uma vez só no período.</p>
-            </NxComoCalcula>
           </NxCard>
         ) : undefined
       }
@@ -277,6 +303,25 @@ function PacientesDoPeriodo() {
       }
       detalhe={
         <div className="nexo-results-overview">
+          {linhasDia.length >= 3 && (
+            <NxCard id="evolucao" nivel={2} icone={icT("chart-bar")} titulo="Evolução por dia" subtitulo={rotuloPeriodo}>
+              <NxLinhaTempo
+                rotulo="Pessoas que chamaram e agendamentos por dia"
+                datas={linhasDia.map((l) => l.dia)}
+                series={[
+                  { rotulo: "Chamaram", valores: linhasDia.map((l) => l.mandaram_mensagem ?? 0), cor: "var(--b1)", area: true },
+                  { rotulo: "Agendaram", valores: linhasDia.map((l) => l.agendaram ?? 0), cor: "var(--or)", eixo: "dir" },
+                ]}
+                formatarData={dataCurta}
+                formatarValor={(n) => fmt(Math.round(n))}
+                altura={180}
+              />
+              <NxComoCalcula titulo="Como ler este gráfico">
+                <p className="nxr-apoio">Pessoas que chamaram (eixo da esquerda) e agendamentos (eixo da direita). Cada ponto conta as pessoas daquele dia. A soma dos dias pode ser maior que o número do cartão, porque quem chamou em dois dias conta uma vez só no período.</p>
+              </NxComoCalcula>
+            </NxCard>
+          )}
+
           <NxCard
             id="chamar-agora"
             nivel={2}
@@ -330,20 +375,6 @@ function PacientesDoPeriodo() {
             )}
           </NxCard>
 
-          {etapas.length > 1 && (
-            <NxCard id="funil" nivel={2} icone={icT("filter")} titulo="Do primeiro contato à venda" subtitulo={`${rotuloPeriodo} · toque numa linha para ver quem são`}>
-              <CmBarras
-                rotulo="Pessoas em cada etapa"
-                aberta={aberta}
-                onAbrir={(k) => abrir(k as ChaveNumero)}
-                max={maior}
-                itens={etapas.map((e) => {
-                  const v = Number(d.numeros[e.chave]?.valor ?? 0);
-                  return { chave: e.chave, rotulo: e.rotulo, valor: v, texto: fmt(v), variacao: paraBarra(vc(e.chave as CampoDiario)) };
-                })}
-              />
-            </NxCard>
-          )}
           {rosca && (
             <NxCard id="rosca" nivel={2} icone={icT("users")} titulo="Quem chamou" subtitulo={`${rotuloPeriodo} · ${fmt(rosca.novas + rosca.antigos)} pessoas`}>
               <NxPizza
