@@ -230,7 +230,7 @@ Plans:
 5. Nada cortado, sem frase > 90 caracteres, respeitando as alturas já medidas; só regras (sem IA); sem SQL nem migration.
 
 **Depends on:** Phase 03.1.1
-**Plans:** 4/9 plans executed (um PR só para a fase; no máximo 2 executores em paralelo, com arquivos disjuntos)
+**Plans:** 5/9 plans executed (um PR só para a fase; no máximo 2 executores em paralelo, com arquivos disjuntos)
 
 Plans:
 **Wave 1**
@@ -249,7 +249,7 @@ Plans:
 - [ ] 03.1.1.1-07-PLAN.md — Instagram › Desempenho: veredito, 3 números, "O que funciona" (formato, horário dos próprios posts, tema), descobertas, Top 5 em "Ver tudo"
 
 **Wave 5** *(blocked on Wave 4 completion; 08 e 09 em paralelo)*
-- [ ] 03.1.1.1-08-PLAN.md — Fechamento do mês: história em cartões em tela cheia aberta de Resultados (sem rota nova, sem envio)
+- [x] 03.1.1.1-08-PLAN.md — Fechamento do mês: história em cartões em tela cheia aberta de Resultados (sem rota nova, sem envio)
 - [ ] 03.1.1.1-09-PLAN.md — Anúncios: custo por conversa com sinal honesto, régua dos próprios dias, dias de verba baixa; seção l) do molde; varredura final
 
 ### Phase 4: Pacote do template do WhatsApp à Meta
