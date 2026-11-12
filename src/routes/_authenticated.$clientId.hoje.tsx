@@ -12,8 +12,9 @@ import { NxCartaoDaAcao, NxChipEstado, NxParaEquipe, SaudacaoHoje } from "@/comp
 import { NxCarregando, NxErro } from "@/components/nx/blocos";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxNotaDoDia } from "@/components/nx/nota-do-dia";
 import type { SerieDiaria } from "@/components/nx/linha-de-30-dias";
-import { getClient, getRoiPeriodo } from "@/lib/client-data";
+import { getAdsResumo, getClient, getRoiPeriodo } from "@/lib/client-data";
 import { resolveDateRange } from "@/lib/date-range";
 import { variacoes } from "@/lib/diagnostico-estrategico";
 import { dePacientesDoPeriodo } from "@/lib/funil-desenhado";
@@ -25,6 +26,8 @@ import { fatosDePacientes } from "@/lib/leitura/fatos-pacientes";
 import { fatosDePublicacoes, fatosDoInstagram } from "@/lib/leitura/fatos-instagram";
 import { GUARDA_DE_TEXTO_DA_TELA_HOJE, acoesDaHoje, type AcaoDaHoje, type EntradaHoje, type FonteDoDado } from "@/lib/leitura/fatos-hoje";
 import { barrasDoPorque, checarDescoberta, checarFraseCinco, variacaoPropria, vereditoDosFatos, visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
+import { fatoresDaHoje, vereditoDaHoje, type AdsDoPeriodo, type CrescimentoDoPeriodo } from "@/lib/leitura/cinco-hoje";
+import { notaDoDia } from "@/lib/leitura/nota-do-dia";
 import type { FatosDaTela, TelaId, TomFato } from "@/lib/leitura/tipos";
 import { ehEquipe } from "@/lib/registro-de-telas";
 import { ddmm, statusDoCliente, tomDaFonte, type LinhaFonte } from "@/lib/saude-fontes";
@@ -39,6 +42,8 @@ export const Route = createFileRoute("/_authenticated/$clientId/hoje")({
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 const CAMPOS_FUNIL = ["mandaram_mensagem", "agendaram", "fecharam"] as const;
+/** Os números diários que a nota e a prova da Hoje comparam com o período anterior (leads_novos é a etapa Virou lead). */
+const CAMPOS_DA_NOTA = ["mandaram_mensagem", "leads_novos", "agendaram", "fecharam"] as const;
 const C = "/_authenticated/$clientId";
 
 const ROTULO_DA_FONTE: Record<string, string> = { instagram: "Instagram", anuncios: "Anúncios", crm: "CRM", atendimento: "WhatsApp" };
@@ -195,8 +200,12 @@ function HojePage() {
   const roi = useQuery({ queryKey: ["roi-periodo", clientId, start, fim], queryFn: () => getRoiPeriodo(clientId, start, fim), staleTime: 5 * 60_000, retry: false });
   const cliente = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId), staleTime: 5 * 60_000, retry: false });
   const estadoDasFontes = useQuery({ queryKey: ["client-sync-status", clientId], queryFn: () => statusDoCliente(clientId), staleTime: 60_000, retry: false });
+  // A nota do dia (D-03, 03.1.1.1) precisa do custo por conversa dos dois períodos: uma linha agregada cada (a mesma RPC ads_resumo que
+  // Anúncios lê, as mesmas chaves de cache; a tela de Resultados usa as mesmas). Se a consulta falhar, só esse sinal vira "Falta dado".
+  const adsAgora = useQuery({ queryKey: ["ads-resumo", clientId, start, comparacao.fimFechado], queryFn: () => getAdsResumo(clientId, start, comparacao.fimFechado), staleTime: 5 * 60_000, retry: false });
+  const adsAntes = useQuery({ queryKey: ["ads-resumo", clientId, comparacao.anterior.start, comparacao.anterior.end], queryFn: () => getAdsResumo(clientId, comparacao.anterior.start, comparacao.anterior.end), staleTime: 5 * 60_000, retry: false });
   // Lista estável: a Hoje só aparece quando as consultas terminaram (nenhuma ação some ou muda de lugar depois de mostrada).
-  const carregandoFontes = resultado.carregandoFontes || pessoas.isPending || diario.isPending || diarioAnterior.isPending || roi.isPending || anterior.isPending || estadoDasFontes.isPending;
+  const carregandoFontes = resultado.carregandoFontes || pessoas.isPending || diario.isPending || diarioAnterior.isPending || roi.isPending || anterior.isPending || estadoDasFontes.isPending || adsAgora.isLoading || adsAntes.isLoading;
 
   const funil = useMemo(() => {
     const atual = somaDiaria((diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado), comparacao.dias, CAMPOS_FUNIL);
@@ -207,6 +216,31 @@ function HojePage() {
 
   const fontes = useMemo(() => fontesDoCliente(estadoDasFontes.data), [estadoDasFontes.data]);
   const temIg = fontesDoRegistro.data?.tem_instagram === true;
+
+  // A nota do dia (D-03): 5 sinais da própria clínica contra o período anterior, só com o que já está carregado.
+  const nota = useMemo(() => {
+    const atual = somaDiaria((diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado), comparacao.dias, CAMPOS_DA_NOTA);
+    const antes = somaDiaria(diarioAnterior.data ?? [], comparacao.dias, CAMPOS_DA_NOTA);
+    const ads = (linha: unknown): AdsDoPeriodo | null => {
+      const l = linha as { gasto?: unknown; conversas?: unknown } | null | undefined;
+      return l ? { gasto: Number(l.gasto), conversas: Number(l.conversas) } : null;
+    };
+    const crescer = (dados: typeof metricas.data, de: string, ate: string): CrescimentoDoPeriodo | null => {
+      if (!temIg || !dados) return null;
+      const c = analyzeGrowth(dados, de, ate);
+      return { novos: c.novos, diasMedidos: c.diasMedidos };
+    };
+    return notaDoDia(
+      fatoresDaHoje({
+        atual,
+        antes,
+        ads: adsAgora.isError || adsAntes.isError ? null : { atual: ads(adsAgora.data), antes: ads(adsAntes.data) },
+        crescimento: temIg ? { atual: crescer(metricas.data, start, end), antes: crescer(anterior.data, comparacao.anterior.start, comparacao.anterior.end) } : null,
+        pessoas: pessoas.data ? dePacientesDoPeriodo({ dados: pessoas.data, variacao: () => null }) : null,
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diario.data, diarioAnterior.data, adsAgora.data, adsAntes.data, adsAgora.isError, adsAntes.isError, metricas.data, anterior.data, pessoas.data, temIg, start, end, hoje]);
   const numeros = useMemo(
     () => numerosDaHoje({ atual: funil.atual, antes: funil.antes, diario: diario.data ?? [], fimFechado: comparacao.fimFechado, pessoas: pessoas.data }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -247,8 +281,9 @@ function HojePage() {
     const entrada: EntradaHoje = { fatos: feitos.fatos, porArea: feitos.porArea, insights: r.insights, limitacoes: r.limitacoes, extras, fontes };
     return { entrada, hoje: acoesDaHoje(entrada) };
   }, [r, start, end, hoje, funil, roi.data, pessoas.data, posts.data, metricas.data, anterior.data, temIg, fontes]);
-  // O veredito do topo (D-01): por enquanto o da leitura de Resultados, que diz o mesmo "Falta dado" quando o portão nega (D-05).
-  const veredito = useMemo(() => (leitura ? vereditoDosFatos({ ...leitura.entrada.fatos, tela: "hoje" }, GUARDA_DE_TEXTO_DA_TELA_HOJE) : null), [leitura]);
+  // O veredito do topo (D-01, D-03): a nota do dia com a palavra da faixa e UMA frase. Quando o portão de Resultados nega, a página
+  // abaixo mostra o mesmo "Falta dado" da leitura (D-05) e a nota não aparece.
+  const veredito = useMemo(() => vereditoDaHoje(nota), [nota]);
 
   // Topo (D-07, emenda de 12/11): um título só (a saudação grande). Sem rótulo da
   // tela, sem pergunta visível, sem etiqueta da decisão e sem o chip da clínica (o nome já está na casca). Ficam o "dado até", os
@@ -309,7 +344,7 @@ function HojePage() {
   return na(
     <PaginaNexo
       {...cabecalho}
-      veredito={<NxVeredito veredito={veredito} carregando={false} tela="hoje" />}
+      veredito={<NxVeredito veredito={veredito} carregando={false} tela="hoje" lado={<NxNotaDoDia nota={nota} />} />}
       cartoes={[c1, c2, c3]}
       descobertas={
         <NxDescobertas
