@@ -100,7 +100,13 @@
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--white);
+  /* Sombra de rolagem: as duas coberturas (local) escondem a sombra do lado onde a tabela está no começo ou no fim; só aparece onde há conteúdo escondido. */
+  background:
+    linear-gradient(to right, var(--white), var(--white)) left center / 16px 100% no-repeat local,
+    linear-gradient(to left, var(--white), var(--white)) right center / 16px 100% no-repeat local,
+    linear-gradient(to right, color-mix(in srgb, var(--text) 22%, transparent), transparent) left center / 14px 100% no-repeat scroll,
+    linear-gradient(to left, color-mix(in srgb, var(--text) 22%, transparent), transparent) right center / 14px 100% no-repeat scroll,
+    var(--white);
 }
 .nxb-tabela:focus-visible { outline: 2px solid var(--b1); outline-offset: 2px; }
 .nxb-tabela table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
@@ -121,7 +127,7 @@
 .nxb-tabela tbody td { padding: 10px 12px; font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text-2); border-top: 1px solid var(--line); }
 .nxb-tabela tbody tr:first-child td { border-top: 0; }
 .nxb-tabela tbody tr:hover td { background: color-mix(in srgb, var(--b6) 60%, transparent); }
-.nxb-tabela .nxb-num { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.nxb-tabela .nxb-num { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .nxb-tabela thead th.nxb-num { font-weight: 600; }
 .nxb-tabela--vazia { padding: 16px; overflow: visible; max-height: none; }
 .nxb-tabela__vazio { margin: 0; font-size: 14px; line-height: 20px; color: var(--muted-ink); font-weight: 500; }

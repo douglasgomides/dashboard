@@ -238,12 +238,18 @@ a.ig-vitrine__item:focus-visible { outline: 2px solid var(--b1); outline-offset:
 .ig-vitrine__img > :first-child { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; }
 .ig-vitrine__pos { position: absolute; left: 8px; top: 8px; width: 28px; height: 28px; font-size: 13px; box-shadow: 0 1px 4px rgba(18, 18, 18, .12); }
 .ig-vitrine__pos:not(.nx-rank--1) { background: var(--white); color: var(--text); }
-.ig-vitrine__corpo { display: grid; gap: 8px; padding: 12px 14px; align-content: start; min-width: 0; }
-.ig-vitrine__titulo { font-size: 14.5px; line-height: 20px; font-weight: 500; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ig-vitrine__corpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 14px; align-content: start; min-width: 0; }
+.ig-vitrine__titulo { font-size: 14.5px; line-height: 20px; font-weight: 500; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: break-word; min-width: 0; }
 .ig-vitrine__num { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .ig-vitrine__num b { font-size: 26px; line-height: 30px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
 .ig-vitrine__num small { font-size: 13px; font-weight: 500; color: var(--muted-ink); }
-.ig-vitrine__extra { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Formato inteiro e tema que encolhe com reticências: uma fileira só, sem passar da borda do cartão. */
+.ig-vitrine__extra { display: flex; flex-wrap: nowrap; gap: 6px; min-width: 0; }
+.ig-vitrine__extra > .nx-tag--g { flex: none; }
+.ig-vitrine__extra > .nx-tag--b { flex: 0 1 auto; }
+/* Chip que cabe: o texto vai num span interno (a peça do SAP, nx-tag, não muda) e corta com reticências. */
+.nexo-ig .nx-tag:has(> .ig-chip__texto) { max-width: 100%; min-width: 0; }
+.ig-chip__texto { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 560px) {
   .ig-vitrine__item { grid-template-columns: 96px minmax(0, 1fr); }
   .ig-vitrine__img { min-height: 96px; }
@@ -348,6 +354,8 @@ a.ig-vitrine__item:focus-visible { outline: 2px solid var(--b1); outline-offset:
 
 /* Seletor (ordenar por). */
 .ig-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+/* Campos de filtro nunca encolhem até sumir: cada um ocupa pelo menos 150 px e desce de linha quando falta lugar. */
+.ig-filtros > .ig-select { flex: 1 1 150px; min-width: 0; max-width: 100%; }
 .ig-filtros label { font-size: 14px; font-weight: 500; color: var(--muted-ink); }
 .ig-select {
   min-height: 40px;
@@ -473,20 +481,43 @@ a.ig-vitrine__item:focus-visible { outline: 2px solid var(--b1); outline-offset:
 
 /* Consultar publicações: célula do post na tabela, matriz tema × formato, próximos ângulos e galeria do explorador. */
 .ig-post-celula { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
-.ig-post-celula__texto { display: grid; min-width: 0; max-width: 340px; }
-.ig-post-celula__texto a, .ig-post-celula__texto > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: var(--text); }
-.ig-post-celula__texto small { font-size: 13px; color: var(--muted-ink); }
+.ig-post-celula__texto { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; min-width: 200px; max-width: 360px; }
+.ig-post-celula__legenda { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; min-width: 0; font-weight: 500; color: var(--text); }
+.ig-post-celula__meta { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; line-height: 20px; color: var(--muted-ink); white-space: nowrap; }
+.ig-post-celula__data, .ig-data-linha { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ig-tema-funil { display: grid; gap: 4px; justify-items: start; min-width: 150px; max-width: 220px; }
+.ig-tema-funil > .nx-tag { max-width: 100%; }
+
+/* Ranking de posts: tabela que cabe em 1440 com o menu aberto; se não couber em 1280, a rolagem é da própria .nxb-tabela. */
+.ig-ranking-tabela { min-width: 0; max-width: 100%; }
+.ig-ranking-tabela .ig-post-celula__texto { min-width: 200px; max-width: 300px; }
+
+/* Ranking de posts no celular: um cartão por post. */
+.ig-ranking-cartoes { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; min-width: 0; }
+.ig-ranking-cartao { display: grid; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); min-width: 0; }
+.ig-ranking-cartao__topo { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.ig-ranking-cartao__pos { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--field); color: var(--text); font-size: 14px; font-variant-numeric: tabular-nums; }
+.ig-ranking-cartao .ig-post-celula { flex: 1 1 0; min-width: 0; align-items: flex-start; }
+.ig-ranking-cartao .ig-post-celula__texto { min-width: 0; max-width: none; }
+.ig-ranking-cartao__nums { margin: 0; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.ig-ranking-cartao__nums > div { display: flex; flex-direction: column-reverse; flex: none; }
+.ig-ranking-cartao__nums dd { margin: 0; font-size: 16px; line-height: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
+.ig-ranking-cartao__nums dt { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--muted-ink); }
+.ig-ranking-cartao .nx-botao { min-height: 44px; justify-content: center; }
 .ig-celula { display: inline-grid; justify-items: end; min-width: 84px; padding: 6px 8px; border-radius: 8px; background: var(--field); color: var(--muted-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 .ig-celula small { font-size: 12px; font-weight: 500; }
 .ig-angulo { display: grid; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--field); font-size: 14px; line-height: 21px; font-weight: 500; color: var(--text-2); }
 .ig-angulo > b { font-size: 15.5px; color: var(--text); }
 .ig-galeria { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-.ig-galeria__item { display: grid; gap: 6px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--white); color: var(--text); text-decoration: none; }
+.ig-galeria__item { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--white); color: var(--text); text-decoration: none; }
 .ig-galeria__img { position: relative; display: block; }
-.ig-galeria__nums { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; gap: 6px; padding: 14px 8px 6px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--white); background: linear-gradient(transparent, var(--text)); }
-.ig-galeria__nums > span { display: inline-flex; align-items: center; gap: 3px; }
+.ig-galeria__nums { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 6px; padding: 14px 8px 6px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--white); background: linear-gradient(transparent, var(--text)); }
+.ig-galeria__nums > span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
 .ig-galeria__texto { padding: 0 10px; font-size: 14px; line-height: 20px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.ig-galeria__rodape { display: flex; justify-content: space-between; gap: 6px; padding: 0 10px 10px; font-size: 13px; color: var(--muted-ink); }
+.ig-galeria__rodape { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 0 10px 10px; font-size: 13px; color: var(--muted-ink); min-width: 0; }
+.ig-galeria__rodape > * { min-width: 0; }
+.ig-galeria__data { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ig-galeria__rodape > .nx-tag { flex: 0 1 auto; }
 .nexo-ig .ig-sub { display: flex; align-items: center; gap: 6px; }
 
 /* Conteúdo × Comercial: célula do mapa de dia da semana e hora dentro da tabela. */

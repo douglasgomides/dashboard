@@ -10,6 +10,7 @@ import { brazilWeekdayAndHour } from "@/lib/report-metrics";
 import { lerPeriodo } from "@/lib/leitura-periodo";
 import { fatosDoInstagram, fatosSemInstagram } from "@/lib/leitura/fatos-instagram";
 import { hojeBrasilia } from "@/lib/status-fonte";
+import { temaParaExibir } from "@/lib/texto-que-cabe";
 import { Miniatura, IconeFormato } from "@/components/visual";
 import { Trophy, Eye, Target, Bookmark, Share2, Heart, MessageCircle, FastForward, Timer, Clock, UserPlus, Reply, Users, Radio, Film, Image as ImageIcon, CircleDot, BarChart3, Layers, ArrowDownToLine } from "lucide-react";
 import { NxCard, NxTag, NxListRow, NxColunas } from "@/components/nx";
@@ -92,7 +93,7 @@ function ListaDePosts({ itens, metrica, reels, inicio = 0 }: { itens: { p: any; 
                     <IconeFormato formato={p.format} size={13} /> {reels ? "Reels" : nomeFormato(p.format)}
                   </span>
                 )}
-                {p.tema && <span className="ig-tema">{p.tema}</span>}
+                {p.tema && <span className="ig-tema">{temaParaExibir(p.tema)}</span>}
                 <span>
                   <Clock size={12} aria-hidden /> {quando(p.posted_at)}
                 </span>
@@ -436,7 +437,7 @@ function TopPage() {
           extra: (
             <>
               {p.format && <NxTag tom="g">{aba === "reels" ? "Reels" : nomeFormato(p.format)}</NxTag>}
-              {p.tema && <NxTag tom="b">{p.tema}</NxTag>}
+              {p.tema && <NxTag tom="b">{temaParaExibir(p.tema)}</NxTag>}
               <NxTag tom="g">{quando(p.posted_at)}</NxTag>
             </>
           ),
