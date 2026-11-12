@@ -10,7 +10,12 @@ import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundo
 import { NxAneis } from "@/components/nx/aneis";
 import { NxAgoraContraAntes } from "@/components/nx/agora-contra-antes";
 import { BotaoFechamentoDoMes, NxHistoriaDoMes } from "@/components/nx/historia-do-mes";
-import { cartoesDoMes, periodoServeParaFechamento } from "@/lib/fechamento-do-mes";
+import { cartoesDoMes, periodoServeParaFechamento, type PostDoMes } from "@/lib/fechamento-do-mes";
+import { descobertaDaAcao, fontesDoCliente, montarEntradaDaHoje, type DadosDaEntradaDaHoje } from "@/lib/leitura/entrada-da-hoje";
+import { acoesDaHoje, type FonteDoDado } from "@/lib/leitura/fatos-hoje";
+import { dePacientesDoPeriodo } from "@/lib/funil-desenhado";
+import { analyzeGrowth } from "@/lib/hub-conteudo";
+import { statusDoCliente } from "@/lib/saude-fontes";
 import { NxAcaoPilula, NxBarras, NxCartaoNumero } from "@/components/nx/cartoes";
 import { linhaDaRota } from "@/components/nx/hoje";
 import type { DateRangeState } from "@/lib/date-range";
@@ -549,6 +554,10 @@ function MonthlyOverview() {
   const carregandoFontes = pessoas.isPending || diario.isPending || diarioAnterior.isPending || roi.isPending || adsAtual.isPending || adsAnterior.isPending || adsDia.isPending;
   // O nome da clínica só abre o cartão de abertura do Fechamento do mês: a mesma chave de cache da Hoje e da casca (consulta compartilhada).
   const cliente = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId), staleTime: 5 * 60_000, retry: false });
+  // O estado das fontes só entra na EntradaHoje das "3 apostas" (a mesma chave da Hoje e do selo de frescura da casca: consulta compartilhada,
+  // uma linha pequena por fonte quando a cache está fria).
+  const estadoDasFontes = useQuery({ queryKey: ["client-sync-status", clientId], queryFn: () => statusDoCliente(clientId), staleTime: 60_000, retry: false });
+  const fontesDoEstado = useMemo(() => fontesDoCliente(estadoDasFontes.data), [estadoDasFontes.data]);
 
   const funil = useMemo(() => {
     const atual = somaDiaria((diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado), comparacao.dias, CAMPOS_FUNIL);
@@ -622,7 +631,7 @@ function MonthlyOverview() {
       variacoes={{ atual: funil.atual, antes: funil.antes }}
       comparacao={{ dias: comparacao.dias, fimFechado: comparacao.fimFechado, anterior: comparacao.anterior }}
       ads={{ atual: adsAtual.data ?? null, anterior: adsAnterior.data ?? null, porDia: adsDia.data ?? null }}
-      fechamento={{ aberto: historia === "aberta", serve: serveParaFechamento, pedir: pedirFechamento, fechar: fecharFechamento, nome: cliente.data?.name ?? null }}
+      fechamento={{ aberto: historia === "aberta", serve: serveParaFechamento, pedir: pedirFechamento, fechar: fecharFechamento, nome: cliente.data?.name ?? null, funil, fontes: fontesDoEstado }}
     />
   );
 }
@@ -660,7 +669,7 @@ function Resultados({
   /** As linhas cruas do banco (ads_resumo e ads_por_dia): os números chegam como texto ou número, e o que falta chega null. */
   ads: { atual: unknown; anterior: unknown; porDia: unknown };
   /** O Fechamento do mês: se a história está aberta, se o período escolhido já serve, e como pedir e fechar. */
-  fechamento: { aberto: boolean; serve: boolean; pedir: () => void; fechar: () => void; nome: string | null };
+  fechamento: { aberto: boolean; serve: boolean; pedir: () => void; fechar: () => void; nome: string | null; funil: DadosDaEntradaDaHoje["funil"]; fontes: readonly FonteDoDado[] };
 }) {
   const { isAdmin } = useAuth();
   const periodLabel = formatRangeLabel({ start, end });
@@ -813,20 +822,45 @@ function Resultados({
   }, [linhasDia, comparacao.fimFechado]);
 
   // Os cartões do Fechamento do mês: só são montados com a história aberta (Resultados fechada não paga nada a mais).
-  const cartoesDaHistoria = useMemo(
-    () =>
-      !fechamento.aberto
-        ? []
-        : cartoesDoMes({
-            nome: fechamento.nome,
-            inicio: start,
-            fim: comparacao.fimFechado,
-            dias: comparacao.dias,
-            anterior: { inicio: comparacao.anterior.start, fim: comparacao.anterior.end },
-            conversas: { atual: variacoes.atual.mandaram_mensagem ?? null, antes: variacoes.antes.mandaram_mensagem ?? null, porDia: series.mandaram_mensagem?.valores ?? [] },
-          }),
-    [fechamento.aberto, fechamento.nome, start, comparacao, variacoes, series],
-  );
+  // Só usa o que a tela já tem em memória (as mesmas consultas e chaves de cache), nenhuma consulta nova além das duas leituras pequenas acima.
+  const cartoesDaHistoria = useMemo(() => {
+    if (!fechamento.aberto) return [];
+    const temIg = resultado.fontes.data?.tem_instagram === true;
+    type LinhaComSeguidores = LinhaDoInstagram & { followers_count?: number | null };
+    const [dados, dadosAntes] = [metricas.data as LinhaComSeguidores[] | undefined, anterior.data as LinhaComSeguidores[] | undefined];
+    const somaDoAlcance = (linhas: LinhaComSeguidores[] | undefined, de: string, ate: string) =>
+      somaDiaria((linhas ?? []).filter((l) => l.date >= de && l.date <= ate).map((l) => ({ dia: l.date, reach: l.reach ?? null })), comparacao.dias, ["reach"]).reach;
+    const crescer = (linhas: LinhaComSeguidores[] | undefined, de: string, ate: string) => {
+      if (!linhas) return null;
+      const c = analyzeGrowth(linhas, de, ate);
+      return { novos: c.novos, diasMedidos: c.diasMedidos };
+    };
+    // As "3 apostas" são as 3 primeiras descobertas da Hoje: a mesma EntradaHoje, a mesma regra, a mesma frase.
+    const entradaHoje = montarEntradaDaHoje({
+      resultado: r, start, end, hoje: resultado.hoje, funil: fechamento.funil, roi, pessoas, posts: posts.data, metricas: metricas.data, anterior: anterior.data, temIg, fontes: fechamento.fontes,
+    });
+    const hojeDaClinica = acoesDaHoje(entradaHoje);
+    const apostas =
+      hojeDaClinica.tipo === "acoes"
+        ? visiveisEResto([...(hojeDaClinica.proxima ? [hojeDaClinica.proxima] : []), ...hojeDaClinica.outras].flatMap((a) => descobertaDaAcao(a) ?? [])).visiveis.map((d) => ({ titulo: d.acao.rotulo, motivo: d.frase }))
+        : [];
+    const totalDeSeguidores = serieContinua((dados ?? []).filter((l) => l.date >= start && l.date <= comparacao.fimFechado).map((l) => ({ dia: l.date, valor: l.followers_count ?? null }))).valores;
+    return cartoesDoMes({
+      nome: fechamento.nome,
+      inicio: start,
+      fim: comparacao.fimFechado,
+      dias: comparacao.dias,
+      anterior: { inicio: comparacao.anterior.start, fim: comparacao.anterior.end },
+      conversas: { atual: variacoes.atual.mandaram_mensagem ?? null, antes: variacoes.antes.mandaram_mensagem ?? null, porDia: series.mandaram_mensagem?.valores ?? [] },
+      alcance: temIg && dados ? { atual: somaDoAlcance(dados, start, comparacao.fimFechado), antes: somaDoAlcance(dadosAntes, comparacao.anterior.start, comparacao.anterior.end) } : null,
+      seguidores: temIg && dados ? { atual: crescer(dados, start, end), antes: crescer(dadosAntes, comparacao.anterior.start, comparacao.anterior.end), total: totalDeSeguidores } : null,
+      posts: temIg ? (posts.data as PostDoMes[] | undefined) ?? null : null,
+      anuncios: entrada.ads ? { atual: entrada.ads.atual, antes: entrada.ads.anterior, porDia: entrada.ads.porDia } : null,
+      funil: { desenhado: pessoas ? dePacientesDoPeriodo({ dados: pessoas, variacao: () => null }) : null, fecharam: { atual: variacoes.atual.fecharam ?? null, antes: variacoes.antes.fecharam ?? null } },
+      apostas,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fechamento.aberto, fechamento.nome, fechamento.funil, fechamento.fontes, start, end, comparacao, variacoes, series, metricas.data, anterior.data, posts.data, pessoas, roi, entrada.ads]);
 
   const detalhe = (
     <div className="nexo-results-overview">

@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState, type KeyboardEvent as EventoDeTecla, type PointerEvent as EventoDePonteiro } from "react";
-import type { CartaoDoMes, VisualDoCartao } from "@/lib/fechamento-do-mes";
+import type { CartaoDoMes, PostDoCartao, VisualDoCartao } from "@/lib/fechamento-do-mes";
+import { ALTURA, LARGURA, caminhoDaArea, caminhoDaLinha, pontosDaLinha } from "@/lib/linha-30-dias";
 import "@/styles/nexo-historia-do-mes.css";
 
 // Fechamento do mês em história (Phase 03.1.1.1, plano 08, D-06): cartões em tela cheia sobre Resultados da clínica, UM número por cartão,
@@ -290,15 +291,43 @@ const CartaoDaHistoria = memo(function CartaoDaHistoria({ cartao, mover }: { car
           {cartao.comparacao}
         </p>
       )}
+      {cartao.post && <PostCampeao post={cartao.post} />}
       {cartao.visual && <DesenhoDoVisual visual={cartao.visual} />}
       {cartao.periodo && (
-        <p className="nx-historia__periodo">
-          {cartao.id === "abertura" || cartao.id === "final" ? cartao.periodo.atual : `${cartao.periodo.atual} · antes: ${cartao.periodo.anterior}`}
-        </p>
+        <p className="nx-historia__periodo">{cartao.comparacao ? `${cartao.periodo.atual} · antes: ${cartao.periodo.anterior}` : cartao.periodo.atual}</p>
       )}
     </section>
   );
 });
+
+/** O post campeão: a legenda da própria clínica como texto (duas linhas, o texto inteiro no title) e os dados do post em quatro quadros. */
+function PostCampeao({ post }: { post: PostDoCartao }) {
+  const quadros = [
+    post.alcance ? { valor: post.alcance, rotulo: "no alcance" } : null,
+    post.formato ? { valor: post.formato, rotulo: "formato" } : null,
+    post.tema ? { valor: post.tema, rotulo: "tema" } : null,
+    post.quando ? { valor: post.quando, rotulo: "publicado em" } : null,
+  ].filter((q): q is { valor: string; rotulo: string } => q != null);
+  return (
+    <>
+      {post.legenda && (
+        <blockquote className="nx-historia__cita" title={post.legenda}>
+          {post.legenda}
+        </blockquote>
+      )}
+      {quadros.length > 0 && (
+        <dl className="nx-historia__quadros">
+          {quadros.map((q) => (
+            <div key={q.rotulo}>
+              <dt>{q.rotulo}</dt>
+              <dd title={q.valor}>{q.valor}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </>
+  );
+}
 
 function DesenhoDoVisual({ visual }: { visual: VisualDoCartao }) {
   switch (visual.tipo) {
@@ -315,7 +344,79 @@ function DesenhoDoVisual({ visual }: { visual: VisualDoCartao }) {
         </div>
       );
     }
-    default:
-      return null;
+    case "pontos":
+      return (
+        <div className="nx-historia__visual">
+          <div className="nx-historia__pontos" aria-hidden>
+            {visual.pontos.map((p, k) => (
+              <i key={k} data-ponto={p} style={{ animationDelay: `${k * 22}ms` }} />
+            ))}
+          </div>
+          <p className="nx-historia__legenda-pequena">{visual.legenda.join(" · ")}</p>
+        </div>
+      );
+    case "linha": {
+      // A mesma linha de 30 dias das outras telas: dia sem dado quebra o caminho (nunca desce a zero).
+      const pontos = pontosDaLinha(visual.valores);
+      return (
+        <div className="nx-historia__visual">
+          <svg className="nx-historia__linha" viewBox={`0 0 ${LARGURA} ${ALTURA}`} preserveAspectRatio="none" aria-hidden focusable="false">
+            <path className="nx-historia__linha-area" d={caminhoDaArea(pontos)} />
+            <path className="nx-historia__linha-traco" d={caminhoDaLinha(pontos)} />
+          </svg>
+          <p className="nx-historia__legenda-pequena">{visual.legenda}</p>
+        </div>
+      );
+    }
+    case "funil":
+      return (
+        <ul className="nx-historia__funil" aria-label="Etapas do funil">
+          {visual.etapas.map((x) => (
+            <li key={x.rotulo} data-perda={x.perda ? "" : undefined}>
+              <span>{x.rotulo}</span>
+              <span>{x.valor}</span>
+              <span className="nx-historia__funil-trilho" aria-hidden>
+                <i style={{ width: `${x.fracao * 100}%` }} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
+    case "regua":
+      return (
+        <div className="nx-historia__visual">
+          <div className="nx-historia__regua" aria-hidden>
+            <span className="nx-historia__regua-eixo" />
+            {visual.dias.map((d, k) => (
+              <i key={k} style={{ left: `${d}%` }} />
+            ))}
+            <i className="nx-historia__regua-agora" style={{ left: `${visual.agora}%` }} />
+            <span className="nx-historia__regua-rotulo" style={{ left: `${visual.agora}%` }}>
+              Agora
+            </span>
+          </div>
+          <p className="nx-historia__legenda-pequena nx-historia__regua-legenda">
+            <span>◀ {visual.legenda[0]}</span>
+            <span>{visual.legenda[1]} ▶</span>
+            <span>{visual.legenda[2]}</span>
+          </p>
+        </div>
+      );
+    case "lista":
+      return (
+        <ol className="nx-historia__apostas">
+          {visual.itens.map((x, k) => (
+            <li key={`${k}-${x.titulo}`}>
+              <span className="nx-historia__aposta-n" aria-hidden>
+                {k + 1}
+              </span>
+              <div>
+                <b>{x.titulo}</b>
+                <span>{x.motivo}</span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      );
   }
 }
