@@ -259,7 +259,16 @@ const limpa = (f: FatosDaTela) => {
   assert.deepEqual(f.portao, { ok: true });
   assert.ok(f.fatos.every((x) => x.numeros.length > 0), "todo fato leva o número");
   const efeito = f.fatos.find((x) => x.id === "efeito-post")!;
-  assert.match(efeito.frase, /Os dias com post tiveram 56% mais conversas que o mesmo dia da semana sem post/);
+  assert.equal(efeito.frase, "Dias com post tiveram mais conversas que o mesmo dia sem post.");
+  assert.equal(efeito.numeros[0].exibicao, "+56% de conversas", "o destaque leigo vem primeiro");
+  assert.match(efeito.numeros[1].exibicao, /contra .* conversas por dia/, "o número antigo fica como segundo número");
+  assert.deepEqual(efeito.comparacao!.barras.map((b) => b.rotulo), ["Com post", "Sem post"]);
+  // Frases curtas (quick 261112-e8e): até 90 caracteres, uma frase só, e barras com fração entre 0 e 1.
+  for (const x of f.fatos.filter((y) => ["efeito-post", "efeito-sem-par", "resposta-rapida"].includes(y.id))) {
+    assert.ok(x.frase.length <= 90, `${x.id}: frase com até 90 caracteres (${x.frase})`);
+    assert.equal(x.frase.split(/(?<=[.!?])\s+/).length, 1, `${x.id}: uma frase só`);
+    assert.ok(x.comparacao && x.comparacao.barras.every((b) => b.fracao >= 0 && b.fracao <= 1), `${x.id}: barras entre 0 e 1`);
+  }
   assert.ok(f.fatos.some((x) => x.id === "tema-que-agenda"), "tema com a amostra mínima de pessoas");
   assert.ok(f.fatos.some((x) => x.id === "demanda-sem-post"));
   // "trouxe" com porcentagem nunca aparece, em fato nenhum nem no texto montado.
@@ -288,7 +297,25 @@ const limpa = (f: FatosDaTela) => {
   const semPar = fatosConteudoComercial({ de: "2026-09-01", ate: "2026-10-26", hoje: "2026-10-27", dados: { ...dados, dias: dias.slice(0, 4) } });
   assert.ok(semPar.fatos.some((x) => x.id === "efeito-sem-par" && x.ressalva === true));
   assert.ok(!semPar.fatos.some((x) => x.id === "efeito-post"));
+  const sp = semPar.fatos.find((x) => x.id === "efeito-sem-par")!;
+  assert.equal(sp.frase, "Faltam dias para comparar dias com e sem post.");
+  assert.ok(sp.frase.length <= 90 && sp.comparacao!.barras.length === 2);
+  assert.ok(sp.comparacao!.barras.some((b) => b.faltou === true), "o que faltou é listrado");
+  assert.ok(sp.comparacao!.barras.every((b) => b.fracao >= 0 && b.fracao <= 1));
   limpa(semPar);
+  // Resposta rápida (quick 261112-e8e): uma frase de até 90 caracteres, com a ressalva, e duas barras entre 0 e 1.
+  const profundos = {
+    posts_compra: [], comentarios: { total: 0, compra: 0, posts_com_compra: 0 }, compra_por_formato: [], temas_valor: [], resposta_tema: [],
+    resposta: [{ faixa: "1_ate_15min", conversas: 40, agendaram: 20 }, { faixa: "4_mais_de_4h", conversas: 40, agendaram: 8 }],
+    cobertura: { conversas: 80, com_lead: 60, com_tema: 50, horario_comercial: 70 },
+  };
+  const comResposta = fatosConteudoComercial({ de: "2026-09-01", ate: "2026-10-26", hoje: "2026-10-27", dados, profundos });
+  const rr = comResposta.fatos.find((x) => x.id === "resposta-rapida")!;
+  assert.ok(rr, "resposta rápida com a amostra mínima");
+  assert.equal(rr.frase, "Quem foi respondido em até 15 min agendou mais; não é prova ainda.");
+  assert.ok(rr.frase.length <= 90 && rr.frase.split(/(?<=[.!?])\s+/).length === 1);
+  assert.deepEqual(rr.comparacao!.barras.map((b) => [b.rotulo, b.exibicao, b.fracao]), [["Até 15 min", "50%", 1], ["Mais de 1 h", "20%", 0.4]]);
+  assert.equal(problemasDoTexto(limpa(comResposta)).length, 0);
 }
 
 // ---------- guardaOrigemPorPost (T-03.1-13, decisão aberta 8) ----------

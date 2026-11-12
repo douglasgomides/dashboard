@@ -512,7 +512,7 @@ test("Jornada: a leitura diz que a maioria dos contatos está sem pessoa ligada 
   await abrirParte(page, context, "viewer", "jornada", { width: 1440, height: 900 });
   const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
   await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
-  await expect(leitura.getByText(/não está ligada a nenhuma pessoa/)).toBeVisible();
+  await expect(leitura.getByText(/não está ligada a uma pessoa/)).toBeVisible();
   await expect(leitura.locator(".nx-leitura__num", { hasText: "50 de 80" })).toBeVisible();
   const detalhes = page.locator("[data-juntada] details#detalhes-jornada");
   await detalhes.locator(":scope > summary").click();

@@ -6,7 +6,7 @@ import { montarTexto, rotuloPeriodo } from "@/lib/leitura/texto";
 import { ROTULO_DECISAO, type DecisaoMedico, type FatosDaTela, type LinhaTexto, type PassoTexto, type TelaId, type TextoDoResumo, type TomFato } from "@/lib/leitura/tipos";
 import { NxTag } from "./base";
 import { NxCarregando, NxErro, NxRecolhido } from "./blocos";
-import { NxAcaoPilula } from "./cartoes";
+import { NxAcaoPilula, NxBarras } from "./cartoes";
 import "@/styles/nexo-pagina.css";
 
 // Molde único de página do Nexo (Phase 3.1). Toda tela, da clínica e da equipe, abre assim, nesta ordem fixa:
@@ -120,18 +120,21 @@ function Linha({ rotulo, tom = "neutro", children }: { rotulo?: string; tom?: To
   );
 }
 
-/** A frase com o número que a sustenta logo depois (cada número em strong, tabular). Texto sempre como texto do React. */
+/** A frase com o número que a sustenta logo depois (cada número em strong, tabular) e, quando o fato traz comparação, as barras embaixo. Texto sempre como texto do React. */
 function FraseComNumero({ linha }: { linha: LinhaTexto }) {
   return (
-    <p className="nx-leitura__frase">
-      {linha.frase}
-      {linha.numeros.map((n) => (
-        <Fragment key={n.chave}>
-          {" "}
-          <strong className="nx-leitura__num">{n.exibicao}</strong>
-        </Fragment>
-      ))}
-    </p>
+    <>
+      <p className="nx-leitura__frase">
+        {linha.frase}
+        {linha.numeros.map((n) => (
+          <Fragment key={n.chave}>
+            {" "}
+            <strong className="nx-leitura__num">{n.exibicao}</strong>
+          </Fragment>
+        ))}
+      </p>
+      {linha.barras && <NxBarras barras={linha.barras} />}
+    </>
   );
 }
 

@@ -247,7 +247,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
       titulo: `${A.nome} é o formato que mais leva o perfil a gente nova.`,
       manchete: `${nomeLeigoDoFormato(A.f)} alcançou mais`,
       comparacao: comparacaoDeAlcance(A, segundo, vezes),
-      porque: `Alcance mediano de ${int(A.alcance)} contas, ${vezes.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}x o de ${segundo.nome}. Na taxa de salvamento os formatos ficaram parecidos, então a diferença está em quantas pessoas cada um alcança.`,
+      porque: comparacaoDeAlcance(A, segundo, vezes).frase,
       acao: { texto: `Use ${A.nome} para os assuntos que você quer que mais gente conheça.`, rota: "conteudo" },
       base,
     });
@@ -261,10 +261,10 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
       id: "formato",
       tom: "bom",
       peso: 2,
-      titulo: `${A.nome} ganha nas duas frentes: é o que mais alcança e o que mais é salvo.`,
+      titulo: `${A.nome} alcança mais e é o mais salvo.`,
       manchete: `${nomeLeigoDoFormato(A.f)} alcançou e foi mais salvo`,
       comparacao: comparacaoDeAlcance(A, segundo, vezes),
-      porque: `Alcança ${vezes >= 1.2 ? `${vezes.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}x mais que ${segundo.nome}` : "mais que os outros formatos"} e quem vê guarda para depois (${pct(A.salvo, 1)} salvam). É o formato em que a audiência deste perfil mais confia.`,
+      porque: `${comparacaoDeAlcance(A, segundo, vezes).frase.replace(/\.$/, "")}; ${pct(A.salvo, 1)} salvam.`,
       acao: { texto: `Priorize ${A.nome} na grade das próximas semanas.`, rota: "conteudo" },
       base,
     });
@@ -277,7 +277,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
     titulo: `${A.nome} leva longe, ${S.nome} faz guardar.`,
     manchete: `${nomeLeigoDoFormato(A.f)} alcançou mais`,
     comparacao: comparacaoDeAlcanceESalvo(A, S),
-    porque: `${A.nome} tem o maior alcance mediano (${int(A.alcance)} contas): é o que apresenta o perfil a gente nova. ${S.nome} tem a maior taxa de salvamento (${pct(S.salvo, 1)} contra ${pct(A.salvo, 1)}): é o que gera confiança em quem já chegou. Os dois têm papéis diferentes no caminho até a consulta.`,
+    porque: "Um alcança mais, o outro é mais salvo.",
     acao: { texto: `Use ${A.nome} para atrair e ${S.nome} para aprofundar o mesmo assunto.`, rota: "conteudo" },
     base,
   });

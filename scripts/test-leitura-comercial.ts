@@ -82,7 +82,10 @@ const semPorcentagem = (fatos: FatosDaTela) => {
   assert.equal(pequena!.ressalva, true);
   assert.equal(pequena!.numeros[0].exibicao, "20 de 25");
   semPorcentagem(fatos);
-  assert.ok(fatos.fatos.some((x) => x.id === "aviso-mudanca-do-funil"), "o aviso de mudança do funil entra como ressalva");
+  const aviso = fatos.fatos.find((x) => x.id === "aviso-mudanca-do-funil");
+  assert.ok(aviso, "o aviso de mudança do funil entra como ressalva");
+  assert.equal(aviso!.frase, 'Com poucos casos, a tela mostra "N de M" no lugar da porcentagem.');
+  assert.ok(aviso!.frase.length <= 90 && aviso!.frase.split(/(?<=[.!?])\s+/).length === 1, "aviso com até 90 caracteres e uma frase");
   confere(fatos);
 }
 
@@ -133,6 +136,7 @@ for (const funil of [null, funilDe({ leads: 0, atendidos: null, agendados: null,
   const fatos = fatosDoFunil({ ...entradaBase, funil: funilDe({}), dados: { escopo: "periodo", crmCompartilhado: { clientes: 2, nomes: ["Clínica Fictícia"] } } });
   const x = fatos.fatos.find((y) => y.id === "crm-compartilhado");
   assert.ok(x && x.ressalva);
+  assert.equal(x!.frase, "Conta de CRM compartilhada com outra clínica.");
   assert.ok(!JSON.stringify(fatos).includes("Clínica Fictícia"), "nome de outro cliente não chega à leitura");
 }
 
@@ -191,6 +195,12 @@ for (const funil of [null, montarFunilDaJornada(banco({}, { tem_crm: false }), u
   const x = com.fatos.find((y) => y.id === "sem-pessoa");
   assert.ok(x, "mais da metade sem pessoa vira fato");
   assert.equal(x!.numeros[0].exibicao, "50 de 80");
+  assert.equal(x!.frase, "A maioria dos contatos do período não está ligada a uma pessoa.");
+  assert.ok(x!.frase.length <= 90 && x!.frase.split(/(?<=[.!?])\s+/).length === 1, "frase curta, uma só");
+  assert.equal(x!.comparacao!.barras.length, 1);
+  assert.equal(x!.comparacao!.barras[0].faltou, true, "a barra do que falta ligar é listrada");
+  assert.ok(x!.comparacao!.barras[0].fracao >= 0 && x!.comparacao!.barras[0].fracao <= 1);
+  assert.equal(x!.comparacao!.barras[0].fracao, 50 / 80);
   assert.ok(com.outrosPassos.some((p) => p.verbo === "corrigir" && p.quem === "comercial"));
   confere(com);
   const pouco = fatosDaJornada({ ...entradaBase, funil, resumo: { leads_total: LIMITES.funil.minLeads - 1, leads_sem_pessoa: 20 } });

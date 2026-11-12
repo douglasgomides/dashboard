@@ -203,3 +203,6 @@
   .nx-pagina .nx-card__head h2, .nx-pagina .nx-card__head h3 { font-size: 16px; line-height: 22px; }
   .nx-pagina .nx-card__head p { font-size: 13px; line-height: 18px; margin: 0; }
 }
+
+/* Barras de comparação dentro da linha da leitura (NxBarras): um respiro entre a frase e as barras. */
+.nx-leitura__corpo .nx-barras { margin-top: 6px; }

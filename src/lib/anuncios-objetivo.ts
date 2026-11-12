@@ -1092,7 +1092,7 @@ export function insightsDeAnuncios(d: DiagnosticoAds | null | undefined): Insigh
       confianca: confiancaPorAmostra(msg.conversas, 10),
       motivoConfianca: `${int(msg.conversas)} conversas no período.`,
       impacto: "medio",
-      acao: { texto: "Conferir com a secretária quantas dessas conversas viraram consulta, para saber o custo por paciente." },
+      acao: { texto: "Conferir com a secretária quantas viraram consulta." },
       responsavel: "gestor_trafego",
       risco: "Conversa iniciada não é paciente agendado: o custo por consulta depende do atendimento.",
     });

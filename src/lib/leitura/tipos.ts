@@ -130,6 +130,8 @@ export interface LinhaTexto {
   frase: string;
   numeros: Numeral[];
   tom: TomFato;
+  /** Barras de comparação do fato (03.1.1): a linha da leitura as desenha embaixo da frase. Só quando todas passam no filtro. */
+  barras?: readonly BarraDoFato[];
 }
 
 export interface PassoTexto {

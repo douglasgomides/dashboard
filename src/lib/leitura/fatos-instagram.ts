@@ -27,7 +27,7 @@ import {
 } from "@/lib/conteudo-comercial";
 import { deAchado } from "./adaptadores";
 import { nega, piorPortao, portaoDoPeriodo } from "./portao";
-import { periodoAnterior, type Fato, type FatosDaTela, type PassoFato, type Portao, type TelaId, type TomFato } from "./tipos";
+import { periodoAnterior, type BarraDoFato, type Fato, type FatosDaTela, type PassoFato, type Portao, type TelaId, type TomFato } from "./tipos";
 
 /** Muda quando uma regra de fato do Instagram muda. */
 export const VERSAO_REGRAS_INSTAGRAM = 1;
@@ -594,15 +594,28 @@ export function fatosConteudoComercial(e: EntradaFatosConteudoComercial): FatosD
   const ef = efeitoPorDiaDaSemana(d.dias ?? []);
   if (efeitoComparavel(ef)) {
     const dif = ef.mediaSem > 0 ? Math.round(((ef.mediaCom - ef.mediaSem) / ef.mediaSem) * 100) : null;
-    const numeros = [{ chave: "conversas_por_dia", exibicao: `${mediaTxt(ef.mediaCom)} contra ${mediaTxt(ef.mediaSem)} conversas por dia`, valor: ef.mediaCom }];
+    const maior = Math.max(ef.mediaCom, ef.mediaSem);
+    const rel = (v: number) => (maior > 0 ? Math.min(1, Math.max(0, v / maior)) : 0);
+    // Duas barras (quick 261112-e8e): a regra calcula a proporção, a tela só desenha.
+    const barras: BarraDoFato[] = [
+      { rotulo: "Com post", exibicao: `${mediaTxt(ef.mediaCom)} por dia`, fracao: rel(ef.mediaCom) },
+      { rotulo: "Sem post", exibicao: `${mediaTxt(ef.mediaSem)} por dia`, fracao: rel(ef.mediaSem) },
+    ];
+    const antigo = { chave: "conversas_por_dia", exibicao: `${mediaTxt(ef.mediaCom)} contra ${mediaTxt(ef.mediaSem)} conversas por dia`, valor: ef.mediaCom };
     if (dif == null || Math.abs(dif) < 10) {
-      fatos.push({ id: "efeito-post", tom: "atencao", peso: 1, frase: "A quantidade de conversas ficou parecida nos dias com post e nos dias sem post do mesmo dia da semana.", numeros, n: ef.diasCom });
+      const frase = "Conversas parecidas nos dias com post e nos dias sem post do mesmo dia da semana.";
+      fatos.push({ id: "efeito-post", tom: "atencao", peso: 1, frase, comparacao: { frase, barras }, numeros: [antigo], n: ef.diasCom });
     } else if (dif > 0) {
-      const fato: Fato = { id: "efeito-post", tom: "bom", peso: 2, frase: `Os dias com post tiveram ${dif}% mais conversas que o mesmo dia da semana sem post.`, numeros, n: ef.diasCom };
+      // O destaque leigo vem primeiro ("+25% de conversas"); o número antigo fica como segundo número.
+      const numeros = [{ chave: "conversas_variacao", exibicao: `+${dif}% de conversas`, valor: dif }, antigo];
+      const frase = "Dias com post tiveram mais conversas que o mesmo dia sem post.";
+      const fato: Fato = { id: "efeito-post", tom: "bom", peso: 2, frase, comparacao: { frase, barras }, numeros, n: ef.diasCom };
       fatos.push(fato);
       passos.push({ passo: { verbo: "publicar", texto: "também nos dias úteis de agenda vazia", quem: "social_media", motivo: "Os dias com post tiveram mais conversas; pode haver anúncio ou feriado no mesmo dia.", fatoId: fato.id }, tom: "bom", peso: 2 });
     } else {
-      const fato: Fato = { id: "efeito-post", tom: "atencao", peso: 2, frase: `Os dias com post tiveram ${-dif}% menos conversas que o mesmo dia da semana sem post.`, numeros, n: ef.diasCom };
+      const numeros = [{ chave: "conversas_variacao", exibicao: `−${-dif}% de conversas`, valor: dif }, antigo];
+      const frase = "Dias com post tiveram menos conversas que o mesmo dia sem post.";
+      const fato: Fato = { id: "efeito-post", tom: "atencao", peso: 2, frase, comparacao: { frase, barras }, numeros, n: ef.diasCom };
       fatos.push(fato);
       passos.push({ passo: { verbo: "revisar", texto: "os posts para incluir uma chamada direta para o WhatsApp", quem: "social_media", motivo: "O conteúdo não acompanhou o volume de conversas no período.", fatoId: fato.id }, tom: "atencao", peso: 2 });
     }
@@ -612,7 +625,15 @@ export function fatosConteudoComercial(e: EntradaFatosConteudoComercial): FatosD
       tom: "atencao",
       peso: 1,
       ressalva: true,
-      frase: `Ainda não dá para comparar dias com e sem post: precisa de pelo menos ${MIN_DIAS} dias de cada lado.`,
+      frase: "Faltam dias para comparar dias com e sem post.",
+      // Duas barras: quantos dias há de cada lado contra o mínimo; o que faltou é listrado.
+      comparacao: {
+        frase: "Faltam dias para comparar dias com e sem post.",
+        barras: [
+          { rotulo: "Dias com post", exibicao: `${ef.diasCom} de ${MIN_DIAS}`, fracao: Math.min(1, ef.diasCom / MIN_DIAS), ...(ef.diasCom < MIN_DIAS ? { faltou: true } : {}) },
+          { rotulo: "Dias sem post", exibicao: `${ef.diasSem} de ${MIN_DIAS}`, fracao: Math.min(1, ef.diasSem / MIN_DIAS), ...(ef.diasSem < MIN_DIAS ? { faltou: true } : {}) },
+        ],
+      },
       numeros: [{ chave: "dias_com_par", exibicao: `${ef.diasCom} com post e ${ef.diasSem} sem post` }],
     });
   }
@@ -709,7 +730,15 @@ export function fatosConteudoComercial(e: EntradaFatosConteudoComercial): FatosD
           id: "resposta-rapida",
           tom: "atencao",
           peso: 2,
-          frase: "Quem foi respondido em até 15 minutos agendou mais do que quem esperou mais de 1 hora. É coincidência nos números, não prova.",
+          frase: "Quem foi respondido em até 15 min agendou mais; não é prova ainda.",
+          // Duas barras (a regra calcula): quem foi respondido em até 15 min contra quem esperou mais de 1 hora.
+          comparacao: {
+            frase: "Quem foi respondido em até 15 min agendou mais; não é prova ainda.",
+            barras: [
+              { rotulo: "Até 15 min", exibicao: `${tr}%`, fracao: Math.max(tr, tl) > 0 ? tr / Math.max(tr, tl) : 0 },
+              { rotulo: "Mais de 1 h", exibicao: `${tl}%`, fracao: Math.max(tr, tl) > 0 ? tl / Math.max(tr, tl) : 0 },
+            ],
+          },
           numeros: [{ chave: "agendaram", exibicao: `${tr}% contra ${tl}% agendaram` }],
           n: rapida.conversas + lentaN,
         };
