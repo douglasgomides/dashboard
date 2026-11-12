@@ -1,0 +1,26 @@
+/*
+ * Carteira da equipe no formato 5 segundos (Phase 03.1.1.1, D-07): o veredito "N clínicas precisam de você hoje", a lista por
+ * urgência com a clínica que abre o painel, os 3 números, o painel lateral da clínica e o Modo TV. Só tokens via var() (nenhum hex),
+ * texto com peso 500 ou mais, grades com minmax(0, 1fr), movimento só sem reduced-motion. Escopo: a casca do Nexo fora do SAP.
+ */
+
+/* ---------- Veredito dentro da casca da equipe ---------- */
+.app.product-workspace:not(.sap-workspace) .adm-carteira > .nx-veredito {
+  border-radius: var(--adm-raio, 18px);
+}
+.app.product-workspace:not(.sap-workspace) .adm-carteira .nx-veredito__acao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---------- Ordem: a opção mais longa não alarga a página no celular ---------- */
+.app.product-workspace:not(.sap-workspace) .adm-carteira .adm-ordem {
+  min-width: 0;
+  max-width: 100%;
+}
+.app.product-workspace:not(.sap-workspace) .adm-carteira .adm-ordem select {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 100%;
+}

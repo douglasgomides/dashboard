@@ -6,13 +6,15 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { createAdminUser, createClient, getAvisosDaCarteira, listAllClients } from "@/lib/admin-data";
 import { ClientAvatar } from "@/components/client-avatar";
 import { supabase } from "@/integrations/supabase/client";
-import { getQualidadeDados, getRoiPeriodo, type ProblemaDado } from "@/lib/client-data";
+import { getQualidadeDados, getRoiPeriodo } from "@/lib/client-data";
 import { grupoSemRoi, montarRoi, resumoRoi, ROTULO_GRUPO_SEM_ROI, type GrupoSemRoi, type Roi } from "@/lib/roi";
 import { SeloConfianca } from "@/components/selo-confianca";
 import { resolveDateRange } from "@/lib/date-range";
 import { getSapPorCliente } from "@/lib/sap-data";
 import { lerStatusDasFontes, type FontesDoCliente } from "@/lib/saude-fontes";
 import { notaDasFontes, ROTULO_FAIXA, type NotaFontes } from "@/lib/nota-fontes";
+import { alertasDaClinica, ordenarPorUrgencia, vereditoDaCarteira, type AlertaDaCarteira, type LinhaDaCarteira as LinhaUrgencia } from "@/lib/carteira-urgencia";
+import { NxVeredito } from "@/components/nx/cinco-segundos";
 import { FONTES, NOME_FONTE, LEGENDA_STATUS, VAR_COR, type FonteId } from "@/lib/status-fonte";
 import { AlertTriangle, ArrowRight, Building2, Calculator, Clock, MinusCircle, Search, ShieldCheck, Unplug, UserPlus, UserX } from "lucide-react";
 import { saudeDaFonte, CelulaSaude, SeloStatus, type SaudeFonte } from "@/components/source-health";
@@ -28,6 +30,7 @@ import { CAMPOS_DIARIOS, type CampoDiario } from "@/hooks/use-resultados-diarios
 import { NxAlertaCurto, NxNota, NxTopo } from "@/components/nx/anuncios-graficos";
 import { AdmCampo, AdmChip, AdmContador, AdmContadores, AdmSecao, tomDaCor, type AdmTom } from "@/components/nx/admin-base";
 import "@/styles/databoard.css";
+import "@/styles/nexo-carteira-urgencia.css";
 
 
 export const Route = createFileRoute("/_authenticated/admin/")({
@@ -189,21 +192,6 @@ function ChipQualidade({ clientId }: { clientId: string }) {
   );
 }
 
-// A mesma contagem do ChipQualidade, como alerta da linha da carteira (função pura do dado).
-function alertaDeQualidade(data: ProblemaDado[] | undefined): Alerta | null {
-  if (!data?.length) return null;
-  const altas = data.filter((p) => p.severidade === "alta").length;
-  return {
-    chave: "dado",
-    tom: altas ? "critico" : "atencao",
-    texto: `${data.length} ${data.length === 1 ? "dado com erro" : "dados com erro"}${altas ? ` · ${altas} afeta${altas === 1 ? "" : "m"} a leitura` : ""}`,
-    titulo: data.map((p) => p.titulo).join("\n"),
-  };
-}
-
-// Um alerta da linha: vira um item da lista que o chip "N alertas" abre. Com `acesso`, o item leva para a seção de acesso.
-type Alerta = { chave: string; tom: AdmTom; texto: string; titulo: string; acesso?: boolean };
-
 const ROTULO_COR: Record<string, string> = { verde: "Em dia", amarelo: "Atenção", vermelho: "Problema", cinza: "Sem fontes" };
 const PESO_TOM: Record<AdmTom, number> = { critico: 3, atencao: 2, neutro: 1, ok: 0, marca: 0 };
 const ICONE_ALERTA: Record<AdmTom, ReactNode> = {
@@ -228,9 +216,9 @@ type NumerosClinica = { atual: Partial<Record<CampoDiario, number>>; antes: Part
 /**
  * Uma linha da carteira. Na coluna de saúde ficam no máximo 3 itens em linha (status, nota e o chip "N alertas" ou o do
  * SAP); tudo que antes ficava empilhado (fonte ruim, dado com erro, acesso, SAP) abre numa lista pelo chip "N alertas".
- * A leitura de dado com erro usa a mesma queryKey de sempre, então o react-query reaproveita o cache.
+ * Os alertas vêm prontos da página (a mesma lista que ordena a carteira e alimenta o veredito).
  */
-function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinha, fatoClinica, ultimoAcesso, idx }: {
+function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinha, alertas, idx }: {
   c: { id: string; name: string; specialty?: string | null; avatar_url?: string | null };
   handle: string | null;
   numeros: NumerosClinica | undefined;
@@ -240,22 +228,10 @@ function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinh
   sp: { dia: number | null } | undefined;
   roi: Roi | null;
   grupoLinha: GrupoSemRoi | null;
-  fatoClinica: ReturnType<typeof fatoDeAcesso>;
-  ultimoAcesso: string | null;
+  /** Os alertas da clínica (src/lib/carteira-urgencia.ts), calculados no nível da página: a linha só desenha. */
+  alertas: AlertaDaCarteira[];
   idx: number;
 }) {
-  const { data: qualidade } = useQualidadeDados(c.id);
-  const ruins = sd ? FONTES.filter((f) => sd[f].status.cor === "vermelho" || sd[f].status.cor === "amarelo") : [];
-  const alertas: Alerta[] = [];
-  if (sd) {
-    for (const f of ruins) {
-      alertas.push({ chave: f, tom: tomDaCor(sd[f].status.cor), texto: `${NOME_FONTE[f]}: ${sd[f].status.rotulo.toLowerCase()}`, titulo: `${sd[f].status.data ? sd[f].status.detalhe : "sem dado gravado"}${sd[f].causa ? ` · ${sd[f].causa}` : ""}` });
-    }
-  }
-  const dado = alertaDeQualidade(qualidade);
-  if (dado) alertas.push(dado);
-  if (fatoClinica.fato === "sem_acesso") alertas.push({ chave: "acesso", tom: "neutro", texto: "Sem acesso criado · dar acesso", titulo: "A equipe ainda não criou o acesso de ninguém da clínica.", acesso: true });
-  if (fatoClinica.fato === "nao_entra") alertas.push({ chave: "acesso", tom: "atencao", texto: `Não entra há ${fatoClinica.dias} dias`, titulo: ultimoAcesso ? `Último acesso de alguém da clínica: ${ultimoAcesso}` : "Acesso criado e nunca usado", acesso: true });
   const piorTom = alertas.reduce<AdmTom>((p, a) => (PESO_TOM[a.tom] > PESO_TOM[p] ? a.tom : p), "neutro");
   const rotuloSap = sp ? (sp.dia === null ? "SAP · sem D0" : sp.dia > 90 ? "Terminou o SAP" : sp.dia < 0 ? `SAP · começa em ${-sp.dia} dia(s)` : `SAP · D${sp.dia} de 90`) : null;
   const chipSap = sp && (
@@ -276,8 +252,8 @@ function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinh
       <div className="adm-chips">
         <AdmChip tom={sd ? tomDaCor(cor) : "neutro"}>{sd ? ROTULO_COR[cor] ?? "Sem fontes" : "Lendo as fontes…"}</AdmChip>
         {nota && nota.nota !== null && (
-          <AdmChip tom={tomDaCor(nota.cor)} semIcone titulo={nota.motivos.length ? `Por que não é 100:\n${nota.motivos.join("\n")}` : "Todas as fontes em dia, sem problema de dado"}>
-            Nota {nota.nota} · {ROTULO_FAIXA[nota.faixa!]}
+          <AdmChip tom={tomDaCor(nota.cor)} semIcone titulo={`Saúde dos dados (nota das fontes, não é o resultado da clínica). ${nota.motivos.length ? `Por que não é 100:\n${nota.motivos.join("\n")}` : "Todas as fontes em dia, sem problema de dado."}`}>
+            Dados {nota.nota} · {ROTULO_FAIXA[nota.faixa!]}
           </AdmChip>
         )}
         {alertas.length > 0 ? (
@@ -427,7 +403,8 @@ function AdminClientsPage() {
   // Filtros e ordenação da tabela.
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<"todos" | "problema" | "sem_roi" | "nao_entra" | "sem_acesso">("todos");
-  const [ordem, setOrdem] = useState<"pior" | "nota" | "nome">("pior");
+  // "urgencia" (padrão): mais problemas abertos primeiro. As outras ordens falam de saúde dos dados, nunca de desempenho (I-1).
+  const [ordem, setOrdem] = useState<"urgencia" | "pior" | "nota" | "nome">("urgencia");
   const piorPeso = (id: string) => {
     const sd = saudePorCliente.get(id);
     return sd ? Math.max(...FONTES.map((f) => sd[f].status.peso)) : 0;
@@ -467,14 +444,35 @@ function AdminClientsPage() {
     }),
   );
   const valorNota = (id: string) => notaPorCliente.get(id)?.nota ?? 101;
+  // Alertas de cada clínica (os mesmos do chip "N alertas"), já com quem resolve. Uma conta só, no nível da página: ordena, vira veredito e desenha a linha.
+  const dataBr = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" }) : null);
+  const alertasPorCliente = new Map<string, AlertaDaCarteira[]>(
+    (clients ?? []).map((c, i) => [
+      c.id,
+      alertasDaClinica({
+        saude: saudePorCliente.get(c.id),
+        problemas: problemas.filter((p) => p.clientId === c.id),
+        qualidade: qualidades[i]?.data,
+        fatoAcesso: acessoDe(c),
+        ultimoAcesso: dataBr(acessoPorClinica.get(c.id)?.ultimo_acesso),
+      }),
+    ]),
+  );
+  const linhasUrgencia: LinhaUrgencia[] = (clients ?? []).map((c) => {
+    const n = notaPorCliente.get(c.id) ?? null;
+    return { id: c.id, nome: c.name, entra: entraNaCarteira(c), nota: n?.nota ?? null, faixa: n?.faixa ?? null, alertas: alertasPorCliente.get(c.id) ?? [] };
+  });
+  const ordemDeUrgencia = new Map(ordenarPorUrgencia(linhasUrgencia).map((l, i) => [l.id, i]));
   const linhasTabela = (clients ?? [])
     .filter(casaFiltro)
     .sort((x, y) =>
-      ordem === "nome"
-        ? x.name.localeCompare(y.name, "pt-BR")
-        : ordem === "nota"
-          ? valorNota(x.id) - valorNota(y.id) || x.name.localeCompare(y.name, "pt-BR")
-          : piorPeso(y.id) - piorPeso(x.id) || x.name.localeCompare(y.name, "pt-BR"),
+      ordem === "urgencia"
+        ? (ordemDeUrgencia.get(x.id) ?? 0) - (ordemDeUrgencia.get(y.id) ?? 0)
+        : ordem === "nome"
+          ? x.name.localeCompare(y.name, "pt-BR")
+          : ordem === "nota"
+            ? valorNota(x.id) - valorNota(y.id) || x.name.localeCompare(y.name, "pt-BR")
+            : piorPeso(y.id) - piorPeso(x.id) || x.name.localeCompare(y.name, "pt-BR"),
     );
   const chipFiltro = (id: typeof filtro, rot: string, n?: number) => (
     <button type="button" onClick={() => setFiltro(id)} aria-pressed={filtro === id} className="adm-pilula">
@@ -551,6 +549,12 @@ function AdminClientsPage() {
         }
       />
 
+      <NxVeredito
+        tela="carteira"
+        carregando={isLoading || carregandoSaude || avisosQ.isLoading || qualidades.some((q) => q.isLoading)}
+        veredito={isLoading ? null : vereditoDaCarteira(linhasUrgencia)}
+      />
+
       <AdmContadores rotulo="Resumo da carteira">
         <AdmContador className="dbx-card" i={0} icone={<Building2 />} rotulo="Clínicas na carteira" valor={isLoading ? "…" : nClinicas} nota="Ver todas" tom="marca" onClick={() => setFiltro("todos")} ativo={filtro === "todos"} />
         <AdmContador className="dbx-card" i={1} icone={<AlertTriangle />} rotulo="Precisam de atenção" valor={lendo(nAtencao)} nota="Fonte atrasada, parada ou com erro" tom={carregandoSaude ? "neutro" : tomDe(nAtencao, "atencao")} onClick={() => setFiltro("problema")} ativo={filtro === "problema"} />
@@ -592,8 +596,9 @@ function AdminClientsPage() {
         <label className="adm-ordem">
           Ordenar por
           <select value={ordem} onChange={(e) => setOrdem(e.target.value as typeof ordem)}>
-            <option value="pior">Pior status</option>
-            <option value="nota">Nota das fontes (menor primeiro)</option>
+            <option value="urgencia">Mais problemas abertos</option>
+            <option value="pior">Saúde das fontes: pior primeiro</option>
+            <option value="nota">Nota da saúde dos dados (menor primeiro)</option>
             <option value="nome">Nome</option>
           </select>
         </label>
@@ -613,7 +618,6 @@ function AdminClientsPage() {
             {linhasTabela.map((c, idx) => {
               const handle = c.instagram_handle || contasIg?.get(c.id) || null;
               const r = roiDe(c.id);
-              const ultimoAcessoIso = acessoPorClinica.get(c.id)?.ultimo_acesso;
               return (
                 <LinhaDaCarteira
                   key={c.id}
@@ -626,8 +630,7 @@ function AdminClientsPage() {
                   sp={sapPorCliente?.get(c.id)}
                   roi={r}
                   grupoLinha={r && entraNaCarteira(c) ? grupoSemRoi(r) : null}
-                  fatoClinica={acessoDe(c)}
-                  ultimoAcesso={ultimoAcessoIso ? new Date(ultimoAcessoIso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" }) : null}
+                  alertas={alertasPorCliente.get(c.id) ?? []}
                   idx={idx}
                 />
               );
@@ -728,7 +731,7 @@ function AdminClientsPage() {
                       <thead>
                         <tr className="text-left text-xs" style={{ color: "var(--ink-2)", background: "var(--surface-2)" }}>
                           <th className="px-4 py-2">Nome</th>
-                          <th className="px-4 py-2" title="0 a 100: fontes em dia, fontes por ligar e problemas de dado">Nota</th>
+                          <th className="px-4 py-2" title="0 a 100: fontes em dia, fontes por ligar e problemas de dado. Não é o resultado da clínica.">Nota dos dados</th>
                           <th className="px-4 py-2">Instagram</th>
                           <th className="px-4 py-2">Anúncios</th>
                           <th className="px-4 py-2">CRM</th>
