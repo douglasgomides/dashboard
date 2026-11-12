@@ -16,6 +16,7 @@ import { fmtFracao, MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { SeguidoresSemana } from "@/components/seguidores-impulsionados";
 import { NxCard, NxKpi, NxTag } from "@/components/nx";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
+import { serieContinua } from "@/lib/linha-30-dias";
 import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxTabela, NxVazio } from "@/components/nx/blocos";
@@ -117,6 +118,8 @@ function ConteudoPage() {
   const seg = useMemo(() => (metrics.data ? analyzeFollowers(metrics.data, start, end) : null), [metrics.data, start, end]);
   const cresc = useMemo(() => (metrics.data ? analyzeGrowth(metrics.data, start, end) : null), [metrics.data, start, end]);
   const fm = useMemo(() => (posts.data ? analyzeFormatsAndTemas(posts.data) : null), [posts.data]);
+  // Linha de 30 dias do cartão "Seguidores hoje" (sketch 002): os mesmos pontos de seguidores, sem consulta nova; dia sem contagem é buraco.
+  const serieDoCartao = useMemo(() => (seg ? { rotulo: "seguidores", ...serieContinua(seg.points.map((p) => ({ dia: p.date, valor: p.followers }))) } : undefined), [seg]);
   const serie = useMemo(() => (seg ? { datas: seg.points.map((p) => p.date), valores: seg.points.map((p) => p.followers) } : null), [seg]);
 
   // Contagem em cinza da aba Desempenho na pasta do Instagram (D-07): dias do período com alcance medido, da lista que a tela já
@@ -192,6 +195,7 @@ function ConteudoPage() {
       titulo="Seguidores hoje"
       semMedida={ultimo == null}
       valor={ultimo != null ? fmtN(ultimo) : "Sem dado"}
+      serie={serieDoCartao}
       legenda={seg?.lastDate ? `última coleta em ${fmtDiaBR(seg.lastDate)}` : "nenhuma coleta no período"}
     />,
     <NxCartaoNumero
