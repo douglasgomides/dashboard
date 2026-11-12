@@ -139,6 +139,10 @@ for (const width of [375, 1440]) {
     expect(await semRolagemLateral(page)).toBe(true);
 
     await page.goto(`/${CID}/atendimento?preset=30d`);
+    // 03.1.1.1 (plano 06): o veredito abre a tela e os números, o volume e a espera de antes moram no "Ver tudo" (aberto aqui antes de ler).
+    const raizAtendimento = '[data-tela="atendimento"]';
+    await expect(page.locator(`${raizAtendimento} [data-peca="veredito"]:not([data-modo="carregando"])`)).toBeVisible();
+    await abrirVerTudo(page, raizAtendimento);
     const atend = page.getByRole("region", { name: "Números do atendimento" });
     await expect(atend.locator(".ws-metric-value")).toHaveText(["200", "15min", "10%", /\d+/]);
     await expect(page.getByRole("slider", { name: /^Atendimentos por dia e espera/ })).toBeVisible();

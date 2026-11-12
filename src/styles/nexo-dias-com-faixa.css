@@ -1,0 +1,650 @@
+/* Barras por dia com a faixa do normal (Phase 03.1.1.1, plano 06): uma barra por dia, a faixa cinza do normal e ▲/▼ escritos sobre os dias
+   fora dela. Só tokens de nexo-system.css (nenhum hex), peso de letra nunca abaixo de 500, nada cortado (molde k), o movimento só sem
+   reduced-motion. Escopo: a casca do Nexo fora do SAP. Cor nunca vai sozinha: a marca ▲/▼ é texto e a legenda diz o mesmo. */
+
+.app.product-workspace:not(.sap-workspace) .nx-dias {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__area {
+  position: relative;
+  height: 220px;
+  /* Espaço para o ▲/▼ sobre a barra mais alta. */
+  margin-top: 16px;
+  border-bottom: 1px solid var(--line-2);
+  cursor: pointer;
+  /* A página continua rolando na vertical enquanto o dedo anda na horizontal. */
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__area:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias[data-compacto] .nx-dias__area {
+  height: 96px;
+  margin-top: 12px;
+}
+
+/* Faixa do normal: retângulo cinza com borda tracejada. */
+.app.product-workspace:not(.sap-workspace) .nx-dias__faixa {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* Sem z-index próprio: o rótulo (z-index 3) fica acima das barras (z-index 1) e a faixa em si, abaixo delas. */
+  min-height: 2px;
+  background: var(--line);
+  border-top: 1.5px dashed var(--muted-2);
+  border-bottom: 1.5px dashed var(--muted-2);
+  pointer-events: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__faixa-rotulo {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  z-index: 3;
+  max-width: calc(100% - 8px);
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--muted-ink);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Barras. */
+.app.product-workspace:not(.sap-workspace) .nx-dias__barras {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(2px, 0.5vw, 6px);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra i {
+  display: block;
+  width: 100%;
+  border-radius: 5px 5px 2px 2px;
+  background: var(--b4);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra[data-marca="acima"] i {
+  background: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra[data-marca="abaixo"] i {
+  background: var(--or);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra[data-destaque] i {
+  background: repeating-linear-gradient(135deg, var(--dn) 0 3px, var(--dn-bg) 3px 6px);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra[data-sel] i {
+  box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__marca {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  line-height: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra[data-marca="acima"] .nx-dias__marca {
+  color: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__barra[data-marca="abaixo"] .nx-dias__marca {
+  color: var(--or-ink);
+}
+
+/* Dica "dia 14/10: 685". Nas pontas não sai do cartão. */
+.app.product-workspace:not(.sap-workspace) .nx-dias__dica {
+  position: absolute;
+  z-index: 4;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--white);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  transform: translateX(-50%);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__dica[data-lado="esquerda"] {
+  transform: translateX(-12px);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__dica[data-lado="direita"] {
+  transform: translateX(calc(-100% + 12px));
+}
+@media (prefers-reduced-motion: no-preference) {
+  .app.product-workspace:not(.sap-workspace) .nx-dias__dica {
+    animation: nx-dias-entra 0.1s ease-out;
+  }
+  @keyframes nx-dias-entra {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+/* Eixo: datas dd/mm a cada poucos dias. */
+.app.product-workspace:not(.sap-workspace) .nx-dias__eixo {
+  display: flex;
+  gap: clamp(2px, 0.5vw, 6px);
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__eixo span {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--muted-ink);
+  white-space: nowrap;
+  overflow: visible;
+  font-variant-numeric: tabular-nums;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__falta {
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--muted-ink);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+/* Legenda: o que cada marca quer dizer, escrito (a cor nunca vai sozinha). */
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda i {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda i[data-tipo="faixa"] {
+  background: var(--line);
+  border: 1.5px dashed var(--muted-2);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda i[data-tipo="acima"] {
+  background: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda i[data-tipo="abaixo"] {
+  background: var(--or);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda i[data-tipo="normal"] {
+  background: var(--b4);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dias__legenda i[data-tipo="destaque"] {
+  background: repeating-linear-gradient(135deg, var(--dn) 0 3px, var(--dn-bg) 3px 6px);
+}
+
+/* Celular: o gráfico é mais baixo (régua de 1,5 tela, D-08). */
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-dias__area {
+    height: 160px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dias[data-compacto] .nx-dias__area {
+    height: 80px;
+  }
+}
+
+/* ---------- Dia cruzado: o dia tocado no gráfico, com o Instagram e os anúncios da própria clínica ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--b6);
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__nota {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__nota[data-marca="acima"] {
+  color: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__nota[data-marca="abaixo"] {
+  color: var(--or-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__grade {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item dt {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item dd {
+  margin: 0;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor--falta {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--muted-ink);
+  letter-spacing: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__apoio {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted-ink);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__causa {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__dica {
+  margin: 0;
+}
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado {
+    padding: 8px 12px;
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__grade {
+    gap: 4px 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor {
+    font-size: 18px;
+    line-height: 22px;
+  }
+}
+
+/* ---------- Atendimento na régua de 1,5 tela (D-08): nunca se sobe o limite, só se comprime o que é desta tela ---------- */
+/* A faixa de abas da equipe ("Números do atendimento" e "Conversas e auditoria"): tamanho do conteúdo no computador. */
+.app.product-workspace:not(.sap-workspace) .nx-atend-abas {
+  width: fit-content;
+}
+@media (max-width: 560px) {
+  /* No celular as duas abas dividem a linha (o texto pode quebrar em duas linhas), em vez de cair uma sobre a outra. */
+  .app.product-workspace:not(.sap-workspace) .nx-atend-abas {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-atend-abas button {
+    min-height: 40px;
+    padding: 0 8px;
+    font-size: 14px;
+    line-height: 18px;
+    text-wrap: balance;
+  }
+  /* A etiqueta da decisão e o período já estão na casca (seletor de período): o cabeçalho fica só com a pergunta. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__rotulo,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__meta,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__pontos {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] {
+    gap: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-veredito {
+    padding: 8px 12px;
+  }
+  /* O dia cruzado vira uma lista de uma linha por fonte (nome à esquerda, número e comparação à direita). */
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__grade {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item dt {
+    flex: 1 1 auto;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item dd {
+    flex: 0 0 auto;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor {
+    font-size: 16px;
+    line-height: 22px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor--falta {
+    font-size: 14px;
+  }
+}
+
+/* ---------- Descobertas 4 e 5, dentro do "Ver tudo" (a mesma aparência de Resultados, só nesta tela) ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-cinco-resto__titulo {
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-cinco-resto__item {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-cinco-resto__item > * {
+  max-width: 100%;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-cinco-resto__item .nx-barras {
+  justify-self: stretch;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-cinco-resto__frase {
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Atendimento: cartões, descobertas e o gráfico dentro da régua (nada é escondido: o que sai da vista mora no "Ver tudo") ---------- */
+/* Cartões de número: o número e a legenda lado a lado em qualquer largura, para o cartão ficar baixo. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__cartoes .nx-numero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__cartoes .nx-numero__legenda {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+/* A ação e o "Por quê?" lado a lado, não um sobre o outro. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__acoes {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+/* A sincronização da equipe: no cabeçalho no computador; no celular ela desce para o "Ver tudo" (o cabeçalho fica só com a pergunta). */
+.app.product-workspace:not(.sap-workspace) .nx-atend-sync--ver-tudo {
+  display: none;
+}
+
+/* Computador: as descobertas lado a lado (cada uma empilha chips, frase e botões no próprio cartão). */
+@media (min-width: 1100px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descobertas__lista {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-atend-sync--topo {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-atend-sync--ver-tudo {
+    display: block;
+    margin-bottom: 12px;
+  }
+  /* Cartões de número: sem o ícone e sem a linha de 30 dias (a série inteira está no gráfico logo abaixo). */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__cartoes .nx-cartao__icone,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__cartoes .nx-linha30 {
+    display: none;
+  }
+  /* O cartão do gráfico: título numa linha ou duas, sem o ícone e sem o subtítulo (o período já está na casca). */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] #conversas-por-dia .nx-tile,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] #conversas-por-dia .nx-card__titulo p {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-dias__legenda {
+    gap: 2px 12px;
+    font-size: 12px;
+    line-height: 16px;
+  }
+  /* Descobertas. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-atendimento-ordem {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descobertas,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descobertas__lista {
+    gap: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descobertas__titulo {
+    font-size: 18px;
+    line-height: 20px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta {
+    padding: 8px;
+    gap: 2px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__corpo {
+    display: block;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__topo {
+    display: inline-flex;
+    max-width: 100%;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  /* O número em jogo fica no "Por quê?" (as barras dizem o mesmo número). */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__impacto {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__frase {
+    display: inline;
+    font-size: 15px;
+    line-height: 20px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta .nx-selo {
+    font-size: 12px;
+    line-height: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__acoes {
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta .nx-acao-pilula {
+    min-height: 36px;
+    padding: 2px 2px 2px 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta .nx-acao-pilula__texto {
+    padding: 0;
+  }
+  /* Um estilo global de botão dá 44 px de altura mínima: a seta redonda de 32 px precisa soltá-la. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta .nx-acao-pilula__seta {
+    width: 32px;
+    height: 32px;
+    min-height: 0;
+    min-width: 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__porque-botao {
+    min-height: 36px;
+  }
+}
+
+/* ---------- Atendimento: o gráfico e o dia cruzado lado a lado no computador (o painel não custa altura) ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-atend-grafico {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+@media (min-width: 1100px) {
+  .app.product-workspace:not(.sap-workspace) .nx-atend-grafico {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 16px;
+    align-items: start;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-atend-grafico .nx-dia-cruzado__dica {
+    align-self: center;
+  }
+  /* No lado, o dia cruzado é uma lista de uma linha por fonte (o nome à esquerda, o número e a comparação à direita). */
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__grade {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item dt {
+    flex: 1 1 auto;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item dd {
+    flex: 0 0 auto;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor {
+    font-size: 18px;
+    line-height: 24px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor--falta {
+    font-size: 14px;
+    line-height: 20px;
+  }
+}
+
+@media (max-width: 560px) {
+  /* A faixa de abas da equipe numa linha só e o espaço entre ela e a página menor. */
+  .app.product-workspace:not(.sap-workspace) .nx-atend-abas button {
+    min-height: 32px;
+    padding: 0 4px;
+    font-size: 13px;
+    line-height: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__pergunta {
+    font-size: 18px;
+    line-height: 22px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-dias__area {
+    height: 140px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nxb-recolhido small {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  /* Equipe: a faixa de abas fica mais perto da página, e a página mais junta (régua de 1,5 tela dentro da pasta). */
+  .app.product-workspace:not(.sap-workspace) .nx-atend-pagina > * + * {
+    margin-top: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] {
+    gap: 6px;
+  }
+  /* O título "O que os números dizem" continua para leitor de tela: a lista de descobertas se explica sozinha. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descobertas__titulo {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descobertas {
+    position: relative;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__cartoes .nx-cartao {
+    padding: 8px 12px;
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] #conversas-por-dia {
+    padding: 12px;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 560px) {
+  /* Última folga da régua de 1,5 tela dentro da pasta da equipe: gráfico, descobertas e "Ver tudo" um pouco mais baixos. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-dias__area {
+    height: 124px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta {
+    padding: 6px 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nxb-recolhido > summary {
+    padding-top: 11px;
+    padding-bottom: 11px;
+  }
+}
+
+/* Descoberta estreita (3 lado a lado no computador): o número em jogo sai do cabeçalho do cartão (as barras do "Por quê?" dizem o mesmo número) e "quem resolve" cabe inteiro. */
+@container nx-descoberta (max-width: 440px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-descoberta__impacto {
+    display: none;
+  }
+}
