@@ -69,7 +69,9 @@ function linhaDe(f: Fato): LinhaTexto | null {
   const numeros = f.numeros.filter((n) => limpo(n.exibicao));
   // Cada afirmação traz ao lado o número que a sustenta: sem número, o fato não vira conclusão.
   if (!numeros.length) return null;
-  return { fatoId: f.id, frase, numeros, tom: f.tom };
+  // As barras da comparação só vão junto quando cada rótulo e cada valor passam no mesmo filtro (a chave nunca fica com undefined).
+  const barras = f.comparacao?.barras.length && f.comparacao.barras.every((b) => limpo(b.rotulo) && limpo(b.exibicao)) ? f.comparacao.barras : undefined;
+  return { fatoId: f.id, frase, numeros, tom: f.tom, ...(barras ? { barras } : {}) };
 }
 
 function passoTexto(p: PassoFato): PassoTexto | null {
@@ -132,7 +134,7 @@ export function problemasDoTexto(t: TextoDaLeitura | TextoDoResumo): string[] {
   };
   const linha = (l: LinhaTexto | null | undefined) => {
     if (!l) return;
-    textos.push(l.frase, ...l.numeros.map((n) => n.exibicao));
+    textos.push(l.frase, ...l.numeros.map((n) => n.exibicao), ...(l.barras ?? []).flatMap((b) => [b.rotulo, b.exibicao]));
   };
   if (t.tipo === "sem_leitura") {
     textos.push(t.motivo);

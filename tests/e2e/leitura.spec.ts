@@ -80,9 +80,9 @@ for (const width of [375, 1440]) {
       await expect(leitura).toBeVisible();
       await expect(leitura.getByText("O que aconteceu", { exact: true })).toBeVisible();
       await expect(leitura.locator(".nx-leitura__num").first()).toBeVisible();
-      await expect(leitura.getByText("Ação da semana", { exact: true })).toBeVisible();
+      await expect(leitura.getByText("Próximo passo", { exact: true })).toBeVisible();
       await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
-      await expect(leitura.getByText(/Sem leitura:/)).toHaveCount(0);
+      await expect(leitura.getByText(/Falta dado:/)).toHaveCount(0);
       // A leitura fica dentro do molde novo, abaixo da pergunta da tela, antes do conteúdo antigo.
       await expect(page.locator('.nx-pagina[data-tela="resultados"] > .nx-leitura')).toHaveCount(1);
       await expect(page.getByRole("heading", { level: 1, name: "Como a clínica foi no período?", exact: true })).toBeVisible();
@@ -95,9 +95,9 @@ for (const width of [375, 1440]) {
       await page.goto(`/${CID}?preset=30d`);
 
       const leitura = regiao(page);
-      await expect(leitura.getByText(/Sem leitura:/)).toBeVisible();
+      await expect(leitura.getByText(/Falta dado:/)).toBeVisible();
       await expect(leitura.getByText(/o Instagram está sem dado novo desde \d{2}\/\d{2}/)).toBeVisible();
-      await expect(leitura.getByText(/Para consertar:/)).toBeVisible();
+      await expect(leitura.getByText(/Próximo passo para resolver:/)).toBeVisible();
       await expect(leitura.getByText("Quem resolve: Equipe Doctor Creator")).toBeVisible();
       await expect(leitura.getByText("O que aconteceu")).toHaveCount(0);
       expect(await semRolagemLateral(page)).toBe(true);

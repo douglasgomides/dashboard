@@ -3,7 +3,7 @@ import { CID, mockAccount } from "./fixtures";
 import { mockInstagram } from "./instagram-dados";
 
 // Telas de Marketing/Instagram no molde novo (Phase 3.1, plano 05): cada uma abre com o cabeçalho, a leitura do período no
-// topo (o que aconteceu com o número ao lado, ou "Sem leitura:" com quem resolve), até 4 cartões, um gráfico e o resto em
+// topo (o que aconteceu com o número ao lado, ou "Falta dado:" com quem resolve), até 4 cartões, um gráfico e o resto em
 // Detalhes. Sem Recharts, sem tabela fora de NxTabela e sem rolagem lateral, em 375 e 1440 px.
 
 const semRolagemLateral = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
@@ -27,11 +27,11 @@ for (const width of [375, 1440]) {
       await expect(page.getByRole("heading", { level: 1, name: t.pergunta })).toBeVisible();
 
       // A leitura do período é a primeira coisa depois do cabeçalho: "O que aconteceu" com o número ao lado,
-      // ou "Sem leitura:" com o motivo e quem resolve.
+      // ou "Falta dado:" com o motivo e quem resolve.
       const leitura = page.getByRole("region", { name: "Leitura do período", exact: true });
       await expect(leitura).toBeVisible();
-      await expect(leitura.getByText("O que aconteceu", { exact: true }).or(leitura.getByText(/^Sem leitura:/))).toBeVisible();
-      await expect(leitura.locator(".nx-leitura__num").first().or(leitura.getByText(/^Sem leitura:/))).toBeVisible();
+      await expect(leitura.getByText("O que aconteceu", { exact: true }).or(leitura.getByText(/^Falta dado:/))).toBeVisible();
+      await expect(leitura.locator(".nx-leitura__num").first().or(leitura.getByText(/^Falta dado:/))).toBeVisible();
       await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
 
       // Cartões: até 4, depois da leitura.
@@ -78,7 +78,7 @@ for (const width of [375, 1440]) {
     await page.goto(`/${CID}/conteudo-comercial?preset=30d`);
     // Aviso fixo, com quem resolve: primeira coisa dos Detalhes (03.1.1-04, régua de 1,5 tela); a leitura do topo repete em "Ver mais".
     await page.locator(".nx-pagina__detalhe > details > summary").click();
-    const aviso = page.locator('[data-peca="aviso"]').filter({ hasText: "Sem leitura: origem por post não medida" });
+    const aviso = page.locator('[data-peca="aviso"]').filter({ hasText: "Falta dado: origem por post não medida" });
     await expect(aviso).toBeVisible();
     await expect(aviso.getByText(/Quem resolve: Equipe Doctor Creator/)).toBeVisible();
     // E o último item de "Ver mais" da leitura, também com a equipe da Doctor Creator.

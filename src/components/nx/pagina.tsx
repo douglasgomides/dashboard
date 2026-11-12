@@ -6,7 +6,7 @@ import { montarTexto, rotuloPeriodo } from "@/lib/leitura/texto";
 import { ROTULO_DECISAO, type DecisaoMedico, type FatosDaTela, type LinhaTexto, type PassoTexto, type TelaId, type TextoDoResumo, type TomFato } from "@/lib/leitura/tipos";
 import { NxTag } from "./base";
 import { NxCarregando, NxErro, NxRecolhido } from "./blocos";
-import { NxAcaoPilula } from "./cartoes";
+import { NxAcaoPilula, NxBarras } from "./cartoes";
 import "@/styles/nexo-pagina.css";
 
 // Molde único de página do Nexo (Phase 3.1). Toda tela, da clínica e da equipe, abre assim, nesta ordem fixa:
@@ -34,24 +34,59 @@ export interface PaginaNexoProps {
   corpo?: ReactNode;
   /** Vai dentro do bloco recolhido "Detalhes", fechado. */
   detalhe?: ReactNode;
-  /** Só a Hoje (03.1.1, D-07): saudação grande no topo; a pergunta vira o parágrafo logo abaixo. Sem ela o HTML é o de sempre. */
+  /**
+   * Só a Hoje (03.1.1, D-07): saudação grande no topo, como único título visível. Com ela a página não desenha o rótulo da tela
+   * e a pergunta fica só para leitor de tela. Sem ela o HTML é o de sempre.
+   */
   saudacao?: ReactNode;
+  /** Só a Hoje: o número grande logo abaixo da saudação ("4 ações esta semana"). Só vale com `saudacao`. */
+  destaqueDoTopo?: ReactNode;
 }
 
-export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitura, cartoes, principal, corpo, detalhe, saudacao }: PaginaNexoProps) {
+/**
+ * No celular a fileira de cartões rola de lado: este ouvinte diz qual cartão está à vista (pelo scrollLeft e pela largura do primeiro
+ * cartão mais o espaço). Passivo, e o estado só muda quando o índice muda (nada de renderizar a cada pixel).
+ */
+function useCartaoAtual(quantidade: number) {
+  const fileira = useRef<HTMLDivElement>(null);
+  const [atual, setAtual] = useState(0);
+  useEffect(() => {
+    const el = fileira.current;
+    if (!el || quantidade < 2) return;
+    const calcula = () => {
+      const primeiro = el.firstElementChild as HTMLElement | null;
+      if (!primeiro) return;
+      const espaco = parseFloat(getComputedStyle(el).columnGap) || 0;
+      const passo = primeiro.offsetWidth + espaco;
+      // Fora do celular a fileira não rola (grade): scrollLeft 0 e o índice fica em 0, sem custo.
+      const indice = passo > 0 ? Math.min(quantidade - 1, Math.max(0, Math.round(el.scrollLeft / passo))) : 0;
+      setAtual((antes) => (antes === indice ? antes : indice));
+    };
+    calcula();
+    el.addEventListener("scroll", calcula, { passive: true });
+    return () => el.removeEventListener("scroll", calcula);
+  }, [quantidade]);
+  return { fileira, atual: Math.min(atual, Math.max(0, quantidade - 1)) };
+}
+
+export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitura, cartoes, principal, corpo, detalhe, saudacao, destaqueDoTopo }: PaginaNexoProps) {
   const cartoesVisiveis = (cartoes ?? []).filter((c) => c != null && c !== false);
+  const { fileira, atual } = useCartaoAtual(cartoesVisiveis.length);
   return (
     <div className="nx-pagina" data-tela={tela}>
       <header className="nx-pagina__topo">
         <div className="nx-pagina__titulos">
-          <p className="nx-pagina__rotulo">{titulo}</p>
           {saudacao ? (
             <>
               <h1 className="nx-pagina__saudacao">{saudacao}</h1>
-              <p className="nx-pagina__pergunta">{pergunta}</p>
+              {destaqueDoTopo}
+              <p className="nx-pagina__pergunta sr-only">{pergunta}</p>
             </>
           ) : (
-            <h1 className="nx-pagina__pergunta">{pergunta}</h1>
+            <>
+              <p className="nx-pagina__rotulo">{titulo}</p>
+              <h1 className="nx-pagina__pergunta">{pergunta}</h1>
+            </>
           )}
           {(decisao || meta) && (
             <div className="nx-pagina__meta">
@@ -64,10 +99,20 @@ export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitur
       </header>
       {leitura}
       {cartoesVisiveis.length > 0 && (
-        <div className="nx-pagina__cartoes" data-quantidade={cartoesVisiveis.length}>
-          {cartoesVisiveis.map((c, k) => (
-            <Fragment key={k}>{c}</Fragment>
-          ))}
+        <div className="nx-pagina__cartoes-bloco">
+          <div ref={fileira} className="nx-pagina__cartoes" data-quantidade={cartoesVisiveis.length}>
+            {cartoesVisiveis.map((c, k) => (
+              <Fragment key={k}>{c}</Fragment>
+            ))}
+          </div>
+          {/* Bolinhas só no celular (a fileira rola de lado). aria-hidden: todos os cartões já estão no DOM para leitor de tela. */}
+          {cartoesVisiveis.length >= 2 && (
+            <div className="nx-pagina__pontos" aria-hidden>
+              {cartoesVisiveis.map((_, k) => (
+                <span key={k} className="nx-pagina__ponto" data-atual={k === atual ? "" : undefined} />
+              ))}
+            </div>
+          )}
         </div>
       )}
       {principal && <div className="nx-pagina__principal">{principal}</div>}
@@ -96,7 +141,7 @@ export interface LeituraDaTelaProps {
   id?: string;
 }
 
-const SINAL: Record<TomFato, string> = { bom: "▲", ruim: "▼", atencao: "!", neutro: "●" };
+export const SINAL: Record<TomFato, string> = { bom: "▲", ruim: "▼", atencao: "!", neutro: "●" };
 
 function Linha({ rotulo, tom = "neutro", children }: { rotulo?: string; tom?: TomFato; children: ReactNode }) {
   return (
@@ -112,18 +157,27 @@ function Linha({ rotulo, tom = "neutro", children }: { rotulo?: string; tom?: To
   );
 }
 
-/** A frase com o número que a sustenta logo depois (cada número em strong, tabular). Texto sempre como texto do React. */
+/**
+ * Com barras, o número técnico longo (a base com "alcance típico … · …") não fica à vista: as barras já mostram cada valor e a conta
+ * inteira continua nos Detalhes da tela. Número curto ("+56% de conversas", "50 de 80") continua ao lado da frase.
+ */
+const MAX_CARACTERES_DO_NUMERO_COM_BARRAS = 60;
+
+/** A frase com o número que a sustenta logo depois (cada número em strong, tabular) e, quando o fato traz comparação, as barras embaixo. Texto sempre como texto do React. */
 function FraseComNumero({ linha }: { linha: LinhaTexto }) {
   return (
-    <p className="nx-leitura__frase">
-      {linha.frase}
-      {linha.numeros.map((n) => (
-        <Fragment key={n.chave}>
-          {" "}
-          <strong className="nx-leitura__num">{n.exibicao}</strong>
-        </Fragment>
-      ))}
-    </p>
+    <>
+      <p className="nx-leitura__frase">
+        {linha.frase}
+        {linha.numeros.filter((n) => !linha.barras || n.exibicao.length <= MAX_CARACTERES_DO_NUMERO_COM_BARRAS).map((n) => (
+          <Fragment key={n.chave}>
+            {" "}
+            <strong className="nx-leitura__num">{n.exibicao}</strong>
+          </Fragment>
+        ))}
+      </p>
+      {linha.barras && <NxBarras barras={linha.barras} />}
+    </>
   );
 }
 
@@ -189,10 +243,10 @@ function SemLeitura({ motivo, passo, tela }: { motivo: string; passo: PassoTexto
   return (
     <ul className="nx-leitura__linhas">
       <Linha tom="atencao">
-        <p className="nx-leitura__frase">{`Sem leitura: ${motivo}`}</p>
+        <p className="nx-leitura__frase">{`Falta dado: ${motivo}`}</p>
       </Linha>
       <Linha>
-        <p className="nx-leitura__frase">Para consertar:</p>
+        <p className="nx-leitura__frase">Próximo passo para resolver:</p>
         <span ref={ancora} className="nx-leitura__ancora">
           <NxAcaoPilula frase={passo.frase} rotuloDaSeta="Ver os detalhes" aoAbrir={aoAbrir} />
         </span>
@@ -242,10 +296,10 @@ export const LeituraDaTela = memo(function LeituraDaTela({ fatos, carregando, er
               </Linha>
             )}
             {resumo.acao ? (
-              <BlocoPasso passo={resumo.acao} rotulo="Ação da semana" tela={fatos?.tela} />
+              <BlocoPasso passo={resumo.acao} rotulo="Próximo passo" tela={fatos?.tela} />
             ) : (
               resumo.semAcaoMotivo && (
-                <Linha rotulo="Ação da semana">
+                <Linha rotulo="Próximo passo">
                   <p className="nx-leitura__frase">{resumo.semAcaoMotivo}</p>
                 </Linha>
               )

@@ -13,6 +13,8 @@
 // - a evidência traz os números que sustentam a frase, para conferir.
 // - sem dado suficiente, não vira insight: vira Limitacao.
 
+import type { ComparacaoDoFato } from "@/lib/leitura/tipos";
+
 export type Area = "resumo" | "conteudo" | "anuncios" | "comercial" | "ideias";
 
 /** Categoria mostrada no card de Próxima Melhor Ação. */
@@ -30,6 +32,7 @@ export interface Insight {
   tom: Tom;
   titulo: string; // o que aconteceu, numa frase
   manchete?: string; // manchete curta e leiga (até 40 caracteres) para a tela Hoje; só quando a regra a escreve
+  comparacao?: ComparacaoDoFato; // frase curta (até 90 caracteres) e barras de comparação; só quando a regra as escreve
   diagnostico: string; // por que aconteceu / o que significa
   evidencia: string; // os números usados
   confianca: Confianca;

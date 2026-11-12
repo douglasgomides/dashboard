@@ -217,6 +217,66 @@
   color: var(--muted-ink);
 }
 
+/* Barras de comparação (NxBarras): rótulo, barra de 8 px e valor, em linhas compactas (a régua de 1,5 tela). A borda tracejada da
+   meta não vale aqui: não há meta numa comparação. */
+.app.product-workspace:not(.sap-workspace) .nx-barras {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+/* nexo-anuncios.css tem a regra solta ".nx-leitura li" (faixa cinza com espaço), que alcançaria as linhas das barras dentro da leitura. */
+.app.product-workspace:not(.sap-workspace) .nx-barras > .nx-barras__item {
+  display: block;
+  gap: 0;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-barras__linha {
+  display: grid;
+  grid-template-columns: minmax(0, 44%) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-barras__rotulo {
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-meta-tracejada__barra.nx-barras__barra {
+  border-right: 0;
+}
+/* Com subgrid, o rótulo, a barra e o valor alinham em colunas entre as linhas e o rótulo não quebra à toa. */
+@supports (grid-template-columns: subgrid) {
+  .app.product-workspace:not(.sap-workspace) .nx-barras {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-barras > .nx-barras__item,
+  .app.product-workspace:not(.sap-workspace) .nx-barras__linha {
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-barras > .nx-barras__item {
+    display: grid;
+  }
+}
+/* O que faltou: o trecho preenchido é listrado (nunca cheio), como o "Sem dado" dos cartões. */
+.app.product-workspace:not(.sap-workspace) .nx-barras__barra.nx-faltou .nx-meta-tracejada__feito {
+  background: repeating-linear-gradient(135deg, var(--muted-ink) 0 3px, transparent 3px 6px);
+}
+.app.product-workspace:not(.sap-workspace) .nx-barras__valor {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  text-align: right;
+}
+
 @media (max-width: 560px) {
   .app.product-workspace:not(.sap-workspace) .nx-acao-pilula {
     font-size: 15px;

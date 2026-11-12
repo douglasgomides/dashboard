@@ -125,7 +125,7 @@ export function fatosDoFunil(e: EntradaFatosFunil): FatosDaTela {
         tom: "neutro",
         peso: 1,
         ressalva: true,
-        frase: "Desde 31/10 a porcentagem entre etapas só aparece com base mínima; abaixo dela a tela mostra o número em \"N de M\".",
+        frase: "Com poucos casos, a tela mostra \"N de M\" no lugar da porcentagem.",
         numeros: [{ chave: "base", exibicao: `${LIMITES.funil.minLeads} contatos` }],
       });
     }
@@ -157,7 +157,7 @@ export function fatosDoFunil(e: EntradaFatosFunil): FatosDaTela {
       tom: "atencao",
       peso: 2,
       ressalva: true,
-      frase: "Esta conta de CRM também está ligada a outro cliente, então os números não são só deste médico.",
+      frase: "Conta de CRM compartilhada com outra clínica.",
       numeros: [{ chave: "clientes", exibicao: `${f(e.dados.crmCompartilhado.clientes)} outro(s)` }],
     });
   }
@@ -265,7 +265,12 @@ export function fatosDaJornada(e: EntradaFatosJornada): FatosDaTela {
       id,
       tom: "atencao",
       peso: 2,
-      frase: "A maioria dos contatos criados no período não está ligada a nenhuma pessoa, então a jornada deles fica no escuro.",
+      frase: "A maioria dos contatos do período não está ligada a uma pessoa.",
+      // Uma barra listrada: o que falta ligar a uma pessoa (a regra calcula a fração).
+      comparacao: {
+        frase: "A maioria dos contatos do período não está ligada a uma pessoa.",
+        barras: [{ rotulo: "Contatos sem pessoa", exibicao: `${f(r.leads_sem_pessoa)} de ${f(r.leads_total)}`, fracao: Math.min(1, r.leads_sem_pessoa / r.leads_total), faltou: true }],
+      },
       numeros: [{ chave: id, exibicao: `${f(r.leads_sem_pessoa)} de ${f(r.leads_total)}`, valor: r.leads_sem_pessoa }],
       n: r.leads_total,
     });

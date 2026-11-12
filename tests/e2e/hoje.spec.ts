@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, client, mockAccount } from "./fixtures";
 import { REGISTRO_DE_TELAS, SECOES_JUNTADAS } from "../../src/lib/registro-de-telas";
-import { GUARDA_DE_NUMERO_DA_HOJE, GUARDA_DE_TEXTO_DA_HOJE, JARGAO_DA_HOJE, MAXIMO_POR_AREA, MAX_CARACTERES_DA_MANCHETE } from "../../src/lib/leitura/fatos-hoje";
+import { GUARDA_DE_NUMERO_DA_HOJE, GUARDA_DE_TEXTO_DA_HOJE, JARGAO_DA_HOJE, MAXIMO_POR_AREA, MAX_CARACTERES_DA_LEGENDA, MAX_CARACTERES_DA_MANCHETE } from "../../src/lib/leitura/fatos-hoje";
 import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, mockCrm, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 
 // O que fazer hoje (Phase 3.1.1, plano 05): a primeira versão da tela Hoje da Phase 9. De 3 a 5 ações da semana por regra fixa
@@ -66,9 +66,16 @@ for (const perfil of ["viewer", "admin"] as const) {
       await page.goto(`/${CID}/hoje?preset=30d`);
 
       await expect(acoes(page).first()).toBeVisible();
-      await expect(page.getByText("O que fazer esta semana?", { exact: true }).first()).toBeVisible();
+      // Topo de título único: a saudação e, logo abaixo, "N ações esta semana" (N = Próximo passo + cartões).
+      const total = page.locator('[data-tela="hoje"] [data-peca="total-da-semana"]');
+      await expect(total).toBeVisible();
+      await expect(total).toHaveText(/^\d+ ações? esta semana$/);
+      await expect(page.locator('[data-tela="hoje"] .nx-pagina__rotulo'), "sem o rótulo pequeno da tela").toHaveCount(0);
+      await expect(page.locator('[data-tela="hoje"] .nx-pagina__meta .nx-tag'), "sem a etiqueta da decisão").toHaveCount(0);
+      await expect(page.locator('[data-tela="hoje"] .nx-chip-contexto', { hasText: /^(?!dado até)/ }), "sem o chip com o nome da clínica").toHaveCount(0);
       await expect(page.locator('[data-tela="hoje"]').getByRole("img", { name: "Número sem selo de confiança" })).toHaveCount(1);
       const n = await acoes(page).count();
+      expect(Number((await total.innerText()).match(/^\d+/)![0]), "o total do topo é o número de ações da tela").toBe(n);
       expect(n, "a Hoje mostra de 3 a 5 ações").toBeGreaterThanOrEqual(3);
       expect(n).toBeLessThanOrEqual(5);
       console.log(`  Hoje (${perfil}, ${janela.width}x${janela.height}): ${n} ações`);
@@ -76,7 +83,23 @@ for (const perfil of ["viewer", "admin"] as const) {
       for (let k = 0; k < n; k++) {
         const acao = acoes(page).nth(k);
         await expect(acao.locator("strong").first(), `a ação ${k + 1} tem o número em strong`).toBeVisible();
-        await expect(acao.getByText(/Quem resolve:/).first()).toBeVisible();
+        // Tom da ação: sinal e cor (nunca só a cor), com o nome do tom para leitor de tela.
+        const marca = acao.locator(".nx-hoje__tom");
+        await expect(marca, `a ação ${k + 1} tem a marca do tom`).toHaveCount(1);
+        expect(["bom", "atencao", "ruim", "neutro"]).toContain(await marca.getAttribute("data-tom"));
+        expect((await marca.getAttribute("aria-label")) ?? "").toMatch(/^Sinal: /);
+        expect((await marca.innerText()).trim().length, "o sinal (glifo) não é vazio").toBeGreaterThan(0);
+        // "Quem resolve" em chip: o olho vê só o nome, o leitor de tela ouve "Quem resolve: nome".
+        const quem = acao.locator(".nx-hoje__quem");
+        await expect(quem).toBeVisible();
+        const visivel = await quem.evaluate((el) => {
+          const copia = el.cloneNode(true) as HTMLElement;
+          copia.querySelectorAll(".sr-only").forEach((x) => x.remove());
+          return (copia.textContent ?? "").trim();
+        });
+        expect(visivel.length, "o chip mostra o nome").toBeGreaterThan(0);
+        expect(visivel, "o texto visível do chip não repete o rótulo").not.toMatch(/Quem resolve/);
+        expect((await quem.textContent()) ?? "").toMatch(/^Quem resolve: \S/);
         const seta = acao.locator("a.nx-acao-pilula__seta");
         await expect(seta).toHaveCount(1);
         const href = (await seta.getAttribute("href"))!;
@@ -126,9 +149,9 @@ test("(c) com o Instagram parado há 10 dias: Sem leitura, para consertar e quem
   await page.goto(`/${CID}/hoje?preset=30d`);
 
   const leitura = page.locator('[data-tela="hoje"] [data-peca="leitura"]');
-  await expect(leitura.getByText(/Sem leitura:/)).toBeVisible();
+  await expect(leitura.getByText(/Falta dado:/)).toBeVisible();
   await expect(leitura.getByText(/o Instagram está sem dado novo desde \d{2}\/\d{2}/)).toBeVisible();
-  await expect(leitura.getByText(/Para consertar:/)).toBeVisible();
+  await expect(leitura.getByText(/Próximo passo para resolver:/)).toBeVisible();
   await expect(leitura.getByText("Quem resolve: Equipe Doctor Creator")).toBeVisible();
   await expect(acoes(page)).toHaveCount(0);
   expect(await semRolagemLateral(page)).toBe(true);
@@ -152,13 +175,14 @@ for (const janela of TELAS_DE_MEDIDA) {
     await page.goto(`/${CID}/hoje?preset=30d`);
 
     await expect(page.locator('[data-tela="hoje"] [data-peca="leitura"][data-modo="carregando"]')).toHaveCount(0);
-    const aviso = page.locator('[data-tela="hoje"]').getByText(/^Poucas ações nesta semana:/);
+    const aviso = page.locator('[data-tela="hoje"] .nx-hoje__aviso');
     await expect(aviso).toBeVisible();
     const n = await acoes(page).count();
     expect(n, "com poucos dados a Hoje mostra de 0 a 2 ações, nunca completa até 3").toBeLessThanOrEqual(2);
     console.log(`  Hoje com poucos dados (${janela.width}x${janela.height}): ${n} ação(ões); aviso: ${await aviso.innerText()}`);
-    // O aviso diz o motivo, curto, sem prometer nada.
-    expect(await aviso.innerText()).toMatch(/^Poucas ações nesta semana: .{10,}\.$/);
+    // O aviso é só o motivo, curto, sem prometer nada, sem a palavra "leituras" e sem repetir o total do topo.
+    expect(await aviso.innerText()).toMatch(/^\p{Lu}.{10,}\.$/u);
+    expect(await aviso.innerText()).not.toMatch(/Poucas ações|leituras/);
     for (let k = 0; k < n; k++) await expect(acoes(page).nth(k).locator("strong").first()).toBeVisible();
     expect(await semRolagemLateral(page)).toBe(true);
     await page.screenshot({ path: `test-results/redesenho/hoje-poucas-${janela.width}.png`, fullPage: true });
@@ -170,7 +194,7 @@ test("(d) sem nenhuma ação: o aviso diz o motivo e a tela não inventa ação"
   await instagramParado(context, 0, []);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}/hoje?preset=30d`);
-  await expect(page.locator('[data-tela="hoje"]').getByText(/^Poucas ações nesta semana:/)).toBeVisible();
+  await expect(page.locator('[data-tela="hoje"] .nx-hoje__aviso')).toHaveText("Os números deste período não pediram nenhuma ação.");
   await expect(acoes(page)).toHaveCount(0);
 });
 
@@ -202,7 +226,7 @@ test("(f) o Próximo da Hoje é a mesma frase da Ação da semana de Resultados 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}?preset=30d`);
   const resumo = page.getByRole("region", { name: "Resumo da clínica", exact: true });
-  const daSemana = resumo.locator(".nx-leitura__linha", { has: page.getByText("Ação da semana", { exact: true }) }).locator(".nx-acao-pilula__texto");
+  const daSemana = resumo.locator(".nx-leitura__linha", { has: page.getByText("Próximo passo", { exact: true }) }).locator(".nx-acao-pilula__texto");
   await expect(daSemana).toBeVisible();
   // Resultados mostra o resumo assim que chega o Instagram e refaz com pessoas, anúncios e CRM: espera as consultas terminarem.
   await page.waitForLoadState("networkidle");
@@ -427,7 +451,32 @@ for (const janela of TELAS_DE_MEDIDA) {
       const sub = acao.locator(".nx-cartao__sub");
       if (await sub.count()) textos.push(norm(await sub.first().innerText()));
       for (const t of textos) expect(t, `jargão em "${t}"`).not.toMatch(JARGAO_DA_HOJE);
+      // Legenda de uma frase e até 90 caracteres (o que passa vai para o "Ver números").
+      if (await legenda.count()) {
+        const l = norm(await legenda.first().innerText());
+        expect(l.length, `legenda "${l}" com mais de ${MAX_CARACTERES_DA_LEGENDA} caracteres`).toBeLessThanOrEqual(MAX_CARACTERES_DA_LEGENDA);
+        expect(l.split(/(?<=[.!?])\s+/).length, `legenda "${l}" com mais de uma frase`).toBe(1);
+      }
+      // Barras de comparação: cada linha tem nome acessível "rótulo: valor" e nunca "atingido".
+      const linhasDeBarra = acao.locator('[data-barras] [role="img"]');
+      for (let b = 0; b < (await linhasDeBarra.count()); b++) {
+        const nome = (await linhasDeBarra.nth(b).getAttribute("aria-label")) ?? "";
+        expect(nome, "nome acessível da barra").toContain(":");
+        expect(nome, "a barra não diz % atingido").not.toMatch(/atingido/i);
+      }
     }
+    // O Próximo lê na ordem dos cartões: a manchete (o número) vem antes da pílula da ação.
+    const antes = await page.locator('[data-tela="hoje"] [data-peca="proximo"]').evaluate((el) => {
+      const m = el.querySelector("[data-manchete]")!;
+      const p = el.querySelector(".nx-acao-pilula")!;
+      const barras = el.querySelector("[data-barras]");
+      return {
+        manchetePrimeiro: !!(m.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING),
+        barrasAntesDaPilula: barras ? !!(barras.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING) : true,
+      };
+    });
+    expect(antes.manchetePrimeiro, "no Próximo a manchete vem antes da pílula").toBe(true);
+    expect(antes.barrasAntesDaPilula, "no Próximo as barras vêm antes da pílula").toBe(true);
     // O número técnico inteiro fica num "Ver números" fechado.
     const detalhes = page.locator('[data-tela="hoje"] details[data-ver-numeros]');
     const total = await detalhes.count();
@@ -438,6 +487,8 @@ for (const janela of TELAS_DE_MEDIDA) {
     console.log(`  Hoje (${janela.width}x${janela.height}): ${n} ações, ${total} com Ver números`);
     // Com tudo fechado, o texto da tela inteira também não traz jargão.
     expect(await page.locator('[data-tela="hoje"]').innerText(), "jargão no texto da Hoje").not.toMatch(JARGAO_DA_HOJE);
+    expect(await page.locator('[data-tela="hoje"]').innerText(), "o ÷ fica no Ver números, nunca à vista").not.toContain("÷");
+    await expect(page.locator('[data-tela="hoje"] .nx-proximo__rotulo')).toHaveText("Próximo passo");
     expect(await semRolagemLateral(page)).toBe(true);
   });
 }
@@ -473,4 +524,35 @@ test("(m) no máximo 2 ações por área e o Próximo não se repete nos cartõe
   const proximo = dados.find((d) => d.proximo);
   expect(proximo, "há um Próximo").toBeTruthy();
   expect(dados.filter((d) => !d.proximo && d.familia === proximo!.familia), "nenhum cartão tem a família do Próximo").toEqual([]);
+});
+
+// ---------- bolinhas na fileira de cartões do celular (quick 261112-e8e) ----------
+
+test("(o) no celular a fileira de cartões mostra uma bolinha por cartão, com a do cartão à vista marcada", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await dadosRealistas(context);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/${CID}/hoje?preset=30d`);
+  await expect(acoes(page).first()).toBeVisible();
+
+  const fileira = page.locator('[data-tela="hoje"] .nx-pagina__cartoes');
+  const pontos = page.locator('[data-tela="hoje"] .nx-pagina__pontos .nx-pagina__ponto');
+  const n = await fileira.locator("> *").count();
+  expect(n, "a Hoje tem pelo menos 2 cartões nos mocks realistas").toBeGreaterThanOrEqual(2);
+  await expect(pontos).toHaveCount(n);
+  await expect(page.locator('[data-tela="hoje"] .nx-pagina__pontos')).toBeVisible();
+  await expect(page.locator('[data-tela="hoje"] .nx-pagina__pontos')).toHaveAttribute("aria-hidden", "true");
+  await expect(pontos.first()).toHaveAttribute("data-atual", "");
+  await expect(page.locator('[data-tela="hoje"] .nx-pagina__ponto[data-atual]')).toHaveCount(1);
+
+  // Rolar a fileira até o fim marca a última bolinha.
+  await fileira.evaluate((el) => {
+    el.scrollLeft = el.scrollWidth;
+  });
+  await expect(pontos.nth(n - 1)).toHaveAttribute("data-atual", "");
+  await expect(page.locator('[data-tela="hoje"] .nx-pagina__ponto[data-atual]')).toHaveCount(1);
+
+  // Fora do celular a fileira não rola e as bolinhas não aparecem.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.locator('[data-tela="hoje"] .nx-pagina__pontos')).toBeHidden();
 });
