@@ -218,7 +218,7 @@ Plans:
 ### Phase 03.1.1.1: Telas no formato 5 segundos (INSERTED)
 
 **Goal:** Cada tela da clínica e a Carteira passam no teste dos 5 segundos: quem bate o olho sabe se está bom ou ruim, por quê e o que fazer. Leva para o Nexo os 8 pilotos HTML aprovados pelo João em 12/11/2026 (Hoje, Resultados, Do contato à venda, Atendimento, Instagram, Anúncios, Carteira, Fechamento do mês).
-**Requirements**: CINCO-01..CINCO-08 (a definir no plano)
+**Requirements**: CINCO-01, CINCO-02, CINCO-03, CINCO-04, CINCO-05, CINCO-06, CINCO-07, CINCO-08
 **Decisões do João (12/11/2026):** nota do dia 0–100 entra com a regra do piloto (só sinais da própria clínica; 50 = igual ao período anterior; fatores ao tocar; "não garante resultado"). Nunca comparar uma clínica com outras. Envio do resumo semanal pelo WhatsApp e Compartilhar/Baixar PDF do Fechamento do mês ficam para fase própria depois (aqui só a prévia).
 **Fonte:** pilotos em scratchpad (fora do repositório, têm dados reais), padrão em PADRAO.md, pesquisa em .planning/research/ux-mercado/.
 
