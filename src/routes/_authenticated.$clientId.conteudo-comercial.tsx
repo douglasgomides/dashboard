@@ -11,6 +11,7 @@ import { hojeBrasilia } from "@/lib/status-fonte";
 import { InfoDica, Miniatura } from "@/components/visual";
 import { NxCard, NxKpi, NxTag, NxListRow, NxLinhaTempo } from "@/components/nx";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { NxAviso, NxCarregando, NxErro, NxTabela } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { IgBarras } from "@/components/nx/instagram";
@@ -106,6 +107,17 @@ function ConteudoComercialPage() {
     },
   });
   const pr = qp.data ?? null;
+
+  // Contagem em cinza da aba Instagram em "De onde vêm os pacientes" (D-07): posts do período que a tela já recebeu em
+  // `cobertura.posts` (nenhuma consulta nova). Erro: null ("—"); carregando: undefined; zero: null (nunca "0"). A chave do período
+  // é a da pasta (o pedido), não o recorte de 120 dias desta tela.
+  usePublicarContagem({
+    clientId,
+    de: pedido.start,
+    ate: pedido.end,
+    rota: "/_authenticated/$clientId/conteudo-comercial",
+    valor: q.isLoading ? undefined : q.error || !q.data ? null : q.data.cobertura.posts || null,
+  });
 
   // A leitura é do cruzamento que a tela já carrega: só regra. A origem por post não é medida e a leitura diz isso.
   const fatos = useMemo(() => {

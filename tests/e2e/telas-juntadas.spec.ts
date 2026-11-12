@@ -270,8 +270,9 @@ test("contagem em cinza: a aba mostra o número que ela mesma carregou e \"—\"
   // Destaques ainda não abriu neste período: "—" (com aviso só para leitor de tela).
   await expect(aba(nav, "Destaques").locator(".nx-pasta__contagem")).toContainText("—");
   await expect(aba(nav, "Destaques").locator(".nx-pasta__contagem .sr-only")).toHaveText("sem número");
-  // Desempenho e Público não têm coisa contável: nenhuma contagem desenhada.
-  await expect(aba(nav, "Desempenho").locator(".nx-pasta__contagem")).toHaveCount(0);
+  // Desempenho conta "dias com dado": antes de abrir mostra "—" (nunca "0"). Público é a leitura ao vivo da Meta e não tem contagem.
+  await expect(aba(nav, "Desempenho").locator(".nx-pasta__contagem")).toContainText("—");
+  await expect(aba(nav, "Desempenho").locator(".nx-pasta__contagem .sr-only")).toHaveText("sem número");
   await expect(aba(nav, "Público").locator(".nx-pasta__contagem")).toHaveCount(0);
 
   // Depois de abrir Destaques e voltar, Destaques mostra o número que a própria aba carregou.
@@ -283,6 +284,10 @@ test("contagem em cinza: a aba mostra o número que ela mesma carregou e \"—\"
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/posts`);
   await expect(aba(nav, "Destaques").locator(".nx-pasta__contagem")).toHaveText(/^\d+$/);
   await expect(aba(nav, "Posts").locator(".nx-pasta__contagem")).toHaveText(total);
+  // Depois de abrir Desempenho, a aba mostra os dias com dado que ela mesma carregou.
+  await aba(nav, "Desempenho").click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/conteudo`);
+  await expect(aba(nav, "Desempenho").locator(".nx-pasta__contagem")).toHaveText(/^\d+$/);
 });
 
 test("contagem em cinza: Consultas e Vendas sem número publicado mostram \"—\" e nunca \"0\"", async ({ page, context }) => {
