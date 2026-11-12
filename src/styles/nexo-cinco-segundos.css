@@ -1,0 +1,151 @@
+/* Telas no formato 5 segundos (Phase 03.1.1.1, D-01): o veredito do topo (palavra com sinal + UMA frase com número grande), o selo de
+   sinal e, mais abaixo, a lista de descobertas com "Por quê?". Só tokens de nexo-system.css (nenhum hex), espaços em 8, 12 e 16,
+   peso de letra nunca abaixo de 500, grades com minmax(0, 1fr), números e datas em uma linha com reticências e o texto inteiro no
+   title (molde k), movimento só sem reduced-motion. Escopo: só a casca do Nexo fora do SAP. */
+
+/* ---------- Selo: sinal e palavra, nunca só a cor ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-selo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--muted-ink);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  /* Prende o texto sr-only dentro do selo (a fileira de cartões do celular rola de lado). */
+  position: relative;
+}
+.app.product-workspace:not(.sap-workspace) .nx-selo__sinal {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+}
+.app.product-workspace:not(.sap-workspace) .nx-selo__texto {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-selo[data-tom="bom"] {
+  background: var(--up-bg);
+  color: var(--up-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-selo[data-tom="ruim"] {
+  background: var(--dn-bg);
+  color: var(--dn-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-selo[data-tom="atencao"] {
+  background: var(--or-bg);
+  color: var(--or-ink);
+}
+
+/* ---------- Veredito ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-veredito {
+  display: grid;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--white);
+  color: var(--text);
+  font-weight: 500;
+  /* Prende o texto sr-only da faixa dentro dela. */
+  position: relative;
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito__corpo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito__corpo[data-tem-lado] {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito__texto {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito__frase {
+  margin: 0;
+  max-width: 100%;
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito__enfase {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito__apoio {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito__acao {
+  min-width: 0;
+  max-width: 100%;
+}
+/* Sem dado: a leitura honesta, sem nenhuma conclusão. */
+.app.product-workspace:not(.sap-workspace) .nx-veredito__sem-dado {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito__falta {
+  margin: 0;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito__passo {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+/* ---------- Falta dado dentro de um cartão: cinza, com o motivo, nunca zero ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-cinco-falta {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Celular: frase de 20 px e faixa compacta ---------- */
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-veredito {
+    padding: 12px;
+    border-radius: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-veredito__frase {
+    font-size: 20px;
+    line-height: 26px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-veredito__corpo[data-tem-lado] {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+}

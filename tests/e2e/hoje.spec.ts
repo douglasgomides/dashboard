@@ -148,7 +148,9 @@ test("(c) com o Instagram parado há 10 dias: Sem leitura, para consertar e quem
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}/hoje?preset=30d`);
 
-  const leitura = page.locator('[data-tela="hoje"] [data-peca="leitura"]');
+  // Formato 5 segundos (03.1.1.1): o veredito diz o "Falta dado" no lugar da leitura, e nenhuma conclusão.
+  const leitura = page.locator('[data-tela="hoje"] [data-peca="veredito"]');
+  await expect(leitura).toHaveAttribute("data-modo", "sem-leitura");
   await expect(leitura.getByText(/Falta dado:/)).toBeVisible();
   await expect(leitura.getByText(/o Instagram está sem dado novo desde \d{2}\/\d{2}/)).toBeVisible();
   await expect(leitura.getByText(/Próximo passo para resolver:/)).toBeVisible();

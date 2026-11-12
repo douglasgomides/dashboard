@@ -5,20 +5,26 @@ import { useAuth } from "@/hooks/use-auth";
 import { useClientRole } from "@/hooks/use-client-role";
 import { useResultado } from "@/hooks/use-resultado";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
-import { useResultadosDiarios } from "@/hooks/use-resultados-diarios";
+import { useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
 import { NxChip } from "@/components/nx-chip";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxCartaoDaAcao, NxChipEstado, NxParaEquipe, NxProximo, SaudacaoHoje } from "@/components/nx/hoje";
 import { NxCarregando, NxErro } from "@/components/nx/blocos";
+import { NxCartaoNumero } from "@/components/nx/cartoes";
+import { NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import type { SerieDiaria } from "@/components/nx/linha-de-30-dias";
 import { getClient, getRoiPeriodo } from "@/lib/client-data";
 import { resolveDateRange } from "@/lib/date-range";
 import { variacoes } from "@/lib/diagnostico-estrategico";
+import { dePacientesDoPeriodo } from "@/lib/funil-desenhado";
 import { analyzeGrowth } from "@/lib/hub-conteudo";
+import { serieContinua } from "@/lib/linha-30-dias";
 import { lerPeriodo } from "@/lib/leitura-periodo";
 import { fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria } from "@/lib/leitura/fatos-resultados";
 import { fatosDePacientes } from "@/lib/leitura/fatos-pacientes";
 import { fatosDePublicacoes, fatosDoInstagram } from "@/lib/leitura/fatos-instagram";
 import { acoesDaHoje, type EntradaHoje, type FonteDoDado } from "@/lib/leitura/fatos-hoje";
+import { variacaoPropria, vereditoDosFatos } from "@/lib/leitura/cinco-segundos";
 import type { FatosDaTela, TelaId } from "@/lib/leitura/tipos";
 import { ehEquipe } from "@/lib/registro-de-telas";
 import { ddmm, statusDoCliente, tomDaFonte, type LinhaFonte } from "@/lib/saude-fontes";
@@ -67,6 +73,77 @@ export function TotalDaSemana({ total }: { total: number }) {
   );
 }
 
+
+/** Os 3 números-chave da Hoje (D-01): cada um contra o período anterior DA PRÓPRIA clínica, com a linha de 30 dias quando há série diária. */
+interface NumeroDaHoje {
+  id: "conversas" | "sem-atendimento" | "fecharam";
+  titulo: string;
+  icone: "message-circle" | "users" | "checklist";
+  legenda: string;
+  valor: number | null;
+  antes: number | null;
+  /** Para "Leads sem atendimento" menos é melhor. */
+  menorEhMelhor?: boolean;
+  serie?: SerieDaHoje;
+  /** Por que não há número (nunca vira 0). */
+  motivo?: string;
+}
+type SerieDaHoje = Pick<SerieDiaria, "datas" | "valores"> & { rotulo: string };
+
+const inteiro = (n: number) => n.toLocaleString("pt-BR");
+
+function numerosDaHoje(e: {
+  atual: Record<string, number | null>;
+  antes: Record<string, number | null>;
+  diario: ReadonlyArray<{ dia: string } & Record<CampoDiario, number | null>>;
+  fimFechado: string;
+  pessoas: Parameters<typeof dePacientesDoPeriodo>[0]["dados"] | undefined;
+}): NumeroDaHoje[] {
+  const linhas = e.diario.filter((l) => l.dia <= e.fimFechado);
+  const serieDe = (campo: CampoDiario, rotulo: string): SerieDaHoje | undefined => {
+    const { datas, valores } = serieContinua(linhas.map((l) => ({ dia: l.dia, valor: l[campo] ?? null })));
+    return datas.length >= 2 ? { rotulo, datas, valores } : undefined;
+  };
+  // Leads sem atendimento = Virou lead menos Atendido, só quando os dois foram medidos (o mesmo funil honesto de Pacientes).
+  let semAtendimento: number | null = null;
+  let motivo: string | undefined;
+  if (e.pessoas) {
+    const [, lead, atendido] = dePacientesDoPeriodo({ dados: e.pessoas, variacao: () => null }).etapas;
+    if (lead.valor != null && atendido.valor != null && atendido.valor <= lead.valor) semAtendimento = lead.valor - atendido.valor;
+    else motivo = lead.motivo ?? atendido.motivo ?? "Atendido passa de Virou lead, então não dá para contar.";
+  } else motivo = "A lista de pessoas do período não veio.";
+  return [
+    { id: "conversas", titulo: "Conversas", icone: "message-circle", legenda: "no período", valor: e.atual.mandaram_mensagem ?? null, antes: e.antes.mandaram_mensagem ?? null, serie: serieDe("mandaram_mensagem", "conversas iniciadas") },
+    // O período anterior de pessoas únicas não é medido: sem comparação, "Falta dado" em cinza (nunca 0).
+    { id: "sem-atendimento", titulo: "Leads sem atendimento", icone: "users", legenda: "ainda esperando", valor: semAtendimento, antes: null, menorEhMelhor: true, motivo },
+    { id: "fecharam", titulo: "Fecharam", icone: "checklist", legenda: "pacientes no período", valor: e.atual.fecharam ?? null, antes: e.antes.fecharam ?? null, serie: serieDe("fecharam", "fecharam") },
+  ];
+}
+
+function CartaoDaHoje({ n, dias }: { n: NumeroDaHoje; dias: number }) {
+  const v = variacaoPropria(n.valor, n.antes, { menorEhMelhor: n.menorEhMelhor });
+  const palavra = v?.melhor === true ? "melhor" : v?.melhor === false ? "pior" : null;
+  return (
+    <NxCartaoNumero
+      icone={n.icone}
+      titulo={n.titulo}
+      subtitulo={`${dias} ${dias === 1 ? "dia" : "dias"}`}
+      valor={n.valor != null ? inteiro(n.valor) : null}
+      legenda={n.valor != null ? n.legenda : undefined}
+      semMedida={n.valor == null}
+      variacao={v ? { texto: palavra ? `${v.texto} · ${palavra} que antes` : v.texto } : null}
+      extra={
+        n.valor == null ? (
+          <p className="nx-cinco-falta" data-falta-dado>{`Falta dado: ${n.motivo ?? "sem medida neste período"}`}</p>
+        ) : !v ? (
+          <NxSelo tom="neutro" texto="Falta dado · sem período anterior" />
+        ) : undefined
+      }
+      serie={n.serie}
+    />
+  );
+}
+
 function HojePage() {
   const { clientId } = Route.useParams();
   const dateRangeState = clientLayoutRoute.useSearch();
@@ -99,6 +176,11 @@ function HojePage() {
 
   const fontes = useMemo(() => fontesDoCliente(estadoDasFontes.data), [estadoDasFontes.data]);
   const temIg = fontesDoRegistro.data?.tem_instagram === true;
+  const numeros = useMemo(
+    () => numerosDaHoje({ atual: funil.atual, antes: funil.antes, diario: diario.data ?? [], fimFechado: comparacao.fimFechado, pessoas: pessoas.data }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [funil, diario.data, pessoas.data, start, end, hoje],
+  );
 
   const leitura = useMemo(() => {
     if (!r) return null;
@@ -134,6 +216,8 @@ function HojePage() {
     const entrada: EntradaHoje = { fatos: feitos.fatos, porArea: feitos.porArea, insights: r.insights, limitacoes: r.limitacoes, extras, fontes };
     return { entrada, hoje: acoesDaHoje(entrada) };
   }, [r, start, end, hoje, funil, roi.data, pessoas.data, posts.data, metricas.data, anterior.data, temIg, fontes]);
+  // O veredito do topo (D-01): por enquanto o da leitura de Resultados, que diz o mesmo "Falta dado" quando o portão nega (D-05).
+  const veredito = useMemo(() => (leitura ? vereditoDosFatos({ ...leitura.entrada.fatos, tela: "hoje" }) : null), [leitura]);
 
   // Topo (D-07, emenda de 12/11): um título só (a saudação grande) e, logo abaixo, o total da semana em número grande. Sem rótulo da
   // tela, sem pergunta visível, sem etiqueta da decisão e sem o chip da clínica (o nome já está na casca). Ficam o "dado até", os
@@ -166,37 +250,44 @@ function HojePage() {
     return na(
       <PaginaNexo
         {...cabecalho}
-        leitura={<LeituraDaTela fatos={null} carregando={false} erro="Os indicadores estão indisponíveis." semSelo />}
+        veredito={<NxVeredito veredito={null} carregando={false} erro="Os indicadores estão indisponíveis." tela="hoje" />}
+        leitura={null}
         corpo={<NxErro texto="Não foi possível carregar as leituras. Os indicadores estão indisponíveis no momento." onTentar={() => void metricas.refetch()} />}
       />,
     );
   }
   if (metricas.isLoading || !r || !leitura || carregandoFontes) {
-    return na(<PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={null} carregando semSelo />} corpo={<NxCarregando linhas={3} />} />);
+    return na(<PaginaNexo {...cabecalho} veredito={<NxVeredito veredito={null} carregando tela="hoje" />} leitura={null} corpo={<NxCarregando linhas={3} />} />);
   }
 
   const { entrada, hoje: lista } = leitura;
   if (lista.tipo === "sem_leitura") {
-    // Dado ruim: o mesmo "Falta dado: motivo" de Resultados da clínica, com o passo para consertar e quem resolve.
-    return na(<PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={{ ...entrada.fatos, tela: "hoje" }} carregando={false} semSelo />} />);
+    // Dado ruim: o mesmo "Falta dado: motivo" de Resultados da clínica, com o passo para consertar e quem resolve, e nenhuma ação.
+    return na(<PaginaNexo {...cabecalho} veredito={<NxVeredito veredito={vereditoDosFatos({ ...entrada.fatos, tela: "hoje" })} carregando={false} tela="hoje" />} leitura={null} />);
   }
 
-  // Até 4 cartões (o tipo de PaginaNexo já limita); o Próximo é o cartão de destaque da leitura, junto do aviso de poucas ações.
+  const [c1, c2, c3] = numeros.map((n) => <CartaoDaHoje key={n.id} n={n} dias={comparacao.dias} />);
+  // Até aqui as ações ainda aparecem como Próximo e cartões; o próximo passo as troca por descobertas.
   const desenhadas = lista.outras.slice(0, 4);
-  const [c1, c2, c3, c4] = desenhadas.map((a) => <NxCartaoDaAcao key={a.id} acao={a} clientId={clientId} dateRange={dateRangeState} />);
-  // N = o Próximo (quando há) mais os cartões desenhados: o mesmo número que o médico conta na tela.
   const total = (lista.proxima ? 1 : 0) + desenhadas.length;
   return na(
     <PaginaNexo
       {...cabecalhoDe(total)}
-      leitura={
+      veredito={<NxVeredito veredito={veredito} carregando={false} tela="hoje" />}
+      leitura={null}
+      cartoes={[c1, c2, c3]}
+      corpo={
         <section className="nx-hoje__leitura" data-peca="leitura" data-modo="leitura" aria-label="Próximo e aviso">
           {lista.proxima && <NxProximo acao={lista.proxima} clientId={clientId} dateRange={dateRangeState} />}
           {lista.aviso && <p className="nx-hoje__aviso">{lista.aviso}</p>}
+          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+            {desenhadas.map((a) => (
+              <NxCartaoDaAcao key={a.id} acao={a} clientId={clientId} dateRange={dateRangeState} />
+            ))}
+          </div>
           {equipe && lista.paraEquipe.length > 0 && <NxParaEquipe acoes={lista.paraEquipe} clientId={clientId} dateRange={dateRangeState} />}
         </section>
       }
-      cartoes={lista.outras.length ? [c1, c2, c3, c4] : undefined}
     />,
   );
 }
