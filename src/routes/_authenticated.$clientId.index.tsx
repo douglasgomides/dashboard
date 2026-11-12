@@ -1,11 +1,16 @@
-import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
+import { Fragment, memo, useCallback, useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, getRouteApi, Link, useLocation } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import "@/styles/nexo-resultados.css";
 import { useResultado } from "@/hooks/use-resultado";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
-import { useResultadosDiarios } from "@/hooks/use-resultados-diarios";
+import { useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxAneis } from "@/components/nx/aneis";
+import type { SerieDiaria } from "@/components/nx/linha-de-30-dias";
+import { serieContinua } from "@/lib/linha-30-dias";
+import { aneisDeResultados, vereditoDeResultados, type ChaveDoFunil, type EntradaCincoResultados } from "@/lib/leitura/cinco-resultados";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido } from "@/components/nx/blocos";
 import { fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria, variacaoPct } from "@/lib/leitura/fatos-resultados";
 import { resumirClinica } from "@/lib/leitura/resumo-clinica";
@@ -556,14 +561,15 @@ function MonthlyOverview() {
     return (
       <PaginaNexo
         {...cabecalho}
-        leitura={<LeituraDaTela fatos={null} carregando={false} erro="Os indicadores estão indisponíveis." semSelo />}
+        veredito={<NxVeredito veredito={null} carregando={false} erro="Os indicadores estão indisponíveis." tela="resultados" />}
+        leitura={null}
         corpo={<NxErro texto="Não foi possível carregar o resumo. Os indicadores estão indisponíveis no momento." onTentar={() => void metricas.refetch()} />}
       />
     );
   }
 
   if (metricas.isLoading || !r || !leitura) {
-    return <PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={null} carregando semSelo />} corpo={<NxCarregando linhas={4} />} />;
+    return <PaginaNexo {...cabecalho} veredito={<NxVeredito veredito={null} carregando tela="resultados" />} leitura={null} corpo={<NxCarregando linhas={4} />} />;
   }
 
   return (
@@ -579,6 +585,7 @@ function MonthlyOverview() {
       roi={roi.data ?? null}
       linhasDia={diario.data ?? []}
       variacoes={{ atual: funil.atual, antes: funil.antes }}
+      comparacao={{ dias: comparacao.dias, fimFechado: comparacao.fimFechado }}
     />
   );
 }
@@ -597,6 +604,7 @@ function Resultados({
   roi,
   linhasDia,
   variacoes,
+  comparacao,
 }: {
   clientId: string;
   start: string;
@@ -607,8 +615,9 @@ function Resultados({
   carregandoFontes: boolean;
   pessoas: PacientesPeriodo | null;
   roi: DadosRoi | null;
-  linhasDia: { dia: string; mandaram_mensagem: number | null; agendaram: number | null }[];
+  linhasDia: ({ dia: string } & Record<CampoDiario, number | null>)[];
   variacoes: { atual: Record<string, number | null>; antes: Record<string, number | null> };
+  comparacao: { dias: number; fimFechado: string };
 }) {
   const { isAdmin } = useAuth();
   const periodLabel = formatRangeLabel({ start, end });
@@ -714,14 +723,56 @@ function Resultados({
     `${fmtTaxaPct(f.median)} de taxa de interação (mediana) · ${f.count} posts · ${ROTULO_CONFIANCA[confiancaPorPosts(f.count)].toLowerCase()}`;
   const pctCobertura = diasPeriodo > 0 ? Math.round((datasDados.length / diasPeriodo) * 100) : 0;
 
-  // ---------- topo: 4 cartões e 1 gráfico ----------
-  const cartoes: [ReactNode, ReactNode?, ReactNode?, ReactNode?] = carregandoFontes
-    ? [<NxCarregando key="c" linhas={2} />]
-    : cartoesDePessoas({ pessoas, roi, variacoes });
-  const principal = linhasDia.filter((l) => l.mandaram_mensagem != null || l.agendaram != null);
+  // ---------- formato 5 segundos (03.1.1.1, D-01): veredito com os 3 anéis ao lado; o topo antigo (4 cartões e o gráfico de contatos) vai para "Ver tudo" ----------
+  const cartoesAntigos: ReactNode[] = carregandoFontes ? [<NxCarregando key="c" linhas={2} />] : cartoesDePessoas({ pessoas, roi, variacoes }).filter((c) => c != null);
+  const principalAntigo = linhasDia.filter((l) => l.mandaram_mensagem != null || l.agendaram != null);
+
+  const numeroDoCartao = (k: ChaveDoFunil) => pessoas?.numeros?.[k]?.valor ?? null;
+  const entrada: EntradaCincoResultados = useMemo(
+    () => ({
+      fatos: leitura.fatos,
+      dias: comparacao.dias,
+      valores: { mandaram_mensagem: numeroDoCartao("mandaram_mensagem"), agendaram: numeroDoCartao("agendaram"), fecharam: numeroDoCartao("fecharam") },
+      atual: variacoes.atual,
+      antes: variacoes.antes,
+      diario: linhasDia,
+      ads: null,
+      seguidores: null,
+      salvos: null,
+      retorno: null,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [leitura.fatos, comparacao.dias, pessoas, variacoes, linhasDia],
+  );
+  const veredito = useMemo(() => vereditoDeResultados(entrada), [entrada]);
+  const aneis = useMemo(() => aneisDeResultados(entrada), [entrada]);
+  // A linha de 30 dias de cada anel: só os dias fechados, com buraco (nunca zero) onde o dia não veio.
+  const series = useMemo(() => {
+    const linhas = linhasDia.filter((l) => l.dia <= comparacao.fimFechado);
+    const de = (campo: CampoDiario, rotulo: string): SerieDiaria | undefined => {
+      const { datas, valores } = serieContinua(linhas.map((l) => ({ dia: l.dia, valor: l[campo] ?? null })));
+      return datas.length >= 2 ? { rotulo, datas, valores } : undefined;
+    };
+    return { mandaram_mensagem: de("mandaram_mensagem", "conversas iniciadas"), agendaram: de("agendaram", "agendaram"), fecharam: de("fecharam", "fecharam") };
+  }, [linhasDia, comparacao.fimFechado]);
 
   const detalhe = (
     <div className="nexo-results-overview">
+      <div className="nx-grade nx-grade--4">{cartoesAntigos.map((c, k) => <Fragment key={k}>{c}</Fragment>)}</div>
+      {principalAntigo.length >= 3 && (
+        <NxCard nivel={2} icone={ic(MessageCircle)} titulo="Contatos e agendamentos por dia" subtitulo={`${periodLabel} · pessoas que chamaram (eixo da esquerda) e agendamentos (eixo da direita)`}>
+          <NxLinhaTempo
+            rotulo="Pessoas que chamaram e agendamentos por dia"
+            datas={principalAntigo.map((l) => l.dia)}
+            series={[
+              { rotulo: "Chamaram", valores: principalAntigo.map((l) => l.mandaram_mensagem ?? 0), cor: "var(--b1)", area: true },
+              { rotulo: "Agendaram", valores: principalAntigo.map((l) => l.agendaram ?? 0), cor: "var(--or)", eixo: "dir" },
+            ]}
+            formatarData={tickDate}
+            formatarValor={(n) => fmt(Math.round(n))}
+          />
+        </NxCard>
+      )}
       <AvisosDeDado insights={r.insights} />
 
       <NxRecolhido id="todas-analises" titulo="Todas as análises do período" resumo="O que melhorou e piorou, o que fazer nesta semana, o resumo do período e o que ainda não dá para dizer">
@@ -895,24 +946,16 @@ function Resultados({
   return (
     <PaginaNexo
       {...cabecalho}
-      leitura={<LeituraDaTela fatos={leitura.fatos} resumo={leitura.resumo} carregando={carregandoFontes} semSelo />}
-      cartoes={cartoes}
-      principal={
-        principal.length >= 3 ? (
-          <NxCard nivel={2} icone={ic(MessageCircle)} titulo="Contatos e agendamentos por dia" subtitulo={`${periodLabel} · pessoas que chamaram (eixo da esquerda) e agendamentos (eixo da direita)`}>
-            <NxLinhaTempo
-              rotulo="Pessoas que chamaram e agendamentos por dia"
-              datas={principal.map((l) => l.dia)}
-              series={[
-                { rotulo: "Chamaram", valores: principal.map((l) => l.mandaram_mensagem ?? 0), cor: "var(--b1)", area: true },
-                { rotulo: "Agendaram", valores: principal.map((l) => l.agendaram ?? 0), cor: "var(--or)", eixo: "dir" },
-              ]}
-              formatarData={tickDate}
-              formatarValor={(n) => fmt(Math.round(n))}
-            />
-          </NxCard>
-        ) : undefined
+      veredito={
+        <NxVeredito
+          veredito={veredito}
+          carregando={carregandoFontes}
+          tela="resultados"
+          lado={veredito?.tipo === "veredito" ? <NxAneis aneis={aneis} series={series} rotuloDoAnterior={`${comparacao.dias} dias antes`} /> : undefined}
+        />
       }
+      leitura={<LeituraDaTela fatos={leitura.fatos} resumo={leitura.resumo} carregando={carregandoFontes} semSelo />}
+      resumoDoVerTudo="Tudo o que esta tela mostrava, com a tabela e os relatórios"
       detalhe={detalhe}
     />
   );

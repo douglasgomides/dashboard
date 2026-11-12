@@ -1,0 +1,267 @@
+/* Resultados da clínica no formato 5 segundos (Phase 03.1.1.1, plano 03): os 3 anéis contra o período anterior da própria clínica e,
+   mais abaixo, "Você agora contra você antes". Só tokens de nexo-system.css (nenhum hex), espaços em 4, 8, 12 e 16, peso de letra nunca
+   abaixo de 500, grades com minmax(0, 1fr), movimento só sem reduced-motion e nada cortado (molde k). Escopo: a casca do Nexo fora do SAP. */
+
+/* ---------- Veredito de Resultados: o texto em cima e os anéis embaixo ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito__corpo[data-tem-lado] {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  justify-items: stretch;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito__lado {
+  order: 2;
+  min-width: 0;
+  width: 100%;
+}
+
+/* ---------- Anéis ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-aneis {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: nx-aneis;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__fila {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__anel {
+  --nx-anel-cor: var(--b1);
+  --nx-anel-fundo: var(--b5);
+  --nx-anel-volta: color-mix(in srgb, var(--b1) 70%, var(--text));
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 4px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__anel[data-chave="agendaram"] {
+  --nx-anel-cor: var(--or);
+  --nx-anel-fundo: var(--or-bg);
+  --nx-anel-volta: var(--or-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__anel[data-chave="fecharam"] {
+  --nx-anel-cor: var(--dn);
+  --nx-anel-fundo: var(--dn-bg);
+  --nx-anel-volta: var(--dn-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__anel:hover {
+  background: var(--field);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__anel[aria-pressed="true"] {
+  background: var(--b6);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__anel:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: 2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__roda {
+  position: relative;
+  display: block;
+  width: clamp(96px, 14vw, 168px);
+  max-width: 100%;
+  aspect-ratio: 1;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__trilho {
+  stroke: var(--nx-anel-fundo);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__arco {
+  stroke: var(--nx-anel-cor);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__volta {
+  stroke: var(--nx-anel-volta);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__marca {
+  stroke: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__centro {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__valor {
+  max-width: 72%;
+  font-size: clamp(18px, 2.6vw, 34px);
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__variacao {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-ink);
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__nome {
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__antes {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__anel .nx-selo {
+  font-size: 12px;
+  line-height: 18px;
+  padding: 0 8px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__passagem {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 4px;
+  min-width: 0;
+  /* Alinha a seta com o meio da roda (o resto da coluna é nome, antes e selo). */
+  padding-top: calc(clamp(96px, 14vw, 168px) / 2 + 12px - 14px);
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__seta {
+  font-size: 20px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--muted-2);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__passagem-texto {
+  max-width: 96px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__legenda {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 8px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--muted-ink);
+  text-align: center;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__legenda-marca {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__detalhe {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__detalhe[hidden] {
+  display: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__detalhe-titulo {
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-aneis__detalhe-apoio {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+
+/* Contêiner estreito (celular): anéis de 96 px, a seta sem texto (a passagem vai para o leitor de tela e para a área do anel). */
+@container nx-aneis (max-width: 420px) {
+  .app.product-workspace:not(.sap-workspace) .nx-aneis__fila {
+    grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr) 12px minmax(0, 1fr);
+    gap: 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-aneis__anel {
+    padding: 8px 0;
+    gap: 2px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-aneis__roda {
+    width: 96px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-aneis__passagem {
+    padding-top: calc(48px + 8px - 10px);
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-aneis__seta {
+    font-size: 16px;
+    line-height: 20px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-aneis__passagem-texto {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-aneis__nome {
+    font-size: 14px;
+    line-height: 18px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-aneis__anel .nx-selo {
+    font-size: 11px;
+    padding: 0 8px;
+  }
+}
+
+/* O arco enche ao abrir a tela, só para quem não pediu menos movimento (o resultado final é o mesmo sem a animação). */
+@media (prefers-reduced-motion: no-preference) {
+  .app.product-workspace:not(.sap-workspace) .nx-aneis__arco,
+  .app.product-workspace:not(.sap-workspace) .nx-aneis__volta {
+    animation: nx-anel-enche 1s cubic-bezier(.2, .8, .2, 1) both;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-aneis__volta {
+    animation-delay: .6s;
+  }
+  @keyframes nx-anel-enche {
+    from {
+      stroke-dashoffset: var(--anel-total);
+    }
+  }
+}
