@@ -10,7 +10,7 @@ import { fatosDoInstagram, fatosSemInstagram } from "@/lib/leitura/fatos-instagr
 import { periodoAnterior } from "@/lib/leitura/tipos";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { IconeFormato } from "@/components/visual";
-import { Users, UserPlus, UserMinus, Scale, TrendingUp, Trophy, Layers, Tag, LineChart as LineIcon } from "lucide-react";
+import { Users, UserPlus, UserMinus, Scale, TrendingUp, Trophy, Layers, Tag, Eye, Bookmark, LineChart as LineIcon } from "lucide-react";
 import { SyncButton } from "@/components/sync-button";
 import { fmtFracao, MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { SeguidoresSemana } from "@/components/seguidores-impulsionados";
@@ -22,6 +22,8 @@ import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxTabela, NxVazio } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { IgLinhaSeguidores, IgColunasSaldo } from "@/components/nx/instagram";
+import { NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { numerosDoInstagram, vereditoDoInstagram, type EntradaCincoInstagram, type NumeroDoInstagram } from "@/lib/leitura/cinco-instagram";
 
 export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
   component: ConteudoPage,
@@ -158,30 +160,35 @@ function ConteudoPage() {
     meta: <span>{periodLabel}</span>,
     acao: temIg ? <SyncButton clientId={clientId} alvo="posts" /> : undefined,
   };
-  const pagina = (corpo: ReactNode, leitura: ReactNode) => (
+  // Formato 5 segundos (03.1.1.1): o veredito abre a tela; a leitura de antes, quando existe, mora no "Ver tudo" fechado.
+  const pagina = (corpo: ReactNode, leitura: ReactNode, veredito: ReactNode) => (
     <div className="nexo-ig">
-      <PaginaNexo {...cabecalho} leitura={leitura} corpo={corpo} />
+      <PaginaNexo {...cabecalho} veredito={veredito} leitura={leitura} corpo={corpo} />
     </div>
   );
+  const carregandoVeredito = <NxVeredito veredito={null} carregando tela="conteudo" />;
 
-  if (fontes.isLoading) return pagina(<NxCarregando linhas={4} />, <LeituraDaTela fatos={null} carregando semSelo />);
+  if (fontes.isLoading) return pagina(<NxCarregando linhas={4} />, null, carregandoVeredito);
   if (fontes.error) {
     return pagina(
       <NxErro texto="Não consegui verificar as fontes deste cliente. Atualize a página." onTentar={() => void fontes.refetch()} />,
-      <LeituraDaTela fatos={null} carregando={false} erro="As fontes não responderam." semSelo />,
+      null,
+      <NxVeredito veredito={null} carregando={false} erro="As fontes não responderam." tela="conteudo" />,
     );
   }
   if (!temIg) {
     return pagina(
       <NxVazio titulo="Instagram não conectado" falta="uma conta de Instagram ligada ao Nexo. Sem ela não há seguidores, posts nem alcance para analisar" quem="equipe_hub" passo="ligar a conta de Instagram do médico à Business Manager do cliente" />,
       <LeituraDaTela fatos={fatos} carregando={false} semSelo />,
+      <NxVeredito veredito={vereditoDoInstagram({ diario: [], diarioAnterior: null, formatos: null }, fatos)} carregando={false} tela="conteudo" />,
     );
   }
-  if (metrics.isLoading || posts.isLoading) return pagina(<NxCarregando texto="Carregando conteúdo do período…" linhas={4} />, <LeituraDaTela fatos={null} carregando semSelo />);
+  if (metrics.isLoading || posts.isLoading) return pagina(<NxCarregando texto="Carregando conteúdo do período…" linhas={4} />, null, carregandoVeredito);
   if (metrics.error || posts.error) {
     return pagina(
       <NxErro texto="Falha ao ler as métricas do Instagram. Tente novamente em instantes." onTentar={() => { void metrics.refetch(); void posts.refetch(); }} />,
-      <LeituraDaTela fatos={null} carregando={false} erro="O Instagram não respondeu." semSelo />,
+      null,
+      <NxVeredito veredito={null} carregando={false} erro="O Instagram não respondeu." tela="conteudo" />,
     );
   }
 
@@ -223,7 +230,7 @@ function ConteudoPage() {
     />,
   ] as const;
 
-  const principal = (
+  const evolucao = (
     <NxCard
       id="evolucao-seguidores"
       nivel={2}
@@ -340,15 +347,62 @@ function ConteudoPage() {
     </div>
   );
 
+  // Formato 5 segundos (03.1.1.1, plano 07): o veredito de alcance e seguidores abre a tela e os 3 números-chave vêm com a variação contra o
+  // período anterior da PRÓPRIA clínica. Tudo o que a aba mostrava antes (cartões, evolução, detalhes e a leitura) mora no "Ver tudo", fechado.
+  const entradaCinco: EntradaCincoInstagram = {
+    diario: metrics.data ?? [],
+    diarioAnterior: metricsAnt.isPending ? null : (metricsAnt.data ?? []),
+    posts: posts.data ?? [],
+    crescimento: cresc ? { novos: cresc.novos, saidas: cresc.saidas, liquido: cresc.liquido, diasMedidos: cresc.diasMedidos } : null,
+    formatos: fm,
+  };
+  const carregandoFatos = fatos == null;
+  const veredito = carregandoFatos ? null : vereditoDoInstagram(entradaCinco, fatos);
+  const ICONE_DO_NUMERO = { seguidores: ic(Users), alcance: ic(Eye), salvos: ic(Bookmark) } as const;
+  const cartoesCinco = numerosDoInstagram(entradaCinco).map((n) => <CartaoDeNumeroIg key={n.id} n={n} icone={ICONE_DO_NUMERO[n.id]} />);
+
   return (
     <div className="nexo-ig">
       <PaginaNexo
         {...cabecalho}
-        leitura={<LeituraDaTela fatos={fatos} carregando={fatos == null} semSelo />}
-        cartoes={cartoes as unknown as [ReactNode, ReactNode?, ReactNode?, ReactNode?]}
-        principal={principal}
-        detalhe={detalhe}
+        veredito={<NxVeredito veredito={veredito} carregando={carregandoFatos} tela="conteudo" />}
+        leitura={<LeituraDaTela fatos={fatos} carregando={carregandoFatos} semSelo />}
+        cartoes={cartoesCinco as unknown as [ReactNode, ReactNode?, ReactNode?]}
+        resumoDoVerTudo="temas, horários, formatos e a contagem de seguidores"
+        detalhe={
+          <div style={{ display: "grid", gap: 18 }}>
+            <div className="nx-grade nx-grade--4">{cartoes}</div>
+            {evolucao}
+            {detalhe}
+          </div>
+        }
       />
     </div>
+  );
+}
+
+/**
+ * Um dos 3 números-chave no formato 5 segundos: o número, a legenda, a variação contra a PRÓPRIA clínica (sinal na pílula) e o selo com a
+ * palavra. Sem comparação, o selo "Falta dado" em cinza; sem medida, "Sem dado" e o motivo (nunca 0). Só apresentação.
+ */
+function CartaoDeNumeroIg({ n, icone }: { n: NumeroDoInstagram; icone: ReactNode }) {
+  const semMedida = n.valorTexto == null;
+  return (
+    <NxCartaoNumero
+      icone={icone}
+      titulo={n.titulo}
+      valor={n.valorTexto}
+      legenda={semMedida ? undefined : n.legenda}
+      semMedida={semMedida}
+      variacao={n.textoDaVariacao ? { texto: n.textoDaVariacao } : null}
+      extra={
+        semMedida ? (
+          <p className="nx-cinco-falta" data-falta-dado>{`Falta dado: ${n.motivo ?? "sem medida neste período"}`}</p>
+        ) : n.selo ? (
+          <NxSelo tom={n.selo.tom} texto={n.selo.texto} />
+        ) : null
+      }
+      serie={n.serie ?? undefined}
+    />
   );
 }
