@@ -1,0 +1,376 @@
+/* Funil desenhado (sketch 001, variante A2, aprovada pelo João em 12/11/2026): faixas centradas em escala de raiz, ligações em
+   trapézio entre elas, a maior perda em vermelho e o toco listrado "Falta dado". Só tokens de nexo-system.css (nenhum hex),
+   peso de letra nunca abaixo de 500, texto de 14 px ou mais (exceto a pílula da ligação e o "vs", de 12 px), movimento só sem
+   reduced-motion. Escopo: só a casca do Nexo fora do SAP. A peça só desenha: não busca nem grava nada (CHAM-07). */
+
+.app.product-workspace:not(.sap-workspace) .nx-funil-d {
+  --nx-funil-colunas: 150px minmax(0, 1fr) 96px;
+  --nx-funil-espaco: 16px;
+  --nx-funil-faixa: 46px;
+  --nx-funil-ligacao: 30px;
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  max-width: 760px;
+  min-width: 0;
+  margin: 0 auto;
+}
+
+/* ---------- Topo: a pílula da maior perda (ou o aviso de fora de ordem) ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__topo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__perda {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--dn-bg);
+  color: var(--dn-ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__perda:hover {
+  background: color-mix(in srgb, var(--dn-bg) 80%, var(--dn));
+}
+
+/* ---------- Grade: etapas e ligações, todas com as mesmas 3 colunas ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__grade {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__etapa {
+  display: grid;
+  grid-template-columns: var(--nx-funil-colunas);
+  column-gap: var(--nx-funil-espaco);
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--nx-funil-faixa);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__etapa:focus-visible,
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__perda:focus-visible,
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__fechar:focus-visible,
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__acao:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Esquerda: o nome e, quando há período anterior em memória, "▲/▼ N%" com o "vs" (o sinal vai no texto, nunca só a cor). */
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__rotulo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 0;
+  text-align: right;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__nome {
+  font-size: 15px;
+  line-height: 18px;
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__variacao {
+  margin-top: 2px;
+  font-size: 14px;
+  line-height: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__variacao[data-sobe] {
+  color: var(--up-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__variacao:not([data-sobe]) {
+  color: var(--dn-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__vs {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Meio: o trilho centrado, com o contorno tracejado do período anterior e a faixa deste período. */
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__trilho {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  height: var(--nx-funil-faixa);
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__anterior {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  border: 1.5px dashed var(--b3);
+  border-radius: 12px;
+  pointer-events: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__faixa {
+  height: 100%;
+  border-radius: 12px;
+  background: linear-gradient(90deg, var(--b1), var(--b2));
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__etapa:hover .nx-funil-d__faixa {
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--b1) 25%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__etapa[data-aberta] .nx-funil-d__faixa {
+  box-shadow: 0 0 0 4px var(--b5);
+}
+/* Falta dado: um toco curto e listrado, nunca uma barra. */
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__toco {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 38%;
+  min-width: 84px;
+  height: 100%;
+  border-radius: 12px;
+  background-color: var(--field);
+  background-image: repeating-linear-gradient(135deg, transparent 0 8px, color-mix(in srgb, var(--line-2) 55%, transparent) 8px 10px);
+  color: var(--muted-ink);
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Direita: o número grande. */
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__numero {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  font-size: 22px;
+  line-height: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__numero[data-falta] {
+  color: var(--muted-ink);
+}
+
+/* ---------- Ligação em trapézio entre duas faixas ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__ligacao {
+  display: grid;
+  grid-template-columns: var(--nx-funil-colunas);
+  column-gap: var(--nx-funil-espaco);
+  height: var(--nx-funil-ligacao);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__miolo {
+  position: relative;
+  grid-column: 2;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__forma {
+  position: absolute;
+  inset: 0;
+  background: var(--b6);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__ligacao[data-perda] .nx-funil-d__forma {
+  background: var(--dn-bg);
+}
+/* Sem % (populações diferentes) ou com uma vizinha sem dado: faixa reta e neutra, sem pílula. */
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__ligacao[data-neutra] .nx-funil-d__forma {
+  background: var(--field);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__pct {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--white);
+  box-shadow: 0 1px 3px var(--line-2), 0 0 0 1px var(--line);
+  color: var(--muted-ink);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__ligacao[data-perda] .nx-funil-d__pct {
+  color: var(--dn-ink);
+}
+
+/* ---------- Legenda de uma linha ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__legenda {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0;
+  color: var(--muted-ink);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__legenda i {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 16px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 3px;
+  vertical-align: middle;
+  background: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__legenda i[data-tracejado] {
+  border: 1.5px dashed var(--b3);
+  background: none;
+}
+
+/* ---------- Gaveta: dialog nativo (folha presa embaixo no celular, centrada no desktop) ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__gaveta {
+  box-sizing: border-box;
+  width: min(520px, calc(100% - 32px));
+  max-width: 520px;
+  max-height: 85dvh;
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 0;
+  border-radius: 24px;
+  background: var(--white);
+  color: var(--text);
+  box-shadow: var(--sombra-dialogo);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__gaveta::backdrop {
+  background: color-mix(in srgb, var(--b6) 55%, var(--veu-cinza));
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__corpo {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  padding: 20px 22px 24px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__titulo {
+  margin: 0;
+  padding-right: 48px;
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 700;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__texto {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__texto[data-sobe] {
+  color: var(--up-ink);
+  font-weight: 700;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__texto[data-desce] {
+  color: var(--dn-ink);
+  font-weight: 700;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__fechar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--field);
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__acoes {
+  display: grid;
+  gap: 8px;
+}
+
+/* ---------- Celular: colunas mais estreitas, faixa e ligação mais baixas, gaveta presa embaixo ---------- */
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-funil-d {
+    --nx-funil-colunas: 92px minmax(0, 1fr) 58px;
+    --nx-funil-espaco: 8px;
+    --nx-funil-faixa: 30px;
+    --nx-funil-ligacao: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funil-d__nome {
+    font-size: 14px;
+    line-height: 15px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funil-d__variacao {
+    margin-top: 0;
+    line-height: 15px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funil-d__vs {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funil-d__faixa,
+  .app.product-workspace:not(.sap-workspace) .nx-funil-d__toco {
+    border-radius: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funil-d__anterior {
+    border-radius: 9px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funil-d__numero {
+    font-size: 16px;
+    line-height: 20px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funil-d__gaveta {
+    width: 100%;
+    max-width: 100%;
+    margin: auto 0 0;
+    border-radius: 24px 24px 0 0;
+  }
+}
+
+/* ---------- Movimento: só sem reduced-motion ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .app.product-workspace:not(.sap-workspace) .nx-funil-d__faixa,
+  .app.product-workspace:not(.sap-workspace) .nx-funil-d__anterior {
+    transition: width 0.5s ease, box-shadow 0.15s ease;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funil-d__gaveta[open] {
+    animation: nx-funil-d-sobe 0.25s ease;
+  }
+  @keyframes nx-funil-d-sobe {
+    from {
+      transform: translateY(24px);
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+}
