@@ -9,11 +9,10 @@ import { CmAviso, CmBarras, CmKpi, CmMetodo, CmRecolhido, icT } from "@/componen
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { NxCarregando, NxErro } from "@/components/nx/blocos";
-import { NxFunil, type NxEtapaFunil } from "@/components/nx/anuncios-graficos";
+import { NxFunilDesenhado } from "@/components/nx/funil-desenhado";
 import { fatosDoFunil } from "@/lib/leitura/fatos-comercial";
 import { hojeBrasilia } from "@/lib/status-fonte";
-import { fmtNdeM } from "@/lib/funil-taxa";
-import { fmtPct } from "@/lib/comercial";
+import { deFunilComercial } from "@/lib/funil-desenhado";
 import type { NomeIcone } from "@/lib/registro-de-telas";
 import { VisoesComerciais } from "@/components/crm-visoes";
 import {
@@ -254,6 +253,9 @@ function CrmClinicaPage() {
         : null,
     [diag.data, start, end, hoje],
   );
+  // O funil desenhado (Conversou · Virou lead · Atendido · Agendou · Fechou): a mesma conta do diagnóstico, só desenhada. Esta tela
+  // não tem período anterior em memória (nenhuma consulta nova), então não há contorno nem ▲/▼.
+  const funilDesenhado = useMemo(() => (diag.data ? deFunilComercial(diag.data) : null), [diag.data]);
 
   const ehRelatorio = clientId === "8d4b3b3f-74a7-419a-a113-35ebc02cb37f";
   const temSync = (crmProvider === "kommo" || crmProvider === "clint" || crmProvider === "rdstation" || crmProvider === "flwchat" || crmProvider === "digisac") && !ehRelatorio;
@@ -365,16 +367,6 @@ function CrmClinicaPage() {
     />,
   ];
 
-  // O funil do período em degraus. Passo sem medida aparece como "Sem dado" (o motivo está no passo a passo, nos Detalhes).
-  const etapasDoFunil: NxEtapaFunil[] | null = diag.data
-    ? diag.data.funil.passos.map((p) => ({
-        rotulo: p.rotulo,
-        valor: p.valor ?? 0,
-        texto: p.valor == null ? "Sem dado" : fmtN(p.valor),
-        passagem: p.pctDoAnterior != null ? `${fmtPct(p.pctDoAnterior)} passam` : p.fracaoDoAnterior ? fmtNdeM(p.fracaoDoAnterior) : null,
-      }))
-    : null;
-
   const alertas = [
     !ehRelatorio && <QualidadeDados key="qualidade" clientId={clientId} fonte="crm" titulo="Dados do CRM com erro" />,
     diag.data?.dados.crmCompartilhado && (
@@ -391,9 +383,9 @@ function CrmClinicaPage() {
       leitura={leituraDoFunil}
       cartoes={cartoes}
       principal={
-        etapasDoFunil ? (
-          <NxCard id="funil-comercial" nivel={2} icone={icT("filter")} titulo="Onde o funil quebra" subtitulo={`Entrou → foi atendido → agendou → comprou · ${periodoTxt}`}>
-            <NxFunil rotulo="Funil comercial do período" etapas={etapasDoFunil} />
+        funilDesenhado ? (
+          <NxCard id="funil-comercial" nivel={2} icone={icT("filter")} titulo="Onde o funil quebra" subtitulo={`Conversou → Fechou · ${periodoTxt} · toque numa etapa`}>
+            <NxFunilDesenhado titulo="Funil comercial do período" funil={funilDesenhado} />
           </NxCard>
         ) : undefined
       }
