@@ -1,6 +1,6 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
-import { textoVisivel } from "./apoio-cinco-segundos";
+import { conferirCincoSegundos, cortesEm, textoVisivel } from "./apoio-cinco-segundos";
 import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockCrm, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 
 // "Do contato à venda" (aba Funil de Onde os pacientes travam) no formato 5 segundos (Phase 03.1.1.1, plano 05): o veredito da maior perda abre
@@ -44,10 +44,30 @@ async function pacientesComAtendidoMedido(context: BrowserContext) {
   );
 }
 
+/**
+ * Histórico diário do próprio spec (os 29 dias fechados de cada período): agora 580 conversas, 203 leads, 58 agendaram e 29 fecharam; antes 522,
+ * 232, 116 e 58. De cada 100 conversas viram lead 35 (eram 44), de cada 100 leads agendam 29 (eram 50) e de cada 100 agendados fecham 50 (igual).
+ */
+async function historicoDoSpec(context: BrowserContext) {
+  await context.route("**/rest/v1/resultados_diarios**", (r) => {
+    const p = new URL(r.request().url()).searchParams;
+    const datas = p.getAll("dia");
+    const de = datas.find((d) => d.startsWith("gte."))?.slice(4) ?? "0000";
+    const ate = datas.find((d) => d.startsWith("lte."))?.slice(4) ?? "9999";
+    const linhas = Array.from({ length: 70 }, (_, i) => ({
+      dia: dia(i), mandaram_mensagem: i < 30 ? 20 : 18, leads_novos: i < 30 ? 7 : 8, antigos: 8, agendaram: i < 30 ? 2 : 4, negociacao: 2, compareceram: null, fecharam: i < 30 ? 1 : 2,
+    }))
+      .filter((l) => l.dia >= de && l.dia <= ate)
+      .sort((a, b) => a.dia.localeCompare(b.dia));
+    return r.fulfill({ json: linhas });
+  });
+}
+
 async function abrir(page: Page, context: BrowserContext, perfil: "viewer" | "admin", largura: { width: number; height: number }, atendidoMedido: boolean) {
   await mockAccount(context, perfil);
   await mockPessoas(context);
   await mockCrm(context);
+  await historicoDoSpec(context);
   if (atendidoMedido) await pacientesComAtendidoMedido(context);
   await page.setViewportSize(largura);
   await page.goto(`/${CID}/pacientes?preset=30d`);
@@ -69,7 +89,7 @@ test("o veredito abre a tela com a maior perda e as pessoas na mesa aparecem uma
   await expect(veredito.locator(".nx-veredito__frase")).toHaveText(/^Aqui você perde mais: só \d+% dos agendados fecham\.$/);
 
   // "Pessoas na mesa" é o número-chave 1: 100 leads menos 75 atendidos = 25, com a frase e a grade de pontos (cada ponto = 1 lead).
-  await expect(cartoes(page)).toHaveCount(1);
+  await expect(cartoes(page)).toHaveCount(3);
   const mesa = cartoes(page).first();
   await expect(mesa).toContainText("Pessoas na mesa");
   await expect(mesa.locator(".nx-numero__valor")).toHaveText("25");
@@ -102,7 +122,7 @@ test("o veredito abre a tela com a maior perda e as pessoas na mesa aparecem uma
 
 test("sem a medida de Atendido o cartão diz Falta dado com o motivo e não desenha ponto nem zero", async ({ page, context }) => {
   await abrir(page, context, "viewer", { width: 1440, height: 900 }, false);
-  await expect(cartoes(page)).toHaveCount(1);
+  await expect(cartoes(page)).toHaveCount(3);
   const mesa = cartoes(page).first();
   await expect(mesa).toContainText("Pessoas na mesa");
   await expect(mesa).toContainText(/Falta dado: .*atendido/i);
@@ -115,8 +135,10 @@ test("sem a medida de Atendido o cartão diz Falta dado com o motivo e não dese
 
 for (const perfil of ["viewer", "admin"] as const) {
   for (const largura of TELAS_DE_MEDIDA) {
-    test(`${perfil}: a aba Funil com o Ver tudo fechado mede no máximo 1,5 tela em ${largura.width}x${largura.height}`, async ({ page, context }) => {
+    test(`${perfil}: ${largura.width}x${largura.height} abre no formato 5 segundos, com o Ver tudo fechado, dentro de 1,5 tela e sem nada cortado`, async ({ page, context }) => {
       await abrir(page, context, perfil, largura, true);
+      // Veredito primeiro, no máximo 3 números, de 3 a 5 descobertas (cada uma com UMA ação e "Por quê?" de 2 a 3 barras), Ver tudo fechado, D-02 e nada cortado.
+      await conferirCincoSegundos(page, RAIZ);
       const { altura, janela } = await alturaDaAbaAberta(page, "[data-juntada]");
       console.log(`altura-funil perfil=${perfil} largura=${largura.width} altura=${Math.round(altura)} janela=${janela} razao=${(altura / janela).toFixed(2)}`);
       expect(altura, `Funil ${perfil} a ${largura.width}px: ${Math.round(altura)} px de ${janela} px (${(altura / janela).toFixed(2)}x)`).toBeLessThanOrEqual(LIMITE_DE_ALTURA * janela);
@@ -124,3 +146,53 @@ for (const perfil of ["viewer", "admin"] as const) {
     });
   }
 }
+
+test("nada cortado em 375, 1280 e 1440 e sem rolagem lateral", async ({ page, context }) => {
+  await abrir(page, context, "admin", { width: 375, height: 812 }, true);
+  for (const largura of [375, 1280, 1440]) {
+    await page.setViewportSize({ width: largura, height: 900 });
+    await expect(page.locator(`${RAIZ} [data-peca="veredito"]`)).toBeVisible();
+    expect(await cortesEm(page, RAIZ), `cortes a ${largura}px`).toEqual([]);
+    expect(await semRolagemLateral(page), `rolagem lateral a ${largura}px`).toBe(true);
+  }
+});
+
+test("as descobertas dizem a conta de cada 100, o Por quê? mostra 2 a 3 barras e nada é enviado ao clicar", async ({ page, context }) => {
+  await abrir(page, context, "viewer", { width: 1440, height: 900 }, true);
+  const escritas: string[] = [];
+  page.on("request", (r) => {
+    if (r.method() !== "GET" && !r.url().includes("/rest/v1/rota_acessos")) escritas.push(`${r.method()} ${r.url()}`);
+  });
+  const itens = page.locator(`${RAIZ} [data-peca="descoberta"]`);
+  expect(await itens.count()).toBeGreaterThanOrEqual(3);
+  // De cada 100 leads agendam 29 (eram 50) e de cada 100 conversas viram lead 35 (eram 44): contas só desta clínica, contra o período anterior dela.
+  await expect(itens.filter({ hasText: "De cada 100 leads, 29 agendam. Antes eram 50." })).toHaveCount(1);
+  await expect(itens.filter({ hasText: "Das conversas, 35 de cada 100 viram lead. Antes eram 44." })).toHaveCount(1);
+  await expect(itens.filter({ hasText: /Entre Agendou e Fechou, \d+% passam\./ })).toHaveCount(1);
+  // Cada "Por quê?" abre de 2 a 3 barras; as ações só abrem uma lista da tela ou levam ao funil.
+  for (let k = 0; k < (await itens.count()); k++) {
+    const d = itens.nth(k);
+    await d.locator("button.nx-descoberta__porque-botao").click();
+    const barras = await d.locator(".nx-barras__item").count();
+    expect(barras).toBeGreaterThanOrEqual(2);
+    expect(barras).toBeLessThanOrEqual(3);
+  }
+  const acaoAgendou = itens.filter({ hasText: "De cada 100 leads" }).locator("button.nx-acao-pilula__seta");
+  await acaoAgendou.click();
+  await expect(page.locator(`${RAIZ} #lista-aberta`)).toBeVisible();
+  await expect(page.locator(`${RAIZ} #lista-aberta`)).toContainText("Agendaram");
+  expect(escritas).toEqual([]);
+});
+
+test("o funil desenhado continua sendo a prova: a gaveta abre numa etapa e o Esc fecha", async ({ page, context }) => {
+  await abrir(page, context, "admin", { width: 1440, height: 900 }, true);
+  await expect(page.locator(`${RAIZ} [data-peca="funil-desenhado"]`)).toBeVisible();
+  const etapas = page.locator(`${RAIZ} .nx-funil-d__etapa`);
+  await expect(etapas).toHaveCount(5);
+  await etapas.nth(2).click();
+  const gaveta = page.locator(`${RAIZ} dialog.nx-funil-d__gaveta`);
+  await expect(gaveta).toBeVisible();
+  await expect(gaveta).toContainText("Atendido");
+  await page.keyboard.press("Escape");
+  await expect(gaveta).toBeHidden();
+});

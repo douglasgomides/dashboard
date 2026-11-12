@@ -72,3 +72,238 @@
     height: 12px;
   }
 }
+
+/* ---------- Do contato à venda na régua de 1,5 tela (D-08): nunca se sobe o limite, só se comprime o que é desta tela ---------- */
+/* A ação e o "Por quê?" lado a lado, não um sobre o outro. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta__acoes {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+/* Celular: veredito, cartões de número e descobertas cabem na régua. */
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-pagina__rotulo,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-pagina__pontos {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] {
+    gap: 6px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-veredito {
+    padding: 8px 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-pagina__cartoes .nx-cartao__icone,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-pagina__cartoes .nx-linha30 {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-pacientes-ordem {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descobertas,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descobertas__lista {
+    gap: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descobertas__titulo {
+    font-size: 18px;
+    line-height: 20px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta {
+    padding: 8px 12px;
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta__frase {
+    font-size: 15px;
+    line-height: 20px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta .nx-selo {
+    font-size: 12px;
+    line-height: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta .nx-acao-pilula {
+    min-height: 40px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta .nx-acao-pilula__seta {
+    width: 36px;
+    height: 36px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta__porque-botao {
+    min-height: 40px;
+  }
+}
+
+/* Computador: as 3 descobertas lado a lado (cada uma empilha chips, frase e botões no próprio cartão) e o funil com faixas um pouco mais baixas. */
+@media (min-width: 1100px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descobertas__lista {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-funil-d {
+    --nx-funil-faixa: 32px;
+    --nx-funil-ligacao: 14px;
+  }
+}
+
+/* Cartões de número: o número e a legenda lado a lado, para o cartão ficar baixo. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-pagina__cartoes .nx-numero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+@media (max-width: 560px) {
+  /* O título do cartão do funil repete a parte que a pessoa acabou de escolher no filtro; o nome continua para leitor de tela. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] #funil > .nx-card__head {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] #funil {
+    position: relative;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nxb-recolhido small {
+    display: none;
+  }
+}
+
+/* O título do cartão do funil repete a parte que a pessoa acabou de escolher no filtro acima ("Do contato à venda"); o nome continua para leitor de tela. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] #funil {
+  position: relative;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] #funil > .nx-card__head {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Botão do cartão e grade de pontos um pouco mais baixos (régua de 1,5 tela). */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-pagina__cartoes .nx-botao {
+  min-height: 40px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-mesa {
+  gap: 4px;
+}
+
+@media (max-width: 560px) {
+  /* O primeiro cartão (Pessoas na mesa) ocupa quase a fileira inteira, para a legenda dos pontos caber numa linha; o seguinte aparece na beirada. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-pagina__cartoes > :first-child {
+    flex-basis: 92%;
+  }
+  /* A legenda do funil numa linha só. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-funil-d__legenda {
+    flex-wrap: nowrap;
+    gap: 4px 8px;
+    margin: 0;
+    font-size: 13px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-funil-d__legenda i {
+    width: 12px;
+    margin-right: 4px;
+  }
+  /* Descoberta: o selo e quem resolve entram na mesma linha da frase (a frase já ocupa duas linhas); o número em jogo fica no "Por quê?". */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta__corpo {
+    display: block;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta__topo {
+    display: inline-flex;
+    max-width: 100%;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta__impacto {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta__frase {
+    display: inline;
+  }
+}
+
+@media (max-width: 560px) {
+  /* A etiqueta da decisão e o período já estão na casca (seletor de período) e na pasta: no celular a linha sai para a régua de 1,5 tela. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-pagina__meta {
+    display: none;
+  }
+  /* Cartões de número: o número e a legenda na mesma linha. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-pagina__cartoes .nx-numero__legenda {
+    flex: 1 1 120px;
+    min-width: 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-mesa__legenda {
+    font-size: 12px;
+    line-height: 16px;
+    gap: 4px 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 560px) {
+  /* Funil: o nome da etapa e a variação na mesma linha (a faixa fica baixa) e a pílula da maior perda mais baixa. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-funil-d {
+    --nx-funil-colunas: 132px minmax(0, 1fr) 40px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-funil-d__rotulo {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-funil-d__perda {
+    min-height: 36px;
+    padding: 6px 12px;
+  }
+}
+
+/* Número e legenda na mesma linha em qualquer largura (a legenda ocupa o que sobra ao lado do número). */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-pagina__cartoes .nx-numero__legenda {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+@media (max-width: 560px) {
+  /* Ação e "Por quê?" de 36 px de altura (toque confortável com a margem de 4 px do cartão). */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta .nx-acao-pilula {
+    min-height: 36px;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta .nx-acao-pilula__seta {
+    width: 32px;
+    height: 32px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta__porque-botao {
+    min-height: 36px;
+  }
+}
+
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta .nx-acao-pilula {
+    padding: 2px 2px 2px 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta .nx-acao-pilula__texto {
+    padding: 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta__acoes {
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta {
+    gap: 2px;
+  }
+}
+
+@media (max-width: 560px) {
+  /* Um estilo global de botão dá 44 px de altura mínima: a seta redonda de 32 px precisa soltá-la. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="pacientes"] .nx-descoberta .nx-acao-pilula__seta {
+    min-height: 0;
+    min-width: 0;
+  }
+}
