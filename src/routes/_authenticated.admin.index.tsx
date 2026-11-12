@@ -1,12 +1,12 @@
 import { DIAS_SEM_ENTRAR, entraNaCarteira, fatoDeAcesso, type AcessoClinica } from "@/lib/carteira-alertas";
-import { useId, useState, type CSSProperties, type FormEvent } from "react";
+import { useId, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAdminUser, createClient, getAvisosDaCarteira, listAllClients } from "@/lib/admin-data";
 import { ClientAvatar } from "@/components/client-avatar";
 import { supabase } from "@/integrations/supabase/client";
-import { getQualidadeDados, getRoiPeriodo } from "@/lib/client-data";
+import { getQualidadeDados, getRoiPeriodo, type ProblemaDado } from "@/lib/client-data";
 import { grupoSemRoi, montarRoi, resumoRoi, ROTULO_GRUPO_SEM_ROI, type GrupoSemRoi, type Roi } from "@/lib/roi";
 import { SeloConfianca } from "@/components/selo-confianca";
 import { resolveDateRange } from "@/lib/date-range";
@@ -14,7 +14,7 @@ import { getSapPorCliente } from "@/lib/sap-data";
 import { lerStatusDasFontes, type FontesDoCliente } from "@/lib/saude-fontes";
 import { notaDasFontes, ROTULO_FAIXA, type NotaFontes } from "@/lib/nota-fontes";
 import { FONTES, NOME_FONTE, LEGENDA_STATUS, VAR_COR, type FonteId } from "@/lib/status-fonte";
-import { AlertTriangle, ArrowRight, Building2, Calculator, Clock, Search, ShieldCheck, Unplug, UserPlus, UserX } from "lucide-react";
+import { AlertTriangle, ArrowRight, Building2, Calculator, Clock, MinusCircle, Search, ShieldCheck, Unplug, UserPlus, UserX } from "lucide-react";
 import { saudeDaFonte, CelulaSaude, SeloStatus, type SaudeFonte } from "@/components/source-health";
 import { useQualidadeDados } from "@/components/qualidade-dados";
 import { LinksSemCliente } from "@/components/links-shortio";
@@ -26,7 +26,7 @@ import { SemRespostaAgora } from "@/components/sem-resposta-agora";
 import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
 import { CAMPOS_DIARIOS, type CampoDiario } from "@/hooks/use-resultados-diarios";
 import { NxAlertaCurto, NxNota, NxTopo } from "@/components/nx/anuncios-graficos";
-import { AdmCampo, AdmChip, AdmContador, AdmContadores, AdmSecao, tomDaCor } from "@/components/nx/admin-base";
+import { AdmCampo, AdmChip, AdmContador, AdmContadores, AdmSecao, tomDaCor, type AdmTom } from "@/components/nx/admin-base";
 import "@/styles/databoard.css";
 
 
@@ -189,16 +189,154 @@ function ChipQualidade({ clientId }: { clientId: string }) {
   );
 }
 
-// A mesma contagem do ChipQualidade, no formato de chip da linha da carteira.
-function ChipQualidadeCurto({ clientId }: { clientId: string }) {
-  const { data } = useQualidadeDados(clientId);
+// A mesma contagem do ChipQualidade, como alerta da linha da carteira (função pura do dado).
+function alertaDeQualidade(data: ProblemaDado[] | undefined): Alerta | null {
   if (!data?.length) return null;
   const altas = data.filter((p) => p.severidade === "alta").length;
+  return {
+    chave: "dado",
+    tom: altas ? "critico" : "atencao",
+    texto: `${data.length} ${data.length === 1 ? "dado com erro" : "dados com erro"}${altas ? ` · ${altas} afeta${altas === 1 ? "" : "m"} a leitura` : ""}`,
+    titulo: data.map((p) => p.titulo).join("\n"),
+  };
+}
+
+// Um alerta da linha: vira um item da lista que o chip "N alertas" abre. Com `acesso`, o item leva para a seção de acesso.
+type Alerta = { chave: string; tom: AdmTom; texto: string; titulo: string; acesso?: boolean };
+
+const ROTULO_COR: Record<string, string> = { verde: "Em dia", amarelo: "Atenção", vermelho: "Problema", cinza: "Sem fontes" };
+const PESO_TOM: Record<AdmTom, number> = { critico: 3, atencao: 2, neutro: 1, ok: 0, marca: 0 };
+const ICONE_ALERTA: Record<AdmTom, ReactNode> = {
+  critico: <AlertTriangle className="adm-alertas__ic" aria-hidden />,
+  atencao: <Clock className="adm-alertas__ic" aria-hidden />,
+  neutro: <MinusCircle className="adm-alertas__ic" aria-hidden />,
+  ok: <MinusCircle className="adm-alertas__ic" aria-hidden />,
+  marca: <MinusCircle className="adm-alertas__ic" aria-hidden />,
+};
+
+const deltaTxt = (a?: number, b?: number) => {
+  // Base pequena no período anterior vira percentual absurdo (clínica nova, dado que começou no meio do mês).
+  if (a == null || b == null || b < 30) return null;
+  const pct = Math.round(((a - b) / b) * 100);
+  if (pct === 0) return { t: "=", c: "flat" };
+  const abs = Math.abs(pct);
+  return { t: `${pct > 0 ? "▲" : "▼"} ${abs > 300 ? "mais de 300" : abs}%`, c: pct > 0 ? "up" : "down" };
+};
+
+type NumerosClinica = { atual: Partial<Record<CampoDiario, number>>; antes: Partial<Record<CampoDiario, number>> };
+
+/**
+ * Uma linha da carteira. Na coluna de saúde ficam no máximo 3 itens em linha (status, nota e o chip "N alertas" ou o do
+ * SAP); tudo que antes ficava empilhado (fonte ruim, dado com erro, acesso, SAP) abre numa lista pelo chip "N alertas".
+ * A leitura de dado com erro usa a mesma queryKey de sempre, então o react-query reaproveita o cache.
+ */
+function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinha, fatoClinica, ultimoAcesso, idx }: {
+  c: { id: string; name: string; specialty?: string | null; avatar_url?: string | null };
+  handle: string | null;
+  numeros: NumerosClinica | undefined;
+  cor: string;
+  sd: Record<FonteId, SaudeFonte> | null | undefined;
+  nota: NotaFontes | null;
+  sp: { dia: number | null } | undefined;
+  roi: Roi | null;
+  grupoLinha: GrupoSemRoi | null;
+  fatoClinica: ReturnType<typeof fatoDeAcesso>;
+  ultimoAcesso: string | null;
+  idx: number;
+}) {
+  const { data: qualidade } = useQualidadeDados(c.id);
+  const ruins = sd ? FONTES.filter((f) => sd[f].status.cor === "vermelho" || sd[f].status.cor === "amarelo") : [];
+  const alertas: Alerta[] = [];
+  if (sd) {
+    for (const f of ruins) {
+      alertas.push({ chave: f, tom: tomDaCor(sd[f].status.cor), texto: `${NOME_FONTE[f]}: ${sd[f].status.rotulo.toLowerCase()}`, titulo: `${sd[f].status.data ? sd[f].status.detalhe : "sem dado gravado"}${sd[f].causa ? ` · ${sd[f].causa}` : ""}` });
+    }
+  }
+  const dado = alertaDeQualidade(qualidade);
+  if (dado) alertas.push(dado);
+  if (fatoClinica.fato === "sem_acesso") alertas.push({ chave: "acesso", tom: "neutro", texto: "Sem acesso criado · dar acesso", titulo: "A equipe ainda não criou o acesso de ninguém da clínica.", acesso: true });
+  if (fatoClinica.fato === "nao_entra") alertas.push({ chave: "acesso", tom: "atencao", texto: `Não entra há ${fatoClinica.dias} dias`, titulo: ultimoAcesso ? `Último acesso de alguém da clínica: ${ultimoAcesso}` : "Acesso criado e nunca usado", acesso: true });
+  const piorTom = alertas.reduce<AdmTom>((p, a) => (PESO_TOM[a.tom] > PESO_TOM[p] ? a.tom : p), "neutro");
+  const rotuloSap = sp ? (sp.dia === null ? "SAP · sem D0" : sp.dia > 90 ? "Terminou o SAP" : sp.dia < 0 ? `SAP · começa em ${-sp.dia} dia(s)` : `SAP · D${sp.dia} de 90`) : null;
+  const chipSap = sp && (
+    <Link to="/sap/$clientId/painel" params={{ clientId: c.id }} className="adm-chip-link" title="Abrir no Sistema de Aquisição">
+      <AdmChip tom="marca" semIcone>{rotuloSap}</AdmChip>
+    </Link>
+  );
+  const sub = [c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram";
   return (
-    <AdmChip tom={altas ? "critico" : "atencao"} titulo={data.map((p) => p.titulo).join("\n")}>
-      {data.length} {data.length === 1 ? "dado com erro" : "dados com erro"}
-      {altas ? ` · ${altas} afeta${altas === 1 ? "" : "m"} a leitura` : ""}
-    </AdmChip>
+    <li className={`adm-linha${cor === "vermelho" ? " adm-linha--alerta" : cor === "amarelo" ? " adm-linha--atencao" : ""}`} style={{ "--i": Math.min(idx, 12) } as CSSProperties}>
+      <div className="adm-quem">
+        <span className="adm-quem__av"><ClientAvatar nome={c.name} url={c.avatar_url} tamanho={44} /></span>
+        <div className="adm-quem__texto">
+          <span className="adm-quem__nome" title={c.name}>{c.name}</span>
+          <span className="adm-quem__sub" title={sub}>{sub}</span>
+        </div>
+      </div>
+      <div className="adm-chips">
+        <AdmChip tom={sd ? tomDaCor(cor) : "neutro"}>{sd ? ROTULO_COR[cor] ?? "Sem fontes" : "Lendo as fontes…"}</AdmChip>
+        {nota && nota.nota !== null && (
+          <AdmChip tom={tomDaCor(nota.cor)} semIcone titulo={nota.motivos.length ? `Por que não é 100:\n${nota.motivos.join("\n")}` : "Todas as fontes em dia, sem problema de dado"}>
+            Nota {nota.nota} · {ROTULO_FAIXA[nota.faixa!]}
+          </AdmChip>
+        )}
+        {alertas.length > 0 ? (
+          <details className="adm-alertas">
+            <summary className={`adm-alertas__chip adm-alertas__chip--${piorTom}`} title={alertas.map((a) => a.texto).join("\n")}>
+              {ICONE_ALERTA[piorTom]}
+              <span className="adm-chip__texto">{alertas.length === 1 ? "1 alerta" : `${alertas.length} alertas`}</span>
+            </summary>
+            <ul className="adm-alertas__lista">
+              {alertas.map((a) => (
+                <li key={a.chave}>
+                  {a.acesso ? (
+                    <Link to="/admin/$clientId" params={{ clientId: c.id }} hash="acesso" className="adm-chip-link" title={a.titulo}>
+                      <AdmChip tom={a.tom} titulo={a.titulo}>{a.texto}</AdmChip>
+                    </Link>
+                  ) : (
+                    <AdmChip tom={a.tom} titulo={a.titulo}>{a.texto}</AdmChip>
+                  )}
+                </li>
+              ))}
+              {chipSap && <li>{chipSap}</li>}
+            </ul>
+          </details>
+        ) : (
+          chipSap
+        )}
+      </div>
+      <div className="adm-nums">
+        {([["mandaram_mensagem", "Chamaram"], ["agendaram", "Agendaram"], ["fecharam", "Fecharam"]] as const).map(([k, rot]) => {
+          const v = numeros?.atual[k];
+          const dl = deltaTxt(numeros?.atual[k], numeros?.antes[k]);
+          return (
+            <div key={k} className="adm-num">
+              <b>{v == null ? "–" : v.toLocaleString("pt-BR")}</b>
+              <small>{rot}</small>
+              <i className={dl?.c ?? ""} aria-label={dl ? `${dl.t.replace("▲", "subiu").replace("▼", "caiu")} contra os 30 dias anteriores` : undefined}>{dl?.t ?? ""}</i>
+            </div>
+          );
+        })}
+        <div className="adm-num adm-num--roi">
+          {roi ? (
+            <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} style={{ color: roi.calculavel ? (roi.roi! >= 0 ? "var(--good)" : "var(--crit)") : "var(--warn)" }} title={grupoLinha ? `${ROTULO_GRUPO_SEM_ROI[grupoLinha]}: ${roi.motivoSemCalculo}` : (roi.motivoSemCalculo ?? "Ver o retorno no Resultado")}>
+              {resumoRoi(roi)}
+            </Link>
+          ) : (
+            <b>…</b>
+          )}
+          <small>Retorno (ROI)</small>
+        </div>
+      </div>
+      <div className="adm-acoes">
+        <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} className="adm-btn adm-btn--pri">
+          Abrir resultados <ArrowRight aria-hidden />
+        </Link>
+        <Link to="/admin/$clientId" params={{ clientId: c.id }} className="adm-btn" title="Fontes, acesso e configuração">
+          Gerenciar
+        </Link>
+      </div>
+    </li>
   );
 }
 
@@ -376,22 +514,12 @@ function AdminClientsPage() {
   const [aba, setAba] = useState<"alertas" | "problemas" | "resposta" | "clinica">("alertas");
   const nClinicas = (clients ?? []).length;
   const nAtencao = (clients ?? []).filter((c) => piorPeso(c.id) >= 2).length;
-  const rotuloCor: Record<string, string> = { verde: "Em dia", amarelo: "Atenção", vermelho: "Problema", cinza: "Sem fontes" };
   const piorCor = (id: string) => {
     const sd = saudePorCliente.get(id);
     if (!sd) return "cinza";
     const worst = [...FONTES].map((f) => sd[f].status).sort((a, b) => b.peso - a.peso)[0];
     return worst ? worst.cor : "cinza";
   };
-  const deltaTxt = (a?: number, b?: number) => {
-    // Base pequena no período anterior vira percentual absurdo (clínica nova, dado que começou no meio do mês).
-    if (a == null || b == null || b < 30) return null;
-    const pct = Math.round(((a - b) / b) * 100);
-    if (pct === 0) return { t: "=", c: "flat" };
-    const abs = Math.abs(pct);
-    return { t: `${pct > 0 ? "▲" : "▼"} ${abs > 300 ? "mais de 300" : abs}%`, c: pct > 0 ? "up" : "down" };
-  };
-
   // Contagens dos cartões do topo: só leem o status que a tela já calculou (regra única de status-fonte.ts).
   const fontesAmarelas = (clients ?? []).map((c) => {
     const sd = saudePorCliente.get(c.id);
@@ -484,87 +612,24 @@ function AdminClientsPage() {
           <ul className="adm-lista">
             {linhasTabela.map((c, idx) => {
               const handle = c.instagram_handle || contasIg?.get(c.id) || null;
-              const n = numerosQ.data?.get(c.id);
-              const cor = piorCor(c.id);
-              const sd = saudePorCliente.get(c.id);
-              const nota = notaPorCliente.get(c.id) ?? null;
-              const sp = sapPorCliente?.get(c.id);
               const r = roiDe(c.id);
-              const grupoLinha = r && entraNaCarteira(c) ? grupoSemRoi(r) : null;
-              const fatoClinica = acessoDe(c);
               const ultimoAcessoIso = acessoPorClinica.get(c.id)?.ultimo_acesso;
-              const ultimoAcesso = ultimoAcessoIso ? new Date(ultimoAcessoIso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" }) : null;
-              const ruins = sd ? FONTES.filter((f) => sd[f].status.cor === "vermelho" || sd[f].status.cor === "amarelo") : [];
               return (
-                <li key={c.id} className={`adm-linha${cor === "vermelho" ? " adm-linha--alerta" : cor === "amarelo" ? " adm-linha--atencao" : ""}`} style={{ "--i": Math.min(idx, 12) } as CSSProperties}>
-                  <div className="adm-quem">
-                    <span className="adm-quem__av"><ClientAvatar nome={c.name} url={c.avatar_url} tamanho={44} /></span>
-                    <div className="adm-quem__texto">
-                      <span className="adm-quem__nome">{c.name}</span>
-                      <span className="adm-quem__sub">{[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}</span>
-                    </div>
-                  </div>
-                  <div className="adm-chips">
-                    <AdmChip tom={sd ? tomDaCor(cor) : "neutro"}>{sd ? rotuloCor[cor] ?? "Sem fontes" : "Lendo as fontes…"}</AdmChip>
-                    {sd && ruins.map((f) => (
-                      <AdmChip key={f} tom={tomDaCor(sd[f].status.cor)} titulo={`${sd[f].status.data ? sd[f].status.detalhe : "sem dado gravado"}${sd[f].causa ? ` · ${sd[f].causa}` : ""}`}>
-                        {NOME_FONTE[f]}: {sd[f].status.rotulo.toLowerCase()}
-                      </AdmChip>
-                    ))}
-                    {nota && nota.nota !== null && (
-                      <AdmChip tom={tomDaCor(nota.cor)} semIcone titulo={nota.motivos.length ? `Por que não é 100:\n${nota.motivos.join("\n")}` : "Todas as fontes em dia, sem problema de dado"}>
-                        Nota {nota.nota} · {ROTULO_FAIXA[nota.faixa!]}
-                      </AdmChip>
-                    )}
-                    <ChipQualidadeCurto clientId={c.id} />
-                    {sp && (
-                      <Link to="/sap/$clientId/painel" params={{ clientId: c.id }} className="adm-chip-link" title="Abrir no Sistema de Aquisição">
-                        <AdmChip tom="marca" semIcone>{sp.dia === null ? "SAP · sem D0" : sp.dia > 90 ? "Terminou o SAP" : sp.dia < 0 ? `SAP · começa em ${-sp.dia} dia(s)` : `SAP · D${sp.dia} de 90`}</AdmChip>
-                      </Link>
-                    )}
-                    {fatoClinica.fato === "sem_acesso" && (
-                      <Link to="/admin/$clientId" params={{ clientId: c.id }} hash="acesso" className="adm-chip-link" title="A equipe ainda não criou o acesso de ninguém da clínica.">
-                        <AdmChip tom="neutro">Sem acesso criado · dar acesso</AdmChip>
-                      </Link>
-                    )}
-                    {fatoClinica.fato === "nao_entra" && (
-                      <Link to="/admin/$clientId" params={{ clientId: c.id }} hash="acesso" className="adm-chip-link" title={ultimoAcesso ? `Último acesso de alguém da clínica: ${ultimoAcesso}` : "Acesso criado e nunca usado"}>
-                        <AdmChip tom="atencao">Não entra há {fatoClinica.dias} dias</AdmChip>
-                      </Link>
-                    )}
-                  </div>
-                  <div className="adm-nums">
-                    {([["mandaram_mensagem", "Chamaram"], ["agendaram", "Agendaram"], ["fecharam", "Fecharam"]] as const).map(([k, rot]) => {
-                      const v = n?.atual[k];
-                      const dl = deltaTxt(n?.atual[k], n?.antes[k]);
-                      return (
-                        <div key={k} className="adm-num">
-                          <b>{v == null ? "–" : v.toLocaleString("pt-BR")}</b>
-                          <small>{rot}</small>
-                          <i className={dl?.c ?? ""} aria-label={dl ? `${dl.t.replace("▲", "subiu").replace("▼", "caiu")} contra os 30 dias anteriores` : undefined}>{dl?.t ?? ""}</i>
-                        </div>
-                      );
-                    })}
-                    <div className="adm-num adm-num--roi">
-                      {r ? (
-                        <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} style={{ color: r.calculavel ? (r.roi! >= 0 ? "var(--good)" : "var(--crit)") : "var(--warn)" }} title={grupoLinha ? `${ROTULO_GRUPO_SEM_ROI[grupoLinha]}: ${r.motivoSemCalculo}` : (r.motivoSemCalculo ?? "Ver o retorno no Resultado")}>
-                          {resumoRoi(r)}
-                        </Link>
-                      ) : (
-                        <b>…</b>
-                      )}
-                      <small>Retorno (ROI)</small>
-                    </div>
-                  </div>
-                  <div className="adm-acoes">
-                    <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} className="adm-btn adm-btn--pri">
-                      Abrir resultados <ArrowRight aria-hidden />
-                    </Link>
-                    <Link to="/admin/$clientId" params={{ clientId: c.id }} className="adm-btn" title="Fontes, acesso e configuração">
-                      Gerenciar
-                    </Link>
-                  </div>
-                </li>
+                <LinhaDaCarteira
+                  key={c.id}
+                  c={c}
+                  handle={handle}
+                  numeros={numerosQ.data?.get(c.id)}
+                  cor={piorCor(c.id)}
+                  sd={saudePorCliente.get(c.id)}
+                  nota={notaPorCliente.get(c.id) ?? null}
+                  sp={sapPorCliente?.get(c.id)}
+                  roi={r}
+                  grupoLinha={r && entraNaCarteira(c) ? grupoSemRoi(r) : null}
+                  fatoClinica={acessoDe(c)}
+                  ultimoAcesso={ultimoAcessoIso ? new Date(ultimoAcessoIso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" }) : null}
+                  idx={idx}
+                />
               );
             })}
           </ul>
@@ -680,9 +745,9 @@ function AdminClientsPage() {
                               <td className="px-4 py-3 align-top font-medium" data-label="Cliente">
                                 <div className="flex items-center gap-3">
                                   <ClientAvatar nome={c.name} url={c.avatar_url} tamanho={36} />
-                                  <div>
+                                  <div className="min-w-0">
                                     <div className="font-semibold">{c.name}</div>
-                                    <div className="text-xs" style={{ color: "var(--text-dim)" }}>
+                                    <div className="max-w-[260px] truncate text-xs" style={{ color: "var(--text-dim)" }} title={[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}>
                                       {[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}
                                     </div>
                                     <ChipQualidade clientId={c.id} />
