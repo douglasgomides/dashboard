@@ -384,7 +384,7 @@ function CrmClinicaPage() {
       cartoes={cartoes}
       principal={
         funilDesenhado ? (
-          <NxCard id="funil-comercial" nivel={2} icone={icT("filter")} titulo="Onde o funil quebra" subtitulo={`Conversou → Fechou · ${periodoTxt} · toque numa etapa`}>
+          <NxCard id="funil-comercial" nivel={2} icone={icT("filter")} titulo="Onde o funil quebra" subtitulo="Conversou → Fechou · toque numa etapa">
             <NxFunilDesenhado titulo="Funil comercial do período" funil={funilDesenhado} />
           </NxCard>
         ) : undefined

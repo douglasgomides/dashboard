@@ -6,10 +6,10 @@
 .app.product-workspace:not(.sap-workspace) .nx-funil-d {
   --nx-funil-colunas: 150px minmax(0, 1fr) 96px;
   --nx-funil-espaco: 16px;
-  --nx-funil-faixa: 46px;
-  --nx-funil-ligacao: 30px;
+  --nx-funil-faixa: 38px;
+  --nx-funil-ligacao: 18px;
   display: grid;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
   max-width: 760px;
   min-width: 0;
@@ -203,7 +203,7 @@
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  padding: 2px 9px;
+  padding: 1px 9px;
   border-radius: 999px;
   background: var(--white);
   box-shadow: 0 1px 3px var(--line-2), 0 0 0 1px var(--line);
@@ -321,12 +321,20 @@
   .app.product-workspace:not(.sap-workspace) .nx-funil-d {
     --nx-funil-colunas: 92px minmax(0, 1fr) 58px;
     --nx-funil-espaco: 8px;
-    --nx-funil-faixa: 30px;
-    --nx-funil-ligacao: 16px;
+    --nx-funil-faixa: 22px;
+    --nx-funil-ligacao: 8px;
   }
   .app.product-workspace:not(.sap-workspace) .nx-funil-d__nome {
     font-size: 14px;
     line-height: 15px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funil-d__pct {
+    padding: 0 8px;
+    line-height: 14px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funil-d__perda {
+    padding: 6px 14px;
+    line-height: 16px;
   }
   .app.product-workspace:not(.sap-workspace) .nx-funil-d__variacao {
     margin-top: 0;
@@ -344,7 +352,7 @@
   }
   .app.product-workspace:not(.sap-workspace) .nx-funil-d__numero {
     font-size: 16px;
-    line-height: 20px;
+    line-height: 18px;
   }
   .app.product-workspace:not(.sap-workspace) .nx-funil-d__gaveta {
     width: 100%;
