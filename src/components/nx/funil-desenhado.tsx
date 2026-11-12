@@ -78,7 +78,7 @@ export const NxFunilDesenhado = memo(function NxFunilDesenhado({ titulo, funil, 
     <figure className="nx-funil-d" data-peca="funil-desenhado" style={{ margin: 0 }}>
       <figcaption className="sr-only">{resumo}</figcaption>
 
-      {(maiorPerda || funil.foraDeOrdem) && (
+      {(maiorPerda || funil.foraDeOrdem || temVariacao) && (
         <div className="nx-funil-d__topo">
           {maiorPerda ? (
             <button type="button" className="nx-funil-d__perda" aria-haspopup="dialog" onClick={() => abrir(maiorPerda.para)}>
@@ -95,6 +95,18 @@ export const NxFunilDesenhado = memo(function NxFunilDesenhado({ titulo, funil, 
                 {funil.aviso}
               </NxAviso>
             )
+          )}
+          {temVariacao && (
+            <p className="nx-funil-d__legenda">
+              <span>
+                <i aria-hidden />
+                faixa = este período
+              </span>
+              <span>
+                <i data-tracejado aria-hidden />
+                tracejado = {rotuloDoAnterior}
+              </span>
+            </p>
           )}
         </div>
       )}
@@ -140,19 +152,6 @@ export const NxFunilDesenhado = memo(function NxFunilDesenhado({ titulo, funil, 
           );
         })}
       </div>
-
-      {temVariacao && (
-        <p className="nx-funil-d__legenda">
-          <span>
-            <i aria-hidden />
-            faixa = este período
-          </span>
-          <span>
-            <i data-tracejado aria-hidden />
-            tracejado = {rotuloDoAnterior}
-          </span>
-        </p>
-      )}
 
       <dialog
         ref={gaveta}

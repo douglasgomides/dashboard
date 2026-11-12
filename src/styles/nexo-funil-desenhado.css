@@ -218,13 +218,67 @@
   color: var(--dn-ink);
 }
 
-/* ---------- Legenda de uma linha ---------- */
+/* ---------- Faixa "Antes da conversa" (Jornada): as 3 etapas do Instagram em chips de uma linha só, que rola de lado ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__antes {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__antes-titulo {
+  margin: 0;
+  color: var(--muted-ink);
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__antes-lista {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__antes-lista:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--b6);
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__chip b {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__chip[data-falta] {
+  background-color: var(--field);
+  background-image: repeating-linear-gradient(135deg, transparent 0 8px, color-mix(in srgb, var(--line-2) 55%, transparent) 8px 10px);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funil-d__chip[data-falta] b {
+  color: var(--muted-ink);
+}
+
+/* ---------- Legenda de uma linha (na mesma linha da pílula da maior perda quando cabe) ---------- */
 .app.product-workspace:not(.sap-workspace) .nx-funil-d__legenda {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 14px;
-  margin: 0;
+  margin: 0 0 0 auto;
   color: var(--muted-ink);
   font-size: 14px;
   line-height: 20px;
