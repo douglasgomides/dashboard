@@ -441,14 +441,15 @@ export const SECOES_JUNTADAS: readonly SecaoJuntada[] = [
           { rota: `${C}/pacientes`, rotulo: "Do contato à venda" },
           { rota: `${C}/crm-painel`, rotulo: "No CRM" },
         ],
-        // Sem contagem: o que o Funil conta são os contatos nas etapas da Phase 9 (chamaram, agendaram, fecharam), cujo rótulo é a
-        // decisão aberta 1 do João (D-06). Até ela, a aba mostra "—" com o motivo escrito.
-        contagem: null,
+        // O João deu os nomes das etapas em 12/11/2026 (D-06, só os nomes). A contagem é Virou lead: as pessoas novas do período que a
+        // primeira parte já carrega (pacientes_periodo), sem consulta nova; zero e erro mostram "—".
+        contagem: "pessoas que viraram lead no período",
       },
       { id: "consultas", rotulo: "Consultas", partes: [{ rota: `${C}/consultas`, rotulo: "Consultas" }], contagem: "consultas no período" },
       { id: "vendas", rotulo: "Vendas", partes: [{ rota: `${C}/vendas`, rotulo: "Vendas" }], contagem: "vendas no período" },
-      // Sem contagem pelo mesmo motivo do Funil: a Jornada conta as etapas da Phase 9 (decisão aberta 1 do João, D-06).
-      { id: "jornada", rotulo: "Jornada", partes: [{ rota: `${C}/jornada`, rotulo: "Jornada" }], contagem: null },
+      // O João deu os nomes das etapas em 12/11/2026 (D-06, só os nomes). A contagem é Virou lead: as pessoas novas do período que a
+      // primeira parte já carrega (pacientes_periodo), sem consulta nova; zero e erro mostram "—".
+      { id: "jornada", rotulo: "Jornada", partes: [{ rota: `${C}/jornada`, rotulo: "Jornada" }], contagem: "pessoas que viraram lead no período" },
     ],
   },
   {

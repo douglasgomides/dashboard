@@ -301,9 +301,32 @@ test("contagem em cinza: Consultas e Vendas sem número publicado mostram \"—\
     await expect(contagem).toContainText("—");
     await expect(contagem).not.toHaveText(/^0/);
   }
-  // Funil e Jornada não têm coisa contável.
-  await expect(aba(nav, "Funil").locator(".nx-pasta__contagem")).toHaveCount(0);
-  await expect(aba(nav, "Jornada").locator(".nx-pasta__contagem")).toHaveCount(0);
+  // Funil e Jornada contam as pessoas que viraram lead: antes de abrir mostram "—" com o aviso só para leitor de tela (nunca "0").
+  for (const rotulo of ["Funil", "Jornada"]) {
+    const contagem = aba(nav, rotulo).locator(".nx-pasta__contagem");
+    await expect(contagem).toContainText("—");
+    await expect(contagem.locator(".sr-only")).toHaveText("sem número");
+    await expect(contagem).not.toHaveText(/^0/);
+  }
+});
+
+test("contagem em cinza: Funil e Jornada mostram as pessoas novas que a primeira parte já carregou", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await mockPessoas(context);
+  await mockCrm(context);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/pacientes?preset=30d`);
+  const nav = pasta(page, "Onde os pacientes travam");
+  await expect(aba(nav, "Funil")).toHaveAttribute("aria-current", "page");
+  // O mock de pessoas tem 80 pessoas novas (leads_novos): é o número de Virou lead.
+  await expect(aba(nav, "Funil").locator(".nx-pasta__contagem")).toHaveText("80");
+  // A Jornada ainda não abriu neste período: "—". Depois de abrir, mostra as pessoas novas que ela carregou.
+  await expect(aba(nav, "Jornada").locator(".nx-pasta__contagem")).toContainText("—");
+  await expect(aba(nav, "Jornada").locator(".nx-pasta__contagem .sr-only")).toHaveText("sem número");
+  await aba(nav, "Jornada").click();
+  await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/jornada`);
+  await expect(aba(nav, "Jornada").locator(".nx-pasta__contagem")).toHaveText("80");
+  await expect(aba(nav, "Funil").locator(".nx-pasta__contagem")).toHaveText("80");
 });
 
 test("a 375 a pasta não cria rolagem lateral na página (a faixa das abas rola sozinha) nas 3 telas juntadas", async ({ page, context }) => {
