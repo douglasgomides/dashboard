@@ -41,6 +41,16 @@ export interface PaginaNexoProps {
   saudacao?: ReactNode;
   /** Só a Hoje: o número grande logo abaixo da saudação ("4 ações esta semana"). Só vale com `saudacao`. */
   destaqueDoTopo?: ReactNode;
+  /**
+   * Formato 5 segundos (03.1.1.1, D-01): o veredito (NxVeredito) abre a tela, logo abaixo do cabeçalho. Com ele a ordem é cabeçalho, veredito,
+   * cartões (até 3 números), principal (a visualização que prova), descobertas, corpo e "Ver tudo" fechado, que recebe a leitura (primeiro) e o
+   * detalhe: nada é apagado, tudo passa a morar ali (MEDV-02). Sem ele o HTML é o de sempre.
+   */
+  veredito?: ReactNode;
+  /** Formato 5 segundos: a lista de descobertas (NxDescobertas), depois da visualização que prova. Só vale com `veredito`. */
+  descobertas?: ReactNode;
+  /** Formato 5 segundos: a linha de apoio do "Ver tudo" ("tabelas e listas completas"). Só vale com `veredito`. */
+  resumoDoVerTudo?: string;
 }
 
 /**
@@ -69,9 +79,12 @@ function useCartaoAtual(quantidade: number) {
   return { fileira, atual: Math.min(atual, Math.max(0, quantidade - 1)) };
 }
 
-export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitura, cartoes, principal, corpo, detalhe, saudacao, destaqueDoTopo }: PaginaNexoProps) {
+export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitura, cartoes, principal, corpo, detalhe, saudacao, destaqueDoTopo, veredito, descobertas, resumoDoVerTudo }: PaginaNexoProps) {
   const cartoesVisiveis = (cartoes ?? []).filter((c) => c != null && c !== false);
   const { fileira, atual } = useCartaoAtual(cartoesVisiveis.length);
+  // Formato 5 segundos: o veredito toma o lugar da leitura no topo, e a leitura vai para dentro do "Ver tudo".
+  const formatoCinco = veredito != null && veredito !== false;
+  const temVerTudo = formatoCinco && ((leitura != null && leitura !== false) || (detalhe != null && detalhe !== false));
   return (
     <div className="nx-pagina" data-tela={tela}>
       <header className="nx-pagina__topo">
@@ -97,7 +110,7 @@ export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitur
         </div>
         {acao && <div className="nx-pagina__acao">{acao}</div>}
       </header>
-      {leitura}
+      {formatoCinco ? veredito : leitura}
       {cartoesVisiveis.length > 0 && (
         <div className="nx-pagina__cartoes-bloco">
           <div ref={fileira} className="nx-pagina__cartoes" data-quantidade={cartoesVisiveis.length}>
@@ -116,12 +129,22 @@ export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitur
         </div>
       )}
       {principal && <div className="nx-pagina__principal">{principal}</div>}
+      {formatoCinco && descobertas}
       {corpo && <div className="nx-pagina__corpo">{corpo}</div>}
-      {detalhe && (
-        <div className="nx-pagina__detalhe">
-          <NxRecolhido titulo="Detalhes" id={`detalhes-${tela}`}>{detalhe}</NxRecolhido>
-        </div>
-      )}
+      {formatoCinco
+        ? temVerTudo && (
+            <div className="nx-pagina__detalhe">
+              <NxRecolhido titulo="Ver tudo" resumo={resumoDoVerTudo} id={`detalhes-${tela}`}>
+                {leitura}
+                {detalhe}
+              </NxRecolhido>
+            </div>
+          )
+        : detalhe && (
+            <div className="nx-pagina__detalhe">
+              <NxRecolhido titulo="Detalhes" id={`detalhes-${tela}`}>{detalhe}</NxRecolhido>
+            </div>
+          )}
     </div>
   );
 }
