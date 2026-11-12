@@ -10,6 +10,8 @@ import { CAMPOS_DIARIOS, useResultadosDiarios, type CampoDiario } from "@/hooks/
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { NxFunilDesenhado } from "@/components/nx/funil-desenhado";
+import { NxLinhaDe30Dias, type SerieDiaria } from "@/components/nx/linha-de-30-dias";
+import { serieContinua } from "@/lib/linha-30-dias";
 import { dePacientesDoPeriodo, rotuloDoAnterior, type VariacaoDaEtapa } from "@/lib/funil-desenhado";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido } from "@/components/nx/blocos";
@@ -177,6 +179,19 @@ function PacientesDoPeriodo() {
     valor: q.isLoading ? undefined : q.isError || !q.data ? null : q.data.numeros.leads_novos?.valor || null,
   });
 
+  // Linha de 30 dias dos cartões de pessoas: o histórico diário que a tela já carregou (nenhuma consulta nova). Só dias fechados; dia
+  // sem linha ou sem valor é buraco, nunca zero.
+  const seriesDosCartoes = useMemo(() => {
+    const out: Partial<Record<ChaveNumero, SerieDiaria>> = {};
+    const linhas = (diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado);
+    for (const k of METRICAS) {
+      const { datas, valores } = serieContinua(linhas.map((l) => ({ dia: l.dia, valor: l[k as CampoDiario] ?? null })));
+      if (datas.length >= 2) out[k] = { rotulo: TEXTO_NUMERO[k].rotulo.toLowerCase(), datas, valores };
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diario.data, start, end, hoje]);
+
   // O funil desenhado: a mesma conta dos números da tela, só desenhada. A variação vem do diário (período anterior em memória),
   // convertida só quando o tom não é "flat"; a conta pesada de pessoas do período anterior continua proibida (estoura 8 s).
   const funilDesenhado = useMemo(() => {
@@ -239,6 +254,7 @@ function PacientesDoPeriodo() {
       ativo={aberta === k}
       onAbrir={() => abrir(k)}
       variacao={vc(k as CampoDiario)}
+      serie={seriesDosCartoes[k]}
     />
   ));
 
@@ -437,7 +453,7 @@ function PacientesDoPeriodo() {
 }
 
 /** Um número de pessoas no cartão: o valor, a variação e o botão que abre quem são. Sem dado aparece como texto, nunca como zero. */
-function CartaoDePessoas({ chave, numero, icone, ativo, onAbrir, variacao, i }: { chave: ChaveNumero; numero: Numero | undefined; icone: NomeIcone; ativo: boolean; onAbrir: () => void; variacao?: VariacaoPct | null; i: number }) {
+function CartaoDePessoas({ chave, numero, icone, ativo, onAbrir, variacao, serie, i }: { chave: ChaveNumero; numero: Numero | undefined; icone: NomeIcone; ativo: boolean; onAbrir: () => void; variacao?: VariacaoPct | null; serie?: SerieDiaria; i: number }) {
   const t = TEXTO_NUMERO[chave];
   const semDado = !numero || numero.valor == null;
   const dv = semDado ? null : paraCartao(variacao);
@@ -455,9 +471,12 @@ function CartaoDePessoas({ chave, numero, icone, ativo, onAbrir, variacao, i }: 
       info={<Ajuda>{fonteDoNumero(chave, numero)}</Ajuda>}
       extra={
         semDado ? undefined : (
-          <button type="button" className="nxr-ver" onClick={onAbrir} aria-expanded={ativo} aria-label={`${t.rotulo}: ${fmt(numero!.valor)}. Ver quem são`}>
-            Ver quem são
-          </button>
+          <div className="nxr-extra">
+            {serie && <NxLinhaDe30Dias {...serie} />}
+            <button type="button" className="nxr-ver" onClick={onAbrir} aria-expanded={ativo} aria-label={`${t.rotulo}: ${fmt(numero!.valor)}. Ver quem são`}>
+              Ver quem são
+            </button>
+          </div>
         )
       }
     />
