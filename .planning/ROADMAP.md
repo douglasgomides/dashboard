@@ -230,7 +230,7 @@ Plans:
 5. Nada cortado, sem frase > 90 caracteres, respeitando as alturas já medidas; só regras (sem IA); sem SQL nem migration.
 
 **Depends on:** Phase 03.1.1
-**Plans:** 5/9 plans executed (um PR só para a fase; no máximo 2 executores em paralelo, com arquivos disjuntos)
+**Plans:** 6/9 plans executed (um PR só para a fase; no máximo 2 executores em paralelo, com arquivos disjuntos)
 
 Plans:
 **Wave 1**
@@ -242,7 +242,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion; 04 e 05 em paralelo)*
 - [x] 03.1.1.1-04-PLAN.md — Carteira por urgência: "N clínicas precisam de você hoje", ordem por problemas abertos, filtro por cor, painel lateral com a nota da saúde dos dados e quem resolve, Modo TV
-- [ ] 03.1.1.1-05-PLAN.md — Do contato à venda: "Aqui você perde mais", "pessoas na mesa" como número 1 com pontos, funil A2 como prova, descobertas
+- [x] 03.1.1.1-05-PLAN.md — Do contato à venda: "Aqui você perde mais", "pessoas na mesa" como número 1 com pontos, funil A2 como prova, descobertas
 
 **Wave 4** *(blocked on Wave 3 completion; 06 e 07 em paralelo)*
 - [ ] 03.1.1.1-06-PLAN.md — Atendimento › Qualidade no molde: faixa do normal da própria clínica, dia fora marcado, dia cruzado com Instagram e anúncio, descobertas
