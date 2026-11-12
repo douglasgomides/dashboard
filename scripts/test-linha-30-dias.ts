@@ -10,6 +10,7 @@ import {
   mediaDaSerie,
   pontosDaLinha,
   resumoDaSerie,
+  serieContinua,
   temSerieParaDesenhar,
   textoDoDia,
   yDaMedia,
@@ -95,5 +96,11 @@ assert.equal(temSerieParaDesenhar([5]), false);
 assert.equal(temSerieParaDesenhar([5, null, null]), false);
 assert.equal(temSerieParaDesenhar([5, null, 6]), true);
 assert.equal(temSerieParaDesenhar([]), false);
+
+// ---------------------------------------------------------------- eixo contínuo: dia sem linha é buraco, nunca zero
+assert.deepEqual(serieContinua([{ dia: "2026-10-15", valor: 3 }, { dia: "2026-10-13", valor: 1 }]), { datas: ["2026-10-13", "2026-10-14", "2026-10-15"], valores: [1, null, 3] });
+assert.deepEqual(serieContinua([{ dia: "2026-10-13T00:00:00Z", valor: 0 }, { dia: "2026-10-14", valor: null }]), { datas: ["2026-10-13", "2026-10-14"], valores: [0, null] }, "zero medido continua zero");
+assert.deepEqual(serieContinua([]), { datas: [], valores: [] });
+assert.deepEqual(serieContinua([{ dia: "2026-10-31", valor: 1 }, { dia: "2026-11-02", valor: 2 }]).datas, ["2026-10-31", "2026-11-01", "2026-11-02"], "vira o mês sem pular dia");
 
 console.log("test-linha-30-dias: ok");

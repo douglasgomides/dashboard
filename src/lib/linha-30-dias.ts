@@ -126,3 +126,18 @@ export function resumoDaSerie({ rotulo, datas, valores, formatar = formatoPadrao
   if (buracos > 0) partes.push(`${buracos} ${buracos === 1 ? "dia" : "dias"} sem dado`);
   return `${cabeca}: ${partes.join("; ")}`;
 }
+
+/**
+ * Linhas {dia, valor} (só os dias que vieram) viram um eixo contínuo do primeiro ao último dia, com null (buraco) nos dias em que a
+ * tela não recebeu linha: dia sem linha é dia sem dado, nunca zero. Datas em AAAA-MM-DD; a mesma data repetida fica com a última.
+ */
+export function serieContinua(linhas: readonly { dia: string; valor: number | null }[]): { datas: string[]; valores: (number | null)[] } {
+  const porDia = new Map<string, number | null>();
+  for (const l of linhas) porDia.set(l.dia.slice(0, 10), l.valor);
+  const dias = [...porDia.keys()].sort();
+  if (dias.length === 0) return { datas: [], valores: [] };
+  const datas: string[] = [];
+  const fim = new Date(`${dias[dias.length - 1]}T12:00:00Z`).getTime();
+  for (let t = new Date(`${dias[0]}T12:00:00Z`).getTime(); t <= fim && datas.length < 800; t += 86_400_000) datas.push(new Date(t).toISOString().slice(0, 10));
+  return { datas, valores: datas.map((d) => porDia.get(d) ?? null) };
+}
