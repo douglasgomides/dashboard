@@ -1,5 +1,5 @@
 import { DIAS_SEM_ENTRAR, entraNaCarteira, fatoDeAcesso, type AcessoClinica } from "@/lib/carteira-alertas";
-import { useId, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,9 +12,10 @@ import { SeloConfianca } from "@/components/selo-confianca";
 import { resolveDateRange } from "@/lib/date-range";
 import { getSapPorCliente } from "@/lib/sap-data";
 import { lerStatusDasFontes, type FontesDoCliente } from "@/lib/saude-fontes";
-import { notaDasFontes, ROTULO_FAIXA, type NotaFontes } from "@/lib/nota-fontes";
-import { alertasDaClinica, ordenarPorUrgencia, vereditoDaCarteira, type AlertaDaCarteira, type LinhaDaCarteira as LinhaUrgencia } from "@/lib/carteira-urgencia";
-import { NxVeredito } from "@/components/nx/cinco-segundos";
+import { fatoresDaNota, notaDasFontes, ROTULO_FAIXA, type NotaFontes } from "@/lib/nota-fontes";
+import { alertasDaClinica, casaFiltroDeCor, corDaClinica, descobertasDaCarteira, numerosDaCarteira, ordenarPorUrgencia, vereditoDaCarteira, type AlertaDaCarteira, type FiltroDeCor, type LinhaDaCarteira as LinhaUrgencia } from "@/lib/carteira-urgencia";
+import { NxDescobertas, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxPainelDaClinica } from "@/components/nx/painel-da-clinica";
 import { FONTES, NOME_FONTE, LEGENDA_STATUS, VAR_COR, type FonteId } from "@/lib/status-fonte";
 import { AlertTriangle, ArrowRight, Building2, Calculator, Clock, MinusCircle, Search, ShieldCheck, Unplug, UserPlus, UserX } from "lucide-react";
 import { saudeDaFonte, CelulaSaude, SeloStatus, type SaudeFonte } from "@/components/source-health";
@@ -218,7 +219,7 @@ type NumerosClinica = { atual: Partial<Record<CampoDiario, number>>; antes: Part
  * SAP); tudo que antes ficava empilhado (fonte ruim, dado com erro, acesso, SAP) abre numa lista pelo chip "N alertas".
  * Os alertas vêm prontos da página (a mesma lista que ordena a carteira e alimenta o veredito).
  */
-function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinha, alertas, idx }: {
+function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinha, alertas, aoAbrir, idx }: {
   c: { id: string; name: string; specialty?: string | null; avatar_url?: string | null };
   handle: string | null;
   numeros: NumerosClinica | undefined;
@@ -230,6 +231,8 @@ function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinh
   grupoLinha: GrupoSemRoi | null;
   /** Os alertas da clínica (src/lib/carteira-urgencia.ts), calculados no nível da página: a linha só desenha. */
   alertas: AlertaDaCarteira[];
+  /** Abre o painel lateral desta clínica; recebe o botão para o foco voltar a ele. */
+  aoAbrir: (de: HTMLElement) => void;
   idx: number;
 }) {
   const piorTom = alertas.reduce<AdmTom>((p, a) => (PESO_TOM[a.tom] > PESO_TOM[p] ? a.tom : p), "neutro");
@@ -242,13 +245,13 @@ function LinhaDaCarteira({ c, handle, numeros, cor, sd, nota, sp, roi, grupoLinh
   const sub = [c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram";
   return (
     <li className={`adm-linha${cor === "vermelho" ? " adm-linha--alerta" : cor === "amarelo" ? " adm-linha--atencao" : ""}`} style={{ "--i": Math.min(idx, 12) } as CSSProperties}>
-      <div className="adm-quem">
+      <button type="button" className="adm-quem adm-quem--botao" aria-haspopup="dialog" title="Ver a nota dos dados e os problemas desta clínica" onClick={(e) => aoAbrir(e.currentTarget)}>
         <span className="adm-quem__av"><ClientAvatar nome={c.name} url={c.avatar_url} tamanho={44} /></span>
-        <div className="adm-quem__texto">
+        <span className="adm-quem__texto">
           <span className="adm-quem__nome" title={c.name}>{c.name}</span>
           <span className="adm-quem__sub" title={sub}>{sub}</span>
-        </div>
-      </div>
+        </span>
+      </button>
       <div className="adm-chips">
         <AdmChip tom={sd ? tomDaCor(cor) : "neutro"}>{sd ? ROTULO_COR[cor] ?? "Sem fontes" : "Lendo as fontes…"}</AdmChip>
         {nota && nota.nota !== null && (
@@ -403,13 +406,16 @@ function AdminClientsPage() {
   // Filtros e ordenação da tabela.
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<"todos" | "problema" | "sem_roi" | "nao_entra" | "sem_acesso">("todos");
+  // Chips de cor da nota dos dados (D-07): vermelho = faixa Ruim, amarelo = Atenção, sem nota = sem fonte ligada.
+  const [corFiltro, setCorFiltro] = useState<FiltroDeCor>("todas");
   // "urgencia" (padrão): mais problemas abertos primeiro. As outras ordens falam de saúde dos dados, nunca de desempenho (I-1).
   const [ordem, setOrdem] = useState<"urgencia" | "pior" | "nota" | "nome">("urgencia");
   const piorPeso = (id: string) => {
     const sd = saudePorCliente.get(id);
     return sd ? Math.max(...FONTES.map((f) => sd[f].status.peso)) : 0;
   };
-  const casaFiltro = (c: { id: string; name: string; active?: boolean | null; specialty?: string | null; instagram_handle?: string | null }) => {
+  // Texto da busca e os filtros de Ver tudo; a cor da nota entra por cima (casaFiltro) e também conta os chips de cor.
+  const casaSemCor = (c: { id: string; name: string; active?: boolean | null; specialty?: string | null; instagram_handle?: string | null }) => {
     const t = busca.trim().toLowerCase();
     const texto = !t || [c.name, c.specialty, c.instagram_handle, contasIg?.get(c.id)].some((x) => (x ?? "").toLowerCase().includes(t));
     if (!texto) return false;
@@ -419,6 +425,8 @@ function AdminClientsPage() {
     if (filtro === "sem_roi") return semRoi(c);
     return true;
   };
+  const corDe = (id: string) => corDaClinica(notaPorCliente.get(id)?.faixa);
+  const casaFiltro = (c: Parameters<typeof casaSemCor>[0]) => casaSemCor(c) && casaFiltroDeCor(corFiltro, corDe(c.id));
   // Problemas de dado (qualidade_dados) por cliente: mesma chave do ChipQualidade, então a leitura é compartilhada.
   const qualidades = useQueries({
     queries: (clients ?? []).map((c) => ({
@@ -537,6 +545,68 @@ function AdminClientsPage() {
   const lendo = (v: number | null | undefined) => (v == null || carregandoSaude ? "…" : v.toLocaleString("pt-BR"));
   const tomDe = (n: number | null, tom: "atencao" | "critico") => (n == null ? "neutro" : n > 0 ? tom : "ok");
 
+  // Os 3 números, o veredito e as descobertas leem a mesma lista de alertas que ordena a carteira.
+  const carregandoUrg = isLoading || carregandoSaude || avisosQ.isLoading || qualidades.some((q) => q.isLoading);
+  const lendoUrg = (v: number) => (carregandoUrg ? "…" : v.toLocaleString("pt-BR"));
+  const nums = numerosDaCarteira(linhasUrgencia);
+  const achados = descobertasDaCarteira(linhasUrgencia);
+  const chipDeCor = (id: FiltroDeCor, rot: string, titulo: string) => (
+    <button type="button" onClick={() => setCorFiltro(id)} aria-pressed={corFiltro === id} className="adm-pilula" title={titulo}>
+      {rot}
+      <small>{(clients ?? []).filter((c) => casaSemCor(c) && casaFiltroDeCor(id, corDe(c.id))).length}</small>
+    </button>
+  );
+  const ROTULO_FILTRO_EXTRA: Record<typeof filtro, string> = { todos: "", problema: "Com problema", sem_roi: "Sem ROI", nao_entra: "Não entra", sem_acesso: "Sem acesso criado" };
+
+  // Painel lateral da clínica: abre pelo botão da linha (ou pela descoberta) e devolve o foco a quem abriu.
+  const [painelId, setPainelId] = useState<string | null>(null);
+  const abridor = useRef<HTMLElement | null>(null);
+  const abrirPainel = (id: string, de: HTMLElement | null) => {
+    abridor.current = de;
+    setPainelId(id);
+  };
+  const fecharPainel = () => {
+    setPainelId(null);
+    abridor.current?.focus({ preventScroll: true });
+  };
+  const [verTudoAberto, setVerTudoAberto] = useState(false);
+  const [diagAberto, setDiagAberto] = useState(false);
+  // Ações das descobertas: só abrem um lugar da própria tela (nada é enviado).
+  const agirNaDescoberta = (local: string) => {
+    if (local === "filtrar-sem-nota") {
+      setBusca("");
+      setFiltro("todos");
+      setCorFiltro("sem-nota");
+    } else if (local === "filtrar-nao-entra") {
+      setCorFiltro("todas");
+      setBusca("");
+      setFiltro("nao_entra");
+    } else if (local === "abrir-diagnostico") {
+      setVerTudoAberto(true);
+      setDiagAberto(true);
+      setAba("alertas");
+    } else if (local === "abrir-primeira") {
+      const primeira = linhasTabela[0] ?? (clients ?? [])[0];
+      if (primeira) abrirPainel(primeira.id, document.activeElement as HTMLElement | null);
+    }
+  };
+  const clinicaDoPainel = painelId ? (clients ?? []).find((c) => c.id === painelId) ?? null : null;
+  const notaDoPainel = clinicaDoPainel ? (notaPorCliente.get(clinicaDoPainel.id) ?? null) : null;
+  const fatoresDoPainel = (() => {
+    if (!clinicaDoPainel) return [];
+    const sd = saudePorCliente.get(clinicaDoPainel.id);
+    if (!sd) return [];
+    const i = (clients ?? []).findIndex((c) => c.id === clinicaDoPainel.id);
+    return fatoresDaNota(Object.fromEntries(FONTES.map((f) => [f, sd[f].status])), qualidades[i]?.data ?? []);
+  })();
+  const numerosDoPainel = clinicaDoPainel
+    ? (["mandaram_mensagem", "agendaram", "fecharam"] as const).map((k) => {
+        const n = numerosQ.data?.get(clinicaDoPainel.id);
+        const rotulo = k === "mandaram_mensagem" ? "Chamaram" : k === "agendaram" ? "Agendaram" : "Fecharam";
+        return { rotulo, valor: n?.atual[k] == null ? "–" : n.atual[k]!.toLocaleString("pt-BR"), delta: deltaTxt(n?.atual[k], n?.antes[k]) };
+      })
+    : [];
+
   return (
     <div className="dbx adm adm-carteira">
       <NxTopo
@@ -551,17 +621,59 @@ function AdminClientsPage() {
 
       <NxVeredito
         tela="carteira"
-        carregando={isLoading || carregandoSaude || avisosQ.isLoading || qualidades.some((q) => q.isLoading)}
+        carregando={carregandoUrg}
         veredito={isLoading ? null : vereditoDaCarteira(linhasUrgencia)}
       />
 
-      <AdmContadores rotulo="Resumo da carteira">
-        <AdmContador className="dbx-card" i={0} icone={<Building2 />} rotulo="Clínicas na carteira" valor={isLoading ? "…" : nClinicas} nota="Ver todas" tom="marca" onClick={() => setFiltro("todos")} ativo={filtro === "todos"} />
-        <AdmContador className="dbx-card" i={1} icone={<AlertTriangle />} rotulo="Precisam de atenção" valor={lendo(nAtencao)} nota="Fonte atrasada, parada ou com erro" tom={carregandoSaude ? "neutro" : tomDe(nAtencao, "atencao")} onClick={() => setFiltro("problema")} ativo={filtro === "problema"} />
-        <AdmContador className="dbx-card" i={2} icone={<Unplug />} rotulo="Fonte parada ou com erro" valor={lendo(totalVermelhas)} nota={carregandoSaude ? "Lendo as fontes…" : totalVermelhas ? `Em ${vermelhas.length} ${vermelhas.length === 1 ? "clínica" : "clínicas"} · mais de 3 dias` : "Nenhuma"} tom={carregandoSaude ? "neutro" : tomDe(totalVermelhas, "critico")} />
-        <AdmContador className="dbx-card" i={3} icone={<Clock />} rotulo="Fonte atrasada" valor={lendo(totalAmarelas)} nota={carregandoSaude ? "Lendo as fontes…" : totalAmarelas ? `Em ${clinicasAmarelas} ${clinicasAmarelas === 1 ? "clínica" : "clínicas"} · 2 a 3 dias` : "Nenhuma"} tom={carregandoSaude ? "neutro" : tomDe(totalAmarelas, "atencao")} />
-        <AdmContador className="dbx-card" i={4} icone={<UserX />} rotulo="Médico não entra" valor={avisosQ.isError ? "–" : nNaoEntra == null ? "…" : nNaoEntra} nota={avisosQ.isError ? `Não consegui ler o último acesso · ${notaAcesso}` : `Há mais de ${DIAS_SEM_ENTRAR} dias · ${notaAcesso}`} tom={avisosQ.isError ? "neutro" : tomDe(nNaoEntra, "atencao")} onClick={() => setFiltro("nao_entra")} ativo={filtro === "nao_entra"} />
-        <AdmContador className="dbx-card" i={5} icone={<Calculator />} rotulo="Sem ROI calculável" valor={nSemRoi == null ? "…" : nSemRoi} nota={nSemRoi == null ? "Lendo o retorno de 30 dias…" : `${nCliente} cliente (CRM) · ${nEquipe} equipe (fonte ou etapa) · ${nNaoSeAplica} não se aplica`} titulo={`${ROTULO_GRUPO_SEM_ROI.cliente}\n${ROTULO_GRUPO_SEM_ROI.equipe}\n${ROTULO_GRUPO_SEM_ROI.nao_se_aplica}`} tom={tomDe(nSemRoi, "atencao")} onClick={() => setFiltro("sem_roi")} ativo={filtro === "sem_roi"} />
+      <AdmContadores rotulo="Números da carteira">
+        <AdmContador
+          className="dbx-card"
+          i={0}
+          icone={<AlertTriangle />}
+          rotulo="Problemas abertos"
+          valor={lendoUrg(nums.problemasAbertos)}
+          tom={carregandoUrg ? "neutro" : tomDe(nums.problemasAbertos, "atencao")}
+          nota={
+            <>
+              <span className="adm-urgencia__quem">
+                {(["Equipe", "Cliente", "Meta"] as const).map((q) => (
+                  <AdmChip key={q} tom="marca" semIcone titulo={`Problemas que ${q === "Meta" ? "a Meta resolve" : q === "Equipe" ? "a equipe resolve" : "o cliente resolve"}`}>
+                    {q} {carregandoUrg ? "…" : nums.porQuem[q]}
+                  </AdmChip>
+                ))}
+              </span>
+              <span className="adm-urgencia__vs">vs semana passada: Falta dado (sem histórico)</span>
+            </>
+          }
+        />
+        <AdmContador
+          className="dbx-card"
+          i={1}
+          icone={<Clock />}
+          rotulo="Ação hoje"
+          valor={lendoUrg(nums.acaoHoje)}
+          tom={carregandoUrg ? "neutro" : tomDe(nums.acaoHoje, "critico")}
+          nota={
+            <>
+              <span className="adm-urgencia__vs">clínicas na faixa Ruim da nota dos dados (abaixo de 60)</span>
+              <span className="adm-urgencia__vs">vs semana passada: Falta dado (sem histórico)</span>
+            </>
+          }
+        />
+        <AdmContador
+          className="dbx-card"
+          i={2}
+          icone={<Calculator />}
+          rotulo="Clínicas com nota"
+          valor={carregandoUrg ? "…" : `${nums.comNota} de ${nums.total}`}
+          tom="marca"
+          nota={
+            <>
+              <span className="adm-urgencia__vs">{carregandoUrg ? "Lendo as fontes…" : nums.semNota ? `${nums.semNota} sem nota: faltam fontes ligadas` : "Todas com nota das fontes"}</span>
+              <span className="adm-urgencia__vs">A nota é a saúde dos dados, não o resultado</span>
+            </>
+          }
+        />
       </AdmContadores>
       {statusQ.isError && (
         <NxAlertaCurto titulo="Não consegui ler o status das fontes agora." passo="Tente de novo em instantes. Os números abaixo podem estar incompletos." />
@@ -586,12 +698,11 @@ function AdminClientsPage() {
             aria-label="Buscar cliente"
           />
         </div>
-        <div className="adm-pilulas" role="group" aria-label="Filtrar clínicas">
-          {chipFiltro("todos", "Todos", (clients ?? []).length)}
-          {chipFiltro("problema", "Com problema", nAtencao)}
-          {chipFiltro("sem_roi", "Sem ROI", nSemRoi ?? undefined)}
-          {chipFiltro("nao_entra", "Não entra", nNaoEntra ?? undefined)}
-          {chipFiltro("sem_acesso", "Sem acesso criado", nSemAcesso ?? undefined)}
+        <div className="adm-pilulas" role="group" aria-label="Filtrar clínicas pela nota dos dados">
+          {chipDeCor("todas", "Todas", "Todas as clínicas")}
+          {chipDeCor("vermelho", "Só vermelhos", "Nota dos dados abaixo de 60 (faixa Ruim)")}
+          {chipDeCor("amarelo", "Só amarelos", "Nota dos dados de 60 a 84 (faixa Atenção)")}
+          {chipDeCor("sem-nota", "Sem nota", "Sem fonte ligada para calcular a nota dos dados")}
         </div>
         <label className="adm-ordem">
           Ordenar por
@@ -603,6 +714,12 @@ function AdminClientsPage() {
           </select>
         </label>
       </div>
+      {filtro !== "todos" && (
+        <p className="adm-urgencia__filtro-ativo">
+          Também filtrando por: <b>{ROTULO_FILTRO_EXTRA[filtro]}</b>{" "}
+          <button type="button" className="adm-link" onClick={() => setFiltro("todos")}>Tirar este filtro</button>
+        </p>
+      )}
 
       {isLoading ? (
         <Carregando texto="Lendo os clientes…" />
@@ -631,6 +748,7 @@ function AdminClientsPage() {
                   roi={r}
                   grupoLinha={r && entraNaCarteira(c) ? grupoSemRoi(r) : null}
                   alertas={alertasPorCliente.get(c.id) ?? []}
+                  aoAbrir={(el) => abrirPainel(c.id, el)}
                   idx={idx}
                 />
               );
@@ -649,153 +767,182 @@ function AdminClientsPage() {
         Retorno (ROI) e nota das fontes só aparecem quando há dado para calcular. Variação só com pelo menos 30 no período anterior: base pequena daria um percentual enganoso.
       </NxNota>
 
-      <details className="adm-det">
+      <NxDescobertas
+        titulo="O que descobrimos"
+        itens={achados}
+        clientId=""
+        aoAgir={agirNaDescoberta}
+      />
+
+      <details className="adm-det adm-urgencia__ver-tudo" open={verTudoAberto} onToggle={(e) => setVerTudoAberto(e.currentTarget.open)}>
         <summary>
-          Diagnóstico das fontes
-          <small>{totalVermelhas ? `${totalVermelhas} em vermelho` : "nenhuma em vermelho"} · só equipe técnica</small>
+          <b>Ver tudo</b>
+          <small>os 6 contadores, mais filtros, diagnóstico das fontes e links curtos sem cliente</small>
         </summary>
         <div className="adm-det__corpo">
-          <div className="adm-abas" role="tablist" aria-label="Diagnóstico das fontes">
-            <button type="button" role="tab" aria-selected={aba === "alertas"} className="adm-pilula" onClick={() => setAba("alertas")}>Alertas <small>{totalVermelhas}</small></button>
-            <button type="button" role="tab" aria-selected={aba === "problemas"} className="adm-pilula" onClick={() => setAba("problemas")}>Problemas <small>{problemas.length}</small></button>
-            <button type="button" role="tab" aria-selected={aba === "resposta"} className="adm-pilula" onClick={() => setAba("resposta")}>Sem resposta</button>
-            <button type="button" role="tab" aria-selected={aba === "clinica"} className="adm-pilula" onClick={() => setAba("clinica")}>Por clínica <small>{nClinicas}</small></button>
-          </div>
-          <div>
-            {aba === "alertas" && (
-              <div className="grid gap-3">
-                {statusQ.isError && (
-                  <p className="text-sm" style={{ color: "var(--crit)" }}>
-                    Não consegui ler o status das fontes agora. Tente de novo em instantes.
-                  </p>
-                )}
-                {!carregandoSaude && statusQ.data && (
-                  totalVermelhas === 0 ? (
-                    <p className="adm-ok">Nenhuma fonte vermelha: tudo ligado tem dado de até 3 dias atrás e nenhuma atualização deu erro.</p>
-                  ) : (
-                    <div className="adm-lista-card">
-                      <p className="adm-grupo-titulo">
-                        {totalVermelhas} fonte{totalVermelhas === 1 ? "" : "s"} em vermelho em {vermelhas.length} cliente{vermelhas.length === 1 ? "" : "s"}
-                        <small>mais de 3 dias sem dado ou erro</small>
-                      </p>
-                      <ul className="adm-itens">
-                        {vermelhas.map(({ c, itens }) => (
-                          <li key={c.id} className="adm-item adm-item--critico">
-                            <div className="adm-item__corpo">
-                              <p className="adm-item__titulo">{c.name}</p>
-                              {itens.map(({ fonte, s }) => (
-                                <div key={fonte} className="grid gap-1">
-                                  <div className="adm-chips">
-                                    <SeloStatus st={s.status} texto={`${NOME_FONTE[fonte]}: ${s.status.rotulo.toLowerCase()}`} />
-                                    <span className="adm-item__mais">{s.status.data ? s.status.detalhe : "sem dado gravado"}</span>
-                                  </div>
-                                  {s.causa && <p className="adm-item__mais">{s.causa}</p>}
-                                </div>
-                              ))}
-                            </div>
-                            <div className="adm-item__fim">
-                              <Link to="/admin/$clientId" params={{ clientId: c.id }} className="adm-btn adm-btn--mini">Gerenciar <ArrowRight aria-hidden /></Link>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )
-                )}
-                <SaudeShortio />
+      <AdmContadores rotulo="Resumo da carteira">
+              <AdmContador className="dbx-card" i={0} icone={<Building2 />} rotulo="Clínicas na carteira" valor={isLoading ? "…" : nClinicas} nota="Ver todas" tom="marca" onClick={() => setFiltro("todos")} ativo={filtro === "todos"} />
+              <AdmContador className="dbx-card" i={1} icone={<AlertTriangle />} rotulo="Precisam de atenção" valor={lendo(nAtencao)} nota="Fonte atrasada, parada ou com erro" tom={carregandoSaude ? "neutro" : tomDe(nAtencao, "atencao")} onClick={() => setFiltro("problema")} ativo={filtro === "problema"} />
+              <AdmContador className="dbx-card" i={2} icone={<Unplug />} rotulo="Fonte parada ou com erro" valor={lendo(totalVermelhas)} nota={carregandoSaude ? "Lendo as fontes…" : totalVermelhas ? `Em ${vermelhas.length} ${vermelhas.length === 1 ? "clínica" : "clínicas"} · mais de 3 dias` : "Nenhuma"} tom={carregandoSaude ? "neutro" : tomDe(totalVermelhas, "critico")} />
+              <AdmContador className="dbx-card" i={3} icone={<Clock />} rotulo="Fonte atrasada" valor={lendo(totalAmarelas)} nota={carregandoSaude ? "Lendo as fontes…" : totalAmarelas ? `Em ${clinicasAmarelas} ${clinicasAmarelas === 1 ? "clínica" : "clínicas"} · 2 a 3 dias` : "Nenhuma"} tom={carregandoSaude ? "neutro" : tomDe(totalAmarelas, "atencao")} />
+              <AdmContador className="dbx-card" i={4} icone={<UserX />} rotulo="Médico não entra" valor={avisosQ.isError ? "–" : nNaoEntra == null ? "…" : nNaoEntra} nota={avisosQ.isError ? `Não consegui ler o último acesso · ${notaAcesso}` : `Há mais de ${DIAS_SEM_ENTRAR} dias · ${notaAcesso}`} tom={avisosQ.isError ? "neutro" : tomDe(nNaoEntra, "atencao")} onClick={() => setFiltro("nao_entra")} ativo={filtro === "nao_entra"} />
+              <AdmContador className="dbx-card" i={5} icone={<Calculator />} rotulo="Sem ROI calculável" valor={nSemRoi == null ? "…" : nSemRoi} nota={nSemRoi == null ? "Lendo o retorno de 30 dias…" : `${nCliente} cliente (CRM) · ${nEquipe} equipe (fonte ou etapa) · ${nNaoSeAplica} não se aplica`} titulo={`${ROTULO_GRUPO_SEM_ROI.cliente}\n${ROTULO_GRUPO_SEM_ROI.equipe}\n${ROTULO_GRUPO_SEM_ROI.nao_se_aplica}`} tom={tomDe(nSemRoi, "atencao")} onClick={() => setFiltro("sem_roi")} ativo={filtro === "sem_roi"} />
+      </AdmContadores>
+        <div className="adm-pilulas" role="group" aria-label="Mais filtros">
+          {chipFiltro("todos", "Todos", (clients ?? []).length)}
+          {chipFiltro("problema", "Com problema", nAtencao)}
+          {chipFiltro("sem_roi", "Sem ROI", nSemRoi ?? undefined)}
+          {chipFiltro("nao_entra", "Não entra", nNaoEntra ?? undefined)}
+          {chipFiltro("sem_acesso", "Sem acesso criado", nSemAcesso ?? undefined)}
+        </div>
+          <details className="adm-det" open={diagAberto} onToggle={(e) => setDiagAberto(e.currentTarget.open)}>
+            <summary>
+              Diagnóstico das fontes
+              <small>{totalVermelhas ? `${totalVermelhas} em vermelho` : "nenhuma em vermelho"} · só equipe técnica</small>
+            </summary>
+            <div className="adm-det__corpo">
+              <div className="adm-abas" role="tablist" aria-label="Diagnóstico das fontes">
+                <button type="button" role="tab" aria-selected={aba === "alertas"} className="adm-pilula" onClick={() => setAba("alertas")}>Alertas <small>{totalVermelhas}</small></button>
+                <button type="button" role="tab" aria-selected={aba === "problemas"} className="adm-pilula" onClick={() => setAba("problemas")}>Problemas <small>{problemas.length}</small></button>
+                <button type="button" role="tab" aria-selected={aba === "resposta"} className="adm-pilula" onClick={() => setAba("resposta")}>Sem resposta</button>
+                <button type="button" role="tab" aria-selected={aba === "clinica"} className="adm-pilula" onClick={() => setAba("clinica")}>Por clínica <small>{nClinicas}</small></button>
               </div>
-            )}
-            {aba === "problemas" && (
-              <PainelSaudeFontes
-                problemas={problemas}
-                clientes={clients ?? []}
-                carregando={isLoading || carregandoSaude || qualidades.some((q) => q.isLoading)}
-                lidos={statusQ.data ? (clients ?? []).length : 0}
-                total={(clients ?? []).length}
-                falhas={statusQ.isError ? (clients ?? []).length : 0}
-              />
-            )}
-            {aba === "resposta" && <SemRespostaAgora />}
-            {aba === "clinica" && (
-              <>
-                <div className="adm-chips mb-3" aria-label="Legenda das cores">
-                  {LEGENDA_STATUS.map((l) => (
-                    <AdmChip key={l.cor} tom={tomDaCor(l.cor)}>{l.texto}</AdmChip>
-                  ))}
-                </div>
-                {isLoading ? (
-                  <Carregando texto="Lendo os clientes…" />
-                ) : (
-                  <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "var(--border)" }}>
-                    <table className="w-full text-sm empilha">
-                      <thead>
-                        <tr className="text-left text-xs" style={{ color: "var(--ink-2)", background: "var(--surface-2)" }}>
-                          <th className="px-4 py-2">Nome</th>
-                          <th className="px-4 py-2" title="0 a 100: fontes em dia, fontes por ligar e problemas de dado. Não é o resultado da clínica.">Nota dos dados</th>
-                          <th className="px-4 py-2">Instagram</th>
-                          <th className="px-4 py-2">Anúncios</th>
-                          <th className="px-4 py-2">CRM</th>
-                          <th className="px-4 py-2">WhatsApp</th>
-                          <th className="px-4 py-2" title="Retorno do investimento dos últimos 30 dias">ROI (30 dias)</th>
-                          <th className="px-4 py-2"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {linhasTabela.map((c) => {
-                          const handle = c.instagram_handle || contasIg?.get(c.id) || null;
-                          return (
-                            <tr key={c.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                              <td className="px-4 py-3 align-top font-medium" data-label="Cliente">
-                                <div className="flex items-center gap-3">
-                                  <ClientAvatar nome={c.name} url={c.avatar_url} tamanho={36} />
-                                  <div className="min-w-0">
-                                    <div className="font-semibold">{c.name}</div>
-                                    <div className="max-w-[260px] truncate text-xs" style={{ color: "var(--text-dim)" }} title={[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}>
-                                      {[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}
+              <div>
+                {aba === "alertas" && (
+                  <div className="grid gap-3">
+                    {statusQ.isError && (
+                      <p className="text-sm" style={{ color: "var(--crit)" }}>
+                        Não consegui ler o status das fontes agora. Tente de novo em instantes.
+                      </p>
+                    )}
+                    {!carregandoSaude && statusQ.data && (
+                      totalVermelhas === 0 ? (
+                        <p className="adm-ok">Nenhuma fonte vermelha: tudo ligado tem dado de até 3 dias atrás e nenhuma atualização deu erro.</p>
+                      ) : (
+                        <div className="adm-lista-card">
+                          <p className="adm-grupo-titulo">
+                            {totalVermelhas} fonte{totalVermelhas === 1 ? "" : "s"} em vermelho em {vermelhas.length} cliente{vermelhas.length === 1 ? "" : "s"}
+                            <small>mais de 3 dias sem dado ou erro</small>
+                          </p>
+                          <ul className="adm-itens">
+                            {vermelhas.map(({ c, itens }) => (
+                              <li key={c.id} className="adm-item adm-item--critico">
+                                <div className="adm-item__corpo">
+                                  <p className="adm-item__titulo">{c.name}</p>
+                                  {itens.map(({ fonte, s }) => (
+                                    <div key={fonte} className="grid gap-1">
+                                      <div className="adm-chips">
+                                        <SeloStatus st={s.status} texto={`${NOME_FONTE[fonte]}: ${s.status.rotulo.toLowerCase()}`} />
+                                        <span className="adm-item__mais">{s.status.data ? s.status.detalhe : "sem dado gravado"}</span>
+                                      </div>
+                                      {s.causa && <p className="adm-item__mais">{s.causa}</p>}
                                     </div>
-                                    <ChipQualidade clientId={c.id} />
-                                  </div>
+                                  ))}
                                 </div>
-                              </td>
-                              <td className="px-4 py-3 align-top" data-label="Nota das fontes"><CelulaNota n={notaPorCliente.get(c.id) ?? null} /></td>
-                              <LinhaSaude clientId={c.id} saude={saudePorCliente.get(c.id) ?? null} />
-                              <td className="px-4 py-3 align-top" data-label="ROI (30 dias)">
-                                {(() => {
-                                  const r = roiDe(c.id);
-                                  if (!r) return <span className="text-xs" style={{ color: "var(--muted)" }}>…</span>;
-                                  const cor = r.calculavel ? (r.roi! >= 0 ? "var(--good)" : "var(--crit)") : "var(--warn)";
-                                  return (
-                                    <span className="inline-flex flex-col items-start gap-1">
-                                      <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} className="whitespace-nowrap text-sm font-bold" style={{ color: cor }} title={r.motivoSemCalculo ?? "Ver o retorno no Resultado"}>
-                                        {resumoRoi(r)}
-                                      </Link>
-                                      <SeloConfianca selo={r.selo} />
-                                    </span>
-                                  );
-                                })()}
-                              </td>
-                              <td className="px-4 py-3 text-right align-top" data-label="">
-                                <Link to="/admin/$clientId" params={{ clientId: c.id }} className="adm-btn adm-btn--mini" title="Gerenciar fontes e acesso">
-                                  Gerenciar <ArrowRight aria-hidden />
-                                </Link>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                                <div className="adm-item__fim">
+                                  <Link to="/admin/$clientId" params={{ clientId: c.id }} className="adm-btn adm-btn--mini">Gerenciar <ArrowRight aria-hidden /></Link>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )
+                    )}
+                    <SaudeShortio />
                   </div>
                 )}
-              </>
-            )}
-          </div>
-        </div>
-      </details>
-
-      <details className="adm-det">
-        <summary>Links curtos sem cliente</summary>
-        <div className="adm-det__corpo">
-          <LinksSemCliente clientes={[...(clients ?? [])].filter((c: any) => c.active !== false).sort((x: any, y: any) => x.name.localeCompare(y.name))} />
+                {aba === "problemas" && (
+                  <PainelSaudeFontes
+                    problemas={problemas}
+                    clientes={clients ?? []}
+                    carregando={isLoading || carregandoSaude || qualidades.some((q) => q.isLoading)}
+                    lidos={statusQ.data ? (clients ?? []).length : 0}
+                    total={(clients ?? []).length}
+                    falhas={statusQ.isError ? (clients ?? []).length : 0}
+                  />
+                )}
+                {aba === "resposta" && <SemRespostaAgora />}
+                {aba === "clinica" && (
+                  <>
+                    <div className="adm-chips mb-3" aria-label="Legenda das cores">
+                      {LEGENDA_STATUS.map((l) => (
+                        <AdmChip key={l.cor} tom={tomDaCor(l.cor)}>{l.texto}</AdmChip>
+                      ))}
+                    </div>
+                    {isLoading ? (
+                      <Carregando texto="Lendo os clientes…" />
+                    ) : (
+                      <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "var(--border)" }}>
+                        <table className="w-full text-sm empilha">
+                          <thead>
+                            <tr className="text-left text-xs" style={{ color: "var(--ink-2)", background: "var(--surface-2)" }}>
+                              <th className="px-4 py-2">Nome</th>
+                              <th className="px-4 py-2" title="0 a 100: fontes em dia, fontes por ligar e problemas de dado. Não é o resultado da clínica.">Nota dos dados</th>
+                              <th className="px-4 py-2">Instagram</th>
+                              <th className="px-4 py-2">Anúncios</th>
+                              <th className="px-4 py-2">CRM</th>
+                              <th className="px-4 py-2">WhatsApp</th>
+                              <th className="px-4 py-2" title="Retorno do investimento dos últimos 30 dias">ROI (30 dias)</th>
+                              <th className="px-4 py-2"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {linhasTabela.map((c) => {
+                              const handle = c.instagram_handle || contasIg?.get(c.id) || null;
+                              return (
+                                <tr key={c.id} className="border-t" style={{ borderColor: "var(--border)" }}>
+                                  <td className="px-4 py-3 align-top font-medium" data-label="Cliente">
+                                    <div className="flex items-center gap-3">
+                                      <ClientAvatar nome={c.name} url={c.avatar_url} tamanho={36} />
+                                      <div className="min-w-0">
+                                        <div className="font-semibold">{c.name}</div>
+                                        <div className="max-w-[260px] truncate text-xs" style={{ color: "var(--text-dim)" }} title={[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}>
+                                          {[c.specialty, handle ? `@${handle}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram"}
+                                        </div>
+                                        <ChipQualidade clientId={c.id} />
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 align-top" data-label="Nota das fontes"><CelulaNota n={notaPorCliente.get(c.id) ?? null} /></td>
+                                  <LinhaSaude clientId={c.id} saude={saudePorCliente.get(c.id) ?? null} />
+                                  <td className="px-4 py-3 align-top" data-label="ROI (30 dias)">
+                                    {(() => {
+                                      const r = roiDe(c.id);
+                                      if (!r) return <span className="text-xs" style={{ color: "var(--muted)" }}>…</span>;
+                                      const cor = r.calculavel ? (r.roi! >= 0 ? "var(--good)" : "var(--crit)") : "var(--warn)";
+                                      return (
+                                        <span className="inline-flex flex-col items-start gap-1">
+                                          <Link to="/$clientId" params={{ clientId: c.id }} search={{ preset: "30d" }} className="whitespace-nowrap text-sm font-bold" style={{ color: cor }} title={r.motivoSemCalculo ?? "Ver o retorno no Resultado"}>
+                                            {resumoRoi(r)}
+                                          </Link>
+                                          <SeloConfianca selo={r.selo} />
+                                        </span>
+                                      );
+                                    })()}
+                                  </td>
+                                  <td className="px-4 py-3 text-right align-top" data-label="">
+                                    <Link to="/admin/$clientId" params={{ clientId: c.id }} className="adm-btn adm-btn--mini" title="Gerenciar fontes e acesso">
+                                      Gerenciar <ArrowRight aria-hidden />
+                                    </Link>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </details>
+          <details className="adm-det">
+            <summary>Links curtos sem cliente</summary>
+            <div className="adm-det__corpo">
+              <LinksSemCliente clientes={[...(clients ?? [])].filter((c: any) => c.active !== false).sort((x: any, y: any) => x.name.localeCompare(y.name))} />
+            </div>
+          </details>
         </div>
       </details>
 
@@ -816,6 +963,16 @@ function AdminClientsPage() {
           </div>
         </div>
       </details>
+
+      <NxPainelDaClinica
+        clinica={clinicaDoPainel ? { id: clinicaDoPainel.id, nome: clinicaDoPainel.name, sub: [clinicaDoPainel.specialty, clinicaDoPainel.instagram_handle || contasIg?.get(clinicaDoPainel.id) ? `@${clinicaDoPainel.instagram_handle || contasIg?.get(clinicaDoPainel.id)}` : null].filter(Boolean).join(" · ") || "sem especialidade nem Instagram" } : null}
+        nota={notaDoPainel}
+        fatores={fatoresDoPainel}
+        alertas={clinicaDoPainel ? (alertasPorCliente.get(clinicaDoPainel.id) ?? []) : []}
+        numeros={numerosDoPainel}
+        aberto={painelId != null}
+        aoFechar={fecharPainel}
+      />
     </div>
   );
 }

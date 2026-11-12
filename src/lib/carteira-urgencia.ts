@@ -3,7 +3,9 @@
 // compara ou dá posição a uma clínica pelo resultado dela (D-02). A nota que aparece é a SAÚDE DOS DADOS (nota das fontes).
 import { FONTES, NOME_FONTE, type FonteId } from "@/lib/status-fonte";
 import type { FaixaNota } from "@/lib/nota-fontes";
-import { checarFraseCinco, type VereditoDaTela, type Veredito } from "@/lib/leitura/cinco-segundos";
+import { DIAS_SEM_ENTRAR } from "@/lib/carteira-alertas";
+import { checarFraseCinco, type Descoberta, type VereditoDaTela, type Veredito } from "@/lib/leitura/cinco-segundos";
+import type { BarraDoFato } from "@/lib/leitura/tipos";
 
 export type QuemResolveCarteira = "Cliente" | "Equipe" | "Meta" | "Só acompanhar";
 /** Os mesmos tons do chip da equipe (AdmTom). */
@@ -198,4 +200,141 @@ export function vereditoDaCarteira(linhas: readonly LinhaDaCarteira[]): Veredito
 export function problemasDeTextoDoVeredito(v: Veredito): string[] {
   if (v.tipo !== "veredito") return [];
   return [...checarFraseCinco(v.frase.map((p) => p.texto).join("")), ...(v.apoio ? checarFraseCinco(v.apoio) : [])];
+}
+
+// ---------- os 3 números ----------
+
+export interface NumerosDaCarteira {
+  /** Clínicas que a Carteira cobra (as do veredito). */
+  total: number;
+  problemasAbertos: number;
+  porQuem: Record<QuemResolveCarteira, number>;
+  /** Clínicas na faixa Ruim da nota das fontes (vermelho). */
+  acaoHoje: number;
+  comNota: number;
+  semNota: number;
+  /** Não há histórico da carteira para comparar com a semana passada: a tela diz "Falta dado: sem histórico", nunca um 0%. */
+  vsSemanaPassada: null;
+}
+
+export function numerosDaCarteira(linhas: readonly LinhaDaCarteira[]): NumerosDaCarteira {
+  const dentro = linhas.filter((l) => l.entra);
+  const porQuem: Record<QuemResolveCarteira, number> = { Equipe: 0, Cliente: 0, Meta: 0, "Só acompanhar": 0 };
+  for (const l of dentro) for (const a of l.alertas) porQuem[a.quem] += 1;
+  const comNota = dentro.filter((l) => l.nota != null).length;
+  return {
+    total: dentro.length,
+    problemasAbertos: dentro.reduce((n, l) => n + l.alertas.length, 0),
+    porQuem,
+    acaoHoje: dentro.filter((l) => l.faixa === "ruim").length,
+    comNota,
+    semNota: dentro.length - comNota,
+    vsSemanaPassada: null,
+  };
+}
+
+// ---------- descobertas (só urgência) ----------
+
+const ehFonte = (a: AlertaDaCarteira) => (FONTES as string[]).includes(a.chave);
+const plural = (n: number, um: string, varios: string) => (n === 1 ? um : varios);
+const razao = (parte: number, todo: number) => (todo > 0 ? Math.max(0, Math.min(1, parte / todo)) : 0);
+
+/**
+ * De 0 a 4 descobertas de URGÊNCIA da carteira, em ordem de impacto: fontes paradas, o que a equipe resolve, médico que não entra,
+ * clínicas sem nota. Nunca nomeia uma clínica por render melhor ou pior que outras (D-02): só fala de problema aberto e de quem resolve.
+ * Toda ação só navega ou abre um lugar da própria tela (`local`); nada é enviado nem gravado (D-04).
+ */
+export function descobertasDaCarteira(linhas: readonly LinhaDaCarteira[]): Descoberta[] {
+  const dentro = linhas.filter((l) => l.entra);
+  const n = numerosDaCarteira(linhas);
+  const lista: Descoberta[] = [];
+
+  const paradas = dentro.map((l) => l.alertas.filter((a) => ehFonte(a) && a.tom === "critico").length);
+  const atrasadas = dentro.map((l) => l.alertas.filter((a) => ehFonte(a) && a.tom === "atencao").length);
+  const nParadas = paradas.reduce((x, y) => x + y, 0);
+  const nAtrasadas = atrasadas.reduce((x, y) => x + y, 0);
+  const clinicasComParada = paradas.filter((x) => x > 0).length;
+  if (nParadas > 0) {
+    const maior = Math.max(nParadas, nAtrasadas);
+    lista.push({
+      id: "carteira-fontes-paradas",
+      tom: "ruim",
+      selo: "Fonte parada",
+      frase: `${nParadas} ${plural(nParadas, "fonte parada", "fontes paradas")} ou com erro na carteira`,
+      quem: "Equipe",
+      impacto: `em ${clinicasComParada} ${plural(clinicasComParada, "clínica", "clínicas")}`,
+      acao: { rotulo: "Abrir o diagnóstico das fontes", local: "abrir-diagnostico" },
+      porque: {
+        titulo: "Fontes com problema agora:",
+        barras: [
+          { rotulo: "Paradas ou com erro", exibicao: `${nParadas}`, fracao: razao(nParadas, maior) },
+          { rotulo: "Atrasadas", exibicao: `${nAtrasadas}`, fracao: razao(nAtrasadas, maior) },
+        ],
+        obs: "Parada: mais de 3 dias sem dado ou erro na atualização.",
+      },
+    });
+  }
+
+  if (n.problemasAbertos > 0 && n.porQuem.Equipe > 0) {
+    const outros = n.porQuem.Meta + n.porQuem["Só acompanhar"];
+    lista.push({
+      id: "carteira-com-a-equipe",
+      tom: "atencao",
+      selo: "Com a equipe",
+      frase: `A equipe resolve ${n.porQuem.Equipe} dos ${n.problemasAbertos} ${plural(n.problemasAbertos, "problema", "problemas")}`,
+      quem: "Equipe",
+      impacto: `${n.porQuem.Equipe} de ${n.problemasAbertos} ${plural(n.problemasAbertos, "problema", "problemas")}`,
+      acao: { rotulo: "Abrir a primeira clínica", local: "abrir-primeira" },
+      porque: {
+        titulo: "Problemas abertos por quem resolve:",
+        barras: [
+          { rotulo: "Equipe", exibicao: `${n.porQuem.Equipe}`, fracao: razao(n.porQuem.Equipe, n.problemasAbertos) },
+          { rotulo: "Cliente", exibicao: `${n.porQuem.Cliente}`, fracao: razao(n.porQuem.Cliente, n.problemasAbertos) },
+          { rotulo: "Meta e só acompanhar", exibicao: `${outros}`, fracao: razao(outros, n.problemasAbertos) },
+        ],
+      },
+    });
+  }
+
+  const naoEntra = dentro.filter((l) => l.alertas.some((a) => a.chave === "acesso" && a.tom === "atencao")).length;
+  if (naoEntra > 0) {
+    lista.push({
+      id: "carteira-medico-nao-entra",
+      tom: "atencao",
+      selo: "Médico parado",
+      frase: `${naoEntra} ${plural(naoEntra, "clínica", "clínicas")}: o médico não entra há mais de ${DIAS_SEM_ENTRAR} dias`,
+      quem: "Cliente",
+      impacto: `mais de ${DIAS_SEM_ENTRAR} dias`,
+      acao: { rotulo: "Ver quem não entra", local: "filtrar-nao-entra" },
+      porque: {
+        titulo: "Clínicas que cobram contato:",
+        barras: [
+          { rotulo: "Médico não entra", exibicao: `${naoEntra} de ${n.total}`, fracao: razao(naoEntra, n.total) },
+          { rotulo: "Demais clínicas", exibicao: `${n.total - naoEntra}`, fracao: razao(n.total - naoEntra, n.total) },
+        ],
+        obs: "Conta a última vez que alguém da clínica abriu o painel.",
+      },
+    });
+  }
+
+  if (n.semNota > 0) {
+    lista.push({
+      id: "carteira-sem-nota",
+      tom: "atencao",
+      selo: "Para ligar",
+      frase: `${n.semNota} ${plural(n.semNota, "clínica ainda sem nota", "clínicas ainda sem nota")}`,
+      quem: "Equipe",
+      impacto: `${n.semNota} de ${n.total} ${plural(n.total, "clínica", "clínicas")}`,
+      acao: { rotulo: "Ver só as sem nota", local: "filtrar-sem-nota" },
+      porque: {
+        titulo: "A nota das fontes precisa de fonte ligada:",
+        barras: [
+          { rotulo: "Com nota", exibicao: `${n.comNota} de ${n.total}`, fracao: razao(n.comNota, n.total) },
+          { rotulo: "Sem nota", exibicao: `${n.semNota} de ${n.total}`, fracao: razao(n.semNota, n.total) },
+        ],
+        obs: "Sem fonte ligada, a clínica fica sem nota das fontes.",
+      },
+    });
+  }
+  return lista;
 }
