@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { Children, type CSSProperties, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Clock, MinusCircle } from "lucide-react";
 import { NxTag, type NxTom } from "./base";
 import "@/styles/nexo-admin.css";
@@ -21,11 +21,23 @@ const ICONE_TOM: Record<AdmTom, ReactNode> = {
 /** Tom do chip a partir da cor da regra única de status (status-fonte.ts). */
 export const tomDaCor = (cor: string): AdmTom => (cor === "verde" ? "ok" : cor === "amarelo" ? "atencao" : cor === "vermelho" ? "critico" : "neutro");
 
-/** Chip de status: cor + ícone + texto. `semIcone` para chips de contagem neutros. */
+/** Texto achatado dos filhos (strings e números, também em array), para o title do chip cortado. */
+function textoDosFilhos(children: ReactNode): string {
+  return Children.toArray(children)
+    .map((c) => (typeof c === "string" || typeof c === "number" ? String(c) : ""))
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Chip de status: cor + ícone + texto. `semIcone` para chips de contagem neutros. O texto fica num span próprio
+ * (adm-chip__texto), que a Carteira corta com reticências; o title traz o texto inteiro.
+ */
 export function AdmChip({ tom = "neutro", children, titulo, semIcone }: { tom?: AdmTom; children: ReactNode; titulo?: string; semIcone?: boolean }) {
   return (
-    <NxTag tom={TOM_TAG[tom]} icone={semIcone ? undefined : ICONE_TOM[tom]} titulo={titulo}>
-      {children}
+    <NxTag tom={TOM_TAG[tom]} icone={semIcone ? undefined : ICONE_TOM[tom]} titulo={titulo ?? (textoDosFilhos(children) || undefined)}>
+      <span className="adm-chip__texto">{children}</span>
     </NxTag>
   );
 }

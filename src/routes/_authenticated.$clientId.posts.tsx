@@ -26,6 +26,8 @@ import { classifyPost, getRankedPosts } from "@/lib/client-data";
 import { CONTENT_FORMATS, FUNNEL_STAGES, METHODOLOGY_STAGES, formatLabel, funnelLabel, methodologyLabel } from "@/lib/methodology";
 import type { ContentFormat, FunnelStage, MethodologyStage } from "@/integrations/supabase/types";
 import { fmtNum } from "@/lib/format";
+import { dataDiaMes, numeroCurto, numeroOuSemDado, temaParaExibir } from "@/lib/texto-que-cabe";
+import { useMediaQuery } from "@/hooks/use-is-mobile";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { fatosDePublicacoes } from "@/lib/leitura/fatos-instagram";
@@ -73,7 +75,18 @@ function firstLine(caption: string | null): string | null {
 }
 const tituloDoPost = (p: Post) => firstLine(p.caption) ?? p.windsor_media_id;
 const nPosts = (n: number) => `${n} ${n === 1 ? "post" : "posts"}`;
-const dataCurta = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "") : "Sem data");
+/** Tema com acento para mostrar; o valor do banco segue nas chaves, no filtro e nos agrupamentos. */
+const tm = (t: string | null) => temaParaExibir(t) ?? t ?? "";
+const inteiroOuSemDado = (n: number | null | undefined) => (n == null ? "sem dado" : fmtNum(n));
+
+/** Chip de uma linha: o texto corta com reticências dentro do cartão e o texto inteiro vai no title. */
+function Chip({ tom = "g", texto, icone, titulo }: { tom?: "g" | "b"; texto: string; icone?: ReactNode; titulo?: string }) {
+  return (
+    <NxTag tom={tom} icone={icone} titulo={titulo ?? texto}>
+      <span className="ig-chip__texto">{texto}</span>
+    </NxTag>
+  );
+}
 const pct1 = (v: number) => `${(v * 100).toFixed(1)}%`;
 
 /** Cartão com o "como ler" recolhido: o que antes era Painel de visual.tsx. */
@@ -171,12 +184,13 @@ function TopDoMes({ posts }: { posts: Post[] }) {
           href: post.permalink,
           imagem: <Miniatura url={post.thumbnail_url} formato={post.format} className="w-full" />,
           titulo: tituloDoPost(post),
+          dica: tituloDoPost(post),
           valor: fmtNum(post.saved),
           rotulo: "salvamentos",
           extra: (
             <>
-              {post.format && <NxTag tom="g">{formatLabel(post.format)}</NxTag>}
-              {post.tema && <NxTag tom="b">{post.tema}</NxTag>}
+              {post.format && <Chip tom="g" texto={formatLabel(post.format)} />}
+              {post.tema && <Chip tom="b" texto={tm(post.tema)} />}
             </>
           ),
         }))}
@@ -185,19 +199,33 @@ function TopDoMes({ posts }: { posts: Post[] }) {
   );
 }
 
+/** Miniatura, legenda em até 2 linhas e, embaixo, a data (dd/mm, numa linha) com o formato. */
 const CELULA_POST = (p: Post) => (
   <span className="ig-post-celula">
     <Miniatura url={p.thumbnail_url} formato={p.format} className="h-12 w-12" />
     <span className="ig-post-celula__texto">
       {p.permalink ? (
-        <a href={p.permalink} target="_blank" rel="noreferrer" title={p.caption ?? undefined}>
+        <a className="ig-post-celula__legenda" href={p.permalink} target="_blank" rel="noreferrer" title={p.caption ?? tituloDoPost(p)}>
           {tituloDoPost(p)}
         </a>
       ) : (
-        <span title={p.caption ?? undefined}>{tituloDoPost(p)}</span>
+        <span className="ig-post-celula__legenda" title={p.caption ?? tituloDoPost(p)}>
+          {tituloDoPost(p)}
+        </span>
       )}
-      <small>{dataCurta(p.posted_at)}</small>
+      <small className="ig-post-celula__meta">
+        <span className="ig-post-celula__data">{dataDiaMes(p.posted_at)}</span>
+        {p.format && <Chip tom="g" icone={<IconeFormato formato={p.format} size={12} />} texto={formatLabel(p.format)} />}
+      </small>
     </span>
+  </span>
+);
+
+/** Chips do tema e do funil, um sobre o outro, cada um numa linha só. */
+const TEMA_E_FUNIL = (p: Post) => (
+  <span className="ig-tema-funil">
+    {p.tema ? <Chip tom="b" texto={tm(p.tema)} /> : <span>Sem tema</span>}
+    {p.funnel_stage ? <Chip tom="g" texto={`${p.funnel_stage}${p.methodology_stage ? ` · ${methodologyLabel(p.methodology_stage)}` : ""}`} titulo={funnelLabel(p.funnel_stage)} /> : <span>Sem dado</span>}
   </span>
 );
 
@@ -212,17 +240,22 @@ function RankingDePosts({ rows, clientId, periodLabel }: { rows: Post[]; clientI
   const contagem = (f: ContentFormat) => rows.filter((p) => p.format === f).length;
   const postEditado = rows.find((p) => p.id === editando) ?? null;
 
+  const celular = useMediaQuery("(max-width: 560px)");
+
   const colunas = [
     { chave: "pos", titulo: "#", numerica: true },
     { chave: "post", titulo: "Post" },
-    { chave: "formato", titulo: "Formato" },
-    { chave: "tema", titulo: "Tema" },
-    { chave: "funil", titulo: "Funil" },
+    { chave: "tema", titulo: "Tema e funil" },
     { chave: "salvos", titulo: "Salvos", numerica: true },
     { chave: "engaj", titulo: "Engajamento", numerica: true },
     { chave: "alcance", titulo: "Alcance", numerica: true },
     ...(podeEditar ? [{ chave: "editar", titulo: "Classificar" }] : []),
   ];
+  const botaoClassificar = (p: Post) => (
+    <button type="button" className="nx-botao" onClick={() => setEditando(editando === p.id ? null : p.id)} aria-expanded={editando === p.id} aria-label={`Classificar ${tituloDoPost(p)}`}>
+      Classificar
+    </button>
+  );
 
   return (
     <Bloco icone={Rows3} titulo="Ranking de posts" resumo={`${periodLabel}, por salvamentos`} ajuda="Ordenado por salvamentos, que indicam interesse real (curtir é fácil, salvar é guardar para depois). Use Classificar para definir tema, funil, estágio e formato de um post. Isso alimenta as análises por tema.">
@@ -244,39 +277,53 @@ function RankingDePosts({ rows, clientId, periodLabel }: { rows: Post[]; clientI
         <NxAviso tom="info" titulo="Nenhum post nesse formato no período selecionado." />
       ) : (
         <>
-          <NxTabela
-            rotulo="Ranking de posts por salvamentos"
-            colunas={colunas}
-            chaveDaLinha={(_, k) => visiveis[k].id}
-            linhas={visiveis.map((p, i) => ({
-              pos: i + 1,
-              post: CELULA_POST(p),
-              formato: p.format ? (
-                <NxTag tom="g" icone={<IconeFormato formato={p.format} size={12} />}>
-                  {formatLabel(p.format)}
-                </NxTag>
-              ) : (
-                "Sem dado"
-              ),
-              tema: p.tema ? <NxTag tom="b">{p.tema}</NxTag> : "Sem tema",
-              funil: p.funnel_stage ? (
-                <NxTag tom="g" titulo={funnelLabel(p.funnel_stage)}>
-                  {p.funnel_stage}
-                  {p.methodology_stage ? ` · ${methodologyLabel(p.methodology_stage)}` : ""}
-                </NxTag>
-              ) : (
-                "Sem dado"
-              ),
-              salvos: fmtNum(p.saved),
-              engaj: fmtNum(p.engagement),
-              alcance: fmtNum(p.reach),
-              editar: (
-                <button type="button" className="nx-botao" onClick={() => setEditando(editando === p.id ? null : p.id)} aria-expanded={editando === p.id} aria-label={`Classificar ${tituloDoPost(p)}`}>
-                  Classificar
-                </button>
-              ),
-            }))}
-          />
+          {celular ? (
+            <ol className="ig-ranking-cartoes" aria-label="Ranking de posts por salvamentos">
+              {visiveis.map((p, i) => (
+                <li key={p.id} className="ig-ranking-cartao">
+                  <div className="ig-ranking-cartao__topo">
+                    <b className="ig-ranking-cartao__pos" aria-label={`${i + 1}º lugar`}>
+                      {i + 1}
+                    </b>
+                    {CELULA_POST(p)}
+                  </div>
+                  {TEMA_E_FUNIL(p)}
+                  <dl className="ig-ranking-cartao__nums">
+                    <div>
+                      <dt>Salvos</dt>
+                      <dd>{numeroOuSemDado(p.saved)}</dd>
+                    </div>
+                    <div>
+                      <dt>Engajamento</dt>
+                      <dd>{numeroOuSemDado(p.engagement)}</dd>
+                    </div>
+                    <div>
+                      <dt>Alcance</dt>
+                      <dd>{numeroOuSemDado(p.reach)}</dd>
+                    </div>
+                  </dl>
+                  {podeEditar && botaoClassificar(p)}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <div className="ig-ranking-tabela">
+              <NxTabela
+                rotulo="Ranking de posts por salvamentos"
+                colunas={colunas}
+                chaveDaLinha={(_, k) => visiveis[k].id}
+                linhas={visiveis.map((p, i) => ({
+                  pos: i + 1,
+                  post: CELULA_POST(p),
+                  tema: TEMA_E_FUNIL(p),
+                  salvos: numeroOuSemDado(p.saved),
+                  engaj: numeroOuSemDado(p.engagement),
+                  alcance: numeroOuSemDado(p.reach),
+                  editar: botaoClassificar(p),
+                }))}
+              />
+            </div>
+          )}
           {filtered.length > PAGE && (
             <button type="button" className="nx-botao" onClick={() => setShowAll((v) => !v)}>
               {showAll ? "Mostrar menos" : `Ver todos os ${filtered.length} posts`}
@@ -296,7 +343,7 @@ function ListaRepetir({ itens, vazio }: { itens: { tema: string; rate: number; c
     <ul className="ig-barras">
       {itens.map((g, i) => (
         <li key={g.tema}>
-          <NxHBar rotulo={g.tema} valor={<>{pct1(g.rate)} <small>· {nPosts(g.count)}</small></>} pct={(g.rate / max) * 100} i={i} />
+          <NxHBar rotulo={tm(g.tema)} valor={<>{pct1(g.rate)} <small>· {nPosts(g.count)}</small></>} pct={(g.rate / max) * 100} i={i} />
         </li>
       ))}
     </ul>
@@ -351,7 +398,7 @@ function ConceitosVencedores({ posts }: { posts: Post[] }) {
               href={post.permalink ?? undefined}
               inicio={<Miniatura url={post.thumbnail_url} formato={post.format} className="h-14 w-14" />}
               titulo={tituloDoPost(post) ?? "Post"}
-              sub={<NxTag tom="b">{tema}</NxTag>}
+              sub={<NxTag tom="b">{tm(tema)}</NxTag>}
               fim={
                 <span className="ig-num-fim">
                   <b>{pct1(rate)}</b>
@@ -436,11 +483,11 @@ function ConversionByTag({ posts }: { posts: Post[] }) {
       <ul className="ig-barras">
         {top.map((g, i) => (
           <li key={`${g.tema}-${g.format}`}>
-            <NxHBar rotulo={`${g.tema} · ${g.format}`} valor={<>{g.medianSaved.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} <small>· {nPosts(g.count)}</small></>} pct={(g.medianSaved / max) * 100} i={i} />
+            <NxHBar rotulo={`${tm(g.tema)} · ${g.format}`} valor={<>{g.medianSaved.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} <small>· {nPosts(g.count)}</small></>} pct={(g.medianSaved / max) * 100} i={i} />
           </li>
         ))}
       </ul>
-      <PoucosDados itens={poucos.map((g) => ({ rotulo: `${g.tema} · ${g.format}`, count: g.count }))} />
+      <PoucosDados itens={poucos.map((g) => ({ rotulo: `${tm(g.tema)} · ${g.format}`, count: g.count }))} />
     </Bloco>
   );
 }
@@ -468,7 +515,7 @@ function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
             <ul className="ig-barras">
               {porTema.map((t, i) => (
                 <li key={t.tema}>
-                  <NxHBar rotulo={t.tema} valor={<>{fmtNum(t.medianReach)} <small>· {nPosts(t.count)}</small></>} pct={(t.medianReach / maxTema) * 100} i={i} />
+                  <NxHBar rotulo={tm(t.tema)} valor={<>{fmtNum(t.medianReach)} <small>· {nPosts(t.count)}</small></>} pct={(t.medianReach / maxTema) * 100} i={i} />
                 </li>
               ))}
             </ul>
@@ -493,7 +540,7 @@ function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
           </div>
         )}
       </div>
-      <PoucosDados itens={[...temaPoucos.map((t) => ({ rotulo: t.tema, count: t.count })), ...formatoPoucos.map((f) => ({ rotulo: f.formato, count: f.count }))]} />
+      <PoucosDados itens={[...temaPoucos.map((t) => ({ rotulo: tm(t.tema), count: t.count })), ...formatoPoucos.map((f) => ({ rotulo: f.formato, count: f.count }))]} />
     </Bloco>
   );
 }
@@ -518,7 +565,7 @@ function FormatoPorTema({ posts }: { posts: Post[] }) {
         colunas={[{ chave: "tema", titulo: "Tema" }, ...formatos.map((f) => ({ chave: f.value, titulo: f.label, numerica: true }))]}
         chaveDaLinha={(_, k) => temas[k]}
         linhas={temas.map((t) => ({
-          tema: t,
+          tema: tm(t),
           ...Object.fromEntries(
             formatos.map((f) => {
               const c = celula(t, f.value);
@@ -647,7 +694,7 @@ function NextAngles({ posts, periodLabel }: { posts: Post[]; periodLabel: string
           {angulos.map((a) => (
             <li key={a.tema} className="ig-angulo">
               <b>
-                {a.tema}
+                {tm(a.tema)}
                 {a.formato && (
                   <>
                     {" "}
@@ -703,7 +750,7 @@ function ExploradorDePosts({ posts, periodLabel }: { posts: Post[]; periodLabel:
           <option value="">Todos os temas</option>
           {temas.map((t) => (
             <option key={t} value={t}>
-              {t}
+              {tm(t)}
             </option>
           ))}
         </select>
@@ -738,15 +785,15 @@ function ExploradorDePosts({ posts, periodLabel }: { posts: Post[]; periodLabel:
                   <span className="ig-galeria__img">
                     <Miniatura url={p.thumbnail_url} formato={p.format} className="aspect-square w-full" />
                     <span className="ig-galeria__nums">
-                      <span><Eye size={12} aria-hidden /> {fmtNum(p.reach)}</span>
-                      <span><Heart size={12} aria-hidden /> {fmtNum(p.engagement)}</span>
-                      <span><Bookmark size={12} aria-hidden /> {fmtNum(p.saved)}</span>
+                      <span aria-label={`Alcance: ${inteiroOuSemDado(p.reach)}`} title={`Alcance: ${inteiroOuSemDado(p.reach)}`}><Eye size={12} aria-hidden /> {numeroCurto(p.reach)}</span>
+                      <span aria-label={`Engajamento: ${inteiroOuSemDado(p.engagement)}`} title={`Engajamento: ${inteiroOuSemDado(p.engagement)}`}><Heart size={12} aria-hidden /> {numeroCurto(p.engagement)}</span>
+                      <span aria-label={`Salvamentos: ${inteiroOuSemDado(p.saved)}`} title={`Salvamentos: ${inteiroOuSemDado(p.saved)}`}><Bookmark size={12} aria-hidden /> {numeroCurto(p.saved)}</span>
                     </span>
                   </span>
                   <span className="ig-galeria__texto" title={tituloDoPost(p) ?? undefined}>{tituloDoPost(p)}</span>
                   <span className="ig-galeria__rodape">
-                    <span>{dataCurta(p.posted_at)}</span>
-                    {p.tema && <span className="ig-tema">{p.tema}</span>}
+                    <span className="ig-galeria__data">{dataDiaMes(p.posted_at)}</span>
+                    {p.tema && <Chip tom="b" texto={tm(p.tema)} />}
                   </span>
                 </a>
               </li>
@@ -773,13 +820,13 @@ function ExploradorDePosts({ posts, periodLabel }: { posts: Post[]; periodLabel:
           ]}
           chaveDaLinha={(_, k) => filtered[k].id}
           linhas={filtered.map((p) => ({
-            data: p.posted_at ? new Date(p.posted_at).toLocaleDateString("pt-BR") : "Sem data",
+            data: <span className="ig-data-linha">{dataDiaMes(p.posted_at)}</span>,
             formato: p.format ? <span className="ig-post-celula"><IconeFormato formato={p.format} />{formatLabel(p.format)}</span> : "Sem dado",
-            tema: p.tema ?? "Sem tema",
-            legenda: <span title={tituloDoPost(p) ?? undefined}>{tituloDoPost(p)}</span>,
-            alcance: (p.reach ?? 0).toLocaleString("pt-BR"),
-            engaj: (p.engagement ?? 0).toLocaleString("pt-BR"),
-            salvos: (p.saved ?? 0).toLocaleString("pt-BR"),
+            tema: p.tema ? <Chip tom="b" texto={tm(p.tema)} /> : "Sem tema",
+            legenda: <span className="ig-post-celula__legenda" title={p.caption ?? tituloDoPost(p)}>{tituloDoPost(p)}</span>,
+            alcance: numeroOuSemDado(p.reach),
+            engaj: numeroOuSemDado(p.engagement),
+            salvos: numeroOuSemDado(p.saved),
             abrir: p.permalink ? <a href={p.permalink} target="_blank" rel="noreferrer">abrir ↗</a> : "Sem link",
           }))}
         />
