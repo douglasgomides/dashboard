@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getClientFontes, getMonthlyMetrics, getPostsForAnalytics } from "@/lib/client-data";
@@ -23,7 +23,9 @@ import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxTabela, NxVazio } from "@
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { IgLinhaSeguidores, IgColunasSaldo } from "@/components/nx/instagram";
 import { NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
-import { numerosDoInstagram, vereditoDoInstagram, type EntradaCincoInstagram, type NumeroDoInstagram } from "@/lib/leitura/cinco-instagram";
+import { NxOQueFunciona, type AbaDaProva } from "@/components/nx/o-que-funciona";
+import { fraseDoFormato, numerosDoInstagram, vereditoDoInstagram, type EntradaCincoInstagram, type NumeroDoInstagram } from "@/lib/leitura/cinco-instagram";
+import { mapaDosPosts, melhorHorario } from "@/lib/mapa-dos-posts";
 
 export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
   component: ConteudoPage,
@@ -120,6 +122,9 @@ function ConteudoPage() {
   const seg = useMemo(() => (metrics.data ? analyzeFollowers(metrics.data, start, end) : null), [metrics.data, start, end]);
   const cresc = useMemo(() => (metrics.data ? analyzeGrowth(metrics.data, start, end) : null), [metrics.data, start, end]);
   const fm = useMemo(() => (posts.data ? analyzeFormatsAndTemas(posts.data) : null), [posts.data]);
+  // O mapa de horários dos próprios posts (dia da semana e hora de São Paulo), da lista que a tela já carregou: nenhuma consulta nova.
+  const mapa = useMemo(() => mapaDosPosts(posts.data ?? []), [posts.data]);
+  const [abaDaProva, setAbaDaProva] = useState<AbaDaProva>("formato");
   // Linha de 30 dias do cartão "Seguidores hoje" (sketch 002): os mesmos pontos de seguidores, sem consulta nova; dia sem contagem é buraco.
   const serieDoCartao = useMemo(() => (seg ? { rotulo: "seguidores", ...serieContinua(seg.points.map((p) => ({ dia: p.date, valor: p.followers }))) } : undefined), [seg]);
   const serie = useMemo(() => (seg ? { datas: seg.points.map((p) => p.date), valores: seg.points.map((p) => p.followers) } : null), [seg]);
@@ -358,6 +363,13 @@ function ConteudoPage() {
   };
   const carregandoFatos = fatos == null;
   const veredito = carregandoFatos ? null : vereditoDoInstagram(entradaCinco, fatos);
+  // A prova: formato, horário e tema dos próprios posts. Sem posts no período, o aviso que a tela já tinha.
+  const prova =
+    fm && fm.total > 0 ? (
+      <NxOQueFunciona formatos={fm.porFormato} temas={fm.porTema} mapa={mapa} melhor={melhorHorario(mapa)} fraseFormato={fraseDoFormato(fm)} aba={abaDaProva} aoTrocarAba={setAbaDaProva} />
+    ) : (
+      <NxVazio titulo="Nenhum post no período" falta="posts do Instagram publicados nesse intervalo, então não dá para comparar formatos, horários nem temas" quem="equipe_hub" passo="trocar o período no cabeçalho ou conferir se a coleta de posts rodou" />
+    );
   const ICONE_DO_NUMERO = { seguidores: ic(Users), alcance: ic(Eye), salvos: ic(Bookmark) } as const;
   const cartoesCinco = numerosDoInstagram(entradaCinco).map((n) => <CartaoDeNumeroIg key={n.id} n={n} icone={ICONE_DO_NUMERO[n.id]} />);
 
@@ -368,6 +380,7 @@ function ConteudoPage() {
         veredito={<NxVeredito veredito={veredito} carregando={carregandoFatos} tela="conteudo" />}
         leitura={<LeituraDaTela fatos={fatos} carregando={carregandoFatos} semSelo />}
         cartoes={cartoesCinco as unknown as [ReactNode, ReactNode?, ReactNode?]}
+        principal={prova}
         resumoDoVerTudo="temas, horários, formatos e a contagem de seguidores"
         detalhe={
           <div style={{ display: "grid", gap: 18 }}>

@@ -224,3 +224,51 @@ export function numerosDoInstagram(e: Pick<EntradaCincoInstagram, "diario" | "di
   };
   return [daSeg, soma("reach", "Pessoas alcançadas", "alcance", "soma do alcance de cada dia", "pessoas alcançadas", true), soma("saves", "Salvos", "salvos", "salvos no período", "salvos", false)];
 }
+
+// ---------- formato: quanto salva x quanto você posta ----------
+
+/** Plural para a frase ("47 Reels e 19 estáticos"). Formato fora da lista não entra na frase. */
+const PLURAL_DO_FORMATO: Record<string, string> = { reels: "Reels", carrossel: "carrosséis", estatico: "estáticos", stories: "Stories" };
+
+/** Posts mínimos de um formato para ele poder ser apontado como o que mais salva (a mesma amostra de conclusão do painel: 8). */
+export const MIN_POSTS_DO_FORMATO = 8;
+/** O formato que mais salva precisa salvar pelo menos 25% mais que o mais postado para a frase falar em descompasso. */
+const FOLGA_DO_DESCOMPASSO = 1.25;
+
+type FormatosDoPeriodo = Pick<NonNullable<EntradaCincoInstagram["formatos"]>, "porFormato">;
+
+export interface FraseDoFormato {
+  tipo: "descompasso" | "alinhado" | "neutro" | "poucos";
+  frase: string;
+  /** Só no descompasso: quem mais salva, quem você mais posta e quantas vezes mais salva. */
+  maisSalva?: GroupStat;
+  maisPostado?: GroupStat;
+  vezes?: number;
+}
+
+/** Os formatos com posts suficientes para comparar (nunca "não classificado"). */
+export function formatosComAmostra(fm: FormatosDoPeriodo | null | undefined): GroupStat[] {
+  return (fm?.porFormato ?? []).filter((f) => f.key !== "não classificado" && f.count >= MIN_POSTS_DO_FORMATO && PLURAL_DO_FORMATO[f.key] != null);
+}
+
+/**
+ * A frase da aba Formato: "{A} salva N× mais, mas você postou X {B} e Y {A}." quando o formato que mais salva NÃO é o que você mais posta
+ * (os dois com pelo menos MIN_POSTS_DO_FORMATO posts). Sem descompasso, uma frase neutra; com menos de 2 formatos com amostra, nenhum é
+ * chamado de "melhor" (D-05). Só a própria clínica (D-02).
+ */
+export function fraseDoFormato(fm: FormatosDoPeriodo | null | undefined): FraseDoFormato {
+  const elegiveis = formatosComAmostra(fm);
+  if (elegiveis.length < 2) return { tipo: "poucos", frase: "Poucos posts por formato para apontar o melhor." };
+  const maisSalva = [...elegiveis].sort((a, b) => b.savedMean - a.savedMean || b.count - a.count)[0];
+  // Empate de quantidade: quem mais salva conta como o mais postado (não há descompasso num empate).
+  const maisPostado = [...elegiveis].sort((a, b) => b.count - a.count || Number(b.key === maisSalva.key) - Number(a.key === maisSalva.key))[0];
+  if (maisSalva.key === maisPostado.key) return { tipo: "alinhado", frase: `${maisSalva.label} é o que mais salva e o que você mais posta.` };
+  const vezes = maisPostado.savedMean > 0 ? maisSalva.savedMean / maisPostado.savedMean : 0;
+  if (vezes < FOLGA_DO_DESCOMPASSO) return { tipo: "neutro", frase: "Os formatos salvam parecido: nenhum se destaca." };
+  const n = umaCasa(vezes);
+  const monta = (multiplicacao: string) =>
+    `${maisSalva.label} salva ${n}${multiplicacao} mais, mas você postou ${maisPostado.count} ${PLURAL_DO_FORMATO[maisPostado.key]} e ${maisSalva.count} ${PLURAL_DO_FORMATO[maisSalva.key]}.`;
+  // O sinal × passa na guarda de jargão; se um dia deixar de passar, a frase usa "vezes".
+  const frase = checarFraseCinco(monta("×")).length === 0 ? monta("×") : monta(" vezes");
+  return { tipo: "descompasso", frase, maisSalva, maisPostado, vezes };
+}

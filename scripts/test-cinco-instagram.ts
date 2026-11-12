@@ -6,7 +6,9 @@ import assert from "node:assert/strict";
 import { fatosSemInstagram } from "../src/lib/leitura/fatos-instagram";
 import { checarFraseCinco, textoDaFrase } from "../src/lib/leitura/cinco-segundos";
 import type { FatosDaTela } from "../src/lib/leitura/tipos";
-import { numerosDoInstagram, vereditoDoInstagram, type DiaDoInstagram } from "../src/lib/leitura/cinco-instagram";
+import type { GroupStat } from "../src/lib/hub-conteudo";
+import { MIN_POSTS_DO_FORMATO, fraseDoFormato, numerosDoInstagram, vereditoDoInstagram, type DiaDoInstagram } from "../src/lib/leitura/cinco-instagram";
+import { FRASE_SEM_MELHOR_HORARIO, MIN_POSTS_NO_HORARIO, fraseDaCelula, horasDoMapa, mapaDosPosts, melhorHorario } from "../src/lib/mapa-dos-posts";
 
 // O real brasileiro sai com espaço sem quebra (U+00A0): nos testes comparamos com espaço comum.
 const sp = (t: string) => t.replace(/ /g, " ");
@@ -141,6 +143,79 @@ const fatosOk = (): FatosDaTela => ({
     assert.ok(n.motivo);
     assert.equal(n.selo, null);
   }
+}
+
+// ---------------------------------------------------------------- mapa de horários dos próprios posts
+{
+  // 2026-10-28 é uma quarta-feira. 21:00Z = 18h em São Paulo; 15:00Z = 12h; 02:00Z de quinta = 23h de quarta.
+  const post = (iso: string, reach: number | null) => ({ posted_at: iso, reach });
+  const celulas = mapaDosPosts([
+    post("2026-10-28T21:00:00Z", 1000),
+    post("2026-10-21T21:00:00Z", 3000), // quarta 18h de novo: média 2.000, 2 posts
+    post("2026-10-26T15:00:00Z", 90_000), // segunda 12h, um post só, o maior alcance de todos
+    post("2026-10-29T02:00:00Z", 400), // quarta 23h no horário de São Paulo (quinta em UTC)
+    post("2026-10-22T02:00:00Z", 600), // quarta 23h de novo: média 500, 2 posts
+    post("2026-10-27T21:00:00Z", null), // sem alcance medido: não vira zero, não entra
+    { posted_at: null, reach: 10 }, // sem data: não entra
+  ]);
+  assert.deepEqual(
+    celulas.map((c) => [c.dia, c.hora, c.posts, c.alcancePorPost]),
+    [
+      [1, 12, 1, 90_000],
+      [3, 18, 2, 2000],
+      [3, 23, 2, 500],
+    ],
+    "cada post cai no dia e na hora de São Paulo, só com alcance medido",
+  );
+  assert.deepEqual(horasDoMapa(celulas), [12, 18, 23], "só as horas com post viram coluna");
+
+  // O melhor horário só vale com MIN_POSTS_NO_HORARIO posts: o post solto de 90 mil NÃO ganha a estrela.
+  assert.equal(MIN_POSTS_NO_HORARIO, 2);
+  const melhor = melhorHorario(celulas);
+  assert.ok(melhor);
+  assert.deepEqual([melhor.dia, melhor.hora], [3, 18]);
+  assert.equal(melhorHorario([{ dia: 1, hora: 12, posts: 1, alcancePorPost: 90_000 }]), null, "uma célula com 1 post nunca é o melhor");
+  assert.equal(melhorHorario([]), null);
+  assert.equal(FRASE_SEM_MELHOR_HORARIO, "Poucos posts por horário para apontar o melhor.");
+
+  // A frase de uma célula tocada compara só com o melhor horário dos próprios posts.
+  assert.equal(sp(fraseDaCelula(melhor, melhor)), "Quarta 18h: 2,0 mil pessoas por post · o seu melhor horário.");
+  assert.equal(sp(fraseDaCelula(celulas[2], melhor)), "Quarta 23h: 500 pessoas por post · 4,0× menos que Quarta 18h.");
+  assert.equal(sp(fraseDaCelula(celulas[0], melhor)), "Segunda 12h: 90,0 mil pessoas por post · só 1 post, pouco para comparar.");
+  assert.doesNotMatch(fraseDaCelula(celulas[0], melhor), /melhor|pior/i, "com 1 post a frase não usa melhor nem pior");
+  assert.deepEqual(checarFraseCinco(fraseDaCelula(celulas[2], melhor)), []);
+}
+
+// ---------------------------------------------------------------- frase do formato
+{
+  const grupo = (key: string, label: string, count: number, savedMean: number): GroupStat => ({ key, label, count, reachMedian: 1000, reachMean: 1100, savedMean, savedMedian: savedMean });
+  // Estático salva 2,3 vezes mais, mas você postou 47 Reels e 19 estáticos.
+  const f = fraseDoFormato({ porFormato: [grupo("estatico", "Estático", 19, 339), grupo("reels", "Reels", 47, 150)] });
+  assert.equal(f.tipo, "descompasso");
+  assert.equal(sp(f.frase), "Estático salva 2,3× mais, mas você postou 47 Reels e 19 estáticos.");
+  assert.deepEqual(checarFraseCinco(f.frase), []);
+  assert.ok(f.frase.length <= 90);
+
+  // O formato que mais salva é o que mais se posta: sem descompasso.
+  const alinhado = fraseDoFormato({ porFormato: [grupo("reels", "Reels", 30, 300), grupo("estatico", "Estático", 20, 100)] });
+  assert.equal(alinhado.tipo, "alinhado");
+  assert.equal(alinhado.frase, "Reels é o que mais salva e o que você mais posta.");
+
+  // Salvam parecido: frase neutra, nenhum "melhor".
+  const neutro = fraseDoFormato({ porFormato: [grupo("reels", "Reels", 30, 100), grupo("estatico", "Estático", 20, 110)] });
+  assert.equal(neutro.tipo, "neutro");
+  assert.doesNotMatch(neutro.frase, /melhor|mais salva/i);
+
+  // Formato com menos de 8 posts não disputa nada (a mesma amostra de conclusão do painel), e "não classificado" nunca entra.
+  const poucos = fraseDoFormato({ porFormato: [grupo("estatico", "Estático", 7, 900), grupo("reels", "Reels", 47, 150), grupo("não classificado", "não classificado", 40, 5000)] });
+  assert.equal(poucos.tipo, "poucos");
+  assert.equal(poucos.frase, "Poucos posts por formato para apontar o melhor.");
+  assert.equal(fraseDoFormato(null).tipo, "poucos");
+  assert.equal(MIN_POSTS_DO_FORMATO, 8);
+
+  // Empate de quantidade não é descompasso.
+  const empate = fraseDoFormato({ porFormato: [grupo("reels", "Reels", 20, 100), grupo("estatico", "Estático", 20, 300)] });
+  assert.equal(empate.tipo, "alinhado");
 }
 
 console.log("test-cinco-instagram: ok");
