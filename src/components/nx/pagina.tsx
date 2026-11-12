@@ -120,13 +120,19 @@ function Linha({ rotulo, tom = "neutro", children }: { rotulo?: string; tom?: To
   );
 }
 
+/**
+ * Com barras, o número técnico longo (a base com "alcance típico … · …") não fica à vista: as barras já mostram cada valor e a conta
+ * inteira continua nos Detalhes da tela. Número curto ("+56% de conversas", "50 de 80") continua ao lado da frase.
+ */
+const MAX_CARACTERES_DO_NUMERO_COM_BARRAS = 60;
+
 /** A frase com o número que a sustenta logo depois (cada número em strong, tabular) e, quando o fato traz comparação, as barras embaixo. Texto sempre como texto do React. */
 function FraseComNumero({ linha }: { linha: LinhaTexto }) {
   return (
     <>
       <p className="nx-leitura__frase">
         {linha.frase}
-        {linha.numeros.map((n) => (
+        {linha.numeros.filter((n) => !linha.barras || n.exibicao.length <= MAX_CARACTERES_DO_NUMERO_COM_BARRAS).map((n) => (
           <Fragment key={n.chave}>
             {" "}
             <strong className="nx-leitura__num">{n.exibicao}</strong>

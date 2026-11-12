@@ -205,4 +205,4 @@
 }
 
 /* Barras de comparação dentro da linha da leitura (NxBarras): um respiro entre a frase e as barras. */
-.nx-leitura__corpo .nx-barras { margin-top: 6px; }
+.nx-leitura__corpo .nx-barras { margin-top: 4px; }
