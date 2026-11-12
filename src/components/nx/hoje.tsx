@@ -3,7 +3,7 @@ import { horaEmSaoPaulo, nomeDaSaudacao, saudacaoDaHora, type AcaoDaHoje } from 
 import type { TomFato } from "@/lib/leitura/tipos";
 import { LinkDoRegistro } from "@/components/menu-equipe";
 import { REGISTRO_DE_TELAS, juntadaDoCaminho, type TelaDoRegistro } from "@/lib/registro-de-telas";
-import { NxAcaoPilula, NxCartaoNumero } from "./cartoes";
+import { NxAcaoPilula, NxBarras, NxCartaoNumero } from "./cartoes";
 import "@/styles/nexo-hoje.css";
 
 // Peças da tela O que fazer hoje (Phase 3.1.1, plano 05, D-07), feitas sobre as peças de cartoes.tsx: saudação grande, chip de
@@ -71,8 +71,9 @@ function VerNumeros({ acao }: { acao: AcaoDaHoje }) {
 // ---------- Próximo ----------
 
 /**
- * Cartão de destaque "Próximo": a Ação da semana de Resultados, em degradê suave, com a seta escura para a aba de origem. A manchete
- * é curta e leiga; "Quem resolve" fica logo depois da pílula e o número técnico inteiro fica num "Ver números" fechado.
+ * Cartão de destaque "Próximo": a Ação da semana de Resultados, em degradê suave, com a seta escura para a aba de origem. Na mesma
+ * ordem dos cartões: a manchete (o número) primeiro, a legenda de uma frase, as barras de comparação quando o fato traz, o "Ver
+ * números" fechado e só então a pílula da ação, com o "Quem resolve" logo depois.
  */
 export function NxProximo({ acao, clientId, dateRange }: { acao: AcaoDaHoje } & Destino) {
   const linha = linhaDaRota(acao.rota);
@@ -80,8 +81,6 @@ export function NxProximo({ acao, clientId, dateRange }: { acao: AcaoDaHoje } & 
   return (
     <section className="nx-proximo" data-acao-hoje={acao.id} data-peca="proximo" data-area-hoje={acao.areaHoje} data-familia-hoje={acao.familia} aria-label="Próximo">
       <p className="nx-proximo__rotulo">Próximo</p>
-      <NxAcaoPilula frase={acao.frase} rotuloDaSeta="Abrir a aba de origem" para={linha ? { tela: linha, clientId, dateRange } : undefined} />
-      <p className="nx-proximo__quem">{`Quem resolve: ${acao.rotuloQuem}`}</p>
       <p className="nx-proximo__numero">
         <strong className={valor.curto ? "nx-proximo__valor" : "nx-proximo__valor nx-proximo__valor--texto"} data-numero-de-destaque data-manchete>
           {valor.texto}
@@ -92,7 +91,10 @@ export function NxProximo({ acao, clientId, dateRange }: { acao: AcaoDaHoje } & 
           </span>
         )}
       </p>
+      {acao.barras && <NxBarras barras={acao.barras} />}
       <VerNumeros acao={acao} />
+      <NxAcaoPilula frase={acao.frase} rotuloDaSeta="Abrir a aba de origem" para={linha ? { tela: linha, clientId, dateRange } : undefined} />
+      <p className="nx-proximo__quem">{`Quem resolve: ${acao.rotuloQuem}`}</p>
     </section>
   );
 }
@@ -130,7 +132,12 @@ export function NxCartaoDaAcao({ acao, clientId, dateRange }: { acao: AcaoDaHoje
         legenda={acao.legenda ? <span data-numero-de-destaque>{acao.legenda}</span> : undefined}
         variacao={acao.outroNumero ? { texto: acao.outroNumero.exibicao } : null}
         abrir={juntada && primeira ? { tela: primeira, clientId, dateRange, rotulo: juntada.secao.rotulo } : undefined}
-        extra={<VerNumeros acao={acao} />}
+        extra={
+          <>
+            {acao.barras && <NxBarras barras={acao.barras} />}
+            <VerNumeros acao={acao} />
+          </>
+        }
         acao={
           <>
             <NxAcaoPilula frase={acao.frase} rotuloDaSeta="Abrir a aba de origem" para={linha ? { tela: linha, clientId, dateRange } : undefined} />

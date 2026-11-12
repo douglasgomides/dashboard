@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, client, mockAccount } from "./fixtures";
 import { REGISTRO_DE_TELAS, SECOES_JUNTADAS } from "../../src/lib/registro-de-telas";
-import { GUARDA_DE_NUMERO_DA_HOJE, GUARDA_DE_TEXTO_DA_HOJE, JARGAO_DA_HOJE, MAXIMO_POR_AREA, MAX_CARACTERES_DA_MANCHETE } from "../../src/lib/leitura/fatos-hoje";
+import { GUARDA_DE_NUMERO_DA_HOJE, GUARDA_DE_TEXTO_DA_HOJE, JARGAO_DA_HOJE, MAXIMO_POR_AREA, MAX_CARACTERES_DA_LEGENDA, MAX_CARACTERES_DA_MANCHETE } from "../../src/lib/leitura/fatos-hoje";
 import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, mockCrm, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 
 // O que fazer hoje (Phase 3.1.1, plano 05): a primeira versão da tela Hoje da Phase 9. De 3 a 5 ações da semana por regra fixa
@@ -434,7 +434,32 @@ for (const janela of TELAS_DE_MEDIDA) {
       const sub = acao.locator(".nx-cartao__sub");
       if (await sub.count()) textos.push(norm(await sub.first().innerText()));
       for (const t of textos) expect(t, `jargão em "${t}"`).not.toMatch(JARGAO_DA_HOJE);
+      // Legenda de uma frase e até 90 caracteres (o que passa vai para o "Ver números").
+      if (await legenda.count()) {
+        const l = norm(await legenda.first().innerText());
+        expect(l.length, `legenda "${l}" com mais de ${MAX_CARACTERES_DA_LEGENDA} caracteres`).toBeLessThanOrEqual(MAX_CARACTERES_DA_LEGENDA);
+        expect(l.split(/(?<=[.!?])\s+/).length, `legenda "${l}" com mais de uma frase`).toBe(1);
+      }
+      // Barras de comparação: cada linha tem nome acessível "rótulo: valor" e nunca "atingido".
+      const linhasDeBarra = acao.locator('[data-barras] [role="img"]');
+      for (let b = 0; b < (await linhasDeBarra.count()); b++) {
+        const nome = (await linhasDeBarra.nth(b).getAttribute("aria-label")) ?? "";
+        expect(nome, "nome acessível da barra").toContain(":");
+        expect(nome, "a barra não diz % atingido").not.toMatch(/atingido/i);
+      }
     }
+    // O Próximo lê na ordem dos cartões: a manchete (o número) vem antes da pílula da ação.
+    const antes = await page.locator('[data-tela="hoje"] [data-peca="proximo"]').evaluate((el) => {
+      const m = el.querySelector("[data-manchete]")!;
+      const p = el.querySelector(".nx-acao-pilula")!;
+      const barras = el.querySelector("[data-barras]");
+      return {
+        manchetePrimeiro: !!(m.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING),
+        barrasAntesDaPilula: barras ? !!(barras.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING) : true,
+      };
+    });
+    expect(antes.manchetePrimeiro, "no Próximo a manchete vem antes da pílula").toBe(true);
+    expect(antes.barrasAntesDaPilula, "no Próximo as barras vêm antes da pílula").toBe(true);
     // O número técnico inteiro fica num "Ver números" fechado.
     const detalhes = page.locator('[data-tela="hoje"] details[data-ver-numeros]');
     const total = await detalhes.count();

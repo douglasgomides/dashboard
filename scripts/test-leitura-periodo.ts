@@ -78,3 +78,23 @@ assert.equal(soAlcance!.manchete, "Post de foto alcançou mais");
 // Título, porque, ação e base não mudam: as outras telas seguem iguais.
 assert.ok(duasFrentes!.base.includes("alcance mediano"), "a base técnica continua inteira no achado");
 console.log("test-leitura-periodo: manchete ok");
+
+// ---------- comparação em barras (quick 261112-e8e): frase curta e 2 ou 4 barras, com o nome leigo do formato ----------
+for (const [nome, a, barras] of [["duas frentes", duasFrentes, 2], ["leva longe", levaLonge, 4], ["só alcance", soAlcance, 2]] as const) {
+  const c = a!.comparacao;
+  assert.ok(c, `${nome}: o achado formato traz a comparação`);
+  assert.ok(c!.frase.length <= 90, `${nome}: frase com até 90 caracteres (${c!.frase})`);
+  assert.equal(c!.frase.split(/(?<=[.!?])\s+/).length, 1, `${nome}: uma frase só`);
+  assert.equal(c!.barras.length, barras, `${nome}: ${barras} barras`);
+  for (const b of c!.barras) {
+    assert.ok(b.fracao >= 0 && b.fracao <= 1, `${nome}: fração entre 0 e 1 (${b.rotulo})`);
+    assert.deepEqual(checarTextoDaHoje(b.rotulo), [], `${nome}: rótulo da barra leigo (${b.rotulo})`);
+    assert.deepEqual(checarTextoDaHoje(b.exibicao), [], `${nome}: valor da barra leigo (${b.exibicao})`);
+    assert.ok(!/mediano|taxa|contas/i.test(`${b.rotulo} ${b.exibicao} ${c!.frase}`), `${nome}: sem mediano, taxa nem contas`);
+  }
+  assert.ok(c!.frase.startsWith("Post de foto"), `${nome}: o estático é "Post de foto" (${c!.frase})`);
+  assert.equal(c!.barras[0].fracao, 1, `${nome}: a primeira barra é a maior`);
+}
+assert.match(soAlcance!.comparacao!.frase, /^Post de foto alcança \d+(,\d)?x mais que (Reels|Carrossel)\.$/);
+assert.equal(levaLonge!.comparacao!.frase, "Post de foto alcança mais, Reels é mais salvo.");
+console.log("test-leitura-periodo: comparação ok");

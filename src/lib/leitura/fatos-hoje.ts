@@ -14,10 +14,10 @@ import { REGISTRO_DE_TELAS } from "@/lib/registro-de-telas";
 import { deInsight } from "./adaptadores";
 import { resumirClinica } from "./resumo-clinica";
 import { checarTextoDaLeitura, frasePasso, montarTexto } from "./texto";
-import type { Fato, FatosDaTela, Numeral, PassoFato, PassoTexto, TelaId, TomFato, VerboPasso } from "./tipos";
+import type { BarraDoFato, Fato, FatosDaTela, Numeral, PassoFato, PassoTexto, TelaId, TomFato, VerboPasso } from "./tipos";
 
 /** Muda quando uma regra da Hoje muda. */
-export const VERSAO_REGRAS_HOJE = 2;
+export const VERSAO_REGRAS_HOJE = 3;
 
 /** Quantas ações a Hoje mostra, no máximo (D-01: de 3 a 5). */
 const MAXIMO_DE_ACOES = 5;
@@ -81,6 +81,9 @@ export const GUARDA_DE_NUMERO_DA_HOJE = /\b(agendamentos?|vendas?|consultas?|com
 /** Quantos caracteres a manchete do Próximo e dos cartões pode ter (D-07: frase curta que o médico lê de relance). */
 export const MAX_CARACTERES_DA_MANCHETE = 40;
 
+/** Quantos caracteres a legenda (a frase embaixo da manchete) pode ter: uma frase só. O que passa vai para o "Ver números". */
+export const MAX_CARACTERES_DA_LEGENDA = 90;
+
 /** Quantos caracteres tem o número de contexto do subtítulo do cartão ("10 posts"). */
 const MAX_CARACTERES_DO_CONTEXTO = 24;
 
@@ -108,6 +111,12 @@ export function checarTextoDaHoje(texto: string, max?: number): string[] {
   if (max != null && t.length > max) problemas.push(`mais de ${max} caracteres`);
   return problemas;
 }
+
+/** true quando o texto é uma frase só (nenhum ponto, exclamação ou interrogação no meio). */
+const umaFrase = (t: string) => t.replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s+/).filter(Boolean).length === 1;
+
+/** Legenda possível: passa no filtro da Hoje com o máximo de 90 caracteres e é uma frase só. */
+const legendaValida = (t: string) => checarTextoDaHoje(t, MAX_CARACTERES_DA_LEGENDA).length === 0 && umaFrase(t);
 
 function excluido(f: Fato): boolean {
   if (EXCLUIDOS_DA_HOJE.includes(f.id)) return true;
@@ -166,8 +175,10 @@ export interface AcaoDaHoje {
   destaque: string;
   /** true quando o destaque é um número do fato (o desenho o mostra grande); false quando é texto. */
   destaqueEhNumero: boolean;
-  /** A frase do fato de origem (o que aconteceu), que fica embaixo do destaque. null quando o destaque já é a frase inteira. */
+  /** A legenda embaixo da manchete: uma frase de até 90 caracteres (a da comparação ou a do fato). null quando o destaque já é a frase inteira ou a frase passou do limite. */
   legenda: string | null;
+  /** Barras de comparação (a regra calcula a proporção; a tela só desenha). Só quando o fato traz comparação que passa nas guardas. */
+  barras?: readonly BarraDoFato[];
   /** Subtítulo do cartão: "30 dias" ou "30 dias · 10 posts" (D-07: o número de contexto). */
   contexto: string;
   /** Outro número leigo do fato (até 40 caracteres), que vai na pílula de variação do cartão. */
@@ -337,6 +348,7 @@ function acaoDaCandidata(c: Candidata): AcaoDaHoje | null {
   let destaque: string | null = null;
   let destaqueEhNumero = false;
   let legenda: string | null = fraseDoFato;
+  let fraseDoFatoFicouDeFora = false;
   let numeroDoDestaque: Numeral | undefined;
   const numeroCurto = liberados.find((n) => leigo(n, MAX_CARACTERES_DA_MANCHETE));
   if (numeroCurto) {
@@ -368,12 +380,27 @@ function acaoDaCandidata(c: Candidata): AcaoDaHoje | null {
   // Nenhuma passou: a candidata não vira ação (a regra nunca encurta no meio de uma palavra).
   if (destaque == null) return null;
 
+  // A legenda, nesta ordem: (i) a frase da comparação do fato, com as barras (frase e cada rótulo e exibição passam nas guardas);
+  // (ii) a frase do fato quando é uma só e tem até 90 caracteres; (iii) nenhuma, e a frase inteira vai para o "Ver números".
+  const comp = c.fato.comparacao;
+  let barras: readonly BarraDoFato[] | undefined;
+  if (comp && comp.barras.length > 0 && legendaValida(comp.frase) && comp.barras.every((b) => checarTextoDaHoje(b.rotulo).length === 0 && checarTextoDaHoje(b.exibicao).length === 0)) {
+    legenda = comp.frase.trim();
+    barras = comp.barras;
+  } else if (legenda != null && !legendaValida(legenda)) {
+    legenda = null;
+    fraseDoFatoFicouDeFora = true;
+  }
+
   // Contexto do subtítulo: "30 dias" e, quando sobra um número leigo e curto, "30 dias · 10 posts".
   const dias = diasDoPeriodo(c.base.periodo.de, c.base.periodo.ate);
   const doContexto = liberados.find((n) => n !== numeroDoDestaque && leigo(n, MAX_CARACTERES_DO_CONTEXTO));
   const contexto = `${dias} ${dias === 1 ? "dia" : "dias"}${doContexto ? ` · ${doContexto.exibicao.trim()}` : ""}`;
   const outroNumero = liberados.find((n) => n !== numeroDoDestaque && n !== doContexto && leigo(n, MAX_CARACTERES_DA_MANCHETE));
-  const numerosTecnicos = liberados.filter((n) => !leigo(n, MAX_CARACTERES_DA_MANCHETE)).map((n) => n.exibicao.trim());
+  const numerosTecnicos = [
+    ...(fraseDoFatoFicouDeFora ? [fraseDoFato.trim()] : []),
+    ...liberados.filter((n) => !leigo(n, MAX_CARACTERES_DA_MANCHETE)).map((n) => n.exibicao.trim()),
+  ];
 
   const rota = rotaDoRegistro(c.rotaDoInsight) ?? c.rotaPadrao;
   return {
@@ -386,6 +413,7 @@ function acaoDaCandidata(c: Candidata): AcaoDaHoje | null {
     destaque,
     destaqueEhNumero,
     legenda,
+    ...(barras ? { barras } : {}),
     contexto,
     ...(outroNumero ? { outroNumero } : {}),
     numerosTecnicos,

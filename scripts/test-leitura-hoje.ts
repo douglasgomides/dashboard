@@ -22,6 +22,7 @@ import {
   GUARDA_DE_TEXTO_DA_HOJE,
   JARGAO_DA_HOJE,
   MAXIMO_POR_AREA,
+  MAX_CARACTERES_DA_LEGENDA,
   MAX_CARACTERES_DA_MANCHETE,
   PREFIXOS_EXCLUIDOS_DA_HOJE,
   ROTA_DA_AREA,
@@ -39,7 +40,7 @@ import {
 import { leads, ig, ads, posts, adsCampanhas } from "./fixtures/lana-2026-10";
 
 const C = "/_authenticated/$clientId";
-assert.equal(VERSAO_REGRAS_HOJE, 2);
+assert.equal(VERSAO_REGRAS_HOJE, 3);
 
 // ---------- fixture da Lana (a mesma de test-leitura-resultados.ts) ----------
 const START = "2026-09-13", END = "2026-10-12", HOJE = "2026-10-14";
@@ -518,6 +519,54 @@ if (comPosts.tipo === "acoes") {
   assert.ok(comPosts.paraEquipe.some((a) => a.id === "posts-sem-tema"), "posts-sem-tema em paraEquipe");
   assert.ok(comPosts.paraEquipe.length <= 3);
 }
+
+// ---------- legenda de 1 frase e até 90 caracteres; comparação com barras (quick 261112-e8e) ----------
+assert.equal(MAX_CARACTERES_DA_LEGENDA, 90);
+// Frase do fato com mais de 90 caracteres: legenda null, a frase inteira vai para o começo de numerosTecnicos (nunca corta no meio de palavra).
+const FRASE_LONGA = "Quem chama no WhatsApp espera muito tempo pela primeira resposta da equipe do consultório em todos os dias.";
+assert.ok(FRASE_LONGA.length > 90 && !/[.!?]\s/.test(FRASE_LONGA));
+const legendaLonga = unica(fato("lg", "ruim", 3, { manchete: "Espera longa no WhatsApp", frase: FRASE_LONGA, numeros: [{ chave: "evidencia", exibicao: "47 min" }] }));
+assert.ok(legendaLonga, "o fato de frase longa vira ação");
+assert.equal(legendaLonga!.legenda, null, "frase de mais de 90 caracteres não vira legenda");
+assert.equal(legendaLonga!.numerosTecnicos[0], FRASE_LONGA, "a frase inteira vai para o Ver números");
+// Frase do fato com 2 frases (mesmo curtas): também vai para o Ver números.
+const duasFrases = unica(fato("d2", "ruim", 3, { manchete: "Espera longa no WhatsApp", frase: "A espera subiu. A equipe demora a responder.", numeros: [{ chave: "evidencia", exibicao: "47 min" }] }));
+assert.ok(duasFrases);
+assert.equal(duasFrases!.legenda, null, "duas frases não viram legenda");
+assert.equal(duasFrases!.numerosTecnicos[0], "A espera subiu. A equipe demora a responder.");
+// Frase de 1 linha e até 90 caracteres continua legenda.
+const legendaCurta = unica(fato("lc", "ruim", 3, { manchete: "Espera longa no WhatsApp", frase: "A espera pela primeira resposta subiu neste período.", numeros: [{ chave: "evidencia", exibicao: "47 min" }] }));
+assert.equal(legendaCurta!.legenda, "A espera pela primeira resposta subiu neste período.");
+assert.equal(legendaCurta!.barras, undefined, "sem comparação, sem barras (e sem a chave)");
+assert.ok(!("barras" in legendaCurta!));
+// Comparação válida vira legenda e barras.
+const comComparacao = unica(fato("cmp", "bom", 2, {
+  manchete: "Post de foto alcançou mais",
+  frase: "Estático é o formato que mais leva o perfil a gente nova.",
+  numeros: [{ chave: "evidencia", exibicao: TECNICO }],
+  comparacao: { frase: "Post de foto alcança 2,4x mais que Carrossel.", barras: [{ rotulo: "Post de foto", exibicao: "2.400 pessoas", fracao: 1 }, { rotulo: "Carrossel", exibicao: "1.000 pessoas", fracao: 0.42 }] },
+}));
+assert.equal(comComparacao!.legenda, "Post de foto alcança 2,4x mais que Carrossel.", "a frase da comparação é a legenda");
+assert.equal(comComparacao!.barras?.length, 2);
+assert.ok(comComparacao!.barras!.every((b) => b.fracao >= 0 && b.fracao <= 1));
+assert.deepEqual(comComparacao!.numerosTecnicos, [TECNICO], "a frase do fato que ficou de fora não é duplicada quando a comparação vale");
+// Comparação com rótulo dos 4 números da Phase 9: não vira barra (D-06); a legenda volta para a frase do fato.
+const comGuardaNaBarra = unica(fato("cmp2", "bom", 2, {
+  manchete: "Post de foto alcançou mais",
+  frase: "Estático é o formato que mais leva o perfil a gente nova.",
+  numeros: [{ chave: "evidencia", exibicao: TECNICO }],
+  comparacao: { frase: "Mais gente chegou até a clínica.", barras: [{ rotulo: "Quem agendaram", exibicao: "10 pessoas", fracao: 1 }] },
+}));
+assert.equal(comGuardaNaBarra!.barras, undefined, "barra com 'agendaram' não é desenhada");
+assert.equal(comGuardaNaBarra!.legenda, "Estático é o formato que mais leva o perfil a gente nova.");
+// Comparação com frase de mais de 90 caracteres não vale.
+const comFraseLongaNaComparacao = unica(fato("cmp3", "bom", 2, {
+  manchete: "Post de foto alcançou mais",
+  frase: "Estático é o formato que mais leva o perfil a gente nova.",
+  numeros: [{ chave: "evidencia", exibicao: TECNICO }],
+  comparacao: { frase: FRASE_LONGA, barras: [{ rotulo: "Post de foto", exibicao: "2.400 pessoas", fracao: 1 }] },
+}));
+assert.equal(comFraseLongaNaComparacao!.barras, undefined);
 
 // ---------- o módulo é puro: sem banco, sem consulta e sem IA (D-05) ----------
 const fonte = readFileSync(new URL("../src/lib/leitura/fatos-hoje.ts", import.meta.url), "utf8");

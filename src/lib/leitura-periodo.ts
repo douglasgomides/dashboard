@@ -12,6 +12,7 @@
 import { fmtFormatKey, median } from "@/lib/report-metrics";
 import { conversaMaisBarata, GRUPOS, type DiagnosticoAds } from "@/lib/anuncios-objetivo";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
+import type { ComparacaoDoFato } from "@/lib/leitura/tipos";
 import { LIMITES } from "./limites.js";
 
 export type Tom = "bom" | "ruim" | "atencao";
@@ -23,6 +24,7 @@ export interface Achado {
   peso: number; // 1..3 — ordena e decide o veredito
   titulo: string; // a conclusão em uma frase
   manchete?: string; // manchete curta e leiga (até 40 caracteres) para a tela Hoje; só a regra de formatos escreve
+  comparacao?: ComparacaoDoFato; // frase curta (até 90 caracteres) e barras de comparação; só a regra de formatos escreve
   porque: string; // o que isso significa / de onde vem
   acao?: { texto: string; rota?: RotaAcao };
   base: string; // números usados, para conferir
@@ -173,6 +175,40 @@ function regraConcentracao(posts: any[], out: Achado[], falta: string[]) {
 export const NOME_LEIGO_DO_FORMATO: Record<string, string> = { reels: "Reels", carrossel: "Carrossel", estatico: "Post de foto", stories: "Stories" };
 export const nomeLeigoDoFormato = (chave: string): string => NOME_LEIGO_DO_FORMATO[chave] ?? fmtFormatKey(chave);
 
+/** Proporção de `x` em relação a `maior` (0 a 1); 0 quando não há maior. A regra calcula, a tela só desenha. */
+const relativo = (x: number, maior: number) => (maior > 0 ? Math.min(1, Math.max(0, x / maior)) : 0);
+interface GrupoDeFormato { f: string; alcance: number; salvo: number }
+
+/** Duas barras de alcance ("Post de foto alcança 2,4x mais que Carrossel."). Abaixo de 1,2x diz só que alcança mais. */
+function comparacaoDeAlcance(A: GrupoDeFormato, segundo: GrupoDeFormato, vezes: number): ComparacaoDoFato {
+  const a = nomeLeigoDoFormato(A.f);
+  const s = nomeLeigoDoFormato(segundo.f);
+  const x = vezes.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+  const frase = vezes >= 1.2 ? `${a} alcança ${x}x mais que ${s}.` : `${a} alcança mais que os outros formatos.`;
+  return {
+    frase,
+    barras: [
+      { rotulo: a, exibicao: `${int(A.alcance)} pessoas`, fracao: 1 },
+      { rotulo: s, exibicao: `${int(segundo.alcance)} pessoas`, fracao: relativo(segundo.alcance, A.alcance) },
+    ],
+  };
+}
+
+/** Quatro barras em dois pares: quem alcança mais e quem é mais salvo, cada medida com o próprio nome. */
+function comparacaoDeAlcanceESalvo(A: GrupoDeFormato, S: GrupoDeFormato): ComparacaoDoFato {
+  const a = nomeLeigoDoFormato(A.f);
+  const s = nomeLeigoDoFormato(S.f);
+  return {
+    frase: `${a} alcança mais, ${s} é mais salvo.`,
+    barras: [
+      { rotulo: `Alcance · ${a}`, exibicao: `${int(A.alcance)} pessoas`, fracao: 1 },
+      { rotulo: `Alcance · ${s}`, exibicao: `${int(S.alcance)} pessoas`, fracao: relativo(S.alcance, A.alcance) },
+      { rotulo: `Salvos · ${s}`, exibicao: `${pct(S.salvo, 1)} salvam`, fracao: 1 },
+      { rotulo: `Salvos · ${a}`, exibicao: `${pct(A.salvo, 1)} salvam`, fracao: relativo(A.salvo, S.salvo) },
+    ],
+  };
+}
+
 // 3. Alcance x profundidade por formato: quem leva longe e quem faz guardar.
 function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
   const g = new Map<string, { reach: number[]; taxaSalvo: number[] }>();
@@ -210,6 +246,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
       peso: 2,
       titulo: `${A.nome} é o formato que mais leva o perfil a gente nova.`,
       manchete: `${nomeLeigoDoFormato(A.f)} alcançou mais`,
+      comparacao: comparacaoDeAlcance(A, segundo, vezes),
       porque: `Alcance mediano de ${int(A.alcance)} contas, ${vezes.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}x o de ${segundo.nome}. Na taxa de salvamento os formatos ficaram parecidos, então a diferença está em quantas pessoas cada um alcança.`,
       acao: { texto: `Use ${A.nome} para os assuntos que você quer que mais gente conheça.`, rota: "conteudo" },
       base,
@@ -226,6 +263,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
       peso: 2,
       titulo: `${A.nome} ganha nas duas frentes: é o que mais alcança e o que mais é salvo.`,
       manchete: `${nomeLeigoDoFormato(A.f)} alcançou e foi mais salvo`,
+      comparacao: comparacaoDeAlcance(A, segundo, vezes),
       porque: `Alcança ${vezes >= 1.2 ? `${vezes.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}x mais que ${segundo.nome}` : "mais que os outros formatos"} e quem vê guarda para depois (${pct(A.salvo, 1)} salvam). É o formato em que a audiência deste perfil mais confia.`,
       acao: { texto: `Priorize ${A.nome} na grade das próximas semanas.`, rota: "conteudo" },
       base,
@@ -238,6 +276,7 @@ function regraFormatos(posts: any[], out: Achado[], falta: string[]) {
     peso: 2,
     titulo: `${A.nome} leva longe, ${S.nome} faz guardar.`,
     manchete: `${nomeLeigoDoFormato(A.f)} alcançou mais`,
+    comparacao: comparacaoDeAlcanceESalvo(A, S),
     porque: `${A.nome} tem o maior alcance mediano (${int(A.alcance)} contas): é o que apresenta o perfil a gente nova. ${S.nome} tem a maior taxa de salvamento (${pct(S.salvo, 1)} contra ${pct(A.salvo, 1)}): é o que gera confiança em quem já chegou. Os dois têm papéis diferentes no caminho até a consulta.`,
     acao: { texto: `Use ${A.nome} para atrair e ${S.nome} para aprofundar o mesmo assunto.`, rota: "conteudo" },
     base,

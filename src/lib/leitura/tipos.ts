@@ -40,6 +40,29 @@ export interface Numeral {
   valor?: number | null;
 }
 
+/**
+ * Uma barra de comparação (03.1.1, "menos texto, mais visual"). A regra já calcula a proporção: a tela só desenha, com largura
+ * igual a `fracao`, e nunca refaz a conta.
+ */
+export interface BarraDoFato {
+  /** O que a barra mede, leigo e curto ("Post de foto", "Alcance · Reels"). */
+  rotulo: string;
+  /** O valor ao lado da barra, já formatado ("1.230 pessoas", "12% salvam"). */
+  exibicao: string;
+  /** 0 a 1: o tamanho da barra em relação à maior da comparação (ou ao mínimo de dias, quando a barra mede amostra). */
+  fracao: number;
+  /** O que faltou (amostra abaixo do mínimo, dado ausente): a barra é listrada, nunca cheia. */
+  faltou?: boolean;
+}
+
+/** A frase curta de uma comparação e as barras que a mostram. */
+export interface ComparacaoDoFato {
+  /** Uma frase, até 90 caracteres, em português leigo. */
+  frase: string;
+  /** De 1 a 4 barras. */
+  barras: readonly BarraDoFato[];
+}
+
 export interface Fato {
   id: string;
   tom: TomFato;
@@ -48,6 +71,8 @@ export interface Fato {
   frase: string;
   /** Manchete curta e leiga escrita pela regra (até 40 caracteres), para a Hoje. Só existe quando a regra a escreveu. */
   manchete?: string;
+  /** Comparação em barras (a regra escreve a frase curta e calcula as proporções). Só existe quando a regra a escreveu. */
+  comparacao?: ComparacaoDoFato;
   numeros: Numeral[];
   /** Ressalva sobre o dado (ex.: período incompleto), não uma conclusão: só vira leitura se não houver conclusão melhor. */
   ressalva?: boolean;

@@ -3,6 +3,7 @@ import { IconeTabler } from "@/components/icons/tabler";
 import { LinkDoRegistro } from "@/components/menu-equipe";
 import type { NomeIcone, TelaDoRegistro } from "@/lib/registro-de-telas";
 import type { DateRangeState } from "@/lib/date-range";
+import type { BarraDoFato } from "@/lib/leitura/tipos";
 import "@/styles/nexo-cartoes.css";
 
 // Peças do D-07 (Phase 3.1.1, referência visual aprovada pelo João em 10/11/2026) para cartões e ações. Toda tela no molde
@@ -81,6 +82,37 @@ export function NxPilulaVariacao({ texto, sobe }: { texto: string; sobe?: boolea
       )}
       {texto}
     </span>
+  );
+}
+
+/**
+ * Barras de comparação (03.1.1, "menos texto, mais visual"): uma linha por barra com o rótulo, a barra e o valor. A largura é a
+ * `fracao` que a regra calculou (a peça só desenha). Cada linha tem nome acessível próprio ("Post de foto: 1.230 pessoas"), porque
+ * o da meta diz "% atingido" e isso seria falso numa comparação. O que faltou (`faltou`) é listrado, nunca cheio.
+ */
+export function NxBarras({ barras, rotulo }: { barras: readonly BarraDoFato[]; rotulo?: string }) {
+  if (barras.length === 0) return null;
+  return (
+    <ul className="nx-barras" data-barras aria-label={rotulo}>
+      {barras.map((b) => {
+        const fracao = Math.max(0, Math.min(1, b.fracao));
+        return (
+          <li key={b.rotulo} className="nx-barras__item" data-faltou={b.faltou ? "" : undefined}>
+            <span className="nx-barras__linha" role="img" aria-label={`${b.rotulo}: ${b.exibicao}`}>
+              <span className="nx-barras__rotulo" aria-hidden>
+                {b.rotulo}
+              </span>
+              <span className={b.faltou ? "nx-meta-tracejada__barra nx-barras__barra nx-faltou" : "nx-meta-tracejada__barra nx-barras__barra"} aria-hidden>
+                <span className="nx-meta-tracejada__feito" style={{ width: `${Math.round(fracao * 100)}%` }} />
+              </span>
+              <span className="nx-barras__valor" aria-hidden>
+                {b.exibicao}
+              </span>
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

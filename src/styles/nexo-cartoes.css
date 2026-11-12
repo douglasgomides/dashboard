@@ -217,6 +217,39 @@
   color: var(--muted-ink);
 }
 
+/* Barras de comparação (NxBarras): rótulo, barra de 8 px e valor, em linhas compactas (a régua de 1,5 tela). A borda tracejada da
+   meta não vale aqui: não há meta numa comparação. */
+.app.product-workspace:not(.sap-workspace) .nx-barras {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-barras__linha {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-barras__rotulo {
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-meta-tracejada__barra.nx-barras__barra {
+  border-right: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-barras__valor {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  text-align: right;
+}
+
 @media (max-width: 560px) {
   .app.product-workspace:not(.sap-workspace) .nx-acao-pilula {
     font-size: 15px;
