@@ -215,6 +215,25 @@ Plans:
 **Wave 8** *(blocked on Wave 7 completion)*
 - [ ] 03.1.1-08-PLAN.md — Equipe agrupada em 9 seções (Conteúdo, Atendimento, Configurar CRM), busca com "Seção › Aba", alturas das 10 abas da equipe registradas; publica; o João olha a visão do médico e a da equipe (critério 5)
 
+### Phase 03.1.1.1: Telas no formato 5 segundos (INSERTED)
+
+**Goal:** Cada tela da clínica e a Carteira passam no teste dos 5 segundos: quem bate o olho sabe se está bom ou ruim, por quê e o que fazer. Leva para o Nexo os 8 pilotos HTML aprovados pelo João em 12/11/2026 (Hoje, Resultados, Do contato à venda, Atendimento, Instagram, Anúncios, Carteira, Fechamento do mês).
+**Requirements**: CINCO-01..CINCO-08 (a definir no plano)
+**Decisões do João (12/11/2026):** nota do dia 0–100 entra com a regra do piloto (só sinais da própria clínica; 50 = igual ao período anterior; fatores ao tocar; "não garante resultado"). Nunca comparar uma clínica com outras. Envio do resumo semanal pelo WhatsApp e Compartilhar/Baixar PDF do Fechamento do mês ficam para fase própria depois (aqui só a prévia).
+**Fonte:** pilotos em scratchpad (fora do repositório, têm dados reais), padrão em PADRAO.md, pesquisa em .planning/research/ux-mercado/.
+
+**Success Criteria**:
+1. Toda tela abre na ordem: veredito (palavra + uma frase com número) → até 3 números com ▲▼ vs o próprio período anterior e linha de 30 dias → um gráfico que prova → 3 a 5 descobertas com ação e "Por quê?" → "Ver tudo" fechado.
+2. Nenhuma tela compara a clínica com outras clínicas.
+3. Hoje mostra a nota do dia com os fatores ao tocar; Carteira ordena por urgência, com quem resolve cada alerta.
+4. Fechamento do mês abre como história em cartões (sem envio real).
+5. Nada cortado, sem frase > 90 caracteres, respeitando as alturas já medidas; só regras (sem IA); sem SQL nem migration.
+**Depends on:** Phase 03.1.1
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 03.1.1.1 to break down)
+
 ### Phase 4: Pacote do template do WhatsApp à Meta
 
 **Goal**: O João tem o pacote pronto para pedir o template à Meta cedo no calendário, para que a aprovação externa não segure a v1.5.
