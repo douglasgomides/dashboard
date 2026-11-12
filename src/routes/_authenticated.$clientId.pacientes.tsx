@@ -14,6 +14,9 @@ import { NxLinhaDe30Dias, type SerieDiaria } from "@/components/nx/linha-de-30-d
 import { serieContinua } from "@/lib/linha-30-dias";
 import { dePacientesDoPeriodo, rotuloDoAnterior, type VariacaoDaEtapa } from "@/lib/funil-desenhado";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
+import { NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxPessoasNaMesa } from "@/components/nx/pessoas-na-mesa";
+import { pessoasNaMesa, vereditoDePacientes } from "@/lib/leitura/cinco-pacientes";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido } from "@/components/nx/blocos";
 import { fatosDePacientes } from "@/lib/leitura/fatos-pacientes";
 import { periodosDeComparacao, somaDiaria, variacaoPct, type VariacaoPct } from "@/lib/leitura/fatos-resultados";
@@ -222,12 +225,14 @@ function PacientesDoPeriodo() {
     meta: <span>{rotuloPeriodo}</span>,
   };
 
-  if (q.isLoading) return <PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={null} carregando semSelo />} corpo={<NxCarregando texto="Contando as pessoas do período…" linhas={4} />} />;
+  if (q.isLoading)
+    return <PaginaNexo {...cabecalho} veredito={<NxVeredito veredito={null} carregando tela="pacientes" />} leitura={null} corpo={<NxCarregando texto="Contando as pessoas do período…" linhas={4} />} />;
   if (q.isError || !q.data)
     return (
       <PaginaNexo
         {...cabecalho}
-        leitura={<LeituraDaTela fatos={null} carregando={false} erro="A consulta falhou." semSelo />}
+        veredito={<NxVeredito veredito={null} carregando={false} erro="A consulta falhou." tela="pacientes" />}
+        leitura={null}
         corpo={<NxErro texto="Não foi possível carregar os pacientes do período. A consulta falhou." onTentar={() => void q.refetch()} />}
       />
     );
@@ -276,11 +281,44 @@ function PacientesDoPeriodo() {
     ),
   ].filter(Boolean);
 
+  // Formato 5 segundos (03.1.1.1): o veredito da maior perda abre a tela; "Pessoas na mesa" (Virou lead menos Atendido) é o número-chave 1 e
+  // aparece uma vez só na página visível. A leitura de antes e tudo o que a tela mostrava moram no "Ver tudo", fechado.
+  const carregandoFontes = diario.isPending || diarioAnterior.isPending || metas.carregando;
+  const veredito = funilDesenhado ? vereditoDePacientes({ funil: funilDesenhado, fatos }) : null;
+  const mesa = funilDesenhado ? pessoasNaMesa(funilDesenhado) : { faltaDado: "O funil do período não veio." };
+  // "Ver quem está esperando" só abre uma lista que a tela já tem (D-04: nada é enviado): a dos leads, ou a de quem foi atendido.
+  const listaDaMesa: ChaveNumero | null = d.listas?.leads_novos ? "leads_novos" : d.listas?.negociacao ? "negociacao" : null;
+  const cartaoDaMesa = (
+    <NxCartaoNumero
+      key="mesa"
+      icone="users"
+      titulo="Pessoas na mesa"
+      valor={mesa.faltaDado == null ? fmt(mesa.esperando) : null}
+      legenda={mesa.faltaDado == null ? "pessoas ficaram na mesa: viraram lead e ninguém atendeu ainda" : undefined}
+      semMedida={mesa.faltaDado != null}
+      extra={
+        <>
+          {mesa.faltaDado == null && <NxSelo tom="neutro" texto="Falta dado · sem período anterior" />}
+          <NxPessoasNaMesa mesa={mesa} />
+        </>
+      }
+      acao={
+        mesa.faltaDado == null && listaDaMesa ? (
+          <button type="button" className="nx-botao" onClick={() => mostrar(listaDaMesa)}>
+            Ver quem está esperando
+          </button>
+        ) : undefined
+      }
+    />
+  );
+
   return (
     <PaginaNexo
       {...cabecalho}
-      leitura={<LeituraDaTela fatos={fatos} carregando={diario.isPending || diarioAnterior.isPending || metas.carregando} semSelo />}
-      cartoes={cartoes.length ? ([cartoes[0], cartoes[1], cartoes[2], cartoes[3]] as [ReactNode, ReactNode?, ReactNode?, ReactNode?]) : undefined}
+      veredito={<NxVeredito veredito={veredito} carregando={carregandoFontes} tela="pacientes" />}
+      leitura={<LeituraDaTela fatos={fatos} carregando={carregandoFontes} semSelo />}
+      cartoes={[cartaoDaMesa]}
+      resumoDoVerTudo="etapa por etapa, listas e evolução por dia"
       principal={
         funilDesenhado ? (
           <NxCard id="funil" nivel={2} icone={icT("filter")} titulo="Do contato à venda" subtitulo={`${rotuloPeriodo} · toque numa etapa`}>
@@ -319,6 +357,7 @@ function PacientesDoPeriodo() {
       }
       detalhe={
         <div className="nexo-results-overview">
+          {cartoes.length > 0 && <div className="nx-grade nx-grade--4">{cartoes}</div>}
           {linhasDia.length >= 3 && (
             <NxCard id="evolucao" nivel={2} icone={icT("chart-bar")} titulo="Evolução por dia" subtitulo={rotuloPeriodo}>
               <NxLinhaTempo

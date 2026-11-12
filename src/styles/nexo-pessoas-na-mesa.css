@@ -1,0 +1,74 @@
+/* Pessoas na mesa (Phase 03.1.1.1, plano 05): a grade de pontos do cartão "Pessoas na mesa" de "Do contato à venda". Só tokens de
+   nexo-system.css (nenhum hex), espaços em 4, 8, 12 e 16, peso de letra nunca abaixo de 500, sem animação (nada se move) e nada cortado
+   (molde k). Escopo: a casca do Nexo fora do SAP. Ponto cheio = atendido; ponto vazado = esperando (a legenda escrita diz o mesmo). */
+.app.product-workspace:not(.sap-workspace) .nx-mesa {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: nx-mesa;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mesa__pontos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mesa__ponto {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mesa__ponto[data-estado="atendido"] {
+  background: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-mesa__ponto[data-estado="esperando"] {
+  background: var(--dn-bg);
+  box-shadow: inset 0 0 0 2px var(--dn);
+}
+.app.product-workspace:not(.sap-workspace) .nx-mesa__legenda {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted-ink);
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mesa__chave {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mesa__chave::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mesa__chave[data-estado="atendido"]::before {
+  background: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-mesa__chave[data-estado="esperando"]::before {
+  background: var(--dn-bg);
+  box-shadow: inset 0 0 0 2px var(--dn);
+}
+.app.product-workspace:not(.sap-workspace) .nx-mesa__escala {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Tela larga: o ponto cresce um pouco (a grade cabe em menos linhas). */
+@container nx-mesa (min-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-mesa__ponto {
+    width: 12px;
+    height: 12px;
+  }
+}
