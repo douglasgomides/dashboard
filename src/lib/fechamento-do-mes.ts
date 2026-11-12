@@ -272,7 +272,7 @@ export function cartoesDoMes(e: EntradaDoMes): CartaoDoMes[] {
       legenda: salvos === 1 ? "pessoa salvou" : "pessoas salvaram",
       post: {
         legenda: legenda || null,
-        alcance: campeao.reach != null && Number(campeao.reach) > 0 ? `${compacto(Number(campeao.reach))} alcançadas` : null,
+        alcance: campeao.reach != null && Number(campeao.reach) > 0 ? compacto(Number(campeao.reach)) : null,
         formato: campeao.format ? nomeLeigoDoFormato(campeao.format) : null,
         tema: campeao.tema?.trim() || null,
         quando: campeao.posted_at ? quandoFoiPublicado(campeao.posted_at) : null,

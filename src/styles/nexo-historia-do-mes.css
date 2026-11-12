@@ -251,6 +251,10 @@
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
+/* Número comprido ("R$ 33,33", "+1.234"): um pouco menor, para caber em uma linha. */
+.app.product-workspace:not(.sap-workspace) .nx-historia__numero[data-longo] {
+  font-size: 17cqw;
+}
 .app.product-workspace:not(.sap-workspace) .nx-historia__legenda {
   margin: 0;
   font-size: max(18px, 6.2cqw);
@@ -390,11 +394,14 @@
 .app.product-workspace:not(.sap-workspace) .nx-historia__quadros dd {
   margin: 0;
   overflow: hidden;
-  font-size: max(15px, 5cqw);
+  font-size: max(15px, 4.6cqw);
   font-weight: 800;
   line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 .app.product-workspace:not(.sap-workspace) .nx-historia__quadros dt {
   font-size: max(14px, 3.4cqw);

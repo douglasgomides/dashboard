@@ -111,8 +111,8 @@ export function NxHistoriaDoMes({ cartoes, aberto, aoFechar, inicio = 0 }: NxHis
     if (!aberto || !movimento || pausado || ultimo || total === 0) return;
     let quadro = 0;
     const inicioDoTrecho = performance.now() - decorrido.current;
-    const passo = (agora: number) => {
-      const d = agora - inicioDoTrecho;
+    const passo = () => {
+      const d = performance.now() - inicioDoTrecho;
       decorrido.current = d;
       const k = Math.min(1, d / DURACAO_DO_CARTAO_EM_MS);
       setProgresso(k);
@@ -262,8 +262,8 @@ function NumeroGrande({ texto, mover }: { texto: string; mover: boolean }) {
     setContando(true);
     const inicio = performance.now();
     let quadro = 0;
-    const passo = (agora: number) => {
-      const k = Math.min(1, (agora - inicio) / DURACAO_DA_CONTAGEM_EM_MS);
+    const passo = () => {
+      const k = Math.min(1, (performance.now() - inicio) / DURACAO_DA_CONTAGEM_EM_MS);
       const suave = 1 - Math.pow(1 - k, 3);
       setExibido(k >= 1 ? texto : numeroNoPasso(texto, suave));
       if (k < 1) quadro = requestAnimationFrame(passo);
@@ -273,7 +273,7 @@ function NumeroGrande({ texto, mover }: { texto: string; mover: boolean }) {
     return () => cancelAnimationFrame(quadro);
   }, [texto, mover]);
   return (
-    <span className="nx-historia__numero" data-peca="numero-do-cartao" aria-hidden={contando ? true : undefined}>
+    <span className="nx-historia__numero" data-peca="numero-do-cartao" data-longo={texto.length > 6 ? "" : undefined} aria-hidden={contando ? true : undefined}>
       {exibido}
     </span>
   );
@@ -303,7 +303,7 @@ const CartaoDaHistoria = memo(function CartaoDaHistoria({ cartao, mover }: { car
 /** O post campeão: a legenda da própria clínica como texto (duas linhas, o texto inteiro no title) e os dados do post em quatro quadros. */
 function PostCampeao({ post }: { post: PostDoCartao }) {
   const quadros = [
-    post.alcance ? { valor: post.alcance, rotulo: "no alcance" } : null,
+    post.alcance ? { valor: post.alcance, rotulo: "pessoas alcançadas" } : null,
     post.formato ? { valor: post.formato, rotulo: "formato" } : null,
     post.tema ? { valor: post.tema, rotulo: "tema" } : null,
     post.quando ? { valor: post.quando, rotulo: "publicado em" } : null,
