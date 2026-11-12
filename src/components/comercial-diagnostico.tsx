@@ -166,7 +166,7 @@ const ICONE_STATUS: Record<StatusItem, { icone: LucideIcon; cor: string; texto: 
   sem_dado: {
     icone: HelpCircle,
     cor: "var(--text-faint)",
-    texto: "Sem leitura",
+    texto: "Falta dado",
   },
 };
 
