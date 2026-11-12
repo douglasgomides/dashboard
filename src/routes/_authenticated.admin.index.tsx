@@ -1,5 +1,5 @@
 import { DIAS_SEM_ENTRAR, entraNaCarteira, fatoDeAcesso, type AcessoClinica } from "@/lib/carteira-alertas";
-import { useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,7 +17,7 @@ import { alertasDaClinica, casaFiltroDeCor, corDaClinica, descobertasDaCarteira,
 import { NxDescobertas, NxVeredito } from "@/components/nx/cinco-segundos";
 import { NxPainelDaClinica } from "@/components/nx/painel-da-clinica";
 import { FONTES, NOME_FONTE, LEGENDA_STATUS, VAR_COR, type FonteId } from "@/lib/status-fonte";
-import { AlertTriangle, ArrowRight, Building2, Calculator, Clock, MinusCircle, Search, ShieldCheck, Unplug, UserPlus, UserX } from "lucide-react";
+import { AlertTriangle, ArrowRight, Building2, Calculator, Clock, MinusCircle, Search, ShieldCheck, Tv, Unplug, UserPlus, UserX, X } from "lucide-react";
 import { saudeDaFonte, CelulaSaude, SeloStatus, type SaudeFonte } from "@/components/source-health";
 import { useQualidadeDados } from "@/components/qualidade-dados";
 import { LinksSemCliente } from "@/components/links-shortio";
@@ -569,6 +569,21 @@ function AdminClientsPage() {
     setPainelId(null);
     abridor.current?.focus({ preventScroll: true });
   };
+  // Modo TV (D-07): letra grande e sem o menu, para a tela da sala. Só liga o atributo data-modo-tv no <html>; Esc (com o painel
+  // fechado), o mesmo botão e sair da tela desligam. Nada é buscado nem atualizado sozinho.
+  const [tv, setTv] = useState(false);
+  useEffect(() => {
+    if (!tv) return;
+    document.documentElement.setAttribute("data-modo-tv", "");
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !document.querySelector("dialog[open]")) setTv(false);
+    };
+    window.addEventListener("keydown", aoTeclar);
+    return () => {
+      window.removeEventListener("keydown", aoTeclar);
+      document.documentElement.removeAttribute("data-modo-tv");
+    };
+  }, [tv]);
   const [verTudoAberto, setVerTudoAberto] = useState(false);
   const [diagAberto, setDiagAberto] = useState(false);
   // Ações das descobertas: só abrem um lugar da própria tela (nada é enviado).
@@ -623,6 +638,12 @@ function AdminClientsPage() {
         tela="carteira"
         carregando={carregandoUrg}
         veredito={isLoading ? null : vereditoDaCarteira(linhasUrgencia)}
+        acao={
+          <button type="button" className="adm-btn" aria-pressed={tv} onClick={() => setTv((v) => !v)} title={tv ? "Voltar ao menu e à letra de sempre (Esc)" : "Letra grande e sem o menu, para a tela da sala"}>
+            {tv ? <X aria-hidden /> : <Tv aria-hidden />}
+            {tv ? "Sair do modo TV" : "Modo TV"}
+          </button>
+        }
       />
 
       <AdmContadores rotulo="Números da carteira">

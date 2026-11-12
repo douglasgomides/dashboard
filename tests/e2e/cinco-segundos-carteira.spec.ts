@@ -49,6 +49,10 @@ for (const width of [375, 1440]) {
     expect(textoDaLista).not.toMatch(GUARDA_SEM_COMPARAR_CLINICAS);
     expect(textoDaLista).not.toMatch(/(^|\s)(\d+º|#\s?\d+)(\s|$)/);
     expect(textoDaLista).not.toMatch(/ranking|posição/i);
+    // Nenhuma promessa de ponto por correção (D-05).
+    expect(textoDaLista).not.toMatch(/pontos?\b|\+\d+ ?pts/i);
+    // Nada cortado na tela toda (veredito, números, filtros, lista e descobertas).
+    expect(await cortesEm(page, RAIZ)).toEqual([]);
 
     // As opções de ordem falam de urgência e de saúde dos dados, nunca de desempenho (I-1).
     const opcoes = await page.locator(".adm-ordem select option").allInnerTexts();
@@ -234,3 +238,55 @@ test("as descobertas são só de urgência: de 3 a 5, uma ação e um 'Por quê?
   await expect(page.locator("details.adm-urgencia__ver-tudo")).toHaveJSProperty("open", true);
   await expect(page.locator("details.adm-det", { hasText: "Diagnóstico das fontes" }).first()).toHaveJSProperty("open", true);
 });
+
+// ---------- Modo TV ----------
+
+for (const width of [375, 1440]) {
+  test(`Modo TV: letra grande, sem o menu, Esc e o botão saem, e nada fica ligado ao sair da tela em ${width}px`, async ({ page, context }) => {
+    await abrir(page, context, width);
+    const html = page.locator("html");
+    const menu = width > 820 ? page.locator("aside.nx-barra") : page.locator("header.mhead");
+    const frase = page.locator(".nx-veredito__frase").first();
+    const fonteAntes = await frase.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    await expect(menu).toBeVisible();
+    await expect(html).not.toHaveAttribute("data-modo-tv");
+
+    const botao = page.getByRole("button", { name: "Modo TV" });
+    await expect(botao).toHaveAttribute("aria-pressed", "false");
+    await botao.click();
+    await expect(html).toHaveAttribute("data-modo-tv", "");
+    await expect(menu).toBeHidden();
+    const sair = page.getByRole("button", { name: "Sair do modo TV" });
+    await expect(sair).toHaveAttribute("aria-pressed", "true");
+    const fonteTv = await frase.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    expect(fonteTv, "a frase do veredito cresce no Modo TV").toBeGreaterThanOrEqual(Math.max(40, fonteAntes + 8));
+    // Mesmo em TV nada passa da largura e nada é cortado.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    expect(await cortesEm(page, RAIZ)).toEqual([]);
+
+    // Esc com o painel aberto fecha só o painel; o segundo Esc sai do Modo TV.
+    await page.locator(`${LISTA} .adm-linha`).first().locator("button.adm-quem--botao").click();
+    const painel = page.getByRole("dialog", { name: "Dra. Carla Mendes" });
+    await expect(painel).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(painel).toBeHidden();
+    await expect(html).toHaveAttribute("data-modo-tv", "");
+    await page.keyboard.press("Escape");
+    await expect(html).not.toHaveAttribute("data-modo-tv");
+    await expect(menu).toBeVisible();
+
+    // O mesmo botão também sai.
+    await page.getByRole("button", { name: "Modo TV" }).click();
+    await expect(html).toHaveAttribute("data-modo-tv", "");
+    await page.getByRole("button", { name: "Sair do modo TV" }).click();
+    await expect(html).not.toHaveAttribute("data-modo-tv");
+    await expect(menu).toBeVisible();
+
+    // Sair da tela com o Modo TV ligado (T-03.1.1.1-10): nenhuma outra tela herda o atributo.
+    await page.getByRole("button", { name: "Modo TV" }).click();
+    await expect(html).toHaveAttribute("data-modo-tv", "");
+    await page.getByRole("link", { name: /Cadastrar clínica nova/ }).click();
+    await expect(page).toHaveURL(/\/sap/);
+    await expect(html).not.toHaveAttribute("data-modo-tv");
+  });
+}

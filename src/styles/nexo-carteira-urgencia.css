@@ -316,3 +316,50 @@
     }
   }
 }
+
+/* ---------- Modo TV: letra grande e sem o menu (o atributo vai no <html> e sai ao desligar, com Esc ou ao sair da tela) ---------- */
+html[data-modo-tv] .app.product-workspace.workspace-admin {
+  grid-template-columns: minmax(0, 1fr);
+}
+html[data-modo-tv] .app.product-workspace.workspace-admin > aside.nx-barra,
+html[data-modo-tv] .app.product-workspace.workspace-admin .mhead {
+  display: none;
+}
+html[data-modo-tv] .app.product-workspace:not(.sap-workspace) .adm-carteira .nx-veredito__frase {
+  font-size: clamp(40px, 5vw, 72px);
+  line-height: 1.1;
+}
+html[data-modo-tv] .app.product-workspace:not(.sap-workspace) .adm-carteira .nx-veredito__apoio {
+  font-size: 22px;
+  line-height: 30px;
+}
+html[data-modo-tv] .app.product-workspace:not(.sap-workspace) .adm-carteira .adm-cont__valor {
+  font-size: 44px;
+  line-height: 48px;
+}
+html[data-modo-tv] .app.product-workspace:not(.sap-workspace) .adm-carteira .adm-cont__rotulo {
+  font-size: 18px;
+  line-height: 24px;
+}
+html[data-modo-tv] .app.product-workspace:not(.sap-workspace) .adm-carteira .adm-linha {
+  padding-block: 18px;
+}
+html[data-modo-tv] .app.product-workspace:not(.sap-workspace) .adm-carteira .adm-quem__nome {
+  font-size: 24px;
+  line-height: 30px;
+}
+html[data-modo-tv] .app.product-workspace:not(.sap-workspace) .adm-carteira .adm-quem__sub {
+  font-size: 16px;
+  line-height: 22px;
+}
+html[data-modo-tv] .app.product-workspace:not(.sap-workspace) .adm-carteira .adm-num b {
+  font-size: 22px;
+  line-height: 28px;
+}
+/* Só o que importa na sala: o veredito, os 3 números e a lista. O resto volta ao sair do modo. */
+html[data-modo-tv] .app.product-workspace:not(.sap-workspace) .adm-carteira .nx-descobertas,
+html[data-modo-tv] .app.product-workspace:not(.sap-workspace) .adm-carteira .adm-det,
+html[data-modo-tv] .app.product-workspace:not(.sap-workspace) .adm-carteira > .nx-nota,
+html[data-modo-tv] .app.product-workspace:not(.sap-workspace) .adm-carteira .adm-urgencia__filtro-ativo {
+  display: none;
+}
