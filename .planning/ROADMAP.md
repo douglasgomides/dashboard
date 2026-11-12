@@ -230,7 +230,7 @@ Plans:
 5. Nada cortado, sem frase > 90 caracteres, respeitando as alturas já medidas; só regras (sem IA); sem SQL nem migration.
 
 **Depends on:** Phase 03.1.1
-**Plans:** 6/9 plans executed (um PR só para a fase; no máximo 2 executores em paralelo, com arquivos disjuntos)
+**Plans:** 7/9 plans executed (um PR só para a fase; no máximo 2 executores em paralelo, com arquivos disjuntos)
 
 Plans:
 **Wave 1**
@@ -245,7 +245,7 @@ Plans:
 - [x] 03.1.1.1-05-PLAN.md — Do contato à venda: "Aqui você perde mais", "pessoas na mesa" como número 1 com pontos, funil A2 como prova, descobertas
 
 **Wave 4** *(blocked on Wave 3 completion; 06 e 07 em paralelo)*
-- [ ] 03.1.1.1-06-PLAN.md — Atendimento › Qualidade no molde: faixa do normal da própria clínica, dia fora marcado, dia cruzado com Instagram e anúncio, descobertas
+- [x] 03.1.1.1-06-PLAN.md — Atendimento › Qualidade no molde: faixa do normal da própria clínica, dia fora marcado, dia cruzado com Instagram e anúncio, descobertas
 - [ ] 03.1.1.1-07-PLAN.md — Instagram › Desempenho: veredito, 3 números, "O que funciona" (formato, horário dos próprios posts, tema), descobertas, Top 5 em "Ver tudo"
 
 **Wave 5** *(blocked on Wave 4 completion; 08 e 09 em paralelo)*
