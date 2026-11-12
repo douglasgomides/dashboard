@@ -15,6 +15,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { erroCurto, lerDadosAte } from "./sync-status.js";
+import { avisoDePausaMeta, ehSoPausaMeta } from "../../src/lib/pausa-meta.js";
+import { dadoEmDiaParaPausa } from "../../src/lib/status-fonte.js";
 
 export type ViaAnuncios = "graph" | "windsor";
 
@@ -62,6 +64,8 @@ export interface AvaliacaoConta {
   avisoDono: string | null;
   rows: number;
   precisaReconferir: number;
+  /** A Meta pediu uma pausa por limite de uso nesta conta, mas o dado dela está em dia: vira aviso, não erro (pausa-meta.ts). */
+  pausaMeta?: boolean;
 }
 
 /** Leitura vale por 48 h: o sync roda todo dia, e uma via que parou de rodar não pode manter o "ok" de ontem. */
@@ -86,6 +90,18 @@ export function avaliarConta(c: ContaParaAvaliar, agora: Date = new Date()): Ava
   const hoje = new Date(agora.getTime() - 3 * 3600_000).toISOString().slice(0, 10);
   const frescas = c.leituras.filter((l) => agora.getTime() - Date.parse(l.em) <= VALIDADE_LEITURA_MS);
   const base = { adAccountId: c.adAccountId, aviso: null as string | null, avisoDono: null as string | null };
+  // Pausa da Meta por limite de uso com o dado da conta em dia (até ontem): não é falha de leitura. O que a pausa deixou
+  // de ler (hoje e a revisão dos últimos dias) volta na próxima rodada. Com o dado velho a pausa já custou dado e segue
+  // como erro. Qualquer outro erro da leitura não muda (ehSoPausaMeta exige que só haja pausa no texto).
+  const diaEmDia = dadoEmDiaParaPausa("anuncios", c.ultimoDado, null, agora);
+  let pausaMeta = false;
+  const leituras = frescas.map((l) => {
+    if (l.erro && diaEmDia && ehSoPausaMeta(l.erro)) {
+      pausaMeta = true;
+      return { ...l, erro: null };
+    }
+    return l;
+  });
   const rows = frescas.reduce((m, l) => Math.max(m, l.rows), 0);
   const precisaReconferir = frescas.reduce((m, l) => Math.max(m, l.precisaReconferir), 0);
   const conta = `Conta ${contaCurta(c.adAccountId)}`;
@@ -94,13 +110,13 @@ export function avaliarConta(c: ContaParaAvaliar, agora: Date = new Date()): Ava
   }
   // Lida por inteiro: sem erro. Pela Graph (token da conta) zero linha é resposta de verdade (nenhuma entrega no
   // período); pela Windsor zero linha também pode ser "a Windsor não tem a conta", decidido abaixo pelo histórico.
-  const inteira = frescas.find((l) => !l.erro && (l.rows > 0 || l.via === "graph"));
-  const vaziaWindsor = frescas.find((l) => !l.erro && l.via === "windsor" && l.rows === 0);
+  const inteira = leituras.find((l) => !l.erro && (l.rows > 0 || l.via === "graph"));
+  const vaziaWindsor = leituras.find((l) => !l.erro && l.via === "windsor" && l.rows === 0);
   let estado: EstadoConta;
   let erro: string | null = null;
   if (inteira) estado = "ok";
   else {
-    const comErro = frescas.filter((l) => l.erro);
+    const comErro = leituras.filter((l) => l.erro);
     const parcial = comErro.find((l) => l.rows > 0);
     // Erro da Graph é sempre real (a conta tem token para ela). Erro só da Windsor vale quando nada mais leu a conta.
     const erroGraph = comErro.find((l) => l.via === "graph");
@@ -127,7 +143,12 @@ export function avaliarConta(c: ContaParaAvaliar, agora: Date = new Date()): Ava
       base.avisoDono = frescas.find((l) => l.motivo)?.motivoDono ?? "cliente";
     }
   }
-  return { ...base, estado, erro, rows, precisaReconferir };
+  // Pausa da Meta com dado em dia: aviso informativo (dono "meta") na conta, sem derrubar o estado dela para "erro".
+  if (estado === "ok" && pausaMeta && !base.aviso) {
+    base.aviso = `${conta}: ${avisoDePausaMeta(c.ultimoDado, hoje)}`;
+    base.avisoDono = "meta";
+  }
+  return { ...base, estado, erro, rows, precisaReconferir, ...(estado === "ok" && pausaMeta ? { pausaMeta: true } : {}) };
 }
 
 export interface ResumoAnunciosCliente {
@@ -138,6 +159,8 @@ export interface ResumoAnunciosCliente {
   rows: number;
   precisaReconferir: number;
   contas: AvaliacaoConta[];
+  /** Alguma conta está em pausa da Meta (aviso, dado em dia): a rodada não leu tudo, então não vale como "último sucesso". */
+  pausaMeta?: boolean;
 }
 
 const ORDEM_ESTADO: Record<EstadoConta, number> = { nao_lida: 0, erro: 1, sem_leitura: 2, parcial: 3, ok: 4 };
@@ -145,8 +168,10 @@ const ORDEM_ESTADO: Record<EstadoConta, number> = { nao_lida: 0, erro: 1, sem_le
 /** Junta as contas de um cliente: "ok" só se TODA conta foi lida por inteiro. */
 export function resumirCliente(contas: AvaliacaoConta[]): ResumoAnunciosCliente {
   const ruins = contas.filter((c) => c.estado !== "ok").sort((a, b) => ORDEM_ESTADO[a.estado] - ORDEM_ESTADO[b.estado]);
-  const avisos = contas.filter((c) => c.aviso);
+  // Aviso de pausa da Meta vai depois dos demais (pagamento, campanha parada) e não decide o dono do motivo.
+  const avisos = contas.filter((c) => c.aviso).sort((a, b) => Number(!!a.pausaMeta) - Number(!!b.pausaMeta));
   const precisaReconferir = contas.reduce((t, c) => t + c.precisaReconferir, 0);
+  const pausaMeta = contas.some((c) => c.pausaMeta);
   return {
     ok: ruins.length === 0,
     erro: ruins.length ? ruins.map((c) => c.erro).filter(Boolean).join(" | ") : null,
@@ -155,6 +180,7 @@ export function resumirCliente(contas: AvaliacaoConta[]): ResumoAnunciosCliente 
     rows: contas.reduce((t, c) => t + c.rows, 0),
     precisaReconferir,
     contas,
+    ...(pausaMeta ? { pausaMeta } : {}),
   };
 }
 
@@ -303,7 +329,8 @@ async function gravarResumo(supabase: SupabaseClient<any, any, any>, clientId: s
         motivo: r.motivo ? erroCurto(r.motivo, 600) : null,
         motivo_dono: r.motivo ? r.motivoDono : null,
         motivo_em: em,
-        ...(r.ok ? { last_success_at: em } : {}),
+        // Conta em pausa da Meta (aviso, dado em dia) não foi lida nesta rodada: não vale como "último sucesso".
+        ...(r.ok && !r.pausaMeta ? { last_success_at: em } : {}),
         ...(dataAte ? { data_ate: dataAte } : {}),
       },
       { onConflict: "client_id,fonte" },

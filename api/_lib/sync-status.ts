@@ -8,6 +8,8 @@
  * (inclusive a tabela ainda não existir) é engolida.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { avisoDePausaMeta, ehSoPausaMeta, MARCA_AVISO_PAUSA_META, primeiroErroReal } from "../../src/lib/pausa-meta.js";
+import { dadoEmDiaParaPausa, hojeBrasilia } from "../../src/lib/status-fonte.js";
 
 export type FonteSync = "instagram" | "comentarios" | "anuncios" | "crm" | "atendimento";
 
@@ -93,7 +95,10 @@ export async function registrarValidadeToken(
     const { data } = await supabase.from("sync_status").select("motivo").eq("client_id", clientId).eq("fonte", fonte).maybeSingle();
     const atual = (data as { motivo?: string | null } | null)?.motivo ?? null;
     const aviso = avisoValidadeToken(provedor, expira, new Date(), 30, texto);
-    if (atual && !AVISO_TOKEN.test(atual)) {
+    // A pausa da Meta por limite de uso é passageira e só informa: o aviso de token vencendo (30 dias de antecedência)
+    // vale mais e a substitui; sem aviso de token a trocar, a pausa fica como está.
+    const pausaDaMeta = !!atual && MARCA_AVISO_PAUSA_META.test(atual);
+    if (atual && !AVISO_TOKEN.test(atual) && !(pausaDaMeta && aviso)) {
       // Motivo de outra origem tem prioridade; só a data é guardada.
     } else if (aviso !== atual) {
       await supabase.from("sync_status").upsert(
@@ -133,12 +138,42 @@ export async function registrarAviso(
   }
 }
 
+/**
+ * Pausa da Meta por limite de uso com o dado da fonte ainda em dia: não é erro de leitura (ver src/lib/pausa-meta.ts).
+ * Devolve o aviso informativo e a data do dado, ou null quando a falha é de verdade (outro erro, dado velho, sem data).
+ * Anúncios ficam de fora: lá a decisão é por conta de anúncios, em anuncios-status.ts.
+ */
+async function pausaInformativa(
+  supabase: SupabaseClient<any, any, any>,
+  clientId: string,
+  fonte: FonteSync,
+  r: { ok: boolean; error?: string | null; dataAte?: string | null },
+): Promise<{ texto: string; dataAte: string | null } | null> {
+  if (r.ok || fonte === "anuncios" || !ehSoPausaMeta(r.error)) return null;
+  try {
+    const dataAte = r.dataAte ?? (await lerDadosAte(supabase, clientId, fonte));
+    let ultimoSucesso: string | null = null;
+    if (!dataAte) {
+      // Fonte sem data própria do dado (comentários): vale o dia do último sucesso gravado.
+      const { data } = await supabase.from("sync_status").select("last_success_at").eq("client_id", clientId).eq("fonte", fonte).maybeSingle();
+      ultimoSucesso = (data as { last_success_at?: string | null } | null)?.last_success_at ?? null;
+    }
+    if (!dadoEmDiaParaPausa(fonte, dataAte, ultimoSucesso)) return null;
+    return { texto: avisoDePausaMeta(dataAte ?? soData(ultimoSucesso), hojeBrasilia()), dataAte };
+  } catch {
+    return null; // na dúvida, a falha continua sendo registrada como falha
+  }
+}
+
 export async function recordSyncStatus(
   supabase: SupabaseClient<any, any, any>,
   clientId: string,
   fonte: FonteSync,
   r: { ok: boolean; rows?: number | null; error?: string | null; dataAte?: string | null; preservaBloqueio?: boolean },
 ): Promise<void> {
+  // Pausa da Meta com dado em dia: a tentativa fica registrada, mas sem last_error (o banco e a tela leem qualquer
+  // last_error como "a sincronização está falhando") e sem carimbo de sucesso (a rodada não leu nada).
+  const pausa = await pausaInformativa(supabase, clientId, fonte, r);
   try {
     const agora = new Date().toISOString();
     // O sync automático (cron/n8n) não informa até que data o dado vai; só o botão manual informava. Resultado: o
@@ -149,17 +184,20 @@ export async function recordSyncStatus(
       client_id: clientId,
       fonte,
       last_attempt_at: agora,
-      last_error: r.ok ? null : erroCurto(r.error) ?? "erro desconhecido",
+      last_error: r.ok || pausa ? null : erroCurto(r.error) ?? "erro desconhecido",
       updated_at: agora,
     };
     if (r.ok) linha.last_success_at = agora;
     if (r.rows != null) linha.last_rows = r.rows;
-    if (r.dataAte) linha.data_ate = r.dataAte;
+    const dataAte = r.dataAte ?? pausa?.dataAte;
+    if (dataAte) linha.data_ate = dataAte;
     await supabase.from("sync_status").upsert(linha, { onConflict: "client_id,fonte" });
   } catch {
     /* registrar não pode quebrar o sync */
   }
-  await registrarMotivoInstagram(supabase, clientId, fonte, r);
+  await registrarMotivoInstagram(supabase, clientId, fonte, r, pausa?.texto ?? null);
+  // Comentários: o aviso de pausa sai quando a rodada volta ao normal (o do Instagram sai em registrarMotivoInstagram).
+  if (fonte === "comentarios" && (pausa || r.ok)) await registrarAviso(supabase, clientId, fonte, pausa?.texto ?? null, MARCA_AVISO_PAUSA_META, "meta");
   // CRM sincronizado: liga os leads às pessoas (telefone) e alimenta a linha do tempo. Nunca derruba o sync.
   if (fonte === "crm" && r.ok) {
     try {
@@ -179,6 +217,7 @@ async function registrarMotivoInstagram(
   clientId: string,
   fonte: FonteSync,
   r: { ok: boolean; error?: string | null; preservaBloqueio?: boolean },
+  avisoPausa: string | null = null,
 ): Promise<void> {
   if (fonte !== "instagram") return;
   // O sync da Windsor (06h30) só traz as métricas diárias da conta; os posts vêm da Graph (06h). Sucesso da
@@ -187,14 +226,15 @@ async function registrarMotivoInstagram(
   if (r.ok && r.preservaBloqueio) return;
   try {
     const bloqueado = !r.ok && !!r.error && BLOQUEIO_INSTAGRAM.test(r.error);
+    const motivo = bloqueado
+      ? "Aguardando a equipe da cliente aprovar, na Business Manager dela, a geração do novo token de acesso ao Instagram. Até lá os posts não atualizam (as métricas diárias da conta seguem normais). Não é falha de sincronização."
+      : avisoPausa; // pausa da Meta por limite de uso com dado em dia: aviso informativo, dono "meta"
     await supabase.from("sync_status").upsert(
       {
         client_id: clientId,
         fonte,
-        motivo: bloqueado
-          ? "Aguardando a equipe da cliente aprovar, na Business Manager dela, a geração do novo token de acesso ao Instagram. Até lá os posts não atualizam (as métricas diárias da conta seguem normais). Não é falha de sincronização."
-          : null,
-        motivo_dono: bloqueado ? "cliente" : null,
+        motivo,
+        motivo_dono: bloqueado ? "cliente" : avisoPausa ? "meta" : null,
         motivo_em: new Date().toISOString(),
       },
       { onConflict: "client_id,fonte" },
@@ -229,7 +269,8 @@ export async function recordSyncStatusPorCliente(
       // serve aquela conta é esperado — ali, entrar linha vale como sucesso.
       ok: a.errors.length === 0 || (!!opts.okSeHouveLinhas && a.rows > 0),
       rows: a.rows,
-      error: a.errors[0],
+      // O primeiro erro que não é pausa da Meta: pausa junto com erro de verdade não pode esconder o erro de verdade.
+      error: primeiroErroReal(a.errors),
       preservaBloqueio: opts.preservaBloqueio,
     });
   }
