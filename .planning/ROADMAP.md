@@ -228,12 +228,13 @@ Plans:
 3. Hoje mostra a nota do dia com os fatores ao tocar; Carteira ordena por urgência, com quem resolve cada alerta.
 4. Fechamento do mês abre como história em cartões (sem envio real).
 5. Nada cortado, sem frase > 90 caracteres, respeitando as alturas já medidas; só regras (sem IA); sem SQL nem migration.
+
 **Depends on:** Phase 03.1.1
-**Plans:** 9 plans (um PR só para a fase; no máximo 2 executores em paralelo, com arquivos disjuntos)
+**Plans:** 1/9 plans executed (um PR só para a fase; no máximo 2 executores em paralelo, com arquivos disjuntos)
 
 Plans:
 **Wave 1**
-- [ ] 03.1.1.1-01-PLAN.md — Tracer: peças compartilhadas dos 5 segundos (veredito, descobertas com "Por quê?", "Ver tudo" no PaginaNexo, conferidor de e2e, checagem de privacidade) + Hoje com veredito, 3 números e as 3 coisas da semana
+- [x] 03.1.1.1-01-PLAN.md — Tracer: peças compartilhadas dos 5 segundos (veredito, descobertas com "Por quê?", "Ver tudo" no PaginaNexo, conferidor de e2e, checagem de privacidade) + Hoje com veredito, 3 números e as 3 coisas da semana
 
 **Wave 2** *(blocked on Wave 1 completion; 02 e 03 em paralelo)*
 - [ ] 03.1.1.1-02-PLAN.md — Hoje: nota do dia (D-03) com os fatores ao tocar, etapas contra o período anterior, tabela nova em "Ver tudo", spec da Hoje
