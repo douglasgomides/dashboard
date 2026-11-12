@@ -33,9 +33,59 @@ async function mockWts(context: BrowserContext) {
   await rpc("wts_por_agente", [{ agente: "Atendente fictícia", atendimentos: 300, concluidos: 290, espera_mediana_seg: 700, atendimento_mediano_seg: 30000 }]);
 }
 
+/** Alcance diário do Instagram do spec: perto de 1.000, com um dia de pico de 5.000 no mesmo dia do pico de conversas (12 dias atrás). */
+async function mockInstagramDoSpec(context: BrowserContext) {
+  await context.route("**/rest/v1/instagram_account_daily_metrics**", (r) => {
+    const p = new URL(r.request().url()).searchParams;
+    const datas = p.getAll("date");
+    const de = datas.find((d) => d.startsWith("gte."))?.slice(4) ?? "0000";
+    const ate = datas.find((d) => d.startsWith("lte."))?.slice(4) ?? "9999";
+    const linhas = Array.from({ length: 70 }, (_, i) => ({ date: dia(i), client_id: CID, reach: i === 12 ? 5000 : 900 + ((i * 37) % 200) }))
+      .filter((l) => l.date >= de && l.date <= ate)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const off = Number(p.get("offset") ?? 0);
+    return r.fulfill({ json: linhas.slice(off, off + Number(p.get("limit") ?? 1000)) });
+  });
+}
+
+/** Conversas pelo anúncio do spec: 12 a 14 por dia, com o dia quase parado (20 dias atrás) em 2. */
+async function mockAnunciosDoSpec(context: BrowserContext) {
+  await context.route("**/rest/v1/rpc/ads_por_dia", (r) => {
+    const b = r.request().postDataJSON() ?? {};
+    const de = String(b.p_start ?? "0000");
+    const ate = String(b.p_end ?? "9999");
+    const linhas = Array.from({ length: 70 }, (_, i) => ({ dia: dia(i), gasto: 40, conversas: i === 20 ? 2 : 12 + (i % 3) }))
+      .filter((l) => l.dia >= de && l.dia <= ate)
+      .sort((a, b2) => a.dia.localeCompare(b2.dia));
+    return r.fulfill({ json: linhas });
+  });
+}
+
+/**
+ * Histórico diário do spec (quem chamou e quem virou lead): agora 20 chamaram e 6 viraram lead por dia (30 de cada 100); antes 20 e 8 (40 de cada 100),
+ * então "Viram lead, de cada 100" cai 10 pontos contra o período anterior da própria clínica.
+ */
+async function mockHistoricoDoSpec(context: BrowserContext) {
+  await context.route("**/rest/v1/resultados_diarios**", (r) => {
+    const p = new URL(r.request().url()).searchParams;
+    const datas = p.getAll("dia");
+    const de = datas.find((d) => d.startsWith("gte."))?.slice(4) ?? "0000";
+    const ate = datas.find((d) => d.startsWith("lte."))?.slice(4) ?? "9999";
+    const linhas = Array.from({ length: 70 }, (_, i) => ({
+      dia: dia(i), mandaram_mensagem: 20, leads_novos: i < 30 ? 6 : 8, antigos: 8, agendaram: 3, negociacao: 2, compareceram: null, fecharam: 1,
+    }))
+      .filter((l) => l.dia >= de && l.dia <= ate)
+      .sort((a, b) => a.dia.localeCompare(b.dia));
+    return r.fulfill({ json: linhas });
+  });
+}
+
 async function abrir(page: Page, context: BrowserContext, perfil: "viewer" | "admin", largura: { width: number; height: number }) {
   await mockAccount(context, perfil);
   await mockWts(context);
+  await mockInstagramDoSpec(context);
+  await mockAnunciosDoSpec(context);
+  await mockHistoricoDoSpec(context);
   await page.setViewportSize(largura);
   await page.goto(`/${CID}/atendimento?preset=30d`);
   await expect(page.locator(`${RAIZ} [data-peca="veredito"]:not([data-modo="carregando"])`)).toBeVisible();
@@ -67,7 +117,7 @@ test("o veredito abre a tela com as conversas por dia e a faixa do normal desta 
   await expect(legenda).toContainText("▼ abaixo do normal");
   await expect(legenda).toContainText("dia normal");
   // O gráfico é um slider de teclado e a dica do dia diz data e valor.
-  const slider = page.getByRole("slider", { name: "conversas por dia" });
+  const slider = page.getByRole("slider", { name: "conversas por dia, com a faixa do normal" });
   await expect(slider).toBeVisible();
   await slider.focus();
   await slider.press("Home");
@@ -105,3 +155,87 @@ for (const perfil of ["viewer", "admin"] as const) {
     });
   }
 }
+
+const cartoes = (page: Page) => page.locator(`${RAIZ} .nx-pagina__cartoes [data-peca="cartao-numero"]`);
+
+test("os 3 números-chave comparam a clínica com ela mesma e dizem Falta dado quando não dá para comparar", async ({ page, context }) => {
+  await abrir(page, context, "admin", { width: 1440, height: 900 });
+  await expect(cartoes(page)).toHaveCount(3);
+  const [conversas, taxa, pessoas] = [cartoes(page).nth(0), cartoes(page).nth(1), cartoes(page).nth(2)];
+  await expect(conversas).toContainText("Conversas");
+  await expect(taxa).toContainText("Viram lead, de cada 100");
+  await expect(pessoas).toContainText("Pessoas diferentes");
+  // Conversas: a soma dos dias fechados contra a do período anterior de mesmo tamanho (os dois do WTS desta clínica).
+  await expect(conversas.locator(".nx-numero__valor")).toHaveText(/^\d/);
+  await expect(conversas).toContainText(/(▲|▼) \d+% · (melhor|pior) que antes|= igual/);
+  // Viram lead de cada 100: 30 agora contra 40 antes, em pontos.
+  await expect(taxa.locator(".nx-numero__valor")).toHaveText("30");
+  await expect(taxa).toContainText("▼ 10 pontos · pior que antes");
+  // Pessoas diferentes: o mesmo contato nas duas janelas do mock, então "igual".
+  await expect(pessoas.locator(".nx-numero__valor")).toHaveText("410");
+  await expect(pessoas).toContainText("= igual");
+  // Nenhum cartão diz "0" no lugar de um dado que falta.
+  for (const c of [conversas, taxa, pessoas]) await expect(c.locator(".nx-numero__valor")).not.toHaveText(/^0$/);
+});
+
+test("o dia cruzado abre no dia fora do normal de maior alcance e cada dia tocado diz a causa por regra", async ({ page, context }) => {
+  await abrir(page, context, "viewer", { width: 1440, height: 900 });
+  const escritas: string[] = [];
+  page.on("request", (r) => {
+    if (r.method() !== "GET" && !r.url().includes("/rest/v1/rota_acessos")) escritas.push(`${r.method()} ${r.url()}`);
+  });
+  const painel = page.locator(`${RAIZ} [data-peca="dia-cruzado"]`);
+  // Abre no pico (12 dias atrás: o dia de maior alcance entre os dias fora do normal): ▲ acima do normal e o Instagram bombou.
+  await expect(painel).toBeVisible();
+  await expect(painel).toContainText("▲ acima do normal");
+  await expect(painel).toContainText("Alcance no Instagram");
+  await expect(painel).toContainText("5.000");
+  await expect(painel).toContainText(/▲ \d+% vs dia comum/);
+  await expect(painel).toContainText("Conversas pelo anúncio");
+  await expect(painel).toContainText(/\d+ viraram lead/);
+  await expect(painel.locator(".nx-dia-cruzado__causa")).toHaveText("Provável causa: o Instagram bombou nesse dia.");
+  await expect(page.locator(`${RAIZ} .nx-dias__barra[data-sel]`)).toHaveCount(1);
+
+  // O dia quase parado: o anúncio quase parou.
+  await page.locator(`${RAIZ} .nx-dias__barra[data-marca="abaixo"]`).first().click();
+  await expect(painel).toContainText("▼ abaixo do normal");
+  await expect(painel.locator(".nx-dia-cruzado__causa")).toHaveText("Provável causa: o anúncio quase parou nesse dia.");
+
+  // Um dia normal.
+  await page.locator(`${RAIZ} .nx-dias__barra[data-marca="normal"]`).nth(2).click();
+  await expect(painel).toContainText("dentro do normal");
+  await expect(painel.locator(".nx-dia-cruzado__causa")).toHaveText("Dia comum.");
+
+  // Tocar de novo no mesmo dia fecha o painel e volta a dica.
+  await page.locator(`${RAIZ} .nx-dias__barra[data-marca="normal"]`).nth(2).click();
+  await expect(painel).toHaveCount(0);
+  await expect(page.locator(`${RAIZ} .nx-dia-cruzado__dica`)).toHaveText("Toque num dia para ver o que aconteceu");
+
+  // Pelo teclado: setas andam, Enter escolhe.
+  const slider = page.getByRole("slider", { name: "conversas por dia, com a faixa do normal" });
+  await slider.focus();
+  await slider.press("Home");
+  await slider.press("Enter");
+  await expect(painel).toBeVisible();
+  expect(escritas).toEqual([]);
+});
+
+test("sem o Instagram a linha do alcance diz Falta dado e o Instagram nunca vira causa", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await mockWts(context);
+  await mockAnunciosDoSpec(context);
+  await mockHistoricoDoSpec(context);
+  await context.route("**/rest/v1/instagram_account_daily_metrics**", (r) => r.fulfill({ status: 500, json: { message: "simulated unavailable data source" } }));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}/atendimento?preset=30d`);
+  await expect(page.locator(`${RAIZ} [data-peca="veredito"]:not([data-modo="carregando"])`)).toBeVisible();
+  // Sem alcance não há dia inicial: a tela pede o toque.
+  await expect(page.locator(`${RAIZ} .nx-dia-cruzado__dica`)).toHaveText("Toque num dia para ver o que aconteceu");
+  await page.locator(`${RAIZ} .nx-dias__barra[data-marca="acima"]`).first().click();
+  const painel = page.locator(`${RAIZ} [data-peca="dia-cruzado"]`);
+  await expect(painel).toBeVisible();
+  const alcance = painel.locator(".nx-dia-cruzado__item", { hasText: "Alcance no Instagram" });
+  await expect(alcance.locator("[data-falta-dado]")).toContainText("Falta dado");
+  await expect(painel.locator(".nx-dia-cruzado__causa")).toHaveText("Sem causa clara nos outros dados.");
+  await expect(painel).not.toContainText("Instagram bombou");
+});

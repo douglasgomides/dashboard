@@ -1,11 +1,13 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { InfoDica } from "@/components/visual";
 import { NxCard, NxLinhaTempo } from "@/components/nx";
 import { CmAviso, CmBarras, CmKpi, CmLeitura, CmMetodo, CmRecolhido, icT } from "@/components/nx/comercial-base";
 import { PaginaNexo } from "@/components/nx/pagina";
-import { NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxCartaoNumero } from "@/components/nx/cartoes";
+import type { NomeIcone } from "@/lib/registro-de-telas";
 import { NxCarregando } from "@/components/nx/blocos";
 import { NxDiasComFaixa } from "@/components/nx/dias-com-faixa";
 import {
@@ -14,14 +16,17 @@ import {
   getWtsPorAgente,
   getWtsVolumeDiario,
   getWtsFilaDoCliente,
+  getMonthlyMetrics,
+  getAdsPorDia,
 } from "@/lib/client-data";
+import { CAMPOS_DIARIOS, useResultadosDiarios } from "@/hooks/use-resultados-diarios";
 import { avisoContaCompartilhada, avisoFilaEsquecida, avisoLote } from "@/lib/fila-whatsapp";
 import { SyncButton } from "@/components/sync-button";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { faixaDoNormal, foraDaFaixa } from "@/lib/faixa-do-normal";
 import { serieContinua } from "@/lib/linha-30-dias";
-import { periodosDeComparacao } from "@/lib/leitura/fatos-resultados";
-import { vereditoDoAtendimento } from "@/lib/leitura/cinco-atendimento";
+import { periodosDeComparacao, somaDiaria } from "@/lib/leitura/fatos-resultados";
+import { diaCruzado, diaInicialDoCruzamento, numerosDoAtendimento, valoresNoEixo, vereditoDoAtendimento, type DiaCruzado, type EntradaCincoAtendimento, type NumeroDeAtendimento } from "@/lib/leitura/cinco-atendimento";
 import type { Veredito } from "@/lib/leitura/cinco-segundos";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { fmtNum } from "@/lib/format";
@@ -76,7 +81,7 @@ function AtendimentoPage() {
     <div className="space-y-4">
       {/* A lista "Recuperar hoje" (agente de recuperação) saiu em 11/11/2026 por decisão do João. */}
       {isAdmin && (
-        <div className="flex max-w-full flex-wrap gap-1 rounded-xl border p-1 text-sm" role="tablist" aria-label="Atendimento no WhatsApp" style={{ borderColor: "var(--line)", width: "fit-content", background: "var(--white)" }}>
+        <div className="nx-atend-abas flex max-w-full flex-wrap gap-1 rounded-xl border p-1 text-sm" role="tablist" aria-label="Atendimento no WhatsApp" style={{ borderColor: "var(--line)", background: "var(--white)" }}>
           {([["numeros", "Números do atendimento"], ["conversas", "Conversas e auditoria"]] as const).map(([id, rot]) => (
             <button
               key={id}
@@ -98,6 +103,7 @@ function AtendimentoPage() {
 }
 
 function NumerosWhatsapp({ clientId }: { clientId: string }) {
+  const { isAdmin } = useAuth();
   const dateRangeState = clientLayoutRoute.useSearch();
   const { start, end } = resolveDateRange(dateRangeState);
   const periodLabel = formatRangeLabel({ start, end });
@@ -125,13 +131,33 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
     retry: false,
   });
 
-  const { data: resumo, isLoading: loadingResumo } = resumoQ;
-  const isLoading = loadingResumo || loadingDep || loadingAgente || loadingDia;
-  const atendimentos = n(resumo?.atendimentos);
-
   // O dia de hoje ainda não está fechado: a faixa do normal e os totais usam só dias fechados (um dia pela metade viraria "abaixo do normal").
   const hoje = hojeBrasilia();
   const comparacao = periodosDeComparacao(start, end, hoje);
+  const temAnterior = comparacao.dias >= 1;
+  const ant = comparacao.anterior;
+  // Formato 5 segundos: leituras extras, todas somente leitura. Cada uma custa uma chamada pequena (no máximo 31 linhas, ou 1 linha) e tem
+  // retry falso e staleTime de 5 min; a falha de uma só vira "Falta dado" na própria linha, nunca derruba a tela. As chaves de
+  // resultados-diarios, monthly-metrics e ads-dia são as mesmas de Resultados e da Hoje (a leitura costuma já estar no cache).
+  const extra = { retry: false, staleTime: 5 * 60_000 } as const;
+  const wtsDiaAnt = useQuery({ queryKey: ["wts-dia", clientId, ant.start, ant.end], queryFn: () => getWtsVolumeDiario(clientId, ant.start, ant.end), enabled: temAnterior, ...extra });
+  const wtsResumoAnt = useQuery({ queryKey: ["wts-resumo", clientId, ant.start, ant.end], queryFn: () => getWtsResumo(clientId, ant.start, ant.end), enabled: temAnterior, ...extra });
+  // Pessoas diferentes agora, contadas até o último dia fechado (a mesma janela do período anterior). Sem hoje no período, é a mesma chave de resumoQ.
+  const wtsResumoFechado = useQuery({ queryKey: ["wts-resumo", clientId, start, comparacao.fimFechado], queryFn: () => getWtsResumo(clientId, start, comparacao.fimFechado), enabled: temAnterior, ...extra });
+  const diario = useResultadosDiarios(clientId, start, end);
+  const diarioAnterior = useResultadosDiarios(clientId, ant.start, ant.end);
+  const fimIg = end > hoje ? hoje : end;
+  const metricasIg = useQuery({ queryKey: ["monthly-metrics", clientId, start, fimIg], queryFn: () => getMonthlyMetrics(clientId, start, fimIg), ...extra });
+  const anunciosDia = useQuery({ queryKey: ["ads-dia", clientId, start, fimIg], queryFn: () => getAdsPorDia(clientId, start, fimIg), ...extra });
+  // O dia escolhido no gráfico: undefined = a tela ainda decide (abre no dia fora do normal de maior alcance), null = nenhum.
+  const [escolhido, setEscolhido] = useState<number | null | undefined>(undefined);
+  useEffect(() => setEscolhido(undefined), [clientId, start, end]);
+
+  const { data: resumo, isLoading: loadingResumo } = resumoQ;
+  const isLoading =
+    loadingResumo || loadingDep || loadingAgente || loadingDia || wtsDiaAnt.isLoading || wtsResumoAnt.isLoading || wtsResumoFechado.isLoading || diario.isLoading || diarioAnterior.isLoading || metricasIg.isLoading || anunciosDia.isLoading;
+  const atendimentos = n(resumo?.atendimentos);
+
   const conversasDoPeriodo = useMemo(
     () =>
       serieContinua(
@@ -227,17 +253,63 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
   // Tudo o que a tela mostrava antes mora, na mesma ordem, dentro do "Ver tudo" (fechado).
   const faixa = faixaDoNormal(conversasDoPeriodo.valores);
   const marcas = foraDaFaixa(conversasDoPeriodo.valores, faixa);
-  const veredito = vereditoDoAtendimento({ conversas: conversasDoPeriodo });
+
+  // O que a regra recebe: as conversas por dia dos dois períodos, o histórico diário (quem chamou e quem virou lead), o alcance do Instagram
+  // e as conversas do anúncio DESTA clínica. Fonte que falhou entra como null: a regra diz "Falta dado", nunca zero.
+  const diasAnt = wtsDiaAnt.data;
+  const linhasDiario = (diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado);
+  const entrada: EntradaCincoAtendimento = {
+    dias: comparacao.dias,
+    conversas: conversasDoPeriodo,
+    conversasAntes: diasAnt
+      ? serieContinua(diasAnt.filter((r) => String(r.dia).slice(0, 10) <= ant.end).map((r) => ({ dia: String(r.dia).slice(0, 10), valor: nOrNull(r.atendimentos) })))
+      : null,
+    pessoas: { agora: wtsResumoFechado.data ? nOrNull(wtsResumoFechado.data.contatos_distintos) : null, antes: wtsResumoAnt.data ? nOrNull(wtsResumoAnt.data.contatos_distintos) : null },
+    somas: {
+      atual: somaDiaria(linhasDiario, comparacao.dias, CAMPOS_DIARIOS),
+      antes: somaDiaria(diarioAnterior.data ?? [], comparacao.dias, CAMPOS_DIARIOS),
+    },
+    diario: linhasDiario.length
+      ? {
+          mandaram: valoresNoEixo(conversasDoPeriodo.datas, linhasDiario.map((l) => ({ dia: l.dia, valor: l.mandaram_mensagem }))) ?? [],
+          leads: valoresNoEixo(conversasDoPeriodo.datas, linhasDiario.map((l) => ({ dia: l.dia, valor: l.leads_novos }))) ?? [],
+        }
+      : null,
+    alcance: metricasIg.data ? metricasIg.data.map((r: { date: string; reach?: unknown }) => ({ dia: String(r.date).slice(0, 10), valor: nOrNull(r.reach) })) : null,
+    anuncios: anunciosDia.data ? anunciosDia.data.map((r: { dia: string; conversas?: unknown }) => ({ dia: String(r.dia).slice(0, 10), valor: nOrNull(r.conversas) })) : null,
+    equipe: isAdmin,
+  };
+  const veredito = vereditoDoAtendimento(entrada);
+  const [numeroConversas, numeroTaxa, numeroPessoas] = numerosDoAtendimento(entrada);
+  const cartoes = [
+    <CartaoDeNumeroCinco key="conversas" n={numeroConversas} icone="message-circle" />,
+    <CartaoDeNumeroCinco key="taxa" n={numeroTaxa} icone="filter" />,
+    <CartaoDeNumeroCinco key="pessoas" n={numeroPessoas} icone="users" />,
+  ];
+  // Dia cruzado: abre no dia fora do normal de maior alcance no Instagram da clínica; tocar de novo no mesmo dia fecha.
+  const inicial = diaInicialDoCruzamento(entrada);
+  const selecionado = escolhido !== undefined ? escolhido : inicial;
+  const dia = selecionado != null ? diaCruzado(selecionado, entrada) : null;
 
   return (
     <PaginaNexo
       {...cabecalho}
       veredito={<NxVeredito veredito={veredito} carregando={false} tela="atendimento" />}
       leitura={null}
+      cartoes={cartoes as [ReactNode, ReactNode?, ReactNode?]}
       principal={
         conversasDoPeriodo.datas.length > 0 ? (
           <NxCard id="conversas-por-dia" nivel={2} icone={icT("chart-bar")} titulo="Conversas por dia, com a faixa do normal" subtitulo={`${periodLabel} · só dias fechados`}>
-            <NxDiasComFaixa rotulo="conversas" datas={conversasDoPeriodo.datas} valores={conversasDoPeriodo.valores} faixa={faixa} marcas={marcas} />
+            <NxDiasComFaixa
+              rotulo="conversas"
+              datas={conversasDoPeriodo.datas}
+              valores={conversasDoPeriodo.valores}
+              faixa={faixa}
+              marcas={marcas}
+              selecionado={selecionado}
+              aoSelecionar={(i) => setEscolhido(i === selecionado ? null : i)}
+            />
+            {dia ? <DiaDoGrafico dia={dia} /> : <p className="nx-cinco-falta nx-dia-cruzado__dica">Toque num dia para ver o que aconteceu</p>}
           </NxCard>
         ) : undefined
       }
@@ -422,5 +494,64 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
         </div>
       }
     />
+  );
+}
+
+/**
+ * Um dos 3 números-chave no formato 5 segundos: o número, a legenda, a variação contra a PRÓPRIA clínica (sinal e palavra na pílula) e, sem
+ * comparação, o selo "Falta dado · ..." em cinza. Sem medida, "Falta dado: motivo" (nunca 0). Só apresentação.
+ */
+function CartaoDeNumeroCinco({ n: numero, icone }: { n: NumeroDeAtendimento; icone: NomeIcone }) {
+  const semMedida = numero.valor == null && numero.valorTexto == null;
+  return (
+    <NxCartaoNumero
+      icone={icone}
+      titulo={numero.titulo}
+      valor={numero.valorTexto ?? (numero.valor != null ? fmtNum(numero.valor) : null)}
+      legenda={semMedida ? undefined : numero.legenda}
+      semMedida={semMedida}
+      variacao={numero.textoDaVariacao ? { texto: numero.textoDaVariacao } : null}
+      extra={
+        semMedida ? (
+          <p className="nx-cinco-falta" data-falta-dado>{`Falta dado: ${numero.motivo ?? "sem medida neste período"}`}</p>
+        ) : !numero.textoDaVariacao && numero.selo ? (
+          <NxSelo tom={numero.selo.tom} texto={numero.selo.texto} />
+        ) : null
+      }
+      serie={numero.serie}
+    />
+  );
+}
+
+/** O dia tocado no gráfico, cruzado com o Instagram e os anúncios da própria clínica, e a "Provável causa" (regra fixa, sem IA). */
+function DiaDoGrafico({ dia }: { dia: DiaCruzado }) {
+  const linha = (rotulo: string, valor: number | null, falta: string | null, apoio: string | null) => (
+    <div className="nx-dia-cruzado__item">
+      <dt>{rotulo}</dt>
+      {valor != null ? (
+        <>
+          <dd className="nx-dia-cruzado__valor">{fmtNum(valor)}</dd>
+          {apoio && <dd className="nx-dia-cruzado__apoio">{apoio}</dd>}
+        </>
+      ) : (
+        <dd className="nx-dia-cruzado__valor nx-dia-cruzado__valor--falta" data-falta-dado>
+          {falta ?? "Falta dado"}
+        </dd>
+      )}
+    </div>
+  );
+  return (
+    <div className="nx-dia-cruzado" data-peca="dia-cruzado" aria-live="polite">
+      <p className="nx-dia-cruzado__titulo">
+        <b>{dia.titulo}</b>
+        {dia.notaDaMarca && <span className="nx-dia-cruzado__nota" data-marca={dia.marca ?? undefined}>{dia.notaDaMarca}</span>}
+      </p>
+      <dl className="nx-dia-cruzado__grade">
+        {linha("Conversas", dia.conversas, "Sem dado", dia.leads != null ? `${fmtNum(dia.leads)} viraram lead` : null)}
+        {linha("Alcance no Instagram", dia.alcance.valor, dia.alcance.faltaDado, dia.alcance.comparacao)}
+        {linha("Conversas pelo anúncio", dia.anuncio.valor, dia.anuncio.faltaDado, dia.anuncio.comparacao)}
+      </dl>
+      <p className="nx-dia-cruzado__causa" data-causa={dia.causaVinda ?? undefined}>{dia.causa}</p>
+    </div>
   );
 }

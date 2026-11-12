@@ -227,3 +227,163 @@
     height: 80px;
   }
 }
+
+/* ---------- Dia cruzado: o dia tocado no gráfico, com o Instagram e os anúncios da própria clínica ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--b6);
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__nota {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__nota[data-marca="acima"] {
+  color: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__nota[data-marca="abaixo"] {
+  color: var(--or-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__grade {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item dt {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item dd {
+  margin: 0;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor--falta {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--muted-ink);
+  letter-spacing: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__apoio {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted-ink);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__causa {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__dica {
+  margin: 0;
+}
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado {
+    padding: 8px 12px;
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__grade {
+    gap: 4px 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor {
+    font-size: 18px;
+    line-height: 22px;
+  }
+}
+
+/* ---------- Atendimento na régua de 1,5 tela (D-08): nunca se sobe o limite, só se comprime o que é desta tela ---------- */
+/* A faixa de abas da equipe ("Números do atendimento" e "Conversas e auditoria"): tamanho do conteúdo no computador. */
+.app.product-workspace:not(.sap-workspace) .nx-atend-abas {
+  width: fit-content;
+}
+@media (max-width: 560px) {
+  /* No celular as duas abas dividem a linha (o texto pode quebrar em duas linhas), em vez de cair uma sobre a outra. */
+  .app.product-workspace:not(.sap-workspace) .nx-atend-abas {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-atend-abas button {
+    min-height: 40px;
+    padding: 0 8px;
+    font-size: 14px;
+    line-height: 18px;
+    text-wrap: balance;
+  }
+  /* A etiqueta da decisão e o período já estão na casca (seletor de período): o cabeçalho fica só com a pergunta. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__rotulo,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__meta,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-pagina__pontos {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] {
+    gap: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="atendimento"] .nx-veredito {
+    padding: 8px 12px;
+  }
+  /* O dia cruzado vira uma lista de uma linha por fonte (nome à esquerda, número e comparação à direita). */
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__grade {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item dt {
+    flex: 1 1 auto;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__item dd {
+    flex: 0 0 auto;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor {
+    font-size: 16px;
+    line-height: 22px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-dia-cruzado__valor--falta {
+    font-size: 14px;
+  }
+}
