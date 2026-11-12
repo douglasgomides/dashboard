@@ -124,6 +124,236 @@
   color: var(--text-2);
 }
 
+/* ---------- Descobertas: frase curta, uma ação e "Por quê?" ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-descobertas {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descobertas__topo {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descobertas__titulo {
+  min-width: 0;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+/* O total da Hoje ("3 ações esta semana") é o título da seção: número menor que no topo da página. */
+.app.product-workspace:not(.sap-workspace) .nx-descobertas__titulo .nx-hoje__total-numero {
+  font-size: 24px;
+  line-height: 30px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descobertas__titulo .nx-hoje__total-texto {
+  font-size: 18px;
+  line-height: 24px;
+  color: var(--text);
+  font-weight: 600;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descobertas__lista {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* O item é o contêiner: os botões descem para a própria linha em vez de ficarem cortados (molde k). */
+.app.product-workspace:not(.sap-workspace) .nx-descobertas__item {
+  min-width: 0;
+  container-type: inline-size;
+  container-name: nx-descoberta;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+  gap: 12px 16px;
+  align-items: start;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--white);
+  color: var(--text);
+  font-weight: 500;
+  /* Prende o texto sr-only dos chips e dos botões dentro do cartão. */
+  position: relative;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__corpo {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__frase {
+  margin: 0;
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__quem,
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__impacto {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  position: relative;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__impacto {
+  background: var(--b6);
+  color: var(--b1);
+  font-variant-numeric: tabular-nums;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__texto-do-chip {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__acoes {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__acoes > .nx-acao-pilula {
+  justify-self: stretch;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__porque-botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--b4);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--b1);
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__porque-botao:hover,
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__porque-botao[aria-expanded="true"] {
+  background: var(--b6);
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__porque-botao:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: 2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__porque {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line-2);
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__porque[hidden] {
+  display: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__porque-titulo {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__obs {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+@container nx-descoberta (max-width: 640px) {
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Os botões descem para a própria linha: a ação ocupa o que sobra e "Por quê?" fica ao lado. */
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__acoes {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+/* Celular (régua de 1,5 tela, D-08): cartão compacto em 8 e 12, chips numa linha só (com reticências e o texto inteiro no title), frase de 16 px. */
+@container nx-descoberta (max-width: 480px) {
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta {
+    gap: 8px;
+    padding: 12px;
+    border-radius: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__corpo {
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__topo {
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__topo > .nx-selo {
+    flex: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__quem,
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__impacto {
+    flex: 0 1 auto;
+    padding: 0 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__frase {
+    font-size: 16px;
+    line-height: 22px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__acoes {
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-acao-pilula {
+    padding-left: 12px;
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__porque-botao {
+    padding: 0 12px;
+  }
+}
+@container nx-descoberta (max-width: 300px) {
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__acoes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- O que não coube à vista e mora no "Ver tudo": cartões em grade ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-cinco-resto {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-cinco-resto__grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
 /* ---------- Falta dado dentro de um cartão: cinza, com o motivo, nunca zero ---------- */
 .app.product-workspace:not(.sap-workspace) .nx-cinco-falta {
   margin: 0;

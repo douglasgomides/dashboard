@@ -8,10 +8,10 @@ import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
 import { useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
 import { NxChip } from "@/components/nx-chip";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
-import { NxCartaoDaAcao, NxChipEstado, NxParaEquipe, NxProximo, SaudacaoHoje } from "@/components/nx/hoje";
+import { NxCartaoDaAcao, NxChipEstado, NxParaEquipe, SaudacaoHoje } from "@/components/nx/hoje";
 import { NxCarregando, NxErro } from "@/components/nx/blocos";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
-import { NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
 import type { SerieDiaria } from "@/components/nx/linha-de-30-dias";
 import { getClient, getRoiPeriodo } from "@/lib/client-data";
 import { resolveDateRange } from "@/lib/date-range";
@@ -23,9 +23,9 @@ import { lerPeriodo } from "@/lib/leitura-periodo";
 import { fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria } from "@/lib/leitura/fatos-resultados";
 import { fatosDePacientes } from "@/lib/leitura/fatos-pacientes";
 import { fatosDePublicacoes, fatosDoInstagram } from "@/lib/leitura/fatos-instagram";
-import { acoesDaHoje, type EntradaHoje, type FonteDoDado } from "@/lib/leitura/fatos-hoje";
-import { variacaoPropria, vereditoDosFatos } from "@/lib/leitura/cinco-segundos";
-import type { FatosDaTela, TelaId } from "@/lib/leitura/tipos";
+import { GUARDA_DE_TEXTO_DA_TELA_HOJE, acoesDaHoje, type AcaoDaHoje, type EntradaHoje, type FonteDoDado } from "@/lib/leitura/fatos-hoje";
+import { barrasDoPorque, checarDescoberta, checarFraseCinco, variacaoPropria, vereditoDosFatos, visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
+import type { FatosDaTela, TelaId, TomFato } from "@/lib/leitura/tipos";
 import { ehEquipe } from "@/lib/registro-de-telas";
 import { ddmm, statusDoCliente, tomDaFonte, type LinhaFonte } from "@/lib/saude-fontes";
 
@@ -144,6 +144,37 @@ function CartaoDaHoje({ n, dias }: { n: NumeroDaHoje; dias: number }) {
   );
 }
 
+/** O selo de cada tom da ação: sempre com o sinal (▲ ▼ ! ●) ao lado, nunca só a cor. */
+const SELO_DO_TOM: Record<TomFato, string> = { bom: "Bom sinal", atencao: "Atenção", ruim: "Para resolver", neutro: "Para conferir" };
+
+/**
+ * Uma ação da Hoje vira uma descoberta (D-01): a frase é a legenda da regra (uma frase de até 90 caracteres, ou a manchete quando não há
+ * legenda), o número em jogo vai no chip (só quando é um número medido e curto) e o "Por quê?" abre as barras da regra, completadas com
+ * barras listradas "Falta dado" até 2 (nunca zero). A ação só navega para a aba de origem. null quando a frase não passa nas guardas.
+ */
+function descobertaDaAcao(a: AcaoDaHoje): Descoberta | null {
+  const legenda = a.legenda?.trim();
+  const manchete = a.destaque.trim();
+  const frase = legenda && checarFraseCinco(legenda).length === 0 ? legenda : checarFraseCinco(manchete).length === 0 ? manchete : null;
+  if (!frase) return null;
+  const impacto = a.destaqueEhNumero && frase !== manchete && checarFraseCinco(manchete, 40).length === 0 ? manchete : undefined;
+  const d: Descoberta = {
+    id: a.id,
+    tom: a.tom,
+    selo: SELO_DO_TOM[a.tom],
+    frase,
+    quem: a.rotuloQuem,
+    ...(impacto ? { impacto } : {}),
+    acao: { rotulo: a.frase.replace(/\.$/, ""), rota: a.rota },
+    porque: {
+      titulo: "O que explica",
+      barras: barrasDoPorque(a.barras, a.destaqueEhNumero ? { rotulo: "Medido no período", exibicao: manchete } : null),
+      obs: `Só dados desta clínica · ${a.contexto}`,
+    },
+  };
+  return checarDescoberta(d).length === 0 ? d : null;
+}
+
 function HojePage() {
   const { clientId } = Route.useParams();
   const dateRangeState = clientLayoutRoute.useSearch();
@@ -217,17 +248,17 @@ function HojePage() {
     return { entrada, hoje: acoesDaHoje(entrada) };
   }, [r, start, end, hoje, funil, roi.data, pessoas.data, posts.data, metricas.data, anterior.data, temIg, fontes]);
   // O veredito do topo (D-01): por enquanto o da leitura de Resultados, que diz o mesmo "Falta dado" quando o portão nega (D-05).
-  const veredito = useMemo(() => (leitura ? vereditoDosFatos({ ...leitura.entrada.fatos, tela: "hoje" }) : null), [leitura]);
+  const veredito = useMemo(() => (leitura ? vereditoDosFatos({ ...leitura.entrada.fatos, tela: "hoje" }, GUARDA_DE_TEXTO_DA_TELA_HOJE) : null), [leitura]);
 
-  // Topo (D-07, emenda de 12/11): um título só (a saudação grande) e, logo abaixo, o total da semana em número grande. Sem rótulo da
+  // Topo (D-07, emenda de 12/11): um título só (a saudação grande). Sem rótulo da
   // tela, sem pergunta visível, sem etiqueta da decisão e sem o chip da clínica (o nome já está na casca). Ficam o "dado até", os
   // chips de estado das fontes com bolinha e o selo, que agora é uma bolinha cinza (continua 1 por tela).
-  const cabecalhoDe = (total?: number) => ({
+  // 03.1.1.1: o total da semana saiu do topo e virou o título da seção de descobertas (o número aparece uma vez só).
+  const cabecalho = {
     tela: "hoje" as const,
     titulo: "O que fazer hoje",
     pergunta: "O que fazer esta semana?",
     saudacao: <SaudacaoHoje nome={cliente.data?.name} />,
-    ...(total != null ? { destaqueDoTopo: <TotalDaSemana total={total} /> } : {}),
     meta: (
       <>
         <span className="nx-chip-contexto">{`dado até ${ddmm(fim)}`}</span>
@@ -237,8 +268,7 @@ function HojePage() {
         <NxChip tipo="sem-selo" ponto />
       </>
     ),
-  });
-  const cabecalho = cabecalhoDe();
+  };
   // O contêiner data-origem="menu" faz o log por rota contar o clique de qualquer botão da Hoje como menu (nada é gravado além disso).
   const na = (pagina: ReactNode) => (
     <div className="nx-hoje" data-origem="menu">
@@ -263,30 +293,52 @@ function HojePage() {
   const { entrada, hoje: lista } = leitura;
   if (lista.tipo === "sem_leitura") {
     // Dado ruim: o mesmo "Falta dado: motivo" de Resultados da clínica, com o passo para consertar e quem resolve, e nenhuma ação.
-    return na(<PaginaNexo {...cabecalho} veredito={<NxVeredito veredito={vereditoDosFatos({ ...entrada.fatos, tela: "hoje" })} carregando={false} tela="hoje" />} leitura={null} />);
+    return na(<PaginaNexo {...cabecalho} veredito={<NxVeredito veredito={vereditoDosFatos({ ...entrada.fatos, tela: "hoje" }, GUARDA_DE_TEXTO_DA_TELA_HOJE)} carregando={false} tela="hoje" />} leitura={null} />);
   }
 
   const [c1, c2, c3] = numeros.map((n) => <CartaoDaHoje key={n.id} n={n} dias={comparacao.dias} />);
-  // Até aqui as ações ainda aparecem como Próximo e cartões; o próximo passo as troca por descobertas.
-  const desenhadas = lista.outras.slice(0, 4);
-  const total = (lista.proxima ? 1 : 0) + desenhadas.length;
+  // As ações da regra (o Próximo e as outras) viram descobertas: as 3 primeiras à vista, o resto em "Ver tudo" como cartões (nada some).
+  const todas = [...(lista.proxima ? [lista.proxima] : []), ...lista.outras];
+  const comDescoberta = todas.flatMap((a) => {
+    const d = descobertaDaAcao(a);
+    return d ? [{ a, d }] : [];
+  });
+  const { visiveis } = visiveisEResto(comDescoberta);
+  const restantes = todas.filter((a) => !visiveis.some((v) => v.a === a));
+  const mostraEquipe = equipe && lista.paraEquipe.length > 0;
   return na(
     <PaginaNexo
-      {...cabecalhoDe(total)}
+      {...cabecalho}
       veredito={<NxVeredito veredito={veredito} carregando={false} tela="hoje" />}
-      leitura={null}
       cartoes={[c1, c2, c3]}
-      corpo={
-        <section className="nx-hoje__leitura" data-peca="leitura" data-modo="leitura" aria-label="Próximo e aviso">
-          {lista.proxima && <NxProximo acao={lista.proxima} clientId={clientId} dateRange={dateRangeState} />}
-          {lista.aviso && <p className="nx-hoje__aviso">{lista.aviso}</p>}
-          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-            {desenhadas.map((a) => (
-              <NxCartaoDaAcao key={a.id} acao={a} clientId={clientId} dateRange={dateRangeState} />
-            ))}
+      descobertas={
+        <NxDescobertas
+          titulo={<TotalDaSemana total={todas.length} />}
+          apoio={lista.aviso ? <p className="nx-hoje__aviso">{lista.aviso}</p> : undefined}
+          itens={visiveis.map((v) => v.d)}
+          clientId={clientId}
+          dateRange={dateRangeState}
+          atributos={(_, k) => {
+            const a = visiveis[k].a;
+            return { "data-acao-hoje": a.id, "data-area-hoje": a.areaHoje, "data-familia-hoje": a.familia, ...(a === lista.proxima ? { "data-proximo": "" } : {}) };
+          }}
+        />
+      }
+      leitura={<LeituraDaTela fatos={{ ...entrada.fatos, tela: "hoje" }} carregando={false} />}
+      resumoDoVerTudo="Leitura, outras ações e a equipe"
+      detalhe={
+        restantes.length > 0 || mostraEquipe ? (
+          <div className="nx-cinco-resto">
+            {restantes.length > 0 && (
+              <div className="nx-cinco-resto__grade">
+                {restantes.map((a) => (
+                  <NxCartaoDaAcao key={a.id} acao={a} clientId={clientId} dateRange={dateRangeState} />
+                ))}
+              </div>
+            )}
+            {mostraEquipe && <NxParaEquipe acoes={lista.paraEquipe} clientId={clientId} dateRange={dateRangeState} />}
           </div>
-          {equipe && lista.paraEquipe.length > 0 && <NxParaEquipe acoes={lista.paraEquipe} clientId={clientId} dateRange={dateRangeState} />}
-        </section>
+        ) : undefined
       }
     />,
   );

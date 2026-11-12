@@ -4,6 +4,7 @@
 // node --import ./scripts/test-network-guard.mjs --import tsx scripts/test-cinco-segundos.ts
 import assert from "node:assert/strict";
 import { ROTULO_RESPONSAVEL } from "../src/lib/insight";
+import { GUARDA_DE_TEXTO_DA_HOJE, GUARDA_DE_TEXTO_DA_TELA_HOJE, checarTextoDaHoje } from "../src/lib/leitura/fatos-hoje";
 import { montarTexto } from "../src/lib/leitura/texto";
 import type { Fato, FatosDaTela, PassoFato } from "../src/lib/leitura/tipos";
 import {
@@ -185,5 +186,19 @@ assert.ok(checarDescoberta({ ...descoberta, impacto: "~12 a mais se você mudar"
 assert.ok(checarDescoberta({ ...descoberta, porque: { ...descoberta.porque, obs: "x".repeat(91) } }).length > 0, "obs de até 90 caracteres");
 assert.ok(checarDescoberta({ ...descoberta, porque: { ...descoberta.porque, barras: descoberta.porque.barras.slice(0, 1) } }).length > 0, "de 2 a 3 fatores");
 assert.ok(checarDescoberta({ ...descoberta, frase: "Você está no ranking das melhores." }).length > 0, "D-02 também vale na descoberta");
+
+// ---------------------------------------------------------------- A-01: o texto da PÁGINA Hoje libera só Agendaram e Fecharam
+for (const liberada of ["Agendaram", "agendaram 30 pessoas", "Fecharam", "fecharam menos", "Fechou", "Etapa Agendou"]) {
+  assert.doesNotMatch(liberada, GUARDA_DE_TEXTO_DA_TELA_HOJE, `A-01 libera: ${liberada}`);
+}
+for (const barrada of ["chamaram", "Chamaram 120 pessoas", "Compareceram", "compareceram no mês", "Os pacientes foram à consulta", "Os pacientes foram a consulta", "foram na consulta"]) {
+  assert.match(barrada, GUARDA_DE_TEXTO_DA_TELA_HOJE, `A-01 segue barrando: ${barrada}`);
+}
+// A guarda das AÇÕES não muda: continua pegando os 4 números da Phase 9 (a regra de ações segue como era).
+for (const palavra of ["agendaram", "fecharam", "chamaram", "compareceram"]) {
+  assert.match(palavra, GUARDA_DE_TEXTO_DA_HOJE, `a guarda das ações segue pegando: ${palavra}`);
+  assert.ok(checarTextoDaHoje(`Os pacientes ${palavra} no mês.`).length > 0, `checarTextoDaHoje segue reprovando: ${palavra}`);
+}
+assert.equal(GUARDA_DE_TEXTO_DA_HOJE.source, String.raw`\b(agendaram|fecharam|chamaram|compareceram)\b|foram (a|à|na) consulta`);
 
 console.log("test-cinco-segundos: ok");

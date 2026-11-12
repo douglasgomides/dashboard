@@ -1,9 +1,11 @@
-import { useId, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
+import type { DateRangeState } from "@/lib/date-range";
 import { ROTULO_RESPONSAVEL } from "@/lib/insight";
 import type { TelaId, TomFato } from "@/lib/leitura/tipos";
-import type { Veredito } from "@/lib/leitura/cinco-segundos";
+import type { Descoberta, Veredito } from "@/lib/leitura/cinco-segundos";
 import { NxCarregando, NxErro } from "./blocos";
-import { NxAcaoPilula } from "./cartoes";
+import { NxAcaoPilula, NxBarras } from "./cartoes";
+import { linhaDaRota } from "./hoje";
 import { SINAL } from "./pagina";
 import "@/styles/nexo-cinco-segundos.css";
 
@@ -100,5 +102,96 @@ function SemDado({ motivo, passo }: { motivo: string; passo: { frase: string; ro
       <NxAcaoPilula frase={passo.frase} />
       <p className="nx-veredito__apoio">{`Quem resolve: ${passo.rotuloQuem}`}</p>
     </div>
+  );
+}
+
+// ---------- Descobertas ----------
+
+type Atributos = Record<string, string>;
+
+export interface NxDescobertasProps {
+  /** O título da seção ("3 ações esta semana"). */
+  titulo: ReactNode;
+  /** Uma linha de apoio embaixo do título (o aviso de poucas ações, por exemplo). */
+  apoio?: ReactNode;
+  /** As descobertas à vista, já em ordem de impacto (de 3 a 5). */
+  itens: readonly Descoberta[];
+  clientId: string;
+  dateRange?: DateRangeState;
+  /** Ação de uma descoberta com `local`: a própria tela decide o que abrir (trocar de aba, por exemplo). Nunca envia nada. */
+  aoAgir?: (local: string) => void;
+  id?: string;
+  /** Atributos extras de cada descoberta (data-*), para a tela marcar o que o teste e a regra precisam achar. */
+  atributos?: (d: Descoberta, indice: number) => Atributos;
+}
+
+/**
+ * De 3 a 5 descobertas em frase curta, cada uma com selo (sinal e palavra), quem resolve, um número medido em jogo, UMA ação que só
+ * navega (CHAM-07) e um "Por quê?" que abre de 2 a 3 fatores em barra. O que falta é barra listrada com "Falta dado" (nunca zero).
+ */
+export function NxDescobertas({ titulo, apoio, itens, clientId, dateRange, aoAgir, id, atributos }: NxDescobertasProps) {
+  const base = useId();
+  return (
+    <section className="nx-descobertas" id={id} aria-labelledby={`${base}-t`} data-peca="descobertas">
+      <header className="nx-descobertas__topo">
+        {/* div com papel de título, porque o título da Hoje é um parágrafo com número grande. */}
+        <div id={`${base}-t`} className="nx-descobertas__titulo" role="heading" aria-level={2}>
+          {titulo}
+        </div>
+        {apoio}
+      </header>
+      {itens.length > 0 && (
+        <ul className="nx-descobertas__lista">
+          {itens.map((d, k) => (
+            <li key={d.id} className="nx-descobertas__item">
+              <ItemDaDescoberta d={d} clientId={clientId} dateRange={dateRange} aoAgir={aoAgir} extras={atributos?.(d, k)} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras }: { d: Descoberta; clientId: string; dateRange?: DateRangeState; aoAgir?: (local: string) => void; extras?: Atributos }) {
+  const [aberto, setAberto] = useState(false);
+  const painel = useId();
+  const linha = d.acao.rota ? linhaDaRota(d.acao.rota) : undefined;
+  const local = d.acao.local;
+  return (
+    <article className="nx-descoberta" data-peca="descoberta" data-tom={d.tom} data-aberto={aberto ? "" : undefined} {...extras}>
+      <div className="nx-descoberta__corpo">
+        <div className="nx-descoberta__topo">
+          <NxSelo tom={d.tom} texto={d.selo} />
+          {d.quem && (
+            <span className="nx-descoberta__quem" title={`Quem resolve: ${d.quem}`}>
+              <span className="sr-only">Quem resolve: </span>
+              <span className="nx-descoberta__texto-do-chip">{d.quem}</span>
+            </span>
+          )}
+          {d.impacto && (
+            <span className="nx-descoberta__impacto" title={d.impacto} data-numero-de-destaque>
+              <span className="nx-descoberta__texto-do-chip">{d.impacto}</span>
+            </span>
+          )}
+        </div>
+        <p className="nx-descoberta__frase">{d.frase}</p>
+      </div>
+      <div className="nx-descoberta__acoes">
+        {linha ? (
+          <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir a aba de origem" para={{ tela: linha, clientId, dateRange }} />
+        ) : local && aoAgir ? (
+          <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={() => aoAgir(local)} />
+        ) : null}
+        <button type="button" className="nx-descoberta__porque-botao" aria-expanded={aberto} aria-controls={painel} onClick={() => setAberto((a) => !a)}>
+          Por quê?
+        </button>
+      </div>
+      <div id={painel} className="nx-descoberta__porque" hidden={!aberto}>
+        <p className="nx-descoberta__porque-titulo">{d.porque.titulo}</p>
+        <NxBarras barras={d.porque.barras} />
+        {d.porque.obs && <p className="nx-descoberta__obs">{d.porque.obs}</p>}
+      </div>
+    </article>
   );
 }
