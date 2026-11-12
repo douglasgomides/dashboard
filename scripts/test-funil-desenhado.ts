@@ -45,7 +45,7 @@ assert.equal(maiorDaEscala([etapa(null)]), 0);
 // Ligação em trapézio: margem = (100 - largura) / 2.
 assert.equal(poligonoDaLigacao(100, 50), "polygon(0% 0, 100% 0, 75% 100%, 25% 100%)");
 assert.equal(poligonoDaLigacao(50, 50), "polygon(25% 0, 75% 0, 75% 100%, 25% 100%)");
-assert.equal(poligonoDaLigacao(100, 33.333), "polygon(0% 0, 100% 0, 83.33% 100%, 16.67% 100%)", "no máximo 2 casas");
+assert.equal(poligonoDaLigacao(100, 33.333), "polygon(0% 0, 100% 0, 66.67% 100%, 33.33% 100%)", "no máximo 2 casas");
 
 // Texto da passagem: mesmo formato de fmtFracao ("9,4%"), "N de M" só para fração, nada para sem passagem.
 assert.equal(textoDaPassagem({ taxa: 0.094, fracao: null, sem: null }), "9,4% passam");
