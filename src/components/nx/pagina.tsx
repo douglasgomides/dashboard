@@ -43,8 +43,35 @@ export interface PaginaNexoProps {
   destaqueDoTopo?: ReactNode;
 }
 
+/**
+ * No celular a fileira de cartões rola de lado: este ouvinte diz qual cartão está à vista (pelo scrollLeft e pela largura do primeiro
+ * cartão mais o espaço). Passivo, e o estado só muda quando o índice muda (nada de renderizar a cada pixel).
+ */
+function useCartaoAtual(quantidade: number) {
+  const fileira = useRef<HTMLDivElement>(null);
+  const [atual, setAtual] = useState(0);
+  useEffect(() => {
+    const el = fileira.current;
+    if (!el || quantidade < 2) return;
+    const calcula = () => {
+      const primeiro = el.firstElementChild as HTMLElement | null;
+      if (!primeiro) return;
+      const espaco = parseFloat(getComputedStyle(el).columnGap) || 0;
+      const passo = primeiro.offsetWidth + espaco;
+      // Fora do celular a fileira não rola (grade): scrollLeft 0 e o índice fica em 0, sem custo.
+      const indice = passo > 0 ? Math.min(quantidade - 1, Math.max(0, Math.round(el.scrollLeft / passo))) : 0;
+      setAtual((antes) => (antes === indice ? antes : indice));
+    };
+    calcula();
+    el.addEventListener("scroll", calcula, { passive: true });
+    return () => el.removeEventListener("scroll", calcula);
+  }, [quantidade]);
+  return { fileira, atual: Math.min(atual, Math.max(0, quantidade - 1)) };
+}
+
 export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitura, cartoes, principal, corpo, detalhe, saudacao, destaqueDoTopo }: PaginaNexoProps) {
   const cartoesVisiveis = (cartoes ?? []).filter((c) => c != null && c !== false);
+  const { fileira, atual } = useCartaoAtual(cartoesVisiveis.length);
   return (
     <div className="nx-pagina" data-tela={tela}>
       <header className="nx-pagina__topo">
@@ -72,10 +99,20 @@ export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitur
       </header>
       {leitura}
       {cartoesVisiveis.length > 0 && (
-        <div className="nx-pagina__cartoes" data-quantidade={cartoesVisiveis.length}>
-          {cartoesVisiveis.map((c, k) => (
-            <Fragment key={k}>{c}</Fragment>
-          ))}
+        <div className="nx-pagina__cartoes-bloco">
+          <div ref={fileira} className="nx-pagina__cartoes" data-quantidade={cartoesVisiveis.length}>
+            {cartoesVisiveis.map((c, k) => (
+              <Fragment key={k}>{c}</Fragment>
+            ))}
+          </div>
+          {/* Bolinhas só no celular (a fileira rola de lado). aria-hidden: todos os cartões já estão no DOM para leitor de tela. */}
+          {cartoesVisiveis.length >= 2 && (
+            <div className="nx-pagina__pontos" aria-hidden>
+              {cartoesVisiveis.map((_, k) => (
+                <span key={k} className="nx-pagina__ponto" data-atual={k === atual ? "" : undefined} />
+              ))}
+            </div>
+          )}
         </div>
       )}
       {principal && <div className="nx-pagina__principal">{principal}</div>}

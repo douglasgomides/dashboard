@@ -525,3 +525,34 @@ test("(m) no máximo 2 ações por área e o Próximo não se repete nos cartõe
   expect(proximo, "há um Próximo").toBeTruthy();
   expect(dados.filter((d) => !d.proximo && d.familia === proximo!.familia), "nenhum cartão tem a família do Próximo").toEqual([]);
 });
+
+// ---------- bolinhas na fileira de cartões do celular (quick 261112-e8e) ----------
+
+test("(o) no celular a fileira de cartões mostra uma bolinha por cartão, com a do cartão à vista marcada", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await dadosRealistas(context);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/${CID}/hoje?preset=30d`);
+  await expect(acoes(page).first()).toBeVisible();
+
+  const fileira = page.locator('[data-tela="hoje"] .nx-pagina__cartoes');
+  const pontos = page.locator('[data-tela="hoje"] .nx-pagina__pontos .nx-pagina__ponto');
+  const n = await fileira.locator("> *").count();
+  expect(n, "a Hoje tem pelo menos 2 cartões nos mocks realistas").toBeGreaterThanOrEqual(2);
+  await expect(pontos).toHaveCount(n);
+  await expect(page.locator('[data-tela="hoje"] .nx-pagina__pontos')).toBeVisible();
+  await expect(page.locator('[data-tela="hoje"] .nx-pagina__pontos')).toHaveAttribute("aria-hidden", "true");
+  await expect(pontos.first()).toHaveAttribute("data-atual", "");
+  await expect(page.locator('[data-tela="hoje"] .nx-pagina__ponto[data-atual]')).toHaveCount(1);
+
+  // Rolar a fileira até o fim marca a última bolinha.
+  await fileira.evaluate((el) => {
+    el.scrollLeft = el.scrollWidth;
+  });
+  await expect(pontos.nth(n - 1)).toHaveAttribute("data-atual", "");
+  await expect(page.locator('[data-tela="hoje"] .nx-pagina__ponto[data-atual]')).toHaveCount(1);
+
+  // Fora do celular a fileira não rola e as bolinhas não aparecem.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.locator('[data-tela="hoje"] .nx-pagina__pontos')).toBeHidden();
+});

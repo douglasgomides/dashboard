@@ -27,6 +27,9 @@
 .nx-pagina__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; line-height: 20px; color: var(--muted-ink); }
 .nx-pagina__acao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .nx-pagina__cartoes { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); min-width: 0; }
+.nx-pagina__cartoes-bloco { min-width: 0; }
+/* Bolinhas do carrossel de cartões: só no celular (a fileira rola de lado). Fora dele não existem na tela. */
+.nx-pagina__pontos { display: none; }
 .nx-pagina__principal, .nx-pagina__corpo { min-width: 0; display: grid; gap: 18px; }
 
 /* Detalhe: o bloco recolhido (NxRecolhido, em blocos.tsx) no fim da página. */
@@ -183,6 +186,10 @@
   }
   .nx-pagina__cartoes::-webkit-scrollbar { display: none; }
   .nx-pagina__cartoes > * { flex: 0 0 min(80%, 260px); scroll-snap-align: start; }
+  /* Uma bolinha por cartão, a do cartão à vista marcada: 6 px com 6 px de espaço, só tokens. */
+  .nx-pagina__pontos { display: flex; justify-content: center; gap: 6px; margin-top: 6px; }
+  .nx-pagina__ponto { width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); }
+  .nx-pagina__ponto[data-atual] { background: var(--muted-ink); }
   .nx-pagina .nx-kpi { padding: 10px 12px; gap: 6px; }
   .nx-pagina .nx-kpi__topo { font-size: 14px; line-height: 18px; }
   .app.product-workspace .nx-pagina .nx-kpi .nx-kpi__valor { font-size: 24px; line-height: 28px; }
