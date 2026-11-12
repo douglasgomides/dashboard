@@ -1,0 +1,114 @@
+/* Linha de 30 dias dos cartões (sketch 002, variante A, aprovada pelo João em 12/11/2026): área, média tracejada, dica com ponto ao
+   passar o dedo ou o mouse e o dia fixado embaixo. Só tokens de nexo-system.css (nenhum hex), peso de letra nunca abaixo de 500,
+   movimento só sem reduced-motion. O ponto e a dica são HTML posicionado em %: um círculo SVG sob preserveAspectRatio="none" esticaria. */
+
+.app.product-workspace:not(.sap-workspace) .nx-linha30 {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-linha30__area {
+  position: relative;
+  height: 56px;
+  border-radius: 8px;
+  cursor: crosshair;
+  /* A página continua rolando na vertical enquanto o dedo anda na horizontal. */
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+}
+.app.product-workspace:not(.sap-workspace) .nx-linha30__area:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-linha30__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.app.product-workspace:not(.sap-workspace) .nx-linha30__preenchimento {
+  fill: var(--b6);
+  stroke: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-linha30__tracado {
+  stroke: var(--b1);
+  stroke-width: 2px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.app.product-workspace:not(.sap-workspace) .nx-linha30__media {
+  stroke: var(--muted-2);
+  stroke-width: 1px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-linha30__ponto {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: var(--b1);
+  border: 2px solid var(--white);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-linha30__dica {
+  position: absolute;
+  z-index: 2;
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--white);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  transform: translate(-50%, calc(-100% - 10px));
+}
+/* Nas pontas a dica não sai do cartão. */
+.app.product-workspace:not(.sap-workspace) .nx-linha30__dica[data-lado="esquerda"] {
+  transform: translate(-12px, calc(-100% - 10px));
+}
+.app.product-workspace:not(.sap-workspace) .nx-linha30__dica[data-lado="direita"] {
+  transform: translate(calc(-100% + 12px), calc(-100% - 10px));
+}
+/* Dia fixado: o texto diz o dia, o valor e ▲/▼ (nunca só a cor). */
+.app.product-workspace:not(.sap-workspace) .nx-linha30__fixo {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--b6);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-linha30__fixo[hidden] {
+  display: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-linha30__fixo b {
+  font-weight: 700;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .app.product-workspace:not(.sap-workspace) .nx-linha30__dica,
+  .app.product-workspace:not(.sap-workspace) .nx-linha30__ponto {
+    animation: nx-linha30-entra 0.1s ease-out;
+  }
+  @keyframes nx-linha30-entra {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-linha30__area {
+    height: 40px;
+  }
+}

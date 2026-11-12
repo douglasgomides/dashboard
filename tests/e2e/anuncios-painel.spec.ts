@@ -60,7 +60,7 @@ for (const width of [375, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/anuncios?preset=30d`);
 
-    // Molde (03.1.1-04): leitura, 4 cartões com ícone redondo, o gráfico do dia e os Detalhes fechados.
+    // Molde (03.1.1-04): leitura, 4 cartões com ícone redondo (2 com a linha de 30 dias) e os Detalhes fechados.
     const leitura = page.locator('[data-peca="leitura"]').first();
     await expect(leitura).toBeVisible();
     await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
@@ -71,16 +71,25 @@ for (const width of [375, 1440]) {
     // Conversas subiram 20% contra o período anterior: pílula azul-clara com o texto (sem cor de bom ou ruim).
     await expect(cartoes.nth(1).locator(".nx-pilula-variacao")).toContainText("+20%");
 
+    // Investido e Conversas iniciadas ganham a linha de 30 dias (sketch 002, A); os outros dois cartões ficam como estavam.
+    await expect(cartoes.locator(".nx-linha30")).toHaveCount(2);
+    const linha = cartoes.first().getByRole("slider");
+    await linha.focus();
+    await page.keyboard.press("Home");
+    await expect(linha).toHaveAttribute("aria-valuenow", "1");
+    await expect(linha).toHaveAttribute("aria-valuetext", /: R\$/);
+    await page.keyboard.press("Enter");
+    await expect(cartoes.first().locator(".nx-linha30__fixo")).toContainText(/R\$\s[\d.,]+ · .*média do mês/);
+
+    // O gráfico do dia (barras e linha), o funil, o "o que fazer" e o método ficam nos Detalhes, fechados.
+    const detalhes = page.locator("details#detalhes-anuncios");
+    await expect(detalhes).not.toHaveAttribute("open", "");
+    await detalhes.locator(":scope > summary").click();
     const grafico = page.getByRole("slider", { name: /^Investimento e conversas por dia/ });
     await expect(grafico).toBeVisible();
     await grafico.focus();
     await page.keyboard.press("Home");
     await expect(grafico).toHaveAttribute("aria-valuetext", /Investido .*Conversas/);
-
-    // O funil, o "o que fazer" e o método ficam nos Detalhes, fechados.
-    const detalhes = page.locator("details#detalhes-anuncios");
-    await expect(detalhes).not.toHaveAttribute("open", "");
-    await detalhes.locator(":scope > summary").click();
     await expect(page.getByRole("figure", { name: "Do anúncio à conversa" })).toBeVisible();
     await expect(page.getByRole("region", { name: "O que fazer agora" })).toBeVisible();
 
