@@ -3,10 +3,12 @@
 // Módulo puro: sem React, sem banco, sem IA, sem consulta nova. Só regra sobre o que a tela já carregou (D-05 da 03.1.1).
 // Cada adaptador traduz o funil que a tela já tem (comercial, pacientes, jornada) para as mesmas 5 etapas.
 import type { DadosComerciais, Funil as FunilComercial, IdPasso, PassoFunil } from "./comercial";
-import { fmtNdeM } from "./funil-taxa";
+import { fmtNdeM, passagem as passagemDaBase } from "./funil-taxa";
+import type { EtapaFunil as EtapaDaJornada, Funil as FunilDaJornada, IdEtapa } from "./jornada-funil";
 import { foraDeOrdem } from "./leitura/fatos-comercial";
 import type { BarraDoFato } from "./leitura/tipos";
 import { fmtFracao } from "./metricas";
+import { TEXTO_NUMERO, avisoAgendouMenosQueFechou, type ChaveNumero, type PacientesPeriodo } from "./pacientes";
 
 /**
  * Nomes do João em 12/11/2026 (decisão aberta 1 / D-06, só os nomes; registrado em .planning/STATE.md). Valem no funil
@@ -260,4 +262,177 @@ export function deFunilComercial(d: { funil: FunilComercial; dados: DadosComerci
     }
   }
   return { etapas, maiorPerda, foraDeOrdem: false, aviso: null };
+}
+
+// ---------------------------------------------------------------- fechamento comum: maior perda e fora de ordem
+
+/** Qualquer ligação com taxa acima de 1 liga o fora de ordem e apaga a maior perda. */
+function algumaTaxaAcimaDeUm(etapas: EtapaDesenhada[]): boolean {
+  return etapas.some((e) => (e.passagem?.taxa ?? 0) > 1);
+}
+
+/** A ligação com a menor taxa abaixo de 1 (maior perda das telas que não trazem a regra pronta). */
+function fechar(etapas: EtapaDesenhada[]): FunilDesenhado {
+  if (algumaTaxaAcimaDeUm(etapas)) return { etapas, maiorPerda: null, foraDeOrdem: true, aviso: AVISO_FORA_DE_ORDEM };
+  let pior: { de: number; para: number; taxa: number } | null = null;
+  for (let i = 1; i < etapas.length; i++) {
+    const t = etapas[i].passagem?.taxa;
+    if (t != null && t < 1 && (!pior || t < pior.taxa)) pior = { de: i - 1, para: i, taxa: t };
+  }
+  return { etapas, maiorPerda: pior ? { de: pior.de, para: pior.para, texto: textoDaPassagem(etapas[pior.para].passagem)! } : null, foraDeOrdem: false, aviso: null };
+}
+
+const capitaliza = (t: string) => (t ? t[0].toUpperCase() + t.slice(1) : t);
+
+// ---------------------------------------------------------------- Funil › Do contato à venda (pacientes)
+
+const SEM_CONVERSOU_VIRA_LEAD = "Virou lead conta só pessoas novas, e quem conversou inclui pacientes antigos: sem % entre as duas.";
+const SEM_LEAD_VIRA_ATENDIDO = "Atendido inclui pacientes antigos: sem % sobre as pessoas novas.";
+const SEM_FECHOU_MAIS_QUE_AGENDOU = "Fecharam conta quem foi marcado como ganho no período, inclusive quem agendou antes: sem % sobre os agendados.";
+const ATENDIDO_INCOMPLETO = "A lista de quem foi atendido não veio inteira, então não dá para contar sem repetir pessoas.";
+
+export interface EntradaDePacientes {
+  dados: Pick<PacientesPeriodo, "numeros" | "listas">;
+  /** Variação já calculada pela tela com o diário (período anterior em memória). null = sem contorno. */
+  variacao: (chave: string) => VariacaoDaEtapa | null;
+}
+
+/**
+ * Atendido em pacientes: pessoas distintas (pela chave `pessoa`) de quem está em atendimento, agendou ou fechou. Só quando as 3
+ * listas vieram inteiras (a lista pode vir cortada) e os 3 números têm valor; senão Falta dado com o motivo.
+ */
+function atendidosDePacientes(d: EntradaDePacientes["dados"]): { valor: number | null; motivo: string | null } {
+  const neg = d.numeros?.negociacao;
+  if (!neg || neg.valor == null) return { valor: null, motivo: neg?.motivo_sem_dado ?? "Quem está em atendimento agora não foi medido neste período." };
+  for (const k of ["agendaram", "fecharam"] as const) {
+    const n = d.numeros?.[k];
+    if (!n || n.valor == null) return { valor: null, motivo: n?.motivo_sem_dado ?? `${TEXTO_NUMERO[k].rotulo} não foi medido, então não dá para contar quem foi atendido.` };
+  }
+  const pessoas = new Set<string>();
+  for (const k of ["negociacao", "agendaram", "fecharam"] as const) {
+    const l = d.listas?.[k];
+    if (!l || l.itens.length !== l.total) return { valor: null, motivo: ATENDIDO_INCOMPLETO };
+    for (const it of l.itens) pessoas.add(it.pessoa);
+  }
+  return { valor: pessoas.size, motivo: null };
+}
+
+/** De Pacientes do período (pessoas) para as 5 etapas do funil desenhado, com a variação que a tela já calculou pelo diário. */
+export function dePacientesDoPeriodo({ dados, variacao }: EntradaDePacientes): FunilDesenhado {
+  const n = dados.numeros;
+  const valorDe = (k: ChaveNumero): number | null => n?.[k]?.valor ?? null;
+  const explica = (k: ChaveNumero) => `${capitaliza(TEXTO_NUMERO[k].legenda)}.`;
+  const doNumero = (k: ChaveNumero, id: string, nome: string, detalhe: BarraDoFato[]): EtapaDesenhada =>
+    etapaCom({ id, nome, valor: valorDe(k), motivo: n?.[k]?.motivo_sem_dado ?? null, explicacao: explica(k), variacao: variacao(k), detalhe });
+  const atendido = atendidosDePacientes(dados);
+
+  const etapas: EtapaDesenhada[] = [
+    doNumero("mandaram_mensagem", "conversou", NOMES_DO_FUNIL[0], barrasDe([["Pessoas novas", valorDe("leads_novos")], ["Pacientes antigos", valorDe("antigos")]])),
+    doNumero("leads_novos", "virou-lead", NOMES_DO_FUNIL[1], []),
+    // O diário não tem o campo de Atendido: nunca tem variação nem contorno.
+    etapaCom({
+      id: "atendido",
+      nome: NOMES_DO_FUNIL[2],
+      valor: atendido.valor,
+      motivo: atendido.motivo,
+      explicacao: "Pessoas diferentes que estão em atendimento agora, agendaram ou fecharam no período.",
+      detalhe: barrasDe([["Em atendimento agora", valorDe("negociacao")], ["Agendaram", valorDe("agendaram")], ["Fecharam", valorDe("fecharam")]]),
+    }),
+    doNumero("agendaram", "agendou", NOMES_DO_FUNIL[3], barrasDe([["Foram na consulta", valorDe("compareceram")], ["Fecharam", valorDe("fecharam")]])),
+    doNumero("fecharam", "fechou", NOMES_DO_FUNIL[4], barrasDe([["Fecharam", valorDe("fecharam")]])),
+  ];
+
+  // Ligações. As duas primeiras contam populações diferentes (pacientes antigos entram em uma e não na outra): sem %.
+  ligar(etapas, 1, { taxa: null, fracao: null, sem: SEM_CONVERSOU_VIRA_LEAD });
+  ligar(etapas, 2, { taxa: null, fracao: null, sem: SEM_LEAD_VIRA_ATENDIDO });
+  ligar(etapas, 3, { ...passagemDaBase(etapas[3].valor, etapas[2].valor, "leads"), sem: null });
+  const ag = etapas[3].valor;
+  const fe = etapas[4].valor;
+  if (ag != null && fe != null) {
+    ligar(etapas, 4, fe <= ag ? { ...passagemDaBase(fe, ag, "agendamentos"), sem: null } : { taxa: null, fracao: null, sem: avisoAgendouMenosQueFechou(dados) ?? SEM_FECHOU_MAIS_QUE_AGENDOU });
+  }
+  return fechar(etapas);
+}
+
+// ---------------------------------------------------------------- Jornada
+
+const SEM_LEAD_VIRA_ATENDIDO_JORNADA = "Atendido conta cards do CRM, e Virou lead conta pessoas: sem % entre as duas.";
+const SEM_ATENDIDO_VIRA_AGENDOU_JORNADA = "Agendou conta pessoas, e Atendido conta cards do CRM: sem % entre as duas.";
+
+/** Uma das 3 etapas do Instagram que ficam na faixa "Antes da conversa" (nomes de hoje, número ou Falta dado). */
+export interface EtapaAntes {
+  id: string;
+  nome: string;
+  valor: number | null;
+  texto: string;
+  motivo: string | null;
+}
+
+export interface EntradaDaJornada {
+  funil: FunilDaJornada;
+  /** O que a tela já carrega do diagnóstico comercial (a mesma chave de React Query). */
+  comercial?: { funil: FunilComercial; dados: Pick<DadosComerciais, "escopo"> } | null;
+}
+
+function etapaDaJornada(e: EtapaDaJornada | undefined, id: string, nome: string): EtapaDesenhada {
+  if (!e) return etapaCom({ id, nome, valor: null, motivo: "Esta etapa não veio do funil da jornada." });
+  const unidade = e.valor != null && e.unidade ? ` Conta: ${e.unidade}.` : "";
+  const falta = e.falta ? `Falta: ${e.falta.integracao}. Dado necessário: ${e.falta.dado}. Onde resolver: ${e.falta.onde}.` : null;
+  return etapaCom({
+    id,
+    nome,
+    valor: e.valor,
+    motivo: e.explicacao,
+    explicacao: e.valor == null ? falta : `${e.explicacao ?? ""}${unidade}`.trim() || null,
+  });
+}
+
+/** Do funil de 7 etapas da jornada para a faixa "Antes da conversa" (3 etapas do Instagram) e o funil desenhado de 5 etapas. */
+export function daJornada({ funil, comercial }: EntradaDaJornada): { antes: EtapaAntes[]; funil: FunilDesenhado } {
+  const por = (id: IdEtapa) => funil.etapas.find((e) => e.id === id);
+  const antes: EtapaAntes[] = (["alcance", "engajamento", "comentario"] as const).map((id) => {
+    const e = por(id);
+    const valor = e?.valor ?? null;
+    return { id, nome: e?.nome ?? id, valor, texto: valor == null ? FALTA_DADO : fmtN(valor), motivo: valor == null ? e?.explicacao ?? "Esta etapa não veio do funil da jornada." : null };
+  });
+
+  // Atendido = o passo "atendidos" do diagnóstico: só com escopo do período, valor e confiança.
+  const passo = comercial?.funil.passos.find((p) => p.id === "atendidos");
+  let atendidoValor: number | null = null;
+  let atendidoMotivo: string | null = null;
+  if (!comercial) atendidoMotivo = "O diagnóstico do CRM não respondeu agora, então não dá para contar quem foi atendido.";
+  else if (comercial.dados.escopo !== "periodo") atendidoMotivo = "Poucos leads no período: o CRM foi lido na base inteira, sem a contagem do período.";
+  else if (!passo || passo.valor == null) atendidoMotivo = passo?.aviso ?? "Não deu para identificar a primeira etapa do funil do CRM.";
+  else if (!passo.confiavel) atendidoMotivo = passo.aviso ?? "Este número do CRM não é confiável neste período.";
+  else atendidoValor = passo.valor;
+
+  const etapas: EtapaDesenhada[] = [
+    etapaDaJornada(por("conversa"), "conversou", NOMES_DO_FUNIL[0]),
+    etapaDaJornada(por("lead"), "virou-lead", NOMES_DO_FUNIL[1]),
+    etapaCom({ id: "atendido", nome: NOMES_DO_FUNIL[2], valor: atendidoValor, motivo: atendidoMotivo, explicacao: passo?.explica ?? null }),
+    etapaDaJornada(por("agendamento"), "agendou", NOMES_DO_FUNIL[3]),
+    etapaDaJornada(por("venda"), "fechou", NOMES_DO_FUNIL[4]),
+  ];
+
+  // Conversou → Virou lead e Agendou → Fechou herdam a conta da jornada (taxa, "N de M" ou o "sem %"); as de Atendido são sempre sem %.
+  const herda = (e: EtapaDaJornada | undefined): PassagemDesenhada => ({ taxa: e?.taxa ?? null, fracao: e?.fracao ?? null, sem: e?.semPassagem ?? null });
+  ligar(etapas, 1, herda(por("lead")));
+  ligar(etapas, 2, { taxa: null, fracao: null, sem: SEM_LEAD_VIRA_ATENDIDO_JORNADA });
+  ligar(etapas, 3, { taxa: null, fracao: null, sem: SEM_ATENDIDO_VIRA_AGENDOU_JORNADA });
+  ligar(etapas, 4, herda(por("venda")));
+
+  if (algumaTaxaAcimaDeUm(etapas)) return { antes, funil: { etapas, maiorPerda: null, foraDeOrdem: true, aviso: AVISO_FORA_DE_ORDEM } };
+  // A maior queda do funil de 7 etapas só vale quando de e para ficam vizinhas no funil desenhado.
+  const indice: Partial<Record<IdEtapa, number>> = { conversa: 0, lead: 1, agendamento: 3, venda: 4 };
+  const mq = funil.maiorQueda;
+  let maiorPerda: FunilDesenhado["maiorPerda"] = null;
+  if (mq) {
+    const de = indice[mq.de];
+    const para = indice[mq.para];
+    if (de != null && para != null && para === de + 1) {
+      const texto = textoDaPassagem(etapas[para].passagem) ?? `${fmtFracao(mq.taxa)} passam`;
+      maiorPerda = { de, para, texto };
+    }
+  }
+  return { antes, funil: { etapas, maiorPerda, foraDeOrdem: false, aviso: null } };
 }
