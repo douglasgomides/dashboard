@@ -9,22 +9,26 @@ import { useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-d
 import { NxChip } from "@/components/nx-chip";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxCartaoDaAcao, NxChipEstado, NxParaEquipe, SaudacaoHoje } from "@/components/nx/hoje";
-import { NxCarregando, NxErro } from "@/components/nx/blocos";
+import { NxCarregando, NxErro, NxTabela } from "@/components/nx/blocos";
+import { NxEtapasContraAntes } from "@/components/nx/etapas-contra-antes";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
 import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxNotaDoDia } from "@/components/nx/nota-do-dia";
 import type { SerieDiaria } from "@/components/nx/linha-de-30-dias";
-import { getClient, getRoiPeriodo } from "@/lib/client-data";
+import { getAdsResumo, getClient, getRoiPeriodo } from "@/lib/client-data";
 import { resolveDateRange } from "@/lib/date-range";
 import { variacoes } from "@/lib/diagnostico-estrategico";
-import { dePacientesDoPeriodo } from "@/lib/funil-desenhado";
+import { dePacientesDoPeriodo, rotuloDoAnterior } from "@/lib/funil-desenhado";
 import { analyzeGrowth } from "@/lib/hub-conteudo";
 import { serieContinua } from "@/lib/linha-30-dias";
 import { lerPeriodo } from "@/lib/leitura-periodo";
 import { fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria } from "@/lib/leitura/fatos-resultados";
 import { fatosDePacientes } from "@/lib/leitura/fatos-pacientes";
-import { fatosDePublicacoes, fatosDoInstagram } from "@/lib/leitura/fatos-instagram";
+import { MIN_DIAS_SALDO, fatosDePublicacoes, fatosDoInstagram } from "@/lib/leitura/fatos-instagram";
 import { GUARDA_DE_TEXTO_DA_TELA_HOJE, acoesDaHoje, type AcaoDaHoje, type EntradaHoje, type FonteDoDado } from "@/lib/leitura/fatos-hoje";
 import { barrasDoPorque, checarDescoberta, checarFraseCinco, variacaoPropria, vereditoDosFatos, visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
+import { custoPorConversa, etapasContraAntes, fatoresDaHoje, tituloDaVirada, vereditoDaHoje, type AdsDoPeriodo, type CrescimentoDoPeriodo, type EntradaCincoHoje } from "@/lib/leitura/cinco-hoje";
+import { notaDoDia } from "@/lib/leitura/nota-do-dia";
 import type { FatosDaTela, TelaId, TomFato } from "@/lib/leitura/tipos";
 import { ehEquipe } from "@/lib/registro-de-telas";
 import { ddmm, statusDoCliente, tomDaFonte, type LinhaFonte } from "@/lib/saude-fontes";
@@ -39,6 +43,8 @@ export const Route = createFileRoute("/_authenticated/$clientId/hoje")({
 
 const clientLayoutRoute = getRouteApi("/_authenticated/$clientId");
 const CAMPOS_FUNIL = ["mandaram_mensagem", "agendaram", "fecharam"] as const;
+/** Os números diários que a nota e a prova da Hoje comparam com o período anterior (leads_novos é a etapa Virou lead). */
+const CAMPOS_DA_NOTA = ["mandaram_mensagem", "leads_novos", "agendaram", "fecharam"] as const;
 const C = "/_authenticated/$clientId";
 
 const ROTULO_DA_FONTE: Record<string, string> = { instagram: "Instagram", anuncios: "Anúncios", crm: "CRM", atendimento: "WhatsApp" };
@@ -144,6 +150,44 @@ function CartaoDaHoje({ n, dias }: { n: NumeroDaHoje; dias: number }) {
   );
 }
 
+const reaisInteiros = (n: number) => `R$ ${Math.round(n).toLocaleString("pt-BR")}`;
+const reaisComCentavos = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const COLUNAS_DO_VER_TUDO = [
+  { chave: "numero", titulo: "Número" },
+  { chave: "agora", titulo: "Agora", numerica: true },
+  { chave: "antes", titulo: "Período anterior", numerica: true },
+  { chave: "mudanca", titulo: "Mudança", numerica: true },
+] as const;
+
+/**
+ * A tabela nova do "Ver tudo": cada número do período contra o período anterior da própria clínica, montada só com o que a Hoje já
+ * carrega. Lado que falta é "Falta dado" (nunca 0); a mudança só aparece quando os dois lados existem e o anterior não é zero.
+ */
+function linhasDoVerTudo(e: EntradaCincoHoje, alcance: { atual: number | null; antes: number | null } | null): Record<string, string>[] {
+  const linha = (rotulo: string, a: number | null | undefined, b: number | null | undefined, formatar: (n: number) => string, menorEhMelhor = false) => {
+    const ok = (n: number | null | undefined): n is number => n != null && Number.isFinite(n);
+    const v = ok(a) && ok(b) ? variacaoPropria(a, b, { menorEhMelhor }) : null;
+    return { numero: rotulo, agora: ok(a) ? formatar(a) : "Falta dado", antes: ok(b) ? formatar(b) : "Falta dado", mudanca: v ? v.texto : "Falta dado" };
+  };
+  const adsAgora = e.ads?.atual;
+  const adsAntes = e.ads?.antes;
+  const linhas = [
+    linha("Conversas no WhatsApp", e.atual.mandaram_mensagem, e.antes.mandaram_mensagem, inteiro),
+    linha("Virou lead", e.atual.leads_novos, e.antes.leads_novos, inteiro),
+    linha("Agendou", e.atual.agendaram, e.antes.agendaram, inteiro),
+    linha("Fechou", e.atual.fecharam, e.antes.fecharam, inteiro),
+    linha("Gasto em anúncios", adsAgora?.gasto, adsAntes?.gasto, reaisInteiros),
+    linha("Conversas pelo anúncio", adsAgora?.conversas, adsAntes?.conversas, inteiro),
+    linha("Custo por conversa", custoPorConversa(adsAgora), custoPorConversa(adsAntes), reaisComCentavos, true),
+  ];
+  if (alcance) linhas.push(linha("Alcance no Instagram", alcance.atual, alcance.antes, inteiro));
+  if (e.crescimento) {
+    const porDia = (c: { novos: number; diasMedidos: number } | null | undefined) => (c && c.diasMedidos >= MIN_DIAS_SALDO ? c.novos / c.diasMedidos : null);
+    linhas.push(linha("Seguidores novos por dia", porDia(e.crescimento.atual), porDia(e.crescimento.antes), (n) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })));
+  }
+  return linhas;
+}
+
 /** O selo de cada tom da ação: sempre com o sinal (▲ ▼ ! ●) ao lado, nunca só a cor. */
 const SELO_DO_TOM: Record<TomFato, string> = { bom: "Bom sinal", atencao: "Atenção", ruim: "Para resolver", neutro: "Para conferir" };
 
@@ -195,8 +239,12 @@ function HojePage() {
   const roi = useQuery({ queryKey: ["roi-periodo", clientId, start, fim], queryFn: () => getRoiPeriodo(clientId, start, fim), staleTime: 5 * 60_000, retry: false });
   const cliente = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId), staleTime: 5 * 60_000, retry: false });
   const estadoDasFontes = useQuery({ queryKey: ["client-sync-status", clientId], queryFn: () => statusDoCliente(clientId), staleTime: 60_000, retry: false });
+  // A nota do dia (D-03, 03.1.1.1) precisa do custo por conversa dos dois períodos: uma linha agregada cada (a mesma RPC ads_resumo que
+  // Anúncios lê, as mesmas chaves de cache; a tela de Resultados usa as mesmas). Se a consulta falhar, só esse sinal vira "Falta dado".
+  const adsAgora = useQuery({ queryKey: ["ads-resumo", clientId, start, comparacao.fimFechado], queryFn: () => getAdsResumo(clientId, start, comparacao.fimFechado), staleTime: 5 * 60_000, retry: false });
+  const adsAntes = useQuery({ queryKey: ["ads-resumo", clientId, comparacao.anterior.start, comparacao.anterior.end], queryFn: () => getAdsResumo(clientId, comparacao.anterior.start, comparacao.anterior.end), staleTime: 5 * 60_000, retry: false });
   // Lista estável: a Hoje só aparece quando as consultas terminaram (nenhuma ação some ou muda de lugar depois de mostrada).
-  const carregandoFontes = resultado.carregandoFontes || pessoas.isPending || diario.isPending || diarioAnterior.isPending || roi.isPending || anterior.isPending || estadoDasFontes.isPending;
+  const carregandoFontes = resultado.carregandoFontes || pessoas.isPending || diario.isPending || diarioAnterior.isPending || roi.isPending || anterior.isPending || estadoDasFontes.isPending || adsAgora.isLoading || adsAntes.isLoading;
 
   const funil = useMemo(() => {
     const atual = somaDiaria((diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado), comparacao.dias, CAMPOS_FUNIL);
@@ -207,6 +255,41 @@ function HojePage() {
 
   const fontes = useMemo(() => fontesDoCliente(estadoDasFontes.data), [estadoDasFontes.data]);
   const temIg = fontesDoRegistro.data?.tem_instagram === true;
+
+  // O que a nota, a prova e a tabela do "Ver tudo" comparam: tudo da própria clínica contra o período anterior, só com o que já está carregado.
+  const entradaCinco = useMemo((): EntradaCincoHoje => {
+    const atual = somaDiaria((diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado), comparacao.dias, CAMPOS_DA_NOTA);
+    const antes = somaDiaria(diarioAnterior.data ?? [], comparacao.dias, CAMPOS_DA_NOTA);
+    const ads = (linha: unknown): AdsDoPeriodo | null => {
+      const l = linha as { gasto?: unknown; conversas?: unknown } | null | undefined;
+      return l ? { gasto: Number(l.gasto), conversas: Number(l.conversas) } : null;
+    };
+    const crescer = (dados: typeof metricas.data, de: string, ate: string): CrescimentoDoPeriodo | null => {
+      if (!temIg || !dados) return null;
+      const c = analyzeGrowth(dados, de, ate);
+      return { novos: c.novos, diasMedidos: c.diasMedidos };
+    };
+    return {
+      atual,
+      antes,
+      ads: adsAgora.isError || adsAntes.isError ? null : { atual: ads(adsAgora.data), antes: ads(adsAntes.data) },
+      crescimento: temIg ? { atual: crescer(metricas.data, start, end), antes: crescer(anterior.data, comparacao.anterior.start, comparacao.anterior.end) } : null,
+      pessoas: pessoas.data ? dePacientesDoPeriodo({ dados: pessoas.data, variacao: () => null }) : null,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diario.data, diarioAnterior.data, adsAgora.data, adsAntes.data, adsAgora.isError, adsAntes.isError, metricas.data, anterior.data, pessoas.data, temIg, start, end, hoje]);
+  // A nota do dia (D-03) e a prova (cada etapa contra o período anterior).
+  const nota = useMemo(() => notaDoDia(fatoresDaHoje(entradaCinco)), [entradaCinco]);
+  const etapas = useMemo(() => etapasContraAntes(entradaCinco), [entradaCinco]);
+  const virada = useMemo(() => tituloDaVirada(etapas), [etapas]);
+  // Alcance do Instagram só para a tabela do "Ver tudo": a soma dos dias fechados, dos dois lados (null = o histórico não cobre 80% dos dias).
+  const alcance = useMemo(() => {
+    if (!temIg) return null;
+    const dos = (dados: { date: string; reach?: number | null }[] | undefined, de: string, ate: string) =>
+      somaDiaria((dados ?? []).filter((d) => d.date >= de && d.date <= ate).map((d) => ({ dia: d.date, reach: d.reach ?? null })), comparacao.dias, ["reach"]).reach;
+    return { atual: dos(metricas.data, start, comparacao.fimFechado), antes: dos(anterior.data, comparacao.anterior.start, comparacao.anterior.end) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metricas.data, anterior.data, temIg, start, end, hoje]);
   const numeros = useMemo(
     () => numerosDaHoje({ atual: funil.atual, antes: funil.antes, diario: diario.data ?? [], fimFechado: comparacao.fimFechado, pessoas: pessoas.data }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -247,8 +330,9 @@ function HojePage() {
     const entrada: EntradaHoje = { fatos: feitos.fatos, porArea: feitos.porArea, insights: r.insights, limitacoes: r.limitacoes, extras, fontes };
     return { entrada, hoje: acoesDaHoje(entrada) };
   }, [r, start, end, hoje, funil, roi.data, pessoas.data, posts.data, metricas.data, anterior.data, temIg, fontes]);
-  // O veredito do topo (D-01): por enquanto o da leitura de Resultados, que diz o mesmo "Falta dado" quando o portão nega (D-05).
-  const veredito = useMemo(() => (leitura ? vereditoDosFatos({ ...leitura.entrada.fatos, tela: "hoje" }, GUARDA_DE_TEXTO_DA_TELA_HOJE) : null), [leitura]);
+  // O veredito do topo (D-01, D-03): a nota do dia com a palavra da faixa e UMA frase. Quando o portão de Resultados nega, a página
+  // abaixo mostra o mesmo "Falta dado" da leitura (D-05) e a nota não aparece.
+  const veredito = useMemo(() => vereditoDaHoje(nota), [nota]);
 
   // Topo (D-07, emenda de 12/11): um título só (a saudação grande). Sem rótulo da
   // tela, sem pergunta visível, sem etiqueta da decisão e sem o chip da clínica (o nome já está na casca). Ficam o "dado até", os
@@ -309,8 +393,9 @@ function HojePage() {
   return na(
     <PaginaNexo
       {...cabecalho}
-      veredito={<NxVeredito veredito={veredito} carregando={false} tela="hoje" />}
+      veredito={<NxVeredito veredito={veredito} carregando={false} tela="hoje" lado={<NxNotaDoDia nota={nota} />} />}
       cartoes={[c1, c2, c3]}
+      principal={<NxEtapasContraAntes etapas={etapas} titulo={virada.titulo} rotuloDoAnterior={rotuloDoAnterior(comparacao.dias)} indiceDaVirada={virada.indice} />}
       descobertas={
         <NxDescobertas
           titulo={<TotalDaSemana total={todas.length} />}
@@ -325,20 +410,19 @@ function HojePage() {
         />
       }
       leitura={<LeituraDaTela fatos={{ ...entrada.fatos, tela: "hoje" }} carregando={false} />}
-      resumoDoVerTudo="Leitura, outras ações e a equipe"
+      resumoDoVerTudo="Todos os números do período"
       detalhe={
-        restantes.length > 0 || mostraEquipe ? (
-          <div className="nx-cinco-resto">
-            {restantes.length > 0 && (
-              <div className="nx-cinco-resto__grade">
-                {restantes.map((a) => (
-                  <NxCartaoDaAcao key={a.id} acao={a} clientId={clientId} dateRange={dateRangeState} />
-                ))}
-              </div>
-            )}
-            {mostraEquipe && <NxParaEquipe acoes={lista.paraEquipe} clientId={clientId} dateRange={dateRangeState} />}
-          </div>
-        ) : undefined
+        <div className="nx-cinco-resto">
+          {restantes.length > 0 && (
+            <div className="nx-cinco-resto__grade">
+              {restantes.map((a) => (
+                <NxCartaoDaAcao key={a.id} acao={a} clientId={clientId} dateRange={dateRangeState} />
+              ))}
+            </div>
+          )}
+          {mostraEquipe && <NxParaEquipe acoes={lista.paraEquipe} clientId={clientId} dateRange={dateRangeState} />}
+          <NxTabela rotulo="Todos os números do período contra o período anterior" colunas={COLUNAS_DO_VER_TUDO} linhas={linhasDoVerTudo(entradaCinco, alcance)} />
+        </div>
       }
     />,
   );
