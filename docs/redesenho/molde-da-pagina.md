@@ -387,3 +387,27 @@ Papel do funil e Etapas no grupo Configurar CRM; Contatos no grupo Atendimento),
 Agentes e Brand Brain saíram; as outras telas da busca sem mudança), 03.1-16 (a faixa antiga de abas da seção e o CSS `.nx-abas`
 ficam sem uso e podem sair) e 03.1-17 (inventário estrito com a Hoje, specs cruzados e asserção de altura das abas da equipe que já
 estiverem no molde).
+
+### k) Nada cortado (12/11/2026)
+
+Passada de leitura pedida pelo João (prints a 1440 px com o menu lateral aberto): nada cortado, nada espremido. As regras abaixo valem
+para toda tela que os planos da 03.1 ainda vão pôr no molde.
+
+- Texto que não cabe é cortado com reticências (uma linha, ou `-webkit-line-clamp` de 2 linhas) e o texto inteiro vai no `title`.
+  Nunca corta sem reticências e nunca esconde sem o texto inteiro à mão.
+- @ do Instagram, data e número nunca quebram no meio: `white-space: nowrap` e, se não couber, reticências com `title`. O nome da
+  pessoa pode ocupar 2 linhas, quebrando só entre palavras (`overflow-wrap: break-word`, nunca `anywhere` nem `break-all`).
+- Chip de uma linha só, com o texto num `span` próprio (`adm-chip__texto` na área da equipe) que corta com reticências dentro do
+  cartão. A regra de corte tem escopo na folha da área; `.nx-tag` e `nx.css` não mudam (o SAP usa).
+- Trilha de grade e filho de flex que contêm texto levam `minmax(0, 1fr)` ou `min-width: 0`: quem precisa de mínimo é o conteúdo, não a
+  trilha. Trilha automática cresce até o chip mais largo e o `overflow: hidden` do cartão corta o resto.
+- Botão sempre inteiro: se não couber na linha, a linha quebra (as ações descem para uma faixa própria, alinhada à direita) antes de
+  o botão encostar na borda do cartão. As quebras da lista olham a largura do cartão (`container-type: inline-size`), não a da
+  janela, porque com o menu lateral aberto o cartão é bem menor que a janela.
+- Tabela larga rola dentro do bloco, com sombra de rolagem visível (no macOS a barra some), e vira lista de cartões no celular.
+- Muitos avisos na mesma linha viram um chip "N alertas" que abre a lista (`details` com `summary` de chip, lista no fluxo da linha,
+  nada de posição absoluta), com os mesmos chips e links de antes. A linha da coluna de saúde fica com no máximo 3 itens em linha.
+- Tema com acento pela lista de exibição (`temaParaExibir`, de `src/lib/texto-que-cabe.ts`); o valor do filtro e os agrupamentos
+  continuam com o texto do banco.
+- A checagem automática fica em `tests/e2e/carteira-sem-corte.spec.ts` e `tests/e2e/posts-sem-corte.spec.ts` (função `cortesEm`, que
+  devolve em texto o que está cortado). Tela nova do molde copia a função para o seu spec.
