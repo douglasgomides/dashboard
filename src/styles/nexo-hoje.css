@@ -10,6 +10,69 @@
   color: var(--muted-ink);
   font-weight: 500;
 }
+/* Topo de título único: o total da semana em número grande logo abaixo da saudação. */
+.app.product-workspace:not(.sap-workspace) .nx-hoje__total {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje__total-numero {
+  font-size: 32px;
+  line-height: 38px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-hoje__total-texto {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--muted-ink);
+}
+
+/* Selo "sem selo" em bolinha cinza: abre a frase ao tocar. Área de toque de pelo menos 24 x 24 px. */
+.app.product-workspace:not(.sap-workspace) .nx-selo-ponto {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-selo-ponto__resumo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  list-style: none;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.app.product-workspace:not(.sap-workspace) .nx-selo-ponto__resumo::-webkit-details-marker {
+  display: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-selo-ponto__resumo:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: 2px;
+}
+/* --muted-ink: contraste de elemento gráfico de 3:1 (--muted-2 não passa). */
+.app.product-workspace:not(.sap-workspace) .nx-selo-ponto__bolinha {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-selo-ponto__texto {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--muted-ink);
+}
+
 .app.product-workspace:not(.sap-workspace) .nx-hoje__leitura {
   display: grid;
   gap: 8px;
@@ -192,6 +255,10 @@
 
 /* ---------- Celular: número menor e cartões compactos (a Hoje cabe em 1,5 tela) ---------- */
 @media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-hoje__total-numero {
+    font-size: 24px;
+    line-height: 30px;
+  }
   .app.product-workspace:not(.sap-workspace) .nx-proximo {
     gap: 8px;
     padding: 16px;

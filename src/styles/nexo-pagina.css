@@ -119,9 +119,12 @@
 .app.product-workspace:not(.sap-workspace) .nx-pagina .nx-kpi__meta .nx-tag--dn { background: var(--b6); color: var(--b1); border-radius: 999px; padding: 1px 10px; font-weight: 500; }
 
 /* ---------- D-07 (03.1.1): saudação da Hoje (a pergunta vira o parágrafo logo abaixo) ---------- */
-.nx-pagina__saudacao { margin: 0; font-size: 28px; line-height: 36px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.nx-pagina__titulos { position: relative; }
+.nx-pagina__saudacao { margin: 0; font-size: 22px; line-height: 28px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
 .nx-pagina__saudacao :where(span, em) { color: var(--muted-ink); font-style: normal; font-weight: 500; }
 .nx-pagina p.nx-pagina__pergunta { font-size: 16px; line-height: 24px; color: var(--muted-ink); }
+/* Só a Hoje: com saudação a pergunta fica só para leitor de tela (o título visível é um só). */
+.nx-pagina p.nx-pagina__pergunta.sr-only { grid-column: auto; grid-row: auto; }
 
 @media (max-width: 560px) {
   .nx-leitura { padding: 14px 12px; }
@@ -138,6 +141,8 @@
   .nx-pagina__titulos { display: contents; }
   .nx-pagina__rotulo { grid-column: 1; grid-row: 1; font-size: 13px; line-height: 18px; }
   .nx-pagina__acao { grid-column: 2; grid-row: 1; }
+  /* Hoje (título único): a saudação e o total da semana usam a largura toda. */
+  .nx-pagina__saudacao, .nx-pagina__titulos > [data-peca="total-da-semana"] { grid-column: 1 / -1; }
   .nx-pagina__pergunta { grid-column: 1 / -1; grid-row: 2; font-size: 19px; line-height: 25px; }
   .nx-pagina__meta { grid-column: 1 / -1; grid-row: 3; gap: 4px 8px; font-size: 13px; line-height: 18px; }
   .nx-pagina__principal, .nx-pagina__corpo { gap: 12px; }

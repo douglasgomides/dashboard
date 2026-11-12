@@ -66,9 +66,16 @@ for (const perfil of ["viewer", "admin"] as const) {
       await page.goto(`/${CID}/hoje?preset=30d`);
 
       await expect(acoes(page).first()).toBeVisible();
-      await expect(page.getByText("O que fazer esta semana?", { exact: true }).first()).toBeVisible();
+      // Topo de título único: a saudação e, logo abaixo, "N ações esta semana" (N = Próximo passo + cartões).
+      const total = page.locator('[data-tela="hoje"] [data-peca="total-da-semana"]');
+      await expect(total).toBeVisible();
+      await expect(total).toHaveText(/^\d+ ações? esta semana$/);
+      await expect(page.locator('[data-tela="hoje"] .nx-pagina__rotulo'), "sem o rótulo pequeno da tela").toHaveCount(0);
+      await expect(page.locator('[data-tela="hoje"] .nx-pagina__meta .nx-tag'), "sem a etiqueta da decisão").toHaveCount(0);
+      await expect(page.locator('[data-tela="hoje"] .nx-chip-contexto', { hasText: /^(?!dado até)/ }), "sem o chip com o nome da clínica").toHaveCount(0);
       await expect(page.locator('[data-tela="hoje"]').getByRole("img", { name: "Número sem selo de confiança" })).toHaveCount(1);
       const n = await acoes(page).count();
+      expect(Number((await total.innerText()).match(/^\d+/)![0]), "o total do topo é o número de ações da tela").toBe(n);
       expect(n, "a Hoje mostra de 3 a 5 ações").toBeGreaterThanOrEqual(3);
       expect(n).toBeLessThanOrEqual(5);
       console.log(`  Hoje (${perfil}, ${janela.width}x${janela.height}): ${n} ações`);

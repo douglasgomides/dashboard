@@ -34,24 +34,32 @@ export interface PaginaNexoProps {
   corpo?: ReactNode;
   /** Vai dentro do bloco recolhido "Detalhes", fechado. */
   detalhe?: ReactNode;
-  /** Só a Hoje (03.1.1, D-07): saudação grande no topo; a pergunta vira o parágrafo logo abaixo. Sem ela o HTML é o de sempre. */
+  /**
+   * Só a Hoje (03.1.1, D-07): saudação grande no topo, como único título visível. Com ela a página não desenha o rótulo da tela
+   * e a pergunta fica só para leitor de tela. Sem ela o HTML é o de sempre.
+   */
   saudacao?: ReactNode;
+  /** Só a Hoje: o número grande logo abaixo da saudação ("4 ações esta semana"). Só vale com `saudacao`. */
+  destaqueDoTopo?: ReactNode;
 }
 
-export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitura, cartoes, principal, corpo, detalhe, saudacao }: PaginaNexoProps) {
+export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitura, cartoes, principal, corpo, detalhe, saudacao, destaqueDoTopo }: PaginaNexoProps) {
   const cartoesVisiveis = (cartoes ?? []).filter((c) => c != null && c !== false);
   return (
     <div className="nx-pagina" data-tela={tela}>
       <header className="nx-pagina__topo">
         <div className="nx-pagina__titulos">
-          <p className="nx-pagina__rotulo">{titulo}</p>
           {saudacao ? (
             <>
               <h1 className="nx-pagina__saudacao">{saudacao}</h1>
-              <p className="nx-pagina__pergunta">{pergunta}</p>
+              {destaqueDoTopo}
+              <p className="nx-pagina__pergunta sr-only">{pergunta}</p>
             </>
           ) : (
-            <h1 className="nx-pagina__pergunta">{pergunta}</h1>
+            <>
+              <p className="nx-pagina__rotulo">{titulo}</p>
+              <h1 className="nx-pagina__pergunta">{pergunta}</h1>
+            </>
           )}
           {(decisao || meta) && (
             <div className="nx-pagina__meta">

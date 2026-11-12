@@ -52,6 +52,21 @@ function fontesDoCliente(linhas: LinhaFonte[] | undefined): (FonteDoDado & { hor
     .map((l) => ({ fonte: ROTULO_DA_FONTE[l.fonte] ?? l.fonte, tom: tomDaFonte(l), ate: l.data_ate, hora: horaDaFonte(l) }));
 }
 
+/** O número grande do topo, logo abaixo da saudação: "4 ações esta semana" ("1 ação esta semana"; "Nenhuma ação esta semana"). */
+export function TotalDaSemana({ total }: { total: number }) {
+  return (
+    <p className="nx-hoje__total" data-peca="total-da-semana">
+      {total === 0 ? (
+        <span className="nx-hoje__total-texto">Nenhuma ação esta semana</span>
+      ) : (
+        <>
+          <strong className="nx-hoje__total-numero">{total}</strong> <span className="nx-hoje__total-texto">{total === 1 ? "ação esta semana" : "ações esta semana"}</span>
+        </>
+      )}
+    </p>
+  );
+}
+
 function HojePage() {
   const { clientId } = Route.useParams();
   const dateRangeState = clientLayoutRoute.useSearch();
@@ -120,24 +135,26 @@ function HojePage() {
     return { entrada, hoje: acoesDaHoje(entrada) };
   }, [r, start, end, hoje, funil, roi.data, pessoas.data, posts.data, metricas.data, anterior.data, temIg, fontes]);
 
-  // Topo (D-07): saudação grande, chips de contexto (clínica e dado até) e chips de estado das fontes com bolinha.
-  const cabecalho = {
+  // Topo (D-07, emenda de 12/11): um título só (a saudação grande) e, logo abaixo, o total da semana em número grande. Sem rótulo da
+  // tela, sem pergunta visível, sem etiqueta da decisão e sem o chip da clínica (o nome já está na casca). Ficam o "dado até", os
+  // chips de estado das fontes com bolinha e o selo, que agora é uma bolinha cinza (continua 1 por tela).
+  const cabecalhoDe = (total?: number) => ({
     tela: "hoje" as const,
     titulo: "O que fazer hoje",
     pergunta: "O que fazer esta semana?",
-    decisao: "D5" as const,
     saudacao: <SaudacaoHoje nome={cliente.data?.name} />,
+    ...(total != null ? { destaqueDoTopo: <TotalDaSemana total={total} /> } : {}),
     meta: (
       <>
-        {cliente.data?.name && <span className="nx-chip-contexto">{cliente.data.name}</span>}
         <span className="nx-chip-contexto">{`dado até ${ddmm(fim)}`}</span>
         {fontes.map((f) => (
           <NxChipEstado key={f.fonte} tom={f.tom} texto={f.ate ? `${f.fonte} até ${ddmm(f.ate)}` : f.fonte} hora={f.hora} />
         ))}
-        <NxChip tipo="sem-selo" />
+        <NxChip tipo="sem-selo" ponto />
       </>
     ),
-  };
+  });
+  const cabecalho = cabecalhoDe();
   // O contêiner data-origem="menu" faz o log por rota contar o clique de qualquer botão da Hoje como menu (nada é gravado além disso).
   const na = (pagina: ReactNode) => (
     <div className="nx-hoje" data-origem="menu">
@@ -165,10 +182,13 @@ function HojePage() {
   }
 
   // Até 4 cartões (o tipo de PaginaNexo já limita); o Próximo é o cartão de destaque da leitura, junto do aviso de poucas ações.
-  const [c1, c2, c3, c4] = lista.outras.slice(0, 4).map((a) => <NxCartaoDaAcao key={a.id} acao={a} clientId={clientId} dateRange={dateRangeState} />);
+  const desenhadas = lista.outras.slice(0, 4);
+  const [c1, c2, c3, c4] = desenhadas.map((a) => <NxCartaoDaAcao key={a.id} acao={a} clientId={clientId} dateRange={dateRangeState} />);
+  // N = o Próximo (quando há) mais os cartões desenhados: o mesmo número que o médico conta na tela.
+  const total = (lista.proxima ? 1 : 0) + desenhadas.length;
   return na(
     <PaginaNexo
-      {...cabecalho}
+      {...cabecalhoDe(total)}
       leitura={
         <section className="nx-hoje__leitura" data-peca="leitura" data-modo="leitura" aria-label="Próximo e aviso">
           {lista.proxima && <NxProximo acao={lista.proxima} clientId={clientId} dateRange={dateRangeState} />}
