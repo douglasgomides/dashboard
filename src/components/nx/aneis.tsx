@@ -107,6 +107,7 @@ export function NxAneis({ aneis, series, rotuloDoAnterior }: NxAneisProps) {
                 aria-pressed={aberto === a.chave}
                 aria-controls={painel}
                 aria-label={aria}
+                title={a.somaAntes != null ? `${a.rotulo}: antes, ${inteiro(a.somaAntes)}` : undefined}
                 onClick={() => setAberto((atual) => (atual === a.chave ? null : a.chave))}
               >
                 <span className="nx-aneis__roda">
@@ -127,7 +128,7 @@ export function NxAneis({ aneis, series, rotuloDoAnterior }: NxAneisProps) {
       </div>
       <p className="nx-aneis__legenda">
         <span className="nx-aneis__legenda-marca" aria-hidden />
-        marca = mesmo número de antes · volta a mais = passou de antes
+        marca = igual a antes · volta = passou de antes
       </p>
       <div id={painel} className="nx-aneis__detalhe" data-peca="anel-detalhe" hidden={!doAnel} aria-live="polite">
         {doAnel && (

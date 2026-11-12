@@ -3,6 +3,8 @@
 // comparação "você agora contra você antes" e as descobertas. Módulo puro: sem React, sem banco, sem rede e sem IA; recebe o que a tela
 // já carregou. D-02: nenhum número de outra clínica entra aqui. D-05: dado que falta é "Falta dado" com o motivo, nunca zero.
 import { LIMITES } from "@/lib/limites";
+import { serieContinua } from "@/lib/linha-30-dias";
+import type { Roi } from "@/lib/roi";
 import { variacaoPropria, vereditoDosFatos, checarFraseCinco, textoDaFrase, type ParteDaFrase, type VariacaoPropria, type Veredito } from "./cinco-segundos";
 import type { FatosDaTela, TomFato } from "./tipos";
 
@@ -189,4 +191,330 @@ export function vereditoDeResultados(e: EntradaCincoResultados): Veredito | null
     }
   }
   return vereditoDosFatos(e.fatos);
+}
+
+// ---------- apoio de datas e dinheiro ----------
+
+const DIA_EM_MS = 86_400_000;
+const emMs = (d: string) => new Date(`${d.slice(0, 10)}T12:00:00Z`).getTime();
+const emIso = (t: number) => new Date(t).toISOString().slice(0, 10);
+const diasEntre = (a: string, b: string) => Math.round((emMs(b) - emMs(a)) / DIA_EM_MS) + 1;
+const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+const reais = (n: number, casas = 0) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: casas, maximumFractionDigits: casas });
+const umaCasa = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const diasAntes = (n: number) => `${n} ${n === 1 ? "dia" : "dias"} antes`;
+
+// ---------- o Instagram em janelas do mesmo tamanho ----------
+
+/** O Instagram só fecha o dia 2 dias depois, e a comparação de seguidores e salvos precisa de uma semana para não oscilar por acaso. */
+const DIAS_PARA_FECHAR_O_INSTAGRAM = 2;
+const DIAS_DO_INSTAGRAM_PARA_COMPARAR = 7;
+/** Fatia dos dias que precisa ter dado dos dois lados (a mesma folga de somaDiaria). */
+const COBERTURA_DO_INSTAGRAM = 0.8;
+
+export interface LinhaDoInstagram {
+  date: string;
+  reach?: number | null;
+  saves?: number | null;
+  new_followers?: number | null;
+}
+
+/**
+ * Seguidores novos e salvos a cada mil alcançados nas MESMAS janelas, tirando os dias que o Instagram ainda está fechando: o período
+ * atual vai do início até 2 dias atrás e o anterior tem o mesmo número de dias, terminando na véspera do início. Dia sem dado conta
+ * como sem dado (nunca zero); sem 80% dos dias dos dois lados, ou com menos de 7 dias, o lado fica null e a tela diz "Falta dado".
+ */
+export function medidasDoInstagram(e: { metricas: readonly LinhaDoInstagram[]; anterior: readonly LinhaDoInstagram[]; start: string; end: string; hoje: string }): {
+  seguidores: NonNullable<EntradaCincoResultados["seguidores"]> | null;
+  salvos: NonNullable<EntradaCincoResultados["salvos"]> | null;
+} {
+  const ateFechado = emIso(emMs(e.hoje) - DIAS_PARA_FECHAR_O_INSTAGRAM * DIA_EM_MS);
+  const ate = e.end < ateFechado ? e.end : ateFechado;
+  const dias = diasEntre(e.start, ate);
+  if (dias < DIAS_DO_INSTAGRAM_PARA_COMPARAR) return { seguidores: null, salvos: null };
+  const antIni = emIso(emMs(e.start) - dias * DIA_EM_MS);
+  const antFim = emIso(emMs(e.start) - DIA_EM_MS);
+  const precisa = Math.ceil(dias * COBERTURA_DO_INSTAGRAM);
+
+  const janela = (linhas: readonly LinhaDoInstagram[], de: string, ate: string) => {
+    const dentro = linhas.filter((l) => l.date >= de && l.date <= ate);
+    const seg = dentro.filter((l) => l.new_followers != null);
+    const sal = dentro.filter((l) => l.reach != null && l.saves != null);
+    return {
+      seguidores: seg.length >= precisa ? seg.reduce((s, l) => s + Number(l.new_followers), 0) : null,
+      salvos: sal.length >= precisa ? { salvos: sal.reduce((s, l) => s + Number(l.saves), 0), alcance: sal.reduce((s, l) => s + Number(l.reach), 0) } : null,
+    };
+  };
+  const agora = janela(e.metricas, e.start, ate);
+  const antes = janela(e.anterior, antIni, antFim);
+  const rotuloAntes = diasAntes(dias);
+  return {
+    seguidores: { atual: agora.seguidores, antes: antes.seguidores, rotuloAntes },
+    salvos: { atual: agora.salvos, antes: antes.salvos, rotuloAntes },
+  };
+}
+
+// ---------- você agora contra você antes ----------
+
+/** Uma linha da comparação da clínica com ela mesma: bolinha cinza (antes) e azul (agora), direita = melhor, invertido para custo. */
+export interface LinhaAgoraContraAntes {
+  id: "conversas" | "custo-por-conversa" | "seguidores-novos" | "salvos-por-mil";
+  rotulo: string;
+  agora: number | null;
+  antes: number | null;
+  formatar: (n: number) => string;
+  menorEhMelhor?: boolean;
+  /** Até 90 caracteres: "62% a mais que antes", "17% mais barato que antes", "Igual a antes". */
+  frase: string;
+  /** "Conversas · agora: X · 30 dias antes: Y · ▲ melhorou". */
+  detalhe: string;
+  /** true = melhorou, false = piorou, null = igual ou sem dado. */
+  melhor: boolean | null;
+  /** De 0 a 100, com a direita sendo o melhor (invertido para custo). null = sem dado: nenhuma bolinha. */
+  posicaoAntes: number | null;
+  posicaoAgora: number | null;
+  rotuloAntes: string;
+  /** O motivo de não haver comparação. Com ele a linha vem em cinza, sem bolinhas. */
+  faltaDado?: string;
+}
+
+function linhaAgoraContraAntes(o: {
+  id: LinhaAgoraContraAntes["id"];
+  rotulo: string;
+  agora: number | null;
+  antes: number | null;
+  formatar: (n: number) => string;
+  menorEhMelhor?: boolean;
+  rotuloAntes: string;
+  baseMinima?: number;
+  motivo: string;
+}): LinhaAgoraContraAntes {
+  const v = variacaoPropria(o.agora, o.antes, { menorEhMelhor: o.menorEhMelhor, baseMinima: o.baseMinima });
+  if (!v || o.agora == null || o.antes == null) {
+    return {
+      id: o.id,
+      rotulo: o.rotulo,
+      agora: null,
+      antes: null,
+      formatar: o.formatar,
+      menorEhMelhor: o.menorEhMelhor,
+      frase: "Falta dado",
+      detalhe: `${o.rotulo} · falta dado: ${o.motivo}`,
+      melhor: null,
+      posicaoAntes: null,
+      posicaoAgora: null,
+      rotuloAntes: o.rotuloAntes,
+      faltaDado: o.motivo,
+    };
+  }
+  const n = Math.abs(v.pct);
+  const frase =
+    v.sinal === "="
+      ? "Igual a antes"
+      : o.menorEhMelhor
+        ? `${n}% ${v.sinal === "▲" ? "mais caro" : "mais barato"} que antes`
+        : `${n}% ${v.sinal === "▲" ? "a mais" : "a menos"} que antes`;
+  const topo = Math.max(o.agora, o.antes) * 1.15;
+  const posicao = (x: number) => Math.round((4 + (o.menorEhMelhor ? 1 - x / topo : x / topo) * 92) * 10) / 10;
+  const veredito = v.melhor === null ? "= igual" : v.melhor ? "▲ melhorou" : "▼ piorou";
+  return {
+    id: o.id,
+    rotulo: o.rotulo,
+    agora: o.agora,
+    antes: o.antes,
+    formatar: o.formatar,
+    menorEhMelhor: o.menorEhMelhor,
+    frase,
+    detalhe: `${o.rotulo} · agora: ${o.formatar(o.agora)} · ${o.rotuloAntes}: ${o.formatar(o.antes)} · ${veredito}`,
+    melhor: v.melhor,
+    posicaoAntes: posicao(o.antes),
+    posicaoAgora: posicao(o.agora),
+    rotuloAntes: o.rotuloAntes,
+  };
+}
+
+const custoDe = (lado: LadoDeAnuncios | null | undefined): number | null =>
+  lado && lado.gasto != null && lado.conversas != null && lado.conversas > 0 ? lado.gasto / lado.conversas : null;
+const porMil = (m: MedidaDeSalvos | null | undefined): number | null => (m && m.alcance > 0 ? (m.salvos / m.alcance) * 1000 : null);
+
+/** As 4 linhas: conversas, custo por conversa, seguidores novos e salvos a cada mil alcançados. Só números desta clínica (D-02). */
+export function linhasAgoraContraAntes(e: EntradaCincoResultados): LinhaAgoraContraAntes[] {
+  const rotuloDoAnterior = diasAntes(e.dias);
+  return [
+    linhaAgoraContraAntes({
+      id: "conversas",
+      rotulo: "Conversas no WhatsApp",
+      agora: e.atual.mandaram_mensagem ?? null,
+      antes: e.antes.mandaram_mensagem ?? null,
+      formatar: inteiro,
+      rotuloAntes: rotuloDoAnterior,
+      baseMinima: BASE_DO_ANTERIOR,
+      motivo: "o histórico por dia não cobre os dois períodos",
+    }),
+    linhaAgoraContraAntes({
+      id: "custo-por-conversa",
+      rotulo: "Custo por conversa",
+      agora: custoDe(e.ads?.atual),
+      antes: custoDe(e.ads?.anterior),
+      formatar: (n) => reais(n, 2),
+      menorEhMelhor: true,
+      rotuloAntes: rotuloDoAnterior,
+      motivo: "faltam o gasto e as conversas dos anúncios",
+    }),
+    linhaAgoraContraAntes({
+      id: "seguidores-novos",
+      rotulo: "Seguidores novos",
+      agora: e.seguidores?.atual ?? null,
+      antes: e.seguidores?.antes ?? null,
+      formatar: inteiro,
+      rotuloAntes: e.seguidores?.rotuloAntes ?? rotuloDoAnterior,
+      motivo: "o Instagram não tem dias medidos suficientes",
+    }),
+    linhaAgoraContraAntes({
+      id: "salvos-por-mil",
+      rotulo: "Salvos a cada mil alcançados",
+      agora: porMil(e.salvos?.atual),
+      antes: porMil(e.salvos?.antes),
+      formatar: umaCasa,
+      rotuloAntes: e.salvos?.rotuloAntes ?? rotuloDoAnterior,
+      motivo: "falta o alcance do Instagram",
+    }),
+  ];
+}
+
+// ---------- cartões de dinheiro ----------
+
+export interface CartaoDeDinheiro {
+  id: "retorno" | "gasto" | "por-paciente";
+  titulo: string;
+  valor: number | null;
+  /** O valor já formatado em R$. null = sem medida (o cartão diz "Sem dado"). */
+  valorTexto: string | null;
+  legenda?: string;
+  antes: number | null;
+  variacao: VariacaoPropria | null;
+  /** "▼ 8% · gastou menos que antes". null quando não há comparação. */
+  textoDaVariacao: string | null;
+  /** O selo do cartão (sinal e palavra). Valor medido sem período anterior: "Falta dado · sem período anterior". */
+  selo: { tom: TomFato; texto: string } | null;
+  semMedida: boolean;
+  /** Por que não há número ("precisa do valor médio da consulta"). */
+  motivo: string | null;
+  /** Só o retorno sem valor da consulta: a equipe tem o lugar onde o valor é informado. */
+  equipeInformaValor: boolean;
+  /** Série diária (só o gasto, quando há ao menos 2 dias). null = dia sem dado. */
+  serie: { rotulo: string; datas: string[]; valores: (number | null)[] } | null;
+}
+
+function cartaoDeCusto(o: {
+  id: CartaoDeDinheiro["id"];
+  titulo: string;
+  valor: number | null;
+  antes: number | null;
+  palavras: { mais: string; menos: string; igual: string };
+  seloDe: { mais: string; menos: string };
+  motivoSemValor: string;
+  serie?: CartaoDeDinheiro["serie"];
+}): CartaoDeDinheiro {
+  const v = variacaoPropria(o.valor, o.antes, { menorEhMelhor: true });
+  const palavra = !v ? null : v.sinal === "▲" ? o.palavras.mais : v.sinal === "▼" ? o.palavras.menos : o.palavras.igual;
+  return {
+    id: o.id,
+    titulo: o.titulo,
+    valor: o.valor,
+    valorTexto: o.valor != null ? reais(o.valor) : null,
+    antes: o.antes,
+    variacao: v,
+    textoDaVariacao: v && palavra ? `${v.texto} · ${palavra}` : null,
+    selo:
+      o.valor == null
+        ? null
+        : v
+          ? v.sinal === "="
+            ? { tom: "neutro", texto: "Igual a antes" }
+            : { tom: v.melhor ? "bom" : "ruim", texto: v.sinal === "▲" ? o.seloDe.mais : o.seloDe.menos }
+          : { tom: "neutro", texto: "Falta dado · sem período anterior" },
+    semMedida: o.valor == null,
+    motivo: o.valor == null ? o.motivoSemValor : null,
+    equipeInformaValor: false,
+    serie: o.serie ?? null,
+  };
+}
+
+/** O que falta para o retorno, em poucas palavras, pelo primeiro item que bloqueia (a mesma ordem do passo a passo de montarRoi). */
+const MOTIVO_DO_ITEM: Record<string, string> = {
+  anuncios: "falta ligar a conta de anúncios",
+  crm: "falta ligar o CRM",
+  compartilhado: "o CRM é compartilhado com outro cliente",
+  etapas: "falta marcar as etapas de venda no CRM",
+  valor: "precisa do valor médio da consulta",
+  origem: "falta a origem dos leads",
+  origem_vendas: "falta a origem das vendas",
+};
+const MOTIVO_FINAL: Record<string, string> = {
+  so_crescimento: "sem anúncio de aquisição no período",
+  sem_investimento: "sem anúncio de aquisição no período",
+  sem_venda: "nenhuma venda ganha no período",
+  sem_separacao: "não dá para separar as vendas dos anúncios",
+  sem_venda_anuncio: "nenhuma venda veio de anúncio no período",
+  poucas_vendas_anuncio: "poucas vendas de anúncio para ler o retorno",
+};
+
+/** Resume o retorno de montarRoi para a entrada: calculável, ou o motivo curto. Só "valor" (sem valor médio da consulta) é coisa que a equipe informa. */
+export function retornoDaEntrada(r: Pick<Roi, "calculavel" | "retornoPorReal" | "motivoFinal" | "itens"> | null | undefined): RetornoDaEntrada | null {
+  if (!r) return null;
+  if (r.calculavel && r.retornoPorReal != null) return { calculavel: true, retornoPorReal: r.retornoPorReal, motivo: null, equipeInformaValor: false };
+  const pendente = r.itens.find((i) => i.bloqueia && !i.feito);
+  const motivo = pendente ? (MOTIVO_DO_ITEM[pendente.id] ?? "faltam dados do CRM") : ((r.motivoFinal && MOTIVO_FINAL[r.motivoFinal]) ?? "o retorno ainda não pode ser calculado");
+  return { calculavel: false, retornoPorReal: null, motivo, equipeInformaValor: pendente?.id === "valor" };
+}
+
+/** Os 3 cartões de dinheiro: retorno em R$, gasto em anúncios e anúncio por paciente fechado (custo: menos é melhor). */
+export function cartoesDeDinheiro(e: EntradaCincoResultados): CartaoDeDinheiro[] {
+  const r = e.retorno;
+  const temRetorno = !!r?.calculavel && r.retornoPorReal != null;
+  const retorno: CartaoDeDinheiro = {
+    id: "retorno",
+    titulo: "Retorno em R$",
+    valor: temRetorno ? r!.retornoPorReal : null,
+    valorTexto: temRetorno ? reais(r!.retornoPorReal!, 2) : null,
+    legenda: temRetorno ? "para cada R$ 1 em anúncio" : undefined,
+    antes: null,
+    variacao: null,
+    textoDaVariacao: null,
+    selo: null,
+    semMedida: !temRetorno,
+    motivo: temRetorno ? null : (r?.motivo ?? "os números comerciais ainda não chegaram"),
+    equipeInformaValor: !temRetorno && !!r?.equipeInformaValor,
+    serie: null,
+  };
+
+  const gastoAgora = e.ads?.atual?.gasto ?? null;
+  const gastoAntes = e.ads?.anterior?.gasto ?? null;
+  const dias = serieContinua((e.ads?.porDia ?? []).map((d) => ({ dia: d.dia, valor: d.gasto })));
+  const gasto = cartaoDeCusto({
+    id: "gasto",
+    titulo: "Gasto em anúncios",
+    valor: gastoAgora,
+    antes: gastoAntes,
+    palavras: { mais: "gastou mais que antes", menos: "gastou menos que antes", igual: "gasto igual ao de antes" },
+    seloDe: { mais: "Gastou mais", menos: "Gastou menos" },
+    motivoSemValor: "a conta de anúncios não respondeu neste período",
+    serie: dias.datas.length >= 2 ? { rotulo: "investido", datas: dias.datas, valores: dias.valores } : null,
+  });
+
+  const fechadosAgora = e.atual.fecharam ?? null;
+  const fechadosAntes = e.antes.fecharam ?? null;
+  const porPaciente = (g: number | null, fechados: number | null) => (g != null && fechados != null && fechados > 0 ? g / fechados : null);
+  const motivo = gastoAgora == null ? "falta o gasto em anúncios" : fechadosAgora == null ? "os fechados do período não foram medidos" : "ninguém fechou no período";
+  const paciente = cartaoDeCusto({
+    id: "por-paciente",
+    titulo: "Anúncio por paciente fechado",
+    valor: porPaciente(gastoAgora, fechadosAgora),
+    antes: porPaciente(gastoAntes, fechadosAntes),
+    palavras: { mais: "mais caro que antes", menos: "mais barato que antes", igual: "custo igual ao de antes" },
+    seloDe: { mais: "Mais caro", menos: "Mais barato" },
+    motivoSemValor: motivo,
+  });
+  return [retorno, gasto, paciente];
 }

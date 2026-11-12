@@ -250,6 +250,246 @@
   }
 }
 
+/* ---------- Você agora contra você antes ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--white);
+  color: var(--text);
+  font-weight: 500;
+  container-type: inline-size;
+  container-name: nx-agora-antes;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__titulo {
+  margin: 0;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 700;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__legenda,
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__nota {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__lista {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__linha {
+  display: grid;
+  grid-template-columns: minmax(180px, 280px) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 24px;
+  min-width: 0;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__linha:last-child {
+  border-bottom: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__texto {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__frase {
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__detalhe {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__linha[data-falta-dado] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__linha[data-falta-dado] .nx-agora-antes__frase {
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__regua {
+  position: relative;
+  height: 40px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__trilho {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 14px;
+  height: 6px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--dn-bg), var(--field) 50%, var(--up-bg));
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__ponto {
+  position: absolute;
+  top: 17px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__ponto:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: 2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__bolinha {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--white);
+  border-radius: 50%;
+  background: var(--muted-2);
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__ponto[data-qual="agora"] {
+  z-index: 1;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__ponto[data-qual="agora"] .nx-agora-antes__bolinha {
+  width: 22px;
+  height: 22px;
+  border-width: 3px;
+  background: var(--b1);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--b1) 35%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__dica {
+  position: absolute;
+  top: -12px;
+  z-index: 2;
+  transform: translateX(-50%);
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--white);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__dica[hidden] {
+  display: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__ponta {
+  position: absolute;
+  bottom: 0;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__ponta--pior {
+  left: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__ponta--melhor {
+  right: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__rotulo,
+.app.product-workspace:not(.sap-workspace) .nx-agora-antes__legenda-curta {
+  display: none;
+}
+/* Celular (régua de 1,5 tela, D-08): cada medida numa linha só, com a frase e o nome à esquerda e a régua à direita; o detalhe inteiro vai
+   para o title da linha e para as bolinhas (aria-label). */
+@container nx-agora-antes (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes {
+    padding: 12px;
+    border-radius: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__titulo {
+    font-size: 18px;
+    line-height: 24px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__linha {
+    grid-template-columns: minmax(0, 1fr) 104px;
+    gap: 4px 12px;
+    padding: 8px 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__legenda-longa {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__legenda-curta {
+    display: inline;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__linha[data-falta-dado] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__frase {
+    font-size: 14px;
+    line-height: 18px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__linha:not([data-falta-dado]) .nx-agora-antes__detalhe {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__rotulo {
+    display: block;
+    margin: 0;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+    color: var(--muted-ink);
+    overflow-wrap: anywhere;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__regua {
+    height: 28px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__trilho {
+    top: 11px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__ponto {
+    top: 14px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-agora-antes__ponta {
+    display: none;
+  }
+}
+
+/* Celular: o que Resultados dá ao veredito e aos cartões de dinheiro cabe na régua de 1,5 tela. */
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito__apoio {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-aneis__antes {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-pagina__cartoes .nx-cartao__icone,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-pagina__cartoes .nx-cartao-selo,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-pagina__cartoes .nx-linha30 {
+    display: none;
+  }
+}
+
 /* O arco enche ao abrir a tela, só para quem não pediu menos movimento (o resultado final é o mesmo sem a animação). */
 @media (prefers-reduced-motion: no-preference) {
   .app.product-workspace:not(.sap-workspace) .nx-aneis__arco,

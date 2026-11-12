@@ -91,6 +91,74 @@ test("Resultados abre com o veredito e os 3 anéis, e cada anel abre e fecha a p
   await expect(page.locator(`${RAIZ} .nx-pagina__detalhe #todas-analises`)).toHaveCount(1);
 });
 
+// Retorno sem o valor das vendas preenchido no CRM (o mesmo caso de numbers-first.spec.ts): falta o valor médio da consulta.
+const ROI_SEM_VALOR = { tem_anuncios: true, tem_crm: true, crm_provider: "kommo", rotulo_custo: "venda", investido: 6000, investido_aquisicao: 4500, investido_crescimento: 1500, investido_estimado: 0, leads: 240, leads_com_origem: 240, ganhos: 30, ganhos_com_valor: 0, receita: 0, ganho_identificavel: true, crm_compartilhado: false };
+
+test("Resultados: 3 cartões de dinheiro e a clínica contra ela mesma, sem nunca virar 0 nem comparar clínicas", async ({ page, context }) => {
+  await mockAccount(context, "admin");
+  await dadosDoSpec(context);
+  await context.route("**/rest/v1/rpc/roi_periodo", (r) => r.fulfill({ json: ROI_SEM_VALOR }));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}?preset=30d`);
+  await expect(aneis(page)).toHaveCount(3);
+
+  // Os 3 cartões de dinheiro, em ordem; o retorno sem o valor da consulta diz "Falta dado" com o motivo (nunca 0).
+  const cartoes = page.locator(`${RAIZ} .nx-pagina__cartoes [data-peca="cartao-numero"]`);
+  await expect(cartoes).toHaveCount(3);
+  await expect(cartoes.nth(0)).toContainText("Retorno em R$");
+  await expect(cartoes.nth(0)).toContainText("Falta dado: precisa do valor médio da consulta");
+  await expect(cartoes.nth(0)).not.toContainText("R$ 0");
+  await expect(cartoes.nth(1)).toContainText("Gasto em anúncios");
+  await expect(cartoes.nth(1)).toContainText("R$ 3.000");
+  await expect(cartoes.nth(1)).toContainText("gasto igual ao de antes");
+  await expect(cartoes.nth(2)).toContainText("Anúncio por paciente fechado");
+  await expect(cartoes.nth(2)).toContainText("R$ 103");
+  await expect(cartoes.nth(2)).toContainText("100% · mais caro que antes");
+  // Só a equipe vê "Informar valor", e ele leva a onde o ticket já é editado (Atendimento, aba de conversas).
+  const informar = cartoes.nth(0).getByRole("link", { name: "Informar valor" });
+  await expect(informar).toBeVisible();
+  const alvo = new URL((await informar.getAttribute("href"))!, "http://localhost");
+  expect(alvo.pathname).toBe(`/${CID}/atendimento`);
+  expect(alvo.searchParams.get("aba")).toBe("conversas");
+
+  // "Você agora contra você antes": 4 linhas, bolinha cinza e azul, só números desta clínica.
+  const secao = page.locator(`${RAIZ} [data-peca="agora-contra-antes"]`);
+  await expect(secao.getByRole("heading", { name: "Você agora contra você antes" })).toBeVisible();
+  await expect(secao).toContainText("Bolinha cinza = antes · azul = agora · direita = melhor");
+  await expect(secao).toContainText("Só números desta clínica.");
+  await expect(secao.locator(".nx-agora-antes__linha")).toHaveCount(4);
+  await expect(secao.locator(".nx-agora-antes__linha").nth(0)).toContainText("50% a mais que antes");
+  await expect(secao.locator(".nx-agora-antes__linha").nth(1)).toContainText("17% mais barato que antes");
+  await expect(secao.getByRole("button", { name: /^Antes: / }).first()).toBeVisible();
+  await secao.getByRole("button", { name: /^Agora: / }).first().click();
+  await expect(secao.getByRole("status")).toContainText("Agora: 870");
+  // O texto à vista nunca compara a clínica com outras (D-02).
+  expect(await page.locator(RAIZ).innerText()).not.toMatch(/outras cl[ií]nicas|m[ée]dia da carteira|ranking|melhor que \d+ de \d+/i);
+});
+
+test("Resultados: o médico não vê Informar valor, vê quem resolve; sem anúncios o gasto diz Falta dado em vez de 0", async ({ page, context }) => {
+  await mockAccount(context, "viewer");
+  await dadosDoSpec(context);
+  await context.route("**/rest/v1/rpc/roi_periodo", (r) => r.fulfill({ json: ROI_SEM_VALOR }));
+  // Sem anúncios no período: nenhuma linha de gasto (lista vazia) e o resumo sem linha.
+  await context.route("**/rest/v1/rpc/ads_resumo", (r) => r.fulfill({ json: [] }));
+  await context.route("**/rest/v1/rpc/ads_por_dia", (r) => r.fulfill({ json: [] }));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${CID}?preset=30d`);
+  const cartoes = page.locator(`${RAIZ} .nx-pagina__cartoes [data-peca="cartao-numero"]`);
+  await expect(cartoes).toHaveCount(3);
+  await expect(cartoes.nth(0).getByRole("link", { name: "Informar valor" })).toHaveCount(0);
+  await expect(cartoes.nth(0)).toContainText("Quem resolve: Equipe Doctor Creator");
+  await expect(cartoes.nth(1)).toContainText("Falta dado: a conta de anúncios não respondeu neste período");
+  await expect(cartoes.nth(1)).not.toContainText("R$ 0");
+  await expect(cartoes.nth(2)).toContainText("Falta dado: falta o gasto em anúncios");
+  // A linha de custo por conversa fica cinza, sem bolinha e sem número inventado.
+  const custo = page.locator(`${RAIZ} .nx-agora-antes__linha[data-falta-dado]`).first();
+  await expect(custo).toContainText("Custo por conversa");
+  await expect(custo).toContainText("Falta dado: faltam o gasto e as conversas dos anúncios");
+  await expect(custo.getByRole("button")).toHaveCount(0);
+});
+
 for (const perfil of ["viewer", "admin"] as const) {
   for (const janela of TELAS_DE_MEDIDA) {
     test(`${perfil} a ${janela.width}x${janela.height}: Resultados com Ver tudo fechado cabe em ${LIMITE_DE_ALTURA} vez a janela, sem rolar de lado e sem nada cortado`, async ({ page, context }) => {
@@ -100,12 +168,12 @@ for (const perfil of ["viewer", "admin"] as const) {
       await page.goto(`/${CID}?preset=30d`);
       await expect(aneis(page)).toHaveCount(3);
 
+      if (perfil === "admin") await page.screenshot({ path: `test-results/redesenho/resultados-5s-${janela.width}.png`, fullPage: true });
       const { altura, janela: altJanela } = await alturaDaAbaAberta(page, RAIZ);
       console.log(`  Resultados (${perfil}, ${janela.width}x${janela.height}): ${Math.round(altura)} px de ${altJanela} (${(altura / altJanela).toFixed(2)}x)`);
       expect(altura, `Resultados mede ${Math.round(altura)} px; o limite é ${LIMITE_DE_ALTURA} x ${altJanela}`).toBeLessThanOrEqual(LIMITE_DE_ALTURA * altJanela);
       expect(await semRolagemLateral(page)).toBe(true);
       expect(await cortesEm(page, RAIZ), "nada pode ficar cortado").toEqual([]);
-      if (perfil === "admin") await page.screenshot({ path: `test-results/redesenho/resultados-5s-${janela.width}.png`, fullPage: true });
     });
   }
 }

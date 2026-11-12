@@ -7,9 +7,16 @@ import { checarDescoberta, checarFraseCinco, textoDaFrase } from "../src/lib/lei
 import type { FatosDaTela } from "../src/lib/leitura/tipos";
 import {
   aneisDeResultados,
+  cartoesDeDinheiro,
+  linhasAgoraContraAntes,
+  medidasDoInstagram,
+  retornoDaEntrada,
   vereditoDeResultados,
   type EntradaCincoResultados,
 } from "../src/lib/leitura/cinco-resultados";
+
+// O real brasileiro sai com espaço sem quebra (U+00A0): nos testes comparamos com espaço comum.
+const sp = (t: string) => t.replace(/\u00a0/g, " ");
 
 const fatos = (ok = true): FatosDaTela => ({
   tela: "resultados",
@@ -150,6 +157,136 @@ const entrada = (parte: Partial<EntradaCincoResultados> = {}): EntradaCincoResul
   const sem = vereditoDeResultados(entrada({ antes: { mandaram_mensagem: 100, agendaram: 80, fecharam: 4 } }));
   assert.notEqual(sem?.tipo === "veredito" ? textoDaFrase(sem.frase) : "", "Chegaram 50% mais conversas, mas fecharam só 18 contra 4.");
   if (sem?.tipo === "veredito") assert.deepEqual(checarFraseCinco(textoDaFrase(sem.frase)), []);
+}
+// ---------------------------------------------------------------- você agora contra você antes
+{
+  // Custo 9 agora contra 10 antes, com menos é melhor: "10% mais barato que antes", e a bolinha de agora fica à direita da de antes.
+  const e = entrada({ ads: { atual: { gasto: 900, conversas: 100 }, anterior: { gasto: 1000, conversas: 100 }, porDia: [] } });
+  const [, custo] = linhasAgoraContraAntes(e);
+  assert.equal(custo.frase, "10% mais barato que antes");
+  assert.equal(custo.melhor, true);
+  assert.ok(custo.posicaoAgora! > custo.posicaoAntes!, "direita = melhor, invertido para custo");
+  assert.equal(sp(custo.detalhe), "Custo por conversa · agora: R$ 9,00 · 30 dias antes: R$ 10,00 · ▲ melhorou");
+  const caro = linhasAgoraContraAntes(entrada({ ads: { atual: { gasto: 1100, conversas: 100 }, anterior: { gasto: 1000, conversas: 100 }, porDia: [] } }))[1];
+  assert.equal(caro.frase, "10% mais caro que antes");
+  assert.equal(caro.melhor, false);
+  assert.ok(caro.posicaoAgora! < caro.posicaoAntes!);
+}
+{
+  const linhas = linhasAgoraContraAntes(entrada());
+  // Conversas 150 contra 100: "50% a mais que antes", agora à direita.
+  assert.equal(linhas[0].frase, "50% a mais que antes");
+  assert.ok(linhas[0].posicaoAgora! > linhas[0].posicaoAntes!);
+  // Igual dentro de 3%.
+  const igual = linhasAgoraContraAntes(entrada({ atual: { mandaram_mensagem: 101, agendaram: 60, fecharam: 18 } }))[0];
+  assert.equal(igual.frase, "Igual a antes");
+  assert.equal(igual.melhor, null);
+  assert.match(igual.detalhe, /= igual$/);
+  // Uma linha sem um dos lados: falta dado com o motivo e nenhuma bolinha (nunca 0).
+  for (const l of linhas.slice(1)) {
+    assert.ok(l.faltaDado, `${l.id} sem dado nenhum`);
+    assert.equal(l.posicaoAgora, null);
+    assert.equal(l.posicaoAntes, null);
+    assert.equal(l.frase, "Falta dado");
+    assert.match(l.detalhe, /falta dado: /);
+  }
+  const semUmLado = linhasAgoraContraAntes(entrada({ ads: { atual: { gasto: 900, conversas: 100 }, anterior: { gasto: 1000, conversas: 0 }, porDia: [] } }))[1];
+  assert.equal(semUmLado.faltaDado, "faltam o gasto e as conversas dos anúncios");
+  assert.equal(semUmLado.posicaoAgora, null);
+  // Conversas do período anterior abaixo da base: falta dado.
+  assert.ok(linhasAgoraContraAntes(entrada({ antes: { mandaram_mensagem: 5 } }))[0].faltaDado);
+  // Toda frase passa nas guardas (90 caracteres, sem jargão, sem comparar clínicas).
+  const todas = linhasAgoraContraAntes(
+    entrada({
+      ads: { atual: { gasto: 900, conversas: 100 }, anterior: { gasto: 1000, conversas: 100 }, porDia: [] },
+      seguidores: { atual: 80, antes: 50, rotuloAntes: "14 dias antes" },
+      salvos: { atual: { salvos: 40, alcance: 10000 }, antes: { salvos: 94, alcance: 10000 }, rotuloAntes: "14 dias antes" },
+    }),
+  );
+  for (const l of todas) assert.deepEqual(checarFraseCinco(l.frase), [], l.frase);
+  assert.equal(todas[2].frase, "60% a mais que antes");
+  assert.equal(todas[3].frase, "57% a menos que antes");
+  assert.equal(todas[3].melhor, false);
+  assert.match(todas[3].detalhe, /agora: 4,0 · 14 dias antes: 9,4 · ▼ piorou$/);
+  // Salvos sem alcance: falta dado.
+  assert.ok(linhasAgoraContraAntes(entrada({ salvos: { atual: { salvos: 4, alcance: 0 }, antes: { salvos: 9, alcance: 100 }, rotuloAntes: "x" } }))[3].faltaDado);
+}
+{
+  // Salvos a cada mil e seguidores nas mesmas janelas: o período anterior tem o mesmo número de dias, terminando na véspera do início.
+  const dia = (i: number) => new Date(Date.UTC(2026, 9, 31) - i * 86_400_000).toISOString().slice(0, 10); // 2026-10-31 menos i
+  const linhas = Array.from({ length: 40 }, (_, i) => ({ date: dia(i), reach: 1000, saves: i < 14 ? 10 : 20, new_followers: i < 14 ? 6 : 3 }));
+  // Hoje é 2026-11-02: o Instagram fecha 2 dias depois, então o período vai até 2026-10-31. Início 2026-10-18 = 14 dias.
+  const m = medidasDoInstagram({ metricas: linhas, anterior: linhas, start: "2026-10-18", end: "2026-11-02", hoje: "2026-11-02" });
+  assert.equal(m.seguidores?.atual, 14 * 6);
+  assert.equal(m.seguidores?.antes, 14 * 3);
+  assert.equal(m.seguidores?.rotuloAntes, "14 dias antes");
+  assert.deepEqual(m.salvos?.atual, { salvos: 140, alcance: 14000 });
+  assert.deepEqual(m.salvos?.antes, { salvos: 280, alcance: 14000 });
+  // Dia sem dado de um lado: com menos de 80% dos dias, o lado vira null (nunca zero).
+  const furado = linhas.map((l, i) => (i >= 14 && i < 24 ? { ...l, new_followers: null, reach: null } : l));
+  const mf = medidasDoInstagram({ metricas: linhas, anterior: furado, start: "2026-10-18", end: "2026-11-02", hoje: "2026-11-02" });
+  assert.equal(mf.seguidores?.atual, 14 * 6);
+  assert.equal(mf.seguidores?.antes, null);
+  assert.equal(mf.salvos?.antes, null);
+  // Período curto demais (menos de 7 dias fechados): nada a comparar.
+  assert.deepEqual(medidasDoInstagram({ metricas: linhas, anterior: linhas, start: "2026-10-28", end: "2026-11-02", hoje: "2026-11-02" }), { seguidores: null, salvos: null });
+}
+
+// ---------------------------------------------------------------- cartões de dinheiro
+{
+  const base = entrada({ ads: { atual: { gasto: 1000, conversas: 100 }, anterior: { gasto: 1100, conversas: 100 }, porDia: [{ dia: "2026-10-01", gasto: 30, conversas: 3 }, { dia: "2026-10-02", gasto: 40, conversas: 4 }] } });
+  const [retorno, gasto, paciente] = cartoesDeDinheiro(base);
+  // Sem o valor médio da consulta: Retorno sem medida, com o motivo, nunca 0.
+  assert.equal(retorno.semMedida, true);
+  assert.equal(retorno.valor, null);
+  assert.equal(retorno.motivo, "os números comerciais ainda não chegaram");
+  const semTicket = cartoesDeDinheiro({ ...base, retorno: { calculavel: false, retornoPorReal: null, motivo: "precisa do valor médio da consulta", equipeInformaValor: true } })[0];
+  assert.equal(semTicket.semMedida, true);
+  assert.equal(semTicket.motivo, "precisa do valor médio da consulta");
+  assert.equal(semTicket.equipeInformaValor, true);
+  const comRetorno = cartoesDeDinheiro({ ...base, retorno: { calculavel: true, retornoPorReal: 3.456, motivo: null, equipeInformaValor: false } })[0];
+  assert.equal(comRetorno.semMedida, false);
+  assert.equal(sp(comRetorno.valorTexto!), "R$ 3,46");
+  assert.equal(comRetorno.equipeInformaValor, false);
+  // Gasto: menos é melhor, com a palavra e a série diária.
+  assert.equal(sp(gasto.valorTexto!), "R$ 1.000");
+  assert.equal(gasto.textoDaVariacao, "▼ 9% · gastou menos que antes");
+  assert.deepEqual(gasto.selo, { tom: "bom", texto: "Gastou menos" });
+  assert.equal(gasto.serie?.datas.length, 2);
+  // Anúncio por paciente fechado: gasto sobre fechados (18 agora, 36 antes), menos é melhor.
+  assert.equal(paciente.valor, 1000 / 18);
+  assert.equal(paciente.antes, 1100 / 36);
+  assert.equal(paciente.textoDaVariacao, "▲ 82% · mais caro que antes");
+  assert.deepEqual(paciente.selo, { tom: "ruim", texto: "Mais caro" });
+  // Nenhum fechado ou fechados sem medida: sem número (nunca divide por zero nem vira 0).
+  const zero = cartoesDeDinheiro({ ...base, atual: { ...base.atual, fecharam: 0 } })[2];
+  assert.equal(zero.semMedida, true);
+  assert.equal(zero.motivo, "ninguém fechou no período");
+  const naoMedido = cartoesDeDinheiro({ ...base, atual: { ...base.atual, fecharam: null } })[2];
+  assert.equal(naoMedido.motivo, "os fechados do período não foram medidos");
+  // Sem anúncios: gasto sem medida, e o anúncio por paciente diz que falta o gasto.
+  const semAds = cartoesDeDinheiro(entrada());
+  assert.equal(semAds[1].semMedida, true);
+  assert.equal(semAds[2].motivo, "falta o gasto em anúncios");
+  // Valor medido sem o período anterior: selo de falta de comparação, sem variação.
+  const semAntes = cartoesDeDinheiro({ ...base, ads: { atual: { gasto: 1000, conversas: 100 }, anterior: null, porDia: [] } })[1];
+  assert.equal(semAntes.variacao, null);
+  assert.equal(semAntes.selo?.texto, "Falta dado · sem período anterior");
+}
+{
+  // O retorno resumido de montarRoi: o motivo é curto e só "valor" é coisa que a equipe informa.
+  const item = (id: string, feito: boolean) => ({ id, bloqueia: true, feito }) as never;
+  assert.deepEqual(retornoDaEntrada({ calculavel: true, retornoPorReal: 2, motivoFinal: null, itens: [] }), { calculavel: true, retornoPorReal: 2, motivo: null, equipeInformaValor: false });
+  assert.deepEqual(retornoDaEntrada({ calculavel: false, retornoPorReal: null, motivoFinal: "item", itens: [item("crm", true), item("valor", false)] }), {
+    calculavel: false,
+    retornoPorReal: null,
+    motivo: "precisa do valor médio da consulta",
+    equipeInformaValor: true,
+  });
+  assert.equal(retornoDaEntrada({ calculavel: false, retornoPorReal: null, motivoFinal: "item", itens: [item("crm", false)] })?.motivo, "falta ligar o CRM");
+  assert.equal(retornoDaEntrada({ calculavel: false, retornoPorReal: null, motivoFinal: "sem_investimento", itens: [] })?.motivo, "sem anúncio de aquisição no período");
+  assert.equal(retornoDaEntrada({ calculavel: false, retornoPorReal: null, motivoFinal: "item", itens: [item("crm", false)] })?.equipeInformaValor, false);
+  assert.equal(retornoDaEntrada(null), null);
 }
 void checarDescoberta;
 
