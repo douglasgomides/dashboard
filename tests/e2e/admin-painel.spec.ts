@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 import { mockCarteira, mockConferencia, mockIntegracoes } from "./admin-dados";
+import { abrirVerTudo } from "./apoio-cinco-segundos";
 
 // Telas da equipe no desenho do painel: contadores em cartões no topo, lista com chips de status e próxima ação,
 // método recolhido e nenhuma rolagem lateral em 375 e 1440.
@@ -17,15 +18,24 @@ async function abrir(page: Page, context: import("@playwright/test").BrowserCont
 }
 
 for (const width of [375, 1440]) {
-  test(`Carteira: contadores no topo, clínicas que pedem atenção primeiro e filtro pelo cartão em ${width}px`, async ({ page, context }) => {
+  test(`Carteira: veredito, clínicas por urgência e, em Ver tudo, contadores e filtros em ${width}px`, async ({ page, context }) => {
     await abrir(page, context, "/admin", width);
-    const resumo = page.getByRole("group", { name: "Resumo da carteira" });
-    await expect(resumo.locator(".adm-cont")).toHaveCount(6);
     const linhas = page.getByRole("region", { name: "Clínicas da carteira" }).locator(".adm-linha");
     await expect(linhas).toHaveCount(6);
-    // Pior status primeiro: a primeira linha tem fonte parada (chip de problema), a última está em dia.
+    // Mais problemas abertos primeiro (padrão): Dra. Carla (2 alertas, nota mais baixa), Dra. Ana (2), e a sem alerta por último.
+    await expect(linhas.nth(0)).toContainText("Dra. Carla Mendes");
+    await expect(linhas.nth(1)).toContainText("Dra. Ana Souza");
+    await expect(linhas.nth(5)).toContainText("Clínica Sorriso");
     await expect(linhas.first().locator(".nx-tag").first()).toHaveText(/Problema/);
     await expect(linhas.first()).toHaveClass(/adm-linha--alerta/);
+
+    // Os 6 contadores de antes moram no "Ver tudo", fechado até alguém abrir.
+    const verTudo = page.locator("details.adm-urgencia__ver-tudo");
+    await expect(verTudo).toHaveJSProperty("open", false);
+    await abrirVerTudo(page, ".adm-carteira");
+    await expect(verTudo).toHaveJSProperty("open", true);
+    const resumo = page.getByRole("group", { name: "Resumo da carteira" });
+    await expect(resumo.locator(".adm-cont")).toHaveCount(6);
     await expect(resumo.getByRole("button", { name: /^Fonte parada/ })).toHaveCount(0);
     await expect(resumo.locator(".adm-cont", { hasText: "Fonte parada ou com erro" }).locator(".adm-cont__valor")).toHaveText("2");
     expect(await semRolagemLateral(page)).toBe(true);

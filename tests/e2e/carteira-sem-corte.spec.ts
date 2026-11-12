@@ -149,6 +149,43 @@ for (const janela of JANELAS) {
       });
     }
 
+    test("veredito, 3 números e a linha de chips de cor não cortam nada nem criam rolagem lateral", async ({ page, context }) => {
+      await abrir(page, context, janela);
+      for (const raiz of ['[data-peca="veredito"]', 'div[aria-label="Números da carteira"]', ".adm-filtros", '[data-peca="descobertas"]']) {
+        expect(await cortesEm(page, raiz), raiz).toEqual([]);
+      }
+      expect(await semRolagemLateral(page)).toBe(true);
+      // Os chips de cor ficam inteiros dentro da linha de filtros.
+      const filtros = (await page.locator(".adm-filtros").boundingBox())!;
+      const pilulas = page.getByRole("group", { name: "Filtrar clínicas pela nota dos dados" }).getByRole("button");
+      expect(await pilulas.count()).toBe(4);
+      for (let k = 0; k < 4; k++) {
+        const b = (await pilulas.nth(k).boundingBox())!;
+        expect(b.x, `chip ${k} sai pela esquerda`).toBeGreaterThanOrEqual(filtros.x - 1);
+        expect(b.x + b.width, `chip ${k} sai pela direita`).toBeLessThanOrEqual(filtros.x + filtros.width + 1);
+      }
+    });
+
+    test("o painel da clínica aberto cabe na janela, sem corte e sem rolagem lateral", async ({ page, context }) => {
+      const linhas = await abrir(page, context, janela);
+      await linhas.filter({ hasText: "Dra. Carla Mendes" }).locator("button.adm-quem--botao").click();
+      const painel = page.getByRole("dialog", { name: "Dra. Carla Mendes" });
+      await expect(painel).toBeVisible();
+      // Espera a entrada do painel terminar para medir a caixa no lugar final.
+      await painel.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+      expect(await cortesEm(page, "dialog.nx-painel-clinica")).toEqual([]);
+      const caixa = (await painel.boundingBox())!;
+      expect(caixa.x, "painel sai pela esquerda").toBeGreaterThanOrEqual(-1);
+      expect(caixa.x + caixa.width, "painel sai pela direita").toBeLessThanOrEqual(janela.width + 1);
+      for (const nomeLink of ["Abrir resultados", "Gerenciar"]) {
+        const b = (await painel.getByRole("link", { name: new RegExp(nomeLink) }).boundingBox())!;
+        expect(b.x + b.width, `${nomeLink} sai pela direita do painel`).toBeLessThanOrEqual(caixa.x + caixa.width + 1);
+      }
+      expect(await semRolagemLateral(page)).toBe(true);
+      await page.keyboard.press("Escape");
+      await expect(painel).toBeHidden();
+    });
+
     test("o chip 'N alertas' abre pelo teclado e mostra os mesmos chips e links de antes", async ({ page, context }) => {
       const linhas = await abrir(page, context, janela);
       const ana = linhas.filter({ hasText: "Dra. Ana Souza" });

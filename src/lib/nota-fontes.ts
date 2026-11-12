@@ -10,6 +10,7 @@
 
 import type { CorStatus, FonteId, StatusFonte } from "@/lib/status-fonte";
 import { NOME_FONTE } from "@/lib/status-fonte";
+import type { BarraDoFato } from "@/lib/leitura/tipos";
 
 export type FaixaNota = "boa" | "atencao" | "ruim";
 
@@ -60,3 +61,34 @@ export function notaDasFontes(status: Partial<Record<FonteId, StatusFonte>>, pro
 }
 
 export const ROTULO_FAIXA: Record<FaixaNota, string> = { boa: "Boa", atencao: "Atenção", ruim: "Ruim" };
+
+const ORDEM_FONTES: FonteId[] = ["instagram", "anuncios", "crm", "atendimento"];
+
+/**
+ * A nota explicada em barras, para o painel da clínica. Espelha a conta de notaDasFontes: uma barra por fonte ligada (a fração é o
+ * ponto da fonte sobre 100), uma barra listrada "Não ligado" por fonte obrigatória sem decisão e uma barra dos problemas de dado
+ * (fração = o que sobrou do teto de desconto de 40). Só mostra o que a nota usou: nenhuma promessa de ponto por correção. Sem
+ * nenhuma fonte ligada não há nota, então não há barra.
+ */
+export function fatoresDaNota(status: Partial<Record<FonteId, StatusFonte>>, problemas: { severidade: "alta" | "media" | "baixa" }[] = []): BarraDoFato[] {
+  const ligadas = ORDEM_FONTES.filter((f) => status[f]?.ligado);
+  if (!ligadas.length) return [];
+  const barras: BarraDoFato[] = [];
+  for (const f of ligadas) {
+    const s = status[f]!;
+    const pontos = PONTOS[s.cor] ?? 0;
+    const palavra = s.cor === "verde" ? "em dia" : s.cor === "amarelo" ? "atrasada" : s.rotulo.toLowerCase();
+    barras.push({ rotulo: NOME_FONTE[f], exibicao: `${palavra}${s.cor !== "verde" && s.dias != null ? ` (${s.dias} dias)` : ""}`, fracao: pontos / 100 });
+  }
+  for (const f of OBRIGATORIAS) {
+    const s = status[f];
+    if (s && !s.ligado && !s.naoUsa) barras.push({ rotulo: NOME_FONTE[f], exibicao: "Não ligado", fracao: 0, faltou: true });
+  }
+  if (problemas.length) {
+    const altas = problemas.filter((p) => p.severidade === "alta").length;
+    const medias = problemas.filter((p) => p.severidade === "media").length;
+    const desconto = Math.min(40, altas * 15 + medias * 5);
+    barras.push({ rotulo: "Problemas de dado", exibicao: `${problemas.length}${altas ? (altas === 1 ? " (afeta a leitura)" : " (afetam a leitura)") : ""}`, fracao: 1 - desconto / 40 });
+  }
+  return barras;
+}
