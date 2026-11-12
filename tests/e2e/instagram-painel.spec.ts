@@ -8,8 +8,9 @@ import { mockInstagram } from "./instagram-dados";
 
 const semRolagemLateral = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 
-const TELAS: { rota: string; cartoes: number; pergunta: RegExp }[] = [
-  { rota: "conteudo", cartoes: 4, pergunta: /^O perfil está crescendo/ },
+// Formato 5 segundos (03.1.1.1, plano 07): Desempenho abre com o veredito e 3 números; a leitura do período mora no "Ver tudo", fechado.
+const TELAS: { rota: string; cartoes: number; pergunta: RegExp; cinco?: boolean }[] = [
+  { rota: "conteudo", cartoes: 3, pergunta: /^O perfil está crescendo/, cinco: true },
   { rota: "audiencia", cartoes: 4, pergunta: /^Quem acompanha o perfil/ },
   { rota: "top", cartoes: 3, pergunta: /^Quais publicações mais se destacaram/ },
   { rota: "posts", cartoes: 4, pergunta: /^O que foi publicado/ },
@@ -29,6 +30,16 @@ for (const width of [375, 1440]) {
       // A leitura do período é a primeira coisa depois do cabeçalho: "O que aconteceu" com o número ao lado,
       // ou "Falta dado:" com o motivo e quem resolve.
       const leitura = page.getByRole("region", { name: "Leitura do período", exact: true });
+      if (t.cinco) {
+        // O veredito abre a tela; a leitura só aparece depois de abrir o "Ver tudo".
+        await expect(page.locator('[data-peca="veredito"]:not([data-modo="carregando"])')).toBeVisible();
+        await expect(leitura).toBeHidden();
+        // O "Ver tudo" abre pelo teclado (Enter no resumo) e mostra a leitura que estava no topo.
+        const verTudo = page.locator('details:has(> summary b:text-is("Ver tudo"))').first();
+        await verTudo.locator("> summary").focus();
+        await page.keyboard.press("Enter");
+        await expect(verTudo).toHaveAttribute("open", "");
+      }
       await expect(leitura).toBeVisible();
       await expect(leitura.getByText("O que aconteceu", { exact: true }).or(leitura.getByText(/^Falta dado:/))).toBeVisible();
       await expect(leitura.locator(".nx-leitura__num").first().or(leitura.getByText(/^Falta dado:/))).toBeVisible();
@@ -41,7 +52,8 @@ for (const width of [375, 1440]) {
       // As 4 telas do Instagram desenham NxCartaoNumero (03.1.1, D-07); Conteúdo × Comercial segue com NxKpi.
       await expect(page.locator(".nx-pagina__cartoes :is(.nx-kpi, .nx-cartao)")).toHaveCount(t.cartoes);
       await expect(page.locator(".nx-pagina__cartoes :is(.nx-kpi .ws-metric-value, .nx-cartao .nx-numero__valor)").first()).toBeVisible();
-      expect((await leitura.boundingBox())!.y).toBeLessThan((await cartoes.first().boundingBox())!.y);
+      if (t.cinco) expect((await page.locator('[data-peca="veredito"]').first().boundingBox())!.y).toBeLessThan((await cartoes.first().boundingBox())!.y);
+      else expect((await leitura.boundingBox())!.y).toBeLessThan((await cartoes.first().boundingBox())!.y);
 
       // Nenhum gráfico do Recharts e nenhuma tabela fora da peça NxTabela.
       await expect(page.locator(".recharts-wrapper")).toHaveCount(0);
@@ -52,7 +64,7 @@ for (const width of [375, 1440]) {
 
       // Detalhes abre pelo teclado.
       const detalhes = page.locator(".nx-pagina__detalhe > details").first();
-      if (await detalhes.count()) {
+      if (!t.cinco && (await detalhes.count())) {
         await detalhes.locator("summary").first().focus();
         await page.keyboard.press("Enter");
         await expect(detalhes).toHaveAttribute("open", "");
@@ -66,8 +78,12 @@ for (const width of [375, 1440]) {
     await mockInstagram(context);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/conteudo?preset=30d`);
+    // A leitura mora no "Ver tudo" (formato 5 segundos): abre antes de conferir o texto dela.
+    await expect(page.locator('[data-peca="veredito"]:not([data-modo="carregando"])')).toBeVisible();
+    await page.locator('details:has(> summary b:text-is("Ver tudo")) > summary').first().click();
     await expect(page.getByRole("region", { name: "Leitura do período", exact: true })).toBeVisible();
     await expect(page.locator(".nx-pagina__cartoes").getByText("Projeção em 30 dias")).toHaveCount(0);
+    await expect(page.locator('[data-peca="veredito"]').getByText(/projeção|ritmo atual|previsão/i)).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Leitura do período", exact: true }).getByText(/projeção|ritmo atual|previsão/i)).toHaveCount(0);
   });
 

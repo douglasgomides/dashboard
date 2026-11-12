@@ -1,0 +1,477 @@
+/* "O que funciona no seu Instagram" (Phase 03.1.1.1, plano 07): o cartão de prova de Instagram > Desempenho, com as abas Formato, Horário e Tema, e o
+   mapa de horários dos próprios posts. Só tokens de nexo-system.css (nenhum hex; a intensidade do mapa usa color-mix com um token), espaços em 4, 8,
+   12 e 16, peso de letra nunca abaixo de 500, sem animação (nada se move) e nada cortado (molde k). Escopo: a casca do Nexo fora do SAP.
+   O ★ e o destaque só aparecem com a amostra mínima; a legenda escrita diz o mesmo que a cor (nunca só a cor). */
+.app.product-workspace:not(.sap-workspace) .nx-funciona {
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__abas {
+  margin-bottom: 12px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__painel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: nx-funciona;
+}
+
+/* ---------- Formato e Tema: barras ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-funciona__colunas {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px 32px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__coluna {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__barras {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__barra,
+.app.product-workspace:not(.sap-workspace) .nx-funciona__tema {
+  display: grid;
+  grid-template-columns: minmax(64px, 96px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__tema {
+  grid-template-columns: minmax(120px, 240px) minmax(0, 1fr) auto;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__rotulo {
+  min-width: 0;
+  display: grid;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__rotulo small {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__trilho {
+  display: block;
+  height: 16px;
+  min-width: 0;
+  border-radius: 8px;
+  background: var(--field);
+  overflow: hidden;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__trilho i {
+  display: block;
+  height: 100%;
+  border-radius: 8px;
+  background: var(--b4);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__barra[data-destaque] .nx-funciona__trilho i,
+.app.product-workspace:not(.sap-workspace) .nx-funciona__tema[data-destaque] .nx-funciona__trilho i {
+  background: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__barras[data-tom="postou"] .nx-funciona__trilho i {
+  background: var(--line-2);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__barras[data-tom="postou"] .nx-funciona__barra[data-destaque] .nx-funciona__trilho i {
+  background: var(--or);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__valor {
+  display: grid;
+  justify-items: end;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__valor small {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__frase {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--or-bg);
+  color: var(--or-ink);
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-funciona__frase[data-tipo="poucos"],
+.app.product-workspace:not(.sap-workspace) .nx-funciona__frase[data-tipo="neutro"],
+.app.product-workspace:not(.sap-workspace) .nx-funciona__frase[data-tipo="alinhado"] {
+  background: var(--b6);
+  color: var(--text);
+}
+
+/* ---------- Horário: o mapa dos próprios posts ---------- */
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+/* Rolagem declarada (data-rola): só aparece quando há tantas horas com post que as células não cabem. */
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__rola {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 8px 8px 0 0;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__grade {
+  display: grid;
+  grid-template-columns: 40px repeat(var(--colunas), minmax(28px, 1fr));
+  gap: 4px;
+  align-items: center;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__hora {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  color: var(--muted-ink);
+  text-align: center;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__dia {
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 700;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__vazio {
+  display: grid;
+  place-items: center;
+  height: 24px;
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--muted-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+/* Um botão pequeno: a regra global de 44 px de altura não vale aqui (o mapa tem até 7 linhas). */
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__celula {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 24px;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--b1) calc(var(--nx-i) * 1%), var(--b5));
+  color: var(--text);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__celula[data-forte] {
+  color: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__celula[data-poucos] {
+  box-shadow: inset 0 0 0 2px var(--white);
+  outline: 2px dashed var(--muted-soft);
+  outline-offset: -2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__celula[aria-pressed="true"] {
+  outline: 3px solid var(--text);
+  outline-offset: 1px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__celula:focus-visible {
+  outline: 3px solid var(--b1);
+  outline-offset: 2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__estrela {
+  position: absolute;
+  top: -8px;
+  right: -4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--white);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__legenda {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__escala {
+  display: inline-flex;
+  gap: 4px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__escala i {
+  display: block;
+  width: 24px;
+  height: 12px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--b1) calc(var(--nx-i) * 1%), var(--b5));
+}
+.app.product-workspace:not(.sap-workspace) .nx-mapa-posts__frase {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--b6);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+/* Celular: tudo numa coluna; o mapa usa células menores, rótulo de hora a cada 2 h e o número sai da célula (o toque diz o número). */
+@container nx-funciona (max-width: 520px) {
+  .app.product-workspace:not(.sap-workspace) .nx-funciona__colunas {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funciona__tema {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funciona__tema .nx-funciona__trilho {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-mapa-posts__grade {
+    grid-template-columns: 32px repeat(var(--colunas), minmax(24px, 1fr));
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-mapa-posts__hora[data-impar] {
+    visibility: hidden;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-mapa-posts__celula,
+  .app.product-workspace:not(.sap-workspace) .nx-mapa-posts__vazio {
+    height: 24px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-mapa-posts__numero {
+    display: none;
+  }
+}
+
+/* ---------- Desempenho na régua de 1,5 tela (D-08): nunca se sobe o limite, só se comprime o que é desta tela ---------- */
+/* Selo com a palavra e pílula com o sinal ▲▼ do cartão de número, na mesma linha. */
+.app.product-workspace:not(.sap-workspace) .nx-ig-sinais {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-ig-sinais .nx-pilula-variacao {
+  max-width: 100%;
+}
+/* Número e legenda na mesma linha; a linha de 30 dias mais baixa. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-pagina__cartoes .nx-numero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-pagina__cartoes .nx-numero__legenda {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-pagina__cartoes .nx-linha30__area {
+  height: 40px;
+}
+/* Descoberta: ação e "Por quê?" lado a lado. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta__acoes {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta .nx-acao-pilula__seta,
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta__porque-botao {
+  min-height: 0;
+}
+
+/* Computador: as 3 descobertas lado a lado (cada uma empilha chips, frase e botões no próprio cartão). */
+@media (min-width: 1100px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descobertas__lista {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta .nx-acao-pilula,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta__porque-botao {
+    min-height: 40px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta .nx-acao-pilula__seta {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* Os 5 posts que mais salvaram, no "Ver tudo". */
+.app.product-workspace:not(.sap-workspace) .nx-top5 {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__titulo {
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-instagram-ordem {
+  margin: 0;
+}
+
+/* Formato: a contagem de posts só aparece junto do número de salvos quando a coluna "Quantos você postou" some (celular). */
+.app.product-workspace:not(.sap-workspace) .nx-funciona__so-estreito {
+  display: none;
+}
+@container nx-funciona (max-width: 520px) {
+  .app.product-workspace:not(.sap-workspace) .nx-funciona__coluna-postou {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funciona__so-estreito {
+    display: block;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funciona__so-largo {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funciona__temas > .nx-funciona__tema:nth-child(n + 4) {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funciona__temas {
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funciona__tema .nx-funciona__trilho {
+    height: 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-funciona__coluna {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  /* A pergunta já é o título da tela: o rótulo, a etiqueta da decisão e o período saem no celular (o período está no seletor da casca). */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-pagina__rotulo,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-pagina__meta,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-pagina__pontos,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-instagram-ordem,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] #o-que-funciona .nx-card__head p,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nxb-recolhido small {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] {
+    gap: 6px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-veredito {
+    padding: 8px 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-veredito__apoio {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-pagina__cartoes .nx-numero__valor {
+    font-size: 26px;
+    line-height: 30px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-pagina__cartoes .nx-cartao__icone,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-pagina__cartoes .nx-cartao__sub {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-pagina__cartoes .nx-cartao {
+    gap: 4px;
+    padding: 8px 12px;
+  }
+  /* A linha de 30 dias dos cartões sai no celular (como em Pacientes): a régua de 1,5 tela não deixa; no computador ela fica. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-pagina__cartoes .nx-linha30 {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-pagina__acao button {
+    min-height: 36px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descobertas,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descobertas__lista {
+    gap: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descobertas__titulo {
+    font-size: 18px;
+    line-height: 20px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta {
+    padding: 8px;
+    gap: 2px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta__frase {
+    font-size: 15px;
+    line-height: 20px;
+  }
+  /* Descoberta: o selo e quem resolve entram na mesma linha da frase; o número em jogo fica no "Por quê?". */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta__corpo {
+    display: block;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta__topo {
+    display: inline-flex;
+    max-width: 100%;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta__impacto {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta__frase {
+    display: inline;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta .nx-selo {
+    font-size: 12px;
+    line-height: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta__acoes {
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta .nx-acao-pilula {
+    min-height: 36px;
+    padding: 2px 2px 2px 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta .nx-acao-pilula__texto {
+    padding: 0;
+    font-size: 14px;
+    line-height: 18px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] #o-que-funciona .ig-aba {
+    min-height: 36px;
+    padding: 0 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-funciona__abas {
+    margin-bottom: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta .nx-acao-pilula__seta {
+    width: 32px;
+    height: 32px;
+    min-width: 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="conteudo"] .nx-descoberta__porque-botao {
+    min-height: 36px;
+  }
+}
