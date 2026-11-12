@@ -130,6 +130,17 @@ Escopo de 10/11/2026 (João): a leitura sai só de regras fixas, calculada na ho
 - [ ] **MEDV-04**: Com o detalhe fechado, a aba aberta de cada tela juntada do médico e a Hoje têm no máximo 1,5 altura de tela em 375 e 1440 px, conferido por teste automático; as abas da equipe ficam medidas e registradas, e viram teste quando a 03.1 as puser no molde
 - [ ] **MEDV-05**: A primeira versão da tela Hoje mostra de 3 a 5 ações tiradas por regra dos fatos das telas (sem IA, sem tabela nova), cada uma com o número que a sustenta, quem resolve e o link para a aba de origem; com dado ruim diz "sem leitura: motivo"; leva o aviso "sem selo" até a Phase 6/9
 
+### Telas no formato 5 segundos (CINCO) — Phase 03.1.1.1
+
+- [ ] **CINCO-01**: Toda tela da clínica abre na mesma ordem: veredito (palavra + uma frase com número) → até 3 números-chave → um gráfico que prova o veredito → 3 a 5 descobertas → "Ver tudo" fechado com o restante do conteúdo atual (nada é apagado)
+- [ ] **CINCO-02**: Cada número-chave mostra ▲▼ contra o período anterior da própria clínica e a linha de 30 dias; cada descoberta tem uma ação e um "Por quê?" que abre 2 a 3 fatores; frase ≤ 90 caracteres, sem jargão, "Falta dado" no lugar de zero
+- [ ] **CINCO-03**: Nenhuma tela compara a clínica com outras clínicas (sem "melhor que X de Y", média ou ranking da carteira); comparação só com a própria história: período anterior, faixa do normal, melhor dia
+- [ ] **CINCO-04**: A Hoje mostra a nota do dia 0–100 com a palavra (Ruim/Atenção/Bom/Ótimo) e os fatores ao tocar, pela regra do piloto: só sinais da própria clínica, 50 = igual ao período anterior, avisando que é regra e não garante resultado; seguida das 3 coisas da semana
+- [ ] **CINCO-05**: Resultados, Do contato à venda, Atendimento, Instagram e Anúncios seguem os pilotos aprovados em 12/11 (anéis, funil com "pessoas que ficaram na mesa", faixa do normal com o dia fora dela marcado, formato × tema × horário, dias de verba baixa)
+- [ ] **CINCO-06**: A Carteira abre com "N clínicas precisam de você hoje", ordena por urgência (problemas abertos), filtra por cor e mostra quem resolve cada alerta, sem ordenar por desempenho
+- [ ] **CINCO-07**: O Fechamento do mês abre como história em cartões (um número por cartão, avanço por toque, seta e teclado), comparando só com o mês anterior; Compartilhar e PDF ficam para a fase de envio
+- [ ] **CINCO-08**: As alturas continuam dentro do limite (1218 px em 375x812 e 1350 px em 1440x900, com "Ver tudo" fechado) e nada fica cortado, conferido por teste automático; só regras (sem IA), sem SQL nem migration
+
 ## Future Requirements
 
 ### v1.5
@@ -240,10 +251,18 @@ Escopo de 10/11/2026 (João): a leitura sai só de regras fixas, calculada na ho
 | MEDV-03 | Phase 03.1.1 | Pending |
 | MEDV-04 | Phase 03.1.1 | Pending |
 | MEDV-05 | Phase 03.1.1 | Pending |
+| CINCO-01 | Phase 03.1.1.1 | Pending |
+| CINCO-02 | Phase 03.1.1.1 | Pending |
+| CINCO-03 | Phase 03.1.1.1 | Pending |
+| CINCO-04 | Phase 03.1.1.1 | Pending |
+| CINCO-05 | Phase 03.1.1.1 | Pending |
+| CINCO-06 | Phase 03.1.1.1 | Pending |
+| CINCO-07 | Phase 03.1.1.1 | Pending |
+| CINCO-08 | Phase 03.1.1.1 | Pending |
 
 **Coverage:**
-- v1 requirements: 72 total
-- Mapped to phases: 72
+- v1 requirements: 80 total
+- Mapped to phases: 80
 - Unmapped: 0 ✓
 
 ---

@@ -75,6 +75,13 @@ export const CHAVES_EXCLUIDAS_DA_HOJE: readonly string[] = [
 /** Guarda de texto: frase, legenda e número de cada ação (os 4 números da Phase 9 dentro de uma frase). */
 export const GUARDA_DE_TEXTO_DA_HOJE = /\b(agendaram|fecharam|chamaram|compareceram)\b|foram (a|à|na) consulta/i;
 
+/**
+ * Guarda do texto visível da PÁGINA Hoje (03.1.1.1, emenda A-01 do João, 12/11/2026): Agendaram e Fecharam podem aparecer na Hoje como
+ * nome de etapa do funil e como fator da nota; os outros dois números da Phase 9 (Chamaram e Compareceram, ou "foram à consulta") seguem
+ * fora do texto da página. A guarda de texto das AÇÕES (GUARDA_DE_TEXTO_DA_HOJE, acima) não muda: a regra das ações continua sem os 4.
+ */
+export const GUARDA_DE_TEXTO_DA_TELA_HOJE = /\b(chamaram|compareceram)\b|foram (a|à|na) consulta/i;
+
 /** Guarda de número: só os números de destaque (número, legenda e número do Próximo). Nada de agendamento, venda ou contato novo. */
 export const GUARDA_DE_NUMERO_DA_HOJE = /\b(agendamentos?|vendas?|consultas?|comparecimentos?|contatos novos|novos contatos|leads?)\b/i;
 

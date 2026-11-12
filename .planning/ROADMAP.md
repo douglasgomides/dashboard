@@ -215,6 +215,43 @@ Plans:
 **Wave 8** *(blocked on Wave 7 completion)*
 - [ ] 03.1.1-08-PLAN.md — Equipe agrupada em 9 seções (Conteúdo, Atendimento, Configurar CRM), busca com "Seção › Aba", alturas das 10 abas da equipe registradas; publica; o João olha a visão do médico e a da equipe (critério 5)
 
+### Phase 03.1.1.1: Telas no formato 5 segundos (INSERTED)
+
+**Goal:** Cada tela da clínica e a Carteira passam no teste dos 5 segundos: quem bate o olho sabe se está bom ou ruim, por quê e o que fazer. Leva para o Nexo os 8 pilotos HTML aprovados pelo João em 12/11/2026 (Hoje, Resultados, Do contato à venda, Atendimento, Instagram, Anúncios, Carteira, Fechamento do mês).
+**Requirements**: CINCO-01, CINCO-02, CINCO-03, CINCO-04, CINCO-05, CINCO-06, CINCO-07, CINCO-08
+**Decisões do João (12/11/2026):** nota do dia 0–100 entra com a regra do piloto (só sinais da própria clínica; 50 = igual ao período anterior; fatores ao tocar; "não garante resultado"). Nunca comparar uma clínica com outras. Envio do resumo semanal pelo WhatsApp e Compartilhar/Baixar PDF do Fechamento do mês ficam para fase própria depois (aqui só a prévia).
+**Fonte:** pilotos em scratchpad (fora do repositório, têm dados reais), padrão em PADRAO.md, pesquisa em .planning/research/ux-mercado/.
+
+**Success Criteria**:
+1. Toda tela abre na ordem: veredito (palavra + uma frase com número) → até 3 números com ▲▼ vs o próprio período anterior e linha de 30 dias → um gráfico que prova → 3 a 5 descobertas com ação e "Por quê?" → "Ver tudo" fechado.
+2. Nenhuma tela compara a clínica com outras clínicas.
+3. Hoje mostra a nota do dia com os fatores ao tocar; Carteira ordena por urgência, com quem resolve cada alerta.
+4. Fechamento do mês abre como história em cartões (sem envio real).
+5. Nada cortado, sem frase > 90 caracteres, respeitando as alturas já medidas; só regras (sem IA); sem SQL nem migration.
+
+**Depends on:** Phase 03.1.1
+**Plans:** 2/9 plans executed (um PR só para a fase; no máximo 2 executores em paralelo, com arquivos disjuntos)
+
+Plans:
+**Wave 1**
+- [x] 03.1.1.1-01-PLAN.md — Tracer: peças compartilhadas dos 5 segundos (veredito, descobertas com "Por quê?", "Ver tudo" no PaginaNexo, conferidor de e2e, checagem de privacidade) + Hoje com veredito, 3 números e as 3 coisas da semana
+
+**Wave 2** *(blocked on Wave 1 completion; 02 e 03 em paralelo)*
+- [x] 03.1.1.1-02-PLAN.md — Hoje: nota do dia (D-03) com os fatores ao tocar, etapas contra o período anterior, tabela nova em "Ver tudo", spec da Hoje
+- [ ] 03.1.1.1-03-PLAN.md — Resultados da clínica: veredito com os 3 anéis, cartões de dinheiro, "Você agora contra você antes", descobertas, tudo o que existia em "Ver tudo"
+
+**Wave 3** *(blocked on Wave 2 completion; 04 e 05 em paralelo)*
+- [ ] 03.1.1.1-04-PLAN.md — Carteira por urgência: "N clínicas precisam de você hoje", ordem por problemas abertos, filtro por cor, painel lateral com a nota da saúde dos dados e quem resolve, Modo TV
+- [ ] 03.1.1.1-05-PLAN.md — Do contato à venda: "Aqui você perde mais", "pessoas na mesa" como número 1 com pontos, funil A2 como prova, descobertas
+
+**Wave 4** *(blocked on Wave 3 completion; 06 e 07 em paralelo)*
+- [ ] 03.1.1.1-06-PLAN.md — Atendimento › Qualidade no molde: faixa do normal da própria clínica, dia fora marcado, dia cruzado com Instagram e anúncio, descobertas
+- [ ] 03.1.1.1-07-PLAN.md — Instagram › Desempenho: veredito, 3 números, "O que funciona" (formato, horário dos próprios posts, tema), descobertas, Top 5 em "Ver tudo"
+
+**Wave 5** *(blocked on Wave 4 completion; 08 e 09 em paralelo)*
+- [ ] 03.1.1.1-08-PLAN.md — Fechamento do mês: história em cartões em tela cheia aberta de Resultados (sem rota nova, sem envio)
+- [ ] 03.1.1.1-09-PLAN.md — Anúncios: custo por conversa com sinal honesto, régua dos próprios dias, dias de verba baixa; seção l) do molde; varredura final
+
 ### Phase 4: Pacote do template do WhatsApp à Meta
 
 **Goal**: O João tem o pacote pronto para pedir o template à Meta cedo no calendário, para que a aprovação externa não segure a v1.5.
