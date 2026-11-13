@@ -2,13 +2,16 @@ import { useQuery } from "@tanstack/react-query";
 import { Workflow } from "lucide-react";
 import { Painel } from "@/components/visual";
 import { formatRangeLabel } from "@/lib/date-range";
-import { getFunisPeriodo, porGrupo, vale } from "@/lib/funis-periodo";
+import { getFunisPeriodo, porGrupo, vale, type LinhaFunil } from "@/lib/funis-periodo";
+import { NxCabecaDoBloco } from "@/components/nx/cabeca-do-bloco";
+import type { CabecaDoBloco } from "@/lib/leitura/cabeca-do-bloco";
+
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const num = (v: number) => v.toLocaleString("pt-BR");
 
 /** Ganho, consulta agendada e perda por funil, só dos leads que entraram no período escolhido. */
-export function FunisPeriodo({ clientId, start, end }: { clientId: string; start: string; end: string }) {
+export function FunisPeriodo({ clientId, start, end, cabeca }: { clientId: string; start: string; end: string; cabeca?: (linhas: LinhaFunil[]) => CabecaDoBloco }) {
   const q = useQuery({ queryKey: ["crm-funis-periodo", clientId, start, end], queryFn: () => getFunisPeriodo(clientId, start, end), retry: false });
   if (q.isPending || q.isError || !q.data || !vale(q.data)) return null;
   const grupos = porGrupo(q.data);
@@ -32,6 +35,7 @@ export function FunisPeriodo({ clientId, start, end }: { clientId: string; start
         </>
       }
     >
+      {cabeca && <NxCabecaDoBloco cabeca={cabeca(q.data)} />}
       <div className="space-y-4">
         {grupos.map((g) => (
           <div key={g.grupo} className="space-y-1.5">

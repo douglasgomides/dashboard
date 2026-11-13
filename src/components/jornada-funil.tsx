@@ -10,6 +10,8 @@ import { formatRangeLabel } from "@/lib/date-range";
 import { useDiagnosticoComercial } from "@/components/comercial-diagnostico";
 import { fmtFracao } from "@/lib/metricas";
 import { AVISO_MUDANCA_FUNIL, fmtNdeM } from "@/lib/funil-taxa";
+import { NxCabecaDoBloco } from "@/components/nx/cabeca-do-bloco";
+import type { CabecaDoBloco } from "@/lib/leitura/cabeca-do-bloco";
 
 // Funil de 7 etapas do período. Etapa sem dado mostra o que falta (integração, dado e onde resolver),
 // nunca um zero que parece resultado.
@@ -103,7 +105,21 @@ export function useFunilDaJornada(clientId: string, start: string, end: string, 
   return { q, pacientes, pac, funil };
 }
 
-export function JornadaFunil({ clientId, start, end }: { clientId: string; start: string; end: string }) {
+export function JornadaFunil({
+  clientId,
+  start,
+  end,
+  cabeca,
+  semMaiorQueda = false,
+}: {
+  clientId: string;
+  start: string;
+  end: string;
+  /** A resposta do bloco (quick-ver-tudo-abas): UMA frase da regra da tela, com o número em destaque, antes da prova. */
+  cabeca?: (funil: NonNullable<ReturnType<typeof useFunilDaJornada>["funil"]>) => CabecaDoBloco;
+  /** A maior queda do comercial já está no funil desenhado do topo da aba: não repete aqui. */
+  semMaiorQueda?: boolean;
+}) {
   const { q, pacientes, pac, funil } = useFunilDaJornada(clientId, start, end);
   const compartilhado = pac?.crm_compartilhado_com ?? [];
   // Barras em escala log: alcance (centenas de milhares) e venda (unidades) no mesmo eixo.
@@ -124,6 +140,7 @@ export function JornadaFunil({ clientId, start, end }: { clientId: string; start
       )}
       {funil && (
         <>
+          {cabeca && <NxCabecaDoBloco cabeca={cabeca(funil)} />}
           {compartilhado.length > 0 && (
             <p className="cm-aviso cm-aviso--critico" style={{ margin: 0 }}>
               O CRM desta clínica é o mesmo de {compartilhado.join(", ")}. Os números do CRM abaixo são da conta inteira, não só deste médico.
@@ -131,12 +148,12 @@ export function JornadaFunil({ clientId, start, end }: { clientId: string; start
           )}
           {semNada ? (
             <p className="nx-vazio text-sm" style={{ margin: 0 }}>Nenhuma etapa pode ser medida ainda: cada uma abaixo diz qual integração falta e qual dado seria necessário.</p>
-          ) : (funil.maiorQueda || funil.receita > 0) && (
+          ) : ((funil.maiorQueda && !semMaiorQueda) || funil.receita > 0) && (
             <div className="nx-aviso">
               <span className="nx-tile nx-tile--suave" aria-hidden>{icT("bulb")}</span>
               <span>
-                {funil.maiorQueda && <>Maior queda no comercial: de <strong>{NOME[funil.maiorQueda.de]}</strong> para <strong>{NOME[funil.maiorQueda.para]}</strong> ({pct(funil.maiorQueda.taxa)} passam).</>}
-                {funil.receita > 0 && ` Receita registrada: ${funil.receita.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}.`}
+                {funil.maiorQueda && !semMaiorQueda && <>Maior queda no comercial: de <strong>{NOME[funil.maiorQueda.de]}</strong> para <strong>{NOME[funil.maiorQueda.para]}</strong> ({pct(funil.maiorQueda.taxa)} passam).</>}
+                {funil.receita > 0 && `${funil.maiorQueda && !semMaiorQueda ? " " : ""}Receita registrada: ${funil.receita.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}.`}
               </span>
             </div>
           )}

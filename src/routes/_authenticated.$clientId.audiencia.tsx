@@ -11,26 +11,43 @@ import {
   pctDe,
   nomeDaCidade,
   ROTULO_GENERO,
-  leituraDemografia,
-  leituraOrigem,
   melhoresJanelas,
   horasDoDia,
   DIAS_SEMANA,
   type Audiencia,
   type Bloco,
 } from "@/lib/audiencia";
-import { horasDosPosts, diasDosPosts, recomendacaoDeHorario } from "@/lib/horarios";
+import { horasDosPosts, diasDosPosts } from "@/lib/horarios";
 import { fatosDoPublico, fatosSemInstagram } from "@/lib/leitura/fatos-instagram";
+import { leituraDaAba } from "@/lib/leitura/leitura-das-abas";
+import { cabecaDaSerieDiaria } from "@/lib/leitura/cabeca-do-bloco";
+import {
+  cabecaDaHoraMaisOnline,
+  cabecaDaOrigem,
+  cabecaDaPrincipalCidade,
+  cabecaDasInteracoes,
+  cabecaDasJanelas,
+  cabecaDasVisualizacoes,
+  cabecaDeQuemEngaja,
+  cabecaDeSeguidoresEAlcancados,
+  cabecaDoDiaMaisOnline,
+  cabecaDoGenero,
+  cabecaDosPaises,
+  cabecaDosSeusPosts,
+  melhorDiaDosPosts,
+} from "@/lib/leitura/ver-tudo-audiencia";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { BarrasPareadas } from "@/components/barras";
 import { MapaDeCalor } from "@/components/mapa-de-calor";
 import { MapaBrasil, MapaMundo, nomeDoPais } from "@/components/mapa-coropletico";
 import { ufDaCidade } from "@/lib/geo-br";
 import { ESTADOS_BR } from "@/lib/mapas";
-import { Users, Target, Heart, Clock, MapPin, Globe, UserPlus, UserMinus, Scale, Eye, Layers, CalendarClock, Trophy, FileText, BarChart3, VenetianMask, Cake, RefreshCw } from "lucide-react";
-import { NxCard, NxKpi, NxPizza, NxColunas, NxLinhaTempo, NxLegenda } from "@/components/nx";
+import { Users, Target, Heart, Clock, MapPin, Globe, Scale, Eye, Layers, CalendarClock, Trophy, FileText, BarChart3, VenetianMask, Cake, RefreshCw } from "lucide-react";
+import { NxCard, NxPizza, NxColunas, NxLinhaTempo, NxLegenda } from "@/components/nx";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
-import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { PaginaNexo } from "@/components/nx/pagina";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
+import { NxComecoDosDetalhes, NxDescobertasDaAba } from "@/components/nx/leitura-da-aba";
 import { NxAviso, NxCarregando, NxErro, NxVazio } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { IgAbas, IgBarras, IgDividida } from "@/components/nx/instagram";
@@ -58,19 +75,8 @@ function Falha({ b }: { b: Extract<Bloco<unknown>, { ok: false }> }) {
   return <NxAviso tom="atencao" titulo="A Meta não devolveu este bloco:">{b.erro}</NxAviso>;
 }
 
-/** As frases que cada aba já escrevia, agora num cartão simples do detalhe (a leitura do topo é uma só). */
-function EmPalavras({ itens }: { itens: string[] }) {
-  if (!itens.length) return null;
-  return (
-    <NxCard titulo="Em palavras simples" subtitulo="O que os números desta aba mostram">
-      <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 8, fontSize: 15, lineHeight: "22px", fontWeight: 500 }}>
-        {itens.map((t) => (
-          <li key={t}>{t}</li>
-        ))}
-      </ul>
-    </NxCard>
-  );
-}
+// Os cartões "Em palavras simples" de cada parte saíram (quick-ver-tudo-abas, João 13/11/2026): a frase de cada número mora agora na
+// cabeça do bloco que o prova (src/lib/leitura/ver-tudo-audiencia.ts), e o que o topo já mostra não se repete.
 
 function Demografia({ a }: { a: Audiencia }) {
   const base = a.seguidores.ok ? a.seguidores.dados.faixa_etaria : [];
@@ -80,8 +86,8 @@ function Demografia({ a }: { a: Audiencia }) {
   const ta = soma(alc);
   return (
     <>
-      <EmPalavras itens={leituraDemografia(a)} />
       <div className="nx-grade nx-grade--2">
+        <NxBlocoDoVerTudo rotulo="Gênero dos seguidores" cabeca={a.seguidores.ok ? cabecaDoGenero(a.seguidores.dados.genero) : { tipo: "falta", motivo: "a Meta não devolveu o gênero dos seguidores" }}>
         <NxCard icone={ic(VenetianMask)} titulo="Gênero dos seguidores" subtitulo="Quem não declarou aparece como não informado">
           {como("Gênero dos seguidores", 'Informado pelo Instagram. "Não informado" é quem não declarou.')}
           {a.seguidores.ok ? (
@@ -90,6 +96,8 @@ function Demografia({ a }: { a: Audiencia }) {
             <Falha b={a.seguidores} />
           )}
         </NxCard>
+        </NxBlocoDoVerTudo>
+        <NxBlocoDoVerTudo rotulo="Quem engaja" cabeca={a.engajados_no_mes.ok ? cabecaDeQuemEngaja(a.engajados_no_mes.dados.faixa_etaria) : { tipo: "falta", motivo: "a Meta não devolveu quem interagiu" }}>
         <NxCard icone={ic(Heart)} titulo="Quem engaja" subtitulo="Por idade">
           {como("Quem engaja", <>Pessoas que curtiram, comentaram, salvaram ou compartilharam ({a.engajados_no_mes.ok ? a.engajados_no_mes.dados.mes : "mês"}).</>)}
           {a.engajados_no_mes.ok ? (
@@ -102,8 +110,10 @@ function Demografia({ a }: { a: Audiencia }) {
             <Falha b={a.engajados_no_mes} />
           )}
         </NxCard>
+        </NxBlocoDoVerTudo>
       </div>
 
+      <NxBlocoDoVerTudo rotulo="Seguidores × alcançados" cabeca={cabecaDeSeguidoresEAlcancados(base, alc, faixas)}>
       <NxCard icone={ic(Target)} titulo="Seguidores × alcançados" subtitulo="% por faixa etária">
         {como("Seguidores e alcançados", <>% por faixa etária. Alcance: {a.alcancados_no_mes.ok ? a.alcancados_no_mes.dados.mes : "mês"}. Se o alcance pesa mais que a base numa faixa, o conteúdo está chegando a gente nova ali.</>)}
         {a.seguidores.ok && a.alcancados_no_mes.ok && tb > 0 && ta > 0 ? (
@@ -118,6 +128,7 @@ function Demografia({ a }: { a: Audiencia }) {
           <NxAviso tom="info" titulo="Sem dado suficiente para comparar neste mês." />
         )}
       </NxCard>
+      </NxBlocoDoVerTudo>
 
       <Geografia seguidores={a.seguidores} />
     </>
@@ -125,25 +136,13 @@ function Demografia({ a }: { a: Audiencia }) {
 }
 
 function Alcance({ a }: { a: Audiencia }) {
+  // Saíram o bloco "Alcance" (seguidores × não seguidores) e o "Seguiu × deixou de seguir" (quick-ver-tudo-abas): repetiam os cartões
+  // "Alcance fora da base" e "Saldo de seguidores" do topo, com os mesmos números.
+  const vis = a.visualizacoes_por_tipo_de_seguidor.ok ? a.visualizacoes_por_tipo_de_seguidor.dados : null;
   return (
     <>
-      <EmPalavras itens={leituraOrigem(a)} />
-      <div className="nx-grade nx-grade--2">
-        <NxCard icone={ic(Users)} titulo="Alcance" subtitulo={`Seguidores × não seguidores · últimos ${a.periodo.dias} dias (janela fixa)`}>
-          {como("Alcance", <>Contas únicas alcançadas nos últimos {a.periodo.dias} dias ({a.periodo.de} a {a.periodo.ate}).</>)}
-          {a.alcance_por_tipo_de_seguidor.ok ? (
-            <IgDividida
-              rotulo="Alcance"
-              partes={[
-                { rotulo: "Seguidores", valor: a.alcance_por_tipo_de_seguidor.dados.seguidores, cor: "var(--b1)" },
-                { rotulo: "Não seguidores", valor: a.alcance_por_tipo_de_seguidor.dados.nao_seguidores, cor: "var(--b3)" },
-              ]}
-            />
-          ) : (
-            <Falha b={a.alcance_por_tipo_de_seguidor} />
-          )}
-        </NxCard>
-        <NxCard icone={ic(Eye)} titulo="Visualizações" subtitulo="Seguidores × não seguidores">
+      <NxBlocoDoVerTudo rotulo="Visualizações" cabeca={cabecaDasVisualizacoes(vis ? { seguidores: vis.seguidores, naoSeguidores: vis.nao_seguidores } : null)}>
+        <NxCard icone={ic(Eye)} titulo="Visualizações" subtitulo={`Seguidores × não seguidores · últimos ${a.periodo.dias} dias (janela fixa)`}>
           {como("Visualizações", "Quantas vezes o conteúdo foi visto, no mesmo período.")}
           {a.visualizacoes_por_tipo_de_seguidor.ok ? (
             <IgDividida
@@ -157,8 +156,9 @@ function Alcance({ a }: { a: Audiencia }) {
             <Falha b={a.visualizacoes_por_tipo_de_seguidor} />
           )}
         </NxCard>
-      </div>
+      </NxBlocoDoVerTudo>
 
+      <NxBlocoDoVerTudo rotulo="Origem das visualizações" cabeca={a.origem.ok ? cabecaDaOrigem(a.origem.dados) : { tipo: "falta", motivo: "a Meta não devolveu a origem das visualizações" }}>
       <NxCard icone={ic(Layers)} titulo="Origem das visualizações" subtitulo="Por tipo de conteúdo">
         {como("Origem das visualizações", "Reels, carrossel, post, stories e anúncios. Alcance e interações vêm da Meta no mesmo período.")}
         {a.origem.ok ? (
@@ -182,19 +182,7 @@ function Alcance({ a }: { a: Audiencia }) {
           <Falha b={a.origem} />
         )}
       </NxCard>
-
-      <NxCard icone={ic(UserPlus)} titulo="Seguiu × deixou de seguir" subtitulo={`Saldo dos últimos ${a.periodo.dias} dias (janela fixa da Meta, não segue o período escolhido)`}>
-        {como("Seguiu e deixou de seguir", <>Saldo dos últimos {a.periodo.dias} dias, direto da Meta.</>)}
-        {a.seguiram_e_deixaram.ok ? (
-          <div className="nx-grade nx-grade--3">
-            <NxKpi icone={ic(UserPlus)} rotulo="Seguiram" valor={fmtN(a.seguiram_e_deixaram.dados.seguiram)} />
-            <NxKpi icone={ic(UserMinus)} rotulo="Deixaram de seguir" valor={fmtN(a.seguiram_e_deixaram.dados.deixaram_de_seguir)} />
-            <NxKpi icone={ic(Scale)} rotulo="Saldo" valor={`${a.seguiram_e_deixaram.dados.saldo >= 0 ? "+" : ""}${fmtN(a.seguiram_e_deixaram.dados.saldo)}`} />
-          </div>
-        ) : (
-          <Falha b={a.seguiram_e_deixaram} />
-        )}
-      </NxCard>
+      </NxBlocoDoVerTudo>
     </>
   );
 }
@@ -206,21 +194,10 @@ function Interacoes({ a, clientId, start, end }: { a: Audiencia; clientId: strin
   const dias = (diario.data ?? []).filter((d) => d.likes != null || d.comments != null || d.saves != null || d.shares != null);
   const tot = a.interacoes.ok ? a.interacoes.dados : null;
   const somaT = tot ? tot.curtidas + tot.comentarios + tot.salvamentos + tot.compartilhamentos : 0;
-  const leitura: string[] = [];
-  if (tot && somaT > 0) {
-    const itens = [
-      { n: "curtidas", v: tot.curtidas },
-      { n: "comentários", v: tot.comentarios },
-      { n: "salvamentos", v: tot.salvamentos },
-      { n: "compartilhamentos", v: tot.compartilhamentos },
-    ].sort((x, y) => y.v - x.v);
-    leitura.push(`Nos últimos ${a.periodo.dias} dias, ${fmtPct(pctDe(itens[0].v, somaT))} das interações foram ${itens[0].n}.`);
-    leitura.push(`Salvamentos e compartilhamentos, que indicam conteúdo que a pessoa quer guardar ou repassar, somam ${fmtPct(pctDe(tot.salvamentos + tot.compartilhamentos, somaT))} das interações.`);
-  }
   return (
     <>
-      <EmPalavras itens={leitura} />
       <div className="ig-duas-uma">
+        <NxBlocoDoVerTudo rotulo="Interações" cabeca={cabecaDasInteracoes(tot)}>
         <NxCard icone={ic(Heart)} titulo="Interações" subtitulo="Curtidas, comentários, salvos e compartilhados">
           {como("Interações", <>Últimos {a.periodo.dias} dias ({a.periodo.de} a {a.periodo.ate}).</>)}
           {tot ? (
@@ -237,6 +214,11 @@ function Interacoes({ a, clientId, start, end }: { a: Audiencia; clientId: strin
             a.interacoes.ok === false && <Falha b={a.interacoes} />
           )}
         </NxCard>
+        </NxBlocoDoVerTudo>
+        <NxBlocoDoVerTudo
+          rotulo="Interações por dia"
+          cabeca={diario.isLoading ? { tipo: "falta", motivo: "lendo o histórico diário" } : cabecaDaSerieDiaria(dias.map((d) => ({ dia: d.date, valor: (d.likes ?? 0) + (d.comments ?? 0) + (d.saves ?? 0) + (d.shares ?? 0) })), "interações", "a")}
+        >
         <NxCard icone={ic(BarChart3)} titulo="Interações por dia" subtitulo="Histórico diário gravado, no período do topo">
           {como("Interações por dia", "Do histórico diário gravado, no período escolhido no topo da página. Cada linha é um tipo de interação, com a mesma escala.")}
           {diario.isLoading ? (
@@ -261,6 +243,7 @@ function Interacoes({ a, clientId, start, end }: { a: Audiencia; clientId: strin
             </>
           )}
         </NxCard>
+        </NxBlocoDoVerTudo>
       </div>
     </>
   );
@@ -273,28 +256,34 @@ function Horarios({ a, clientId, start, end }: { a: Audiencia; clientId: string;
   const porHora = useMemo(() => (mapa ? horasDoDia(mapa) : []), [mapa]);
   const horasPosts = useMemo(() => horasDosPosts(posts.data ?? []), [posts.data]);
   const diasPosts = useMemo(() => diasDosPosts(posts.data ?? []), [posts.data]);
-  const leitura = recomendacaoDeHorario({ janelas, horasPosts, diasPosts });
+  const melhorDia = melhorDiaDosPosts(diasPosts);
   const colunasHora = useMemo(() => porHora.map((v, h) => ({ rotulo: `${h}h`, valor: v, texto: fmtN(v) })).filter((_, h) => h >= 6), [porHora]);
   const pico = colunasHora.reduce((m, c, i) => (c.valor > (colunasHora[m]?.valor ?? -1) ? i : m), 0);
   return (
     <>
-      <EmPalavras itens={leitura} />
+      <NxBlocoDoVerTudo rotulo="Seguidores online" cabeca={mapa ? cabecaDoDiaMaisOnline(mapa) : { tipo: "falta", motivo: "a Meta não devolveu os horários dos seguidores" }}>
       <NxCard icone={ic(Clock)} titulo="Seguidores online" subtitulo="Dia da semana × hora (Brasília). Mais escuro, mais gente online">
         {como("Seguidores online", <>Média de seguidores online por dia da semana e hora, em horário de Brasília{a.horarios.ok ? `, nos últimos ${a.horarios.dados.dias} dias` : ""}. Cor mais forte, mais gente online.</>)}
         {mapa ? <MapaDeCalor mapa={mapa} /> : a.horarios.ok === false && <Falha b={a.horarios} />}
       </NxCard>
+      </NxBlocoDoVerTudo>
       {mapa && (
         <div className="nx-grade nx-grade--2">
+          <NxBlocoDoVerTudo rotulo="5 melhores janelas" cabeca={cabecaDasJanelas(janelas)}>
           <NxCard icone={ic(Trophy)} titulo="5 melhores janelas" subtitulo="Dia e hora com mais gente online">
             {como("5 melhores janelas", "Seguidores online (média) em cada janela.")}
             <IgBarras semPercentual itens={janelas.map((j) => ({ rotulo: `${DIAS_SEMANA[j.dia]}, ${j.hora}h`, valor: j.online }))} formato={(v) => `${fmtN(v)} online`} />
           </NxCard>
+          </NxBlocoDoVerTudo>
+          <NxBlocoDoVerTudo rotulo="Por hora do dia" cabeca={cabecaDaHoraMaisOnline(porHora.map((valor, hora) => ({ hora, valor })).filter((h) => h.hora >= 6))}>
           <NxCard icone={ic(Clock)} titulo="Por hora do dia" subtitulo="Média dos 7 dias, das 6h às 23h">
             {como("Por hora do dia", "Média dos sete dias da semana.")}
             <NxColunas dados={colunasHora} destaque={pico} formatarEixo={fmtN} rotulo="Seguidores online por hora do dia" />
           </NxCard>
+          </NxBlocoDoVerTudo>
         </div>
       )}
+      <NxBlocoDoVerTudo rotulo="E os seus posts?" cabeca={posts.isLoading ? { tipo: "falta", motivo: "lendo os posts do período" } : cabecaDosSeusPosts(horasPosts, janelas[0]?.hora ?? null)}>
       <NxCard icone={ic(FileText)} titulo="E os seus posts?" subtitulo="Engajamento mediano por hora de publicação">
         {como("E os seus posts", "Engajamento mediano por hora de publicação, só horas com 3+ posts no período escolhido no topo.")}
         {posts.isLoading ? (
@@ -304,7 +293,10 @@ function Horarios({ a, clientId, start, end }: { a: Audiencia; clientId: string;
         ) : (
           <IgBarras semPercentual itens={horasPosts.slice(0, 8).map((h) => ({ rotulo: `${h.hora}h (${h.posts} posts)`, valor: Math.round(h.mediana) }))} formato={(v) => fmtN(v)} />
         )}
+        {/* O melhor dia dos posts só aparecia no "Em palavras simples": continua aqui, embaixo das horas. */}
+        {!posts.isLoading && melhorDia && <p className="nx-cinco-falta">{melhorDia}</p>}
       </NxCard>
+      </NxBlocoDoVerTudo>
     </>
   );
 }
@@ -374,36 +366,40 @@ function AudienciaPage() {
     </div>
   );
 
-  if (fontes.isLoading) return pagina(<NxCarregando linhas={4} />, <LeituraDaTela fatos={null} carregando semSelo />);
+  // A leitura do período saiu (quick-ver-tudo-abas, João 13/11/2026): no lugar da caixa, até 3 descobertas no topo da aba, com o que ela
+  // dizia e os 4 cartões ainda não mostram (faixa de idade, alcance fora da base, saldo e janela online já estão nos cartões).
+  const semDescoberta = (carregando: boolean) => <NxDescobertasDaAba itens={[]} carregando={carregando} clientId={clientId} />;
+  if (fontes.isLoading) return pagina(<NxCarregando linhas={4} />, semDescoberta(true));
   if (fontes.error) {
     return pagina(
       <NxErro texto="Não consegui verificar as fontes deste cliente. Atualize a página." onTentar={() => void fontes.refetch()} />,
-      <LeituraDaTela fatos={null} carregando={false} erro="As fontes não responderam." semSelo />,
+      semDescoberta(false),
     );
   }
   if (!temIg) {
     return pagina(
       <NxVazio titulo="Instagram não conectado" falta="uma conta de Instagram ligada ao Nexo. Sem ela não há seguidores nem alcance para mostrar" quem="equipe_hub" passo="ligar a conta de Instagram do médico à Business Manager do cliente" />,
-      <LeituraDaTela fatos={fatos} carregando={false} semSelo />,
+      // O aviso acima já diz o que falta e quem resolve: a leitura (portão fechado) não repete.
+      semDescoberta(false),
     );
   }
-  if (aud.isLoading) return pagina(<NxCarregando texto="Lendo a audiência na Meta…" linhas={4} />, <LeituraDaTela fatos={null} carregando semSelo />);
+  if (aud.isLoading) return pagina(<NxCarregando texto="Lendo a audiência na Meta…" linhas={4} />, semDescoberta(true));
   if (aud.error || !aud.data) {
     return pagina(
       <NxErro texto="Falha ao ler a audiência. Tente de novo em instantes." onTentar={() => void aud.refetch()} />,
-      <LeituraDaTela fatos={null} carregando={false} erro="A Meta não respondeu." semSelo />,
+      semDescoberta(false),
     );
   }
   if (aud.data.nada_a_fazer) {
     return pagina(
       <NxVazio titulo="Audiência indisponível" falta={aud.data.nada_a_fazer} quem="equipe_hub" passo="gerar o token da Meta do cliente" />,
-      <LeituraDaTela fatos={null} carregando={false} erro="A audiência está indisponível." semSelo />,
+      semDescoberta(false),
     );
   }
   if (aud.data.erro || !a || !kpis) {
     return pagina(
       <NxErro texto={aud.data.erro ?? "A Meta não respondeu."} onTentar={() => void aud.refetch()} />,
-      <LeituraDaTela fatos={null} carregando={false} erro="A Meta não respondeu." semSelo />,
+      semDescoberta(false),
     );
   }
 
@@ -468,8 +464,16 @@ function AudienciaPage() {
     </NxCard>
   );
 
+  const textoDoTopo = [
+    kpis.topo ? `${kpis.topo.chave} anos ${fmtPct(pctDe(kpis.topo.valor, kpis.totalFaixas))} dos seguidores` : "",
+    alc && alc.seguidores + alc.nao_seguidores > 0 ? `${fmtPct(pctDe(alc.nao_seguidores, alc.seguidores + alc.nao_seguidores))} não seguidores entre ${fmtN(alc.seguidores + alc.nao_seguidores)} contas alcançadas` : "",
+    sd ? `saldo ${sd.saldo} seguiram ${fmtN(sd.seguiram)} deixaram ${fmtN(sd.deixaram_de_seguir)}` : "",
+    kpis.janela ? `${DIAS_SEMANA[kpis.janela.dia]}, ${kpis.janela.hora}h ${fmtN(kpis.janela.online)} seguidores online em média` : "",
+  ];
+  const { visiveis, resto } = fatos == null ? { visiveis: [], resto: [] } : leituraDaAba({ fatos, textoDoTopo });
+
   const detalhe = (
-    <div style={{ display: "grid", gap: 18 }}>
+    <NxComecoDosDetalhes fatos={fatos} resto={resto} clientId={clientId} dateRange={dateRangeState}>
       <IgAbas rotulo="Partes do público" abas={ABAS} ativa={aba} onTrocar={setAba} />
       <div role="tabpanel" aria-label={ABAS.find((x) => x.id === aba)?.rotulo} className="nexo-ig">
         {aba === "demografia" && <Demografia a={a} />}
@@ -481,15 +485,13 @@ function AudienciaPage() {
         tom="info"
         titulo={`Dados da Meta lidos em ${new Date(a.gerado_em).toLocaleString("pt-BR")}.`}
         detalhe={<>Alcance, visualizações e interações cobrem os últimos {a.periodo.dias} dias; a Meta não permite períodos maiores que 30 dias nestas métricas. As abas Interações e Horários dos posts usam também o período do topo ({periodLabel}).</>}
-      >
-        Janela fixa de {a.periodo.dias} dias.
-      </NxAviso>
-    </div>
+      />
+    </NxComecoDosDetalhes>
   );
 
   return (
     <div className="nexo-ig">
-      <PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={fatos} carregando={fatos == null} semSelo />} cartoes={cartoes} principal={principal} detalhe={detalhe} />
+      <PaginaNexo {...cabecalho} leitura={<NxDescobertasDaAba itens={visiveis} carregando={fatos == null} clientId={clientId} dateRange={dateRangeState} />} cartoes={cartoes} principal={principal} detalhe={detalhe} />
     </div>
   );
 }
@@ -524,6 +526,7 @@ function Geografia({ seguidores }: { seguidores: Bloco<{ faixa_etaria: { chave: 
 
   return (
     <>
+      <NxBlocoDoVerTudo rotulo="Onde estão no Brasil" cabeca={cabecaDaPrincipalCidade(g.cidades.map((c) => ({ nome: nomeDaCidade(c.chave), valor: c.valor })))}>
       <NxCard icone={ic(MapPin)} titulo="Onde estão no Brasil" subtitulo="Estados mais escuros têm mais seguidores">
         {como(
           "Onde estão no Brasil",
@@ -547,7 +550,9 @@ function Geografia({ seguidores }: { seguidores: Bloco<{ faixa_etaria: { chave: 
         </div>
         {g.semEstado > 0 && <NxAviso tom="info" titulo={`${fmtN(g.semEstado)} seguidores em cidades sem estado identificado`}>ficam fora do mapa.</NxAviso>}
       </NxCard>
+      </NxBlocoDoVerTudo>
 
+      <NxBlocoDoVerTudo rotulo="Países" cabeca={cabecaDosPaises(g.paises.map((p) => ({ nome: nomeDoPais(p.chave), valor: p.valor })))}>
       <NxCard icone={ic(Globe)} titulo="Países" subtitulo="Países mais escuros têm mais seguidores">
         {como("Países", "Seguidores por país, como a Meta informa. A escala de cor usa a raiz do valor para os países pequenos não sumirem ao lado do Brasil. Países muito pequenos podem não aparecer no mapa, mas estão na lista.")}
         <div className="nx-grade nx-grade--2" style={{ alignItems: "center" }}>
@@ -555,6 +560,7 @@ function Geografia({ seguidores }: { seguidores: Bloco<{ faixa_etaria: { chave: 
           <IgBarras total={soma(g.paises)} itens={g.paises.slice(0, 6).map((p) => ({ rotulo: nomeDoPais(p.chave), chave: p.chave, valor: p.valor }))} />
         </div>
       </NxCard>
+      </NxBlocoDoVerTudo>
     </>
   );
 }

@@ -103,9 +103,13 @@ for (const width of [375, 1440]) {
     await expect(topo.locator(".nx-numero__valor").first()).toHaveText("68");
     await expect(page.getByRole("figure", { name: "Funil comercial do período" })).toBeVisible();
     await page.locator(".nx-pagina__detalhe > details > summary").click();
-    const periodo = page.getByRole("region", { name: "No período selecionado" });
-    await expect(periodo.locator(".nx-kpi")).toHaveCount(4);
-    await expect(periodo.locator(".ws-metric-value").first()).toHaveText("68");
+    // quick-ver-tudo-abas: os leads novos (68) e os ganhos já estão nos cartões do topo; o bloco do período mostra só os perdidos e o valor,
+    // e abre com a frase da resposta.
+    const periodo = page.locator("#crm-periodo");
+    await expect(periodo.locator(".nx-bloco-vt__frase")).toHaveText("3 perdidos no período; os cards somam R$ 12.000.");
+    await expect(periodo.locator(".nx-kpi")).toHaveCount(2);
+    await expect(periodo.locator(".ws-metric-value").first()).toHaveText("3");
+    await expect(periodo.getByText("68", { exact: true })).toHaveCount(0);
     await expect(page.locator("#conversao .nx-medidor svg[role=img]")).toHaveAttribute("aria-label", /Taxa de conversão: 57%/);
     await expect(page.getByRole("list", { name: "Leads da base em cada situação" })).toBeVisible();
     // O método fica recolhido, mas um toque abre.

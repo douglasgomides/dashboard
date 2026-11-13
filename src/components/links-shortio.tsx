@@ -4,6 +4,8 @@ import { Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { NxCard, NxKpi, NxListRow } from "@/components/nx/base";
 import { NxTabela } from "@/components/nx/blocos";
+import { NxCabecaDoBloco } from "@/components/nx/cabeca-do-bloco";
+import type { CabecaDoBloco } from "@/lib/leitura/cabeca-do-bloco";
 
 // Links do short.gy do cliente (bio, stories, anúncios): cliques e para onde levam.
 // Atribuição automática pela bio do Instagram, @ ou nome; o que ficou sem dono aparece no Admin.
@@ -21,7 +23,7 @@ const DESTINO = (u: string | null) => {
 };
 const COMO: Record<string, string> = { bio: "link da bio", handle: "@ no link", nome: "nome no link", manual: "atribuído à mão" };
 
-export function LinksShortio({ clientId }: { clientId: string }) {
+export function LinksShortio({ clientId, cabeca }: { clientId: string; cabeca?: (e: { links: number; cliques: number | null }) => CabecaDoBloco }) {
   const { data } = useQuery({
     queryKey: ["shortio-links", clientId],
     queryFn: async () => {
@@ -54,6 +56,7 @@ export function LinksShortio({ clientId }: { clientId: string }) {
   }));
   return (
     <NxCard rotulo="Links rastreados" titulo={`Links do short.gy (${data.length})`} subtitulo="Cada link foi ligado a este cliente pela bio do Instagram, pelo @ ou pelo nome no link.">
+      {cabeca && <NxCabecaDoBloco cabeca={cabeca({ links: data.length, cliques: data.some((l) => l.stats_em) ? total : null })} />}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
         <NxKpi icone={<Link2 size={18} />} rotulo="Cliques de pessoas (30 dias)" valor={total.toLocaleString("pt-BR")} nota="Robôs fora" />
       </div>
