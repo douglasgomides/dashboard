@@ -1,4 +1,5 @@
 import { DIAS_SEM_ENTRAR, entraNaCarteira, fatoDeAcesso, type AcessoClinica } from "@/lib/carteira-alertas";
+import { CAMPOS_DE_FILA } from "@/lib/leitura/fatos-resultados";
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Carregando } from "@/components/sem-fonte";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -506,10 +507,19 @@ function AdminClientsPage() {
         .limit(5000);
       if (error) return new Map<string, { atual: Partial<Record<CampoDiario, number>>; antes: Partial<Record<CampoDiario, number>> }>();
       const m = new Map<string, { atual: Partial<Record<CampoDiario, number>>; antes: Partial<Record<CampoDiario, number>> }>();
+      const ultimoDia: { atual: Record<string, string>; antes: Record<string, string> } = { atual: {}, antes: {} };
       for (const r of (data ?? []) as Array<{ client_id: string; dia: string } & Record<CampoDiario, number | null>>) {
         const e = m.get(r.client_id) ?? { atual: {}, antes: {} };
         const lado = r.dia >= iniAtual ? e.atual : e.antes;
-        for (const k of CAMPOS_DIARIOS) if (r[k] != null) lado[k] = (lado[k] ?? 0) + Number(r[k]);
+        // Negociação é fila (o que está aberto no dia), não entrada: vale o último dia medido, nunca a soma dos dias (03.1.1.1.1).
+        const ultimo = r.dia >= iniAtual ? ultimoDia.atual : ultimoDia.antes;
+        for (const k of CAMPOS_DIARIOS) {
+          if (r[k] == null) continue;
+          if ((CAMPOS_DE_FILA as readonly string[]).includes(k)) {
+            const chave = `${r.client_id}:${k}`;
+            if (!ultimo[chave] || r.dia >= ultimo[chave]) { ultimo[chave] = r.dia; lado[k] = Number(r[k]); }
+          } else lado[k] = (lado[k] ?? 0) + Number(r[k]);
+        }
         m.set(r.client_id, e);
       }
       return m;
