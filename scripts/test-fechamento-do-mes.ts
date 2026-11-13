@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { checarFraseCinco } from "../src/lib/leitura/cinco-segundos";
 import { cartoesDoMes, periodoServeParaFechamento, pontosDaEscala, type EntradaDoMes, type PostDoMes } from "../src/lib/fechamento-do-mes";
-import type { EtapaDesenhada, FunilDesenhado } from "../src/lib/funil-desenhado";
+import { AVISO_FORA_DE_ORDEM, type EtapaDesenhada, type FunilDesenhado } from "../src/lib/funil-desenhado";
 import { variacoes } from "../src/lib/diagnostico-estrategico";
 import { analyzeGrowth } from "../src/lib/hub-conteudo";
 import { lerPeriodo } from "../src/lib/leitura-periodo";
@@ -216,9 +216,22 @@ const entrada = (parte: Partial<EntradaDoMes> = {}): EntradaDoMes => ({
   // O final cita quem fechou, vindo da soma dos dias.
   assert.equal(cartoesDoMes(entrada({ conversas: null, funil: { desenhado: desenhado(), fecharam: { atual: 29, antes: 58 } } })).at(-1)?.legenda, "29 fecharam.");
 
-  // Fora de ordem ou sem maior perda: nunca nomeia etapa.
-  assert.equal(perda({ desenhado: desenhado({ foraDeOrdem: true }), fecharam: { atual: 29, antes: 58 } }), undefined);
+  // D-01: uma ligação fora de ordem em outro ponto (a de baixo sem %) não tira o cartão quando a maior perda está numa ligação em ordem.
+  const foraEmOutroPonto = desenhado({
+    etapas: [etapa("conversou", "Conversou", 120, null), etapa("virou-lead", "Virou lead", 60, 0.5), etapa("atendido", "Atendido", 54, 0.9), etapa("agendou", "Agendou", 90, null), etapa("fechou", "Fechou", 40, 0.44)],
+    maiorPerda: { de: 0, para: 1, texto: "50% passam" },
+    ligacoesForaDeOrdem: [3],
+    foraDeOrdem: true,
+    aviso: AVISO_FORA_DE_ORDEM,
+  });
+  const fp = perda({ desenhado: foraEmOutroPonto, fecharam: { atual: 29, antes: 58 } });
+  assert.equal(fp?.numero, "50%");
+  assert.equal(fp?.legenda, "passam de Conversou para Virou lead");
+  // Sem maior perda (com ou sem ligação fora de ordem): nunca nomeia etapa.
   assert.equal(perda({ desenhado: desenhado({ maiorPerda: null }), fecharam: { atual: 29, antes: 58 } }), undefined);
+  assert.equal(perda({ desenhado: desenhado({ maiorPerda: null, ligacoesForaDeOrdem: [4], foraDeOrdem: true, aviso: AVISO_FORA_DE_ORDEM }), fecharam: { atual: 29, antes: 58 } }), undefined);
+  // A maior perda numa ligação sem taxa (a que cresce fica sem %) não vira cartão: a checagem da taxa continua guardando.
+  assert.equal(perda({ desenhado: desenhado({ maiorPerda: { de: 2, para: 3, texto: "" } }), fecharam: { atual: 29, antes: 58 } }), undefined);
   assert.equal(perda({ desenhado: null, fecharam: { atual: 29, antes: 58 } }), undefined);
   // Sem a soma dos dias o cartão fica sem a comparação (nunca 0).
   assert.equal(perda({ desenhado: desenhado(), fecharam: { atual: null, antes: null } })?.comparacao, undefined);

@@ -481,7 +481,7 @@ for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes, c
         const veredito = page.locator('[data-juntada] [data-peca="veredito"]').first();
         await expect(veredito).toBeVisible();
         await expect(veredito).not.toHaveAttribute("data-modo", "carregando");
-        await expect(veredito.getByText(/Aqui você perde mais|Funil fora de ordem|Falta dado:/).first()).toBeVisible();
+        await expect(veredito.getByText(/Aqui você perde mais|Uma etapa tem mais gente|Falta dado:/).first()).toBeVisible();
         await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toBeHidden();
       } else {
         const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
