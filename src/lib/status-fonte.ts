@@ -51,6 +51,8 @@ export interface StatusFonte {
   data: string | null; // dd/mm do último dado
   detalhe: string; // frase curta: "até 09/10 · 5 dias sem dado novo"
   motivo: string | null;
+  /** Quem é o dono do motivo gravado ("cliente", "meta", "manual"...); a nota usa para a planilha manual. */
+  dono?: string | null;
   peso: number; // para ordenar: pior primeiro (vermelho 3, amarelo 2, verde 1, cinza 0)
 }
 
@@ -115,8 +117,8 @@ export function statusDaFonte(e: EntradaStatus, hoje: string = hojeBrasilia()): 
   const ligado = fonteLigada(e);
   const motivoDado = e.motivo?.trim() || null;
   if (!ligado) {
-    if (e.naoUsa) return { cor: "cinza", ligado, naoUsa: true, rotulo: "Não usa", dias: null, data: null, detalhe: "Marcado como intencional", motivo: null, peso: 0 };
-    return { cor: "cinza", ligado, naoUsa: false, rotulo: "Não ligado", dias: null, data: null, detalhe: "Fonte não conectada", motivo: null, peso: 0 };
+    if (e.naoUsa) return { cor: "cinza", ligado, naoUsa: true, rotulo: "Não usa", dias: null, data: null, detalhe: "Marcado como intencional", motivo: null, dono: null, peso: 0 };
+    return { cor: "cinza", ligado, naoUsa: false, rotulo: "Não ligado", dias: null, data: null, detalhe: "Fonte não conectada", motivo: null, dono: null, peso: 0 };
   }
   const data = e.data_ate ? ddmm(e.data_ate) : null;
   let dias = e.data_ate ? Math.max(0, (contaDiasUteis(e.fonte) ? diasUteisEntre(hoje, e.data_ate) : diasEntre(hoje, e.data_ate)) - folgaDaFonte(e.fonte)) : null;
@@ -135,7 +137,7 @@ export function statusDaFonte(e: EntradaStatus, hoje: string = hojeBrasilia()): 
     donoMotivo = donoMotivo ?? "meta";
     erro = null;
   }
-  const base = { ligado, naoUsa: false, data, dias, motivo: motivo ?? (erro ? `Erro na última atualização: ${erro.slice(0, 140)}` : null) };
+  const base = { ligado, naoUsa: false, data, dias, motivo: motivo ?? (erro ? `Erro na última atualização: ${erro.slice(0, 140)}` : null), dono: donoMotivo };
   if (dias == null) return { ...base, cor: "vermelho", rotulo: erro ? "Erro" : "Sem dado", detalhe: "Nenhum dado gravado ainda", peso: 3 };
   const un = contaDiasUteis(e.fonte) ? "útil" : "";
   const quando = `até ${data} · ${dias === 0 ? "hoje" : dias === 1 ? `1 dia${un ? " útil" : ""} sem dado novo` : `${dias} dias${un ? " úteis" : ""} sem dado novo`}`;

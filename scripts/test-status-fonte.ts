@@ -68,3 +68,14 @@ assert.equal(pausadaCliente.motivo, motivoCliente);
 assert.equal(s({ fonte: "anuncios", cadastro: true, data_ate: "2026-10-03", ultimo_sucesso: "2026-10-01T16:00:00Z", motivo: motivoCliente, motivo_dono: "cliente" }).cor, "vermelho", "sync parado é falha nossa");
 assert.equal(s({ fonte: "anuncios", cadastro: true, data_ate: "2026-10-03", ultimo_sucesso: "2026-10-14T16:00:00Z", motivo: "falha nossa", motivo_dono: "nos" }).cor, "vermelho");
 assert.equal(s({ fonte: "anuncios", cadastro: true, data_ate: "2026-10-03", ultimo_sucesso: "2026-10-14T16:00:00Z", last_error: "timeout", motivo: motivoCliente, motivo_dono: "cliente" }).cor, "vermelho", "erro continua vermelho");
+
+// dono: quem é o dono do motivo, em todo caminho ligado (a nota usa para a planilha manual); null sem motivo ou sem fonte.
+assert.equal(pausadaCliente.dono, "cliente");
+assert.equal(s({ fonte: "anuncios", cadastro: true, data_ate: "2026-10-03", ultimo_sucesso: "2026-10-14T16:00:00Z", motivo: "Planilha lançada à mão", motivo_dono: "manual" }).dono, "manual");
+assert.equal(s({ cadastro: true, data_ate: "2026-10-14" }).dono, null);
+assert.equal(s({ cadastro: true, data_ate: null }).dono, null);
+assert.equal(s({ cadastro: true, data_ate: "2026-10-14", last_error: "timeout", motivo_dono: "nos" }).dono, "nos");
+assert.equal(s({ cadastro: false, data_ate: null }).dono, null);
+assert.equal(s({ cadastro: false, data_ate: null, naoUsa: true }).dono, null);
+assert.equal(carrion.dono, "manual");
+console.log("status-fonte dono: ok");
