@@ -56,10 +56,10 @@ function LinhaCanal({ r, clientId, maior }: { r: LinhaParaConfirmar; clientId: s
   const idSelect = `origem-${r.chave}`;
   const idNome = `nome-${r.chave}`;
   return (
-    <li className="grid gap-2" data-canal={r.chave} style={{ paddingBottom: 14, borderBottom: "1px solid var(--line)" }}>
-      <div className="nx-hb__linha">
+    <li className="grid min-w-0 gap-2" data-canal={r.chave} style={{ paddingBottom: 14, borderBottom: "1px solid var(--line)" }}>
+      <div className="nx-hb__linha" style={{ flexWrap: "wrap" }}>
         <span className="min-w-0" style={{ fontWeight: 600, color: "var(--text)", overflowWrap: "anywhere" }}>{r.rotulo}</span>
-        <em>
+        <em style={{ whiteSpace: "normal" }}>
           <b style={{ color: "var(--text)" }}>{fmt(r.sem_origem_90d)}</b> sem origem · {fmt(r.leads_90d)} leads em 90 dias
         </em>
       </div>

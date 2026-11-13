@@ -80,8 +80,8 @@ const COR_ESTADO: Record<LinhaCobertura["estado"], string> = {
 
 function Linha({ l, i }: { l: LinhaCobertura; i: number }) {
   return (
-    <li className="nx-hb" data-cobertura={l.id} style={{ paddingBottom: 14, borderBottom: "1px solid var(--line)" }}>
-      <div className="nx-hb__linha">
+    <li className="nx-hb min-w-0" data-cobertura={l.id} style={{ paddingBottom: 14, borderBottom: "1px solid var(--line)" }}>
+      <div className="nx-hb__linha" style={{ flexWrap: "wrap" }}>
         <span style={{ fontWeight: 600, color: "var(--text)" }}>
           <i aria-hidden style={{ width: 10, height: 10, borderRadius: 999, background: COR_ESTADO[l.estado], flex: "none" }} />
           {l.rotulo}
@@ -126,7 +126,7 @@ function Contagem({ linhas }: { linhas: LinhaCobertura[] }) {
         {medidas} de {aplicaveis} completas
       </NxTag>
       {(["Cliente", "Equipe", "Nós"] as const).map((q) => (
-        <NxTag key={q} tom={TOM_QUEM[q]}>
+        <NxTag key={q} tom={todas.some((x) => x.quem === q) ? TOM_QUEM[q] : "g"}>
           {q} · {todas.filter((x) => x.quem === q).length}
         </NxTag>
       ))}
