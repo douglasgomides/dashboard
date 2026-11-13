@@ -107,7 +107,8 @@ test("o veredito abre a tela com alcance e seguidores e os 3 números vêm com �
   await expect(sal).toContainText(/▼ 10% · vs 1\.200 antes/);
   await expect(sal).toContainText("Em queda");
   // A linha de 30 dias vem do histórico que a tela já tem.
-  await expect(alc.locator("svg").first()).toBeVisible();
+  // (O cartão não tem mais o ícone do canto, como no piloto: a conferência olha a própria linha de 30 dias.)
+  await expect(alc.locator('[data-peca="linha-30-dias"] svg').first()).toBeVisible();
   // Comparação só com a própria clínica (D-02).
   await expect(page.locator(RAIZ)).not.toContainText(/outras clínicas|carteira/i);
 });

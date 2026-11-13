@@ -44,6 +44,8 @@ export interface NxOQueFuncionaProps {
 }
 
 const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+/** Salvos por post em número inteiro ("342 salvos", nunca "341,8 salvos": o decimal de uma média não ajuda a decidir). */
+const inteiro = (n: number) => Math.round(n).toLocaleString("pt-BR");
 /** "9,4 mil" vira "9,4k" para caber na célula. */
 const curtinho = (n: number) => numeroCurto(n).replace(" mil", "k").replace(" mi", "M");
 
@@ -104,7 +106,7 @@ function PainelDeFormato({ formatos, frase }: { formatos: readonly GroupStat[]; 
           <h3 className="nx-funciona__coluna">Salvos por post</h3>
           <ul className="nx-funciona__barras">
             {lista.map((f) => (
-              <Barra key={f.key} rotulo={f.label} valor={f.savedMean} maximo={maxSalvos} texto={`${fmt(f.savedMean)} salvos`} destaque={f.key === lider} nota={f.count < MIN_POSTS_DO_FORMATO ? "poucos posts" : undefined} soEstreito={`${fmt(f.count)} ${f.count === 1 ? "post" : "posts"}${f.count < MIN_POSTS_DO_FORMATO ? " · poucos posts" : ""}`} />
+              <Barra key={f.key} rotulo={f.label} valor={f.savedMean} maximo={maxSalvos} texto={`${inteiro(f.savedMean)} salvos`} destaque={f.key === lider} nota={f.count < MIN_POSTS_DO_FORMATO ? "poucos posts" : undefined} soEstreito={`${fmt(f.count)} ${f.count === 1 ? "post" : "posts"}${f.count < MIN_POSTS_DO_FORMATO ? " · poucos posts" : ""}`} />
             ))}
           </ul>
         </section>
@@ -231,7 +233,7 @@ function PainelDeTema({ temas }: { temas: readonly GroupStat[] }) {
               <span className="nx-funciona__trilho" aria-hidden>
                 <i style={{ width: `${Math.max(3, Math.min(100, maximo > 0 ? (t.savedMean / maximo) * 100 : 0))}%` }} />
               </span>
-              <span className="nx-funciona__valor">{fmt(t.savedMean)}</span>
+              <span className="nx-funciona__valor">{inteiro(t.savedMean)}</span>
             </li>
           );
         })}

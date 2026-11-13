@@ -43,6 +43,11 @@
      não cobrem. O --ai fica com o mesmo valor claro de hoje: não muda de cor, só deixa de virar escuro (revisão na Phase 9). */
   --axis:#CBD5E1; --s1:#2563EB; --s2:#EA580C; --s3:#0D9488; --s7:#7C3AED;
   --serious:#C2410C; --brand-gold-ink:#84612d; --ai:#85632f;
+  /* Faixa do veredito dos pilotos de 12/11/2026 (base.css + pecas-b.css): o azul-noite do começo do degradê, a cor do número em
+     destaque sobre o azul, a faixa vermelha da Carteira e o selo dourado de "campeão" dos 5 posts que mais salvaram. */
+  --faixa-1:#0E2A8A; --faixa-enfase:#C9F2DF;
+  --faixa-alerta-1:#3B0A14; --faixa-alerta-enfase:#FFE4B5;
+  --campeao-bg:#FDE68A; --campeao-ink:#713F12;
 }
 /* tokens: fim */
 

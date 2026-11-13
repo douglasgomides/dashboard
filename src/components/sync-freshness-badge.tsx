@@ -46,7 +46,16 @@ export function SyncFreshnessBadge({ clientId, compacto = false }: { clientId: s
   const linhas = ORDEM.map((f) => (data ?? []).find((l) => l.fonte === f)).filter(
     (l): l is LinhaFonte => !!l && (!!l.data_ate || (l.fonte === "comentarios" && !!l.last_error)),
   );
-  if (linhas.length === 0) return null;
+  if (linhas.length === 0) {
+    // Pílula de status do cabeçalho (12/11/2026): sem nenhuma fonte com data, a pílula diz "Dados" em cinza em vez de ficar vazia.
+    if (!compacto) return null;
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap" style={{ color: "var(--text-dim)" }} title="Nenhuma fonte com data de dado ainda.">
+        <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: COR.neutro }} />
+        {FRASE_TOM.neutro}
+      </span>
+    );
+  }
 
   if (compacto) {
     const pior = linhas.reduce((a, l) => (PESO[tomDaFonte(l)] > PESO[a] ? tomDaFonte(l) : a), "bom" as string);
