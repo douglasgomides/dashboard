@@ -230,7 +230,7 @@ Plans:
 5. Nada cortado, sem frase > 90 caracteres, respeitando as alturas já medidas; só regras (sem IA); sem SQL nem migration.
 
 **Depends on:** Phase 03.1.1
-**Plans:** 8/9 plans executed (um PR só para a fase; no máximo 2 executores em paralelo, com arquivos disjuntos)
+**Plans:** 9/9 plans executed (um PR só para a fase; no máximo 2 executores em paralelo, com arquivos disjuntos)
 
 Plans:
 **Wave 1**
@@ -250,7 +250,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion; 08 e 09 em paralelo)*
 - [x] 03.1.1.1-08-PLAN.md — Fechamento do mês: história em cartões em tela cheia aberta de Resultados (sem rota nova, sem envio)
-- [ ] 03.1.1.1-09-PLAN.md — Anúncios: custo por conversa com sinal honesto, régua dos próprios dias, dias de verba baixa; seção l) do molde; varredura final
+- [x] 03.1.1.1-09-PLAN.md — Anúncios: custo por conversa com sinal honesto, régua dos próprios dias, dias de verba baixa; seção l) do molde; varredura final
 
 ### Phase 03.1.1.1.1: Contas certas e saúde 75 ou mais (INSERTED)
 
@@ -261,6 +261,7 @@ Plans:
 3. Agendou subcontado onde o perfil da clínica não marca etapas "agendad*" (Samira 6, Doctor Creator 0, Lana sem "Consulta Agendada" em Comercial 1/Elité).
 4. Anúncio parado pela Meta (limite de gasto, pagamento, WhatsApp exigido) com leitura OK conta como fonte parada e tira 25 da nota (Samira, Betina, Antonione, HOMS): vira aviso de negócio para o cliente, não falha de dado.
 5. Problemas de `qualidade_dados` ainda não auditados (só respondem a admin logado).
+
 **Fora do nosso alcance (lista com quem resolve):** Glauce (acesso à conta 9641), Mariela (anúncios sem dado desde 21/10 sem motivo; planilha do CRM parada), Betina e Glauce (ligar CRM ou marcar "não usa"), Marcelly (planilha manual de anúncios), cadastro "Douglas" sem fontes.
 **Limites:** SQL de escrita e migrações só o João roda; o plano entrega o SQL pronto para ele.
 **Requirements**: TBD
