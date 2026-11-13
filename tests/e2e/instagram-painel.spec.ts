@@ -9,10 +9,12 @@ import { mockInstagram } from "./instagram-dados";
 const semRolagemLateral = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 
 // Formato 5 segundos (03.1.1.1, plano 07): Desempenho abre com o veredito e 3 números; a leitura do período mora no "Ver tudo", fechado.
-const TELAS: { rota: string; cartoes: number; pergunta: RegExp; cinco?: boolean }[] = [
+// quick-ver-tudo-abas (João 13/11/2026): as abas sem veredito perderam a caixa da leitura; o que ela dizia e a aba não mostra é
+// descoberta no topo da aba (semLeitura), e o período mora uma vez só no começo dos Detalhes.
+const TELAS: { rota: string; cartoes: number; pergunta: RegExp; cinco?: boolean; semLeitura?: boolean }[] = [
   { rota: "conteudo", cartoes: 3, pergunta: /^O perfil está crescendo/, cinco: true },
   { rota: "audiencia", cartoes: 4, pergunta: /^Quem acompanha o perfil/ },
-  { rota: "top", cartoes: 3, pergunta: /^Quais publicações mais se destacaram/ },
+  { rota: "top", cartoes: 3, pergunta: /^Quais publicações mais se destacaram/, semLeitura: true },
   { rota: "posts", cartoes: 4, pergunta: /^O que foi publicado/ },
   { rota: "conteudo-comercial", cartoes: 4, pergunta: /^O conteúdo está trazendo conversa/ },
 ];
@@ -30,7 +32,20 @@ for (const width of [375, 1440]) {
       // A leitura do período é a primeira coisa depois do cabeçalho: "O que aconteceu" com o número ao lado,
       // ou "Falta dado:" com o motivo e quem resolve.
       const leitura = page.getByRole("region", { name: "Leitura do período", exact: true });
-      if (t.cinco) {
+      const topoDaAba = page.locator('[data-peca="descobertas-da-aba"]');
+      if (t.semLeitura) {
+        await expect(leitura).toHaveCount(0);
+        await expect(topoDaAba).toHaveAttribute("data-modo", "pronta");
+        // Cada descoberta tem selo, frase e quem resolve; no máximo 3 à vista.
+        const descobertas = topoDaAba.locator('[data-peca="descoberta"]');
+        expect(await descobertas.count()).toBeLessThanOrEqual(3);
+        for (let i = 0; i < (await descobertas.count()); i++) {
+          await expect(descobertas.nth(i).locator(".nx-descoberta__frase")).toBeVisible();
+          await expect(descobertas.nth(i).locator(".nx-descoberta__frase")).not.toHaveText("");
+        }
+        const proximo = topoDaAba.locator("[data-proximo-passo]");
+        if (await proximo.count()) await expect(proximo.first().getByText(/Quem resolve:/)).toHaveCount(1);
+      } else if (t.cinco) {
         // O veredito abre a tela; a leitura só aparece depois de abrir o "Ver tudo".
         await expect(page.locator('[data-peca="veredito"]:not([data-modo="carregando"])')).toBeVisible();
         await expect(leitura).toBeHidden();
@@ -59,6 +74,7 @@ for (const width of [375, 1440]) {
       await expect(page.locator(".nx-pagina__cartoes :is(.nx-kpi, .nx-cartao)")).toHaveCount(t.cartoes);
       await expect(page.locator(".nx-pagina__cartoes :is(.nx-kpi .ws-metric-value, .nx-cartao .nx-numero__valor)").first()).toBeVisible();
       if (t.cinco) expect((await page.locator('[data-peca="veredito"]').first().boundingBox())!.y).toBeLessThan((await cartoes.first().boundingBox())!.y);
+      else if (t.semLeitura) expect((await topoDaAba.evaluate((el) => el.getBoundingClientRect().y))).toBeLessThan((await cartoes.first().boundingBox())!.y);
       else expect((await leitura.boundingBox())!.y).toBeLessThan((await cartoes.first().boundingBox())!.y);
 
       // Nenhum gráfico do Recharts e nenhuma tabela fora da peça NxTabela.
@@ -74,6 +90,8 @@ for (const width of [375, 1440]) {
         await detalhes.locator("summary").first().focus();
         await page.keyboard.press("Enter");
         await expect(detalhes).toHaveAttribute("open", "");
+        // O período da leitura, uma vez só, pequeno, no começo dos Detalhes.
+        if (t.semLeitura) await expect(detalhes.locator('[data-peca="periodo-do-ver-tudo"]')).toHaveCount(1);
         expect(await semRolagemLateral(page)).toBe(true);
       }
     });

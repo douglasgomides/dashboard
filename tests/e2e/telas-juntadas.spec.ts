@@ -281,7 +281,7 @@ test("contagem em cinza: a aba mostra o número que ela mesma carregou e \"—\"
   // Depois de abrir Destaques e voltar, Destaques mostra o número que a própria aba carregou.
   await aba(nav, "Destaques").click();
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/top`);
-  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first()).toBeVisible();
+  await expect(page.locator('[data-juntada] [data-peca="descobertas-da-aba"]')).toHaveAttribute("data-modo", "pronta");
   await expect(aba(nav, "Destaques").locator(".nx-pasta__contagem")).toHaveText(/^\d+$/);
   await aba(nav, "Posts").click();
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/posts`);
@@ -348,6 +348,9 @@ test("a 375 a pasta não cria rolagem lateral na página (a faixa das abas rola 
   }
 });
 
+// quick-ver-tudo-abas (João 13/11/2026): abas sem a caixa da leitura; o próximo passo dela é a pílula de uma descoberta no topo da aba.
+const ABAS_SEM_LEITURA: ReadonlySet<string> = new Set(["vendas-kommo", "links", "top"]);
+
 // D-07 (plano 02): o próximo passo da leitura é a pílula de ação com a seta escura; a seta só abre os Detalhes da própria página.
 const ABAS_DO_INSTAGRAM = [
   ["Desempenho", "conteudo"],
@@ -380,12 +383,15 @@ for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
     }
     // quick-ver-tudo (João 13/11/2026): em Desempenho a leitura saiu do "Ver tudo"; o próximo passo dela é a pílula de uma descoberta lá dentro,
     // e a seta continua só abrindo os Detalhes da própria página.
+    // quick-ver-tudo-abas: nas abas sem a caixa da leitura, o próximo passo dela é a pílula de uma descoberta no topo da aba.
     const leitura =
       sub === "conteudo"
         ? page.locator('[data-juntada] [data-peca="descoberta-extra"][data-descoberta-extra^="leitura-"]').first()
-        : page.locator('[data-juntada] [data-peca="leitura"]').first();
+        : ABAS_SEM_LEITURA.has(sub)
+          ? page.locator('[data-juntada] [data-peca="descobertas-da-aba"] [data-peca="descoberta"][data-proximo-passo]').first()
+          : page.locator('[data-juntada] [data-peca="leitura"]').first();
     await expect(leitura).toBeVisible();
-    if (sub !== "conteudo") await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+    if (sub !== "conteudo" && !ABAS_SEM_LEITURA.has(sub)) await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
     const pilula = leitura.locator(".nx-acao-pilula").first();
     await expect(pilula).toBeVisible();
     await page.screenshot({ path: `test-results/redesenho/pilula-${sub}.png` });
@@ -857,9 +863,6 @@ for (const { rotulo, sub, slug } of MEDIDAS_DO_PLANO_04) {
     });
   }
 }
-
-// quick-ver-tudo-abas (João 13/11/2026): abas sem a caixa da leitura; o próximo passo dela é a pílula de uma descoberta no topo da aba.
-const ABAS_SEM_LEITURA: ReadonlySet<string> = new Set(["vendas-kommo", "links"]);
 
 // Todas as 13 abas e partes: leitura com a pílula de ação e todo cartão com o ícone no círculo (D-07), num laço só.
 for (const sub of PARTES_DAS_3_TELAS) {
