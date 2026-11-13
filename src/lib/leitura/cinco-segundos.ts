@@ -205,7 +205,7 @@ const semPonto = (t: string) => t.replace(/\s+/g, " ").trim().replace(/[.!?]+$/,
  * A frase cabendo em 90 caracteres: inteira quando cabe; senão a primeira oração (antes da vírgula, dois-pontos ou travessão);
  * senão corta na fronteira de uma palavra e termina em "…". Nunca corta no meio de uma palavra.
  */
-function caberEm90(frase: string): string {
+export function caberEm90(frase: string): string {
   const t = semPonto(frase);
   if (t.length + 1 <= MAX_DA_FRASE) return `${t}.`;
   const corte = /, |: | — |; /.exec(t);

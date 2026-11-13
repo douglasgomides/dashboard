@@ -1,8 +1,9 @@
-import { useId, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import type { DateRangeState } from "@/lib/date-range";
 import { ROTULO_RESPONSAVEL } from "@/lib/insight";
 import type { TelaId, TomFato } from "@/lib/leitura/tipos";
 import type { Descoberta, Veredito } from "@/lib/leitura/cinco-segundos";
+import { ABRIR_VER_TUDO } from "@/lib/leitura/leitura-em-descobertas";
 import { NxCarregando, NxErro } from "./blocos";
 import { NxAcaoPilula, NxBarras } from "./cartoes";
 import { linhaDaRota } from "./hoje";
@@ -166,10 +167,23 @@ export function NxDescobertas({ titulo, apoio, itens, clientId, dateRange, aoAgi
 function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras, extraDoPorque }: { d: Descoberta; clientId: string; dateRange?: DateRangeState; aoAgir?: (local: string) => void; extras?: Atributos; extraDoPorque?: (d: Descoberta) => ReactNode }) {
   const [aberto, setAberto] = useState(false);
   const painel = useId();
+  const cartao = useRef<HTMLElement>(null);
   const linha = d.acao.rota ? linhaDaRota(d.acao.rota) : undefined;
   const local = d.acao.local;
+  // A ação que veio da leitura do período (quick-ver-tudo): abre o "Ver tudo" da própria tela, onde estão os números. Só abre e leva o
+  // foco; nada é enviado nem gravado (CHAM-07).
+  const abrirVerTudo = () => {
+    const pagina = cartao.current?.closest(".nx-pagina, .adm-carteira");
+    const verTudo = pagina?.querySelector<HTMLDetailsElement>('details[id^="detalhes-"], details.adm-urgencia__ver-tudo');
+    if (!verTudo) return;
+    verTudo.open = true;
+    const alvo = verTudo.querySelector<HTMLElement>('[data-peca="bloco-do-ver-tudo"]') ?? verTudo;
+    alvo.scrollIntoView({ behavior: "smooth", block: "start" });
+    verTudo.querySelector("summary")?.focus({ preventScroll: true });
+  };
+  const aoAgirAqui = local === ABRIR_VER_TUDO ? abrirVerTudo : local && aoAgir ? () => aoAgir(local) : undefined;
   return (
-    <article className="nx-descoberta" data-peca="descoberta" data-tom={d.tom} data-aberto={aberto ? "" : undefined} {...extras}>
+    <article ref={cartao} className="nx-descoberta" data-peca="descoberta" data-tom={d.tom} data-aberto={aberto ? "" : undefined} {...extras}>
       {/* O ícone do piloto (quadrado com o sinal): decoração, o selo ao lado diz o tom em palavra. */}
       <span className="nx-descoberta__icone" aria-hidden>
         {SINAL[d.tom]}
@@ -196,8 +210,8 @@ function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras, extraDoPorqu
       <div className="nx-descoberta__acoes">
         {linha ? (
           <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir a aba de origem" para={{ tela: linha, clientId, dateRange }} />
-        ) : local && aoAgir ? (
-          <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={() => aoAgir(local)} />
+        ) : aoAgirAqui ? (
+          <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={aoAgirAqui} />
         ) : null}
         <button type="button" className="nx-descoberta__porque-botao" aria-expanded={aberto} aria-controls={painel} onClick={() => setAberto((a) => !a)}>
           Por quê?

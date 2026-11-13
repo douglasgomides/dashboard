@@ -51,6 +51,13 @@ export interface PaginaNexoProps {
   descobertas?: ReactNode;
   /** Formato 5 segundos: a linha de apoio do "Ver tudo" ("tabelas e listas completas"). Só vale com `veredito`. */
   resumoDoVerTudo?: string;
+  /**
+   * Formato 5 segundos (quick-ver-tudo, 13/11/2026): o período da leitura ("15/10 a 13/11, comparado com 15/09 a 14/10"), uma vez só e
+   * pequeno, no começo do "Ver tudo". A leitura do período saiu do "Ver tudo": os fatos dela viraram descobertas.
+   */
+  periodoDoVerTudo?: string | null;
+  /** Formato 5 segundos: o chip "sem selo" que a leitura levava, agora no começo do "Ver tudo", ao lado do período. */
+  semSeloNoVerTudo?: boolean;
 }
 
 /**
@@ -79,7 +86,7 @@ function useCartaoAtual(quantidade: number) {
   return { fileira, atual: Math.min(atual, Math.max(0, quantidade - 1)) };
 }
 
-export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitura, cartoes, principal, corpo, detalhe, saudacao, destaqueDoTopo, veredito, descobertas, resumoDoVerTudo }: PaginaNexoProps) {
+export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitura, cartoes, principal, corpo, detalhe, saudacao, destaqueDoTopo, veredito, descobertas, resumoDoVerTudo, periodoDoVerTudo, semSeloNoVerTudo }: PaginaNexoProps) {
   const cartoesVisiveis = (cartoes ?? []).filter((c) => c != null && c !== false);
   const { fileira, atual } = useCartaoAtual(cartoesVisiveis.length);
   // Formato 5 segundos: o veredito toma o lugar da leitura no topo, e a leitura vai para dentro do "Ver tudo".
@@ -139,6 +146,12 @@ export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitur
         ? temVerTudo && (
             <div className="nx-pagina__detalhe">
               <NxRecolhido titulo="Ver tudo" resumo={resumoDoVerTudo} id={`detalhes-${tela}`}>
+                {(periodoDoVerTudo || semSeloNoVerTudo) && (
+                  <p className="nx-ver-tudo__periodo" data-peca="periodo-do-ver-tudo">
+                    {periodoDoVerTudo && <span>{periodoDoVerTudo}</span>}
+                    {semSeloNoVerTudo && <NxChip tipo="sem-selo" />}
+                  </p>
+                )}
                 {leitura}
                 {detalhe}
               </NxRecolhido>
