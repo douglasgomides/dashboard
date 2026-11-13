@@ -7,6 +7,8 @@ import { fmtTaxa } from "@/lib/metricas";
 import { causaHonesta } from "@/lib/qualidade-insights";
 import { NxCard, NxTag } from "@/components/nx/base";
 import { NxAviso, NxTabela } from "@/components/nx/blocos";
+import { NxCabecaDoBloco } from "@/components/nx/cabeca-do-bloco";
+import type { CabecaDoBloco } from "@/lib/leitura/cabeca-do-bloco";
 
 // "Dado com erro": o que está entrando errado na origem (CRM, Instagram, anúncios),
 // a causa provável e o que fazer para corrigir. Regras fixas no banco (qualidade_dados).
@@ -94,7 +96,7 @@ export function QualidadeDados({ clientId, fonte, titulo = "Dados com erro na or
 export { problemasParaInsights } from "@/lib/qualidade-insights";
 
 /** Base viva x parada: quantos leads em aberto de fato estão em movimento. */
-export function BaseVivaCrm({ clientId }: { clientId: string }) {
+export function BaseVivaCrm({ clientId, cabeca }: { clientId: string; cabeca?: (b: { abertos: number; vivos_30d: number; parados_90d: number }) => CabecaDoBloco }) {
   const { data: b } = useQuery({ queryKey: ["crm-base-viva", clientId], queryFn: () => getCrmBaseViva(clientId), staleTime: 10 * 60_000, retry: false });
   if (!b) return null;
   const pct = (x: number) => fmtTaxa(x, b.abertos);
@@ -107,6 +109,7 @@ export function BaseVivaCrm({ clientId }: { clientId: string }) {
   ];
   return (
     <NxCard rotulo="Base viva do CRM" titulo="Leads em aberto: quantos estão vivos">
+      {cabeca && <NxCabecaDoBloco cabeca={cabeca(b)} />}
       <p style={NOTA}>
         Dos <b>{fmt(b.abertos)}</b> leads em aberto no CRM, <b>{fmt(b.vivos_30d)}</b> ({pct(b.vivos_30d)}) tiveram alguma movimentação nos últimos 30 dias.
         {b.parados_90d > 0 && <> <b>{fmt(b.parados_90d)}</b> ({pct(b.parados_90d)}) estão parados há mais de 90 dias: é estoque, não fila de atendimento.</>}

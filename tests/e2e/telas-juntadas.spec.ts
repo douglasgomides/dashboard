@@ -450,16 +450,17 @@ for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
 // Plano 03: Onde os pacientes travam (4 abas, Funil com 2 partes) e De onde vêm os pacientes > Por origem, no molde, no desenho
 // do D-07 e dentro de 1,5 tela. Dados fictícios (mockPessoas e mockCrm).
 // ===================================================================================================================
-type ParteMedida = { pasta: string; aba: string; parte?: string; sub: string; slug: string; semCartoes?: boolean; cinco?: boolean };
+type ParteMedida = { pasta: string; aba: string; parte?: string; sub: string; slug: string; semCartoes?: boolean; cinco?: boolean; semLeitura?: "descobertas" | "vazio" };
 const TRAVAM = "Onde os pacientes travam";
 const PARTES_DO_CRM: ParteMedida[] = [
   // Formato 5 segundos (03.1.1.1, plano 05): abre com o veredito (a leitura mora no "Ver tudo").
   { pasta: TRAVAM, aba: "Funil", parte: "Do contato à venda", sub: "pacientes", slug: "do-contato-a-venda", cinco: true },
-  { pasta: TRAVAM, aba: "Funil", parte: "No CRM", sub: "crm-painel", slug: "no-crm" },
-  // Consultas e Vendas são telas em construção: leitura "Falta dado:", sem cartões.
-  { pasta: TRAVAM, aba: "Consultas", sub: "consultas", slug: "consultas", semCartoes: true },
-  { pasta: TRAVAM, aba: "Vendas", sub: "vendas", slug: "vendas", semCartoes: true },
-  { pasta: TRAVAM, aba: "Jornada", sub: "jornada", slug: "jornada" },
+  // quick-ver-tudo-abas (João 13/11/2026): No CRM e Jornada sem a "Leitura do período"; o que ela dizia virou descoberta (no máximo 3 à vista).
+  { pasta: TRAVAM, aba: "Funil", parte: "No CRM", sub: "crm-painel", slug: "no-crm", semLeitura: "descobertas" },
+  // Consultas e Vendas são telas em construção, sem cartões: o quadro "O que falta" diz o que falta e quem resolve (a leitura só repetia).
+  { pasta: TRAVAM, aba: "Consultas", sub: "consultas", slug: "consultas", semCartoes: true, semLeitura: "vazio" },
+  { pasta: TRAVAM, aba: "Vendas", sub: "vendas", slug: "vendas", semCartoes: true, semLeitura: "vazio" },
+  { pasta: TRAVAM, aba: "Jornada", sub: "jornada", slug: "jornada", semLeitura: "descobertas" },
   // De onde vêm os pacientes > Por origem (Resultados por origem do CRM).
   { pasta: "De onde vêm os pacientes", aba: "Por origem", sub: "vendas-kommo", slug: "por-origem" },
 ];
@@ -472,7 +473,7 @@ async function abrirParte(page: Page, context: BrowserContext, perfil: "viewer" 
   await page.goto(`/${CID}/${sub}?preset=30d`);
 }
 
-for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes, cinco } of PARTES_DO_CRM) {
+for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes, cinco, semLeitura } of PARTES_DO_CRM) {
   for (const perfil of ["viewer", "admin"] as const) {
     test(`${perfil}: ${nomeDaAba}${parte ? ` > ${parte}` : ""} abre no molde com leitura, pílula de ação e cartões com ícone redondo`, async ({ page, context }) => {
       await abrirParte(page, context, perfil, sub, { width: 1440, height: 900 });
@@ -490,6 +491,20 @@ for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes, c
         await expect(veredito).not.toHaveAttribute("data-modo", "carregando");
         await expect(veredito.getByText(/Aqui você perde mais|Uma etapa tem mais gente|Falta dado:/).first()).toBeVisible();
         await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toBeHidden();
+      } else if (semLeitura === "descobertas") {
+        // A leitura saiu; as descobertas (de 1 a 3 à vista) abrem a aba, cada uma com quem resolve e a pílula de ação.
+        await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+        const descobertas = page.locator('[data-juntada] [data-peca="descoberta"]');
+        await expect(descobertas.first()).toBeVisible();
+        expect(await descobertas.count()).toBeLessThanOrEqual(3);
+        await expect(descobertas.first().locator(".nx-descoberta__quem")).toBeVisible();
+        await expect(descobertas.first().locator(".nx-acao-pilula")).toBeVisible();
+      } else if (semLeitura === "vazio") {
+        // A leitura saiu; o quadro diz uma vez só o que falta, como consertar e quem resolve (nunca um zero).
+        await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+        const vazio = page.locator('[data-juntada] [data-peca="vazio"]');
+        await expect(vazio.getByText(/^O que falta: /)).toHaveCount(1);
+        await expect(vazio.getByText(/^Quem resolve: /)).toHaveCount(1);
       } else {
         const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
         await expect(leitura).toBeVisible();
@@ -840,6 +855,9 @@ for (const { rotulo, sub, slug } of MEDIDAS_DO_PLANO_04) {
   }
 }
 
+// quick-ver-tudo-abas (13/11/2026): estas abas não têm mais a "Leitura do período" (o que ela dizia virou descoberta ou já estava no quadro).
+const ABAS_SEM_LEITURA_B = new Set(["crm-painel", "consultas", "vendas", "jornada", "conteudo-comercial"]);
+
 // Todas as 13 abas e partes: leitura com a pílula de ação e todo cartão com o ícone no círculo (D-07), num laço só.
 for (const sub of PARTES_DAS_3_TELAS) {
   test(`D-07: /${sub} (aba ou parte das telas juntadas) tem a pílula de ação na leitura e ícone redondo em todo cartão`, async ({ page, context }) => {
@@ -857,6 +875,11 @@ for (const sub of PARTES_DAS_3_TELAS) {
       const veredito = page.locator('[data-juntada] [data-peca="veredito"]').first();
       await expect(veredito).toBeVisible();
       await expect(veredito).not.toHaveAttribute("data-modo", "carregando");
+    } else if (ABAS_SEM_LEITURA_B.has(sub)) {
+      // quick-ver-tudo-abas: sem a leitura; a pílula de ação é a da primeira descoberta (Consultas e Vendas: o quadro "O que falta", sem pílula).
+      await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+      if (sub === "consultas" || sub === "vendas") await expect(page.locator('[data-juntada] [data-peca="vazio"]')).toBeVisible();
+      else await expect(page.locator('[data-juntada] [data-peca="descoberta"] .nx-acao-pilula').first(), `/${sub}: sem pílula de ação na descoberta`).toBeVisible();
     } else {
       const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
       await expect(leitura).toBeVisible();

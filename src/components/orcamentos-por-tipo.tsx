@@ -9,12 +9,14 @@ import {
   type NomeProcedimento, type TipoProcedimento,
 } from "@/lib/orcamentos-tipo";
 import { mensagemDeErroAcao } from "@/lib/erro-amigavel";
+import { NxCabecaDoBloco } from "@/components/nx/cabeca-do-bloco";
+import type { CabecaDoBloco } from "@/lib/leitura/cabeca-do-bloco";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const num = (v: number) => v.toLocaleString("pt-BR");
 
 /** Orçamentos agrupados por tipo de procedimento, contados por paciente. Some quando os cards não têm procedimento. */
-export function OrcamentosPorTipo({ clientId, start, end }: { clientId: string; start: string; end: string }) {
+export function OrcamentosPorTipo({ clientId, start, end, cabeca }: { clientId: string; start: string; end: string; cabeca?: (d: { pessoas: number; pessoas_aprovadas: number }) => CabecaDoBloco }) {
   const q = useQuery({
     queryKey: ["crm-orcamentos-por-tipo", clientId, start, end],
     queryFn: () => getOrcamentosPorTipo(clientId, start, end),
@@ -39,6 +41,7 @@ export function OrcamentosPorTipo({ clientId, start, end }: { clientId: string; 
         </>
       }
     >
+      {cabeca && <NxCabecaDoBloco cabeca={cabeca(d)} />}
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
           <Numero rotulo="Pacientes que aprovaram algo" valor={`${num(d.pessoas_aprovadas)} de ${num(d.pessoas)}`} />
