@@ -9,7 +9,7 @@ import { getAdsPorDia, getAdsDiagnosticoPorObjetivo, getClientFontes, getAdsPlan
 import { AdsPlanilhaPainel } from "@/components/ads-planilha";
 import { PostsImpulsionados } from "@/components/seguidores-impulsionados";
 import { SyncButton } from "@/components/sync-button";
-import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
+import { resolveDateRange, formatRangeLabel, type DateRangeState } from "@/lib/date-range";
 import { ComparativoConta } from "@/components/anuncios/comparativo-conta";
 import { QualidadeLeadsCampanha } from "@/components/anuncios/qualidade-leads";
 import { fmtBRL } from "@/lib/format";
@@ -27,14 +27,23 @@ import { NxCard, NxTag, NxHBar } from "@/components/nx";
 import { NxBarrasLinha, NxFunil, NxAlertaCurto, NxNota, NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
-import { NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxAcaoPilula, NxBarras } from "@/components/nx/cartoes";
 import { NxReguaDosDias } from "@/components/nx/regua-dos-dias";
+import { NxDiasComFaixa } from "@/components/nx/dias-com-faixa";
+import { linhaDaRota } from "@/components/nx/hoje";
+import { useAuth } from "@/hooks/use-auth";
+import { useClientRole } from "@/hooks/use-client-role";
+import { useResultadosDiarios } from "@/hooks/use-resultados-diarios";
+import { faixaDoNormal, foraDaFaixa } from "@/lib/faixa-do-normal";
+import { ehEquipe } from "@/lib/registro-de-telas";
+import { variacaoPropria, visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
 import { serieContinua } from "@/lib/linha-30-dias";
 import { NxCarregando, NxErro, NxTabela } from "@/components/nx/blocos";
 import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { fatosDosAnuncios, type ResumoDeAnuncios } from "@/lib/leitura/fatos-anuncios";
 import { hojeBrasilia } from "@/lib/status-fonte";
-import { compararCusto, custoDoTotal, custoPorDia, reais, vereditoDosAnuncios } from "@/lib/leitura/cinco-anuncios";
+import { ACOES_DE_ANUNCIOS, compararCusto, custoDoTotal, custoPorDia, dataCurta, descobertasDosAnuncios, diasDeVerbaBaixa, mediaMovel7, reais, vereditoDosAnuncios } from "@/lib/leitura/cinco-anuncios";
 
 export const Route = createFileRoute("/_authenticated/$clientId/anuncios")({
   component: AnunciosPage,
@@ -353,6 +362,47 @@ function OQueFazer({ d, aoVerPlano }: { d: DiagnosticoAds; aoVerPlano: () => voi
   );
 }
 
+/** As descobertas que passam das 3 à vista (4 e 5) moram no "Ver tudo", já com os fatores do "Por quê?" abertos (nada some). */
+function MaisDescobertasDosAnuncios({
+  itens,
+  clientId,
+  dateRange,
+  aoAgir,
+  extraDoPorque,
+}: {
+  itens: readonly Descoberta[];
+  clientId: string;
+  dateRange: DateRangeState;
+  aoAgir: (local: string) => void;
+  extraDoPorque: (d: Descoberta) => ReactNode;
+}) {
+  return (
+    <section className="nx-cinco-resto" aria-label="Mais descobertas do período" data-peca="mais-descobertas">
+      <h3 className="nx-cinco-resto__titulo">Mais descobertas do período</h3>
+      <div className="nx-cinco-resto__grade">
+        {itens.map((d) => {
+          const linha = d.acao.rota ? linhaDaRota(d.acao.rota) : undefined;
+          const local = d.acao.local;
+          return (
+            <article key={d.id} className="nx-cinco-resto__item" data-descoberta-extra={d.id}>
+              <NxSelo tom={d.tom} texto={d.selo} />
+              <p className="nx-cinco-resto__frase">{d.frase}</p>
+              <NxBarras barras={d.porque.barras} rotulo={d.porque.titulo} />
+              {extraDoPorque(d)}
+              {d.porque.obs && <p className="nx-cinco-falta">{d.porque.obs}</p>}
+              {linha ? (
+                <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir a aba de origem" para={{ tela: linha, clientId, dateRange }} />
+              ) : local ? (
+                <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={() => aoAgir(local)} />
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 /** Total do período que a tela lê de ads_resumo, em números; null quando a leitura não veio. */
 function resumoEmNumeros(r: unknown): ResumoDeAnuncios | null {
   if (!r) return null;
@@ -386,6 +436,14 @@ function AnunciosPage() {
   const resumoAtual = useQuery({ queryKey: ["ads-resumo", clientId, start, end], queryFn: () => getAdsResumo(clientId, start, end.slice(0, 10)), staleTime: 5 * 60_000 });
   const resumoAnt = useQuery({ queryKey: ["ads-resumo", clientId, antIni, antFim], queryFn: () => getAdsResumo(clientId, antIni, antFim), staleTime: 5 * 60_000 });
 
+  // Formato 5 segundos: a única leitura nova, para a descoberta do que vem depois do anúncio. Os resultados diários do período (no máximo 31
+  // linhas) são a mesma leitura, com a mesma chave de cache, de Resultados e da Hoje: costuma já estar na memória. Se falhar, só essa
+  // descoberta some; a tela nunca cai por isso. Quem é da equipe vê o atalho para o Atendimento (o médico vai ao funil).
+  const { isAdmin } = useAuth();
+  const papel = useClientRole(clientId);
+  const equipe = !papel.carregando && ehEquipe({ isAdmin, papel: papel.papel });
+  const diario = useResultadosDiarios(clientId, start, end);
+
   const { data: diag, isLoading: loadingDiag } = diagnosticoQ;
   const { data: porDia, isLoading: loadingDia } = diasQ;
   const isLoading = loadingDiag || loadingDia;
@@ -398,7 +456,8 @@ function AnunciosPage() {
   const limitacoes = useMemo(() => limitacoesDeAnuncios(diag), [diag]);
   const plano = useMemo(() => (diag ? planoDeAcao(diag) : []), [diag]);
   // Formato 5 segundos (03.1.1.1, plano 09): os dias em números, para a régua, o custo por dia e o veredito. Só o que a tela já carregou.
-  const diasDeAnuncio = useMemo(() => (porDia ?? []).map((r) => ({ dia: String(r.dia).slice(0, 10), gasto: n(r.gasto), conversas: n(r.conversas) })), [porDia]);
+  // Só dias fechados: o dia de hoje ainda está se formando e viraria "verba baixa" ou "abaixo do normal" por estar pela metade.
+  const diasDeAnuncio = useMemo(() => (porDia ?? []).map((r) => ({ dia: String(r.dia).slice(0, 10), gasto: n(r.gasto), conversas: n(r.conversas) })).filter((r) => r.dia < hoje), [porDia, hoje]);
 
   // Leitura por regra (sem consulta nova, sem IA): o diagnóstico, o plano e os dois totais que a tela já carregou.
   const comparacaoCarregando = resumoAtual.isLoading || resumoAnt.isLoading;
@@ -563,7 +622,7 @@ function AnunciosPage() {
     el.querySelector("summary")?.focus();
   };
 
-  const cartoes: [ReactNode, ReactNode, ReactNode, ReactNode] = [
+  const cartoesDoVerTudo: [ReactNode, ReactNode, ReactNode, ReactNode] = [
     <NxCartaoNumero
       key="investido"
       icone={ic(Wallet)}
@@ -616,22 +675,125 @@ function AnunciosPage() {
     />,
   ];
 
+  // ---- Formato 5 segundos (03.1.1.1, plano 09): só dados da própria clínica, contra o período anterior dela e contra os dias dela. ----
+  const totalDeAgora = resumoEmNumeros(resumoAtual.data) ?? { gasto: diag.gasto, conversas: diag.conversas };
+  const totalDeAntes = resumoEmNumeros(resumoAnt.data);
+  const comparacaoDeCusto = compararCusto(totalDeAgora, totalDeAntes);
+  const diasComCusto = custoPorDia(diasDeAnuncio);
+  const verbaBaixa = diasDeVerbaBaixa(diasDeAnuncio);
+  const media7 = mediaMovel7(diasDeAnuncio);
+  // A faixa do normal das conversas por dia (só dias fechados): marca os dias fora dela e serve ao "Por quê?" dos dias de verba baixa.
+  const conversasPorDia = serieContinua(diasDeAnuncio.map((r) => ({ dia: r.dia, valor: r.conversas })));
+  const faixaDeConversas = faixaDoNormal(conversasPorDia.valores);
+  const marcasDeConversas = foraDaFaixa(conversasPorDia.valores, faixaDeConversas);
+  const temDiaForaDoNormal = marcasDeConversas.some((m) => m === "acima" || m === "abaixo");
+  const diasBaixos = new Set(verbaBaixa?.dias ?? []);
+  const indicesBaixos = conversasPorDia.datas.map((data, i) => (diasBaixos.has(data) ? i : -1)).filter((i) => i >= 0);
+
+  const textoDaMudanca = (v: { texto: string } | null, antes: string, palavra?: string) => (v ? `${v.texto}${palavra ? ` ${palavra}` : ""} · vs ${antes} antes` : null);
+  const varGastoCinco = totalDeAntes ? variacaoPropria(totalDeAgora.gasto, totalDeAntes.gasto) : null;
+  const varConversasCinco = totalDeAntes ? variacaoPropria(totalDeAgora.conversas, totalDeAntes.conversas) : null;
+  const semAnterior = <p className="nx-cinco-falta" data-falta-dado>Falta dado: sem o período anterior para comparar.</p>;
+  const custoAgora = custoDoTotal(totalDeAgora);
+
+  const cartoes = [
+    <NxCartaoNumero
+      key="investido"
+      icone={ic(Wallet)}
+      titulo="Investido"
+      subtitulo={verbaBaixa ? `${verbaBaixa.dias.length} dias com verba baixa` : `${diag.campanhas.length} ${diag.campanhas.length === 1 ? "campanha" : "campanhas"}`}
+      valor={fmtBRL(gasto)}
+      legenda="no período"
+      variacao={varGastoCinco && totalDeAntes ? { texto: textoDaMudanca(varGastoCinco, fmtBRL(totalDeAntes.gasto)) ?? "" } : null}
+      extra={varGastoCinco ? undefined : semAnterior}
+      serie={serieGasto}
+      info={info("Investido", `Tudo o que foi gasto em anúncios do Meta em ${periodLabel}, direto da conta de anúncio (não é estimativa), de ${diag.campanhas.length} campanhas com atividade. Dia com verba baixa é o que ficou abaixo da metade do seu dia comum.`)}
+    />,
+    <NxCartaoNumero
+      key="conversas"
+      icone={ic(MessageCircle)}
+      titulo="Conversas pelo anúncio"
+      subtitulo="WhatsApp e Direct"
+      valor={int(diag.conversas)}
+      legenda="de todas as campanhas"
+      variacao={varConversasCinco && totalDeAntes ? { texto: textoDaMudanca(varConversasCinco, int(totalDeAntes.conversas)) ?? "" } : null}
+      extra={
+        temDiaForaDoNormal || !varConversasCinco ? (
+          <div className="nx-anuncios-sinais">
+            {temDiaForaDoNormal && <NxSelo tom="atencao" texto="Fora do normal" />}
+            {!varConversasCinco && semAnterior}
+          </div>
+        ) : undefined
+      }
+      serie={serieConversas}
+      info={info("Conversas pelo anúncio", `WhatsApp e Direct, de todas as campanhas.${suspeito ? " Rastreio suspeito: o número real pode ser maior." : ""}${faixaDeConversas ? ` O seu dia normal tem de ${faixaDeConversas.lo} a ${faixaDeConversas.hi} conversas.` : ""}`)}
+    />,
+    <NxCartaoNumero
+      key="custo"
+      icone={ic(Coins)}
+      titulo="Custo por conversa"
+      subtitulo={suspeito ? "rastreio suspeito" : media7.melhor ? `Melhor semana: ${fmtBRL(media7.melhor.valor)} (7 dias até ${ddmm(media7.melhor.ate)})` : "média de 7 dias ainda sem dado"}
+      valor={suspeito ? "Não confiável" : custoAgora != null ? fmtBRL(custoAgora) : "—"}
+      semMedida={!suspeito && custoAgora == null}
+      legenda={suspeito ? "veja o aviso do rastreio" : custoAgora != null ? `${fmtBRL(totalDeAgora.gasto)} ÷ ${int(totalDeAgora.conversas)} conversas` : undefined}
+      variacao={!suspeito && comparacaoDeCusto ? { texto: textoDaMudanca(comparacaoDeCusto.v, fmtBRL(comparacaoDeCusto.antes), comparacaoDeCusto.v.sinal === "=" ? undefined : comparacaoDeCusto.v.pct < 0 ? "mais barato" : "mais caro") ?? "" } : null}
+      extra={!suspeito && custoAgora != null && !comparacaoDeCusto ? <p className="nx-cinco-falta" data-falta-dado>Falta dado: poucas conversas para comparar com o período anterior.</p> : undefined}
+      serie={suspeito || media7.melhor == null ? undefined : { rotulo: "custo por conversa, média de 7 dias", formatar: fmtBRL, datas: media7.datas, valores: media7.valores }}
+      info={info(
+        "Custo por conversa",
+        `Investido ÷ conversas de todas as campanhas, no período e no anterior (a mesma conta dos dois lados). A linha é a média móvel de 7 dias. O custo só das campanhas de mensagem${msg ? ` (${fmtBRL(msg.gasto)} ÷ ${int(msg.conversas)})` : ""} está no Ver tudo. Referência de mercado, sem estudo independente e por isso sem cor: ${BENCHMARKS.custoPorConversa.referencia}.`,
+      )}
+    />,
+  ] as const;
+
+  // Descobertas (de 0 a 5, só com a própria clínica): as 3 primeiras à vista, as outras no começo do "Ver tudo". Sem veredito, nenhuma.
+  const descobertas = descobertasDosAnuncios({ porDia: diasDeAnuncio, atual: totalDeAgora, anterior: totalDeAntes, fatos, diario: diario.data ?? null, equipe });
+  const { visiveis, resto } = visiveisEResto(descobertas.itens);
+
   // A régua dos próprios dias: o custo por conversa de cada dia contra o custo de antes da própria clínica. Com o rastreio suspeito o custo não é
   // confiável (D-05), então a régua não aparece. Poucos dias com conversa: "Falta dado", nunca uma régua de 2 pontos.
-  const totalDeAgora = resumoEmNumeros(resumoAtual.data) ?? { gasto: diag.gasto, conversas: diag.conversas };
-  const comparacaoDeCusto = compararCusto(totalDeAgora, resumoEmNumeros(resumoAnt.data));
-  const diasComCusto = custoPorDia(diasDeAnuncio);
   const principal = suspeito ? undefined : diasComCusto.length >= MIN_DIAS_DA_REGUA ? (
-    <NxReguaDosDias dias={diasComCusto} custoAntes={comparacaoDeCusto?.antes ?? null} custoAgora={custoDoTotal(totalDeAgora)} formatar={reais} />
+    <NxReguaDosDias dias={diasComCusto} custoAntes={comparacaoDeCusto?.antes ?? null} custoAgora={custoAgora} formatar={reais} />
   ) : (
     <NxCard icone={ic(CalendarDays)} titulo="Seus dias, um a um" rotulo="Seus dias, um a um">
       <p className="nx-cinco-falta" data-falta-dado>Falta dado: poucos dias com conversa para comparar um dia com o outro.</p>
     </NxCard>
   );
 
+  // O "Por quê?" dos dias de verba baixa leva, depois das barras, as conversas por dia sobre a faixa do normal da própria clínica.
+  const extraDoPorque = (d: Descoberta) =>
+    d.id === "anuncios-verba-baixa" && conversasPorDia.datas.length > 0 ? (
+      <NxDiasComFaixa
+        compacto
+        rotulo="conversas"
+        datas={conversasPorDia.datas}
+        valores={conversasPorDia.valores}
+        faixa={faixaDeConversas}
+        marcas={marcasDeConversas}
+        destaque={indicesBaixos}
+        legendaDoDestaque="dia de verba baixa"
+      />
+    ) : null;
+
+  // A ação local de uma descoberta só abre um lugar desta tela (nada é enviado nem gravado).
+  function agirNaDescoberta(local: string) {
+    if (local === ACOES_DE_ANUNCIOS.plano) abrirPlano();
+    else if (local === ACOES_DE_ANUNCIOS.campanhas) {
+      const verTudo = document.getElementById("detalhes-anuncios");
+      if (verTudo instanceof HTMLDetailsElement) verTudo.open = true;
+      requestAnimationFrame(() => document.getElementById("campanhas-anuncios")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+  }
+
   return (
     <PaginaNexo
       {...cabecalho}
+      // A sincronização: no computador fica no cabeçalho; no celular desce para o "Ver tudo" (o cabeçalho fica só com a pergunta).
+      acao={
+        <div className="nx-anuncios-sync nx-anuncios-sync--topo">
+          <SyncButton clientId={clientId} alvo="anuncios" />
+        </div>
+      }
       veredito={
         <>
           <NxVeredito veredito={veredito} carregando={fatos == null} tela="anuncios" />
@@ -641,7 +803,21 @@ function AnunciosPage() {
         </>
       }
       leitura={<LeituraDaTela fatos={fatos} carregando={comparacaoCarregando} semSelo />}
+      cartoes={cartoes as unknown as [ReactNode, ReactNode?, ReactNode?]}
       principal={principal}
+      descobertas={
+        veredito?.tipo === "veredito" ? (
+          <NxDescobertas
+            titulo="O que descobrimos"
+            apoio={<p className={descobertas.aviso ? "nx-cinco-falta" : "nx-cinco-falta nx-anuncios-ordem"}>{descobertas.aviso ?? "Em ordem de impacto"}</p>}
+            itens={visiveis}
+            clientId={clientId}
+            dateRange={dateRangeState}
+            aoAgir={agirNaDescoberta}
+            extraDoPorque={extraDoPorque}
+          />
+        ) : undefined
+      }
       corpo={
         suspeito ? (
           <NxAlertaCurto
@@ -656,8 +832,12 @@ function AnunciosPage() {
       resumoDoVerTudo="números, gráfico por dia, campanhas, plano e comparativo"
       detalhe={
         <div className="nexo-mkt nexo-anuncios">
+          <div className="nx-anuncios-sync nx-anuncios-sync--ver-tudo">
+            <SyncButton clientId={clientId} alvo="anuncios" />
+          </div>
+          {resto.length > 0 && <MaisDescobertasDosAnuncios itens={resto} clientId={clientId} dateRange={dateRangeState} aoAgir={agirNaDescoberta} extraDoPorque={extraDoPorque} />}
           {/* Formato 5 segundos (MEDV-02): os 4 números de antes (com o "Cliques no link") moram aqui, no "Ver tudo", como sempre foram. */}
-          <div className="nx-grade nx-grade--4">{cartoes}</div>
+          <div className="nx-grade nx-grade--4">{cartoesDoVerTudo}</div>
           {/* Os cartões de Investido e Conversas já mostram a linha de 30 dias: o gráfico diário completo (barras e linha) vem para cá (nada some, D-03). */}
           <NxCard
             icone={ic(CalendarDays)}
@@ -749,7 +929,7 @@ function AnunciosPage() {
           <QualidadeLeadsCampanha clientId={clientId} start={start} end={end} />
           <PostsImpulsionados clientId={clientId} start={start} end={end} />
 
-          {suspeito ? <ObjetivosDasCampanhas d={diag} /> : <DiagnosticoCampanhas d={diag} />}
+          <div id="campanhas-anuncios">{suspeito ? <ObjetivosDasCampanhas d={diag} /> : <DiagnosticoCampanhas d={diag} />}</div>
 
           <PorObjetivo d={diag} />
 

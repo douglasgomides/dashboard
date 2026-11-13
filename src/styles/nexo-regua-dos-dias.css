@@ -5,7 +5,7 @@
 
 .app.product-workspace:not(.sap-workspace) .nx-regua {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   padding: 16px 20px;
   border: 1px solid var(--line);
@@ -18,8 +18,8 @@
 }
 .app.product-workspace:not(.sap-workspace) .nx-regua__titulo {
   margin: 0;
-  font-size: 20px;
-  line-height: 28px;
+  font-size: 18px;
+  line-height: 24px;
   font-weight: 600;
   color: var(--text);
   overflow-wrap: anywhere;
@@ -35,7 +35,7 @@
 /* ---------- A escala ---------- */
 .app.product-workspace:not(.sap-workspace) .nx-regua__escala {
   position: relative;
-  height: 124px;
+  height: 114px;
   /* O ponto e o marcador "Agora" passam do limite da escala: a folga lateral não deixa nada ser cortado. */
   margin: 0 20px;
 }
@@ -43,7 +43,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: 62px;
+  top: 54px;
   height: 4px;
   border-radius: 4px;
   background: linear-gradient(90deg, var(--up) 0%, var(--or) 50%, var(--dn) 100%);
@@ -51,7 +51,7 @@
 }
 .app.product-workspace:not(.sap-workspace) .nx-regua__marca {
   position: absolute;
-  top: 86px;
+  top: 78px;
   transform: translateX(-50%);
   font-size: 12px;
   line-height: 16px;
@@ -68,14 +68,14 @@
 }
 .app.product-workspace:not(.sap-workspace) .nx-regua__antes {
   position: absolute;
-  top: 44px;
+  top: 36px;
   height: 40px;
   border-left: 2px dashed var(--text);
   pointer-events: none;
 }
 .app.product-workspace:not(.sap-workspace) .nx-regua__antes-rotulo {
   position: absolute;
-  top: 104px;
+  top: 94px;
   transform: translateX(-50%);
   font-size: 13px;
   line-height: 18px;
@@ -88,7 +88,7 @@
 /* O ponto de cada dia: um botão (alvo de toque maior que o desenho). */
 .app.product-workspace:not(.sap-workspace) .nx-regua__ponto {
   position: absolute;
-  top: 54px;
+  top: 46px;
   width: 20px;
   height: 20px;
   min-width: 0;
@@ -120,7 +120,7 @@
 .app.product-workspace:not(.sap-workspace) .nx-regua__agora {
   position: absolute;
   z-index: 2;
-  top: 47px;
+  top: 39px;
   width: 34px;
   height: 34px;
   margin-left: -17px;
@@ -179,8 +179,8 @@
 /* A frase do ponto tocado. */
 .app.product-workspace:not(.sap-workspace) .nx-regua__leitura {
   margin: 0;
-  padding: 8px 12px;
-  min-height: 40px;
+  padding: 6px 12px;
+  min-height: 36px;
   border-radius: 12px;
   background: var(--b6);
   font-size: 15px;
@@ -191,6 +191,10 @@
 }
 
 /* ---------- Os dias mais baratos e os mais caros ---------- */
+/* O botão que abre as listas só existe no celular (no computador a lista está sempre à vista). */
+.app.product-workspace:not(.sap-workspace) .nx-regua__lista-botao {
+  display: none;
+}
 .app.product-workspace:not(.sap-workspace) .nx-regua__lista-titulo {
   margin: 8px 0 0;
   font-size: 15px;
@@ -230,7 +234,7 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 2px 8px;
+  padding: 0 8px;
   border-radius: 10px;
   font-size: 14px;
   line-height: 20px;
@@ -281,12 +285,11 @@
     font-size: 16px;
     line-height: 22px;
   }
+  /* A frase de baixo da régua já diz "Toque nos pontos": a explicação sai no celular. */
   .app.product-workspace:not(.sap-workspace) .nx-regua__sub {
-    font-size: 13px;
-    line-height: 18px;
+    display: none;
   }
   .app.product-workspace:not(.sap-workspace) .nx-regua__escala {
-    height: 112px;
     margin: 0 16px;
   }
   .app.product-workspace:not(.sap-workspace) .nx-regua__pontas {
@@ -307,14 +310,57 @@
     min-height: 36px;
     padding: 4px 8px;
   }
-  .app.product-workspace:not(.sap-workspace) .nx-regua__linha {
-    grid-template-columns: 24px 44px minmax(0, 1fr) 68px;
+  /* No celular as listas começam recolhidas atrás de um botão (a régua de 1,5 tela não cabe com elas à vista). */
+  .app.product-workspace:not(.sap-workspace) .nx-regua__lista-titulo {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-regua__lista-botao {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 8px;
-    padding: 0 8px;
-    line-height: 18px;
+    width: 100%;
+    min-height: 36px;
+    margin: 0;
+    padding: 0 12px;
+    border: 1px solid var(--control-border);
+    border-radius: 12px;
+    background: var(--white);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-regua__lista-botao:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-regua__listas:not([data-aberta]) {
+    display: none;
+  }
+  /* As duas listas lado a lado, sem a barra (a posição e o custo já dizem tudo): metade da altura. */
+  .app.product-workspace:not(.sap-workspace) .nx-regua__listas {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-regua__linha {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    gap: 4px;
+    padding: 0 6px;
+    font-size: 13px;
+    line-height: 20px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-regua__trilha {
+    display: none;
   }
   .app.product-workspace:not(.sap-workspace) .nx-regua__linhas {
     gap: 2px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-regua__legenda-da-lista {
+    font-size: 12px;
+    line-height: 16px;
   }
 }
 @media (max-width: 560px) {
@@ -327,5 +373,216 @@
 @media (prefers-reduced-motion: no-preference) {
   .app.product-workspace:not(.sap-workspace) .nx-regua__ponto {
     transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+}
+
+/* ---------- Anúncios na régua de 1,5 tela (D-08): nunca se sobe o limite, só se comprime o que é desta tela ---------- */
+/* Selo "Fora do normal" e o aviso de falta de dado do cartão, na mesma linha. */
+.app.product-workspace:not(.sap-workspace) .nx-anuncios-sinais {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-anuncios-ordem {
+  margin: 0;
+}
+
+/* Descobertas 4 e 5, dentro do "Ver tudo" (a mesma aparência de Atendimento, só nesta tela). */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-cinco-resto__titulo {
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-cinco-resto__item {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-cinco-resto__item > * {
+  max-width: 100%;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-cinco-resto__item .nx-barras {
+  justify-self: stretch;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-cinco-resto__frase {
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* Cartões de número: o número e a legenda lado a lado em qualquer largura, para o cartão ficar baixo. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__cartoes .nx-numero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__cartoes .nx-numero__legenda {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+/* A ação e o "Por quê?" lado a lado, não um sobre o outro. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__acoes {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+/* A sincronização da equipe: no cabeçalho no computador; no celular ela desce para o "Ver tudo" (o cabeçalho fica só com a pergunta). */
+.app.product-workspace:not(.sap-workspace) .nx-anuncios-sync--ver-tudo {
+  display: none;
+}
+
+/* Computador: as descobertas lado a lado (cada uma empilha chips, frase e botões no próprio cartão) e a régua mais baixa. */
+@media (min-width: 1100px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descobertas__lista {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-regua__sub {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__cartoes .nx-cartao {
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__cartoes .nx-linha30__area {
+    height: 52px;
+  }
+}
+/* Descoberta estreita (3 lado a lado no computador): o número em jogo sai do cabeçalho do cartão (as barras do "Por quê?" dizem o mesmo número). */
+@container nx-descoberta (max-width: 440px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__impacto {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  /* A etiqueta da decisão e o período já estão na casca (seletor de período): o cabeçalho fica só com a pergunta. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__rotulo,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__meta,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__pontos,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-anuncios-ordem {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-anuncios-sync--topo {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-anuncios-sync--ver-tudo {
+    display: block;
+    margin-bottom: 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] {
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-regua {
+    padding: 8px 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__pergunta {
+    font-size: 16px;
+    line-height: 20px;
+  }
+  /* A linha "Antes: ..." do veredito já está na régua (o marcador "antes") e nos cartões (▲▼ contra o período anterior). */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-veredito__texto > .nx-veredito__apoio {
+    display: none;
+  }
+  /* A linha de média de 7 dias do custo, mais baixa. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__cartoes .nx-linha30__area {
+    height: 36px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-veredito {
+    padding: 6px 12px;
+  }
+  /* Cartões de número: sem o ícone e a linha de 30 dias só no custo (a média de 7 dias). */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__cartoes .nx-cartao__icone {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__cartoes .nx-cartao {
+    padding: 8px 12px;
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__cartoes .nx-cartao:nth-child(-n + 2) .nx-linha30 {
+    display: none;
+  }
+  /* Descobertas. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descobertas,
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descobertas__lista {
+    gap: 8px;
+  }
+  /* O título "O que descobrimos" continua para leitor de tela: a lista de descobertas se explica sozinha. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descobertas__titulo {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descobertas {
+    position: relative;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta {
+    padding: 6px 8px;
+    gap: 2px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__corpo {
+    display: block;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__topo {
+    display: inline-flex;
+    max-width: 100%;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  /* O número em jogo fica no "Por quê?" (as barras dizem o mesmo número). */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__impacto {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__frase {
+    display: inline;
+    font-size: 15px;
+    line-height: 20px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta .nx-selo {
+    font-size: 12px;
+    line-height: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__acoes {
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta .nx-acao-pilula {
+    min-height: 36px;
+    padding: 2px 2px 2px 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta .nx-acao-pilula__texto {
+    padding: 0;
+  }
+  /* Um estilo global de botão dá 44 px de altura mínima: a seta redonda de 32 px precisa soltá-la. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta .nx-acao-pilula__seta {
+    width: 32px;
+    height: 32px;
+    min-height: 0;
+    min-width: 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__porque-botao {
+    min-height: 36px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nxb-recolhido small {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nxb-recolhido > summary {
+    padding-top: 11px;
+    padding-bottom: 11px;
   }
 }

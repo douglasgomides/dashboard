@@ -123,13 +123,15 @@ export interface NxDescobertasProps {
   id?: string;
   /** Atributos extras de cada descoberta (data-*), para a tela marcar o que o teste e a regra precisam achar. */
   atributos?: (d: Descoberta, indice: number) => Atributos;
+  /** Uma peça da tela depois das barras do "Por quê?" (por exemplo os dias de verba baixa sobre a faixa do normal). Só apresentação. */
+  extraDoPorque?: (d: Descoberta) => ReactNode;
 }
 
 /**
  * De 3 a 5 descobertas em frase curta, cada uma com selo (sinal e palavra), quem resolve, um número medido em jogo, UMA ação que só
  * navega (CHAM-07) e um "Por quê?" que abre de 2 a 3 fatores em barra. O que falta é barra listrada com "Falta dado" (nunca zero).
  */
-export function NxDescobertas({ titulo, apoio, itens, clientId, dateRange, aoAgir, id, atributos }: NxDescobertasProps) {
+export function NxDescobertas({ titulo, apoio, itens, clientId, dateRange, aoAgir, id, atributos, extraDoPorque }: NxDescobertasProps) {
   const base = useId();
   return (
     <section className="nx-descobertas" id={id} aria-labelledby={`${base}-t`} data-peca="descobertas">
@@ -144,7 +146,7 @@ export function NxDescobertas({ titulo, apoio, itens, clientId, dateRange, aoAgi
         <ul className="nx-descobertas__lista">
           {itens.map((d, k) => (
             <li key={d.id} className="nx-descobertas__item">
-              <ItemDaDescoberta d={d} clientId={clientId} dateRange={dateRange} aoAgir={aoAgir} extras={atributos?.(d, k)} />
+              <ItemDaDescoberta d={d} clientId={clientId} dateRange={dateRange} aoAgir={aoAgir} extras={atributos?.(d, k)} extraDoPorque={extraDoPorque} />
             </li>
           ))}
         </ul>
@@ -153,7 +155,7 @@ export function NxDescobertas({ titulo, apoio, itens, clientId, dateRange, aoAgi
   );
 }
 
-function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras }: { d: Descoberta; clientId: string; dateRange?: DateRangeState; aoAgir?: (local: string) => void; extras?: Atributos }) {
+function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras, extraDoPorque }: { d: Descoberta; clientId: string; dateRange?: DateRangeState; aoAgir?: (local: string) => void; extras?: Atributos; extraDoPorque?: (d: Descoberta) => ReactNode }) {
   const [aberto, setAberto] = useState(false);
   const painel = useId();
   const linha = d.acao.rota ? linhaDaRota(d.acao.rota) : undefined;
@@ -190,6 +192,7 @@ function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras }: { d: Desco
       <div id={painel} className="nx-descoberta__porque" hidden={!aberto}>
         <p className="nx-descoberta__porque-titulo">{d.porque.titulo}</p>
         <NxBarras barras={d.porque.barras} />
+        {extraDoPorque?.(d)}
         {d.porque.obs && <p className="nx-descoberta__obs">{d.porque.obs}</p>}
       </div>
     </article>

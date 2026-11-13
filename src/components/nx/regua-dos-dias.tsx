@@ -46,6 +46,9 @@ export const NxReguaDosDias = memo(function NxReguaDosDias({ dias, custoAntes, c
   const n = ordenados.length;
   const [escolhido, setEscolhido] = useState<number | null>(null);
   const [foco, setFoco] = useState(0);
+  // No celular as listas começam recolhidas (a régua de 1,5 tela não cabe com elas à vista); no computador estão sempre à vista.
+  const [listasAbertas, setListasAbertas] = useState(false);
+  const painelDasListas = `${base}-listas`;
 
   const escala = useMemo(() => {
     const meio = n ? ordenados[Math.floor(n / 2)].custo : 0;
@@ -138,7 +141,11 @@ export const NxReguaDosDias = memo(function NxReguaDosDias({ dias, custoAntes, c
       </p>
 
       <h4 className="nx-regua__lista-titulo">Seus dias mais baratos e mais caros</h4>
-      <div className="nx-regua__listas" data-peca="regua-dias-lista">
+      <button type="button" className="nx-regua__lista-botao" aria-expanded={listasAbertas} aria-controls={painelDasListas} onClick={() => setListasAbertas((a) => !a)}>
+        Seus dias mais baratos e mais caros
+        <span aria-hidden>{listasAbertas ? "▴" : "▾"}</span>
+      </button>
+      <div id={painelDasListas} className="nx-regua__listas" data-peca="regua-dias-lista" data-aberta={listasAbertas ? "" : undefined}>
         <div className="nx-regua__lista">
           <p className="nx-regua__legenda-da-lista">{baratos.length === 1 ? "O mais barato" : `Os ${baratos.length} mais baratos`}</p>
           <ol className="nx-regua__linhas">
