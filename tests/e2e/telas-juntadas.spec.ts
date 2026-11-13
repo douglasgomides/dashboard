@@ -723,7 +723,10 @@ test("contagem em cinza: a aba Anúncios mostra o número de campanhas que a pr�
   await expect(aba(nav, "Anúncios").locator(".nx-pasta__contagem")).not.toHaveText(/^0/);
   await aba(nav, "Anúncios").click();
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/anuncios`);
-  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first()).not.toHaveAttribute("data-modo", "carregando");
+  // Anúncios abre com o veredito (a leitura saiu em quick-ver-tudo). Antes esta linha achava a leitura de Por origem ainda na tela; com
+  // Por origem também sem a caixa (quick-ver-tudo-abas), confere o veredito de Anúncios já carregado.
+  await expect(page.locator('[data-juntada] [data-tela="anuncios"] [data-peca="veredito"]').first()).toBeVisible();
+  await expect(page.locator('[data-juntada] [data-peca="veredito"]').first()).not.toHaveAttribute("data-modo", "carregando");
   // O mock tem 3 campanhas com atividade; o cartão "Investido" diz o mesmo número.
   // Formato 5 segundos: o cartão "Investido" à vista diz o número de campanhas (ou os dias de verba baixa); o de antes mora no "Ver tudo".
   await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao", { hasText: "Investido" }).locator(".nx-cartao__sub")).toContainText("3 campanhas");

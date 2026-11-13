@@ -318,7 +318,12 @@ for (const t of TELAS) {
   assert.ok(fonteRota.includes("<PaginaNexo"), `${t.rota}: marcada novo, mas ${arquivoRota} não usa <PaginaNexo`);
   // Formato 5 segundos (quick-ver-tudo, João 13/11/2026): a leitura saiu do "Ver tudo"; a tela lê os mesmos fatos pelo veredito (com o portão
   // e o "Falta dado") e o que só a leitura dizia vira descoberta (descobertasDaLeitura). Uma das duas formas é obrigatória.
-  const leConformeOMolde = fonteRota.includes("<LeituraDaTela") || (fonteRota.includes("<NxVeredito") && fonteRota.includes("descobertasDaLeitura("));
+  // Abas das pastas sem veredito (quick-ver-tudo-abas): leituraDaAba lê os mesmos fatos por descobertasDaLeitura e, com o portão fechado,
+  // mostra a descoberta "Falta dado" com o passo; o topo da aba é o NxDescobertasDaAba.
+  const leConformeOMolde =
+    fonteRota.includes("<LeituraDaTela") ||
+    (fonteRota.includes("<NxVeredito") && fonteRota.includes("descobertasDaLeitura(")) ||
+    (fonteRota.includes("<NxDescobertasDaAba") && fonteRota.includes("leituraDaAba("));
   assert.ok(leConformeOMolde, `${t.rota}: marcada novo, mas ${arquivoRota} não usa <LeituraDaTela (nem o veredito com descobertasDaLeitura)`);
   assert.equal(
     antigos.length,
