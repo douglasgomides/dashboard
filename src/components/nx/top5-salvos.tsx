@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { brazilWeekdayAndHour } from "@/lib/report-metrics";
 import { DIAS_CURTOS } from "@/lib/mapa-dos-posts";
 import { dataDiaMes, numeroCurto, temaParaExibir } from "@/lib/texto-que-cabe";
@@ -14,6 +14,7 @@ export interface PostDoTop5 {
   media_follows?: number | null;
   posted_at?: string | null;
   permalink?: string | null;
+  thumbnail_url?: string | null;
 }
 
 const fmtN = (n: number) => Math.round(n).toLocaleString("pt-BR");
@@ -68,6 +69,7 @@ export function NxTop5Salvos({ posts, acao }: { posts: readonly PostDoTop5[]; ac
           const corpo = (
             <>
               <span className="nx-top5__capa" data-capa={capa.tipo}>
+                <CapaDoPost url={p.thumbnail_url} />
                 {capa.rotulo ? <span className="nx-top5__fmt">{capa.rotulo}</span> : <span className="nx-top5__fmt nx-top5__fmt--falta">Formato: Falta dado</span>}
                 <span className="nx-top5__pos">#{k + 1}</span>
               </span>
@@ -113,4 +115,12 @@ export function NxTop5Salvos({ posts, acao }: { posts: readonly PostDoTop5[]; ac
       </ol>
     </section>
   );
+}
+
+/** A imagem do post na capa (João 13/11/2026: "aqui devem ter as imagens dos posts"). Sem endereço ou se a imagem não abrir
+ * (o link do Instagram expira), fica o degradê do formato, como antes. */
+function CapaDoPost({ url }: { url?: string | null }) {
+  const [falhou, setFalhou] = useState(false);
+  if (!url || falhou) return null;
+  return <img className="nx-top5__img" src={url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFalhou(true)} />;
 }
