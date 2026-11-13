@@ -21,7 +21,7 @@ import { resolveDateRange } from "@/lib/date-range";
 import { dePacientesDoPeriodo, rotuloDoAnterior } from "@/lib/funil-desenhado";
 import { analyzeGrowth } from "@/lib/hub-conteudo";
 import { serieContinua } from "@/lib/linha-30-dias";
-import { fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria } from "@/lib/leitura/fatos-resultados";
+import { fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria, somaDiariaComCobertura } from "@/lib/leitura/fatos-resultados";
 import { MIN_DIAS_SALDO } from "@/lib/leitura/fatos-instagram";
 import { descobertaDaAcao, fontesDoCliente, montarEntradaDaHoje } from "@/lib/leitura/entrada-da-hoje";
 import { GUARDA_DE_TEXTO_DA_TELA_HOJE, acoesDaHoje } from "@/lib/leitura/fatos-hoje";
@@ -85,9 +85,17 @@ function numerosDaHoje(e: {
   antes: Record<string, number | null>;
   diario: ReadonlyArray<{ dia: string } & Record<CampoDiario, number | null>>;
   fimFechado: string;
+  dias: number;
   pessoas: Parameters<typeof dePacientesDoPeriodo>[0]["dados"] | undefined;
 }): NumeroDaHoje[] {
   const linhas = e.diario.filter((l) => l.dia <= e.fimFechado);
+  // Soma com cobertura (03.1.1.1.1, D-01): dia sem medida não apaga o cartão. Com parte dos dias medida, o número aparece com
+  // "medido em N de M dias" e sem comparação (os dois períodos não têm a mesma cobertura). Nada medido: Falta dado.
+  const cob = somaDiariaComCobertura(linhas, e.dias, ["mandaram_mensagem", "fecharam"]);
+  const parcial = (k: "mandaram_mensagem" | "fecharam") => {
+    const c = cob[k];
+    return e.atual[k] == null && c && c.valor != null && c.medidos > 0 ? { valor: c.valor, nota: ` · medido em ${c.medidos} de ${c.de} dias` } : null;
+  };
   const serieDe = (campo: CampoDiario, rotulo: string): SerieDaHoje | undefined => {
     const { datas, valores } = serieContinua(linhas.map((l) => ({ dia: l.dia, valor: l[campo] ?? null })));
     return datas.length >= 2 ? { rotulo, datas, valores } : undefined;
@@ -100,11 +108,25 @@ function numerosDaHoje(e: {
     if (lead.valor != null && atendido.valor != null && atendido.valor <= lead.valor) semAtendimento = lead.valor - atendido.valor;
     else motivo = lead.motivo ?? atendido.motivo ?? "Atendido passa de Virou lead, então não dá para contar.";
   } else motivo = "A lista de pessoas do período não veio.";
+  // Fecharam: a soma diária completa primeiro; sem ela, as pessoas que fecharam no CRM no período (contadas uma vez cada); por
+  // último, a soma dos dias medidos.
+  let fecharam: { valor: number | null; antes: number | null; legenda: string; motivo?: string } = { valor: e.atual.fecharam ?? null, antes: e.antes.fecharam ?? null, legenda: "pacientes no período" };
+  if (fecharam.valor == null) {
+    const fechou = e.pessoas ? dePacientesDoPeriodo({ dados: e.pessoas, variacao: () => null }).etapas[4] : null;
+    const p = parcial("fecharam");
+    if (fechou?.valor != null) fecharam = { valor: fechou.valor, antes: null, legenda: "pacientes no período, contados no CRM" };
+    else if (p) fecharam = { valor: p.valor, antes: null, legenda: `pacientes${p.nota}` };
+    else fecharam = { ...fecharam, motivo: fechou?.motivo ?? undefined };
+  }
+  const pc = parcial("mandaram_mensagem");
+  const conversas = e.atual.mandaram_mensagem != null || !pc
+    ? { valor: e.atual.mandaram_mensagem ?? null, antes: e.antes.mandaram_mensagem ?? null, legenda: "no período" }
+    : { valor: pc.valor, antes: null, legenda: `no período${pc.nota}` };
   return [
-    { id: "conversas", titulo: "Conversas", icone: "message-circle", legenda: "no período", valor: e.atual.mandaram_mensagem ?? null, antes: e.antes.mandaram_mensagem ?? null, serie: serieDe("mandaram_mensagem", "conversas iniciadas") },
+    { id: "conversas", titulo: "Conversas", icone: "message-circle", legenda: conversas.legenda, valor: conversas.valor, antes: conversas.antes, serie: serieDe("mandaram_mensagem", "conversas iniciadas") },
     // O período anterior de pessoas únicas não é medido: sem comparação, "Falta dado" em cinza (nunca 0).
     { id: "sem-atendimento", titulo: "Leads sem atendimento", icone: "users", legenda: "ainda esperando", valor: semAtendimento, antes: null, menorEhMelhor: true, motivo },
-    { id: "fecharam", titulo: "Fecharam", icone: "checklist", legenda: "pacientes no período", valor: e.atual.fecharam ?? null, antes: e.antes.fecharam ?? null, serie: serieDe("fecharam", "fecharam") },
+    { id: "fecharam", titulo: "Fecharam", icone: "checklist", legenda: fecharam.legenda, valor: fecharam.valor, antes: fecharam.antes, motivo: fecharam.motivo, serie: serieDe("fecharam", "fecharam") },
   ];
 }
 
@@ -254,7 +276,7 @@ function HojePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metricas.data, anterior.data, temIg, start, end, hoje]);
   const numeros = useMemo(
-    () => numerosDaHoje({ atual: funil.atual, antes: funil.antes, diario: diario.data ?? [], fimFechado: comparacao.fimFechado, pessoas: pessoas.data }),
+    () => numerosDaHoje({ atual: funil.atual, antes: funil.antes, diario: diario.data ?? [], fimFechado: comparacao.fimFechado, dias: comparacao.dias, pessoas: pessoas.data }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [funil, diario.data, pessoas.data, start, end, hoje],
   );
