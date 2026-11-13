@@ -835,6 +835,12 @@
   border-radius: 0 0 22px 22px;
   gap: 12px;
 }
+/* O "Ver tudo" da Carteira (details próprio da tela): a mesma moldura cinza com os blocos em cartão branco. */
+.app.product-workspace:not(.sap-workspace) .adm-carteira .adm-urgencia__ver-tudo > .adm-det__corpo {
+  display: grid;
+  gap: 12px;
+  background: var(--frame);
+}
 .app.product-workspace:not(.sap-workspace) .nx-ver-tudo__periodo {
   display: flex;
   flex-wrap: wrap;
