@@ -13,6 +13,14 @@ export const TELAS_DE_MEDIDA = [
 /** Altura máxima da aba aberta, em múltiplos da altura da janela (D-04). */
 export const LIMITE_DE_ALTURA = 1.5;
 
+/**
+ * Instagram > Desempenho, a única exceção à régua de 1,5 tela. João 13/11/2026: Top 5 na tela mesmo passando do limite ("Seus 5 posts
+ * que mais salvaram" saiu do "Ver tudo" e mora à vista, entre as descobertas e o "Ver tudo"). O limite desta tela é em px, por largura:
+ * a altura medida em 13/11/2026 com o Top 5 à vista e o Ver tudo fechado, na aba Formato (a que a tela abre), mais 40 px de folga.
+ * Medida (cinco-segundos-instagram.spec.ts, a maior dos specs que medem esta tela): 1510 px em 375x812 e 1630 px em 1440x900.
+ */
+export const LIMITE_DO_DESEMPENHO_COM_TOP5: Record<number, number> = { 375: 1510 + 40, 1440: 1630 + 40 };
+
 export const semRolagemLateral = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 
 /**
