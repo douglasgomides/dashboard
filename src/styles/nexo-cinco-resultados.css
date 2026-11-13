@@ -512,12 +512,6 @@
   }
 }
 
-/* Descobertas de Resultados (régua de 1,5 tela, D-08): a ação e o "Por quê?" lado a lado, não um sobre o outro. */
-.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descoberta__acoes {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
-
 /* Computador (régua de 1,5 tela, D-08): as medidas contra o passado em duas colunas. */
 @container nx-agora-antes (min-width: 760px) {
   .app.product-workspace:not(.sap-workspace) .nx-agora-antes__lista {
@@ -555,9 +549,6 @@
 
 /* Celular: o que Resultados dá ao veredito, aos cartões de dinheiro e às descobertas cabe na régua de 1,5 tela. */
 @media (max-width: 560px) {
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-pagina__rotulo {
-    display: none;
-  }
   .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-pagina__pontos {
     display: none;
   }
@@ -585,42 +576,8 @@
   .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-aneis__legenda {
     display: none;
   }
-
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descobertas__lista {
-    gap: 8px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descobertas {
-    gap: 8px;
-  }
   .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-resultados-ordem {
     display: none;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descobertas__titulo {
-    font-size: 18px;
-    line-height: 20px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descoberta {
-    padding: 8px 12px;
-    gap: 4px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descoberta__frase {
-    font-size: 15px;
-    line-height: 20px;
-  }
-  /* Selo, ação e "Por quê?" um pouco mais baixos no celular (40 px de toque), para as 3 descobertas caberem na régua. */
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descoberta .nx-selo {
-    font-size: 12px;
-    line-height: 16px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descoberta .nx-acao-pilula {
-    min-height: 40px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descoberta .nx-acao-pilula__seta {
-    width: 36px;
-    height: 36px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-descoberta__porque-botao {
-    min-height: 40px;
   }
   .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="resultados"] .nx-veredito__texto > .nx-veredito__apoio {
     display: none;

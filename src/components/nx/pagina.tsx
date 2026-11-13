@@ -86,7 +86,7 @@ export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitur
   const formatoCinco = veredito != null && veredito !== false;
   const temVerTudo = formatoCinco && ((leitura != null && leitura !== false) || (detalhe != null && detalhe !== false));
   return (
-    <div className="nx-pagina" data-tela={tela}>
+    <div className="nx-pagina" data-tela={tela} data-formato={formatoCinco ? "cinco" : undefined}>
       <header className="nx-pagina__topo">
         <div className="nx-pagina__titulos">
           {saudacao ? (
@@ -95,16 +95,20 @@ export function PaginaNexo({ tela, titulo, pergunta, decisao, meta, acao, leitur
               {destaqueDoTopo}
               <p className="nx-pagina__pergunta sr-only">{pergunta}</p>
             </>
+          ) : formatoCinco ? (
+            // Formato 5 segundos (pilotos de 12/11/2026): a casca já mostra o nome da tela e o veredito logo abaixo responde a pergunta.
+            // Sem o rótulo pequeno e sem a pergunta à vista; a pergunta fica como título só para leitor de tela.
+            <h1 className="nx-pagina__pergunta sr-only">{pergunta}</h1>
           ) : (
             <>
               <p className="nx-pagina__rotulo">{titulo}</p>
               <h1 className="nx-pagina__pergunta">{pergunta}</h1>
             </>
           )}
-          {(decisao || meta) && (
+          {((decisao && !formatoCinco) || meta) && (
             <div className="nx-pagina__meta">
-              {decisao && <NxTag tom="b">{ROTULO_DECISAO[decisao]}</NxTag>}
-              {meta}
+              {decisao && !formatoCinco && <NxTag tom="b">{ROTULO_DECISAO[decisao]}</NxTag>}
+              {meta && formatoCinco && !saudacao ? <span className="nx-pagina__periodo">{meta}</span> : meta}
             </div>
           )}
         </div>

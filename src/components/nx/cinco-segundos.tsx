@@ -44,17 +44,25 @@ export interface NxVereditoProps {
   apoio?: ReactNode;
   /** No máximo um botão. */
   acao?: ReactNode;
+  /**
+   * Desenho da faixa, copiado do piloto da tela (rodada 1, 12/11/2026): "faixa" é a faixa azul em degradê dos pilotos de Instagram,
+   * Anúncios e Mês; "faixa-alerta" é a mesma faixa em vermelho (piloto da Carteira); "cartao" é o cartão branco com a frase grande dos
+   * pilotos de Hoje e Resultados (padrão quando há ). Sem dado, carregando ou com erro, a faixa vira sempre o cartão branco (o "Falta dado" não ganha destaque).
+   */
+  estilo?: "faixa" | "faixa-alerta" | "cartao";
 }
 
 /**
  * Faixa do topo da tela: a palavra do veredito (com sinal) e UMA frase com o número em destaque. Sem dado, mostra exatamente os textos
  * da leitura honesta ("Falta dado: motivo", "Próximo passo para resolver:", "Quem resolve: ...") e nenhuma conclusão (D-05).
  */
-export function NxVeredito({ veredito, carregando, erro, tela, lado, apoio, acao }: NxVereditoProps) {
+export function NxVeredito({ veredito, carregando, erro, tela, lado, apoio, acao, estilo }: NxVereditoProps) {
   const id = useId();
+  // Com um visual ao lado (anel da nota da Hoje, anéis de Resultados) vale o cartão branco do piloto; sem ele, a faixa azul.
+  const desenho = estilo ?? (lado ? "cartao" : "faixa");
   const modo = carregando ? "carregando" : erro ? "erro" : !veredito ? "vazio" : veredito.tipo === "sem_leitura" ? "sem-leitura" : "veredito";
   return (
-    <section className="nx-veredito" aria-labelledby={`${id}-t`} data-peca="veredito" data-modo={modo} data-tela-do-veredito={tela}>
+    <section className="nx-veredito" aria-labelledby={`${id}-t`} data-peca="veredito" data-modo={modo} data-tela-do-veredito={tela} data-estilo={modo === "veredito" ? desenho : "cartao"}>
       <h2 id={`${id}-t`} className="sr-only">
         Veredito da tela
       </h2>
@@ -162,17 +170,23 @@ function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras, extraDoPorqu
   const local = d.acao.local;
   return (
     <article className="nx-descoberta" data-peca="descoberta" data-tom={d.tom} data-aberto={aberto ? "" : undefined} {...extras}>
+      {/* O ícone do piloto (quadrado com o sinal): decoração, o selo ao lado diz o tom em palavra. */}
+      <span className="nx-descoberta__icone" aria-hidden>
+        {SINAL[d.tom]}
+      </span>
       <div className="nx-descoberta__corpo">
+        {/* Selo, quem resolve e o número em jogo numa linha só, em cima da frase (os chips quebram linha, nada é cortado): a frase fica
+            logo embaixo, como nos pilotos, e o cartão não cresce além da régua de 1,5 tela. */}
         <div className="nx-descoberta__topo">
           <NxSelo tom={d.tom} texto={d.selo} />
           {d.quem && (
-            <span className="nx-descoberta__quem" title={`Quem resolve: ${d.quem}`}>
+            <span className="nx-descoberta__quem">
               <span className="sr-only">Quem resolve: </span>
               <span className="nx-descoberta__texto-do-chip">{d.quem}</span>
             </span>
           )}
           {d.impacto && (
-            <span className="nx-descoberta__impacto" title={d.impacto} data-numero-de-destaque>
+            <span className="nx-descoberta__impacto" data-numero-de-destaque>
               <span className="nx-descoberta__texto-do-chip">{d.impacto}</span>
             </span>
           )}

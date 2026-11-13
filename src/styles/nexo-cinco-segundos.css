@@ -3,33 +3,31 @@
    peso de letra nunca abaixo de 500, grades com minmax(0, 1fr), números e datas em uma linha com reticências e o texto inteiro no
    title (molde k), movimento só sem reduced-motion. Escopo: só a casca do Nexo fora do SAP. */
 
-/* ---------- Selo: sinal e palavra, nunca só a cor ---------- */
+/* ---------- Selo: sinal e palavra, nunca só a cor (piloto: .selo de base.css, 12 px em 700) ---------- */
 .app.product-workspace:not(.sap-workspace) .nx-selo {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   max-width: 100%;
   min-width: 0;
-  padding: 2px 12px;
+  padding: 3px 10px;
   border-radius: 999px;
   background: var(--field);
   color: var(--muted-ink);
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 600;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
   /* Prende o texto sr-only dentro do selo (a fileira de cartões do celular rola de lado). */
   position: relative;
 }
 .app.product-workspace:not(.sap-workspace) .nx-selo__sinal {
   flex: none;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 .app.product-workspace:not(.sap-workspace) .nx-selo__texto {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .app.product-workspace:not(.sap-workspace) .nx-selo[data-tom="bom"] {
   background: var(--up-bg);
@@ -48,10 +46,11 @@
 .app.product-workspace:not(.sap-workspace) .nx-veredito {
   display: grid;
   min-width: 0;
-  padding: 16px;
+  padding: clamp(16px, 2.8vw, 36px);
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 22px;
   background: var(--white);
+  box-shadow: var(--sombra-cartao);
   color: var(--text);
   font-weight: 500;
   /* Prende o texto sr-only da faixa dentro dela. */
@@ -60,7 +59,7 @@
 .app.product-workspace:not(.sap-workspace) .nx-veredito__corpo {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  gap: clamp(16px, 3vw, 44px);
   align-items: center;
   min-width: 0;
 }
@@ -70,30 +69,40 @@
 .app.product-workspace:not(.sap-workspace) .nx-veredito__texto {
   display: grid;
   justify-items: start;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
+}
+/* Cartão branco (pilotos de Hoje e Atendimento, .vered de kit-a.css): palavra em pílula de 15 px e frase de até 32 px em 800. */
+.app.product-workspace:not(.sap-workspace) .nx-veredito .nx-veredito__texto > .nx-selo {
+  padding: 5px 14px;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 800;
 }
 .app.product-workspace:not(.sap-workspace) .nx-veredito__frase {
   margin: 0;
-  max-width: 100%;
-  font-size: 28px;
-  line-height: 34px;
-  font-weight: 600;
-  letter-spacing: -.01em;
+  max-width: 34ch;
+  font-size: clamp(22px, 2.6vw, 32px);
+  line-height: 1.18;
+  font-weight: 800;
+  letter-spacing: -.025em;
   color: var(--text);
   overflow-wrap: anywhere;
   text-wrap: balance;
 }
 .app.product-workspace:not(.sap-workspace) .nx-veredito__enfase {
-  font-weight: 700;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--b1);
 }
+.app.product-workspace:not(.sap-workspace) .nx-veredito__enfase[data-enfase="ruim"] {
+  color: var(--dn-ink);
+}
 .app.product-workspace:not(.sap-workspace) .nx-veredito__apoio {
   margin: 0;
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 500;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
   color: var(--muted-ink);
   overflow-wrap: anywhere;
 }
@@ -101,6 +110,60 @@
   min-width: 0;
   max-width: 100%;
 }
+
+/* Faixa azul em degradê (pilotos de Instagram, Anúncios e Mês, .veredito de pecas-b.css): selo claro em caixa alta, frase grande em
+   branco e o número em destaque em verde-claro. O brilho do canto é uma camada do fundo (nada passa da borda: nada cortado). */
+.app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo="faixa"],
+.app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo="faixa-alerta"] {
+  --faixa-brilho: radial-gradient(circle at calc(100% - 64px) 64px, rgba(255, 255, 255, .18), rgba(255, 255, 255, 0) 180px);
+  padding: clamp(16px, 1.8vw, 24px) clamp(18px, 3.2vw, 40px);
+  border: 0;
+  border-radius: 28px;
+  background: var(--faixa-brilho), linear-gradient(135deg, var(--faixa-1) 0%, var(--b1) 55%, var(--b2) 100%);
+  box-shadow: 0 18px 40px color-mix(in srgb, var(--b1) 18%, transparent);
+  color: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo="faixa-alerta"] {
+  background: var(--faixa-brilho), linear-gradient(135deg, var(--faixa-alerta-1) 0%, var(--dn-ink) 60%, var(--dn) 100%);
+  box-shadow: 0 18px 40px color-mix(in srgb, var(--dn-ink) 18%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo^="faixa"] .nx-veredito__texto {
+  gap: 10px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo^="faixa"] .nx-veredito__texto > .nx-selo {
+  padding: 5px 12px;
+  border: 1px solid rgba(255, 255, 255, .28);
+  background: rgba(255, 255, 255, .16);
+  color: var(--white);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo^="faixa"] .nx-veredito__frase {
+  max-width: 26ch;
+  font-size: clamp(26px, 3vw, 40px);
+  line-height: 1.08;
+  color: var(--white);
+  text-wrap: balance;
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo^="faixa"] .nx-veredito__enfase {
+  color: var(--faixa-enfase);
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo="faixa-alerta"] .nx-veredito__enfase {
+  color: var(--faixa-alerta-enfase);
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo^="faixa"] .nx-veredito__apoio {
+  max-width: 60ch;
+  font-size: clamp(15px, 1.4vw, 18px);
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--white) 88%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo^="faixa"] .nx-veredito__apoio :where(strong, b) {
+  color: var(--white);
+}
+
 /* Sem dado: a leitura honesta, sem nenhuma conclusão. */
 .app.product-workspace:not(.sap-workspace) .nx-veredito__sem-dado {
   display: grid;
@@ -112,7 +175,7 @@
   margin: 0;
   font-size: 20px;
   line-height: 28px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text);
   overflow-wrap: anywhere;
 }
@@ -124,44 +187,70 @@
   color: var(--text-2);
 }
 
-/* ---------- Descobertas: frase curta, uma ação e "Por quê?" ---------- */
+/* ---------- Descobertas (pilotos: .descs/.desc de pecas-b.css e kit-a.css) ----------
+   Uma por linha, na largura toda: o quadrado do sinal à esquerda, o selo, a frase em 700, quem resolve e o número em jogo em chips que
+   quebram linha (nada cortado) e os botões. No computador os botões ficam à direita da frase (como em Hoje e Atendimento: a régua de
+   1,5 tela não deixa a linha crescer); em cartão estreito eles descem para baixo da frase (como em Instagram e Anúncios). */
 .app.product-workspace:not(.sap-workspace) .nx-descobertas {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
 }
 .app.product-workspace:not(.sap-workspace) .nx-descobertas__topo {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
   min-width: 0;
 }
+/* Título da seção como no piloto ("O QUE DESCOBRIMOS"): pequeno, em caixa alta e cinza. */
 .app.product-workspace:not(.sap-workspace) .nx-descobertas__titulo {
   min-width: 0;
-  font-size: 20px;
-  line-height: 28px;
-  font-weight: 600;
-  color: var(--text);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted-ink);
   overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descobertas__topo > p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--muted-ink);
+}
+/* A Hoje (piloto: "As 3 coisas desta semana", .sec-t de kit-a.css): o total é o título, em 20 px e 800, sem caixa alta. */
+.app.product-workspace:not(.sap-workspace) .nx-descobertas__titulo:has(.nx-hoje__total-numero) {
+  text-transform: none;
+  letter-spacing: -.02em;
+  color: var(--text);
 }
 /* O total da Hoje ("3 ações esta semana") é o título da seção: número menor que no topo da página. */
 .app.product-workspace:not(.sap-workspace) .nx-descobertas__titulo .nx-hoje__total-numero {
   font-size: 24px;
   line-height: 30px;
 }
+.app.product-workspace:not(.sap-workspace) .nx-descobertas__titulo .nx-hoje__total-numero {
+  font-weight: 800;
+}
 .app.product-workspace:not(.sap-workspace) .nx-descobertas__titulo .nx-hoje__total-texto {
-  font-size: 18px;
-  line-height: 24px;
+  font-size: 20px;
+  line-height: 26px;
   color: var(--text);
-  font-weight: 600;
+  font-weight: 800;
 }
 .app.product-workspace:not(.sap-workspace) .nx-descobertas__lista {
   display: grid;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-/* O item é o contêiner: os botões descem para a própria linha em vez de ficarem cortados (molde k). */
+/* O item é o contêiner: os botões descem para baixo da frase em cartão estreito, em vez de ficarem cortados (molde k). */
 .app.product-workspace:not(.sap-workspace) .nx-descobertas__item {
   min-width: 0;
   container-type: inline-size;
@@ -169,21 +258,55 @@
 }
 .app.product-workspace:not(.sap-workspace) .nx-descoberta {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
-  gap: 12px 16px;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 4px 16px;
   align-items: start;
   min-width: 0;
-  padding: 16px;
+  padding: 10px 20px;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 22px;
   background: var(--white);
+  box-shadow: var(--sombra-cartao);
   color: var(--text);
   font-weight: 500;
+  transition: box-shadow .15s;
   /* Prende o texto sr-only dos chips e dos botões dentro do cartão. */
   position: relative;
 }
-.app.product-workspace:not(.sap-workspace) .nx-descoberta__corpo {
+.app.product-workspace:not(.sap-workspace) .nx-descoberta:hover {
+  box-shadow: var(--sombra-cartao-hover);
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__icone {
+  grid-column: 1;
+  grid-row: 1;
   display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--b6);
+  color: var(--b1);
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 800;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta[data-tom="bom"] .nx-descoberta__icone {
+  background: var(--up-bg);
+  color: var(--up-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta[data-tom="ruim"] .nx-descoberta__icone {
+  background: var(--dn-bg);
+  color: var(--dn-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta[data-tom="atencao"] .nx-descoberta__icone {
+  background: var(--or-bg);
+  color: var(--or-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__corpo {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  justify-items: start;
   gap: 8px;
   min-width: 0;
 }
@@ -191,14 +314,17 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
+  max-width: 100%;
 }
 .app.product-workspace:not(.sap-workspace) .nx-descoberta__frase {
   margin: 0;
-  font-size: 18px;
-  line-height: 26px;
-  font-weight: 600;
+  max-width: 100%;
+  font-size: clamp(17px, 1.5vw, 19px);
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: -.01em;
   color: var(--text);
   overflow-wrap: anywhere;
 }
@@ -206,139 +332,426 @@
 .app.product-workspace:not(.sap-workspace) .nx-descoberta__impacto {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   max-width: 100%;
   min-width: 0;
-  padding: 2px 12px;
+  padding: 3px 10px;
   border-radius: 999px;
   background: var(--field);
   color: var(--text-2);
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 500;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
   position: relative;
+}
+/* O ponto azul do "quem resolve" do piloto. */
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__quem::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--b2);
 }
 .app.product-workspace:not(.sap-workspace) .nx-descoberta__impacto {
   background: var(--b6);
   color: var(--b1);
   font-variant-numeric: tabular-nums;
 }
+/* Nada cortado: o chip quebra linha em vez de cortar com reticências. */
 .app.product-workspace:not(.sap-workspace) .nx-descoberta__texto-do-chip {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .app.product-workspace:not(.sap-workspace) .nx-descoberta__acoes {
-  display: grid;
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   min-width: 0;
 }
-.app.product-workspace:not(.sap-workspace) .nx-descoberta__acoes > .nx-acao-pilula {
-  justify-self: stretch;
+/* A ação é o botão azul cheio do piloto: a pílula inteira leva aonde a seta leva (o alvo do clique cobre a pílula). */
+.app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-acao-pilula {
+  position: relative;
+  gap: 2px;
+  min-height: 40px;
+  padding: 0 8px 0 16px;
+  background: var(--b1);
+  color: var(--white);
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 700;
+  transition: filter .15s;
 }
+.app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-acao-pilula:hover {
+  filter: brightness(1.08);
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-acao-pilula__texto {
+  padding: 11px 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-acao-pilula__seta {
+  width: 24px;
+  height: 24px;
+  min-width: 0;
+  min-height: 0;
+  margin-left: 2px;
+  background: transparent;
+  color: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-acao-pilula__seta svg {
+  width: 16px;
+  height: 16px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-acao-pilula__seta:hover {
+  background: transparent;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-acao-pilula__seta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-acao-pilula__seta:focus-visible {
+  outline: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-acao-pilula:has(.nx-acao-pilula__seta:focus-visible) {
+  outline: 2px solid var(--b1);
+  outline-offset: 2px;
+}
+/* "Por quê? ▾": o botão cinza do piloto. */
 .app.product-workspace:not(.sap-workspace) .nx-descoberta__porque-botao {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
-  padding: 0 16px;
-  border: 1px solid var(--b4);
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
   border-radius: 999px;
-  background: var(--white);
-  color: var(--b1);
+  background: var(--field);
+  color: var(--text);
   font: inherit;
   font-size: 14px;
-  line-height: 20px;
-  font-weight: 600;
+  line-height: 18px;
+  font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__porque-botao::after {
+  content: "▾";
+  font-size: 11px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-descoberta__porque-botao[aria-expanded="true"]::after {
+  content: "▴";
 }
 .app.product-workspace:not(.sap-workspace) .nx-descoberta__porque-botao:hover,
 .app.product-workspace:not(.sap-workspace) .nx-descoberta__porque-botao[aria-expanded="true"] {
   background: var(--b6);
+  color: var(--b1);
 }
 .app.product-workspace:not(.sap-workspace) .nx-descoberta__porque-botao:focus-visible {
   outline: 2px solid var(--b1);
   outline-offset: 2px;
 }
+/* O "Por quê?" aberto: a caixa cinza do piloto, embaixo da frase. */
 .app.product-workspace:not(.sap-workspace) .nx-descoberta__porque {
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
   display: grid;
   gap: 8px;
   min-width: 0;
-  padding-top: 12px;
-  border-top: 1px dashed var(--line-2);
+  margin-top: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--field);
 }
 .app.product-workspace:not(.sap-workspace) .nx-descoberta__porque[hidden] {
   display: none;
 }
 .app.product-workspace:not(.sap-workspace) .nx-descoberta__porque-titulo {
   margin: 0;
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 600;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 800;
   color: var(--muted-ink);
 }
 .app.product-workspace:not(.sap-workspace) .nx-descoberta__obs {
   margin: 0;
   font-size: 13px;
   line-height: 18px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--muted-ink);
   overflow-wrap: anywhere;
 }
-@container nx-descoberta (max-width: 640px) {
+/* Cartão estreito: os botões descem para baixo da frase (piloto de Instagram e Anúncios). */
+@container nx-descoberta (max-width: 700px) {
   .app.product-workspace:not(.sap-workspace) .nx-descoberta {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 12px 14px;
   }
-  /* Os botões descem para a própria linha: a ação ocupa o que sobra e "Por quê?" fica ao lado. */
   .app.product-workspace:not(.sap-workspace) .nx-descoberta__acoes {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
+    grid-column: 2;
+    grid-row: 2;
+    justify-content: flex-start;
   }
 }
-/* Celular (régua de 1,5 tela, D-08): cartão compacto em 8 e 12, chips numa linha só (com reticências e o texto inteiro no title), frase de 16 px. */
+/* Celular (régua de 1,5 tela, D-08): o quadrado do sinal vai para o canto e o texto usa a largura toda; tudo em 8 e 12. */
 @container nx-descoberta (max-width: 480px) {
   .app.product-workspace:not(.sap-workspace) .nx-descoberta {
-    gap: 8px;
-    padding: 12px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    padding: 8px 10px;
     border-radius: 16px;
   }
+  /* O quadrado do sinal sai no celular: o selo ao lado da frase já leva o sinal (▲ ▼ !) e a palavra. */
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__icone {
+    display: none;
+  }
+  /* O número em jogo fica no "Por quê?" no celular (a régua de 1,5 tela): selo e quem resolve numa linha só. */
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__impacto {
+    display: none;
+  }
+  /* Selo e quem resolve na mesma linha da frase, antes dela (a régua de 1,5 tela não deixa uma linha só para os chips). */
   .app.product-workspace:not(.sap-workspace) .nx-descoberta__corpo {
-    gap: 4px;
+    grid-column: 1;
+    display: block;
   }
   .app.product-workspace:not(.sap-workspace) .nx-descoberta__topo {
-    flex-wrap: nowrap;
-    gap: 4px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-descoberta__topo > .nx-selo {
-    flex: none;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-descoberta__quem,
-  .app.product-workspace:not(.sap-workspace) .nx-descoberta__impacto {
-    flex: 0 1 auto;
-    padding: 0 8px;
+    display: inline-flex;
+    margin-right: 6px;
+    vertical-align: 1px;
   }
   .app.product-workspace:not(.sap-workspace) .nx-descoberta__frase {
-    font-size: 16px;
-    line-height: 22px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-descoberta__acoes {
-    gap: 4px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-acao-pilula {
-    padding-left: 12px;
-    font-size: 14px;
+    display: inline;
+    font-size: 15px;
     line-height: 20px;
   }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-selo,
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__quem {
+    padding: 2px 8px;
+    font-size: 11px;
+    line-height: 15px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__quem {
+    gap: 4px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__quem::before {
+    width: 6px;
+    height: 6px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__acoes {
+    grid-column: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-acao-pilula {
+    min-height: 36px;
+    padding: 0 2px 0 12px;
+    font-size: 13px;
+    line-height: 17px;
+    font-weight: 600;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-acao-pilula__texto {
+    padding: 8px 0;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta .nx-acao-pilula__seta {
+    width: 20px;
+  }
   .app.product-workspace:not(.sap-workspace) .nx-descoberta__porque-botao {
-    padding: 0 12px;
+    gap: 4px;
+    min-height: 36px;
+    padding: 0 10px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta__porque {
+    grid-column: 1;
+    margin-top: 0;
+    padding: 12px;
   }
 }
 @container nx-descoberta (max-width: 300px) {
   .app.product-workspace:not(.sap-workspace) .nx-descoberta__acoes {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* ---------- A página no formato 5 segundos: cabeçalho fino, cartões de número e "Ver tudo" do piloto ---------- */
+@media (min-width: 561px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] {
+    gap: 16px;
+  }
+}
+/* O cabeçalho só leva o período (pílula branca) e o botão da tela: a casca já mostra o nome da tela. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] > .nx-pagina__topo {
+  align-items: center;
+}
+/* Com a faixa azul, em toda largura: o botão da tela (Atualizar posts, Atualizar anúncios…) mora no canto de cima da faixa, como os
+   botões claros do piloto; o período já está no seletor da casca. A faixa vem logo depois das abas, sem uma linha a mais. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"]:has(> .nx-veredito[data-estilo^="faixa"]) {
+  position: relative;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"]:has(> .nx-veredito[data-estilo^="faixa"]) > .nx-pagina__topo {
+  position: absolute;
+  z-index: 2;
+  top: clamp(14px, 1.6vw, 20px);
+  right: clamp(18px, 3.2vw, 40px);
+  max-width: 45%;
+  /* O botão e a barra de progresso da sincronização usam estas variáveis: na faixa ficam claros. */
+  --surface-2: rgba(255, 255, 255, .16);
+  --border: rgba(255, 255, 255, .32);
+  --text-dim: rgba(255, 255, 255, .86);
+  color: var(--white);
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"]:has(> .nx-veredito[data-estilo^="faixa"]) > .nx-pagina__topo .nx-pagina__meta {
+  display: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"]:has(> .nx-veredito[data-estilo^="faixa"]) > .nx-pagina__topo button {
+  min-height: 36px;
+  padding-inline: 14px;
+  border-radius: 999px;
+  color: var(--white);
+  font-weight: 700;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"]:has(> .nx-veredito[data-estilo^="faixa"]) > .nx-veredito .nx-veredito__texto {
+  padding-right: min(190px, 20%);
+}
+
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"]:has(> .nx-veredito[data-estilo^="faixa"]) > .nx-pagina__topo {
+    top: 12px;
+    right: 14px;
+    max-width: 55%;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"]:has(> .nx-veredito[data-estilo^="faixa"]) > .nx-pagina__topo button {
+    min-height: 24px;
+    padding: 0 10px;
+    font-size: 12px;
+    line-height: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"]:has(> .nx-veredito[data-estilo^="faixa"]) > .nx-veredito .nx-veredito__texto {
+    padding-right: 0;
+  }
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina__periodo {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* Cartões de número do piloto (.kpi de pecas-b.css): sem o ícone, rótulo cinza em 700 e o número grande em 800. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] .nx-pagina__cartoes .nx-cartao {
+  border-radius: 22px;
+  box-shadow: var(--sombra-cartao);
+  transition: box-shadow .15s;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] .nx-pagina__cartoes .nx-cartao:hover {
+  box-shadow: var(--sombra-cartao-hover);
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] .nx-pagina__cartoes .nx-cartao__icone {
+  display: none;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] .nx-pagina__cartoes .nx-cartao__titulo {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--muted-ink);
+}
+@media (min-width: 561px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] .nx-pagina__cartoes .nx-cartao {
+    padding: 16px 20px 14px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] .nx-pagina__cartoes .nx-numero__valor {
+    font-size: clamp(32px, 3vw, 42px);
+    line-height: 1.05;
+    font-weight: 800;
+    letter-spacing: -.035em;
+  }
+}
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] .nx-pagina__cartoes .nx-numero__valor {
+    font-weight: 800;
+    letter-spacing: -.03em;
+  }
+}
+/* A visualização que prova (piloto: .prova de pecas-b.css): título em 800 e o cartão com o raio e a sombra dos pilotos. */
+@media (min-width: 561px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] > .nx-pagina__principal > .nx-card {
+    border-radius: 22px;
+    box-shadow: var(--sombra-cartao);
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] > .nx-pagina__principal .nx-card__head :is(h2, h3) {
+    font-size: 22px;
+    line-height: 28px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] > .nx-pagina__principal .nx-card__head p {
+    font-size: 15px;
+    line-height: 20px;
+    font-weight: 600;
+    color: var(--muted-ink);
+  }
+}
+/* Abas da prova como o seletor do piloto (.seg): trilho cinza e a aba escolhida em branco. */
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] .nx-funciona__abas .ig-abas {
+  display: inline-flex;
+  gap: 2px;
+  max-width: 100%;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--field);
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] .nx-funciona__abas .ig-aba {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] .nx-funciona__abas .ig-aba:hover {
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] .nx-funciona__abas .ig-aba[aria-selected="true"] {
+  background: var(--white);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(18, 18, 18, .08);
+}
+/* "Ver tudo: …" numa linha só, em 800, como o details.tudo do piloto. */
+@media (min-width: 561px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] > .nx-pagina__detalhe > .nxb-recolhido > summary {
+    min-height: 52px;
+    padding-block: 10px;
+  }
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] > .nx-pagina__detalhe > .nxb-recolhido {
+  border-radius: 22px;
+  box-shadow: var(--sombra-cartao);
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] > .nx-pagina__detalhe > .nxb-recolhido > summary b,
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] > .nx-pagina__detalhe > .nxb-recolhido > summary small {
+  display: inline;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 800;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] > .nx-pagina__detalhe > .nxb-recolhido > summary small::before {
+  content: ": ";
 }
 
 /* ---------- O que não coube à vista e mora no "Ver tudo": cartões em grade ---------- */
@@ -364,18 +777,52 @@
   overflow-wrap: anywhere;
 }
 
-/* ---------- Celular: frase de 20 px e faixa compacta ---------- */
+/* ---------- Celular: faixa compacta (régua de 1,5 tela) ---------- */
 @media (max-width: 560px) {
   .app.product-workspace:not(.sap-workspace) .nx-veredito {
-    padding: 12px;
-    border-radius: 16px;
+    padding: 14px 16px;
+    border-radius: 18px;
   }
-  .app.product-workspace:not(.sap-workspace) .nx-veredito__frase {
-    font-size: 20px;
-    line-height: 26px;
+  .app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo="faixa"],
+  .app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo="faixa-alerta"] {
+    padding: 12px 14px;
+    border-radius: 20px;
+  }
+  /* Descobertas mais juntas no celular (8 px entre os cartões). */
+  .app.product-workspace:not(.sap-workspace) .nx-descobertas,
+  .app.product-workspace:not(.sap-workspace) .nx-descobertas__lista {
+    gap: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-veredito__texto,
+  .app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo^="faixa"] .nx-veredito__texto {
+    gap: 6px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-veredito .nx-veredito__texto > .nx-selo,
+  .app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo^="faixa"] .nx-veredito__texto > .nx-selo {
+    padding: 2px 10px;
+    font-size: 12px;
+    line-height: 16px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-veredito__frase,
+  .app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo^="faixa"] .nx-veredito__frase {
+    font-size: 21px;
+    line-height: 1.15;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-veredito__apoio,
+  .app.product-workspace:not(.sap-workspace) .nx-veredito[data-estilo^="faixa"] .nx-veredito__apoio {
+    font-size: 14px;
+    line-height: 19px;
   }
   .app.product-workspace:not(.sap-workspace) .nx-veredito__corpo[data-tem-lado] {
     grid-template-columns: minmax(0, 1fr);
     justify-items: start;
+  }
+  /* No celular o "Ver tudo" fica numa linha só: o que mora dentro aparece ao abrir. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] > .nx-pagina__detalhe > .nxb-recolhido > summary small {
+    display: none;
+  }
+  /* O período já está no seletor da casca: no celular o cabeçalho só leva o botão da tela. */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-formato="cinco"] > .nx-pagina__topo:not(:has(.nx-pagina__saudacao)) .nx-pagina__meta {
+    display: none;
   }
 }
