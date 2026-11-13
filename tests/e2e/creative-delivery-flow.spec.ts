@@ -1,6 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 import { readFileSync } from "node:fs";
+
+// Análise de mídia, Radar e Aprendizado pausados na interface (João 13/11/2026; ANALISE_ENABLED em workspace.tsx).
+// Voltar a rodar quando ANALISE_ENABLED voltar a true.
+test.skip(true, "Inteligência Criativa: análise pausada na interface");
 const fixture = JSON.parse(readFileSync(new URL("./creative-fixture.json", import.meta.url), "utf8")) as typeof import("./creative-fixture.json");
 
 // Todos os provedores e a persistência deste percurso são fictícios. Nenhuma publicação ou conta real é usada.

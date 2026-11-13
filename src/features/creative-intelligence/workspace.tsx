@@ -51,6 +51,10 @@ const parentRoute = getRouteApi("/_authenticated/$clientId");
 const RadarView = lazy(() => import("./radar-view").then(m => ({ default: m.RadarView })));
 // Criação pausada na interface publicada. Manter propostas, artes e histórico salvos.
 const CREATION_ENABLED = false;
+// Análise de mídia pausada na interface (João 13/11/2026: "Análises e DNA, Radar de mercado e Aprendizado não funcionam, retira").
+// O código e os dados salvos ficam; só saem as abas, os contadores da fila e o botão de pedir análise.
+const ANALISE_ENABLED = false;
+const ABAS_DA_ANALISE = new Set(["analises", "radar", "aprendizado"]);
 const TABS = [
   { id: "acervo", label: "Conteúdos em destaque", icon: Trophy },
   { id: "analises", label: "Análises e DNA", icon: Fingerprint },
@@ -320,14 +324,14 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
           Carregando biblioteca privada…
         </p>
       )}
-      {!!w && !canAnalyse && (
+      {ANALISE_ENABLED && !!w && !canAnalyse && (
         <p className="creative-notice">
           {podeEditar
             ? "O processamento de mídia ainda não está disponível neste ambiente. As análises já concluídas continuam acessíveis."
             : "Seu acesso permite consultar as evidências. Novas análises são solicitadas pelos responsáveis da clínica."}
         </p>
       )}
-      {!!w && canAnalyse && (
+      {ANALISE_ENABLED && !!w && canAnalyse && (
         <p className="creative-notice">
           {healthy ? "As solicitações entram na fila e tentam iniciar o processamento. Acompanhe o andamento e o resultado nesta tela." : "O processador está sem sinal recente. Você pode solicitar uma análise: o pedido fica na fila e tenta iniciar uma nova execução. Acompanhe o andamento nesta tela; o início pode demorar."}
         </p>
@@ -338,8 +342,9 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
         </p>
       )}
       {!!w && (
-        <section aria-label="Resumo da Inteligência Criativa" className="nx-grade nx-grade--4">
+        <section aria-label="Resumo da Inteligência Criativa" className={ANALISE_ENABLED ? "nx-grade nx-grade--4" : "nx-grade nx-grade--3"}>
           <NxKpi i={0} icone={<Trophy size={17} strokeWidth={1.7} aria-hidden />} rotulo="Publicações no ranking" valor={rankings.length.toLocaleString("pt-BR")} nota="Carrosséis e Reels do período" />
+{ANALISE_ENABLED && (<>
           <NxKpi i={1} icone={<Layers size={17} strokeWidth={1.7} aria-hidden />} rotulo="Análises concluídas" valor={w.analyses.length.toLocaleString("pt-BR")} nota="Evidência por slide e cena" />
           <NxKpi
             i={2}
@@ -349,13 +354,14 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
             nota={healthy ? "Processador ativo" : "Processador sem sinal recente"}
           />
           <NxKpi i={3} icone={<ShieldCheck size={17} strokeWidth={1.7} aria-hidden />} rotulo="Estruturas salvas" valor={w.structures.length.toLocaleString("pt-BR")} nota="Biblioteca privada da clínica" />
+                  </>)}
         </section>
       )}
       <nav
         className="creative-tabs"
         aria-label="Áreas da Inteligência Criativa"
       >
-        {TABS.filter((t) => CREATION_ENABLED || t.id !== "biblioteca").map((t) => (
+        {TABS.filter((t) => (CREATION_ENABLED || t.id !== "biblioteca") && (ANALISE_ENABLED || !ABAS_DA_ANALISE.has(t.id))).map((t) => (
           <button
             type="button"
             key={t.id}
@@ -479,7 +485,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                       ))}
                     </ul>
                   </details>
-                  <div className="mt-auto flex flex-wrap gap-2 pt-3">
+                  {ANALISE_ENABLED && <div className="mt-auto flex flex-wrap gap-2 pt-3">
                     {report ? (
                       <button
                         className="btn"
@@ -512,7 +518,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
                         <ArrowRight size={14} aria-hidden />
                       </button>
                     )}
-                  </div>
+                  </div>}
                 </article>
               );
             })}
@@ -525,7 +531,7 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
           )}
         </Painel>
       )}
-      {tab === "analises" && (
+      {ANALISE_ENABLED && tab === "analises" && (
         <div className="space-y-4">
           <label className="block text-sm">
             Publicação analisada
@@ -758,8 +764,8 @@ export function CreativeWorkspace({ clientId }: { clientId: string }) {
           )}
         </div>
       )}
-      {tab === "radar" && <Suspense fallback={<p role="status">Carregando Radar…</p>}><RadarView key={`${clientId}:${accountId}`} clientId={clientId} accountId={accountId} discoveries={w?.discoveries ?? []} capabilities={w?.health.capabilities ?? {}} editable={podeEditar} busy={busy} collect={input => dispatch(() => enqueue(clientId, accountId, "discover", input))} /></Suspense>}
-      {tab === "aprendizado" && (
+      {ANALISE_ENABLED && tab === "radar" && <Suspense fallback={<p role="status">Carregando Radar…</p>}><RadarView key={`${clientId}:${accountId}`} clientId={clientId} accountId={accountId} discoveries={w?.discoveries ?? []} capabilities={w?.health.capabilities ?? {}} editable={podeEditar} busy={busy} collect={input => dispatch(() => enqueue(clientId, accountId, "discover", input))} /></Suspense>}
+      {ANALISE_ENABLED && tab === "aprendizado" && (
         <Painel
           icone={ChartNoAxesCombined}
           titulo="Aprendizado: a adaptação deu resultado?"
