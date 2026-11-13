@@ -186,7 +186,17 @@ function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras, extraDoPorqu
     alvo.scrollIntoView({ behavior: "smooth", block: "start" });
     verTudo.querySelector("summary")?.focus({ preventScroll: true });
   };
-  const aoAgirAqui = local === ABRIR_VER_TUDO ? abrirVerTudo : local && aoAgir ? () => aoAgir(local) : undefined;
+  // Descoberta que já mora dentro do "Ver tudo": a ação abre a evidência dela (o "Por quê?" com as barras), em vez de só rolar até o
+  // topo do "Ver tudo" (João 13/11/2026: "esses botões não funcionam, não mostram a evidência").
+  const abrirEvidencia = () => {
+    if (cartao.current?.closest("details[open]")) {
+      setAberto(true);
+      requestAnimationFrame(() => cartao.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+      return;
+    }
+    abrirVerTudo();
+  };
+  const aoAgirAqui = local === ABRIR_VER_TUDO ? abrirEvidencia : local && aoAgir ? () => aoAgir(local) : undefined;
   return (
     <article ref={cartao} className="nx-descoberta" data-acao-longa={(d.acao?.rotulo ?? "").length > 60 ? "" : undefined} data-peca={peca} data-proximo-passo={d.origem === "proximo-passo" ? "" : undefined} data-tom={d.tom} data-aberto={aberto ? "" : undefined} {...extras}>
       {/* O ícone do piloto (quadrado com o sinal): decoração, o selo ao lado diz o tom em palavra. */}
