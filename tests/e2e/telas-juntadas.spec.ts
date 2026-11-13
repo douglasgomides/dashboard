@@ -349,7 +349,7 @@ test("a 375 a pasta não cria rolagem lateral na página (a faixa das abas rola 
 });
 
 // quick-ver-tudo-abas (João 13/11/2026): abas sem a caixa da leitura; o próximo passo dela é a pílula de uma descoberta no topo da aba.
-const ABAS_SEM_LEITURA: ReadonlySet<string> = new Set(["vendas-kommo", "links", "top", "posts"]);
+const ABAS_SEM_LEITURA: ReadonlySet<string> = new Set(["vendas-kommo", "links", "top", "posts", "audiencia"]);
 
 // D-07 (plano 02): o próximo passo da leitura é a pílula de ação com a seta escura; a seta só abre os Detalhes da própria página.
 const ABAS_DO_INSTAGRAM = [
