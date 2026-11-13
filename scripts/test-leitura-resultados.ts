@@ -7,7 +7,7 @@ import { VERBOS_PROVISORIOS } from "../src/lib/leitura/tipos";
 import type { Fato } from "../src/lib/leitura/tipos";
 import { checarTextoDaLeitura, montarTexto, problemasDoTexto } from "../src/lib/leitura/texto";
 import { vereditoDeResultados } from "../src/lib/leitura/cinco-resultados";
-import { fatosDeResultados, fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria, variacaoPct, VERSAO_REGRAS_RESULTADOS } from "../src/lib/leitura/fatos-resultados";
+import { CAMPOS_DE_FILA, fatosDeResultados, fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria, somaDiariaComCobertura, variacaoPct, VERSAO_REGRAS_RESULTADOS } from "../src/lib/leitura/fatos-resultados";
 import { resumirClinica } from "../src/lib/leitura/resumo-clinica";
 import { fatosDePacientes, fatosEmConstrucao, VERSAO_REGRAS_PACIENTES } from "../src/lib/leitura/fatos-pacientes";
 import { paraChamarAgora, type PacientesPeriodo, type VendaHistorico } from "../src/lib/pacientes";
@@ -207,6 +207,55 @@ assert.ok(funilBanco);
 assert.equal(funilBanco!.pessoas?.agendaram, null, "agendaram sem medida continua nulo, não vira 0");
 assert.deepEqual(funilBanco!.semMedida?.map((s) => [s.chave, s.quem, s.motivo]), [["agendaram", "equipe_hub", "As conversas ainda não chegavam ao Nexo."]]);
 assert.equal(funilDosNumeros({ dados: null }), null, "a consulta de pessoas não respondeu: sem funil");
+
+// ---------- soma com cobertura (D-01) e Negociação como fila ----------
+{
+  const dia = (i: number) => `2026-10-${String(i + 1).padStart(2, "0")}`;
+  const linhas = (medidos: number, valor: (i: number) => number) =>
+    Array.from({ length: 30 }, (_, i) => ({ dia: dia(i), fecharam: i < medidos ? valor(i) : null }));
+  const l18 = linhas(18, (i) => (i % 3) + 1);
+  const soma18 = l18.reduce((s, l) => s + (l.fecharam ?? 0), 0);
+  assert.deepEqual(somaDiariaComCobertura(l18, 30, ["fecharam"]), { fecharam: { valor: soma18, medidos: 18, de: 30, completo: false } }, "18 de 30 dias: soma dos medidos, parcial");
+  assert.equal(somaDiariaComCobertura(linhas(24, () => 1), 30, ["fecharam"]).fecharam.completo, true, "24 de 30 (80%, arredondado para cima): completo");
+  assert.equal(somaDiariaComCobertura(linhas(23, () => 1), 30, ["fecharam"]).fecharam.completo, false, "23 de 30: parcial");
+  assert.deepEqual(somaDiariaComCobertura(linhas(0, () => 1), 30, ["fecharam"]), { fecharam: { valor: null, medidos: 0, de: 30, completo: false } }, "nenhum dia medido: null, nunca zero");
+  assert.deepEqual(somaDiariaComCobertura(l18, 0, ["fecharam"]).fecharam, { valor: null, medidos: 0, de: 0, completo: false }, "sem dia fechado: null");
+  // somaDiaria segue igual para o que é somado: null abaixo de 80% e sem dia fechado.
+  assert.deepEqual(somaDiaria(l18, 30, ["fecharam"]), { fecharam: null });
+  assert.deepEqual(somaDiaria(linhas(24, () => 2), 30, ["fecharam"]), { fecharam: 48 });
+  assert.deepEqual(somaDiaria(l18, 0, ["fecharam"]), { fecharam: null });
+
+  // Negociação é fila: o último dia medido, nunca a soma dos dias (a mesma fila aberta não conta de novo a cada dia).
+  assert.deepEqual([...CAMPOS_DE_FILA], ["negociacao"]);
+  const fila = [{ dia: "2026-10-02", negociacao: 42 }, { dia: "2026-10-03", negociacao: 41 }, { dia: "2026-10-01", negociacao: 40 }];
+  assert.deepEqual(somaDiaria(fila, 3, ["negociacao"]), { negociacao: 41 }, "fila: o valor do dia mais recente medido");
+  assert.deepEqual(somaDiariaComCobertura(fila, 3, ["negociacao"]).negociacao, { valor: 41, medidos: 3, de: 3, completo: true });
+  assert.deepEqual(somaDiaria([{ dia: "2026-10-01", negociacao: null }], 3, ["negociacao"]), { negociacao: null }, "fila sem dia medido: null");
+  assert.deepEqual(somaDiaria([...fila, { dia: "2026-10-04", negociacao: null }], 30, ["negociacao"]), { negociacao: 41 }, "fila não depende de 80% dos dias");
+
+  // Parcial no período atual: ressalva "medido em N de M dias" e nenhuma variação daquele número.
+  const cobertura = somaDiariaComCobertura(l18.map((l) => ({ ...l, mandaram_mensagem: 10, agendaram: 3 })), 30, ["mandaram_mensagem", "agendaram", "fecharam"]);
+  const funilParcial = funilDosNumeros({
+    dados: { numeros: { mandaram_mensagem: { valor: 250 }, agendaram: { valor: 80 }, fecharam: { valor: 20 } } },
+    somaAtual: somaDiaria(l18.map((l) => ({ ...l, mandaram_mensagem: 10, agendaram: 3 })), 30, ["mandaram_mensagem", "agendaram", "fecharam"]),
+    somaAntes: { mandaram_mensagem: 260, agendaram: 70, fecharam: 25 },
+    coberturaAtual: cobertura,
+  });
+  assert.deepEqual(funilParcial?.parciais, [{ chave: "fecharam", rotulo: "Fecharam", medidos: 18, de: 30 }]);
+  assert.equal(funilParcial?.atual.fecharam, null, "parcial não entra na comparação");
+  const comParcial = fatosDeResultadosComAreas(entrada({ funil: funilParcial }));
+  const ressalvaParcial = comParcial.porArea.comercial.find((x) => x.id === "parcial-fecharam");
+  assert.ok(ressalvaParcial, "o parcial vira ressalva na área comercial");
+  assert.equal(ressalvaParcial!.frase, "Fecharam foi medido em 18 de 30 dias: sem comparação com o período anterior.");
+  assert.equal(ressalvaParcial!.tom, "atencao");
+  assert.equal(ressalvaParcial!.ressalva, true);
+  assert.deepEqual(ressalvaParcial!.numeros.map((n) => n.exibicao), ["18 de 30 dias"]);
+  assert.deepEqual(checarTextoDaLeitura(ressalvaParcial!.frase), []);
+  assert.ok(!comParcial.fatos.outrosPassos.some((p) => p.fatoId === "parcial-fecharam"), "ressalva de cobertura não cria passo");
+  assert.ok(!comParcial.fatos.fatos.some((x) => x.id.startsWith("mudou-") && /fecha/i.test(x.frase)), "sem variação de quem fechou");
+  // Sem cobertura, nada muda.
+  assert.equal(funilDosNumeros({ dados: { numeros: { fecharam: { valor: 9 } } } })?.parciais, undefined);
+}
 
 // ---------- Pacientes do período ----------
 const nump = (valor: number | null, extra: Record<string, unknown> = {}) => ({ valor, fonte: "crm", motivo_sem_dado: valor == null ? "Sem dado no CRM." : null, responsavel: "comercial", ...extra });

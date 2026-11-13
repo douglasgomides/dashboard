@@ -26,7 +26,7 @@ import { serieContinua } from "@/lib/linha-30-dias";
 import { visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
 import { aneisDeResultados, cartoesDeDinheiro, descobertasDeResultados, linhasAgoraContraAntes, medidasDoInstagram, retornoDaEntrada, vereditoDeResultados, type CartaoDeDinheiro, type ChaveDoFunil, type EntradaCincoResultados, type LinhaDoInstagram } from "@/lib/leitura/cinco-resultados";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido } from "@/components/nx/blocos";
-import { fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria, variacaoPct } from "@/lib/leitura/fatos-resultados";
+import { fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria, somaDiariaComCobertura, variacaoPct } from "@/lib/leitura/fatos-resultados";
 import { resumirClinica } from "@/lib/leitura/resumo-clinica";
 import { ROTULO_RESPONSAVEL, ROTULO_TOM, type Insight, type Limitacao, type Responsavel, type Tom } from "@/lib/insight";
 import { ROTULO_CONFIANCA } from "@/lib/insight";
@@ -560,9 +560,18 @@ function MonthlyOverview() {
   const fontesDoEstado = useMemo(() => fontesDoCliente(estadoDasFontes.data), [estadoDasFontes.data]);
 
   const funil = useMemo(() => {
-    const atual = somaDiaria((diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado), comparacao.dias, CAMPOS_FUNIL);
+    // Quantos dias de cada número foram medidos no período atual: a soma só entra na comparação com 80% dos dias (a mesma regra
+    // de somaDiaria); abaixo disso a tela diz "medido em N de M dias" (D-01) em vez de "Falta dado".
+    const comCobertura = somaDiariaComCobertura((diario.data ?? []).filter((l) => l.dia <= comparacao.fimFechado), comparacao.dias, CAMPOS_FUNIL);
+    const atual: Record<string, number | null> = {};
+    const cobertura: NonNullable<EntradaCincoResultados["cobertura"]> = {};
+    for (const k of CAMPOS_FUNIL) {
+      const c = comCobertura[k];
+      atual[k] = c.completo ? c.valor : null;
+      cobertura[k] = { medidos: c.medidos, de: c.de };
+    }
     const antes = somaDiaria(diarioAnterior.data ?? [], comparacao.dias, CAMPOS_FUNIL);
-    return { funil: funilDosNumeros({ dados: pessoas.data ?? null, somaAtual: atual, somaAntes: antes }), atual, antes };
+    return { funil: funilDosNumeros({ dados: pessoas.data ?? null, somaAtual: atual, somaAntes: antes, coberturaAtual: comCobertura }), atual, antes, cobertura };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pessoas.data, diario.data, diarioAnterior.data, start, end, hoje]);
 
@@ -628,7 +637,7 @@ function MonthlyOverview() {
       pessoas={pessoas.data ?? null}
       roi={roi.data ?? null}
       linhasDia={diario.data ?? []}
-      variacoes={{ atual: funil.atual, antes: funil.antes }}
+      variacoes={{ atual: funil.atual, antes: funil.antes, cobertura: funil.cobertura }}
       comparacao={{ dias: comparacao.dias, fimFechado: comparacao.fimFechado, anterior: comparacao.anterior }}
       ads={{ atual: adsAtual.data ?? null, anterior: adsAnterior.data ?? null, porDia: adsDia.data ?? null }}
       fechamento={{ aberto: historia === "aberta", serve: serveParaFechamento, pedir: pedirFechamento, fechar: fecharFechamento, nome: cliente.data?.name ?? null, funil, fontes: fontesDoEstado }}
@@ -664,7 +673,7 @@ function Resultados({
   pessoas: PacientesPeriodo | null;
   roi: DadosRoi | null;
   linhasDia: ({ dia: string } & Record<CampoDiario, number | null>)[];
-  variacoes: { atual: Record<string, number | null>; antes: Record<string, number | null> };
+  variacoes: { atual: Record<string, number | null>; antes: Record<string, number | null>; cobertura?: EntradaCincoResultados["cobertura"] };
   comparacao: { dias: number; fimFechado: string; anterior: { start: string; end: string } };
   /** As linhas cruas do banco (ads_resumo e ads_por_dia): os números chegam como texto ou número, e o que falta chega null. */
   ads: { atual: unknown; anterior: unknown; porDia: unknown };
@@ -792,6 +801,7 @@ function Resultados({
       valores: { mandaram_mensagem: numeroDoCartao("mandaram_mensagem"), agendaram: numeroDoCartao("agendaram"), fecharam: numeroDoCartao("fecharam") },
       atual: variacoes.atual,
       antes: variacoes.antes,
+      cobertura: variacoes.cobertura,
       diario: linhasDia,
       ads: ladoDeAnuncios(ads),
       seguidores: instagram.seguidores,
