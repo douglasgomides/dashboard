@@ -485,6 +485,19 @@
   color: var(--muted-ink);
   overflow-wrap: anywhere;
 }
+/* Ação longa (ou coluna estreita): o botão nunca espreme a frase. Coluna da ação limitada; texto longo desce para baixo da frase
+   e ocupa a largura dela (bug de 13/11/2026: frase virou uma letra por linha). */
+@container nx-descoberta (min-width: 701px) {
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta[data-acao-longa] {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-descoberta[data-acao-longa] .nx-descoberta__acoes {
+    grid-column: 2;
+    grid-row: 2;
+    justify-content: flex-start;
+    max-width: 100%;
+  }
+}
 /* Cartão estreito: os botões descem para baixo da frase (piloto de Instagram e Anúncios). */
 @container nx-descoberta (max-width: 700px) {
   .app.product-workspace:not(.sap-workspace) .nx-descoberta {
