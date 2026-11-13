@@ -1,8 +1,8 @@
 // "Do contato à venda" no formato 5 segundos (Phase 03.1.1.1, plano 05, D-01): o veredito "Aqui você perde mais: só N% ...", as pessoas que
 // ficaram na mesa (Virou lead menos Atendido), os 3 números-chave e as descobertas da aba Funil de "Onde os pacientes travam". Módulo
 // puro: sem React, sem banco, sem rede e sem IA; só lê o que a tela já carregou (D-08: nenhuma consulta nova). D-02: nenhum número de outra
-// clínica entra aqui. D-05: dado que falta é "Falta dado" com o motivo, nunca zero, e a regra do funil fora de ordem continua: sem maior
-// perda apontada. A regra lê só contagens (T-03.1.1.1-12): nenhum campo de pessoa passa por aqui.
+// clínica entra aqui. D-05: dado que falta é "Falta dado" com o motivo, nunca zero. D-01 (03.1.1.1.1): a ligação fora de ordem fica sem % e
+// nunca é a maior perda, mas as ligações em ordem continuam apontando a maior perda. A regra lê só contagens (T-03.1.1.1-12): nenhum campo de pessoa passa por aqui.
 import type { FunilDesenhado } from "@/lib/funil-desenhado";
 import { ROTULO_RESPONSAVEL } from "@/lib/insight";
 import { LIMITES } from "@/lib/limites";
@@ -57,27 +57,34 @@ function perdaEmTexto(paraId: string, texto: string): string | null {
 /** Mesma frase, com a perda em destaque. */
 const fraseDaPerda = (perda: string): ParteDaFrase[] => [{ texto: "Aqui você perde mais: " }, { texto: perda, enfase: "ruim" }, { texto: "." }];
 
+/** A frase do veredito quando uma etapa tem mais gente que a anterior e nenhuma ligação em ordem aponta a maior perda (D-01). */
+export const FRASE_ETAPA_COM_MAIS_GENTE = "Uma etapa tem mais gente que a anterior: conferir a marcação no CRM.";
+
+/** O veredito "Maior perda" da ligação que mais perde, ou null quando o funil não aponta uma ou a frase não passa no filtro. */
+function vereditoDaMaiorPerda(funil: FunilDesenhado): Veredito | null {
+  const mp = funil.maiorPerda;
+  const para = mp ? funil.etapas[mp.para] : undefined;
+  if (!mp || !para) return null;
+  const perda = perdaEmTexto(para.id, mp.texto);
+  if (!perda) return null;
+  const frase = fraseDaPerda(perda);
+  return checarFraseCinco(textoDaFrase(frase)).length === 0 ? { tipo: "veredito", palavra: "Maior perda", tom: "ruim", frase } : null;
+}
+
 /**
  * O veredito de "Do contato à venda": a palavra "Maior perda" e UMA frase com a ligação que mais perde, tirada do funil desenhado (a
- * mesma conta que a tela desenha). Funil fora de ordem: "Atenção" e nenhuma etapa nomeada (AVISO_FORA_DE_ORDEM). Portão negado ou sem
- * maior perda a apontar: o veredito dos fatos (o mesmo "Falta dado: motivo" da leitura, D-05). null = ainda sem fatos.
+ * mesma conta que a tela desenha). D-01: uma ligação fora de ordem (etapa com mais gente que a anterior) não apaga a maior perda das
+ * ligações em ordem; só sem maior perda a apontar o funil fora de ordem vira "Atenção", sem nomear etapa. Portão negado ou sem maior
+ * perda a apontar: o veredito dos fatos (o mesmo "Falta dado: motivo" da leitura, D-05). null = ainda sem fatos.
  */
 export function vereditoDePacientes(e: Pick<EntradaCincoPacientes, "funil" | "fatos">): Veredito | null {
   const { funil, fatos } = e;
-  if (funil.foraDeOrdem) {
-    return { tipo: "veredito", palavra: "Atenção", tom: "atencao", frase: [{ texto: "Funil fora de ordem: a maior perda não é apontada." }] };
+  const maiorPerda = vereditoDaMaiorPerda(funil);
+  if (funil.foraDeOrdem && !maiorPerda) {
+    return { tipo: "veredito", palavra: "Atenção", tom: "atencao", frase: [{ texto: FRASE_ETAPA_COM_MAIS_GENTE }] };
   }
   if (fatos && !fatos.portao.ok) return vereditoDosFatos(fatos);
-  const mp = funil.maiorPerda;
-  const para = mp ? funil.etapas[mp.para] : undefined;
-  if (mp && para) {
-    const perda = perdaEmTexto(para.id, mp.texto);
-    if (perda) {
-      const frase = fraseDaPerda(perda);
-      if (checarFraseCinco(textoDaFrase(frase)).length === 0) return { tipo: "veredito", palavra: "Maior perda", tom: "ruim", frase };
-    }
-  }
-  return vereditoDosFatos(fatos);
+  return maiorPerda ?? vereditoDosFatos(fatos);
 }
 
 // ---------- pessoas na mesa ----------
@@ -332,10 +339,13 @@ const MODELOS_DA_TAXA: ModeloDaTaxa[] = [
   },
 ];
 
-/** A ligação com a maior perda do funil desenhado, em descoberta. Só quando o funil está em ordem e a regra aponta uma ligação. */
+/**
+ * A ligação com a maior perda do funil desenhado, em descoberta, sempre que a regra aponta uma ligação. D-01: uma ligação fora de ordem
+ * em outro ponto do funil não apaga esta (a ligação fora de ordem nunca é a maior perda).
+ */
 function descobertaDaMaiorPerda(funil: FunilDesenhado): Descoberta | null {
   const mp = funil.maiorPerda;
-  if (funil.foraDeOrdem || !mp) return null;
+  if (!mp) return null;
   const de = funil.etapas[mp.de];
   const para = funil.etapas[mp.para];
   if (!de || !para || de.valor == null || para.valor == null) return null;

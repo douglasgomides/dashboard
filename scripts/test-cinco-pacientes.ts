@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 import { AVISO_FORA_DE_ORDEM, NOMES_DO_FUNIL, type EtapaDesenhada, type FunilDesenhado } from "../src/lib/funil-desenhado";
 import { checarDescoberta, checarFraseCinco, textoDaFrase } from "../src/lib/leitura/cinco-segundos";
 import type { FatosDaTela } from "../src/lib/leitura/tipos";
-import { ACOES_DE_PACIENTES, descobertasDePacientes, numerosDePacientes, pessoasNaMesa, pontoPorLeads, vereditoDePacientes, type EntradaCincoPacientes } from "../src/lib/leitura/cinco-pacientes";
+import { ACOES_DE_PACIENTES, FRASE_ETAPA_COM_MAIS_GENTE, descobertasDePacientes, numerosDePacientes, pessoasNaMesa, pontoPorLeads, vereditoDePacientes, type EntradaCincoPacientes } from "../src/lib/leitura/cinco-pacientes";
 
 // O real brasileiro sai com espaço sem quebra (U+00A0): nos testes comparamos com espaço comum.
 const sp = (t: string) => t.replace(/ /g, " ");
@@ -40,6 +40,7 @@ const etapa = (k: number, valor: number | null, motivo: string | null = null): E
 const funilDe = (valores: (number | null)[], resto: Partial<FunilDesenhado> = {}): FunilDesenhado => ({
   etapas: valores.map((v, k) => etapa(k, v)),
   maiorPerda: null,
+  ligacoesForaDeOrdem: [],
   foraDeOrdem: false,
   aviso: null,
   ...resto,
@@ -67,14 +68,34 @@ const funilDe = (valores: (number | null)[], resto: Partial<FunilDesenhado> = {}
   assert.equal(textoDaFrase((vereditoDePacientes({ funil: f5, fatos: fatos() }) as any).frase), "Aqui você perde mais: só 6 de 18 agendados fecham.");
 }
 {
-  // Funil fora de ordem: "Atenção", nenhuma etapa nomeada, mesmo com uma maior perda no objeto (a regra do funil apaga, esta também).
-  const f = funilDe([1000, 500, 50, 30, 40], { foraDeOrdem: true, aviso: AVISO_FORA_DE_ORDEM, maiorPerda: { de: 1, para: 2, texto: "10% passam" } });
+  // D-01: uma ligação fora de ordem (Fechou passa de Agendou) não apaga a maior perda das ligações em ordem: o mesmo veredito de um funil em ordem.
+  const emOrdem = funilDe([1000, 500, 50, 30, 18], { maiorPerda: { de: 1, para: 2, texto: "10% passam" } });
+  const f = funilDe([1000, 500, 50, 30, 40], { ligacoesForaDeOrdem: [4], foraDeOrdem: true, aviso: AVISO_FORA_DE_ORDEM, maiorPerda: { de: 1, para: 2, texto: "10% passam" } });
+  const v = vereditoDePacientes({ funil: f, fatos: fatos() });
+  assert.ok(v && v.tipo === "veredito");
+  assert.equal(v.palavra, "Maior perda");
+  assert.equal(v.tom, "ruim");
+  assert.equal(textoDaFrase(v.frase), "Aqui você perde mais: só 10% dos leads são atendidos.");
+  assert.deepEqual(v, vereditoDePacientes({ funil: emOrdem, fatos: fatos() }));
+}
+{
+  // Fora de ordem e nenhuma ligação em ordem para apontar: "Atenção", nenhuma etapa nomeada, e a frase pede para conferir o CRM.
+  const f = funilDe([1000, 500, 50, 60, 70], { ligacoesForaDeOrdem: [3, 4], foraDeOrdem: true, aviso: AVISO_FORA_DE_ORDEM });
   const v = vereditoDePacientes({ funil: f, fatos: fatos() });
   assert.ok(v && v.tipo === "veredito");
   assert.equal(v.palavra, "Atenção");
   assert.equal(v.tom, "atencao");
-  assert.equal(textoDaFrase(v.frase), "Funil fora de ordem: a maior perda não é apontada.");
+  assert.equal(textoDaFrase(v.frase), "Uma etapa tem mais gente que a anterior: conferir a marcação no CRM.");
+  assert.equal(textoDaFrase(v.frase), FRASE_ETAPA_COM_MAIS_GENTE);
+  assert.ok(textoDaFrase(v.frase).length <= 90);
+  assert.deepEqual(checarFraseCinco(textoDaFrase(v.frase)), []);
   for (const nome of NOMES_DO_FUNIL) assert.ok(!textoDaFrase(v.frase).includes(nome), `não nomeia ${nome}`);
+  // Uma maior perda com texto que a regra não conhece também não nomeia etapa: continua "Atenção".
+  const h = funilDe([1000, 500, 50, 30, 40], { ligacoesForaDeOrdem: [4], foraDeOrdem: true, aviso: AVISO_FORA_DE_ORDEM, maiorPerda: { de: 1, para: 2, texto: "talvez 10" } });
+  assert.equal((vereditoDePacientes({ funil: h, fatos: fatos() }) as any).palavra, "Atenção");
+  // Portão negado com uma maior perda: o "Falta dado: motivo" da leitura continua na frente (D-05).
+  const g = funilDe([1000, 500, 50, 30, 40], { ligacoesForaDeOrdem: [4], foraDeOrdem: true, aviso: AVISO_FORA_DE_ORDEM, maiorPerda: { de: 1, para: 2, texto: "10% passam" } });
+  assert.equal(vereditoDePacientes({ funil: g, fatos: fatos(false) })?.tipo, "sem_leitura");
 }
 {
   // Sem maior perda e em ordem: o veredito dos fatos (aqui, sem fato aproveitável: "Falta dado" com o motivo da leitura).
@@ -236,9 +257,13 @@ const entrada = (parte: Partial<EntradaCincoPacientes> = {}): EntradaCincoPacien
   assert.match(itens.find((d) => d.id === "pacientes-conversa-vira-lead")?.porque.obs ?? "", /pacientes antigos/);
 }
 {
-  // Funil fora de ordem: nenhuma descoberta aponta a maior perda.
-  const f = funilDe([1000, 500, 300, 100, 30], { foraDeOrdem: true, aviso: AVISO_FORA_DE_ORDEM });
+  // Fora de ordem sem maior perda a apontar: nenhuma descoberta da maior perda.
+  const f = funilDe([1000, 500, 300, 100, 30], { ligacoesForaDeOrdem: [2], foraDeOrdem: true, aviso: AVISO_FORA_DE_ORDEM });
   assert.ok(!descobertasDePacientes(entrada({ funil: f })).itens.some((d) => d.id === "pacientes-maior-perda"));
+  // D-01: com uma ligação fora de ordem em outro ponto e a maior perda numa ligação em ordem, a descoberta aparece.
+  const comPerda = funilDe([1000, 500, 600, 100, 30], { ligacoesForaDeOrdem: [2], foraDeOrdem: true, aviso: AVISO_FORA_DE_ORDEM, maiorPerda: { de: 3, para: 4, texto: "30% passam" } });
+  const perda = descobertasDePacientes(entrada({ funil: comPerda })).itens.find((d) => d.id === "pacientes-maior-perda");
+  assert.equal(sp(perda?.frase ?? ""), "Entre Agendou e Fechou, 30% passam.");
   // Portão negado: nenhuma descoberta (a tela diz Falta dado).
   assert.deepEqual(descobertasDePacientes(entrada({ fatos: fatos(false) })), { itens: [], aviso: null });
   // Menos de 3 válidas: só as válidas e o aviso com o motivo (nunca inventa).
