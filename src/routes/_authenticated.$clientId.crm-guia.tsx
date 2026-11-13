@@ -5,7 +5,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Copy, Printer } from "lucide-react";
 import { NxCard, NxTag } from "@/components/nx";
-import { CoberturaCrm } from "@/components/cobertura-crm";
+import { CoberturaCrm, useCoberturaCrm } from "@/components/cobertura-crm";
+import { CanaisOrigemCrm } from "@/components/canais-origem-crm";
 import { useAuth } from "@/hooks/use-auth";
 import { CmKpi, CmRecolhido, CmTopo, icT } from "@/components/nx/comercial-base";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,6 +30,9 @@ function GuiaCrmPage() {
   const { clientId } = Route.useParams();
   // Cobertura (D-06) é só da equipe: a tela abre por link para outro papel, mas o bloco não.
   const { isAdmin } = useAuth();
+  const cobertura = useCoberturaCrm(clientId, isAdmin);
+  // A lista de canais só aparece com a regra nova no banco e o CRM ligado.
+  const comCanais = isAdmin && !!cobertura.data && !cobertura.data.ausente && cobertura.data.dados.tem_crm;
   const { data: client } = useQuery({ queryKey: ["client", clientId], queryFn: () => getClient(clientId) });
   const { data, isLoading } = useQuery({
     queryKey: ["crm-guia", clientId],
@@ -102,6 +106,7 @@ function GuiaCrmPage() {
       />
 
       {isAdmin && <CoberturaCrm clientId={clientId} />}
+      {comCanais && <CanaisOrigemCrm clientId={clientId} />}
 
       <section className="nx-grade nx-grade--4" aria-label="Situação do CRM">
         <CmKpi

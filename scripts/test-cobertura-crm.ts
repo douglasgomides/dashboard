@@ -1,7 +1,18 @@
 // node --import ./scripts/test-network-guard.mjs --import tsx scripts/test-cobertura-crm.ts
 // Cobertura do CRM (D-06): números inventados, nenhuma clínica real.
 import assert from "node:assert/strict";
-import { montarCobertura, rpcAusente, type DadosCobertura, type FonteDaCobertura, type LinhaCobertura } from "../src/lib/cobertura-crm";
+import {
+  montarCobertura,
+  rpcAusente,
+  linhasParaConfirmar,
+  payloadConfirmar,
+  ORIGENS_PERMITIDAS,
+  ORIGEM_GENERICA,
+  type CanalParaConfirmar,
+  type DadosCobertura,
+  type FonteDaCobertura,
+  type LinhaCobertura,
+} from "../src/lib/cobertura-crm";
 
 const HOJE = "2026-10-21"; // quarta-feira: dias úteis e corridos iguais para "ontem"
 const ONTEM = "2026-10-20";
@@ -149,5 +160,58 @@ assert.equal(rpcAusente({ code: "PGRST202", message: "Could not find the functio
 assert.equal(rpcAusente({ status: 404 }), true);
 assert.equal(rpcAusente({ code: "42501", message: "permission denied" }), false);
 assert.equal(rpcAusente(null), false);
+
+// ---------------------------------------------------------------- canais e funis sem origem (D-02)
+const CONEXAO = "00000000-0000-4000-8000-0000000000aa";
+const canal = (x: Partial<CanalParaConfirmar>): CanalParaConfirmar => ({
+  crm_connection_id: CONEXAO,
+  tipo: "canal",
+  canal_id: "900001",
+  nome: "Canal inventado",
+  leads_90d: 10,
+  sem_origem_90d: 5,
+  origem_atual: null,
+  conclusivo: null,
+  sugestao: null,
+  ...x,
+});
+{
+  const ls = linhasParaConfirmar([
+    canal({ canal_id: "900001", nome: null, sem_origem_90d: 3 }),
+    canal({ canal_id: "funil:700", tipo: "funil", nome: "Captação Instagram", sem_origem_90d: 20, sugestao: "Instagram" }),
+    canal({ canal_id: "900002", nome: "Resolvido", sem_origem_90d: 0, conclusivo: true, origem_atual: "Google" }),
+    canal({ canal_id: "900003", nome: "Genérico sem nada", sem_origem_90d: 0, conclusivo: false, origem_atual: ORIGEM_GENERICA }),
+  ]);
+  // Ordem por sem origem; o resolvido (0 sem origem e conclusivo) some.
+  assert.deepEqual(ls.map((l) => l.canal_id), ["funil:700", "900001", "900003"]);
+  assert.equal(ls[0].rotulo, "Funil Captação Instagram");
+  assert.equal(ls[0].sugestaoTexto, "Sugestão pelo nome: Instagram");
+  assert.equal(ls[1].rotulo, "Canal 900001 · sem nome na API (ler em Configurações > Canais do Kommo)");
+  assert.equal(ls[1].precisaNome, true);
+  assert.equal(ls[1].sugestaoTexto, null);
+  assert.equal(ls[0].precisaNome, false);
+  for (const l of ls) assert.ok(l.rotulo.length <= 90, l.rotulo);
+  assert.deepEqual(linhasParaConfirmar([]), []);
+}
+{
+  const r = canal({ nome: null });
+  assert.deepEqual(payloadConfirmar(r, "Instagram", "  Nome lido no CRM "), {
+    p_connection: CONEXAO,
+    p_canal: "900001",
+    p_nome: "Nome lido no CRM",
+    p_origem: "Instagram",
+    p_conclusivo: true,
+  });
+  // Nome da API ganha do digitado; sem nenhum, vai null.
+  assert.equal(payloadConfirmar(canal({ nome: "Da API" }), "Google", "outro").p_nome, "Da API");
+  assert.equal(payloadConfirmar(r, "Google", "  ").p_nome, null);
+  // Só o genérico vai com conclusivo false.
+  assert.equal(payloadConfirmar(r, ORIGEM_GENERICA).p_conclusivo, false);
+  for (const o of ORIGENS_PERMITIDAS) assert.equal(payloadConfirmar(r, o).p_conclusivo, o !== ORIGEM_GENERICA);
+  // Origem fora da lista (inclusive a sugestão crua ou vazio) não grava.
+  assert.throws(() => payloadConfirmar(r, "WhatsApp"), /fora da lista/);
+  assert.throws(() => payloadConfirmar(r, ""), /fora da lista/);
+  assert.equal(ORIGENS_PERMITIDAS.length, 13);
+}
 
 console.log("test-cobertura-crm: ok");

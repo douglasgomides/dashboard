@@ -236,3 +236,70 @@ export function rpcAusente(erro: unknown): boolean {
 }
 
 export const AVISO_SEM_REGRA = "Falta dado: a regra nova ainda não foi aplicada no banco";
+
+// ---------------------------------------------------------------- canais e funis sem origem (D-02)
+
+export interface CanalParaConfirmar {
+  crm_connection_id: string;
+  tipo: "canal" | "funil";
+  canal_id: string;
+  nome: string | null;
+  leads_90d: number;
+  sem_origem_90d: number;
+  origem_atual: string | null;
+  conclusivo: boolean | null;
+  sugestao: string | null;
+}
+
+export interface LinhaParaConfirmar extends CanalParaConfirmar {
+  chave: string;
+  rotulo: string;
+  /** Nome não veio da API: a pessoa digita o nome lido no CRM. */
+  precisaNome: boolean;
+  /** "Sugestão pelo nome: X" ou null. Nunca vira origem sozinha. */
+  sugestaoTexto: string | null;
+}
+
+const semPrefixo = (id: string) => id.replace(/^funil:/, "");
+
+export function rotuloDoCanal(r: Pick<CanalParaConfirmar, "tipo" | "canal_id" | "nome">): string {
+  const nome = r.nome?.trim();
+  if (r.tipo === "funil") return nome ? `Funil ${nome}` : `Funil ${semPrefixo(r.canal_id)} · sem nome na API (ler no CRM)`;
+  return nome ? `Canal ${nome}` : `Canal ${r.canal_id} · sem nome na API (ler em Configurações > Canais do Kommo)`;
+}
+
+/** Ordena por leads sem origem (mais primeiro) e esconde o que já está resolvido (0 sem origem e tradução conclusiva). */
+export function linhasParaConfirmar(rows: CanalParaConfirmar[]): LinhaParaConfirmar[] {
+  return (rows ?? [])
+    .map((r) => ({ ...r, leads_90d: int(r.leads_90d), sem_origem_90d: int(r.sem_origem_90d) }))
+    .filter((r) => !(r.sem_origem_90d === 0 && r.conclusivo === true))
+    .sort((a, b) => b.sem_origem_90d - a.sem_origem_90d || b.leads_90d - a.leads_90d)
+    .map((r) => ({
+      ...r,
+      chave: `${r.crm_connection_id}:${r.canal_id}`,
+      rotulo: rotuloDoCanal(r),
+      precisaNome: !r.nome?.trim(),
+      sugestaoTexto: r.sugestao?.trim() ? `Sugestão pelo nome: ${r.sugestao.trim()}` : null,
+    }));
+}
+
+export interface PayloadConfirmar {
+  p_connection: string;
+  p_canal: string;
+  p_nome: string | null;
+  p_origem: OrigemPermitida;
+  p_conclusivo: boolean;
+}
+
+/** Argumentos de crm_definir_canal_origem. Origem fora da lista fixa = erro (nada é gravado). */
+export function payloadConfirmar(row: CanalParaConfirmar, origem: string, nomeDigitado?: string | null): PayloadConfirmar {
+  if (!(ORIGENS_PERMITIDAS as readonly string[]).includes(origem)) throw new Error(`Origem fora da lista: ${origem}`);
+  const nome = row.nome?.trim() || nomeDigitado?.trim() || null;
+  return {
+    p_connection: row.crm_connection_id,
+    p_canal: row.canal_id,
+    p_nome: nome,
+    p_origem: origem as OrigemPermitida,
+    p_conclusivo: origem !== ORIGEM_GENERICA,
+  };
+}
