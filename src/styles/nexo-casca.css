@@ -570,3 +570,136 @@
   line-height: 20px;
   color: var(--muted-ink);
 }
+
+/* --- 12/11/2026: status das fontes numa pílula só (ponto + palavra), ao lado do período ---
+   Tocar abre o mesmo conteúdo de antes ("Conferir fontes e atualização": data de cada fonte e o selo CFM). O painel flutua por cima da
+   tela, então o título não empurra o veredito para baixo. */
+.app.product-workspace:not(.sap-workspace) .ws-fontes {
+  position: relative;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .ws-fontes__pilula {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+  list-style: none;
+  cursor: pointer;
+}
+.app.product-workspace:not(.sap-workspace) span.ws-fontes__pilula {
+  cursor: default;
+}
+.app.product-workspace:not(.sap-workspace) .ws-fontes__pilula::-webkit-details-marker {
+  display: none;
+}
+.app.product-workspace:not(.sap-workspace) details.ws-fontes > .ws-fontes__pilula::after {
+  content: "▾";
+  font-size: 10px;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) details.ws-fontes[open] > .ws-fontes__pilula::after {
+  content: "▴";
+}
+.app.product-workspace:not(.sap-workspace) details.ws-fontes > .ws-fontes__pilula:hover,
+.app.product-workspace:not(.sap-workspace) details.ws-fontes[open] > .ws-fontes__pilula {
+  background: var(--b6);
+  border-color: var(--b5);
+}
+.app.product-workspace:not(.sap-workspace) .ws-fontes__pilula:focus-visible {
+  outline: 2px solid var(--b1);
+  outline-offset: 2px;
+}
+/* O selo de frescor dentro da pílula: o texto herda o peso e a cor da pílula. */
+.app.product-workspace:not(.sap-workspace) .ws-fontes__pilula > span {
+  font-size: inherit;
+  color: inherit !important;
+}
+.app.product-workspace:not(.sap-workspace) .ws-fontes__rotulo::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--muted-2);
+}
+.app.product-workspace:not(.sap-workspace) .ws-fontes__painel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  gap: 10px;
+  width: min(440px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--white);
+  box-shadow: var(--sombra-dialogo);
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  white-space: normal;
+}
+.app.product-workspace:not(.sap-workspace) .ws-fontes__titulo {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 800;
+  color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .ws-fontes__painel .fontes-linha {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app.product-workspace:not(.sap-workspace) .ws-fontes__painel .fontes-linha li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .ws-fontes__painel .fontes-ponto {
+  flex: none;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.app.product-workspace:not(.sap-workspace) .ws-fontes__painel .fontes-linha b {
+  font-weight: 700;
+  color: var(--text);
+}
+/* Celular: a pílula fica no cabeçalho de cima e o painel abre na largura da tela, preso ao cabeçalho (sem rolagem lateral). */
+.app.product-workspace:not(.sap-workspace) .ws-fontes[data-onde="celular"] {
+  position: static;
+  flex: none;
+}
+.app.product-workspace:not(.sap-workspace) .ws-fontes__pilula[data-onde="celular"],
+.app.product-workspace:not(.sap-workspace) .ws-fontes[data-onde="celular"] > .ws-fontes__pilula {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.app.product-workspace:not(.sap-workspace) .ws-fontes[data-onde="celular"] > .ws-fontes__painel {
+  left: 16px;
+  right: 16px;
+  width: auto;
+}
+/* Sem a linha de status embaixo do título: o título da casca fica numa linha só e o veredito vem logo depois. */
+.app.product-workspace:not(.sap-workspace).workspace-guided .workspace-heading {
+  padding-bottom: 14px;
+}
