@@ -255,21 +255,29 @@ Plans:
 ### Phase 03.1.1.1.1: Contas certas e saúde 75 ou mais (INSERTED)
 
 **Goal:** Nenhuma clínica fica sem informação por erro nosso, e toda clínica chega a pelo menos 75 de saúde de dados (pedido do João em 12/11/2026). Auditoria completa de todos os clientes e correção do que é nosso; o que depende de cliente ou equipe sai numa lista com quem resolve.
-**Achados de partida (12/11):**
-1. O portão "funil fora de ordem" apaga a tela inteira (Lana): João aprovou travar só a etapa com problema.
-2. `resultados_diarios` soma a fila aberta de Negociação todo dia (Lana: entradas reais 228→124, soma 166→435): contar entradas ou fila, não soma de dias.
-3. Agendou subcontado onde o perfil da clínica não marca etapas "agendad*" (Samira 6, Doctor Creator 0, Lana sem "Consulta Agendada" em Comercial 1/Elité).
-4. Anúncio parado pela Meta (limite de gasto, pagamento, WhatsApp exigido) com leitura OK conta como fonte parada e tira 25 da nota (Samira, Betina, Antonione, HOMS): vira aviso de negócio para o cliente, não falha de dado.
-5. Problemas de `qualidade_dados` ainda não auditados (só respondem a admin logado).
+**Achados de partida (12/11):** detalhes por clínica ficam FORA do repo (repo público), no contexto local da fase. Em resumo:
+1. O portão "funil fora de ordem" apaga a tela inteira: João aprovou travar só a etapa com problema.
+2. A soma diária de Negociação conta a fila aberta de novo todo dia: contar entradas ou mostrar como fila.
+3. Agendou subcontado onde o perfil da clínica não mapeia etapas "agendad*".
+4. Anúncio parado pela Meta (limite de gasto, pagamento, WhatsApp exigido) com leitura OK conta como fonte parada e derruba a nota: vira aviso de negócio para o cliente, não falha de dado.
+5. Problemas de qualidade de dado ainda não auditados.
 
-**Fora do nosso alcance (lista com quem resolve):** Glauce (acesso à conta 9641), Mariela (anúncios sem dado desde 21/10 sem motivo; planilha do CRM parada), Betina e Glauce (ligar CRM ou marcar "não usa"), Marcelly (planilha manual de anúncios), cadastro "Douglas" sem fontes.
+**Fora do nosso alcance:** lista com quem resolve (acesso de conta, CRM ligar ou "não usa", planilhas manuais, cadastro duplicado), sem nome de cliente no repo.
 **Limites:** SQL de escrita e migrações só o João roda; o plano entrega o SQL pronto para ele.
-**Requirements**: TBD
+**Requirements**: CONTA-01, CONTA-02, CONTA-03, CONTA-04, CONTA-05, CONTA-06, CONTA-07
 **Depends on:** Phase 03.1.1.1
-**Plans:** 0 plans
+**Plans:** 1/6 plans executed (onda 1 = código, nós entregamos; onda 2 = SQL em arquivo, o João aplica)
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 03.1.1.1.1 to break down)
+**Wave 1** *(código; 01 a 04 com arquivos disjuntos, no máximo 2 executores por vez)*
+- [ ] 03.1.1.1.1-01-PLAN.md — Portão por etapa nas leituras (Resultados, CRM, Pacientes), "Medido em N de M dias" nos anéis e Negociação como fila (nunca somada)
+- [ ] 03.1.1.1.1-02-PLAN.md — Funil desenhado por ligação: só a ligação que cresce fica sem %, maior perda e veredito de Pacientes e o cartão do Fechamento seguem
+- [x] 03.1.1.1.1-03-PLAN.md — Nota de saúde (D-04): fonte parada pelo cliente ou sem movimento neutra com alerta, planilha manual 60, cada fato desconta uma vez; conferência da carteira fora do repo
+- [ ] 03.1.1.1.1-04-PLAN.md — Kommo: autor "Atendente" e conversa antiga ligada ao lead sem duplicar (antes do reprocessamento)
+
+**Wave 2** *(SQL; o João aplica; 05 e 06 em paralelo, aplicar 05 antes de 06)*
+- [ ] 03.1.1.1.1-05-PLAN.md — Contas no banco: etapa sem papel volta ao nome, Agendaram "não se aplica", Fecharam pelo período, origem por pessoa, qualidade_dados no recorte da clínica, fontes_base com contas ativas (checkpoint do João)
+- [ ] 03.1.1.1.1-06-PLAN.md — Histórico diário por entrada (uma vez por pessoa em 30 dias), Negociação só do cron, preenchimento em janelas, robô do Kommo após gatilho de etapa e reprocessamento das conversas (checkpoint do João)
 
 ### Phase 03.1.1.1.2: Três telas que respondem (rodada 2 dos pilotos) (INSERTED)
 

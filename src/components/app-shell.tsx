@@ -363,6 +363,29 @@ export function AppShell({
     </span>
   );
 
+  // Status das fontes numa pílula só (12/11/2026, João: o título, a linha "Dados em dia" e o link "Conferir fontes e atualização" empilhados
+  // empurravam a tela para baixo). O ponto e a palavra vêm do selo de frescor (nunca só a cor); tocar na pílula abre o mesmo conteúdo de
+  // antes (fontes por data e o selo CFM), para quem já via. Mora ao lado do seletor de período (computador) ou no topo do celular.
+  const temPainelDeFontes = !!(fontesLinha || cfm);
+  const statusDasFontes = (onde: "topo" | "celular") =>
+    temPainelDeFontes ? (
+      <details className="ws-fontes" data-onde={onde}>
+        <summary className="ws-fontes__pilula">
+          {frescorCompacto ?? <span className="ws-fontes__rotulo">Fontes</span>}
+          <span className="sr-only">. Conferir fontes e atualização</span>
+        </summary>
+        <div className="ws-fontes__painel">
+          <p className="ws-fontes__titulo">Conferir fontes e atualização</p>
+          {fontesLinha}
+          {cfm}
+        </div>
+      </details>
+    ) : frescorCompacto ? (
+      <span className="ws-fontes__pilula" data-onde={onde}>
+        {frescorCompacto}
+      </span>
+    ) : null;
+
   return (
     <div
       className={`app product-workspace workspace-guided${recolhida ? " recolhida" : ""}`}
@@ -514,7 +537,7 @@ export function AppShell({
                   <IconeTabler nome="menu-2" tamanho={20} />
                 </button>
               </div>
-              {(!semPeriodo || frescorCompacto) && (
+              {(!semPeriodo || frescorCompacto || temPainelDeFontes) && (
                 <div className="nx-mhead-periodo">
                   {!semPeriodo && (
                     <button
@@ -527,7 +550,7 @@ export function AppShell({
                       <span>{rotuloPeriodo(dateRange)}</span>
                     </button>
                   )}
-                  {frescorCompacto}
+                  {statusDasFontes("celular")}
                 </div>
               )}
             </>
@@ -536,8 +559,8 @@ export function AppShell({
               <ClientAvatar nome={nome} url={client?.avatar_url} tamanho={32} />
               <div className="mhead-nome">
                 <b>{nome}</b>
-                {frescorCompacto}
               </div>
+              {statusDasFontes("celular")}
               <button
                 type="button"
                 className="icobtn"
@@ -578,6 +601,7 @@ export function AppShell({
                 Trocar de clínica
               </button>
             )}
+            {statusDasFontes("topo")}
             {!semPeriodo && <DateRangePicker
               value={dateRange}
               onChange={onDateRange}
@@ -596,18 +620,6 @@ export function AppShell({
             </div>
           </header>
         )}
-        <div className="workspace-data-status">
-          {frescorCompacto ?? frescor}
-          {(fontesLinha || cfm) && (
-            <details>
-              <summary>Conferir fontes e atualização</summary>
-              <div>
-                {fontesLinha}
-                {cfm}
-              </div>
-            </details>
-          )}
-        </div>
         <main id="workspace-content" tabIndex={-1}>
           <TelaJuntada clientId={clientId} pathname={pathname} dateRange={dateRange} vis={vis} perfil={perfilEquipe}>
             {children}

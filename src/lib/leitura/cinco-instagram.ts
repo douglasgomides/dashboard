@@ -365,7 +365,8 @@ export function descobertasDoInstagram(e: EntradaCincoInstagram, fatos?: FatosDa
       selo: v?.melhor === true ? "Em alta" : v?.melhor === false ? "Em queda" : "Link da bio",
       frase: `Link da bio: ${numeroCurto(taps.soma)} ${taps.soma === 1 ? "toque" : "toques"} em ${numeroCurto(alcance.soma)} pessoas alcançadas.`,
       quem: social,
-      impacto: `${umaCasa(porMil)} a cada mil pessoas`,
+      // "0,0 a cada mil pessoas" não diz nada (12/11/2026, João): o chip mostra a contagem de toques do período.
+      impacto: `${numeroCurto(taps.soma)} ${taps.soma === 1 ? "toque" : "toques"} no link`,
       acao: { rotulo: "Revisar o link da bio", rota: ROTA_DE_LINKS },
       porque: { titulo: "Toques no link da bio, no período", barras, obs: v ? undefined : "Falta dado: sem o período anterior para comparar." },
     });

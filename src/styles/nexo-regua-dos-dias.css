@@ -191,16 +191,50 @@
 }
 
 /* ---------- Os dias mais baratos e os mais caros ---------- */
-/* O botão que abre as listas só existe no celular (no computador a lista está sempre à vista). */
-.app.product-workspace:not(.sap-workspace) .nx-regua__lista-botao {
-  display: none;
-}
+/* As listas começam recolhidas atrás de um botão, no celular e no computador (12/11/2026): são um ranking, e o padrão dos pilotos põe
+   ranking e lista fora da primeira vista; a régua de 1,5 tela não cabe com elas abertas e a faixa azul do veredito. O título fica para
+   leitor de tela; o botão diz o mesmo e abre as duas listas na própria régua. */
 .app.product-workspace:not(.sap-workspace) .nx-regua__lista-titulo {
-  margin: 8px 0 0;
-  font-size: 15px;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-regua__lista-botao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  margin: 0;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--text);
+  font-size: 14px;
   line-height: 20px;
   font-weight: 700;
-  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.app.product-workspace:not(.sap-workspace) .nx-regua__lista-botao:hover,
+.app.product-workspace:not(.sap-workspace) .nx-regua__lista-botao[aria-expanded="true"] {
+  background: var(--b6);
+  color: var(--b1);
+}
+.app.product-workspace:not(.sap-workspace) .nx-regua__lista-botao:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-regua__listas:not([data-aberta]) {
+  display: none;
 }
 .app.product-workspace:not(.sap-workspace) .nx-regua__listas {
   display: grid;
@@ -277,6 +311,13 @@
   .app.product-workspace:not(.sap-workspace) .nx-regua__listas {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
+  /* Título da prova como no piloto (.prova-tit): grande e em 800. */
+  .app.product-workspace:not(.sap-workspace) .nx-regua__titulo {
+    font-size: 22px;
+    line-height: 28px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+  }
 }
 
 /* ---------- Celular ---------- */
@@ -310,35 +351,9 @@
     min-height: 36px;
     padding: 4px 8px;
   }
-  /* No celular as listas começam recolhidas atrás de um botão (a régua de 1,5 tela não cabe com elas à vista). */
-  .app.product-workspace:not(.sap-workspace) .nx-regua__lista-titulo {
-    display: none;
-  }
   .app.product-workspace:not(.sap-workspace) .nx-regua__lista-botao {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    width: 100%;
     min-height: 36px;
-    margin: 0;
     padding: 0 12px;
-    border: 1px solid var(--control-border);
-    border-radius: 12px;
-    background: var(--white);
-    color: var(--text);
-    font-size: 14px;
-    line-height: 20px;
-    font-weight: 600;
-    text-align: left;
-    cursor: pointer;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-regua__lista-botao:focus-visible {
-    outline: 2px solid var(--focus);
-    outline-offset: 2px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-regua__listas:not([data-aberta]) {
-    display: none;
   }
   /* As duas listas lado a lado, sem a barra (a posição e o custo já dizem tudo): metade da altura. */
   .app.product-workspace:not(.sap-workspace) .nx-regua__listas {
@@ -434,11 +449,6 @@
   flex: 1 1 120px;
   min-width: 0;
 }
-/* A ação e o "Por quê?" lado a lado, não um sobre o outro. */
-.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__acoes {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
 
 /* A sincronização da equipe: no cabeçalho no computador; no celular ela desce para o "Ver tudo" (o cabeçalho fica só com a pergunta). */
 .app.product-workspace:not(.sap-workspace) .nx-anuncios-sync--ver-tudo {
@@ -447,10 +457,6 @@
 
 /* Computador: as descobertas lado a lado (cada uma empilha chips, frase e botões no próprio cartão) e a régua mais baixa. */
 @media (min-width: 1100px) {
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descobertas__lista {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    align-items: start;
-  }
   .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-regua__sub {
     display: none;
   }
@@ -461,19 +467,11 @@
     height: 52px;
   }
 }
-/* Descoberta estreita (3 lado a lado no computador): o número em jogo sai do cabeçalho do cartão (as barras do "Por quê?" dizem o mesmo número). */
-@container nx-descoberta (max-width: 440px) {
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__impacto {
-    display: none;
-  }
-}
 
 @media (max-width: 560px) {
-  /* A etiqueta da decisão e o período já estão na casca (seletor de período): o cabeçalho fica só com a pergunta. */
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__rotulo,
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__meta,
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__pontos,
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-anuncios-ordem {
+
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__pontos,
+.app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-anuncios-ordem {
     display: none;
   }
   .app.product-workspace:not(.sap-workspace) .nx-anuncios-sync--topo {
@@ -489,20 +487,10 @@
   .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-regua {
     padding: 8px 12px;
   }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__pergunta {
-    font-size: 16px;
-    line-height: 20px;
-  }
-  /* A linha "Antes: ..." do veredito já está na régua (o marcador "antes") e nos cartões (▲▼ contra o período anterior). */
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-veredito__texto > .nx-veredito__apoio {
-    display: none;
-  }
+
   /* A linha de média de 7 dias do custo, mais baixa. */
   .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__cartoes .nx-linha30__area {
     height: 36px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-veredito {
-    padding: 6px 12px;
   }
   /* Cartões de número: sem o ícone e a linha de 30 dias só no custo (a média de 7 dias). */
   .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__cartoes .nx-cartao__icone {
@@ -515,13 +503,18 @@
   .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-pagina__cartoes .nx-cartao:nth-child(-n + 2) .nx-linha30 {
     display: none;
   }
-  /* Descobertas. */
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descobertas,
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descobertas__lista {
-    gap: 8px;
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nxb-recolhido small {
+    display: none;
   }
-  /* O título "O que descobrimos" continua para leitor de tela: a lista de descobertas se explica sozinha. */
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descobertas__titulo {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nxb-recolhido > summary {
+    padding-top: 11px;
+    padding-bottom: 11px;
+  }
+}
+
+/* Celular (régua de 1,5 tela): o título "O que descobrimos" fica só para leitor de tela; as descobertas se explicam sozinhas. */
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descobertas__topo {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -532,57 +525,8 @@
   .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descobertas {
     position: relative;
   }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta {
-    padding: 6px 8px;
-    gap: 2px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__corpo {
-    display: block;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__topo {
-    display: inline-flex;
-    max-width: 100%;
-    margin-right: 8px;
-    vertical-align: middle;
-  }
-  /* O número em jogo fica no "Por quê?" (as barras dizem o mesmo número). */
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__impacto {
+  /* A linha "Antes: ..." da faixa já está na régua (o marcador "antes") e nos cartões (▲▼ contra o período anterior). */
+  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-veredito__texto > .nx-veredito__apoio {
     display: none;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__frase {
-    display: inline;
-    font-size: 15px;
-    line-height: 20px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta .nx-selo {
-    font-size: 12px;
-    line-height: 16px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__acoes {
-    gap: 4px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta .nx-acao-pilula {
-    min-height: 36px;
-    padding: 2px 2px 2px 12px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta .nx-acao-pilula__texto {
-    padding: 0;
-  }
-  /* Um estilo global de botão dá 44 px de altura mínima: a seta redonda de 32 px precisa soltá-la. */
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta .nx-acao-pilula__seta {
-    width: 32px;
-    height: 32px;
-    min-height: 0;
-    min-width: 0;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nx-descoberta__porque-botao {
-    min-height: 36px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nxb-recolhido small {
-    display: none;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-pagina[data-tela="anuncios"] .nxb-recolhido > summary {
-    padding-top: 11px;
-    padding-bottom: 11px;
   }
 }

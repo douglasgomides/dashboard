@@ -64,6 +64,36 @@ export function tipoKommo(t: string | null | undefined): string {
   return m[String(t ?? "")] ?? (t ? String(t) : "texto");
 }
 
+/**
+ * Quem mandou a mensagem. Recebida = "Paciente". Enviada com created_by > 0 = "Atendente" (uma pessoa da equipe,
+ * pelo usuário do Kommo); created_by 0 ou ausente = "Clínica", e a regra de robô por horário (kommo_marcar_robo)
+ * continua valendo para ela. Só o número decide: nada do texto ou da origem entra.
+ */
+export function autorDaSaidaKommo(m: Pick<MensagemKommo, "direcao" | "criadoPor">): "Paciente" | "Atendente" | "Clínica" {
+  if (m.direcao === "entrada") return "Paciente";
+  return typeof m.criadoPor === "number" && m.criadoPor > 0 ? "Atendente" : "Clínica";
+}
+
+/** Texto e tipo de uma recebida, vindos do webhook de mensagem (crm_raw_events). */
+export type TextoWebhookKommo = { texto: string | null; tipo: string | null };
+
+/**
+ * Linha gravada em `mensagens` para uma mensagem do Kommo (exportada para teste).
+ * O tipo continua dizendo "o Kommo não entregou o texto" ('kommo_sem_texto') em toda enviada, de gente ou não: quem
+ * mandou fica no autor. Assim a tela de Atendimento mantém o rótulo de hoje sem mudar componente, e a regra de robô em
+ * SQL (plano 06) pula autor "Atendente". A recebida ganha texto e tipo do webhook quando ele existe.
+ */
+export function linhaDaMensagemKommo(m: MensagemKommo, conversaId: string, clientId: string, w: TextoWebhookKommo | undefined) {
+  const doWebhook = m.direcao === "entrada" ? w : undefined; // o Kommo não manda o texto da clínica por nenhum caminho
+  return {
+    conversa_id: conversaId, client_id: clientId, direcao: m.direcao,
+    autor: autorDaSaidaKommo(m),
+    texto: doWebhook?.texto ?? null,
+    tipo: m.direcao === "saida" ? "kommo_sem_texto" : doWebhook ? tipoKommo(doWebhook.tipo) : "kommo_sem_texto",
+    enviada_em: m.enviadaEm, externo_id: m.messageId,
+  };
+}
+
 export type ResultadoKommo = { robo?: number; dias: number; eventos: number; conversas: number; mensagens: number; com_texto: number; ate: string | null; erros: string[]; valoresVistos: Record<string, Record<string, number>> };
 
 async function eventosDoDia(dom: string, token: string, tipo: string, de: number, ate: number): Promise<EventoKommo[]> {
@@ -179,17 +209,33 @@ export async function ingerirConversasKommo(
 const PAUSA_NOVA_CONVERSA_MS = 7 * 86_400_000;
 
 /**
+ * Conversa já gravada com a chave antiga (o id do talk, de antes do agrupamento por lead de 30/10/2026). `ate` é a
+ * última mensagem dela já gravada: só a mensagem até esse instante volta para ela (é a que já está lá); a posterior
+ * segue o atendimento do lead. Uma string sozinha = a chave, sem limite.
+ */
+export type ConversaLegadaKommo = string | { externo_id: string; ate: string | null };
+
+/**
  * Conversa de cada mensagem: o atendimento do lead ("lead:<id>:<dia em Brasília em que começou>"), que continua
  * enquanto o lead manda ou recebe mensagem com menos de 7 dias de intervalo. Sem lead, fica o talk do Kommo.
  * `ultimas` traz, por lead, a conversa mais recente já gravada (para continuar o atendimento aberto).
+ * `legadas` traz, por talk, a conversa gravada com a chave antiga: a mensagem desse talk fica nela (o vínculo com o
+ * lead vem do evento na hora de gravar) e não abre nem estende atendimento do lead. Sem `legadas`, igual a antes.
  */
 export function chavesConversaKommo(
   msgs: Pick<MensagemKommo, "messageId" | "leadId" | "talkId" | "enviadaEm">[],
   ultimas: Map<string, { externo_id: string; ultima_msg_em: string }>,
+  legadas: Map<string, ConversaLegadaKommo> = new Map(),
 ): Map<string, string> {
   const chave = new Map<string, string>();
   const atual = new Map(ultimas);
   for (const m of [...msgs].sort((a, b) => a.enviadaEm.localeCompare(b.enviadaEm))) {
+    const legada = legadas.get(m.talkId);
+    if (legada != null) {
+      const ext = typeof legada === "string" ? legada : legada.externo_id;
+      const ate = typeof legada === "string" ? null : legada.ate;
+      if (ate == null || Date.parse(m.enviadaEm) <= Date.parse(ate)) { chave.set(m.messageId, ext); continue; }
+    }
     if (!m.leadId) { chave.set(m.messageId, m.talkId); continue; }
     const aberta = atual.get(m.leadId);
     if (aberta && Date.parse(m.enviadaEm) - Date.parse(aberta.ultima_msg_em) <= PAUSA_NOVA_CONVERSA_MS) {
@@ -205,11 +251,31 @@ export function chavesConversaKommo(
   return chave;
 }
 
+/**
+ * Atendimento aberto de cada lead para uma janela que termina em `fimJanela`: a conversa mais recente dele que já
+ * tinha começado até o fim da janela. Na sincronização normal é a mais recente de todas (como antes); ao reprocessar
+ * uma janela antiga, é a conversa em que aquelas mensagens já estão, e não um atendimento posterior do mesmo lead
+ * (que receberia as mesmas mensagens de novo). Sem última mensagem, a conversa não conta.
+ */
+export function atendimentosAbertos(
+  convs: { lead: string; externo_id: string; iniciada_em: string | null; ultima_msg_em: string | null }[],
+  fimJanela: number,
+): Map<string, { externo_id: string; ultima_msg_em: string }> {
+  const abertas = new Map<string, { externo_id: string; ultima_msg_em: string }>();
+  for (const c of convs) {
+    if (!c.ultima_msg_em) continue;
+    if (c.iniciada_em && Date.parse(c.iniciada_em) > fimJanela) continue;
+    const atual = abertas.get(c.lead);
+    if (!atual || Date.parse(c.ultima_msg_em) > Date.parse(atual.ultima_msg_em)) abertas.set(c.lead, { externo_id: c.externo_id, ultima_msg_em: c.ultima_msg_em });
+  }
+  return abertas;
+}
+
 /** Grava as mensagens de uma janela para um cliente: conversas (lead no dia), texto do webhook e mensagens. */
 async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoKommo, msgs: MensagemKommo[], cursor: number, fimJanela: number, r: ResultadoKommo): Promise<void> {
   const clientId = conn.client_id;
   // Texto das recebidas: webhook do mesmo período (com folga), pelo id da mensagem.
-  const texto = new Map<string, { texto: string | null; tipo: string | null }>();
+  const texto = new Map<string, TextoWebhookKommo>();
   if (msgs.some((m) => m.direcao === "entrada")) {
     for (let de = 0; de < 20_000; de += 1000) {
       const { data: raws, error: eR } = await admin.from("crm_raw_events").select("raw_payload")
@@ -232,21 +298,33 @@ async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoK
     if (erroLeads) { r.erros.push("Não foi possível ler os vínculos de leads"); return; }
     for (const l of ls ?? []) leadDe.set(l.external_lead_id as string, l.id as string);
   }
-  // Atendimento aberto de cada lead (a conversa mais recente dele), para a mensagem nova continuar nele.
-  const ultimas = new Map<string, { externo_id: string; ultima_msg_em: string }>();
+  // Atendimento aberto de cada lead (a conversa mais recente dele que já tinha começado até o fim da janela), para a
+  // mensagem nova continuar nele e a reprocessada voltar para onde já está.
+  const convsLead: { lead: string; externo_id: string; iniciada_em: string | null; ultima_msg_em: string | null }[] = [];
   const extDe = new Map([...leadDe].map(([ext, id]) => [id, ext]));
   const idsLead = [...leadDe.values()];
   for (let i = 0; i < idsLead.length; i += 200) {
-    const { data: us, error: erroUlt } = await admin.from("conversas").select("lead_id, externo_id, ultima_msg_em").eq("client_id", clientId).eq("provider", "kommo").like("externo_id", "lead:%").in("lead_id", idsLead.slice(i, i + 200));
+    const { data: us, error: erroUlt } = await admin.from("conversas").select("lead_id, externo_id, iniciada_em, ultima_msg_em").eq("client_id", clientId).eq("provider", "kommo").like("externo_id", "lead:%").in("lead_id", idsLead.slice(i, i + 200));
     if (erroUlt) { r.erros.push("Não foi possível ler as conversas abertas dos leads"); return; }
-    for (const u of (us ?? []) as { lead_id: string; externo_id: string; ultima_msg_em: string | null }[]) {
+    for (const u of (us ?? []) as { lead_id: string; externo_id: string; iniciada_em: string | null; ultima_msg_em: string | null }[]) {
       const ext = extDe.get(u.lead_id);
-      if (!ext || !u.ultima_msg_em) continue;
-      const atual = ultimas.get(ext);
-      if (!atual || u.ultima_msg_em > atual.ultima_msg_em) ultimas.set(ext, { externo_id: u.externo_id, ultima_msg_em: u.ultima_msg_em });
+      if (ext) convsLead.push({ lead: ext, externo_id: u.externo_id, iniciada_em: u.iniciada_em, ultima_msg_em: u.ultima_msg_em });
     }
   }
-  const chaveDe = chavesConversaKommo(msgs, ultimas);
+  const ultimas = atendimentosAbertos(convsLead, fimJanela);
+  // Conversas gravadas com a chave antiga (o id do talk, antes do agrupamento por lead): a mensagem que já está nelas
+  // continua nelas, e o upsert abaixo liga a conversa ao lead do evento. Sem isso, o reprocesso abriria uma segunda
+  // conversa "lead:<id>:<dia>" com as mesmas mensagens. Só a mesma clínica e o mesmo provider, pelo id do talk.
+  const legadas = new Map<string, ConversaLegadaKommo>();
+  const talksJanela = [...new Set(msgs.map((m) => m.talkId))];
+  for (let i = 0; i < talksJanela.length; i += 200) {
+    const { data: ls, error: erroLegadas } = await admin.from("conversas").select("externo_id, ultima_msg_em").eq("client_id", clientId).eq("provider", "kommo").in("externo_id", talksJanela.slice(i, i + 200));
+    if (erroLegadas) { r.erros.push("Não foi possível ler as conversas antigas por talk"); return; }
+    for (const l of (ls ?? []) as { externo_id: string; ultima_msg_em: string | null }[]) {
+      if (l.ultima_msg_em) legadas.set(l.externo_id, { externo_id: l.externo_id, ate: l.ultima_msg_em });
+    }
+  }
+  const chaveDe = chavesConversaKommo(msgs, ultimas, legadas);
   const chave = (m: MensagemKommo) => chaveDe.get(m.messageId)!;
 
   // Junta com o que já existe para não encolher início/fim.
@@ -282,13 +360,7 @@ async function gravarJanela(admin: SupabaseClient<any, any, any>, conn: ConexaoK
     const w = m.direcao === "entrada" ? texto.get(m.messageId) : undefined;
     if (w?.texto) r.com_texto++;
     r.valoresVistos.direcao[m.direcao] = (r.valoresVistos.direcao[m.direcao] ?? 0) + 1;
-    return {
-      conversa_id: idConv.get(chave(m))!, client_id: clientId, direcao: m.direcao,
-      autor: m.direcao === "saida" ? "Clínica" : "Paciente",
-      texto: w?.texto ?? null,
-      tipo: m.direcao === "saida" ? "kommo_sem_texto" : w ? tipoKommo(w.tipo) : "kommo_sem_texto",
-      enviada_em: m.enviadaEm, externo_id: m.messageId,
-    };
+    return linhaDaMensagemKommo(m, idConv.get(chave(m))!, clientId, w);
   });
   for (let i = 0; i < linhasMsg.length; i += 500) {
     const { error: eM } = await admin.from("mensagens").upsert(linhasMsg.slice(i, i + 500), { onConflict: "conversa_id,externo_id" });

@@ -906,25 +906,6 @@
 }
 
 /* ---------- Descobertas da Hoje no cartão largo: a ação e o "Por quê?" ficam na mesma linha do texto (régua de 1,5 tela, D-08) ---------- */
-/* Só na Hoje (escopo .nx-hoje): o cartão de 3 descobertas passa de ~150 px para ~95 px cada, sem esconder nada nem subir o limite. */
-@container nx-descoberta (min-width: 641px) {
-  .app.product-workspace:not(.sap-workspace) .nx-hoje .nx-descoberta {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-hoje .nx-descoberta__acoes {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-hoje .nx-descoberta__acoes > .nx-acao-pilula {
-    flex: 0 1 340px;
-    min-width: 0;
-  }
-  .app.product-workspace:not(.sap-workspace) .nx-hoje .nx-descoberta__porque-botao {
-    flex: none;
-  }
-}
 
 /* ---------- Movimento da nota e da prova só para quem não pediu menos movimento ---------- */
 @media (prefers-reduced-motion: no-preference) {

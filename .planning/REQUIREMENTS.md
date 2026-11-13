@@ -141,6 +141,16 @@ Escopo de 10/11/2026 (João): a leitura sai só de regras fixas, calculada na ho
 - [ ] **CINCO-07**: O Fechamento do mês abre como história em cartões (um número por cartão, avanço por toque, seta e teclado), comparando só com o mês anterior; Compartilhar e PDF ficam para a fase de envio
 - [ ] **CINCO-08**: As alturas continuam dentro do limite (1218 px em 375x812 e 1350 px em 1440x900, com "Ver tudo" fechado) e nada fica cortado, conferido por teste automático; só regras (sem IA), sem SQL nem migration
 
+### Contas certas e saúde 75 ou mais (CONTA) — Phase 03.1.1.1.1
+
+- [ ] **CONTA-01**: "Funil fora de ordem" trava só a conclusão que usa a etapa com problema (D-01): as etapas em ordem continuam dando veredito, anéis e maior perda; a etapa que cresce vira achado da equipe "conferir a marcação no CRM"
+- [ ] **CONTA-02**: Medida parcial aparece como ressalva "medido em N de M dias", não "Sem dado"; Negociação nunca é somada entre dias (é fila: vale o último dia medido)
+- [ ] **CONTA-03**: A nota de saúde não pune conexão que funciona por estado do negócio (D-04): fonte parada pelo cliente ou sem movimento fica neutra com alerta de quem resolve; planilha manual atrasada vale 60; cada fato desconta uma vez
+- [ ] **CONTA-04**: Contas no banco sem erro nosso: etapa sem papel volta a contar pelo nome, Agendaram "não se aplica" sem etapa de agendamento, Fecharam nulo só por regra do período, qualidade_dados no recorte da clínica e sem duplicata, "dado até" de anúncios só de contas ativas, uma origem por pessoa
+- [ ] **CONTA-05**: O histórico diário conta entradas do dia (uma vez por pessoa em 30 dias), Negociação só como fila do cron, e é preenchido de novo com a mesma regra
+- [ ] **CONTA-06**: Conversas do Kommo com autor atendente gravado, robô marcado também após gatilho de etapa, e conversas antigas ligadas ao lead sem duplicar
+- [ ] **CONTA-07**: Toda clínica ativa chega a 75 ou mais de saúde, ou cada desconto que sobra tem "quem resolve" (Cliente/Equipe/Comercial) numa lista fora do repo; nenhum dado de cliente no repo; SQL de escrita só o João roda (D-03)
+
 ## Future Requirements
 
 ### v1.5
@@ -259,10 +269,17 @@ Escopo de 10/11/2026 (João): a leitura sai só de regras fixas, calculada na ho
 | CINCO-06 | Phase 03.1.1.1 | Pending |
 | CINCO-07 | Phase 03.1.1.1 | Pending |
 | CINCO-08 | Phase 03.1.1.1 | Pending |
+| CONTA-01 | Phase 03.1.1.1.1 | Pending |
+| CONTA-02 | Phase 03.1.1.1.1 | Pending |
+| CONTA-03 | Phase 03.1.1.1.1 | Pending |
+| CONTA-04 | Phase 03.1.1.1.1 | Pending |
+| CONTA-05 | Phase 03.1.1.1.1 | Pending |
+| CONTA-06 | Phase 03.1.1.1.1 | Pending |
+| CONTA-07 | Phase 03.1.1.1.1 | Pending |
 
 **Coverage:**
-- v1 requirements: 80 total
-- Mapped to phases: 80
+- v1 requirements: 87 total
+- Mapped to phases: 87
 - Unmapped: 0 ✓
 
 ---
