@@ -292,13 +292,14 @@ for (const source of ["anuncios", "crm-painel", "atendimento"] as const) {
     const path = source === "anuncios" ? "**/rest/v1/meta_ads_daily?**" : `**/rest/v1/rpc/${source === "crm-painel" ? "crm_metricas_essenciais" : "wts_resumo"}`;
     await context.route(path, r => fail ? r.fulfill({ status: 503, json: { message: "fictional failure" } }) : r.fulfill({ json: [] }));
     await page.goto(`/${CID}/${source}`);
-    const alert = page.getByRole("alert").filter({ has: page.getByRole("heading", { name: /^Não foi possível carregar os números/ }) });
+    // O aviso de erro (NxErro, no molde de 03.1 e no formato 5 segundos) é um alerta com o texto, sem título; o botão diz "Tentar de novo".
+    const alert = page.getByRole("alert").filter({ hasText: /Não foi possível carregar os números/ });
     await expect(alert).toBeVisible({ timeout: 20000 });
     await expect(page.getByText(/Nenhum atendimento no período|Ainda sem leads|Sem investimento no período/)).toHaveCount(0);
     fail = false;
-    await alert.getByRole("button", { name: "Tentar novamente", exact: true }).click();
+    await alert.getByRole("button", { name: /^Tentar (novamente|de novo)$/ }).click();
     await expect(alert).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: /Não foi possível carregar os números/ })).toHaveCount(0);
+    await expect(page.getByText(/Não foi possível carregar os números/)).toHaveCount(0);
   });
 }
 

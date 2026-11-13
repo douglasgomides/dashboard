@@ -30,7 +30,12 @@ export async function alturaDaAbaAberta(page: Page, seletor = "[data-juntada]"):
   return alvo.evaluate((el) => ({ altura: el.getBoundingClientRect().height, janela: innerHeight }));
 }
 
-const dia = (i: number) => new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+/**
+ * Dia (AAAA-MM-DD) de `i` dias atrás no fuso de Brasília, o mesmo "hoje" do app. Os mocks não podem usar o dia em UTC: entre 21h e 24h de Brasília o
+ * dia UTC já é o seguinte e desloca toda janela de período (um spec que passa de manhã falharia à noite).
+ */
+export const diaBR = (i: number) => new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Sao_Paulo" }).format(new Date(Date.now() - i * 86400000));
+const dia = diaBR;
 const num = (valor: number | null, extra: Record<string, unknown> = {}) => ({ valor, fonte: "crm", motivo_sem_dado: valor == null ? "Sem dado no CRM." : null, responsavel: "comercial", ...extra });
 const pessoa = (i: number) => ({ id: `p${i}`, pessoa: `pp${i}`, nome: `Pessoa fictícia ${i}`, canal: "whatsapp", conversa_id: null, data: dia(i + 1), fonte: "crm", crm: null, leitura: null });
 const lista = (n: number) => ({ total: n, itens: Array.from({ length: Math.min(n, 3) }, (_, i) => pessoa(i)) });
@@ -48,7 +53,7 @@ export async function mockInstagram(context: BrowserContext) {
     const de = datas.find((d) => d.startsWith("gte."))?.slice(4) ?? "0000";
     const ate = datas.find((d) => d.startsWith("lte."))?.slice(4) ?? "9999";
     const linhas = Array.from({ length: 60 }, (_, i) => ({
-      date: new Date(Date.now() - i * 86400000).toISOString().slice(0, 10),
+      date: diaBR(i),
       client_id: CID,
       reach: 900 + ((i * 137) % 600),
       new_followers: 8 + (i % 7),
@@ -195,7 +200,7 @@ export async function mockCrm(context: BrowserContext) {
  * Dados fictícios, só leitura.
  */
 export async function mockAnuncios(context: BrowserContext, variante: "bom" | "suspeito" = "bom") {
-  const dia1 = (i: number) => new Date(Date.now() - (i + 1) * 86400_000).toISOString().slice(0, 10);
+  const dia1 = (i: number) => diaBR(i + 1);
   const campanhas = [
     { campaign_id: "c1", name: "Primeira consulta fictícia", objective: "MESSAGES", spend: 60, conv: 3, imp: 5000, clk: 70 },
     { campaign_id: "c2", name: "Tráfego fictício", objective: "OUTCOME_TRAFFIC", spend: 30, conv: 0, imp: 6000, clk: 120 },

@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 import { conferirCincoSegundos, cortesEm, abrirVerTudo, textoVisivel } from "./apoio-cinco-segundos";
-import { TELAS_DE_MEDIDA, LIMITE_DE_ALTURA, alturaDaAbaAberta, semRolagemLateral, mockAnuncios } from "./apoio-telas-juntadas";
+import { TELAS_DE_MEDIDA, LIMITE_DE_ALTURA, alturaDaAbaAberta, diaBR, semRolagemLateral, mockAnuncios } from "./apoio-telas-juntadas";
 
 // Anúncios no formato 5 segundos (Phase 03.1.1.1, plano 09): o veredito do custo por conversa contra o período anterior da própria clínica, com o
 // sinal honesto, abre a tela; a régua dos próprios dias é a prova. Dados fictícios (nenhuma campanha, nome ou número de cliente real).
@@ -12,7 +12,7 @@ const RAIZ = '[data-tela="anuncios"]';
 
 /** Troca o total do período em ads_resumo (as rotas registradas por último valem primeiro): o gasto e as conversas de agora e de antes. */
 async function totaisDoSpec(context: BrowserContext, agora: { gasto: number; conversas: number }, antes: { gasto: number; conversas: number }) {
-  const dia1 = (i: number) => new Date(Date.now() - (i + 1) * 86400_000).toISOString().slice(0, 10);
+  const dia1 = (i: number) => diaBR(i + 1);
   await context.route("**/rest/v1/rpc/ads_resumo", (r) => {
     const b = r.request().postDataJSON() ?? {};
     const anterior = b.p_end < dia1(25);
@@ -21,8 +21,7 @@ async function totaisDoSpec(context: BrowserContext, agora: { gasto: number; con
   });
 }
 
-const DIA = 86_400_000;
-const dia1 = (i: number) => new Date(Date.now() - (i + 1) * DIA).toISOString().slice(0, 10);
+const dia1 = (i: number) => diaBR(i + 1);
 const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 /** Os 4 dias seguidos de verba baixa do spec (de 9 a 12 dias atrás, contando de ontem como 0). */
 const DIAS_BAIXOS = [8, 9, 10, 11];

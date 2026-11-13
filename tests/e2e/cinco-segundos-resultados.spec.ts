@@ -1,7 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 import { abrirVerTudo, conferirCincoSegundos, cortesEm } from "./apoio-cinco-segundos";
-import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, mockCrm, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
+import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, diaBR, mockAnuncios, mockCrm, mockInstagram, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 
 // Resultados da clínica no formato 5 segundos (Phase 03.1.1.1, plano 03): o veredito abre a tela com os 3 anéis (Conversas, Agendaram,
 // Fecharam) contra o período anterior da própria clínica; tudo o que a tela mostrava antes mora no "Ver tudo", fechado. Dados fictícios.
@@ -9,7 +9,7 @@ import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, moc
 test.use({ reducedMotion: "reduce" });
 
 const RAIZ = '[data-tela="resultados"]';
-const dia = (i: number) => new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+const dia = diaBR;
 
 /**
  * Histórico diário do próprio spec: o período atual (os 29 dias fechados) tem 50% mais conversas, 25% menos agendamentos e metade dos
