@@ -542,15 +542,19 @@ for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes, c
   }
 }
 
-test("Onde os pacientes travam: Consultas e Vendas abrem com \"Falta dado:\" e a contagem das abas continua \"—\"", async ({ page, context }) => {
+test("Onde os pacientes travam: Consultas e Vendas abrem com o que falta e a contagem das abas continua \"—\"", async ({ page, context }) => {
   for (const [rotulo, sub] of [["Consultas", "consultas"], ["Vendas", "vendas"]] as const) {
     await abrirParte(page, context, "viewer", sub, { width: 1440, height: 900 });
     const nav = pasta(page, TRAVAM);
     await expect(aba(nav, rotulo)).toHaveAttribute("aria-current", "page");
-    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-    await expect(leitura.getByText(/^Falta dado: a tela ainda não tem a fonte ligada/)).toBeVisible();
-    await expect(leitura.getByText(/Quem resolve:/)).toBeVisible();
-    await expect(leitura.locator(".nx-acao-pilula")).toBeVisible();
+    // quick-ver-tudo-abas: a leitura saiu (repetia o quadro). O que falta e quem resolve aparecem uma vez só, no quadro "Em construção";
+    // o período e o "sem selo" uma vez só, pequenos, no cabeçalho.
+    await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+    const vazio = page.locator('[data-juntada] [data-peca="vazio"]');
+    await expect(vazio.getByText(/^O que falta: a fonte que mostra quem virou/)).toBeVisible();
+    await expect(vazio.getByText(/^Quem resolve: /)).toHaveCount(1);
+    await expect(vazio.getByText("Em construção")).toBeVisible();
+    await expect(page.locator('[data-juntada] .nx-pagina__meta').getByText("sem selo")).toHaveCount(1);
     for (const r of ["Consultas", "Vendas"]) {
       const contagem = aba(nav, r).locator(".nx-pasta__contagem");
       await expect(contagem).toContainText("—");
