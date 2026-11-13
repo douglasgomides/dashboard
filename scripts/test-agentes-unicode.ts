@@ -32,6 +32,12 @@ try {
     const u = new URL(String(input));
     if (u.origin === origin) {
       const table = u.pathname.split("/").at(-1);
+      // Leads da clínica pela função (conta compartilhada): contagens por HEAD, vendas por POST.
+      if (u.pathname.endsWith("/rpc/crm_leads_do_cliente")) {
+        const p = init?.method === "POST" ? JSON.parse(String(init.body)).p_client : u.searchParams.get("p_client");
+        assert.equal(p, cid);
+        return init?.method === "HEAD" ? new Response(null, { status: 200, headers: { "content-range": "*/0" } }) : Response.json([]);
+      }
       if (init?.method === "POST") {
         assert.equal(table, "ia_execucoes"); costRows++;
         return Response.json(null);
