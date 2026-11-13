@@ -138,7 +138,12 @@ test("tudo o que a tela mostrava mora no Ver tudo, fechado, na mesma ordem, com 
   expect(await verTudo.evaluate((el) => (el as HTMLDetailsElement).open)).toBe(false);
   await verTudo.locator("> summary").click();
   const regiao = page.getByRole("region", { name: "Números do atendimento", exact: true });
-  await expect(regiao.locator(".ws-metric-value")).toHaveText(["520", "15min", "4%", /\d+/]);
+  // quick-ver-tudo: o número de atendimentos e o de pessoas já estão nos cartões do topo (uma vez só); aqui ficam a espera, o roteamento e as abertas,
+  // e o bloco abre com UMA frase (a espera na metade dos atendimentos).
+  await expect(regiao.locator(".ws-metric-value")).toHaveText(["15min", "4%", /\d+/]);
+  await expect(page.locator(`${RAIZ} .nx-pagina__cartoes [data-peca="cartao-numero"]`, { hasText: "Pessoas diferentes" })).toHaveCount(1);
+  await expect(page.locator(`${RAIZ} details#detalhes-atendimento [data-peca="cabeca-do-bloco"]`).first()).toContainText("Na metade dos atendimentos, a 1ª resposta veio em até 15min.");
+  await expect(page.locator(`${RAIZ} #resumo-atendimento`)).toHaveCount(0);
   await expect(page.locator(`${RAIZ} #volume`)).toBeVisible();
   await expect(page.locator(`${RAIZ} #por-equipe`)).toBeVisible();
   await expect(page.locator(`${RAIZ} #tempo-fechar`)).toBeVisible();
@@ -280,7 +285,7 @@ test("as descobertas dizem a conta da própria clínica, a quarta mora no Ver tu
   await expect(itens.filter({ hasText: "quase parou" }).locator("a.nx-acao-pilula__seta")).toHaveAttribute("href", new RegExp(`/${CID}/anuncios`));
   await expect(itens.filter({ hasText: "O pico veio do Instagram" }).locator("a.nx-acao-pilula__seta")).toHaveAttribute("href", new RegExp(`/${CID}/conteudo`));
 
-  // A quarta (o padrão da semana) mora no começo do Ver tudo, com os fatores à mostra, e a ação leva à tabela por equipe.
+  // A quarta (o padrão da semana) mora no começo do Ver tudo, no mesmo desenho das de cima (o Por quê? com os 3 fatores), e a ação leva às equipes.
   await expect(page.locator(`${RAIZ} [data-descoberta-extra]`)).toBeHidden();
   await abrirVerTudo(page, RAIZ);
   const extra = page.locator(`${RAIZ} [data-descoberta-extra]`);

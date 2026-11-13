@@ -169,8 +169,11 @@ test("(c) com o Instagram parado há 10 dias: Sem leitura, para consertar e quem
   expect(await semRolagemLateral(page)).toBe(true);
   // O mesmo motivo que Resultados da clínica dá para os mesmos dados.
   await page.goto(`/${CID}?preset=30d`);
-  await abrirResumoDeResultados(page);
-  await expect(page.getByRole("region", { name: "Resumo da clínica", exact: true }).getByText(/o Instagram está sem dado novo desde \d{2}\/\d{2}/)).toBeVisible();
+  // O resumo saiu do "Ver tudo" (quick-ver-tudo): o veredito de Resultados diz o mesmo motivo, com o passo e quem resolve.
+  const deResultados = page.locator('[data-tela="resultados"] [data-peca="veredito"]');
+  await expect(deResultados).toHaveAttribute("data-modo", "sem-leitura");
+  await expect(deResultados.getByText(/o Instagram está sem dado novo desde \d{2}\/\d{2}/)).toBeVisible();
+  await expect(deResultados.getByText(/^Quem resolve: Equipe /)).toBeVisible();
 });
 
 /** Resultados (03.1.1.1-03): o resumo fica no "Ver tudo"; espera o veredito sair de "carregando" antes de abrir. */
@@ -265,16 +268,13 @@ test("(f) a primeira descoberta da Hoje é a mesma frase do Próximo passo de Re
   await dadosRealistas(context);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${CID}?preset=30d`);
-  // O Próximo passo de Resultados fica dentro do "Ver tudo" (03.1.1.1-03).
-  await abrirResumoDeResultados(page);
-  const resumo = page.getByRole("region", { name: "Resumo da clínica", exact: true });
-  const daSemana = resumo.locator(".nx-leitura__linha", { has: page.getByText("Próximo passo", { exact: true }) }).locator(".nx-acao-pilula__texto");
-  await expect(daSemana).toBeVisible();
-  // Resultados mostra o resumo assim que chega o Instagram e refaz com pessoas, anúncios e CRM: espera as consultas terminarem.
+  // O Próximo passo de Resultados virou a ação de uma descoberta do "Ver tudo" (quick-ver-tudo: a leitura saiu de lá).
+  // Resultados refaz a leitura com pessoas, anúncios e CRM: espera as consultas terminarem.
   await page.waitForLoadState("networkidle");
-  await abrirVerTudo(page, '[data-tela="resultados"]');
+  await abrirResumoDeResultados(page);
+  const daSemana = page.locator('[data-tela="resultados"] [data-proximo-passo] .nx-acao-pilula__texto');
   await expect(daSemana).toBeVisible();
-  const fraseDaSemana = norm(await daSemana.innerText());
+  const fraseDaSemana = `${norm(await daSemana.innerText())}.`;
 
   await page.goto(`/${CID}/hoje?preset=30d`);
   const primeira = page.locator('[data-tela="hoje"] [data-peca="descoberta"][data-proximo] .nx-acao-pilula__texto');

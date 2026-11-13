@@ -178,12 +178,17 @@ test("a régua dos próprios dias: tocar num ponto escreve a frase do dia e as p
   expect(await cortesEm(page, RAIZ)).toEqual([]);
 });
 
-test("Ver tudo guarda o que a tela tinha antes: gráfico por dia, campanhas e o 4º número", async ({ page, context }) => {
+test("Ver tudo guarda o que só ele tinha: gráfico por dia, campanhas e os cliques no link, sem repetir os números do topo", async ({ page, context }) => {
   await abrir(page, context, "viewer", "bom");
   await abrirVerTudo(page, RAIZ);
   await expect(page.getByRole("slider", { name: /^Investimento e conversas por dia/ })).toBeVisible();
-  await expect(page.locator(`${RAIZ} .nx-cartao`, { hasText: "Cliques no link" })).toBeVisible();
-  await expect(page.getByRole("figure", { name: "Do anúncio à conversa" })).toBeVisible();
+  // Os cliques no link (o antigo 4º número) moram no funil "Do anúncio à conversa"; a fileira de 4 cartões que repetia o topo saiu.
+  await expect(page.getByRole("figure", { name: "Do anúncio à conversa" })).toContainText("Cliques no link");
+  await expect(page.locator(`${RAIZ} details#detalhes-anuncios .nx-cartao`, { hasText: "Investido" })).toHaveCount(0);
+  // A leitura do período saiu do "Ver tudo": o que só ela dizia virou descoberta (mesmo desenho), e o período fica uma vez só, no começo.
+  await expect(page.locator(`${RAIZ} details#detalhes-anuncios [data-peca="leitura"]`)).toHaveCount(0);
+  await expect(page.locator(`${RAIZ} details#detalhes-anuncios [data-peca="periodo-do-ver-tudo"]`)).toContainText(/\d\d\/\d\d a \d\d\/\d\d, comparado com/);
+  await expect(page.locator(`${RAIZ} details#detalhes-anuncios [data-peca="periodo-do-ver-tudo"]`)).toContainText("sem selo");
 });
 
 // ---------------------------------------------------------------- 3 números-chave e descobertas
@@ -209,7 +214,7 @@ test("os 3 números-chave: investido com os dias de verba baixa, conversas fora 
   await expect(custo.getByRole("slider")).toHaveAttribute("aria-label", /custo por conversa, média de 7 dias/);
   await expect(page.locator(`${RAIZ} .nx-pagina__cartoes`, { hasText: "Cliques no link" })).toHaveCount(0);
   await abrirVerTudo(page, RAIZ);
-  await expect(page.locator(`${RAIZ} .nx-cartao`, { hasText: "Cliques no link" })).toBeVisible();
+  await expect(page.getByRole("figure", { name: "Do anúncio à conversa" })).toContainText("Cliques no link");
 });
 
 test("a descoberta dos dias de verba baixa compara com os dias normais da própria clínica, mostra a faixa do normal e nunca estima conversa perdida", async ({ page, context }) => {

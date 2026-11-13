@@ -316,7 +316,10 @@ for (const t of TELAS) {
   for (const c of cartoes) assert.ok(c.depois.length > 0, `${t.rota}: tela nova com o cartão "${c.cartao}" sem "Depois"`);
   const fonteRota = fonteDe(arquivoRota);
   assert.ok(fonteRota.includes("<PaginaNexo"), `${t.rota}: marcada novo, mas ${arquivoRota} não usa <PaginaNexo`);
-  assert.ok(fonteRota.includes("<LeituraDaTela"), `${t.rota}: marcada novo, mas ${arquivoRota} não usa <LeituraDaTela`);
+  // Formato 5 segundos (quick-ver-tudo, João 13/11/2026): a leitura saiu do "Ver tudo"; a tela lê os mesmos fatos pelo veredito (com o portão
+  // e o "Falta dado") e o que só a leitura dizia vira descoberta (descobertasDaLeitura). Uma das duas formas é obrigatória.
+  const leConformeOMolde = fonteRota.includes("<LeituraDaTela") || (fonteRota.includes("<NxVeredito") && fonteRota.includes("descobertasDaLeitura("));
+  assert.ok(leConformeOMolde, `${t.rota}: marcada novo, mas ${arquivoRota} não usa <LeituraDaTela (nem o veredito com descobertasDaLeitura)`);
   assert.equal(
     antigos.length,
     0,

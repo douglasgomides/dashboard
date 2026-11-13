@@ -15,19 +15,22 @@ import { SyncButton } from "@/components/sync-button";
 import { fmtFracao, MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { SeguidoresSemana } from "@/components/seguidores-impulsionados";
 import { NxCard, NxKpi, NxTag } from "@/components/nx";
-import { NxAcaoPilula, NxBarras, NxCartaoNumero, NxPilulaVariacao } from "@/components/nx/cartoes";
+import { NxAcaoPilula, NxCartaoNumero, NxPilulaVariacao } from "@/components/nx/cartoes";
 import { linhaDaRota } from "@/components/nx/hoje";
 import { serieContinua } from "@/lib/linha-30-dias";
 import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
-import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { PaginaNexo } from "@/components/nx/pagina";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxTabela, NxVazio } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { IgLinhaSeguidores, IgColunasSaldo } from "@/components/nx/instagram";
 import { NxTop5Salvos, type PostDoTop5 } from "@/components/nx/top5-salvos";
-import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxDescobertas, NxMaisDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
 import { NxOQueFunciona, type AbaDaProva } from "@/components/nx/o-que-funciona";
 import { ACOES_DE_INSTAGRAM, descobertasDoInstagram, fraseDoFormato, numerosDoInstagram, vereditoDoInstagram, type EntradaCincoInstagram, type NumeroDoInstagram } from "@/lib/leitura/cinco-instagram";
-import { visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
+import { textoDaFrase, visiveisEResto } from "@/lib/leitura/cinco-segundos";
+import { descobertasDaLeitura, periodoDoVerTudo, visiveisERestoComLeitura } from "@/lib/leitura/leitura-em-descobertas";
+import { cabecaDaCobertura, cabecaDaEvolucaoDeSeguidores, cabecaDoAlcancePorFormato, cabecaDoBrutoLiquido } from "@/lib/leitura/ver-tudo-instagram";
 import { mapaDosPosts, melhorHorario } from "@/lib/mapa-dos-posts";
 import "@/styles/nexo-o-que-funciona.css";
 
@@ -188,7 +191,8 @@ function ConteudoPage() {
   if (!temIg) {
     return pagina(
       <NxVazio titulo="Instagram não conectado" falta="uma conta de Instagram ligada ao Nexo. Sem ela não há seguidores, posts nem alcance para analisar" quem="equipe_hub" passo="ligar a conta de Instagram do médico à Business Manager do cliente" />,
-      <LeituraDaTela fatos={fatos} carregando={false} semSelo />,
+      // A leitura do período saiu do "Ver tudo" (quick-ver-tudo): sem Instagram, o veredito e o aviso acima já dizem o que falta e quem resolve.
+      null,
       <NxVeredito veredito={vereditoDoInstagram({ diario: [], diarioAnterior: null, formatos: null }, fatos)} carregando={false} tela="conteudo" />,
     );
   }
@@ -204,42 +208,11 @@ function ConteudoPage() {
   const ultimo = seg && seg.points.length ? seg.points[seg.points.length - 1].followers : null;
   const melhorFormato = fm?.melhorFormato ?? null;
 
-  const cartoes = [
-    <NxCartaoNumero
-      key="seg"
-      icone={ic(Users)}
-      titulo="Seguidores hoje"
-      semMedida={ultimo == null}
-      valor={ultimo != null ? fmtN(ultimo) : "Sem dado"}
-      serie={serieDoCartao}
-      legenda={seg?.lastDate ? `última coleta em ${fmtDiaBR(seg.lastDate)}` : "nenhuma coleta no período"}
-    />,
-    <NxCartaoNumero
-      key="var"
-      icone={ic(TrendingUp)}
-      titulo="Variação no período"
-      semMedida={seg?.delta == null}
-      valor={seg?.delta == null ? "Sem dado" : `${seg.delta >= 0 ? "+" : "−"}${fmtN(Math.abs(seg.delta))}`}
-      legenda={seg?.delta == null ? "precisa de 2 dias com contagem" : `entre ${fmtDiaBR(seg.firstDate!)} e ${fmtDiaBR(seg.lastDate!)}`}
-    />,
-    <NxCartaoNumero
-      key="saldo"
-      icone={ic(Scale)}
-      titulo="Saldo do período"
-      semMedida={!(cresc && cresc.diasMedidos)}
-      valor={cresc && cresc.diasMedidos ? `${cresc.liquido >= 0 ? "+" : "−"}${fmtN(Math.abs(cresc.liquido))}` : "Sem dado"}
-      legenda={cresc && cresc.diasMedidos ? `entraram ${fmtN(cresc.novos)} e saíram ${fmtN(cresc.saidas)}` : "sem dias medidos no período"}
-    />,
-    <NxCartaoNumero
-      key="formato"
-      icone={ic(Trophy)}
-      titulo="Formato que mais alcança"
-      valor={melhorFormato ? melhorFormato.label : "Sem resposta"}
-      legenda={melhorFormato ? `${fmtN(melhorFormato.reachMedian)} contas por post (mediana)` : (fm?.melhorFormatoMotivo ?? "sem posts no período")}
-    />,
-  ] as const;
 
+  // Evolução de seguidores: só os dias medidos (a linha tracejada é estimativa e não entra na frase).
+  const primeiroSeguidor = seg && seg.points.length ? seg.points[0].followers : null;
   const evolucao = (
+    <NxBlocoDoVerTudo rotulo="Evolução de seguidores" cabeca={cabecaDaEvolucaoDeSeguidores({ primeiro: seg && seg.points.length >= 2 ? primeiroSeguidor : null, ultimo: seg && seg.points.length >= 2 ? ultimo : null, cobertura: seg?.coverage ?? 0 })}>
     <NxCard
       id="evolucao-seguidores"
       nivel={2}
@@ -285,18 +258,20 @@ function ConteudoPage() {
         </div>
       )}
     </NxCard>
+    </NxBlocoDoVerTudo>
   );
 
   const detalhe = (
     <div style={{ display: "grid", gap: 18 }}>
       {seg && seg.coverage >= 0.6 && (
-        <NxCard icone={ic(LineIcon)} titulo="Cobertura da contagem de seguidores" subtitulo="Quantos dias do período têm contagem">
+        <NxBlocoDoVerTudo rotulo="Cobertura da contagem de seguidores" cabeca={cabecaDaCobertura({ dias: seg.daysWithData, esperados: seg.expectedDays })}>
           <NxAviso tom="info" titulo={`${seg.daysWithData} de ${seg.expectedDays} dias com contagem`}>
             ({Math.round(seg.coverage * 100)}% do período, mínimo 60%)
           </NxAviso>
-        </NxCard>
+        </NxBlocoDoVerTudo>
       )}
       {cresc && cresc.days.length > 0 && (
+        <NxBlocoDoVerTudo rotulo="Crescimento: bruto × líquido" cabeca={cabecaDoBrutoLiquido({ novos: cresc.novos, saidas: cresc.saidas, diasMedidos: cresc.diasMedidos })}>
         <NxCard icone={ic(Scale)} titulo="Crescimento: bruto × líquido" subtitulo="Novos − saíram = o que mudou no total">
           <NxComoCalcula titulo="Como ler: crescimento bruto e líquido">
             Bruto é o número que o Instagram mostra em "Seguidores" (novos no período). Líquido desconta quem deixou de seguir ou saiu do Instagram, e é o que de fato mudou no total. A Meta leva cerca de 2 dias para fechar um dia, então os 2 últimos dias ficam de fora das somas e aparecem no gráfico como "em fechamento".
@@ -324,9 +299,10 @@ function ConteudoPage() {
             </div>
           )}
         </NxCard>
+        </NxBlocoDoVerTudo>
       )}
 
-      <SeguidoresSemana clientId={clientId} start={start} end={end} />
+      <SeguidoresSemana clientId={clientId} start={start} end={end} comCabeca />
 
       {fm && fm.total === 0 ? (
         <NxVazio titulo="Nenhum post no período" falta="posts do Instagram publicados nesse intervalo, então não dá para comparar formatos nem temas" quem="equipe_hub" passo="trocar o período no cabeçalho ou conferir se a coleta de posts rodou" />
@@ -334,6 +310,12 @@ function ConteudoPage() {
         fm && (
           <>
             {!fm.melhorFormato && <NxAviso tom="info" titulo="Melhor formato: ainda sem resposta." detalhe={fm.melhorFormatoMotivo} />}
+            <NxBlocoDoVerTudo
+              cabeca={cabecaDoAlcancePorFormato(
+                fm.porFormato.filter((r) => r.key !== "não classificado").map((r) => ({ nome: r.label, alcanceTipico: r.reachMedian, posts: r.count })),
+                MIN_POSTS_CONCLUSAO,
+              )}
+            >
             <NxRecolhido titulo="Alcance por formato e por tema" resumo="Duas tabelas com o alcance mediano de cada grupo de posts">
               <div style={{ display: "grid", gap: 18 }}>
                 <TabelaGrupo titulo="Posts por formato" sub={`${fm.total} posts no período · alcance mediano por post`} rows={fm.porFormato} col="Formato" icone={Layers} formato />
@@ -346,6 +328,7 @@ function ConteudoPage() {
                 />
               </div>
             </NxRecolhido>
+            </NxBlocoDoVerTudo>
           </>
         )
       )}
@@ -379,7 +362,19 @@ function ConteudoPage() {
 
   // Descobertas (de 0 a 5, só com a própria clínica): as 3 primeiras à vista, as outras no começo do "Ver tudo". Sem leitura, nenhuma.
   const descobertas = carregandoFatos ? { itens: [], aviso: null } : descobertasDoInstagram(entradaCinco, fatos);
-  const { visiveis, resto } = visiveisEResto(descobertas.itens);
+  // A leitura do período saiu do "Ver tudo" (João 13/11/2026): o que ela dizia e o topo ainda não diz vira descoberta, no mesmo desenho.
+  // O formato que mais alcança e salva está no veredito e na prova; o post mais salvo, no Top 5; o saldo de seguidores, no bloco
+  // "Crescimento: bruto × líquido" do próprio "Ver tudo".
+  const daLeitura = carregandoFatos
+    ? []
+    : descobertasDaLeitura({
+        fatos,
+        descobertas: descobertas.itens,
+        jaDitos: ["formato", "formato-melhor-taxa", "post-mais-salvo", "saldo-seguidores"],
+        textoDoTopo: [veredito?.tipo === "veredito" ? textoDaFrase(veredito.frase) : "", veredito?.tipo === "veredito" ? (veredito.apoio ?? "") : ""],
+      });
+  const { visiveis, resto } = visiveisERestoComLeitura(descobertas.itens, daLeitura);
+  const avisoDasDescobertas = visiveis.length >= 3 ? null : descobertas.aviso;
   // Os 5 posts do período com mais salvos (todos os formatos), da lista que a tela já carregou. Ficam à vista, entre as descobertas e o
   // "Ver tudo" (João 13/11/2026: Top 5 na tela mesmo passando do limite de 1,5 tela).
   const top5 = [...(posts.data ?? [])]
@@ -401,14 +396,16 @@ function ConteudoPage() {
       <PaginaNexo
         {...cabecalho}
         veredito={<NxVeredito veredito={veredito} carregando={carregandoFatos} tela="conteudo" />}
-        leitura={<LeituraDaTela fatos={fatos} carregando={carregandoFatos} semSelo />}
+        leitura={null}
+        periodoDoVerTudo={carregandoFatos ? null : periodoDoVerTudo(fatos)}
+        semSeloNoVerTudo
         cartoes={cartoesCinco as unknown as [ReactNode, ReactNode?, ReactNode?]}
         principal={prova}
         descobertas={
           carregandoFatos || veredito?.tipo !== "veredito" ? undefined : (
             <NxDescobertas
               titulo="O que descobrimos"
-              apoio={<p className={descobertas.aviso ? "nx-cinco-falta" : "nx-cinco-falta nx-instagram-ordem"}>{descobertas.aviso ?? "Em ordem de impacto"}</p>}
+              apoio={<p className={avisoDasDescobertas ? "nx-cinco-falta" : "nx-cinco-falta nx-instagram-ordem"}>{avisoDasDescobertas ?? "Em ordem de impacto"}</p>}
               itens={visiveis}
               clientId={clientId}
               dateRange={dateRangeState}
@@ -420,8 +417,9 @@ function ConteudoPage() {
         resumoDoVerTudo="temas, horários, formatos e a contagem de seguidores"
         detalhe={
           <div style={{ display: "grid", gap: 18 }}>
-            {resto.length > 0 && <MaisDescobertasDoInstagram itens={resto} clientId={clientId} dateRange={dateRangeState} aoAgir={agirNaDescoberta} />}
-            <div className="nx-grade nx-grade--4">{cartoes}</div>
+            <NxMaisDescobertas itens={resto} clientId={clientId} dateRange={dateRangeState} aoAgir={agirNaDescoberta} />
+            {/* Os 4 números de antes saíram (quick-ver-tudo): seguidores e variação estão no cartão do topo, o formato no veredito e na prova,
+                e o saldo no bloco "Crescimento: bruto × líquido" logo abaixo. */}
             {evolucao}
             {detalhe}
           </div>
@@ -445,34 +443,6 @@ function Top5DosSalvos({ posts, clientId, dateRange }: { posts: PostDaLista[]; c
       posts={posts}
       acao={destaques ? <NxAcaoPilula frase="Ver todos em Destaques" rotuloDaSeta="Abrir a aba Destaques" para={{ tela: destaques, clientId, dateRange }} /> : undefined}
     />
-  );
-}
-
-/** As descobertas que passam das 3 à vista (4 e 5) moram no "Ver tudo", já com os fatores do "Por quê?" abertos (nada some). */
-function MaisDescobertasDoInstagram({ itens, clientId, dateRange, aoAgir }: { itens: readonly Descoberta[]; clientId: string; dateRange: DateRangeState; aoAgir: (local: string) => void }) {
-  return (
-    <section className="nx-cinco-resto" aria-label="Mais descobertas do período" data-peca="mais-descobertas">
-      <h3 className="nx-cinco-resto__titulo">Mais descobertas do período</h3>
-      <div className="nx-cinco-resto__grade">
-        {itens.map((d) => {
-          const linha = d.acao.rota ? linhaDaRota(d.acao.rota) : undefined;
-          const local = d.acao.local;
-          return (
-            <article key={d.id} className="nx-cinco-resto__item" data-descoberta-extra={d.id}>
-              <NxSelo tom={d.tom} texto={d.selo} />
-              <p className="nx-cinco-resto__frase">{d.frase}</p>
-              <NxBarras barras={d.porque.barras} rotulo={d.porque.titulo} />
-              {d.porque.obs && <p className="nx-cinco-falta">{d.porque.obs}</p>}
-              {linha ? (
-                <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir a aba de origem" para={{ tela: linha, clientId, dateRange }} />
-              ) : local ? (
-                <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={() => aoAgir(local)} />
-              ) : null}
-            </article>
-          );
-        })}
-      </div>
-    </section>
   );
 }
 

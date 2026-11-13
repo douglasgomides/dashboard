@@ -100,22 +100,23 @@ for (const width of [375, 1440]) {
     expect(await page.locator(".nx-pagina__cartoes [data-peca=\"cartao-numero\"]").count()).toBeLessThanOrEqual(3);
     await expect(page.locator(".nx-pagina__principal [data-peca=\"agora-contra-antes\"]")).toBeVisible();
 
-    // O resumo é a leitura da tela, agora dentro do "Ver tudo": uma só, com as 3 linhas e o número ao lado.
+    // O resumo da clínica saiu do "Ver tudo" (quick-ver-tudo, João 13/11/2026): o que só ele dizia virou descoberta, no mesmo desenho das de
+    // cima, e a ação da semana é a ação de uma delas, com quem resolve. O período fica uma vez só, no começo do "Ver tudo".
     await abrirVerTudo(page, '[data-tela="resultados"]');
-    const resumo = page.getByRole("region", { name: "Resumo da clínica", exact: true });
-    await expect(resumo).toBeVisible();
-    await expect(resumo.getByText("O que aconteceu", { exact: true })).toBeVisible();
-    await expect(resumo.getByText("O que mais preocupa", { exact: true })).toBeVisible();
-    await expect(resumo.getByText("Próximo passo", { exact: true })).toBeVisible();
-    await expect(resumo.getByText(/Quem resolve:/).first()).toBeVisible();
-    await expect(resumo.locator(".nx-leitura__num").first()).toBeVisible();
+    await expect(page.getByRole("region", { name: "Resumo da clínica", exact: true })).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Leitura do período", exact: true })).toHaveCount(0);
+    const proximo = page.locator('[data-tela="resultados"] [data-proximo-passo]');
+    await expect(proximo).toHaveCount(1);
+    await expect(proximo.locator(".nx-acao-pilula__texto")).toBeVisible();
+    await expect(proximo.getByText(/Quem resolve:/)).toHaveCount(1);
+    await expect(page.locator('.nx-pagina__detalhe [data-peca="periodo-do-ver-tudo"]')).toContainText("comparado com");
 
-    // Os 4 cartões de pessoas (chamaram, agendaram, fecharam e o dinheiro) e o gráfico de contatos, no começo do "Ver tudo".
-    const cartoes = page.locator(".nx-pagina__detalhe .nexo-results-overview > .nx-grade > *");
-    expect(await cartoes.count()).toBeLessThanOrEqual(4);
-    await expect(page.locator(".nx-pagina__detalhe .nx-kpi .ws-metric-value").first()).toHaveText("120");
-    await expect(page.getByRole("heading", { name: "Contatos e agendamentos por dia" })).toBeVisible();
+    // O dinheiro e o gráfico de contatos, no começo do "Ver tudo". Chamaram, Agendaram e Fecharam já estão nos anéis do topo.
+    await expect(page.locator(".nx-pagina__detalhe .nx-kpi", { hasText: "Chamaram" })).toHaveCount(0);
+    await expect(page.locator(".nx-pagina__detalhe .nx-kpi").first()).toContainText(/Faturamento|Investimento/);
+    // O nome do bloco fica em cima da frase de resposta; o título do cartão de dentro continua para leitor de tela.
+    await expect(page.locator(".nx-pagina__detalhe .nx-bloco-vt__rotulo", { hasText: "Contatos e agendamentos por dia" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Contatos e agendamentos por dia" })).toBeAttached();
     // O que brigava pelo topo saiu dele: prioridade recomendada e as 8 respostas só no detalhe.
     await expect(page.getByText("Prioridade recomendada")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Diagnóstico estratégico" })).toHaveCount(0);
@@ -158,14 +159,17 @@ for (const width of [375, 1440]) {
     await pessoas(context);
     await page.setViewportSize({ width, height: 900 });
 
-    // Pacientes (03.1.1.1, plano 05): o veredito abre a tela e a leitura com número ao lado mora no "Ver tudo", que se abre depois de carregar.
+    // Pacientes (03.1.1.1, plano 05): o veredito abre a tela. A leitura do período saiu do "Ver tudo" (quick-ver-tudo, João 13/11/2026): o que só
+    // ela dizia virou descoberta, e o próximo passo dela é a ação de uma descoberta, com quem resolve.
     await page.goto(`/${CID}/pacientes?preset=30d`);
     await expect(page.locator('[data-tela="pacientes"] [data-peca="veredito"]:not([data-modo="carregando"])')).toBeVisible();
     await abrirVerTudo(page, '[data-tela="pacientes"]');
-    const leitura = page.getByRole("region", { name: "Leitura do período", exact: true });
-    await expect(leitura.getByText("O que aconteceu", { exact: true })).toBeVisible();
-    await expect(leitura.locator(".nx-leitura__num").first()).toBeVisible();
-    await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
+    await expect(page.getByRole("region", { name: "Leitura do período", exact: true })).toHaveCount(0);
+    const proximo = page.locator('[data-tela="pacientes"] [data-proximo-passo]');
+    await expect(proximo).toHaveCount(1);
+    await expect(proximo.locator(".nx-acao-pilula__texto")).toBeVisible();
+    await expect(proximo.getByText(/Quem resolve:/)).toHaveCount(1);
+    await expect(page.locator('[data-tela="pacientes"] [data-peca="periodo-do-ver-tudo"]')).toContainText("comparado com");
     expect(await semRolagemLateral(page)).toBe(true);
     await page.screenshot({ path: `test-results/redesenho/pacientes-leitura-${width}.png`, fullPage: true });
 

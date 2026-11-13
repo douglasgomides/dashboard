@@ -16,6 +16,8 @@ import { lerStatusDasFontes, type FontesDoCliente } from "@/lib/saude-fontes";
 import { fatoresDaNota, notaDasFontes, ROTULO_FAIXA, type NotaFontes } from "@/lib/nota-fontes";
 import { alertasDaClinica, casaFiltroDeCor, corDaClinica, descobertasDaCarteira, numerosDaCarteira, ordenarPorUrgencia, vereditoDaCarteira, type AlertaDaCarteira, type FiltroDeCor, type LinhaDaCarteira as LinhaUrgencia } from "@/lib/carteira-urgencia";
 import { NxDescobertas, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
+import { cabecaDoDiagnosticoDasFontes, cabecaDosContadores } from "@/lib/leitura/ver-tudo-carteira";
 import { NxPainelDaClinica } from "@/components/nx/painel-da-clinica";
 import { FONTES, NOME_FONTE, LEGENDA_STATUS, VAR_COR, type FonteId } from "@/lib/status-fonte";
 import { AlertTriangle, ArrowRight, Building2, Calculator, Clock, MinusCircle, Search, ShieldCheck, Tv, Unplug, UserPlus, UserX, X } from "lucide-react";
@@ -814,6 +816,7 @@ function AdminClientsPage() {
           <small>os 6 contadores, mais filtros, diagnóstico das fontes e links curtos sem cliente</small>
         </summary>
         <div className="adm-det__corpo">
+      <NxBlocoDoVerTudo rotulo="Resumo da carteira" cabeca={cabecaDosContadores({ comProblema: isLoading || carregandoSaude ? null : nAtencao, total: nClinicas })}>
       <AdmContadores rotulo="Resumo da carteira">
               <AdmContador className="dbx-card" i={0} icone={<Building2 />} rotulo="Clínicas na carteira" valor={isLoading ? "…" : nClinicas} nota="Ver todas" tom="marca" onClick={() => setFiltro("todos")} ativo={filtro === "todos"} />
               <AdmContador className="dbx-card" i={1} icone={<AlertTriangle />} rotulo="Precisam de atenção" valor={lendo(nAtencao)} nota="Fonte atrasada, parada ou com erro" tom={carregandoSaude ? "neutro" : tomDe(nAtencao, "atencao")} onClick={() => setFiltro("problema")} ativo={filtro === "problema"} />
@@ -822,13 +825,13 @@ function AdminClientsPage() {
               <AdmContador className="dbx-card" i={4} icone={<UserX />} rotulo="Médico não entra" valor={avisosQ.isError ? "–" : nNaoEntra == null ? "…" : nNaoEntra} nota={avisosQ.isError ? `Não consegui ler o último acesso · ${notaAcesso}` : `Há mais de ${DIAS_SEM_ENTRAR} dias · ${notaAcesso}`} tom={avisosQ.isError ? "neutro" : tomDe(nNaoEntra, "atencao")} onClick={() => setFiltro("nao_entra")} ativo={filtro === "nao_entra"} />
               <AdmContador className="dbx-card" i={5} icone={<Calculator />} rotulo="Sem ROI calculável" valor={nSemRoi == null ? "…" : nSemRoi} nota={nSemRoi == null ? "Lendo o retorno de 30 dias…" : `${nCliente} cliente (CRM) · ${nEquipe} equipe (fonte ou etapa) · ${nNaoSeAplica} não se aplica`} titulo={`${ROTULO_GRUPO_SEM_ROI.cliente}\n${ROTULO_GRUPO_SEM_ROI.equipe}\n${ROTULO_GRUPO_SEM_ROI.nao_se_aplica}`} tom={tomDe(nSemRoi, "atencao")} onClick={() => setFiltro("sem_roi")} ativo={filtro === "sem_roi"} />
       </AdmContadores>
+        {/* Todos, Com problema, Sem ROI e Não entra saíram (quick-ver-tudo): eram os mesmos filtros e números dos contadores logo acima, que já
+            filtram com um toque. Fica o filtro que só esta linha tinha. */}
         <div className="adm-pilulas" role="group" aria-label="Mais filtros">
-          {chipFiltro("todos", "Todos", (clients ?? []).length)}
-          {chipFiltro("problema", "Com problema", nAtencao)}
-          {chipFiltro("sem_roi", "Sem ROI", nSemRoi ?? undefined)}
-          {chipFiltro("nao_entra", "Não entra", nNaoEntra ?? undefined)}
           {chipFiltro("sem_acesso", "Sem acesso criado", nSemAcesso ?? undefined)}
         </div>
+      </NxBlocoDoVerTudo>
+          <NxBlocoDoVerTudo cabeca={cabecaDoDiagnosticoDasFontes(carregandoSaude ? null : vermelhas.flatMap((v) => v.itens.map((i) => NOME_FONTE[i.fonte])))}>
           <details className="adm-det" open={diagAberto} onToggle={(e) => setDiagAberto(e.currentTarget.open)}>
             <summary>
               Diagnóstico das fontes
@@ -971,6 +974,7 @@ function AdminClientsPage() {
               </div>
             </div>
           </details>
+          </NxBlocoDoVerTudo>
           <details className="adm-det">
             <summary>Links curtos sem cliente</summary>
             <div className="adm-det__corpo">
