@@ -81,27 +81,35 @@ for (const width of [375, 1440]) {
       await page.setViewportSize({ width, height: 900 });
     });
 
-    test("(a) com dado em dia, no modo resumo: o que aconteceu, um número ao lado, a ação da semana e quem resolve", async ({ page, context }) => {
+    test("(a) com dado em dia: a leitura saiu do Ver tudo e o que só ela dizia virou descoberta, com número, ação e quem resolve", async ({ page, context }) => {
       await mockAccount(context, "admin");
       await instagram(context);
       await page.goto(`/${CID}?preset=30d`);
 
-      // O veredito abre a tela, sem "Falta dado"; a leitura inteira está no "Ver tudo".
+      // O veredito abre a tela, sem "Falta dado".
       await expect(veredito(page)).toBeVisible();
       await expect(veredito(page)).not.toHaveAttribute("data-modo", "carregando");
       await expect(veredito(page)).not.toHaveAttribute("data-modo", "sem-leitura");
       await expect(veredito(page).getByText(/Falta dado:/)).toHaveCount(0);
+      await page.waitForLoadState("networkidle");
       await abrirDepoisDeCarregar(page);
-      const leitura = regiao(page);
-      await expect(leitura).toBeVisible();
-      await expect(leitura.getByText("O que aconteceu", { exact: true })).toBeVisible();
-      await expect(leitura.locator(".nx-leitura__num").first()).toBeVisible();
-      await expect(leitura.getByText("Próximo passo", { exact: true })).toBeVisible();
-      await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
-      await expect(leitura.getByText(/Falta dado:/)).toHaveCount(0);
-      // A leitura fica dentro do molde novo, abaixo da pergunta da tela, antes do conteúdo antigo.
-      await expect(page.locator('.nx-pagina[data-tela="resultados"] .nx-pagina__detalhe .nx-leitura')).toHaveCount(1);
-      await expect(page.getByRole("heading", { level: 1, name: "Como a clínica foi no período?", exact: true })).toBeVisible();
+      // quick-ver-tudo (João 13/11/2026): nenhum bloco "Resumo da clínica" / "Leitura do período" dentro do "Ver tudo".
+      await expect(regiao(page)).toHaveCount(0);
+      await expect(page.locator(`${RAIZ} .nx-pagina__detalhe .nx-leitura`)).toHaveCount(0);
+      // A ação da semana (o próximo passo do resumo) virou descoberta, no mesmo desenho das de cima: selo, frase curta, quem resolve, UMA ação
+      // e o "Por quê?" com barras. Com poucas descobertas próprias ela sobe para as 3 à vista; senão mora no "Ver tudo".
+      const proximo = page.locator(`${RAIZ} [data-proximo-passo]`);
+      await expect(proximo).toHaveCount(1);
+      await expect(proximo.locator(".nx-selo")).toBeVisible();
+      await expect(proximo.locator(".nx-acao-pilula__texto")).toBeVisible();
+      await expect(proximo.getByText(/Quem resolve:/)).toHaveCount(1);
+      const frase = (await proximo.locator(".nx-descoberta__frase").innerText()).replace(/\s+/g, " ").trim();
+      expect(frase.length, frase).toBeLessThanOrEqual(90);
+      await proximo.getByRole("button", { name: "Por quê?" }).click();
+      expect(await proximo.locator(".nx-barras__item").count()).toBeGreaterThanOrEqual(2);
+      // Nenhuma descoberta da leitura repete um número que o topo já mostra: cada uma é de um fato que só a leitura dizia, ou um passo.
+      for (const d of await page.locator(`${RAIZ} [data-descoberta-extra^="leitura-"]`).all()) await expect(d.getByText(/Falta dado:/)).toHaveCount(0);
+      await expect(page.getByRole("heading", { level: 1, name: "Como a clínica foi no período?", exact: true })).toBeAttached();
       expect(await semRolagemLateral(page)).toBe(true);
     });
 
@@ -118,29 +126,28 @@ for (const width of [375, 1440]) {
       await expect(page.locator(`${RAIZ} [data-peca="descoberta"]`)).toHaveCount(0);
       await expect(page.locator(`${RAIZ} [data-peca="aneis"]`)).toHaveCount(0);
 
+      // Portão negado: o "Ver tudo" não traz nenhuma conclusão da leitura (nem o resumo antigo, nem descoberta tirada dela).
       await abrirDepoisDeCarregar(page);
-      const leitura = regiao(page);
-      await expect(leitura.getByText(/Falta dado:/)).toBeVisible();
-      await expect(leitura.getByText(/o Instagram está sem dado novo desde \d{2}\/\d{2}/)).toBeVisible();
-      await expect(leitura.getByText(/Próximo passo para resolver:/)).toBeVisible();
-      await expect(leitura.getByText("Quem resolve: Equipe Doctor Creator")).toBeVisible();
-      await expect(leitura.getByText("O que aconteceu")).toHaveCount(0);
+      await expect(regiao(page)).toHaveCount(0);
+      await expect(page.locator(`${RAIZ} [data-descoberta-extra^="leitura-"]`)).toHaveCount(0);
+      await expect(page.locator(`${RAIZ} .nx-pagina__detalhe`).getByText("O que aconteceu", { exact: true })).toHaveCount(0);
       expect(await semRolagemLateral(page)).toBe(true);
     });
 
-    test("(c) a leitura segue o período escolhido: 7 dias e o anterior de 7 dias", async ({ page, context }) => {
+    test("(c) a leitura segue o período escolhido: 7 dias e o anterior de 7 dias, numa linha só no começo do Ver tudo", async ({ page, context }) => {
       await mockAccount(context, "admin");
       await instagram(context);
 
       await page.goto(`/${CID}?preset=30d`);
       await abrirDepoisDeCarregar(page);
-      const subtitulo = regiao(page).locator(".nx-leitura__periodo");
-      await expect(subtitulo).toHaveText(`${ddmm(29)} a ${ddmm(0)}, comparado com ${ddmm(59)} a ${ddmm(30)}`);
+      const periodo = page.locator(`${RAIZ} [data-peca="periodo-do-ver-tudo"]`);
+      await expect(periodo).toHaveCount(1);
+      await expect(periodo).toContainText(`${ddmm(29)} a ${ddmm(0)}, comparado com ${ddmm(59)} a ${ddmm(30)}`);
+      await expect(periodo).toContainText("sem selo");
 
       await page.goto(`/${CID}?preset=7d`);
       await abrirDepoisDeCarregar(page);
-      await expect(subtitulo).toHaveText(`${ddmm(6)} a ${ddmm(0)}, comparado com ${ddmm(13)} a ${ddmm(7)}`);
-      await expect(regiao(page).getByText("O que aconteceu", { exact: true })).toBeVisible();
+      await expect(periodo).toContainText(`${ddmm(6)} a ${ddmm(0)}, comparado com ${ddmm(13)} a ${ddmm(7)}`);
       expect(await semRolagemLateral(page)).toBe(true);
     });
   });

@@ -19,15 +19,16 @@ import { avisoContaAnuncioCompartilhada, type ContaAnuncioCompartilhada } from "
 import { InsightCard, ListaLimitacoes } from "@/components/insight-card";
 import { MetodologiaAnuncios } from "@/components/anuncios/metodologia";
 import { DiagnosticoCampanhas } from "@/components/anuncios/diagnostico-campanhas";
-import { Wallet, MessageCircle, Coins, Eye, MousePointerClick, Layers, Zap, Megaphone, CalendarDays, Lightbulb, ChevronRight, Filter } from "lucide-react";
+import { Wallet, MessageCircle, Coins, Eye, MousePointerClick, Layers, Zap, Megaphone, CalendarDays, Filter } from "lucide-react";
 import { Painel, BarraFina, InfoDica } from "@/components/visual";
 import { fmtFracao } from "@/lib/metricas";
 import { nomeObjetivo, objetivoNaoContaConversa } from "@/lib/rastreio-anuncios";
 import { NxCard, NxTag, NxHBar } from "@/components/nx";
 import { NxBarrasLinha, NxFunil, NxAlertaCurto, NxNota, NxComoCalcula } from "@/components/nx/anuncios-graficos";
-import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { PaginaNexo } from "@/components/nx/pagina";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
-import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxDescobertas, NxMaisDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
 import { NxAcaoPilula, NxBarras } from "@/components/nx/cartoes";
 import { NxReguaDosDias } from "@/components/nx/regua-dos-dias";
 import { NxDiasComFaixa } from "@/components/nx/dias-com-faixa";
@@ -37,7 +38,9 @@ import { useClientRole } from "@/hooks/use-client-role";
 import { useResultadosDiarios } from "@/hooks/use-resultados-diarios";
 import { faixaDoNormal, foraDaFaixa } from "@/lib/faixa-do-normal";
 import { ehEquipe } from "@/lib/registro-de-telas";
-import { variacaoPropria, visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
+import { textoDaFrase, variacaoPropria, visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
+import { ABRIR_VER_TUDO, descobertasDaLeitura, periodoDoVerTudo, visiveisERestoComLeitura } from "@/lib/leitura/leitura-em-descobertas";
+import { cabecaDasCampanhas, cabecaDasLimitacoes, cabecaDeOndeFoiAVerba, cabecaDoAnuncioAConversa, cabecaDoDiaADia, cabecaDoPlano, cabecaPorObjetivo } from "@/lib/leitura/ver-tudo-anuncios";
 import { serieContinua } from "@/lib/linha-30-dias";
 import { NxCarregando, NxErro, NxTabela } from "@/components/nx/blocos";
 import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
@@ -320,89 +323,6 @@ function OndeFoiAVerba({ d }: { d: DiagnosticoAds }) {
   );
 }
 
-// ---------- abertura: a leitura do que fazer, em frases ----------
-function OQueFazer({ d, aoVerPlano }: { d: DiagnosticoAds; aoVerPlano: () => void }) {
-  const plano = useMemo(() => planoDeAcao(d), [d]);
-  const suspeito = !!d.rastreio?.suspeito;
-  const itens = suspeito ? [] : plano.slice(0, 3);
-  return (
-    <NxCard icone={ic(Lightbulb)} titulo="O que fazer agora" subtitulo="A leitura do período em linguagem simples" rotulo="O que fazer agora">
-      {suspeito ? (
-        <ol className="nx-leitura">
-          <li>
-            <span className="nx-leitura__n" aria-hidden>1</span>
-            <span className="nx-leitura__corpo">
-              <b>Corrigir o rastreio das conversas antes de mexer na verba</b>
-              <span>Enquanto o rastreio estiver suspeito, nenhuma campanha é julgada pelo custo por conversa. Veja o aviso no topo.</span>
-            </span>
-          </li>
-        </ol>
-      ) : itens.length === 0 ? (
-        <p className="nx-vazio text-sm font-medium" style={{ margin: 0 }}>
-          Nenhuma mudança de verba urgente neste período: nenhuma campanha com verba relevante está marcada "Cortar" ou "Sem tração" e nenhuma
-          marcada "Escalar" está pronta para receber mais.
-        </p>
-      ) : (
-        <ol className="nx-leitura">
-          {itens.map((it, k) => (
-            <li key={it.id}>
-              <span className="nx-leitura__n" aria-hidden>{k + 1}</span>
-              <span className="nx-leitura__corpo">
-                <b>{it.titulo}</b>
-                <span>{it.impactoTexto ?? it.acao?.texto ?? it.diagnostico}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-      )}
-      <button type="button" className="nx-botao" onClick={aoVerPlano} style={{ justifySelf: "start" }}>
-        Ver o plano completo e as recomendações <ChevronRight size={16} aria-hidden />
-      </button>
-    </NxCard>
-  );
-}
-
-/** As descobertas que passam das 3 à vista (4 e 5) moram no "Ver tudo", já com os fatores do "Por quê?" abertos (nada some). */
-function MaisDescobertasDosAnuncios({
-  itens,
-  clientId,
-  dateRange,
-  aoAgir,
-  extraDoPorque,
-}: {
-  itens: readonly Descoberta[];
-  clientId: string;
-  dateRange: DateRangeState;
-  aoAgir: (local: string) => void;
-  extraDoPorque: (d: Descoberta) => ReactNode;
-}) {
-  return (
-    <section className="nx-cinco-resto" aria-label="Mais descobertas do período" data-peca="mais-descobertas">
-      <h3 className="nx-cinco-resto__titulo">Mais descobertas do período</h3>
-      <div className="nx-cinco-resto__grade">
-        {itens.map((d) => {
-          const linha = d.acao.rota ? linhaDaRota(d.acao.rota) : undefined;
-          const local = d.acao.local;
-          return (
-            <article key={d.id} className="nx-cinco-resto__item" data-descoberta-extra={d.id}>
-              <NxSelo tom={d.tom} texto={d.selo} />
-              <p className="nx-cinco-resto__frase">{d.frase}</p>
-              <NxBarras barras={d.porque.barras} rotulo={d.porque.titulo} />
-              {extraDoPorque(d)}
-              {d.porque.obs && <p className="nx-cinco-falta">{d.porque.obs}</p>}
-              {linha ? (
-                <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir a aba de origem" para={{ tela: linha, clientId, dateRange }} />
-              ) : local ? (
-                <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={() => aoAgir(local)} />
-              ) : null}
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
 /** Total do período que a tela lê de ads_resumo, em números; null quando a leitura não veio. */
 function resumoEmNumeros(r: unknown): ResumoDeAnuncios | null {
   if (!r) return null;
@@ -554,6 +474,7 @@ function AnunciosPage() {
     );
 
   if (!diag || gasto === 0) {
+    const daLeituraSemGasto = descobertasDaLeitura({ fatos, descobertas: [], textoDoTopo: veredito?.tipo === "veredito" ? [textoDaFrase(veredito.frase), veredito.apoio ?? ""] : [] });
     const dataBR = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
     const mensagemVazia = ultimoGasto
       ? `Anúncios pausados: o último investimento registrado foi em ${dataBR(ultimoGasto)}. Não houve gasto em ${periodLabel}.`
@@ -564,8 +485,13 @@ function AnunciosPage() {
       <PaginaNexo
         {...cabecalho}
         veredito={<NxVeredito veredito={veredito} carregando={fatos == null} tela="anuncios" />}
-        leitura={<LeituraDaTela fatos={fatos} carregando={comparacaoCarregando} semSelo />}
-        resumoDoVerTudo="a leitura do período"
+        leitura={null}
+        descobertas={
+          // Sem gasto, a leitura do período (o que ela diz além do veredito) vira descoberta, no mesmo desenho das outras telas.
+          veredito?.tipo === "veredito" && daLeituraSemGasto.length > 0 ? (
+            <NxDescobertas titulo="O que descobrimos" itens={daLeituraSemGasto} clientId={clientId} dateRange={dateRangeState} />
+          ) : undefined
+        }
         corpo={
           <div className="nexo-mkt nexo-anuncios">
             <MotivoParada clientId={clientId} />
@@ -596,19 +522,6 @@ function AnunciosPage() {
   // A mensagem do rastreio termina com o que verificar; o próximo passo já diz isso (e um pouco mais), então sai do texto.
   const textoRastreio = (diag.rastreio?.mensagem ?? "").replace(/\s*Verifique se .*$/, "") || diag.rastreio?.mensagem;
 
-  // Variação contra o período anterior (ads_resumo dos dois lados, a mesma fonte do comparativo da conta).
-  const ra = resumoAtual.data as any;
-  const rb = resumoAnt.data as any;
-  const varGasto = variacaoDe(ra?.gasto, rb?.gasto);
-  const varConv = variacaoDe(ra?.conversas, rb?.conversas);
-  const varClique = variacaoDe(ra?.cliques_link, rb?.cliques_link);
-  // Pílula azul-clara do D-07, sem cor de bom ou de ruim: abaixo de 5% é "estável", sem seta.
-  const pilula = (x: ReturnType<typeof variacaoDe>) =>
-    x
-      ? Math.abs(x.v) < 0.05
-        ? { texto: "Estável vs período anterior" }
-        : { texto: `${x.v > 0 ? "+" : "−"}${x.pct} vs período anterior`, sobe: x.v > 0 }
-      : null;
   const info = (rotulo: string, texto: string) => <InfoDica texto={texto} rotulo={`Sobre ${rotulo}`} />;
 
   const abrirPlano = () => {
@@ -621,59 +534,6 @@ function AnunciosPage() {
     el.scrollIntoView({ behavior: "smooth", block: "start" });
     el.querySelector("summary")?.focus();
   };
-
-  const cartoesDoVerTudo: [ReactNode, ReactNode, ReactNode, ReactNode] = [
-    <NxCartaoNumero
-      key="investido"
-      icone={ic(Wallet)}
-      titulo="Investido"
-      subtitulo={`${diag.campanhas.length} ${diag.campanhas.length === 1 ? "campanha" : "campanhas"}`}
-      valor={fmtBRL(gasto)}
-      legenda="no período"
-      variacao={pilula(varGasto)}
-      serie={serieGasto}
-      info={info("Investido", `Tudo o que foi gasto em anúncios do Meta em ${periodLabel}, direto da conta de anúncio (não é estimativa), de ${diag.campanhas.length} campanhas com atividade.`)}
-    />,
-    <NxCartaoNumero
-      key="conversas"
-      icone={ic(MessageCircle)}
-      titulo="Conversas iniciadas"
-      subtitulo="WhatsApp e Direct"
-      valor={int(diag.conversas)}
-      legenda="de todas as campanhas"
-      variacao={pilula(varConv)}
-      serie={serieConversas}
-      info={info("Conversas iniciadas", `WhatsApp e Direct, de todas as campanhas.${suspeito ? " Rastreio suspeito: o número real pode ser maior." : ""}`)}
-    />,
-    <NxCartaoNumero
-      key="custo"
-      icone={ic(Coins)}
-      titulo="Custo por conversa"
-      subtitulo={suspeito ? "rastreio suspeito" : msg ? "só campanhas de mensagem" : "sem campanha de mensagem"}
-      valor={suspeito ? "Não confiável" : msg?.custoPorConversa != null ? fmtBRL(msg.custoPorConversa) : "—"}
-      semMedida={!suspeito && msg?.custoPorConversa == null}
-      legenda={suspeito ? "veja a leitura acima" : msg ? `${fmtBRL(msg.gasto)} ÷ ${int(msg.conversas)} conversas` : undefined}
-      info={info(
-        "Custo por conversa",
-        `Conta só as campanhas de mensagem${msg ? ` (${fmtBRL(msg.gasto)} ÷ ${int(msg.conversas)})` : ""}: dividir a verba de todos os objetivos pelas conversas deixaria o número inflado. Referência de mercado, sem estudo independente e por isso sem cor: ${BENCHMARKS.custoPorConversa.referencia}.`,
-      )}
-    />,
-    <NxCartaoNumero
-      key="cliques"
-      icone={ic(MousePointerClick)}
-      titulo="Cliques no link"
-      subtitulo={`${porCem(ctrConta)} a cada 100 aparições`}
-      valor={int(diag.cliquesLink)}
-      legenda="no link do anúncio"
-      variacao={pilula(varClique)}
-      info={info(
-        "Cliques no link",
-        diag.cliquesPerfil > 0
-          ? `${int(diag.cliquesPerfil)} foram visitas ao perfil do Instagram e ${int(diag.cliquesLink - diag.cliquesPerfil)} foram para WhatsApp ou site. Clique no link pode levar ao perfil, ao WhatsApp ou ao site, conforme o destino da campanha: visita ao perfil faz o médico ser conhecido, mas não é pedido de atendimento.`
-          : `Só clique no link, não curtida nem clique na foto${diag.cliquesLink > 0 ? `: ${fmtBRL(diag.gasto / diag.cliquesLink)} por clique` : ""}. Pode levar ao perfil do Instagram, ao WhatsApp ou ao site, conforme o destino da campanha.`,
-      )}
-    />,
-  ];
 
   // ---- Formato 5 segundos (03.1.1.1, plano 09): só dados da própria clínica, contra o período anterior dela e contra os dias dela. ----
   const totalDeAgora = resumoEmNumeros(resumoAtual.data) ?? { gasto: diag.gasto, conversas: diag.conversas };
@@ -748,7 +608,22 @@ function AnunciosPage() {
 
   // Descobertas (de 0 a 5, só com a própria clínica): as 3 primeiras à vista, as outras no começo do "Ver tudo". Sem veredito, nenhuma.
   const descobertas = descobertasDosAnuncios({ porDia: diasDeAnuncio, atual: totalDeAgora, anterior: totalDeAntes, fatos, diario: diario.data ?? null, equipe });
-  const { visiveis, resto } = visiveisEResto(descobertas.itens);
+  // A leitura do período saiu do "Ver tudo" (João 13/11/2026): o que ela dizia e o topo ainda não diz vira descoberta, no mesmo desenho.
+  const textoDoTopo = [
+    veredito?.tipo === "veredito" ? textoDaFrase(veredito.frase) : "",
+    veredito?.tipo === "veredito" ? (veredito.apoio ?? "") : "",
+    fmtBRL(gasto),
+    int(diag.conversas),
+    custoAgora != null ? fmtBRL(custoAgora) : "",
+    totalDeAntes ? `${fmtBRL(totalDeAntes.gasto)} ${int(totalDeAntes.conversas)}` : "",
+    varConversasCinco?.texto ?? "",
+    varGastoCinco?.texto ?? "",
+    comparacaoDeCusto ? `${comparacaoDeCusto.v.texto} ${fmtBRL(comparacaoDeCusto.antes)}` : "",
+  ];
+  // As ações da leitura nesta tela são de verba e de campanha: levam ao diagnóstico campanha a campanha.
+  const daLeitura = descobertasDaLeitura({ fatos, descobertas: descobertas.itens, textoDoTopo, acaoDoFato: () => ({ rotulo: "", local: ACOES_DE_ANUNCIOS.campanhas }) });
+  const { visiveis, resto } = visiveisERestoComLeitura(descobertas.itens, daLeitura);
+  const avisoDasDescobertas = visiveis.length >= 3 ? null : descobertas.aviso;
 
   // A régua dos próprios dias: o custo por conversa de cada dia contra o custo de antes da própria clínica. Com o rastreio suspeito o custo não é
   // confiável (D-05), então a régua não aparece. Poucos dias com conversa: "Falta dado", nunca uma régua de 2 pontos.
@@ -777,7 +652,11 @@ function AnunciosPage() {
 
   // A ação local de uma descoberta só abre um lugar desta tela (nada é enviado nem gravado).
   function agirNaDescoberta(local: string) {
-    if (local === ACOES_DE_ANUNCIOS.plano) abrirPlano();
+    if (local === ABRIR_VER_TUDO) {
+      const verTudo = document.getElementById("detalhes-anuncios");
+      if (verTudo instanceof HTMLDetailsElement) verTudo.open = true;
+      requestAnimationFrame(() => verTudo?.querySelector('[data-peca="bloco-do-ver-tudo"]')?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    } else if (local === ACOES_DE_ANUNCIOS.plano) abrirPlano();
     else if (local === ACOES_DE_ANUNCIOS.campanhas) {
       const verTudo = document.getElementById("detalhes-anuncios");
       if (verTudo instanceof HTMLDetailsElement) verTudo.open = true;
@@ -806,14 +685,16 @@ function AnunciosPage() {
           <ContaCompartilhada clientId={clientId} />
         </>
       }
-      leitura={<LeituraDaTela fatos={fatos} carregando={comparacaoCarregando} semSelo />}
+      leitura={null}
+      periodoDoVerTudo={periodoDoVerTudo(fatos)}
+      semSeloNoVerTudo
       cartoes={cartoes as unknown as [ReactNode, ReactNode?, ReactNode?]}
       principal={principal}
       descobertas={
         !aguardando && veredito?.tipo === "veredito" ? (
           <NxDescobertas
             titulo="O que descobrimos"
-            apoio={<p className={descobertas.aviso ? "nx-cinco-falta" : "nx-cinco-falta nx-anuncios-ordem"}>{descobertas.aviso ?? "Em ordem de impacto"}</p>}
+            apoio={<p className={avisoDasDescobertas ? "nx-cinco-falta" : "nx-cinco-falta nx-anuncios-ordem"}>{avisoDasDescobertas ?? "Em ordem de impacto"}</p>}
             itens={visiveis}
             clientId={clientId}
             dateRange={dateRangeState}
@@ -833,21 +714,16 @@ function AnunciosPage() {
           </NxAlertaCurto>
         ) : undefined
       }
-      resumoDoVerTudo="números, gráfico por dia, campanhas, plano e comparativo"
+      resumoDoVerTudo="gráfico por dia, campanhas, plano e comparativo"
       detalhe={
         <div className="nexo-mkt nexo-anuncios">
           <div className="nx-anuncios-sync nx-anuncios-sync--ver-tudo">
             <SyncButton clientId={clientId} alvo="anuncios" />
           </div>
-          {resto.length > 0 && <MaisDescobertasDosAnuncios itens={resto} clientId={clientId} dateRange={dateRangeState} aoAgir={agirNaDescoberta} extraDoPorque={extraDoPorque} />}
-          {/* Formato 5 segundos (MEDV-02): os 4 números de antes (com o "Cliques no link") moram aqui, no "Ver tudo", como sempre foram. */}
-          <div className="nx-grade nx-grade--4">{cartoesDoVerTudo}</div>
-          {/* Os cartões de Investido e Conversas já mostram a linha de 30 dias: o gráfico diário completo (barras e linha) vem para cá (nada some, D-03). */}
-          <NxCard
-            icone={ic(CalendarDays)}
-            titulo="Investimento e conversas por dia"
-            rotulo="Investimento e conversas por dia"
-          >
+          <NxMaisDescobertas itens={resto} clientId={clientId} dateRange={dateRangeState} aoAgir={agirNaDescoberta} extraDoPorque={extraDoPorque} />
+          {/* Os 4 números de antes saíram daqui (quick-ver-tudo): Investido, Conversas e o custo já estão nos cartões e no veredito do topo, e os
+              cliques no link estão no bloco "Do anúncio à conversa", logo abaixo. */}
+          <NxBlocoDoVerTudo rotulo="Investimento e conversas por dia" cabeca={cabecaDoDiaADia(diasDeAnuncio)}>
             <NxBarrasLinha
               altura={130}
               dados={serie}
@@ -858,17 +734,10 @@ function AnunciosPage() {
               formatarLinha={int}
               formatarData={ddmm}
             />
-          </NxCard>
-          <NxNota>Gráfico por dia: barras = investido no dia, linha = conversas iniciadas. Dias em que a linha não acompanha a barra são os que merecem olhada.</NxNota>
+            <NxNota>Barras = investido no dia, linha = conversas iniciadas. Dias em que a linha não acompanha a barra são os que merecem olhada.</NxNota>
+          </NxBlocoDoVerTudo>
 
-          {soConversa && (
-            <NxNota>
-              <b>Só conversas são medidas nesta conta:</b> "leads" e "visitas à página" chegaram zerados em {periodLabel} (sem pixel nem formulário
-              instalado). Campanhas de cadastro ou vendas ficam sem o resultado próprio.
-            </NxNota>
-          )}
-
-          <NxCard icone={ic(Filter)} titulo="Do anúncio à conversa" subtitulo="Quantas pessoas passaram de cada etapa" rotulo="Do anúncio à conversa">
+          <NxBlocoDoVerTudo rotulo="Do anúncio à conversa" cabeca={cabecaDoAnuncioAConversa({ aparicoes: diag.impressoes, cliques: diag.cliquesLink, conversas: diag.conversas })}>
             <NxFunil
               rotulo="Do anúncio à conversa"
               etapas={[
@@ -890,12 +759,56 @@ function AnunciosPage() {
               ]}
             />
             {custoMil != null && <NxNota>{fmtBRL(custoMil)} a cada mil aparições. A mesma pessoa pode ver o anúncio mais de uma vez.</NxNota>}
-          </NxCard>
+            {soConversa && (
+              <NxNota>
+                <b>Só conversas são medidas nesta conta:</b> "leads" e "visitas à página" chegaram zerados em {periodLabel} (sem pixel nem formulário
+                instalado). Campanhas de cadastro ou vendas ficam sem o resultado próprio.
+              </NxNota>
+            )}
+          </NxBlocoDoVerTudo>
 
-          <div className="nx-grade nx-grade--2">
+          <NxBlocoDoVerTudo rotulo="Onde a verba foi gasta" cabeca={cabecaDeOndeFoiAVerba(diag.campanhas)}>
             <OndeFoiAVerba d={diag} />
-            <OQueFazer d={diag} aoVerPlano={abrirPlano} />
-          </div>
+          </NxBlocoDoVerTudo>
+
+          {/* "O que fazer agora" saiu (quick-ver-tudo): repetia o plano logo abaixo e o próximo passo, que agora é descoberta. */}
+          <NxBlocoDoVerTudo rotulo="Plano para a verba" cabeca={cabecaDoPlano(suspeito ? 0 : plano.length, suspeito)}>
+            <details ref={recomendacoes} id="recomendacoes-anuncios" className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+              <summary className="min-h-[44px] cursor-pointer py-3 font-semibold">Ver recomendações e ações para os anúncios</summary>
+              <div className="mt-3 space-y-4"><AgirHoje d={diag} clientId={clientId} /></div>
+            </details>
+          </NxBlocoDoVerTudo>
+
+          {/* Investido, conversas e custo por conversa já estão no topo: o comparativo mostra só os outros números da conta. */}
+          <ComparativoConta clientId={clientId} start={start} end={end} comCabeca ocultar={["Investido", "Conversas iniciadas", "Custo por conversa"]} />
+
+          <QualidadeLeadsCampanha clientId={clientId} start={start} end={end} comCabeca />
+          <PostsImpulsionados clientId={clientId} start={start} end={end} comCabeca />
+
+          <NxBlocoDoVerTudo id="campanhas-anuncios" cabeca={cabecaDasCampanhas(
+              diag.campanhas.map((c) => ({ ...c, semResultado: c.vereditoOficial === "Atrai mas não converte" || c.vereditoOficial === "Sem tração" })),
+              suspeito ? null : diag.reguaConta.custoPorConversa,
+            )}>
+            {suspeito ? <ObjetivosDasCampanhas d={diag} /> : <DiagnosticoCampanhas d={diag} />}
+          </NxBlocoDoVerTudo>
+
+          <NxBlocoDoVerTudo
+            cabeca={cabecaPorObjetivo(
+              diag.grupos.map((g) => ({ nome: GRUPOS[g.grupo].curto, gasto: g.gasto, conversas: g.conversas })),
+              (() => {
+                const cmp = conversaMaisBarata(diag);
+                return cmp ? { caro: GRUPOS[cmp.caro.grupo].curto, barato: GRUPOS[cmp.barato.grupo].curto, vezes: cmp.vezes } : null;
+              })(),
+            )}
+          >
+            <PorObjetivo d={diag} />
+          </NxBlocoDoVerTudo>
+
+          {limitacoes.length > 0 && (
+            <NxBlocoDoVerTudo rotulo="O que o painel ainda não consegue dizer" cabeca={cabecaDasLimitacoes(limitacoes.length)}>
+              <ListaLimitacoes itens={limitacoes} />
+            </NxBlocoDoVerTudo>
+          )}
 
           <NxComoCalcula titulo="Como estes números são calculados">
             <p>
@@ -910,34 +823,18 @@ function AnunciosPage() {
               </p>
             )}
             <p>
-              <b>Custo por conversa</b> conta só as campanhas de mensagem ({msg ? `${fmtBRL(msg.gasto)} ÷ ${int(msg.conversas)}` : "nenhuma no período"}):
-              dividir a verba de todos os objetivos pelas conversas deixaria o número inflado. Referência de mercado, sem estudo independente e por isso
-              sem cor: {BENCHMARKS.custoPorConversa.referencia}. <b>Aparições</b> são as vezes que o anúncio apareceu na tela (a mesma pessoa pode ver
-              mais de uma vez). <b>Cliques a cada 100 aparições</b> conta só clique no link, não curtida nem clique na foto. <b>Clique no link</b> pode
-              levar ao perfil do Instagram, ao WhatsApp ou ao site, conforme o destino da campanha: visita ao perfil faz o médico ser conhecido, mas não
-              é pedido de atendimento.
+              <b>Custo por conversa</b> do topo é o investido de todas as campanhas pelas conversas de todas elas, nos dois períodos (a mesma conta dos
+              dois lados). Só das campanhas de mensagem: {msg ? `${fmtBRL(msg.gasto)} em ${int(msg.conversas)} conversas, ${msg.custoPorConversa != null ? fmtBRL(msg.custoPorConversa) : "—"} cada` : "nenhuma no período"}.
+              Referência de mercado, sem estudo independente e por isso sem cor: {BENCHMARKS.custoPorConversa.referencia}. <b>Aparições</b> são as
+              vezes que o anúncio apareceu na tela (a mesma pessoa pode ver mais de uma vez). <b>Cliques a cada 100 aparições</b> conta só clique no
+              link, não curtida nem clique na foto. <b>Clique no link</b> pode levar ao perfil do Instagram, ao WhatsApp ou ao site, conforme o
+              destino da campanha: visita ao perfil faz o médico ser conhecido, mas não é pedido de atendimento.
             </p>
             <p>
-              A variação dos cartões compara com {ddmm(antIni)} a {ddmm(antFim)} ({dias} dias), somando todas as campanhas, ativas ou não. Abaixo de 5% o
-              número aparece como estável.
+              A variação dos cartões compara com {ddmm(antIni)} a {ddmm(antFim)} ({dias} dias), somando todas as campanhas, ativas ou não. Abaixo de 3% o
+              número aparece como igual.
             </p>
           </NxComoCalcula>
-
-          <details ref={recomendacoes} id="recomendacoes-anuncios" className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-            <summary className="min-h-[44px] cursor-pointer py-3 font-semibold">Ver recomendações e ações para os anúncios</summary>
-            <div className="mt-3 space-y-4"><AgirHoje d={diag} clientId={clientId} /></div>
-          </details>
-
-          <ComparativoConta clientId={clientId} start={start} end={end} />
-
-          <QualidadeLeadsCampanha clientId={clientId} start={start} end={end} />
-          <PostsImpulsionados clientId={clientId} start={start} end={end} />
-
-          <div id="campanhas-anuncios">{suspeito ? <ObjetivosDasCampanhas d={diag} /> : <DiagnosticoCampanhas d={diag} />}</div>
-
-          <PorObjetivo d={diag} />
-
-          <ListaLimitacoes itens={limitacoes} />
 
           <MetodologiaAnuncios d={diag} />
 

@@ -31,13 +31,29 @@ import { useMediaQuery } from "@/hooks/use-is-mobile";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { fatosDePublicacoes } from "@/lib/leitura/fatos-instagram";
+import { leituraDaAba } from "@/lib/leitura/leitura-das-abas";
+import type { CabecaDoBloco } from "@/lib/leitura/cabeca-do-bloco";
+import { cabecaDoAlcancePorFormato } from "@/lib/leitura/ver-tudo-instagram";
+import {
+  cabecaDaCombinacaoMaisSalva,
+  cabecaDaParteDeQuemViu,
+  cabecaDaRetencao,
+  cabecaDoExplorador,
+  cabecaDoRanking,
+  cabecaDoRepetirOuRevisar,
+  cabecaDosGanchos,
+  cabecaDosProximosAngulos,
+  cabecaDoTemaNoFormato,
+} from "@/lib/leitura/ver-tudo-posts";
 import { SyncButton } from "@/components/sync-button";
 import { useClientRole } from "@/hooks/use-client-role";
 import { MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
 import { Miniatura, IconeFormato, InfoDica } from "@/components/visual";
 import { NxCard, NxKpi, NxTag, NxHBar, NxListRow } from "@/components/nx";
 import { NxCartaoNumero } from "@/components/nx/cartoes";
-import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { PaginaNexo } from "@/components/nx/pagina";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
+import { NxComecoDosDetalhes, NxDescobertasDaAba } from "@/components/nx/leitura-da-aba";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxTabela, NxVazio } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
 import { IgAbas, IgVitrine } from "@/components/nx/instagram";
@@ -89,14 +105,18 @@ function Chip({ tom = "g", texto, icone, titulo }: { tom?: "g" | "b"; texto: str
 }
 const pct1 = (v: number) => `${(v * 100).toFixed(1)}%`;
 
-/** Cartão com o "como ler" recolhido: o que antes era Painel de visual.tsx. */
-function Bloco({ icone, titulo, resumo, ajuda, children }: { icone: Parameters<typeof ic>[0]; titulo: string; resumo?: ReactNode; ajuda?: ReactNode; children: ReactNode }) {
-  return (
+/**
+ * Cartão com o "como ler" recolhido: o que antes era Painel de visual.tsx. Com `cabeca` (quick-ver-tudo-abas), o cartão abre com a
+ * resposta do bloco (UMA frase com o número em destaque, da regra em src/lib/leitura/ver-tudo-posts.ts) e depois vem a prova.
+ */
+function Bloco({ icone, titulo, resumo, ajuda, cabeca, children }: { icone: Parameters<typeof ic>[0]; titulo: string; resumo?: ReactNode; ajuda?: ReactNode; cabeca?: CabecaDoBloco; children: ReactNode }) {
+  const cartao = (
     <NxCard icone={ic(icone)} titulo={titulo} subtitulo={resumo}>
       {ajuda && <NxComoCalcula titulo={`Como ler: ${titulo}`}>{ajuda}</NxComoCalcula>}
       {children}
     </NxCard>
   );
+  return cabeca ? <NxBlocoDoVerTudo cabeca={cabeca}>{cartao}</NxBlocoDoVerTudo> : cartao;
 }
 
 function Seletor<T extends string>({ valor, opcoes, rotulo, aoMudar }: { valor: T | null; opcoes: { value: T; label: string }[]; rotulo: string; aoMudar: (v: T | null) => void }) {
@@ -356,6 +376,7 @@ function RepetirOuRevisar({ posts, periodLabel }: { posts: Post[]; periodLabel: 
     <Bloco
       icone={Repeat2Icon}
       titulo="O que repetir e o que revisar"
+      cabeca={cabecaDoRepetirOuRevisar({ temSuficiente: hasEnough, repetir: repetir.length, revisar: revisar.length, temasComAmostra, minimoDePosts: MIN_POSTS_CONCLUSAO, minimoDeTemas: MIN_TEMAS_REPETIR })}
       resumo={`Temas acima e abaixo do post típico da conta (${pct1(baseline)} de engajamento)`}
       ajuda={`Cada tema com ${MIN_POSTS_CONCLUSAO} posts ou mais é comparado com a mediana da taxa de engajamento (engajamento ÷ alcance) de todos os posts do período (${periodLabel}). Só aparece com ${MIN_TEMAS_REPETIR} temas ou mais com amostra, para ter com o que comparar.`}
     >
@@ -390,7 +411,7 @@ function ConceitosVencedores({ posts }: { posts: Post[] }) {
   const conceitos = useMemo(() => computeConceitosVencedores(posts, 7), [posts]);
   if (conceitos.length === 0) return null;
   return (
-    <Bloco icone={Crown} titulo="Conceitos vencedores" resumo="O melhor post de cada tema" ajuda="Um post por tema: o de maior taxa de salvamento dele. São os conceitos que já provaram funcionar. As variações de ângulo para testar são produzidas fora do dashboard, a partir daqui.">
+    <Bloco icone={Crown} titulo="Conceitos vencedores" cabeca={cabecaDaParteDeQuemViu(conceitos.map((c) => c.rate), "salvou", "nenhum tema com post salvo no período")} resumo="O melhor post de cada tema" ajuda="Um post por tema: o de maior taxa de salvamento dele. São os conceitos que já provaram funcionar. As variações de ângulo para testar são produzidas fora do dashboard, a partir daqui.">
       <ul className="nx-lista ig-ranking">
         {conceitos.map(({ tema, post, rate }) => (
           <li key={tema}>
@@ -441,12 +462,12 @@ function TopPorTaxa({ posts }: { posts: Post[] }) {
   return (
     <div className="nx-grade nx-grade--2">
       {porSalvamento.length > 0 && (
-        <Bloco icone={Bookmark} titulo="Quem mais salva" resumo="Posts com maior taxa de salvamento" ajuda="Salvamentos ÷ alcance. Normaliza por quem viu, então um post pequeno e bom aparece ao lado de um viral.">
+        <Bloco icone={Bookmark} titulo="Quem mais salva" cabeca={cabecaDaParteDeQuemViu(porSalvamento.map((x) => x.rate), "salvou", "nenhum post com salvamento e alcance medidos")} resumo="Posts com maior taxa de salvamento" ajuda="Salvamentos ÷ alcance. Normaliza por quem viu, então um post pequeno e bom aparece ao lado de um viral.">
           <ListaPorTaxa itens={porSalvamento} />
         </Bloco>
       )}
       {porCompartilhamento.length > 0 && (
-        <Bloco icone={Share2} titulo="Quem mais circula" resumo="Posts com maior taxa de compartilhamento" ajuda="Compartilhamentos ÷ alcance, em todos os formatos (Reels, carrossel e post estático). É o sinal mais forte de que o conteúdo circulou sozinho.">
+        <Bloco icone={Share2} titulo="Quem mais circula" cabeca={cabecaDaParteDeQuemViu(porCompartilhamento.map((x) => x.rate), "compartilhou", "nenhum post com compartilhamento e alcance medidos")} resumo="Posts com maior taxa de compartilhamento" ajuda="Compartilhamentos ÷ alcance, em todos os formatos (Reels, carrossel e post estático). É o sinal mais forte de que o conteúdo circulou sozinho.">
           <ListaPorTaxa itens={porCompartilhamento} />
         </Bloco>
       )}
@@ -476,6 +497,7 @@ function ConversionByTag({ posts }: { posts: Post[] }) {
     <Bloco
       icone={Target}
       titulo="Salvamentos por tema e formato"
+      cabeca={cabecaDaCombinacaoMaisSalva(conclusivos.map((g) => ({ nome: `${tm(g.tema)} · ${g.format}`, salvosPorPost: g.medianSaved })), MIN_POSTS_CONCLUSAO)}
       resumo="Salvamentos do post típico (mediana) de cada combinação"
       ajuda={`Mostra salvamentos, não conversas nem vendas. Quanto do conteúdo vira conversa e agendamento está em Conteúdo × Comercial. Só entra no ranking a combinação com ${MIN_POSTS_CONCLUSAO} posts ou mais; as outras aparecem à parte, sem conclusão.`}
     >
@@ -504,6 +526,7 @@ function DesempenhoEstrutural({ posts }: { posts: Post[] }) {
     <Bloco
       icone={Eye}
       titulo="Alcance por tema e por formato"
+      cabeca={cabecaDoAlcancePorFormato(porFormato.map((f) => ({ nome: f.formato, alcanceTipico: f.medianReach, posts: f.count })), MIN_POSTS_CONCLUSAO)}
       resumo="Mediana, para não se enganar com um post viral"
       ajuda={`Alcance (mediana) é a base de comparação. Decide se um formato ou tema vale ser repetido, independente de picos isolados. Só entra na comparação o grupo com ${MIN_POSTS_CONCLUSAO} posts ou mais.`}
     >
@@ -557,6 +580,7 @@ function FormatoPorTema({ posts }: { posts: Post[] }) {
     <Bloco
       icone={Grid3x3}
       titulo="Tema dentro de cada formato"
+      cabeca={cabecaDoTemaNoFormato(rows.map((r) => ({ tema: tm(r.tema), formato: CONTENT_FORMATS.find((f) => f.value === r.formato)?.label ?? r.formato, taxa: r.medianEngRate, posts: r.count })), MIN_POSTS_CONCLUSAO)}
       resumo="Taxa de engajamento: quanto mais escuro, melhor"
       ajuda={`O mesmo tema pode performar muito diferente dependendo do formato. Cada célula mostra a taxa de engajamento (mediana), a quantidade de posts e o alcance (mediana). Célula sem cor: menos de ${MIN_POSTS_CONCLUSAO} posts, sem conclusão. Só aparecem combinações com tema classificado.`}
     >
@@ -603,7 +627,7 @@ function MelhoresGanchos({ posts }: { posts: Post[] }) {
   );
   if (top.length === 0) return null;
   return (
-    <Bloco icone={Quote} titulo="Melhores ganchos" resumo="Como abriram os posts que mais engajaram" ajuda="Primeira linha da legenda dos posts com mais engajamento. É o padrão de abertura que mais prendeu atenção.">
+    <Bloco icone={Quote} titulo="Melhores ganchos" cabeca={cabecaDosGanchos(top.map((x) => x.post.engagement))} resumo="Como abriram os posts que mais engajaram" ajuda="Primeira linha da legenda dos posts com mais engajamento. É o padrão de abertura que mais prendeu atenção.">
       <ul className="nx-lista ig-ranking">
         {top.map(({ post, gancho }) => (
           <li key={post.id}>
@@ -631,7 +655,7 @@ function RetencaoDeReels({ posts }: { posts: Post[] }) {
   // Tem reel, mas sem o dado de retenção: dizer o motivo, senão parece que o número está zerado.
   if (r.withData === 0) {
     return (
-      <Bloco icone={PlayCircle} titulo="Retenção dos reels" resumo={`${r.totalReels} reels no período, sem dado de retenção`}>
+      <Bloco icone={PlayCircle} titulo="Retenção dos reels" cabeca={cabecaDaRetencao({ reels: r.totalReels, comDado: 0, segura: null })} resumo={`${r.totalReels} reels no período, sem dado de retenção`}>
         <NxAviso tom="info" titulo="Sem dado de retenção:">o hook rate vem do “skip rate” da Meta, que só chega pela Windsor.ai. Contas sincronizadas direto pela Graph API não recebem esse campo.</NxAviso>
       </Bloco>
     );
@@ -640,6 +664,7 @@ function RetencaoDeReels({ posts }: { posts: Post[] }) {
     <Bloco
       icone={PlayCircle}
       titulo="Retenção dos reels"
+      cabeca={cabecaDaRetencao({ reels: r.totalReels, comDado: r.withData, segura: r.medianHookRate })}
       resumo="Quem ficou depois dos 3 primeiros segundos"
       ajuda="Hook rate é quanta gente não pulou nos 3 primeiros segundos: é o gancho fazendo efeito. Body rate e hold rate exigiriam a duração do vídeo, que a Meta não entrega por API. Por isso o tempo assistido aparece em segundos, não em porcentagem."
     >
@@ -677,6 +702,7 @@ function NextAngles({ posts, periodLabel }: { posts: Post[]; periodLabel: string
     <Bloco
       icone={Sparkles}
       titulo="Próximos ângulos"
+      cabeca={cabecaDosProximosAngulos({ angulos: angulos.map((a) => ({ ...a, tema: tm(a.tema) })), temasComAmostra, minimoDePosts: MIN_POSTS_ANGULO })}
       resumo="Temas que salvam mais que o post típico da conta: direções para testar"
       ajuda={`Temas com ${MIN_POSTS_ANGULO} posts ou mais no período (${periodLabel}) cujo post típico (mediana) foi mais salvo que o post típico da conta. Sugestão de direção, nunca conteúdo pronto.`}
     >
@@ -862,13 +888,13 @@ function PostsRankingPage() {
     acao: <SyncButton clientId={clientId} alvo="posts" />,
   };
 
-  if (isLoading) return <div className="nexo-ig"><PaginaNexo {...cabecalho} leitura={<LeituraDaTela fatos={null} carregando semSelo />} corpo={<NxCarregando texto="Carregando posts…" linhas={4} />} /></div>;
+  if (isLoading) return <div className="nexo-ig"><PaginaNexo {...cabecalho} leitura={<NxDescobertasDaAba itens={[]} carregando clientId={clientId} />} corpo={<NxCarregando texto="Carregando posts…" linhas={4} />} /></div>;
   if (error) {
     return (
       <div className="nexo-ig">
         <PaginaNexo
           {...cabecalho}
-          leitura={<LeituraDaTela fatos={null} carregando={false} erro="Os posts não carregaram." semSelo />}
+          leitura={<NxDescobertasDaAba itens={[]} carregando={false} clientId={clientId} />}
           corpo={<NxErro texto="Não foi possível ler os posts deste período. Tente novamente em instantes." onTentar={() => void refetch()} />}
         />
       </div>
@@ -876,12 +902,23 @@ function PostsRankingPage() {
   }
 
   const rows = posts ?? [];
+  // A leitura do período saiu (quick-ver-tudo-abas, João 13/11/2026): o que ela dizia e a aba ainda não mostra (cartões e Top 5) vira
+  // descoberta, no máximo 3 no topo; o resto mora no começo dos Detalhes. Os posts sem tema estão no cartão "Posts com tema".
+  const classificados = rows.filter((p) => !!p.tema).length;
+  const textoDoTopo = [
+    `${rows.length} posts no período`,
+    `${rows.reduce((a, p) => a + (p.saved ?? 0), 0)} salvamentos acumulados`,
+    `${rows.reduce((a, p) => a + (p.engagement ?? 0), 0)} engajamento acumulado`,
+    `${rows.length > 0 ? Math.round((classificados / rows.length) * 100) : 0}% posts com tema ${classificados} de ${rows.length}`,
+    ...rows.slice(0, 5).map((p) => `${tituloDoPost(p) ?? ""} ${p.saved ?? ""} salvamentos`),
+  ];
+  const { visiveis, resto } = fatos == null ? { visiveis: [], resto: [] } : leituraDaAba({ fatos, textoDoTopo });
 
   return (
     <div className="nexo-ig">
       <PaginaNexo
         {...cabecalho}
-        leitura={<LeituraDaTela fatos={fatos} carregando={fatos == null} semSelo />}
+        leitura={<NxDescobertasDaAba itens={visiveis} carregando={fatos == null} clientId={clientId} dateRange={dateRangeState} />}
         cartoes={rows.length > 0 ? cartoesDoResumo(rows) : undefined}
         corpo={
           rows.length > 0 ? (
@@ -894,10 +931,12 @@ function PostsRankingPage() {
         }
         detalhe={
           rows.length > 0 ? (
-            <div style={{ display: "grid", gap: 18 }}>
+            <NxComecoDosDetalhes fatos={fatos} resto={resto} clientId={clientId} dateRange={dateRangeState}>
+              <NxBlocoDoVerTudo cabeca={cabecaDoRanking(rows.map((p) => p.saved))}>
               <NxRecolhido titulo="Ranking de posts" resumo="Todos os posts do período por salvamentos, com filtro por formato e a classificação de tema, funil e estágio">
                 <RankingDePosts rows={rows} clientId={clientId} periodLabel={periodLabel} />
               </NxRecolhido>
+              </NxBlocoDoVerTudo>
               <NxRecolhido titulo="Mais análises dos posts" resumo="Próximos ângulos, o que repetir, conceitos vencedores, quem mais salva e circula, tema × formato, ganchos e retenção dos Reels">
                 <div style={{ display: "grid", gap: 18 }}>
                   <NextAngles posts={rows} periodLabel={periodLabel} />
@@ -913,10 +952,12 @@ function PostsRankingPage() {
                   <RetencaoDeReels posts={rows} />
                 </div>
               </NxRecolhido>
+              <NxBlocoDoVerTudo cabeca={cabecaDoExplorador(rows.map((p) => p.reach))}>
               <NxRecolhido titulo="Explorador de posts" resumo="Todos os posts do período, com busca, filtros e ordenação">
                 <ExploradorDePosts posts={rows} periodLabel={periodLabel} />
               </NxRecolhido>
-            </div>
+              </NxBlocoDoVerTudo>
+            </NxComecoDosDetalhes>
           ) : undefined
         }
       />

@@ -15,7 +15,7 @@
           "updated_at": 1760500000,
           "source_id": 300001,
           "custom_fields_values": [ { "field_id": 500001, "field_name": "Fonte do Lead", "values": [ { "value": "Instagram" } ] } ],
-          "_embedded": { "contacts": [ { "id": 8000001, "is_main": true } ] }
+          "_embedded": { "contacts": [ { "id": 8000001, "is_main": true } ], "source": { "id": 300001, "name": "Canal de exemplo" } }
         },
         {
           "id": 9000002,
@@ -47,6 +47,15 @@
             ]
           }
         }
+      ]
+    }
+  },
+  "fontes": {
+    "_page": 1,
+    "_embedded": {
+      "sources": [
+        { "id": 300001, "name": "Canal de exemplo", "pipeline_id": 7000001, "external_id": "exemplo-1", "default": true, "origin_code": "exemplo" },
+        { "id": 300002, "name": "  ", "pipeline_id": 7000001, "external_id": "exemplo-2", "default": false }
       ]
     }
   },

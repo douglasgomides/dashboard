@@ -316,7 +316,17 @@ for (const t of TELAS) {
   for (const c of cartoes) assert.ok(c.depois.length > 0, `${t.rota}: tela nova com o cartão "${c.cartao}" sem "Depois"`);
   const fonteRota = fonteDe(arquivoRota);
   assert.ok(fonteRota.includes("<PaginaNexo"), `${t.rota}: marcada novo, mas ${arquivoRota} não usa <PaginaNexo`);
-  assert.ok(fonteRota.includes("<LeituraDaTela"), `${t.rota}: marcada novo, mas ${arquivoRota} não usa <LeituraDaTela`);
+  // Formato 5 segundos (quick-ver-tudo, João 13/11/2026): a leitura saiu do "Ver tudo"; a tela lê os mesmos fatos pelo veredito (com o portão
+  // e o "Falta dado") e o que só a leitura dizia vira descoberta (descobertasDaLeitura). Uma das duas formas é obrigatória.
+  // Abas sem o veredito (quick-ver-tudo-abas, 13/11/2026): as descobertas da leitura abrem a aba no lugar dela (NxDescobertasDaAba/leituraDaAba
+  // ou NxDescobertas/descobertasDaLeitura com o "Falta dado"); abas em construção: o quadro "O que falta" (NxVazio emConstrucao).
+  const leConformeOMolde =
+    fonteRota.includes("<LeituraDaTela") ||
+    (fonteRota.includes("<NxVeredito") && fonteRota.includes("descobertasDaLeitura(")) ||
+    (fonteRota.includes("<NxDescobertasDaAba") && fonteRota.includes("leituraDaAba(")) ||
+    (fonteRota.includes("<NxDescobertas") && fonteRota.includes("descobertasDaLeitura(") && fonteRota.includes("descobertaDaFaltaDeDado(")) ||
+    (fonteRota.includes("<NxVazio") && /\bemConstrucao\b/.test(fonteRota) && fonteRota.includes("quem="));
+  assert.ok(leConformeOMolde, `${t.rota}: marcada novo, mas ${arquivoRota} não usa <LeituraDaTela (nem o veredito ou as descobertas com descobertasDaLeitura, nem o quadro "Em construção")`);
   assert.equal(
     antigos.length,
     0,

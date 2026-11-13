@@ -42,7 +42,9 @@ for (const width of [375, 1440]) {
     // A lista segue os problemas abertos: Carla (2 alertas, nota mais baixa), Ana (2), depois quem tem 1 e, por último, quem não tem nenhum.
     await expect(linhas.nth(0)).toContainText("Dra. Carla Mendes");
     await expect(linhas.nth(1)).toContainText("Dra. Ana Souza");
-    await expect(linhas.nth(5)).toContainText("Clínica Sorriso");
+    // "Sem acesso criado" não conta como urgência (13/11/2026): as duas sem problema urgente (Sorriso e Dr. Diego, que só não tem
+    // acesso) ficam no fim, em qualquer ordem entre si.
+    await expect(linhas.nth(3)).toContainText("Clínica Sorriso");
 
     // Nenhuma posição, ranking ou comparação com outras clínicas (D-02).
     const textoDaLista = await textoVisivel(page.locator(RAIZ));

@@ -5,9 +5,10 @@ import { InfoDica } from "@/components/visual";
 import { NxCard, NxLinhaTempo } from "@/components/nx";
 import { CmAviso, CmBarras, CmKpi, CmLeitura, CmMetodo, CmRecolhido, icT } from "@/components/nx/comercial-base";
 import { PaginaNexo } from "@/components/nx/pagina";
-import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
-import { NxAcaoPilula, NxBarras, NxCartaoNumero } from "@/components/nx/cartoes";
-import { linhaDaRota } from "@/components/nx/hoje";
+import { NxDescobertas, NxMaisDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
+import { cabecaDaEsperaPorDia, cabecaDosNumerosDoAtendimento, cabecaDoTempoAteFechar, cabecaPorAtendente, cabecaPorEquipe } from "@/lib/leitura/ver-tudo-atendimento";
+import { NxCartaoNumero } from "@/components/nx/cartoes";
 import type { NomeIcone } from "@/lib/registro-de-telas";
 import { NxCarregando } from "@/components/nx/blocos";
 import { NxDiasComFaixa } from "@/components/nx/dias-com-faixa";
@@ -28,7 +29,7 @@ import { faixaDoNormal, foraDaFaixa } from "@/lib/faixa-do-normal";
 import { serieContinua } from "@/lib/linha-30-dias";
 import { periodosDeComparacao, somaDiaria } from "@/lib/leitura/fatos-resultados";
 import { ACOES_DE_ATENDIMENTO, descobertasDoAtendimento, diaCruzado, diaInicialDoCruzamento, numerosDoAtendimento, valoresNoEixo, vereditoDoAtendimento, type DiaCruzado, type EntradaCincoAtendimento, type NumeroDeAtendimento } from "@/lib/leitura/cinco-atendimento";
-import { visiveisEResto, type Descoberta, type Veredito } from "@/lib/leitura/cinco-segundos";
+import { visiveisEResto, type Veredito } from "@/lib/leitura/cinco-segundos";
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { fmtNum } from "@/lib/format";
 import { CustoWhatsapp } from "@/components/custo-whatsapp";
@@ -371,9 +372,10 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
           <div className="nx-atend-sync nx-atend-sync--ver-tudo">
             <SyncButton clientId={clientId} alvo="atendimento" />
           </div>
-          {resto.length > 0 && <MaisDescobertasDoAtendimento itens={resto} clientId={clientId} dateRange={dateRangeState} aoAgir={agirNaDescoberta} />}
-          <section className="nx-grade nx-grade--4" aria-label="Números do atendimento">
-            <CmKpi i={0} icone="message-circle" rotulo="Atendimentos" valor={fmtNum(atendimentos)} nota={`${fmtNum(n(resumo?.contatos_distintos))} pessoas diferentes`} />
+          <NxMaisDescobertas itens={resto} clientId={clientId} dateRange={dateRangeState} aoAgir={agirNaDescoberta} />
+          {/* "Atendimentos" saiu daqui (quick-ver-tudo): as conversas e as pessoas diferentes já estão nos cartões do topo. Fica o que só este bloco tem. */}
+          <NxBlocoDoVerTudo rotulo="Números do atendimento" cabeca={cabecaDosNumerosDoAtendimento({ esperaSeg, fatiaSemRoteamento, semRoteamento })}>
+          <section className="nx-grade nx-grade--3" aria-label="Números do atendimento">
             <CmKpi
               i={1}
               icone="target"
@@ -408,8 +410,10 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
               />
             )}
           </section>
+          </NxBlocoDoVerTudo>
 
           <div className="cm-par">
+            <NxBlocoDoVerTudo rotulo="Volume por dia e espera até a 1ª resposta" cabeca={cabecaDaEsperaPorDia(dias.map((d) => d.espera))}>
             <NxCard id="volume" nivel={2} icone={icT("chart-bar")} titulo="Volume por dia e espera até a 1ª resposta" subtitulo={periodLabel}>
               {dias.length === 0 ? (
                 <p className="nx-vazio text-sm">Sem volume por dia neste período.</p>
@@ -431,6 +435,11 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
                 </p>
               )}
             </NxCard>
+            </NxBlocoDoVerTudo>
+            <NxBlocoDoVerTudo
+              rotulo="Por equipe"
+              cabeca={cabecaPorEquipe(deps.map((r) => ({ nome: r.departamento, atendimentos: n(r.atendimentos), fatia: nOrNull(r.fatia), esperaSeg: nOrNull(r.espera_mediana_seg) })))}
+            >
             <NxCard id="por-equipe" nivel={2} icone={icT("users")} titulo="Por equipe" subtitulo="Atendimentos de cada equipe e a espera mediana">
               {deps.length === 0 ? (
                 <p className="nx-vazio text-sm">Sem equipes neste período.</p>
@@ -450,25 +459,13 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
                 />
               )}
             </NxCard>
+            </NxBlocoDoVerTudo>
           </div>
 
+          {/* "Em resumo" saiu (quick-ver-tudo): repetia os cartões do topo (conversas e pessoas) e a espera, que agora abre o bloco dos números;
+              o aviso do roteamento acima de 40% também abre aquele bloco. */}
           <div className="cm-par cm-par--igual">
-            <CmLeitura
-              id="resumo-atendimento"
-              titulo="Em resumo"
-              itens={[
-                { texto: `${fmtNum(atendimentos)} atendimentos de ${fmtNum(n(resumo?.contatos_distintos))} pessoas no período.` },
-                {
-                  texto:
-                    esperaSeg == null
-                      ? "Sem dado de espera até a 1ª resposta neste período."
-                      : `Na metade dos atendimentos, a 1ª resposta veio em até ${dur(esperaSeg)}${(esperaSeg ?? 0) > 3600 ? ": acima de 1 hora. Resposta demorada pode fazer o paciente procurar outra clínica." : "."}`,
-                  tom: (esperaSeg ?? 0) > 3600 ? "atencao" : atencao ? "flat" : "up",
-                },
-                { texto: fatiaSemRoteamento > 40 ? `${fatiaSemRoteamento.toFixed(0)}% das conversas não foram para nenhuma equipe: organizar o roteamento é o primeiro ajuste.` : "", tom: "atencao" },
-              ]}
-            />
-
+            <NxBlocoDoVerTudo cabeca={cabecaDoTempoAteFechar(nOrNull(resumo?.atendimento_mediano_seg))}>
             <NxCard id="tempo-fechar" nivel={2} icone={icT("calendar")} titulo="Tempo até fechar" subtitulo="Quando a conversa é encerrada; não é tempo de atendimento">
               <div className="cm-numerao">
                 <b>{dur(nOrNull(resumo?.atendimento_mediano_seg))}</b>
@@ -484,35 +481,16 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
                 </p>
               </CmMetodo>
             </NxCard>
+            </NxBlocoDoVerTudo>
           </div>
 
-          <CustoWhatsapp clientId={clientId} />
+          <CustoWhatsapp clientId={clientId} comCabeca />
 
-          <CmRecolhido titulo="Ver tabelas por equipe e por atendente" subtitulo="Atendimentos, concluídos, espera e tempo até fechar de cada um">
-            <div className="cm-tabela">
-              <table className="empilha">
-                <thead>
-                  <tr>
-                    <th className="text-left">Equipe</th>
-                    <th className="text-right">Atendimentos</th>
-                    <th className="text-right">Fatia</th>
-                    <th className="text-right">Espera</th>
-                    <th className="text-right">Até fechar</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deps.map((r) => (
-                    <tr key={r.departamento}>
-                      <td data-label="Equipe" style={{ fontWeight: 600 }}>{r.departamento}</td>
-                      <td data-label="Atendimentos" className="cm-num">{fmtNum(n(r.atendimentos))}</td>
-                      <td data-label="Fatia" className="text-right">{nOrNull(r.fatia) === null ? "—" : `${n(r.fatia).toFixed(1)}%`}</td>
-                      <td data-label="Espera" className="text-right">{dur(nOrNull(r.espera_mediana_seg))}</td>
-                      <td data-label="Até fechar" className="text-right">{dur(nOrNull(r.atendimento_mediano_seg))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          {/* A tabela por equipe saiu (quick-ver-tudo): era o mesmo dado das barras "Por equipe" logo acima. Fica a tabela por atendente. */}
+          <NxBlocoDoVerTudo
+            cabeca={cabecaPorAtendente((porAgente ?? []).map((r) => ({ nome: r.agente, atendimentos: n(r.atendimentos), esperaSeg: nOrNull(r.espera_mediana_seg) })))}
+          >
+          <CmRecolhido titulo="Ver a tabela por atendente" subtitulo="Atendimentos, concluídos, espera e tempo até fechar de cada um">
             <div className="cm-tabela">
               <table className="empilha">
                 <thead>
@@ -538,6 +516,7 @@ function NumerosWhatsapp({ clientId }: { clientId: string }) {
               </table>
             </div>
           </CmRecolhido>
+          </NxBlocoDoVerTudo>
         </div>
       }
     />
@@ -603,29 +582,3 @@ function DiaDoGrafico({ dia }: { dia: DiaCruzado }) {
   );
 }
 
-/** As descobertas que passam das 3 à vista (4 e 5) moram no "Ver tudo", já com os fatores do "Por quê?" abertos (nada some). Só navegam. */
-function MaisDescobertasDoAtendimento({ itens, clientId, dateRange, aoAgir }: { itens: readonly Descoberta[]; clientId: string; dateRange: ReturnType<typeof clientLayoutRoute.useSearch>; aoAgir: (local: string) => void }) {
-  return (
-    <section className="nx-cinco-resto" aria-label="Mais descobertas do período" data-peca="mais-descobertas">
-      <h3 className="nx-cinco-resto__titulo">Mais descobertas do período</h3>
-      <div className="nx-cinco-resto__grade">
-        {itens.map((d) => {
-          const linha = d.acao.rota ? linhaDaRota(d.acao.rota) : undefined;
-          return (
-            <article key={d.id} className="nx-cinco-resto__item" data-descoberta-extra={d.id}>
-              <NxSelo tom={d.tom} texto={d.selo} />
-              <p className="nx-cinco-resto__frase">{d.frase}</p>
-              <NxBarras barras={d.porque.barras} rotulo={d.porque.titulo} />
-              {d.porque.obs && <p className="nx-cinco-falta">{d.porque.obs}</p>}
-              {linha ? (
-                <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir a aba de origem" para={{ tela: linha, clientId, dateRange }} />
-              ) : d.acao.local ? (
-                <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={() => aoAgir(d.acao.local as string)} />
-              ) : null}
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
-}

@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Painel } from "@/components/visual";
 import { AMOSTRA_MIN_COORTE, lerVisoes, leituraDoEstoque } from "@/lib/crm-visoes";
 import { somarDias } from "@/lib/sap-metas";
+import { NxCabecaDoBloco } from "@/components/nx/cabeca-do-bloco";
+import type { CabecaDoBloco } from "@/lib/leitura/cabeca-do-bloco";
 
 const fmtN = (v: number) => v.toLocaleString("pt-BR");
 const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%`);
@@ -18,7 +20,7 @@ async function getVisoes(clientId: string, de: string, ate: string) {
 }
 
 /** Coorte por semana de entrada, estoque de leads abertos por etapa e idade, e movimentos da semana. */
-export function VisoesComerciais({ clientId, start, end }: { clientId: string; start: string; end: string }) {
+export function VisoesComerciais({ clientId, start, end, cabeca }: { clientId: string; start: string; end: string; cabeca?: (e: { abertos: number; parados30: number }) => CabecaDoBloco }) {
   const q = useQuery({ queryKey: ["crm-visoes", clientId, start, end], queryFn: () => getVisoes(clientId, start, end.slice(0, 10)), retry: false });
   if (q.isLoading) return <p className="note">Carregando coortes e estoque…</p>;
   if (q.isError) return <p className="note">Não foi possível ler as coortes e o estoque agora.</p>;
@@ -28,6 +30,7 @@ export function VisoesComerciais({ clientId, start, end }: { clientId: string; s
 
   return (
     <div className="space-y-4">
+      {cabeca && <NxCabecaDoBloco cabeca={cabeca({ abertos: v.resumoEstoque.abertos, parados30: v.resumoEstoque.parados30 })} />}
       <Painel
         icone={Users}
         titulo="Coorte: os leads de cada semana, hoje"

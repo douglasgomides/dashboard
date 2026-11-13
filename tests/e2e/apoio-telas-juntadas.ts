@@ -13,6 +13,14 @@ export const TELAS_DE_MEDIDA = [
 /** Altura máxima da aba aberta, em múltiplos da altura da janela (D-04). */
 export const LIMITE_DE_ALTURA = 1.5;
 
+/**
+ * Instagram > Desempenho, a única exceção à régua de 1,5 tela. João 13/11/2026: Top 5 na tela mesmo passando do limite ("Seus 5 posts
+ * que mais salvaram" saiu do "Ver tudo" e mora à vista, entre as descobertas e o "Ver tudo"). O limite desta tela é em px, por largura:
+ * a altura medida em 13/11/2026 com o Top 5 à vista e o Ver tudo fechado, na aba Formato (a que a tela abre), mais 40 px de folga.
+ * Medida (cinco-segundos-instagram.spec.ts, a maior dos specs que medem esta tela): 1510 px em 375x812 e 1630 px em 1440x900.
+ */
+export const LIMITE_DO_DESEMPENHO_COM_TOP5: Record<number, number> = { 375: 1510 + 40, 1440: 1630 + 40 };
+
 export const semRolagemLateral = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 
 /**
@@ -23,9 +31,10 @@ export const semRolagemLateral = (page: Page) => page.evaluate(() => document.do
 export async function alturaDaAbaAberta(page: Page, seletor = "[data-juntada]"): Promise<{ altura: number; janela: number }> {
   const alvo = page.locator(seletor).first();
   await expect(alvo).toBeVisible();
-  // O veredito (formato 5 segundos, 03.1.1.1) ou a leitura precisa existir (a tela montou) e já ter saído de "carregando".
-  await expect(alvo.locator('[data-peca="veredito"], [data-peca="leitura"]').first()).toBeVisible();
-  await expect(alvo.locator('[data-peca="veredito"][data-modo="carregando"], [data-peca="leitura"][data-modo="carregando"], [data-peca="carregando"]')).toHaveCount(0);
+  // O veredito (formato 5 segundos, 03.1.1.1) ou a leitura precisa existir (a tela montou) e já ter saído de "carregando". Nas abas sem a
+  // leitura (quick-ver-tudo-abas): o topo das descobertas da aba (pode ter altura 0), as descobertas, ou o quadro "O que falta".
+  await expect(alvo.locator('[data-peca="veredito"]:visible, [data-peca="leitura"]:visible, [data-peca="descobertas-da-aba"], [data-peca="descobertas"]:visible, [data-peca="vazio"]:visible').first()).toBeAttached();
+  await expect(alvo.locator('[data-peca="veredito"][data-modo="carregando"], [data-peca="leitura"][data-modo="carregando"], [data-peca="descobertas-da-aba"][data-modo="carregando"], [data-peca="carregando"]')).toHaveCount(0);
   expect(await alvo.locator("details[open]").count(), "a medida exige todo details fechado").toBe(0);
   return alvo.evaluate((el) => ({ altura: el.getBoundingClientRect().height, janela: innerHeight }));
 }

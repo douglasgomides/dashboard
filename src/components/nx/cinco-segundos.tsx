@@ -1,8 +1,9 @@
-import { useId, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import type { DateRangeState } from "@/lib/date-range";
 import { ROTULO_RESPONSAVEL } from "@/lib/insight";
 import type { TelaId, TomFato } from "@/lib/leitura/tipos";
 import type { Descoberta, Veredito } from "@/lib/leitura/cinco-segundos";
+import { ABRIR_VER_TUDO } from "@/lib/leitura/leitura-em-descobertas";
 import { NxCarregando, NxErro } from "./blocos";
 import { NxAcaoPilula, NxBarras } from "./cartoes";
 import { linhaDaRota } from "./hoje";
@@ -133,13 +134,18 @@ export interface NxDescobertasProps {
   atributos?: (d: Descoberta, indice: number) => Atributos;
   /** Uma peça da tela depois das barras do "Por quê?" (por exemplo os dias de verba baixa sobre a faixa do normal). Só apresentação. */
   extraDoPorque?: (d: Descoberta) => ReactNode;
+  /**
+   * O data-peca de cada cartão. As descobertas à vista são "descoberta"; as do "Ver tudo" são "descoberta-extra", para a conferência dos
+   * 5 segundos (que conta o que está à vista) não contar o que mora no "Ver tudo" fechado.
+   */
+  pecaDoItem?: "descoberta" | "descoberta-extra";
 }
 
 /**
  * De 3 a 5 descobertas em frase curta, cada uma com selo (sinal e palavra), quem resolve, um número medido em jogo, UMA ação que só
  * navega (CHAM-07) e um "Por quê?" que abre de 2 a 3 fatores em barra. O que falta é barra listrada com "Falta dado" (nunca zero).
  */
-export function NxDescobertas({ titulo, apoio, itens, clientId, dateRange, aoAgir, id, atributos, extraDoPorque }: NxDescobertasProps) {
+export function NxDescobertas({ titulo, apoio, itens, clientId, dateRange, aoAgir, id, atributos, extraDoPorque, pecaDoItem = "descoberta" }: NxDescobertasProps) {
   const base = useId();
   return (
     <section className="nx-descobertas" id={id} aria-labelledby={`${base}-t`} data-peca="descobertas">
@@ -154,7 +160,7 @@ export function NxDescobertas({ titulo, apoio, itens, clientId, dateRange, aoAgi
         <ul className="nx-descobertas__lista">
           {itens.map((d, k) => (
             <li key={d.id} className="nx-descobertas__item">
-              <ItemDaDescoberta d={d} clientId={clientId} dateRange={dateRange} aoAgir={aoAgir} extras={atributos?.(d, k)} extraDoPorque={extraDoPorque} />
+              <ItemDaDescoberta d={d} clientId={clientId} dateRange={dateRange} aoAgir={aoAgir} extras={atributos?.(d, k)} extraDoPorque={extraDoPorque} peca={pecaDoItem} />
             </li>
           ))}
         </ul>
@@ -163,13 +169,26 @@ export function NxDescobertas({ titulo, apoio, itens, clientId, dateRange, aoAgi
   );
 }
 
-function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras, extraDoPorque }: { d: Descoberta; clientId: string; dateRange?: DateRangeState; aoAgir?: (local: string) => void; extras?: Atributos; extraDoPorque?: (d: Descoberta) => ReactNode }) {
+function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras, extraDoPorque, peca }: { d: Descoberta; clientId: string; dateRange?: DateRangeState; aoAgir?: (local: string) => void; extras?: Atributos; extraDoPorque?: (d: Descoberta) => ReactNode; peca: string }) {
   const [aberto, setAberto] = useState(false);
   const painel = useId();
+  const cartao = useRef<HTMLElement>(null);
   const linha = d.acao.rota ? linhaDaRota(d.acao.rota) : undefined;
   const local = d.acao.local;
+  // A ação que veio da leitura do período (quick-ver-tudo): abre o "Ver tudo" da própria tela, onde estão os números. Só abre e leva o
+  // foco; nada é enviado nem gravado (CHAM-07).
+  const abrirVerTudo = () => {
+    const pagina = cartao.current?.closest(".nx-pagina, .adm-carteira");
+    const verTudo = pagina?.querySelector<HTMLDetailsElement>('details[id^="detalhes-"], details.adm-urgencia__ver-tudo');
+    if (!verTudo) return;
+    verTudo.open = true;
+    const alvo = verTudo.querySelector<HTMLElement>('[data-peca="bloco-do-ver-tudo"]') ?? verTudo;
+    alvo.scrollIntoView({ behavior: "smooth", block: "start" });
+    verTudo.querySelector("summary")?.focus({ preventScroll: true });
+  };
+  const aoAgirAqui = local === ABRIR_VER_TUDO ? abrirVerTudo : local && aoAgir ? () => aoAgir(local) : undefined;
   return (
-    <article className="nx-descoberta" data-peca="descoberta" data-tom={d.tom} data-aberto={aberto ? "" : undefined} {...extras}>
+    <article ref={cartao} className="nx-descoberta" data-acao-longa={(d.acao?.rotulo ?? "").length > 60 ? "" : undefined} data-peca={peca} data-proximo-passo={d.origem === "proximo-passo" ? "" : undefined} data-tom={d.tom} data-aberto={aberto ? "" : undefined} {...extras}>
       {/* O ícone do piloto (quadrado com o sinal): decoração, o selo ao lado diz o tom em palavra. */}
       <span className="nx-descoberta__icone" aria-hidden>
         {SINAL[d.tom]}
@@ -196,8 +215,8 @@ function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras, extraDoPorqu
       <div className="nx-descoberta__acoes">
         {linha ? (
           <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir a aba de origem" para={{ tela: linha, clientId, dateRange }} />
-        ) : local && aoAgir ? (
-          <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={() => aoAgir(local)} />
+        ) : aoAgirAqui ? (
+          <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={aoAgirAqui} />
         ) : null}
         <button type="button" className="nx-descoberta__porque-botao" aria-expanded={aberto} aria-controls={painel} onClick={() => setAberto((a) => !a)}>
           Por quê?
@@ -210,5 +229,18 @@ function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras, extraDoPorqu
         {d.porque.obs && <p className="nx-descoberta__obs">{d.porque.obs}</p>}
       </div>
     </article>
+  );
+}
+
+/**
+ * As descobertas que passam das 3 à vista moram no começo do "Ver tudo" (quick-ver-tudo, João 13/11/2026), no MESMO desenho das de cima:
+ * ícone, selo, frase curta, número em destaque, UMA ação e o "Por quê?" com barras. Inclui as que vieram da leitura do período.
+ */
+export function NxMaisDescobertas({ itens, titulo, atributos, ...resto }: Omit<NxDescobertasProps, "titulo" | "pecaDoItem"> & { titulo?: ReactNode }) {
+  if (itens.length === 0) return null;
+  return (
+    <div className="nx-cinco-resto" data-peca="mais-descobertas">
+      <NxDescobertas titulo={titulo ?? "Mais descobertas do período"} itens={itens} {...resto} pecaDoItem="descoberta-extra" atributos={(d, k) => ({ ...atributos?.(d, k), "data-descoberta-extra": d.id })} />
+    </div>
   );
 }

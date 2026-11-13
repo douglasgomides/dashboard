@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 import { SECOES_JUNTADAS } from "../../src/lib/registro-de-telas";
-import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, mockAudiencia, mockCrm, mockInstagram, mockLinks, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
+import { LIMITE_DE_ALTURA, LIMITE_DO_DESEMPENHO_COM_TOP5, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, mockAudiencia, mockCrm, mockInstagram, mockLinks, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 import { mockInstagram as mockInstagramCompleto } from "./instagram-dados";
 import { abrirVerTudo } from "./apoio-cinco-segundos";
 
@@ -234,7 +234,9 @@ for (const { width, height } of TELAS_DE_MEDIDA) {
       await page.goto(`/${CID}/${caminho}?preset=30d`);
       const { altura, janela } = await alturaDaAbaAberta(page);
       console.log(`altura-instagram aba=${rotulo} largura=${width} altura=${Math.round(altura)} janela=${janela} razao=${(altura / janela).toFixed(2)}`);
-      expect(altura, `${rotulo} a ${width}px: ${Math.round(altura)} px de ${janela} px (${(altura / janela).toFixed(2)}x)`).toBeLessThanOrEqual(LIMITE_DE_ALTURA * janela);
+      // Desempenho: João 13/11/2026: Top 5 na tela mesmo passando do limite (limite próprio em px, medida + 40 px). As outras abas: 1,5 tela.
+      const limite = caminho === "conteudo" ? LIMITE_DO_DESEMPENHO_COM_TOP5[width] : LIMITE_DE_ALTURA * janela;
+      expect(altura, `${rotulo} a ${width}px: ${Math.round(altura)} px de ${janela} px (${(altura / janela).toFixed(2)}x)`).toBeLessThanOrEqual(limite);
       expect(await semRolagemLateral(page)).toBe(true);
       await page.screenshot({ path: `test-results/redesenho/juntada-instagram-${caminho}-${width}.png`, fullPage: true });
     });
@@ -279,7 +281,7 @@ test("contagem em cinza: a aba mostra o número que ela mesma carregou e \"—\"
   // Depois de abrir Destaques e voltar, Destaques mostra o número que a própria aba carregou.
   await aba(nav, "Destaques").click();
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/top`);
-  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first()).toBeVisible();
+  await expect(page.locator('[data-juntada] [data-peca="descobertas-da-aba"]')).toHaveAttribute("data-modo", "pronta");
   await expect(aba(nav, "Destaques").locator(".nx-pasta__contagem")).toHaveText(/^\d+$/);
   await aba(nav, "Posts").click();
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/posts`);
@@ -346,6 +348,9 @@ test("a 375 a pasta não cria rolagem lateral na página (a faixa das abas rola 
   }
 });
 
+// quick-ver-tudo-abas (João 13/11/2026): abas sem a caixa da leitura; o próximo passo dela é a pílula de uma descoberta no topo da aba.
+const ABAS_SEM_LEITURA: ReadonlySet<string> = new Set(["vendas-kommo", "links", "top", "posts", "audiencia"]);
+
 // D-07 (plano 02): o próximo passo da leitura é a pílula de ação com a seta escura; a seta só abre os Detalhes da própria página.
 const ABAS_DO_INSTAGRAM = [
   ["Desempenho", "conteudo"],
@@ -376,9 +381,17 @@ for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
       await expect(detalhes).not.toHaveAttribute("open", /.*/);
       await detalhes.locator(":scope > summary").click();
     }
-    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+    // quick-ver-tudo (João 13/11/2026): em Desempenho a leitura saiu do "Ver tudo"; o próximo passo dela é a pílula de uma descoberta lá dentro,
+    // e a seta continua só abrindo os Detalhes da própria página.
+    // quick-ver-tudo-abas: nas abas sem a caixa da leitura, o próximo passo dela é a pílula de uma descoberta no topo da aba.
+    const leitura =
+      sub === "conteudo"
+        ? page.locator('[data-juntada] [data-peca="descoberta-extra"][data-descoberta-extra^="leitura-"]').first()
+        : ABAS_SEM_LEITURA.has(sub)
+          ? page.locator('[data-juntada] [data-peca="descobertas-da-aba"] [data-peca="descoberta"][data-proximo-passo]').first()
+          : page.locator('[data-juntada] [data-peca="leitura"]').first();
     await expect(leitura).toBeVisible();
-    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
+    if (sub !== "conteudo" && !ABAS_SEM_LEITURA.has(sub)) await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
     const pilula = leitura.locator(".nx-acao-pilula").first();
     await expect(pilula).toBeVisible();
     await page.screenshot({ path: `test-results/redesenho/pilula-${sub}.png` });
@@ -443,18 +456,20 @@ for (const [rotulo, sub] of ABAS_DO_INSTAGRAM) {
 // Plano 03: Onde os pacientes travam (4 abas, Funil com 2 partes) e De onde vêm os pacientes > Por origem, no molde, no desenho
 // do D-07 e dentro de 1,5 tela. Dados fictícios (mockPessoas e mockCrm).
 // ===================================================================================================================
-type ParteMedida = { pasta: string; aba: string; parte?: string; sub: string; slug: string; semCartoes?: boolean; cinco?: boolean };
+type ParteMedida = { pasta: string; aba: string; parte?: string; sub: string; slug: string; semCartoes?: boolean; cinco?: boolean; semLeitura?: true | "descobertas" | "vazio" };
 const TRAVAM = "Onde os pacientes travam";
 const PARTES_DO_CRM: ParteMedida[] = [
   // Formato 5 segundos (03.1.1.1, plano 05): abre com o veredito (a leitura mora no "Ver tudo").
   { pasta: TRAVAM, aba: "Funil", parte: "Do contato à venda", sub: "pacientes", slug: "do-contato-a-venda", cinco: true },
-  { pasta: TRAVAM, aba: "Funil", parte: "No CRM", sub: "crm-painel", slug: "no-crm" },
-  // Consultas e Vendas são telas em construção: leitura "Falta dado:", sem cartões.
-  { pasta: TRAVAM, aba: "Consultas", sub: "consultas", slug: "consultas", semCartoes: true },
-  { pasta: TRAVAM, aba: "Vendas", sub: "vendas", slug: "vendas", semCartoes: true },
-  { pasta: TRAVAM, aba: "Jornada", sub: "jornada", slug: "jornada" },
+  // quick-ver-tudo-abas (João 13/11/2026): No CRM e Jornada sem a "Leitura do período"; o que ela dizia virou descoberta (no máximo 3 à vista).
+  { pasta: TRAVAM, aba: "Funil", parte: "No CRM", sub: "crm-painel", slug: "no-crm", semLeitura: "descobertas" },
+  // Consultas e Vendas são telas em construção, sem cartões: o quadro "O que falta" diz o que falta e quem resolve (a leitura só repetia).
+  { pasta: TRAVAM, aba: "Consultas", sub: "consultas", slug: "consultas", semCartoes: true, semLeitura: "vazio" },
+  { pasta: TRAVAM, aba: "Vendas", sub: "vendas", slug: "vendas", semCartoes: true, semLeitura: "vazio" },
+  { pasta: TRAVAM, aba: "Jornada", sub: "jornada", slug: "jornada", semLeitura: "descobertas" },
   // De onde vêm os pacientes > Por origem (Resultados por origem do CRM).
-  { pasta: "De onde vêm os pacientes", aba: "Por origem", sub: "vendas-kommo", slug: "por-origem" },
+  // quick-ver-tudo-abas (João 13/11/2026): a leitura do período saiu; o que ela dizia e a aba não mostra é descoberta no topo da aba.
+  { pasta: "De onde vêm os pacientes", aba: "Por origem", sub: "vendas-kommo", slug: "por-origem", semLeitura: true },
 ];
 
 async function abrirParte(page: Page, context: BrowserContext, perfil: "viewer" | "admin", sub: string, largura: { width: number; height: number }) {
@@ -465,7 +480,7 @@ async function abrirParte(page: Page, context: BrowserContext, perfil: "viewer" 
   await page.goto(`/${CID}/${sub}?preset=30d`);
 }
 
-for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes, cinco } of PARTES_DO_CRM) {
+for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes, cinco, semLeitura } of PARTES_DO_CRM) {
   for (const perfil of ["viewer", "admin"] as const) {
     test(`${perfil}: ${nomeDaAba}${parte ? ` > ${parte}` : ""} abre no molde com leitura, pílula de ação e cartões com ícone redondo`, async ({ page, context }) => {
       await abrirParte(page, context, perfil, sub, { width: 1440, height: 900 });
@@ -483,6 +498,30 @@ for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes, c
         await expect(veredito).not.toHaveAttribute("data-modo", "carregando");
         await expect(veredito.getByText(/Aqui você perde mais|Uma etapa tem mais gente|Falta dado:/).first()).toBeVisible();
         await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toBeHidden();
+      } else if (semLeitura === true) {
+        // Sem a caixa da leitura: as descobertas dela no topo da aba, com a pílula de ação (o próximo passo) e o "Por quê?".
+        await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+        const topo = page.locator('[data-juntada] [data-peca="descobertas-da-aba"]');
+        await expect(topo).toHaveAttribute("data-modo", "pronta");
+        const descoberta = topo.locator('[data-peca="descoberta"]').first();
+        await expect(descoberta).toBeVisible();
+        await expect(descoberta.locator(".nx-acao-pilula").first()).toBeVisible();
+        await expect(descoberta.getByRole("button", { name: "Por quê?" })).toBeVisible();
+        expect(await topo.locator('[data-peca="descoberta"]').count()).toBeLessThanOrEqual(3);
+      } else if (semLeitura === "descobertas") {
+        // A leitura saiu; as descobertas (de 1 a 3 à vista) abrem a aba, cada uma com quem resolve e a pílula de ação.
+        await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+        const descobertas = page.locator('[data-juntada] [data-peca="descoberta"]');
+        await expect(descobertas.first()).toBeVisible();
+        expect(await descobertas.count()).toBeLessThanOrEqual(3);
+        await expect(descobertas.first().locator(".nx-descoberta__quem")).toBeVisible();
+        await expect(descobertas.first().locator(".nx-acao-pilula")).toBeVisible();
+      } else if (semLeitura === "vazio") {
+        // A leitura saiu; o quadro diz uma vez só o que falta, como consertar e quem resolve (nunca um zero).
+        await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+        const vazio = page.locator('[data-juntada] [data-peca="vazio"]');
+        await expect(vazio.getByText(/^O que falta: /)).toHaveCount(1);
+        await expect(vazio.getByText(/^Quem resolve: /)).toHaveCount(1);
       } else {
         const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
         await expect(leitura).toBeVisible();
@@ -520,15 +559,19 @@ for (const { pasta: nomeDaPasta, aba: nomeDaAba, parte, sub, slug, semCartoes, c
   }
 }
 
-test("Onde os pacientes travam: Consultas e Vendas abrem com \"Falta dado:\" e a contagem das abas continua \"—\"", async ({ page, context }) => {
+test("Onde os pacientes travam: Consultas e Vendas abrem com o que falta e a contagem das abas continua \"—\"", async ({ page, context }) => {
   for (const [rotulo, sub] of [["Consultas", "consultas"], ["Vendas", "vendas"]] as const) {
     await abrirParte(page, context, "viewer", sub, { width: 1440, height: 900 });
     const nav = pasta(page, TRAVAM);
     await expect(aba(nav, rotulo)).toHaveAttribute("aria-current", "page");
-    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-    await expect(leitura.getByText(/^Falta dado: a tela ainda não tem a fonte ligada/)).toBeVisible();
-    await expect(leitura.getByText(/Quem resolve:/)).toBeVisible();
-    await expect(leitura.locator(".nx-acao-pilula")).toBeVisible();
+    // quick-ver-tudo-abas: a leitura saiu (repetia o quadro). O que falta e quem resolve aparecem uma vez só, no quadro "Em construção";
+    // o período e o "sem selo" uma vez só, pequenos, no cabeçalho.
+    await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+    const vazio = page.locator('[data-juntada] [data-peca="vazio"]');
+    await expect(vazio.getByText(/^O que falta: a fonte que mostra quem virou/)).toBeVisible();
+    await expect(vazio.getByText(/^Quem resolve: /)).toHaveCount(1);
+    await expect(vazio.getByText("Em construção")).toBeVisible();
+    await expect(page.locator('[data-juntada] .nx-pagina__meta').getByText("sem selo")).toHaveCount(1);
     for (const r of ["Consultas", "Vendas"]) {
       const contagem = aba(nav, r).locator(".nx-pasta__contagem");
       await expect(contagem).toContainText("—");
@@ -554,26 +597,35 @@ test("Onde os pacientes travam: clicar em No CRM leva ao funil comercial com o p
   await expect.poll(() => posts.find((p) => p.rota === "/_authenticated/$clientId/crm-painel")?.origem).toBe("menu");
 });
 
-test("Jornada: a leitura diz que a maioria dos contatos está sem pessoa ligada e o aviso completo fica nos Detalhes", async ({ page, context }) => {
+test("Jornada: a descoberta diz que a maioria dos contatos está sem pessoa ligada (\"N de M\") e o porquê fica nos Detalhes", async ({ page, context }) => {
   await abrirParte(page, context, "viewer", "jornada", { width: 1440, height: 900 });
-  const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-  await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
-  await expect(leitura.getByText(/não está ligada a uma pessoa/)).toBeVisible();
-  await expect(leitura.locator(".nx-leitura__num", { hasText: "50 de 80" })).toBeVisible();
+  // quick-ver-tudo-abas: a leitura saiu; o fato está uma vez só, numa descoberta à vista, com "50 de 80" no número em destaque.
+  await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+  const descoberta = page.locator('[data-juntada] [data-peca="descoberta"]', { hasText: /não está ligada a uma pessoa/ });
+  await expect(descoberta).toHaveCount(1);
+  await expect(descoberta.locator(".nx-descoberta__impacto", { hasText: "50 de 80" })).toBeVisible();
+  // O aviso crítico com o mesmo número não volta; nos Detalhes fica só o porquê (como o painel liga um contato a uma pessoa).
+  await expect(page.locator("[data-juntada] .cm-aviso--critico")).toHaveCount(0);
   const detalhes = page.locator("[data-juntada] details#detalhes-jornada");
   await detalhes.locator(":scope > summary").click();
-  await expect(detalhes.locator(".cm-aviso--critico").getByText(/% dos leads criados no período não estão ligados/)).toBeVisible();
+  const porque = detalhes.locator(".cm-metodo", { hasText: "Por que um contato fica sem pessoa" });
+  await porque.locator("summary").click();
+  await expect(porque.getByText(/nunca por nome parecido/)).toBeVisible();
+  await expect(detalhes.locator('[data-peca="periodo-do-ver-tudo"]')).toHaveCount(1);
 });
 
 test("De onde vêm os pacientes: a aba Por origem mostra em cinza o número de origens com venda que a própria aba carregou", async ({ page, context }) => {
   await abrirParte(page, context, "viewer", "vendas-kommo", { width: 1440, height: 900 });
   const nav = pasta(page, "De onde vêm os pacientes");
   await expect(aba(nav, "Por origem")).toHaveAttribute("aria-current", "page");
-  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first()).not.toHaveAttribute("data-modo", "carregando");
+  await expect(page.locator('[data-juntada] [data-peca="descobertas-da-aba"]')).toHaveAttribute("data-modo", "pronta");
   // mockCrm: Instagram e Indicação têm ganho; "Não informado" não é uma origem e não entra na conta.
   await expect(aba(nav, "Por origem").locator(".nx-pasta__contagem")).toHaveText("2");
-  // A leitura afirma a origem líder só com a base de leadsRanking (Instagram tem 300 contatos).
-  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first().getByText(/A origem com mais ganhos registrados é "Instagram"/)).toBeVisible();
+  // A leitura afirma a origem líder só com a base de leadsRanking (Instagram tem 300 contatos). quick-ver-tudo-abas: a caixa da leitura
+  // saiu; a origem líder está no gráfico do topo e o passo de conferir o "ganho" dela é UMA descoberta, uma vez só na aba.
+  await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+  await expect(page.locator("[data-juntada]").getByText(/Conferir se o status ganho de "Instagram" é venda de verdade/)).toHaveCount(1);
+  await expect(page.locator('[data-juntada] [data-peca="descobertas-da-aba"] [data-peca="descoberta"]').getByText(/status ganho de "Instagram"/)).toBeVisible();
 });
 
 // ===================================================================================================================
@@ -621,12 +673,12 @@ for (const perfil of ["viewer", "admin"] as const) {
     await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao")).toHaveCount(3);
     await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-linha30")).toHaveCount(3);
     await expect(page.locator("[data-juntada] details#detalhes-anuncios")).not.toHaveAttribute("open", /.*/);
-    // A leitura de antes continua inteira, dentro do "Ver tudo" (MEDV-02).
+    // quick-ver-tudo: a leitura saiu do "Ver tudo". O que ela dizia ("as conversas subiram 20%") está uma vez só, no cartão do topo; o que só ela
+    // dizia virou descoberta lá dentro (MEDV-02: nada único some).
+    await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao", { hasText: "Conversas pelo anúncio" })).toContainText("▲ 20%");
     await abrirVerTudo(page, "[data-juntada]");
-    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-    await expect(leitura.getByText("O que aconteceu")).toBeVisible();
-    await expect(leitura.getByText(/As conversas iniciadas pelos anúncios subiram/)).toBeVisible();
-    await expect(leitura.locator(".nx-leitura__num", { hasText: "+20%" })).toBeVisible();
+    await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+    expect(await page.locator('[data-juntada] [data-descoberta-extra^="leitura-"]').count()).toBeGreaterThan(0);
     expect(await semRolagemLateral(page)).toBe(true);
   });
 
@@ -648,16 +700,17 @@ for (const perfil of ["viewer", "admin"] as const) {
     // O aviso longo do rastreio fica à vista (honestidade primeiro), sem abrir o "Ver tudo".
     await expect(page.locator("[data-juntada] details#detalhes-anuncios")).not.toHaveAttribute("open", /.*/);
     await expect(page.getByRole("alert").filter({ hasText: "As conversas dos anúncios não estão sendo contadas direito" })).toContainText("Quem resolve: Gestor de tráfego");
-    // A leitura de antes (com o mesmo motivo) continua no "Ver tudo".
+    // quick-ver-tudo: o "Falta dado" fica uma vez só, no veredito (acima); o "Ver tudo" não traz a leitura nem descoberta tirada dela (portão negado).
     await abrirVerTudo(page, "[data-juntada]");
-    await expect(page.locator('[data-juntada] [data-peca="leitura"]').first().getByText(/^Falta dado: o rastreio das conversas dos anúncios está suspeito/)).toBeVisible();
+    await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+    await expect(page.locator('[data-juntada] [data-descoberta-extra^="leitura-"]')).toHaveCount(0);
     expect(await semRolagemLateral(page)).toBe(true);
   });
 }
 
 test("a seta da pílula de Anúncios abre os Detalhes da própria página e não grava nada", async ({ page, context }) => {
   await mockAccount(context, "viewer");
-  await mockAnuncios(context, "suspeito");
+  await mockAnuncios(context, "bom");
   await page.setViewportSize({ width: 1440, height: 900 });
   const escritas: string[] = [];
   let aposOClique = false;
@@ -666,19 +719,20 @@ test("a seta da pílula de Anúncios abre os Detalhes da própria página e não
     if (aposOClique && ["POST", "PATCH", "DELETE"].includes(r.method()) && pathname.startsWith("/rest/v1/") && pathname !== "/rest/v1/rota_acessos") escritas.push(`${r.method()} ${pathname}`);
   });
   await page.goto(`/${CID}/anuncios?preset=30d`);
-  // Formato 5 segundos: a leitura de antes mora no "Ver tudo"; ao abri-lo, a seta da pílula leva o foco para o próprio bloco.
+  // quick-ver-tudo: a leitura saiu do "Ver tudo"; o passo dela é a pílula de uma descoberta lá dentro, e a seta só abre um lugar da própria
+  // página (o diagnóstico campanha a campanha). Nada é gravado nem enviado (CHAM-07).
   const detalhes = page.locator("[data-juntada] details#detalhes-anuncios");
+  await expect(page.locator('[data-juntada] [data-peca="veredito"]:not([data-modo="carregando"])')).toBeVisible();
   await expect(detalhes).not.toHaveAttribute("open", /.*/);
-  await expect(page.locator('[data-juntada] [data-peca="veredito"] .nx-acao-pilula').first()).toBeVisible();
   await detalhes.locator(":scope > summary").click();
-  const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-  await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
+  const daLeitura = page.locator('[data-juntada] [data-descoberta-extra^="leitura-"]').first();
+  await expect(daLeitura.locator(".nx-acao-pilula").first()).toBeVisible();
   await page.screenshot({ path: "test-results/redesenho/pilula-anuncios.png" });
   await page.waitForLoadState("networkidle");
   aposOClique = true;
-  await leitura.locator(".nx-acao-pilula__seta").first().click();
+  await daLeitura.locator(".nx-acao-pilula__seta").first().click();
   await expect(detalhes).toHaveAttribute("open", /.*/);
-  await expect(detalhes.locator(":scope > summary")).toBeFocused();
+  await expect(page.locator("[data-juntada] #campanhas-anuncios")).toBeInViewport();
   await page.waitForTimeout(300);
   expect(escritas, "a seta da pílula não grava nada").toEqual([]);
 });
@@ -694,7 +748,10 @@ test("contagem em cinza: a aba Anúncios mostra o número de campanhas que a pr�
   await expect(aba(nav, "Anúncios").locator(".nx-pasta__contagem")).not.toHaveText(/^0/);
   await aba(nav, "Anúncios").click();
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/anuncios`);
-  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first()).not.toHaveAttribute("data-modo", "carregando");
+  // Anúncios abre com o veredito (a leitura saiu em quick-ver-tudo). Antes esta linha achava a leitura de Por origem ainda na tela; com
+  // Por origem também sem a caixa (quick-ver-tudo-abas), confere o veredito de Anúncios já carregado.
+  await expect(page.locator('[data-juntada] [data-tela="anuncios"] [data-peca="veredito"]').first()).toBeVisible();
+  await expect(page.locator('[data-juntada] [data-peca="veredito"]').first()).not.toHaveAttribute("data-modo", "carregando");
   // O mock tem 3 campanhas com atividade; o cartão "Investido" diz o mesmo número.
   // Formato 5 segundos: o cartão "Investido" à vista diz o número de campanhas (ou os dias de verba baixa); o de antes mora no "Ver tudo".
   await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao", { hasText: "Investido" }).locator(".nx-cartao__sub")).toContainText("3 campanhas");
@@ -726,20 +783,22 @@ async function abrirLinks(page: Page, context: BrowserContext, perfil: "viewer" 
 }
 
 for (const perfil of ["viewer", "admin"] as const) {
-  test(`${perfil}: Links abre na pasta com a leitura do link que mais teve conversa, pílula de ação e cartões com ícone redondo`, async ({ page, context }) => {
+  test(`${perfil}: Links abre na pasta com a descoberta do link que mais teve conversa, pílula de ação e cartões com ícone redondo`, async ({ page, context }) => {
     await abrirLinks(page, context, perfil);
     const nav = pasta(page, ORIGEM);
     await expect(aba(nav, "Links")).toHaveAttribute("aria-current", "page");
     await expect(page.locator("[data-juntada] .nx-pagina")).toHaveCount(1);
-    const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-    await expect(leitura).toBeVisible();
-    await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
-    await expect(leitura.getByText("O que aconteceu")).toBeVisible();
-    // mockLinks: 61 conversas nos 4 links, 40 delas no link "Bio principal" (acima da base mínima de 5 conversas).
-    await expect(leitura.getByText(/O link com mais conversas é “Bio principal”/)).toBeVisible();
-    await expect(leitura.locator(".nx-leitura__num", { hasText: "40 de 61 conversas" })).toBeVisible();
-    await expect(leitura.getByText(/Quem resolve:/).first()).toBeVisible();
-    await expect(leitura.locator(".nx-acao-pilula").first()).toBeVisible();
+    // quick-ver-tudo-abas (João 13/11/2026): a caixa da leitura saiu; o fato dela que a aba não mostra é UMA descoberta no topo.
+    await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+    const topo = page.locator('[data-juntada] [data-peca="descobertas-da-aba"]');
+    await expect(topo).toHaveAttribute("data-modo", "pronta");
+    // mockLinks: 61 conversas nos 4 links, 40 delas no link "Bio principal" (acima da base mínima de 5 conversas). Uma vez só na aba.
+    const descoberta = topo.locator('[data-peca="descoberta"]', { hasText: /O link com mais conversas é “Bio principal”/ });
+    await expect(descoberta).toBeVisible();
+    await expect(page.locator("[data-juntada]").getByText(/O link com mais conversas é “Bio principal”/)).toHaveCount(1);
+    await expect(descoberta.locator("[data-numero-de-destaque]", { hasText: "40 de 61 conversas" })).toBeVisible();
+    await expect(descoberta.getByText("Social media")).toBeVisible();
+    await expect(descoberta.locator(".nx-acao-pilula").first()).toBeVisible();
     await confereIconesDosCartoes(page, "links");
     await expect(page.locator("[data-juntada] .nx-pagina__cartoes .nx-cartao")).toHaveCount(4);
     // A tabela crua virou NxTabela, dentro dos Detalhes.
@@ -750,9 +809,11 @@ for (const perfil of ["viewer", "admin"] as const) {
 
 test("Links sem nenhum link criado: \"Falta dado:\" para a equipe Doctor Creator, e só a equipe vê o Gerador à vista", async ({ page, context }) => {
   await abrirLinks(page, context, "viewer", "vazio");
-  const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
+  // quick-ver-tudo-abas: sem a caixa da leitura, o "Falta dado" é UMA descoberta no topo, com quem resolve e o passo.
+  const leitura = page.locator('[data-juntada] [data-peca="descobertas-da-aba"] [data-peca="descoberta"]').first();
   await expect(leitura.getByText(/^Falta dado: ainda não há link rastreado para esta clínica/)).toBeVisible();
-  await expect(leitura.getByText("Quem resolve: Equipe Doctor Creator")).toBeVisible();
+  await expect(leitura.getByText("Equipe Doctor Creator")).toBeVisible();
+  await expect(leitura.locator(".nx-acao-pilula")).toBeVisible();
   await expect(page.getByText("A equipe Doctor Creator ainda não criou links rastreados para esta clínica.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Criar link curto" })).toHaveCount(0);
   await expect(aba(pasta(page, ORIGEM), "Links").locator(".nx-pasta__contagem")).toContainText("—");
@@ -793,7 +854,7 @@ test("contagem em cinza: a aba Links mostra \"—\" antes de abrir e o número d
   await expect(aba(nav, "Links").locator(".nx-pasta__contagem")).not.toHaveText(/^0/);
   await aba(nav, "Links").click();
   await expect.poll(() => new URL(page.url()).pathname).toBe(`/${CID}/links`);
-  await expect(page.locator('[data-juntada] [data-peca="leitura"]').first()).not.toHaveAttribute("data-modo", "carregando");
+  await expect(page.locator('[data-juntada] [data-peca="descobertas-da-aba"]')).toHaveAttribute("data-modo", "pronta");
   await expect(aba(nav, "Links").locator(".nx-pasta__contagem")).toHaveText("4");
 });
 
@@ -831,6 +892,9 @@ for (const { rotulo, sub, slug } of MEDIDAS_DO_PLANO_04) {
   }
 }
 
+// quick-ver-tudo-abas (13/11/2026): estas abas não têm mais a "Leitura do período" (o que ela dizia virou descoberta ou já estava no quadro).
+const ABAS_SEM_LEITURA_B = new Set(["crm-painel", "consultas", "vendas", "jornada", "conteudo-comercial"]);
+
 // Todas as 13 abas e partes: leitura com a pílula de ação e todo cartão com o ícone no círculo (D-07), num laço só.
 for (const sub of PARTES_DAS_3_TELAS) {
   test(`D-07: /${sub} (aba ou parte das telas juntadas) tem a pílula de ação na leitura e ícone redondo em todo cartão`, async ({ page, context }) => {
@@ -848,6 +912,16 @@ for (const sub of PARTES_DAS_3_TELAS) {
       const veredito = page.locator('[data-juntada] [data-peca="veredito"]').first();
       await expect(veredito).toBeVisible();
       await expect(veredito).not.toHaveAttribute("data-modo", "carregando");
+    } else if (ABAS_SEM_LEITURA.has(sub)) {
+      await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+      const topo = page.locator('[data-juntada] [data-peca="descobertas-da-aba"]');
+      await expect(topo).toHaveAttribute("data-modo", "pronta");
+      await expect(topo.locator('[data-peca="descoberta"] .nx-acao-pilula').first(), `/${sub}: sem pílula de ação nas descobertas`).toBeVisible();
+    } else if (ABAS_SEM_LEITURA_B.has(sub)) {
+      // quick-ver-tudo-abas: sem a leitura; a pílula de ação é a da primeira descoberta (Consultas e Vendas: o quadro "O que falta", sem pílula).
+      await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+      if (sub === "consultas" || sub === "vendas") await expect(page.locator('[data-juntada] [data-peca="vazio"]')).toBeVisible();
+      else await expect(page.locator('[data-juntada] [data-peca="descoberta"] .nx-acao-pilula').first(), `/${sub}: sem pílula de ação na descoberta`).toBeVisible();
     } else {
       const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
       await expect(leitura).toBeVisible();

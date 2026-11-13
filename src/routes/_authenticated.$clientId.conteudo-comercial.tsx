@@ -1,7 +1,7 @@
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, type CSSProperties, type ReactNode } from "react";
-import { CalendarDays, Clock, MessageCircle, Tag, Layers, ShieldAlert, Search, Sparkles, ShoppingBag, BadgeDollarSign, Timer } from "lucide-react";
+import { CalendarDays, Clock, MessageCircle, Sparkles } from "lucide-react";
 import { efeitoPorDiaDaSemana, efeitoDiaSeguinte, efeitoComparavel, juntarTemas, temasSemPost, temasSemConversa, nomeFormato, temaValido, recortarPeriodo, quem, quemAgendou, coberturaComentarios, FAIXA_RESPOSTA, MIN_CONVERSAS_FAIXA, MIN_DIAS, MAX_DIAS_PERIODO, type DadosProfundos, type EfeitoPareado } from "@/lib/conteudo-comercial";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveDateRange, formatRangeLabel } from "@/lib/date-range";
@@ -10,7 +10,25 @@ import { fatosConteudoComercial, SEM_LEITURA_ORIGEM_POR_POST } from "@/lib/leitu
 import { hojeBrasilia } from "@/lib/status-fonte";
 import { InfoDica, Miniatura } from "@/components/visual";
 import { NxCard, NxKpi, NxTag, NxListRow, NxLinhaTempo } from "@/components/nx";
-import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { PaginaNexo } from "@/components/nx/pagina";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
+import { NxDescobertas, NxMaisDescobertas } from "@/components/nx/cinco-segundos";
+import { NxChip } from "@/components/nx-chip";
+import { descobertasDaLeitura, periodoDoVerTudo } from "@/lib/leitura/leitura-em-descobertas";
+import { visiveisEResto } from "@/lib/leitura/cinco-segundos";
+import { comAcaoCurta, descobertaDaFaltaDeDado } from "@/lib/leitura/ver-tudo-crm-painel";
+import {
+  JA_DITOS_NO_TOPO,
+  cabecaDaGrade,
+  cabecaDaResposta,
+  cabecaDaVendaPorTema,
+  cabecaDasSemanas,
+  cabecaDoMaisComum,
+  cabecaDosComentariosDeCompra,
+  cabecaDosTemas,
+  semRepetirOAviso,
+  temasJaDitos,
+} from "@/lib/leitura/ver-tudo-conteudo-comercial";
 import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { NxAviso, NxCarregando, NxErro, NxTabela } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
@@ -132,25 +150,15 @@ function ConteudoComercialPage() {
     decisao: "D3" as const,
     meta: <span>{periodLabel}</span>,
   };
-  const pagina = (corpo: ReactNode, leitura: ReactNode) => (
+  const pagina = (corpo: ReactNode) => (
     <div className="nexo-ig">
-      <PaginaNexo {...cabecalho} leitura={leitura} corpo={corpo} />
+      <PaginaNexo {...cabecalho} leitura={null} corpo={corpo} />
     </div>
   );
-  if (q.isLoading) return pagina(<NxCarregando texto="Cruzando conteúdo e conversas…" linhas={4} />, <LeituraDaTela fatos={null} carregando semSelo />);
-  if (q.error) {
-    return pagina(
-      <NxErro texto="Não consegui cruzar conteúdo e conversas agora. Atualize a página." onTentar={() => void q.refetch()} />,
-      <LeituraDaTela fatos={null} carregando={false} erro="O cruzamento não respondeu." semSelo />,
-    );
-  }
+  if (q.isLoading) return pagina(<NxCarregando texto="Cruzando conteúdo e conversas…" linhas={4} />);
+  if (q.error) return pagina(<NxErro texto="Não consegui cruzar conteúdo e conversas agora. Atualize a página." onTentar={() => void q.refetch()} />);
   const d = q.data;
-  if (!d) {
-    return pagina(
-      <NxErro texto="Não consegui ler este período para este cliente. Confira se você tem acesso a ele." onTentar={() => void q.refetch()} />,
-      <LeituraDaTela fatos={null} carregando={false} erro="Não foi possível ler este período." semSelo />,
-    );
-  }
+  if (!d) return pagina(<NxErro texto="Não consegui ler este período para este cliente. Confira se você tem acesso a ele." onTentar={() => void q.refetch()} />);
 
   const c = d.cobertura;
   // Leitura pela IA: conversa lida (com texto) ou marcada sem texto. As duas somadas são as que a IA já passou.
@@ -183,6 +191,28 @@ function ConteudoComercialPage() {
       info={info("Dia seguinte ao post", "Conversas novas no dia seguinte a um dia com post, comparadas com o dia seguinte a um dia sem post, sempre no mesmo dia da semana. Anúncios e feriados também mexem nesse número.")}
     />,
   ] as unknown as [ReactNode, ReactNode?, ReactNode?, ReactNode?];
+
+  // quick-ver-tudo-abas (João 13/11/2026): a "Leitura do período" saiu da aba. O que ela dizia e a aba ainda não mostra (os 4 cartões e o
+  // gráfico por dia) virou descoberta: no máximo 3 à vista, no lugar da leitura, e o resto no começo dos Detalhes. "Origem por post não
+  // medida" fica uma vez só, no aviso dos Detalhes (com quem resolve). Leitura negada: UMA descoberta "Falta dado" com o passo.
+  const textoDoTopo = [
+    // Os posts do período ficam fora: "30 posts" no apoio do cartão casaria por acaso com "30 pessoas" de um assunto sem post.
+    `${c.pessoas ?? ""} ${c.conversas}`,
+    efeitoComparavel(efeito) ? `${media(efeito.mediaCom)} ${media(efeito.mediaSem)}` : "",
+    efeitoComparavel(seguinte) ? `${media(seguinte.mediaCom)} ${media(seguinte.mediaSem)}` : "",
+  ];
+  const daLeitura = semRepetirOAviso(descobertasDaLeitura({ fatos, descobertas: [], jaDitos: [...JA_DITOS_NO_TOPO], textoDoTopo }), SEM_LEITURA_ORIGEM_POR_POST);
+  const faltaDeDado = fatos == null ? null : descobertaDaFaltaDeDado(fatos, false);
+  const { visiveis: descobertasAVista, resto: descobertasDoDetalhe } = visiveisEResto((faltaDeDado ? [faltaDeDado] : daLeitura).map(comAcaoCurta));
+  const leitura =
+    fatos == null ? (
+      <NxCarregando texto="Lendo o cruzamento…" linhas={2} />
+    ) : descobertasAVista.length ? (
+      <NxDescobertas titulo="O que fazer com isso" itens={descobertasAVista} clientId={clientId} />
+    ) : null;
+  const periodoDaLeitura = periodoDoVerTudo(fatos);
+  // O tema que uma descoberta à vista já nomeia não volta na lista "Pedem, mas não teve post".
+  const semConteudoNoDetalhe = temasJaDitos(semConteudo, descobertasAVista);
 
   const principal = (
     <NxCard nivel={2} icone={ic(CalendarDays)} titulo="Posts e conversas por dia" subtitulo="Coincidência no tempo, não é prova">
@@ -238,23 +268,27 @@ function ConteudoComercialPage() {
 
   const detalhe = (
     <div style={{ display: "grid", gap: 18 }}>
+      <p className="nx-ver-tudo__periodo" data-peca="periodo-do-ver-tudo">
+        {periodoDaLeitura && <span>{periodoDaLeitura}</span>}
+        <NxChip tipo="sem-selo" />
+      </p>
+      <NxMaisDescobertas itens={descobertasDoDetalhe} clientId={clientId} />
       {avisos}
       {como("Posts e conversas por dia", "Se as conversas sobem nos dias com post, pode haver relação; é coincidência no tempo, não prova. As linhas azul e verde são as conversas novas e quantas agendaram (eixo da esquerda); a linha clara é a quantidade de posts do dia (eixo da direita). Setas do teclado escolhem o dia.")}
-      <NxCard
-        icone={ic(Tag)}
-        titulo="Tema do post × assunto da conversa"
-        subtitulo="O que foi postado e quantas pessoas chegaram falando de cada tema"
+      <NxBlocoDoVerTudo
+        rotulo="Tema do post × assunto da conversa"
+        cabeca={cabecaDosTemas(temas.filter((t) => temaValido(t.tema)).map((t) => ({ tema: t.tema, quem: quem(t), agendaram: quemAgendou(t) })), c.pessoas != null ? "pessoas" : "conversas")}
       >
         {como("Tema do post e assunto da conversa", "Cada linha é um tema (o mesmo tema escrito com ou sem acento conta uma vez só). À esquerda, o que foi postado; à direita, quantas pessoas chegaram falando desse assunto e quantas agendaram. Tema com muita procura e nenhum post, nem de tema parecido, é pauta pronta.")}
-        {(semConteudo.length > 0 || semDemanda.length > 0) && (
+        {(semConteudoNoDetalhe.length > 0 || semDemanda.length > 0) && (
           <div className="nx-grade nx-grade--2">
-            {semConteudo.length > 0 && (
+            {semConteudoNoDetalhe.length > 0 && (
               <div className="ig-pauta ig-pauta--bom">
                 <p>
                   <Sparkles size={14} aria-hidden /> Pedem, mas não teve post do tema nem de tema parecido
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {semConteudo.map((t) => (
+                  {semConteudoNoDetalhe.map((t) => (
                     <NxTag key={t.tema} tom="up" titulo={`${fmtN(quem(t))} ${c.pessoas != null ? "pessoas" : "conversas"}`}>
                       {t.tema} · {fmtN(quem(t))}
                     </NxTag>
@@ -297,9 +331,9 @@ function ConteudoComercialPage() {
           }))}
           vazio={<NxAviso tom="info" titulo="Ainda sem temas lidos neste período." />}
         />
-      </NxCard>
+      </NxBlocoDoVerTudo>
 
-      <NxCard icone={ic(Clock)} titulo="Dia da semana e hora" subtitulo="Mais escuro, mais conversas começaram ali. O número é quantos posts saíram">
+      <NxBlocoDoVerTudo rotulo="Dia da semana e hora" cabeca={cabecaDaGrade(d.grade)}>
         {como("Dia da semana e hora", "Quanto mais escura a célula, mais conversas começaram naquele dia e hora. O número dentro é quantos posts saíram ali. O ideal é ter posts perto das células escuras.")}
         <NxTabela
           rotulo="Conversas por dia da semana e hora, com os posts que saíram"
@@ -326,19 +360,19 @@ function ConteudoComercialPage() {
             ),
           }))}
         />
-      </NxCard>
+      </NxBlocoDoVerTudo>
 
-      <NxCard
-        icone={ic(ShoppingBag)}
-        titulo="Posts que atraem quem quer comprar"
-        subtitulo="Comentários que pedem preço, horário, convênio, endereço ou contato, no próprio post"
+      <NxBlocoDoVerTudo
+        rotulo="Posts que atraem quem quer comprar"
+        cabeca={qp.isLoading ? cabecaDosComentariosDeCompra(null) : cabecaDosComentariosDeCompra(pr ? pr.comentarios : null)}
       >
         {como("Posts que atraem quem quer comprar", "Comentários que pedem preço, horário, convênio, endereço ou contato, ou que são a palavra-chave pedida na legenda (como 'comente PROMPT'), contados no próprio post. Aqui a ligação é direta: o comentário está naquele post. Directs do Instagram não entram.")}
         {qp.isLoading ? <NxCarregando texto="Lendo os comentários…" linhas={2} /> : qp.error || !pr ? <NxAviso tom="atencao" titulo="Não consegui ler os comentários agora. Atualize a página." /> : pr.posts_compra.length === 0 ? (
           <NxAviso tom="info" titulo={`Nenhum comentário com intenção de compra no período (${fmtN(pr.comentarios.total)} comentários lidos).`}>{avisoCobertura(pr)}</NxAviso>
         ) : (
           <>
-            <p className="ig-resumo">{fmtN(pr.comentarios.compra)} de {fmtN(pr.comentarios.total)} comentários ({pct(pr.comentarios.compra, pr.comentarios.total)}) em {fmtN(pr.comentarios.posts_com_compra)} posts{pr.comentarios.palavra ? `, ${fmtN(pr.comentarios.palavra)} deles com a palavra-chave da legenda` : ""}.</p>
+            {/* Quantos comentários pedem compra, de quantos, já é a frase do bloco: aqui só a palavra-chave da legenda. */}
+            {(pr.comentarios.palavra ?? 0) > 0 && <p className="ig-resumo">{fmtN(pr.comentarios.palavra)} deles com a palavra-chave da legenda.</p>}
             {avisoCobertura(pr) && <NxAviso tom="atencao" titulo={avisoCobertura(pr)} />}
             <ul className="nx-lista ig-ranking">
               {pr.posts_compra.slice(0, 8).map((p) => (
@@ -366,10 +400,10 @@ function ConteudoComercialPage() {
             {pr.compra_por_formato.length > 1 && <p className="ig-resumo">Por formato: {pr.compra_por_formato.map((f) => `${nomeFormato(f.formato)} ${fmtN(f.compra)} em ${f.posts} posts`).join(" · ")}</p>}
           </>
         )}
-      </NxCard>
+      </NxBlocoDoVerTudo>
 
       <div className="nx-grade nx-grade--2">
-        <NxCard icone={ic(Layers)} titulo="Etapa do funil por semana" subtitulo="C0 e C1 atraem gente nova; C2 e C3 chamam para consulta">
+        <NxBlocoDoVerTudo rotulo="Etapa do funil por semana" cabeca={cabecaDasSemanas(d.semanas)}>
           {como("Etapa do funil por semana", "C0 e C1 atraem gente nova; C2 e C3 chamam para consulta. Semanas com mais C2/C3 deveriam ter mais conversas e agendamentos.")}
           <NxTabela
             rotulo="Etapa do funil por semana"
@@ -386,11 +420,13 @@ function ConteudoComercialPage() {
             linhas={d.semanas.map((s) => ({ semana: `${s.semana.slice(8, 10)}/${s.semana.slice(5, 7)}`, c0: s.c0, c1: s.c1, c2: s.c2, c3: s.c3, conversas: fmtN(s.conversas), agendaram: fmtN(s.agendaram) }))}
             vazio={<NxAviso tom="info" titulo="Nenhuma semana com etapa do funil no período." />}
           />
-        </NxCard>
-        <NxCard
-          icone={ic(Timer)}
-          titulo="Tempo da primeira resposta × agendamento"
-          subtitulo="Quanto o paciente esperou e quantos agendaram, em horário comercial"
+        </NxBlocoDoVerTudo>
+        <NxBlocoDoVerTudo
+          rotulo="Tempo da primeira resposta × agendamento"
+          cabeca={cabecaDaResposta(
+            qp.isLoading || !pr ? [] : pr.resposta.map((r) => ({ rotulo: FAIXA_RESPOSTA[r.faixa] ?? r.faixa, conversas: r.conversas, agendaram: r.agendaram })),
+            MIN_CONVERSAS_FAIXA,
+          )}
         >
           {como("Tempo da primeira resposta", "Quanto tempo o paciente esperou pela primeira resposta de uma pessoa (robô não conta) e quantos agendaram. Só conversas que começaram em horário comercial (seg a sex 8h–18h, sáb 8h–12h). É correlação, não prova.")}
           {qp.isLoading ? <NxCarregando texto="Medindo as respostas…" linhas={2} /> : !pr || pr.cobertura.horario_comercial < MIN_CONVERSAS_FAIXA ? (
@@ -430,13 +466,12 @@ function ConteudoComercialPage() {
               )}
             </>
           )}
-        </NxCard>
+        </NxBlocoDoVerTudo>
       </div>
 
-      <NxCard
-        icone={ic(BadgeDollarSign)}
-        titulo="Tema da conversa × venda fechada no CRM"
-        subtitulo="Quantas conversas de cada tema viraram venda e quanto faturaram"
+      <NxBlocoDoVerTudo
+        rotulo="Tema da conversa × venda fechada no CRM"
+        cabeca={qp.isLoading || !pr ? cabecaDaVendaPorTema([]) : cabecaDaVendaPorTema(pr.temas_valor.filter((t) => temaValido(t.tema)).map((t) => ({ tema: t.tema, ganhos: t.ganhos, receita: t.receita })))}
       >
         {como("Tema da conversa e venda fechada", "Cada conversa tem o tema lido pela IA e está ligada ao lead do CRM. Mostra quantas viraram venda e quanto faturaram. Depende de a equipe marcar o lead como ganho e preencher o valor.")}
         {qp.isLoading ? <NxCarregando texto="Cruzando com o CRM…" linhas={2} /> : !pr ? <NxAviso tom="atencao" titulo="Não consegui cruzar com o CRM agora." /> : pr.temas_valor.filter((t) => temaValido(t.tema)).length === 0 ? (
@@ -468,10 +503,13 @@ function ConteudoComercialPage() {
             <NxAviso tom="info" titulo={`${fmtN(pr.cobertura.com_tema)} de ${fmtN(pr.cobertura.conversas)} conversas do período já têm tema lido;`}>{fmtN(pr.cobertura.com_lead)} estão ligadas a um lead.</NxAviso>
           </>
         )}
-      </NxCard>
+      </NxBlocoDoVerTudo>
 
       <div className="nx-grade nx-grade--2">
-        <NxCard icone={ic(ShieldAlert)} titulo="Objeções que aparecem nas conversas" subtitulo="Cada objeção frequente é um post que responde antes da conversa">
+        <NxBlocoDoVerTudo
+          rotulo="Objeções que aparecem nas conversas"
+          cabeca={cabecaDoMaisComum(d.objecoes.map((o) => ({ nome: OBJ[o.objecao] ?? o.objecao, n: o.pessoas ?? o.n })), { oQue: "a objeção mais comum", unidade: d.objecoes.some((o) => o.pessoas != null) ? "pessoas" : "conversas", vazio: "nenhuma objeção lida ainda" })}
+        >
           {d.objecoes.length === 0 ? <NxAviso tom="info" titulo="Nenhuma objeção lida ainda." /> : (
             <IgBarras
               semPercentual
@@ -484,12 +522,15 @@ function ConteudoComercialPage() {
               formato={fmtN}
             />
           )}
-        </NxCard>
-        <NxCard icone={ic(Search)} titulo="O que mais pedem nas conversas" subtitulo="Assunto da conversa nas palavras da IA, sem dado pessoal. Contado por conversa">
+        </NxBlocoDoVerTudo>
+        <NxBlocoDoVerTudo
+          rotulo="O que mais pedem nas conversas"
+          cabeca={cabecaDoMaisComum(d.assuntos.map((a) => ({ nome: a.assunto, n: a.n })), { oQue: "o pedido mais comum", unidade: "conversas", vazio: "nenhum assunto lido ainda" })}
+        >
           {d.assuntos.length === 0 ? <NxAviso tom="info" titulo="Nenhum assunto lido ainda." /> : (
             <IgBarras semPercentual itens={d.assuntos.map((a) => ({ chave: a.assunto, rotulo: a.assunto, valor: a.n }))} formato={(v) => `${fmtN(v)} conversas`} />
           )}
-        </NxCard>
+        </NxBlocoDoVerTudo>
       </div>
 
       <NxComoCalcula titulo="Como ler esta tela">
@@ -502,7 +543,7 @@ function ConteudoComercialPage() {
     <div className="nexo-ig">
       <PaginaNexo
         {...cabecalho}
-        leitura={<LeituraDaTela fatos={fatos} carregando={fatos == null} semSelo />}
+        leitura={leitura}
         cartoes={cartoes}
         principal={principal}
         detalhe={detalhe}

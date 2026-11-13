@@ -361,18 +361,241 @@
   height: 40px;
 }
 
-/* Os 5 posts que mais salvaram, no "Ver tudo". */
+/* Os 5 posts que mais salvaram, à vista entre as descobertas e o "Ver tudo" (piloto de 12/11/2026; João 13/11/2026: Top 5 na tela mesmo
+   passando do limite de 1,5 tela). Computador: 5 colunas (3 numa largura média); celular: fileira que rola de lado com encaixe. */
 .app.product-workspace:not(.sap-workspace) .nx-top5 {
   display: grid;
-  gap: 12px;
+  gap: 10px;
+  min-width: 0;
+  container: nx-top5 / inline-size;
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__cabeca {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
   min-width: 0;
 }
 .app.product-workspace:not(.sap-workspace) .nx-top5__titulo {
   margin: 0;
-  font-size: 18px;
-  line-height: 24px;
-  font-weight: 700;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__dica {
+  display: none;
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__item {
+  display: flex;
+  min-width: 0;
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__post {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 22px;
+  background: var(--white);
+  box-shadow: var(--sombra-cartao);
+  color: inherit;
+  text-decoration: none;
+}
+.app.product-workspace:not(.sap-workspace) a.nx-top5__post:hover {
+  box-shadow: var(--sombra-cartao-hover);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .app.product-workspace:not(.sap-workspace) a.nx-top5__post {
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+  .app.product-workspace:not(.sap-workspace) a.nx-top5__post:hover {
+    transform: translateY(-2px);
+  }
+}
+.app.product-workspace:not(.sap-workspace) a.nx-top5__post:focus-visible {
+  outline: 3px solid var(--b1);
+  outline-offset: 2px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__capa {
+  aspect-ratio: 4 / 5;
+  max-height: 220px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  color: var(--white);
+  background: linear-gradient(160deg, var(--b1), var(--b3));
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+/* Imagem do post por baixo; um véu escuro em cima e embaixo deixa o formato e o #lugar legíveis. */
+.app.product-workspace:not(.sap-workspace) .nx-top5__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -1;
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__capa:has(.nx-top5__img) .nx-top5__fmt {
+  background: color-mix(in srgb, var(--text) 55%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__capa:has(.nx-top5__img)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--text) 70%, transparent) 0%, color-mix(in srgb, var(--text) 20%, transparent) 28%, transparent 45%, color-mix(in srgb, var(--text) 25%, transparent) 62%, color-mix(in srgb, var(--text) 85%, transparent) 100%);
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__capa[data-capa="reels"] {
+  background: linear-gradient(160deg, var(--text), var(--muted-ink));
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__capa[data-capa="sem"] {
+  background: var(--field);
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__fmt {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--white) 20%, transparent);
+  white-space: nowrap;
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__fmt--falta {
+  background: var(--white);
+  color: var(--muted-ink);
+  font-weight: 600;
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__pos {
+  font-size: 36px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__corpo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 14px 16px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__campeao {
+  align-self: flex-start;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 800;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--campeao-bg);
+  color: var(--campeao-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__salvos {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__salvos b {
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -.02em;
   color: var(--text);
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__salvos small {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted-ink);
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__legenda {
+  margin: 2px 0 4px;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 600;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__meta {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+.app.product-workspace:not(.sap-workspace) .nx-top5__falta {
+  color: var(--muted-ink);
+  font-weight: 500;
+}
+/* Largura média: 3 colunas, como o piloto numa tela mais estreita. */
+@container nx-top5 (max-width: 860px) {
+  .app.product-workspace:not(.sap-workspace) .nx-top5__lista {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+/* Celular: a fileira rola de lado com encaixe (só ela rola; a página não), o próximo cartão aparece na beirada e a dica diz que há mais. */
+@container nx-top5 (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .nx-top5__dica {
+    display: block;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-top5__lista {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 2px;
+    padding: 2px 2px 8px;
+    scrollbar-width: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-top5__lista::-webkit-scrollbar {
+    display: none;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-top5__item {
+    flex: 0 0 74%;
+    scroll-snap-align: start;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-top5__capa {
+    aspect-ratio: auto;
+    height: 112px;
+    padding: 12px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-top5__pos {
+    font-size: 30px;
+  }
+  .app.product-workspace:not(.sap-workspace) .nx-top5__corpo {
+    padding: 12px 12px 14px;
+  }
 }
 .app.product-workspace:not(.sap-workspace) .nx-instagram-ordem {
   margin: 0;

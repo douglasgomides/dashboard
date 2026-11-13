@@ -2,7 +2,7 @@ import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 
 // E2e do sistema visual do Nexo (Phase 3, D-01, 03-UI-SPEC.md): sempre claro mesmo com tema escuro salvo (V12), SAP
-// intacto (MENU-07), moldura com a barra sobre ela e painel branco, Urbanist 16 px, movimento que respeita
+// intacto (MENU-07), moldura cinza com a barra sobre ela e os cartões brancos (13/11/2026), Urbanist 16 px, movimento que respeita
 // prefers-reduced-motion (V14), fundo do diálogo nunca preto e nenhuma rolagem horizontal depois do corpo 15 -> 16 px (V7).
 // O fixture aborta a rede externa: a Urbanist não carrega aqui e a fonte cai no fallback (backstop da troca de fonte).
 
@@ -38,6 +38,7 @@ async function conferirClaro(page: Page) {
     return {
       colorScheme: s.colorScheme,
       page: s.getPropertyValue("--page").trim(),
+      moldura: s.backgroundColor,
       painel: painel ? getComputedStyle(painel).backgroundColor : "",
       htmlCor: html.backgroundColor,
       htmlImagem: html.backgroundImage,
@@ -45,7 +46,10 @@ async function conferirClaro(page: Page) {
   });
   expect(medida.colorScheme).toBe("light");
   expect(medida.page.toUpperCase()).toBe("#FFFFFF");
-  expect(medida.painel).toBe("rgb(255, 255, 255)");
+  // Moldura cinza do piloto (João 13/11/2026): o conteúdo fica direto sobre a moldura clara (--frame), sem o painel branco; os cartões é que
+  // são brancos. Continua sempre claro com o tema escuro salvo.
+  expect(medida.moldura).toBe("rgb(240, 242, 244)");
+  expect(medida.painel).toBe("rgba(0, 0, 0, 0)");
   const htmlClaro = /gradient/.test(medida.htmlImagem) || luminancia(canais(medida.htmlCor)) > 0.8;
   expect(htmlClaro, `fundo do html: ${medida.htmlCor} ${medida.htmlImagem}`).toBe(true);
   expect(luminancia(canais(medida.htmlCor))).toBeGreaterThan(0.8);

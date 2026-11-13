@@ -102,6 +102,65 @@ export function etapasDosFunis(body: unknown, crmConnectionId: string) {
   });
 }
 
+/**
+ * Nome do canal de entrada (o source_id do lead) por conexão, para a equipe confirmar a origem na tela (D-02).
+ * Só guarda o nome que o Kommo deu: nunca vira origem sozinho e nunca é chutado. Formato da resposta ainda não
+ * verificado ao vivo (docs/apis/kommo.md): o que não tiver id inteiro e nome de verdade fica de fora.
+ */
+export interface CanalKommo {
+  crm_connection_id: string;
+  canal_id: string;
+  nome: string;
+  tipo: string | null;
+}
+
+function canalDe(fonte: unknown, crmConnectionId: string, idDoLead?: unknown): CanalKommo | null {
+  if (!fonte || typeof fonte !== "object") return null;
+  const f = fonte as { id?: unknown; name?: unknown; type?: unknown; origin_code?: unknown };
+  const id = idDoLead != null ? idDoLead : f.id;
+  if (!Number.isSafeInteger(id)) return null;
+  // O nome do lead vale só para o canal do próprio lead: id diferente do source_id é ambíguo, fica de fora.
+  if (idDoLead != null && f.id != null && f.id !== idDoLead) return null;
+  const nome = typeof f.name === "string" ? f.name.trim() : "";
+  if (!nome) return null;
+  const tipo = typeof f.type === "string" && f.type.trim() ? f.type.trim() : typeof f.origin_code === "string" && f.origin_code.trim() ? f.origin_code.trim() : null;
+  return { crm_connection_id: crmConnectionId, canal_id: String(id), nome, tipo };
+}
+
+/** GET /api/v4/sources → nomes dos canais. Lista vazia ou ausente = nenhum nome. */
+export function canaisDaResposta(body: unknown, crmConnectionId: string): CanalKommo[] {
+  const fontes = (body as { _embedded?: { sources?: unknown } } | null)?._embedded?.sources;
+  if (!Array.isArray(fontes)) return [];
+  return juntarCanais(fontes.map((f) => canalDe(f, crmConnectionId)).filter((c): c is CanalKommo => c !== null), []);
+}
+
+/** Leads pedidos com with=source: o nome vem em _embedded.source. Lead sem nome não gera linha. */
+export function canaisDosLeads(leads: KommoLead[], crmConnectionId: string): CanalKommo[] {
+  if (!Array.isArray(leads)) return [];
+  const linhas: CanalKommo[] = [];
+  for (const l of leads) {
+    const fonte = (l?._embedded as { source?: unknown } | undefined)?.source;
+    const c = canalDe(fonte, crmConnectionId, l?.source_id ?? undefined);
+    if (c) linhas.push(c);
+  }
+  return juntarCanais([], linhas);
+}
+
+/** Uma linha por canal_id. O nome de /sources vence o do lead; entre leads, vale o primeiro. */
+export function juntarCanais(daApi: CanalKommo[], dosLeads: CanalKommo[]): CanalKommo[] {
+  const porCanal = new Map<string, CanalKommo>();
+  for (const c of daApi) if (!porCanal.has(c.canal_id)) porCanal.set(c.canal_id, c);
+  for (const c of dosLeads) if (!porCanal.has(c.canal_id)) porCanal.set(c.canal_id, c);
+  return [...porCanal.values()];
+}
+
+/** Tabela ainda não existe (antes da migração do plano 07): pula em silêncio, sem marcar a fonte como falha. */
+function tabelaAusente(error: { code?: string; message?: string }): boolean {
+  return error.code === "PGRST205" || error.code === "42P01" || /could not find the table|relation .* does not exist/i.test(error.message ?? "");
+}
+
+const MAX_PAGINAS_FONTES = 10;
+
 type BuscarKommo = (url: string, headers: Record<string, string>) => Promise<{ status: number; corpo: unknown }>;
 
 /** GET JSON no Kommo pelo mesmo caminho seguro dos outros pedidos (corpo nulo no 204). */
@@ -136,7 +195,7 @@ export async function leadsDaEntradaKommo(
     for (let pagina = 1; ; pagina++) {
       if (pagina > maxPaginas) return { leads, completo: false, erro: `Entrada do Kommo passou de ${maxPaginas} páginas no funil ${e.funil}` };
       const qs = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(pagina), [`filter[statuses][0][pipeline_id]`]: String(e.funil), [`filter[statuses][0][status_id]`]: String(e.etapa) });
-      if (opts.comDetalhes) qs.set("with", "source_id,contacts");
+      if (opts.comDetalhes) qs.set("with", "source_id,source,contacts");
       const r = await buscar(`https://${domain}/api/v4/leads?${qs.toString()}`, auth);
       if (r.status === 204) break;
       if (r.status !== 200) return { leads, completo: false, erro: `Kommo respondeu ${r.status} na Entrada do funil ${e.funil}` };
@@ -256,6 +315,7 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
   let leadsFetched = 0;
   let leadsUpserted = 0;
   let hasMore = true;
+  const canaisLidos: CanalKommo[] = [];
 
   // Persiste o cursor a cada página processada. Antes, o estado só era salvo
   // no fim da execução E somente se `errors.length === 0`. Numa conta grande
@@ -284,13 +344,16 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
       result = await fetchLeadsPage(domain, env.accessToken, {
         ...baseParams,
         page: String(page),
-        with: "custom_fields_values,source_id,contacts",
+        // custom_fields_values não é opção de with (vem sempre; docs/apis/kommo.md), mantido porque é inofensivo.
+        // source traz o nome do canal em _embedded.source.
+        with: "custom_fields_values,source_id,source,contacts",
       });
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
       break;
     }
     leadsFetched += result.leads.length;
+    canaisLidos.push(...canaisDosLeads(result.leads, env.crmConnectionId));
 
     if (result.leads.length > 0) {
       const rows = result.leads.map((lead) => linhaDoLead(lead, env.crmConnectionId, env.clientId));
@@ -317,6 +380,7 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
   try {
     const entrada = await leadsDaEntradaKommo(buscarKommo, domain, env.accessToken, { comDetalhes: true });
     if (entrada.erro) errors.push(entrada.erro);
+    canaisLidos.push(...canaisDosLeads(entrada.leads, env.crmConnectionId));
     for (let i = 0; i < entrada.leads.length; i += 250) {
       const rows = entrada.leads.slice(i, i + 250).map((lead) => linhaDoLead(lead, env.crmConnectionId, env.clientId));
       const { error } = await supabase.from("crm_leads").upsert(rows, { onConflict: "crm_connection_id,external_lead_id" });
@@ -326,6 +390,30 @@ export async function runKommoLeadsSync(env: KommoLeadsSyncEnv): Promise<KommoLe
     }
   } catch (err) {
     errors.push(`Entrada do Kommo: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // Nomes dos canais de entrada (source_id): o lead só traz o número. Vem de /sources e do _embedded.source dos leads;
+  // o de /sources vence. Só guarda o nome: a origem só muda quando uma pessoa confirma (D-02). Falha não para o sync.
+  try {
+    const daApi: CanalKommo[] = [];
+    for (let pagina = 1; pagina <= MAX_PAGINAS_FONTES; pagina++) {
+      const r = await buscarKommo(`https://${domain}/api/v4/sources?limit=250&page=${pagina}`, { Authorization: `Bearer ${env.accessToken}` });
+      // 204 ou lista vazia: a conta não dá nome pela API (canal nativo); a equipe digita o nome na tela.
+      if (r.status !== 200) break;
+      daApi.push(...canaisDaResposta(r.corpo, env.crmConnectionId));
+      if (!(r.corpo as { _links?: { next?: unknown } } | null)?._links?.next) break;
+    }
+    const canais = juntarCanais(daApi, canaisLidos);
+    if (canais.length) {
+      const lidoEm = new Date().toISOString();
+      const { error } = await (supabase as any).from("crm_canais_kommo").upsert(
+        canais.map((c) => ({ ...c, lido_em: lidoEm })),
+        { onConflict: "crm_connection_id,canal_id" },
+      );
+      if (error && !tabelaAusente(error)) errors.push(`canais: ${error.message}`);
+    }
+  } catch (err) {
+    errors.push(`canais: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   if (mode === "incremental" && hasMore && pagesLeft === 0) errors.push("Kommo incremental incompleto: limite de páginas atingido; aumente max_pages para cobrir a janela");

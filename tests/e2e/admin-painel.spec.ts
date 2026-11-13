@@ -25,7 +25,9 @@ for (const width of [375, 1440]) {
     // Mais problemas abertos primeiro (padrão): Dra. Carla (2 alertas, nota mais baixa), Dra. Ana (2), e a sem alerta por último.
     await expect(linhas.nth(0)).toContainText("Dra. Carla Mendes");
     await expect(linhas.nth(1)).toContainText("Dra. Ana Souza");
-    await expect(linhas.nth(5)).toContainText("Clínica Sorriso");
+    // "Sem acesso criado" não conta como urgência (13/11/2026): as duas sem problema urgente (Sorriso e Dr. Diego, que só não tem
+    // acesso) ficam no fim, em qualquer ordem entre si.
+    await expect(linhas.nth(3)).toContainText("Clínica Sorriso");
     await expect(linhas.first().locator(".nx-tag").first()).toHaveText(/Problema/);
     await expect(linhas.first()).toHaveClass(/adm-linha--alerta/);
 
@@ -40,16 +42,17 @@ for (const width of [375, 1440]) {
     await expect(resumo.locator(".adm-cont", { hasText: "Fonte parada ou com erro" }).locator(".adm-cont__valor")).toHaveText("2");
     expect(await semRolagemLateral(page)).toBe(true);
 
-    // O cartão "Precisam de atenção" filtra a lista, também pelo teclado.
-    const atencao = resumo.getByRole("button", { name: /^Precisam de atenção/ });
+    // O cartão "Fonte com problema" filtra a lista, também pelo teclado.
+    const atencao = resumo.getByRole("button", { name: /^Fonte com problema/ });
     await atencao.focus();
     await page.keyboard.press("Enter");
     await expect(atencao).toHaveAttribute("aria-pressed", "true");
     await expect(linhas).toHaveCount(3);
-    await expect(page.getByRole("button", { name: /^Com problema/ })).toHaveAttribute("aria-pressed", "true");
+    // quick-ver-tudo: os chips Todos, Com problema, Sem ROI e Não entra saíram (eram os mesmos filtros dos contadores); fica só "Sem acesso criado".
+    await expect(page.getByRole("button", { name: /^Com problema/ })).toHaveCount(0);
 
     // Acesso do médico: o alerta real (não entra há mais de 14 dias) e, ao lado, o fato neutro da equipe (sem acesso criado).
-    await page.getByRole("button", { name: /^Todos/ }).click();
+    await resumo.getByRole("button", { name: /^Clínicas na carteira/ }).click();
     const naoEntra = resumo.locator(".adm-cont", { hasText: "Médico não entra" });
     await expect(naoEntra.locator(".adm-cont__valor")).toHaveText("1");
     await expect(naoEntra).toContainText("2 sem acesso criado");
@@ -62,7 +65,7 @@ for (const width of [375, 1440]) {
     await expect(linhas.first()).toContainText("Não entra há 37 dias");
     await page.getByRole("button", { name: /^Sem acesso criado/ }).click();
     await expect(linhas).toHaveCount(2);
-    await page.getByRole("button", { name: /^Todos/ }).click();
+    await resumo.getByRole("button", { name: /^Clínicas na carteira/ }).click();
 
     // Sem ROI calculável: separa cliente (CRM), equipe (fonte ou etapa) e "não se aplica" (0 vendas). Só os dois primeiros contam.
     const semRoi = resumo.locator(".adm-cont", { hasText: "Sem ROI calculável" });
@@ -72,10 +75,10 @@ for (const width of [375, 1440]) {
     await expect(semRoi).toContainText("1 não se aplica");
     await resumo.getByRole("button", { name: /^Sem ROI calculável/ }).click();
     await expect(linhas).toHaveCount(4);
-    await page.getByRole("button", { name: /^Todos/ }).click();
+    await resumo.getByRole("button", { name: /^Clínicas na carteira/ }).click();
 
     // Busca visível e ligada à lista.
-    await page.getByRole("button", { name: /^Todos/ }).click();
+    await resumo.getByRole("button", { name: /^Clínicas na carteira/ }).click();
     await page.getByRole("searchbox", { name: "Buscar cliente" }).fill("sorriso");
     await expect(linhas).toHaveCount(1);
     await expect(linhas.first()).toContainText("Clínica Sorriso");
