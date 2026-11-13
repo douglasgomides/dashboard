@@ -208,7 +208,10 @@ export function descobertasDaLeitura(e: EntradaDaLeituraEmDescobertas): Descober
     const fato = passo.fatoId ? fatoPorId.get(passo.fatoId) : undefined;
     // O motivo de um passo cujo fato o topo já diz (ou substitui, como a maior perda do funil) não vira a frase: a frase é o próprio passo.
     const doFatoDito = passo.fatoId != null && jaDitos.has(passo.fatoId);
-    const motivo = !doFatoDito && passo.texto.motivo && checarFraseCinco(caberEm90(passo.texto.motivo)).length === 0 ? caberEm90(passo.texto.motivo) : null;
+    // O motivo só vira a frase quando traz um número (é um fato); sem número ("Sem dado no CRM.") a frase é o passo e o motivo vai para o "Por quê?".
+    const motivoBom = !doFatoDito && passo.texto.motivo && checarFraseCinco(caberEm90(passo.texto.motivo)).length === 0 ? caberEm90(passo.texto.motivo) : null;
+    const motivo = motivoBom && fichasDeNumero(motivoBom).length > 0 ? motivoBom : null;
+    const obs = !motivo && motivoBom && motivoBom.length <= 90 ? motivoBom : null;
     const frase = motivo ?? caberEm90(passo.texto.frase);
     if (frasesDoTopo.has(normal(frase))) continue;
     const linhaDoFato = fato ? { frase: fato.frase, numeros: fato.numeros, barras: fato.comparacao?.barras } : null;
@@ -224,6 +227,7 @@ export function descobertasDaLeitura(e: EntradaDaLeituraEmDescobertas): Descober
         // A frase cortada em 90 caracteres não perde nada: o "Por quê?" abre com o texto inteiro do passo.
         titulo: frase.endsWith("…") ? `${motivo ? passo.texto.motivo : passo.texto.frase}` : "O que sustenta este passo",
         barras: linhaDoFato ? barrasDoFato(fato, linhaDoFato) : barrasDoPorque(undefined),
+        ...(obs ? { obs } : {}),
       },
     });
   }

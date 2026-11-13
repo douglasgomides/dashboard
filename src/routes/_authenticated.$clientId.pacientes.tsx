@@ -8,17 +8,21 @@ import { useMediaQuery } from "@/hooks/use-is-mobile";
 import { Ajuda } from "@/components/visual";
 import { usePacientesPeriodo } from "@/hooks/use-pacientes-periodo";
 import { CAMPOS_DIARIOS, useResultadosDiarios, type CampoDiario } from "@/hooks/use-resultados-diarios";
-import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
+import { PaginaNexo } from "@/components/nx/pagina";
+import { NxBlocoDoVerTudo } from "@/components/nx/cabeca-do-bloco";
 import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { NxFunilDesenhado } from "@/components/nx/funil-desenhado";
 import { NxLinhaDe30Dias, type SerieDiaria } from "@/components/nx/linha-de-30-dias";
 import { serieContinua } from "@/lib/linha-30-dias";
 import { dePacientesDoPeriodo, rotuloDoAnterior, type VariacaoDaEtapa } from "@/lib/funil-desenhado";
-import { NxAcaoPilula, NxBarras, NxCartaoNumero } from "@/components/nx/cartoes";
-import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
+import { NxCartaoNumero } from "@/components/nx/cartoes";
+import { NxDescobertas, NxMaisDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
 import { NxPessoasNaMesa } from "@/components/nx/pessoas-na-mesa";
 import { ACOES_DE_PACIENTES, descobertasDePacientes, numerosDePacientes, pessoasNaMesa, vereditoDePacientes, type EntradaCincoPacientes, type NumeroDePacientes } from "@/lib/leitura/cinco-pacientes";
-import { visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
+import { textoDaFrase, visiveisEResto } from "@/lib/leitura/cinco-segundos";
+import { cabecaDaSerieDiaria, enfase, faltaDado, inteiro, primeiraQueCabe } from "@/lib/leitura/cabeca-do-bloco";
+import { descobertasDaLeitura, juntarDescobertas, periodoDoVerTudo } from "@/lib/leitura/leitura-em-descobertas";
+import { cabecaDeQuemChamar, cabecaDeQuemChamou, cabecaDosNaoMedidos, semRepetirOVeredito } from "@/lib/leitura/ver-tudo-pacientes";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido } from "@/components/nx/blocos";
 import { fatosDePacientes } from "@/lib/leitura/fatos-pacientes";
 import { periodosDeComparacao, somaDiaria, variacaoPct, type VariacaoPct } from "@/lib/leitura/fatos-resultados";
@@ -264,7 +268,8 @@ function PacientesDoPeriodo() {
       numero={d.numeros[k]}
       ativo={aberta === k}
       onAbrir={() => abrir(k)}
-      variacao={vc(k as CampoDiario)}
+      // A mudança contra o período anterior já está no funil do topo (quick-ver-tudo): aqui só o número de pessoas, a fonte e a linha.
+      variacao={null}
       serie={seriesDosCartoes[k]}
     />
   ));
@@ -326,7 +331,23 @@ function PacientesDoPeriodo() {
 
   // Descobertas (de 0 a 5, só com a própria clínica): as 3 primeiras à vista, as outras no começo do "Ver tudo". Sem leitura, nenhuma.
   const descobertas = entradaCinco ? descobertasDePacientes(entradaCinco) : { itens: [], aviso: null };
-  const { visiveis, resto } = visiveisEResto(descobertas.itens);
+  // A leitura do período saiu do "Ver tudo" (João 13/11/2026): o que ela dizia e o topo ainda não diz vira descoberta. A "maior perda" é do
+  // veredito (a regra nova olha cada passagem): a frase antiga da leitura sobre a maior perda não volta.
+  const fraseDoVeredito = veredito?.tipo === "veredito" ? textoDaFrase(veredito.frase) : null;
+  const daLeitura = descobertasDaLeitura({
+    fatos,
+    descobertas: descobertas.itens,
+    jaDitos: ["maior-perda"],
+    textoDoTopo: [
+      fraseDoVeredito ?? "",
+      ...(funilDesenhado?.etapas ?? []).map((e) => `${e.texto} ${e.variacao ? `${Math.abs(Math.round(e.variacao.pct))}%` : ""}`),
+      ...[numeroMesa, numeroAgenda, numeroFecharam].map((n) => (n ? `${n.valorTexto ?? n.valor ?? ""} ${n.textoDaVariacao ?? ""}` : "")),
+    ],
+  });
+  const { visiveis, resto: restoDaRegra } = visiveisEResto(juntarDescobertas(descobertas.itens, daLeitura));
+  // O que repete o veredito não volta no "Ver tudo" ("Entre Agendou e Fechou, 30% passam" quando o veredito já diz os 30%).
+  const resto = semRepetirOVeredito(restoDaRegra, fraseDoVeredito);
+  const avisoDasDescobertas = visiveis.length >= 3 ? null : descobertas.aviso;
   // A ação de uma descoberta só abre uma lista que a tela já tem ou leva ao funil desenhado (CHAM-07: nada é enviado nem gravado).
   function agirNaDescoberta(local: string) {
     const lista: Record<string, ChaveNumero> = { [ACOES_DE_PACIENTES.leads]: "leads_novos", [ACOES_DE_PACIENTES.agendaram]: "agendaram", [ACOES_DE_PACIENTES.fecharam]: "fecharam" };
@@ -339,13 +360,15 @@ function PacientesDoPeriodo() {
     <PaginaNexo
       {...cabecalho}
       veredito={<NxVeredito veredito={veredito} carregando={carregandoFontes} tela="pacientes" />}
-      leitura={<LeituraDaTela fatos={fatos} carregando={carregandoFontes} semSelo />}
+      leitura={null}
+      periodoDoVerTudo={carregandoFontes ? null : periodoDoVerTudo(fatos)}
+      semSeloNoVerTudo
       cartoes={cartoesCinco.length ? (cartoesCinco as [ReactNode, ReactNode?, ReactNode?]) : undefined}
       descobertas={
         carregandoFontes || veredito?.tipo !== "veredito" ? undefined : (
           <NxDescobertas
             titulo="O que fazer com isso"
-            apoio={<p className={descobertas.aviso ? "nx-cinco-falta" : "nx-cinco-falta nx-pacientes-ordem"}>{descobertas.aviso ?? "Em ordem de impacto"}</p>}
+            apoio={<p className={avisoDasDescobertas ? "nx-cinco-falta" : "nx-cinco-falta nx-pacientes-ordem"}>{avisoDasDescobertas ?? "Em ordem de impacto"}</p>}
             itens={visiveis}
             clientId={clientId}
             dateRange={dateRangeState}
@@ -392,9 +415,30 @@ function PacientesDoPeriodo() {
       }
       detalhe={
         <div className="nexo-results-overview">
-          {resto.length > 0 && <MaisDescobertasDoFunil itens={resto} aoAgir={agirNaDescoberta} />}
-          {cartoes.length > 0 && <div className="nx-grade nx-grade--4">{cartoes}</div>}
+          <NxMaisDescobertas itens={resto} clientId={clientId} dateRange={dateRangeState} aoAgir={agirNaDescoberta} />
+          {cartoes.length > 0 && (
+            <NxBlocoDoVerTudo
+              rotulo="Pessoas de cada etapa"
+              cabeca={(() => {
+                const chamaram = d.numeros.mandaram_mensagem?.valor;
+                const fecharam = d.numeros.fecharam?.valor;
+                return chamaram == null
+                  ? faltaDado(d.numeros.mandaram_mensagem?.motivo_sem_dado ?? "o CRM não respondeu")
+                  : primeiraQueCabe(
+                      [
+                        fecharam != null ? [{ texto: "Cada pessoa conta uma vez: " }, enfase(inteiro(chamaram)), { texto: ` chamaram e ${inteiro(fecharam)} fecharam.` }] : null,
+                        [{ texto: "Cada pessoa conta uma vez: " }, enfase(inteiro(chamaram)), { texto: " chamaram no período." }],
+                      ],
+                      "neutro",
+                      "o CRM não respondeu",
+                    );
+              })()}
+            >
+              <div className="nx-grade nx-grade--4">{cartoes}</div>
+            </NxBlocoDoVerTudo>
+          )}
           {linhasDia.length >= 3 && (
+            <NxBlocoDoVerTudo rotulo="Evolução por dia" cabeca={cabecaDaSerieDiaria(linhasDia.map((l) => ({ dia: l.dia, valor: l.mandaram_mensagem })), "contatos")}>
             <NxCard id="evolucao" nivel={2} icone={icT("chart-bar")} titulo="Evolução por dia" subtitulo={rotuloPeriodo}>
               <NxLinhaTempo
                 rotulo="Pessoas que chamaram e agendamentos por dia"
@@ -411,8 +455,17 @@ function PacientesDoPeriodo() {
                 <p className="nxr-apoio">Pessoas que chamaram (eixo da esquerda) e agendamentos (eixo da direita). Cada ponto conta as pessoas daquele dia. A soma dos dias pode ser maior que o número do cartão, porque quem chamou em dois dias conta uma vez só no período.</p>
               </NxComoCalcula>
             </NxCard>
+            </NxBlocoDoVerTudo>
           )}
 
+          <NxBlocoDoVerTudo
+            cabeca={cabecaDeQuemChamar({
+              total: chamar.length,
+              atrasados: chamar.filter((c) => c.tipo === "recompra" && c.faltam < 0).length,
+              carregando: historico.isLoading,
+              semVendas: d.numeros.fecharam.valor == null ? (d.numeros.fecharam.motivo_sem_dado ?? null) : null,
+            })}
+          >
           <NxCard
             id="chamar-agora"
             nivel={2}
@@ -465,8 +518,10 @@ function PacientesDoPeriodo() {
               </button>
             )}
           </NxCard>
+          </NxBlocoDoVerTudo>
 
           {rosca && (
+            <NxBlocoDoVerTudo rotulo="Quem chamou" cabeca={cabecaDeQuemChamou(rosca)}>
             <NxCard id="rosca" nivel={2} icone={icT("users")} titulo="Quem chamou" subtitulo={`${rotuloPeriodo} · ${fmt(rosca.novas + rosca.antigos)} pessoas`}>
               <NxPizza
                 rotulo="Quem chamou"
@@ -476,11 +531,13 @@ function PacientesDoPeriodo() {
                 ]}
               />
             </NxCard>
+            </NxBlocoDoVerTudo>
           )}
 
           <MetasDoMesNx clientId={clientId} isAdmin={isAdmin} metas={metas} />
 
           {indisponiveis.length > 0 && (
+            <NxBlocoDoVerTudo cabeca={cabecaDosNaoMedidos(indisponiveis.length)}>
             <NxRecolhido titulo={`Números que não aparecem aqui (${indisponiveis.length})`} resumo="O que não é medido nesta clínica, por quê e o que fazer">
               <ul className="nx-lista">
                 {indisponiveis.map((k) => (
@@ -499,6 +556,7 @@ function PacientesDoPeriodo() {
               </ul>
               {avisoNaoMedido(d) && <p className="nxr-apoio">{avisoNaoMedido(d)}</p>}
             </NxRecolhido>
+            </NxBlocoDoVerTudo>
           )}
 
           {avisosLeitura > 0 && (
@@ -554,26 +612,6 @@ function CartaoDeNumeroCinco({ n, icone, serie, desenho, acao }: { n: NumeroDePa
       serie={serie}
       acao={acao}
     />
-  );
-}
-
-/** As descobertas que passam das 3 à vista (4 e 5) moram no "Ver tudo", já com os fatores do "Por quê?" abertos (nada some). Só abrem uma lista da tela. */
-function MaisDescobertasDoFunil({ itens, aoAgir }: { itens: readonly Descoberta[]; aoAgir: (local: string) => void }) {
-  return (
-    <section className="nx-cinco-resto" aria-label="Mais descobertas do período" data-peca="mais-descobertas">
-      <h3 className="nx-cinco-resto__titulo">Mais descobertas do período</h3>
-      <div className="nx-cinco-resto__grade">
-        {itens.map((d) => (
-          <article key={d.id} className="nx-cinco-resto__item" data-descoberta-extra={d.id}>
-            <NxSelo tom={d.tom} texto={d.selo} />
-            <p className="nx-cinco-resto__frase">{d.frase}</p>
-            <NxBarras barras={d.porque.barras} rotulo={d.porque.titulo} />
-            {d.porque.obs && <p className="nx-cinco-falta">{d.porque.obs}</p>}
-            {d.acao.local && <NxAcaoPilula frase={d.acao.rotulo} rotuloDaSeta="Abrir" aoAbrir={() => aoAgir(d.acao.local as string)} />}
-          </article>
-        ))}
-      </div>
-    </section>
   );
 }
 
