@@ -328,9 +328,10 @@ export function cartoesDoMes(e: EntradaDoMes): CartaoDoMes[] {
     });
   }
 
-  // Onde mais perdemos: a ligação do funil que mais perde (nunca nomeia etapa com o funil fora de ordem).
+  // Onde mais perdemos: a ligação do funil que mais perde. D-01: a ligação fora de ordem (etapa com mais gente que a anterior) fica sem %
+  // e nunca é a maior perda, então uma ligação fora de ordem em outro ponto não tira este cartão.
   const f = e.funil;
-  const perda = f?.desenhado && !f.desenhado.foraDeOrdem ? f.desenhado.maiorPerda : null;
+  const perda = f?.desenhado?.maiorPerda ?? null;
   if (f?.desenhado && perda) {
     const etapas = f.desenhado.etapas;
     const de = etapas[perda.de];

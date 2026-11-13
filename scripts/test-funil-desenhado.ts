@@ -3,7 +3,9 @@
 // node --import ./scripts/test-network-guard.mjs --import tsx scripts/test-funil-desenhado.ts
 import assert from "node:assert/strict";
 import {
+  AVISO_FORA_DE_ORDEM,
   NOMES_DO_FUNIL,
+  SEM_ETAPA_COM_MAIS_GENTE,
   daJornada,
   deFunilComercial,
   dePacientesDoPeriodo,
@@ -102,6 +104,7 @@ assert.equal(textoDaPassagem(f.etapas[3].passagem), "18% passam");
 assert.equal(textoDaPassagem(f.etapas[4].passagem), "46% passam");
 // Maior perda: Virou lead → Atendido.
 assert.deepEqual(f.maiorPerda, { de: 1, para: 2, texto: "9,5% passam" });
+assert.deepEqual(f.ligacoesForaDeOrdem, [], "tudo em ordem: nenhuma ligação sem % por ordem");
 assert.equal(f.foraDeOrdem, false);
 assert.equal(f.aviso, null);
 // Só números nos detalhes (nenhum nome, telefone ou e-mail) e fração relativa ao maior da própria lista.
@@ -155,11 +158,18 @@ assert.equal(textoDaPassagem(pequeno.etapas[2].passagem), "5 de 20");
 assert.equal(pequeno.maiorPerda, null, "base pequena não aponta a maior perda");
 assert.ok(!resumoAcessivel("Funil", pequeno).includes("%"), "base pequena não fala em %");
 
-// ---------------------------------------------------------------- funil fora de ordem: sem maior perda e com aviso
+// ---------------------------------------------------------------- D-01: só a ligação fora de ordem fica sem %, a maior perda vem das outras
 const fora = lana({ c: { atendidos: 100, agendados: 150, agendadosProvaveis: 150, ganhos: 18 } });
+assert.deepEqual(fora.ligacoesForaDeOrdem, [3], "Agendou tem mais gente que Atendido: só essa ligação");
+assert.deepEqual(fora.etapas[3].passagem, { taxa: null, fracao: null, sem: SEM_ETAPA_COM_MAIS_GENTE }, "a taxa cortada em 1 não vira 100%");
+assert.equal(textoDaPassagem(fora.etapas[3].passagem), null);
+assert.equal(textoDaPassagem(fora.etapas[2].passagem), "4,4% passam", "as outras ligações guardam o %");
+assert.equal(textoDaPassagem(fora.etapas[4].passagem), "12% passam");
+assert.deepEqual(fora.maiorPerda, { de: 1, para: 2, texto: "4,4% passam" }, "a maior perda vem das ligações em ordem");
 assert.equal(fora.foraDeOrdem, true);
-assert.equal(fora.maiorPerda, null);
-assert.match(fora.aviso ?? "", /fora de ordem/);
+assert.equal(fora.aviso, AVISO_FORA_DE_ORDEM);
+assert.equal(AVISO_FORA_DE_ORDEM, "Uma etapa tem mais gente que a anterior: essa ligação fica sem %.");
+assert.match(resumoAcessivel("Funil", fora), /conferir a marcação no CRM/, "o leitor de tela diz por que a ligação não tem %");
 
 // ================================================================ dePacientesDoPeriodo (Funil › Do contato à venda)
 const num = (valor: number | null, motivo: string | null = valor == null ? "A fonte não respondeu." : null): Numero => ({ valor, fonte: "teste", motivo_sem_dado: motivo, responsavel: null });
@@ -195,7 +205,9 @@ assert.match(p.etapas[2].passagem?.sem ?? "", /pacientes antigos/);
 assert.equal(textoDaPassagem(p.etapas[3].passagem), "71% passam");
 assert.equal(textoDaPassagem(p.etapas[4].passagem), "30% passam");
 assert.deepEqual(p.maiorPerda, { de: 3, para: 4, texto: "30% passam" }, "a menor taxa abaixo de 1");
+assert.deepEqual(p.ligacoesForaDeOrdem, [], "tudo em ordem: igual a antes");
 assert.equal(p.foraDeOrdem, false);
+assert.equal(p.aviso, null);
 // Detalhe só com números.
 assert.deepEqual(p.etapas[0].detalhe.map((b) => b.rotulo), ["Pessoas novas", "Pacientes antigos"]);
 assert.deepEqual(p.etapas[2].detalhe.map((b) => b.rotulo), ["Em atendimento agora", "Agendaram", "Fecharam"]);
@@ -219,6 +231,33 @@ assert.match(semNegociacao.etapas[2].motivo ?? "", /Sem etapa de negociação/);
 const maisFechouQueAgendou = dePacientesDoPeriodo({ dados: pacientes({ numeros: { fecharam: num(40) }, listas: { fecharam: lista(ids("c", 40)) } }), variacao: () => null });
 assert.equal(maisFechouQueAgendou.etapas[4].passagem?.taxa, null);
 assert.match(maisFechouQueAgendou.etapas[4].passagem?.sem ?? "", /40 pessoas fecharam no período, mas só 30 aparecem como agendadas/);
+// D-01: Agendou com mais gente que Atendido (a lista de agendados repete pessoa) deixa só essa ligação sem %; Agendou → Fechou segue
+// e é a maior perda. Números inventados.
+const agendouCresce = dePacientesDoPeriodo({
+  dados: pacientes({
+    numeros: { negociacao: num(5), agendaram: num(50), fecharam: num(10) },
+    listas: { negociacao: lista(ids("a", 5)), agendaram: lista([...ids("b", 35), ...ids("b", 15)]), fecharam: lista(ids("b", 10)) },
+  }),
+  variacao: () => null,
+});
+assert.deepEqual(agendouCresce.etapas.map((e) => e.valor), [120, 80, 40, 50, 10]);
+assert.deepEqual(agendouCresce.ligacoesForaDeOrdem, [3]);
+assert.deepEqual(agendouCresce.etapas[3].passagem, { taxa: null, fracao: null, sem: "Esta etapa tem mais gente que a anterior: conferir a marcação no CRM." });
+assert.equal(textoDaPassagem(agendouCresce.etapas[4].passagem), "20% passam");
+assert.deepEqual(agendouCresce.maiorPerda, { de: 3, para: 4, texto: "20% passam" }, "a ligação que cresce nunca é a maior perda");
+assert.equal(agendouCresce.foraDeOrdem, true);
+assert.equal(agendouCresce.aviso, AVISO_FORA_DE_ORDEM);
+// As duas ligações com % fora de ordem: nenhuma maior perda, e as duas ficam sem %.
+const duasCrescem = dePacientesDoPeriodo({
+  dados: pacientes({
+    numeros: { negociacao: num(5), agendaram: num(50), fecharam: num(60) },
+    listas: { negociacao: lista(ids("a", 5)), agendaram: lista([...ids("b", 35), ...ids("b", 15)]), fecharam: lista([...ids("b", 35), ...ids("b", 25)]) },
+  }),
+  variacao: () => null,
+});
+assert.equal(duasCrescem.etapas[4].passagem?.taxa, null);
+assert.equal(duasCrescem.maiorPerda, null);
+assert.equal(duasCrescem.foraDeOrdem, true);
 // Base pequena: "N de M".
 const poucosAgendou = dePacientesDoPeriodo({ dados: pacientes({ numeros: { agendaram: num(10) }, listas: { agendaram: lista(ids("b", 10)), fecharam: lista(ids("b", 6)) } }), variacao: () => null });
 assert.deepEqual(poucosAgendou.etapas[4].passagem?.fracao, { n: 9, m: 10 });
@@ -253,15 +292,24 @@ assert.match(j.funil.etapas[2].passagem?.sem ?? "", /Atendido conta cards do CRM
 assert.match(j.funil.etapas[3].passagem?.sem ?? "", /Agendou conta pessoas, e Atendido conta cards do CRM/);
 assert.equal(textoDaPassagem(j.funil.etapas[4].passagem), "20% passam");
 assert.deepEqual(j.funil.maiorPerda, { de: 3, para: 4, texto: "20% passam" });
+assert.deepEqual(j.funil.ligacoesForaDeOrdem, [], "tudo em ordem: igual a antes");
+assert.equal(j.funil.aviso, null);
 // A maior queda só vale quando as duas etapas ficam vizinhas no funil desenhado.
 const quedaDistante = daJornada({ funil: montarJornada(banco({ vendas: 27 })), comercial: comercialDaJornada({ ganhos: 27 }) });
 assert.equal(quedaDistante.funil.maiorPerda, null, "a maior queda (Virou lead → Agendou) não é vizinha: não aponta");
 assert.equal(quedaDistante.funil.foraDeOrdem, false);
-// Taxa acima de 1 liga fora de ordem e apaga a maior perda.
+// D-01: taxa acima de 1 deixa só aquela ligação sem %; a maior queda vizinha nas outras ligações continua.
 const foraJ = daJornada({ funil: montarJornada(banco({ leads: 200, agendados: 30 })), comercial: comercialDaJornada() });
+assert.deepEqual(foraJ.funil.ligacoesForaDeOrdem, [1], "Virou lead tem mais gente que Conversou");
+assert.deepEqual(foraJ.funil.etapas[1].passagem, { taxa: null, fracao: null, sem: SEM_ETAPA_COM_MAIS_GENTE });
+assert.equal(textoDaPassagem(foraJ.funil.etapas[4].passagem), "20% passam", "a outra ligação guarda o %");
 assert.equal(foraJ.funil.foraDeOrdem, true);
-assert.equal(foraJ.funil.maiorPerda, null);
-assert.match(foraJ.funil.aviso ?? "", /fora de ordem/);
+assert.equal(foraJ.funil.aviso, AVISO_FORA_DE_ORDEM);
+assert.equal(foraJ.funil.maiorPerda, null, "a maior queda (Virou lead → Agendou) não é vizinha: não aponta");
+const foraJPerda = daJornada({ funil: montarJornada(banco({ leads: 200, agendados: 100, vendas: 6 })), comercial: comercialDaJornada() });
+assert.deepEqual(foraJPerda.funil.ligacoesForaDeOrdem, [1]);
+assert.deepEqual(foraJPerda.funil.maiorPerda, { de: 3, para: 4, texto: "6% passam" }, "com uma ligação que cresce, a maior queda vizinha continua apontada");
+assert.equal(foraJPerda.funil.foraDeOrdem, true);
 // Atendido só com escopo do período e passo confiável.
 const base2 = daJornada({ funil: montarJornada(banco()), comercial: comercialDaJornada({}, "base") });
 assert.equal(base2.funil.etapas[2].valor, null);
