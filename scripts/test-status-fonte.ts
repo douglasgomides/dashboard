@@ -41,6 +41,13 @@ assert.equal(piorStatus([s({ cadastro: true, data_ate: hoje }), carrion])?.cor, 
 const quintaSemLead = { cadastro: true, data_ate: "2026-10-15" };
 assert.equal(statusDaFonte({ ...quintaSemLead, fonte: "crm" }, "2026-10-19").cor, "amarelo");
 assert.equal(statusDaFonte({ ...quintaSemLead, fonte: "crm" }, "2026-10-19").dias, 2);
+// Leitura rodando sem erro e 2 dias úteis sem lead novo: a origem não teve lead, não é atraso ("Sem movimento", fora da nota).
+const semLeadComLeitura = { ...quintaSemLead, ultimo_sucesso: "2026-10-19T12:00:00Z" };
+assert.equal(statusDaFonte({ ...semLeadComLeitura, fonte: "crm" }, "2026-10-19").rotulo, "Sem movimento");
+assert.equal(statusDaFonte({ ...semLeadComLeitura, fonte: "atendimento" }, "2026-10-19").cor, "cinza");
+// Com erro na leitura continua vermelho; Instagram com 2 dias segue a regra de antes.
+assert.equal(statusDaFonte({ ...semLeadComLeitura, fonte: "crm", last_error: "401" }, "2026-10-19").cor, "vermelho");
+assert.equal(statusDaFonte({ ...semLeadComLeitura, fonte: "instagram" }, "2026-10-19").rotulo, "Atrasada");
 assert.equal(statusDaFonte({ ...quintaSemLead, fonte: "instagram" }, "2026-10-19").dias, 2, "Instagram conta dias corridos (4) menos a folga de 2 da Meta");
 // Passou de 3 dias úteis: continua vermelho no CRM (ex.: Juliana Carrion, parada desde 05/09).
 assert.equal(statusDaFonte({ cadastro: true, data_ate: "2026-10-09", fonte: "crm" }, "2026-10-19").cor, "vermelho");
