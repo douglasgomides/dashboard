@@ -580,15 +580,21 @@ test("Onde os pacientes travam: clicar em No CRM leva ao funil comercial com o p
   await expect.poll(() => posts.find((p) => p.rota === "/_authenticated/$clientId/crm-painel")?.origem).toBe("menu");
 });
 
-test("Jornada: a leitura diz que a maioria dos contatos está sem pessoa ligada e o aviso completo fica nos Detalhes", async ({ page, context }) => {
+test("Jornada: a descoberta diz que a maioria dos contatos está sem pessoa ligada (\"N de M\") e o porquê fica nos Detalhes", async ({ page, context }) => {
   await abrirParte(page, context, "viewer", "jornada", { width: 1440, height: 900 });
-  const leitura = page.locator('[data-juntada] [data-peca="leitura"]').first();
-  await expect(leitura).not.toHaveAttribute("data-modo", "carregando");
-  await expect(leitura.getByText(/não está ligada a uma pessoa/)).toBeVisible();
-  await expect(leitura.locator(".nx-leitura__num", { hasText: "50 de 80" })).toBeVisible();
+  // quick-ver-tudo-abas: a leitura saiu; o fato está uma vez só, numa descoberta à vista, com "50 de 80" no número em destaque.
+  await expect(page.locator('[data-juntada] [data-peca="leitura"]')).toHaveCount(0);
+  const descoberta = page.locator('[data-juntada] [data-peca="descoberta"]', { hasText: /não está ligada a uma pessoa/ });
+  await expect(descoberta).toHaveCount(1);
+  await expect(descoberta.locator(".nx-descoberta__impacto", { hasText: "50 de 80" })).toBeVisible();
+  // O aviso crítico com o mesmo número não volta; nos Detalhes fica só o porquê (como o painel liga um contato a uma pessoa).
+  await expect(page.locator("[data-juntada] .cm-aviso--critico")).toHaveCount(0);
   const detalhes = page.locator("[data-juntada] details#detalhes-jornada");
   await detalhes.locator(":scope > summary").click();
-  await expect(detalhes.locator(".cm-aviso--critico").getByText(/% dos leads criados no período não estão ligados/)).toBeVisible();
+  const porque = detalhes.locator(".cm-metodo", { hasText: "Por que um contato fica sem pessoa" });
+  await porque.locator("summary").click();
+  await expect(porque.getByText(/nunca por nome parecido/)).toBeVisible();
+  await expect(detalhes.locator('[data-peca="periodo-do-ver-tudo"]')).toHaveCount(1);
 });
 
 test("De onde vêm os pacientes: a aba Por origem mostra em cinza o número de origens com venda que a própria aba carregou", async ({ page, context }) => {
