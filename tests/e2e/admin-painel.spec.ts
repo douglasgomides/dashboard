@@ -25,7 +25,9 @@ for (const width of [375, 1440]) {
     // Mais problemas abertos primeiro (padrão): Dra. Carla (2 alertas, nota mais baixa), Dra. Ana (2), e a sem alerta por último.
     await expect(linhas.nth(0)).toContainText("Dra. Carla Mendes");
     await expect(linhas.nth(1)).toContainText("Dra. Ana Souza");
-    await expect(linhas.nth(5)).toContainText("Clínica Sorriso");
+    // "Sem acesso criado" não conta como urgência (13/11/2026): as duas sem problema urgente (Sorriso e Dr. Diego, que só não tem
+    // acesso) ficam no fim, em qualquer ordem entre si.
+    await expect(linhas.nth(3)).toContainText("Clínica Sorriso");
     await expect(linhas.first().locator(".nx-tag").first()).toHaveText(/Problema/);
     await expect(linhas.first()).toHaveClass(/adm-linha--alerta/);
 
