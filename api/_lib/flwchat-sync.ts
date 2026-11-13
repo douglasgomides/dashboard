@@ -75,6 +75,9 @@ interface FlwCard {
   updatedAt?: string | null;
   customFields?: Record<string, unknown> | null;
   contactIds?: string[] | null;
+  /** Etiquetas do card (ids de /core/v1/tag). */
+  tagIds?: string[] | null;
+  description?: unknown;
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -341,6 +344,69 @@ export async function lerTagsDosContatos(opts: {
   };
 }
 
+/** Nomes das etiquetas do card (tagIds), pelo mesmo mapa de /core/v1/tag dos contatos. Id sem nome conhecido fica de fora. */
+export function tagsDoCard(card: { tagIds?: string[] | null }, nomes: Map<string, string> | null | undefined): string[] {
+  if (!nomes || !Array.isArray(card.tagIds)) return [];
+  return card.tagIds.map((id) => nomes.get(id)).filter((n): n is string => !!n);
+}
+
+/** Algum card com etiqueta: só então vale buscar os nomes das etiquetas quando tags_contato está desligado. */
+export function algumCardComTag(cards: Array<{ tagIds?: string[] | null }>): boolean {
+  return cards.some((c) => Array.isArray(c?.tagIds) && c.tagIds.length > 0);
+}
+
+export interface CtxCardFlw {
+  connectionId: string;
+  clientId: string;
+  panelId: string;
+  outcome: "won" | "lost" | "open";
+  /** Etiquetas (nomes) do contato do card, de crm_contato_tags. */
+  tagsContato: string[];
+  /** Mapa id -> nome das etiquetas; null quando não foi buscado (nenhum card com etiqueta) ou a busca falhou. */
+  nomesTags: Map<string, string> | null;
+  agora: string;
+}
+
+/**
+ * Card do painel -> linha de crm_leads. Origem, nesta ordem: etiqueta "Origem · X" (o card decide quando tem alguma
+ * etiqueta de origem, por ser o registro específico; senão o contato), campo "origem-do-lead", observação do card.
+ * Etiqueta que não é "Origem · ..." nunca vira origem aqui (a leitura de card_tags no banco é outra etapa).
+ */
+export function linhaDoCardFlw(c: FlwCard, ctx: CtxCardFlw): Record<string, unknown> {
+  const titulo = String(c.title ?? "").trim();
+  const origem = c.customFields?.["origem-do-lead"];
+  const descricao = c.description;
+  const procedimento = procedimentoDaDescricao(descricao);
+  const tagsContato = ctx.tagsContato;
+  const tagsCard = tagsDoCard(c, ctx.nomesTags);
+  const cardTemOrigem = tagsCard.some((n) => PREFIXO_ORIGEM.test(n));
+  const origemTag = cardTemOrigem ? origemDasTags(tagsCard) : origemDasTags(tagsContato);
+  return {
+    crm_connection_id: ctx.connectionId,
+    client_id: ctx.clientId,
+    provider: "flwchat",
+    external_lead_id: c.id,
+    event_type: "sync",
+    status_id: c.stepId ?? null,
+    pipeline_id: ctx.panelId,
+    price: typeof c.monetaryAmount === "number" && c.monetaryAmount > 0 ? c.monetaryAmount : null,
+    occurred_at: c.createdAt ?? null,
+    outcome: ctx.outcome,
+    source: origemTag
+      ?? (typeof origem === "string" && origem.trim()
+        ? origem.trim()
+        : origemDaDescricao(descricao)),
+    contact_name: titulo || null,
+    raw_payload: {
+      ...c,
+      ...(procedimento ? { custom_fields_values: [{ field_name: "Tipo de Procedimento", values: [{ value: procedimento }] }] } : {}),
+      ...(tagsContato.length ? { contato_tags: tagsContato, contato_tipo: tipoDasTags(tagsContato) } : {}),
+      ...(tagsCard.length ? { card_tags: tagsCard } : {}),
+    } as unknown as Record<string, unknown>,
+    received_at: c.updatedAt ?? c.createdAt ?? ctx.agora,
+  };
+}
+
 async function nomesDasTags(token: string): Promise<Map<string, string>> {
   const nomes = new Map<string, string>();
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -491,9 +557,18 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
     }
 
     let tagsPorContato = new Map<string, string[]>();
+    // Nomes das etiquetas (/core/v1/tag): servem aos contatos e às etiquetas do card. Buscados uma vez por conexão,
+    // com tags_contato ligado ou, sem ele, só quando algum painel traz card com etiqueta.
+    let nomesTags: Map<string, string> | null = null;
+    let buscouNomesTags = false;
+    const carregarNomesTags = async (): Promise<Map<string, string>> => {
+      buscouNomesTags = true;
+      nomesTags = await nomesDasTags(token);
+      return nomesTags;
+    };
     if (config.tags_contato) {
       try {
-        const nomes = await nomesDasTags(token);
+        const nomes = await carregarNomesTags();
         const leitura = await lerTagsDosContatos({
           estado: { tags_ate: config.tags_ate ?? null, tags_varredura: config.tags_varredura ?? null },
           nomes,
@@ -569,6 +644,13 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
         if (teto) errors.push(`${panelName}: passou de ${MAX_PAGES * PAGE_SIZE} cards, o teto de leitura; os mais recentes podem ter ficado de fora`);
         else if (parcial) errors.push(`${panelName}: listagem interrompida por tempo, o restante entra na próxima rodada`);
         paineisLidos++;
+        if (!buscouNomesTags && algumCardComTag(cards)) {
+          try {
+            await carregarNomesTags();
+          } catch (err) {
+            errors.push(`etiquetas dos cards: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
         if (!parcial && !teto) vistosPorPainel.set(panelId, new Set(cards.map((c) => String(c?.id ?? "")).filter(Boolean)));
 
         const desde = config.painel_desde?.[panelId] ?? null;
@@ -577,33 +659,15 @@ export async function runFlwChatSync(env: FlwChatSyncEnv): Promise<FlwChatSyncRe
           const titulo = String(c.title ?? "").trim();
           if (/^teste/i.test(titulo)) continue;
           if (desde && c.createdAt && c.createdAt.slice(0, 10) < desde) continue;
-          const origem = c.customFields?.["origem-do-lead"];
-          const procedimento = procedimentoDaDescricao((c as { description?: unknown }).description);
-          const tagsContato = tagsPorContato.get(c.contactIds?.[0] ?? "") ?? [];
-          const origemTag = origemDasTags(tagsContato);
-          leadRows.push({
-            crm_connection_id: conn.id,
-            client_id: conn.client_id,
-            provider: "flwchat",
-            external_lead_id: c.id,
-            event_type: "sync",
-            status_id: c.stepId ?? null,
-            pipeline_id: panelId,
-            price: typeof c.monetaryAmount === "number" && c.monetaryAmount > 0 ? c.monetaryAmount : null,
-            occurred_at: c.createdAt ?? null,
+          leadRows.push(linhaDoCardFlw(c, {
+            connectionId: conn.id,
+            clientId: conn.client_id,
+            panelId,
             outcome: confirmadas.get(`${panelId}|${c.stepId ?? ""}`) ?? resultadoDaEtapa(stepNames.get(c.stepId ?? "") ?? ""),
-            source: origemTag
-              ?? (typeof origem === "string" && origem.trim()
-                ? origem.trim()
-                : origemDaDescricao((c as { description?: unknown }).description)),
-            contact_name: titulo || null,
-            raw_payload: {
-              ...c,
-              ...(procedimento ? { custom_fields_values: [{ field_name: "Tipo de Procedimento", values: [{ value: procedimento }] }] } : {}),
-              ...(tagsContato.length ? { contato_tags: tagsContato, contato_tipo: tipoDasTags(tagsContato) } : {}),
-            } as unknown as Record<string, unknown>,
-            received_at: c.updatedAt ?? c.createdAt ?? new Date().toISOString(),
-          });
+            tagsContato: tagsPorContato.get(c.contactIds?.[0] ?? "") ?? [],
+            nomesTags,
+            agora: new Date().toISOString(),
+          }));
         }
       } catch (err) {
         errors.push(err instanceof Error ? err.message : String(err));
