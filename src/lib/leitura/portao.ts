@@ -1,6 +1,7 @@
 // Portão de honestidade da leitura (D-03): com dado incompleto ou não confiável, a leitura diz o problema e para.
 // Nunca conclui em cima de número ruim. Função pura, no mesmo estilo de piorSelo (src/lib/selo.ts): devolve o primeiro
-// motivo que nega, em português simples, com o passo para consertar e quem resolve.
+// motivo que nega, em português simples, com o passo para consertar e quem resolve. Etapa do funil maior que a anterior
+// não nega (D-01): só a conclusão que usa aquela etapa sai, e a etapa vira fato para a equipe (adaptadores.ts).
 import { LIMITES } from "@/lib/limites";
 import type { Rastreio } from "@/lib/rastreio-anuncios";
 import type { Selo } from "@/lib/selo";
@@ -19,7 +20,7 @@ export interface EntradaPortao {
   fontes?: { nome: string; status: StatusFonte | null; ultimoDado?: string | null }[];
   rastreio?: Rastreio | null;
   selo?: Selo | null;
-  /** As etapas do funil do CRM estão fora de ordem (ex.: mais fechamentos do que agendamentos). */
+  /** Ignorado (D-01): etapa fora de ordem não nega mais a leitura. Sai na Task 2 do plano 03.1.1.1.1-01. */
   funilInconsistente?: boolean;
   /** Quantos problemas graves de dado na origem a tela já detectou. */
   problemasAltos?: number;
@@ -73,21 +74,12 @@ export function portaoDoPeriodo(e: EntradaPortao): Portao {
     return nega("selo_ilegivel", e.selo.motivo, { verbo: "corrigir", texto: "o dado que falta", quem: "equipe_hub" });
   }
 
-  // 5. funil fora de ordem
-  if (e.funilInconsistente) {
-    return nega("funil_fora_de_ordem", "as etapas do funil estão fora de ordem", {
-      verbo: "corrigir",
-      texto: "a marcação das etapas do CRM",
-      quem: "comercial",
-    });
-  }
-
-  // 6. erro de dado na origem
+  // 5. erro de dado na origem
   if ((e.problemasAltos ?? 0) > 0) {
     return nega("erro_de_dado", "há dado com erro na origem", { verbo: "corrigir", texto: "o dado na origem", quem: "equipe_hub" });
   }
 
-  // 7. amostra pequena
+  // 6. amostra pequena
   const minimo = LIMITES.leitura.grupoMinimo;
   if (e.n != null && e.n < minimo) {
     return nega("amostra_pequena", `a amostra é pequena (${e.n}, menos de ${minimo})`, {

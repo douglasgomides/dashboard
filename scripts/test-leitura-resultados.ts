@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { VERBOS_PROVISORIOS } from "../src/lib/leitura/tipos";
 import type { Fato } from "../src/lib/leitura/tipos";
-import { montarTexto, problemasDoTexto } from "../src/lib/leitura/texto";
+import { checarTextoDaLeitura, montarTexto, problemasDoTexto } from "../src/lib/leitura/texto";
+import { vereditoDeResultados } from "../src/lib/leitura/cinco-resultados";
 import { fatosDeResultados, fatosDeResultadosComAreas, funilDosNumeros, periodosDeComparacao, somaDiaria, variacaoPct, VERSAO_REGRAS_RESULTADOS } from "../src/lib/leitura/fatos-resultados";
 import { resumirClinica } from "../src/lib/leitura/resumo-clinica";
 import { fatosDePacientes, fatosEmConstrucao, VERSAO_REGRAS_PACIENTES } from "../src/lib/leitura/fatos-pacientes";
@@ -51,7 +52,7 @@ const ROI_CONFIAVEL: DadosRoi = {
 const semNumero = (f: Fato) => f.numeros.length === 0;
 
 // ---------- versão das regras ----------
-assert.equal(VERSAO_REGRAS_RESULTADOS, 2, "as regras completas de Resultados são a versão 2");
+assert.equal(VERSAO_REGRAS_RESULTADOS, 3, "D-01: etapa fora de ordem deixou de negar (versão 3)");
 
 // ---------- ROI só com selo confiável ----------
 const comRoi = (roi: DadosRoi) => fatosDeResultados(entrada({ funil: FUNIL, roi }));
@@ -87,10 +88,49 @@ const textoErro = montarTexto(comErro);
 assert.equal(textoErro.tipo, "sem_leitura");
 assert.deepEqual(problemasDoTexto(textoErro), []);
 
-// ---------- funil fora de ordem e rastreio suspeito negam ----------
-const fora = fatosDeResultados(entrada({ funil: { atual: { mandaram_mensagem: 500, agendaram: 3, fecharam: 36 }, anterior: null } }));
-assert.ok(!fora.portao.ok && fora.portao.codigo === "funil_fora_de_ordem", "agendou menos do que fechou nega");
-if (!fora.portao.ok) assert.equal(fora.portao.passo.quem, "comercial");
+// ---------- D-01: etapa fora de ordem não nega; vira fato para a equipe ----------
+{
+  const FRASE = "«Fecharam» passa de «Agendaram» neste período: conferir a marcação no CRM.";
+  const funilFora = {
+    pessoas: { mandaram_mensagem: 120, agendaram: 10, fecharam: 30 },
+    atual: { mandaram_mensagem: 120, agendaram: 10, fecharam: 30 },
+    anterior: { mandaram_mensagem: 100, agendaram: 12, fecharam: 20 },
+  };
+  const fora = fatosDeResultadosComAreas(entrada({ funil: funilFora }));
+  assert.deepEqual(fora.fatos.portao, { ok: true }, "fechou mais do que agendou: o portão libera");
+  assert.ok(fora.fatos.fatos.some((x) => x.id.startsWith("mudou-")), "a leitura do período continua");
+  const daEquipe = fora.porArea.comercial.filter((x) => x.id.startsWith("etapa-cresce-"));
+  assert.equal(daEquipe.length, 1, "um fato de equipe para o par que cresce");
+  const fe = daEquipe[0];
+  assert.equal(fe.frase, FRASE);
+  assert.equal(fe.tom, "atencao");
+  assert.equal(fe.ressalva, true);
+  assert.deepEqual(fe.numeros.map((n) => n.valor), [30, 10], "só os dois números medidos");
+  assert.ok(fe.frase.length <= 90, "frase curta");
+  assert.deepEqual(checarTextoDaLeitura(fe.frase), [], "a frase passa no filtro de linguagem");
+  const passoEquipe = fora.fatos.outrosPassos.filter((p) => p.fatoId === fe.id);
+  assert.equal(passoEquipe.length, 1);
+  const { motivo: _m, fatoId: _f, ...semMotivo } = passoEquipe[0];
+  assert.deepEqual(semMotivo, { verbo: "conferir", texto: "a marcação das etapas no CRM", quem: "comercial", soEquipe: true });
+  assert.notEqual(fora.fatos.proximoPasso?.fatoId, fe.id, "o passo da equipe nunca é o próximo passo");
+
+  // Com menos de 5 fechamentos o par não vira fato (mesmo mínimo da regra antiga).
+  const pouco = fatosDeResultadosComAreas(entrada({ funil: { pessoas: { mandaram_mensagem: 120, agendaram: 2, fecharam: 4 }, atual: { mandaram_mensagem: 120, agendaram: 2, fecharam: 4 }, anterior: null } }));
+  assert.ok(pouco.fatos.portao.ok);
+  assert.equal(pouco.fatos.fatos.filter((x) => x.id.startsWith("etapa-cresce-")).length, 0, "abaixo de 5: sem fato de equipe");
+
+  // Ponta a ponta: com Conversas e Fecharam comparados, o 5 segundos sai com veredito de verdade.
+  const v = vereditoDeResultados({
+    fatos: fora.fatos, dias: 30,
+    valores: { mandaram_mensagem: 120, agendaram: 10, fecharam: 30 },
+    atual: { mandaram_mensagem: 160, agendaram: 14, fecharam: 32 },
+    antes: { mandaram_mensagem: 110, agendaram: 15, fecharam: 20 },
+    diario: [], ads: null, seguidores: null, salvos: null, retorno: null,
+  });
+  assert.equal(v?.tipo, "veredito", "o veredito Conversas x Fecharam sai mesmo com Fecharam acima de Agendaram");
+}
+
+// ---------- rastreio suspeito nega ----------
 const suspeito = fatosDeResultados(entrada({ funil: FUNIL, rastreio: avaliarRastreio({ cliquesLink: 7391, conversas: 29 }) }));
 assert.ok(!suspeito.portao.ok && suspeito.portao.codigo === "rastreio_suspeito");
 
@@ -223,8 +263,7 @@ assert.ok(ressalvaComparecimento?.ressalva && ressalvaComparecimento.numeros[0]?
 
 // Funil fora de ordem: agendou menos do que fechou.
 const pFora = pacientes(dadosPacientes({ agendaram: nump(3), fecharam: nump(36, { vendas: 36, sem_valor: 0, valor_total: 0 }) }));
-assert.ok(!pFora.portao.ok && pFora.portao.codigo === "funil_fora_de_ordem");
-if (!pFora.portao.ok) assert.equal(pFora.portao.passo.quem, "comercial");
+assert.deepEqual(pFora.portao, { ok: true }, "D-01: fechou mais do que agendou não nega Pacientes");
 // Amostra pequena.
 const pPouco = pacientes(dadosPacientes({ mandaram_mensagem: nump(4), agendaram: nump(1), fecharam: nump(0, { vendas: 0, sem_valor: 0, valor_total: 0 }) }));
 assert.ok(!pPouco.portao.ok && pPouco.portao.codigo === "amostra_pequena", "4 pessoas: amostra pequena");
