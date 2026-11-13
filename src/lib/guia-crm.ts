@@ -14,11 +14,20 @@ export const PADRAO: { papel: Exclude<Papel, "desconhecida" | "reativacao" | "po
   { papel: "perdido", nome: "Perdido (com motivo)", o_que_e: "Desistiu ou parou de responder. Sempre com o motivo escolhido numa lista." },
 ];
 
-const REGRAS: [Papel, RegExp][] = [
+// Etapa em que o paciente veio (papel "realizada"). Copiado literalmente no SQL (plano 08); mudar os dois juntos.
+// "Contato/Abordagem/Reunião realizada" não contam; "Venda realizada" é ganho (regra anterior).
+export const RE_COMPARECEU =
+  /(compareceu|atendid[oa]|(consulta|avalia[cç][aã]o|procedimento|cirurgia)s? (realizad|feit)|p[oó]s[- ]?(consulta|procedimento|operat)|em acompanhamento|protocolo finalizado)/i;
+// Exclusão: falta e remarcação nunca contam como comparecimento.
+export const RE_NAO_COMPARECEU = /(no.?show|n[aã]o compareceu|n[aã]o atendid|faltou|reagend)/i;
+
+const compareceu = { test: (nome: string) => RE_COMPARECEU.test(nome) && !RE_NAO_COMPARECEU.test(nome) };
+
+const REGRAS: [Papel, Pick<RegExp, "test">][] = [
   ["perdido", /(perdid|lost|desqualific|cemit[eé]rio|n[aã]o eleg|cancelad|excluir|parou de interagir|sem resposta|falha na tentativa)/i],
   ["ganho", /(ganh|fechad|fechou|venda realizada|closed - won|\bwon\b|liberado|on going)/i],
   ["reativacao", /(no.?show|n[aã]o compareceu|reagend)/i],
-  ["realizada", /(realizad|compareceu|consulta feita|p[oó]s.?consulta|em acompanhamento|protocolo finalizado)/i],
+  ["realizada", compareceu],
   ["agendada", /(agendad|agendamento|confirmad|reserva|pr[eé].?consulta)/i],
   ["reativacao", /(reativ|resgate|reengaj|recall|follow ?up d\d|nutri[cç][aã]o|longo prazo|leads antigos|base antiga|cad[eê]ncia)/i],
   ["pos", /(p[oó]s.?(venda|procedimento)|fideliza|recorrente|upsell)/i],
