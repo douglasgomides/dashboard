@@ -8,6 +8,7 @@ import { createAdminUser, createClient, getAvisosDaCarteira, listAllClients } fr
 import { ClientAvatar } from "@/components/client-avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { getQualidadeDados, getRoiPeriodo } from "@/lib/client-data";
+import { fetchAllRows } from "@/lib/pagination";
 import { grupoSemRoi, montarRoi, resumoRoi, ROTULO_GRUPO_SEM_ROI, type GrupoSemRoi, type Roi } from "@/lib/roi";
 import { SeloConfianca } from "@/components/selo-confianca";
 import { resolveDateRange } from "@/lib/date-range";
@@ -501,12 +502,22 @@ function AdminClientsPage() {
   const numerosQ = useQuery({
     queryKey: ["admin-numeros-30d", iniAntes, fimFechado],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("resultados_diarios")
-        .select(["client_id", "dia", ...CAMPOS_DIARIOS].join(","))
-        .gte("dia", iniAntes)
-        .lte("dia", fimFechado)
-        .limit(5000);
+      // Em páginas: o banco devolve no máximo 1000 linhas por pedido, e 20 clínicas x 60 dias passam disso (as últimas clínicas
+      // ficavam com "—" na Carteira, 13/11/2026).
+      let data: unknown[] | null = null;
+      let error: unknown = null;
+      try {
+        data = await fetchAllRows((de, ate) => (supabase as any)
+          .from("resultados_diarios")
+          .select(["client_id", "dia", ...CAMPOS_DIARIOS].join(","))
+          .gte("dia", iniAntes)
+          .lte("dia", fimFechado)
+          .order("client_id")
+          .order("dia")
+          .range(de, ate));
+      } catch (e) {
+        error = e;
+      }
       if (error) return new Map<string, { atual: Partial<Record<CampoDiario, number>>; antes: Partial<Record<CampoDiario, number>> }>();
       const m = new Map<string, { atual: Partial<Record<CampoDiario, number>>; antes: Partial<Record<CampoDiario, number>> }>();
       const ultimoDia: { atual: Record<string, string>; antes: Record<string, string> } = { atual: {}, antes: {} };
