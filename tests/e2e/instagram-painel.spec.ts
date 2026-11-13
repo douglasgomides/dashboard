@@ -9,12 +9,13 @@ import { mockInstagram } from "./instagram-dados";
 const semRolagemLateral = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 
 // Formato 5 segundos (03.1.1.1, plano 07): Desempenho abre com o veredito e 3 números; a leitura do período mora no "Ver tudo", fechado.
-const TELAS: { rota: string; cartoes: number; pergunta: RegExp; cinco?: boolean }[] = [
+// quick-ver-tudo-abas (13/11/2026): Conteúdo × Comercial sem a leitura; as descobertas (no máximo 3) abrem a aba no lugar dela.
+const TELAS: { rota: string; cartoes: number; pergunta: RegExp; cinco?: boolean; semLeitura?: boolean }[] = [
   { rota: "conteudo", cartoes: 3, pergunta: /^O perfil está crescendo/, cinco: true },
   { rota: "audiencia", cartoes: 4, pergunta: /^Quem acompanha o perfil/ },
   { rota: "top", cartoes: 3, pergunta: /^Quais publicações mais se destacaram/ },
   { rota: "posts", cartoes: 4, pergunta: /^O que foi publicado/ },
-  { rota: "conteudo-comercial", cartoes: 4, pergunta: /^O conteúdo está trazendo conversa/ },
+  { rota: "conteudo-comercial", cartoes: 4, pergunta: /^O conteúdo está trazendo conversa/, semLeitura: true },
 ];
 
 for (const width of [375, 1440]) {
@@ -44,6 +45,12 @@ for (const width of [375, 1440]) {
         await expect(page.locator('[data-peca="periodo-do-ver-tudo"]')).toContainText("comparado com");
         const proximo = page.locator('[data-proximo-passo]');
         if (await proximo.count()) await expect(proximo.first().getByText(/Quem resolve:/)).toHaveCount(1);
+      } else if (t.semLeitura) {
+        await expect(leitura).toHaveCount(0);
+        const descobertas = page.locator('[data-peca="descoberta"]');
+        await expect(descobertas.first()).toBeVisible();
+        expect(await descobertas.count()).toBeLessThanOrEqual(3);
+        await expect(descobertas.first().getByText(/Quem resolve:/)).toHaveCount(1);
       } else {
         await expect(leitura).toBeVisible();
         await expect(leitura.getByText("O que aconteceu", { exact: true }).or(leitura.getByText(/^Falta dado:/))).toBeVisible();
@@ -59,6 +66,7 @@ for (const width of [375, 1440]) {
       await expect(page.locator(".nx-pagina__cartoes :is(.nx-kpi, .nx-cartao)")).toHaveCount(t.cartoes);
       await expect(page.locator(".nx-pagina__cartoes :is(.nx-kpi .ws-metric-value, .nx-cartao .nx-numero__valor)").first()).toBeVisible();
       if (t.cinco) expect((await page.locator('[data-peca="veredito"]').first().boundingBox())!.y).toBeLessThan((await cartoes.first().boundingBox())!.y);
+      else if (t.semLeitura) expect((await page.locator('[data-peca="descobertas"]').first().boundingBox())!.y).toBeLessThan((await cartoes.first().boundingBox())!.y);
       else expect((await leitura.boundingBox())!.y).toBeLessThan((await cartoes.first().boundingBox())!.y);
 
       // Nenhum gráfico do Recharts e nenhuma tabela fora da peça NxTabela.
@@ -100,16 +108,15 @@ for (const width of [375, 1440]) {
     await mockInstagram(context);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${CID}/conteudo-comercial?preset=30d`);
-    // Aviso fixo, com quem resolve: primeira coisa dos Detalhes (03.1.1-04, régua de 1,5 tela); a leitura do topo repete em "Ver mais".
+    // Aviso fixo, com quem resolve: primeira coisa dos Detalhes (03.1.1-04, régua de 1,5 tela). quick-ver-tudo-abas: a leitura saiu, e
+    // "origem por post não medida" aparece uma vez só, nesse aviso (nenhuma descoberta repete).
+    await expect(page.getByRole("region", { name: "Leitura do período", exact: true })).toHaveCount(0);
     await page.locator(".nx-pagina__detalhe > details > summary").click();
     const aviso = page.locator('[data-peca="aviso"]').filter({ hasText: "Falta dado: origem por post não medida" });
     await expect(aviso).toBeVisible();
     await expect(aviso.getByText(/Quem resolve: Equipe Doctor Creator/)).toBeVisible();
-    // E o último item de "Ver mais" da leitura, também com a equipe da Doctor Creator.
-    const leitura = page.getByRole("region", { name: "Leitura do período", exact: true });
-    await leitura.locator("summary", { hasText: /^Ver mais/ }).click();
-    await expect(leitura.getByText(/origem por post não medida/)).toBeVisible();
-    await expect(leitura.getByText(/Quem resolve: Equipe Doctor Creator/).last()).toBeVisible();
+    await expect(page.locator(".nx-pagina").getByText(/origem por post não medida/)).toHaveCount(1);
+    await expect(page.locator('[data-peca="descoberta"], [data-peca="descoberta-extra"]').filter({ hasText: /origem de cada contato por post/ })).toHaveCount(0);
     const texto = await page.locator("main").innerText();
     expect(texto).not.toMatch(/trouxe\s+\d+\s*%/i);
     expect(await semRolagemLateral(page)).toBe(true);
