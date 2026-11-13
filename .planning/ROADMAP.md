@@ -252,6 +252,34 @@ Plans:
 - [x] 03.1.1.1-08-PLAN.md — Fechamento do mês: história em cartões em tela cheia aberta de Resultados (sem rota nova, sem envio)
 - [ ] 03.1.1.1-09-PLAN.md — Anúncios: custo por conversa com sinal honesto, régua dos próprios dias, dias de verba baixa; seção l) do molde; varredura final
 
+### Phase 03.1.1.1.1: Contas certas e saúde 75 ou mais (INSERTED)
+
+**Goal:** Nenhuma clínica fica sem informação por erro nosso, e toda clínica chega a pelo menos 75 de saúde de dados (pedido do João em 12/11/2026). Auditoria completa de todos os clientes e correção do que é nosso; o que depende de cliente ou equipe sai numa lista com quem resolve.
+**Achados de partida (12/11):**
+1. O portão "funil fora de ordem" apaga a tela inteira (Lana): João aprovou travar só a etapa com problema.
+2. `resultados_diarios` soma a fila aberta de Negociação todo dia (Lana: entradas reais 228→124, soma 166→435): contar entradas ou fila, não soma de dias.
+3. Agendou subcontado onde o perfil da clínica não marca etapas "agendad*" (Samira 6, Doctor Creator 0, Lana sem "Consulta Agendada" em Comercial 1/Elité).
+4. Anúncio parado pela Meta (limite de gasto, pagamento, WhatsApp exigido) com leitura OK conta como fonte parada e tira 25 da nota (Samira, Betina, Antonione, HOMS): vira aviso de negócio para o cliente, não falha de dado.
+5. Problemas de `qualidade_dados` ainda não auditados (só respondem a admin logado).
+**Fora do nosso alcance (lista com quem resolve):** Glauce (acesso à conta 9641), Mariela (anúncios sem dado desde 21/10 sem motivo; planilha do CRM parada), Betina e Glauce (ligar CRM ou marcar "não usa"), Marcelly (planilha manual de anúncios), cadastro "Douglas" sem fontes.
+**Limites:** SQL de escrita e migrações só o João roda; o plano entrega o SQL pronto para ele.
+**Requirements**: TBD
+**Depends on:** Phase 03.1.1.1
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 03.1.1.1.1 to break down)
+
+### Phase 03.1.1.1.2: Três telas que respondem (rodada 2 dos pilotos) (INSERTED)
+
+**Goal:** Resultados da clínica, Onde os pacientes travam e De onde vêm os pacientes respondem uma pergunta e dizem o que fazer, como a tela do Instagram, seguindo os pilotos da rodada 2 aprovados pelo João em 12/11/2026 ("gostei segue"): Resultados = por que fecharam menos (origem × fechados, antes e agora); Travam = quem está parado agora, há quanto tempo, de que origem e quem resolve; De onde vêm = parte de quem chegou × parte de quem fechou por origem, com custo. Pilotos fora do repo (dados reais): scratchpad/pilotos/*-v2.html. Precisa de leitura nova por pessoa (origem, estado atual, idade na etapa) — RPC só leitura que o João aplica. Clínica com pouca origem marcada mostra "Falta dado: X% sem origem" com o passo para corrigir.
+**Requirements**: TBD
+**Depends on:** Phase 03.1.1.1.1
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 03.1.1.1.2 to break down)
+
 ### Phase 4: Pacote do template do WhatsApp à Meta
 
 **Goal**: O João tem o pacote pronto para pedir o template à Meta cedo no calendário, para que a aprovação externa não segure a v1.5.
