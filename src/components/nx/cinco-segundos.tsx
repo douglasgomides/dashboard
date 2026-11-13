@@ -188,7 +188,7 @@ function ItemDaDescoberta({ d, clientId, dateRange, aoAgir, extras, extraDoPorqu
   };
   const aoAgirAqui = local === ABRIR_VER_TUDO ? abrirVerTudo : local && aoAgir ? () => aoAgir(local) : undefined;
   return (
-    <article ref={cartao} className="nx-descoberta" data-peca={peca} data-proximo-passo={d.origem === "proximo-passo" ? "" : undefined} data-tom={d.tom} data-aberto={aberto ? "" : undefined} {...extras}>
+    <article ref={cartao} className="nx-descoberta" data-acao-longa={(d.acao?.rotulo ?? "").length > 60 ? "" : undefined} data-peca={peca} data-proximo-passo={d.origem === "proximo-passo" ? "" : undefined} data-tom={d.tom} data-aberto={aberto ? "" : undefined} {...extras}>
       {/* O ícone do piloto (quadrado com o sinal): decoração, o selo ao lado diz o tom em palavra. */}
       <span className="nx-descoberta__icone" aria-hidden>
         {SINAL[d.tom]}

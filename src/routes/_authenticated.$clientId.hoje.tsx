@@ -94,7 +94,7 @@ function numerosDaHoje(e: {
   const cob = somaDiariaComCobertura(linhas, e.dias, ["mandaram_mensagem", "fecharam"]);
   const parcial = (k: "mandaram_mensagem" | "fecharam") => {
     const c = cob[k];
-    return e.atual[k] == null && c && c.valor != null && c.medidos > 0 ? { valor: c.valor, nota: ` · medido em ${c.medidos} de ${c.de} dias` } : null;
+    return e.atual[k] == null && c && c.valor != null && c.medidos > 0 ? { valor: c.valor, nota: ` · ${c.medidos} de ${c.de} dias` } : null;
   };
   const serieDe = (campo: CampoDiario, rotulo: string): SerieDaHoje | undefined => {
     const { datas, valores } = serieContinua(linhas.map((l) => ({ dia: l.dia, valor: l[campo] ?? null })));
@@ -114,7 +114,7 @@ function numerosDaHoje(e: {
   if (fecharam.valor == null) {
     const fechou = e.pessoas ? dePacientesDoPeriodo({ dados: e.pessoas, variacao: () => null }).etapas[4] : null;
     const p = parcial("fecharam");
-    if (fechou?.valor != null) fecharam = { valor: fechou.valor, antes: null, legenda: "pacientes no período, contados no CRM" };
+    if (fechou?.valor != null) fecharam = { valor: fechou.valor, antes: null, legenda: "pacientes no CRM" };
     else if (p) fecharam = { valor: p.valor, antes: null, legenda: `pacientes${p.nota}` };
     else fecharam = { ...fecharam, motivo: fechou?.motivo ?? undefined };
   }
@@ -123,10 +123,10 @@ function numerosDaHoje(e: {
     ? { valor: e.atual.mandaram_mensagem ?? null, antes: e.antes.mandaram_mensagem ?? null, legenda: "no período" }
     : { valor: pc.valor, antes: null, legenda: `no período${pc.nota}` };
   return [
-    { id: "conversas", titulo: "Conversas", icone: "message-circle", legenda: conversas.legenda, valor: conversas.valor, antes: conversas.antes, serie: serieDe("mandaram_mensagem", "conversas iniciadas") },
+    { id: "conversas", titulo: "Conversas", icone: "message-circle", legenda: conversas.legenda, valor: conversas.valor, antes: conversas.antes, serie: e.atual.mandaram_mensagem != null ? serieDe("mandaram_mensagem", "conversas iniciadas") : undefined },
     // O período anterior de pessoas únicas não é medido: sem comparação, "Falta dado" em cinza (nunca 0).
     { id: "sem-atendimento", titulo: "Leads sem atendimento", icone: "users", legenda: "ainda esperando", valor: semAtendimento, antes: null, menorEhMelhor: true, motivo },
-    { id: "fecharam", titulo: "Fecharam", icone: "checklist", legenda: fecharam.legenda, valor: fecharam.valor, antes: fecharam.antes, motivo: fecharam.motivo, serie: serieDe("fecharam", "fecharam") },
+    { id: "fecharam", titulo: "Fecharam", icone: "checklist", legenda: fecharam.legenda, valor: fecharam.valor, antes: fecharam.antes, motivo: fecharam.motivo, serie: e.atual.fecharam != null ? serieDe("fecharam", "fecharam") : undefined },
   ];
 }
 
