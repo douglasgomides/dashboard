@@ -9,7 +9,7 @@ import { lerPeriodo } from "@/lib/leitura-periodo";
 import { fatosDoInstagram, fatosSemInstagram } from "@/lib/leitura/fatos-instagram";
 import { periodoAnterior } from "@/lib/leitura/tipos";
 import { hojeBrasilia } from "@/lib/status-fonte";
-import { IconeFormato, Miniatura } from "@/components/visual";
+import { IconeFormato } from "@/components/visual";
 import { Users, UserPlus, UserMinus, Scale, TrendingUp, Trophy, Layers, Tag, Eye, Bookmark, LineChart as LineIcon } from "lucide-react";
 import { SyncButton } from "@/components/sync-button";
 import { fmtFracao, MIN_POSTS_CONCLUSAO } from "@/lib/metricas";
@@ -22,13 +22,13 @@ import { usePublicarContagem } from "@/components/nx/abas-em-pasta";
 import { PaginaNexo, LeituraDaTela } from "@/components/nx/pagina";
 import { NxAviso, NxCarregando, NxErro, NxRecolhido, NxTabela, NxVazio } from "@/components/nx/blocos";
 import { NxComoCalcula } from "@/components/nx/anuncios-graficos";
-import { IgLinhaSeguidores, IgColunasSaldo, IgVitrine } from "@/components/nx/instagram";
+import { IgLinhaSeguidores, IgColunasSaldo } from "@/components/nx/instagram";
+import { NxTop5Salvos, type PostDoTop5 } from "@/components/nx/top5-salvos";
 import { NxDescobertas, NxSelo, NxVeredito } from "@/components/nx/cinco-segundos";
 import { NxOQueFunciona, type AbaDaProva } from "@/components/nx/o-que-funciona";
 import { ACOES_DE_INSTAGRAM, descobertasDoInstagram, fraseDoFormato, numerosDoInstagram, vereditoDoInstagram, type EntradaCincoInstagram, type NumeroDoInstagram } from "@/lib/leitura/cinco-instagram";
 import { visiveisEResto, type Descoberta } from "@/lib/leitura/cinco-segundos";
 import { mapaDosPosts, melhorHorario } from "@/lib/mapa-dos-posts";
-import { numeroCurto, temaParaExibir } from "@/lib/texto-que-cabe";
 import "@/styles/nexo-o-que-funciona.css";
 
 export const Route = createFileRoute("/_authenticated/$clientId/conteudo")({
@@ -380,7 +380,8 @@ function ConteudoPage() {
   // Descobertas (de 0 a 5, só com a própria clínica): as 3 primeiras à vista, as outras no começo do "Ver tudo". Sem leitura, nenhuma.
   const descobertas = carregandoFatos ? { itens: [], aviso: null } : descobertasDoInstagram(entradaCinco, fatos);
   const { visiveis, resto } = visiveisEResto(descobertas.itens);
-  // Os 5 posts do período com mais salvos (todos os formatos), da lista que a tela já carregou. Ficam no "Ver tudo" (régua de 1,5 tela).
+  // Os 5 posts do período com mais salvos (todos os formatos), da lista que a tela já carregou. Ficam à vista, entre as descobertas e o
+  // "Ver tudo" (João 13/11/2026: Top 5 na tela mesmo passando do limite de 1,5 tela).
   const top5 = [...(posts.data ?? [])]
     .filter((p: PostDaLista) => p.saved != null)
     .sort((a: PostDaLista, b: PostDaLista) => Number(b.saved) - Number(a.saved) || Number(b.reach ?? 0) - Number(a.reach ?? 0))
@@ -391,8 +392,6 @@ function ConteudoPage() {
       setAbaDaProva("horario");
       requestAnimationFrame(() => document.getElementById("o-que-funciona")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } else if (local === ACOES_DE_INSTAGRAM.top5) {
-      const verTudo = document.getElementById("detalhes-conteudo");
-      if (verTudo instanceof HTMLDetailsElement) verTudo.open = true;
       requestAnimationFrame(() => document.getElementById("top5-salvaram")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     }
   }
@@ -417,11 +416,11 @@ function ConteudoPage() {
             />
           )
         }
+        corpo={top5.length > 0 ? <Top5DosSalvos posts={top5} clientId={clientId} dateRange={dateRangeState} /> : undefined}
         resumoDoVerTudo="temas, horários, formatos e a contagem de seguidores"
         detalhe={
           <div style={{ display: "grid", gap: 18 }}>
             {resto.length > 0 && <MaisDescobertasDoInstagram itens={resto} clientId={clientId} dateRange={dateRangeState} aoAgir={agirNaDescoberta} />}
-            {top5.length > 0 && <Top5DosSalvos posts={top5} clientId={clientId} dateRange={dateRangeState} />}
             <div className="nx-grade nx-grade--4">{cartoes}</div>
             {evolucao}
             {detalhe}
@@ -433,48 +432,19 @@ function ConteudoPage() {
 }
 
 /** O post da lista da tela: só os campos que o Top 5 mostra. */
-type PostDaLista = { id: string; caption?: string | null; format?: string | null; tema?: string | null; reach?: number | null; saved?: number | null; permalink?: string | null; thumbnail_url?: string | null };
-
-const primeiraLinha = (legenda: string | null | undefined) => (legenda ?? "").split("\n").find((l) => l.trim().length > 0)?.trim() ?? "";
-const nomeDoFormato = (f: string) => (f === "carrossel" ? "Carrossel" : f === "estatico" ? "Imagem" : f === "reels" ? "Reels" : f);
-
-/** Chip de uma linha: o texto corta com reticências dentro do cartão e o texto inteiro vai no title. */
-function ChipIg({ tom = "g", texto }: { tom?: "g" | "b"; texto: string }) {
-  return (
-    <NxTag tom={tom} titulo={texto}>
-      <span className="ig-chip__texto">{texto}</span>
-    </NxTag>
-  );
-}
+type PostDaLista = PostDoTop5;
 
 /**
- * "Seus 5 posts que mais salvaram": os cartões da vitrine (miniatura, legenda em 2 linhas com o texto inteiro no title, salvos como o número
- * grande, alcance e tema em forma curta), no "Ver tudo" para respeitar a régua de 1,5 tela. O link leva à aba Destaques com o mesmo período.
+ * "Seus 5 posts que mais salvaram", à vista entre as descobertas e o "Ver tudo" (o desenho é o do piloto, em NxTop5Salvos). O link leva à aba
+ * Destaques com o mesmo período, onde mora a lista completa.
  */
 function Top5DosSalvos({ posts, clientId, dateRange }: { posts: PostDaLista[]; clientId: string; dateRange: DateRangeState }) {
   const destaques = linhaDaRota("/_authenticated/$clientId/top");
   return (
-    <section id="top5-salvaram" className="nx-top5" data-peca="top5-salvaram" aria-label="Seus 5 posts que mais salvaram">
-      <h3 className="nx-top5__titulo">Seus 5 posts que mais salvaram</h3>
-      <IgVitrine
-        itens={posts.map((p) => ({
-          id: p.id,
-          href: p.permalink,
-          imagem: <Miniatura url={p.thumbnail_url} formato={p.format} className="w-full" />,
-          titulo: primeiraLinha(p.caption) || "(sem legenda)",
-          dica: (p.caption ?? "").trim() || "(sem legenda)",
-          valor: fmtN(Number(p.saved)),
-          rotulo: p.reach != null ? `salvos · ${numeroCurto(Number(p.reach))} alcance` : "salvos",
-          extra: (
-            <>
-              {p.format && <ChipIg texto={nomeDoFormato(p.format)} />}
-              {p.tema && <ChipIg tom="b" texto={temaParaExibir(p.tema) ?? p.tema} />}
-            </>
-          ),
-        }))}
-      />
-      {destaques && <NxAcaoPilula frase="Ver todos em Destaques" rotuloDaSeta="Abrir a aba Destaques" para={{ tela: destaques, clientId, dateRange }} />}
-    </section>
+    <NxTop5Salvos
+      posts={posts}
+      acao={destaques ? <NxAcaoPilula frase="Ver todos em Destaques" rotuloDaSeta="Abrir a aba Destaques" para={{ tela: destaques, clientId, dateRange }} /> : undefined}
+    />
   );
 }
 

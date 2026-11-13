@@ -320,6 +320,92 @@ body:has(.app.product-workspace:not(.sap-workspace)) {
   }
 }
 
+/* --- Moldura cinza do piloto (João 13/11/2026): o conteúdo deixa de morar num painel branco e fica sobre a moldura (--frame); os cartões
+   viram brancos, com o raio e a sombra suave do piloto (base.css .card) e sem borda pesada. Vale para todas as telas, do médico e da equipe.
+   A borda fica transparente (não some): a medida dos cartões não muda e a régua de altura das telas continua a mesma.
+   Cartão dentro de cartão (ou dentro do diálogo) continua como era: branco sobre branco precisa da borda fina para aparecer. --- */
+@media (min-width: 821px) {
+  .app.product-workspace:not(.sap-workspace) > .mainwrap {
+    background: transparent;
+  }
+}
+@media (max-width: 820px) {
+  .app.product-workspace:not(.sap-workspace),
+  .app.product-workspace:not(.sap-workspace) > .mainwrap {
+    background: var(--frame);
+  }
+}
+.app.product-workspace:not(.sap-workspace) .mainwrap :is(
+  .nx-card, .nx-cartao, .nx-kpi, .dbx-card, .nx-descoberta, .nxb-recolhido, .nx-etapas, .nx-cinco-resto__item, .nx-agora-antes, .nx-regua,
+  .card, .ws-panel, .ws-metric, .ig-mais, .ig-leitura__item, .ig-ranking-cartao, .adm-lista-card, .adm-urgencia__ver-tudo, .cm-recolhido, .pl-recolhe
+):not(:is(
+  .nx-card, .nx-cartao, .nx-kpi, .dbx-card, .nx-descoberta, .nxb-recolhido, .nx-etapas, .nx-cinco-resto__item, .nx-agora-antes, .nx-regua,
+  .card, .ws-panel, .ws-metric, .ig-mais, .ig-leitura__item, .ig-ranking-cartao, .adm-lista-card, .adm-urgencia__ver-tudo, .cm-recolhido, .pl-recolhe,
+  dialog, .nx-top5__post
+) *):not(.nx-card--plano) {
+  background-color: var(--white);
+  border-color: transparent;
+  box-shadow: var(--sombra-cartao);
+}
+/* O raio do piloto (22 px) só nos cartões do sistema novo; os painéis antigos (.card, .ws-panel, listas da equipe) guardam o raio deles, porque
+   alguns cortam o conteúdo na borda (overflow: hidden) e um canto maior comeria a primeira letra. */
+.app.product-workspace:not(.sap-workspace) .mainwrap :is(.nx-card, .nx-cartao, .nx-kpi, .dbx-card, .nx-descoberta, .nxb-recolhido, .nx-etapas, .nx-cinco-resto__item, .nx-agora-antes, .nx-regua):not(:is(
+  .nx-card, .nx-cartao, .nx-kpi, .dbx-card, .nx-descoberta, .nxb-recolhido, .nx-etapas, .nx-cinco-resto__item, .nx-agora-antes, .nx-regua,
+  .card, .ws-panel, .ws-metric, .ig-mais, .ig-leitura__item, .ig-ranking-cartao, .adm-lista-card, .adm-urgencia__ver-tudo, .cm-recolhido, .pl-recolhe,
+  dialog, .nx-top5__post
+) *):not(.nx-card--plano) {
+  border-radius: 22px;
+}
+/* O veredito claro (o da Hoje) também perde a borda fina; o fundo dele não muda (a faixa azul e a vermelha têm o degradê próprio). */
+.app.product-workspace:not(.sap-workspace) .mainwrap .nx-veredito {
+  border-color: transparent;
+}
+/* O aviso de "nada aqui" (cinza-claro) solto na moldura vira branco; dentro de um cartão continua cinza-claro sobre o branco. */
+.app.product-workspace:not(.sap-workspace) .mainwrap .nx-vazio:not(:is(
+  .nx-card, .nx-cartao, .nx-kpi, .dbx-card, .nx-descoberta, .nxb-recolhido, .nx-etapas, .nx-cinco-resto__item, .nx-agora-antes, .nx-regua,
+  .card, .ws-panel, .ws-metric, .ig-mais, .ig-leitura__item, .ig-ranking-cartao, .adm-lista-card, .adm-urgencia__ver-tudo, .cm-recolhido, .pl-recolhe, dialog
+) *) {
+  background: var(--white);
+  box-shadow: var(--sombra-cartao);
+}
+/* O trilho do filtro segmentado e o selo do período eram cinza-claro sobre o branco; sobre a moldura cinza viram brancos para continuar à vista. */
+.app.product-workspace:not(.sap-workspace) .mainwrap .nx-segmentado ul {
+  background: var(--white);
+  box-shadow: var(--sombra-cartao);
+}
+/* A pasta das telas juntadas: o corpo deixa de ser o cartão grande branco (os cartões da tela flutuam na moldura) e a aba atual vira a pílula
+   branca sobre o cinza. */
+.app.product-workspace:not(.sap-workspace) .mainwrap .nx-pasta__corpo {
+  border-color: transparent;
+  background: transparent;
+  padding: 14px 0 0;
+}
+.app.product-workspace:not(.sap-workspace) .mainwrap .nx-pasta__aba {
+  border-radius: 12px;
+  background: transparent;
+}
+.app.product-workspace:not(.sap-workspace) .mainwrap .nx-pasta__aba:hover {
+  background: color-mix(in srgb, var(--white) 60%, transparent);
+}
+.app.product-workspace:not(.sap-workspace) .mainwrap .nx-pasta__aba[aria-current] {
+  margin-bottom: 0;
+  border-color: transparent;
+  background: var(--white);
+  box-shadow: var(--sombra-cartao);
+}
+/* No celular os cartões do gráfico dentro da pasta tinham perdido a moldura (a pasta já era a moldura): voltam a ser cartão branco. A régua
+   de 1,5 tela não muda: o respiro que a pasta gastava em volta (12 px em cima e embaixo) passa para dentro desses cartões. */
+@media (max-width: 560px) {
+  .app.product-workspace:not(.sap-workspace) .mainwrap .nx-pasta__corpo {
+    padding-top: 8px;
+  }
+  .app.product-workspace:not(.sap-workspace) .mainwrap .nx-pasta .nx-pagina :is(.nx-pagina__principal, .nx-pagina__corpo) > .nx-card:not(.nx-card--plano) {
+    padding: 8px 12px;
+    border: 1px solid transparent;
+    border-radius: 18px;
+  }
+}
+
 /* --- Limpeza visual: cartões brancos de borda fina, barras em degradê, diálogo de raio 22 --- */
 .app.product-workspace:not(.sap-workspace) .dbx-card {
   background: var(--white);

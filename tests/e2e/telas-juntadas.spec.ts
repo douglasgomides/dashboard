@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { CID, mockAccount } from "./fixtures";
 import { SECOES_JUNTADAS } from "../../src/lib/registro-de-telas";
-import { LIMITE_DE_ALTURA, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, mockAudiencia, mockCrm, mockInstagram, mockLinks, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
+import { LIMITE_DE_ALTURA, LIMITE_DO_DESEMPENHO_COM_TOP5, TELAS_DE_MEDIDA, alturaDaAbaAberta, mockAnuncios, mockAudiencia, mockCrm, mockInstagram, mockLinks, mockPessoas, semRolagemLateral } from "./apoio-telas-juntadas";
 import { mockInstagram as mockInstagramCompleto } from "./instagram-dados";
 import { abrirVerTudo } from "./apoio-cinco-segundos";
 
@@ -234,7 +234,9 @@ for (const { width, height } of TELAS_DE_MEDIDA) {
       await page.goto(`/${CID}/${caminho}?preset=30d`);
       const { altura, janela } = await alturaDaAbaAberta(page);
       console.log(`altura-instagram aba=${rotulo} largura=${width} altura=${Math.round(altura)} janela=${janela} razao=${(altura / janela).toFixed(2)}`);
-      expect(altura, `${rotulo} a ${width}px: ${Math.round(altura)} px de ${janela} px (${(altura / janela).toFixed(2)}x)`).toBeLessThanOrEqual(LIMITE_DE_ALTURA * janela);
+      // Desempenho: João 13/11/2026: Top 5 na tela mesmo passando do limite (limite próprio em px, medida + 40 px). As outras abas: 1,5 tela.
+      const limite = caminho === "conteudo" ? LIMITE_DO_DESEMPENHO_COM_TOP5[width] : LIMITE_DE_ALTURA * janela;
+      expect(altura, `${rotulo} a ${width}px: ${Math.round(altura)} px de ${janela} px (${(altura / janela).toFixed(2)}x)`).toBeLessThanOrEqual(limite);
       expect(await semRolagemLateral(page)).toBe(true);
       await page.screenshot({ path: `test-results/redesenho/juntada-instagram-${caminho}-${width}.png`, fullPage: true });
     });
