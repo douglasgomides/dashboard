@@ -20,8 +20,6 @@ export interface EntradaPortao {
   fontes?: { nome: string; status: StatusFonte | null; ultimoDado?: string | null }[];
   rastreio?: Rastreio | null;
   selo?: Selo | null;
-  /** Ignorado (D-01): etapa fora de ordem não nega mais a leitura. Sai na Task 2 do plano 03.1.1.1.1-01. */
-  funilInconsistente?: boolean;
   /** Quantos problemas graves de dado na origem a tela já detectou. */
   problemasAltos?: number;
   /** Tamanho da amostra que sustenta a conclusão. */

@@ -3,7 +3,7 @@
 // devolve, o funil de 7 etapas da jornada e as linhas por origem) e devolve os fatos. Não consulta nada, não importa React
 // nem banco e não usa IA. Só contagens entram: nome e telefone de contato nunca chegam à leitura (T-03.1.1-07).
 // Honestidade (D-05, T-03.1.1-06): etapa com base menor que a mínima de LIMITES.funil vira "N de M", sem porcentagem e sem
-// conclusão; funil fora de ordem ou CRM sem dado viram "Sem leitura:"; a origem líder só é afirmada com a base de
+// conclusão; CRM sem dado vira "Sem leitura:" e etapa fora de ordem vira fato para a equipe (D-01); a origem líder só é afirmada com a base de
 // LIMITES.crm.leadsRanking.
 import { fmtNdeM, minimoDaBase, type BaseFunil } from "@/lib/funil-taxa";
 import { LIMITES } from "@/lib/limites";
@@ -11,12 +11,12 @@ import { NAO_INFORMADO, MAX_GANHOS_SEM_ORIGEM, MIN_LEADS_RANKING, soNaoInformado
 import type { DadosComerciais, Funil as FunilDoCrm, IdPasso, PassoFunil } from "@/lib/comercial";
 import type { Funil as FunilDaJornada, EtapaFunil as EtapaDaJornada, IdEtapa } from "@/lib/jornada-funil";
 import type { Insight, Limitacao } from "@/lib/insight";
-import { deInsight, deLimitacao } from "./adaptadores";
+import { deInsight, deLimitacao, fatoDeEtapaQueCresce } from "./adaptadores";
 import { nega, piorPortao, portaoDoPeriodo } from "./portao";
 import type { Fato, FatosDaTela, PassoFato, Portao, TelaId } from "./tipos";
 
 /** Muda quando uma regra de fato do CRM muda. */
-export const VERSAO_REGRAS_COMERCIAL = 1;
+export const VERSAO_REGRAS_COMERCIAL = 2;
 
 const f = (n: number) => Math.round(n).toLocaleString("pt-BR");
 
@@ -74,11 +74,20 @@ function passoDaPerdaDoFunil(para: IdPasso): PassoFato {
 /** Passos medidos e confiáveis, na ordem do funil. Estimado ou sem confiança não entra em conta de ordem. */
 const medidosEConfiaveis = (passos: PassoFunil[]) => passos.filter((p) => p.valor != null && p.confiavel && !p.estimado);
 
-/** Uma etapa maior que a anterior medida: o funil está fora de ordem (o CRM marca as etapas de um jeito que não fecha a conta). */
-export function foraDeOrdem(passos: PassoFunil[]): boolean {
+/**
+ * Os pares seguidos de passos medidos e confiáveis em que o de depois é maior que o de antes (o CRM marca as etapas de um jeito
+ * que não fecha a conta). Estimado ou sem confiança fica de fora, igual a foraDeOrdem. Sem mínimo, como a regra antiga do CRM.
+ */
+export function paresForaDeOrdem(passos: PassoFunil[]): { de: IdPasso; para: IdPasso }[] {
   const ok = medidosEConfiaveis(passos);
-  for (let i = 1; i < ok.length; i++) if (ok[i].valor! > ok[i - 1].valor!) return true;
-  return false;
+  const pares: { de: IdPasso; para: IdPasso }[] = [];
+  for (let i = 1; i < ok.length; i++) if (ok[i].valor! > ok[i - 1].valor!) pares.push({ de: ok[i - 1].id, para: ok[i].id });
+  return pares;
+}
+
+/** Uma etapa maior que a anterior medida: o funil está fora de ordem. Mesmo nome e mesmo sentido de antes (o funil desenhado usa). */
+export function foraDeOrdem(passos: PassoFunil[]): boolean {
+  return paresForaDeOrdem(passos).length > 0;
 }
 
 export function fatosDoFunil(e: EntradaFatosFunil): FatosDaTela {
@@ -91,7 +100,7 @@ export function fatosDoFunil(e: EntradaFatosFunil): FatosDaTela {
   const adaptados = dosAdaptadores(e.insights, e.limitacoes, (id) => id.includes("maior-perda"));
   fatos.push(...adaptados.fatos);
 
-  // Portão (D-03): CRM sem leads no período, funil fora de ordem e amostra pequena.
+  // Portão (D-03): CRM sem leads no período e amostra pequena. Etapa fora de ordem não nega (D-01): vira fato de equipe abaixo.
   const portao = portaoDoPeriodo({
     periodoAte: fim,
     hoje: e.hoje,
@@ -99,7 +108,6 @@ export function fatosDoFunil(e: EntradaFatosFunil): FatosDaTela {
       !e.funil || entraram == null || entraram <= 0
         ? { motivo: "o CRM não devolveu contatos neste período", quem: "equipe_hub" }
         : null,
-    funilInconsistente: !!e.funil && foraDeOrdem(passos),
     n: entraram != null && entraram > 0 ? entraram : undefined,
   });
 
@@ -150,6 +158,22 @@ export function fatosDoFunil(e: EntradaFatosFunil): FatosDaTela {
     }
   }
 
+  // Etapa maior que a anterior (D-01): fato para a equipe conferir a marcação no CRM, com os dois números medidos. O passo é só
+  // da equipe e vai para os outros passos; a maior perda continua vindo de funil.maiorPerda (montarFunil pula o par que cresce).
+  const passosDaEquipe: PassoFato[] = [];
+  if (e.funil) {
+    const porId = new Map(passos.map((p) => [p.id, p]));
+    for (const par of paresForaDeOrdem(passos)) {
+      const de = porId.get(par.de)!, para = porId.get(par.para)!;
+      const { fato, passo } = fatoDeEtapaQueCresce({
+        de: { chave: de.id, rotulo: NOME_DO_PASSO[de.id], valor: de.valor! },
+        para: { chave: para.id, rotulo: NOME_DO_PASSO[para.id], valor: para.valor! },
+      });
+      fatos.push(fato);
+      passosDaEquipe.push(passo);
+    }
+  }
+
   // Conta de CRM compartilhada com outro cliente: a leitura diz que os números não são só deste médico.
   if (e.dados?.crmCompartilhado) {
     fatos.push({
@@ -170,7 +194,7 @@ export function fatosDoFunil(e: EntradaFatosFunil): FatosDaTela {
     portao,
     fatos,
     proximoPasso,
-    outrosPassos: adaptados.passos,
+    outrosPassos: [...adaptados.passos, ...passosDaEquipe],
   };
 }
 

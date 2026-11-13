@@ -4,16 +4,16 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { LIMITES } from "../src/lib/limites";
 import { VERBOS_PROVISORIOS, type FatosDaTela } from "../src/lib/leitura/tipos";
-import { montarTexto, problemasDoTexto } from "../src/lib/leitura/texto";
-import { fatosDaJornada, fatosDoFunil, fatosPorOrigem, VERSAO_REGRAS_COMERCIAL } from "../src/lib/leitura/fatos-comercial";
-import { montarFunil, type Contagem, type DadosComerciais } from "../src/lib/comercial";
+import { checarTextoDaLeitura, montarTexto, problemasDoTexto } from "../src/lib/leitura/texto";
+import { fatosDaJornada, fatosDoFunil, fatosPorOrigem, foraDeOrdem, paresForaDeOrdem, VERSAO_REGRAS_COMERCIAL } from "../src/lib/leitura/fatos-comercial";
+import { montarFunil, type Contagem, type DadosComerciais, type IdPasso, type PassoFunil } from "../src/lib/comercial";
 import { montarFunil as montarFunilDaJornada, type FunilBanco } from "../src/lib/jornada-funil";
 import { MIN_LEADS_RANKING } from "../src/lib/vendas-origem";
 
 const DE = "2026-10-12", ATE = "2026-11-10", HOJE = "2026-11-11";
 const entradaBase = { de: DE, ate: ATE, hoje: HOJE };
 
-assert.equal(VERSAO_REGRAS_COMERCIAL, 1, "as regras do CRM são a versão 1");
+assert.equal(VERSAO_REGRAS_COMERCIAL, 2, "D-01: etapa fora de ordem deixou de negar o CRM (versão 2)");
 
 // ---------- fixtures (só contagens: nenhum nome nem telefone) ----------
 const contagem = (c: Partial<Contagem>): Contagem => ({
@@ -103,20 +103,42 @@ const semPorcentagem = (fatos: FatosDaTela) => {
   confere(fatos);
 }
 
-// Etapa maior que a anterior (fora de ordem): nega com o motivo e quem comercial.
+// D-01: etapa maior que a anterior não nega. Cada par que cresce vira fato para a equipe; a maior perda vem só de pares em ordem.
 {
-  const funil = funilDe({ leads: 100, atendidos: 80, agendados: 90, agendadosProvaveis: 90, emConsulta: 90, ganhos: 5, perdidos: 1, ganhosEmEtapaAgenda: 0 });
+  const passo = (id: IdPasso, valor: number | null, extra: Partial<PassoFunil> = {}): PassoFunil => ({
+    id, rotulo: id, explica: "", valor, pctDoAnterior: null, fracaoDoAnterior: null, anterior: null, deCada: null, faixa: null, estimado: false, confiavel: true, ...extra,
+  });
+  const fixtures: PassoFunil[][] = [
+    [passo("entraram", 100), passo("atendidos", 120), passo("agendaram", 30), passo("compraram", 10)],
+    [passo("entraram", 100), passo("atendidos", 80), passo("agendaram", 30), passo("compraram", 10)],
+    [passo("entraram", 100), passo("atendidos", 150, { estimado: true }), passo("agendaram", 30), passo("compraram", 10)],
+    [passo("entraram", 100), passo("atendidos", 150, { confiavel: false }), passo("agendaram", 30), passo("compraram", 40)],
+    [passo("entraram", 100), passo("atendidos", null), passo("agendaram", 120), passo("compraram", 10)],
+  ];
+  assert.deepEqual(paresForaDeOrdem(fixtures[0]), [{ de: "entraram", para: "atendidos" }]);
+  assert.deepEqual(paresForaDeOrdem(fixtures[1]), [], "funil em ordem: nenhum par");
+  assert.deepEqual(paresForaDeOrdem(fixtures[2]), [], "passo estimado fica fora da conta de ordem");
+  assert.deepEqual(paresForaDeOrdem(fixtures[3]), [{ de: "agendaram", para: "compraram" }], "passo sem confiança é pulado, como em foraDeOrdem");
+  assert.deepEqual(paresForaDeOrdem(fixtures[4]), [{ de: "entraram", para: "agendaram" }], "passo sem medida é pulado");
+  for (const p of fixtures) assert.equal(foraDeOrdem(p), paresForaDeOrdem(p).length > 0, "foraDeOrdem continua o mesmo booleano");
+
+  const funil = funilDe({ leads: 100, atendidos: 120, agendados: 30, agendadosProvaveis: 30, emConsulta: 30, ganhos: 10, perdidos: 1, ganhosEmEtapaAgenda: 0 });
+  assert.ok(foraDeOrdem(funil.passos), "a fixture tem Foram atendidos acima de Entraram");
   const fatos = fatosDoFunil({ ...entradaBase, funil });
-  assert.equal(fatos.portao.ok, false);
-  if (!fatos.portao.ok) {
-    assert.equal(fatos.portao.codigo, "funil_fora_de_ordem");
-    assert.equal(fatos.portao.passo.quem, "comercial");
-    assert.equal(fatos.portao.passo.verbo, "corrigir");
-  }
-  assert.ok(!fatos.fatos.some((x) => x.id === "maior-perda"), "funil fora de ordem não conclui");
+  assert.deepEqual(fatos.portao, { ok: true }, "fora de ordem não nega mais o CRM");
+  const perda = fatos.fatos.find((x) => x.id === "maior-perda");
+  assert.ok(perda, "a maior perda sai de um par em ordem");
+  assert.ok(funil.maiorPerda && funil.maiorPerda.de !== "entraram", "a maior perda nunca usa o par que cresce");
+  const daEquipe = fatos.fatos.filter((x) => x.id.startsWith("etapa-cresce-"));
+  assert.equal(daEquipe.length, 1);
+  assert.equal(daEquipe[0].frase, "«Foram atendidos» passa de «Entraram» neste período: conferir a marcação no CRM.");
+  assert.deepEqual(daEquipe[0].numeros.map((n) => n.valor), [120, 100], "só os dois números medidos");
+  assert.deepEqual(checarTextoDaLeitura(daEquipe[0].frase), []);
+  const passoEquipe = fatos.outrosPassos.find((p) => p.fatoId === daEquipe[0].id);
+  assert.ok(passoEquipe?.soEquipe && passoEquipe.verbo === "conferir" && passoEquipe.quem === "comercial", "passo só da equipe nos outros passos");
+  assert.notEqual(fatos.proximoPasso?.fatoId, daEquipe[0].id, "o passo da equipe nunca é o próximo passo");
   const t = confere(fatos);
-  assert.equal(t.tipo, "sem_leitura");
-  if (t.tipo === "sem_leitura") assert.match(t.motivo, /fora de ordem/);
+  assert.equal(t.tipo, "leitura");
 }
 
 // CRM sem dado no período: nega com quem equipe_hub.
